@@ -71,7 +71,7 @@ use Globals;
 # It will be passed to most classes when we're creating new objects.
 %GLOBALVARS;
 
-my $DEBUG = 0;		# Shows debug information regarding the page if set to 1
+my $DEBUG = 1;		# Shows debug information regarding the page if set to 1
 
 my $DUPLICATE = 2;	# not sure what this is for?
 
@@ -2580,22 +2580,22 @@ sub processCollectionsSearch {
 		} elsif($q->param("latdec_range") eq "50") {
 			push @terms, "((latmin >= 30 AND latmin <45) OR "
  						. "(latdec regexp '^(5|6|(7(0|1|2|3|4)))'))";
-		} else {
+		} elsif ($q->param('latdec_range') eq "75") {
 			push @terms, "(latmin >= 45 OR (latdec regexp '^(9|8|(7(5|6|7|8|9)))'))";
 		}
 
 		if ( $q->param('lngdec_range') eq "50" )	{
 			push @terms, "(lngmin>=30 OR (lngdec regexp '^(5|6|7|8|9)'))";
-		} else {
+		} elsif ($q->param('lngdec_range') eq "00") {
 			push @terms, "(lngmin<30 OR (lngdec regexp '^(0|1|2|3|4)') OR (lngmin IS NULL AND lngdec
 IS NULL))";
 		}
     # assume coordinate resolution is 'full', which means full/half degress for long/lat
     # respectively 
-	} else { 
+	} else {
 		if ( $q->param('latdec_range') eq "50" )	{
 			push @terms, "(latmin>=30 OR (latdec regexp '^(5|6|7|8|9)'))";
-		} else {
+		} elsif ($q->param('latdec_range') eq "00") {
 			push @terms, "(latmin<30 OR (latdec regexp '^(0|1|2|3|4)') OR (latmin IS NULL AND latdec
 IS NULL))";
 		}
@@ -2667,8 +2667,8 @@ IS NULL))";
 	}
 			
 	# Remove it from further consideration
-	$q->param("research_group" => undef);
-		
+	$q->param("research_group" => "");
+	
 	
 	# Compose the WHERE clause
 	# loop through all of the possible fields checking if each one has a value in it
