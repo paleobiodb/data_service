@@ -694,6 +694,17 @@ sub submitOpinionForm {
 	} else {
 		$fieldsToEnter{modifier_no} = $s->entererNumber();	
 	}
+
+	# Set up a few variables to represent the state of the form..
+	
+	# the taxon_status radio is in ('belongs to', 'recombined as', 'invalid1', 'invalid2).
+	my $taxonStatusRadio = $q->param('taxon_status');
+	
+	# figure out the name of the child taxon.
+	my $childTaxon = Taxon->new($self->{GLOBALVARS});
+	$childTaxon->setWithTaxonNumber($q->param('taxon_no'));
+	my $childTaxonName = $childTaxon->taxonName();
+	my $childRank = Rank->new($q->param('taxon_rank'));
 	
 	
 	###
@@ -707,12 +718,25 @@ sub submitOpinionForm {
 		
 		$errors->add("You must choose one of the reference radio buttons");
 	}
-	
-	
-	# merge the pages and 2nd_pages, figures and 2nd_figures fields together
-	# since they are one field in the database.
-	
+
+	# JA: now Poling does the bulk of the checks on the reference
 	if ($q->param('ref_has_opinion') eq 'NO') {
+
+		# JA: first order of business is making sure that the child
+		#  plus author combination doesn't duplicate anything
+		#  already in the database
+		# I have no idea why Poling didn't do this himself; typical
+		#  incompetence
+		# note: the ref no and parent no don't need to match
+		my $sql = $self->getTransactionManager();
+		my $osql = "SELECT parent_no FROM opinions WHERE ref_has_opinion!='YES' AND child_no=".$q->param('taxon_no')." AND author1last='".$q->param('author1last')."' AND author2last='".$q->param('author2last')."' AND pubyr=".$q->param('pubyr');
+		my $oref = ${$sql->getData($osql)}[0];
+		if ( $oref ) {
+			$errors->add("The author's opinion on ".$childTaxonName." already has been entered - an author can only have one opinion on a name");
+		}
+
+		# merge the pages and 2nd_pages, figures and 2nd_figures fields
+		# together since they are one field in the database.
 		$fieldsToEnter{pages} = $q->param('2nd_pages');
 		$fieldsToEnter{figures} = $q->param('2nd_figures');
 		
@@ -816,7 +840,7 @@ sub submitOpinionForm {
 		AND reference_no = $reference_no $own_opinion_no_clause")}[0]->{c};
 		
 		if ($count > 0) {
-			$errors->add("You can only enter one opinion on a taxon from each reference");
+			$errors->add("The author's opinion on ".$childTaxonName." already has been entered - an author can only have one opinion on a name");
 		}
 	}
 	
@@ -891,17 +915,6 @@ sub submitOpinionForm {
 	##
 	###
 	
-	
-	# Set up a few variables to represent the state of the form..
-	
-	# the taxon_status radio is in ('belongs to', 'recombined as', 'invalid1', 'invalid2).
-	my $taxonStatusRadio = $q->param('taxon_status');
-	
-	# figure out the name of the child taxon.
-	my $childTaxon = Taxon->new($self->{GLOBALVARS});
-	$childTaxon->setWithTaxonNumber($q->param('taxon_no'));
-	my $childTaxonName = $childTaxon->taxonName();
-	my $childRank = Rank->new($q->param('taxon_rank'));
 	
 	###
 	# Figure out the name of the parent taxon.
