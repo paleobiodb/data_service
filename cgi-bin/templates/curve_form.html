@@ -2,416 +2,49 @@
 <CENTER>
 <H1>Paleobiology Database Diversity Curve Request Form</H1></CENTER>
 
-<h4>
+<p>
 This form allows you to request a diversity curve with assorted statistics.
-</h4>
-<i>Note: I plan to add more options for excluding collections that are missing data in any of a variety of categories.</i><p>
+Submit the form without indicating any options for subsampling, unless you do want to perform subsampling analyses.</p>
 
-The basic time scale used by this form derives from <a href="javascript: tipsPopup( '/public/data/harland.html')">Harland et al. 1989</a>.
-Analyses may employ either epochs from the Harland scale or <a href="/public/timescale.10my.html">10 m.y.-long "working intervals"</a> defined by the group.<p>
+<p>
+<font color="FF0000"><b>Warning</b></font>: you must first <a href="$exec_url?action=displayDownloadForm">download</a> an occurrence data file or you can't do an analysis.
+</p>
+
+<!--
+the following options have been deleted and might be replaced by augmenting the download script:
+
+exclude lists with no county or precise lat/long
+lump collections by formation
+analysis restricted to paleoenvironmental zones 1 - 6
+analysis restricted to one exact lithology (as opposed to carbonate or siliciclastic)
+analysis restricted to a collection type (biostratigraphic, taxonomic, etc.)
+exclude lists with at least or no more than some number of occurrences
+mix and match of taxonomic groups
+geographic dispersion algorithm
+
+-->
 
 <form method="POST" action="$exec_url">
  
 <input type=hidden name="action" value="displayCurveResults">
 
+<hr>
+
 <TABLE cellpadding=4>
-<tr><td colspan=2><b><font size=+1>Spatiotemporal coverage</font></b></td></tr>
-<tr><td>
-<font size=-1>
-What working time scale should be used?
-</font>
-</td>
-
-<td><font size=-1><select name=scale>
-<option>stages</option>
-<option>Sepkoski intervals</option>
-<option selected>10 m.y. intervals</option>
-<option>Harland epochs</option>
-</select>
-</font>
-</td></tr>
 
 <tr><td valign=top>
-<font size=-1>
-If you only want to include specific geographic regions, check them off:
-</font></td>
+<font size=-1>Diversity measure to report:</font></td>
 
-<td valign=top><font size=-1>
-<input type=checkbox name="Africa" value="Y">Africa
-<input type=checkbox name="Antarctica" value="Y">Antarctica
-<input type=checkbox name="Asia" value="Y">Asia
-<input type=checkbox name="Australia" value="Y">Australia<br>
-<input type=checkbox name="Europe" value="Y">Europe
-<input type=checkbox name="North America" value="Y">North America
-<input type=checkbox name="South America" value="Y">South America<br>
-</font>
-</td></tr>
-
-<tr><td>
+<td valign=top>
 <font size=-1>
-Include lists that have poor geographic data (no county or lat/long)?
-</font></td>
-<td><font size=-1>
-<select name=strictgeography>
-<option selected>yes, include them</option>
-<option>no, exclude them</option>
+<select name=diversity>
+<option selected>boundary-crossers</option>
+<option>range-through</option>
+<option>range-through minus singletons</option>
+<option>sampled-in-bin</option>
+<option>sampled minus singletons</option>
 </select>
 </font>
-</td></tr>
-
-
-<tr><td>
-<font size=-1>
-Include lists that have not been fit into a single age/stage?</font></td>
-
-<td><font size=-1>
-<select name=strictchronology>
-<option selected>yes, include them</option>
-<option>no, exclude them</option>
-</select>
-</font>
-</td>
-
-<tr><td colspan=2><b><font size=+1>Stratigraphic and environmental coverage</font></b></td></tr>
-
-<tr><td>
-<font size=-1>
-Required stratigraphic data (= fields that must be filled):
-</font></td>
-<td><font size=-1>
-<input type=checkbox name=requiredfm value="Y">formation
-<input type=checkbox name=requiredmbr value="Y">member
-</font>
-</td></tr>
-
-<tr><td>
-<font size=-1>
-<select name=stratscale_minmax>
-<option selected>broadest</option>
-<option>narrowest</option>
-</select>
-allowable scale of stratigraphic resolution:
-</font>
-</td>
-
-<td><font size=-1>
-<select name=stratscale>
-<option selected></option>
-<option>formation</option>
-<option>member</option>
-<option>group of beds</option>
-<option>bed</option>
-</select>
-</font>
-</td></tr>
-
-<tr><td>
-<font size=-1>
-Check if you want to lump collections
-</font></td>
-<td><font size=-1>
-<input type=checkbox name=lumpbyfm value="Y">by formation
-</font></td></tr>
-
-<tr><td>
-<font size=-1>
-You may restrict the analysis so that the paleoenvironment field must
-fall in the following category:
-</font>
-</td>
-<td valign=top><font size=-1>
-<select name=paleoenvironment>
-<option selected></option>
-<option>zone 1</option>
-<option>zone 2</option>
-<option>zone 3</option>
-<option>zone 4</option>
-<option>zone 5</option>
-</select>
-</font></td></tr>
-
-<tr><td>
-<font size=-1>
-You may restrict the analysis so that the lithology field must
-<select name=lithonlyor>
-<option selected>equal</option>
-<option>include</option>
-<option>combine</option>
-</select>
-the following value:<br>
-</font>
-<font size=-1>
-Warning! Select only from the left-hand list unless you want to combine lithologies.
-</font>
-</td>
-
-<td valign=top><font size=-1>
-<select id="lithology1"></select>
-<select id="lithology2"></select>
-</font>
-</td>
-</tr>
-
-<tr><td colspan=2><b><font size=+1>Additional restrictions</font></b></td></tr>
-
-<tr><td><font size=-1>Select the research group or project:</font></td>
-<td>
-<select id="research_group">
-</select>
-</td></tr>
-
-<tr><td nowrap>
-<font size=-1>
-Use data records created</font> 
-<select name="created_before_after">
-<option selected>before</option>
-<option>after</option>
-</select>:
-</td>
-
-<td>
-<select name="date">
-<option selected></option>
-<SCRIPT>fillDays();</SCRIPT>
-</select>
-</select>
-
-<select name="month">
-<option selected></option>
-<SCRIPT>fillMonths();</SCRIPT>
-</select>
-</select>
-
-<select name="year">
-<option selected></option>
-<SCRIPT>fillYears();</SCRIPT>
-</select>
-</select>
-</td>
-</tr>
-
-<tr><td>
-<font size=-1>Select the authors' reason for describing the collections:
-</td>
-
-<td>
-<select id="collection_type">
-</select>
-</td></tr>
-
-
-<tr><td>
-<font size=-1>
-Include lists with <select name=lowerupper>
-<option selected>at least</option>
-<option>no more than</option>
-</select>
-how many genus occurrences?
-</font>
-</td>
-
-<td><input name=cutoff size=10></td></tr>
-
-<tr><td valign=top>
-<font size=-1>
-If you don't want to analyze all taxonomic groups together, 
-you may either check off a set of allowed or required marine invertebrate groups 
-or select a single class.
-Required groups must be present in every list; allowed groups also 
-will be counted but may be in absent in some lists.
-</font>
-</td>
-
-<td>
-<font size=-1>
-brachiopods
-<select name=brachiopods>
-<option></option>
-<option selected>allowed</option>
-<option>required</option>
-</select><br>
-
-bryozoans
-<select name=bryozoans>
-<option selected></option>
-<option>allowed</option>
-<option>required</option>
-</select><br>
-
-cephalopods
-<select name=cephalopods>
-<option></option>
-<option selected>allowed</option>
-<option>required</option>
-</select><br>
-
-conodonts
-<select name=conodonts>
-<option selected></option>
-<option>allowed</option>
-<option>required</option>
-</select><br>
-
-corals
-<select name=corals>
-<option></option>
-<option selected>allowed</option>
-<option>required</option>
-</select><br>
-
-echinoderms
-<select name=echinoderms>
-<option></option>
-<option selected>allowed</option>
-<option>required</option>
-</select><br>
-
-graptolites
-<select name=graptolites>
-<option selected></option>
-<option>allowed</option>
-<option>required</option>
-</select><br>
-
-molluscs (benthic)
-<select name=molluscs>
-<option></option>
-<option selected>allowed</option>
-<option>required</option>
-</select><br>
-
-trilobites
-<select name=trilobites>
-<option></option>
-<option selected>allowed</option>
-<option>required</option>
-</select>
-<p>
-
-<select name=class>
-<option selected></option>
-<option>Anthozoa</option>
-<option>Articulata</option>
-<option>Bivalvia</option>
-<option>Cephalopoda</option>
-<option>Crinoidea</option>
-<option>Echinoidea</option>
-<option>Gastropoda</option>
-<option>Gymnolaemata</option>
-<option>Stenolaemata</option>
-<option>Trilobita</option>
-
-<option></option>
-<option>Acantharia</option>
-<option>Acanthodii</option>
-<option>Acrania</option>
-<option>Amphibia</option>
-<option>Arachnida</option>
-<option>Ascidiacea</option>
-<option>Asteroidea</option>
-<option>Aves</option>
-<option>Blastoidea</option>
-<option>Brachypoda</option>
-<option>Branchiopoda</option>
-<option>Calcarea</option>
-<option>Cambroclavida</option>
-<option>Camptostromoidea</option>
-<option>Cephalaspidomorphi</option>
-<option>Cephalochordata</option>
-<option>Chondrichthyes</option>
-<option>Cirripedia</option>
-<option>Coeloscleritophora</option>
-<option>Conodonta</option>
-<option>Copepoda</option>
-<option>Coronata</option>
-<option>Cribricyathea</option>
-<option>Cricoconarida</option>
-<option>Ctenocystoidea</option>
-<option>Cubozoa</option>
-<option>Cyclozoa</option>
-<option>Demospongia</option>
-<option>Dinocarida</option>
-<option>Diploporita</option>
-<option>Diplorhina</option>
-<option>Edrioasteroidea</option>
-<option>Eldonioidea</option>
-<option>Enteropneusta</option>
-<option>Eocrinoidea</option>
-<option>Graptolithina</option>
-<option>Helcionelloida</option>
-<option>Helicoplacoidea</option>
-<option>Hexactinellida</option>
-<option>Hirudinea</option>
-<option>Holothuroidea</option>
-<option>Homoiostelea</option>
-<option>Homostelea</option>
-<option>Hydroconozoa</option>
-<option>Hydrozoa</option>
-<option>Hyolithomorpha</option>
-<option>Inarticulata</option>
-<option>Incertae</option>
-<option>Irregulares</option>
-<option>Lingulata</option>
-<option>Machaeridia</option>
-<option>Malacostraca</option>
-<option>Mammalia</option>
-<option>Marrelomorpha</option>
-<option>Medusae</option>
-<option>Merostomata</option>
-<option>Merostomoidea</option>
-<option>Monorhina</option>
-<option>Multiplacophora</option>
-<option>Myriapoda</option>
-<option>Myzostomaria</option>
-<option>Oligochaeta</option>
-<option>Ophiocistioidea</option>
-<option>Ophiuroidea</option>
-<option>Orthothecimorpha</option>
-<option>Osteichthyes</option>
-<option>Ostracoda</option>
-<option>Palaeoscolecida</option>
-<option>Parablastoidea</option>
-<option>Paracrinoidea</option>
-<option>Paragastropoda</option>
-<option>Paratrilobita</option>
-<option>Petalonamae</option>
-<option>Placodermi</option>
-<option>Polychaeta</option>
-<option>Polyhymenophora</option>
-<option>Polyplacophora</option>
-<option>Pteraspidomorphi</option>
-<option>Pterobranchia</option>
-<option>Pycnogonida</option>
-<option>Radiolaria</option>
-<option>Regulares</option>
-<option>Remipedia</option>
-<option>Reptilia</option>
-<option>Rhabditida</option>
-<option>Rhizopodea</option>
-<option>Rhombifera</option>
-<option>Rostroconchia</option>
-<option>Scaphopoda</option>
-<option>Scyphozoa</option>
-<option>Somasteroidea</option>
-<option>Stenothecoidea</option>
-<option>Stylophora</option>
-<option>Tentaculitoidea</option>
-<option>Tergomya</option>
-<option>Thylacocephala</option>
-<option>Tommotiida</option>
-<option>Tunicata</option>
-<option>Uncertain</option>
-
-</select>
-</p>
-</font>
-</td>
-</tr>
-
-
-<tr><td colspan=2><b><font size=+1>Subsampling</font></b><br>
-Important: Don't modify anything in this section unless you want to perform
- subsampling analyses. Nothing will happen unless you configure the required pull-downs.
 </td></tr>
 
 <tr><td valign=top>
@@ -507,21 +140,6 @@ Intermediate numbers of items to report in subsampling curves:<br>
 </tr>
 
 <tr><td valign=top>
-<font size=-1>Diversity measure to report:</font></td>
-
-<td valign=top>
-<font size=-1>
-<select name=diversity>
-<option selected>boundary-crossers</option>
-<option>range-through</option>
-<option>range-through minus singletons</option>
-<option>sampled-in-bin</option>
-<option>sampled minus singletons</option>
-</select>
-</font>
-</td></tr>
-
-<tr><td valign=top>
 <font size=-1>Print subsampling stats for intervals with less items than the exact quota?
 </font></td>
 
@@ -535,29 +153,15 @@ Intermediate numbers of items to report in subsampling curves:<br>
 </td>
 </tr>
 
-<tr><td valign=top>
-<font size=-1>Use the geographic dispersion algorithm?</font></td>
-
-<td valign=top>
-<font size=-1>
-<select name=disperse>
-<option selected>no</option>
-<option>yes</option>
-</select>
-</font>
-</td>
-</tr>
-
 </table>
 
 <hr>
 <table cellpadding=4 width=100%>
-<tr><td valign=top align=right><input type=submit value="Submit"></td></tr>
+<tr><td valign=top align=center><input type=submit value="Submit"></td></tr>
 </table>
 
 
 </form>
-<hr>
 
 </BODY>
 </HTML>
