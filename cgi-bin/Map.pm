@@ -543,6 +543,7 @@ sub mapQueryDb	{
 
 	# handle time interval JA 20.7.03
 	if ( $q->param('interval_name') =~ /[A-Za-z]/ )	{
+        if (!$intlist) { $intlist = "0"; } #If the interval doesn't exist, set it so we get no results
 		$where = &::buildWhere ( $where, " ( collection_no IN (" . $intlist . ") )" );
 	}
 
