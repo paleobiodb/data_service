@@ -4728,6 +4728,9 @@ sub insertRecord {
 	my $fields_ref = shift;
 	my $vals_ref = shift;
 
+	my @fields;
+	my @vals;
+
 	# This 'unless' wraps most of the method. If we have data in fields_ref
 	# and vals_ref, we're re-entering this method from processCheckNearMatch
 	# after finding a potential conflict entering a new reference, and the 
@@ -4735,82 +4738,80 @@ sub insertRecord {
 	# below, for final details...
 	unless($fields_ref && $vals_ref){
 
-	my $searchVal = $q->param($searchField);
+		my $searchVal = $q->param($searchField);
 
-	# Created data, unless specified.
-	my $nowString = now();
-	$q->param(created=>"$nowString") unless $q->param('created');
+		# Created data, unless specified.
+		my $nowString = now();
+		$q->param(created=>"$nowString") unless $q->param('created');
 
-	# Get the database metadata
-	$sql = "SELECT * FROM $tableName WHERE $idName=0";
-	dbg ( "$sql<HR>" );
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
+		# Get the database metadata
+		$sql = "SELECT * FROM $tableName WHERE $idName=0";
+		dbg ( "$sql<HR>" );
+		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+		$sth->execute();
 
-	my @fieldNames = @{$sth->{NAME}};
-	my @fieldTypes = @{$sth->{mysql_is_num}};	# To see which fields need quotes
-	my @fieldTypeCodes = @{$sth->{mysql_type}};
-	# Get the null constraints
-	my @nullables = @{$sth->{NULLABLE}};
-	$sth->finish();
+		my @fieldNames = @{$sth->{NAME}};
+		my @fieldTypes = @{$sth->{mysql_is_num}};	# To see which fields need quotes
+		my @fieldTypeCodes = @{$sth->{mysql_type}};
+		# Get the null constraints
+		my @nullables = @{$sth->{NULLABLE}};
+		$sth->finish();
 
-	# Set a few defaults
-	$q->param(enterer => $s->get('enterer'));			# This is an absolute
-	$q->param(authorizer => $s->get('authorizer'));		# This is an absolute
-	$q->param(modifier => $s->get('enterer')) unless $q->param('modifier');
-	# Set the pubtitle to the pull-down pubtitle unless it's set in the form
-	$q->param(pubtitle => $q->param('pubtitle_pulldown')) unless $q->param("pubtitle");
+		# Set a few defaults
+		$q->param(enterer => $s->get('enterer'));			# This is an absolute
+		$q->param(authorizer => $s->get('authorizer'));		# This is an absolute
+		$q->param(modifier => $s->get('enterer')) unless $q->param('modifier');
+		# Set the pubtitle to the pull-down pubtitle unless it's set in the form
+		$q->param(pubtitle => $q->param('pubtitle_pulldown')) unless $q->param("pubtitle");
 
-	&setPersonValues( $tableName );
+		&setPersonValues( $tableName );
 
-	my @fields;
-	my @vals;
-	my $fieldCount = 0;
-	# Loop over all database fields
-	foreach my $i ( 0..$#fieldNames ) {
-		my $fieldName = $fieldNames[$i];
-		my $val;
+		my $fieldCount = 0;
+		# Loop over all database fields
+		foreach my $i ( 0..$#fieldNames ) {
+			my $fieldName = $fieldNames[$i];
+			my $val;
 
-		if ( defined $q->param($fieldName) ) {
+			if ( defined $q->param($fieldName) ) {
 
-			$val = $q->param($fieldName);
+				$val = $q->param($fieldName);
 
-			push(@fields, $fieldName);
-			
-			# Set: separate with commas
-			my @formVals = $q->param($fieldName);
-			if ( $fieldTypeCodes[$fieldCount] == 254 ) {
-				my $numSetValues = @formVals;
-				if ( $numSetValues ) {
-					$val = join(',', @formVals);
+				push(@fields, $fieldName);
+				
+				# Set: separate with commas
+				my @formVals = $q->param($fieldName);
+				if ( $fieldTypeCodes[$fieldCount] == 254 ) {
+					my $numSetValues = @formVals;
+					if ( $numSetValues ) {
+						$val = join(',', @formVals);
+					}
 				}
-			}
-      
-			# Add quotes if this is character data
-			$val = $dbh->quote($val) unless $fieldTypes[$fieldCount];
-#dbg ( "fn:[$fieldName] val:[$val] type:[".$fieldTypes[$fieldCount]."] tc:[".$fieldTypeCodes[$fieldCount]."]" );
-			if ( $val !~ /\w/ )	{
-				if ( $nullables[$i] )	{
-						$val = "NULL";
-				} else	{
-						$val = "''";
+		  
+				# Add quotes if this is character data
+				$val = $dbh->quote($val) unless $fieldTypes[$fieldCount];
+	#dbg ( "fn:[$fieldName] val:[$val] type:[".$fieldTypes[$fieldCount]."] tc:[".$fieldTypeCodes[$fieldCount]."]" );
+				if ( $val !~ /\w/ )	{
+					if ( $nullables[$i] )	{
+							$val = "NULL";
+					} else	{
+							$val = "''";
+					}
 				}
+				
+				push ( @vals, $val );
 			}
-			
-			push ( @vals, $val );
+			$fieldCount++;
 		}
-		$fieldCount++;
-	}
-	dbg("insert VALS: @vals<br>");
+		dbg("insert VALS: @vals<br>");
 
-	# Check for a duplicate and bomb if one is found
-	$return = checkDuplicates ( $idName, $primary_key, $tableName, \@fields, \@vals );
-	if ( ! $return || $return == $DUPLICATE ) { return $return; }
+		# Check for a duplicate and bomb if one is found
+		$return = checkDuplicates ( $idName, $primary_key, $tableName, \@fields, \@vals );
+		if ( ! $return || $return == $DUPLICATE ) { return $return; }
 
-	# Check for near matches
-	# NOTE: the below method now handles matches by giving the user a choice
-	# of 'cancel' or 'continue' if a match is found. See method for details.
-	checkNearMatch ( $matchlimit, $idName, $tableName, $searchField, $searchVal, \@fields, \@vals );
+		# Check for near matches
+		# NOTE: the below method now handles matches by giving the user a choice
+		# of 'cancel' or 'continue' if a match is found. See method for details.
+		checkNearMatch ( $matchlimit, $idName, $tableName, $searchField, $searchVal, \@fields, \@vals );
 
 	} # END 'unless($fields_ref && $vals_ref)' - see top of method
 
