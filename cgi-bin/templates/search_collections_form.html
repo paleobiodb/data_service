@@ -105,7 +105,7 @@ function checkForm ( ) {
 	<input id="use_primary" type=hidden name="use_primary" value="%%use_primary%%">
 
 
-<center><font size=-1><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character.</i></font></center>
+<center><p><font size=-1><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character.</i></font></p></center>
 
 		<hr>
 
@@ -137,14 +137,10 @@ function checkForm ( ) {
 	  <td>County/parish: <br><input name=county size=30><br></td>
 	</tr>
 	<tr>
-	  <td>Period: <br><select name=period><option><option>Modern<option>Quaternary<option>Tertiary<option>Cretaceous<option>Jurassic<option>Triassic<option>Permian<option>Carboniferous<option>Devonian<option>Silurian<option>Ordovician<option>Cambrian<option>Neoproterozoic</select></td>
-<!-- OPTIONAL collection_search -->
-	  <td>Epoch: <br><input name=epoch size=30><br></td>
-	  <td>International age/stage: <br><input name=intage size=30><br></td>
+	  <td>Oldest time interval (or age in Ma): <br><select id="eml_max_interval"></select><input name=max_interval size=15><br></td>
+	  <td>Youngest time interval/Ma: <br><select id="eml_min_interval"></select><input name=min_interval size=15><br></td>
 	</tr>
 	<tr>
-	  <td>Local age/stage: <br><input name=locage size=30><br></td>
-<!-- END collection_search -->
 	  <td>Formation: <br><input name=formation size=30><br></td>
 <!-- OPTIONAL collection_search -->
 	  <td>Member: <br><input name=member size=30><br></td>

@@ -183,6 +183,7 @@ Taxonomic name <small><i>(genus or higher rank)</i></small>:
 <td valign=top><font size=-1>
 <input  name=genus_name size=25>
 
+<!-- LEGACY
 <tr><td valign=top><font size=-1>
 Included time interval(s):
 <td valign=top><font size=-1>
@@ -212,7 +213,14 @@ Included time interval(s):
 	</tr>
 	</table>
 	</td></tr></table></td></tr>
+-->
 
+<tr><td valign=top><font size=-1>
+If you only want lists from one time span, enter the oldest and youngest intervals:
+<td valign=top><font size=-1>
+<input name=max_interval_name size=25> - <input name=min_interval_name size=25>
+
+<!-- LEGACY
 <tr><td valign=top><font size=-1>
 If you only want lists from one epoch, enter its name:
 <td valign=top><font size=-1>
@@ -222,6 +230,7 @@ If you only want lists from one epoch, enter its name:
 Likewise for a single age/stage:
 <td valign=top><font size=-1>
 <input name=stage size=25>
+-->
 
 <tr><td valign=top><font size=-1>
 Environment:

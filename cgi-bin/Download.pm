@@ -2,6 +2,7 @@ package Download;
 
 use PBDBUtil;
 use Classification;
+use TimeLookup;
 
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
@@ -17,7 +18,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out.
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdec latdir lngdeg lngmin lngsec lngdec lngdir latlng_basis altitude_value altitude_unit geogscale geogcomments emlperiod_max emlperiod_min period_max emlepoch_max emlepoch_min epoch_max epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group formation geological_group member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 period_min otherenvironment rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdec latdir lngdeg lngmin lngsec lngdec lngdir latlng_basis altitude_value altitude_unit geogscale geogcomments emlperiod_max emlperiod_min period_max emlepoch_max emlepoch_min epoch_max epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone max_interval_no min_interval_no research_group formation geological_group member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 period_min otherenvironment rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
 my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name reference_no comments created modified modified_temp plant_organ);
 my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
@@ -90,8 +91,11 @@ sub retellOptions {
 			last;
 		}
 	}
-	$html .= $self->retellOptionsRow ( "Epoch", $q->param("epoch") );
-	$html .= $self->retellOptionsRow ( "Single age/stage", $q->param("stage") );
+# LEGACY CODE
+#	$html .= $self->retellOptionsRow ( "Epoch", $q->param("epoch") );
+#	$html .= $self->retellOptionsRow ( "Single age/stage", $q->param("stage") );
+	$html .= $self->retellOptionsRow ( "Oldest interval", $q->param("max_interval_name") );
+	$html .= $self->retellOptionsRow ( "Youngest interval", $q->param("min_interval_name") );
 	$html .= $self->retellOptionsRow ( "Environment", $q->param("environment") );
 	$html .= $self->retellOptionsRow ( "Genus name", $q->param("genus_name") );
 	$html .= $self->retellOptionsRow ( "Class", $q->param("class") );
@@ -211,6 +215,8 @@ sub retellOptions {
 					"collections_emllocage_min", 
 					"collections_locage_min", 
 					"collections_zone", 
+					"collections_max_interval_no", 
+					"collections_min_interval_no", 
 					"collections_formation", 
 					"collections_member", 
 					"collections_localsection", 
@@ -333,6 +339,7 @@ sub getOutFieldsString {
 	return $outFieldsString;
 }
 
+# LEGACY CODE
 # Returns a string representation of the time interval (period)
 # portion of the collections where clause.  The return value
 # looks like: period='period_name' OR period='period2_name'
@@ -412,6 +419,21 @@ sub getCountryString {
 	return "";
 }
 
+sub getIntervalString	{
+	my $self = shift;
+	my $max = $q->param('max_interval_name');
+	my $min = $q->param('min_interval_name');
+
+	if ( $max )	{
+		my $collref = TimeLookup::processLookup($dbh, $dbt, '', $max, '', $min);
+		my @colls = @{$collref};
+		return " ( collections.collection_no IN ( " . join (',',@colls) . " ) )";
+	}
+
+	return "";
+}
+
+# LEGACY CODE
 sub getEpochString {
 	my $self = shift;
 	my $epoch = $q->param('epoch');
@@ -421,6 +443,7 @@ sub getEpochString {
 	return "";
 }
 
+# LEGACY CODE
 # 19.3.02 JA
 sub getStageString {
 	my $self = shift;
@@ -508,23 +531,28 @@ sub getOccurrencesWhereClause {
 sub getCollectionsWhereClause {
 	my $self = shift;
 	my $retVal = "";
-	my $time_interval = $self->getTimeIntervalString();
+# LEGACY CODE
+#	my $time_interval = $self->getTimeIntervalString();
 	
 	my $authorizer = $self->getDataForAuthorizer();
 	# This is handled by getOccurrencesWhereClause if we're getting occs data.
 	if($authorizer ne "All" && $q->param('collections_only') eq 'YES'){
 		$retVal .= " collections.authorizer='$authorizer' ";
 	}
-	$retVal .= " AND " if $retVal && $time_interval;
-	$retVal .= "(" . $time_interval . ")" if $time_interval;
+# LEGACY CODE
+#	$retVal .= " AND " if $retVal && $time_interval;
+#	$retVal .= "(" . $time_interval . ")" if $time_interval;
 	$retVal .= " AND " if $retVal && $self->getResGrpString();
 	$retVal .= $self->getResGrpString() if $self->getResGrpString();
 	$retVal .= " AND " if $retVal && $self->getCountryString();
 	$retVal .= $self->getCountryString() if $self->getCountryString();
-	$retVal .= " AND " if $retVal && $self->getEpochString();
-	$retVal .= $self->getEpochString() if $self->getEpochString();
-	$retVal .= " AND " if $retVal && $self->getStageString();
-	$retVal .= $self->getStageString() if $self->getStageString();
+	$retVal .= " AND " if $retVal && $self->getIntervalString();
+	$retVal .= $self->getIntervalString() if $self->getIntervalString();
+# LEGACY CODE
+#	$retVal .= " AND " if $retVal && $self->getEpochString();
+#	$retVal .= $self->getEpochString() if $self->getEpochString();
+#	$retVal .= " AND " if $retVal && $self->getStageString();
+#	$retVal .= $self->getStageString() if $self->getStageString();
 	$retVal .= " AND " if $retVal && $self->getEnvironmentString();
 	$retVal .= $self->getEnvironmentString() if $self->getEnvironmentString();
 	
@@ -614,14 +642,15 @@ sub doQuery {
 				$sql .= "\nWHERE (collections.county IS NOT NULL OR (collections.latdeg IS NOT NULL AND collections.lngdeg IS NOT NULL))\n";
 			}
 		}
-		if($q->param('strictchronology') eq 'NO'){
-			if($sql =~ /WHERE/){
-				$sql .= "\nAND ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))";
-			}
-			else{
-				$sql .= "\nWHERE ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))";
-			}
-		}
+# LEGACY CODE
+#		if($q->param('strictchronology') eq 'NO'){
+#			if($sql =~ /WHERE/){
+#				$sql .= "\nAND ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))";
+#			}
+#			else{
+#				$sql .= "\nWHERE ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))";
+#			}
+#		}
 	}
 	# complete the collections/occurrences join query string
 	else{
@@ -637,7 +666,8 @@ sub doQuery {
 		$sql .= " AND ".  $occWhereClause if $occWhereClause;
 		$sql .= " AND $collectionsWhereClause " if $collectionsWhereClause ne "";
 		$sql .= "\nAND (collections.county IS NOT NULL OR (collections.latdeg IS NOT NULL AND collections.lngdeg IS NOT NULL))\n" if $q->param('strictgeography') eq 'NO';
-		$sql .= "\nAND ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))" if $q->param('strictchronology') eq 'NO';
+# LEGACY CODE
+#		$sql .= "\nAND ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))" if $q->param('strictchronology') eq 'NO';
 
 	}
 

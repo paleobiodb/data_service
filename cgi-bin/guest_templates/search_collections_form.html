@@ -74,7 +74,7 @@ function checkForm ( ) {
 	</tr>
 	</table>
 
-	  <small><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character.</i></small>
+	  <small><p><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character.</i></p></small>
 		<hr>
 		<b>Search values:</b>
 
@@ -89,12 +89,19 @@ name:</nobr>
 	<tr>
 	  <td>Country: <br><input name=country size=30><br></td>
 	  <td>State/province: <br><input name=state size=30><br></td>
+<!-- LEGACY
 	  <td>Period: <br><select name=period><option><option>Modern<option>Holocene<option>Quaternary<option>Tertiary<option>Cretaceous<option>Jurassic<option>Triassic<option>Permian<option>Carboniferous<option>Devonian<option>Silurian<option>Ordovician<option>Cambrian<option>Neoproterozoic</select></td>
+-->
 	</tr>
 	<tr>
+	  <td>Oldest time interval (or age in Ma): <br><nobr><select id="eml_max_interval"></select><input name=max_interval size=14></nobr><br></td>
+	  <td>Youngest time interval/Ma: <br><nobr><select id="eml_min_interval"></select><input name=min_interval size=14></nobr><br></td>
+
+<!-- LEGACY
 	  <td>Epoch: <br><input name=epoch size=30><br></td>
 	  <td>International age/stage: <br><input name=intage size=30><br></td>
 	  <td>Local age/stage: <br><input name=locage size=30><br></td>
+-->
 	</tr>
 	<tr>
 	  <td>Formation: <br><input name=formation size=30><br></td>

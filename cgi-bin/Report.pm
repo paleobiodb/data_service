@@ -29,6 +29,7 @@ package Report;
 
 use Text::CSV_XS;
 use PBDBUtil;
+use TimeLookup;
 
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
@@ -334,6 +335,7 @@ sub tallyFieldTerms	{
 	my %fieldnames = ("authorizer" => "authorizer", "enterer" => "enterer",
 				"research group" => "research_group",
 				"country" => "country", "continent" => "country", "state" => "state",
+				"interval name" => "max_interval_no",
 				"period" => "period_max", "epoch" => "epoch_max",
 				"international age/stage" => "intage_max", "local age/stage" => "locage_max",
 				"chronological data type" => "stratcomments", "formation" => "formation",
@@ -434,32 +436,47 @@ sub tallyFieldTerms	{
 
 	$self->dbg("number of coll results: ".@all_coll_rows."<br>");
 
+# for each period, get a list of all collections, then make a hash array
+#  assigning collections to periods
+	for my $period ('Cambrian','Ordovician','Silurian','Devonian',
+			'Carboniferous','Permian','Triassic','Jurassic',
+			'Cretaceous','Tertiary','Quaternary','Modern')	{
+		my $collref = TimeLookup::processLookup($dbh, $dbt, '', $period, '', '');
+		my @colls = @{$collref};
+		for my $coll ( @colls )	{
+			$myperiod{$coll} = $period;
+		}
+	}
+
+# tick through all the collections and tally occurrences etc.
 	foreach my $rowref ( @all_coll_rows ) {
 		%collrow = %{$rowref};
 
-			if ( $collrow{'collection_no'} > 0 &&
-				( $include[$collrow{'collection_no'}] > 0 ||
-				  $q->param('taxon_name') eq "" ) )	{
-				$lines++;
+		if ( $collrow{'collection_no'} > 0 &&
+			( $include[$collrow{'collection_no'}] > 0 ||
+			  $q->param('taxon_name') eq "" ) )	{
+			$lines++;
 				
-				if ($include[$collrow{'collection_no'}] > 0)	{
-					$recs[$collrow{'collection_no'}] = $include[$collrow{'collection_no'}];
-				}
-				$rectotal = $rectotal + $recs[$collrow{'collection_no'}];
-				# record that the genera in this collection
-				#  have been included in the tallies JA 28.2.03
-				my @temp = @{$taxlist[$collrow{'collection_no'}]};
-				for my $t ( @temp )	{
-					$genuscounted{$t}++;
-				}
-				if (($collrow{'country'} eq "") || ($collrow{'country'} eq "U.S.A."))	{
-					$collrow{'country'} = "USA";
-				}
+			if ($include[$collrow{'collection_no'}] > 0)	{
+				$recs[$collrow{'collection_no'}] = $include[$collrow{'collection_no'}];
+			}
+			$rectotal = $rectotal + $recs[$collrow{'collection_no'}];
+			# record that the genera in this collection
+			#  have been included in the tallies JA 28.2.03
+			my @temp = @{$taxlist[$collrow{'collection_no'}]};
+			for my $t ( @temp )	{
+				$genuscounted{$t}++;
+			}
+			if (($collrow{'country'} eq "") || ($collrow{'country'} eq "U.S.A."))	{
+				$collrow{'country'} = "USA";
+			}
 	 # concatenate two lithology fields if interbedded/mixed with is non-null
-				if (($collrow{'lithology2'} ) && ($field2[1] == 0) &&
-					  ($field2[2] == 0))	{
-					$collrow{'lithology1'} = $collrow{'lithology1'}." + ".$collrow{'lithology2'};
-				}
+			if (($collrow{'lithology2'} ) && ($field2[1] == 0) &&
+				  ($field2[2] == 0))	{
+				$collrow{'lithology1'} = $collrow{'lithology1'}." + ".$collrow{'lithology2'};
+			}
+
+			$collrow{'period_max'} = $myperiod{$collrow{'collection_no'}};
 				
 	 # determine the identity of the BEST type of chronological data
 	 # available for this collection: ranking is international age/stage,
@@ -644,6 +661,20 @@ if ($region{$collrow{$field[$r]}} eq "") { print "$collrow{$field[$r]}<br>\n"; }
 			}
 		}
 	}
+
+	# get the interval names for the interval numbers in the collections
+	#  table, if "interval name" was selected JA 19.7.03
+	for $r (1..2)      {
+		if ($q->param('searchfield'.$r) eq "interval name")	{
+			for my $i (0..$nterms[$r])	{
+				if ( $fieldterms[$r][$i] > 0 )	{
+					$sql = "SELECT interval_name FROM intervals WHERE interval_no=" . $fieldterms[$r][$i];
+					my $intref = @{$dbt->getData($sql)}[0];
+					$fieldterms[$r][$i] = $intref->{interval_name};
+				}
+			}
+		}
+	}
 	
 	if ( ! open OUTFILE,">$OUTPUT_FILE" ) {
 		$self->htmlError ( "$0:Couldn't open $OUTPUT_FILE<BR>$!" );
@@ -696,7 +727,7 @@ if ($region{$collrow{$field[$r]}} eq "") { print "$collrow{$field[$r]}<br>\n"; }
 					$yy = int($recsused[1][$i]/$rectotal*1000);
 				}
 				$yy = $yy / 10;
-				if ($fieldterms[1][$i] eq "")	{
+				if ( $fieldterms[1][$i] eq "" || $fieldterms[1][$i] eq "0")	{
 					$fieldterms[1][$i] = "<i>(no term entered)</i>";
 				}
 				printf "<tr><td align=center>%d<td align=center>%.1f<td>%s\n",$xx,$yy,$fieldterms[1][$i];
@@ -716,7 +747,7 @@ if ($region{$collrow{$field[$r]}} eq "") { print "$collrow{$field[$r]}<br>\n"; }
 		print OUTFILE $q->param('searchfield1').",";
 		for ($i = 0; $i <= $maxterms2; $i++)	{
 			if (($timesused[2][$i] > 0) || ($recsused[2][$i]))	{
-				if ($fieldterms[2][$i] )	{
+				if ( $fieldterms[2][$i] && $fieldterms[2][$i] != 0 )	{
 					print "<td>$fieldterms[2][$i] ";
 					print OUTFILE "\"$fieldterms[2][$i]\"";
 				}
@@ -731,7 +762,7 @@ if ($region{$collrow{$field[$r]}} eq "") { print "$collrow{$field[$r]}<br>\n"; }
 		print OUTFILE "TOTALS\n";
 		for ($i = 0; $i <= $maxterms1; $i++)	{
 			if (($timesused[1][$i] > 0) || ($recsused[1][$i] > 0))	{
-				if ($fieldterms[1][$i] )	{
+				if ( $fieldterms[1][$i] && $fieldterms[1][$i] != 0 )	{
 					print "<tr><td>$fieldterms[1][$i] ";
 					print OUTFILE "\"$fieldterms[1][$i]\",";
 				}

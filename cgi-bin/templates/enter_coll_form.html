@@ -1,19 +1,11 @@
-    <script language="JavaScript">
-    <!-- Begin
 
-			// This is a squirrely way to do this, but otherwise some browsers fail
-    function checkFields( ) {
 		var missinginfo = "";
-		var frm = document.forms[0];
 
 		if ( frm.collection_name.value == "") {
 			missinginfo += "\n    - Collection name (required)";
 		}
 		if ( frm.collection_type.selectedIndex == 0 ) {
 			missinginfo += "\n    - Reason for describing collection (required)";
-		}
-		if ( frm.period_max.selectedIndex == 0 ) {
-			missinginfo += "\n    - Period maximum (required)";
 		}
 		if ( frm.country.selectedIndex == 0 ) {
 			missinginfo += "\n    - Country (required)";
@@ -206,6 +198,7 @@
       <td colspan="2">
 		<input id="research_group" type="checkbox" value="ETE"> ETE
 		<input id="research_group" type="checkbox" value="marine invertebrate"> marine invertebrate
+		<input id="research_group" type="checkbox" value="PACED"> PACED
 		<input id="research_group" type="checkbox" value="paleobotany"> paleobotany
 		<input id="research_group" type="checkbox" value="paleoentomology"> paleoentomology
 		<input id="research_group" type="checkbox" value="taphonomy"> taphonomy
@@ -278,8 +271,8 @@
     </tr>
   </table>
   
-  <i><small>*State is required for collections 
-  within the United States.</i></small>
+  <i><p class="small">*State is required for collections 
+  within the United States.</i></p>
   <br>
   
   <table>
@@ -309,9 +302,9 @@
     </tr>
   </table>
 
-  <small><i>*Enter either minutes-seconds or decimal value, but not both. See the 
+  <p class="small"><i>*Enter either minutes-seconds or decimal value, but not both. See the 
   <A HREF="javascript:tipsPopup('/public/tips/tips.html#Coordinates')">tip sheet</A>
-  for web sites that provide coordinate data.</i></small>
+  for web sites that provide coordinate data.</i></p>
   <p>
   Basis of coordinate: <select id="latlng_basis"></select>
   <p>
@@ -334,18 +327,20 @@
   <P>
 	<font size="+1"><b>STRATIGRAPHIC INFORMATION</b></font>
     <font size="1"><A HREF="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</A> /
-    <A HREF="javascript:tipsPopup('/public/data/harland.html')">time scale</A></font>
+<a href="javascript:tipsPopup('$exec_url?action=startScale')">time scales</a></font>
   </p>
-  
+ 
+ 
   <table border=0>
+<!--
     <tr>
       <td><font color=#ff0000><B>Period (oldest):</FONT></B><br>
-		    <select id="emlperiod_max"></select>
-			  <select id="period_max"></select>
+		    <span id="emlperiod_max"></span>
+			  <span id="period_max"></span>
       </td>
       <td>Period (youngest):<br>
-		  	<select id="emlperiod_min"></select>
-			  <select id="period_min"></select>
+		  	<span id="emlperiod_min"></span>
+			  <span id="period_min"></span>
       </td>
     </tr>
     <tr>
@@ -376,8 +371,17 @@
       <td width="50%">Zone:<br><input id="zone" maxlength=255>
       </td>
     </tr>
+-->
+    <tr>
+      <td><font color=#ff0000><b>Maximum (oldest) time interval:</b></font><br><select id="eml_max_interval"></select>
+			  <input id="max_interval" maxlength=255>
+      </td>
+      <td>Minimum (youngest) time interval:<br><select id="eml_min_interval"></select>
+		  	<input id="min_interval" maxlength=255>
+      </td>
+    </tr>
   </table>
-  
+ 
   <table border=0>
     <tr>
       <td>Group:<br><input id="geological_group" maxlength=255></td>
@@ -413,9 +417,9 @@
   <select id="lithification"></select>
     <select id="lithology1"></select>
   <br>
-  <i><small>See the 
+  <i><p class="small">See the 
   <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">tip sheet</A>
-  for instructions.</i></small>
+  for instructions.</i></p>
   <p>
   Fossils collected from this lithology?<input id="fossilsfrom1" type=checkbox value="Y">
   <p>
@@ -441,9 +445,9 @@
   <select id="lithification2"></select>
 	<select id="lithology2"></select>
   <br>
-  <i><small>See the 
+  <i><p class="small">See the 
   <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">tip sheet</A>
-  for instructions.</i></small>
+  for instructions.</i></p>
   <p>
   Fossils collected from this lithology?<input id="fossilsfrom2" type=checkbox value="Y">
   <p>
@@ -601,8 +605,8 @@
   </tr>
   </table>
   
-  <i><small>Check these boxes only if the 
-original material is preserved!</i></small>
+  <i><p class="small">Check these boxes only if the 
+original material is preserved!</i></p>
   <p>
     <u>Replacement minerals</u>:
   </p>
@@ -654,7 +658,7 @@ original material is preserved!</i></small>
     </td>
   </tr>
   </table>
-  <i><small>"Other" includes barite, chlorite, and glauconite.</small></i>
+  <i><p class="small">"Other" includes barite, chlorite, and glauconite.</p></i>
 
   <p>
     <u>Special modes of occurrence</u>:
@@ -853,8 +857,8 @@ original material is preserved!</i></small>
   </p>
 
   <p>
-    <i><small>Check all values that apply in each of the following 
-    sections!</i></small>
+    <i><p class="small">Check all values that apply in each of the following 
+    sections!</i></p>
   </p>
   <p>
     <u>What is <i>not</i> included in the list but <i>is</i> reported to be 
@@ -1002,7 +1006,7 @@ original material is preserved!</i></small>
   </tr>
   </table>
   
-  <i><small>Give a total only if counts are not given for individual taxa.</small></i>
+  <i><p class="small">Give a total only if counts are not given for individual taxa.</p></i>
   <p>
     <u>Museum repositories</u>:
       <select id="museum"></select>

@@ -20,6 +20,8 @@ use PBDBUtil;
 use TaxonInfo;
 use DBTransactionManager;
 use Images;
+use Scales;
+use TimeLookup;
 
 require "connection.pl";	# Contains our database connection info
 
@@ -1339,7 +1341,7 @@ sub displaySearchColls {
 	# Show the "search collections" form
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-    my $html = $hbo->populateHTML('search_collections_form', [ '', '', '', '','' ], [ 'research_group', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment',$type ], \@prefkeys);
+    my $html = $hbo->populateHTML('search_collections_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment',$type ], \@prefkeys);
 	buildAuthorizerPulldown ( \$html );
 	buildEntererPulldown ( \$html );
 
@@ -1686,6 +1688,19 @@ sub processCollectionsSearch {
 		}
 	}
 
+	# if time intervals were requested, get an in-list
+	my @timeinlist;
+	my $listsintime;
+	if ( $q->param('max_interval') )	{
+ 		$inlistref = TimeLookup::processLookup($dbh, $dbt, $q->param('eml_max_interval'), $q->param('max_interval'), $q->param('eml_min_interval'), $q->param('min_interval'));
+ 		@timeinlist = @{$inlistref};
+		$timesearch = "Y";
+		$q->param(eml_max_interval => '');
+		$q->param(max_interval => '');
+		$q->param(eml_min_interval => '');
+		$q->param(min_interval => '');
+	}
+
 	# Get the database metadata
 	$sql = "SELECT * FROM collections WHERE collection_no=0";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -1766,7 +1781,7 @@ sub processCollectionsSearch {
 		}
 		# research_group is now a set -- tone 7 jun 2002
 		my $resgrp = $q->param('research_group');
-		if($resgrp && $resgrp =~ /(^ETE$)|(^5%$)|(^PGAP$)/){
+		if($resgrp && $resgrp =~ /(^ETE$)|(^5%$)|(^PACED$)|(^PGAP$)/){
 			my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
 				if($resprojstr ne ""){
 					push(@terms, " reference_no IN (" . $resprojstr . ")");
@@ -1808,14 +1823,17 @@ sub processCollectionsSearch {
 			}
 		}
 		
-		if ( ! @terms ) {
+		if ( ! @terms && ! @timeinlist ) {
 			if ( $q->param("genus_name") ) {
 				push @terms,"collection_no is not NULL";
 			} else {
-				my $message =	"
-<center>
-<h4>Please specify at least one search term</h4>
-<p>
+				my $message =	"<center>\n";
+				if ( ! $timesearch )	{
+$message .= "<h4>Please specify at least one search term</h4>\n";
+				} else	{
+$message .= "<h4>Please enter a valid time term or broader time range</h4>\n";
+				}
+$message .= "<p>
 <a href='?action=displaySearchColls&type=".$q->param("type")."'><b>Try again</b></a>
 </p>
 </center>
@@ -1852,11 +1870,21 @@ sub processCollectionsSearch {
 				"  FROM collections ".
 				" WHERE ".join(' AND ', @terms);
 
+		# modified to handle time lookup in-list JA 17.7.03
 		if ( $q->param('genus_name') ) {
+			if ( @timeinlist )	{
+				push @okcolls, @timeinlist;
+			}
 			if (@terms)	{
 				$sql .= " AND collection_no IN ( " . join ( ", ", @okcolls )." ) ";
 			} else	{
 				$sql .= " collection_no IN ( " . join ( ", ", @okcolls )." ) ";
+			}
+		} elsif ( @timeinlist )	{
+			if (@terms)	{
+				$sql .= " AND collection_no IN ( " . join ( ", ", @timeinlist )." ) ";
+			} else	{
+				$sql .= " collection_no IN ( " . join ( ", ", @timeinlist )." ) ";
 			}
 		}
 
@@ -1944,13 +1972,54 @@ sub displayCollectionDetails {
     push(@row, $subString);
     push(@fieldNames, 'subset_string');
 
+	# get the interval names by querying the intervals table JA 11.7.03
+	# also get the E/M/Ls JA 17.7.03
+	$fieldCount = "";
+	for my $tmpVal (@fieldNames) {
+		if ( $tmpVal eq 'max_interval_no') {
+			$max_interval_no = $row[$fieldCount];
+		} elsif ( $tmpVal eq 'min_interval_no' )	{
+			$min_interval_no = $row[$fieldCount];
+		}
+		if ( $max_interval_no && $min_interval_no )	{
+			last;
+		}
+		$fieldCount++;
+	}
+	if ( $max_interval_no )	{
+		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $max_interval_no;
+		unshift @row, @{$dbt->getData($sql)}[0]->{eml_interval};
+		unshift @row, @{$dbt->getData($sql)}[0]->{interval_name};
+	} else	{
+		unshift @row, '';
+		unshift @row, '';
+	}
+	unshift @fieldNames, 'eml_max_interval';
+	unshift @fieldNames, 'max_interval';
+	if ( $min_interval_no )	{
+		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $min_interval_no;
+		unshift @row, @{$dbt->getData($sql)}[0]->{eml_interval};
+		unshift @row, @{$dbt->getData($sql)}[0]->{interval_name};
+	} else	{
+		unshift @row, '';
+		unshift @row, '';
+	}
+	unshift @fieldNames, 'eml_min_interval';
+	unshift @fieldNames, 'min_interval';
+
     print &stdIncludes ( "std_page_top" );
 
 	# check whether we have period/epoch/locage/intage max AND/OR min:
-	for my $term ("epoch_","intage_","locage_","period_"){
+	for my $term ("_interval","epoch_","intage_","locage_","period_"){
 		my $max = 0;
 		my $min = 0;
 		for my $index (0..scalar(@fieldNames)){
+			if($fieldNames[$index] eq "max".$term && $row[$index]){
+				$max = 1;
+			}
+			elsif($fieldNames[$index] eq "min".$term && $row[$index]){
+				$min = 1;
+			}
 			if($fieldNames[$index] eq $term."max" && $row[$index]){
 				$max = 1;
 			}
@@ -1959,7 +2028,11 @@ sub displayCollectionDetails {
 			}
 		}
 		# Do this regardless:
-		push(@fieldNames,$term."title");
+		my $termtitle = $term."title";
+		if ( $term =~ /_interval/ )	{
+			$termtitle = "title".$term;
+		}
+		push(@fieldNames,$termtitle);
 		if($max || $min){
 			# There is no corresponding span, so this is just a placeholder, 
 			# but necessary so that htmlbuilder doesn't wipe the contents of 
@@ -1967,12 +2040,20 @@ sub displayCollectionDetails {
 			push(@row, "dummy"); 
 
 			if($max && $min){
-				push(@fieldNames,$term."dash");
+				if ( $term =~ /_interval/ )	{
+					push(@fieldNames,"dash".$term);
+				} else	{
+					push(@fieldNames,$term."dash");
+				}
 				push(@row, " - ");
 			}
 			elsif($min && !$max){
-				push(@fieldNames, $term."min_only");
-				push(@row, "<small>(minimum)</small>");
+				if ( $term =~ /_interval/ )	{
+					push(@fieldNames, "min_only".$term);
+				} else	{
+					push(@fieldNames, $term."min_only");
+				}
+				push(@row, "<p class=\"small\">(minimum)</p>");
 			}
 		}
 		# This will cause the whole "*_title" section to be erased.
@@ -2523,15 +2604,19 @@ sub displayEnterCollPage {
 	# Tack a few extra fields
 	my @row;
 	unshift(@fieldNames,	'authorizer', 
-							'enterer', 
-							'reference_no',
-							'ref_string',
-							'country' );
+		'enterer', 
+		'reference_no',
+		'ref_string',
+		'country',
+		'max_interval',
+		'min_interval' );
 	unshift(@row,	$s->get('authorizer'), 
-					$s->get('enterer'), 
-					$reference_no,
-					$refRowString,
-					'' );
+		$s->get('enterer'), 
+		$reference_no,
+		$refRowString,
+		'',
+		'',
+		'' );
 
 	%pref = &getPreferences($s->get('enterer'));
 	# Get the enterer's preferences JA 25.6.02
@@ -2543,11 +2628,81 @@ sub displayEnterCollPage {
 		}
 	}
 
-	# Output the page
 	print &stdIncludes ( "std_page_top" );
+
+	print &printIntervalsJava();
+
+	# Output the main part of the page
 	my @prefkeys = keys %pref;
 	print $hbo->populateHTML('enter_coll_form', \@row, \@fieldNames, \@prefkeys);
+
 	print &stdIncludes ("std_page_bottom");
+}
+
+sub printIntervalsJava	{
+
+	# print Javascript to limit entry of time interval names
+	# WARNING: if "Early/Late Interval" is submitted but only "Interval"
+	#  is present in the intervals table, the submission will be rejected
+	print "<script language=\"JavaScript\">\n";
+	print "<!-- Begin\n\n";
+	print "function checkFields() {\n";
+	print "  var noname = \"\";\n";
+	print "  var badname = \"\";\n";
+	print "  var frm = document.forms[0];\n";
+	print "  var index = frm.eml_max_interval.selectedIndex;\n";
+	print "  var eml1 = frm.eml_max_interval.options[index].value;\n";
+	print "  var time1 = frm.max_interval.value;\n";
+	print "  index = frm.eml_min_interval.selectedIndex;\n";
+	print "  var eml2 = frm.eml_min_interval.options[index].value;\n";
+	print "  var time2 = frm.min_interval.value;\n";
+	print "  var emltime1 = eml1 + time1;\n";
+	print "  var emltime2 = eml2 + time2;\n";
+
+	$sql = "SELECT eml_interval,interval_name FROM intervals";
+	my @names = @{$dbt->getData($sql)};
+
+	print "  if ( time1 == \"\" )   {\n";
+	print "    noname =\"WARNING!\\n\" +\n";
+	print "    \"The maximum interval field is required.\\n\" +\n";
+	print "    \"Please fill it in and submit the form again.\\n\" +\n";
+	print "    \"Hint: epoch names are better than nothing.\\n\";\n";
+	print "    alert(noname);\n";
+	print "    return false;\n";
+	print "  }\n";
+
+	print "  if (";
+	for my $nm ( @names )	{
+		print " emltime1 != \"" , $nm->{eml_interval} . $nm->{interval_name} , "\" ";
+		if ( $nm != $names[$#names] )	{
+			print "&&";
+		}
+	}
+	print ") {\n";
+	print "    badname += \"YES\";\n";
+	print "  }\n";
+	print "  if (";
+	for my $nm ( @names )	{
+		print " emltime2 != \"" , $nm->{eml_interval} . $nm->{interval_name} , "\" ";
+		if ( $nm != $names[$#names] )	{
+			print "&&";
+		}
+	}
+	print " && time2 != \"\" ) {\n";
+	print "    badname += \"YES\";\n";
+	print "  }\n";
+
+	print "  if ( badname != \"\" ) {\n";
+	print "    badname =\"WARNING!\\n\" +\n";
+	print "    \"The maximum and/or minimum interval fields have unrecognized values.\\n\" +\n";
+	print "    \"Please correct them and submit the form again.\\n\" +\n";
+	print "    \"Hint: try epoch names instead.\\n\";\n";
+	print "    alert(badname);\n";
+	print "    return false;\n";
+	print "  }\n";
+
+	return;
+
 }
 
 # Set the release date
@@ -2598,17 +2753,40 @@ sub setReleaseDate	{
 sub processEnterCollectionForm {
 		print &stdIncludes ( "std_page_top" );
 
+	unless($q->param('max_interval'))	{
+		print "<center><h3>The time interval field is required!</h3>\n<p>Please go back and specify the time interval for this collection</p></center>";
+		print &stdIncludes ("std_page_bottom");
+		print "<br><br>";
+		return;
+	}
+
+	# figure out the release date, enterer, and authorizer
 	&setReleaseDate();
-		$q->param(enterer=>$s->get("enterer"));
-		$q->param(authorizer=>$s->get("authorizer"));
-		
-    unless($q->param('period_max'))
-    {
-      print "<h3>The period field is required!</h3>\nPlease go back and specify the period for this collection";
-      print &stdIncludes ("std_page_bottom");
-      print "<br><br>";
-      return;
-    }
+	$q->param(enterer=>$s->get("enterer"));
+	$q->param(authorizer=>$s->get("authorizer"));
+
+	# change interval names into numbers by querying the intervals table
+	# JA 11-12.7.03
+	if ( $q->param('max_interval') )	{
+		$sql = "SELECT interval_no FROM intervals WHERE interval_name='" . $q->param('max_interval') . "'";
+		if ( $q->param('eml_max_interval') )	{
+			$sql .= " AND eml_interval='" . $q->param('eml_max_interval') . "'";
+		} else	{
+			$sql .= " AND eml_interval=''";
+		}
+		my $no = ${$dbt->getData($sql)}[0]->{interval_no};
+		$q->param(max_interval_no => $no);
+	}
+	if ( $q->param('min_interval') )	{
+		$sql = "SELECT interval_no FROM intervals WHERE interval_name='" . $q->param('min_interval') . "'";
+		if ( $q->param('eml_min_interval') )	{
+			$sql .= " AND eml_interval='" . $q->param('eml_min_interval') . "'";
+		} else	{
+			$sql .= " AND eml_interval=''";
+		}
+	my $no = ${$dbt->getData($sql)}[0]->{interval_no};
+		$q->param(min_interval_no => $no);
+	}
     
 	my $recID;
 	$return = insertRecord( 'collections', 'collection_no', \$recID, '99', 'period_max' );
@@ -2784,16 +2962,30 @@ sub displayTaxonInfoResults{
 ##############
 ## Scales stuff JA 7.7.03
 sub startScale	{
-	Images::startEditScale($dbh, $dbt, $s, $exec_url);
+	Scales::startSearchScale($dbh, $dbt, $s, $exec_url);
 }
-sub processStartScale	{
-	Images::processStartEditScale($dbt, $q, $s, $exec_url);
+sub processShowForm	{
+	Scales::processShowEditForm($dbh, $dbt, $hbo, $q, $s, $exec_url);
+}
+sub processViewScale	{
+	Scales::processViewTimeScale($dbt, $hbo, $q, $s, $exec_url);
 }
 sub processEditScale	{
-	Images::processEditScaleForm($dbt, $q, $s, $exec_url);
+	Scales::processEditScaleForm($dbt, $hbo, $q, $s, $exec_url);
 }
-## END Image stuff
+## END Scales stuff
 ##############
+
+sub startLookup	{
+
+	my $eml_max_interval = ""; my $max_interval_name = "40";
+	my $eml_min_interval = ""; my $min_interval_name = "30";
+
+	my $collref = TimeLookup::processLookup($dbh, $dbt, $eml_max_interval, $max_interval_name, $eml_min_interval, $min_interval_name);
+print join ',',@collections;
+	my @collections = @{$collref};
+
+}
 
 ##############
 ## Images stuff
@@ -2901,6 +3093,49 @@ sub displayEditCollection {
     push(@row, $refRowString);
     push(@fieldNames, 'session_reference_string');
 
+	# turn the max interval no into a name by querying the intervals table
+	# JA 11.7.03
+	$curColNum = "";
+	foreach my $colName (@fieldNames) {
+		if ( $colName eq 'max_interval_no') {
+			$max_interval_no = $row[$curColNum];
+			last;
+		}
+		$curColNum++;
+	}
+	if ( $max_interval_no )	{
+		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $max_interval_no;
+		unshift @row, @{$dbt->getData($sql)}[0]->{eml_interval};
+		unshift @row, @{$dbt->getData($sql)}[0]->{interval_name};
+	} else	{
+		unshift @row, '';
+		unshift @row, '';
+	}
+	unshift @fieldNames, 'eml_max_interval';
+	unshift @fieldNames, 'max_interval';
+
+	# likewise with the min interval no
+	$curColNum = "";
+	foreach my $colName (@fieldNames) {
+		if ( $colName eq 'min_interval_no') {
+			$min_interval_no = $row[$curColNum];
+			last;
+		}
+		$curColNum++;
+	}
+	if ( $min_interval_no )	{
+		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $min_interval_no;
+		unshift @row, @{$dbt->getData($sql)}[0]->{eml_interval};
+		unshift @row, @{$dbt->getData($sql)}[0]->{interval_name};
+	} else	{
+		unshift @row, '';
+		unshift @row, '';
+	}
+	unshift @fieldNames, 'eml_min_interval';
+	unshift @fieldNames, 'min_interval';
+
+	print &printIntervalsJava();
+
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
 	print $hbo->populateHTML('edit_coll_form', \@row, \@fieldNames, \@prefkeys);
@@ -2916,6 +3151,13 @@ sub processEditCollectionForm {
 	my $secondary = $q->param('secondary_reference_no');
 
 	print &stdIncludes ( "std_page_top" );
+
+	unless($q->param('max_interval'))	{
+		print "<center><h3>The time interval field is required!</h3>\n<p>Please go back and specify the time interval for this collection</p></center>";
+		print &stdIncludes ("std_page_bottom");
+		print "<br><br>";
+		return;
+	}
 
 	# SECONDARY REF STUFF...
 	# If a radio button was checked, we're changing a secondary to the primary
@@ -2953,6 +3195,29 @@ sub processEditCollectionForm {
 				PBDBUtil::deleteRefAssociation($dbh, $collection_no, $ref_no);
 			}
 		}
+	}
+
+	# change interval names into numbers by querying the intervals table
+	# JA 11-12.7.03
+	if ( $q->param('max_interval') )	{
+		$sql = "SELECT interval_no FROM intervals WHERE interval_name='" . $q->param('max_interval') . "'";
+		if ( $q->param('eml_max_interval') )	{
+			$sql .= " AND eml_interval='" . $q->param('eml_max_interval') . "'";
+		} else	{
+			$sql .= " AND eml_interval=''";
+		}
+		my $no = ${$dbt->getData($sql)}[0]->{interval_no};
+		$q->param(max_interval_no => $no);
+	}
+	if ( $q->param('min_interval') )	{
+		$sql = "SELECT interval_no FROM intervals WHERE interval_name='" . $q->param('min_interval') . "'";
+		if ( $q->param('eml_min_interval') )	{
+			$sql .= " AND eml_interval='" . $q->param('eml_min_interval') . "'";
+		} else	{
+			$sql .= " AND eml_interval=''";
+		}
+		my $no = ${$dbt->getData($sql)}[0]->{interval_no};
+		$q->param(min_interval_no => $no);
 	}
 
     unless($q->param('fossilsfrom1'))	{
@@ -3010,6 +3275,7 @@ sub processEditCollectionForm {
     print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
     
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit">Edit another collection using the same reference</a></p></b></center>|;
+	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</a></p></b></center>|;
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=add">Add a collection with the same reference</a></p></b></center>|;
 
 	print &stdIncludes ("std_page_bottom");
@@ -5758,7 +6024,6 @@ sub insertRecord {
 
 	# Insert the record
 	my $valstring = join ',',@vals;
-	$valstring =~ s/"/\\"/;
 	$sql = "INSERT INTO $tableName (" . join(',', @fields) . ") VALUES (" . $valstring . ")";
 	$sql =~ s/\s+/ /gs;
 	dbg("$sql<HR>");

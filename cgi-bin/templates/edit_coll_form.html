@@ -1,11 +1,4 @@
-
-
-    <script language="JavaScript">
-    <!-- Begin
-
-    function checkFields() {
 		var missinginfo = "";
-		var frm = document.forms[0];
 
 		// Deleting the primary reference is not allowed.
 		// Note that the length of the radio group (or checkbox group) equals 
@@ -32,9 +25,6 @@
 		}
 	  } // if secondary_reference_no
 
-		if ( frm.period_max.selectedIndex == 0 ) {
-			missinginfo += "\n    - Period maximum (required)";
-		}
 		if ( frm.country.selectedIndex == 0 ) {
 			missinginfo += "\n    - Country (required)";
 		}
@@ -122,6 +112,7 @@
       <td colspan="2">
 		<input id="research_group" type="checkbox" value="ETE"> ETE
 		<input id="research_group" type="checkbox" value="marine invertebrate"> marine invertebrate
+		<input id="research_group" type="checkbox" value="PACED"> PACED
 		<input id="research_group" type="checkbox" value="paleobotany"> paleobotany
 		<input id="research_group" type="checkbox" value="paleoentomology"> paleoentomology
 		<input id="research_group" type="checkbox" value="taphonomy"> taphonomy
@@ -197,8 +188,8 @@
     </tr>
   </table>
   
-  <i><small>*State is required for collections 
-  within the United States.</i></small>
+  <i><p class="small">*State is required for collections 
+  within the United States.</i></p>
   <br>
   
   <table>
@@ -228,9 +219,9 @@
     </tr>
   </table>
 
-  <small><i>*Enter either minutes-seconds or decimal value, but not both. See the 
+  <p class="small"><i>*Enter either minutes-seconds or decimal value, but not both. See the 
   <A HREF="javascript:tipsPopup('/public/tips/tips.html#Coordinates')">tip sheet</A>
-  for web sites that provide coordinate data.</i></small>
+  for web sites that provide coordinate data.</i></p>
   <p>
   Basis of coordinate: <select id="latlng_basis"></select>
   <p>
@@ -253,50 +244,58 @@
   <P>
 	<font size="+1"><b>STRATIGRAPHIC INFORMATION</b></font>
     <font size="1"><A HREF="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</A> /
-    <A HREF="javascript:tipsPopup('/public/data/harland.html')">time scale</A></font>
+<a href="javascript:tipsPopup('$exec_url?action=startScale')">time scales</a></font>
   </p>
   
   <table border=0>
     <tr>
-      <td><font color=#ff0000><B>Period (oldest):</FONT></B><br>
-		    <select id="emlperiod_max"></select>
-			  <select id="period_max"></select>
+      <td>
+      <i><div show="period_max"> Period (oldest): <span id="emlperiod_max"></span> <span id="period_max"></span> </div></i>
       </td>
-      <td>Period (youngest):<br>
-		  	<select id="emlperiod_min"></select>
-			  <select id="period_min"></select>
+      <td>
+      <i><div show="period_min"> Period (youngest): <span id="emlperiod_min"></span> <span id="period_min"></span> </div></i>
       </td>
     </tr>
     <tr>
-      <td>Epoch/series (oldest):<br><select id="emlepoch_max"></select>
-			  <input id="epoch_max" maxlength=255>
+      <td>
+      <i><div show="epoch_max"> Epoch/series (oldest): <span id="emlepoch_max"></span> <span id="epoch_max"></span> </div></i>
       </td>
-      <td>Epoch/series (youngest):<br><select id="emlepoch_min"></select>
-		    <input id="epoch_min" maxlength=255>
-      </td>
-    </tr>
-    <tr>
-      <td>International age/stage (oldest):<br><select id="emlintage_max"></select>
-        <input id="intage_max" maxlength=255>
-      </td>
-      <td>International age/stage (youngest):<br><select id="emlintage_min"></select>
-        <input id="intage_min" maxlength=255>
+      <td>
+      <i><div show="epoch_min"> Epoch/series (youngest): <span id="emlepoch_min"></span> <span id="epoch_min"></span> </div></i>
       </td>
     </tr>
     <tr>
-      <td>Local age/stage (oldest):<br><select id="emllocage_max"></select>
-			  <input id="locage_max" maxlength=255>
+      <td>
+      <i><div show="intage_max"> International age/stage (oldest): <span id="emlintage_max"></span> <span id="intage_max"></span> </div></i>
       </td>
-      <td>Local age/stage (youngest):<br><select id="emllocage_min"></select>
-		  	<input id="locage_min" maxlength=255>
+      <td>
+      <i><div show="intage_min"> International age/stage (youngest): <span id="emlintage_min"></span> <span id="intage_min"></span> </div></i>
       </td>
     </tr>
     <tr>
-      <td width="50%">Zone:<br><input id="zone" maxlength=255>
+      <td>
+      <i><div show="locage_max"> Local age/stage (oldest): <span id="emllocage_max"></span> <span id="locage_max"></span> </div></i>
+      </td>
+      <td>
+      <i><div show="locage_min"> Local age/stage (youngest): <span id="emllocage_min"></span> <span id="locage_min"></span> </div></i>
+      </td>
+    </tr>
+    <tr>
+      <td width="50%">
+      <i><div show="zone"> Zone:<br><span id="zone"></span> </div></i>
+      </td>
+    </tr>
+
+     <tr>
+      <td><font color=#ff0000><b>Maximum (oldest) time interval:</b></font><br><select id="eml_max_interval"></select>
+                          <input id="max_interval" maxlength=255>
+      </td>
+      <td>Minimum (youngest) time interval:<br><select id="eml_min_interval"></select>
+                        <input id="min_interval" maxlength=255>
       </td>
     </tr>
   </table>
-  
+ 
   <table border=0>
     <tr>
       <td>Group:<br><input id="geological_group" maxlength=255></td>
@@ -333,9 +332,9 @@
   <select id="lithification"></select>
     <select id="lithology1"></select>
   <br>
-  <i><small>See the 
+  <i><p class="small">See the 
   <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">tip sheet</A>
-  for instructions.</i></small>
+  for instructions.</i></p>
   <p>
   Fossils collected from this lithology?<input id="fossilsfrom1" type=checkbox value="Y">
   <p>
@@ -361,9 +360,9 @@
   <select id="lithification2"></select>
 	<select id="lithology2"></select>
   <br>
-  <i><small>See the 
+  <i><p class="small">See the 
   <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">tip sheet</A>
-  for instructions.</i></small>
+  for instructions.</i></p>
   <p>
   Fossils collected from this lithology?<input id="fossilsfrom2" type=checkbox value="Y">
   <p>
@@ -521,8 +520,8 @@
   </tr>
   </table>
   
-  <i><small>Check these boxes only if the 
-original material is preserved!</i></small>
+  <i><p class="small">Check these boxes only if the 
+original material is preserved!</i></p>
   <p>
     <u>Replacement minerals</u>:
   </p>
@@ -574,7 +573,7 @@ original material is preserved!</i></small>
     </td>
   </tr>
   </table>
-  <i><small>"Other" includes barite, chlorite, and glauconite.</small></i>
+  <i><p class="small">"Other" includes barite, chlorite, and glauconite.</p></i>
 
   <p>
     <u>Special modes of occurrence</u>:
@@ -773,8 +772,8 @@ original material is preserved!</i></small>
   </p>
 
   <p>
-    <i><small>Check all values that apply in each of the following 
-    sections!</i></small>
+    <i><p class="small">Check all values that apply in each of the following 
+    sections!</i></p>
   </p>
   <p>
     <u>What is <i>not</i> included in the list but <i>is</i> reported to be 
@@ -922,7 +921,7 @@ original material is preserved!</i></small>
   </tr>
   </table>
   
-  <i><small>Give a total only if counts are not given for individual taxa.</small></i>
+  <i><p class="small">Give a total only if counts are not given for individual taxa.</p></i>
   <p>
     <u>Museum repositories</u>:
       <select id="museum"></select>

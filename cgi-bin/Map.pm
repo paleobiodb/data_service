@@ -2,6 +2,7 @@ package Map;
 use GD;
 use Class::Date qw(date localdate gmdate now);
 use Image::Magick;
+use TimeLookup;
 
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
@@ -114,6 +115,15 @@ sub buildMapOnly {
 			$reflist =~ s/^,//;
 		}
 
+		# make a list of collections falling in a time interval
+		# JA 20.7.03
+		my $intlist;
+		if ( $q->param('interval_name') =~ /[A-Za-z]/ )	{
+			my $collref = TimeLookup::processLookup($dbh, $dbt, '', $q->param('interval_name'), '', '');
+			my @colls = @{$collref};
+			$intlist = join ',', @colls;
+		}
+
 
 		# query the occurrences table to get a list of useable collections
 		# Also handles species name searches JA 19-20.8.02
@@ -168,6 +178,7 @@ sub buildMapOnly {
 				if ($occ{'collection_no'} ne ""){
 				  $self->dbg($occ{'collection_no'});
 				  $collok{$occ{'collection_no'}} = "Y";
+print "<!-- $occ{'collection_no'} -->\n";
 				}
 			}
 			$sth2->finish();
@@ -286,22 +297,28 @@ sub buildMapOnly {
 		$where = "WHERE collection_no IN($collection_no_list) ";
 	}
 
+	# handle time interval JA 20.7.03
+	if ( $q->param('interval_name') =~ /[A-Za-z]/ )	{
+		$where = &::buildWhere ( $where, " ( collection_no IN (" . $intlist . ") )" );
+	}
+
 	for $t (keys %filledfields)	{
 		if ( $filledfields{$t} )	{
-			# handle period
-			if ($t eq "period")	{
-				$where = &::buildWhere ( $where, qq| (period_max='$filledfields{$t}' OR period_min='$filledfields{$t}')| );
-			}
-			# handle epoch 
-			elsif ($t eq "epoch")	{
-				$where = &::buildWhere ( $where, qq| (epoch_max='$filledfields{$t}' OR epoch_min='$filledfields{$t}')| );
-			}
-			# handle stage
-			elsif ($t eq "stage")	{
-				$where = &::buildWhere ( $where, qq| (intage_max LIKE "$filledfields{$t}%" OR intage_min LIKE "$filledfields{$t}%" OR locage_max LIKE "$filledfields{$t}%" OR locage_min LIKE "$filledfields{$t}%")| );
-			}
+		# LEGACY CODE
+#			# handle period
+#			if ($t eq "period")	{
+#				$where = &::buildWhere ( $where, qq| (period_max='$filledfields{$t}' OR period_min='$filledfields{$t}')| );
+#			}
+#			# handle epoch 
+#			elsif ($t eq "epoch")	{
+#				$where = &::buildWhere ( $where, qq| (epoch_max='$filledfields{$t}' OR epoch_min='$filledfields{$t}')| );
+#			}
+#			# handle stage
+#			elsif ($t eq "stage")	{
+#				$where = &::buildWhere ( $where, qq| (intage_max LIKE "$filledfields{$t}%" OR intage_min LIKE "$filledfields{$t}%" OR locage_max LIKE "$filledfields{$t}%" OR locage_min LIKE "$filledfields{$t}%")| );
+#			}
 			# handle lithology
-			elsif ($t eq "lithology1")	{
+			if ($t eq "lithology1")	{
 				$where = &::buildWhere ( $where, qq| (lithology1='$filledfields{$t}' OR lithology2='$filledfields{$t}')| );
 			}
 			# handle modified date
@@ -1205,6 +1222,9 @@ if ( $q->param('gridposition') ne "in back" )	{
 						print MAPOUT "&wild=Y";
 					}
 				}
+			}
+			if ( $q->param('interval_name') )	{
+				print MAPOUT "&max_interval=" . $q->param('interval_name');
 			}
 			if ( $q->param('genus_name') )	{
 				# get rid of spaces in a genus-species name

@@ -161,6 +161,7 @@ Select the research group:
 <tr><td valign="top"><font size=-1>Data authorizer:</font></td>
 <td><select name="authorizer"></select></td>
 
+<!-- LEGACY
 <tr><td valign=top><font size=-1>
 Check the time interval that you want to download (you must select the "or" radio button if you want to check off individual periods):
 <td><font size=-1>
@@ -188,7 +189,14 @@ Check the time interval that you want to download (you must select the "or" radi
 		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Modern" onClick="intervalsClick();">Modern</td>
 	</tr>
 	</table>
+-->
 
+<tr><td valign=top><font size=-1>
+If you only want lists from one time span, enter the oldest and youngest intervals:
+<td valign=top><font size=-1>
+<input name=max_interval_name size=25> - <input name=min_interval_name size=25>
+
+<!-- LEGACY
 <tr><td valign=top><font size=-1>
 If you only want lists from one epoch, enter its name:
 <td><font size=-1>
@@ -198,6 +206,7 @@ If you only want lists from one epoch, enter its name:
 Likewise for a single age/stage:
 <td><font size=-1>
 <input name=stage size=25>
+-->
 
 <tr><td><font size=-1>
 Taxonomic Name <small><i>(genus or higher rank)</i></small>:
