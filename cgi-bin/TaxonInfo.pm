@@ -1254,6 +1254,10 @@ sub doCollections{
 	# Process the data:  group all the collection numbers with the same
 	# time-place string together as a hash.
 	%time_place_coll = ();
+	my $oldestupperbound;
+	my $oldestuppername;
+	my $oldestlowerbound;
+	my $youngestupperbound = 9999;
 	foreach my $row (@data){
 	    $res = Collections::createTimePlaceString($row,$dbt);
 	    if(exists $time_place_coll{$res}){
@@ -1276,12 +1280,23 @@ sub doCollections{
 			$upper = $upperbound{$row->{'min_interval_no'}};
 			$min_interval_name{$res} = $interval_name{$row->{'min_interval_no'}};
 		}
+		# we also need to track the interval with the oldest upper
+		#  bound, because this will be the reported first appearance
+		if ( $upper > $oldestupperbound )	{
+			$oldestupperbound = $upper;
+			$oldestuppername = $max_interval_name{$res};
+			$oldestlowerbound = $lowerbound{$row->{'max_interval_no'}};
+		}
+		# also store the overall upper bound for printing below
+		if ( $upper < $youngestupperbound )	{
+			$youngestupperbound = $upper;
+		}
 		# WARNING: we're assuming upper boundary ages will never be
-		#  greater than 1000 million years
+		#  greater than 999 million years
 		# also, we're just going to ignore fractions of m.y. estimates
 		#  because those would screw up the sort below
 		$upper = int($upper);
-		$upper = 1000 - $upper;
+		$upper = 999 - $upper;
 		if ( $upper < 10 )	{
 			$upper = "00" . $upper;
 		} elsif ( $upper < 100 )	{
@@ -1291,8 +1306,12 @@ sub doCollections{
 	    }
 	}
 
-	# sort the time-place strings temporally
-	my @sorted = sort { $bounds_coll{$b} <=> $bounds_coll{$a} } keys %bounds_coll;
+	# a little cleanup
+	$oldestlowerbound =~ s/00$//;
+	$youngestupperbound =~ s/00$//;
+
+	# sort the time-place strings temporally or by geographic location
+	my @sorted = sort { $bounds_coll{$b} <=> $bounds_coll{$a} || $a cmp $b } keys %bounds_coll;
 
 	# legacy: originally the sorting was just on the key
 #	my @sorted = sort (keys %time_place_coll);
@@ -1301,15 +1320,18 @@ sub doCollections{
 		# Do this locally because the module never gets exec_url
 		#   from bridge.pl
 		my $exec_url = $q->url();
-		$output .= "<center><h3>Collections</h3></center>\n";
 
 		# print the first and last appearance (i.e., the age range)
 		#  JA 25.6.04
-		$output .= "<center>Age range: <b>" . $max_interval_name{$sorted[0]};
-		if ( $max_interval_name{$sorted[0]} ne $min_interval_name{$sorted[$#sorted]} )	{
+		$output .= "<center><h3>Age range</h3>\n";
+		$output .= $oldestuppername;
+		if ( $oldestuppername ne $min_interval_name{$sorted[$#sorted]} )	{
 			$output .= " to " . $min_interval_name{$sorted[$#sorted]};
 		}
-		$output .= "</b><center><p>\n";
+		$output .= " <i>or</i> " . $oldestlowerbound . " to " . $youngestupperbound . " Ma";
+		$output .= "<center><p>\n<hr>\n";
+
+		$output .= "<center><h3>Collections</h3></center>\n";
 
 		$output .= "<table width=\"100%\"><tr>";
 		$output .= "<th align=\"middle\">Time interval</th>";
