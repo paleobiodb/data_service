@@ -308,6 +308,43 @@ sub buildSelect {
 }
 
 
+
+
+
+# Pass it:
+# - reference to html string (of a template for example)
+# - name to select by default (optional)
+# - boolean value - should we only select active names from the DB?
+#
+# Returns nothing, simply search/replaces the html passed.
+# used to be in bridge.pl.
+#
+# class method
+sub buildAuthorizerPulldown {
+	my ($html, $authorizer, $active) = @_;
+	my $menu = authorizerPopupMenu($authorizer, $active);
+
+	$$html =~ s/<select name="authorizer">/$&\n$menu/;
+}
+
+
+# Pass it:
+# - reference to html string (of a template for example)
+# - name to select by default (optional)
+# - boolean value - should we only select active names from the DB?
+#
+# Returns nothing, simply search/replaces the html passed.
+# used to be in bridge.pl.
+#
+# class method
+sub buildEntererPulldown {
+	my ($html, $enterer, $active) = @_;
+	my $menu = entererPopupMenu($enterer, $active);
+	$$html =~ s/<select name="enterer">/$&\n$menu/;
+}
+
+
+
 # Pass it a string to select (or empty string if none)
 # and a boolean.  If the boolean is true, then we'll only
 # find active enterers, otherwise, find all enterers.
@@ -316,6 +353,8 @@ sub buildSelect {
 # use in a popup menu.
 #
 # rjp, 3/2004
+#
+# class method
 sub entererPopupMenu {
 	my $toSelect = shift;		# Default value
 	my $active = shift;
@@ -340,6 +379,8 @@ sub entererPopupMenu {
 # same as entererPopup, but for authorizers
 # 
 # rjp, 3/2004
+#
+# class method
 sub authorizerPopupMenu {
 	my $toSelect = shift;		# Default value
 	my $active = shift;
