@@ -1,0 +1,465 @@
+<script language="JavaScript">
+<!-- Begin
+
+// Smart handling of the period
+function intervalsClick ( ) {
+	var frm = document.forms[0];
+	var onePeriodChecked = false;
+
+	var intervalCount = frm.intervals.length;
+	for ( var i=0; i<intervalCount; i++ ) {
+		if ( frm.intervals[i].checked ) {
+			onePeriodChecked = true;
+			break;
+		}
+	}
+	if ( onePeriodChecked ) {
+		frm.interval[3].checked = true;
+	}
+}
+
+function intervalClick ( ) {
+
+	var frm = document.forms[0];
+
+	if ( ! frm.interval[3].checked ) {
+
+		// Uncheck all intervals checkboxes
+		var intervalCount = frm.intervals.length;
+		for ( var i=0; i<intervalCount; i++ ) {
+			frm.intervals[i].checked = false;
+		}
+	}
+}
+
+function globalClick ( ) {
+
+	var frm = document.forms[0];
+
+	if ( frm.global.checked ) {
+		// Uncheck all continents
+		frm.Africa.checked = false;
+		frm.Antarctica.checked = false;
+		frm.Asia.checked = false;
+		frm.Australia.checked = false;
+		frm.Europe.checked = false;
+		frm.elements['North America'].checked = false;
+		frm.elements['South America'].checked = false;
+	}
+}
+
+function continentClick ( ) {
+
+	var frm = document.forms[0];
+
+	if (	frm.Africa.checked || 
+			frm.Antarctica.checked || 
+			frm.Asia.checked || 
+			frm.Australia.checked || 
+			frm.Europe.checked || 
+			frm.elements['North America'].checked || 
+			frm.elements['South America'].checked  ) {
+		frm.global.checked = false;
+	} else {
+		// At least one must be checked, or hit the global
+		frm.global.checked = true;
+	}
+}
+
+function occurrencesNoneClick ( ) {
+
+	var frm = document.forms[0];
+
+	if ( frm.collections_only.checked ) {
+		frm.occurrences_authorizer.checked = false;
+		frm.occurrences_enterer.checked = false;
+		frm.occurrences_modifier.checked = false;
+		frm.occurrences_occurrence_no.checked = false;
+		frm.occurrences_species_name.checked = false;
+		frm.occurrences_abund_value.checked = false;
+		frm.occurrences_abund_unit.checked = false;
+		frm.occurrences_reference_no.checked = false;
+		frm.occurrences_comments.checked = false;
+		frm.occurrences_created.checked = false;
+		frm.occurrences_modified.checked = false;
+	}
+}
+
+function occurrencesClick ( ) {
+
+	var frm = document.forms[0];
+
+	if (	frm.occurrences_authorizer.checked ||
+			frm.occurrences_enterer.checked ||
+			frm.occurrences_modifier.checked ||
+			frm.occurrences_occurrence_no.checked ||
+			frm.occurrences_species_name.checked ||
+			frm.occurrences_abund_value.checked ||
+			frm.occurrences_abund_unit.checked ||
+			frm.occurrences_reference_no.checked ||
+			frm.occurrences_comments.checked ||
+			frm.occurrences_created.checked ||
+			frm.occurrences_modified.checked ) {
+		frm.collections_only.checked = false;
+	} else {
+		frm.collections_only.checked = true;
+	}
+}
+//  End -->
+</script>
+
+	<STYLE type="text/css">
+     <!--
+      TD  {
+      font-family : Arial, Helvetica;
+      font-size : medium;
+      }
+      P  {
+      font-family : Arial, Helvetica;
+      font-size : medium;
+      }
+      .cell {
+      font-family : Arial, Helvetica;
+      font-size : small;
+      color : Black;
+      }
+     -->
+     </STYLE>
+
+<center>
+<h2>Download request form</h2>
+</center>
+
+<h4>This form allows you to download a file that includes selected taxonomic occurrences.</h4>
+
+<form method=post action="bridge.pl">
+<input id="action" type=hidden name="action" value="displayDownloadResults">
+
+<hr>
+
+<table width="100%">
+
+<tr><td valign=top><font size=-1>
+Select the research group:
+<td><font size=-1>
+<select name="research_group">
+<option selected>
+<option>marine invertebrate
+<option>paleobotany
+<option>vertebrate
+</select>
+
+<tr><td valign=top><font size=-1>
+Check the time interval that you want to download (you must select the "or" radio button if you want to check off individual periods):
+<td><font size=-1>
+<input type=radio name=interval value="Phanerozoic" checked onClick="intervalClick();"><i>all periods</i>
+<input type=radio name=interval value="Interval1" onClick="intervalClick();"><i>all of the Paleozoic</i>
+<input type=radio name=interval value="Interval2" onClick="intervalClick();"><i>all of the Meso-Cenozoic</i><p>
+<input type=radio name=interval value="other">or...<p>
+
+	<table width="100%">
+	<tr>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Neoproterozoic" onClick="intervalsClick();">Neoproterozoic</td>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Cambrian" onClick="intervalsClick();">Cambrian</td>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Ordovician" onClick="intervalsClick();">Ordovician</td>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Silurian" onClick="intervalsClick();">Silurian</td>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Devonian" onClick="intervalsClick();">Devonian</td>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Carboniferous" onClick="intervalsClick();">Carboniferous</td>
+	</tr>
+	<tr>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Permian" onClick="intervalsClick();">Permian</td>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Triassic" onClick="intervalsClick();">Triassic</td>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Jurassic" onClick="intervalsClick();">Jurassic</td>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Cretaceous" onClick="intervalsClick();">Cretaceous</td>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Tertiary" onClick="intervalsClick();">Tertiary</td>
+	</tr>
+	</table>
+
+<tr><td valign=top><font size=-1>
+If you only want lists from one epoch, enter its name:
+<td><font size=-1>
+<input name=epoch size=25>
+
+<tr><td valign=top><font size=-1>
+Likewise for a single age/stage:
+<td><font size=-1>
+<input name=stage size=25>
+
+<tr><td><font size=-1>
+Enter a genus name if you only want occurrences of that one genus:
+<td><font size=-1>
+<input  name=genus_name size=25>
+
+<tr><td><font size=-1>
+...or else enter the <a href="javascript:tipsPopup('/public/tips/classtips.html')">names of classes</a> you want to include, separating each of them by a space (leave this blank if you want all of them):
+<td><font size=-1>
+<input name=class size=25><br>
+<font size=-1><i>Note: the phylum names Brachiopoda, Echinodermata and Mollusca will be parsed correctly into class names, but other phylum names won't be!</i>
+
+<tr><td><font size=-1>
+Download only your own taxonomic lists?
+<td><font size=-1><select name=owndata>
+<option selected value="YES">yes, download my data only
+<option value="NO">no, download everyone's data
+</select>
+
+<tr><td valign=top><font size=-1>
+Check the continents you want to include:
+
+<td valign=top><font size=-1>
+<input type=checkbox name="global" value="YES" checked onClick="globalClick();"><i>global</i><br>
+<input type=checkbox name="Africa" value="YES" onClick="continentClick();">Africa
+<input type=checkbox name="Antarctica" value="YES" onClick="continentClick();">Antarctica
+<input type=checkbox name="Asia" value="YES" onClick="continentClick();">Asia
+<input type=checkbox name="Australia" value="YES" onClick="continentClick();">Australia
+<input type=checkbox name="Europe" value="YES" onClick="continentClick();">Europe
+<input type=checkbox name="North America" value="YES" onClick="continentClick();">North America
+<input type=checkbox name="South America" value="YES" onClick="continentClick();">South America<br>
+
+<tr><td><font size=-1>
+Lump lists that are from the same county and formation? - WARNING: algorithm not yet functional
+<td><font size=-1><select name=lumplists>
+<option selected>no, keep them separate
+<option>yes, lump them
+</select>
+
+<tr><td><font size=-1>
+Lump occurrences of the same genus from the same collection?
+<td><font size=-1><select name=lumpgenera>
+<option selected value="NO">no, keep them separate
+<option value="YES">yes, lump them
+</select>
+
+<tr><td><font size=-1>
+Include lists that have poor geographic data (no county or lat/long)?
+<td><font size=-1><select name=strictgeography>
+<option selected value="YES">yes, include them
+<option value="NO">no, exclude them
+</select>
+
+<tr><td><font size=-1>
+Include lists that have poor temporal data (no epoch or stage)?
+<td><font size=-1><select name=strictchronology>
+<option selected value="YES">yes, include them
+<option value="NO">no, exclude them
+</select>
+
+<tr><td><font size=-1>
+Include occurrences that are generically indeterminate?
+<td><font size=-1><select name=indet>
+<option selected value="YES">yes, include them
+<option value="NO">no, exclude them
+</select>
+
+<tr><td><font size=-1>
+Select the type of output:
+<td><font size=-1><select name=collections_put>
+<option selected>comma-delimited text
+<option>tab-delimited text
+<option>CONJUNCT
+</select>
+<p>
+
+<tr><td valign=top><font size=-1>
+Check the fields from the occurrence table that you want output (the collection ID and genus name fields are always output): 
+<td><font size=-1>
+<table>
+<tr><td><font size=-1><input type=checkbox name=occurrences_authorizer value="YES" onClick="occurrencesClick();">authorizer
+<td><font size=-1><input type=checkbox name=occurrences_enterer value="YES" onClick="occurrencesClick();">enterer
+<td><font size=-1><input type=checkbox name=occurrences_modifier value="YES" onClick="occurrencesClick();">modifier
+<td><font size=-1><input type=checkbox name=occurrences_occurrence_no value="YES" onClick="occurrencesClick();">occurrence_no
+<!--input type=checkbox name=occurrences_collection_no value="YES">collection_no-->
+<!--input type=checkbox name=occurrences_genus_reso value="YES">genus_reso-->
+<!--input type=checkbox name=occurrences_genus_name value="YES">genus_name-->
+<!--input type=checkbox name=occurrences_species_reso value="YES">species_reso-->
+<tr><td><font size=-1><input type=checkbox name=occurrences_species_name value="YES" onClick="occurrencesClick();">species_name
+<td><font size=-1><input type=checkbox name=occurrences_abund_value value="YES" onClick="occurrencesClick();">abund_value
+<td><font size=-1><input type=checkbox name=occurrences_abund_unit value="YES" onClick="occurrencesClick();">abund_unit
+<td><font size=-1><input type=checkbox name=occurrences_reference_no value="YES" onClick="occurrencesClick();">reference_no
+<tr><td><font size=-1><input type=checkbox name=occurrences_comments value="YES" onClick="occurrencesClick();">comments
+<td><font size=-1><input type=checkbox name=occurrences_created value="YES" onClick="occurrencesClick();">created
+<td><font size=-1><input type=checkbox name=occurrences_modified value="YES" onClick="occurrencesClick();">modified
+<td><font size=-1><input type=checkbox name=collections_only value="YES" onClick="occurrencesNoneClick();"><nobr>NONE (get collection data only)</nobr>
+</table>
+
+<tr><td valign=top><font size=-1>
+Check the field fields from the main collection data table that you want output:
+
+<td>
+
+	<table border=0 width="100%">
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_authorizer value="YES">authorizer</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_enterer value="YES">enterer</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_modifier value="YES">modifier</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	<!--td><input type=checkbox name=collections_collection_no value="YES">collection_no-->
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_collection_subset value="YES"><nobr>collection_subset</nobr></td>
+	<td class="cell" nowrap><input type=checkbox name=collections_reference_no value="YES">reference_no</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_collection_name value="YES">collection_name</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_collection_aka value="YES">collection_aka</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_country value="YES">country</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_state value="YES">state</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_county value="YES">county</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_latdeg value="YES">latdeg</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_latmin value="YES">latmin</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_latdec value="YES">latdec</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_latdir value="YES">latdir</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_lngdeg value="YES">lngdeg</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_lngmin value="YES">lngmin</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_lngdec value="YES">lngdec</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_lngdir value="YES">lngdir</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_latlng_basis value="YES">latlng basis</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_geogscale value="YES">geogscale</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_geogcomments value="YES">geogcomments</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_emlperiod_max value="YES">emlperiod max</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_period_max value="YES">period max</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_emlperiod_min value="YES">emlperiod min</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_period_min value="YES">period min</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_emlepoch_max value="YES">emlepoch max</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_epoch_max value="YES">epoch max</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_emlepoch_min value="YES">emlepoch min</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_epoch_min value="YES">epoch min</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_emlintage_max value="YES">emlintage_max</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_intage_max value="YES">intage_max</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_emlintage_min value="YES">emlintage_min</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_intage_min value="YES">intage_min</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_emllocage_max value="YES">emllocage_max</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_locage_max value="YES">locage_max</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_emllocage_min value="YES">emllocage_min</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_locage_min value="YES">locage_min</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_zone value="YES">zone</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_formation value="YES">formation</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_member value="YES">member</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_localsection value="YES">localsection</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_localbed value="YES">localbed</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_localorder value="YES">localorder</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_regionalsection value="YES">regionalsection</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_regionalbed value="YES">regionalbed</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_regionalorder value="YES">regionalorder</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_stratscale value="YES">stratscale</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_stratcomments value="YES">stratcomments</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_lithdescript value="YES">lithdescript</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_lithadj value="YES">lithadj</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_lithification value="YES">lithification</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_lithology1 value="YES">lithology1</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_fossilsfrom1 value="YES">fossilsfrom1</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_lithadj2 value="YES">lithadj2</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_lithification2 value="YES">lithification2</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_lithology2 value="YES">lithology2</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_fossilsfrom2 value="YES">fossilsfrom2</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_environment value="YES">environment</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_tectonic_setting value="YES">tectonic_setting</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_preservation value="YES">preservation</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	<td class="cell" nowrap>&nbsp;</td></tr>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_geology_comments value="YES">geology_comments</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_collection_type value="YES">collection_type</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_collection_coverage value="YES">collection_coverage</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_collection_attributes value="YES">collection_attributes</td>
+	<td class="cell" nowrap>&nbsp;</td>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_collection_size value="YES">collection_size</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_collection_comments value="YES">collection_comments</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_taxonomy_comments value="YES">taxonomy_comments</td>
+	<td class="cell" nowrap>&nbsp;</td>
+	<td class="cell" nowrap>&nbsp;</td>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap><input type=checkbox name=collections_created value="YES">created</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_modified value="YES">modified</td>
+	<td class="cell" nowrap>&nbsp;</td>
+	<td class="cell" nowrap>&nbsp;</td>
+	<td class="cell" nowrap>&nbsp;</td>
+	</tr>
+
+	</table>
+
+	</td>
+</tr>
+
+<tr>
+	<td>
+		<input type=submit value="Create data set">
+	</td>
+</tr>
+
+</table>
+
+</form>

@@ -1,0 +1,106 @@
+<div align="center">
+<h2>Tabular report request form</h2>
+</div>
+
+<h4>
+This form generates tallies of fields in the Paleobiology Database main collection data table.
+</h4>
+
+<form method="POST" action="$exec_url">
+<input id="action" type=hidden name="action" value="displayReportResults">
+<input type=hidden name=maxcols value=30>
+
+<table><tr><td>
+<i>Note: the only required field on this page is the first one.</i><p>
+</td></tr></table>
+
+<table>
+<tr><td>
+Select the name of the field you want tabulated (rows):
+<td><select name=searchfield1>
+<option>continent
+<option>country
+<option>state
+<option selected>period
+<option>epoch
+<option>international age/stage
+<option>local age/stage
+<option>chronological data type
+<option>formation
+<option>lithology
+<option>paleoenvironment
+<option>tectonic setting
+<option>preservation mode
+<option>publication type
+<option>list coverage
+</select>
+<p>
+
+<tr><td>
+If you want to make a table that tallies combinations of two fields, select the name of the second field (columns):
+<td><select name=searchfield2>
+<option selected>
+<option>continent
+<option>country
+<option>state
+<option>period
+<option>epoch
+<option>international age/stage
+<option>local age/stage
+<option>chronological data type
+<option>formation
+<option>lithology
+<option>paleoenvironment
+<option>tectonic setting
+<option>preservation mode
+<option>publication type
+<option>list coverage
+</select>
+<p>
+
+<tr><td>
+If you are only searching one field, how many terms do you want to have tabulated?
+<td><select name=maxrows>
+<option>the 10 most frequent
+<option>the 20 most frequent
+<option>the 50 most frequent
+<option>all of them
+</select>
+
+<tr><td>
+If you want to limit the search to collections that include a <i>genus,</i> type in its full name here:
+<td><input name=genus size=25>
+
+<tr><td>
+Alternatively, you can limit the search to collections that include a <i>marine class</i> by entering
+its full name here (please see our <a href="javascript: tipsPopup('/public/tips/classtips.html')">tip sheet listing common marine invertebrate class names</a>):
+<td><input name=class size=25>
+
+<tr><td>
+Select the research group:
+
+<td>
+
+<select name="research_group">
+<option selected>
+<option>ETE
+<option>marine invertebrate
+<option>paleobotany
+<option>taphonomy
+<option>vertebrate
+</select>
+
+<tr><td>
+Select the type of output:
+<td><select name=output>
+<option>collections
+<option>records
+<option>mean records
+</select>
+<p>
+
+<tr><td>
+<td><input type=submit value="Submit">
+</table>
+
+</form>

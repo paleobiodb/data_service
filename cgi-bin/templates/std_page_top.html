@@ -1,0 +1,63 @@
+<html>
+<head>
+	<title id="title">Paleobiology Database</title>
+
+<STYLE type="text/css"> <!--
+        TD      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
+        TH      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
+        P       { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
+        H2      { font-family : Arial, Verdana, Helvetica; }
+        H3      { font-family : Arial, Verdana, Helvetica; }
+        H4      { font-family : Arial, Verdana, Helvetica; }
+        .menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }
+        .tiny { font-family : Arial, Verdana, Helvetica; font-size : 10px; text-decoration:none; }
+        .small { font-family : Arial, Verdana, Helvetica; font-size : 12px; text-decoration:none; }
+        .large { font-family : Arial, Verdana, Helvetica; font-size : 16px; text-decoration:none; }
+        .cell { font-family : Arial, Verdana, Helvetica; font-size : 12px; text-decoration:none; }
+                -->
+</STYLE>
+
+
+
+    <script language="JavaScript">
+    <!-- Begin
+
+	function tipsPopup (URL) {
+		window.open(URL, 'tips', 'toolbar=1,scrollbars=1,location=1,statusbar=0,menubar=0,resizable=1,width=640,height=480');
+	}
+    //  End -->
+    </script>
+
+</head>
+
+<body bgcolor="white" background="/public/PDbg.gif" vlink="#5522FF" alink="#00AAFF" link="#0033FF">
+
+<table border=0 align=center>
+  <tr>
+    <td width=650>
+
+      <table border=0 width=640 bgcolor="0077FF">
+        <tr>
+          <td width=160 align=center>
+            <nobr>
+            <a id="main_menu" href="$exec_url?action=displayMenuPage&clear=clearQueue" class="menu">Main menu</a>
+            </nobr>
+          </td>
+          <td width=160 align=center>
+            <a id="login" href="$exec_url?action=logout" class="menu">Current enterer:<BR>%%enterer%%</a>
+          </td>
+          <td width=160 align=center>
+            <a id="login" href="$exec_url?action=displaySearchRefs&type=select" class="menu">Current reference:<BR>%%reference%%</a>
+          </td>
+          <td width=160 align=center>
+            <nobr>
+            <a id="login" href="$exec_url?user=Contributor&action=displayHomePage" class="menu">Contributors' home page</a>
+            </nobr>
+          </td>
+        </tr>
+      </table>
+  </tr>
+</table>
+
+	<!-- End std_page_top.html -->
+

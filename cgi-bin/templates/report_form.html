@@ -1,0 +1,329 @@
+<div align="center">
+<h2>Paleobiology Database report form</h2>
+</div>
+
+<h4>
+This form generates tallies of fields in the Paleobiology Database main collection data table.
+</h4>
+
+<form method="POST" action="bridge.pl">
+<input id="action" type=hidden name="action" value="displayReportResults">
+<input type=hidden name=maxcols value=30>
+
+<table><tr><td>
+<i>Note: the only required field on this page is the first one.</i><p>
+</td></tr></table>
+
+<div align="center">
+<table>
+<tr><td>
+Select the name of the field you want tabulated (rows):
+<td><select name=searchfield1>
+<option>authorizer
+<option>enterer
+<option>country
+<option>continent
+<option>state
+<option>period
+<option>epoch
+<option>international age/stage
+<option>local age/stage
+<option>chronological data type
+<option>formation
+<option>lithification
+<option>lithology - all combinations
+<option>lithology - weighted
+<option>paleoenvironment
+<option>scale of geographic resolution
+<option>scale of stratigraphic resolution
+<option>tectonic setting
+<option>preservation mode
+<option>publication type
+<option>list coverage
+</select>
+<p>
+
+<tr><td>
+If you want to make a table that tallies combinations of two fields, select the name of the second field (columns):
+<td><select name=searchfield2>
+<option selected>
+<option>authorizer
+<option>enterer
+<option>country
+<option>continent
+<option>state
+<option>period
+<option>epoch
+<option>international age/stage
+<option>local age/stage
+<option>chronological data type
+<option>formation
+<option>lithification
+<option>lithology - all combinations
+<option>lithology - weighted
+<option>paleoenvironment
+<option>scale of geographic resolution
+<option>scale of stratigraphic resolution
+<option>tectonic setting
+<option>preservation mode
+<option>publication type
+<option>list coverage
+</select>
+<p>
+
+<tr><td>
+If you are only searching one field, how many terms do you want to have tabulated?<br>
+
+<td><select name=maxrows>
+<option>the 10 most frequent
+<option>the 20 most frequent
+<option>the 30 most frequent
+<option>the 40 most frequent
+<option>the 50 most frequent
+<option selected>all of them
+</select>
+
+<tr><td>
+If you are searching two fields instead, how many columns of data for the second field do you want to see?<br>
+
+<td><select name=maxcols>
+<option>the 5 most frequent
+<option>the 10 most frequent
+<option>the 20 most frequent
+<option selected>the 30 most frequent
+<option>the 40 most frequent
+<option>the 50 most frequent
+<option>all of them
+</select>
+
+
+<tr><td>
+If you want to limit the search to collections that include one or more <i>genera,</i> enter their full names here, <b>comma separated, no spaces please</b>:
+<td><input name=genus size=25>
+
+<tr><td>
+Alternatively, you can limit the search to collections that include a <i>marine class</i> by  selecting its name:
+
+<td><font size=-1>
+<select name=class>
+<option selected>
+<option>Anthozoa
+<option>Articulata
+<option>Bivalvia
+<option>Cephalopoda
+<option>Crinoidea
+<option>Echinoidea
+<option>Gastropoda
+<option>Gymnolaemata
+<option>Stenolaemata
+<option>Trilobita
+
+<option>
+
+<option>Acantharia
+<option>Acanthodii
+<option>Acrania
+<option>Amphibia
+<option>Arachnida
+<option>Ascidiacea
+<option>Asteroidea
+<option>Aves
+<option>Blastoidea
+<option>Brachypoda
+<option>Branchiopoda
+<option>Calcarea
+<option>Cambroclavida
+<option>Camptostromoidea
+<option>Cephalaspidomorphi
+<option>Cephalochordata
+<option>Chondrichthyes
+<option>Cirripedia
+<option>Coeloscleritophora
+<option>Conodonta
+<option>Copepoda
+<option>Coronata
+<option>Cribricyathea
+<option>Cricoconarida
+<option>Ctenocystoidea
+<option>Cubozoa
+<option>Cyclozoa
+<option>Demospongia
+<option>Dinocarida
+<option>Diploporita
+<option>Diplorhina
+<option>Edrioasteroidea
+<option>Eldonioidea
+<option>Enteropneusta
+<option>Eocrinoidea
+<option>Graptolithina
+<option>Helcionelloida
+<option>Helicoplacoidea
+<option>Hexactinellida
+<option>Hirudinea
+<option>Holothuroidea
+<option>Homoiostelea
+<option>Homostelea
+<option>Hydroconozoa
+<option>Hydrozoa
+<option>Hyolithomorpha
+<option>Inarticulata
+<option>Incertae
+<option>Irregulares
+<option>Lingulata
+<option>Machaeridia
+<option>Malacostraca
+<option>Mammalia
+<option>Marrelomorpha
+<option>Medusae
+<option>Merostomata
+<option>Merostomoidea
+<option>Monorhina
+<option>Multiplacophora
+<option>Myriapoda
+<option>Myzostomaria
+<option>Oligochaeta
+<option>Ophiocistioidea
+<option>Ophiuroidea
+<option>Orthothecimorpha
+<option>Osteichthyes
+<option>Ostracoda
+<option>Palaeoscolecida
+<option>Parablastoidea
+<option>Paracrinoidea
+<option>Paragastropoda
+<option>Paratrilobita
+<option>Petalonamae
+<option>Placodermi
+<option>Polychaeta
+<option>Polyhymenophora
+<option>Polyplacophora
+<option>Pteraspidomorphi
+<option>Pterobranchia
+<option>Pycnogonida
+<option>Radiolaria
+<option>Regulares
+<option>Remipedia
+<option>Reptilia
+<option>Rhabditida
+<option>Rhizopodea
+<option>Rhombifera
+<option>Rostroconchia
+<option>Scaphopoda
+<option>Scyphozoa
+<option>Somasteroidea
+<option>Stenothecoidea
+<option>Stylophora
+<option>Tentaculitoidea
+<option>Tergomya
+<option>Thylacocephala
+<option>Tommotiida
+<option>Tunicata
+<option>Uncertain
+
+</select>
+</font>
+
+<tr><td>
+Select the research group or project:
+
+<td>
+<select name=research_group>
+<option selected>
+<option>marine invertebrate
+<option>paleobotany
+<option>taphonomy
+<option>vertebrate
+<option>ETE
+<option>5%
+<option>PGAP
+</select>
+
+<tr><td valign=top>
+Select the date of the oldest collections you want to tally:
+
+<td align="left">
+<table align="left">
+<tr align="left">
+<td align="left">
+<select name=year>
+<option selected>
+<option>2002
+<option>2001
+<option>2000
+<option>1999
+<option>1998
+</select>
+</td>
+
+<td>
+<select name=mon>
+<option selected>
+<option>December
+<option>November
+<option>October
+<option>September
+<option>August
+<option>July
+<option>June
+<option>May
+<option>April
+<option>March
+<option>February
+<option>January
+</select>
+</td>
+
+<td>
+<select name=day>
+<option selected>
+<option>31
+<option>30
+<option>29
+<option>28
+<option>27
+<option>26
+<option>25
+<option>24
+<option>23
+<option>22
+<option>21
+<option>20
+<option>19
+<option>18
+<option>17
+<option>16
+<option>15
+<option>14
+<option>13
+<option>12
+<option>11
+<option>10
+<option>9
+<option>8
+<option>7
+<option>6
+<option>5
+<option>4
+<option>3
+<option>2
+<option>1
+</select>
+</td>
+</tr>
+</table>
+
+<tr><td>
+Select the type of output:
+<td><select name=output>
+<option>collections
+<option>occurrences
+<option>mean occurrences
+</select>
+<p>
+
+<tr><td>
+<td>
+<input type=submit value="Submit">
+</table>
+</form>
+

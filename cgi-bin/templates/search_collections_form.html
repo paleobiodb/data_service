@@ -1,0 +1,526 @@
+<script language="JavaScript">
+<!-- Begin
+
+    // This is a handy little function for seeing what properties an object has
+    function showProperties ( obj ) {
+        var result = "";
+
+        for ( var i in obj ) {
+            result += "o." + i + " = " + obj[i] + "<BR>\n";
+        }
+        document.write ( result );
+    }
+
+
+// Zips pulldown to the current user
+function me ( ) {
+
+	// Loop over all forms on the page
+	for ( var i=0; i < document.forms.length; i++ ) {
+		// If we have an enterer pulldown
+		if ( document.forms[i].enterer ) {
+
+			var options = document.forms[i].enterer.options;
+
+			// Loop over each option to find our person
+			for ( var loop=0; loop < options.length; loop++) {
+				if ( options[loop].value == "%%enterer%%" ) {
+					options.selectedIndex = loop;
+					break;
+				} // fi
+			} // rof
+			break;
+		} //fi
+	} // rof
+}
+
+// Zips pulldown to the current authorizer
+function auth ( ) {
+
+	// Loop over all forms on the page
+	for ( var i=0; i < document.forms.length; i++ ) {
+		// If we have an authorizer pulldown
+		if ( document.forms[i].authorizer ) {
+
+			var options = document.forms[i].authorizer.options;
+
+			// Loop over each option to find our person
+			for ( var loop=0; loop < options.length; loop++) {
+				if ( options[loop].value == "%%authorizer%%" ) {
+					options.selectedIndex = loop;
+					break;
+				} // fi
+			} // rof
+			break;
+		} //fi
+	} // rof
+}
+
+// Checks the form data
+function checkForm ( ) {
+
+	var frm = document.forms[0];
+	var errors = "";
+
+	if ( frm.collection_names.value == ""
+		&& frm.collection_no.value == ""
+		&& frm.genus_name.value == ""
+		&& frm.country.value == ""
+		&& frm.state.value == ""
+		&& frm.epoch.value == ""
+		&& frm.intage.value == ""
+		&& frm.locage.value == ""
+		&& frm.formation.value == ""
+		&& frm.member.value == "" 
+		&& frm.authorizer.selectedIndex == -1
+		&& frm.enterer.selectedIndex == -1
+		&& frm.research_group.selectedIndex == -1 
+		&& frm.period.selectedIndex == -1
+		&& frm.lithology1.selectedIndex == -1
+		&& frm.lithology2.selectedIndex == -1
+		&& frm.environment.selectedIndex == -1 ) {
+		errors = "Please supply a search term.";
+	}
+
+	if ( errors != "" ) { 
+		alert ( errors );
+		return false;
+	} else {
+		return true;
+	}
+}
+
+
+//  End -->
+</script>
+
+	<center>
+	<h2>Collection search form</h2>
+	<h3>Fill in any of the following fields and press "Search collections."</h3>
+	</center>
+
+    <form method=post action="bridge.pl" onSubmit="return checkForm();">
+	<input id="action" type=hidden name="action" value="displayCollResults">
+	<input id="type" type=hidden name="type" value="%%type%%">
+
+
+<center><font size=-1><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character.</i></font></center>
+
+		<hr>
+
+	<table width=100%><tr><td align=center>
+    <table border=0 cellpadding=2 cellspacing=2>
+	<tr><td colspan=4 align=center><b>Search values</b></td></tr>
+	<tr>
+      <td>Collection name: <br><input name=collection_names size=30><br></td>
+	  <td>Collection number: <br><input name=collection_no size=30><br></td>
+	  <td>Reference number: <br><input name=reference_no size=30><br></td>
+	</tr>
+	<tr>
+	  <td>Authorizer: <br><select name="authorizer"></select>&nbsp;<a href="javascript: auth( );">Me</a></td>
+	  <td>Enterer: <br><select name="enterer"></select>&nbsp;<a href="javascript: me( );">Me</a></td>
+	  <td>Research group or project: <br>
+<select name="research_group">
+<option selected>
+<option>marine invertebrate
+<option>paleobotany
+<option>taphonomy
+<option>vertebrate
+<option>ETE
+<option>5%
+<option>PGAP
+</select>
+</td>
+	</tr>
+	<tr>
+	  <td>
+	<nobr><select name="taxon_rank"><option>Higher-taxon<option>Genus<option>Genus and species<option>species</select>
+	name:</nobr>
+	<br><input name=genus_name size=30><br></td>
+	</tr>
+	<tr>
+	  <td>Country: <br><input name=country size=30><br></td>
+	  <td>State/province: <br><input name=state size=30><br></td>
+	  <td>County/parish: <br><input name=county size=30><br></td>
+	</tr>
+	<tr>
+	  <td>Period: <br><select name=period><option><option>Modern<option>Quaternary<option>Tertiary<option>Cretaceous<option>Jurassic<option>Triassic<option>Permian<option>Carboniferous<option>Devonian<option>Silurian<option>Ordovician<option>Cambrian<option>Neoproterozoic</select></td>
+<!-- OPTIONAL collection_search -->
+	  <td>Epoch: <br><input name=epoch size=30><br></td>
+	  <td>International age/stage: <br><input name=intage size=30><br></td>
+	</tr>
+	<tr>
+	  <td>Local age/stage: <br><input name=locage size=30><br></td>
+<!-- END collection_search -->
+	  <td>Formation: <br><input name=formation size=30><br></td>
+<!-- OPTIONAL collection_search -->
+	  <td>Member: <br><input name=member size=30><br></td>
+	</tr>
+	<tr>
+<!-- END collection_search -->
+	  <td>Primary lithology: <br><select id="lithology1"></select><br></td>
+<!-- OPTIONAL collection_search -->
+	  <td>Secondary lithology: <br><select id="lithology2"></select><br></td>
+	  <td>Paleoenvironment: <br><select id="environment"></select><br></td>
+	  <td></td>
+<!-- END collection_search -->
+	</table>
+	</td></tr></table>
+	<hr>
+
+
+	<table width=100%><tr><td align=center>
+	<table border=0 cellpadding=2 cellspacing=2>
+	<tr>
+		<td colspan="4" align=center><b>Search and display options</b></td>
+	</tr>
+	<tr valign=top>
+		<td><input type=radio name=wild value=N></td>
+		<td>require exact matches</td>
+		<td><input type=radio name=wild value=Y checked></td>
+		<td>allow wildcards and partial string matches</td>
+	</tr>
+<!-- OPTIONAL collection_search -->
+	<tr>
+		<td>Column 1:</td>
+		<td>collection number</td>
+		<td>Column 3:</td>
+		<td><select name="column1">
+<option>
+<option>authorizer
+<option>enterer
+<option>modifier
+<option>collection_no
+<option>collection_subset
+<option>reference_no
+<option>collection_name
+<option>collection_aka
+<option>country
+<option>state
+<option>county
+<option>latdeg
+<option>latmin
+<option>latsec
+<option>latdec
+<option>latdir
+<option>lngdeg
+<option>lngmin
+<option>lngsec
+<option>lngdec
+<option>lngdir
+<option>latlng_basis
+<option>altitude_value
+<option>altitude_unit
+<option>geogscale
+<option>geogcomments
+<option>emlperiod_max
+<option>emlperiod_min
+<option>period_max
+<option>emlepoch_max
+<option>emlepoch_min
+<option>epoch_max
+<option>epoch_min
+<option>emlintage_max
+<option>intage_max
+<option>emlintage_min
+<option>intage_min
+<option>emllocage_max
+<option>locage_max
+<option>emllocage_min
+<option>locage_min
+<option>zone
+<option>research_group
+<option>formation
+<option>geological_group
+<option>member
+<option>localsection
+<option>localbed
+<option>localorder
+<option>regionalsection
+<option>regionalbed
+<option>regionalorder
+<option>stratscale
+<option>stratcomments
+<option>lithdescript
+<option>lithadj
+<option>lithification
+<option>lithology1
+<option>fossilsfrom1
+<option>lithology2
+<option>fossilsfrom2
+<option>environment
+<option>tectonic_setting
+<option>pres_mode
+<option>geology_comments
+<option>collection_type
+<option>collection_coverage
+<option>coll_meth
+<option>collection_size
+<option>collection_size_unit
+<option>collection_comments
+<option>taxonomy_comments
+<option>created
+<option>modified
+<option>release_date
+<option>access_level
+<option>lithification2
+<option>lithadj2
+<option>period_min
+<option>otherenvironment
+<option>rock_censused_unit
+<option>rock_censused
+<option>spatial_resolution
+<option>temporal_resolution
+<option>feed_pred_traces
+<option>encrustation
+<option>bioerosion
+<option>fragmentation
+<option>sorting
+<option>disassoc_minor_elems
+<option>disassoc_maj_elems
+<option>art_whole_bodies
+<option>disart_assoc_maj_elems
+<option>seq_strat
+<option>lagerstatten
+<option>concentration
+<option>orientation
+<option>preservation_quality
+<option>sieve_size_min
+<option>sieve_size_max
+<option>assembl_comps
+<option>taphonomy_comments
+</select>
+		</td>
+	</tr>
+	<tr>
+		<td>Column 2:</td>
+		<td>collection name</td>
+		<td>Column 4:</td>
+		<td><select name="column2">
+<option>
+<option>authorizer
+<option>enterer
+<option>modifier
+<option>collection_no
+<option>collection_subset
+<option>reference_no
+<option>collection_name
+<option>collection_aka
+<option>country
+<option>state
+<option>county
+<option>latdeg
+<option>latmin
+<option>latsec
+<option>latdec
+<option>latdir
+<option>lngdeg
+<option>lngmin
+<option>lngsec
+<option>lngdec
+<option>lngdir
+<option>latlng_basis
+<option>altitude_value
+<option>altitude_unit
+<option>geogscale
+<option>geogcomments
+<option>emlperiod_max
+<option>emlperiod_min
+<option>period_max
+<option>emlepoch_max
+<option>emlepoch_min
+<option>epoch_max
+<option>epoch_min
+<option>emlintage_max
+<option>intage_max
+<option>emlintage_min
+<option>intage_min
+<option>emllocage_max
+<option>locage_max
+<option>emllocage_min
+<option>locage_min
+<option>zone
+<option>research_group
+<option>formation
+<option>geological_group
+<option>member
+<option>localsection
+<option>localbed
+<option>localorder
+<option>regionalsection
+<option>regionalbed
+<option>regionalorder
+<option>stratscale
+<option>stratcomments
+<option>lithdescript
+<option>lithadj
+<option>lithification
+<option>lithology1
+<option>fossilsfrom1
+<option>lithology2
+<option>fossilsfrom2
+<option>environment
+<option>tectonic_setting
+<option>pres_mode
+<option>geology_comments
+<option>collection_type
+<option>collection_coverage
+<option>coll_meth
+<option>collection_size
+<option>collection_size_unit
+<option>collection_comments
+<option>taxonomy_comments
+<option>created
+<option>modified
+<option>release_date
+<option>access_level
+<option>lithification2
+<option>lithadj2
+<option>period_min
+<option>otherenvironment
+<option>rock_censused_unit
+<option>rock_censused
+<option>spatial_resolution
+<option>temporal_resolution
+<option>feed_pred_traces
+<option>encrustation
+<option>bioerosion
+<option>fragmentation
+<option>sorting
+<option>disassoc_minor_elems
+<option>disassoc_maj_elems
+<option>art_whole_bodies
+<option>disart_assoc_maj_elems
+<option>seq_strat
+<option>lagerstatten
+<option>concentration
+<option>orientation
+<option>preservation_quality
+<option>sieve_size_min
+<option>sieve_size_max
+<option>assembl_comps
+<option>taphonomy_comments
+</select>
+		</td>
+	</tr>
+	<tr>
+	 	<td>Sort column:</td>
+		<td><select name="sortby">
+<option>
+<option>authorizer
+<option>enterer
+<option>modifier
+<option selected>collection_no
+<option>collection_subset
+<option>reference_no
+<option>collection_name
+<option>collection_aka
+<option>country
+<option>state
+<option>county
+<option>latdeg
+<option>latmin
+<option>latsec
+<option>latdec
+<option>latdir
+<option>lngdeg
+<option>lngmin
+<option>lngsec
+<option>lngdec
+<option>lngdir
+<option>latlng_basis
+<option>altitude_value
+<option>altitude_unit
+<option>geogscale
+<option>geogcomments
+<option>emlperiod_max
+<option>emlperiod_min
+<option>period_max
+<option>emlepoch_max
+<option>emlepoch_min
+<option>epoch_max
+<option>epoch_min
+<option>emlintage_max
+<option>intage_max
+<option>emlintage_min
+<option>intage_min
+<option>emllocage_max
+<option>locage_max
+<option>emllocage_min
+<option>locage_min
+<option>zone
+<option>research_group
+<option>formation
+<option>geological_group
+<option>member
+<option>localsection
+<option>localbed
+<option>localorder
+<option>regionalsection
+<option>regionalbed
+<option>regionalorder
+<option>stratscale
+<option>stratcomments
+<option>lithdescript
+<option>lithadj
+<option>lithification
+<option>lithology1
+<option>fossilsfrom1
+<option>lithology2
+<option>fossilsfrom2
+<option>environment
+<option>tectonic_setting
+<option>pres_mode
+<option>geology_comments
+<option>collection_type
+<option>collection_coverage
+<option>coll_meth
+<option>collection_size
+<option>collection_size_unit
+<option>collection_comments
+<option>taxonomy_comments
+<option>created
+<option>modified
+<option>release_date
+<option>access_level
+<option>lithification2
+<option>lithadj2
+<option>period_min
+<option>otherenvironment
+<option>rock_censused_unit
+<option>rock_censused
+<option>spatial_resolution
+<option>temporal_resolution
+<option>feed_pred_traces
+<option>encrustation
+<option>bioerosion
+<option>fragmentation
+<option>sorting
+<option>disassoc_minor_elems
+<option>disassoc_maj_elems
+<option>art_whole_bodies
+<option>disart_assoc_maj_elems
+<option>seq_strat
+<option>lagerstatten
+<option>concentration
+<option>orientation
+<option>preservation_quality
+<option>sieve_size_min
+<option>sieve_size_max
+<option>assembl_comps
+<option>taphonomy_comments
+</select></td>
+	<td>Sort order:</td>
+	<td><select name=sortorder size=1><option value="asc">ascending<option value="desc">descending</select></td>
+</tr>
+<!-- END collection_search -->
+<tr>
+	<td colspan="4">Number of matching records shown: <input name=limit size=10 value=30>
+</tr>
+</table>
+
+<p><input type="submit" value="Search collections"></p>
+
+</td></tr></table>
+
+</form>

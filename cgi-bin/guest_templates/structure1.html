@@ -1,0 +1,712 @@
+<html>
+<head>
+   <title>Database Fields: Paleobiology Database Collections</title>
+</head>
+<body bgcolor="white" background="PDbg.gif" text=black link="#0055FF" vlink="#990099">
+
+<center><h2>Paleobiology Database Fields and Content Restrictions</h2></center>
+<center><h3>Collection records</h3></center>
+
+<br>Comments: please do not put backslashes "\"&nbsp; or "&amp;" in fields.  You should also read the <a href="javascript: tipsPopup('/public/tips/tips.html')"> tip sheet</a>  for additional information on data entry, etc.
+
+<br>&nbsp;
+<table BORDER WIDTH="100%" >
+<tr>
+<td><u>Identity</u>
+<td><u>Format</u>
+<td><u>Values</u>
+<tr>
+<td>Authorized by</td>
+<td>fixed value list, one value only.</td>
+<td>J. Alroy
+<br>R. Bambach
+<br>C. Brett
+<br>D. Erwin
+<br>M. Foote
+<br>F. Fursich
+<br>T. Hansen
+<br>S. Holland
+<br>L. Ivany
+<br>D. Jablonski
+<br>D. Jacobs
+<br>W. Kiessling
+<br>M. Kosnik
+<br>S. Lidgard
+<br>C. Marshall
+<br>M. McKinney
+<br>D. Meyer
+<br>A. Miller
+<br>T. Olszewski
+<br>M. Patzkowsky
+<br>D. Raup
+<br>K. Roy
+<br>J. Sepkoski
+<br>P. Wagner</td>
+</tr>
+
+<tr>
+<td>Entered by</td>
+<td>fixed value list, one value only.</td>
+<td>J. Alroy
+<br>R. Bambach
+<br>K. Bezusko
+<br>P. Borkow
+<br>C. Brett
+<br>D. Carlson
+<br>S. DeLong
+<br>H. Eichiner
+<br>D. Erwin
+<br>M. Foote
+<br>F. Fursich
+<br>T. Hansen
+<br>S. Holland
+<br>L. Ivany
+<br>D. Jablonski
+<br>D. Jacobs
+<br>M. Kosnik
+<br>E. Kowalski
+<br>S. Lidgard
+<br>E. Link
+<br>S. Low
+<br>C. Marshall
+<br>M. McKinney
+<br>D. Meyer
+<br>A. Miller
+<br>P. Novack-Gottshall
+<br>T. Olszewski
+<br>M. Patzkowsky
+<br>D. Raup
+<br>K. Roy
+<br>M. Sommers
+<br>K. Straub
+<br>E. Valiulis
+<br>P. Wagner
+<br>A. Webber
+</td>
+</tr>
+
+<tr>
+<td>last modified by</td>
+<td>fixed value list, one value only.</td>
+<td>auto entered data, same values as field 2</td>
+</tr>
+
+<tr>
+<td>PMPD number</td>
+<td>unsigned integer</td>
+<td>auto entered data</td>
+</tr>
+
+<tr>
+<td>Research group
+<td>fixed value list, one value only.
+<td>marine invertebrate
+<br>paleobotany
+<br>taphonomy
+<br>vertebrate
+
+<tr>
+<td>Date of public release
+<td>fixed value list, one value only.
+<td>immediate
+<br>three months
+<br>six months
+<br>one year
+<br>two years
+<br>three years
+<br>four years
+<br>five years
+
+<tr>
+<td>Access level
+<td>fixed value list, one value only.
+<td>The public
+<br>Database members
+<br>Group members
+<br>Authorizer only
+
+<tr>
+<td>Collection name</td>
+<td>string</td>
+<td>80 character limit</td>
+</tr>
+
+<tr>
+<td>Also known as</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Subset of PMPD collection #</td>
+<td>unsigned integer</td>
+<td>PMPD locality number</td>
+</tr>
+
+<tr>
+<td>Main reference</td>
+<td>unsigned integer</td>
+<td>look up from PMPD reference list</td>
+</tr>
+
+<tr>
+<td>Country</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>State/province</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>County/parish/etc.:</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Latitude degrees</td>
+<td>unsigned integer</td>
+<td>0-90</td>
+</tr>
+
+<tr>
+<td>Latitude minutes</td>
+<td>unsigned integer</td>
+<td>0-60</td>
+</tr>
+
+<tr>
+<td>Latitude seconds</td>
+<td>unsigned integer</td>
+<td>0-60</td>
+</tr>
+
+<tr>
+<td>Latitude decimal</td>
+<td>unsigned integer</td>
+<td>no decimal point</td>
+</tr>
+
+<tr>
+<td>Latitude direction</td>
+<td>fixed value list, one value only.</td>
+<td>North
+<br>South</td>
+</tr>
+
+<tr>
+<td>Longitude degrees</td>
+<td>unsigned integer</td>
+<td>0-180</td>
+</tr>
+
+<tr>
+<td>Longitude minutes</td>
+<td>unsigned integer</td>
+<td>0-60</td>
+</tr>
+
+<tr>
+<td>Longitude seconds</td>
+<td>unsigned integer</td>
+<td>0-60</td>
+</tr>
+
+<tr>
+<td>Longitude decimal</td>
+<td>unsigned integer</td>
+<td>no decimal point</td>
+</tr>
+
+<tr>
+<td>Longitude direction</td>
+<td>fixed value list, one value only.</td>
+<td>East
+<br>West</td>
+</tr>
+
+<tr>
+<td>Altitude
+<td>unsigned integer
+<td>
+
+<tr>
+<td>Altitude units
+<td>fixed value list, one value only.
+<td>meters
+<br>feet
+
+<tr>
+<td>Scale of geographic resolution</td>
+<td>fixed value list, one value only.</td>
+<td>small collection
+<br>outcrop
+<br>local area
+<br>basin</td>
+</tr>
+
+<tr>
+<td>Location details/comments</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Early/Middle/Late part of Period
+<td>fixed value list, one value only
+<td>Late/Upper<br>
+Middle - Late/Upper<br>
+Middle<br>
+Early/Lower - Middle<br>
+Early/Lower</td>
+</tr>
+
+<tr>
+<td>Period</td>
+<td>fixed value list, one value only.</td>
+<td>Holocene
+<br>Quaternary
+<br>Tertiary
+<br>Cretaceous
+<br>Jurassic
+<br>Triassic
+<br>Permian
+<br>Carboniferous
+<br>Devonian
+<br>Silurian
+<br>Ordovician
+<br>Cambrian
+<br>Neoproterozoic</td>
+</tr>
+
+<tr>
+<td>Early/Middle/Late part of Epoch
+<td>fixed value list, one value only
+<td>same values as field 24</td>
+</tr>
+
+<tr>
+<td>Epoch/series</td>
+<td>string, one value only.</td>
+<td>currently using Harland et al. 1989</td>
+</tr>
+
+<tr>
+<td>Early/Middle/Late part of International Age/Stage (max)
+<td>fixed value list, one value only
+<td>same values as field 24</td>
+</tr>
+
+<tr>
+<td>International Age/Stage (max)</td>
+<td>string, one value only.</td>
+<td>currently using Harland et al. 1989</td>
+</tr>
+
+<tr>
+<td>Early/Middle/Late part of International Age/Stage (min)
+<td>fixed value list, one value only
+<td>same values as field 24</td>
+</tr>
+
+<tr>
+<td>International Age/Stage (min)</td>
+<td>string, one value only.</td>
+<td>currently using Harland et al. 1989</td>
+</tr>
+
+<tr>
+<td>Early/Middle/Late part of Local Age/Stage (max)
+<td>fixed value list, one value only
+<td>same values as field 24</td>
+</tr>
+
+<tr>
+<td>Local Age/Stage (max)</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Early/Middle/Late part of Local Age/Stage (min)
+<td>fixed value list, one value only
+<td>same values as field 24</td>
+</tr>
+
+<tr>
+<td>Local Age/Stage (min)</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Zone</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Group</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+
+<tr>
+<td>Formation</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Member</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+
+
+<tr>
+<td>Local section name</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Local bed</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Local bed order</td>
+<td>fixed value list, one value only.</td>
+<td>bottom to top
+<br>top to bottom
+<br>no particular order
+</td>
+</tr>
+
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+
+
+<tr>
+<td>Basinal/regional section name</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Basinal/regional bed</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Basinal/regional bed order</td>
+<td>fixed value list, one value only.</td>
+<td>same values as field 41
+</td>
+</tr>
+
+
+<tr>
+<td>Scale of stratigraphic resolution</td>
+<td>fixed value list, one value only.</td>
+<td>bed
+<br>group of beds
+<br>member
+<br>formation</td>
+</tr>
+
+<tr>
+<td>Stratigraphy comments</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Lithology description</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Lithology adjectives</td>
+<td>fixed value list; can use up to four choices; space-colon-space delimited</td>
+<td>desiccation cracks
+<br>current ripples & small-scale cross-stratification
+<br>dunes, sand waves & large-scale cross-stratification
+<br>hummocky & other combined-flow cross-stratification
+<br>wave ripples and wave-ripple lamination
+<br>tool marks, groove casts, and gutter casts
+<br>flute casts
+<br>soft-sediment deformational structures
+<br>graded bedding
+<br>burrows (ii 1-3)
+<br>intense burrowing (ii 4-5)
+<br>
+<br>condensed
+<br>firmground
+<br>hardground
+<br>lag
+<br>
+<br>argillaceous
+<br>silty
+<br>sandy
+<br>
+<br>calcareous
+<br>carbonaceous
+<br>cherty/siliceous
+<br>concretionary
+<br>dolomitic
+<br>ferruginous
+<br>glauconitic
+<br>hematitic
+<br>pebbly
+<br>pyritic
+<br>phosphatic
+<br>sideritic
+<br>
+<br>intraclastic
+<br>oncoidal
+<br>ooidal
+<br>peloidal
+<br>shelly/skeletal
+<br>
+<br>black
+<br>gray
+<br>green
+<br>red or brown
+<br>yellow
+
+</td>
+</tr>
+
+<tr>
+<td>Lithification</td>
+<td>fixed value list, one value only.</td>
+<td>lithified
+<br>poorly lithified
+<br>unlithified</td>
+</tr>
+
+<tr>
+<td>Primary lithology</td>
+<td>fixed value list, one value only.</td>
+<td>claystone
+<br>mudstone
+<br>"shale"
+<br>siltstone
+<br>sandstone
+<br>conglomerate
+<br>
+<br>marl
+<br>
+<br>lime mudstone
+<br>wackestone
+<br>packstone
+<br>grainstone
+<br>"reef rocks"
+<br>"limestone"
+<br>dolomite
+<br>"carbonate"
+<br>
+<br>chert
+<br>phosphorite
+<br>ironstone
+</td>
+</tr>
+
+<tr>
+<td>fossils from primary lithology</td>
+<td>single character</td>
+<td>Y
+<br>null
+</td>
+</tr>
+
+<tr>
+<td>Secondary lithology</td>
+<td>fixed value list, one value only.</td>
+<td>same values as field 50</td>
+</tr>
+
+<tr>
+<td>fossils from secondary lithology</td>
+<td>single character</td>
+<td>same value list as field 51</td>
+</tr>
+
+<tr>
+<td>Paleoenvironment</td>
+<td>fixed value list, there can be only one!</td>
+<td>(paralic indet.)
+<br>estuarine/bay
+<br>lagoonal
+<br>(coastal indet.)
+<br>foreshore
+<br>shoreface
+<br>transition zone/lower shoreface
+<br>offshore
+<br>(deltaic indet.)
+<br>delta plain
+<br>interdistributary bay
+<br>delta front
+<br>prodelta
+<br>(deep-water indet.)
+<br>submarine fan
+<br>basinal (siliclastic)
+<br>(carbonate indet.)
+<br>peritidal
+<br>shallow subtidal
+<br>sand shoal
+<br>reef, buildup or bioherm
+<br>deep subtidal ramp
+<br>deep subtidal shelf
+<br>(deep subtidal indet.)
+<br>offshore ramp
+<br>offshore shelf
+<br>(offshore indet.)
+<br>slope
+<br>basinal (carbonate)
+</tr>
+
+<tr>
+<td>Tectonic setting</td>
+<td>fixed value list, one value only.</td>
+<td>rift
+<br>passive margin
+<br>cratonic basin
+<br>pull-apart basin
+<br>foreland basin
+<br>forearc basin</td>
+</tr>
+
+<tr>
+<td>Modes of preservation</td>
+<td>fixed value list, isolated colons as delimiters for multiple
+options, all appear in one field</td>
+<td>body
+<br>cast
+<br>mold
+<br>trace
+<br>concretion
+<br>soft part
+<br>original aragonite
+<br>original calcite
+<br>original phosphate
+<br>original silica
+<br>replaced with pyrite
+<br>replaced with calcite
+<br>replaced with phosphate
+<br>replaced with silica</td>
+</tr>
+
+<tr>
+<td>Comments on geology</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+
+<tr>
+<td>Purpose of collection</td>
+<td>fixed value list, one value only.</td>
+<td>biostratigraphic
+<br>paleoecologic
+<br>taxonomic </td>
+</tr>
+
+<tr>
+<td>List coverage (taxa not included)</td>
+<td>fixed value list, multiple values, space colon space delimited.</td>
+<td>all macrofossils
+<br>all microfossils
+<br>some genera
+<br>some macrofossils
+<br>some microfossils
+<br>species names
+<br>difficult macrofossils
+</td>
+</tr>
+
+<tr>
+<td>Collection attributes</td>
+<td>fixed value list (check boxes), isolated colons as delimiters for multiple
+options, all appear in one field</td>
+<td>field collection
+<br>observed (not collected)
+<br>survey of museum collection
+<br>bulk
+<br>core
+<br>surface (float)
+<br>surface (in situ)
+<br>chemical
+<br>mechanical
+<br>peel or thin section
+<br>sieve
+<br>rock shop
+<br>library visit
+</td>
+</tr>
+
+<tr>
+<td>Collection size (total number of individuals)</td>
+<td>unsigned integer</td>
+<td></td>
+</tr>
+
+<tr>
+<td>Collection size units
+<td>fixed value list, one value only.
+<td>specimens
+<br>individuals
+
+<tr>
+<td>Collection comments</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+
+<tr>
+<td>Taxonomy comments</td>
+<td>string</td>
+<td>free form</td>
+</tr>
+
+<tr>
+<td>Date/time created stamp</td>
+<td>date-month-year hr:min:sec</td>
+<td>auto entered data</td>
+</tr>
+
+<tr>
+<td>Date/time last modified stamp</td>
+<td>date-month-year hr:min:sec</td>
+<td>auto entered data</td>
+</tr>
+
+</table>
+
+<br>Created 19 August 1999 by Matthew Kosnik
+<br>Last modified 13 March 2001 by John Alroy
+
+</body>
+</html>

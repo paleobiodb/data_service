@@ -1,0 +1,83 @@
+<form method="POST" action="bridge.pl" onSubmit="return checkPassword();">
+
+<input type=hidden name="action" value="setPreferences">
+
+<center><h2>Data entry preferences</h2></center>
+
+<div align="center">
+<table border=0 cellpadding=8>
+<table border=0 cellpadding=4>
+	<tr><td align="center" colspan=2><b>Displayed form sections</b></td></tr>
+	<tr><td valign="top"><table border=0>
+		<tr><td><input id="collection_search" type=checkbox value="yes"> Full collection search form</td></tr>
+		<tr><td><input id="taphonomy" type=checkbox value="yes"> Full taphonomy section in main form</td></tr>
+		<tr><td>Blank occurrence rows: <input id="blanks" size=5></td></tr>
+	</table>
+	<td valign="top"><table border=0>
+		<tr><td><input id="subgenera" type=checkbox value="yes"> Subgenera in occurrence form</td></tr>
+		<tr><td><input id="abundances" type=checkbox value="yes"> Abundances in occurrence form</td></tr>
+		<tr><td><input id="plant_organs" type=checkbox value="yes"> Plant organs in occurrence form</td></tr>
+	</table>
+	<tr><td align="center" colspan=2><b>Prefilled checkboxes, pulldowns, and text fields</b></td></tr>
+	<tr><td valign="top">
+	<table border=0>
+		<tr><td>Research group: <select id="research_group"></select></td></tr>
+		<tr><td>Country: <select id="country"></select></td></tr>
+		<tr><td>State: <input id="state" maxlength=255></td></tr>
+		<tr><td>Latitude degree/direction: <input id="latdeg" size=5><select id="latdir"></select></td></tr>
+		<tr><td>Longitude degree/direction: <input id="lngdeg" size=5><select id="lngdir"></select></td></tr>
+		<tr><td><font size=-2>DO NOT enter minutes, seconds, or decimal values.</font></td></tr>
+		<tr><td>Geographic resolution: <select id="geogscale"></select></td></tr>
+		<tr><td><nobr>Period max: <select id="emlperiod_max"></select><select id="period_max"></select></nobr></td></tr>
+		<tr><td>Epoch max: <select id="emlepoch_max"></select><input id="epoch_max" size=15></td></tr>
+	</table>
+</td>
+<td valign="top">
+	<table border=0>
+		<tr><td>Formation: <input id="formation" maxlength=255></td></tr>
+		<tr><td><nobr>Stratigraphic resolution: <select id="stratscale"></nobr></select></td></tr>
+		<tr><td>Primary lithology: <select id="lithology1"></select></td></tr>
+		<tr><td>Paleoenvironment: <select id="environment"></select></td></tr>
+		<tr><td>Purpose of collection: <select id="collection_type"></select></td></tr>
+		<tr><td><input id="assembl_comps" type=checkbox value="macrofossils"> macrofossils
+		<input id="assembl_comps" type=checkbox value="mesofossils"> mesofossils
+		<input id="assembl_comps" type=checkbox value="microfossils"> microfossils
+		<tr><td>Body fossils? <input id="pres_mode" type=checkbox value="body">
+		Field collection? <input id="coll_meth" type=checkbox value="field collection"></td></tr>
+		<tr><td>Species name: <select id="species_name"></select></td></tr>
+	</table>
+	<tr><td align="center" colspan=2><b>Prefilled comments fields</b></td></tr>
+	<tr><td align="center" valign="top" colspan=2>
+	<table border=0>
+		<tr><td>Location details<br><textarea id="geogcomments" rows=2 wrap=virtual cols=100></textarea></td></tr>
+		<tr><td>Stratigraphy<br><textarea id="stratcomments" rows=2 wrap=virtual cols=100></textarea></td></tr>
+		<tr><td>Complete lithology description<br><textarea id="lithdescript" rows=2 wrap=virtual cols=100></textarea></td></tr>
+	</table>
+	</td></tr>
+	<tr><td align="center" colspan=2><b>Map view options</b></td></tr>
+	<tr><td align="center">
+	<table border=0>
+		<tr><td>Continent: <select id="mapcontinent"></select></td></tr>
+		<tr><td>Magnification: <select id="mapscale"></select></td></tr>
+		<tr><td>Background color: <select id="mapbgcolor"></select></td></tr>
+		<tr><td>Grid line spacing: <select id="gridsize"></select></td></tr>
+		<tr><td>Grid line color: <select id="gridcolor"></select></td></tr>
+	</table>
+</td>
+<td valign="top">
+	<table border=0>
+		<tr><td>Coastline color: <select id="coastlinecolor"></select></td></tr>
+		<tr><td>Point size/shape: <select id="pointshape"></select></td></tr>
+		<tr><td>Point color: <select id="dotcolor"></select></td></tr>
+		<tr><td>Point borders: <select id="dotborder"></select></td></tr>
+	</table>
+	</td></tr>
+</td></tr>
+<tr><td>
+</td>
+<td valign="bottom" align="center"><input type=submit value="Submit preferences"></td></tr>
+</table>
+</table>
+</div>
+</form>
+

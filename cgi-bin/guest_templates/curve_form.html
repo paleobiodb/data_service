@@ -1,0 +1,101 @@
+<center>
+<h2>Diversity curve request form</h2>
+</center>
+
+<h4>
+This form allows you to request a diversity curve with assorted statistics.<br>
+<font size=-1>
+<i>WARNING:</i> our server is fast, but requests still may take about a half-minute to process.
+</font>
+</h4>
+
+The time scale used in this analysis is based on the latest published sources.
+Binning of local stages into international stages follows <a href="javascript: tipsPopup( '/public/data/harland.html')">Harland et al. 1989</a>.<p>
+
+<form method="POST" action="$exec_url">
+<input type=hidden name="action" value="displayCurveResults">
+<input type=hidden name=scale value="10 m.y. intervals">
+
+<table border=1>
+<tr><td>
+<font size=-1>
+If you only want to include specific geographic regions, check them off:
+
+<td valign=top><font size=-1>
+<input type=checkbox name="Africa" value="Y">Africa
+<input type=checkbox name="Antarctica" value="Y">Antarctica
+<input type=checkbox name="Asia" value="Y">Asia
+<input type=checkbox name="Australia" value="Y">Australia<br>
+<input type=checkbox name="North America" value="Y">North America
+<input type=checkbox name="Europe" value="Y">Europe
+<input type=checkbox name="South America" value="Y">South America
+
+<tr><td>
+<font size=-1>
+Include lists that have poor geographic data (no county or lat/long)?
+
+<td>
+<font size=-1>
+<select name=strictgeography>
+<option selected>yes, include them
+<option>no, exclude them
+</select>
+
+<tr><td>
+<font size=-1>
+Include lists that have not been fit into a single age/stage?
+
+<td>
+<font size=-1>
+<select name=strictchronology>
+<option selected>yes, include them
+<option>no, exclude them
+</select>
+
+<tr><td>
+<font size=-1>
+Broadest allowable scale of stratigraphic resolution:
+<td><font size=-1>
+<select name=stratscale>
+<option selected>
+<option>formation
+<option>member
+<option>group of beds
+<option>bed
+</select>
+
+<tr><td>
+<font size=-1>
+Include lists with <select name=lowerupper>
+<option selected>at least
+<option>no more than
+</select>
+how many genus occurrences?
+
+<td>
+<input name=cutoff size=10>
+
+<tr><td valign=top>
+<font size=-1>
+If you don't want to analyze all taxonomic groups together, you may check off a set of acceptable groups.
+<td><font size=-1>
+<input type=checkbox name=brachiopods value="Y">brachiopods
+<input type=checkbox name=bryozoans value="Y">bryozoans
+<input type=checkbox name=cephalopods value="Y">cephalopods
+<input type=checkbox name=conodonts value="Y">conodonts
+<input type=checkbox name=corals value="Y">corals
+<input type=checkbox name=graptolites value="Y">graptolites
+<input type=checkbox name=molluscs value="Y">molluscs (benthic)
+<input type=checkbox name=trilobites value="Y">trilobites
+<p>
+
+<tr>
+<td><font color=white> -
+<td><input type=submit value="Submit">
+</table>
+
+<input type=hidden name=authorizer value="nobody">
+</form>
+
+</body>
+

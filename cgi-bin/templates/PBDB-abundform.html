@@ -1,0 +1,150 @@
+<HTML>
+<HEAD><TITLE>Paleobiology Database Abundance Data Analysis Form</TITLE></HEAD>
+<body bgcolor="white" background="/public/PDbg.gif" text=black link="#0033FF" vlink="#990099">
+
+<font face="arial,helvetica">
+<CENTER>
+<H1>Paleobiology Database Abundance Data Analysis Form</H1></CENTER>
+
+<h4>
+This form allows you to request a regression analysis of species richness on total abundance, plus assorted diversity index stats.
+</h4>
+
+<form method="POST" action="/cgi-bin/pmpd-abund.cgi">
+
+<table cellpadding=4>
+<tr><td>
+
+<tr><td>
+<font size=-1>
+Select a period:
+<td><font size=-1>
+<select name=period>
+<option selected>Tertiary
+<option>Cretaceous
+<option>Jurassic
+<option>Triassic
+<option>Permian
+<option>Carboniferous
+<option>Devonian
+<option>Silurian
+<option>Ordovician
+<option>Cambrian
+</select>
+
+<tr><td>
+<font size=-1>
+Minimum number of specimens in each collection:
+<td><font size=-1>
+<select name=minspecimens>
+<option selected>
+<option>10
+<option>20
+<option>50
+<option>100
+<option>200
+<option>500
+<option>1000
+</select>
+
+<tr><td>
+<font size=-1>
+Minimum number of species in each collection:
+<td><font size=-1>
+<select name=minspecies>
+<option selected>
+<option>5
+<option>10
+<option>20
+<option>30
+<option>40
+<option>50
+<option>75
+<option>100
+</select>
+
+<tr><td>
+<font size=-1>
+You may restrict the analysis so that the lithology field must
+<select name=lithonlyor>
+<option selected>equal
+<option>include
+</select>
+the following value:
+
+<td valign=top><font size=-1>
+<select name=lithology>
+<option selected>
+<option>all carbonate lithologies
+<option>all siliciclastic lithologies
+<option>
+<option>claystone
+<option>mudstone
+<option>"shale"
+<option>siltstone
+<option>sandstone
+<option>conglomerate
+<option>
+<option>marl
+<option>
+<option>lime mudstone
+<option>wackestone
+<option>packstone
+<option>grainstone
+<option>"reef rocks"
+<option>"limestone"
+<option>dolomite
+<option>"carbonate"
+<option>
+<option>"coal"
+<option>peat
+<option>lignite
+<option>subbituminous coal
+<option>bituminous coal
+<option>anthracite
+<option>coal ball
+<option>
+<option>chert
+<option>phosphorite
+<option>ironstone
+<option>siderite
+<option>
+<option>phyllite
+<option>slate
+<option>schist
+</select>
+
+<tr><td>
+<font size=-1>
+Check off the acceptable taxonomic groups:
+<td><font size=-1>
+<input type=checkbox name=anytaxa value="Y" checked><i>any and all</i>
+<input type=checkbox name=brachiopods value="Y">brachiopods
+<input type=checkbox name=bryozoans value="Y">bryozoans
+<input type=checkbox name=cephalopods value="Y">cephalopods
+<input type=checkbox name=conodonts value="Y">conodonts
+<input type=checkbox name=corals value="Y">corals
+<input type=checkbox name=echinoderms value="Y">echinoderms
+<input type=checkbox name=graptolites value="Y">graptolites
+<input type=checkbox name=molluscs value="Y">molluscs (benthic)
+<input type=checkbox name=trilobites value="Y">trilobites
+
+<tr><td>
+<font size=-1>
+Check off the acceptable list coverage categories:
+<td><font size=-1>
+<input type=checkbox name=anycoverage value="Y" checked><i>any and all</i>
+<input type=checkbox name=allgroups value="Y">all groups
+<input type=checkbox name=allmacrofossils value="Y">all macrofossils
+<input type=checkbox name=allmicrofossils value="Y">all microfossils
+
+<tr><td> 
+<td><input type=submit value="Submit">
+</table>
+</font>
+
+</form>
+<hr>
+
+</body>
+

@@ -1,0 +1,48 @@
+<form method=post action="$exec_url">
+<input id="action" type=hidden name="action" value="">
+<input id="type" type=hidden name="type" value="">
+
+<font size="3" color='red'>
+%%message%%
+</font>
+
+<div align="center">
+<h2>Reference search form</h2>
+
+<table border=0>
+<tr>
+	<th align=right>Author's last name:</th>
+	<td><input id="name" name="name" type=text size=20></td>
+
+	<td align=left><b> year:</b>
+	<input id="year" name="year" type=text size=5 maxlength=4>
+	</td>
+
+<tr>
+	<th align=right>Title includes: </th>
+	<td colspan=2>
+	<input id="reftitle" name="reftitle" type=text size=40>
+	</td> 
+</tr>
+
+<tr>
+	<th align=right> Reference number: </th>
+	<td>
+	<input id="reference_no" name="reference_no" type=text size=6 maxlength=5>
+	</td>
+
+	<td valign=top>
+	<input type=checkbox name=mine_only value=yes>
+	<b>Display only my references</b>
+	</td> 
+</tr>
+
+<tr>
+	<td colspan="3" align="center">
+	<input type=submit value="Search"> %%use_current%%
+	</td> 
+</tr> 
+</table>
+</div>
+
+</form>

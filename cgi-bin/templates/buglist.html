@@ -1,0 +1,82 @@
+<HTML>
+<HEAD><TITLE>The Paleobiology Database: Bugs and Requested Changes</TITLE></HEAD>
+<body bgcolor="white" background="/public/PDbg.gif" text=black link="#0033FF" vlink="#9900FF">
+
+<center>
+<h2>The Paleobiology Database: List of Known Bugs and Requested Changes</h2>
+</center>
+
+Names of Database members who have reported the bugs are given in italics.
+Please also see our <a href="$exec_url?action=displayPage&page=newfeatures">list of new pages, scripts, and other features</a>.
+
+<hr>
+<h4>Serious bugs</h4>
+<ul>
+<li>The download script appears to download the wrong lists when certain epochs are requested; does not download US lists when North America is selected as the geographical region; and does not download emlepoch and emlperiod, while it does download lithdescript1 and lithdescript2 when they are not requested <i>(Z. Krug)</i> - <u>Apparently fixed. Could someone confirm this for me?</u>
+<li>Users are logged out automatically whenever they go from contributors-only areas to the public web site, so getting back requires another login <i>(J. Alroy)</i>
+</ul>
+
+<h4>Cosmetic bugs</h4>
+<ul>
+<li>Possibly, stray collection ID numbers in some versions of the reference search return page <i>(J. Alroy)</i>
+</ul>
+
+<h4>Data errors</h4>
+<ul>
+<!-- <li><i>None reported at the moment</i> -->
+<li>Several dozen records include the word "Series" in the epoch fields or "Stage" in the local age/stage field; these should be stripped <i>(JA)</i>
+<li>Quotation marks have been entered into some of the taxon name fields <i>(JA)</i>
+</ul>
+
+<h4>Duplicate records</h4>
+<i>Please notify John Alroy if you know of any other duplicates.</i>
+<ul>
+ <ul>Collections
+ <li>10762 (Carrano) = 14616 (Alroy)
+ <li>13080 (Alroy) = 11604 (Carrano)
+ <li>13142 (Fara) = 14516/14671 (Alroy)
+ <li>13295 (Hunter) = 18597 (Alroy)
+ <li>13297 (Hunter) = 19542 (Alroy)
+ <li>19485 (Alroy) = 11601 (Uhen)
+ <li>22688 (Behrensmeyer) = 15072 (Alroy)
+ </ul>
+ <ul>References
+ <li>3534 (Alroy) = 3533 (Alroy)
+ <li>4301 (Alroy) = 4177 (Carrano)
+ <li>4742 (Behrensmeyer) = 1198 (Alroy)
+ <li>5751 (Behrensmeyer) = 2954 (Alroy)
+ </ul>
+</ul>
+
+<h4>Feature requests</h4>
+NOTE: all requests on this list will be implemented if no objections are raised by Database members.
+<ul>
+<li>Genus names checked for classification data on entry using occurrences form; shortcut to enter taxonomy data quickly for new names <i>(W. Kiessling, 22 August 2002)</i>
+<li>Curve, download, map, and report modules should query reIDs and not just occurrences when query parameters include genus name <i>(J. Alroy, 16 August 2002)</i>
+<li>Options for sorting collections matched by a search (e.g., by geological age) <i>(Ross Secord, 16 August 2002)</i>
+<li>New time term, stratigraphic unit, stratigraphic section, and chronological data tables keyed to each other and to the collection table <i>(Advisory Board, 11 August 2002)</i>
+<li>Search of references by research group, exploiting the fact that group membership is defined in the MySQL person table <i>(H. Sims, 27 July 2002)</i>
+<li>Collection display pages should include links to add reidentifications <i>(H. Sims, 2 June 2002)</i>
+<li>"animal" value in plant organ pulldowns (?) <i>(H. Sims)</i>
+<li>When a ref is displayed, any collection including occurrences from that ref should be listed, not just collections for which this is the main ref <i>(H. Sims)</i> 
+<li>On the collection search form, genus name searches do not allow partial string matching <i>(M. Foote)</i>
+<li>On the collection search form, searches by continent, species name, taxon ID comment, lithology and geology comments, and author should be allowed. <i>(M. Foote)</i>
+<li>The list of original biominerals on main form should be revised: "phosphate" will be changed to "hydroxyapatite"; several other values will be added <i>(taphonomy group)</i>
+<li>The third of three taphonomy tip sheets needs to be formatted properly <i>(taphonomy group)</i>
+<li>All references associated with a collection should be listed on the collection page with radio buttons to choose the "primary reference" <i>(VP group)</i>
+<li>Separate collection size field into two: one with MNI and one with number of specimens.  If both are known then both can be recorded, if only one is known then only one needs to be recorded <i>(VP group)</i>
+<li>Geochronological age estimates need to be tracked in a table/form documenting estimate, error, method, stratigraphic position and/or foreign key to collection(s), and comments <i>(paleobotany/VP groups)</i>
+<li>Tertiary lithology fields <i>(W. Kiessling)</i>
+<li>Carbonate geometry field (values need to be discussed) <i>(W. Kiessling)</i>
+<li>"replaced by chlorite" checkbox <i>(W. Kiessling)</i>
+<li>Quotation marks should be added to the lists of modifiers for taxon names <i>(JA)</i>
+<li>Occurrence matrix data ingest tool <i>(paleobotany group)</i>
+<li>Plant organ tip sheet needs to be updated <i>(paleobotany group)</i>
+</ul>
+
+<hr>
+Web page maintained by <a href="mailto:alroy@nceas.ucsb.edu">John Alroy</a>.
+Last updated 6 May 2002.</FONT></I>
+<p>&nbsp;
+</BODY>
+</HTML>

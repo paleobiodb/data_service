@@ -1,0 +1,92 @@
+    <script language="JavaScript">
+    <!-- Begin
+
+	// This is a handy little function for seeing what properties an object has
+	function showProperties ( obj ) {
+		var result = "";
+
+		for ( var i in obj ) {
+			result += "o." + i + " = " + obj[i] + "<BR>\n";
+		}
+		document.write ( result );
+	}
+
+    function checkForm() {
+		var year = /^[1-2][0-9]{3}$/;
+		var capital = /[A-Z]/;
+		var frm = document.forms[0];
+		var errors = "";
+
+		// First Author Initials
+		if ( frm.author1init.value == "" ) {
+			errors += "First author initials may not be blank.\n"; 
+		} else {
+			// Check for a capital letter
+			if ( capital.test ( frm.author1init.value ) == false ) {
+				errors += "First author initials should have a capital letter.\n"; 
+			}
+		}
+
+		// First Author Last
+		if ( frm.author1last.value == "" ) {
+			errors += "First author last name may not be blank.\n"; 
+		} else {
+			// Check for a capital letter
+			if ( capital.test ( frm.author1last.value ) == false ) {
+				errors += "First author last name should have a capital letter.\n"; 
+			}
+		}
+
+		// Second Author Initials
+		if ( frm.author2init.value != "" ) {
+			// Check for a capital letter
+			if ( capital.test ( frm.author2init.value ) == false ) {
+				errors += "Second author initials should have a capital letter.\n"; 
+			}
+		}
+
+		// Second Author Last
+		if ( frm.author2last.value != "" ) {
+			// Check for a capital letter
+			if ( capital.test ( frm.author2last.value ) == false ) {
+				errors += "Second author last name should have a capital letter.\n"; 
+			}
+		}
+
+		// Publication Year
+		if ( frm.pubyr.value == "" ) {
+			errors += "The publication year may not be blank.\n"; 
+		} else {
+			if ( year.test( frm.pubyr.value ) == false ) {
+				errors += "The publication year is invalid.\n"; 
+			}
+		}
+
+		// Publication Type
+		var index = frm.publication_type.selectedIndex;
+		if ( index == -1 ) {
+			errors += "The publication type must be selected.\n"; 
+		} else {
+			if ( frm.publication_type.options[frm.publication_type.selectedIndex].text == "book/book chapter" ) {
+				if ( frm.pubtitle.value == "" ) {
+					errors += "If you select \"book/book chapter\", you are required to fill in its name.\n"; 
+				}
+			}
+		}
+
+		// Report errors
+		if ( errors != "" ) {
+			errors = "   Errors detected!!   \n" + 
+					 "---------------------------------------\n\n" +
+					 errors + "\n" +
+					 "---------------------------------------\n\n" +
+					 "See the tip sheet for instructions.";
+			alert ( errors );
+			return false;
+		} 
+		return true;
+    }
+
+
+    //  End -->
+    </script>

@@ -1,0 +1,51 @@
+<center>
+<h2><a href="http://www.ucmp.berkeley.edu/pdn/index.html">Paleontology Database Network</a> Information</h2>
+</center>
+
+<hr><b>Name</b>: The Paleobiology Database<p>
+
+<hr><b>Home page URL</b>: <a href="http://paleodb.org/">http://paleodb.org/</a><p>
+
+<hr><b>Purpose</b>: To provide the public and the paleontological research community with collection-level information on the spatial, temporal, and environmental distribution of fossils, as well as web-based scripts for analyzing large-scale patterns in these data. Taphonomic, taxonomic, phylogenetic, morphometric data also will be collected and provided freely on the web. Any professional paleontologist may volunteer to become a contributor to the database. See also our <a href="/cgi-bin/bridge.pl?action=displayPage&page=paleodbFAQ">FAQ</a> page.<p>
+
+<hr><b>Scope</b>: The global Neoproterozoic and Phanerozoic fossil record of marine and terrestrial animal and plant life.<p>
+
+<hr><b>Intended audience</b>: Everyone, and especially professional paleontologists.<p>
+
+<hr><b>Platform/software</b>: Housed in a MySQL database on a Dell PowerEdge dual-processor server.<p>
+
+<hr><b>Data model</b>: The database currently includes five major, interconnected tables:
+<ol>
+<li>References.
+<li>Collections (including geographic, stratigraphic, paleoenvironmental, taphonomic, and collecting method data). Keyed to references.
+<li>Occurrences (i.e., instances of taxa occuring within collections, plus abundances). Keyed to references and collections.
+<li>Reidentifications (i.e., taxonomic changes to previously published occurrences). Keyed to references and occurrences.
+<li>Taxonomic authorities (i.e., who named what when). Keyed to references.
+</ol>
+
+We are currently implementing tables that will record taxonomic opinions (i.e., classification and determinations of validity of taxonomic names), phylogeny, morphometrics, taphonomic and paleoecologic data regarding individual taxa, occurrences, and specimens.<p>
+
+<hr><b>Terminology conventions for data entry</b>: Please see our <a
+href="javascript: tipsPopup('/public/tips/tips.html');">tip sheets</a>.<p>
+
+<hr><b>Output query system</b>: Analysis and query of data sets is performed using custom CGI scripts written in Perl, Java, and C++ that employ standard SQL syntax.<p>
+
+<hr><b>Available user support</b>: The database employs a full-time programmer and database manager who is responsible for technical support.
+We maintain extensive <a href="javascript: tipsPopup('/public/tips/tips.html');">tip sheets</a> that show how to enter data using our web-based data entry forms.<p>
+
+<hr><b>Date of establishment</b>: August, 1998 (Phanerozoic Marine Paleofaunal Database); September, 2000 (current database, including the PMPD).<p>
+
+<hr><b>Location</b>: The database server and main office are housed at the National Center for Ecological Analysis and Synthesis, a unit of the University of California, Santa Barbara.<p>
+
+<hr><b>Institutional and financial support</b>: Supported by a Biocomplexity grant from NSF from September, 2000 through August, 2005.<p>
+
+<hr><b>Long-term maintenance plans</b>: The database will continue to be housed and maintained at NCEAS through the duration of the grant.
+It is intended to become a permanent resource for the community.<p>
+
+<hr><b>Contact</b>: <a href="mailto:alroy@nceas.ucsb.edu">John Alroy</a> (alroy@nceas.ucsb.edu: project coordinator) and <a href="mailto:muhl@nceas.ucsb.edu">Paul Muhl</a> (systems developer and database manager).<p>
+
+<hr>
+</font>
+
+</BODY>
+</HTML>

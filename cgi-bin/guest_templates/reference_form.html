@@ -1,0 +1,59 @@
+<html>
+  <head>
+    <title id="title">Paleobiology Database</title>
+  </head>
+<body bgcolor="white" background="http://paleodb.org/public/PDbg.gif" vlink="#5522FF" alink="#00AAFF" link="#0033FF">
+<table border=0>
+  <tr>
+    <td width=650>
+<FORM method="POST" action=""><input type=hidden name="action" value=""><hr>For a <b>new</b> reference you must fill out the remaining fields.
+Use the following format:<br><font size=-1><i><b>INITALS:</b> J. Q.<b> LAST NAME:</b> Doe<b> YEAR:</b> 1984 <b>TITLE:</b> A new species of ammonite from the North Horn Formation of Utah <b>SERIAL:</b> Bulletin of the Southern California Academy of Sciences <b>VOLUME:</b> 34 <b>NUMBER:</b> 2 <b>FIRST PAGE:</b> 113 <b>LAST PAGE:</b> 118</i><p></font>
+
+<input id="reference_no" type=hidden name="reference_no">
+<input type="hidden" name="authorizer" value="J. Alroy">
+<input type="hidden" name="enterer" value="J. Alroy">
+<table>
+  <tr>
+    <td><font color="#FF0000"><b>First author: </font></b></td>
+    <td><font color="#FF0000"><b>initials:</font></b> <input id="author1init" name=author1init size=8 value=""></td>
+    <td><font color="#FF0000"><b>Last name:</font> <input id="author1last" name=author1last size=20 value=></td>
+  </tr>
+  <tr>
+    <td>Second author: <td>initials: <input id="author2init" name=author2init size=8 value=""></td>
+    <td>Last name: <input id="author2last" name=author2last size=20 value=""></td>
+  </tr>
+</table>
+Initials and names of additional authors:<br><textarea id="otherauthors" name=otherauthors rows=5 cols=60 wrap=virtual></textarea><p>
+<font color="#FF0000"><b>Publication year:</font></b> <input id="pubyr" name=pubyr size=5 value=""><br>
+<TABLE border=0>
+  <tr>
+    <td>Publication type: </td>
+    <td>
+			<select name="publication_type"><option><option>journal article<option>book/book chapter<option>Ph.D. thesis<option>M.S. thesis<option>abstract<option>unpublished<option>serial monograph<option>guidebook</select>
+	  </td>
+  </tr>
+</TABLE>
+<table>
+  <tr>
+		<td valign=top><font color="#FF0000"><b>Title:</font></b><br><textarea id="reftitle" name=reftitle rows=2 cols=60 wrap=virtual></textarea><br></td>
+  <tr>
+		<td valign=top>Full name of serial:<br><textarea id="pubtitle" name=pubtitle rows=2 cols=60 wrap=virtual></textarea><br></td>
+	</tr>
+</table>
+<table>
+  <tr>
+    <td>Volume: <input id="pubvol" name=pubvol size=4 value=""></td>
+    <td>Number: <input id="pubno" name=pubno size=3 value=""></td>
+    <td>First page: <input id="firstpage" name=firstpage size=4 value=""></td>
+    <td>Last page: <input id="lastpage" name=lastpage size=4 value=""></td>
+  </tr>
+</table>
+
+<input type=submit value="Submit">
+</form>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

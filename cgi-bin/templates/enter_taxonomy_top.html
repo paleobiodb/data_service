@@ -1,0 +1,16 @@
+<form method="POST" action="$exec_url" onSubmit="return checkForm();">
+
+<input type=hidden name="action" value="processTaxonomyEntryForm">
+<input id="taxon_no" type="hidden">
+<input type=hidden name="taxon_name" value="$taxon_name">
+<input id="type_taxon_no" type="hidden">
+
+<center>
+<h4>Who named $taxon_name?</h4>
+
+<span class="tiny">
+See the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Authority')">tip sheet</a>.
+If the name is misspelled, <a href="$exec_url?action=displayTaxonomySearchForm"><b>try another search</b></a>.
+</span>
+</center>
+

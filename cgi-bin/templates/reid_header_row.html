@@ -1,0 +1,31 @@
+<!-- Begin reid_header_row.html -->
+<h2 align=center>Paleobiology Database reidentification form</h2>
+
+<p><b>Current reference:</b></p>
+<table border=0>
+<span id="ref_string"></span>
+</table>
+
+<hr color='blue'>
+
+<table border=0>
+<tr>
+	<th>Genus reso</th>
+	<th>Genus name</th>
+<!-- OPTIONAL subgenera -->
+	<th>Subgenus reso</th>
+	<th>Subgenus name</th>
+<!-- END subgenera -->
+	<th>Species reso</th>
+	<th>Species name</th>
+	<th>Comments</th>
+<!-- OPTIONAL plant_organs -->
+	<th>Plant organs</th>
+	<th>Plant organs 2</th>
+<!-- END plant_organs -->
+</tr>
+
+<form method=POST action='$exec_url' onSubmit='return checkForm();'>
+<input type=hidden name=action value=processNewReIDs>
+<input type=hidden name=reference_no value=".$s->get("reference_no").">
+<!-- End reid_header_row.html -->

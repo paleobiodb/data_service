@@ -1,0 +1,68 @@
+    <script language="JavaScript">
+    <!-- Begin
+
+	function sendPassword ( ) {
+
+		alert ( "Coming soon!" );
+		var frm = document.forms[0];
+		frm.action.value = "sendPassword";
+		frm.submit();
+	}
+
+	function checkPassword ( ) {
+		var frm = document.forms[0];
+		if ( frm.password.value == "" ) {
+			alert ( "Don't forget to enter your password!" );
+			return false;
+		}
+	}
+
+    //  End -->
+    </script>
+
+<form method="POST" action="bridge.pl" onSubmit="return checkPassword();">
+
+<input type=hidden name="action" value="processLogin">
+<input type=hidden name="destination" value="%%destination%%">
+
+<p align="center">
+	<b>If you are a data contributor, please log in</b>
+</p>
+
+<div align="center">
+<table border=1><tr><td>
+<table border=0>
+  <tr>
+    <th align=right>Authorizer: </th>
+    <td><select name="authorizer"></select>
+    </td>
+  </tr>
+  <tr>
+    <th align=right>Enterer: </th>
+    <td><select name="enterer"></select>
+    </td>
+  </tr>
+  <tr>
+    <th align=right>Password: </th>
+    <td><input type=password name="password" size=12> 
+<!--
+	<BR>
+	<font size="1">
+	<a href="javascript: sendPassword();">Mail password to authorizer's E-mail address.</a>
+	</font>
+-->
+	</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td><input type=submit value="Login to system"></td>
+  </tr>
+</table>
+</td></tr></table>
+</div>
+</form>
+
+
+<p align="center">
+	<b>If you are not, please <a href="/cgi-bin/bridge.pl?user=Guest&action=displayHomePage">return to the public area</a></b>
+</p>

@@ -1,0 +1,71 @@
+<!-- OPINIONS -->
+
+<hr>
+<center><h4>What is the status of $taxon_name?</h4></center>
+
+<center>
+<table>
+<tr><td align=right>
+<input type="radio" name="taxon_status" value="belongs_to"> </td><td><b>Valid</b>, classified as belonging to 
+<input id="parent_taxon_name" size=50>
+</td></tr>
+
+<tr><td align=right>
+<input type="radio" name="taxon_status" value="invalid1"> </td><td><b>Invalid</b> and another name should be used.
+</td></tr>
+<tr><td></td><td>
+Status:
+<select name="synonym"><option>subjective synonym of <option>objective synonym of <option>homonym of <option>replaced by <option>corrected as </select>
+<input name="parent_taxon_name2" size=50>
+</td></tr>
+
+<tr><td align=right>
+<input type="radio" name="taxon_status" value="invalid2"> </td><td><b>Invalid</b> and no other name can be applied. Status:
+<select name="nomen"><option>nomen dubium <option>nomen nudum <option>nomen oblitem <option>nomen vanum </select>
+</td></tr>
+
+</table>
+
+<p>
+<center><span class="tiny">
+Please check the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> for an explanation of these terms.
+</span></center>
+</p>
+
+<hr>
+<center><h4>Whose opinion on $taxon_name is this?</h4></center>
+
+<center>
+<p><input type=checkbox name="ref_has_opinion" value="YES"> The current reference argues for this opinion.</p>
+
+<p>... <i>or</i> the opinion is repeated from an earlier authority, which is:</p>
+</center>
+
+<table>
+<tr>
+<td><td class=tiny>initials <td class=tiny>last name
+<td><td class=tiny>initials <td class=tiny>last name
+<tr><td align=right><b>First author:</b> <td><input id="opinion_author1init" size=6> <td><input id="opinion_author1last" size=20><br>
+<td align=right><b>Second author:</b> <td><input id="opinion_author2init" size=6> <td><input id="opinion_author2last" size=20><br>
+</tr>
+<tr><td valign=top align=right><b>Other authors:</b> <td colspan=5><textarea id="opinion_otherauthors" rows=3 cols=80></textarea><br>
+</tr>
+<tr><td align=right><b>Year:</b> <td colspan=2><input id="opinion_pubyr" size=6><br>
+<tr><td align=right><b>Comments:</b> <td colspan=5><textarea id="opinion_comments" rows=2 cols=80></textarea><br>
+</td></tr>
+
+<tr><td colspan=4></td><td align=right>
+<input type=submit value="Submit">
+</td></tr>
+
+</table>
+
+<p>
+<center><span class="tiny">
+Please read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> before you press submit.
+</span></center>
+</p>
+
+</center>
+</form>
+

@@ -1,0 +1,40 @@
+<table border=0>
+  <tr>
+    <td width=640>
+      <form method="POST" action="$exec_url">
+      <input type=hidden name="action" value="processBugReport">
+      <table border=0>
+        <tr>
+          <td align="right"><b>Submitted by:</b></td>
+          <td><span id="enterer"></span></td>
+        </tr>
+        <tr>
+          <td align="right"><b>Severity:</b></td>
+          <td><select id="severity"></select></td>
+        </tr>
+        <tr>
+          <td align="right"><b>Use case:</b></td>
+          <td><input id="use_case" name="use_case" maxlength=64></td>
+        </tr>
+        <tr>
+          <td align="right"><b>Use case stage:</b></td>
+          <td><input id="use_case_stage" name="use_case_stage" maxlength=64></td>
+        </tr>
+        <tr>
+          <td align="right"><b>Summary:</b></td>
+          <td><input id="bug_summary" name="bug_summary" size="40" maxlength=128></td>
+        </tr>
+        <tr>
+          <td align="right" valign="top"><b>Description:</b></td>
+          <td><textarea id="bug_description" name="bug_description" cols="40" rows="5"></textarea></td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>
+            <input type="submit" value="Submit bug report">
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

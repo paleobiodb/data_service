@@ -1,0 +1,63 @@
+<script language="JavaScript">
+<!-- Begin
+
+function checkName ( value )	{
+
+	var	startUppercase = /^[A-Z]/;
+	var	firstUpperRestLower = /^[A-Z][a-z ]+$/;
+
+	if ( startUppercase.test( value ) == false )	{
+		return "Taxon name \"" + value + "\" must be capitalized.";
+	} else	{
+		if ( firstUpperRestLower.test( value ) == false )	{
+			return "Taxon names only can include letters.";
+		}
+	}
+	return "";
+}
+
+function checkForm( )	{
+
+	var frm = document.forms[0];
+	var errors = "";
+
+	if ( frm.taxon_name.value != "" )	{
+		errors += checkName ( frm.taxon_name.value );
+	} else	{
+		errors += "Taxon name must be filled in.";
+	}
+
+	if ( errors != "" )	{
+		errors = "   Error detected!!\n\n* " +
+				errors + " *\n\n" +
+				"See the tip sheet for instructions.";
+		alert ( errors );
+		return false;
+	}
+	return true;
+}
+
+// End -->
+</script>
+
+<center><h3>Please enter the full name of the taxon you want to revise</h3></center>
+
+<form method="POST" action="$exec_url" onSubmit="return checkForm();">
+
+<input type=hidden name="action" value="processTaxonomySearch">
+<input type=hidden name="destination" value="%%destination%%">
+
+<center>
+<table><tr><td>
+<b>Taxon name:</b> <input name="taxon_name" size=30><br>
+</td></tr>
+
+<tr><td align="right">
+<input type=submit value="Search">
+</td></tr></table>
+
+<p><span class="tiny">Don't abbreviate the name, and be careful to spell it correctly! You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</span></p>
+
+<center>
+</form>
+

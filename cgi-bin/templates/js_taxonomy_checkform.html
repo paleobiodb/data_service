@@ -1,0 +1,156 @@
+    <script language="JavaScript">
+    <!-- Begin
+
+	function checkOpinion( )	{
+
+		var frm = document.forms[0];
+		var hasSpace = / /;
+
+		if ( frm.taxon_status[0].checked != false && frm.parent_taxon_name.value == "" )	{
+			if ( hasSpace.test ( frm.taxon_name ) == false )	{
+				return "* Higher taxon name is missing.\n";
+			}
+			else	{
+				return "* Name of combination is missing.\n";
+			}
+		}
+		else if ( frm.taxon_status[1].checked != false && frm.parent_taxon_name2.value == "" )	{
+			return "* Name of senior synonym is missing.\n";
+		}
+
+	// If opinion doesn't come from the current ref, it has to come
+	//  from somewhere
+		if ( frm.ref_has_opinion.value == "" && frm.opinion_author1last.value == "" )	{
+			return "* No authority for the taxon's status.\n";
+		}
+		return "";
+	}
+
+
+    function checkForm() {
+		var year = /^[1-2][0-9]{3}$/;
+		var capital = /[A-Z]/;
+		var firstUpperRestLower = /^[A-Z][a-z ]+$/;
+		var hasSpace = / /;
+		var frm = document.forms[0];
+		var errors = "";
+
+		// Taxon, type, and parent names must be different
+		if ( frm.taxon_name.value == frm.type_taxon_name.value )	{
+			errors += "* Type taxon and taxon have the same name.\n";
+		}
+		if ( frm.taxon_name.value == frm.parent_taxon_name.value && hasSpace.test (frm.taxon_name.value ) == false )	{
+			errors += "* Higher taxon and taxon have the same name.\n";
+		}
+		if ( frm.taxon_name.value == frm.parent_taxon_name2.value )	{
+			errors += "* Synyonym and taxon have the same name.\n";
+		}
+		if ( frm.type_taxon_name.value == frm.parent_taxon_name.value && frm.type_taxon_name.value != "" )	{
+			errors += "* Type taxon and higher taxon have the same name.\n";
+		}
+		if ( frm.type_taxon_name.value == frm.parent_taxon_name2.value && frm.type_taxon_name.value != "" )	{
+			errors += "* Type taxon and synonym have the same name.\n";
+		}
+
+		// Check taxonomic names
+		if ( frm.type_taxon_name.value != "" && firstUpperRestLower.test ( frm.type_taxon_name.value ) == false )	{
+			if ( hasSpace.test ( frm.taxon_name.value ) == false )	{
+				errors += "* Type taxon's name is ill-formed.\n";
+			}
+		}
+		if ( hasSpace.test ( frm.taxon_name.value ) == false )	{
+			if ( frm.parent_taxon_name.value != "" && firstUpperRestLower.test ( frm.parent_taxon_name.value ) == false )	{
+				errors += "* Higher taxon's name is ill-formed.\n";
+			}
+			else if ( frm.parent_taxon_name.value != "" && hasSpace.test ( frm.parent_taxon_name.value ) != false )	{
+				errors += "* Higher taxon's name is more than one word.\n";
+			}
+		}
+		else	{
+			if ( frm.parent_taxon_name.value != "" && firstUpperRestLower.test ( frm.parent_taxon_name.value ) == false )	{
+				errors += "* New combination's name is ill-formed.\n";
+			}
+			else if ( frm.parent_taxon_name.value != "" && hasSpace.test ( frm.parent_taxon_name.value ) == false )	{
+				errors += "* New combination's name is just one word.\n";
+			}
+		}
+		if ( frm.parent_taxon_name2.value != "" && firstUpperRestLower.test ( frm.parent_taxon_name2.value ) == false )	{
+			errors += "* Synonym's name is ill-formed.\n";
+		}
+
+		// Check names for authority data
+		if ( frm.author1init.value != "" ) {
+			// Check for a capital letter
+			if ( capital.test ( frm.author1init.value ) == false ) {
+				errors += "* First author's initials should be capitalized.\n"; 
+			}
+		}
+		if ( frm.author1last.value != "" ) {
+			// Check for a capital letter
+			if ( capital.test ( frm.author1last.value ) == false ) {
+				errors += "* First author's name should be capitalized.\n"; 
+			}
+		}
+		if ( frm.author2init.value != "") {
+			// Check for a capital letter
+			if ( capital.test ( frm.author2init.value ) == false ) {
+				errors += "* Second author's initials should be capitalized.\n"; 
+			}
+		}
+		if ( frm.author2last.value != "" ) {
+			// Check for a capital letter
+			if ( capital.test ( frm.author2last.value ) == false ) {
+				errors += "* Second author's name should be capitalized.\n"; 
+			}
+		}
+
+		// Check names for opinion data
+		if ( frm.opinion_author1init.value != "" ) {
+			// Check for a capital letter
+			if ( capital.test ( frm.opinion_author1init.value ) == false ) {
+				errors += "* First author's initials should be capitalized.\n"; 
+			}
+		}
+		if ( frm.opinion_author1last.value != "" ) {
+			// Check for a capital letter
+			if ( capital.test ( frm.opinion_author1last.value ) == false ) {
+				errors += "* First author's name should be capitalized.\n"; 
+			}
+		}
+		if ( frm.opinion_author2init.value != "") {
+			// Check for a capital letter
+			if ( capital.test ( frm.opinion_author2init.value ) == false ) {
+				errors += "* Second author's initials should be capitalized.\n"; 
+			}
+		}
+		if ( frm.opinion_author2last.value != "" ) {
+			// Check for a capital letter
+			if ( capital.test ( frm.opinion_author2last.value ) == false ) {
+				errors += "* Second author's name should be capitalized.\n"; 
+			}
+		}
+
+		// Publication Year
+		if ( frm.pubyr.value != "" ) {
+			if ( year.test( frm.pubyr.value ) == false ) {
+				errors += "* The publication year is invalid.\n"; 
+			}
+		}
+
+		// Check taxonomic opinion data if any are present on the page
+		errors += checkOpinion ( ) ;
+
+		// Report errors
+		if ( errors != "" ) {
+			errors = "   Please fix the following errors:\n\n" + 
+					 errors + "\n" +
+					 "See the tip sheet for instructions.";
+			alert ( errors );
+			return false;
+		} 
+		return true;
+    }
+
+
+    //  End -->
+    </script>
