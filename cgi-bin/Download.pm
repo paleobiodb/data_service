@@ -638,6 +638,20 @@ sub doQuery {
 	my $collections_only = $q->param('collections_only');
 	my $distinct_taxa_only = $q->param('distinct_taxa_only');
 
+	# get the names of time intervals
+	if ( $q->param('collections_max_interval_no') || $q->param('collections_min_interval_no') ) {
+		$sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
+		my @intnorefs = @{$dbt->getData($sql)};
+		for $intnoref ( @intnorefs )	{
+			if ( $intnoref->{eml_interval} )	{
+				$max_interval_name{$intnoref->{interval_no}} = $intnoref->{eml_interval} . " " . $intnoref->{interval_name};
+			} else	{
+				$max_interval_name{$intnoref->{interval_no}} = $intnoref->{interval_name};
+			}
+		}
+	}
+
+
 	# Getting only collection data:
 	if($collections_only eq 'YES'){
 		$sql =  "SELECT collections.reference_no, collections.collection_no, ".
@@ -860,6 +874,12 @@ sub doQuery {
 		# Loop over each collection output column
 		foreach my $column ( @collectionHeaderCols ){
 			$column =~ s/^collections\.//;
+			# translate interval nos into names JA 18.9.03
+			if ( $column eq "max_interval_no" )	{
+				$row->{$column} = $max_interval_name{$row->{$column}};
+			} elsif ( $column eq "min_interval_no" )	{
+				$row->{$column} = $min_interval_name{$row->{$column}};
+			}
 			push ( @coll_row, $row->{$column} );
 		}
 
