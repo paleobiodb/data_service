@@ -87,6 +87,9 @@ sub getSecondaryRefsString{
     $sth->execute();
     my @results = @{$sth->fetchall_arrayref({})};
     $sth->finish();
+	unless(scalar @results > 0){ 
+		return "";
+	}
 
 	# Authorname Formatting
 	use AuthorNames;
