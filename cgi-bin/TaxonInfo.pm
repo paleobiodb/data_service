@@ -16,13 +16,16 @@ use POSIX qw(ceil floor);
 $DEBUG = 0;
 
 
-sub startTaxonInfo{
+sub startTaxonInfo {
 	my $q = shift;
 
 	print main::stdIncludes( "std_page_top" );
 	print searchForm($q);
 	print main::stdIncludes("std_page_bottom");
 }
+
+
+
 
 sub searchForm{
 	my $q = shift;
@@ -1403,7 +1406,8 @@ sub displayTaxonClassification{
 			}
 			# If we didn't get a parent or status ne 'belongs to'
 			else{
-				$parent_no = 0;
+				#$parent_no = 0;
+				$parent_no = undef;
 			}
 		}
 		else{

@@ -426,6 +426,12 @@ sub displayOpinionForm {
 	}
 	
 	
+		
+	# Now we should figure out the parent taxon name for this opinion.
+	my $parent = Taxon->new();
+	$parent->setWithTaxonNumber($fields{parent_no});
+	
+	
 	if ($fields{status}) {
 		if (! (Globals::isIn(\@valid, $fields{status}))) {
 			# it's an invalid status
@@ -443,6 +449,10 @@ sub displayOpinionForm {
 				
 				$fields{'taxon_status_invalid1'} = 'checked';
 				$fields{taxon_status} =  INVALID1;
+				
+				if (! $secondTime) {
+					$fields{'parent_taxon_name2'} = $parent->taxonName();
+				}
 			}
 		} else {
 			# it must be a valid status
@@ -453,6 +463,10 @@ sub displayOpinionForm {
 			} else {
 				$fields{taxon_status_belongs_to} = 'checked';
 				$fields{taxon_status} = BELONGS_TO;
+			}
+			
+			if (! $secondTime) {
+				$fields{'parent_taxon_name'} = $parent->taxonName();
 			}
 		}
 	}
@@ -466,15 +480,7 @@ sub displayOpinionForm {
 
 	
 	
-	
-	# Now we should figure out the parent taxon name for this opinion.
-	# but only if it's not the second time through.
-	if (! $secondTime) {
-		my $parent = Taxon->new();
-		$parent->setWithTaxonNumber($fields{parent_no});
-		$fields{parent_taxon_name} = $parent->taxonName();
-		$fields{'parent_taxon_name2'} = $fields{parent_taxon_name};
-	}
+
 	
 	
 	# if the authorizer of this record doesn't match the current
@@ -894,6 +900,7 @@ sub submitOpinionForm {
 		# in this case, the status is not "invalid2", it's whatever they
 		# chose in the nomen popup.
 		$fieldsToEnter{status} = $q->param('nomen');
+		$fieldsToEnter{parent_no} = undef;
 	} 
 	
 	

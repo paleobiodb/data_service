@@ -186,7 +186,7 @@ sub properInitial {
 	
 	if ((!$input) || $input eq "") { return 0; }
 	
-	if ($input !~ m/^[A-Za-z.][A-Za-z .-]*$/) {
+	if ($input !~ m/^[A-Za-z][A-Za-z .-]*$/) {
 		return 0;
 	}
 	

@@ -140,7 +140,8 @@ sub get_classification_hash{
             }                    
             # If we didn't get a parent or status ne 'belongs to'
             else{                
-                $parent_no = 0;
+                #$parent_no = 0;
+				$parent_no = undef;  # to correspond to new database table structure.
             }
         }   
         else{   

@@ -609,12 +609,12 @@ sub setPreferences	{
 
 sub newAuthorityTesting {
 	print stdIncludes("std_page_top");
-	print "<H2>Regular taxonomic entry is disabled until the new forms have been completed.</H2>
-	We'd appreciate your help debugging the new version of the authority entry form.  Click
+	print "<H2>Regular taxonomic entry is disabled until the new forms have been completed (which should be in a few days).</H2>
+	We'd appreciate your help debugging the new version of the authority/opinion entry forms.  Click
 	<A HREF=\"http://paleobackup.nceas.ucsb.edu:8110/cgi-bin/bridge.pl?user=Contributor&action=displayHomePage\">here</A> to log in to our backup server so you can try out the new form.  <B>Any data you enter or edit on the backup server will not affect data on the live server.</B> <BR><BR>
-	Go to the main menu on the backup server, and click on the Add/edit taxononomic name link.  Send your bug reports to alroy at nceas.ucsb.edu, and cc it to poling at nceas.ucsb.edu.<BR><BR>
+	Go to the main menu on the backup server, and click on the <i>Add/edit taxononomic name<i> link, or the <i>Add/edit taxonomic opinion</i> link.  Feel free to try entering bogus data, corrupt existing data, etc. - it's the backup server, so it doesn't matter.  Send your bug reports to alroy at nceas.ucsb.edu, and cc it to poling at nceas.ucsb.edu.<BR><BR>
 	Also note that you can only enter authority information for a taxon at this time.  The new opinion form has not yet been completed.<BR><BR>
-	Testing begins: March 8th, 2004.<BR><BR>";
+	Testing begins: March 8th, 2004.  Unless we receive bug reports from you, the new forms will appear on the real server sometime in the week of March 14th.<BR><BR>";
 	
 	print stdIncludes("std_page_bottom");
 }
@@ -645,22 +645,33 @@ sub displayAuthorityForm {
 	if ($q->param('taxon_no') > 0) {
 		$taxon->setWithTaxonNumber($q->param('taxon_no'));
 	} elsif ($q->param('taxon_no') == -1) { 
-		# this is a new entry, so make sure they have a reference
-		# before allowing them to add it.
+		# this is a new entry
 		
-		if (! $s->currentReference()) {
-			my $toQueue = "action=displayAuthorityForm&taxon_name=$taxonName" . 
-			"&taxon_no=" . $q->param('taxon_no');
+		if ($q->param('skip_ref_check')) {
+			# then we've already prompted them for a reference_no
+			
+			# set the taxon with the name only, otherwise, it will
+			# grab an old record.
+			$taxon->setWithTaxonNameOnly($taxonName);
+			
+		} else {
+			
+			# if skip_ref_check is not set, then we should prompt them for a reference_no 
+	
+			# set the skip_ref_check in the queued action so we don't
+			# endlessly loop and ask them for a reference.	
+		
+			my $toQueue = "action=displayAuthorityForm&skip_ref_check=1&taxon_name=$taxonName" . "&taxon_no=" . $q->param('taxon_no');
 			$s->enqueue( $dbh, $toQueue );
 	
 			$q->param( "type" => "select" );
 			displaySearchRefs("You must choose a reference before adding a new taxon." );
+		
 			return;
 		}
 		
-		$taxon->setWithTaxonNameOnly($taxonName);
-		
 	} elsif ($taxonName) {
+		# we have a taxon name, and it is *not* a new entry.
 		$taxon->setWithTaxonName($taxonName);
 	}
 		
@@ -729,18 +740,21 @@ sub displayOpinionForm {
 	
 	if ($q->param('opinion_no') ne "-1") {
 		$opinion->setWithOpinionNumber($q->param('opinion_no'));
-	} else {
+	} elsif (! $q->param('skip_ref_check')) {
 		# opinion_no == -1, so that means they're adding a new opinion,
-		# and hence, we have to make sure they have a reference selected.
-		if (! $s->currentReference()) {
-			my $toQueue = 'action=displayOpinionForm&opinion_no=' . $q->param('opinion_no') . 
-			'&taxon_no=' . $q->param('taxon_no');
-			$s->enqueue( $dbh, $toQueue );
+		# and hence, we should prompt them for a reference_no each time.
+		#
+		# Set the skip_ref_check in the queued action so we don't go into an infinite 
+		# loop of asking for references.
+		
+		my $toQueue = 'action=displayOpinionForm&skip_ref_check=1&opinion_no=-1&taxon_no=' .
+		$q->param('taxon_no');
+		$s->enqueue( $dbh, $toQueue );
 	
-			$q->param( "type" => "select" );
-			displaySearchRefs("You must choose a reference before adding a new opinion");
-			return;
-		}
+		$q->param( "type" => "select" );
+		displaySearchRefs("You must choose a reference before adding a new opinion");
+		return;
+		
 	}
 
 	
@@ -5303,27 +5317,27 @@ sub processTaxonomySearch	{
 			#$action = "displayOpinionList";
 		}
 		
-		# make sure they have a reference selected
-		if (! $s->currentReference()) {
-			# if they don't have a reference selected,
+		# if matches == 0, then they're adding a new taxon,
+		# so we should always prompt them for a reference_no.
+		# unless the skip_ref_check paramter is set.	
 			
-			my $toQueue = "action=$action&taxon_name=$taxonName" . 
-			"&taxon_no=" . $q->param('taxon_no');
-			$s->enqueue( $dbh, $toQueue );
+		my $toQueue = "action=$action&skip_ref_check=1&taxon_name=$taxonName" . 
+		"&taxon_no=" . $q->param('taxon_no');
+		$s->enqueue( $dbh, $toQueue );
 	
-			$q->param( "type" => "select" );
-			displaySearchRefs("Please choose a reference first" );
+		$q->param( "type" => "select" );
+		displaySearchRefs("Please choose a reference before adding a new taxon" );
 			
-			return;
-		}
+		return;
+		
 		
 		# if we make it to here, then they had a reference selected.
 		
-		if ($goal eq 'authority') {
-			displayAuthorityForm();
-		} elsif ($goal eq 'opinion')  {
-			displayOpinionList();
-		}
+		#if ($goal eq 'authority') {
+		#	displayAuthorityForm();
+		#} elsif ($goal eq 'opinion')  {
+		#	displayOpinionList();
+		#}
 		
 	# rjp, 3/12/2004, note, we're not doing this yet because
 	# it would skip the display of homonyms:
@@ -6316,7 +6330,8 @@ sub displayTaxonomyResults	{
 		$q->param(status => $q->param('synonym') );
 	} elsif ( $q->param('taxon_status') eq "invalid2" )	{
 		$q->param(status => $q->param('nomen') );
-		$q->param(parent_no => 0); ##***********##
+		#$q->param(parent_no => 0); ##***********##
+		$q->param(parent_no => undef); ##***********##
 		$q->param(parent_taxon_no => 0);
 	}
 	elsif($q->param('taxon_status') eq "no_opinion"){

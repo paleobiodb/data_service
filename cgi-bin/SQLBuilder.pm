@@ -827,13 +827,14 @@ sub insertNewRecord {
 		}
 	}
 	
-	Debug::dbPrint("here2");
 	
 	# remove the trailing comma
 	$toInsert =~ s/, $/ /;
 	
 	$toInsert = "INSERT INTO $tableName SET " . $toInsert;
 	
+	
+	Debug::printHash($hashRef);
 	Debug::dbPrint("here3, toInsert = $toInsert");
 	
 	# actually insert into the database

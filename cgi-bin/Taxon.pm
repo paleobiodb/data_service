@@ -1188,7 +1188,7 @@ sub submitAuthorityForm {
 		
 		if (!$number) {
 			# if it doesn't exist, tell them to go enter it first.
-			$errors->add("The type taxon '" . $q->param('type_taxon_name') . "' doesn't exist in our database.  If you made a typo, correct it and try again.  Otherwise, please submit this form without the type taxon and then go back and add it later.");
+			$errors->add("The type taxon '" . $q->param('type_taxon_name') . "' doesn't exist in our database.  If you made a typo, correct it and try again.  Otherwise, please submit this form without the type taxon and then go back and add it later (after you have added an authority record for the type taxon).");
 		} else {
 			
 			# check to make sure the rank of the type taxon makes sense.
@@ -1387,7 +1387,7 @@ sub displayAuthoritySummary {
 		print "<TABLE align=center BORDER=0 WIDTH=80\%><TR>
 		<TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $self->{taxonNumber} ."\"><B>Add more data about " . $dbrec->{taxon_name} . "</B></A></TD>
 		<TD align=center>-</TD>
-		<TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm\"><B>Add more data about another taxon</B></A></TD></TR></TABLE>";	
+		<TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority\"><B>Add more data about another taxon</B></A></TD></TR></TABLE>";	
 
 	}
 	
