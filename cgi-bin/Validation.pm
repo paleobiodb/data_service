@@ -179,6 +179,7 @@ sub genusFromString {
 
 
 # returns true if the input is in a proper format for a last name
+# JA: added \p{L} meaning any letter including accented ones 17.4.04
 sub properLastName {
 	my $input = shift;
 	
@@ -186,7 +187,7 @@ sub properLastName {
 	
 	#Debug::dbPrint("properLastName($input) returns " . 
 	
-	if ($input !~ m/^[A-Za-z,-.\'][A-Za-z ,-.\']*$/) {
+	if ($input !~ m/^[A-Za-z,-.\'][A-Za-z ,-.\'\p{L}]*$/) {
 		return 0;	
 	}
 	
