@@ -862,9 +862,31 @@ sub displayRefResults {
 		else	{
 			print &stdIncludes ( "std_page_top" );
 			print "<h3>Here is the full reference...</h3>\n";
-			print "<table border=0 cellpadding=5 cellspacing=0>\n";
+			print "<table border=0 cellpadding=4 cellspacing=0>\n";
 		    my $drow = DataRow->new($rows[0], $md);
-		   	print &makeRefString( $drow, 0, 1, 1 );
+			# Args: data row, selectable, row, rowcount, suppress_colls
+			# Suppress collections so I can insert other stuff and then
+			# call it below.
+		   	print makeRefString( $drow, 0, 1, 1, 1);
+			print "<tr><td colspan=\"3\">&nbsp;</td>";
+			print "<td><font size=-1>\n";
+			print "<table border=0 cellpadding=0 cellspacing=0>";
+			# Now the pubyr:
+			# This spacing is to match up with the collections, below
+			if(${@rows[0]}[19]){
+				print "<tr><td>Publication type:&nbsp;<i>".${@rows[0]}[19]."</i></font></td></tr>";
+			}
+			# Now the comments:
+			if(${@rows[0]}[20]){
+				print "<tr><td>Comments:&nbsp;<i>".${@rows[0]}[20]."</i></font></td></tr>";
+			}
+			# getCollsWithRef creates a new <tr> for the collections.
+			my $refColls = getCollsWithRef(${@rows[0]}[3], $row, $rowcount);
+			# remove the cells that cause this to line up since we're putting
+			# it in a subtable.
+			$refColls =~ s/^<tr>\n<td colspan=\"3\">&nbsp;<\/td>/<tr>/;
+			print $refColls;
+			print "</table>\n";
 			print "</table><p>\n";
 			print &stdIncludes ( "std_page_bottom" );
 		}
@@ -5246,15 +5268,18 @@ sub makeRefString	{
 		return $retRefString;
 	}
 	my $tempRefNo = $bibRef->get("_reference_no");
-	return getCollsWithRef ( $retRefString, $tempRefNo, $row, $rowcount );
+	# getCollsWithRef creates a new <tr> for the collections.
+	$retRefString .= getCollsWithRef($tempRefNo, $row, $rowcount);
+
+	return $retRefString;
 }
 
 # JA 23.2.02
 sub getCollsWithRef	{
-	my $retString = shift;
 	my $tempRefNo = shift;
 	my $row = shift;
 	my $rowcount = shift;
+	my $retString = "";
 
 	# make sure displayed collections are readable by this person JA 24.6.02
 	$limit = 999;
