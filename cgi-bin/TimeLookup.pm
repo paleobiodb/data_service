@@ -359,9 +359,10 @@ sub findBoundaries	{
 
 	$dbh = shift;
 	$dbt = shift;
+    my $scale_no = shift;
     $skip_orphaned_intervals = shift;
 
-	&findBestScales();
+	&findBestScales($scale_no);
 	&findImmediateCorrelates();
 
 
@@ -545,36 +546,52 @@ sub findBoundaries	{
 }
 
 sub findBestScales	{
+    my $scale_no = shift;
+   
+    # find the pubyr of each time scale's ref
+    $sql = "SELECT scale_no,reference_no FROM scales";
+    my @refnos = @{$dbt->getData($sql)};
+    for my $r ( 0..$#refnos )	{
+        $sql = "SELECT pubyr FROM refs WHERE reference_no=" . $refnos[$r]->{reference_no};
+        $pubyr{$refnos[$r]->{scale_no}} = @{$dbt->getData($sql)}[0]->{pubyr};
+    }
 
-# find the pubyr of each time scale's ref
-	$sql = "SELECT scale_no,reference_no FROM scales";
-	my @refnos = @{$dbt->getData($sql)};
-	for my $r ( 0..$#refnos )	{
-		$sql = "SELECT pubyr FROM refs WHERE reference_no=" . $refnos[$r]->{reference_no};
-		$pubyr{$refnos[$r]->{scale_no}} = @{$dbt->getData($sql)}[0]->{pubyr};
-	}
-
-# figure out which scale to trust for each interval
-	$sql = "SELECT interval_no,scale_no,next_interval_no,max_interval_no,lower_boundary FROM correlations";
-	my @corrs = @{$dbt->getData($sql)};
-	for my $corr ( @corrs )	{
-		if ( $pubyr{$corr->{scale_no}} > $bestscaleyr{$corr->{interval_no}} )	{
-			$bestscaleyr{$corr->{interval_no}} = $pubyr{$corr->{scale_no}};
-			$bestscale{$corr->{interval_no}} = $corr->{scale_no};
-			if ( $corr->{next_interval_no} > 0 )	{
-				$bestnext{$corr->{interval_no}} = $corr->{next_interval_no};
-			}
-			# need this for orphan intervals like the Gallic that
-			#  aren't the immediatemax of anything in the most
-			#  recent time scales
-			$bestincludedmax{$corr->{max_interval_no}} = $corr->{interval_no};
-		}
-		if ( $pubyr{$corr->{scale_no}} > $bestboundyr{$corr->{interval_no}} && $corr->{lower_boundary} > 0 )	{
-			$bestboundyr{$corr->{interval_no}} = $pubyr{$corr->{scale_no}};
-			$bestboundary{$corr->{interval_no}} = $corr->{lower_boundary};
-		}
-	}
-
+    # figure out which scale to trust for each interval
+    $sql = "SELECT interval_no,scale_no,next_interval_no,max_interval_no,lower_boundary FROM correlations";
+    my @corrs = @{$dbt->getData($sql)};
+    for my $corr ( @corrs )	{
+        if ($pubyr{$corr->{scale_no}} > $bestscaleyr{$corr->{interval_no}}) {
+        #if ((!$scale_no && ($pubyr{$corr->{scale_no}} > $bestscaleyr{$corr->{interval_no}})) ||
+        #    ( $scale_no && ($corr->{scale_no}==$scale_no)))	{
+            $bestscaleyr{$corr->{interval_no}} = $pubyr{$corr->{scale_no}};
+            $bestscale{$corr->{interval_no}} = $corr->{scale_no};
+            if ( $corr->{next_interval_no} > 0 )	{
+                $bestnext{$corr->{interval_no}} = $corr->{next_interval_no};
+            }
+            # need this for orphan intervals like the Gallic that
+            #  aren't the immediatemax of anything in the most
+            #  recent time scales
+            $bestincludedmax{$corr->{max_interval_no}} = $corr->{interval_no};
+                }
+                if ( $pubyr{$corr->{scale_no}} > $bestboundyr{$corr->{interval_no}} && $corr->{lower_boundary} > 0 )	{
+                    $bestboundyr{$corr->{interval_no}} = $pubyr{$corr->{scale_no}};
+                    $bestboundary{$corr->{interval_no}} = $corr->{lower_boundary};
+                }
+            }
+            #; Hack for Confidence.pm.  If we specifiy a scale no, don't use the composite interval estimates
+    if ($scale_no) {
+        for my $corr ( @corrs )	{
+            if ($corr->{'scale_no'} == $scale_no) {
+                $bestscale{$corr->{interval_no}} = $corr->{scale_no};
+                if ( $corr->{next_interval_no} > 0 )	{
+                    $bestnext{$corr->{interval_no}} = $corr->{next_interval_no};
+                } 
+                if ($corr->{lower_boundary} > 0){
+                    $bestboundary{$corr->{interval_no}} = $corr->{lower_boundary};
+                }
+            }
+        }
+    }
 }
 
 sub getIntervalRange	{
@@ -881,27 +898,75 @@ sub splitInterval {
 sub getScaleOrder {
     my $dbt = shift;
     my $scale_no = shift;
+    my $return_type = shift || "name"; #name or number
+    my $is_composite = shift;
 
     my @scale_list = ();
 
-    my $count;
-    my $sql = "SELECT correlations.interval_no, next_interval_no, interval_name FROM correlations, intervals".
-              " WHERE correlations.interval_no=intervals.interval_no".
-              " AND scale_no=".$dbt->dbh->quote($scale_no). 
-              " AND next_interval_no=0";
-    my @results = @{$dbt->getData($sql)};
-    while (scalar(@results)) {
-        if ($count++ > 200) { die "infinite loop in getScaleOrder"; }
-        my $row = $results[0];
-        if ($row->{'eml_interval'}) {
-            push @scale_list, $row->{'eml_interval'} . ' ' .$row->{'interval_name'};
-        } else {
-            push @scale_list, $row->{'interval_name'};
+    if ($is_composite) {
+        if (!%bestnext) {
+            findBestScales();
+        }    
+        # find first guy in scale - sort of a hack, just use max interval no for now
+#        my $sql = "SELECT max(lower_boundary) as maxb FROM correlations WHERE scale_no=".$dbt->dbh->quote($scale_no);
+#        my @results = @{$dbt->getData($sql)};
+        #$sql = "SELECT interval_no FROM correlations WHERE scale_no=".$dbt->dbh->quote($scale_no)." AND lower_boundary=".$results[0]->{'maxb'};
+        my $sql = "SELECT MAX(interval_no) as interval_no FROM correlations WHERE scale_no=".$dbt->dbh->quote($scale_no);
+        my @results = @{$dbt->getData($sql)};
+        my $interval_no = $results[0]->{'interval_no'};
+        while (1) {
+            if ($count++ > 200) {die "loop";}
+            unshift @scale_list, $interval_no;
+            if (!exists $bestnext{$interval_no}) {
+                if ($bestscale{$interval_no} != $scale_no) {
+                    print "*1 ";
+                    #Backtrack till we can rejoin teh scale
+                    foreach $orig_interval_no (@scale_list) {
+                        print "*2 ";
+                        my $sql = "SELECT next_interval_no FROM correlations WHERE interval_no=$orig_interval_no AND scale_no=".$dbt->dbh->quote($scale_no);
+                        print $sql."<br>";
+                        my @results = @{$dbt->getData($sql)};
+                        if (scalar(@results)) {
+                            $interval_no=$results[0]->{'next_interval_no'};
+                            last;
+                        }
+                    }
+                    if (!$interval_no) {
+                        last;
+                    }
+                } else {
+                     print "*4 ";
+                    last;
+                }
+            } else {
+                print "bn $interval_no $bestnext{$interval_no}<br>";
+                $interval_no=$bestnext{$interval_no};
+            }
         }
-        $sql = "SELECT eml_interval, interval_name, correlations.interval_no FROM correlations, intervals".
-               " WHERE correlations.interval_no=intervals.interval_no".
-               " AND next_interval_no=$row->{interval_no}";
-        @results = @{$dbt->getData($sql)};
+    } else {
+        my $count;
+        my $sql = "SELECT correlations.interval_no, next_interval_no, interval_name FROM correlations, intervals".
+                  " WHERE correlations.interval_no=intervals.interval_no".
+                  " AND scale_no=".$dbt->dbh->quote($scale_no). 
+                  " AND next_interval_no=0";
+        my @results = @{$dbt->getData($sql)};
+        while (scalar(@results)) {
+            if ($count++ > 200) { die "infinite loop in getScaleOrder"; }
+            my $row = $results[0];
+            if ($return_type eq 'number') {
+                push @scale_list, $row->{'interval_no'};
+            } else {
+                if ($row->{'eml_interval'}) {
+                    push @scale_list, $row->{'eml_interval'} . ' ' .$row->{'interval_name'};
+                } else {
+                    push @scale_list, $row->{'interval_name'};
+                }
+            }
+            $sql = "SELECT eml_interval, interval_name, correlations.interval_no FROM correlations, intervals".
+                   " WHERE correlations.interval_no=intervals.interval_no".
+                   " AND next_interval_no=$row->{interval_no}";
+            @results = @{$dbt->getData($sql)};
+        }
     }
         
     return @scale_list;
