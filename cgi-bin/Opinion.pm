@@ -1003,13 +1003,14 @@ sub displayOpinionSummary {
 		my $opinionHTML = $opinion->formatAsHTML();
 		$opinionHTML =~ s/according to/of/i;
 		
-		print "<H2> The opinion $opinionHTML has been $enterupdate the database</H2><BR>";
+		print "<H2> The opinion $opinionHTML has been $enterupdate the database</H2><p>To verify that the information was entered correctly, click on the add more data link below.</p>";
 		
-		print "
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=" . $self->{opinion_no} ."\"><B>Add more data about this opinion</B></A> - <A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&amp;goal=opinion\"><B>Add/edit an opinion about another taxon</B></A>";
+		print "<TABLE align=center BORDER=0 WIDTH=80\%><TR><TD align=center>
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=" . $self->{opinion_no} ."\"><B>Add more data about this opinion</B></A></TD>
+		<TD align=center>-</TD><TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&amp;goal=opinion\"><B>Add/edit an opinion about another taxon</B></A></TD></TR></TABLE>";
 	}
 	
-	print "<BR><BR>";
+	print "<BR>";
 	print "</CENTER>";
 	
 	print main::stdIncludes("std_page_bottom");
