@@ -4567,7 +4567,7 @@ sub beginTaxonInfo{
 }
 
 sub checkTaxonInfo{
-	TaxonInfo::checkStartForm($q, $dbh, $s, $dbt);
+	TaxonInfo::checkStartForm($q, $dbh, $s, $dbt, $hbo);
 }
 
 sub displayTaxonInfoResults{

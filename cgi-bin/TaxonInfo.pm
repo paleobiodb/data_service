@@ -289,6 +289,7 @@ sub checkStartForm {
 	my $dbh = shift;
 	my $s = shift;
 	my $dbt = shift;
+    my $hbo = shift;
 	
 	$GLOBALVARS{session} = $s;
 	
@@ -532,7 +533,7 @@ sub checkStartForm {
 		print main::stdIncludes("std_page_top");
 		print "<center><h3>No results found</h3>";
 		print "<p><b>Please search again</b></center>";
-		print searchForm($q, 1); # param for not printing header with form
+		searchForm($hbo, $q, 1); # param for not printing header with form
 		if($s->get("enterer") ne "Guest" && $s->get("enterer") ne ""){
 			print "<center><p><a href=\"/cgi-bin/bridge.pl?action=startTaxonomy\"><b>Add taxonomic information</b></a></center>";
 		}
