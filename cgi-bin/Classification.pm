@@ -6,20 +6,20 @@ use TaxonInfo;
 # Rewritten 01/11/2004 PS. Function is much more flexible, can do full upward classification of any 
 # of the taxon rank's, with caching to keep things fast for large arrays of input data. 
 #   * Use a upside-down tree data structure internally
+#  Arguments:
 #   * 1st arg: comma separated list of the ranks you want,i.e(class,order,family) 
 #              OR keyword 'parent' => gets first parent of taxon passed in 
 #              OR keyword 'all' => get full classification (not imp'd yet, not used yet);
 #   * 2nd arg: Takes an array of taxon names or numbers
-#   * Returns a hash array of comma-separated lists
-#     * The hash reference will be keyed on the values of the array used for input (no's or names)
-#     * Each comma separated list is in the same order as the '$ranks' list is in
-#   * 3rd arg: Will either be comma-separated taxon_nos or taxon_names returned in table
+#   * 3rd arg: What to return: will either be comma-separated taxon_nos (numbers), taxon_names (names), or a linked_list (linked_list) 
+#  Return:
+#   * Returns a hash whose key is input (no or name), value is comma-separated lists
+#     * Each comma separated list is in the same order as the '$ranks' input variable was in
 sub get_classification_hash{
-    use Data::Dumper;
 	my $dbt = shift;
 	my $ranks = shift;
 	my $taxon_names_or_nos = shift;
-	my $return_type = shift || 'names'; #names or numbers;
+	my $return_type = shift || 'names'; #names OR numbers OR linked_list;
 
 	my @taxon_names_or_nos = @{$taxon_names_or_nos};
     $ranks =~ s/\s+//g; #NO whitespace
@@ -87,6 +87,7 @@ sub get_classification_hash{
 
         # start the link with child_no;
         my $link = {};
+        my $prev_link = $link;
         $link_head{$hash_key} = $link;
         my %visits = ();
         my $debug_print_link = 0;
@@ -98,7 +99,7 @@ sub get_classification_hash{
         for(my $INIT=0;$INIT==0||scalar(@parents) && !$found_parent;$INIT++) {
             $loopcount++;
             #hasn't been necessary yet, but just in case
-            if ($loopcount >= 22) { $msg = "Infinite loop for $child_no?";croak $msg;} 
+            if ($loopcount >= 30) { $msg = "Infinite loop for $child_no?";croak $msg;} 
 
             # bail if we couldn't find exactly one taxon_no for taxon_name entered above
             last if (!$child_no);
@@ -107,7 +108,6 @@ sub get_classification_hash{
             $visits{$child_no}++;
             last if ($visits{$child_no} > 1);
 
-            # Get parents of current child
             $sql = "SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank, o.status, o.pubyr, o.reference_no " 
                  . " FROM authorities a,opinions o" 
                  . " WHERE a.taxon_no=o.parent_no" 
@@ -125,10 +125,17 @@ sub get_classification_hash{
                 # bail if its a junk nomem * relationship
                 last if ($parents[$parent_index]->{'status'} =~ /^nomen/);
                 #main::dbg(Dumper($parents[$parent_index]));
-
+ 
+                # Belongs to should always point to original combination
                 $parent_no   = $parents[$parent_index]->{'taxon_no'};
-                $parent_name = $parents[$parent_index]->{'taxon_name'};
-                $parent_rank = $parents[$parent_index]->{'taxon_rank'};
+                if ($parent_no) {
+                    $correct_name = PBDBUtil::getCorrectedName($dbt,$parent_no);
+                    $parent_name = $correct_name->{'taxon_name'};
+                    $parent_rank = $correct_name->{'taxon_rank'};
+                } else { # This shouldn't happen but might bc of bad opinions
+                    $parent_name = $parents[$parent_index]->{'taxon_name'};
+                    $parent_rank = $parents[$parent_index]->{'taxon_rank'};
+                }
                 #main::dbg("parent no $parent_no name $parent_name rank $parent_rank");
 
                 if ($parents[$parent_index]->{'status'} eq 'belongs to' && $ranks[0] eq 'parent') {
@@ -146,23 +153,39 @@ sub get_classification_hash{
                     last;
                 # populate this link, then set the link to be the next_link, climbing one up the tree
                 } else {
-                    if (exists $rank_hash{$parent_rank} || 
-                        $ranks[0] eq 'parent') {
+                    # Synonyms are tricky: We don't add the child (junior?) synonym onto the chain, only the parent
+                    # Thus the child synonyms get their node values replace by the parent, with the old child data being
+                    # placed into a "synonyms" field (an array of nodes)
+                    if ($parents[$parent_index]->{'status'} =~ /^(repl|subj|obje)/) {
                         my %node = (
-                            'number'=>$parent_no,
-                            'name'=>$parent_name,
-                            'rank'=>$parent_rank,
-                            'next_link'=>{}
+                            'number'=>$prev_link->{'number'},
+                            'name'=>$prev_link->{'name'},
+                            'rank'=>$prev_link->{'rank'}
                         );
-                        %{$link} = %node;
-                        $link = $node{'next_link'};
-                        $link_cache{$parent_no} = \%node;
+                        $prev_link->{'number'} = $parent_no;
+                        $prev_link->{'name'} = $parent_name;
+                        $prev_link->{'rank'} = $parent_rank;
+                        push @{$prev_link->{'synonyms'}}, \%node;
+                    } else {
+                        if (exists $rank_hash{$parent_rank} || $ranks[0] eq 'parent' || $ranks[0] eq 'all') {
+                            my %node = (
+                                'number'=>$parent_no,
+                                'name'=>$parent_name,
+                                'rank'=>$parent_rank,
+                                'next_link'=>{}
+                            );
+                            %{$link} = %node;
+                            $prev_link = $link;
+                            $link = $node{'next_link'};
+                            $link_cache{$parent_no} = \%node;
+
+                        }
                     }
                 }
 
                 # bail if we're already above the rank of 'class'
-                last if($parent_rank && $taxon_rank_order{$parent_rank} && 
-                        $taxon_rank_order{$parent_rank} < $highest_level);
+                last if($ranks[0] ne 'all' && ($parent_rank && $taxon_rank_order{$parent_rank} && 
+                        $taxon_rank_order{$parent_rank} < $highest_level));
 
                 # set this var to set up next loop
                 $child_no = $parent_no;
@@ -177,42 +200,44 @@ sub get_classification_hash{
     #print "\n\nlink head\n".Dumper(\%link_head).'</pre><center>';
 
     # flatten the links before passing it back
-    while(($hash_key, $link) = each(%link_head)) {
-        my %list= ();
-        my %visits = ();
-        my $list_ordered = '';
-        # Flatten out data, but first prepare it all
-        if ($ranks[0] eq 'parent') {
-            if ($return_type eq 'names') {
-                $list_ordered .= ','.$link->{'name'};
-            } else {
-                $list_ordered .= ','.$link->{'number'};
-            }
-        } else {
-            while (%$link) {
-                #if ($count++ > 5) { print "link: ".Dumper($link)."<br>"}
-                #if ($count++ > 12) { last; }
-                # Loop prevention by marking where we've been
-                if (exists $visits{$link->{'number'}}) { 
-                    last; 
-                } else {
-                    $visits{$link->{'number'}} = 1;
-                }
+    if ($return_type ne 'linked_list') {
+        while(($hash_key, $link) = each(%link_head)) {
+            my %list= ();
+            my %visits = ();
+            my $list_ordered = '';
+            # Flatten out data, but first prepare it all
+            if ($ranks[0] eq 'parent') {
                 if ($return_type eq 'names') {
-                    $list{$link->{'rank'}} = $link->{'name'}; 
+                    $list_ordered .= ','.$link->{'name'};
                 } else {
-                    $list{$link->{'rank'}} = $link->{'number'}; 
+                    $list_ordered .= ','.$link->{'number'};
                 }
-                $link = $link->{'next_link'};
+            } else {
+                while (%$link) {
+                    #if ($count++ > 5) { print "link: ".Dumper($link)."<br>"}
+                    #if ($count++ > 12) { last; }
+                    # Loop prevention by marking where we've been
+                    if (exists $visits{$link->{'number'}}) { 
+                        last; 
+                    } else {
+                        $visits{$link->{'number'}} = 1;
+                    }
+                    if ($return_type eq 'names') {
+                        $list{$link->{'rank'}} = $link->{'name'}; 
+                    } else {
+                        $list{$link->{'rank'}} = $link->{'number'}; 
+                    }
+                    $link = $link->{'next_link'};
+                }
+                # The output list will be in the same order as the input list
+                # by looping over this array
+                foreach $rank (@ranks) {
+                    $list_ordered .= ','.$list{$rank};
+                }
             }
-            # The output list will be in the same order as the input list
-            # by looping over this array
-            foreach $rank (@ranks) {
-                $list_ordered .= ','.$list{$rank};
-            }
+            $list_ordered =~ s/^,//g;
+            $link_head{$hash_key} = $list_ordered;
         }
-        $list_ordered =~ s/^,//g;
-        $link_head{$hash_key} = $list_ordered;
     }
 
     return \%link_head;
