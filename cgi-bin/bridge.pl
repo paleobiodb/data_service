@@ -19,6 +19,7 @@ use Permissions;
 use PBDBUtil;
 use TaxonInfo;
 use DBTransactionManager;
+use Images;
 
 require "connection.pl";	# Contains our database connection info
 
@@ -2723,6 +2724,21 @@ sub displayTaxonInfoResults{
 }
 ## END Taxon Info Stuff
 ##############
+
+##############
+## Images stuff
+sub startImage{
+	Images::startLoadImage($dbh, $dbt, $s, $exec_url);
+}
+sub processStartImage(){
+	Images::processStartLoadImage($dbt, $q, $exec_url);
+}
+sub processLoadImage(){
+	Images::processLoadImageForm($dbt, $q);
+}
+## END Image stuff
+##############
+
 
 # JA 13.8.02
 sub startTaxonomy	{
