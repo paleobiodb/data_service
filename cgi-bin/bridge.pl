@@ -17,7 +17,7 @@ use Report;
 use Curve;
 use Permissions;
 use PBDBUtil;
-#use TaxonInfo;
+use TaxonInfo;
 
 require "connection.pl";	# Contains our database connection info
 
@@ -1898,12 +1898,12 @@ sub buildTaxonomicList {
 		# Taxonomic list header
 		$return = "
 <div align='center'>
-<h2>Taxonomic list for $coll_name[0] (PBDB collection $collection_no)</h2>";
+<h3>Taxonomic list for $coll_name[0] (PBDB collection $collection_no)</h3>";
 
 		if($new_found){
-			$return .= "<h3><font color=red>WARNING!</font> Taxon names in ".
+			$return .= "<h4><font color=red>WARNING!</font> Taxon names in ".
 					   "<b>bold</b> are new to the database.<br>Please make ".
-					   "sure the spelling is correct.</h3>";
+					   "sure the spelling is correct.</h4>";
 		}
 
 		$return .=
@@ -4904,6 +4904,7 @@ sub insertRecord {
 		@fields = @{$fields_ref};
 		@vals = @{$vals_ref};
 	}
+	dbg("fields: @fields<br>vals: @vals<br>");
 
 	# Insert the record
 	$sql = "INSERT INTO $tableName (" . join(',', @fields) . ") VALUES (" . join(',', @vals) . ")";
