@@ -1,0 +1,251 @@
+# Represents an SQL statement.  May be expanded in the future or replaced with a CPAN module...
+#
+# Written by Ryan, 1/2004.
+#
+# Each section of the SQL statement can either be built up one component at a time, or set all at once.
+# (note, building up is only supported for the WHERE expression for now)
+#
+# To set it all at once, use the appropriate setXXXExpr() method.
+# Setting an expression directly will override any expression which has been built up from components.
+#
+# To build the where expression from components, set the separator using setWhereSeparator(),
+# and then use addWhereItem() to add each component.  
+#
+# You can also access any expression directly by using the method of its name, for example, whereExpr(),
+# or you can access the entire SQL statement by using the SQLExpr() method.
+
+package SQLBuilder;
+use strict;
+use fields qw(	selectExpr
+				fromExpr
+				whereExpr
+				groupByExpr
+				havingExpr
+				orderByExpr
+				limitExpr
+				
+				whereSeparator
+				whereItems
+							);  # list of allowable data fields.
+
+
+
+sub new {
+	my $class = shift;
+	my SQLBuilder $self = fields::new($class);
+	
+	# set up some default values
+	$self->clear();	
+
+	return $self;
+}
+
+
+# clears everything
+sub clear {
+	my SQLBuilder $self = shift;
+	$self->{selectExpr} = '';
+	$self->{fromExpr} = '';
+	$self->{groupByExpr} = '';
+	$self->{havingExpr} = '';
+	$self->{orderByExpr} = '';
+	$self->{limitExpr} = '';
+	$self->{whereSeparator} = 'and';
+	$self->{whereItems} = ();
+}
+
+# set directly
+sub setSelectExpr {
+	my SQLBuilder $self = shift;
+	if (my $input = shift) {
+		$self->{selectExpr} = $input;
+	}
+}
+
+sub selectExpr {
+	my SQLBuilder $self = shift;
+	if ($self->{selectExpr}) {
+		# if they set it explicitly, then just return it.
+		return " SELECT " . $self->{selectExpr};	
+	}
+	
+	return "";
+}
+
+
+# set directly
+sub setFromExpr {
+	my SQLBuilder $self = shift;
+	if (my $input = shift) {
+		$self->{fromExpr} = $input;
+	}
+}
+
+sub fromExpr {
+	my SQLBuilder $self = shift;
+	if ($self->{fromExpr}) {
+		# if they set it explicitly, then just return it.
+		return " FROM " . $self->{fromExpr};	
+	}
+	
+	return "";
+}
+
+
+## WHERE ##
+
+# set directly
+sub setWhereExpr {
+	my SQLBuilder $self = shift;
+	if (my $input = shift) {
+		$self->{whereExpr} = $input;
+	}
+}
+
+# returns the separator
+sub whereSeparator {
+	my SQLBuilder $self = shift;
+	return $self->{whereSeparator};	
+}
+
+# set which separator to use
+sub setWhereSeparator {
+	my SQLBuilder $self = shift;
+	my $newSep = shift;
+	
+	if (($newSep =~ /and/i) || ($newSep =~ /or/i )) {	
+		$self->{whereSeparator} = $newSep;
+	} else {  print "illegal separator"; }
+}
+
+
+# adds an item to the where clause.
+# does not allow addition of empty items
+sub addWhereItem {
+	my SQLBuilder $self = shift;
+	my $item = shift;
+
+	if (($item) && ($item ne " ")) {
+		push(@{$self->{whereItems}}, $item);
+	}
+}
+
+
+# returns a list of all the items.
+sub whereItems {
+	my SQLBuilder $self = shift;
+	if ($self->{whereItems}) {
+		return @{$self->{whereItems}};
+	} else  {
+		return ();
+	}
+}
+
+
+# forms the where expression with the user defined 
+# separator (and, or, etc..) and returns it.
+# Note, if the user has explicitly set the whereExpr with the setWhereExpr() method,
+# then this value will OVERRIDE anything set by using addWhereItem().
+sub whereExpr {
+	my SQLBuilder $self = shift;
+
+	if ($self->{whereExpr}) {
+		# if they set it explicitly, then just return it.
+		return " WHERE " . $self->{whereExpr};	
+	}
+	
+	# if we get to here, then they *didn't* set it explicitly, so we have to build it.
+	my @itemsList = $self->whereItems();
+		
+	my $expr = " WHERE " . join(" " . $self->whereSeparator() . " ", @itemsList);	
+	
+	return $expr;
+}
+
+# set directly
+sub setGroupByExpr {
+	my SQLBuilder $self = shift;
+	if (my $input = shift) {
+		$self->{groupByExpr} = $input;
+	}
+}
+
+sub groupByExpr {
+	my SQLBuilder $self = shift;
+	if ($self->{groupByExpr}) {
+		# if they set it explicitly, then just return it.
+		return " GROUP BY " . $self->{groupByExpr};
+	}
+	
+	return "";
+}
+
+# set directly
+sub setHavingExpr {
+	my SQLBuilder $self = shift;
+	if (my $input = shift) {
+		$self->{havingExpr} = $input;
+	}
+}
+
+sub havingExpr {
+	my SQLBuilder $self = shift;
+	if ($self->{havingExpr}) {
+		# if they set it explicitly, then just return it.
+		return " HAVING " . $self->{havingExpr};	
+	}
+	
+	return "";	
+}
+
+# set directly
+sub setOrderByExpr {
+	my SQLBuilder $self = shift;
+	if (my $input = shift) {
+		$self->{orderByExpr} = $input;
+	}
+}
+
+sub orderByExpr {
+	my SQLBuilder $self = shift;
+	if ($self->{orderByExpr}) {
+		# if they set it explicitly, then just return it.
+		return " ORDER BY " . $self->{orderByExpr};	
+	}
+	
+	return "";
+}
+
+# set directly
+sub setLimitExpr {
+	my SQLBuilder $self = shift;
+	if (my $input = shift) {
+		$self->{limitExpr} = $input;
+	}
+}
+
+sub limitExpr {
+	my SQLBuilder $self = shift;
+	if ($self->{limitExpr}) {
+		# if they set it explicitly, then just return it.
+		return " LIMIT " . $self->{limitExpr};	
+	}
+	
+	return "";	
+}
+
+
+# return the *entire* SQL statement.  Note, this won't work if something crucial such as
+# selectExpr is left blank.  Well, it will work, but the result won't be a well formed query.
+sub SQLExpr {
+	my SQLBuilder $self = shift;
+	my $expr =	$self->selectExpr()		. 
+				$self->fromExpr()		.
+				$self->whereExpr()		.
+				$self->groupByExpr()	.
+				$self->havingExpr()		.
+				$self->orderByExpr()	.
+				$self->limitExpr();
+}
+
+1;
