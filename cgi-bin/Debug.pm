@@ -57,7 +57,7 @@ sub printVars {
 	
 	for ($i = 0; $i < scalar(@_); $i+= 2) {
 		if (($i + 1) < scalar(@_)) {
-			$string .= "@_[$i] = '" . @_[$i+1] . "', ";
+			$string .= "$_[$i] = '" . $_[$i+1] . "', ";
 		}
 	}
 	
