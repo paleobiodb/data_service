@@ -461,6 +461,7 @@ sub getTaxonNameFromNumber {
 
 # figures out how many times this taxonName occurs in the 
 # database and returns a count.
+# JA: function not used anywhere and could be deleted
 sub numberOfDBInstancesForName {
 	my Taxon $self = shift;
 	
@@ -1809,9 +1810,43 @@ sub submitAuthorityForm {
 		}
 		#
 		#
-	
-		
-		
+
+		# JA 2.4.04
+		# if the taxon name is unique, find matches to it in the
+		#  occurrences table and set the taxon numbers appropriately
+
+		# start with a test for uniqueness
+		my $mysql = "SELECT count(*) AS c FROM authorities WHERE taxon_name='" . $fieldsToEnter{taxon_name} . "'";
+		if ( ${$sql->getData($mysql)}[0]->{c} == 1 )	{
+
+			# start composing update sql
+			# NOTE: in theory, taxon no for matching records always
+			#  should be zero, unless the new name is a species and
+			#  some matching records were set on the basis of their
+			#  genus, in which case we assume users will want the
+			#  new number for the species instead; that's why there
+			#  is no test to make sure the taxon no is empty
+			$mysql = "UPDATE occurrences SET modified=modified,taxon_no=" . $resultTaxonNumber . " WHERE ";
+
+			# if the name has a space then match on both the
+			#  genus and species name fields
+			if ( $fieldsToEnter{taxon_name} =~ / / )	{
+				my ($a,$b) = split / /,$fieldsToEnter{taxon_name};
+				$mysql .= " genus_name='" . $a ."' AND species_name='" . $b . "'";
+			}
+			# otherwise match only on the genus name field
+			else 	{
+				$mysql .= " genus_name='" . $fieldsToEnter{taxon_name} . "'";
+			}
+
+			# update the occurrences table
+			$sql->getData($mysql);
+
+			# and then the reidentifications table
+			$mysql =~ s/UPDATE occurrences /UPDATE reidentifications /;
+			$sql->getData($mysql);
+		}
+
 	} else {
 		# if it's an old entry, then we'll update.
 		
