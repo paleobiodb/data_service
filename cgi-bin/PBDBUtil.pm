@@ -624,7 +624,8 @@ sub get_classification_hash{
         $rank = "species";
     }
     else{
-        $rank = "genus";
+        $rank = '';
+        #$rank = "genus";
     }
 
     my $child_no = -1;
@@ -638,8 +639,11 @@ sub get_classification_hash{
     # Loop at least once, but as long as it takes to get full classification
     while($parent_no){
         # Keep $child_no at -1 if no results are returned.
-        my $sql = "SELECT taxon_no FROM authorities WHERE ".
-                  "taxon_name='$taxon_name' AND taxon_rank = '$rank'";
+        my $sql = "SELECT taxon_no, taxon_rank FROM authorities WHERE ".
+                  "taxon_name='$taxon_name'";
+		if($rank){
+			$sql .= " AND taxon_rank = '$rank'";
+		}
         my @results = @{$dbt->getData($sql)};
         if(defined $results[0]){
             # Save the taxon_no for keying into the opinions table.
@@ -683,6 +687,19 @@ sub get_classification_hash{
             else{
                 last;
             }
+        }
+
+		# get the taxon_no and rank of the initial argument, in case it's a
+        # higher taxon name with some c/o/f parents so we can sort better.
+        # don't save the taxon_name in the hash because it will already be
+        # displayed in the 'genus' field of the taxonomic list
+        if($first_time and $child_no > 0 ){
+            $classification{$results[0]->{taxon_rank}."_no"} = $child_no;
+        }
+
+        # otherwise, give up...
+        if($child_no < 1){
+            return {};
         }
 
         # Now see if the opinions table has a parent for this child
@@ -733,6 +750,7 @@ sub get_classification_hash{
                     $rank = $auth_hash_ref->{"taxon_rank"};
                     $taxon_name = $auth_hash_ref->{"taxon_name"};
                     $classification{$rank} = $taxon_name;
+                    $classification{$rank."_no"} = $parent_no;
                 }       
                 else{   
                     # No results might not be an error: 
@@ -753,7 +771,7 @@ sub get_classification_hash{
         }       
     }       
     return \%classification;
-}       
+}
 
 sub getMostRecentReIDforOcc{
 	my $dbt = shift;
