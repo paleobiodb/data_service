@@ -132,7 +132,6 @@ LOGIN: {
 		if($q->param("user") eq "Contributor"){
 			displayLoginPage();
 		}
-		# IS IT POSSIBLE TO GET HERE?
 		else{
 			$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
 		}
@@ -1217,8 +1216,15 @@ sub displayRefEdit
 	$sth->finish();
 
 	# Tack on a few extras
-	push ( @fieldNames, 'authorizer', 'enterer', '%%new_message%%' );
-	push ( @row, $s->get('authorizer'), $s->get('enterer'), '');
+	#push ( @fieldNames, 'authorizer', 'enterer', '%%new_message%%' );
+	#push ( @row, $s->get('authorizer'), $s->get('enterer'), '');
+
+    if($row[0] eq ""){
+        $row[0] = $s->get('authorizer');
+    }
+    if($row[1] eq ""){
+        $row[1] = $s->get('enterer');
+    }
 
 	print qq|<form method="POST" action="$exec_url" onSubmit='return checkForm();'>\n|;
 	print qq|<input type=hidden name="action" value="processReferenceEditForm"\n|;
@@ -4862,10 +4868,12 @@ sub updateRecord {
 	$sth->finish();
 
 	# Set a few defaults
-	if ( ! $q->param('enterer') )	{
+	if( ! $q->param('enterer') ){
 		$q->param(enterer => $s->get("enterer"));
 	}
-	$q->param(authorizer => $s->get("authorizer"));		# This is an absolute
+	if( ! $q->param('authorizer') ){
+		$q->param(authorizer => $s->get("authorizer"));
+	}
 	$q->param(modifier => $s->get("enterer"));			# This is an absolute
 	# Set the pubtitle to the pull-down pubtitle unless it's set in the form
 	$q->param(pubtitle => $q->param("pubtitle_pulldown")) unless $q->param("pubtitle");
