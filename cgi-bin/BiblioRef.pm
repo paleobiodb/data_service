@@ -16,6 +16,7 @@ sub new
     
     $self->{_reference_no} = $data->getValue('reference_no');
     $self->{_project_name} = $data->getValue('project_name');
+	$self->{_project_name} =~ s/,/,&nbsp;/g;
     $self->{_project_ref_no} = $data->getValue('project_ref_no');
 
     $self->{_authorizer} = $data->getValue('authorizer');
@@ -74,7 +75,7 @@ sub toString
 	# Project name
 	if ($self->{_project_name})	{
 		$retVal .= "	<td valign=\"top\"><font color=\"red\">".$self->{_project_name};
-		$retVal .= $self->{_project_ref_no} if $self->{_project_ref_no};
+		$retVal .= " ".$self->{_project_ref_no} if $self->{_project_ref_no};
 		$retVal .= "</font></td>\n";
 	} else {
 		# Nothing there?  Make it small
