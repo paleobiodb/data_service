@@ -5292,10 +5292,21 @@ sub processTaxonomySearch	{
 	my $taxonName = $q->param('taxon_name');
 		
 	# check for proper spacing of the taxon..
-	if (Validation::taxonRank($taxonName) eq 'invalid') {
-		Globals::printWarning("Ill-formed taxon.  Check capitalization and spacing.");
+	my $errors = Errors->new();
+	$errors->setDisplayEndingMessage(0); 
+	
+	if ( (Validation::looksLikeBadSubgenus($taxonName)) ||
+		 ((Validation::taxonRank($taxonName) eq 'invalid')) ) {
+		$errors->add("Ill-formed taxon.  Check capitalization and spacing.");
+	}
+		
+	if ($errors->count()) {
+		print stdIncludes("std_page_top");
+		print $errors->errorMessage();
+		print stdIncludes("std_page_bottom");
 		return;
 	}
+	
 	
 	
 	my $startingName = $taxonName;	# record to use after the while loop
