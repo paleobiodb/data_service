@@ -159,8 +159,18 @@ sub populateHTML
 {
   # Get the template name, the row (list of values), and a list of fieldnames to scan for
   my ($self, $htmlTemplateName, $row, $fieldNames, $prefkeys) = @_;
-  my @row = @$row;
-  my @fieldNames = @$fieldNames;
+  my @row;
+  my @fieldNames;
+  if(UNIVERSAL::isa($row, "HASH")){
+		while(my ($key,$value) = each %$row){
+			push(@row, $value);
+			push(@fieldNames, $key);
+		}
+  }
+  elsif(UNIVERSAL::isa($row, "ARRAY")){
+	  @row = @$row;
+	  @fieldNames = @$fieldNames;
+  }
   #print "look: " . join(',', @fieldNames);
 
   my $htmlTemplateString = $self->getTemplateString($htmlTemplateName,\@$prefkeys);
@@ -175,7 +185,6 @@ sub populateHTML
   foreach my $fieldName (@fieldNames)
   {
     my $val = $row[$fieldNum];
-
 	# insert spaces after commas for the set members
 	if($fieldName =~ /(lithadj*|research_group|pres_mode|coll_meth|feed_pred_traces|assembl_comps|project_name)/){ 
 		$val =~ s/,/, /g;	
@@ -219,7 +228,7 @@ sub populateHTML
 	# corresponding value.
     $htmlTemplateString =~ s/<span show="$fieldName">.*?<\/span>//gim unless $val ne "";
 
-    # Do span tags
+    # Do span tags with id
 	# Else, replace span tags with just the value
     $htmlTemplateString =~ s/<span\s+id="$fieldName">.*?<\/span>/$val/gim if $val ne "";
 
