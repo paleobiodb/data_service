@@ -1790,7 +1790,7 @@ sub doQuery {
 			 "Cretaceous 5", "Cretaceous 4", "Cretaceous 3",
 			 "Cretaceous 2", "Cretaceous 1", "Jurassic 6",
 			 "Jurassic 5", "Jurassic 4", "Jurassic 3",
-			 "Jurassic 2", "Jurassic 1", "Triassic 5",
+			 "Jurassic 2", "Jurassic 1",
 			 "Triassic 4", "Triassic 3", "Triassic 2",
 			 "Triassic 1", "Permian 4",
 			 "Permian 3", "Permian 2", "Permian 1",
