@@ -739,7 +739,9 @@ sub submitOpinionForm {
 		}
 
 			
-		if (my $pubyr = $q->param('pubyr')) {
+		if ($q->param('pubyr')) {
+			my $pubyr = $q->param('pubyr');
+			
 			if (! Validation::properYear( $pubyr ) ) {
 				$errors->add("The year is improperly formatted");
 			}
@@ -753,6 +755,7 @@ sub submitOpinionForm {
 				recent than that of the primary reference (" . $ref->pubyr() . ")");
 			}
 		}
+		
 
 		
 		if (($q->param('otherauthors')) && (! $q->param('author2last') )) {
@@ -780,14 +783,42 @@ sub submitOpinionForm {
 		my $child_no = $q->param('taxon_no');
 		my $reference_no = $q->param('reference_no');
 		
+		# if we're editing an opinion, then we also need to make sure that
+		# we don't include the current opinion in the count.
+		my $own_opinion_no_clause;
+		if (! $isNewEntry) {
+			$own_opinion_no_clause = " AND opinion_no != " . $self->opinionNumber() . " ";
+		}
+		
 		my $sql = $self->getSQLBuilder();
 		my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM opinions WHERE 
 		child_no = $child_no AND
-		ref_has_opinion = 'YES' AND reference_no = $reference_no");
+		ref_has_opinion = 'YES' AND reference_no = $reference_no $own_opinion_no_clause");
 		
 		if ($count > 0) {
 			$errors->add("You can only enter one opinion on a taxon 
 			from each reference");
+		}
+	}
+	
+	
+	
+	{
+		# also make sure that the pubyr of this opinion isn't older than
+		# the pubyr of the authority record the opinion is about.
+		my $taxon = Taxon->new();
+		$taxon->setWithTaxonNumber($q->param('taxon_no'));
+		my $ref = Reference->new();
+		$ref->setWithReferenceNumber($q->param('reference_no'));
+		
+		my $pubyr = $q->param('pubyr');
+		
+		Debug::dbPrint("ref pub yr = " . $ref->pubyr() . ", taxon pub yr
+		= " . $taxon->pubyr());
+		if (($taxon->pubyr() > $ref->pubyr()) ||
+			($taxon->pubyr() > $pubyr) ) {
+			$errors->add("The publication year for this opinion can't be
+			earlier than the year the taxon was named");	
 		}
 	}
 	
