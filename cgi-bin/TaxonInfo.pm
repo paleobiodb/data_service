@@ -1450,6 +1450,7 @@ sub displayTaxonClassification{
 				    # print "ERROR in sql: $sql_auth<br>";
 				    last;
 				}
+				$easy_number = $parent_no;
 			}
 			# If we didn't get a parent or status ne 'belongs to'
 			else{
