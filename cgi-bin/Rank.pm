@@ -113,6 +113,7 @@ sub setWithRankString {
 	
 	# is it a higher taxon or not?
 	$self->{isHigher} = ($rankNum > 2);
+	$self->{onlyKnowHigher} = 0;
 	
 	$self->{isValid} = 1;
 }
@@ -137,11 +138,11 @@ sub setWithTaxonNameSpacingOnly {
 	if ($spacingRank eq 'higher') {
 		$self->{isHigher} = 1;
 		$self->{onlyKnowHigher} = 1;
-		
 	} else {
 		$self->{rankString} = $spacingRank;
 		$self->{rankNum} = $rankToNum{$spacingRank};
 		$self->{isHigher} = 0;
+		$self->{onlyKnowHigher} = 0;
 	}
 }
 
@@ -165,7 +166,7 @@ sub setWithTaxonNameFullLookup {
 	$self->setWithTaxonNameSpacingOnly($taxonName);
 	
 	# if we get a higher taxon, then actually look it up.
-	if ($self->{isHigher}) {
+	if ($self->{onlyKnowHigher}) {
 		my $taxon = Taxon->new();
 		$taxon->setWithTaxonName($taxonName);
 		
@@ -337,7 +338,7 @@ sub isHigherThan {
 	
 	my $sokh = $self->{onlyKnowHigher};
 	my $ookh = $other->{onlyKnowHigher};
-	
+		
 	if ($sokh && $ookh) {
 		return 0;	
 	} elsif ($sokh) {
@@ -353,8 +354,8 @@ sub isHigherThan {
 		return 0;
 	} else {
 		# we know the full rank of both objects.
-		
-		return ($self->{rankNum} > $other->{rankNum});
+
+		return (($self->{rankNum}) > ($other->{rankNum}));
 	}
 }
 
@@ -412,11 +413,13 @@ sub test {
 	my $rank1 = Rank->new();
 	my $rank2 = Rank->new();
 
-	$rank1->setWithTaxonNameFullLookup('Aelurodon validus');
+	$rank2->setWithRankString("genus");
+	#$rank1->setWithTaxonNameFullLookup('Aelurodon validus');
 	#$rank->setWithTaxonNameSpacingOnly('Aelurodon validus');
 
+	$rank1->setWithRankString("genus");
 	#$rank2->setWithRank($rank1);
-	$rank2->setWithTaxonNameFullLookup('Equidae');
+	#$rank2->setWithTaxonNameFullLookup('Equidae');
 
 	print "rank1 rank = " . $rank1->rank() . "\n";
 	print "rank2 rank = " . $rank2->rank() . "\n";
@@ -424,8 +427,17 @@ sub test {
 	my $isHigherThan = $rank1->isHigherThan($rank2);
 	my $isLowerThan = $rank1->isLowerThan($rank2);
 	
-	print "isHigherThan = $isHigherThan\n";
-	print "isLowerThan = $isLowerThan\n";
+	
+	print $rank1->rank() . " (isHigherThan = $isHigherThan) " . $rank2->rank() . "\n";
+	print $rank1->rank() . " (isLowerThan = $isLowerThan) " . $rank2->rank() . "\n";
+	
+	
+	my $family = Rank->new("family");
+	my $genus = Rank->new("genus");
+	
+	if (! $family->isHigherThan($genus)) {
+		print "family should be higher than genus\n";	
+	}
 }
 
 
