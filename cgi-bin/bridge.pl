@@ -5411,17 +5411,13 @@ sub updateRecord {
 	$sth->finish();
 
 	# Set a few defaults
-	if( ! $q->param('enterer') ){
-		$q->param(enterer => $s->get("enterer"));
-	}
-	if( ! $q->param('authorizer') ){
-		$q->param(authorizer => $s->get("authorizer"));
-	}
 	$q->param(modifier => $s->get("enterer"));			# This is an absolute
 	# Set the pubtitle to the pull-down pubtitle unless it's set in the form
 	$q->param(pubtitle => $q->param("pubtitle_pulldown")) unless $q->param("pubtitle");
 
 	&setPersonValues( $tableName );
+	$q->delete("authorizer_no");
+	$q->delete("enterer_no");
 
 	my $updateString = "UPDATE $tableName SET ";
 	my @updates;
