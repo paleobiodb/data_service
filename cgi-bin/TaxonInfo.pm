@@ -34,8 +34,10 @@ sub searchForm{
 			 "function checkInput(){\n".
 			 "	var rank = document.forms[0].taxon_rank.options[document.forms[0].taxon_rank.selectedIndex].text;\n".
 			 "	var value = document.forms[0].taxon_name.value;\n".
-			 "	if(value == \"\"){\n".
-			 "		alert('Please enter a taxon name.');\n".
+			 "	var author = document.forms[0].author.value;\n".
+			 "	var pubyr = document.forms[0].pubyr.value;\n".
+			 "	if(value == \"\" && author == \"\" && pubyr == \"\"){\n".
+			 "		alert('Please enter a search term.');\n".
 			 "		return false;\n".
 			 "	}\n".
 			 "	if(value.match(/[A-Za-z]+\\s+[a-z]+/) && rank != 'Genus and species'){\n".
@@ -57,17 +59,23 @@ sub searchForm{
 		   " value=\"checkTaxonInfo\">".
 		   "<input id=\"user\" type=hidden name=\"user\"".
 		   " value=\"".$q->param("user")."\">".
-		   "<center><table width=\"75%\">".
-		   "<tr><td valign=\"middle\" align=\"right\" width=\"5%\">".
+		   "<center><table width=\"300\">".
+		   "<tr><td valign=\"middle\" align=\"left\" colspan=\"2\">".
 		   "<nobr><select name=\"taxon_rank\"><option>Higher taxon".
 		   "<option selected>Genus<option>Genus and species<option>species".
-		   "</select></td>".
-		   "<td valign=\"middle\" align=\"left\" width=\"5%\">name:</td>".
-		   "<td width=\"5%\"><input name=\"taxon_name\" type=\"text\" size=25>".
+		   "</select>".
+		   "name:&nbsp;".
+		   "<input name=\"taxon_name\" type=\"text\" size=25>".
+		   "</nobr></td>".
+		   "<tr><td valign=\"middle\" align=\"left\">".
+		   "<nobr>Author:&nbsp;<input id=\"author\" name=\"author\" size=12>".
+		   "Year:&nbsp;<nobr><input id=\"pubyr\" name=\"pubyr\" size=5></nobr>".
 		   "</td>".
-		   "<td align=\"left\" width=\"5%\">".
+		   "<td align=\"middle\">".
 		   "<input id=\"submit\" name=\"submit\" value=\"Get info\"".
-		   " type=\"submit\"></td></tr></table></center></form>";
+		   " type=\"submit\"></td></tr></table>".
+		   "<p><i>The taxon name field is required.</i></p>\n".
+		   "</center></form>";
 
 	return $html;
 }
@@ -89,25 +97,82 @@ sub checkStartForm{
 	}
 	my $taxon_name = $q->param("taxon_name");
 	$taxon_name =~ s/\+/ /g;
+	my $author = $q->param("author");
+	my $pubyr = $q->param("pubyr");
 	my $results = "";
 	my $genus = "";
 	my $species = "";
 	my $sql =""; 
 	my @results;
+	my @refnos;
 
+	# find possibly matching refs in the refs table, needed if ref_is_authority below
+	if ( $author && $pubyr )	{
+		$sql = "SELECT reference_no FROM refs WHERE author1last='" . $author . "' AND pubyr='" . $pubyr . "'";
+		@refrefs = @{$dbt->getData($sql)};
+	} elsif ( $author )	{
+		$sql = "SELECT reference_no FROM refs WHERE author1last='" . $author . "'";
+		@refrefs = @{$dbt->getData($sql)};
+	} elsif ( $pubyr )	{
+		$sql = "SELECT reference_no FROM refs WHERE pubyr='" . $pubyr . "'";
+		@refrefs = @{$dbt->getData($sql)};
+	}
+	for $refref ( @refrefs )	{
+		push @refnos, $refref->{reference_no};
+	}
+	if ( @refnos )	{
+		$refinlist = "(" . join(',',@refnos) . ")";
+	}
+	# whoops, author and/or year search failed  - make a match impossible
+	if ( ( $author || $pubyr ) && ! $refinlist )	{
+		$refinlist = "( -1 )";
+	}
 
 	# If they gave us nothing, start again.
-	if($taxon_type eq "" or $taxon_name eq ""){
+	if($taxon_type eq "" or ( $taxon_name eq "" && ! $author && ! $pubyr ) ){
 	    print $q->redirect(-url=>$BRIDGE_HOME."?action=beginTaxonInfo");
 	    exit;
 	}
 
+	if ( ! $taxon_name && ( $author || $pubyr ) )	{
+		$sql = "SELECT taxon_name, taxon_no, pubyr, author1last, ".
+			   "ref_is_authority, reference_no FROM authorities WHERE";
+		if ( $author )	{
+			$sql .= " ( author1last='" . $author . "'";
+		# be kind of slack here: if the record ref exists and matches
+		#  the author and there is no author1last, just assume that
+		#  the record ref is the authority
+			$sql .= " OR ( ref_is_authority='YES' AND reference_no IN " . $refinlist . " ) )";
+		}
+		if ( $pubyr )	{
+			if ( $author )	{
+				$sql .= " AND";
+			}
+			$sql .= " ( pubyr='" . $pubyr. "'";
+			$sql .= " OR ( ref_is_authority='YES' AND reference_no IN " . $refinlist . " ) )";
+		}
+		@results = @{$dbt->getData($sql)};
+		foreach my $ref (@results){
+			$ref->{genus_name} = $ref->{taxon_name};
+ 			delete $ref->{taxon_name};
+		}
+		# DON'T GO to the occs and reID tables because they have
+		#  no author/year data
+	}
 	# Higher taxon
-	if($taxon_type eq "Higher taxon"){
+	elsif($taxon_type eq "Higher taxon"){
 		$q->param("genus_name" => $taxon_name);
 		$sql = "SELECT taxon_name, taxon_no, pubyr, author1last, ".
 			   "ref_is_authority, reference_no FROM authorities ".
 			   "WHERE taxon_name='$taxon_name'";
+		if ( $author )	{
+			$sql .= " AND ( author1last='" . $author . "'";
+			$sql .= " OR ( ref_is_authority='YES' AND reference_no IN " . $refinlist . " ) )";
+		}
+		if ( $pubyr )	{
+			$sql .= " AND ( pubyr='" . $pubyr. "'";
+			$sql .= " OR ( ref_is_authority='YES' AND reference_no IN " . $refinlist . " ) )";
+		}
 		@results = @{$dbt->getData($sql)};
 		# Check for homonyms
 		if(scalar @results > 1){
@@ -119,7 +184,7 @@ sub checkStartForm{
  			delete $ref->{taxon_name};
 		}
 		# if nothing from authorities, go to occurrences and reidentifications
-		if(scalar @results < 1){
+		if(scalar @results < 1 && ! $author && ! $pubyr ){
 			$q->param("no_classification" => "true");
 			$sql = "SELECT DISTINCT(genus_name) FROM occurrences ".
 				   "WHERE genus_name like '$taxon_name'";
@@ -136,6 +201,14 @@ sub checkStartForm{
 		$sql = "SELECT taxon_name, taxon_no, pubyr, author1last, ".
 			   "ref_is_authority, reference_no FROM authorities ".
 			   "WHERE taxon_name = '$taxon_name' AND taxon_rank='species'";
+		if ( $author )	{
+			$sql .= " AND ( author1last='" . $author . "'";
+			$sql .= " OR ( ref_is_authority='YES' AND reference_no IN " . $refinlist . " ) )";
+		}
+		if ( $pubyr )	{
+			$sql .= " AND ( pubyr='" . $pubyr. "'";
+			$sql .= " OR ( ref_is_authority='YES' AND reference_no IN " . $refinlist . " ) )";
+		}
 		@results = @{$dbt->getData($sql)};
 		# NOTE: this may not be necessary, but we'll leave it in for now.
 		# Check for homonyms
@@ -149,7 +222,7 @@ sub checkStartForm{
 			$ref->{species_name} = $species;
 			delete $ref->{taxon_name};
 		}
-		if(scalar @results < 1){
+		if(scalar @results < 1 && ! $author && ! $pubyr ){
 			($genus,$species) = split(/\s+/,$taxon_name);
 			$sql ="select distinct(species_name),genus_name ".
 				  "from occurrences ".
@@ -169,6 +242,14 @@ sub checkStartForm{
 		$sql = "SELECT taxon_name, taxon_no, pubyr, author1last, ".
 			   "ref_is_authority, reference_no FROM authorities WHERE ".
 			   "taxon_name='$taxon_name' AND taxon_rank='Genus'";
+		if ( $author )	{
+			$sql .= " AND ( author1last='" . $author . "'";
+			$sql .= " OR ( ref_is_authority='YES' AND reference_no IN " . $refinlist . " ) )";
+		}
+		if ( $pubyr )	{
+			$sql .= " AND ( pubyr='" . $pubyr. "'";
+			$sql .= " OR ( ref_is_authority='YES' AND reference_no IN " . $refinlist . " ) )";
+		}
 		@results = @{$dbt->getData($sql)};
 		# Check for homonyms
 		if(scalar @results > 1){
@@ -181,7 +262,7 @@ sub checkStartForm{
 			$ref->{species_name} = $species;
 			delete $ref->{taxon_name};
 		}
-		if(scalar @results < 1){
+		if(scalar @results < 1 && ! $author && ! $pubyr ){
 			$sql ="select distinct(genus_name),species_name ".
 				  "from occurrences ".
 				  "where genus_name = '$taxon_name'";
@@ -198,6 +279,14 @@ sub checkStartForm{
 		$sql = "SELECT taxon_name, taxon_no, pubyr, author1last, ".
 			   "ref_is_authority, reference_no FROM authorities WHERE ".
 			   "taxon_name like '% $taxon_name' AND taxon_rank='species'";
+		if ( $author )	{
+			$sql .= " AND ( author1last='" . $author . "'";
+			$sql .= " OR ( ref_is_authority='YES' AND reference_no IN " . $refinlist . " ) )";
+		}
+		if ( $pubyr )	{
+			$sql .= " AND ( pubyr='" . $pubyr. "'";
+			$sql .= " OR ( ref_is_authority='YES' AND reference_no IN " . $refinlist . " ) )";
+		}
 		@results = @{$dbt->getData($sql)};
 		# DON'T NEED TO DO THIS WITH SPECIES, METHINKS...
 		# Check for homonyms
@@ -211,7 +300,7 @@ sub checkStartForm{
 			$ref->{species_name} = $species;
 			delete $ref->{taxon_name};
 		}
-		if(scalar @results < 1){
+		if(scalar @results < 1 && ! $author && ! $pubyr ){
 			$sql ="select distinct(species_name),genus_name ".
 				  "from occurrences ".
 				  "where species_name = '$taxon_name'";
