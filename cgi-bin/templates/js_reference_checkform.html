@@ -53,6 +53,17 @@
 			}
 		}
 
+		// OtherAuthors
+		var contents = frm.otherauthors.value;
+        var pattern = /^[A-Z][a-z\']+/;
+        var result = contents.match(pattern);
+        if(result != null){
+            errors += "Names of additional authors must be initials first, " +
+                  	  "then lastname;  NOT last name first.\n"+
+                  	  "EXAMPLE: P. McCartney, J. P. Jones, J. Hendrix\n";
+        }
+
+
 		// Publication Year
 		if ( frm.pubyr.value == "" ) {
 			errors += "The publication year may not be blank.\n"; 
