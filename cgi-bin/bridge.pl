@@ -6825,14 +6825,13 @@ sub RefQuery {
 		
 		$where->setOrderByExpr($orderBy);
 		
-		#$sql .= $where;
-		$sql = $where->SQLExpr();
+		$sqlString = $where->SQLExpr();
 		
-		$sql =~ s/\s+/ /gms;
-		dbg ( "$sql<HR>" );
+		$sqlString =~ s/\s+/ /gms;
+		dbg ( "$sqlString<HR>" );
 
 		# Execute the ref query
-		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+		$sth = $dbh->prepare( $sqlString ) || die ( "$sqlString<hr>$!" );
 		$sth->execute();
 		my @rows = @{$sth->fetchall_arrayref()};
 		
@@ -6840,9 +6839,9 @@ sub RefQuery {
 		if (@rows > 30)	{
 			$overlimit = @rows;
 			$q->param('refsSeen' => 30 + $q->param('refsSeen') );
-			#$sql .= " LIMIT " . $q->param('refsSeen');
+
 			$where->setLimitExpr($q->param('refsSeen'));
-			$sql = $where->SQLExpr();
+			$sqlString = $where->SQLExpr();
 		}
 		
 		
@@ -6860,7 +6859,7 @@ sub RefQuery {
 		close REFOUTPUT;
 		
 		# Rerun the query
-		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+		$sth = $dbh->prepare( $sqlString ) || die ( "$sqlString<hr>$!" );
 		$sth->execute();
 		$md = MetadataModel->new($sth);
 		@fieldNames = @{$sth->{NAME}};
