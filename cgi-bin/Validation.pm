@@ -55,10 +55,20 @@ sub cleanCGIParams {
 	
 	if (! $q) { return; }
 	
+	# note, this is a little complicated because each parameter may
+	# be a scalar or a list.. If it's a list, evaluating it in a scalar 
+	# context only returns the first element, so we need to evaluate it in a list context.
+	
 	my @params = $q->param();
+	my @plist;
 	foreach my $p (@params) {
-		$q->param($p => clean($q->param($p)));		
-		#dbPrint("$p = " . $q->param($p));	
+		@plist = $q->param($p);
+		
+		foreach my $pItem (@plist) {
+			clean($pItem);
+		}
+		
+		$q->param($p => @plist);
 	}
 }
 
