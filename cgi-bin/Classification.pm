@@ -2,188 +2,200 @@ package Classification;
 
 use TaxonInfo;
 
-# Does a sort of wierd reverse tree (from nodes up) using hashes and hash refs.
+# Travel up the classification tree
+# Rewritten 01/11/2004 PS. Function is much more flexible, can do full upward classification of any 
+# of the taxon rank's, with caching to keep things fast for large arrays of input data. 
+#   * Use a upside-down tree data structure internally
+#   * 1st arg: comma separated list of the ranks you want,i.e(class,order,family) 
+#   * 2nd arg: Takes an array of taxon names or numbers
+#   * Returns a hash array of comma-separated lists
+#     * The hash reference will be keyed on the values of the array used for input (no's or names)
+#     * Each comma separated list is in the same order as the '$ranks' list is in
+#   * 3rd arg: Will either be comma-separated taxon_nos or taxon_names returned in table
 sub get_classification_hash{
+    use Data::Dumper;
 	my $dbt = shift;
-	my $levels = shift;
-	my $taxon_names = shift;
-	my $get_ancestors = shift;
+	my $ranks = shift;
+	my $taxon_names_or_nos = shift;
+	my $return_type = shift || 'names'; #names or numbers;
 
-	# WARNING: these might be numbers instead of names if the ID numbers
-	#  of the taxa are known, in which case the function will return
-	#  a classification hash (full_class) with keys as numbers instead
-	#  of names
-	my @taxon_names = @{$taxon_names};
-	my @levels = split(',', $levels);
-	my $highest_level = $levels[-1];
+	my @taxon_names_or_nos = @{$taxon_names_or_nos};
+    $ranks =~ s/\s+//g; #NO whitespace
+	my @ranks = split(',', $ranks);
+    %rank_hash = ();
+   
+    my %link_cache = (); #for speeding up 
+    my %link_head = (); #our master upside-down tree. imagine a table of pointers to linked lists, 
+                        #except the lists converge into each other as we climb up the hierarchy
 
+	my $highest_level = 21;
 	my %taxon_rank_order = ('superkingdom'=>0,'kingdom'=>1,'subkingdom'=>2,'superphylum'=>3,'phylum'=>4,'subphylum'=>5,'superclass'=>6,'class'=>7,'subclass'=>8,'infraclass'=>9,'superorder'=>10,'order'=>11,'suborder'=>12,'infraorder'=>13,'superfamily'=>14,'family'=>15,'subfamily'=>16,'tribe'=>17,'subtribe'=>18,'genus'=>19,'subgenus'=>20,'species'=>21,'subspecies'=>22);
-
-    my %family = ();
-    my %order = ();
-    my %class = ();
-    my %full_class = ();
-    my @ancestors = ();
-
-  foreach my $item (@taxon_names){
-# Rank will start as genus
-    my $rank = "";
-    my $taxon_name = $item;
-# Failing to clear this causes problems if multiple taxa are passed into
-#  this function or multiple names were passed in at once
-    my $taxon_no = "";
-    my $base_taxon_name = $item;
-    my %family = ();
-    my %order = ();
-    my %class = ();
-    $full_class{$item} = "";
-    my $child_no = -1;
-    my $parent_no = -1;
-    my %parent_no_visits = ();
-    my %child_no_visits = ();
-
-    my $status = "";
-    my $first_time = 1;
-    # Loop at least once, but as long as it takes to get full classification
-    while($parent_no){
-        # Keep $child_no at -1 if no results are returned.
-        my $sql = "SELECT taxon_no, taxon_name, taxon_rank FROM authorities WHERE ";
-	# normally, do a lookup based on the name
-	if ( $taxon_name =~ /[A-Za-z]/ && ! $taxon_no )	{
-		$sql .= "taxon_name='$taxon_name'";
-	}
-	# if the number was computed in a previous round, use it
-	elsif ( $taxon_no )	{
-		$sql .= "taxon_no='$taxon_no'";
-	}
-	# if taxon no is blank and taxon name is a number, the latter was
-	#  passed into the function and this is the first round, so use it
-	else	{
-		$sql .= "taxon_no='$taxon_name'";
-	}
-	if($rank){
-		$sql .= " AND taxon_rank = '$rank'";
-	}
-        my @results = @{$dbt->getData($sql)};
-        if(defined $results[0]){
-            # Save the taxon_no for keying into the opinions table.
-            $child_no = $results[0]->{taxon_no};
-            my $base_rank = $results[0]->{taxon_rank};
-            if ( $base_rank =~ /family/ )	{
-              $family{$taxon_name} = $results[0]->{taxon_name};
-            } elsif ( $base_rank =~ /order/ )	{
-              $order{$taxon_name} = $results[0]->{taxon_name};
-            } elsif ( $base_rank =~ /class/ )	{
-              $class{$taxon_name} = $results[0]->{taxon_name};
-            }
-
-            # Insurance for self referential / bad data in database.
-            # NOTE: can't use the tertiary operator with hashes...
-            # How strange...
-            if(exists $child_no_visits{$child_no}){
-                $child_no_visits{$child_no} += 1;
-            }
-            else{
-                $child_no_visits{$child_no} = 1;
-            }
-            last if($child_no_visits{$child_no}>1);
-			# bail if we're already above the rank of 'class'
-			last if($results[0]->{taxon_rank} && $taxon_rank_order{$results[0]->{taxon_rank}} < $taxon_rank_order{$highest_level});
+    # this gets the 'min' number, or highest we climb
+    foreach (@ranks) {
+        if ($taxon_rank_order{$_} && $taxon_rank_order{$_} < $highest_level) {
+            $highest_level = $taxon_rank_order{$_};
         }
-        # no taxon number: give up.
-        else{
-			last;
-        }
-
-        # Now see if the opinions table has a parent for this child
-        my $sql_opin =  "SELECT status, parent_no, pubyr, reference_no ".
-                        "FROM opinions ".
-                        "WHERE child_no=$child_no AND status='belongs to'";
-        @results = @{$dbt->getData($sql_opin)};
-
-        $first_time = 0;
-
-        if(scalar @results){
-            $parent_no=TaxonInfo::selectMostRecentParentOpinion($dbt,\@results);
-                
-            # Insurance for self referential or otherwise bad data in database.
-            if($parent_no_visits{$parent_no}){
-                $parent_no_visits{$parent_no} += 1;
-            }       
-            else{
-                $parent_no_visits{$parent_no}=1;
-            }           
-            last if($parent_no_visits{$parent_no}>1);
-
-            if($parent_no){
-                # Get the name and rank for the parent
-                my $sql_auth = "SELECT taxon_name, taxon_rank ".
-                           "FROM authorities ".
-                           "WHERE taxon_no=$parent_no";
-                @results = @{$dbt->getData($sql_auth)};
-                if(scalar @results){
-			$auth_hash_ref = $results[0];
-			# reset rank, name, and number for next loop pass
-			$rank = $auth_hash_ref->{"taxon_rank"};
-			$taxon_name = $auth_hash_ref->{"taxon_name"};
-			$taxon_no = $parent_no;
-			# Quit if we're already at 'class' rank level or higher.
-			last if($results[0]->{taxon_rank} && $taxon_rank_order{$results[0]->{taxon_rank}} < $taxon_rank_order{$highest_level});
-			if($rank eq "family"){
-				$family{$base_taxon_name} = $taxon_name;
-				# Skip ahead if we've already got the hierarchy
-				# $order_ref will either be a scalar or a hash ref.
-				if ( $order{$taxon_name} )	{
-					last;
-				}
-			}
-			elsif($rank eq "order"){
-				$order{$base_taxon_name} = $taxon_name;
-				$order{$family{$base_taxon_name}} = $taxon_name;
-				if ( $class{$taxon_name} )	{
-					last;
-				}
-			}
-			elsif($rank eq "class"){
-				$class{$base_taxon_name} = $taxon_name;
-				$class{$family{$base_taxon_name}} = $taxon_name;
-				$class{$order{$base_taxon_name}} = $taxon_name;
-			}
-			push @ancestors,$parent_no;
-                }       
-                else{   
-                    # No results might not be an error: 
-                    # it might just be lack of data
-                    # print "ERROR in sql: $sql_auth<br>";
-                    last;
-                }
-            }                    
-            # If we didn't get a parent or status ne 'belongs to'
-            else{                
-                #$parent_no = 0;
-				$parent_no = undef;  # to correspond to new database table structure.
-            }
-        }   
-        else{   
-            # No results might not be an error: it might just be lack of data
-            # print "ERROR in sql: $sql_opin<br>";
-            last;                 
-        }       
+        if ($taxon_rank_order{$_}) {
+            $rank_hash{$_} = 1;
+        }    
     }
-# DOESN'T HELP
-  # if ( ! $order{$base_taxon_name} )	{
-  #   $order{$base_taxon_name} = $order{$family{$base_taxon_name}};
-  # }
-  # if ( ! $class{$base_taxon_name} )	{
-  #   $class{$base_taxon_name} = $class{$order{$base_taxon_name}};
-  # }
-    $full_class{$base_taxon_name} = $class{$base_taxon_name} .",". $order{$base_taxon_name} .",". $family{$base_taxon_name};
-  }
-  if ( $get_ancestors )	{
-    return @ancestors;
-  } else	{
-    return \%full_class;
-  }
+
+    #main::dbg("get_classification_hash called");
+    #main::dbg('ranks'.Dumper(@ranks));
+    #main::dbg('highest_level'.$highest_level);
+    #main::dbg('return_type'.$return_type);
+    #main::dbg('taxon names or nos'.Dumper(@taxon_names_or_nos));
+
+    foreach my $hash_key (@taxon_names_or_nos){
+        my ($taxon_no, $taxon_name, $parent_no, $child_no);
+       
+        # We're using taxon_nos as input
+        if ($hash_key =~ /^\d+$/) {
+            $taxon_no = $hash_key;
+        # We're using taxon_names as input    
+        } else {    
+            @taxon_nos = TaxonInfo::getTaxonNos($dbt,$hash_key);
+
+            # If the name is ambiguous (multiple authorities entries), taxon_no/child_no are undef so nothing gets set
+            if (scalar(@taxon_nos) == 1) {
+                $taxon_no = @taxon_nos[0];
+            }    
+            $taxon_name = $hash_key;
+        }
+        
+        my $orig_child = $taxon_no;
+        my $new_name;
+        if ($taxon_no) {
+            # Get original combination so we can move upward in the tree
+            #$taxon_no = TaxonInfo::getOriginalCombination($dbt, $taxon_no);
+            ($new_name, $taxon_no) = TaxonInfo::verify_chosen_taxon('',$taxon_no,$dbt);
+        }
+
+        my $new_child = $taxon_no;
+        $child_no = $taxon_no;
+        
+        my $loopcount = 0;
+        my $sql;
+        my @parents;
+
+        # start the link with child_no;
+        my $link = {};
+        $link_head{$hash_key} = $link;
+        my %visits = ();
+        my $debug_print_link = 0;
+
+        # Loop at least once, but as long as it takes to get full classification
+        # Keep looping while we have more levels to go up - the $INIT deal is just a weird way of emulating
+        # a do { } while (scalar(@parents)); block.  DON'T use do...while cause 'last' doesn't work in it
+        for(my $INIT=0;$INIT==0|| scalar(@parents);$INIT++) {
+            $loopcount++;
+            #hasn't been necessary yet, but just in case
+            if ($loopcount >= 22) { $msg = "Infinite loop for $child_no?";croak $msg;} 
+
+            # bail if we couldn't find exactly one taxon_no for taxon_name entered above
+            last if (!$child_no);
+       
+            # bail if we have a loop
+            $visits{$child_no}++;
+            last if ($visits{$child_no} > 1);
+
+            # Get parents of current child
+            $sql = "SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank, o.status, o.pubyr, o.reference_no " 
+                 . " FROM authorities a,opinions o" 
+                 . " WHERE a.taxon_no=o.parent_no" 
+                 . " AND o.status NOT IN ('rank corrected as','recombined as','corrected as')" 
+                 . " AND o.child_no=".$child_no;
+
+            #use Data::Dumper; print Dumper($sql);
+         
+            @parents = @{$dbt->getData($sql)};
+            if(scalar(@parents)){
+                $parent_index=TaxonInfo::selectMostRecentParentOpinion($dbt,\@parents,1);
+                #main::dbg("parent idx $parent_index");
+                #main::dbg(Dumper($parents[$parent_index]));
+
+                # bail if its a junk nomem * relationship
+                last if ($parents[$parent_index]->{'status'} =~ /^nomen/);
+                #main::dbg(Dumper($parents[$parent_index]));
+
+                $parent_no   = $parents[$parent_index]->{'taxon_no'};
+                $parent_name = $parents[$parent_index]->{'taxon_name'};
+                $parent_rank = $parents[$parent_index]->{'taxon_rank'};
+                #main::dbg("parent no $parent_no name $parent_name rank $parent_rank");
+
+                #if ($parents[$parent_index]->{'status'} eq 'recombined as') {
+                #    $debug_print_link = 1;
+                #    use Data::Dumper; print Dumper($parents[$parent_index]);
+                #    print $sql;
+                #}
+
+                # bail because we've already climbed up this part o' the tree and its cached
+                if (exists $link_cache{$parent_no}) {
+                    %{$link} = %{$link_cache{$parent_no}};
+                    last;
+                # populate this link, then set the link to be the next_link, climbing one up the tree
+                } else {
+                    if (exists $rank_hash{$parent_rank}) {
+                        my %node = (
+                            'number'=>$parent_no,
+                            'name'=>$parent_name,
+                            'rank'=>$parent_rank,
+                            'next_link'=>{}
+                        );
+                        %{$link} = %node;
+                        $link = $node{'next_link'};
+                        $link_cache{$parent_no} = \%node;
+                    }
+                }
+
+                # bail if we're already above the rank of 'class'
+                last if($parent_rank && 
+                        $taxon_rank_order{$parent_rank} < $highest_level);
+
+                # set this var to set up next loop
+                $child_no = $parent_no;
+            } 
+        }
+        ##if ($debug_print_link) {
+        #    use Data::Dumper; print "</center>orig child $orig_child new child $new_child<pre>".Dumper($link_head{$hash_key}).'</pre><center>';
+        #}
+    }
+
+    #print "</center><pre>link cache\n".Dumper(\%link_cache);
+    #print "\n\nlink head\n".Dumper(\%link_head).'</pre><center>';
+
+    # flatten the links before passing it back
+    while(($hash_key, $link) = each(%link_head)) {
+        my %list= ();
+        my %visits = ();
+        # Flatten out data, but first prepare it all
+        while (%$link) {
+            #if ($count++ > 5) { print "link: ".Dumper($link)."<br>"}
+            #if ($count++ > 12) { last; }
+            # Loop prevention by marking where we've been
+            if (exists $visits{$link->{'number'}}) { 
+                last; 
+            } else {
+                $visits{$link->{'number'}} = 1;
+            }
+            if ($return_type eq 'names') {
+                $list{$link->{'rank'}} = $link->{'name'}; 
+            } else {
+                $list{$link->{'rank'}} = $link->{'number'}; 
+            }
+            $link = $link->{'next_link'};
+        }
+        # The output list will be in the same order as the input list
+        # by looping over this array
+        my $list_ordered = '';
+        foreach $rank (@ranks) {
+            $list_ordered .= ','.$list{$rank};
+        }
+        $list_ordered =~ s/^,//g;
+        $link_head{$hash_key} = $list_ordered;
+    }
+
+    return \%link_head;
 }
 
 1;
