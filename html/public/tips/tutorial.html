@@ -37,7 +37,8 @@
 <h3>Introduction</h3>
 
 <p>The Paleobiology Database has many data tables and many scripts used to enter and edit data in the tables.
-In this tutorial you will step through the procedure for entering data into each major table, stopping short right before submitting.</p>
+In this tutorial you will step through the procedure for entering data into each major table, stopping short right before submitting <i>unless</i> you are using the backup server.
+If you have any other questions, write to <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">the Database coordinator</a>.</p>
 
 <h3>Public pages</h3>
 
@@ -49,9 +50,19 @@ In this tutorial you will step through the procedure for entering data into each
 <li>Hit <u>Frequently asked questions</u> and read the entire page.
 Pay careful attention to the sections "What is the database structure?"; "How is the Database organized?"; "Who can join..."; "How can I form a research group..."; and "Who has access..."
 <li>Hit <u>Home</u> in the blue navigation bar.
-<li>Hit <u>General data entry tip sheet</u> and read the entire page. Pay very close attention to the "General comments."
+<li>Hit <u>General data entry tip sheet</u> in the "How we do data entry" section, and read the entire page. Pay very close attention to the "General comments."
 <li>Hit <u>Home</u> and successively read the three other tip sheets.
 </ol>
+
+<h3>The backup server and test database</h3>
+
+<p>You probably should practice entering some data before you do any "real" data entry.
+We have a backup server with a test database that you can use for this purpose.
+Any data entered on that server eventually will be thrown out, so you can enter anything you'd like to.
+However, it's a good idea to enter real data from a real paper just to get familiar with some common situations.
+Everything from this point on should be done on the backup server. The address is:</p>
+
+<p><a href="http://paleobackup.nceas.ucsb.edu:8090">http://paleobackup.nceas.ucsb.edu:8090</a></p>
 
 <h3>Logging in</h3>
 
@@ -59,10 +70,11 @@ Pay careful attention to the sections "What is the database structure?"; "How is
 
 <ol>
 <li>Starting on the public web site, hit <u>Contributors' area</u> on the navigation bar.
-<li>Select the "Authorizer" and "Enterer" names. The authorizer is typically the Ph.D. who is supervising a data entry project; the enterer could be the same as the authorizer, but more often is a student or postdoc working with the authorizer.
-<li>Enter the "Password" of the authorizer and hit <u>Login to system</u>.
-<li>If you enter the wrong password or select the wrong authorizer name, you will be bounced right back to the public home page. Hit <u>Contributors' area</u> to go back to the login page.
-<li>You should now be on the data entry "Main menu," a.k.a. <u>Paleobiology Database functions</u>.
+<li>Fill in the "Authorizer" and "Enterer" names.
+The authorizer is typically the Ph.D. who is supervising a data entry project; the enterer could be the same as the authorizer, but more often is a student or postdoc working with the authorizer.
+<li>Enter the "Password" of the authorizer and hit <u>Login</u>.
+<li>If you enter the wrong password or select the wrong authorizer name, you will be bounced right back to the same page.
+<li>Once you log in correctly, you should now be on the data entry "Main menu."
 If you ever need to get back to this page from anywhere in the contributors' area, hit <u>Main menu</u> in the navigation bar.
 </ol>
 
@@ -82,25 +94,7 @@ If none of the refs are the same as yours, hit <u>Add reference</u>.
 Fill out every field you can.
 Don't worry about the project codes if you don't know what they are; if you can, use the "serial's name" pulldown to avoid filling out the "full name" field.
 <li>In a real session you would be ready for submission.
-Instead, hit <u>Main menu</u>.
-</ol>
-
-<h3>Time scales</h3>
-
-<p>The Database uses multiple time scales to aid data analysis of fossil collections.
-Each scale is a column from a correlation chart in a single publication, such as a series of epochs.
-Scales only need to be entered once, so you probably won't need to use this function.</p>
-
-<ol>
-<li>You have to have a current reference if you want to create or edit a time scale.
-If you don't have a current reference or want to change it, use <i>Search for or select a reference</i> in the "Search" section of the main menu.
-<li>From the main menu, hit <u>Add or edit a time scale</u> under "Time scales."
-<li>There should be two pulldown menus on the resulting "Select a time scale" page.
-First, browse through the top menu to see if the time scale you want to create already has been entered into the system.
-<li>If your time scale seems new, select "select to create a new time scale" in the second pull-down and hit <u>Add/edit scale</u>.
-<li>Fill out the form following the instructions in the bulleted list.
-General information goes up top; each time interval is detailed in one of the repeated sections below.
-<li>Once you're done, don't hit <u>Submit</u>; instead, hit <u>Main menu</u>.
+If you are on the backup server you can do so; otherwise, hit <u>Main menu</u>.
 </ol>
 
 <h3>Collections</h3>
@@ -125,7 +119,7 @@ Make sure none of them are the same as the one you are trying to create.
 It helps to click on the collection names, look at the full records on the resulting pages, and then hit the back button to get back to the list.
 <li>If you did not find any matching collections, or if you hit <u>Add a new collection</u>, you will get a data entry form.
 Fill out every field you can following the instructions on the <a href="javascript: tipsPopup('/public/tips/tips.html')">general data entry tip sheet</a>.
-<li>Once you're done, don't hit <u>Enter new collection</u>; instead, hit <u>Main menu</u>.
+<li>Once you're done, unless you're on the backup server don't hit <u>Enter new collection</u>; instead, hit <u>Main menu</u>.
 </ol>
 
 <h3>Occurrences</h3>
@@ -145,7 +139,7 @@ Click the highlighted collection number to the left of the collection that you w
 <li>You can now modify old occurrences and/or create new ones by typing in names below the old records.
 Note that the genus/higher taxon and species/sp./indet. fields are required.
 If your authorizer doesn't own the old records, they won't be writeable.
-<li>Once you're done, don't hit <u>Save changes</u>; instead, hit <u>Main menu</u>.
+<li>Once you're done, unless you're on the backup server don't hit <u>Save changes</u>; instead, hit <u>Main menu</u>.
 </ol>
 
 <h3>Reidentifications</h3>
@@ -168,30 +162,70 @@ Fill out the field for taxonomic names and no other fields, and then hit <u>Sear
 <li>Either way, at this point you should have a list of occurrences with original identifications printed at top and lines with input fields for reidentifications.
 Fill out only the reidentifications you need to, ignoring the others.
 If the first page doesn't have the occurrences you need to correct, hit the <u>View next 10 occurrences</u> link to navigate forwards.
-<li>Once you're done, don't hit <u>Save reidentifications</u>; instead, hit <u>Main menu</u>.
+<li>Once you're done, unless you're on the backup server don't hit <u>Save reidentifications</u>; instead, hit <u>Main menu</u>.
+</ol>
+
+<h3>Reclassifications</h3>
+
+<p>Our system normally figures out for you which taxonomic authority record (= formally listed name) goes with which occurrence or reidentification.
+However, sometimes there are two names that mean different things (i.e., apply to different authority records), but are spelt the same way.
+The typical reason is that one name is for a plant and the other is for an animal.
+In those cases, you need to tell the system which authority goes with your occurrence.</p>
+
+<ol>
+<li>From the main menu, hit <u>Reclassify occurrences</u> under "Occurrences."
+<li>You now have a regular collection search form.
+Hit <u>Search collections</u> when you have entered some useful search terms.
+<li>As with the occurrence search, you will be given a list of collections.
+Click the highlighted number of the collection you want.
+<li>You will be given a form that can have either or both of two sections.
+First, there may be a section that gives the "Classification" of the taxa in the collection.
+Select the appropriate authority data in the pulldown menus for the taxa you need to reclassify, ignoring the others.
+Second, there may be a "Taxa that cannot be classified" section.
+You can't do anything about those names unless you first create the taxonomic authority record that goes with the name (see below).
+<li>Once you're done, unless you're on the backup server don't hit <u>Reclassify</u>; instead, hit <u>Main menu</u>.
 </ol>
 
 <h3>Taxonomic data</h3>
 
 <p>We have two tables that handle all the basic information of alpha taxonomy.
-Who named what when (e.g., Linnaeus named Homo in 1758) is recorded in our authorities table.
+Who named what when (e.g., Linnaeus named Homo in 1758) is recorded in our authorities table (= master name list).
 The status of a name - either how it should be classified, what it should be synonymized, or why it's flat-out useless - is recorded in our opinions table.
-We have one medium-length form that feeds into both tables.</p>
+We have one short form that feeds into each table.</p>
 
 <ol>
-<li>From the main menu, hit <u>Add taxonomic information</u> under "Taxa."
+<li>From the main menu, hit <u>Add/edit taxonomic name</u> under "Taxa."
 <li>If you don't have a current reference or want to change it, do a search.
 Otherwise hit <u>Use current reference</u>.
 <li>You now have a simple form that asks you to find a taxon by entering its exact name.
 This crucial step is needed to make sure that a "new" taxonomic name has not already been entered into the system; or, if you are editing an existing name, to make sure you find it.
 So, be very careful to enter the name fully and correctly.
-<li>If there are one or more existing names spelt like yours, you will be given a list ending with a choice to "create a <b>new</b> taxon."
+<li>If there are one or more existing names spelt like yours, you will be given a list ending with a choice to "create a <b>new</b> taxon record."
 If you are revising an existing name, choose it based on its author and/or the higher-order taxon that includes it.
 Otherwise, just select the last radio button.
-<li>One way or another, at this stage you will be presented with a taxonomic data entry form.
-It includes a part for authority information and a part for opinion data.
+<li>One way or another, at this stage you will be presented with a taxonomic authority data entry form.
 Carefully consult the <a href="javascript: tipsPopup('/public/tips/taxonomy_tips.html')">taxonomy data entry tip sheet</a> before you fill in any of the fields.
-<li>Once you're done, don't hit <u></u>; instead, hit <u>Main menu</u>.
+<li>Once you're done, unless you're on the backup server don't hit <u>Submit</u>; instead, hit <u>Main menu</u>.
+<li>Once you have entered or revised the authority data, you can classify or synonymize the taxon using the taxonomic opinion form.
+Hit <u>Add/edit taxonomic opinion</u> under "Taxa" and then follow the equivalent of steps 3 - 6.
+</ol>
+
+<h3>Ecological/taphonomic information</h3>
+
+<p>The Database can record general information about higher or lower taxa such as their skeletal composition or diet.
+The information can be useful if (say) you want to download your occurrences with each one having a dietary category based on its taxonomic identity.
+Any data you enter for a taxon (e.g., a family) also will be applied to its lower taxa (e.g., its genera), unless those taxa have been scored directly themselves using this function.
+So, once you enter the family you don't have to enter the genera, unless they're different.</p>
+
+<ol>
+<li>From the main menu, hit <u>Add ecological/taphonomic information</u> under "Taxa."
+<li>If you don't have a current reference you'll need to search for one and select it.
+<li>On the next page, select a taxon by entering its exact name.
+If you enter a taxon whose name is not in the authorities table, you will be kicked back to this page.
+If you know the taxon's name is correctly spelt but you still can't get past the page, you probably need to create a taxonomic authority record first (see above).
+<li>You will be presented with an ecology/taphonomy data entry form.
+Carefully consult the <a href="javascript: tipsPopup('/public/tips/ecology_tips.html')">ecology/taphonomy data entry tip sheet</a> before you fill in any of the fields.
+<li>Once you're done, unless you're on the backup server don't hit <u>Submit</u>; instead, hit <u>Main menu</u>.
 </ol>
 
 <h3>Images</h3>
@@ -209,7 +243,7 @@ If you get a "Not found" error, hit the <u>provide the taxonomic information</u>
 You can view any of the images you upload by going through the <u>Search for a taxon</u> link on the <u>Main menu</u>.
 The caption is optional but will appear below the images.
 Note that you can only upload one image at a time; if you have multiple images of the same species, start the procedure over again for each one.
-<li>Once you're done, don't hit <u>Enter new collection</u>; instead, hit <u>Main menu</u>.
+<li>Once you're done, unless you're on the backup server don't hit <u>Enter new collection</u>; instead, hit <u>Main menu</u>.
 </ol>
 
 
