@@ -640,6 +640,10 @@ sub mapDrawMap	{
   $height = $vmult * $vpix;
   $width = $hmult * $hpix;
 
+  # recenter the image if the GIF size is non-standard
+  $gifoffhor = ( 360 - $hpix ) / ( $scale * 2 );
+  $gifoffver = ( 180 - $vpix ) / ( $scale * 2 );
+
 #--
 %fieldnames = ( "research group" => "research_group",
 		"state/province" => "state",
@@ -740,15 +744,15 @@ sub mapDrawMap	{
 		) {
 
       $lngoff = $coll{'lngdeg'};
-      if ( $lngoff > 0 )	{
+      if ( $coll{'lngdir'} eq "E" )	{
         $lngoff = $coll{'lngdeg'} + 0.5;
-      } elsif ( $lngoff < 0 )	{
+      } elsif ( $coll{'lngdir'} eq "W" )	{
         $lngoff = $coll{'lngdeg'} - 0.5;
       }
       $latoff = $coll{'latdeg'};
-      if ( $latoff > 0 )	{
+      if ( $coll{'latdir'} eq "N" )	{
         $latoff = $coll{'latdeg'} + 0.5;
-      } elsif ( $latoff < 0 )	{
+      } elsif ( $coll{'latdir'} eq "S" )	{
         $latoff = $coll{'latdeg'} - 0.5;
       }
       ($x1,$y1,$hemi) = $self->getCoords($lngoff,$latoff);
@@ -775,10 +779,6 @@ sub mapDrawMap	{
 
 #--
 
-
-  # recenter the image if the GIF size is non-standard
-  $gifoffhor = ( 360 - $hpix ) / ( $scale * 2 );
-  $gifoffver = ( 180 - $vpix ) / ( $scale * 2 );
 
   if ( $width > 300 )	{
     $im = new GD::Image($width,$height+12);
