@@ -1744,7 +1744,7 @@ sub processCollectionsSearch {
 		  push @terms, "(latmin>=30 OR latdec LIKE '5%' OR latdec LIKE '6%' OR latdec LIKE '7%' OR latdec LIKE '8%' OR latdec LIKE '9%')";
 		  $q->param('lathalf' => '');
 		} elsif ( $q->param('lathalf') eq "N" )	{
-		  push @terms, "( ( latmin<30 AND latmin!='' ) OR latdec LIKE '0%' OR latdec LIKE '1%' OR latdec LIKE '2%' OR latdec LIKE '3%' OR latdec LIKE '4%')";
+		  push @terms, "((latmin<30 OR latmin IS NULL) AND (latdec IS NULL OR (latdec NOT LIKE '5%' AND latdec NOT LIKE '6%' AND latdec NOT LIKE '7%' AND latdec NOT LIKE '8%' AND latdec NOT LIKE '9%')))";
 		  $q->param('lathalf' => '');
 		}
 		# Handle period
