@@ -5236,6 +5236,7 @@ sub displayTaxonomyEntryForm	{
 	
 	$html .= $hbo->populateHTML ('enter_taxonomy_top', [ $authorityRow{'taxon_no'}, $authorityRow{'type_taxon_no'}, $taxon, length($taxon)] , [ 'taxon_no', 'type_taxon_no',"%%taxon_name%%","%%taxon_size%%" ] );
 	$html .= $hbo->populateHTML('enter_tax_ref_form', \%authorityRow);
+
 	# Don't show the 'ref_is_authority' checkbox if there is already authorinfo
 	if ($authorityRow{author1init} || $authorityRow{author1last} ||
 	   $authorityRow{author2init} || $authorityRow{author2last} ||
@@ -5250,6 +5251,7 @@ sub displayTaxonomyEntryForm	{
 	# the existing data are non-null
 	my $authorizer = $s->get('authorizer');
 	my $authNoOwn = ($authorizer ne $authorityRow{'authorizer'});
+
 	
 	if ($authNoOwn) {
 		$html =~ s/<input type=text name="taxon_name_corrected" size=\d+ value="($taxon)".*?>/$1/;
@@ -5258,14 +5260,18 @@ sub displayTaxonomyEntryForm	{
 			for my $f (keys %authorityRow) {
 				if ($authorityRow{$f}) {
 					$html =~ s/<input name="$f".*?>/<u>$authorityRow{$f}<\/u>/;
-					$html =~ s/<select name="$f".*?<\/select>/<input name="$f" type=hidden value=species><u>$authorityRow{$f}<\/u>/;
+					$html =~ s/<select name="$f".*?<\/select>/<input name="$f" type=hidden value=$authorityRow{taxon_rank}><u>$authorityRow{$f}<\/u>/;
+
+				# rjp, 2/27/2004 bug fix.. In the above row, it used to always asign
+				# species to the rank's hidden field..  
+
 					$html =~ s/<textarea name="$f".*?<\/textarea>/<u>$authorityRow{$f}<\/u>/;
 				}
 			}
 		}
 	}
 	
-	
+
 	
 	$html .= $hbo->populateHTML('enter_taxonomy_form', \%authorityRow);
 	
@@ -5308,6 +5314,7 @@ sub displayTaxonomyEntryForm	{
 	my $taxonObject = Taxon->new();
 	$taxonObject->setWithTaxonName($taxon);
 	my $rank = $taxonObject->rank();
+
 	
 	if ($rank eq "") {
 		$rank = "higher taxon";  # if we couldn't find a rank
@@ -5332,12 +5339,13 @@ sub displayTaxonomyEntryForm	{
 				
 		$html =~ s/Name of type taxon/Type specimen/g;
 	} else { # must be a higher taxon	
-				
+			
 		$html =~ s/%%recombined_message%%/classified as belonging to/; 
 		$html =~ s/%%rank%%/$rank/g;
 		$html =~ s/%%species_only_start%%(.|\s)+%%species_only_end%%//;	# remove the row which is only shown for species.
 		
 		$html =~ s/Name of type taxon:<\/b>/Name of type taxon:<\/b><br><span class=tiny>e.g., "<i>Homo sapiens<\/i>"<\/span>/g;
+
 	}
 
 	# Substitute in the taxon name
