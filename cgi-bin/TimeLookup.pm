@@ -222,6 +222,10 @@ sub processLookup	{
 		}
 	# if not, look at the max/min intervals of the max and min
 		while ( $max > 0 )	{
+		# this could happen if a correlate isn't actually in a scale
+			if ( ! $bestscale{$max} || ! $bestscale{$min} )	{
+				last;
+			}
 
 			my $lastmin = $min;
 
