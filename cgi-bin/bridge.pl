@@ -585,7 +585,7 @@ sub displayMenuPage	{
 	# Clear Queue?  This is highest priority
 	my @time = `date +%S_%N`;
 	
-	Debug::dbPrint("starting at @time");
+#	Debug::dbPrint("starting at @time");
 	if ( $q->param("clear") ) {
 		$s->clearQueue ( $dbh ); 
 	} else {
@@ -611,7 +611,7 @@ sub displayMenuPage	{
 	print &stdIncludes ("std_page_bottom");
 
 		@time = `date +%S_%N`;
-	Debug::dbPrint("done at @time");
+#	Debug::dbPrint("done at @time");
 }
 
 sub displayHomePage {
@@ -5209,7 +5209,7 @@ sub displayTaxonomyEntryForm	{
 				
 		$html =~ s/%%recombined_message%%/classified as belonging to/; 
 		$html =~ s/%%rank%%/$rank/g;
-		$html =~ s/%%species_only_start%%((.)|\s)*%%species_only_end%%//;	# remove the row which is only shown for species.
+		$html =~ s/%%species_only_start%%(.|\s)+%%species_only_end%%//;	# remove the row which is only shown for species.
 		
 		$html =~ s/Name of type taxon:<\/b>/Name of type taxon:<\/b><br><span class=tiny>e.g., "<i>Homo sapiens<\/i>"<\/span>/g;
 	}
