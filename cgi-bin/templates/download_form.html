@@ -279,11 +279,10 @@ If you selected a scale, you can select a field to be tallied:
 Lithologies:</font></td>
 
 <td valign=top><font size=-1>
-<select name="lithology">
-<option>all
-<option>carbonate only
-<option>siliciclastic only
-</select>
+<input type=checkbox name="lithology_carbonate" value="YES" checked>carbonate
+<input type=checkbox name="lithology_mixed" value="YES" checked>mixed
+<input type=checkbox name="lithology_siliciclastic" value="YES" checked>siliciclastic
+</font></td></tr>
 
 <tr><td valign=top><font size=-1>
 Environment:</font></td>
@@ -397,10 +396,25 @@ Stratigraphic scale of collections:</font></td>
 </font></td></tr>
 
 <tr><td valign=top><font size=-1>
+Replace genus names with subgenus names, so subgenera are treated as separate genera?
+<td valign=top><font size=-1><select name=split_subgenera>
+<option selected value="NO">no, use the genus name
+<option value="YES">yes, use the subgenus name
+</select>
+
+<tr><td valign=top><font size=-1>
 Include generically indeterminate occurrences?</font></td>
 <td valign=top><font size=-1><select name=indet>
 <option selected value="NO">no, exclude them</option>
 <option value="YES">yes, include them</option>
+</select>
+</font></td></tr>
+
+<tr><td valign=top><font size=-1>
+Include genus names that are qualified with "aff." or quotes?</font></td>
+<td valign=top><font size=-1><select name=poor_genus_reso>
+<option value="NO">no, exclude them</option>
+<option selected value="YES">yes, include them</option>
 </select>
 </font></td></tr>
 

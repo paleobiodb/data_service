@@ -210,7 +210,9 @@ sub retellOptions {
 
 	$html .= $self->retellOptionsRow ( "Stratigraphic scale of collections", $stratscales );
 
+	$html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
 	$html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
+	$html .= $self->retellOptionsRow ( "Include occurrences that are qualified by \"aff.\" or quotes?", $q->param("poor_genus_reso") );
 	$html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
 	$html .= $self->retellOptionsRow ( "Output data format", $q->param("collections_put") );
 
@@ -773,6 +775,7 @@ sub getOccurrencesWhereClause {
 	}
 	
 	$where->addWhereItem(" occurrences.species_name!='indet.' ") if $q->param('indet') eq 'NO';
+	$where->addWhereItem(" (occurrences.genus_reso NOT IN ('aff.','\"') OR occurrences.genus_reso IS NULL) ") if $q->param('poor_genus_reso') eq 'NO';
 	$where->addWhereItem(" (occurrences.genus_reso NOT LIKE '%informal%' OR occurrences.genus_reso IS NULL) ") if $q->param('informal') eq 'NO';
 
 	return $where->whereExpr();
@@ -1030,6 +1033,12 @@ sub doQuery {
 	# Create the sql: we're doing a join on occurrences and collections
 	# so as to select all the data at once.
 	} else{
+		# subgenus name must be downloaded if subgenera are to be
+		#  treated as genera
+		# an amusing hack, if I do say so myself JA 18.8.04
+		if ( $q->param('split_subgenera') eq 'YES' && $sql !~ /subgenus/ )	{
+			$q->param('occurrences_subgenus_name' => 'YES');
+		}
 		$sql =	"SELECT occurrences.reference_no, ".
 				"occurrences.genus_reso, occurrences.genus_name, ".
 				"occurrences.taxon_no, ".
@@ -1236,7 +1245,12 @@ sub doQuery {
 	# run through the result set
 
 	# first do a quick hit to get some by-taxon and by-collection stats
+	#  ... and so on
 	foreach my $row ( @dataRows ){
+		# raise subgenera to genus level JA 18.8.04
+		if ( $q->param('split_subgenera') eq 'YES' && $row->{subgenus_name} )	{
+			$row->{genus_name} = $row->{subgenus_name};
+		}
 		# cumulate number of collections including each genus
 		$totaloccs{$row->{genus_name}}++;
 		# need these two for ecology lookup below

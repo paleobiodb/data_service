@@ -230,11 +230,26 @@ Lump occurrences of the same genus from the same collection?
 </select>
 
 <tr><td valign=top><font size=-1>
+Replace genus names with subgenus names, so subgenera are treated as separate genera?
+<td valign=top><font size=-1><select name=split_subgenera>
+<option selected value="NO">no, use the genus name
+<option value="YES">yes, use the subgenus name
+</select>
+
+<tr><td valign=top><font size=-1>
 Include occurrences that are generically indeterminate?
 <td valign=top><font size=-1><select name=indet>
 <option selected value="YES">yes, include them
 <option value="NO">no, exclude them
 </select>
+
+<tr><td valign=top><font size=-1>
+Include genus names that are qualified with "aff." or quotes?</font></td>
+<td valign=top><font size=-1><select name=poor_genus_reso>
+<option value="NO">no, exclude them</option>
+<option selected value="YES">yes, include them</option>
+</select>
+</font></td></tr>
 
 <tr><td valign=top><font size=-1>
 Select the type of output:
