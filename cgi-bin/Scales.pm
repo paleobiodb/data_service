@@ -21,12 +21,6 @@ sub startSearchScale	{
 	my $session = shift;
 	my $exec_url = shift;
 
-	# Have to be logged in
-	if ($session->get('enterer') eq "Guest" or $session->get('enterer') eq "")	{
-		$session->enqueue($dbh, "action=startLoadImage");
-		exit;
-	}
-
 	# Print the form
 	print main::stdIncludes("std_page_top");
 	print "<center><h3>Select a time scale to view</h3>\n";
@@ -74,22 +68,24 @@ sub startSearchScale	{
 
 	print "<tr><td><p></p></td></tr>\n";
 
-	print "<tr><td colspan=2 align=\"center\" valign=\"bottom\"><h3>... or select a time scale to add or edit</h3></td></tr>\n";
+	if ( $session->get('enterer') ne "Guest" && $session->get('enterer') ne "" )	{
+		print "<tr><td colspan=2 align=\"center\" valign=\"bottom\"><h3>... or select a time scale to add or edit</h3></td></tr>\n";
 
-	print "<tr><td align=\"right\"> ";
-	print "<form name=\"scale_add_form\" action=\"$exec_url\" method=\"POST\">\n";
-	print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"processShowForm\">\n\n";
-	print "<select name=\"scale\">\n";
-	print "<option selected value=\"\">------------ select to create a new time scale ------------\n";
-	for my $string (@sorted)	{
-		if ( $session->get('authorizer') eq $scale_authorizer{$string} )	{
-			print $scale_strings{$string};
+		print "<tr><td align=\"right\"> ";
+		print "<form name=\"scale_add_form\" action=\"$exec_url\" method=\"POST\">\n";
+		print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"processShowForm\">\n\n";
+		print "<select name=\"scale\">\n";
+		print "<option selected value=\"\">------------ select to create a new time scale ------------\n";
+		for my $string (@sorted)	{
+			if ( $session->get('authorizer') eq $scale_authorizer{$string} )	{
+				print $scale_strings{$string};
+			}
 		}
+		print "</select>\n\n";
+		print "</td><td align=\"left\"> ";
+		print "<input type=\"submit\" value=\"Add/edit scale\"></form>";
+		print "</td></tr> ";
 	}
-	print "</select>\n\n";
-	print "</td><td align=\"left\"> ";
-	print "<input type=\"submit\" value=\"Add/edit scale\"></form>";
-	print "</td></tr> ";
 	print "</table>\n<p>\n";
 
 	print main::stdIncludes("std_page_bottom");
@@ -179,7 +175,7 @@ sub processShowEditForm	{
 		# translate numbers into names for interval variables
 		if ( $times[$i]->{interval_no} )	{
 
-			my $sql = "SELECT eml_interval FROM intervals WHERE interval_no=";
+			my $sqlstem = "SELECT eml_interval FROM intervals WHERE interval_no=";
 			$sql .= $times[$i]->{interval_no};
 			my @emls = @{$dbt->getData($sql)};
 			$eml_interval = $emls[0]->{eml_interval};
@@ -394,6 +390,13 @@ sub processEditScaleForm	{
 
 	print main::stdIncludes("std_page_top");
 
+	$scale_name = $q->param('scale_name');
+	$scale_comments = $q->param('scale_comments');
+
+	# escape single quotes
+	$scale_name =~ s/'/\\'/g;
+	$scale_comments =~ s/'/\\'/g;
+
 	@correlation_nos = $q->param('correlation_no');
 	@interval_nos = $q->param('interval_no');
 
@@ -426,11 +429,11 @@ sub processEditScaleForm	{
 		$scale_no = $q->param('scale_no');
 		$sql = "UPDATE scales SET modifier_no=";
 		$sql .= $enterer_no . ", ";
-		$sql .= "scale_name='". $q->param('scale_name') . "', ";
+		$sql .= "scale_name='". $scale_name . "', ";
 		$sql .= "continent='" . $q->param('continent') . "', ";
 		$sql .= "basis='" . $q->param('basis') . "', ";
 		$sql .= "scale_rank='" . $q->param('scale_rank') . "', ";
-		$sql .= "scale_comments='" . $q->param('scale_comments') . "'";
+		$sql .= "scale_comments='" . $scale_comments . "'";
 		$sql .= " WHERE scale_no=" . $q->param('scale_no');
 		$dbt->getData($sql);
 	} else	{
@@ -440,21 +443,21 @@ sub processEditScaleForm	{
 		$sql .= $authorizer_no . "', '";
 		$sql .= $enterer_no . "', '";
 		$sql .= $session->get('reference_no') . "', '";
-		$sql .= $q->param('scale_name') . "', '";
+		$sql .= $scale_name . "', '";
 		$sql .= $q->param('continent') . "', '";
 		$sql .= $q->param('basis') . "', '";
 		$sql .= $q->param('scale_rank') . "', '";
-		$sql .= $q->param('scale_comments') . "')";
+		$sql .= $scale_comments . "')";
 		$dbt->getData($sql);
 
 		$sql = "SELECT scale_no FROM scales WHERE scale_name='";
-		$sql .= $q->param('scale_name') . "'";
+		$sql .= $scale_name . "'";
 		my @nos = @{$dbt->getData($sql)};
 		$scale_no = $nos[0]->{scale_no};
 
 		# set the created date
 		$sql = "SELECT modified FROM scales WHERE scale_name='";
-		$sql .= $q->param('scale_name') . "'";
+		$sql .= $scale_name . "'";
 		my @modifieds = @{$dbt->getData($sql)};
 		$sql = "UPDATE scales SET modified=modified,created=";
 		$sql .= $modifieds[0]->{modified} . " WHERE scale_no=" . $scale_no;
