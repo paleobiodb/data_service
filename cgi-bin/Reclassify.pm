@@ -48,7 +48,7 @@ sub displayOccurrenceReclassify	{
 	my $dbt = shift;
 
 	# needed by Classification
-	$levels = "family,order,class";
+	$levels = "class,order,family";
 
 	print main::stdIncludes("std_page_top");
 
@@ -195,8 +195,10 @@ sub displayOccurrenceReclassify	{
 
 					# get the family, order, and class
 					$temp[0] = $t->{taxon_no};
-my %master_class=%{Classification::get_classification_hash($dbt, $levels, [ $t->{taxon_no} ] )};
-					my @parents = split ',',$master_class{$t->{taxon_no}};
+                    # index[0] = class, index[1] = order, index[2] = family 
+                    my %master_class=%{Classification::get_classification_hash($dbt, $levels, [ $t->{taxon_no} ] )};
+
+					my @parents = split(/,/,$master_class{$t->{taxon_no}},-1);
 					if ( @parents )	{
 						$authority .= " (";
 						if ( $parents[2] ) { $authority .= $parents[2] . ", "; }
