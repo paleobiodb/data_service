@@ -25,12 +25,11 @@ sub startLoadImage{
 		# save away destination on the queue?
 	print main::stdIncludes("std_page_top");
 	print "<center><h2>Image upload</h2></center>";
-	print "<p>This is the starting point for uploading images. Note that we ".
-		  "must already have taxonomic information on the subject of the image".
-		  " before you will be allowed to upload the image.  If we don't have ".
-		  " this information, you will be asked to ".
+	print "<p>You can't upload an image unless we have taxonomic information ".
+		  "on the subject of the image. If this search doesn't find it, you ".
+		  "will be asked to ".
 		  "<a href=\"$exec_url?action=startTaxonomy\"> provide the ".
-		  "taxonomic information</a> on the subject of the image.";
+		  "taxonomic information</a> yourself.";
 	print "<center><p><form name=\"image_form\" action=\"$exec_url\" ".
 		  "method=\"POST\"><table><tr><td>";
 	print "<b>Taxonomic name of specimen in image:&nbsp</b>";
@@ -132,9 +131,7 @@ sub processLoadImageForm{
 		print main::stdIncludes("std_page_top");
 		print "<center><p>Image files of type jpg, png or gif only please!<br>";
 		print "<p><a href=\"$exec_url?action=startImage\">".
-			  "<b>Enter another image</b></a>&nbsp;&#149;&nbsp;".
-			  "<a href=\"$exec_url?action=viewImage\"><b>View images</b></a>".
-			  "</center>";
+			  "<b>Enter another image</b></a></center>";
 		print main::stdIncludes("std_page_bottom");
 		exit;
 	}
@@ -146,9 +143,7 @@ sub processLoadImageForm{
 		print main::stdIncludes("std_page_top");
 		print "<center><p>Please upload only images of type jpg, gif or png.<br>";
 		print "<p><a href=\"$exec_url?action=startImage\">".
-			  "<b>Enter another image</b></a>&nbsp;&#149;&nbsp;".
-			  "<a href=\"$exec_url?action=viewImage\"><b>View images</b></a>".
-			  "</center>";
+			  "<b>Enter another image</b></a></center>";
 		print main::stdIncludes("std_page_bottom");
 		exit;
 	}
@@ -164,9 +159,7 @@ sub processLoadImageForm{
 		print "<center><p>Image is too large.  Please only upload images ".
 			  "less than one megabyte in size<br>";
 		print "<p><a href=\"$exec_url?action=startImage\">".
-			  "<b>Enter another image</b></a>&nbsp;&#149;&nbsp;".
-			  "<a href=\"$exec_url?action=viewImage\"><b>View images</b></a>".
-			  "</center>";
+			  "<b>Enter another image</b></a></center>";
 		print main::stdIncludes("std_page_bottom");
 		exit;
 	}
@@ -194,9 +187,7 @@ sub processLoadImageForm{
 		print "<center><p>This image <a href=\"".$results[0]->{path_to_image}.
 			  "\">already exists</a> in the database<br>";
 		print "<p><a href=\"$exec_url?action=startImage\">".
-			  "<b>Enter another image</b></a>&nbsp;&#149;&nbsp;".
-			  "<a href=\"$exec_url?action=viewImage\"><b>View images</b></a>".
-			  "</center>";
+			  "<b>Enter another image</b></a></center>";
 		print main::stdIncludes("std_page_bottom");
 		exit; 
 	}
@@ -294,11 +285,9 @@ sub processLoadImageForm{
 	}
 	else{
 		print main::stdIncludes("std_page_top");
-		print "<center><p>Inserted record number ".$dbt->getID()."<br>";
+		print "<center><p>The image of $taxon_name was uploaded successfully<br>";
 		print "<p><a href=\"$exec_url?action=startImage\">".
-			  "<b>Enter another image</b></a>&nbsp;&#149;&nbsp;".
-			  "<a href=\"$exec_url?action=viewImage\"><b>View images</b></a>".
-			  "</center>";
+			  "<b>Enter another image</b></a></center>";
 		print main::stdIncludes("std_page_bottom");
 	}
 }
@@ -307,97 +296,20 @@ sub processLoadImageForm{
 ###
 # VIEWING
 ###
-
-sub startViewImages{
-	my $dbt = shift;
-	my $q = shift;
-	my $exec_url = shift;
-
-	# Enter in a taxonomic name for images you wish to view.
-	print main::stdIncludes("std_page_top");
-	print "<center><h2>View images</h2></center>";
-	print "<center><p><form name=\"image_form\" action=\"$exec_url\" ".
-		  "method=\"POST\"><table><tr><td>";
-	print "<b>Taxonomic name of specimen to view:&nbsp</b>";
-	print "<input type=text size=30 name=\"taxon_name\">".
-		  "<input type=hidden name=\"action\" value=\"processViewImage\">".
-		  "</td></tr>";
-	print "<tr><td><center><input type=submit></center></td></tr></table></center>";
-	print main::stdIncludes("std_page_bottom");
-}
-
 sub processViewImages{
 	my $dbt = shift;
 	my $q = shift;
 	my $s = shift;
-	my $exec_url = shift;
-	my $taxon_name = $q->param('taxon_name');
-	my $selected_index = $q->param('selected_index');
-	if(!$selected_index){
-		$selected_index = 0;
-	}
+	my $taxon_name = $q->param('genus_name');
 
-	my $sql = "SELECT authorities.taxon_no, image_no, path_to_image, caption ".
+	my $sql = "SELECT authorities.taxon_no, image_no, path_to_image, caption, ".
+			  " original_filename ".
 			  "FROM authorities, images ".
 			  "WHERE authorities.taxon_no = images.taxon_no AND ".
 			  "taxon_name='$taxon_name'";
 	my @results = @{$dbt->getData($sql)};
 	
-	if(@results){
-		taxonImageDisplay($selected_index, $taxon_name, \@results);
-	}
-	else{
-		print main::stdIncludes("std_page_top");
-		print "<center><p>No images found for taxon <i>$taxon_name</i><br>";
-		if($s->get("enterer") ne "Guest" or $s->get("enterer") ne ""){
-			print "<p><a href=\"$exec_url?action=startImage\">".
-				  "<b>Enter an image</b></a>&nbsp;&#149;&nbsp;";
-		}
-		print "<a href=\"$exec_url?action=viewImage\"><b>View images</b></a>".
-			  "</center>";
-		print main::stdIncludes("std_page_bottom");
-	}
-}
-
-# REDO THIS TO WORK INSIDE OF THE TAXON INFO FORM
-# Maybe have multiple images shown as thumbnails with checkboxes (like the
-# module nav) so that 1 or more can be shown simultaneously.
-sub taxonImageDisplay{
-	my $selected_index = shift;
-	my $taxon_name = shift;
-	my $data = shift;
-	my @data = @{$data};
-
-	print main::stdIncludes("std_page_top");
-
-	if(@data == 1){
-		print "<center><table><tr><td>". 
-			  "<img src=\"".$data[0]->{path_to_image}."\"><br>".
-			  "<center>".$data[0]->{caption}."</center>".
-			  "</td></tr></table></center>";
-	}
-	else{
-		print "<center><table><tr><td>";
-		my $main_image = $data[$selected_index]->{path_to_image};
-		my $main_caption = $data[$selected_index]->{caption};
-		my $first = shift @data;
-		my $thumb = $first->{path_to_image};
-		$thumb =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
-		print "<a href=\"$exec_url?action=processViewImage&taxon_name=$taxon_name&selected_index=0\"><img src=\"$thumb\"></a>";
-		print "</td><td rowspan=".(@data+1).">";
-		print "<center><img src=\"$main_image\"><br>$main_caption</td></tr>\n";
-
-		for($index=0; $index < @data; $index++){
-			print "<tr><td>";
-			my $thumb = $data[$index]->{path_to_image};
-			$thumb =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
-			print "<a href=\"$exec_url?action=processViewImage&taxon_name=$taxon_name&selected_index=".($index+1)."\"><img src=\"$thumb\"></a>";
-			print "</td></tr>\n";
-		}
-		print "</table></center>";
-	}
-	
-	print main::stdIncludes("std_page_bottom");
+	return @results;
 }
 
 1;
