@@ -120,6 +120,17 @@ sub referenceNumber {
 	return ($self->{reference_no});
 }
 
+# return reference_no for the collection this occurrence belongs to
+sub collectionReferenceNumber {
+	my Occurrence $self = shift;
+
+	my $sql = SQLBuilder->new();
+
+	return $sql->getSingleSQLResult("SELECT c.reference_no FROM 
+								collections c, occurrences o
+								WHERE o.occurrence_no = $self->{occurrence_no}
+								AND o.collection_no = c.collection_no");
+}
 
 # returns the taxon_no for the class of the most
 # recent reid.
@@ -175,6 +186,8 @@ sub buildReidList {
 	my $occ_no = $self->{occurrence_no};
 	my $taxon = TaxonHierarchy->new();
 	
+	my $reference_no = $self->{reference_no};
+	
 	# initialize these to be empty..
 	my $taxClass = "";		my $classNum;
 	my $taxOrder = "";		my $orderNum;
@@ -182,8 +195,11 @@ sub buildReidList {
 	
 	# grab the author names for the first reference.
 	my $ref = Reference->new();
-	$ref->setWithReferenceNumber($self->referenceNumber());
+	$ref->setWithReferenceNumber($reference_no);
 	my $authors = $ref->authors();
+	
+	my $referenceString;
+	my $colRefNo = $self->collectionReferenceNumber();
 	
 	
 	# figure out how many (if any) reidentifications exist
@@ -230,10 +246,15 @@ sub buildReidList {
 		$familyNum = $taxon->numberForRank("family");
 	}
 
+	$referenceString = "";
+	if ($colRefNo != $result[8]) {
+		# only list reference if it's not the same as the collection's reference number
+		$referenceString = "<A HREF=\"" . URLMaker::URLForReferenceNumber($result[8]) . "\">$authors</A>";
+	}
 	my @reidRow = ($taxClass, $taxOrder, $taxFamily,
 					"<A HREF=\"" . URLMaker::URLForTaxonName($result[2], $result[4]) .
 					"\">$result[1] $result[2] $result[3] $result[4]</A>",
-					"<A HREF=\"" . URLMaker::URLForReferenceNumber($result[8]) . "\">$authors</A>",
+					$referenceString,
 					"$result[5] $result[6]",
 					$result[7] );
 	
@@ -277,10 +298,15 @@ sub buildReidList {
 			$familyNum = $taxon->numberForRank("family");
 		}
 	
+		$referenceString = "";
+		if ($colRefNo != $result->[7]) {
+			# only list reference if it's not the same as the collection's reference number
+			$referenceString = "<A HREF=\"" . URLMaker::URLForReferenceNumber($result->[7]) . "\">$authors</A>";
+		}
 		my @reidRow = ($taxClass, $taxOrder, $taxFamily,
 					"= <A HREF=\"" . URLMaker::URLForTaxonName($result->[2], $result->[4]) .
 					 "\">$result->[1] $result->[2] $result->[3] $result->[4]</A>",
-					"<A HREF=\"" . URLMaker::URLForReferenceNumber($result->[7]) . "\">$authors</A>",
+					$referenceString,
 					"",
 					$result->[6]);
 	
