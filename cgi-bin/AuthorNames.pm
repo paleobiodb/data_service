@@ -180,7 +180,7 @@ sub parseAuthorsString
           $prevTokenType = $tokenType;
           $stage = 2;
           $au2Last .= " $token";
-		  $self->dbg("<br>TokenType=LNAME, Stabe=1, au2Last: $au2Last<br>");
+		  $self->dbg("<br>TokenType=LNAME, Stage=1, au2Last: $au2Last<br>");
           next;
         }
         # Otherwise, append it to the first author name string
@@ -335,19 +335,21 @@ sub isInitial
   
   # True if token is exactly three upper case characters JA 27.3.02
   # Possibly followed by a period and/or a space for each one 12/03/02 PM
-  return 1 if $token ne 'III' && $token =~ /\A[A-Z]\.?\s?[A-Z]\.?\s?[A-Z]\.?\s?\Z/ && uc($token) eq $token;
+  return 1 if $token ne 'III' && $token =~ /^[A-Z]\.{0,1}\s{0,1}[A-Z]\.{0,1}\s{0,1}[A-Z]\.{0,1}\s{0,1}$/ && uc($token) eq $token;
 
   # ... or two upper case characters JA 14.3.02
   # Possibly followed by a period and/or a space for each one 12/03/02 PM
-  return 1 if $token ne 'II' && $token ne 'IV' && $token =~ /\A[A-Z]\.?\s?[A-Z]\.?\s?\Z/ && uc($token) eq $token;
+  return 1 if $token ne 'II' && $token ne 'IV' && $token =~ /^[A-Z]\.{0,1}\s{0,1}[A-Z]\.{0,1}\s{0,1}$/ && uc($token) eq $token;
 
   # True if token is a single upper case character possibly followed
   # by a dot, followed by a dash, followed by another character and dot.
-  return 1 if $token =~ /\A\w\.?-\w\.?\Z/ && uc($token) eq $token;
+  return 1 if $token =~ /^[A-Z]\.{0,1}-[A-Za-z]\.{0,1}$/;
+  # 01/07/03:  Foote wants to enter lowercase initials, such as 'J.-y.'
+  #return 1 if $token =~ /^[A-Z]\.{0,1}-[A-Za-z]\.{0,1}$/ && uc($token) eq $token;
   
   # True if token is a single upper case character possibly followed
   # by a dot
-  return 1 if $token =~ /\A\w\.?\Z/ && uc($token) eq $token;
+  return 1 if $token =~ /^[A-Z]\.{0,1}$/ && uc($token) eq $token;
 
   return 0;
 }
@@ -416,7 +418,7 @@ sub setAuthor1Init
   # Get rid of all periods
   $auInit =~ s/\.//g;
   # Put them back in after every letter.
-  $auInit =~ s/([A-Z])/$1./g;
+  $auInit =~ s/([A-Za-z])/$1./g;
   
   $self->{au1Init} = $auInit unless $auInit eq '';
 }
@@ -465,7 +467,7 @@ sub setAuthor2Init
   # Get rid of all periods
   $auInit =~ s/\.//g;
   # Put them back in after every letter.
-  $auInit =~ s/([A-Z])/$1./g;
+  $auInit =~ s/([A-Za-z])/$1./g;
   
   $self->{au2Init} = $auInit unless $auInit eq '';
 }
