@@ -585,6 +585,12 @@ original material is preserved!</i></small>
         <input id="pres_mode" type=checkbox value="amber"> amber
       </td>
       <td>
+        <input id="pres_mode" type=checkbox value="anthropogenic"> anthropogenic
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="bone collector"> bone collector
+      </td>
+      <td>
         <input id="pres_mode" type=checkbox value="concretion"> concretion
       </td>
       <td>
@@ -699,6 +705,17 @@ original material is preserved!</i></small>
       <input id="feed_pred_traces" type=checkbox value="gastric dissolution"> gastric dissolution
     </td>
   </tr>
+  <tr>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="burning"> burning
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="cutmarks"> cutmarks
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="stone tools"> stone tools
+    </td>
+  </tr>
 
   <tr>
     <td>
@@ -795,6 +812,9 @@ original material is preserved!</i></small>
       <i>(e.g., annelids, bryozoans,
       <br>
       cnidarians, crinoids, sponges)</i>
+    </td>
+    <td valign=top>
+      <input id="collection_coverage" type=checkbox value="ichnofossils"> ichnofossils
     </td>
   </tr>
   </table>
@@ -903,6 +923,13 @@ original material is preserved!</i></small>
   </table>
   
   <i><small>Give a total only if counts are not given for individual taxa.</small></i>
+  <p>
+    <u>Museum repositories</u>:
+      <select id="museum"></select>
+      <select id="museum"></select>
+      <select id="museum"></select>
+      <select id="museum"></select>
+  </p>
   <p>
     <u>Comments about collection</u>:<br><textarea id="collection_comments" rows=4 wrap=virtual cols=100></textarea>
   </p>
