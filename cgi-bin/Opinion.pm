@@ -90,6 +90,23 @@ sub opinionNumber {
 }
 
 
+# the parent_no is the parent in a relationship such as
+# recombined_as.  It's the *new* one.
+sub parentNumber {
+	my Opinion $self = shift;
+
+	my $rec = $self->databaseOpinionRecord();
+	return $rec->{parent_no};	
+}
+
+# the child_no is the original taxon_no that this opinion is about.
+sub childNumber {
+	my Opinion $self = shift;
+	
+	my $rec = $self->databaseOpinionRecord();
+	return $rec->{child_no};
+}
+
 # returns the authors of the opinion record
 sub authors {
 	my Opinion $self = shift;
@@ -144,12 +161,34 @@ sub formatAsHTML {
 	my $ref = $self->databaseOpinionRecord();
 	
 	my $status = $ref->{status};
+	my $statusPhrase = $status;
+	
+	if (($status eq 'subjective synonym of') || 
+		($status eq 'objective synonym of') || 
+		($status eq 'homonym of') || 
+		($status =~ m/nomen/)) {
+			$statusPhrase = "is a $status";
+	}
+	
 	my $ref_has_opinion = $ref->{ref_has_opinion};
 	
 	my $parent = Taxon->new();
-	$parent->setWithTaxonNumber($ref->{parent_no});
+	$parent->setWithTaxonNumber($self->parentNumber());
 	
-	return $status . " " .  $parent->taxonName() . " according to " . $self->authors() ;
+	my $child = Taxon->new();
+	$child->setWithTaxonNumber($self->childNumber());
+	
+	
+	if ($status =~ m/nomen/) {
+		# nomen anything...
+		return "'" . $child->taxonName() . " $statusPhrase'". " according to " . $self->authors() ;
+	} elsif ($status ne 'revalidated') {
+		
+		return "'" . $child->taxonName() . " $statusPhrase " .  $parent->taxonName() . "' according to " . $self->authors();
+	} else {
+		# revalidated
+		return "'" . $child->taxonName() . " $statusPhrase' according to " . $self->authors();
+	}
 }
 
 
@@ -238,12 +277,14 @@ sub displayOpinionForm {
 	## hash.  However, it shouldn't be done before here, because the hash
 	## might be overwritten in two places above.
 	####
-	
+
+
 	# figure out the taxon name and number
 	my $taxon = Taxon->new();
 	$taxon->setWithTaxonNumber($q->param('taxon_no'));
 	$fields{taxon_name} = $taxon->taxonName();
 	$fields{taxon_no} = $taxon->taxonNumber();
+
 	
 	
 	# Store whether or not this is a new entry in a hidden variable so 
@@ -352,20 +393,24 @@ sub displayOpinionForm {
 				# "Invalid and no other name can be applied"
 				
 				$fields{'taxon_status_invalid2'} = 'checked';
+				$fields{taxon_status} = 'invalid2';
 				
 			} else {
 				# else, we should pick the invalid1 radio button.
 				# "Invalid and another name should be used"
 				
-				$fields{'taxon_status_invalid1'} = 'checked';	
+				$fields{'taxon_status_invalid1'} = 'checked';
+				$fields{taxon_status} = 'invalid1';
 			}
 		} else {
 			# it must be a valid status
 	
 			if ($fields{status} eq 'recombined as') {
 				$fields{taxon_status_recombined_as} = 'checked';
+				$fields{taxon_status} = 'recombined_as';
 			} else {
 				$fields{taxon_status_belongs_to} = 'checked';
+				$fields{taxon_status} = 'belongs_to';
 			}
 		}
 	}
@@ -392,7 +437,8 @@ sub displayOpinionForm {
 	my $parent = Taxon->new();
 	$parent->setWithTaxonNumber($fields{parent_no});
 	$fields{parent_taxon_name} = $parent->taxonName();
-
+	$fields{'parent_taxon_name2'} = $fields{parent_taxon_name};
+	
 	
 	
 	# if the authorizer of this record doesn't match the current
@@ -426,6 +472,21 @@ sub displayOpinionForm {
 			push (@nonEditables, ('pages', 'figures'));		
 		}
 		
+		
+		# depending on the status, we should disable some fields.		
+		if ($fields{'status'}) {
+			
+			push(@nonEditables, 'taxon_status');
+			push(@nonEditables, 'nomen');
+			push(@nonEditables, 'synonym');
+			push(@nonEditables, 'parent_taxon_name');
+			push(@nonEditables, 'parent_taxon_name2');
+		}
+		
+		if ($fields{'status'} ne 'recombined as') {
+			push(@nonEditables, 'diagnosis');
+		}
+				
 				
 		# find all fields in the database record which are not empty and add them to the list.
 		foreach my $f (keys(%$dbFieldsRef)) {	
@@ -440,13 +501,7 @@ sub displayOpinionForm {
 		if ($fields{'2nd_pages'}) { push(@nonEditables, '2nd_pages'); }
 		if ($fields{'2nd_figures'}) { push(@nonEditables, '2nd_figures'); }
 		if ($fields{'taxon_status'}) { push(@nonEditables, 'taxon_status'); }
-		if ($fields{'status'}) { 
-			push(@nonEditables, 'taxon_status');
-			push(@nonEditables, 'nomen');
-			push(@nonEditables, 'synonym');
-			push(@nonEditables, 'parent_taxon_name');
-			push(@nonEditables, 'parent_taxon_name2');
-		}
+
 		
 	}
 	
@@ -697,7 +752,7 @@ sub submitOpinionForm {
 		$errors->add("You must select a status radio button before submitting this record");	
 	}
 	
-	# Note: the actual field in the database is called 'status'
+	# Note: the actual field in the database is called 'status'	
 	
 	if ($taxonStatusRadio eq 'belongs_to') {
 		$fieldsToEnter{status} = 'belongs to';
@@ -733,6 +788,13 @@ sub submitOpinionForm {
 	} 
 	
 	
+	# The diagnosis field only applies to the case where the status
+	# is belongs to.
+	if (($taxonStatusRadio ne 'recombined_as') && ($q->param('diagnosis'))) {
+		$errors->add("Don't enter a diagnosis unless you choose the appropriate radio button.");
+	}
+	
+	
 	
 	if ($parentTaxonName) {
 		# check the parent taxon name to make sure it's valid and exists
@@ -741,6 +803,27 @@ sub submitOpinionForm {
 		if ($parentRankFromSpaces eq 'invalid') {
 			$errors->add("Invalid parent taxon name, please check spacing and capitalization");	
 		}
+	
+		if ($taxonStatusRadio eq 'invalid1') {
+			my $childRank = $q->param('taxon_rank');
+			
+			if ($parentRankFromSpaces eq 'higher') {
+				if (($childRank eq 'species') || ($childRank eq 'subspecies')) {
+					$errors->add("The rank of your child taxon ($childRank) doesn't match the rank of your parent taxon");	
+				}
+					
+			} else {
+				# parent rank is not higher
+				if ($childRank ne $parentRankFromSpaces) {
+					$errors->add("The rank of your child taxon ($childRank) doesn't match the rank of your parent taxon ($parentRankFromSpaces)");
+				}
+			}
+		}
+		
+		
+		# **NOTE: we should also check that the parent taxon rank for the
+		# belonging to field is higher than the child taxon rank.. However, this
+		# is difficult to do until the Rank class is finished.
 	
 		# see if the parent name exists in the authorities table
 	
@@ -751,6 +834,7 @@ sub submitOpinionForm {
 		if (! $parentTaxonNumber) {
 			$errors->add("The parent taxon '" . $parentTaxonName . "' doesn't exist in our database.  Please enter an authority record for the parent taxon name <i>before</i> entering this opinion.");	
 		}
+		
 	}
 	
 	
@@ -873,12 +957,55 @@ sub submitOpinionForm {
 	
 	# now show them what they inserted...
 	
-	# note, if we set our own taxon number to be the new one, then if they had errors,
-	# it will screw up the isNewEntry calculation...
-	#my $t = Taxon->new();
-	#$t->setWithTaxonNumber($resultTaxonNumber);
-	#$t->displayOpinionSummary($isNewEntry);
+	$self->displayOpinionSummary($isNewEntry);
 	
+}
+
+
+
+
+
+# displays info about the opinion record the user just entered...
+# pass it a boolean
+# is it a new entry or not..
+sub displayOpinionSummary {
+	my Opinion $self = shift;
+	my $newEntry = shift;
+
+	my $enterupdate;
+	if ($newEntry) {
+		$enterupdate = 'entered into';
+	} else {
+		$enterupdate = 'updated in'	
+	}
+	
+	print main::stdIncludes("std_page_top");
+	
+	
+	print "<CENTER>";
+	
+	my $opinion = Opinion->new();
+	$opinion->setWithOpinionNumber($self->opinionNumber());
+	
+	my $dbrec = $opinion->databaseOpinionRecord();
+	
+	if (!$dbrec) {
+		print "<DIV class=\"warning\">Error inserting/updating opinion record.  Please start over and try again.</DIV>";	
+	} else {
+		
+		my $opinionHTML = $opinion->formatAsHTML();
+		$opinionHTML =~ s/according to/of/i;
+		
+		print "<H2> The opinion $opinionHTML has been $enterupdate the database</H2><BR>";
+		
+		print "
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=" . $self->{opinion_no} ."\"><B>Add more data about this opinion</B></A> - <A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&amp;goal=opinion\"><B>Add/edit an opinion about another taxon</B></A>";
+	}
+	
+	print "<BR><BR>";
+	print "</CENTER>";
+	
+	print main::stdIncludes("std_page_bottom");
 }
 
 
