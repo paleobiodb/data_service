@@ -66,7 +66,7 @@ sub buildDownload {
 	if ( $q->param('ecology1') )	{
 		$self->getEcology ( );
 	}
-	if ( $q->param('compendium_ranges') ne 'YES' )	{
+	if ( $q->param('compendium_ranges') eq 'NO' )	{
 		$self->getCompendiumAgeRanges ( );
 	}
 	$self->doQuery ( );
@@ -176,7 +176,6 @@ sub retellOptions {
 	}
 	
 	$html .= $self->retellOptionsRow ( "Lump lists of same county & formation?", $q->param("lumplist") );
-	$html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
 
 	if ( $q->param('small_collection') )	{
 		$geogscales = "small collection";
@@ -214,6 +213,7 @@ sub retellOptions {
 	$html .= $self->retellOptionsRow ( "Stratigraphic scale of collections", $stratscales );
 
 	$html .= $self->retellOptionsRow ( "Lump by coordinate and formation/member?", $q->param("lump_by_mbr") );
+	$html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
 	$html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
 	$html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
 	$html .= $self->retellOptionsRow ( "Include occurrences qualified by \"aff.\" or quotes?", $q->param("poor_genus_reso") );
@@ -1292,7 +1292,7 @@ sub doQuery {
 		# get rid of occurrences of genera either (1) not in the
 		#  Compendium or (2) falling outside the official Compendium
 		#  age range JA 27.8.04
-		if ( $q->param('compendium_ranges') ne 'YES' )	{
+		if ( $q->param('compendium_ranges') ne 'NO' )	{
 			if ( ! $incompendium{$row->{genus_name}.$mybin{$row->{collection_no}}} )	{
 				$exclude++;
 			}
