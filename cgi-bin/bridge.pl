@@ -1693,13 +1693,18 @@ sub processNewRef {
 	else{
 		dbg("reentry FALSE, calling insertRecord()<br>");
 
-        $return = checkGupta();
+        $return = checkFraud();
         if (!$return) {
             $return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
             if ( ! $return ) { return $return; }
         } else {
-            print qq|<center><h3><font color='red'>WARNING: Data published by V. J. Gupta have been called into question by Talent et al. 1990, Webster et al. 1991, Webster et al. 1993, and Talent 1995. Please hit back, and copy the comment below to the reference title, and resubmit.  Do NOT enter any further data from the reference:<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|; 
-            print "</font></h3></center>\n";
+            if ($return eq 'Gupta') {
+                print qq|<center><h3><font color='red'>WARNING: Data published by V. J. Gupta have been called into question by Talent et al. 1990, Webster et al. 1991, Webster et al. 1993, and Talent 1995. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter
+any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|;
+                print "</font></h3></center>\n";
+            } else {
+                print qq|<center><h3><font color='red'>WARNING: Data published by M. M. Imam have been called into question by <a href='http://www.up.ac.za/organizations/societies/psana/Plagiarism_in_Palaeontology-A_New_Threat_Within_The_Scientific_Community.pdf'>J. Aguirre 2004</a>. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|;
+            }
             return 0;
         }
 	}
@@ -7756,7 +7761,7 @@ sub displayEnterAuthoritiesForm
 		# and get it's reference_no
 		if ( $q->param('submit') ne "Use reference")
 		{
-            $return = checkGupta();
+            $return = checkFraud();
             if (!$return) {
                 $return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
                 if ( ! $return ) { return $return; }
@@ -7767,8 +7772,13 @@ sub displayEnterAuthoritiesForm
                 }
                 print "added</font></h3></center>\n";
             } else {
-                print qq|<center><h3><font color='red'>WARNING: Data published by V. J. Gupta have been called into question by Talent et al. 1990, Webster et al. 1991, and Webster et al. 1993. Please add the following comment to the reference title and do NOT enter any further data from the reference:<br><br> "DATA NOT ENTERED: SEE [your name here] FOR DETAILS"|; 
-                print "</font></h3></center>\n";
+                if ($return eq 'Gupta') {
+                    print qq|<center><h3><font color='red'>WARNING: Data published by V. J. Gupta have been called into question by Talent et al. 1990, Webster et al. 1991, Webster et al. 1993, and Talent 1995. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|;
+                    print "</font></h3></center>\n";
+                } else {
+                    print qq|<center><h3><font color='red'>WARNING: Data published by M. M. Imam have been called into question by <a href='http://www.up.ac.za/organizations/societies/psana/Plagiarism_in_Palaeontology-A_New_Threat_Within_The_Scientific_Community.pdf'>J. Aguirre 2004</a>. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|; 
+                }
+                return 0;
             }
 		} else {
 			$reference_no = $q->param('reference_no');
@@ -7976,7 +7986,7 @@ sub displayTaxonGeneralForm
 		# and get it's reference_no
 		if ( $q->param('submit') ne "Use reference")
 		{
-            $return = checkGupta();
+            $return = checkFraud();
             if (!$return) {
                 $return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
                 if ( ! $return ) { return $return; }
@@ -7987,8 +7997,14 @@ sub displayTaxonGeneralForm
                 }
                 print "added</font></h3></center>\n";
             } else {
-                print qq|<center><h3><font color='red'>WARNING: Data published by V. J. Gupta have been called into question by Talent et al. 1990, Webster et al. 1991, and Webster et al. 1993. Please add the following comment to the reference title and do NOT enter any further data from the reference:<br><br> "DATA NOT ENTERED: SEE [your name here] FOR DETAILS"|; 
-                print "</font></h3></center>\n";
+                if ($return eq 'Gupta') {
+                    print qq|<center><h3><font color='red'>WARNING: Data published by V. J. Gupta have been called into question by Talent et al. 1990, Webster et al. 1991, Webster et al. 1993, and Talent 1995. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter
+any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|;
+                    print "</font></h3></center>\n";
+                } else {
+                    print qq|<center><h3><font color='red'>WARNING: Data published by M. M. Imam have been called into question by <a href='http://www.up.ac.za/organizations/societies/psana/Plagiarism_in_Palaeontology-A_New_Threat_Within_The_Scientific_Community.pdf'>J. Aguirre 2004</a>. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|;
+                }
+                return 0;
             }
 		} else {
 			$reference_no = $q->param('reference_no');
@@ -9013,29 +9029,42 @@ sub displayTaxonomicNamesAndOpinions {
     print stdIncludes("std_page_bottom");
 }
 
-# check for the presence of the nefarious V.J. Gupta
-sub checkGupta {
-    dbg("checkGupta called". $q->param('author1last'));
+# check for the presence of the nefarious V.J. Gupta or M.M. Imam
+sub checkFraud{
+    dbg("checkFraud called". $q->param('author1last'));
 
     if ($q->param('reftitle') =~ /DATA NOT ENTERED: SEE (.*) FOR DETAILS/) {
-        dbg("found gupta bypassed by finidng data not entered");
+        dbg("found gupta/imam bypassed by finidng data not entered");
         return 0;
     }
     
     if ($q->param('author1init') =~ /V/i &&
-        $q->param('author1last') =~ /Gupta/i)  {
+        $q->param('author1last') =~ /^Gupta/i)  {
         dbg("found gupta in author1");    
-        return 1;
-         
+        return 'Gupta';
+    }
+    if ($q->param('author1init') =~ /M/i &&
+        $q->param('author1last') =~ /^Imam/i)  {
+        dbg("found imam in author1");    
+        return 'Imam';
     }
     if ($q->param('otherauthors') =~ /V[J. ]+Gupta/i) {
         dbg("found gupta in other authors");    
-        return 1;
+        return 'Gupta';
+    }
+    if ($q->param('otherauthors') =~ /M[M. ]+Imam/i) {
+        dbg("found imam in other authors");    
+        return 'Imam';
     }
     if ($q->param('author2init') =~ /V/i &&
-        $q->param('author2last') =~ /Gupta/i)  {
+        $q->param('author2last') =~ /^Gupta/i)  {
         dbg("found gupta in author2");    
-        return 1;
+        return 'Gupta';
+    }
+    if ($q->param('author2init') =~ /M/i &&
+        $q->param('author2last') =~ /^Imam/i)  {
+        dbg("found imam in author2");    
+        return 'Imam';
     }
 
     return 0;
