@@ -97,10 +97,7 @@
 					continue;
 				}
 	
-				// Subgenus
-				if ( frm.subgenus_name[i].value != "" ) {
-					errors += checkName ( "Subgenus", frm.subgenus_name[i].value, frm.subgenus_reso[i], i );
-				}
+				// check subgenera
 	
 				// Species must be there
 				if ( frm.species_name[i].value == "" ) {
@@ -122,10 +119,7 @@
 			if ( frm.genus_name.value != "" ) {
 				errors += checkName ( "Genus", frm.genus_name.value, frm.genus_reso, 1 );
 
-				// Subgenus
-				if ( frm.subgenus_name.value != "" ) {
-					errors += checkName ( "Subgenus", frm.subgenus_name.value, frm.subgenus_reso, 1 );
-				}
+				// check subgenus
 	
 				// Species must be there
 				if ( frm.species_name.value == "" ) {
