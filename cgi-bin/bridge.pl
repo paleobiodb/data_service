@@ -4175,33 +4175,34 @@ sub displayEnterCollPage {
 	# Need to build the research_group checkboxes
 
 	# Tack a few extra fields
-	my @row;
-	unshift(@fieldNames,	'authorizer', 
-		'enterer', 
-		'reference_no',
-		'ref_string',
-		'country',
-		'eml_max_interval',
-		'max_interval',
-		'eml_min_interval',
-		'min_interval' );
-	unshift(@row,	$s->get('authorizer'), 
-		$s->get('enterer'), 
-		$reference_no,
-		$refRowString,
-		'',
-		'',
-		'',
-		'',
-		'' );
+	push @htmlValues, '' for @fieldNames;
+    @htmlFields = @fieldNames;
+    unshift(@htmlFields,    'authorizer',
+        'enterer',
+        'reference_no',
+        'ref_string',
+        'country',
+        'eml_max_interval',
+        'max_interval',
+        'eml_min_interval',
+        'min_interval' );
+    unshift(@htmlValues,   $s->get('authorizer'),
+        $s->get('enterer'),
+        $reference_no,
+        $refRowString,
+        '',
+        '',
+        '',
+        '',
+        '' );
 
 	%pref = getPreferences($s->get('enterer'));
 	# Get the enterer's preferences JA 25.6.02
 	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = getPrefFields();
 	for $p (@{$setFieldNames})	{
 		if ($pref{$p} ne "")	{
-			unshift @row,$pref{$p};
-			unshift @fieldNames,$p;
+			unshift @htmlValues,$pref{$p};
+			unshift @htmlFields,$p;
 		}
 	}
 
@@ -4211,8 +4212,8 @@ sub displayEnterCollPage {
 			"lngdeg","lngmin","lngsec","lngdec","lngdir");
 	for my $cf (@coordfields)	{
 		if ( $q->param($cf) )	{
-			unshift @row,$q->param($cf);
-			unshift @fieldNames,$cf;
+			unshift @htmlValues,$q->param($cf);
+			unshift @htmlFields,$cf;
 		}
 	}
 
@@ -4220,101 +4221,109 @@ sub displayEnterCollPage {
 
 	print printIntervalsJava();
 
-	# Output the main part of the page
-	my @prefkeys = keys %pref;
-	print $hbo->populateHTML('enter_coll_form', \@row, \@fieldNames, \@prefkeys);
+    push(@htmlValues, '<input type="hidden" name="action" value="processEnterCollectionForm">');
+    push(@htmlFields, 'page_target');
 
-	print stdIncludes("std_page_bottom");
-}
+    push(@htmlValues, "Collection entry form");
+    push(@htmlFields, 'page_title');
 
-sub printIntervalsJava	{
+    push(@htmlValues, '<input type=submit name="enter_button" value="Enter collection and exit">');
+    push(@htmlFields, 'page_submit_button');
 
-	# print Javascript to limit entry of time interval names
-	# WARNING: if "Early/Late Interval" is submitted but only "Interval"
-	#  is present in the intervals table, the submission will be rejected
-	print "<script language=\"JavaScript\">\n";
-	print "<!-- Begin\n\n";
-	print "function checkFields() {\n";
-	print "  var noname = \"\";\n";
-	print "  var badname = \"\";\n";
-	print "  var badname2 = \"\";\n";
-	print "  var alertmessage = \"\";\n";
-	print "  var frm = document.forms[0];\n";
-	print "  var index = frm.eml_max_interval.selectedIndex;\n";
-	print "  var eml1 = frm.eml_max_interval.options[index].value;\n";
-	print "  var time1 = frm.max_interval.value;\n";
-	print "  index = frm.eml_min_interval.selectedIndex;\n";
-	print "  var eml2 = frm.eml_min_interval.options[index].value;\n";
-	print "  var time2 = frm.min_interval.value;\n";
-	print "  var emltime1 = eml1 + time1;\n";
-	print "  var emltime2 = eml2 + time2;\n";
+    push(@htmlValues, stdIncludes("std_page_bottom"));
+    push(@htmlFields, 'page_footer');
 
-	$sql = "SELECT eml_interval,interval_name FROM intervals";
-	my @names = @{$dbt->getData($sql)};
-
-	print "  if ( time1 == \"\" )   {\n";
-	print "    noname =\"WARNING!\\n\" +\n";
-	print "    \"The maximum interval field is required.\\n\" +\n";
-	print "    \"Please fill it in and submit the form again.\\n\" +\n";
-	print "    \"Hint: epoch names are better than nothing.\\n\";\n";
-	print "    alert(noname);\n";
-	print "    return false;\n";
-	print "  }\n";
-
-	print "  if (";
-	for my $nm ( @names )	{
-		# this is kind of ugly: we're just not going to let users
-		#  enter a time term that has double quotes because that
-		#  would break the JavaScript
-		if ( $nm->{interval_name} !~ /"/ )	{
-			print " emltime1 != \"" , $nm->{eml_interval} . $nm->{interval_name} , "\" ";
-			if ( $nm != $names[$#names] )	{
-				print "&&\n";
-			}
-		}
-	}
-	print ") {\n";
-	print "    badname += \"YES\";\n";
-	print "  }\n";
-	print "  if (";
-	for my $nm ( @names )	{
-		if ( $nm->{interval_name} !~ /"/ )	{
-			print " emltime2 != \"" , $nm->{eml_interval} . $nm->{interval_name} , "\" ";
-			if ( $nm != $names[$#names] )	{
-				print "&&\n";
-			}
-		}
-	}
-	print " && time2 != \"\" ) {\n";
-	print "    badname2 += \"YES\";\n";
-	print "  }\n";
-
-	print "  if ( badname != \"\" || badname2 != \"\" ) {\n";
-	print "    alertmessage = \"WARNING!\\n\"; }\n";
-
-	print "  if ( badname != \"\" && badname2 != \"\" ) {\n";
-        print "    alertmessage += eml1 + \" \" + time1 + ";
-	print " \" and \" + eml2 + \" \" + time2 +";
-	print " \" aren't official time terms.\\n\"; }\n";
-
-	print "  else if ( badname != \"\" ) {\n";
-	print "    alertmessage += eml1 + \" \" + time1; }\n";
-	print "  else if ( badname2 != \"\" ) {\n";
-	print "    alertmessage += eml2 + \" \" + time2; }\n";
-	print "  if ( badname != \"\" && badname2 != \"\" ) {\n";
-	print "    alertmessage += \"Please correct them and submit the form again.\\n\"; }\n";
-	print "  else if ( badname != \"\" || badname2 != \"\" ) {\n";
-	print "    alertmessage += \" isn't an official time term.\\n\" +\n";
-	print "    \"Please correct it and submit the form again.\\n\"; }\n";
-	print "  if ( alertmessage != \"\" ) {\n";
-	print "    alertmessage += \"Hint: try epoch names instead.\";\n";
-	print "    alert(alertmessage);\n";
-	print "    return false;\n";
-	print "  }\n";
-
-	return;
+    # Output the main part of the page
+    my @prefkeys = keys %pref;
+    print $hbo->populateHTML("collection_form", \@htmlValues, \@htmlFields, \@prefkeys);
 
 }
+
+# print Javascript to limit entry of time interval names
+# WARNING: if "Early/Late Interval" is submitted but only "Interval"
+#  is present in the intervals table, the submission will be rejected
+sub printIntervalsJava  {
+                                                                                                                                                             
+print <<EOF;
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+function checkIntervalNames() {
+    var frm = document.forms[0];
+    var badname1 = "";
+    var badname2 = "";
+    var alertmessage = "";
+    var eml1 = frm.eml_max_interval.options[frm.eml_max_interval.selectedIndex].value;
+    var time1 = frm.max_interval.value;
+    var eml2 = frm.eml_min_interval.options[frm.eml_min_interval.selectedIndex].value;
+    var time2 = frm.min_interval.value;
+    var emltime1 = eml1 + time1;
+    var emltime2 = eml2 + time2;
+                                                                                                                                                             
+    if ( time1 == "" )   {
+        var noname ="WARNING!\\n" +
+                    "The maximum interval field is required.\\n" +
+                    "Please fill it in and submit the form again.\\n" +
+                    "Hint: epoch names are better than nothing.\\n";
+        alert(noname);
+        return false;
+    }
+EOF
+    my $sql = "SELECT eml_interval,interval_name FROM intervals";
+    my @results = @{$dbt->getData($sql)};
+                                                                                                                                                             
+    for $i (1..2) {
+        my $check = "    if(";
+        for my $row ( @results) {
+            # this is kind of ugly: we're just not going to let users
+            #  enter a time term that has double quotes because that
+            #  would break the JavaScript
+            if ( $row->{'interval_name'} !~ /"/ )   {
+                $check .= qq| emltime$i != "| . $row->{'eml_interval'} . $row->{'interval_name'} . qq|" &&\n|;
+            }
+        }
+        if ($i == 1) {
+            chop($check); chop($check); chop($check);#remove trailing &&\n
+        } else {
+            $check .= qq|time$i != ""|;
+        }
+        $check .= ") {\n";
+        $check .= "        badname$i += \"YES\";\n";
+        $check .= "    }\n";
+        print $check;
+    }
+print <<EOF;
+                                                                                                                                                             
+    if ( badname1 != "" || badname2 != "" ) {
+        alertmessage = "WARNING!\\n";
+    }
+                                                                                                                                                             
+    if ( badname1 != "" && badname2 != "" ) {
+        alertmessage += eml1 + " " + time1 +
+                        " and " + eml2 + " " + time2 +
+                        " aren't official time terms.\\n";
+        alertmessage += "Please correct them and submit the form again.\\n";
+    } else if ( badname1 != "" ) {
+        alertmessage += eml1 + " " + time1;
+        alertmessage += " isn't an official time term.\\n" +
+                        "Please correct it and submit the form again.\\n";
+    } else if ( badname2 != "" ) {
+        alertmessage += eml2 + " " + time2;
+        alertmessage += " isn't an official time term.\\n" +
+                        "Please correct it and submit the form again.\\n";
+    }
+    if ( alertmessage != "" ) {
+        alertmessage += "Hint: try epoch names instead.";
+        alert(alertmessage);
+        return false;
+    }
+    return true;
+}
+// END -->
+</script>
+EOF
+    return;
+}
+
 
 # Set the release date
 # originally written by Ederer; made a separate function by JA 26.6.02
@@ -4848,11 +4857,21 @@ sub displayEditCollection {
 
 	print printIntervalsJava();
 
-	%pref = getPreferences($s->get('enterer'));
-	my @prefkeys = keys %pref;
-	print $hbo->populateHTML('edit_coll_form', \@row, \@fieldNames, \@prefkeys);
-    
-	print stdIncludes("std_page_bottom");
+    push(@row, '<input type="hidden" name="action" value="processEditCollectionForm">');
+    push(@fieldNames, 'page_target');
+                                                                                                                                                             
+    push(@row, "Collection no ".$collection_no);
+    push(@fieldNames, 'page_title');
+                                                                                                                                                             
+    push(@row, '<input type=submit name="update_button" value="Update collection and exit">');
+    push(@fieldNames, 'page_submit_button');
+                                                                                                                                                             
+    push(@row, stdIncludes("std_page_bottom"));
+    push(@fieldNames, 'page_footer');
+                                                                                                                                                             
+    # Output the main part of the page
+    my @prefkeys = keys %pref;
+    print $hbo->populateHTML("collection_form", \@row, \@fieldNames, \@prefkeys);
 }
 
 
