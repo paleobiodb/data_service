@@ -27,9 +27,7 @@ my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no occurre
 my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
 my @mesoCenozoic = qw(triassic jurassic cretaceous tertiary);
 
-my %ecotaph1 = ();
-my %ecotaph2 = ();
-my %ecotaph3 = ();
+my %ecotaph = ();
 
 my $csv;
 my $OUT_HTTP_DIR = "/paleodb/data";
@@ -615,28 +613,63 @@ sub getEcology	{
 	my $self = shift;
 
 	my $sql = "SELECT ecotaph.taxon_no,taxon_name," . $q->param('ecology1');
+	$etfields = 1;
 	if ( $q->param('ecology2') )	{
 		$sql .= "," . $q->param('ecology2');
+		$etfields = 2;
 	}
 	if ( $q->param('ecology3') )	{
 		$sql .= "," . $q->param('ecology3');
+		$etfields = 3;
+	}
+	if ( $q->param('ecology4') )	{
+		$sql .= "," . $q->param('ecology3');
+		$etfields = 4;
+	}
+	if ( $q->param('ecology5') )	{
+		$sql .= "," . $q->param('ecology3');
+		$etfields = 5;
 	}
 	$sql .= " FROM ecotaph LEFT JOIN authorities ON ecotaph.taxon_no = authorities.taxon_no";
 	my @ecos = @{$dbt->getData($sql)};
 	my $i;
-	for $i (0..5) { print "$ecos[$i]->{taxon_name}<br>\n"; }
 
 	for $i (0..$#ecos)	{
-		$ecotaph1{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology1')};
+		$ecotaph[1]{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology1')};
 	}
 	if ( $q->param('ecology2') )	{
 		for $i (0..$#ecos)	{
-			$ecotaph2{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology2')};
+			$ecotaph[2]{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology2')};
 		}
 	}
 	if ( $q->param('ecology3') )	{
 		for $i (0..$#ecos)	{
-			$ecotaph3{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology3')};
+			$ecotaph[3]{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology3')};
+		}
+	}
+	if ( $q->param('ecology4') )	{
+		for $i (0..$#ecos)	{
+			$ecotaph[4]{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology4')};
+		}
+	}
+	if ( $q->param('ecology5') )	{
+		for $i (0..$#ecos)	{
+			$ecotaph[5]{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology5')};
+		}
+	}
+}
+
+# JA 28.2.04
+sub getAncestralEcology	{
+
+	my $etfield = shift;
+	my $genus = shift;
+
+	my @parents = split ',',$ancestor_hash{$genus};
+	for $p ( @parents )	{
+		if ( $ecotaph[$etfield]{$p} && ! $ecotaph[$etfield]{$genus} )	{
+			$ecotaph[$etfield]{$genus} = $ecotaph[$etfield]{$p};
+			last;
 		}
 	}
 }
@@ -835,6 +868,12 @@ sub doQuery {
 	if ( $q->param('ecology3') )	{
 		$header .= $sepChar.$q->param('ecology3');
 	}
+	if ( $q->param('ecology4') )	{
+		$header .= $sepChar.$q->param('ecology4');
+	}
+	if ( $q->param('ecology5') )	{
+		$header .= $sepChar.$q->param('ecology5');
+	}
 
 	# Collection header
 	@collectionHeaderCols = $self->getOutFields('collections');	# Need this (for later...)
@@ -874,6 +913,24 @@ sub doQuery {
 		if ( ( $row->{abund_unit} eq "specimens" || $row->{abund_unit} eq "individuals" ) && ( $row->{abund_value} > 0 ) )	{
 			$nisp{$row->{collection_no}} = $nisp{$row->{collection_no}} + $row->{abund_value};
 			$numberofcounts{$row->{genus_name}}++;
+		}
+	}
+
+	# get the higher order names associated with each genus name,
+	#   then set the ecotaph values by running up the hierarchy
+	# JA 28.2.04
+	# only do this is ecotaph data were requested
+	# WARNING: only the common ranks are retrieved
+	if ( $q->param('ecology1') )	{
+
+		# finally, get the higher order names
+		my @genera = keys %totaloccs;
+		my $levels = "family,order,class,phylum";
+		%ancestor_hash=%{Classification::get_classification_hash($dbt,$levels,\@genera)};
+		for $etfield ( 1..$etfields )	{
+			for my $g ( @genera )	{
+				&getAncestralEcology($etfield,$g);
+			}
 		}
 	}
 
@@ -968,13 +1025,19 @@ sub doQuery {
 		# WARNING: this only works on genus or higher-order data,
 		#  assuming species won't be scored separately
 		if ( $q->param('ecology1') )	{
-			push @reid_row , $ecotaph1{$genusName};
+			push @reid_row , $ecotaph[1]{$genusName};
 		}
 		if ( $q->param('ecology2') )	{
-			push @reid_row , $ecotaph2{$genusName};
+			push @reid_row , $ecotaph[2]{$genusName};
 		}
 		if ( $q->param('ecology3') )	{
-			push @reid_row , $ecotaph3{$genusName};
+			push @reid_row , $ecotaph[3]{$genusName};
+		}
+		if ( $q->param('ecology4') )	{
+			push @reid_row , $ecotaph[4]{$genusName};
+		}
+		if ( $q->param('ecology5') )	{
+			push @reid_row , $ecotaph[5]{$genusName};
 		}
 
 		if( $q->param('collections_only') ){
