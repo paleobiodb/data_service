@@ -5794,12 +5794,14 @@ sub processTaxonomySearch	{
 		# get the name of the original combination
 		$taxonName = $taxonObject->taxonName();
 	
-		$html .= "<tr><td><input type=radio name=taxon_no value=\"$originalCombination\" ";
 		
 		# Check the button if this is the first match, which forces
 		#  users who want to create new taxa to check another button
 		if ( $matches == 1 )	{
+			$html .= "<tr><td align=\"center\"><table><tr><td align=\"right\"><input type=radio name=taxon_no value=\"$originalCombination\" ";
 			$html .= " checked";
+		} else	{
+			$html .= "<tr><td align=\"right\"><input type=radio name=taxon_no value=\"$originalCombination\" ";
 		}
 		
 		$html .= "> </td><td>";
@@ -5859,11 +5861,14 @@ sub processTaxonomySearch	{
 		
 	# rjp, 3/12/2004, note, we're not doing this yet because
 	# it would skip the display of homonyms:
-	#} elsif (($matches == 1) && ($goal eq 'opinion')) {
-		# for opinions, since we don't display the radio button with the add
-		# a new taxon option, we should take them directly to the opinion list
-		# if we only have one match.
-	#	displayOpinionList();
+	# JA 19.4.04: I can't figure out Poling's reasoning, because $matches
+	#  must be > 1 if in fact there are homonyms, so I am uncommenting
+	#  the code
+	} elsif (($matches == 1) && ($goal eq 'opinion')) {
+	# for opinions, since we don't display the radio button with the add
+	# a new taxon option, we should take them directly to the opinion list
+	# if we only have one match.
+		displayOpinionList();
 		
 	} else	{
 		# Otherwise, print a form so the user can pick the taxon
@@ -5890,7 +5895,7 @@ sub processTaxonomySearch	{
 		# edit an authority record.  It will screw things up if they try this with
 		# an opinion record.
 		if ($goal ne 'opinion') {
-			print "<tr><td><input type=\"radio\" name=\"taxon_no\" value=\"-1\"> </td> <td>";
+			print "<tr><td align=\"right\"><input type=\"radio\" name=\"taxon_no\" value=\"-1\"></td>\n<td>";
 			
 			if ( $matches == 1 )	{
 				print "No, not the one above ";
@@ -5898,12 +5903,25 @@ sub processTaxonomySearch	{
 				print "None of the above ";
 			}
 		
-			print "- create a <b>new</b> taxon record</i></td> </tr>\n";
+			print "- create a <b>new</b> taxon record</i></td></tr>\n";
 		}
+		print "</table></td> </tr>\n";
 		
+		print "<tr><td align=\"center\" colspan=2>\n";
+		print "<p><input type=submit value=\"Submit\"></p>\n</form>\n";
+
+		if ($goal ne 'opinion') {
+			print "<p align=\"left\"><span class=\"tiny\">You have a choice because there may be multiple biological species (e.g., a plant and an animal) with identical names.<br>\n";
+			print "Create a new taxon only if the old ones were named by different people in different papers.<br>\n";
+		} else	{
+			print "<p align=\"left\"><span class=\"tiny\">You have a choice because there are multiple biological species (e.g., a plant and an animal) with identical names.<br>\n";
+		}
+
+		print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n";
+
+		print "</td></tr>\n";
 		print "</table><p>\n";
 		
-		print "<input type=submit value=\"Submit\">\n</form>\n";
 		print "</center>\n";
 		print stdIncludes("std_page_bottom");
 	}
