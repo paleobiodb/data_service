@@ -39,9 +39,27 @@ sub processLogin {
 
 	# We want them to specify both an authorizer and an enterer
 	# otherwise kick them out to the public site.
-	if(!($q->param("authorizer") && $q->param("enterer"))){
+	if (!($q->param("authorizer") && $q->param("enterer"))){
 		return "";
 	}
+	
+	# need to reverse the login name.
+	# added by rjp, 2/17/2004 to work correctly with the new login page.
+	my $auth = $q->param('authorizer');
+	my $ent = $q->param('enterer');
+	
+	# basically takes the part after the comma and puts it in the front..
+	# so "Sepkoski, J." becomes "J. Sepkoski"
+	if ($auth =~ /,/) {
+		$auth =~ s/^\s*(.*)\s*,\s*(.*)\s*$/\2 \1/;
+		$q->param(authorizer => $auth);
+	}
+	
+	if ($ent =~ /,/) {
+		$ent =~ s/^\s*(.*)\s*,\s*(.*)\s*$/\2 \1/;
+		$q->param(enterer => $ent);
+	}
+	
 
 	# Get info from database on this person.
 	$sql =	"SELECT * ".
