@@ -79,7 +79,7 @@ sub getSecondaryRefsString{
     my $sql = "SELECT refs.reference_no, refs.author1init, refs.author1last, ".
 			  "refs.author2init, refs.author2last, refs.otherauthors, ".
               "refs.pubyr, refs.reftitle, refs.pubtitle, refs.pubvol, ".
-			  "refs.pubno, refs.firstpage, refs.lastpage ".
+			  "refs.pubno, refs.firstpage, refs.lastpage, refs.project_name ".
               "FROM refs, secondary_refs ".
               "WHERE refs.reference_no = secondary_refs.reference_no ".
               "AND secondary_refs.collection_no = $collection_no ".
@@ -121,10 +121,17 @@ sub getSecondaryRefsString{
 		my $an = AuthorNames->new(\%temp);
 
 		$result_string .= "<td valign=top width=\"5%\"><small>".
-						  "<b>$ref->{reference_no}</b></small></td>".
-						  "<td rowspan=2 valign=top width=\"95%\">".
-						  "<small>&nbsp;".$an->toString().
+						  "<b>$ref->{reference_no}</b></small></td>";
+
+		if($ref->{project_name}){
+			$result_string .= "<td width=\"1%\" valign=top><font color=\"red\"".
+							  ">&nbsp;$ref->{project_name}&nbsp;</font></td>";
+		}
+
+		$result_string .= "<td rowspan=2 valign=top width=\"95%\">".
+						  "<small>".$an->toString().
 						  ".&nbsp;$ref->{pubyr}.&nbsp;";
+
 		if($ref->{reftitle}){
 			$result_string .= "$ref->{reftitle}.";
 		}
