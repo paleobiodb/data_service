@@ -457,7 +457,7 @@ sub new_search_recurse{
     @results = @{$dbt->getData($sql)};
 
     if(scalar @results > 0){
-        my $seed_pubyr = get_real_pubyr($results[0],"apubyr","areference_no",$dbt);
+        my $seed_pubyr = get_real_pubyr($dbt,$results[0],"apubyr","areference_no");
         if($seed_pubyr == -1){
             # ERROR
             return $validated_list;
@@ -468,7 +468,7 @@ sub new_search_recurse{
         foreach my $child (@results){
             #print "\tchild_no: ".$child->{child_no};
             # get pubyr
-            $child->{pubyr} = get_real_pubyr($child,"opubyr","oreference_no",$dbt);
+            $child->{pubyr} = get_real_pubyr($dbt,$child,"opubyr","oreference_no");
             my @other_results = ();
             $sql = "SELECT opinions.parent_no, authorities.pubyr, ".
                    "authorities.reference_no from opinions, authorities ".
@@ -481,7 +481,7 @@ sub new_search_recurse{
             foreach my $parent (@other_results){
                 #print "\tchild's parent: ".$parent->{parent_no};
                 # Get the pubyr for each parent from the authorities table
-                $parent->{pubyr} = get_real_pubyr($parent, $dbt);
+                $parent->{pubyr} = get_real_pubyr($dbt,$parent);
                 if($parent->{pubyr} > $most_recent){
                     $most_recent = $parent->{pubyr};
                 }
@@ -490,7 +490,7 @@ sub new_search_recurse{
             # not children with parents younger than the seed parent.
             unless($most_recent > $seed_pubyr){
                 # Recursion: call self on all validated children
-                #print "\nRECURSING WITH ".$name_results[0]->{taxon_name}." SEED: $seed_no\n";
+                #print "\nRECURSING WITH ".$child->{child_no}." SEED: $seed_no\n";
                 my $more .= new_search_recurse($child->{child_no},$dbt);
                 $validated_list .= ",$more";
             }
@@ -513,17 +513,17 @@ sub new_search_recurse{
 #
 ##
 sub get_real_pubyr{
+	my $dbt = shift;
     my $hash_rec = shift;
     my $year_string = (shift or "pubyr");
     my $ref_string = (shift or "reference_no");
-	my $dbt = shift;
 
 	# if it's got a pubyr, cool
-    if($hash_rec->{pubyr}){
-        return int($hash_rec->{pubyr});
+    if($hash_rec->{$year_string}){
+        return int($hash_rec->{$year_string});
     }
 	# if there's no reference number, we're dead in the water.
-    elsif(!$hash_rec->{reference_no}){
+    elsif(!$hash_rec->{$ref_string}){
         return -1;
     }
     # check the global cache
@@ -533,9 +533,10 @@ sub get_real_pubyr{
 	# hit the db
     else{
         my $sql = "SELECT pubyr FROM refs WHERE reference_no=".
-                  $hash_rec->{reference_no};
+                  $hash_rec->{$ref_string};
         my @results = @{$dbt->getData($sql)};
         if($results[0]->{pubyr}){
+			$ref_pubyr{$hash_rec->{$ref_string}} = $results[0]->{pubyr};
             return int($results[0]->{pubyr});
         }
     }
@@ -554,25 +555,25 @@ sub taxonomic_search{
     my @results = @{$dbt->getData($sql)};
 
 	# We might not get a number or rank if this name isn't in authorities yet.
-	if(!$results[0]->{taxon_no}){
+	if(!$results[0]){
 		return "'$name'";
 	}
 
 	my $results = new_search_recurse($results[0]->{taxon_no}, $dbt);
-	my @names_list = split(/,/, $results);
+	my @nums_list = split(/,/, $results);
 	
 	my @clean = ();
-	@names_list = @{simple_array_push_unique(\@clean, \@names_list)};
-	$results = join(",",@names_list);
+	@nums_list = @{simple_array_push_unique(\@clean, \@nums_list)};
+	$results = join(",",@nums_list);
 	
     $sql = "SELECT taxon_name FROM authorities WHERE taxon_no IN ($results)";
     @results = @{$dbt->getData($sql)};
 
-	foreach my $item (@names_list){
+	foreach my $item (@results){
         $item = "'".$item->{taxon_name}."'";
 	}
 
-	$results = join(",",@names_list);
+	$results = join(",",@results);
 	
 	return $results;
 }
