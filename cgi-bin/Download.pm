@@ -1292,7 +1292,7 @@ sub doQuery {
 		# get rid of occurrences of genera either (1) not in the
 		#  Compendium or (2) falling outside the official Compendium
 		#  age range JA 27.8.04
-		if ( $q->param('compendium_ranges') ne 'NO' )	{
+		if ( $q->param('compendium_ranges') eq 'NO' )	{
 			if ( ! $incompendium{$row->{genus_name}.$mybin{$row->{collection_no}}} )	{
 				$exclude++;
 			}
