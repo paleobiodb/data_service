@@ -1476,7 +1476,8 @@ sub submitAuthorityForm {
 	
 	
 	{ # so we have our own scope for these variables.
-		my $rankFromSpaces = Validation::taxonRank($q->param('taxon_name_corrected'));
+		my $taxon_name_corrected = $q->param('taxon_name_corrected');
+		my $rankFromSpaces = Validation::taxonRank($taxon_name_corrected);
 		my $trank = $q->param('taxon_rank');
 		my $er = 0;
 		
@@ -1485,13 +1486,18 @@ sub submitAuthorityForm {
 			$errors->add("The taxon's name is invalid; please check spacing and capitalization");	
 		}
 		
+		if (Validation::looksLikeBadSubgenus($taxon_name_corrected)) {
+			$errors->add("If you are attempting to enter a subgenus, 
+			only enter the subgenus name and don't use parentheses");
+		}
+		
 		if ( (($rankFromSpaces eq SUBSPECIES) && ($trank ne SUBSPECIES)) ||
 			(($rankFromSpaces eq SPECIES) && ($trank ne SPECIES)) ||
 			(($rankFromSpaces eq 'higher') && 
 			(  ($trank eq SUBSPECIES) || ($trank eq SPECIES) )
 			) ) {
 
-			$errors->add("The original rank '" . $trank . "' doesn't match the spacing of the taxon name '" . $q->param('taxon_name_corrected') . "'");
+			$errors->add("The original rank '" . $trank . "' doesn't match the spacing of the taxon name '" . $taxon_name_corrected . "'");
 			
 			
 		}
@@ -1558,6 +1564,10 @@ sub submitAuthorityForm {
 		if ($ttRankFromSpaces eq 'invalid') {
 			$errors->add("The type taxon's name is invalid; please check spacing and capitalization");	
 		}
+		
+		if (Validation::looksLikeBadSubgenus($fieldsToEnter{type_taxon_name})) {
+			$errors->add("Invalid type taxon format; don't use parentheses");
+		}
 
 		
 		my $junk;
@@ -1568,7 +1578,9 @@ sub submitAuthorityForm {
 			# if it doesn't exist, tell them to go enter it first.
 			$errors->add("The type taxon '" . $q->param('type_taxon_name') . "' doesn't exist in our database.  If you made a typo, correct it and try again.  Otherwise, please submit this form without the type taxon and then go back and add it later (after you have added an authority record for the type taxon).");
 		} else {
+			# the type taxon exists in the database, so do some checks on it.
 			
+
 			# check to make sure the rank of the type taxon makes sense.
 			my $ttaxon = Taxon->new($self->{GLOBALVARS});
 			$ttaxon->setWithTaxonNumber($number);
@@ -1585,7 +1597,28 @@ sub submitAuthorityForm {
 					$errors->add("The type taxon's rank doesn't make sense");	
 				}
 			}
+
+
+			# make sure the publicaion date of the type taxon in the authorities
+			# table is <= the publication date of the current authority record
+			# which is either in the pubyr field or the reference.
+			my $pubyrToCheck;
 			
+			if ($q->param('ref_is_authority') eq 'YES') {
+				my $ref = Reference->new();
+				$ref->setWithReferenceNumber($q->param('reference_no'));
+				
+				$pubyrToCheck = $ref->pubyr();
+			} else {
+				$pubyrToCheck = $q->param('pubyr');
+			}
+			
+			if ($ttaxon->pubyr() > $pubyrToCheck ) {
+				$errors->add("The type taxon couldn't have been published after 
+				the current taxon");
+			}
+			
+					
 			$fieldsToEnter{type_taxon_no} = $number;
 			$fieldsToEnter{type_taxon_name} = '';
 		}
