@@ -1746,7 +1746,7 @@ sub drawBackground	{
 		$edgecolor = $col{'offwhite'};
 	}
 	if ( $q->param('projection') eq "rectilinear" )	{
-		$im->fill(100,100,$col{$q->param('mapbgcolor')});
+          	$im->filledRectangle(0,0,$width,$height,$col{$q->param('mapbgcolor')});
   		print AI "0 O\n";
             	printf AI "%s\n",$mycolor;
 		printf AI "%.1f %.1f m\n",$AILEFT,$AITOP;
