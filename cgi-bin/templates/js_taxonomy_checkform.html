@@ -1,6 +1,8 @@
 <!-- Start of js_taxonomy_checkform.html -->
 
-<!-- Note, makes use of a couple of functions from the common.js file.-->
+<!--	Note, makes use of a couple of functions from the common.js file.
+		Mostly rewritten by rjp, 2/2004  -->
+
 
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
@@ -22,7 +24,6 @@ function checkForm() {
 		errors.add("The taxon's rank in the top field can't be changed.");
 	}
 		
-
 
 	// First, make sure that they either selected the 
 	// "it was first named in" check box,
@@ -257,7 +258,9 @@ function opinionRefsAreBlank() {
 		(frm.opinion_author2init.value == "") &&
 		(frm.opinion_author2last.value == "") &&
 		(frm.opinion_pubyr.value == "") &&
-		(frm.opinion_otherauthors.value == ""));				
+		(frm.opinion_otherauthors.value == "") &&
+		(frm.elements['opinion_2nd_pages'].value == "") &&
+		(frm.elements['opinion_2nd_figures'].value == ""));				
 }
 
 
@@ -270,23 +273,9 @@ function authorityRefsAreBlank() {
 		(frm.author2init.value == "") &&
 		(frm.author2last.value == "") &&
 		(frm.pubyr.value == "") &&
-		(frm.otherauthors.value == ""));				
-}
-
-
-
-function authorityRefFieldsFilled() {
-	var frm = document.forms[0];
-	
-	var value = (	(frm.author1init.value != "") &&
-					(frm.author1last.value != "") &&
-					(frm.author2init.value != "") &&
-					(frm.author2last.value != "") &&
-					(frm.pubyr.value != "") &&
-					(frm.elements['2nd_pages'].value != "") &&
-					(frm.elements['2nd_figures'].value != ""));
-	
-	return value;		
+		(frm.otherauthors.value == "") &&
+		(frm.elements['2nd_pages'].value == "") &&
+		(frm.elements['2nd_figures'].value == ""));				
 }
 
 
