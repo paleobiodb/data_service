@@ -11,9 +11,9 @@
 
 use DBI;
 
-require "connection.pl";
+require "/pbdb/cgi/connection.pl";
 
-$IMGDIR="../html/public/images";
+$IMGDIR="/pbdb/html/public/images";
 
 my $DEBUG = 0;
 my $sql;
