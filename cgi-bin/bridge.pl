@@ -826,13 +826,12 @@ sub startDisplayOpinionChoiceForm{
 # It grabs the taxon_no and opinion_no from the CGI object ($q).
 sub displayOpinionForm {
 	if (! $q->param('opinion_no')) {
-		Debug::logError("bridge::displayOpinionForm failed because opinion_no doesn't exist.");
 		return;	
 	}
 
 	my $opinion = Opinion->new(\%GLOBALVARS);
 	
-	if ($q->param('opinion_no') ne "-1") {
+	if ($q->param('opinion_no') > 0) {
 		$opinion->setWithOpinionNumber($q->param('opinion_no'));
 	} elsif (! $q->param('skip_ref_check')) {
 		# opinion_no == -1, so that means they're adding a new opinion,
@@ -841,32 +840,14 @@ sub displayOpinionForm {
 		# Set the skip_ref_check in the queued action so we don't go into an infinite 
 		# loop of asking for references.
 		
-		my $toQueue = 'action=displayOpinionForm&skip_ref_check=1&opinion_no=-1&taxon_no=' .
-		$q->param('taxon_no');
+		my $toQueue = 'action=displayOpinionForm&skip_ref_check=1&opinion_no=-1&child_no='.$q->param('child_no');
 		$s->enqueue( $dbh, $toQueue );
 	
 		$q->param( "type" => "select" );
 		displaySearchRefs("You must choose a reference before adding a new opinion");
 		return;
-		
 	}
-
 	
-	if (! $q->param('taxon_no')) {
-		# if we don't have a taxon_no for this opinion,
-		# then we'll see if we can grab it from the opinion record.
-		
-		my $taxonNum = $opinion->childNumber();
-	
-		if ($taxonNum) {
-			$q->param(-name=>'taxon_no', -values=>[$taxonNum]);
-		} else {
-			# if it doesn't exist, then it's an error..
-			print "Could not find the opinion ".$q->param('opinion_no')." in the database";
-			croak "Could not find the opinion ".$q->param('opinion_no')." in the database";
-		}
-	}
-
 	$opinion->displayOpinionForm($hbo, $s, $q);
 
 }
@@ -875,18 +856,10 @@ sub displayOpinionForm {
 sub submitOpinionForm {
 	my $opinion = Opinion->new(\%GLOBALVARS);
 	
-	if (! $q->param('taxon_no')) {
-        print "Error: no taxon no found";
-		return;	
-	}
-	
-	if ($q->param('opinion_no')) {
+	if ($q->param('opinion_no') > 0) {
 		$opinion->setWithOpinionNumber($q->param('opinion_no'));
-	} else {
-		# don't do anything because we don't know what the opinion no is...
-		# ie, just use a dummy opinion object.
-	}
-	
+	} 
+
 	$opinion->submitOpinionForm($hbo, $s, $q);
 }
 
@@ -7900,62 +7873,6 @@ sub formatShortRef	{
 
 }
 
-# DEPRECATED FUNCTION
-sub displayEnterAuthoritiesForm
-{
-	# Have to be logged in
-	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
-		$s->enqueue( $dbh, "action=displayEnterAuthoritiesForm" );
-		displayLoginPage( "Please log in first." );
-		exit;
-	}
-		my $reference_no;
-	  
-		# If the nice user created a new reference, commit it
-		# and get it's reference_no
-		if ( $q->param('submit') ne "Use reference")
-		{
-            $return = checkFraud();
-            if (!$return) {
-                $return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
-                if ( ! $return ) { return $return; }
-
-                print "<center><h3><font color='red'>Reference record ";
-                if ( $return == $DUPLICATE ) {
-                    print "already ";
-                }
-                print "added</font></h3></center>\n";
-            } else {
-                if ($return eq 'Gupta') {
-                    print qq|<center><h3><font color='red'>WARNING: Data published by V. J. Gupta have been called into question by Talent et al. 1990, Webster et al. 1991, Webster et al. 1993, and Talent 1995. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|;
-                    print "</font></h3></center>\n";
-                } else {
-                    print qq|<center><h3><font color='red'>WARNING: Data published by M. M. Imam have been called into question by <a href='http://www.up.ac.za/organizations/societies/psana/Plagiarism_in_Palaeontology-A_New_Threat_Within_The_Scientific_Community.pdf'>J. Aguirre 2004</a>. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|; 
-                }
-                return 0;
-            }
-		} else {
-			$reference_no = $q->param('reference_no');
-		}
-		$s->setReferenceNo( $dbh, $reference_no );
-
-		print stdIncludes( "std_page_top" );
- 
-		print '<table>';
-		print qq|<form method=POST action="$exec_url">\n|;
-		print qq|<input type=hidden name=action value=processNewAuthorities>\n|;
-		print qq|<input type=hidden name=reference_no value="$reference_no">\n|;
-		print $hbo->populateHTML('authority_header_row');
-		for($i = 0;$i < 20;$i++)
-		{
- 			print $hbo->populateHTML('authority_entry_row', ['genus', 'species', ''], ['taxon_rank', 'type_taxon_rank', 'body_part']);
-		}
-		print '</table>';
-		print '<input type=submit value="Add authorities">';
-		
-	  print stdIncludes("std_page_bottom");
-}
-
 #  5. * System processes new authorities.  System displays
 #       authorities form.
 sub processNewAuthorities
@@ -8129,66 +8046,6 @@ sub authorityRow
 	print stdIncludes( "std_page_top" );
 	print '<form><table>' . $hbo->populateHTML('authority_entry_row') . '</table></form>';
 	print stdIncludes("std_page_bottom");
-}
-
-# DEPRECATED
-sub displayTaxonGeneralForm
-{
-		my $reference_no;
-	  
-		# If the nice user created a new reference, commit it
-		# and get it's reference_no
-		if ( $q->param('submit') ne "Use reference")
-		{
-            $return = checkFraud();
-            if (!$return) {
-                $return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
-                if ( ! $return ) { return $return; }
-                                                                                                                                                             
-                print "<center><h3><font color='red'>Reference record ";
-                if ( $return == $DUPLICATE ) {
-                    print "already ";
-                }
-                print "added</font></h3></center>\n";
-            } else {
-                if ($return eq 'Gupta') {
-                    print qq|<center><h3><font color='red'>WARNING: Data published by V. J. Gupta have been called into question by Talent et al. 1990, Webster et al. 1991, Webster et al. 1993, and Talent 1995. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter
-any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|;
-                    print "</font></h3></center>\n";
-                } else {
-                    print qq|<center><h3><font color='red'>WARNING: Data published by M. M. Imam have been called into question by <a href='http://www.up.ac.za/organizations/societies/psana/Plagiarism_in_Palaeontology-A_New_Threat_Within_The_Scientific_Community.pdf'>J. Aguirre 2004</a>. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|;
-                }
-                return 0;
-            }
-		} else {
-			$reference_no = $q->param('reference_no');
-		}
-		$s->setReferenceNo( $dbh, $reference_no );
-	  
-		print $hbo->populateHTML('taxon_general_page_top');
-	  
-		# Display the reference
-		$sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
-		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute();
-		my $refRowRef = $sth->fetchrow_arrayref();
-		my $refFieldNamesRef = $sth->{NAME};
-		$sth->finish();
-		print $hbo->populateHTML('reference_display_row', $refRowRef, $refFieldNamesRef);
-
-		print '<table>';
-		print qq|<form method=POST action="$exec_url">\n|;
-		print qq|<input type=hidden name=action value=processNewAuthorities>\n|;
-		print qq|<input type=hidden name=reference_no value="$reference_no">\n|;
-		for($i = 0;$i < 10;$i++)
-		{
- 			print $hbo->populateHTML('taxon_general_entry_row', ['genus', 'species', ''], ['taxon_rank', 'type_taxon_rank', 'body_part']);
-		}
-		print '</table>';
-		print '<input type=submit value="Process taxa">';
-		
-	  print stdIncludes("std_page_bottom");
-	  
 }
 
 sub displayProjectStatusPage
