@@ -579,10 +579,10 @@ sub getPrefFields	{
 		"coastlinecolor" => "coastline color",
 		"borderlinecolor" => "international border color",
 		"usalinecolor" => "USA state border color",
-		"pointsize" => "point size",
-		"pointshape" => "point shape",
-		"dotcolor" => "point color",
-		"dotborder" => "point borders" );
+		"pointsize1" => "point size",
+		"pointshape1" => "point shape",
+		"dotcolor1" => "point color",
+		"dotborder1" => "point borders" );
 	# list of fields in tables
 	my @setFieldNames = ("blanks", "research_group", "country", "state",
 			"latdeg", "latdir", "lngdeg", "lngdir", "geogscale",
@@ -598,8 +598,8 @@ sub getPrefFields	{
 			"mapscale", "mapresolution", "mapbgcolor", "crustcolor",
 			"gridsize", "gridcolor", "latlngnocolor",
 			"coastlinecolor", "borderlinecolor", "usalinecolor",
-			"pointsize", "pointshape",
-			"dotcolor", "dotborder");
+			"pointsize1", "pointshape1",
+			"dotcolor1", "dotborder1");
 	for $fn (@setFieldNames)	{
 		if ($cleanSetFieldNames{$fn} eq "")	{
 			my $cleanFN = $fn;
@@ -1060,7 +1060,7 @@ sub displayHomePage {
 sub displayMapForm {
 
 	# List fields that should be preset
-	my @fieldNames = ( 'research_group', 'country', 'period_max', 'lithology1', 'environment', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapscale', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngnocolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder', 'mapsearchfields2', 'pointsize2', 'pointshape2', 'dotcolor2', 'dotborder2', 'mapsearchfields3', 'pointsize3', 'pointshape3', 'dotcolor3', 'dotborder3', 'mapsearchfields4', 'pointsize4', 'pointshape4', 'dotcolor4', 'dotborder4' );
+	my @fieldNames = ( 'research_group', 'country', 'period_max', 'lithology1', 'environment', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapscale', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngnocolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize1', 'pointshape1', 'dotcolor1', 'dotborder1', 'mapsearchfields2', 'pointsize2', 'pointshape2', 'dotcolor2', 'dotborder2', 'mapsearchfields3', 'pointsize3', 'pointshape3', 'dotcolor3', 'dotborder3', 'mapsearchfields4', 'pointsize4', 'pointshape4', 'dotcolor4', 'dotborder4' );
 	# Set default values
 	my @row = ( '', '', '', '', '', '100%', 'rectilinear', '0', 'Europe', 'X 1', 'medium', 'white', 'none', '30 degrees', 'gray', 'in back', 'medium', 'none', 'black', 'none', 'none', 'medium', 'circles', 'red', 'black', '', 'medium', 'squares', 'blue', 'black', '', 'medium', 'triangles', 'yellow', 'black', '', 'medium', 'diamonds', 'green', 'black' );
 	
