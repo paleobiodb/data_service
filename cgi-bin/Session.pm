@@ -466,13 +466,10 @@ sub personNameForNumber {
 	}
 	
 	my $sql = DBTransactionManager->new();
-	my @result = $sql->getSingleSQLResult("SELECT name FROM person WHERE person_no = '$num'");
+	#my $result = $sql->getSingleSQLResult("SELECT name FROM person WHERE person_no = '$num'");
+	my $result = ${$sql->getData("SELECT name FROM person WHERE person_no = '$num'")}[0]->{name};
 	
-	if (@result) {
-		return $result[0];	
-	}
-	
-	return '';
+	return $result;
 }
 
 sub authorizerNumber {

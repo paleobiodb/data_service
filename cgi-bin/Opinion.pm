@@ -791,9 +791,14 @@ sub submitOpinionForm {
 		}
 		
 		my $sql = $self->getTransactionManager();
-		my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM opinions WHERE 
-		child_no = $child_no AND
-		ref_has_opinion = 'YES' AND reference_no = $reference_no $own_opinion_no_clause");
+#		my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM opinions WHERE 
+#		child_no = $child_no AND
+#		ref_has_opinion = 'YES' AND reference_no = $reference_no
+#		$own_opinion_no_clause");
+
+		my $count = ${$sql->getData("SELECT COUNT(*) as c FROM opinions WHERE 
+		child_no = $child_no AND ref_has_opinion = 'YES' 
+		AND reference_no = $reference_no $own_opinion_no_clause")}[0]->{c};
 		
 		if ($count > 0) {
 			$errors->add("You can only enter one opinion on a taxon 

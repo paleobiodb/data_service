@@ -293,7 +293,9 @@ sub rank {
 		# if we haven't already fetched the rank, then fetch it.
 		my $sql = $self->getTransactionManager();
 	
-		my $r = $sql->getSingleSQLResult("SELECT taxon_rank FROM authorities WHERE taxon_no = $self->{taxonNumber}");
+		#my $r = $sql->getSingleSQLResult("SELECT taxon_rank FROM authorities WHERE taxon_no = $self->{taxonNumber}");
+		my $r = ${$sql->getData("SELECT taxon_rank FROM authorities 
+					WHERE taxon_no = $self->{taxonNumber} ")}[0]->{taxon_rank};
 	
 		my $rank = Rank->new($r);
 		
@@ -439,8 +441,13 @@ sub getTaxonNameFromNumber {
 		my $sql = $self->getTransactionManager();
 		
 		Debug::dbPrint("Taxon::getTaxonNameFromNumber 1");
-		my $tn = $sql->getSingleSQLResult("SELECT taxon_name FROM authorities 
-				WHERE taxon_no = $input");
+
+		#my $tn = $sql->getSingleSQLResult("SELECT taxon_name FROM authorities 
+		#		WHERE taxon_no = $input");
+
+		my $tn = ${$sql->getData("SELECT taxon_name FROM authorities 
+				WHERE taxon_no = $input")}[0]->{taxon_name};
+	
 
 		Debug::dbPrint("Taxon::getTaxonNameFromNumber 2");
 		if ($tn) {
@@ -459,7 +466,8 @@ sub numberOfDBInstancesForName {
 	
 	my $sql = $self->getTransactionManager();
 	
-	my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM authorities WHERE taxon_name = '" . $self->{taxonName} . "'");
+#	my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM authorities WHERE taxon_name = '" . $self->{taxonName} . "'");
+	my $count = ${$sql->getData("SELECT COUNT(*) as c FROM authorities WHERE taxon_name = '" . $self->{taxonName} . "'")}[0]->{c};
 
 	return $count;
 }
@@ -483,7 +491,10 @@ sub getTaxonNumberFromName {
 	if (my $input = shift) {
 		my $sql = $self->getTransactionManager();
 		
-		my $tn = $sql->getSingleSQLResult("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
+#		my $tn = $sql->getSingleSQLResult("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
+		my $tn = ${$sql->getData("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'")}[0]->{taxon_no};
+
+
 		Debug::dbPrint("getTaxonNumberFromName here1");
 		
 		if ($tn) {
@@ -533,7 +544,10 @@ sub nameForRank {
 	if ($id) {
 		# now we need to get the name for it
 		my $sql = $self->getTransactionManager();
-		return $sql->getSingleSQLResult("SELECT taxon_name FROM authorities WHERE taxon_no = $id");
+		#return $sql->getSingleSQLResult("SELECT taxon_name FROM authorities WHERE taxon_no = $id");
+
+		return ${$sql->getData("SELECT taxon_name FROM 
+			authorities WHERE taxon_no = $id")}[0]->{taxon_name};
 	}
 	
 	return "";
@@ -577,8 +591,12 @@ sub originalCombination {
 	
 	# this works because all 'recombined as' and 'corrected as' opinions should point
 	# to the original (rather than having a chain).
-	my $cn = $sql->getSingleSQLResult("SELECT child_no FROM opinions WHERE parent_no = $tn 
-		AND status IN ('recombined as', 'corrected as')");
+#	my $cn = $sql->getSingleSQLResult("SELECT child_no FROM opinions WHERE parent_no =
+#  $tn AND status IN ('recombined as', 'corrected as')");
+		
+	my $cn = ${$sql->getData("SELECT child_no FROM opinions WHERE
+		parent_no = $tn AND status IN 
+		('recombined as', 'corrected as')")}[0]->{child_no};
 	
 	if (! $cn) {
 		return $tn;		# return the number we started with if there are no recombinations	
@@ -635,8 +653,10 @@ sub createTaxaHash {
 	my $subSQL = DBTransactionManager->new($self->{GLOBALVARS});
 	
 	# first, insert the current taxon into the hash
-	my $ownTaxonRank = $subSQL->getSingleSQLResult("SELECT taxon_rank FROM 
-								authorities WHERE taxon_no = $tn");
+#	my $ownTaxonRank = $subSQL->getSingleSQLResult("SELECT taxon_rank FROM 
+#								authorities WHERE taxon_no = $tn");
+	my $ownTaxonRank = ${$subSQL->getData("SELECT taxon_rank FROM 
+								authorities WHERE taxon_no = $tn")}[0]->{taxon_rank};
 	
 	$hash{$ownTaxonRank} = $tn;
 
@@ -689,7 +709,10 @@ sub createTaxaHash {
 		my $parent = $idNum;  # this is the parent with the most recent pubyr.
 
 		# get the rank of the parent
-		my $pRank = $sql->getSingleSQLResult("SELECT taxon_rank FROM authorities WHERE taxon_no = $parent");
+		#my $pRank = $sql->getSingleSQLResult("SELECT taxon_rank 
+		#FROM authorities WHERE taxon_no = $parent");
+		my $pRank = ${$sql->getData("SELECT taxon_rank 
+			FROM authorities WHERE taxon_no = $parent")}[0]->{taxon_rank};
 		
 		# insert it into the hash, so we have the parent rank as the key
 		# and the parent number as the value.
@@ -1119,7 +1142,10 @@ sub displayAuthorityForm {
 		}
 		
 		# figure out how many authoritiy records could be the possible parent.
-		my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM authorities WHERE taxon_name = '" . $name . "'");
+#		my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM authorities WHERE taxon_name = '" . $name . "'");
+		my $count = ${$sql->getData("SELECT COUNT(*) as c FROM authorities 
+			WHERE taxon_name = '" . $name . "'")}[0]->{c};
+		
 		
 		# if only one record, then we don't have to ask the user anything.
 		# otherwise, we should ask them to pick which one.

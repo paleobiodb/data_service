@@ -143,7 +143,8 @@ sub fetchDatabaseRow {
 	
 	
 	# figure out how many rows their where clause will return.
-	my $count = $sql->getSingleSQLResult("SELECT count(*) $sqlString");
+#	my $count = $sql->getSingleSQLResult("SELECT count(*) $sqlString");
+	my $count = ${$sql->getData("SELECT COUNT(*) as c $sqlString")}[0]->{c};
 
     # we don't want to fetch too many rows because it's probably an error
     # on the programmer's part - ie - maybe they forgot to include a valid
@@ -220,7 +221,9 @@ sub setDatabaseRow {
 
 
     if ($where) {    
-        $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM " . $self->{table} . " WHERE $where");
+#        $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM " . $self->{table} . " WHERE $where");
+		$count = ${$sql->getData("SELECT COUNT(*) as c FROM " 
+			. $self->{table} . " WHERE $where")}[0]->{c};
      } else {
         Debug::logError("No where clause in CachedTableRow::setDatabaseRow");
         return;

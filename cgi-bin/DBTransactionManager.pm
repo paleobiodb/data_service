@@ -433,6 +433,9 @@ sub dbh {
 }
 
 
+# Note - 3/30/2004 - alroy doesn't want us to use this
+# method anymore.  He would like us to use getData instead.
+#
 # pass this an entire SQL query string
 # and it will return a single result
 # (ie, assumes that there aren't multiple rows)
@@ -879,8 +882,8 @@ sub insertNewRecord {
 	my $insertResult = $dbh->do($toInsert);
 	
 	# figure out the id of the last insert, ie, the primary key value.
-	my $idNum = $self->getSingleSQLResult("SELECT LAST_INSERT_ID() FROM $tableName");
-
+#	my $idNum = $self->getSingleSQLResult("SELECT LAST_INSERT_ID() as l FROM $tableName");
+	my $idNum = ${$self->getData("SELECT LAST_INSERT_ID() FROM $tableName")}[0]->{l};
 		
 	# return the result code from the do() method.
 	return ($insertResult, $idNum);
@@ -1046,7 +1049,10 @@ sub internalUpdateRecord {
 	
 	# figure out how many records this update statement will affect
 	# return if they try to update too many at once, because it's probably an error.
-	my $count = $self->getSingleSQLResult("SELECT count(*) FROM $tableName WHERE $whereClause");
+#	my $count = $self->getSingleSQLResult("SELECT count(*) FROM $tableName WHERE $whereClause");
+	my $count = ${$self->getData("SELECT COUNT(*) as c FROM $tableName WHERE
+					$whereClause")}[0]->{c};
+	
 	if ($count > $self->{maxNumUpdatesAllowed}) {
 		Debug::logError("DBTransactionManager::internalUpdateRecord, tried to update $count records at once which is more than the maximum allowed of " . $self->{maxNumUpdatesAllowed});
 		return;

@@ -107,8 +107,10 @@ sub isValidName {
 	
 	my $sql = $self->getTransactionManager();
 	
-	my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM person WHERE
-		name = '$name' OR reversed_name = '$name'");
+#	my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM person WHERE
+#		name = '$name' OR reversed_name = '$name'");
+	my $count = ${$sql->getData("SELECT COUNT(*) as c FROM person WHERE
+		name = '$name' OR reversed_name = '$name'")}[0]->{c};	
 
 	if ($count) { return TRUE; }
 	else { return FALSE; }

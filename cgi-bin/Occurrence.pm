@@ -143,10 +143,16 @@ sub collectionReferenceNumber {
 
 	my $sql = DBTransactionManager->new($self->{GLOBALVARS});
 
-	return $sql->getSingleSQLResult("SELECT c.reference_no FROM 
-								collections c, occurrences o
-								WHERE o.occurrence_no = $self->{occurrence_no}
-								AND o.collection_no = c.collection_no");
+	#return $sql->getSingleSQLResult("SELECT c.reference_no FROM 
+	#							collections c, occurrences o
+	#							WHERE o.occurrence_no = $self->{occurrence_no}
+	#							AND o.collection_no = c.collection_no");
+	
+	return ${$sql->getData("SELECT c.reference_no FROM 
+							collections c, occurrences o 
+							WHERE o.occurrence_no = $self->{occurrence_no} 
+							AND o.collection_no = c.collection_no 
+							")}[0]->{reference_no};
 }
 
 # returns the taxon_no for the class of the most
