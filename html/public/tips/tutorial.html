@@ -9,6 +9,7 @@
         H2      { font-family : Arial, Verdana, Helvetica; }
         H3      { font-family : Arial, Verdana, Helvetica; }
         H4      { font-family : Arial, Verdana, Helvetica; }
+        OL     { font-family : Arial, Verdana, Helvetica; font-size : 12px; }
         .menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }
         .small { font-family : Arial, Verdana, Helvetica; font-size : 12px; text-decoration:none; }
         .large { font-family : Arial, Verdana, Helvetica; font-size : 16px; text-decoration:none; }
@@ -35,12 +36,12 @@
 
 <h3>Introduction</h3>
 
-The Paleobiology Database has many data tables and many scripts used to enter and edit data in the tables.
-In this tutorial you will step through the procedure for entering data into each major table, stopping short right before submitting.
+<p>The Paleobiology Database has many data tables and many scripts used to enter and edit data in the tables.
+In this tutorial you will step through the procedure for entering data into each major table, stopping short right before submitting.</p>
 
 <h3>Public pages</h3>
 
-The first step is to check some of the public web pages that explain the Database.
+<p>The first step is to check some of the public web pages that explain the Database.</p>
 
 <ol>
 <li>Go to <u>paleodb.org</u>.
@@ -54,7 +55,8 @@ Pay careful attention to the sections "What is the database structure?"; "How is
 
 <h3>Logging in</h3>
 
-To do any data entry, you must log in to the "Contributors' area," which is password-protected and closed to the public.
+<p>To do any data entry, you must log in to the "Contributors' area," which is password-protected and closed to the public.</p>
+
 <ol>
 <li>Starting on the public web site, hit <u>Contributors' area</u> on the navigation bar.
 <li>Select the "Authorizer" and "Enterer" names. The authorizer is typically the Ph.D. who is supervising a data entry project; the enterer could be the same as the authorizer, but more often is a student or postdoc working with the authorizer.
@@ -66,12 +68,12 @@ If you ever need to get back to this page from anywhere in the contributors' are
 
 <h3>References</h3>
 
-Every major table in the Database is tied back to the references table, which tracks publications yielding assorted data.
+<p>Every major table in the Database is tied back to the references table, which tracks publications yielding assorted data.
 We record references only if they include some enterable data, and we avoid references (such as review articles) that repeat information from earlier publications.
-Reference records have a straightforward structure, with author names, publication years, article and journal titles, etc.
+Reference records have a straightforward structure, with author names, publication years, article and journal titles, etc.</p>
 
 <ol>
-<li>From the main menu, hit <u>Add a new reference</u> under "Reference functions."
+<li>From the main menu, hit <u>Add a new reference</u> under "References."
 <li>You don't want to enter a duplicate reference, so you must search our data to see if the ref is already there before you continue.
 Try a very simple search just using the author's last name.
 <li>If there are matches, you will get a list.
@@ -83,14 +85,32 @@ Don't worry about the project codes if you don't know what they are; if you can,
 Instead, hit <u>Main menu</u>.
 </ol>
 
-<h3>Collections</h3>
+<h3>Time scales</h3>
 
-We separate information about fossil collections into two tables that have different data entry forms.
-For the collections table there is a lengthy form that records all the contextual information: geography, stratigraphy, lithology, taphonomy, collection methods, etc.
-Each collection is supposed to represent the most geographically and stratigraphically restricted unit you can identify, and ultimately would correspond to the fossils collection from one bed in one spot by one worker in one field season.
+<p>The Database uses multiple time scales to aid data analysis of fossil collections.
+Each scale is a column from a correlation chart in a single publication, such as a series of epochs.
+Scales only need to be entered once, so you probably won't need to use this function.</p>
 
 <ol>
-<li>From the main menu, hit <u>Add a new collection</u> under "Collection functions."
+<li>You have to have a current reference if you want to create or edit a time scale.
+If you don't have a current reference or want to change it, use <i>Search for or select a reference</i> in the "Search" section of the main menu.
+<li>From the main menu, hit <u>Add or edit a time scale</u> under "Time scales."
+<li>There should be two pulldown menus on the resulting "Select a time scale" page.
+First, browse through the top menu to see if the time scale you want to create already has been entered into the system.
+<li>If your time scale seems new, select "select to create a new time scale" in the second pull-down and hit <u>Add/edit scale</u>.
+<li>Fill out the form following the instructions in the bulleted list.
+General information goes up top; each time interval is detailed in one of the repeated sections below.
+<li>Once you're done, don't hit <u>Submit</u>; instead, hit <u>Main menu</u>.
+</ol>
+
+<h3>Collections</h3>
+
+<p>We separate information about fossil collections into two tables that have different data entry forms.
+For the collections table there is a lengthy form that records all the contextual information: geography, stratigraphy, lithology, taphonomy, collection methods, etc.
+Each collection is supposed to represent the most geographically and stratigraphically restricted unit you can identify, and ultimately would correspond to the fossils collection from one bed in one spot by one worker in one field season.</p>
+
+<ol>
+<li>From the main menu, hit <u>Add a new collection</u> under "Collections."
 <li>You must have a "current reference" to enter any data.
 The Database gives you a chance to select one whenever you start the data entry process.
 Because this is just a demonstration, you should pick any arbitrary ref; if you were really entering data, you would have to be careful to get the right one. 
@@ -110,12 +130,12 @@ Fill out every field you can following the instructions on the <a href="javascri
 
 <h3>Occurrences</h3>
 
-The "occurrences" comprise the taxonomic list for a collection, plus abundance data, comments, etc.
+<p>The "occurrences" comprise the taxonomic list for a collection, plus abundance data, comments, etc.
 You can't create occurrences unless you have (or someone has) already created the corresponding collection.
-You may add new occurrences to an existing list entered by someone else under a different authorizer's name.
+You may add new occurrences to an existing list entered by someone else under a different authorizer's name.</p>
 
 <ol>
-<li>From the main menu, hit <u>Add/edit occurrences for a collection</u> under "Taxonomy and occurrence functions."
+<li>From the main menu, hit <u>Add/edit occurrences for a collection</u> under "Occurrences."
 <li>If you don't have a current reference or want to change it, do a search.
 Otherwise hit <u>Use current reference</u>.
 <li>To see the occurrences, you need to find the collection they belong do.
@@ -130,11 +150,11 @@ If your authorizer doesn't own the old records, they won't be writeable.
 
 <h3>Reidentifications</h3>
 
-If a newer paper says that the identification in an older taxonomic list is wrong, you need to record the new ID or "reidentification."
-Note that we do not encourage simply changing the occurrence itself; instead, we want to know what name originally was used (the occurrence) and what name now should be used (the reidentification).
+<p>If a newer paper says that the identification in an older taxonomic list is wrong, you need to record the new ID or "reidentification."
+Note that we do not encourage simply changing the occurrence itself; instead, we want to know what name originally was used (the occurrence) and what name now should be used (the reidentification).</p>
 
 <ol>
-<li>From the main menu, hit <u>Reidentify occurrences</u> under "Taxonomy and occurrence functions."
+<li>From the main menu, hit <u>Reidentify occurrences</u> under "Occurrences."
 <li>If you don't have a current reference or want to change it, do a search.
 Otherwise hit <u>Use current reference</u>.
 <li>You now have a collection search form that can be used in two ways.
@@ -153,13 +173,13 @@ If the first page doesn't have the occurrences you need to correct, hit the <u>V
 
 <h3>Taxonomic data</h3>
 
-We have two tables that handle all the basic information of alpha taxonomy.
+<p>We have two tables that handle all the basic information of alpha taxonomy.
 Who named what when (e.g., Linnaeus named Homo in 1758) is recorded in our authorities table.
 The status of a name - either how it should be classified, what it should be synonymized, or why it's flat-out useless - is recorded in our opinions table.
-We have one medium-length form that feeds into both tables.
+We have one medium-length form that feeds into both tables.</p>
 
 <ol>
-<li>From the main menu, hit <u>Add taxonomic information</u> under "Taxonomy and occurrence functions."
+<li>From the main menu, hit <u>Add taxonomic information</u> under "Taxa."
 <li>If you don't have a current reference or want to change it, do a search.
 Otherwise hit <u>Use current reference</u>.
 <li>You now have a simple form that asks you to find a taxon by entering its exact name.
@@ -176,11 +196,11 @@ Carefully consult the <a href="javascript: tipsPopup('/public/tips/taxonomy_tips
 
 <h3>Images</h3>
 
-The Database can store image files such as JPG, GIF, or PNG.
-However, the images have to be tied to taxonomic names stored in the authorities table (see above).
+<p>The Database can store image files such as JPG, GIF, or PNG.
+However, the images have to be tied to taxonomic names stored in the authorities table (see above).</p>
 
 <ol>
-<li>From the main menu, hit <u>Add an image</u> under "Taxonomy and occurrence functions."
+<li>From the main menu, hit <u>Add an image</u> under "Taxa."
 <li>Unlike the other functions, this one doesn't require you to choose a reference.
 However, it's crucial that you associate the picture with a valid taxon name.
 Enter the full, correctly spelt name of the species or higher taxon that appears in the picture.
