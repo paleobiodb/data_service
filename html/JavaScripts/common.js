@@ -7,7 +7,7 @@ function checkBrowserVersion() {
 	var match = /Microsoft/i;
 	
 	if (match.test(navigator.appName)) {
-		document.write("<div class=\"warning\">Internet Explorer is not recommended for this web site.<BR> Read the web browsers <A HREF=\"javascript: tipsPopup('/public/tips/browser_tips.html')\">tip sheet</A> for information on which browser to download.</div>");
+		document.write("<div class=\"warning\">Warning: Internet Explorer is not recommended for this web site. <BR> Aside from cosmetic defects in page rendering, error checking routines may not work correctly and you may be randomly logged out of the site.<BR><BR> Read the web browsers <A HREF=\"javascript: tipsPopup('/public/tips/browser_tips.html')\">tip sheet</A> for information on which browser to download.</div>");
 	}
 }
 
@@ -20,7 +20,7 @@ function checkBrowserVersion() {
 function properLastName(input) {
 	if ((!input) || input == "") { return false; }
 	
-	var match = /^[A-Za-z ,-.\']+$/;
+	var match = /^[A-Za-z,-.\'][A-Za-z ,-.\']*$/;
 	
 	return match.test(input);
 }
@@ -29,7 +29,7 @@ function properLastName(input) {
 function properInitial(input) {
 	if ((!input) || input == "") { return false; }
 	
-	var match = /^[A-Za-z .]+$/;
+	var match = /^[A-Za-z.][A-Za-z .]*$/;
 	
 	return match.test(input);
 }
@@ -63,7 +63,6 @@ function taxonRank(taxon) {
 	var isSubspecies = /^[A-Z][a-z]+[ ][a-z]+[ ][a-z]+\n?$/;
 	var isHigher = /^[A-Z][a-z]+\n?$/;
 	
-	//alert ("taxon = '" + taxon + "'");
 	if (isSubspecies.test(taxon)) {
 		return "subspecies";	
 	}
