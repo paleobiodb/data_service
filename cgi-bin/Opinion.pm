@@ -12,12 +12,14 @@ use Constants;
 use DBI;
 use DBConnection;
 use DBTransactionManager;
+use PBDBUtil;
 use URLMaker;
 use Class::Date qw(date localdate gmdate now);
 use CachedTableRow;
 use Rank;
 use Globals;
 use Session;
+use Classification;
 
 
 # names of radio buttons, etc. used in the form.
@@ -32,8 +34,6 @@ use fields qw(
                 GLOBALVARS
 				opinion_no
                 reference_no
-				
-				parentName
 				
 				cachedDBRow
 				DBTransactionManager
@@ -110,31 +110,6 @@ sub opinionNumber {
 }
 
 
-# the parent_no is the parent in a relationship such as
-# recombined as.  It's the *new* one.
-sub parentNumber {
-	my Opinion $self = shift;
-
-	my $rec = $self->databaseOpinionRecord();
-	return $rec->{parent_no};	
-}
-
-# returns the parent name for this opinion if it can figure it out.
-# (this is the taxon name from the authorities table figured out from the 
-# parent_no of this opinion record).
-sub parentName {
-	my Opinion $self = shift;
-	
-	my $parent_no = $self->parentNumber();
-	if (($parent_no) && (! $self->{parentName})) {
-		my $pt = Taxon->new();
-		$pt->setWithTaxonNumber($parent_no);
-		$self->{parentName} = $pt->taxonName();
-	}
-	
-	return $self->{parentName};
-}
-
 # the child_no is the original taxon_no that this opinion is about.
 sub childNumber {
 	my Opinion $self = shift;
@@ -142,8 +117,6 @@ sub childNumber {
 	my $rec = $self->databaseOpinionRecord();
 	return $rec->{child_no};
 }
-
-
 
 
 # returns the authors of the opinion record
@@ -228,7 +201,8 @@ sub formatAsHTML {
 	my $ref_has_opinion = $ref->{ref_has_opinion};
 	
 	my $parent = Taxon->new($self->{GLOBALVARS});
-	$parent->setWithTaxonNumber($self->parentNumber());
+	my $rec = $self->databaseOpinionRecord();
+	$parent->setWithTaxonNumber($rec->{parent_no});
 	
 	my $child = Taxon->new($self->{GLOBALVARS});
 	$child->setWithTaxonNumber($self->childNumber());
@@ -263,6 +237,11 @@ sub displayOpinionForm {
 	my $hbo = shift;
 	my $s = shift;
 	my $q = shift;
+	my $parentnosref = shift;
+	my @parentnos;
+	if ( $parentnosref )	{
+		@parentnos = @{$parentnosref};
+	}
 	
 	
 	my $sql = $self->getTransactionManager();
@@ -414,33 +393,6 @@ sub displayOpinionForm {
 	$fields{'OPTIONAL_species_only'} = $childRank->isSpecies();
 	$fields{'OPTIONAL_subspecies_only'} = $childRank->isSubspecies();	
 	$fields{'OPTIONAL_not_species'} = $childRank->isHigherThanString(SPECIES);
-	
-	if ( $childRank->isSubspecies() || $childRank->isSpecies() ) {		
-		
-		# if it's a species or subspecies, then we need to figure out
-		# the genus or species.  Eventually, this should be handled by the Rank class,
-		# but for now, we'll just grab the first "word" of the taxon_name
-		my $parentName;
-		
-		Debug::dbPrint("is new entry = $isNewEntry");
-		
-		if ($isNewEntry) {  # if new entry, get parent name from taxon_name entered.
-			$parentName = $fields{taxon_name}; 
-		} else {
-			# else, if we're editing a form, then figure out the parent
-			# name based on the parent_no field in the opinion record.
-			$parentName = $self->parentName();
-			Debug::dbPrint("parentName = $parentName");
-		}
-		
-		my ($one, $two, $three) = split(/ /, $parentName);
-		$fields{parent_genus} = $one;
-		$fields{parent_species} = "$one $two";
-	
-		# don't do anything for now.
-	}
-	
-
 	
 
 	# figure out which radio button to select for the status:
@@ -606,10 +558,124 @@ sub displayOpinionForm {
 		if ($fields{'taxon_status'}) { push(@nonEditables, 'taxon_status'); }
 		
 	}
+<<<<<<< Opinion.pm
 
+	# if this is a second pass and we have a list of alternative taxon
+	#  numbers, make a pulldown menu listing the taxa JA 25.4.04
+	my $pulldown;
+	if ( @parentnos )	{
+		$pulldown = "<select name=parent_taxon_no>\n";
+		$pulldown .= "<option selected>\n";
+	# grab the parent taxon name from the database - kind of ugly to do
+	#  this so late, but really the information exists nowhere else
+		my $pnamesql = "SELECT taxon_name FROM authorities WHERE taxon_no=" . $parentnos[0];
+		my $pname = ${$sql->getData($pnamesql)}[0]->{taxon_name};
+		for my $i (@parentnos)	{
+			$pulldown .= "<option value=\"" . $i . "\">";
+			$pulldown .= $pname . " ";
+		# lucky us, Poling made $sql local to the whole subroutine
+			my %auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($sql,$i)};
+			$pulldown .= $auth_yr{author1last} . " " . $auth_yr{pubyr};
+		# tack on the closest higher order name
+		# a little clunky, but it works and doesn't require messing
+		#  with get_classification_hash
+			my %master_class=%{Classification::get_classification_hash($sql, [ "family,order,class" ] , [ $i ] )};
+			my @parents = split ',',$master_class{$i};
+			if ( $parents[2] )	{
+				$pulldown .= " [" . $parents[2] . "]";
+			} elsif ( $parents[1] )	{
+				$pulldown .= " [" . $parents[1] . "]";
+			} elsif ( $parents[0] )	{
+				$pulldown .= " [" . $parents[0] . "]";
+			}
+			$pulldown .= "\n";
+		}
+		$pulldown .= "</select>\n";
+	}
+
+	# format the "belongs to" section of the form
+	my $belongstotext;
+	# species get special treatment
+	if ( $fields{taxon_rank} =~ /species/ )	{
+		$belongstotext = "<TD colspan=2><b>Valid ".$fields{taxon_rank}."</b> as originally combined; belongs to ";
+		# if the user needs to choose from several possible parent
+		#  genera or species, print the pulldown
+		# note that we don't have to include the parent name in a
+		#  hidden because it will be computed from the child name
+		if ( $fields{'status'} eq BELONGS_TO && @parentnos )	{
+			$pulldown =~ s/<select name=parent_taxon_no>/<select name=belongs_to_parent_taxon_no>/;
+			$belongstotext .= $pulldown . "<br>";
+		}
+		# or print the species or genus name as plain text
+		else	{
+			my ($one,$two,$three) = split / /,$fields{taxon_name};
+			if ( $three )	{
+				$belongstotext .= "<i>" . $one . " " . $two . "</i>.";
+			} else	{
+				$belongstotext .= "<i>" . $one . "</i>.";
+			}
+		}
+	}
+	# standard approach for genera or higher taxa
+	else	{
+		$belongstotext = "<TD colspan=2><b>Valid ".$fields{taxon_rank}."</b>, classified as belonging to ";
+		if ( $fields{'status'} eq BELONGS_TO && @parentnos )	{
+			$pulldown =~ s/<select name=parent_taxon_no>/<select name=belongs_to_parent_taxon_no>/;
+	# have to store the actual name in case the submission fails and the
+	#  pulldown has to be recomputed
+			$pulldown .= "<br>\n<input type=\"hidden\" name=\"parent_taxon_name\" value=\"%%parent_taxon_name%%\">\n";
+			$belongstotext .= $pulldown . "<br>";
+		}
+		else	{
+			$belongstotext .= "<input id=\"parent_taxon_name\" name=\"parent_taxon_name\" size=\"50\" value=\"%%parent_taxon_name%%\"><br>";
+		}
+	}
+	$fields{belongs_to} = $belongstotext;
+
+	# if the rank is species or subspecies, throw in a recombined option
+	if ( $fields{taxon_rank} =~ /species/ )	{
+		my $recombinedtext = "<TR><TD valign=top>
+<input type=\"radio\" name=\"taxon_status\" value=\"recombined as\" %%taxon_status_recombined_as%%></TD>
+<TD colspan=2><b>Valid %%taxon_rank%%</b>, but recombined into a different genus.<br>
+New genus and species:<br>";
+		if ( $fields{taxon_rank} eq "subspecies" )	{
+			$recombinedtext =~ s/different genus/different species/;
+			$recombinedtext =~ s/genus and species/genus, species, and subspecies/;
+		}
+		$fields{recombined_as} = $recombinedtext;
+		if ( $fields{'status'} eq RECOMBINED_AS && @parentnos )	{
+			$pulldown =~ s/<select name=parent_taxon_no>/<select name=recombined_parent_taxon_no>/;
+			$fields{recombined_input} = $pulldown . "<br>\n<input type=\"hidden\" name=\"parent_taxon_name\" value=\"%%parent_taxon_name%%\">\n";
+		}
+		else	{
+			my $inputfield = "<input id=\"parent_taxon_name\" name=\"parent_taxon_name\" size=\"50\" value=\"%%parent_taxon_name%%\"><br></td></tr>";
+			$fields{recombined_input} = $inputfield;
+		}
+	}
+
+	# format the synonym section
+	# note: by now we already have a status pulldown ready to go; we're
+	#  tacking on either another pulldown or an input to store the name
+	# need a pulldown if this is a second pass and we have multiple
+	#  alternative senior synonyms
+	if ( $fields{taxon_status} eq INVALID1 && @parentnos )	{
+		$pulldown =~ s/<select name=parent_taxon_no>/<select name=synonym_parent_taxon_no>/;
+		$fields{synonym_select} .= $pulldown . "\n<input type=\"hidden\" name=\"parent_taxon_name2\" value=\"%%parent_taxon_name2%%\">\n";
+	}
+	# standard version
+	else	{
+		$fields{synonym_select} .= "<input name=\"parent_taxon_name2\" size=\"50\" value=\"%%parent_taxon_name2%%\">";
+	}
+
+=======
+
+>>>>>>> 1.44
 	# print the form	
 	print main::stdIncludes("std_page_top");
-	print $hbo->newPopulateHTML("add_enter_opinion", \%fields, \@nonEditables);
+
+	my $html = $hbo->newPopulateHTML("add_enter_opinion", \%fields, \@nonEditables);
+
+	print $html;
 	print main::stdIncludes("std_page_bottom");
 }
 
@@ -630,6 +696,16 @@ sub submitOpinionForm {
 	my $hbo = shift;
 	my $s = shift;		# the cgi parameters
 	my $q = shift;		# session
+
+	my %rankToNum = (  'subspecies' => 1, 'species' => 2, 'subgenus' => 3,
+		'genus' => 4, 'subtribe' => 5, 'tribe' => 6,
+		'subfamily' => 7, 'family' => 8, 'superfamily' => 9,
+		'infraorder' => 10, 'suborder' => 11,
+		'order' => 12, 'superorder' => 13, 'infraclass' => 14,
+		'subclass' => 15, 'class' => 16, 'superclass' => 17,
+		'subphylum' => 18, 'phylum' => 19, 'superphylum' => 20,
+		'subkingdom' => 21, 'kingdom' => 22, 'superkingdom' => 23,
+		'unranked clade' => 24, 'informal' => 25 );
 
 	if ((!$hbo) || (!$s) || (!$q)) {
 		Debug::logError("Taxon::submitOpinionForm had invalid arguments passed to it.");
@@ -922,14 +998,14 @@ sub submitOpinionForm {
 	# Figure out the name of the parent taxon.
 	# This is dependent on the taxonStatusRadio value
 	###
+	# JA: we're also going to set the parent no if a pulldown was used
+	#  AND the status didn't change (happens only on second passes)
 	
 	my $parentTaxonName;
-	my $parentTaxon = Taxon->new($self->{GLOBALVARS});
-	my $parentRank;
 
 	# tracks whether we going to have to create a new parent on the fly
 	my $createParent;
-	
+
 	if ($taxonStatusRadio eq BELONGS_TO) {
 		# if this is the radio button, then the parent taxon depends
 		# on whether the child is a higher taxon or not.
@@ -938,44 +1014,95 @@ sub submitOpinionForm {
 		} else {
 			# it's a species or subspecies, so just grab the genus or species
 			# name from the child taxon..
-			
+			my ($one,$two,$three) = split / /,$childTaxonName;
 			if ($childRank->isSpecies()) {
 				# then the parent is genus.
-				$parentTaxonName = $childTaxon->firstWord();
+				$parentTaxonName = $one;
 			} elsif ($childRank->isSubspecies()) {
 				# then the parent is a species
-				$parentTaxonName = $childTaxon->firstWord() . " " . $childTaxon->secondWord();
+				$parentTaxonName = $one . " " . $two;
 			}
 
 		}		
+		if ( $q->param('belongs_to_parent_taxon_no') )	{
+			$fieldsToEnter{parent_no} =  $q->param('belongs_to_parent_taxon_no');
+		}
 	} elsif ($taxonStatusRadio eq RECOMBINED_AS) {
 		$parentTaxonName = $q->param('parent_taxon_name');
+		if ( $q->param('recombined_parent_taxon_no') )	{
+			$fieldsToEnter{parent_no} =  $q->param('recombined_parent_taxon_no');
+		}
 	} elsif ($taxonStatusRadio eq INVALID1) {
 		$parentTaxonName = $q->param('parent_taxon_name2');
-	}	
-	
-	Debug::dbPrint("parentTaxonName = $parentTaxonName");
-	
-	# figure out the parent rank.
-	$parentRank = Rank->new();
-	$parentRank->setWithTaxonNameFullLookup($parentTaxonName);
-	
-	
-	# make sure it's valid, if it exists.
-	
-	if ($parentTaxonName) {
-		$parentTaxon->setWithTaxonName($parentTaxonName);
-		
-		if (! ($parentRank->isValid())) {
-			$errors->add("The taxon name '" . $parentTaxonName . "' is invalid");
+		if ( $q->param('synonym_parent_taxon_no') )	{
+			$fieldsToEnter{parent_no} =  $q->param('synonym_parent_taxon_no');
 		}
-		
-		elsif (Validation::looksLikeBadSubgenus($parentTaxonName)) {
+	}
+
+#FOO
+# does the insert actually work?
+
+	Debug::dbPrint("parentTaxonName = $parentTaxonName");
+
+	# make sure it's valid, if it exists.
+
+	# do a bunch of things based on the parent taxon name:
+	# (1) set the parent no if the name matches once
+	# (2) if more than once, save a list of possible numbers
+	# (3) do some error checking on the name per se
+	# note that we'll do the search and save the list even if we already
+	#  know the "right" parent number because the user selected it in
+	#  an earlier pass, just in case other errors redirect the user to
+	#  the input form
+
+	my $parentRank;
+	my @parentnos;
+
+	# if the user submitted a parent number after choosing one from
+	#  a select list populated during a second pass, then get the rank
+	#  so the parent can be entered if error checks pass
+	if ( $fieldsToEnter{parent_no} )	{
+		my $sql = $self->getTransactionManager();
+		my $ranksql = "SELECT taxon_rank FROM authorities WHERE taxon_no=" . $fieldsToEnter{parent_no};
+		$parentRank = ${$sql->getData($ranksql)}[0]->{taxon_rank};
+	}
+
+	if ($parentTaxonName) {
+
+	#  find taxa matching the name
+		my $sql = $self->getTransactionManager();
+		my $parentsql = "SELECT taxon_no,taxon_rank FROM authorities WHERE taxon_name='" . $parentTaxonName . "'";
+
+		my @parentrefs = @{$sql->getData($parentsql)};
+
+	# if there are multiple matches there's big trouble
+	# basically, (1) we're going to stop the user with an error, and
+	#  (2) we're going to save an array of the taxon numbers so
+	#  displayOpinionForm can populate a pulldown menu
+		if ( $#parentrefs > 0 )	{
+			for my $i (0..$#parentrefs)	{
+				push @parentnos , $parentrefs[$i]->{taxon_no};
+			}
+		# give the user a pass on the error if the parent number
+		#   was preselected
+			if ( ! $fieldsToEnter{parent_no} )	{
+				$errors->add("You need to select the taxon that " . $childTaxonName . " belongs to");
+			}
+		}
+
+	# there's a single match, so set the no and rank
+	# this is redundant but harmless if the user preselected a parent no
+		if ( $#parentrefs == 0 )	{
+			$fieldsToEnter{parent_no} = $parentrefs[0]->{taxon_no};
+			$parentRank = $parentrefs[0]->{taxon_rank};
+		}
+
+		if (Validation::looksLikeBadSubgenus($parentTaxonName)) {
 			$errors->add("The taxon name '$parentTaxonName' is invalid; you can't use parentheses");
 		}
 
 	# if the parent taxon doesn't exist yet, we have big trouble
-		if (! $parentTaxon->taxonNumber()) {
+		if ( ! @parentrefs )	{
 		# if the parent is a recombination, we're going to let them
 		#  get away with creating a new taxon on the fly JA 14.4.04
 			if ( $taxonStatusRadio eq RECOMBINED_AS )	{
@@ -1014,8 +1141,10 @@ sub submitOpinionForm {
 		
 		# for belongs to, the parent rank should always be higher than the child rank.
 		# unless either taxon is an unranked clade (JA)
-		if (! ($parentRank->isHigherThan($childRank)) && $parentRank->rank() ne "unranked clade" && $childRank->rank() ne "unranked clade" ) {
-			$errors->add("The rank of the higher taxon (currently " . $parentRank->rank() . ") must be higher than the rank of $childTaxonName (" . $childRank->rank() . ")");	
+		# or there's no parent rank because there are multiple matching
+		#  parents and the user hasn't selected one yet (JA)
+		if ( $rankToNum{$parentRank} < $rankToNum{$childRank->rank()} && $parentRank ne "unranked clade" && $childRank->rank() ne "unranked clade" && $parentRank ) {
+			$errors->add("The rank of the higher taxon (currently " . $parentRank . ") must be higher than the rank of $childTaxonName (" . $childRank->rank() . ")");	
 		}
 		
 		
@@ -1029,7 +1158,7 @@ sub submitOpinionForm {
 	
 		$fieldsToEnter{status} = RECOMBINED_AS;
 		
-		if (! ($parentRank->isSpecies())) {
+		if ( $parentTaxonName !~ / / )	{
 			$errors->add("If a species is recombined its new rank must be 'species'");	
 		}
 		
@@ -1040,8 +1169,10 @@ sub submitOpinionForm {
 		if (!$childRank->isSpecies()) {
 			$errors->add("If a species is recombined its old rank must be 'species'");
 		}
-		
-		if ($childTaxon->firstWord() eq $parentTaxon->firstWord()) {
+
+		my ($cgen,$foo) = split / /,$childTaxonName;
+		my ($pgen,$foo) = split / /,$parentTaxonName;
+		if ( $cgen eq $pgen )	{
 			$errors->add("The genus name in the new combination must be different from the genus name in the old combination");
 		}
 		
@@ -1072,12 +1203,12 @@ sub submitOpinionForm {
 		$fieldsToEnter{status} = $q->param('synonym');
 		
 		# the parent rank should be the same as the child rank...
-		if ( ! $parentRank->isEqualTo($childRank) && $fieldsToEnter{status} ne "rank changed as" ) {
+		if ( $parentRank ne $childRank->rank() && $fieldsToEnter{status} ne "rank changed as" ) {
 			$errors->add("The rank of a taxon and the rank of its synonym must be the same");
 		}
 		# JA: ... except if the status is "rank changed as," which is
 		#  actually the opposite case
-		elsif ( $parentRank->isEqualTo($childRank) && $fieldsToEnter{status} eq "rank changed as" ) {
+		elsif ( $parentRank eq $childRank->rank() && $fieldsToEnter{status} eq "rank changed as" ) {
 			$errors->add("If you change a taxon's rank, its old and ew ranks must be different");
 		}
 		
@@ -1108,16 +1239,10 @@ sub submitOpinionForm {
 	}
 	
 	
-	# assign the parent_no and child_no fields if they don't already exist.
+	# assign the child_no field if it doesn't already exist.
+	# JA: I'm pretty sure Poling only ever assigns this variable here,
+	#  so the conditional is actually superfluous
 	if (!$fieldsToEnter{child_no} ) { $fieldsToEnter{child_no} = $q->param('taxon_no'); }
-	
-	# if we have a parent name, then we
-	# want to use it.. Otherwise, it would be impossible to change the parent
-	# of an opinion.
-	if ($parentTaxon) {
-		$fieldsToEnter{parent_no} = $parentTaxon->taxonNumber(); 
-	}
-
 
 	# Delete some fields that may be present since these don't correspond
 	# to fields in the database table.. (ie, they're in the form, but not in the table)
@@ -1162,7 +1287,7 @@ sub submitOpinionForm {
 		$q->param(-name=>'error_message', -values=>[$message]);
 			
 			
-		$self->displayOpinionForm($hbo, $s, $q);
+		$self->displayOpinionForm($hbo, $s, $q, \@parentnos);
 			
 		return;
 	}
@@ -1239,11 +1364,15 @@ sub submitOpinionForm {
 		push @authVals , now();
 
 	# go for it
+	# Poling screwed this up by getting the first authority record
+	#  that matches the entered name, instead of the last
 		my $insertsql = "INSERT INTO authorities (" . join(',', @authFields ) . ") VALUES ('" . join("', '", @authVals) . "')";
 		my $sql = $self->getTransactionManager();
 		$sql->getData($insertsql);
-		$parentTaxon->setWithTaxonName($parentTaxonName);
-		$fieldsToEnter{parent_no} = $parentTaxon->taxonNumber(); 
+	# get the LAST authority record matching this name JA 25.4.04
+		my $matchsql = "SELECT taxon_no FROM authorities WHERE taxon_name='" . $parentTaxonName . "'";
+		my @parentrefs = @{$sql->getData($matchsql)};
+		$fieldsToEnter{parent_no} = $parentrefs[$#parentrefs]->{taxon_no}; 
 	}
 
 	my $resultOpinionNumber;
@@ -1386,11 +1515,17 @@ sub displayOpinionSummary {
 		print "<center>
 		<p><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonInfoResults&taxon_rank=" . $ref->{taxon_rank} . "&genus_name=" . $tempTaxon . "+(" . $self->childNumber() .")\"><B>Get&nbsp;general&nbsp;information&nbsp;about&nbsp;" . $ref->{taxon_name} . "</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=" . $self->{opinion_no} ."\"><B>Edit&nbsp;this&nbsp;opinion</B></A>&nbsp;-
+<<<<<<< Opinion.pm
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionList&taxon_no=" . $self->childNumber() . " \"><B>Add/edit&nbsp;a&nbsp;different&nbsp;opinion&nbsp;about&nbsp;" . $ref->{taxon_name} . "</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&amp;goal=opinion\"><B>Add/edit&nbsp;an&nbsp;opinion&nbsp;about&nbsp;another&nbsp;taxon</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority\"><B>Add/edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
+=======
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=" . $self->{reference_no} . " \"><B>Edit&nbsp;a&nbsp;different&nbsp;opinion&nbsp;with&nbsp;same&nbsp;reference</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=startDisplayOpinionChoiceForm&taxon_no=" . $self->childNumber() . " \"><B>Add/edit&nbsp;a&nbsp;different&nbsp;opinion&nbsp;about&nbsp;" . $ref->{taxon_name} . "</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&amp;goal=opinion\"><B>Add/edit&nbsp;an&nbsp;opinion&nbsp;about&nbsp;another&nbsp;taxon</B></A>&nbsp;-
         <A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority\"><B>Add/edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
 
+>>>>>>> 1.44
 		</center>";
 	}
 	
