@@ -178,14 +178,26 @@ sub isHigher {
 # Pass it another rank object and it will tell you
 # if it is higher than the passed object.
 # Returns boolean.
+#
+# If it can't figure it out, it will return 0
 sub isHigherThan {
 	my Rank $self = shift;
+	
+	my $other = shift;
+	
+	if (! ($self->{isValid} && $other->{isValid})) {
+		return 0;	
+	}
+	
+	
 	
 }
 
 # Pass it another rank object and it will tell you
 # if it is lower than the passed object.
 # Returns boolean.
+#
+# If it can't figure it out, it will return 0
 sub isLowerThan {
 	my Rank $self = shift;
 	
