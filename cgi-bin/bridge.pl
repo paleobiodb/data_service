@@ -4621,6 +4621,9 @@ sub checkNewTaxon{
 			print "<center><input type=submit value=\"Submit\"></center>\n</form>\n";
 			print &stdIncludes ("std_page_bottom");
 		}
+		else{
+			displayTaxonomyResults();
+		}
 	}
 	else{ # not reentry, so all matches were either 0 or 1
 		my $printed = 0;
