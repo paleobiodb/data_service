@@ -219,8 +219,11 @@ sub tallyFieldTerms	{
 			$sql .= "occurrences.created >= $datelimit ";
 		}
 		elsif($q->param('taxon_name')){
-			my $name = $q->param('taxon_name');
-			$genus_names_string = `./recurse $name`;
+		# JA: replaced recurse call with taxonomic_search call 7.5.04
+		#  because I am not maintaining recurse
+			$genus_names_string = PBDBUtil::taxonomic_search($q->param('taxon_name'), $dbt);
+			# my $name = $q->param('taxon_name');
+			# $genus_names_string = `./recurse $name`;
 			if($genus_names_string){
 					$sql .= " occurrences.genus_name IN ($genus_names_string)";
 			}
