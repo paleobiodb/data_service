@@ -4,6 +4,7 @@ package Confidence;
 
 use DBTransactionManager;
 use Debug;
+use Data::Dumper; 
 use GD;
 
 # written 03.31.04 by Josh Madin as final product
@@ -15,18 +16,18 @@ sub displayQueryPage    {
     my $q=shift;
     my $s=shift;
     my $dbt=shift;
-    print "<HTML><HEAD>";
-    print "<TITLE>Confidence Intervals</TITLE>";
-    print "<link REL=\"stylesheet\" TYPE=\"text/css\" HREF=\"/StyleSheets/common.css\">";
-    print "<DIV CLASS=\"title\">Confidence interval form</DIV></BR>";
+    print "<DIV CLASS=\"title\">Confidence interval form</DIV><BR>";
     print "<BODY><CENTER><TABLE CELLPADDING=5 BORDER=0>";
     print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"databaseCheckForm\">";
-    print "<TR><TH ALIGN=\"right\">Enter stratigraphic section, genus or species name:</TH><TD ALIGN=\"left\">";
+    print "<TR><TD ALIGN=\"right\">Enter a <SELECT NAME=\"input_type\"><OPTION VALUE=\"strat\">stratigraphic section</OPTION><OPTION VALUE=\"taxon\">taxonomic name</OPTION></SELECT>:</TD>";
+    print "<TD ALIGN=\"left\"><INPUT TYPE=\"text\" SIZE=\"20\" NAME=\"input\"></TD></TR>"; 
+    print "<TR><TD ALIGN=\"right\">Taxonomic resolution:</TD>";
+    print "<TD ALIGN=\"left\"><SELECT NAME=\"taxon_resolution\"><OPTION>species</OPTION><OPTION>genus</OPTION></SELECT></TD></TR>"; 
+    print "</TABLE><BR>";
 #	print "<TEXTAREA ROWS=\"5\" COLUMNS=\"20\" NAME=\"input\"></TEXTAREA></TD></TR></TABLE>";
-	print "<INPUT TYPE=\"text\" SIZE=\"20\" NAME=\"input\"></TD></TR></TABLE></BR>";
 
-#    print "<SPAN CLASS=\"tiny\">(This form will accept a taxa list copied from a text file)</SPAN></BR></BR></BR>";
-    print "<INPUT NAME=\"full\" TYPE=\"submit\" VALUE=\"Submit\"></FORM></CENTER></BR></BR></BODY></HTML>";
+#    print "<SPAN CLASS=\"tiny\">(This form will accept a taxa list copied from a text file)</SPAN><BR><BR><BR>";
+    print "<INPUT NAME=\"full\" TYPE=\"submit\" VALUE=\"Submit\"></FORM></CENTER><BR><BR>";
     
     return;
 }
@@ -35,75 +36,69 @@ sub checkData    {
     my $q=shift;
     my $s=shift;
     my $dbt=shift;
-    my $box = $q->param("input");
-#    print "BOX: $box</BR>";
-    my @taxon = split(" ", $q->param("input"));
-    my $strat = $q->param("input");
-# ----------------------REMAKE SPECIES LIST-----ALSO REMOVE UNCHECKED--------------
-    my $i=0;
-    my @splist;
-    my @testspe =0;
-    my $testyes =0;
-    while ($q->param("speciesname$i"))  {
-        if ($q->param("keepspecies$i") eq "yes")   {
-            push @splist, $q->param("speciesname$i");
-            $testyes++;
-        }
-        $testspe++;
-        $i++;
-    }    
+    my $dbh=$dbt->dbh;
 #-------------------CHECK-IF-TAXON-------------------------------------------------
-    if (scalar(@taxon) == 2)        {
-        $sql = "SELECT collection_no FROM occurrences WHERE genus_name ='" . @taxon[0] . "'";
-        $sql .= "AND species_name ='" . @taxon[1] . "'";
-    } elsif (scalar(@taxon) ==1)      {
-        $sql = "SELECT collection_no FROM occurrences WHERE genus_name ='" . @taxon[0] . "'";
-    } else    {
-        if (scalar(@splist) == 0)   {
-            displayQueryPage($q, $s, $dbt);
-            print "<center><table><tr><th><font color=\"red\">Sorry, couldn't understand your entry</font></th></tr></table></CENTER><br>";
-            return;
-        } else {
-            if ($testspe == $testyes)   {
-                optionsForm($q, $s, $dbt, \@splist);
-            return;
+    if ($q->param('input_type') eq 'taxon') {
+        my @taxon = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('input'));
+# ----------------------REMAKE SPECIES LIST-----ALSO REMOVE UNCHECKED--------------
+        my $i=0;
+        my @splist;
+        my $testspe =0;
+        my $testyes =0;
+        while ($q->param("speciesname$i"))  {
+            if ($q->param("keepspecies$i") eq "yes")   {
+                push @splist, $q->param("speciesname$i");
+                $testyes++;
+            }
+            $testspe++;
+            $i++;
+        }    
+
+        if (scalar(@taxon) == 2) { #genus+species
+            $sql = "SELECT collection_no FROM occurrences WHERE genus_name=" . $dbh->quote($taxon[0]);
+            $sql .= " AND species_name=" . $dbh->quote($taxon[1]);
+        } elsif (scalar(@taxon) ==1) { #genus
+            $sql = "SELECT collection_no FROM occurrences WHERE genus_name=" . $dbh->quote($taxon[0]);
+        } else    {
+            if (scalar(@splist) == 0)   {
+                displayQueryPage($q, $s, $dbt);
+                print "<center><table><tr><th><font color=\"red\">Sorry, couldn't understand your entry</font></th></tr></table></CENTER><br>";
+                return;
+            } else {
+                if ($testspe == $testyes)   {
+                    optionsForm($q, $s, $dbt, \@splist);
+                    return;
+                }
             }
         }
-    }
-    my @tempory = @{$dbt->getData($sql)};
-    my @checktaxon;
-    for my $counter (@tempory)        {
-        push @checktaxon, $counter->{collection_no};
-    }
-    if (scalar(@checktaxon) > 0)    {
-        push @splist, $strat;
-            buildList($q, $s, $dbt, \@splist);
-        return;
-    } elsif (scalar(@splist) == 0)  {
-#-------------------CHECK-IF-STRAT-------------------------------------------------
-        my $sql = "SELECT collection_no FROM collections WHERE localsection = '" . $strat . "' AND localbed !=''";
+        main::dbg("Species list: ".Dumper(\@splist));
+        main::dbg("Species sql: $sql");
         my @tempory = @{$dbt->getData($sql)};
-    
-        my @checkstrat;
+        my @checktaxon;
         for my $counter (@tempory)        {
-            push @checkstrat, $counter->{collection_no};
+            push @checktaxon, $counter->{collection_no};
         }
-        if (scalar(@checkstrat) > 0)    {
-            my $stname = $strat;
-            showStrat($q, $s, $dbt, \@stname);
+        if (scalar(@checktaxon) > 0)    {
+            push @splist, $q->param('input');
+            buildList($q, $s, $dbt, \@splist);
+        } else {
+            buildList($q, $s, $dbt, \@splist);
+            print "<center><table><tr><th><font color=\"red\">Sorry, </font><font color=\"blue\"><i>".$q->param('input')."</i></font><font color=\"red\"> is not in the database</font></th></tr></table></CENTER><BR><BR>";
+        }
+#-------------------CHECK-IF-STRAT-------------------------------------------------
+    } else {
+        my $strat = $q->param("input");
+        my $sql = "SELECT count(*) as cnt FROM collections WHERE localsection = " . $dbh->quote($strat) . " AND localbed !=''";
+        my $row = @{$dbt->getData($sql)}[0];
+    
+        if ($row->{'cnt'} > 0)    {
+            showStrat($q, $s, $dbt);
             return;
         } else  {
-#-------------------OTHERWISE-BACK-TO-FIRST-PAGE-----------------------------------
             displayQueryPage($q, $s, $dbt);
-            print "<center><table><tr><th><font color=\"red\">Sorry, couldn't understand your entry</font></th></tr></table></CENTER><br>";
+            print "<center><table><tr><th><font color=\"red\">Sorry, </font><font color=\"blue\"><i>$strat</i></font><font color=\"red\"> is not in the database</font></th></tr></table></CENTER><BR><BR>";
             return;
         }
-    } else  {
-        buildList($q, $s, $dbt, \@splist);
-        if ($testspe == $testyes) {
-            print "<center><table><tr><th><font color=\"red\">Sorry, </font><font color=\"blue\"><i>$strat </i></font><font color=\"red\"> is not in the database</font></th></tr></table></CENTER></BR></BR>";
-        }
-        return;
     }
 }
 #--------------------------TAXON LIST BUILDER------------------------------------
@@ -114,22 +109,20 @@ sub buildList    {
     my $dbt=shift;
     my $splist=shift;
     my @splist = @$splist;
-    print "<HTML><HEAD>";
-    print "<TITLE>Confidence Intervals</TITLE>\n\n";
-    print "<link REL=\"stylesheet\" TYPE=\"text/css\" HREF=\"/StyleSheets/common.css\">";
-    print "<DIV CLASS=\"title\">Confidence interval taxa list</DIV></BR>";
+    print "<DIV CLASS=\"title\">Confidence interval taxon list</DIV><BR>";
     print "<BODY><CENTER><TABLE CELLPADDING=5 BORDER=0>";
     print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"databaseCheckForm\">";
+    print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"".$q->param('input_type')."\">";
     my $i = 0;
     foreach my $speciesname (@splist)   {
         print "<TR><TH ALIGN=\"right\"><INPUT TYPE=checkbox NAME=keepspecies$i VALUE=yes CHECKED=checked></TH><TD ALIGN=\"left\"><i>$speciesname</i><INPUT TYPE=hidden NAME=\"speciesname$i\" VALUE=\"$speciesname\"></TD>";
         $i++;
     }     
-    print "<TR><TH></TH><TD ALIGN=\"left\"><SPAN CLASS=\"tiny\">(To remove taxa from list, uncheck and press 'Submit')</SPAN></TD></TR>";
+    print "<TR><TH></TH><TD ALIGN=\"left\"><SPAN CLASS=\"tiny\">(To remove taxon from list, uncheck and press 'Submit')</SPAN></TD></TR>";
     print "<TR><TH ALIGN=\"right\">Add another genus or species to list: </TH><TD ALIGN=\"left\">";
-	print "<INPUT TYPE=\"text\" SIZE=\"30\" NAME=\"input\"></TD></TR>";
-    print "<TR><TH></TH><TD ALIGN=\"left\"><SPAN CLASS=\"tiny\">(To calculate confidence intervals, leave text box empty and press 'Submit')</SPAN></TD></TR></TABLE></BR>"; 
-    print "<INPUT TYPE=\"submit\" VALUE=\"Submit\"><A HREF=\"/cgi-bin/bridge.pl?user=Guest&action=displayFirstForm\"><INPUT TYPE=\"button\" VALUE=\"Start again\"></A></FORM></CENTER></BR></BR></BODY></HTML>";
+    print "<INPUT TYPE=\"text\" SIZE=\"30\" NAME=\"input\"></TD></TR>";
+    print "<TR><TH></TH><TD ALIGN=\"left\"><SPAN CLASS=\"tiny\">(To calculate confidence intervals, leave text box empty and press 'Submit')</SPAN></TD></TR></TABLE><BR>"; 
+    print "<INPUT TYPE=\"submit\" VALUE=\"Submit\"><A HREF=\"/cgi-bin/bridge.pl?action=displayFirstForm\"><INPUT TYPE=\"button\" VALUE=\"Start again\"></A></FORM></CENTER><BR><BR>";
 
     return;
 }
@@ -139,48 +132,54 @@ sub showStrat    {
     my $q=shift;
     my $s=shift;
     my $dbt=shift;
+    my $dbh=$dbt->dbh;
     my @splist;
     my $local_sect = $q->param("input");
-    my $sql = "SELECT localbed, collection_no FROM collections WHERE localsection = '" . $local_sect . "' AND localbed !=''";
-    my @temparray = @{$dbt->getData($sql)};
-    my @collections;
-    for my $counter (@temparray)  {
-        push @collections, $counter->{collection_no};
-    } 
-#---------------------------------------------------------------------------------------------
-    my %speciesStrat;
-    foreach my $collect (@collections)   {
-        $sql = "SELECT occurrence_no, genus_name, species_name FROM occurrences WHERE collection_no =" . $collect;
-        
-        my @temparray = @{$dbt->getData($sql)};
-        foreach my $count (@temparray)  {
-            $genusspecies = join ' ',$count->{genus_name},$count->{species_name};
-            $speciesStrat{$genusspecies} = $count->{occurrence_no};
+    my $sql = "SELECT occurrence_no, occurrences.taxon_no, genus_name, species_name, taxon_name, taxon_rank".
+              " FROM collections, occurrences ".
+              " LEFT JOIN authorities ON occurrences.taxon_no=authorities.taxon_no".
+              " WHERE occurrences.collection_no=collections.collection_no ".
+              " AND localsection = " . $dbh->quote($local_sect) . " AND localbed !=''".
+              " GROUP BY taxon_no,genus_name,species_name ";
+    my @strat_taxa_list= @{$dbt->getData($sql)};
+    my %taxonList;
+    # We build a comma separated list of taxon_nos to pass in. If the taxon_resolution is species,
+    # the list will always have one taxon_no in it, if its genus, it may have more. If theres no
+    # taxon_no, use the genus+species name
+    foreach my $row (@strat_taxa_list) {
+        if ($row->{'taxon_no'}) {
+            if ($q->param('taxon_resolution') eq 'genus') {
+                $taxonList{$row->{'genus_name'}} .= $row->{'taxon_no'}.",";
+            } else { #species resolution
+                $taxonList{$row->{'genus_name'}.' '.$row->{'species_name'}} .= $row->{'taxon_no'}.",";
+            }
+        } else {
+            if ($q->param('taxon_resolution') eq 'genus') {
+                $taxonList{$row->{'genus_name'}} .= $row->{'genus_name'}.",";
+            } else { #species resolution
+                $taxonList{$row->{'genus_name'}.' '.$row->{'species_name'}} .= $row->{'genus_name'}.' '.$row->{'species_name'}.",";
+            }
         }
     }
-#---------------------------------------------------------------------------------------------
-    print "<HTML><HEAD>";
-    print "<TITLE>Confidence Intervals</TITLE>\n\n";
-    print "<link REL=\"stylesheet\" TYPE=\"text/css\" HREF=\"/StyleSheets/common.css\">";
-    print "<DIV CLASS=\"title\">Stratigraphic section taxa list</DIV></BR>";
+
+    print "<DIV CLASS=\"title\">Stratigraphic section taxon list</DIV><BR>";
     print "<BODY><CENTER><TABLE CELLPADDING=5 BORDER=0>";
-    print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"showOptionsForm\"><INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"$local_sect\">";
+    print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"showOptionsForm\"><INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"$local_sect\"><INPUT TYPE=\"hidden\" NAME=\"taxon_resolution\" VALUE=\"".$q->param("taxon_resolution")."\">";
     my $type = 1;
-    my $stlength = scalar(keys(%speciesStrat));
-    my $columns = int(($stlength+2)/3);
-    my @speciesNames = sort alphabetically keys(%speciesStrat);
-    for ($p = 0; $p < $columns; $p++) {
-        $q=$p + $columns;
-        $r=$p + 2 * ($columns);
-        print "<TR><TD><INPUT TYPE=checkbox NAME=keepstrat$p VALUE=yes CHECKED=checked></TD><TD><i>" . $speciesNames[$p] . "</i><INPUT TYPE=hidden NAME=\"speciesname$p\" VALUE=\"$speciesNames[$p]\"></TD>";
-        print "<TD><INPUT TYPE=checkbox NAME=keepstrat$q VALUE=yes CHECKED=checked></TD><TD><i>" . $speciesNames[$q] . "</i><INPUT TYPE=hidden NAME=\"speciesname$q\" VALUE=\"$speciesNames[$q]\"></TD>";
-        if ($r < $stlength)   {
-            print "<TD><INPUT TYPE=checkbox NAME=keepstrat$r VALUE=yes CHECKED=checked></TD><TD><i>" . $speciesNames[$r] . "</i><INPUT TYPE=hidden NAME=\"speciesname$r\" VALUE=\"$speciesNames[$r]\"></TD></TR>";
+    my @sortList = sort alphabetically keys(%taxonList);
+    my $columns = int(scalar(@sortList)/3)+1;
+    for($i=0;$i<$columns;$i++) {
+        print "<TR>";
+        for($j=$i;$j<scalar(@sortList);$j=$j+$columns) {
+            $taxonList{$sortList[$j]} =~ s/,$//; 
+            print "<TD><INPUT TYPE=checkbox NAME=keepstrat$j VALUE=yes CHECKED=checked>" . 
+                  "<i>".$sortList[$j] . "</i><INPUT TYPE=hidden NAME=\"speciesname$j\" VALUE=\"$taxonList{$sortList[$j]}\"></TD>\n";
         }
+        print "</TR>";
     }
-    print "</CENTER></TABLE></BR>";
-    print "<CENTER><SPAN CLASS=\"tiny\">(To remove taxa from list for analysis, uncheck before pressing 'Submit')</SPAN></BR></BR>";
-    print "<INPUT TYPE=\"submit\" VALUE=\"Submit\"><A HREF=\"/cgi-bin/bridge.pl?user=Guest&action=displayFirstForm\"><INPUT TYPE=\"button\" VALUE=\"Start again\"></A></CENTER></BR></BR></FORM></BODY></HTML>";
+    print "</CENTER></TABLE><BR>";
+    print "<CENTER><SPAN CLASS=\"tiny\">(To remove taxon from list for analysis, uncheck before pressing 'Submit')</SPAN><BR><BR>";
+    print "<INPUT TYPE=\"submit\" VALUE=\"Submit\"><A HREF=\"/cgi-bin/bridge.pl?action=displayFirstForm\"><INPUT TYPE=\"button\" VALUE=\"Start again\"></A></CENTER><BR><BR></FORM>";
     
     return;
 }
@@ -241,9 +240,6 @@ sub optionsForm    {
         
 #------------------------------OPTIONS FORM----------------------------------
     
-    print "<HTML><HEAD>";
-    print "<TITLE>Confidence Intervals</TITLE>\n\n";
-    print "<link REL=\"stylesheet\" TYPE=\"text/css\" HREF=\"/StyleSheets/common.css\">";
     print "<DIV CLASS=\"title\">Confidence interval options form</DIV>";
     print "<BODY><CENTER><TABLE CELLPADDING=5 BORDER=0>";
     if ($type == 0)   {
@@ -252,15 +248,13 @@ sub optionsForm    {
     } else  {
         print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"calculateStratigraphicInterval\"><INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"$local_sect\">";
         print "<INPUT TYPE=\"hidden\" NAME=\"type\" VALUE=1>";
+        print "<INPUT TYPE=\"hidden\" NAME=\"taxon_resolution\" VALUE=\"".$q->param("taxon_resolution")."\">";
     }    
     my $i = 0;
     foreach my $speciesname (@list)   {
         print "<INPUT TYPE=hidden NAME=\"speciesname$i\" VALUE=\"$speciesname\"></TD>";
         $i++;
     }     
-    if ($type == 1) {
-        print "<TR><TH ALIGN=\"right\">Taxonomic resolution: </TH><TD ALIGN=\"left\"><SELECT NAME=\"stratres\"><OPTION SELECTED>species<OPTION>genus</SELECT></TD><TR>";
-    }
     if ($type == 0)   {    
         print "<TR><TH ALIGN=\"right\">Time-scale: </TH><TD ALIGN=\"left\"><SELECT NAME=\"scale\">";
         my @sorted = sort keys %scale_strings;
@@ -275,8 +269,8 @@ sub optionsForm    {
 #    print "<TR><TH></TH><TD><SPAN CLASS=\"tiny\">(Warning: Know thine assumptions)</SPAN></TD></TR>";
     print "<TR><TH ALIGN=\"right\">Estimate: </TH><TD ALIGN=\"left\"><SELECT NAME=\"conffor\"><OPTION>total duration<OPTION>first appearance<OPTION>last appearance<OPTION>no confidence intervals</SELECT></TD><TR>";
     print "<TR><TH ALIGN=\"right\">Confidence level: </TH><TD ALIGN=\"left\"><SELECT NAME=\"alpha\"><OPTION>0.99<OPTION SELECTED>0.95<OPTION>0.8<OPTION>0.5<OPTION>0.25</SELECT></TD></TR>";
-    print "<TR><TH ALIGN=\"right\">Order taxa by: </TH><TD ALIGN=\"left\"><SELECT NAME=\"order\"><OPTION>name<OPTION SELECTED>first appearance<OPTION>last appearance<OPTION>stratigraphic range</SELECT></TD><TR></TABLE></BR>";
-    print "<INPUT NAME=\"full\" TYPE=\"submit\" VALUE=\"Submit\"><A HREF=\"/cgi-bin/bridge.pl?user=Guest&action=displayFirstForm\"><INPUT TYPE=\"button\" VALUE=\"Start again\" STYLE=\"color:red\"></A></FORM></CENTER></BR></BR></BODY></HTML>";
+    print "<TR><TH ALIGN=\"right\">Order taxa by: </TH><TD ALIGN=\"left\"><SELECT NAME=\"order\"><OPTION>name<OPTION SELECTED>first appearance<OPTION>last appearance<OPTION>stratigraphic range</SELECT></TD><TR></TABLE><BR>";
+    print "<INPUT NAME=\"full\" TYPE=\"submit\" VALUE=\"Submit\"><A HREF=\"/cgi-bin/bridge.pl?action=displayFirstForm\"><INPUT TYPE=\"button\" VALUE=\"Start again\" STYLE=\"color:red\"></A></FORM></CENTER><BR><BR>";
 
     return;
 }
@@ -288,6 +282,7 @@ sub calculateTaxaInterval {
     my $q=shift;
     my $s=shift;
     my $dbt=shift;
+    my $dbh=$dbt->dbh;
     my $i=0;
     my @list;
     while ($q->param("speciesname$i")) {
@@ -336,19 +331,19 @@ sub calculateTaxaInterval {
 
 #        foreach my $keycounter (keys(%timeHash)) {
 #            print "$keycounter: $timeHash{$keycounter}";
-#            print "</BR>";
+#            print "<BR>";
 #        }
     
-	@_ = TimeLookup::findBoundaries($dbh,$dbt);
-	my %upperbound = %{$_[0]};
-	my %lowerbound = %{$_[1]};
+    @_ = TimeLookup::findBoundaries($dbh,$dbt);
+    my %upperbound = %{$_[0]};
+    my %lowerbound = %{$_[1]};
     my %upperboundname = %{$_[2]};
     my %lowerboundname = %{$_[3]};
     
 #        foreach my $keycounter (sort numerically keys(%upperbound)) {
 #            print "$keycounter: ";
 #                print "$upperbound{$keycounter} -- $lowerbound{$keycounter}";
-#            print "</BR>";
+#            print "<BR>";
 #        }
 
     my $sql = "SELECT interval_no, next_interval_no, lower_boundary FROM correlations WHERE scale_no = " . $scale . " "; # Get all the necessary stuff to create a scale
@@ -362,9 +357,9 @@ sub calculateTaxaInterval {
     
     foreach my $counter (@results)	{
         my $temp = $counter->{interval_name};
-		if ($eml_interval ne "")	{
-			$temp = $counter->{eml_interval} . " " . $counter->{interval_name};
-		}
+        if ($eml_interval ne "")	{
+            $temp = $counter->{eml_interval} . " " . $counter->{interval_name};
+        }
         $namescale{$counter->{interval_no}} = $temp;
     }
 
@@ -380,7 +375,7 @@ sub calculateTaxaInterval {
 #            foreach my $arrcounter (@{$masterHash{$keycounter}}) {
 #                print "$arrcounter, ";
 #            }
-#            print "</BR>";
+#            print "<BR>";
 #        }
 
 # ----------------------------------------------------------------------------
@@ -394,11 +389,12 @@ sub calculateTaxaInterval {
         my $sql;
 # ---------------------START TAXON CHECKER----------------------------------
         my @taxon = split(" ",$tryout);
+
         if (scalar(@taxon) == 2)        {
-            $sql = "SELECT collection_no FROM occurrences WHERE genus_name ='" . @taxon[0] . "'";
-            $sql .= "AND species_name ='" . @taxon[1] . "'";
+            $sql = "SELECT collection_no FROM occurrences WHERE genus_name=" . $dbh->quote($taxon[0]);
+            $sql .= " AND species_name=" . $dbh->quote($taxon[1]);
         } elsif (scalar(@taxon) ==1)      {
-            $sql = "SELECT collection_no FROM occurrences WHERE genus_name ='" . @taxon[0] . "'";
+            $sql = "SELECT collection_no FROM occurrences WHERE genus_name=" . $dbh->quote($taxon[0]);
         } 
         my @col_nos = @{$dbt->getData($sql)};
         my @collnums;
@@ -423,7 +419,7 @@ sub calculateTaxaInterval {
 ##            foreach my $arrcounter (@{$anotherHash{$keycounter}}) {
 #                print "$arrcounter, ";
 #            }
-#            print "</BR>";
+#            print "<BR>";
 #        }
 
         foreach my $keycounter (keys(%namescale)) {
@@ -431,7 +427,7 @@ sub calculateTaxaInterval {
         }
         
         
-#        print "$count</BR>";
+#        print "$count<BR>";
         
         #------------FIND FIRST AND LAST OCCURRENCES---------------
         my $firstint;
@@ -466,7 +462,7 @@ sub calculateTaxaInterval {
         @gaplist = sort numerically @gaplist;
         
 #        foreach my $gapcounter (@gaplist) {
-#            print "gaplist: $gapcounter</BR>";
+#            print "gaplist: $gapcounter<BR>";
 #        }
  
             if ($conftype eq "Strauss and Sadler (1989)") {
@@ -513,7 +509,7 @@ sub calculateTaxaInterval {
 #            foreach my $arrcounter (@{$solowHash{$keycounter}}) {
 #                print "$arrcounter, ";
 #            }
-#            print "</BR>";
+#            print "<BR>";
 #        }
 
     my @mx;
@@ -526,35 +522,35 @@ sub calculateTaxaInterval {
     my $Smin = $mx[0];
 
     if ($conftype eq "Solow (1996)") {  
-#        print "HERE 1</BR>";
+#        print "HERE 1<BR>";
         commonEndPoint(\%solowHash,$C,$conffor);
-#        print "HERE 2</BR>";
+#        print "HERE 2<BR>";
 #        foreach my $keycounter (keys(%solowHash)) {
 #            print "$keycounter: ";
 #            foreach my $arrcounter (@{$solowHash{$keycounter}}) {
 #                print "$arrcounter, ";
 #            }
-#            print "</BR>";
+#            print "<BR>";
 #        }
         
-#        print "return: FS: $firstsig, FC: $firstconfidencelengthlong, LS: $lastsig, LC: $lastconfidencelengthlong</BR>";
+#        print "return: FS: $firstsig, FC: $firstconfidencelengthlong, LS: $lastsig, LC: $lastconfidencelengthlong<BR>";
     
 
-#        print "MAX: $Smax, MIN: $Smin</BR>";
+#        print "MAX: $Smax, MIN: $Smin<BR>";
     
         foreach my $keycounter (keys(%theHash)) {
             if ($firstconfidencelengthlong != -999) {
                 $theHash{$keycounter}[1] = $Smax + $firstconfidencelengthlong;
                 $theHash{$keycounter}[4] = $firstconfidencelengthlong;
-#                    print "HERE 3</BR>";
+#                    print "HERE 3<BR>";
             }
             if ($lastconfidencelengthlong != -999) {
                 $theHash{$keycounter}[0] = $Smin - $lastconfidencelengthlong;
                 $theHash{$keycounter}[11] = $lastconfidencelengthlong;
-#                    print "HERE 4</BR>";
+#                    print "HERE 4<BR>";
             }        
         }
-#        print "HERE 5</BR>";
+#        print "HERE 5<BR>";
     }
 #            $theHash{$tryout} = [$upper, $lower, $first, $last, $firstconfidencelengthlong, $intervallength, $uppershort, $lowershort, $correlation,$N,$firstconfidencelengthshort,$lastconfidencelengthlong,0];
 
@@ -564,7 +560,7 @@ sub calculateTaxaInterval {
 #            foreach my $arrcounter (@{$theHash{$keycounter}}) {
 #                print "$arrcounter, ";
 #            }
-#            print "</BR>";
+#            print "<BR>";
 #        }
             
                 
@@ -574,7 +570,7 @@ sub calculateTaxaInterval {
 #            foreach my $arrcounter (@{$masterHash{$keycounter}}) {
 #                print "$arrcounter, ";
 #            }
-#            print "</BR>";
+#            print "<BR>";
 #        }
 
 #print "Chi: " . chiSquaredDensity(4,0.05,0);    
@@ -600,6 +596,8 @@ sub calculateTaxaInterval {
     my $poly = GD::Polygon->new();    
     my $white  = $gd->colorAllocate(255, 255, 255);
     my $aiwhite = "0.00 0.00 0.00 0.00 K"; 
+    my $grey= $gd->colorAllocate(  192,   192,   192);
+    my $aigrey = "0.23 0.16 0.13 0.02 K";
     my $black  = $gd->colorAllocate(  0,   0,   0);
     my $aiblack = "0.00 0.00 0.00 1.00 K";
 #    $gd->rectangle(0,0,$fig_width - 1,$fig_lenth - 1,$black);
@@ -627,7 +625,7 @@ sub calculateTaxaInterval {
     
 #        foreach my $keycounter (sort numerically keys(%periodinclude)) {
 #            print "$keycounter: $periodinclude{$keycounter}";
-#            print "</BR>";
+#            print "<BR>";
 #        }
 
     
@@ -645,7 +643,7 @@ sub calculateTaxaInterval {
         if (($temp - $tempn) > 25 && $tempn > 0)	{
             $gd->string(gdTinyFont, 10, ((($temp - $tempn)/2) + $tempn - 3) , @{$masterHash{$key}}[0], $black);
             aiText("null",10, ((($temp - $tempn)/2) + $tempn + 3) , @{$masterHash{$key}}[0],$aiblack);       #AI
-#            print "distance: " . ($temp - $tempn) . ", name: " . @{$masterHash{$key}}[0] . ", key: " . $key . "</BR>";
+#            print "distance: " . ($temp - $tempn) . ", name: " . @{$masterHash{$key}}[0] . ", key: " . $key . "<BR>";
         }
         if (($temp - $tempn) > 10)	{
             $gd->string(gdTinyFont, 45, $temp - 3, sprintf("%.1f", $masterHash{$key}[2]), $black);
@@ -687,12 +685,12 @@ sub calculateTaxaInterval {
             $dottemp = 1;
         }
         
-#        print "upper:" . @{$theHash{$something}}[0] . "</BR>";
-#        print "lower:" . @{$theHash{$something}}[1] . "</BR>";
-#        print "first:" . @{$theHash{$something}}[2] . "</BR>";
-#        print "last:" . @{$theHash{$something}}[3] . "</BR>";
-#        print "uppershort:" . @{$theHash{$something}}[6] . "</BR>";
-#        print "lowershort:" . @{$theHash{$something}}[7] . "</BR>";
+#        print "upper:" . @{$theHash{$something}}[0] . "<BR>";
+#        print "lower:" . @{$theHash{$something}}[1] . "<BR>";
+#        print "first:" . @{$theHash{$something}}[2] . "<BR>";
+#        print "last:" . @{$theHash{$something}}[3] . "<BR>";
+#        print "uppershort:" . @{$theHash{$something}}[6] . "<BR>";
+#        print "lowershort:" . @{$theHash{$something}}[7] . "<BR>";
 
         my $limup;
         my $limdn;
@@ -708,7 +706,8 @@ sub calculateTaxaInterval {
         
         my $limupshort = 130 + (@{$theHash{$something}}[6] - $upperval) * $millionyr;
         my $limdnshort = 130 + (@{$theHash{$something}}[7] - $upperval) * $millionyr;
-        	
+        
+        # Draw confidence bar
         $gd->line($marker,$barup,$marker,$bardn, $black);
         $gd->line($marker + 5,$barup,$marker + 5,$bardn, $black);
         $gd->line($marker,$barup,$marker + 5,$barup, $black);
@@ -781,24 +780,24 @@ sub calculateTaxaInterval {
             $gd->line($counter,130 + ($Smin - $upperval) * $millionyr,$counter,130 + ($Smin - $upperval) * $millionyr, $black);
         }
         my $temptemp = (130 + ($Smax - $upperval) * $millionyr);
-#        print "barup: $temptemp </BR>";
+#        print "barup: $temptemp <BR>";
         my $temptemp = (130 + ($Smin - $upperval) * $millionyr);
-#        print "barup: $temptemp </BR>";       
+#        print "barup: $temptemp <BR>";       
 
-#        print "dotmarkerlast: $dotmarkerlast </BR>";              
+#        print "dotmarkerlast: $dotmarkerlast <BR>";              
         for (my $counter = (130 + ($Smin - $upperval) * $millionyr); $counter <= $dotmarkerlast; $counter=$counter + 2) {
             $gd->line($Smarker, $counter,$Smarker,$counter, $black);
-#        print "counter: $counter </BR>";
+#        print "counter: $counter <BR>";
 
         }
         
         for (my $counter = (130 + ($Smin - $upperval) * $millionyr); $counter <= $barup; $counter=$counter + 2) {
             $gd->line($marker - 11, $counter,$marker - 11,$counter, $black);
-#        print "counter: $counter </BR>";
+#        print "counter: $counter <BR>";
 
         }
         my $conftemp = $lastconfidencelengthlong;
-#        print "lastconfidencelengthlong: $lastconfidencelengthlong </BR>";
+#        print "lastconfidencelengthlong: $lastconfidencelengthlong <BR>";
         
         if (($Smin - $lastconfidencelengthlong) < 0) {
             $conftemp = $Smin;
@@ -808,7 +807,7 @@ sub calculateTaxaInterval {
             $gd->line($center ,130 -3,$center + 1,130 -3, $black);
             $gd->line($center ,130 -4,$center + 1,130 -4, $black);  
         } else {
-#        print "conftemp: $conftemp </BR>";
+#        print "conftemp: $conftemp <BR>";
             $gd->line($Smarker,(130 + ($Smin - $conftemp - $upperval) * $millionyr),$marker - 11,(130 + ($Smin - $conftemp - $upperval) * $millionyr), $black); 
         }
         $gd->rectangle($center , (130 + ($Smin - $conftemp - $upperval) * $millionyr), $center + 1,(130 + ($Smin - $upperval) * $millionyr), $black);
@@ -826,12 +825,12 @@ sub calculateTaxaInterval {
         }
         for (my $counter = $dotmarkerfirst; $counter <= (130 + ($Smax - $upperval) * $millionyr); $counter=$counter + 2) {
             $gd->line($Smarker, $counter,$Smarker,$counter, $black);
-#        print "counter: $counter </BR>";
+#        print "counter: $counter <BR>";
 
         }
         for (my $counter = $bardn; $counter <= (130 + ($Smax - $upperval) * $millionyr); $counter=$counter + 2) {
             $gd->line($marker - 11, $counter,$marker - 11,$counter, $black);
-#        print "counter: $counter </BR>";
+#        print "counter: $counter <BR>";
 
         }
         $gd->rectangle($center , (130 + ($Smax + $firstconfidencelengthlong - $upperval) * $millionyr), $center + 1,(130 + ($Smax - $upperval) * $millionyr), $black);
@@ -849,8 +848,6 @@ sub calculateTaxaInterval {
     close IMAGEJ;
     close IMAGEP;
 # ---------------------------------RESULTS-PAGE----------------------------------------
-    print "<HTML><HEAD><TITLE>Confidence Intervals</TITLE>";
-    print "<link REL=\"stylesheet\" TYPE=\"text/css\" HREF=\"/StyleSheets/common.css\">";
     print "<DIV CLASS=\"title\">Confidence interval results</DIV>";
     print "<FORM METHOD=\"post\" ACTION=\"bridge.pl\">";
     print "<INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"displayFirstForm\">";
@@ -859,42 +856,46 @@ sub calculateTaxaInterval {
     
     if ($recent == 1)    {
         print "<center><table><tr><th><font color=\"red\">
-            This taxon may not be extinct</font></th></tr></table></CENTER></br></br>";
+            This taxon may not be extinct</font></th></tr></table></CENTER><BR><BR>";
     }
     if ($recent == 2)    {
         print "<center><table><tr><th><font color=\"red\">
             The upper confidence interval extends into the future and is therefore unreliable
-            </font></th></tr></table></CENTER></br></br>";
+            </font></th></tr></table></CENTER><BR><BR>";
     }
-    #RESULTS TABLE
     
     print "<CENTER><TABLE><TD><IMG SRC=\"/public/confidence/$imagenamepng\"></TD><TD WIDTH=40></TD>";
-    
+  
+    print "<TD>";
     if($conftype eq "Strauss and Sadler (1989)") {
-        print "<TD><TABLE CELLSPACING=1 BGCOLOR=\"black\" CELLPADDING=5><TR BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD></TD><TD WIDTH=70><B>First Occurrence (Ma)</B></TD><TD WIDTH=70><B>Last Occurrence (Ma)</B></TD><TD WIDTH=70><B>Confidence Interval (Ma)</B></TD><TD WIDTH=70><B>Number of Horizons</B></TD><TD WIDTH=70><B>Transposition Test</B></TD></TR>";
-    
-        foreach my $something (@sortedKeys) {
-            print "<TR  BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD><I><B>$something</B></I></TD><TD>@{$theHash{$something}}[2]</TD><TD>@{$theHash{$something}}[3]</TD><TD>@{$theHash{$something}}[4]</TD><TD>@{$theHash{$something}}[9]</TD><TD>@{$theHash{$something}}[8]</TD></TR>";
+        my (@tableRowHeader, @tableColHeader, @table);
+        @tableRowHeader = ('first occurrence','last occurrence (Ma)','confidence interval (Ma)', 'number of horizons', 'transposition test');
+        for($i=0;$i<scalar(@sortedKeys);$i++){
+            push @tableColHeader, $sortedKeys[$i]; #taxon name
+            my @confVals = @{$theHash{$sortedKeys[$i]}};
+            $table[$i] = [$confVals[2],$confVals[3],$confVals[4],$confVals[9],$confVals[8]];
         }
-#    print "<TR><TD></TD></TR>";
-
+        printResultTable('',\@tableRowHeader,\@tableColHeader,\@table);
     } elsif($conftype eq "Marshall (1994)") {
-        print "<TD><TABLE CELLSPACING=1 BGCOLOR=\"black\" CELLPADDING=5><TR BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD></TD><TD WIDTH=70><B>First Occurrence (Ma)</B></TD><TD WIDTH=70><B>Last Occurrence (Ma)</B></TD><TD WIDTH=70><B>Lower Confidence Interval (Ma)</B></TD><TD WIDTH=70><B>Upper Confidence Interval (Ma)</B></TD><TD WIDTH=70><B>Number of Horizons</B></TD><TD WIDTH=70><B>Transposition Test</B></TD></TR>";
-    
-        foreach my $something (@sortedKeys) {
-            print "<TR  BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD><I><B>$something</B></I></TD><TD>@{$theHash{$something}}[2]</TD><TD>@{$theHash{$something}}[3]</TD><TD>@{$theHash{$something}}[10]</TD><TD>@{$theHash{$something}}[4]</TD><TD>@{$theHash{$something}}[9]</TD><TD>@{$theHash{$something}}[8]</TD></TR>";
+        my (@tableRowHeader, @tableColHeader, @table);
+        @tableRowHeader = ('first occurrence','last occurrence (Ma)','lower confidence interval (Ma)', 'upper confidence interval (Ma)','number of horizons', 'transposition test');
+        for($i=0;$i<scalar(@sortedKeys);$i++){
+            push @tableColHeader, $sortedKeys[$i]; #taxon name
+            my @confVals = @{$theHash{$sortedKeys[$i]}};
+            $table[$i] = [$confVals[2],$confVals[3],$confVals[10],$confVals[4],$confVals[9],$confVals[8]];
         }
-#    print "<TR><TD></TD></TR>";
-
+        printResultTable('',\@tableRowHeader,\@tableColHeader,\@table);
     } elsif($conftype eq "Solow (1996)") {
-        print "<TD><TABLE><TR><TD><TABLE CELLSPACING=1 BGCOLOR=\"black\" CELLPADDING=5>";
-
-        
-        print "<TR BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD>Table 1</TD><TD WIDTH=70><B>First Occurrence (Ma)</B></TD><TD WIDTH=70><B>Last Occurrence (Ma)</B></TD><TD WIDTH=70><B>Number of Horizons</B></TD><TD WIDTH=70><B>Transposition Test</B></TD></TR>";
-    
-        foreach my $something (@sortedKeys) {
-            print "<TR BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD WIDTH=70><I><B>$something</B></I></TD><TD>@{$theHash{$something}}[2]</TD><TD>@{$theHash{$something}}[3]</TD><TD>@{$theHash{$something}}[9]</TD><TD>@{$theHash{$something}}[8]</TD></TR>";
+        my (@tableRowHeader, @tableColHeader, @table);
+        @tableRowHeader = ('first occurrence','last occurrence (Ma)','number of horizons', 'transposition test');
+        for($i=0;$i<scalar(@sortedKeys);$i++){
+            push @tableColHeader, $sortedKeys[$i]; #taxon name
+            my @confVals = @{$theHash{$sortedKeys[$i]}};
+            $table[$i] = [$confVals[2],$confVals[3],$confVals[9],$confVals[8]];
         }
+        printResultTable('table 1',\@tableRowHeader,\@tableColHeader,\@table);
+        print "<BR><BR>";
+        
         my $temp1;
         my $temp2;
         if ($firstconfidencelengthlong == -999) {
@@ -904,42 +905,62 @@ sub calculateTaxaInterval {
         if ($lastconfidencelengthlong == -999) {
             $temp2 = "NA";
         } else {$temp2 = sprintf("%.3f", $lastconfidencelengthlong)}
-        
-        print "</TABLE></TD></TR><TR><TD HEIGHT=40></TD></TR>";
-        print "<TR><TD><TABLE CELLSPACING=1 BGCOLOR=\"black\" CELLPADDING=5><TR BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD>Table 2</TD><TD WIDTH=70><B>Significance Level</B></TD><TD WIDTH=70><B>Confidence Limit (Ma)</B></TD></TR>";
+      
+        # print table 2 
+        print "<TABLE CELLSPACING=1 BGCOLOR=\"black\" CELLPADDING=5><TR BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD>table 2</TD><TD WIH=70><B>significance level</B></TD><TD WIH=70><B>confidence limit (Ma)</B></TD></TR>";
         if ($firstsig != -999) {
-        print "<TR  BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD WIDTH=70><B>Common First Occurrence</B></TD><TD>$firstsig</TD><TD>$temp1</TD></TR>";
+        print "<TR  BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD WIH=70><B>common first occurrence</B></TD><TD>$firstsig</TD><TD>$temp1</TD></TR>";
         }
         if ($lastsig != -999) {
-        print "<TR  BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD WIDTH=70><B>Common Last Occurrence</B></TD><TD>$lastsig</TD><TD>$temp2</TD></TR>";
+        print "<TR  BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD WIH=70><B>common last occurrence</B></TD><TD>$lastsig</TD><TD>$temp2</TD></TR>";
         }
-        print "</TABLE></TD></TR>";
-
-    
+        print "</TABLE>";
     }
+    print "</TD></TR>";
+        
     print "</TABLE></TD>";
 
-    print "</TABLE></CENTER></BR></BR>";
+    print "</TABLE></CENTER><BR><BR>";
     
     print "<CENTER><b>Download figure as: <a href=\"/public/confidence/$imagenamepng\" TARGET=\"xy\">PNG</a>";
     print ", <a href=\"/public/confidence/$imagenamejpg\" TARGET=\"xy\">JPEG</a>";
-    print ", <a href=\"/public/confidence/$imagenameai\">AI</a></BR></BR></b>";
-    print "<INPUT TYPE=submit VALUE=\"Start again\"></BR></BR></BR>";
+    print ", <a href=\"/public/confidence/$imagenameai\">AI</a><BR><BR></b>";
+    print "<INPUT TYPE=submit VALUE=\"Start again\"><BR><BR><BR>";
 
     return;
 } #End Subroutine CalculateIntervals
+
+# Used in CalculateTaxaInterval, print HTML table
+sub printResultTable { 
+    $tableName = $_[0];
+    @tableRowHeader = @{$_[1]};
+    @tableColHeader = @{$_[2]};
+    @table = @{$_[3]};
+
+    # RESULTS TABLE HEADER
+    print "<TABLE CELLSPACING=1 BGCOLOR=\"black\" CELLPADDING=5><TR BGCOLOR=\"white\" ALIGN=\"CENTER\">";
+    print "<TD BGCOLOR=\"white\" ALIGN=\"CENTER\">$tableName</TD>";
+    foreach $col (@tableColHeader) { 
+        print "<TD BGCOLOR=\"white\" ALIGN=\"center\"><I><B>$col</B></I></TD>";
+    }    
+    print "</TR>";
+    # RESULTS TABLE BODY
+    for(my $rowNum=0;$rowNum<scalar(@tableRowHeader);$rowNum++){
+        print "<TR><TD BGCOLOR=\"white\" ALIGN=\"center\"><B>$tableRowHeader[$rowNum]</B></TD>";
+        for(my $colNum=0;$colNum<scalar(@tableColHeader);$colNum++){
+            print "<TD BGCOLOR=\"white\" ALING=\"center\">".$table[$colNum][$rowNum]."</TD>";
+        }
+        print "</TR>";
+    }
+    print "</TABLE>";
+}
 
 #--------------CALCULATE STRATIGRAPHIC RELATIVE CONFIDENCE INTERVALS----------------
 sub calculateStratInterval	{
     my $q=shift;
     my $s=shift;
     my $dbt=shift;
-    my $i=0;
-    my @list;
-    while ($q->param("speciesname$i")) {
-        push @list, $q->param("speciesname$i");
-        $i++;
-    }
+    my $dbh=$dbt->dbh;
     my $marker = 100;
     $AILEFT;
     $AITOP;
@@ -948,48 +969,56 @@ sub calculateStratInterval	{
     $aifig_size = 500;
     my $local_sect = $q->param("input");
     my $alpha = $q->param("alpha");
-#    $alpha = 1 - $alpha;
+#   $alpha = 1 - $alpha;
     my $conffor = $q->param("conffor");
     my $conftype = $q->param("conftype");
     my $stratres = $q->param("stratres");
     my $order = $q->param("order");
-    my $sql = "SELECT localbed, collection_no, localorder FROM collections WHERE localsection = '" . $local_sect . "' AND localbed !=''";
-    my @temparray = @{$dbt->getData($sql)};
-    my $direction;
-    my @localbed;
-    my %localCollHash;
-    foreach my $counter (@temparray)  {            
-        push @{$localCollHash{$counter->{localbed}}}, $counter->{collection_no};
-        $direction = $counter->{localorder};
-        push @localbed, $counter->{localbed};
-    }
-# -------------------Taxa AND number stratigraphic horizons------------------------------
-    my %mainHash;
-    
-    foreach my $keycounter (keys(%localCollHash)) {
-        my $sql = "SELECT genus_name, species_name FROM occurrences WHERE collection_no IN (" . join(',', @{$localCollHash{$keycounter}}) . ")";
-        my @temparray = @{$dbt->getData($sql)};
-        foreach my $counter (@temparray)  {
-            if ($stratres eq 'species') {
-                my $genusspecies = join ' ',$counter->{genus_name},$counter->{species_name};
-                foreach my $checker (@list) {
-                    if ($checker eq $genusspecies) {
-                        push @{$mainHash{$genusspecies}}, $keycounter;
-                    }
-                }
+
+    my ($taxon_nos_string,$genus_species_sql);
+    for(my $i=0;$q->param("speciesname$i");$i++) {
+        my @taxon_nos = split(",",$q->param("speciesname$i"));
+        foreach $taxon_no_or_name (@taxon_nos) {
+            if ($taxon_no_or_name =~ /^\d+$/) {
+                $taxon_nos_string .= $taxon_no_or_name . ",";
             } else {
-                my $genusspecies = $counter->{genus_name};
-                foreach my $checker (@list) {
-                    my @taxtemp = split ' ', $checker;
-                    if (@taxtemp[0] eq $genusspecies) {
-                        push @{$mainHash{$genusspecies}}, $keycounter;
+                my ($genus,$species) = split(/ /,$taxon_no_or_name);
+                if ($genus) {
+                    $genus_species_sql .= " OR (occurrences.genus_name=".$dbh->quote($genus);
+                    if ($species) {
+                        $genus_species_sql .= "AND occurrences.species_name=".$dbh->quote($species);
                     }
+                    $genus_species_sql .= ")";
                 }
             }
         }
     }
+    if ($taxon_nos_string) { $taxon_nos_string =~ s/,$//;}
+    else {$taxon_nos_string='-1'};
+
+    my $sql = "SELECT localbed, localorder, occurrences.collection_no, genus_name, species_name FROM collections, occurrences". 
+              " WHERE collections.collection_no=occurrences.collection_no".
+              " AND (taxon_no IN ($taxon_nos_string) $genus_species_sql)".
+              " AND localsection=".$dbh->quote($local_sect);
+              " AND localbed != ''";
+    main::dbg("sql to get beds from species list: $sql");
+    my @beds_and_colls = @{$dbt->getData($sql)};
+    foreach my $row (@beds_and_colls) {
+        my $genus_species;
+        if ($q->param('taxon_resolution') eq 'genus') {
+            $genus_species = $row->{'genus_name'};
+        } else {
+            $genus_species = join ' ',$row->{'genus_name'},$row->{'species_name'};
+        }
+        $localbed{$row->{'collection_no'}}=$row->{'localbed'};
+        push @{$mainHash{$genus_species}}, $row->{'localbed'};
+    }
+
+
 # ----------------------------GENERAL FIGURE DIMENSIONS---------------------------
-    my @tempp = sort numerically @localbed;                        
+    my @tempp = sort numerically values %localbed;                        
+    main::dbg("sorted localbed values:".Dumper(\@tempp));
+    main::dbg("mainHash (genus->beds array):".Dumper(\%mainHash));
     my $number_horizons = scalar(@tempp);            # how many horizons for whole section
     my $maxhorizon = $tempp[$number_horizons-1];     # the maximum horizon number, e.g., 17 (+1, for upper bound)
     my $minhorizon = $tempp[0] - 1;                      # thw minimum horizon number, e.g., 3
@@ -1004,7 +1033,7 @@ sub calculateStratInterval	{
         my $conf = 0;
         my @array = sort numerically @{$mainHash{$counter}};
         my $count = scalar(@array);         # number of horizons
-#        print "$counter: $count</BR>";
+    #        print "$counter: $count<BR>";
         my $lower = $array[0] - 1;              # lower species horizon, say 6
         my $upper = $array[$count - 1]; # upper species horizon, say 10 (+ 1, for upper bound of interval)
         my $lenth = $upper - $lower;        # total number of horizons for species, therefore 5;
@@ -1059,6 +1088,7 @@ sub calculateStratInterval	{
     $fig_lenth = 250 + 400;#($horizon_unit * $fig_long);
     $AILEFT = 0;
     $AITOP = 580;    
+    my $image_map = "<map name='ConfidenceMap'>";
 # ------------------------------------GD------------------------
     my $imagenamejpg = "confimagejpg.jpg";
     my $imagenamepng = "confimagepng.png";
@@ -1076,6 +1106,8 @@ sub calculateStratInterval	{
     my $poly = GD::Polygon->new();    
     my $white  = $gd->colorAllocate(255, 255, 255);
     my $aiwhite = "0.00 0.00 0.00 0.00 K"; 
+    my $grey= $gd->colorAllocate(  192,   192,   192);
+    my $aigrey = "0.23 0.16 0.13 0.02 K";
     my $black  = $gd->colorAllocate(  0,   0,   0);
     my $aiblack = "0.00 0.00 0.00 1.00 K";
     $gd->rectangle(0,0,$fig_width-1,$fig_lenth - 1,$black);
@@ -1086,9 +1118,12 @@ sub calculateStratInterval	{
     foreach my $counter (($lower_lim)..($upper_lim+1))  {
         if ($i > $j)    {
             $gd->line(65,($fig_lenth - 20) - $i,70,($fig_lenth - 20) - $i,$black);   #GD
-            $gd->string(gdTinyFont,45,($fig_lenth - 20) - ($i) - 4,$counter,$black);      #GD
+            $gd->string(gdTinyFont,55-length($counter)*5,($fig_lenth - 20) - ($i) - 4,$counter,$black);      #GD
             aiLine(65,($fig_lenth - 20) - $i,70,($fig_lenth - 20) - $i,$aiblack);    #AI
-            aiText("null",45,(($fig_lenth - 20) - $i) + 2,$counter,$aiblack);       #AI
+            aiText("null",55-length($counter)*6,(($fig_lenth - 20) - $i) + 2,$counter,$aiblack);       #AI
+            if ($counter > $minhorizon && $counter <= $maxhorizon) {
+                $image_map .= "<area shape=rect coords=\"".(55-length($counter)*6).",".int($fig_lenth - $i - 15).",55,".int($fig_lenth - $i - 30)."\" HREF=\"bridge.pl?action=displayStrataSearch&localsection=$local_sect&localbed=$counter\" ALT=\"local bed $counter of $local_sect\">";
+            }
             $j = $j + 8;
         }
         if ($counter == $maxhorizon || $counter == $minhorizon) {
@@ -1100,6 +1135,7 @@ sub calculateStratInterval	{
     print AI "U\n";                                                     # AI terminate the group 
     $gd->line(70,$fig_lenth - 20 - $horizon_unit,70,$fig_lenth - (($fig_long + 1)*$horizon_unit) - 20,$black);   #GD    
     $gd->stringUp(gdMediumBoldFont, 13,(250 + (($fig_lenth - 220)/2)), "Section: $local_sect", $black);
+    #$image_map .= "<area shape=rect coords=\"12,".int(260 + ($fig_lenth - 220)/2).",28,".int(260 + ($fig_lenth-380)/2-length($local_sect)*7)."\" HREF=\"bridge.pl?action=displayStrataSearch&localsection=$local_sect\" ALT=\"section $local_sect\">";
     $gd->string(gdTinyFont, $fig_width - 70,$fig_lenth - 10, "J. Madin 2004", $black);
     aiLine(70,$fig_lenth - 20 - $horizon_unit,70,$fig_lenth - (($fig_long + 1)*$horizon_unit) - 20,$aiblack);   #AI    
     aiTextVert("null", 13,(250 + (($fig_lenth - 220)/2)), "Section: $local_sect", $aiblack);
@@ -1121,9 +1157,20 @@ sub calculateStratInterval	{
     }
 # -------------------------------SPECIES BARS----------------------------
     foreach my $counter (@sortedKeys) {
+        # -----------------GREY BOXES IN BAR (PS)--------------------------
+        my @localbeds = @{$mainHash{$counter}};
+        my %seenBeds = ();
+        foreach $bed (@localbeds) {
+            if (!$seenBeds{$bed}) {
+                $gd->filledRectangle($marker+1,$fig_lenth-20-(($bed-$lower_lim)*$horizon_unit),$marker+4,$fig_lenth-20-(($bed-1-$lower_lim)*$horizon_unit),$grey);
+                aiFilledRectangle($marker+1,$fig_lenth-20-(($bed-$lower_lim)*$horizon_unit),$marker+4,$fig_lenth-20-(($bed-1-$lower_lim)*$horizon_unit),$aigrey);
+                $image_map .= "<area shape=rect coords=\"".$marker.",".int($fig_lenth-20-(($bed-$lower_lim)*$horizon_unit)).",".($marker+5).",".int($fig_lenth-20-(($bed-1-$lower_lim)*$horizon_unit))."\" HREF=\"bridge.pl?action=displayCollResults&localsection=$local_sect&localbed=$bed&genus_name=$counter\" ALT=\"$counter in local bed $bed\">";
+            }
+            $seenBeds{$bed} = 1;
+        }
         $gd->rectangle($marker, ($fig_lenth - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), $marker + 5, ($fig_lenth - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit) , $black);
         aiRectangle(   $marker, ($fig_lenth - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), $marker + 5, ($fig_lenth - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit) , $aiblack);
-        # -----------------CONFIDENCE BARS--------------------------
+# -----------------CONFIDENCE BARS--------------------------
         if ($conffor eq "first appearance" || $conffor eq "total duration")	{
             $color = $black;
             $gd->rectangle(($marker + 2), ($fig_lenth - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), ($marker + 3), ($fig_lenth - 20) - ((-$lower_lim + ($stratHash{$counter}[0] - $stratHash{$counter}[2])) * $horizon_unit), $color);
@@ -1136,31 +1183,35 @@ sub calculateStratInterval	{
         }    
         $gd->stringUp(gdSmallFont, $marker-5, 200, "$counter", $black);
         aiTextVert(        "null", $marker+7, 200, "$counter", $aiblack);
+        $image_map .= "<area shape=rect coords=\"".($marker-5).",205,".($marker+7).",".(200-length($counter)*6)."\" HREF=\"bridge.pl?action=checkTaxonInfo&taxon_name=$counter\" ALT=\"$counter\">";
+
+        
         $marker = $marker + $lateral_unit;
-	}
+    }
+
 # ------------------------------------MAKE FIGURE------------------------------
     open AIFOOT,"<./data/AI.footer";
     while (<AIFOOT>) {print AI $_};
     close AIFOOT;
     print IMAGEJ $gd->jpeg;
-	print IMAGEP $gd->png;
+    print IMAGEP $gd->png;
     close IMAGEJ;
-	close IMAGEP;
+    close IMAGEP;
+    $image_map .= "</map>";
 # ---------------------------------RESULTS-PAGE----------------------------------------
-    print "<HTML><HEAD><TITLE>Confidence Intervals</TITLE>";
-    print "<link REL=\"stylesheet\" TYPE=\"text/css\" HREF=\"/StyleSheets/common.css\">";
-    print "<DIV CLASS=\"title\">Confidence interval results for the <i>$local_sect</i> stratigraphic section</DIV></BR>";
+    print "<DIV CLASS=\"title\">Confidence interval results for the <i>$local_sect</i> stratigraphic section</DIV><BR>";
     print "<FORM METHOD=\"post\" ACTION=\"bridge.pl\">";
     print "<INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"displayFirstForm\">";
-    if ($fig_width > 750)  {
-	   print "<CENTER><IMG WIDTH=750 SRC=\"/public/confidence/$imagenamepng\"></CENTER><BR><BR>";
-	} else {
-	   print "<CENTER><IMG SRC=\"/public/confidence/$imagenamepng\"></CENTER></BR></BR>";
-    }
+    #if ($fig_width > 750)  {
+    #   print "<CENTER><IMG WIDTH=750 SRC=\"/public/confidence/$imagenamepng\"></CENTER><BR><BR>";
+    #} else {
+    print $image_map;
+    print "<CENTER><IMG SRC=\"/public/confidence/$imagenamepng\" USEMAP=\"#ConfidenceMap\" ISMAP BORDER=0></CENTER><BR><BR>";
+    #}
     print "<CENTER><b>Download figure as: <a href=\"/public/confidence/$imagenamepng\" TARGET=\"xy\">PNG</a>";
     print ", <a href=\"/public/confidence/$imagenamejpg\" TARGET=\"xy\">JPEG</a>";
-    print ", <a href=\"/public/confidence/$imagenameai\">AI</a></BR></BR></b>";
-    print "<INPUT TYPE=submit VALUE=\"Start again\"></BR></BR></BR>";
+    print ", <a href=\"/public/confidence/$imagenameai\">AI</a><BR><BR></b>";
+    print "<INPUT TYPE=submit VALUE=\"Start again\"><BR><BR><BR>";
 
     return;
 } 
@@ -1192,6 +1243,24 @@ sub aiLineDash {
     printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
     printf AI "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y2;
     print AI "S\n";
+}
+
+sub aiFilledRectangle {
+    my $x1=shift;
+    my $y1=shift;
+    my $x2=shift;
+    my $y2=shift;
+    my $color=shift;
+    print AI "0 O\n";
+    print AI "$color\n";
+    print AI "0 G\n";
+    print AI "4 M\n";
+    printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
+    printf AI "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y1;
+    printf AI "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y2;
+    printf AI "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y2;
+    printf AI "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1;
+    print AI "f\n";
 }
 
 sub aiRectangle {
@@ -1278,10 +1347,10 @@ sub transpositionTest {
     $correlation = 0;
     #-----------------p(0.95) ONLY------------------
     if ($Total <= ((0.215*($N**2))-(1.15*$N)+0.375)) {
-        print "*Significant correlation at alpha = 0.95  </BR>";
+        print "*Significant correlation at alpha = 0.95  <BR>";
         $correlation = 1;
     } else {
-#        print "No correlataion  </BR>";
+#        print "No correlataion  <BR>";
     }
     return $correlation;
 }
@@ -1335,7 +1404,7 @@ sub distributionFree {          #FOR MARSHALL 1994
     my $gamma = (1 - $alpha)/2;
     my $ll = 0;
     my $uu = 0;
-#        print "N: $N</BR>";
+#        print "N: $N<BR>";
     if ($N > 5) {
         foreach my $x (1 .. $N) {
             my $sum = 0;
@@ -1352,8 +1421,8 @@ sub distributionFree {          #FOR MARSHALL 1994
                 $upp = $x + 1;
             }
         }
-#        print "upp: $upp</BR>";
-#        print "low: $low</BR>";
+#        print "upp: $upp<BR>";
+#        print "low: $low<BR>";
         
         if ($upp > $N) {
             $firstconfidencelengthlong = 0;
@@ -1395,24 +1464,24 @@ sub commonEndPoint {        #FOR SOLOW (1996)
         #-------------------------SIGNIFICANCE FINDER-----------------------------
 
         my $df = 2 * (length(%solowHash) - 1);
-#        print "df: $df</BR>";
-#        print "alpha: $alpha</BR>";
+#        print "df: $df<BR>";
+#        print "alpha: $alpha<BR>";
     
         my $lambda = 1;
         foreach my $i (keys(%solowHash)) {
             $lambda = $lambda * ((($solowHash{$i}[2] - $solowHash{$i}[1]) / ($max - $solowHash{$i}[1])) ** ($solowHash{$i}[0] - 1));
         }
-#        print "lambda: $lambda</BR>";
+#        print "lambda: $lambda<BR>";
 
         $firstsig = chiSquaredDensity($df,0,-2*log($lambda));
 
-#        print "Significance: $lastsig</BR>";
+#        print "Significance: $lastsig<BR>";
         #----------------------UPPER CONFIDENCE FINDER-----------------------------
         
         if ($firstsig > 0.05) {
             my $df = 2 * scalar(%solowHash);
             my $tester = chiSquaredDensity($df,$alpha,0);
-#            print "tester: $tester</BR>";
+#            print "tester: $tester<BR>";
             my $j;
             for ($j = $max; $j <= $max + 1000; $j = $j + 0.1) {
                 my $Rstore = 1;
@@ -1428,7 +1497,7 @@ sub commonEndPoint {        #FOR SOLOW (1996)
         $firstsig = -999;
         $firstconfidencelengthlong = -999;
     }
-#    print "first SIG: $firstsig, first CONF: $firstconfidencelengthlong</BR>";
+#    print "first SIG: $firstsig, first CONF: $firstconfidencelengthlong<BR>";
 
     my %tempsolowHash = %solowHash;
     
@@ -1449,18 +1518,18 @@ sub commonEndPoint {        #FOR SOLOW (1996)
         #-------------------------SIGNIFICANCE FINDER-----------------------------
 
         my $df = 2 * (length(%tempsolowHash) - 1);
-#        print "df: $df</BR>";
-#        print "alpha: $alpha</BR>";
+#        print "df: $df<BR>";
+#        print "alpha: $alpha<BR>";
     
         my $lambda = 1;
         foreach my $i (keys(%tempsolowHash)) {
             $lambda = $lambda * ((($tempsolowHash{$i}[2] - $tempsolowHash{$i}[1]) / ($max - $tempsolowHash{$i}[1])) ** ($tempsolowHash{$i}[0] - 1));
         }
-#        print "lambda: $lambda</BR>";
+#        print "lambda: $lambda<BR>";
 
         $lastsig = chiSquaredDensity($df,0,-2*log($lambda));
 
-#        print "Significance: $firstsig</BR>";
+#        print "Significance: $firstsig<BR>";
         #----------------------LOWER CONFIDENCE FINDER-----------------------------
         
         if ($lastsig > 0.05) {
@@ -1481,7 +1550,7 @@ sub commonEndPoint {        #FOR SOLOW (1996)
         $lastsig = -999;
         $lastconfidencelengthlong = -999;
     }
-#    print "last SIG: $lastsig, last CONF: $lastconfidencelengthlong</BR>";
+#    print "last SIG: $lastsig, last CONF: $lastconfidencelengthlong<BR>";
     return $firstsig, $firstconfidencelengthlong, $lastsig, $lastconfidencelengthlong;
 }
 
