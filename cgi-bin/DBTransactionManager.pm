@@ -71,6 +71,7 @@ sub getData{
 		# execute returns the number of rows affected for non-select statements.
 		# SELECT:
 		if($sql_result == 1){
+
 			$sth->execute();
 			$self->{_err} = $sth->errstr;
 			# Ok now attributes are accessible

@@ -123,6 +123,18 @@ my @rowData;
 
 
 
+# testing
+#{
+	
+#	my $path = "$HTML_DIR/JavaScripts/test.js";
+#	$test = `cat test`;
+
+#	Debug::dbPrint("path = $path, contents = " . $test);
+#}
+# end testing
+
+
+
 
 # process the action
 processAction();
@@ -7410,6 +7422,7 @@ sub checkNearMatch {
 				print $hbo->populateHTML('reference_display_row', \@rowData, \@display);
 			}
 			elsif($tableName eq "opinions"){
+				Debug::dbPrint("in bridge test5, taxon_no = '" . $row{parent_no} . "'");
 				my $sql="SELECT taxon_name FROM authorities WHERE taxon_no=".
 						$row{parent_no};
 				my @results = @{$dbt->getData($sql)};

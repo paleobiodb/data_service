@@ -83,6 +83,7 @@ sub populateEcologyForm	{
 
 	# if there's still no taxon name, get it
 	if ( ! $q->param('taxon_name') )	{
+	
 		$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=" . $taxon_no;
 		my $taxref = @{$dbt->getData($sql)}[0];
 		$q->param('taxon_name' => $taxref->{taxon_name});
