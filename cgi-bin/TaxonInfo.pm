@@ -438,9 +438,22 @@ sub displayTaxonInfoResults{
 				if($image == $res->{image_no}){
 					print "<center><table><tr><td>";
 					print "<center><img src=\"".$res->{path_to_image}.
-						  "\" border=1></center><br>";
-					print "<i>".$res->{caption}."</i><br>";
-					print "<div class=\"small\"><b>Original name of image:</b> ".$res->{original_filename}."</div>";
+						  "\" border=1></center><br>\n";
+					print "<i>".$res->{caption}."</i><p>\n";
+					print "<div class=\"small\"><b>Original name of image:</b> ".$res->{original_filename}."</div>\n";
+					if ( $res->{reference_no} > 0 )	{
+						$sql = "SELECT author1last, author2last, otherauthors, pubyr FROM refs WHERE reference_no=" . $res->{reference_no};
+						my @refresults = @{$dbt->getData($sql)};
+						my $refstring = $refresults[0]->{author1last};
+						if ( $refresults[0]->{otherauthors} )	{
+							$refstring .= " et al.";
+						} elsif ( $refresults[0]->{author2last} )	{
+							$refstring .= " and " . $refresults[0]->{author2last};
+						}
+						$refstring =~ s/and et al\./et al./;
+						print "<div class=\"small\"><b>Reference:</b> 
+<a href=$exec_url?action=displayRefResults&reference_no=".$res->{reference_no}.">".$refstring." ".$refresults[0]->{pubyr}."</a></div>\n";
+					}
 					print "</td></tr></table></center>";
 					print "<hr width=\"100%\">";
 					last;
