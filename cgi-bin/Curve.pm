@@ -495,6 +495,12 @@ sub assignGenera	{
 				}
 				$first = $j;
 			}
+			if ( $present[$i][$j] < 0 && $present[$i][$j+1] < 0 )	{
+				$twotimers[$j]++;
+			}
+			if ( ( $present[$i][$j-1] < 0 && $present[$i][$j+1] < 0 ) || $present[$i][$j] < 0 )	{
+				$localrt[$j]++;
+			}
 			if ($present[$i][$j] == -1)	{
 				$chaol[$j]++;
 			}
@@ -759,6 +765,8 @@ sub subsample	{
 			for $i (1..$chrons)	{
 				$tsampled[$i] = $tsampled[$i] + $sampled[$i];
 			}
+			@tsubstwotimers = ();
+			@tsubslocalrt = ();
 			@tsubsrangethrough = ();
 			@tsubssingletons = ();
 			@tsubsoriginate = ();
@@ -772,6 +780,14 @@ sub subsample	{
 					    $last = $j;
 					  }
 					  $first = $j;
+					}
+					if ( $present[$i][$j] < 0 && $present[$i][$j+1] < 0 )	{
+						$msubstwotimers[$j]++;
+						$tsubstwotimers[$j]++;
+					}
+					if ( ( $present[$i][$j-1] < 0 && $present[$i][$j+1] < 0 ) || $present[$i][$j] < 0 )	{
+						$msubslocalrt[$j]++;
+						$tsubslocalrt[$j]++;
 					}
 				}
 				for $j ($last..$first)	{
@@ -827,6 +843,14 @@ sub subsample	{
 					$outrichness[$i][$trials] = $subsrichness[$i] - $tsubssingletons[$i];
 					$meanoutrichness[$i] = $meanoutrichness[$i] + $subsrichness[$i] - $tsubssingletons[$i];
 				}
+				elsif ($q->param('diversity') =~ /two timers/)	{
+					$outrichness[$i][$trials] = $tsubstwotimers[$i];
+					$meanoutrichness[$i] = $meanoutrichness[$i] + $tsubstwotimers[$i];
+				}
+				elsif ($q->param('diversity') =~ /local range-through/)	{
+					$outrichness[$i][$trials] = $tsubslocalrt[$i];
+					$meanoutrichness[$i] = $meanoutrichness[$i] + $tsubslocalrt[$i];
+				}
 			}
 	 # end of trials loop
 		}
@@ -835,6 +859,8 @@ sub subsample	{
 			if ($msubsrangethrough[$i] > 0)	{
 				$tsampled[$i] = $tsampled[$i]/$trials;
 				$msubsrichness[$i] = $msubsrichness[$i]/$trials;
+				$msubstwotimers[$i] = $msubstwotimers[$i]/$trials;
+				$msubslocalrt[$i] = $msubslocalrt[$i]/$trials;
 				$msubsrangethrough[$i] = $msubsrangethrough[$i]/$trials;
 				$meanoutrichness[$i] = $meanoutrichness[$i]/$trials;
 				$msubsoriginate[$i] = $msubsoriginate[$i]/$trials;
@@ -952,6 +978,8 @@ sub printResults	{
 		print "<td class=small align=center valign=top><b>Sampled<br>genera</b>";
 		print "<td class=small align=center valign=top><b>Range-through<br>genera</b> ";
 		print "<td class=small align=center valign=top><b>Boundary-crosser <br>genera</b> ";
+		print "<td class=small align=center valign=top><b>Two&nbsp;timer<br>genera</b> ";
+		print "<td class=small align=center valign=top><b>Local&nbsp;range-through<br>genera</b> ";
 		print "<td class=small align=center valign=top><b>First<br>appearances</b> <td class=small align=center valign=top><b>Origination<br>rate</b> <td class=small align=center valign=top><b>Last<br>appearances</b><td class=small align=center valign=top><b>Extinction<br>rate</b> <td class=small align=center valign=top><b>Singletons</b> ";
 		print "<td class=small align=center valign=top><b>Chao-2<br>estimate</b> ";
 		print "<td class=small align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
@@ -965,6 +993,8 @@ sub printResults	{
 		}
 		print "<td class=small align=center valign=top><b>Mean<br>richness</b> <td class=small align=center valign=top><b>Median<br>richness</b> ";
 		print TABLE "Bin,Bin name,Sampled genera,Range-through genera,Boundary-crosser genera,";
+		print TABLE "Two timer genera,";
+		print TABLE "Local range-through genera,";
 		print TABLE "First appearances,Origination rate,Last appearances,Extinction rate,Singletons,";
 		print TABLE "Chao-2 estimate,Jolly-Seber estimate,";
 		if ($samplingmethod != 5)	{
@@ -995,6 +1025,8 @@ sub printResults	{
 		#  you get total diversity minus originations
 				$bcrich[$i] = $rangethrough[$i] - $originate[$i];
 				printf "<td class=small align=center valign=top>%d ",$bcrich[$i];
+				printf "<td class=small align=center valign=top>%d ",$twotimers[$i];
+				printf "<td class=small align=center valign=top>%d ",$localrt[$i];
 				print "<td class=small align=center valign=top>$originate[$i] ";
 			# Foote origination rate - note: extinction counts must
 			#  exclude singletons
@@ -1035,6 +1067,8 @@ sub printResults	{
 				print TABLE ",$rangethrough[$i]";
 		# boundary crossers
 				printf TABLE ",%d",$bcrich[$i];
+				printf TABLE ",%d",$twotimers[$i];
+				printf TABLE ",%d",$localrt[$i];
 				print TABLE ",$originate[$i]";
 			# Foote origination rate
 				if ( $bcrich[$i-1] > 0 && $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 )	{
