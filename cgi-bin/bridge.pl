@@ -2687,11 +2687,13 @@ sub displayCollectionDetails {
 	# rjp, 1/2004.  This is the new routine which handles all reids instead
 	# of just the first and the last.  To rever to the old way, comment
 	# out the following three lines, and uncomment the fourth.
-	my $collection = Collection->new(\%GLOBALVARS);
-	$collection->setWithCollectionNumber($collection_no);
-	my $taxa_list = $collection->HTMLFormattedTaxonomicList();
+	# JA: HTMLFormattedTaxonomicList is totally redundant and is therefore
+	#  deprecated
+	#my $collection = Collection->new(\%GLOBALVARS);
+	#$collection->setWithCollectionNumber($collection_no);
+	#my $taxa_list = $collection->HTMLFormattedTaxonomicList();
 	
-	#my $taxa_list = buildTaxonomicList($collection_no, $refNo);
+	my $taxa_list = buildTaxonomicList($collection_no, $refNo);
 	
 	
 	print $taxa_list;
@@ -2944,8 +2946,12 @@ sub buildTaxonomicList {
 				
 				# rjp, 1/2004, change this so it displays *all* reidentifications, not just
 				# the last one.
+	# JA 2.4.04: this was never implemented by Poling, who instead went
+	#  renegade and wrote the entirely redundant HTMLFormattedTaxonomicList;
+	#  the correct way to do it was to pass in $rowref->{occurrence_no} and
+	#  isReidNo = 0 instead of $mostRecentReID and isReidNo = 1
 				
-				$output .= getReidHTMLTableByOccNum($mostRecentReID, 1, \%classification);
+				$output .= getReidHTMLTableByOccNum($rowref->{occurrence_no}, 0, \%classification);
 				
 				#Debug::dbPrint("mostRecentReID = $mostRecentReID");
 
@@ -3206,6 +3212,7 @@ sub buildTaxonomicList {
 # note: rjp 1/2004 - I *think* this gets an HTML formatted table
 # of reidentifications for a particular taxon
 # to be used in the taxon list of the collections page.
+# JA 2.4.04: yes, stupid, of course that's what it does
 #
 # pass it an occurrence number or reid number 
 # the second parameter tells whether it's a reid_no (true) or occurrence_no (false).
@@ -3214,19 +3221,21 @@ sub getReidHTMLTableByOccNum {
 	my $isReidNo = shift;
 
 	$sql =	"SELECT genus_reso, ".
-			"       genus_name, ".
-			"       subgenus_reso, ".
-			"       subgenus_name, ".
-			"       species_reso, ".
-			"       species_name, ".
-			"       comments, ".
-			"       reference_no ".
-			"  FROM reidentifications ";
+			" genus_name, ".
+			" subgenus_reso, ".
+			" subgenus_name, ".
+			" species_reso, ".
+			" species_name, ".
+			" reidentifications.comments as comments, ".
+			" reidentifications.reference_no as reference_no, ".
+			" pubyr ".
+			" FROM reidentifications,refs ";
 	if ($isReidNo) {
 		$sql .= " WHERE reid_no = $occNum";
 	} else {
 		$sql .= " WHERE occurrence_no = $occNum";
 	}
+	$sql .= " AND refs.reference_no=reidentifications.reference_no";
 
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
@@ -3234,18 +3243,32 @@ sub getReidHTMLTableByOccNum {
 	my @fieldNames = @{$sth->{NAME}};
 	@rows = @{$sth->fetchall_arrayref()};
 
+	# JA 2.4.04: if there are multiple results, sort them by the
+	#  reference's publication year (column 8)
+	# syntax here is ugly because we are sorting on elements of a
+	#  referenced array
+	@rows = sort { ${$a}[8] <=> ${$b}[8] } @rows;
+
 	my $retVal = "";
 	
 	# NOT SURE ABOUT THIS LOOP. DON'T WE JUST WANT ONE (THE MOST RECENT)?
 	# note, rjp, 12/23/2004 - No, we want all of them.
+	# JA 2.4.04: whether we get all of them depends on whether isReidNo
+	#  is true (no, just one) or false (yes, all of them)
 	foreach my $rowRef ( @rows ) {
 		my @row = @{$rowRef};
-		# format the reference
-		$row[-1] = buildReference($row[-1],"list");
+		# format the reference (PM)
+		# JA: -2 means second to last element in the array
+		$row[-2] = buildReference($row[-2],"list");
+		# JA: what PM is doing here is creating a genus + species
+		#  combo, because those names are the 1st and 5th in the row
 		my $arg = $row[1]." ". $row[5];
 		# 3rd arg becomes the 1st since the other 2 were shifted off already.
 		%{$_[0]} = %{PBDBUtil::get_classification_hash($dbt, $arg)};
 
+		# JA 2.4.04: changed this so it only works on the most
+		#  recently published reID
+		if ( $rowRef == $rows[$#rows] )	{
 		if($_[0]->{'class'} || $_[0]->{'order'} || $_[0]->{'family'} ){
 			push(@row, "bogus");
 			push(@fieldNames, 'higher_taxa');
@@ -3256,7 +3279,11 @@ sub getReidHTMLTableByOccNum {
 			push(@row, $_[0]->{'family'});
 			push(@fieldNames, 'family');
 		}
+		}
+
 		$retVal .= $hbo->populateHTML("reid_taxa_display_row", \@row,\@fieldNames);
+
+		if ( $rowRef == $rows[$#rows] )	{
 		if($_[0]->{'class'} || $_[0]->{'order'} || $_[0]->{'family'} ){
 			pop(@row);
 			pop(@row);
@@ -3266,6 +3293,7 @@ sub getReidHTMLTableByOccNum {
 			pop(@fieldNames);
 			pop(@fieldNames);
 			pop(@fieldNames);
+		}
 		}
 	}
 
