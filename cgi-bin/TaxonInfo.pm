@@ -739,7 +739,7 @@ sub displayTaxonClassification{
 			}
 			$taxon_rank =~ s/\s/+/g;
 			$output .= qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo|;
-			$output.="&taxon_name=".$taxon_name."&taxon_rank=$taxon_rank>";
+			$output.="&taxon_name=".$taxon_name."&taxon_rank=$taxon_rank\">";
 			$output .= $item->{taxon_name}."</a>,\n";
 		}
 		$output =~ s/,\s*$//;
