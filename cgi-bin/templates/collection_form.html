@@ -10,6 +10,11 @@ function checkFields() {
     doCheckFieldsGeography();
     doCheckFieldsTaphonomy();
     doCheckFieldsCollectingInfo();
+    
+    var returnVal = checkIntervalNames();
+    if (!returnVal) {
+        return false;
+    }
 
     if ( bad_info != "" ) { 
         bad_info = "WARNING!\n" +
@@ -185,11 +190,6 @@ function doCheckFieldsGeography() {
 function doCheckFieldsStratigraphy() {
     var frm = document.forms[0];
 
-    var returnVal = checkIntervalNames();
-    if (!returnVal) {
-        return false;
-    }
-
     var hasgroup = /group/i;
     if ( hasgroup.test ( frm.geological_group.value ) == true )      {
         bad_info += "\n  - A group name can't include the word \"group\"";
@@ -214,10 +214,10 @@ function doCheckFieldsTaphonomy() {
     if (frm.disart_assoc_maj_elems.options[frm.disart_assoc_maj_elems.selectedIndex].text == "all") {
         full_count  += 1;
     }
-    if (frm.disassoc_maj_elems.options[frm.disart_assoc_maj_elems.selectedIndex].text == "all") {
+    if (frm.disassoc_maj_elems.options[frm.disassoc_maj_elems.selectedIndex].text == "all") {
         full_count  += 1;
     }
-    if (frm.disassoc_minor_elems.options[frm.disart_assoc_maj_elems.selectedIndex].text == "all") {
+    if (frm.disassoc_minor_elems.options[frm.disassoc_minor_elems.selectedIndex].text == "all") {
         full_count  += 1;
     } 
     if (full_count > 1) {
@@ -263,7 +263,7 @@ function doCheckFieldsTaphonomy() {
    </tr></table>
    </div>
 
-  <form name="form" action="$exec_url" method="post" onsubmit="return checkFields();">
+  <form name="form" action="$exec_url" method="post" onSubmit="return checkFields();">
   <span id="page_target"></span>
   <input id="reference_no" type="hidden">
   <input id="authorizer" type="hidden">
