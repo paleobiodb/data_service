@@ -117,7 +117,7 @@ sub getTemplateDir {
 					spatial_resolution=>['', 'autochthonous', 'parautochthonous', 'allochthonous'],
 					collection_type=>['', 'archaeological', 'biostratigraphic', 'paleoecologic', 'taphonomic', 'taxonomic', 'general faunal/floral'],
 					collection_size_unit=>['', 'specimens', 'individuals'],
-					rock_censused_unit=>['', 'cm (line intercept)', 'cm2 (area)', 'cm3 (volume)', 'kg', '# of surfaces (quadrat)'],
+					rock_censused_unit=>['', 'cm (line intercept)', 'cm2 (area)', 'cm3 (volume)', 'g', 'kg', '# of surfaces (quadrat)'],
 					museum=>['', 'AMNH', 'BMNH', 'BPI', 'CAS', 'CIT', 'CM', 'DMNH', 'FMNH', 'GSC', 'IVPP', 'LACM', 'MACN', 'MCZ', 'MfN', 'MLP', 'MNHN', 'MNHN (La Paz)', 'NIGPAS', 'NMMNH', 'NYSM', 'OSU', 'OU', 'PIN', 'PRI', 'ROM', 'SDSM', 'SGOPV', 'SMF', 'SUI', 'TMM', 'TMP', 'UCM', 'UCMP', 'UF', 'UMMP', 'UNM', 'UNSM', 'USNM', 'UW', 'UWBM', 'YPM'],
 					genus_reso=>['', 'aff.', 'cf.', 'ex gr.', 'n. gen.', '?', '"', 'informal', 'informal aff.', 'informal cf.'],
 					subgenus_reso=>['', 'aff.', 'cf.', 'ex gr.', 'n. subgen.', '?', '"', 'informal', 'informal aff.', 'informal cf.'],
