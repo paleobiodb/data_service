@@ -141,67 +141,27 @@ function collsCheckAll(){
 
 <hr>
 
+<center><h3>Options</h3></center>
+
 <table width="100%">
 
 <tr><td valign=top><font size=-1>
 Select the research group:
-<td><font size=-1>
+<td valign=top><font size=-1>
 <select id="research_group">
 </select>
 
 <tr><td valign="top"><font size=-1>Data authorizer:</font></td>
 <td><select name="authorizer"></select></td>
 
-<!-- LEGACY
-<tr><td valign=top><font size=-1>
-Check the time interval that you want to download (you must select the "or" radio button if you want to check off individual periods):
-<td><font size=-1>
-<input type=radio name=interval value="Phanerozoic" checked onClick="intervalClick();"><i>all periods</i>
-<input type=radio name=interval value="Interval1" onClick="intervalClick();"><i>all of the Paleozoic</i>
-<input type=radio name=interval value="Interval2" onClick="intervalClick();"><i>all of the Meso-Cenozoic</i><p>
-<input type=radio name=interval value="other">or...<p>
-
-	<table>
-	<tr>
-		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Neoproterozoic" onClick="intervalsClick();">Neoproterozoic</td>
-		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Cambrian" onClick="intervalsClick();">Cambrian</td>
-		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Ordovician" onClick="intervalsClick();">Ordovician</td>
-		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Silurian" onClick="intervalsClick();">Silurian</td>
-		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Devonian" onClick="intervalsClick();">Devonian</td>
-		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Carboniferous" onClick="intervalsClick();">Carboniferous</td>
-		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Permian" onClick="intervalsClick();">Permian</td>
-	</tr>
-	<tr>
-		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Triassic" onClick="intervalsClick();">Triassic</td>
-		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Jurassic" onClick="intervalsClick();">Jurassic</td>
-		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Cretaceous" onClick="intervalsClick();">Cretaceous</td>
-		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Tertiary" onClick="intervalsClick();">Tertiary</td>
-		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Quaternary" onClick="intervalsClick();">Quaternary</td>
-		<td class="cell" nowrap><font size=-1><input type=checkbox name=intervals value="Modern" onClick="intervalsClick();">Modern</td>
-	</tr>
-	</table>
--->
-
 <tr><td valign=top><font size=-1>
 If you only want lists from one time span, enter the oldest and youngest intervals:
 <td valign=top><font size=-1>
 <input name=max_interval_name size=25> - <input name=min_interval_name size=25>
 
-<!-- LEGACY
 <tr><td valign=top><font size=-1>
-If you only want lists from one epoch, enter its name:
-<td><font size=-1>
-<input name=epoch size=25>
-
-<tr><td valign=top><font size=-1>
-Likewise for a single age/stage:
-<td><font size=-1>
-<input name=stage size=25>
--->
-
-<tr><td><font size=-1>
-Taxonomic Name <small><i>(genus or higher rank)</i></small>:
-<td><font size=-1>
+Taxonomic name <small><i>(genus or higher rank)</i></small>:
+<td valign=top><font size=-1>
 <input  name=genus_name size=25>
 
 <tr><td valign=top><font size=-1>
@@ -240,76 +200,60 @@ Longitudinal range:</font</td>
 <input name="lngmax" size="4" value="180">&deg;
 </font></td>
 
-<tr><td><font size=-1>
-Lump lists that are from the same county and formation? - WARNING: algorithm not yet functional
-<td><font size=-1><select name=lumplists>
-<option selected>no, keep them separate
-<option>yes, lump them
-</select>
-
-<tr><td><font size=-1>
+<tr><td valign=top><font size=-1>
 Lump occurrences of the same genus from the same collection?
-<td><font size=-1><select name=lumpgenera>
+<td valign=top><font size=-1><select name=lumpgenera>
 <option selected value="NO">no, keep them separate
 <option value="YES">yes, lump them
 </select>
 
-<tr><td><font size=-1>
-Include lists that have poor geographic data (no county or lat/long)?
-<td><font size=-1><select name=strictgeography>
-<option selected value="YES">yes, include them
-<option value="NO">no, exclude them
-</select>
-
-<tr><td><font size=-1>
-Include lists that have poor temporal data (no epoch or stage)?
-<td><font size=-1><select name=strictchronology>
-<option selected value="YES">yes, include them
-<option value="NO">no, exclude them
-</select>
-
-<tr><td><font size=-1>
+<tr><td valign=top><font size=-1>
 Include occurrences that are generically indeterminate?
-<td><font size=-1><select name=indet>
+<td valign=top><font size=-1><select name=indet>
 <option selected value="YES">yes, include them
 <option value="NO">no, exclude them
 </select>
 
-<tr><td><font size=-1>
+<tr><td valign=top><font size=-1>
 Select the type of output:
-<td><font size=-1><select name=collections_put>
+<td valign=top><font size=-1><select name=collections_put>
 <option selected>comma-delimited text
 <option>tab-delimited text
 <option>CONJUNCT
 </select>
 <p>
 
-<tr><td valign=top><font size=-1>
-Check the fields from the occurrence table that you want output (the collection ID and genus name fields are always output): 
-<td><font size=-1>
-<table>
-<tr><td><font size=-1><input type=checkbox name=occurrences_authorizer value="YES" onClick="occurrencesClick();">authorizer
-<td><font size=-1><input type=checkbox name=occurrences_enterer value="YES" onClick="occurrencesClick();">enterer
-<td><font size=-1><input type=checkbox name=occurrences_modifier value="YES" onClick="occurrencesClick();">modifier
-<td><font size=-1><input type=checkbox name=occurrences_occurrence_no value="YES" onClick="occurrencesClick();">occurrence_no
+</table>
+
+<hr>
+<center><h3>Occurrence fields</h3></center>
+
+<p>Check the occurrence and ecology/taphonomy fields that you want output.
+Note that the collection ID and genus name fields are always output.</p>
+
+<table width="100%">
+
+<td valign=top><font size=-1>
+<table bgcolor="EEEEEE">
+<tr><td valign=top><font size=-1><input type=checkbox name=occurrences_authorizer value="YES" onClick="occurrencesClick();">authorizer
+<td valign=top><font size=-1><input type=checkbox name=occurrences_enterer value="YES" onClick="occurrencesClick();">enterer
+<td valign=top><font size=-1><input type=checkbox name=occurrences_modifier value="YES" onClick="occurrencesClick();">modifier
+<td valign=top><font size=-1><input type=checkbox name=occurrences_occurrence_no value="YES" onClick="occurrencesClick();">occurrence no
 <!--input type=checkbox name=occurrences_collection_no value="YES">collection_no-->
 <!--input type=checkbox name=occurrences_genus_reso value="YES">genus_reso-->
 <!--input type=checkbox name=occurrences_genus_name value="YES">genus_name-->
 <!--input type=checkbox name=occurrences_species_reso value="YES">species_reso-->
-<tr><td><font size=-1><input type=checkbox name=occurrences_species_name value="YES" onClick="occurrencesClick();">species_name
-<td><font size=-1><input type=checkbox name=occurrences_abund_value value="YES" onClick="occurrencesClick();">abund_value
-<td><font size=-1><input type=checkbox name=occurrences_abund_unit value="YES" onClick="occurrencesClick();">abund_unit
-<td><font size=-1><input type=checkbox name=occurrences_reference_no value="YES" onClick="occurrencesClick();">reference_no
-<tr><td><font size=-1><input type=checkbox name=occurrences_comments value="YES" onClick="occurrencesClick();">comments
-<td><font size=-1><input type=checkbox name=occurrences_created value="YES" onClick="occurrencesClick();">created
-<td><font size=-1><input type=checkbox name=occurrences_modified value="YES" onClick="occurrencesClick();">modified
-<td><font size=-1><input type=checkbox name=collections_only value="YES" onClick="occurrencesNoneClick();"><nobr>NONE (get collection data only)</nobr>
+<tr><td valign=top><font size=-1><input type=checkbox name=occurrences_species_name value="YES" onClick="occurrencesClick();">species name
+<td valign=top><font size=-1><input type=checkbox name=occurrences_abund_value value="YES" onClick="occurrencesClick();">abund value
+<td valign=top><font size=-1><input type=checkbox name=occurrences_abund_unit value="YES" onClick="occurrencesClick();">abund unit
+<td valign=top><font size=-1><input type=checkbox name=occurrences_reference_no value="YES" onClick="occurrencesClick();">reference no
+<tr><td valign=top><font size=-1><input type=checkbox name=occurrences_comments value="YES" onClick="occurrencesClick();">comments
+<td valign=top><font size=-1><input type=checkbox name=occurrences_created value="YES" onClick="occurrencesClick();">created
+<td valign=top><font size=-1><input type=checkbox name=occurrences_modified value="YES" onClick="occurrencesClick();">modified
+<td valign=top><font size=-1><input type=checkbox name=collections_only value="YES" onClick="occurrencesNoneClick();"><nobr>NONE (get collection data only)</nobr>
 </table>
 
-<tr><td valign=top><font size=-1>
-Ecology/taphonomy fields you want:<br></font>
-</td>
-
+<tr>
 <td valign=top>
 <nobr>
 <select id="ecology1"></select>
@@ -323,8 +267,14 @@ Ecology/taphonomy fields you want:<br></font>
 </nobr>
 </td></tr>
 
-<tr><td valign=top><font size=-1>
-Check the field fields from the main collection data table that you want output:
+</table>
+
+<hr>
+<center><h3>Collection fields</h3></center>
+
+<p>Check the fields from the main collection data table that you want output.</p>
+
+<table width="100%">
 
 <td valign=top>
 
@@ -502,12 +452,12 @@ Check the field fields from the main collection data table that you want output:
 </td>
 </tr>
 
-<tr>
-	<td>
-		<input type=submit value="Create data set">
-	</td>
-</tr>
+<table>
 
-</table>
+<hr>
+
+<p align=center>
+<input type=submit value="Create data set">
+</p>
 
 </form>
