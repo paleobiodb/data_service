@@ -228,10 +228,22 @@ sub properYear {
 	return 1;
 }
 
-
-
-
-
+# Trivial function to check if an interval name is valid. Used in form checking
+# two params = eml, interval name
+sub checkInterval {
+    my $dbt = shift || return;
+    my $eml_interval = shift || "";
+    my $interval_name = shift || "";
+    if ($interval_name ne "") {
+        my $sql = "SELECT count(*) AS cnt FROM intervals WHERE interval_name=".$dbt->dbh->quote($interval_name);
+        if ($eml_interval ne "") {
+            $sql .= " AND eml_interval=".$dbt->dbh->quote($eml_interval);
+        }
+        my @results = @{$dbt->getData($sql)};
+        if ($results[0]->{'cnt'} > 0) { return 1; }
+    }
+    return 0;
+}
 
 
 1;
