@@ -80,6 +80,8 @@ function occurrencesNoneClick ( ) {
 		frm.occurrences_abund_unit.checked = false;
 		frm.occurrences_reference_no.checked = false;
 		frm.occurrences_comments.checked = false;
+		frm.occurrences_plant_organ.checked = false;
+		frm.occurrences_plant_organ2.checked = false;
 		frm.occurrences_created.checked = false;
 		frm.occurrences_modified.checked = false;
 	}
@@ -98,6 +100,8 @@ function occurrencesClick ( ) {
 			frm.occurrences_abund_unit.checked ||
 			frm.occurrences_reference_no.checked ||
 			frm.occurrences_comments.checked ||
+			frm.occurrences_plant_organ.checked ||
+			frm.occurrences_plant_organ2.checked ||
 			frm.occurrences_created.checked ||
 			frm.occurrences_modified.checked ) {
 		frm.collections_only.checked = false;
@@ -276,6 +280,8 @@ Occurrence fields you want (the collection ID and genus name fields are always o
 <td><font size=-1><input type=checkbox name=occurrences_abund_value value="YES" onClick="occurrencesClick();">abund_value
 <td><font size=-1><input type=checkbox name=occurrences_abund_unit value="YES" onClick="occurrencesClick();">abund_unit
 <tr><td><font size=-1><input type=checkbox name=occurrences_comments value="YES" onClick="occurrencesClick();">comments
+<tr><td><font size=-1><input type=checkbox name=occurrences_plant_organ value="YES" onClick="occurrencesClick();">plant organ
+<tr><td><font size=-1><input type=checkbox name=occurrences_plant_organ2 value="YES" onClick="occurrencesClick();">plant organ 2
 <td><font size=-1><input type=checkbox name=occurrences_created value="YES" onClick="occurrencesClick();">created
 <td><font size=-1><input type=checkbox name=occurrences_modified value="YES" onClick="occurrencesClick();">modified
 <td colspan=2><font size=-1><input type=checkbox name=collections_only value="YES" onClick="occurrencesNoneClick();"><nobr><b>NONE</b> (get collection data only)</nobr>
