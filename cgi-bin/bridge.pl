@@ -1890,7 +1890,7 @@ $message .= "<p>
 		#  JA 5.12.03
 		if ( $q->param('genus_name') ) {
 			if ( @timeinlist )	{
-				my %collintimelist = ();
+				my %collintimeinlist = ();
 				for my $t ( @timeinlist )	{
 					$collintimeinlist{$t} = "Y";
 				}
@@ -1901,6 +1901,9 @@ $message .= "<p>
 					}
 				}
 				@okcolls = @newokcolls;
+				if ( ! @okcolls )	{
+					push @okcolls, 0;
+				}
 			}
 			if (@terms)	{
 				$sql .= " AND collection_no IN ( " . join ( ", ", @okcolls )." ) ";
