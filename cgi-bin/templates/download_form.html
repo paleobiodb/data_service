@@ -109,6 +109,18 @@ function occurrencesClick ( ) {
 		frm.collections_only.checked = true;
 	}
 }
+
+function collsCheckAll(){
+	var frm = document.forms[0];
+	
+	for(var i=0; i<frm.elements.length; i++){
+		if(frm.elements[i].name.match("collections") &&
+			frm.elements[i].name != "collections_only"){
+			frm.elements[i].checked = true;
+		}
+	}
+}
+
 //  End -->
 </script>
 
@@ -287,6 +299,7 @@ Main collection data fields you want:
 
 	<table border=0 width="100%" bgcolor="EEEEEE">
 	<tr>
+	<td class="cell" nowrap><center><input type=button onclick="collsCheckAll()" value="Check all"></td>
 	<td class="cell" nowrap><input type=checkbox name=collections_authorizer value="YES">authorizer</td>
 	<td class="cell" nowrap><input type=checkbox name=collections_enterer value="YES">enterer</td>
 	<td class="cell" nowrap><input type=checkbox name=collections_modifier value="YES">modifier</td>
