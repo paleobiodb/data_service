@@ -1,21 +1,130 @@
+# Used for permissions checking to make sure the current user has permission to access each row.
+# applies to collections, occurrences, and reidentifications.
+#
+# Relies on the access_level and release_date fields of the collection table.
+#
+# updated by rjp, 1/2004.
+
 package Permissions;
 
+use SQLBuilder;
+use Debug;
+
+use fields qw(	
+				SQLBuilder
+
+			);  # list of data members
+
+
+
 # Flags and constants
-my $DEBUG = 0;			# DEBUG flag
+my $DEBUG = 0;		# DEBUG flag
 my $s;				# Reference to the session variables
 
+
+
+# **Note: Must pass the session variable when creating this object.
 sub new {
 	my $class = shift;
-	$s = shift;
-	my $self = {};
-
-	bless $self, $class;
+	my Permissions $self = fields::new($class);
+	
+	$s = shift;		# session object
+	
+	# create SQLBuilder object
+	my $sql = SQLBuilder->new();
+	$self->{SQLBuilder} = $sql;  # store in data member
+	
 	return $self;
 }
 
+
+# pass it a collection_no
+# returns a boolean value 
+# false (0) if the user can't read this collection
+# true (1) if they can.
+#
+# Note, this may be slower than the older method, but it is cleaner
+# since it only requires the collection_no to determine access.
+#
+# Tested on Linux box, and it took 1.44 seconds to check 1000 columns.
+# Should be much faster on XServe.
+#
+# by rjp, 1/2004.
+sub userHasReadPermissionForCollectionNumber {
+	my $self = shift;
+	
+	my $cnum = shift; 	# the collection_no to check
+	
+	if (! $cnum) {
+		Debug::logError("Permissions, no collection_no passed.");
+		return 0;  # false if no collection_no
+	}
+
+	# Get today's date in the lexical comparison format
+	my $now = $self->getDate();
+	
+	my $sql = $self->{SQLBuilder};
+	$sql->setSQLExpr("SELECT access_level, 
+						DATE_FORMAT(release_date,'%Y%m%d') rd_short,
+						research_group, authorizer 
+						FROM collections WHERE collection_no = $cnum");
+	$sql->executeSQL();
+	my @result = $sql->nextResultRow();
+	
+	if (! @result) {
+		return 0;
+	}
+	
+	my $access_level = $result[0];
+	my $rd_short = $result[1];
+	my $research_group = $result[2];
+	$research_group =~ tr/ /_/;		# replace spaces with underscores for comparison
+	
+	my $authorizer = $result[3];
+	
+
+	if ($rd_short < $now) {
+		# the release date has already passed, so it reverts to public access
+		return 1;		# okay to access.
+	}
+	
+	# if we make it to here, then the release date has not yet passed
+	
+	if (($s->get("superuser") == 1) || ($s->get("authorizer") eq $authorizer)) {
+		return 1;	# superuser can read anything
+					# and if the current authorizer authorized this record, then they can read it too.
+	}
+	
+	if ($access_level eq "the public") {
+		return 1;	# public access level is always visible, even if release date hasn't passed..	
+	}
+	
+	if (($access_level eq "database members") && ($s->get("authorizer") ne "guest")){
+		return 1;	# okay as long as user isn't a guest
+	}
+	
+	if (($access_level eq "authorizer only") && ($s->get("authorizer") eq $authorizer)) {
+		return 1;
+	}
+	
+	if (($access_level eq "group members") && ($s->get($research_group))){
+		# note, spaces have already been replaced with underscores in the $research_group variable
+		return 1;
+	}
+	
+	return 0;		# if we make it to here, then there must be a problem, so disallow access.
+}
+
+
+
+
+# rjp note: pass it the $sth, a reference to an array of data rows, 
+# a limit number, and a reference to a scalar for the number of rows.
+# 
 # Produces an array of rows that this person has permissions to READ
 sub getReadRows {
 	my $self = shift;
+	
 	my $sth = shift;
 	my $dataRows = shift;
 	my $limit = shift;
