@@ -26,7 +26,9 @@ my $BADLINK = "";		# redirect them to this link if the info passed in was not va
 # escaped URL string						
 sub escapeURL {
 	my $url = shift;
-	return (CGI::escape($url));
+	$url =~ s/\s/%20/;
+	return $url;
+	#return (CGI::escape($url));
 }
 
 
@@ -51,18 +53,27 @@ sub URLForTaxonName {
 	$rank = "Genus";
 	
 	if ($second) {
-		$rank = "Genus+and+Species";
+		$rank = "Genus+and+species";
 		
 		if ($second eq "indet.") {
 			$rank = "Higher+taxon";	
+		} else {
+			# if it's not indet., but it contains a period, then
+			# we'll assume that it's a Genus.  For example, second = sp. would fit this case
+			if ($second =~ m/[.]/) {
+				$rank = "Genus";
+			}
 		}
 	}
 	
-	if ($second ne "indet.") {
+	# if the second name contains a period, then remove it..
+	$second =~ s/^.*([.]).*$//g;
+	
+	if ($second ne '') {
 		$name .= "+$second";
 	}
 	
-	return escapeURL("/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$name&taxon_rank=$rank");
+	return escapeURL("bridge.pl?action=checkTaxonInfo&taxon_name=$name&taxon_rank=$rank");
 }
 
 
@@ -73,7 +84,7 @@ sub URLForReferenceNumber {
 		return $BADLINK;
 	}
 
-	return escapeURL("/cgi-bin/bridge.pl?action=displayRefResults&type=view&reference_no=$ref");
+	return escapeURL("bridge.pl?action=displayRefResults&type=view&reference_no=$ref");
 }
 
 
