@@ -92,6 +92,7 @@ sub get_classification_hash{
         my %visits = ();
         my $debug_print_link = 0;
         my $found_parent = 0;
+        my $recomb_no = 0;
 
         # Loop at least once, but as long as it takes to get full classification
         # Keep looping while we have more levels to go up - the $INIT deal is just a weird way of emulating
@@ -128,10 +129,14 @@ sub get_classification_hash{
  
                 # Belongs to should always point to original combination
                 $parent_no   = $parents[$parent_index]->{'taxon_no'};
+                $recomb_no   = 0;
                 if ($parent_no) {
                     $correct_name = PBDBUtil::getCorrectedName($dbt,$parent_no);
                     $parent_name = $correct_name->{'taxon_name'};
                     $parent_rank = $correct_name->{'taxon_rank'};
+                    if ($correct_name->{'taxon_no'} != $parent_no) {
+                        $recomb_no = $correct_name->{'taxon_no'};
+                    }
                 } else { # This shouldn't happen but might bc of bad opinions
                     $parent_name = $parents[$parent_index]->{'taxon_name'};
                     $parent_rank = $parents[$parent_index]->{'taxon_rank'};
@@ -160,11 +165,13 @@ sub get_classification_hash{
                         my %node = (
                             'number'=>$prev_link->{'number'},
                             'name'=>$prev_link->{'name'},
-                            'rank'=>$prev_link->{'rank'}
+                            'rank'=>$prev_link->{'rank'},
+                            'recomb_no'=>$prev_link->{'recomb_no'}
                         );
                         $prev_link->{'number'} = $parent_no;
                         $prev_link->{'name'} = $parent_name;
                         $prev_link->{'rank'} = $parent_rank;
+                        $prev_link->{'recomb_no'} => $recomb_no;
                         push @{$prev_link->{'synonyms'}}, \%node;
                     } else {
                         if (exists $rank_hash{$parent_rank} || $ranks[0] eq 'parent' || $ranks[0] eq 'all') {
@@ -172,6 +179,7 @@ sub get_classification_hash{
                                 'number'=>$parent_no,
                                 'name'=>$parent_name,
                                 'rank'=>$parent_rank,
+                                'recomb_no' => $recomb_no,
                                 'next_link'=>{}
                             );
                             %{$link} = %node;

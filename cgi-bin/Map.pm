@@ -483,43 +483,71 @@ sub mapQueryDb	{
             $genus = $q->param('genus_name');
         }
         $sql = qq|SELECT occurrences.collection_no FROM occurrences LEFT JOIN reidentifications ON occurrences.occurrence_no = reidentifications.occurrence_no WHERE |;
-        if($q->param('taxon_rank') eq "Higher taxon" ||
-           $q->param('taxon_rank') eq "Higher-taxon"){
 
-			if (! @$in_list) {
-				$self->dbg("genus_name q param:".$q->param('genus_name')."<br>");
+        if (@$in_list) {
+                # In list may be a text genus+species name, a taxon number, or both (if passed from Confidence.pm)
+                my ($taxon_nos_string,$genus_species_sql);
+                foreach $taxon_no_or_name (@$in_list) {
+                    if ($taxon_no_or_name =~ /^\d+$/) {
+                        $taxon_nos_string .= $taxon_no_or_name . ",";
+                    } else {
+                        my ($genus,$species) = split(/ /,$taxon_no_or_name);
+                        if ($genus) {
+                            for $table (('reidentifications','occurrences')) {
+                                $genus_species_sql .= " OR ($table.genus_name=".$dbh->quote($genus);
+                                if ($species) {
+                                    $genus_species_sql .= " AND $table.species_name=".$dbh->quote($species);
+                                }
+                                $genus_species_sql .= ")";
+                            }
+                        }
+                    }
+                }
+                $taxon_nos_string =~ s/,$//;
+                if ($taxon_nos_string) {
+                }
+                $sql .= " (";
+                if (!$taxon_nos_string) {
+                    $genus_species_sql =~ s/^ OR//;
+                    $sql .= $genus_species_sql;
+                } else {
+                    $sql .= "occurrences.taxon_no IN ($taxon_nos_string) OR reidentifications.taxon_no IN ($taxon_nos_string) $genus_species_sql";
+                }
+                $sql .= ") ";
+        } else {
+            if($q->param('taxon_rank') eq "Higher taxon" ||
+               $q->param('taxon_rank') eq "Higher-taxon"){
+                $self->dbg("genus_name q param:".$q->param('genus_name')."<br>");
 
-				my $genus_names_string; 
-				my $taxon_nos_string;
+                my $genus_names_string; 
+                my $taxon_nos_string;
 
-				@taxon_nos = TaxonInfo::getTaxonNos($dbt, $q->param('genus_name'));
-				$self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
-				if (scalar(@taxon_nos) == 0) {
-					$genus_names_string .= $dbh->quote($q->param('genus_name'));
-				} elsif (scalar(@taxon_nos) == 1) {
-					$taxon_nos_string = PBDBUtil::taxonomic_search('',$dbt,$taxon_nos[0],'return taxon nos');
-				} else { #result > 1
-					push @warnings, "The taxon name '$taxon' was not included because it is ambiguous and belongs to multiple taxonomic hierarchies. Right the download script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
-				}
+                @taxon_nos = TaxonInfo::getTaxonNos($dbt, $q->param('genus_name'));
+                $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
+                if (scalar(@taxon_nos) == 0) {
+                    $genus_names_string .= $dbh->quote($q->param('genus_name'));
+                } elsif (scalar(@taxon_nos) == 1) {
+                    $taxon_nos_string = PBDBUtil::taxonomic_search('',$dbt,$taxon_nos[0],'return taxon nos');
+                } else { #result > 1
+                    push @warnings, "The taxon name '$taxon' was not included because it is ambiguous and belongs to multiple taxonomic hierarchies. Right the download script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
+                }
 
-				if ($taxon_nos_string) {
-					$sql .= " (occurrences.taxon_no IN (".$taxon_nos_string.") OR reidentifications.taxon_no IN (".$taxon_nos_string."))";
-				} elsif ($genus_names_string) {
-					$sql .= " (occurrences.genus_name IN (".$genus_names_string.") OR reidentifications.genus_name IN (".$genus_names_string."))";
-				}
-			} else {
-				$sql .= " (occurrences.taxon_no IN (".join(',',@$in_list).") OR reidentifications.taxon_no IN (".join(',',@$in_list)."))";
-			}
-        }
-        else{
-            if($genus){
-                $sql .= "(occurrences.genus_name=" . $dbh->quote($genus) . " OR reidentifications.genus_name=" . $dbh->quote($genus) . ")" ;
-                if($species){
-                    $sql .= " AND ";
+                if ($taxon_nos_string) {
+                    $sql .= " (occurrences.taxon_no IN (".$taxon_nos_string.") OR reidentifications.taxon_no IN (".$taxon_nos_string."))";
+                } elsif ($genus_names_string) {
+                    $sql .= " (occurrences.genus_name IN (".$genus_names_string.") OR reidentifications.genus_name IN (".$genus_names_string."))";
                 }
             }
-            if($species){
-                $sql .= "(occurrences.species_name=" . $dbh->quote($species) . " OR reidentifications.species_name=" . $dbh->quote($genus) . ")";
+            else{
+                if($genus){
+                    $sql .= "(occurrences.genus_name=" . $dbh->quote($genus) . " OR reidentifications.genus_name=" . $dbh->quote($genus) . ")" ;
+                    if($species){
+                        $sql .= " AND ";
+                    }
+                }
+                if($species){
+                    $sql .= "(occurrences.species_name=" . $dbh->quote($species) . " OR reidentifications.species_name=" . $dbh->quote($genus) . ")";
+                }
             }
         }
         $sth2 = $dbh->prepare($sql);
