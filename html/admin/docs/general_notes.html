@@ -41,6 +41,10 @@ SPAN.title {
 	font-weight: bold;
 }
 
+SPAN.emphasized {
+	font-weight: bold;
+}
+
 </style>
 </HEAD>
 
@@ -77,7 +81,21 @@ If the <SPAN class="field">release_date</SPAN> has passed, the actual <SPAN clas
 <A NAME="editingpolicies"><SPAN class="title">Editing Policies</SPAN></A>
 
 <DIV>
-<p>Not sure.  A user can only edit their own records?
+<p>
+Record the <SPAN class="field">person_no</SPAN> of the enterer in the
+<SPAN class="field">modifier</SPAN> field.
+</p>
+
+<p><SPAN class="emphasized">authorities, opinions</SPAN> 
+Any (authorizer, enterer) pair can edit a <b>NULL</B> field.  If the authorizer is the same as the original, then any enterer can edit any field.
+</p>
+
+<p><SPAN class="emphasized">collections, occurrences</SPAN>
+As long as the authorizer is the same as original, any enterer can edit any field.
+</p>
+
+<p><SPAN class="emphasized">refs</SPAN>
+Any (authorizer, enterer) pair can edit any field.
 </p>
 </DIV>
 
