@@ -422,7 +422,7 @@ sub newTaxonNames{
 	NAME:
 	foreach my $check (@names){
 		foreach my $check_res (@res){ 
-			next NAME if($check_res->{$type} eq $check);
+			next NAME if(uc($check_res->{$type}) eq uc($check));
 		}
 		push(@result, $check);
 	}
