@@ -2060,6 +2060,9 @@ sub buildTaxonomicList {
 				pop(@occFieldNames);
 			}
 
+			# CALL A METHOD THAT GETS THE MOST RECENT REID FOR THE GIVEN OCC,
+			# REARRANGE THIS (BELOW) METHOD TO USE THE REID NO ARG.
+			# ALSO, DON'T DO CLASSIFICATION HASH (ABOVE) IF WE GET A REID.
 			$formattedrow .= getReidHTMLTableByOccNum(pop(@occrow),$collection_refno);
 
 			# Link taxa to the TaxonInfo script
@@ -2075,7 +2078,7 @@ sub buildTaxonomicList {
 			}
 			elsif($formattedrow =~ /<species>indet/s){
 				# shouldn't be any <i> tags for indet's.
-				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Higher+taxon&user=Contributor">$1$2 indet.<\/a>/g;
+				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Higher+taxon&user=Contributor">$1$2<\/a>/g;
 				$formattedrow =~ s/<species>(.*)?<\/species>//;
 			}
 			else{
@@ -2143,6 +2146,7 @@ sub buildTaxonomicList {
 sub getReidHTMLTableByOccNum {
 
 	my $occNum = shift;
+	# This appears to be unused:
 	my $collection_refno = shift;
 
 	$sql =	"SELECT genus_reso, ".
