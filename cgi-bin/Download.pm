@@ -8,7 +8,7 @@ use Globals;
 use DBTransactionManager;
 
 # Flags and constants
-my $DEBUG=0;			# The debug level of the calling program
+my $DEBUG=1;			# The debug level of the calling program
 my $dbh;				# The database handle
 my $dbt;				# The new and improved database object
 my $q;					# Reference to the parameters
@@ -20,10 +20,10 @@ $|=1;
 # These arrays contain names of possible fields to be checked by a user in the
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
-# be written out.
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdec latdir lngdeg lngmin lngsec lngdec lngdir latlng_basis altitude_value altitude_unit geogscale geogcomments period epoch 10mybin max_interval_no min_interval_no emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
-my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
-my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name reference_no comments created modified modified_temp plant_organ);
+# be written out. 
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch 10mybin max_interval_no min_interval_no emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
+my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
+my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name reference_no comments created modified modified_temp plant_organ);
 my @refsFieldNames = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage created modified publication_type comments project_name project_ref_no);
 my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
 my @mesoCenozoic = qw(triassic jurassic cretaceous tertiary);
@@ -37,6 +37,11 @@ my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
 my $outFileBaseName;
 
 my $bestbothscale;
+
+# for measuring execution time
+my ($th0, $th1);
+use Time::HiRes qw(gettimeofday);
+$th0 = gettimeofday() if ($DEBUG);
 
 sub new {
 	my $class = shift;
@@ -58,20 +63,38 @@ sub buildDownload {
 	<center>
 	<h2>The Paleobiology Database: Download Results</h2>
 	</center>";
+    
 
 	$self->setupOutput ( );
+    $th1 = gettimeofday() if ($DEBUG);
+    $self->dbg("Exec time setupOutput: ".sprintf ("%5.3f",($th1 - $th0)));
+
 	$self->retellOptions ( );
+    $th1 = gettimeofday() if ($DEBUG);
+    $self->dbg("Exec time retellOptions: ".sprintf ("%5.3f",($th1 - $th0)));
+
 	if ( $q->param('time_scale') )	{
 		$self->getTimeLookup ( );
 	}
+    $th1 = gettimeofday() if ($DEBUG);
+    $self->dbg("Exec time timeScale: ".sprintf ("%5.3f",($th1 - $th0)));
+    
 	if ( $q->param('ecology1') )	{
 		$self->getEcology ( );
 	}
+    $th1 = gettimeofday() if ($DEBUG);
+    $self->dbg("Exec time getEcology: ".sprintf ("%5.3f",($th1 - $th0)));
+    
 	if ( $q->param('compendium_ranges') eq 'NO' )	{
 		$self->getCompendiumAgeRanges ( );
 	}
-	$self->doQuery ( );
+    $th1 = gettimeofday() if ($DEBUG);
+    $self->dbg("Exec time compendiumAgeRanges: ".sprintf ("%5.3f",($th1 - $th0)));
 
+    
+	$self->doQuery ( );
+    $th1 = gettimeofday() if ($DEBUG);
+    $self->dbg("Exec time doQuery: ".sprintf ("%5.3f",($th1 - $th0)));
 }
 
 
@@ -88,30 +111,10 @@ sub retellOptions {
 
 	# authorizer added 30.6.04 JA (left out by mistake?) 
 	$html .= $self->retellOptionsRow ( "Authorizer", $q->param("authorizer") );
+	$html .= $self->retellOptionsRow ( "Output data type", $q->param("output_data") );
+	$html .= $self->retellOptionsRow ( "Output data format", $q->param("output_format") );
 	$html .= $self->retellOptionsRow ( "Research group or project", $q->param("research_group") );
-	INTERVAL: {
-		if ( $q->param("interval") eq "Phanerozoic" ) { 
-			$html .= $self->retellOptionsRow ( "Time interval", "All periods" );
-			last;
-		}
-		if ( $q->param("interval") eq "Interval1" ) {
-			$html .= $self->retellOptionsRow ( "Time interval", "All of the Paleozoic" );
-			last;
-		}
-		if ( $q->param("interval") eq "Interval2" ) {
-			$html .= $self->retellOptionsRow ( "Time interval", "All of the Meso-Cenozoic" );
-			last;
-		}
-		if ( $q->param("interval") eq "other" ) {
-			my @intervals = $q->param("intervals");
-			$html .= $self->retellOptionsRow ( "Time interval", join ( ", ", @intervals ) );
-			last;
-		}
-	}
-	# LEGACY CODE
-	#	$html .= $self->retellOptionsRow ( "Epoch", $q->param("epoch") );
-	#	$html .= $self->retellOptionsRow ( "Single age/stage", $q->param("stage") );
-
+    
 	# added by rjp on 12/30/2003
 	if ($q->param('year')) {
 		my $dataCreatedBeforeAfter = $q->param("created_before_after") . " " . $q->param("date") . " " . $q->param("month") . " " . $q->param("year");
@@ -130,32 +133,103 @@ sub retellOptions {
 	}
 	$html .= $self->retellOptionsRow ( "Class", $q->param("class") );
 
-	$html .= $self->retellOptionsRow ( "Oldest interval", $q->param("max_interval_name") );
-	$html .= $self->retellOptionsRow ( "Youngest interval", $q->param("min_interval_name") );
-	if ( ! $q->param("lithology_carbonate") || ! $q->param("lithology_mixed") || ! $q->param("lithology_siliciclastic") )	{
-		my $liths;
-		if ( $q->param("lithology_carbonate") )	{
-			$liths = "carbonate";
-		}
-		if ( $q->param("lithology_mixed") )	{
-			$liths .= ", mixed";
-		}
-		if ( $q->param("lithology_siliciclastic") )	{
-			$liths .= ", siliciclastic";
-		}
-		$liths =~ s/^,//;
-		$html .= $self->retellOptionsRow ( "Lithologies", $liths );
-	}
-	$html .= $self->retellOptionsRow ( "Environment", $q->param("environment") );
+    if ($q->param("max_interval_name")) {
+    	$html .= $self->retellOptionsRow ( "Oldest interval", $q->param("max_eml_interval") . " " . $q->param("max_interval_name") );
+    }
+    if ($q->param("min_interval_name")) { 
+	    $html .= $self->retellOptionsRow ( "Youngest interval", $q->param("min_eml_interval") . " " .$q->param("min_interval_name") );
+    }
+
+    # Lithologies or lithology
+    if ( $q->param("lithology1") ) {
+        $html .= $self->retellOptionsRow("Lithology: ", $q->param("include_exclude_lithology1") . " " .$q->param("lithology1"));
+    } else {
+        my $liths;
+        if ( ! $q->param("lithology_carbonate") || ! $q->param("lithology_mixed") ||
+             ! $q->param("lithology_siliciclastic") || ! $q->param("lithology_unknown") ){
+            my $liths;
+            if ( $q->param("lithology_carbonate") )	{
+                $liths = "carbonate";
+            }
+            if ( $q->param("lithology_mixed") )	{
+                $liths .= ", mixed";
+            }
+            if ( $q->param("lithology_siliciclastic") )	{
+                $liths .= ", siliciclastic";
+            }
+            if ( $q->param("lithology_unknown") ) {
+                $liths .= ", unknown";
+            }    
+            $liths =~ s/^, //;
+            $html .= $self->retellOptionsRow ( "Lithologies", $liths );
+        }
+    }
+
+    # Environment or environments
+    if ( $q->param('environment') ) {
+    	$html .= $self->retellOptionsRow ( "Environment", $q->param("include_exclude_environment") . " " .$q->param("environment") );
+    } else {
+        if (! $q->param("environment_carbonate") || ! $q->param("environment_unknown") ||
+            ! $q->param("environment_siliciclastic") || ! $q->param("environment_terrestrial")) {
+            my $envs;
+            if ( $q->param("environment_carbonate") ) {
+                $envs .= "carbonate";
+            }
+            if ( $q->param("environment_siliciclastic") ) {
+                $envs .= ", siliciclastic";
+            }
+            if ( $q->param("environment_terrestrial") ) {
+                $envs .= ", terrestrial";
+            }
+            if ( $q->param("environment_unknown") ) {
+                $envs = ", unknown";
+            }    
+            $envs =~ s/^,//;
+            $html .= $self->retellOptionsRow( "Environments", $envs);
+        }
+    }    
+
+    # Collection types
+    if (! $q->param('collection_type_archaeological') || ! $q->param('collection_type_biostratigraphic') ||
+        ! $q->param('collection_type_paleoecologic') || ! $q->param('collection_type_taphonomic') || 
+        ! $q->param('collection_type_taxonomic') || ! $q->param('collection_type_general_faunal/floral') ||
+        ! $q->param('collection_type_unknown')) {
+        my $colltypes;
+        if ($q->param('collection_type_archaeological')) {
+            $colltypes .= "archaeological";
+        }
+        if ($q->param('collection_type_biostratigraphic')) {
+            $colltypes .= ", biostratigraphic";
+        }
+        if ($q->param('collection_type_paleoecologic')) {
+            $colltypes .= ", paleoecologic";
+        }
+        if ($q->param('collection_type_taphonomic')) {
+            $colltypes .= ", taphonomic";
+        }
+        if ($q->param('collection_type_taxonomic')) {
+            $colltypes .= ", taxonomic";
+        }
+        if ($q->param('collection_type_general_faunal/floral')) {
+            $colltypes .= ", general faunal/floral";
+        }
+        if ($q->param('collection_type_unknown')) {
+            $colltypes .= ", unknown";
+        }
+        $colltypes =~ s/^,//;
+        $plural = ($colltypes =~ /,/) ? "s":"";
+        $html .= $self->retellOptionsRow( "Collections included for reason$plural",$colltypes);
+    }
+    
 
 	# Continents or country
 	my @continents = ( );
 	# If a country was selected, ignore the continents JA 6.7.02
 	if ( $q->param("country") )	{
-		$html .= $self->retellOptionsRow ( "Country", $q->param("country") );
+		$html .= $self->retellOptionsRow ( "Country", $q->param("include_exclude_country") . " " . $q->param("country") );
 	}
 	else	{
-		if ( $q->param("global") ) 			{ push ( @continents, "Global" ); }
+		if ( $q->param("global") ) 			{ push ( @continents, "global" ); }
 		if ( $q->param("Africa") ) 			{ push ( @continents, "Africa" ); }
 		if ( $q->param("Antarctica") ) 		{ push ( @continents, "Antarctica" ); }
 		if ( $q->param("Asia") ) 			{ push ( @continents, "Asia" ); }
@@ -180,223 +254,112 @@ sub retellOptions {
 	if ( $q->param("lngmax") > -180 && $q->param("lngmax") < 180 )	{
 		$html .= $self->retellOptionsRow ( "Maximum longitude", $q->param("lngmax") . "&deg;" );
 	}
+
+	if ( $q->param("paleolatmin") > -90 && $q->param("paleolatmin") < 90 )	{
+		$html .= $self->retellOptionsRow ( "Minimum paleolatitude", $q->param("paleolatmin") . "&deg;" );
+	}
+	if ( $q->param("paleolatmax") > -90 && $q->param("paleolatmax") < 90 )	{
+		$html .= $self->retellOptionsRow ( "Maximum paleolatitude", $q->param("paleolatmax") . "&deg;" );
+	}
+	if ( $q->param("paleolngmin") > -180 && $q->param("paleolngmin") < 180 )	{
+		$html .= $self->retellOptionsRow ( "Minimum paleolongitude", $q->param("paleolngmin") . "&deg;" );
+	}
+	if ( $q->param("paleolngmax") > -180 && $q->param("paleolngmax") < 180 )	{
+		$html .= $self->retellOptionsRow ( "Maximum paleolongitude", $q->param("paleolngmax") . "&deg;" );
+	}
 	
 	$html .= $self->retellOptionsRow ( "Lump lists of same county & formation?", $q->param("lumplist") );
 
-	if ( $q->param('small_collection') )	{
-		$geogscales = "small collection";
-	}
-	if ( $q->param('outcrop') )	{
-		$geogscales .= ", outcrop";
-	}
-	if ( $q->param('local_area') )	{
-		$geogscales .= ", local area";
-	}
-	if ( $q->param('basin') )	{
-		$geogscales .= ", basin";
-	}
-	$geogscales =~ s/^,//;
+    if (! $q->param('geogscale_small_collection') || ! $q->param('geogscale_outcrop') || ! $q->param('geogscale_local_area') ||
+        ! $q->param('geogscale_basin') || ! $q->param('geogscale_unknown')) { 
+        my $geogscales;
+        if ( $q->param('geogscale_small_collection') )	{
+            $geogscales = "small collection";
+        }
+        if ( $q->param('geogscale_outcrop') )	{
+            $geogscales .= ", outcrop";
+        }
+        if ( $q->param('geogscale_local_area') )	{
+            $geogscales .= ", local area";
+        }
+        if ( $q->param('geogscale_basin') )	{
+            $geogscales .= ", basin";
+        }
+        if ( $q->param('geogscale_unknown')) {
+            $geogscales .= ", unknown";
+        }    
+        $geogscales =~ s/^,//;
 
-	$html .= $self->retellOptionsRow ( "Geographic scale of collections", $geogscales );
+        $html .= $self->retellOptionsRow ( "Geographic scale of collections", $geogscales );
+    }
 
-	if ( $q->param('bed') )	{
-		$stratscales = "bed";
-	}
-	if ( $q->param('group_of_beds') )	{
-		$stratscales .= ", group of beds";
-	}
-	if ( $q->param('member') )	{
-		$stratscales .= ", member";
-	}
-	if ( $q->param('formation') )	{
-		$stratscales .= ", formation";
-	}
-	if ( $q->param('group') )	{
-		$stratscales .= ", group";
-	}
-	$stratscales =~ s/^,//;
+    if (! $q->param('stratscale_bed') || ! $q->param('stratscale_group_of_beds') || ! $q->param('stratscale_member') ||
+        ! $q->param('stratscale_formation') || ! $q->param('stratscale_group') || ! $q->param('stratscale_unknown')) {
+        my $stratscales;
+        if ( $q->param('stratscale_bed') )	{
+            $stratscales = "bed";
+        }
+        if ( $q->param('stratscale_group_of_beds') )	{
+            $stratscales .= ", group of beds";
+        }
+        if ( $q->param('stratscale_member') )	{
+            $stratscales .= ", member";
+        }
+        if ( $q->param('stratscale_formation') )	{
+            $stratscales .= ", formation";
+        }
+        if ( $q->param('stratscale_group') )	{
+            $stratscales .= ", group";
+        }
+        if ( $q->param('stratscale_unknown') ) {
+            $stratscales .= ", unknown";
+        }
+        $stratscales =~ s/^,//;
 
-	$html .= $self->retellOptionsRow ( "Stratigraphic scale of collections", $stratscales );
+        $html .= $self->retellOptionsRow ( "Stratigraphic scale of collections", $stratscales );
+    }
 
 	$html .= $self->retellOptionsRow ( "Lump by coordinate and formation/member?", $q->param("lump_by_mbr") );
 	$html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
 	$html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
 	$html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
 	$html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", $q->param("sp") );
+    $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
 	$html .= $self->retellOptionsRow ( "Include occurrences qualified by \"aff.\" or quotes?", $q->param("poor_genus_reso") );
 	$html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
 	$html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
-	$html .= $self->retellOptionsRow ( "Output data format", $q->param("collections_put") );
 
-	my @occurrenceOutputFields = (	"occurrences_authorizer",
-					"occurrences_enterer",
-					"occurrences_modifier",
-					"occurrences_occurrence_no",
-					"occurrences_subgenus_name",
-					"occurrences_species_name",
-					"occurrences_abund_value",
-					"occurrences_abund_unit",
-					"occurrences_reference_no",
-					"occurrences_comments",
-					"occurrences_plant_organ",
-					"occurrences_plant_organ2",
-					"occurrences_created",
-					"occurrences_modified",
-					"collections_only" );
+    if ($q->param('output_data') eq "occurrences") {
+        my $occFields = ();
+        push (@occFields, 'class_name') if ($q->param("occurrences_class_name") eq "YES");
+        push (@occFields, 'order_name') if ($q->param("occurrences_order_name") eq "YES");
+        push (@occFields, 'family_name') if ($q->param("occurrences_family_name") eq "YES");
+        push (@occFields, 'genus_reso','genus_name');
+        foreach my $field ( @occurrencesFieldNames ) {
+            if( $q->param ( "occurrences_".$field ) ){ 
+                push ( @occFields, "occurrences_".$field ); 
+            }
+        }
+        push(@occFields,"reidentifications_genus_name" );
+        foreach my $field ( @reidentificationsFieldNames ) {
+            if( $q->param ( "occurrences_".$field) ){ 
+                push ( @occFields, "reidentifications_".$field ); 
+            }
+        }
+	    $html .= $self->retellOptionsRow ( "Occurrence output fields", join ( "<BR>", @occFields) );
+    }
 
-	my @reidOutputFields = ("reidentifications_authorizer",
-							"reidentifications_enterer",
-							"reidentifications_modifier",
-							"reidentifications_occurrence_no",
-							"reidentifications_subgenus_name",
-							"reidentifications_species_name",
-							"reidentifications_reference_no",
-							"reidentifications_comments",
-							"reidentifications_plant_organ",
-							"reidentifications_created",
-							"reidentifications_modified");
+    if ($q->param('output_data') eq 'genera') {
+	    $html .= $self->retellOptionsRow ( "Collection output fields", "genus_name");
+    } else {
+        my @collFields = ( "collection_no");
+        foreach my $field ( @collectionsFieldNames ) {
+            if ( $q->param ( 'collections_'.$field ) ) { push ( @collFields, 'collections_'.$field ); }
+        }
+	    $html .= $self->retellOptionsRow ( "Collection output fields", join ( "<BR>", @collFields) );
+    }
 
-	my @occurrenceOutputResult = ( "occurrences_genus_name" );
-	foreach my $field ( @occurrenceOutputFields ) {
-		if( $q->param ( $field ) ){ 
-			push ( @occurrenceOutputResult, $field ); 
-		}
-	}
-	push(@occurrenceOutputResult,"reidentifications_genus_name" );
-	foreach my $field ( @reidOutputFields ) {
-		my $temp = $field;
-		$temp =~ s/reidentifications/occurrences/;
-		if( $q->param ( $temp ) ){ 
-			push ( @occurrenceOutputResult, $field ); 
-		}
-	}
-
-	$html .= $self->retellOptionsRow ( "Occurrence output fields", join ( "<BR>", @occurrenceOutputResult ) );
-
-
-	my @collectionOutputFields = (	"collections_authorizer", 
-					"collections_enterer", 
-					"collections_modifier", 
-					"collections_collection_no", 
-					"collections_collection_subset", 
-					"collections_reference_no", 
-					"collections_collection_name", 
-					"collections_collection_aka", 
-					"collections_country", 
-					"collections_state", 
-					"collections_county", 
-					"collections_latdeg", 
-					"collections_latmin", 
-					"collections_latsec", 
-					"collections_latdec", 
-					"collections_latdir", 
-					"collections_lngdeg", 
-					"collections_lngmin", 
-					"collections_lngsec", 
-					"collections_lngdec", 
-					"collections_lngdir", 
-					"collections_latlng_basis", 
-					"collections_geogscale", 
-					"collections_geogcomments", 
-                    "collections_period",
-                    "collections_epoch",
-                    "collections_10mybin",
-					"collections_max_interval_no", 
-					"collections_min_interval_no", 
-                    "collections_emlperiod_max",
-                    "collections_period_max",
-                    "collections_emlperiod_min",
-                    "collections_period_min",
-                    "collections_emlepoch_max",
-                    "collections_epoch_max",
-                    "collections_emlepoch_min",
-                    "collections_epoch_min",
-                    "collections_emlintage_max",
-                    "collections_intage_max",
-                    "collections_emlintage_min",
-                    "collections_intage_min",
-                    "collections_emllocage_max",
-                    "collections_locage_max",
-                    "collections_emllocage_min",
-                    "collections_locage_min",
-					"collections_zone", 
-					"collections_geological_group", 
-					"collections_formation", 
-					"collections_member", 
-					"collections_localsection", 
-					"collections_localbed", 
-					"collections_localorder", 
-					"collections_regionalsection", 
-					"collections_regionalbed", 
-					"collections_regionalorder", 
-					"collections_stratscale", 
-					"collections_stratcomments", 
-					"collections_lithdescript", 
-					"collections_lithadj", 
-					"collections_lithification", 
-					"collections_lithology1", 
-					"collections_fossilsfrom1", 
-					"collections_lithadj2", 
-					"collections_lithification2", 
-					"collections_lithology2", 
-					"collections_fossilsfrom2", 
-					"collections_environment", 
-					"collections_tectonic_setting", 
-					"collections_preservation", 
-					"collections_geology_comments", 
-					"collections_collection_type", 
-					"collections_collection_coverage", 
-					"collections_collection_attributes", 
-					"collections_collection_size", 
-					"collections_museum", 
-					"collections_collection_comments", 
-					"collections_taxonomy_comments", 
-					"collections_created", 
-					"collections_modified" );
-
-   	my @collectionOutputResult = ( "collection_no" );	# A freebie
-	if ( ! $q->param("collections_only") ) { push ( @collectionOutputResult, "genus_reso", "genus_name" ); }
-	# hey, if you want the data binned into time intervals you have to
-	#  download the interval names into the occurrences table too
-	if ( $q->param('time_scale') )	{
-		$q->param('collections_max_interval_no' => "YES");
-		$q->param('collections_min_interval_no' => "YES");
-	}
-	# and hey, if you want counts of some enum field split up within
-	#  time interval bins, you have to download that field
-	if ( $q->param('binned_field') )	{
-		if ( $q->param('binned_field') =~ /plant_organ/ )	{
-			$q->param('occurrences_' . $q->param('binned_field') => "YES");
-		} else	{
-			$q->param('collections_' . $q->param('binned_field') => "YES");
-		}
-	}
-	# and hey, if you want to lump by coordinate/member you need all
-	#  the coordinate and formation/member fields JA 21.8.04
-	if ( $q->param('lump_by_mbr') eq 'YES' )	{
-		$q->param('collections_latdeg' => "YES");
-		$q->param('collections_latmin' => "YES");
-		$q->param('collections_latsec' => "YES");
-		$q->param('collections_latdec' => "YES");
-		$q->param('collections_latdir' => "YES");
-		$q->param('collections_lngdeg' => "YES");
-		$q->param('collections_lngmin' => "YES");
-		$q->param('collections_lngsec' => "YES");
-		$q->param('collections_lngdec' => "YES");
-		$q->param('collections_lngdir' => "YES");
-		$q->param('collections_formation' => "YES");
-		$q->param('collections_member' => "YES");
-		$q->param('collections_max_interval_no' => "YES");
-		$q->param('collections_min_interval_no' => "YES");
-	}
-	foreach my $field ( @collectionOutputFields ) {
-		if ( $q->param ( $field ) ) { push ( @collectionOutputResult, $field ); }
-	}
-	$html .= $self->retellOptionsRow ( "Collection output fields", join ( "<BR>", @collectionOutputResult ) );
-
-	$html .= "
-</table>
-";
+	$html .= "\n</table>\n";
 
 	$html =~ s/_/ /g;
 	print $html;
@@ -420,61 +383,90 @@ sub retellOptionsRow {
 sub getOutFields {
 	my $self = shift;
 	my $tableName = shift;
-	my $isReID = shift;
-    # isQuery states whether we're going to use the output in a SQL query or not.
-    # important because some fields are created via TimeLookup (epoch, period, 10mybin)
-    # so should be in output fields, but not in a SELECT fields list
-    my $isQuery = shift; 
-	my @outFields;
+    my $isSQL = shift;
 	
 	my @fieldNames;
 	
 	if($tableName eq "collections") {
-        if ($isQuery) {
-		    @fieldNames = grep {!/^(epoch|period|10mybin)$/} @collectionsFieldNames;
+        if ($isSQL) {
+            # These fieldnames are created virtually, not from the DB
+	        @fieldNames = grep {!/^(paleo(lat|lng)(deg|dec|min|sec|dir)|epoch|period|10mybin)$/} @collectionsFieldNames;
         } else {
-		    @fieldNames = @collectionsFieldNames;
-        } 
+	        @fieldNames = @collectionsFieldNames;
+        }
 	} elsif($tableName eq "occurrences") {
-		if($isReID eq 'reidentifications'){
-			@fieldNames = @reidentificationsFieldNames;
-		}
-		else{
-			@fieldNames = @occurrencesFieldNames;
-		}
-	} else {
+        @fieldNames = @occurrencesFieldNames;
+	} elsif($tableName eq "reidentifications") {
+        @fieldNames = @reidentificationsFieldNames;
+    } else {
 		$self->dbg("getOutFields(): Unknown table [$tableName]");
 	}
 	
 	my @outFields = ( );
 	foreach my $fieldName ( @fieldNames ) {
-		# use brackets below because the underscore is a valid
-		# character for identifiers (could also have done $var."_".$var
+		# use brackets below because the underscore is a valid char
 		if ( $q->param("${tableName}_${fieldName}") eq "YES") {
-			if($fieldName eq 'subgenus_name') {
-				if($isReID eq 'reidentifications'){
-					push(@outFields, "reidentifications.subgenus_reso as reid_subgenus_reso");
-				}
-				else{
-					push(@outFields, "$tableName.subgenus_reso");
-				}
+            # Rename field to avoid conflicts with fieldnames in collections/occ table
+			if($tableName eq 'reidentifications'){
+                if ($isSQL) {
+				    push(@outFields, "$tableName.$fieldName as reid_$fieldName");
+                } else {
+                    push(@outFields, "$tableName.$fieldName");
+                }
 			}
-			elsif($fieldName eq 'species_name') {
-				if($isReID eq 'reidentifications'){
-					push(@outFields, "reidentifications.species_reso as reid_species_reso");
-				}
-				else{
-					push(@outFields, "$tableName.species_reso");
-				}
-			}
-			if($isReID eq 'reidentifications'){
-				push(@outFields, "reidentifications.$fieldName as reid_$fieldName");
-			}
-			else{
-				push(@outFields, "$tableName.$fieldName");
-			}
+            # Rename field to avoid conflicts with fieldnames in collections table
+			elsif ($tableName eq 'occurrences') {
+                if ($isSQL) {
+				    push(@outFields, "$tableName.$fieldName as occ_$fieldName");
+                } else {
+				    push(@outFields, "$tableName.$fieldName");
+                }
+			} else { 
+                push(@outFields,"$tableName.$fieldName");
+            }
 		}
 	}
+
+    # Need these fields to perform various computations
+    # So make sure they included in the SQL query, but not necessarily  included
+    # into a CSV header.
+    my %fieldExists;
+    @fieldExists{@outFields} = ();
+    if ($isSQL && $tableName eq "collections") {
+        my %impliedFields;
+        %impliedFields = (
+            'collections_paleolat'=>['paleolat'],
+            'collections_paleolng'=>['paleolng'],
+            'collections_lat'=>['latdeg', 'latmin', 'latsec', 'latdec', 'latdir'],
+            'collections_lng'=>['lngdeg', 'lngmin', 'lngsec', 'lngdec', 'lngdir'],
+            'lump_by_mbr'=>['latdeg','latmin','latsec','latdec','latdir',
+                            'lngdeg','lngmin','lngsec','lngdec','lngdir',
+                            'formation','member','max_interval_no','min_interval_no']);
+
+        foreach $key (keys %impliedFields) {
+            if ($q->param($key) eq "YES") {
+                foreach $field (@{$impliedFields{$key}}) {
+                    if (!exists $fieldExists{$field}) {
+                        push @outFields, "$tableName.$field";
+                        $fieldExists{$field} = 1;
+                    }    
+                }    
+            }
+        }  
+        if (!exists $fieldExists{'reference_no'}) {
+            push @outFields, "$tableName.reference_no";
+        }
+    } elsif ($isSQL && $tableName eq "occurrences") {    
+		# subgenus name must be downloaded if subgenera are to be
+		#  treated as genera
+		# an amusing hack, if I do say so myself JA 18.8.04
+		if ( $q->param('split_subgenera') eq 'YES' && !exists $fieldExists{'subgenus_name'} )	{
+            push @outFields, "$tableName.subgenus_name as occ_subgenus_name";
+		}
+        if (!exists $fieldExists{'reference_no'}) {
+            push @outFields, "$tableName.reference_no as occ_reference_no";
+        }
+    }    
 	return @outFields;
 }
 
@@ -482,61 +474,10 @@ sub getOutFields {
 sub getOutFieldsString {
 	my $self = shift;
 	my $tableName = shift;
-	my $isReID = shift;
-    my $isQuery = shift;
+    my $isSQL = shift;
 
-	my $outFieldsString = join ( ",\n", $self->getOutFields($tableName, $isReID, $isQuery) );
+	my $outFieldsString = join ( ",\n", $self->getOutFields($tableName,$isSQL) );
 	return $outFieldsString;
-}
-
-# LEGACY CODE
-# Returns a string representation of the time interval (period)
-# portion of the collections where clause.  The return value
-# looks like: period='period_name' OR period='period2_name'
-sub getTimeIntervalString {
-	my $self = shift;
-	my $single_interval = $q->param('interval');
-	
-	# If the user selected 'other', get the list of periods
-	if($single_interval eq 'other')
-	{
-		my @intervals = $q->param('intervals');
-		return $self->makeOrString('collections.period_max', @intervals);
-	}
-	# If the user selected Phanerozoic, do not constrain this field
-	# (All but Neoproterozoic).
-	elsif($single_interval eq "Phanerozoic")
-	{
-		return $self->makeOrString('collections.period_max', @paleozoic) . " OR " . $self->makeOrString('collections.period_max', @mesoCenozoic);
-	}
-	# If the user selected interval1 ("all of the Paleozoic")
-	# (Cambrian-Permian)
-	elsif($single_interval eq "Interval1")
-	{
-		return $self->makeOrString('collections.period_max', @paleozoic);
-	}
-	# If the user selected interval2 ("all of the Meso-Cenozoic")
-	# (Triassic-Tertiary)
-	elsif($single_interval eq "Interval2")
-	{
-		return $self->makeOrString('collections.period_max', @mesoCenozoic);
-	}
-}
-
-# Takes a field name and an array of values, and returns a string that 
-# looks like: 
-# 	field_name='array_member' 
-#	OR fieldname='array2_member'
-# 	...
-sub makeOrString {
-	my $self = shift;
-	my $fieldName = shift;
-	my @vals = @_;
-	foreach my $val (@vals)
-	{
-		$val = "$fieldName='$val'";
-	}
-	return " " . join("\n OR ", @vals) . " ";
 }
 
 # Returns research group
@@ -562,11 +503,86 @@ sub getResGrpString {
 # 6.7.02 JA
 sub getCountryString {
 	my $self = shift;
+    my $country_sql = "";
+	my $in_str = "";
 
-	my $country = $q->param('country');
+    #Country or Countries
+    if ($q->param('country')) {
+        $country_term = $dbh->quote($q->param('country'));
+        if ($q->param('include_exclude_country') eq "exclude") {
+            $country_sql = qq| collections.country NOT LIKE $country_term |;
+        } else {
+            $country_sql = qq| collections.country LIKE $country_term |;
+        }
+    } else {     
+        # Get the regions
+        if ( ! open ( REGIONS, "$DATAFILE_DIR/PBDB.regions" ) ) {
+            print "<font color='red'>Skipping regions.</font> Error message is $!<BR><BR>\n";
+            return;
+        }
 
-	if ( $country ) { return " collections.country='$country' "; }
-	return "";
+        while (<REGIONS>)
+        {
+            chomp();
+            my ($region, $countries) = split(/:/, $_, 2);
+            $countries =~ s/'/\\'/g;
+            $REGIONS{$region} = $countries;
+        }
+        # Add the countries within selected regions
+        my @regions = (	"North America", 
+                        "South America", 
+                        Europe, 
+                        Africa,
+                        Antarctica, 
+                        Asia, 
+                        Australia );
+
+        foreach my $region (@regions) {
+            if($q->param($region) eq 'YES') {
+                $in_str = $in_str .','. "'".join("','", split(/\t/,$REGIONS{$region}))."'";
+            }
+            $in_str =~ s/^,//; 
+        }
+        if ($in_str) {
+            $country_sql = qq| collections.country IN ($in_str) |;
+        } else {
+            $country_sql = "";
+        }    
+    }
+	return $country_sql;
+}
+
+# 12/13/2004 PS 
+sub getPaleoLatLongString	{
+	my $self = shift;
+	
+    my $coord_sql = "";
+
+	# all the boundaries must be given
+	if ( $q->param('paleolatmin') eq "" || $q->param('paleolatmax') eq "" || 
+	     $q->param('paleolngmin') eq "" || $q->param('paleolngmax') eq "") {
+		return "";
+	}
+	# at least one of the boundaries must be non-trivial
+	if ( $q->param('paleolatmin') <= -90 && $q->param('paleolatmax') >= 90 && 
+	     $q->param('paleolngmin') <= -180 && $q->param('paleolngmax') >= 180) {
+		return "";
+	}
+
+    if ($q->param('paleolatmin') > -90 ) {
+        $coord_sql .= " AND paleolat >= ".$dbh->quote($q->param('paleolatmin'));
+    }
+    if ($q->param('paleolatmax') < 90 ) {
+        $coord_sql .= " AND paleolat <= ".$dbh->quote($q->param('paleolatmax'));
+    }
+    if ($q->param('paleolngmin') > -180 ) {
+        $coord_sql .= " AND paleolng >= ".$dbh->quote($q->param('paleolngmin'));
+    }
+    if ($q->param('paleolngmax') < 180 ) {
+        $coord_sql .= " AND paleolng <= ".$dbh->quote($q->param('paleolngmax'));
+    }
+    $coord_sql =~ s/ AND //;
+    return $coord_sql;
 }
 
 # 29.4.04 JA
@@ -587,7 +603,7 @@ sub getLatLongString	{
 		return "";
 	}
 	# at least one of the boundaries must be non-trivial
-	if ( $latmin <= -90 && $latmax >= 90 && $lngmin <= -180 || $lngmax >= 180 )	{
+	if ( $latmin <= -90 && $latmax >= 90 && $lngmin <= -180 && $lngmax >= 180 )	{
 		return "";
 	}
 
@@ -612,7 +628,7 @@ sub getLatLongString	{
 	}
 	$latlongclause .= "AND";
 	if ( $lngmax >= 0 )	{
-		$latlongclause .= " ( lngdeg<$abslngmax AND lngdir='East' ) OR lngdir='West' ) ";
+		$latlongclause .= " ( ( lngdeg<$abslngmax AND lngdir='East' ) OR lngdir='West' ) ";
 	} else	{
 		$latlongclause .= " ( lngdeg>=$abslngmax AND lngdir='West' ) ";
 	}
@@ -626,6 +642,8 @@ sub getIntervalString	{
 	my $self = shift;
 	my $max = $q->param('max_interval_name');
 	my $min = $q->param('min_interval_name');
+    my $eml_max  =$q->param("max_eml_interval");  
+    my $eml_min  =$q->param("min_eml_interval");  
 
 	my $collref;
 
@@ -636,7 +654,7 @@ sub getIntervalString	{
 	}
 
 	if ( $max )	{
-		($collref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, '', $max, '', $min);
+		($collref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, $eml_max, $max, $eml_min, $min);
 		my @colls = @{$collref};
 		if ( ! @colls )	{
 			print "<p><b>WARNING: Can't complete the download because the specified time intervals are unknown</b></p>\n"; exit;
@@ -647,26 +665,44 @@ sub getIntervalString	{
 	return "";
 }
 
-# LEGACY CODE
-sub getEpochString {
-	my $self = shift;
-	my $epoch = $q->param('epoch');
-	if($epoch)	{
-		return qq| (collections.epoch_max LIKE "$epoch%" OR collections.epoch_min LIKE "$epoch%") |;
-	}
-	return "";
+# Returns a hash reference filled with all interval names
+sub getIntervalNames {
+    my $self = shift;
+    my %interval_names;
+
+	# get the names of time intervals
+    my $sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
+    my @intnorefs = @{$dbt->getData($sql)};
+    for $intnoref ( @intnorefs )	{
+        if ( $intnoref->{eml_interval} )	{
+            $interval_names{$intnoref->{interval_no}} = $intnoref->{eml_interval} . " " . $intnoref->{interval_name};
+        } else	{
+            $interval_names{$intnoref->{interval_no}} = $intnoref->{interval_name};
+        }
+    }
+    return \%interval_names;
 }
 
-# LEGACY CODE
-# 19.3.02 JA
-sub getStageString {
-	my $self = shift;
-	my $stage = $q->param('stage');
-	if($stage)	{
-		return qq| (collections.intage_max LIKE "$stage%" OR collections.intage_min LIKE "$stage%"  OR collections.locage_max LIKE "$stage%" OR collections.locage_min LIKE "$stage%") |;
-	}
-	return "";
+# Querys the database for a single interval name
+# returns the interval_eml and interval_name, if it can
+sub getIntervalName {
+    my $self = shift;
+    my $interval_no = shift;
+
+    my ($interval_name, $interval_eml);
+
+	# get the names of time intervals
+    my $sql = "SELECT eml_interval,interval_name FROM intervals";
+    $sql .= " WHERE interval_no=$interval_no";
+    my @intnorefs = @{$dbt->getData($sql)};
+    if (scalar(@intnorefs) > 0) {
+        my $href = $intnorefs[0];
+        $interval_name = $href->{'interval_name'};
+        $interval_eml = $href->{'eml_interval'};
+    }
+    return ($interval_eml, $interval_name);
 }
+
 
 # JA 1.7.04
 # WARNING: relies on fixed lists of lithologies; if these ever change in
@@ -677,144 +713,218 @@ sub getLithologyString	{
 	my $carbonate = $q->param('lithology_carbonate');
 	my $mixed = $q->param('lithology_mixed');
 	my $silic = $q->param('lithology_siliciclastic');
+    my $unknown = $q->param('lithology_unknown');
+    my $lith_sql = "";
 
-	# if all the boxes were unchecked, just return (idiot proofing)
-	if ( ! $carbonate && ! $mixed && ! $silic )	{
-		return "";
-	}
-	# only do something if some of the boxes aren't checked
-	if  ( ! $carbonate || ! $mixed || ! $silic )	{
+    # Lithology or Lithologies
+    if ( $q->param('lithology1') ) {
+        my $lith_term = $dbh->quote($q->param('lithology1'));
+        if ($q->param('include_exclude_lithology1') eq "exclude") {
+		    return qq| collections.lithology1 NOT LIKE $lith_term AND collections.lithology2 NOT LIKE $lith_term |;
+        } else {
+		    return qq| (collections.lithology1 LIKE $lith_term OR collections.lithology2 LIKE $lith_term) |;
+        }
+    } else {
+        # if all the boxes were unchecked, just return (idiot proofing)
+        if ( ! $carbonate && ! $mixed && ! $silic && ! $unknown)	{
+            return "";
+        }
+        # only do something if some of the boxes aren't checked
+        if  ( ! $carbonate || ! $mixed || ! $silic || ! $unknown)	{
 
-		$silic_str = qq|'"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate'|;
-		$mixed_str = qq|'"mixed carbonate-siliciclastic"','marl'|;
-		$carbonate_str = qq|'lime mudstone','wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"'|;
+            my $silic_str = qq|'"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate'|;
+            my $mixed_str = qq|'"mixed carbonate-siliciclastic"','marl'|;
+            my $carbonate_str = qq|'lime mudstone','wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"'|;
 
-		# the logic is basically different for every combination,
-		#  so go through all of them
-		# carbonate only
-		if  ( $carbonate && ! $mixed && ! $silic )	{
-			return qq| ( collections.lithology1 IN ($carbonate_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($carbonate_str) ) ) |;
-		}
-		# mixed only
-		elsif  ( ! $carbonate && $mixed && ! $silic )	{
-			return qq| ( collections.lithology1 IN ($mixed_str) OR collections.lithology2 IN ($mixed_str) OR ( collections.lithology1 IN ($carbonate_str) && collections.lithology2 IN ($silic_str) ) OR ( collections.lithology1 IN ($silic_str) && collections.lithology2 IN ($carbonate_str) ) ) |;
-		}
-		# siliciclastic only
-		elsif  ( ! $carbonate && ! $mixed && $silic )	{
-			return qq| ( collections.lithology1 IN ($silic_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($silic_str) ) ) |;
-		}
-		# carbonate and siliciclastic but NOT mixed
-		elsif  ( $carbonate && ! $mixed && $silic )	{
-			return qq| ( ( collections.lithology1 IN ($carbonate_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($carbonate_str) ) ) OR ( collections.lithology1 IN ($silic_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($silic_str) ) ) ) |;
-		}
-		# carbonate and mixed
-		elsif  ( $carbonate && $mixed && ! $silic )	{
-			return qq| ( ( collections.lithology1 IN ($mixed_str) OR collections.lithology2 IN ($mixed_str) OR ( collections.lithology1 IN ($carbonate_str) && collections.lithology2 IN ($silic_str) ) OR ( collections.lithology1 IN ($silic_str) && collections.lithology2 IN ($carbonate_str) ) ) OR ( collections.lithology1 IN ($carbonate_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($carbonate_str) ) ) ) |;
-		}
-		# mixed and siliciclastic
-		elsif  ( ! $carbonate && $mixed && $silic )	{
-			return qq| ( ( collections.lithology1 IN ($mixed_str) OR collections.lithology2 IN ($mixed_str) OR ( collections.lithology1 IN ($carbonate_str) && collections.lithology2 IN ($silic_str) ) OR ( collections.lithology1 IN ($silic_str) && collections.lithology2 IN ($carbonate_str) ) ) OR ( collections.lithology1 IN ($silic_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($silic_str) ) ) ) |;
-		}
+            # the logic is basically different for every combination,
+            #  so go through all of them
+            # carbonate only
+            if  ( $carbonate && ! $mixed && ! $silic )	{
+                $lith_sql =  qq| ( collections.lithology1 IN ($carbonate_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($carbonate_str) ) ) |;
+            }
+            # mixed only
+            elsif  ( ! $carbonate && $mixed && ! $silic )	{
+                $lith_sql = qq| ( collections.lithology1 IN ($mixed_str) OR collections.lithology2 IN ($mixed_str) OR ( collections.lithology1 IN ($carbonate_str) && collections.lithology2 IN ($silic_str) ) OR ( collections.lithology1 IN ($silic_str) && collections.lithology2 IN ($carbonate_str) ) ) |;
+            }
+            # siliciclastic only
+            elsif  ( ! $carbonate && ! $mixed && $silic )	{
+                $lith_sql = qq| ( collections.lithology1 IN ($silic_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($silic_str) ) ) |;
+            }
+            # carbonate and siliciclastic but NOT mixed
+            elsif  ( $carbonate && ! $mixed && $silic )	{
+                $lith_sql = qq| ( ( collections.lithology1 IN ($carbonate_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($carbonate_str) ) ) OR ( collections.lithology1 IN ($silic_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($silic_str) ) ) ) |;
+            }
+            # carbonate and mixed
+            elsif  ( $carbonate && $mixed && ! $silic )	{
+                $lith_sql = qq| ( ( collections.lithology1 IN ($mixed_str) OR collections.lithology2 IN ($mixed_str) OR ( collections.lithology1 IN ($carbonate_str) && collections.lithology2 IN ($silic_str) ) OR ( collections.lithology1 IN ($silic_str) && collections.lithology2 IN ($carbonate_str) ) ) OR ( collections.lithology1 IN ($carbonate_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($carbonate_str) ) ) ) |;
+            }
+            # mixed and siliciclastic
+            elsif  ( ! $carbonate && $mixed && $silic )	{
+                $lith_sql = qq| ( ( collections.lithology1 IN ($mixed_str) OR collections.lithology2 IN ($mixed_str) OR ( collections.lithology1 IN ($carbonate_str) && collections.lithology2 IN ($silic_str) ) OR ( collections.lithology1 IN ($silic_str) && collections.lithology2 IN ($carbonate_str) ) ) OR ( collections.lithology1 IN ($silic_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($silic_str) ) ) ) |;
+            }
+            
+            # lithologies where both fields are null
+            if ($unknown) {
+                my $unknown_sql = qq|((collections.lithology1 IS NULL OR collections.lithology1='') AND (collections.lithology2 IS NULL OR collections.lithology2=''))|;
+                if ($lith_sql) {
+                    $lith_sql = "($lith_sql OR $unknown_sql)";
+                } else {
+                    $lith_sql = "$unknown_sql";
+                }    
 
-	}
+            }
+        }
+    }
 
-	return "";
+	return $lith_sql;
 }
 
 sub getEnvironmentString{
 	my $self = shift;
-	my $environment = $q->param('environment');
-	if($environment){
-		return qq| collections.environment='$environment' |;
-	}
-	return "";
+    my $env_sql = '';
+
+    # Environment or environments
+    if ( $q->param('environment') ) {
+        my $compare = "LIKE";
+        if ($q->param('include_exclude_environment') eq "exclude") {
+            $compare = "NOT LIKE"; 
+        }
+		return qq| collections.environment $compare |.$dbh->quote($q->param('environment'));
+    } else {
+        my $carbonate_str = qq|'carbonate indet.', 'peritidal', 'shallow subtidal indet.', 'open shallow subtidal', 'lagoonal/restricted shallow subtidal', 'sand shoal', 'reef, buildup or bioherm', 'deep subtidal ramp', 'deep subtidal shelf', 'deep subtidal indet.', 'offshore ramp', 'offshore shelf', 'offshore indet.', 'slope', 'basinal (carbonate)'|;
+        my $siliciclastic_str = qq|'marginal marine indet.', 'paralic indet.', 'estuarine/bay', 'lagoonal', 'coastal indet.', 'foreshore', 'shoreface', 'transition zone/lower shoreface', 'offshore', 'deltaic indet.', 'delta plain', 'interdistributary bay', 'delta front', 'prodelta', 'deep-water indet.', 'submarine fan', 'basinal (siliciclastic)'|;
+        my $terrestrial_str = qq|'terrestrial indet.','fluvial-lacustrine indet.',  'fluvial indet.', '\"channel\"', 'channel lag', 'coarse channel fill', 'fine channel fill', '\"floodplain\"', 'wet floodplain', 'dry floodplain', 'levee', 'crevasse splay', 'lacustrine indet.', 'lacustrine - large', 'lacustrine - small', 'pond', 'crater lake', 'karst indet.', 'fissure fill', 'cave', 'sinkhole', 'eolian indet.', 'dune', 'interdune', 'loess', 'fluvial-deltaic indet.', 'deltaic indet.', 'delta plain', 'interdistributary bay', 'alluvial fan', 'estuary', 'glacial', 'mire/swamp', 'spring', 'tar'|;
+                                                                                                                                                                # Siliciclastic
+        
+        if (! $q->param("environment_carbonate") || ! $q->param("environment_siliciclastic") || 
+            ! $q->param("environment_terrestrial")) {
+            if ( $q->param("environment_carbonate") ) {
+                $env_sql .= " OR collections.environment IN ($carbonate_str)";
+            }
+            if ( $q->param("environment_siliciclastic") ) {
+                $env_sql .= " OR collections.environment IN ($siliciclastic_str)";
+            }
+            if ( $q->param("environment_terrestrial") ) {
+                $env_sql .= " OR collections.environment IN ($terrestrial_str)";
+            }
+            if ( $q->param("environment_unknown")) {
+                $env_sql .= " OR collections.environment = '' OR collections.environment IS NULL"; 
+            }
+            $env_sql =~ s/^ OR//;
+            $env_sql = '('.$env_sql.')';
+        }
+   }
+
+	return $env_sql;
 }
 
 sub getGeogscaleString{
 	my $self = shift;
-	my $geogscales;
-	if ( ! $q->param('small_collection') )	{
-		$geogscales = "'small collection'";
-	}
-	if ( ! $q->param('outcrop') )	{
-		$geogscales .= ",'outcrop'";
-	}
-	if ( ! $q->param('local_area') )	{
-		$geogscales .= ",'local area'";
-	}
-	if ( ! $q->param('basin') )	{
-		$geogscales .= ",'basin'";
-	}
-	$geogscales =~ s/^,//;
-	if ( $geogscales )	{
-		return qq| collections.geogscale NOT IN ($geogscales) |;
-	}
+	my $geogscales = "";
+    if (! $q->param('geogscale_small_collection') || ! $q->param('geogscale_outcrop') || ! $q->param('geogscale_local_area') ||
+        ! $q->param('geogscale_basin') || ! $q->param('geogscale_unknown')) { 
+        if ( $q->param('geogscale_small_collection') )	{
+            $geogscales = "'small collection'";
+        }
+        if ( $q->param('geogscale_outcrop') )	{
+            $geogscales .= ",'outcrop'";
+        }
+        if ( $q->param('geogscale_local_area') )	{
+            $geogscales .= ",'local area'";
+        }
+        if ( $q->param('geogscale_basin') )	{
+            $geogscales .= ",'basin'";
+        }
+        if ( $q->param('geogscale_unknown') ) {
+            $geogscales .= ",''";
+        }    
+        $geogscales =~ s/^,//;
+        if ( $geogscales )	{
+            $geogscales = qq| collections.geogscale IN ($geogscales) |;
+            if ( $q->param('geogscale_unknown')) {
+                $geogscales = " (".$geogscales."OR collections.geogscale IS NULL)";
+            }
+        }
+    }
+    return $geogscales;
 }
 
 sub getStratscaleString{
 	my $self = shift;
-	my $stratscales;
-	if ( ! $q->param('bed') )	{
-		$stratscales = "'bed'";
-	}
-	if ( ! $q->param('group_of_beds') )	{
-		$stratscales .= ",'group of beds'";
-	}
-	if ( ! $q->param('member') )	{
-		$stratscales .= ",'member'";
-	}
-	if ( ! $q->param('formation') )	{
-		$stratscales .= ",'formation'";
-	}
-	if ( ! $q->param('group') )	{
-		$stratscales .= ",'group'";
-	}
-	$stratscales =~ s/^,//;
-	if ( $stratscales )	{
-		return qq| collections.stratscale NOT IN ($stratscales) |;
-	}
+	my $stratscales = "";
+
+    if (! $q->param('stratscale_bed') || ! $q->param('stratscale_group_of_beds') || ! $q->param('stratscale_member') ||
+        ! $q->param('stratscale_formation') || ! $q->param('stratscale_group') || ! $q->param('stratscale_unknown')) {
+        if ( $q->param('stratscale_bed') )	{
+            $stratscales = "'bed'";
+        }
+        if ( $q->param('stratscale_group_of_beds') )	{
+            $stratscales .= ",'group of beds'";
+        }
+        if ( $q->param('stratscale_member') )	{
+            $stratscales .= ",'member'";
+        }
+        if ( $q->param('stratscale_formation') )	{
+            $stratscales .= ",'formation'";
+        }
+        if ( $q->param('stratscale_group') )	{
+            $stratscales .= ",'group'";
+        }
+        if ( $q->param('stratscale_unknown') ) {
+            $stratscales .= ",''";
+        }
+       
+        $stratscales =~ s/^,//;
+        if ( $stratscales )	{
+            $stratscales = qq| collections.stratscale IN ($stratscales) |;
+            if ($q->param('stratigraphic_scale_unknown')) {
+                $stratscales = " (".$stratscales."OR collections.stratscale IS NULL)";
+            }
+        }
+    }
+    return $stratscales;
 }
 
-sub getRegionsString {
-	my $self = shift;
-	my $retVal = "";
-	my @bits;
-	
-	# Get the regions
-	if ( ! open ( REGIONS, "$DATAFILE_DIR/PBDB.regions" ) ) {
-	print "<font color='red'>Skipping regions.</font> Error message is $!<BR><BR>\n";
-	return;
-	}
-
-	while (<REGIONS>)
-	{
-		chomp();
-		my ($region, $countries) = split(/:/, $_, 2);
-		# Clean up the string (need to escape single quotes) JA 6.7.02
-		$countries =~ s/'/\\'/g;
-		$REGIONS{$region} = $countries;
-		#print "$region: $REGIONS{$region}\n";
-	}
-	# Add the countries within selected regions
-	my @regions = (	"North America", 
-					"South America", 
-					Europe, 
-					Africa,
-					Antarctica, 
-					Asia, 
-					Australia );
-
-	foreach my $region (@regions)
-	{
-		if($q->param($region) eq 'YES')
-		{
-			#print "$region = 'YES'\n";
-			push(@bits, $self->makeOrString('collections.country', split(/\t/, $REGIONS{$region})));
-		}
-	}
-	$retVal = join('OR', @bits);
-	return $retVal;
+sub getCollectionTypeString{
+    my $self = shift;
+    my $colltypes = "";
+    # Collection types
+    if (! $q->param('collection_type_archaeological') || ! $q->param('collection_type_biostratigraphic') ||
+        ! $q->param('collection_type_paleoecologic') || ! $q->param('collection_type_taphonomic') ||
+        ! $q->param('collection_type_taxonomic') || ! $q->param('collection_type_general_faunal/floral') ||
+        ! $q->param('collection_type_unknown')) {
+        if ($q->param('collection_type_archaeological')) {
+            $colltypes .= ",'archaeological'";
+        }
+        if ($q->param('collection_type_biostratigraphic')) {
+            $colltypes .= ",'biostratigraphic'";
+        }
+        if ($q->param('collection_type_paleoecologic')) {
+            $colltypes .= ",paleoecologic'";
+        }
+        if ($q->param('collection_type_taphonomic')) {
+            $colltypes .= ",'taphonomic'";
+        }
+        if ($q->param('collection_type_taxonomic')) {
+            $colltypes .= ",'taxonomic'";
+        }
+        if ($q->param('collection_type_general_faunal/floral')) {
+            $colltypes .= ",'general faunal/floral'";
+        }
+        if ($q->param('collection_type_unknown')) {
+            $colltypes .= ", ''";
+        }
+        $colltypes =~ s/^,//;
+        if ( $colltypes)	{
+            $colltypes = qq| collections.collection_type IN ($colltypes) |;
+            if ($q->param('collection_type_unknown')) {
+                $colltypes = "(".$colltypes." OR collections.collection_type IS NULL)";
+            }
+        }
+    }
+    return $colltypes;
 }
+
 
 sub getOccurrencesWhereClause {
 	my $self = shift;
@@ -823,7 +933,6 @@ sub getOccurrencesWhereClause {
 	$where->setWhereSeparator("AND");
 
 	if ( $q->param('pubyr') > 0 )	{
-		$where->addWhereItem(" refs.reference_no=occurrences.reference_no ");
 		if ( $q->param('published_before_after') eq "before" )	{
 			$pubyrrelation = "<";
 		} else	{
@@ -841,6 +950,7 @@ sub getOccurrencesWhereClause {
 		$where->addWhereItem(" occurrences.genus_name IN (".$genusNames.")");
 	}
 	
+    $where->addWhereItem(" occurrences.abund_value NOT LIKE \"\" AND occurrences.abund_value IS NOT NULL ") if $q->param("without_abundance") eq 'NO';
 	$where->addWhereItem(" occurrences.species_name!='indet.' ") if $q->param('indet') eq 'NO';
 	$where->addWhereItem(" occurrences.species_name!='sp.' ") if $q->param('sp') eq 'NO';
 	$where->addWhereItem(" (occurrences.genus_reso NOT IN ('aff.','\"') OR occurrences.genus_reso IS NULL) ") if $q->param('poor_genus_reso') eq 'NO';
@@ -857,7 +967,7 @@ sub getCollectionsWhereClause {
 	
 	my $authorizer = $q->param('authorizer');
 	# This is handled by getOccurrencesWhereClause if we're getting occs data.
-	if($authorizer ne "" && $q->param('collections_only') eq 'YES'){
+	if($authorizer ne "" && $q->param('output_data') eq 'collections'){
 		$where->addWhereItem(" collections.authorizer='$authorizer' ");
 	}
 	
@@ -868,7 +978,7 @@ sub getCollectionsWhereClause {
 	# (filter it if they enter a year at the minimum.
 	if ($q->param('year')) {
 		
-		my $month = Globals::monthNameToNumber($q->param('month'));
+		my $month = $q->param('month');
 		my $day = $q->param('date');
 
 		# use default values if the user didn't enter any.		
@@ -880,20 +990,20 @@ sub getCollectionsWhereClause {
 		}
 		
 		# note, this should really be handled by a function?  maybe in bridge.pl.
-		my $created_date = $q->param('year').$month.$day."000000";
+		my $created_date = $dbh->quote($q->param('year')."-".$month."-".$day." 00:00:00");
 		# note, the version of mysql on flatpebble needs the 000000 at the end, but the
 		# version on the linux box doesn't need it.  weird.						 
 	
 		my $created_string;
 		# if so, did they want to look before or after?
 		if ($q->param('created_before_after') eq "before") {
-			if ( $q->param('collections_only') eq 'YES' )	{
+			if ( $q->param('output_data') eq 'collections' )	{
 				$created_string = " collections.created < $created_date ";
 			} else	{
 				$created_string = " occurrences.created < $created_date ";
 			}
 		} elsif ($q->param('created_before_after') eq "after") {
-			if ( $q->param('collections_only') eq 'YES' )	{
+			if ( $q->param('output_data') eq 'collections' )	{
 				$created_string = " collections.created > $created_date ";
 			} else	{
 				$created_string = " occurrences.created > $created_date ";
@@ -902,34 +1012,22 @@ sub getCollectionsWhereClause {
 		
 		$where->addWhereItem($created_string);
 	}
-	
-	$where->addWhereItem($self->getCountryString()) if $self->getCountryString();
-	$where->addWhereItem($self->getLatLongString()) if $self->getLatLongString();
-	$where->addWhereItem($self->getIntervalString()) if $self->getIntervalString();
-	$where->addWhereItem($self->getLithologyString()) if $self->getLithologyString();
-	$where->addWhereItem($self->getEnvironmentString()) if $self->getEnvironmentString();
-	$where->addWhereItem($self->getGeogscaleString()) if $self->getGeogscaleString();
-	$where->addWhereItem($self->getStratscaleString()) if $self->getStratscaleString();
-		
-	my $regionsString = $self->getRegionsString();
-	if($regionsString ne "") {
-		$where->addWhereItem("($regionsString)");
-	}
 
+    $where->addWhereItem($_) for (
+        $self->getCountryString(),
+        $self->getLatLongString(),
+        $self->getPaleoLatLongString(),
+        $self->getIntervalString(),
+        $self->getLithologyString(),
+        $self->getEnvironmentString(),
+        $self->getGeogscaleString(),
+        $self->getStratscaleString(),
+        $self->getCollectionTypeString());
+
+		
 	return $where->whereExpr();
 }
 
-sub getNotNullString {
-	my $self = shift;
-	my (@fieldNames) = @_;
-	my $retVal = "";
-	
-	foreach my $fieldName (@fieldNames) {
-		$retVal .= " OR ($fieldName IS NOT NULL AND $fieldName!='') ";
-	}
-	$retVal =~ s/\A OR//;
-	return $retVal;
-}
 
 # get a hash table mapping interval numbers into intervals of the selected
 #   time scale
@@ -1062,23 +1160,8 @@ sub doQuery {
 	my $outFieldsString = '';
 	my %COLLS_DONE;
 	my %REFS_DONE;
-	my $collections_only = $q->param('collections_only');
-	my $distinct_taxa_only = $q->param('distinct_taxa_only');
+    my $interval_names;
 
-	# get the names of time intervals
-	if ( $q->param('collections_max_interval_no') || $q->param('collections_min_interval_no') ) {
-		$sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
-		my @intnorefs = @{$dbt->getData($sql)};
-		for $intnoref ( @intnorefs )	{
-			if ( $intnoref->{eml_interval} )	{
-				$max_interval_name{$intnoref->{interval_no}} = $intnoref->{eml_interval} . " " . $intnoref->{interval_name};
-				$min_interval_name{$intnoref->{interval_no}} = $intnoref->{eml_interval} . " " . $intnoref->{interval_name};
-			} else	{
-				$max_interval_name{$intnoref->{interval_no}} = $intnoref->{interval_name};
-				$min_interval_name{$intnoref->{interval_no}} = $intnoref->{interval_name};
-			}
-		}
-	}
 
 	# get the period names for the collections JA 22.2.04
 	# based on scale 2 = Harland periods
@@ -1086,6 +1169,8 @@ sub doQuery {
 		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '2');
 		%myperiod = %{$intervalInScaleRef};
 	}
+    $th1 = gettimeofday() if ($DEBUG);
+    $self->dbg("Exec time doQuery1a: ".sprintf ("%5.3f",($th1 - $th0)));
 
 	# get the epoch names for the collections JA 22.2.04
 	# based on scale 4 = Harland epochs
@@ -1093,201 +1178,155 @@ sub doQuery {
 		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '4');
 		%myepoch = %{$intervalInScaleRef};
 	}
+    $th1 = gettimeofday() if ($DEBUG);
+    $self->dbg("Exec time doQuery1b: ".sprintf ("%5.3f",($th1 - $th0)));
 	# get the PBDB 10 m.y. bin names for the collections JA 3.3.04
 	# WARNING: the locage_max field is just being used as a dummy
 	if ( $q->param('collections_10mybin') )	{
 		@_ = TimeLookup::processBinLookup($dbh,$dbt);
 		%mybin = %{$_[0]};
 	}
+    $th1 = gettimeofday() if ($DEBUG);
+    $self->dbg("Exec time doQuery1c: ".sprintf ("%5.3f",($th1 - $th0)));
 
-	# Getting only collection data:
-	if($collections_only eq 'YES'){
-		$sql =  "SELECT collections.reference_no, collections.collection_no, ".
-				" DATE_FORMAT(collections.release_date, '%Y%m%d') rd_short, ".
-				" collections.access_level, ";
+    # Get hash to map interval_no -> interval_name
+    if ($q->param("collections_max_interval_no") eq "YES" || 
+        $q->param("collections_min_interval_no") eq "YES") {
+        $interval_names = $self->getIntervalNames();
+    }
+
+    #
+    # Handle generation of the SELECT part of the query
+    #      
+    my $permissionFields = "collections.authorizer,collections.research_group,collections.access_level, " 
+				         . " DATE_FORMAT(collections.release_date, '%Y%m%d') rd_short ";
+    my $commonFields = "collections.reference_no, collections.collection_no";
+	# Getting only collection data
+	if($q->param('output_data') eq 'collections'){
+		$sql =  "SELECT $commonFields,$permissionFields";
+        my $outFieldsString = $self->getOutFieldsString('collections',TRUE);
+        if ($outFieldsString ne '') { $sql .= ",$outFieldsString" ; }
 	# Getting distinct taxon names from occurrences table (JA 12.9.03)
-	} elsif ( $distinct_taxa_only eq "YES" )	{
-		$sql = "SELECT DISTINCT occurrences.genus_name ";
+    # Use a group by later
+	} elsif ( $q->param('output_data') eq "genera" )	{
+		$sql = "SELECT occurrences.genus_name as occ_genus_name, $commonFields, $permissionFields ";
 	# Getting occurrence and collection data:
 	# Create the sql: we're doing a join on occurrences and collections
 	# so as to select all the data at once.
-	} else{
-		# subgenus name must be downloaded if subgenera are to be
-		#  treated as genera
-		# an amusing hack, if I do say so myself JA 18.8.04
-		if ( $q->param('split_subgenera') eq 'YES' && $sql !~ /subgenus/ )	{
-			$q->param('occurrences_subgenus_name' => 'YES');
-		}
-		$sql =	"SELECT occurrences.reference_no, ".
-				"occurrences.genus_reso, occurrences.genus_name, ".
-				"occurrences.taxon_no, ".
-				"occurrences.collection_no, ".
-				"occurrences.abund_value, ".
-				"occurrences.abund_unit, ".
+	} elsif ($q->param('output_data') eq "occurrences") {
+		$sql =	"SELECT $commonFields,$permissionFields,". 
+                "occurrences.reference_no as occ_reference_no,".
+				"occurrences.genus_reso as occ_genus_reso, occurrences.genus_name as occ_genus_name, ".
+				"occurrences.taxon_no as occ_taxon_no, ".
+				"occurrences.abund_value as occ_abund_value, ".
+				"occurrences.abund_unit as occ_abund_unit, ".
+                "occurrences.authorizer as occ_authorizer, ".
 				"reidentifications.reference_no as reid_reference_no, ".
 				"reidentifications.genus_reso as reid_genus_reso, ".
 				"reidentifications.genus_name as reid_genus_name";
-		$outFieldsString = $self->getOutFieldsString('occurrences');
+		my $outFieldsString = $self->getOutFieldsString('occurrences',TRUE);
 		if ($outFieldsString ne '') { $sql .= ", $outFieldsString" ; }
-		$outFieldsString = $self->getOutFieldsString('occurrences','reidentifications');
+		$outFieldsString = $self->getOutFieldsString('reidentifications',TRUE);
 		if ($outFieldsString ne '') { $sql .= ", $outFieldsString" ; }
-	}
+        $outFieldsString = $self->getOutFieldsString('collections',TRUE);
+        if ($outFieldsString ne '') { $sql .= ", $outFieldsString" ; }
+    }
 
-	# may be getting this for either of the above cases
-	$outFieldsString = '';
-	$outFieldsString = $self->getOutFieldsString('collections',FALSE,TRUE);
-	my $comma = ", ";
-	$comma = "" if $outFieldsString eq "";
-
-	# may be getting this for either of the above cases
-	my $collectionsWhereClause = $self->getCollectionsWhereClause();
-
-	#print "collectionsWhereClause = $collectionsWhereClause<BR>";
-	
-	# complete the collections only query string
-	if($collections_only eq 'YES'){
-		$sql .= " collections.research_group ".$comma.$outFieldsString.
-				" FROM collections ";
-		if($collectionsWhereClause ne ""){
-			$sql .= " WHERE $collectionsWhereClause ";
-		}
-		# LEGACY CODE
-#		if($q->param('strictgeography') eq 'NO'){
-#			if($sql =~ /WHERE/i){
-#				$sql .= "\nAND (collections.county IS NOT NULL OR (collections.latdeg IS NOT NULL AND collections.lngdeg IS NOT NULL))\n";
-#			}
-#			else{
-#				$sql .= "\nWHERE (collections.county IS NOT NULL OR (collections.latdeg IS NOT NULL AND collections.lngdeg IS NOT NULL))\n";
-#			}
-#		}
-		#		if($q->param('strictchronology') eq 'NO'){
-			#			if($sql =~ /WHERE/){
-				#				$sql .= "\nAND ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))";
-			#			}
-			#			else{
-				#				$sql .= "\nWHERE ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))";
-			#			}
-		#		}
-	# complete the collections/occurrences join query string
-	} else{
-		$sql .= ", collections.collection_no, " .
-				" DATE_FORMAT(collections.release_date, '%Y%m%d') rd_short, ".
-				" collections.access_level, ".
-				" collections.research_group ".$comma.$outFieldsString.
-				" FROM occurrences, collections";
+    #
+    # Handle generation of the FROM, WHERE, GROUP BY parts of the query, and JOIN conditions
+    #      
+    if ($q->param('output_data') eq 'collections') {
+	    $sql .=" FROM collections";
+        my $collectionsWhereClause = $self->getCollectionsWhereClause();
+	    if($collectionsWhereClause ne ''){ $sql .= " WHERE $collectionsWhereClause "; }
+        # GROUP BY basically does a 'DISTINCT' on these two columns (for join only)
+        if($q->param('lumpgenera') eq 'YES') {
+            $sql .= " GROUP BY occurrences.genus_name, occurrences.collection_no";
+        } 
+    } else { # both genera and occurrences 
+	    $sql .=" FROM occurrences, collections";
 		if ( $q->param('pubyr') > 0 )	{
-			$sql .= ", refs";
+			$sql .= " LEFT JOIN refs ON refs.reference_no=occurrences.reference_no";
 		}
 		$sql .= " LEFT JOIN reidentifications ON".
 				" occurrences.occurrence_no = reidentifications.occurrence_no ".
 				" WHERE collections.collection_no = occurrences.collection_no";
 
+        my $collectionsWhereClause = $self->getCollectionsWhereClause();
+	    if($collectionsWhereClause ne ''){ $sql .= " AND $collectionsWhereClause "; }
 		my $occWhereClause = $self->getOccurrencesWhereClause();
-		$sql .= " AND ".  $occWhereClause if $occWhereClause;
-		$sql .= " AND $collectionsWhereClause " if $collectionsWhereClause ne "";
-		$sql .= "\nAND (collections.county IS NOT NULL OR (collections.latdeg IS NOT NULL AND collections.lngdeg IS NOT NULL))\n" if $q->param('strictgeography') eq 'NO';
-# LEGACY CODE
-#		$sql .= "\nAND ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))" if $q->param('strictchronology') eq 'NO';
-
-	}
-
+	    if($occWhereClause ne ''){ $sql .= " AND $occWhereClause "; }
+    }
+    
+	if ( $q->param('output_data') eq "genera" )	{
+        $sql .= " GROUP BY occurrences.genus_name";
+    }
 	
-	# GROUP BY basically does a 'DISTINCT' on these two columns (for join only)
-	if($q->param('lumpgenera') eq 'YES' && $collections_only ne 'YES'){
-		$sql .= " GROUP BY occurrences.genus_name, occurrences.collection_no";
-	} elsif ( $distinct_taxa_only eq "YES" )	{
-		$sql .= " GROUP BY occurrences.genus_name";
-	}
+    #
+    # Header Generation
+    #
+	# print column names to occurrence output file JA 19.8.01
+	my $header = "";
+    $sepChar = ","  if ($q->param('output_format') eq 'comma-delimited text');
+    $sepChar = "\t" if ($q->param('output_format') eq 'tab-delimited text');
+    if( $q->param('output_data') eq 'genera'){
+        $header = "genus_name";
+    } else {
+        $header =  "collection_no";
+	    if($q->param('output_data') eq 'occurrences') {
+            $header .= $sepChar.'class_name' if ($q->param("occurrences_class_name") eq "YES");
+            $header .= $sepChar.'order_name' if ($q->param("occurrences_order_name") eq "YES");
+            $header .= $sepChar.'family_name' if ($q->param("occurrences_family_name") eq "YES");
+            $header .= $sepChar.'genus_reso'.$sepChar.'genus_name'.$sepChar.'reidentifications.genus_reso'.$sepChar.'reidentifications.genus_name';
 
+            # Occurrence header
+            @occurrenceHeaderCols = $self->getOutFields('occurrences');	# Need this (for later...)
+            my $occurrenceCols = join($sepChar, @occurrenceHeaderCols);
+            if ( $occurrenceCols ) { $header .= $sepChar.$occurrenceCols; }
+
+            # ReID header
+            # Need this (for later...)
+            @reidHeaderCols = $self->getOutFields('reidentifications');	
+            my $reidCols = join($sepChar, @reidHeaderCols);
+            if ( $reidCols ) { $header .= $sepChar.$reidCols; }
+
+            if ( $q->param('ecology1') )	{
+                $header .= $sepChar.$q->param('ecology1');
+            }
+            if ( $q->param('ecology2') )	{
+                $header .= $sepChar.$q->param('ecology2');
+            }
+            if ( $q->param('ecology3') )	{
+                $header .= $sepChar.$q->param('ecology3');
+            }
+            if ( $q->param('ecology4') )	{
+                $header .= $sepChar.$q->param('ecology4');
+            }
+            if ( $q->param('ecology5') )	{
+                $header .= $sepChar.$q->param('ecology5');
+            }
+            if ( $q->param('ecology6') )	{
+                $header .= $sepChar.$q->param('ecology6');
+            }
+        }
+
+        # Collection header
+        @collectionHeaderCols = $self->getOutFields('collections');	# Need this (for later...)
+        my $collectionCols = join ( $sepChar, @collectionHeaderCols );
+        if ( $collectionCols ) { $header .= $sepChar.$collectionCols; }
+    }
+	print OUTFILE "$header\n";
+	$self->dbg ( "Output header: $header" );
+
+	#
+	# Loop through the result set
+    #
 	$sql =~ s/\s+/ /g;
 	$self->dbg("<b>Occurrences query:</b><br>\n$sql<BR>");
 
-		#print "sql = $sql<BR>";
-
-	
 	my $sth = $dbh->prepare($sql); #|| die $self->dbg("Prepare query failed ($!)<br>");
 	my $rv = $sth->execute(); # || die $self->dbg("Execute query failed ($!)<br>");
 	$self->dbg($sth->rows()." rows returned.<br>");
-
-
-	
-	# print column names to occurrence output file JA 19.8.01
-	my $header = "";
-	if($q->param('collections_put') eq 'comma-delimited text'){
-		if( ! $q->param('distinct_taxa_only') ){
-			$header =  "collection_no";
-		} else	{
-			$header = "genus_name";
-		}
-		if( ! $q->param('collections_only') && ! $q->param('distinct_taxa_only') ){
-			$header .= ",genus_reso,genus_name,reid_genus_reso,reid_genus_name";
-		}
-		$sepChar = ',';
-	}
-	elsif( $q->param('collections_put') eq 'tab-delimited text'){
-		if( ! $q->param('distinct_taxa_only') ){
-			$header =  "collection_no";
-		} else	{
-			$header = "genus_name";
-		}
-		if( ! $q->param('collections_only') && ! $q->param('distinct_taxa_only') ){
-			$header .= "\tgenus_reso\tgenus_name\treid_genus_reso\treid_genus_name";
-		}
-		$sepChar = "\t";
-	}
-
-	# Occurrence header
-	@occurrenceHeaderCols = $self->getOutFields('occurrences');	# Need this (for later...)
-	my $occurrenceCols = join($sepChar, @occurrenceHeaderCols);
-	if ( $occurrenceCols ) { $header .= $sepChar.$occurrenceCols; }
-
-	# ReID header
-	# Need this (for later...)
-	@reidHeaderCols = $self->getOutFields('occurrences','reidentifications');	
-	foreach my $col (@reidHeaderCols){
-		$col =~ s/.*?as (reid_(.*))$/reidentifications.$2/;
-	}
-	my $reidCols = join($sepChar, @reidHeaderCols);
-	if ( $reidCols ) { $header .= $sepChar.$reidCols; }
-
-	if ( $q->param('ecology1') )	{
-		$header .= $sepChar.$q->param('ecology1');
-	}
-	if ( $q->param('ecology2') )	{
-		$header .= $sepChar.$q->param('ecology2');
-	}
-	if ( $q->param('ecology3') )	{
-		$header .= $sepChar.$q->param('ecology3');
-	}
-	if ( $q->param('ecology4') )	{
-		$header .= $sepChar.$q->param('ecology4');
-	}
-	if ( $q->param('ecology5') )	{
-		$header .= $sepChar.$q->param('ecology5');
-	}
-	if ( $q->param('ecology6') )	{
-		$header .= $sepChar.$q->param('ecology6');
-	}
-
-	# Collection header
-	@collectionHeaderCols = $self->getOutFields('collections');	# Need this (for later...)
-	my $collectionCols = join ( $sepChar, @collectionHeaderCols );
-	if ( $collectionCols ) { $header .= $sepChar.$collectionCols; }
-
-	# trivial clean up: "period_max" is actually a computed period value,
-	#  so call it "period"; likewise "epoch_max"/"epoch"
-    # LEGACY - now its actually called period/epoch, so no need to change
-    # PS 11/22/2004
-	#$header =~ s/period_max/period/;
-	#$header =~ s/epoch_max/epoch/;
-
-	print OUTFILE "$header\n";
-	$self->dbg ( "Output header: $header" );
-	
-	# Alroy hack 16.8.01  
-	my $classString = $q->param('class');
-
-	# Loop through the result set
 
 	# See if rows okay by permissions module
 	my @dataRows = ( );
@@ -1298,52 +1337,22 @@ sub doQuery {
 	$sth->finish();
 	$self->dbg("Rows that passed Permissions: number of rows $ofRows, length of dataRows array: ".@dataRows."<br>");
 
-	# knock out collections with paleolatitudes that are too high or
-	#  too low JA 30.6.04
-	if ( $q->param('paleolatlimit') > 0 )	{
-		open COORDS,"<./data/collection.ageplace";
-		my %goodlats;
-		my @tempDataRows;
-		while (<COORDS>)	{
-			my @temp = split /\t/,$_;
-			# col 0 is the collection number; col 8 is the
-			#  paleolatitude
-			# we're expecting something like "greater than"
-			#  or "less than" as a query parameter
-			if ( $q->param('paleolatdirection') =~ /north/ && $temp[8] >= $q->param('paleolatlimit') )	{
-				$goodlats{$temp[0]}++;
-			} elsif ( $q->param('paleolatdirection') =~ /south/ && $temp[8] <= -1 * $q->param('paleolatlimit') )	{
-				$goodlats{$temp[0]}++;
-			} elsif ( $q->param('paleolatdirection') =~ /less/ && $temp[8] < $q->param('paleolatlimit') && $temp[8] > -1 * $q->param('paleolatlimit') )	{
-				$goodlats{$temp[0]}++;
-			}
-		}
-		close COORDS;
-		foreach my $row ( @dataRows ){
-			if ( $goodlats{$row->{collection_no}} )	{
-				push @tempDataRows , $row;
-			}
-		}
-		@dataRows = @tempDataRows;
-	}
-
-	# run through the result set
-
 	# first do a quick hit to get some by-taxon and by-collection stats
 	#  ... and so on
+    # also records genera names, useful for later loop
 	my %mbrseen;
 	my %occseen;
 	foreach my $row ( @dataRows ){
 		# raise subgenera to genus level JA 18.8.04
-		if ( $q->param('split_subgenera') eq 'YES' && $row->{subgenus_name} )	{
-			$row->{genus_name} = $row->{subgenus_name};
+		if ( $q->param('split_subgenera') eq 'YES' && $row->{occ_subgenus_name} )	{
+			$row->{occ_genus_name} = $row->{occ_subgenus_name};
 		}
 		my $exclude = 0;
 		# get rid of occurrences of genera either (1) not in the
 		#  Compendium or (2) falling outside the official Compendium
 		#  age range JA 27.8.04
 		if ( $q->param('compendium_ranges') eq 'NO' )	{
-			if ( ! $incompendium{$row->{genus_name}.$mybin{$row->{collection_no}}} )	{
+			if ( ! $incompendium{$row->{occ_genus_name}.$mybin{$row->{collection_no}}} )	{
 				$exclude++;
 			}
 		}
@@ -1353,53 +1362,58 @@ sub doQuery {
 			my $mbrstring = $row->{'latdeg'}.$row->{'latmin'}.$row->{'latsec'}.$row->{'latdec'}.$row->{'latdir'}.$row->{'lngdeg'}.$row->{'lngmin'}.$row->{'lngsec'}.$row->{'lngdec'}.$row->{'lngdir'}.$row->{'formation'}.$row->{'member'}.$row->{'max_interval_no'}.$row->{'min_interval_no'};
 			if ( $mbrseen{$mbrstring} )	{
 				$row->{collection_no} = $mbrseen{$mbrstring};
-				if ( $occseen{$row->{collection_no}.$row->{genus_name}} > 0 )	{
+				if ( $occseen{$row->{collection_no}.$row->{occ_genus_name}} > 0 )	{
 					$exclude++;
 				}
 			} else	{
 				$mbrseen{$mbrstring} = $row->{collection_no};
 			}
-			$occseen{$row->{collection_no}.$row->{genus_name}}++;
+			$occseen{$row->{collection_no}.$row->{occ_genus_name}}++;
 		}
 		if ( $exclude == 0 )	{
 			push @tempDataRows, $row;
 		# cumulate number of collections including each genus
-			$totaloccs{$row->{genus_name}}++;
+			$totaloccs{$row->{occ_genus_name}}++;
 		# need these two for ecology lookup below
-			$totaloccsbyno{$row->{taxon_no}}++;
-			$genusbyno{$row->{taxon_no}} = $row->{genus_name};
+			$totaloccsbyno{$row->{occ_taxon_no}}++;
+			$genusbyno{$row->{occ_taxon_no}} = $row->{occ_genus_name};
 		# cumulate number of specimens per collection, and number of
 		#  times a genus has abundance counts at all
-			if ( ( $row->{abund_unit} eq "specimens" || $row->{abund_unit} eq "individuals" ) && ( $row->{abund_value} > 0 ) )	{
-				$nisp{$row->{collection_no}} = $nisp{$row->{collection_no}} + $row->{abund_value};
-				$numberofcounts{$row->{genus_name}}++;
+			if ( ( $row->{occ_abund_unit} eq "specimens" || $row->{occ_abund_unit} eq "individuals" ) && ( $row->{occ_abund_value} > 0 ) )	{
+				$nisp{$row->{collection_no}} = $nisp{$row->{collection_no}} + $row->{occ_abund_value};
+				$numberofcounts{$row->{occ_genus_name}}++;
 			}
 		# also make a master list of all collection numbers that are
 		#  used, so we can properly get all the primary AND secondary
 		#  refs for those collections JA 16.7.04
 			$COLLECTIONS_USED{$row->{collection_no}}++;
-			$REFS_USED{$row->{reference_no}}++;
+			$REFS_USED{$row->{'reference_no'}}++;
+			#$REFS_USED{$row->{'occ_reference_no'}}++ if ($row->{'occ_reference_no'});
+			#$REFS_USED{$row->{'reid_reference_no'}}++ if ($row->{'reid_reference_no'});
 		}
 	}
 	@dataRows = @tempDataRows;
+    $self->dbg("primary refs: " . (join(",",keys %REFS_USED))); 
 
 	# now hit the secondary refs table, mark all of those references as
 	#  having been used, and print all the refs JA 16.7.04
 	my @collnos = keys %COLLECTIONS_USED;
 	if ( @collnos )	{
-		$secondary_sql = "SELECT reference_no FROM secondary_refs WHERE collection_no IN (" . join (',',@collnos) . ")";
+		$secondary_sql = "SELECT reference_no,collection_no FROM secondary_refs WHERE collection_no IN (" . join (',',@collnos) . ")";
+        $self->dbg("secondary refs sql: $secondary_sql"); 
 		my @refrefs= @{$dbt->getData($secondary_sql)};
 		for my $refref (@refrefs)	{
 			$REFS_USED{$refref->{reference_no}}++;
 		}
 		my @refnos = keys %REFS_USED;
+        $self->dbg("primary +secondary refs: " . join(",",(keys %REFS_USED))); 
 
 	# print the header
 		print REFSFILE join (',',@refsFieldNames), "\n";
-		my $refCols = join($sepChar, @refsHeaderCols);
 
 	# print the refs
 		$ref_sql = "SELECT * FROM refs WHERE reference_no IN (" . join (',',@refnos) . ")";
+        $self->dbg("Get ref data sql: $ref_sql"); 
 		@refrefs= @{$dbt->getData($ref_sql)};
 		for my $refref (@refrefs)	{
 			my @refvals = ();
@@ -1433,14 +1447,38 @@ sub doQuery {
 		}
 	}
 
+
+    # This list of genera is needed  both for the abundance file far below
+    # and for retrieving the class/order/family hash for the occurences output file
+    # right below here
+	my @genera = keys %totaloccs;
+	@genera = sort @genera;
+
+	my %master_class;
+    if ($q->param("output_data") eq "occurrences") {
+        my $levels = "";
+        if($q->param("occurrences_family_name") eq "YES"){
+            $levels .= "family";
+        }
+        if($q->param("occurrences_order_name") eq "YES"){
+            $levels .= "order";
+        }
+        if($q->param("occurrences_class_name") eq "YES"){
+            $levels .= "class";
+        }
+        if ($levels) {
+    	    %master_class=%{Classification::get_classification_hash($dbt,$levels,\@genera)};
+        }
+    }    
+
 	# main pass through the results set
 	my $acceptedCount = 0;
 	foreach my $row ( @dataRows ){
 		# These DON'T come back with a table name prepended.
 		my $reference_no = $row->{reference_no};
-		my $genus_reso = $row->{genus_reso};
-		my $genusName = $row->{genus_name};
-		my $genusNo = $row->{taxon_no};
+		my $genus_reso = $row->{occ_genus_reso};
+		my $genusName = $row->{occ_genus_name};
+		my $genusNo = $row->{occ_taxon_no};
 		my $reid_genus_reso = $row->{reid_genus_reso};
 		my $reid_genus_name = $row->{reid_genus_name};
 		my $collection_no = $row->{collection_no};
@@ -1485,8 +1523,8 @@ sub doQuery {
 		# compute relative abundance proportion and add to running total
 		# WARNING: sum is of logged abundances because geometric means
 		#   are desired
-		if ( ( $row->{abund_unit} eq "specimens" || $row->{abund_unit} eq "individuals" ) && ( $row->{abund_value} > 0 ) )	{
-			$summedproportions{$row->{genus_name}} = $summedproportions{$row->{genus_name}} + log( $row->{abund_value} / $nisp{$row->{collection_no}} );
+		if ( ( $row->{occ_abund_unit} eq "specimens" || $row->{occ_abund_unit} eq "individuals" ) && ( $row->{occ_abund_value} > 0 ) )	{
+			$summedproportions{$row->{occ_genus_name}} = $summedproportions{$row->{occ_genus_name}} + log( $row->{occ_abund_value} / $nisp{$row->{collection_no}} );
 		}
 
 		#$self->dbg("reference_no: $reference_no<br>genus_reso: $genus_reso<br>genusName: $genusName<br>collection_no: $collection_no<br>");
@@ -1495,7 +1533,7 @@ sub doQuery {
 		# was checked; do this by fooling the system into lumping all
 		# occurrences in a collection
 		my $tempGenus = $genusName;
-		if( $q->param('collections_only') ){
+		if( $q->param('output_data') eq 'collections'){
 			$tempGenus = '';
 			if($COLLS_DONE{"$collection_no.$tempGenus"} == 1){
 				next;
@@ -1508,79 +1546,177 @@ sub doQuery {
 		my @occs_row = ();
 		my @reid_row = ();
 
-		# We don't want to add the collection_no, rd_short, access_level, etc.
+        #
+        # Set up occurence fields
+        #
+        if ($q->param("output_data") eq "occurrences") {
+            # Put the values in the correct order since by looping through this array
+            foreach my $column ( @occurrenceHeaderCols ){
+                $column =~ s/^occurrences\./occ_/;
+                push ( @occs_row, $row->{$column} );
+            }
+        }
 
-		# These next two loops put the values in the correct order since
-		# they retrieve the values from the data row in the same order
-		# as they appear in the header
 
-		# Loop over each occurrence output column
-		foreach my $column ( @occurrenceHeaderCols ){
-			$column =~ s/^occurrences\.//;
-			push ( @occs_row, $row->{$column} );
-		}
+        #
+        # Set up reid fields
+        #
+        
+        if ($q->param("output_data") eq "occurrences") {
+            # Push the eco/taphonomic data, if any, onto the reid rows
+            # WARNING: this only works on genus or higher-order data,
+            #  assuming species won't be scored separately
+            if ( $q->param('ecology1') )	{
+                push @reid_row , $ecotaph{'1'.$genusNo};
+            }
+            if ( $q->param('ecology2') )	{
+                push @reid_row , $ecotaph{'2'.$genusNo};
+            }
+            if ( $q->param('ecology3') )	{
+                push @reid_row , $ecotaph{'3'.$genusNo};
+            }
+            if ( $q->param('ecology4') )	{
+                push @reid_row , $ecotaph{'4'.$genusNo};
+            }
+            if ( $q->param('ecology5') )	{
+                push @reid_row , $ecotaph{'5'.$genusNo};
+            }
+            if ( $q->param('ecology6') )	{
+                push @reid_row , $ecotaph{'6'.$genusNo};
+            }
 
-		# Loop over each reid output column
-		foreach my $column ( @reidHeaderCols ){
-			$column =~ s/^reidentifications\./reid_/;
-			push ( @reid_row, $row->{$column} );
-		}
+            # Put the values in the correct order since by looping through this array
+            foreach my $column ( @reidHeaderCols ){
+                $column =~ s/^reidentifications\./reid_/;
+                push ( @reid_row, $row->{$column} );
+            }
+        }
 
-		# Loop over each collection output column
-		foreach my $column ( @collectionHeaderCols ){
-			$column =~ s/^collections\.//;
-			# translate interval nos into names JA 18.9.03
-			if ( $column eq "max_interval_no" )	{
-				$row->{$column} = $max_interval_name{$row->{$column}};
-			} elsif ( $column eq "min_interval_no" )	{
-				$row->{$column} = $min_interval_name{$row->{$column}};
-			# translate bogus period or epoch max into legitimate,
-			#   looked-up period or epoch names JA 22.2.04
-			# WARNING: this won't work at all if the period_max
-			#   and/or epoch_max fields are ever removed from
-			#   the database
-			} elsif ( $column eq "period" )	{
-				$row->{$column} = $myperiod{$row->{collection_no}};
-			} elsif ( $column eq "epoch" )	{
-				$row->{$column} = $myepoch{$row->{collection_no}};
-			# WARNING: similar trick here in which useless legacy
-			#  field locage_max is used as a placeholder for the
-			#  bin name
-			} elsif ( $column eq "10mybin" )	{
-				$row->{$column} = $mybin{$row->{collection_no}};
-			}
 
-			push ( @coll_row, $row->{$column} );
-		}
+        #
+        # Set up collections fields
+        #
 
-		# Push the eco/taphonomic data, if any, onto the reid rows
-		# WARNING: this only works on genus or higher-order data,
-		#  assuming species won't be scored separately
-		if ( $q->param('ecology1') )	{
-			push @reid_row , $ecotaph{'1'.$genusNo};
-		}
-		if ( $q->param('ecology2') )	{
-			push @reid_row , $ecotaph{'2'.$genusNo};
-		}
-		if ( $q->param('ecology3') )	{
-			push @reid_row , $ecotaph{'3'.$genusNo};
-		}
-		if ( $q->param('ecology4') )	{
-			push @reid_row , $ecotaph{'4'.$genusNo};
-		}
-		if ( $q->param('ecology5') )	{
-			push @reid_row , $ecotaph{'5'.$genusNo};
-		}
-		if ( $q->param('ecology6') )	{
-			push @reid_row , $ecotaph{'6'.$genusNo};
-		}
+        if ($q->param("output_data") ne "genera") {
+            # Get coordinates into the correct format (decimal or deg/min/sec/dir), performing
+            # conversions as necessary
+            if ($q->param('collections_lng') eq "YES") {
+                if ($q->param('collections_lng_format') eq 'decimal') {
+                    if ($row->{'lngmin'} =~ /\d+/) {
+                        $row->{'lngdec'} = $row->{'lngdeg'} + $row->{'lngmin'}/60 + $row->{'lngsec'}/3600;
+                    } else {
+                        $row->{'lngdec'} = $row->{'lngdeg'}.".".int($row->{'lngdec'});
+                    }    
+                    $row->{'lngdec'} *= -1 if ($row->{'lngdir'} eq "West");
+                } else {
+                    if (!($row->{'lngmin'} =~ /\d+/)) {
+                        if ($row->{'lngdec'} =~ /\d+/) {
+                            my $min = 60*(".".$row->{'lngdec'});
+                            $row->{'lngmin'} = int($min);
+                            $row->{'lngsec'} = int(($min-int($min))*60);
+                        }    
+                    }
+                }
+            }
+            if ($q->param('collections_lat') eq "YES") {
+                if ($q->param('collections_lat_format') eq 'decimal') {
+                    if ($row->{'latmin'} =~ /\d+/) {
+                        $row->{'latdec'} = $row->{'latdeg'} + $row->{'latmin'}/60 + $row->{'latsec'}/3600;
+                    } else {
+                        $row->{'latdec'} = $row->{'latdeg'}.".".int($row->{'latdec'});
+                    }    
+                    $row->{'latdec'} *= -1 if ($row->{'latdir'} eq "South");
+                } else {
+                    if (!($row->{'latmin'} =~ /\d+/)) {
+                        if ($row->{'latdec'} =~ /\d+/) {
+                            my $min = 60*(".".$row->{'latdec'});
+                            $row->{'latmin'} = int($min);
+                            $row->{'latsec'} = int(($min-int($min))*60);
+                        }    
+                    }
+                }
+            }
+            if ($q->param('collections_paleolat') eq "YES") {
+                if ($q->param('collections_paleolat_format') eq 'decimal') {
+                    $row->{'paleolatdec'} = $row->{'paleolat'};
+                } else {
+                    if ($row->{'paleolat'} =~ /\d+/) {
+                        $row->{'paleolatdir'}  = ($row->{'paleolat'} >= 0) ? "North" : "South";
+                        my $abs_lat = ($row->{'paleolat'} < 0) ? -1*$row->{'paleolat'} : $row->{'paleolat'};
+                        my $deg = int($abs_lat);
+                        my $min = 60*($abs_lat-$deg);
+                        $row->{'paleolatdeg'} = $deg;
+                        $row->{'paleolatmin'} = int($min);
+                        $row->{'paleolatsec'} = int(($min-int($min))*60);
+                    }    
+                }
+            }
+            if ($q->param('collections_paleolng') eq "YES") {
+                if ($q->param('collections_paleolng_format') eq 'decimal') {
+                    $row->{'paleolngdec'} = $row->{'paleolng'};
+                } else {
+                    if ($row->{'paleolng'} =~ /\d+/) {
+                        $row->{'paleolngdir'}  = ($row->{'paleolng'} >= 0) ? "East" : "West";
+                        my $abs_lat = ($row->{'paleolng'} < 0) ? -1*$row->{'paleolng'} : $row->{'paleolng'};
+                        my $deg = int($abs_lat);
+                        my $min = 60*($abs_lat-$deg);
+                        $row->{'paleolngdeg'} = $deg;
+                        $row->{'paleolngmin'} = int($min);
+                        $row->{'paleolngsec'} = int(($min-int($min))*60);
+                    }    
+                }
+            }
+            if ($q->param("collections_max_interval_no") eq "YES") {
+			    # translate interval nos into names JA 18.9.03
+                $row->{'max_interval_no'} = $interval_names->{$row->{'max_interval_no'}};
+            }
+            if ($q->param("collections_min_interval_no") eq "YES") {
+                $row->{'min_interval_no'} = $interval_names->{$row->{'min_interval_no'}};
+            }    
+            if ($q->param("collections_period") eq "YES") {
+                # translate bogus period or epoch max into legitimate,
+                #   looked-up period or epoch names JA 22.2.04
+                # WARNING: this won't work at all if the period_max
+                #   and/or epoch_max fields are ever removed from
+                #   the database
+                $row->{'period'} = $myperiod{$row->{'collection_no'}};
+            }
+            if ($q->param("collections_epoch") eq "YES") {
+                $row->{'epoch'} = $myepoch{$row->{'collection_no'}};
+            }
+            if ($q->param("collections_10mybin") eq "YES") {
+                # WARNING: similar trick here in which useless legacy
+                #  field locage_max is used as a placeholder for the
+                #  bin name
+                $row->{'10mybin'} = $mybin{$row->{'collection_no'}};
+            }
 
-		if( $q->param('collections_only') ){
+            # Put the values in the correct order since by looping through this array
+            foreach my $column ( @collectionHeaderCols ){
+                $column =~ s/collections\.//;
+                push ( @coll_row, $row->{$column} );
+            }
+        }
+
+
+		if( $q->param('output_data') eq 'collections'){
 			$curLine = $self->formatRow(($collection_no, @occs_row, @coll_row));
-		} elsif ( $q->param('distinct_taxa_only') )	{
+		} elsif ( $q->param('output_data') eq 'genera')	{
 			$curLine = $self->formatRow(($genusName));
 		} else{
-			$curLine = $self->formatRow(($collection_no, $genus_reso, $genusName, $reid_genus_reso, $reid_genus_name, @occs_row, @reid_row, @coll_row));
+            my @firstCols = ($collection_no);
+            my @parents = split ',',$master_class{$row->{'occ_genus_name'}};
+            if ($q->param("occurrences_class_name") eq "YES") {
+                push (@firstCols, $parents[0]);
+            }
+            if ($q->param("occurrences_order_name") eq "YES") {
+                push (@firstCols, $parents[1]);
+            }
+            if ($q->param("occurrences_family_name") eq "YES") {
+                push (@firstCols, $parents[2]);
+            }
+            push (@firstCols,$genus_reso,$genusName,$reid_genus_reso,$reid_genus_name);
+			$curLine = $self->formatRow((@firstCols, @occs_row, @reid_row, @coll_row));
 		}
 		# get rid of carriage returns 24.5.04 JA
 		# failing to do this is lethal and I'm not sure why no-one
@@ -1589,57 +1725,28 @@ sub doQuery {
 		print OUTFILE "$curLine\n";
 		$acceptedCount++;
 	}
-
 	close OUTFILE;
-	
-	# Post process, if necessary (family, order, class names)
-	my $family_level = $q->param("occurrences_family_name");
-	my $order_level = $q->param("occurrences_order_name");
-	my $class_level = $q->param("occurrences_class_name");
-	my $post_file = "$OUT_FILE_DIR/$occsOutFileName";
-	my $levels = "";
-	if($family_level eq "YES"){
-		$levels = "family";
-	}
-	if($order_level eq "YES"){
-		if($levels ne ""){
-			$levels .= ",";
-		}
-		$levels .= "order";
-	}
-	if($class_level eq "YES"){
-		if($levels ne ""){
-			$levels .= ",";
-		}
-		$levels .= "class";
-	}
-	if($levels ne ""){
-		foc($post_file, $levels);
-	}
-
-	my $outputType = "occurrences";
-	if ( $q->param("collections_only") )	{
-		$outputType = "collections";
-	}
 
 	# print out a list of genera with total number of occurrences and average relative abundance
-	if ( $outputType eq "occurrences" )	{
-		my @genera = keys %totaloccs;
-		@genera = sort @genera;
+	if ( $q->param("output_data") ne "collections" )	{
+		my @abundline = ();
 		open ABUNDFILE,">$OUT_FILE_DIR/$generaOutFileName";
-		print ABUNDFILE "genus\tcollections\twith abundances\tgeometric mean abundance\n";
+		push @abundline, 'genus','collections','with abundances','geometric mean abundance';
+		print ABUNDFILE join($sepChar,@abundline)."\n";
 		for $g ( @genera )	{
-			print ABUNDFILE "$g\t$totaloccs{$g}\t";
-			printf ABUNDFILE "%d\t",$numberofcounts{$g};
+			@abundline = ();
+			push @abundline, $g, $totaloccs{$g}, sprintf("%d",$numberofcounts{$g});
 			if ( $numberofcounts{$g} > 0 )	{
-				printf ABUNDFILE "%.4f\n",exp($summedproportions{$g} / $numberofcounts{$g});
+				push @abundline, sprintf("%.4f",exp($summedproportions{$g} / $numberofcounts{$g}));
 			} else	{
-				print ABUNDFILE "NaN\n";
+				push @abundline, "NaN";
 			}
+			print ABUNDFILE join($sepChar,@abundline)."\n";
 			$acceptedGenera++;
 		}
 		close ABUNDFILE;
 	}
+
 
 	# print out a list of time intervals with counts of occurrences
 	if ( $q->param('time_scale') )	{
@@ -1688,52 +1795,46 @@ sub doQuery {
 		@enumvals = sort @enumvals;
 
 		# now print the results
-		print SCALEFILE "interval";
-		print SCALEFILE "\tlower boundary\tupper boundary\tmidpoint";
-		print SCALEFILE "\ttotal occurrences";
-		print SCALEFILE "\ttotal genera";
+		my @scaleline;
+		push @scaleline, 'interval','lower boundary','upper boundary','midpoint','total occurrences','total genera';
 		for my $val ( @enumvals )	{
 			if ( $val eq "" )	{
-				print SCALEFILE "\tno data occurrences";
-				print SCALEFILE "\tno data taxa";
+				push @scaleline, 'no data occurrences', 'no data taxa';
 			} else	{
-				print SCALEFILE "\t$val occurrences";
-				print SCALEFILE "\t$val taxa";
+				push @scaleline, "$val occurrences", "$val taxa";
 			}
 		}
 		for my $val ( @enumvals )	{
 			if ( $val eq "" )	{
-				print SCALEFILE "\tproportion no data occurrences";
-				print SCALEFILE "\tproportion no data taxa";
+				push @scaleline, 'proportion no data occurrences', 'proportion no data taxa';
 			} else	{
-				print SCALEFILE "\tproportion $val occurrences";
-				print SCALEFILE "\tproportion $val taxa";
+				push @scaleline, "proportion $val occurrences", "proportion $val taxa";
 			}
 		}
-		print SCALEFILE "\n";
+		print SCALEFILE join($sepChar,@scaleline)."\n";
 
 		for my $intervalName ( @intervalnames )	{
 			$acceptedIntervals++;
-			print SCALEFILE "$intervalName";
-			printf SCALEFILE "\t%.2f",$lowerbinbound{$intervalName};
-			printf SCALEFILE "\t%.2f",$upperbinbound{$intervalName};
-			printf SCALEFILE "\t%.2f",($lowerbinbound{$intervalName} + $upperbinbound{$intervalName}) / 2;
-			printf SCALEFILE "\t%d",$occsbybin{$intervalName};
-			printf SCALEFILE "\t%d",$taxabybin{$intervalName};
+			@scaleline = ();
+			push @scaleline, $intervalName;
+			push @scaleline, sprintf("%.2f",$lowerbinbound{$intervalName});
+			push @scaleline, sprintf("%.2f",$upperbinbound{$intervalName});
+			push @scaleline, sprintf("%.2f",($lowerbinbound{$intervalName} + $upperbinbound{$intervalName}) / 2);
+			push @scaleline, sprintf("%d",$occsbybin{$intervalName});
+			push @scaleline, sprintf("%d",$taxabybin{$intervalName});
 			for my $val ( @enumvals )	{
-				printf SCALEFILE "\t%d",$occsbybinandcategory{$intervalName}{$val};
-				printf SCALEFILE "\t%d",$taxabybinandcategory{$intervalName}{$val};
+				push @scaleline, sprintf("%d",$occsbybinandcategory{$intervalName}{$val});
+				push @scaleline, sprintf("%d",$taxabybinandcategory{$intervalName}{$val});
 			}
 			for my $val ( @enumvals )	{
 				if ( $occsbybinandcategory{$intervalName}{$val} eq "" )	{
-					print SCALEFILE "\t0.0000";
-					print SCALEFILE "\t0.0000";
+					push @scaleline, "0.0000","0.0000";
 				} else	{
-					printf SCALEFILE "\t%.4f",$occsbybinandcategory{$intervalName}{$val} / $occsbybin{$intervalName};
-					printf SCALEFILE "\t%.4f",$taxabybinandcategory{$intervalName}{$val} / $taxabybin{$intervalName};
+					push @scaleline, sprintf("%.4f",$occsbybinandcategory{$intervalName}{$val} / $occsbybin{$intervalName});
+					push @scaleline, sprintf("%.4f",$taxabybinandcategory{$intervalName}{$val} / $taxabybin{$intervalName});
 				}
 			}
-			print SCALEFILE "\n";
+			print SCALEFILE join($sepChar,@scaleline)."\n";
 		}
 		close SCALEFILE;
 	}
@@ -1744,8 +1845,8 @@ sub doQuery {
 	print "
 <table border='0' width='600'>
 <tr><td class='darkList'><b><font size='+1'>Output files</font></b></td></tr>
-<tr><td>$acceptedCount $outputType were printed to <a href='$OUT_HTTP_DIR/$occsOutFileName'>$occsOutFileName</a></td></tr>\n";
-	if ( $outputType eq "occurrences" )	{
+<tr><td>$acceptedCount ".$q->param("output_data")." were printed to <a href='$OUT_HTTP_DIR/$occsOutFileName'>$occsOutFileName</a></td></tr>\n";
+	if ( $q->param("output_data") ne "collections" )	{
 		print "
 <tr><td>$acceptedGenera genus names were printed to <a href='$OUT_HTTP_DIR/$generaOutFileName'>$generaOutFileName</a></td></tr>\n";
 	}
@@ -1767,9 +1868,12 @@ print "</table>
 	
 }
 
+# This functions sets up handles to the output files, and
+# also sets certain implied param fields in the CGI object so the SQL
+# and CSV get generated correctly
 sub setupOutput {
 	my $self = shift;
-	my $outputType = $q->param('collections_put');
+	my $outputType = $q->param('output_format');
 	my $sepChar;
 	if($outputType eq 'comma-delimited text')
 	{
@@ -1799,7 +1903,7 @@ sub setupOutput {
 	$authorizer =~ s/(\s|\.)//g;
 	$occsOutFileName = $authorizer . "-occs.$outFileExtension";
 	$generaOutFileName = $authorizer . "-genera.$outFileExtension";
-	if ( $q->param("collections_only") )	{
+	if ( $q->param("output_data") eq 'collections')	{
 		$occsOutFileName = $authorizer . "-cols.$outFileExtension";
 	}
 	$refsOutFileName = $authorizer . "-refs.$outFileExtension";
@@ -1817,6 +1921,23 @@ sub setupOutput {
 	chmod 0664, "$OUT_FILE_DIR/$occsOutFileName";
 	chmod 0664, "$OUT_FILE_DIR/$refsOutFileName";
 
+    # Setup additional fields that should appear as columns in the CSV file
+
+	# hey, if you want the data binned into time intervals you have to
+	#  download the interval names into the occurrences table too
+	if ( $q->param('time_scale') )	{
+		$q->param('collections_max_interval_no' => "YES");
+		$q->param('collections_min_interval_no' => "YES");
+	}
+	# and hey, if you want counts of some enum field split up within
+	#  time interval bins, you have to download that field
+	if ( $q->param('binned_field') )	{
+		if ( $q->param('binned_field') =~ /plant_organ/ )	{
+			$q->param('occurrences_' . $q->param('binned_field') => "YES");
+		} else	{
+			$q->param('collections_' . $q->param('binned_field') => "YES");
+		}
+	}
     # this sets a bunch of checkbox values to true if a corresponding checkbox is also true
     # so that the download script may be a bit simpler. 
     # must be called before retellOptions
@@ -1830,6 +1951,80 @@ sub setupOutput {
     $q->param('collections_emlepoch_min' => "YES")  if ($q->param('collections_epoch_min'));
     $q->param('collections_emllocage_max' => "YES") if ($q->param('collections_locage_max'));
     $q->param('collections_emllocage_min' => "YES") if ($q->param('collections_locage_min'));
+
+    # Get the right lat/lng/paleolat/paleolng fields
+    if ($q->param('collections_lat')) {
+        if ($q->param('collections_lat_format') eq 'decimal') {
+            $q->param('collections_latdec'=>'YES');
+        } else {
+            $q->param('collections_latdeg'=>'YES');
+            $q->param('collections_latmin'=>'YES');
+            $q->param('collections_latsec'=>'YES');
+            $q->param('collections_latdir'=>'YES');
+        }
+    }
+    if ($q->param('collections_lng')) {
+        if ($q->param('collections_lng_format') eq 'decimal') {
+            $q->param('collections_lngdec'=>'YES');
+        } else {
+            $q->param('collections_lngdeg'=>'YES');
+            $q->param('collections_lngmin'=>'YES');
+            $q->param('collections_lngsec'=>'YES');
+            $q->param('collections_lngdir'=>'YES');
+        }
+    }
+    if ($q->param('collections_paleolat')) {
+        if ($q->param('collections_paleolat_format') eq 'decimal') {
+            $q->param('collections_paleolatdec'=>'YES');
+        } else {
+            $q->param('collections_paleolatdeg'=>'YES');
+            $q->param('collections_paleolatmin'=>'YES');
+            $q->param('collections_paleolatsec'=>'YES');
+            $q->param('collections_paleolatdir'=>'YES');
+        }
+    }
+    if ($q->param('collections_paleolng')) {
+        if ($q->param('collections_paleolng_format') eq 'decimal') {
+            $q->param('collections_paleolngdec'=>'YES');
+        } else {
+            $q->param('collections_paleolngdeg'=>'YES');
+            $q->param('collections_paleolngmin'=>'YES');
+            $q->param('collections_paleolngsec'=>'YES');
+            $q->param('collections_paleolngdir'=>'YES');
+        }
+    }
+    # Get these related fields as well
+    if ($q->param('occurrences_subgenus_name')) {
+        $q->param('occurrences_subgenus_reso'=>'YES');
+        $q->param('reidentifications_subgenus_reso'=>'YES');
+    }
+    if ($q->param('occurrences_species_name')) {
+        $q->param('occurrences_species_reso'=>'YES');
+        $q->param('reidentifications_species_reso'=>'YES');
+    }
+    # There is no separate reidentifications checkboxes on the form
+    # So they get included if the corresponding occurences checkbox is set
+    foreach $field (@reidentificationsFieldNames) {
+        if ($q->param('occurrences_'.$field)) {
+            $q->param("reidentifications_$field"=>'YES');
+        }
+    }
+
+    # If interval names are numbers, translate them into regular names
+    my $max_interval_no = $q->param("max_interval_name");
+    my $min_interval_no = $q->param("min_interval_name");
+    my ($eml_interval,$interval_name);
+    if ($min_interval_no=~ /^\d+$/) {
+        ($eml_interval,$interval_name) = $self->getIntervalName($min_interval_no);
+        if ($eml_interval) {$q->param("min_eml_interval"=>$eml_interval);}
+        if ($interval_name) {$q->param("min_interval_name"=>$interval_name);}
+    }
+    if ($max_interval_no=~ /^\d+$/) {
+        ($eml_interval,$interval_name) = $self->getIntervalName($max_interval_no);
+        if ($eml_interval) {$q->param("max_eml_interval"=>$eml_interval);}
+        if ($interval_name) {$q->param("max_interval_name"=>$interval_name);}
+    }
+
 }
 
 sub formatRow {
@@ -1891,109 +2086,5 @@ sub dbg {
 	return $DEBUG;					# Either way, return the current DEBUG value
 }
 
-sub foc{
-	my $filename = shift;
-	my $levels = shift;
-
-	open(FILE,$filename) or die "couldn't open $filename ($!)";
-	my $headers = <FILE>;
-	my @lines = <FILE>;
-	close FILE;
-
-	# Parse the headers to find the positions of 'genus_name' and 'genus_reso'
-	my @headers = split(',', $headers);
-	my $genus_reso_pos = -1;
-	my $genus_pos = -1;
-	my $i;
-	for($i=0; $i<@headers; $i++){
-		if($headers[$i] eq "genus_reso"){
-			$genus_reso_pos = $i;
-		}
-		if($headers[$i] eq "genus_name"){
-			$genus_pos = $i;
-			last;
-		}
-
-	}
-
-	# get a list of unique genus names
-	my %genera;
-
-	foreach my $item (@lines){
-		my @parsed_line = split(',', $item);
-		# I'm just using a hash to guarantee uniqueness. 
-		# I'll only need the keys...
-		next if($parsed_line[$genus_reso_pos] =~ /informal/);
-		$parsed_line[$genus_pos] =~ s/\n//;
-		$genera{$parsed_line[$genus_pos]} = 1;
-	}
-
-	# get the classifications
-	my %master_class;
-	my @genera = keys %genera;
-	%master_class=%{Classification::get_classification_hash($dbt,$levels,\@genera)};
-	my $insert_pos = $genus_pos-1;
-	if ( $insert_pos < 0 )	{
-		$insert_pos = 0;
-	}
-	if($levels =~ /class/){
-		splice(@headers, $insert_pos++, 0, "class_name");
-	}
-	if($levels =~ /order/){
-		splice(@headers, $insert_pos++, 0, "order_name");
-	}
-	if($levels =~ /family/){
-		splice(@headers, $insert_pos++, 0, "family_name");
-	}
-	my @altered_lines = ();
-	foreach my $item (@lines){
-		my @parsed_line = split(',', $item);
-		my @fkeys = ();
-		my @okeys = ();
-		my $key = $parsed_line[$genus_pos];
-		$key =~ s/\n//;
-		my @parents = split ',',$master_class{$key};
-		$insert_pos = $genus_pos-1;
-		if ( $insert_pos < 0 )	{
-			$insert_pos = 0;
-		}
-		# first insert class
-		if ( $levels =~ /class/ )	{
-			my $class = $parents[0];
-			if($class && $class ne ""){
-				splice(@parsed_line, $insert_pos++, 0, $class);
-			} else	{
-				splice(@parsed_line, $insert_pos++, 0, "");
-			}
-		}
-		# then insert order
-		if ( $levels =~ /order/ )	{
-			my $order = $parents[1];
-			if($order && $order ne ""){
-				splice(@parsed_line, $insert_pos++, 0, $order);
-			} else	{
-				splice(@parsed_line, $insert_pos++, 0, "");
-			}
-		}
-		# then insert family
-		if($levels =~ /family/){
-			my $family = $parents[2];
-			if ( $family && $family ne "" )	{
-				splice(@parsed_line, $insert_pos++, 0, $family);
-			} else	{
-				splice(@parsed_line, $insert_pos++, 0, "");
-			}
-		}
-		my $altered = join(',', @parsed_line);	
-		push(@altered_lines, $altered);
-	}
-	open(FILE,">$filename") or die "couldn't open $filename ($!)";
-	$headers = join(",", @headers);
-	print FILE $headers;
-	foreach my $line (@altered_lines){
-		print FILE $line;
-	}
-	close FILE;
-}
 
 1;
