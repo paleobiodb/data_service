@@ -9,14 +9,56 @@ A:link.menu { font-family : Arial, Verdana, Helvetica; color : White; font-size 
 A:visited.menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }
 A:active.menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }
 A:hover.menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }       
+
+
+TD      { font-size : 14px; }
+TH      { font-size : 14px; }
+P       { font-size : 14px; }
+H2      {  }
+H3      {  }
+H4      {  }
+TEXTAREA {  font-size : 14px; }
+SELECT {  font-size : 14px; }
+INPUT {  font-size : 14px; }
+LI      {  }
+.tiny {  font-size : 10px; text-decoration:none; }
+.small {  font-size : 12px; text-decoration:none; }
+.medium {  font-size : 14px; text-decoration:none; }
+.large {  font-size : 16px; text-decoration:none; }
+.cell {  font-size : 12px; text-decoration:none; }
+
    
+   
+/*	note, this defines the defaults for the document unless 
+	they are overridden by something more specific */
 body {
 	background-color: white;
 	background-image: url(/public/PDbg.gif);
+	font-family: Arial, Verdana, Helvetica;
 }
 
 .menu {
 	color: white;	
+}
+
+/*	used for titles at top of forms, 
+	ie, "Collection Search Form" */
+.title {
+	padding-top: 1em;
+	padding-bottom: 1em;
+	font-weight: bold;
+	font-size: 1.5em;
+	text-align: center;
+}
+
+/*	most titles have a smaller details section after them,
+	ie, "Fill in any of the following fields." */ 
+.titleDetails {
+	padding-top: 0em;
+	padding-bottom: 1em;
+	font-weight: bold;
+	font-size: 1.0em;
+	text-align: center;
 }
 
 /* generic warning message */
@@ -47,21 +89,6 @@ table.navbox {
 	background-color: 0077FF;
 }
 
-TD      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
-TH      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
-P       { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
-H2      { font-family : Arial, Verdana, Helvetica; }
-H3      { font-family : Arial, Verdana, Helvetica; }
-H4      { font-family : Arial, Verdana, Helvetica; }
-TEXTAREA { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
-SELECT { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
-INPUT { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
-LI      { font-family : Arial, Verdana, Helvetica; }
-.tiny { font-family : Arial, Verdana, Helvetica; font-size : 10px; text-decoration:none; }
-.small { font-family : Arial, Verdana, Helvetica; font-size : 12px; text-decoration:none; }
-.medium { font-family : Arial, Verdana, Helvetica; font-size : 14px; text-decoration:none; }
-.large { font-family : Arial, Verdana, Helvetica; font-size : 16px; text-decoration:none; }
-.cell { font-family : Arial, Verdana, Helvetica; font-size : 12px; text-decoration:none; }
       
 
 
