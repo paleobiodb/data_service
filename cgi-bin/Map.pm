@@ -124,6 +124,7 @@ sub buildMap {
 		# in what fields
 		@allfields = (	'research_group',
 				'authorizer',
+				'enterer',
 				'country',
 				'state',
 				'period',
