@@ -1413,8 +1413,15 @@ sub displaySearchColls {
 }
 
 
-#  * User submits completed collection search form
-#  * System displays matching collection results
+# User submits completed collection search form
+# System displays matching collection results
+# Also called by TaxonInfo.pm in the doCollections() routine,
+# and by bridge.pl in the displayReIDForm() routine.
+#
+# $in_list is an optional parameter which is used when 
+# the script is called from TaxonInfo in the doCollections() routine.
+# It is a list of synonyms of taxa to find (ie, find collections which 
+# have occurrences of any taxa in this list).
 sub displayCollResults {
 	my $in_list = shift; # for taxon info script
 	
@@ -1429,7 +1436,7 @@ sub displayCollResults {
 	# Run it
 
 #	print "in sub displayCollResults, sql = $sql<BR><BR>";
-	Debug::dbPrint("sql = $sql");
+	Debug::dbPrint("sqldcr = $sql");
 	
 	my $sth = $dbh->prepare( $sql );
 
