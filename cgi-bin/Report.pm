@@ -9,7 +9,7 @@ use TimeLookup;
 use Data::Dumper;
 
 # Flags and constants
-my $DEBUG=1;			# The debug level of the calling program
+my $DEBUG=0;			# The debug level of the calling program
 my $dbh;
 my $dbt;
 my $q;					# Reference to the parameters
@@ -88,12 +88,12 @@ sub reportDisplayHTML {
     print "<table border=0 class=dataTable cellspacing=0>";
     if ($isDoubleArray) {
         my $numCols = scalar(@{$self->{'sortKeys2'}});
-        print "<tr><td>&nbsp;</td>";
-        print "<td class=dataTableTop colspan=$numCols align=center>".$q->param('searchfield2')."</td>";
+        print "<tr><td class=dataTableTopULCorner>&nbsp;</td>";
+        print "<td class=dataTableTop colspan=$numCols align=center><b>".$q->param('searchfield2')."</b></td>";
         print "<td>&nbsp;</td></tr>";
     }
     print "<tr>";
-    print "<td class=dataTableCorner align=center>".$q->param('searchfield1')."</td>";
+    print "<td class=dataTableULCorner align=center><b>".$q->param('searchfield1')."</b></td>";
     if ($isDoubleArray) { 
         foreach $key2 (@{$self->{'sortKeys2'}}) {
             print "<td class=dataTableColumn>$key2</td>";
