@@ -1219,7 +1219,7 @@ print "$collectionsWhereClause"; #FOO
 			#  or "less than" as a query parameter
 			if ( $q->param('paleolatdirection') =~ /north/ && $temp[8] >= $q->param('paleolatlimit') )	{
 				$goodlats{$temp[0]}++;
-			} elsif ( $q->param('paleolatdirection') =~ /south/ && $temp[8] <= $q->param('paleolatlimit') )	{
+			} elsif ( $q->param('paleolatdirection') =~ /south/ && $temp[8] <= -1 * $q->param('paleolatlimit') )	{
 				$goodlats{$temp[0]}++;
 			} elsif ( $q->param('paleolatdirection') =~ /less/ && $temp[8] < $q->param('paleolatlimit') && $temp[8] > -1 * $q->param('paleolatlimit') )	{
 				$goodlats{$temp[0]}++;
