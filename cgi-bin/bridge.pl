@@ -2008,8 +2008,12 @@ sub buildTaxonomicList {
 			my $output = '';
 			my %grand_master_hash = ();
 			my %classification = ();
+
 			# For sorting, later
 			$grand_master_hash{occurrence_no} = $rowref->{occurrence_no};
+			$grand_master_hash{comments} = $rowref->{comments};
+			$grand_master_hash{abund_value} = $rowref->{abund_value};
+			$grand_master_hash{reference_no} = $rowref->{reference_no};
 
 			# check for unrecognized genus names
 			foreach my $nn (@gnew_names){
@@ -2126,6 +2130,20 @@ sub buildTaxonomicList {
             $grand_master_hash{html} = $output;
 			push(@grand_master_list, \%grand_master_hash);
 		}
+		# Look at @grand_master_list to see every record has class_no, order_no,
+		# family_no,  reference_no, abundance_unit and comments. 
+		# If ALL records are missing any of those, don't print the header
+		# for it.
+		my ($class_nos, $order_nos, $family_nos, $reference_nos, 
+			$abund_values, $comments) = (0,0,0,0,0,0);
+		foreach my $row (@grand_master_list){
+			$class_nos++ if($row->{class_no} && $row->{class_no} != 1000000);
+			$order_nos++ if($row->{order_no} && $row->{order_no} != 1000000);
+			$family_nos++ if($row->{family_no} && $row->{family_no} != 1000000);
+			$reference_nos++ if($row->{reference_no});
+			$abund_values++ if($row->{abund_value});
+			$comments++ if($row->{comments});
+		}
 
 		$sql = "SELECT collection_name FROM collections ".
 			   "WHERE collection_no=$collection_no";
@@ -2145,11 +2163,47 @@ sub buildTaxonomicList {
 		$return .=
 "<table border=\"0\" cellpadding=\"3\" cellspacing=\"0\"><tr>";
 
-	$return .= "<td nowrap><u>Class</u></td><td><u>Order</u></td>".
-			   "<td><u>Family</u></td><td><u>Genus and species</u></td>";
+	if($class_nos == 0){
+		$return .= "<td nowrap></td>";
+	}
+	else{
+		$return .= "<td nowrap><u>Class</u></td>";
+	}
+	if($order_nos == 0){
+		$return .= "<td></td>";
+	}
+	else{
+		$return .= "<td><u>Order</u></td>";
+	}
+	if($family_nos == 0){
+		$return .= "<td></td>";
+	}
+	else{
+		$return .= "<td><u>Family</u></td>";
+	}
 
-	$return .= "<td><u>Reference</u></td><td><u>Abundance</u></td>".
-			   "<td><u>Comments</u></td></tr>";
+	# if ALL taxa have no genus or species, we have no list,
+	# so always print this.
+	$return .= "<td><u>Genus and species</u></td>";
+
+	if($reference_nos == 0){
+		$return .= "<td></td>";
+	}
+	else{
+		$return .= "<td><u>Reference</u></td>";
+	}
+	if($abund_values == 0){
+		$return .= "<td></td>";
+	}
+	else{
+		$return .= "<td><u>Abundance</u></td>";
+	}
+	if($comments == 0){
+		$return .= "<td></td>";
+	}
+	else{
+		$return .= "<td><u>Comments</u></td></tr>";
+	}
 
 		# Sort:
 		my @sorted = sort{ $a->{class_no} <=> $b->{class_no} ||
