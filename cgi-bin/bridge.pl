@@ -3474,9 +3474,14 @@ sub buildTaxonomicList {
 			elsif($output =~ /<genus>(.*)?<\/genus>(.*)?informal/s){
 				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Genus"><i>$1$2$3$4<\/i><\/a>/g;
 			}
+            # N sp. id the only species reso that comes after the species
+			elsif($output =~ /n\. sp\.\s*<species>/s){
+				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Genus"><i>$1$2$3$4<\/i><\/a>/g;
+				$output =~ s/(n\. sp\.)(.*)?<\/i><\/a>/$2 $1<\/a>/g;
+			}
+			# shouldn't be any <i> tags for indet's.
 			elsif($output =~ /<species>indet/s){
 				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Genus"><i>$1$2$3$4<\/i><\/a>/g;
-				# shouldn't be any <i> tags for indet's.
 				$output =~ s/<i>(.*)?indet(\.{0,1})<\/i><\/a>/$1indet$2<\/a>/;
 			}
 			else{
