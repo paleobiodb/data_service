@@ -122,8 +122,10 @@ There are three major categories of opinions, as follows.<p>
 <i>Important:</i> you also may enter the verbatim text of the formal diagnosis, if one is given.
 The database stores different values depending on whether the taxon is a species:
  <ul>
- <li>"<i>belongs to</i>" means a <u>higher taxon</u> (not a species) is valid and falls within an even higher parent taxon.
+ <li>"<i>belongs to</i>" means a <u>higher taxon</u> (not a species) is valid and falls within an even higher parent taxon. A subgenus belongs to a genus; a genus belongs to a tribe, subfamily, family, or (if hard to classify) some even higher taxon; etc. Remember, lower belongs to higher - a genus belongs to a family,
+ not the other way around!
  <li>"<i>recombined as</i>" means a <u>species</u> is valid but has been moved to another genus. Put the new combination in the parent taxon field.
+For example, Linnaeus called chimps "Homo troglodytes"; the name was recombined by Oken (1816) as "Pan troglodytes," which is still used.
 </ul>
 
 <p><i>Synonymy.</i> The taxon is invalid and the same as something else.
@@ -166,7 +168,7 @@ First, fill out a form with X in the taxon name field; G in full in the parent t
 <ul>
 <li><i>Species X originally was in genus G but is now in genus H</i> (<u>classification</u>). Write out species X with the genus name G in the taxon name field; write out the new name in full in the parent taxon field; select "Genus and species" for both rank fields.
 <li><i>Species X turns out to be valid and in the correct combination</i> (<u>classification</u>). Write out the same, full species name in both the taxon field and the parent taxon field, and pull down "Genus and species" in both rank fields. <i>Unlike genera and other higher taxa, species only need to be classified if their genus assignment and/or status has been debated.</i>
-<li><i>Species X is a synonym or homonym of species Y</i> (<u>synonymy</u>). Select the appropriate status and write out the senior synonym X in full (both genus and species) in the parent taxon field.
+<li><i>Species X is a synonym or homonym of species Y</i> (<u>synonymy</u>). Select the appropriate status (subjective synonym, objective synonym, homonym) and write out the senior synonym or replacement name X in full (both genus and species) in the parent taxon field. For homonyms, you need to enter TWO opinions: first, the opinion that X is a "homonym of" the other species spelt exactly the same way, and second, the opinion that X has been "replaced by" a new, differently spelt name.
 <li><i>Species X is invalid</i> (<u>validity</u>). Select "nomen dubium," "nomen nudum," "nomen oblitum" or "nomen vanum" and leave the senior synonym field <i>blank</i>.
 </ul>
 
