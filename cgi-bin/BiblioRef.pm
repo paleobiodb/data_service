@@ -55,20 +55,20 @@ sub toString
 
 	# Choose the row background color
 	if ( $row % 2 != 0 && $rowcount > 1) {
-		$retVal .= "<tr bgcolor='#E0E0E0'>\n";
+		$retVal .= "<tr bgcolor=\"#E0E0E0\">\n";
 	}
 	else	{
 		$retVal .= "<tr>\n";
 	}
 
 	if ( $selectable ) {
-		$retVal .= "	<td width='5%' valign=top><input type='radio' name='reference_no' value='" . $self->{_reference_no} . "'></td>\n";
+		$retVal .= "	<td width=\"5%\" valign=top><input type=\"radio\" name=\"reference_no\" value=\"" . $self->{_reference_no} . "\"></td>\n";
 	} else {
 		# Nothing there?  Make it small
-		$retVal .= "	<td width='1%'>&nbsp;</td>\n";
+		$retVal .= "	<td></td>\n";
 	}
 
-	$retVal .= "	<td width='5%' valign=top><b>".$self->{_reference_no}."</b></td>\n";
+	$retVal .= "	<td width=\"5%\" valign=top><b>".$self->{_reference_no}."</b></td>\n";
 
 	# Project name
 	if ($self->{_project_name})	{
@@ -77,7 +77,7 @@ sub toString
 		$retVal .= "</font></td>\n";
 	} else {
 		# Nothing there?  Make it small
-		$retVal .= "	<td width='1%'>&nbsp;</td>\n";
+		$retVal .= "	<td></td>\n";
 	}
 
 	$retVal .= "	<td>\n";
