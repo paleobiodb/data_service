@@ -1,0 +1,1194 @@
+<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+var bad_info = ""; // Global variable
+
+function checkFields() {
+    doCheckFieldsBasicInfo();
+    doCheckFieldsStratigraphy();
+    doCheckFieldsGeography();
+    doCheckFieldsTaphonomy();
+    doCheckFieldsCollectingInfo();
+
+    if ( bad_info != "" ) { 
+        bad_info = "WARNING!\n" +
+                      "The following fields have incorrect values:\n" +
+                      bad_info + "\n_____________________________" +
+                      "\nPlease correct them and submit the form again.";
+        alert(bad_info);
+        bad_info = "";
+        return false; 
+    }    
+    return true;
+}
+
+function doCheckFieldsBasicInfo() {
+    var frm = document.forms[0];
+
+    // Deleting the primary reference is not allowed.
+    // Note that the length of the radio group (or checkbox group) equals 
+    // the number of radio buttons regardless of their checked status.
+    // Note the the length of each may be different since there's not
+    // necessarily a one to one correspondence.
+    if(frm.secondary_reference_no && frm.delete_ref){
+        var i;
+        var radio_vals = new Array();
+        for(i=0; i<frm.secondary_reference_no.length; i++){
+            radio_vals[i] = parseInt(frm.secondary_reference_no[i].value);
+        }
+        var checked_vals = new Array();
+        for(i=0; i<frm.delete_ref.length; i++){
+            checked_vals[i] = parseInt(frm.delete_ref[i].value);
+        }
+        var j;
+        for(i=0; i<radio_vals.length; i++){
+            for(j=0; j<checked_vals.length; j++){
+                if(radio_vals[i] == checked_vals[j] && frm.secondary_reference_no[i].checked && frm.delete_ref[j].checked){
+                    bad_info += "\n    -Primary reference cannot be deleted";
+                }
+            }
+        }
+    } // if secondary_reference_no
+
+    if ( frm.collection_type.options[frm.collection_type.selectedIndex].value == "") {
+        bad_info += "\n    - Reason for describing collection";
+    }
+
+    if ( frm.collection_name.value == "") {
+        bad_info += "\n    - Collection name";
+    }
+}
+
+function doCheckFieldsCollectingInfo() {
+    var frm = document.forms[0];
+
+    if ( frm.collection_size.value != "" ) {
+        var	numeric = /^[0-9]*$/;
+        if ( numeric.test ( frm.collection_size.value ) == false ) {
+            bad_info += "\n    - Collection size must be numeric";
+        }
+    }
+}
+
+function doCheckFieldsGeography() {
+    var frm = document.forms[0];
+
+    if ( frm.country.selectedIndex == 0 ) {
+        bad_info += "\n    - Country (required)";
+    }
+    if ( frm.state.value == "" ) {
+        // This is a squirrely way to do this, but otherwise some browsers fail
+        var index = frm.country.selectedIndex;
+        if ( index != 0 ) {
+            if ( frm.country.options[index].text == "United States") {
+                bad_info += "\n    - U.S. state (required)";
+            }
+        }
+    }
+    var integerReq = /^[0-9]+$/;
+    var integerOpt = /^[0-9]*$/;
+    if ( integerReq.test (frm.latdeg.value) == false ) {
+        bad_info += "\n    - Latitude must be an integer";
+    }
+    if ( parseInt(frm.latdeg.value) > 90 )	{
+        bad_info += "\n    - Latitude must be less than 90";
+    }
+    if ( integerReq.test (frm.lngdeg.value) == false ) {
+        bad_info += "\n    - Longitude must be an integer";
+    }
+    if ( parseInt(frm.lngdeg.value) > 180 )	{
+        bad_info += "\n    - Longitude must be less than 180";
+    }
+    if ( integerOpt.test (frm.latmin.value) == false ) {
+        bad_info += "\n    - Latitude minutes must be integer";
+    } 
+    if ( frm.latmin.value != "" && parseInt(frm.latmin.value) >= 60)	{
+        bad_info += "\n    - Longitude minutes must be less than 60";
+    }
+    if ( integerOpt.test (frm.lngmin.value) == false ) {
+        bad_info += "\n    - Longitude minutes must be less than 60";
+    }
+    if ( frm.lngmin.value != "" && parseInt(frm.lngmin.value) >= 60)	{
+        bad_info += "\n    - Longitude minutes must be less 60";
+    }
+
+    // added decimal vs. minutes checks JA 18.5.04
+    if ( frm.latdec.value != "" && frm.latmin.value != "" ) {
+        bad_info += "\n    - Latitude: can't enter both decimal and minutes/seconds values";
+    }
+    if ( frm.lngdec.value != "" && frm.lngmin.value != "" ) {
+        bad_info += "\n    - Longitude: can't enter both decimal and minutes/seconds values";
+    }
+
+    var index = frm.country.selectedIndex;
+    var indexLat = frm.latdir.selectedIndex;
+    var indexLng = frm.lngdir.selectedIndex;
+    if ( index != 0 ) {
+        if ( ( frm.country.options[index].text == "United States" ||
+               frm.country.options[index].text == "Canada" ||
+               frm.country.options[index].text == "Mexico" ) &&
+             ( frm.latdir.options[indexLat].text != "North" ||
+               frm.lngdir.options[indexLng].text != "West" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+        else if ( ( frm.country.options[index].text == "Germany" ||
+              frm.country.options[index].text == "China" ||
+              frm.country.options[index].text == "Egypt" ||
+              frm.country.options[index].text == "Ethiopia" ||
+              frm.country.options[index].text == "Japan" ||
+              frm.country.options[index].text == "Russian Federation" ||
+              frm.country.options[index].text == "India" ) &&
+             ( frm.latdir.options[indexLat].text != "North" ||
+               frm.lngdir.options[indexLng].text != "East" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+        else if ( ( frm.country.options[index].text == "Australia" ||
+              frm.country.options[index].text == "Tanzania, United Republic of" ||
+              frm.country.options[index].text == "South Africa" ) &&
+             ( frm.latdir.options[indexLat].text != "South" ||
+               frm.lngdir.options[indexLng].text != "East" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+        else if ( ( frm.country.options[index].text == "Argentina" ||
+              frm.country.options[index].text == "Chile" ) &&
+             ( frm.latdir.options[indexLat].text != "South" ||
+               frm.lngdir.options[indexLng].text != "West" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+        else if ( ( frm.country.options[index].text == "Algeria" ||
+              frm.country.options[index].text == "France" ||
+              frm.country.options[index].text == "Spain" ||
+              frm.country.options[index].text == "United Kingdom" ) &&
+             ( parseInt(frm.lngdeg.value) > 15 ||
+               frm.latdir.options[indexLat].text != "North" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+        // PM 09/19/02 Changed the "West" check to longitude from latitude
+        else if ( frm.country.options[index].text == "Brazil" &&
+             ( parseInt(frm.latdeg.value) > 35 ||
+               frm.lngdir.options[indexLng].text != "West" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+        else if ( ( frm.country.options[index].text == "Kenya" ||
+              frm.country.options[index].text == "Uganda" ||
+              frm.country.options[index].text == "Indonesia" ) &&
+             ( parseInt(frm.latdeg.value) > 15 ||
+               frm.lngdir.options[indexLng].text != "East" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+    }
+
+
+}
+                                                                                                                                     
+function doCheckFieldsStratigraphy() {
+    var frm = document.forms[0];
+
+    var returnVal = checkIntervalNames();
+    if (!returnVal) {
+        return false;
+    }
+
+    var hasgroup = /group/i;
+    if ( hasgroup.test ( frm.geological_group.value ) == true )      {
+        bad_info += "\n  - A group name can't include the word \"group\"";
+    }
+    var hasformation = /formation/i;
+    if ( hasformation.test ( frm.formation.value ) == true )      {
+        bad_info += "\n  - A formation name can't include the word \"formation\"";
+    }
+    var hasmember = /member/i;
+    if ( hasmember.test ( frm.member.value ) == true )      {
+        bad_info += "\n  - A member name can't include the word \"member\"";
+    }
+}
+
+function doCheckFieldsTaphonomy() {
+    var frm = document.forms[0];
+    var full_count = 0;
+
+    if (frm.art_whole_bodies.options[frm.art_whole_bodies.selectedIndex].text == "all") { 
+        full_count  += 1;
+    }    
+    if (frm.disart_assoc_maj_elems.options[frm.disart_assoc_maj_elems.selectedIndex].text == "all") {
+        full_count  += 1;
+    }
+    if (frm.disassoc_maj_elems.options[frm.disart_assoc_maj_elems.selectedIndex].text == "all") {
+        full_count  += 1;
+    }
+    if (frm.disassoc_minor_elems.options[frm.disart_assoc_maj_elems.selectedIndex].text == "all") {
+        full_count  += 1;
+    } 
+    if (full_count > 1) {
+        bad_info += "\n  - Only one pulldown in the \"Articulation/element representation\" section be set to \"all\"";
+    }
+    
+    
+}
+
+// End -->
+</script>
+
+<div class="title_small_overhead">
+<span id="page_title"></span>
+</div>
+
+   <div align=center>
+   <table cellpadding=0 cellspacing=0 border=0 width=600><tr>
+   <td id="tab1" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(1);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(1)">Basic Info</td>
+   <td id="tab2" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(2);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(2)">Geography</td>
+   <td id="tab3" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(3);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(3)">Stratigraphy</td>
+   <td id="tab4" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(4);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(4)">Geology</td>
+   <td id="tab5" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(5);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(5)">Taphonomy</td>
+   <td id="tab6" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(6);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(6)">Collecting Info</td>
+   </tr></table>
+   </div>
+
+  <form name="form" action="$exec_url" method="post" onsubmit="return checkFields();">
+  <span id="page_target"></span>
+  <input id="reference_no" type="hidden">
+  <input id="authorizer" type="hidden">
+  <input id="enterer" type=hidden>
+  <input id="collection_no" type="hidden">
+
+<div id="panel1" class="panel">
+  <div align="center">
+
+  <p>
+    <span class="required">Required fields are in red.</span> 
+	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
+  </p>
+  
+  <table border=0 cellpadding=0 cellspacing=0><tr><td>
+
+  <table border=0 width=620>
+    <tr>
+      <td valign="top" colspan="2"><b>Research group(s):</b></td>
+      <td colspan="2">
+        <input id="research_group" type="checkbox" value="decapod"> decapod
+		<input id="research_group" type="checkbox" value="ETE"> ETE
+		<input id="research_group" type="checkbox" value="marine invertebrate"> marine invertebrate
+		<input id="research_group" type="checkbox" value="micropaleontology"> micropaleontology
+		<input id="research_group" type="checkbox" value="PACED"> PACED
+		<input id="research_group" type="checkbox" value="paleobotany"> paleobotany
+		<input id="research_group" type="checkbox" value="paleoentomology"> paleoentomology
+		<input id="research_group" type="checkbox" value="taphonomy"> taphonomy
+		<input id="research_group" type="checkbox" value="vertebrate"> vertebrate
+      </td>
+    </tr>
+  </table>
+  
+  <table border=0>
+    <tr>
+      <td><span class="required">Access level:</span></td>
+      <td><select id="access_level"></select></td>
+      <td> </td>
+      <td><span class="required">Release date:</span></td>
+      <td><select id="release_date"></select></td>
+    </tr>
+  </table>
+  
+  <table>
+    <tr>
+      <td>
+        <span class="required">Collection name</span> (truncated at 80 
+        characters):
+      </td>
+      <td>
+        <input id="collection_name" size=50 maxlength=80>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        Also known as:
+      </td>
+      <td>
+        <textarea id="collection_aka" rows=2 wrap=virtual cols=50></textarea>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        Subset of PBDB Collection #:
+      </td>
+      <td>
+        <input id="collection_subset" size=10 maxlength=10>
+      </td>
+    </tr>
+  </table>
+
+  <p>Current primary reference:<br>
+  <table cellspacing=0 cellpadding=8><span id="ref_string"></span></table>
+  </p>
+  <div show="secondary_reference_string"> <p>Secondary references <span class=tiny>(select to make primary):</span><br> <table cellspacing=0 cellpadding=0><span id="secondary_reference_string"></span></table></div>
+  <div show="session_reference_string"> <p>Current session reference <span class=tiny>(select to make primary):</span><br> <table cellspacing=0 cellpadding=0><span id="session_reference_string"></span></table></div>
+
+  <p>
+    <span class="required">Author's main reason for describing collection</span>:<select id="collection_type"></select> analysis
+  </p>
+
+  <p>
+     <div align="center"><span id="page_submit_button"></span></div>
+  </p>
+  <span id="page_footer"></span>
+  </td></tr></table></div>
+</div>
+
+
+<div id="panel2" class="panel">
+  <div align="center">
+  <p>
+    <span class="required">Required fields are in red.</span> 
+	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
+  </p>
+
+  <table border=0 cellpadding=0 cellspacing=0><tr><td>
+
+  <table border=0>
+    <tr>
+      <td>
+        <span class="required">Country*</span>: <br><select id="country"></select>
+      </td>
+      <td>
+        <span class="required">State*</span>/province: <br><input id="state" maxlength=255>
+      </td>
+      <td>
+        County/parish/etc.: <br><input id="county" maxlength=255>
+      </td>
+    </tr>
+  </table>
+  
+  <i><p class="small">*State is required for collections 
+  within the United States.</i></p>
+  <br>
+  
+  <table>
+    <tr>
+      <td></td>
+      <td><span class="required">Degrees</span></td>
+      <td>Minutes</td>
+      <td>Seconds</td>
+      <td>Decimal value*</td>
+      <td><span class="required">Direction</span></td>
+    </tr>
+    <tr>
+      <td>Latitude</td>
+      <td><input id="latdeg" size=5 maxlength=3></td>
+      <td><input id="latmin" size=3 maxlength=2></td>
+      <td><input id="latsec" size=3 maxlength=2></td>
+      <td><input id="latdec" size=5 maxlength=8></td>
+      <td><select id="latdir"></select>
+    </tr>
+    <tr>
+      <td>Longitude</td>
+      <td><input id="lngdeg" size=5 maxlength=3></td>
+      <td><input id="lngmin" size=3 maxlength=2></td>
+      <td><input id="lngsec" size=3 maxlength=2></td>
+      <td><input id="lngdec" size=5 maxlength=8></td>
+      <td><select id="lngdir"></select></td>
+    </tr>
+  </table>
+
+  <p class="small"><i>*Enter either minutes-seconds or decimal value, but not both. See the 
+  <A HREF="javascript:tipsPopup('/public/tips/tips.html#Coordinates')">tip sheet</A>
+  for web sites that provide coordinate data.</i></p>
+  <p>
+  Basis of coordinate: <select id="latlng_basis"></select>
+  GPS datum: <select id="gps_datum"></select>
+  <p>
+  Altitude:<input id="altitude_value" size=10 maxlength=11>
+  <select id="altitude_unit"></select>
+  
+  <table>
+    <tr>
+      <td>
+        Scale of geographic resolution: <select id="geogscale"></select>
+      </td>
+    </tr>
+  </table>
+  
+  <p>
+  Location details (quadrangle, township and range, etc.):
+  <br>
+  <textarea id="geogcomments" name=geogcomments rows=4 wrap=virtual cols=100></textarea>
+
+  <p>
+     <div align="center"><span id="page_submit_button"></span></div>
+  </p>
+  <span id="page_footer"></span>
+ 
+    </td></tr></table></div>
+</div>
+<div id="panel3" class="panel">
+  <div align="center">
+  <p>
+    <span class="required">Required fields are in red.</span> 
+	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
+  </p>
+  <table border=0 cellpadding=0 cellspacing=0><tr><td>
+  <table border=0>
+    <tr>
+      <td>
+      <i><div show="period_max"> Period (oldest): <span id="emlperiod_max"></span> <span id="period_max"></span> </div></i>
+      </td>
+      <td>
+      <i><div show="period_min"> Period (youngest): <span id="emlperiod_min"></span> <span id="period_min"></span> </div></i>
+      </td>
+    </tr>
+    <tr>
+      <td>
+      <i><div show="epoch_max"> Epoch/series (oldest): <span id="emlepoch_max"></span> <span id="epoch_max"></span> </div></i>
+      </td>
+      <td>
+      <i><div show="epoch_min"> Epoch/series (youngest): <span id="emlepoch_min"></span> <span id="epoch_min"></span> </div></i>
+      </td>
+    </tr>
+    <tr>
+      <td>
+      <i><div show="intage_max"> International age/stage (oldest): <span id="emlintage_max"></span> <span id="intage_max"></span> </div></i>
+      </td>
+      <td>
+      <i><div show="intage_min"> International age/stage (youngest): <span id="emlintage_min"></span> <span id="intage_min"></span> </div></i>
+      </td>
+    </tr>
+    <tr>
+      <td>
+      <i><div show="locage_max"> Local age/stage (oldest): <span id="emllocage_max"></span> <span id="locage_max"></span> </div></i>
+      </td>
+      <td>
+      <i><div show="locage_min"> Local age/stage (youngest): <span id="emllocage_min"></span> <span id="locage_min"></span> </div></i>
+      </td>
+    </tr>
+    <tr>
+      <td width="50%">
+      <i><div show="zone"> Zone:<br><span id="zone"></span> </div></i>
+      </td>
+    </tr>
+
+     <tr>
+      <td><span class="required">Maximum (oldest) time interval:</span><br><select id="eml_max_interval"></select>
+                          <input id="max_interval" maxlength=255>
+      </td>
+      <td>Minimum (youngest) time interval:<br><select id="eml_min_interval"></select>
+                        <input id="min_interval" maxlength=255>
+      </td>
+    </tr>
+  </table>
+ 
+  <table border=0>
+    <tr>
+      <td>Group:<br><input id="geological_group" maxlength=255></td>
+      <td>Formation:<br><input id="formation" maxlength=255></td>
+      <td>Member:<br><input id="member" maxlength=255></td>
+    </tr>
+    <tr>
+      <td>Local section name:<br><input id="localsection" maxlength=255></td>
+      <td valign="bottom">Bed/horizon:<br><input id="localbed" maxlength=255>
+      <select id="localbedunit"></select></td>
+      <td>Numbered from:<br><select id="localorder"></select></td>
+    </tr>
+    <tr>
+      <td>Basinal/regional section name:<br><input id="regionalsection" maxlength=255></td>
+      <td valign="bottom">Bed/horizon:<br><input id="regionalbed" maxlength=255>
+      <select id="regionalbedunit"></select></td>
+      <td>Numbered from:<br><select id="regionalorder"></select></td>
+  	</tr>
+  </table>
+  
+  <p>
+    Scale of stratigraphic resolution:<select id="stratscale"></select>
+  </p>
+  <p>
+    Comments about stratigraphy:<br><textarea id="stratcomments" rows=4 wrap=virtual cols=100></textarea>
+  </p>
+
+  <p>
+     <div align="center"><span id="page_submit_button"></span></div>
+  </p>
+  <span id="page_footer"></span>
+  
+  </td></tr></table></div>   
+</div>
+<div id="panel4" class="panel">
+  <div align="center">
+  <p>
+	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
+  </p>
+<table border=0 cellpadding=0 cellspacing=0><tr><td>
+  <p>
+  <h4>Primary lithology</h4>
+  <select id="lithification"></select>
+    <select id="lithology1"></select>
+  <br>
+  <i><p class="small">See the 
+  <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">tip sheet</A>
+  for instructions.</i></p>
+  <p>
+  Fossils collected from this lithology?<input id="fossilsfrom1" type=checkbox value="Y">
+  <p>
+  <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">Lithology adjectives</A>:
+  <p>
+  
+  <table border=0>
+    <tr>
+      <td width="650">
+        <select id="lithadj"></select>
+        <select id="lithadj"></select>
+        <select id="lithadj"></select>
+        <select id="lithadj"></select>
+        <select id="lithadj"></select>
+        <select id="lithadj"></select>
+        <select id="lithadj"></select>
+        <select id="lithadj"></select>
+      </td>
+    </tr>
+  </table>
+
+  <H4>Secondary lithology</H4>
+  <select id="lithification2"></select>
+	<select id="lithology2"></select>
+  <br>
+  <i><p class="small">See the 
+  <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">tip sheet</A>
+  for instructions.</i></p>
+  <p>
+  Fossils collected from this lithology?<input id="fossilsfrom2" type=checkbox value="Y">
+  <p>
+  <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">Lithology adjectives</A>:
+  <p>
+  
+  <table border=0>
+    <tr>
+      <td width="650">
+        <select id="lithadj2"></select>
+        <select id="lithadj2"></select>
+        <select id="lithadj2"></select>
+        <select id="lithadj2"></select>
+        <select id="lithadj2"></select>
+        <select id="lithadj2"></select>
+        <select id="lithadj2"></select>
+        <select id="lithadj2"></select>
+      </td>
+    </tr>
+  </table>
+  
+  <p>
+  Original, complete description of lithology:<br><textarea id="lithdescript" rows=4 wrap=virtual cols=100></textarea>
+  </p>
+  
+  <h4>Environments</h4>
+  
+  <table border=0>
+    <tr>
+      <td>
+		  	<!--General:-->
+        <select id="environment"></select>
+        <br>
+        Read descriptions of 
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">Carbonate</A>,
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#SiliciMarine')">Siliciclastic</A> or
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Terrestrial')">Terrestial</A> environments.
+        <!--BR>
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">Carbonate</A>:< select id="environment"></select>
+        <br>
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#SiliciMarine')">Siliciclastic</A>:< select id="environment"></select>
+        <br>
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Terrestrial')">Terrestial</A>:< select id="environment"></select-->
+        <br><br>
+
+      </td>
+      <td valign=top>
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#TectonicSetting')">Tectonic setting</a>:
+        <br>
+        <select id="tectonic_setting"></select>
+        <br>Sequence stratigraphy: <select id="seq_strat"></select>
+      </td>
+    </tr>
+  </table>
+  
+  <p>
+    Comments on geology:
+    <br>
+    <textarea id="geology_comments" rows=4 wrap=virtual cols=100></textarea>
+  </p>
+  
+  <p>
+     <div align="center"><span id="page_submit_button"></span></div>
+  </p>
+  <span id="page_footer"></span>
+
+  </td></tr></table></div>  
+</div>
+<div id="panel5" class="panel">
+  <div align="center">
+  <p>
+	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
+  </p>
+<table border=0 cellpadding=0 cellspacing=0><tr><td>
+  <p>
+    <i>Describe the entire collection, not just a few specimens. Check all values 
+    that apply.</i>
+  </p>
+  <p>
+    <u>Modes of preservation</u>:
+  </p>
+  
+  <table>
+    <tr>
+      <td>
+        <input id="pres_mode" type=checkbox value="body"> body
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="cast"> cast
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="mold/impression"> mold/impression
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="adpression"> adpression/compression
+      </td>
+    <tr>
+    <tr>
+      <td>
+        <input id="pres_mode" type=checkbox value="trace"> trace
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="concretion"> concretion
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="soft parts"> soft parts
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="recrystallized"> recrystallized
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <input id="pres_mode" type=checkbox value="permineralized"> permineralized
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="dissolution traces"> dissolution traces
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="charcoalification"> charcoalification
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="coalified"> coalified
+      </td>
+    </tr>
+  </table>
+  
+  <p>
+    <u>Original biominerals or organics, if preserved</u>:
+  </p>
+  
+  <table>
+  <tr>
+    <td>
+      <input id="pres_mode" type=checkbox value="original aragonite"> 
+      aragonite
+    </td>
+    <td>
+      <input id="pres_mode" type=checkbox value="original calcite"> 
+      calcite
+    </td>
+    <td>
+      <input id="pres_mode" type=checkbox value="original phosphate"> 
+      phosphate
+    </td>
+    <td>
+      <input id="pres_mode" type=checkbox value="original silica"> silica
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <input id="pres_mode" type=checkbox value="original chitin"> chitin
+    </td>
+    <td>
+      <input id="pres_mode" type=checkbox value="original carbon"> carbon
+    </td>
+    <td>
+      <input id="pres_mode" type=checkbox value="original sporopollenin"> sporopollenin
+    </td>
+    <td>
+      <input id="pres_mode" type=checkbox value="original cellulose"> cellulose
+    </td>
+  </tr>
+  </table>
+  
+  <i><p class="small">Check these boxes only if the 
+original material is preserved!</i></p>
+  <p>
+    <u>Replacement minerals</u>:
+  </p>
+ 
+  <table>
+  <tr>
+    <td>
+      <input id="pres_mode" type=checkbox value="replaced with calcite"> 
+      calcite
+    </td>
+    <td>
+      <input id="pres_mode" type=checkbox value="replaced with dolomite"> 
+      dolomite
+    </td>
+    <td>
+      <input id="pres_mode" type=checkbox value="replaced with silica"> 
+      silica
+    </td>
+    <td>
+      <input id="pres_mode" type=checkbox value="replaced with pyrite"> 
+      pyrite
+    </td>
+    <td>
+      <input id="pres_mode" type=checkbox value="replaced with siderite"> 
+      siderite
+    </td>
+    <td>
+  </tr>
+  <tr>
+    <td>
+      <input id="pres_mode" type=checkbox value="replaced with hematite"> 
+      hematite
+    </td>
+    <td>
+      <input id="pres_mode" type=checkbox value="replaced with limonite"> 
+      limonite
+    </td> 
+    <td>
+      <input id="pres_mode" type=checkbox value="replaced with phosphate"> 
+      phosphate
+    </td>
+    <td>
+      <input id="pres_mode" type=checkbox value="replaced with carbon"> 
+      carbon
+    </td>
+    <td>
+      <input id="pres_mode" type=checkbox value="replaced with other"> 
+      other
+    </td>
+  </tr>
+  </table>
+  <i><p class="small">"Other" includes barite, chlorite, and glauconite.</p></i>
+
+  <p>
+    <u>Special modes of occurrence</u>:
+  </p>
+  <table>
+    <tr>
+      <td>
+        <input id="pres_mode" type=checkbox value="amber"> amber
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="anthropogenic"> anthropogenic
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="bone collector"> bone collector
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="concretion"> concretion
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="coprolite"> coprolite
+      </td>
+      <td>
+        <input id="pres_mode" type=checkbox value="midden"> midden
+      </td>
+    </tr>
+  </table>
+  <p>
+ 
+<!-- OPTIONAL taphonomy --> 
+  <table width=100%>
+  <tr>
+    <td valign=top width=50%>
+      <u>Lagerstätten type</u> <select id="lagerstatten"></select>
+    </td>
+    <td valign=top>
+      <u>Degree of concentration</u> <select id="concentration"></select>
+    </td>
+  </tr>
+  </table>
+  <p>
+<!-- END taphonomy -->
+
+	  <A HREF="javascript:tipsPopup('/public/tips/tips.html#AssemblageComponents')">Assemblage components</A>:
+      <p>
+      <input id="assembl_comps" type=checkbox value="macrofossils"> macrofossils
+      <input id="assembl_comps" type=checkbox value="mesofossils"> mesofossils
+      <input id="assembl_comps" type=checkbox value="microfossils"> microfossils
+  <p>
+
+<!-- OPTIONAL taphonomy -->
+      <u>Spatial orientation</u> <select id="orientation"></select>
+  <p>
+<!-- END taphonomy -->
+ 
+  <table>
+  <tr>
+    <td>
+      <u>Preservation of anatomical detail</u> <select id="preservation_quality"></select>
+    </td>
+    <td>
+      <u>Abundance in sediment</u> <select id="abund_in_sediment"></select>
+    </td>
+  </tr>
+  </table>
+  <p>
+
+    <u>Articulation/element representation</u>:
+  </p>
+  
+  <table>
+  <tr>
+    <td>
+      articulated whole bodies <select id="art_whole_bodies"></select> 
+    </td>
+    <td>
+      associated major elements <select id="disart_assoc_maj_elems"></select>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      disassociated major elements <select id="disassoc_maj_elems"></select>
+    </td>
+    <td>
+      disassociated minor elements <select id="disassoc_minor_elems"></select>
+    </td>
+  </tr>
+  </table>
+  <p>
+
+<!-- OPTIONAL taphonomy -->
+  <table width=100%>
+  <tr>
+    <td width=50%>
+      <u>Size sorting</u> <select id="sorting"></select>
+    </td>
+    <td>
+      <u>Fragmentation</u> <select id="fragmentation"></select>
+    </td>
+  </tr>
+  </table>
+  <p>
+
+  <table width=100%>
+  <tr>
+    <td width=50%>
+      <u>Bioerosion</u> <select id="bioerosion"></select>
+    </td>
+    <td>
+      <u>Encrustation</u> <select id="encrustation"></select>
+    </td>
+  </tr>
+  </table>
+  <p>
+ 
+  <u>Feeding/predation traces</u>:
+  <br>
+  <table>
+  <tr>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="drill holes"> drill holes
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="repair scars"> repair scars
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="fractures"> fractures
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="punctures"> punctures
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="tooth marks"> tooth marks
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="gastric dissolution"> gastric dissolution
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="burning"> burning
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="cutmarks"> cutmarks
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="stone tools"> stone tools
+    </td>
+  </tr>
+
+  <tr>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="external foliage feeding"> external foliage feeding
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="arthropod mining"> arthropod mining
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="arthropod galling"> arthropod galling
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="arthropod boring"> arthropod boring
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="seed feeding"> seed feeding
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="piercing/sucking"> piercing/sucking
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="palynivory"> palynivory
+    </td>
+    <td>
+      <input id="feed_pred_traces" type=checkbox value="oviposition"> oviposition
+    </td>
+  </tr>
+  </table>
+  <p>
+<!-- END taphonomy -->
+
+  <table width=100%>
+  <tr>
+    <td width=50%>
+    <u>Temporal resolution</u> <select id="temporal_resolution"></select>
+    </td>
+    <td width=50%>
+    <u>Spatial resolution</u> <select id="spatial_resolution"></select>
+    </td>
+  </tr>
+  </table>
+  <p>
+    <u>Comments on taphonomy</u>:
+    <br>
+    <textarea id="taphonomy_comments" rows=4 wrap=virtual cols=100></textarea>
+  </p>
+  <p>
+     <div align="center"><span id="page_submit_button"></span></div>
+  </p>
+  <span id="page_footer"></span>
+  </td></tr></table></div>
+</div>
+<div id="panel6" class="panel">
+  <div align="center">
+  <p>
+    <span class="required">Required fields are in red.</span> 
+	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
+  </p>
+<table border=0 cellpadding=0 cellspacing=0><tr><td>
+  <p>
+    <i><p class="small">Check all values that apply in each of the following 
+    sections!</i></p>
+  </p>
+  <p>
+    <u>What is <i>not</i> included in the list but <i>is</i> reported to be 
+    present</u>?
+  </p>
+  
+  <table border=0>
+  <tr>
+    <td valign=top>
+      <input id="collection_coverage" type=checkbox value="all macrofossils"> all macrofossils
+    </td>
+    <td valign=top>
+      <input id="collection_coverage" type=checkbox value="all microfossils"> all microfossils
+    </td>
+    <td valign=top>
+      <input id="collection_coverage" type=checkbox value="some genera"> some genera
+    </td>
+  </tr>
+  <tr>
+    <td valign=top>
+      <input id="collection_coverage" type=checkbox value="some macrofossils"> some macrofossils
+    </td>
+    <td valign=top>
+      <input id="collection_coverage" type=checkbox value="some microfossils"> some microfossils
+    </td>
+    <td valign=top>
+      <input id="collection_coverage" type=checkbox value="species names"> species names
+    </td>
+  </tr>
+  <tr>
+    <td valign=top>
+      <input id="collection_coverage" type=checkbox value="difficult macrofossils"> difficult macrofossils
+    </td>
+    <td valign=top>
+      <i>(e.g., annelids, bryozoans,
+      <br>
+      cnidarians, crinoids, sponges)</i>
+    </td>
+    <td valign=top>
+      <input id="collection_coverage" type=checkbox value="ichnofossils"> ichnofossils
+    </td>
+  </tr>
+  </table>
+  
+  <table>
+  <tr>
+    <td>
+      <u>Collection types</u>:
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <input id="coll_meth" type=checkbox value="field collection"> field 
+      collection
+    </td>
+    <td>
+      <input id="coll_meth" type=checkbox value="observed (not collected)"> observed (not collected)
+    </td>
+    <td>
+      <input id="coll_meth" type=checkbox value="survey of museum collection"> survey of<br>museum collection
+    </td>
+    <td>
+      <input type=checkbox> rock shop
+    </td>
+  </tr>
+  </table>
+  
+  <table>
+  <tr>
+    <td>
+      <u>Collection methods</u>:
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <input id="coll_meth" type=checkbox value="bulk"> bulk
+    </td>
+    <td>
+      <input id="coll_meth" type=checkbox value="core"> core
+    </td>
+    <td>
+      <input id="coll_meth" type=checkbox value="selective quarrying"> 
+      selective quarrying 
+    </td>
+    <td>
+      <input id="coll_meth" type=checkbox value="salvage"> salvage
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <input id="coll_meth" type=checkbox value="surface (float)"> surface
+      (float)
+    </td>
+    <td>
+      <input id="coll_meth" type=checkbox value="surface (in situ)"> 
+      surface (in situ)
+    </td>
+    <td>
+      <input id="coll_meth" type=checkbox value="anthill"> anthill
+    </td>
+  </tr>
+  </table>
+  
+  <table>
+  <tr>
+    <td>
+      <u>Preparation methods</u>:
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <input id="coll_meth" type=checkbox value="chemical"> chemical
+    </td>
+    <td>
+      <input id="coll_meth" type=checkbox value="mechanical"> mechanical
+    </td>
+    <td>
+      <input id="coll_meth" type=checkbox value="peel or thin section"> peel or thin section
+    </td>
+    <td>
+      <input id="coll_meth" type=checkbox value="smear slide"> smear slide
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <input id="coll_meth" type=checkbox value="acetic"> acetic
+    </td>
+    <td>
+      <input id="coll_meth" type=checkbox value="hydrochloric"> hydrochloric
+    </td>
+    <td>
+      <input id="coll_meth" type=checkbox value="hydroflouric"> hydroflouric
+    </td>
+    <td>
+      <input id="coll_meth" type=checkbox value="peroxide"> peroxide
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <input id="coll_meth" type=checkbox value="sieve"> sieve
+    </td>
+    <td>
+      minimum sieve size: <input id="sieve_size_min" size=5 maxlength=8> mm
+    </td>
+    <td>
+      maximum sieve size: <input id="sieve_size_max" size=5 maxlength=8> mm
+  </tr>
+  </table>
+  
+  <br>
+  
+  <table>
+  <tr>
+    <td>
+      <u>Collection size</u>:<input id="collection_size" size=8 maxlength=8><select id="collection_size_unit"></select>
+    </td>
+    <td>
+      <u>Amount of rock censused</u>:<input id="rock_censused" size=8 maxlength=8>
+		  <select id="rock_censused_unit"></select>
+    </td>
+  </tr>
+  </table>
+  
+  <i><p class="small">Give a total only if counts are not given for individual taxa.</p></i>
+  <p>
+    <u>Museum repositories</u>:
+      <select id="museum"></select>
+      <select id="museum"></select>
+      <select id="museum"></select>
+      <select id="museum"></select>
+  </p>
+  <p>
+    <u>Comments about collection</u>:<br><textarea id="collection_comments" rows=4 wrap=virtual cols=100></textarea>
+  </p>
+  <p>
+    <u>Comments on the taxonomic list</u>:<br><textarea id="taxonomy_comments" rows=4 wrap=virtual cols=100></textarea>
+  </p>
+
+  <p>
+     <div align="center"><span id="page_submit_button"></span></div>
+  </p>
+  <span id="page_footer"></span>
+  </td></tr></table></div>
+</div>
+  
+</form>
+
+<script language="JavaScript">
+    showPanel(1);
+</script>
