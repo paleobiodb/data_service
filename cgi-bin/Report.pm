@@ -219,7 +219,7 @@ sub tallyFieldTerms	{
 			$sql .= " WHERE ";
 		}
 		if($datelimit){
-			$sql .= "occurrences.created >= $datelimit AND ";
+			$sql .= "occurrences.created >= $datelimit ";
 		}
 		elsif($q->param('taxon_name')){
 			my $name = $q->param('taxon_name');
