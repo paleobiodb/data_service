@@ -1973,9 +1973,51 @@ sub displayCollectionDetails {
     push(@row, $subString);
     push(@fieldNames, 'subset_string');
 
+	# get the max/min interval names
+	my ($r,$f) = &getMaxMinNamesAndDashes(\@row,\@fieldNames);
+	@row = @{$r};
+	@fieldNames = @{$f};
+
+    print &stdIncludes ( "std_page_top" );
+
+    print $hbo->populateHTML('collection_display_fields', \@row, \@fieldNames);
+    # If the viewer is the authorizer (or it's me), display the record with edit buttons
+    if ( $authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy') {
+		print $hbo->populateHTML('collection_display_buttons', \@row, \@fieldNames);
+    }
+
+	print "<HR>\n";
+	my $taxa_list = buildTaxonomicList($collection_no, $refNo);
+	print $taxa_list;
+
+	if ( $taxa_list =~ /Abundance/ )	{
+		print $hbo->populateHTML('rarefy_display_buttons', \@row, \@fieldNames);
+	}
+
+	if($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy')	{
+		print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames);
+	}
+	if($taxa_list ne "" && $q->param("user") ne "Guest"){
+		print $hbo->populateHTML('reid_display_buttons', \@row, \@fieldNames);
+	}
+
+	print &stdIncludes ("std_page_bottom");
+}
+
+# written around excised chunk of code from above JA 30.7.03
+# first part gets interval names matching numbers in intervals table;
+# second part figures out whether to display dashes in time interval fields
+sub getMaxMinNamesAndDashes	{
+
+	my $r = shift;
+	my $f = shift;
+
+	my @row = @{$r};
+	my @fieldNames = @{$f};
+
 	# get the interval names by querying the intervals table JA 11.7.03
 	# also get the E/M/Ls JA 17.7.03
-	$fieldCount = "";
+	my $fieldCount = "";
 	for my $tmpVal (@fieldNames) {
 		if ( $tmpVal eq 'max_interval_no') {
 			$max_interval_no = $row[$fieldCount];
@@ -2008,8 +2050,6 @@ sub displayCollectionDetails {
 	}
 	unshift @fieldNames, 'eml_min_interval';
 	unshift @fieldNames, 'min_interval';
-
-    print &stdIncludes ( "std_page_top" );
 
 	# check whether we have period/epoch/locage/intage max AND/OR min:
 	for my $term ("_interval","epoch_","intage_","locage_","period_"){
@@ -2064,28 +2104,8 @@ sub displayCollectionDetails {
 		}
 	}
 
-    print $hbo->populateHTML('collection_display_fields', \@row, \@fieldNames);
-    # If the viewer is the authorizer (or it's me), display the record with edit buttons
-    if ( $authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy') {
-		print $hbo->populateHTML('collection_display_buttons', \@row, \@fieldNames);
-    }
+	return (\@row, \@fieldNames);
 
-	print "<HR>\n";
-	my $taxa_list = buildTaxonomicList($collection_no, $refNo);
-	print $taxa_list;
-
-	if ( $taxa_list =~ /Abundance/ )	{
-		print $hbo->populateHTML('rarefy_display_buttons', \@row, \@fieldNames);
-	}
-
-	if($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy')	{
-		print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames);
-	}
-	if($taxa_list ne "" && $q->param("user") ne "Guest"){
-		print $hbo->populateHTML('reid_display_buttons', \@row, \@fieldNames);
-	}
-
-	print &stdIncludes ("std_page_bottom");
 }
 
 sub buildTaxonomicList {
@@ -3131,46 +3151,10 @@ sub displayEditCollection {
     push(@row, $refRowString);
     push(@fieldNames, 'session_reference_string');
 
-	# turn the max interval no into a name by querying the intervals table
-	# JA 11.7.03
-	$curColNum = "";
-	foreach my $colName (@fieldNames) {
-		if ( $colName eq 'max_interval_no') {
-			$max_interval_no = $row[$curColNum];
-			last;
-		}
-		$curColNum++;
-	}
-	if ( $max_interval_no )	{
-		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $max_interval_no;
-		unshift @row, @{$dbt->getData($sql)}[0]->{eml_interval};
-		unshift @row, @{$dbt->getData($sql)}[0]->{interval_name};
-	} else	{
-		unshift @row, '';
-		unshift @row, '';
-	}
-	unshift @fieldNames, 'eml_max_interval';
-	unshift @fieldNames, 'max_interval';
-
-	# likewise with the min interval no
-	$curColNum = "";
-	foreach my $colName (@fieldNames) {
-		if ( $colName eq 'min_interval_no') {
-			$min_interval_no = $row[$curColNum];
-			last;
-		}
-		$curColNum++;
-	}
-	if ( $min_interval_no )	{
-		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $min_interval_no;
-		unshift @row, @{$dbt->getData($sql)}[0]->{eml_interval};
-		unshift @row, @{$dbt->getData($sql)}[0]->{interval_name};
-	} else	{
-		unshift @row, '';
-		unshift @row, '';
-	}
-	unshift @fieldNames, 'eml_min_interval';
-	unshift @fieldNames, 'min_interval';
+	# get the max/min interval names
+	my ($r,$f) = &getMaxMinNamesAndDashes(\@row,\@fieldNames);
+	@row = @{$r};
+	@fieldNames = @{$f};
 
 	print &printIntervalsJava();
 
@@ -3293,10 +3277,15 @@ sub processEditCollectionForm {
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
   	$sth->execute();
 	&dbg ( "$sql<HR>" );
-    my @fields = @{$sth->{NAME}};
+	my @fields = @{$sth->{NAME}};
 	my @row = $sth->fetchrow_array();
-    $sth->finish();
+	$sth->finish();
     
+	# get the max/min interval names
+	my ($r,$f) = &getMaxMinNamesAndDashes(\@row,\@fields);
+	@row = @{$r};
+	@fields = @{$f};
+
 	my $curColNum = 0;
 	my $reference_no;
 	foreach my $colName (@fields){
