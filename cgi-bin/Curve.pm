@@ -242,6 +242,9 @@ sub assignGenera	{
 	my $authorizer = $s->get('authorizer');
 	my ($authinit,$authlast) = split / /,$authorizer;
 	my @temp = split //,$authinit;
+	if ( ! $temp[0] )	{
+		$temp[0] = "unknown";
+	}
 	my $occsfile = $temp[0] . $authlast . "-occs.csv";
 
 	if ( ! open OCCS,"<$DOWNLOAD_FILE_DIR/$occsfile" )	{
