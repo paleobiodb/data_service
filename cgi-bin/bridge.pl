@@ -1704,8 +1704,16 @@ sub processNewRef {
 	}
 	else{
 		dbg("reentry FALSE, calling insertRecord()<br>");
-		$return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
-		if ( ! $return ) { return $return; }
+
+        $return = checkGupta();
+        if (!$return) {
+            $return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
+            if ( ! $return ) { return $return; }
+        } else {
+            print qq|<center><h3><font color='red'>WARNING: Data published by V. J. Gupta have been called into question by Talent et al. 1990, Webster et al. 1991, Webster et al. 1993, and Talent 1995. Please hit back, and copy the comment below to the reference title, and resubmit.  Do NOT enter any further data from the reference:<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|; 
+            print "</font></h3></center>\n";
+            return 0;
+        }
 	}
 
 	print "<center><h3><font color='red'>Reference record ";
@@ -7695,6 +7703,7 @@ sub formatShortRef	{
 
 }
 
+# DEPRECATED FUNCTION
 sub displayEnterAuthoritiesForm
 {
 	# Have to be logged in
@@ -7709,14 +7718,20 @@ sub displayEnterAuthoritiesForm
 		# and get it's reference_no
 		if ( $q->param('submit') ne "Use reference")
 		{
-			$return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
-			if ( ! $return ) { return $return; }
+            $return = checkGupta();
+            if (!$return) {
+                $return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
+                if ( ! $return ) { return $return; }
 
-			print "<center><h3><font color='red'>Reference record ";
-			if ( $return == $DUPLICATE ) {
-   				print "already ";
-			}
-			print "added</font></h3></center>\n";
+                print "<center><h3><font color='red'>Reference record ";
+                if ( $return == $DUPLICATE ) {
+                    print "already ";
+                }
+                print "added</font></h3></center>\n";
+            } else {
+                print qq|<center><h3><font color='red'>WARNING: Data published by V. J. Gupta have been called into question by Talent et al. 1990, Webster et al. 1991, and Webster et al. 1993. Please add the following comment to the reference title and do NOT enter any further data from the reference:<br><br> "DATA NOT ENTERED: SEE [your name here] FOR DETAILS"|; 
+                print "</font></h3></center>\n";
+            }
 		} else {
 			$reference_no = $q->param('reference_no');
 		}
@@ -7914,6 +7929,7 @@ sub authorityRow
 	print stdIncludes("std_page_bottom");
 }
 
+# DEPRECATED
 sub displayTaxonGeneralForm
 {
 		my $reference_no;
@@ -7922,14 +7938,20 @@ sub displayTaxonGeneralForm
 		# and get it's reference_no
 		if ( $q->param('submit') ne "Use reference")
 		{
-			$return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
-			if ( ! $return ) { return $return; }
-
-			print "<center><h3><font color='red'>Reference record ";
-			if ( $return == $DUPLICATE ) {
-   				print "already ";
-			}
-			print "added</font></h3></center>\n";
+            $return = checkGupta();
+            if (!$return) {
+                $return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
+                if ( ! $return ) { return $return; }
+                                                                                                                                                             
+                print "<center><h3><font color='red'>Reference record ";
+                if ( $return == $DUPLICATE ) {
+                    print "already ";
+                }
+                print "added</font></h3></center>\n";
+            } else {
+                print qq|<center><h3><font color='red'>WARNING: Data published by V. J. Gupta have been called into question by Talent et al. 1990, Webster et al. 1991, and Webster et al. 1993. Please add the following comment to the reference title and do NOT enter any further data from the reference:<br><br> "DATA NOT ENTERED: SEE [your name here] FOR DETAILS"|; 
+                print "</font></h3></center>\n";
+            }
 		} else {
 			$reference_no = $q->param('reference_no');
 		}
@@ -8935,4 +8957,32 @@ sub buildReference {
 	}
 
 	return $reference;
+}
+
+# check for the presence of the nefarious V.J. Gupta
+sub checkGupta {
+    dbg("checkGupta called". $q->param('author1last'));
+
+    if ($q->param('reftitle') =~ /DATA NOT ENTERED: SEE (.*) FOR DETAILS/) {
+        dbg("found gupta bypassed by finidng data not entered");
+        return 0;
+    }
+    
+    if ($q->param('author1init') =~ /V/i &&
+        $q->param('author1last') =~ /Gupta/i)  {
+        dbg("found gupta in author1");    
+        return 1;
+         
+    }
+    if ($q->param('otherauthors') =~ /V[J. ]+Gupta/i) {
+        dbg("found gupta in other authors");    
+        return 1;
+    }
+    if ($q->param('author2init') =~ /V/i &&
+        $q->param('author2last') =~ /Gupta/i)  {
+        dbg("found gupta in author2");    
+        return 1;
+    }
+
+    return 0;
 }
