@@ -210,9 +210,10 @@ sub retellOptions {
 
 	$html .= $self->retellOptionsRow ( "Stratigraphic scale of collections", $stratscales );
 
+	$html .= $self->retellOptionsRow ( "Lump by coordinate and formation/member?", $q->param("lump_by_mbr") );
 	$html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
 	$html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
-	$html .= $self->retellOptionsRow ( "Include occurrences that are qualified by \"aff.\" or quotes?", $q->param("poor_genus_reso") );
+	$html .= $self->retellOptionsRow ( "Include occurrences qualified by \"aff.\" or quotes?", $q->param("poor_genus_reso") );
 	$html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
 	$html .= $self->retellOptionsRow ( "Output data format", $q->param("collections_put") );
 
@@ -342,6 +343,24 @@ sub retellOptions {
 		} else	{
 			$q->param('collections_' . $q->param('binned_field') => "YES");
 		}
+	}
+	# and hey, if you want to lump by coordinate/member you need all
+	#  the coordinate and formation/member fields JA 21.8.04
+	if ( $q->param('lump_by_mbr') eq 'YES' )	{
+		$q->param('collections_latdeg' => "YES");
+		$q->param('collections_latmin' => "YES");
+		$q->param('collections_latsec' => "YES");
+		$q->param('collections_latdec' => "YES");
+		$q->param('collections_latdir' => "YES");
+		$q->param('collections_lngdeg' => "YES");
+		$q->param('collections_lngmin' => "YES");
+		$q->param('collections_lngsec' => "YES");
+		$q->param('collections_lngdec' => "YES");
+		$q->param('collections_lngdir' => "YES");
+		$q->param('collections_formation' => "YES");
+		$q->param('collections_member' => "YES");
+		$q->param('collections_max_interval_no' => "YES");
+		$q->param('collections_min_interval_no' => "YES");
 	}
 	foreach my $field ( @collectionOutputFields ) {
 		if ( $q->param ( $field ) ) { push ( @collectionOutputResult, $field ); }
@@ -1246,28 +1265,49 @@ sub doQuery {
 
 	# first do a quick hit to get some by-taxon and by-collection stats
 	#  ... and so on
+	my %mbrseen;
+	my %occseen;
 	foreach my $row ( @dataRows ){
 		# raise subgenera to genus level JA 18.8.04
 		if ( $q->param('split_subgenera') eq 'YES' && $row->{subgenus_name} )	{
 			$row->{genus_name} = $row->{subgenus_name};
 		}
+		# lump bed/group of beds scale collections with the exact same
+		#  formation/member and geographic coordinate JA 21.8.04
+		my $exclude = 0;
+		if ( $q->param('lump_by_mbr') eq 'YES' )	{
+			my $mbrstring = $row->{'latdeg'}.$row->{'latmin'}.$row->{'latsec'}.$row->{'latdec'}.$row->{'latdir'}.$row->{'lngdeg'}.$row->{'lngmin'}.$row->{'lngsec'}.$row->{'lngdec'}.$row->{'lngdir'}.$row->{'formation'}.$row->{'member'}.$row->{'max_interval_no'}.$row->{'min_interval_no'};
+			if ( $mbrseen{$mbrstring} )	{
+				$row->{collection_no} = $mbrseen{$mbrstring};
+				if ( $occseen{$row->{collection_no}.$row->{genus_name}} > 0 )	{
+					$exclude++;
+				}
+			} else	{
+				$mbrseen{$mbrstring} = $row->{collection_no};
+			}
+			$occseen{$row->{collection_no}.$row->{genus_name}}++;
+		}
+		if ( $exclude == 0 )	{
+			push @tempDataRows, $row;
 		# cumulate number of collections including each genus
-		$totaloccs{$row->{genus_name}}++;
+			$totaloccs{$row->{genus_name}}++;
 		# need these two for ecology lookup below
-		$totaloccsbyno{$row->{taxon_no}}++;
-		$genusbyno{$row->{taxon_no}} = $row->{genus_name};
+			$totaloccsbyno{$row->{taxon_no}}++;
+			$genusbyno{$row->{taxon_no}} = $row->{genus_name};
 		# cumulate number of specimens per collection, and number of
 		#  times a genus has abundance counts at all
-		if ( ( $row->{abund_unit} eq "specimens" || $row->{abund_unit} eq "individuals" ) && ( $row->{abund_value} > 0 ) )	{
-			$nisp{$row->{collection_no}} = $nisp{$row->{collection_no}} + $row->{abund_value};
-			$numberofcounts{$row->{genus_name}}++;
-		}
+			if ( ( $row->{abund_unit} eq "specimens" || $row->{abund_unit} eq "individuals" ) && ( $row->{abund_value} > 0 ) )	{
+				$nisp{$row->{collection_no}} = $nisp{$row->{collection_no}} + $row->{abund_value};
+				$numberofcounts{$row->{genus_name}}++;
+			}
 		# also make a master list of all collection numbers that are
 		#  used, so we can properly get all the primary AND secondary
 		#  refs for those collections JA 16.7.04
-		$COLLECTIONS_USED{$row->{collection_no}}++;
-		$REFS_USED{$row->{reference_no}}++;
+			$COLLECTIONS_USED{$row->{collection_no}}++;
+			$REFS_USED{$row->{reference_no}}++;
+		}
 	}
+	@dataRows = @tempDataRows;
 
 	# now hit the secondary refs table, mark all of those references as
 	#  having been used, and print all the refs JA 16.7.04
