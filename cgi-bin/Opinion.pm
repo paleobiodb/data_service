@@ -739,10 +739,21 @@ sub submitOpinionForm {
 		}
 
 			
-		if ( ($q->param('pubyr') && 
-			(! Validation::properYear($q->param('pubyr'))))) {
-			$errors->add("The year is formatted improperly");
+		if (my $pubyr = $q->param('pubyr')) {
+			if (! Validation::properYear( $pubyr ) ) {
+				$errors->add("The year is improperly formatted");
+			}
+			
+			# make sure that the pubyr they entered (if they entered one)
+			# isn't more recent than the pubyr of the reference.  
+			my $ref = Reference->new();
+			$ref->setWithReferenceNumber($q->param('reference_no'));
+			if ($pubyr > $ref->pubyr()) {
+				$errors->add("The publication year ($pubyr) can't be more 
+				recent than that of the primary reference (" . $ref->pubyr() . ")");
+			}
 		}
+
 		
 		if (($q->param('otherauthors')) && (! $q->param('author2last') )) {
 			# don't let them enter other authors if the second author field
