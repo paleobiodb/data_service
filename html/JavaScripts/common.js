@@ -77,7 +77,8 @@ Error.prototype.toString = function() {
 // pass this method another Error object, and it will append the
 // new object onto the end of itself.
 Error.prototype.appendErrors = function(newError) {
-	this.message += newError.message;	
+	this.message += newError.message;
+	this.internalcount += newError.internalcount;
 }
 
 // End of error class.
