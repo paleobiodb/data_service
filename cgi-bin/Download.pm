@@ -1568,7 +1568,7 @@ sub doQuery {
 <tr><td>$acceptedIntervals time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleOutFileName\">$scaleOutFileName</a></td></tr>\n";
 	}
 print "</table>
-<p align='center'><b><a href='?action=displayDownloadForm'>Do&nbsp;another&nbsp;download> -
+<p align='center'><b><a href='?action=displayDownloadForm'>Do&nbsp;another&nbsp;download</a> -
 <a href='?action=displayCurveForm'>Generate&nbsp;diversity&nbsp;curves</a></b>
 </p>
 </center>
