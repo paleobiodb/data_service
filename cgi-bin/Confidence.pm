@@ -480,7 +480,7 @@ sub displayStratTaxa{
               " FROM collections, occurrences ".
               " LEFT JOIN authorities ON occurrences.taxon_no=authorities.taxon_no".
               " WHERE occurrences.collection_no=collections.collection_no ".
-              " AND ${section_type}section = " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^[0-9]\$'".
+              " AND ${section_type}section = " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^[0-9]+\$'".
               " GROUP BY taxon_no,genus_name,species_name ";
     main::dbg($sql);
     my @strat_taxa_list= @{$dbt->getData($sql)};
@@ -581,11 +581,7 @@ sub optionsForm    {
         }
         $auth .= " " . $results2[0]->{pubyr};
         $auth = " [" . $auth . "]\n";
-        if ($form_type eq 'large') {
-            $scale_strings{$name} = $option . $name . $auth;
-        } else {
-            $scale_strings{$name} = $option . $name;
-        }
+        $scale_strings{$name} = $option . $name . $auth;
     }
         
 #------------------------------OPTIONS FORM----------------------------------
@@ -630,22 +626,18 @@ sub optionsForm    {
         print '<TR><TH ALIGN="CENTER" COLSPAN=4><DIV CLASS="large">Options</DIV></TH><TR>';
         
         if ($type eq 'taxon')   {    
-            print "<TR><TH align=\"right\"> Time-scale: </TH><TD><SELECT NAME=\"scale\">";
+            print "<TR><TH align=\"right\"> Time-scale: </TH><TD COLSPAN=3><SELECT NAME=\"scale\">";
             my @sorted = sort keys %scale_strings;
             for my $string (@sorted)        {
                 print $scale_strings{$string};
             }       
             print "</SELECT></TD>";
-        } else {
-            print "<TR>";
-        }
-        print "<TH align=\"right\"> Confidence level: </TH><TD><SELECT NAME=\"alpha\"><OPTION>0.99<OPTION SELECTED>0.95<OPTION>0.8<OPTION>0.5<OPTION>0.25</SELECT></TD></TR>";
-
+        } 
 
         print "<TR><TH align=\"right\"> Confidence interval method: </TD><TD><SELECT NAME=\"conftype\"><OPTION>Strauss and Sadler (1989)<OPTION>Marshall (1994)<OPTION>Solow (1996)</SELECT><A HREF=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</A></TD>";
+        print "<TH align=\"right\"> Confidence level: </TH><TD><SELECT NAME=\"alpha\"><OPTION>0.99<OPTION SELECTED>0.95<OPTION>0.8<OPTION>0.5<OPTION>0.25</SELECT></TD></TR>";
+        print "<TR><TH align=\"right\"> Estimate: </TH><TD><SELECT NAME=\"conffor\"><OPTION>total duration<OPTION>first appearance<OPTION>last appearance<OPTION>no confidence intervals</SELECT></TD>";
         print "<TH ALIGN=\"right\">Order taxa by: </TH><TD><SELECT NAME=\"order\"><OPTION>name<OPTION SELECTED>first appearance<OPTION>last appearance<OPTION>stratigraphic range</SELECT></TD><TR>";
-        
-        print "<TR><TH align=\"right\"> Estimate: </TH><TD><SELECT NAME=\"conffor\"><OPTION>total duration<OPTION>first appearance<OPTION>last appearance<OPTION>no confidence intervals</SELECT></TD><TR>";
         print "</TABLE><BR>";
         print "<INPUT NAME=\"full\" TYPE=\"submit\" VALUE=\"Submit\">";
         print "</FORM></CENTER><BR><BR>";
@@ -722,9 +714,6 @@ sub calculateTaxaInterval {
 #    print "testing getScaleOrder ";
 #    @a = TimeLookup::getScaleOrder($dbt,$scale,'number',1);
    #print Dumper(\@a);
-#    foreach $interval_no (@a) {
-#        print "$interval_no $upperbound{$interval_no} $lowerbound{$interval_no}<BR>";
-#    }
 #    die;
    #print "findboundaries ".Dumper(\%upperbound,\%lowerbound);
 #        foreach my $keycounter (sort numerically keys(%upperbound)) {
@@ -755,6 +744,10 @@ sub calculateTaxaInterval {
         #$upperbound{$row->{'interval_no'}} = $last_lower_boundary;
         #$last_lower_boundary = $lower_boundary;
     }
+    #foreach $row (@results) {
+    #    $interval_no = $row->{'interval_no'};
+    #    print "$interval_no $namescale{$interval_no} $upperbound{$interval_no} $lowerbound{$interval_no}<BR>";
+    #}
 #    print "<BR>LB:".Dumper(\%lowerbound);
 #    print "<BR>UB:".Dumper(\%upperbound);
 #    print "<BR>NS:".Dumper(\%namescale);
@@ -1484,7 +1477,7 @@ sub calculateStratInterval	{
               " LEFT JOIN authorities ON occurrences.taxon_no=authorities.taxon_no".
               " WHERE collections.collection_no=occurrences.collection_no".
               " AND ${section_type}section=".$dbh->quote($section_name).
-              " AND ${section_type}bed REGEXP '^[0-9]\$'";
+              " AND ${section_type}bed REGEXP '^[0-9]+\$'";
     if ($taxon_nos_string && $genus_species_sql) {
         # Doing this as a union is much faster since it uses the indexes properly.  Otherwise doesn't know which index to use
         $sql = "($sql AND occurrences.taxon_no IN ($taxon_nos_string)) UNION ($sql AND ($genus_species_sql))";
@@ -1725,7 +1718,7 @@ sub calculateStratInterval	{
     print ", <a href=\"/public/confidence/$imagenamejpg\" TARGET=\"xy\">JPEG</a>";
     print ", <a href=\"/public/confidence/$imagenameai\">AI</a><BR><BR></b>";
 
-    optionsForm($q, $s, $dbt, \%splist);
+    optionsForm($q, $s, $dbt, \%splist, 'small');
     print " <a href='bridge.pl?action=displaySearchSectionForm'>Do another search</a></b><p></center><BR><BR><BR>";
 
     return;
