@@ -1,6 +1,12 @@
 <html>
 <head>
 <link REL="stylesheet" TYPE="text/css" HREF="/StyleSheets/common.css">
+<STYLE type="text/css"> <!--
+	P	{ font-size : 12px; }
+	BR	{ font-size : 12px; }
+	LI	{ font-size : 12px; }
+	-->
+</STYLE>
 
 	<title id="title">Paleobiology Database</title>
 
@@ -23,17 +29,16 @@
 </div>
 
 <font size=-1>
-<i>This page was written by Arnie Miller and John Alroy, March 1999; revised by Alroy, 17/21 June 1999, 8 September 2000, and by the taphonomy working group, 26 October 2001, 25 February 2002.</i>
+<i>This page was written by Arnie Miller and John Alroy, March 1999; revised by Alroy, 17/21 June 1999, 8 September 2000, and by the taphonomy working group, 26 October 2001, 25 February 2002.
+It gives information on the <a href="#Collections">main collection record form</a> and <a href="#Occurrences">taxonomic occurrences form</a>.</i>
 </font>
-
-<a href="#collection">main collection record form</a> - <a href="#list">taxonomic list form</a><p>
 
 <hr>
 
 <h3>General comments</h3>
 
 <ul>
-<li>If you have any questions, please write to either the <a href="mailto:alroy@nceas.ucsb.edu">Database coordinator</a> or <a href="mailto:alroy@nceas.ucsb.edu">Database manager</a>.<p>
+<li>If you have any questions, please write to either the <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">Database coordinator</a> or <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">Database manager</a>.<p>
 
 <li>Each data record should include <i>one</i> fossil collection.
 A geographic locality or stratigraphic level may include many collections.
@@ -85,11 +90,13 @@ We have tried to get our server to handle accents and umlauts and so on, but we 
 <a name="Collections"></a>
 <H3>Main collection record</H3>
 
-<FONT SIZE=4><H4><u>Basic Information</u></H4></font>
+<H4>Basic information</H4>
 
+<p>
 <b><A NAME="BasicInformation"></A>Collection name</b> (up to 80 characters)<br>
-A <FONT COLOR="#ff0000">required</FONT> field, intended to provide a unique identification that may also aid in recognizing close links among collections.  For example, if you are entering multiple collections from the same collection (e.g., a series of consecutive beds), use collection names that reflect their relationship (e.g., "Bully Hill 1.5 meter bed"  and "Bully Hill 2.0 meter bed").<p>
+A <FONT COLOR="#ff0000">required</FONT> field, intended to provide a unique identification that may also aid in recognizing close links among collections.  For example, if you are entering multiple collections from the same collection (e.g., a series of consecutive beds), use collection names that reflect their relationship (e.g., "Bully Hill 1.5 meter bed"  and "Bully Hill 2.0 meter bed").</p>
 
+<p>
 <b>Also known as</b><br>
 An optional field for alternative names by which the collection may be known.  This may permit the recognition in the database of two or more collections contributed by different researchers that were derived from the same, or overlapping, venues.  Museum numbers for collections should also be entered here.<p>
 
@@ -111,18 +118,20 @@ Use this if the all the taxa are included in a systematic paleontology section, 
 <li><i>"general faunal/floral"</i> means there is no detailed discussion of the age, environment, ecology, preservation, or morphology of the fossils, but a taxonomic list is given. Use this category only if the other ones are too specific.
 </ul>
 
-<FONT SIZE=4><H4><u>Geographic Information</u></H4></FONT>
+<H4>Geographic information</H4>
 <A NAME="GeographicInformation"></A>
 
+<p>
 <b>Country</b><br>
-
 A <FONT COLOR="#ff0000">required</FONT> field. If the country is the USA, write out "USA" and <i>not</i> "US," "U.S.," "U.S.A." or "United States."
 If the country is not English speaking, <i>use the English name anyway.</i>
-So, write out "Netherlands" and <i>not</i> "Nederland."<p>
+So, write out "Netherlands" and <i>not</i> "Nederland."</p>
 
+<p>
 <b>State/province</b><br>
-A <FONT COLOR="#ff0000">required</FONT> field if the country is the USA. Elsewhere, its use is also encouraged (e. g., England is a "state" of the United Kingdom, Ontario is a province of Canada). You must spell out the entire state name; do <i>not</i> use U.S. postal codes like "CA" or "WY."<p>
+A <FONT COLOR="#ff0000">required</FONT> field if the country is the USA. Elsewhere, its use is also encouraged (e. g., England is a "state" of the United Kingdom, Ontario is a province of Canada). You must spell out the entire state name; do <i>not</i> use U.S. postal codes like "CA" or "WY."</p>
 
+<p>
 <b>County/parish</b><br>
 An optional field.<p>
 
@@ -147,8 +156,9 @@ You can use any of the following search engines to obtain coordinates:<p>
 <li><a href="http://www.tandt.be/wis/index.html">UTM converter</a>
 </ul>
 
-<b>Basis of Coordinate</b><br>
-If at all possible, record the information you used to obtain this latitude/longitude coordinate.<p>
+<p>
+<b>Basis of coordinate</b><br>
+If at all possible, record the information you used to obtain this latitude/longitude coordinate.</p>
 
 <ul>
 <li>"<i>stated in text</i>" means the coordinate is directly taken from what the authors said in the text
@@ -158,8 +168,10 @@ If at all possible, record the information you used to obtain this latitude/long
 <li>"<i>unpublished field data</i>" means the coordinate was taken from a museum database or unpublished field notes
 </ul>
 
+<p>
 <b>Scale of geographic resolution</b><br>
 From the pop-up menu, select the resolution that best characterizes your collection. Err on the side of conservatism: if you know the collection is from a particular road cut but don't know if it does or doesn't come from a small excavation within the road cut, enter "outcrop" instead of "small collection." If no information is given, do not make a selection. Terms are defined as follows:
+</p>
 <ul>
 <li>"<i>small collection</i>" means from an area < 10 x 10 m, e.g., a single fossil, an individual bulk sample, or a small quarry
 <li>"<i>outcrop</i>" means from an area < 1 x 1 km, e.g., a large quarry, road cut, or wash
@@ -173,14 +185,16 @@ Provide any additional information that you think is important with respect to t
 Do NOT put museum collection numbers or alternative locality names here; put them in the "Also known as" field.
 If the lat/lon for the geographic location were taken from a GPS device or interpolated from a large-scale map, please record here the datum for the lat/lon coordinates (e.g., NADConus27, WGS84).Ê A large-scale map shows a small land area in great detail.<p>
 
-<FONT SIZE=4><H4><u>Stratigraphic Information</u></H4></FONT>
+<H4>Stratigraphic information</H4>
 <A NAME="StratigraphicInformation"></A>
 
+<p>
 <b>Period,</b> <b>Epoch/series,</b> and <b>International age/stage</b><br>
 These fields were used previously to record time data, but have now been abandoned.
 The field contents are printed when you view an old collection but will be empty for a new collection.
-The information is printed to help you correct the data in the <i>Time interval</i> field (see).<p>
+The information is printed to help you correct the data in the <i>Time interval</i> field (see).</p>
 
+<p>
 <b>Time interval</b><br>
 Enter the zone, age/stage, epoch, or period from which your collection is drawn.
 Use the most precise term you can.
@@ -227,15 +241,17 @@ If you are unsure, don't make a selection.<p>
 <b>Comments about stratigraphy</b><br>
 Provide any additional information that you think is important with respect to the stratigraphic delineation of the collection.<p>
 
-<h4><b><u>Other Geological Information</u></b></h4><p>
+<h4>Other geological information</h4>
 
+<p>
 <b>Original, complete description of lithology</b><br>
 Quote the entire description of the lithology if it includes <i>any</i> information you can't record in the other fields of this section.
 Even if there is just a word difference like "carbonate" vs. "lime," the description should be quoted in full.
-The purpose of the field is to make it possible to revise this section if we change the fields later on.<p>
+The purpose of the field is to make it possible to revise this section if we change the fields later on.</p>
 
+<p>
 <b>Lithology adjectives</b><br>
-The form provides pop-up menus for <i>as many as four adjectives</i> that describe the lithologies. Each of the four lithology adjective menus and the two lithology menus provides an identical list of choices.  <i>Review the lithology adjectives</i><FONT SIZE=4> </FONT>carefully before making selections; they include several different classes of information.<p>
+The form provides pop-up menus for <i>as many as four adjectives</i> that describe the lithologies. Each of the four lithology adjective menus and the two lithology menus provides an identical list of choices.  <i>Review the lithology adjectives</i> carefully before making selections; they include several different classes of information.<p>
 
 <b>Lithification</b><br>
 If the extent of lithification is known, the most appropriate characterization should be selected from the pop-up menu provided below the lithology adjectives. Do <i>not</i> make a selection if the only information is that the lithology is a "clay" (which does not necessarily mean unlithified) or a "claystone" (not necessarily lithified).
@@ -263,12 +279,13 @@ Full <a href="javascript: tipsPopup('/public/tips/environtips.html#TectonicSetti
 <b>Comments about geology</b><br>
 Provide any additional information that you think is important with respect to the geologic attributes of the collection.<p>
 
-<h4><b><u>Taphonomy</u></b></h4><p>
+<h4>Taphonomy</h4>
 
+<p>
 <b>Modes of preservation</b><br>
 These boxes record the kind of fossils that are present (body, cast, etc.) and the mineral composition of the fossils.
 Check as many of them as apply to any of the fossils in the collection.
-Check boxes only if you have unambiguous information; just because you suspect that the fossils are actual body fossils and not molds or casts doesn't mean you should check a box. Impressions, casts, and molds are fossils with none of the original biomineralized or organic tissue preserved. These three categories are differentiated from each other as follows:<p>
+Check boxes only if you have unambiguous information; just because you suspect that the fossils are actual body fossils and not molds or casts doesn't mean you should check a box. Impressions, casts, and molds are fossils with none of the original biomineralized or organic tissue preserved. These three categories are differentiated from each other as follows:</p>
 
 <ul>
 <li>"<i>impression</i>" may be a 2D fossil (e.g., leaf impression)
@@ -276,9 +293,11 @@ Check boxes only if you have unambiguous information; just because you suspect t
 <li>"<i>mold</i>" means a 3D fossil that is a <i>negative</i> image of the original
 </ul>
 
+<p>
 <b>Original biominerals or organics, if preserved</b><br>
-These values refer to the ORIGINAL composition of the skeleton if it is preserved. Do not use this section if the original biominerals have been completely replaced. For the latter, see "Replacement minerals" below.<p>
+These values refer to the ORIGINAL composition of the skeleton if it is preserved. Do not use this section if the original biominerals have been completely replaced. For the latter, see "Replacement minerals" below.</p>
 
+<p>
 <b>Replacement/permineralization minerals</b><br>
 These values refer to the secondary or tertiary minerals that have replaced the original biomineralized or organic tissues of the organism.  These include void-filling minerals in the case of permineralization. "apatite" means as in bones and conodonts; "other" includes barite, chlorite, and glauconite.<p>
 
@@ -290,16 +309,18 @@ These values refer to the secondary or tertiary minerals that have replaced the 
 <li>"midden": accumulation of fecal matter or other debris concentrated by an organism's behavior
 </ul>
 
+<p>
 <b>Lagerst&auml;tten type</b><br>
-This field is reserved for extraordinary fossil deposits in which an unusually rich biological record is preserved.<p>
+This field is reserved for extraordinary fossil deposits in which an unusually rich biological record is preserved.</p>
 
 <ul>
 <li>"conservation" means an extraordinary assemblage in which soft tissue and other fine structures generally are preserved, such as the Burgess Shale, Balboa fish beds, Hunsruck, etc.
 <li>"concentration" means a thick and dense accumulation of fossils formed by biological or physical (e.g., winnowing) condensation of biomineralized elements such as the Agate Springs bone bed, Calvert Cliffs coquinas, Petrified Forest, etc.
 </ul>
 
+<p>
 <b>Concentration of fossils</b><br>
-The measure of dispersal among individual elements within a defined sedimentary unit (e.g., lamina, bed).  Concentrated should only be selected if a more precise designation is not provided or specified in the reference.  If a more precise designation is available, select one of the values below characterizing the assemblage genesis.<p>
+The measure of dispersal among individual elements within a defined sedimentary unit (e.g., lamina, bed).  Concentrated should only be selected if a more precise designation is not provided or specified in the reference.  If a more precise designation is available, select one of the values below characterizing the assemblage genesis.</p>
 
 <ul>
 <li>"dispersed" means isolated or rare elements distributed in a sedimentary unit; no close juxtaposition of elements.
@@ -312,10 +333,11 @@ The measure of dispersal among individual elements within a defined sedimentary 
 <li>"vertebrate microsite" means a single sedimentary deposit in which small vertebrate elements are abundant  relative to adjacent deposits (e.g., ant hill concentrations)
 </ul>
 
+<p>
 <a name="AssemblageComponents"></a><b>Assemblage components</b><br>
 Check all gross size categories that describe the fossils in the taxonomic list.
 Check a size category if the greatest length in any direction of the average fossil of any taxon fits into that category.
-Hence, if you have a 12 mm bivalve and a 3 mm gastropod, check both <i>macrofossil</i> (for the bivalve) and <i>mesofossil</i> (for the gastropod).<p>
+Hence, if you have a 12 mm bivalve and a 3 mm gastropod, check both <i>macrofossil</i> (for the bivalve) and <i>mesofossil</i> (for the gastropod).</p>
 
 <ul>
 <li>"macrofossils": a <i>macrofossil</i> is at least 10 mm (1 cm) long
@@ -323,16 +345,18 @@ Hence, if you have a 12 mm bivalve and a 3 mm gastropod, check both <i>macrofoss
 <li>"microfossil": a <i>microfossil</i> is less than 1 mm long
 </ul>
 
+<p>
 <b>Spatial orientation</b><br>
-This field applies to the dominant orientation of the organisms in the assemblage.<p>
+This field applies to the dominant orientation of the organisms in the assemblage.</p>
 <ul>
 <li>"life position" means most individuals are positioned as they were when living (e.g., obrution deposit)
 <li>"random" means no preferential orientation can be distinguished
 <li>"preferred" means some directionality in alignment or organization of elements in the assemblage
 </ul>
 
+<p>
 <b>Preservation of anatomical detail</b><br>
-This represents the most common type of preservation in the assemblage as indicated in the publication (text and/or plates) or as identified from the collection under consideration.<p>
+This represents the most common type of preservation in the assemblage as indicated in the publication (text and/or plates) or as identified from the collection under consideration.</p>
 <ul>
 <li>"excellent": delicate and fine-scale features are obvious (e.g., feathers, cellular detail, spines,  thin-delicate projections, original color pattern, soft tissues) on complete specimens
 <li>"good": hard part morphology readily visible and unaltered, may be  partly fragmented
@@ -341,11 +365,12 @@ This represents the most common type of preservation in the assemblage as indica
 <li>"variable": this term is restricted to circumstances where disparate preservational styles occur in the same collection/assemblage
 </ul>
 
+<p>
 <b>Articulation/element representation</b><br>
 These fields are intended to characterize the assemblage elements in a qualitative sense.  Each of the four categories should be completed with none, some, many, or all as applicable.
 Pull down "some" if there is at least one fossil in the category, even if you don't know the total.
 You may pull down values as minimum estimates for some categories and leave others blank.
-The terms "major" and "minor" refer to the part's size relative to the body and <i>not</i> to its anatomical or taxonomic importance. Elements are "minor" if they are relatively small and (often) serially repeated.<p>
+The terms "major" and "minor" refer to the part's size relative to the body and <i>not</i> to its anatomical or taxonomic importance. Elements are "minor" if they are relatively small and (often) serially repeated.</p>
 
 <ul>
 <li>"articulated whole bodies": more than half of the body is associated and articulated.
@@ -354,17 +379,20 @@ The terms "major" and "minor" refer to the part's size relative to the body and 
 <li>"disassociated minor elements": Examples: crinoid stem ossicles, osteoderms, phalanges, scutes, spines, teeth, vertebrae; cone scales, flowers, fruits, palynomorphs, seeds.
 </ul>
 
+<p>
 <b>Size sorting</b><br>
-The variation in bioclast size within the assemblage.<p>
+The variation in bioclast size within the assemblage.</p>
 <ul>
 <li>"poor" means a wide array of bioclast sizes exists; approximately equal numbers of all clast sizes
 <li>"moderate" means a dominant mode of clast size with notable tails
 <li>"good" means a single size-class dominates
 </ul>
 
+<p>
 <b>Fragmentation</b><br>
-A qualitative assessment of the degree to which individual elements in the assemblage are broken.<p>
+A qualitative assessment of the degree to which individual elements in the assemblage are broken.</p>
 
+<p>
 <b>Bioerosion</b><br>
 A qualitative assessment of the degree to which individual elements in the assemblage were bored, excavated, dissolved, etc. by other organisms.<p>
 
@@ -387,16 +415,18 @@ Check all of the following that apply to specimens within the collection based e
 <li>"coprolite": bone, plant, or shell-bearing fecal deposit
 </ul>
 
+<p>
 <b>Temporal resolution</b><br>
-An estimate of time averaging (temporal mixing) of the assemblage, indicating the degree of non-contemporaneous nature of the fossils.<p>
+An estimate of time averaging (temporal mixing) of the assemblage, indicating the degree of non-contemporaneous nature of the fossils.</p>
 <ul>
 <li>"snapshot" means a single event deposit representing geologically instantaneous accumulation (e.g., minutes, hours, days, months)
 <li>"time-averaged" means prolonged or episodic accumulation is represented within an assemblage; the total time can range from years to millennia
 <li>"condensed" means records that include mixtures of fossils over longer time scales, representing 10s of thousands to millions of years
 </ul>
 
+<p>
 <b>Spatial resolution</b><br>
-These terms relate to the predominant relationship of the assemblage to the life habitats of the organisms.<p>
+These terms relate to the predominant relationship of the assemblage to the life habitats of the organisms.</p>
 
 <ul>
 <li>"autochthonous" means a fossil assemblage that is preserved in its growth or ecological habitat of the constituent organisms
@@ -404,13 +434,16 @@ These terms relate to the predominant relationship of the assemblage to the life
 <li>"allochthonous" means a fossil assemblage comprised of elements that are not derived locally but have been transported some distance outside of their growth or ecological habit
 </ul>
 
+<p>
 <b>Comments on taphonomy</b><br>
-Add taphonomically relevant information and/or interpretations of the author(s) concerning the processes responsible for assemblage formation.<p>
+Add taphonomically relevant information and/or interpretations of the author(s) concerning the processes responsible for assemblage formation.</p>
 
-<h4><b><u>Collecting Information</u></b></h4><p>
+<h4>Collecting information</h4>
 
-Select as many check boxes from any or all of the rows in this section that you need to further characterize the collection.<p>
+<p>
+Select as many check boxes from any or all of the rows in this section that you need to further characterize the collection.</p>
 
+<p>
 <b>What is <i>not</i> included in the list?</b><br>
 The categories pertain to the taxa that <i>could</i> have been listed because they were definitely present in the outcrop or collections, but weren't listed.
 This field is the basis for determining the "quality" of the reporting, not the type of preservation: did the author collect, prepare, and report all of the taxa that could have been collected, prepared, and reported if they had bothered? <!-- just like Jack wanted it -->
@@ -429,7 +462,8 @@ Common examples are bryozoans and crinoids.
 A counter-example is snake vertebrate, which are not "difficult macrofossils" even though they are rarely identified due to lack of expertise and/or interest; in cases like this one, select "some macrofossils" instead. 
 </ul>
 
-<b>Collection types</b><br>
+<p>
+<b>Collection types</b></p>
 <ul>
 <li><i>"field collection"</i> means material collected and studied by the investigators.
 <li><i>"observed (not collected)"</i> means material identified in the field but not brought back.
@@ -437,7 +471,8 @@ A counter-example is snake vertebrate, which are not "difficult macrofossils" ev
 <li>Check "<i>rock shop</i>" if at all possible.
 </ul>
 
-<b>Collection methods</b><br>
+<p>
+<b>Collection methods</b></p>
 <ul>
 <li>"<i>bulk</i>" means that all the fossils in a set volume of rock, or on an all surfaces of slabs of rock, were identified.
 <li>"<i>core</i>" means that the fossils came from a core, regardless of whether all material was identified.
@@ -448,10 +483,12 @@ A counter-example is snake vertebrate, which are not "difficult macrofossils" ev
 <li>"<i>anthill</i>" means that fossils were picked from the debris on the tops of anthills (a common method of collecting small vertebrates).
 </ul>
 
+<p>
 <b>Preparation methods</b><br>
 Check "sieve" for wet or dry screen-washed collections.
-<p>
+</p>
 
+<p>
 <b>Collection size</b><br>
 This field is meant to record the total number of specimens or individuals for the entire fossil collection, if known.
 Enter the total count if and only if: 1) a total is mentioned somewhere in the paper, but 2) no breakdown by species, or only a percentage breakdown, is given.
@@ -470,6 +507,7 @@ Provide any additional information that you think is important with respect to t
 <a name="Occurrences"></a>
 <H3>Taxonomic occurrences</H3>
 
+<p>
 <b>Genus name modifier</b><br>
 An optional menu of modifiers like "aff." and "cf." that apply to the genus name. You may not enter more than one modifier, so pick the most relevant one. In
 order of preference, these are "n. gen.," "aff.," "cf.," "ex gr.," and "?". 
