@@ -127,7 +127,6 @@ sub displaySectionResults{
     my $taxon_resolution = $q->param('taxon_resolution') || 'species';
     my $show_taxon_list = $q->param('show_taxon_list') || 'NO';
 
-    use Data::Dumper;
     # Only used below, in a couple places.  Print contents of a table row
     sub formatSectionLine {
         my ($time_str, $place_str);
@@ -489,7 +488,7 @@ sub showStrat    {
         print "<DIV CLASS=\"title\">Stratigraphic section taxon list</DIV><BR>";
         print "<CENTER><TABLE CELLPADDING=5 BORDER=0>";
         print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"showOptionsForm\">";
-        print "<INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"$local_sect\">";
+        print "<INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"".uri_escape($local_sect)."\">";
         print "<INPUT TYPE=\"hidden\" NAME=\"taxon_resolution\" VALUE=\"".$q->param("taxon_resolution")."\">";
         print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"".$q->param('input_type')."\">\n";
         my @sortList = sort alphabetically keys(%splist);
@@ -519,7 +518,7 @@ sub optionsForm    {
     my $dbt=shift;
     my $splist=shift;
     my %splist = %$splist;
-    my $local_sect = $q->param("input");
+    my $local_sect = uri_unescape($q->param("input"));
     my $type = $q->param("input_type");
 
 # -----------------REMAKE STRAT LIST-----------(REMOVES UNCHECKED)-----------
@@ -565,7 +564,7 @@ sub optionsForm    {
         print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"calculateTaxonomicInterval\">";
     } else  {
         print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"calculateStratigraphicInterval\">";
-        print "<INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"$local_sect\">";
+        print "<INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"".uri_escape($local_sect)."\">";
         print "<INPUT TYPE=\"hidden\" NAME=\"taxon_resolution\" VALUE=\"".$q->param("taxon_resolution")."\">";
     }    
     print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"".$q->param('input_type')."\">";
@@ -1338,7 +1337,7 @@ sub calculateStratInterval	{
     $fig_width;
     $fig_lenth;
     $aifig_size = 500;
-    my $local_sect = $q->param("input");
+    my $local_sect = uri_unescape($q->param("input"));
     my $alpha = $q->param("alpha");
 #   $alpha = 1 - $alpha;
     my $conffor = $q->param("conffor");
