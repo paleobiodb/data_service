@@ -313,12 +313,12 @@ sub processViewImages{
 	my @results;
 
     if(($q->param('taxon_rank') eq "Higher taxon" || $q->param('taxon_rank') eq "Higher-taxon") && 
-       $in_list ne ""){
+       @$in_list){
 		my $sql = "SELECT authorities.taxon_no, taxon_name, image_no, images.reference_no, path_to_image, caption, ".
 			  " original_filename ".
 			  "FROM authorities, images ".
 			  "WHERE authorities.taxon_no = images.taxon_no " . 
-			  "AND images.taxon_no IN ($in_list)";
+			  "AND images.taxon_no IN (".join(",",$in_list).")";
 		@results = @{$dbt->getData($sql)};
 	}
 	return @results;

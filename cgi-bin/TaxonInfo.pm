@@ -683,11 +683,12 @@ sub displayTaxonInfoResults {
 	#  I am not maintaining recurse
 		#my $name = $q->param('genus_name');
 		#$in_list = `./recurse $name`;
-		$in_list=PBDBUtil::taxonomic_search($q->param('genus_name'),$dbt,'','return_taxon_nos');
+		@in_list=PBDBUtil::taxonomic_search($q->param('genus_name'),$dbt,'','return_taxon_nos');
+        $in_list=\@in_list;
 	} elsif ( ! $taxon_no )	{
 	# Don't go looking for junior synonyms if this taxon isn't even
 	#  in the authorities table (because it has no taxon_no) JA 8.7.03
-		$in_list = "'".$q->param('genus_name')."'";
+		$in_list = [$q->param('genus_name')];
 	} else	{
 		# Find all the junior synonyms of this genus or species JA 4.7.03
 		# First find all taxa that ever were children of this taxon no
@@ -731,7 +732,7 @@ sub displayTaxonInfoResults {
 				}
 			}
 		}
-		$in_list =  join ',',@synonyms;
+		$in_list =  \@synonyms;
 	}
 
 	print main::stdIncludes("std_page_top");

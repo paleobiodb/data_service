@@ -486,7 +486,7 @@ sub mapQueryDb	{
         if($q->param('taxon_rank') eq "Higher taxon" ||
            $q->param('taxon_rank') eq "Higher-taxon"){
 
-			if ($in_list eq "") {
+			if (! @$in_list) {
 				$self->dbg("genus_name q param:".$q->param('genus_name')."<br>");
 
 				my $genus_names_string; 
@@ -508,7 +508,7 @@ sub mapQueryDb	{
 					$sql .= " (occurrences.genus_name IN (".$genus_names_string.") OR reidentifications.genus_name IN (".$genus_names_string."))";
 				}
 			} else {
-				$sql .= " (occurrences.taxon_no IN (".$in_list.") OR reidentifications.taxon_no IN (".$in_list."))";
+				$sql .= " (occurrences.taxon_no IN (".join(',',@$in_list).") OR reidentifications.taxon_no IN (".join(',',@$in_list)."))";
 			}
         }
         else{
@@ -934,7 +934,7 @@ sub mapSetupImage {
 			unlink "$GIF_DIR/$file";
 		}
 	}
-
+    use Data::Dumper; print Dumper(@filenames);
 
     # get the next number for file creation.
     if ( ! open GIFCOUNT,"<$GIF_DIR/gifcount" ) {
