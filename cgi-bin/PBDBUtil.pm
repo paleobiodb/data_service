@@ -38,7 +38,7 @@ sub getResearchProjectRefsStr{
 
     my $reflist = "";
 
-    if ( $q->param('research_group') =~ /(^ETE$)|(^5%$)|(^PGAP$)/ ) {
+    if ( $q->param('research_group') =~ /(^ETE$)|(^5%$)|(^PACED$)|(^PGAP$)/ ) {
         $sql = "SELECT reference_no FROM refs WHERE project_name LIKE '%";
         $sql .= $q->param('research_group') . "%'";
 
