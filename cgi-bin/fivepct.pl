@@ -8,6 +8,7 @@ use Session;
 # written 20.10.02
 # restricts searches to refs with a particular status; uses GeoRef numbers
 #   instead of table key numbers 21.10.02
+# searches and displays language field 2.3.03
 
 require "connection.pl";
 
@@ -27,7 +28,7 @@ if ( $q->param("action") eq "search" )	{
 
 	@statusvals = ("unknown","junk","desirable","copied","discarded","entered");
 
-	$sql = "SELECT ref_no,title,author,pub,subjects,status,modifier FROM fivepct WHERE ";
+	$sql = "SELECT ref_no,title,author,pub,subjects,language,status,modifier FROM fivepct WHERE ";
 	if ( $q->param("status") ne "all" )	{
 		$sql .= "status='" . $q->param("status") . "' AND ";
 	}
@@ -48,6 +49,9 @@ if ( $q->param("action") eq "search" )	{
 			$searchstring =~ s/ /%' OR $field LIKE '%/g;
 		}
 		$sql .= "($field LIKE '%" . $searchstring . "%')";
+	}
+	if ( $q->param("language") ne "any language" and $q->param("language") ne "" )	{
+		$sql .= " AND language='" . $q->param("language") . "'";
 	}
 	my $sth = $dbh->prepare($sql);
 	$sth->execute();
@@ -74,7 +78,8 @@ if ( $q->param("action") eq "search" )	{
 		print "<td valign=top>$refrow{'author'} \n";
 		print "\"$refrow{'title'}\" \n";
 		print "<i>$refrow{'pub'}</i><br>\n";
-		print "<font size=1px>[$refrow{'subjects'}]</font></td>\n";
+		print "<font size=1px>[$refrow{'subjects'}]";
+		print " <b>$refrow{'language'}</b></font></td>\n";
 		print "</tr>\n";
 	}
 	print "</table>\n\n";
