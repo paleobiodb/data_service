@@ -1994,16 +1994,16 @@ sub buildTaxonomicList {
 			}
 			# If species is informal, link only the genus.
 			elsif($formattedrow =~ /<genus>(.*)?<\/genus>(.*)?informal/s){
-				$formattedrow =~ s/<genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$1&taxon_rank=Genus&user=Contributor"><i>$1$2$3<\/i><\/a>/s;
+				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Genus&user=Contributor"><i>$1$2$3$4<\/i><\/a>/s;
 			}
 			elsif($formattedrow =~ /<species>indet/s){
 				# shouldn't be any <i> tags for indet's.
-				$formattedrow =~ s/<genus>(.*)?<\/genus>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$1&taxon_rank=Higher+taxon&user=Contributor">$1 indet.<\/a>/;
+				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Higher+taxon&user=Contributor">$1$2 indet.<\/a>/;
 				$formattedrow =~ s/<species>(.*)?<\/species>//;
 			}
 			else{
 				# match multiple rows as a single (use the 's' modifier)
-				$formattedrow =~ s/<genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$1+$3&taxon_rank=Genus+and+species&user=Contributor"><i>$1$2$3<\/i><\/a>/s;
+				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2+$4&taxon_rank=Genus+and+species&user=Contributor"><i>$1$2$3$4<\/i><\/a>/s;
 			}
 			# ---------------------------------
 
