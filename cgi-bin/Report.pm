@@ -577,7 +577,7 @@ sub reportQueryDB{
 
     # Research group conditional
     my $research_group = $q->param('research_group');
-    if($research_group && $research_group =~ /(^decapod$)|(^EJECT$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
+    if($research_group && $research_group =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
         my $project_str = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
         if($project_str ne ""){
             push @whereTerms, "collections.reference_no IN (" . $project_str. ")";

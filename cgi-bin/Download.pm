@@ -491,7 +491,7 @@ sub getResGrpString {
 
 	my $resgrp = $q->param('research_group');
 
-	if($resgrp && $resgrp =~ /(^decapod$)|(^EJECT$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
+	if($resgrp && $resgrp =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
 		my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
 		if($resprojstr ne ""){
 			$result = " collections.reference_no IN (" . $resprojstr . ")";

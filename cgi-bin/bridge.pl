@@ -2760,7 +2760,7 @@ IS NULL))";
 		
 	# research_group is now a set -- tone 7 jun 2002
 	my $resgrp = $q->param('research_group');
-	if($resgrp && $resgrp =~ /(^decapod$)|(^EJECT$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
+	if($resgrp && $resgrp =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
 		my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
 		if($resprojstr ne ""){
 			push(@terms, "(collections.reference_no IN ($resprojstr) OR "

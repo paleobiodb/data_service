@@ -58,7 +58,7 @@ sub getTemplateDir {
 					type_taxon_rank=>['', 'specimen number', 'species', 'subgenus', 'genus', 'subtribe', 'tribe', 'subfamily', 'family', 'superfamily', 'infraorder', 'suborder', 'order', 'superorder', 'infraclass', 'subclass', 'class', 'superclass', 'subphylum', 'phylum', 'superphylum', 'subkingdom', 'kingdom', 'superkingdom', 'unranked clade'],
                     current_status=>["active", "deferred", "retired"],
 					species_name=>['', 'indet.', 'sp.'],
-					project_name=>['', 'decapod', 'EJECT', 'ETE', '5%', '1%', 'PACED', 'PGAP'],
+					project_name=>['', 'decapod', 'ETE', '5%', '1%', 'PACED', 'PGAP'],
 					publication_type=>['', 'journal article', 'book/book chapter', 'serial monograph', 'compendium', 'Ph.D. thesis', 'M.S. thesis', 'abstract', 'guidebook','news article', 'unpublished'],
 					release_date=>['immediate','three months','six months','one year','two years','three years','four years','five years'],
 					access_level=>['the public','database members', 'group members', 'authorizer only'],
@@ -167,7 +167,7 @@ sub getTemplateDir {
 					dispersal1=>['', 'direct/internal','water','wind','animal'],
 					dispersal2=>['', 'planktonic','non-planktonic','wind-dispersed','animal-dispersed','mobile','gravity'],
 
-					research_group=>['', 'decapod','marine invertebrate', 'micropaleontology', 'paleobotany', 'paleoentomology', 'taphonomy', 'vertebrate', 'EJECT', 'ETE', '5%', '1%', 'PACED', 'PGAP'],
+					research_group=>['', 'decapod','marine invertebrate', 'micropaleontology', 'paleobotany', 'paleoentomology', 'taphonomy', 'vertebrate', 'ETE', '5%', '1%', 'PACED', 'PGAP'],
 					eml_interval=>['', 'Late/Upper', 'late Late', 'middle Late', 'early Late', 'Middle', 'late Middle', 'middle Middle', 'early Middle', 'Early/Lower', 'late Early', 'middle Early', 'early Early'],
 					eml_max_interval=>['', 'Late/Upper', 'late Late', 'middle Late', 'early Late', 'Middle', 'late Middle', 'middle Middle', 'early Middle', 'Early/Lower', 'late Early', 'middle Early', 'early Early'],
 					eml_min_interval=>['', 'Late/Upper', 'late Late', 'middle Late', 'early Late', 'Middle', 'late Middle', 'middle Middle', 'early Middle', 'Early/Lower', 'late Early', 'middle Early', 'early Early'],
