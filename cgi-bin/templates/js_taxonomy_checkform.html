@@ -13,22 +13,33 @@ function checkForm() {
 	var frm = document.forms[0];
 	var errors = new Error();
 
-	// figure out the rank of the taxon name.	
-	var rank = taxonRank(frm.taxon_name_corrected.value);
-	var originalRank = taxonRank(frm.taxon_name.value);
+	var rank = "";
+	var originalRank = "";
 	
-	//alert("original = " + originalRank + " corrected = " + rank);
+	if (frm.taxon_name_corrected) {
+		// it's possible that the taxon_name_corrected field won't exist 
+		// for example, if the user has already entered a species where the genus
+		// didn't already exist, then it will prompt them to enter authority data
+		// on the genus.  However, the taxon_name_corrected field isn't in this form.
 	
-	if (rank == "invalid") {
-		errors.add("The taxon being edited is ill-formed.");
-	}
+		// figure out the rank of the taxon name.	
+		rank = taxonRank(frm.taxon_name_corrected.value);
+		originalRank = taxonRank(frm.taxon_name.value);
+	
+		//alert("original = " + originalRank + " corrected = " + rank);
+	
+		if (rank == "invalid") {
+			errors.add("The taxon being edited is ill-formed.");
+			}
 		
-	// make sure that the rank they started with in taxon_name is the
-	// same as the edited rank.  This is the only check we have to do with the
-	// original taxon name.
-	if (rank != originalRank) {
-		errors.add("The taxon's rank in the top field can't be changed.");
+		// make sure that the rank they started with in taxon_name is the
+		// same as the edited rank.  This is the only check we have to do with the
+		// original taxon name.
+		if (rank != originalRank) {
+			errors.add("The taxon's rank in the top field can't be changed.");
+		}
 	}
+			
 		
 
 	// First, make sure that they either selected the 
@@ -79,18 +90,18 @@ function checkForm() {
 
 	
 	
-
-	// Check taxonomic opinion data if any are present on the page
-	errors.appendErrors(checkOpinion());
+	if (frm.opinion_present) {
+		// Check taxonomic opinion data if any are present on the page
+		errors.appendErrors(checkOpinion());
+	}
 	
 	// Report errors
 	if (errors.count() > 0) {
 		errors.showAlert()
 		return false;
 	} 
-	
-	return false	
-	//return true;
+		
+	return true;
 }
 
 
@@ -254,6 +265,80 @@ function checkOpinion() {
 }
 
 
+// used to check the reference section for both authorities and opinions
+// returns an error object if any errors are found.
+//
+// the first argument is a boolean, true if the "current reference" check box is 
+// checked, false otherwise.  The other arguments are strings which correspond
+// to the fields in the reference form.
+//
+// type is either "authority" or "opinion"
+//
+function checkReferenceInfo(checked, type, currentPages, currentFigures, firstAuthorInitial, firstAuthorLast, secondAuthorInitial, secondAuthorLast, otherAuthors, year, pages, figures) {
+
+	var errors = new Error();
+	
+	var refsAreBlank = ((firstAuthorInitial == "") &&
+		(firstAuthorLast == "") &&
+		(secondAuthorInitial == "") &&
+		(secondAuthorLast == "") &&
+		(year == "") &&
+		(otherAuthors == "") &&
+		(pages == "") &&
+		(figures.value == ""));
+		
+	
+	// First, make sure that they either selected the 
+	// use current reference check box
+	// or fill in some information in the reference fields.
+	if (checked) {
+		// then make sure that the fields are blank
+		
+		if (! refsAreBlank) {
+			errors.add("Don't fill in " + type + " reference fields if the 'use current reference' checkbox is checked.");		
+		}
+		
+	} else {  // the checkbox is not checked
+		// so we need to check the validity of the reference information.
+		if (refsAreBlank) {
+			errors.add("You must fill in an " + type + " reference or check the 'use current reference' checkbox.");
+		} else {
+			//the refs aren't blank
+			
+			//at a minimum, we need the author last name and pubyr.
+			if (!(properLastName(firstAuthorLast))) {
+				errors.add("Ill-formed or missing " + type + " last name.");
+			}
+			if (!(properYear(year))) {
+				errors.add("Ill-formed or missing " + type + " year.");
+			}
+		
+			if (firstAuthorInitial != "") {
+				if (! properInitial(firstAuthorInitial)) {
+					errors.add("Ill-formed " + type + " initial");
+				}
+			}
+			
+			if (secondAuthorLast != "") {
+				if (! properInitial(secondAuthorLast)) {
+					errors.add("Ill-formed " + type + " last name");
+				}
+			}
+			
+			if (secondAuthorInitial != "") {
+				if (! properInitial(secondAuthorInitial)) {
+					errors.add("Ill-formed " + type + " initial");
+				}
+			}
+		}
+	}
+	
+	return errors;
+
+}
+
+
+/*
 // returns true if opinion reference fields are blank.
 function opinionRefsAreBlank() {
 	var frm = document.forms[0];
@@ -283,7 +368,7 @@ function authorityRefsAreBlank() {
 		(frm.elements['2nd_figures'].value == ""));				
 }
 
-
+*/
 
 
 
