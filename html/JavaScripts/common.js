@@ -33,7 +33,7 @@ function taxonRank(taxon) {
 // pass this a taxon name and it will return a true value
 // if the capitilization if proper, or a false value
 // if the capitilization isn't working. 
-function checkProperCapitalization(taxon) {
+function checkTaxonCapitalization(taxon) {
 	if (! taxon || taxon == "") {
 		return true;  // we'll say that it's proper, although it's not since nothing exists.
 	}
