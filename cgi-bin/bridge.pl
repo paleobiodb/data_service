@@ -4120,13 +4120,13 @@ sub displayTaxonomyEntryForm	{
 	# Customize the status fields
 	if ( $taxon =~ / / )	{
 		# Following substitution also changes JavaScript
-		$html =~ s/Type taxon's name/Type specimen/g;
+		$html =~ s/Name of type taxon/Type specimen/g;
 		$html =~ s/Valid/Valid species/;
 		$html =~ s/, classified as belonging to/, combined or recombined as/;
 		$html =~ s/value="belongs_to"/value="recombined"/;
 	}
 	else	{
-		$html =~ s/Type taxon's name:<\/b>/Type taxon's name:<\/b><br><span class=tiny>e.g., "<i>Homo sapiens<\/i>"<\/span>/g;
+		$html =~ s/Name of type taxon:<\/b>/Name of type taxon:<\/b><br><span class=tiny>e.g., "<i>Homo sapiens<\/i>"<\/span>/g;
 		$html =~ s/Valid/Valid higher taxon/;
 	}
 
