@@ -1051,8 +1051,11 @@ sub displayMapForm {
 	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = &getPrefFields();
 	for $p (@{$setFieldNames})	{
 		if ($pref{$p} ne "")	{
-			unshift @row,$pref{$p};
-			unshift @fieldNames,$p;
+			#these prefs are for collection entry form, don't display the here
+			if ($p !~ /environment|research_group|formation|country|state|interval_name|lithology|period_max/) {
+				unshift @row,$pref{$p};
+				unshift @fieldNames,$p;
+			}
 		}
 	}
 
