@@ -2078,6 +2078,9 @@ sub processCollectionsSearch {
 	# modified to handle time lookup in-list JA 17.7.03
 	# previous fix assumed OR logic, modified to use AND logic
 	#  JA 5.12.03
+	####***** rjp 1/14/04 - what the heck does this do?  
+	#### I think there are some bugs in this logic related
+	#### to searching for a genus with a min/max time period..
 	if ( $q->param('genus_name') ) {
 		if ( @timeinlist )	{
 			my %collintimeinlist = ();
@@ -2095,11 +2098,13 @@ sub processCollectionsSearch {
 				push @okcolls, 0;
 			}
 		}
-		if (@terms)	{
+		#if (@terms)	{
 			$sql->addWhereItem("collection_no IN ( " . join ( ", ", @okcolls ) . " )");
-		} 
+		#} 
 	} elsif ( @timeinlist )	{
-			$sql->addWhereItem("collection_no IN ( " . join(", ", @timeinlist) . " )"); 
+		#if (@terms) {
+			$sql->addWhereItem("collection_no IN ( " . join(", ", @timeinlist) . " )");
+		#}
 	}
 
 	# Sort and limit
