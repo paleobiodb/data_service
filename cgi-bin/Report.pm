@@ -141,9 +141,9 @@ sub tallyFieldTerms	{
 		$self->dbg("nterms[$suffix]: $nterms[$suffix]<br>");
 	}
 	
-	if (index($q->param('genus'),",") > 0)    {
-		# Form changed to ask the user to provide a comma separated list
-		@genera = split(",",$q->param('genus'));
+	if (index($q->param('genus'),",") > 0 || index($q->param('genus')," ") > 0){
+		# User could enter comma or space separated (or both) names.
+		@genera = split("[, ]",$q->param('genus'));
 		for $gen (@genera)  {
 			# lowercase all the letters
 			$gen = "\L$gen";
