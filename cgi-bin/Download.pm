@@ -1203,6 +1203,13 @@ sub doQuery {
 				print SCALEFILE "\t$val";
 			}
 		}
+		for my $val ( @enumvals )	{
+			if ( $val eq "" )	{
+				print SCALEFILE "\tproportion no data";
+			} else	{
+				print SCALEFILE "\tproportion $val";
+			}
+		}
 		print SCALEFILE "\n";
 		for my $ir ( @intervalrefs )	{
 			$acceptedIntervals++;
@@ -1213,6 +1220,13 @@ sub doQuery {
 					print SCALEFILE "\t0";
 				} else	{
 					print SCALEFILE "\t$occsbybinandcategory{$ir->{interval_name}}{$val}";
+				}
+			}
+			for my $val ( @enumvals )	{
+				if ( $occsbybinandcategory{$ir->{interval_name}}{$val} eq "" )	{
+					print SCALEFILE "\t0.0000";
+				} else	{
+					printf SCALEFILE "\t%.4f",$occsbybinandcategory{$ir->{interval_name}}{$val} / $occsbybin{$ir->{interval_name}};
 				}
 			}
 			print SCALEFILE "\n";
