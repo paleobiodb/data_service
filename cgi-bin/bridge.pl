@@ -1785,13 +1785,15 @@ sub displayCollectionDetails {
     }
 
 	print "<HR>\n";
-	print &buildTaxonomicList ( $collection_no, $refNo );
+	my $taxa_list = buildTaxonomicList($collection_no, $refNo);
+	print $taxa_list;
 
-	if ( $authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy')	{
+	if(($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy') && $taxa_list ne "")	{
 		print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames);
 	}
-	print $hbo->populateHTML('reid_display_buttons', \@row, \@fieldNames);
-
+	if($taxa_list ne ""){
+		print $hbo->populateHTML('reid_display_buttons', \@row, \@fieldNames);
+	}
 
 	print &stdIncludes ("std_page_bottom");
 }
