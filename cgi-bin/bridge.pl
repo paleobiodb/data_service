@@ -1831,11 +1831,17 @@ sub buildTaxonomicList {
 			$count++;
 		}
 
+		$sql = "SELECT collection_name FROM collections ".
+			   "WHERE collection_no=$collection_no";
+		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+		$sth->execute();
+		my @coll_name = @{$sth->fetchrow_arrayref()};
+		$sth->finish();
 
 		# Taxonomic list header
 		$return = "
 <div align='center'>
-<h2>Taxonomic list for collection $collection_no</h2>";
+<h2>Taxonomic list for $coll_name[0] (PBDB collection $collection_no)</h2>";
 
 		if($new_found){
 			$return .= "<h3><font color=red>WARNING!</font> Taxon names in ".
