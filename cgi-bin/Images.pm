@@ -44,6 +44,7 @@ sub startLoadImage{
 sub processStartLoadImage{
 	my $dbt = shift;
 	my $q = shift;
+	my $s = shift;
 	my $exec_url = shift;
 	my $taxon_name = $q->param('taxon_name');
 
@@ -70,13 +71,14 @@ sub processStartLoadImage{
 		exit;
 	}
 	# If logged in and name exists in Authorities, go to image upload page.
-	displayLoadImageForm($exec_url, $taxon_name, $taxon_no);
+	displayLoadImageForm($exec_url, $taxon_name, $taxon_no, $s);
 }
 
 sub displayLoadImageForm{
 	my $exec_url = shift;
 	my $taxon_name = shift;
 	my $taxon_no = shift;
+	my $s = shift;
 
 	# Spit out upload html page
 	# list constraints: image size and image type
@@ -95,6 +97,10 @@ sub displayLoadImageForm{
 	print "<table><tr><td valign=top><p><b>Caption:</b></td><td>".
 		  "<textarea cols=60 rows 4 name=\"caption\">".
 		  "Optional image description here.</textarea></td></tr></table>";
+	my $reference_no = $s->get("reference_no");
+	if ( $reference_no )	{
+		print  "<input type=checkbox name=reference_no value=$reference_no> <b>Check if image is from the current reference</b><p>\n\n";
+	}
 	print "<br><input type=submit></form></center>";
 	print main::stdIncludes("std_page_bottom");
 }
@@ -109,6 +115,7 @@ sub processLoadImageForm{
 	my $taxon_name = $q->param('taxon_name');
 	$taxon_name =~ s/\s+/_/g;
 	my $taxon_no = $q->param('taxon_no');
+	my $reference_no = $q->param('reference_no');
 
 	if($DEBUG){
 		print "FILE NAME: $file_name<br>";
@@ -268,12 +275,13 @@ sub processLoadImageForm{
 	$x = $image->Write("$docroot$subdirs/$new_thumb");
 	warn "$x" if "$x";
 
-	my @values = ($authorizer, $enterer, $taxon_no, "'$now'", "'$subdirs/$new_file'", "'$file_name'", "'$caption'", "'$digest'");
+	my @values = ($authorizer, $enterer, $reference_no, $taxon_no, "'$now'", "'$subdirs/$new_file'", "'$file_name'", "'$caption'", "'$digest'");
 
 	#	insert a new record into the db
-	$sql = "INSERT INTO images (authorizer_no, enterer_no, taxon_no, ".
+	$sql = "INSERT INTO images (authorizer_no, enterer_no, reference_no, taxon_no, ".
 		   "created, path_to_image, original_filename, caption, file_md5_hexdigest) ".
 		   "VALUES (".join(',',@values).")";
+print "$sql\n";
 	if(!$dbt->getData($sql)){
 		print $dbt->getErr() ;
 		# If we had an error inserting, remove the image from the filesystem too
