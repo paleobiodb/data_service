@@ -1,6 +1,7 @@
 package Map;
 
 use Debug;
+use CGI::Carp;
 use GD;
 use Class::Date qw(date localdate gmdate now);
 use Image::Magick;
@@ -37,7 +38,19 @@ my $AITOP = 580;
 
 my %coll_count = ();
 
-sub acos { my $a = ($_[0] > 1.0) ? 1.0 : $_[0]; atan2( sqrt(1 - $a * $a), $a ) }
+
+sub acos {
+    my $a;
+    if ($_[0] > 1.0) {
+        $a = 1.0;
+        carp "Map.pm warning, bad args passed to acos: $_[0] x $x oppgcd $oppgcd y $y";
+    } else {
+        $a = $_[0];
+    }
+    atan2( sqrt(1 - $a * $a), $a )
+}
+
+
 sub tan { sin($_[0]) / cos($_[0]) }
 
 # returns great circle distance given two latitudes and a longitudinal offset
