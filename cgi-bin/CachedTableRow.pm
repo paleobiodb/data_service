@@ -39,6 +39,8 @@ sub new {
 	$self->{table} = $table;
 	$self->{where} = $where;
 	
+	$self->runQuery();
+	
 	return $self;
 }
 
@@ -63,10 +65,13 @@ sub runQuery {
 	my CachedTableRow $self = shift;
 	
 	my $sql = $self->getSQLBuilder();
-	$sql->setSQLExpr("SELECT * FROM " . $self->{table} . " " . $self->{where});
+	$sql->setSQLExpr("SELECT * FROM " . $self->{table} . " WHERE " . $self->{where});
+		
 	$sql->executeSQL();
 		
-	my $row = $sql->nextResultArrayRef();
+	my $row = $sql->nextResultHashRef();
+	
+	$sql->finishSQL();
 	
 	$self->{row} = $row;
 }
@@ -78,11 +83,24 @@ sub get {
 	my CachedTableRow $self = shift;
 	my $col = shift;
 	
-	if ($self->{$col}) {
-		return $self->{$col};	
+	my $row = $self->{row};
+	
+	if (!$row) {
+		return '';	
+	}
+	
+	if ( $row->{$col}) {
+		return $row->{$col};	
 	}
 	
 	return '';
+}
+
+# returns the hashref for this row.
+sub row {
+	my CachedTableRow $self = shift;
+
+	return $self->{row};	
 }
 
 
