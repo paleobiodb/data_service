@@ -79,7 +79,7 @@ sub displayOccurrenceReclassify	{
 	# tick through the occurrences
 	# NOTE: the list will be in data entry order, nothing fancy here
 	if ( @occrefs )	{
-		print "<h4>Taxa that can be classified</h4>";
+		print "<hr>\n";
 		print "<form method=\"post\">\n";
 		print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"startProcessReclassifyForm\">\n";
 		print "<input type=\"hidden\" name=\"collection_no\" value=\"";
@@ -244,6 +244,7 @@ my %master_class=%{Classification::get_classification_hash($dbt, $levels, [ $t->
 
 	# print the informal and otherwise unclassifiable names
 	if ( @badoccrefs )	{
+		print "<hr>\n";
 		print "<h4>Taxa that cannot be classified</h4>";
 		print "<p><i>Check these names for typos and/or create new taxonomic authority records for them</i></p>\n";
 		print "<table border=0 cellpadding=0 cellspacing=0>\n";
