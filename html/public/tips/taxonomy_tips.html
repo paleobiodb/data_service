@@ -15,12 +15,14 @@
 <a href="#Authority">Who named the taxon?</a> - 
 <a href="#Type">How was it named?</a> - 
 <a href="#Status">Whose opinion are you entering?</a> -
-<a href="#Opinions">What did they say about its status?</a>
+<a href="#Opinions">What did they say about its status?</a> -
+<a href="#Complications">How to handle complicated cases</a> -
+<a href="#Example">How to read a synonymy list</a>
 
 <hr>
 
 <font size=-1>
-<i>This page was written by John Alroy on 28 August 2000, updated on 25 July, 3/7 August 2001, 14-17 August 2002, 28 March 2003, and 19 April 2004.</i><p>
+<i>This page was written by John Alroy on 28 August 2000, updated on 25 July, 3/7 August 2001, 14-17 August 2002, 28 March 2003, and 19 - 20 April 2004.</i><p>
 </font>
 
 <hr>
@@ -31,8 +33,8 @@
 
 <p><b>WARNING:</b> Do NOT use the taxonomy scripts unless you understand all of the terms listed in the four "what the terms mean" sections on this page</a>.</p>
 
-Currently, we do not handle phylogenetic data and put all the other information into just two tables. The <i>authority table</i> lists all taxa we know about, who named them, and when.
-The <i>opinion table</i> lists all classification, synonymy, and validity information, giving the authority and year for each opinion. Taxa can appear only once in the authority table but many times in the opinion table.<p>
+Currently, we do not handle phylogenetic data and put all the other information into just two tables. The <b>authority table</b> lists all taxa we know about, who named them, and when.
+The <b>opinion table</b> lists all classification, synonymy, and validity information, giving the authority and year for each opinion. Taxa can appear only once in the authority table but many times in the opinion table.<p>
 
 <p>You will use two different scripts to enter data into these two tables.
 Follow the "Add/edit taxonomic names" link on the main menu to enter authority data.
@@ -50,22 +52,25 @@ If only one synonymy/combination gets used at a time, then who cares about all t
 
 <hr>
 <center>
-<a name="Definitions"></a>
-<h3>Definitions of taxonomic terms</a></h3>
-</center><p>
-
-<hr>
-<center>
 <a name="Authority"></a>
-<h3>Who named the taxon?</a></h3>
+<h3>Authority form: Who named the taxon?</a></h3>
 </center><p>
 
-IMPORTANT: At this point the name of the taxon must be correct. (1) Be very sure you have the spelling right. If not, quit and start over.
-(2) Don't use the spelling or combination given by the current reference if the original name is different.
-Make sure you put in the original name instead.<p>
+<p>IMPORTANT: At this point the name of the taxon must be correct.</p>
 
-Every taxon has to be named in a publication, which is called the authority. For example, <i>Homo sapiens</i> was named in a 1758 publication by Linnaeus, so the authority is <i>Linnaeus 1758</i>.
-You can record the authority in one of two ways. (1) You are entering data from the same paper in which the taxon was named. So, if you are reading Linnaeus 1758, select the radio button that says "It was first named in the data record's primary reference." (2) You are working from another, later paper that discusses the species and gives some information about the authority. So, select the button that says "it was named in an earlier publication" and enter as much as you can about the author names and the year the taxon was named.<p>
+<ol>
+<li> Be very sure you have the spelling right. If not, quit and start over.
+<li> Don't use the spelling or combination given by the current reference if the original name is different.
+Make sure you put in the original name instead.
+</ol>
+
+<p>Every taxon has to be named in a publication, which is called the authority. For example, <i>Homo sapiens</i> was named in a 1758 publication by Linnaeus, so the authority is <i>Linnaeus 1758</i>.
+You can record the authority in one of two ways:</p>
+
+<ol>
+<li> You are entering data from the same paper in which the taxon was named. So, if you are reading Linnaeus 1758, select the radio button that says "It was first named in the data record's primary reference."
+<li> You are working from another, later paper that discusses the species and gives some information about the authority. So, select the button that says "it was named in an earlier publication" and enter as much as you can about the author names and the year the taxon was named.
+</ol>
 
 <p>Create a new authority record for any taxon name that is spelt differently.
 So, if Linnaeus named the family "Equidae" but someone later created a subfamily called "Equinae," or reranked "Equidae" as the subfamily "Equinae," then Linnaeus is the author of that name too, but you need to make a new authority record anyway.</p>
@@ -86,13 +91,15 @@ The scripts won't be confused by these facts, so don't worry about them.
  <li>"<i>pages</i>" means the page number, or numbers, on which the taxon was named.
 DON'T enter page numbers for the whole paper!
 Usually the first page of the formal definition is good enough.
+You don't need to include "p." or "pp." or "page" or "pages" in the field; just enter the number(s).
  <li>"<i>figures</i>" means a list of figure numbers that show the type specimen.
+If there are both figures and plates, enter the numbers like this: "1, 2, Pl. 3" instead of "Fig. 1, 2, Pl. 3."
 </ul>
 
 <hr>
 <center>
 <a name="Type"></a>
-<h3>How was it named?</h3>
+<h3>Authority form: How was it named?</h3>
 </center><p>
 
 In this section you record key data about the taxon that should have been published when the name was first described.<p>
@@ -131,7 +138,7 @@ If there are two type specimens in a biological species, the names are synonyms 
 <hr>
 <center>
 <a name="Status"></a>
-<h3>Whose opinion are you entering?</h3>
+<h3>Opinion form: Whose opinion are you entering?</h3>
 </center>
 
 <p>Every opinion has to be tied to a reference. If the opinion is based on what you read in your current reference, check the "current reference" box. If not, enter as much information as you can about the earlier publication that argued this opinion. For example, if the current paper says "Xus was synonymized with Yus by Jones 1984" but says nothing more about the status of Xus, enter "Jones" and "1984" in this section and don't check the box.</p>
@@ -158,12 +165,13 @@ Again, this is for informational purposes only.
 <hr>
 <center>
 <a name="Opinions"></a>
-<h3>What did they say about its status?</h3>
+<h3>Opinion form: What did they say about its status?</h3>
 </center>
 
 <p>Once a taxon is named, the classification or validity of that taxon are a matter of opinion.
 Your job is to pick <i>one</i> opinion that best represents the author's viewpoint, or the viewpoint of the earlier publication that the author has mentioned.
 It is <i>very</i> important to record opinion data if at all possible.
+Otherwise we can't perform data analyses that require (say) finding all the taxa in a taxonomic group, or catching all the synonyms in the taxonomic occurrence lists so they can be reidentified.
 Read this entire section carefully, including the "How to read a synonymy list" discussion below, before you do anything.</p>
 
 <p>The scripts will display opinion information whenever you are entering new taxonomic data, or after you are done entering the data.
@@ -214,8 +222,10 @@ Pick "Invalid and no other name can be applied" and then choose the status. The 
  <li>"<i>nomen vanum</i>" means that the type material is indeterminate and there is no reasonable chance that further research might help. Leave "parent taxon" empty.
 </ul>
 
+<hr>
 <center>
-<h4>How to handle complicated cases</h4>
+<a name="Complications"></a>
+<h3>How to handle complicated cases</h3>
 </center><p>
 
 <i>Higher taxa:</i>
@@ -238,8 +248,10 @@ First, fill out a form with X in the taxon name field; G in full in the parent t
 <li><i>Species X is invalid</i> (<u>validity</u>). Select "nomen dubium," "nomen nudum," "nomen oblitum" or "nomen vanum" and leave the senior synonym field <i>blank</i>.
 </ul>
 
+<hr>
 <center>
-<h4>How to read a synonymy list</h4>
+<a name="Example"></a>
+<h3>How to read a synonymy list</h3>
 </center><p>
 
 In a carefully written paper, the systematic paleontology section for each species (and sometimes each genus or even higher taxon) begins with a list of species names found in the earlier literature.
@@ -264,18 +276,19 @@ Here's how you handle an American-style list:</p>
 <ul>
 <li>The first line should show the naming event for the valid species (the one at the top of the list).
 Just create an authority record for that name, if none exists yet.
-<li>If the line shows a naming event and the name is not the valid species at the top of the list, it's a junior synonym.
+<li>If a line shows a naming event and the name is not the valid species at the top of the list, it's a junior synonym.
 Make sure there is an authority record for the synonym, then enter the opinion that the <i>current</i> author thinks it is a synonym.
-<li>If the line shows a recombination, either of the valid species or of a synonym, (a) do NOT create an authority record, but (b) do create an opinion that the original combination of that name was recombined by that author in that year.
+<li>If a line shows a recombination, either of the valid species or of a synonym, (a) do NOT create an authority record, but (b) do create an opinion that the original combination of that name was recombined by that author in that year.
 </ul>
 
 <p>The second format is a long format that is commonly (but not only) used by European authors, and also sometimes by authors from other continents.
 It includes not just the synonymy/recombination information listed by the Americans, but also any cases where an earlier author described some material <i>of a totally different, valid species</i> and the present author has reidentified <i>just that material, but not the type</i> as the valid species under consideration.
 You can tell right away that you are dealing with a European-style list if you see the letter "v" to the left of some of the names.
 This is abbreviated Latin meaning "I saw it" and indicating that this is a list of specimens, not just species.
-Another way to tell is when some lines end <i>partim,</i> meaning that only some of the specimens, and not the type specimens, are being assigned to this species.
-So, a <i>partim</i> assignment is never ever a synonymy.
-It is extremely difficult and dangerous to work with these lists, because you often can't tell if a name is a synonym/recombination or just some reidentified material.
+Another way to tell is when some lines end with <i>partim,</i> meaning that only some of the specimens, and not the type specimens, are being assigned to this species.
+So, a <i>partim</i> assignment is never ever a synonymy.</p>
+
+<p>It is extremely difficult and dangerous to work with these lists, because you often can't tell if a name is a synonym/recombination or just some reidentified material.
 Here are some hints:</p>
 
 <ul>
@@ -292,18 +305,23 @@ Now enter an opinion that the second author recombined the name.
 <p>Here's an example of an American (= easy) synonymy list with real species names taken from a single make-believe paper ("Smith 2004"), and instructions for entering it.</p>
 
 <center><i>Omomys carteri</i></center>
-<ul>
-<li>1869 <i>Omomys carteri</i> Leidy
-<li>1872 <i>Palaeacodon vagus</i> Marsh
-<li>1872 <i>Hemiacodon pucillus</i> Marsh
-<li>1872 <i>Hemiacodon nanus</i> Marsh
-<li>1872 <i>Euryacodon lepidus</i> Marsh
-<li>1904 <i>Omomys carteri</i> Wortman
-<li>1904 <i>Omomys pucillus</i> Wortman
-<li>1958 <i>Omomys carteri</i> Gazin
-<li>1976 <i>Omomys carteri</i> Szalay
-<li>1990 <i>Omomys carteri</i> Westgate
-</ul>
+
+<table width="100%">
+<tr><td align="center">
+ <table>
+ <tr><td align="left">
+   1869 <i>Omomys carteri</i> Leidy<br>
+   1872 <i>Palaeacodon vagus</i> Marsh<br>
+   1872 <i>Hemiacodon pucillus</i> Marsh<br>
+   1872 <i>Hemiacodon nanus</i> Marsh<br>
+   1872 <i>Euryacodon lepidus</i> Marsh<br>
+   1904 <i>Omomys carteri</i> Wortman<br>
+   1904 <i>Omomys pucillus</i> Wortman<br>
+   1958 <i>Omomys carteri</i> Gazin<br>
+   1976 <i>Omomys carteri</i> Szalay<br>
+   1990 <i>Omomys carteri</i> Westgate
+</td></tr></table>
+</td></tr></table>
 
 <p>What to do:</p>
 
@@ -312,13 +330,13 @@ Now enter an opinion that the second author recombined the name.
 Create the authority record if it doesn't already exist.
 <li>Marsh's <i>vagus, pucillus, nanus,</i> and <i>lepidus</i> are synonyms.
 First create authority records for them if needed.
-The enter opinions that the current author (Smith 2004) thinks they are synonyms.
+Then enter opinions that the current author (Smith 2004) thinks they are synonyms.
 <li>Wortman (1904) also thought that <i>carteri</i> belonged to <i>Omomys</i>.
 Enter that opinion.
 <li>Wortman (1904) thought that <i>pucillus</i> was valid but recombined it into <i>Omomys</i>.
 Enter that opinion too.
 <li>The last three authors (Gazin, Szalay, and Westgate) all agreed with Wortman that the original combination of <i>carteri</i> was correct.
-Enter an opinion for each case.
+Enter an opinion in each case.
 </ol>
 
 <p>Note that if this were a European list, we'd only be able to enter the four opinions on <i>carteri</i> saying that it was always placed in its original genus.
