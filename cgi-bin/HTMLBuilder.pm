@@ -164,6 +164,14 @@ sub populateHTML
 		$val = date($val);
 	}
 
+	# genera with species equal to 'indet.' shoudn't be italicized
+	if($htmlTemplateName eq 'taxa_display_row' && $fieldName eq 'species_name'){
+		if($val eq 'indet.'){
+			$htmlTemplateString =~ s/<i>//g;
+			$htmlTemplateString =~ s/<\/i>//g;
+		}	
+	}
+
     # Do div tags (eventually, other tags should support show/hide attributes)
 	# revised by JA 16.7.02
 	if ($val ne "")	{
