@@ -219,12 +219,29 @@ sub processAction {
 			# failed login:  (bad password, etc.)
 
 			#Debug::dbPrint("failed login");
+
+			my $errorMessage;
+
+			if ( ! $q->param('authorizer') )	{
+				$errorMessage = "The authorizer name is required. ";
+			}
+			if ( ! $q->param('enterer') )	{
+				$errorMessage .= "The enterer name is required. ";
+			}
+			if ( ! $q->param('password') )	{
+				$errorMessage .= "The password is required. ";
+			}
+			if ( ( $q->param('authorizer') && $q->param('authorizer') !~ /.\ / ) || ( $q->param('enterer') && $q->param('enterer') !~ /\. / ) )	{
+				$errorMessage .= "Note that the format for names is <i>Smith, A.</i> ";
+			if ( ! $errorMessage )	{
+				$errorMessage .= "The authorizer name, enterer name, or password is invalid. ";
+			}
 			
 			$q->param("user" => "Guest");
 			$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
 			
 			# return them to the login page with a message about the bad login.
-			displayLoginPage("<div class=\"warning\">Bad user name or password.  Please check your spelling, make sure your caps lock key is off, and try again.  Note that the format is <i>Smith, A.</i></div>");
+			displayLoginPage("<div class=\"warning\">Sorry, your login failed. $errorMessage</div>");
 			
 			return;
 		}
