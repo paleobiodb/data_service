@@ -120,7 +120,7 @@ sub getSecondaryRefsString{
 					);
 		my $an = AuthorNames->new(\%temp);
 
-		$result_string .= "<td valign=top width=\"5%\"><small>".
+		$result_string .= "<td valign=top width=\"7%\"><small>".
 						  "<b>$ref->{reference_no}</b></small></td>";
 
 		if($ref->{project_name}){
@@ -128,7 +128,7 @@ sub getSecondaryRefsString{
 							  ">&nbsp;$ref->{project_name}&nbsp;</font></td>";
 		}
 
-		$result_string .= "<td rowspan=2 valign=top width=\"95%\">".
+		$result_string .= "<td rowspan=2 valign=top width=\"93%\">".
 						  "<small>".$an->toString().
 						  ".&nbsp;$ref->{pubyr}.&nbsp;";
 
