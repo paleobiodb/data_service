@@ -34,12 +34,12 @@ my $DEBUG=0;			# The debug level of the calling program
 my $dbh;
 my $dbt;
 my $q;					# Reference to the parameters
+my $s;
 
 $DDIR=$ENV{REPORT_DDIR};
 $DDIR2=$ENV{REPORT_DDIR2};
                                         # the default working directory
 $BACKGROUND="/public/PDbg.gif";
-$OUTPUT_FILE="$DDIR2/report.csv";
 
 # I think these are for the collections table.
 $LOCIDCOL=3;
@@ -52,6 +52,7 @@ $GENCOL=6;
 $SPCOL=8;
 $ABCOL=9;
 
+my $authorizer;
 
 sub new {
 	my $class = shift;
@@ -68,6 +69,18 @@ sub new {
 sub buildReport {
 	my $self = shift;
 
+	$OUTPUT_FILE = $DDIR2;
+	# customize the subdirectory holding the output files
+	if ( $s->get('enterer') ne "Guest")     {
+		$authorizer = $s->get("authorizer");
+		$authorizer =~ s/ //g;
+		$authorizer =~ s/\.//g;
+		$authorizer =~ tr/[A-Z]/[a-z]/;
+		$OUTPUT_FILE .= "/" . $temp;
+		mkdir $OUTPUT_FILE;
+		chmod 0777, $OUTPUT_FILE;
+	}
+	$OUTPUT_FILE .= "/report.csv";
 	# compute the numeric equivalent of the date limit
 	if ( $q->param('day') < 10)	{ $q->param('day' => "0".$q->param('day')); }
 
@@ -767,7 +780,7 @@ if ($region{$columns[$fieldno[$r]]} eq "") { print "$columns[$fieldno[$r]]<br>\n
 		print "The search was restricted to collections including <i>".$q->param('taxon_name')."</i><p>\n";
 	}
 
-	print "\nThe report data have been saved to \"<a href=\"/public/data/report.csv\">report.csv</a>\"<p>\n";
+	print "\nThe report data have been saved to \"<a href=\"/public/data/$authorizer/report.csv\">report.csv</a>\"<p>\n";
     print "</center>\n";
 
 }
