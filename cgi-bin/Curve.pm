@@ -497,6 +497,19 @@ sub assignGenera	{
 			$originate[$first]++;
 			$extinct[$last]++;
 			$foote[$first][$last]++;
+		# stats needed for Jolly-Seber estimator
+		# note that "first" is bigger than "last" because time bins
+		#  are numbered from youngest to oldest
+			for $j ($last..$first)	{
+				if ( abs($present[$i][$j]) > 0 )	{
+					if ( $first > $j )	{
+						$earlier[$j]++;
+					}
+					if ( $last < $j )	{
+						$later[$j]++;
+					}
+				}
+			}
 		}
 	}
 	close PADATA;
@@ -517,6 +530,17 @@ sub assignGenera	{
 		print FOOTE "\n";
 	}
 
+	# compute Jolly-Seber estimator
+	# based on Nichols and Pollock 1983, eqns. 2 and 3, which reduce to
+	#  N = n^2z/rm + n where N = estimate, n = sampled, z = range-through
+	#  minus sampled, r = sampled and present earlier, and m = sampled
+	#  and present later
+	for $i (reverse 1..$chrons)	{
+		if ( $earlier[$i] > 0 && $later[$i] > 0 )	{
+			$jolly[$i] = ($richness[$i]**2 * ($rangethrough[$i] - $richness[$i]) / ($earlier[$i] * $later[$i])) + $richness[$i];
+		}
+	}
+
 	# free some variables
 	@lastocc = ();
 	@occs = ();
@@ -534,6 +558,7 @@ sub subsample	{
 			@lastsampled = ();
 			@subsrichness = ();
 			@lastsubsrichness = ();
+			@present = ();
 			for $i (1..$chrons)	{
 				if (($q->param('printall') eq "yes" && $listsinchron[$i] > 0)||
 					  (($usedoccsinchron[$i] > $q->param('samplesize') &&
@@ -620,17 +645,17 @@ sub subsample	{
 		 # declare the genus (or all genera in a list) present in this chron
 					  $lastsubsrichness[$i] = $subsrichness[$i];
 					  if (($samplingmethod == 1) || ($samplingmethod == 5))	{
-					    if ($present[$occid[$j]][$i] != $trials)	{
-					      $present[$occid[$j]][$i] = $trials;
+					    if ($present[$occid[$j]][$i] == 0)	{
 					      $subsrichness[$i]++;
 					    }
+					    $present[$occid[$j]][$i]--;
 					  }
 					  else	{
 					    for $k ($baseocc[$listid[$j]]..$topocc[$listid[$j]])	{
-					      if ($present[$occsbychron[$i][$k]][$i] != $trials)	{
-					        $present[$occsbychron[$i][$k]][$i] = $trials;
+					      if ($present[$occsbychron[$i][$k]][$i] == 0)	{
 					        $subsrichness[$i]++;
 					      }
+					      $present[$occsbychron[$i][$k]][$i]--;
 					    }
 					  }
 	
@@ -646,11 +671,8 @@ sub subsample	{
 					  }
 		# for method 2 = UW, compute the honest to goodness
 		#  complete subsampling curve
-		# note: this is kind of redundant because the value keeps
-		#  getting erased up until the value from the last trial
-		#  is copied, but no harm is done
 					  if ( $samplingmethod == 2 )	{
-					    $fullsampcurve[$i][$sampled[$i]] = $subsrichness[$i];
+					    $fullsampcurve[$i][$sampled[$i]] = $fullsampcurve[$i][$sampled[$i]] + $subsrichness[$i];
 					  }
 	
 		 # erase the list or occurrence that has been drawn
@@ -693,7 +715,7 @@ sub subsample	{
 				$first = 0;
 				$last = 0;
 				for $j (1..$chrons)	{
-					if ($present[$i][$j] == $trials)	{
+					if ($present[$i][$j] < 0)	{
 					  if ($last == 0)	{
 					    $last = $j;
 					  }
@@ -712,6 +734,22 @@ sub subsample	{
 				$msubsextinct[$last]++;
 				$tsubsoriginate[$first]++;
 				$tsubsextinct[$last]++;
+				for $j ($last..$first)	{
+					if ( abs($present[$i][$j]) > 0 )	{
+						if ($present[$i][$j] == -1)	{
+							$msubschaol[$j]++;
+						}
+						elsif ($present[$i][$j] == -2)	{
+							$msubschaom[$j]++;
+						}
+						if ( $first > $j )	{
+							$msubsearlier[$j]++;
+						}
+						if ( $last < $j )	{
+							$msubslater[$j]++;
+						}
+					}
+				}
 			}
 			for $i (1..$chrons)	{
 				if ($msubsrangethrough[$i] > 0)	{
@@ -750,6 +788,10 @@ sub subsample	{
 				$msubsoriginate[$i] = $msubsoriginate[$i]/$trials;
 				$msubsextinct[$i] = $msubsextinct[$i]/$trials;
 				$msubssingletons[$i] = $msubssingletons[$i]/$trials;
+				$msubschaol[$i] = $msubschaol[$i]/$trials;
+				$msubschaom[$i] = $msubschaom[$i]/$trials;
+				$msubsearlier[$i] = $msubsearlier[$i]/$trials;
+				$msubslater[$i] = $msubslater[$i]/$trials;
 				for $j (1..$atstep[$q->param('samplesize')])	{
 					$sampcurve[$i][$j] = $sampcurve[$i][$j]/$trials;
 				}
@@ -761,19 +803,24 @@ sub subsample	{
 		@{$outrichness[$i]} = sort { $a <=> $b } @{$outrichness[$i]};
 	}
 
+	# compute Jolly-Seber estimator
+	for $i (reverse 1..$chrons)	{
+		if ( $msubsearlier[$i] > 0 && $msubslater[$i] > 0 )	{
+			$msubsjolly[$i] = ($msubsrichness[$i]**2 * ($msubsrangethrough[$i] - $msubsrichness[$i]) / ($msubsearlier[$i] * $msubslater[$i])) + $msubsrichness[$i];
+		}
+	}
+
 	# fit Michaelis-Menten equation using Raaijmakers maximum likelihood
 	#  equation (Colwell and Coddington 1994, p. 106) 13.7.04
 	# do this only for method 2 (UW) because the method assumes you are
 	#  making a UW curve
-#FOO if this doesn't run for sub-samplesize chrons, those curves need to be
-#  forced
 	if ( $samplingmethod == 2)	{
 		for $i (1..$chrons)	{
 			if ($msubsrichness[$i] > 0)	{
 				# get means
 				my $sumx = 0;
 				my $sumy = 0;
-				my $curvelength;
+				my $curvelength = 0;
 				for $j (1..$q->param('samplesize'))	{
 					if ( $fullsampcurve[$i][$j] > 0 )	{
 						$fullsampcurve[$i][$j] = $fullsampcurve[$i][$j] / $trials;
@@ -853,7 +900,9 @@ sub printResults	{
 		print "<td class=small align=center valign=top><b>Sampled<br>genera</b>";
 		print "<td class=small align=center valign=top><b>Range-through<br>genera</b> ";
 		print "<td class=small align=center valign=top><b>Boundary-crosser <br>genera</b> ";
-		print "<td class=small align=center valign=top><b>First<br>appearances</b> <td class=small align=center valign=top><b>Origination<br>rate</b> <td class=small align=center valign=top><b>Last<br>appearances</b><td class=small align=center valign=top><b>Extinction<br>rate</b> <td class=small align=center valign=top><b>Singleton<br>genera</b> ";
+		print "<td class=small align=center valign=top><b>First<br>appearances</b> <td class=small align=center valign=top><b>Origination<br>rate</b> <td class=small align=center valign=top><b>Last<br>appearances</b><td class=small align=center valign=top><b>Extinction<br>rate</b> <td class=small align=center valign=top><b>Singletons</b> ";
+		print "<td class=small align=center valign=top><b>Chao-2<br>estimate</b> ";
+		print "<td class=small align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
 		print "<td class=small align=center valign=top><b>$listorfm</b> ";
 		if ($samplingmethod != 5)	{
 			print "<td class=small align=center valign=top><b>Occurrences</b> ";
@@ -864,7 +913,8 @@ sub printResults	{
 		}
 		print "<td class=small align=center valign=top><b>Mean<br>richness</b> <td class=small align=center valign=top><b>Median<br>richness</b> ";
 		print TABLE "Bin,Bin name,Sampled genera,Range-through genera,Boundary-crosser genera,";
-		print TABLE "First appearances,Origination rate,Last appearances,Extinction rate,Singleton genera,";
+		print TABLE "First appearances,Origination rate,Last appearances,Extinction rate,Singletons,";
+		print TABLE "Chao-2 estimate,Jolly-Seber estimate,";
 		if ($samplingmethod != 5)	{
 			print TABLE "$listorfm,Occurrences,Occurrences-squared,";
 		}
@@ -875,6 +925,12 @@ sub printResults	{
 	
 		for $i (1..$chrons)	{
 			if ($rangethrough[$i] > 0 && $listsinchron[$i] > 0)	{
+				if ($chaom[$i] > 0)	{
+				  $chaostat = $richness[$i] + ($chaol[$i] * $chaol[$i] / (2 * $chaom[$i]));
+				}
+				else	{
+				  $chaostat = "NaN";
+				}
 				$temp = $chname[$i];
 				$temp =~ s/ /&nbsp;/;
 				print "<tr><td class=small valign=top>$temp";
@@ -903,6 +959,16 @@ sub printResults	{
 					print "<td class=small align=center valign=top>NaN";
 				}
 				print "<td class=small align=center valign=top>$singletons[$i] ";
+				if ($chaostat > 0 && $msubsrichness[$i] > 0 )	{
+				  printf "<td class=small align=center valign=top>%.1f ",$chaostat;
+				} else    {
+				  print "<td class=small align=center valign=top>NaN ";
+				}
+				if ($jolly[$i] > 0 && $msubsrichness[$i] > 0 )	{
+				  printf "<td class=small align=center valign=top>%.1f ",$jolly[$i];
+				} else    {
+				  print "<td class=small align=center valign=top>NaN ";
+				}
 				print "<td class=small align=center valign=top>$listsinchron[$i] ";
 				print "<td class=small align=center valign=top>$occsinchron[$i] ";
 				if ($samplingmethod != 5)	{
@@ -932,6 +998,16 @@ sub printResults	{
 					print TABLE ",NaN";
 				}
 				print TABLE ",$singletons[$i]";
+				if ($chaostat > 0 && $msubsrichness[$i] > 0 )	{
+				  printf TABLE ",%.1f",$chaostat;
+				} else    {
+				  print TABLE ",NaN";
+				}
+				if ($jolly[$i] > 0 && $msubsrichness[$i] > 0 )	{
+				  printf TABLE ",%.1f",$jolly[$i];
+				} else    {
+				  print TABLE ",NaN";
+				}
 				print TABLE ",$listsinchron[$i]";
 				print TABLE ",$occsinchron[$i]";
 				if ($samplingmethod != 5)	{
@@ -971,7 +1047,10 @@ sub printResults	{
 			print "<td class=small align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
 			print "<td class=small align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
 			print "<td class=small align=center valign=top><b>Chao-2<br>estimate</b> ";
-			print "<td class=small align=center valign=top><b>Michaelis-Menten<br>estimate</b> ";
+			print "<td class=small align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
+			if ( $samplingmethod == 2)	{
+				print "<td class=small align=center valign=top><b>Michaelis-Menten<br>estimate</b> ";
+			}
 			print TABLE "Bin,Bin name,";
 			print TABLE "Sampled genera,Range-through genera,";
 			print TABLE "Items sampled,Median richness,";
@@ -985,11 +1064,14 @@ sub printResults	{
 			if ($q->param('diversity') =~ /boundary-crossers/)	{
 				print TABLE "Extinction rate,";
 			}
-			print TABLE "Singleton genera,";
+			print TABLE "Singletons,";
 			print TABLE "Gap analysis completeness,";
 			print TABLE "Gap analysis diversity,";
 			print TABLE "Chao-2 estimate,";
-			print TABLE "Michaelis-Menten estimate,";
+			print TABLE "Jolly-Seber estimate,";
+			if ( $samplingmethod == 2)	{
+				print TABLE "Michaelis-Menten estimate,";
+			}
 			print TABLE "Base (Ma),Midpoint (Ma)\n";
 			for ($i = 1; $i <= $chrons; $i++)     {
 				if ($rangethrough[$i] > 0)  {
@@ -1001,11 +1083,11 @@ sub printResults	{
 					else	{
 					  $gapstat = "NaN";
 					}
-					if ($chaom[$i] > 0)	{
-					  $chaostat = $richness[$i] + ($chaol[$i] * $chaol[$i] / (2 * $chaom[$i]));
+					if ($msubschaom[$i] > 0)	{
+					  $msubschaostat = $richness[$i] + ($msubschaol[$i] * $msubschaol[$i] / (2 * $msubschaom[$i]));
 					}
 					else	{
-					  $chaostat = "NaN";
+					  $msubschaostat = "NaN";
 					}
 					$temp = $chname[$i];
 					$temp =~ s/ /&nbsp;/;
@@ -1076,16 +1158,22 @@ sub printResults	{
 					  print "<td class=small align=center valign=top>NaN <td class=small align=center valign=top>NaN ";
 					  print TABLE ",NaN,NaN";
 					}
-					if ($chaostat > 0)	{
-					  printf "<td class=small align=center valign=top>%.1f ",$chaostat;
-					  print TABLE ",$chaostat";
+					if ($msubschaostat > 0 && $msubsrichness[$i] > 0 )	{
+					  printf "<td class=small align=center valign=top>%.1f ",$msubschaostat;
+					  printf TABLE ",%.1f",$msubschaostat;
+					} else    {
+					  print "<td class=small align=center valign=top>NaN ";
+					  print TABLE ",NaN";
 					}
-					else    {
+					if ($msubsjolly[$i] > 0 && $msubsrichness[$i] > 0 )	{
+					  printf "<td class=small align=center valign=top>%.1f ",$msubsjolly[$i];
+					  printf TABLE ",%.1f",$msubsjolly[$i];
+					} else    {
 					  print "<td class=small align=center valign=top>NaN ";
 					  print TABLE ",NaN";
 					}
 					if ( $samplingmethod == 2)	{
-						if ($michaelis[$i] > 0)	{
+						if ($michaelis[$i] > 0 && $msubsrichness[$i] > 0 )	{
 					  	printf "<td class=small align=center valign=top>%.1f ",$michaelis[$i];
 					  	printf TABLE ",%.1d",$michaelis[$i];
 						}
