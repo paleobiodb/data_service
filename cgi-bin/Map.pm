@@ -6,6 +6,7 @@ use Image::Magick;
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
 my $dbh;				# The database handle
+my $dbt;				# The DBTransactionManager object
 my $q;					# Reference to the parameters
 my $s;					# Reference to the session
 my $sql;				# Any SQL string
@@ -30,6 +31,7 @@ sub new {
 	$dbh = shift;
 	$q = shift;
 	$s = shift;
+	$dbt = shift;
 	my $self = {};
 
 	bless $self, $class;
@@ -56,8 +58,43 @@ sub buildMap {
 
 }
 
+## same as buildMap, but doesn't call mapDrawMap, and returns number of colls.
+sub buildMapOnly {
+	my $self = shift;
+	my $in_list = (shift or "");
+
+	$|=1;					# Freeflowing data
+
+	$maptime = $q->param('maptime');
+	if ( $maptime eq "" )	{
+		$maptime = 0;
+	}
+
+	$self->mapGetScale();
+	$self->mapDefineOutlines();
+	if ( $maptime > 0 )	{
+		$self->mapGetRotations();
+	}
+	$self->mapQueryDb($in_list);
+
+	# Get rows okayed by permissions module
+	my $p = Permissions->new ( $s );
+	my @dataRows = ( );
+	my $limit = 1000000;
+	my $ofRows = 0;
+	# NOTE: this statement handle is apparently picked up from the
+	# mapQueryDb method, though it's not 'self' or passed in...
+	# (It stays in scope only because it was initialized through $dbh
+	# which is global)
+	$p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
+
+	return \@dataRows;
+}
+
+
 	sub mapQueryDb	{
 		my $self = shift;
+		my $in_list = shift;
 
 		# if a research project (not a group) is requested, get a list of
 		#  references included in that project JA 3.10.02
@@ -78,31 +115,44 @@ sub buildMap {
 		}
 
 
-		# if a genus name is requested, query the occurrences table to get
-		#  a list of useable collections
+		# query the occurrences table to get a list of useable collections
 		# Also handles species name searches JA 19-20.8.02
 		my $genus;
 		my $species;
-		if ( $q->param('genus_name') ) {
+		if($q->param('genus_name')){
 			# PM 09/13/02 added the '\s+' pattern for space matching.
-			if ( $q->param('genus_name') =~ /\s+/ )	{
+			if($q->param('genus_name') =~ /\w\s+\w/){
 				($genus,$species) = split /\s+/,$q->param('genus_name');
-			} elsif ( $q->param('taxon_rank') eq "species" )	{
+			}
+			elsif($q->param('taxon_rank') eq "species"){
 				$species = $q->param('genus_name');
-			} else	{
+			}
+			else{
 				$genus = $q->param('genus_name');
 			}
 			$sql = qq|SELECT collection_no FROM occurrences WHERE |;
-			if ( $genus )	{
-				$sql .= "genus_name='" . $genus;
-				if ( $species )	{
-					$sql .= "' AND ";
+			if($q->param('taxon_rank') eq "Higher taxon"){
+				$self->dbg("genus_name q param:".$q->param('genus_name')."<br>");
+				$sql .= "genus_name IN (";
+				if($in_list eq ""){
+					$self->dbg("RE-RUNNING TAXONOMIC SEARCH in Map.pm<br>");
+					$in_list=PBDBUtil::taxonomic_search($q->param('genus_name'),
+														$dbt);
 				}
+				$sql .= $in_list . ")";
 			}
-			if ( $species )	{
-				$sql .= "species_name='" . $species;
+			else{
+				if($genus){
+					$sql .= "genus_name='" . $genus;
+					if($species){
+						$sql .= "' AND ";
+					}
+				}
+				if($species){
+					$sql .= "species_name='" . $species;
+				}
+				$sql .= "'";
 			}
-			$sql .= "'";
 			$sth2 = $dbh->prepare($sql);
 			# DEBUG: PM 09/13/02
 			$self->dbg("mapQueryDb sql: $sql<br>");
@@ -123,8 +173,8 @@ sub buildMap {
 		# figure out what collection table values are being matched 
 		# in what fields
 		@allfields = (	'research_group',
-				'authorizer',
 				'enterer',
+				'authorizer',
 				'country',
 				'state',
 				'period',
@@ -287,7 +337,7 @@ sub buildMap {
 
  	if ( $where ) { $sql .= "$where "; }
 	$sql =~ s/FROM collections  AND /FROM collections WHERE /;
-	$sql =~ s/\s+/ /gms;
+	$sql =~ s/\s+/ /gs;
 	$self->dbg ( "Final sql: $sql<br>" );
 	# NOTE: Results attached to this statement handle are used in mapDrawMap
 	$sth = $dbh->prepare($sql);
@@ -304,7 +354,7 @@ sub mapGetScale	{
   $scale = $q->param('mapscale');
   $scale =~ s/x //i;
 
-  my ($cont,$coords) = split / \(/,$q->param('mapfocus');
+  ($cont,$coords) = split / \(/,$q->param('mapfocus');
   $coords =~ s/\)//;
   ($midlat,$midlng) = split /,/,$coords;
   if ( $q->param('maplat') && $q->param('maplng') )	{
@@ -519,6 +569,7 @@ sub mapGetRotations	{
 sub mapDrawMap	{
 
   my $self = shift;
+  my $perm_rows = shift;
 
   # erase the last map that was drawn
   if ( ! open GIFCOUNT,"<$GIF_DIR/gifcount" ) {
@@ -585,6 +636,131 @@ sub mapDrawMap	{
   }
   $height = $vmult * $vpix;
   $width = $hmult * $hpix;
+
+#--
+%fieldnames = ( "research group" => "research_group",
+		"state/province" => "state",
+		"age/stage" => "stage",
+		"lithology" => "lithology1",
+		"paleoenvironment" => "environment",
+		"taxon" => "genus_name" );
+
+	$maxsetpts = 1;
+	if ( $q->param('mapsearchfields2') && $q->param('mapsearchterm2') )	{
+		$maxsetpts = 2;
+	}
+	if ( $q->param('mapsearchfields3') && $q->param('mapsearchterm3') )	{
+		$maxsetpts = 3;
+	}
+	if ( $q->param('mapsearchfields4') && $q->param('mapsearchterm4') )	{
+		$maxsetpts = 4;
+	}
+
+ for $ptset (1..$maxsetpts)	{
+	if ( $ptset > 1 )	{
+		my $extraterm;
+		if ( $ptset == 2 )	{
+			$extraterm = $q->param('mapsearchfields2');
+		} elsif ( $ptset == 3 )	{
+			$extraterm = $q->param('mapsearchfields3');
+		} else	{
+			$extraterm = $q->param('mapsearchfields4');
+		}
+		if ( $fieldnames{$extraterm} )	{
+			$extraterm = $fieldnames{$extraterm};
+		}
+
+		if ( $ptset == 2 )	{
+			$q->param($extraterm => $q->param('mapsearchterm2') );
+		} elsif ( $ptset == 3 )	{
+			$q->param($extraterm => $q->param('mapsearchterm3') );
+		} else	{
+			$q->param($extraterm => $q->param('mapsearchterm4') );
+		}
+
+		$self->mapQueryDb();
+	}
+	$setsuffix = $ptset;
+	if ( $ptset == 1 )	{
+  		$setsuffix = "";
+	}
+
+  $dotsizeterm = $q->param("pointsize$setsuffix");
+  $dotshape = $q->param("pointshape$setsuffix");
+
+  if ($dotsizeterm eq "tiny")	{
+    $dotsize = 1.5;
+  } elsif ($dotsizeterm eq "small")	{
+    $dotsize = 2;
+  } elsif ($dotsizeterm eq "medium")	{
+    $dotsize = 3;
+  } elsif ($dotsizeterm eq "large")	{
+    $dotsize = 4;
+  }
+  $maxdotsize = $dotsize;
+  if ($dotsizeterm eq "proportional")	{
+    $maxdotsize = 7;
+  }
+
+	# Get rows okayed by permissions module
+	my $p = Permissions->new ( $s );
+	my @dataRows = ( );
+	# from buildMapOnly, we may have already run the permissions step.
+	# Note that even if we have data passing the permissions step, we 
+	# still might not get any points to draw since the data may be lacking
+	# lat/long info.
+	if($perm_rows){
+		@dataRows = @{$perm_rows};
+	}
+	my $limit = 1000000;
+	my $ofRows = 0;
+	# NOTE: this statement handle is apparently picked up from the
+	# mapQueryDb method, though it's not 'self' or passed in...
+	# (It stays in scope only because it was initialized through $dbh
+	# which is global)
+	if(scalar @dataRows < 1){
+		$p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
+		$self->dbg ( "Returned $ofRows rows okayed by permissions module" );
+	}
+
+
+  # draw collection data points
+  %atCoord = ();
+  %longVal = ();
+  %latgVal = ();
+  foreach $collRef ( @dataRows ) {
+    %coll = %{$collRef};
+    if ( ( $coll{'latdeg'} > 0 || $coll{'latmin'} > 0 || $coll{'latdec'} > 0 ) &&
+         ( $coll{'lngdeg'} > 0 || $coll{'lngmin'} > 0 || $coll{'lngdec'} > 0 ) && 
+			( $collok{$coll{'collection_no'}} eq "Y" || 
+			! $q->param('genus_name') ) 
+		) {
+
+      ($x1,$y1,$hemi) = $self->getCoords($coll{'lngdeg'},$coll{'latdeg'});
+
+      if ( $x1 > 0 && $y1 > 0 && $x1-$maxdotsize > 0 && 
+			$x1+$maxdotsize < $width &&
+			$y1-$maxdotsize > 0 && 
+			$y1+$maxdotsize < $height )	{
+        $atCoord{$x1}{$y1}++;
+        $longVal{$x1} = $coll{'lngdeg'} . " " . $coll{'lngdir'};
+        $latVal{$y1} = $coll{'latdeg'} . " " . $coll{'latdir'};
+	$hemiVal{$x1}{$y1} = $hemi;
+        $matches++;
+      }
+    }
+  }
+
+	$self->dbg("matches: $matches<br>");
+	# Bail if we don't have anything to draw.
+	if($matches < 1 && $q->param('taxon_info_script') eq "yes"){
+		print "NO MATCHING COLLECTION DATA AVAILABLE<br>";
+		return;
+	}
+
+#--
+
+
   # recenter the image if the GIF size is non-standard
   $gifoffhor = ( 360 - $hpix ) / ( $scale * 2 );
   $gifoffver = ( 180 - $vpix ) / ( $scale * 2 );
@@ -963,69 +1139,6 @@ if ( $q->param('gridposition') ne "in back" )	{
 	$self->drawGrids();
 }
 
-# START DATA POINT DRAWING SECTION
-
-%fieldnames = ( "research group" => "research_group",
-		"state/province" => "state",
-		"age/stage" => "stage",
-		"lithology" => "lithology1",
-		"paleoenvironment" => "environment",
-		"taxon" => "genus_name" );
-
-	$maxsetpts = 1;
-	if ( $q->param('mapsearchfields2') && $q->param('mapsearchterm2') )	{
-		$maxsetpts = 2;
-	}
-	if ( $q->param('mapsearchfields3') && $q->param('mapsearchterm3') )	{
-		$maxsetpts = 3;
-	}
-	if ( $q->param('mapsearchfields4') && $q->param('mapsearchterm4') )	{
-		$maxsetpts = 4;
-	}
-
- for $ptset (1..$maxsetpts)	{
-	if ( $ptset > 1 )	{
-		my $extraterm;
-		if ( $ptset == 2 )	{
-			$extraterm = $q->param('mapsearchfields2');
-		} elsif ( $ptset == 3 )	{
-			$extraterm = $q->param('mapsearchfields3');
-		} else	{
-			$extraterm = $q->param('mapsearchfields4');
-		}
-		if ( $fieldnames{$extraterm} )	{
-			$extraterm = $fieldnames{$extraterm};
-		}
-
-		if ( $ptset == 2 )	{
-			$q->param($extraterm => $q->param('mapsearchterm2') );
-		} elsif ( $ptset == 3 )	{
-			$q->param($extraterm => $q->param('mapsearchterm3') );
-		} else	{
-			$q->param($extraterm => $q->param('mapsearchterm4') );
-		}
-
-		$self->mapQueryDb();
-	}
-
-	# Get rows okayed by permissions module
-	my $p = Permissions->new ( $s );
-	my @dataRows = ( );
-	my $limit = 1000000;
-	my $ofRows = 0;
-	# NOTE: this statement handle is apparently picked up from the
-	# mapQueryDb method, though it's not 'self' or passed in...
-	# (It stays in scope only because it was initialized through $dbh
-	# which is global)
-	$p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
-
-	$self->dbg ( "Returned $ofRows rows okayed by permissions module" );
-
-	$setsuffix = $ptset;
-	if ( $ptset == 1 )	{
-  		$setsuffix = "";
-	}
-
   $dotcolor = $q->param("dotcolor$setsuffix");
   $bordercolor = $dotcolor;
   if ($q->param("dotborder$setsuffix") ne "no" )	{
@@ -1035,50 +1148,6 @@ if ( $q->param('gridposition') ne "in back" )	{
 	else	{
 		$bordercolor = "borderblack";
 	}
-  }
-
-  $dotsizeterm = $q->param("pointsize$setsuffix");
-  $dotshape = $q->param("pointshape$setsuffix");
-
-  if ($dotsizeterm eq "tiny")	{
-    $dotsize = 1.5;
-  } elsif ($dotsizeterm eq "small")	{
-    $dotsize = 2;
-  } elsif ($dotsizeterm eq "medium")	{
-    $dotsize = 3;
-  } elsif ($dotsizeterm eq "large")	{
-    $dotsize = 4;
-  }
-  $maxdotsize = $dotsize;
-  if ($dotsizeterm eq "proportional")	{
-    $maxdotsize = 7;
-  }
-
-  # draw collection data points
-  %atCoord = ();
-  %longVal = ();
-  %latgVal = ();
-  foreach $collRef ( @dataRows ) {
-    %coll = %{$collRef};
-    if ( ( $coll{'latdeg'} > 0 || $coll{'latmin'} > 0 || $coll{'latdec'} > 0 ) &&
-         ( $coll{'lngdeg'} > 0 || $coll{'lngmin'} > 0 || $coll{'lngdec'} > 0 ) && 
-			( $collok{$coll{'collection_no'}} eq "Y" || 
-			! $q->param('genus_name') ) 
-		) {
-
-      ($x1,$y1,$hemi) = $self->getCoords($coll{'lngdeg'},$coll{'latdeg'});
-
-      if ( $x1 > 0 && $y1 > 0 && $x1-$maxdotsize > 0 && 
-			$x1+$maxdotsize < $width &&
-			$y1-$maxdotsize > 0 && 
-			$y1+$maxdotsize < $height )	{
-        $atCoord{$x1}{$y1}++;
-        $longVal{$x1} = $coll{'lngdeg'} . " " . $coll{'lngdir'};
-        $latVal{$y1} = $coll{'latdeg'} . " " . $coll{'latdir'};
-	$hemiVal{$x1}{$y1} = $hemi;
-        $matches++;
-      }
-    }
   }
 
   print AI "u\n";  # start the group
@@ -1374,11 +1443,11 @@ if ( $q->param('gridposition') ne "in back" )	{
     # PM 09/13/02 Added bit about missing lat/long data to message
     print "<td class=\"large\"><b>Sorry! Either the collections were missing lat/long data, or no collections fall ";
   }
-  print "within the mapped area and matched your query";
-  if ($searchstring ne "")	{
-    $searchstring =~ s/_/ /g;
-    print " \"<i>$searchstring</i>\"";
-  }
+  print "within the mapped area, have lat/long data, and matched your query.";
+  #if ($searchstring ne "")	{
+  #  $searchstring =~ s/_/ /g;
+  #  print " \"<i>$searchstring</i>\"";
+  #}
   print "</b></td></tr></table>\n";
   if ($dotsizeterm eq "proportional")	{
     print "<br>Sizes of $dotshape are proportional to counts of collections at each point.\n"
@@ -1390,7 +1459,9 @@ if ( $q->param('gridposition') ne "in back" )	{
   print "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
   print "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format</p>\n";
 
-  print "</font><p>\n<hr><p><b><a href='?action=displayMapForm'>Search&nbsp;again</a></b></p>\n";
+  unless($q->param("taxon_info_script") eq "yes"){
+	  print "</font><p>\n<hr><p><b><a href='?action=displayMapForm'>Search&nbsp;again</a></b></p>\n";
+  }
 
   print "</center></body>\n</html>\n";
 
