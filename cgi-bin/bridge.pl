@@ -160,7 +160,7 @@ LOGIN: {
 if(!$DEBUG){
 	# The right combination will allow me to conditionally set the DEBUG flag
 	if($s->get("enterer") eq "J. Sepkoski" && 
-									$s->get("authorizer") eq "J. Alroy" ) {
+									$s->get("authorizer") eq Globals::god() ) {
 		$DEBUG = 1;
 	}
 }
@@ -189,9 +189,21 @@ dbg($q->Dump);
 # ACTION
 &$action;
 
+
+
+
+# check to see if java script is turned off
+# rjp, 1/2004.
+#if ($q->param('javascripton')) {
+#	Debug::dbPrint("javascript on");	
+#} else {
+#	Debug::dbPrint("javascript off");
+#}
+
+
+
+
 # --------------------------------------- subroutines --------------------------------
-
-
 
 
 # Logout
@@ -1261,7 +1273,7 @@ sub displaySelectRefForEditPage
 		foreach my $rowref (@rowrefs)
 		{
 			my $drow = DataRow->new($rowref, $md);
-			my $selectable = 1 if ( $s->get('authorizer') eq $drow->getValue('authorizer') || $s->get('authorizer') eq 'J. Alroy');
+			my $selectable = 1 if ( $s->get('authorizer') eq $drow->getValue('authorizer') || $s->get('authorizer') eq Globals::god());
 			$retVal = &makeRefString ( $drow, $selectable, $row, $numRows );
 			print $retVal;
 			$matches++ if $selectable;
@@ -2252,7 +2264,7 @@ sub displayCollectionDetails {
 		print $hbo->populateHTML('rarefy_display_buttons', \@row, \@fieldNames);
 	}
 
-	if($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy')	{
+	if($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq Globals::god())	{
 		print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames);
 	}
 	if($taxa_list ne "" && $q->param("user") ne "Guest"){
@@ -5147,10 +5159,12 @@ sub displayTaxonomyEntryForm	{
 	print &stdIncludes ("std_page_bottom");
 }
 
-# JA 15-22,27.8.02
-sub processTaxonomyEntryForm{
 
-# Pages and figures each can come from two different widgets, so merge them
+# JA 15-22,27.8.02
+# modified by rjp, 1/2004
+sub processTaxonomyEntryForm {
+
+	# Pages and figures each can come from two different widgets, so merge them
 	if ( $q->param('2nd_pages') )	{
 		$q->param(pages => $q->param('2nd_pages') );
 	}
@@ -5164,7 +5178,31 @@ sub processTaxonomyEntryForm{
 		$q->param(opinion_figures => $q->param('opinion_2nd_figures') );
 	}
 
-# Figure out the parent taxon name
+	
+	# do some validity checking.. make sure that the new taxon name isn't the same
+	# as the original.., that it is capitalized correctly, etc.
+	#
+	# rjp, 1/2004.
+	{
+		my $originalTaxon = uc($q->param('taxon_name_corrected'));
+		my $newTaxon1 = $q->param('parent_taxon_name');
+		my $newTaxon2 = $q->param('parent_taxon_name2');
+	
+		# make sure the first letter is capitalized.
+		if ($newTaxon1 ne ucfirst($newTaxon1) || $newTaxon2 ne ucfirst($newTaxon2)) {
+			Globals::printWarning("Invalid capitalization of taxon name.  Please go back and re-enter it.");
+			return;
+		}
+		
+		# make sure the new taxon != old taxon.
+		if ($originalTaxon eq uc($newTaxon1) || $originalTaxon eq uc($newTaxon2)) {
+			Globals::printWarning("The new taxon name is the same as the original.  Please go back and re-enter it.");
+			return;
+		}
+	}
+	
+	
+	# Figure out the parent taxon name
 	# The parent of a synonym is the senior synonym
 	if ( $q->param('taxon_status') eq "invalid1" )	{
 		$q->param(parent_taxon_name => $q->param('parent_taxon_name2') );
@@ -5172,8 +5210,8 @@ sub processTaxonomyEntryForm{
 		$q->param(parent_taxon_rank => $q->param('taxon_rank') );
 	}
 
-	if($q->param('taxon_name_corrected') && 
-			$q->param('taxon_name_corrected') ne $q->param('taxon_name')){
+	if ($q->param('taxon_name_corrected') && 
+			$q->param('taxon_name_corrected') ne $q->param('taxon_name')) {
 		$q->param('taxon_name' => $q->param('taxon_name_corrected'));
 	}
 
@@ -5202,16 +5240,17 @@ sub processTaxonomyEntryForm{
 			}
 		}
 	}
+	
+	
 
 	# If an unrecognized type or parent taxon name was entered, stash the form 
 	# data and ask if the user wants to add the name to the authorities table
 	checkNewTaxon();
 }
 
-##
-# checkNewTaxon
-##
-sub checkNewTaxon{
+
+# used in conjunction with processTaxonomyEntryForm()
+sub checkNewTaxon {
 	my @params_to_check = ('type', 'parent', 'parent_genus');
 	my @matches = (0,0,0);
 	my @matchList = ();
@@ -5303,7 +5342,7 @@ sub checkNewTaxon{
 		# WARNING: some fields don't correspond to database fields, e.g.,
 		#  type_taxon_name, parent_taxon_name2, and parent_genus_taxon_name
 		if($matches[0] != 1 || $matches[1] != 1 || $matches[2] != 1){
-			print &stdIncludes ("std_page_top");
+			print stdIncludes ("std_page_top");
 			print stdIncludes("js_taxonomy_checkform");
 			print "<form method=\"POST\" action=\"$exec_url\" onSubmit=\"return checkForm();\">\n";
 			$open_form_printed = 1;
@@ -5363,7 +5402,7 @@ sub checkNewTaxon{
 
 			if($q->param("$new_taxon_name") && !$q->param("$new_taxon_no")){
 				if(!$printed){
-					print &stdIncludes ("std_page_top");
+					print stdIncludes ("std_page_top");
 					print stdIncludes("js_taxonomy_checkform");
 					print "<form method=\"POST\" action=\"$exec_url\" ".
 						  "onSubmit=\"return checkForm();\">\n";
@@ -5512,6 +5551,7 @@ sub new_authority_form{
 	print $html;
 }
 
+
 # JA 13-18,27.8.02
 sub displayTaxonomyResults	{
 
@@ -5622,7 +5662,7 @@ sub displayTaxonomyResults	{
 	}
 
 
-# Process the form data relevant to the opinions table
+	# Process the form data relevant to the opinions table
 
 	# Set values implied by selection of radio buttons
 	if ( $q->param('taxon_status') eq "belongs_to" )	{
@@ -5731,7 +5771,7 @@ sub displayTaxonomyResults	{
 
 	my $taxon = $q->param('taxon_name');
 
-	my $opinion = &printTaxonomicOpinions( $taxon, $q->param('taxon_no'), \@lastOpinions );
+	my $opinion = printTaxonomicOpinions( $taxon, $q->param('taxon_no'), \@lastOpinions );
 	if ( $opinion )	{
 		if ( $taxon_is_new )	{
 			print "<center><h4>$taxon has been entered into the Database</h4></center>\n\n";
@@ -5756,7 +5796,7 @@ sub displayTaxonomyResults	{
 	print $q->param('taxon_no');
 	print "\">Add more data about " . $q->param('taxon_name') . "</a></b> - ";
 	print "<b><a href=\"$exec_url?action=displayTaxonomySearchForm\">Add more data about another taxon</a></b></p>\n";
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes ("std_page_bottom");
 
 }
 
@@ -6578,7 +6618,7 @@ sub checkNearMatch ()	{
 
 	if (@complaints)	{
 		# Print out the possible matches
-		print "<center><h3><font color='red'>WARNING!</font> Your new record may duplicate one of the following old ones</h3><center>\n";
+		Globals::printWarning("Your new record may duplicate one of the following old ones.");
 		print "<table><tr><td>\n";
 		# Figure out what fields to show
 		my @display;
