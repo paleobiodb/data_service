@@ -4627,9 +4627,14 @@ sub processEditOccurrences {
 			my %results = %{$results_ref};
 
 			# remove keys we don't directly mess with from the result set
+			# NOTE: for some reason Muhl originally excluded
+			#  authorizer and enterer, causing corruption of data;
+			#  fixed this 3.4.04 JA
+			delete($results{authorizer});
+			delete($results{enterer});
+			delete($results{modifier});
 			delete($results{created});
 			delete($results{modified});
-			delete($results{modifier});
 			delete($results{modified_temp});
 			delete($results{reid_no});
 			
@@ -4764,9 +4769,14 @@ sub processEditOccurrences {
 			my %results = %{$results_ref};
 
 			# remove keys we don't directly mess with from the result set
+			# NOTE: for some reason Muhl originally excluded
+			#  authorizer and enterer, causing corruption of data;
+			#  fixed this 3.4.04 JA
+			delete($results{authorizer});
+			delete($results{enterer});
+			delete($results{modifier});
 			delete($results{created});
 			delete($results{modified});
-			delete($results{modifier});
 			delete($results{occurrence_no});
 			
 			my $something_changed = 0;
