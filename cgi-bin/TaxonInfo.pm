@@ -1645,10 +1645,10 @@ sub displayTaxonSynonymy{
 	PBDBUtil::debug(1,"original combination_no: $original_combination_no");
 	
 	# Select all parents of the original combination whose status' are
-	# either 'recombined as' or 'corrected as'
+	# either 'recombined as,' 'corrected as,' or 'rank changed as'
 	$sql = "SELECT DISTINCT(parent_no), status FROM opinions ".
 		   "WHERE child_no=$original_combination_no ".	
-		   "AND (status='recombined as' OR status='corrected as')";
+		   "AND (status='recombined as' OR status='corrected as' OR status='rank changed as')";
 	@results = @{$dbt->getData($sql)};
 	Debug::dbPrint("synhere4");
 
@@ -1719,6 +1719,7 @@ sub getSynonymyParagraph{
 	my %synmap = ( 'recombined as' => 'recombined as ',
 				   'replaced by' => 'replaced with ',
 				   'corrected as' => 'corrected as ',
+				   'rank changed as' => 'changed to another rank and altered to ',
 				   'belongs to' => 'revalidated by ',
 				   'nomen dubium' => 'considered a nomen dubium ',
 				   'nomen nudum' => 'considered a nomen nudum ',
@@ -2045,14 +2046,14 @@ sub getOriginalCombination{
 	# that have recombined or corrected as relations to you.
 	my $sql = "SELECT DISTINCT(child_no), status FROM opinions ".
 			  "WHERE parent_no=$taxon_no AND (status='recombined as' OR ".
-			  "status='corrected as')";
+			  "status='corrected as' OR status='rank changed as')";
 	my @results = @{$dbt->getData($sql)};
 
 	my $has_status = 0;
 	foreach my $rec (@results){
 		$sql = "SELECT DISTINCT(child_no), status FROM opinions ".
 			   "WHERE parent_no=".$rec->{child_no}.
-			   " AND (status='recombined as' OR status='corrected as')";	
+			   " AND (status='recombined as' OR status='corrected as' OR status='rank changed as')";
 		my @second_level = @{$dbt->getData($sql)};
 		if(scalar @second_level < 1){
 			return $rec->{child_no};
@@ -2172,12 +2173,12 @@ sub deal_with_homonyms{
 					  " AND status='belongs to'";	
 			my @ref_ref = @{$dbt->getData($sql)};
 			# if it has no parent, find the child that's either 
-			# "corrected as", "recombined as" or "replaced by" and use 
+			# "corrected as", "recombined as", "rank changed as", or "replaced by" and use 
 			# that as the focal taxon.
 			if(scalar @ref_ref < 1){
 				$sql = "SELECT child_no FROM opinions WHERE parent_no=".
 					   $ref->{taxon_no}." AND status IN ('recombined as',".
-					   "'replaced by','corrected as')";
+					   "'replaced by','corrected as','rank changed as')";
 				@ref_ref = @{$dbt->getData($sql)};
 				if(scalar @ref_ref < 1){
 					# Dead end: clarification_info?

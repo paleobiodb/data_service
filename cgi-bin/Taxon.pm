@@ -587,7 +587,7 @@ sub numberForRank {
 
 # Finds the original combination of this taxon (ie, genus and species).
 # This takes the taxon name and looks for opinion records which deal with
-# the taxon and which have status of "recombined as" or "corrected as."  It then
+# the taxon and which have status of "recombined as," "corrected as," or "rank changed as."  It then
 # goes down the links to find the original name in the authority table.
 #
 # Note, if the current taxon doesn't have an entry in the opinions table,
@@ -602,14 +602,14 @@ sub originalCombination {
 	
 	my $tn = $self->taxonNumber();  # number we're starting with
 	
-	# this works because all 'recombined as' and 'corrected as' opinions should point
+	# this works because all 'recombined as'/'corrected as'/'rank changed as' opinions should point
 	# to the original (rather than having a chain).
 #	my $cn = $sql->getSingleSQLResult("SELECT child_no FROM opinions WHERE parent_no =
 #  $tn AND status IN ('recombined as', 'corrected as')");
 		
 	my $cn = ${$sql->getData("SELECT child_no FROM opinions WHERE
 		parent_no = $tn AND status IN 
-		('recombined as', 'corrected as')")}[0]->{child_no};
+		('recombined as', 'corrected as', 'rank changed as')")}[0]->{child_no};
 	
 	if (! $cn) {
 		return $tn;		# return the number we started with if there are no recombinations	
@@ -631,7 +631,7 @@ sub originalCombinationTaxon {
 
 
 # returns boolean - is this the original
-# combination ('recombined as' or 'corrected as') ?
+# combination ('recombined as'/'corrected as'/'rank changed as') ?
 sub isOriginalCombination {
 	my Taxon $self = shift;
 
