@@ -663,51 +663,24 @@ sub createTaxaHash {
 
 	# go up the hierarchy to the top (kingdom)
 	# from the rank the user started with.
+	# rewrote this section to employ normal, sensible getData function
+	#  instead of ridiculously arcane Poling $sql object function calls;
+	#  replaced lengthy computation of most recent parent number with call
+	#  to selectMostRecentParentOpinion JA 5.4.04
+	# WARNING: rewrite not debugged and probably a waste of time because
+	#  this function createTaxaHash is used only by nameForRank and
+	#  numberForRank, which in turn are used only by deprecated module
+	#  Occurrence.pm
 	while ($tn) {
 
 		# note, the "ORDER BY o.parent_no DESC" is important - this means that if we have two
 		# rows with the same pubyr, then it will always fetch the last one added since 
 		# the numbers increment on each addition.
-		$sql->setSQLExpr("SELECT o.parent_no, o.pubyr, o.ref_has_opinion, 
-		o.reference_no, r.pubyr FROM opinions o, refs r 
-		WHERE o.child_no = $tn AND o.reference_no = r.reference_no 
-		AND status = 'belongs to' ORDER BY o.parent_no DESC");
-		$sql->executeSQL();
+		my $opsql = "SELECT o.parent_no, o.pubyr, o.ref_has_opinion, o.reference_no, r.pubyr FROM opinions o, refs r WHERE o.child_no = $tn AND o.reference_no = r.reference_no AND status = 'belongs to' ORDER BY o.parent_no DESC";
+		@results = @{$sql->getData($opsql)};
 
-		
-		# loop through all result rows, and find the one with the most
-		# recent pubyr.  Note, we'll have to look at the reference if the ref_has_opinion field is true.
-		$pubyr = 0;
-		$idNum = 0;
-		
-		my $tempYR;
-		while ($resultRef = $sql->nextResultArrayRef()) {
-
-			# note, there is a special case where the parent_no = child_no.  This should *never* happen,
-			# but due to some older errors, it does seem to happen once in a while.  In this case,
-			# we should just abort.
-			if ($resultRef->[0] == $tn) {
-				last;  # exit the loop
-			}
-		
-			
-			if ($ref_has_opinion = $resultRef->[2]) {
-				# if ref_has_opinion is YES, then we need to look to the reference
-				# to find the pubyr
-				$tempYR = $resultRef->[4]; # pubyr from reference
-			} else {
-				$tempYR = $resultRef->[1];  # pubyr from opinion
-			}
-				
-			if ($tempYR > $pubyr) {
-				$pubyr = $tempYR;
-				$idNum = $resultRef->[0];
-			}
-			
-		} # end while $resultRef.
-
-		$sql->finishSQL();
-		my $parent = $idNum;  # this is the parent with the most recent pubyr.
+		# this is the parent with the most recent pubyr.
+		my $parent = TaxonInfo::selectMostRecentParentOpinion($sql,\@results);
 
 		# get the rank of the parent
 		#my $pRank = $sql->getSingleSQLResult("SELECT taxon_rank 
