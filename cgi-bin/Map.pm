@@ -1252,7 +1252,7 @@ if ( $q->param('gridposition') ne "in back" )	{
           }
           if ($dotshape =~ /^circles$/)	{
             $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,$hpix,$col{$bordercolor});
-          } elsif ($dotshape =~ /^crosses$/)	{
+          } elsif ($dotshape =~ /^crosses$/)	{ # don't do anything
           } elsif ($dotshape =~ /^diamonds$/)	{
             my $poly = new GD::Polygon;
             $poly->addPt($x1,$y1+($dotsize*2));
@@ -1269,7 +1269,7 @@ if ( $q->param('gridposition') ne "in back" )	{
                 $poly->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180)),$y1-($dotsize/$C72*cos($p*36*$PI/180)));
               }
             }
-            $im->polygon($poly,$col{'borderblack'});
+            $im->polygon($poly,$col{$bordercolor});
           } elsif ($dotshape =~ /^triangles$/)	{
             my $poly = new GD::Polygon;
             $poly->addPt($x1+($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
