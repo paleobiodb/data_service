@@ -1639,9 +1639,6 @@ sub displayCollResults {
 # an appropriate SQL query.
 sub processCollectionsSearch {
 	my $in_list = shift;  # for taxon info script
-
-	Debug::dbPrint("inlist = $in_list");
-
 	
 	# This is a list of all pulldowns in the collection search form.  
 	# These cannot use the LIKE wildcard, i.e. they must be
@@ -1706,9 +1703,6 @@ sub processCollectionsSearch {
 			$sql->setFromExpr($tableName);
 			$sql->clearWhereItems();
 			
-			#$sql =	"SELECT collection_no, count(*) ".
-			#		" FROM " . $tableName . " WHERE ";
-
 			if ( $q->param("wild") =~ /Y/ ) {
 				$relationString = " LIKE '";
 				$wildCard = "%'";
@@ -1720,11 +1714,8 @@ sub processCollectionsSearch {
 			if ( $genus )	{
 				if($q->param("taxon_rank") eq "Higher taxon" ||
 						$q->param("taxon_rank") eq "Higher-taxon"){
-					
-				
-					#$sql .= "genus_name IN (";
-					
-					if($in_list eq ""){
+										
+					if ($in_list eq "") {
 						dbg("RE-RUNNING TAXONOMIC SEARCH in bridge<br>");
 						$in_list = PBDBUtil::taxonomic_search(
 											$q->param('genus_name'), $dbt);
@@ -1733,31 +1724,20 @@ sub processCollectionsSearch {
 					}
 					
 					$sql->addWhereItem("genus_name IN ($in_list)");
-					
-					#$sql .= $in_list . ") ";
-					
+										
 				} else {
 					$sql->addWhereItem("genus_name $relationString $genus $wildCard");
-					#$sql .= "genus_name" . $relationString . $genus . $wildCard;
 				}
-				#if ( $sub_genus || $species )	{
-				#	$sql .= " AND ";
-				#}
+			
 			}
-			if ( $sub_genus )	{
+			if ( $sub_genus ) {
 				$sql->addWhereItem("subgenus_name" . $relationString.$subgenus.$wildCard);
-				#$sql .= "subgenus_name" . $relationString.$subgenus.$wildCard;
-				#if ( $species )	{
-				#	$sql .= " AND ";
-				#}
 			}
 			if ( $species )	{
 				$sql->addWhereItem("species_name" . $relationString . $species . $wildCard);
-				#$sql .= "species_name" . $relationString . $species . $wildCard;
 			}
 
 			$sql->setGroupByExpr("collection_no");
-			#$sql .= " GROUP BY collection_no";
 			dbg ( "$sql->SQLExpr()<HR>" );
 			$sth = $dbh->prepare($sql->SQLExpr());
 			$sth->execute();
@@ -1773,7 +1753,7 @@ sub processCollectionsSearch {
 			$sth->finish();
 		}
 	}
-
+	
 	# if time intervals were requested, get an in-list
 	my @timeinlist;
 	my $listsintime;
@@ -1898,6 +1878,8 @@ sub processCollectionsSearch {
 	# Remove it from further consideration
 	$q->param("research_group" => "");
 
+	Debug::dbPrint("terms = @terms");
+	
 	# Compose the WHERE clause
 	my $fieldCount = -1;
 	foreach $fieldName ( @fieldNames ) {
@@ -1915,6 +1897,9 @@ sub processCollectionsSearch {
 			}
 		}
 	}
+	
+				
+
 
 	# if first search failed and wild cards were used, try again
 	#  stripping first wildcard JA 22.2.02
@@ -1929,7 +1914,7 @@ sub processCollectionsSearch {
 			}
 		}
 	}
-		
+
 	if ( ! @terms && ! @timeinlist ) {
 		if ( $q->param("genus_name") ) {
 			push @terms,"collection_no is not NULL";
@@ -1974,7 +1959,6 @@ sub processCollectionsSearch {
 		
 	# Handle sort order
 	my $sortString = "";
-	#$sortString = "ORDER BY " . $q->param('sortby') if $q->param('sortby');
 	$sortString = $q->param('sortby') if $q->param('sortby');
 	$sortString .= " DESC" if $sortString && $q->param('sortorder') eq 'desc';
 
@@ -2057,11 +2041,6 @@ sub processCollectionsSearch {
 		$sql->addWhereItem($t);
 	}
 	
-	#$sql = "SELECT " . join(', ', @columnList, 'reference_no').
-	#	" FROM collections ".
-	#		" WHERE ". join(' AND ', @terms);
-
-#	dbPrint("full SQL == $sql");
 
 
 	# modified to handle time lookup in-list JA 17.7.03
@@ -2085,24 +2064,17 @@ sub processCollectionsSearch {
 			}
 		}
 		if (@terms)	{
-			#$sql .= " AND collection_no IN ( " . join ( ", ", @okcolls )." ) ";
 			$sql->addWhereItem("collection_no IN ( " . join ( ", ", @okcolls ) . " )");
-		} #else	{
-			#$sql .= " collection_no IN ( " . join ( ", ", @okcolls )." ) ";
-		#}
+		} 
 	} elsif ( @timeinlist )	{
 		if (@terms)	{
 			$sql->addWhereItem("collection_no IN ( " . join ( ", ", @timeinlist )." ) ");
-			#$sql .= " AND collection_no IN ( " . join ( ", ", @timeinlist )." ) ";
-		} #else	{
-			#$sql .= " collection_no IN ( " . join ( ", ", @timeinlist )." ) ";
-		#}
+		} 
 	}
 
 	# Sort and limit
 	$sql->setOrderByExpr($sortString);
 	$sql->setLimitExpr($limitString);
-	#$sql .= " $sortString $limitString";
 
 	dbg ( "$sql->SQLExpr()<HR>" );
 	#print ("sql = $sql<BR>");
