@@ -174,7 +174,12 @@ Research group or project:
 <option>PGAP
 </select>
 
-<tr><td valign="top"><font size=-1>Data authorizer:</font><br><select name="authorizer"></select></td><td valign="bottom"><a href="javascript: auth();">Me</a></td>
+<tr><td valign="top"><font size=-1>Data authorizer:</font><td><select name="authorizer"></select></td><td valign="bottom"><a href="javascript: auth();">Me</a></td>
+
+<tr><td valign=top><font size=-1>
+Taxonomic name <small><i>(genus or higher rank)</i></small>:
+<td valign=top><font size=-1>
+<input  name=genus_name size=25>
 
 <tr><td valign=top><font size=-1>
 Included time interval(s):
@@ -215,9 +220,9 @@ Likewise for a single age/stage:
 <input name=stage size=25>
 
 <tr><td valign=top><font size=-1>
-Taxonomic Name <small><i>(genus or higher rank)</i></small>:
+Environment:
 <td valign=top><font size=-1>
-<input  name=genus_name size=25>
+<select id="environment"></select>
 
 <tr><td valign=top><font size=-1>
 Select a single continent:
