@@ -122,6 +122,7 @@ sub processBinLookup	{
 
 	$dbh = shift;
 	$dbt = shift;
+	my $returndata = shift;
 
 	&cleanArrays();
 
@@ -275,21 +276,28 @@ sub processBinLookup	{
 		}
 
 	# get a list of collections in this bin
-		$sql = "SELECT collection_no FROM collections WHERE ";
-		$sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
-		$sql .= "AND ( min_interval_no IN ( " . join(',',@intervals) . " ) ";
-		$sql .= " OR min_interval_no < 1 )";
-		my @collrefs = @{$dbt->getData($sql)};
+	# don't do this if we only need boundary estimates
+		if ( $returndata ne "boundaries" )	{
+			$sql = "SELECT collection_no FROM collections WHERE ";
+			$sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
+			$sql .= "AND ( min_interval_no IN ( " . join(',',@intervals) . " ) ";
+			$sql .= " OR min_interval_no < 1 )";
+			my @collrefs = @{$dbt->getData($sql)};
 
 	# make a hash array in which keys are collection numbers and
 	#   values are the name of this bin
-		for my $collref ( @collrefs )   {
-			$intervalInScale{$collref->{collection_no}} = $binname;
+			for my $collref ( @collrefs )   {
+				$intervalInScale{$collref->{collection_no}} = $binname;
+			}
 		}
 
 	}
 
-	return (\%intervalInScale,\%upperbinbound,\%lowerbinbound);
+	if ( $returndata ne "boundaries" )	{
+		return (\%intervalInScale,\%upperbinbound,\%lowerbinbound);
+	} else	{
+		return (\%upperbinbound,\%lowerbinbound);
+	}
 
 }
 
