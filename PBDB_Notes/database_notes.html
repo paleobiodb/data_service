@@ -55,6 +55,10 @@ span.primaryKey {
 	color:red;
 }
 
+span.foreignKey {
+	color:green;
+}
+
 .tableDesc {
 	font-weight: normal;
 	font-style: italic;
@@ -101,6 +105,9 @@ p.field {
 </p>
 <p class="field">
 <span class="fieldName"><span class="primaryKey">Primary Key</span></span>
+</p>
+<p class="field">
+<span class="fieldName"><span class="foreignKey">Foreign Key</span></span>
 </p>
 
 
@@ -187,11 +194,11 @@ A collection can be thought of as a particular <i>hole</i> in the ground.</p>
 <span class="fieldName"><span class="primaryKey">correlation_no</span></span>
 </p>
 <p class="field">
-<span class="fieldName">max_interval_no</span>
+<span class="fieldName"><span class="foreignKey">max_interval_no</span></span>
 <span class="fieldDesc">oldest interval covered by a particular scale.</span>
 </p>
 <p class="field">
-<span class="fieldName">min_interval_no</span>
+<span class="fieldName"><span class="foreignKey">min_interval_no</span></span>
 <span class="fieldDesc">youngest interval covered by a particular scale.</span>
 </p>
 </div>
@@ -200,12 +207,17 @@ A collection can be thought of as a particular <i>hole</i> in the ground.</p>
 <div class="table">
 <A NAME="ecotaph"><span class="table">ecotaph</span></A>
 <p class="tableDesc">Attributes of taxa, what they look like, body mass, ocean/land, etc.</p>
+<p class="field">
+<span class="fieldName"><span class="primaryKey">ecotaph_no</span></span>
+</p>
+
 </div>
 
 <div class="table">
 <A NAME="fivepct"><span class="table">fivepct</span></A>
 <p class="tableDesc">Holds a sample containing 5% of the data 
-in the GeoRef database which is a database of references.</p>
+in the GeoRef database which is a database of references.
+Not important to the rest of the database.</p>
 </div>
 
 <div class="table">
@@ -231,7 +243,9 @@ and the <A HREF="#scales">scales</A> table lists opinions about time scales.</p>
 
 <div class="table">
 <A NAME="marinepct"><span class="table">marinepct</span></A>
-<p class="tableDesc">Holds references for the 1% study - similar to the <A HREF="#fivepct">fivepct</A> table..</p>
+<p class="tableDesc">Holds references for the 1% study - similar to the 
+<A HREF="#fivepct">fivepct</A> table..  Not important to the rest of 
+the database.</p>
 </div>
 
 
@@ -266,16 +280,28 @@ and the <A HREF="#scales">scales</A> table lists opinions about time scales.</p>
 <span class="fieldName"><span class="primaryKey">opinion_no</span></span>
 </p>
 <p class="field">
-<span class="fieldName">reference_no</span>
+<span class="fieldName"><span class="foreignKey">reference_no</span></span>
 <span class="fieldDesc">The reference where the opinion came from.</span>
 </p>
 <p class="field">
-<span class="fieldName">child_no</span>
+<span class="fieldName"><span class="foreignKey">child_no</span></span>
 <span class="fieldDesc">Key to the authorities table, the child of this taxa rank.</span>
 </p>
 <p class="field">
-<span class="fieldName">parent_no</span>
+<span class="fieldName"><span class="foreignKey">parent_no</span></span>
 <span class="fieldDesc">Key to the authorities table, the parent of this taxa rank.</span>
+</p>
+<p class="field">
+<span class="fieldName">diagnosis</span>
+</p>
+<p class="field">
+<span class="fieldName">ref_has_opinion</span>
+</p>
+<p class="field">
+<span class="fieldName">pubyr</span>
+</p>
+<p class="field">
+<span class="fieldName">comments</span>
 </p>
 
 </div>
@@ -332,11 +358,11 @@ occur if a fossil was incorrectly classified and later re-classified as somethin
 <span class="fieldName"><span class="primaryKey">reid_no</span></span>
 </p>
 <p class="field">
-<span class="fieldName">reference_no</span>
+<span class="fieldName"><span class="foreignKey">reference_no</span></span>
 <span class="fieldDesc">Reference number which reidentified the occurrence.</span>
 </p>
 <p class="field">
-<span class="fieldName">occurrence_no</span>
+<span class="fieldName"><span class="foreignKey">occurrence_no</span></span>
 <span class="fieldDesc">Occurrence number which was reidentified.</span>
 </p>
 <p class="field">
@@ -356,6 +382,17 @@ occur if a fossil was incorrectly classified and later re-classified as somethin
 <A NAME="scales"><span class="table">scales</span></A>
 <p class="tableDesc">Listing of time scales.  Each one will have been defined by a certain reference.
 See also the <A HREF="#intervals">intevals</A> and <A HREF="#correlations">correlations</A> tables.</p>
+<p class="field">
+<span class="fieldName"><span class="primaryKey">scale_no</span></span>
+</p>
+<p class="field">
+<span class="fieldName">scale_name</span>
+</p>
+
+<p class="field">
+<span class="fieldName"><span class="foreignKey">reference_no</span></span>
+</p>
+
 </div>
 
 <div class="table">
@@ -363,6 +400,12 @@ See also the <A HREF="#intervals">intevals</A> and <A HREF="#correlations">corre
 <p class="tableDesc">Allows people to enter more than one reference for a collection. 
 Basically just ties a collection number to a reference number, so if you wanted to have several
 references, you'd have an entry in here for each refernce (not including the primary reference).</p>
+<p class="field">
+<span class="fieldName"><span class="foreignKey">collection_no</span></span>
+</p>
+<p class="field">
+<span class="fieldName"><span class="foreignKey">reference_no</span></span>
+</p>
 </div>
 
 <div class="table">
