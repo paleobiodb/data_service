@@ -44,8 +44,8 @@ body {
 /*	used for titles at top of forms, 
 	ie, "Collection Search Form" */
 .title {
-	padding-top: 1em;
-	padding-bottom: 1em;
+	padding-top: 0.8em;
+	padding-bottom: 0.8em;
 	font-weight: bold;
 	font-size: 1.5em;
 	text-align: center;
@@ -89,6 +89,10 @@ table.navbox {
 	background-color: 0077FF;
 }
 
-      
+/*	the color for the dark row in a list which has alternating 
+	light and dark rows */
+.darkList {
+	background-color:E0E0E0;
+}
 
 
