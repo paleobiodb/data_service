@@ -175,6 +175,8 @@ function auth ( ) {
 
 <hr>
 
+<center><h3>Options</h3></center>
+
 <table width="100%">
 
 <tr><td valign=top><font size=-1>
@@ -221,39 +223,6 @@ Use data records created
 Taxonomic name <small><i>(genus or higher rank)</i></small>:</font></td>
 <td valign=top><font size=-1>
 <input  name=genus_name size=25></td></tr>
-
-<!-- LEGACY
-<tr><td valign=top><font size=-1>
-Included time interval(s):
-<td valign=top><font size=-1>
-	<table width="100%" bgcolor="EEEEEE"><tr><td>
-	<input type=radio name=interval value="Phanerozoic" checked onClick="intervalClick();"><i>all periods</i>
-	<input type=radio name=interval value="Interval1" onClick="intervalClick();"><i>all of the Paleozoic</i>
-	<input type=radio name=interval value="Interval2" onClick="intervalClick();"><i>all of the Meso-Cenozoic</i><p>
-	<input type=radio name=interval value="other">or...<p>
-
-	<table>
-	<tr>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Neoproterozoic" onClick="intervalsClick();">Neoproterozoic</td>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Cambrian" onClick="intervalsClick();">Cambrian</td>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Ordovician" onClick="intervalsClick();">Ordovician</td>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Silurian" onClick="intervalsClick();">Silurian</td>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Devonian" onClick="intervalsClick();">Devonian</td>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Carboniferous" onClick="intervalsClick();">Carboniferous</td>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Permian" onClick="intervalsClick();">Permian</td>
-	</tr>
-	<tr>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Triassic" onClick="intervalsClick();">Triassic</td>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Jurassic" onClick="intervalsClick();">Jurassic</td>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Cretaceous" onClick="intervalsClick();">Cretaceous</td>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Tertiary" onClick="intervalsClick();">Tertiary</td>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Quaternary" onClick="intervalsClick();">Quaternary</td>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Modern" onClick="intervalsClick();">Modern</td>
-	</tr>
-	</table>
-	</td></tr></table></td></tr>
--->
-
 
 <tr><td valign=top><font size=-1>
 If you only want lists from one time span, enter the oldest and youngest intervals:</font></td>
@@ -354,16 +323,6 @@ Longitudinal range:</font</td>
 </font></td>
 
 <tr><td valign=top><font size=-1>
-Lump lists from the same county and formation? - WARNING: algorithm not yet functional
-<!--if not functional, then why is it here??-->
-</font></td>
-
-<td valign=top><font size=-1><select name=lumplists>
-<option selected>no, keep them separate</option>
-<option>yes, lump them</option>
-</select></font></td></tr>
-
-<tr><td valign=top><font size=-1>
 Lump occurrences of the same genus from the same collection?
 </font></td>
 
@@ -374,19 +333,24 @@ Lump occurrences of the same genus from the same collection?
 </font></td></tr>
 
 <tr><td valign=top><font size=-1>
-Include lists with poor geographic data (no county or lat/long)?</font></td>
-<td valign=top><font size=-1><select name=strictgeography>
-<option selected value="YES">yes, include them</option>
-<option value="NO">no, exclude them</option>
-</select>
+Geographic scale of collections:</font></td>
+
+<td valign=top><font size=-1>
+<input type=checkbox name="small_collection" value="YES" checked>small collection
+<input type=checkbox name="outcrop" value="YES" checked>outcrop
+<input type=checkbox name="local_area" value="YES" checked>local area
+<input type=checkbox name="basin" value="YES" checked>basin
 </font></td></tr>
 
 <tr><td valign=top><font size=-1>
-Include lists with poor temporal data (no epoch or stage)?</font></td>
-<td valign=top><font size=-1><select name=strictchronology>
-<option selected value="YES">yes, include them</option>
-<option value="NO">no, exclude them</option>
-</select>
+Temporal scale of collections:</font></td>
+
+<td valign=top><font size=-1>
+<input type=checkbox name="bed" value="YES" checked>bed
+<input type=checkbox name="group_of_beds" value="YES" checked>group of beds
+<input type=checkbox name="member" value="YES" checked>member
+<input type=checkbox name="formation" value="YES" checked>formation
+<input type=checkbox name="group" value="YES" checked>group
 </font></td></tr>
 
 <tr><td valign=top><font size=-1>
@@ -406,11 +370,15 @@ Type of output:</font></td>
 </select>
 </font></td></tr>
 
+</table>
 
-<tr><td valign=top><font size=-1>
-Occurrence fields you want:</font><br>
-<font size=-2>(the collection ID and genus name fields are always output)</font>
-</td>
+<hr>
+<center><h3>Occurrence fields</h3></center>
+
+<p>Check the occurrence and ecology/taphonomy fields that you want output.
+Note that the collection ID and genus name fields are always output.</p>
+
+<table width="100%">
 
 <td valign=top><font size=-1>
 <table bgcolor="EEEEEE">
@@ -452,10 +420,7 @@ Occurrence fields you want:</font><br>
 </table>
 </td></tr>
 
-<tr><td valign=top><font size=-1>
-Ecology/taphonomy fields you want:<br></font>
-</td>
-
+<tr>
 <td valign=top>
 <nobr>
 <select id="ecology1"></select>
@@ -469,9 +434,15 @@ Ecology/taphonomy fields you want:<br></font>
 </nobr>
 </td></tr>
 
-<tr><td valign=top><font size=-1>
-Main collection data fields you want:
-</font></td>
+</table>
+
+<hr>
+
+<center><h3>Collection fields</h3></center>
+
+<p>Check the fields from the main collection data table that you want output.</p>
+
+<table width="100%">
 
 <td valign=top>
 
@@ -659,8 +630,10 @@ Main collection data fields you want:
 
 </table>
 
+<hr>
+
 <p align=center>
-	<input type=submit value="Create data set">
+<input type=submit value="Create data set">
 </p>
 
 
