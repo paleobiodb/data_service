@@ -2220,7 +2220,9 @@ sub processEnterCollectionForm {
 			
 			push(@row, $refRowString);
 			push(@fields, 'reference_string');
-			
+			push(@row, PBDBUtil::getSecondaryRefsString($dbh,$recID,0,0));
+			push(@fields, 'secondary_reference_string');
+
 			last;
 		}
 		$curColNum++;
@@ -2376,8 +2378,8 @@ sub displayEditCollection {
 	$refRowString = PBDBUtil::getSecondaryRefsString($dbh,$collection_no,1,1);
 
     # secondary_references
-    push(@row, $refRowString);
-    push(@fieldNames, 'secondary_reference_string');
+	push(@row, $refRowString);
+	push(@fieldNames, 'secondary_reference_string');
 
 	# Clear the variable for use below
 	$refRowString = "";
