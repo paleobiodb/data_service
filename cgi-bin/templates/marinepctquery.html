@@ -1,0 +1,29 @@
+<center>
+<h3>Query the marine invertebrate 1% project reference table</h3>
+</center>
+
+<form method=post action=marinepct.pl>
+
+<input type=hidden name=action value="search">
+
+<center>
+<table>
+<tr><td align=left>
+<p>
+Search the <select name="field"><option>title<option>author<option>publication<option>subjects<option>ID number</select> field for <select name="andor"><option>all of the words<option>any of the words<option>the exact phrase</select> <input size=20 name="searchstring">
+</p>
+</td>
+<tr><td align=left>
+<p>
+Retrieve <select name="status"><option selected>all<option>unknown<option>junk<option>desirable<option>help<option>claimed<option>copied<option>discarded<option>entered</select> references
+in <select name="language"><option selected>any language<option>Chinese<option>English<option>French<option>German<option>Italian<option>Japanese<option>Russian<option>Spanish</select>
+</p>
+</td>
+<tr><td align=right>
+<input type=submit value="Search"> 
+</td>
+</table>
+</center>
+
+</form>
+
