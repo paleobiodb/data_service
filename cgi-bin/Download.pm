@@ -91,6 +91,7 @@ sub retellOptions {
 	}
 	$html .= $self->retellOptionsRow ( "Epoch", $q->param("epoch") );
 	$html .= $self->retellOptionsRow ( "Single age/stage", $q->param("stage") );
+	$html .= $self->retellOptionsRow ( "Environment", $q->param("environment") );
 	$html .= $self->retellOptionsRow ( "Genus name", $q->param("genus_name") );
 	$html .= $self->retellOptionsRow ( "Class", $q->param("class") );
 	$html .= $self->retellOptionsRow ( "Only your own data?", $q->param("owndata") ) if ( !  $s->guest ( ) );
@@ -428,6 +429,15 @@ sub getStageString {
 	return "";
 }
 
+sub getEnvironmentString{
+	my $self = shift;
+	my $environment = $q->param('environment');
+	if($environment){
+		return qq| collections.environment='$environment' |;
+	}
+	return "";
+}
+
 sub getRegionsString {
 	my $self = shift;
 	my $retVal = "";
@@ -513,6 +523,8 @@ sub getCollectionsWhereClause {
 	$retVal .= $self->getEpochString() if $self->getEpochString();
 	$retVal .= " AND " if $retVal && $self->getStageString();
 	$retVal .= $self->getStageString() if $self->getStageString();
+	$retVal .= " AND " if $retVal && $self->getEnvironmentString();
+	$retVal .= $self->getEnvironmentString() if $self->getEnvironmentString();
 	
 	my $regionsString = $self->getRegionsString();
 	if($regionsString ne "")
