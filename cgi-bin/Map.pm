@@ -292,11 +292,9 @@ sub mapGetScale	{
       $midlng = -50;
       $midlat = 10;
     }
-    $midlng = $midlng + 180;
-    $midlat = $midlat + 90;
     # NOTE: shouldn't these be module globals??
-    $offlng = $midlng - (180 / $scale);
-    $offlat = $midlat - (90 / $scale);
+    $offlng = ( $midlng + 180 ) - ( 180 / $scale );
+    $offlat = ( $midlat + 90 ) - ( 90 / $scale );
   }
 }
 
@@ -317,7 +315,9 @@ sub mapDefineOutlines	{
 }
 
 sub mapDrawMap	{
-	my $self = shift;
+  my $self = shift;
+
+print "($SELECT_LISTS{'mapbgcolor'}[0])<br>($SELECT_LISTS{'oceancolor'}[0])<br>\n";
 
   # erase the last map that was drawn
   if ( ! open GIFCOUNT,"<$GIF_DIR/gifcount" ) {
@@ -351,32 +351,45 @@ sub mapDrawMap	{
   $vmult = 2;
   $hpix = 360;
   $vpix = 180;
-  if ($cont =~ /Africa/ || $cont =~ /South America/)	{
+  if ( $q->param('projection') eq "polar" )	{
+    $hpix = 280;
+    $vpix = 280;
+  } elsif ($cont =~ /Africa/ || $cont =~ /South America/)	{
     $hpix = 280;
     $vpix = 240;
   }
   # PM 09/10/02 - Draw a half-sized map for the taxon information script.
-  if($q->param("taxon_info_script") eq "yes"){
+  if($q->param("taxon_info_script") eq "yes")	{
 	$hmult = 0.8;
 	$vmult = 1.0;
   }
+  if ( $q->param("projection") eq "polar")	{
+    $hmult = $hmult * 1.25;
+  }
   $height = $vmult * $vpix;
   $width = $hmult * $hpix;
+  # recenter the image if the GIF size is non-standard
+  $gifoffhor = ( 360 - $hpix ) / ( $scale * 2 );
+  $gifoffver = ( 180 - $vpix ) / ( $scale * 2 );
+
   $im = new GD::Image($width,$height);
 
   $col{'white'} = $im->colorAllocate(255,255,255);
   $col{'black'} = $im->colorAllocate(0,0,0);
+  $col{'borderblack'} = $im->colorAllocate(1,1,1);
   $col{'gray'} = $im->colorAllocate(127,127,127);
   $col{'lightgray'} = $im->colorAllocate(191,191,191);
+  $col{'blue'} = $im->colorAllocate(63,63,255);
   $col{'red'} = $im->colorAllocate(255,0,0);
   $col{'darkred'} = $im->colorAllocate(127,0,0);
   $col{'yellow'} = $im->colorAllocate(255,255,0);
   $col{'green'} = $im->colorAllocate(0,255,0);
   $col{'orange'} = $im->colorAllocate(255,127,0);
+  $col{'purple'} = $im->colorAllocate(223,0,255);
   $col{'violet'} = $im->colorAllocate(191,0,255);
+  $col{'pink'} = $im->colorAllocate(255,191,191);
   $col{'darkviolet'} = $im->colorAllocate(127,0,127);
   $col{'darkblue'} = $im->colorAllocate(0,0,255);
-  $col{'blue'} = $im->colorAllocate(63,63,255);
   $col{'teal'} = $im->colorAllocate(0,255,255);
 
   $dotcolor = $q->param('dotcolor');
@@ -386,10 +399,11 @@ sub mapDrawMap	{
 		$bordercolor='white';
 	}
 	else{
-		$bordercolor = 'black';
+		$bordercolor = 'borderblack';
 	}
   }
-  ($dotsizeterm,$dotshape) = split / /,$q->param('pointshape');
+  $dotsizeterm = $q->param('pointsize');
+  $dotshape = $q->param('pointshape');
   if ($dotsizeterm eq "small")	{
     $dotsize = 2;
   }
@@ -408,7 +422,15 @@ sub mapDrawMap	{
 	# create an interlaced GIF with a white background
 	$im->interlaced('true');
 	if ( $q->param('mapbgcolor') ne "transparent" )	{
-		$im->fill(100,100,$col{$q->param('mapbgcolor')});
+		if ( $q->param("projection") ne "polar" )	{
+			$im->fill(100,100,$col{$q->param('mapbgcolor')});
+		} else	{
+		# for a polar projection, draw a circle and fill it
+			my $origx = $self->getLng($midlng);
+			my $origy = $self->getLat($midlat * -1);
+          		$im->arc($origx,$origy,180*$hmult*$scale,180*$hmult*$scale,0,360,$col{$q->param('coastlinecolor')});
+			$im->fill($origx,$origy,$col{$q->param('mapbgcolor')});
+		}
 	} else	{
 		$im->transparent('');
 	}
@@ -431,14 +453,23 @@ sub mapDrawMap	{
  # draw grids
   $grids = $q->param('gridsize');
   if ($grids > 0)	{
-    for $lat (1..int($vpix/$grids)-1)	{
+    for my $lat (1..int($vpix/$grids)-1)	{
       $color = $col{$q->param('gridcolor')};
       if ($lat * $grids == 90)	{
         $color = $col{'gray'};
       }
-      $im->line(0,$scale*$vmult*$lat*$grids,$scale*$hmult*$hpix,$scale*$vmult*$lat*$grids,$color);
+      if ( $q->param('projection') ne "polar" )	{
+        $im->line(0,$scale*$vmult*$lat*$grids,$scale*$hmult*$hpix,$scale*$vmult*$lat*$grids,$color);
+      } else	{
+          my ($lng1,$lat1) = $self->projectPoints($midlng - 89, ($lat * $grids) - 89 + $midlat);
+          my ($lng2,$lat2) = $self->projectPoints($midlng + 89, ($lat * $grids) - 89 + $midlat);
+#printf "%d %d %d<br>\n",$midlng-90,$midlng+90,($lat*$grids)-90+$midlat;
+#printf "%d %d %d %d<br>\n",$lng1,$lat1,$lng2,$lat2;
+          $im->line($self->getLng($lng1),$self->getLat($lat1),$self->getLng($lng2),$self->getLat($lat2),$color);
+#         $im->line($self->getLng(-180),$self->getLat(($lat*$grids)-90),$self->getLng(180),$self->getLat(($lat*$grids)-90),$color); FOO
+      }
     }
-    for $lng (1..int($hpix/$grids)-1)	{
+    for my $lng (1..int($hpix/$grids)-1)	{
       $color = $col{$q->param('gridcolor')};
       if ($lng * $grids == 180)	{
         $color = $col{'gray'};
@@ -448,8 +479,16 @@ sub mapDrawMap	{
   }
 
  # draw coastlines
+ # first rescale the coordinates, if necessary
+  if ( $q->param('projection') eq "polar")	{
+    for $c (0..$#worldlat)	{
+      if ( $worldlat[$c] ne "" )	{
+        ($worldlng[$c],$worldlat[$c]) = $self->projectPoints($worldlng[$c],$worldlat[$c]);
+      }
+    }
+  }
   for $c (0..$#worldlat-1)	{
-    if ($worldlat[$c] ne "" && $worldlat[$c+1] ne "")	{
+    if ( $worldlat[$c] ne "" && $worldlat[$c+1] ne "" )	{
       $im->line( $self->getLng($worldlng[$c]),$self->getLat($worldlat[$c]),$self->getLng($worldlng[$c+1]),$self->getLat($worldlat[$c+1]),$col{$q->param('coastlinecolor')});
     }
   }
@@ -511,8 +550,19 @@ sub mapDrawMap	{
 		#}
 
     # draw a circle
-        if ($dotshape =~ /circles/)	{
+        if ($dotshape =~ /^circles$/)	{
           $im->arc($x1,$y1,($dotsize*2)+2,($dotsize*2)+2,0,360,$col{$bordercolor});
+        }
+    # or draw a triangle
+        elsif ($dotshape =~ /^triangles$/)	{
+          my $poly = new GD::Polygon;
+       # lower left vertex
+          $poly->addPt($x1+$dotsize,$y1+$dotsize);
+       # top middle vertex
+          $poly->addPt($x1,$y1-$dotsize);
+       # lower right vertex
+          $poly->addPt($x1-$dotsize,$y1+$dotsize);
+          $im->polygon($poly,$col{$dotcolor});
         }
     # or draw a square
         else	{
@@ -534,10 +584,15 @@ sub mapDrawMap	{
           if ($dotsizeterm eq "proportional")	{
             $dotsize = int($atCoord{$x1}{$y1}**0.5) + 1;
           }
-          if ($dotshape =~ /circles/)	{
+          if ($dotshape =~ /^circles$/)	{
             $im->arc($x1,$y1,($dotsize*2)+2,($dotsize*2)+2,0,$hpix,$col{$bordercolor});
-          }
-          else	{
+          } elsif ($dotshape =~ /^triangles$/)	{
+            my $poly = new GD::Polygon;
+            $poly->addPt($x1+$dotsize,$y1+$dotsize);
+            $poly->addPt($x1,$y1-$dotsize);
+            $poly->addPt($x1-$dotsize,$y1+$dotsize);
+            $im->polygon($poly,$col{$bordercolor});
+          } else	{
             $im->rectangle($x1-$dotsize,$y1-$dotsize,$x1+$dotsize,$y1+$dotsize,$col{$bordercolor});
           }
         }
@@ -593,16 +648,40 @@ sub getCoords	{
 	if ($coll{'latdir'} =~ /S/)	{
 		$y = $y * -1;
 	}
+	($x,$y) = $self->projectPoints($x,$y);
 	# Get pixel values, but shift everything a half degree so dots
 	#  are at midpoints of 1 by 1 deg rectangles
 	return($self->getLng($x - 0.5),$self->getLat($y + 0.5));
+}
+
+sub projectPoints	{
+	my $self = shift;
+
+	my ($x,$y) = @_;
+	if ( $q->param('projection') eq "polar" )	{
+		# how far is this point from the origin?
+		my $dist = ( ($x - $midlng)**2 + ($y + $midlat)**2 )**0.5;
+		# dark side of the Earth is invisible!
+		if ( $dist > 90 )	{
+			return;
+		}
+		# transform to radians
+		$dist = ($dist / 360) * 3.14159265;
+		$x = $x - $midlng;
+		$x = $x * cos($dist) * ( 1 / cos( 3.14159265 * 90 / 360 ) ) ;
+		$x = $x + $midlng;
+		$y = $y + $midlat;
+		$y = $y * cos($dist) * ( 1 / cos( 3.14159265 * 90 / 360 ) ) ;
+		$y = $y - $midlat;
+	}
+	return($x,$y);
 }
 
 sub getLng	{
 	my $self = shift;
 
 	my $l = $_[0];
-	$l = (180 + $l - $offlng) * $hmult * $scale;
+	$l = (180 + $l - $offlng - $gifoffhor) * $hmult * $scale;
 	return $l;
 }
 
@@ -610,13 +689,13 @@ sub getLat	{
 	my $self = shift;
 
 	my $l = $_[0];
-	$l = (90 - $l - $offlat) * $vmult * $scale;
+	$l = (90 - $l - $offlat - $gifoffver) * $vmult * $scale;
 	return $l;
 }
 
-# This only shown for internal errors
+# This is only shown for internal errors
 sub htmlError {
-	my $self = shift;
+    my $self = shift;
     my $message = shift;
 
     print $message;

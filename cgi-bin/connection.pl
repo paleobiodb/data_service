@@ -5,8 +5,8 @@
 $driver =	"mysql";
 $host =		"localhost";
 $user =		"pbdbuser";
-#$db =		"pbdb_paul";
-$db =		"pbdb_new";
+$db =		"pbdb_paul";
+#$db =		"pbdb_new";
 
 open PASSWD,"</home/paleodbpasswd/passwd";
 $password = <PASSWD>;
