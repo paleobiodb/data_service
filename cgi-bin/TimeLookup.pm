@@ -204,15 +204,23 @@ sub processLookup	{
 	@results = @{$dbt->getData($sql)};
 	$ninterval = $#results + 1;
 
+# get lookup hashes of the max and min interval nos for each interval no
+	for my $i ( 1..$ninterval )	{
+		if ( $bestscale{$i} > 0 )	{
+			$sql = "SELECT max_interval_no,min_interval_no FROM correlations WHERE interval_no=" . $i . " AND scale_no=" . $bestscale{$i};
+			my $maxmin = @{$dbt->getData($sql)}[0];
+			$immediatemax{$i} = $maxmin->{max_interval_no};
+			$immedatemin{$i} = $maxmin->{min_interval_no};
+		}
+	}
+
 	my $max;
 	my $min;
 
 	for my $i ( 1..$ninterval )	{
 		if ( $bestscale{$i} > 0 )	{
-		$sql = "SELECT max_interval_no,min_interval_no FROM correlations WHERE interval_no=" . $i . " AND scale_no=" . $bestscale{$i};
-		my $maxmin = @{$dbt->getData($sql)}[0];
-		$max = $maxmin->{max_interval_no};
-		$min = $maxmin->{min_interval_no};
+		$max = $immediatemax{$i};
+		$min = $immediatemin{$i};
 
 	# if both min and max in the "official" list, you're golden
 		if ( $yesints{$max} && ( $yesints{$min} || $min == 0 ) )	{
@@ -230,22 +238,16 @@ sub processLookup	{
 			my $lastmin = $min;
 
 	# first check the max correlate
-			$sql = "SELECT max_interval_no FROM correlations WHERE interval_no=" . $max . " AND scale_no=" . $bestscale{$max};
-			$maxmin = @{$dbt->getData($sql)}[0];
-			$max = $maxmin->{max_interval_no};
+			$max = $immediatemax{$max};
 
 	# ... and then the min correlate
 			if ( $min > 0 )	{
-				$sql = "SELECT min_interval_no FROM correlations WHERE interval_no=" . $min . " AND scale_no=" . $bestscale{$min};
-				$maxmin = @{$dbt->getData($sql)}[0];
-				$min = $maxmin->{min_interval_no};
+				$min = $immediatemin{$min};
 			}
 
 	# the min interval might have only had a max; if so check that too
 			if ( $min == 0 && $lastmin > 0 )	{
-				$sql = "SELECT max_interval_no FROM correlations WHERE interval_no=" . $lastmin . " AND scale_no=" . $bestscale{$lastmin};
-				$maxmin = @{$dbt->getData($sql)}[0];
-				$min = $maxmin->{max_interval_no};
+				$min = $immediatemin{$lastmin};
 			}
 	# if the "grandparents" are within the list, add the interval
 	#    we started with and bomb out
