@@ -383,17 +383,51 @@ sub displayLoginPage {
 	
 	print $q->header( -type => "text/html", -Cache_Control=>'no-cache');
 	
-	#my $select = "";
 	my $authorizer = $q->cookie("authorizer");
 	my $enterer = $q->cookie("enterer");
 	my $destination = $q->param("destination");
-	#my $html = $hbo->getTemplateString('login_box');
-
-	#my $html = $hbo->populateHTML('login_box', 
-	#							[ $message, $destination ], 
-	#							[ "%%message%%", "%%destination%%" ]);
 
 	my %fields = ('message' => $message, 'destination' => $destination);
+	
+	####
+	## We need to build a list of the enterers and authorizers for 
+	## the java script to use for autocompletion.
+	####
+	my $person = Person->new();
+	my $authListRef = $person->listOfAuthorizers(TRUE);
+	my $entListRef = $person->listOfEnterers(TRUE);
+	
+	my $authList;
+	my $entList;
+	foreach my $p (@$authListRef) {
+		$authList .= "\"" . $p->[1] . "\", ";  # reversed name
+	}
+	$authList =~ s/,\s*$//; # remove last comma and space if present.
+
+
+	foreach my $p (@$entListRef) {
+		$entList .= "\"" . $p->[1] . "\", ";  # reversed name
+	}
+	$entList =~ s/,\s*$//; # remove last comma and space if present.
+
+	my $javaScript = '<SCRIPT language=\"JavaScript\" type=\"text/javascript\">
+	// returns an array of enterer names
+	function entererNames() {
+		var names = new Array(' . $entList . ');
+		return names;
+	}
+		
+	// returns an array of enterer names
+	function authorizerNames() {
+		var names = new Array(' . $authList . ');
+		return names;
+	} 
+	</SCRIPT>
+	';
+
+	$fields{NOESCAPE_enterer_authorizer_lists} = $javaScript;
+	
+	
 	
 	my $html = $hbo->newPopulateHTML('login_box', \%fields);
 	
