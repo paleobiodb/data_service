@@ -724,6 +724,64 @@ sub doModules{
 	}
 }
 
+
+# pass this a reference to the collection list array and it
+# should figure out the min/max/center lat/lon 
+# returns an array of parameters (see end of routine for order)
+# written 12/11/2003 by Ryan.
+sub calculateCollectionBounds {
+	my $collections = shift;  #collections to plot
+
+	# calculate the min and max latitude and 
+	# longitude with 1 degree resolution
+	my $latMin = 360;
+	my $latMax = -360;
+	my $lonMin = 360;
+	my $lonMax = -360;
+
+	foreach (@$collections) {
+		%coll = %$_;
+
+		# note, this is *assuming* that latdeg and lngdeg are 
+		# always populated, even if the user set the lat/lon with 
+		# decimal degrees instead.  So if this isn't the case, then
+		# we need to check both of them.  
+		my $latDeg = $coll{'latdeg'};
+		if ($coll{'latdir'} eq "South") {
+			$latDeg = -1*$latDeg;
+		}
+
+		my $lonDeg = $coll{'lngdeg'};
+		if ($coll{'lngdir'} eq "West") {
+			$lonDeg = -1* $lonDeg;
+		}
+
+		#print "lat = $latDeg<BR>";
+		#print "lon = $lonDeg<BR>";
+
+		if ($latDeg > $latMax) { $latMax = $latDeg; }
+		if ($latDeg < $latMin) { $latMin = $latDeg; }
+		if ($lonDeg > $lonMax) { $lonMax = $lonDeg; }
+		if ($lonDeg < $lonMin) { $lonMin = $lonDeg; }
+	}
+
+	$latCenter = (($latMax - $latMin)/2) + $latMin;
+	$lonCenter = (($lonMax - $lonMin)/2) + $lonMin;
+
+	#print "latCenter = $latCenter<BR>";
+	#print "lonCenter = $lonCenter<BR>";
+	#print "latMin = $latMin<BR>";
+	#print "latMax = $latMax<BR>";
+	#print "lonMin = $lonMin<BR>";
+	#print "lonMax = $lonMax<BR>";
+
+	return ($latCenter, $lonCenter, $latMin, $latMax, $lonMin, $lonMax);
+}
+
+
+
+
+
 sub doMap{
 	my $dbh = shift;
 	my $dbt = shift;
@@ -755,8 +813,15 @@ sub doMap{
 		$q->param('coastlinecolor' => 'black');
 	}
 	$q->param('mapresolution'=>'medium');
+
+	# note, we need to leave this in here even though it's 
+	# redunant (since we scale below).. taking it out will
+	# cause a division by zero error in Map.pm.
 	$q->param('mapscale'=>'X 1');
+
+
 	$q->param('pointsize'=>'tiny');
+
 	if(!$q->param('projection') or $q->param('projection') eq ""){
 		$q->param('projection'=>'rectilinear');
 	}
@@ -765,13 +830,65 @@ sub doMap{
 	my $m = Map->new( $dbh, $q, $s, $dbt );
 	my $perm_rows = $m->buildMapOnly($in_list);
 	my @perm_rows = @{$perm_rows};
-	if(@perm_rows > 0){
+
+	if(@perm_rows > 0) {
+
+		# this section added by Ryan on 12/11/2003
+		# at this point, we need to figure out the bounds 
+		# of the collections and the center point.  
+		my @bounds = calculateCollectionBounds(\@perm_rows);
+
+		$q->param('maplat' => shift(@bounds));
+		$q->param('maplng' => shift(@bounds));
+
+		# note, we must constrain the map size to be in a ratio
+		# of 360 wide by 180 high, so figure out what ratio to use
+		my $latMin = shift(@bounds);	my $latMax = shift(@bounds);
+		my $lonMin = shift(@bounds);	my $lonMax = shift(@bounds);
+
+		my $latWidth = abs($latMax - $latMin);
+		my $lonWidth = abs($lonMax - $lonMin);
+
+		my $scale = 8;  # default scale value
+		if (not (($latWidth == 0) and ($lonWidth == 0))) {
+			# only do this if they're not both zero...
+		
+			if ($latWidth == 0) { $latWidth = 1; } #to prevent divide by zero
+			if ($lonWidth == 0) { $lonWidth = 1; }
+		
+			# multiply by 0.9 to give a slight boundary around the zoom.
+			my $latRatio = (0.9 * 180) / $latWidth;
+			my $lonRatio = (0.9 * 360) / $lonWidth;
+
+			#print "latRatio = $latRatio\n";
+			#print "lonRatio = $lonRatio\n";
+
+			if ($latRatio < $lonRatio) {
+				$scale = $latRatio;
+			} else { 
+				$scale = $lonRatio;
+			}
+		}
+
+		if ($scale > 8) { $scale = 8; } # don't let it zoom too far in!
+		$q->param('mapscale' => "X $scale");
+		
+
+		# note, we have already set $q in the map object,
+		# so we have to set it again with the new values.
+		# this is not the ideal way to do it, so perhaps change
+		# this at a future date.
+		$m->setQAndUpdateScale($q);
+		
+	
+		# now actually draw the map
 		return $m->mapDrawMap($perm_rows);
-	}
-	else{
+	} else {
 		return "<i>No distribution data are available</i>";
 	}
 }
+
+
 
 sub doCollections{
 	my $exec_url = shift;
