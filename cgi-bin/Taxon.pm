@@ -1355,7 +1355,7 @@ sub submitAuthorityForm {
 		$fieldsToEnter{figures} = $q->param('2nd_figures');
 		
 		if (! $q->param('author1last')) {
-			$errors->add('You must enter at least a first author last name');	
+			$errors->add('You must enter at least the last name of a first author');	
 		}
 		
 		# make sure the pages/figures fields above this are empty.
@@ -1373,14 +1373,14 @@ sub submitAuthorityForm {
 			)
 			) {
 			
-			$errors->add("Improper author initial format");		
+			$errors->add("The author's initials are improperly formatted");		
 		}
 		
 
 		# make sure the format of the author names is proper
 		if  ( $q->param('author1last')) {
 			if (! (Validation::properLastName($q->param('author1last'))) ) {
-				$errors->add("Improper first author last name");
+				$errors->add("The first author's last name is improperly formatted");
 			}
 		}
 			
@@ -1389,13 +1389,13 @@ sub submitAuthorityForm {
 			(! Validation::properLastName( $q->param('author2last') ) )
 			) {
 		
-			$errors->add("Improper second author last name");	
+			$errors->add("The second author's last name is improperly formatted");	
 		}
 
 			
 		if ( ($q->param('pubyr') && 
 			(! Validation::properYear($q->param('pubyr'))))) {
-			$errors->add("Improper year format");
+			$errors->add("The year is improperly formatted");
 		}
 		
 		if (($q->param('otherauthors')) && (! $q->param('author2last') )) {
@@ -1436,7 +1436,7 @@ sub submitAuthorityForm {
 			# make sure they didn't try to change the genus name.
 			if ($oldTaxon->firstWord() ne $newTaxon->firstWord()) {
 				$errors->add("You can't change the genus name of a species
-				which already exists.  Contact the database manager
+				that already exists.  Contact the database manager
 				if you need to do this.");
 			}
 			
@@ -1445,7 +1445,7 @@ sub submitAuthorityForm {
 			if (($oldTaxon->firstWord() ne $newTaxon->firstWord()) || 
 				($oldTaxon->secondWord() ne $newTaxon->secondWord()) ){
 				$errors->add("You can't change the species name of a subspecies
-				which already exists.  Contact the database manager
+				that already exists.  Contact the database manager
 				if you need to do this.");
 			}
 
@@ -1460,7 +1460,7 @@ sub submitAuthorityForm {
 		
 		
 		if ($rankFromSpaces eq 'invalid') {
-			$errors->add("Invalid taxon name, please check spacing and capitalization");	
+			$errors->add("The taxon's name is invalid; please check spacing and capitalization");	
 		}
 		
 		if ( (($rankFromSpaces eq SUBSPECIES) && ($trank ne SUBSPECIES)) ||
@@ -1534,7 +1534,7 @@ sub submitAuthorityForm {
 		# check the spacing/capitilization of the type taxon name
 		my $ttRankFromSpaces = Validation::taxonRank($fieldsToEnter{type_taxon_name});
 		if ($ttRankFromSpaces eq 'invalid') {
-			$errors->add("Invalid type taxon name, please check spacing and capitalization");	
+			$errors->add("The type taxon's name is invalid; please check spacing and capitalization");	
 		}
 
 		
@@ -1555,12 +1555,12 @@ sub submitAuthorityForm {
 			if (($taxonRank eq GENUS) || ($taxonRank eq SUBGENUS)) {
 				# then the type taxon rank must be species
 				if ($ttaxon->rankString() ne SPECIES) {
-					$errors->add("The type taxon rank doesn't make sense");	
+					$errors->add("The type taxon's rank doesn't make sense");	
 				}
 			} else {
 				# for any other rank, the type taxon rank must not be species.
 				if ($ttaxon->rankString() eq SPECIES) {
-					$errors->add("The type taxon rank doesn't make sense");	
+					$errors->add("The type taxon's rank doesn't make sense");	
 				}
 			}
 			
@@ -1616,8 +1616,8 @@ sub submitAuthorityForm {
 		
 		if (! $parentTaxon->taxonNumber()) {
 			$errors->add("The parent taxon '" . $parentTaxon->taxonName() . 
-			"' which this $taxonRank belongs to doesn't exist in our 
-			database.  Please add an authority record for this genus
+			"' that this $taxonRank belongs to doesn't exist in our 
+			database.  Please add an authority record for this $taxonRank
 			before continuing.");
 		}
 	}
