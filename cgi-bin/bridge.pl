@@ -3103,6 +3103,24 @@ sub buildTaxonomicList {
 				}
 			}
 
+			# tack on the author and year if the taxon number exists
+			# JA 19.4.04
+			if ( $rowref->{taxon_no} )	{
+			# If the authority is a PBDB ref, retrieve and print it
+				my $sql = "SELECT * FROM authorities WHERE taxon_no=" . $rowref->{taxon_no};
+				my %taxData = %{@{$dbt->getData($sql)}[0]};
+				if ( $taxData{'ref_is_authority'} )	{
+					$sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=";
+					$sql .= $taxData{'reference_no'};
+					my %refRow = %{@{$dbt->getData($sql)}[0]};
+					$rowref->{authority} = formatShortRef( \%refRow );
+				}
+				# Otherwise, use what authority info can be found
+				else	{
+					$rowref->{authority} = formatShortRef( \%taxData );
+				}
+			}
+
 			my $formatted_reference = '';
 
 			# if the reference_no for this occurrence isn't equal to the one
@@ -3450,8 +3468,28 @@ sub getReidHTMLTableByOccNum {
 	#  is true (no, just one) or false (yes, all of them)
 	foreach my $rowRef ( @rows ) {
 		my @row = @{$rowRef};
+
+		# get the taxonomic authority JA 19.4.04
+		# the taxon no is in the second to last field
+		my $authority = "";
+		if ( $row[-1] )	{
+		# If the authority is a PBDB ref, retrieve and print it
+			my $sql = "SELECT * FROM authorities WHERE taxon_no=" . $row[-1];
+			my %taxData = %{@{$dbt->getData($sql)}[0]};
+			if ( $taxData{'ref_is_authority'} )	{
+				$sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=";
+				$sql .= $taxData{'reference_no'};
+				my %refRow = %{@{$dbt->getData($sql)}[0]};
+				$authority = formatShortRef( \%refRow );
+			}
+			# Otherwise, use what authority info can be found
+			else	{
+				$authority = formatShortRef( \%taxData );
+			}
+		}
+
 		# format the reference (PM)
-		# JA: -3 means second to last element in the array
+		# JA: -3 means fourth to last element in the array
 		$row[-3] = buildReference($row[-3],"list");
 		# JA: originally PM created a genus + species combo and
 		#  passed it to PBDBUtil, but now the function operates on
@@ -3474,6 +3512,11 @@ sub getReidHTMLTableByOccNum {
 		}
 		}
 
+		if ( $authority )	{
+			push @row , $authority;
+			push @fieldNames , "authority";
+		}
+
 		$retVal .= $hbo->populateHTML("reid_taxa_display_row", \@row,\@fieldNames);
 
 		if ( $rowRef == $rows[$#rows] )	{
@@ -3487,6 +3530,10 @@ sub getReidHTMLTableByOccNum {
 			pop(@fieldNames);
 			pop(@fieldNames);
 		}
+		}
+		if ( $authority )	{
+			pop(@row);
+			pop(@fieldNames);
 		}
 	}
 
