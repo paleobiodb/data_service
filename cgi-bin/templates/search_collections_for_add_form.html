@@ -1,0 +1,80 @@
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+// Checks the form data
+function checkForm ( ) {
+
+	var frm = document.forms[0];
+	var errors = "";
+
+	if ( frm.period_max.selectedIndex == 0 )	{
+		errors = "Please choose a period name\n\n";
+	}
+
+	if ( frm.latdeg.value == ""
+		|| frm.lngdeg.value == "" ) {
+		errors += "You must supply lat/long coordinates\n";
+	}
+
+	if ( errors != "" ) { 
+		alert ( errors );
+		return false;
+	} else {
+		return true;
+	}
+}
+
+
+//  End -->
+</script>
+
+	<div class="title">Collection search form</div>
+	<div class="titleDetails">Choose a period, fill in the coordinates, and press "Search collections"</div>
+
+    <form method=post action="bridge.pl" onSubmit="return checkForm();">
+	<input id="action" type=hidden name="action" value="displayCollResults">
+	<input id="type" type=hidden name="type" value="add">
+
+		<hr>
+
+<center>
+
+<p>Period:&nbsp;<select id="period_max"></select></p>
+
+  <table>
+    <tr>
+      <td></td>
+      <td><span class="required">Degrees</span></td>
+      <td>Minutes</td>
+      <td>Seconds</td>
+      <td>Decimal value*</td>
+      <td><span class="required">Direction</span></td>
+    </tr>
+    <tr>
+      <td>Latitude</td>
+      <td><input id="latdeg" size=5 maxlength=3></td>
+      <td><input id="latmin" size=3 maxlength=2></td>
+      <td><input id="latsec" size=3 maxlength=2></td>
+      <td><input id="latdec" size=5 maxlength=8></td>
+      <td><select id="latdir"></select>
+    </tr>
+    <tr>
+      <td>Longitude</td>
+      <td><input id="lngdeg" size=5 maxlength=3></td>
+      <td><input id="lngmin" size=3 maxlength=2></td>
+      <td><input id="lngsec" size=3 maxlength=2></td>
+      <td><input id="lngdec" size=5 maxlength=8></td>
+      <td><select id="lngdir"></select></td>
+    </tr>
+  </table>
+
+  <p class="small"><i>*Enter either minutes-seconds or decimal value, but not both. See the
+  <A HREF="javascript:tipsPopup('/public/tips/tips.html#Coordinates')">tip sheet</A>
+
+<p><input type="submit" value="Search collections"></p>
+
+</td></tr></table>
+
+</center>
+
+</form>
