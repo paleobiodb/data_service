@@ -11,7 +11,7 @@ use DBConnection;
 use SQLBuilder;
 use URLMaker;
 use CGI::Carp qw(fatalsToBrowser);
-
+use Constants;
 
 use fields qw(	
 				GLOBALVARS
@@ -97,6 +97,21 @@ sub listOfEnterers {
 	
 	return $res;
 	
+}
+
+# Pass this an enterer or authorizer name (reversed or normal - doesn't matter)
+# Returns a true value if the name exists in our database of people.
+sub isValidName {
+	my Person $self = shift;
+	my $name = shift;
+	
+	my $sql = $self->getSQLBuilder();
+	
+	my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM person WHERE
+		name = '$name' OR reversed_name = '$name'");
+
+	if ($count) { return TRUE; }
+	else { return FALSE; }
 }
 
 
