@@ -1626,10 +1626,16 @@ sub displayTaxonClassification{
             $rank = $record->{'taxon_rank'} eq 'species' ? "Genus+and+species" 
                   : $record->{'taxon_rank'} eq 'genus'   ? "Genus"
                                                          : "Higher+Taxon"; 
+            my @syn_links;                                                         
+            my @synonyms = @{$record->{'synonyms'}};
+            push @syn_links, $_->{'taxon_name'} for @synonyms;
+            my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$record->{taxon_name}&taxon_rank=$rank">$record->{taxon_name}|;
+            $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
+            $link .= "</a>";
 			if ($record->{'is_invalid'}) { 
-        		push @invalid_taxa_links, qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$record->{taxon_name}&taxon_rank=$rank">$record->{taxon_name}</a>|;
+        		push @invalid_taxa_links, $link;
 			} else {
-        		push @child_taxa_links, qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$record->{taxon_name}&taxon_rank=$rank">$record->{taxon_name}</a>|;
+        		push @child_taxa_links, $link;
 			}
     	}
 		if (@child_taxa_links) {
@@ -1658,10 +1664,16 @@ sub displayTaxonClassification{
             if ($lastrank ne $record->{'taxon_rank'}) {
                 PBDBUtil::debug(1,"rank mismatch $lastrank -- $record->{taxon_rank} for sister $record->{taxon_name}");
             } else {
+                my @syn_links;
+                my @synonyms = @{$record->{'synonyms'}};
+                push @syn_links, $_->{'taxon_name'} for @synonyms;
+                my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$record->{taxon_name}&taxon_rank=$rank">$record->{taxon_name}|;
+                $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
+                $link .= "</a>";
                 if ($is_invalid->{$taxon_no}) { 
-        		    push @invalid_taxa_links, qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$record->{taxon_name}&taxon_rank=$rank">$record->{taxon_name}</a>|;
+        		    push @invalid_taxa_links, $link;
                 } else {
-        		    push @child_taxa_links, qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$record->{taxon_name}&taxon_rank=$rank">$record->{taxon_name}</a>|;
+        		    push @child_taxa_links, $link;
                 }
             }
     	}
