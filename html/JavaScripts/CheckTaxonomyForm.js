@@ -1,7 +1,11 @@
-/*  Used to perform sanity checking on Taxonomy Entry forms.	
+/*  CheckTaxonomyForm.js  
 
+Used to perform sanity checking on Taxonomy Entry forms.	
 Note, makes use of a couple of functions from the common.js file.
-		Mostly rewritten by rjp, 2/2004  */
+
+Rewritten by rjp, 2/2004  
+
+*/
 
 
 // check the form to make sure it's legal to submit
@@ -274,4 +278,4 @@ function checkReferenceInfo(checked, type, currentPages, currentFigures, firstAu
 
 
 
-
+//end of CheckTaxonomyForm.js
