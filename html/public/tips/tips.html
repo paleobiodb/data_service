@@ -94,11 +94,19 @@ An optional field for alternative names by which the collection may be known.  T
 If this new collection is a subset of a more general collection, enter the collection ID number of this larger collection.
 For example, if you have a bulk sample from a roadcut and an older, previously entered paper describes the general fauna from the roadcut, create a new collection for the bulk sample and enter the ID of the older, general faunal collection here.<p>
 
-<b>Authorized by</b><br>
-Select from the pop-up menu the name of the project participant who authorized entry of this collection.<p>
-
-<b>Entered by</b><br>
-Select your name from the pop-up menu.<p>
+<b>Author's main reason for describing collection</b><br>
+A <FONT COLOR="#ff0000">required</FONT> field.
+Characterize the intent or subject area of the <i>part</i> of the publication from which the collection was compiled.
+Be careful because different parts of one paper might have different purposes.
+When in doubt, use the category that best describes the whole paper.
+<ul>
+<li><i>"biostratigraphic"</i> means described for the purpose of temporal correlation, or in the course of a geological study (e.g., lists given within descriptions of measured sections).
+<li><i>"paleoecologic"</i> means described for the purpose of paleoecological analysis, including taxonomic lists that are given without descriptions of fossils and without discussions of temporal correlation.
+<li><i>"taphonomic"</i> means described for the purpose of a taphonomic analysis.
+<li><i>"taxonomic"</i> means a systematic paleontology treatment, including simple descriptions of fossils.
+Use this if the all the taxa are included in a systematic paleontology section, or if the taxonomic list is given only in support of an otherwise taxonomic account of one or a few taxa.
+<li><i>"general faunal/floral"</i> means there is no detailed discussion of the age, environment, ecology, preservation, or morphology of the fossils, but a taxonomic list is given. Use this category only if the other ones are too specific.
+</ul>
 
 <FONT SIZE=4><H4><u>Geographic Information</u></H4>
 
@@ -379,17 +387,6 @@ Add taphonomically relevant information and/or interpretations of the author(s) 
 
 Select as many check boxes from any or all of the rows in this section that you need to further characterize the collection.<p>
 
-<b>Purpose of collection</b><br>
-Characterize the intent or subject area of the <i>part</i> of the publication from which the collection was compiled.
-Different parts of one paper might have multiple purposes.
-When in doubt, use the category that best describes the whole paper.
-<ul>
-<li><i>"biostratigraphic"</i> means described for the purpose of geological correlation, or in the course of a geological study (e.g., lists given within descriptions of measured sections).
-<li><i>"paleoecologic"</i> means described for the purpose of paleoecological analysis, including taxonomic lists that are given without descriptions of fossils or discussions of temporal correlation.
-<li><i>"taphonomic"</i> means described for the purpose of a taphonomic analysis.
-<li><i>"taxonomic"</i> means a systematic paleontology treatment, including simple descriptions of fossils.<p>
-</ul>
-
 <b>What is <i>not</i> included in the list?</b><br>
 The categories pertain to the taxa that <i>could</i> have been listed because they were definitely present in the outcrop or collections, but weren't listed.
 This field is the basis for determining the "quality" of the reporting, not the type of preservation: did the author collect, prepare, and report all of the taxa that could have been collected, prepared, and reported if they had bothered? <!-- just like Jack wanted it -->
@@ -491,8 +488,9 @@ For example, if you have an identification like "Xus yus zus," put "Xus" in the 
 </ul>
 <p>
 
+<a name="Abundance"></a>
 <b>Abundance</b><br>
-Optional. Integers and real numbers are both okay.<p>
+Optional, so the occurrence still will "count" even if you leave this field blank. Integers and real numbers are both okay.<p>
 
 <b>Abundance unit</b><br>
 This is required if you have entered a value in the preceding field. If you do not make a selection, the default value will be "specimens," which may not be correct.<p>
