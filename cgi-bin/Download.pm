@@ -8,7 +8,7 @@ use Globals;
 use DBTransactionManager;
 
 # Flags and constants
-#my $DEBUG=0;			# The debug level of the calling program
+my $DEBUG=0;			# The debug level of the calling program
 my $dbh;				# The database handle
 my $dbt;				# The new and improved database object
 my $q;					# Reference to the parameters
@@ -22,7 +22,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch 10mybin max_interval_no min_interval_no emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch 10mybin max_interval_no min_interval_no emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
 my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name reference_no comments created modified modified_temp plant_organ);
 my @refsFieldNames = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage created modified publication_type comments project_name project_ref_no);
@@ -38,11 +38,6 @@ my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
 my $outFileBaseName;
 
 my $bestbothscale;
-
-# for measuring execution time
-my ($th0, $th1);
-#if ($DEBUG) { use Time::HiRes qw(gettimeofday); }
-$th0 = gettimeofday() if ($DEBUG);
 
 sub new {
 	my $class = shift;
@@ -68,34 +63,22 @@ sub buildDownload {
     
 
 	$self->setupOutput ( );
-    $th1 = gettimeofday() if ($DEBUG);
-    $self->dbg("Exec time setupOutput: ".sprintf ("%5.3f",($th1 - $th0)));
 
 	$self->retellOptions ( );
-    $th1 = gettimeofday() if ($DEBUG);
-    $self->dbg("Exec time retellOptions: ".sprintf ("%5.3f",($th1 - $th0)));
 
 	if ( $q->param('time_scale') )	{
 		$self->getTimeLookup ( );
 	}
-    $th1 = gettimeofday() if ($DEBUG);
-    $self->dbg("Exec time timeScale: ".sprintf ("%5.3f",($th1 - $th0)));
     
 	if ( $q->param('ecology1') )	{
 		$self->getEcology ( );
 	}
-    $th1 = gettimeofday() if ($DEBUG);
-    $self->dbg("Exec time getEcology: ".sprintf ("%5.3f",($th1 - $th0)));
     
 	if ( $q->param('compendium_ranges') eq 'NO' )	{
 		$self->getCompendiumAgeRanges ( );
 	}
-    $th1 = gettimeofday() if ($DEBUG);
-    $self->dbg("Exec time compendiumAgeRanges: ".sprintf ("%5.3f",($th1 - $th0)));
 
 	$self->doQuery ( );
-    $th1 = gettimeofday() if ($DEBUG);
-    $self->dbg("Exec time doQuery: ".sprintf ("%5.3f",($th1 - $th0)));
 }
 
 
@@ -271,9 +254,12 @@ sub retellOptions {
 	
 	$html .= $self->retellOptionsRow ( "Lump lists of same county & formation?", $q->param("lumplist") );
 
-    if (! $q->param('geogscale_small_collection') || ! $q->param('geogscale_outcrop') || ! $q->param('geogscale_local_area') ||
+    if (! $q->param('geogscale_small_collection') || ! $q->param('geogscale_hand_sample') || ! $q->param('geogscale_outcrop') || ! $q->param('geogscale_local_area') ||
         ! $q->param('geogscale_basin') || ! $q->param('geogscale_unknown')) { 
         my $geogscales;
+        if ( $q->param('geogscale_hand_sample') )	{
+            $geogscales = "hand sample";
+        }
         if ( $q->param('geogscale_small_collection') )	{
             $geogscales = "small collection";
         }
@@ -844,10 +830,13 @@ sub getEnvironmentString{
 sub getGeogscaleString{
 	my $self = shift;
 	my $geogscales = "";
-    if (! $q->param('geogscale_small_collection') || ! $q->param('geogscale_outcrop') || ! $q->param('geogscale_local_area') ||
+    if (! $q->param('geogscale_small_collection') || !$q->param('geogscale_hand_sample') || ! $q->param('geogscale_outcrop') || ! $q->param('geogscale_local_area') ||
         ! $q->param('geogscale_basin') || ! $q->param('geogscale_unknown')) { 
+        if ( $q->param('geogscale_hand_sample') )	{
+            $geogscales = "'hand sample'";
+        }
         if ( $q->param('geogscale_small_collection') )	{
-            $geogscales = "'small collection'";
+            $geogscales = ",'small collection'";
         }
         if ( $q->param('geogscale_outcrop') )	{
             $geogscales .= ",'outcrop'";
@@ -1189,8 +1178,6 @@ sub doQuery {
 		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '2');
 		%myperiod = %{$intervalInScaleRef};
 	}
-    $th1 = gettimeofday() if ($DEBUG);
-    $self->dbg("Exec time doQuery1a: ".sprintf ("%5.3f",($th1 - $th0)));
 
 	# get the epoch names for the collections JA 22.2.04
 	# based on scale 4 = Harland epochs
@@ -1198,16 +1185,12 @@ sub doQuery {
 		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '4');
 		%myepoch = %{$intervalInScaleRef};
 	}
-    $th1 = gettimeofday() if ($DEBUG);
-    $self->dbg("Exec time doQuery1b: ".sprintf ("%5.3f",($th1 - $th0)));
 	# get the PBDB 10 m.y. bin names for the collections JA 3.3.04
 	# WARNING: the locage_max field is just being used as a dummy
 	if ( $q->param('collections_10mybin') )	{
 		@_ = TimeLookup::processBinLookup($dbh,$dbt);
 		%mybin = %{$_[0]};
 	}
-    $th1 = gettimeofday() if ($DEBUG);
-    $self->dbg("Exec time doQuery1c: ".sprintf ("%5.3f",($th1 - $th0)));
 
     # Get hash to map interval_no -> interval_name
     if ($q->param("collections_max_interval_no") eq "YES" || 
