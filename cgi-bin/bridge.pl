@@ -1792,8 +1792,7 @@ sub buildTaxonomicList {
 			# check for unrecognized genus names
 			foreach my $nn (@gnew_names){
 				if($rowref->[$genus_index] eq $nn){
-					$rowref->[$genus_index] = "<b>".$rowref->[$genus_index];
-					$rowref->[$species_index]=$rowref->[$species_index]."</b>";
+					$rowref->[$genus_index] = "<b>".$rowref->[$genus_index]."</b>";
 					$new_found = 1;
 				}
 			}
@@ -1801,8 +1800,7 @@ sub buildTaxonomicList {
 			# check for unrecognized species names
 			foreach my $nn (@snew_names){
 				if($rowref->[$species_index] eq $nn){
-					$rowref->[$species_index]=$rowref->[$species_index]."</b>";
-					$rowref->[$genus_index] = "<b>".$rowref->[$genus_index];
+					$rowref->[$species_index]="<b>".$rowref->[$species_index]."</b>";
 					$new_found = 1;
 				}
 			}
