@@ -47,5 +47,17 @@ sub logError {
 }
 
 
+# prints each parameter in the passed CGI object
+# note, this is normally called $q in our programs.
+sub printAllParams {
+	my $q = shift;
+	dbPrint("Printing list of all parameters:\n");
+	my @params = $q->param();
+	foreach my $p (@params) {
+		dbPrint("$p = " . $q->param($p));	
+	}
+	dbPrint("End of parameter list\n\n");	
+}
+
 1
 

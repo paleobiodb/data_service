@@ -1,3 +1,5 @@
+<!-- Start of js_taxonomy_checkform.html -->
+
     <script language="JavaScript" type="text/javascript">
     <!-- Begin
 
@@ -53,14 +55,16 @@
 		var frm = document.forms[0];
 		var errors = "";
 
+		var originalIsSpecies = hasSpace.test(frm.taxon_name.value);
+				
 		// Taxon, type, and parent names must be different
 		if ( frm.taxon_name.value == frm.type_taxon_name.value )	{
 			errors += "* Type taxon and taxon have the same name.\n";
 		}
 		
-		// recombined as
+		// valid, recombined as
 		if (frm.taxon_status[2].checked) {
-			if ( frm.taxon_name.value == frm.parent_taxon_name.value && hasSpace.test (frm.taxon_name.value ) == false )	{
+			if ( frm.taxon_name.value == frm.parent_taxon_name.value && (! originalIsSpecies) )	{
 				errors += "* Higher taxon and taxon have the same name.\n";
 			}
 		}
@@ -75,11 +79,13 @@
 		}
 		// Check taxonomic names
 		if ( frm.type_taxon_name.value != "" && firstUpperRestLower.test ( frm.type_taxon_name.value ) == false )	{
-			if ( hasSpace.test ( frm.taxon_name.value ) == false )	{
+			if ( ! originalIsSpecies )	{
 				errors += "* Type taxon's name is ill-formed.\n";
 			}
 		}
-		if ( hasSpace.test ( frm.taxon_name.value ) == false )	{
+		
+		if ( ! originalIsSpecies ) {
+		   //then it must be a higher taxon
 			if ( frm.parent_taxon_name.value != "" && firstUpperRestLower.test ( frm.parent_taxon_name.value ) == false )	{
 				errors += "* Higher taxon's name is ill-formed.\n";
 			}
@@ -213,3 +219,6 @@
 
     //  End -->
     </script>
+	
+	
+	<!-- End of js_taxonomy_checkform.html -->

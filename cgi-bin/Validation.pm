@@ -14,7 +14,7 @@
 #
 
 #
-# The clean routine cleans the passed string by removing all
+# The clean routine cleans the passed string by removing/escaping all
 # questionable characters such as <,>*/|\~`", etc.
 
 package Validation;
@@ -23,6 +23,7 @@ use strict;
 
 # pass this a string and it returns a "cleaned" copy of it.
 # basically removes any funny characters which shouldn't be in the database,
+# escapes single quote marks (JA didn't want double quotes escaped),
 # and also removes HTML code such as italics <i>
 sub clean {
 	my $in = shift;
@@ -31,10 +32,15 @@ sub clean {
 	# looks for "<" followed by optional "/" followed by one or more
 	# characters which *aren't* "<" or ">" followed by ">".  This pretty
 	# much defines an HTML tag, so this should remove all of them.
+	
 	$in =~ s/<[\/]?[^<>]+>//g;
 
-	# remove quote marks, etc..
-	$in =~ s/["'`]//g;
+	# comment out the escape quote marks for now..
+	# because it would be an issue if some other code tried to escape them again... 
+	
+	# escape quote marks.
+	# don't escape quotes which are already escaped...
+	#$in =~ s/([^\]['])|(^['])/\\'/g;
 	
 	return $in;
 }
@@ -51,8 +57,7 @@ sub cleanCGIParams {
 	
 	my @params = $q->param();
 	foreach my $p (@params) {
-		$q->param($p => clean($q->param($p)));
-		
+		$q->param($p => clean($q->param($p)));		
 		#dbPrint("$p = " . $q->param($p));	
 	}
 }

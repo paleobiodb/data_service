@@ -45,16 +45,16 @@
 <!-- the following row should only appear if the rank is species -->
 %%species_only_start%%
 <tr><td align=right>
-<input type="radio" name="taxon_status" value="original_valid"> </td>
+<input type="radio" name="taxon_status" value="belongs_to"> </td>
 <td colspan=2><b>Valid %%rank%%</b> as originally combined; belongs to genus <i>%%genus%%</i>.
 </td></tr>
 %%species_only_end%%
 
-<!-- Replace the belongs_to_message in the script.  
+<!-- Replace the recombined_message in the script.  
 If rank is a higher taxon, then it should say "classified as belonging to."  
 Otherwise, it should say "recombined into a different genus as." -->
 <tr><td align=right valign=top>
-<input type="radio" name="taxon_status" value="belongs_to"> </td><td colspan=2><b>Valid %%rank%%</b>, %%belongs_to_message%%
+<input type="radio" name="taxon_status" value="recombined_as"> </td><td colspan=2><b>Valid %%rank%%</b>, %%recombined_message%%
 <input id="parent_taxon_name" name="parent_taxon_name" size=50><br>
 </td></tr>
 <tr><td></td><td valign="top" align=right> Diagnosis:</td>
