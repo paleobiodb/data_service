@@ -26,6 +26,27 @@ sub dbPrint {
 }
 
 
+# pass this an alternating series of variable names and variables
+# and it will print them out in a human readable format.
+sub printVars {
+	if (! @_) { return; }
+	
+	my $string;
+	
+	my $i;
+	
+	for ($i = 0; $i < scalar(@_); $i+= 2) {
+		if (($i + 1) < scalar(@_)) {
+			$string .= "@_[$i] = '" . @_[$i+1] . "', ";
+		}
+	}
+	
+	$string =~ s/, $//;
+	
+	dbPrint("\nVariable List: " . $string);
+}
+
+
 # logs an error message to the error_log
 sub logError {
 	$| = 1;	# flushes buffer immediately
@@ -53,8 +74,12 @@ sub printAllParams {
 	my $q = shift;
 	dbPrint("Printing list of all parameters:\n");
 	my @params = $q->param();
+	my @list;
 	foreach my $p (@params) {
-		dbPrint("$p = " . $q->param($p));	
+		# have to do this carefully because each param can either be a 
+		# scalar value, or a list value.
+		@list = $q->param($p); 
+		dbPrint("$p = " . "'" . join(", ", @list) . "'");	
 	}
 	dbPrint("End of parameter list\n\n");	
 }
