@@ -204,6 +204,11 @@ DIV.errorMessage {
 }
 
 
+/* Used on download form */
+.lightGrey {
+	background-color:EEEEEE;
+}
+
 /*	the color for the dark row in a list which has alternating 
 	light and dark rows. */
 .darkList {
@@ -212,7 +217,60 @@ DIV.errorMessage {
 
 /*	color of light row in list, not used everywhere. */
 .lightList {
-	background-color:white;
+	background-color:FFFFFF;
+}
+
+/* relate to report formatting */
+.dataTable {
+    border: 0px; 
+}
+.dataTableCell, .dataTableCellTotal {
+    border-left: 0px;
+    border-top: 0px;
+    border-right: 2px #C0C0C0 solid;
+    border-bottom: 2px #C0C0C0 solid;
+}
+.dataTableColumn, .dataTableColumnTotal {
+    background-color:#EEEEEE;
+    border-top: 0px;
+    border-bottom: 2px #707070 solid;
+    border-left: 0px;
+    border-right: 2px #909090 solid;
+}
+.dataTableColumnTotal { border-right: 0px; }
+
+.dataTableRow, .dataTableRowTotal {
+    background-color:#EEEEEE;
+    border-left: 0px;
+    border-right: 2px #707070 solid;
+    border-top: 0px;
+    border-bottom: 2px #909090 solid;
+}
+
+.dataTableULCorner {
+    background-color:#DDDDDD;
+    border-left: 0px;
+    border-top: 0px;
+    border-right: 2px #707070 solid;
+    border-bottom: 2px #707070 solid;
+}
+
+.dataTableTopULCorner{
+    border-left: 0px;
+    border-top: 0px;
+    border-right: 2px #707070 solid;
+    border-bottom: 0px;
+}
+.dataTableTop {
+    background-color:#DDDDDD;
+    border-left: 0px;
+    border-top: 0px;
+    border-right: 2px #909090 solid;
+    border-bottom: 2px #909090 solid;
+}
+
+.headerList1 {
+	background-color:#A0A0A0;
 }
 
 /* The navigation box at the left of pages such as the taxon display page */
