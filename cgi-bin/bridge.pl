@@ -550,7 +550,7 @@ sub getPrefFields	{
 		"research_group" => "research group",
 		"latdeg" => "latitude", "lngdeg" => "longitude",
 		"geogscale" => "geographic resolution",
-		"period_max" => "period max", "epoch_max" => "epoch max",
+		"max_interval" => "time interval",
 		"stratscale" => "stratigraphic resolution",
 		"lithology1" => "primary lithology",
 		"environment" => "paleoenvironment",
@@ -579,7 +579,7 @@ sub getPrefFields	{
 	# list of fields in tables
 	my @setFieldNames = ("blanks", "research_group", "country", "state",
 			"latdeg", "latdir", "lngdeg", "lngdir", "geogscale",
-			"emlperiod_max", "period_max", "emlepoch_max", "epoch_max",
+			"max_interval",
 			"formation", "stratscale", "lithology1", "environment",
 			"collection_type", "assembl_comps", "pres_mode", "coll_meth",
 		# occurrence fields
@@ -641,12 +641,6 @@ sub setPreferences	{
 	}
 	if ($q->param("lngdir"))	{
 		$q->param(lngdeg => $q->param("lngdeg") . " " . $q->param("lngdir") );
-	}
-	if ($q->param("emlperiod_max"))	{
-		$q->param(period_max => $q->param("emlperiod_max") . " " . $q->param("period_max") );
-	}
-	if ($q->param("emlepoch_max"))	{
-		$q->param(epoch_max => $q->param("emlepoch_max") . " " . $q->param("epoch_max") );
 	}
 
 	print "<tr><td valign=\"top\" width=\"33%\">\n";
@@ -1903,7 +1897,10 @@ sub displaySearchCollsForAdd	{
 		exit;
 	}
 
-	my $html = $hbo->populateHTML('search_collections_for_add_form' , [ '' , '' , '' , '' , '' , '' , '' , '' , '' , '' , '' ] , [ period_max , latdeg , latmin , latsec , latdec , latdir,  lngdeg , lngmin , lngsec , lngdec , lngdir ] );
+	# use some preferences JA 20.10.04
+	%pref = getPreferences($s->get('enterer'));
+
+	my $html = $hbo->populateHTML('search_collections_for_add_form' , [ '' , $pref{'latdeg'} , '' , '' , '' , $pref{'latdir'} , $pref{'lngdeg'} , '' , '' , '' , $pref{'lngdir'} ] , [ period_max , latdeg , latmin , latsec , latdec , latdir,  lngdeg , lngmin , lngsec , lngdec , lngdir ] );
 
 	# Spit out the HTML
 	print stdIncludes( "std_page_top" );
