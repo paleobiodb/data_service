@@ -41,7 +41,7 @@ my $bestbothscale;
 
 # for measuring execution time
 my ($th0, $th1);
-if ($DEBUG) { use Time::HiRes qw(gettimeofday); }
+#if ($DEBUG) { use Time::HiRes qw(gettimeofday); }
 $th0 = gettimeofday() if ($DEBUG);
 
 sub new {
