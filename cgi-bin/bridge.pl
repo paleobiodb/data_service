@@ -7655,7 +7655,7 @@ sub processCheckNearMatch{
 	}
 	else{
 		print stdIncludes("std_page_top");
-		print "<center><h3>Record Addition Canceled</h3>";
+		print "<center><h3>Record addition canceled</h3>";
 		if($table_name eq "refs"){
 			print qq|<p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p></center><br>\n|;
 		}
