@@ -122,7 +122,7 @@ sub checkSQL{
 	my $type = $1;
 
 	if(!$self->checkWhereClause($sql)){
-		die "Bad WHERE clause in SQl: $sql<br>";
+		die "Bad WHERE clause in SQL: $sql";
 	}
 	
 	if($type eq "SELECT"){
@@ -174,9 +174,9 @@ sub checkWhereClause{
 
 	# This is only 'first-pass' safe. Could be more robust if we check
 	# all AND clauses.
-	$sql =~ /WHERE\s+([A-Z_]*)\s*=\s*(.*)?\s+(AND)/;
+	$sql =~ /WHERE\s+([A-Z_]*)\s*=\s*(.*)?\s*/;
 
-	print "\$1: $1, \$2: $2, \$3: $3<br>";
+	#print "\$1: $1, \$2: $2<br>";
 	if(!$1){
 		return 0;
 	}
