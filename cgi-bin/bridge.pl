@@ -5667,7 +5667,7 @@ sub formatAuthorityLine	{
 		"FROM opinions WHERE opinions.child_no=" .
 		$taxData{'taxon_no'};
 	@opRefs = @{$dbt->getData($sql)};
-	my $index = selectMostRecentParentOpinion($dbt, \@opRefs, 1);
+	my $index = TaxonInfo::selectMostRecentParentOpinion($dbt, \@opRefs, 1);
 	my %opRow = %{$opRefs[$index]};
 	my $status = $opRow{'status'};
 	my $parent_no = $opRow{'parent_no'};
