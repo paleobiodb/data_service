@@ -5111,7 +5111,7 @@ sub displayTaxonomyEntryForm	{
 	}
 	
 	# used to be js_taxonomy_checkform
-	$html .= "\n<SCRIPT src=\"/JavaScripts/CheckTaxonomyForm.js\" language=\"JavaScript\" type=\"text/javascript\">\n";
+	$html .= "\n<!--<SCRIPT src=\"/JavaScripts/CheckTaxonomyForm.js\" language=\"JavaScript\" type=\"text/javascript\">-->\n";
 	
 	$html .= $hbo->populateHTML ('enter_taxonomy_top', [ $authorityRow{'taxon_no'}, $authorityRow{'type_taxon_no'}, $taxon, length($taxon)] , [ 'taxon_no', 'type_taxon_no',"%%taxon_name%%","%%taxon_size%%" ] );
 	$html .= $hbo->populateHTML('enter_tax_ref_form', \%authorityRow);
