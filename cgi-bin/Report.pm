@@ -36,6 +36,7 @@ my $dbt;
 my $q;					# Reference to the parameters
 my $s;
 
+my $HOST_URL = $ENV{BRIDGE_HOST_URL};
 $DDIR=$ENV{REPORT_DDIR};
 $DDIR2=$ENV{REPORT_DDIR2};
                                         # the default working directory
@@ -76,11 +77,12 @@ sub buildReport {
 		$authorizer =~ s/ //g;
 		$authorizer =~ s/\.//g;
 		$authorizer =~ tr/[A-Z]/[a-z]/;
-		$OUTPUT_FILE .= "/" . $temp;
+		$OUTPUT_FILE .= "/" . $authorizer;
 		mkdir $OUTPUT_FILE;
 		chmod 0777, $OUTPUT_FILE;
 	}
 	$OUTPUT_FILE .= "/report.csv";
+
 	# compute the numeric equivalent of the date limit
 	if ( $q->param('day') < 10)	{ $q->param('day' => "0".$q->param('day')); }
 
@@ -780,7 +782,7 @@ if ($region{$columns[$fieldno[$r]]} eq "") { print "$columns[$fieldno[$r]]<br>\n
 		print "The search was restricted to collections including <i>".$q->param('taxon_name')."</i><p>\n";
 	}
 
-	print "\nThe report data have been saved to \"<a href=\"/public/data/$authorizer/report.csv\">report.csv</a>\"<p>\n";
+	print "\nThe report data have been saved to \"<a href=\"$HOST_URL/public/data/$authorizer/report.csv\">report.csv</a>\"<p>\n";
     print "</center>\n";
 
 }
