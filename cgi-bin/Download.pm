@@ -702,6 +702,8 @@ sub doQuery {
 		$sql =	"SELECT occurrences.reference_no, ".
 				"occurrences.genus_reso, occurrences.genus_name, ".
 				"occurrences.collection_no, ".
+				"occurrences.abund_value, ".
+				"occurrences.abund_unit, ".
 				"reidentifications.reference_no as reid_reference_no, ".
 				"reidentifications.genus_reso as reid_genus_reso, ".
 				"reidentifications.genus_name as reid_genus_name";
@@ -861,7 +863,21 @@ sub doQuery {
 	$sth->finish();
 	$self->dbg("Rows that passed Permissions: number of rows $ofRows, length of dataRows array: ".@dataRows."<br>");
 
-	# Run through the result set.
+	# run through the result set
+
+	# first do a quick hit to get some by-taxon and by-collection stats
+	foreach my $row ( @dataRows ){
+		# cumulate number of collections including each genus
+		$totaloccs{$row->{genus_name}}++;
+		# cumulate number of specimens per collection, and number of
+		#  times a genus has abundance counts at all
+		if ( ( $row->{abund_unit} eq "specimens" || $row->{abund_unit} eq "individuals" ) && ( $row->{abund_value} > 0 ) )	{
+			$nisp{$row->{collection_no}} = $nisp{$row->{collection_no}} + $row->{abund_value};
+			$numberofcounts{$row->{genus_name}}++;
+		}
+	}
+
+	# main pass through the results set
 	my $acceptedCount = 0;
 	foreach my $row ( @dataRows ){
 		# These DON'T come back with a table name prepended.
@@ -871,6 +887,13 @@ sub doQuery {
 		my $reid_genus_reso = $row->{reid_genus_reso};
 		my $reid_genus_name = $row->{reid_genus_name};
 		my $collection_no = $row->{collection_no};
+
+		# compute relative abundance proportion and add to running total
+		# WARNING: sum is of logged abundances because geometric means
+		#   are desired
+		if ( ( $row->{abund_unit} eq "specimens" || $row->{abund_unit} eq "individuals" ) && ( $row->{abund_value} > 0 ) )	{
+			$summedproportions{$row->{genus_name}} = $summedproportions{$row->{genus_name}} + log( $row->{abund_value} / $nisp{$row->{collection_no}} );
+		}
 
 		#$self->dbg("reference_no: $reference_no<br>genus_reso: $genus_reso<br>genusName: $genusName<br>collection_no: $collection_no<br>");
 
@@ -998,17 +1021,42 @@ sub doQuery {
 		foc($post_file, $levels);
 	}
 
-	# Tell what happened
-	if ( ! $acceptedCount ) { $acceptedCount = 0; }
-	if ( ! $acceptedRefs ) { $acceptedRefs = 0; }
 	my $outputType = "occurrences";
 	if ( $q->param("collections_only") )	{
 		$outputType = "collections";
 	}
+
+	# print out a list of genera with total number of occurrences and average relative abundance
+	if ( $outputType eq "occurrences" )	{
+		my @genera = keys %totaloccs;
+		@genera = sort @genera;
+		open ABUNDFILE,">$OUT_FILE_DIR/$generaOutFileName";
+		print ABUNDFILE "genus\tcollections\twith abundances\tgeometric mean abundance\n";
+		for $g ( @genera )	{
+			print ABUNDFILE "$g\t$totaloccs{$g}\t";
+			printf ABUNDFILE "%d\t",$numberofcounts{$g};
+			if ( $numberofcounts{$g} > 0 )	{
+				printf ABUNDFILE "%.4f\n",exp($summedproportions{$g} / $numberofcounts{$g});
+			} else	{
+				print ABUNDFILE "NaN\n";
+			}
+			$acceptedGenera++;
+		}
+	close ABUNDFILE;
+	}
+
+	# Tell what happened
+	if ( ! $acceptedCount ) { $acceptedCount = 0; }
+	if ( ! $acceptedRefs ) { $acceptedRefs = 0; }
 	print "
 <table border='0' width='600'>
 <tr><td class='darkList'><b><font size='+1'>Output files</font></b></td></tr>
-<tr><td>$acceptedCount $outputType were printed to <a href='$OUT_HTTP_DIR/$occsOutFileName'>$occsOutFileName</a></td></tr>
+<tr><td>$acceptedCount $outputType were printed to <a href='$OUT_HTTP_DIR/$occsOutFileName'>$occsOutFileName</a></td></tr>\n";
+	if ( $outputType eq "occurrences" )	{
+		print "
+<tr><td>$acceptedGenera genus names were printed to <a href='$OUT_HTTP_DIR/$generaOutFileName'>$generaOutFileName</a></td></tr>\n";
+	}
+	print "
 <tr><td>$acceptedRefs references were printed to <a href='$OUT_HTTP_DIR/$refsOutFileName'>$refsOutFileName</a></td></tr>
 </table>
 <p align='center'><a href='?action=displayDownloadForm'>Do another download</a>
@@ -1049,6 +1097,7 @@ sub setupOutput {
 	if ( ! $authorizer ) { $authorizer = "unknown"; }
 	$authorizer =~ s/(\s|\.)//g;
 	$occsOutFileName = $authorizer . "-occs.$outFileExtension";
+	$generaOutFileName = $authorizer . "-genera.$outFileExtension";
 	if ( $q->param("collections_only") )	{
 		$occsOutFileName = $authorizer . "-cols.$outFileExtension";
 	}
