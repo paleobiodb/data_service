@@ -911,6 +911,9 @@ sub submitOpinionForm {
 	my $parentTaxonName;
 	my $parentTaxon = Taxon->new($self->{GLOBALVARS});
 	my $parentRank;
+
+	# tracks whether we going to have to create a new parent on the fly
+	my $createParent;
 	
 	if ($taxonStatusRadio eq BELONGS_TO) {
 		# if this is the radio button, then the parent taxon depends
@@ -955,9 +958,18 @@ sub submitOpinionForm {
 		elsif (Validation::looksLikeBadSubgenus($parentTaxonName)) {
 			$errors->add("The taxon name '$parentTaxonName' is invalid; you can't use parentheses");
 		}
-		
+
+	# if the parent taxon doesn't exist yet, we have big trouble
 		if (! $parentTaxon->taxonNumber()) {
-			$errors->add("The taxon '" . $parentTaxonName ."' doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$parentTaxonName\">create a new authority record for '$parentTaxonName'</a> <i>before</i> entering this opinion.");	
+		# if the parent is a recombination, we're going to let them
+		#  get away with creating a new taxon on the fly JA 14.4.04
+			if ( $taxonStatusRadio eq RECOMBINED_AS )	{
+				$createParent = 1;
+			}
+		# but if it's a proper parent we're just going to complain
+			else	{
+				$errors->add("The taxon '" . $parentTaxonName ."' doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$parentTaxonName\">create a new authority record for '$parentTaxonName'</a> <i>before</i> entering this opinion.");	
+			}
 		}
 		
 		if ($parentTaxonName eq $childTaxonName) {
@@ -1137,8 +1149,52 @@ sub submitOpinionForm {
 	
 	
 	# now we'll actually insert or update into the database.
-	
-	
+
+	# first step is to create the parent taxon if a species is being
+	#  recombined and the new combination doesn't exist JA 14.4.04
+	# WARNING: this is very dangerous; typos in parent names will
+	# create bogus combinations, and likewise if the opinion create/update
+	#  code below bombs
+	if ( $createParent )	{
+		my @authFields;
+		my @authVals;
+
+	# sine qua non: the new taxon's name is the parent name
+		push @authFields , "taxon_name";
+		push @authVals , $parentTaxonName;
+
+	# next we need to steal data from the opinion
+	# don't bother with pages, figures, or comments
+		my @allAuthFields = ( "authorizer_no", "enterer_no",
+			"reference_no", "taxon_rank", "author1init",
+			"author1last", "author2init", "author2last",
+			"otherauthors", "pubyr");
+		for my $af ( @allAuthFields )	{
+			if ( $fieldsToEnter{$af} )	{
+				push @authFields , $af;
+				push @authVals , $fieldsToEnter{$af};
+			}
+		}
+
+	# ref is authority is stolen from ref has opinion
+		if ( $fieldsToEnter{ref_has_opinion} )	{
+			push @authFields, "ref_is_authority";
+			push @authVals , "YES";
+		}
+
+	# have to store created date
+		push @authFields, "created";
+		push @authVals , now();
+
+	# go for it
+		my $insertsql = "INSERT INTO authorities (" . join(',', @authFields ) . ") VALUES ('" . join("', '", @authVals) . "')";
+		my $sql = $self->getTransactionManager();
+print "$insertsql ";
+		$sql->getData($insertsql);
+		$parentTaxon->setWithTaxonName($parentTaxonName);
+		$fieldsToEnter{parent_no} = $parentTaxon->taxonNumber(); 
+	}
+
 	my $resultOpinionNumber;
 	
 	if ($isNewEntry) {
