@@ -87,6 +87,7 @@ sub logError {
 	print LOG "Error, $date: $string \n";	
 }
 
+
 # prints the passed hashref in
 # a nice user readable form
 sub printHash {

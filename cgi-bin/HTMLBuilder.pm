@@ -237,7 +237,43 @@ sub escapeHTMLOnFields {
 
 
 
-
+# rjp, 3/2004
+#
+# Pass this an arrayref, a name for the select,
+# and an optional choice to select.
+#
+# It will return an HTML formatted select statement
+# with the approriate one selected.
+sub buildSelect {
+	my $self = shift;
+	
+	my $ref = shift;
+	my $name = shift;
+	my $toSelect = shift;
+	
+	if ((! $ref) || (! $name)) {
+		return "error in buildSelect";	
+	}
+	
+	my $html = "<SELECT name=\"$name\" id=\"$name\">\n";
+	
+	my @choices = @{$ref};
+	
+	foreach my $option (@choices) {
+		my $selected = '';
+		if ($option eq $toSelect) {
+			$selected = "selected";
+		} else {
+			$selected = "";
+		}
+		
+		$html .= "<OPTION $selected>$option</OPTION>\n";	
+	}
+	
+	$html .= "</SELECT>\n";
+	
+	return $html;
+}
 
 
 

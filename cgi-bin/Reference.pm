@@ -160,25 +160,27 @@ sub internalGetAuthors {
 	
 	my $getInitials = shift;  # should we get initials or not?
 	
+	my $auth = Globals::formatAuthors($getInitials, $self->{author1init}, $self->{author1last}, $self->{author2init}, $self->{author2last}, $self->{otherauthors} );
+	
 	my $ref_no = $self->{reference_no};
 	
-	my $auth = $self->{author1last};	# first author
+	#my $auth = $self->{author1last};	# first author
 
-	if ($getInitials) {
-		$auth = $self->{author1init} . " " . $auth;	# first author
-	}
+	#if ($getInitials) {
+	#	$auth = $self->{author1init} . " " . $auth;	# first author
+	#}
 	
-	if ($self->{otherauthors}) {	# we have other authors (implying more than two)
-		$auth .= " et al."; 
-	} elsif ($self->{author2last}) {	# exactly two authors
-		$auth .= " and ";
+	#if ($self->{otherauthors}) {	# we have other authors (implying more than two)
+	#	$auth .= " et al."; 
+	#} elsif ($self->{author2last}) {	# exactly two authors
+	#	$auth .= " and ";
 		
-		if ($getInitials) {
-			$auth .= $self->{author2init} . " ";
-		}
+	#	if ($getInitials) {
+	#		$auth .= $self->{author2init} . " ";
+	#	}
 			
-		$auth .= $self->{author2last};
-	}
+	#	$auth .= $self->{author2last};
+	#}
 	
 	$auth .= " $self->{pubyr}";  # pubyr
 		
@@ -216,6 +218,11 @@ sub referenceURL {
 # returns a nicely formatted HTML reference line.
 sub formatAsHTML() {
 	my Reference $self = shift;
+	
+	if ($self->{reference_no} == 0) {
+		# this is an error, we should never have a zero reference.
+		return "no reference";	
+	}
 	
 	my $html = "<SPAN class=\"smallRef\"><b>" . $self->referenceNumber() . "</b> ";
 	$html .= $self->authorsWithInitials() . ". ";

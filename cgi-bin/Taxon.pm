@@ -309,6 +309,7 @@ sub authors {
 	} else {
 	
 		$auth = Globals::formatAuthors(1, $hr->{author1init}, $hr->{author1last}, $hr->{author2init}, $hr->{author2last}, $hr->{otherauthors} );
+		$auth .= $self->pubyr();
 	}
 	
 	return $auth;
@@ -1374,36 +1375,47 @@ sub displayAuthoritySummary {
 }
 
 
-
-# pass this an HTMLBuilder object
+# Displays a form which lists all opinions that currently exist
+# for this taxon.
 # 
-# display the form which allows users to enter/edit opinion
-# table data.
-#
-sub displayOpinionForm {
+# Doesn't work if the taxonNumber doesn't exist.
+sub displayOpinionChoiceForm {
 	my Taxon $self = shift;
-	my $hbo = shift;
 
-	my %fields;
-	my @nonEditables;
+	if (! $self->{taxonNumber}) {
+		Debug::logError("Taxon::displayOpinionChoiceForm tried to display form for taxon without a valid taxon_no.");
+		return;
+	}
 	
-	print $hbo->newPopulateHTML("add_enter_opinion", \%fields, \@nonEditables);
+	my $sql = $self->getSQLBuilder();
+	
+	$sql->setSQLExpr("SELECT opinion_no FROM opinions WHERE child_no = '" . $self->{taxonNumber} . "'");
+	
+	my $results = $sql->allResultsArrayRef();
+	
+	print "<CENTER><H2>Which opinion about " . $self->taxonName() . " do you want to edit?</H2>\n";
+	
+	print "<FORM method=\"POST\" action=\"bridge.pl\">\n";
+	print "<input type=hidden name=\"action\" value=\"displayOpinionForm\">\n";
+	print "<input type=hidden name=\"taxon_no\" value=\"" . $self->{taxonNumber} . "\">\n";
+	
+	print "<TABLE BORDER=0>\n";
+	foreach my $row (@$results) {
+		my $opinion_no = $row->[0];
+		
+		my $opinion = Opinion->new();
+		$opinion->setWithOpinionNumber($opinion_no);
+		
+		print "<TR><TD><INPUT type=\"radio\" name=\"opinion_no\" id=\"opinion_no\" value=\"$opinion_no\">" . 
+		$opinion->formatAsHTML() . "</TD></TR>\n";	
+	}
+	
+	print "<TR><TD><INPUT type=\"radio\" name=\"opinion_no\" id=\"opinion_no\" value=\"-1\" checked>Create a <b>new</b> opinion record.</TD></TR>\n";
+	print "</TABLE><BR>\n";
+	
+	print "<INPUT type=submit value=\"Submit\">\n";
+	print "<\FORM></CENTER><BR>\n";
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

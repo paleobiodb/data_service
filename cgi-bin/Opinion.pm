@@ -301,11 +301,13 @@ sub displayOpinionForm {
 	}
 	
 	my $rankToUse = $taxon->rank();
+	$fields{taxon_rank} = $rankToUse;
+	
 	
 	# We display a couple of different things depending on whether
 	# the rank is species or higher...
 	
-	if ($rankToUse eq 'species' || $rankToUse eq 'subspecies') {
+	if (! ($rankToUse eq 'species' || $rankToUse eq 'subspecies')) {
 		# remove the type_taxon_name field.
 		$fields{'OPTIONAL_species_only'} = 0;
 	} else {
@@ -314,9 +316,8 @@ sub displayOpinionForm {
 		# don't do anything for now.
 	}
 	
-	$fields{taxon_rank} = $rankToUse;
-	
 
+	
 
 	# figure out which radio button to select for the status:
 	# status is one of these:
@@ -324,38 +325,68 @@ sub displayOpinionForm {
 	# Valid: 'belongs to','recombined as','revalidated'
 	#
 	# Invalid1: 'subjective synonym of', 'objective synonym of',
-	# 'homonym of','replaced by','corrected as',
+	# 'homonym of','replaced by','corrected as'
 	#
 	# Invalid2: 'nomen dubium','nomen nudum','nomen oblitem',
 	# 'nomen vanum' 
 	#
 
+	my @synArray = ('subjective synonym of', 'objective synonym of', 'homonym of','replaced by','corrected as');
+	my @nomArray = ('nomen dubium','nomen nudum','nomen oblitem', 'nomen vanum');
+	
 	my @valid = ('belongs to', 'recombined as', 'revalidated');
+
 	
 	if (! (Globals::isIn(\@valid, $fields{status}))) {
 		# it's an invalid status
 		
 		if ($fields{status} =~ m/nomen/) {
 			# it's a nomen status..
-			$fields{'taxon_status_invalid2'} = 'checked'; 
+			# "Invalid and no other name can be applied"
+			
+			$fields{'taxon_status_invalid2'} = 'checked';
+			
 		} else {
 			# else, we should pick the invalid1 radio button.
-			$fields{'taxon_status_invalid1'} = 'checked';
+			# "Invalid and another name should be used"
+			
+			$fields{'taxon_status_invalid1'} = 'checked';	
 		}
 	} else {
 		# it must be a valid status
-		
-		
-		
+
+		if ($fields{status} eq 'recombined as') {
+			$fields{taxon_status_recombined_as} = 'checked';
+		} else {
+			$fields{taxon_status_belongs_to} = 'checked';
+		}
 	}
 	
+	
+	
+	# actually build the nomen popup menu.
+	$fields{nomen_select} = $hbo->buildSelect(\@nomArray, 'nomen', $fields{status});
+			
+	# actually build the synonym popup menu.
+	$fields{synonym_select} = $hbo->buildSelect(\@synArray, 'synonym', $fields{status});
+	
+	
+	# we show a different message depending on the rank...
 	if (($rankToUse eq 'species') || ($rankToUse eq 'subspecies')) { 
-		$fields{recombined_as} =
-		
+		$fields{recombined_message} = 'recombined into a different genus as'
+	} else {
+		$fields{recombined_message} = 'classified as belonging to';	
 	}
 	
 	
 	
+	# Now we should figure out the parent taxon name for this opinion.
+	
+	my $parent = Taxon->new();
+	$parent->setWithTaxonNumber($fields{parent_no});
+	$fields{parent_taxon_name} = $parent->taxonName();
+	
+
 	
 	
 	
@@ -404,6 +435,14 @@ sub displayOpinionForm {
 		
 		if ($fields{'2nd_pages'}) { push(@nonEditables, '2nd_pages'); }
 		if ($fields{'2nd_figures'}) { push(@nonEditables, '2nd_figures'); }
+		if ($fields{'taxon_status'}) { push(@nonEditables, 'taxon_status'); }
+		if ($fields{'status'}) { 
+			push(@nonEditables, 'taxon_status');
+			push(@nonEditables, 'nomen');
+			push(@nonEditables, 'synonym');
+			push(@nonEditables, 'parent_taxon_name');
+			push(@nonEditables, 'parent_taxon_name2');
+		}
 		
 	}
 	

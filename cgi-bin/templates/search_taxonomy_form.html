@@ -12,6 +12,7 @@ function checkForm( )	{
 		errors.add("Ill-formed taxon.  Check capitalization and spacing.");
 	}
 	
+	
 	if (errors.count() > 0) {
 		errors.showAlert()
 		return false;
@@ -42,8 +43,9 @@ span.s { margin: 0em 1em 0em 1em; };
 <form method="POST" action="$exec_url" onSubmit="return checkForm();">
 <input type=hidden name="action" value="processTaxonomySearch">
 <input type=hidden name="destination" value="%%destination%%">
+<input type=hidden name="goal" value="%%goal%%">
 
-<h2>Please enter the full name of the taxon you want to add or revise</h2>
+<h2>Please enter the full name of the taxon you want to %%taxon_what_to_do%%</h2>
 
 <p>
 <b><span class="s">Taxon name:</span></b> <input name="taxon_name" value="" size="30">

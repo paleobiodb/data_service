@@ -873,10 +873,13 @@ sub updateRecord {
 }
 
 
-# same as updateRecord(), but only 
+# Same as updateRecord(), but only 
 # updates the fields which are empty or zero in the table row..
 # ie, if you pass it a field which is already populated in this database
 # row, then it won't update that field.
+#
+# Note, it *WILL* allow updates of the modifier_no field since we need to modify that field 
+# each time!
 sub updateRecordEmptyFieldsOnly {
 	my SQLBuilder $self = shift;
 	
@@ -894,6 +897,9 @@ sub updateRecordEmptyFieldsOnly {
 # Pass it a boolean which will determine whether we 
 # should only update empty columns.  True (1) means that 
 # we should only update empty columns, false (0) means update any column.
+#
+# Note, it *WILL* allow updates of the modifier_no field since we need to modify that field 
+# each time!
 #
 # Also pass it a table name, a hashref of key/value pairs to update, 
 # a where clause so we know which records to update, and the primary
@@ -1000,6 +1006,12 @@ sub internalUpdateRecord {
 			# update.
 			my @keys = keys(%$hashRef);
 			foreach my $key (@keys) {
+		
+				# if it's the modifier_no, then we'll update it regardless
+				# of whether the current field in the database is empty or not.
+				if ($key eq 'modifier_no') {
+					$toUpdate .= "$key = " . $dbh->quote($hashRef->{$key}) . ", ";
+				}
 		
 				# if it's a valid column name, and the column is empty,
 				# then add it to the update statement.
