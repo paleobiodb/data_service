@@ -1,0 +1,53 @@
+/* Common style sheet to be used for all pages. 
+   Created 1/2004. */
+
+A:link	{ font-family : Arial, Verdana, Helvetica; color : #0033FF; text-decoration:none; }
+A:visited	{ font-family : Arial, Verdana, Helvetica; color : #5522FF; text-decoration:none; }
+A:active	{ font-family : Arial, Verdana, Helvetica; color : #00AAFF; text-decoration:none; }
+A:hover	{ font-family : Arial, Verdana, Helvetica; color : #0033FF; text-decoration:none; }
+A:link.menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }
+A:visited.menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }
+A:active.menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }
+A:hover.menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }       
+   
+body {
+	background-color: white;
+	background-image: url(/public/PDbg.gif);
+}
+
+/* generic warning message */
+.warning {
+	border-style: single;
+	border-color: lightgrey;
+	border-width: 2;
+	border-style: solid;
+	
+    font-weight: bold;	
+	color: red;
+	background-color: lightyellow;
+
+	width:ex;
+	
+	text-align: center;
+}
+
+
+
+TD      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
+TH      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
+P       { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
+H2      { font-family : Arial, Verdana, Helvetica; }
+H3      { font-family : Arial, Verdana, Helvetica; }
+H4      { font-family : Arial, Verdana, Helvetica; }
+TEXTAREA { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
+SELECT { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
+INPUT { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
+LI      { font-family : Arial, Verdana, Helvetica; }
+.tiny { font-family : Arial, Verdana, Helvetica; font-size : 10px; text-decoration:none; }
+.small { font-family : Arial, Verdana, Helvetica; font-size : 12px; text-decoration:none; }
+.medium { font-family : Arial, Verdana, Helvetica; font-size : 14px; text-decoration:none; }
+.large { font-family : Arial, Verdana, Helvetica; font-size : 16px; text-decoration:none; }
+.cell { font-family : Arial, Verdana, Helvetica; font-size : 12px; text-decoration:none; }
+      
+
+
