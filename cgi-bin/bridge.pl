@@ -12,7 +12,8 @@
 #use strict;	# eventually, should have use strict set.. rjp 2/2004.
 
 use CGI;
-use CGI::Carp qw(fatalsToBrowser);
+#use CGI::Carp qw(fatalsToBrowser);
+use CGI::Carp;
 use HTMLBuilder;
 use DBConnection;
 use DBI;
@@ -26,7 +27,6 @@ use BiblioRef;
 use FileHandle;
 use Map;
 use Download;
-use Report;
 use Curve;
 use Permissions;
 use PBDBUtil;
@@ -40,6 +40,7 @@ use Ecology;
 use Strata;
 use PrintHierarchy;
 use URI::Escape;
+use Report;
 use POSIX qw(ceil floor);
 
 # god awful Poling modules
@@ -75,7 +76,8 @@ use Globals;
 
 my $DEBUG = 0;		# Shows debug information regarding the page if set to 1
 
-my $DUPLICATE = 2;	# not sure what this is for?
+# a constant value returned by a mysql insert record indicating a duplicate row already exists
+my $DUPLICATE = 2;	
 
 
 my $sql="";					# Any SQL string
@@ -181,7 +183,6 @@ sub processAction {
 		$action = "displayMenuPage" unless ( $action );  # set default action to menu page
 	}
 
-	#Debug::dbPrint("in processAction, action = $action");
 	
 	# need to know (below) if we did a processLogin and then changed the action
 	my $old_action = "";
@@ -279,6 +280,7 @@ sub processAction {
 	if (! $cookie) { # if we didn't just make a cookie, then grab it from the session.
 		$cookie = $s->validateUser($dbh, $q->cookie('session_id'));
 	}
+	Debug::dbPrint("processAction $action authorizer ".$s->get('authorizer')." enterer ".$s->get('enterer')." session ".$q->cookie('session_id')." ip $ENV{REMOTE_ADDR}");
 		
 	if (!$cookie) {
 		
@@ -332,7 +334,6 @@ sub processAction {
 	#dbg("@INC");
 	dbg($q->Dump);
 
-	
 	# print out some debugging stuff
 	#Debug::printAllCGIParams($q);
 	#Debug::printAllSessionParams($s);
@@ -1125,11 +1126,12 @@ sub displayMapResults {
 sub displayDownloadForm {
 	print stdIncludes( "std_page_top" );
 	my $auth = $q->cookie('authorizer');
-	my $html = $hbo->populateHTML( 'download_form', [ '', '', $auth, '', '', '', '' ], [ 'research_group', 'country','%%authorizer%%','environment','ecology1','ecology2','ecology3','ecology4','ecology5','ecology6' ] );
+	my $html = $hbo->populateHTML( 'download_form', [ '', '', $auth, '', '', '', '','','','','' ], [ 'research_group', 'country','%%authorizer%%','environment','lithology1','ecology1','ecology2','ecology3','ecology4','ecology5','ecology6' ] );
 	HTMLBuilder::buildAuthorizerPulldown( \$html );
 	$html =~ s/<OPTION value=''>Select authorizer\.\.\./<option value='All'>All/m;
 	buildTimeScalePulldown ( \$html );
 	print $html;
+
 	print stdIncludes("std_page_bottom");
 }
 
@@ -4303,7 +4305,43 @@ sub processEnterCollectionForm {
 		print stdIncludes("std_page_bottom");
 		return;
 	}
-    
+
+                                                                                                                                          
+    #set paleolat, paleolng if we can PS 11/07/2004
+    dbg("paleocoords part");
+    my ($paleolat, $paleolng);
+    if ($q->param('lngdeg') >= 0 && $q->param('lngdeg') =~ /\d+/ &&
+        $q->param('latdeg') >= 0 && $q->param('latdeg') =~ /\d+/)
+    {
+        my ($f_latdeg, $f_lngdeg);
+        if ($q->param('lngmin') =~ /\d+/ && $q->param('lngmin') >= 0 && $q->param('lngmin') < 60)  {
+            $f_lngdeg = $q->param('lngdeg') + ($q->param('lngmin')/60) + ($q->param('lngsec')/3600);
+        } else {
+            $f_lngdeg = $q->param('lngdeg') . "." .  int($q->param('lngdec'));
+        }
+        if ($q->param('latmin') =~ /\d+/ && $q->param('latmin') >= 0 && $q->param('latmin') < 60)  {
+            $f_latdeg = $q->param('latdeg') + ($q->param('latmin')/60) + ($q->param('latsec')/3600);
+        } else {
+            $f_latdeg = $q->param('latdeg') . "." .  int($q->param('latdec'));
+        }
+        dbg("f_lngdeg $f_lngdeg f_latdeg $f_latdeg");
+        if ($q->param('lngdir') =~ /West/)  {
+                $f_lngdeg = $f_lngdeg * -1;
+        }
+        if ($q->param('latdir') =~ /South/) {
+                $f_latdeg = $f_latdeg * -1;
+        }
+
+        ($paleolng, $paleolat) = PBDBUtil::getPaleoCoords($dbh, $dbt,$q->param('max_interval_no'),$q->param('min_interval_no'),$f_lngdeg,
+    $f_latdeg);
+        dbg("have paleocoords paleolat: $paleolat paleolng $paleolng");
+        if ($paleolat ne "" && $paleolng ne "") {
+            $q->param("paleolng"=>$paleolng);
+            $q->param("paleolat"=>$paleolat);
+        }
+    }
+   
+ 
 	my $recID;
 	$return = insertRecord( 'collections', 'collection_no', \$recID, '99', 'period_max' );
 	if ( ! $return ) { return $return; }
@@ -4803,6 +4841,41 @@ sub processEditCollectionForm {
 		print stdIncludes("std_page_bottom");
 		return;
 	}
+                                                                                                                                          
+    #set paleolat, paleolng if we can PS 11/07/2004
+    dbg("paleocoords part");
+    my ($paleolat, $paleolng);
+    if ($q->param('lngdeg') >= 0 && $q->param('lngdeg') =~ /\d+/ &&
+        $q->param('latdeg') >= 0 && $q->param('latdeg') =~ /\d+/)
+    {
+        my ($f_latdeg, $f_lngdeg);
+        if ($q->param('lngmin') =~ /\d+/ && $q->param('lngmin') >= 0 && $q->param('lngmin') < 60)  {
+            $f_lngdeg = $q->param('lngdeg') + ($q->param('lngmin')/60) + ($q->param('lngsec')/3600);
+        } else {
+            $f_lngdeg = $q->param('lngdeg') . "." .  int($q->param('lngdec'));
+        }
+        if ($q->param('latmin') =~ /\d+/ && $q->param('latmin') >= 0 && $q->param('latmin') < 60)  {
+            $f_latdeg = $q->param('latdeg') + ($q->param('latmin')/60) + ($q->param('latsec')/3600);
+        } else {
+            $f_latdeg = $q->param('latdeg') . "." .  int($q->param('latdec'));
+        }
+        dbg("f_lngdeg $f_lngdeg f_latdeg $f_latdeg");
+        if ($q->param('lngdir') =~ /West/)  {
+                $f_lngdeg = $f_lngdeg * -1;
+        }
+        if ($q->param('latdir') =~ /South/) {
+                $f_latdeg = $f_latdeg * -1;
+        }
+
+        ($paleolng, $paleolat) = PBDBUtil::getPaleoCoords($dbh, $dbt,$q->param('max_interval_no'),$q->param('min_interval_no'),$f_lngdeg,
+    $f_latdeg);
+        dbg("have paleocoords paleolat: $paleolat paleolng $paleolng");
+        if ($paleolat ne "" && $paleolng ne "") {
+            $q->param("paleolng"=>$paleolng);
+            $q->param("paleolat"=>$paleolat);
+        }
+    }
+
     
 
     unless($q->param('fossilsfrom1'))	{
@@ -8796,7 +8869,6 @@ sub htmlError {
     print stdIncludes("std_page_bottom");
 	exit 1;
 }
-
 
 # **********
 # deprecated.  please use the DBTransactionManager class instead for this.
