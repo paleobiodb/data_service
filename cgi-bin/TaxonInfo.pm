@@ -310,6 +310,17 @@ sub displayTaxonInfoResults{
 		$genus_name =~ s/\s+$//; # remove trailing spaces.
 	}
 
+	# Keep track of entered name for link at bottom of page
+	my $entered_name = $genus_name;
+	if(!$taxon_no){
+		my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='".
+				  $entered_name."'";
+		$taxon_no = ${$dbt->getData($sql)}[0]->{taxon_no};
+		# urlencode name in case we got a 'Genus species' combo
+		$entered_name =~ s/\s+/ /g;
+	}
+	my $entered_no = $taxon_no;
+
 	# Verify taxon:  If what was entered's most recent parent is a "belongs to"
 	# or a "nomen *" relationship, then do the display page on what was entered.
 	# If any other relationship exists for the most recent parent, display info 
@@ -324,8 +335,6 @@ sub displayTaxonInfoResults{
 	if($taxon_type eq "Higher taxon"){
 		$in_list = PBDBUtil::taxonomic_search($q->param('genus_name'), $dbt);
 	}
-
-	## DEAL WITH param NO_MAP AND param NO_CLASSIFICATION ??
 
 	print main::stdIncludes("std_page_top");
 	print "<center><h2>$genus_name</h2></center>";
@@ -430,9 +439,29 @@ sub displayTaxonInfoResults{
 	#subroutine to do the synonymy
 	displayTaxonSynonymy($dbt, $genus, $species);
 
+	# Entered Taxon
+	print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
+		  "startTaxonomy&taxon_name=$entered_name";
+	if($entered_no){
+		  print "&taxon_no=$entered_no";
+	}
+	print "\">Edit taxonomic data for $entered_name</a>".
+		  "</b></p></center>\n";
+	
+	unless($entered_name eq $genus_name){
+		# Verified Taxon
+		print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
+			  "startTaxonomy&taxon_name=$genus_name";
+		if($taxon_no){
+			  print "&taxon_no=$taxon_no";
+		}
+		print "\">Edit taxonomic data for $genus_name</a>".
+			  "</b></p></center>\n";
+	}
+
 	print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
 		  "beginTaxonInfo\">Get info on another taxon</a>".
-		  "</b></p></center>";
+		  "</b></p></center>\n";
 
 	print main::stdIncludes("std_page_bottom");
 }
@@ -830,7 +859,7 @@ sub displayTaxonSynonymy{
 	# Get synonymies for all of these original combinations
 	foreach my $child (@results){
 		my $list_item = getSynonymyParagraph($dbt, $child);
-		push(@paragraphs, "<br><br>$list_item") if($list_item ne "");
+		push(@paragraphs, "<br><br>$list_item\n") if($list_item ne "");
 	}
 
 	# Print the info for the original combination of the passed in taxon first.
@@ -1352,10 +1381,11 @@ sub verify_chosen_taxon{
 	}
 	# Otherwise, return the name and number of the parent.
 	else{
+		my $parent_no = $results[$index]->{parent_no};
 		$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=".
 			   $results[$index]->{parent_no};
 		@results = @{$dbt->getData($sql)};
-		return ($results[0]->{taxon_name},$results[$index]->{parent_no});
+		return ($results[0]->{taxon_name},$parent_no);
 	}
 }
 
