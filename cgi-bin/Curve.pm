@@ -253,7 +253,15 @@ sub assignGenera	{
 	#  epoch or "locage_max" (can be 10 m.y. bin)
 	$_ = <OCCS>;
 	s/\n//;
-	my @fieldnames = split /,/,$_;
+	my @fieldnames;
+	# tab-delimited file
+	if ( $_ =~ /\t/ )	{
+		@fieldnames = split /\t/,$_;
+	}
+	# comma-delimited file
+	else	{
+		@fieldnames = split /,/,$_;
+	}
 	my $fieldcount = 0;
 	my $field_collection_no = -1;
 	for my $fn (@fieldnames)	{
@@ -323,7 +331,15 @@ sub assignGenera	{
 
 		while (<OCCS>)	{
 			s/\n//;
-			my @occrow = split /,/,$_;
+			my @occrow;
+			# tab-delimited file
+			if ( $_ =~ /\t/ )	{
+				@occrow = split /\t/,$_;
+			}
+			# comma-delimited file
+			else	{
+				@occrow = split /,/,$_;
+			}
 
 		# set the bin ID number (chid) for the collection
 		# time interval name has some annoying quotes
@@ -946,14 +962,14 @@ sub printResults	{
 				print "<td class=small align=center valign=top>$originate[$i] ";
 			# Foote origination rate - note: extinction counts must
 			#  exclude singletons
-				if ( $bcrich[$i] > 0 && $bcrich[$i-1] > 0 )	{
+				if ( $bcrich[$i-1] > 0 && $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 )	{
 					printf "<td class=small align=center valign=top>%.4f",log( $bcrich[$i-1] / ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) );
 				} else	{
 					print "<td class=small align=center valign=top>NaN";
 				}
 				print "<td class=small align=center valign=top>$extinct[$i] ";
 			# Foote extinction rate
-				if ( $bcrich[$i] > 0 && $bcrich[$i-1] > 0 )	{
+				if ( $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 && $bcrich[$i] > 0 )	{
 					printf "<td class=small align=center valign=top>%.4f",log( ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) / $bcrich[$i] ) * -1;
 				} else	{
 					print "<td class=small align=center valign=top>NaN";
@@ -985,14 +1001,14 @@ sub printResults	{
 				printf TABLE ",%d",$bcrich[$i];
 				print TABLE ",$originate[$i]";
 			# Foote origination rate
-				if ( $bcrich[$i] > 0 && $bcrich[$i-1] > 0 )	{
+				if ( $bcrich[$i-1] > 0 && $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 )	{
 					printf TABLE ",%.4f",log( $bcrich[$i-1] / ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) );
 				} else	{
 					print TABLE ",NaN";
 				}
 				print TABLE ",$extinct[$i]";
 			# Foote extinction rate
-				if ( $bcrich[$i] > 0 && $bcrich[$i-1] > 0 )	{
+				if ( $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 && $bcrich[$i] > 0 )	{
 					printf TABLE ",%.4f",log( ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) / $bcrich[$i] ) * -1;
 				} else	{
 					print TABLE ",NaN";
@@ -1104,7 +1120,7 @@ sub printResults	{
 					printf "<td class=small align=center valign=top>%.1f ",$msubsoriginate[$i];
 			# Foote origination rate
 					if ($q->param('diversity') =~ /boundary-crossers/)	{
-						if ( $meanoutrichness[$i] > 0 && $meanoutrichness[$i-1] > 0 )	{
+						if ( $meanoutrichness[$i-1] > 0 && $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 )	{
 							printf "<td class=small align=center valign=top>%.4f ",log( $meanoutrichness[$i-1] / ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) );
 						} else	{
 							print "<td class=small align=center valign=top>NaN ";
@@ -1113,7 +1129,7 @@ sub printResults	{
 					printf "<td class=small align=center valign=top>%.1f ",$msubsextinct[$i];
 			# Foote extinction rate
 					if ($q->param('diversity') =~ /boundary-crossers/)	{
-						if ( $meanoutrichness[$i] > 0 && $meanoutrichness[$i-1] > 0 )	{
+						if ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 && $meanoutrichness[$i] > 0 )	{
 							printf "<td class=small align=center valign=top>%.4f ",log( ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanoutrichness[$i] ) * -1;
 						} else	{
 							print "<td class=small align=center valign=top>NaN ";
@@ -1132,7 +1148,7 @@ sub printResults	{
 					printf TABLE ",%.1f",$msubsoriginate[$i];
 			# Foote origination rate
 					if ($q->param('diversity') =~ /boundary-crossers/)	{
-						if ( $meanoutrichness[$i] > 0 && $meanoutrichness[$i-1] > 0 )	{
+						if ( $meanoutrichness[$i-1] > 0 && $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 )	{
 							printf TABLE ",%.4f",log( $meanoutrichness[$i-1] / ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) );
 						} else	{
 							print TABLE ",NaN";
@@ -1141,7 +1157,7 @@ sub printResults	{
 					printf TABLE ",%.1f",$msubsextinct[$i];
 			# Foote extinction rate
 					if ($q->param('diversity') =~ /boundary-crossers/)	{
-						if ( $meanoutrichness[$i] > 0 && $meanoutrichness[$i-1] > 0 )	{
+						if ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 && $meanoutrichness[$i] > 0 )	{
 							printf TABLE ",%.4f",log( ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanoutrichness[$i] ) * -1;
 						} else	{
 							print TABLE ",NaN";
