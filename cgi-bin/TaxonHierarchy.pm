@@ -9,6 +9,8 @@ use strict;
 use DBI;
 use DBConnection;
 use SQLBuilder;
+use CGI::Carp qw(fatalsToBrowser);
+
 
 use fields qw(	taxonName
 				taxonNumber
@@ -170,9 +172,10 @@ sub taxonName {
 }
 
 
-# pass this a rank such as "family" or "genus" and it will
+# pass this a rank such as "family", "class", "genus", etc. and it will
 # return the name of the taxon at that rank as determined by the taxaHash.
 sub nameForRank {
+	Debug::dbPrint("nameforrank");
 	my TaxonHierarchy $self = shift;
 	my $key = shift; 
 	
@@ -181,6 +184,8 @@ sub nameForRank {
 		$self->createTaxaHash();
 	}
 
+	Debug::dbPrint("hash created");
+	
 	my $hash = $self->{taxaHash};
 	my %hash = %$hash;
 	
@@ -252,7 +257,7 @@ sub createTaxaHash {
 	
 	# get the initial taxon the user set
 	my $tn = $self->taxonNumber();
-	
+	Debug::dbPrint("tn = $tn");
 	if (! $tn) { return };
 	
 	my %hash;  # hash of the results
@@ -283,13 +288,23 @@ sub createTaxaHash {
 		AND status = 'belongs to' ORDER BY o.parent_no DESC");
 		$sql->executeSQL();
 
+		
 		# loop through all result rows, and find the one with the most
 		# recent pubyr.  Note, we'll have to look at the reference if the ref_has_opinion field is true.
 		$pubyr = 0;
 		$idNum = 0;
 		
 		my $tempYR;
-		while ($resultRef = $sql->nextResultArrayRef()) {			
+		while ($resultRef = $sql->nextResultArrayRef()) {
+
+			# note, there is a special case where the parent_no = child_no.  This should *never* happen,
+			# but due to some older errors, it does seem to happen once in a while.  In this case,
+			# we should just abort.
+			if ($resultRef->[0] == $tn) {
+				last;  # exit the loop
+			}
+		
+			
 			if ($ref_has_opinion = $resultRef->[2]) {
 				# if ref_has_opinion is YES, then we need to look to the reference
 				# to find the pubyr
@@ -322,24 +337,6 @@ sub createTaxaHash {
 		#print "tn = $tn, id = $idNum, pubyr = $pubyr\n";
 	}
 	
-	
-	# print out for debugging purposes.
-#	my @keys = keys(%hash);
-#	foreach my $key (@keys) {
-#		$sql->clear();
-#		
-#		if (!($key =~ /\d/)) {
-#			my $taxon_no = $hash{$key};
-#		
-#			$sql->setSQLExpr("SELECT taxon_name FROM authorities WHERE taxon_no = '$taxon_no'");
-#			$sql->executeSQL();
-#			my @result = $sql->nextResultArray();
-#			my $taxon_name = $result[0];
-#			print "$key = $taxon_name\n";
-#		}
-#	}
-	# end of printing section for debugging
-	
 
 	#store the hash in the object data field
 	$self->{taxaHash} = \%hash;
@@ -362,6 +359,25 @@ sub printTaxaHash {
 	foreach my $key (@keys) {
 		print "key = $key\n";
 	}
+	
+	
+	
+		# print out for debugging purposes.
+#	my @keys = keys(%hash);
+#	foreach my $key (@keys) {
+#		$sql->clear();
+#		
+#		if (!($key =~ /\d/)) {
+#			my $taxon_no = $hash{$key};
+#		
+#			$sql->setSQLExpr("SELECT taxon_name FROM authorities WHERE taxon_no = '$taxon_no'");
+#			$sql->executeSQL();
+#			my @result = $sql->nextResultArray();
+#			my $taxon_name = $result[0];
+#			print "$key = $taxon_name\n";
+#		}
+#	}
+	# end of printing section for debugging
 
 }
 
