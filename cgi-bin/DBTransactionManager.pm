@@ -54,6 +54,7 @@ sub _initialize{
 #					hash references	to rows of all data returned.
 #					For non-select statements, returns the number of rows
 #					affected.
+#					Returns zero on failure.
 ##
 sub getData{
 	my $self = shift;
@@ -77,7 +78,8 @@ sub getData{
 			}
 			my @data = @{$sth->fetchall_arrayref({})};
 			$sth->finish();
-#*******	# OK NOW CHECK PERMISSIONS... **********************************
+# ?? THIS MAY OR MAY NOT BE IMPLEMENTED AS NOTED BELOW (FUTURE RELEASE)
+#*******	# Ok now check permissions... **********************************
 # - session object.
 # - either paste permissions methods in here (modified - without the executes,
 #	etc., or make modified versions in Permissions.pm.  NOTE: modified versions
@@ -133,7 +135,7 @@ sub checkSQL{
 		# NOTE: down the road, we could check required fields
 		# against table names.
 		$sql =~ /(\(.*?\))\s+VALUES\s+(\(.*?\))/;
-		if($1 eq "()" or $2 eq "()"){
+		if($1 eq "()" or $1 eq "" or $2 eq "()" or $2 eq "" ){
 			return 0;
 		}
 		else{
@@ -141,8 +143,9 @@ sub checkSQL{
 		}
 	}
 	elsif($type eq "UPDATE"){
-		# NOTE: on a table by table basis, make sure required fields aren't
-		# blanked out.
+		# NOTE (FUTURE): on a table by table basis, make sure required 
+		# fields aren't blanked out.
+
 		# Avoid full table updates.
 		if($sql !~ /WHERE/){
 			return 0;
