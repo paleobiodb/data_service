@@ -174,7 +174,9 @@ Research group or project:
 <option>PGAP
 </select>
 
-<tr><td valign="top"><font size=-1>Data authorizer:</font><td><select name="authorizer"></select></td><td valign="bottom"><a href="javascript: auth();">Me</a></td>
+<tr><td valign="top"><font size=-1>Data authorizer:</font></td>
+<td valign="bottom"><select name="authorizer"></select>
+<a href="javascript: auth();">Me</a></td>
 
 <tr><td valign=top><font size=-1>
 Taxonomic name <small><i>(genus or higher rank)</i></small>:
@@ -190,7 +192,7 @@ Included time interval(s):
 	<input type=radio name=interval value="Interval2" onClick="intervalClick();"><i>all of the Meso-Cenozoic</i><p>
 	<input type=radio name=interval value="other">or...<p>
 
-	<table width="100%">
+	<table>
 	<tr>
 		<td class="cell" nowrap><input type=checkbox name=intervals value="Neoproterozoic" onClick="intervalsClick();">Neoproterozoic</td>
 		<td class="cell" nowrap><input type=checkbox name=intervals value="Cambrian" onClick="intervalsClick();">Cambrian</td>
@@ -198,13 +200,15 @@ Included time interval(s):
 		<td class="cell" nowrap><input type=checkbox name=intervals value="Silurian" onClick="intervalsClick();">Silurian</td>
 		<td class="cell" nowrap><input type=checkbox name=intervals value="Devonian" onClick="intervalsClick();">Devonian</td>
 		<td class="cell" nowrap><input type=checkbox name=intervals value="Carboniferous" onClick="intervalsClick();">Carboniferous</td>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Permian" onClick="intervalsClick();">Permian</td>
 	</tr>
 	<tr>
-		<td class="cell" nowrap><input type=checkbox name=intervals value="Permian" onClick="intervalsClick();">Permian</td>
 		<td class="cell" nowrap><input type=checkbox name=intervals value="Triassic" onClick="intervalsClick();">Triassic</td>
 		<td class="cell" nowrap><input type=checkbox name=intervals value="Jurassic" onClick="intervalsClick();">Jurassic</td>
 		<td class="cell" nowrap><input type=checkbox name=intervals value="Cretaceous" onClick="intervalsClick();">Cretaceous</td>
 		<td class="cell" nowrap><input type=checkbox name=intervals value="Tertiary" onClick="intervalsClick();">Tertiary</td>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Quaternary" onClick="intervalsClick();">Quaternary</td>
+		<td class="cell" nowrap><input type=checkbox name=intervals value="Modern" onClick="intervalsClick();">Modern</td>
 	</tr>
 	</table>
 	</td></tr></table></td></tr>
