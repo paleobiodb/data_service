@@ -193,9 +193,10 @@ my %SELECT_LISTS = (assigned_to=>["Ederer", "Alroy"],
 
 my $rowCount = 0;
 
-sub populateHTML
-{
-  # Get the template name, the row (list of values), and a list of fieldnames to scan for
+
+sub populateHTML {
+  # Get the template name, the row (list of values)
+  # and a list of fieldnames to scan for
   my ($self, $htmlTemplateName, $row, $fieldNames, $prefkeys) = @_;
   my @row;
   my @fieldNames;
@@ -220,8 +221,7 @@ sub populateHTML
 
   # Do substitutions
   my $fieldNum = 0;
-  foreach my $fieldName (@fieldNames)
-  {
+  foreach my $fieldName (@fieldNames) {
     my $val = $row[$fieldNum];
 	# insert spaces after commas for the set members
 	if($fieldName =~ /(lithadj*|research_group|pres_mode|coll_meth|museum|feed_pred_traces|assembl_comps|project_name)/){ 
@@ -229,7 +229,7 @@ sub populateHTML
 	}
     
 	my @split_val = split(/(<.*?>)/,$val);
-	foreach my $token (@split_val){
+	foreach my $token (@split_val) {
 		if($token !~ /[<>]/){
 			$token =~ s/"/&quot;/g;
 		}
