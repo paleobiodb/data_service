@@ -4063,7 +4063,7 @@ sub displayTaxonomyEntryForm	{
 	# Print the entry form
 
 	# Determine the fields and values to be populated by populateHTML
-	my @authorityFields = ( "taxon_no", "taxon_rank", "type_taxon_name", "ref_is_authority", "author1init", "author1last", "author2init", "author2last", "otherauthors", "pubyr", "comments");
+	my @authorityFields = ( "taxon_no", "taxon_rank", "type_taxon_name", "ref_is_authority", "author1init", "author1last", "author2init", "author2last", "otherauthors", "pubyr", "pages", "figures", "2nd_pages", "2nd_figures", "comments");
 	for $f ( @authorityFields )	{
 		if ( $f ne "taxon_rank" || $authorityRow{$f} ne "" )	{
 			push @authorityVals, $authorityRow{$f};
@@ -4112,7 +4112,7 @@ sub displayTaxonomyEntryForm	{
 	push @authorityVals, $refRowString;
 	push @authorityFields , 'ref_string';
 
-	my @opinionFields = ( "opinion_author1init", "opinion_author1last", "opinion_author2init", "opinion_author2last", "opinion_otherauthors", "opinion_pubyr", "opinion_comments");
+	my @opinionFields = ( "opinion_author1init", "opinion_author1last", "opinion_author2init", "opinion_author2last", "opinion_otherauthors", "opinion_pubyr", "opinion_pages", "opinion_figures", "opinion_2nd_pages", "opinion_2nd_figures", "opinion_comments", "diagnosis");
 	for $f ( @opinionFields )	{
 		push @authorityFields, $f;
 		push @authorityVals, $authorityRow{$f};
@@ -4179,6 +4179,20 @@ sub displayTaxonomyEntryForm	{
 # JA 15-22,27.8.02
 sub processTaxonomyEntryForm	{
 
+# Pages and figures each can come from two different widgets, so merge them
+	if ( $q->param('2nd_pages') )	{
+		$q->param(pages => $q->param('2nd_pages') );
+	}
+	if ( $q->param('2nd_figures') )	{
+		$q->param(figures => $q->param('2nd_figures') );
+	}
+	if ( $q->param('opinion_2nd_pages') )	{
+		$q->param(opinion_pages => $q->param('opinion_2nd_pages') );
+	}
+	if ( $q->param('opinion_2nd_figures') )	{
+		$q->param(opinion_figures => $q->param('opinion_2nd_figures') );
+	}
+
 # Figure out the parent taxon name
 	# The parent of a synonym is the senior synonym
 	if ( $q->param('taxon_status') eq "invalid1" )	{
@@ -4229,17 +4243,17 @@ sub checkNewTaxon{
 	my @insertParams = ("taxon_rank", "type_taxon_name",
 			"author1init", "author1last",
 			"author2init", "author2last", "otherauthors",
-			"pubyr", "comments");
+			"pubyr", "pages", "figures", "comments");
 	my @taxonParams = ("taxon_no", "taxon_name",
 			"ref_is_authority",
 			"taxon_status", "parent_taxon_name", "parent_taxon_rank",
-			"synonym", "parent_taxon_name2",
+			"diagnosis", "synonym", "parent_taxon_name2",
 			"parent_genus_taxon_name", "nomen",
 			"ref_has_opinion",
 			"opinion_author1init", "opinion_author1last",
 			"opinion_author2init", "opinion_author2last",
-			"opinion_otherauthors",
-			"opinion_pubyr", "opinion_comments");
+			"opinion_otherauthors", "opinion_pubyr",
+			"opinion_pages", "opinion_figures", "opinion_comments");
 	push @taxonParams, @insertParams;
 	my $open_form_printed = 0;
 
@@ -4247,6 +4261,9 @@ sub checkNewTaxon{
 	#  it will be a specimen number and not a taxon JA 1.3.03
 	if ( $q->param('taxon_rank') eq "species" )	{
 		@params_to_check = ('parent', 'parent_genus');
+		# Third param is never checked, so set match value to 1
+		# JA 30.3.03
+		@matches = (0,0,1);
 	}
 
 	# First, check for pre-existing names in authorities.
@@ -4440,16 +4457,16 @@ sub checkNewTaxon{
 
 ## New authorities record(s) form loop
 sub new_authority_form{
-	my ($new_taxon_name, $stemName, @insertParams) = @_;
+	my ($new_taxon_name_param, $stemName, @insertParams) = @_;
 
-	my $new_name = $q->param("$new_taxon_name");
+	my $new_name = $q->param("$new_taxon_name_param");
 	# Puts the action 'displayTaxonomyResults' into the form
 	my $html = $hbo->populateHTML('enter_authority_top', [ $new_name ], [ 'taxon_name' ] );
 	$html =~ s/<hr>//;
 	$html =~ s/^(.*)/<hr>$1/;
 	$html =~ s/missing_taxon_name/$new_name/;
-	if ( $new_taxon_name =~ /type/ )	{
-		if ( $new_taxon_name =~ / / )	{
+	if ( $new_taxon_name_param =~ /type/ )	{
+		if ( $new_name =~ / / )	{
 			$html =~ s/no authority data for/no authority data for the type species/;
 		} else	{
 			$html =~ s/no authority data for/no authority data for the type taxon/;
@@ -4463,10 +4480,10 @@ sub new_authority_form{
 	#  the current ref
 	my @tempParams = ( "author1init", "author1last",
 			"author2init", "author2last", "otherauthors",
-			"pubyr", "comments");
-	my @tempVals = ( "", "",  "", "", "",  "", "" );
+			"pubyr", "pages", "figures", "comments");
+	my @tempVals = ( "", "",  "", "", "",  "", "", "", "" );
 	unshift @tempParams, 'taxon_rank';
-	if ( $taxon =~ / / )	{
+	if ( $new_name =~ / / )	{
 		unshift @tempVals, "species";
 	} else	{
 		unshift @tempVals, "genus";
@@ -4496,7 +4513,7 @@ sub new_authority_form{
 	# Suppress the type taxon field because this name would have
 	#  to be checked against the authorities table, and life is
 	#  already way too complicated!
-	$html =~ s/Type taxon's name://;
+	$html =~ s/Name of type taxon://;
 	$html =~ s/<input name="type_taxon_name" size=50>//;
 	$html =~ s/<input id="type_taxon_name" size=50>//;
 
@@ -4539,7 +4556,7 @@ sub displayTaxonomyResults	{
 				"type_taxon_no", "type_specimen",
 				"ref_is_authority", "author1init", "author1last",
 				"author2init", "author2last", "otherauthors",
-				"pubyr", "comments");
+				"pubyr", "pages", "figures", "comments");
 
 	# Process authority data on a new type and/or parent taxon name, if
 	#  either was submitted on a previous page
@@ -4680,6 +4697,8 @@ sub displayTaxonomyResults	{
 		$q->param(author2last => $q->param('opinion_author2last') );
 		$q->param(otherauthors => $q->param('opinion_otherauthors') );
 		$q->param(pubyr => $q->param('opinion_pubyr') );
+		$q->param(pages => $q->param('opinion_pages') );
+		$q->param(figures => $q->param('opinion_figures') );
 		$q->param(comments => $q->param('opinion_comments') );
 	} else	{
 		$q->param(author1init => '');
@@ -4688,6 +4707,8 @@ sub displayTaxonomyResults	{
 		$q->param(author2last => '');
 		$q->param(otherauthors => '');
 		$q->param(pubyr => '');
+		$q->param(pages => '');
+		$q->param(figures => '');
 		$q->param(comments => '');
 	}
 
@@ -5464,7 +5485,9 @@ sub insertRecord {
 	# taxonomy scripts handle the display when this method returns to them.
 
 	$$primary_key = $recID;
-	return 1;
+	# record ID is returned so printTaxonomicOpinions can tell
+	#  if an opinion is new
+	return $recID;
 }
 
 # JA 15.8.02
