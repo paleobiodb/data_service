@@ -1605,7 +1605,11 @@ sub doQuery {
                     if ($row->{'lngmin'} =~ /\d+/) {
                         $row->{'lngdec'} = sprintf("%.6f",$row->{'lngdeg'} + $row->{'lngmin'}/60 + $row->{'lngsec'}/3600);
                     } else {
-                        $row->{'lngdec'} = sprintf("%.6f",$row->{'lngdeg'}.".".int($row->{'lngdec'}));
+                        if ($row->{'lngdec'} =~ /\d+/) {
+                            $row->{'lngdec'} = sprintf("%s",$row->{'lngdeg'}.".".int($row->{'lngdec'}));
+                        } else {
+                            $row->{'lngdec'} = $row->{'lngdeg'};
+                        }
                     }    
                     $row->{'lngdec'} *= -1 if ($row->{'lngdir'} eq "West");
                 } else {
@@ -1623,8 +1627,13 @@ sub doQuery {
                     if ($row->{'latmin'} =~ /\d+/) {
                         $row->{'latdec'} = sprintf("%.6f",$row->{'latdeg'} + $row->{'latmin'}/60 + $row->{'latsec'}/3600);
                     } else {
-                        $row->{'latdec'} = sprintf("%.6f",$row->{'latdeg'}.".".int($row->{'latdec'}));
+                        if ($row->{'latdec'} =~ /\d+/) {
+                            $row->{'latdec'} = sprintf("%s",$row->{'latdeg'}.".".int($row->{'latdec'}));
+                        } else {
+                            $row->{'latdec'} = $row->{'latdeg'};
+                        }
                     }    
+                    print "latdec1 is ". $row->{'latdec'}."<br>\n";
                     $row->{'latdec'} *= -1 if ($row->{'latdir'} eq "South");
                 } else {
                     if (!($row->{'latmin'} =~ /\d+/)) {
