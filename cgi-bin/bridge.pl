@@ -2527,7 +2527,7 @@ sub processCollectionsSearch {
                         if ($genus) {
                             $genus_species_sql .= " OR (genus_name=".$dbh->quote($genus);
                             if ($species) {
-                                $genus_species_sql .= "AND species_name=".$dbh->quote($species);
+                                $genus_species_sql .= " AND species_name=".$dbh->quote($species);
                             }
                             $genus_species_sql .= ")";
                         }
