@@ -701,7 +701,7 @@ sub submitOpinionForm {
 		$fieldsToEnter{figures} = $q->param('2nd_figures');
 		
 		if (! $q->param('author1last')) {
-			$errors->add('You must enter at least a first author last name');	
+			$errors->add('You must enter at least the last name of the first author');	
 		}
 		
 		# make sure the pages/figures fields above this are empty.
@@ -719,14 +719,14 @@ sub submitOpinionForm {
 			)
 			) {
 			
-			$errors->add("Improper author initial format");		
+			$errors->add("The first author's initials are improperly formatted");		
 		}
 		
 
 		# make sure the format of the author names is proper
 		if  ( $q->param('author1last')) {
 			if (! (Validation::properLastName($q->param('author1last'))) ) {
-				$errors->add("Improper first author last name");
+				$errors->add("The first author's last name is improperly formatted");
 			}
 		}
 			
@@ -735,13 +735,13 @@ sub submitOpinionForm {
 			(! Validation::properLastName( $q->param('author2last') ) )
 			) {
 		
-			$errors->add("Improper second author last name");	
+			$errors->add("The second author's last name is improperly formatted");	
 		}
 
 			
 		if ( ($q->param('pubyr') && 
 			(! Validation::properYear($q->param('pubyr'))))) {
-			$errors->add("Improper year format");
+			$errors->add("The year is formatted improperly");
 		}
 		
 		if (($q->param('otherauthors')) && (! $q->param('author2last') )) {
@@ -758,7 +758,7 @@ sub submitOpinionForm {
 		my @vals = ($q->param('author1init'), $q->param('author1last'), $q->param('author2init'), $q->param('author2last'), $q->param('otherauthors'), $q->param('pubyr'), $q->param('2nd_pages'), $q->param('2nd_figures'));
 		
 		if (!(Globals::isEmpty(\@vals))) {
-			$errors->add("Don't enter other publication information if you chose the 'first named in primary reference' radio button");	
+			$errors->add("Don't enter any other publication information if you chose the 'first named in primary reference' radio button");	
 		}
 		
 	}
@@ -880,7 +880,7 @@ sub submitOpinionForm {
 		}
 		
 		if ($parentTaxonName eq $childTaxonName) {
-			$errors->add("The parent and child taxon names should not be the same");	
+			$errors->add("The taxon and its parent should not have the same name");	
 		}
 	}
 
@@ -906,7 +906,7 @@ sub submitOpinionForm {
 		
 		# for belongs to, the parent rank should always be higher than the child rank.
 		if (! ($parentRank->isHigherThan($childRank)) ) {
-			$errors->add("The parent taxon rank (" . $parentRank->rankString() . ") must be higher than the child taxon rank (" . $childRank->rankString() . ")");	
+			$errors->add("The parent taxon's rank (" . $parentRank->rankString() . ") must be higher than the taxon's rank (" . $childRank->rankString() . ")");	
 		}
 		
 		
@@ -921,18 +921,18 @@ sub submitOpinionForm {
 		$fieldsToEnter{status} = RECOMBINED_AS;
 		
 		if (! ($parentRank->isSpecies())) {
-			$errors->add("The parent rank for a recombined 
-			relationship must be species");	
+			$errors->add("If a species is recombined 
+			its new rank must be 'species'");	
 		}
 		
 		if ($parentTaxonName eq $childTaxonName) {
-			$errors->add("The parent taxon and child taxon
-			can't be the same for a recombined relationship");	
+			$errors->add("Original and new combinations
+			can't be exactly the same");	
 		}
 		
 		if (!$childRank->isSpecies()) {
-			$errors->add("The child rank must be 
-			species for a recombined as relationship");
+			$errors->add("If a species is recombined
+			its old rank must be 'species'");
 		}
 		
 		if ($childTaxon->firstWord() eq $parentTaxon->firstWord()) {
@@ -954,7 +954,7 @@ sub submitOpinionForm {
 			# figure out what the original combination was.
 			my $originalCombination = $childTaxon->originalCombinationTaxon();
 			
-			$errors->add("The child taxon is not the original combination.  
+			$errors->add("The taxon is not the original combination.  
 					The original combination is " . $originalCombination->taxonName() . ".");
 		}
 		
@@ -969,7 +969,7 @@ sub submitOpinionForm {
 		
 		# the parent rank should be the same as the child rank
 		if (!($parentRank->isEqualTo($childRank))) {
-			$errors->add("For a synonym, the parent rank should match the child rank");
+			$errors->add("The rank of a name and its synonym must be the same");
 		}
 		
 	} elsif ($taxonStatusRadio eq INVALID2) {
@@ -995,7 +995,7 @@ sub submitOpinionForm {
 	# is belongs to or recombined as.
 	if ( (! (($taxonStatusRadio eq RECOMBINED_AS) ||
 			($taxonStatusRadio eq BELONGS_TO) )) && ($q->param('diagnosis'))) {
-		$errors->add("Don't enter a diagnosis unless you choose the belongs to or recombined as  radio button");
+		$errors->add("Don't enter a diagnosis unless you choose the 'belongs to' or 'recombined as' radio button");
 	}
 	
 	
