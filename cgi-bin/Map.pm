@@ -694,21 +694,33 @@ sub mapDrawMap	{
 		for $lat (-90..90)	{
 			for $lng (-180..180)	{
 				if ( $touched{$lng}{$lat} ne "" )	{
-					($xs[0],$ys[0],$rawxs[0],$rawys[0]) = $self->projectPoints($lng+1.0,$lat+1.0,"grid");
-					($xs[1],$ys[1],$rawxs[1],$rawys[1]) = $self->projectPoints($lng+1.0,$lat-1.0,"grid");
-					($xs[2],$ys[2],$rawxs[2],$rawys[2]) = $self->projectPoints($lng-1.0,$lat-1.0,"grid");
-					($xs[3],$ys[3],$rawxs[3],$rawys[3]) = $self->projectPoints($lng-1.0,$lat+1.0,"grid");
-					if ( abs($rawxs[0] - $rawxs[2]) > 180 )	{
-						$xs[2] = -1 * $xs[2];
-						$xs[3] = -1 * $xs[3];
-					}
-					if ( abs($rawys[0] - $rawys[2]) > 90 )	{
-						$ys[1] = -1 * $ys[1];
-						$ys[2] = -1 * $ys[2];
-					}
+					my @xs = ();
+					my @ys = ();
+					push @xs, $lng+1;
+					push @xs, $lng+1;
+					push @xs, $lng-1;
+					push @xs, $lng-1;
+					push @ys, $lat+1;
+					push @ys, $lat-1;
+					push @ys, $lat-1;
+					push @ys, $lat+1;
 					my $npts = 3;
 					my @newxs = ();
 					my @newys = ();
+					# smooth left half of cell to the north
+					if ( $touched{$lng-2}{$lat+2} ne "" &&
+					     $touched{$lng}{$lat+2} eq "" )	{
+						push @newxs, $xs[3] - ($xs[3] - $xs[2]) / 2;
+						push @newys, $ys[3] + ($ys[3] - $ys[2]) / 2;
+						$npts++;
+					}
+					# smooth right half of cell to the north
+					if ( $touched{$lng+2}{$lat+2} ne "" &&
+					     $touched{$lng}{$lat+2} eq "" )	{
+						push @newxs, $xs[0] + ($xs[0] - $xs[1]) / 2;
+						push @newys, $ys[0] + ($ys[0] - $ys[1]) / 2;
+						$npts++;
+					}
 					# flatten upper right corner by
 					#  adding a point
 					if ( $touched{$lng}{$lat+2} eq "" &&
@@ -721,6 +733,20 @@ sub mapDrawMap	{
 					} else	{
 						push @newxs, $xs[0];
 						push @newys, $ys[0];
+					}
+					# smooth upper half of cell to the east
+					if ( $touched{$lng+2}{$lat+2} ne "" &&
+					     $touched{$lng+2}{$lat} eq "" )	{
+						push @newxs, $xs[0] + ($xs[0] - $xs[3]) / 2;
+						push @newys, $ys[0] + ($ys[0] - $ys[3]) / 2;
+						$npts++;
+					}
+					# smooth lower half of cell to the east
+					if ( $touched{$lng+2}{$lat-2} ne "" &&
+					     $touched{$lng+2}{$lat} eq "" )	{
+						push @newxs, $xs[1] + ($xs[1] - $xs[2]) / 2;
+						push @newys, $ys[1] - ($ys[1] - $ys[2]) / 2;
+						$npts++;
 					}
 					# lower right corner
 					if ( $touched{$lng+2}{$lat} eq "" &&
@@ -760,17 +786,32 @@ sub mapDrawMap	{
 					}
 					@xs = @newxs;
 					@ys = @newys;
+					my $nan = "";
 					for $p (0..$npts)	{
+						($xs[$p],$ys[$p],$rawxs[$p],$rawys[$p]) = $self->projectPoints($xs[$p],$ys[$p],"grid");
+						if ( $p == 0 )	{
+							$firstx = $rawxs[0];
+							$firsty = $rawys[0];
+						}
+						if ( abs($rawxs[$p] - $firstx) > 180 )	{
+							$xs[$p] = -1 * $xs[$p];
+						}
+						if ( abs($rawys[$p] - $firsty) > 90 )	{
+							$ys[$p] = -1 * $ys[$p];
+						}
 						$xs[$p] = $self->getLng($xs[$p]);
 						$ys[$p] = $self->getLat($ys[$p]);
+						if ( $xs[$p] eq "NaN" || $ys[$p] eq "NaN" )	{
+							$nan = "Y";
+						}
 					}
 
-					if ( $xs[0] ne "NaN" && $xs[1] ne "NaN" && $xs[2] ne "NaN" && $xs[3] ne "NaN" && $ys[0] ne "NaN" && $ys[1] ne "NaN" && $ys[2] ne "NaN" && $ys[3] ne "NaN" )	{
-          					my $poly = new GD::Polygon;
+					if ( $nan eq "" )	{
+       						my $poly = new GD::Polygon;
 						for $p (0..$npts)	{
 							$poly->addPt($xs[$p],$ys[$p]);
 						}
-          					$im->filledPolygon($poly,$col{$crustcolor});
+      		 				$im->filledPolygon($poly,$col{$crustcolor});
 						print AI "0 O\n";
 						print AI "$mycolor\n";
 						print AI "4 M\n";
