@@ -726,7 +726,7 @@ sub displayTaxonInfoResults {
 				$sql .= $comb_no;
 				my @results = @{$dbt->getData($sql)};
 				for my $ref (@results)	{
-					push @synonyms, $ref->{taxon_name};
+					push @synonyms, "'".$ref->{taxon_name}."'";
 				}
 			}
 		}
