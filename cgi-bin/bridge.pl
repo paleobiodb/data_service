@@ -1096,7 +1096,8 @@ sub processNewRef {
     $retVal = &makeRefString($drow);
     print '<table>' . $retVal . '</table>';
 
-    print qq|<center><p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p></center><br>\n|;
+    print qq|<center><p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p>\n|;
+	print qq|<p><a href="$exec_url?action=displaySearchColls&type=add"><b>Add a new collection</b></a></p></center>|;
     print &stdIncludes ("std_page_bottom");
 }
 
