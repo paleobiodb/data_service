@@ -8,8 +8,10 @@ $DEBUG = 0;
 #
 ##
 sub startTaxonInfo{
+	my $q = shift;
+
 	print main::stdIncludes( "std_page_top" );
-	print searchForm();
+	print searchForm($q);
 	print main::stdIncludes("std_page_bottom");
 }
 
@@ -17,6 +19,7 @@ sub startTaxonInfo{
 #
 ##
 sub searchForm{
+	my $q = shift;
 	my $search_again = (shift or 0);
 
 	my $html = "";
@@ -51,7 +54,7 @@ sub searchForm{
 		   "<input id=\"action\" type=hidden name=\"action\"".
 		   " value=\"checkTaxonInfo\">".
 		   "<input id=\"user\" type=hidden name=\"user\"".
-		   " value=\"Contributor\">".
+		   " value=\"".$q->param("user")."\">".
 		   "<center><table width=\"75%\">".
 		   "<tr><td valign=\"middle\" align=\"right\" width=\"5%\">".
 		   "<nobr><select name=\"taxon_rank\"><option>Higher taxon".
@@ -93,7 +96,7 @@ sub checkStartForm{
 
 	# If they gave us nothing, start again.
 	if($taxon_type eq "" or $taxon_name eq ""){
-	    print $q->redirect(-url=>$BRIDGE_HOME."?action=beginTaxonInfo&user=Contributor");
+	    print $q->redirect(-url=>$BRIDGE_HOME."?action=beginTaxonInfo");
 	    exit;
 	}
 
@@ -219,7 +222,7 @@ sub checkStartForm{
 		print main::stdIncludes("std_page_top");
 		print "<center><h3>No results found</h3>";
 		print "<p><b>Please search again</b></center>";
-		print searchForm(1); # param for not printing header with form
+		print searchForm($q, 1); # param for not printing header with form
 		print main::stdIncludes("std_page_bottom");
 	}
 	# if we got just one result, it could be higher taxon, or an exact
@@ -336,6 +339,15 @@ sub displayTaxonInfoResults{
 		}
 	}
 	# Not covered by prefs:
+	if(!$q->param('pointshape')){
+		$q->param('pointshape' => 'circles');
+	}
+	if(!$q->param('dotcolor')){
+		$q->param('dotcolor' => 'red');
+	}
+	if(!$q->param('coastlinecolor')){
+		$q->param('coastlinecolor' => 'black');
+	}
 	$q->param('mapresolution'=>'medium');
 	$q->param('mapscale'=>'X 1');
 	$q->param('pointsize'=>'tiny');
@@ -419,7 +431,7 @@ sub displayTaxonInfoResults{
 	displayTaxonSynonymy($dbt, $genus, $species);
 
 	print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
-		  "beginTaxonInfo&user=Contributor\">Get info on another taxon</a>".
+		  "beginTaxonInfo\">Get info on another taxon</a>".
 		  "</b></p></center>";
 
 	print main::stdIncludes("std_page_bottom");
@@ -650,14 +662,14 @@ sub displayTaxonClassification{
 				print "<tr bgcolor=\"E0E0E0\"><td align=\"middle\">$rank</td>".
 					  "<td align=\"middle\"><a href=\"/cgi-bin/bridge.pl?".
 					  "action=checkTaxonInfo&taxon_rank=$temp_rank&taxon_name=".
-					  "$classification{$rank}&user=Contributor\">".
+					  "$classification{$rank}\">".
 					  "$classification{$rank}</a></td></tr>\n";
 			}
 			else{
 				print "<tr><td align=\"middle\">$rank</td>".
 					  "<td align=\"middle\"><a href=\"/cgi-bin/bridge.pl?".
 					  "action=checkTaxonInfo&taxon_rank=$temp_rank&taxon_name=".
-					  "$classification{$rank}&user=Contributor\">".
+					  "$classification{$rank}\">".
 					  "$classification{$rank}</a></td></tr>\n";
 			}
 		  }
@@ -727,8 +739,7 @@ sub displayTaxonClassification{
 			}
 			$taxon_rank =~ s/\s/+/g;
 			$output .= qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo|;
-			$output.="&taxon_name=".$taxon_name."&taxon_rank=$taxon_rank";
-			$output .= qq|&user=Contributor">|;
+			$output.="&taxon_name=".$taxon_name."&taxon_rank=$taxon_rank>";
 			$output .= $item->{taxon_name}."</a>,\n";
 		}
 		$output =~ s/,\s*$//;

@@ -2359,7 +2359,7 @@ sub startReidentifyOccurrences {
 ##############
 ## Taxon Info Stuff
 sub beginTaxonInfo{
-	TaxonInfo::startTaxonInfo();
+	TaxonInfo::startTaxonInfo($q);
 }
 
 sub checkTaxonInfo{
