@@ -775,10 +775,13 @@ sub get_classification_hash{
     return \%classification;
 }
 
+
+
 sub getMostRecentReIDforOcc{
 	my $dbt = shift;
 	my $occ = shift;
 	my $returnTheRef = shift;
+	
 	my $sql = "SELECT genus_name, species_name, collection_no, reid_no,pubyr, ".
 			  "reidentifications.created ".
 			  "FROM reidentifications, refs WHERE occurrence_no=$occ ".

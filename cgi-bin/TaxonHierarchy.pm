@@ -78,16 +78,18 @@ sub getTaxonNameFromNumber {
 }
 
 
-# for internal use only - get the number of a taxon from the name
-# returns -1 if it can't find the number.
+# **For internal use only - get the number of a taxon from the name
+# returns an ARRAY with two elements: the taxon_no, and the new taxon_name.
+# This is done because the taxon_name may be shortened, for example, if
+# it's a genus species pair, but we only have an entry for the genus, not the pair.
+# returns -1 if it can't find the number. 
+# Note, not all taxa are in this table, so it won't work for something that dosen't exist.
 sub getTaxonNumberFromName {
 	my TaxonHierarchy $self = shift;
 
 	if (my $input = shift) {
 		my $sql = $self->getSQLBuilder();
-		$sql->setSQLExpr("SELECT taxon_no FROM authorities 
-				WHERE taxon_name = '$input'");
-
+		$sql->setSQLExpr("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
 		$sql->executeSQL();
 		
 		my @result = $sql->nextResultRow();
@@ -95,11 +97,27 @@ sub getTaxonNumberFromName {
 		$sql->finishSQL();
 		
 		if ($tn) {
-			return $tn;
+			return ($tn, $input);
+		}
+		
+		# if we make it to here, then that means that we didn't find the
+		# taxon in the authorities table, so try it with just the first part
+		# (ie, we'll assume that it was a genus species, and cut off the species)
+		$input =~ s/^(.*)\s.*$/$1/;
+		
+		$sql->setSQLExpr("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
+		$sql->executeSQL();
+
+		my @result = $sql->nextResultRow();
+		my $tn = $result[0];
+		$sql->finishSQL();
+		
+		if ($tn) {
+			return ($tn, $input);
 		}
 	}
 	
-	return -1;
+	return (-1, "");
 }
 
 
@@ -126,16 +144,18 @@ sub setWithTaxonNumber {
 # If the taxon is not in the database, then it does nothing.
 sub setWithTaxonName {
 	my TaxonHierarchy $self = shift;
-
+	my $newname;
+	
 	if (my $input = shift) {
 		# now we need to get the taxonNo from the database if it exists.
-		my $tn = $self->getTaxonNumberFromName($input);
+		my ($tn, $newname) = $self->getTaxonNumberFromName($input);
 		
 		if ($tn) {
 			# if we found a taxon_no for this taxon_name, then 
 			# set the appropriate fields
 			$self->{taxonNumber} = $tn;
-			$self->{taxonName} = $input;
+			$self->{taxonName} = $newname;
+		
 		}	
 	}
 }	
@@ -173,13 +193,16 @@ sub nameForRank {
 	
 	my $id = $hash{$key};
 	
-	# now we need to get the name for it
-	my $sql = SQLBuilder->new();
-	$sql->setSQLExpr("SELECT taxon_name FROM authorities WHERE taxon_no = $id");
-	$sql->executeSQL();
+	if ($id) {
+		# now we need to get the name for it
+		my $sql = SQLBuilder->new();
+		$sql->setSQLExpr("SELECT taxon_name FROM authorities WHERE taxon_no = $id");
+		$sql->executeSQL();
+		return ($sql->nextResultRow())[0];
+	}
 	
+	return "";
 	
-	return ($sql->nextResultRow())[0];
 }
 
 
@@ -196,13 +219,24 @@ sub createTaxaHash {
 	
 	# get the initial taxon the user set
 	my $tn = $self->taxonNumber();
-	my %hash;
+	
+	if (! $tn) { return };
+	
+	my %hash;  # hash of the results
+	
 	my $ref_has_opinion;  # boolean
 	my ($pubyr, $idNum);
 	my (@result, @subResult);  # sql query results
 	
 	# another sql object for executing subqueries.
 	my $subSQL = SQLBuilder->new();
+	
+	# first, insert the current taxon into the hash
+	my $ownTaxonRank = $subSQL->getSingleSQLResult("SELECT taxon_rank FROM 
+								authorities WHERE taxon_no = $tn");
+	
+	$hash{$ownTaxonRank} = $tn;
+
 	
 	# go up the hierarchy to the top (kingdom)
 	# from the rank the user started with.
@@ -243,7 +277,6 @@ sub createTaxaHash {
 		
 		
 		# get the rank of the parent
-		$sql->clear();
 		$sql->setSQLExpr("SELECT taxon_rank FROM authorities WHERE taxon_no = $parent");
 		$sql->executeSQL();
 			
@@ -310,7 +343,7 @@ sub createTaxaHash {
 
 		
 		# insert it into the hash, so we have the parent rank as the key
-		# and the parent number as the value.
+		# and the parent taxon_no as the value.
 		$hash{$cRank} = $child;
 		
 		# also insert the pubyr for this child, keyed to the id number.
@@ -359,5 +392,7 @@ sub printTaxaHash {
 
 }
 
+
+# end of TaxonHierarchy.pm
 
 1;

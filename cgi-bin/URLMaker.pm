@@ -14,28 +14,44 @@ use strict;
 # URLForReferenceNumber
 
 
+# *********
+# Note, these should be escaped ...  do this soon?
+
+
+
 my $BADLINK = "";		# redirect them to this link if the info passed in was not valid
 						# just an empty string for now.
 
 
-# pass it a genus and species (or just a genus)
+# pass it two names such as a genus and species
 # and it will return a URL pointing to more 
 # information about that genus (and possibly species).
-# For internal use only!
-sub URLForGenusAndSpecies {
-	my $genus = shift;
-	my $species = shift;
+# The second argument is optional.
+# Note, if the second argument is "indet.", then the names
+# represent a higher taxon, not a genus and species.
+sub URLForTaxonName {
+	my $first = shift;
+	my $second = shift;
 	
-	if ((! $genus) and (! $species)) {
-		return $BADLINK;  # nothing!	
+	if (! $first) {
+		return $BADLINK;
+	}
+		
+	my $name = $first; 
+	my $rank;
+	
+	$rank = "Genus";
+	
+	if ($second) {
+		$rank = "Genus+and+Species";
+		
+		if ($second eq "indet.") {
+			$rank = "Higher+taxon";	
+		}
 	}
 	
-	my $name = $genus; 
-	
-	my $rank = "Genus";
-	if ($species) {
-		$name .= "+$species";
-		$rank .= "+and+Species";
+	if ($second ne "indet.") {
+		$name .= "+$second";
 	}
 	
 	return "/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$name&taxon_rank=$rank";

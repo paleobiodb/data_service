@@ -7,17 +7,19 @@
 
 package Permissions;
 
+use strict;
+
 use SQLBuilder;
 use Debug;
 
 use fields qw(	
 				SQLBuilder
-
 			);  # list of data members
 
 
 
 # Flags and constants
+# These are class variables.
 my $DEBUG = 0;		# DEBUG flag
 my $s;				# Reference to the session variables
 
@@ -29,6 +31,11 @@ sub new {
 	my Permissions $self = fields::new($class);
 	
 	$s = shift;		# session object
+	
+	if (! $s) {
+		Debug::logError("Permissions must be created with valid Session object!");
+		return undef;
+	}
 	
 	# create SQLBuilder object
 	my $sql = SQLBuilder->new();
@@ -46,8 +53,8 @@ sub new {
 # Note, this may be slower than the older method, but it is cleaner
 # since it only requires the collection_no to determine access.
 #
-# Tested on Linux box, and it took 1.44 seconds to check 1000 columns.
-# Should be much faster on XServe.
+# Tested on XServe, and it took 6.2 seconds to check 10,000 rows = 0.00063 s. per row
+# which isn't too bad.
 #
 # by rjp, 1/2004.
 sub userHasReadPermissionForCollectionNumber {
@@ -81,7 +88,6 @@ sub userHasReadPermissionForCollectionNumber {
 	$research_group =~ tr/ /_/;		# replace spaces with underscores for comparison
 	
 	my $authorizer = $result[3];
-	
 
 	if ($rd_short < $now) {
 		# the release date has already passed, so it reverts to public access
@@ -89,8 +95,9 @@ sub userHasReadPermissionForCollectionNumber {
 	}
 	
 	# if we make it to here, then the release date has not yet passed
+	my $session_auth = $s->get("authorizer");
 	
-	if (($s->get("superuser") == 1) || ($s->get("authorizer") eq $authorizer)) {
+	if (($s->get("superuser") == 1) || ($session_auth eq $authorizer)) {
 		return 1;	# superuser can read anything
 					# and if the current authorizer authorized this record, then they can read it too.
 	}
@@ -99,11 +106,11 @@ sub userHasReadPermissionForCollectionNumber {
 		return 1;	# public access level is always visible, even if release date hasn't passed..	
 	}
 	
-	if (($access_level eq "database members") && ($s->get("authorizer") ne "guest")){
+	if (($access_level eq "database members") && ($session_auth ne "guest")){
 		return 1;	# okay as long as user isn't a guest
 	}
 	
-	if (($access_level eq "authorizer only") && ($s->get("authorizer") eq $authorizer)) {
+	if (($access_level eq "authorizer only") && ($session_auth eq $authorizer)) {
 		return 1;
 	}
 	
@@ -144,6 +151,9 @@ sub getReadRows {
 			if ( $field eq $required ) { $requiredResults{$field} = 1; }
 		}
 	}
+	
+	my $required;
+	
 	foreach $required ( @requiredFields ) {
 		if ( ! $requiredResults{$required} ) { 
 			$self->htmlError ( "Improperly formed SQL.  Must have field [$required]" );

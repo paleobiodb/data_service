@@ -2138,11 +2138,12 @@ sub processCollectionsSearch {
 #  * User selects a collection from the displayed list
 #  * System displays selected collection
 sub displayCollectionDetails {
-
 	my $collection_no = $q->param('collection_no');
+	
 	$sql = "SELECT * FROM collections WHERE collection_no=" . $collection_no;
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
+	
 	my @fieldNames = @{$sth->{NAME}};
 	my $numFields  = $sth->{NUM_OF_FIELDS};
 	
@@ -2158,8 +2159,8 @@ sub displayCollectionDetails {
   
 	# Get the name of the authorizer
 	my $fieldCount = 0;
-	my $authorizer;
-    my $refNo;
+	my ($authorizer, $refNo);
+    
     foreach my $tmpVal (@fieldNames) {
 		if ( $tmpVal eq 'authorizer') {
 			$authorizer = $row[$fieldCount];
@@ -2239,7 +2240,8 @@ sub displayCollectionDetails {
 	}
 
 	print &stdIncludes ("std_page_bottom");
-}
+} # end sub displayCollectionDetails()
+
 
 # written around excised chunk of code from above JA 30.7.03
 # first part gets interval names matching numbers in intervals table;
@@ -2345,15 +2347,19 @@ sub getMaxMinNamesAndDashes	{
 
 }
 
+
 sub buildTaxonomicList {
 	my $collection_no = shift;
 	my $collection_refno = shift;
 	my $gnew_names = shift;
-	my @gnew_names = @{$gnew_names};
 	my $subgnew_names = shift;
-	my @subgnew_names = @{$subgnew_names};
 	my $snew_names = shift;
+	
+
+	my @gnew_names = @{$gnew_names};
+	my @subgnew_names = @{$subgnew_names};
 	my @snew_names = @{$snew_names};
+	
 	my $new_found = 0;
 	my $return = "";
 
@@ -2431,16 +2437,28 @@ sub buildTaxonomicList {
 				push(@occrow, $value);
 			}
 
+			# get the most recent reidentification of this occurrence.  
 			my $mostRecentReID = PBDBUtil::getMostRecentReIDforOcc($dbt,$rowref->{occurrence_no});
-			if($mostRecentReID){
+			
+			if ($mostRecentReID) {
+				# this occurrence has been reidentified at least once
+				
 				$output = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
+				
+				# rjp, 1/2004, change this so it displays *all* reidentifications, not just
+				# the last one.
+				
 				$output .= getReidHTMLTableByOccNum($mostRecentReID, 1, \%classification);
+				
+				Debug::dbPrint("mostRecentReID = $mostRecentReID");
 
 				$grand_master_hash{class_no} = ($classification{class_no} or 1000000);
 				$grand_master_hash{order_no} = ($classification{order_no} or 1000000);
 				$grand_master_hash{family_no} = ($classification{family_no} or 1000000);
 			}
-			else{
+			else {
+				# this occurrence has never been reidentified
+				
 				my $arg = $rowref->{'genus_name'}." ".$rowref->{'species_name'};
 				%classification=%{PBDBUtil::get_classification_hash($dbt,$arg)};
 
@@ -2558,7 +2576,7 @@ sub buildTaxonomicList {
 
 		# if ALL taxa have no genus or species, we have no list,
 		# so always print this.
-		$return .= "<td><u>Genus and species</u></td>";
+		$return .= "<td><u>Taxon</u></td>";
 
 		if($reference_nos == 0){
 			$return .= "<td></td>";
@@ -2676,17 +2694,16 @@ sub buildTaxonomicList {
 		}
 		$return .= $sorted_html;
 
-		$return .= "
-</table>
-</div>
-";
+		$return .= "</table>
+					</div>";
 
 	}
 	return $return;
-}
+} # end sub buildTaxonomicList()
+
+
 
 sub getReidHTMLTableByOccNum {
-
 	my $occNum = shift;
 	my $isReidNo = shift;
 

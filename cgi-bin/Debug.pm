@@ -17,5 +17,21 @@ sub dbPrint {
 	print LOG "$date: $string \n";
 }
 
+
+# logs an error message to the error_log
+sub logError {
+	$| = 1;	# flushes buffer immediately
+
+	open LOG, ">>error_log";
+	my $date = `date`;
+	chomp($date);
+ 
+	my $string = shift;
+	chomp($string);
+ 
+	print LOG "Error, $date: $string \n";	
+}
+
+
 1
 

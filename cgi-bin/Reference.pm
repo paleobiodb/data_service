@@ -1,6 +1,8 @@
 #!/usr/bin/perl
 
 # created by rjp, 1/2004.
+# Represents information about a particular reference
+
 
 package Reference;
 
@@ -88,6 +90,7 @@ sub authors {
 }
 
 
+# end of Reference.pm
 
 
 1;

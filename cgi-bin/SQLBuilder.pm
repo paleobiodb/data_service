@@ -5,7 +5,7 @@
 # Written by rjp, 1/2004.
 #
 # Each section of the SQL statement can either be built up one component at a time, or set all at once.
-# (note, building up is only supported for the WHERE expression for now)
+# (**note, building up is only supported for the WHERE expression for now, but eventually for others)
 #
 # To set it all at once, use the appropriate setXXXExpr() method.
 # Setting an expression directly will override any expression which has been built up from components.
@@ -18,12 +18,28 @@
 #
 # Note, expressions are *NOT* returned with the leading WHERE, SELECT, HAVING, etc. keywords *unless*
 # you request the entire SQL statement at once.
+#
+# To execute an SQL expression, just call the executeSQL() method *after* you have set the SQL statement
+# To retrieve the results, call nextResultRow() repeatedly, and call finishSQL() when finished.
+#
+# To execute an SQL expression using Permissions checking, make sure to pass the current
+# Session object when creating the SQLBuilder object, ie, pass it in new().
+# Then use the appropriate permission sensitive methods to fetch the results.
 
 package SQLBuilder;
+
 use strict;
+use Permissions;
+use DBConnection;
+use Debug;
+use Session;
+
 use fields qw(	
 				dbh
 				sth
+				perm
+				session
+								
 				SQLExpr
 				selectExpr
 				fromExpr
@@ -37,18 +53,33 @@ use fields qw(
 				whereItems
 							);  # list of allowable data fields.
 
-# dbh is a handle to the database
-# SQLExpr is the entire SQL expression *if* the user set it explicitly
+# dbh				:	handle to the database
+# session			:	optional session object, for use with the Permissions object.
+# perm				:	Permissions object
+# SQLExpr			:	the entire SQL expression *if* the user set it explicitly
 
 							
-
+# If using permissions, then
+# you must pass the current Session object
+# when calling new().  If not using permissions,
+# then this is optional. 
 sub new {
 	my $class = shift;
 	my SQLBuilder $self = fields::new($class);
 	
+	my $session = shift;	# optional parameter
+
 	# set up some default values
 	$self->clear();	
 
+	$self->{session} = $session;
+	
+	# create the permissions object as well
+	# note, if the session object didn't really exist, then
+	# the permissions object will catch the error, so don't have to check for it here.
+	my $perm = Permissions->new($session);
+	$self->{perm} = $perm;
+	
 	return $self;
 }
 
@@ -56,6 +87,7 @@ sub new {
 # clears everything
 sub clear {
 	my SQLBuilder $self = shift;
+	
 	$self->{SQLExpr} = '';
 	$self->{selectExpr} = '';
 	$self->{fromExpr} = '';
@@ -68,6 +100,8 @@ sub clear {
 	
 	$self->finishSQL();  # finish the SQL query if there was one.
 }
+
+
 
 # directly set the entire SQL expression
 # note, doing this will *override* any of the other
@@ -310,8 +344,30 @@ sub dbConnect {
 }
 
 
+# pass this an entire SQL query string
+# and it will return a single result
+# (ie, assumes that there aren't multiple rows)
+sub getSingleSQLResult {
+	my SQLBuilder $self = shift;
 
-# executes the SQL 
+	my $sql = shift;
+	
+	if (! $sql) { return undef; };
+	
+	$self->setSQLExpr($sql);
+	$self->executeSQL();
+	my @result = $self->nextResultRow();
+	
+	if (@result) {
+		return $result[0];
+	}
+	
+	return undef;
+}
+
+
+# executes the SQL
+# can use this with or without permissions
 sub executeSQL {
 	my SQLBuilder $self = shift;
 
@@ -334,7 +390,52 @@ sub executeSQL {
 }
 
 
-# fetches the next result row from the $sth.  
+# returns an array of result rows using permissions
+# to check if the user can read the rows.
+#
+# Also, **make sure** the SQL query includes the necessary
+# column called "collection_no" AS THE FIRST column **********!!!
+#
+sub nextResultRowUsingPermissions {
+	my SQLBuilder $self = shift;
+	
+	my $sth = $self->{sth};
+	
+	if ((! $sth) || (! $self->{perm}) || (! $self->{session})) {
+		Debug::logError("SQLBuilder must have valid permissions and sessions objects to execute this query.");
+		return (); 	
+	}
+	
+	my @result;
+	
+	# fetch the next array row and return it.	
+	@result = $sth->fetchrow_array();
+	$self->{sth} = $sth;  # important - save it back in the parameter.
+	
+	if (! @result) {
+		$self->finishSQL();
+		return ();		# return empty array
+	}
+	
+	# collection_no *should* be the first column.
+	my $collection_no = $result[0];
+	
+	if (($self->{perm})->userHasReadPermissionForCollectionNumber($collection_no)) {
+		return @result;
+	} else {
+		# user is not allowed to read this row.
+		# so return the next row.. if it exists
+		return ($self->nextResultRowUsingPermission($collection_no));
+	}
+			
+}
+
+
+
+# fetches the next result row from the $sth.
+# ** doesn't use permissions checking **
+# returns it as an array
+#  
 # must be called *after* first calling executeSQL(),
 # otherwise will return empty arry.
 sub nextResultRow {
@@ -346,16 +447,19 @@ sub nextResultRow {
 		return ();  # return empty array if sth doesn't exist	
 	}
 	
-	# otherwise, fetch the next array row and return it.	
-	my @result = $sth->fetchrow_array();
+	my @result;
+	
+	# fetch the next array row and return it.	
+	@result = $sth->fetchrow_array();
 	$self->{sth} = $sth;  # important - save it back in the parameter.
 	
 	if (! @result) {
 		$self->finishSQL();
 	}
-	
+		
 	return @result;
 }
+
 
 
 # clean up after finishing with a query.
@@ -371,5 +475,6 @@ sub finishSQL {
 }
 
 
+# end of SQLBuilder.pm
 
 1;
