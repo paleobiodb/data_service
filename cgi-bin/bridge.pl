@@ -73,7 +73,7 @@ use Globals;
 # It will be passed to most classes when we're creating new objects.
 %GLOBALVARS;
 
-my $DEBUG = 1;		# Shows debug information regarding the page if set to 1
+my $DEBUG = 0;		# Shows debug information regarding the page if set to 1
 
 my $DUPLICATE = 2;	# not sure what this is for?
 
@@ -2613,16 +2613,6 @@ sub processCollectionsSearch {
 		$q->param('collection_names' => '');
 	}
 	
-	# Handle half-latitude degrees passed by Map.pm JA 28.8.03
-	# LEGACY
-	#if ( $q->param('lathalf') eq "Y" )	{
-	#	push @terms, "(latmin>=30 OR latdec LIKE '5%' OR latdec LIKE '6%' OR latdec LIKE '7%' OR latdec LIKE '8%' OR latdec LIKE '9%')";
-	#	$q->param('lathalf' => '');
-	#} elsif ( $q->param('lathalf') eq "N" )	{
-	#	push @terms, "((latmin<30 OR latmin IS NULL) AND (latdec IS NULL OR (latdec NOT LIKE '5%' AND latdec NOT LIKE '6%' AND latdec NOT LIKE '7%' AND latdec NOT LIKE '8%' AND latdec NOT LIKE '9%')))";
-	#	$q->param('lathalf' => '');
-	#}
-
 	# Handle half/quarter degrees for long/lat respectively passed by Map.pm PS 11/23/2004
     if ( $q->param("coordres") eq "half") {
 		if ($q->param("latdec_range") eq "00") {
@@ -2722,7 +2712,7 @@ IS NULL))";
 		}   
         $joinSecondaryRefs = 1;
 	} elsif($resgrp){
-		push ( @terms, "FIND_IN_SET('".$q->param("research_group")."', collections.research_group)" );
+		push ( @terms, "FIND_IN_SET(".$dbh->quote($q->param("research_group")).", collections.research_group)" );
 	}
 			
 	# Remove it from further consideration
@@ -2734,8 +2724,8 @@ IS NULL))";
     # PS 11/29/2004
 	if ($q->param("reference_no")) {
         $joinSecondaryRefs = 1;
-		push @terms, " (collections.reference_no=".$q->param("reference_no")." OR "
-                     ." secondary_refs.reference_no=".$q->param("reference_no").") ";
+		push @terms, " (collections.reference_no=".$dbh->quote($q->param("reference_no"))." OR "
+                     ." secondary_refs.reference_no=".$dbh->quote($q->param("reference_no")).") ";
     }
 	# Remove it from further consideration
     $q->param("reference_no" => "");
@@ -2749,17 +2739,18 @@ IS NULL))";
 		
 		#Debug::dbPrint("field $fieldName");
 		
-		$val = $q->param($fieldName);
 		if (defined $q->param($fieldName) && $q->param($fieldName) ne '')  {
-        
             if ($q->param($fieldName) eq "NULL_OR_EMPTY") {
                 push(@terms, "(collections.$fieldName IS NULL OR collections.$fieldName='')");
 			} elsif ( $pulldowns{$fieldName} ) {
 				# It is in a pulldown... no wildcards
-				push(@terms, "collections.$fieldName = '$val'");
+                my $val = $dbh->quote($q->param($fieldName));
+				push(@terms, "collections.$fieldName = $val");
 			} else {
-				$val = qq|"$wildcardToken$val$wildcardToken"| if $fieldTypes[$fieldCount] == 0;
-				push(@terms, "collections.$fieldName$comparator$val");
+                my $val = ($fieldTypes[$fieldCount] == 0) # == 1 if number, 0 otherwise
+                        ? $dbh->quote($wildcardToken.$q->param($fieldName).$wildcardToken)
+                        : $dbh->quote($q->param($fieldName));
+				push(@terms, "collections.$fieldName $comparator $val");
 			}
 		}
 	}
@@ -2768,16 +2759,18 @@ IS NULL))";
 	# either be geological_group, formation, or member.  Therefore, it has a special name, 
 	# group_formation_member, and we'll have to deal with it separately.
 	# added by rjp on 1/13/2004
-	if (my $val = $q->param("group_formation_member")) {
-		push(@terms, "(collections.geological_group $comparator '$wildcardToken$val$wildcardToken' 
-						OR collections.formation $comparator '$wildcardToken$val$wildcardToken' 
-						OR collections.member $comparator '$wildcardToken$val$wildcardToken')");
+	if ($q->param("group_formation_member")) {
+        my $val = $dbh->quote($wildcardToken.$q->param("group_formation_member").$wildcardToken);
+		push(@terms, "(collections.geological_group $comparator $val
+						OR collections.formation $comparator $val
+						OR collections.member $comparator $val)");
 	}
 
     # This field is only passed by links created in the Strata module PS 12/01/2004
-	if (my $val = $q->param("lithologies")) {
-		push(@terms, "(collections.lithology1$comparator '$wildcardToken$val$wildcardToken' 
-					   OR collections.lithology2$comparator '$wildcardToken$val$wildcardToken')"); 
+	if ($q->param("lithologies")) {
+        my $val = $dbh->quote($wildcardToken.$q->param("lithologies").$wildcardToken);
+		push(@terms, "(collections.lithology1 $comparator $val
+					   OR collections.lithology2 $comparator $val)"); 
 	}
 	
 	#Debug::dbPrint("terms = @terms");
@@ -3001,21 +2994,29 @@ sub displayCollectionDetails {
 	@fieldNames = @{$f};
 
     # have the geological group/formation/members hyperlink to strata search
+    my ($group_idx, $formation_idx, $member_idx, $group_link, $formation_link, $member_link);
     for($index=0;$index < $#fieldNames;$index++) {
-        if ($fieldNames[$index] eq "geological_group") {
-            if ($row[$index]) {
-                $row[$index] = "<a href=\"$exec_url?action=displayStrataSearch&search_term=$row[$index]\">$row[$index]</a>";
-            }    
-        } elsif($fieldNames[$index] eq "formation") {
-            if ($row[$index]) {
-                $row[$index] = "<a href=\"$exec_url?action=displayStrataSearch&search_term=$row[$index]\">$row[$index]</a>";
-            }    
-        } elsif($fieldNames[$index] eq "member") {
-            if ($row[$index]) {
-                $row[$index] = "<a href=\"$exec_url?action=displayStrataSearch&search_term=$row[$index]\">$row[$index]</a>";
-            }    
-        }
+        $group_idx = $index if ($fieldNames[$index] eq "geological_group");
+        $formation_idx = $index if ($fieldNames[$index] eq "formation");
+        $member_idx = $index if ($fieldNames[$index] eq "member");
     }
+    if ($row[$group_idx]) {
+        $group_link = "<a href=\"$exec_url?action=displayStrataSearch"
+                         . "&search_term=".uri_escape($row[$group_idx])."\">$row[$group_idx]</a>";
+    }
+    if ($row[$formation_idx]) {   
+        $formation_link = "<a href=\"$exec_url?action=displayStrataSearch"
+                             . "&group_hint=".uri_escape($row[$group_idx])
+                             . "&search_term=".uri_escape($row[$formation_idx])."\">$row[$formation_idx]</a>";
+    }
+    if ($row[$member_idx]) {
+        $member_link = "<a href=\"$exec_url?action=displayStrataSearch"
+                          . "&formation_hint=".uri_escape($row[$formation_idx])
+                          . "&search_term=".uri_escape($row[$member_idx])."\">$row[$member_idx]</a>";
+    }
+    $row[$group_idx] = $group_link if ($group_link);
+    $row[$formation_idx] = $formation_link if ($formation_link);
+    $row[$member_idx] = $member_link if ($member_link);
 
     print stdIncludes( "std_page_top" );
 	
