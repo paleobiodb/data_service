@@ -247,7 +247,7 @@ sub assignGenera	{
 	}
 	my $occsfilecsv = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.csv";
 	my $occsfiletab = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.tab";
-    if ((-M $occsfiletab) < (-M $occsfilecsv)) {
+    if (-e $occsfiletab && ((-M $occsfiletab) < (-M $occsfilecsv))) {
         $self->dbg("using tab $occsfiletab");
         $occsfile = $occsfiletab;
         $sepChar = "\t";
@@ -280,7 +280,6 @@ sub assignGenera	{
     $status = $csv->parse($_);
     if (!$status) { print "Warning, error parsing CSV line $count"; }
     my @fieldnames = $csv->fields();
-    use Data::Dumper; print Dumper(@fieldnames);
 	#s/\n//;
 	#my @fieldnames;
 	## tab-delimited file
