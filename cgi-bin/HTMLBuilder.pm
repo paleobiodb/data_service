@@ -154,7 +154,7 @@ sub populateHTML
 	my @split_val = split(/(<.*?>)/,$val);
 	foreach my $token (@split_val){
 		if($token !~ /[<>]/){
-			$val =~ s/"/&quot;/g;
+			$token =~ s/"/&quot;/g;
 		}
 	}
 	$val = join('',@split_val);
@@ -188,13 +188,13 @@ sub populateHTML
     {
       $keepMatching = 0;
       # Do select tags
-      if($htmlTemplateString =~ /(<select\s+id="$fieldName".*?>)/ims)
+      if($htmlTemplateString =~ /(<select\s+id="$fieldName".*?>)/im)
       {
         my $stuff = $1;
 		#print $stuff;
 
 		# Get a list of select lists with this name
-		my @selLists = ($htmlTemplateString =~ /(<select\s+id="$fieldName".*?>)/imsg);
+		my @selLists = ($htmlTemplateString =~ /(<select\s+id="$fieldName".*?>)/img);
 				
 		# If the list has a length greater than 1, then this is an enumeration field
 		if(@selLists > 1)
@@ -225,7 +225,7 @@ sub populateHTML
 						
 				#print "stuff: $stuff\nhtmlString: $htmlString\n\n";
 						
-				$htmlTemplateString =~ s/\Q$selList/$htmlString/ims;
+				$htmlTemplateString =~ s/\Q$selList/$htmlString/im;
 						
 				$selListCount++;
 			}
@@ -256,14 +256,14 @@ sub populateHTML
 
       # Do <input> tags
       # To Do: This should match any valid input tag, not just one with id="" next to <input
-      elsif ( $htmlTemplateString =~ /(<input\s+id="?$fieldName"?.*?>)/ims)
+      elsif ( $htmlTemplateString =~ /(<input\s+id="?$fieldName"?.*?>)/im)
       {
         my $stuff = $1;
         #print "\n\n<!-- $stuff -->\n\n";
         # Checkboxes
-        if ( $stuff =~ /type="?checkbox"?/ims ) {
+        if ( $stuff =~ /type="?checkbox"?/im ) {
 			# Get a list of checkboxes with this name
-			my @checkboxes = ($htmlTemplateString =~ /(<input\s+id="?$fieldName"?.*?>)/imsg);
+			my @checkboxes = ($htmlTemplateString =~ /(<input\s+id="?$fieldName"?.*?>)/img);
 			# If the list has a length greater than 1, then this is an enumeration field
 			if ( @checkboxes > 1 ) {
 				my %CHECK_VALS;
@@ -288,7 +288,7 @@ sub populateHTML
 							
 					#print "stuff: $stuff\nhtmlString: $htmlString\n\n";
 							
-					$htmlTemplateString =~ s/\Q$checkbox/$htmlString/ims;
+					$htmlTemplateString =~ s/\Q$checkbox/$htmlString/im;
 					# Get the value
 							
 					$cbCount++;
@@ -309,15 +309,15 @@ sub populateHTML
 					
 			#print "stuff: $stuff\nhtmlString: $htmlString\n\n";
 					
-			$htmlTemplateString =~ s/\Q$stuff/$htmlString/ims;
+			$htmlTemplateString =~ s/\Q$stuff/$htmlString/im;
         }
         # Do radios
 		# Each radio gets the current field name for the name,
 		# and the current val for the value
-        elsif($stuff =~ /type="?radio"?/ims)
+        elsif($stuff =~ /type="?radio"?/im)
         {
 			# Get the value from the form
-			$stuff =~ /value="?(.+?)"?/ims;
+			$stuff =~ /value="?(.+?)"?/im;
 			my $formVal = $1;
 
 			my $rd = Radiodial->new();
@@ -330,16 +330,16 @@ sub populateHTML
 				$rd->setChecked(1) if $val eq $formVal;
 			} else {
 				# See if there is a default value
-				if ( $stuff =~ /checked/ims ) {
+				if ( $stuff =~ /checked/im ) {
 					$rd->setChecked(1);
 				}
 			}
 
 			my $htmlString = $rd->toHTML();
-			$htmlTemplateString =~ s/\Q$stuff/$htmlString/ims;
+			$htmlTemplateString =~ s/\Q$stuff/$htmlString/im;
         }
         # Do submit buttons
-        elsif ( $stuff =~ /type="?submit"?/ims )
+        elsif ( $stuff =~ /type="?submit"?/im )
         {
         }
         # Do text fields
@@ -349,15 +349,15 @@ sub populateHTML
 			$tf->setText($val);
 			$tf->setName($fieldName);
 
-			if( $stuff =~ /size="?(\d+)"?/ims) 		{ $tf->setSize($1); }
-			if( $stuff =~ /maxlength="?(\d+)"?/ims) { $tf->setMaxLength($1); }
-			if( $stuff =~ /disabled/ims )			{ $tf->setDisabled(); }
+			if( $stuff =~ /size="?(\d+)"?/im) 		{ $tf->setSize($1); }
+			if( $stuff =~ /maxlength="?(\d+)"?/im) { $tf->setMaxLength($1); }
+			if( $stuff =~ /disabled/im )			{ $tf->setDisabled(); }
 
 			my $htmlString = $tf->toHTML();
 			$htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
         }
         # Do hiddens
-        elsif($stuff =~ /type="?hidden"?/ims)
+        elsif($stuff =~ /type="?hidden"?/im)
         {
           my $hn = Hidden->new();
           $hn->setValue($val);
@@ -369,19 +369,19 @@ sub populateHTML
       }
 
       # Do textareas
-      elsif($htmlTemplateString =~ /(<textarea\s+id="?$fieldName"?.*?>)/ims)
+      elsif($htmlTemplateString =~ /(<textarea\s+id="?$fieldName"?.*?>)/im)
       {
         my $stuff = $1;
         
-        $stuff =~ /cols="?(\d+)"?/ims;
+        $stuff =~ /cols="?(\d+)"?/im;
         my $formCols = $1;
-        $stuff =~ /rows="?(\d+)"?/ims;
+        $stuff =~ /rows="?(\d+)"?/im;
         my $formRows = $1;
         
         my $ta = TextArea->new();
         $ta->setName($fieldName);
         $ta->setText($val);
-        $ta->setWrapVirtual(1) if $stuff =~ /wrap="?virtual"?/ims;
+        $ta->setWrapVirtual(1) if $stuff =~ /wrap="?virtual"?/im;
         $ta->setRows($formRows);
         $ta->setCols($formCols);
         my $htmlString = $ta->toHTML();
@@ -392,7 +392,7 @@ sub populateHTML
 
       # Do anchor tags
       # (To Do: Get path from ???)
-      elsif($htmlTemplateString =~ /(<a\s+id="?$fieldName"?.*?>)/ims)
+      elsif($htmlTemplateString =~ /(<a\s+id="?$fieldName"?.*?>)/im)
       {
         my $stuff = $1;
         
