@@ -413,7 +413,11 @@ sub displayTaxonInfoResults{
 	print "<form name=module_nav_form method=POST action=\"$exec_url\">";
     print "<input type=hidden name=action value=processModuleNavigation>";
     print "<input type=hidden name=genus_name value=\"".
-		  $q->param('genus_name')."\">";
+		  $q->param('genus_name');
+    if ( $taxon_no )	{
+      print " ($taxon_no)";
+    }
+    print "\">";
     print "<input type=hidden name=taxon_rank value=\"$taxon_type\">";
 
 	# Now, the checkboxes and submit button, 
@@ -595,10 +599,10 @@ sub doModules{
 	}
 	# synonymy
 	elsif($module == 2){
-		print displayTaxonSynonymy($dbt, $genus, $species);
+		print displayTaxonSynonymy($dbt, $genus, $species, $taxon_no);
 	}
 	elsif ( $module == 3 )	{
-		print displaySynonymyList($dbt, $q, $genus, $species);
+		print displaySynonymyList($dbt, $q, $genus, $species, $taxon_no);
 	}
 	# ecology
 	elsif ( $module == 4 )	{
@@ -1082,6 +1086,7 @@ sub displayTaxonSynonymy{
 	my $dbt = shift;
 	my $genus = (shift or "");
 	my $species = (shift or "");
+	my $taxon_no = (shift or "");
 	my $taxon_rank;
 	my $taxon_name;
 	my $output = "";
@@ -1089,7 +1094,8 @@ sub displayTaxonSynonymy{
 	if($genus && $species eq ""){
 		$taxon_name = $genus;
 		# Initialize the classification hash:
-		my $sql="SELECT taxon_rank FROM authorities WHERE taxon_name='$genus'";
+		my $sql="SELECT taxon_rank FROM authorities WHERE taxon_no=$taxon_no";
+#		my $sql="SELECT taxon_rank FROM authorities WHERE taxon_name='$genus'";
 		my @results = @{$dbt->getData($sql)};
 		$taxon_rank = $results[0]->{taxon_rank};
 	}
@@ -1108,9 +1114,10 @@ sub displayTaxonSynonymy{
 
 	my $sql = "SELECT taxon_no, reference_no, author1last, pubyr, ".
 			  "ref_is_authority FROM authorities ".
-			  "WHERE taxon_name='$taxon_name' AND taxon_rank='$taxon_rank'";
+			  "WHERE taxon_no=$taxon_no";
+#			  "WHERE taxon_name='$taxon_name' AND taxon_rank='$taxon_rank'";
 	my @results = @{$dbt->getData($sql)};
-	my $taxon_no = $results[0]->{taxon_no};
+#	my $taxon_no = $results[0]->{taxon_no};
 	PBDBUtil::debug(1,"taxon rank: $taxon_rank");
 	PBDBUtil::debug(1,"taxon name: $taxon_name");
 	PBDBUtil::debug(1,"taxon number from authorities: $taxon_no");
@@ -1237,10 +1244,14 @@ sub getSynonymyParagraph{
 	}
 	# If ref_is_authority is not set, use the authorname and pubyr in this
 	# record.
-	elsif($auth_rec[0]->{author1last} && $auth_rec[0]->{pubyr}){
+	elsif($auth_rec[0]->{author1last}){
+#	elsif($auth_rec[0]->{author1last} && $auth_rec[0]->{pubyr}){
 		PBDBUtil::debug(1,"author and year from authorities<br>");
 		$text .= "<li><i>".$auth_rec[0]->{taxon_name}."</i> was named by ".
-			  	 $auth_rec[0]->{author1last}." (".$auth_rec[0]->{pubyr}.")";
+			  	 $auth_rec[0]->{author1last};
+		if ( $auth_rec[0]->{pubyr} )	{
+			$text .= " (".$auth_rec[0]->{pubyr}.")";
+		}
 		if ( $auth_rec[0]->{comments} )	{
 			$text .= " <span class=small>[" . $auth_rec[0]->{comments} . "]</span>";
 		}
@@ -1821,6 +1832,7 @@ sub displaySynonymyList	{
 	my $q = shift;
 	my $genus = (shift or "");
 	my $species = (shift or "");
+	my $taxon_no = (shift or "");
 	my $taxon_name;
 	my $output = "";
 
@@ -1832,10 +1844,6 @@ sub displaySynonymyList	{
 	}
 
 	print "<center><h3>Synonymy</h3></center>";
-
-# get the taxon's ID number
-	my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='" . $taxon_name . "'";
-	my $taxon_no = @{$dbt->getData($sql)}[0]->{taxon_no};
 
 # find all distinct children where relation is NOT "belongs to"
 	$sql = "SELECT DISTINCT child_no FROM opinions WHERE status!='belongs to' AND parent_no=" . $taxon_no;
