@@ -242,16 +242,14 @@ sub populateHTML
     {
       $keepMatching = 0;
       # Do select tags
-      if($htmlTemplateString =~ /(<select\s+id="$fieldName"(.*?)>)/im)
-      {
+      if($htmlTemplateString =~ /(<select\s+id="$fieldName"(.*?)>)/im){
         my $otherstuff = $2;
 
 		# Get a list of select lists with this name
 		my @selLists = ($htmlTemplateString =~ /(<select\s+id="$fieldName".*?>)/img);
 				
 		# If the list has a length greater than 1, then this is an enumeration field
-		if(@selLists > 1)
-		{
+		if(@selLists > 1){
 			my @selVals = split(/\s*,\s*/, $val);
 			
 			my $selListCount = 0;
@@ -327,7 +325,7 @@ sub populateHTML
 
       # Do <input> tags
       # To Do: This should match any valid input tag, not just one with id="" next to <input
-      elsif ( $htmlTemplateString =~ /(<input\s+id="?$fieldName"?.*?>)/im)
+      elsif ( $htmlTemplateString =~ /(<input\s+id="{0,1}$fieldName"{0,1}.*?>)/im)
       {
         my $stuff = $1;
         #print "\n\n<!-- $stuff -->\n\n";
@@ -413,8 +411,18 @@ sub populateHTML
         elsif ( $stuff =~ /type="?submit"?/im )
         {
         }
+        # Do hiddens
+        elsif($stuff =~ /type="?hidden"?/im)
+        {
+          my $hn = Hidden->new();
+          $hn->setValue($val);
+          $hn->setName($fieldName);
+          my $htmlString = $hn->toHTML();
+          $htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
+        }
         # Do text fields
-        elsif ( $stuff =~ /type="?text"?/i || $stuff !~ /type=/i )
+        else
+        #else( $stuff =~ /type="?text"?/i || $stuff !~ /type/i )
         {
 			my $tf = TextField->new();
 			$tf->setText($val);
@@ -426,15 +434,6 @@ sub populateHTML
 
 			my $htmlString = $tf->toHTML();
 			$htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
-        }
-        # Do hiddens
-        elsif($stuff =~ /type="?hidden"?/im)
-        {
-          my $hn = Hidden->new();
-          $hn->setValue($val);
-          $hn->setName($fieldName);
-          my $htmlString = $hn->toHTML();
-          $htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
         }
         $keepMatching = 1;
       }

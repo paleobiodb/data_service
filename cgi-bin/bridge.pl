@@ -4222,20 +4222,28 @@ sub displayTaxonomyEntryForm	{
 			$authorityRow{'type_taxon_name'} = $authorityRow{'type_specimen'};
 		}
 	}
+	# for a new name, prepopulate the %authorityRow hash with column names
+	# (and empty values.  This gets HTMLBuilder to change <input id...> to
+	# <input name...>
+	else{ 
+		my %attrs = ("NAME"=>'');
+		my $sql = "SELECT * FROM authorities WHERE taxon_no=0";
+        %authorityRow = %{@{$dbt->getData($sql,\%attrs)}[0]};
+		foreach my $name (@{$attrs{"NAME"}}){
+			$authorityRow{$name} = "";
+		}
+	}
+
 
 	# Print the entry form
 
 	# Determine the fields and values to be populated by populateHTML
 	if($authorityRow{"taxon_rank"} eq ""){
-		if($q->param("taxon_no")){
-			if($taxon =~ / /){
-				$authorityRow{"taxon_rank"} = "species";
-			}else{
-				$authorityRow{"taxon_rank"} = "genus";
-			}
+		if($taxon =~ / /){
+			$authorityRow{"taxon_rank"} = "species";
 		}
-		else{ # entering a new name
-			$authorityRow{"taxon_rank"} = "";
+		else{
+			$authorityRow{"taxon_rank"} = "genus";
 		}
 	}
 
@@ -4320,7 +4328,8 @@ sub displayTaxonomyEntryForm	{
 	}
 	for my $f (keys %authorityRow){
 		if($authorityRow{$f} &&
-			 $s->get('authorizer') ne $authorityRow{'authorizer'} )	{
+			 ($s->get('authorizer') ne $authorityRow{'authorizer'})
+			   && $authorityRow{'authorizer'} ne ""){
 			$html =~ s/<input name="$f".*?>/<u>$authorityRow{$f}<\/u>/;
 			$html =~ s/<select name="$f".*?<\/select>/<u>$authorityRow{$f}<\/u>/;
 			$html =~ s/<textarea name="$f".*?<\/textarea>/<u>$authorityRow{$f}<\/u>/;
@@ -4703,8 +4712,7 @@ sub new_authority_form{
 	#  to be checked against the authorities table, and life is
 	#  already way too complicated!
 	$html =~ s/Name of type taxon://;
-	$html =~ s/<input name="type_taxon_name" size=50>//;
-	$html =~ s/<input id="type_taxon_name" size=50>//;
+	$html =~ s/<input id="type_taxon_name" name="type_taxon_name" size=50>//;
 
 	# Make sure all the "new" ref field names are modified so
 	#  they can be retrieved when the form data are processed

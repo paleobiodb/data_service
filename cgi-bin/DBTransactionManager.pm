@@ -46,11 +46,11 @@ sub _initialize{
 #					$type			"read", "write", "both", "neither"
 #					$attr_hash-ref	reference to a hash whose keys are set by
 #					the user according to which attributes are desired for this
-#					table, e.g. "NAMES" (required!), "mysql_is_num", "NULLABLE",
+#					table, e.g. "NAME" (required!), "mysql_is_num", "NULLABLE",
 #					etc. Upon calling this method, the values will be set as
 #					references to arrays whose elements correspond to each 
-#					column in the table, in the order of the NAMES attribute,
-#					which is why "NAMES" is required (to correlate order).
+#					column in the table, in the order of the NAME attribute,
+#					which is why "NAME" is required (to correlate order).
 #
 #	returns:		For select statements, returns a reference to an array of 
 #					hash references	to rows of all data returned.
@@ -61,7 +61,7 @@ sub _initialize{
 sub getData{
 	my $self = shift;
 	my $sql = shift;
-	my $type = (shift or "neither");
+#	my $type = (shift or "neither");
 	my $attr_hash_ref = shift;
 
 	# First, check the sql for any obvious problems
@@ -74,11 +74,9 @@ sub getData{
 			$sth->execute();
 			$self->{_err} = $sth->errstr;
 			# Ok now attributes are accessible
-			if(scalar(keys(%{$attr_hash_ref})) > 0){
-				foreach my $key (keys(%{$attr_hash_ref})){
-					$attr_hash_ref->{$key} = $sth->{$key};
-				}	
-			}
+			foreach my $key (keys(%{$attr_hash_ref})){
+				$attr_hash_ref->{$key} = $sth->{$key};
+			}	
 			my @data = @{$sth->fetchall_arrayref({})};
 			$sth->finish();
 # ?? THIS MAY OR MAY NOT BE IMPLEMENTED AS NOTED BELOW (FUTURE RELEASE)
