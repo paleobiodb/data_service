@@ -54,7 +54,7 @@ sub buildMap {
 		$self->mapGetRotations();
 	}
 	$self->mapQueryDb();
-	$self->mapDrawMap();
+	return $self->mapDrawMap();
 
 }
 
@@ -569,30 +569,34 @@ sub mapGetRotations	{
 }
 
 
-sub mapDrawMap	{
+sub mapDrawMap{
 
   my $self = shift;
   my $perm_rows = shift;
 
   $self->dbg($q->Dump);
 
-  # erase the last map that was drawn
+  # erase all files that haven't been accessed in more than a day
+	opendir(DIR,"$GIF_DIR") or die "couldn't open $GIF_DIR ($!)";
+	# grab only files with extensions;  not subdirs or . or ..
+	my @filenames = grep { /.*?\.(\w+)/ } readdir(DIR);
+	closedir(DIR);
+
+	foreach my $file (@filenames){
+		if((-A "$GIF_DIR/$file") > 1){
+			unlink "$GIF_DIR/$file";
+		}
+	}
+
+
+  # get the next number for file creation.
   if ( ! open GIFCOUNT,"<$GIF_DIR/gifcount" ) {
 		$self->htmlError ( "Couldn't open [$GIF_DIR/gifcount]: $!" );
   }
   $gifcount = <GIFCOUNT>;
-  s/\n//;
-  $gifname = "pbdbmap" . $gifcount . ".gif";
-  $epsname = "pbdbmap" . $gifcount . ".eps";
-  $ainame = "pbdbmap" . $gifcount . ".ai";
-  $jpgname = "pbdbmap" . $gifcount . ".jpg";
-  $pictname = "pbdbmap" . $gifcount . ".pict";
-  unlink "$GIF_DIR/$gifname";
-  unlink "$GIF_DIR/$epsname";
-  unlink "$GIF_DIR/$ainame";
-  unlink "$GIF_DIR/$jpgname";
-  unlink "$GIF_DIR/$pictname";
+  chomp($gifcount);
   close GIFCOUNT;
+
   $gifcount++;
   if ( ! open GIFCOUNT,">$GIF_DIR/gifcount" ) {
 		$self->htmlError ( "Couldn't open [$GIF_DIR/gifcount]: $!" );
@@ -601,7 +605,10 @@ sub mapDrawMap	{
   close GIFCOUNT;
 
   $gifcount++;
+
+  # set up the filenames
   $gifname = "pbdbmap" . $gifcount . ".gif";
+  $htmlname = "pbdbmap".$gifcount.".html";
   $epsname = "pbdbmap" . $gifcount . ".eps";
   $ainame = "pbdbmap" . $gifcount . ".ai";
   $jpgname = "pbdbmap" . $gifcount . ".jpg";
@@ -630,7 +637,7 @@ sub mapDrawMap	{
   }
   # PM 09/10/02 - Draw a half-sized map for the taxon information script.
   if($q->param("taxon_info_script") eq "yes")	{
-	$q->param('mapsize' => '50%');
+	$q->param('mapsize' => '75%');
   }
   $x = $q->param('mapsize');
   $x =~ s/%//;
@@ -1026,7 +1033,9 @@ sub mapDrawMap	{
 		print AI "U\n";  # terminate the group
 	}
 
-	print "<table>\n<tr>\n<td>\n<map name=\"PBDBmap\">\n";
+	# Write this to a file, not stdout
+	open(MAPOUT,">$GIF_DIR/$htmlname") or die "couldn't open $GIF_DIR/$htmlname ($!)";
+	print MAPOUT "<table>\n<tr>\n<td>\n<map name=\"PBDBmap\">\n";
 
  # draw coastlines
  # first rescale the coordinates depending on the rotation
@@ -1176,24 +1185,24 @@ if ( $q->param('gridposition') ne "in back" )	{
 			}
 		# There is no way for a public user to use this at the moment.
         #if( $q->param('user') =~ /paleodb/ && $q->param('user') !~ /public/ ){
-			print "<area shape=\"rect\" coords=\"";
+			print MAPOUT "<area shape=\"rect\" coords=\"";
 			if ( $hemiVal{$x1}{$y1} eq "N" )	{
-				printf "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1+0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1+0.5+(1.5*$dotsize));
+				printf MAPOUT "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1+0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1+0.5+(1.5*$dotsize));
 			} else	{
-				printf "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1-0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1-0.5+(1.5*$dotsize));
+				printf MAPOUT "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1-0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1-0.5+(1.5*$dotsize));
 			}
-			print "\" href=\"$BRIDGE_HOME?action=displayCollResults";
+			print MAPOUT "\" href=\"$BRIDGE_HOME?action=displayCollResults";
 			for $t (keys %filledfields)	{
 				if ($filledfields{$t} ne "")	{
 					my $temp = $filledfields{$t};
 					$temp =~ s/"//g;
 					$temp =~ s/ /\+/g;
-					print "&$t=$temp";
+					print MAPOUT "&$t=$temp";
 
 					# HACK: force search to use wildcards if lithology or formation is searched, in order
 					#  to avoid problems with values that include double quotes
 					if ($t =~ /(formation)|(lithology1)/)	{
-						print "&wild=Y";
+						print MAPOUT "&wild=Y";
 					}
 				}
 			}
@@ -1201,12 +1210,12 @@ if ( $q->param('gridposition') ne "in back" )	{
 				# get rid of spaces in a genus-species name
 				my $clean_name = $q->param('genus_name');
 				$clean_name =~ s/ /\+/g;
-				print "&genus_name=" . $clean_name;
-				print "&taxon_rank=" . $q->param('taxon_rank');
+				print MAPOUT "&genus_name=" . $clean_name;
+				print MAPOUT "&taxon_rank=" . $q->param('taxon_rank');
 			}
 			($lngdeg,$lngdir) = split / /,$longVal{$x1};
 			($latdeg,$latdir) = split / /,$latVal{$y1};
-			print "&latdeg=$latdeg&latdir=$latdir&lngdeg=$lngdeg&lngdir=$lngdir\">\n";
+			print MAPOUT "&latdeg=$latdeg&latdir=$latdir&lngdeg=$lngdeg&lngdir=$lngdir\">\n";
 		#}
 
         my $mycolor = $aicol{$dotcolor};
@@ -1446,47 +1455,48 @@ if ( $q->param('gridposition') ne "in back" )	{
 
   close GIF;
 
-  print "</map>\n";
-  print "</table>\n";
-  print "<table cellpadding=10 width=100%>\n";
-  print "<tr><td align=center><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
-  print "</table>\n";
+  print MAPOUT "</map>\n";
+  print MAPOUT "</table>\n";
+  print MAPOUT "<table cellpadding=10 width=100%>\n";
+  print MAPOUT "<tr><td align=center><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
+  print MAPOUT "</table>\n";
 
   if(!$q->param("taxon_info_script")){
-	  print "<center>\n<table><tr>\n";
+	  print MAPOUT "<center>\n<table><tr>\n";
 	  if ($matches > 1)	{
-		print "<td class=\"large\"><b>$matches collections fall ";
+		print MAPOUT "<td class=\"large\"><b>$matches collections fall ";
 	  }
 	  elsif ($matches == 1)	{
-		print "<td class=\"large\"><b>Exactly one collection falls ";
+		print MAPOUT "<td class=\"large\"><b>Exactly one collection falls ";
 	  }
 	  else	{
 		# PM 09/13/02 Added bit about missing lat/long data to message
-		print "<td class=\"large\"><b>Sorry! Either the collections were missing lat/long data, or no collections fall ";
+		print MAPOUT "<td class=\"large\"><b>Sorry! Either the collections were missing lat/long data, or no collections fall ";
 	  }
-	  print "within the mapped area, have lat/long data, and matched your query.";
+	  print MAPOUT "within the mapped area, have lat/long data, and matched your query.";
 	  #if ($searchstring ne "")	{
 	  #  $searchstring =~ s/_/ /g;
 	  #  print " \"<i>$searchstring</i>\"";
 	  #}
-	  print "</b></td></tr></table>\n";
+	  print MAPOUT "</b></td></tr></table>\n";
   }
   if ($dotsizeterm eq "proportional")	{
-    print "<br>Sizes of $dotshape are proportional to counts of collections at each point.\n"
+    print MAPOUT "<br>Sizes of $dotshape are proportional to counts of collections at each point.\n"
   }
 
-  print "<p>You may download the image in ";
-  print "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
-  print "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">GIF</a></b>, ";
-  print "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
-  print "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format</p>\n";
+  print MAPOUT "<p>You may download the image in ";
+  print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
+  print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">GIF</a></b>, ";
+  print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
+  print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format</p>\n";
 
   unless($q->param("taxon_info_script") eq "yes"){
-	  print "</font><p>\n<hr><p><b><a href='?action=displayMapForm'>Search&nbsp;again</a></b></p>\n";
+	  print MAPOUT "</font><p>\n<hr><p><b><a href='?action=displayMapForm'>Search&nbsp;again</a></b></p>\n";
   }
 
-  print "</center></body>\n</html>\n";
-
+  print MAPOUT "</center>";
+  close MAPOUT;
+  return "$GIF_DIR/$htmlname";
 }
 
 sub getCoords	{
