@@ -1666,7 +1666,7 @@ sub processCollectionsSearch {
 					
 	my $sql = SQLBuilder->new();
 	$sql->setWhereSeparator("AND");
-	
+		
 	# If a genus name is requested, query the occurrences table to get
 	# a list of useable collections
 	#
@@ -1892,14 +1892,21 @@ sub processCollectionsSearch {
 	# Remove it from further consideration
 	$q->param("research_group" => "");
 		
+	#Debug::dbPrint("fieldNames = @fieldNames");
 	
 	# Compose the WHERE clause
 	# loop through all of the possible fields checking if each one has a value in it
 	my $fieldCount = -1;
-	foreach $fieldName ( @fieldNames ) {
+	my $val;
+	foreach my $fieldName ( @fieldNames ) {
 		$fieldCount++;
-
-		if ( my $val = $q->param($fieldName) ) {
+		
+		#Debug::dbPrint("field $fieldName");
+		
+		$val = $q->param("\'". $fieldName . "\'");
+		if ($val) {
+			#Debug::dbPrint("found field named $fieldName with value $val");
+			
 			$val =~ s/"//g;
 	
 			if ( $pulldowns{$fieldName} ) {
@@ -2055,6 +2062,8 @@ sub processCollectionsSearch {
 	}
 
 
+	#Debug::dbPrint("terms before adding to where = @terms");
+	
 	# form the SQL query from the newterms list.
 	$sql->clear();
 	$sql->setFromExpr("collections");
@@ -2064,7 +2073,7 @@ sub processCollectionsSearch {
 		$sql->addWhereItem($t);
 	}
 	
-
+	#Debug::dbPrint("whereItems = " . $sql->whereItems());
 
 	# modified to handle time lookup in-list JA 17.7.03
 	# previous fix assumed OR logic, modified to use AND logic
@@ -2090,9 +2099,7 @@ sub processCollectionsSearch {
 			$sql->addWhereItem("collection_no IN ( " . join ( ", ", @okcolls ) . " )");
 		} 
 	} elsif ( @timeinlist )	{
-		if (@terms)	{
-			$sql->addWhereItem("collection_no IN ( " . join ( ", ", @timeinlist )." ) ");
-		} 
+			$sql->addWhereItem("collection_no IN ( " . join(", ", @timeinlist) . " )"); 
 	}
 
 	# Sort and limit
@@ -2101,7 +2108,8 @@ sub processCollectionsSearch {
 
 	dbg ( "$sql->SQLExpr()<HR>" );
 	#print ("sql = $sql<BR>");
-
+	#Debug::dbPrint("proccessCollectionsSearch SQL Num. 2 =" . $sql->SQLExpr());
+	
 	return $sql->SQLExpr();
 
 } # end sub processCollectionsSearch
@@ -4816,7 +4824,8 @@ sub formatAuthorityLine	{
 # JA 13-20.8.02
 sub displayTaxonomyEntryForm	{
 
-	print &stdIncludes ("js_tipsPopup");
+	#print &stdIncludes ("js_tipsPopup");
+	# now handled by common.js.  rjp, 1/2004.
 
 	my $taxon = $q->param('taxon_name');
 	my $author;
