@@ -1,8 +1,11 @@
 package Download;
 
+use PBDBUtil;
+
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
 my $dbh;				# The database handle
+my $dbt;				# The new and improved database object
 my $q;					# Reference to the parameters
 my $s;					# Reference to the session data
 my $sql;				# Any SQL string
@@ -28,6 +31,7 @@ my $outFileBaseName;
 sub new {
 	my $class = shift;
 	$dbh = shift;
+	$dbt = shift;
 	$q = shift;
 	$s = shift;
 	my $self = {};
@@ -336,7 +340,6 @@ sub getResGrpString {
 	my $resgrp = $q->param('research_group');
 
 	if($resgrp && $resgrp =~ /(^ETE$)|(^5%$)|(^PGAP$)/){
-		require PBDBUtil;
 		my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
 		if($resprojstr ne ""){
 			$result = " collections.reference_no IN (" . $resprojstr . ")";
@@ -432,17 +435,13 @@ sub getOccurrencesWhereClause {
 	my $self = shift;
 	my $retVal = "";
 	
-	# NOTE: Nothing is currently done with the results of this call
-	# (@genusNames), but calling getGenusNames() is critical for filtering
-	# the query results (containing all class/genus/species)
-	# against the class name entered from the form. (The filtering goes
-	# against the %inclass global hash which is populated via getGenusNames,
-	# which in turn gets its data from the cgi-bin/data/classdata/ files.)
-	my @genusNames = $self->getGenusNames();
-
 	$retVal .= " occurrences.authorizer='".$s->get("authorizer")."' " if $self->getOwnDataOnly() == 1;
-	$retVal .= " AND " if $retVal && $q->param('genus_name') ne "";
-	$retVal .= " occurrences.genus_name='" . $q->param('genus_name') . "'" if $q->param('genus_name') ne "";
+
+	if($q->param('genus_name') ne ""){
+		$retVal .= " AND " if $retVal;
+		my $genusNames = $self->getGenusNames($q->param('genus_name'));
+		$retVal .= " occurrences.genus_name IN (".$genusNames.")";
+	}
 	$retVal .= " AND " if $retVal && $q->param('indet') eq 'NO';
 	$retVal .= " occurrences.species_name!='indet.' " if $q->param('indet') eq 'NO';
 	
@@ -692,18 +691,12 @@ sub doQuery {
 		else{
 			$curLine = $self->formatRow(($collection_no, $genus_reso, $genusName, @occs_row, @coll_row));
 		}
-		# Alroy hack 16.8.01
-		# THIS inclass HASH IS GLOBAL, FIRST USED IN 
-		# THE METHOD getGenusNames()
-		# Filter results for genus names in the specified class.
-		if($inclass{$genusName} =~ /Y/ || $classString eq ""){
-			print OUTFILE "$curLine\n";
-			$acceptedCount++;
-			if(exists($REFS_DONE{$reference_no}) && $REFS_DONE{$reference_no} ne "Y"){
-				print REFSFILE "$REFS_DONE{$reference_no}\n";
-				$REFS_DONE{$reference_no} = "Y";
-				$acceptedRefs++;
-			}
+		print OUTFILE "$curLine\n";
+		$acceptedCount++;
+		if(exists($REFS_DONE{$reference_no}) && $REFS_DONE{$reference_no} ne "Y"){
+			print REFSFILE "$REFS_DONE{$reference_no}\n";
+			$REFS_DONE{$reference_no} = "Y";
+			$acceptedRefs++;
 		}
 	}
 
@@ -787,42 +780,10 @@ sub formatRow {
 
 sub getGenusNames {
 	my $self = shift;
-	my @genusNames;
-	# convert phyla into classes
-	my $classString = $q->param('class');
-	if ($classString ne "") {
-	$| = 1;
-		print "<b>WARNING</b>: this will take a long time because genera need to be matched to classes<p>\n";
-		my @oldclassname = split(/\s/,$classString);
-		$classString =~ s/Brachiopoda/Articulata Inarticulata Lingulata/i;
-		$classString =~ s/Echinodermata/Asteroidea Blastoidea Camptostromoidea Coronata Crinoidea Ctenocystoidea Diploporita Echinoidea Edrioasteroidea Eocrinoidea Helicoplacoidea Holothuroidea Homoiostelea Homostelea Ophiocistioidea Ophiuroidea Parablastoidea Paracrinoidea Rhombifera Somasteroidea Stylophora/i;
-		$classString =~ s/Mollusca/Bivalvia Cephalopoda Cricoconarida Gastropoda Helcionelloida Monoplacophora Paragastropoda Polyplacophora Rostroconchia Scaphopoda Stenothecoidea Tergomya/i;
+	my $genus_name = (shift || "");
 
-		my @classname = split(/\s/, $classString);
-		#print "<TABLE border=1><tr><th>Class</th><th>Order</th><th>Genus</th></tr>";
-		foreach $classname (@classname) {
-			# Initial cap
-			$classname =~ s/\A(\w)/\u\1/;
-			if ( ! open ( CLASSFILE,"<$DATAFILE_DIR/classdata/class.$classname") ) {
-		print "<BR><font color='red'>Unknown class: $classname</font><BR><BR>\n";
-		return;
-	  }
-
-			while (<CLASSFILE>) {
-				chomp();
-				($genus,$order) = split(/,/,$_,2);
-		# Alroy hack 16.8.01
-				# THIS IS A GLOBAL HASH, USED AGAIN BY doQuery()
-				$inclass{$genus} = "Y"; # $classname;
-				push(@genusNames, $genus);
-				#$tableContents .= "<tr><td>$classname</td><td>$order</td><td>$genus</td></tr>\n";
-			}
-			close CLASSFILE;
-		}
-		#print "$tableContents";
-		#print "</TABLE>";
-	}
-	return @genusNames;
+	my $cslist = PBDBUtil::taxonomic_search($genus_name, $dbt);
+	return $cslist;
 }
 
 sub dbg {
