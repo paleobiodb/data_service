@@ -1886,9 +1886,21 @@ $message .= "<p>
 				" WHERE ".join(' AND ', @terms);
 
 		# modified to handle time lookup in-list JA 17.7.03
+		# previous fix assumed OR logic, modified to use AND logic
+		#  JA 5.12.03
 		if ( $q->param('genus_name') ) {
 			if ( @timeinlist )	{
-				push @okcolls, @timeinlist;
+				my %collintimelist = ();
+				for my $t ( @timeinlist )	{
+					$collintimeinlist{$t} = "Y";
+				}
+				my @newokcolls = ();
+				for my $o ( @okcolls )	{
+					if ( $collintimeinlist{$o} eq "Y" )	{
+						push @newokcolls, $o;
+					}
+				}
+				@okcolls = @newokcolls;
 			}
 			if (@terms)	{
 				$sql .= " AND collection_no IN ( " . join ( ", ", @okcolls )." ) ";
