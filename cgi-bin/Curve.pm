@@ -51,10 +51,19 @@
 # integrated into bridge.pl 7.6.02 Garot 
 # debugging related to above 21.6.02 JA
 # column headers printed to presences.txt 24.6.02 JA
+# major rewrite to use data output by Download.pm instead of vetting all
+#  the data in this program 30.6.04 JA
+# to do this, the following subroutines were eliminated:
+#  readRegions
+#  readOneClassFile
+#  readClassFiles
+#  readScale
+#  assignLocs
 
 package Curve;
 
 use Globals;
+use TimeLookup;
 
 #require Text::CSV_XS;
 # FOO ##  # CGI::Carp qw(fatalsToBrowser);
@@ -64,12 +73,14 @@ my $DEBUG=0;			# The debug level of the calling program
 my $dbh;
 my $q;					# Reference to the parameters
 my $s;
+my $dbt;
 
 sub new {
 	my $class = shift;
 	$dbh = shift;
 	$q = shift;
 	$s = shift;
+	$dbt = shift;
 	my $self = {};
 
 	bless $self, $class;
@@ -81,25 +92,10 @@ sub buildCurve {
 
 	$self->setArrays;
 	$self->printHeader;
-	$self->readRegions;
-	if ($q->param('class') ne "")	{
-	  $self->readOneClassFile;
-	}
-	elsif ($q->param('brachiopods') ne "" || $q->param('bryozoans') ne "" ||
-	       $q->param('cephalopods') ne "" || $q->param('conodonts') ne "" ||
-	       $q->param('corals') ne "" || $q->param('echinoderms') ne "" ||
-	       $q->param('graptolites') ne "" || $q->param('molluscs') ne "" ||
-	       $q->param('trilobites') ne "")	{
-	  $self->readClassFiles;
-	}
-	# read the working time scale
-	$self->readScale;
 	# compute the sizes of intermediate steps to be reported in subsampling curves
 	if ($q->param('stepsize') ne "")	{
 	  $self->setSteps;
 	}
-	# match collections to sampling intervals
-	$self->assignLocs;
 	$self->assignGenera;
 	$self->subsample;
 	$self->printResults;
@@ -112,11 +108,12 @@ sub setArrays	{
 	$DDIR="./data";
 	$PUBLIC_DIR = $ENV{CURVE_PUBLIC_DIR};
 	$CURVE_HOST = $ENV{CURVE_HOST};
+	# this is the output directory used by Curve.pm, not this program
+	$DOWNLOAD_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
 	$CLASS_DATA_DIR = "$DDIR/classdata";
 					                                # the default working directory
 	$PRINTED_DIR = "/public/data";
 	$BACKGROUND="/public/PDbg.gif";
-	$GEN_FILE="$DDIR/pmpd-genera";
 	
 	$OUTPUT_DIR = $PUBLIC_DIR;
 	# customize the subdirectory holding the output files
@@ -132,68 +129,6 @@ sub setArrays	{
 		chmod 0777, $OUTPUT_DIR;
 	}
 	
-	$LTYPE{'siliciclastic'} = "siliciclastic";
-	$LTYPE{'claystone'} = "siliciclastic";
-	$LTYPE{'mudstone'} = "siliciclastic";
-	$LTYPE{'shale'} = "siliciclastic";
-	$LTYPE{'siltstone'} = "siliciclastic";
-	$LTYPE{'sandstone'} = "siliciclastic";
-	$LTYPE{'conglomerate'} = "siliciclastic";
-	$LTYPE{'mixed carbonate-siliciclastic'} = "other";
-	$LTYPE{'marl'} = "other";
-	$LTYPE{'lime mudstone'} = "carbonate";
-	$LTYPE{'wackestone'} = "carbonate";
-	$LTYPE{'packstone'} = "carbonate";
-	$LTYPE{'grainstone'} = "carbonate";
-	$LTYPE{'reef rocks'} = "carbonate";
-	$LTYPE{'floatstone'} = "carbonate";
-	$LTYPE{'rudstone'} = "carbonate";
-	$LTYPE{'bafflestone'} = "carbonate";
-	$LTYPE{'bindstone'} = "carbonate";
-	$LTYPE{'framestone'} = "carbonate";
-	$LTYPE{'limestone'} = "carbonate";
-	$LTYPE{'dolomite'} = "carbonate";
-	$LTYPE{'carbonate'} = "carbonate";
-	$LTYPE{'coal'} = "other";
-	$LTYPE{'peat'} = "other";
-	$LTYPE{'lignite'} = "other";
-	$LTYPE{'subbituminous coal'} = "other";
-	$LTYPE{'bituminous coal'} = "other";
-	$LTYPE{'anthracite'} = "other";
-	$LTYPE{'coal ball'} = "other";
-	$LTYPE{'tar'} = "other";
-	$LTYPE{'amber'} = "other";
-	$LTYPE{'chert'} = "other";
-	$LTYPE{'evaporite'} = "other";
-	$LTYPE{'phosphorite'} = "other";
-	$LTYPE{'ironstone'} = "other";
-	$LTYPE{'siderite'} = "other";
-	$LTYPE{'phyllite'} = "other";
-	$LTYPE{'slate'} = "other";
-	$LTYPE{'schist'} = "other";
-	$LTYPE{'quartzite'} = "other";
-	
-	%ENVTYPE = ("(paralic indet.)" => "zone 1", "estuarine/bay" => "zone 1",
-					    "lagoonal" => "zone 1",
-					    "foreshore" => "zone 2", "shoreface" => "zone 2",
-					    "transition zone/lower shoreface" => "zone 3",
-					    "offshore" => "zone 4",
-					    "delta plain" => "zone 1",
-					    "interdistributary bay" => "zone 1", "delta front" => "zone 2",
-					    "prodelta" => "zone 3", "(deep-water indet.)" => "zone 5",
-					    "submarine fan" => "zone 5", "basinal (siliciclastic)" => "zone 5",
-					    "peritidal" => "zone 1",
-					    "shallow subtidal" => "zone 2", "sand shoal" => "zone 2",
-					    "reef, buildup or bioherm" => "zone 2",
-					    "deep subtidal ramp" => "zone 3",
-					    "deep subtidal shelf" => "zone 3",
-					    "(deep subtidal indet.)" => "zone 3",
-					    "offshore ramp" => "zone 4", "offshore shelf" => "zone 4",
-					    "(offshore indet.)" => "zone 4", "slope" => "zone 5",
-					    "basinal (carbonate)" => "zone 5");
-	if ($q->param('paleoenvironment') eq "zone 4")	{
-		$ENVTYPE{'prodelta'} = "zone 4";
-	}
 	if ($q->param('samplingmethod') eq "classical rarefaction")	{
 		$samplingmethod = 1;
 	}
@@ -210,367 +145,19 @@ sub setArrays	{
 		$samplingmethod = 5;
 	}
 
-	if ( $q->param('year') )	{
-		
-		if ( length $q->param('date') == 1 )	{
-			$q->param(date => "0".$q->param('date') );
-		}
-		$created_date = $q->param('year'). Globals::monthNameToNumber($q->param('month')) . $q->param('date') . "000000";
-	}
 }
 
 sub printHeader	{
 	my $self = shift;
 
 	print "<html>\n<head><title>Paleobiology Database diversity curve report";
-	if ($q->param('class') ne "")	{
-		print ": ".$q->param('class');
-	}
 	print "</title></head>\n";
 	print "<body bgcolor=\"white\" background=\"";
 	print $BACKGROUND;
 	print "\" text=black link=\"#0055FF\" vlink=\"#990099\">\n\n";
 
 	print "<center>\n<h1>Paleobiology Database diversity curve report";
-	if ($q->param('class') ne "")	{
-		print ": ".$q->param('class');
-	}
 	print "</h1></center>\n";
-
-}
-
-sub readRegions {
-	my $self = shift;
-
-	if ( ! open REGIONS,"<$DDIR/PBDB.regions" ) {
-		$self->htmlError ( "$0:Couldn't open $DDIR/PBDB.regions<BR>$!" );
-	}
-	while (<REGIONS>)	{
-		s/\n//;
-		($temp,$temp2) = split /:/, $_, 2;
-		@countries = split /\t/,$temp2;
-		for $country (@countries)	{
-			$region{$country} = $temp;
-		}
-	}
-	close REGIONS;
-
-}
-
-sub readOneClassFile	{
-	my $self = shift;
-
-	my $cleanclass = $q->param('class');
-	$cleanclass =~ tr/[a-zA-Z0-9]/_/c;
-
-	if ( ! open CLASSFILE,"<$CLASS_DATA_DIR/class.$cleanclass" ) {
-		$self->htmlError ( "$0:Couldn't open $CLASS_DATA_DIR/class.$cleanclass<BR>$!" );
-	}
-	while (<CLASSFILE>)	{
-		s/\n//;
-		($genus,$_) = split(/,/,$_,2);
-		$required{$genus} = "required";
-	}
-	close CLASSFILE;
-
-}
-
-sub readClassFiles	{
-	my $self = shift;
-
-	if ($q->param('brachiopods') ne "")	{
-		@temp = ("Articulata", "Inarticulata", "Lingulata");
-		for $t (@temp)	{
-			$orderstatus{$t} = $q->param('brachiopods');
-		}
-		push @classes,@temp;
-		$q->param('class' => "Brachiopoda");
-	}
-	if ($q->param('bryozoans') ne "")	{
-		@temp = ("Gymnolaemata", "Stenolaemata");
-		for $t (@temp)	{
-			$orderstatus{$t} = $q->param('bryozoans');
-		}
-		push @classes,@temp;
-		$q->param('class' => "Bryozoa");
-	}
-	if ($q->param('cephalopods') ne "")	{
-		push @classes,"Cephalopoda";
-		$orderstatus{"Cephalopoda"} = $q->param('cephalopods');
-		$q->param('class' => "Cephalopoda");
-	}
-	if ($q->param('conodonts') ne "")	{
-		push @classes,"Conodonta";
-		$orderstatus{"Conodonta"} = $q->param('conodonts');
-		$q->param('class' => "Conodonta");
-	}
-	if ($q->param('corals') ne "")	{
-		push @classes,"Anthozoa";
-		$orderstatus{"Anthozoa"} = $q->param('corals');
-		$q->param('class' => "Anthozoa");
-	}
-	if ($q->param('echinoderms') ne "")	{
-		@temp =  ("Asteroidea", "Blastoidea", "Camptostromoidea",
-		 "Coronata", "Crinoidea", "Ctenocystoidea", "Diploporita",
-		 "Echinoidea", "Edrioasteroidea", "Eocrinoidea", "Helicoplacoidea",
-		 "Holothuroidea", "Homoiostelea", "Homostelea", "Ophiocistioidea",
-		 "Ophiuroidea", "Parablastoidea", "Paracrinoidea", "Rhombifera",
-		 "Somasteroidea", "Stylophora");
-		for $t (@temp)	{
-			$orderstatus{$t} = $q->param('echinoderms');
-		}
-		push @classes,@temp;
-		$q->param('class' => "Echinodermata");
-	}
-	if ($q->param('graptolites') ne "")	{
-		push @classes,"Graptolithina";
-		$orderstatus{"Graptolithina"} = $q->param('graptolites');
-		$q->param('class' => "Graptolithina");
-	}
-	if ($q->param('molluscs') ne "")	{
-		@temp = ("Bivalvia", "Gastropoda", "Polyplacophora", "Scaphopoda",
-					         "Tergomya", "Helcionelloida", "Paragastropoda",
-					         "Rostroconchia", "Scaphopoda", "Tentaculitoidea");
-		for $t (@temp)	{
-			$orderstatus{$t} = $q->param('molluscs');
-		}
-		push @classes,@temp;
-		$q->param('class' => "Mollusca (less Cephalopoda)");
-	}
-	if ($q->param('trilobites') ne "")	{
-		push @classes,"Trilobita";
-		$orderstatus{"Trilobita"} = $q->param('trilobites');
-		$q->param('class' => "Trilobita");
-	}
-	
-	# if ALL the classes are optional, then make all of them together
-	#   one big "required" group (i.e., any of them is sufficient)
-	$xx = 0;
-	for $class (@classes)	{
-		if ($orderstatus{$class} eq "required")	{
-			$xx++;
-		}
-	}
-	if ($xx == 0)	{
-		for $class (@classes)	{
-			$orderstatus{$class} = "required";
-		}
-	}
-	$xx = 0;
-	
-	for $class (@classes)	{
-		if ( ! open CLASSIF, "<$CLASS_DATA_DIR/class.$class" ) {
-			$self->htmlError ( "$0:Couldn't open $CLASS_DATA_DIR/class.$class<BR>$!" );
-		}
-		while (<CLASSIF>)	{
-			s/\n//;
-			@temp = split(/,/,$_,2);
-		# distinguish genera belonging to required and allowed orders
-			$required{$temp[0]} = $orderstatus{$class};
-		}
-		close CLASSIF;
-	}
-}
-
-# read whatever time scale will be used
-sub readScale	{
-	my $self = shift;
-
-	if ($q->param('scale') eq "Harland epochs")	{
-		if ( ! open SCALE,"<$PUBLIC_DIR/harland.epochs" ) {
-			$self->htmlError ( "$0:Couldn't open $PUBLIC_DIR/harland.epochs<BR>$!" );
-		}
-		while (<SCALE>)	{
-			s/\n//;
-			s/^ //;
-			@words = split / /,$_;
-			if ($words[0] eq "E")	{
-		 # use last stage name encountered as first stage of preceding epoch
-				$longstartstage[$chrons] = $laststage;
-				$startstage[$chrons] = $laststage;
-				$startstage[$chrons] =~ s/ian$//;
-				$startstage[$chrons] =~ s/Early /Early\/Lower /;
-				$startstage[$chrons] =~ s/Late /Late\/Upper /;
-				$startstage[$chrons] =~ s/^Lower /Early\/Lower /;
-				$startstage[$chrons] =~ s/^Upper /Late\/Upper /;
-		 # increment epoch counter
-				$chrons++;
-				$chname[$chrons] = $words[1];
-				if ($words[1] eq "Early" || $words[1] eq "Middle" ||
-					  $words[1] eq "Late" || $words[1] eq "Lower" ||
-					  $words[1] eq "Upper")	{
-					$chname[$chrons] = $chname[$chrons]." ".$words[2];
-				}
-		 # store epoch name so it can be used as last stage name
-				$laststage = $chname[$chrons];
-			}
-			elsif ($words[0] eq "S")	{
-				if ($words[1] ne "-")	{
-					$laststage = $words[1];
-					if ($words[1] eq "Early" || $words[1] eq "Middle" ||
-					    $words[1] eq "Late" || $words[1] eq "Lower" ||
-					    $words[1] eq "Upper")	{
-					  $laststage = $laststage." ".$words[2];
-					}
-				}
-			}
-		}
-		close SCALE;
-		$longstartstage[$chrons] = $laststage;
-		$startstage[$chrons] = $laststage;
-		$startstage[$chrons] =~ s/ian$//;
-		$startstage[$chrons] =~ s/Early /Early\/Lower /;
-		$startstage[$chrons] =~ s/Late /Late\/Upper /;
-		$startstage[$chrons] =~ s/^Lower /Early\/Lower /;
-		$startstage[$chrons] =~ s/^Upper /Late\/Upper /;
-	}
-	elsif ($q->param('scale') eq "stages" ||
-				 $q->param('scale') eq "10 m.y. intervals" ||
-				 $q->param('scale') eq "Sepkoski intervals")	{
-		if ($q->param('scale') eq "Sepkoski intervals")	{
-			if ( ! open SCALE,"<$PUBLIC_DIR/timescale.Sepkoski" ) {
-				$self->htmlError ( "$0:Couldn't open $PUBLIC_DIR/timescale.Sepkoski<BR>$!" );
-			}
-		}
-		elsif ($q->param('scale') eq "10 m.y. intervals")	{
-			if ( ! open SCALE,"<$PUBLIC_DIR/timescale.10my" ) {
-				$self->htmlError ( "$0:Couldn't open $PUBLIC_DIR/timescale.10my<BR>$!" );
-			}
-		}
-		else	{
-			if ( ! open SCALE,"<$PUBLIC_DIR/timescale.stages" ) {
-				$self->htmlError ( "$0:Couldn't open $PUBLIC_DIR/timescale.stages<BR>$!" );
-			}
-		}
-		while (<SCALE>)	{
-			s/\n//;
-			$chrons++;
-			if ($q->param('scale') ne "stages")	{
-				($chname[$chrons],$longstartstage[$chrons],$basema[$chrons]) = split(/\t/,$_,3);
-				$midptma[$chrons] = ($basema[$chrons] + $lastma) / 2;
-				$lastma = $basema[$chrons];
-				$startstage[$chrons] = $longstartstage[$chrons];
-			}
-			else	{
-				$chname[$chrons] = $_;
-				$startstage[$chrons] = $_;
-			}
-			$startstage[$chrons] =~ s/ian$//;
-			$startstage[$chrons] =~ s/Early /Early\/Lower /;
-			$startstage[$chrons] =~ s/Late /Late\/Upper /;
-			$startstage[$chrons] =~ s/^Lower /Early\/Lower /;
-			$startstage[$chrons] =~ s/^Upper /Late\/Upper /;
-		}
-		close SCALE;
-		if ($chname[$chrons] eq "")	{
-			$chrons--;
-		}
-		$upto = 1;
-		$lastchron = $chname[1];
-	}
-	else	{
-		print "Fatal error: scale not specified correctly.<p>\n";
-		exit(0);
-	}
-	
-	# make a lookup table of epochs, international stages, and local stages
-	#   referring to a numbered list of international stages
-	
-	if ( ! open SCALE,"<$PUBLIC_DIR/harland.epochs" ) {
-		$self->htmlError ( "$0:Couldn't open $PUBLIC_DIR/harland.epochs<BR>$!" );
-	}
-	# WARNING!!! when updating field numbers, make sure to change
-	#   the following (i.e., ID number of epoch field)
-	$upto = 1;
-	while (<SCALE>)	{
-		s/\n//;
-		($rank,$timeterms) = split(' ',$_,2);
-	
-	# if line describes an international stage...
-		if ($rank eq "S")	{
-			$nstage++;
-			$belongsto[$nstage] = $upto;
-			@synonym = ();
-		# modify Early or Late terms
-			$timeterms =~ s/Early /Early\/Lower /g;
-			$timeterms =~ s/Late /Late\/Upper /g;
-			($atstage,@synonym) = split(/ = /,$timeterms);
-			if ($atstage eq "-")	{
-				$atstage = $lastepoch;
-			}
-		# WARNING: strips "ian" so later parsing assumes this is absent!
-			$longatstage = $atstage;
-			$atstage =~ s/ian$//;
-			$minstage{$atstage} = $nstage;
-			$maxstage{$atstage} = $nstage;
-		# if youngest stage of bin has not yet been defined, it is this stage
-			if ($endstage[$upto] eq "")	{
-				$endstage[$upto] = $longatstage;
-			}
-		# if stage defines the beginning of a bin, increment bin count
-			if ($atstage eq $startstage[$upto])	{
-				$upto++;
-			}
-		# define stage ID number of local stages
-			for $syn (@synonym)	{
-				$syn =~ s/ian$//;
-				if ($syn ne "")	{
-					if ($minstage{$syn} eq "")	{
-					  $minstage{$syn} = $nstage;
-					  $maxstage{$syn} = $nstage;
-					}
-					else	{
-					  $maxstage{$syn} = $nstage;
-			 # if local stage spans multiple international stages, define mapping
-			 #    of its E/M/L substages
-					  $x = $maxstage{$syn} - $minstage{$syn} + 1;
-					  $subst = "Late/Upper ".$syn;
-					  $y = int(($x-1)/3);
-					  $minstage{$subst} = $minstage{$syn};
-					  $maxstage{$subst} = $minstage{$syn} + $y;
-					  $subst = "Middle ".$syn;
-					  $y = int($x/3);
-					  $minstage{$subst} = $minstage{$syn} + $y;
-					  $maxstage{$subst} = $maxstage{$syn} - $y;
-					  $subst = "Early/Lower ".$syn;
-					  $y = int(($x-1)/3);
-					  $minstage{$subst} = $maxstage{$syn} - $y;
-					  $maxstage{$subst} = $maxstage{$syn};
-					}
-				}
-			}
-		}
-	 # if line describes an epoch...
-		elsif ($rank eq "E")	{
-			@synonym = ();
-			@synonym = split(/ = /,$timeterms);
-			$minstage{$synonym[0]} = $nstage+1;
-			for $syn (@synonym)	{
-				$minstage{$syn} = $nstage+1;
-			}
-			for $syn (@lastsyn)	{
-				$maxstage{$syn} = $nstage;
-		# define stage mappings of E/M/L subepochs
-				$x = $maxstage{$lastepoch} - $minstage{$lastepoch} + 1;
-				$y = int(($x-1)/3);
-				$subep = "Late/Upper ".$syn;
-				$minstage{$subep} = $minstage{$syn};
-				$maxstage{$subep} = $minstage{$syn} + $y;
-				$subep = "Middle ".$syn;
-				$y = int($x/3);
-				$minstage{$subep} = $minstage{$syn} + $y;
-				$maxstage{$subep} = $maxstage{$syn} - $y;
-				$subep = "Early/Lower ".$syn;
-				$y = int(($x-1)/3);
-				$minstage{$subep} = $maxstage{$syn} - $y;
-				$maxstage{$subep} = $maxstage{$syn};
-			}
-			$lastepoch = $synonym[0];
-			@lastsyn = @synonym;
-		}
-	}
-	$maxstage{$epoch} = $nstage;
-	close SCALE;
 
 }
 
@@ -641,629 +228,165 @@ sub setSteps	{
 	}
 }
 
-# determine the chron that includes each collection
-sub assignLocs	{
-	my $self = shift;
-
-	if ( ! open ORPHANS,">$OUTPUT_DIR/orphans.txt" ) {
-		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/orphans.txt<BR>$!" );
-	}
-	
-	$lithquery1 = $q->param('lithology1');
-	$lithquery1 =~ s/all //g;
-	$lithquery1 =~ s/ lithologies//g;
-	$lithquery2 = $q->param('lithology2');
-	$lithquery2 =~ s/all //g;
-	$lithquery2 =~ s/ lithologies//g;
-	
-	my $sql = "SELECT * FROM collections WHERE";
-	if ( $q->param('research_group') ne "" )	{
-		# Handle "groups" that are actually projects
-		if ( $q->param('research_group') eq "PGAP" ||
-		     $q->param('research_group') eq "5%" )	{
-			my $sql2 = "SELECT reference_no FROM refs WHERE project_name LIKE '%" . $q->param('research_group') . "%'";
-			my $sth = $dbh->prepare( $sql2 ) || die ( "$sql2<hr>$!" );
-			$sth->execute();
-			my @refrefs = @{$sth->fetchall_arrayref()};
-
-			for $refref (@refrefs)  {
-				$reflist .= "," . ${$refref}[0];
-			}
-			$reflist =~ s/^,//;
-
-			$sth->finish();
-
-			$sql .= " AND reference_no IN (" . $reflist . ") ";
-		} else	{
-			$sql .= " AND research_group='" . $q->param('research_group') . "' ";
-		}
-	}
-	if ( $q->param('collection_type') ne "" )	{
-		$sql .= " AND collection_type='" . $q->param('collection_type') . "' ";
-	}
-	if ( $q->param('requiredfm') ne "" )	{
-		$sql .= " AND formation!=''";
-	}
-	if ( $q->param('requiredmbr') ne "" )	{
-		$sql .= " AND member!=''";
-	}
-
-	$sql =~ s/WHERE$//;
-	$sql =~ s/WHERE AND /WHERE /;
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-	while ( my $collrowref = $sth->fetchrow_hashref() )  {
-		my %collrow = %{$collrowref};
-	 # clean up funny accented characters JA 30.10.01
-		s/à/a/g; # a grave
-		s/â/a/g; # a funny hat
-		s/é/e/g; # e acute
-		s/è/e/g; # e grave
-		s/ê/e/g; # e funny hat
-		s/í/i/g; # i acute
-        s/ï/i/g; # i umlaut
-		s/î/i/g; # i funny hat
-		s/ó/o/g; # o acute
-		s/ô/o/g; # o funny hat
-		s/ú/u/g; # u acute
-		s/ö/o/g; # u umlaut
-		s/ü/u/g; # u umlaut
-		s/ñ/n/g; # n tilde
-		s/°/deg/g; # degree symbol
-        s/ //g; # dagger
-        s/…//g; # some damn thang
-        s/[^" \+\(\)\-=A-Za-z0-9,\.\/]//g;
-	
-			$rawagedata = $collrow{'period_max'}." ".$collrow{'epoch_max'}." ".$collrow{'intage_max'}." ".$collrow{'intage_min'}." ".$collrow{'locage_max'}." ".$collrow{'locage_min'};
-	
-			if ($q->param('North America') eq "Y" || $q->param('Europe') eq "Y" ||
-					$q->param('South America') eq "Y" || $q->param('Africa') eq "Y" ||
-					$q->param('Antarctica') eq "Y" ||
-					$q->param('Asia') eq "Y" || $q->param('Australia') eq "Y")	{
-	
-		# clean country field
-				$collrow{'country'} =~ s/  / /g;
-				$collrow{'country'} = "STARTFIELD".$collrow{'country'}."ENDFIELD";
-				$collrow{'country'} =~ s/STARTFIELD //g;
-				$collrow{'country'} =~ s/STARTFIELD//g;
-				$collrow{'country'} =~ s// ENDFIELD/g;
-				$collrow{'country'} =~ s/ENDFIELD//g;
-				
-				if ($collrow{'country'} eq "" || $collrow{'country'} eq "U.S.A." ||
-					  $collrow{'country'} eq "USA") {
-					$collrow{'country'}="United States";
-				}
-	
-	
-		# toss lists from regions that are not included
-			 if (($q->param('North America') ne "Y") &&
-					 ($region{$collrow{'country'}} eq "North America"))	{
-				 $collrow{'collection_no'} = 0;
-			 }
-			 elsif ($q->param('South America') ne "Y" &&
-					    $region{$collrow{'country'}} eq "South America")	{
-				 $collrow{'collection_no'} = 0;
-			 }
-			 elsif ($q->param('Europe') ne "Y" &&
-					    $region{$collrow{'country'}} eq "Europe")	{
-				 $collrow{'collection_no'} = 0;
-			 }
-			 elsif ($q->param('Africa') ne "Y" &&
-					    $region{$collrow{'country'}} eq "Africa")	{
-				 $collrow{'collection_no'} = 0;
-			 }
-			 elsif ($q->param('Asia') ne "Y" &&
-					    $region{$collrow{'country'}} eq "Asia")	{
-				 $collrow{'collection_no'} = 0;
-			 }
-			 elsif ($q->param('Australia') ne "Y" &&
-					    $region{$collrow{'country'}} eq "Australia")	{
-				 $collrow{'collection_no'} = 0;
-			 }
-				elsif ($region{$collrow{'country'}} eq "")	{
-					$collrow{'collection_no'} = 0;
-			 }
-		 }
-	
-		# save country name to be printed in binning.csv file
-		 if ($collrow{'collection_no'} > 0)	{
-			 $country[$collrow{'collection_no'}] = $collrow{'country'};
-		 }
-	
-	 # toss lists with no county or lat/long
-			if (($q->param('strictgeography') eq "no, exclude them") && ($collrow{'county'} eq "") &&
-					(($collrow{'latdeg'} eq "") || ($collrow{'lngdeg'} eq "")))	{
-				$collrow{'collection_no'} = 0;
-		 }
-	
-			if ($q->param('strictchronology') eq "no, exclude them")	{
-	 # toss lists with no age/stage data at all
-				if (($collrow{'intage_max'} eq "") && ($collrow{'intage_min'} eq "") &&
-					($collrow{'locage_max'} eq "") && ($collrow{'locage_min'} eq ""))	{
-					$collrow{'collection_no'} = 0;
-			 }
-	 # toss lists with a range of possible international age/stage values
-				elsif (($collrow{'intage_max'} ne "") && ($collrow{'intage_min'} ne "") &&
-					     ($collrow{'intage_max'} ne $collrow{'intage_min'}))	{
-					$collrow{'collection_no'} = 0;
-				}
-	 # toss lists with a range of possible local age/stage values
-				elsif (($collrow{'llocage_max'} ne "") && ($collrow{'locage_min'} ne "") &&
-					     ($collrow{'locage_max'} ne $collrow{'locage_min'}))	{
-					$collrow{'collection_no'} = 0;
-				}
-			}
-
-	 # toss lists with excluded creation dates
-			if ( $created_date > 0 )	{
-			# clean up the creation date field
-				my $date = $collrow{'created'};
-				$date =~ s/[ \-:]//g;
-				if ( $q->param('created_before_after') eq "before" &&
-					 $date > $created_date )	{
-					$collrow{'collection_no'} = 0;
-				} elsif ( $q->param('created_before_after') eq "after" &&
-					 $date < $created_date )	{
-					$collrow{'collection_no'} = 0;
-				}
-			}
-	
-	 # toss lists with broad scale of resolution
-			if ($q->param('stratscale') ne "")	{
-				$ao = 0;
-				if ($collrow{'stratscale'} =~ /group of bed/)	{
-					$ao = 3;
-				}
-				elsif ($collrow{'stratscale'} =~ /^bed$/)	{
-					$ao = 4;
-				}
-				elsif ($collrow{'stratscale'} =~ /member/)	{
-					$ao = 2;
-				}
-				elsif ($collrow{'stratscale'} =~ /formation/)	{
-					$ao = 1;
-				}
-				if ($q->param('stratscale') =~ /group of bed/ &&
-					  ($q->param('stratscale_minmax') eq "broadest" && $ao < 3 ||
-					   $q->param('stratscale_minmax') eq "narrowest" && $ao > 3))	{
-					$collrow{'collection_no'} = 0;
-				}
-				elsif ($q->param('stratscale') =~ /^bed$/ &&
-					  ($q->param('stratscale_minmax') eq "broadest" && $ao < 4 ||
-					   $q->param('stratscale_minmax') eq "narrowest" && $ao > 4))	{
-					$collrow{'collection_no'} = 0;
-				}  
-				elsif ($q->param('stratscale') =~ /member/ &&
-					  ($q->param('stratscale_minmax') eq "broadest" && $ao < 2 ||
-					   $q->param('stratscale_minmax') eq "narrowest" && $ao > 2))	{
-					$collrow{'collection_no'} = 0;
-				}  
-				elsif ($q->param('stratscale') =~ /formation/ &&
-					  ($q->param('stratscale_minmax') eq "broadest" && $ao == 0 ||
-					   $q->param('stratscale_minmax') eq "narrowest" && $ao > 1))	{
-					$collrow{'collection_no'} = 0;
-				}
-			}
-	
-			if ($q->param('lithology1') ne "")	{
-				if ($collrow{'lithology1'} eq "" && $collrow{'lithology2'} eq "")	{
-					$collrow{'collection_no'} = 0;
-				}
-			# evaluate all... lithologies
-				elsif ($q->param('lithology1') =~ /^all /)	{
-				 $lithdata = $LTYPE{$collrow{'lithology1'}}.$LTYPE{$collrow{'lithology2'}};
-			 # if two non-null lithologies are present and query is exactly one
-			 #   lithology, toss the list
-					if (($q->param('lithonlyor') eq "equal") &&
-					    ($LTYPE{$collrow{'lithology1'}} ne $LTYPE{$collrow{'lithology2'}}) &&
-					    ($LTYPE{$collrow{'lithology1'}} ne "") &&
-					    ($LTYPE{$collrow{'lithology2'}} ne ""))	{
-					  $collrow{'collection_no'} = 0;
-					}
-			# toss list if query is exact and category doesn't match
-			# WARNING: assumes that if only one lithology is present, the submit
-			#  script has correctly placed it in the primary lithology field
-					elsif (($q->param('lithonlyor') eq "equal") &&
-					       ($LTYPE{$collrow{'lithology1'}} eq "carbonate" || $LTYPE{$collrow{'lithology1'}} eq "other") &&
-					       ($q->param('lithology1') eq "all siliciclastic lithologies"))	{
-					  $collrow{'collection_no'} = 0;
-					}
-					elsif (($q->param('lithonlyor') eq "equal") &&
-					       ($LTYPE{$collrow{'lithology1'}} eq "siliciclastic" || $LTYPE{$collrow{'lithology1'}} eq "other") &&
-					       ($q->param('lithology1') eq "all carbonate lithologies"))	{
-					  $collrow{'collection_no'} = 0;
-					}
-					elsif (($q->param('lithonlyor') eq "include") &&
-					       ($LTYPE{$collrow{'lithology1'}} ne "siliciclastic") &&
-					       ($LTYPE{$collrow{'lithology2'}} ne "siliciclastic") &&
-					       ($q->param('lithology1') eq "all siliciclastic lithologies"))	{
-					  $collrow{'collection_no'} = 0;
-					}
-					elsif (($q->param('lithonlyor') eq "include") &&
-					       ($LTYPE{$collrow{'lithology1'}} ne "carbonate") &&
-					       ($LTYPE{$collrow{'lithology2'}} ne "carbonate") &&
-					       ($q->param('lithology1') eq "all carbonate lithologies"))	{
-					  $collrow{'collection_no'} = 0;
-					}
-					elsif ($q->param('lithonlyor') eq "combine" &&
-					       ($lithdata !~ $lithquery1 ||
-					        $lithdata !~ $lithquery2))	{
-					  $collrow{'collection_no'} = 0;
-					}
-				}
-	 # evaluate uncombined (i.e., not all...) lithologies
-				else	{
-					$lithdata = $collrow{'lithology1'}.$collrow{'lithology2'};
-	 # for "equal" lith searches, toss lists with any other lithology
-	 # WARNING: assumes first pull-down is used and second isn't
-					if (($q->param('lithonlyor') eq "equal") &&
-					    ($lithdata ne $q->param('lithology1')))	{
-					  $collrow{'collection_no'} = 0;
-					}
-	 # for "include" lith searches, toss lists that entirely lack the lithology
-	 # WARNING: ditto
-					elsif ($q->param('lithonlyor') eq "include" &&
-					       $lithdata !~ $q->param('lithology1'))	{
-					  $collrow{'collection_no'} = 0;
-					}
-	 # for "combine" lith searches, toss lists that lack either search lithology
-					elsif ($q->param('lithonlyor') eq "combine" &&
-					       ($lithdata !~ $q->param('lithology1') ||
-					        $lithdata !~ $q->param('lithology2') ||
-					        length $lithdata != length($q->param('lithology1')) +
-					        length($q->param('lithology2'))))	{
-					  $collrow{'collection_no'} = 0;
-					}
-				}
-			}
-	 # if a category of paleoenvironments is specified and this collection does
-	 #   not fall in that category, exclude it
-			if ($q->param('paleoenvironment') ne "")	{
-				if ($q->param('paleoenvironment') ne $ENVTYPE{$collrow{'environment'}} )	{
-					$collrow{'collection_no'} = 0;
-				}
-			}
-	
-	 # ASSIGN COLLECTION TO TEMPORAL BIN
-			if ($collrow{'collection_no'} > 0)	{
-				$stagemin = "";
-				$stagemax = "";
-	 # start by trying to use stage data
-	 # first move local age/stage data into international age/stage fields
-				if (($collrow{'intage_max'} eq "") && ($collrow{'locage_max'} ne ""))	{
-					$collrow{'intage_max'} = $collrow{'locage_max'};
-				}
-				if (($collrow{'intage_min'} eq "") && ($collrow{'locage_min'} ne ""))	{
-					$collrow{'intage_min'} = $collrow{'locage_min'};
-				}
-		 # duplicate the min/max stage name if it is empty but max/min is known
-				if (($collrow{'intage_min'} eq "") && ($collrow{'intage_max'} ne ""))	{
-					$collrow{'intage_min'} = $collrow{'intage_max'};
-					$collrow{'emlintage_min'} = $collrow{'emlintage_max'};
-				}
-				elsif (($collrow{'intage_max'} eq "") && ($collrow{'intage_min'} ne ""))	{
-					$collrow{'intage_max'} = $collrow{'intage_min'};
-					$collrow{'emlintage_max'} = $collrow{'emlintage_min'};
-				}
-				if ($collrow{'intage_max'} ne "")	{
-					$c1temp = "";
-					$c1temp = $collrow{'intage_max'};
-					$c1temp =~ s/\? //;
-					$c1temp =~ s/ \?//;
-					$c1temp =~ s/\?//;
-					$c1temp =~ s/ian$//;
-		 # use max value if it exists because this is the maximum field
-		 # first try prepending the E/M/L data 
-					if ($collrow{'emlintage_max'} ne "")	{
-					  $prec1temp = $collrow{'emlintage_max'}." ".$c1temp;
-					  if ($maxstage{$prec1temp} ne "")	{
-					    $stagemax = $maxstage{$prec1temp};
-					    $stagemin = $minstage{$prec1temp};
-					  }
-					}
-					if ($maxstage{$c1temp} ne "")	{
-					  if ($stagemax eq "" || $stagemax < $maxstage{$c1temp})	{
-					    $stagemax = $maxstage{$c1temp};
-					  }
-					  if ($stagemin eq "" || $stagemin > $minstage{$c1temp})	{
-					    $stagemin = $minstage{$c1temp};
-					  }
-					}
-				}
-				if ($collrow{'intage_min'} ne "")	{
-					$c2temp = "";
-					$c2temp = $collrow{'intage_min'};
-					$c2temp =~ s/\? //;
-					$c2temp =~ s/ \?//;
-					$c2temp =~ s/\?//;
-					$c2temp =~ s/ian$//;
-					if ($collrow{'emlintage_max'} ne "")	{
-					  $prec2temp = $collrow{'emlintage_max'}." ".$c2temp;
-					  if ($stagemax eq "" || $stagemax < $maxstage{$prec2temp})	{
-					    $stagemax = $maxstage{$prec2temp};
-					  }
-					  if ($stagemin eq "" || $stagemin > $minstage{$prec2temp})	{
-					    $stagemin = $minstage{$prec2temp};
-					  }
-					}
-					if ($minstage{$c2temp} ne "")	{
-					  if ($stagemax eq "" || $stagemax < $maxstage{$c2temp}) 	{
-					    $stagemax = $maxstage{$c2temp};
-					  }
-					  if ($stagemin eq "" || $stagemin > $minstage{$c2temp})	{
-					    $stagemin = $minstage{$c2temp};
-					  }
-					}
-				}
-		 # use max data for min and vice versa
-				if ($stagemax ne "" && $stagemin eq "")	{
-					$stagemin = $stagemax;
-				}
-				elsif ($stagemin ne "" && $stagemax eq "")	{
-					$stagemax = $stagemin;
-				}
-			# if none of that works but there is stage data, the stage is bogus
-				if ($stagemax eq "" && $collrow{'intage_max'} ne "")	{
-					if (!$badnames{$collrow{'intage_max'}})	{
-					  $badnames{$collrow{'intage_max'}} = "<i>$collrow{'enterer'}" . ":</i>";
-					}
-					$badnames{$collrow{'intage_max'}} .= " $collrow{'collection_no'}";
-				}
-				if ($stagemin eq "" && $collrow{'intage_min'} ne "")	{
-					if (!$badnames{$collrow{'intage_min'}})	{
-					  $badnames{$collrow{'intage_min'}} = "<i>$collrow{'enterer'}" . ":</i>" ;
-					}
-					if ($badnames{$collrow{'intage_min'}} !~ / $collrow{'collection_no'}$/)	{
-					  $badnames{$collrow{'intage_min'}} .= " $collrow{'collection_no'}";
-					}
-				}
-	 # IF STAGE DATA FAIL, TRY EPOCH DATA
-				if ($collrow{'epoch_max'} ne "" && $stagemin eq "")	{
-		 # find the stage min/max for this epoch
-					if ($collrow{'emlepoch_max'} ne "")	{
-					  @parts = ();
-				# if E/M/L has more than one value...
-					  @parts = split(/ - /,$collrow{'emlepoch_max'});
-					  if ($#parts > 0)	{
-					    $minterm = $parts[1]." ".$collrow{'epoch_max'};
-					    $maxterm = $parts[0]." ".$collrow{'epoch_max'};
-					  }
-				# but if E/M/L is a single word...
-					  else	{
-					    $minterm = $parts[0]." ".$collrow{'epoch_max'};
-					    $maxterm = $parts[0]." ".$collrow{'epoch_max'};
-					  }
-					}
-					else	{
-					  $minterm = $collrow{'epoch_max'};
-					  $maxterm = $collrow{'epoch_max'};
-					}
-					$stagemin = $minstage{$minterm};
-					$stagemax = $maxstage{$maxterm};
-			 # if that didn't work, try variations on the name
-					if ($stagemin eq "")	{
-					  $temp = $minterm;
-					  $temp2 = $minterm;
-					  $temp =~ s/ian$//;
-					  $temp2 =~ s/ian$//;
-					  $stagemin = $minstage{$temp};
-					  $stagemax = $maxstage{$temp2};
-					}
-					if ($stagemin eq "")	{
-					  $temp = $minterm;
-					  $temp2 = $minterm;
-					  $temp = $temp."ian";
-					  $temp2 = $temp2."ian";
-					  $stagemin = $minstage{$temp};
-					  $stagemax = $maxstage{$temp2};
-					}
-				}
-		 # if the "epoch" is just Lower/Middle/Upper then add the period name to it
-		 # WARNING: this may or may not be useful if the scale = epochs option is
-		 #   ever debugged, but right now it does nothing useful
-			 #  if ((index($collrow{'epoch_max'},"Lower") > -1) ||
-			 #      (index($collrow{'epoch_max'},"Early") > -1))	{
-			 #    $collrow{'epoch_max'} = "Lower"." ".$collrow{'period_max'};
-			 #  }
-			 #  elsif (index($collrow{'epoch_max'},"Middle") > -1)	{
-			 #    $collrow{'epoch_max'} = "Middle"." ".$collrow{'period_max'};
-			 #  }
-			 #  elsif ((index($collrow{'epoch_max'},"Upper") > -1) ||
-			 #         (index($collrow{'epoch_max'},"Late") > -1))	{
-			 #    $collrow{'epoch_max'} = "Upper"." ".$collrow{'period_max'};
-			 #  }
-			 #  if ($sensyn{$collrow{'epoch_max'}} ne "")	{
-			 #    $collrow{'epoch_max'} = $sensyn{$collrow{'epoch_max'}};
-			 #  }
-		# END BINNING 
-		# if list is assignable, do so
-				if ($belongsto[$stagemax] == $belongsto[$stagemin] && $stagemin ne "" &&
-					  ($collrow{'formation'} ne "" || $q->param('lumpbyfm') ne "Y"))	{
-		 # if using the geographic dispersion algorithm, increment the number of
-		 #   lists in this country, state, and county or lat/long combination
-					$i = $belongsto[$stagemin];
-			 # assign formation ID number
-					if ($q->param('lumpbyfm') eq "Y")	{
-					  $collrow{'formation'} =~ s/ fm$//i;
-					  $collrow{'formation'} =~ s/ fm\.$//i;
-					  $collrow{'formation'} =~ s/ formation$//i;
-					  $collrow{'formation'} =~ tr/A-Z/a-z/;
-				# append the chron ID number so each formation-chron combo is unique
-					  $collrow{'formation'} = $collrow{'formation'}.$i;
-					  if ($formationID{$collrow{'formation'}} eq "")	{
-					    $nformations++;
-					    $formationID{$collrow{'formation'}} = $nformations;
-					  }
-					  $formation[$collrow{'collection_no'}] = $formationID{$collrow{'formation'}};
-				 # WARNING! this irrevocably modifies the collection ID number
-					  $collrow{'collection_no'} = $formationID{$collrow{'formation'}};
-					}
-	
-					$chid[$collrow{'collection_no'}] = $i;
-	
-	if ($collrow{'stratscale'} =~ /group of/)	{
-		$sscale[$collrow{'collection_no'}] = 3;
-	}
-	elsif ($collrow{'stratscale'} =~ /bed/)	{
-		$sscale[$collrow{'collection_no'}] = 4;
-	}
-	elsif ($collrow{'stratscale'} =~ /member/)	{
-		$sscale[$collrow{'collection_no'}] = 2;
-	}
-	elsif ($collrow{'stratscale'} =~ /form/)	{
-		$sscale[$collrow{'collection_no'}] = 1;
-	}
-	else	{
-		$sscale[$collrow{'collection_no'}] = 0;
-	}
-	
-					if ($q->param('disperse') eq "yes")	{
-					  $temp = $i.$collrow{'country'}.$collrow{'state'};
-					  if ($collrow{'county'} ne "")	{
-					    $temp = $temp.$collrow{'county'};
-					  }
-					  else	{
-					    $temp = $temp.$collrow{'latdeg'}.$collrow{'latdir'}.$collrow{'lngdeg'}.$collrow{'lngdir'};
-					  }
-					  $locsatpoint{$temp}++;
-					  $locpoint[$collrow{'collection_no'}] = $temp;
-					}
-				}
-	 # if collection cannot be placed in an interval, print its temporal
-	 #   data to a complaint file
-				else	{
-					$rawagedata =~ s/  / /g;
-					print ORPHANS "$collrow{'collection_no'}\t$stagemin - $stagemax\t$collrow{'geogcomments'}\t$collrow{'country'} $collrow{'state'}\t$rawagedata\n";
-				}
-			}
-		}
-	close ORPHANS;
-
-}
-
 
 sub assignGenera	{
 	my $self = shift;
 
-	if ( ! open GEN,"<$GEN_FILE" ) {
-		$self->htmlError ( "$0:Couldn't open $GEN_FILE for read<BR>$!" );
+	# BEGINNING of input file parsing routine
+	# WARNING: we're assuming the user went with the defaults and
+	#  downloaded a comma-delimited file
+
+	my $authorizer = $s->get('authorizer');
+	my ($authinit,$authlast) = split / /,$authorizer;
+	my @temp = split //,$authinit;
+	my $occsfile = $temp[0] . $authlast . "-occs.csv";
+
+	open OCCS,"<$DOWNLOAD_FILE_DIR/$occsfile";
+
+	# following fields need to be pulled from the input file:
+	#  collection_no (should be mandatory)
+	#  genus_name (mandatory)
+	#  species_name (optional)
+	#  abund_value and abund_unit (iff method 5 is selected)
+	#  epoch or "locage_max" (can be 10 m.y. bin)
+	$_ = <OCCS>;
+	s/\n//;
+	my @fieldnames = split /,/,$_;
+	my $fieldcount = 0;
+	my $field_collection_no = -1;
+	for my $fn (@fieldnames)	{
+		if ( $fn eq "collection_no" )	{
+			$field_collection_no = $fieldcount;
+		} elsif ( $fn eq "genus_name" )	{
+			$field_genus_name = $fieldcount;
+		} elsif ( $fn eq "occurrences.species_name" )	{
+			$field_species_name = $fieldcount;
+		} elsif ( $fn eq "occurrences.abund_unit" )	{
+			$field_abund_unit = $fieldcount;
+		} elsif ( $fn eq "occurrences.abund_value" )	{
+			$field_abund_value = $fieldcount;
+		} elsif ( $fn eq "collections.epoch" )	{
+			$field_bin = $fieldcount;
+			$bin_type = "epoch";
+		} elsif ( $fn eq "collections.locage_max" )	{
+			$field_bin = $fieldcount;
+			$bin_type = "10my";
+		}
+		$fieldcount++;
 	}
-	while (<GEN>)	{
-		s/\n//;
-		$ngen++;
-		$genid{$_} = $ngen;
-		$genus[$ngen] = $_;
+	# this first condition never should be met, just being careful here
+	if ( $field_collection_no < 0 )	{
+		print "<h3>The data can't be analyzed because the collection number field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		exit;
+	# this one is crucial and might be missing
+	} elsif ( ! $field_bin )	{
+		print "<h3>The data can't be analyzed because the epoch or 10 m.y. bin field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		exit;
+	# this one also always should be present anyway
+	} elsif ( ! $field_genus_name )	{
+		print "<h3>The data can't be analyzed because the genus name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		exit;
+	# these two might be missing
+	} elsif ( ! $field_abund_value && $samplingmethod == 5 )	{
+		print "<h3>The data can't be analyzed because the abundance value field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		exit;
+	} elsif ( ! $field_abund_unit && $samplingmethod == 5 )	{
+		print "<h3>The data can't be analyzed because the abundance unit field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		exit;
 	}
-	close GEN;
-	
-	if ( ! open GEN,">>$GEN_FILE" ) {
-		#$self->htmlError ( "$0:Couldn't open $GEN_FILE for append.<BR>$!" );
-		print "Couldn't open $GEN_FILE for append.<BR>\n";
+
+	# figure out the ID numbers of the bins from youngest to oldest
+	# we do this in a messy way, i.e., using preset arrays; if the
+	#  10 m.y. bin scheme ever changes, this will need to be updated
+	# also get the bin boundaries in Ma
+	my @binnames;
+	if ( $bin_type eq "epoch" )	{
+		@binnames = ("Holocene","Pleistocene","Pliocene","Miocene","Oligocene","Eocene","Paleocene","Late/Upper Cretaceous","Early/Lower Cretaceous","Late/Upper Jurassic","Middle Jurassic","Early/Lower Jurassic","Late/Upper Triassic","Middle Triassic","Early/Lower Triassic","Zechstein","Rotliegendes","Gzelian","Kasimovian","Moscovian","Bashkirian","Serpukhovian","Visean","Tournaisian","Late/Upper Devonian","Middle Devonian","Early/Lower Devonian","Pridoli","Ludlow","Wenlock","Llandovery","Ashgill","Caradoc","Llandeilo","Llanvirn","Arenig","Tremadoc","Merioneth","St Davids","Caerfai","Ediacara","Varanger");
+		@_ = TimeLookup::findBoundaries($dbh,$dbt);
+		%topma = %{$_[2]};
+		%basema = %{$_[3]};
+	} elsif ( $bin_type eq "10my" )	{
+		@binnames = ("Cenozoic 6", "Cenozoic 5", "Cenozoic 4", "Cenozoic 3", "Cenozoic 2", "Cenozoic 1", "Cretaceous 8", "Cretaceous 7", "Cretaceous 6", "Cretaceous 5", "Cretaceous 4", "Cretaceous 3", "Cretaceous 2", "Cretaceous 1", "Jurassic 6", "Jurassic 5", "Jurassic 4", "Jurassic 3", "Jurassic 2", "Jurassic 1", "Triassic 5", "Triassic 4", "Triassic 3", "Triassic 2", "Triassic 1", "Permian 5", "Permian 4", "Permian 3", "Permian 2", "Permian 1", "Carboniferous 5", "Carboniferous 4", "Carboniferous 3", "Carboniferous 2", "Carboniferous 1", "Devonian 5", "Devonian 4", "Devonian 3", "Devonian 2", "Devonian 1", "Silurian 2", "Silurian 1", "Ordovician 5", "Ordovician 4", "Ordovician 3", "Ordovician 2", "Ordovician 1", "Cambrian 4", "Cambrian 3", "Cambrian 2", "Cambrian 1");
+		@_ = TimeLookup::processBinLookup($dbh,$dbt,"boundaries");
+		%topma = %{$_[0]};
+		%basema = %{$_[1]};
 	}
-	
-	# when using a genus count cutoff for lists, the number of
-	#   genera in each list must be counted ahead of time
-		my $sql = "SELECT occurrence_no,collection_no,genus_name,species_name,abund_value,abund_unit FROM occurrences";
-		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute();
-		while ( my $occrowref = $sth->fetchrow_hashref() )  {
-			my %occrow = %{$occrowref};
+	# assign chron numbers to named bins
+	# note: $chrons and $chname are key variables used later
+	for my $bn (@binnames)	{
+		$chrons++;
+		$binnumber{$bn} = $chrons;
+		$chname[$chrons] = $bn;
+	}
+
+		while (<OCCS>)	{
+			s/\n//;
+			my @occrow = split /,/,$_;
+
+		# set the bin ID number (chid) for the collection
+		# time interval name has some annoying quotes
+			$occrow[$field_bin] =~ s/"//g;
+			$chid[$occrow[$field_collection_no]] = $binnumber{$occrow[$field_bin]};
+
 	
 		# get rid of records with no specimen/individual counts for method 5
 			if ($samplingmethod == 5)   {
-				if ($occrow{'abund_value'} eq "" || $occrow{'abund_value'} == 0 ||
-				    ($occrow{'abund_unit'} ne "specimens" && $occrow{'abund_unit'} ne "individuals"))	{
-				  $occrow{'occurrence_no'} = 0;
+				if ($occrow[$field_abund_value] eq "" || $occrow[$field_abund_value] == 0 ||
+				    ($occrow[$field_abund_unit] ne "specimens" && $occrow[$field_abund_unit] ne "individuals"))	{
+				  $occrow[$field_genus_name] = "";
 				}
 			}
 	
-		# give collection identity of its formation if lumping
-			$collno = $occrow{'collection_no'};
-			if ($q->param('lumpbyfm') eq "Y")	{
-				$collno = $formation[$collno];
-			}
-	
-			if (( $occrow{'occurrence_no'} > 0) && ( $occrow{'species_name'} ne "indet.") &&
-				  ( $occrow{'species_name'} ne "indet") && ($chid[$collno] > 0))      {
-				$temp = $occrow{'genus_name'};
-				($temp,$temp2) = split(/ \(/,$temp,2);
-				$temp =~ s/"//g;
-				$temp =~ s/\?//g;
+			$collno = $occrow[$field_collection_no];
 
-				$temp =~ s/  / /g;
-				$temp =~ s/ $//;
+		# we're not even going to look at indet. records; this
+		#  entire program is assuming you only want to use records
+		#  determinate at the genus level
+		# note that you actually could include these records in the
+		#  input file but we're still enforcing this exclusion
+			if (( $occrow[$field_genus_name] ne "" ) && ( $occrow[$field_species_name] ne "indet.") &&
+				  ( $occrow[$field_species_name] ne "indet") && ($chid[$collno] > 0))      {
+				$temp = $occrow[$field_genus_name];
+		# we used to do some cleanups here that assumed error checking
+		#  on data entry didn't always work
+		# disabled 30.6.04 because on that date almost all genus-level
+		#  records lacked quotation marks, question marks, double
+		#  spaces, trailing spaces, and subgenus names
 	
-		 # update file keeping list of all distinct genus names
+		 # create a list of all distinct genus names
 				$ao = 0;
 				$ao = $genid{$temp};
 				if ($ao == 0)	{
 				  $ngen++;
 				  $genus[$ngen] = $temp;
 				  $genid{$temp} = $ngen;
-				   print GEN "$temp\n";
 				}
 
-				if ($required{$temp} ne "" || $q->param('class') eq "")  {
 				  $nsp = 1;
 				  if ($samplingmethod == 5)       {
-				    $nsp = $occrow{'abund_value'};
+				    $nsp = $occrow[$field_abund_value];
 				  }
 
-				# check to see if genus already is listed in collection
-				  $xx = $lastocc[$collno];
-				  while ($xx > 0)	{
-				    if ($occs[$xx] ne $genid{$temp})	{
-				      $xx = $stone[$xx];
-				    }
-				    else	{
-				      $abund[$xx] = $abund[$xx] + $occrow{'abund_value'};
-				      $xx = -9;
-				    }
-				  }
-				 # if not, add genus to master occurrence list
+				# we used to knock out repeated occurrences of
+				#  the same genus here, but that's now handled
+				#  by the download script
+
+				# add genus to master occurrence list and
+				#  store the abundances
 				  if ($xx != -9)	{
 				    push @occs,$genid{$temp};
 				    push @stone,$lastocc[$collno];
-				    push @abund,$occrow{'abund_value'};
+				    push @abund,$occrow[$field_abund_value];
 				    $lastocc[$collno] = $#occs;
 				    $toccsinlist[$collno] = $toccsinlist[$collno] + $nsp;
-				    if ($required{$temp} eq "required")	{
-				      $hasrequired[$collno]++;
-				    }
 				  }
-				}
 			}
 		}
-		$sth->finish();
-	
-	 # get rid of too-small or too-large lists if a cutoff is being used
-	 # because all the crucial stats computed later on depend on starting
-	 #   searches from lastocc, setting its value to zero deletes the lists
-		if ($q->param('cutoff') ne "" || $q->param('class') ne "")  {
-			for $qq (1..$#lastocc)	{
-		# get rid of null lists or lists without any required higher taxa
-				if ($toccsinlist[$qq] == -1 ||
-					  ($hasrequired[$qq] < 1 && $q->param('class') ne ""))    {
-					$lastocc[$qq] = 0;
-					$toccsinlist[$qq] = -1;
-				}
-				elsif ($q->param('lowerupper') eq "at least") {
-					if ($toccsinlist[$qq] < $q->param('cutoff'))      {
-					  $lastocc[$qq] = 0;
-					  $toccsinlist[$qq] = -1;
-					}
-				}
-				elsif ($q->param('lowerupper') eq "no more than")     {
-					if ($toccsinlist[$qq] > $q->param('cutoff'))      {
-					  $lastocc[$qq] = 0;
-					  $toccsinlist[$qq] = -1;
-					}
-				}
-			}
-		}
-	
+	# END of input file parsing routine
+
+
 	 # get basic counts describing lists and their contents
-		for $collno (1..$#lastocc)	{
+		for $collno (1..$#lastocc)	{ #FOO
 			$xx = $lastocc[$collno];
 			while ($xx > 0)	{
 				$nsp = 1;
@@ -1306,19 +429,6 @@ sub assignGenera	{
 		$k = int(($#temp + 1)/2);
 		$median[$i] = ($temp[$j] + $temp[$k])/2;
 	}
-	
-	if ( ! open BINNING,">$OUTPUT_DIR/binning.csv" ) {
-		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/binning.csv<BR>$!" );
-	}
-	print BINNING "Collection,Bin,Country,Occurrences,Strat scale\n";
-	for $i (1..$#occsinlist)	{
-		if ($occsinlist[$i] > 0)	{
-			printf BINNING "%d,%d,",$i,$chrons-$chid[$i]+1;
-			print BINNING "$country[$i],";
-			print BINNING "$occsinlist[$i],$sscale[$i]\n";
-		}
-	}
-	close BINNING;
 	
 	# compute sum of (squared) richnesses across lists
 	if (($samplingmethod == 1) || ($samplingmethod == 5))	{
@@ -1484,17 +594,6 @@ sub subsample	{
 					while ($tosub > 0 && $sampled[$i] < $inbin)	{
 					  $lastsampled[$i] = $sampled[$i];
 					  $j = int(rand $nitems) + 1;
-			 # if using the geographic dispersion algorithm, throw back the list
-			 #   (x-1)/x of the time where x is the number of lists at the same
-			 #   geographic coordinate in this temporal bin
-					  if ($samplingmethod != 1 && $samplingmethod != 5 &&
-					      $q->param('disperse') eq "yes")	{
-					    $xx = int(rand $locsatpoint{$locpoint[$listid[$j]]}) + 1;
-					    while ($xx > 1)	{
-					      $j = int(rand $nitems) + 1;
-					      $xx = int(rand $locsatpoint{$locpoint[$listid[$j]]}) + 1;
-					    }
-					  }
 		 # modify the counter
 					  if (($samplingmethod < 3) || ($samplingmethod > 4))	{
 					    $tosub--;
@@ -1684,26 +783,25 @@ sub printResults	{
 	
 	if ($listsread > 0)	{
 		$listorfm = "Lists";
-		if ($q->param('lumpbyfm') eq "Y")	{
-			$listorfm = "Formations";
-		}
 		if ($q->param('samplesize') ne "")	{
 			print "<hr>\n<h3>Raw data</h3>\n\n";
 		}
 		print "<table cellpadding=4>\n";
-		print "<tr><td><u>Sampled<br>genera</u> <td><u>Range-through<br>genera</u> ";
-		print "<td><u>First<br>appearances</u> <td><u>Last<br>appearances</u> <td><u>Singleton<br>genera</u> ";
-		print "<td><u>$listorfm</u> ";
+		print "<tr><td valign=top><b>Interval</b>\n";
+		print "<td align=center valign=top><b>Sampled<br>genera</b>";
+		print "<td align=center valign=top><b>Range-through<br>genera</b> ";
+		print "<td align=center valign=top><b>Boundary-crosser <br>genera</b> ";
+		print "<td align=center valign=top><b>First<br>appearances</b> <td align=center valign=top><b>Last<br>appearances</b> <td align=center valign=top><b>Singleton<br>genera</b> ";
+		print "<td align=center valign=top><b>$listorfm</b> ";
 		if ($samplingmethod != 5)	{
-			print "<td><u>Occurrences</u> ";
-			print "<td><u>Occurrences<br>-squared</u> ";
+			print "<td align=center valign=top><b>Occurrences</b> ";
+			print "<td align=center valign=top><b>Occurrences<br>-squared</b> ";
 		}
 		else	{
-			print "<td><u>Specimens</u> ";
+			print "<td align=center valign=top><b>Specimens</b> ";
 		}
-		print "<td><u>Mean<br>richness</u> <td><u>Median<br>richness</u> ";
-		print "<td><u>Interval</u>\n";
-		print TABLE "Bin,Sampled genera,Range-through genera,";
+		print "<td align=center valign=top><b>Mean<br>richness</b> <td align=center valign=top><b>Median<br>richness</b> ";
+		print TABLE "Bin,Bin name,Sampled genera,Range-through genera,Boundary-crosser genera,";
 		print TABLE "First appearances,Last appearances,Singleton genera,";
 		if ($samplingmethod != 5)	{
 			print TABLE "$listorfm,Occurrences,Occurrences-squared,";
@@ -1711,27 +809,37 @@ sub printResults	{
 		else	{
 			print TABLE "$listorfm,Specimens,";
 		}
-		print TABLE "Mean richness,Median richness,Base (Ma),Midpoint (Ma),Bin name,Stages\n";
+		print TABLE "Mean richness,Median richness,Base (Ma),Midpoint (Ma)\n";
 	
 		for $i (1..$chrons)	{
 			if ($rangethrough[$i] > 0 && $listsinchron[$i] > 0)	{
-				print "<tr><td align=center>$richness[$i] ";
-				print "<td align=center>$rangethrough[$i] ";
-				print "<td align=center>$originate[$i] ";
-				print "<td align=center>$extinct[$i] ";
-				print "<td align=center>$singletons[$i] ";
-				print "<td align=center>$listsinchron[$i] ";
-				print "<td align=center>$occsinchron[$i] ";
+				$temp = $chname[$i];
+				$temp =~ s/ /&nbsp;/;
+				print "<tr><td valign=top>$temp";
+				print "<td align=center valign=top>$richness[$i] ";
+				print "<td align=center valign=top>$rangethrough[$i] ";
+		# compute boundary crossers
+		# this is total range through diversity minus singletons minus
+		#  first-appearing crossers into the next bin; the latter is
+		#  originations - singletons, so the singletons cancel out and
+		#  you get total diversity minus originations
+				printf "<td align=center valign=top>%d ",$rangethrough[$i] - $originate[$i];
+				print "<td align=center valign=top>$originate[$i] ";
+				print "<td align=center valign=top>$extinct[$i] ";
+				print "<td align=center valign=top>$singletons[$i] ";
+				print "<td align=center valign=top>$listsinchron[$i] ";
+				print "<td align=center valign=top>$occsinchron[$i] ";
 				if ($samplingmethod != 5)	{
-					print "<td align=center>$occsinchron2[$i] ";
+					print "<td align=center valign=top>$occsinchron2[$i] ";
 				}
-				printf "<td>%.1f ",$occsinchron[$i]/$listsinchron[$i];
-				printf "<td>%.1f ",$median[$i];
-				print "<td>$chname[$i]";
+				printf "<td align=center valign=top>%.1f ",$occsinchron[$i]/$listsinchron[$i];
+				printf "<td align=center valign=top>%.1f ",$median[$i];
 	
 				print TABLE $chrons - $i + 1;
+				print TABLE ",$chname[$i]";
 				print TABLE ",$richness[$i]";
 				print TABLE ",$rangethrough[$i]";
+				printf TABLE ",%d",$rangethrough[$i] - $originate[$i];
 				print TABLE ",$originate[$i]";
 				print TABLE ",$extinct[$i]";
 				print TABLE ",$singletons[$i]";
@@ -1742,18 +850,8 @@ sub printResults	{
 				}
 				printf TABLE ",%.1f",$occsinchron[$i]/$listsinchron[$i];
 				printf TABLE ",%.1f",$median[$i];
-				printf TABLE ",%.1f",$basema[$i];
-				printf TABLE ",%.1f",$midptma[$i];
-				print TABLE ",$chname[$i]";
-				if ($longstartstage[$i] ne "")	{
-					print " ($longstartstage[$i]";
-					print TABLE ",$longstartstage[$i]";
-					if (($endstage[$i] ne "") && ($endstage[$i] ne $longstartstage[$i]))	{
-					  print " - $endstage[$i]";
-					  print TABLE " - $endstage[$i]";
-					}
-					print ")";
-				}
+				printf TABLE ",%.1f",$basema{$chname[$i]};
+				printf TABLE ",%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
 				print "<p>\n";
 				print TABLE "\n";
 			}
@@ -1765,23 +863,23 @@ sub printResults	{
 		if ($q->param('samplesize') ne "")	{
 			print "\n<hr>\n<h3>Results of subsampling analysis</h3>\n\n";
 			print "<table cellpadding=4>\n";
-			print "<tr><td><u>Items<br>sampled</u> ";
-			print "<td><u>Median<br>richness</u> ";
-			print "<td><u>1-sigma CI</u> ";
-			print "<td><u>Sampled<br>genera</u> ";
-			print "<td><u>Range-through<br>genera</u> ";
-			print "<td><u>First<br>appearances</u> <td><u>Last<br>appearances</u> <td><u>Singleton<br>genera</u> ";
-			print "<td align=center><u>Gap analysis<br>sampling stat</u> ";
-			print "<td align=center><u>Gap analysis<br>diversity estimate</u> ";
-			print "<td align=center><u>Chao-2<br>estimate</u> ";
-			print "<td><u>Interval</u>\n";
-			print TABLE "Bin,Items sampled,Median richness,";
+			print "<tr><td valign=top><b>Interval</b>\n";
+			print "<td align=center valign=top><b>Items<br>sampled</b> ";
+			print "<td align=center valign=top><b>Median<br>richness</b> ";
+			print "<td align=center valign=top><b>1-sigma CI</b> ";
+			print "<td align=center valign=top><b>Sampled<br>genera</b> ";
+			print "<td align=center valign=top><b>Range-through<br>genera</b> ";
+			print "<td align=center valign=top><b>First<br>appearances</b> <td align=center valign=top><b>Last<br>appearances</b> <td align=center valign=top><b>Singleton<br>genera</b> ";
+			print "<td align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
+			print "<td align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
+			print "<td align=center valign=top><b>Chao-2<br>estimate</b> ";
+			print TABLE "Bin,Bin name,Items sampled,Median richness,";
 			print TABLE "1-sigma lower CI,1-sigma upper CI,";
 			print TABLE "Sampled genera,Range-through genera,";
 			print TABLE "First appearances,Last appearances,Singleton genera,";
 			print TABLE "Gap analysis completeness,";
 			print TABLE "Gap analysis diversity,";
-			print TABLE "Chao-2 estimate,Base (Ma),Midpoint (Ma),Bin name,Stages\n";
+			print TABLE "Chao-2 estimate,Base (Ma),Midpoint (Ma)\n";
 			for ($i = 1; $i <= $chrons; $i++)     {
 				if ($rangethrough[$i] > 0)  {
 					$gapstat = $richness[$i] - $originate[$i] - $extinct[$i] + $singletons[$i];
@@ -1798,18 +896,22 @@ sub printResults	{
 					else	{
 					  $chaostat = "";
 					}
-					printf "<tr><td align=center>%.1f ",$tsampled[$i];
+					$temp = $chname[$i];
+					$temp =~ s/ /&nbsp;/;
+					print "<tr><td valign=top>$temp";
+					printf "<td align=center valign=top>%.1f ",$tsampled[$i];
 					$s = int(0.5*$trials)+1;
-					print "<td align=center>$outrichness[$i][$s] ";
+					print "<td align=center valign=top>$outrichness[$i][$s] ";
 					$qq = int(0.1587*$trials)+1;
 					$r = int(0.8413*$trials)+1;
-					print "<td align=center>$outrichness[$i][$qq]-$outrichness[$i][$r]";
-					printf "<td align=center>%.1f ",$msubsrichness[$i];
-					printf "<td align=center>%.1f ",$msubsrangethrough[$i];
-					printf "<td align=center>%.1f ",$msubsoriginate[$i];
-					printf "<td align=center>%.1f ",$msubsextinct[$i];
-					printf "<td align=center>%.1f ",$msubssingletons[$i];
+					print "<td align=center valign=top>$outrichness[$i][$qq]-$outrichness[$i][$r]";
+					printf "<td align=center valign=top>%.1f ",$msubsrichness[$i];
+					printf "<td align=center valign=top>%.1f ",$msubsrangethrough[$i];
+					printf "<td align=center valign=top>%.1f ",$msubsoriginate[$i];
+					printf "<td align=center valign=top>%.1f ",$msubsextinct[$i];
+					printf "<td align=center valign=top>%.1f ",$msubssingletons[$i];
 					print TABLE $chrons - $i + 1;
+					print TABLE ",$chname[$i]";
 					printf TABLE ",%.1f",$tsampled[$i];
 					print TABLE ",$outrichness[$i][$s]";
 					print TABLE ",$outrichness[$i][$qq]";
@@ -1820,36 +922,25 @@ sub printResults	{
 					printf TABLE ",%.1f",$msubsextinct[$i];
 					printf TABLE ",%.1f",$msubssingletons[$i];
 					if ($gapstat > 0)	{
-					  printf "<td align=center>%.3f ",$gapstat;
-					  printf "<td align=center>%.1f ",$richness[$i] / $gapstat;
+					  printf "<td align=center valign=top>%.3f ",$gapstat;
+					  printf "<td align=center valign=top>%.1f ",$richness[$i] / $gapstat;
 					  printf TABLE ",%.3f",$gapstat;
 					  printf TABLE ",%.3f",$richness[$i] / $gapstat;
 					}
 					else	{
-					  print "<td align=center> <td align=center> ";
+					  print "<td align=center valign=top> <td align=center valign=top> ";
 					  print TABLE ",,";
 					}
 					if ($chaostat > 0)	{
-					  printf "<td align=center>%.1f ",$chaostat;
+					  printf "<td align=center valign=top>%.1f ",$chaostat;
 					  print TABLE ",$chaostat";
 					}
 					else    {
-					  print "<td align=center> ";
+					  print "<td align=center valign=top> ";
 					  print TABLE ",";
 					}
-					print "<td>$chname[$i]";
-					printf TABLE ",%.1f",$basema[$i];
-					printf TABLE ",%.1f",$midptma[$i];
-					print TABLE ",$chname[$i]";
-					if ($longstartstage[$i] ne "")        {
-					  print " ($longstartstage[$i]";
-					  print TABLE ",$longstartstage[$i]";
-					  if (($endstage[$i] ne "") && ($endstage[$i] ne $longstartstage[$i]))        {
-					    print " - $endstage[$i]";
-					    print TABLE " - $endstage[$i]";
-					  }
-					  print ")";
-					}
+					printf TABLE ",%.1f",$basema{$chname[$i]};
+					printf TABLE ",%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
 					print "<p>\n";
 					print TABLE "\n";
 				}
@@ -1872,16 +963,13 @@ sub printResults	{
 			print "<li>The subsampling curves (<a href=\"http://$CURVE_HOST$PRINTED_DIR/subcurve.tab\">subcurve.tab</a>)<p>\n";
 		}
 	
-		print "<li>An abstract of the collections assigned to each bin (<a href=\"http://$CURVE_HOST$PRINTED_DIR/binning.csv\">binning.csv</a>)<p>\n";
-	
 		print "<li>A first-by-last occurrence count matrix (<a href=\"http://$CURVE_HOST$PRINTED_DIR/firstlast.txt\">firstlast.txt</a>)<p>\n";
 	
 		print "<li>A list of each genus, the number of collections including it,  and the ID number of the intervals in which it was found (<a href=\"http://$CURVE_HOST$PRINTED_DIR/presences.txt\">presences.txt</a>)<p>\n";
-	
-		if ( $s->get('enterer') ne "Guest" )	{
-			print "<li>A list of collections that could not be placed in temporal bins (<a href=\"http://$CURVE_HOST$PRINTED_DIR/orphans.txt\">orphans.txt</a>)<p>\n";
-			print "</ul>\n";
-		}
+
+		print "</ul><p>\n";
+
+		print "\nYou may wish to <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">download another data set</a></b> before you run another analysis.<p>\n";
 	
 	}
 	else	{
