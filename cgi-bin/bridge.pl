@@ -5014,7 +5014,7 @@ sub insertRecord {
 
 	# This 'unless' wraps most of the method. If we have data in fields_ref
 	# and vals_ref, we're re-entering this method from processCheckNearMatch
-	# after finding a potential conflict entering a new reference, and the 
+	# after finding a potential conflict entering a new record, and the 
 	# user said to go ahead and add the reference anyway.  See the INSERT, 
 	# below, for final details...
 	unless($fields_ref && $vals_ref){
@@ -5106,7 +5106,7 @@ sub insertRecord {
 	my $valstring = join ',',@vals;
 	$valstring =~ s/"/\\"/;
 	$sql = "INSERT INTO $tableName (" . join(',', @fields) . ") VALUES (" . $valstring . ")";
-	$sql =~ s/\s+/ /gms;
+	$sql =~ s/\s+/ /gs;
 	dbg("$sql<HR>");
 	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 
@@ -5115,9 +5115,61 @@ sub insertRecord {
 	dbg("inserted record ID: $recID<br>");
 
 	# Once again, deal with the re-entry scenario (checkNearMatch found some
-	# matches, but the user chose to go ahead and enter the ref anyway)
-	if($fields_ref && $vals_ref){
+	# matches, but the user chose to go ahead and enter the data anyway)
+	if($fields_ref && $vals_ref && ($tableName eq "refs")){
 		processNewRef($recID);
+	}
+	# Show entered rec (and other, related recs?) and give a link to
+	# do more of the same
+	elsif($fields_ref && $vals_ref && ($tableName eq "opinions")){
+		my $sql="SELECT * FROM opinions WHERE opinion_no=$recID";
+		my @results = @{$dbt->getData($sql)};
+
+		my $sql="SELECT * FROM authorities WHERE taxon_no=".
+				$results[0]->{parent_no};
+		my @other_results = @{$dbt->getData($sql)};
+
+		print stdIncludes("std_page_top");
+		print "<center><b>Record added:</b>";
+		print "<table><tr>";
+		print "<td>$results[0]->{status} $other_results[0]->{taxon_name} ".
+			  "$results[0]->{author1last} $results[0]->{pubyr} ";
+
+		my $sql="SELECT p1.name as name1, p2.name as name2, ".
+				"p3.name as name3 ".
+				"FROM person as p1, person as p2, person as p3 WHERE ".
+				"p1.person_no=$results[0]->{authorizer_no} ".
+				"AND p2.person_no=$results[0]->{enterer_no} ".
+				"AND p3.person_no=$results[0]->{modifier_no}";
+		my @results = @{$dbt->getData($sql)};
+
+		print "<font class=\"tiny\">[".
+			  "$results[0]->{name1}/$results[0]->{name2}/".
+			  "$results[0]->{name3}]".
+			  "</font></td>";
+		print "</tr></table>";
+		print "<p><a href=\"/cgi-bin/bridge.pl?action=startTaxonomy\">Enter more taxonomic information</a></center>";
+
+		print stdIncludes("std_page_bottom");
+	}
+	elsif($fields_ref && $vals_ref && ($tableName eq "authorities")){
+        my $sql="SELECT * FROM authorities WHERE taxon_no=$recID";
+        my @results = @{$dbt->getData($sql)};
+
+		print stdIncludes("std_page_top");
+		print "<center><b>Record added:</b>";
+        print "<table><tr>";
+        print "<td>$results[0]->{taxon_rank} $results[0]->{taxon_name} ".
+              "$results[0]->{author1last} $results[0]->{pubyr} ";
+
+        print "</td></tr></table>";
+		print "<p><a href=\"/cgi-bin/bridge.pl?action=startTaxonomy\">Enter more taxonomic information</a></center>";
+		print stdIncludes("std_page_bottom");
+	}
+	else{
+		print stdIncludes("std_page_top");
+		print "<center><b>Record added.</b></center>";
+		print stdIncludes("std_page_bottom");
 	}
 
 	$$primary_key = $recID;
@@ -5257,6 +5309,46 @@ sub checkNearMatch ()	{
 			if ($tableName eq "refs")	{
 				print $hbo->populateHTML('reference_display_row', \@rowData, \@display);
 			}
+			elsif($tableName eq "opinions"){
+				my $sql="SELECT taxon_name FROM authorities WHERE taxon_no=".
+						$row{parent_no};
+				my @results = @{$dbt->getData($sql)};
+				print "<table><tr>";
+				print "<td>$row{status} $results[0]->{taxon_name}: ".
+					  "$row{author1last} $row{pubyr} ";
+
+				my $sql="SELECT p1.name as name1, p2.name as name2, ".
+						"p3.name as name3 ".
+						"FROM person as p1, person as p2, person as p3 WHERE ".
+						"p1.person_no=$row{authorizer_no} ".
+						"AND p2.person_no=$row{enterer_no} ".
+						"AND p3.person_no=$row{modifier_no}";
+				my @results = @{$dbt->getData($sql)};
+
+				print "<font class=\"tiny\">[".
+					  "$results[0]->{name1}/$results[0]->{name2}/".
+					  "$results[0]->{name3}]".
+					  "</font></td>";
+				print "</tr></table>";
+			}
+			elsif($tableName eq "authorities"){
+				print "<table><tr>";
+				print "<td> $row{taxon_name}: $row{author1last} $row{pubyr} ";
+
+				my $sql="SELECT p1.name as name1, p2.name as name2, ".
+						"p3.name as name3 ".
+						"FROM person as p1, person as p2, person as p3 WHERE ".
+						"p1.person_no=$row{authorizer_no} ".
+						"AND p2.person_no=$row{enterer_no} ".
+						"AND p3.person_no=$row{modifier_no}";
+				my @results = @{$dbt->getData($sql)};
+
+				print "<font class=\"tiny\">[".
+					  "$results[0]->{name1}/$results[0]->{name2}/".
+					  "$results[0]->{name3}]".
+					  "</font></td>";
+				print "</tr></table>";
+			}
 			$sth->finish();
 		}
 		print "</td></tr></table>\n";
@@ -5272,11 +5364,17 @@ sub checkNearMatch ()	{
 		print "<form method=POST action=$exec_url>";
 		print "<input type=hidden name=\"action\" value=\"processCheckNearMatch\">";
 		print "<input type=hidden name=\"tablename\" value=\"$tableName\">";
+		print "<input type=hidden name=\"idname\" value=\"$idName\">";
+		print "<input type=hidden name=\"searchField\" value=\"$searchField\">";
 		print "<input type=hidden name=\"fields\" value=\"$flat_fields\">";
 		print "<input type=hidden name=\"vals\" value=\"$flat_vals\">";
 		print "<center><input type=submit name=\"whattodo\" value=\"Cancel\">&nbsp;";
 		print "<input type=submit name=\"whattodo\" value=\"Continue\"></form>";
-		print qq|<p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p></center><br>\n|;
+		if($tableName eq "refs"){
+			print qq|<p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p></center><br>\n|;
+		}
+		print stdIncludes("std_page_bottom");
+
 		# we don't want control to return to insertRecord() (which called this
 		# method and will insert the record after control returns to it after
 		# calling this method, thus potentially creating a duplicate record if
@@ -5304,15 +5402,22 @@ sub processCheckNearMatch{
 	my @vals = split(',',$vals);
 	my $what_to_do = $q->param('whattodo');
 	my $table_name = $q->param('tablename');
+	my $idName = $q->param('idName');
+	my $searchField = $q->param('searchField');
 
 	if($what_to_do eq 'Continue'){
 		# these are mostly dummy vars, except tablename and the last two.
-		insertRecord($table_name, 'reference_no', 0, 5, 'author1last', \@fields, \@vals);
+		insertRecord($table_name, $idName, 0, 5, $searchField, \@fields, \@vals);
 	}
 	else{
 		print stdIncludes("std_page_top");
-		print "<center><h3>Reference Addition Canceled</h3>";
-		print qq|<p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p></center><br>\n|;
+		print "<center><h3>Record Addition Canceled</h3>";
+		if($table_name eq "refs"){
+			print qq|<p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p></center><br>\n|;
+		}
+		elsif($table_name eq "opinions" || $table_name eq "authorities"){
+			print qq|<p><a href="$exec_url?action=startTaxonomy"><b>Add more taxonomic information.</b></a></p></center><br>\n|;
+		}
 		print stdIncludes("std_page_bottom");
 	}
 }
