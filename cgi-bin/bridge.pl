@@ -581,7 +581,7 @@ sub displayMapForm {
 
 	# Read preferences if there are any JA 8.7.02
 	my @row = ('global', 'X 3', 'white', '30 degrees', 'gray', 'black', 'medium circles', 'blue', 'without');
-	my @fieldNames = ('mapcontinent', 'mapscale', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'pointshape', 'dotcolor', 'dotborder');
+	my @fieldNames = ('mapcontinent', 'mapscale', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder');
 	
 	%pref = &getPreferences($s->get('enterer'));
 	# Get the enterer's preferences
