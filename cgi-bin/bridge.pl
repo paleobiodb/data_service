@@ -857,16 +857,16 @@ sub displayOpinionForm {
 		# then we'll see if we can grab it from the opinion record.
 		
 		my $taxonNum = $opinion->childNumber();
-		
+	
 		if ($taxonNum) {
 			$q->param(-name=>'taxon_no', -values=>[$taxonNum]);
 		} else {
 			# if it doesn't exist, then it's an error..
-			Debug::logError("bridge::displayOpinionForm failed because we couldn't figure out the taxon_no (child_no).");
-			return;	
+			print "Could not find the opinion ".$q->param('opinion_no')." in the database";
+			croak "Could not find the opinion ".$q->param('opinion_no')." in the database";
 		}
 	}
-	
+
 	$opinion->displayOpinionForm($hbo, $s, $q);
 
 }
@@ -876,7 +876,7 @@ sub submitOpinionForm {
 	my $opinion = Opinion->new(\%GLOBALVARS);
 	
 	if (! $q->param('taxon_no')) {
-		Debug::logError("bridge::submitOpinionForm failed because taxon_no doesn't exist.");
+        print "Error: no taxon no found";
 		return;	
 	}
 	
@@ -3119,10 +3119,12 @@ sub displayCollectionDetails {
     print $hbo->populateHTML('collection_display_fields', \@row, \@fieldNames);
 		
     # If the viewer is the authorizer (or it's me), display the record with edit buttons
+	print '<p><div align="center"><table><tr>';
     if ( ($authorizer eq $sesAuthorizer) || ($sesAuthorizer eq Globals::god())) {
-		print $hbo->populateHTML('collection_display_buttons', \@row, \@fieldNames);
+		print '<td>'.$hbo->populateHTML('collection_display_buttons', \@row, \@fieldNames).'</td>';
     }
-
+	print '<td>'.$hbo->populateHTML('collection_display_buttons2', [$q->param('collection_no')],['prefill_collection_no']).'</td>';
+	print '</tr></table></div></p>';
 	
 	print "<HR>\n";
 	
@@ -3140,18 +3142,20 @@ sub displayCollectionDetails {
 	
 	print $taxa_list;
 
+	print '<p><div align="center"><table><tr>';
 	if ( $taxa_list =~ /Abundance/ )	{
-		print $hbo->populateHTML('rarefy_display_buttons', \@row, \@fieldNames);
+		print "<td>".$hbo->populateHTML('rarefy_display_buttons', \@row, \@fieldNames)."</td>";
 	}
 
-	print $hbo->populateHTML('ecology_display_buttons', \@row, \@fieldNames);
+	print "<td>".$hbo->populateHTML('ecology_display_buttons', \@row, \@fieldNames)."</td>";
 
 	if($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq Globals::god())	{
-		print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames);
+		print "<td>".$hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames)."</td>";;
 	}
 	if($taxa_list ne "" && $q->param("user") ne "Guest"){
-		print $hbo->populateHTML('reid_display_buttons', \@row, \@fieldNames);
+		print "<td>".$hbo->populateHTML('reid_display_buttons', \@row, \@fieldNames)."</td>";
 	}
+	print "</tr></table></div></p>";
 
 	print stdIncludes("std_page_bottom");
 } # end sub displayCollectionDetails()
@@ -4561,10 +4565,15 @@ sub processEnterCollectionForm {
 	@fields = @{$f};
  
     print $hbo->populateHTML('collection_display_fields', \@row, \@fields);
-    print $hbo->populateHTML('collection_display_buttons', \@row, \@fields);
+	print '<p><div align="center"><table><tr>';
+    print '<td>'.$hbo->populateHTML('collection_display_buttons', \@row, \@fields).'</td>';
+	print '<td>'.$hbo->populateHTML('collection_display_buttons2', [$recID],['prefill_collection_no']).'</td>';
+    print "</tr></table></div></p>";
+	print '<div align="center">';
     print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
+	print '</div>';
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></p></b>|;
-	print qq| <b><p><a href="$exec_url?action=displayEnterCollPage&prefill_collection_no=$recID">Add another collection with fields prefilled based on this collection</a></p></b></center>|;
+	#print qq| <b><p><a href="$exec_url?action=displayEnterCollPage&prefill_collection_no=$recID">Add another collection with fields prefilled based on this collection</a></p></b></center>|;
  
 	print stdIncludes("std_page_bottom");
 }
@@ -5109,11 +5118,17 @@ sub processEditCollectionForm {
 
     
     print $hbo->populateHTML('collection_display_fields', \@row, \@fields);
-    print $hbo->populateHTML('collection_display_buttons', \@row, \@fields);
+	print '<p><div align="center"><table><tr>';
+    print '<td>'.$hbo->populateHTML('collection_display_buttons', \@row, \@fields).'</td>';
+	print '<td>'.$hbo->populateHTML('collection_display_buttons2', [$recID],['prefill_collection_no']).'</td>';
+    print "</tr></table></div></p>";
+	print '<div align="center">';
     print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
+	print '</div>';
     
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit">Edit another collection using the same reference</a></p></b></center>|;
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</a></p></b></center>|;
+	#print qq| <b><p><a href="$exec_url?action=displayEnterCollPage&prefill_collection_no=$recID">Add a collection with fields prefilled based on this collection</a></p></b></center>|;
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add a collection with the same reference</a></p></b></center>|;
 
 	print stdIncludes("std_page_bottom");
