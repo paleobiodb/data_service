@@ -18,7 +18,7 @@ my $GIF_DIR = $ENV{MAP_GIF_DIR};      # For maps
 my $PI = 3.14159265;
 my $C72 = cos(72 * $PI / 180);
 my $AILEFT = 100;
-my $AITOP = 500;
+my $AITOP = 580;
 
 sub acos { atan2( sqrt(1 - $_[0] * $_[0]), $_[0] ) }
 sub tan { sin($_[0]) / cos($_[0]) }
@@ -681,8 +681,9 @@ sub mapDrawMap	{
 		while (<MASK>)	{
 			s/\n//;
 			my ($lat,$lng) = split /\t/,$_;
+			$touched{$lng}{$lat} = 1;
 			if ( $streakend{$lng-1}{$lat} eq "" )	{
-				$touched{$lng}{$lat} = 1;
+				$streakstart{$lng}{$lat} = 1;
 				$firstlng = $lng;
 			}
 			$streakend{$firstlng}{$lat} = $lng;
@@ -698,7 +699,7 @@ sub mapDrawMap	{
 		# draw a rectangle for each touched cell
 		for $lat (-90..90)	{
 			for $lng (-180..180)	{
-				if ( $touched{$lng}{$lat} == 1 )	{
+				if ( $streakstart{$lng}{$lat} == 1 )	{
 					$streak = $streakend{$lng}{$lat} - $lng;
 					($xs[0],$ys[0],$rawxs[0],$rawys[0]) = $self->projectPoints($lng+1.0+$streak,$lat+1.0,"grid");
 					($xs[1],$ys[1],$rawxs[1],$rawys[1]) = $self->projectPoints($lng+1.0+$streak,$lat-1.0,"grid");
@@ -712,14 +713,64 @@ sub mapDrawMap	{
 						$ys[1] = -1 * $ys[1];
 						$ys[2] = -1 * $ys[2];
 					}
-					for $p (0..3)	{
+					my $npts = 3;
+					my @newxs = ();
+					my @newys = ();
+					# flatten upper right corner by
+					#  adding a point
+					if ( $touched{$lng}{$lat+1} eq "" &&
+					     $touched{$lng+1}{$lat} eq "" )	{
+						push @newxs, $xs[0] - ($xs[0] - $xs[3]) / 2;
+						push @newys, $ys[0];
+						push @newxs, $xs[0];
+						push @newys, $ys[0] - ($ys[0] - $ys[1]) / 2;
+					} else	{
+						push @newxs, $xs[0];
+						push @newys, $ys[0];
+					}
+					# lower right corner
+					if ( $touched{$lng+1}{$lat} eq "" &&
+					     $touched{$lng}{$lat-1} eq "" )	{
+						push @newxs, $xs[1];
+						push @newys, $ys[1] + ($ys[0] - $ys[1]) / 2;
+						push @newxs, $xs[1] - ($xs[1] - $xs[2]) / 2;
+						push @newys, $ys[1];
+					} else	{
+						push @newxs, $xs[1];
+						push @newys, $ys[1];
+					}
+					# lower left corner
+					if ( $touched{$lng}{$lat-1} eq "" &&
+					     $touched{$lng-1}{$lat} eq "" )	{
+						push @newxs, $xs[2] + ($xs[1] - $xs[2]) / 2;
+						push @newys, $ys[2];
+						push @newxs, $xs[2];
+						push @newys, $ys[2] + ($ys[3] - $ys[2]) / 2;
+					} else	{
+						push @newxs, $xs[2];
+						push @newys, $ys[2];
+					}
+					# upper left corner
+					if ( $touched{$lng-1}{$lat} eq "" &&
+					     $touched{$lng}{$lat+1} eq "" )	{
+						push @newxs, $xs[3];
+						push @newys, $ys[3] - ($ys[3] - $ys[2]) / 2;
+						push @newxs, $xs[3] + ($xs[0] - $xs[3]) / 2;
+						push @newys, $ys[3];
+					} else	{
+						push @newxs, $xs[3];
+						push @newys, $ys[3];
+					}
+					@xs = @newxs;
+					@ys = @newys;
+					for $p (0..$npts)	{
 						$xs[$p] = $self->getLng($xs[$p]);
 						$ys[$p] = $self->getLat($ys[$p]);
 					}
 
 					if ( $xs[0] ne "NaN" && $xs[1] ne "NaN" && $xs[2] ne "NaN" && $xs[3] ne "NaN" && $ys[0] ne "NaN" && $ys[1] ne "NaN" && $ys[2] ne "NaN" && $ys[3] ne "NaN" )	{
           					my $poly = new GD::Polygon;
-						for $p (0..3)	{
+						for $p (0..$npts)	{
 							$poly->addPt($xs[$p],$ys[$p]);
 						}
           					$im->filledPolygon($poly,$col{$crustcolor});
@@ -727,7 +778,7 @@ sub mapDrawMap	{
 						print AI "$mycolor\n";
 						print AI "4 M\n";
 						printf AI "%.1f %.1f m\n",$AILEFT+$xs[0],$AITOP-$ys[0];
-						for $p (1..3)	{
+						for $p (1..$npts)	{
 							printf AI "%.1f %.1f L\n",$AILEFT+$xs[$p],$AITOP-$ys[$p];
 						}
 						printf AI "%.1f %.1f L\n",$AILEFT+$xs[0],$AITOP-$ys[0];
@@ -936,8 +987,8 @@ if ( $q->param('gridposition') ne "in back" )	{
 
   $dotcolor = $q->param("dotcolor$setsuffix");
   $bordercolor = $dotcolor;
-  if ($q->param("dotborder$setsuffix") eq "with")	{
-	if($q->param('mapbgcolor') eq "black")	{
+  if ($q->param("dotborder$setsuffix") ne "no" )	{
+	if($q->param('mapbgcolor') eq "black" || $q->param("dotborder$setsuffix") eq "white" )	{
 		$bordercolor = "white";
 	}
 	else	{
@@ -1041,9 +1092,9 @@ if ( $q->param('gridposition') ne "in back" )	{
         }
     # draw a circle and fill it
         if ($dotshape =~ /^circles$/)	{
-          $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,360,$col{$bordercolor});
-          if ( $x1+($dotsize*3)+2 < $width && $x1-($dotsize*3)-2 > 0 &&
-               $y1+($dotsize*3)+2 < $height && $y1-($dotsize*3)-2 > 0 )	{
+          if ( $x1+($dotsize*1.5)+1 < $width && $x1-($dotsize*1.5)-1 > 0 &&
+               $y1+($dotsize*1.5)+1 < $height && $y1-($dotsize*1.5)-1 > 0 )	{
+            $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,360,$col{$bordercolor});
             $im->fillToBorder($x1,$y1,$col{$bordercolor},$col{$dotcolor});
             $im->fillToBorder($x1+$dotsize,$y1,$col{$bordercolor},$col{$dotcolor});
             $im->fillToBorder($x1-$dotsize,$y1,$col{$bordercolor},$col{$dotcolor});
