@@ -26,7 +26,7 @@ if ( $q->param("action") eq "search" )	{
 	print "<form method=post action=fivepct.pl>\n\n";
 	print "<input type=hidden name=action value=update>\n\n";
 
-	@statusvals = ("unknown","junk","desirable","copied","discarded","entered");
+	@statusvals = ("unknown","junk","desirable","claimed","copied","discarded","entered");
 
 	$sql = "SELECT ref_no,title,author,pub,subjects,language,status,modifier FROM fivepct WHERE ";
 	if ( $q->param("status") ne "all" )	{
