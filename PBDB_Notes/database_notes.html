@@ -157,11 +157,14 @@ by looking at the parent_no, and child_no fields.</span>
 </p>
 <p class="field">
 <span class="fieldName">taxon_name</span>
-<span class="fieldDesc">Name of this taxon (of type taxon_rank).</span>
+<span class="fieldDesc">Name of this taxon (of type taxon_rank).
+Note, in this case, if the taxon_rank is species, 
+then it will be a two word species such as "Homo sapiens."  Otherwise,
+it's just one word.</span>
 </p>
 <p class="field">
 <span class="fieldName">taxon_rank</span>
-<span class="fieldDesc">class, species, genus, etc.</span>
+<span class="fieldDesc">class, species, genus, etc. </span>
 </p>
 <p class="field">
 <span class="fieldName">pub_yr</span>
@@ -181,7 +184,8 @@ the authorities table.</span>
 <div class="table">
 <A NAME="collections"><span class="table">collections</span></A>
 <p class="tableDesc">Holds one record for each collection in the database.  
-A collection can be thought of as a particular <i>hole</i> in the ground.</p>
+A collection can be thought of as a particular <i>hole</i> in the ground.
+Make sure to respect the access_level and release_date fields.</p>
 <p class="field">
 <span class="fieldName">collection_name</span>
 <span class="fieldDesc"></span>
@@ -192,6 +196,18 @@ A collection can be thought of as a particular <i>hole</i> in the ground.</p>
 <p class="field">
 <span class="fieldName"><span class="foreignKey">reference_no</span></span>
 </p>
+<p class="field">
+<span class="fieldName">access_level</span>
+<span class="fieldDesc">public, database members, group members, authorizer only.  
+If it's null, which might happen for some of our earliest records, then treat it
+as public.</span>
+</p>
+<p class="field">
+<span class="fieldName">release_date</span>
+<span class="fieldDesc">After this date, the data is fair game for everyone.  Before it, 
+look at the access_level field to determine who should have access.</span>
+</p>
+
 
 </div>
 
@@ -269,11 +285,27 @@ the database.</p>
 <p class="field">
 <span class="fieldName"><span class="foreignKey">collection_no</span></span>
 </p>
+
+<p class="field">
+<span class="fieldName">genus_reso</span>
+<span class="fieldDesc"></span>
+</p>
+
 <p class="field">
 <span class="fieldName">genus_name</span>
+<span class="fieldDesc">First part of the name, <i>not</i> necessarily a genus!  
+Could be a higher taxon name.</span>
 </p>
+
+<p class="field">
+<span class="fieldName">species_reso</span>
+<span class="fieldDesc"></span>
+</p>
+
 <p class="field">
 <span class="fieldName">species_name</span>
+<span class="fieldDesc">Second part of the name, <i>not</i> necessarily a species!
+For example, if genus_name is a higher taxon, then species would be "indet."</span>
 </p>
 <p class="field">
 <span class="fieldName">abund_value</span>
@@ -289,7 +321,9 @@ the database.</p>
 
 <div class="table">
 <A NAME="opinions"><span class="table">opinions</span></A>
-<p class="tableDesc">Records information about taxa that have been renamed.</p>
+<p class="tableDesc">Records information about taxa that have been renamed.  Note,
+don't confuse this with the <A HREF="#reidentifications">reidentifications</A> table which 
+is used for reidentifications of a particular fossil at a particular collection.</p>
 <p class="field">
 <span class="fieldName"><span class="primaryKey">opinion_no</span></span>
 </p>
