@@ -1,9 +1,14 @@
 #!/usr/bin/perl -w
 
-# by rjp, 3/22/2004
+# Constants.pm
+# created by rjp, 3/22/2004
 # 
 # Some common constants which can be used throughout the modules.
 # To include them, simply say "use Constants;" at the top of the file.
+#
+# Constants in here *should* be fairly generic to the entire program - ie -
+# values we might want to use anywhere.  It wouldn't make sense to put specialized
+# constants for a single module in here - put those in the module instead.
 
 package Constants;
 
@@ -15,11 +20,14 @@ use strict;
 require Exporter;
 our @ISA = qw(Exporter);
 
-# every constant you want to export must be listed in this list.
+# Every constant you want to export must be listed in this list.
+# This means that they will be available in modules which say "use Constants" without
+# having to qualify their names with the Constants:: package name.
 our @EXPORT = qw(
 					TRUE
 					FALSE
-
+					
+					YES
 
 					SUBSPECIES
 					SPECIES
@@ -49,11 +57,15 @@ our @EXPORT = qw(
 				);
 
 
-
+# for booleans
 use constant TRUE => 1;
 use constant FALSE => 0;
 
+# in the database, some boolean fields are stored with a 'YES' value for true
+# and a '' value for false.  
+use constant YES => 'YES';
 
+# standard names for ranks which we use in the database taxon_rank fields.
 use constant SUBSPECIES => 'subspecies';
 use constant SPECIES 	=> 'species';
 use constant SUBGENUS => 'subgenus';
