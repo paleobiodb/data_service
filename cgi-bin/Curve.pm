@@ -970,7 +970,7 @@ sub subsample	{
 		# again, chrons are in reverse order, so we are looking at
 		#  i - 1 instead of i + 1
 		for $i (1..$chrons)	{
-			if ( $mnewbc[$i] > 0 && $mnewbc[$i-1] > 0 )	{
+			if ( $mthreetimers[$i] > 0 && $threetimerp > 0 )	{
 				$mmesa[$i] = $mtwotimers[$i] * $mtwotimers[$i-1] / ( $mthreetimers[$i] * $threetimerp );
 			}
 		}
