@@ -557,11 +557,14 @@ sub get_real_pubyr{
 # Recursively find all taxon_nos or genus names belonging to a taxon
 ##
 # Hacked to return taxon_nos as well, and an array if a user assigns return value to an array PS 12/29/2004
+# Added fetching of recombinations PS 02/14/2005.  if var suppress_recombinations is set, don't do this (useful)
+# in taxomic intervals, where we want to do that manually
 sub taxonomic_search{
 	my $name = shift;
 	my $dbt = shift;
 	my $taxon_no = (shift or "");
     my $return_taxon_nos = (shift or "");
+    my $suppress_recombinations = (shift or "");
 
 	my $sql = "";
 	my @results = ();
@@ -594,11 +597,13 @@ sub taxonomic_search{
     delete $passed{0};
 
     # Get recombination taxon nos also, and add those in PS 02/14/2005
-    foreach $taxon_no (keys %passed) {
-        $recomb_no = getCorrectedName($dbt,$taxon_no,'number');
-        if ($recomb_no != $taxon_no) {
-            PBDBUtil::debug(2,"recomb no is $recomb_no for taxon no $taxon_no");
-            $passed{$recomb_no} = 1;
+    unless ($suppress_recombinations) {
+        foreach $taxon_no (keys %passed) {
+            $recomb_no = getCorrectedName($dbt,$taxon_no,'number');
+            if ($recomb_no != $taxon_no) {
+                PBDBUtil::debug(2,"recomb no is $recomb_no for taxon no $taxon_no");
+                $passed{$recomb_no} = 1;
+            }
         }
     }
 
