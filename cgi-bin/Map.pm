@@ -1026,8 +1026,8 @@ sub mapDrawMap{
 						if ( abs($rawys[$p] - $firsty) > 90 )	{
 							$ys[$p] = -1 * $ys[$p];
 						}
-						$xs[$p] = $self->getLng($xs[$p]);
-						$ys[$p] = $self->getLat($ys[$p]);
+						$xs[$p] = $self->getLngTrunc($xs[$p]);
+						$ys[$p] = $self->getLatTrunc($ys[$p]);
 						if ( $xs[$p] eq "NaN" || $ys[$p] eq "NaN" )	{
 							$nan = "Y";
 						}
@@ -1521,7 +1521,7 @@ if ( $q->param('gridposition') ne "in back" )	{
 	print MAPOUT "</table>\n";
 
 	print MAPOUT "<table cellpadding=0 width=100%>\n<tr>\n";
-	print MAPOUT "<td valign=\"top\">\n";
+	print MAPOUT "<td valign=\"middle\">\n";
 	print MAPOUT "<table cellpadding=0 cellspacing=1><tr>\n<td align=\"right\" valign=\"top\" bgcolor=\"black\">\n";
 	print MAPOUT "<table cellpadding=5 cellspacing=1>\n";
 	if(!$q->param("taxon_info_script")){
