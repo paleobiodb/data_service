@@ -248,7 +248,7 @@ sub checkStartForm{
 		if($numrows == 0){
 			$numrows = 1;
 		}
-		elsif($choices % $numrows > 0){
+		elsif($choices % $NUMCOLS > 0){
 			$numrows++;
 		}
 		for(my $index=0; $index<$numrows; $index++){
@@ -1343,12 +1343,15 @@ sub verify_chosen_taxon{
 		# work for it because we have one occurrence in the db. (so don't
 		# let it choke out here)
 		if(@results > 0){
-			$temp_num = $results[0]->{taxon_no};
+			$num = $results[0]->{taxon_no};
+			#$temp_num = $results[0]->{taxon_no};
 		}
 	}
-	if($temp_num){
+	#if($temp_num){
+	if($num){
 		$sql = "SELECT child_no,taxon_name FROM opinions,authorities ".
-			   "WHERE parent_no=$temp_num AND taxon_no=child_no ".
+			   "WHERE parent_no=$num AND taxon_no=child_no ".
+			   #"WHERE parent_no=$temp_num AND taxon_no=child_no ".
 			   "AND status='recombined as'";
 		@results = @{$dbt->getData($sql)};
 		# might not get any recombinations; that's fine - keep going either way.
