@@ -115,8 +115,7 @@ sub processLoadImageForm{
 	my $taxon_name = $q->param('taxon_name');
 	$taxon_name =~ s/\s+/_/g;
 	my $taxon_no = $q->param('taxon_no');
-	my $reference_no = $q->param('reference_no');
-
+	my $reference_no = $q->param('reference_no') || 'NULL';
 	if($DEBUG){
 		print "FILE NAME: $file_name<br>";
 	}
