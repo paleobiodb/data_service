@@ -202,11 +202,15 @@ sub checkWhereClause{
 		return 1;
 	}
 
+	# parenthetical constructions like "WHERE ( x OR y )" aren't going to
+	#  be checked fully, so lop off leading open parentheses JA 28.9.03
+	$sql =~ s/WHERE\s\(/WHERE /i;
+
 	# This is only 'first-pass' safe. Could be more robust if we check
 	# all AND clauses.
 	$sql =~ /WHERE\s+([A-Z0-9_\.\(]+)\s*(=|LIKE|IN|!=|>|<|>=|<=)\s*(.+)?\s*/i;
 
-	#print "\$1: $1, \$2: $2<br>";
+	print "\$1: $1, \$2: $2 \$3: $3<br>";
 	if(!$1){
 		return 0;
 	}
