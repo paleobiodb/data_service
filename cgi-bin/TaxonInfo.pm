@@ -4,6 +4,7 @@ use PBDBUtil;
 
 $DEBUG = 0;
 
+
 ## startTaxonInfo
 #
 ##
@@ -453,28 +454,30 @@ sub displayTaxonInfoResults{
 	my $clean_entered_name = $entered_name;
 	$clean_entered_name =~ s/ /\+/g;
 
-	# Entered Taxon
-	print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
-		  "startTaxonomy&taxon_name=$clean_entered_name";
-	if($entered_no){
-		  print "&taxon_no=$entered_no";
-	}
-	print "\">Edit taxonomic data for $entered_name</a>".
-		  "</b></p></center>\n";
-	
-	unless($entered_name eq $genus_name){
-
-		my $clean_genus_name = $genus_name;
-		$clean_genus_name =~ s/ /\+/g;
-
-		# Verified Taxon
+	if($q->param("user") ne "Guest"){
+		# Entered Taxon
 		print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
-			  "startTaxonomy&taxon_name=$clean_genus_name";
-		if($taxon_no){
-			  print "&taxon_no=$taxon_no";
+			  "startTaxonomy&taxon_name=$clean_entered_name";
+		if($entered_no){
+			  print "&taxon_no=$entered_no";
 		}
-		print "\">Edit taxonomic data for $genus_name</a>".
+		print "\">Edit taxonomic data for $entered_name</a>".
 			  "</b></p></center>\n";
+		
+		unless($entered_name eq $genus_name){
+
+			my $clean_genus_name = $genus_name;
+			$clean_genus_name =~ s/ /\+/g;
+
+			# Verified Taxon
+			print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
+				  "startTaxonomy&taxon_name=$clean_genus_name";
+			if($taxon_no){
+				  print "&taxon_no=$taxon_no";
+			}
+			print "\">Edit taxonomic data for $genus_name</a>".
+				  "</b></p></center>\n";
+		}
 	}
 
 	print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
