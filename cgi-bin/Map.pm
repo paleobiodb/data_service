@@ -382,7 +382,12 @@ sub mapDrawMap	{
   $dotcolor = $q->param('dotcolor');
   $bordercolor = $dotcolor;
   if ($q->param('dotborder') eq "with")	{
-    $bordercolor = 'black';
+	if($q->param('mapbgcolor') eq "black"){
+		$bordercolor='white';
+	}
+	else{
+		$bordercolor = 'black';
+	}
   }
   ($dotsizeterm,$dotshape) = split / /,$q->param('pointshape');
   if ($dotsizeterm eq "small")	{
