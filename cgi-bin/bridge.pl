@@ -1,6 +1,9 @@
 #!/usr/bin/perl
 
-# bridge.pl is the glue between all the other modules.
+# bridge.pl is the starting point for all parts of PBDB system.  Everything passes through
+# here to start with.
+
+#use strict;	# eventually, should have use strict set.. rjp 2/2004.
 
 use CGI;
 use CGI::Carp qw(fatalsToBrowser);
@@ -39,15 +42,30 @@ use Debug;
 use Globals;
 
 
-my $DEBUG = 0;				# Shows debug information regarding the page
-							#   if set to 1
+#*************************************
+# some global variables (to bridge.pl)
+#*************************************
+# 
+# Some of these variable names are used throughout the code
+# $sql 		: Generally is any SQL string, although it may also be an SQLBuilder object.
+# $q		: The CGI object - used for getting parameters from HTML forms.
+# $s		: The session object - used for keeping track of users, see Session.pm
+# $hbo		: HTMLBuilder object, used for populating HTML templates with data. 
+# $dbh		: Connection to the database, see DBConnection.pm.
+# $dbt		: DBTransactionManager object, used for querying the database.
+#
+# rjp, 2/2004.
 
-my $DUPLICATE = 2;
+my $DEBUG = 0;		# Shows debug information regarding the page if set to 1
 
-# A few declarations
+my $DUPLICATE = 2;	# not sure what this is for?
+
+
 my $sql="";					# Any SQL string
 my $return="";				# Generic return value
 my $rs;						# Generic recordset
+
+# Paths from the Apache environment variables (in the httpd.conf file).
 my $HOST_URL = $ENV{BRIDGE_HOST_URL};
 my $BRIDGE_HOME = $HOST_URL . "/cgi-bin/bridge.pl";
 my $TEMPLATE_DIR = "./templates";
@@ -55,30 +73,23 @@ my $GUEST_TEMPLATE_DIR = "./guest_templates";
 my $HTML_DIR = $ENV{BRIDGE_HTML_DIR};
 my $OUTPUT_DIR = "public/data";
 
-# Make a few objects
+
+# Create the CGI, Session, and some other objects.
 my $q = CGI->new();
 my $s = Session->new();
 $csv = Text::CSV_XS->new();
 
+# Get the URL pointing to bridge
+# WARNING (JA 13.6.02): must do this before making the HTMLBuilder object!
+my $exec_url = $q->url();
 
 # this cleans all of the CGI parameters by removing HTML, escaping quotes, etc.
 # added by rjp, 2/2004
 Validation::cleanCGIParams($q);
 
 
-# Get the URL pointing to this executable
-# WARNING (JA 13.6.02): must do this before making the HTMLBuilder object!
-my $exec_url = $q->url();
-
-# Make the HTMLBuilder object
-my $hbo = HTMLBuilder->new( $TEMPLATE_DIR, $dbh, $exec_url );
-
-# Grab the action from the form.  This is what subroutine we should run.
-my $action = $q->param("action");
-$action = "displayMenuPage" unless ( $action );  # set default action to menu page.
-
-# need to know (below) if we did a processLogin and then changed the action
-my $old_action = "";
+# Make the HTMLBuilder object with the private template directory..  
+my $hbo = HTMLBuilder->new($TEMPLATE_DIR, $dbh, $exec_url );
 
 # Get the database connection
 my $dbh = DBConnection::connect();
@@ -86,42 +97,66 @@ my $dbh = DBConnection::connect();
 # Make a Transaction Manager object
 my $dbt = DBTransactionManager->new($dbh, $s);
 
-# Need to do this before printing anything else out, if debugging.
-#print $q->header('text/html') if $DEBUG;
+my $action = "";
 
-# Logout?
-# Run before debugging information
-if ( $action eq "logout" ) { logout(); }
+my @rowData;
 
-# Send Password must be run before login
-if ( $action eq "sendPassword" ) { 
-	sendPassword();
-	print $q->redirect( -url=>$BRIDGE_HOME );
-	exit;
-}
 
-# Login?
-LOGIN: {
-	# Display Login page
-	if ($action eq "displayLogin"){
-		displayLoginPage();
-		last;
+# process the action
+processAction();
+
+
+
+
+
+
+# ____________________________________________________________________________________
+# --------------------------------------- subroutines --------------------------------
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# rjp, 2/2004
+sub processAction {
+	my $cookie;
+		
+	# Grab the action from the form.  This is what subroutine we should run.
+	$action = $q->param("action");
+	
+	$action = "displayMenuPage" unless ( $action );  # set default action to menu page.
+
+	Debug::dbPrint("in processAction, action = $action");
+	
+	# need to know (below) if we did a processLogin and then changed the action
+	my $old_action = "";
+
+	# figure out what to do with the action
+	
+	if ($action eq 'logout') { 
+		logout();
+		return;
 	}
-
-	# Process Login
+	
+	if ($action eq "displayLogin") {
+		displayLoginPage();
+		return;
+	}
+	
+		# Process Login
 	if ($action eq "processLogin") {
-		$cookie = $s->processLogin( $dbh, $q ); 
+		
+		$cookie = $s->processLogin($dbh, $q);
+
 		if ($cookie) {
+			
+			Debug::dbPrint("cookie created");
+
 			my $cf = CookieFactory->new();
 			# The following two cookies are for setting the select lists
 			# on the login page.
-			my $cookieEnterer = $cf->buildCookie("enterer",
-												 $q->param("enterer"));
-			my $cookieAuthorizer = $cf->buildCookie("authorizer",
-													$q->param("authorizer"));
+			my $cookieEnterer = $cf->buildCookie("enterer", $q->param("enterer"));
+			my $cookieAuthorizer = $cf->buildCookie("authorizer", $q->param("authorizer"));
+			
 			print $q->header(-type => "text/html", 
-							 -cookie => [$cookie, 
-										 $cookieEnterer, $cookieAuthorizer],
+							 -cookie => [$cookie, $cookieEnterer, $cookieAuthorizer],
 							 -expires =>"now" );
 
 			# Destination
@@ -129,95 +164,124 @@ LOGIN: {
 				$action = $q->param("destination");
 			}
 			if ($action eq "processLogin") {
+								
 				$action = "displayMenuPage";
 				$old_action = "processLogin";
+					
 			}
-		}
-		else {
-			# failed login:  (bad password, etc)
-			$action = "displayHomePage";
+		} else { # no cookie
+			# failed login:  (bad password, etc.)
+
+			Debug::dbPrint("failed login");
+			
 			$q->param("user" => "Guest");
 			$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
+			
+			# return them to the login page with a message about the bad login.
+			displayLoginPage("<div class=\"warning\">Bad user name or password.  Please check your spelling, make sure your Caps Lock key is off, and try again.  Note that the format is <i>Last, I.</i></div>");
+			
+			return;
 		}
-		last; 
+		
+		Debug::dbPrint("successfull login");
+		# if we make it to here, then we can continue...
 	}
 
+	
 	# Guest page? 
 	if ($q->param("user") eq "Guest") {
-		# Change the HTMLBuilder object
+		# Change the HTMLBuilder object so that the templates
+		# will come from the guest directory instead of the private directory.
+		
+		Debug::dbPrint("user = guest");
+		
 		$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
-		last;
+		return;
 	}
-
+	
 	# Validate User
 	my $temp_cookie = $q->cookie('session_id');
-	$cookie = $s->validateUser($dbh, $q->cookie('session_id'));
+	if (! $cookie) { # if we didn't just make a cookie, then grab it from the session.
+		$cookie = $s->validateUser($dbh, $q->cookie('session_id'));
+	}
+		
 	if (!$cookie) {
-		if ($q->param("user") eq "Contributor") {
+		
+		Debug::dbPrint("cookie doesn't exist, user = " . $q->param("user"));
+		
+		if ($q->param("user") eq "Contributor") {			
 			displayLoginPage();
-		}
-		else {
+			return;
+		} else {
+			
+			Debug::dbPrint("user is not contributer, user = " . $q->param("user"));
+			
 			$q->param("user" => "Guest");
 			$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
 		}
 	}
-}
 
-if (!$DEBUG) {
-	# The right combination will allow me to conditionally set the DEBUG flag
-	if($s->get("enterer") eq "J. Sepkoski" && 
-									$s->get("authorizer") eq Globals::god() ) {
-		$DEBUG = 1;
+
+	if (!$DEBUG) {
+		# The right combination will allow me to conditionally set the DEBUG flag
+		if ($s->get("enterer") eq "J. Sepkoski" && 
+			$s->get("authorizer") eq Globals::god() ) {
+				$DEBUG = 1;
+		}
 	}
-}
-
-# Record the date of the action in the person table JA 27/30.6.02
-if ($s->get("enterer") ne "" && $s->get("enterer") ne "Guest")	{
-	my $nowString = now();
-	my $sql = "UPDATE person SET last_action='" . $nowString;
-	my $enterer = $s->get("enterer");
-	# fix O'Regan-type names JA 24.8.03
-	if ( $enterer !~ /\\/ )	{
-		$enterer =~ s/'/\\'/g;
+	
+	
+	# Record the date of the action in the person table JA 27/30.6.02
+	if ($s->get("enterer") ne "" && $s->get("enterer") ne "Guest") {
+		my $nowString = now();
+		my $sql = "UPDATE person SET last_action='" . $nowString;
+		my $enterer = $s->get("enterer");
+		
+		# fix O'Regan-type names JA 24.8.03
+		if ( $enterer !~ /\\/ )	{
+			$enterer =~ s/'/\\'/g;
+		}
+		
+		$sql .= "' WHERE name='" . $enterer . "'";
+		$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 	}
-	$sql .= "' WHERE name='" . $enterer . "'";
-	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
+	
+	# print out the HTML headers..  We have to do this differently for
+	# the displayLogin routine because it turns off the cache control for some reason...(rjp)
+	unless ($action eq 'displayLogin' or $old_action eq 'processLogin') {
+		print $q->header('text/html');
+	}
+	
+	
+	dbg("<p><font color='red' size='+1' face='arial'>You are in DEBUG mode!</font><br> Cookie [$cookie]<BR> Action [$action] DB [$db] Authorizer [".$s->get("authorizer")."] Enterer [".$s->get("enterer")."]<BR></p>");
+	#dbg("@INC");
+	dbg($q->Dump);
+
+	
+	# print out some debugging stuff
+	#Debug::printAllCGIParams($q);
+	#Debug::printAllSessionParams($s);
+
+	# check to see if java script is turned off
+	# rjp, 1/2004.
+	#if ($q->param('javascripton')) {
+		#	Debug::dbPrint("javascript on");	
+	#} else {
+		#	Debug::dbPrint("javascript off");
+	#}
+		
+		
+	print "hbo template dir = " . $hbo->getTemplateDir();
+		
+	# Run the action (ie, call the proper subroutine)
+	&$action;
+	
 }
 
-unless ($action eq 'displayLogin' or $old_action eq 'processLogin') {
-	print $q->header('text/html');
-}
-
-dbg("<p><font color='red' size='+1' face='arial'>You are in DEBUG mode!</font><br> Cookie [$cookie]<BR> Action [$action] DB [$db] Authorizer [".$s->get("authorizer")."] Enterer [".$s->get("enterer")."]<BR></p>");
-#dbg("@INC");
-dbg($q->Dump);
-
-
-# print out some debugging stuff
-#Debug::printAllCGIParams($q);
-#Debug::printAllSessionParams($s);
-
-
-# Run the action (ie, call the proper subroutine)
-&$action;
 
 
 
 
-# check to see if java script is turned off
-# rjp, 1/2004.
-#if ($q->param('javascripton')) {
-#	Debug::dbPrint("javascript on");	
-#} else {
-#	Debug::dbPrint("javascript off");
-#}
-
-
-
-
-
-
-# --------------------------------------- subroutines --------------------------------
 
 
 # Logout
@@ -283,19 +347,36 @@ sub sendMessage {
 
 
 # Displays the login page
-sub displayLoginPage {
-	my $select = "";
+sub displayLoginPage {	
+	my $message = shift;
+	
+	print $q->header( -type => "text/html", -Cache_Control=>'no-cache');
+	
+	#my $select = "";
 	my $authorizer = $q->cookie("authorizer");
 	my $enterer = $q->cookie("enterer");
 	my $destination = $q->param("destination");
-    my $html = $hbo->getTemplateString('login_box');
+	#my $html = $hbo->getTemplateString('login_box');
 
+	#my $html = $hbo->populateHTML('login_box', 
+	#							[ $message, $destination ], 
+	#							[ "%%message%%", "%%destination%%" ]);
+
+	my %fields = ('message' => $message, 'destination' => $destination);
+	
+	my $html = $hbo->newPopulateHTML('login_box', \%fields);
+	
+	
+	print $html;
+	
 	# Set the destination
-	$html =~ s/%%destination%%/$destination/;
+	#$html =~ s/%%destination%%/$destination/;
 
 	# Show the login page
-	print $q->header( -type => "text/html", -Cache_Control=>'no-cache'); 
-	print $html;
+	#print $q->header( -type => "text/html", -Cache_Control=>'no-cache'); 
+	
+	#print $html;
+
 	exit;
 }
 
@@ -578,20 +659,24 @@ sub buildAuthorizerPulldown {
 }
 
 
+
 # displays the main menu page for the data enterers
 sub displayMenuPage	{
-	# Clear Queue?  This is highest priority
-	my @time = `date +%S_%N`;
 	
-#	Debug::dbPrint("starting at @time");
+	
+	#Debug::printAllCGIParams($q);
+	#Debug::printAllSessionParams($s);
+	
+	# Clear Queue?  This is highest priority
 	if ( $q->param("clear") ) {
 		$s->clearQueue ( $dbh ); 
 	} else {
-
+	
 		# QUEUE
 		# See if there is something to do.  If so, do it first.
 		my %queue = $s->unqueue( $dbh );
 		if ( $queue{action} ) {
+	
 			# Set each parameter
 			foreach my $parm ( %queue ) {
 				$q->param ( $parm => $queue{$parm} );
@@ -603,14 +688,17 @@ sub displayMenuPage	{
 		}
 	}
 	
+	# rjp, 2/2004.. Where do the rowData and fieldNames come from?!?!
+	#Debug::dbPrint("fieldNames = @fieldNames");
 	
 	print stdIncludes("std_page_top");
 	print $hbo->populateHTML('menu', \@rowData, \@fieldNames);
 	print stdIncludes("std_page_bottom");
 
-		@time = `date +%S_%N`;
-#	Debug::dbPrint("done at @time");
+
 }
+
+
 
 
 # displays the "Contributer's Area" home page.
