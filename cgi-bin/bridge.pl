@@ -986,13 +986,20 @@ sub displayRefAdd
 #  * System commits data to database and thanks the nice user
 #    (or displays an error message if something goes terribly wrong)
 sub processNewRef {
-
+	my $reentry = shift;
 	my $reference_no=0;
+	my $return;
 
 	print &stdIncludes ( "std_page_top" );
 
-    $return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
-	if ( ! $return ) { return $return; }
+	if($reentry){
+		$reference_no = $reentry;
+		$return = 1; # equivalent to 'success' from insertRecord
+	}
+	else{
+		$return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
+		if ( ! $return ) { return $return; }
+	}
 
 	print "<center><h3><font color='red'>Reference record ";
 	if ( $return == $DUPLICATE ) {
@@ -4718,6 +4725,16 @@ sub insertRecord {
 	my $primary_key = shift;
 	my $matchlimit = shift;
 	my $searchField = shift;
+	my $fields_ref = shift;
+	my $vals_ref = shift;
+
+	# This 'unless' wraps most of the method. If we have data in fields_ref
+	# and vals_ref, we're re-entering this method from processCheckNearMatch
+	# after finding a potential conflict entering a new reference, and the 
+	# user said to go ahead and add the reference anyway.  See the INSERT, 
+	# below, for final details...
+	unless($fields_ref && $vals_ref){
+
 	my $searchVal = $q->param($searchField);
 
 	# Created data, unless specified.
@@ -4790,8 +4807,17 @@ sub insertRecord {
 	$return = checkDuplicates ( $idName, $primary_key, $tableName, \@fields, \@vals );
 	if ( ! $return || $return == $DUPLICATE ) { return $return; }
 
-	# Check for near matches and complain if one is found
-	$return = checkNearMatch ( $matchlimit, $idName, $tableName, $searchField, $searchVal, \@fields, \@vals );
+	# Check for near matches
+	# NOTE: the below method now handles matches by giving the user a choice
+	# of 'cancel' or 'continue' if a match is found. See method for details.
+	checkNearMatch ( $matchlimit, $idName, $tableName, $searchField, $searchVal, \@fields, \@vals );
+
+	} # END 'unless($fields_ref && $vals_ref)' - see top of method
+
+	if($fields_ref && $vals_ref){
+		@fields = @{$fields_ref};
+		@vals = @{$vals_ref};
+	}
 
 	# Insert the record
 	$sql = "INSERT INTO $tableName (" . join(',', @fields) . ") VALUES (" . join(',', @vals) . ")";
@@ -4801,6 +4827,12 @@ sub insertRecord {
 
 	# Retrieve and display the record
 	my $recID = $dbh->{'mysql_insertid'};
+
+	# Once again, deal with the re-entry scenario (checkNearMatch found some
+	# matches, but the user chose to go ahead and enter the ref anyway)
+	if($fields_ref && $vals_ref){
+		processNewRef($recID);
+	}
 
 	$$primary_key = $recID;
 	return 1;
@@ -4834,8 +4866,24 @@ sub setPersonValues	{
 
 }
 
-# Check for records that match at least some number of fields JA 28.6.02
-# WARNING: All this does right now is complain; does not kill insert!
+## checkNearMatch
+#
+# 	Description:		Check for records that match at least some number of 
+#						fields
+#
+#	Arguments:			$matchlimit		threshold of column matches to consider
+#										whole record a 'match.'
+#						$idName			name of primary key of table
+#						$tableName		db table in which to look for matches
+#						$searchField	table column on which to search
+#						$searchVal		column value to search against
+#						$fields			names of fields from form (from 
+#										submission to insertRecord that called
+#										this method).	
+#						$vals			values from form (as above)
+#
+#	Returns:
+##			
 sub checkNearMatch ()	{
 
 	my $matchlimit = shift;
@@ -4928,6 +4976,52 @@ sub checkNearMatch ()	{
 		print "</td></tr></table>\n";
 	}
 
+	if(scalar @complaints){
+		my @fields = @{$fields};
+		my $flat_fields = join(',',@fields);
+		my @vals = @{$vals};
+		my $flat_vals = join(',',@vals);
+		print "<b>What would you like to do?</b><br>";
+		print "<form method=POST action=$exec_url>";
+		print "<input type=hidden name=\"action\" value=\"processCheckNearMatch\">";
+		print "<input type=hidden name=\"tablename\" value=\"$tableName\">";
+		print "<input type=hidden name=\"fields\" value=\"$flat_fields\"";
+		print "<input type=hidden name=\"vals\" value=\"$flat_vals\"";
+		print "<center><input type=submit name=\"whattodo\" value=\"Cancel\">&nbsp;";
+		print "<input type=submit name=\"whattodo\" value=\"Continue\"></form>";
+		print qq|<p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p></center><br>\n|;
+	}
+}
+
+## processCheckNearMatch
+#
+#	Description:		either calls insertRecord with existing data (from a
+#						previous call to insertRecord) or cuts the process 
+#						short and just provides links to continue down a
+#						different path.
+#
+#	Arguments:
+#
+#	Returns:			
+##
+sub processCheckNearMatch{
+	my $fields = $q->param('fields');
+	my @fields = split(',',$fields);
+	my $vals = $q->param('vals');
+	my @vals = split(',',$vals);
+	my $what_to_do = $q->param('whattodo');
+	my $table_name = $q->param('tablename');
+
+	if($what_to_do eq 'Continue'){
+		# these are mostly dummy vars, exect tablename and the last two.
+		insertRecord($table_name, 'reference_no', 0, 5, 'author1last', \@fields, \@vals);
+	}
+	else{
+		print stdIncludes("std_page_top");
+		print "<center><h3>Reference Addition Canceled</h3>";
+		print qq|<p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p></center><br>\n|;
+		print stdIncludes("std_page_bottom");
+	}
 }
 
 # Check for duplicates before inserting a record
