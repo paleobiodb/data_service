@@ -997,7 +997,7 @@ sub getChildren {
     my $dbt = shift;
     my $taxon_name_or_no = shift;
     my $max_depth = (shift || 1);
-    my $get_junior_synonyms = (shift || 0);
+    my $get_synonyms = (shift || 0);
 
     use Data::Dumper;
 
@@ -1075,7 +1075,7 @@ sub getChildren {
                                 'taxon_rank'=>$rank,
                                 'level'=>$level,
                                 'children'=>[]);
-                if ($get_junior_synonyms) {
+                if ($get_synonyms) {
                     $new_node{'synonyms'} = getSynonyms($dbt,$ref->{child_no});
                 } 
                 push @{$node->{'children'}}, \%new_node;
@@ -1106,25 +1106,46 @@ sub getChildren {
 sub getCorrectedName{
     my $dbt = shift;
     my $child_no = shift;
-    my $return_type = shift; #default is to return row, optionally return taxon_no
+    my $return_type = shift; #default is to return row, optionally return taxon_no if this is 'number'
+    my $include_synonym = shift; #boolean, return corrected as synonym
+    my $recurse_times = shift || 0;
 
     # will get what its renamed to.  A bit tricky, as you want to the most recent opinion, but normally the 'belongs to' comes first
     # so you have to use an order by so it comes second.  can't use filter the belongs to in the where clause cause the taxon may
     # genuinely belong to something else (not recomb). surround the select in () so aliased fields can be used in order by.
-    my $sql = "(SELECT a.taxon_no, a.taxon_name, a.taxon_rank, (o.status in ('recombined as','corrected as','rank changed as')) as is_recomb, IF(o.pubyr, o.pubyr, r.pubyr) as pubyr, (r.publication_type='compendium') AS is_compendium" 
+    my $sql = "(SELECT a.taxon_no, a.taxon_name, a.taxon_rank, (o.status = 'belongs to') AS is_bt, o.status,"
+         . " IF(o.pubyr IS NOT NULL AND o.pubyr != '', o.pubyr, r.pubyr) as pubyr, (r.publication_type='compendium') AS is_compendium" 
          . " FROM opinions o " 
          . " LEFT JOIN authorities a ON o.parent_no = a.taxon_no " 
          . " LEFT JOIN refs r ON r.reference_no=o.reference_no " 
          . " WHERE o.child_no=$child_no) " 
-         . " ORDER BY is_compendium ASC, pubyr DESC, is_recomb DESC LIMIT 1";
+         . " ORDER BY is_compendium ASC, pubyr DESC, is_bt ASC LIMIT 1";
 
     my @rows = @{$dbt->getData($sql)};
     if (@rows) {
-        if ($rows[0]->{'is_recomb'}) {
-            if ($return_type eq 'number') {
-                return $rows[0]->{'taxon_no'};
+        my $status = $rows[0]->{'status'};
+        if (($status eq 'recombined as' || $status eq 'corrected as' || $status eq 'rank changed as') || 
+            ($include_synonym && ($status eq 'homonym of' || $status eq 'subjective synonym of' || $status eq 'objective synonym of' || $status eq 'revalidated' || $status eq 'replaced by'))) {
+            if ($recurse_times > 2) {
+                if ($return_type eq 'number') {
+                    return $rows[0]->{'taxon_no'};
+                } else {
+                    return $rows[0];
+                }
             } else {
-                return $rows[0];
+                #print "t $rows[0]->{taxon_no} rt $return_type is $include_synonym, rt $recurse_times<BR>";
+                my $use_row = getCorrectedName($dbt,$rows[0]->{'taxon_no'},'',$include_synonym,$recurse_times+1);
+                
+                if ($use_row->{'pubyr'} <= $rows[0]->{'pubyr'}) {
+                    $use_row = $rows[0];
+                } 
+
+                if ($return_type eq 'number') {
+                    return $use_row->{'taxon_no'};
+                } else {
+                    return $use_row;
+                }
+                #use Data::Dumper; print Dumper($row2);
             }
         } else {
             if ($return_type eq 'number') {
@@ -1138,8 +1159,13 @@ sub getCorrectedName{
             }        
         }
     } else {
-        #bad input, bad output
-        return undef;        
+        if ($return_type eq 'number') {
+            return $child_no;
+        } else {
+            $sql = "SELECT a.taxon_no, a.taxon_name, a.taxon_rank from authorities a WHERE a.taxon_no=$child_no";
+            @me = @{$dbt->getData($sql)};
+            return $me[0];
+        }
     }
 }
 
@@ -1160,7 +1186,7 @@ sub getChildrenTraverseTree {
     } 
 }
 
-# Trivial function get junior synonyms of a taxon_no. Returns array of hash references to db table rows (like getData does)
+# Trivial function get synonyms of a taxon_no. Returns array of hash references to db table rows (like getData does)
 sub getSynonyms {
     my $dbt = shift;
     my $parent_no = shift;    
