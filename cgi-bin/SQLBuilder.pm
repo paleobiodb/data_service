@@ -34,6 +34,7 @@ use Permissions;
 use DBConnection;
 use Debug;
 use Session;
+use Globals;
 use CGI::Carp qw(fatalsToBrowser);
 
 
@@ -54,6 +55,8 @@ use fields qw(
 				
 				whereSeparator
 				whereItems
+				
+				tableNames
 							);  # list of allowable data fields.
 
 # dbh				:	handle to the database
@@ -61,6 +64,7 @@ use fields qw(
 # perm				:	Permissions object
 # SQLExpr			:	the entire SQL expression *if* the user set it explicitly
 
+# tableNames		:	array ref of all table names in the database, not set by default.
 							
 # If using permissions, then
 # you must pass the current Session object
@@ -570,6 +574,133 @@ sub finishSQL {
 		$self->{sth} = undef;
 	}
 }
+
+
+
+
+# for internal use only
+# Pass it a table name, and it returns a reference to an array of array refs, one per col.
+# Basically grabs the table description from the database.
+#
+sub getTableDesc {
+	my SQLBuilder $self = shift;
+	
+	my $tableName = shift;
+	
+	if (! $self->isValidTableName($tableName)) {
+		return 0;	
+	}
+
+	my $sql = "DESC $tableName";
+	my $ref = ($self->{dbh})->selectall_arrayref($sql);
+
+	return $ref;
+}
+
+
+# for internal use only, doesn't return anything
+#
+# simply grabs a list of all table names in the database
+# and stores it in a member variable.
+sub populateTableNames {
+	my SQLBuilder $self = shift;
+
+	my $sql = "SHOW TABLES";
+	my $ref = ($self->{dbh})->selectcol_arrayref($sql);
+
+	$self->{tableNames} = $ref;
+}
+
+# pass this a table name string and it will
+# return a true or false value dependent on the existence of that
+# table in the database.
+sub isValidTableName {
+	my SQLBuilder $self = shift;
+	
+	my $tableName = shift;
+	
+	if (! $self->{tableNames}) {
+		# then call a method to figure out the names.
+		$self->populateTableNames();
+	}
+	
+	my $success = 0;
+	my $tableNames = $self->{tableNames};
+	foreach my $name (@$tableNames) {
+		if ($tableName eq $name) {
+			$success = 1;
+		}
+	}
+	
+	return $success;
+}
+
+
+# rjp, 2/2004.
+#
+# Pass it a table name such as "occurrences", and a
+# hash ref - the hash should contain keys which correspond
+# directly to column names in the database.  Note, not all columns need to 
+# be listed; only the ones which you are inserting data for.
+#
+# Returns a true value for success, or false otherwise.
+# Note, if it makes it to the insert statement, then it returns
+# the result code from the dbh->do() method.
+#
+#
+# Note, for now, this just blindly inserts whatever the user passes.
+# However, in the future, since insert is an operation which won't occur very 
+# often (and not in a loop), we should do some more checking.
+# For example, we can make sure that NOT NULL fields are set before performing the
+# insert.. We can check the column types to make sure they match (integers, varchars, etc.).
+# We can make sure that the autoincrement fields aren't overwritten, etc..
+# 
+# Add this eventually..
+#
+#
+sub insertNewRecord {
+	my SQLBuilder $self = shift;
+	my $tableName = shift;
+	my $hashRef = shift;
+
+	# make sure the table name is valid
+	if ((! $self->isValidTableName($tableName)) || (! $hashRef)) {
+		return 0;	
+	}
+	
+	# loop through each key in the passed hash and
+	# build up the insert statement.
+	
+	# get the description of the table
+	my @desc = @{$self->getTableDesc($tableName)};
+	my @colName; 	# names of columns in table
+	foreach my $row (@desc) {
+		push(@colName, $row->[0]);	
+	}
+	
+	my $toInsert = "";
+	
+	my @keys = keys(%$hashRef);
+	foreach my $key (@keys) {
+		
+		# if it's a valid column name, then add it to the insert
+		if (Globals::isIn(\@colName, $key)) {
+			$toInsert .= "$key = '" . $hashRef->{$key} . "', ";
+		}
+	}
+	
+	# remove the trailing comma
+	$toInsert =~ s/, $/ /;
+	
+	$toInsert = "INSERT INTO $tableName SET " . $toInsert;
+	
+	# actually insert into the database
+	my $insertResult = $self->{dbh}->do($toInsert);
+		
+	# return the result code from the do() method.
+	return $insertResult;
+}
+
 
 
 
