@@ -24,7 +24,7 @@
 <tr><td align=right><b>First author:</b> <td><input id="opinion_author1init" name="opinion_author1init" size=6> <td><input id="opinion_author1last" name="opinion_author1last" size=20><br>
 <td align=right><b>Second author:</b> <td><input id="opinion_author2init" name="opinion_author2init" size=6> <td><input id="opinion_author2last" name="opinion_author2last" size=20><br>
 </tr>
-<tr><td valign=top align=right><b>Other authors:</b> <td colspan=5><textarea id="opinion_otherauthors" name="opinion_otherauthors" rows=3 cols=80></textarea><br>
+<tr><td valign=top align=right><b>Other authors:</b> <td colspan=5><textarea id="opinion_otherauthors" name="opinion_otherauthors" rows=3 cols=70></textarea><br>
 </tr>
 <tr><td align=right><b>Year:</b> <td colspan=1><input id="opinion_pubyr" name="opinion_pubyr" size=6>
 <td colspan=4><b>Pages*:</b> <input id="opinion_2nd_pages" name="opinion_2nd_pages" size=12>
@@ -40,11 +40,11 @@
 
 
 <DIV class="mainSection">
-
 <center><h2>What did they say about the status of %%taxon_name%%?</h2></center>
 
 <center>
-<table>
+
+<TABLE BORDER=0>
 <tr><td align=right>
 <input type="radio" name="taxon_status" value="no_opinion" checked> </td><td colspan=2>
 <b>Don't enter an opinion</b>; I'm just editing authority information.
@@ -65,8 +65,10 @@ Otherwise, it should say "recombined into a different genus as." -->
 <input type="radio" name="taxon_status" value="recombined_as"> </td><td colspan=2><b>Valid %%rank%%</b>, %%recombined_message%%
 <input id="parent_taxon_name" name="parent_taxon_name" size=50><br>
 </td></tr>
-<tr><td></td><td valign="top" align=right> Diagnosis:</td>
-<td><textarea id="diagnosis" name="diagnosis" rows=3 cols=80></textarea>
+<tr>
+<td></td>
+<td valign="center" align=left>Diagnosis:<BR>
+<textarea id="diagnosis" name="diagnosis" rows=3 cols=70></textarea>
 </td></tr>
 
 <tr><td align=right>
@@ -84,14 +86,33 @@ Status:
 <select name="nomen"><option>nomen dubium <option>nomen nudum <option>nomen oblitem <option>nomen vanum </select>
 </td></tr>
 
-</table>
 
-<p>
-<center><span class="tiny">
-Please check the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> for an explanation of these terms.
-</span></center>
-</p>
-<p><b>Comments:</b> <textarea id="opinion_comments" name="opinion_comments" rows=2 cols=80></textarea></p>
+<TR>
+<TD></TD>
+
+<TD align=center>
+<span class="tiny"><BR>
+Please check the 
+<a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> 
+for an explanation of these terms. <BR>
+</span></TD>
+</TR>
+<TR><TD> </TD></TR>
+<TR>
+<TD colspan=2 align=left valign=top>
+<b>Comments:</b><BR>
+<textarea id="opinion_comments" name="opinion_comments" rows=2 cols=70></textarea>
+</TD>
+</TR>
+
+</TABLE>
+
+<!--
+<tr><td align=right><b>Comments:</b></td>
+<td colspan=5><textarea id="comments" name="comments" rows=2 cols=70></textarea></td>
+</tr>
+-->
+
 
 
 </DIV>
