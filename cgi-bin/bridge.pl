@@ -815,7 +815,7 @@ sub printGetRefsButton	{
 	if ($overlimit > 30 && $overlimit > $numRows)	{
 		my $oldSearchTerms;
 		my @oldParams = ("name", "year", "reftitle", "reference_no",
-						 "authorizer", "project_name", "refsortby",
+						 "enterer", "project_name", "refsortby",
 						 "refsSeen");
 		for my $parameter (@oldParams)	{
 			if ($q->param($parameter))	{
