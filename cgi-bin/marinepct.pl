@@ -8,8 +8,6 @@ use DBConnection;
 
 # made from a copy of fivepct.pl 19.8.03
 
-require "connection.pl";
-
 my $q = CGI->new();
 my $dbh = DBConnection::connect();
 my $s = Session->new();
