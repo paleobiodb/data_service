@@ -1,5 +1,6 @@
 # Used for permissions checking to make sure the current user has permission to access each row.
-# applies to collections, occurrences, and reidentifications.
+# applies to collections, occurrences, and reidentifications for read permissions, and to several
+# other tables for read/write and write permissions.
 #
 # Relies on the access_level and release_date fields of the collection table.
 #
@@ -13,15 +14,18 @@ use SQLBuilder;
 use Debug;
 
 use fields qw(	
+				session
 				SQLBuilder
 			);  # list of data members
 
-
+# session		:	the session object passed in with new()
+# SQLBuilder	:	SQLBuilder object so we don't have to keep recreating it.
+			
 
 # Flags and constants
 # These are class variables.
 my $DEBUG = 0;		# DEBUG flag
-my $s;				# Reference to the session variables
+#my $s;				# Reference to the session variables
 
 
 
@@ -30,7 +34,8 @@ sub new {
 	my $class = shift;
 	my Permissions $self = fields::new($class);
 	
-	$s = shift;		# session object
+	my $s = shift;		# session object
+	$self->{session} = $s;
 	
 	if (! $s) {
 		Debug::logError("Permissions must be created with valid Session object!");
@@ -66,6 +71,8 @@ sub userHasReadPermissionForCollectionNumber {
 		Debug::logError("Permissions, no collection_no passed.");
 		return 0;  # false if no collection_no
 	}
+	
+	my $s = $self->{session};
 
 	# Get today's date in the lexical comparison format
 	my $now = $self->getDate();
@@ -136,6 +143,8 @@ sub getReadRows {
 	my $dataRows = shift;
 	my $limit = shift;
 	my $ofRows = shift;
+	
+	my $s = $self->{session};
 
 	# Get today's date in the lexical comparison format
 	my $now = $self->getDate ( );
@@ -247,6 +256,8 @@ sub getWriteRows {
 	my $dataRows = shift;
 	my $limit = shift;
 	my $ofRows = shift;
+	
+	my $s = $self->{session};
 
 	while ( my $row = $sth->fetchrow_hashref ( ) ) {
 
@@ -302,6 +313,8 @@ sub getReadWriteRowsForEdit{
 	my $self = shift;
 	my $sth = shift;
 
+	my $s = $self->{session};
+	
 	# for returning data
 	my @results = ();
 
