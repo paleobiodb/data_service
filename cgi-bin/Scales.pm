@@ -89,6 +89,8 @@ sub startSearchScale	{
 	}
 	print "</table>\n<p>\n";
 
+	print "<p align=\"left\" class=\"small\">All data on the web site are prepared using an automatically generated composite time scale. The composite scale is based on the latest published correlations and boundary estimates for each time interval. Individual scales may be viewed by selecting from the pulldown menu above. Note, however, that the correlations in an individual scale might not be used in computations because they might not be the most recently published.</p>\n";
+
 	print main::stdIncludes("std_page_bottom");
 
 	return;
