@@ -1683,6 +1683,8 @@ sub displayCollResults {
 sub processCollectionsSearch {
 	my $in_list = shift;  # for taxon info script
 	
+	#Debug::dbPrint("inlist = $in_list\n");
+	
 	# This is a list of all pulldowns in the collection search form.  
 	# These cannot use the LIKE wildcard, i.e. they must be
 	# exact matches regardless of the request.
@@ -1799,7 +1801,8 @@ sub processCollectionsSearch {
 
 			$sth->finish();
 		}
-	}
+	} # end of if genus block.
+	
 	
 	# if time intervals were requested, get an in-list
 	my @timeinlist;
@@ -1819,13 +1822,15 @@ sub processCollectionsSearch {
 	my $sth = $dbh->prepare( $sqlLiteral ) || die ( "$sqlLiteral<hr>$!" );
 	$sth->execute();
 
-	# Get a list of field names
+	# Get a list of field names from the database
 	my @fieldNames = @{$sth->{NAME}};
-	# Get a list of field types
+	# Get a list of field types (number = 1, otherwise = 0)
 	my @fieldTypes = @{$sth->{mysql_is_num}};
 	# Get the number of fields
 	my $numFields = $sth->{NUM_OF_FIELDS};
 	$sth->finish();
+	
+	Debug::dbPrint("fieldNames = @fieldNames\n\nfieldTypes = @fieldTypes\n\nnumFields = $numFields");
     
 	# Handle wildcards
 	my $comparator = "=";
@@ -1842,7 +1847,7 @@ sub processCollectionsSearch {
 	  $q->param('modified_since' => '');
 	}
 	
-	# Handle collection name (must also search aka field) JA 7.3.02
+	# Handle collection name (must also search collection_aka field) JA 7.3.02
 	if ( $q->param('collection_names')) {
 		my $collectionName = $dbh->quote($wildcardToken . $q->param('collection_names') . $wildcardToken);
 		push(@terms, "(collection_name$comparator" . $collectionName . " OR collection_aka$comparator" . $collectionName . ")");
@@ -1925,7 +1930,6 @@ sub processCollectionsSearch {
 	# Remove it from further consideration
 	$q->param("research_group" => "");
 		
-	#Debug::dbPrint("fieldNames = @fieldNames");
 	
 	# Compose the WHERE clause
 	# loop through all of the possible fields checking if each one has a value in it
@@ -1936,12 +1940,11 @@ sub processCollectionsSearch {
 		
 		#Debug::dbPrint("field $fieldName");
 		
-		$val = $q->param("\'". $fieldName . "\'");
+		#$val = $q->param("\'". $fieldName . "\'");
+		$val = $q->param($fieldName);
 		if ($val) {
 			#Debug::dbPrint("found field named $fieldName with value $val");
-			
-			$val =~ s/"//g;
-	
+				
 			if ( $pulldowns{$fieldName} ) {
 				# It is in a pulldown... no wildcards
 				push(@terms, "$fieldName = '$val'");
@@ -2146,7 +2149,7 @@ sub processCollectionsSearch {
 
 	dbg ( "$sql->SQLExpr()<HR>" );
 	#print ("sql = $sql<BR>");
-	#Debug::dbPrint("proccessCollectionsSearch SQL Num. 2 =" . $sql->SQLExpr());
+	Debug::dbPrint("proccessCollectionsSearch SQL Num. 2 =" . $sql->SQLExpr());
 	
 	return $sql->SQLExpr();
 
