@@ -74,7 +74,8 @@ sub get_classification_hash{
         if ($taxon_no) {
             # Get original combination so we can move upward in the tree
             #$taxon_no = TaxonInfo::getOriginalCombination($dbt, $taxon_no);
-            ($new_name, $taxon_no) = TaxonInfo::verify_chosen_taxon('',$taxon_no,$dbt);
+#            ($new_name, $taxon_no) = TaxonInfo::verify_chosen_taxon('',$taxon_no,$dbt);
+            $taxon_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
         }
 
         my $new_child = $taxon_no;
