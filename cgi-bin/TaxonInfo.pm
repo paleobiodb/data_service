@@ -2,13 +2,30 @@ package TaxonInfo;
 
 use PBDBUtil;
 
-$DEBUG = 0;
+$DEBUG = 1;
 
 ## startTaxonInfo
 #
 ##
 sub startTaxonInfo{
-	my $html = "<form method=post action=\"/cgi-bin/bridge.pl\">".
+	print main::stdIncludes( "std_page_top" );
+	print searchForm();
+	print main::stdIncludes("std_page_bottom");
+}
+
+## searchForm
+#
+##
+sub searchForm{
+	my $search_again = (shift or 0);
+
+	my $html = "";
+
+	unless($search_again){
+		$html .= "<center><h3>Taxon search form</h3></center>";
+	}
+
+	$html .= "<form method=post action=\"/cgi-bin/bridge.pl\">".
 		   "<input id=\"action\" type=hidden name=\"action\"".
 		   " value=\"checkTaxonInfo\">".
 		   "<input id=\"user\" type=hidden name=\"user\"".
@@ -25,11 +42,7 @@ sub startTaxonInfo{
 		   "<input id=\"submit\" name=\"submit\" value=\"Get info\"".
 		   " type=\"submit\"></td></tr></table></center></form>";
 
-	# Spit out the HTML
-	print main::stdIncludes( "std_page_top" );
-	print "<center><h3>Taxon search form</h3></center>";
-	print $html;
-	print main::stdIncludes("std_page_bottom");
+	return $html;
 }
 
 ## checkStartForm
@@ -176,10 +189,8 @@ sub checkStartForm{
 	if(scalar @results < 1 ){
 		print main::stdIncludes("std_page_top");
 		print "<center><h3>No results found</h3>";
-		#	  "genus: \&lt;<i>$genus</i>\&gt; and ".
-		#	  "species: \&lt;<i>$species</i>\&gt;.";
-		print "<br><br><p><b><a href=\"/cgi-bin/bridge.pl?action=".
-			  "beginTaxonInfo&user=Contributor\">Search Again</a></b></center>";
+		print "<p><b>Please search again</b></center>";
+		print searchForm(1); # param for not printing header with form
 		print main::stdIncludes("std_page_bottom");
 	}
 	# if we got just one result, it could be higher taxon, or an exact
@@ -197,7 +208,7 @@ sub checkStartForm{
 			  "<input id=\"action\" type=\"hidden\"".
 			  " name=\"action\"".
 			  " value=\"displayTaxonInfoResults\">".
-			  "<table width=\"75%\">";
+			  "<table width=\"100%\">";
 		my $newrow = 0;
 		my $choices = @results;
 		my $NUMCOLS = 3;
@@ -218,7 +229,7 @@ sub checkStartForm{
 				if($results[$index+($counter*$numrows)]->{clarification_info}){
 					print " (".$results[$index+($counter*$numrows)]->{taxon_no}.")";
 				}
-				print "\">&nbsp;<i>".$results[$index+($counter*$numrows)]->{genus_name}."\&nbsp;".
+				print "\"><i>&nbsp;".$results[$index+($counter*$numrows)]->{genus_name}."&nbsp;".
 					  $results[$index+($counter*$numrows)]->{species_name};
 				if($results[$index+($counter*$numrows)]->{clarification_info}){
 					print " (".$results[$index+($counter*$numrows)]->{clarification_info}.")";
@@ -248,6 +259,7 @@ sub displayTaxonInfoResults{
 	my $s = shift;
 	my $dbt = shift;
 	my $genus_name = $q->param("genus_name");
+	my $taxon_type = $q->param("taxon_rank");
 	my $taxon_no = 0;
 
 	require Map;
@@ -261,6 +273,10 @@ sub displayTaxonInfoResults{
 		$genus_name =~ s/\s+$//; # remove trailing spaces.
 		$q->param("genus_name" => $genus_name);
 	}
+	else{
+		# just do this
+		$genus_name =~ s/\s+$//; # remove trailing spaces.
+	}
 
 	# Verify taxon:  If what was entered's most recent parent is a "belongs to"
 	# or a "nomen *" relationship, then do the display page on what was entered.
@@ -271,8 +287,11 @@ sub displayTaxonInfoResults{
 	$q->param("genus_name" => $genus_name);
 	$taxon_no = $verified[1];
 	
-
-	print "genus_name: $genus_name, taxon_no: $taxon_no<br>";
+	# Get the sql IN list for a Higher taxon:
+	my $in_list = "";
+	if($taxon_type eq "Higher taxon"){
+		$in_list = PBDBUtil::taxonomic_search($q->param('genus_name'), $dbt);
+	}
 
 ## DEAL WITH param NO_MAP AND param NO_CLASSIFICATION
 
@@ -292,8 +311,6 @@ sub displayTaxonInfoResults{
 	$q->param('mapscale'=>'X 1');
 	$q->param('pointsize'=>'tiny');
 
-	# NOTE: ERROR: need to change/remove the "search again" link generated
-	# at the bottom of this output.
 	print "<table width=\"100%\">".
 		  "<tr><td align=\"middle\"><h3>Classification</h3></td><td align=\"middle\"><h3>Distribution</h3></td></tr>";
 	print "<tr><td width=\"40%\" valign=\"top\" align=\"middle\">";
@@ -307,7 +324,7 @@ sub displayTaxonInfoResults{
 	print"</td><td width=\"60%\" align=\"middle\" valign=\"top\">";
 	# MAP USES $q->param("genus_name") to determine what it's doing.
 	my $m = Map->new( $dbh, $q, $s, $dbt );
-	my $perm_rows = $m->buildMapOnly();
+	my $perm_rows = $m->buildMapOnly($in_list);
 	my @perm_rows = @{$perm_rows};
 	if(@perm_rows > 0){
 		$m->mapDrawMap($perm_rows);
@@ -321,7 +338,7 @@ sub displayTaxonInfoResults{
 	$q->param(-name=>"limit",-value=>1000000);
 
 	# Get all the data from the database
-	@data = @{main::displayCollResults()};	
+	@data = @{main::displayCollResults($in_list)};	
 
 	require Collections;
 
@@ -344,7 +361,7 @@ sub displayTaxonInfoResults{
 	print "<center><h3>Collections</h3></center>";
 	print "<table width=\"100%\"><tr bgcolor=\"white\">";
 	print "<th align=\"middle\">Time - place</th>";
-	print "<th align=\"middle\">PBDB collection number</th></tr>";
+	print "<th align=\"left\">PBDB collection number</th></tr>";
 	my $row_color = 0;
 	foreach my $key (@sorted){
 		if($row_color % 2 == 0){
@@ -400,12 +417,7 @@ sub displayTaxonClassification{
 	my $taxon_name;
 	my %classification = ();
 
-	# The authorities table has "Genus species" for taxon_rank='species', so
-	# we set the rank to genus iff we only got a genus. These values 
-	# (taxon name and rank) will be used for the initial select into the
-	# authorities table, though the passed in genus and species values will
-	# be used as given for the classification table (otherwise we often will
-	# get genus and species on the same line in the table). 
+	# if we didn't get a species, figure out what rank we got
 	if($genus && $species eq ""){
 		$taxon_name = $genus;
 		# Initialize the classification hash:
@@ -631,14 +643,17 @@ sub displayTaxonClassification{
 		$lastrank = $rank;
 	  }
 	}
+	print "</table>";
 	# Now,  print out a hyperlinked list of all taxa below the one at the
 	# bottom of the Classification section.
-	# NOTE: Don't do this if the last rank was 'species.'
-	print "</table>";
+	if($counter <1){
+		print "<i>No classification data available for this taxon</i><br>";
+	}
 	my $index;
 	for($index=0; $index<@taxon_rank_order; $index++){
 		last if($lastrank eq $taxon_rank_order[$index]);
 	}
+	# NOTE: Don't do this if the last rank was 'species.'
 	CHILDREN:{
 	unless($index+1 >= @taxon_rank_order){
 		$lastrank = $taxon_rank_order[$index+1];
@@ -713,78 +728,66 @@ sub displayTaxonSynonymy{
 			  "ref_is_authority FROM authorities ".
 			  "WHERE taxon_rank='$taxon_rank' AND taxon_name='$taxon_name'";
 	my @results = @{$dbt->getData($sql)};
-	my $child_no = $results[0]->{taxon_no};
+	my $taxon_no = $results[0]->{taxon_no};
 	PBDBUtil::debug(1,"taxon rank: $taxon_rank");
 	PBDBUtil::debug(1,"taxon name: $taxon_name");
-	PBDBUtil::debug(1,"taxon number from authorities: $child_no");
-	unless($child_no){
+	PBDBUtil::debug(1,"taxon number from authorities: $taxon_no");
+	unless($taxon_no){
 		print "<i>No taxonomic history is available for $taxon_rank $taxon_name.</i><br>";
 		return 0;
 	}
 
 	print "<center><h3>Taxonomic history</h3></center>";
-	# Do the "was named by" part first:
 	print "<ul>";
 
-	# Get ref info from refs if 'ref_is_authority' is set
-	if($results[0]->{ref_is_authority} =~ /YES/i){
-		PBDBUtil::debug(1,"author and year from refs<br>");
-		# If we didn't get an author and pubyr and also didn't get a 
-		# reference_no, we're at a wall and can go no further.
-		if(!$results[0]->{reference_no}){
-			print "Cannot determine taxonomic history for $taxon_name<br>.";
-			return;	
-		}
-		$sql = "SELECT author1last, pubyr FROM refs ".
-			   "WHERE reference_no=".$results[0]->{reference_no};
-		@results = @{$dbt->getData($sql)};
-		print "<li><i>$genus $species</i> was named by ".
-			  "$results[0]->{author1last} ($results[0]->{pubyr})";
-	}
-	# If ref_is_authority is not set, use the authorname and pubyr in this
-	# record.
-	elsif($results[0]->{author1last} && $results[0]->{pubyr}){
-		PBDBUtil::debug(1,"author and year from authorities<br>");
-		print "<li><i>$genus $species</i> was named by ".
-			  "$results[0]->{author1last} ($results[0]->{pubyr})";
-	}
-	# if there's nothing from above, give up or try the reference?
-	else{
-		print "</ul>";
-		print "<i>No taxonomic history is available for $taxon_rank $taxon_name.</i><br>";
-		return 0;
-	}
-
-	# Now, go get synonymies for the taxon as child
-	my $syn_html = getSynonymyParagraph($dbt, $child_no);
-	print "<br><br><li>$syn_html" if($syn_html ne "");
-
-	# ... and for the taxon as parent
-	# We only want unique results: (The db has 8 records of parent 46303 with
-	# child 50471 as a 'subjective synonym of'.
-	$sql = "SELECT DISTINCT(child_no), status FROM opinions ".
-		   "WHERE parent_no=$child_no";
+	# Get the original combination
+	my $original_combination_no = getOriginalCombination($dbt, $taxon_no);
+	
+	# Select all parents of the original combination whose status' are
+	# either 'recombined as' or 'corrected as'
+	$sql = "SELECT DISTINCT(parent_no), status FROM opinions ".
+		   "WHERE (status='recombined as' OR status='corrected as') AND ".
+		   "child_no=$original_combination_no";	
 	@results = @{$dbt->getData($sql)};
-	foreach my $child (@results){
-		my $other_paras = "";
-		# Need to print out "[taxon_name] was named by [author] ([pubyr])".
-		# - select taxon_name, author1last, pubyr, reference_no from authorities
-		$sql = "SELECT taxon_name, author1last, pubyr, reference_no ".
-			   "FROM authorities WHERE taxon_no=".$child->{child_no};
-		my @auth_rec = @{$dbt->getData($sql)};
-		# - if not pubyr and author1last, get same from refs
-		unless($auth_rec[0]->{author1last} && $auth_rec[0]->{pubyr}){
-			$sql = "SELECT author1last, pubyr ".
-				   "FROM refs WHERE reference_no=".$auth_rec[0]->{reference_no};
-			my @ref_rec = @{$dbt->getData($sql)};
-			$auth_rec[0]->{author1last} = $ref_rec[0]->{author1last};
-			$auth_rec[0]->{pubyr} = $ref_rec[0]->{pubyr};
+
+	# Combine parent numbers from above for the next select below. If nothing
+	# was returned from above, use the original combination number.
+	my @parent_list = ();
+	if(scalar @results <1){
+		push(@parent_list, $original_combination_no);
+	}
+	else{
+		foreach my $rec (@results){
+			push(@parent_list,$rec->{parent_no});
 		}
-		$other_paras .= "<i>".$auth_rec[0]->{taxon_name}."</i> was named by ".
-						$auth_rec[0]->{author1last}." (".
-						$auth_rec[0]->{pubyr}."). ";
-		$other_paras .= getSynonymyParagraph($dbt, $child->{child_no});
-		print "<br><br><li>$other_paras" if($other_paras ne "");
+	}
+
+	# Select all synonymies for the above list of taxa.
+	$sql = "SELECT DISTINCT(child_no), status FROM opinions ".
+		   "WHERE status like '%synonym%' AND parent_no IN (".
+			join(',',@parent_list).")";
+	@results = @{$dbt->getData($sql)};
+
+	# Reduce these results to original combinations:
+	foreach my $rec (@results){
+		$rec = getOriginalCombination($dbt, $rec->{child_no});	
+	}
+
+	# NOTE: "corrected as" could also occur at higher taxonomic levels.
+
+	# Get synonymies for all of these original combinations
+	foreach my $child (@results){
+		my $list_item = getSynonymyParagraph($dbt, $child);
+		push(@paragraphs, "<br><br>$list_item") if($list_item ne "");
+	}
+
+	# Print the info for the original combination of the passed in taxon first.
+	print getSynonymyParagraph($dbt, $original_combination_no);
+
+	# Now alphabetize the rest:
+	@paragraphs = sort {lc($a) cmp lc($b)} @paragraphs;
+	foreach my $rec (@paragraphs){
+		print $rec;
 	}
 
 	print "</ul>";
@@ -796,18 +799,59 @@ sub displayTaxonSynonymy{
 ##
 sub getSynonymyParagraph{
 	my $dbt = shift;
-	my $child_no = shift;
+	my $taxon_no = shift;
 	my %synmap = ( 'recombined as' => 'recombined as ',
-				   'reassigned to' => 'recombined as ',
+				   'corrected as' => 'corrected as',
 				   'subjective synonym of' => 'synonymized subjectively with ',
 				   'objective synonym of' => 'synonymized objectively with ');
+	my $text = "";
+#--
+	# "Named by" part first:
+	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
+	# - select taxon_name, author1last, pubyr, reference_no from authorities
+	my $sql = "SELECT taxon_name, author1last, pubyr, reference_no, ".
+			  "ref_is_authority FROM authorities WHERE taxon_no=$taxon_no";
+	my @auth_rec = @{$dbt->getData($sql)};
+	# Get ref info from refs if 'ref_is_authority' is set
+	if($auth_rec[0]->{ref_is_authority} =~ /YES/i){
+		PBDBUtil::debug(1,"author and year from refs<br>");
+		# If we didn't get an author and pubyr and also didn't get a 
+		# reference_no, we're at a wall and can go no further.
+		if(!$auth_rec[0]->{reference_no}){
+			$text .= "Cannot determine taxonomic history for ".
+					 $auth_rec[0]->{taxon_name}."<br>.";
+			return $text;	
+		}
+		$sql = "SELECT author1last, pubyr FROM refs ".
+			   "WHERE reference_no=".$auth_rec[0]->{reference_no};
+		@results = @{$dbt->getData($sql)};
+		$text .= "<li><i>".$auth_rec[0]->{taxon_name}."</i> was named by ".
+			  	 $results[0]->{author1last}." ".($results[0]->{pubyr});
+	}
+	# If ref_is_authority is not set, use the authorname and pubyr in this
+	# record.
+	elsif($auth_rec[0]->{author1last} && $auth_rec[0]->{pubyr}){
+		PBDBUtil::debug(1,"author and year from authorities<br>");
+		$text .= "<li><i>".$auth_rec[0]->{taxon_name}."</i> was named by ".
+			  	 $auth_rec[0]->{author1last}." ".($auth_rec[0]->{pubyr});
+	}
+	# if there's nothing from above, give up.
+	else{
+		$text .= "</ul>";
+		$text .= "<i>Cannot determine who named ".
+				 $auth_rec[0]->{taxon_rank}." ".
+				 $auth_rec[0]->{taxon_name}.".</i><br>";
+		# RETURN OR KEEP GOING?
+		return $text;
+	}
+#--
 
+	# Now, synonymies:
 	$sql = "SELECT parent_no, status, reference_no, pubyr, author1last ".
-		   "FROM opinions WHERE child_no=$child_no AND status != 'belongs to'".
+		   "FROM opinions WHERE child_no=$taxon_no AND status != 'belongs to'".
 		   " AND status NOT LIKE 'nomen%'";
 	@results = @{$dbt->getData($sql)};
-	# I can't remember why this is here, commented out...
-	#$parent_no = selectMostRecentParentOpinion($dbt, \@results);
+
 	my %synonymies = ();
 	# check for synonymies - status' of anything other than "belongs to"
 	foreach my $row (@results){
@@ -832,45 +876,78 @@ sub getSynonymyParagraph{
 	}
 	# Now print it all out
 	my @syn_keys = keys %synonymies;
-	my $syn_html = "";
-	# Loop through unique parent numbers from the opinions table.
+	# Loop through unique parent number from the opinions table.
 	# Each parent number is a hash key whose value is an array ref of records.
 	for(my $index = 0; $index < @syn_keys; $index++){
 		# $syn_keys[$index] is a parent_no, so $synonymies{$syn_keys[$index]}
 		# is a record from the immediately preceeding 'opinions' select.
-		$syn_html .= "; it was ".$synmap{$synonymies{$syn_keys[$index]}[0]->{status}};
+		$text .= "; it was ".$synmap{$synonymies{$syn_keys[$index]}[0]->{status}};
 		$sql = "SELECT taxon_name FROM authorities ".
 			   "WHERE taxon_no=".
 			   $syn_keys[$index];
 		@results = @{$dbt->getData($sql)};
-		$syn_html .= "<i>".$results[0]->{taxon_name}."</i> by ";
+		$text .= "<i>".$results[0]->{taxon_name}."</i> by ";
 		# Dereference the hash value (array ref of opinions recs), so we can
 		# write out all of the authors/years for this synonymy.
 		my @key_list = @{$synonymies{$syn_keys[$index]}};
 		# sort the list by date (ascending)
 		@key_list = sort {$a->{pubyr} <=> $b->{pubyr}} @key_list;
 		for(my $j = 0; $j < @key_list; $j++){
-			$syn_html .= $key_list[$j]->{author1last}.
+			$text .= $key_list[$j]->{author1last}.
 						 " (".$key_list[$j]->{pubyr}."), ";
 		}
-		if($syn_html =~ /,\s+$/){
+		if($text =~ /,\s+$/){
 			# remove the last comma
-			$syn_html =~ s/,\s+$//;
+			$text =~ s/,\s+$//;
 			# replace the last comma-space sequence with ' and '
-			$syn_html =~ s/(, ([\w_']+\s\(\d{4}\)))$/ and $2/;
+			$text =~ s/(, ([\w_']+\s\(\d{4}\)))$/ and $2/;
 			# put a semi-colon on the end to separate from any following syns.
 		}
 	}
-	if($syn_html ne ""){
+	if($text ne ""){
 		# Add a period at the end.
-		$syn_html .= '.';
+		$text .= '.';
 		# remove a leading semi-colon and any space.
-		$syn_html =~ s/^;\s+//;
+		$text =~ s/^;\s+//;
 		# capitalize the first 'I' in the first word (It).
-		$syn_html =~ s/^i/I/;
+		$text =~ s/^i/I/;
 	}
 
-	return $syn_html;
+	return $text;
+}
+
+## getOriginalCombination
+#
+##
+sub getOriginalCombination{
+	my $dbt = shift;
+	my $taxon_no = shift;
+	my $sql = "SELECT DISTINCT(child_no), status FROM opinions ".
+			  "WHERE parent_no=$taxon_no AND (status='recombined as' OR ".
+			  "status='corrected as')";
+	my @results = @{$dbt->getData($sql)};
+
+	my $has_status = 0;
+	foreach my $rec (@results){
+		$sql = "SELECT DISTINCT(child_no), status FROM opinions ".
+			   "WHERE parent_no=".$rec->{child_no}.
+			   " AND (status='recombined as' OR status='corrected as')";	
+		my @second_level = @{$dbt->getData($sql)};
+		if(scalar @second_level < 1){
+			return $rec->{child_no};
+		}
+		# else
+		$has_status = 1;
+	}
+	# If all results in the loop above gave results, follow the first one
+	# down (assuming they all point to the same place eventually) recursively.
+	if($has_status){
+		$taxon_no = getOriginialCombination($dbt,$results[0]->{child_no});
+	}
+
+	# If we fall through above but $has_status was not set, we just
+	# return the original $taxon_no passed in.
+	return $taxon_no;
 }
 
 ## selectMostRecentParentOpinion
