@@ -1644,8 +1644,8 @@ sub processCollectionsSearch {
 					$sql .= "genus_name IN (";
 					if($in_list eq ""){
 						dbg("RE-RUNNING TAXONOMIC SEARCH in bridge<br>");
-						#$in_list = PBDBUtil::taxonomic_search(
-						#						$q->param('genus_name'), $dbt);
+						$in_list = PBDBUtil::taxonomic_search(
+												$q->param('genus_name'), $dbt);
                         my $name = $q->param('genus_name');
                         $in_list = `./recurse $name`;
 					}
@@ -2166,7 +2166,7 @@ sub buildTaxonomicList {
 
 		if($new_found){
 			$return .= "<h3><font color=red>WARNING!</font> Taxon names in ".
-					   "<b>bold</b> are new to the database.</h3><p>Please make ".
+					   "<b>bold</b> are new to the occurrences table.</h3><p>Please make ".
 					   "sure the spelling is correct. If it isn't, DON'T hit the back button; hit the \"Edit occurrences\" button below.</p>";
 		}
 
@@ -4650,9 +4650,9 @@ sub checkNewTaxon{
 			print "<center><input type=submit value=\"Submit\"></center>\n</form>\n";
 			print &stdIncludes ("std_page_bottom");
 		}
-		#else{
-		#	displayTaxonomyResults();
-		#}
+		else{
+			displayTaxonomyResults();
+		}
 	}
 	else{ # not reentry, so all matches were either 0 or 1
 		my $printed = 0;
