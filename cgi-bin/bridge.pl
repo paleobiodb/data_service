@@ -1182,6 +1182,73 @@ sub displayCurveResults {
 	print stdIncludes("std_page_bottom");
 }
 
+# JA 9.8.04
+sub displayTenMyBins	{
+
+	print stdIncludes("std_page_top");
+
+	print "<center><h2>10 m.y.-Long Sampling Bins</h2></center>\n\n";
+
+	print "These bin definitions are used by the <a href=\"$exec_url?action=displayCurveForm\">diversity curve generator</a>.\n\n";
+
+	@binnames = ("Cenozoic 6", "Cenozoic 5", "Cenozoic 4", "Cenozoic 3", "Cenozoic 2", "Cenozoic 1", "Cretaceous 8", "Cretaceous 7", "Cretaceous 6", "Cretaceous 5", "Cretaceous 4", "Cretaceous 3", "Cretaceous 2", "Cretaceous 1", "Jurassic 6", "Jurassic 5", "Jurassic 4", "Jurassic 3", "Jurassic 2", "Jurassic 1", "Triassic 5", "Triassic 4", "Triassic 3", "Triassic 2", "Triassic 1", "Permian 5", "Permian 4", "Permian 3", "Permian 2", "Permian 1", "Carboniferous 6", "Carboniferous 5", "Carboniferous 4", "Carboniferous 3", "Carboniferous 2", "Carboniferous 1", "Devonian 5", "Devonian 4", "Devonian 3", "Devonian 2", "Devonian 1", "Silurian 2", "Silurian 1", "Ordovician 5", "Ordovician 4", "Ordovician 3", "Ordovician 2", "Ordovician 1", "Cambrian 4", "Cambrian 3", "Cambrian 2", "Cambrian 1");
+
+	@_ = TimeLookup::processBinLookup($dbh,$dbt,"boundaries");
+	%topma = %{$_[0]};
+	%basema = %{$_[1]};
+	%binning = %{$_[2]};
+
+	my $intervalsql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
+	my @intervalrefs = @{$dbt->getData($intervalsql)};
+	my %intervalname;
+
+	for my $ir (@intervalrefs)	{
+		$intervalname{$ir->{interval_no}} = $ir->{interval_name};
+		$intervalalias{$intervalname{$ir->{interval_no}}} = $ir->{interval_name};
+		if ( $ir->{eml_interval} =~ /[A-Za-z]/ )	{
+			$intervalname{$ir->{interval_no}} = $ir->{eml_interval} . " " . $ir->{interval_name};
+			if ( $ir->{eml_interval} !~ /middle/i )	{
+				$intervalalias{$intervalname{$ir->{interval_no}}} = $ir->{interval_name} . $ir->{eml_interval};
+			} else	{
+				$intervalalias{$intervalname{$ir->{interval_no}}} = $ir->{interval_name} . "F";
+			}
+		}
+	}
+
+	print "<hr>\n\n";
+
+	print "<table><tr>\n";
+	print "<td valign=top><b>Bin name</b></td>  <td valign=top><b>Age&nbsp;at&nbsp;base&nbsp;(Ma)</b></td>  <td valign=top><b>Included intervals</b></td></tr>\n";
+
+	for my $bn (@binnames)	{
+		my $temp = $bn;
+		$temp =~ s/ /&nbsp;/g;
+		print "<tr><td valign=top>$temp</td>\n";
+		printf "<td align=center valign=top>%.1f</td>\n",$basema{$bn};
+		print "<td class=tiny>";
+		my @namestoprint;
+		for my $in ( keys %binning )	{
+			if ( $binning{$in} eq $bn )	{
+				push @namestoprint , $intervalname{$in};
+			}
+		}
+		@namestoprint = sort { $intervalalias{$a} cmp $intervalalias{$b} } @namestoprint;
+		my $printed = 0;
+		for my $nametoprint ( @namestoprint )	{
+			if ( $printed > 0 )	{
+				print ", ";
+			}
+			print $nametoprint;
+			$printed++;
+		}
+		print "</td></tr>\n\n";
+	}
+	print "</table>\n<p>\n\n";
+
+	print stdIncludes("std_page_bottom");
+
+}
+
 # Show a generic page
 sub displayPage {
 	my $page = shift;
