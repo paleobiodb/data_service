@@ -3608,6 +3608,37 @@ sub rarefyAbundances	{
 	# compute Buzas-Gibson index
 	my $bge = exp($swh) / $ntaxa;
 
+	# abundances have to be sorted and transformed to frequencies
+	#  in order to test the distribution against the log series JA 14.5.04
+	@abund = sort { $b <=> $a } @abund;
+	my @freq;
+	for my $i (0..$ntaxa-1)	{
+		$freq[$i] = $abund[$i] / $abundsum;
+	}
+
+	# now we need to get freq i out of alpha and gamma (Euler's constant)
+	# start with May 1975 eqn. F.10
+	#  i = -a log(a * freq i) - gamma, so
+	#  (i + gamma)/-a = log(a * freq i), so
+	#  exp((i +gamma)/-a) / a = freq i
+	my $gamma = 0.577215664901532860606512090082;
+
+	# note that we only get the right estimates if we start i at 0
+	my $estfreq;
+	my $sumestfreq;
+	my $sumfreq;
+	my $logseriesksd;
+	for my $i (0..$ntaxa-1)	{
+		my $estfreq = ($i + $gamma) / (-1 * $alpha);
+		$estfreq = exp($estfreq) / $alpha;
+		$sumestfreq = $sumestfreq + $estfreq;
+		$sumfreq = $sumfreq + $freq[$i];
+		my $freqdiff = abs($sumfreq - $sumestfreq);
+		if ( $freqdiff > $logseriesksd )	{
+			$logseriesksd = $freqdiff;
+		}
+	}
+
 	print "<center><h3>Diversity statistics for ", $q->param(collection_name), " (PBDB collection ", $q->param(collection_no), ")</h3></center>\n\n";
 
 	print "<center><table><tr><td align=\"left\">\n";
@@ -3616,9 +3647,18 @@ sub rarefyAbundances	{
 	printf "Simpson's <i>D</i>*: <b>%.3f</b><br>\n",$simpson;
 	printf "Berger-Parker <i>d</i>: <b>%.3f</b><br>\n",$bpd;
 	printf "Fisher's <i>alpha</i>**: <b>%.2f</b><br>\n",$alpha;
+	printf "Kolmogorov-Smirnov <i>D</i>, data vs. log series***: <b>%.3f</b>",$logseriesksd;
+	if ( $logseriesksd > 1.031 / $ntaxa**0.5 )	{
+		print " (<i>p</i> < 0.01)<br>\n";
+	} elsif ( $logseriesksd > 0.886 / $ntaxa**0.5 )	{
+		print " (<i>p</i> < 0.05)<br>\n";
+	} else	{
+		print " (not significant)<br>\n";
+	}
 	printf "Pielou's <i>J</i> (evenness): <b>%.3f</b><br>\n",$pj;
-	printf "Buzas-Gibson <i>E</i> (evenness): <b>%.3f</b></p>\n</td></tr></table>\n",$bge;
-	print "<div class=small><p>* = with Lande 1996 correction; ** = solved recursively based on richness and total abundance</p></div></center>\n";
+	printf "Buzas-Gibson <i>E</i> (evenness): <b>%.3f</b></p>\n",$bge;
+	print "<div class=small><p>* = with Lande 1996 correction<br>\n** = solved recursively based on richness and total abundance<br>\n*** = test of whether the distribution differs from a log series</p></div></center>\n";
+	print "</td></tr></table>\n";
 
 	# rarefy the abundances
 	my $maxtrials = 200;
