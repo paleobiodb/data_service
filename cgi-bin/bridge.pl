@@ -4682,6 +4682,9 @@ sub checkNearMatch ()	{
 	my $fields = shift;
 	my $vals = shift;
 
+    # Escape quotes in names like O'Sullivan
+    $searchVal =~ s/(\w+)'{1}/$1\\'/;
+
 	my $sql = "SELECT * FROM $tableName WHERE " . $searchField;
 	$sql .= "='" . $searchVal . "'";
 	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
