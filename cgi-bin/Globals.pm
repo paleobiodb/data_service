@@ -5,6 +5,7 @@ package Globals;
 use strict;
 
 
+# pass this a full month name such as "December" and it will return the month number, ie, 12.
 sub monthNameToNumber {
 	my $name = shift;
 	

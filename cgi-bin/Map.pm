@@ -5,6 +5,7 @@ use GD;
 use Class::Date qw(date localdate gmdate now);
 use Image::Magick;
 use TimeLookup;
+use Globals;
 
 # Flags and constants
 my $DEBUG = 0;			# The debug level of the calling program
@@ -352,11 +353,8 @@ print "<!-- $occ{'collection_no'} -->\n";
 			}
 			# handle modified date
 			elsif ($t eq "modified_since")	{
-				%month2num = (	"January" => "01", "February" => "02", "March" => "03",
-								"April" => "04", "May" => "05", "June" => "06",
-								"July" => "07", "August" => "08", "September" => "09",
-								"October" => "10", "November" => "11",
-								"December" => "12");
+				
+				
 				my ($yy,$mm,$dd) = split / /,$filledfields{$t},3;
 				if (length $mm == 1)	{
 					$dd = "0".$mm;
@@ -365,7 +363,7 @@ print "<!-- $occ{'collection_no'} -->\n";
 					$dd = "0".$dd;
 				}
 				if ($mm =~ /[a-z]/)	{
-					$filledfields{$t} = $yy.$month2num{$mm}.$dd."000000";
+					$filledfields{$t} = $yy . Globals::monthNameToNumber($mm) . $dd."000000";
 				}
 				else	{
 					$filledfields{$t} = $yy.$mm.$dd."000000";

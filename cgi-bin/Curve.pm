@@ -54,6 +54,8 @@
 
 package Curve;
 
+use Globals;
+
 #require Text::CSV_XS;
 # FOO ##  # CGI::Carp qw(fatalsToBrowser);
 
@@ -209,15 +211,11 @@ sub setArrays	{
 	}
 
 	if ( $q->param('year') )	{
-		%month2num = (  "January" => "01", "February" => "02", "March" => "03",
-                                "April" => "04", "May" => "05", "June" => "06",
-                                "July" => "07", "August" => "08", "September" => "09",
-                                "October" => "10", "November" => "11",
-                                "December" => "12");
+		
 		if ( length $q->param('date') == 1 )	{
 			$q->param(date => "0".$q->param('date') );
 		}
-		$created_date = $q->param('year').$month2num{$q->param('month')}.$q->param('date')."000000";
+		$created_date = $q->param('year'). Globals::monthNameToNumber($q->param('month')) . $q->param('date') . "000000";
 	}
 }
 
@@ -1889,8 +1887,9 @@ sub printResults	{
 	else	{
 		print "\n<b>Sorry, the search failed.</b> No lists met the search criteria.<p>\n";
 	}
-	
-	if (%badnames ne () && $s->get('enterer') ne "Guest")	{
+
+# disabled 12.9.03 JA	
+	if (%badnames ne () && $s->get('enterer') ne "Guest" && $fandango )	{
 		print "\nThe following age/stage names were not recognized:<p>\n<ul>\n";
 		my @temp = keys %badnames;
 		@temp = sort { $a cmp $b } @temp;

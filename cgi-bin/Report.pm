@@ -88,12 +88,7 @@ sub buildReport {
 	# compute the numeric equivalent of the date limit
 	if ( $q->param('day') < 10)	{ $q->param('day' => "0".$q->param('day')); }
 
-	%monthid = ( "January" => "01", "February" => "02", "March" => "03",
-             	"April" => "04", "May" => "05", "June" => "06", "July" => "07",
-             	"August" => "08", "September" => "09", "October" => 10,
-             	"November" => 11, "December" => 12 );
-
-	$datelimit = $q->param('year').$monthid{$q->param('mon')}.$q->param('day')."010000";
+	$datelimit = $q->param('year') . Globals::monthNameToNumber($q->param('mon')) . $q->param('day')."010000";
 	$self->dbg("datelimit: $datelimit<br>");
 
 	$self->readRegions();

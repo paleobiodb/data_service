@@ -1,8 +1,10 @@
 package Download;
 
+#use strict;
 use PBDBUtil;
 use Classification;
 use TimeLookup;
+use Globals;
 
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
@@ -299,6 +301,8 @@ sub getOutFields {
 	my $isReID = shift;
 	my @outFields;
 	
+	my @fieldNames;
+	
 	if($tableName eq "collections") {
 		@fieldNames = @collectionsFieldNames;
 	} elsif($tableName eq "occurrences") {
@@ -569,15 +573,7 @@ sub getCollectionsWhereClause {
 	# (filter it if they enter a year at the minimum.
 	if ($q->param('year')) {
 		
-		# convert month name to number (do this in a function later?)
-		my %month2num = (  "January" => "01", "February" => "02", "March" => "03",
-                         "April" => "04", "May" => "05", "June" => "06",
-                         "July" => "07", "August" => "08", "September" => "09",
-                         "October" => "10", "November" => "11",
-                         "December" => "12");
-		
-	
-		my $month = $month2num{$q->param('month')};  # needs semicolon because it's a hash.. weird.
+		my $month = Globals::monthNameToNumber($q->param('month'));
 		my $day = $q->param('date');
 
 		# use default values if the user didn't enter any.		
@@ -667,6 +663,7 @@ sub getEcology	{
 	}
 	$sql .= " FROM ecotaph LEFT JOIN authorities ON ecotaph.taxon_no = authorities.taxon_no";
 	my @ecos = @{$dbt->getData($sql)};
+	my $i;
 	for $i (0..5) { print "$ecos[$i]->{taxon_name}<br>\n"; }
 
 	for $i (0..$#ecos)	{
@@ -1118,6 +1115,7 @@ sub foc{
 	my @headers = split(',', $headers);
 	my $genus_reso_pos = -1;
 	my $genus_pos = -1;
+	my $i;
 	for($i=0; $i<@headers; $i++){
 		if($headers[$i] eq "genus_reso"){
 			$genus_reso_pos = $i;
