@@ -86,8 +86,12 @@ sub processScaleLookup	{
 		&mapIntervals();
 
 	# get the name of the interval
-		$sql = "SELECT interval_name FROM intervals WHERE interval_no=" . $intref->{interval_no};
+		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $intref->{interval_no};
 		my $interval_name = @{$dbt->getData($sql)}[0]->{interval_name};
+		my $eml_interval = @{$dbt->getData($sql)}[0]->{eml_interval};
+		if ( $eml_interval ne "" )	{
+			$interval_name = $eml_interval . " " . $interval_name;
+		}
 
 	# get a list of collections in this interval
 		$sql = "SELECT collection_no FROM collections WHERE ";
