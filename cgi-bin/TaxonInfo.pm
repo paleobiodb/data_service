@@ -946,7 +946,7 @@ sub doCollections{
 				$output .= "<tr class='darkList'>";
 			} 
 			else{
-				$output .= "<tr bgcolor=\"white\">";
+				$output .= "<tr>";
 			}
 			$output .= "<td align=\"middle\" valign=\"top\">".
 				  "<span class=tiny>$key</span></td><td align=\"left\">";
