@@ -720,10 +720,13 @@ sub buildTimeScalePulldown	{
 
 	# build the select list
 	my $timescale = "<select name=\"time_scale\">\n<option selected>\n";
+	# add the 10 m.y. bin option at the head of the list
+	$timescale .= "<option>PBDB 10 m.y. bins\n<option>\n";
 	for my $ts ( @tsnames )	{
 		$timescale .= "<option value=\"$tsid{$ts}\">$ts\n";
 	}
 	$timescale .= "</select>\n";
+
 
 	# add a blank after the Harland periods
 	$timescale =~ s/<option value="6">Harland 6: Stages/<option value="6">Harland 6: Stages\n<option>\n/;
