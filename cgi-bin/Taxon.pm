@@ -1855,10 +1855,15 @@ sub displayAuthoritySummary {
 		my $tempTaxon = $dbrec->{taxon_name};
 		$tempTaxon =~ s/ /+/g;
 
+        # Hack PS, no $q is passed in ;(
+        my $q = new CGI;
+        $q->param("reference_no");
+
 		print "<center>
 		<p><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonInfoResults&taxon_rank=" . $dbrec->{taxon_rank} . "&genus_name=" . $tempTaxon . "+(" . $self->{taxonNumber} .")\"><B>Get&nbsp;general&nbsp;information&nbsp;about&nbsp;" . $dbrec->{taxon_name} . "</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $self->{taxonNumber} ."\"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;" . $dbrec->{taxon_name} . "</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionList&taxon_no=" . $self->taxonNumber() . "&taxon_name=" . $dbrec->{taxon_name} . "\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;" . $dbrec->{taxon_name} . "</B></A>&nbsp;-
+        <A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=" . $q->param('reference_no') . " \"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;a&nbsp;different&nbsp;taxon&nbsp;with&nbsp;same&nbsp;reference</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=startDisplayOpinionChoiceForm&taxon_no=" . $self->taxonNumber() . "&taxon_name=" . $dbrec->{taxon_name} . "\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;" . $dbrec->{taxon_name} . "</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority\"><B>Add/edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;another&nbsp;taxon</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=opinion\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
 		</center>";	
@@ -1870,70 +1875,6 @@ sub displayAuthoritySummary {
 	
 	print main::stdIncludes("std_page_bottom");
 }
-
-
-# Displays a form which lists all opinions that currently exist
-# for this taxon.
-# 
-# JA: I have no idea why Poling put this function here and not in Opinion.pm;
-#   typical...
-#
-# Doesn't work if the taxonNumber doesn't exist.
-sub displayOpinionChoiceForm {
-	my Taxon $self = shift;
-
-	if (! $self->{taxonNumber}) {
-		Debug::logError("Taxon::displayOpinionChoiceForm tried to display form for taxon without a valid taxon_no.");
-		return;
-	}
-	
-	my $sql = $self->getTransactionManager();
-	
-	 
-	# This is kind of messy SQL, but it is actually pretty simple.  It grabs all
-	# of the opinion numbers which are use this taxon as the child_no, and sorts
-	# them by pubyr looking either in the opinion pubyr field, or the refs pubyr field
-	# depending on the value of ref_has_opinion.
-	$sql->setSQLExpr("SELECT o.opinion_no FROM opinions as o, refs as r WHERE r.reference_no = o.reference_no AND o.child_no = " . $self->{taxonNumber} ." ORDER BY IF((o.ref_has_opinion != 'YES' AND o.pubyr), o.pubyr, r.pubyr) ASC");
-	
-	my $results = $sql->allResultsArrayRef();
-	
-	print "<CENTER><H3>Which opinion about " . $self->taxonNameHTML() . " do you want to edit?</H3>\n<br>\n";
-	
-	print "<FORM method=\"POST\" action=\"bridge.pl\">\n";
-	print "<input type=hidden name=\"action\" value=\"displayOpinionForm\">\n";
-	print "<input type=hidden name=\"taxon_no\" value=\"" . $self->{taxonNumber} . "\">\n";
-	
-	print "<TABLE BORDER=0>\n";
-	
-	my $count = 0;
-	my $checked = '';
-	foreach my $row (@$results) {
-		my $opinion_no = $row->[0];
-		
-		my $opinion = Opinion->new();
-		$opinion->setWithOpinionNumber($opinion_no);
-		
-		print "<TR><TD><INPUT type=\"radio\" name=\"opinion_no\" id=\"opinion_no\" value=\"$opinion_no\">" . 
-		$opinion->formatAsHTML() . "</TD></TR>\n";
-		
-		$count++;
-	}
-	
-	print "<TR><TD><INPUT type=\"radio\" name=\"opinion_no\" id=\"opinion_no\" value=\"-1\" checked>Create a <b>new</b> opinion record</TD></TR>\n";
-
-	print "<tr><td align=\"center\"><p><INPUT type=submit value=\"Submit\"></p><br></td></tr>\n";
-
-	print "<tr><td align=\"left\"><p><span class=\"tiny\">An \"opinion\" is when an author classifies or synonymizes a taxon.<br>\nSelect an old opinion if it was entered incorrectly or incompletely.<br>\nCreate a new one if the author whose opinion you are looking at right now is not in the above list.<br>\n";
-	print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n";
-	print "</span></p></td></tr>\n";
-
-	print "</TABLE><BR>\n";
-	
-	print "<\FORM></CENTER>\n";
-}
-
-
 
 # end of Taxon.pm
 
