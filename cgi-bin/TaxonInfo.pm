@@ -1182,6 +1182,7 @@ sub getSynonymyParagraph{
 	my $dbt = shift;
 	my $taxon_no = shift;
 	my %synmap = ( 'recombined as' => 'recombined as ',
+				   'replaced by' => 'replaced with ',
 				   'corrected as' => 'corrected as ',
 				   'belongs to' => 'revalidated by ',
 				   'nomen dubium' => 'considered a nomen dubium ',
