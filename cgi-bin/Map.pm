@@ -607,7 +607,7 @@ sub mapDrawMap{
   $gifcount++;
 
   # set up the filenames
-  $gifname = "pbdbmap" . $gifcount . ".gif";
+  $gifname = "pbdbmap" . $gifcount . ".png";
   $htmlname = "pbdbmap".$gifcount.".html";
   $epsname = "pbdbmap" . $gifcount . ".eps";
   $ainame = "pbdbmap" . $gifcount . ".ai";
@@ -1430,7 +1430,7 @@ if ( $q->param('gridposition') ne "in back" )	{
   print AI "U\n";  # terminate the group
 
   binmode STDOUT;
-  print MAPGIF $im->gif;
+  print MAPGIF $im->png;
   close MAPGIF;
   chmod 0664, "$GIF_DIR/$gifname";
 
@@ -1486,7 +1486,7 @@ if ( $q->param('gridposition') ne "in back" )	{
 
   print MAPOUT "<p>You may download the image in ";
   print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
-  print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">GIF</a></b>, ";
+  print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">PNG</a></b>, ";
   print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
   print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format</p>\n";
 
