@@ -1982,9 +1982,10 @@ sub displayCollResults {
 	my $limit;
 	if (!($limit = $q->param("limit"))) { $limit = 30; }
 
-	# force the user to see up to 200 collections when adding a new one
+	# effectively don't limit the number of collections put into the
+	#  initial set to examine when adding a new one
 	if ( $q->param('type') eq "add" )	{
-		$limit = 200;
+		$limit = 1000000;
 	}
 	
 	my $ofRows = 0;
@@ -2089,6 +2090,10 @@ sub displayCollResults {
 				push @tempDataRows, $dr;
 				$ofRows++;
 			} else	{
+			}
+			# only display the first 200 collections to match
+			if ( $ofRows == 200 )	{
+				last;
 			}
 		}
 		@dataRows = @tempDataRows;
