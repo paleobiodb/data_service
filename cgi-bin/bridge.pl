@@ -1,5 +1,11 @@
 #!/usr/bin/perl
 
+#-d:ptkdb
+
+#sub BEGIN {
+#	$ENV{DISPLAY} = "localhost:0.0";	
+#}
+
 # bridge.pl is the starting point for all parts of PBDB system.  Everything passes through
 # here to start with. test5
 
@@ -42,6 +48,7 @@ use Validation;
 use Debug;
 use Globals;
 
+use TestClass;
 
 #*************************************
 # some global variables (to bridge.pl)
@@ -56,6 +63,12 @@ use Globals;
 # $dbt		: DBTransactionManager object, used for querying the database.
 #
 # rjp, 2/2004.
+
+
+# %GLOBALVARS is a hash which will contain references to some commonly
+# used variables such as the CGI object, session variable, HTMLBuilder, etc.
+# It will be passed to most classes when we're creating new objects.
+%GLOBALVARS;
 
 my $DEBUG = 0;		# Shows debug information regarding the page if set to 1
 
@@ -78,7 +91,11 @@ my $OUTPUT_DIR = "public/data";
 
 # Create the CGI, Session, and some other objects.
 my $q = CGI->new();
+$GLOBALVARS{'q'} = $q;
+
 my $s = Session->new();
+$GLOBALVARS{'session'} = $s;
+
 $csv = Text::CSV_XS->new();
 
 # Get the URL pointing to bridge
@@ -92,6 +109,7 @@ Validation::cleanCGIParams($q);
 
 # Make the HTMLBuilder object with the private template directory..  
 my $hbo = HTMLBuilder->new($TEMPLATE_DIR, $dbh, $exec_url );
+$GLOBALVARS{hbo} = $hbo;
 
 # Get the database connection
 my $dbh = DBConnection::connect();
@@ -102,6 +120,9 @@ my $dbt = DBTransactionManager->new($dbh, $s);
 my $action = "";
 
 my @rowData;
+
+
+
 
 
 # process the action
@@ -627,8 +648,9 @@ sub newAuthorityTesting {
 # Don't need to pass it anything - it will grab the taxon_no
 # or the taxon_name out of the CGI ($q) object.
 sub displayAuthorityForm {
-	my $taxon = Taxon->new();
+	my $taxon = Taxon->new(\%GLOBALVARS);
 		
+	Debug::dbPrint("we're in displayauthorityform here 1");
 	# If the taxon_no from their choice is > 0, then we can
 	# set the taxon object with the taxon_no.  However, if it's
 	# equal to -1, that means that they choose the "No not the one" option
@@ -643,10 +665,15 @@ sub displayAuthorityForm {
 		$taxonName = $q->param('taxon_name');
 	}
 	
+	Debug::dbPrint("we're in displayauthorityform here 2");	
+	
 	if ($q->param('taxon_no') > 0) {
 		$taxon->setWithTaxonNumber($q->param('taxon_no'));
 	} elsif ($q->param('taxon_no') == -1) { 
 		# this is a new entry
+		
+		Debug::dbPrint("we're in displayauthorityform here 3");	
+
 		
 		if ($q->param('skip_ref_check')) {
 			# then we've already prompted them for a reference_no
@@ -655,8 +682,13 @@ sub displayAuthorityForm {
 			# grab an old record.
 			$taxon->setWithTaxonNameOnly($taxonName);
 			
+			Debug::dbPrint("we're in displayauthorityform here 4");	
+
+			
 		} else {
 			
+				Debug::dbPrint("we're in displayauthorityform here 5");	
+
 			# if skip_ref_check is not set, then we should prompt them for a reference_no 
 	
 			# set the skip_ref_check in the queued action so we don't
@@ -672,17 +704,22 @@ sub displayAuthorityForm {
 		}
 		
 	} elsif ($taxonName) {
+		Debug::dbPrint("we're in displayauthorityform here 6");	
+
 		# we have a taxon name, and it is *not* a new entry.
 		$taxon->setWithTaxonName($taxonName);
+		Debug::dbPrint("we're in displayauthorityform here 7");
 	}
 		
+	Debug::dbPrint("we're in displayauthorityform here 8");
+
 	$taxon->displayAuthorityForm($hbo, $s, $q);	
 }
 
 
 # rjp, 3/2004
 sub submitAuthorityForm {
-	my $taxon = Taxon->new();
+	my $taxon = Taxon->new(\%GLOBALVARS);
 	
 	if (!$q->param('taxon_name_corrected')) {
 		Debug::logError("bridge::submitAuthorityForm failed because taxon_name_corrected doesn't exist.");
@@ -703,7 +740,7 @@ sub submitAuthorityForm {
 # displays a list of opinions for the taxon
 # defined by taxon_no in the current CGI ($q) object.
 sub displayOpinionList {
-	my $taxon = Taxon->new();
+	my $taxon = Taxon->new(\%GLOBALVARS);
 		
 	# If the taxon_no from their choice is > 0, then we can
 	# set the taxon object with the taxon_no.  However, if it's
@@ -737,7 +774,7 @@ sub displayOpinionForm {
 		return;	
 	}
 
-	my $opinion = Opinion->new();
+	my $opinion = Opinion->new(\%GLOBALVARS);
 	
 	if ($q->param('opinion_no') ne "-1") {
 		$opinion->setWithOpinionNumber($q->param('opinion_no'));
@@ -780,7 +817,7 @@ sub displayOpinionForm {
 
 
 sub submitOpinionForm {
-	my $opinion = Opinion->new();
+	my $opinion = Opinion->new(\%GLOBALVARS);
 	
 	if (! $q->param('taxon_no')) {
 		Debug::logError("bridge::submitOpinionForm failed because taxon_no doesn't exist.");
@@ -1356,7 +1393,7 @@ sub displayRefResults {
 
 		# if there's an action, go straight back to it without showing the ref
 		if ( $action)	{
-			Debug::dbPrint("Refs here4");
+			Debug::dbPrint("Refs here4, action = $action");
 			&{$action};			# Run the action
 		} else	{  
 			Debug::dbPrint("Refs here5");
@@ -2080,7 +2117,7 @@ sub processCollectionsSearch {
 							"environment"		=> 1 );
 
 					
-	my $sql = SQLBuilder->new();
+	my $sql = SQLBuilder->new(\%GLOBALVARS);
 	$sql->setWhereSeparator("AND");
 		
 	# If a genus name is requested, query the occurrences table to get
@@ -2637,7 +2674,7 @@ sub displayCollectionDetails {
 	# rjp, 1/2004.  This is the new routine which handles all reids instead
 	# of just the first and the last.  To rever to the old way, comment
 	# out the following three lines, and uncomment the fourth.
-	my $collection = Collection->new($s);
+	my $collection = Collection->new(\%GLOBALVARS);
 	$collection->setWithCollectionNumber($collection_no);
 	my $taxa_list = $collection->HTMLFormattedTaxonomicList();
 	
@@ -4904,7 +4941,7 @@ sub displayOccsForReID
 	}
 
 	# Build the SQL
-	my $where = SQLBuilder->new();
+	my $where = SQLBuilder->new(\%GLOBALVARS);
 	$where->setWhereSeparator("AND");
 	
 	if($genus_name ne '' or $species_name ne ''){
@@ -5263,7 +5300,7 @@ sub processTaxonomySearch	{
 	
 	my $startingName = $taxonName;	# record to use after the while loop
 	
-	my $taxonObject = Taxon->new();
+	my $taxonObject = Taxon->new(\%GLOBALVARS);
 	
 	# Try to find this taxon in the authorities table
 
@@ -5680,7 +5717,7 @@ sub displayTaxonomyEntryForm	{
 	# Customize the status fields
 	
 	# figure out the rank of the taxon.
-	my $taxonObject = Taxon->new();
+	my $taxonObject = Taxon->new(\%GLOBALVARS);
 	$taxonObject->setWithTaxonName($taxon);
 	my $rank = $taxonObject->rank();
 
@@ -7708,7 +7745,7 @@ sub RefQuery {
 	if ( $refsearchstring ) { $refsearchstring = "for '$refsearchstring' "; }
 
 	if ( $refsearchstring ne "" || $q->param('enterer') || $q->param('project_name') ) {
-		my $sql = SQLBuilder->new();
+		my $sql = SQLBuilder->new(\%GLOBALVARS);
 		$sql->setSelectExpr("*");
 		$sql->setFromExpr("refs");
 

@@ -55,6 +55,7 @@ use fields qw(
 				dbh
 				sth
 				perm
+				GLOBALVARS
 				session
 								
 				SQLExpr
@@ -75,7 +76,7 @@ use fields qw(
 							);  # list of allowable data fields.
 
 # dbh				:	handle to the database
-# session			:	optional session object, for use with the Permissions object.
+# GLOBALVARS			:	optional GLOBAL hash, see top of bridge.pl for more info.
 # perm				:	Permissions object
 # SQLExpr			:	the entire SQL expression *if* the user set it explicitly
 
@@ -84,25 +85,37 @@ use fields qw(
 # maxNumUpdatesAllowed	: how many updates should we allow at the same time?
 				
 # If using permissions, or performing updates or inserts, then
-# you must pass the current Session object
+# you must pass the GLOBALVARS hashref to it
 # when calling new().  If not using permissions, update, or inserts
 # then this is optional. 
 sub new {
 	my $class = shift;
 	my SQLBuilder $self = fields::new($class);
 	
-	my $session = shift;	# optional parameter
+	my $GLOBALVARS = shift;  # optional parameter
+	$self->{GLOBALVARS} = $GLOBALVARS;
+	if ($GLOBALVARS) {
+	    Debug::dbPrint("SQLBuilder::new, globalVars exists");
+	    
+	    if ($GLOBALVARS->{session}) {
+	    	    Debug::dbPrint("SQLBuilder::new, globalVars->session exists");
 
+	    }
+	 } else {	
+	 	Debug::dbPrint("SQLBuilder::new, globalVars doesn't exist");
+	 }
+    
+    
 	# set up some default values
 	$self->clear();	
 
-	if ($session) {
-		$self->{session} = $session;
-	
+	if ($GLOBALVARS && $GLOBALVARS->{session}) {
+	    $self->{session} = $GLOBALVARS->{session};
+	    
 		# create the permissions object as well
 		# note, if the session object didn't really exist, then
 		# the permissions object will catch the error, so don't have to check for it here.
-		my $perm = Permissions->new($session);
+		my $perm = Permissions->new($GLOBALVARS->{session});
 		$self->{perm} = $perm;
 	}
 	
@@ -136,6 +149,7 @@ sub clear {
 }
 
 # pass it a session.
+# deprecated.
 sub setSession {
 	my SQLBuilder $self = shift;
 	my $s = shift;
@@ -419,9 +433,10 @@ sub getSingleSQLResult {
 	my SQLBuilder $self = shift;
 
 	my $sql = shift;
+	Debug::dbPrint("getSingleSQLResult here 1, sql = $sql");
+	
 	my $dbh = $self->{dbh};
 	
-	Debug::dbPrint("getSingleSQLResult, sql = $sql");
 	return ($dbh->selectrow_array($sql))[0];
 }
 
@@ -799,6 +814,7 @@ sub insertNewRecord {
 	
 	# make sure they're allowed to insert data!
 	my $s = $self->{session};
+	if (!$self->{GLOBALVARS}) { Debug::dbPrint("GLOBALVARS doesn't exist"); }
 	if (!$s || $s->guest() || $s->get('enterer') eq '') {
 		Debug::logError("invalid session or enterer in SQLBuilder::insertNewRecord");
 		return;
@@ -1046,7 +1062,7 @@ sub internalUpdateRecord {
 		Debug::dbPrint("empty only update");
 		
 		# fetch all of the rows we're going to try to update from the database
-		my $select = SQLBuilder->new();
+		my $select = SQLBuilder->new($self->{GLOBALVARS});
 		$select->setSQLExpr("SELECT * FROM $tableName WHERE $whereClause");
 		my $selResults = $select->allResultsHashRef($primaryKey);
 	

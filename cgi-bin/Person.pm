@@ -14,6 +14,7 @@ use CGI::Carp qw(fatalsToBrowser);
 
 
 use fields qw(	
+				GLOBALVARS
 				
 				SQLBuilder
 							);  # list of allowable data fields.
@@ -24,6 +25,8 @@ sub new {
 	my $class = shift;
 	my Person $self = fields::new($class);
 
+	$self->{GLOBALVARS} = shift;
+	
 	return $self;
 }
 
@@ -36,7 +39,7 @@ sub getSQLBuilder {
 	
 	my $SQLBuilder = $self->{SQLBuilder};
 	if (! $SQLBuilder) {
-		$SQLBuilder = SQLBuilder->new();
+	    $SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
 	}
 	
 	return $SQLBuilder;

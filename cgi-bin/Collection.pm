@@ -19,7 +19,7 @@ use Debug;
 
 # these are the data fields for the object
 use fields qw(	
-				session
+				GLOBALVARS
 				
 				collection_no
 				collection_name
@@ -40,8 +40,7 @@ sub new {
 	my $class = shift;
 	my Collection $self = fields::new($class);
 	
-	my $session = shift;
-	$self->{session} = $session;
+	$self->{GLOBALVARS} = shift;
 	
 	# set up some default values
 	#$self->clear();	
@@ -58,7 +57,7 @@ sub getSQLBuilder {
 	
 	my SQLBuilder $SQLBuilder = $self->{SQLBuilder};
 	if (! $SQLBuilder) {
-		$SQLBuilder = SQLBuilder->new($self->{session});
+	    $SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
 	}
 	
 	return $SQLBuilder;
@@ -129,7 +128,7 @@ sub HTMLFormattedTaxonomicList {
 	my $html = "<CENTER><H3>Taxonomic list for " . $self->{collection_name} .
 		" (PBDB collection $collection_no)</H3></CENTER>";
 
-	my $occ = Occurrence->new($self->{session});
+	my $occ = Occurrence->new($self->{GLOBALVARS});
 	
 	my $sql = $self->getSQLBuilder();	
 	$sql->setSQLExpr("SELECT collection_no, occurrence_no FROM occurrences 
@@ -142,7 +141,7 @@ sub HTMLFormattedTaxonomicList {
 	# build up an array of occurrence objects.. Then we'll sort the array
 	my @occArray = ();
 	foreach my $row (@{$result}) {
-		$occ = Occurrence->new($self->{session});
+		$occ = Occurrence->new($self->{GLOBALVARS});
 		$occ->setWithOccurrenceNumber($row->[1]);
 		$occ->buildHTML();	# have to do this now so we can sort on values from this..
 		push(@occArray, $occ);

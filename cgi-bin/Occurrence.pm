@@ -19,7 +19,7 @@ use CGI::Carp qw(fatalsToBrowser);
 
 # these are the data fields for the object
 use fields qw(	
-				session
+				GLOBALVARS
 				
 				occurrence_no
 				reference_no
@@ -60,9 +60,8 @@ sub new {
 	my $class = shift;
 	my Occurrence $self = fields::new($class);
 	
-	my $session = shift;
-	$self->{session} = $session;
-	
+	$self->{GLOBALVARS} = shift;
+
 	# set up some default values
 	#$self->clear();	
 
@@ -78,7 +77,7 @@ sub getSQLBuilder {
 	
 	my $SQLBuilder = $self->{SQLBuilder};
 	if (! $SQLBuilder) {
-		$SQLBuilder = SQLBuilder->new($self->{session});
+	    $SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
 	}
 	
 	return $SQLBuilder;
@@ -143,7 +142,7 @@ sub referenceNumber {
 sub collectionReferenceNumber {
 	my Occurrence $self = shift;
 
-	my $sql = SQLBuilder->new();
+	my $sql = SQLBuilder->new($self->{GLOBALVARS});
 
 	return $sql->getSingleSQLResult("SELECT c.reference_no FROM 
 								collections c, occurrences o
@@ -203,7 +202,7 @@ sub buildReidList {
 	my $sql = $self->getSQLBuilder();
 	
 	my $occ_no = $self->{occurrence_no};
-	my $taxon = Taxon->new();
+	my $taxon = Taxon->new($self->{GLOBALVARS});
 	
 	my $reference_no = $self->{reference_no};
 	

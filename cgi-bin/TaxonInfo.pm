@@ -15,6 +15,8 @@ use POSIX qw(ceil floor);
 
 $DEBUG = 0;
 
+my %GLOBALVARS;
+
 
 sub startTaxonInfo {
 	my $q = shift;
@@ -161,8 +163,10 @@ sub newCheckStartForm {
 	
 	my $LIMIT = 500;	# don't allow more than this many results...
 	
-	my $sql1 = SQLBuilder->new($s);
-	my $sql2 = SQLBuilder->new($s);
+	$GLOBALVARS{session} = $s;
+	
+	my $sql1 = SQLBuilder->new(\%GLOBALVARS);
+	my $sql2 = SQLBuilder->new(\%GLOBALVARS);
 	
 	$sql1->setLimitExpr($LIMIT);
 	$sql2->setLimitExpr($LIMIT);
@@ -351,6 +355,8 @@ sub checkStartForm {
 	my $dbh = shift;
 	my $s = shift;
 	my $dbt = shift;
+	
+	$GLOBALVARS{session} = $s;
 	
 	# the "Original Rank" popup menu on the entry form
 	my $taxon_type = $q->param("taxon_rank");
@@ -669,6 +675,8 @@ sub displayTaxonInfoResults {
 	my $s = shift;
 	my $dbt = shift;
 
+	$GLOBALVARS{session} = $s;
+	
 	my $genus_name = $q->param("genus_name");
 	my $taxon_type = $q->param("taxon_rank");
 	my $taxon_no = 0;
@@ -964,6 +972,7 @@ sub doModules{
 	my $in_list = shift;
 	my $taxon_no = shift;
 	
+	$GLOBALVARS{session} = $s;
 	
 	# If $q->param("genus_name") has a space, it's a "Genus species" combo,
 	# otherwise it's a "Higher taxon."
@@ -1082,6 +1091,8 @@ sub doMap{
 	my $s = shift;
 	my $in_list = shift;
 	my $map_num = $q->param('map_num');
+
+	$GLOBALVARS{session} = $s;
 
 	if($q->param('map_num')){
 		return $q->param('map_num');

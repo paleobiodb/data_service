@@ -24,6 +24,7 @@ use Reference;
 
 use fields qw(	
 
+			GLOBALVARS
 			taxonName
 			taxonNumber
 			taxonRank					
@@ -60,9 +61,13 @@ use fields qw(
 # (\@) listOfChildren()
 #
 
+
+# optionally pass it the GLOBALVARS hash.
 sub new {
 	my $class = shift;
 	my Taxon $self = fields::new($class);
+	
+	$self->{GLOBALVARS} = shift;
 	
 	# set up some default values
 	#$self->clear();	
@@ -99,16 +104,23 @@ sub setWithTaxonName {
 	my Taxon $self = shift;
 	my $newname;
 	
+	Debug::dbPrint("Taxon::setWithTaxonName 1");
 	if (my $input = shift) {
+		
+			Debug::dbPrint("Taxon::setWithTaxonName 2");
 		
 		$self->{taxonName} = $input;
 		
 		# now we need to get the taxonNo from the database if it exists.
 		my ($tn, $newname) = $self->getTaxonNumberFromName($input);
 		
+			Debug::dbPrint("Taxon::setWithTaxonName 3");
+			
 		if ($tn) {
 			# if we found a taxon_no for this taxon_name, then 
 			# set the appropriate fields
+			
+				Debug::dbPrint("Taxon::setWithTaxonName 4");
 			$self->{taxonNumber} = $tn;
 			$self->{taxonName} = $newname;
 		
@@ -139,9 +151,22 @@ sub setWithTaxonNameOnly {
 sub getSQLBuilder {
 	my Taxon $self = shift;
 	
+	my $globals = $self->{GLOBALVARS};
+	my $ses = $globals->{session};
+	
+	if ($ses) {
+		Debug::dbPrint("getSQLBuilder, ses exists");
+		} else {
+		Debug::dbPrint("getSQLBuilder, no ses");
+		}
+
+	
 	my $SQLBuilder = $self->{SQLBuilder};
 	if (! $SQLBuilder) {
-		$SQLBuilder = SQLBuilder->new();
+		Debug::dbPrint("getSQLBuilder creating sql builder...");
+		$SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
+		Debug::dbPrint("getSQLBuilder done creating sql builder...");
+
 	}
 	
 	return $SQLBuilder;
@@ -156,9 +181,12 @@ sub getTaxonNameFromNumber {
 	if (my $input = shift) {
 
 		my $sql = $self->getSQLBuilder();
+		
+		Debug::dbPrint("Taxon::getTaxonNameFromNumber 1");
 		my $tn = $sql->getSingleSQLResult("SELECT taxon_name FROM authorities 
 				WHERE taxon_no = $input");
 
+		Debug::dbPrint("Taxon::getTaxonNameFromNumber 2");
 		if ($tn) {
 			return $tn;
 		}
@@ -181,10 +209,12 @@ sub getTaxonNameFromNumber {
 sub getTaxonNumberFromName {
 	my Taxon $self = shift;
 
+
 	if (my $input = shift) {
 		my $sql = $self->getSQLBuilder();
 		
 		my $tn = $sql->getSingleSQLResult("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
+		Debug::dbPrint("getTaxonNumberFromName here1");
 		
 		if ($tn) {
 			return ($tn, $input);
@@ -420,7 +450,7 @@ sub createTaxaHash {
 	my $resultRef;  # sql query results
 	
 	# another sql object for executing subqueries.
-	my $subSQL = SQLBuilder->new();
+	my $subSQL = SQLBuilder->new($self->{GLOBALVARS});
 	
 	# first, insert the current taxon into the hash
 	my $ownTaxonRank = $subSQL->getSingleSQLResult("SELECT taxon_rank FROM 
@@ -554,7 +584,7 @@ sub listOfChildren {
 	my @taxa;
 	my @taxaKeys = keys(%taxaHash);
 	foreach my $k (@taxaKeys) {
-		my $newT = Taxon->new();
+		my $newT = Taxon->new($self->{GLOBALVARS});
 		$newT->setWithTaxonNumber($taxaHash{$k});
 		push(@taxa, $newT);  # add the new taxon object onto the taxa array
 	}
@@ -621,7 +651,7 @@ sub databaseAuthorityRecord {
 		# if a cached version of this row query doesn't already exist,
 		# then go ahead and fetch the data.
 	
-		$row = CachedTableRow->new('authorities', "taxon_no = '" . $self->{taxonNumber} . "'");
+		$row = CachedTableRow->new($self->{GLOBALVARS}, 'authorities', "taxon_no = '" . $self->{taxonNumber} . "'");
 
 		$self->{cachedDBRow} = $row;  # save for future use.
 	}
@@ -1099,8 +1129,6 @@ sub submitAuthorityForm {
 	
 	
 
-	
-	
 	# check and make sure the taxon_name_corrected field in the form makes sense
 	if (!($q->param('taxon_name_corrected'))) {
 		$errors->add("You can't submit the form with an empty taxon name!");	
@@ -1197,7 +1225,7 @@ sub submitAuthorityForm {
 		} else {
 			
 			# check to make sure the rank of the type taxon makes sense.
-			my $ttaxon = Taxon->new();
+			my $ttaxon = Taxon->new($self->{GLOBALVARS});
 			$ttaxon->setWithTaxonNumber($number);
 			
 			my $taxonRank = $q->param('taxon_rank'); 	# rank in popup menu
@@ -1274,14 +1302,37 @@ sub submitAuthorityForm {
 			
 			# only show warning on first subimission
 			
-			my $oldTaxon = Taxon->new();
+			my $oldTaxon = Taxon->new($self->{GLOBALVARS});
 			$oldTaxon->setWithTaxonName($fieldsToEnter{taxon_name});
 			
 			$errors->add("The taxon \"" . $fieldsToEnter{taxon_name} . " " . $oldTaxon->authors() . " " . $oldTaxon->pubyr() . "\" already exists in our database. Are you sure you want to submit this record?");
 		}
 	}
 	
+
+
 	
+	# if the rank was species or subspecies, then we also need to insert
+	# an opinion record automatically which has the state of "belongs to"
+	#
+	# 3/22/2004, this is a ******HACK****** for now.  Eventually,
+	# the opinion object should do this for us
+	my $genusTaxon;
+	if ( ($fieldsToEnter{taxon_rank} eq 'species') ||
+		 ($fieldsToEnter{taxon_rank} eq 'subspecies') ) {
+				
+		Debug::dbPrint("we're here 1 in Taxon");
+		my $genusName = Validation::genusFromString($fieldsToEnter{taxon_name});
+		$genusTaxon = Taxon->new($self->{GLOBALVARS});
+		$genusTaxon->setWithTaxonName($genusName);
+		if (! $genusTaxon->taxonNumber()) {
+			$errors->add("The genus which this " . $fieldsToEnter{taxon_rank} . " belongs to doesn't exist in our database.  Please add an authority record for this genus before continuing.");
+		}
+	}
+	## end of hack
+	####
+
+
 	
 	if ($errors->count() > 0) {
 		# put a message in a hidden to let us know that we have already displayed
@@ -1313,6 +1364,46 @@ sub submitAuthorityForm {
 		$fieldsToEnter{created} = now();
 			
 		($code, $resultTaxonNumber) = $sql->insertNewRecord('authorities', \%fieldsToEnter);
+
+		
+		# if the $genusTaxon object exists, then that means that we
+		# need to insert an opinion record which says that our taxon
+		# belongs to the genus represented in $genusTaxon.
+		#
+		# this is a bit of a hack for now, we should be doing this by creating
+		# an opinion object, populating it, and having it set itself.  Do this later.
+		if ($genusTaxon) {
+			Debug::dbPrint("we're here 2 in Taxon");
+			my $opinionRow = CachedTableRow->new($self->{GLOBALVARS}, 'opinions');
+			
+			my %opinionHash;
+			$opinionHash{status} = 'belongs to';
+			$opinionHash{child_no} = $resultTaxonNumber;
+			$opinionHash{parent_no} = $genusTaxon->taxonNumber();
+			$opinionHash{authorizer_no} = $fieldsToEnter{authorizer_no};
+			$opinionHash{enterer_no} = $fieldsToEnter{authorizer_no};
+			$opinionHash{ref_has_opinion} = $fieldsToEnter{ref_is_authority};
+			$opinionHash{reference_no} = $fieldsToEnter{reference_no};
+			$opinionHash{author1init} = $fieldsToEnter{author1init};
+			$opinionHash{author1last} = $fieldsToEnter{author1last};
+			$opinionHash{author2init} = $fieldsToEnter{author2init};
+			$opinionHash{author2last} = $fieldsToEnter{author2last};
+			$opinionHash{otherauthors} = $fieldsToEnter{otherauthors};
+			$opinionHash{pubyr} = $fieldsToEnter{pubyr};
+			$opinionHash{pages} = $fieldsToEnter{pages};
+			$opinionHash{figures} = $fieldsToEnter{figures};
+			
+			$opinionRow->setWithHashRef(\%opinionHash);
+			
+			$opinionRow->setPrimaryKeyName('opinion_no');
+			$opinionRow->setUpdateEmptyOnly(0);
+			
+			$opinionRow->setDatabaseRow();
+		}
+		#
+		#
+	
+		
 		
 	} else {
 		# if it's an old entry, then we'll update.
@@ -1354,7 +1445,7 @@ sub submitAuthorityForm {
 	
 	# note, if we set our own taxon number to be the new one, then if they had errors,
 	# it will screw up the isNewEntry calculation...
-	my $t = Taxon->new();
+	my $t = Taxon->new($self->{GLOBALVARS});
 	$t->setWithTaxonNumber($resultTaxonNumber);
 	$t->displayAuthoritySummary($isNewEntry);
 	

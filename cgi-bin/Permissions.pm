@@ -26,6 +26,7 @@ use fields qw(
 				readCache
 				writeCache
 				readWriteCache
+				GLOBALVARS
 				session
 				SQLBuilder
 				
@@ -51,6 +52,11 @@ sub new {
 	my $session = shift;		# session object
 	$self->{session} = $session;
 	
+	#hack for now.. we should pass this
+	my %GLOBALVARS;
+	$GLOBALVARS{session} = $session;
+	$self->{GLOBALVARS} = \%GLOBALVARS;
+	
 	if (! $session) {
 		Debug::logError("Permissions must be created with valid Session object!");
 		return undef;
@@ -58,6 +64,8 @@ sub new {
 	
 	# create SQLBuilder object
 	my $sql = SQLBuilder->new();
+	# Note - be very careful - do it this way, otherwise we get an infinite loop.
+	$sql->setSession($session);
 	$self->{SQLBuilder} = $sql;  # store in data member
 	
 	# create empty caches

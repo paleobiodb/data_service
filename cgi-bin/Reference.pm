@@ -14,7 +14,9 @@ use URLMaker;
 use CGI::Carp qw(fatalsToBrowser);
 
 
-use fields qw(	reference_no
+use fields qw(
+				GLOBALVARS
+				reference_no
 				reftitle
 				pubtitle
 				pubyr
@@ -38,6 +40,8 @@ sub new {
 	my $class = shift;
 	my Reference $self = fields::new($class);
 	
+	$self->{GLOBALVARS} = shift;
+	
 	# set up some default values
 	#$self->clear();	
 
@@ -53,7 +57,7 @@ sub getSQLBuilder {
 	
 	my $SQLBuilder = $self->{SQLBuilder};
 	if (! $SQLBuilder) {
-		$SQLBuilder = SQLBuilder->new();
+	    $SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
 	}
 	
 	return $SQLBuilder;

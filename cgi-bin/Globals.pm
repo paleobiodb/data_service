@@ -210,4 +210,22 @@ sub formatAuthors {
 }
 
 
+# pass this a hashref, and it will return a new hashref
+# which contains a copy of the hash refererred to by the first hashref.
+#
+# rjp, 3/2004
+sub copyHash {
+    my $ref = shift;
+    my %copy;
+    
+    if (!$ref) { return \%copy; }
+    
+    foreach my $key (keys(%$ref)) {
+        $copy{$key} = $ref->{$key};  
+    }
+  
+    return \%copy;  
+}
+
+
 1;

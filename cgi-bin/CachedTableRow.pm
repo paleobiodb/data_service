@@ -16,6 +16,7 @@
 
 package CachedTableRow;
 
+
 use strict;
 use DBI;
 use DBConnection;
@@ -23,10 +24,13 @@ use SQLBuilder;
 use Debug;
 use CGI::Carp qw(fatalsToBrowser);
 
-use Session;    # note, only needed for testing purposes.
+use Session;
+
 
 
 use fields qw(	
+				GLOBALVARS
+
 				table
 				where
 				primaryKeyName
@@ -48,18 +52,20 @@ use fields qw(
 
 						
 
-# Must pass this the table name.
+# Must pass this the global variable and table name.
 # If fetching a row which already
 # exists in the database then you must also pass a where clause
 #
-# For example, my $row = CachedTableRow->new('authorities', 'taxon_no = 5');
+# For example, my $row = CachedTableRow->new($session, 'authorities', 'taxon_no = 5');
 #
 sub new {
 	my $class = shift;
+    my CachedTableRow $self = fields::new($class);
+    
+	$self->{GLOBALVARS} = shift;
 	my $table = shift;
 	my $where = shift;
 
-	my CachedTableRow $self = fields::new($class);
 	
 	$self->{table} = $table;
 	$self->{primaryKeyName} = '';
@@ -77,7 +83,7 @@ sub new {
 	
 	return $self;
 }
-
+ 
 
 # for internal use only!
 # returns the SQL builder object
@@ -87,7 +93,7 @@ sub getSQLBuilder {
 	
 	my $SQLBuilder = $self->{SQLBuilder};
 	if (! $SQLBuilder) {
-		$SQLBuilder = SQLBuilder->new();
+	    $SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
 	}
 	
 	return $SQLBuilder;
@@ -238,6 +244,7 @@ sub setDatabaseRow {
         Debug::logError("Tried to update a row in the " . $self->{table} . " table, but update would have affected $count rows.  Bailing out.");    
     } else {
         # doesn't exist, so do an insert
+        Debug::dbPrint("we're trying to do an insert");
         my ($resultCode, $insertID) = $sql->insertNewRecord($self->{table}, $self->{row});
         
         $self->{primaryKeyValue} = $insertID;
@@ -310,16 +317,15 @@ sub row {
 # tests functionality
 # class function
 sub testUpdate {
-    my $row = CachedTableRow->new('opinions', 'opinion_no = 1234');
     my $ses = Session->new();
     $ses->put('authorizer', 'J. Sepkoski');
     $ses->put('enterer', 'J. Sepkoski');
     $ses->put('enterer_no', 48);
     $ses->put('authorizer_no', 48);
+    my %GLOBALVARS;
+    $GLOBALVARS{session} = $ses;
     
-    my $sql = $row->getSQLBuilder();
-    $sql->setSession($ses);
-    $row->{SQLBuilder} = $sql;
+    my $row = CachedTableRow->new(\%GLOBALVARS, 'opinions', 'opinion_no = 1234');
     
     $row->setUpdateEmptyOnly(0);
     $row->setPrimaryKeyName('opinion_no');
@@ -337,17 +343,19 @@ sub testUpdate {
 # tests functionality
 # class function
 sub testInsert {
-    my $row = CachedTableRow->new('opinions');
+    
     my $ses = Session->new();
     $ses->put('authorizer', 'J. Sepkoski');
     $ses->put('enterer', 'J. Sepkoski');
     $ses->put('enterer_no', 48);
     $ses->put('authorizer_no', 48);
+
+    my %GLOBALVARS;
+    $GLOBALVARS{session} = $ses;
+
     
-    my $sql = $row->getSQLBuilder();
-    $sql->setSession($ses);
-    $row->{SQLBuilder} = $sql;
-    
+    my $row = CachedTableRow->new(\%GLOBALVARS, 'opinions');
+        
     $row->setUpdateEmptyOnly(0);
     $row->setPrimaryKeyName('opinion_no');
     $row->setPrimaryKeyValue('80012');

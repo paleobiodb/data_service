@@ -16,6 +16,7 @@ use Class::Date qw(date localdate gmdate now);
 use CachedTableRow;
 use Rank;
 use Globals;
+use Session;
 
 
 
@@ -23,18 +24,21 @@ use constant YES => 'YES';
 
 
 use fields qw(	
+                GLOBALVARS
 				opinion_no
 				cachedDBRow
 				SQLBuilder
 							);  # list of allowable data fields.
 
 						
-
+# optionally pass it a reference to the GLOBALVARS hash.
 sub new {
 	my $class = shift;
+		
 	my Opinion $self = fields::new($class);
 	
-
+	$self->{GLOBALVARS} = shift;
+	
 	return $self;
 }
 
@@ -47,7 +51,7 @@ sub getSQLBuilder {
 	
 	my $SQLBuilder = $self->{SQLBuilder};
 	if (! $SQLBuilder) {
-		$SQLBuilder = SQLBuilder->new();
+		$SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
 	}
 	
 	return $SQLBuilder;
@@ -70,7 +74,7 @@ sub databaseOpinionRecord {
 		# if a cached version of this row query doesn't already exist,
 		# then go ahead and fetch the data.
 	
-		$row = CachedTableRow->new('opinions', "opinion_no = '" . $self->{opinion_no} . "'");
+		$row = CachedTableRow->new($self->{GLOBALVARS}, 'opinions', "opinion_no = '" . $self->{opinion_no} . "'");
 
 		$self->{cachedDBRow} = $row;  # save for future use.
 	}
@@ -179,10 +183,10 @@ sub formatAsHTML {
 	
 	my $ref_has_opinion = $ref->{ref_has_opinion};
 	
-	my $parent = Taxon->new();
+	my $parent = Taxon->new($self->{GLOBALVARS});
 	$parent->setWithTaxonNumber($self->parentNumber());
 	
-	my $child = Taxon->new();
+	my $child = Taxon->new($self->{GLOBALVARS});
 	$child->setWithTaxonNumber($self->childNumber());
 	
 	
@@ -293,7 +297,7 @@ sub displayOpinionForm {
 
 
 	# figure out the taxon name and number
-	my $taxon = Taxon->new();
+	my $taxon = Taxon->new($self->{GLOBALVARS});
 	$taxon->setWithTaxonNumber($q->param('taxon_no'));
 	$fields{taxon_name} = $taxon->taxonName();
 	$fields{taxon_no} = $taxon->taxonNumber();
@@ -428,7 +432,7 @@ sub displayOpinionForm {
 	
 		
 	# Now we should figure out the parent taxon name for this opinion.
-	my $parent = Taxon->new();
+	my $parent = Taxon->new($self->{GLOBALVARS});
 	$parent->setWithTaxonNumber($fields{parent_no});
 	
 	
@@ -795,7 +799,7 @@ sub submitOpinionForm {
 	my $taxonStatusRadio = $q->param('taxon_status');
 	
 	# figure out the name of the child taxon.
-	my $childTaxon = Taxon->new();
+	my $childTaxon = Taxon->new($self->{GLOBALVARS});
 	$childTaxon->setWithTaxonNumber($q->param('taxon_no'));
 	my $childTaxonName = $childTaxon->taxonName();
 	my $childRank = Rank->new($q->param('taxon_rank'));
@@ -803,7 +807,7 @@ sub submitOpinionForm {
 	# figure out the name of the parent taxon.
 	# This is dependent on the taxonStatusRadio value
 	my $parentTaxonName;
-	my $parentTaxon = Taxon->new();
+	my $parentTaxon = Taxon->new($self->{GLOBALVARS});
 	my $parentRank;
 	
 	if ($taxonStatusRadio eq BELONGS_TO) {
@@ -872,6 +876,8 @@ sub submitOpinionForm {
 		if (! ($parentRank->isHigherThan($childRank)) ) {
 			$errors->add("The parent taxon rank (" . $parentRank->rank() . ") must be higher than the child taxon rank (" . $childRank->rank() . ")");	
 		}
+		
+		
 		
 	} elsif ($taxonStatusRadio eq RECOMBINED_AS) {
 		$fieldsToEnter{status} = RECOMBINED_AS;
