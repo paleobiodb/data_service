@@ -750,7 +750,11 @@ sub displaySearchRefs {
 	unshift @fields,"project_name";
 
 	print &stdIncludes ( "std_page_top" );
-	my $html = &stdIncludes ( "js_pulldown_me" );
+	my $html = "";
+
+	unless($q->param('user') eq "Guest"){
+		$html .= stdIncludes("js_pulldown_me");
+	}
 
 	$html .= $hbo->populateHTML("search_refs_form", \@row, \@fields);
 	buildAuthorizerPulldown ( \$html, $authorizer, 1 );
