@@ -537,20 +537,15 @@ sub getRegionsString {
 	return $retVal;
 }
 
-sub getDataForAuthorizer{
-	my $self = shift;
-	return $q->param('authorizer');
-}
-
 sub getOccurrencesWhereClause {
 	my $self = shift;
 	
 	my $where = DBTransactionManager->new();
 	$where->setWhereSeparator("AND");
 	
-	my $authorizer = $self->getDataForAuthorizer();
+	my $authorizer = $q->param('authorizer');
 	
-	$where->addWhereItem(" occurrences.authorizer='$authorizer' ") if ($authorizer ne "All");
+	$where->addWhereItem(" occurrences.authorizer='$authorizer' ") if ($authorizer ne "");
 	
 	if($q->param('genus_name') ne ""){
 		my $genusNames = $self->getGenusNames($q->param('genus_name'));
@@ -558,7 +553,7 @@ sub getOccurrencesWhereClause {
 	}
 	
 	$where->addWhereItem(" occurrences.species_name!='indet.' ") if $q->param('indet') eq 'NO';
-	
+
 	return $where->whereExpr();
 }
 
@@ -568,9 +563,9 @@ sub getCollectionsWhereClause {
 	my $where = DBTransactionManager->new();
 	$where->setWhereSeparator("AND");
 	
-	my $authorizer = $self->getDataForAuthorizer();
+	my $authorizer = $q->param('authorizer');
 	# This is handled by getOccurrencesWhereClause if we're getting occs data.
-	if($authorizer ne "All" && $q->param('collections_only') eq 'YES'){
+	if($authorizer ne "" && $q->param('collections_only') eq 'YES'){
 		$where->addWhereItem(" collections.authorizer='$authorizer' ");
 	}
 	
