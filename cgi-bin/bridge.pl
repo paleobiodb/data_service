@@ -679,14 +679,20 @@ sub displayReportResults {
 }
 
 sub displayCurveForm {
-    displayPage ('curve_form');
+
+	print &stdIncludes ( "std_page_top" );
+
+	print $hbo->populateHTML( 'curve_form', [ '', '', '', '' ] , [ 'research_group', 'collection_type', 'lithology1', 'lithology2' ] );
+print "FOO";
+
+	print &stdIncludes ("std_page_bottom");
 }
 
 sub displayCurveResults {
 
 	print &stdIncludes ( "std_page_top" );
 
-	my $c = Curve->new( $q, $s );
+	my $c = Curve->new( $dbh, $q, $s );
 	$c->buildCurve ( );
 
 	print &stdIncludes ("std_page_bottom");
