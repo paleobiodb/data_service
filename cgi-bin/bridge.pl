@@ -1264,7 +1264,7 @@ sub displaySearchColls {
 	# Show the "search collections" form
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-    my $html = $hbo->populateHTML('search_collections_form', [ '', '', '' ], [ 'lithology1', 'lithology2', 'environment' ], \@prefkeys);
+    my $html = $hbo->populateHTML('search_collections_form', [ '', '', '','' ], [ 'lithology1', 'lithology2', 'environment',$type ], \@prefkeys);
 	buildAuthorizerPulldown ( \$html );
 	buildEntererPulldown ( \$html );
 
