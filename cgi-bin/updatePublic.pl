@@ -72,7 +72,7 @@ $dbh->disconnect();
 $filename = $images[int(rand $#images)];
 chomp($filename);
 
-`cp $filename $IMGDIR/fossil.jpg`;
+`cp -f $filename $IMGDIR/fossil.jpg`;
 
 
 
