@@ -36,7 +36,6 @@ if ( $q->param("action") eq "search" )	{
 		$sql .= "ref_no=";
 		$sql .= $q->param("searchstring") / 20;
 	} else	{
-		$sql .= "$field LIKE '%";
 		my $searchstring = $q->param("searchstring");
 		# escape single quotes
 		$searchstring =~ s/'/\\'/g;
@@ -45,7 +44,7 @@ if ( $q->param("action") eq "search" )	{
 		} elsif ( $q->param("andor") eq "any of the words" )	{
 			$searchstring =~ s/ /%' OR $field LIKE '%/g;
 		}
-		$sql .= $searchstring . "%'";
+		$sql .= "($field LIKE '%" . $searchstring . "%')";
 	}
 	my $sth = $dbh->prepare($sql);
 	$sth->execute();
