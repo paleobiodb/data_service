@@ -5,14 +5,19 @@
 	<input id="enterer" type=hidden>
 	<input id="occurrence_no" type=hidden>
 	<input id="reid_no" type=hidden>
+<!-- OPTIONAL genus_and_species_only -->
 	<td align=right><select id="genus_reso"></select></td>
+<!-- END genus_and_species_only -->
 	<td><input id="genus_name" size=20 maxlength=255></td>
+<!-- OPTIONAL genus_and_species_only -->
 <!-- OPTIONAL subgenera -->
 	<td align=right><select id="subgenus_reso"></select></td>
 	<td><input id="subgenus_name" size=20 maxlength=255></td>
 <!-- END subgenera -->
 	<td align=right><select id="species_reso"></select></td>
+<!-- END genus_and_species_only -->
 	<td><input id="species_name" size=20 maxlength=255></td>
+<!-- OPTIONAL genus_and_species_only -->
 <!-- OPTIONAL abundances -->
 	<td><input id="abund_value" size=4 maxlength=255></td>
 	<td><select id="abund_unit"></select></td>
@@ -23,5 +28,6 @@
 	<td><select id="plant_organ"></select></td>
 	<td><select id="plant_organ2"></select></td>
 <!-- END plant_organs -->
+<!-- END genus_and_species_only -->
 </tr>
 <!-- End occurrence edit row -->

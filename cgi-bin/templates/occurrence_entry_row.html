@@ -3,14 +3,19 @@
 	<input id="collection_no" type=hidden>
 	<input id="authorizer" type=hidden>
 	<input id="enterer" type=hidden>
+<!-- OPTIONAL genus_and_species_only -->
 	<td align=right><select id="genus_reso"></select></td>
+<!-- END genus_and_species_only -->
 	<td><input name="genus_name" size=20 maxlength=255></td>
+<!-- OPTIONAL genus_and_species_only -->
 <!-- OPTIONAL subgenera -->
 	<td align=right><select id="subgenus_reso"></select></td>
 	<td><input name="subgenus_name" size=20 maxlength=255></td>
 <!-- END subgenera -->
 	<td align=right><select id="species_reso"></select></td>
+<!-- END genus_and_species_only -->
 	<td><input id="species_name" name="species_name" size=20 maxlength=255></td>
+<!-- OPTIONAL genus_and_species_only -->
 <!-- OPTIONAL abundances -->
 	<td><input name="abund_value" size=4 maxlength=255></td>
 	<td><select name="abund_unit"><option><option>specimens<option>%-specimens<option>individuals<option>%-individuals<option>%-volume<option>%-area<option>grid-count<option>rank<option>category<option>% of quadrats<option># of quadrats</select></td>
@@ -21,5 +26,6 @@
 	<td><select id="plant_organ"></select></td>
 	<td><select id="plant_organ2"></select></td>
 <!-- END plant_organs -->
+<!-- END genus_and_species_only -->
 </tr>
 <!-- End occurrence entry row -->
