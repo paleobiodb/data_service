@@ -418,6 +418,9 @@ sub displayTaxonInfoResults{
 	my @sorted = sort by_time_place_string (keys %time_place_coll);
 
 	if(scalar @sorted > 0){
+		# Do this locally because the module never gets exec_url
+		#   from bridge.pl
+		my $exec_url = $q->url();
 		print "<center><h3>Collections</h3></center>";
 		print "<table width=\"100%\"><tr bgcolor=\"white\">";
 		print "<th align=\"middle\">Time - place</th>";
@@ -445,9 +448,12 @@ sub displayTaxonInfoResults{
 	#subroutine to do the synonymy
 	displayTaxonSynonymy($dbt, $genus, $species);
 
+	my $clean_entered_name = $entered_name;
+	$clean_entered_name =~ s/ /\+/g;
+
 	# Entered Taxon
 	print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
-		  "startTaxonomy&taxon_name=$entered_name";
+		  "startTaxonomy&taxon_name=$clean_entered_name";
 	if($entered_no){
 		  print "&taxon_no=$entered_no";
 	}
@@ -455,9 +461,13 @@ sub displayTaxonInfoResults{
 		  "</b></p></center>\n";
 	
 	unless($entered_name eq $genus_name){
+
+		my $clean_genus_name = $genus_name;
+		$clean_genus_name =~ s/ /\+/g;
+
 		# Verified Taxon
 		print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
-			  "startTaxonomy&taxon_name=$genus_name";
+			  "startTaxonomy&taxon_name=$clean_genus_name";
 		if($taxon_no){
 			  print "&taxon_no=$taxon_no";
 		}
