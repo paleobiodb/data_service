@@ -1120,10 +1120,10 @@ sub displayOpinionChoiceForm{
     
     my $osql = "SELECT o.opinion_no FROM opinions o "; 
     if ($q->param("taxon_no")) {
+        $orig_child_no = TaxonInfo::getOriginalCombination($dbt,$q->param("taxon_no"));
         $osql .= " LEFT JOIN refs r ON r.reference_no=o.reference_no";
         $osql .= " WHERE o.child_no=$orig_child_no";
         $osql .= " ORDER BY IF((o.ref_has_opinion != 'YES' AND o.pubyr), o.pubyr, r.pubyr) ASC";
-        $orig_child_no = TaxonInfo::getOriginalCombination($dbt,$q->param("taxon_no"));
     } elsif ($q->param("reference_no")) {
         $osql .= " LEFT JOIN authorities a ON a.taxon_no=o.child_no";
         $osql .= " WHERE o.reference_no=".int($q->param("reference_no"));
