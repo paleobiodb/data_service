@@ -204,10 +204,9 @@ sub populateHTML
     {
       $keepMatching = 0;
       # Do select tags
-      if($htmlTemplateString =~ /(<select\s+id="$fieldName".*?>)/im)
+      if($htmlTemplateString =~ /(<select\s+id="$fieldName"(.*?)>)/im)
       {
-        my $stuff = $1;
-		#print $stuff;
+        my $otherstuff = $2;
 
 		# Get a list of select lists with this name
 		my @selLists = ($htmlTemplateString =~ /(<select\s+id="$fieldName".*?>)/img);
@@ -233,7 +232,14 @@ sub populateHTML
 				if($selList =~ /size="?(\d+)"?/)
 				{
 					my $size = $1;
-  				$sl->setSize($size);
+  					$sl->setSize($size);
+				}
+				# Set other main tag attributes if any (like class=)
+				if($selList =~ /<select\s+id="$fieldName"(.*?)>/)
+				{
+					if($1){
+  						$sl->setMainTagStuff($1);
+					}
 				}
 		        $sl->setSelected($selVals[$selListCount]) if $selVals[$selListCount];
 		        $sl->setAllowNulls(0);
@@ -252,6 +258,8 @@ sub populateHTML
         my $sl = new SelectList;
         # Set the name
         $sl->setName($fieldName);
+		# Set other stuff
+		$sl->setMainTagStuff($otherstuff) if($otherstuff);
         # If an array having this field name exists, use it
         if(defined $SELECT_LISTS{$fieldName})
         {
