@@ -1459,7 +1459,7 @@ sub displayTaxonClassification{
 	}
 
 	my $output = "";
-	$output .= "<table width=\"50%\"><tr valign=top><th>Rank</th><th>Name</th><th>Author</th><th>Publication year</th></tr>";
+	$output .= "<table width=\"50%\"><tr valign=top><th>Rank</th><th>Name</th><th>Author</th></tr>";
 	my $counter = 0;
 	# Print these out in correct order
 	my @taxon_rank_order = ('superkingdom','kingdom','subkingdom','superphylum','phylum','subphylum','superclass','class','subclass','infraclass','superorder','order','suborder','infraorder','superfamily','family','subfamily','tribe','subtribe','genus','subgenus','species','subspecies');
@@ -1469,24 +1469,34 @@ sub displayTaxonClassification{
 	foreach my $rank (@taxon_rank_order){
 		# Don't provide links for any rank higher than 'order'
 		my %auth_yr;
+		# get the authority data
 		if(exists $classification{$rank}){
 		  if(exists $classification{$rank}[1]){
-			%auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$classification{$rank}[1])};
+		# for a species, first find out the original combination
+			my $orig_taxon_no = $classification{$rank}[1];
+			if ( $rank eq "species" )	{
+				$orig_taxon_no = getOriginalCombination($dbt, $orig_taxon_no);
+			}
+			%auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$orig_taxon_no)};
+			if ( $classification{$rank}[1] != $orig_taxon_no )	{
+				$auth_yr{author1last} = "(" . $auth_yr{author1last};
+				$auth_yr{pubyr} .= ")";
+			}
 		  }
 		  $auth_yr{author1last} =~ s/\s+/&nbsp;/g;
 		  # Don't link 'sp, 'sp.', 'indet' or 'indet.' either.
 		  if($taxon_rank_order{$rank} < 11 || $classification{$rank}[0] =~ /(sp\.{0,1}|indet\.{0,1})$/){
 			if($counter % 2 == 0){
-				$output .="<tr class='darkList'><td align=\"middle\">$rank".
-						  "</td><td align=\"middle\">$classification{$rank}[0]".
-						  "</td><td>$auth_yr{author1last}</td>".
-						  "<td>$auth_yr{pubyr}</td></tr>\n";
+				$output .="<tr class='darkList'><td align=\"middle\">$rank</td>".
+						  "<td align=\"middle\">$classification{$rank}[0]</td>".
+						  "<td>$auth_yr{author1last}&nbsp;".
+						  "$auth_yr{pubyr}</td></tr>\n";
 			}
 			else{
 				$output .="<tr><td align=\"middle\">$rank</td>".
 					      "<td align=\"middle\">$classification{$rank}[0]</td>".
-						  "<td>$auth_yr{author1last}</td>".
-						  "<td>$auth_yr{pubyr}</td></tr>\n";
+						  "<td>$auth_yr{author1last}&nbsp;".
+						  "$auth_yr{pubyr}</td></tr>\n";
 			}
 		  }
 		  else{
@@ -1508,8 +1518,8 @@ sub displayTaxonClassification{
 						  "&taxon_rank=$temp_rank&taxon_name=".
 					      "$classification{$rank}[0]\">".
 					      "$classification{$rank}[0]</a></td>".
-						  "<td>$auth_yr{author1last}</td>".
-						  "<td>$auth_yr{pubyr}</td></tr>\n";
+						  "<td>$auth_yr{author1last}&nbsp;".
+						  "$auth_yr{pubyr}</td></tr>\n";
 			}
 			else{
 				$output .="<tr><td align=\"middle\">$rank</td>".
@@ -1517,8 +1527,8 @@ sub displayTaxonClassification{
 					      "action=checkTaxonInfo&taxon_rank=$temp_rank&".
 						  "taxon_name=$classification{$rank}[0]\">".
 					      "$classification{$rank}[0]</a></td>".
-						  "<td>$auth_yr{author1last}</td>".
-						  "<td>$auth_yr{pubyr}</td></tr>\n";
+						  "<td>$auth_yr{author1last}&nbsp;".
+						  "$auth_yr{pubyr}</td></tr>\n";
 			}
 		  }
 			$counter++;
