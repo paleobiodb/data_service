@@ -127,6 +127,8 @@ sub retellOptions {
 					"occurrences_abund_unit",
 					"occurrences_reference_no",
 					"occurrences_comments",
+					"occurrences_plant_organ",
+					"occurrences_plant_organ2",
 					"occurrences_created",
 					"occurrences_modified",
 					"collections_only" );
