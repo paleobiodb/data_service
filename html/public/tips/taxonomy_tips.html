@@ -1,4 +1,4 @@
-
+<head>
 <STYLE type="text/css"> <!--
         TD      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
         TH      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
@@ -14,6 +14,10 @@
                 -->
 </STYLE>
 
+</head>
+
+<body bgcolor="white" background="/public/PDbg.gif" vlink="#5522FF" alink="#00AA
+FF" link="#0033FF">
 <center>
 <h2>Taxonomy Data Entry Tip Sheet</h2>
 </center><p>
@@ -22,13 +26,13 @@
 <a href="#General">General comments</a> - 
 <a href="#Authority">Who named the taxon?</a> - 
 <a href="#Type">How was it named?</a> - 
-<a href="#Opinions">What is its status?</a> - 
-<a href="#Status">Whose opinion is this?</a>
+<a href="#Status">Whose opinion are you entering?</a> -
+<a href="#Opinions">What did they say about its status?</a>
 
 <hr>
 
 <font size=-1>
-<i>This page was written by John Alroy on 28 August 2000, updated on 25 July, 3/7 August 2001, and 14-17 August 2002.</i><p>
+<i>This page was written by John Alroy on 28 August 2000, updated on 25 July, 3/7 August 2001, 14-17 August 2002, and 28 March 2003.</i><p>
 </font>
 
 <hr>
@@ -61,9 +65,11 @@ IMPORTANT: At this point the name of the taxon must be correct. (1) Be very sure
 Make sure you put in the original name instead.<p>
 
 Every taxon has to be named in a publication, which is called the authority. For example, <i>Homo sapiens</i> was named in a 1758 publication by Linnaeus, so the authority is <i>Linnaeus 1758</i>.
-You can record the authority in one of two ways. (1) You are entering data from the same paper in which the taxon was named. So, if you are reading Linnaeus 1758, check the box that says "It was first named in the primary reference." (2) You are working from another, later paper that discusses the species and gives some information about the authority. So, enter as much as you can about the author names and the year the taxon was named.<p>
+You can record the authority in one of two ways. (1) You are entering data from the same paper in which the taxon was named. So, if you are reading Linnaeus 1758, check the box that says "It was first named in the data record's primary reference." (2) You are working from another, later paper that discusses the species and gives some information about the authority. So, enter as much as you can about the author names and the year the taxon was named.<p>
 
-<i>Note:</i> if you are adding more data for a name that previously was entered, (1) the "primary reference" for the taxon may be different from your current reference, and (2) the "primary reference" box will be checked <i>and</i> the reference information will be displayed below.
+In this section you may also enter the numbers of the pages and figures of the taxon's original description. DON'T enter page numbers for the whole paper!<p>
+
+<i>Note:</i> if you are adding more data for a name that previously was entered, (1) the "data record's primary reference" for the taxon may be different from your current reference, and (2) the "data record's primary reference" box will be checked <i>and</i> the reference information will be displayed below.
 The scripts won't be confused by these facts, so don't worry about them.<p>
 
 <hr>
@@ -80,7 +86,7 @@ Use the "unranked clade" value if the original author does not use ranks but doe
 Also use this term for non-standard ranks such as "Mirorder" or "Parvorder."
 Use the "informal" value only if the taxon has not been named formally and you are entering it to keep track of (say) a leaf morphotype category. DO NOT enter common English names such as "antelope", "oyster," or "conifer" as new taxa. These terms always can be translated into formal scientific names such as "Bovidae," so they should not be entered anywhere in the Database.<p>
 
-<b>Type taxon's name</b><br>
+<b>Name of type taxon</b><br>
 The name of the type taxon, as originally given when the taxon was named.
 For example, if you are entering data for a genus, enter the name of its type species here.<p>
 
@@ -89,11 +95,22 @@ Note any problems here. For example, make a note if: you are not sure you have t
 
 <hr>
 <center>
-<a name="Opinions"></a>
-<h3>What is its status?</h3>
+<a name="Status"></a>
+<h3>Whose opinion are you entering?</h3>
 </center><p>
 
-Once a taxon is named, the classification and validity of that taxon is a matter of opinion. The scripts will display this information whenever you are entering new taxonomic data, or after you are done entering the data. It is <i>very</i> important to record opinion data if at all possible.
+Every opinion has to be tied to a reference. If the opinion is based on what you read in your current reference, check the "current reference" box. If not, enter as much information as you can about the earlier publication that argued this opinion. For example, if the current paper says "Xus was synonymized with Yus by Jones 1984" but says nothing more about the status of Xus, enter "Jones" and "1984" in this section and don't check the box.
+
+<hr>
+<center>
+<a name="Opinions"></a>
+<h3>What did they say about its status?</h3>
+</center><p>
+
+Once a taxon is named, the classification or validity of that taxon are a matter of opinion.
+Your job is to pick <i>one</i> opinion that best represents the author's viewpoint, or the viewpoint of the earlier publication that the author has mentioned.
+You may also enter the numbers of the pages and figures where the taxon is discussed in the paper whose opinion you are recording. DON'T enter page numbers for the whole paper!
+The scripts will display this information whenever you are entering new taxonomic data, or after you are done entering the data. It is <i>very</i> important to record opinion data if at all possible.
 
 <center>
 <h4>What the terms mean</h4>
@@ -101,13 +118,17 @@ Once a taxon is named, the classification and validity of that taxon is a matter
 
 There are three major categories of opinions, as follows.<p>
 
-<i>Classification.</i> The taxon is valid, so classify it.
+<i>Classification.</i> The taxon is valid, so classify it. First pick the "Valid" radio button and then enter the name of the higher taxon (for a genus, this is a family; for a species, this is a genus).
+<i>Important:</i> you also may enter the verbatim text of the formal diagnosis, if one is given.
+The database stores different values depending on whether the taxon is a species:
  <ul>
  <li>"<i>belongs to</i>" means a <u>higher taxon</u> (not a species) is valid and falls within an even higher parent taxon.
  <li>"<i>recombined as</i>" means a <u>species</u> is valid but has been moved to another genus. Put the new combination in the parent taxon field.
 </ul>
 
 <p><i>Synonymy.</i> The taxon is invalid and the same as something else.
+Pick "Invalid and another name should be used," pick the status, and then enter the other name.
+The possible status values are:
 <ul>
  <li>"<i>subjective synonym of</i>" means that the taxon is invalid because the same taxon was given a different name by an earlier author (although the types are different). List the older, valid name (i.e., the senior synonym) in the parent taxon field.
  <li>"<i>objective synonym of</i>" means that the taxon is invalid because <i>exactly the same</i> type specimen was used by an earlier author as the basis of a different name. List the older, valid name in the parent taxon field.
@@ -117,6 +138,7 @@ There are three major categories of opinions, as follows.<p>
 </ul>
 
 <p><i>Invalidation.</i> The taxon is invalid and you can't even tell if it's the same as something else.
+Pick "Invalid and no other name can be applied" and then choose the status. The values are:
 <ul>
  <li>"<i>nomen dubium</i>" means that the taxon is probably invalid and needs to be investigated. Leave "parent taxon" empty.
  <li>"<i>nomen nudum</i>" means that the original description didn't follow the rules of nomenclature properly, so the name has no scientific meaning. Leave "parent taxon" empty.
@@ -148,12 +170,5 @@ First, fill out a form with X in the taxon name field; G in full in the parent t
 <li><i>Species X is invalid</i> (<u>validity</u>). Select "nomen dubium," "nomen nudum," "nomen oblitum" or "nomen vanum" and leave the senior synonym field <i>blank</i>.
 </ul>
 
-<hr>
-<center>
-<a name="Status"></a>
-<h3>Whose opinion is this?</h3>
-</center><p>
-
-Every opinion has to be tied to a reference. If the opinion is based on what you read in your current reference, check the "current reference" box. If not, enter as much information as you can about the earlier publication that argued this opinion. For example, if the current paper says "Xus was synonymized with Yus by Jones 1984" but says nothing more about the status of Xus, enter "Jones" and "1984" in this section and don't check the box.
-
+</body>
 
