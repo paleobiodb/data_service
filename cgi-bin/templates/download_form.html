@@ -303,7 +303,9 @@ Type of output:
 <p>
 
 <tr><td valign=top><font size=-1>
-Occurrence fields you want (the collection ID and genus name fields are always output): 
+Occurrence fields you want:<br>
+<font size=-2>(the collection ID and genus name fields are always output)</font>
+
 <td valign=top><font size=-1>
 <table bgcolor="EEEEEE">
 <tr><td><font size=-1><input type=checkbox name=occurrences_authorizer value="YES" onClick="occurrencesClick();">authorizer
@@ -327,8 +329,20 @@ Occurrence fields you want (the collection ID and genus name fields are always o
 <td><font size=-1><input type=checkbox name=occurrences_plant_organ2 value="YES" onClick="occurrencesClick();">plant organ 2
 <tr><td><font size=-1><input type=checkbox name=occurrences_created value="YES" onClick="occurrencesClick();">created
 <td><font size=-1><input type=checkbox name=occurrences_modified value="YES" onClick="occurrencesClick();">modified
-<td colspan=2><font size=-1><input type=checkbox name=collections_only value="YES" onClick="occurrencesNoneClick();"><nobr><b>NONE</b> (get collection data only)</nobr>
+<tr><td colspan=2><font size=-1><input type=checkbox name=collections_only value="YES" onClick="occurrencesNoneClick();"><nobr><b>NONE</b> (get collection data only)</nobr>
+<td colspan=2><font size=-1><input type=checkbox name=distinct_taxa_only value="YES" onClick="occurrencesNoneClick();"><nobr>get distinct genera only</nobr>
 </table>
+
+<tr><td valign=top><font size=-1>
+Ecology/taphonomy fields you want:<br>
+<font size=-2>(values are for directly scored taxa only)</font>
+
+<td valign=top>
+<nobr>
+<select id="ecology1"></select>
+<select id="ecology2"></select>
+<select id="ecology3"></select>
+</nobr>
 
 <tr><td valign=top><font size=-1>
 Main collection data fields you want:
