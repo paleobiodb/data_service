@@ -1904,13 +1904,17 @@ sub displayAuthoritySummary {
 		print "<DIV class=\"warning\">Error inserting/updating authority record.  Please start over and try again.</DIV>";	
 	} else {
 		
-		print "<H3>" . $dbrec->{taxon_name} . " has been $enterupdate the database</H3>
-		<p>To verify that the information was entered correctly, click on the add more data link below.</p>";
-		
-		print "<TABLE align=center BORDER=0 WIDTH=80\%><TR>
-		<TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $self->{taxonNumber} ."\"><B>Add more data about " . $dbrec->{taxon_name} . "</B></A></TD></TR><TR>
-		<TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionList&taxon_no=" . $self->taxonNumber() . "&taxon_name=" . $dbrec->{taxon_name} . "\"><B>Add/edit opinion about " . $dbrec->{taxon_name} . "</B></A></TD></TR><TR>
-		<TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority\"><B>Add more data about another taxon</B></A></TD></TR></TABLE>";	
+		print "<H3>" . $dbrec->{taxon_name} . " " . $self->authors() . " has been $enterupdate the database</H3>";
+
+		my $tempTaxon = $dbrec->{taxon_name};
+		$tempTaxon =~ s/ /+/g;
+
+		print "<center>
+		<p><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonInfoResults&taxon_rank=" . $dbrec->{taxon_rank} . "&genus_name=" . $tempTaxon . "+(" . $self->{taxonNumber} .")\"><B>Get&nbsp;general&nbsp;information&nbsp;about&nbsp;" . $dbrec->{taxon_name} . "</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $self->{taxonNumber} ."\"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;" . $dbrec->{taxon_name} . "</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionList&taxon_no=" . $self->taxonNumber() . "&taxon_name=" . $dbrec->{taxon_name} . "\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;" . $dbrec->{taxon_name} . "</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority\"><B>Add&nbsp;authority&nbsp;data&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
+		</center>";	
 
 	}
 	
