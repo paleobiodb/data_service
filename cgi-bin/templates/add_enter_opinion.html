@@ -10,7 +10,7 @@
 %%message%%
 %%error_message%%
 
-<H2>Add/edit opinion record for %%taxon_name%%</H2>
+<H2>Add/edit opinion record for %%child_name%%</H2>
 
 <FORM method="POST" action="%%exec_url%%">
 
@@ -24,19 +24,14 @@
 
 <!-- taxon_no, and taxon_rank apply to the child_no taxon, ie, the taxon about
 which they are entering the authority record. -->
-<input type="hidden" id="taxon_no" name="taxon_no" value="%%taxon_no%%">
-<input type="hidden" id="taxon_rank" name="taxon_rank" value="%%taxon_rank%%">
-
-<input type="hidden" id="parent_no" name="parent_no" value="%%parent_no%%">
-
+<input type="hidden" id="child_no" name="child_no" value="%%child_no%%">
 <input type="hidden" id="opinion_no" name="opinion_no" value="%%opinion_no%%">
-<input type="hidden" id="is_new_entry" name="is_new_entry" value="%%is_new_entry%%">
-<input type="hidden" id="second_submission" name="second_submission" value="%%second_submission%%">
+<input type="hidden" id="orig_taxon_status" name="orig_taxon_status" value="%%orig_taxon_status%%">
 
 <!-- end of hiddens.  other fields may be converted to hidden if the user is not 
 supposed to edit them -->
 
-<h2>Whose opinion on %%taxon_name%% are you entering?</h2>
+<h2>Whose opinion on %%child_name%% are you entering?</h2>
 
 <div class="emphasized">
 <input id="ref_has_opinion" name="ref_has_opinion" type="radio" value="YES" %%ref_has_opinion_checked%%>
@@ -97,106 +92,22 @@ The current reference argues for this opinion:
 
 
 <DIV class="mainSection">
-<H2>What did they say about the status of %%taxon_name%%?</H2>
+<H2>What did they say about the status of %%child_name%%?</H2>
 
 <TABLE BORDER=0>
-
-
-<!-- 
-for a species or subspecies, this should say:
-"Valid rank as originally combined; belongs to genus genus_name"  For
-for anything else (subgenus or higher), it should say:
-"Valid rank, classified as belonging to"	
--->
-
-<TR><TD valign=top>
-<input type="radio" name="taxon_status" value="belongs to" %%taxon_status_belongs_to%%></TD>
-
-%%START_OPTIONAL_species_only%%
-<!-- this should only be visible for species -->
-<TD colspan=2><b>Valid %%taxon_rank%%</b> as originally combined; belongs to genus <i>%%parent_genus%%</i>.</TD>
-%%END_OPTIONAL_species_only%%
-
-%%START_OPTIONAL_subspecies_only%%
-<!-- this should only be visible for subspecies -->
-<TD colspan=2><b>Valid %%taxon_rank%%</b> as originally combined; belongs to species <i>%%parent_species%%</i>.</TD>
-%%END_OPTIONAL_subspecies_only%%
-
-
-%%START_OPTIONAL_not_species%%
-<!-- this should only be visible if it's **NOT** a species or subspecies -->
-<TD colspan=2><b>Valid %%taxon_rank%%</b>, classified as belonging to 
-<input id="parent_taxon_name" name="parent_taxon_name" size="50" value="%%parent_taxon_name%%"><br>
-</TD>
-%%END_OPTIONAL_not_species%%
-
-</TR>
-
-%%START_OPTIONAL_species_only%%
-<!-- this should only be visible for species -->
-<TR><TD valign=top>
-<input type="radio" name="taxon_status" value="recombined as" %%taxon_status_recombined_as%%></TD>
-<TD colspan=2><b>Valid %%taxon_rank%%</b>, but recombined into a different genus.<br>
-New genus and species:<br>
-<input id="parent_taxon_name" name="parent_taxon_name" size="50" value="%%parent_taxon_name%%"><br>
-</TD></TR>
-%%END_OPTIONAL_species_only%%
-
-%%START_OPTIONAL_subspecies_only%%
-<!-- this should only be visible for subspecies -->
-<TR><TD valign=top>
-<input type="radio" name="taxon_status" value="recombined as" %%taxon_status_recombined_as%%></TD>
-<TD colspan=2><b>Valid %%taxon_rank%%</b>, but recombined into a different species.<br>
-New genus, species, and subspecies:<br>
-<input id="parent_taxon_name" name="parent_taxon_name" size="50" value="%%parent_taxon_name%%"><br>
-</TD></TR>
-%%END_OPTIONAL_subspecies_only%%
-
-
-
-<!-- the diagnosis box applies to either of the valid radio buttons -->
+%%belongs_to_row%% 
+%%recombined_as_row%%
 <TR>
 <TD></TD>
-<TD valign="middle" align=left>Diagnosis:<BR>
+<TD valign="middle" align=left colspan=2>Diagnosis:<BR>
 <textarea id="diagnosis" name="diagnosis" rows=3 cols=70>%%diagnosis%%</textarea>
 </TD>
-
-<BR><BR>
-&nbsp &nbsp
-%%parent_taxon_popup%%
-
 </TR>
-
-<TR><TD valign=top>
-<input type="radio" name="taxon_status" value="invalid1" %%taxon_status_invalid1%%>
-</TD>
-<TD colspan=2><b>Invalid</b> and another name should be used.
-</TD>
-</TR>
-
+%%synonym_row%%
+%%nomen_row%%
 <TR>
 <TD></TD>
-<TD colspan=2>Status:
-
-%%synonym_select%%
-
-<input name="parent_taxon_name2" size="50" value="%%parent_taxon_name2%%">
-</TD>
-</TR>
-
-<TR><TD valign=top>
-<input type="radio" name="taxon_status" value="invalid2" %%taxon_status_invalid2%%> </TD>
-<TD colspan=2><b>Invalid</b> and no other name can be applied. Status:
-
-%%nomen_select%%
-</TD>
-</TR>
-
-
-<TR>
-<TD></TD>
-
-<TD align=center>
+<TD align=center colspan=2>
 <span class="tiny"><BR>
 Please check the 
 <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> 
@@ -205,11 +116,11 @@ for an explanation of these terms. <BR>
 </TR>
 
 <TR>
-<TD colspan=2></TD>
+<TD colspan=3></TD>
 </TR>
 
 <TR>
-<TD colspan=2 align=left valign=top>
+<TD colspan=3 align=left valign=top>
 <b>Comments:</b><BR>
 <textarea id="comments" name="comments" rows=2 cols=70>%%comments%%</textarea>
 </TD>
