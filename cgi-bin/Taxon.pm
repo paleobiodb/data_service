@@ -13,6 +13,7 @@ use SQLBuilder;
 use CGI::Carp qw(fatalsToBrowser);
 
 use URLMaker;
+use Reference;
 
 
 use fields qw(	taxonName
@@ -144,7 +145,7 @@ sub getTaxonNameFromNumber {
 # returns an ARRAY with two elements: the taxon_no, and the new taxon_name.
 # This is done because the taxon_name may be shortened, for example, if
 # it's a genus species pair, but we only have an entry for the genus, not the pair.
-# returns -1 if it can't find the number. 
+# returns 0 if it can't find the number. 
 # Note, not all taxa are in this table, so it won't work for something that dosen't exist.
 #
 # Note, this also won't work very well for homonyms, etc.. For example, if two entries exist
@@ -174,7 +175,7 @@ sub getTaxonNumberFromName {
 		}
 	}
 	
-	return (-1, "");
+	return (0, "");
 }
 
 
@@ -513,6 +514,330 @@ sub printTaxaHash {
 	# end of printing section for debugging
 
 }
+
+
+
+# mainly meant for internal use
+# returns a hashref with all data (select *) for the current taxon,
+# *if* we have a taxon_no for it.  If we don't, then it returns nothing.
+sub databaseRecord {
+	my Taxon $self = shift;
+
+	if (! $self->{taxonNumber}) {
+		return;	
+	}
+	
+	my $sql = $self->getSQLBuilder();
+	my $dbh = $sql->dbh();
+	
+	# grab all the current data for this taxon from the database	
+	my $sth = $dbh->prepare("SELECT * FROM authorities WHERE taxon_no = ?");
+	$sth->execute($self->{taxonNumber});
+
+	return $sth->fetchrow_hashref(); 	
+}
+
+
+
+# pass this an HTMLBuilder object
+# and a session object
+# 
+# Displays the form which allows users to enter/edit authority
+# table data.
+#
+# rjp, 3/2004
+sub displayAuthorityForm {
+	my Taxon $self = shift;
+	my $hbo = shift;
+	my $s = shift;
+	
+	my %fields;  # a hash of fields and values that we'll pass to HTMLBuilder to pop. the form.
+	my @nonEditables; 	# fields that the user can't edit.
+	
+	# is this a new entry, or an edit of an old record?
+	my $isNewEntry = 1;  
+	if ($self->{taxonNumber}) {
+		$isNewEntry = 0;  # it must exist if we have a taxon_no for it.
+	}
+	
+	
+	# if the taxon is already in the authorities table,
+	# then grab the data from that table row.
+	if (! $isNewEntry) {	
+		my $results = $self->databaseRecord();
+		%fields = %$results;		
+	 	
+		$fields{'taxon_no'} = $self->{taxonNumber};
+	}
+	
+	
+	$fields{'taxon_name_corrected'} = $self->{taxonName};	
+	
+	
+	# if the type_taxon_no exists, then grab the name for that taxon.
+	if ($fields{type_taxon_no}) {
+		$fields{type_taxon_name} = $self->getTaxonNameFromNumber($fields{type_taxon_no});
+	}
+	
+	
+	# populate the correct pages/figures fields depending
+	# on the ref_is_authority value.
+
+	my $ref = Reference->new();
+	
+	if ($isNewEntry) {
+		# for a new entry, use the current reference from the session.
+		$ref->setWithReferenceNumber($s->currentReference());
+	} else {
+		# for an old entry, use the reference_number in the record.
+		$ref->setWithReferenceNumber($fields{reference_no});	
+	}
+	
+	$fields{primary_reference} = $ref->formatAsHTML();
+
+	if ($fields{'ref_is_authority'} eq 'YES') {
+		# reference_no is the authority
+		$fields{'ref_is_authority_checked'} = 'checked';
+		$fields{'ref_is_authority_notchecked'} = '';
+	
+	} else {
+		# reference_no is not the authority
+		
+		if (! $isNewEntry) {
+			# we only want to check a reference radio button
+			# if they're editing an old record.  This will force them to choose
+			# one for a new record.
+			$fields{'ref_is_authority_checked'} = '';
+			$fields{'ref_is_authority_notchecked'} = 'checked';
+		}
+		
+		$fields{'2nd_pages'} = $fields{'pages'};
+		$fields{'2nd_figures'} = $fields{'figures'};
+		$fields{'pages'} = '';
+		$fields{'figures'} = '';
+	}
+	
+		
+	
+	# if the rank is species, then display the type_specimen input
+	# field.  Otherwise display the type_taxon_name field.
+	my $rankFromSpaces = Validation::taxonRank($self->{taxonName});
+	my $databaseRank = $fields{taxon_rank};
+	
+	if ($rankFromSpaces eq 'species') {
+		# remove the type_taxon_name field.
+		$fields{'OPTIONAL_type_taxon_name'} = 0;
+	} else {
+		# remove the type_specimen field.	
+		$fields{'OPTIONAL_type_specimen'} = 0;
+	}
+	
+	# Now we need to deal with the taxon rank popup menu.
+	# if this authority record already existed, then use the taxon_rank
+	# from the database.  Otherwise, use the rank obtained from the 
+	# spacing of the name
+	my $rankToUse = ($databaseRank || $rankFromSpaces);
+	$fields{taxon_rank} = $hbo->rankPopupMenu($rankToUse);
+	
+
+	# if the authorizer of this record doesn't match the current
+	# authorizer, then only let them edit empty fields.
+	#
+	# otherwise, they can edit any field.
+	my @nonEditables;
+	
+	if ($s->get('authorizer_no') != $fields{authorizer_no}) {
+	
+		print "<p align=center><i>You did not create this record, so you can only edit empty fields.</i></p>";
+		
+		# we should always make the ref_is_authority radio buttons disabled
+		# because only the original authorizer can edit these.
+		
+		push (@nonEditables, "ref_is_authority");
+		
+		# depending on the status of the ref_is_authority radio, we should
+		# make the other reference fields non-editable.
+		if ($fields{'ref_is_authority'} eq 'YES') {
+			push (@nonEditables, ('author1init', 'author1last', 'author2init', 'author2last', 'otherauthors', 'pubyr', '2nd_pages', '2nd_figures'));
+		} else {
+			push (@nonEditables, ('pages', 'figures'));		
+		}
+		
+		
+		my @keys = keys(%fields);
+		
+		# find all fields which are not empty and add them to the list.
+		foreach my $f (@keys) {
+			if (($fields{$f} ne '') || ($fields{$f} != 0) ) {
+				push(@nonEditables, $f);
+			}
+		}		
+	}
+	
+	
+	print $hbo->newPopulateHTML("add_enter_authority", \%fields, \@nonEditables);
+}
+
+
+
+
+
+# call this when you want to submit an authority form.
+# must pass it the cgi parameters, $q, and the session, $s.
+#
+# rjp, 3/2004.
+sub submitAuthorityForm {
+	my Taxon $self = shift;
+	my $q = shift;		# the cgi parameters
+	my $s = shift;		# session
+
+	
+	# is this a new entry, or an edit of an old record?
+	my $isNewEntry = 1;  
+	if ($self->{taxonNumber}) {
+		$isNewEntry = 0;  # it must exist if we have a taxon_no for it.
+	}
+
+	# grab all the current data from the database about this record
+	# if it's not a new entry (ie, if it already existed).	
+	my %dbFields;
+	if (! $isNewEntry) {
+		my $results = $self->databaseRecord();
+
+		if ($results) {
+			%dbFields = %$results;
+		}
+	}
+	
+	
+	# this $editAny variable is true if they can edit any field,
+	# false if they can't.
+	my $editAny = 0;
+	
+	if ($isNewEntry) {
+		$editAny = 1;	# new entries can edit any field.
+	} else {
+		# edits of pre-existing records have more restrictions. 
+	
+		# if the authorizer of the authority record doesn't match the current
+		# authorizer, then *only* let them edit empty fields.
+	
+		my $editAny = 0;
+	
+		# if the authorizer of the authority record matches the authorizer
+		# who is currently trying to edit this data, then allow them to change
+		# any field.
+		if ($s->get('authorizer_no') == $dbFields{authorizer_no}) {
+			$editAny = 1;	
+		}
+		
+		if ($s->isSuperUser()) {
+			# super user can edit any field no matter what.
+			$editAny = 1;	
+		}
+	}
+	
+	
+	# build up a hash of fields/values to enter into the database
+	my %fieldsToEnter;
+	
+	if ($isNewEntry) {
+		$fieldsToEnter{authorizer_no} = $s->authorizerNumber();
+		$fieldsToEnter{enterer_no} = $s->entererNumber();
+		$fieldsToEnter{reference_no} = $s->currentReference();
+	} else {
+		$fieldsToEnter{modifier_no} = $s->entererNumber();	
+	}
+	
+	
+	# merge the pages and 2nd_pages, figures and 2nd_figures fields together
+	# since they are one field in the database.
+	
+	if (! $q->param('ref_is_authority')) {
+		$q->param(pages => $q->param('2nd_pages'));
+		$q->param(figures => $q->param('2nd_figures'));
+	}
+	
+	# remove the old ones.
+	$q->delete('2nd_pages');
+	$q->delete('2nd_figures');
+	
+	# remove the action parameter so we won't try to add it to the database table!
+	$q->delete('action');
+	
+	# Now loop through all fields submitted from the form.
+	# If a field is not empty, then see if we're allowed to edit it in the database.
+	# If we can edit it, then make sure the name is correct (since a few fields like
+	# 2nd_pages, etc. don't match the database field names) and add it to the 
+	# %fieldsToEnter hash.
+	
+	foreach my $formField ($q->param()) {
+		if (! $q->param($formField)) {
+			next;  # don't worry about empty fields.	
+		}
+		
+		my $okayToEdit = $editAny;
+		if (! $okayToEdit) {
+			# then we should do some more checks, because maybe they are allowed
+			# to edit it aferall..  If the field they want to edit is empty in the
+			# database, and is not the ref_is_authority field, then they can edit it.
+			
+			if (! $dbFields{$formField}) {
+				# If the field in the database is empty, then it's okay
+				# to edit it, as long as it's not the ref_is_authority field.
+				$okayToEdit = 1;
+			}
+		}
+		
+		if ($okayToEdit) {
+			$fieldsToEnter{$formField} = $q->param($formField);
+		}
+		
+		#Debug::dbPrint("okayToEdit = $okayToEdit, $formField = " . $q->param($formField));
+		
+	} # end foreach formField.
+
+	
+	# at this point, we should have a nice hash array (%fieldsToEnter) of
+	# fields and values to enter into the authorities table.
+	foreach my $fieldToEnter (keys(%fieldsToEnter)) {
+		Debug::dbPrint("$fieldToEnter = " . $fieldsToEnter{$fieldToEnter});
+	}
+}
+
+
+
+
+# pass this an HTMLBuilder object
+# 
+# display the form which allows users to enter/edit opinion
+# table data.
+#
+sub displayOpinionForm {
+	my Taxon $self = shift;
+	my $hbo = shift;
+
+	my %fields;
+	my @nonEditables;
+	
+	print $hbo->newPopulateHTML("add_enter_opinion", \%fields, \@nonEditables);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # end of Taxon.pm
