@@ -583,11 +583,11 @@ sub processEditScaleForm	{
 					}
 					if ( $#matches > -1 )	{
 						if ( $f eq "locage_max" )	{
-							$sql = "UPDATE collections SET modified=modified,eml_max_interval='" . $eml_intervals[$i] . "',max_interval_no='" . $interval_no . "' WHERE collection_no IN ( " . join(",",@matches) . " )";
+							$sql = "UPDATE collections SET modified=modified,max_interval_no='" . $interval_no . "' WHERE collection_no IN ( " . join(",",@matches) . " )";
 							$dbt->getData($sql);
 							@matches = ();
 						} elsif ( $f eq "locage_min" )	{
-							$sql = "UPDATE collections SET modified=modified,eml_min_interval='" . $eml_intervals[$i] . "',min_interval_no='" . $interval_no . "' WHERE collection_no IN ( " . join(",",@matches) . " )";
+							$sql = "UPDATE collections SET modified=modified,min_interval_no='" . $interval_no . "' WHERE collection_no IN ( " . join(",",@matches) . " )";
 							$dbt->getData($sql);
 						}
 					}
