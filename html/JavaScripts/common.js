@@ -1,5 +1,21 @@
 //some common java script functions which are used throughout the web site.
-//written by ryan, 1/2004.
+//**note, these are for use on BOTH the PUBLIC and PRIVATE page.
+//created by rjp, 1/2004.
+
+
+//show a popup window with the passed URL.
+function tipsPopup (URL) {
+	window.open(URL, 'tips', 'toolbar=1,scrollbars=1,location=1,statusbar=0,menubar=0,resizable=1,width=640,height=480');
+}
+
+
+//if java script is turned on, then this will
+//print a hidden input field so we can check from the perl
+//code and see that it was turned on.
+function javascriptOnCheck() {
+	document.writeln("<INPUT type=\"hidden\" name=\"javascripton\" value=\"yes\"></INPUT>");	
+}
+
 
 //meant to fill the years in a pull down menu from 1998 to the current year.
 function fillYears() {
