@@ -24,7 +24,7 @@ my $PI = 3.14159265;
 my $C72 = cos(72 * $PI / 180);
 my $AILEFT = 100;
 my $AITOP = 580;
-my @coll_counts = ();
+my %coll_count = ();
 
 sub acos { atan2( sqrt(1 - $_[0] * $_[0]), $_[0] ) }
 sub tan { sin($_[0]) / cos($_[0]) }
@@ -302,11 +302,10 @@ sub mapFinishImage {
     print MAPOUT "<table cellpadding=5 cellspacing=1>\n";
     if(!$q->param("taxon_info_script")){
         print MAPOUT "<tr><td width=110 valign=\"top\" bgcolor=\"white\" class=\"small\">";
-        my $max_count = 0;
-        for (@coll_counts) { $max_count = $_ if ($_ > $max_count); }
-        if ($max_count > 1)	{
-            print MAPOUT "<b>$max_count&nbsp;collections</b> fall ";
-        } elsif ($max_count == 1)	{
+        my $count = scalar(keys %coll_count);
+        if ($count > 1)	{
+            print MAPOUT "<b>$count&nbsp;collections</b> fall ";
+        } elsif ($count == 1)	{
             print MAPOUT "<b>Exactly&nbsp;one collection</b> falls ";
         }  else	{
             # PM 09/13/02 Added bit about missing lat/long data to message
@@ -1402,11 +1401,11 @@ sub mapDrawPoints{
 
                     $hemiVal{$x1}{$y1} = $hemi;
                     $matches++;
+                    $coll_count{$coll{'collection_no'}}++;
             }
         }
     }
     
-    push @coll_counts, $matches;
 	$self->dbg("matches: $matches<br>");
 	# Bail if we don't have anything to draw.
 	if($matches < 1 && $q->param('taxon_info_script') eq "yes"){
