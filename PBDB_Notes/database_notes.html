@@ -71,7 +71,7 @@ p.field {
 
 
 .fieldName {
-	background-color: lightyellow;
+	background-color: rgb(220,220,220);
 	font-weight: bold;
 	font-size: 100%;
 	width: auto;
@@ -163,7 +163,10 @@ by looking at the parent_no, and child_no fields.</span>
 <span class="fieldName">taxon_rank</span>
 <span class="fieldDesc">class, species, genus, etc.</span>
 </p>
-
+<p class="field">
+<span class="fieldName">pub_yr</span>
+<span class="fieldDesc">Year the taxon was named.</span>
+</p>
 <p class="field">
 <span class="fieldName">type_taxon_no</span>
 <span class="fieldDesc">Optional field - for example, Felidae 
@@ -185,6 +188,9 @@ A collection can be thought of as a particular <i>hole</i> in the ground.</p>
 </p>
 <p class="field">
 <span class="fieldName"><span class="primaryKey">collection_no</span></span>
+</p>
+<p class="field">
+<span class="fieldName"><span class="foreignKey">reference_no</span></span>
 </p>
 
 </div>
@@ -258,6 +264,12 @@ the database.</p>
 <span class="fieldName"><span class="primaryKey">occurrence_no</span></span>
 </p>
 <p class="field">
+<span class="fieldName"><span class="foreignKey">reference_no</span></span>
+</p>
+<p class="field">
+<span class="fieldName"><span class="foreignKey">collection_no</span></span>
+</p>
+<p class="field">
 <span class="fieldName">genus_name</span>
 </p>
 <p class="field">
@@ -298,13 +310,32 @@ the database.</p>
 </p>
 <p class="field">
 <span class="fieldName">ref_has_opinion</span>
+<span class="fieldDesc">Basically means that the opinion comes
+from a refs table entry.  If this exists, then go to the 
+refs table to get the publication year (use the reference_no field).</span>
 </p>
 <p class="field">
 <span class="fieldName">pubyr</span>
+<span class="fieldDesc">Year of the opinion.  If blank, then look at ref_has_opinion 
+and get the year from the reference instead.</span>
 </p>
 <p class="field">
-<span class="fieldName">comments</span>
+<span class="fieldName">author1init</span>
 </p>
+<p class="field">
+<span class="fieldName">author1last</span>
+</p>
+<p class="field">
+<span class="fieldName">author2init</span>
+</p>
+<p class="field">
+<span class="fieldName">author2last</span>
+</p>
+<p class="field">
+<span class="fieldName">otherauthors</span>
+</p>
+
+
 
 </div>
 
