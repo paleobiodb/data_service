@@ -24,6 +24,7 @@ $|=1;
 my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdec latdir lngdeg lngmin lngsec lngdec lngdir latlng_basis altitude_value altitude_unit geogscale geogcomments zone period_max epoch_max locage_max max_interval_no min_interval_no research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 otherenvironment rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
 my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name reference_no comments created modified modified_temp plant_organ);
+my @refsFieldNames = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage created modified publication_type comments project_name project_ref_no);
 my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
 my @mesoCenozoic = qw(triassic jurassic cretaceous tertiary);
 
@@ -1189,7 +1190,39 @@ sub doQuery {
 			$nisp{$row->{collection_no}} = $nisp{$row->{collection_no}} + $row->{abund_value};
 			$numberofcounts{$row->{genus_name}}++;
 		}
+		# also make a master list of all collection numbers that are
+		#  used, so we can properly get all the primary AND secondary
+		#  refs for those collections JA 16.7.04
+		$COLLECTIONS_USED{$row->{collection_no}}++;
+		$REFS_USED{$row->{reference_no}}++;
 	}
+
+	# now hit the secondary refs table, mark all of those references as
+	#  having been used, and print all the refs JA 16.7.04
+	my @collnos = keys %COLLECTIONS_USED;
+	$secondary_sql = "SELECT reference_no FROM secondary_refs WHERE collection_no IN (" . join (',',@collnos) . ")";
+	my @refrefs= @{$dbt->getData($secondary_sql)};
+	for my $refref (@refrefs)	{
+		$REFS_USED{$refref->{reference_no}}++;
+	}
+	my @refnos = keys %REFS_USED;
+
+	# print the header
+	print REFSFILE join (',',@refsFieldNames), "\n";
+	my $refCols = join($sepChar, @refsHeaderCols);
+
+	# print the refs
+	$ref_sql = "SELECT * FROM refs WHERE reference_no IN (" . join (',',@refnos) . ")";
+	@refrefs= @{$dbt->getData($ref_sql)};
+	for my $refref (@refrefs)	{
+		my @refvals = ();
+		for my $r (@refsFieldNames)	{
+			push @refvals , $refref->{$r};
+		}
+		printf REFSFILE "%s\n",$self->formatRow(@refvals);
+		$acceptedRefs++;
+	}
+	close REFSFILE;
 
 	$genusbyno{'0'} = "";
 
@@ -1283,16 +1316,6 @@ sub doQuery {
 			$COLLS_DONE{"$collection_no.$tempGenus"} = 1;
 		}
 		
-		# NOTE:  This would be much more efficient if done in a separate thread.
-		if(!exists($REFS_DONE{$reference_no}) && $reference_no){
-			my $refsQueryString = "SELECT * FROM refs WHERE reference_no=$reference_no";
-			$self->dbg ( "Refs select: $refsQueryString" );
-			my $sth2 = $dbh->prepare($refsQueryString);
-			$sth2->execute();
-			$REFS_DONE{$reference_no} = $self->formatRow($sth2->fetchrow_array());
-			$sth2->finish();
-		}
-
 		my @coll_row = ();
 		my @occs_row = ();
 		my @reid_row = ();
@@ -1377,15 +1400,9 @@ sub doQuery {
 		$curLine =~ s/\n/ /g;
 		print OUTFILE "$curLine\n";
 		$acceptedCount++;
-		if(exists($REFS_DONE{$reference_no}) && $REFS_DONE{$reference_no} ne "Y"){
-			print REFSFILE "$REFS_DONE{$reference_no}\n";
-			$REFS_DONE{$reference_no} = "Y";
-			$acceptedRefs++;
-		}
 	}
 
 	close OUTFILE;
-	close REFSFILE;
 	
 	# Post process, if necessary (family, order, class names)
 	my $family_level = $q->param("occurrences_family_name");
