@@ -1996,6 +1996,7 @@ sub displayCollectionDetails {
 	}
 	unshift @fieldNames, 'eml_max_interval';
 	unshift @fieldNames, 'max_interval';
+
 	if ( $min_interval_no )	{
 		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $min_interval_no;
 		unshift @row, @{$dbt->getData($sql)}[0]->{eml_interval};
@@ -2608,12 +2609,16 @@ sub displayEnterCollPage {
 		'reference_no',
 		'ref_string',
 		'country',
+		'eml_max_interval',
 		'max_interval',
+		'eml_min_interval',
 		'min_interval' );
 	unshift(@row,	$s->get('authorizer'), 
 		$s->get('enterer'), 
 		$reference_no,
 		$refRowString,
+		'',
+		'',
 		'',
 		'',
 		'' );
