@@ -1,7 +1,7 @@
     <script language="JavaScript">
     <!-- Begin
 
-	function checkOpinion( )	{
+	function checkOpinion(){
 
 		var frm = document.forms[0];
 		var hasSpace = / /;
@@ -16,6 +16,21 @@
 		}
 		else if ( frm.taxon_status[2].checked != false && frm.parent_taxon_name2.value == "" )	{
 			return "* Name of senior synonym is missing.\n";
+		}
+
+		if(frm.ref_has_opinion){
+		   if(frm.ref_has_opinion.checked == true &&
+			  ((frm.opinion_author1init && frm.opinion_author1init.value!="") ||
+			   (frm.opinion_author1last && frm.opinion_author1last.value!="") ||
+			   (frm.opinion_author2init && frm.opinion_author2init.value!="") ||
+			   (frm.opinion_author2last && frm.opinion_author2last.value!="") ||
+			   (frm.opinion_otherauthors && frm.opinion_otherauthors.value!="")
+		      )	
+			 ){
+				return "* Author data can't be entered if the "
+					   +"'The current reference argues for this opinion' "
+					   +"checkbox is checked. Please choose one or the other.";
+			}
 		}
 
 	// If opinion doesn't come from the current ref, it has to come
@@ -51,7 +66,6 @@
 		if ( frm.type_taxon_name.value == frm.parent_taxon_name2.value && frm.type_taxon_name.value != "" )	{
 			errors += "* Type taxon and synonym have the same name.\n";
 		}
-
 		// Check taxonomic names
 		if ( frm.type_taxon_name.value != "" && firstUpperRestLower.test ( frm.type_taxon_name.value ) == false )	{
 			if ( hasSpace.test ( frm.taxon_name.value ) == false )	{
@@ -78,67 +92,105 @@
 			errors += "* Synonym's name is ill-formed.\n";
 		}
 
-		// Check names for authority data
-		if ( frm.author1init.value != "" ) {
-			// Check for a capital letter
-			if ( capital.test ( frm.author1init.value ) == false ) {
-				errors += "* First author's initials should be capitalized.\n"; 
+		if(frm.ref_is_authority){
+		   if(frm.ref_is_authority.checked == true &&
+			  ((frm.author1init && frm.author1init.value!="") ||
+			   (frm.author1last && frm.author1last.value!="") ||
+			   (frm.author2init && frm.author2init.value!="") ||
+			   (frm.author2last && frm.author2last.value!="") ||
+			   (frm.otherauthors && frm.otherauthors.value!="")
+		      )	
+			 ){
+				errors += "* Author data can't be entered if the "
+					   +"'It was first named in the current reference' "
+					   +"checkbox is checked. Please choose one or the other.";
 			}
 		}
+
+		// Check names for authority data
+		// check for existence of elements before trying to check their values.
+		// This is important because 1) some elements may not exist if they've
+		// been substituted by plain text from bridge, and 2) if they don't
+		// exist and you try to check their value, JS issues an error and STOPS
+		// meaning it won't do any checks appearing beyond the error point.
+		if ( frm.author1init){
+			if(frm.author1init.value != "" ) {
+				// Check for a capital letter
+				if ( capital.test ( frm.author1init.value ) == false ) {
+					errors += "* First author's initials should be capitalized.\n"; 
+				}
+			}
+		}
+		if(frm.author1last){
 		if ( frm.author1last.value != "" ) {
 			// Check for a capital letter
 			if ( capital.test ( frm.author1last.value ) == false ) {
 				errors += "* First author's name should be capitalized.\n"; 
 			}
 		}
+		}
+		if(frm.author2init){
 		if ( frm.author2init.value != "") {
 			// Check for a capital letter
 			if ( capital.test ( frm.author2init.value ) == false ) {
 				errors += "* Second author's initials should be capitalized.\n"; 
 			}
 		}
+		}
+		if(frm.author2last){
 		if ( frm.author2last.value != "" ) {
 			// Check for a capital letter
 			if ( capital.test ( frm.author2last.value ) == false ) {
 				errors += "* Second author's name should be capitalized.\n"; 
 			}
 		}
+		}
 
 		// Check names for opinion data
+		if(frm.opinion_author1init){
 		if ( frm.opinion_author1init.value != "" ) {
 			// Check for a capital letter
 			if ( capital.test ( frm.opinion_author1init.value ) == false ) {
 				errors += "* First author's initials should be capitalized.\n"; 
 			}
 		}
+		}
+		if(frm.opinion_author1last){
 		if ( frm.opinion_author1last.value != "" ) {
 			// Check for a capital letter
 			if ( capital.test ( frm.opinion_author1last.value ) == false ) {
 				errors += "* First author's name should be capitalized.\n"; 
 			}
 		}
+		}
+		if(frm.opinion_author2init){
 		if ( frm.opinion_author2init.value != "") {
 			// Check for a capital letter
 			if ( capital.test ( frm.opinion_author2init.value ) == false ) {
 				errors += "* Second author's initials should be capitalized.\n"; 
 			}
 		}
+		}
+		if(frm.opinion_author2last){
 		if ( frm.opinion_author2last.value != "" ) {
 			// Check for a capital letter
 			if ( capital.test ( frm.opinion_author2last.value ) == false ) {
 				errors += "* Second author's name should be capitalized.\n"; 
 			}
 		}
+		}
 
 		// Publication Year
+		if(frm.pubyr){
 		if ( frm.pubyr.value != "" ) {
 			if ( year.test( frm.pubyr.value ) == false ) {
 				errors += "* The publication year is invalid.\n"; 
 			}
 		}
+		}
 
 		// Check taxonomic opinion data if any are present on the page
-		errors += checkOpinion ( ) ;
+		errors += checkOpinion();
 
 		// Report errors
 		if ( errors != "" ) {
