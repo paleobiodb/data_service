@@ -1587,7 +1587,9 @@ sub processCollectionsSearch {
 						"enterer"			=> 1,
 						"research_group"	=> 1,
 						"period"			=> 1,
+						"lithadj"		=> 1,
 						"lithology1"		=> 1,
+						"lithadj2"		=> 1,
 						"lithology2"		=> 1,
 						"environment"		=> 1 );
 
@@ -1735,10 +1737,12 @@ sub processCollectionsSearch {
 		  my $epochName = $dbh->quote($wildcardToken . $q->param('epoch') . $wildcardToken);
 		  push(@terms, "(epoch_min$comparator" . $epochName . " OR epoch_max$comparator" . $epochName . ")");
 		}
-		# Handle lithology
+		# Handle lithology and lithology adjectives
 		if ( $q->param('lithology'))	{
 		  my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology') . $wildcardToken);
 		  push(@terms, "(lithology1$comparator" . $lithologyName . " OR lithology2$comparator" . $lithologyName . ")");
+		  my $lithadjName = $dbh->quote($wildcardToken . $q->param('lithadj') . $wildcardToken);
+		  push(@terms, "(lithadj$comparator" . $lithadjName. " OR lithadj2$comparator" . $lithadjName . ")");
 		}
 		# research_group is now a set -- tone 7 jun 2002
 		my $resgrp = $q->param('research_group');
@@ -2717,6 +2721,30 @@ sub startReidentifyOccurrences {
 	&displaySearchRefs ( );
 }
 
+# JA 13.8.02
+sub startTaxonomy	{
+
+	# 1. Need to ensure they have a ref
+	# 2. Need to perform a taxonomy search
+
+	# if there's no selected taxon you'll have to search for one
+	if ( ! $q->param('taxon_name') ){
+		$s->enqueue( $dbh, "action=displayTaxonomySearchForm" );
+	}
+	elsif(! $q->param('taxon_no') )	{
+		$s->enqueue( $dbh, "action=displayTaxonomySearchForm&taxon_name=".$q->param('taxon_name') );
+	} 
+	# otherwise go right to the edit page
+	else{
+		my $temp = "action=displayTaxonomyEntryForm&taxon_name=";
+		$temp .= $q->param('taxon_name');
+		$temp .= "&taxon_no=" . $q->param('taxon_no');
+		$s->enqueue( $dbh, $temp );
+	}
+	$q->param( "type" => "select" );
+	&displaySearchRefs ( "Please choose a reference first" );
+}
+
 ##############
 ## Taxon Info Stuff
 sub beginTaxonInfo{
@@ -2731,6 +2759,20 @@ sub displayTaxonInfoResults{
 	TaxonInfo::displayTaxonInfoResults($q, $dbh, $s, $dbt);
 }
 ## END Taxon Info Stuff
+##############
+
+##############
+## Scales stuff JA 7.7.03
+sub startScale	{
+	Images::startEditScale($dbh, $dbt, $s, $exec_url);
+}
+sub processStartScale	{
+	Images::processStartEditScale($dbt, $q, $s, $exec_url);
+}
+sub processEditScale	{
+	Images::processEditScaleForm($dbt, $q, $s, $exec_url);
+}
+## END Image stuff
 ##############
 
 ##############
@@ -2764,30 +2806,6 @@ sub processModuleNavigation{
 ### End Module Navigation
 ##############
 
-
-# JA 13.8.02
-sub startTaxonomy	{
-
-	# 1. Need to ensure they have a ref
-	# 2. Need to perform a taxonomy search
-
-	# if there's no selected taxon you'll have to search for one
-	if ( ! $q->param('taxon_name') ){
-		$s->enqueue( $dbh, "action=displayTaxonomySearchForm" );
-	}
-	elsif(! $q->param('taxon_no') )	{
-		$s->enqueue( $dbh, "action=displayTaxonomySearchForm&taxon_name=".$q->param('taxon_name') );
-	} 
-	# otherwise go right to the edit page
-	else{
-		my $temp = "action=displayTaxonomyEntryForm&taxon_name=";
-		$temp .= $q->param('taxon_name');
-		$temp .= "&taxon_no=" . $q->param('taxon_no');
-		$s->enqueue( $dbh, $temp );
-	}
-	$q->param( "type" => "select" );
-	&displaySearchRefs ( "Please choose a reference first" );
-}
 
 sub displayEditCollection {
 	# Have to be logged in
