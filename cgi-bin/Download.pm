@@ -18,6 +18,7 @@ $|=1;
 # be written out.
 my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdec latdir lngdeg lngmin lngsec lngdec lngdir latlng_basis altitude_value altitude_unit geogscale geogcomments emlperiod_max emlperiod_min period_max emlepoch_max emlepoch_min epoch_max epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group formation geological_group member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 period_min otherenvironment rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
 my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
+my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name reference_no comments created modified modified_temp plant_organ);
 my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
 my @mesoCenozoic = qw(triassic jurassic cretaceous tertiary);
 
@@ -137,11 +138,35 @@ sub retellOptions {
 					"occurrences_modified",
 					"collections_only" );
 
+	my @reidOutputFields = ("reidentifications_authorizer",
+							"reidentifications_enterer",
+							"reidentifications_modifier",
+							"reidentifications_occurrence_no",
+							"reidentifications_subgenus_name",
+							"reidentifications_species_name",
+							"reidentifications_reference_no",
+							"reidentifications_comments",
+							"reidentifications_plant_organ",
+							"reidentifications_created",
+							"reidentifications_modified");
+
 	my @occurrenceOutputResult = ( "occurrences_genus_name" );
 	foreach my $field ( @occurrenceOutputFields ) {
-		if ( $q->param ( $field ) ) { push ( @occurrenceOutputResult, $field ); }
+		if( $q->param ( $field ) ){ 
+			push ( @occurrenceOutputResult, $field ); 
+		}
 	}
+	push(@occurrenceOutputResult,"reidentifications_genus_name" );
+	foreach my $field ( @reidOutputFields ) {
+		my $temp = $field;
+		$temp =~ s/reidentifications/occurrences/;
+		if( $q->param ( $temp ) ){ 
+			push ( @occurrenceOutputResult, $field ); 
+		}
+	}
+
 	$html .= $self->retellOptionsRow ( "Occurrence output fields", join ( "<BR>", @occurrenceOutputResult ) );
+
 
 	my @collectionOutputFields = (	"collections_authorizer", 
 					"collections_enterer", 
@@ -247,12 +272,18 @@ sub retellOptionsRow {
 sub getOutFields {
 	my $self = shift;
 	my $tableName = shift;
+	my $isReID = shift;
 	my @outFields;
 	
 	if($tableName eq "collections") {
 		@fieldNames = @collectionsFieldNames;
 	} elsif($tableName eq "occurrences") {
-		@fieldNames = @occurrencesFieldNames;
+		if($isReID eq 'reidentifications'){
+			@fieldNames = @reidentificationsFieldNames;
+		}
+		else{
+			@fieldNames = @occurrencesFieldNames;
+		}
 	} else {
 		$self->dbg("getOutFields(): Unknown table [$tableName]");
 	}
@@ -260,15 +291,30 @@ sub getOutFields {
 	my @outFields = ( );
 	foreach my $fieldName ( @fieldNames ) {
 		# use brackets below because the underscore is a valid
-		# character for identifiers
+		# character for identifiers (could also have done $var."_".$var
 		if ( $q->param("${tableName}_${fieldName}") eq "YES") {
 			if($fieldName eq 'subgenus_name') {
-				push(@outFields, "$tableName.subgenus_reso");
+				if($isReID eq 'reidentifications'){
+					push(@outFields, "reidentifications.subgenus_reso as reid_subgenus_reso");
+				}
+				else{
+					push(@outFields, "$tableName.subgenus_reso");
+				}
 			}
-			if($fieldName eq 'species_name') {
-				push(@outFields, "$tableName.species_reso");
+			elsif($fieldName eq 'species_name') {
+				if($isReID eq 'reidentifications'){
+					push(@outFields, "reidentifications.species_reso as reid_species_reso");
+				}
+				else{
+					push(@outFields, "$tableName.species_reso");
+				}
 			}
-			push(@outFields, "$tableName.$fieldName");
+			if($isReID eq 'reidentifications'){
+				push(@outFields, "reidentifications.$fieldName as reid_$fieldName");
+			}
+			else{
+				push(@outFields, "$tableName.$fieldName");
+			}
 		}
 	}
 	return @outFields;
@@ -278,8 +324,9 @@ sub getOutFields {
 sub getOutFieldsString {
 	my $self = shift;
 	my $tableName = shift;
+	my $isReID = shift;
 
-	my $outFieldsString = join ( ",\n", $self->getOutFields($tableName) );
+	my $outFieldsString = join ( ",\n", $self->getOutFields($tableName, $isReID) );
 	return $outFieldsString;
 }
 
@@ -422,20 +469,18 @@ sub getRegionsString {
 	return $retVal;
 }
 
-sub getOwnDataOnly {
+sub getDataForAuthorizer{
 	my $self = shift;
-	if($q->param('owndata') eq "YES")
-	{
-		return 1;
-	}
-	return 0;
+	return $q->param('authorizer');
 }
 
 sub getOccurrencesWhereClause {
 	my $self = shift;
 	my $retVal = "";
 	
-	$retVal .= " occurrences.authorizer='".$s->get("authorizer")."' " if $self->getOwnDataOnly() == 1;
+	my $authorizer = $self->getDataForAuthorizer();
+
+	$retVal .= " occurrences.authorizer='$authorizer' " if $authorizer ne "All";
 
 	if($q->param('genus_name') ne ""){
 		$retVal .= " AND " if $retVal;
@@ -453,9 +498,10 @@ sub getCollectionsWhereClause {
 	my $retVal = "";
 	my $time_interval = $self->getTimeIntervalString();
 	
+	my $authorizer = $self->getDataForAuthorizer();
 	# This is handled by getOccurrencesWhereClause if we're getting occs data.
-	if($self->getOwnDataOnly() == 1 && $q->param('collections_only') eq 'YES'){
-		$retVal .= " collections.authorizer='".$s->get("authorizer")."' ";
+	if($authorizer ne "All" && $q->param('collections_only') eq 'YES'){
+		$retVal .= " collections.authorizer='$authorizer' ";
 	}
 	$retVal .= " AND " if $retVal && $time_interval;
 	$retVal .= "(" . $time_interval . ")" if $time_interval;
@@ -502,6 +548,7 @@ sub doQuery {
 	my $p = Permissions->new ( $s );
 	my @collectionHeaderCols = ( );
 	my @occurrenceHeaderCols = ( );
+	my @reidHeaderCols = ( );
 	my $outFieldsString = '';
 	my %COLLS_DONE;
 	my %REFS_DONE;
@@ -519,8 +566,13 @@ sub doQuery {
 	else{
 		$sql =	"SELECT occurrences.reference_no, ".
 				"occurrences.genus_reso, occurrences.genus_name, ".
-				"occurrences.collection_no ";
+				"occurrences.collection_no, ".
+				"reidentifications.reference_no as reid_reference_no, ".
+				"reidentifications.genus_reso as reid_genus_reso, ".
+				"reidentifications.genus_name as reid_genus_name";
 		$outFieldsString = $self->getOutFieldsString('occurrences');
+		if ($outFieldsString ne '') { $sql .= ", $outFieldsString" ; }
+		$outFieldsString = $self->getOutFieldsString('occurrences','reidentifications');
 		if ($outFieldsString ne '') { $sql .= ", $outFieldsString" ; }
 	}
 
@@ -563,7 +615,8 @@ sub doQuery {
 				" DATE_FORMAT(collections.release_date, '%Y%m%d') rd_short, ".
 				" collections.access_level, ".
 				" collections.research_group ".$comma.$outFieldsString.
-				" FROM occurrences, collections".
+				" FROM occurrences, collections LEFT JOIN reidentifications ON".
+				" occurrences.occurrence_no = reidentifications.occurrence_no ".
 				" WHERE collections.collection_no = occurrences.collection_no";
 
 		my $occWhereClause = $self->getOccurrencesWhereClause();
@@ -591,14 +644,14 @@ sub doQuery {
 	if($q->param('collections_put') eq 'comma-delimited text'){
 		$header =  "collection_no";
 		if( ! $q->param('collections_only') ){
-			$header .= ",genus_reso,genus_name";
+			$header .= ",genus_reso,genus_name,reid_genus_reso,reid_genus_name";
 		}
 		$sepChar = ',';
 	}
 	elsif( $q->param('collections_put') eq 'tab-delimited text'){
 		$header =  "collection_no";
 		if( ! $q->param('collections_only') ){
-			$header .= "\tgenus_reso\tgenus_name";
+			$header .= "\tgenus_reso\tgenus_name\treid_genus_reso\treid_genus_name";
 		}
 		$sepChar = "\t";
 	}
@@ -607,6 +660,15 @@ sub doQuery {
 	@occurrenceHeaderCols = $self->getOutFields('occurrences');	# Need this (for later...)
 	my $occurrenceCols = join($sepChar, @occurrenceHeaderCols);
 	if ( $occurrenceCols ) { $header .= $sepChar.$occurrenceCols; }
+
+	# ReID header
+	# Need this (for later...)
+	@reidHeaderCols = $self->getOutFields('occurrences','reidentifications');	
+	foreach my $col (@reidHeaderCols){
+		$col =~ s/.*?as (reid_(.*))$/reidentifications.$2/;
+	}
+	my $reidCols = join($sepChar, @reidHeaderCols);
+	if ( $reidCols ) { $header .= $sepChar.$reidCols; }
 
 	# Collection header
 	@collectionHeaderCols = $self->getOutFields('collections');	# Need this (for later...)
@@ -637,6 +699,8 @@ sub doQuery {
 		my $reference_no = $row->{reference_no};
 		my $genus_reso = $row->{genus_reso};
 		my $genusName = $row->{genus_name};
+		my $reid_genus_reso = $row->{reid_genus_reso};
+		my $reid_genus_name = $row->{reid_genus_name};
 		my $collection_no = $row->{collection_no};
 
 		#$self->dbg("reference_no: $reference_no<br>genus_reso: $genus_reso<br>genusName: $genusName<br>collection_no: $collection_no<br>");
@@ -655,9 +719,9 @@ sub doQuery {
 		}
 		
 		# NOTE:  This would be much more efficient if done in a separate thread.
-		if(!exists($REFS_DONE{$reference_no})){
+		if(!exists($REFS_DONE{$reference_no}) && $reference_no){
 			my $refsQueryString = "SELECT * FROM refs WHERE reference_no=$reference_no";
-			#$self->dbg ( "Refs select: $refsQueryString" );
+			$self->dbg ( "Refs select: $refsQueryString" );
 			my $sth2 = $dbh->prepare($refsQueryString);
 			$sth2->execute();
 			$REFS_DONE{$reference_no} = $self->formatRow($sth2->fetchrow_array());
@@ -666,6 +730,7 @@ sub doQuery {
 
 		my @coll_row = ();
 		my @occs_row = ();
+		my @reid_row = ();
 
 		# We don't want to add the collection_no, rd_short, access_level, etc.
 
@@ -679,6 +744,12 @@ sub doQuery {
 			push ( @occs_row, $row->{$column} );
 		}
 
+		# Loop over each reid output column
+		foreach my $column ( @reidHeaderCols ){
+			$column =~ s/^reidentifications\./reid_/;
+			push ( @reid_row, $row->{$column} );
+		}
+
 		# Loop over each collection output column
 		foreach my $column ( @collectionHeaderCols ){
 			$column =~ s/^collections\.//;
@@ -689,7 +760,7 @@ sub doQuery {
 			$curLine = $self->formatRow(($collection_no, @occs_row, @coll_row));
 		}
 		else{
-			$curLine = $self->formatRow(($collection_no, $genus_reso, $genusName, @occs_row, @coll_row));
+			$curLine = $self->formatRow(($collection_no, $genus_reso, $genusName, $reid_genus_reso, $reid_genus_name, @occs_row, @reid_row, @coll_row));
 		}
 		print OUTFILE "$curLine\n";
 		$acceptedCount++;
