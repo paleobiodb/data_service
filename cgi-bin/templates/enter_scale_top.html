@@ -1,0 +1,57 @@
+<center>
+
+<h3>Time scale entry/editing form</h3>
+
+<table>
+<tr><td align=left>
+<input id="scale_no" type="hidden">
+
+<table>
+<tr><td valign="top">
+Name: </td><td>
+<input id="scale_name" name="scale_name" size=70>
+</td></tr>
+</table>
+
+<table>
+<tr><td valign="top" width="50%">
+<p>Continent: <select id="continent" name="continent">
+</select>
+
+</td><td valign="top" width="50%">
+Basis of scale: <select id="basis" name="basis">
+</select>
+
+</td><td valign="top" width="50%">
+Rank of each interval: <select id="scale_rank" name="scale_rank">
+</select></p>
+</td></tr>
+</table>
+
+<table>
+<tr><td valign="top">
+Comments: </td><td>
+<textarea id="scale_comments" name="comments" rows=3 cols=70>
+</textarea>
+</td></tr>
+</table>
+
+</td></tr>
+</table>
+
+<table><tr><td align=left class=tiny>
+<ul>
+<li>Your current reference will become the time scale's reference.
+<li>This form is for scales, not charts. Enter each scale in a chart separately; enter epochs separately from stages, stages separately from zones, etc.
+<li>Always enter coarser scales first: epochs before stages before zones, etc.
+<li>Make separate entries for Early/Lower, Middle, and Late/Upper subdivisions if <i>and only if</i> these subdivisions are shown in the published time scale. Subdivisions may be formal or informal.
+<li>Never enter "Early," "Middle," "Late," "Lower," or "Upper" into the interval or correlate name fields. Use the pulldowns instead!
+<li>The only <b><font color="red">required</font></b> field is interval name, but maximum and minimum correlates are <b>strongly recommended</b>.
+<li>Maximum and minimum correlates are intervals from a different scale, e.g., epochs if you are entering stages.
+The correlates should be coarser than, or at least as coarse as, the intervals of the new scale you are entering.
+Don't map coarse intervals into fine intervals!
+Multiple intervals can map into one correlate.
+</td></tr></table>
+
+</center>
+

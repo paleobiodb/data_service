@@ -1,0 +1,52 @@
+<script language="JavaScript">
+<!-- Begin
+
+function checkFields( )	{
+	var badinfo = "";
+	var frm = document.forms[0];
+	var rows = frm.interval.length;
+	var hasEarly = /^[Ee]arly/;
+	var hasMiddle = /^[Mm]iddle/;
+	var hasLate = /^[Ll]ate/;
+
+	if ( rows )	{
+		for ( var i=0; i < rows; i++ )	{
+			if  ( frm.interval[i].value != "" )	{
+				if ( hasEarly.test(frm.interval[i].value) == true )	{
+					badinfo += "Interval names can't begin with \"Early\" or \"early\"\n";
+				}
+				if ( hasMiddle.test(frm.interval[i].value) == true )	{
+					badinfo += "Interval names can't begin with \"Middle\" or \"middle\"\n";
+				}
+				if ( hasLate.test(frm.interval[i].value) == true )	{
+					badinfo += "Interval names can't begin with \"Late\" or \"late\"\n";
+				}
+			} else {
+				continue;
+			}
+			if  ( frm.max_interval[i].value != "" )	{
+				if ( hasEarly.test(frm.max_interval[i].value) == true )	{
+					badinfo += "Interval names can't begin with \"Early\" or \"early\"\n";
+				}
+				if ( hasMiddle.test(frm.max_interval[i].value) == true )	{
+					badinfo += "Interval names can't begin with \"Middle\" or \"middle\"\n";
+				}
+				if ( hasLate.test(frm.max_interval[i].value) == true )	{
+					badinfo += "Interval names can't begin with \"Late\" or \"late\"\n";
+				}
+			}
+		}
+	}
+
+	if ( badinfo != "" )	{
+		badinfo = "WARNING!\n" + badinfo + "\nPlease fix the names and resubmit."
+		alert(badinfo);
+		return false;
+	}
+
+	return true;
+}
+
+//  End -->
+</script>
+
