@@ -944,83 +944,49 @@ sub foc{
 	my %master_class;
 	my @genera = keys %genera;
 	%master_class=%{Classification::get_classification_hash($dbt,$levels,\@genera)};
-	my $insert_pos = $genus_pos+1;
-	if($levels =~ /family/){
-		splice(@headers, $insert_pos++, 0, "family_name");
+	my $insert_pos = $genus_pos-1;
+	if($levels =~ /class/){
+		splice(@headers, $insert_pos++, 0, "class_name");
 	}
 	if($levels =~ /order/){
 		splice(@headers, $insert_pos++, 0, "order_name");
 	}
-	if($levels =~ /class/){
-		splice(@headers, $insert_pos, 0, "class_name");
+	if($levels =~ /family/){
+		splice(@headers, $insert_pos++, 0, "family_name");
 	}
 	my @altered_lines = ();
 	foreach my $item (@lines){
 		my @parsed_line = split(',', $item);
 		my @fkeys = ();
 		my @okeys = ();
-		$insert_pos = $genus_pos+1;
 		my $key = $parsed_line[$genus_pos];
-		# if we have a scalar, then that's all we have, and it needs to be 
-		# dereferenced.
-		# Family:
-		if($levels =~ /family/){
-			if(UNIVERSAL::isa($master_class{$key}, "SCALAR")){
-				my $family = ${$master_class{$key}};
-				if($family && $family ne ""){
-					splice(@parsed_line, $insert_pos++, 0, $family);
-				}
-			}
-			# otherwise, the hash key is already dereferenced, so just print it.
-			elsif(UNIVERSAL::isa($master_class{$key}, "HASH")){
-				@fkeys = keys %{$master_class{$key}};
-				if(scalar @fkeys > 0){
-					splice(@parsed_line, $insert_pos++, 0, $fkeys[0]);
-				}
-
-				# BELOW: apparently this doesn't work because the iterator for 
-				# the $master_class{$key} hash has to be reset via a call to 
-				# (e.g) keys() as above.
-				#($fkeys, $order_ref) = each(%{$master_class{$key}});
-				#print $fkeys;
-			}
-			else{
+		my @parents = split ',',$master_class{$key};
+		$insert_pos = $genus_pos-1;
+		# first insert class
+		if ( $levels =~ /class/ )	{
+			my $class = $parents[0];
+			if($class && $class ne ""){
+				splice(@parsed_line, $insert_pos++, 0, $class);
+			} else	{
 				splice(@parsed_line, $insert_pos++, 0, "");
 			}
 		}
-		# Order or Class:
-		if($levels =~ /order/ || $levels =~ /class/){
-			# This is necessary again in case we just get a request for order
-			# or class
-			@fkeys = keys %{$master_class{$key}};
-			# order and class
-			if($master_class{$key}->{$fkeys[0]} &&
-					UNIVERSAL::isa($master_class{$key}->{$fkeys[0]}, "HASH")){
-				@okeys = keys %{$master_class{$key}->{$fkeys[0]}};
-				if($levels =~ /order/){
-					splice(@parsed_line, $insert_pos++, 0, $okeys[0]);
-				}
-				# Class:
-				if($levels =~ /class/){
-					my $class = $master_class{$key}->{$fkeys[0]}->{$okeys[0]};
-					if($class){
-						splice(@parsed_line, $insert_pos++, 0, ${$class});
-					}
-					else{
-						splice(@parsed_line, $insert_pos++, 0, "");
-					}
-				}
+		# then insert order
+		if ( $levels =~ /order/ )	{
+			my $order = $parents[1];
+			if($order && $order ne ""){
+				splice(@parsed_line, $insert_pos++, 0, $order);
+			} else	{
+				splice(@parsed_line, $insert_pos++, 0, "");
 			}
-			# just order
-			elsif($master_class{$key}->{$fkeys[0]} && $master_class{$key}->{$fkeys[0]} ne ""){
-				if($levels =~ /order/){
-					splice(@parsed_line, $insert_pos++, 0,${$master_class{$key}->{$fkeys[0]}});
-				}
-			}
-			else{
-				if($levels =~ /order/){
-					splice(@parsed_line, $insert_pos++, 0,"");
-				}
+		}
+		# then insert family
+		if($levels =~ /family/){
+			my $family = $parents[2];
+			if ( $family && $family ne "" )	{
+				splice(@parsed_line, $insert_pos++, 0, $family);
+			} else	{
+				splice(@parsed_line, $insert_pos++, 0, "");
 			}
 		}
 		my $altered = join(',', @parsed_line);	
