@@ -323,6 +323,28 @@ Longitudinal range:</font</td>
 </font></td>
 
 <tr><td valign=top><font size=-1>
+Paleolatitude must be
+<select name="paleolatdirection">
+<option>greater than
+<option>less than
+</select>
+
+<td valign=top><font size=-1>
+<select name="paleolatlimit">
+<option>0
+<option>10
+<option>20
+<option>30
+<option>40
+<option>50
+<option>60
+<option>70
+<option>80
+</select>
+degrees
+</font></td>
+
+<tr><td valign=top><font size=-1>
 Lump occurrences of the same genus from the same collection?
 </font></td>
 
@@ -356,8 +378,16 @@ Temporal scale of collections:</font></td>
 <tr><td valign=top><font size=-1>
 Include generically indeterminate occurrences?</font></td>
 <td valign=top><font size=-1><select name=indet>
-<option selected value="YES">yes, include them</option>
-<option value="NO">no, exclude them</option>
+<option selected value="NO">no, exclude them</option>
+<option value="YES">yes, include them</option>
+</select>
+</font></td></tr>
+
+<tr><td valign=top><font size=-1>
+Include occurrences with informal names?</font></td>
+<td valign=top><font size=-1><select name=informal>
+<option selected value="NO">no, exclude them</option>
+<option value="YES">yes, include them</option>
 </select>
 </font></td></tr>
 
