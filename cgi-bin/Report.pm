@@ -93,8 +93,7 @@ sub buildReport {
              	"August" => "08", "September" => "09", "October" => 10,
              	"November" => 11, "December" => 12 );
 
-	# old method, assuming non-UNIX date format
-	$datelimit = $q->param('year').$monthid{$q->param('mon')}.$q->param('day');
+	$datelimit = $q->param('year').$monthid{$q->param('mon')}.$q->param('day')."010000";
 	$self->dbg("datelimit: $datelimit<br>");
 
 	$self->readRegions();
@@ -395,7 +394,7 @@ sub tallyFieldTerms	{
 	}
 
 	## Research group conditional
-    if($resgrp && $resgrp =~ /(^ETE$)|(^5%$)|(^PACED$)|(^PGAP$)/){
+    if($resgrp && $resgrp =~ /(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
         require PBDBUtil;
         my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
         if($resprojstr ne ""){
