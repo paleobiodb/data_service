@@ -88,8 +88,10 @@ sub buildReport {
 	# compute the numeric equivalent of the date limit
 	if ( $q->param('day') < 10)	{ $q->param('day' => "0".$q->param('day')); }
 
-	$datelimit = $q->param('year') . Globals::monthNameToNumber($q->param('mon')) . $q->param('day')."010000";
-	$self->dbg("datelimit: $datelimit<br>");
+	if ( $q->param('year') > 1757 )	{
+		$datelimit = $q->param('year') . Globals::monthNameToNumber($q->param('mon')) . $q->param('day')."010000";
+		$self->dbg("datelimit: $datelimit<br>");
+	}
 
 	$self->readRegions();
 	$self->tallyFieldTerms();
