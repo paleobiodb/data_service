@@ -51,10 +51,10 @@ sub displayOccurrenceReclassify	{
 	$levels = "family,order,class";
 
 	print main::stdIncludes("std_page_top");
-#print "C(",$q->param('collection_no'),")"; exit;
 
-#	my $sql = "SELECT collection_name FROM collections WHERE collection_no=" . $q->param('collection_no');
+	my $sql = "SELECT collection_name FROM collections WHERE collection_no=" . $q->param('collection_no');
 	my $coll_name = ${$dbt->getData($sql)}[0]->{collection_name};
+print "$sql = $coll_name";
 	print "<center><h3>Classification of taxa in collection ",$q->param('collection_no')," ($coll_name)</h3>";
 
 	# get all the occurrences
@@ -214,7 +214,6 @@ my %master_class=%{Classification::get_classification_hash($dbt, $levels, [ $t->
 					$authority =~ s/^ //;
 
 					print "<option value='" , $t->{taxon_no} , "+" , $authority , "'";
-# FOO MUST TEST THE FOLLOWING AFTER ENTRY OF DATA IS WORKING
 					if ( $t->{taxon_no} eq $o->{taxon_no} )	{
 						print " selected";
 					}
