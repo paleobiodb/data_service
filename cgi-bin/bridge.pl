@@ -36,6 +36,7 @@ use SQLBuilder;
 use Occurrence;
 use Collection;
 use Taxon;
+use Opinion;
 
 use Validation;
 use Debug;
@@ -606,6 +607,19 @@ sub setPreferences	{
 }
 
 
+sub newAuthorityTesting {
+	print stdIncludes("std_page_top");
+	print "<H2>Regular taxonomic entry is disabled until the new forms have been completed.</H2>
+	We'd appreciate your help debugging the new version of the authority entry form.  Click
+	<A HREF=\"http://paleobackup.nceas.ucsb.edu:8110/cgi-bin/bridge.pl?user=Contributor&action=displayHomePage\">here</A> to log in to our backup server so you can try out the new form.  <B>Any data you enter or edit on the backup server will not affect data on the live server.</B> <BR><BR>
+	Go to the main menu on the backup server, and click on the Add/edit taxononomic name link.  Send your bug reports to alroy at nceas.ucsb.edu, and cc it to poling at nceas.ucsb.edu.<BR><BR>
+	Also note that you can only enter authority information for a taxon at this time.  The new opinion form has not yet been completed.<BR><BR>
+	Testing begins: March 8th, 2004.<BR><BR>";
+	
+	print stdIncludes("std_page_bottom");
+}
+
+
 # rjp, 3/2004
 #
 # Displays a form with authority data about a taxon.
@@ -623,12 +637,31 @@ sub displayAuthorityForm {
 	# Lastly, if there's only a name, but not a number, then set
 	# the taxon with the name and look up the number.
 	
+	my $taxonName;
+	if ($q->param('taxon_name')) {
+		$taxonName = $q->param('taxon_name');
+	}
+	
 	if ($q->param('taxon_no') > 0) {
 		$taxon->setWithTaxonNumber($q->param('taxon_no'));
 	} elsif ($q->param('taxon_no') == -1) { 
-		$taxon->setWithTaxonNameOnly($q->param('taxon_name'));
-	} elsif ($q->param('taxon_name')) {
-		$taxon->setWithTaxonName($q->param('taxon_name'));
+		# this is a new entry, so make sure they have a reference
+		# before allowing them to add it.
+		
+		if (! $s->currentReference()) {
+			my $toQueue = "action=displayAuthorityForm&taxon_name=$taxonName" . 
+			"&taxon_no=" . $q->param('taxon_no');
+			$s->enqueue( $dbh, $toQueue );
+	
+			$q->param( "type" => "select" );
+			displaySearchRefs("You must choose a reference before adding a new taxon." );
+			return;
+		}
+		
+		$taxon->setWithTaxonNameOnly($taxonName);
+		
+	} elsif ($taxonName) {
+		$taxon->setWithTaxonName($taxonName);
 	}
 		
 	$taxon->displayAuthorityForm($hbo, $s, $q);	
@@ -654,15 +687,99 @@ sub submitAuthorityForm {
 }
 
 
-# rjp, 2/2004
-sub displayOpinionForm {
+# rjp, 3/2004
+# displays a list of opinions for the taxon
+# defined by taxon_no in the current CGI ($q) object.
+sub displayOpinionList {
 	my $taxon = Taxon->new();
-	$taxon->setWithTaxonName("Equus");
-	
-	print stdIncludes("std_page_top");
-	$taxon->displayOpinionForm($hbo);
-	print stdIncludes("std_page_bottom");
 		
+	# If the taxon_no from their choice is > 0, then we can
+	# set the taxon object with the taxon_no.  However, if it's
+	# equal to -1, that means that they choose the "No not the one" option
+	# at the bottom, and they want to add a new taxon, so just set the name,
+	# not the number.
+	#
+	# Lastly, if there's only a name, but not a number, then set
+	# the taxon with the name and look up the number.
+	
+	if ($q->param('taxon_no') > 0) {
+		$taxon->setWithTaxonNumber($q->param('taxon_no'));
+	} elsif ($q->param('taxon_name')) {
+		$taxon->setWithTaxonName($q->param('taxon_name'));
+	}
+		
+	print stdIncludes("std_page_top");
+	$taxon->displayOpinionChoiceForm();	
+	print stdIncludes("std_page_bottom");
+	
+}
+
+
+# rjp, 3/2004
+#
+# Displays a form for users to add/enter opinions about a taxon.
+# It grabs the taxon_no and opinion_no from the CGI object ($q).
+sub displayOpinionForm {
+	if (! $q->param('opinion_no')) {
+		Debug::logError("bridge::displayOpinionForm failed because opinion_no doesn't exist.");
+		return;	
+	}
+
+	my $opinion = Opinion->new();
+	
+	if ($q->param('opinion_no') ne "-1") {
+		$opinion->setWithOpinionNumber($q->param('opinion_no'));
+	} else {
+		# opinion_no == -1, so that means they're adding a new opinion,
+		# and hence, we have to make sure they have a reference selected.
+		if (! $s->currentReference()) {
+			my $toQueue = 'action=displayOpinionForm&opinion_no=' . $q->param('opinion_no') . 
+			'&taxon_no=' . $q->param('taxon_no');
+			$s->enqueue( $dbh, $toQueue );
+	
+			$q->param( "type" => "select" );
+			displaySearchRefs("You must choose a reference before adding a new opinion.");
+			return;
+		}
+	}
+
+	
+	if (! $q->param('taxon_no')) {
+		# if we don't have a taxon_no for this opinion,
+		# then we'll see if we can grab it from the opinion record.
+		
+		my $taxonNum = $opinion->childNumber();
+		
+		if ($taxonNum) {
+			$q->param(-name=>'taxon_no', -values=>[$taxonNum]);
+		} else {
+			# if it doesn't exist, then it's an error..
+			Debug::logError("bridge::displayOpinionForm failed because we couldn't figure out the taxon_no (child_no).");
+			return;	
+		}
+	}
+	
+	$opinion->displayOpinionForm($hbo, $s, $q);
+
+}
+
+
+sub submitOpinionForm {
+	my $opinion = Opinion->new();
+	
+	if (! $q->param('taxon_no')) {
+		Debug::logError("bridge::submitOpinionForm failed because taxon_no doesn't exist.");
+		return;	
+	}
+	
+	if ($q->param('opinion_no')) {
+		$opinion->setWithOpinionNumber($q->param('opinion_no'));
+	} else {
+		# don't do anything because we don't know what the opinion no is...
+		# ie, just use a dummy opinion object.
+	}
+	
+	$opinion->submitOpinionForm($hbo, $s, $q);
 }
 
 
@@ -1029,6 +1146,8 @@ sub stdIncludes {
 
 
 # Shows the search form
+# for references
+#
 sub displaySearchRefs {
 
 	my $message = shift;			# Message telling them why they are here
@@ -1086,6 +1205,11 @@ sub displaySearchRefs {
 	$html =~ s/%%enterer%%/$enterer/;
 	my $authorizer = $s->get("authorizer");
 	$html =~ s/%%authorizer%%/$authorizer/;
+	
+	my $goal = $q->param('goal');
+	
+	$html =~ s/%%goal%%/$goal/;
+	
 	print $html;
 
 	print stdIncludes("std_page_bottom");
@@ -1156,7 +1280,7 @@ sub printGetRefsButton	{
 
 
 # rjp - 1/2004, called from places like the reference search form.
-# This shows the actual references
+# This shows the actual references.
 sub displayRefResults {
 	my $overlimit;
 	my @rows;
@@ -3547,43 +3671,82 @@ sub startReidentifyOccurrences {
 
 # JA 13.8.02
 #
-# Entry point for entering new taxa into the authorities table.
-# Called when the user clicks on the "Add taxonomic information" link
-# on the menu page.  Also called several other places.
+# Entry point for entering new taxa/opinions into the authorities/opinions tables.
+# Called when the user clicks on the "Add/edit taxonomic name" or 
+# "Add/edit taxonomic opinion" link on the menu page.  Also called several other places.
+#
+# Modified 3/2004 by rjp.
 #
 sub startTaxonomy	{
 
-	# 1. Need to ensure they have a ref
-	# 2. Need to perform a taxonomy search
-
 	my $taxonName = $q->param('taxon_name');
 	
-	# if there's no selected taxon you'll have to search for one
-	if ($taxonName eq '') {
-		$s->enqueue( $dbh, "action=displayTaxonomySearchForm" );
-	} 
-	elsif (! $q->param('taxon_no') ) {
-		$s->enqueue( $dbh, "action=displayTaxonomySearchForm&taxon_name=$taxonName");
-	} 
-	# otherwise go right to the edit page
-	else {
-		my $temp = "action=displayTaxonomyEntryForm&taxon_name=$taxonName";
-		$temp .= "&taxon_no=" . $q->param('taxon_no');
-		$s->enqueue( $dbh, $temp );
+	
+	# the goal should be 'opinion' or 'authority'
+	# if it's empty, we'll assume that it's authority.
+	if (! $q->param('goal')) {
+		$q->param(-name=>'goal', -values=>['authority']);
 	}
 	
-	$q->param( "type" => "select" );
-	displaySearchRefs("Please choose a reference first" );
+	if ((! $taxonName) || (!($q->param('taxon_no')))) {
+		displayTaxonomySearchForm();
+		return;
+	}
+	
+	# otherwise, if we already know which taxon to edit, then go 
+	# directly to the appropriate page.
+	processTaxonomySearch();
+	
+
+	# if there's no selected taxon you'll have to search for one
+	#if ($taxonName eq '') {
+	#	$s->enqueue( $dbh, "action=displayTaxonomySearchForm" );
+	#} 
+	#elsif (! $q->param('taxon_no') ) {
+	#	$s->enqueue( $dbh, "action=displayTaxonomySearchForm&taxon_name=$taxonName");
+	#} 
+	# otherwise go right to the edit page
+	#else {
+	#	my $temp = "action=displayTaxonomyEntryForm&taxon_name=$taxonName";
+	#	$temp .= "&taxon_no=" . $q->param('taxon_no');
+	#	$s->enqueue( $dbh, $temp );
+	#}
+	
+	#$q->param( "type" => "select" );
+	#displaySearchRefs("Please choose a reference first" );
 }
 
 
 # JA 13.8.02
+#
+# modified by rjp 3/2004: This displays a form where the user can type in 
+# a taxon name and search for it.  For example, if the user
+# is adding information about a taxon, this form will be shown.
 sub displayTaxonomySearchForm	{
 
 	print stdIncludes("std_page_top");
 
-	print $hbo->populateHTML('search_taxonomy_form', [$q->param('taxon_name')],["taxon_name"]);
+	Debug::dbPrint("goal = " . $q->param('goal'));
+	
+	my $html = $hbo->populateHTML('search_taxonomy_form', [$q->param('taxon_name')],["taxon_name"]);
 
+	# goal is either 'authority' or 'opinion' and tells
+	# us whether the user wants to edit an authority or 
+	# opinion record about this taxon.
+	my $goal = $q->param('goal');
+	$html =~ s/%%goal%%/$goal/;
+	
+	my $toDo;
+	if ($goal eq 'opinion') {
+		$toDo = "add or edit an opinion about";
+	} else {
+		$toDo = 'add or revise';	
+	}
+	
+	$html =~ s/%%taxon_what_to_do%%/$toDo/;
+	
+	print $html;
+	
 	print stdIncludes("std_page_bottom");
 }
 
@@ -5052,14 +5215,9 @@ sub processNewReIDs {
 
 # JA 17.8.02
 #
-# Called when the user searches for a taxon from the search_taxonomy_form 
+# Called when the user searches for a taxon from the search_taxonomy_form. 
 #
-# Edited by rjp 1/22/2004 to fix bug where
-# original combination is not used when user 
-# searches for a recombination.
-#
-# Edited again by rjp, 2/18/2004.
-#
+# Edited by rjp 1/22/2004, 2/18/2004, 3/2004
 #
 sub processTaxonomySearch	{
 	my $taxonName = $q->param('taxon_name');
@@ -5084,6 +5242,8 @@ sub processTaxonomySearch	{
 	
 	my $subSQL;
 	my $subSTH;
+	
+	my $goal = $q->param('goal'); 
 	
 	my $html;
 	my $originalWasRecombination = 0;  # not a recombination to start with
@@ -5142,7 +5302,45 @@ sub processTaxonomySearch	{
 	
 	# If there were no matches, present the new taxon entry form immediately
 	if ( $matches == 0 )	{
-		displayAuthorityForm();
+		
+		my $action;
+		
+		if ($goal eq 'authority') {
+			$action = "displayAuthorityForm";
+		} elsif ($goal eq 'opinion')  {
+			# we can't let them enter an opinion about a taxon which doesn't
+			# yet exist.. So give them an error message.
+			print stdIncludes("std_page_top");
+			print "<DIV class=\"warning\">The taxon '" . $taxonName . "' doesn't exist in our database.  You can't enter an opinion about a nonexistent taxon.  Please go back and add an authority record for this taxon before adding an opinion.</DIV>"; 
+			print stdIncludes("std_page_top");
+			
+			return;
+
+
+			#$action = "displayOpinionList";
+		}
+		
+		# make sure they have a reference selected
+		if (! $s->currentReference()) {
+			# if they don't have a reference selected,
+			
+			my $toQueue = "action=$action&taxon_name=$taxonName" . 
+			"&taxon_no=" . $q->param('taxon_no');
+			$s->enqueue( $dbh, $toQueue );
+	
+			$q->param( "type" => "select" );
+			displaySearchRefs("Please choose a reference first" );
+			
+			return;
+		}
+		
+		# if we make it to here, then they had a reference selected.
+		
+		if ($goal eq 'authority') {
+			displayAuthorityForm();
+		} elsif ($goal eq 'opinion')  {
+			displayOpinionList();
+		}
 	}
 	# Otherwise, print a form so the user can pick the taxon
 	else	{
@@ -5150,20 +5348,34 @@ sub processTaxonomySearch	{
 		print "<center>\n";
 		print "<h3>Which \"$taxonName\" do you mean?</h3>\n";
 		print "<form method=\"POST\" action=\"bridge.pl\">\n";
-		print "<input type=hidden name=\"action\" value=\"displayAuthorityForm\">\n";
+		
+		if ($goal eq 'authority') {	
+			print "<input type=hidden name=\"action\" value=\"displayAuthorityForm\">\n";
+		} else {
+			print "<input type=hidden name=\"action\" value=\"displayOpinionList\">\n";	
+		}
+		
 		print "<input type=hidden name=\"taxon_name\" value=\"$taxonName\">\n";
+
+
 		print "<table>\n";
 		print $html;
 		
-		print "<tr><td><input type=\"radio\" name=\"taxon_no\" value=\"-1\"> </td> <td>";
 		
-		if ( $matches == 1 )	{
-			print "No, not the one above ";
-		} else	{
-			print "None of the above ";
+		# we only want to allow them to add a new taxon if they're trying to 
+		# edit an authority record.  It will screw things up if they try this with
+		# an opinion record.
+		if ($goal ne 'opinion') {
+			print "<tr><td><input type=\"radio\" name=\"taxon_no\" value=\"-1\"> </td> <td>";
+			
+			if ( $matches == 1 )	{
+				print "No, not the one above ";
+			} else	{
+				print "None of the above ";
+			}
+		
+			print "- create a <b>new</b> taxon record</i></td> </tr>\n";
 		}
-		
-		print "- create a <b>new</b> taxon record</i></td> </tr>\n";
 		
 		print "</table><p>\n";
 		
