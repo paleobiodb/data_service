@@ -5019,7 +5019,9 @@ sub insertRecord {
 	dbg("fields: @fields<br>vals: @vals<br>");
 
 	# Insert the record
-	$sql = "INSERT INTO $tableName (" . join(',', @fields) . ") VALUES (" . join(',', @vals) . ")";
+	my $valstring = join ',',@vals;
+	$valstring =~ s/"/\\"/;
+	$sql = "INSERT INTO $tableName (" . join(',', @fields) . ") VALUES (" . $valstring . ")";
 	$sql =~ s/\s+/ /gms;
 	dbg("$sql<HR>");
 	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
