@@ -25,10 +25,18 @@ sub new
     $self->setAuthor2Init($data->getValue('author2init'));
     $self->setAuthor2Last($data->getValue('author2last'));
     $self->setOtherAuthors($data->getValue('otherauthors'));
-    
-    $data = $self->toString();
   }
-  
+  # Deal with a hash, too
+  elsif(UNIVERSAL::isa($data,"HASH")){
+	$self->setAuthor1Init($data->{'author1init'});
+    $self->setAuthor1Last($data->{'author1last'});
+    $self->setAuthor2Init($data->{'author2init'});
+    $self->setAuthor2Last($data->{'author2last'});
+    $self->setOtherAuthors($data->{'otherauthors'});
+
+  }
+
+  $data = $self->toString();
   $self->setAuthorsString($data) if $data;
   
 	return $self;
@@ -40,7 +48,7 @@ sub setAuthorsString
   
   $self->{au_string} = $auString;
   
-  $self->parseAuthorsString($auString);
+  $self->parseAuthorsString($self->{au_string});
 }
 
 # Parses the supplied string and returns an ordered list of authors
