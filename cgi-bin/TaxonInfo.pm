@@ -526,8 +526,8 @@ sub displayTaxonClassification{
 		unless($easy_number){
 			my $sql_auth_inv = "SELECT taxon_no ".
 					   "FROM authorities ".
-					   "WHERE taxon_rank = '$taxon_rank' ".
-					   "AND taxon_name = '$taxon_name'";
+					   "WHERE taxon_name = '$taxon_name' ".
+					   "AND taxon_rank = '$taxon_rank'";
 			PBDBUtil::debug(1,"authorities inv: $sql_auth_inv<br>");
 			@results = @{$dbt->getData($sql_auth_inv)};
 		}
@@ -560,8 +560,8 @@ sub displayTaxonClassification{
 			if($genus && $species){
 				$sql_auth_inv = "SELECT taxon_no ".
                    "FROM authorities ".
-                   "WHERE taxon_rank = 'Genus' ".
-                   "AND taxon_name = '$genus'";
+                   "WHERE taxon_name = '$genus' ".
+                   "AND taxon_rank = 'Genus'";
 				@results = @{$dbt->getData($sql_auth_inv)};
 				# THIS IS LOOKING IDENTICAL TO ABOVE...
 				# COULD CALL SELF WITH EMPTY SPECIES NAME AND AN EXIT...
@@ -594,8 +594,8 @@ sub displayTaxonClassification{
 			my ($genus, $species) = split(/\s+/,$taxon_name);
             my $last_ditch_sql = "SELECT taxon_no ".
 							     "FROM authorities ".
-							     "WHERE taxon_rank = 'Genus' ".
-							     "AND taxon_name = '$genus'";
+							     "WHERE taxon_name = '$genus' ".
+							     "AND taxon_rank = 'Genus'";
             @results = @{$dbt->getData($last_ditch_sql)};
 			my $child_no = $results[0]->{taxon_no};
 			if($child_no > 0){
@@ -807,7 +807,7 @@ sub displayTaxonSynonymy{
 
 	my $sql = "SELECT taxon_no, reference_no, author1last, pubyr, ".
 			  "ref_is_authority FROM authorities ".
-			  "WHERE taxon_rank='$taxon_rank' AND taxon_name='$taxon_name'";
+			  "WHERE taxon_name='$taxon_name' AND taxon_rank='$taxon_rank'";
 	my @results = @{$dbt->getData($sql)};
 	my $taxon_no = $results[0]->{taxon_no};
 	PBDBUtil::debug(1,"taxon rank: $taxon_rank");
@@ -827,8 +827,8 @@ sub displayTaxonSynonymy{
 	# Select all parents of the original combination whose status' are
 	# either 'recombined as' or 'corrected as'
 	$sql = "SELECT DISTINCT(parent_no), status FROM opinions ".
-		   "WHERE (status='recombined as' OR status='corrected as') AND ".
-		   "child_no=$original_combination_no";	
+		   "WHERE child_no=$original_combination_no ".	
+		   "AND (status='recombined as' OR status='corrected as')";
 	@results = @{$dbt->getData($sql)};
 
 	# Combine parent numbers from above for the next select below. If nothing
@@ -845,8 +845,9 @@ sub displayTaxonSynonymy{
 
 	# Select all synonymies for the above list of taxa.
 	$sql = "SELECT DISTINCT(child_no), status FROM opinions ".
-		   "WHERE status like '%synonym%' AND parent_no IN (".
-			join(',',@parent_list).")";
+		   "WHERE parent_no IN (".
+			join(',',@parent_list).") ".
+		   "AND status like '%synonym%'";
 	@results = @{$dbt->getData($sql)};
 
 	# Reduce these results to original combinations:
@@ -1343,8 +1344,8 @@ sub verify_chosen_taxon{
 	}
 	if($temp_num){
 		$sql = "SELECT child_no,taxon_name FROM opinions,authorities ".
-			   "WHERE status='recombined as' ".
-			   "AND parent_no=$temp_num AND taxon_no=child_no";
+			   "WHERE parent_no=$temp_num AND taxon_no=child_no ".
+			   "AND status='recombined as'";
 		@results = @{$dbt->getData($sql)};
 		# might not get any recombinations; that's fine - keep going either way.
 		if(scalar @results > 0){
