@@ -1,33 +1,6 @@
 /* Common style sheet to be used for all pages. 
    Created 1/2004 by rjp. */
 
-A:link	{ font-family : Arial, Verdana, Helvetica; color : #0033FF; text-decoration:none; }
-A:visited	{ font-family : Arial, Verdana, Helvetica; color : #5522FF; text-decoration:none; }
-A:active	{ font-family : Arial, Verdana, Helvetica; color : #00AAFF; text-decoration:none; }
-A:hover	{ font-family : Arial, Verdana, Helvetica; color : #0033FF; text-decoration:none; }
-A:link.menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }
-A:visited.menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }
-A:active.menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }
-A:hover.menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }       
-
-
-TD      { font-size : 14px; }
-TH      { font-size : 14px; }
-P       { font-size : 14px; }
-H2      {  }
-H3      {  }
-H4      {  }
-TEXTAREA {  font-size : 14px; }
-SELECT {  font-size : 14px; }
-INPUT {  font-size : 14px; }
-LI      {  }
-.tiny {  font-size : 10px; text-decoration:none; }
-.small {  font-size : 12px; text-decoration:none; }
-.medium {  font-size : 14px; text-decoration:none; }
-.large {  font-size : 16px; text-decoration:none; }
-.cell {  font-size : 12px; text-decoration:none; }
-
-   
    
 /*	note, this defines the defaults for the document unless 
 	they are overridden by something more specific */
@@ -35,11 +8,92 @@ body {
 	background-color: white;
 	background-image: url(/public/PDbg.gif);
 	font-family: Arial, Verdana, Helvetica;
+	font-size: 14px;
 }
+
+/* how should the regular links look? */
+A:link	{ color : #0033FF; text-decoration:none; }
+A:visited	{ color : #5522FF; text-decoration:none; }
+A:active	{ color : #00AAFF; text-decoration:none; }
+A:hover	{ color : RGB(200,0,120); text-decoration:none; }
+
+/* how should the links look in the menu bar at the top?  */
+A:link.menu { 
+	color : White; font-size : 12px; text-decoration:none; 
+	padding: 2px 5px 2px 5px;
+}
+
+A:visited.menu { 
+	color : White; font-size : 12px; text-decoration:none; 
+	padding: 2px 5px 2px 5px;
+}
+
+A:active.menu { 
+	color : White; font-size : 12px; text-decoration:none; 
+	padding: 2px 5px 2px 5px;
+}
+
+A:hover.menu { 
+	color : White; font-size : 12px; 
+
+	border-style: solid;  /*solid, dashed, dotted, grooved */
+    border-color: white;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 0px;
+    border-top-width: 0px;   
+	
+	/* top, right, bottom, left*/
+	padding: 0px 4px 0px 4px;
+	
+	text-decoration:none; 
+}       
+
+
+.tiny {  font-size : 10px; text-decoration:none; }
+.small {  font-size : 12px; text-decoration:none; }
+.medium {  font-size : 14px; text-decoration:none; }
+.large {  font-size : 16px; text-decoration:none; }
+.cell {  font-size : 12px; text-decoration:none; }
+
+.smaller {
+	font-size: 90%;
+}
+   
+.test {
+	width:0px;	
+}
+   
 
 .menu {
 	color: white;	
 }
+
+
+div.mainSection {
+    padding-left:0.5em;
+    padding-top:0.5em;
+    padding-right:0.5em;
+    padding-bottom:0.5em;
+    /*background-color: lightyellow;*/
+    
+    border-style: solid;  /*solid, dashed, dotted, grooved */
+    border-color: grey;
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-bottom-width: 2px;
+    border-top-width: 2px;   
+}
+
+div.subSection {
+	padding-left:0.2em;
+    padding-top:0.2em;
+    padding-right:0.2em;
+    padding-bottom:0.2em;
+    background-color: RGB(250,250,250);
+
+}
+
 
 /*	used for titles at top of forms, 
 	ie, "Collection Search Form" */
@@ -106,6 +160,22 @@ table.navbox {
 /*	color of light row in list, not used everywhere. */
 .lightList {
 	background-color:white;
+}
+
+
+th.style1 {
+	text-align: left;
+	font-weight: normal;
+	text-decoration: underline;
+}
+
+/* for occurrence lists */
+td.indet {
+	font-style: normal;
+}
+
+td.nonindet {
+	font-style: italic;
 }
 
 
