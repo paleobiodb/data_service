@@ -907,7 +907,7 @@ sub displayMenuPage	{
 	
 	# Clear Queue?  This is highest priority
 	if ( $q->param("clear") ) {
-		$s->clearQueue ( $dbh ); 
+		$s->clearQueue( $dbh ); 
 	} else {
 	
 		# QUEUE
@@ -1524,7 +1524,7 @@ sub setReferenceNoFromSth {
 		my @names = @{$sth->{NAME}};
 		for ( my $i=0; $i<$#names; $i++ ) {
 			if ( $names[$i] eq "reference_no" ) {
-				$s->setReferenceNo ( $dbh, ${$values}[$i] );
+				$s->setReferenceNo( $dbh, ${$values}[$i] );
 			}
 		}
 	}
@@ -1655,11 +1655,10 @@ sub displaySelectRefForEditPage
 		print "<table border=0 cellpadding=5 cellspacing=0>\n";
 		my $matches;
 		my $row = 1;
-		foreach my $rowref (@rowrefs)
-		{
+		foreach my $rowref (@rowrefs) {
 			my $drow = DataRow->new($rowref, $md);
 			my $selectable = 1 if ( $s->get('authorizer') eq $drow->getValue('authorizer') || $s->get('authorizer') eq Globals::god());
-			$retVal = makeRefString ( $drow, $selectable, $row, $numRows );
+			$retVal = makeRefString($drow, $selectable, $row, $numRows);
 			print $retVal;
 			$matches++ if $selectable;
 			$row++;
@@ -1780,7 +1779,7 @@ sub displaySearchColls {
 	my $type = $q->param("type");
 	if ( ! $type ) {
 		# QUEUE
-		my %queue = $s->unqueue ( $dbh );
+		my %queue = $s->unqueue( $dbh );
 		$type = $queue{type};
 	}
 
@@ -1856,8 +1855,8 @@ sub displayCollResults {
 
 	$sth->execute();  	# run the query
 
-	if ( $q->param ( "type" ) ) {
-		$type = $q->param ( "type" );			# It might have been passed (ReID)
+	if ( $q->param('type') ) {
+		$type = $q->param('type');			# It might have been passed (ReID)
 	} else {
 		# QUEUE
 		my %queue = $s->unqueue( $dbh );		# Most of 'em are queued
@@ -3608,7 +3607,7 @@ sub processEnterCollectionForm {
 		{
 			$refColNum = $curColNum;
 			my $reference_no = $row[$refColNum];
-			$s->setReferenceNo ( $dbh, $reference_no );
+			$s->setReferenceNo($dbh, $reference_no);
 
 			$sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
 			$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -4746,7 +4745,7 @@ sub processEditOccurrences {
 			push(@insert_values, "'".now()."'");
 
 			# Check for duplicates
-			$return = checkDuplicates ( "occurrence_no", \${$all_params{occurrence_no}}[$index], "occurrences", \@insert_names, \@insert_values );
+			$return = checkDuplicates("occurrence_no", \${$all_params{occurrence_no}}[$index], "occurrences", \@insert_names, \@insert_values );
 			if(!$return){return $return;}
 			if($return != $DUPLICATE){
 				$sql = "INSERT INTO occurrences (".
@@ -5605,7 +5604,7 @@ sub displayTaxonomyEntryForm	{
 	# used to be js_taxonomy_checkform
 	$html .= "\n<!--<SCRIPT src=\"/JavaScripts/CheckTaxonomyForm.js\" language=\"JavaScript\" type=\"text/javascript\">-->\n";
 	
-	$html .= $hbo->populateHTML ('enter_taxonomy_top', [ $authorityRow{'taxon_no'}, $authorityRow{'type_taxon_no'}, $taxon, length($taxon)] , [ 'taxon_no', 'type_taxon_no',"%%taxon_name%%","%%taxon_size%%" ] );
+	$html .= $hbo->populateHTML('enter_taxonomy_top', [ $authorityRow{'taxon_no'}, $authorityRow{'type_taxon_no'}, $taxon, length($taxon)] , [ 'taxon_no', 'type_taxon_no',"%%taxon_name%%","%%taxon_size%%" ] );
 	$html .= $hbo->populateHTML('enter_tax_ref_form', \%authorityRow);
 
 	# Don't show the 'ref_is_authority' checkbox if there is already authorinfo
