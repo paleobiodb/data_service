@@ -4382,8 +4382,8 @@ sub displayTaxonomyEntryForm	{
 	}
 
 	# If the taxon already is known, look for known opinions about it
-	if ( $authorityRow{'taxon_name'} )	{
-		my $opinion = &printTaxonomicOpinions( $taxon, 0 );
+	if ( $authorityRow{'taxon_no'} )	{
+		my $opinion = &printTaxonomicOpinions( $taxon, $authorityRow{'taxon_no'}, 0 );
 
 		if ( $opinion )	{
 			my $preOpinion = "<hr>\n<center><h4>Previously entered opinions on the status of $taxon</h4></center>\n\n<center><table><tr><td>\n";
@@ -4991,7 +4991,7 @@ sub displayTaxonomyResults	{
 
 	my $taxon = $q->param('taxon_name');
 
-	my $opinion = &printTaxonomicOpinions( $taxon, \@lastOpinions );
+	my $opinion = &printTaxonomicOpinions( $taxon, '', \@lastOpinions );
 	if ( $opinion )	{
 		if ( $taxon_is_new )	{
 			print "<center><h4>$taxon has been entered into the Database</h4></center>\n\n";
@@ -5054,18 +5054,20 @@ sub insertSwappedTaxon	{
 # JA 13-15.8.02
 sub printTaxonomicOpinions	{
 
-	my ($taxon, $lastOpinions) = @_;
+	my ($taxon, $child_no, $lastOpinions) = @_;
 	my @lastOpinions = @$lastOpinions;
 	my $author;
 	my $opinion;
 
 	# Retrieve the child taxon's number from the authorities table
-	my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='";
-	$sql .= $taxon . "'";
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-	my $child_no = ${$sth->fetchrow_arrayref()}[0];
-	$sth->finish();
+	if ( ! $child_no )	{
+		my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='";
+		$sql .= $taxon . "'";
+		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+		$sth->execute();
+		$child_no = ${$sth->fetchrow_arrayref()}[0];
+		$sth->finish();
+	}
 
 	my $sql = "SELECT * FROM opinions WHERE child_no=" . $child_no;
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
