@@ -52,10 +52,9 @@ sub buildDownload {
 	my $self = shift;
 
 	print "
-<center>
-<h2>The Paleobiology Database: Download Results</h2>
-</center>
-";
+	<center>
+	<h2>The Paleobiology Database: Download Results</h2>
+	</center>";
 
 	$self->setupOutput ( );
 	$self->retellOptions ( );
@@ -66,17 +65,17 @@ sub buildDownload {
 
 }
 
-# Tells the user what options they chose
+
+# Prints out the options which the user selected in summary form.
 sub retellOptions {
 	my $self = shift;
 
 	my $html = "
-<center>
-<table border='0' width='600'>
-<tr>
+	<center>
+	<table border='0' width='600'>
+	<tr>
 	<td colspan='2' bgcolor='#E0E0E0'><b><font size='+1'>Download criteria</font></b></td>
-</tr>
-";
+	</tr>";
 
 	$html .= $self->retellOptionsRow ( "Research group or project", $q->param("research_group") );
 	INTERVAL: {
@@ -98,9 +97,16 @@ sub retellOptions {
 			last;
 		}
 	}
-# LEGACY CODE
-#	$html .= $self->retellOptionsRow ( "Epoch", $q->param("epoch") );
-#	$html .= $self->retellOptionsRow ( "Single age/stage", $q->param("stage") );
+	# LEGACY CODE
+	#	$html .= $self->retellOptionsRow ( "Epoch", $q->param("epoch") );
+	#	$html .= $self->retellOptionsRow ( "Single age/stage", $q->param("stage") );
+
+	# added by Ryan on 12/30/2003
+	if ($q->param('year')) {
+		my $dataCreatedBeforeAfter = $q->param("created_before_after") . " " . $q->param("date") . " " . $q->param("month") . " " . $q->param("year");
+		$html .= $self->retellOptionsRow ( "Data records created", $dataCreatedBeforeAfter);
+	}
+	
 	$html .= $self->retellOptionsRow ( "Oldest interval", $q->param("max_interval_name") );
 	$html .= $self->retellOptionsRow ( "Youngest interval", $q->param("min_interval_name") );
 	$html .= $self->retellOptionsRow ( "Environment", $q->param("environment") );
@@ -272,6 +278,7 @@ sub retellOptions {
 	print $html;
 }
 
+
 # Formats a query parameter (name=value) as a table row in html.
 sub retellOptionsRow {
 	my $self = shift;
@@ -282,6 +289,7 @@ sub retellOptionsRow {
 		return "<tr><td valign='top'>$name</td><td><i>$value</i></td></tr>\n";
 	}
 }
+
 
 # Returns a list of field names to print out by comparing the query params
 # to the above global params arrays.
@@ -541,40 +549,92 @@ sub getOccurrencesWhereClause {
 sub getCollectionsWhereClause {
 	my $self = shift;
 	my $retVal = "";
-# LEGACY CODE
-#	my $time_interval = $self->getTimeIntervalString();
+	# LEGACY CODE
+	#	my $time_interval = $self->getTimeIntervalString();
 	
 	my $authorizer = $self->getDataForAuthorizer();
 	# This is handled by getOccurrencesWhereClause if we're getting occs data.
 	if($authorizer ne "All" && $q->param('collections_only') eq 'YES'){
 		$retVal .= " collections.authorizer='$authorizer' ";
 	}
-# LEGACY CODE
-#	$retVal .= " AND " if $retVal && $time_interval;
-#	$retVal .= "(" . $time_interval . ")" if $time_interval;
+	# LEGACY CODE
+	#	$retVal .= " AND " if $retVal && $time_interval;
+	#	$retVal .= "(" . $time_interval . ")" if $time_interval;
 	$retVal .= " AND " if $retVal && $self->getResGrpString();
 	$retVal .= $self->getResGrpString() if $self->getResGrpString();
 	$retVal .= " AND " if $retVal && $self->getCountryString();
+	
+	# should we filter the data based on collection creation date?
+	# added by Ryan on 12/30/2003, some code copied from Curve.pm.
+	# (filter it if they enter a year at the minimum.
+	if ($q->param('year')) {
+		
+		# convert month name to number (do this in a function later?)
+		my %month2num = (  "January" => "01", "February" => "02", "March" => "03",
+                         "April" => "04", "May" => "05", "June" => "06",
+                         "July" => "07", "August" => "08", "September" => "09",
+                         "October" => "10", "November" => "11",
+                         "December" => "12");
+		
+	
+		my $month = $month2num{$q->param('month')};  # needs semicolon because it's a hash.. weird.
+		my $day = $q->param('date');
+
+		# use default values if the user didn't enter any.		
+		if (! $q->param('month')) { $month = "01" }
+		if (! $q->param('date')) { $day = "01" }
+				 
+		if ( length $day == 1 )	{
+			$day = "0".$q->param('date'); #prepend a zero if only one digit.
+		}
+		
+		# note, this should really be handled by a function?  maybe in bridge.pl.
+		my $created_date = $q->param('year').$month.$day;						 
+	
+		my $created_string;
+		# if so, did they want to look before or after?
+		if ($q->param('created_before_after') eq "before") {
+			$created_string = " collections.created < $created_date ";
+		} elsif ($q->param('created_before_after') eq "after") {
+			$created_string = " collections.created > $created_date ";
+		}
+		
+
+		if (length($retVal) > 0) {
+			$retVal .= " AND ";
+		}
+		
+		$retVal .= $created_string;
+		
+	}
+	
+	if ($retVal) { $retVal .= " AND "; }
 	$retVal .= $self->getCountryString() if $self->getCountryString();
 	$retVal .= " AND " if $retVal && $self->getIntervalString();
 	$retVal .= $self->getIntervalString() if $self->getIntervalString();
-# LEGACY CODE
-#	$retVal .= " AND " if $retVal && $self->getEpochString();
-#	$retVal .= $self->getEpochString() if $self->getEpochString();
-#	$retVal .= " AND " if $retVal && $self->getStageString();
-#	$retVal .= $self->getStageString() if $self->getStageString();
+	# LEGACY CODE
+	#	$retVal .= " AND " if $retVal && $self->getEpochString();
+	#	$retVal .= $self->getEpochString() if $self->getEpochString();
+	#	$retVal .= " AND " if $retVal && $self->getStageString();
+	#	$retVal .= $self->getStageString() if $self->getStageString();
 	$retVal .= " AND " if $retVal && $self->getEnvironmentString();
 	$retVal .= $self->getEnvironmentString() if $self->getEnvironmentString();
 	
+
 	my $regionsString = $self->getRegionsString();
-	if($regionsString ne "")
-	{
-		if($retVal ne "")
-		{
+	if($regionsString ne "") {
+		if($retVal ne "") {
 			$retVal .= " AND ";
 		}
 		$retVal .= "($regionsString)";
 	}
+
+	# this is a hack for now which will remove duplicate AND statements (AND AND).
+	# later, we will hopefully have a class for generating SQL statements.	
+	$retVal =~ s/AND( )+AND/AND/i;
+	$retVal =~ s/AND( )+$//i;
+	
+	#print "at end retVal = $retVal<BR>";
 	
 	return $retVal;
 }
@@ -605,7 +665,7 @@ sub getEcology	{
 	}
 	$sql .= " FROM ecotaph LEFT JOIN authorities ON ecotaph.taxon_no = authorities.taxon_no";
 	my @ecos = @{$dbt->getData($sql)};
-for $i (0..5){print "$ecos[$i]->{taxon_name}<br>\n"; }
+	for $i (0..5) { print "$ecos[$i]->{taxon_name}<br>\n"; }
 
 	for $i (0..$#ecos)	{
 		$ecotaph1{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology1')};
@@ -687,6 +747,8 @@ sub doQuery {
 	# may be getting this for either of the above cases
 	my $collectionsWhereClause = $self->getCollectionsWhereClause();
 
+	#print "collectionsWhereClause = $collectionsWhereClause<BR>";
+	
 	# complete the collections only query string
 	if($collections_only eq 'YES'){
 		$sql .= " collections.research_group ".$comma.$outFieldsString.
@@ -702,15 +764,15 @@ sub doQuery {
 				$sql .= "\nWHERE (collections.county IS NOT NULL OR (collections.latdeg IS NOT NULL AND collections.lngdeg IS NOT NULL))\n";
 			}
 		}
-# LEGACY CODE
-#		if($q->param('strictchronology') eq 'NO'){
-#			if($sql =~ /WHERE/){
-#				$sql .= "\nAND ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))";
-#			}
-#			else{
-#				$sql .= "\nWHERE ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))";
-#			}
-#		}
+		# LEGACY CODE
+		#		if($q->param('strictchronology') eq 'NO'){
+			#			if($sql =~ /WHERE/){
+				#				$sql .= "\nAND ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))";
+			#			}
+			#			else{
+				#				$sql .= "\nWHERE ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))";
+			#			}
+		#		}
 	# complete the collections/occurrences join query string
 	} else{
 		$sql .= ", collections.collection_no, " .
@@ -730,6 +792,7 @@ sub doQuery {
 
 	}
 
+	
 	# GROUP BY basically does a 'DISTINCT' on these two columns (for join only)
 	if($q->param('lumpgenera') eq 'YES' && $collections_only ne 'YES'){
 		$sql .= " GROUP BY occurrences.genus_name, occurrences.collection_no";
@@ -740,10 +803,15 @@ sub doQuery {
 	$sql =~ s/\s+/ /g;
 	$self->dbg("<b>Occurrences query:</b><br>\n$sql<BR>");
 
+		#print "sql = $sql<BR>";
+
+	
 	my $sth = $dbh->prepare($sql); #|| die $self->dbg("Prepare query failed ($!)<br>");
 	my $rv = $sth->execute(); # || die $self->dbg("Execute query failed ($!)<br>");
 	$self->dbg($sth->rows()." rows returned.<br>");
 
+
+	
 	# print column names to occurrence output file JA 19.8.01
 	my $header = "";
 	if($q->param('collections_put') eq 'comma-delimited text'){
