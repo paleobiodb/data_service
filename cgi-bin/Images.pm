@@ -248,7 +248,8 @@ sub processLoadImageForm{
 		# and get their maximum number suffix
 		if(@files){
 			foreach my $file (@files){
-				my $temp_num = $file =~ /(\d+)\./;
+				$file =~ /(\d+)\./;
+				my $temp_num = $1;
 				if($temp_num > $number){
 					$number = $temp_num;
 				}
@@ -302,22 +303,6 @@ sub processLoadImageForm{
 	}
 }
 
-# DONE, ABOVE
-sub checkLoadedImage{
-	# Check size of uploaded image
-		# if too big, send back a rejection message explaining it was too big
-		#	and delete the file
-		# if wrong file type (has to be .jpg, .gif or .png) send back a 
-		#	rejection message...
-	# Do an md5 on the uploaded file and see if we already have it (compare
-	# with md5s - in db - from other numbered files of the same taxonomic name).
-	# Determine where to store it: enterer/taxonomic_name_digit.suffix
-	# save original filename
-	# write file to directory where it belongs:  write out a thumbnail too
-	# 	or do we do that on the fly with imagemagick?
-	# add record to the images table with all collected info
-}
-
 
 ###
 # VIEWING
@@ -358,12 +343,6 @@ sub processViewImages{
 			  "taxon_name='$taxon_name'";
 	my @results = @{$dbt->getData($sql)};
 	
-	# 	If we have images, build a page:
-	#		nav bar with thumbnails 
-	#		clicking nav bar brings up images: alone on a page with a "back"
-	#			link?  Or on same page in main space with navbar still on
-	#			the side/top? If the latter, what fills the space when the
-	#			page first comes up - the first image in the series?
 	if(@results){
 		taxonImageDisplay($selected_index, $taxon_name, \@results);
 	}
@@ -380,6 +359,9 @@ sub processViewImages{
 	}
 }
 
+# REDO THIS TO WORK INSIDE OF THE TAXON INFO FORM
+# Maybe have multiple images shown as thumbnails with checkboxes (like the
+# module nav) so that 1 or more can be shown simultaneously.
 sub taxonImageDisplay{
 	my $selected_index = shift;
 	my $taxon_name = shift;
@@ -389,25 +371,30 @@ sub taxonImageDisplay{
 	print main::stdIncludes("std_page_top");
 
 	if(@data == 1){
-		my $thumb = $data[0]->{path_to_image};
-		$thumb =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
-		print "<table><tr><td>"; 
-			  "<a href=\"".$im->{path_to_image}."\">".
-			  "<img src=\"".$thumb."\"></a></td></tr>".
-			  "<tr><td><center>".$im->{caption}.
-			  "</center></td></tr></table>";
+		print "<center><table><tr><td>". 
+			  "<img src=\"".$data[0]->{path_to_image}."\"><br>".
+			  "<center>".$data[0]->{caption}."</center>".
+			  "</td></tr></table></center>";
 	}
 	else{
-# HMMM, MAY HAVE TO DO THIS AS A 'GET' TYPE, WITH ALL PARAMS IN THE LINKS
-# <a href="$exec_url?action=processViewImage&name=$taxon_name&selected_index=$selected_index><img src=""></a>
-		print "<form name=\"image_display\" method=POST>";
-		print "<input type=\"hidden\" name=\"action\" value=\"processViewImage\">";
-		print "<input type=\"hidden\" name=\"taxon_name\" value=\"$taxon_name\">";
-		foreach my $im (@results){
-			my $thumb = $im->{path_to_image};
+		print "<center><table><tr><td>";
+		my $main_image = $data[$selected_index]->{path_to_image};
+		my $main_caption = $data[$selected_index]->{caption};
+		my $first = shift @data;
+		my $thumb = $first->{path_to_image};
+		$thumb =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
+		print "<a href=\"$exec_url?action=processViewImage&taxon_name=$taxon_name&selected_index=0\"><img src=\"$thumb\"></a>";
+		print "</td><td rowspan=".(@data+1).">";
+		print "<center><img src=\"$main_image\"><br>$main_caption</td></tr>\n";
+
+		for($index=0; $index < @data; $index++){
+			print "<tr><td>";
+			my $thumb = $data[$index]->{path_to_image};
 			$thumb =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
+			print "<a href=\"$exec_url?action=processViewImage&taxon_name=$taxon_name&selected_index=".($index+1)."\"><img src=\"$thumb\"></a>";
+			print "</td></tr>\n";
 		}
-		print "</form>";
+		print "</table></center>";
 	}
 	
 	print main::stdIncludes("std_page_bottom");
