@@ -1312,14 +1312,14 @@ sub checkSQL{
 	$sql =~/^[\(]*(\w+)\s+/;
 	my $type = uc($1);
 
-	if($type ne "INSERT" && !$self->checkWhereClause($sql)){
+	if($type ne "INSERT" && $type ne "REPLACE" && !$self->checkWhereClause($sql)){
 		die "Bad WHERE clause in SQL: $sql";
 	}
 	
 	if($type eq "SELECT"){
 		return 1;
 	}
-	elsif($type eq "INSERT"){
+	elsif($type eq "INSERT" || $type eq "REPLACE"){
 		# Check that the columns and values lists are not empty
 		# NOTE: down the road, we could check required fields
 		# against table names.
@@ -1372,7 +1372,8 @@ sub checkWhereClause {
 	# This is only 'first-pass' safe. Could be more robust if we check
 	# all AND clauses.
 	# modified by JA 1.4.04 to accept IS NULL
-	$sql =~ /WHERE\s+([A-Z0-9_\.\(]+)\s*(=|LIKE|IN|IS NULL|!=|>|<|>=|<=)\s*(.+)?\s*/i;
+	# modified by JA 2.28.05 to accept IS AGAINST
+	$sql =~ /WHERE\s+([A-Z0-9_\.\(\)]+)\s*(=|AGAINST|LIKE|IN|IS NULL|!=|>|<|>=|<=)\s*(.+)?\s*/i;
 
 	#print "\$1: $1, \$2: $2 \$3: $3<br>";
 	if(!$1){
