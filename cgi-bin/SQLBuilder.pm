@@ -819,7 +819,7 @@ sub insertNewRecord {
 # Note, if it makes it to the update statement, then it returns
 # the result code from the dbh->do() method.
 #
-# see also updateRecordOnlyEmptyFields() below.
+# see also updateRecordEmptyFieldsOnly() below.
 #
 # ****NOTE**** this doesn't check write permissions yet...
 # WARNING!!
@@ -841,7 +841,7 @@ sub updateRecord {
 # updates the fields which are empty in the table row..
 # ie, if you pass it a field which is already populated in this database
 # row, then it won't update that field.
-sub updateRecordOnlyEmptyFields {
+sub updateRecordEmptyFieldsOnly {
 	my SQLBuilder $self = shift;
 	
 	my $tableName = shift;
