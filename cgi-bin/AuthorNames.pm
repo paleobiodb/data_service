@@ -20,6 +20,7 @@ sub new
 	
   if(UNIVERSAL::isa($data, 'DataRow'))
   {
+	$self->dbg("Initializing via a DataRow object<br>");
     $self->setAuthor1Init($data->getValue('author1init'));
     $self->setAuthor1Last($data->getValue('author1last'));
     $self->setAuthor2Init($data->getValue('author2init'));
@@ -28,6 +29,7 @@ sub new
   }
   # Deal with a hash, too
   elsif(UNIVERSAL::isa($data,"HASH")){
+	$self->dbg("Initializing via a HASH<br>");
 	$self->setAuthor1Init($data->{'author1init'});
     $self->setAuthor1Last($data->{'author1last'});
     $self->setAuthor2Init($data->{'author2init'});
@@ -36,8 +38,13 @@ sub new
 
   }
 
-  $data = $self->toString();
-  $self->setAuthorsString($data) if $data;
+  # Assume it's a string
+  else{
+	  $self->dbg("Initializing via a string<br>");
+	  #$data = $self->toString();
+	  #$self->setAuthorsString($data) if $data;
+	  $self->setAuthorsString($data);
+  }
   
 	return $self;
 }
@@ -93,7 +100,7 @@ sub parseAuthorsString
   # Get rid of all the dots (we'll put them in the appropriate places later)
   $inString =~ s/\.//g;
   # Combine 'et al' into a single token (we fix this below)
-  $inString =~ s/\bet\s+al(ia)?\b/et_al/;
+  $inString =~ s/\bet\.?\s+al\.?(ia)?\.?\b/et_al/;
   # Get rid of commas before suffixes (we'll put these back later)
   $inString =~ s/,\s*(jr\.?|sr\.?|i{2,3}|iv)/ $1/gi;
   # Surround commas with spaces (this turns commas into tokens because we split on spaces)
@@ -168,6 +175,7 @@ sub parseAuthorsString
           $prevTokenType = $tokenType;
           $stage = 2;
           $au2Last .= " $token";
+		  $self->dbg("<br>TokenType=LNAME, Stabe=1, au2Last: $au2Last<br>");
           next;
         }
         # Otherwise, append it to the first author name string
@@ -193,6 +201,7 @@ sub parseAuthorsString
         else
         {
           $au2Last = $token;
+		  $self->dbg("<br>TokenType=ETAL, au2Last: $au2Last<br>");
           last;
         }
       }
@@ -202,6 +211,7 @@ sub parseAuthorsString
         $token =~ s/(.+)/\u$1/;
         $token =~ s/R\Z/r./i;
         $au2Last .= ", $token";
+	    $self->dbg("<br>TokenType=SUFFIX, au2Last: $au2Last<br>");
       }
       # Otherwise, if this is an initial
       elsif($tokenType == $INITIAL)
@@ -231,6 +241,7 @@ sub parseAuthorsString
         else
         {
           $au2Last .= " $token";
+	      $self->dbg("<br>TokenType=LNAME, Stage=2, au2Last: $au2Last<br>");
         }
       }
       # Otherwise, if this is a comma, do nothing
@@ -307,7 +318,7 @@ sub getTokenType
   else
   {
     $tokenType = $UNKNOWN_TYPE;
-    dbg("Unknown token type: $token\n");
+    $self->dbg("Unknown token type: $token\n");
   }
   
   return $tokenType;
@@ -317,17 +328,22 @@ sub isInitial
 {
   my ($self, $token) = @_;
   
-  # True if token is a single upper case character possibly followed
-  # by a dot
-  return 1 if $token =~ /\A\w\.?\Z/ && uc($token) eq $token;
+  # True if token is exactly three upper case characters JA 27.3.02
+  # Possibly followed by a period and/or a space for each one 12/03/02 PM
+  return 1 if $token ne 'III' && $token =~ /\A[A-Z]\.?\s?[A-Z]\.?\s?[A-Z]\.?\s?\Z/ && uc($token) eq $token;
+
+  # ... or two upper case characters JA 14.3.02
+  # Possibly followed by a period and/or a space for each one 12/03/02 PM
+  return 1 if $token ne 'II' && $token ne 'IV' && $token =~ /\A[A-Z]\.?\s?[A-Z]\.?\s?\Z/ && uc($token) eq $token;
+
   # True if token is a single upper case character possibly followed
   # by a dot, followed by a dash, followed by another character and dot.
   return 1 if $token =~ /\A\w\.?-\w\.?\Z/ && uc($token) eq $token;
-  # True if token is exactly two upper case characters JA 14.3.02
-  return 1 if $token ne 'II' && $token ne 'IV' && $token =~ /\A\w\w\Z/ && uc($token) eq $token;
-  # ... or exactly three upper case characters JA 27.3.02
-  return 1 if $token ne 'III' && $token =~ /\A\w\w\w\Z/ && uc($token) eq $token;
   
+  # True if token is a single upper case character possibly followed
+  # by a dot
+  return 1 if $token =~ /\A\w\.?\Z/ && uc($token) eq $token;
+
   return 0;
 }
 
@@ -348,7 +364,7 @@ sub isSuffix
   
   # True if token is any of 'Jr', 'Sr', 'II' or 'III', 'IV' possibly
   # "iv" must fill entire token JA 1.10.02
-  return 1 if $token =~ /(jr\.?|sr\.?|i{2,3}|iv)/i;
+  return 1 if $token =~ /^(jr\.?|sr\.?|i{2,3}|iv)$/i;
   
   return 0;
 }
@@ -392,8 +408,10 @@ sub setAuthor1Init
 {
   my ($self, $auInit) = @_;
   
+  # Get rid of all periods
   $auInit =~ s/\.//g;
-  $auInit =~ s/\b(\w)\b/$1./g;
+  # Put them back in after every letter.
+  $auInit =~ s/([A-Z])/$1./g;
   
   $self->{au1Init} = $auInit unless $auInit eq '';
 }
@@ -439,8 +457,10 @@ sub setAuthor2Init
 {
   my ($self, $auInit) = @_;
   
+  # Get rid of all periods
   $auInit =~ s/\.//g;
-  $auInit =~ s/\b(\w)\b/$1./g;
+  # Put them back in after every letter.
+  $auInit =~ s/([A-Z])/$1./g;
   
   $self->{au2Init} = $auInit unless $auInit eq '';
 }
@@ -458,6 +478,9 @@ sub setOtherAuthors
   
   $auOther =~ s/et al\.?/et al./;
   
+  # Get rid of all periods
+  $auOther =~ s/\.//g;
+  # Put them back in. (?)
   $auOther =~ s/\b(\w)\b/$1./g;
   
   $self->{auOther} = $auOther unless $auOther eq '';
@@ -487,7 +510,7 @@ sub getAuthorsString
   }
   elsif(($au1init || $au1last) && ($au2init || $au2last))
   {
-    $retVal .= ' and ';
+    $retVal .= ', and ';
   }
   $retVal .= $au2init;
   $retVal .= ' ' if $au2init && $au2last;
@@ -502,13 +525,14 @@ sub getAuthorsString
     my $otherAu = AuthorNames->new($otherAuthors);
     if($otherAu->getAuthor2Last())
     {
+	  $self->dbg("Created new AuthorNames for OtherAuthors: $otherAuthors<br>");
       $retVal .= ', ';
     }
     else
     {
-      $retVal .= ' and ';
+      $retVal .= ', and ';
     }
-    $retVal .= $otherAuthors;
+    $retVal .= $otherAu->toString();
   }
   return $retVal;
 }
@@ -547,7 +571,7 @@ sub dbg
 {
   my ($self, $str) = @_;
   
-  print $str if $DEBUG;
+  print "<font color=\"green\">$str</font>" if $DEBUG;
 }
 
 1;
