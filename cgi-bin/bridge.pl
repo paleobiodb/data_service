@@ -766,7 +766,7 @@ sub displaySearchRefs {
 	}
 
 	$html .= $hbo->populateHTML("search_refs_form", \@row, \@fields);
-	buildAuthorizerPulldown ( \$html, $authorizer, 1 );
+	buildEntererPulldown ( \$html, $enterer, 1 );
 	my $enterer = $s->get("enterer");
 	$html =~ s/%%enterer%%/$enterer/;
 	my $authorizer = $s->get("authorizer");
