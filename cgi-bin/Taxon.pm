@@ -283,7 +283,7 @@ sub authors {
 	my Taxon $self = shift;
 	
 	# get all info from the database about this record.
-	my $hr = $self->databaseRecord();
+	my $hr = $self->databaseAuthorityRecord();
 	
 	if (!$hr) {
 		return '';	
@@ -309,7 +309,7 @@ sub pubyr {
 	my Taxon $self = shift;
 
 	# get all info from the database about this record.
-	my $hr = $self->databaseRecord();
+	my $hr = $self->databaseAuthorityRecord();
 	
 	if (!$hr) {
 		return '';	
@@ -580,7 +580,7 @@ sub printTaxaHash {
 # mainly meant for internal use
 # returns a hashref with all data (select *) for the current taxon,
 # *if* we have a taxon_no for it.  If we don't, then it returns nothing.
-sub databaseRecord {
+sub databaseAuthorityRecord {
 	my Taxon $self = shift;
 
 	if (! $self->{taxonNumber}) {
@@ -661,7 +661,7 @@ sub displayAuthorityForm {
 	# then grab the data from that table row.
 	my $dbFieldsRef;
 	if (! $isNewEntry) {	
-		$dbFieldsRef = $self->databaseRecord();
+		$dbFieldsRef = $self->databaseAuthorityRecord();
 		Debug::dbPrint("querying database");
 		
 		if (!$secondTime) {
@@ -842,6 +842,10 @@ sub submitAuthorityForm {
 	my $s = shift;		# the cgi parameters
 	my $q = shift;		# session
 
+	if ((!$hbo) || (!$s) || (!$q)) {
+		Debug::logError("Taxon::submitAuthorityForm had invalid arguments passed to it.");
+		return;	
+	}
 	
 	my $sql = $self->getSQLBuilder();
 	$sql->setSession($s);
@@ -856,7 +860,7 @@ sub submitAuthorityForm {
 	# is this a new entry, or an edit of an old record?
 	my $isNewEntry = 1;  
 	if ($self->{taxonNumber}) {
-		$isNewEntry = 0;  # it must exist if we have a taxon_no for it.
+		$isNewEntry = 0;  # it must be an edit if we have a taxon_no for it.
 	}
 
 	#Debug::dbPrint("new entry = $isNewEntry");
@@ -866,7 +870,7 @@ sub submitAuthorityForm {
 	# if it's not a new entry (ie, if it already existed).	
 	my %dbFields;
 	if (! $isNewEntry) {
-		my $results = $self->databaseRecord();
+		my $results = $self->databaseAuthorityRecord();
 
 		if ($results) {
 			%dbFields = %$results;
@@ -1078,12 +1082,18 @@ sub submitAuthorityForm {
 		
 		if (!$number) {
 			# if it doesn't exist, tell them to go enter it first.
-			$errors->add("The type taxon you entered doesn't exist in our database.  Please submit this form without the type taxon and then go back and add it later.");
+			$errors->add("The type taxon '" . $q->param('type_taxon_name') . "' doesn't exist in our database.  Please submit this form without the type taxon and then go back and add it later.");
 		} else {
 			$fieldsToEnter{type_taxon_no} = $number;
 			$fieldsToEnter{type_taxon_name} = '';
 		}
 	}
+	
+	# if they didn't enter a type taxon, then set the type_taxon number to zero.
+	if (! $q->param('type_taxon_name')) {
+		$fieldsToEnter{type_taxon_no} = 0;	
+	}
+	
 
 	$fieldsToEnter{taxon_name} = $q->param('taxon_name_corrected');
 	
@@ -1115,23 +1125,17 @@ sub submitAuthorityForm {
 		
 		# *** NOTE, if they try to enter a new record which has the same name and
 		# taxon_rank as an existing record, we should display a warning page stating
-		# this fact..  Put all of the fields they're trying to enter in hidden fields
-		# on this page.  Then allow them to *really* submit it if they want to.
-		#
-		# Could do this by having a separate method in bridge called 
-		# submitDuplicateAuthorityForm, and that could call this 
-		# submitAuthorityForm method and pass it an argument so we know that we 
-		# shouldn't display the warning form *again*, but should actually enter it.
+		# this fact..  However, if they *really* want to submit a duplicate, we should 
+		# let them.  So we check the value of 'second_submission' which is true if 
+		# they have already submitted the form at least once.  If this is true, then 
+		# we'll go ahead an let them enter a duplicate.
 		
 		$fieldsToEnter{created} = now();
 		
 		if (($self->getTaxonNumberFromName($fieldsToEnter{taxon_name})) && 
 			(! $q->param('second_submission')) ) {
 			
-			# put a message in a hidden to let us know that the user *really*
-			# wants to submit this duplicate record.  This way, when they click
-			# the submit button the second time around, we won't display the 
-			# same warning message again.
+			# only show warning on first subimission
 			
 			my $oldTaxon = Taxon->new();
 			$oldTaxon->setWithTaxonName($fieldsToEnter{taxon_name});
@@ -1143,7 +1147,10 @@ sub submitAuthorityForm {
 	
 	
 	if ($errors->count() > 0) {
-			
+		# put a message in a hidden to let us know that we have already displayed
+		# some errors to the user and this is at least the second time through (well,
+		# next time will be the second time through - whatever).
+
 		$q->param(-name=>'second_submission', -values=>['1']);
 			
 		# stick the errors in the CGI object for display.
@@ -1158,9 +1165,15 @@ sub submitAuthorityForm {
 	}
 	
 	
-
+	# now we'll actually insert or update into the database.
+	
+	my $resultTaxonNumber;
+	
 	if ($isNewEntry) {
-		$sql->insertNewRecord('authorities', \%fieldsToEnter);
+		my $code;	# result code from dbh->do.
+		
+		($code, $resultTaxonNumber) = $sql->insertNewRecord('authorities', \%fieldsToEnter);
+		
 	} else {
 		# if it's an old entry, then we'll update.
 		
@@ -1168,7 +1181,7 @@ sub submitAuthorityForm {
 		delete $fieldsToEnter{authorizer_no};
 		delete $fieldsToEnter{enterer_no};
 		delete $fieldsToEnter{created};
-	
+		delete $fieldsToEnter{reference_no};
 		
 		
 		if (!($self->{taxonNumber})) {
@@ -1176,6 +1189,7 @@ sub submitAuthorityForm {
 			return;
 		}
 			
+		$resultTaxonNumber = $self->{taxonNumber};
 		
 		if ($editAny) {
 			Debug::dbPrint("Taxon update any record");
@@ -1184,19 +1198,52 @@ sub submitAuthorityForm {
 		} else {
 			
 			
-			Debug::dbPrint("Taxon update empty records only");
-			Debug::printHash(\%fieldsToEnter);
+			#Debug::dbPrint("Taxon update empty records only");
+			#Debug::printHash(\%fieldsToEnter);
+			
+			my $whereClause = "taxon_no = '" . $self->{taxonNumber} . "'";
 			
 			# only allow updates of fields which are already blank in the database.	
-			$sql->updateRecordEmptyFieldsOnly('authorities', \%fieldsToEnter, "taxon_no = '" . $self->{taxonNumber} . "'", 'taxon_no');
+			$sql->updateRecordEmptyFieldsOnly('authorities', \%fieldsToEnter, $whereClause, 'taxon_no');
 		}
 	}
 	
 	
-	print "<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm\">Add/edit authority</A>";
-
+	
+	# now show them what they inserted...
+	
+	# update our internal taxon number since we should definitely have one by now..
+	$self->{taxonNumber} = $resultTaxonNumber;
+	$self->displayAuthoritySummary($hbo);
+	
 }
 
+
+# displays info about the authority record the user just entered...
+sub displayAuthoritySummary {
+	my Taxon $self = shift;
+
+	print main::stdIncludes("std_page_top");
+	
+	print "<CENTER><H2>Authority entry</H2>";
+	
+	my $dbrec = $self->databaseAuthorityRecord();
+	
+	if (!$dbrec) {
+		print "Error inserting/updating authority record.  Please start over and try again.";	
+	} else {
+		
+		print "The information was submitted correctly.  To double check your entry,
+		click 
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $self->{taxonNumber} ."\">here</A>. There is no need to resubmit it.";
+	}
+	
+	print "<BR><BR>";
+	print "<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm\">Add/edit authority</A>";
+	print "</CENTER><BR><BR>";
+	
+	print main::stdIncludes("std_page_bottom");
+}
 
 
 
