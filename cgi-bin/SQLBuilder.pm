@@ -1,6 +1,6 @@
 # Represents an SQL select statement.  May be expanded in the future or replaced with a CPAN module...
-# Note, although this *ONLY WORKS FOR SELECT STATEMENTS* for now, it may eventually be expanded
-# to include other types of statements such as UPDATE, etc.
+# Note, although this only supports SELECT statements by setting direct SQL.  To insert, call
+# the insertNewRecord() method.
 #
 # Written by rjp, 1/2004.
 #
@@ -19,12 +19,24 @@
 # Note, expressions are *NOT* returned with the leading WHERE, SELECT, HAVING, etc. keywords *unless*
 # you request the entire SQL statement at once.
 #
-# To execute an SQL expression, just call the executeSQL() method *after* you have set the SQL statement
-# To retrieve the results, call nextResultArray() repeatedly, and call finishSQL() when finished.
+# To execute an SQL expression:
+# -----------------------------
+# 
+# 1.  If you'll be retrieving one row at a time, then you must call
+#     the executeSQL() method before retrieving any rows, and you must
+#	  call the finishSQL() method when you're done. Note, fetching one row
+#	  at a time is slow.
+#
+# 2.  If you'll be retrieving all rows at once, then you can just directly
+# 	  call the retrieval method without calling execute or finish.
 #
 # To execute an SQL expression using Permissions checking, make sure to pass the current
 # Session object when creating the SQLBuilder object, ie, pass it in new().
-# Then use the appropriate permission sensitive methods to fetch the results.
+# Then use the appropriate permission sensitive methods to fetch the results.  You must
+# also include the collection_no as the *FIRST* item in the SELECT statement if you're
+# fetching them as an array.  If it's as a hash, then it doesn't matter where it is.
+#
+#
 
 
 package SQLBuilder;
@@ -66,9 +78,10 @@ use fields qw(
 
 # tableNames		:	array ref of all table names in the database, not set by default.
 							
-# If using permissions, then
+							
+# If using permissions, or performing updates or inserts, then
 # you must pass the current Session object
-# when calling new().  If not using permissions,
+# when calling new().  If not using permissions, update, or inserts
 # then this is optional. 
 sub new {
 	my $class = shift;
@@ -114,12 +127,18 @@ sub clear {
 	$self->finishSQL();  # finish the SQL query if there was one.
 }
 
+# pass it a session.
+sub setSession {
+	my SQLBuilder $self = shift;
+	my $s = shift;
+	
+	$self->{session} = $s;	
+}
 
 
 # directly set the entire SQL expression
 # note, doing this will *override* any of the other
-# set/get methods.. Only use in weird cases.
-# not a recommended way of doing it..
+# set/get methods.. 
 sub setSQLExpr {
 	my SQLBuilder $self = shift;
 	if (my $input = shift) {
@@ -339,6 +358,12 @@ sub SQLExpr {
 }
 
 
+
+##################################################################################
+# Portions which actually talk to the MySQL database
+##################################################################################
+
+
 # for internal use only!
 # connects to MySQL database if needed (ie, if we weren't already connected)
 # returns handle to the database
@@ -354,6 +379,24 @@ sub dbConnect {
 	}
 	
 	return $dbh;	
+}
+
+
+# returns the DBI Statement Handle
+# for those cases when it's simpler to directly use the statement handle
+#
+# note, this may be empty if you have not prepared anything yet.
+sub sth {
+	my SQLBuilder $self = shift;
+	return $self->{sth};
+}
+
+# returns the DBI Database Handle
+# for those cases when it's simpler to directly use the database handle
+sub dbh {
+	my SQLBuilder $self = shift;
+	
+	return $self->dbConnect();
 }
 
 
@@ -376,7 +419,8 @@ sub getSingleSQLResult {
 # executes the SQL
 # can use this with or without permissions
 #
-# note, not needed for all methods, for example, getSingleSQLResult() doesn't use this.
+# only used for method which fetch one row at a time.
+# methods which fetch all rows don't need this.
 sub executeSQL {
 	my SQLBuilder $self = shift;
 
@@ -398,7 +442,19 @@ sub executeSQL {
 }
 
 
-
+# Returns the entire result set as a hash with NO permissions checking
+# optionally, pass it a key field to organize the results by
+sub allResultsHashRef {
+	my SQLBuilder $self = shift;
+	my $key = shift;
+	
+	my $sql = $self->SQLExpr();
+	
+	# fetch all array rows 	
+	my $ref = ($self->{dbh})->selectall_hashref($sql, $key);
+	
+	return $ref;
+}
 
 
 # Returns the entire result set as a matrix with NO permissions checking
@@ -463,11 +519,13 @@ sub allResultsArrayRefUsingPermissions {
 }
 
 
-# returns an array of result rows using permissions
-# to check if the user can read the rows.
+# returns the next result row using read permissions as an array
 #
 # Also, **make sure** the SQL query includes the necessary
 # column called "collection_no" AS THE FIRST column **********!!!
+#
+# must be called *after* first calling executeSQL(),
+# otherwise will return empty array.
 #
 # ****SPEED NOTE****
 # If you will be retrieving multiple rows, this is about twice as slow
@@ -509,12 +567,14 @@ sub nextResultArrayUsingPermissions {
 
 
 
-# fetches the next result row from the $sth.
-# ** doesn't use permissions checking **
+# fetches the next result row WITHOUT using permissions of any kind.
 # returns it as an array
 #  
 # must be called *after* first calling executeSQL(),
 # otherwise will return empty array.
+#
+# ****SPEED NOTE****
+# This is slow compared to getting all results at once.
 sub nextResultArray {
 	my SQLBuilder $self = shift;
 
@@ -539,6 +599,9 @@ sub nextResultArray {
 
 # same as nextResultArray, but gets it
 # as an array reference
+#
+# ****SPEED NOTE****
+# slower than getting all results at once.
 sub nextResultArrayRef {
 	my SQLBuilder $self = shift;
 
@@ -560,11 +623,38 @@ sub nextResultArrayRef {
 }
 
 
+# as an hash reference
+#
+# ****SPEED NOTE****
+# slower than getting all results at once.
+sub nextResultHashRef {
+	my SQLBuilder $self = shift;
+
+	my $sth = $self->{sth};
+	
+	if (! $sth) {
+		return ();  # return empty array if sth doesn't exist	
+	}
+	
+	# fetch the next array row and return it.	
+	my $result = $sth->fetchrow_hashref();
+	$self->{sth} = $sth;  # important - save it back in the parameter.
+	
+	if (! $result) {
+		$self->finishSQL();
+	}
+		
+	return $result;
+}
 
 
 
-# clean up after finishing with a query.
+
+# Clean up after finishing with a query.
 # should be called when the user is done accessing result sets from a query.
+#
+# Only necessary for methods which fetch one result row at a time.
+# Method which fetch them all at once don't need to worry about this.
 sub finishSQL {
 	my SQLBuilder $self = shift;
 
@@ -576,6 +666,11 @@ sub finishSQL {
 }
 
 
+
+
+#####################################################################
+# Inserts, updates, etc.
+#####################################################################
 
 
 # for internal use only
@@ -663,6 +758,15 @@ sub insertNewRecord {
 	my $tableName = shift;
 	my $hashRef = shift;
 
+	
+	# make sure they're allowed to insert data!
+	my $s = $self->{session};
+	if (!$s || $s->get('enterer') eq 'Guest' || $s->get('enterer') eq '') {
+		Debug::logError("invalid session or enterer in SQLBuilder::insertNewRecord");
+		return;
+	}
+	
+	
 	# make sure the table name is valid
 	if ((! $self->isValidTableName($tableName)) || (! $hashRef)) {
 		return 0;	
@@ -702,6 +806,166 @@ sub insertNewRecord {
 }
 
 
+
+
+# rjp, 3/2004.
+#
+# Pass it a table name such as "occurrences", and a
+# hash ref - the hash should contain keys which correspond
+# directly to column names in the database.  Note, not all columns need to 
+# be listed; only the ones which you are inserting data for.
+#
+# Returns a true value for success, or false otherwise.
+# Note, if it makes it to the update statement, then it returns
+# the result code from the dbh->do() method.
+#
+# see also updateRecordOnlyEmptyFields() below.
+#
+# ****NOTE**** this doesn't check write permissions yet...
+# WARNING!!
+#
+sub updateRecord {
+	
+}
+
+
+# same as updateRecord(), but only 
+# updates the fields which are empty in the table row..
+# ie, if you pass it a field which is already populated in this database
+# row, then it won't update that field.
+sub updateRecordOnlyEmptyFields {
+	
+}
+
+
+# for internal use only!!
+#
+# Pass it a boolean which will determine whether we 
+# should only update empty columns.  True (1) means that 
+# we should only update empty columns, false (0) means update any column.
+#
+# Also pass it a table name, a hashref of key/value pairs to update, 
+# a where clause so we know which records to update, and the primary
+# key name for this table.
+#
+# Note: we could grab the primary key from the database, but I haven't figured
+# out how to do that yet, so for now, we'll just pass it.
+#
+sub internalUpdateRecord {
+	my SQLBuilder $self = shift;
+	my $emptyOnly = shift;
+	my $tableName = shift;
+	my $hashRef = shift;
+	my $whereClause = shift;
+	my $primaryKey = shift;
+	
+	# make sure they're allowed to update data!
+	my $s = $self->{session};
+	if (!$s || $s->get('enterer') eq 'Guest' || $s->get('enterer') eq '')	{
+		Debug::logError("invalid session or enterer in SQLBuilder::internalUpdateRecord");
+		return;
+	}
+	
+	# make sure the whereClause and tableName aren't empty!  That would be bad.
+	if (($tableName eq '') || ($whereClause eq '')) {
+		return 0;	
+	}
+	
+	# make sure the table name is valid
+	if ((! $self->isValidTableName($tableName)) || (! $hashRef)) {
+		return 0;	
+	}
+	
+
+	# loop through each key in the passed hash and
+	# build up the update statement.
+	
+	# get the description of the table
+	my @desc = @{$self->getTableDesc($tableName)};
+	my @colName; 	# names of columns in table
+	foreach my $row (@desc) {
+		push(@colName, $row->[0]);	
+	}
+	
+	
+	my $toUpdate;
+	
+	
+	if ($emptyOnly) {
+		# only allow updates of fields which are already empty.
+		
+		# fetch all of the rows we're going to try to update from the database
+		my $select = SQLBuilder->new();
+		$select->setSQLExpr("SELECT * FROM $tableName WHERE $whereClause");
+		my $selResults = $select->allResultsHashRef($primaryKey);
+	
+		# loop through each row that we're going to try and update
+		foreach my $row (keys(%$selResults)) {
+		
+			$toUpdate = '';
+		
+			# loop through each key (column) that the user want's to
+			# update.
+			my @keys = keys(%$hashRef);
+			foreach my $key (@keys) {
+		
+				# if it's a valid column name, and the column is empty,
+				# then add it to the update statement.
+				if (Globals::isIn(\@colName, $key)) {
+					
+					# if the column in the database for this row is
+					# already empty...
+					if (($selResults->{$row})->{$key} eq '') {
+						# then add the key to the update statement.
+						$toUpdate .= "$key = '" . $hashRef->{$key} . "', ";
+					}
+				}	
+			}
+		
+		
+			if (! $toUpdate) {  # if there's nothing to update, skip to the next one.
+				next;
+			}
+			
+			# remove the trailing comma
+			$toUpdate =~ s/, $/ /;
+	
+			$toUpdate = "UPDATE $tableName SET $toUpdate WHERE $whereClause";
+	
+			# actually update the row in the database
+			my $updateResult = $self->{dbh}->do($toUpdate);	
+		}
+		
+	} else {
+		# update any field, doesn't matter if it's empty or not
+	
+		
+		$toUpdate = '';
+		
+		my @keys = keys(%$hashRef);
+		foreach my $key (@keys) {
+			
+			# if it's a valid column name, then add it to the update
+			if (Globals::isIn(\@colName, $key)) {
+					$toUpdate .= "$key = '" . $hashRef->{$key} . "', ";
+			}
+		}
+		
+		# remove the trailing comma
+		$toUpdate =~ s/, $/ /;
+		
+		$toUpdate = "UPDATE $tableName SET $toUpdate WHERE $whereClause";
+		
+		# actually update the row in the database
+		my $updateResult = $self->{dbh}->do($toUpdate);
+			
+		# return the result code from the do() method.
+		return $updateResult;
+	
+	}
+	
+	
+}
 
 
 
