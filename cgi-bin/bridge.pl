@@ -17,7 +17,7 @@ use Report;
 use Curve;
 use Permissions;
 use PBDBUtil;
-use TaxonInfo;
+#use TaxonInfo;
 
 require "connection.pl";	# Contains our database connection info
 
