@@ -771,21 +771,14 @@ sub displayTaxonInfoResults {
 		$sql .= $child . " AND status!='belongs to'";
 		my @results = @{$dbt->getData($sql)};
 		my $currentParent = "";
-		my $maxyr = 0;
 		my %recombined = ();
+
+	# rewrote this section to employ selectMostRecentParentOpinion
+	# JA 5.4.04
+		$currentParent = selectMostRecentParentOpinion($dbt, \@results);
+
+		my $maxyr = 0;
 		for my $ref (@results)	{
-			if ( $ref->{pubyr} > $maxyr )	{
-				$maxyr = $ref->{pubyr};
-				$currentParent = $ref->{parent_no};
-			} elsif ( $ref->{pubyr} == 0 )	{
-				my $sql = "SELECT pubyr FROM refs WHERE reference_no=";
-				$sql .= $ref->{reference_no};
-				$pubyr = ${$dbt->getData($sql)}[0]->{pubyr};
-				if ( $pubyr > $maxyr )	{
-					$maxyr = $pubyr;
-					$currentParent = $ref->{parent_no};
-				}
-			}
 			if ( $ref->{status} eq "recombined as" )	{
 				$recombined{$ref->{parent_no}}++;
 			}
