@@ -407,8 +407,11 @@ sub mapDrawMap	{
 
 	# create an interlaced GIF with a white background
 	$im->interlaced('true');
-	# $im->transparent($white);
-	$im->fill(100,100,$col{$q->param('mapbgcolor')});
+	if ( $q->param('mapbgcolor') ne "transparent" )	{
+		$im->fill(100,100,$col{$q->param('mapbgcolor')});
+	} else	{
+		$im->transparent('');
+	}
 
 	print "<table>\n<tr>\n<td>\n<map name=\"PBDBmap\">\n";
 
