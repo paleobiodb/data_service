@@ -414,7 +414,9 @@ sub mapGetScale	{
   ($cont,$coords) = split / \(/,$q->param('mapfocus');
   $coords =~ s/\)//;  # cut off the right parenthesis.
   ($midlat,$midlng) = split /,/,$coords;
-  if ( $q->param('maplat') && $q->param('maplng') )	{
+ # the user might enter a zero for one value or the other, so just one
+ #  non-zero value is needed
+  if ( $q->param('maplat') || $q->param('maplng') )	{
     $midlat = $q->param('maplat');
     $midlng = $q->param('maplng');
   }
