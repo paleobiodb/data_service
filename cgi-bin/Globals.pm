@@ -40,6 +40,27 @@ sub monthNameToNumber {
 }
 
 
+# pass it an array ref and a scalar
+# loops through the array to see if the scalar is a member of it.
+# returns true or false value.
+sub isIn {
+	my $arrayRef = shift;
+	my $val = shift;
+	
+	# if they don't exist
+	if ((!$arrayRef) || (!$val)) {
+		return 0;
+	}
+	
+	foreach my $k (@$arrayRef) {
+		if ($val eq $k) {
+			return 1;	
+		}
+	}
+	
+	
+	return 0;
+}
 
 
 
