@@ -72,16 +72,18 @@ sub processScaleLookup	{
 	$dbh = shift;
 	$dbt = shift;
 	$focal_scale = shift;
+    $return_type = shift;
 
 	&cleanArrays();
 
 # get an array of the interval numbers falling in the requested scale
-	$sql = "SELECT interval_no FROM correlations WHERE scale_no=" . $focal_scale;
+	$sql = "SELECT c.interval_no,i.eml_interval,i.interval_name FROM correlations c LEFT JOIN intervals i ON c.interval_no = i.interval_no WHERE c.scale_no=" . $focal_scale;
 	my @intrefs = @{$dbt->getData($sql)};
 
 	&findBestScales();
 	&findImmediateCorrelates();
-
+    
+    my %intervalToScale = ();
 # for each interval in the scale, find all other intervals mapping into it
 	for my $intref ( @intrefs )	{
 
@@ -92,29 +94,46 @@ sub processScaleLookup	{
 		$yesints{$intref->{interval_no}} = "Y";
 		&mapIntervals();
 
-	# get the name of the interval
-		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $intref->{interval_no};
-		my $interval_name = @{$dbt->getData($sql)}[0]->{interval_name};
-		my $eml_interval = @{$dbt->getData($sql)}[0]->{eml_interval};
-		if ( $eml_interval ne "" )	{
-			$interval_name = $eml_interval . " " . $interval_name;
-		}
+        # The 'intervalToScale' return type returns a mapping of interval_nos to the interval name of the
+        # scale we're processing.  Used in Report.pm PS 12/27/2004
+        if ($return_type eq 'intervalToScale') {
+            foreach $interval_in_scale (@intervals) {
+                if ($intref->{'eml_interval'}) {
+                    $intervalToScale{$interval_in_scale} = $intref->{'eml_interval'} . ' ' . $intref->{'interval_name'}; 
+                } else {
+                    $intervalToScale{$interval_in_scale} = $intref->{'interval_name'} ;
+                }
+            }
+        # Else we map collection_nos to interval name of the scale we're processing, and return a hash of that.
+        } else {
+        # get the name of the interval
+            $sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $intref->{interval_no};
+            my $interval_name = @{$dbt->getData($sql)}[0]->{interval_name};
+            my $eml_interval = @{$dbt->getData($sql)}[0]->{eml_interval};
+            if ( $eml_interval ne "" )	{
+                $interval_name = $eml_interval . " " . $interval_name;
+            }
 
-	# get a list of collections in this interval
-		$sql = "SELECT collection_no FROM collections WHERE ";
-		$sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
-		$sql .= "AND ( min_interval_no IN ( " . join(',',@intervals) . " ) ";
-		$sql .= " OR min_interval_no < 1 )";
-		my @collrefs = @{$dbt->getData($sql)};
+        # get a list of collections in this interval
+            $sql = "SELECT collection_no FROM collections WHERE ";
+            $sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
+            $sql .= "AND ( min_interval_no IN ( " . join(',',@intervals) . " ) ";
+            $sql .= " OR min_interval_no < 1 )";
+            my @collrefs = @{$dbt->getData($sql)};
 
-	# make a hash array in which keys are collection numbers and
-	#   values are the name of this interval in the focal scale
-		for my $collref ( @collrefs )   {
-			$intervalInScale{$collref->{collection_no}} = $interval_name;
-		}
-
+        # make a hash array in which keys are collection numbers and
+        #   values are the name of this interval in the focal scale
+            for my $collref ( @collrefs )   {
+                $intervalInScale{$collref->{collection_no}} = $interval_name;
+            }
+        }
 	}
-	return \%intervalInScale;
+
+    if ($return_type eq 'intervalToScale') {
+        return \%intervalToScale;
+    } else {
+    	return \%intervalInScale;
+    }
 }
 
 # JA 2-3.3.04
