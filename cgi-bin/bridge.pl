@@ -649,7 +649,7 @@ sub displayAuthorityForm {
 		
 		if ($q->param('skip_ref_check')) {
 			# then we've already prompted them for a reference_no
-			
+			 
 			# set the taxon with the name only, otherwise, it will
 			# grab an old record.
 			$taxon->setWithTaxonNameOnly($taxonName);
