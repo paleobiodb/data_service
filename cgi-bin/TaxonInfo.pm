@@ -661,7 +661,9 @@ sub checkStartForm {
 # by the time we get here, the occurrences table has been queried.
 # ALSO by the time we're here, we have either a single name
 # higher taxon, or a "Genus species" combination.
-sub displayTaxonInfoResults{
+#
+# Called from bridge::processModuleNavigation() as well as other places.
+sub displayTaxonInfoResults {
 	my $q = shift;
 	my $dbh = shift;
 	my $s = shift;
@@ -671,15 +673,28 @@ sub displayTaxonInfoResults{
 	my $taxon_type = $q->param("taxon_rank");
 	my $taxon_no = 0;
 
+
 	# Looking for "Genus (23456)" or something like that.
 	
 	# rjp, note, 2/20/2004 - this won't work if the taxon isn't 
 	# in the authorities table...	
+	#
+	# Apparently the taxon_no is sometimes passed in parenthesis??!?!
+	# ie, Homo (1231234)  ??
 	$genus_name =~ /(.*?)\((\d+)\)/;
 	$taxon_no = $2;
 	
+	
 	# cut off the other stuff if it exists.
-	$genus_name = Validation::genusFromString($1);
+	if ($1) {
+		$genus_name = Validation::genusFromString($1);
+	} else {
+		$genus_name = Validation::genusFromString($genus_name);	
+	}
+	
+	Debug::dbPrint("genus_name = $genus_name");
+	Debug::dbPrint("taxon_rank = $taxon_type");
+	
 	
 	if ($taxon_no) {  # if it's in the authorities table
 		$q->param("genus_name" => $genus_name);

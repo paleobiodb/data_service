@@ -15,6 +15,7 @@ use Hidden;
 use Anchor;
 use Class::Date qw(date localdate gmdate now);
 use Debug;
+use Person;
 
 use CGI;
 
@@ -239,6 +240,30 @@ sub escapeHTMLOnFields {
 
 # rjp, 3/2004
 #
+# same as buildSelect(),
+# but pass it a name of a list in the
+# hard coded %SELECT_LISTS which is defined at
+# the top of this HTMLBuilder file.
+#
+# Optionally pass the second argument as the default value
+# to select.
+#
+# Returns HTML formatted select statement.
+sub buildSelectWithHardList {
+	my $self = shift;
+
+	my $listName = shift;
+	my $toSelect = shift;
+
+	my $temp = $SELECT_LISTS{$listName};
+
+	return $self->buildSelect($temp, $listName, $toSelect);
+}
+
+
+
+# rjp, 3/2004
+#
 # Pass this an arrayref, a name for the select,
 # and an optional choice to select.
 #
@@ -276,6 +301,94 @@ sub buildSelect {
 }
 
 
+# Pass it a string to select (or empty string if none)
+# and a boolean.  If the boolean is true, then we'll only
+# find active enterers, otherwise, find all enterers.
+#
+# Returns an HTML formatted string of <OPTION> tags for 
+# use in a popup menu.
+#
+# rjp, 3/2004
+sub entererPopupMenu {
+	my $toSelect = shift;		# Default value
+	my $active = shift;
+
+	my $p = Person->new();
+	my $list = $p->listOfEnterers($active);
+	
+	my $select = "<OPTION value=\"\">Select enterer...</OPTION>\n";
+	
+	my $selected = '';
+	foreach my $a (@$list) {
+		if ($a->[0] eq $toSelect) { $selected = 'selected'; } 
+		else { $selected = ''; };
+		
+		$select .= "<OPTION value=\"" . $a->[0] . "\" $selected>". $a->[1] . "</OPTION>\n";
+	}
+	
+	return $select;
+}
+
+
+# same as entererPopup, but for authorizers
+# 
+# rjp, 3/2004
+sub authorizerPopupMenu {
+	my $toSelect = shift;		# Default value
+	my $active = shift;
+
+	my $p = Person->new();
+	my $list = $p->listOfAuthorizers($active);
+	
+	my $select = "<OPTION value=\"\">Select authorizer...</OPTION>\n";
+	
+	my $selected = '';
+	foreach my $a (@$list) {
+		if ($a->[0] eq $toSelect) { $selected = 'selected'; } 
+		else { $selected = ''; };
+		
+		$select .= "<OPTION value=\"" . $a->[0] . "\" $selected>". $a->[1] . "</OPTION>\n";
+	}
+	
+	return $select;
+}
+
+
+
+# Creates a popup menu of taxon ranks (a select).
+#
+# Pass it a rank to select as the first argument,
+# and optionally pass it an array ref of ranks which you want to have excluded
+# from the list as the second argument.
+sub rankPopupMenu {
+	my $self = shift;
+	my $rankToSelect = shift;
+	my $toExcludeRef = shift; # optional
+	
+	my @toExclude;
+	if ($toExcludeRef) {
+		@toExclude = @$toExcludeRef;
+	}
+	
+	my @ranks = ('subspecies', 'species', 'subgenus', 'genus', 'subtribe', 'tribe', 'subfamily', 'family', 'superfamily', 'infraorder', 'suborder', 'order', 'superorder', 'subclass', 'class', 'superclass', 'subphylum', 'phylum', 'superphylum', 'subkingdom', 'kingdom', 'superkingdom', 'unranked clade', 'informal');
+	
+	my $html;
+	my $selected = "";
+	
+	foreach my $rank (@ranks) {
+		# add each rank unless it's in the exclude list.
+		if ($rank eq $rankToSelect) {
+			$selected = "selected";
+		} else {
+			$selected = '';
+		}
+
+		$html .= "<OPTION $selected>$rank</OPTION>" unless Globals::isIn(\@toExclude, $rank);
+		
+	}
+	
+	return $html;
+}
 
 
 # rjp, 3/2004..
@@ -324,8 +437,8 @@ sub newPopulateHTML {
 	my $hashRef = shift;		# hash of fields and values to populate with
 	my $nonEditableRef = shift;		# array of input fields to make non-editable
 	
-	Debug::dbPrint("nonEditables = ");
-	Debug::printArray($nonEditableRef);
+	#Debug::dbPrint("nonEditables = ");
+	#Debug::printArray($nonEditableRef);
 	
 	
 	if (! $hashRef) {
@@ -357,6 +470,7 @@ sub newPopulateHTML {
 	# and see if we should add any keys such as a nicely formatted
 	# reference entry, or a taxon_rank popup.
 	foreach my $key (keys(%fields)) {
+	
 		if ($key eq 'taxon_rank') {
 			# if it's name is taxon_rank, then we'll look for any fields
 			# in the template called "taxon_rank_popup" and fill them with
@@ -559,40 +673,7 @@ sub newReadTemplate {
 }
 
 
-# Creates a popup menu of taxon ranks (a select).
-#
-# Pass it a rank to select as the first argument,
-# and optionally pass it an array ref of ranks which you want to have excluded
-# from the list as the second argument.
-sub rankPopupMenu {
-	my $self = shift;
-	my $rankToSelect = shift;
-	my $toExcludeRef = shift; # optional
-	
-	my @toExclude;
-	if ($toExcludeRef) {
-		@toExclude = @$toExcludeRef;
-	}
-	
-	my @ranks = ('subspecies', 'species', 'subgenus', 'genus', 'subtribe', 'tribe', 'subfamily', 'family', 'superfamily', 'infraorder', 'suborder', 'order', 'superorder', 'subclass', 'class', 'superclass', 'subphylum', 'phylum', 'superphylum', 'subkingdom', 'kingdom', 'superkingdom', 'unranked clade', 'informal');
-	
-	my $html;
-	my $selected = "";
-	
-	foreach my $rank (@ranks) {
-		# add each rank unless it's in the exclude list.
-		if ($rank eq $rankToSelect) {
-			$selected = "selected";
-		} else {
-			$selected = '';
-		}
 
-		$html .= "<OPTION $selected>$rank</OPTION>" unless Globals::isIn(\@toExclude, $rank);
-		
-	}
-	
-	return $html;
-}
 
 
 

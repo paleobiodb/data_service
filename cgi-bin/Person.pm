@@ -46,7 +46,8 @@ sub getSQLBuilder {
 # can pass it an optional argument, activeOnly
 # if true, then only return active authorizers.
 #
-# Returns an array ref of authorizer names
+# Returns a matrix of authorizers with the 0th column
+# being the normal name and the 1st column the reversed name.
 sub listOfAuthorizers {
 	my Person $self = shift;
 	
@@ -54,7 +55,7 @@ sub listOfAuthorizers {
 	
 	my $sql = $self->getSQLBuilder();
 	
-	$sql->setSelectExpr("name FROM person");
+	$sql->setSelectExpr("name, reversed_name FROM person");
 	$sql->setWhereSeparator("AND");
 	$sql->addWhereItem("is_authorizer = 1");
 	
@@ -67,19 +68,15 @@ sub listOfAuthorizers {
 	
 	my $res = $sql->allResultsArrayRef();
 	
-	my @list;
-	foreach my $r (@$res) {
-		push(@list, $r->[0]);
-	}
-	
-	return \@list;
+	return $res;	
 }
 
 
 # can pass it an optional argument, activeOnly
 # if true, then only return active enterers.
 #
-# Returns an array ref of enterer names
+# Returns a matrix of enterers with the 0th column
+# being the normal name and the 1st column the reversed name.
 sub listOfEnterers {
 	my Person $self = shift;
 	
@@ -87,7 +84,7 @@ sub listOfEnterers {
 	
 	my $sql = $self->getSQLBuilder();
 	
-	my $temp = "SELECT name FROM person ";
+	my $temp = "SELECT name, reversed_name FROM person ";
 	if ($activeOnly) { $temp .= " WHERE active = 1 "; }
 	$temp .= " ORDER BY reversed_name";
 	
@@ -95,14 +92,10 @@ sub listOfEnterers {
 	
 	my $res = $sql->allResultsArrayRef();
 	
-	my @list;
-	foreach my $r (@$res) {
-		push(@list, $r->[0]);
-	}
-	
-	return \@list;
+	return $res;
 	
 }
+
 
 
 

@@ -60,7 +60,7 @@ sub getSQLBuilder {
 }
 
 
-# sets the occurrence
+# sets it with the reference number
 sub setWithReferenceNumber {
 	my Reference $self = shift;
 	

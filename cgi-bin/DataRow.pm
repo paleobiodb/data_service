@@ -1,8 +1,15 @@
+# note : rjp : 3/2004 : it looks like this class is used to represent a single
+# data row returned from the database.  Not exactly sure why we have this.
+
 package DataRow;
 
 use DBI;
 use MetadataModel;
 
+
+# note : rjp : 3/2004 : apparently, we're supposed to pass two arguments
+# to this method.  Looks like the first one is an array reference,
+# and the second one is a MetadataModel object.
 sub new
 {
   my $class = shift();

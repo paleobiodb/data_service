@@ -1,7 +1,7 @@
 
-<form method=post action="$exec_url">
-<input id="action" type=hidden name="action" value="">
-<input id="type" type=hidden name="type" value="">
+<form method=post action="%%exec_url%%">
+<input id="action" type=hidden name="action" value="%%action%%">
+<input id="type" type=hidden name="type" value="%%type%%">
 <input id="goal" type=hidden name="goal" value="%%goal%%">
 
 <div class="title">Reference search form</div>
@@ -44,14 +44,21 @@
 <tr>
 	<th align=right valign=top>Enterer:</th>
 	<td>
-	<select name="enterer"></select>&nbsp;<a href="javascript: me( );">Me</a>
+	
+	<select name="enterer">
+	%%enterer_popup%%	
+	</select>
+	
+	&nbsp;<a href="javascript: me( );">Me</a>
 	</td> 
 </tr>
 
 <tr>
 	<th align=right valign=top>Project: </th>
 	<td valign=top>
-	<select id="project_name"></select>
+	<select id="project_name">
+	%%project_name_popup%%
+	</select>
 
 	<b>Sort by:</b> 
 	<select name="refsortby"><option>author<option>year<option>publication<option>authorizer<option>enterer<option>entry date</select>
@@ -63,7 +70,15 @@
 	<th></th>
 	<td colspan="3">
 	<BR>
-	<input type=submit value="Search"> %%use_current%% %%use_primary%%
+	<input type=submit value="Search"> 
+	%%START_OPTIONAL_use_current%%
+	<input type="submit" name="use_current" value="Use current reference (%%reference_no%%)">
+	%%END_OPTIONAL_use_current%%
+	
+	%%START_OPTIONAL_use_primary%%
+	<input type="submit" name="use_primary" value="Use collection's reference">
+	%%END_OPTIONAL_use_primary%%
+	
 	</td>
 </tr>
 </table>
