@@ -1445,14 +1445,14 @@ sub projectPoints	{
 		my $q; 
 		my $r;
 		if ( $x >= 0 )	{
-			$q = int($x+0.5);
+			$q = int($x);
 		} else	{
-			$q = int($x-0.5);
+			$q = int($x-1);
 		}
 		if ( $y >= 0 )	{
-			$r = int($y+0.5);
+			$r = int($y);
 		} else	{
-			$r = int($y-0.5);
+			$r = int($y-1);
 		}
 
 	# what plate is this point on?
