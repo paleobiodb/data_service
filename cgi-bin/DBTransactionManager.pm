@@ -168,7 +168,7 @@ sub checkSQL{
 ##
 sub checkWhereClause{
 	my $self = shift;
-	my $sql = shift;
+	my $sql = shift; # Note: this has already been uppercase-d by the caller.
 	
 	# This method is a 'pass-through' if there is no WHERE clause.
 	if($sql !~ /WHERE/){
@@ -177,16 +177,16 @@ sub checkWhereClause{
 
 	# This is only 'first-pass' safe. Could be more robust if we check
 	# all AND clauses.
-	$sql =~ /WHERE\s+([A-Z_]*)\s*=\s*(.*)?\s*/;
+	$sql =~ /WHERE\s+([A-Z_]+)\s*(=|LIKE)\s*(.+)?\s*/;
 
 	#print "\$1: $1, \$2: $2<br>";
 	if(!$1){
 		return 0;
 	}
-	if($1 && !$2){
+	if($1 && !$3){
 		return 0;
 	}
-	if($1 && $2 && ($2 eq "AND")){
+	if($1 && $3 && ($3 eq "AND")){
 		return 0;
 	}
 	# passed so far
