@@ -1088,8 +1088,8 @@ sub getTemplateString {
 			if ($_ =~ /<!-- OPTIONAL/)	{
 				my ($a,$b) = split /OPTIONAL /,$_,2;
 				my ($a,$b) = split / -->/,$b,2;
-				if ($pref{$a} ne "yes")	{
-					while ($_ !~ / END /)	{
+				if ( $pref{$a} ne "yes" || ( $a eq "genus_and_species_only" && $pref{$a} eq "yes" ) )	{
+					while ($_ !~ / END $a /)	{
 						$_ = <HTMLTEMPLATEFILE>;
 					}
 				}

@@ -539,6 +539,7 @@ sub getPreferences	{
 # Made a separate function JA 29.6.02
 sub getPrefFields	{
 
+	# translations of fields in database tables, where needed
 	my %cleanSetFieldNames = ("blanks" => "blank occurrence rows",
 		"research_group" => "research group",
 		"latdeg" => "latitude", "lngdeg" => "longitude",
@@ -569,6 +570,7 @@ sub getPrefFields	{
 		"pointshape" => "point shape",
 		"dotcolor" => "point color",
 		"dotborder" => "point borders" );
+	# list of fields in tables
 	my @setFieldNames = ("blanks", "research_group", "country", "state",
 			"latdeg", "latdir", "lngdeg", "lngdir", "geogscale",
 			"emlperiod_max", "period_max", "emlepoch_max", "epoch_max",
@@ -592,8 +594,9 @@ sub getPrefFields	{
 			$cleanSetFieldNames{$fn} = $cleanFN;
 		}
 	}
-	@shownFormParts = ("collection_search", "taphonomy",
-		"subgenera", "abundances", "plant_organs");
+	# options concerning display of forms, not individual fields
+	@shownFormParts = ("collection_search", "genus_and_species_only",
+		"taphonomy", "subgenera", "abundances", "plant_organs");
 	return (\@setFieldNames,\%cleanSetFieldNames,\@shownFormParts);
 
 }
