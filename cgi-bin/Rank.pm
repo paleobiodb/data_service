@@ -17,7 +17,6 @@ use strict;
 
 use Constants;
 
-use CGI::Carp qw(fatalsToBrowser);
 use Validation;
 use Taxon;
 

@@ -7,7 +7,6 @@ require Exporter;
 use DBI;
 use CookieFactory;
 use Class::Date qw(date localdate gmdate now);
-use CGI::Carp qw(fatalsToBrowser);
 
 use Debug;
 use Globals;

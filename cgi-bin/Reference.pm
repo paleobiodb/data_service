@@ -11,7 +11,6 @@ use DBI;
 use DBConnection;
 use DBTransactionManager;
 use URLMaker;
-use CGI::Carp qw(fatalsToBrowser);
 
 
 use fields qw(

@@ -20,7 +20,6 @@ use Constants;
 use DBI;
 use DBConnection;
 use DBTransactionManager;
-use CGI::Carp qw(fatalsToBrowser);
 use Class::Date qw(date localdate gmdate now);
 use Errors;
 use CachedTableRow;

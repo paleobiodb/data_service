@@ -7,7 +7,6 @@
 package Errors;
 
 use strict;
-use CGI::Carp qw(fatalsToBrowser);
 use Globals;
 
 
@@ -101,3 +100,4 @@ sub appendErrors {
 
 
 1;
+

@@ -7,7 +7,6 @@ package URLMaker;
 
 use strict;
 use CGI;
-use CGI::Carp qw(fatalsToBrowser);
 
 
 # Includes the following functions:

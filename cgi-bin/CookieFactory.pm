@@ -1,7 +1,6 @@
 package CookieFactory;
 
 use CGI;
-use CGI::Carp qw(fatalsToBrowser);
 use Session;
 
 sub new

@@ -22,7 +22,6 @@ use DBI;
 use DBConnection;
 use DBTransactionManager;
 use Debug;
-use CGI::Carp qw(fatalsToBrowser);
 
 use Session;
 
