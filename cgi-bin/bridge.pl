@@ -24,7 +24,7 @@ use Scales;
 use TimeLookup;
 use Ecology;
 use PrintHierarchy;
-use WhereClause;
+use SQLBuilder;
 use Debug;
 
 require "connection.pl";	# Contains our database connection info
@@ -4300,31 +4300,36 @@ sub displayOccsForReID
 	}
 
 	# Build the SQL
-	my $where = WhereClause->new();
-	$where->setSeparator("AND");
+	my $where = SQLBuilder->new();
+	$where->setWhereSeparator("AND");
 	
 	if($genus_name ne '' or $species_name ne ''){
 		$printCollectionDetails = 1;
 
-		$sql = "SELECT * FROM occurrences ";
+		$where->setSelectExpr("*");
+		$where->setFromExpr("occurrences");
+		#$sql = "SELECT * FROM occurrences ";
 			
-		$where->addItem("genus_name='$genus_name'") if ( $genus_name );
-		$where->addItem("species_name='$species_name'") if ( $species_name );
+		$where->addWhereItem("genus_name='$genus_name'") if ( $genus_name );
+		$where->addWhereItem("species_name='$species_name'") if ( $species_name );
 		
 		if (@colls > 0) {
-			$where->addItem("collection_no IN(".join(',',@colls).")");
+			$where->addWhereItem("collection_no IN(".join(',',@colls).")");
 		} elsif ($collection_no > 0) {
-			$where->addItem("collection_no=$collection_no");
+			$where->addWhereItem("collection_no=$collection_no");
 		}
 	} elsif ($collection_no) {
-		$sql = "SELECT * FROM occurrences ";
-		$where->addItem("collection_no=$collection_no");
+		#$sql = "SELECT * FROM occurrences ";
+		$where->setSelectExpr("*");
+		$where->setFromExpr("occurrences");
+		$where->addWhereItem("collection_no=$collection_no");
 	}
 	
-	$where->addItem("occurrence_no > $lastOccNum LIMIT 11");
+	$where->addWhereItem("occurrence_no > $lastOccNum LIMIT 11");
 
 	# Tack it all together
-	$sql .= " WHERE " . $where->whereClause();
+	#$sql .= " WHERE " . $where->whereClause();
+	$sql = $where->SQLExpr();
  
 	dbg("$sql<br>");
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -6767,45 +6772,62 @@ sub RefQuery {
 	if ( $refsearchstring ) { $refsearchstring = "for '$refsearchstring' "; }
 
 	if ( $refsearchstring ne "" || $q->param('enterer') || $q->param('project_name') ) {
-		$sql =	"SELECT * FROM refs ";
+		#$sql =	"SELECT * FROM refs ";
 
-		my $where = "";
+		my $where = SQLBuilder->new();
+		$where->setSelectExpr("*");
+		$where->setFromExpr("refs");
 
-		if ( $name ) {
-			$where = buildWhere ( $where,	" ( author1last LIKE '%$name%' OR ".
-											"   author2last LIKE '%$name%' OR ".
-											"   otherauthors LIKE '%$name%' ) " );
+		if ($name) {
+			$where->addWhereItem(
+				" ( author1last LIKE '%$name%' OR ".
+				"   author2last LIKE '%$name%' OR ".
+				"   otherauthors LIKE '%$name%' ) " );
 		}
 		
 		#append each relevant clause onto the $where string.
-		if ( $pubyr ) { $where = &buildWhere ( $where, "pubyr='$pubyr'" ); }
-		if ( $reftitle ) { $where = &buildWhere ( $where, " ( reftitle LIKE '%$reftitle%' OR reftitle LIKE '$reftitle%' )" ); }
-		if ( $pubtitle ) { $where = &buildWhere ( $where, " ( pubtitle LIKE '%$pubtitle%')") }
-		if ( $refno ) { $where = &buildWhere ( $where, "reference_no=$refno" ); }
-		if ( $q->param('enterer') ) { $where = &buildWhere ( $where, "enterer='".$q->param('enterer')."'" ); }
-		if ( $q->param('project_name') ) { $where = &buildWhere ( $where, "project_name='".$q->param('project_name')."'" ); }
+		$where->addWhereItem("pubyr = '$pubyr'") 											if ($pubyr);
+		$where->addWhereItem("(reftitle LIKE '%$reftitle%' OR reftitle LIKE '$reftitle%')")	if ($reftitle);
+		$where->addWhereItem(" ( pubtitle LIKE '%$pubtitle%')")								if ($pubtitle);
+		$where->addWhereItem("reference_no = $refno")										if ($refno);
+		$where->addWhereItem("enterer='" . $q->param('enterer') . "'") 						if ( $q->param('enterer') );
+		$where->addWhereItem("project_name='".$q->param('project_name')."'")				if ($q->param('project_name'));
+		
+		#if ( $pubyr ) { $where = &buildWhere ( $where, "pubyr='$pubyr'" ); }
+		#if ( $reftitle ) { $where = &buildWhere ( $where, " ( reftitle LIKE '%$reftitle%' OR reftitle LIKE '$reftitle%' )" ); }
+		#if ( $pubtitle ) { $where = &buildWhere ( $where, " ( pubtitle LIKE '%$pubtitle%')") }
+		#if ( $refno ) { $where = &buildWhere ( $where, "reference_no=$refno" ); }
+		#if ( $q->param('enterer') ) { $where = &buildWhere ( $where, "enterer='".$q->param('enterer')."'" ); }
+		#if ( $q->param('project_name') ) { $where = &buildWhere ( $where, "project_name='".$q->param('project_name')."'" ); }
 
 		# sort the results in any of multiple ways JA 26-27.7.02
 		# default is first author
-		if ($q->param('refsortby'))	{
-			$where .= " ORDER BY ";
+		#if ($q->param('refsortby'))	{
+			#$where .= " ORDER BY ";
+		#}
+		
+		my $orderBy = "";
+		if ($q->param('refsortby') eq "year")	{
+			$orderBy .= "pubyr, ";
+		} elsif ($q->param('refsortby') eq "publication")	{
+			$orderBy .= "pubtitle, ";
+		} elsif ($q->param('refsortby') eq "authorizer")	{
+			$orderBy .= "authorizer, ";
+		} elsif ($q->param('refsortby') eq "enterer")	{
+			$orderBy .= "enterer, ";
+		} elsif ($q->param('refsortby') eq "entry date")	{
+			$orderBy .= "reference_no, ";
 		}
 		
-		if ($q->param('refsortby') eq "year")	{
-			$where .= "pubyr, ";
-		} elsif ($q->param('refsortby') eq "publication")	{
-			$where .= "pubtitle, ";
-		} elsif ($q->param('refsortby') eq "authorizer")	{
-			$where .= "authorizer, ";
-		} elsif ($q->param('refsortby') eq "enterer")	{
-			$where .= "enterer, ";
-		} elsif ($q->param('refsortby') eq "entry date")	{
-			$where .= "reference_no, ";
-		}
 		if ($q->param('refsortby'))	{
-			$where .= "author1last, author1init, author2last, pubyr";
+			$orderBy .= "author1last, author1init, author2last, pubyr";
 		}
-		$sql .= $where;
+		
+		$where->setOrderByExpr($orderBy);
+		
+		#$sql .= $where;
+		$sql = $where->SQLExpr();
+		
 		$sql =~ s/\s+/ /gms;
 		dbg ( "$sql<HR>" );
 
@@ -6818,8 +6840,11 @@ sub RefQuery {
 		if (@rows > 30)	{
 			$overlimit = @rows;
 			$q->param('refsSeen' => 30 + $q->param('refsSeen') );
-			$sql .= " LIMIT " . $q->param('refsSeen');
+			#$sql .= " LIMIT " . $q->param('refsSeen');
+			$where->setLimitExpr($q->param('refsSeen'));
+			$sql = $where->SQLExpr();
 		}
+		
 		
 		# Dump the refs to a flat file JA 1.7.02
 		my $authname = $s->get('authorizer');
