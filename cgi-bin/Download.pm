@@ -1633,7 +1633,6 @@ sub doQuery {
                             $row->{'latdec'} = $row->{'latdeg'};
                         }
                     }    
-                    print "latdec1 is ". $row->{'latdec'}."<br>\n";
                     $row->{'latdec'} *= -1 if ($row->{'latdir'} eq "South");
                 } else {
                     if (!($row->{'latmin'} =~ /\d+/)) {
