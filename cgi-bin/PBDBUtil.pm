@@ -840,17 +840,22 @@ sub authorAndPubyrFromTaxonNo{
 	my $taxon_no = shift;
 	my %return_vals = ();
 
-    my $sql = "SELECT taxon_name, author1last, pubyr, reference_no, ".
+    my $sql = "SELECT taxon_name, author1last, author2last, otherauthors, pubyr, reference_no, ".
               "ref_is_authority FROM authorities WHERE taxon_no=$taxon_no";
     my @auth_rec = @{$dbt->getData($sql)};
     # Get ref info from refs if 'ref_is_authority' is set
     if($auth_rec[0]->{ref_is_authority} =~ /YES/i){
         PBDBUtil::debug(1,"author and year from refs<br>");
         if($auth_rec[0]->{reference_no}){
-			$sql = "SELECT author1last, pubyr FROM refs ".
+			$sql = "SELECT author1last, author2last, otherauthors, pubyr FROM refs ".
 				   "WHERE reference_no=".$auth_rec[0]->{reference_no};
 			@results = @{$dbt->getData($sql)};
 			$return_vals{author1last} = $results[0]->{author1last};
+			if ( $results[0]->{otherauthors} )	{
+				$return_vals{author1last} .= " et al.";
+			} elsif ( $results[0]->{author2last} )	{
+				$return_vals{author1last} .= " and " . $results[0]->{author2last};
+			}
 			$return_vals{pubyr} = $results[0]->{pubyr};
         }
     }
@@ -859,7 +864,12 @@ sub authorAndPubyrFromTaxonNo{
     elsif($auth_rec[0]->{author1last} && $auth_rec[0]->{pubyr}){
         PBDBUtil::debug(1,"author and year from authorities<br>");
         $return_vals{author1last} = $auth_rec[0]->{author1last};
-		$return_vals{pubyr} = $auth_rec[0]->{pubyr};
+	if ( $auth_rec[0]->{otherauthors} )	{
+		$return_vals{author1last} .= " et al.";
+	} elsif ( $auth_rec[0]->{author2last} )	{
+		$return_vals{author1last} .= " and " . $auth_rec[0]->{author2last};
+	}
+	$return_vals{pubyr} = $auth_rec[0]->{pubyr};
     }
 	# This could be empty, so it's up to the caller to test the return vals.
 	return \%return_vals;
