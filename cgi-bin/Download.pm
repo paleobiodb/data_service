@@ -1093,6 +1093,10 @@ sub doQuery {
 			#  into exactly one bin
 			if ( $intervallookup{$row->{collection_no}} )	{
 				$occsbybin{$intervallookup{$row->{collection_no}}}++;
+				$occsbybintaxon{$intervallookup{$row->{collection_no}}}{$genusNo}++;
+				if ( $occsbybintaxon{$intervallookup{$row->{collection_no}}}{$genusNo} == 1 )	{
+					$taxabybin{$intervallookup{$row->{collection_no}}}++;
+				}
 			}
 			# now things get nasty: if a field was selected to
 			#  break up into categories, add to the count involving
@@ -1103,10 +1107,18 @@ sub doQuery {
 				# special processing for ecology data
 				if ( $q->param('binned_field') eq "ecology" )	{
 					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph[1]{$genusNo}}++;
+					$occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$ecotaph[1]{$genusNo}}{$genusNo}++;
+					if ( $occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$ecotaph[1]{$genusNo}}{$genusNo} == 1 )	{
+						$taxabybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph[1]{$genusNo}}++;
+					}
 					$occsbycategory{$ecotaph[1]{$genusNo}}++;
 				} else	{
 				# default processing
 					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}++;
+					$occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}{$genusNo}++;
+					if ( $occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}{$genusNo} )	{
+						$taxabybinandcategory{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}++;
+					}
 					$occsbycategory{$row->{$q->param('binned_field')}}++;
 				}
 			}
@@ -1333,18 +1345,23 @@ sub doQuery {
 		print SCALEFILE "interval";
 		print SCALEFILE "\tlower boundary\tupper boundary\tmidpoint";
 		print SCALEFILE "\ttotal occurrences";
+		print SCALEFILE "\ttotal genera";
 		for my $val ( @enumvals )	{
 			if ( $val eq "" )	{
-				print SCALEFILE "\tno data";
+				print SCALEFILE "\tno data occurrences";
+				print SCALEFILE "\tno data taxa";
 			} else	{
-				print SCALEFILE "\t$val";
+				print SCALEFILE "\t$val occurrences";
+				print SCALEFILE "\t$val taxa";
 			}
 		}
 		for my $val ( @enumvals )	{
 			if ( $val eq "" )	{
-				print SCALEFILE "\tproportion no data";
+				print SCALEFILE "\tproportion no data occurrences";
+				print SCALEFILE "\tproportion no data taxa";
 			} else	{
-				print SCALEFILE "\tproportion $val";
+				print SCALEFILE "\tproportion $val occurrences";
+				print SCALEFILE "\tproportion $val taxa";
 			}
 		}
 		print SCALEFILE "\n";
@@ -1356,14 +1373,18 @@ sub doQuery {
 			printf SCALEFILE "\t%.2f",$upperbinbound{$intervalName};
 			printf SCALEFILE "\t%.2f",($lowerbinbound{$intervalName} + $upperbinbound{$intervalName}) / 2;
 			printf SCALEFILE "\t%d",$occsbybin{$intervalName};
+			printf SCALEFILE "\t%d",$taxabybin{$intervalName};
 			for my $val ( @enumvals )	{
 				printf SCALEFILE "\t%d",$occsbybinandcategory{$intervalName}{$val};
+				printf SCALEFILE "\t%d",$taxabybinandcategory{$intervalName}{$val};
 			}
 			for my $val ( @enumvals )	{
 				if ( $occsbybinandcategory{$intervalName}{$val} eq "" )	{
 					print SCALEFILE "\t0.0000";
+					print SCALEFILE "\t0.0000";
 				} else	{
 					printf SCALEFILE "\t%.4f",$occsbybinandcategory{$intervalName}{$val} / $occsbybin{$intervalName};
+					printf SCALEFILE "\t%.4f",$taxabybinandcategory{$intervalName}{$val} / $taxabybin{$intervalName};
 				}
 			}
 			print SCALEFILE "\n";
@@ -1455,8 +1476,8 @@ sub formatRow {
 	}
 }
 
-# Paul replaced taxonomic_search call with recurse call, but it seems that
-#  the former is actually faster (try "Gastropoda")
+# JA Paul replaced taxonomic_search call with recurse call because it's faster,
+#  but I'm reverting because I'm not maintaining recurse
 sub getGenusNames {
 	my $self = shift;
 	my $genus_name = (shift || "");
