@@ -6,7 +6,7 @@
 		var frm = document.forms[0];
 		var hasSpace = / /;
 
-		if ( frm.taxon_status[0].checked != false && frm.parent_taxon_name.value == "" )	{
+		if ( frm.taxon_status[1].checked != false && frm.parent_taxon_name.value == "" )	{
 			if ( hasSpace.test ( frm.taxon_name ) == false )	{
 				return "* Higher taxon name is missing.\n";
 			}
@@ -14,7 +14,7 @@
 				return "* Name of combination is missing.\n";
 			}
 		}
-		else if ( frm.taxon_status[1].checked != false && frm.parent_taxon_name2.value == "" )	{
+		else if ( frm.taxon_status[2].checked != false && frm.parent_taxon_name2.value == "" )	{
 			return "* Name of senior synonym is missing.\n";
 		}
 
