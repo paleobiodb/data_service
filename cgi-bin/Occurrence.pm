@@ -122,22 +122,20 @@ sub occurrenceDetailsLink {
 sub formatAsHTML {
 	my Occurrence $self = shift;
 	
-	my (@result, $year);
+	my (@result, $year, $html);	
 	my $sql = $self->getSQLBuilder();
-	my $html;
 	
 	my $occ_no = $self->{occurrence_no};
 	
 	my $taxon = TaxonHierarchy->new();
+	
 	
 	# initialize these to be empty..
 	my $taxClass = "";
 	my $taxOrder = "";
 	my $taxFamily = "";
 	
-	Debug::dbPrint("formatAsHTML, occ_no = $occ_no\n");
 	
-
 	# grab the author names for the first reference.
 	my $ref = Reference->new();
 	$ref->setWithReferenceNumber($self->referenceNumber());
@@ -180,9 +178,7 @@ sub formatAsHTML {
 		# get the taxa information for the original id
 		$taxon->setWithTaxonName("$result[2] $result[4]");
 		
-		$taxClass = $taxon->nameForRank("class");
-		
-		
+		$taxClass = $taxon->nameForRank("class");		
 		$taxOrder = $taxon->nameForRank("order");
 		$taxFamily = $taxon->nameForRank("family");
 	}
