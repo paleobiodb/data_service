@@ -302,7 +302,7 @@ sub validateUser {
 					return $session_id;
 				}
 				else{
-					die "$sth->errstr";
+					die $sth->errstr;
 				}
 			}
 		}
