@@ -13,7 +13,9 @@
 //
 // it will return a string, either "higher", "species", or "subspecies"
 // ** note, we can't tell the difference between a genus and a higher taxon
-// by just looking at the spacing.. so a genus name will return as "higher" as well. 
+// by just looking at the spacing.. so a genus name will return as "higher" as well.
+//
+// by rjp, 2/2004 
 function taxonRank(taxon) {
 	var hasOneSpace = /.+[ ]{1}.+/;
 	var hasTwoSpaces = /.+[ ]{2}.+/;
@@ -33,6 +35,8 @@ function taxonRank(taxon) {
 // pass this a taxon name and it will return a true value
 // if the capitilization if proper, or a false value
 // if the capitilization isn't working. 
+//
+// by rjp, 2/2004
 function checkTaxonCapitalization(taxon) {
 	if (! taxon || taxon == "") {
 		return true;  // we'll say that it's proper, although it's not since nothing exists.
@@ -72,6 +76,8 @@ function checkTaxonCapitalization(taxon) {
 // alert(err);  // same thing
 
 // constructor, optionally pass it the first error message.
+//
+// by rjp, 2/2004
 function Error(msg) {
 	this.starting = "\tPlease fix the following errors:\n\n";
 	this.message = "";
@@ -131,6 +137,8 @@ function javascriptOnCheck() {
 
 
 //meant to fill the years in a pull down menu from 1998 to the current year.
+//
+// by rjp, 2/2004
 function fillYears() {
 	var yearField = document.forms[0].year
 	var date = new Date();
