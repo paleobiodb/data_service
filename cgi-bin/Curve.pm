@@ -658,7 +658,7 @@ sub assignLocs	{
 	$lithquery2 =~ s/all //g;
 	$lithquery2 =~ s/ lithologies//g;
 	
-	my $sql = "SELECT * FROM collections WHERE ";
+	my $sql = "SELECT * FROM collections WHERE";
 	if ( $q->param('research_group') ne "" )	{
 		# Handle "groups" that are actually projects
 		if ( $q->param('research_group') eq "PGAP" ||
@@ -675,22 +675,22 @@ sub assignLocs	{
 
 			$sth->finish();
 
-			$sql .= "AND reference_no IN (" . $reflist . ") ";
+			$sql .= " AND reference_no IN (" . $reflist . ") ";
 		} else	{
-			$sql .= "AND research_group='" . $q->param('research_group') . "' ";
+			$sql .= " AND research_group='" . $q->param('research_group') . "' ";
 		}
 	}
 	if ( $q->param('collection_type') ne "" )	{
-		$sql .= "AND collection_type='" . $q->param('collection_type') . "' ";
+		$sql .= " AND collection_type='" . $q->param('collection_type') . "' ";
 	}
 	if ( $q->param('requiredfm') ne "" )	{
-		$sql .= "AND formation!=''";
+		$sql .= " AND formation!=''";
 	}
 	if ( $q->param('requiredmbr') ne "" )	{
-		$sql .= "AND member!=''";
+		$sql .= " AND member!=''";
 	}
 
-	$sql =~ s/WHERE ^//;
+	$sql =~ s/WHERE$//;
 	$sql =~ s/WHERE AND /WHERE /;
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
