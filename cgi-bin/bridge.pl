@@ -2826,10 +2826,10 @@ IS NULL))";
 
     # This field is only passed by section search form PS 12/01/2004
     if (defined $q->param("section_name") && $q->param("section_name") eq '') {
-        push(@terms, "((collections.regionalsection IS NOT NULL AND collections.regionalsection != '' AND collections.regionalbed REGEXP '^[0-9]\$') OR (collections.localsection IS NOT NULL AND collections.localsection != '' AND collections.localbed REGEXP '^[0-9]\$'))");
+        push(@terms, "((collections.regionalsection IS NOT NULL AND collections.regionalsection != '' AND collections.regionalbed REGEXP '^[0-9]+\$') OR (collections.localsection IS NOT NULL AND collections.localsection != '' AND collections.localbed REGEXP '^[0-9]+\$'))");
     } elsif ($q->param("section_name")) {
         my $val = $dbh->quote($wildcardToken.$q->param("section_name").$wildcardToken);
-        push(@terms, "((collections.regionalsection $comparator $val AND collections.regionalbed REGEXP '^[0-9]\$') OR (collections.localsection $comparator $val AND collections.localbed REGEXP '^[0-9]\$'))"); 
+        push(@terms, "((collections.regionalsection $comparator $val AND collections.regionalbed REGEXP '^[0-9]+\$') OR (collections.localsection $comparator $val AND collections.localbed REGEXP '^[0-9]+\$'))"); 
     }                
 
     # This field is only passed by links created in the Strata module PS 12/01/2004
@@ -2971,7 +2971,7 @@ IS NULL))";
 
     my $sql_expr;
     if ($q->param('sortby') eq 'section_name') {
-	    $sql_expr = "(".$sql->SQLExpr().") ORDER BY section_name";
+	    $sql_expr = "(".$sql->SQLExpr().") ORDER BY section_name, localsection";
     } else {
 	    $sql_expr = $sql->SQLExpr();
     }    
@@ -3066,6 +3066,17 @@ sub displayCollectionDetails {
 	@row = @{$r};
 	@fieldNames = @{$f};
 
+    # have the regional section link to a local section search
+    my ($regionalsection_idx, $regionalsection_link);
+    for($index=0;$index < $#fieldNames;$index++) {
+        $regionalsection_idx = $index if ($fieldNames[$index] eq "regionalsection");
+    }
+    if ($row[$regionalsection_idx]) {
+        $regionalsection_link = "<a href=\"$exec_url?action=displayStratTaxaForm&taxon_resolution=species&skip_taxon_list=YES&input_type=regional"
+                         . "&input=".uri_escape($row[$regionalsection_idx])."\">$row[$regionalsection_idx]</a>";
+    }
+    $row[$regionalsection_idx] = $regionalsection_link if ($regionalsection_link);
+    
     # have the local section link to a local section search
     my ($localsection_idx, $localsection_link);
     for($index=0;$index < $#fieldNames;$index++) {
