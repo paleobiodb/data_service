@@ -441,119 +441,51 @@ sub newTaxonNames{
 #
 #
 ##
-sub new_search_recurse{
+sub new_search_recurse {
     # Start with a taxon_name:
-    my $seed_no = shift;
     my $dbt = shift;
-	my $first_time = shift;
-    my $recursed = (shift || 0);
-    $recursed += 1;
-    my $sql = "";
-    my @results = ();
-    #my $validated_list = $seed_no;
+    my $seed_no = shift;
 	$passed{$seed_no} = 1;
 
-    #print "\nPrimary seed: $seed_no";
+    # Get the children
+    my $sql = "SELECT DISTINCT child_no FROM opinions WHERE parent_no=$seed_no";
+    my @results = @{$dbt->getData($sql)};
 
-    # select for taxon_no of seed in authorities:
-    $sql = "SELECT taxon_no, child_no, opinions.pubyr, ".
-		   "opinions.reference_no, opinion_no ".
-           "FROM authorities, opinions ".
-           "WHERE taxon_no = parent_no ".
-           "AND taxon_no=$seed_no";
-    @results = @{$dbt->getData($sql)};
-
+    #my $debug_msg = "";
     if(scalar @results > 0){
-        my $seed_pubyr = get_real_pubyr($dbt, $results[0]);
-		# THIS SHOULD NEVER HAPPEN
-        #if($seed_pubyr == -1){
-            # ERROR
-        #    return $validated_list;
-        #}
-        #print ", Primary taxon_no: ".$results[0]->{taxon_no}."\n"; 
-
-        # validate all the children
+        # Validate all the children
         foreach my $child (@results){
-			# Don't revisit same child: this has to be done with the opinion
-			# number (not the child_no) or the results will be incomplete.
-			# Note: this is done mostly to avoid self referential data (and 
-			# therefore deep recursion) but also speeds the whole thing up
-			# A LOT!
-            if(exists $visited_children{$child->{child_no}}){
-                next;
+			# Don't revisit same child. Avoids loops in data structure, and speeds things up
+            if (exists $passed{$child->{child_no}}) {
+                #print "already visited $child->{child_no}<br>";
+                next;    
             }
-            else{
-                $visited_children{$child->{child_no}} = 1;
-            }
-            #print "\tchild_no: ".$child->{child_no};
-            my @other_results = ();
-            $sql = "SELECT opinions.parent_no, opinions.pubyr, ".
-                   "opinions.reference_no from opinions, authorities ".
-                   "WHERE opinions.parent_no = authorities.taxon_no ".
-                   "AND opinions.child_no=".$child->{child_no};
+            # Don't let recombined as screw things up, we get those separately afterwards
+            # (the taxon_nos in %passed will always be original combinations since orig. combs always have all the belongs to links)
+            $sql = "SELECT parent_no, pubyr, status, reference_no".
+                   " FROM opinions ".
+                   " WHERE status NOT IN ('recombined as','rank changed as','corrected as') ".
+                   " AND child_no=".$child->{child_no};
             # go back up and check each child's parent(s)
-            @other_results = @{$dbt->getData($sql)};
-            # find the most recent parent
+            my @other_results = @{$dbt->getData($sql)};
             my $index = TaxonInfo::selectMostRecentParentOpinion($dbt, \@other_results , 1);
-            my $most_recent = $other_results[$index]->{pubyr};
-			## if this is the very first original seed, all children are good,
-            # so don't do a pubyr check.
-            #print "c $child->{child_no} ";
-            if($first_time){
-                $passed{$child->{child_no}} = 1;
-                new_search_recurse($child->{child_no}, $dbt, 0, $recursed);
-            }
-            # This adds current child and children with older parents, but
-            # not children with parents younger than the seed parent.
-            elsif($most_recent le $seed_pubyr){
-                # Recursion: call self on all validated children
-                #print "\nRECURSING WITH ".$child->{child_no}." SEED: $seed_no\n";
-                $passed{$child->{child_no}} = 1;
-                new_search_recurse($child->{child_no}, $dbt, 0, $recursed);
-            }
+
+            if($other_results[$index]->{parent_no} == $seed_no){
+                new_search_recurse($dbt,$child->{child_no});
+                #$debug_msg .= "Adding child $child->{child_no} named ". 
+                #    ${$dbt->getData("SELECT taxon_name FROM authorities WHERE taxon_no=$child->{child_no}")}[0]->{'taxon_name'};
+            } #else {
+                #$debug_msg .= "Rejecting child $child->{child_no} named ". 
+                #    ${$dbt->getData("SELECT taxon_name FROM authorities WHERE taxon_no=$child->{child_no}")}[0]->{'taxon_name'};
+            #}
+            #$debug_msg .= " from parent $other_results[$index]->{parent_no} named ". ${$dbt->getData("SELECT taxon_name FROM authorities WHERE taxon_no=$other_results[$index]->{parent_no}")}[0]->{'taxon_name'}."<br>";
         }
-    }
-    else{
+    } #else{
+        #print "no children for seed $seed_no<br>";
         #print "\nNO TAXON_NO FOUND FOR $seed_no\n";
-		$visited_children{$seed_no} = 1;
-    }
-}
-
-
-##
-#
-#
-##
-sub get_real_pubyr{
-	my $dbt = shift;
-    my $hash_rec = shift;
-    my $year_string = (shift or "pubyr");
-    my $ref_string = (shift or "reference_no");
-
-	# if it's got a pubyr, cool
-    if($hash_rec->{$year_string}){
-        return $hash_rec->{$year_string};
-    }
-	# if there's no reference number, we're dead in the water.
-    elsif(!$hash_rec->{$ref_string}){
-        return "0";
-    }
-    # check the global cache
-    elsif(exists $ref_pubyr{$hash_rec->{$ref_string}}){
-        return $ref_pubyr{$hash_rec->{$ref_string}};
-    }
-	# hit the db
-    else{
-        my $sql = "SELECT pubyr FROM refs WHERE reference_no=".
-                  $hash_rec->{$ref_string};
-        my @results = @{$dbt->getData($sql)};
-        if($results[0]->{pubyr}){
-			$ref_pubyr{$hash_rec->{$ref_string}} = $results[0]->{pubyr};
-            return $results[0]->{pubyr};
-        }
-    }
-    # If there is no pubyr, return an error condition.
-    return "0";
+		#$visited_children{$seed_no} = 1;
+    #}
+    #print $debug_msg;
 }
 
 ##
@@ -578,8 +510,6 @@ sub taxonomic_search{
 	}
 
     # global to this method and methods called by it
-    local %ref_pubyr = ();
-    local %visited_children = ();
 	local %passed = ();
 
 	# We might not get a number or rank if this name isn't in authorities yet.
@@ -590,8 +520,7 @@ sub taxonomic_search{
     		return wantarray ? ($name) : "'$name'";
         }
 	}
-	new_search_recurse($taxon_no, $dbt, 1);
-	my $results;
+	new_search_recurse($dbt,$taxon_no);
 
     # Dirty trick PS 01/10/2005 - if a taxon_no of 0 is passed in a occurrence query, any
     #  occurrence that doesn't have a taxon no gets added in (~90000) and any collection
@@ -601,15 +530,17 @@ sub taxonomic_search{
 
     # Get recombination taxon nos also, and add those in PS 02/14/2005
     unless ($suppress_recombinations) {
+        my $sql = "SELECT parent_no FROM opinions WHERE status IN ('recombined as','corrected as', 'rank changed as') AND child_no=?";
+        $sth = $dbt->dbh->prepare($sql) || die "$sql";
         foreach $taxon_no (keys %passed) {
-            $recomb_no = getCorrectedName($dbt,$taxon_no,'number');
-            if ($recomb_no != $taxon_no && $recomb_no) {
-                PBDBUtil::debug(2,"recomb no is $recomb_no for taxon no $taxon_no");
-                $passed{$recomb_no} = 1;
+            $sth->execute($taxon_no);
+            while(my @row=$sth->fetchrow_array()) {
+                $passed{$row[0]} = 1 if $row[0];
             }
         }
     }
 
+	my $results;
     if ($return_taxon_nos ne "") {
         if (wantarray) {
             return keys %passed;
@@ -984,7 +915,7 @@ sub getPaleoCoords {
         } 
     }
 
-    main::dbg("Paleolng: $paleolng Paleolat $paleolat x $lngdeg y $latdeg fx $f_lngdeg fy $f_latdeg collage $collage rx $rx ry $ry pid $pid");
+    main::dbg("Paleolng: $paleolng Paleolat $paleolat fx $f_lngdeg fy $f_latdeg rx $rx ry $ry pid $pid");
     return ($paleolng, $paleolat);
 }
 
@@ -1118,12 +1049,14 @@ sub getCorrectedName{
     # so you have to use an order by so it comes second.  can't use filter the belongs to in the where clause cause the taxon may
     # genuinely belong to something else (not recomb). surround the select in () so aliased fields can be used in order by.
     my $sql = "(SELECT a.taxon_no, a.taxon_name, a.taxon_rank, (o.status = 'belongs to') AS is_bt, o.status,"
-         . " IF(o.pubyr IS NOT NULL AND o.pubyr != '', o.pubyr, r.pubyr) as pubyr, (r.publication_type='compendium') AS is_compendium" 
+         . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr, (r.publication_type='compendium') AS is_compendium" 
          . " FROM opinions o " 
          . " LEFT JOIN authorities a ON o.parent_no = a.taxon_no " 
          . " LEFT JOIN refs r ON r.reference_no=o.reference_no " 
          . " WHERE o.child_no=$child_no) " 
          . " ORDER BY is_compendium ASC, pubyr DESC, is_bt ASC LIMIT 1";
+
+    #print $sql."<br>";
 
     my @rows = @{$dbt->getData($sql)};
     if (scalar(@rows)) {
