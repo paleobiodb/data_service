@@ -971,5 +971,33 @@ sub getPaleoCoords {
     return ($paleolng, $paleolat);
 }
 
+# Trivial function to check if an interval name is valid. Used in form checking
+# two params = eml, interval name
+sub checkInterval {
+    my $dbt = shift || return;
+    my $eml_interval = shift || "";
+    my $interval_name = shift || "";
+    if ($interval_name ne "") {
+        $sql = "SELECT count(*) AS cnt FROM intervals WHERE interval_name=".$dbt->dbh->quote($interval_name);
+        if ($eml_interval ne "") { 
+            $sql .= " AND eml_interval=".$dbt->dbh->quote($eml_interval);
+        }
+        @results = @{$dbt->getData($sql)}; 
+        if ($results[0]->{'cnt'} > 0) { return 1; }
+    }
+    return 0;
+}
+                                                                                                                                   
+# Trivial function to split a interval into eml adjective + name, if possible. Used in other modules
+sub splitInterval {
+    my $dbt = shift || return ('','');
+    my $interval_name = shift;
+
+    $eml_vals = 'Late/Upper|late Late|early Late|Middle|Early/Lower|late Early|early Early';
+    $interval_name =~ s/^($eml_vals)\s+//;
+    $eml_interval = $1;
+    return ($eml_interval,$interval_name);
+}
+
 
 1;
