@@ -1380,7 +1380,7 @@ sub displayTaxonClassification{
        
         # This will happen if the genus has a taxon_no but not the species
         if ($append_species) {
-            push @table_rows, ['species',$species,0,0];
+            push @table_rows, ['species',"$genus $species",0,0];
         }
 
         # First, find the rank, name, publication info of the focal taxon
@@ -1420,7 +1420,10 @@ sub displayTaxonClassification{
             @taxon_name = split(/\s+/,$taxon_name);
             $taxon_name = $taxon_name[-1];
         }
-        my %auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$taxon_no)} if $taxon_no;
+        my %auth_yr;
+        if ($taxon_no) {
+            %auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$taxon_no)}
+        }
         my $pub_info = $auth_yr{author1last}.' '.$auth_yr{pubyr};
         if ($recomb_no) {
             $pub_info = "(".$pub_info.")" if $pub_info ne ' ';
@@ -1432,7 +1435,7 @@ sub displayTaxonClassification{
             my $show_rank = ($taxon_rank eq 'species') ? 'Genus and species' : 
                             ($taxon_rank eq 'genus')   ? 'Genus' : 
                                                          'Higher taxon'; 
-            $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_rank&taxon_rank=$show_rank">$taxon_name</a>|;
+            $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$table_rows[$i][1]&taxon_rank=$show_rank">$taxon_name</a>|;
         }
         $output .= qq|<td align="middle">$taxon_rank</td>|.
                    qq|<td align="middle">$link</td>|.
