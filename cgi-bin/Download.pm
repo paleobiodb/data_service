@@ -658,6 +658,7 @@ sub getTimeLookup	{
 
 # create a hash table relating taxon names to eco/taphonomic categories
 # JA 12.8.03
+# JA 4.4.04: note that keying of ecotaph is here by name and not number
 sub getEcology	{
 	my $self = shift;
 
@@ -718,6 +719,10 @@ sub getEcology	{
 }
 
 # JA 28.2.04
+# this is a little confusing; the ancestor ecotaph values are keyed by name,
+#  whereas the genus values are now keyed by number - made necessary by fact
+#  that occurrence are linked to taxon numbers and not names to avoid problems
+#  with homonymy
 sub getAncestralEcology	{
 
 	my $etfield = shift;
@@ -798,6 +803,7 @@ sub doQuery {
 	} else{
 		$sql =	"SELECT occurrences.reference_no, ".
 				"occurrences.genus_reso, occurrences.genus_name, ".
+				"occurrences.taxon_no, ".
 				"occurrences.collection_no, ".
 				"occurrences.abund_value, ".
 				"occurrences.abund_unit, ".
@@ -975,6 +981,9 @@ sub doQuery {
 	foreach my $row ( @dataRows ){
 		# cumulate number of collections including each genus
 		$totaloccs{$row->{genus_name}}++;
+		# need these two for ecology lookup below
+		$totaloccsbyno{$row->{taxon_no}}++;
+		$genusbyno{$row->{taxon_no}} = $row->{genus_name};
 		# cumulate number of specimens per collection, and number of
 		#  times a genus has abundance counts at all
 		if ( ( $row->{abund_unit} eq "specimens" || $row->{abund_unit} eq "individuals" ) && ( $row->{abund_value} > 0 ) )	{
@@ -983,15 +992,18 @@ sub doQuery {
 		}
 	}
 
+	$genusbyno{'0'} = "";
+
 	# get the higher order names associated with each genus name,
 	#   then set the ecotaph values by running up the hierarchy
 	# JA 28.2.04
 	# only do this is ecotaph data were requested
 	# WARNING: only the common ranks are retrieved
+	# JA 4.4.04: adapted this to use taxon numbers instead of names
 	if ( $q->param('ecology1') )	{
 
 		# finally, get the higher order names
-		my @genera = keys %totaloccs;
+		my @genera = keys %totaloccsbyno;
 		my $levels = "family,order,class,phylum";
 		%ancestor_hash=%{Classification::get_classification_hash($dbt,$levels,\@genera)};
 		for $etfield ( 1..$etfields )	{
@@ -1008,6 +1020,7 @@ sub doQuery {
 		my $reference_no = $row->{reference_no};
 		my $genus_reso = $row->{genus_reso};
 		my $genusName = $row->{genus_name};
+		my $genusNo = $row->{taxon_no};
 		my $reid_genus_reso = $row->{reid_genus_reso};
 		my $reid_genus_name = $row->{reid_genus_name};
 		my $collection_no = $row->{collection_no};
@@ -1027,8 +1040,8 @@ sub doQuery {
 			if ( $q->param('binned_field') )	{
 				# special processing for ecology data
 				if ( $q->param('binned_field') eq "ecology" )	{
-					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph[1]{$genusName}}++;
-					$occsbycategory{$ecotaph[1]{$genusName}}++;
+					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph[1]{$genusNo}}++;
+					$occsbycategory{$ecotaph[1]{$genusNo}}++;
 				} else	{
 				# default processing
 					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}++;
@@ -1122,22 +1135,22 @@ sub doQuery {
 		# WARNING: this only works on genus or higher-order data,
 		#  assuming species won't be scored separately
 		if ( $q->param('ecology1') )	{
-			push @reid_row , $ecotaph[1]{$genusName};
+			push @reid_row , $ecotaph[1]{$genusNo};
 		}
 		if ( $q->param('ecology2') )	{
-			push @reid_row , $ecotaph[2]{$genusName};
+			push @reid_row , $ecotaph[2]{$genusNo};
 		}
 		if ( $q->param('ecology3') )	{
-			push @reid_row , $ecotaph[3]{$genusName};
+			push @reid_row , $ecotaph[3]{$genusNo};
 		}
 		if ( $q->param('ecology4') )	{
-			push @reid_row , $ecotaph[4]{$genusName};
+			push @reid_row , $ecotaph[4]{$genusNo};
 		}
 		if ( $q->param('ecology5') )	{
-			push @reid_row , $ecotaph[5]{$genusName};
+			push @reid_row , $ecotaph[5]{$genusNo};
 		}
 		if ( $q->param('ecology6') )	{
-			push @reid_row , $ecotaph[6]{$genusName};
+			push @reid_row , $ecotaph[6]{$genusNo};
 		}
 
 		if( $q->param('collections_only') ){
