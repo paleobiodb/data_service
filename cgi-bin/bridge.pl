@@ -161,7 +161,7 @@ unless($action eq 'displayLogin' or $old_action eq 'processLogin'){
 }
 
 dbg("<p><font color='red' size='+1' face='arial'>You are in DEBUG mode!</font><br> Cookie [$cookie]<BR> Action [$action] DB [$db] Authorizer [".$s->get("authorizer")."] Enterer [".$s->get("enterer")."]<BR></p>");
-
+#dbg("@INC");
 dbg($q->Dump);
 
 # ACTION
@@ -1374,7 +1374,6 @@ sub displayCollResults {
 
 	# Build the SQL
     $sql = processCollectionsSearch($in_list);
-
 	# Run it
 	my $sth = $dbh->prepare( $sql );
 	$sth->execute();
@@ -2769,10 +2768,14 @@ sub startTaxonomy	{
 	# 2. Need to perform a taxonomy search
 
 	# if there's no selected taxon you'll have to search for one
-	if ( ! $q->param('taxon_name') || ! $q->param('taxon_no') )	{
+	if ( ! $q->param('taxon_name') ){
 		$s->enqueue( $dbh, "action=displayTaxonomySearchForm" );
+	}
+	elsif(! $q->param('taxon_no') )	{
+		$s->enqueue( $dbh, "action=displayTaxonomySearchForm&taxon_name=".$q->param('taxon_name') );
+	} 
 	# otherwise go right to the edit page
-	} else	{
+	else{
 		my $temp = "action=displayTaxonomyEntryForm&taxon_name=";
 		$temp .= $q->param('taxon_name');
 		$temp .= "&taxon_no=" . $q->param('taxon_no');
@@ -4090,7 +4093,7 @@ sub displayTaxonomySearchForm	{
 
 	print &stdIncludes ("std_page_top");
 
-	print $hbo->populateHTML('search_taxonomy_form');
+	print $hbo->populateHTML('search_taxonomy_form', [$q->param('taxon_name')],["taxon_name"]);
 
 	print &stdIncludes ("std_page_bottom");
 }
