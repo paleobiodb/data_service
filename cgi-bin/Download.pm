@@ -1455,12 +1455,14 @@ sub formatRow {
 	}
 }
 
+# Paul replaced taxonomic_search call with recurse call, but it seems that
+#  the former is actually faster (try "Gastropoda")
 sub getGenusNames {
 	my $self = shift;
 	my $genus_name = (shift || "");
 
-	#my $cslist = PBDBUtil::taxonomic_search($genus_name, $dbt);
-	my $cslist = `./recurse $genus_name`;
+	my $cslist = PBDBUtil::taxonomic_search($genus_name, $dbt);
+	#my $cslist = `./recurse $genus_name`;
 	return $cslist;
 }
 
