@@ -105,6 +105,12 @@ LOGIN: {
 				$old_action = "processLogin";
 			}
 		}
+		else{
+			# failed login:  (bad password, etc)
+			$action = "displayHomePage";
+			$q->param("user" => "Guest");
+			$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
+		}
 		last; 
 	}
 
