@@ -87,6 +87,7 @@ my $dbh = DBConnection::connect();
 # rjp 1/2004 - note, if it's *global* then why is it declared with *my*??
 my $dbt = DBTransactionManager->new($dbh, $s);
 
+
 # Need to do this before printing anything else out, if debugging.
 #print $q->header('text/html') if $DEBUG;
 
@@ -193,7 +194,13 @@ dbg("<p><font color='red' size='+1' face='arial'>You are in DEBUG mode!</font><b
 #dbg("@INC");
 dbg($q->Dump);
 
-# ACTION
+
+# print out some debugging stuff
+#Debug::printAllCGIParams($q);
+#Debug::printAllSessionParams($s);
+
+
+# Run the action (ie, call the proper subroutine)
 &$action;
 
 
@@ -424,7 +431,7 @@ sub getPrefFields	{
 # Set new preferences JA 25.6.02
 sub setPreferences	{
 
-    print &stdIncludes ( "std_page_top" );
+    print stdIncludes ( "std_page_top" );
 	print "<table width='100%'><tr><td colspan='2' align='center'><h3>Your current preferences</h3></td><tr><td align='center'>\n";
 	print "<table align=center cellpadding=4>\n";
 
@@ -524,7 +531,7 @@ sub setPreferences	{
 	if($continue{action}){
 		print "<center><p>\n<a href=\"$exec_url?action=$continue{action}\"><b>Continue</b></a><p></center>\n";
 	}
-    print &stdIncludes ("std_page_bottom");
+    print stdIncludes ("std_page_bottom");
 	exit;
 
 }
@@ -3491,6 +3498,7 @@ sub displayEditCollection {
 		$refRowString = "<table border=0 cellpadding=8><tr><td>".
 						 "<table border=0 cellpadding=2 cellspacing=0><tr>".
 						 "</td></tr><tr class='darkList'><td valign=top>".
+						 #"</td></tr><tr><td valign=top>".
 						 "<input type=radio name=secondary_reference_no value=".
 						 $session_ref."></td><td></td>";
 		$sr = getCurrRefDisplayStringForColl($dbh, $collection_no,$session_ref);
@@ -5080,7 +5088,7 @@ sub displayTaxonomyEntryForm	{
 	my $refRowString = '<table>' . $hbo->populateHTML('reference_display_row', $ref_hash_ref ) . '</table>';
 
 	# Add gray background and make font small
-	$refRowString =~ s/<tr>/<tr class='darkList'>/;
+	#$refRowString =~ s/<tr>/<tr class='darkList'>/;
 	$refRowString =~ s/<td/<td class='small' /;
 	$authorityRow{'ref_string'} = $refRowString;
 
@@ -5104,9 +5112,6 @@ sub displayTaxonomyEntryForm	{
 	
 	
 
-	
-	
-
 	$html = stdIncludes("js_taxonomy_checkform");
 	$html .= $hbo->populateHTML ('enter_taxonomy_top', [ $authorityRow{'taxon_no'}, $authorityRow{'type_taxon_no'}, $taxon, length($taxon)] , [ 'taxon_no', 'type_taxon_no',"%%taxon_name%%","%%taxon_size%%" ] );
 	$html .= $hbo->populateHTML('enter_tax_ref_form', \%authorityRow);
@@ -5117,9 +5122,7 @@ sub displayTaxonomyEntryForm	{
 		$html =~ s/<p><input(.*)?"ref_is_authority"(.*)?> It was first named in the current reference, which is:<\/p>//;
 		$html =~ s/<p>... <i>or<\/i> it was named in an earlier publication, which is:<\/p>//;
 	}
-	
-	
-	
+		
 	
 		
 	# Remove widgets if the current authorizer does not own the record and
@@ -5164,9 +5167,11 @@ sub displayTaxonomyEntryForm	{
 		my $opinion = printTaxonomicOpinions( $taxon, $authorityRow{'taxon_no'}, 0 );
 
 		if ( $opinion )	{
-			my $preOpinion = "<hr>\n<center><h4>Previously entered opinions on the status of $taxon
-								</h4></center>\n\n<center><table><tr><td>\n";
-			my $postOpinion = "</td></tr></table></center>";
+			my $preOpinion = "<DIV class=\"mainSection\">
+			<center><h2>Previously entered opinions 
+			on the status of $taxon </h2></center>
+			\n\n<center><table><tr><td>\n";
+			my $postOpinion = "</td></tr></table></center></DIV>";
 			$opinion = $preOpinion . $opinion . $postOpinion;
 			$html =~ s/<!-- OPINIONS -->/$opinion/g;
 		}
@@ -5237,8 +5242,10 @@ sub processTaxonomyEntryForm {
 	
 	if ($q->param('reference_no') == 0) {
 		my $sesRef = $s->get('reference_no');
-		$q->param(reference_no => $sesRef);  # temporary hack to fix the problem... rjp, 2/10/2004.
-		Debug::logError("error in processTaxonomyEntryForm tried to enter 0 reference_no, authorizer_no = " .  $s->get('authorizer') . " session reference_no = " . $s->get('reference_no'));		
+		$q->param(reference_no => $sesRef);  # temporary bugfix for 0 reference problem... rjp, 2/10/2004.
+		# see also the rest of this bugfix in the displayTaxonomyResults() routine. 
+		
+		#Debug::logError("error in processTaxonomyEntryForm tried to enter 0 reference_no, authorizer_no = " .  $s->get('authorizer') . " session reference_no = " . $s->get('reference_no'));		
 	}
 	
 	# do some validity checking.. make sure that the new taxon name isn't the same
@@ -5692,14 +5699,12 @@ sub displayTaxonomyResults	{
 	my $sesRef = $s->get('reference_no');
 	my $cgiRef = $q->param('reference_no');
 	
-	# temporary hack to fix a bug,
-	# 2/10/2004 by rjp.
+	# temporary bugfix for the 0 reference problem.
+	# 2/10/2004 by rjp.  See also the rest of this bugfix in the processTaxonomyEntryForm() routine.
 	if (! $cgiRef) {
 		$q->param(reference_no => $sesRef);	
 	}
-	
-	Debug::dbPrint("sesref = $sesRef, cgiref = $cgiRef");
-	
+		
 	# Update or insert the authority data, as appropriate
 	# Assumption here is that you definitely want to create the taxon name
 	# if it doesn't exist yet
@@ -5707,13 +5712,15 @@ sub displayTaxonomyResults	{
 	if ( $q->param('taxon_no') > 0 )	{
 		updateRecord( 'authorities', 'taxon_no', $q->param('taxon_no') );
 	} else	{
-		$q->param(reference_no => $s->get('reference_no') );
-		dbg("insertRecord called from displayTaxonomyResults (new name)<br>");
+		$q->param(reference_no => $sesRef);
+		Debug::dbPrint("insertRecord called from displayTaxonomyResults (new name)<br>");
 		insertRecord( 'authorities', 'taxon_no', \$taxon_no, '9', 'taxon_name' );
 		$q->param(taxon_no => $taxon_no);
 		$taxon_is_new = 1;
 	}
 
+	Debug::dbPrint('CGIref = ' . $q->param('reference_no'));
+	
 	# if species is valid as originally combined, parent no = species no
 	if ( $q->param('parent_taxon_name') eq $q->param('taxon_name') )	{
 		$q->param(parent_taxon_no => $q->param('taxon_no') );
