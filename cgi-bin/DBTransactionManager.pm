@@ -94,7 +94,6 @@ sub getData{
 		# non-SELECT:
 		else{
 			my $num = $sth->execute();
-print "SQL: $sql\n";
 			$self->{_err} = $sth->errstr;
 			# If we did an insert, make the record id available
 			if($sql =~ /INSERT/i){
