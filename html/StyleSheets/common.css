@@ -13,9 +13,9 @@ body {
 
 /* how should the regular links look? */
 A:link	{ color : #0033FF; text-decoration:none; }
-A:visited	{ color : RGB(110,0,255); text-decoration:none; }
+A:visited	{ color : #6E00FF; text-decoration:none; }
 A:active	{ color : #00AAFF; text-decoration:none; }
-A:hover	{ color : RGB(200,0,120); text-decoration:none; }
+A:hover	{ color : #C80078; text-decoration:none; }
 
 /* how should the links look in the menu bar at the top?  */
 A:link.menu { 
@@ -55,7 +55,7 @@ A:hover.menu {
 TD, TH { font-size: 14px; }
 H1, H2, H3, H4 { 
 	padding: 0px 0px 0px 0px;
-	margin: 0.1em 0.1em 0.5em 0.1em;
+	margin: 0.1em 1em 0.5em 1em;
 }
 
 LI { font-size: 13px; }
@@ -81,7 +81,7 @@ LI { font-size: 13px; }
 /* puts a nice border around tables */
 table.niceBorder {
 	border-style: solid;  /*solid, dashed, dotted, grooved */
-    border-color: RGB(200,200,200);
+    border-color: #C8C8C8;
     border-width: 4px 4px 4px 4px;
 	
 	padding: 1em 1em 1em 1em;
@@ -97,7 +97,7 @@ div.mainSection {
 	margin: 1em 1em 1em 1em;
 	
     border-style: solid;  /*solid, dashed, dotted, grooved */
-    border-color: RGB(200,200,200);
+    border-color: #C8C8C8;
     border-left-width: 4px;
     border-right-width: 4px;
     border-bottom-width: 4px;
@@ -115,10 +115,10 @@ div.emphasized {
 	padding: 0.2em 0.2em 0.2em 0.2em;
 	margin: 0em 2em 0em 2em;
 	
-	background-color: RGB(230,230,230);
+	background-color: #E6E6E6;
 	
 	border-style: solid;  /*solid, dashed, dotted, grooved */
-    border-color: RGB(220,220,220);
+    border-color: #DCDCDC;
     border-left-width: 1px;
     border-right-width: 1px;
     border-bottom-width: 1px;

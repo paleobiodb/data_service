@@ -208,12 +208,19 @@ sub properInitial {
 
 # returns true if it's a proper year format which begins with a 1 or 2,
 # ie, 1900 and something or 2000 something.
+#
+# Also prevents the year from being older than 1700.
 sub properYear {
 	my $input = shift;
 	
 	if ((!$input) || $input eq "") { return 0; }
 	
 	if ($input !~ m/^[12]\d{3}$/) {
+		return 0;
+	}
+	
+	# prevent dates before 1700.
+	if ($input < 1700) {
 		return 0;
 	}
 	
