@@ -18,8 +18,16 @@
 		var errors = "";
 
 		// First Author Initials
+		// pattern for multiple spaces match
+		var last_name_institution = /^\S+\s+\S+\s+\S+/;
 		if ( frm.author1init.value == "" ) {
-			errors += "First author initials may not be blank.\n"; 
+			if(frm.author1last.value.match(last_name_institution)){
+				// OK to have a blank first name if the last name is
+				// and institution.
+			}
+			else{
+				errors += "First author initials may not be blank.\n"; 
+			}
 		} else {
 			// Check for a capital letter
 			if ( capital.test ( frm.author1init.value ) == false ) {
