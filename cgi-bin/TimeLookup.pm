@@ -815,5 +815,36 @@ sub returnCollectionList	{
 	return(\@collections,$bestbothscale);
 }
 
+# Utility function, parse input from form into valid eml+interval name pair, if possible
+sub splitInterval {
+    my $dbt = shift || return ('','');
+    my $interval_name = shift;
+                                                                                                                                                             
+    my @terms = split(/ /,$interval_name);
+    $interval_name = pop(@terms) or '';
+    my $eml = '';
+                                                                                                                                                             
+    if (scalar(@terms) == 1) {
+        $eml = 'Early/Lower' if ($terms[0] =~ /lower|early/i);
+        $eml = 'Late/Upper' if ($terms[0] =~ /late|upper/i);
+        $eml = 'Middle' if ($terms[0] =~ /middle/i);
+    } elsif(scalar(@terms) > 1) {
+        my ($eml0, $eml1);
+        $eml0 = 'early'  if ($terms[0] =~ /early|lower/i);
+        $eml0 = 'middle' if ($terms[0] =~ /middle/i);
+        $eml0 = 'late'   if ($terms[0] =~ /late|upper/i);
+        $eml1 = 'Early'  if ($terms[1] =~ /early|lower/i);
+        $eml1 = 'Middle' if ($terms[1] =~ /middle/i);
+        $eml1 = 'Late'   if ($terms[1] =~ /late|upper/i);
+        if ($eml0 && $eml1) {
+            $eml = $eml0.' '.$eml1;
+        }
+    }
+                                                                                                                                                             
+    return ($eml,$interval_name);
+}
+                                                                                                                                                             
+
+
 
 1;
