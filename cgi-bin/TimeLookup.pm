@@ -306,7 +306,7 @@ sub findBoundaries	{
 	for my $i ( keys %bestscale )	{
 		$j = $immediatemax{$i};
 		while ( $j > 0 && $lowerbound{$i} > 0 )	{
-			if ( $lowerbound{$i} > $lowerbound{$j} )	{
+			if ( $lowerbound{$i} > $lowerbound{$j} && $bestscaleyr{$i} > $bestscaleyr{$j} )	{
 				$lowerbound{$j} = $lowerbound{$i};
 	# stop if the next, more broad interval already has an older estimate
 			} elsif ( $lowerbound{$i} < $lowerbound{$j} )	{
