@@ -117,22 +117,13 @@ sub processPrintHierarchy	{
 				if ( $orgcombref )	{
 					$sql = "SELECT parent_no,status,reference_no,ref_has_opinion,pubyr FROM opinions WHERE child_no=" . $orgcombref->{child_no};
 					@crefs = @{$dbt->getData($sql)};
-					my $maxyr = 0;
-					for $cref ( @crefs )	{
-						if ( $cref->{pubyr} > $maxyr )	{
-							$maxyr = $cref->{pubyr};
-							$lastopinion = $cref->{status};
-							$lastparent = $cref->{parent_no};
-						} elsif ( $cref->{ref_has_opinion} eq "YES" )	{
-							$sql = "SELECT pubyr FROM refs WHERE reference_no=" . $cref->{reference_no};
-							$rref = @{$dbt->getData($sql)}[0];
-							if ( $rref->{pubyr} > $maxyr )	{
-								$maxyr = $rref->{pubyr};
-								$lastopinion = $cref->{status};
-								$lastparent = $cref->{parent_no};
-							}
-						}
-					}
+
+			# rewrote this section to employ selectMostRecentParentOpinion JA 5.4.04
+
+					my $index = TaxonInfo::selectMostRecentParentOpinion($dbt, \@crefs, 1);
+					$lastopinion = $crefs[$index]->{status};
+					$lastparent = $crefs[$index]->{parent_no};
+
 					if ( $lastopinion ne "recombined as" || $lastparent != $ref->{child_no} )	{
 						next;
 					}
