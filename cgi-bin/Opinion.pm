@@ -772,6 +772,23 @@ sub submitOpinionForm {
 			$errors->add("Don't enter any other publication information if you chose the 'first named in primary reference' radio button");	
 		}
 		
+		
+		# if they chose ref_has_opinion, then we also need to make sure that there
+		# are no other opinions about the current taxon (child_no) which use 
+		# this as the reference.  So, look for all opinions with ref_has_opinion = 'YES'
+		# and child_no = our current child_no and matching reference_no's.
+		my $child_no = $q->param('taxon_no');
+		my $reference_no = $q->param('reference_no');
+		
+		my $sql = $self->getSQLBuilder();
+		my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM opinions WHERE 
+		child_no = $child_no AND
+		ref_has_opinion = 'YES' AND reference_no = $reference_no");
+		
+		if ($count > 0) {
+			$errors->add("You can only enter one opinion on a taxon 
+			from each reference");
+		}
 	}
 	
 	
@@ -884,6 +901,10 @@ sub submitOpinionForm {
 		
 		if (! ($parentRank->isValid())) {
 			$errors->add("The parent taxon name '" . $parentTaxonName . "' is not valid");
+		}
+		
+		if (Validation::looksLikeBadSubgenus($parentTaxonName)) {
+			$errors->add("Invalid parent taxon format; don't use parentheses");
 		}
 		
 		if (! $parentTaxon->taxonNumber()) {
