@@ -17,15 +17,17 @@
 
 <tr><td width="50%" valign=top><table>
 <tr><td colspan=2 valign=top><h4>Search options</h4>
-<tr><td valign=top>Research group:
+<tr><td valign=top>Research group or project:
 <td>
 <select name="research_group">
 <option selected>all
-<option>ETE
 <option>marine invertebrate
 <option>paleobotany
 <option>taphonomy
 <option>vertebrate
+<option>ETE
+<option>5%
+<option>PGAP
 </select>
 
 
@@ -133,103 +135,37 @@ name:</nobr>
 <td valign=top width="50%"><table>
 <tr><td colspan=2 valign=top><h4>View options</h4>
 <tr><td valign=top>Featured continent:
-<td><select name="mapcontinent">
-<option selected>global
-<option>Africa
-<option>Antarctica
-<option>Asia (north)
-<option>Asia (south)
-<option>Australia
-<option>Europe
-<option>North America
-<option>South America
+<td><select id="mapcontinent">
 </select>
 
 <tr><td valign=top>Magnification of continent:
-<td valign=top><select name="mapscale">
-<option>x 2.5
-<option selected>x 3
-<option>x 4
-<option>x 5
+<td valign=top><select id="mapscale">
 </select>
 
 <tr><td valign=top>Background color:
-<td><select name="mapbgcolor">
-<option>blue
-<option>red
-<option>yellow
-<option>black
-<option>gray
-<option selected>white
-<option>green
-<option>orange
-<option>teal
-<option>violet
+<td><select id="mapbgcolor">
 </select>
+
 <tr><td valign=top>Spacing of grid lines:
-<td valign=top><select name="gridsize">
-<option selected>30 degrees
-<option>15 degrees
-<option>10 degrees
-<option>none
+<td valign=top><select id="gridsize">
 </select>
 
 <tr><td valign=top>Color of grid lines:
-<td valign=top><select name="gridcolor">
-<option>blue
-<option>red
-<option>yellow
-<option>black
-<option selected>gray
-<option>white
-<option>green
-<option>orange
-<option>teal
-<option>violet
+<td valign=top><select id="gridcolor">
 </select>
 
 <tr><td valign=top>Color of coastlines:
-<td valign=top><select name="coastlinecolor">
-<option>blue
-<option>red
-<option>yellow
-<option selected>black
-<option>gray
-<option>white
-<option>green
-<option>orange
-<option>teal
-<option>violet
+<td valign=top><select id="coastlinecolor">
 </select>
 
 <tr><td valign=top>Size and shape of points:
-<td valign=top><select name="pointshape">
-<option>small circles
-<option selected>medium circles
-<option>large circles
-<option>proportional circles
-<option>small squares
-<option>medium squares
-<option>large squares
-<option>proportional squares 
+<td valign=top><select id="pointshape">
 </select>
 
 <tr><td valign=top>Color of points:
-<td valign=top><select name="dotcolor">
-<option selected>blue
-<option>red
-<option>yellow
-<option>black
-<option>gray
-<option>white
-<option>green
-<option>orange
-<option>teal
-<option>violet
+<td valign=top><select id="dotcolor">
 </select><br>
-<select name="dotborder">
-<option>with
-<option selected>without
+<select id="dotborder">
 </select>
 <font size=-1>black borders</font>
 
