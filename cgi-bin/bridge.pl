@@ -664,7 +664,7 @@ sub displayMapForm {
 
 sub displayMapResults {
 
-	Debug::dbPrint("made it to displayMapResult");
+	#Debug::dbPrint("made it to displayMapResult");
 
 	print &stdIncludes ( "std_page_top" );
 
@@ -676,7 +676,7 @@ sub displayMapResults {
 	
 	my $file = $m->buildMap();
 
-	Debug::dbPrint("built map");
+	#Debug::dbPrint("built map");
 
     open(MAP, $file) or die "couldn't open $file ($!)";
     while(<MAP>){
@@ -1437,7 +1437,7 @@ sub displayCollResults {
     my $sql = processCollectionsSearch($in_list);
 	my $sth = $dbh->prepare( $sql );
 	
-	Debug::dbPrint("displayCollResults SQL = $sql");
+	#Debug::dbPrint("displayCollResults SQL = $sql");
 
 	$sth->execute();  	# run the query
 
@@ -1917,8 +1917,12 @@ sub processCollectionsSearch {
 	# group_formation_member, and we'll have to deal with it separately.
 	# added by rjp on 1/13/2004
 	if (my $val = $q->param("group_formation_member")) {
-		push(@terms, "(geological_group = '$val' OR formation = '$val' OR member = '$val')");
+		push(@terms, "(geological_group $comparator '$wildcardToken$val$wildcardToken' 
+						OR formation $comparator '$wildcardToken$val$wildcardToken' 
+						OR member $comparator '$wildcardToken$val$wildcardToken')");
 	}
+	
+	#Debug::dbPrint("terms = @terms");
 	
 	# if first search failed and wild cards were used, try again
 	#  stripping first wildcard JA 22.2.02
