@@ -675,6 +675,7 @@ sub displayTaxonInfoResults {
 	$q->param("genus_name" => $genus_name);
 	$taxon_no = $verified[1];
 	
+
 	# Get the sql IN list for a Higher taxon:
 	my $in_list = "";
 
@@ -687,7 +688,7 @@ sub displayTaxonInfoResults {
 	} elsif ( ! $taxon_no )	{
 	# Don't go looking for junior synonyms if this taxon isn't even
 	#  in the authorities table (because it has no taxon_no) JA 8.7.03
-		$in_list = $q->param('genus_name');
+		$in_list = "'".$q->param('genus_name')."'";
 	} else	{
 
 	# Find all the junior synonyms of this genus or species JA 4.7.03
@@ -825,11 +826,11 @@ sub displayTaxonInfoResults {
 		print "<img align=middle src=\"$thumb_path\" border=1 vspace=3><br>";
 	}
 
+	my $first_module = shift @modules_to_display;
 	print "<p><center><input type=submit value=\"update\"></center>";
 	print "</td></tr></table></td></tr></table></td>";
 	print "<td>";
 	# First module here
-	my $first_module = shift @modules_to_display;
 	doModules($dbt,$dbh,$q,$s,$exec_url,$first_module,$genus,$species,$in_list,$taxon_no);
 	print "</td></tr></table>";
 	print "<hr width=\"100%\">";
@@ -951,12 +952,26 @@ sub doModules{
 	}
 	# synonymy
 	elsif($module == 2){
-		Debug::dbPrint("synhere8");
-		print displayTaxonSynonymy($dbt, $genus, $species, $taxon_no);
-		Debug::dbPrint("synhere9");	
+        if ($taxon_no) {
+    		print displayTaxonSynonymy($dbt, $genus, $species, $taxon_no);
+        } else {
+            print "<table width=\"100%\">".
+                  "<tr><td align=\"middle\"><h3>Taxonomic history</h3></td></tr>".
+                  "<tr><td valign=\"top\" align=\"middle\">".
+                  "<i>No taxonomic history data are available</i>".
+                  "</td></tr></table>\n";
+        }
 	}
 	elsif ( $module == 3 )	{
-		print displaySynonymyList($dbt, $q, $genus, $species, $taxon_no);
+        if ($taxon_no) {
+    		print displaySynonymyList($dbt, $q, $genus, $species, $taxon_no);
+        } else {
+            print "<table width=\"100%\">".
+                  "<tr><td align=\"middle\"><h3>Synonymy</h3></td></tr>".
+                  "<tr><td valign=\"top\" align=\"middle\">".
+                  "<i>No synonymy data are available</i>".
+                  "</td></tr></table>\n";
+        }
 	}
 	# ecology
 	elsif ( $module == 4 )	{
