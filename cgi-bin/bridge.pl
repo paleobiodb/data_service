@@ -48,6 +48,7 @@ use POSIX qw(ceil floor);
 #use Collection; - entirely deprecated, replicates buildTaxonomicList
 use Taxon;
 use Opinion;
+use Confidence;
 
 use Validation;
 use Debug;
@@ -9011,6 +9012,52 @@ sub buildReference {
 	}
 
 	return $reference;
+}
+
+# ------------------------ #
+# Confidence Intervals JSM #
+# ------------------------ #
+
+sub displayFirstForm   {
+    print stdIncludes("std_page_top");
+        Confidence::displayQueryPage($q, $s, $dbt, $splist);
+    print stdIncludes("std_page_bottom");
+}
+
+sub databaseCheckForm   {
+    print stdIncludes("std_page_top");
+        Confidence::checkData($q, $s, $dbt, $splist);
+    print stdIncludes("std_page_bottom");
+}
+
+sub buildListForm {
+    print stdIncludes("std_page_top");
+        Confidence::buildList($q, $s, $dbt, $splist);
+    print stdIncludes("std_page_bottom");
+}
+
+sub showStratForm {
+    print stdIncludes("std_page_top");
+        Confidence::showStrat($q, $s, $dbt, $splist);
+    print stdIncludes("std_page_bottom");
+}
+
+sub showOptionsForm {
+	print stdIncludes("std_page_top");
+	   Confidence::optionsForm($q, $s, $dbt, $splist);
+	print stdIncludes("std_page_bottom");
+}
+
+sub calculateTaxonomicInterval {
+	print stdIncludes("std_page_top");
+	   Confidence::calculateTaxaInterval($q, $s, $dbt, $splist);
+	print stdIncludes("std_page_bottom");
+}
+
+sub calculateStratigraphicInterval {
+	print stdIncludes("std_page_top");
+	   Confidence::calculateStratInterval($q, $s, $dbt, $splist);
+	print stdIncludes("std_page_bottom");
 }
 
 # Displays taxonomic opinions and names associated with a reference_no
