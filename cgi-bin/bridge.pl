@@ -7604,7 +7604,7 @@ sub checkNearMatch {
 		my @vals = @{$vals};
 		my $flat_vals = join(',',@vals);
 		$flat_vals =~ s/"/&quot;/g;
-		print "<p><b>What would you like to do?</b></p>";
+		print "<center><p><b>What would you like to do?</b></p></center>";
 		print "<form method=POST action=$exec_url>";
 		print "<input type=hidden name=\"action\" value=\"processCheckNearMatch\">";
 		print "<input type=hidden name=\"tablename\" value=\"$tableName\">";
