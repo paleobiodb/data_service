@@ -268,6 +268,7 @@ sub assignGenera	{
 
 	if ( ! open OCCS,"<$occsfile" )	{
 		print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with epoch or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+        return;
 	}
 
 	# following fields need to be pulled from the input file:
