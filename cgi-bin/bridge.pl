@@ -2162,7 +2162,7 @@ sub rarefyAbundances	{
 	print OUT "Specimens\tSpecies\tLower CI\tUpper CI\n";
 	for my $n (0..$#ids)	{
 		if ( $n == $#ids || $isalevel[$n+1] eq "Y" )	{
-			my @distrib = sort @{$richnesses[$n]};
+			my @distrib = sort { $a <=> $b } @{$richnesses[$n]};
 			printf "<tr><td align=center>%d</td> <td align=center>%.1f</td> <td align=center>%d - %d</td></tr>\n",$n + 1,$sampledTaxa[$n] / $maxtrials,$distrib[4],$distrib[195];
 			printf OUT "%d\t%.1f\t%d\t%d\n",$n + 1,$sampledTaxa[$n] / $maxtrials,$distrib[4],$distrib[195];
 		}
