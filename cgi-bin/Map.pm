@@ -770,16 +770,22 @@ sub mapDrawMap{
 		) {
 
       $lngoff = $coll{'lngdeg'};
-      if ( $coll{'lngdir'} eq "E" )	{
-        $lngoff = $coll{'lngdeg'} + 0.5;
-      } elsif ( $coll{'lngdir'} eq "W" )	{
-        $lngoff = $coll{'lngdeg'} - 0.5;
+      if ( $coll{'lngdir'} eq "East" )	{
+        $lngoff = $lngoff + 0.5;
+      } elsif ( $coll{'lngdir'} eq "West" )	{
+        $lngoff = $lngoff - 0.5;
       }
       $latoff = $coll{'latdeg'};
-      if ( $coll{'latdir'} eq "N" )	{
-        $latoff = $coll{'latdeg'} + 0.5;
-      } elsif ( $coll{'latdir'} eq "S" )	{
-        $latoff = $coll{'latdeg'} - 0.5;
+      $lathalf = "";
+      # doubles the number of point rows latitudinally
+      if ( $coll{'latmin'} >= 30 || $coll{'latdec'} =~ /[^5-9]/ )	{
+        $latoff = $latoff + 0.5;
+        $lathalf = ".5";
+      }
+      if ( $coll{'latdir'} eq "North" )	{
+        $latoff = $latoff + 0.5;
+      } elsif ( $coll{'latdir'} eq "South" )	{
+        $latoff = $latoff - 0.5;
       }
       ($x1,$y1,$hemi) = $self->getCoords($lngoff,$latoff);
 
@@ -789,7 +795,7 @@ sub mapDrawMap{
 			$y1+$maxdotsize < $height )	{
         $atCoord{$x1}{$y1}++;
         $longVal{$x1} = $coll{'lngdeg'} . " " . $coll{'lngdir'};
-        $latVal{$y1} = $coll{'latdeg'} . " " . $coll{'latdir'};
+        $latVal{$y1} = $coll{'latdeg'} . $lathalf . " " . $coll{'latdir'};
 	$hemiVal{$x1}{$y1} = $hemi;
         $matches++;
       }
@@ -1233,8 +1239,14 @@ if ( $q->param('gridposition') ne "in back" )	{
 				print MAPOUT "&genus_name=" . $clean_name;
 				print MAPOUT "&taxon_rank=" . $q->param('taxon_rank');
 			}
-			($lngdeg,$lngdir) = split / /,$longVal{$x1};
 			($latdeg,$latdir) = split / /,$latVal{$y1};
+			if ( $latdeg =~ /\.5/ )	{
+				$latdeg =~ s/\.5//;
+				print MAPOUT "&lathalf=Y";
+			} else	{
+				print MAPOUT "&lathalf=N";
+			}
+			($lngdeg,$lngdir) = split / /,$longVal{$x1};
 			print MAPOUT "&latdeg=$latdeg&latdir=$latdir&lngdeg=$lngdeg&lngdir=$lngdir\">\n";
 		#}
 
@@ -1523,10 +1535,10 @@ sub getCoords	{
 	my $self = shift;
 
 	my ($x,$y) = @_;
-	if ($coll{'lngdir'} =~ /W/)	{
+	if ($coll{'lngdir'} =~ /West/)	{
 		$x = $x * -1;
 	}
-	if ($coll{'latdir'} =~ /S/)	{
+	if ($coll{'latdir'} =~ /South/)	{
 		$y = $y * -1;
 	}
 	($x,$y) = $self->projectPoints($x,$y);
@@ -1535,9 +1547,9 @@ sub getCoords	{
 	$y = $self->getLat($y);
 	if ( $x ne "NaN" && $y ne "NaN" )	{
 		if ( $y > 0 )	{
-			return($x,$y,"N");
+			return($x,$y,"North");
 		} else	{
-			return($x,$y,"S");
+			return($x,$y,"South");
 		}
 	} else	{
 		return;
