@@ -457,6 +457,7 @@ sub assignGenera	{
 		if ( $q->param('recent_genera') )	{
 			for my $taxon ( keys %isRecent )	{
 				$present[$genid{$taxon}][1]--;
+				$recentbyid[$genid{$taxon}] = 1;
 			}
 		}
 
@@ -530,13 +531,18 @@ sub assignGenera	{
 	for $i (reverse 1..$chrons)	{
 		print PADATA "\t$chname[$i]";
 	}
+	if ( $q->param('recent_genera') )	{
+		print PADATA "\tRecent";
+	}
 	print PADATA "\n";
 	for $i (1..$ngen)	{
 		$first = 0;
 		$last = 0;
 		for $j (1..$chrons)	{
 			if ($present[$i][$j] < 0)	{
-				$richness[$j]++;
+				if ( $j > 1 || ! $q->param('recent_genera') || $present[$i][$j] + $recentbyid[$i] < 0 )	{
+					$richness[$j]++;
+				}
 				if ($last == 0)	{
 					$last = $j;
 				}
@@ -563,13 +569,24 @@ sub assignGenera	{
 			for $j (reverse 1..$chrons)	{
 			# if ($present[$i][$j] < 0)	{
 					$fx = abs($present[$i][$j]);
+				# need to clean up the data in the first bin
+				#  for Recent taxa
+					if ( $j == 1 )	{
+						$fx = $fx - $recentbyid[$i];
+					}
 			#   print PADATA " ",$chrons-$j+1," ($fx)";
 					print PADATA "\t$fx";
 			# }
 			}
+			if ( $q->param('recent_genera') )	{
+				printf PADATA "\t%d",$recentbyid[$i];
+			}
 			print PADATA "\n";
 		}
 		if (($first > 0) && ($last > 0))	{
+			if ( $recentbyid[$i] == 1 )	{
+				$last = 0;
+			}
 			for $j ($last..$first)	{
 				$rangethrough[$j]++;
 			}
@@ -1110,6 +1127,10 @@ sub printResults	{
 		if ($q->param('samplesize') ne "")	{
 			print "<hr>\n<h3>Raw data</h3>\n\n";
 		}
+		# need this diversity value for origination rates to make sense
+		#  when ranging through taxa to the Recent in Pull of the
+		#  Recent analyses
+		$bcrich[0] = $rangethrough[0];
 		print "<table cellpadding=4>\n";
 		print "<tr><td class=tiny valign=top><b>Interval</b>\n";
 		print "<td class=tiny align=center valign=top><b>Sampled<br>$generaorrefs</b>";
