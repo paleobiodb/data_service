@@ -1,5 +1,10 @@
 #!/usr/bin/perl
 
+# Poling code deprecated by JA 2.4.04; kept for reasons of historical
+#  interest, because this is one of the unnecessary, unrequested massive
+#  rewrites carried out by Poling when he failed to understand existing
+#  code well enough to carry out simple hacks; no longer used by any module
+
 # created by rjp, 1/2004.
 # represents information about a collection
 
@@ -109,7 +114,6 @@ sub referenceNumber {
 	
 	return ($self->{reference_no});
 }
-
 
 
 

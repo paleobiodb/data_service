@@ -1,5 +1,8 @@
 #!/usr/bin/perl
 
+# deprecated by JA 2.4.04: only ever called by Collection.pm, which replicated
+#  fully operational, existing bridge function buildTaxonomicList
+
 # represents information about an occurrence
 # has methods to set the occurrence number,
 # and then to retrieve information about it
