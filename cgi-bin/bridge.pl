@@ -4093,9 +4093,14 @@ sub printIntervalsJava	{
 
 	print "  if (";
 	for my $nm ( @names )	{
-		print " emltime1 != \"" , $nm->{eml_interval} . $nm->{interval_name} , "\" ";
-		if ( $nm != $names[$#names] )	{
-			print "&&";
+		# this is kind of ugly: we're just not going to let users
+		#  enter a time term that has double quotes because that
+		#  would break the JavaScript
+		if ( $nm->{interval_name} !~ /"/ )	{
+			print " emltime1 != \"" , $nm->{eml_interval} . $nm->{interval_name} , "\" ";
+			if ( $nm != $names[$#names] )	{
+				print "&&\n";
+			}
 		}
 	}
 	print ") {\n";
@@ -4103,9 +4108,11 @@ sub printIntervalsJava	{
 	print "  }\n";
 	print "  if (";
 	for my $nm ( @names )	{
-		print " emltime2 != \"" , $nm->{eml_interval} . $nm->{interval_name} , "\" ";
-		if ( $nm != $names[$#names] )	{
-			print "&&";
+		if ( $nm->{interval_name} !~ /"/ )	{
+			print " emltime2 != \"" , $nm->{eml_interval} . $nm->{interval_name} , "\" ";
+			if ( $nm != $names[$#names] )	{
+				print "&&\n";
+			}
 		}
 	}
 	print " && time2 != \"\" ) {\n";
