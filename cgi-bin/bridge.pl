@@ -48,7 +48,6 @@ use Validation;
 use Debug;
 use Globals;
 
-use TestClass;
 
 #*************************************
 # some global variables (to bridge.pl)
