@@ -3247,11 +3247,11 @@ sub processEditOccurrences {
 
 	# Show a link to re-edit
 	print "
-	<p align='center'><b>
-	<a href='$exec_url?action=displayOccurrenceAddEdit&collection_no=$collection_no'>Edit occurrences for this collection</a>
-	<br><a href='$exec_url?action=displayEditCollection&collection_no=$collection_no'>Edit the main collection record</a>
-	<br><a href='$exec_url?action=displaySearchColls&type=edit_occurrence'>Add/edit occurrences for a different collection with the current reference</a>
-	<br><a href='$exec_url?action=displaySearchColls&type=add'>Enter another collection with the same reference</a></p></b>
+	<center><b>
+	<a href='$exec_url?action=displayOccurrenceAddEdit&collection_no=$collection_no'>Edit occurrences for this collection</a><br>
+	<a href='$exec_url?action=displayEditCollection&collection_no=$collection_no'>Edit the main collection record</a><br>
+	<a href='$exec_url?action=displaySearchColls&type=edit_occurrence'>Add/edit occurrences for a different collection with the current reference</a><br>
+	<a href='$exec_url?action=displaySearchColls&type=add'>Enter another collection with the same reference</a></b><p></center>
 ";
 
 	print &stdIncludes ("std_page_bottom");
