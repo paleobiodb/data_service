@@ -2232,8 +2232,11 @@ sub displayEditCollection {
     push(@row, $refRowString);
     push(@fieldNames, 'secondary_reference_string');
 
+	# Clear the variable for use below
+	$refRowString = "";
+
 	# Check if current session ref is at all associated with the collection
-	# If not, tack it on to $refRowString (with radio button for selecting
+	# If not, list it beneath the sec. refs. (with radio button for selecting
 	# as the primary ref, as with the secondary refs below).
 	unless(PBDBUtil::isRefPrimaryOrSecondary($dbh,$collection_no,$session_ref)){
 		# This part allows current session ref to be selected as primary
@@ -2252,7 +2255,7 @@ sub displayEditCollection {
 						 "value=$session_ref>\n";
 	}
 
-    # get the secondary_references
+    # get the session reference
     push(@row, $refRowString);
     push(@fieldNames, 'session_reference_string');
 
