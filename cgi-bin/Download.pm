@@ -15,7 +15,7 @@ my $q;					# Reference to the parameters
 my $s;					# Reference to the session data
 my $sql;				# Any SQL string
 my $rs;					# Generic recordset
-my @warnings;           # Possible errors in user input
+my @errors;           # Possible errors in user input
 $|=1;
 
 # These arrays contain names of possible fields to be checked by a user in the
@@ -41,7 +41,7 @@ my $bestbothscale;
 
 # for measuring execution time
 my ($th0, $th1);
-#if ($DEBUG) { use Time::HiRes qw(gettimeofday); }
+if ($DEBUG) { use Time::HiRes qw(gettimeofday); }
 $th0 = gettimeofday() if ($DEBUG);
 
 sub new {
@@ -50,7 +50,8 @@ sub new {
 	$dbt = shift;
 	$q = shift;
 	$s = shift;
-	my $self = {};
+    $hbo = shift;
+	my $self = {'dbh'=>$dbh,'dbt'=>$dbt,'q'=>$q,'s'=>$s,'hbo'=>$hbo};
 
 	bless $self, $class;
 	return $self;
@@ -726,7 +727,8 @@ sub getLithologyString	{
     if ( $q->param('lithology1') ) {
         my $lith_term = $dbh->quote($q->param('lithology1'));
         if ($q->param('include_exclude_lithology1') eq "exclude") {
-		    return qq| collections.lithology1 NOT LIKE $lith_term AND collections.lithology2 NOT LIKE $lith_term |;
+		    return qq| (collections.lithology1 NOT LIKE $lith_term OR collections.lithology1 IS NULL) AND|.
+                   qq| (collections.lithology2 NOT LIKE $lith_term OR collections.lithology2 IS NULL)|;
         } else {
 		    return qq| (collections.lithology1 LIKE $lith_term OR collections.lithology2 LIKE $lith_term) |;
         }
@@ -738,10 +740,10 @@ sub getLithologyString	{
         # only do something if some of the boxes aren't checked
         if  ( ! $carbonate || ! $mixed || ! $silic || ! $unknown)	{
 
-            my $silic_str = qq|'"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate'|;
-            my $mixed_str = qq|'"mixed carbonate-siliciclastic"','marl'|;
-            my $carbonate_str = qq|'lime mudstone','wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"'|;
-
+            my $silic_str = join(",", map {"'".$_."'"} @{$self->{'hbo'}{'SELECT_LISTS'}{'lithology_siliciclastic'}});
+            my $mixed_str = join(",", map {"'".$_."'"} @{$self->{'hbo'}{'SELECT_LISTS'}{'lithology_mixed'}});
+            my $carbonate_str = join(",", map {"'".$_."'"} @{$self->{'hbo'}{'SELECT_LISTS'}{'lithology_carbonate'}});
+            
             # the logic is basically different for every combination,
             #  so go through all of them
             # carbonate only
@@ -785,23 +787,38 @@ sub getLithologyString	{
 	return $lith_sql;
 }
 
+# A bad thing about this, and the lithology checkboxes: 
+# they don't add up right now, there are environment/lithologies that don't go into any
+# of the categories, so the 4 checkboxes checked individually don't add up to all four check boxes checked (fetch all).
 sub getEnvironmentString{
 	my $self = shift;
     my $env_sql = '';
 
     # Environment or environments
     if ( $q->param('environment') ) {
-        my $compare = "LIKE";
-        if ($q->param('include_exclude_environment') eq "exclude") {
-            $compare = "NOT LIKE"; 
+        # Maybe this is redundant, but for consistency sake
+        my $environment;
+        if ($q->param('environment') =~ /General/) {
+            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_general'}});
+        } elsif ($q->param('environment') =~ /Terrestrial/) {
+            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_terrestrial'}});
+        } elsif ($q->param('environment') =~ /Siliciclastic/) {
+            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_siliciclastic'}});
+        } elsif ($q->param('environment') =~ /Carbonate/) {
+            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_carbonate'}});
+        } else {
+            $environment = $dbh->quote($q->param('environment'));
         }
-		return qq| collections.environment $compare |.$dbh->quote($q->param('environment'));
+
+        if ($q->param('include_exclude_environment') eq "exclude") {
+		    return qq| (collections.environment NOT IN ($environment) OR collections.environment IS NULL) |;
+        } else {
+		    return qq| collections.environment IN ($environment)|;
+        }
     } else {
-        my $carbonate_str = qq|'carbonate indet.', 'peritidal', 'shallow subtidal indet.', 'open shallow subtidal', 'lagoonal/restricted shallow subtidal', 'sand shoal', 'reef, buildup or bioherm', 'deep subtidal ramp', 'deep subtidal shelf', 'deep subtidal indet.', 'offshore ramp', 'offshore shelf', 'offshore indet.', 'slope', 'basinal (carbonate)'|;
-        my $siliciclastic_str = qq|'marginal marine indet.', 'paralic indet.', 'estuarine/bay', 'lagoonal', 'coastal indet.', 'foreshore', 'shoreface', 'transition zone/lower shoreface', 'offshore', 'deltaic indet.', 'delta plain', 'interdistributary bay', 'delta front', 'prodelta', 'deep-water indet.', 'submarine fan', 'basinal (siliciclastic)'|;
-        my $terrestrial_str = qq|'terrestrial indet.','fluvial-lacustrine indet.',  'fluvial indet.', '\"channel\"', 'channel lag', 'coarse channel fill', 'fine channel fill', '\"floodplain\"', 'wet floodplain', 'dry floodplain', 'levee', 'crevasse splay', 'lacustrine indet.', 'lacustrine - large', 'lacustrine - small', 'pond', 'crater lake', 'karst indet.', 'fissure fill', 'cave', 'sinkhole', 'eolian indet.', 'dune', 'interdune', 'loess', 'fluvial-deltaic indet.', 'deltaic indet.', 'delta plain', 'interdistributary bay', 'alluvial fan', 'estuary', 'glacial', 'mire/swamp', 'spring', 'tar'|;
-                                                                                                                                                                # Siliciclastic
-        
+        my $carbonate_str = join(",", map {"'".$_."'"} @{$self->{'hbo'}{'SELECT_LISTS'}{'environment_carbonate'}});
+        my $siliciclastic_str = join(",", map {"'".$_."'"} @{$self->{'hbo'}{'SELECT_LISTS'}{'environment_siliciclastic'}});
+        my $terrestrial_str = join(",", map {"'".$_."'"} @{$self->{'hbo'}{'SELECT_LISTS'}{'environment_terrestrial'}});
         if (! $q->param("environment_carbonate") || ! $q->param("environment_siliciclastic") || 
             ! $q->param("environment_terrestrial")) {
             if ( $q->param("environment_carbonate") ) {
@@ -1339,11 +1356,6 @@ sub doQuery {
 	print OUTFILE "$header\n";
 	$self->dbg ( "Output header: $header" );
     
-    #
-    # Print warnings
-    #
-    $self->printWarnings(@warnings);
-
 	#
 	# Loop through the result set
     #
@@ -2047,10 +2059,10 @@ sub setupOutput {
     # Get EML values, check interval names
     if ($q->param('max_interval_name')) {
         if ($q->param('max_interval_name') =~ /[a-zA-Z]/) {
-            my ($eml, $name) = PBDBUtil::splitInterval($dbt,$q->param('max_interval_name'));
-            my $ret = PBDBUtil::checkInterval($dbt,$eml,$name);
+            my ($eml, $name) = TimeLookup::splitInterval($dbt,$q->param('max_interval_name'));
+            my $ret = Validation::checkInterval($dbt,$eml,$name);
             if (!$ret) {
-                push @warnings, "We have no record of ".$q->param('max_interval_name')." in the database, so it was ignored";
+                push @errors, "There is no record of ".$q->param('max_interval_name')." in the database";
                 $q->param('max_interval_name'=>'');
                 $q->param('max_eml_interval'=>'');
             } else {
@@ -2061,10 +2073,10 @@ sub setupOutput {
     }
     if ($q->param('min_interval_name')) {
         if ($q->param('min_interval_name') =~ /[a-zA-Z]/) {
-            my ($eml, $name) = PBDBUtil::splitInterval($dbt,$q->param('min_interval_name'));
-            my $ret = PBDBUtil::checkInterval($dbt,$eml,$name);
+            my ($eml, $name) = TimeLookup::splitInterval($dbt,$q->param('min_interval_name'));
+            my $ret = Validation::checkInterval($dbt,$eml,$name);
             if (! $ret) {
-                push @warnings, "We have no record of ".$q->param('min_interval_name')." in the database, so it was ignored";
+                push @errors, "There is no record of ".$q->param('min_interval_name')." in the database";
                 $q->param('min_interval_name'=>'');
                 $q->param('min_eml_interval'=>'');
             } else {
@@ -2074,6 +2086,21 @@ sub setupOutput {
         }
     }
 
+    # Generate warning for taxon with homonyms
+    my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
+    foreach my $taxon (@taxa) {
+        my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon);
+        if (scalar(@taxon_nos)  > 1) {
+            push @errors, "The taxon name '$taxon' is ambiguous and belongs to multiple taxonomic hierarchies. Right the download script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
+        }
+    } 
+
+    # Now if there are any errors, die
+    if (@errors) {
+        PBDBUtil::printErrors(@errors);
+        print main::stdIncludes("std_page_bottom");
+        exit;     
+    }    
 }
 
 sub formatRow {
@@ -2107,7 +2134,7 @@ sub getTaxonString {
             # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
             @taxon_nos_unique{@all_taxon_nos} = ();
         } else { #result > 1
-            push @warnings, "The taxon name '$taxon' was not included because it is ambiguous and belongs to multiple taxonomic hierarchies. Right the download script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
+            #do nothing here, quit above
         }
     }
     $taxon_nos_string = join(", ", keys %taxon_nos_unique);
@@ -2122,17 +2149,6 @@ sub getTaxonString {
     }
     $sql =~ s/^ OR //g;
     return "(".$sql.")";
-}
-sub printWarnings{
-    my $self = shift;
-    if (scalar(@_)) {
-        my $plural = (scalar(@_) > 1) ? "s" : "";
-        print "<br><table width=600 border=0>" .
-              "<tr><td class=darkList><font size='+1'><b>Warning$plural</b></font></td></tr>" .
-              "<tr><td>";
-        print "<li class='medium'>$_</li>" for (@_);
-        print "</td></tr></table><br>";
-    }
 }
 
 sub dbg {
