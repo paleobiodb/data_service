@@ -1875,7 +1875,7 @@ sub doQuery {
 	# Tell what happened
 	if ( ! $acceptedCount ) { $acceptedCount = 0; }
 	if ( ! $acceptedRefs ) { $acceptedRefs = 0; }
-    if ( ! $accectedGenera) { $acceptedGenera = 0; }
+    if ( ! $acceptedGenera) { $acceptedGenera = 0; }
 	print "
 <table border='0' width='600'>
 <tr><td class='darkList'><b><font size='+1'>Output files</font></b></td></tr>
