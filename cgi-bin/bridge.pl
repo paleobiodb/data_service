@@ -2220,7 +2220,9 @@ sub processEnterCollectionForm {
 			
 			push(@row, $refRowString);
 			push(@fields, 'reference_string');
-			push(@row, PBDBUtil::getSecondaryRefsString($dbh,$recID,0,0));
+			# We won't ever have a secondary ref yet, but we want HTMLBuilder
+			# to nuke the headline in the template, so give it an empty value.
+			push(@row, "");
 			push(@fields, 'secondary_reference_string');
 
 			last;
