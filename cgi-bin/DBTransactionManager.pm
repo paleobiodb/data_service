@@ -51,8 +51,9 @@ use DBConnection;
 use Debug;
 use Session;
 use Globals;
-use CGI::Carp qw(fatalsToBrowser);
 use Class::Date qw(date localdate gmdate now);
+use CGI::Carp;
+use CGI;
 
 
 use fields qw(	
@@ -1217,8 +1218,7 @@ sub getData{
 	my $sql = shift;
 #	my $type = (shift or "neither");
 	my $attr_hash_ref = shift;
-	
-	
+
 	# First, check the sql for any obvious problems
 	my $sql_result = $self->checkSQL($sql);
 	if ($sql_result) {
@@ -1227,8 +1227,20 @@ sub getData{
 		# execute returns the number of rows affected for non-select statements.
 		# SELECT:
 		if ($sql_result == 1) {
-			$sth->execute();
+			eval { $sth->execute() };
 			$self->{_err} = $sth->errstr;
+            if ($sth->errstr) { 
+                my $errstr = "SQL error: sql($sql)";
+                my $q2 = new CGI;
+                $errstr .= " sth err (".$sth->errstr.")" if ($sth->errstr);
+                $errstr .= " IP ($ENV{REMOTE_ADDR})";
+                $errstr .= " script (".$q2->url().")";
+                my $getpoststr; my %params = $q2->Vars; my $k; my $v;
+                while(($k,$v)=each(%params)) { $getpoststr .= "&$k=$v"; }
+                $getpoststr =~ s/\n//;
+                $errstr .= " GET,POST ($getpoststr)";
+                croak $errstr;
+            }    
 			# Ok now attributes are accessible
 			foreach my $key (keys(%{$attr_hash_ref})){
 				$attr_hash_ref->{$key} = $sth->{$key};
@@ -1249,8 +1261,21 @@ sub getData{
 		}
 		# non-SELECT:
 		else{
-			my $num = $sth->execute();
+			my $num;
+			eval { $num = $sth->execute() };
 			$self->{_err} = $sth->errstr;
+            if ($sth->errstr) { 
+                my $errstr = "SQL error: sql($sql)";
+                my $q2 = new CGI;
+                $errstr .= " sth err (".$sth->errstr.")" if ($sth->errstr);
+                $errstr .= " IP ($ENV{REMOTE_ADDR})";
+                $errstr .= " script (".$q2->url().")";
+                my $getpoststr; my %params = $q2->Vars; my $k; my $v;
+                while(($k,$v)=each(%params)) { $getpoststr .= "&$k=$v"; }
+                $getpoststr =~ s/\n//;
+                $errstr .= " GET,POST ($getpoststr)";
+                croak $errstr;
+            }    
 			# If we did an insert, make the record id available
 			if($sql =~ /INSERT/i){
 				$self->{_id} = $self->{dbh}->{'mysql_insertid'};
