@@ -129,22 +129,15 @@ sub processPrintHierarchy	{
 					}
 				}
 
+			# this won't be gotten to if the species is a
+			#  recombination, thanks to the "next"
+			# rewrote this section 21.4.04 to use selectMostRecentParentOpinion
 				$sql = "SELECT status,reference_no,ref_has_opinion,pubyr FROM opinions WHERE child_no=" . $ref->{child_no};
 				@crefs = @{$dbt->getData($sql)};
-				my $maxyr = 0;
-				for $cref ( @crefs )	{
-					if ( $cref->{pubyr} > $maxyr )	{
-						$maxyr = $cref->{pubyr};
-						$lastopinion = $cref->{status};
-					} elsif ( $cref->{ref_has_opinion} eq "YES" )	{
-						$sql = "SELECT pubyr FROM refs WHERE reference_no=" . $cref->{reference_no};
-						$rref = @{$dbt->getData($sql)}[0];
-						if ( $rref->{pubyr} > $maxyr )	{
-							$maxyr = $rref->{pubyr};
-							$lastopinion = $cref->{status};
-						}
-					}
-				}
+
+				my $index = TaxonInfo::selectMostRecentParentOpinion($dbt, \@crefs, 1);
+				$lastopinion = $crefs[$index]->{status};
+
 				if ( $lastopinion =~ /belongs to/ )	{
 					push @goodrefs , $ref;
 				}
