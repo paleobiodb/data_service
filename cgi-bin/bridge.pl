@@ -5183,6 +5183,7 @@ sub checkNearMatch ()	{
 		my $flat_fields = join(',',@fields);
 		my @vals = @{$vals};
 		my $flat_vals = join(',',@vals);
+		$flat_vals =~ s/"/\\"/g;
 		print "<b>What would you like to do?</b><br>";
 		print "<form method=POST action=$exec_url>";
 		print "<input type=hidden name=\"action\" value=\"processCheckNearMatch\">";
