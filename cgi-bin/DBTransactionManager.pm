@@ -20,6 +20,7 @@ sub new{
 	$self->{_dbh} = shift;
 	$self->{_session} = shift;
 	$self->{_id} = 0;
+	$self->{_err} = "";
 
 	#_initialize();
 
@@ -71,6 +72,7 @@ sub getData{
 		# SELECT:
 		if($sql_result == 1){
 			$sth->execute();
+			$self->{_err} = $sth->errstr;
 			# Ok now attributes are accessible
 			if(scalar(keys(%{$attr_hash_ref})) > 0){
 				foreach my $key (keys(%{$attr_hash_ref})){
@@ -92,6 +94,7 @@ sub getData{
 		# non-SELECT:
 		else{
 			my $num = $sth->execute();
+			$self->{_err} = $sth->errstr;
 			# If we did an insert, make the record id available
 			if($sql =~ /INSERT/i){
 				$self->{_id} = $self->{_dbh}->{'mysql_insertid'};
@@ -112,6 +115,15 @@ sub getID{
 	my $self = shift;
 
 	return $self->{_id};
+}	
+
+## getErr
+#
+##
+sub getErr{
+	my $self = shift;
+
+	return $self->{_err};
 }	
 
 ## checkSQL
@@ -191,7 +203,7 @@ sub checkWhereClause{
 
 	# This is only 'first-pass' safe. Could be more robust if we check
 	# all AND clauses.
-	$sql =~ /WHERE\s+([A-Z0-9_\.\(]+)\s*(=|LIKE|IN)\s*(.+)?\s*/;
+	$sql =~ /WHERE\s+([A-Z0-9_\.\(]+)\s*(=|LIKE|IN|!=)\s*(.+)?\s*/;
 
 	#print "\$1: $1, \$2: $2<br>";
 	if(!$1){
