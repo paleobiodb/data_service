@@ -3202,6 +3202,20 @@ sub displayReIDForm {
 
 sub displayOccsForReID
 {
+	my $genus_name = $q->param('g_name');
+	my $species_name = $q->param('species_name');
+	my $collection_no = $q->param('collection_no');
+
+	my $current_session_ref = $s->get("reference_no");
+	# make sure they've selected a reference
+	# (the only way to get here without a reference is by doing 
+	# a coll search right after logging in).
+	unless($current_session_ref){
+		displaySearchRefs();	
+		$s->enqueue( $dbh, "action=displayOccsForReID&collection_no=$collection_no" );
+		exit();
+	}
+
 	my $collNos = shift;
 	my @colls;
 	if($collNos){
@@ -3214,10 +3228,6 @@ sub displayOccsForReID
 	print &stdIncludes ( "std_page_top" );
 	print $hbo->populateHTML('js_occurrence_checkform');
     
-	my $genus_name = $q->param('g_name');
-	my $species_name = $q->param('species_name');
-	my $collection_no = $q->param('collection_no');
-
 	my $lastOccNum = $q->param('last_occ_num');
 	if ( ! $lastOccNum ) { 
 		$lastOccNum = -1;
