@@ -36,6 +36,7 @@ my $OUT_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
 my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
 my $outFileBaseName;
 
+my $bestbothscale;
 
 sub new {
 	my $class = shift;
@@ -601,6 +602,8 @@ sub getIntervalString	{
 	my $max = $q->param('max_interval_name');
 	my $min = $q->param('min_interval_name');
 
+	my $collref;
+
 	# return immediately if the user already selected a full time scale
 	#  to bin the data
 	if ( $q->param('time_scale') )	{
@@ -608,7 +611,7 @@ sub getIntervalString	{
 	}
 
 	if ( $max )	{
-		my $collref = TimeLookup::processLookup($dbh, $dbt, '', $max, '', $min);
+		($collref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, '', $max, '', $min);
 		my @colls = @{$collref};
 		if ( ! @colls )	{
 			print "<p><b>WARNING: Can't complete the download because the specified time intervals are unknown</b></p>\n"; exit;
@@ -1725,6 +1728,9 @@ sub doQuery {
 	if ( $q->param('time_scale') )	{
 		print "
 <tr><td>$acceptedIntervals time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleOutFileName\">$scaleOutFileName</a></td></tr>\n";
+	}
+	if ( $q->param("max_interval_name") && ! $bestbothscale )	{
+		print "<tr><td><b>WARNING</b>: the two intervals are not in the same time scale, so intervals in between them could not be determined.</td></tr>\n";
 	}
 print "</table>
 <p align='center'><b><a href='?action=displayDownloadForm'>Do&nbsp;another&nbsp;download</a> -
