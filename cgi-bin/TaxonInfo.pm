@@ -1473,7 +1473,7 @@ sub displayTaxonClassification{
 		  if(exists $classification{$rank}[1]){
 			%auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$classification{$rank}[1])};
 		  }
-		  $auth_yr{author1last} =~ s/\s+/&nbsp;/;	
+		  $auth_yr{author1last} =~ s/\s+/&nbsp;/g;
 		  # Don't link 'sp, 'sp.', 'indet' or 'indet.' either.
 		  if($taxon_rank_order{$rank} < 11 || $classification{$rank}[0] =~ /(sp\.{0,1}|indet\.{0,1})$/){
 			if($counter % 2 == 0){
