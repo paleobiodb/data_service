@@ -73,7 +73,7 @@ my $exec_url = $q->url();
 # Make the HTMLBuilder object
 my $hbo = HTMLBuilder->new( $TEMPLATE_DIR, $dbh, $exec_url );
 
-# Figure out the action
+# Grab the action from the form.  This is what subroutine we should run.
 my $action = $q->param("action");
 $action = "displayMenuPage" unless ( $action );  # set default action to menu page.
 
@@ -83,17 +83,15 @@ my $old_action = "";
 # Get the database connection
 my $dbh = DBConnection::connect();
 
-# Make a Global Transaction Manager object
-# rjp 1/2004 - note, if it's *global* then why is it declared with *my*??
+# Make a Transaction Manager object
 my $dbt = DBTransactionManager->new($dbh, $s);
-
 
 # Need to do this before printing anything else out, if debugging.
 #print $q->header('text/html') if $DEBUG;
 
 # Logout?
 # Run before debugging information
-if ( $action eq "logout" ) { &logout(); }
+if ( $action eq "logout" ) { logout(); }
 
 # Send Password must be run before login
 if ( $action eq "sendPassword" ) { 
@@ -105,15 +103,15 @@ if ( $action eq "sendPassword" ) {
 # Login?
 LOGIN: {
 	# Display Login page
-	if($action eq "displayLogin"){
+	if ($action eq "displayLogin"){
 		displayLoginPage();
 		last;
 	}
 
 	# Process Login
-	if($action eq "processLogin"){
-		$cookie = $s->processLogin ( $dbh, $q ); 
-		if($cookie){
+	if ($action eq "processLogin") {
+		$cookie = $s->processLogin( $dbh, $q ); 
+		if ($cookie) {
 			my $cf = CookieFactory->new();
 			# The following two cookies are for setting the select lists
 			# on the login page.
@@ -127,15 +125,15 @@ LOGIN: {
 							 -expires =>"now" );
 
 			# Destination
-			if($q->param("destination") ne ""){
+			if ($q->param("destination") ne "") {
 				$action = $q->param("destination");
 			}
-			if($action eq "processLogin"){
+			if ($action eq "processLogin") {
 				$action = "displayMenuPage";
 				$old_action = "processLogin";
 			}
 		}
-		else{
+		else {
 			# failed login:  (bad password, etc)
 			$action = "displayHomePage";
 			$q->param("user" => "Guest");
@@ -145,7 +143,7 @@ LOGIN: {
 	}
 
 	# Guest page? 
-	if($q->param("user") eq "Guest"){
+	if ($q->param("user") eq "Guest") {
 		# Change the HTMLBuilder object
 		$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
 		last;
@@ -154,18 +152,18 @@ LOGIN: {
 	# Validate User
 	my $temp_cookie = $q->cookie('session_id');
 	$cookie = $s->validateUser($dbh, $q->cookie('session_id'));
-	if(!$cookie){
-		if($q->param("user") eq "Contributor"){
+	if (!$cookie) {
+		if ($q->param("user") eq "Contributor") {
 			displayLoginPage();
 		}
-		else{
+		else {
 			$q->param("user" => "Guest");
 			$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
 		}
 	}
 }
 
-if(!$DEBUG){
+if (!$DEBUG) {
 	# The right combination will allow me to conditionally set the DEBUG flag
 	if($s->get("enterer") eq "J. Sepkoski" && 
 									$s->get("authorizer") eq Globals::god() ) {
@@ -186,7 +184,7 @@ if ($s->get("enterer") ne "" && $s->get("enterer") ne "Guest")	{
 	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 }
 
-unless($action eq 'displayLogin' or $old_action eq 'processLogin'){
+unless ($action eq 'displayLogin' or $old_action eq 'processLogin') {
 	print $q->header('text/html');
 }
 
@@ -254,7 +252,7 @@ sub sendPassword {
 			if ( $rs->{plaintext} ) {
 				my $body = "\n\nThe password for ".$rs->{name}." is ".$rs->{plaintext}.".\n";
 				my $subject = "Your password";
-				&sendMessage ( $rs->{email}, $subject, $body );
+				sendMessage( $rs->{email}, $subject, $body );
 			}
 		}
 		$sth->finish();
@@ -272,7 +270,7 @@ sub sendMessage {
 	my $sendmail = "/usr/sbin/sendmail -t";
 	my $from = "root\@flatpebble.nceas.ucsb.edu";
 
-	open ( $sm, "| $sendmail") || die "Cannot open $sendmail: $!";
+	open( $sm, "| $sendmail") || die "Cannot open $sendmail: $!";
 
 	print $sm "Subject: $subject\n";
 	print $sm "To: $to\n";
@@ -283,28 +281,21 @@ sub sendMessage {
 	close ( $sm );
 }
 
+
 # Displays the login page
 sub displayLoginPage {
 	my $select = "";
 	my $authorizer = $q->cookie("authorizer");
 	my $enterer = $q->cookie("enterer");
 	my $destination = $q->param("destination");
-    my $html = $hbo->getTemplateString ('login_box');
-
-	# Authorizer
-	buildAuthorizerPulldown ( \$html, $authorizer, 1 );
-
-	# Enterer
-	buildEntererPulldown ( \$html, $enterer, 1 );
+    my $html = $hbo->getTemplateString('login_box');
 
 	# Set the destination
 	$html =~ s/%%destination%%/$destination/;
 
 	# Show the login page
 	print $q->header( -type => "text/html", -Cache_Control=>'no-cache'); 
-    print stdIncludes ( "std_page_top" );
 	print $html;
-    print stdIncludes ("std_page_bottom");
 	exit;
 }
 
@@ -333,9 +324,9 @@ sub displayPreferencesPage	{
 	}
 
 	# Show the preferences entry page
-    print &stdIncludes ( "std_page_top" );
+    print stdIncludes( "std_page_top" );
 	print $hbo->populateHTML('preferences', \@rowData, \@fieldNames);
-    print &stdIncludes ("std_page_bottom");
+    print stdIncludes("std_page_bottom");
 	exit;
 }
 
@@ -431,7 +422,7 @@ sub getPrefFields	{
 # Set new preferences JA 25.6.02
 sub setPreferences	{
 
-    print stdIncludes ( "std_page_top" );
+    print stdIncludes( "std_page_top" );
 	print "<table width='100%'><tr><td colspan='2' align='center'><h3>Your current preferences</h3></td><tr><td align='center'>\n";
 	print "<table align=center cellpadding=4>\n";
 
@@ -531,7 +522,7 @@ sub setPreferences	{
 	if($continue{action}){
 		print "<center><p>\n<a href=\"$exec_url?action=$continue{action}\"><b>Continue</b></a><p></center>\n";
 	}
-    print stdIncludes ("std_page_bottom");
+    print stdIncludes("std_page_bottom");
 	exit;
 
 }
@@ -599,7 +590,7 @@ sub displayMenuPage	{
 
 		# QUEUE
 		# See if there is something to do.  If so, do it first.
-		my %queue = $s->unqueue ( $dbh );
+		my %queue = $s->unqueue( $dbh );
 		if ( $queue{action} ) {
 			# Set each parameter
 			foreach my $parm ( %queue ) {
@@ -613,24 +604,26 @@ sub displayMenuPage	{
 	}
 	
 	
-	print &stdIncludes ("std_page_top");
+	print stdIncludes("std_page_top");
 	print $hbo->populateHTML('menu', \@rowData, \@fieldNames);
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 
 		@time = `date +%S_%N`;
 #	Debug::dbPrint("done at @time");
 }
 
+
+# displays the "Contributer's Area" home page.
 sub displayHomePage {
 
 	# Clear Queue?  This is highest priority
 	if ( $q->param("clear") ) {
-		$s->clearQueue ( $dbh ); 
+		$s->clearQueue( $dbh ); 
 	} else {
 
 		# QUEUE
 		# See if there is something to do.  If so, do it first.
-		my %queue = $s->unqueue ( $dbh );
+		my %queue = $s->unqueue( $dbh );
 		if ( $queue{action} ) {
 			# Set each parameter
 			foreach my $parm ( %queue ) {
@@ -659,10 +652,12 @@ sub displayHomePage {
 	$sth->finish();
 
 
-	print &stdIncludes ("std_page_top");
+	print stdIncludes("std_page_top");
 	print $hbo->populateHTML('home', \@rowData, \@fieldNames);
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
+
+
 
 # Shows the form for requesting a map
 sub displayMapForm {
@@ -673,7 +668,7 @@ sub displayMapForm {
 	my @row = ( '', '', '', '', '', '100%', 'rectilinear', '0', 'Europe', 'X 1', 'medium', 'white', 'none', '30 degrees', 'gray', 'in back', 'medium', 'none', 'black', 'none', 'none', 'medium', 'circles', 'red', 'black', '', 'medium', 'squares', 'blue', 'black', '', 'medium', 'triangles', 'yellow', 'black', '', 'medium', 'diamonds', 'green', 'black' );
 	
 	# Read preferences if there are any JA 8.7.02
-	%pref = &getPreferences($s->get('enterer'));
+	%pref = getPreferences($s->get('enterer'));
 	# Get the enterer's preferences
 	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = &getPrefFields();
 	for $p (@{$setFieldNames})	{
@@ -683,12 +678,12 @@ sub displayMapForm {
 		}
 	}
 
-	%pref = &getPreferences($s->get('enterer'));
+	%pref = getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-    my $html = $hbo->populateHTML ('map_form', \@row, \@fieldNames, \@prefkeys);
+    my $html = $hbo->populateHTML('map_form', \@row, \@fieldNames, \@prefkeys);
 
-	buildAuthorizerPulldown ( \$html );
-	buildEntererPulldown ( \$html );
+	buildAuthorizerPulldown( \$html );
+	buildEntererPulldown( \$html );
 
 	my $authorizer = $s->get("authorizer");
 	$html =~ s/%%authorizer%%/$authorizer/;
@@ -696,10 +691,10 @@ sub displayMapForm {
 	$html =~ s/%%enterer%%/$enterer/;
 
 	# Spit out the HTML
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes("std_page_top" );
 	print $hbo->populateHTML('js_map_checkform');
 	print $html;
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 
@@ -708,7 +703,7 @@ sub displayMapResults {
 
 	#Debug::dbPrint("made it to displayMapResult");
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes("std_page_top" );
 
 	my $m = Map::->new( $dbh, $q, $s, $dbt );
 
@@ -726,67 +721,67 @@ sub displayMapResults {
     }
     close MAP;
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 
 
 sub displayDownloadForm {
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 	my $auth = $q->cookie('authorizer');
 	my $html = $hbo->populateHTML( 'download_form', [ '', '', $auth, '', '', '', '' ], [ 'research_group', 'country','%%authorizer%%','environment','ecology1','ecology2','ecology3' ] );
-	buildAuthorizerPulldown ( \$html );
+	buildAuthorizerPulldown( \$html );
 	$html =~ s/<OPTION value=''>Select authorizer\.\.\./<option value='All'>All/m;
 	print $html;
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 sub displayDownloadResults {
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 
 	my $m = Download->new( $dbh, $dbt, $q, $s );
-	$m->buildDownload ( );
+	$m->buildDownload( );
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 sub displayReportForm {
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 
 	print $hbo->populateHTML( 'report_form', [ '' ], [ 'research_group' ] );
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 sub displayReportResults {
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 
 	my $r = Report->new( $dbh, $q, $s, $dbt );
-	$r->buildReport ( );
+	$r->buildReport();
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 sub displayCurveForm {
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 
 	print $hbo->populateHTML( 'curve_form', [ '', '', '', '' ] , [ 'research_group', 'collection_type', 'lithology1', 'lithology2' ] );
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 sub displayCurveResults {
 
-	print stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 
 	my $c = Curve->new( $dbh, $q, $s, $dbt );
-	$c->buildCurve ( );
+	$c->buildCurve();
 
-	print stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 # Show a generic page
@@ -796,17 +791,17 @@ sub displayPage {
 		# Try the parameters
 		$page = $q->param("page"); 
 		if ( ! $page ) {
-			htmlError ( "$0.displayPage(): Unknown page..." );
+			htmlError( "$0.displayPage(): Unknown page..." );
 		}
 	}
 
 	# Spit out the HTML
 	if ( $page !~ /\.eps$/ && $page !~ /\.gif$/ )	{
-		print &stdIncludes ( "std_page_top" );
+		print stdIncludes( "std_page_top" );
 	}
 	print $hbo->populateHTML( $page );
 	if ( $page !~ /\.eps$/ && $page !~ /\.gif$/ )	{
-		print &stdIncludes ("std_page_bottom");
+		print stdIncludes("std_page_bottom");
 	}
 }
 
@@ -816,7 +811,7 @@ sub displayPage {
 # it will return the HTML code.
 sub stdIncludes {
 	my $page = shift;
-	my $reference = buildReference ( $s->get("reference_no"), "bottom" );
+	my $reference = buildReference( $s->get("reference_no"), "bottom" );
 	my $enterer;
 
 	ENTERER: {
@@ -830,7 +825,7 @@ sub stdIncludes {
 		$enterer = "none";
 	}
 
-	return $hbo->populateHTML (	$page, 
+	return $hbo->populateHTML(	$page, 
 								[ $reference, $enterer ], 
 								[ "%%reference%%", "%%enterer%%" ] );
 }
@@ -881,7 +876,7 @@ sub displaySearchRefs {
 	unshift @row,"";
 	unshift @fields,"project_name";
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 	my $html = "";
 
 	unless($q->param('user') eq "Guest"){
@@ -889,14 +884,14 @@ sub displaySearchRefs {
 	}
 
 	$html .= $hbo->populateHTML("search_refs_form", \@row, \@fields);
-	buildEntererPulldown ( \$html, $enterer, 1 );
+	buildEntererPulldown( \$html, $enterer, 1 );
 	my $enterer = $s->get("enterer");
 	$html =~ s/%%enterer%%/$enterer/;
 	my $authorizer = $s->get("authorizer");
 	$html =~ s/%%authorizer%%/$authorizer/;
 	print $html;
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 
@@ -989,13 +984,13 @@ sub displayRefResults {
 
 		# Set the reference_no
 		unless($q->param('use_primary')){
-			$s->setReferenceNo ( $dbh, ${@rows[0]}[3] );		# Why isn't the primary key the first column?
+			$s->setReferenceNo( $dbh, ${@rows[0]}[3] );		# Why isn't the primary key the first column?
 		}
 		# print "reference_no is ".${@rows[0]}[3]."<BR>\n";
 
 
 		# QUEUE
-		my %queue = $s->unqueue ( $dbh );
+		my %queue = $s->unqueue( $dbh );
 		$q->param( "type" => $queue{type} );		# Store the type, just in case
 		$q->param( "collection_no" => $queue{collection_no} );
 		my $action = $queue{action};
@@ -1011,7 +1006,7 @@ sub displayRefResults {
 			&{$action};			# Run the action
 		} else	{  
 			# otherwise, display a page showing the ref JA 10.6.02
-			print stdIncludes ( "std_page_top" );
+			print stdIncludes( "std_page_top" );
 			print "<h3>Here is the full reference...</h3>\n";
 			print "<table border=0 cellpadding=4 cellspacing=0>\n";
 		    my $drow = DataRow->new($rows[0], $md);
@@ -1039,13 +1034,13 @@ sub displayRefResults {
 			print $refColls;
 			print "</table>\n";
 			print "</table><p>\n";
-			print stdIncludes ( "std_page_bottom" );
+			print stdIncludes( "std_page_bottom" );
 		}
 		#	if ( ! $action ) { $action = "displayMenuPage"; } # bad Tone code
 		return;		# Out of here!
 	}
 
-	print stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 
 	if ( $numRows ) {
 
@@ -1077,7 +1072,7 @@ sub displayRefResults {
 			print qq|<input type=submit value="Select reference"></form>\n|;
 		}
 
-		&printGetRefsButton($numRows,$overlimit);
+		printGetRefsButton($numRows,$overlimit);
 
 	} else {
 		print "<center>\n<h3>Your search $refsearchstring produced no matches</h3>\n";
@@ -1091,14 +1086,14 @@ sub displayRefResults {
 	}
 	print "</p></center><br>\n";
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 
 
 sub displayRefResultsForAdd {
 
-	my $overlimit = &RefQuery();
+	my $overlimit = RefQuery();
 
 	my @rows = @{$sth->fetchall_arrayref()};
 	my $numRows = @rows;
@@ -1109,9 +1104,9 @@ sub displayRefResultsForAdd {
 		exit;
 	}
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 
-	&describeRefResults($numRows,$overlimit);
+	describeRefResults($numRows,$overlimit);
 
 	print qq|<FORM method="POST" action="$exec_url"'>\n|;
 
@@ -1132,19 +1127,19 @@ sub displayRefResultsForAdd {
 	foreach my $rowref ( @rows ) {
 	    my $drow = DataRow->new($rowref, $md);
 		# This is view only... you may not select
-    	print &makeRefString ( $drow, 0, $row, $numRows );
+    	print makeRefString ( $drow, 0, $row, $numRows );
 		$row++;
 	}
 	print "</table>\n";
 	$sth->finish();
 
-	&printGetRefsButton($numRows,$overlimit);
+	printGetRefsButton($numRows,$overlimit);
 
 	print qq|<a href="$exec_url?action=displaySearchRefs&type=add"><b>Do another search</b></a></p>\n|;
 
 	print qq|<p><input type=submit value="Add reference"></center>\n</p>\n|;
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 
@@ -1166,8 +1161,8 @@ sub setReferenceNoFromSth {
 
 sub selectReference {
 
-	$s->setReferenceNo ( $dbh, $q->param("reference_no") );
-	displayMenuPage ( );
+	$s->setReferenceNo( $dbh, $q->param("reference_no") );
+	displayMenuPage( );
 }
 
 sub displayRefAdd {
@@ -1180,7 +1175,7 @@ sub displayRefAdd {
 				$s->get('enterer'), 
 				"<p>If the reference is <b>new</b>, please fill out the following form.</p>" );
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 	print $hbo->populateHTML('js_reference_checkform');
 
 	print qq|<FORM method="POST" action="$exec_url" onSubmit='return checkForm();'>\n|;
@@ -1199,7 +1194,7 @@ sub displayRefAdd {
 		}
 	}
 	print $hbo->populateHTML("enter_ref_form", \@row, \@fieldNames);
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 #  * User (presumably has a ref that's not in the results, and)
@@ -1211,7 +1206,7 @@ sub processNewRef {
 	my $reference_no=0;
 	my $return;
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 	dbg("processNewRef reentry:$reentry<br>");
 
 	if($reentry){
@@ -1232,7 +1227,7 @@ sub processNewRef {
 	print "added</font></h3><center>";
 
 	# Set the reference_no
-	$s->setReferenceNo ( $dbh, $reference_no );
+	$s->setReferenceNo( $dbh, $reference_no );
 
     $sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
     dbg( "$sql<HR>" );
@@ -1242,12 +1237,12 @@ sub processNewRef {
     my $rowref = $sth->fetchrow_arrayref();
     my $md = MetadataModel->new($sth);
     my $drow = DataRow->new($rowref, $md);
-    $retVal = &makeRefString($drow);
+    $retVal = makeRefString($drow);
     print '<table>' . $retVal . '</table>';
 
     print qq|<center><p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p>\n|;
 	print qq|<p><a href="$exec_url?action=displaySearchColls&type=add"><b>Add a new collection</b></a></p></center>|;
-    print &stdIncludes ("std_page_bottom");
+    print stdIncludes("std_page_bottom");
 }
 
 
@@ -1256,7 +1251,7 @@ sub processNewRef {
 sub displaySelectRefForEditPage
 {
 
-	my $overlimit = &RefQuery();
+	my $overlimit = RefQuery();
 	
 	my @rowrefs = @{$sth->fetchall_arrayref()};
 	my $numRows = @rowrefs;
@@ -1273,15 +1268,15 @@ sub displaySelectRefForEditPage
 				$q->param("reference_no" => $s->get("reference_no") );
 			}
 		}
-		&displayRefEdit ();
+		displayRefEdit();
 		exit;
 	}
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 
 	if ( $numRows > 0) {
 
-		&describeRefResults($numRows,$overlimit);
+		describeRefResults($numRows,$overlimit);
 
 		print qq|<form method="POST" action="$exec_url">\n|;
 		print qq|<input type=hidden name="action" value="displayRefEdit">\n|;
@@ -1293,7 +1288,7 @@ sub displaySelectRefForEditPage
 		{
 			my $drow = DataRow->new($rowref, $md);
 			my $selectable = 1 if ( $s->get('authorizer') eq $drow->getValue('authorizer') || $s->get('authorizer') eq Globals::god());
-			$retVal = &makeRefString ( $drow, $selectable, $row, $numRows );
+			$retVal = makeRefString ( $drow, $selectable, $row, $numRows );
 			print $retVal;
 			$matches++ if $selectable;
 			$row++;
@@ -1304,7 +1299,7 @@ sub displaySelectRefForEditPage
 		}
 		print "</form>";
 
-		&printGetRefsButton($numRows,$overlimit);
+		printGetRefsButton($numRows,$overlimit);
 
 	} else {
 		print "<center><h3>Your search $refsearchstring produced no matches</h3>\n";
@@ -1314,7 +1309,7 @@ sub displaySelectRefForEditPage
 
 	print qq|<a href="$exec_url?action=displaySearchRefs&type=edit"><b>Search for another reference</b></a></p></center><br>\n|;
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 # Wrapper to displayRefEdit
@@ -1322,10 +1317,10 @@ sub editCurrentRef {
 	my $reference_no = $s->get("reference_no");
 	if ( $reference_no ) {
 		$q->param("reference_no"=>$reference_no);
-		displayRefEdit ( );
+		displayRefEdit( );
 	} else {
 		$q->param("type"=>"edit");
-		&displaySearchRefs ( "Please choose a reference first" );
+		displaySearchRefs( "Please choose a reference first" );
 	}
 }
 
@@ -1335,20 +1330,20 @@ sub displayRefEdit
 	# Have to be logged in
 	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
 		$s->enqueue( $dbh, "action=displayRefEdit" );
-		&displayLoginPage ( "Please log in first." );
+		displayLoginPage( "Please log in first." );
 		exit;
 	}
 	my $reference_no = $q->param('reference_no');
 	if ( $reference_no ) {
-		$s->setReferenceNo ( $dbh, $reference_no );
+		$s->setReferenceNo( $dbh, $reference_no );
 	} else {
 		# Have to have one!
 		$s->enqueue( $dbh, "action=displayRefEdit" );
-		&displaySearchRefs ( "Please choose a reference first" );
+		displaySearchRefs( "Please choose a reference first" );
 		exit;
 	}
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 	print $hbo->populateHTML('js_reference_checkform');
 
 	$sql =	"SELECT * ".
@@ -1380,7 +1375,7 @@ sub displayRefEdit
 	print qq|<input type=hidden name="action" value="processReferenceEditForm"\n|;
 	print $hbo->populateHTML('enter_ref_form', \@row, \@fieldNames);
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 #  * User submits completed reference form
@@ -1388,7 +1383,7 @@ sub displayRefEdit
 #    (or displays an error message if something goes terribly wrong)
 sub processReferenceEditForm {
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 	  
 	$refID = updateRecord('refs', 'reference_no', $q->param('reference_no'));
     print "<center><h3><font color='red'>Reference record updated</font></h3></center>\n";
@@ -1399,12 +1394,12 @@ sub processReferenceEditForm {
     my $rowref = $sth->fetchrow_arrayref();
     my $md = MetadataModel->new($sth);
     my $drow = DataRow->new($rowref, $md);
-    print '<table>' . &makeRefString($drow) . '</table>';
+    print '<table>' . makeRefString($drow) . '</table>';
 	# my $bibRef = BiblioRef->new($drow);
 	# print '<table>' . $bibRef->toString() . '</table>';
 		
     print qq|<center><p><a href="$exec_url?action=displaySearchRefs&type=edit"><b>Edit another reference</b></a></p></center><br>\n|;
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 
@@ -1422,8 +1417,8 @@ sub displaySearchColls {
 	my $reference_no = $s->get("reference_no");
 	if ( ! $reference_no && $type ne "view" && !$q->param('use_primary') ) {
 		# Come back here... requeue our option
-		$s->enqueue ( $dbh, "action=displaySearchColls&type=$type" );
-		&displaySearchRefs ( "Please choose a reference first" );
+		$s->enqueue( $dbh, "action=displaySearchColls&type=$type" );
+		displaySearchRefs( "Please choose a reference first" );
 		exit;
 	}	
 
@@ -1433,11 +1428,11 @@ sub displaySearchColls {
 	# edit_occurrence	result list links go to edit occurrence page
 
 	# Show the "search collections" form
-	%pref = &getPreferences($s->get('enterer'));
+	%pref = getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML('search_collections_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment',$type ], \@prefkeys);
-	buildAuthorizerPulldown ( \$html );
-	buildEntererPulldown ( \$html );
+	buildAuthorizerPulldown( \$html );
+	buildEntererPulldown( \$html );
 
 	# Set the Enterer
 	my $enterer = $s->get("enterer");
@@ -1456,9 +1451,9 @@ sub displaySearchColls {
 	$html =~ s/%%type%%/$type/;
 
 	# Spit out the HTML
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 	print $html;
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 
@@ -1479,7 +1474,7 @@ sub displayCollResults {
 	
 	my $ofRows = 0;
 	my $method = "getReadRows";			# Default is readable rows
-	my $p = Permissions->new ( $s );
+	my $p = Permissions->new( $s );
 	my $type;							# from the hidden type field in the form.
 
 	# Build the SQL
@@ -1494,7 +1489,7 @@ sub displayCollResults {
 		$type = $q->param ( "type" );			# It might have been passed (ReID)
 	} else {
 		# QUEUE
-		my %queue = $s->unqueue ( $dbh );		# Most of 'em are queued
+		my %queue = $s->unqueue( $dbh );		# Most of 'em are queued
 		$type = $queue{type};
 	}
 
@@ -1671,7 +1666,7 @@ sub displayCollResults {
 			displayEnterCollPage();
 			return;
 		} else {
-			print stdIncludes ( "std_page_top" );
+			print stdIncludes( "std_page_top" );
 			print "<center>\n<h3>Your search produced no matches</h3>";
 			print "<p>Please try again with fewer search terms.</p>\n</center>\n";
 		}
@@ -2015,7 +2010,7 @@ sub processCollectionsSearch {
 				.$q->param("type")."'><b>Try again</b></a>
 				</p>
 				</center>";
-				&htmlError ( $message );
+				htmlError( $message );
 		}
 	}
 		
@@ -2163,7 +2158,7 @@ sub processCollectionsSearch {
 	$sql->setOrderByExpr($sortString);
 	$sql->setLimitExpr($limitString);
 
-	dbg ( "$sql->SQLExpr()<HR>" );
+	dbg( "$sql->SQLExpr()<HR>" );
 	#Debug::dbPrint("proccessCollectionsSearch SQL Num. 2 =" . $sql->SQLExpr());
 	
 	return $sql->SQLExpr();
@@ -2257,7 +2252,7 @@ sub displayCollectionDetails {
 	@row = @{$r};
 	@fieldNames = @{$f};
 
-    print stdIncludes ( "std_page_top" );
+    print stdIncludes( "std_page_top" );
 	
     print $hbo->populateHTML('collection_display_fields', \@row, \@fieldNames);
 		
@@ -2292,7 +2287,7 @@ sub displayCollectionDetails {
 		print $hbo->populateHTML('reid_display_buttons', \@row, \@fieldNames);
 	}
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 } # end sub displayCollectionDetails()
 
 
@@ -2861,7 +2856,7 @@ sub getReidHTMLTableByOccNum {
 # JA 21.2.03
 sub rarefyAbundances	{
 
-	print &stdIncludes ("std_page_top");
+	print stdIncludes("std_page_top");
 
 	$sql = "SELECT abund_value FROM occurrences WHERE collection_no=";
 	$sql .= $q->param(collection_no);
@@ -2973,7 +2968,7 @@ sub rarefyAbundances	{
 	print "<p><i>Results are based on 200 random sampling trials.\n";
 	print "The data can be downloaded from a <a href=\"$HOST_URL/$OUTPUT_DIR/rarefaction.csv\">tab-delimited text file</a>.</i></p></center>\n\n";
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 
 }
 
@@ -2983,20 +2978,20 @@ sub displayEnterCollPage {
 	# Have to be logged in
 	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
 		$s->enqueue( $dbh, "action=displayEnterCollPage" );
-		&displayLoginPage ( "Please log in first." );
+		displayLoginPage( "Please log in first." );
 		exit;
 	}
 	# Have to have a reference #
 	my $reference_no = $s->get("reference_no");
 	if ( ! $reference_no ) {
 		$s->enqueue( $dbh, "action=displayEnterCollPage" );
-		&displaySearchRefs ( "Please choose a reference first" );
+		displaySearchRefs( "Please choose a reference first" );
 		exit;
 	}	
 
 	# Get the field names
 	$sql = "SELECT * FROM collections WHERE collection_no=0";
-	dbg ( "$sql<HR>" );
+	dbg( "$sql<HR>" );
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 	my @fieldNames = @{$sth->{NAME}};
@@ -3039,9 +3034,9 @@ sub displayEnterCollPage {
 		'',
 		'' );
 
-	%pref = &getPreferences($s->get('enterer'));
+	%pref = getPreferences($s->get('enterer'));
 	# Get the enterer's preferences JA 25.6.02
-	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = &getPrefFields();
+	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = getPrefFields();
 	for $p (@{$setFieldNames})	{
 		if ($pref{$p} ne "")	{
 			unshift @row,$pref{$p};
@@ -3049,15 +3044,15 @@ sub displayEnterCollPage {
 		}
 	}
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 
-	print &printIntervalsJava();
+	print printIntervalsJava();
 
 	# Output the main part of the page
 	my @prefkeys = keys %pref;
 	print $hbo->populateHTML('enter_coll_form', \@row, \@fieldNames, \@prefkeys);
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 sub printIntervalsJava	{
@@ -3172,17 +3167,17 @@ sub setReleaseDate	{
 #  * System commits data to database and thanks the nice user
 #    (or displays an error message if something goes terribly wrong)
 sub processEnterCollectionForm {
-		print &stdIncludes ( "std_page_top" );
+		print stdIncludes( "std_page_top" );
 
 	unless($q->param('max_interval'))	{
 		print "<center><h3>The time interval field is required!</h3>\n<p>Please go back and specify the time interval for this collection</p></center>";
-		print &stdIncludes ("std_page_bottom");
+		print stdIncludes("std_page_bottom");
 		print "<br><br>";
 		return;
 	}
 
 	# figure out the release date, enterer, and authorizer
-	&setReleaseDate();
+	setReleaseDate();
 	$q->param(enterer=>$s->get("enterer"));
 	$q->param(authorizer=>$s->get("authorizer"));
 
@@ -3211,7 +3206,7 @@ sub processEnterCollectionForm {
 	# bomb out if no such interval exists JA 28.7.03
 	if ( $q->param('max_interval_no') < 1 )	{
 		print "<center><h3>You can't enter an unknown time interval name</h3>\n<p>Please go back, check the time scales, and enter a valid name</p></center>";
-		print &stdIncludes ("std_page_bottom");
+		print stdIncludes("std_page_bottom");
 		return;
 	}
     
@@ -3265,7 +3260,7 @@ sub processEnterCollectionForm {
 	}
 
 	# get the max/min interval names
-	my ($r,$f) = &getMaxMinNamesAndDashes(\@row,\@fields);
+	my ($r,$f) = getMaxMinNamesAndDashes(\@row,\@fields);
 	@row = @{$r};
 	@fields = @{$f};
  
@@ -3274,7 +3269,7 @@ sub processEnterCollectionForm {
     print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=add">Enter another collection with the same reference</a></p></b></center>|;
  
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 # This subroutine intializes the process to get to the Edit Collection page
@@ -3286,7 +3281,7 @@ sub startEditCollection {
 	# Have to be logged in
 	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
 		$s->enqueue( $dbh, "action=startEditCollection" );
-		&displayLoginPage ( "Please log in first." );
+		displayLoginPage( "Please log in first." );
 		exit;
 	}
 	elsif ( $q->param("collection_no") ) {
@@ -3296,7 +3291,7 @@ sub startEditCollection {
 	}
 
 	$q->param( "type" => "select" );
-	&displaySearchRefs ( ); 
+	displaySearchRefs( ); 
 }
 
 # This subroutine intializes the process to get to the Add Collection page
@@ -3308,13 +3303,13 @@ sub startAddCollection {
 	# Have to be logged in
 	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
 		$s->enqueue( $dbh, "action=startAddCollection" );
-		&displayLoginPage ( "Please log in first." );
+		displayLoginPage( "Please log in first." );
 		exit;
 	}
 	$s->enqueue( $dbh, "action=displaySearchColls&type=add" );
 
 	$q->param( "type" => "select" );
-	&displaySearchRefs ( ); 
+	displaySearchRefs( ); 
 }
 
 # This subroutine intializes the process to get to the Add/Edit Occurrences page
@@ -3326,7 +3321,7 @@ sub startAddEditOccurrences {
 	# Have to be logged in
 	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
 		$s->enqueue( $dbh, "action=startAddEditOccurrences" );
-		&displayLoginPage ( "Please log in first." );
+		displayLoginPage( "Please log in first." );
 		exit;
 	}
 	elsif ( $q->param("collection_no") ) {
@@ -3336,7 +3331,7 @@ sub startAddEditOccurrences {
 	}
 
 	$q->param( "type" => "select" );
-	&displaySearchRefs ( ); 
+	displaySearchRefs(); 
 }
 
 # This subroutine intializes the process to get to the reID entry page
@@ -3348,32 +3343,54 @@ sub startReidentifyOccurrences {
 	$s->enqueue( $dbh, "action=displayReIDCollsAndOccsSearchForm" );
 
 	$q->param( "type" => "select" );
-	&displaySearchRefs ( );
+	displaySearchRefs();
 }
 
+
+
 # JA 13.8.02
+#
+# Entry point for entering new taxa into the authorities table.
+# Called when the user clicks on the "Add taxonomic information" link
+# on the menu page.  Also called several other places.
+#
 sub startTaxonomy	{
 
 	# 1. Need to ensure they have a ref
 	# 2. Need to perform a taxonomy search
 
+	my $taxonName = $q->param('taxon_name');
+	
 	# if there's no selected taxon you'll have to search for one
-	if ( ! $q->param('taxon_name') ){
+	if ($taxonName eq '') {
 		$s->enqueue( $dbh, "action=displayTaxonomySearchForm" );
-	}
-	elsif(! $q->param('taxon_no') )	{
-		$s->enqueue( $dbh, "action=displayTaxonomySearchForm&taxon_name=".$q->param('taxon_name') );
+	} 
+	elsif (! $q->param('taxon_no') ) {
+		$s->enqueue( $dbh, "action=displayTaxonomySearchForm&taxon_name=$taxonName");
 	} 
 	# otherwise go right to the edit page
-	else{
-		my $temp = "action=displayTaxonomyEntryForm&taxon_name=";
-		$temp .= $q->param('taxon_name');
+	else {
+		my $temp = "action=displayTaxonomyEntryForm&taxon_name=$taxonName";
 		$temp .= "&taxon_no=" . $q->param('taxon_no');
 		$s->enqueue( $dbh, $temp );
 	}
+	
 	$q->param( "type" => "select" );
-	&displaySearchRefs ( "Please choose a reference first" );
+	displaySearchRefs("Please choose a reference first" );
 }
+
+
+# JA 13.8.02
+sub displayTaxonomySearchForm	{
+
+	print stdIncludes("std_page_top");
+
+	print $hbo->populateHTML('search_taxonomy_form', [$q->param('taxon_name')],["taxon_name"]);
+
+	print stdIncludes("std_page_bottom");
+}
+
+
 
 ##############
 ## Taxon Info Stuff
@@ -3470,13 +3487,13 @@ sub displayEditCollection {
 	# Have to be logged in
 	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
 		$s->enqueue( $dbh, "action=displayEditCollection" );
-		&displayLoginPage ( "Please log in first." );
+		displayLoginPage( "Please log in first." );
 		exit;
 	}
 	
 	my $collection_no = $q->param('collection_no');
 	$sql = "SELECT * FROM collections WHERE collection_no=" . $collection_no;
-	dbg ( "$sql<HR>" );
+	dbg( "$sql<HR>" );
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 	my @fieldNames = @{$sth->{NAME}};
@@ -3488,7 +3505,7 @@ sub displayEditCollection {
 	}
 
 	my $session_ref = $s->get('reference_no');
-	print &stdIncludes ("std_page_top");
+	print stdIncludes("std_page_top");
 
 	# Get the reference for this collection
 	my $curColNum = 0;
@@ -3542,17 +3559,17 @@ sub displayEditCollection {
     push(@fieldNames, 'session_reference_string');
 
 	# get the max/min interval names
-	my ($r,$f) = &getMaxMinNamesAndDashes(\@row,\@fieldNames);
+	my ($r,$f) = getMaxMinNamesAndDashes(\@row,\@fieldNames);
 	@row = @{$r};
 	@fieldNames = @{$f};
 
-	print &printIntervalsJava();
+	print printIntervalsJava();
 
-	%pref = &getPreferences($s->get('enterer'));
+	%pref = getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
 	print $hbo->populateHTML('edit_coll_form', \@row, \@fieldNames, \@prefkeys);
     
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 
@@ -3562,11 +3579,11 @@ sub processEditCollectionForm {
 	my $collection_no = $q->param("collection_no");
 	my $secondary = $q->param('secondary_reference_no');
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 
 	unless($q->param('max_interval'))	{
 		print "<center><h3>The time interval field is required!</h3>\n<p>Please go back and specify the time interval for this collection</p></center>";
-		print &stdIncludes ("std_page_bottom");
+		print stdIncludes("std_page_bottom");
 		print "<br><br>";
 		return;
 	}
@@ -3637,7 +3654,7 @@ sub processEditCollectionForm {
 	# bomb out if no such interval exists JA 28.7.03
 	if ( $q->param('max_interval_no') < 1 )	{
 		print "<center><h3>You can't enter an unknown time interval name</h3>\n<p>Please go back, check the time scales, and enter a valid name</p></center>";
-		print &stdIncludes ("std_page_bottom");
+		print stdIncludes("std_page_bottom");
 		return;
 	}
     
@@ -3658,10 +3675,10 @@ sub processEditCollectionForm {
     $sth->finish();
 	# Why is this here? Maybe it should be called only if the release date
 	# is not already set.
-	&setReleaseDate();
+	setReleaseDate();
 
 	# Updates here 
-	my $recID = &updateRecord ( 'collections', 'collection_no', $q->param('collection_no') );
+	my $recID = updateRecord( 'collections', 'collection_no', $q->param('collection_no') );
  
     print "<center><h3><font color='red'>Collection record updated</font></h3></center>\n";
 
@@ -3669,13 +3686,13 @@ sub processEditCollectionForm {
 	$sql = "SELECT * FROM collections WHERE collection_no=$recID";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
   	$sth->execute();
-	&dbg ( "$sql<HR>" );
+	dbg( "$sql<HR>" );
 	my @fields = @{$sth->{NAME}};
 	my @row = $sth->fetchrow_array();
 	$sth->finish();
     
 	# get the max/min interval names
-	my ($r,$f) = &getMaxMinNamesAndDashes(\@row,\@fields);
+	my ($r,$f) = getMaxMinNamesAndDashes(\@row,\@fields);
 	@row = @{$r};
 	@fields = @{$f};
 
@@ -3705,7 +3722,7 @@ sub processEditCollectionForm {
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</a></p></b></center>|;
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=add">Add a collection with the same reference</a></p></b></center>|;
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 ## getCurrRefDisplayStringForColl($dbh, $collection_no, $reference_no, $session)
@@ -3739,7 +3756,7 @@ sub processNewOccurrences
 {
 	my $recID;
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 
 	# Get the database metadata
 	$sql = "SELECT * FROM occurrences WHERE occurrence_no=0";
@@ -3818,19 +3835,19 @@ sub processNewOccurrences
 #print "$sql\n"; exit(0);
 
 		# Check for duplicates
-		$return = checkDuplicates ( "occurrence_no", \$recID, "occurrences", \@fieldList, \@row );
+		$return = checkDuplicates( "occurrence_no", \$recID, "occurrences", \@fieldList, \@row );
 		if ( ! $return ) { return $return; }
 
 		if ( $return != $DUPLICATE ) {
 			$sql = "INSERT INTO occurrences (" . join(',', @fieldList) . ") VALUES (" . join(', ', @row) . ")" || die $!;
 			$sql =~ s/\s+/ /gms;
-			dbg ( "$sql<HR>" );
+			dbg( "$sql<HR>" );
 			$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 			$recID = $dbh->{'mysql_insertid'};
 		}
 
 		$sql = "SELECT * FROM occurrences WHERE occurrence_no=$recID";
-		dbg ( "$sql<HR>" );
+		dbg( "$sql<HR>" );
 		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute();
 		my @retrievedRow = $sth->fetchrow_array();
@@ -3845,14 +3862,14 @@ sub processNewOccurrences
     }
     print "</table>";
 		
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 
 sub displayOccurrenceAddEdit {
 
 	my $collection_no = $q->param("collection_no");
-	if ( ! $collection_no ) { htmlError ( "No collection_no specified" ); }
+	if ( ! $collection_no ) { htmlError( "No collection_no specified" ); }
 
 	# Grab the collection name for display purposes JA 1.10.02
 	$sql = "SELECT collection_name FROM collections WHERE collection_no=$collection_no";
@@ -3861,7 +3878,7 @@ sub displayOccurrenceAddEdit {
 	my $collection_name = ${$sth->fetchrow_arrayref()}[0];
 	$sth->finish();
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 	print $hbo->populateHTML('js_occurrence_checkform');
 
 	$sql = "SELECT * FROM occurrences WHERE collection_no=$collection_no";
@@ -3878,7 +3895,7 @@ sub displayOccurrenceAddEdit {
 	push @tempRow, $collection_name;
 	push @tempFieldName, "collection_name";
 
-	%pref = &getPreferences($s->get('enterer'));
+	%pref = getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
 	print $hbo->populateHTML('occurrence_header_row', \@tempRow, \@tempFieldName, \@prefkeys);
 
@@ -3972,7 +3989,7 @@ sub displayOccurrenceAddEdit {
 				'', '', '', '', '');
 
 	# Read the users' preferences related to occurrence entry/editing
-	%pref = &getPreferences($s->get('enterer'));
+	%pref = getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
 
 	# Figure out the number of blanks to print
@@ -3995,7 +4012,7 @@ sub displayOccurrenceAddEdit {
     printf " to collection %s's taxonomic list</p></center>\n",$collection_no;
 	print "</form>";
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 sub processEditOccurrences {
@@ -4363,12 +4380,12 @@ sub processEditOccurrences {
 		}
 	}
 
-	print stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 
 	# Show the rows for this collection to the user
 	my $collection_no = ${$all_params{collection_no}}[0];
 
-	print buildTaxonomicList ( $collection_no, 0,\@gnew_names,\@subgnew_names,\@snew_names );
+	print buildTaxonomicList( $collection_no, 0,\@gnew_names,\@subgnew_names,\@snew_names );
 
 	# Show a link to re-edit
 	print "
@@ -4379,7 +4396,7 @@ sub processEditOccurrences {
 	<a href='$exec_url?action=displaySearchColls&type=add'>Enter another collection with the same reference</a></b><p></center>
 ";
 
-	print stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 
@@ -4395,28 +4412,28 @@ sub displayReIDCollsAndOccsSearchForm
 	# Have to be logged in
 	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
 		$s->enqueue( $dbh, "action=displayReIDCollsAndOccsSearchForm" );
-		&displayLoginPage ( "Please log in first." );
+		displayLoginPage( "Please log in first." );
 		exit;
 	}
 	# Have to have a reference #
 	my $reference_no = $s->get("reference_no");
 	if ( ! $reference_no ) {
 		$s->enqueue( $dbh, "action=displayReIDCollsAndOccsSearchForm" );
-		&displaySearchRefs ( "Please choose a reference first" );
+		displaySearchRefs( "Please choose a reference first" );
 		exit;
 	}	
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
   
 	print "<h4>You may now reidentify either a set of occurrences matching a genus or higher taxon name, or all the occurrences in one collection.</h4>";
   
 	# Display the collection search form
-	%pref = &getPreferences($s->get('enterer'));
+	%pref = getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
 	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no,'',$q->param('type'),'',''], ['authorizer', 'enterer', 'action', 'reid_reference_no', 'lithadj', 'lithology1','type','lithadj2', 'lithology2','environment'], \@prefkeys);
 
-	buildAuthorizerPulldown ( \$html );
-	buildEntererPulldown ( \$html );
+	buildAuthorizerPulldown( \$html );
+	buildEntererPulldown( \$html );
 
 	# Set the Enterer & Authorizer
 	my $enterer = $s->get("enterer");
@@ -4428,7 +4445,7 @@ sub displayReIDCollsAndOccsSearchForm
 	print $html;
   
 	print '</form>';
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 sub displayReIDForm {
@@ -4436,7 +4453,7 @@ sub displayReIDForm {
     # If this is a genus/species search, go right to the reid form.
 	#if($q->param("taxon_rank") ne ''){
 		$q->param("type" => "reid");
-	    &displayCollResults ();
+	    displayCollResults();
 	#}
 	# Not sure why this is here, which of course means I'm not sure why this
 	# entire method exists...  11/26/02 PM
@@ -4447,7 +4464,7 @@ sub displayReIDForm {
 #
 #    	# Must be a collection search
 #		$q->param("type" => "reid");
-#	    &displayCollResults ();
+#	    displayCollResults();
 #    }
 }
 
@@ -4485,7 +4502,7 @@ sub displayOccsForReID
 	my $onFirstPage = 0;
 	my $printCollDetails = 0;
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 	print $hbo->populateHTML('js_occurrence_checkform');
     
 	my $lastOccNum = $q->param('last_occ_num');
@@ -4555,7 +4572,7 @@ sub displayOccsForReID
 
 		my @prefkeys;
 		if ($rowCount == 1)	{
-			%pref = &getPreferences($s->get('enterer'));
+			%pref = getPreferences($s->get('enterer'));
 			@prefkeys = keys %pref;
 			print $hbo->populateHTML('reid_header_row', [ $refString ], [ 'ref_string' ], \@prefkeys);
 		}
@@ -4676,7 +4693,7 @@ sub displayOccsForReID
 
 	print "</tr>\n</table><p>\n";
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 #  5. * System processes reidentifications.  System displays
@@ -4685,7 +4702,7 @@ sub displayOccsForReID
 sub processNewReIDs {
 	my $redID;
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
     
 	# Get the database metadata
 	$sql = "SELECT * FROM reidentifications WHERE reid_no=0";
@@ -4768,13 +4785,13 @@ sub processNewReIDs {
 			push ( @row, $s->get('reference_no'));
  
 			# Check for duplicates
-			$return = checkDuplicates ( "reid_no", \$recID, "reidentifications", \@fieldList, \@row );
+			$return = checkDuplicates( "reid_no", \$recID, "reidentifications", \@fieldList, \@row );
 			if ( ! $return ) { return $return; }
 
 			if ( $return != $DUPLICATE ) {
 				$sql = "INSERT INTO reidentifications (" . join(',', @fieldList).") VALUES (".join(', ', @row) . ")" || die $!;
 				$sql =~ s/\s+/ /gms;
-				dbg ( "$sql<HR>" );
+				dbg( "$sql<HR>" );
 				$dbh->do( $sql ) || die ( "$sql<HR>$!" );
       
 				$recID = $dbh->{'mysql_insertid'};
@@ -4831,18 +4848,9 @@ sub processNewReIDs {
    	print "</table><p>\n";
 	print "<p align=center><b><a href=\"$exec_url?action=displayReIDCollsAndOccsSearchForm\">Reidentify more occurrences</a></b></p>\n";
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
-# JA 13.8.02
-sub displayTaxonomySearchForm	{
-
-	print stdIncludes ("std_page_top");
-
-	print $hbo->populateHTML('search_taxonomy_form', [$q->param('taxon_name')],["taxon_name"]);
-
-	print stdIncludes ("std_page_bottom");
-}
 
 
 # JA 17.8.02
@@ -4942,7 +4950,7 @@ sub processTaxonomySearch	{
 	}
 	# Otherwise, print a form so the user can pick the taxon
 	else	{
-		print stdIncludes ("std_page_top");
+		print stdIncludes("std_page_top");
 		print "<center>\n";
 		print "<h3>Which \"$taxonName\" do you mean?</h3>\n";
 		print "<form method=\"POST\" action=\"bridge.pl\">\n";
@@ -4958,7 +4966,7 @@ sub processTaxonomySearch	{
 		print "</table><p>\n";
 		print "<input type=submit value=\"Submit\">\n</form>\n";
 		print "</center>\n";
-		print stdIncludes ("std_page_bottom");
+		print stdIncludes("std_page_bottom");
 	}
 
 }
@@ -5251,9 +5259,9 @@ sub displayTaxonomyEntryForm	{
 
 	
 	# actually print the form.
-	print stdIncludes ("std_page_top");
+	print stdIncludes("std_page_top");
 	print $html;
-	print stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 } # end of displayTaxonomyEntryForm()
 
 
@@ -5322,7 +5330,7 @@ sub new_authority_form {
 	push @tempVals, $refRowString;
 	push @tempParams, 'ref_string';
 
-	$html = $hbo->populateHTML ("enter_tax_ref_form", \@tempVals, \@tempParams );
+	$html = $hbo->populateHTML("enter_tax_ref_form", \@tempVals, \@tempParams );
 
 	# Suppress the type taxon field because this name would have
 	#  to be checked against the authorities table, and life is
@@ -5395,9 +5403,9 @@ sub processTaxonomyEntryForm {
 		}
 		
 		if ($warning) {  # print out a warning message and return, ie, don't submit the form.
-			print stdIncludes ("std_page_top");
+			print stdIncludes("std_page_top");
 			Globals::printWarning($warning);
-			print stdIncludes ("std_page_bottom");
+			print stdIncludes("std_page_bottom");
 			
 			return;
 		}
@@ -5599,7 +5607,7 @@ sub checkNewTaxon {
 		# WARNING: some fields don't correspond to database fields, e.g.,
 		# type_taxon_name, parent_taxon_name2, and parent_genus_taxon_name
 		if ($matches[0] != 1 || $matches[1] != 1 || $matches[2] != 1) {
-			print stdIncludes ("std_page_top");
+			print stdIncludes("std_page_top");
 
 			# used to be js_taxonomy_checkform
 			print "\n<SCRIPT src=\"/JavaScripts/CheckTaxonomyForm.js\" language=\"JavaScript\" type=\"text/javascript\">\n";
@@ -5648,7 +5656,7 @@ sub checkNewTaxon {
 				}
 			}
 			print "<input type=submit value=\"Submit\">\n</center>\n</form>\n";
-			print stdIncludes ("std_page_bottom");
+			print stdIncludes("std_page_bottom");
 			exit;
 		}
 	} # end if(!$reentry)
@@ -5670,7 +5678,7 @@ sub checkNewTaxon {
 
 			if ($q->param("$new_taxon_name") && !$q->param("$new_taxon_no")) {
 				if (!$printed) {
-					print stdIncludes ("std_page_top");
+					print stdIncludes("std_page_top");
 
 					# used to be js_taxonomy_checkform
 					print "\n<SCRIPT src=\"/JavaScripts/CheckTaxonomyForm.js\" language=\"JavaScript\" type=\"text/javascript\">\n";
@@ -5692,7 +5700,7 @@ sub checkNewTaxon {
 				}
 			}
 			print "<center><input type=submit value=\"Submit\"></center>\n</form>\n";
-			print stdIncludes ("std_page_bottom");
+			print stdIncludes("std_page_bottom");
 		}
 		else {
 			displayTaxonomyResults();
@@ -5708,7 +5716,7 @@ sub checkNewTaxon {
 
 			if ($matches[$index] == 0) {
 				if (!$open_form_printed) {
-					print stdIncludes ("std_page_top");
+					print stdIncludes("std_page_top");
 
 					# used to be js_taxonomy_checkform
 					print "\n<SCRIPT src=\"/JavaScripts/CheckTaxonomyForm.js\" language=\"JavaScript\" type=\"text/javascript\">\n";
@@ -5730,7 +5738,7 @@ sub checkNewTaxon {
 		if ($printed) {
 			print $ones."\n";
 			print "<center><input type=submit value=\"Submit\"></center>\n</form>\n";
-			print stdIncludes ("std_page_bottom");
+			print stdIncludes("std_page_bottom");
 		}
 		else { ## All 1's
 			for(my $index = 0; $index < @params_to_check; $index++){
@@ -5760,7 +5768,7 @@ sub checkNewTaxon {
 # The form asks for info about the genus.
 sub displayTaxonomyResults	{
 
-	print stdIncludes ("std_page_top");
+	print stdIncludes("std_page_top");
 	# Process the form data relevant to the authorities table
 
 	my $sesRef = $s->get('reference_no');
@@ -6016,7 +6024,7 @@ sub displayTaxonomyResults	{
 	print $q->param('taxon_no');
 	print "\">Add more data about " . $q->param('taxon_name') . "</a></b> - ";
 	print "<b><a href=\"$exec_url?action=displayTaxonomySearchForm\">Add more data about another taxon</a></b></p>\n";
-	print stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 
 }
 
@@ -6132,7 +6140,7 @@ sub printTaxonomicOpinions	{
 		# If the opinion data are from a secondary report, print the
 		#  second-hand data for the original report
 		if ( $taxonRow{'author1last'} )	{
-			$opinion .= &formatShortRef( \%taxonRow );
+			$opinion .= formatShortRef( \%taxonRow );
 		}
 
 		# Get the PBDB ref info
@@ -6149,7 +6157,7 @@ sub printTaxonomicOpinions	{
 		}
 		$opinion .= "<a href=$exec_url?action=displayRefResults&reference_no=";
 		$opinion .= $taxonRow{'reference_no'} . ">";
-		$opinion .= &formatShortRef( \%refRow );
+		$opinion .= formatShortRef( \%refRow );
 		$opinion .= "</a>";
 		if ( $taxonRow{'author1last'} )	{
 			$opinion .= ")";
@@ -6191,7 +6199,7 @@ sub displayEnterAuthoritiesForm
 	# Have to be logged in
 	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
 		$s->enqueue( $dbh, "action=displayEnterAuthoritiesForm" );
-		&displayLoginPage ( "Please log in first." );
+		displayLoginPage( "Please log in first." );
 		exit;
 	}
 		my $reference_no;
@@ -6211,9 +6219,9 @@ sub displayEnterAuthoritiesForm
 		} else {
 			$reference_no = $q->param('reference_no');
 		}
-		$s->setReferenceNo ( $dbh, $reference_no );
+		$s->setReferenceNo( $dbh, $reference_no );
 
-		print &stdIncludes ( "std_page_top" );
+		print stdIncludes( "std_page_top" );
  
 		print '<table>';
 		print qq|<form method=POST action="$exec_url">\n|;
@@ -6227,14 +6235,14 @@ sub displayEnterAuthoritiesForm
 		print '</table>';
 		print '<input type=submit value="Add authorities">';
 		
-	  print &stdIncludes ("std_page_bottom");
+	  print stdIncludes("std_page_bottom");
 }
 
 #  5. * System processes new authorities.  System displays
 #       authorities form.
 sub processNewAuthorities
 {
-		print &stdIncludes ( "std_page_top" );
+		print stdIncludes( "std_page_top" );
     
 		# Get the database metadata
 		$sql = "SELECT * FROM authorities WHERE taxon_no=0";
@@ -6321,20 +6329,20 @@ sub processNewAuthorities
 			push ( @row, $q->param('reference_no'));
  
 			# Check for duplicates
-			$return = checkDuplicates ( "taxon_no", \$recID, "authorities", \@fieldList, \@row );
+			$return = checkDuplicates( "taxon_no", \$recID, "authorities", \@fieldList, \@row );
 			if ( ! $return ) { return $return; }
 
 			if ( $return != $DUPLICATE ) {
 				$sql = "INSERT INTO authorities (" . join(',', @fieldList) . ") VALUES (" . join(', ', @row) . ")" || die $!;
 				$sql =~ s/\s+/ /gms;
-				dbg ( "$sql<HR>" );
+				dbg( "$sql<HR>" );
 				$dbh->do( $sql ) || die ( "$sql<HR>$!" );
  
 				my $recID = $dbh->{'mysql_insertid'};
 			}
 
 			$sql = "SELECT * FROM authorities WHERE taxon_no=$recID";
-			dbg ( "$sql<HR>" );
+			dbg( "$sql<HR>" );
 			$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 			$sth->execute();
 			my @retrievedRow = $sth->fetchrow_array();
@@ -6349,14 +6357,14 @@ sub processNewAuthorities
    	}
    	print "</table>\n";
 		
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 sub displaySearchDLGenusNamesForm
 {
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 	print $hbo->populateHTML('search_genus_names');
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 sub displayGenusNamesDLResults
@@ -6367,7 +6375,7 @@ sub displayGenusNamesDLResults
 	$sth->execute();
 	my @rows = @{$sth->fetchall_arrayref()};
 	
-	print stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 	
 	my $numRows = @rows;
 	if ( $numRows > 0)
@@ -6394,15 +6402,15 @@ sub displayGenusNamesDLResults
 		print "<h1>No genus names for class $class_name</h1>";
 	}
 	
-	print stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 
 sub authorityRow
 {
-	print stdIncludes ( "std_page_top" );
+	print stdIncludes( "std_page_top" );
 	print '<form><table>' . $hbo->populateHTML('authority_entry_row') . '</table></form>';
-	print stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 }
 
 sub displayTaxonGeneralForm
@@ -6424,7 +6432,7 @@ sub displayTaxonGeneralForm
 		} else {
 			$reference_no = $q->param('reference_no');
 		}
-		$s->setReferenceNo ( $dbh, $reference_no );
+		$s->setReferenceNo( $dbh, $reference_no );
 	  
 		print $hbo->populateHTML('taxon_general_page_top');
 	  
@@ -6448,24 +6456,24 @@ sub displayTaxonGeneralForm
 		print '</table>';
 		print '<input type=submit value="Process taxa">';
 		
-	  print stdIncludes ("std_page_bottom");
+	  print stdIncludes("std_page_bottom");
 	  
 }
 
 sub displayProjectStatusPage
 {
-	  print stdIncludes ( "std_page_top" );
+	  print stdIncludes( "std_page_top" );
 	  print $hbo->populateHTML('project_status_page');
-	  print stdIncludes ("std_page_bottom");
+	  print stdIncludes("std_page_bottom");
 }
 
 
 # not used?
 sub displaySubmitBugForm
 {
-	  print stdIncludes ( "std_page_top" );
+	  print stdIncludes( "std_page_top" );
 	  print $hbo->populateHTML('bug_report_form', [$s->get('enterer'), 'Cosmetic'], ['enterer', 'severity']);
-	  print stdIncludes ("std_page_bottom");
+	  print stdIncludes("std_page_bottom");
 }
 
 
@@ -6477,9 +6485,9 @@ sub processBugReport
 		$return = insertRecord('bug_reports', 'bug_id', 0);
 		if ( ! $return ) { return $return; }
     
-		print stdIncludes ( "std_page_top" );
+		print stdIncludes( "std_page_top" );
 		print "<h3>Your bug report has been added</h3>";
-		print stdIncludes ("std_page_bottom");
+		print stdIncludes("std_page_bottom");
 }
 
 # not used?
@@ -6491,7 +6499,7 @@ sub displayBugs {
 	  my @rowrefs = @{$sth->fetchall_arrayref()};
 	  $sth->finish();
 	  
-	  print stdIncludes ( "std_page_top" );
+	  print stdIncludes( "std_page_top" );
 	  print "<table border=0>";
 	  foreach my $rowref (@rowrefs)
 	  {
@@ -6499,7 +6507,7 @@ sub displayBugs {
 	    print $hbo->populateHTML('bug_display_row', $rowref, $fieldNamesRef);
 	  }
 	  print "</table>";
-	  print stdIncludes ("std_page_bottom");
+	  print stdIncludes("std_page_bottom");
 }
 
 
@@ -6513,7 +6521,7 @@ sub updateRecord {
 	# Have to be logged in
 	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
 		$s->enqueue( $dbh, "action=updateRecord" );
-		&displayLoginPage ( "Please log in first." );
+		displayLoginPage( "Please log in first." );
 		exit;
 	}
 
@@ -6541,7 +6549,7 @@ sub updateRecord {
 	# Set the pubtitle to the pull-down pubtitle unless it's set in the form
 	$q->param(pubtitle => $q->param("pubtitle_pulldown")) unless $q->param("pubtitle");
 
-	&setPersonValues( $tableName );
+	setPersonValues( $tableName );
 	$q->delete("authorizer_no");
 	$q->delete("enterer_no");
 
@@ -6591,7 +6599,7 @@ sub updateRecord {
 
 	# Trying to find why the modifier is sometimes coming through 
 	# blank.  This should stop it.
-	if ( $updateString !~ /modifier/ ) { htmlError ( "modifier not specified" ); }
+	if ( $updateString !~ /modifier/ ) { htmlError( "modifier not specified" ); }
 
 #if ( $s->get("authorizer") eq "M. Uhen" ) { print "$updateString<br>\n"; } 
 	$dbh->do( $updateString ) || die ( "$updateString<HR>$!" );
@@ -6613,7 +6621,7 @@ sub insertRecord {
 	# Have to be logged in
 	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
 		$s->enqueue( $dbh, "action=insertRecord" );
-		displayLoginPage ( "Please log in first." );
+		displayLoginPage( "Please log in first." );
 		exit;
 	}
 
@@ -6645,7 +6653,7 @@ sub insertRecord {
 
 		# Get the database metadata
 		$sql = "SELECT * FROM $tableName WHERE $idName=0";
-		dbg ( "$sql<HR>" );
+		dbg( "$sql<HR>" );
 		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute();
 
@@ -6712,13 +6720,13 @@ sub insertRecord {
 		dbg("insert VALS: @vals<br>");
 
 		# Check for a duplicate and bomb if one is found
-		$return = checkDuplicates ( $idName, $primary_key, $tableName, \@fields, \@vals );
+		$return = checkDuplicates( $idName, $primary_key, $tableName, \@fields, \@vals );
 		if ( ! $return || $return == $DUPLICATE ) { return $return; }
 
 		# Check for near matches
 		# NOTE: the below method now handles matches by giving the user a choice
 		# of 'cancel' or 'continue' if a match is found. See method for details.
-		checkNearMatch ( $matchlimit, $idName, $tableName, $searchField, $searchVal, \@fields, \@vals );
+		checkNearMatch( $matchlimit, $idName, $tableName, $searchField, $searchVal, \@fields, \@vals );
 
 	} # END 'unless($fields_ref && $vals_ref)' - see top of method
 
@@ -6802,7 +6810,7 @@ sub setPersonValues	{
 #
 #	Returns:
 ##			
-sub checkNearMatch ()	{
+sub checkNearMatch {
 
 	my $matchlimit = shift;
 	my $idName = shift;
@@ -7004,7 +7012,7 @@ sub processCheckNearMatch{
 }
 
 # Check for duplicates before inserting a record
-sub checkDuplicates () {
+sub checkDuplicates {
 	my $idName = shift;
 	my $primary_key = shift;
 	my $tableName = shift;
@@ -7063,7 +7071,7 @@ sub makeRefString	{
 	my $supress_colls = shift;
 
 	my $retRefString  = "";
-	my $bibRef = BiblioRef->new ( $drow );
+	my $bibRef = BiblioRef->new( $drow );
 
 	$retRefString = $bibRef->toString( $selectable, $row, $rowcount );
 	if($supress_colls){
@@ -7088,7 +7096,7 @@ sub getCollsWithRef	{
 	my $ofRows = 0;
 	my $ofRows2 = 0;
 	#my $method = "getReadRows";					# Default is readable rows
-	my $p = Permissions->new ( $s );
+	my $p = Permissions->new( $s );
 
 	# NOTE:  "release_date" seems redundant, and "collection_name" seems
 	# unnecessary.  PM 10/16/02
@@ -7201,7 +7209,7 @@ sub RefQuery {
 	# Use current reference button?
 	if ( $q->param("use_current") ) {
 		my $sql = "SELECT * FROM refs WHERE reference_no = ".$s->get("reference_no");
-		dbg ( "Using current: $sql<HR>" );
+		dbg( "Using current: $sql<HR>" );
 		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute();
 		$md = MetadataModel->new($sth);
@@ -7306,10 +7314,10 @@ sub RefQuery {
 		$md = MetadataModel->new($sth);
 		@fieldNames = @{$sth->{NAME}};
 	} else {
-		print &stdIncludes ("std_page_top");
+		print stdIncludes("std_page_top");
 		print "<center><h4>Sorry! You can't do a search without filling in at least one field</h4>\n";
 		print "<p><a href='$exec_url?action=displaySearchRefs&type=".$q->param("type")."'><b>Do another search</b></a></p></center>\n";
-		print &stdIncludes ("std_page_bottom");
+		print stdIncludes("std_page_bottom");
 		exit(0);
 	}
 	
@@ -7323,9 +7331,9 @@ sub htmlError {
 	my $message = shift;
 
 	# print $q->header( -type => "text/html" );
-    print stdIncludes ( "std_page_top" );
+    print stdIncludes( "std_page_top" );
 	print $message;
-    print stdIncludes ("std_page_bottom");
+    print stdIncludes("std_page_bottom");
 	exit 1;
 }
 
