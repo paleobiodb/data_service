@@ -233,6 +233,7 @@ sub processAction {
 			}
 			if ( ( $q->param('authorizer') && $q->param('authorizer') !~ /.\ / ) || ( $q->param('enterer') && $q->param('enterer') !~ /\. / ) )	{
 				$errorMessage .= "Note that the format for names is <i>Smith, A.</i> ";
+			}
 			if ( ! $errorMessage )	{
 				$errorMessage .= "The authorizer name, enterer name, or password is invalid. ";
 			}
