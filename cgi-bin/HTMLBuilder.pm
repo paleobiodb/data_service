@@ -205,15 +205,22 @@ sub populateHTML
     # Do div tags (eventually, other tags should support show/hide attributes)
 	# revised by JA 16.7.02
 	if ($val ne "")	{
+		# If we have a value, replace the div tags with just what's between
+		# them (which could be <span> tags).
 		$htmlTemplateString =~ s/(<div show="$fieldName">)(.*?)(<\/div>)/$2/gim;
 	} else	{
+		# Otherwise, remove the div tags, and everything inbetween (like <span>
+		# tags), completely
 		$htmlTemplateString =~ s/<div show="$fieldName">.*?<\/div>//gim;
 	}
     
     # Do spans with show
+	# Remove the <span> tags and everything inbetween if there is no
+	# corresponding value.
     $htmlTemplateString =~ s/<span show="$fieldName">.*?<\/span>//gim unless $val ne "";
 
     # Do span tags
+	# Else, replace span tags with just the value
     $htmlTemplateString =~ s/<span\s+id="$fieldName">.*?<\/span>/$val/gim if $val ne "";
 
 	# Variable substitution (of form %%variable%%) -- tone
