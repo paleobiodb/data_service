@@ -206,7 +206,7 @@ sub checkWhereClause{
 
 	# This is only 'first-pass' safe. Could be more robust if we check
 	# all AND clauses.
-	$sql =~ /WHERE\s+([A-Z0-9_\.\(]+)\s*(=|LIKE|IN|!=)\s*(.+)?\s*/i;
+	$sql =~ /WHERE\s+([A-Z0-9_\.\(]+)\s*(=|LIKE|IN|!=|>|<|>=|<=)\s*(.+)?\s*/i;
 
 	#print "\$1: $1, \$2: $2<br>";
 	if(!$1){
