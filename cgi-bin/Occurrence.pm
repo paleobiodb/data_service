@@ -329,11 +329,17 @@ sub buildHTML {
 	
 	# some HTML tags
 	my $TD = "TD nowrap";
+	my $fontStart = "";
+	my $fontEnd = "";
 	my $style;
 	my $html;
 	
 	# loop through all rows in the reidList
 	# each of these will become a row of HTML code.
+	#
+	# note, if more than one row, then everything after the
+	# first row is a reid.  Make the reids show up in smaller font size.
+	my $count = 0;
 	foreach my $row (@{$reidListRef}) {
 	
 		# if a cell has a style (from a style sheet)
@@ -343,16 +349,25 @@ sub buildHTML {
 			$style = "class=\"indet\""; 
 		}
 		
+		# since we're going through in order, if we get to a count
+		# of 1, that means that we have reids, so for this one and
+		# all future reids, make the font small.
+		if ($count == 1) {
+			$fontStart = "<SPAN class=\"smaller\">";
+			$fontEnd = "</SPAN>";
+		}
 		
 		$html .= "<TR>
-				<$TD>$row->[0]</TD>
-				<$TD>$row->[1]</TD>
-				<$TD>$row->[2]</TD>
-				<$TD $style>$row->[3]</A></TD>
-				<$TD>$row->[4]</TD>
-				<$TD>$row->[5]</TD>
-				<$TD>$row->[6]</TD>
-			</TR>";		
+				<$TD>$fontStart$row->[0]$fontEnd</TD>
+				<$TD>$fontStart$row->[1]$fontEnd</TD>
+				<$TD>$fontStart$row->[2]$fontEnd</TD>
+				<$TD $style>$fontStart$row->[3]</A>$fontEnd</TD>
+				<$TD>$fontStart$row->[4]$fontEnd</TD>
+				<$TD>$fontStart$row->[5]$fontEnd</TD>
+				<$TD>$fontStart$row->[6]$fontEnd</TD>
+			</TR>";
+		
+		$count++;
 	}
 	
 	$self->{html} = $html;
