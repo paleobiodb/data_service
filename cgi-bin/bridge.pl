@@ -4836,27 +4836,47 @@ sub getCollsWithRef	{
 	my $row = shift;
 	my $rowcount = shift;
 
-  # make sure displayed collections are readable by this person JA 24.6.02
+	# make sure displayed collections are readable by this person JA 24.6.02
 	$limit = 999;
 	my $ofRows = 0;
-	my $method = "getReadRows";					# Default is readable rows
+	my $ofRows2 = 0;
+	#my $method = "getReadRows";					# Default is readable rows
 	my $p = Permissions->new ( $s );
 
+	# NOTE:  "release_date" seems redundant, and "collection_name" seems
+	# unnecessary.  PM 10/16/02
 	my @columnList = (	"collection_no", "authorizer",
 						"collection_name", "access_level",
 						"research_group", "release_date",
 						"DATE_FORMAT(release_date, '%Y%m%d') rd_short" );
 
+	# primary ref
 	$sql = "SELECT ". join (', ', @columnList) . " FROM collections WHERE reference_no=$tempRefNo";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 
+	# secondary ref
+	$sql = "SELECT col.collection_no, col.authorizer, col.access_level, ".
+		  "col.research_group,DATE_FORMAT(col.release_date,'%Y%m%d') rd_short ".
+		  "FROM collections AS col, secondary_refs ".
+		  "WHERE col.collection_no = secondary_refs.collection_no ".
+		  "AND secondary_refs.reference_no=$tempRefNo";
+	my $sth2= $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+	$sth2->execute();
+	
+
 	my $displayRows;
-	if ( $sth->rows )	{
+	my $displayRows2;
+	if($sth->rows || $sth2->rows){
 		# Get rows okayed by permissions module
 		@dataRows = ();
-		$p->$method ( $sth, \@dataRows, $limit, \$ofRows );
-    	$displayRows = @dataRows;				# This is the actual number of rows displayed
+		@dataRows2 = ();
+		# primary
+		$p->getReadRows($sth, \@dataRows, $limit, \$ofRows);
+    	$displayRows = @dataRows; # This is the actual number of rows displayed
+		# secondary
+		$p->getReadRows($sth2, \@dataRows2, $limit, \$ofRows2);
+    	$displayRows2 = @dataRows2;# This is the actual number of rows displayed
 
 		# Make sure the background color matches what was set back when
 		#  bibRef->toString was used in makeRefString
@@ -4868,24 +4888,33 @@ sub getCollsWithRef	{
 		}
 		$retString .= "<td colspan='3'>&nbsp;</td>\n<td><font size=-1>\n";
 	}
-	if ( $displayRows == 0 && $sth->rows )	{
+	if( ($displayRows == 0 && $displayRows2 == 0) 
+							&& ($sth->rows || $sth2->rows) ){
 		$retString .= "<b>WARNING: collections have been created using this reference.\n";
 		$retString .= "</font>\n</td>\n</tr>\n";
 	}
-	elsif ( $displayRows > 0 ) {
+	elsif($displayRows > 0 || $displayRows2 > 0){
 		# Build the collections line
 
 		my $CollString = "";
 		my $count = 0;
 		my $exec_url = $q->url();
 	
+		# primary
 		foreach my $dataRow (@dataRows) {
+			my $collno = $dataRow->{"collection_no"};
+			my $linkFront = "<b><a href=\"$exec_url?action=displayCollectionDetails&collection_no=$collno\">";
+			$CollString .= $linkFront . $dataRow->{"collection_no"} . "</a></b> ";
+			$count++;
+		}
+		# secondary
+		foreach my $dataRow (@dataRows2) {
 			my $collno = $dataRow->{"collection_no"};
 			my $linkFront = "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$collno\">";
 			$CollString .= $linkFront . $dataRow->{"collection_no"} . "</a> ";
 			$count++;
 		}
-		if ( $count ) {
+		if($count){
 			if ( $count == 1 )	{
 				$retString .= "Collection: ";
 			} else {
