@@ -21,13 +21,12 @@ use Globals;
 use Session;
 
 
-
-use constant YES => 'YES';
-
-
 use fields qw(	
                 GLOBALVARS
 				opinion_no
+				
+				parentName
+				
 				cachedDBRow
 				SQLBuilder
 							);  # list of allowable data fields.
@@ -112,6 +111,22 @@ sub parentNumber {
 	return $rec->{parent_no};	
 }
 
+# returns the parent name for this opinion if it can figure it out.
+# (this is the taxon name from the authorities table figured out from the 
+# parent_no of this opinion record).
+sub parentName {
+	my Opinion $self = shift;
+	
+	my $parent_no = $self->parentNumber();
+	if (($parent_no) && (! $self->{parentName})) {
+		my $pt = Taxon->new();
+		$pt->setWithTaxonNumber($parent_no);
+		$self->{parentName} = $pt->taxonName();
+	}
+	
+	return $self->{parentName};
+}
+
 # the child_no is the original taxon_no that this opinion is about.
 sub childNumber {
 	my Opinion $self = shift;
@@ -119,6 +134,9 @@ sub childNumber {
 	my $rec = $self->databaseOpinionRecord();
 	return $rec->{child_no};
 }
+
+
+
 
 # returns the authors of the opinion record
 sub authors {
@@ -378,15 +396,27 @@ sub displayOpinionForm {
 	$fields{'OPTIONAL_subspecies_only'} = $childRank->isSubspecies();	
 	$fields{'OPTIONAL_not_species'} = $childRank->isHigherThanString(SPECIES);
 	
-	if ( $childRank->isSubspecies || $childRank->isSpecies ) {		
+	if ( $childRank->isSubspecies() || $childRank->isSpecies() ) {		
 		
 		# if it's a species or subspecies, then we need to figure out
 		# the genus or species.  Eventually, this should be handled by the Rank class,
 		# but for now, we'll just grab the first "word" of the taxon_name
-		my $tname = $fields{taxon_name};
-		my ($one, $two, $three) = split(/ /, $tname);
-		$fields{genus} = $one;
-		$fields{species} = "$one $two";
+		my $parentName;
+		
+		Debug::dbPrint("is new entry = $isNewEntry");
+		
+		if ($isNewEntry) {  # if new entry, get parent name from taxon_name entered.
+			$parentName = $fields{taxon_name}; 
+		} else {
+			# else, if we're editing a form, then figure out the parent
+			# name based on the parent_no field in the opinion record.
+			$parentName = $self->parentName();
+			Debug::dbPrint("parentName = $parentName");
+		}
+		
+		my ($one, $two, $three) = split(/ /, $parentName);
+		$fields{parent_genus} = $one;
+		$fields{parent_species} = "$one $two";
 	
 		# don't do anything for now.
 	}
@@ -627,34 +657,8 @@ sub submitOpinionForm {
 		
 	# this $editAny variable is true if they can edit any field,
 	# false if they can't.
-	my $editAny = 0;
+	my $editAny = $s->editAnyFormField($isNewEntry, $dbFields{authorizer_no});
 	
-	if ($isNewEntry) {
-		$editAny = 1;	# new entries can edit any field.
-	} else {
-		# edits of pre-existing records have more restrictions. 
-	
-		# if the authorizer of the opinion record doesn't match the current
-		# authorizer, then *only* let them edit empty fields.
-	
-		$editAny = 0;
-	
-		# if the authorizer of the opinion record matches the authorizer
-		# who is currently trying to edit this data, then allow them to change
-		# any field.
-		
-		if ($s->get('authorizer_no') == $dbFields{authorizer_no}) {
-			$editAny = 1;
-		}
-		
-		if ($s->isSuperUser()) {
-			# super user can edit any field no matter what.
-			$editAny = 1;	
-		}
-	}
-
-	
-
 	
 	# build up a hash of fields/values to enter into the database
 	my %fieldsToEnter;
@@ -672,6 +676,12 @@ sub submitOpinionForm {
 		$fieldsToEnter{modifier_no} = $s->entererNumber();	
 	}
 	
+	
+	###
+	## Deal with the reference section at the top of the form.  This
+	## is almost identical to the way we deal with it in the authority form
+	## so this functionality should probably be merged at some point.
+	###
 	
 	if ( 	($q->param('ref_has_opinion') ne YES) && 
 			($q->param('ref_has_opinion') ne 'NO')) {
@@ -751,16 +761,17 @@ sub submitOpinionForm {
 	}
 	
 	
+	## End of dealing with the reference section
+	####
 
-	
 
-	
-	# Now loop through all fields submitted from the form.
-	# If a field is not empty, then see if we're allowed to edit it in the database.
-	# If we can edit it, then make sure the name is correct (since a few fields like
-	# 2nd_pages, etc. don't match the database field names) and add it to the 
-	# %fieldsToEnter hash.
-	
+	####
+	## Now loop through all fields submitted from the form.
+	## If a field is not empty, then see if we're allowed to edit it in the database.
+	## If we can edit it, then make sure the name is correct (since a few fields like
+	## 2nd_pages, etc. don't match the database field names) and add it to the 
+	## %fieldsToEnter hash.
+	####
 	
 	#Debug::dbPrint("dbFields = ");
 	#Debug::printHash(\%dbFields);
@@ -783,6 +794,7 @@ sub submitOpinionForm {
 		if ($okayToEdit) {
 			
 			# if the value isn't already in our fields to enter
+			# then add it to the fields to enter
 			if (! $fieldsToEnter{$formField}) {
 				$fieldsToEnter{$formField} = $q->param($formField);
 			}
@@ -792,6 +804,12 @@ sub submitOpinionForm {
 		
 	} # end foreach formField.
 	
+	
+	
+	###
+	## Most of the rest of this function is just error checking.
+	##
+	###
 	
 	
 	# Set up a few variables to represent the state of the form..
@@ -805,8 +823,11 @@ sub submitOpinionForm {
 	my $childTaxonName = $childTaxon->taxonName();
 	my $childRank = Rank->new($q->param('taxon_rank'));
 	
-	# figure out the name of the parent taxon.
+	###
+	# Figure out the name of the parent taxon.
 	# This is dependent on the taxonStatusRadio value
+	###
+	
 	my $parentTaxonName;
 	my $parentTaxon = Taxon->new($self->{GLOBALVARS});
 	my $parentRank;
@@ -888,24 +909,32 @@ sub submitOpinionForm {
 		
 		
 	} elsif ($taxonStatusRadio eq RECOMBINED_AS) {
+		#####
+		## RECOMBINED AS
+		#####
+		
 		## Tons of things to check for the Recombined As..  
 	
 		$fieldsToEnter{status} = RECOMBINED_AS;
 		
 		if (! ($parentRank->isSpecies())) {
-			$errors->add("The parent rank for a recombined relationship must be species");	
+			$errors->add("The parent rank for a recombined 
+			relationship must be species");	
 		}
 		
 		if ($parentTaxonName eq $childTaxonName) {
-			$errors->add("The parent taxon and child taxon can't be the same for a recombined relationship");	
+			$errors->add("The parent taxon and child taxon
+			can't be the same for a recombined relationship");	
 		}
 		
 		if (!$childRank->isSpecies()) {
-			$errors->add("The child rank must be species for a recombined as relationship");
+			$errors->add("The child rank must be 
+			species for a recombined as relationship");
 		}
 		
 		if ($childTaxon->firstWord() eq $parentTaxon->firstWord()) {
-			$errors->add("The genus of the child taxon must be different from the genus of the parent taxon");
+			$errors->add("The genus of the child 
+			taxon must be different from the genus of the parent taxon");
 		}
 		
 		
@@ -921,6 +950,16 @@ sub submitOpinionForm {
 		# we should also enter a separate opinion that Homo blaheri belongs to 
 		# Homo.  If they were using a subspecies, this would be the same, except
 		# that the belongs to would apply to a species instead of a genus.
+		#
+		# Note, this is pretty weird since Homo blaheri should *already* have an 
+		# opinion that it belongs to Homo - this opinion would have been created
+		# automatically when they entered the authority record for Homo blaheri.
+		# However, due to these historical reasons, for now, we're going to create
+		# a *duplicate* belongs to record in the sense that child_no and parent_no
+		# of it are the same as the one that already exists - but the author 
+		# information in the new belongs to record will be the same as for the 
+		# recombined as opinion that they're currently entering.  In the future
+		# we'll probably change this.
 		#
 		# Note, this is pretty similar to what we do in the Authority form.  Perhaps
 		# these two functionalities should be combined somehow?
@@ -941,7 +980,8 @@ sub submitOpinionForm {
 				$belongsToParent->setWithTaxonName($parentTaxon->firstWord());
 				
 				Debug::dbPrint("parent taxon name = " . $parentTaxon->taxonName() .
-							", parent taxon first word = " . $parentTaxon->firstWord() );
+							", parent taxon first word = " .
+							$parentTaxon->firstWord() );
 				Debug::dbPrint("howdy we're here 2, parentname = "
 					. $belongsToParent->taxonName());							
 			}
@@ -1066,8 +1106,6 @@ sub submitOpinionForm {
 	}
 	
 	
-
-
 	# assign the parent_no and child_no fields if they don't already exist.
 	if (!$fieldsToEnter{child_no} ) { $fieldsToEnter{child_no} = $q->param('taxon_no'); }
 	
