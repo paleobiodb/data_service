@@ -266,12 +266,14 @@ sub checkStartForm{
 				if($results[$index+($counter*$numrows)]->{clarification_info}){
 					print " (".$results[$index+($counter*$numrows)]->{taxon_no}.")";
 				}
-				print "\"><i>&nbsp;".$results[$index+($counter*$numrows)]->{genus_name}."</i>&nbsp;".
+				print "\"><i>&nbsp;".$results[$index+($counter*$numrows)]->{genus_name}."&nbsp;".
 					  $results[$index+($counter*$numrows)]->{species_name};
 				if($results[$index+($counter*$numrows)]->{clarification_info}){
-					print " <small>".$results[$index+($counter*$numrows)]->{clarification_info}."</small>";
+					print " </i><small>".$results[$index+($counter*$numrows)]->{clarification_info}."</small></td>";
 				}
-				print "</td>";
+				else{
+					print "</i></td>";
+				}
 			}
 			print "</tr>";
 		}
@@ -827,6 +829,7 @@ sub displayTaxonSynonymy{
 
 	# Get the original combination
 	my $original_combination_no = getOriginalCombination($dbt, $taxon_no);
+	PBDBUtil::debug(1,"original combination_no: $original_combination_no");
 	
 	# Select all parents of the original combination whose status' are
 	# either 'recombined as' or 'corrected as'
