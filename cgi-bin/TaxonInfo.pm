@@ -1,7 +1,6 @@
 package TaxonInfo;
 
 use PBDBUtil;
-use DBTransactionManager;
 
 $DEBUG = 1;
 
@@ -9,13 +8,6 @@ $DEBUG = 1;
 #
 ##
 sub startTaxonInfo{
-	# NOTE:  gonna have to get prefs for map scale, etc.
-	# NOTE:  need to intercept query to see which continents are returned.
-	# NOTE:  The above (immediate) should probably be done via defining my
-	# own 'displayMapResults' method so I can get back the collection
-	# data (numbers and all else from that "select *" in Map.pm)
-	# for the collection search display.
-
 	my $html = "<form method=post action=\"/cgi-bin/bridge.pl\">".
 		   "<input id=\"action\" type=hidden name=\"action\"".
 		   " value=\"checkTaxonInfo\">".
@@ -41,13 +33,14 @@ sub checkStartForm{
 	my $q = shift;
 	my $dbh = shift;
 	my $s = shift;
+	my $dbt = shift;
 	my $taxon_type = $q->param("taxon_rank");
 	my $taxon_name = $q->param("genus_name");
-	my $sth = "";
 	my $results = "";
 	my $genus = "";
 	my $species = "";
 	my $sql =""; 
+	my @results;
 
 	# if we got here because we had to relogin (old session), we could
 	# have a query string that looks like 
@@ -57,7 +50,7 @@ sub checkStartForm{
 	# NOTE: we could also check that we got at least one of genus/species
 	# non-empty before running any selects...
 	if($taxon_type eq "" or $taxon_name eq ""){
-	    print $q->redirect(-url=>$BRIDGE_HOME."?action=displayPaulsTest");
+	    print $q->redirect(-url=>$BRIDGE_HOME."?action=beginTaxonInfo");
 	    exit;
 	}
 
@@ -94,14 +87,9 @@ sub checkStartForm{
 			      "and species_name!='sp.'"; 
 		}
 	}
-	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	# execute returns true if the statement was successfully executed.
-	if($sth->execute()){
-		# Returns results as a reference to an array which contains
-		# references to hashes, representing rows of data.
-		$results = $sth->fetchall_arrayref({});
-		print "ERROR: $sth->err<br>" if($sth->err);
-		if(scalar(@{$results}) < 1 ){
+	@results = @{$dbt->getData($sql)};
+	if(@results){
+		if(scalar @results < 1 ){
 			print main::stdIncludes("std_page_top");
 			print "<center><h3>No results found</h3>".
 			      "genus: \&lt;<i>$genus</i>\&gt; and ".
@@ -112,8 +100,8 @@ sub checkStartForm{
 		}
 		# if we got just one result, we assume they chose 
 		# 'Genus and species' and got an exact match.
-		elsif(scalar(@{$results}) == 1){
-			displayTaxonInfoResults($q, $dbh, $s);
+		elsif(scalar @results == 1){
+			displayTaxonInfoResults($q, $dbh, $s, $dbt);
 		}
 		# Show 'em their choices (radio buttons for genus-species)
 		else{
@@ -127,7 +115,7 @@ sub checkStartForm{
 			      "value=\"$taxon_type\">".
 			      "<table width=\"100%\">";
 			my $newrow = 0;
-			foreach $hash (@{$results}){
+			foreach $hash (@results){
 			    print "<tr>" if($newrow % 3 == 0);
 			    print "<td><input type=\"radio\" ".
 				  "name=\"genus_name\" value=\"".
@@ -144,7 +132,6 @@ sub checkStartForm{
 			print main::stdIncludes("std_page_bottom");
 		}
 	}
-	print "ERROR: $sth->errstr<br>" if($sth->errstr);
 }
 
 ## displayTaxonInfoResults
@@ -154,6 +141,7 @@ sub displayTaxonInfoResults{
 	my $q = shift;
 	my $dbh = shift;
 	my $s = shift;
+	my $dbt = shift;
 
 	require Map;
 
@@ -162,27 +150,19 @@ sub displayTaxonInfoResults{
 
 	my $m = Map->new( $dbh, $q, $s );
 	$q->param(-name=>"taxon_info_script",-value=>"yes");
-	# NOTE: THIS needs to be a single continent if it comes up on just one!
-	$q->param(-name=>"mapcontinent",-value=>"global");
-	$q->param(-name=>"mapresolution",-value=>"medium");
-	$q->param(-name=>"mapscale",-value=>"X 3");
-	$q->param(-name=>"mapbgcolor",-value=>"white");
-	$q->param(-name=>"gridsize",-value=>"30 degrees");
-	$q->param(-name=>"gridcolor",-value=>"gray");
-	$q->param(-name=>"coastlinecolor",-value=>"black");
-	$q->param(-name=>"pointshape",-value=>"medium circles");
-	$q->param(-name=>"dotcolor",-value=>"blue");
-	$q->param(-name=>"dotborder",-value=>"without");
+	my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder');
+	my %user_prefs = main::getPreferences($s->get('enterer'));
+	foreach my $pref (@map_params){
+		if($user_prefs{$pref}){
+			$q->param($pref => $user_prefs{$pref});
+		}
+	}
+	# Not covered by prefs:
+	$q->param('mapresolution'=>'medium');
+	$q->param('mapscale'=>'X 1');
 
 	# NOTE: ERROR: need to change/remove the "search again" link generated
 	# at the bottom of this output.
-	# NOTE: DO THIS STEPWISE: instead of this wrapper, do the mapQueryDb
-	# and then figure out the number of continents, then call the other
-	# routines.
-	# NOTE: FIGURING OUT CONTINENTS:  do I do a backwards Map::mapGetScale
-	# or just compare collections.country names? THE BEST THING would be
-	# to add a CONTINENT column to the collections table (actually, a
-	# CONTINENT table with a reference to it from collections).
 	print "<table width=\"100%\">".
 		  "<tr><td align=\"middle\"><h3>Classification</h3></td><td align=\"middle\"><h3>Collection Map</h3></td></tr>";
 	print "<tr><td width=\"40%\" valign=\"top\" align=\"middle\">";
@@ -200,7 +180,7 @@ sub displayTaxonInfoResults{
 		}
 	}
 
-	displayTaxonClassification($dbh, $genus, $species);
+	displayTaxonClassification($dbt, $genus, $species);
 
 	print"</td><td width=\"60%\" align=\"middle\">";
 	$m->buildMap();
@@ -263,7 +243,7 @@ sub displayTaxonInfoResults{
 	print "</table><hr>";
 	
 	#subroutine to do the synonymy
-	displayTaxonSynonymy($dbh, $s, $genus, $species);
+	displayTaxonSynonymy($dbt, $genus, $species);
 
 	print "<br><br><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
 		  "beginTaxonInfo\">Search Again</a></b></center>";
@@ -284,13 +264,12 @@ sub by_time_place_string{
 #
 ##
 sub displayTaxonClassification{
-	my $dbh = shift;
+	my $dbt = shift;
 	my $genus = shift or "";
 	my $species = shift or "";
 	my $species_only = 0;
 	my $taxon_rank;
 	my $taxon_name;
-	my $sth;
 
 	# The authorities table has "Genus species" for taxon_rank='species', so
 	# we set the rank to genus iff we only got a genus. These values 
@@ -329,6 +308,7 @@ sub displayTaxonClassification{
 	my $status = "";
 	# Loop at least once, but as long as it takes to get full classification
 	while($parent_no){
+		my @results = ();
 		# We know the taxon_rank and taxon_name, so get its number
 		my $sql_auth_inv = "SELECT taxon_no ".
 				   "FROM authorities ".
@@ -336,13 +316,12 @@ sub displayTaxonClassification{
 				   "AND taxon_name = '$taxon_name'";
 	# NOTE: ABOVE: should species also be included in taxon_name???
 		PBDBUtil::debug(1,"authorities inv: $sql_auth_inv<br>");
-		$sth = $dbh->prepare($sql_auth_inv) || die ("$sql_auth_inv<hr>$!");
-		if($sth->execute()){
-			my @tmp_array = $sth->fetchrow_array();
+		@results = @{$dbt->getData($sql_auth_inv)};
+		if(@results){
 			# Keep $child_no at -1 if no results are returned.
-			if(defined $tmp_array[0]){
+			if(defined $results[0]){
 				# Save the taxon_no for keying into the opinions table.
-				$child_no = $tmp_array[0];
+				$child_no = $results[0]->{taxon_no};
 
 				# Insurance for self referential / bad data in database.
 				# NOTE: can't use the tertiary operator with hashes...
@@ -362,20 +341,19 @@ sub displayTaxonClassification{
 			}
 		}
 		else{ # bad select?
-		    print "ERROR: $sth->errstr<br>" if($sth->errstr);
+			# No results might not be an error: it might just be lack of data
+		    # print "ERROR: no results for $sql_auth_inv<br>";
 		    last;
 		}
-		$sth->finish();
 		
 		# Now see if the opinions table has a parent for this child
 		my $sql_opin =  "SELECT status, parent_no, pubyr, reference_no ".
 						"FROM opinions ".
 						"WHERE child_no=$child_no";
 		PBDBUtil::debug(1,"opinions: $sql_opin<br>");
-		$sth = $dbh->prepare($sql_opin) || die ("$sql_opin<hr>$!");
-		if($sth->execute()){
-			($status,$parent_no) = selectMostRecentParentOpinion(
-											$sth->fetchall_arrayref({}), $dbh);
+		@results = @{$dbt->getData($sql_opin)};
+		if(scalar @results){
+			($status,$parent_no)=selectMostRecentParentOpinion($dbt,\@results);
 
 			# Insurance for self referential or otherwise bad data in database.
 			if($parent_no_visits{$parent_no}){
@@ -393,10 +371,9 @@ sub displayTaxonClassification{
 					       "FROM authorities ".
 					       "WHERE taxon_no=$parent_no";
 				PBDBUtil::debug(1,"authorities: $sql_auth<br>");
-				$sth = $dbh->prepare($sql_auth) || 
-						die ("$sql_auth<hr>$!");
-				if($sth->execute()){
-					$auth_hash_ref = $sth->fetchrow_hashref;
+				@results = @{$dbt->getData($sql_auth)};
+				if(scalar @results){
+					$auth_hash_ref = $results[0];
 					# reset name and rank for next loop pass
 					$taxon_rank = $auth_hash_ref->{"taxon_rank"};
 					$taxon_name = $auth_hash_ref->{"taxon_name"};
@@ -404,10 +381,11 @@ sub displayTaxonClassification{
 					$classification{$taxon_rank} = $taxon_name;
 				}
 				else{
-				    print "ERROR: $sth->errstr<br>" if($sth->errstr);
+					# No results might not be an error: 
+					# it might just be lack of data
+				    # print "ERROR in sql: $sql_auth<br>";
 				    last;
 				}
-				$sth->finish();
 			}
 			# If we didn't get a parent or status ne 'belongs to'
 			else{
@@ -415,10 +393,10 @@ sub displayTaxonClassification{
 			}
 		}
 		else{
-			print "ERROR: $sth->errstr<br>" if($sth->errstr);
+			# No results might not be an error: it might just be lack of data
+			# print "ERROR in sql: $sql_opin<br>";
 			last;
 		}
-		$sth->finish();
 	}
 
 	print "<table width=\"50%\"><tr><th>Rank</th><th>Name</th></tr>";
@@ -447,14 +425,12 @@ sub displayTaxonClassification{
 #
 ##
 sub displayTaxonSynonymy{
-	my $dbh = shift;
-	my $session = shift;
+	my $dbt = shift;
 	my $genus = shift or "";
 	my $species = shift or "";
 	my $taxon_rank;
 	my $taxon_name;
 	my $species_only = 0;
-	my $db = DBTransactionManager->new($dbh,$session);
 
 	my %synmap = ( 'recombined as' => 'recombined as',
 				   'reassigned to' => 'recombined as',
@@ -480,7 +456,7 @@ sub displayTaxonSynonymy{
 	my $sql = "SELECT taxon_no, reference_no, author1last, pubyr, ref_is_authority ".
 			  "FROM authorities ".
 			  "WHERE taxon_rank='$taxon_rank' AND taxon_name='$taxon_name'";
-	my @results = @{$db->getData($sql)};
+	my @results = @{$dbt->getData($sql)};
 	my $child_no = $results[0]->{taxon_no};
 	unless($child_no){
 		#print "no taxonomic history found.<br>";
@@ -502,7 +478,7 @@ sub displayTaxonSynonymy{
 		}
 		$sql = "SELECT author1last, pubyr FROM refs ".
 			   "WHERE reference_no=$results[0]->{reference_no}";
-		@results = @{$db->getData($sql)};
+		@results = @{$dbt->getData($sql)};
 		print "<li><i>$genus $species</i> was named by ".
 			  "$results[0]->{author1last} ($results[0]->{pubyr})";
 	}
@@ -519,31 +495,30 @@ sub displayTaxonSynonymy{
 	}
 
 	# Now, go get synonymies for the taxon as child
-	my $syn_html = getSynonymyParagraph($dbh, $session, $child_no);
+	my $syn_html = getSynonymyParagraph($dbt, $child_no);
 	print "<li>$syn_html" if($syn_html ne "");
 
 	# and for the taxon as parent
 	$sql = "SELECT child_no FROM opinions WHERE parent_no=$child_no";
-	@results = @{$db->getData($sql)};
+	@results = @{$dbt->getData($sql)};
 	foreach my $child (@results){
 		my $other_paras = "";
 		# Need to print out "[taxon_name] was named by [author] ([pubyr])".
 		# - select taxon_name, author1last, pubyr, reference_no from authorities
 		$sql = "SELECT taxon_name, author1last, pubyr, reference_no ".
 			   "FROM opinions WHERE taxon_no=$child->{child_no}";
-		my @auth_rec = @{$db->getData($sql)};
+		my @auth_rec = @{$dbt->getData($sql)};
 		# - if not pubyr and author1last, get same from refs
 		unless($auth_rec[0]->{author1last} && $auth_rec[0]->{pubyr}){
 			$sql = "SELECT author1last, pubyr ".
 				   "FROM refs WHERE reference_no=$auth_rec[0]->{reference_no}";
-			my @ref_rec = @{$db->getData($sql)};
+			my @ref_rec = @{$dbt->getData($sql)};
 			$auth_rec[0]->{author1last} = $ref_rec[0]->{author1last};
 			$auth_rec[0]->{pubyr} = $ref_rec[0]->{pubyr};
 		}
 		$other_paras .= "<i>$auth_rec[0]->{taxon_name}</i> was named by ".
 						"$auth_rec[0]->{author1last} ($auth_rec[0]->{pubyr})";
-		$other_paras .= getSynonymyParagraph($dbh, $session,
-											   $child->{child_no});
+		$other_paras .= getSynonymyParagraph($dbt, $child->{child_no});
 		print "<li>$other_paras" if($other_paras ne "");
 	}
 
@@ -555,17 +530,14 @@ sub displayTaxonSynonymy{
 #
 ##
 sub getSynonymyParagraph{
-	my $dbh = shift;
-	my $session = shift;
+	my $dbt = shift;
 	my $child_no = shift;
-
-	my $db = DBTransactionManager->new($dbh,$session);
 
 	$sql = "SELECT parent_no, status, reference_no, pubyr, author1last ".
 		   "FROM opinions WHERE child_no=$child_no";
-	#($status, $parent_no)=selectMostRecentParentOpinion($db->getData($sql),
-	#																 $dbh);
-	@results = @{$db->getData($sql)};
+	@results = @{$dbt->getData($sql)};
+	# I can't remember why this is here, commented out...
+	#($status, $parent_no) = selectMostRecentParentOpinion($dbt, \@results);
 	my %synonymies = ();
 	# check for synonymies - status' of anything other than "belongs to"
 	foreach my $row (@results){
@@ -575,7 +547,7 @@ sub getSynonymyParagraph{
 				# select into the refs table.
 				$sql = "SELECT author1last, pubyr FROM refs ".
 					   "WHERE reference_no=$row->{reference_no}";
-				my @real_ref = @{$db->getData($sql)};
+				my @real_ref = @{$dbt->getData($sql)};
 				$row->{author1last} = $real_ref[0]->{author1last};
 				$row->{pubyr} = $real_ref[0]->{pubyr};
 			}
@@ -595,7 +567,7 @@ sub getSynonymyParagraph{
 		$syn_html .= "; it was $synmap{$synonymies{$syn_keys[$index]}[0]->{status}}";
 		$sql = "SELECT taxon_name FROM authorities ".
 			   "WHERE taxon_no=$synonymies{$syn_keys[$index]}[0]->{parent_no}";
-		@results = @{$db->getData($sql)};
+		@results = @{$dbt->getData($sql)};
 		$syn_html .= "<i>$results[0]->{taxon_name}</i> ";
 		my @key_list = @{$synonymies{$syn_keys[$index]}};
 		for(my $j = 0; $j < @key_list; $j++){
@@ -617,8 +589,8 @@ sub getSynonymyParagraph{
 #
 ##
 sub selectMostRecentParentOpinion{
+	my $dbt = shift;
 	my $array_ref = shift;
-	my $dbh = shift;
 	my @array_of_hash_refs = @{$array_ref};
 	
 	if(scalar @array_of_hash_refs == 1){
@@ -645,15 +617,11 @@ sub selectMostRecentParentOpinion{
 				# get the year from the refs table
 				my $sql = "SELECT pubyr FROM refs WHERE reference_no=".
 						  "$array_of_hash_refs[$index]->{reference_no}";
-				my $sth = $dbh->prepare($sql) or 
-										die "failed to prepare $sql<br>"; 
-				$sth->execute();
-				my @ref_ref = @{$sth->fetchall_arrayref({})};
+				my @ref_ref = @{$dbt->getData($sql)};
 				if($ref_ref[0]->{pubyr} && $ref_ref[0]->{pubyr} > $years[1]){
 					$years[0] = $index;
 					$years[1] = $ref_ref[0]->{pubyr};
 				}
-				$sth->finish();
 			}	
 		}
 		return ($array_of_hash_refs[$years[0]]->{"status"},$years[1]);
@@ -662,38 +630,3 @@ sub selectMostRecentParentOpinion{
 		return (undef, undef);
 	}
 }
-
-# Shows the form for requesting a map
-# STEAL AND NUKE!!
-sub displayMapForm {
-
-	# defaults
-	my @row = ('global', 'X 3', 'white', '30 degrees', 'gray', 'black', 'medium circles', 'blue', 'without');
-	my @fieldNames = ('mapcontinent', 'mapscale', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'pointshape', 'dotcolor', 'dotborder');
-	
-	# Read preferences if there are any JA 8.7.02
-	%pref = &getPreferences($s->get('enterer'));
-	# Get the enterer's preferences
-	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = &getPrefFields();
-	for $p (@{$setFieldNames})	{
-		if ($pref{$p} ne "")	{
-			unshift @row,$pref{$p};
-			unshift @fieldNames,$p;
-		}
-	}
-
-	%pref = &getPreferences($s->get('enterer'));
-	my @prefkeys = keys %pref;
-    my $html = $b->populateHTML ('map_form', \@row, \@fieldNames, \@prefkeys);
-	buildAuthorizerPulldown ( \$html );
-
-	my $authorizer = $s->get("authorizer");
-	$html =~ s/%%authorizer%%/$authorizer/;
-
-	# Spit out the HTML
-	print main::stdIncludes("std_page_top");
-	print $html;
-	print main::stdIncludes("std_page_bottom");
-}
-
-1;
