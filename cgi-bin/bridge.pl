@@ -3719,7 +3719,7 @@ sub processTaxonomySearch	{
 	my $sql = "SELECT * FROM authorities WHERE taxon_name='" . $taxon . "'";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
-	my $matches;
+	my $matches = 0;
 	my $html;
 	while ( my %authorityRow = %{$sth->fetchrow_hashref()} )	{
 		$matches++;
@@ -3990,102 +3990,100 @@ sub processTaxonomyEntryForm	{
 		}
 	}
 
-# If an unrecognized type or parent taxon name was entered, stash the form data
-#  and ask if the user wants to add the name to the authorities table
-# WARNING: unrecognized parent names won't be dealt with immediately if
-#  unrecognized type taxon names are seen first
-
-	if ( $q->param('type_taxon_name') && $q->param('taxon_name') !~ / / )	{
-		$matches = &checkNewTaxon('type', 'YES');
-		if ( $matches == 1 ) {
-		# So far so good, but parent name still needs checking
-			if ( $q->param('parent_taxon_name') )	{
-				$matches = &checkNewTaxon('parent', 'YES');
-			}
-		# Go straight to the results display page if everything checked out
-		# If not, the user will have gotten a form by now anyway
-			if ( $matches == 1 ) {
-				&displayTaxonomyResults();
-			}
-		}
-	}
-	elsif ( $q->param('parent_taxon_name') )	{
-	 # Check the genus name if this is a recombination
-		if ( $q->param('parent_genus_taxon_name') )	{
-			$matches = &checkNewTaxon('parent_genus', 'YES');
-		# If the genus is OK, check the recombination itself, but don't
-		#  waste time getting extra (redundant) authority info
-			if ( $matches == 1 ) {
-				$matches = &checkNewTaxon('parent', 'NO');
-				if ( $matches < 2 ) {
-					&displayTaxonomyResults();
-				}
-			}
-		}
-	 # Display results if this is a "valid as originally combined" species
-		elsif ( $q->param('parent_taxon_name') eq $q->param('taxon_name') )	{
-			&displayTaxonomyResults();
-		}
-	 # Otherwise check the full name
-		else	{
-			$matches = &checkNewTaxon('parent', 'YES');
-			if ( $matches == 1 ) {
-				&displayTaxonomyResults();
-			}
-		}
-	}
-	# Go straight to the results display page if there are no problem names
-	else	{
-		&displayTaxonomyResults();
-	}
-
+	# If an unrecognized type or parent taxon name was entered, stash the form 
+	# data and ask if the user wants to add the name to the authorities table
+	checkNewTaxon();
 }
 
-sub checkNewTaxon	{
+##
+# checkNewTaxon
+##
+sub checkNewTaxon{
+	my @params_to_check = ('type', 'parent', 'parent_genus');
+	my @matches = (0,0,0);
+	my @matchList = ();
+	my @lastNo = ();
+	my @insertParams = ("taxon_rank", "type_taxon_name",
+			"author1init", "author1last",
+			"author2init", "author2last", "otherauthors",
+			"pubyr", "comments");
+	my @taxonParams = ("taxon_no", "taxon_name",
+			"ref_is_authority",
+			"taxon_status", "parent_taxon_name", "parent_taxon_rank",
+			"synonym", "parent_taxon_name2",
+			"parent_genus_taxon_name", "nomen",
+			"ref_has_opinion",
+			"opinion_author1init", "opinion_author1last",
+			"opinion_author2init", "opinion_author2last",
+			"opinion_otherauthors",
+			"opinion_pubyr", "opinion_comments");
+	push @taxonParams, @insertParams;
+	my $open_form_printed = 0;
 
-	my ($stemName,$moreData) = @_;
-	$new_taxon_name = $stemName . "_taxon_name";
-	$new_taxon_no = $stemName . "_taxon_no";
+	# First, check for pre-existing names in authorities.
+	# If we find them, store their taxon_no's because the user will have to
+	# choose which is meant if more than one is found.
+	my $reentry = $q->param('reentry');
+	if(!$reentry){ # If first time through:
+		for(my $index = 0; $index < @params_to_check; $index++){
+			my $stemName = $params_to_check[$index];
+			my $new_taxon_name = $stemName . "_taxon_name";
+			my $new_taxon_no = $stemName . "_taxon_no";
 
-		$sql = "SELECT * FROM authorities WHERE taxon_name='";
-		$sql .= $q->param($new_taxon_name) . "'";
-		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute();
-		my $matches;
-		my $matchList;
-		my %taxonRow;
-		while ( %taxonRow = %{$sth->fetchrow_hashref()} )	{
-			$matches++;
-			$lastNo = $taxonRow{'taxon_no'};
-			my $authority = "<tr><td><input type=\"radio\" name=\"$new_taxon_no\"";
-			$authority .= " value=\"". $taxonRow{'taxon_no'} . "\"> ";
-			$authority .= &formatAuthorityLine( \%taxonRow );
-			$authority .= "</td></tr>\n";
-			$matchList .= $authority;
+			# If we didn't even get this param, treat it as though we did
+			# and found a single match (which basically means ignore it).
+			if(!$q->param("$new_taxon_name")){
+				$matches[$index] = 1;
+				next;
+			}
+
+			$sql = "SELECT * FROM authorities WHERE taxon_name='".
+					$q->param($new_taxon_name) . "'";
+			my @results = @{$dbt->getData($sql)};
+
+			# Check if the type taxon name from the form 
+			# matches the type taxon no from the above select. 
+			# If not, nuke the type taxon no value in the query params.
+			# (It was set in displayTaxonomyEntryForm)
+			if($stemName eq "type" && $q->param('type_taxon_name') 
+						&& $q->param('type_taxon_no')){
+				$sql = "SELECT taxon_name FROM authorities WHERE".
+					   " type_taxon_no=".$q->param('type_taxon_no');
+				my @ttn_results = @{$dbt->getData($sql)};
+				if($ttn_results[0]->{taxon_name} ne 
+							$q->param('type_taxon_name')){
+					$q->delete('type_taxon_no');	
+				}
+			}
+
+			my $first_one = 0;
+			foreach my $hit (@results){
+				$matches[$index]++;
+				$lastNo[$index] = $hit->{'taxon_no'};
+				my $authority = "<tr><td><input type=\"radio\" name=\"$new_taxon_no\"";
+				# Make the first one checked so that we at least have a default 
+				# for re-entry
+				if(!$first_one){
+					$authority .= " value=\"".$hit->{'taxon_no'}."\" checked>";
+					$first_one = 1;
+				}
+				else{
+					$authority .= " value=\"". $hit->{'taxon_no'} . "\"> ";
+				}
+				$authority .= &formatAuthorityLine( $hit );
+				$authority .= "</td></tr>\n";
+				$matchList[$index] .= $authority;
+			}
 		}
-		$sth->finish();
-		my @refParams;
+
 		# Stash all the query params as hidden values
 		# WARNING: some fields don't correspond to database fields, e.g.,
 		#  type_taxon_name, parent_taxon_name2, and parent_genus_taxon_name
-		if ( $matches != 1 )	{
+		if($matches[0] != 1 || $matches[1] != 1 || $matches[2] != 1){
 			print &stdIncludes ("std_page_top");
-			@insertParams = ("taxon_rank", "type_taxon_name",
-					"author1init", "author1last",
-					"author2init", "author2last", "otherauthors",
-					"pubyr", "comments");
-			my @taxonParams = ("taxon_no", "taxon_name",
-					"ref_is_authority",
-					"taxon_status", "parent_taxon_name", "parent_taxon_rank",
-					"synonym", "parent_taxon_name2",
-					"parent_genus_taxon_name", "nomen",
-					"ref_has_opinion",
-					"opinion_author1init", "opinion_author1last",
-					"opinion_author2init", "opinion_author2last",
-					"opinion_otherauthors",
-					"opinion_pubyr", "opinion_comments");
-			push @taxonParams, @insertParams;
-			print "<form method=\"POST\" action=\"bridge.pl\" onSubmit=\"return checkForm();\">\n";
+			print stdIncludes("js_taxonomy_checkform");
+			print "<form method=\"POST\" action=\"$exec_url\" onSubmit=\"return checkForm();\">\n";
+			$open_form_printed = 1;
 			for my $p ( @taxonParams )	{
 				if ( $q->param($p) )	{
 					print "<input type=hidden name=\"$p\" value=\"";
@@ -4093,95 +4091,201 @@ sub checkNewTaxon	{
 				}
 			}
 		}
-		# Can't find the taxon? Get some info on it and submit it
-		if ( $matches == 0 && $moreData eq "YES" )	{
-			my $new_name = $q->param($new_taxon_name);
-			my $html = $hbo->populateHTML('enter_authority_top', [ $new_name ], [ 'taxon_name' ] );
-			$html =~ s/missing_taxon_name/$new_name/;
-			if ( $stemName =~ /type/ )	{
-				if ( $new_name =~ / / )	{
-					$html =~ s/no authority data for/no authority data for the type species/;
-				} else	{
-					$html =~ s/no authority data for/no authority data for the type taxon/;
+
+		if ( $matches[0] > 1  || $matches[1] > 1 || $matches[2] > 1)	{
+			print "<input type=hidden name=\"action\" value=\"checkNewTaxon\">";
+			print "<input type=hidden name=\"reentry\" value=\"checkNewTaxon\">";
+			for(my $index = 0; $index < @params_to_check; $index++){
+				my $stemName = $params_to_check[$index];
+				my $new_taxon_name = $stemName . "_taxon_name";
+				my $new_taxon_no = $stemName . "_taxon_no";
+				## Write the taxon_no out if it's a single or multiple matches.
+				if($matches[$index] >= 1){
+					if($matches[$index] > 1){
+						my $stemName = $params_to_check[$index];
+						my $new_taxon_name = $stemName . "_taxon_name";
+						print "<center>\n<h4>There are several taxa called \"";
+						print $q->param($new_taxon_name), "\"</h4>\n";
+						print "<p>Please select one and hit submit.</p>\n";
+						print "<table>\n";
+						print $matchList[$index];
+						print "</table>\n";
+					}
+					else{ # == 1
+						print "<input type=hidden name=\"$new_taxon_no\"".
+							  " value=\"$lastNo[$index]\">";
+					}
 				}
-			} else	{
-				$html =~ s/no authority data for/no authority data for the parent taxon/;
 			}
-			print $html;
-			# Print the ref info part of the form, which has no populated vals
-			#  other than the taxon rank pulldown, the usual ref fields, and
-			#  the current ref
-			my @tempParams = ( "ref_is_authority", "author1init", "author1last",
-					"author2init", "author2last", "otherauthors",
-					"pubyr", "comments");
-			my @tempVals = ( "YES", "", "",  "", "", "",  "", "" );
-			unshift @tempParams, 'taxon_rank';
-			if ( $taxon =~ / / )	{
-				unshift @tempVals, "species";
-			} else	{
-				unshift @tempVals, "genus";
-			}
-
-			# Display the current ref
-			my $sql = "SELECT * FROM refs WHERE reference_no=";
-			$sql .= $s->get("reference_no");
-			my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-			$sth->execute();
-			my @refRow = $sth->fetchrow_array();
-			my @refFieldNames = @{$sth->{NAME}};
-			$sth->finish();
-			my $refRowString = '<table>' . $hbo->populateHTML('reference_display_row', \@refRow, \@refFieldNames) . '</table>';
-
-			# Add gray background and make font small
-			$refRowString =~ s/<tr>/<tr bgcolor='#E0E0E0'>/;
-			$refRowString =~ s/<td/<td class='small' /;
-			push @tempVals, $refRowString;
-			push @tempParams, 'ref_string';
-
-			$html = $hbo->populateHTML ("enter_tax_ref_form", \@tempVals, \@tempParams );
-
-			# Suppress the type taxon field because this name would have
-			#  to be checked against the authorities table, and life is
-			#  already way too complicated!
-			$html =~ s/Type taxon's name://;
-			$html =~ s/<input name="type_taxon_name" size=50>//;
-			$html =~ s/<input id="type_taxon_name" size=50>//;
-
-			# Make sure all the "new" ref field names are modified so
-			#  they can be retrieved when the form data are processed
-			for my $p ( @insertParams )	{
-				my $newp = $stemName . "_" . $p;
-				$html =~ s/name="$p/name="$newp/;
-			}
-			$html =~ s/\$taxon_name/$new_name/;
-			print $html;
-			print "<center><input type=submit value=\"Submit\"></center>\n</form>\n";
-			print &stdIncludes ("std_page_bottom");
-		} elsif ( $matches > 1 )	{
-			print "<input type=hidden name=\"action\" value=\"displayTaxonomyResults\">";
-			print "<center>\n<h4>There are several taxa called \"";
-			print $q->param($new_taxon_name), "\"</h4>\n";
-			print "<p>Please select one and hit submit.</p>\n";
-			print "<table>\n";
-			print $matchList;
-			print "</table>\n";
 			print "<input type=submit value=\"Submit\">\n</center>\n</form>\n";
 			print &stdIncludes ("std_page_bottom");
-		} elsif ( $matches == 1 ) {
-	# Save the taxon number if there's only one match
-			$q->param($new_taxon_no => $lastNo );
+			exit;
 		}
+	} # end if(!$reentry)
 
-	return $matches;
+
+	##
+	## RE-ENTRY POINT: NOTE that this is for reentry as well as for first pass
+	## where no matches were above 0
+	##
+
+	# Can't find the taxon? Get some info on it and submit it
+	# Reentry:  zero matches have the named param but no corresponding number.
+	if($reentry){
+		my $printed = 0;
+		for(my $index = 0; $index < @params_to_check; $index++){
+			my $stemName = $params_to_check[$index];
+			my $new_taxon_name = $stemName . "_taxon_name";
+			my $new_taxon_no = $stemName . "_taxon_no";
+
+			if($q->param("$new_taxon_name") && !$q->param("$new_taxon_no")){
+				if(!$printed){
+					print &stdIncludes ("std_page_top");
+					print stdIncludes("js_taxonomy_checkform");
+					print "<form method=\"POST\" action=\"$exec_url\" ".
+						  "onSubmit=\"return checkForm();\">\n";
+				}
+				new_authority_form($new_taxon_name, $stemName, @insertParams);
+				$printed = 1;
+			}
+		}
+		if($printed){
+			# I think we need to write out all params again...
+			push(@taxonParams, "type_taxon_no","parent_taxon_no","parent_genus_taxon_no");
+			for my $p ( @taxonParams )	{
+				if ( $q->param($p) )	{
+					print "<input type=hidden name=\"$p\" value=\"";
+					print $q->param($p) , "\">\n";
+				}
+			}
+			print "<center><input type=submit value=\"Submit\"></center>\n</form>\n";
+			print &stdIncludes ("std_page_bottom");
+		}
+	}
+	else{ # not reentry, so all matches were either 0 or 1
+		my $printed = 0;
+		my $ones = "";
+		for(my $index = 0; $index < @params_to_check; $index++){
+			my $stemName = $params_to_check[$index];
+			my $new_taxon_name = $stemName . "_taxon_name";
+			my $new_taxon_no = $stemName . "_taxon_no";
+
+			if($matches[$index] == 0){
+				if(!$open_form_printed){
+					print &stdIncludes ("std_page_top");
+					print stdIncludes("js_taxonomy_checkform");
+					print "<form method=\"POST\" action=\"$exec_url\" ".
+						  "onSubmit=\"return checkForm();\">\n";
+					$open_form_printed = 1;
+				}
+				new_authority_form($new_taxon_name, $stemName, @insertParams);
+				$printed = 1;
+			}
+			## IF ANY 0's PRINT, ALL THE 1's HAVE TO PRINT TOO
+			elsif($matches[$index] == 1 && $q->param("$new_taxon_name")){
+				# Save the taxon number if there's only one match 
+				$ones .= "<input type=hidden name=\"$new_taxon_no\"".
+						 " value=\"$lastNo[$index]\">";
+			}
+		}
+		if($printed){
+			print $ones."\n";
+			print "<center><input type=submit value=\"Submit\"></center>\n</form>\n";
+			print &stdIncludes ("std_page_bottom");
+		}
+		else{ ## All 1's
+			for(my $index = 0; $index < @params_to_check; $index++){
+				my $stemName = $params_to_check[$index];
+				my $new_taxon_name = $stemName . "_taxon_name";
+				my $new_taxon_no = $stemName . "_taxon_no";
+
+				if($matches[$index] == 1 && $q->param("$new_taxon_name")){
+					# Save the taxon number if there's only one match 
+					$q->param($new_taxon_no => $lastNo[$index]);
+				}
+			}
+			displayTaxonomyResults();
+		}
+	}
 }
 
+## New authorities record(s) form loop
+sub new_authority_form{
+	my ($new_taxon_name, $stemName, @insertParams) = @_;
+
+	my $new_name = $q->param("$new_taxon_name");
+	# Puts the action 'displayTaxonomyResults' into the form
+	my $html = $hbo->populateHTML('enter_authority_top', [ $new_name ], [ 'taxon_name' ] );
+	$html =~ s/<hr>//;
+	$html =~ s/^(.*)/<hr>$1/;
+	$html =~ s/missing_taxon_name/$new_name/;
+	if ( $new_taxon_name =~ /type/ )	{
+		if ( $new_taxon_name =~ / / )	{
+			$html =~ s/no authority data for/no authority data for the type species/;
+		} else	{
+			$html =~ s/no authority data for/no authority data for the type taxon/;
+		}
+	} else	{
+		$html =~ s/no authority data for/no authority data for the parent taxon/;
+	}
+	print $html;
+	# Print the ref info part of the form, which has no populated vals
+	#  other than the taxon rank pulldown, the usual ref fields, and
+	#  the current ref
+	my @tempParams = ( "author1init", "author1last",
+			"author2init", "author2last", "otherauthors",
+			"pubyr", "comments");
+	my @tempVals = ( "", "",  "", "", "",  "", "" );
+	unshift @tempParams, 'taxon_rank';
+	if ( $taxon =~ / / )	{
+		unshift @tempVals, "species";
+	} else	{
+		unshift @tempVals, "genus";
+	}
+
+	# Display the current ref
+	my $sql = "SELECT * FROM refs WHERE reference_no=";
+	$sql .= $s->get("reference_no");
+	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+	$sth->execute();
+	my @refRow = $sth->fetchrow_array();
+	my @refFieldNames = @{$sth->{NAME}};
+	$sth->finish();
+	my $refRowString = '<table>'.
+					   $hbo->populateHTML('reference_display_row',
+										  \@refRow,\@refFieldNames).
+					   '</table>';
+
+	# Add gray background and make font small
+	$refRowString =~ s/<tr>/<tr bgcolor='#E0E0E0'>/;
+	$refRowString =~ s/<td/<td class='small' /;
+	push @tempVals, $refRowString;
+	push @tempParams, 'ref_string';
+
+	$html = $hbo->populateHTML ("enter_tax_ref_form", \@tempVals, \@tempParams );
+
+	# Suppress the type taxon field because this name would have
+	#  to be checked against the authorities table, and life is
+	#  already way too complicated!
+	$html =~ s/Type taxon's name://;
+	$html =~ s/<input name="type_taxon_name" size=50>//;
+	$html =~ s/<input id="type_taxon_name" size=50>//;
+
+	# Make sure all the "new" ref field names are modified so
+	#  they can be retrieved when the form data are processed
+	for my $p ( @insertParams )	{
+		my $newp = $stemName . "_" . $p;
+		$html =~ s/name="$p/name="$newp/;
+	}
+	$html =~ s/\$taxon_name/$new_name/;
+	print $html;
+}
 
 # JA 13-18,27.8.02
 sub displayTaxonomyResults	{
 
 	print &stdIncludes ("std_page_top");
-
-# Process the form data relevant to the authorities table
+	# Process the form data relevant to the authorities table
 
 	# Update or insert the authority data, as appropriate
 	# Assumption here is that you definitely want to create the taxon name
@@ -4208,8 +4312,8 @@ sub displayTaxonomyResults	{
 				"author2init", "author2last", "otherauthors",
 				"pubyr", "comments");
 
-# Process authority data on a new type and/or parent taxon name, if
-#  either was submitted on a previous page
+	# Process authority data on a new type and/or parent taxon name, if
+	#  either was submitted on a previous page
 
 	if ( ( $q->param('parent_taxon_name') && ! $q->param('parent_taxon_no') ) ||
 		 ( $q->param('parent_genus_taxon_name') &&
@@ -4981,7 +5085,7 @@ sub updateRecord {
 	# blank.  This should stop it.
 	if ( $updateString !~ /modifier/ ) { &htmlError ( "modifier not specified" ); }
 
-if ( $s->get("authorizer") eq "M. Uhen" ) { print "$updateString<br>\n"; } 
+#if ( $s->get("authorizer") eq "M. Uhen" ) { print "$updateString<br>\n"; } 
 	$dbh->do( $updateString ) || die ( "$updateString<HR>$!" );
   
 	return $id;
