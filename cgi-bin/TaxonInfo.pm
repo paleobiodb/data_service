@@ -5,7 +5,6 @@ use Classification;
 use Globals;
 use Debug;
 
-use Validation;
 use URLMaker;
 use SQLBuilder;
 use Taxon;
@@ -28,7 +27,8 @@ sub startTaxonInfo {
 
 
 
-
+# JA: rjp did a big complicated reformatting of the following and I can't
+#  confirm that no damage was done in the course of it
 sub searchForm{
 	my $q = shift;
 	my $search_again = (shift or 0);
@@ -129,6 +129,8 @@ sub searchForm{
 # ie, Homo sapiens, or Homo, or Bogus bogus bogus, and it will
 # return a hash three strings - the Genus/Higher taxon (higher), 
 # species (species), and subspecies name (subspecies). 
+# JA: this is rjp code only used in following, unused, unneeded, and 
+#  undebugged code, so probably should be deleted
 sub splitTaxonName {
 	my $input = shift;
 	
@@ -155,6 +157,9 @@ sub splitTaxonName {
 # Note, this is not finished yet.. Don't use it for anything other than testing.
 # Started writing this to deal with a bug report.. but have abandoned it for now.
 # rjp 2/2004.
+# JA: indeed, this isn't used anywhere, needlessly duplicates existing
+#  functionality, and probably should be deleted - implementing it would
+#  require needless and dangerous debugging
 sub newCheckStartForm {
 	my $q = shift;
 	my $dbh = shift;
@@ -686,30 +691,41 @@ sub displayTaxonInfoResults {
 	
 	# rjp, note, 2/20/2004 - this won't work if the taxon isn't 
 	# in the authorities table...	
+	# JA: of course it will, (23456) wouldn't be in the form in the first
+	#  place unless it did exist in the table; if it does then $taxon_no
+	#  will be set correctly, otherwise it's blank as it should be
 	#
 	# Apparently the taxon_no is sometimes passed in parenthesis??!?!
+	# JA: duh, it's always passed in parentheses if present
 	# ie, Homo (1231234)  ??
 	$genus_name =~ /(.*?)\((\d+)\)/;
 	$taxon_no = $2;
-	
-	
-	# cut off the other stuff if it exists.
-	if ($1) {
-		$genus_name = Validation::genusFromString($1);
+
+	# following section restored by JA from PM code 27.3.04
+	# cut off the other stuff if it exists (JA: i.e., the number and
+	#  NOT the species name
+	if ($taxon_no) {
+		$genus_name = $1;
+		$genus_name =~ s/\s+$//; # remove trailing spaces.
 	} else {
-		$genus_name = Validation::genusFromString($genus_name);	
+		# just do this
+		# JA: at this point genus_name may actually be a genus
+		#  plus species combination
+		$genus_name =~ s/\s+$//; # remove trailing spaces.
 	}
-	
-	Debug::dbPrint("genus_name = $genus_name");
-	Debug::dbPrint("taxon_rank = $taxon_type");
-	
-	
+
+	# JA: point here is to reset genus_name param to be a string only
+	#  with no numbers, not to actually wipe out a species name with
+	#  a genus name
 	if ($taxon_no) {  # if it's in the authorities table
 		$q->param("genus_name" => $genus_name);
 	} 
 
 	
 	# Keep track of entered name for link at bottom of page
+	# JA: this is crucial, at this point genus_name would definitely
+	#  still include the species name if any had been entered by the
+	#  user, and so must be saved
 	my $entered_name = $genus_name;
 	if (!$taxon_no) {
 		my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='".
