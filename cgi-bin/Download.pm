@@ -491,7 +491,7 @@ sub getResGrpString {
 
 	my $resgrp = $q->param('research_group');
 
-	if($resgrp && $resgrp =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
+	if($resgrp && $resgrp =~ /(^decapod$)|(^EJECT$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
 		my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
 		if($resprojstr ne ""){
 			$result = " collections.reference_no IN (" . $resprojstr . ")";
@@ -1392,6 +1392,7 @@ sub doQuery {
 		if ( $q->param('compendium_ranges') eq 'NO' )	{
 			if ( ! $incompendium{$row->{occ_genus_name}.$mybin{$row->{collection_no}}} )	{
 				$exclude++;
+				print "exc. compendum ".$row->{'collection_no'};
 			}
 		}
 		# lump bed/group of beds scale collections with the exact same
