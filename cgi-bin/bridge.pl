@@ -346,6 +346,7 @@ sub getPrefFields	{
 		"mapbgcolor" => "background/ocean color",
 		"crustcolor" => "continental crust color",
 		"gridsize" => "grid line spacing", "gridcolor" => "grid line color",
+		"latlngnocolor" => "lat/long number color",
 		"coastlinecolor" => "coastline color",
 		"borderlinecolor" => "international border color",
 		"usalinecolor" => "USA state border color",
@@ -365,8 +366,8 @@ sub getPrefFields	{
 		# map form fields
 			"mapsize", "projection", "maptime", "mapfocus",
 			"mapscale", "mapresolution", "mapbgcolor", "crustcolor",
-			"gridsize", "gridcolor", "coastlinecolor",
-			"borderlinecolor", "usalinecolor",
+			"gridsize", "gridcolor", "latlngnocolor",
+			"coastlinecolor", "borderlinecolor", "usalinecolor",
 			"pointsize", "pointshape",
 			"dotcolor", "dotborder");
 	for $fn (@setFieldNames)	{
@@ -613,9 +614,9 @@ sub displayHomePage {
 sub displayMapForm {
 
 	# List fields that should be preset
-	my @fieldNames = ( 'research_group', 'country', 'period_max', 'lithology1', 'environment', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapscale', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder', 'mapsearchfields2', 'pointsize2', 'pointshape2', 'dotcolor2', 'dotborder2', 'mapsearchfields3', 'pointsize3', 'pointshape3', 'dotcolor3', 'dotborder3', 'mapsearchfields4', 'pointsize4', 'pointshape4', 'dotcolor4', 'dotborder4' );
+	my @fieldNames = ( 'research_group', 'country', 'period_max', 'lithology1', 'environment', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapscale', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder', 'mapsearchfields2', 'pointsize2', 'pointshape2', 'dotcolor2', 'dotborder2', 'mapsearchfields3', 'pointsize3', 'pointshape3', 'dotcolor3', 'dotborder3', 'mapsearchfields4', 'pointsize4', 'pointshape4', 'dotcolor4', 'dotborder4' );
 	# Set default values
-	my @row = ( '', '', '', '', '', '100%', 'rectilinear', '0', 'Europe', 'X 1', 'medium', 'white', 'none', '30 degrees', 'gray', 'in back', 'medium', 'black', 'none', 'none', 'medium', 'circles', 'red', 'black', '', 'medium', 'squares', 'blue', 'black', '', 'medium', 'triangles', 'yellow', 'black', '', 'medium', 'diamonds', 'green', 'black' );
+	my @row = ( '', '', '', '', '', '100%', 'rectilinear', '0', 'Europe', 'X 1', 'medium', 'white', 'none', '30 degrees', 'gray', 'in back', 'medium', 'none', 'black', 'none', 'none', 'medium', 'circles', 'red', 'black', '', 'medium', 'squares', 'blue', 'black', '', 'medium', 'triangles', 'yellow', 'black', '', 'medium', 'diamonds', 'green', 'black' );
 	
 	# Read preferences if there are any JA 8.7.02
 	%pref = &getPreferences($s->get('enterer'));
@@ -1379,7 +1380,7 @@ sub displayCollResults {
 	my $in_list = shift; # for taxon info script
 
 	my $limit = $q->param("limit");
-	if ( ! $limit ) { $limit = 10; }
+	if ( ! $limit ) { $limit = 30; }
 	my $ofRows = 0;
 	my $method = "getReadRows";					# Default is readable rows
 	my $p = Permissions->new ( $s );
