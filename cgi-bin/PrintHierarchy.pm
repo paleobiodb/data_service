@@ -49,8 +49,7 @@ sub processPrintHierarchy	{
 	my $OUT_HTTP_DIR = "/paleodb/data";
 	my $OUT_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
 
-	$MAX = $q->param('maximum_levels');
-	%shortrank = ("species" => "", "subgenus" => "Subg.", "genus" => "G.",
+	%shortranks = ("species" => "", "subgenus" => "Subg.", "genus" => "G.",
 			"tribe" => "Tr.", "subfamily" => "Subfm", "family" => "Fm.",
 			"superfamily" => "Superfm." ,
 			"infraorder" => "Infraor.", "suborder" => "Subor.",
@@ -71,152 +70,42 @@ sub processPrintHierarchy	{
 		exit;
 	}
 
-	push @parents , $ref->{taxon_no};
-
 	print "<center><h3>Classification of ";
 	if ( $ref->{taxon_rank} ne "genus" )	{
 		print "the ";
 	}
 	print $q->param('taxon_name') . "</h3></center>";
-	$id{$ref->{taxon_no}} = 10**(3*($MAX-1));
-	my $rank = $shortrank{$ref->{taxon_rank}};
-	$name{$ref->{taxon_no}} = "<b>" . $rank . "</b> ";
-	if ( $ref->{taxon_rank} =~ /genus/ )	{
-		$name{$ref->{taxon_no}} .= "<i>";
-	}
-	$name{$ref->{taxon_no}} .= $q->param('taxon_name');
-	if ( $ref->{taxon_rank} =~ /genus/ )	{
-		$name{$ref->{taxon_no}} .= "</i>";
-	}
-	$outrank{$ref->{taxon_no}} = $ref->{taxon_rank};
-	$outname{$ref->{taxon_no}} = $q->param('taxon_name');
 
-# work through three hierarchical levels
-	for $level ( 1..$MAX )	{
+	$MAX = $q->param('maximum_levels');
+    my ($taxon_records) = PBDBUtil::getChildren($dbt,$ref->{'taxon_no'},$MAX);
 
-# go through the parent list
-		my @children = ();
-		$childcount = 0;
-		for $p ( @parents )	{
+    # prepend the query stuff to the array so it gets printed out as well
+    unshift @{$taxon_records}, {'taxon_no'=>$ref->{'taxon_no'},
+                            'taxon_name'=>$q->param('taxon_name'),
+                            'taxon_rank'=>$ref->{'taxon_rank'},
+                            'level'=>0};
 
-	# find all children of this parent
-			my $sql = "SELECT child_no FROM opinions WHERE status='belongs to' AND parent_no=" . $p;
-			@refs = @{$dbt->getData($sql)};
-
-			# now the hard part: make sure the most recent opinion
-			#  on each child name is a "belongs to" and places
-			#  the child in the parent we care about
-			@goodrefs = ();
-			for my $ref ( @refs )	{
-			# first check if the child is a recombination
-				my $lastopinion = "";
-				$sql = "SELECT child_no FROM opinions WHERE status='recombined as' AND parent_no=" . $ref->{child_no};
-				$orgcombref = @{$dbt->getData($sql)}[0];
-				# OH NO! this is recombination
-				# find the most recent opinion, and if it is
-				#   NOT "recombined as" the taxon then continue
-				if ( $orgcombref )	{
-					$sql = "SELECT child_no,parent_no,status,reference_no,ref_has_opinion,pubyr FROM opinions WHERE child_no=" . $orgcombref->{child_no};
-					@crefs = @{$dbt->getData($sql)};
-
-			# rewrote this section to employ selectMostRecentParentOpinion JA 5.4.04
-			# switched to selectMostRecentBelongsToOpinion JA 18.11.04
-
-					my $currentref = TaxonInfo::selectMostRecentBelongsToOpinion($dbt, \@crefs, 1);
-					$lastopinion = $currentref ->{status};
-					$lastparent = $currentref ->{parent_no};
-
-					if ( $lastopinion ne "recombined as" || $lastparent != $ref->{child_no} )	{
-						next;
-					}
-				}
-
-			# this won't be gotten to if the original combination
-			#  is invalid or recombined into something else,
-			#  thanks to the "next"
-			# rewrote this section 21.4.04 to use selectMostRecentParentOpinion
-			# switched to selectMostRecentBelongsToOpinion JA 18.11.04
-				$sql = "SELECT child_no,parent_no,status,reference_no,ref_has_opinion,pubyr FROM opinions WHERE child_no=" . $ref->{child_no};
-				@crefs = @{$dbt->getData($sql)};
-
-				my $currentref = TaxonInfo::selectMostRecentBelongsToOpinion($dbt, \@crefs, 1);
-				$lastopinion = $currentref ->{status};
-				$lastparent = $currentref->{parent_no};
-
-				if ( $lastopinion =~ /belongs to/ && $lastparent == $p )	{
-					push @goodrefs , $ref;
-				}
-			}
-
-			for my $ref ( @goodrefs )	{
-				$childcount++;
-				push @children,$ref->{child_no};
-				$sql = "SELECT taxon_name,taxon_rank FROM authorities WHERE taxon_no=" . $ref->{child_no};
-				$cref = @{$dbt->getData($sql)}[0];
-				my $rank = $shortrank{$cref->{taxon_rank}};
-			# rock 'n' roll: save the child name
-				if ( ! $seen{$cref->{taxon_name}} )	{
-					$name{$ref->{child_no}} = "<b>" . $rank . "</b> ";
-					if ( $cref->{taxon_rank} =~ /(species)|(genus)/ )	{
-						$name{$ref->{child_no}} .= "<i>";
-					}
-					$name{$ref->{child_no}} .= $cref->{taxon_name};
-					if ( $cref->{taxon_rank} =~ /(species)|(genus)/ )	{
-						$name{$ref->{child_no}} .= "</i>";
-					}
-					$outrank{$ref->{child_no}} = $cref->{taxon_rank};
-					$outname{$ref->{child_no}} = $cref->{taxon_name};
-					my ($genus,$species) = split / /,$cref->{taxon_name};
-					my @gletts = split //,$genus;
-					my $code = "";
-					for my $l ( 0..9 )	{
-						if ( $gletts[$l] )	{
-							$code .= $gletts[$l];
-						} else	{
-							$code .= "0";
-						}
-					}
-					if ( $species )	{
-						my @sletts = split //,$species;
-						for my $l ( 0..9 )	{
-							if ( $sletts[$l] )	{
-								$code .= $sletts[$l];
-							} else	{
-								$code .= "0";
-							}
-						}
-					} else	{
-						$code .= "0000000000";
-					}
-					$id{$ref->{child_no}} = $id{$p} . $code;
-					$mylevel{$ref->{child_no}} = $level;
-					$seen{$cref->{taxon_name}}++;
-				}
-			}
-		}
-
-# replace the parent list with the child list
-		@parents = @children;
-
-# END of main routine
-
-	}
-
-# now print out the data
+    # now print out the data
 	open OUT, ">$OUT_FILE_DIR/classification.csv";
 	print "<center><table>\n";
-	@sorted = keys %id;
-	@sorted = sort { $id{$a} cmp $id{$b} } @sorted;
-	for $sk ( @sorted )	{
+	foreach $record ( @{$taxon_records})	{
 		print "<tr>";
-		for $i ( 1..$mylevel{$sk} )	{
+		for $i ( 0..$record->{'level'} )	{
 			print "<td></td>";
 		}
 		print "<td>";
-		print $name{$sk};
-		print OUT "$outrank{$sk},$outname{$sk}\n";
+        $shortrank = $shortranks{$record->{'taxon_rank'}};
+        $title = "<b>$shortrank</b> ";
+        if ( $record->{'taxon_rank'} =~ /(species)|(genus)/ ) {
+            $title .= "<i>".$record->{'taxon_name'}."</i>";
+        } else {
+            $title .= $record->{'taxon_name'};
+        }
+        print $title;
 		print "</td>";
 		print "</tr>\n";
+        
+		print OUT $record->{'taxon_rank'}.",".$record->{'taxon_name'}."\n";
 		$nrecords++;
 	}
 	print "</table></center><p>\n";
