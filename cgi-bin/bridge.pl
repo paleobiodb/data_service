@@ -5661,6 +5661,16 @@ sub processNewReIDs {
 		my @successfulRows;
 		my @rowTokens = $q->param('row_token');
 		my $numRows = @rowTokens;
+		my $skipped;
+
+		if ( @rowTokens )	{
+			print "<center><h3>Submitted reidentifications</h3></center>\n\n";
+		}
+		else	{
+			print "<center><h3>No reidentifications were submitted</h3></center>\n\n";
+		}
+		print "<table align=center>\n";
+
 		ROW:
 		for(my $i = 0;$i < $numRows;$i++)
 		{
@@ -5686,7 +5696,21 @@ sub processNewReIDs {
 				next if  $fieldName eq 'reference_no';
 				# Skip rows that don't have a required data item
 				unless ( ! $isRequired[$j] || ($types[$j] eq 'timestamp') || $priKeys[$j] || $curVal ) {
-					#print "Skipping row $i because of missing $fieldName<br>";
+					# explain why the row was skipped unless
+					#  the missing field is the genus name,
+					#  in which case it's obvious
+					#  JA 26.60.04
+					if ( $fieldName ne "genus_name" )	{
+						my $temp = $fieldName;
+						$temp =~ s/_/ /g;
+						$temp =~ s/no$/number/g;
+						my $tempi = $i + 1;
+						$tempString = "<tr><td>";
+						$tempString .= "<b>Row $tempi</b>: <i>skipped</i> because it is missing the $temp<p>\n";
+						$tempString .= "</td></tr>\n\n";
+						$skipped++;
+						push(@submittedRow, $tempString);
+					}
   					next ROW;
 				}
  
@@ -5730,53 +5754,50 @@ sub processNewReIDs {
 				unless(PBDBUtil::isRefPrimaryOrSecondary($dbh, $collection_no, $reference_no))	{
 					PBDBUtil::setSecondaryRef($dbh,$collection_no, $reference_no);
 				}
-				if ($#successfulRows == -1)	{
-					print "<center><h3><font color='red'>Newly entered reidentifications</font></h3></center>\n";
-				}
-			} else {
-				print "<center><h3>The following reidentifications already were entered</h3></center>\n";
 			}
 
-			$sql = "SELECT reid_no,occurrence_no,collection_no,reference_no,genus_reso,genus_name,species_reso,species_name,comments FROM reidentifications WHERE reid_no=$recID";
+			$sql = "SELECT occurrence_no,genus_reso,genus_name,species_reso,species_name,comments,collection_no FROM reidentifications WHERE reid_no=$recID";
 			dbg ( "$sql<HR>" );
 			$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 			$sth->execute();
 			my @retrievedRow = $sth->fetchrow_array();
-			my @colnames = ("Reid no", "Occurrence", "Collection",
-              "Reference", "Corrected name", "", "", "", "Comments" );
 			$sth->finish();
 
-			$sql = "SELECT genus_reso,genus_name,species_reso,species_name FROM occurrences WHERE occurrence_no=" . $retrievedRow[1];
+			if ( $retrievedRow[4] ne "indet." )	{
+				$retrievedRow[2] = "<i>" . $retrievedRow[2] . "</i>";
+				$retrievedRow[4] = "<i>" . $retrievedRow[4] . "</i>";
+			}
+			my $reidname = $retrievedRow[1] . " " . $retrievedRow[2] . " " . $retrievedRow[3] . " " . $retrievedRow[4];
+
+			$sql = "SELECT genus_reso,genus_name,species_reso,species_name FROM occurrences WHERE occurrence_no=" . $retrievedRow[0];
 			my $occref = @{$dbt->getData($sql)}[0];
+			if ( $occref->{species_name} ne "indet." )	{
+				$occref->{genus_name} = "<i>" . $occref->{genus_name} . "</i>";
+				$occref->{species_name} = "<i>" . $occref->{species_name} . "</i>";
+			}
 			my $occname = $occref->{genus_reso} . " " . $occref->{genus_name} . " " . $occref->{species_reso} . " " . $occref->{species_name};
 
-			my $rowString = "<tr><td>";
-			for $i (0..$#retrievedRow)	{
-				if ($retrievedRow[$i] ne "" ||
-					$colnames[$i] eq "Corrected name")	{
-					if ($colnames[$i] ne "")	{
-						if ($colnames[$i] eq "Corrected name" ||
-							$colnames[$i] eq "Comments")	{
-							$rowString .= "</td></tr>\n<tr><td colspan=4>";
-						}
-						elsif ( $colnames[$i] !~ /Reid/ )	{
-							$rowString .= "</td><td>";
-						}
-						$rowString .= "<b>" . $colnames[$i] . ":</b>&nbsp;";
-					}
-					$rowString .= $retrievedRow[$i] . " ";
-					if ( $colnames[$i] eq "Reference" )	{
-						$rowString .= "</td></tr>\n<tr><td colspan=4><b>Original name:</b>&nbsp;" . $occname;
-					}
+			my $rowString = "<tr>";
+			my $tempi = $i + 1;
+			$rowString .= "<td><b>Row $tempi</b>: ";
+
+		# standard report
+			if ( $return != $DUPLICATE ) {
+				$rowString .= $occname . " in collection " . $retrievedRow[6] . " reidentified as " . $reidname;
+				if ( $retrievedRow[5] )	{
+					$rowString .= "</td></tr>\n<tr><td>&nbsp;&nbsp;&nsbp;Comments: " . $retrievedRow[5];
 				}
+		# handle duplicate rows
+			} else	{
+				$rowString .= "<i>skipped</i> because it is a duplicate";
 			}
+
 			$rowString .= "<p></td></tr><tr>";
-			push(@successfulRows, $rowString);
+			push(@submittedRow, $rowString);
 		}
 
-	print "<table align=center>\n";
-	foreach $successfulRow (@successfulRows)	{
-  		print $successfulRow;
+	foreach $submittedRow (@submittedRow)	{
+  		print $submittedRow;
    	}
    	print "</table><p>\n";
 	print "<p align=center><b><a href=\"$exec_url?action=displayReIDCollsAndOccsSearchForm\">Reidentify more occurrences</a></b></p>\n";
