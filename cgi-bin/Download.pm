@@ -81,6 +81,8 @@ sub retellOptions {
 	<td colspan='2' class='darkList'><b><font size='+1'>Download criteria</font></b></td>
 	</tr>";
 
+	# authorizer added 30.6.04 JA (left out by mistake?) 
+	$html .= $self->retellOptionsRow ( "Authorizer", $q->param("authorizer") );
 	$html .= $self->retellOptionsRow ( "Research group or project", $q->param("research_group") );
 	INTERVAL: {
 		if ( $q->param("interval") eq "Phanerozoic" ) { 
@@ -1118,6 +1120,33 @@ sub doQuery {
 
 	$sth->finish();
 	$self->dbg("Rows that passed Permissions: number of rows $ofRows, length of dataRows array: ".@dataRows."<br>");
+
+	# knock out collections with paleolatitudes that are too high or
+	#  too low JA 30.6.04
+	if ( $q->param('paleolatlimit') > 0 )	{
+		open COORDS,"<./data/collection.ageplace";
+		my %goodlats;
+		my @tempDataRows;
+		while (<COORDS>)	{
+			my @temp = split /\t/,$_;
+			# col 0 is the collection number; col 8 is the
+			#  paleolatitude
+			# we're expecting something like "greater than"
+			#  or "less than" as a query parameter
+			if ( $q->param('paleolatdirection') =~ /greater/ && abs($temp[8]) >= $q->param('paleolatlimit') )	{
+				$goodlats{$temp[0]}++;
+			} elsif ( $q->param('paleolatdirection') =~ /less/ && abs($temp[8]) < $q->param('paleolatlimit') )	{
+				$goodlats{$temp[0]}++;
+			}
+		}
+		close COORDS;
+		foreach my $row ( @dataRows ){
+			if ( $goodlats{$row->{collection_no}} )	{
+				push @tempDataRows , $row;
+			}
+		}
+		@dataRows = @tempDataRows;
+	}
 
 	# run through the result set
 
