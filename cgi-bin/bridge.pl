@@ -319,11 +319,15 @@ sub getPrefFields	{
 		"geogcomments" => "location details",
 		"stratcomments" => "stratigraphic comments",
 		"lithdescript" => "complete lithology description",
-		"mapcontinent" => "continent", "mapscale" => "magnification",
+		"mapfocus" => "map focus", "mapscale" => "magnification",
 		"mapbgcolor" => "background color",
 		"gridsize" => "grid line spacing", "gridcolor" => "grid line color",
 		"coastlinecolor" => "coastline color",
-		"pointshape" => "point size/shape", "dotcolor" => "point color",
+		"borderlinecolor" => "international border color",
+		"usalinecolor" => "USA state border color",
+		"pointsize" => "point size",
+		"pointshape" => "point shape",
+		"dotcolor" => "point color",
 		"dotborder" => "point borders" );
 	my @setFieldNames = ("blanks", "research_group", "country", "state",
 			"latdeg", "latdir", "lngdeg", "lngdir", "geogscale",
@@ -335,8 +339,10 @@ sub getPrefFields	{
 		# comments fields
 			"geogcomments", "stratcomments", "lithdescript",
 		# map form fields
-			"mapcontinent", "mapscale", "mapbgcolor", "gridsize",
-			"gridcolor", "coastlinecolor", "pointshape",
+			"projection", "mapfocus", "mapscale", "mapbgcolor",
+			"gridsize", "gridcolor", "coastlinecolor",
+			"borderlinecolor", "usalinecolor",
+			"pointsize", "pointshape",
 			"dotcolor", "dotborder");
 	for $fn (@setFieldNames)	{
 		if ($cleanSetFieldNames{$fn} eq "")	{
@@ -424,9 +430,9 @@ sub setPreferences	{
 				print "<b>Comment fields</b><br>\n";
  			}
  		}
-		elsif ($f =~ /mapcontinent/)	{
+		elsif ($f =~ /mapfocus/)	{
 			print "</td></tr>\n<tr><td valign=\"top\" width=\"33%\">\n";
-			print "<b>Map view</b><br>\n";
+			print "<b>Map focus</b><br>\n";
 		}
 		elsif ($f =~ /(formation)|(coastlinecolor)/)	{
 			print "</td><td valign=\"top\" width=\"33%\">\n<br>";
@@ -580,7 +586,7 @@ sub displayHomePage {
 sub displayMapForm {
 
 	# List fields that should be preset
-	my @fieldNames = ('lithology1', 'environment', 'projection', 'mapcontinent', 'mapscale', 'mapresolution', 'mapbgcolor', 'gridsize', 'gridcolor', 'linethickness', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder');
+	my @fieldNames = ('lithology1', 'environment', 'projection', 'mapfocus', 'mapscale', 'mapresolution', 'mapbgcolor', 'gridsize', 'gridcolor', 'linethickness', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder');
 	# Set default values
 	my @row = ('', '', 'orthographic', 'Europe', 'X 1', 'coarse', 'white', '30 degrees', 'gray', 'medium', 'black', 'black', 'none', 'medium', 'circles', 'blue', 'with');
 	
