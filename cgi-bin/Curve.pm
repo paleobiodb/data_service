@@ -149,19 +149,46 @@ sub setArrays	{
 		chmod 0777, $OUTPUT_DIR;
 	}
 	
+	$LTYPE{'siliciclastic'} = "siliciclastic";
 	$LTYPE{'claystone'} = "siliciclastic";
-	$LTYPE{'siltstone'} = "siliciclastic";
+	$LTYPE{'mudstone'} = "siliciclastic";
 	$LTYPE{'shale'} = "siliciclastic";
+	$LTYPE{'siltstone'} = "siliciclastic";
 	$LTYPE{'sandstone'} = "siliciclastic";
 	$LTYPE{'conglomerate'} = "siliciclastic";
+	$LTYPE{'mixed carbonate-siliciclastic'} = "other";
+	$LTYPE{'marl'} = "other";
 	$LTYPE{'lime mudstone'} = "carbonate";
 	$LTYPE{'wackestone'} = "carbonate";
 	$LTYPE{'packstone'} = "carbonate";
 	$LTYPE{'grainstone'} = "carbonate";
 	$LTYPE{'reef rocks'} = "carbonate";
+	$LTYPE{'floatstone'} = "carbonate";
+	$LTYPE{'rudstone'} = "carbonate";
+	$LTYPE{'bafflestone'} = "carbonate";
+	$LTYPE{'bindstone'} = "carbonate";
+	$LTYPE{'framestone'} = "carbonate";
 	$LTYPE{'limestone'} = "carbonate";
 	$LTYPE{'dolomite'} = "carbonate";
 	$LTYPE{'carbonate'} = "carbonate";
+	$LTYPE{'coal'} = "other";
+	$LTYPE{'peat'} = "other";
+	$LTYPE{'lignite'} = "other";
+	$LTYPE{'subbituminous coal'} = "other";
+	$LTYPE{'bituminous coal'} = "other";
+	$LTYPE{'anthracite'} = "other";
+	$LTYPE{'coal ball'} = "other";
+	$LTYPE{'tar'} = "other";
+	$LTYPE{'amber'} = "other";
+	$LTYPE{'chert'} = "other";
+	$LTYPE{'evaporite'} = "other";
+	$LTYPE{'phosphorite'} = "other";
+	$LTYPE{'ironstone'} = "other";
+	$LTYPE{'siderite'} = "other";
+	$LTYPE{'phyllite'} = "other";
+	$LTYPE{'slate'} = "other";
+	$LTYPE{'schist'} = "other";
+	$LTYPE{'quartzite'} = "other";
 	
 	%ENVTYPE = ("(paralic indet.)" => "zone 1", "estuarine/bay" => "zone 1",
 					    "lagoonal" => "zone 1",
@@ -835,12 +862,12 @@ sub assignLocs	{
 			# WARNING: assumes that if only one lithology is present, the submit
 			#  script has correctly placed it in the primary lithology field
 					elsif (($q->param('lithonlyor') eq "equal") &&
-					       ($LTYPE{$columns[$LITH1COL]} eq "carbonate") &&
+					       ($LTYPE{$columns[$LITH1COL]} eq "carbonate" || $LTYPE{$columns[$LITH1COL]} eq "other") &&
 					       ($q->param('lithology1') eq "all siliciclastic lithologies"))	{
 					  $columns[$LOCIDCOL] = 0;
 					}
 					elsif (($q->param('lithonlyor') eq "equal") &&
-					       ($LTYPE{$columns[$LITH1COL]} eq "siliciclastic") &&
+					       ($LTYPE{$columns[$LITH1COL]} eq "siliciclastic" || $LTYPE{$columns[$LITH1COL]} eq "other") &&
 					       ($q->param('lithology1') eq "all carbonate lithologies"))	{
 					  $columns[$LOCIDCOL] = 0;
 					}
