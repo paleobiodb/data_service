@@ -864,7 +864,6 @@ sub printResults	{
 		# boundary crossers
 				printf TABLE ",%d",$bcrich[$i];
 				print TABLE ",$originate[$i]";
-				print TABLE ",$originate[$i]";
 			# Foote origination rate
 				if ( $bcrich[$i] > 0 && $bcrich[$i-1] > 0 )	{
 					printf TABLE ",%.4f",log( $bcrich[$i-1] / ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) );
