@@ -2,10 +2,14 @@
 
 # created by rjp, 3/2004.
 # Represents information about a taxon rank
+# 
+# You can set the rank with either a string such as "species", or with a taxon name.
+# If you set it with a taxon name, you have the choice of having it guess the rank based
+# on spacing (can only figure out subspecies, species, higher, or invalid), or actually
+# having it do a full database lookup to assign the rank.
+#
+# Includes methods for comparing ranks, etc.
 
-# ************************
-# not even nearly done yet
-# ************************
 
 package Rank;
 
