@@ -605,7 +605,7 @@ sub getLithologyString	{
 	if ( $lithology eq "siliciclastic only" )	{
 		return qq| ( collections.lithology1 IN ('"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate') AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ('"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate') ) ) |;
 	} elsif ( $lithology eq "carbonate only" )	{
-		return qq| ( collections.lithology1 IN ('wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"') AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ('wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"') ) ) |;
+		return qq| ( collections.lithology1 IN ('lime mudstone','wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"') AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ('lime mudstone','wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"') ) ) |;
 	}
 	return "";
 }
