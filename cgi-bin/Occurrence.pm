@@ -10,7 +10,7 @@ package Occurrence;
 
 use strict;
 
-use TaxonHierarchy;
+use Taxon;
 use SQLBuilder;
 use Reference;
 use URLMaker;
@@ -203,7 +203,7 @@ sub buildReidList {
 	my $sql = $self->getSQLBuilder();
 	
 	my $occ_no = $self->{occurrence_no};
-	my $taxon = TaxonHierarchy->new();
+	my $taxon = Taxon->new();
 	
 	my $reference_no = $self->{reference_no};
 	

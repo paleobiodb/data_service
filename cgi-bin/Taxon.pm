@@ -1,7 +1,8 @@
 #!/usr/bin/perl
 
 # created by rjp, 1/2004.
-# similar to TaxonInfo, may eventually replace it.
+# Represents a single taxon, usually from the authorities table
+# (if it doesn't exist in the authorities table, then not all methods will work)
 
 package Taxon;
 

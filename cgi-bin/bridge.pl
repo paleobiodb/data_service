@@ -32,7 +32,7 @@ use SQLBuilder;
 
 use Occurrence;
 use Collection;
-use TaxonHierarchy;
+use Taxon;
 
 use Validation;
 use Debug;
@@ -4817,7 +4817,7 @@ sub processTaxonomySearch	{
 	my $taxonName = $q->param('taxon_name');
 	my $startingName = $taxonName;	# record to use after the while loop
 	
-	my $taxonObject = TaxonHierarchy->new();
+	my $taxonObject = Taxon->new();
 	
 	# Try to find this taxon in the authorities table
 
@@ -5179,7 +5179,7 @@ sub displayTaxonomyEntryForm	{
 	# Customize the status fields
 	
 	# figure out the rank of the taxon.
-	my $taxonObject = TaxonHierarchy->new();
+	my $taxonObject = Taxon->new();
 	$taxonObject->setWithTaxonName($taxon);
 	my $rank = $taxonObject->rank();
 	
