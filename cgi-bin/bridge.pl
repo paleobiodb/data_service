@@ -2374,6 +2374,8 @@ sub processCollectionsSearchForAdd	{
 	$inlist =~ s/,$//;
 	$sql .= "lngdeg IN (" . $inlist . ")";
 
+	$sql .= " ORDER BY collection_no";
+
 	return ($sql,$lat,$lng);
 }
 
@@ -2976,6 +2978,8 @@ sub displayCollectionDetails {
 	if ( $taxa_list =~ /Abundance/ )	{
 		print $hbo->populateHTML('rarefy_display_buttons', \@row, \@fieldNames);
 	}
+
+	print $hbo->populateHTML('ecology_display_buttons', \@row, \@fieldNames);
 
 	if($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq Globals::god())	{
 		print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames);
@@ -3789,6 +3793,172 @@ sub rarefyAbundances	{
 	print "<p><i>Results are based on 200 random sampling trials.\n";
 	print "The data can be downloaded from a <a href=\"$HOST_URL/$OUTPUT_DIR/rarefaction.csv\">tab-delimited text file</a>.</i></p></center>\n\n";
 
+	print stdIncludes("std_page_bottom");
+
+}
+
+# JA 20,21,28.9.04
+# shows counts of taxa within ecological categories for an individual
+#  collection
+# WARNING: assumes you only care about life habit and diet
+# Download.pm uses some similar calculations but I see no easy way to
+#  use a common function
+sub displayCollectionEcology	{
+
+	print stdIncludes("std_page_top");
+
+	$sql = "SELECT genus_name,species_name,taxon_no FROM occurrences WHERE collection_no=";
+	$sql .= $q->param(collection_no);
+	my @occrefs = @{$dbt->getData($sql)};
+	my @taxonnos;
+	for my $or ( @occrefs )	{
+		push @taxonnos , $or->{taxon_no};
+	}
+
+	@categories = ("life_habit", "diet1", "diet2");
+
+	# WARNING: this could be inefficient because we are simply getting
+	#  the data for ALL the taxa in the table
+# DO WE NEED taxon_name? need join?
+# this is fucked up because get_class is returning names only
+	my %ecology;
+	my %basis;
+	for $category ( @categories )	{
+		my $sql = "SELECT ecotaph.taxon_no,taxon_name," . $category;
+		$sql .= " FROM ecotaph LEFT JOIN authorities ON ecotaph.taxon_no = authorities.taxon_no";
+		my @ecos = @{$dbt->getData($sql)};
+
+		for my $i (0..$#ecos)	{
+# no or name??
+			$ecology{$category.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$category};
+		}
+
+		my $levels = "family,order,class,phylum";
+		my %ancestor_hash=%{Classification::get_classification_hash($dbt,$levels,\@taxonnos)};
+
+		my @ranks = split ',',$levels;
+		for my $tn ( @taxonnos )	{
+			my @parents = split ',',$ancestor_hash{$tn};
+			for my $p ( 0..$#parents )	{
+				if ( $ecology{$category.$parents[$p]} && ! $ecology{$category.$tn} )	{
+					$ecology{$category.$tn} = $ecology{$category.$parents[$p]};
+					$basis{$category.$tn} = $ranks[$p];
+					$incat{$category}++;
+					last;
+				}
+			}
+		}
+	}
+
+	for $category ( @categories )	{
+		$sumincat = $sumincat + $incat{$category};
+	}
+
+	if ( ! $sumincat )	{
+		print "<center><h3>Sorry, there are no ecological data for any of the taxa</h3></center>\n\n";
+		print "<center><p><b><a href=\"$exec_url?action=displayCollectionDetails&collection_no=" . $q->param(collection_no) . "\">Return to the collection record</a></b></p></center>\n\n";
+		print stdIncludes("std_page_bottom");
+		return;
+	}
+
+	# count up species in each category and combined categories
+$|=1;
+	for my $or ( @occrefs )	{
+		$colsum{$ecology{life_habit.$or->{taxon_no}}}++;
+		if ( $ecology{diet2.$or->{taxon_no}} )	{
+			$rowsum{$ecology{diet1.$or->{taxon_no}}."/".$ecology{diet2.$or->{taxon_no}}}++;
+			$cellsum{$ecology{life_habit.$or->{taxon_no}}}{$ecology{diet1.$or->{taxon_no}}."/".$ecology{diet2.$or->{taxon_no}}}++;
+		} else	{
+			$rowsum{$ecology{diet1.$or->{taxon_no}}}++;
+			$cellsum{$ecology{life_habit.$or->{taxon_no}}}{$ecology{diet1.$or->{taxon_no}}}++;
+		}
+	}
+
+	print "<center><h3>Assignments of taxa to categories</h3></center>\n";
+	my $format1 = "<table width=100% height=100% cellpadding=4 cellspacing=0 bgcolor=999999><tr><td bgcolor=FFFFFF>";
+	my $format2 = "</td></tr></table>";
+	print "<table cellpadding=1 cellspacing=0 bgcolor=#EEEEEE align=center>\n";
+	print "<tr><th>",$format1,"<b>Taxon</b>$format2</th>\n";
+	for $category ( @categories )	{
+		my $temp = $category;
+		my @letts = split //,$temp;
+		$letts[0] =~ tr/[a-z]/[A-Z]/;
+		$temp = join //,@letts;
+		$temp =~ s/_/ /g;
+		$temp =~ s/1/ 1/;
+		$temp =~ s/2/ 2/;
+		print "<th>$format1<b>$temp</b>$format2</th><th>$format1<b>Basis</b>$format2</th>\n";
+	}
+	print "</tr>\n";
+	for my $or ( @occrefs )	{
+		print "<tr><td>$format1";
+		if ( $or->{species_name} ne "indet." )	{
+			print "<i>";
+		}
+		print "$or->{genus_name} $or->{species_name}";
+		if ( $or->{species_name} ne "indet." )	{
+			print "</i>";
+		}
+		print "$format2</td>\n";
+		for $category ( @categories )	{
+			if ( $ecology{$category.$or->{taxon_no}} )	{
+				print "<td>$format1$ecology{$category.$or->{taxon_no}}$format2</td>\n";
+				print "<td>$format1<i>$basis{$category.$or->{taxon_no}}</i>$format2</td>\n";
+			} else	{
+				print "<td>$format1 ? $format2</td>\n";
+				print "<td>$format1 ? $format2</td>\n";
+			}
+		}
+		print "</tr>\n";
+	}
+	print "</table>\n\n";
+
+	print "<p>\n\n";
+
+	print "<center><h3>Counts within categories</h3></center>\n";
+	print "<table cellpadding=1 cellspacing=0 bgcolor=#EEEEEE align=center>\n";
+	print "<tr><td>$format1<font color=FFFFFF>.</font>$format2</td>";
+	for my $habit ( sort keys %colsum )	{
+		if ( $habit )	{
+			print "<th><b>",$format1,$habit,$format2,"</b></th>\n";
+		} else	{
+			print "<th><b>",$format1,"?",$format2,"</b></th>\n";
+		}
+	}
+	print "<th>",$format1,"<b>Total</b>",$format2,"</th>\n";
+	print "</tr>\n";
+	for my $diet ( sort keys %rowsum )	{
+		print "<tr>";
+		if ( $diet )	{
+			print "<td>",$format1,$diet,$format2,"</td>\n";
+		} else	{
+			print "<td>",$format1,"?",$format2,"</td>\n";
+		}
+		for my $habit ( sort keys %colsum )	{
+			print "<td>";
+			if ( $cellsum{$habit}{$diet} )	{
+				print "$format1";
+				printf "%d",$cellsum{$habit}{$diet};
+				print "$format2";
+			}
+			print "</td>\n";
+		#	printf "%d",$cellsum{$habit}{$diet};
+		}
+		print "</tr>\n";
+	}
+	print "<tr><td>",$format1,"<b>Total</b>",$format2,"</td>\n";
+	for my $diet ( sort keys %colsum )	{
+		print "<td>";
+		if ( $colsum{$habit} )	{
+			print "<b>",$format1,$colsum{$habit},$format2,"</b>\n";
+		}
+		print "</td>\n";
+	}
+	print "<td><b>",$format1,$#occrefs + 1,$format2,"</b></td></tr>\n";
+	print "</table>\n\n";
+
+	print "<center><p><b><a href=\"$exec_url?action=displayCollectionDetails&collection_no=" . $q->param(collection_no) . "\">Return to the collection record</a></b> - ";
+	print "<b><a href=\"$exec_url?action=displaySearchColls&type=view\">Search for other collections</a></b></p></center>\n\n";
 	print stdIncludes("std_page_bottom");
 
 }
@@ -5590,8 +5760,6 @@ sub displayOccsForReID
 	#$sql .= " WHERE " . $where->whereClause();
 	$sql = $where->SQLExpr();
 
-print "$sql<br>\n";#FOO
- 
 	dbg("$sql<br>");
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
