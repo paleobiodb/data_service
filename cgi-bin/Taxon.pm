@@ -11,6 +11,9 @@ use DBI;
 use DBConnection;
 use SQLBuilder;
 use CGI::Carp qw(fatalsToBrowser);
+use Class::Date qw(date localdate gmdate now);
+use Errors;
+
 
 use URLMaker;
 use Reference;
@@ -23,12 +26,15 @@ use fields qw(	taxonName
 				taxaHash
 				
 				SQLBuilder
+
 							);  # list of allowable data fields.
 
 # taxonName is the name of the original taxon the user set
 # taxonNumber is the number for the original taxon
 # taxonRank is the rank of this taxon, note, this won't be populated until the user calls rank()
 # taxaHash is a hash of taxa numbers and ranks.
+				
+
 				
 				
 # includes the following public methods
@@ -77,7 +83,8 @@ sub setWithTaxonNumber {
 
 
 # Sets the initial taxon with the taxon_name from the database.
-# If the taxon is not in the database, then it does nothing.
+# If the taxon is not in the database, then it just sets the name,
+# but not the number.
 #
 # returns a boolean, 1 if it worked, 0, if it couldn't.
 sub setWithTaxonName {
@@ -85,6 +92,9 @@ sub setWithTaxonName {
 	my $newname;
 	
 	if (my $input = shift) {
+		
+		$self->{taxonName} = $input;
+		
 		# now we need to get the taxonNo from the database if it exists.
 		my ($tn, $newname) = $self->getTaxonNumberFromName($input);
 		
@@ -539,8 +549,12 @@ sub databaseRecord {
 
 
 
-# pass this an HTMLBuilder object
-# and a session object
+# Pass this an HTMLBuilder object
+# and a session object.  
+#
+# Optionally, pass it the CGI object ($q), but usually this is only done
+# if we're running the displayAuthorityForm for the second time (ie, if they
+# had errors the first time).
 # 
 # Displays the form which allows users to enter/edit authority
 # table data.
@@ -550,9 +564,27 @@ sub displayAuthorityForm {
 	my Taxon $self = shift;
 	my $hbo = shift;
 	my $s = shift;
+	my $q = shift;
 	
 	my %fields;  # a hash of fields and values that we'll pass to HTMLBuilder to pop. the form.
 	my @nonEditables; 	# fields that the user can't edit.
+	
+	
+	my $secondTime = 0;  # is this the second time displaying this form?
+	if (($q) && ($q->{second_submission}) ) {
+		# this means that we're displaying the form for the second
+		# time with some error messages.
+		$secondTime = 1;
+			
+		# so grab all of the fields from the CGI object
+		# and stick them in our fields hash.
+		my $fieldRef = Globals::copyCGIToHash($q);
+		%fields = %$fieldRef;
+	}
+	
+	Debug::dbPrint("second_submission = $secondTime");
+	Debug::dbPrint("fields, second sub = " . $fields{second_submission});
+	
 	
 	# is this a new entry, or an edit of an old record?
 	my $isNewEntry = 1;  
@@ -563,19 +595,22 @@ sub displayAuthorityForm {
 	
 	# if the taxon is already in the authorities table,
 	# then grab the data from that table row.
-	if (! $isNewEntry) {	
+	# (unless we're going through for the second time);
+	if ((! $isNewEntry) && (!$secondTime) ) {	
 		my $results = $self->databaseRecord();
 		%fields = %$results;		
-	 	
-		$fields{'taxon_no'} = $self->{taxonNumber};
+	 	Debug::dbPrint("querying database");
+		
+		$fields{taxon_no} = $self->{taxonNumber};
 	}
 	
-	
-	$fields{'taxon_name_corrected'} = $self->{taxonName};	
-	
+	$fields{taxon_name} = $self->{taxonName};
+	if (! $secondTime) {  # otherwise the taxon_name_corrected will already have been set.
+		$fields{taxon_name_corrected} = $self->{taxonName};
+	}
 	
 	# if the type_taxon_no exists, then grab the name for that taxon.
-	if ($fields{type_taxon_no}) {
+	if ((!$secondTime) && ($fields{type_taxon_no})) {
 		$fields{type_taxon_name} = $self->getTaxonNameFromNumber($fields{type_taxon_no});
 	}
 	
@@ -589,12 +624,12 @@ sub displayAuthorityForm {
 		# for a new entry, use the current reference from the session.
 		$ref->setWithReferenceNumber($s->currentReference());
 	} else {
-		# for an old entry, use the reference_number in the record.
-		$ref->setWithReferenceNumber($fields{reference_no});	
+		# for an old entry, use the reference_number in the record. 
+		$ref->setWithReferenceNumber($fields{reference_no});
 	}
 	
 	$fields{primary_reference} = $ref->formatAsHTML();
-
+	
 	if ($fields{'ref_is_authority'} eq 'YES') {
 		# reference_no is the authority
 		$fields{'ref_is_authority_checked'} = 'checked';
@@ -603,18 +638,21 @@ sub displayAuthorityForm {
 	} else {
 		# reference_no is not the authority
 		
-		if (! $isNewEntry) {
+		if ((!$isNewEntry) || $secondTime) {
 			# we only want to check a reference radio button
 			# if they're editing an old record.  This will force them to choose
-			# one for a new record.
+			# one for a new record.  However, if it's the second time
+			# through, then it's okay to check one since they already did.
 			$fields{'ref_is_authority_checked'} = '';
 			$fields{'ref_is_authority_notchecked'} = 'checked';
 		}
 		
-		$fields{'2nd_pages'} = $fields{'pages'};
-		$fields{'2nd_figures'} = $fields{'figures'};
-		$fields{'pages'} = '';
-		$fields{'figures'} = '';
+		if (!$secondTime) {
+			$fields{'2nd_pages'} = $fields{'pages'};
+			$fields{'2nd_figures'} = $fields{'figures'};
+			$fields{'pages'} = '';
+			$fields{'figures'} = '';
+		}
 	}
 	
 		
@@ -622,9 +660,13 @@ sub displayAuthorityForm {
 	# if the rank is species, then display the type_specimen input
 	# field.  Otherwise display the type_taxon_name field.
 	my $rankFromSpaces = Validation::taxonRank($self->{taxonName});
+	
+	# note, if secondTime through, then this is still the database rank,
+	# but it was just pulled from the database on the first time through
+	# and then passed in the $q object.
 	my $databaseRank = $fields{taxon_rank};
 	
-	if ($rankFromSpaces eq 'species') {
+	if ($rankFromSpaces eq 'species' || $rankFromSpaces eq 'subspecies') {
 		# remove the type_taxon_name field.
 		$fields{'OPTIONAL_type_taxon_name'} = 0;
 	} else {
@@ -637,16 +679,22 @@ sub displayAuthorityForm {
 	# from the database.  Otherwise, use the rank obtained from the 
 	# spacing of the name
 	my $rankToUse = ($databaseRank || $rankFromSpaces);
+	if ($rankToUse eq 'higher') {
+		# the popup menu doesn't have "higher", so use "genus" instead.
+		$rankToUse = 'genus';
+	}
+	
 	$fields{taxon_rank} = $hbo->rankPopupMenu($rankToUse);
 	
 
 	# if the authorizer of this record doesn't match the current
-	# authorizer, then only let them edit empty fields.
+	# authorizer, and if this is an edit (not a first entry),
+	# then only let them edit empty fields.
 	#
 	# otherwise, they can edit any field.
 	my @nonEditables;
 	
-	if ($s->get('authorizer_no') != $fields{authorizer_no}) {
+	if ((! $isNewEntry) && ($s->get('authorizer_no') != $fields{authorizer_no})) {
 	
 		print "<p align=center><i>You did not create this record, so you can only edit empty fields.</i></p>";
 		
@@ -674,23 +722,35 @@ sub displayAuthorityForm {
 		}		
 	}
 	
-	
+	# print the form	
+	print main::stdIncludes("std_page_top");
 	print $hbo->newPopulateHTML("add_enter_authority", \%fields, \@nonEditables);
+	print main::stdIncludes("std_page_bottom");
 }
 
 
 
 
-
-# call this when you want to submit an authority form.
-# must pass it the cgi parameters, $q, and the session, $s.
+# Call this when you want to submit an authority form.
+# Pass it the HTMLBuilder object, $hbo, the cgi parameters, $q, and the session, $s.
+#
+# The majority of this method deals with validation of the input to make
+# sure the user didn't screw up, and to display an appropriate error message if they did.
 #
 # rjp, 3/2004.
 sub submitAuthorityForm {
 	my Taxon $self = shift;
-	my $q = shift;		# the cgi parameters
-	my $s = shift;		# session
+	my $hbo = shift;
+	my $s = shift;		# the cgi parameters
+	my $q = shift;		# session
 
+	my $sql = $self->getSQLBuilder();
+	my $errors = Errors->new();
+	
+	# if this is the second time they submitted the form (or third, fourth, etc.),
+	# then this variable will be true.  This would happen if they had errors
+	# the first time, and then resubmitted it.
+	my $isSecondSubmission = $q->param('second_submission');
 	
 	# is this a new entry, or an edit of an old record?
 	my $isNewEntry = 1;  
@@ -708,8 +768,7 @@ sub submitAuthorityForm {
 			%dbFields = %$results;
 		}
 	}
-	
-	
+		
 	# this $editAny variable is true if they can edit any field,
 	# false if they can't.
 	my $editAny = 0;
@@ -750,20 +809,48 @@ sub submitAuthorityForm {
 	}
 	
 	
+	if (	($q->param('ref_is_authority') ne 'YES') && 
+			($q->param('ref_is_authority') ne 'NO')) {
+		#Debug::dbPrint("radio error");
+		$errors->add("You must choose one of the reference radio buttons.");
+	}
+	
 	# merge the pages and 2nd_pages, figures and 2nd_figures fields together
 	# since they are one field in the database.
 	
-	if (! $q->param('ref_is_authority')) {
-		$q->param(pages => $q->param('2nd_pages'));
-		$q->param(figures => $q->param('2nd_figures'));
+	if ($q->param('ref_is_authority') eq 'NO') {
+		$fieldsToEnter{pages} = $q->param('2nd_pages');
+		$fieldsToEnter{figures} = $q->param('2nd_figures');
+		
+		if (! $q->param('author1last')) {
+			$errors->add('You must enter an author.');	
+		}
 	}
 	
-	# remove the old ones.
-	$q->delete('2nd_pages');
-	$q->delete('2nd_figures');
 	
-	# remove the action parameter so we won't try to add it to the database table!
-	$q->delete('action');
+	if (($q->param('otherauthors')) && (! $q->param('author2last') )) {
+		# don't let them enter other authors if the second author field
+		# isn't filled in.
+		
+		$errors->add("Don't enter other authors if you haven't entered a second author.");
+	}
+	
+	{ # so we have our own scope for these variables.
+		my $rankFromSpaces = Validation::taxonRank($q->param('taxon_name'));
+		my $trank = $q->param('taxon_rank');
+		my $er = 0;
+		
+		if ( (($rankFromSpaces eq 'subspecies') && ($trank ne 'subspecies')) ||
+			(($rankFromSpaces eq 'species') && ($trank ne 'species')) ||
+			(($rankFromSpaces eq 'higher') && (
+					($trank eq 'subspecies') || 
+					($trank eq 'species')
+					
+					)) ) {
+
+			$errors->add("The original rank, '" . $trank . "' doesn't match the spacing of the taxon name, '" . $q->param('taxon_name_corrected') . "'.");		
+		}
+	}
 	
 	# Now loop through all fields submitted from the form.
 	# If a field is not empty, then see if we're allowed to edit it in the database.
@@ -780,11 +867,11 @@ sub submitAuthorityForm {
 		if (! $okayToEdit) {
 			# then we should do some more checks, because maybe they are allowed
 			# to edit it aferall..  If the field they want to edit is empty in the
-			# database, and is not the ref_is_authority field, then they can edit it.
+			# database, then they can edit it.
 			
 			if (! $dbFields{$formField}) {
 				# If the field in the database is empty, then it's okay
-				# to edit it, as long as it's not the ref_is_authority field.
+				# to edit it.
 				$okayToEdit = 1;
 			}
 		}
@@ -796,10 +883,76 @@ sub submitAuthorityForm {
 		#Debug::dbPrint("okayToEdit = $okayToEdit, $formField = " . $q->param($formField));
 		
 	} # end foreach formField.
+	
+	if ($q->param('type_taxon_name')) {
+		my $junk;
+		($fieldsToEnter{type_taxon_no}, $junk) = $self->getTaxonNumberFromName($fieldsToEnter{type_taxon_name});
+		$fieldsToEnter{type_taxon_name} = '';
+	}
 
+	$fieldsToEnter{taxon_name} = $q->param('taxon_name_corrected');	
+
+	# delete some fields that may be present since these don't correspond
+	# to fields in the database table..
+	delete $fieldsToEnter{action};
+	delete $fieldsToEnter{'2nd_authors'};
+	delete $fieldsToEnter{'2nd_figures'};
+	
+	# correct the ref_is_authority field.  In the HTML form, it can be "YES" or "NO"
+	# but in the database, it should be "YES" or "" (empty).
+	if ($fieldsToEnter{ref_is_authority} eq 'NO') {
+		$fieldsToEnter{ref_is_authority} = '';
+	}
+	
 	
 	# at this point, we should have a nice hash array (%fieldsToEnter) of
 	# fields and values to enter into the authorities table.
+	if ($isNewEntry) {
+		# if it's a new entry, then insert it into the database.
+		
+		# *** NOTE, if they try to enter a new record which has the same name and
+		# taxon_rank as an existing record, we should display a warning page stating
+		# this fact..  Put all of the fields they're trying to enter in hidden fields
+		# on this page.  Then allow them to *really* submit it if they want to.
+		#
+		# Could do this by having a separate method in bridge called 
+		# submitDuplicateAuthorityForm, and that could call this 
+		# submitAuthorityForm method and pass it an argument so we know that we 
+		# shouldn't display the warning form *again*, but should actually enter it.
+		
+		$fieldsToEnter{created} = now();
+		
+		if (($self->getTaxonNumberFromName($fieldsToEnter{taxon_name})) && 
+			(! $q->param('second_submission')) ) {
+			
+			# put a message in a hidden to let us know that the user *really*
+			# wants to submit this duplicate record.  This way, when they click
+			# the submit button the second time around, we won't display the 
+			# same warning message again.
+			
+			$errors->add("The taxon '" . $fieldsToEnter{taxon_name} . "' already exists in our database. Are you sure you want to submit this record?");
+		}
+		
+		if ($errors->count() > 0) {
+			
+			$q->param(-name=>'second_submission', -values=>['1']);
+			
+			# stick the errors in the CGI object for display.
+			my $message = $errors->errorMessage();
+						
+			$q->param(-name=>'error_message', -values=>[$message]);
+			
+			
+			$self->displayAuthorityForm($hbo, $s, $q);
+			
+			return;
+		}
+		
+		$sql->insertNewRecord('authorities', \%fieldsToEnter);
+		
+		# now that we've inserted, we should grab the taxon_no
+	}
+	
 	foreach my $fieldToEnter (keys(%fieldsToEnter)) {
 		Debug::dbPrint("$fieldToEnter = " . $fieldsToEnter{$fieldToEnter});
 	}
