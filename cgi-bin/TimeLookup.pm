@@ -588,19 +588,26 @@ sub getIntervalRange	{
 	}
 
 # push the numbers onto the master list
-	push @intervals, $max_interval_no;
+    if ($max_interval_no) {
+    	push @intervals, $max_interval_no;
+    }    
 	if ( $max_interval_no != $min_interval_no && ( $min_interval_no > 0 ) )	{
 		push @intervals, $min_interval_no;
 	}
 
 # find all scales including both numbers or (if there is one) the number
-	$sql = "SELECT scale_no FROM correlations WHERE interval_no=";
-	$sql .= $max_interval_no;
-	my @scales = @{$dbt->getData($sql)};
+    my @scales;
+    if ($max_interval_no) {
+        $sql = "SELECT scale_no FROM correlations WHERE interval_no=";
+        $sql .= $max_interval_no;
+        @scales = @{$dbt->getData($sql)};
+    }
 
-	$sql = "SELECT scale_no FROM correlations WHERE interval_no=";
-	$sql .= $min_interval_no;
-	push @scales, @{$dbt->getData($sql)};
+    if ($min_interval_no) {
+        $sql = "SELECT scale_no FROM correlations WHERE interval_no=";
+        $sql .= $min_interval_no;
+        push @scales, @{$dbt->getData($sql)};
+    }
 
 # if the scale's pubyr is most recent, record the scale number
 	my %seen = ();
@@ -762,18 +769,19 @@ sub mapIntervals	{
 #   and so is the min
 sub returnCollectionList	{
 	my $bestbothscale = shift;
-
-	$sql = "SELECT collection_no FROM collections WHERE ";
-	$sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
-	$sql .= "AND ( min_interval_no IN ( " . join(',',@intervals) . " ) ";
-	$sql .= " OR min_interval_no < 1 )";
-	my @collrefs = @{$dbt->getData($sql)};
-
 	my @collections = ();
-	for my $collref ( @collrefs )	{
-		push @collections, $collref->{collection_no};
-	}
 
+    if (@intervals) {
+        $sql = "SELECT collection_no FROM collections WHERE ";
+        $sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
+        $sql .= "AND ( min_interval_no IN ( " . join(',',@intervals) . " ) ";
+        $sql .= " OR min_interval_no < 1 )";
+        my @collrefs = @{$dbt->getData($sql)};
+
+        for my $collref ( @collrefs )	{
+            push @collections, $collref->{collection_no};
+        }
+    }
 # return the matching collections plus a value indicating whether the
 #  intervals are in the same scale (computed by getIntervalRange)
 	return(\@collections,$bestbothscale);
