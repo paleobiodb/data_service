@@ -31,14 +31,14 @@ sub searchForm{
 
 	$html .= "\n<script language=\"Javascript\">\n".
 			 "function checkInput(){\n".
-			 "	var rank = document.forms[0].taxon_rank.value;\n".
+			 "	var rank = document.forms[0].taxon_rank.options[document.forms[0].taxon_rank.selectedIndex].text;\n".
 			 "	var value = document.forms[0].taxon_name.value;\n".
 			 "	if(value == \"\"){\n".
 			 "		alert('Please enter a taxon name.');\n".
 			 "		return false;\n".
 			 "	}\n".
-			 "	if(value.match(/[A-Za-z]+\\s+[A-Za-z]+/) && rank != 'Genus and species'){\n".
-			 "		alert('Please choose rank \"Genus and species\" for this search');\n".
+			 "	if(value.match(/[A-Za-z]+\\s+[a-z]+/) && rank != 'Genus and species'){\n".
+			 "		alert('Please choose rank \"Genus and species\" to search for a species');\n".
 			 "		return false;\n".
 			 "	}\n".
 			 "	if(rank == 'Genus and species' && value.match(/^[A-Z]{1}[a-z]+\\s+[a-z]+\$/) == null){\n".
@@ -342,9 +342,61 @@ sub displayTaxonInfoResults{
 	
 	# Get the sql IN list for a Higher taxon:
 	my $in_list = "";
+
 	if($taxon_type eq "Higher taxon"){
 		my $name = $q->param('genus_name');
 		$in_list = `./recurse $name`;
+	} else	{
+
+	# Find all the junior synonyms of this genus or species JA 4.7.03
+	# Find all taxa that ever were children of this taxon no
+	$sql = "SELECT child_no,count(*) FROM opinions WHERE parent_no=";
+	$sql .= $taxon_no . " AND status!='belongs to' GROUP BY child_no";
+	my @results = @{$dbt->getData($sql)};
+	for my $ref (@results)	{
+		push @childlist,$ref->{child_no};
+	}
+	# For each child, confirm that this is the most recent opinion
+	for my $child (@childlist)	{
+		my $sql = "SELECT parent_no,pubyr,reference_no,status FROM opinions WHERE child_no=";
+		$sql .= $child . " AND status!='belongs to'";
+		my @results = @{$dbt->getData($sql)};
+		my $currentParent = "";
+		my $maxyr = 0;
+		my %recombined = ();
+		for my $ref (@results)	{
+			if ( $ref->{pubyr} > $maxyr )	{
+				$maxyr = $ref->{pubyr};
+				$currentParent = $ref->{parent_no};
+			} elsif ( $ref->{pubyr} == 0 )	{
+				my $sql = "SELECT pubyr FROM refs WHERE reference_no=";
+				$sql .= $ref->{reference_no};
+				$pubyr = ${$dbt->getData($sql)}[0]->{pubyr};
+				if ( $pubyr > $maxyr )	{
+					$maxyr = $pubyr;
+					$currentParent = $ref->{parent_no};
+				}
+			}
+			if ( $ref->{status} eq "recombined as" )	{
+				$recombined{$ref->{parent_no}}++;
+			}
+		}
+		# If the most recent opinion makes this a synonym, record its
+		#  name AND those of recombinations
+		if ( $currentParent == $taxon_no )	{
+			my @recombs = keys %recombined;
+			push @recombs,$child;
+			for my $comb_no (@recombs)	{
+				my $sql = "SELECT taxon_name FROM authorities WHERE taxon_no=";
+				$sql .= $comb_no;
+				my @results = @{$dbt->getData($sql)};
+				for my $ref (@results)	{
+					push @synonyms, $ref->{taxon_name};
+				}
+			}
+		}
+	}
+	$in_list =  join ',',@synonyms;
 	}
 
 
@@ -396,7 +448,7 @@ sub displayTaxonInfoResults{
 	# image thumbs:
 	my @selected_images = $q->param('image_thumbs');
 	require Images;
-	my @thumbs = Images::processViewImages($dbt, $q, $s);
+	my @thumbs = Images::processViewImages($dbt, $q, $s, $in_list);
 	foreach my $thumb (@thumbs){
 		print "<input type=checkbox name=image_thumbs value=";
 		print $thumb->{image_no};
@@ -440,6 +492,9 @@ sub displayTaxonInfoResults{
 					print "<center><img src=\"".$res->{path_to_image}.
 						  "\" border=1></center><br>\n";
 					print "<i>".$res->{caption}."</i><p>\n";
+					if ( $res->{taxon_no} != $taxon_no )	{
+						print "<div class=\"small\"><b>Original identification:</b> ".$res->{taxon_name}."</div>\n";
+					}
 					print "<div class=\"small\"><b>Original name of image:</b> ".$res->{original_filename}."</div>\n";
 					if ( $res->{reference_no} > 0 )	{
 						$sql = "SELECT author1last, author2last, otherauthors, pubyr FROM refs WHERE reference_no=" . $res->{reference_no};
