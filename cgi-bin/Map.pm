@@ -9,6 +9,7 @@ use Globals;
 
 # Flags and constants
 my $DEBUG = 0;			# The debug level of the calling program
+my $hbo;                # HTMLBuilder object
 my $dbh;				# The database handle
 my $dbt;				# The DBTransactionManager object
 my $q;					# Reference to the parameters
@@ -24,6 +25,16 @@ my $PI = 3.14159265;
 my $C72 = cos(72 * $PI / 180);
 my $AILEFT = 100;
 my $AITOP = 580;
+
+# mapsearchfieldsX value => query parameter mapping.  really should have value
+# parameters directly embedded in select statement, but would probably screw up prefs. module parsing. PS 01/26/2004
+%fieldnames = ( "research group" => "research_group",
+                "state/province" => "state",
+                "time interval" => "interval_name",
+                "lithology" => "lithology1",
+                "paleoenvironment" => "environment",
+                "taxon" => "genus_name" );
+
 my %coll_count = ();
 
 sub acos { atan2( sqrt(1 - $_[0] * $_[0]), $_[0] ) }
@@ -38,6 +49,7 @@ sub new {
 	$q = shift;
 	$s = shift;
 	$dbt = shift;
+    $hbo = shift;
 	my $self = {maptime=>0,plate=>()};
 
 	bless $self, $class;
@@ -58,11 +70,11 @@ sub setQAndUpdateScale {
 }
 
 sub buildMap {
-	Debug::dbPrint("Made it to buildMap");
-	
 	my $self = shift;
 
 	$|=1;					# Freeflowing data
+
+    $self->mapCheckForm(); # Will print out warnings and die if anything is encountered
 
 	$self->{'maptime'} = $q->param('maptime');
 	if ( $self->{'maptime'} eq "" )	{
@@ -74,14 +86,6 @@ sub buildMap {
 	if ( $self->{'maptime'} > 0 )	{
 		$self->mapGetRotations();
 	}
-
-
-    %fieldnames = ( "research group" => "research_group",
-		            "state/province" => "state",
-		            "time interval" => "interval_name",
-		            "lithology" => "lithology1",
-		            "paleoenvironment" => "environment",
-		            "taxon" => "genus_name" );
 
     $img_link = $self->mapSetupImage();
     for my $ptset (1..4) {
@@ -134,6 +138,60 @@ sub buildMap {
     $self->mapFinishImage();
 
     return $img_link;
+}
+
+# This makes sure some parameters (interval name, taxon name) are kosher.
+# e.g. they exist in the db/aren't ambiguous. print errors and die if they aren't
+sub mapCheckForm {
+    my $self = shift;
+
+    # For all four datasets (point types) ... 
+    for my $ptset (1..4) {
+        my $interval_name = '';    
+        my $genus_name = '';
+        if ($ptset > 1) {
+            $extraField = $fieldnames{$q->param('mapsearchfields'.$ptset)}
+                                        ||
+                          $q->param('mapsearchfields'.$ptset);
+            $extraFieldValue = $q->param('mapsearchterm'.$ptset);
+                                                                                                                                                             
+            if ($extraField eq 'interval_name') {
+                $interval_name = $extraFieldValue;
+            } elsif ($extraField eq 'genus_name') {
+                $genus_name = $extraFieldValue;
+            }
+        } elsif ($ptset == 1) {
+            $interval_name = $q->param('interval_name');
+            $genus_name    = $q->param('genus_name');
+        }
+        
+
+        # Get EML values, check interval names
+        if ($interval_name =~ /[a-zA-Z]/) {
+            my ($eml, $name) = TimeLookup::splitInterval($dbt,$interval_name);
+            if (!Validation::checkInterval($dbt,$eml,$name)) {
+                push @errors, "We have no record of $interval_name in the database";
+            } 
+        }
+
+        # Generate warning for taxon with homonyms
+        if ($genus_name) {
+            if($q->param('taxon_rank') eq "Higher taxon" ||
+               $q->param('taxon_rank') eq "Higher-taxon"){
+                my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $genus_name);
+                if (scalar(@taxon_nos)  > 1) {
+                    push @errors, "The taxon name '$genus_name' is ambiguous and belongs to multiple taxonomic hierarchies. Right the map script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
+                }
+            }
+        }
+    }
+   
+    # Now if there are any errors, die
+    if (@errors) {
+        PBDBUtil::printErrors(@errors);
+        print main::stdIncludes("std_page_bottom");
+        exit;
+    }
 }
 
 #this is the complement to buildMapOnly, used in TaxonInfo
@@ -396,15 +454,6 @@ sub mapQueryDb	{
         $reflist =~ s/^,//;
     }
 
-    # make a list of collections falling in a time interval
-    # JA 20.7.03
-    my $intlist;
-    if ( $q->param('interval_name') =~ /[A-Za-z]/ )	{
-        my ($collref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, '', $q->param('interval_name'), '', '');
-        my @colls = @{$collref};
-        $intlist = join ',', @colls;
-    }
-
     # query the occurrences table to get a list of useable collections
     # Also handles species name searches JA 19-20.8.02
     my $genus;
@@ -485,7 +534,7 @@ sub mapQueryDb	{
             'authorizer',
             'country',
             'state',
-            'time interval',
+            'interval_name',
             'formation', 
             'lithology1', 
             'environment',
@@ -527,18 +576,6 @@ sub mapQueryDb	{
         $q->param('modified_since' => $q->param('year')." ".$q->param('month')." ".$q->param('date'));
     }
 
-    # Clean up the environment field
-    my $environment = $q->param('environment');
-    if ( $environment =~ /General/ )	{
-        $q->param(environment => '');
-    } elsif ( $environment =~ /Carbonate/ )	{
-        $q->param(environment => 'carbonate indet.');
-    } elsif ( $environment =~ /Siliciclastic/ )	{
-        $q->param(environment => 'marginal marine indet.');
-    } elsif ( $environment =~ /Terrestrial/ )	{
-        $q->param(environment => 'fluvial-lacustrine indet.');
-    }
-
 	for my $field ( @allfields ) {
 		if ( $q->param($field) && $q->param( $field ) ne "all")	{
 			$filledfields{$field} = $q->param ( $field );
@@ -563,26 +600,44 @@ sub mapQueryDb	{
         }
     }
 
-	# handle time interval JA 20.7.03
-	if ( $q->param('interval_name') =~ /[A-Za-z]/ )	{
-        if (!$intlist) { $intlist = "0"; } #If the interval doesn't exist, set it so we get no results
-		$where = &::buildWhere ( $where, " ( collection_no IN (" . $intlist . ") )" );
-	}
-
 	for $t (keys %filledfields)	{
 		if ( $filledfields{$t} )	{
 			# handle stage
 			if ($t eq "interval_name")	{
-                my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh,$dbt,'',$filledfields{$t},'','','intervals');
+                # no checking at this point, assumed already handled in MapCheckForm
+                my ($eml,$name) = TimeLookup::splitInterval($dbt,$filledfields{$t});
+                my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh,$dbt,$eml,$name,'','','intervals');
                 @intervals = @{$inlistref};
                 if (@intervals) {
-				    $where = &::buildWhere ( $where, qq| max_interval_no IN (|.join(",",@intervals).qq|)| );
+                    my $whereTerm = " max_interval_no IN (".join(',',@intervals).")".
+                                    " AND ( min_interval_no IN (".join(',',@intervals).")".
+                                    "  OR min_interval_no < 1 )";
+				    $where = &::buildWhere ( $where, $whereTerm);
                 }
 			}
 			# handle lithology
 			elsif ($t eq "lithology1")	{
 				$where = &::buildWhere ( $where, qq| (lithology1='$filledfields{$t}' OR lithology2='$filledfields{$t}')| );
 			}
+            # handle environment
+            elsif ($t eq 'environment') {
+                my $environment;
+                
+                if ($filledfields{$t} =~ /General/) {
+                    $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_general'}});
+                } elsif ($filledfields{$t} =~ /Terrestrial/) {
+                    $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_terrestrial'}});
+                } elsif ($filledfields{$t} =~ /Siliciclastic/) {
+                    $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_siliciclastic'}});
+                } elsif ($filledfields{$t} =~ /Carbonate/) {
+                    $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_carbonate'}});
+                } else {
+                    $environment = $dbh->quote($filledfields{$t});
+                }
+                if ($environment) {
+                    $where = &::buildWhere($where, qq| environment IN ($environment)|);;
+                }
+            }
 			# handle modified date
 			elsif ($t eq "modified_since")	{
 				my ($yy,$mm,$dd) = split / /,$filledfields{$t},3;
