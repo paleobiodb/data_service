@@ -22,7 +22,7 @@
 <hr>
 
 <font size=-1>
-<i>This page was written by John Alroy on 28 August 2000, updated on 25 July, 3/7 August 2001, 14-17 August 2002, 28 March 2003, and 19 - 20 April 2004.</i><p>
+<i>This page was written by John Alroy on 28 August 2000, updated on 25 July, 3/7 August 2001, 14-17 August 2002, 28 March 2003, and 19 - 22 April 2004.</i><p>
 </font>
 
 <hr>
@@ -72,12 +72,23 @@ You can record the authority in one of two ways:</p>
 <li> You are working from another, later paper that discusses the species and gives some information about the authority. So, select the button that says "it was named in an earlier publication" and enter as much as you can about the author names and the year the taxon was named.
 </ol>
 
-<p>Create a new authority record for any taxon name that is spelt differently.
-So, if Linnaeus named the family "Equidae" but someone later created a subfamily called "Equinae," or reranked "Equidae" as the subfamily "Equinae," then Linnaeus is the author of that name too, but you need to make a new authority record anyway.</p>
+<p>Some rules on creating taxa:</p>
 
-<p>Never create more than one authority record for a taxon, even if the original record is owned by some other authorizer and/or entered by some other enterer; the original record has different names of authors, dates of publication, etc.; or if you are about to classify the taxon in a new way.
-But <i>do</i> create a new record if the taxon is actually different even though its name is spelt the same way.
-This can happen when names are homonyms (see below).</p>
+<ul>
+<li>Never create more than one authority record for a taxon, even if the original record is owned by some other authorizer and/or entered by some other enterer; the original record mistakenly has different names of authors, dates of publication, etc.; or if you are about to classify the taxon in a new way.
+<i>But <i>do</i> create a new record if the taxon is actually biologically different even though its name is spelt the same way (i.e., it has a different type specimen or type taxon).
+This can happen when names are homonyms (see definitions of opinion terms below).</p>
+<li>Create a new authority record for any taxon name that is spelt differently.
+So, if Linnaeus named the family "Equidae" but someone later created a subfamily called "Equinae," or reranked "Equidae" as the subfamily "Equinae," then Linnaeus is the author of that name too, but you need to make a new authority record anyway.
+<li>Conversely, don't create a new record if the rank changed but the spelling didn't.
+<li>DO NOT enter common English names such as "antelope", "oyster," or "conifer" as new taxa.
+These terms always can be translated into formal scientific names such as "Bovidae," so they should not be entered anywhere in the Database.
+<li>Likewise, never create an authority record for an informal but still scientific name such as a leaf type category.
+<li>And don't create a record for an "indeterminate" higher taxon that includes an "incertae sedis" taxon.
+Instead, "incertae sedis" taxa should be classified into the next higher-ranked taxon that <i>is</i> formally defined.
+So if all you know is that the genus is a plant, put in the opinion that it belongs to "Plantae."
+</ul>
+
 
 <center>
 <h4>What the terms mean</h4>
@@ -105,15 +116,16 @@ If there are both figures and plates, enter the numbers like this: "1, 2, Pl. 3"
 In this section you record key data about the taxon that should have been published when the name was first described.<p>
 
 <b>Original rank</b><br>
-The Linnean taxonomic rank of the taxon that is being discussed, as it was originally published by the original author.
-Use the "unranked clade" value if the original author does not use ranks but does use formal Latin names for higher taxa.
+The Linnean taxonomic rank of the taxon that is being discussed, as it was originally published by the original author.<p>
+
+<ul>
+<li>If someone changed the rank and the spelling changed (e.g., "Herpestinae" changed to "Herpestidae"), make a new authority record for the new spelling and make a "rank changed as" opinion to connect the authority records.
+<li>But if the spelling didn't change, don't change the "original rank" value or do anything else; we simply are not tracking trivial changes in ranks.
+In cases like that, simply add a comment to the original authority record saying so-and-so changed the rank to such-and-such.
+<li>Use the "unranked clade" value if the original author does not use ranks but does use formal Latin names for higher taxa.
 Also use this term for non-standard ranks such as "Mirorder" or "Parvorder."
-You may <i>not</i> define genera or species as "unranked clades"; this term only applies to higher taxa.
-DO NOT enter common English names such as "antelope", "oyster," or "conifer" as new taxa.
-These terms always can be translated into formal scientific names such as "Bovidae," so they should not be entered anywhere in the Database.
-Likewise, never create an authority record for an informal name such as a leaf type category, or for an "indeterminate" higher taxon that includes an "incertae sedis" taxon.
-Instead, "incertae sedis" taxa should be classified into the next higher-ranked taxon that <i>is</i> formally defined.
-So if all you know is that the genus is a plant, put in the opinion that it belongs to "Plantae."<p>
+<li>You may <i>not</i> define genera or species as "unranked clades"; this term only applies to higher taxa.
+</ul>
 
 <b>Name of type taxon</b><br>
 The name of the type taxon, as originally given when the taxon was named.
@@ -128,7 +140,6 @@ Note any problems here. For example, make a note if: you are not sure you have t
 
 <ul>
  <li>"<i>original rank</i>" means the rank in the Linnean hierarchy that was given to the taxon when it was first named.
-Don't change this value even if someone later changed the rank.
  <li>"<i>type taxon</i>" means the taxon at the next lower rank that is the name-bearer.
 So, if <i>Equus caballus</i> is the type species of the genus <i>Equus,</i> then <i>Equus</i> must always include <i>E. caballus</i>, and if <i>E. caballus</i> is moved to another genus, then <i>Equus</i> becomes invalid.
  <li>"<i>type specimen</i>" means the museum number of the actual physical specimen that is the name-bearer of a species.
@@ -211,7 +222,8 @@ The possible status values are:
  <li>"<i>corrected as</i>" means that the original spelling was grammatically incorrect and a new spelling has been proposed. Put the old spelling in the taxon field and the new spelling in the parent taxon field.
  <li>"<i>rank changed as</i>" means that the original spelling was changed because the taxon's rank was changed.
 Create a new authority record for the new spelling.
-The put the old spelling in the taxon field and the new spelling in the parent taxon field.
+Then put the old spelling in the taxon field and the new spelling in the parent taxon field.
+It does <i>not</i> matter if the new rank is higher or lower than the old one.
 </ul>
 
 <p><i>Invalidation.</i> The taxon is invalid and you can't even tell if it's the same as something else.
