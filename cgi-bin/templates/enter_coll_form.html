@@ -6,6 +6,12 @@
 		var missinginfo = "";
 		var frm = document.forms[0];
 
+		if ( frm.collection_name.value == "") {
+			missinginfo += "\n    - Collection name (required)";
+		}
+		if ( frm.collection_type.value == "") {
+			missinginfo += "\n    - Reason for describing collection (required)";
+		}
 		if ( frm.period_max.selectedIndex == 0 ) {
 			missinginfo += "\n    - Period maximum (required)";
 		}
@@ -19,9 +25,6 @@
 					missinginfo += "\n    - U.S. state (required)";
 				}
 			}
-		}
-		if ( frm.collection_name.value == "") {
-			missinginfo += "\n    - Collection name (required)";
 		}
 		var index = frm.geogscale.selectedIndex;
 		if ( frm.latdeg.value == "" && frm.geogscale.options[index].text != "basin" ) {
