@@ -222,6 +222,7 @@ sub originalCombination {
 # for internal use only
 # creates a hash of all taxa ranks and numbers
 # for the original taxa the user passed in.
+# Note, only goes *up* to higher taxa, not down.
 sub createTaxaHash {
 	my TaxonHierarchy $self = shift;
 
@@ -259,7 +260,8 @@ sub createTaxaHash {
 		# the numbers increment on each addition.
 		$sql->setSQLExpr("SELECT o.parent_no, o.pubyr, o.ref_has_opinion, 
 		o.reference_no, r.pubyr FROM opinions o, refs r 
-		WHERE o.child_no = $tn AND o.reference_no = r.reference_no ORDER BY o.parent_no DESC");
+		WHERE o.child_no = $tn AND o.reference_no = r.reference_no 
+		AND status = 'belongs to' ORDER BY o.parent_no DESC");
 		$sql->executeSQL();
 
 		# loop through all result rows, and find the one with the most
@@ -298,64 +300,9 @@ sub createTaxaHash {
 		$hash{$parent} = $pubyr;		
 					
 		$tn = $parent;
-		
-		#print "here, tn = $tn\n";	
-
 		#print "tn = $tn, id = $idNum, pubyr = $pubyr\n";
 	}
 	
-	#print "\t\tout of loop\n";
-	
-	# now go down the hierarchy to the bottom
-	# starting from the taxon the user originally passed in
-	$tn = $self->taxonNumber();
-	while ($tn) {
-		$sql->setSQLExpr("SELECT o.child_no, o.pubyr, o.ref_has_opinion,
-		o.reference_no, r.pubyr FROM opinions o, refs r 
-		WHERE o.parent_no = $tn AND o.reference_no = r.reference_no ORDER BY o.child_no DESC");
-		$sql->executeSQL();
-
-		# loop through all result rows, and find the one with the most
-		# recent pubyr.  Note, we'll have to look at the reference if the ref_has_opinion field is true.
-		$pubyr = 0;
-		$idNum = 0;
-		
-		my $tempYR;
-		while ($resultRef = $sql->nextResultArrayRef()) {
-			if ($ref_has_opinion = $resultRef->[2]) {
-				# if ref_has_opinion is YES, then we need to look to the reference
-				# to find the pubyr
-				$tempYR = $resultRef->[4]; # pubyr from reference
-			} else {
-				$tempYR = $resultRef->[1];  # pubyr from opinion
-			}
-				
-			if ($tempYR > $pubyr) {
-				$pubyr = $tempYR;
-				$idNum = $resultRef->[0];
-			}
-			
-		} # end while $resultRef.
-	
-	
-		$sql->finishSQL();
-		my $child = $idNum;  # this is the child with the most recent pubyr.
-
-		# get the rank of the parent
-		my $cRank = $sql->getSingleSQLResult("SELECT taxon_rank FROM authorities WHERE taxon_no = $child");
-		
-		# insert it into the hash, so we have the parent rank as the key
-		# and the parent taxon_no as the value.
-		$hash{$cRank} = $child;
-		
-		# also insert the pubyr for this child, keyed to the id number.
-		$hash{$child} = $pubyr;
-				
-		$tn = $child;
-		
-		print "tn = $tn, id = $idNum, pubyr = $pubyr\n";
-	}
-	print "\t\tout of loop\n";
 	
 	# print out for debugging purposes.
 #	my @keys = keys(%hash);
@@ -378,6 +325,9 @@ sub createTaxaHash {
 	#store the hash in the object data field
 	$self->{taxaHash} = \%hash;
 }
+
+
+
 
 
 # debugging
