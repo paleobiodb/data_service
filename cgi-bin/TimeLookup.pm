@@ -110,6 +110,141 @@ sub processScaleLookup	{
 	return \%intervalInScale;
 }
 
+# JA 2-3.3.04
+sub processBinLookup	{
+
+	$dbh = shift;
+	$dbt = shift;
+
+	&cleanArrays();
+
+	# this hash array defines the binning
+	%binning = ("33" => "Cenozoic 6", # Pleistocene
+		"34" => "Cenozoic 6", # Pliocene
+		"83" => "Cenozoic 6", # Late Miocene
+		"84" => "Cenozoic 5", # Middle Miocene
+		"85" => "Cenozoic 5", # Early Miocene
+		"36" => "Cenozoic 4", # Oligocene
+		"106" => "Cenozoic 3", # Priabonian
+		"107" => "Cenozoic 3", # Bartonian
+		"108" => "Cenozoic 2", # Lutetian
+		"90" => "Cenozoic 2", # Early Eocene
+		"38" => "Cenozoic 1", # Paleocene
+		"112" => "Cretaceous 8", # Maastrichtian
+		"113" => "Cretaceous 7", # Campanian
+		"114" => "Cretaceous 6", # Santonian
+		"115" => "Cretaceous 6", # Coniacian
+		"116" => "Cretaceous 6", # Turonian
+		"117" => "Cretaceous 5", # Cenomanian
+		"118" => "Cretaceous 4", # Albian
+		"119" => "Cretaceous 3", # Aptian
+		"120" => "Cretaceous 2", # Barremian
+		"121" => "Cretaceous 2", # Hauterivian
+		"122" => "Cretaceous 1", # Valanginian
+		"123" => "Cretaceous 1", # Berriasian
+		"124" => "Jurassic 6", # Tithonian
+		"125" => "Jurassic 5", # Kimmeridgian
+		"126" => "Jurassic 5", # Oxfordian
+		"127" => "Jurassic 5", # Callovian
+		"128" => "Jurassic 4", # Bathonian
+		"129" => "Jurassic 4", # Bajocian
+		"130" => "Jurassic 3", # Aalenian
+		"131" => "Jurassic 3", # Toarcian
+		"132" => "Jurassic 2", # Pliensbachian
+		"133" => "Jurassic 1", # Sinemurian
+		"134" => "Jurassic 1", # Hettangian
+		"135" => "Triassic 5", # Rhaetian
+		"136" => "Triassic 4", # Norian
+		"137" => "Triassic 3", # Carnian
+		"138" => "Triassic 2", # Ladinian
+		"139" => "Triassic 1", # Anisian
+		"46" => "Triassic 1", # Early Triassic
+		"715" => "Permian 5", # Changhsingian
+		"716" => "Permian 5", # Wuchiapingian
+		"145" => "Permian 4", # Capitanian
+		"146" => "Permian 4", # Wordian
+		"717" => "Permian 4", # Roadian
+		"148" => "Permian 3", # Kungurian
+		"149" => "Permian 3", # Artinskian
+		"150" => "Permian 2", # Sakmarian
+		"151" => "Permian 1", # Asselian
+		"49" => "Carboniferous 5", # Gzelian
+		"50" => "Carboniferous 5", # Kasimovian
+		"51" => "Carboniferous 5", # Moscovian
+		"52" => "Carboniferous 4", # Bashkirian
+		"166" => "Carboniferous 4", # Alportian
+		"167" => "Carboniferous 4", # Chokierian
+		"168" => "Carboniferous 3", # Arnsbergian
+		"169" => "Carboniferous 3", # Pendleian
+		"170" => "Carboniferous 3", # Brigantian
+		"171" => "Carboniferous 2", # Asbian
+		"172" => "Carboniferous 2", # Holkerian
+		"173" => "Carboniferous 2", # Arundian
+		"174" => "Carboniferous 2", # Chadian
+		"55" => "Carboniferous 1", # Tournaisian
+		"177" => "Devonian 5", # Famennian
+		"178" => "Devonian 4", # Frasnian
+		"57" => "Devonian 3", # Middle Devonian
+		"181" => "Devonian 2", # Emsian
+		"182" => "Devonian 1", # Pragian
+		"183" => "Devonian 1", # Lochkovian
+		"59" => "Silurian 2", # Pridoli
+		"60" => "Silurian 2", # Ludlow
+		"61" => "Silurian 2", # Wenlock
+		"62" => "Silurian 1", # Llandovery
+		"638" => "Ordovician 5", # Ashgillian
+		"639" => "Ordovician 4", # Caradocian
+		"30" => "Ordovician 3", # Middle Ordovician
+		"641" => "Ordovician 2", # Latorpian
+		"559" => "Ordovician 1", # Tremadocian
+		"69" => "Cambrian 5", # Merioneth
+		"70" => "Cambrian 4", # St David's
+		"212" => "Cambrian 3", # Lenian
+		"213" => "Cambrian 2", # Atdabanian
+		"214" => "Cambrian 2"); #  Tommotian
+		# Nemakit-Daldynian is omitted
+
+	my @binnames = values %binning;
+
+	&findBestScales();
+	&findImmediateCorrelates();
+
+	# find the list of collections belonging to each bin
+	for my $binname ( @binnames )	{
+		@intervals = ();
+		@tempintervals = ();
+		%yesints = ();
+
+	# find the highest-level intervals falling in the bin
+		my @stagenos = keys %binning;
+		for my $sn ( @stagenos )	{
+			if ( $binning{$sn} eq $binname )	{
+				push @intervals, $sn;
+				$yesints{$sn} = "Y";
+			}
+		}
+
+	# now look up the subtended intervals falling in the bin
+		&mapIntervals();
+
+	# get a list of collections in this bin
+		$sql = "SELECT collection_no FROM collections WHERE ";
+		$sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
+		$sql .= "AND ( min_interval_no IN ( " . join(',',@intervals) . " ) ";
+		$sql .= " OR min_interval_no < 1 )";
+		my @collrefs = @{$dbt->getData($sql)};
+
+	# make a hash array in which keys are collection numbers and
+	#   values are the name of this bin
+		for my $collref ( @collrefs )   {
+			$intervalInScale{$collref->{collection_no}} = $binname;
+		}
+
+	}
+	return \%intervalInScale;
+
+}
+
 sub findBestScales	{
 
 # find the pubyr of each time scale's ref
