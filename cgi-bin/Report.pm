@@ -351,10 +351,10 @@ sub tallyFieldTerms	{
     }
     elsif($resgrp){
 		if($datelimit){
-			$csql = " AND FIND_IN_SET( '$resgrp', collections.research_group )";
+			$csql .= " AND FIND_IN_SET( '$resgrp', collections.research_group )";
 		}
 		else{
-			$csql = " WHERE FIND_IN_SET( '$resgrp', collections.research_group )";
+			$csql .= " WHERE FIND_IN_SET( '$resgrp', collections.research_group )";
 		}
     }
 
