@@ -224,7 +224,7 @@ sub processAction {
 			$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
 			
 			# return them to the login page with a message about the bad login.
-			displayLoginPage("<div class=\"warning\">Bad user name or password.  Please check your spelling, make sure your Caps Lock key is off, and try again.  Note that the format is <i>Last, I.</i></div>");
+			displayLoginPage("<div class=\"warning\">Bad user name or password.  Please check your spelling, make sure your caps lock key is off, and try again.  Note that the format is <i>Smith, A.</i></div>");
 			
 			return;
 		}
@@ -392,6 +392,7 @@ sub sendMessage {
 
 
 # Displays the login page
+# original Ederer function messed up by Poling and revised by JA 13.4.04
 sub displayLoginPage {	
 	my $message = shift;
 	
@@ -401,8 +402,24 @@ sub displayLoginPage {
 	my $enterer = $q->cookie("enterer");
 	my $destination = $q->param("destination");
 
-	my %fields = ('message' => $message, 'destination' => $destination);
+	my $javaScript = &makeAuthEntJavaScript();
+
+	my $html = $hbo->populateHTML('login_box', [ ] , [ ] );
+	$html =~ s/%%message%%/$message/;
+	$html =~ s/%%destination%%/$destination/;
+	$html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
 	
+	print &stdIncludes ("std_page_top");
+
+	print $html;
+
+	print &stdIncludes ("std_page_bottom");
+	
+	exit;
+}
+
+# Poling code calved off from displayLoginPage by JA 13.4.04
+sub makeAuthEntJavaScript	{
 	####
 	## We need to build a list of the enterers and authorizers for 
 	## the java script to use for autocompletion.
@@ -439,26 +456,8 @@ sub displayLoginPage {
 	</SCRIPT>
 	';
 
-	$fields{NOESCAPE_enterer_authorizer_lists} = $javaScript;
-	
-	
-	# calls Poling's newPopulateHTML, written without authorization
-	#  and of unknown robustness (should be deprecated and replaced
-	#  by a call to populateHTML)
-	my $html = $hbo->newPopulateHTML('login_box', \%fields);
-	
-	
-	print $html;
-	
-	# Set the destination
-	#$html =~ s/%%destination%%/$destination/;
+	return $javaScript;
 
-	# Show the login page
-	#print $q->header( -type => "text/html", -Cache_Control=>'no-cache'); 
-	
-	#print $html;
-
-	exit;
 }
 
 # Display the preferences page JA 25.6.02
@@ -1200,86 +1199,67 @@ sub stdIncludes {
 
 
 # Shows the search form
-# for references
-#
-# Does different things depending on the type in the 
-# $q type parameter.  Type can be select, edit, or add.
-# 
-# Can optionally pass it a message to display at the top.
-#
 # modified by rjp, 3/2004
+# JA: Poling completely fucked this up and I restored it from backup 13.4.04
 sub displaySearchRefs {
 
-	my $message = shift;	# Message telling them why they are here
-	
-	# type is select, edit, or add.
+	my $message = shift;		    # Message telling them why they are here
 	my $type = $q->param("type");
 
-	my %fields;
-	
-	if ($type eq 'select') {
-		$fields{action} = 'displayRefResults';
-	} elsif ($type eq 'edit') {
-		$fields{action} = 'displaySelectRefForEditPage';
-	} elsif ($type eq 'add') {
-		$fields{action} = 'displayRefResultsForAdd';
-	} else {
+	my @row;
+	my @fields = ( "action" );
+
+	my $html = "";
+
+	print &stdIncludes ( "std_page_top" );
+
+	TYPE: {
+		if ( $type eq "select" ) { push ( @row, "displayRefResults" ); last; }
+		if ( $type eq "edit" ) { push ( @row, "displaySelectRefForEditPage" ); last; }
+		if ( $type eq "add" ) { push ( @row, "displayRefResultsForAdd" ); last; }
+
 		# Unspecified
-		$fields{action} = 'displayRefResults';
+		push ( @row, "displayRefResults" );
 	}
-	
-	$fields{type} = $type;
-	$fields{message} = $message;
-	
+
+	# Prepend the message and the type
+	unshift ( @row, $message, $type );
+	unshift ( @fields, "%%message%%", "type" );
 
 	# If we have a default reference_no set, show another button.
 	# Don't bother to show if we are in select mode.
-	
-	my $reference_no = $s->currentReference();
-	$fields{reference_no} = $reference_no;
-	
-	if (! ($reference_no && $type ne "add" )) {
-		$fields{'OPTIONAL_use_current'} = 0;
+	unshift ( @fields, "%%use_current%%" );
+	my $reference_no = $s->get("reference_no");
+	if ( $reference_no && $type ne "add" ) {
+		unshift ( @row, "<input type='submit' name='use_current' value='Use current reference ($reference_no)'>\n" );
+	} else {
+		unshift ( @row, "" );
 	}
 
-
-	# Users editing collections may want to have their current reference
+# Users editing collections may want to have their current reference
 	# swapped with the primary reference of the collection to be edited.
-	if (!($q->param('action') eq "startEditCollection" )) {
-		$fields{'OPTIONAL_use_primary'} = 0;
+	unshift ( @fields, "%%use_primary%%" );
+	if ($q->param('action') eq "startEditCollection" ) {
+		unshift ( @row, "<input type='submit' name='use_primary' value=\"Use collection's reference\">\n" ); } else {
+		unshift ( @row, "" );
 	}
 
-	$fields{authorizer} = '';
-	$fields{project_name} = '';
-	
-	my $html = "";
+	unshift @row,"";
+	unshift @fields,"project_name";
 
-	unless ($s->guest()) {
-		$html .= stdIncludes("js_pulldown_me");
-	}
+	$html .= $hbo->populateHTML("search_refs_form", \@row, \@fields);
 
-	Debug::dbPrint($hbo->entererPopupMenu($s->get('enterer'), 1));
-	
-	# build popup menus for the enterer and authorizer.
-	$fields{enterer_popup} = $hbo->entererPopupMenu($s->get('enterer'), 1);
-	$fields{authorizer} = $s->get('authorizer');
-	
-	$fields{goal} = $q->param('goal');
+	# insert the JavaScript
+	# WARNING: this can't be done by means of populateHTML because
+	#  quotes would be turned into &quot; tags
+	my $javaScript = &makeAuthEntJavaScript();
+	$html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
 
-	# build the project name select list with a pre-assigned list.		
-	$fields{project_name_popup} = $hbo->buildSelectWithHardList('project_name', '');
-	
-
-
-	
-	$html .= $hbo->newPopulateHTML("search_refs_form", \%fields);
-	
-	# print the HTML.	
-	print stdIncludes( "std_page_top" );
 	print $html;
-	print stdIncludes("std_page_bottom");
-}
 
+	print &stdIncludes ("std_page_bottom");
+
+}
 
 
 # Print out the number of refs found by a ref search JA 26.7.02
@@ -1345,7 +1325,6 @@ sub printGetRefsButton	{
 
 
 
-# rjp - 1/2004, called from places like the reference search form.
 # This shows the actual references.
 sub displayRefResults {
 	my $overlimit;
@@ -8110,7 +8089,7 @@ sub RefQuery {
 
 	if ( $refsearchstring ) { $refsearchstring = "for '$refsearchstring' "; }
 
-	if ( $refsearchstring ne "" || $q->param('enterer') || $q->param('project_name') ) {
+	if ( $refsearchstring ne "" || $q->param('authorizer') || $q->param('enterer') || $q->param('project_name') ) {
 
 		# here's where the restoration starts
 		# note that WHERE clause is mandatory
@@ -8132,13 +8111,21 @@ sub RefQuery {
 		$pubtitle =~ s/'/\\'/g if ($pubtitle);
 		$sql .= "AND ( pubtitle LIKE '\%$pubtitle\%') " if ($pubtitle);
 		$sql .= "AND reference_no = $refno " if ($refno);
+		# added section for handling authorizer name and lines
+		#  for swapping last name and initial JA 13.4.04
+		if ( $q->param('authorizer') )	{
+			my $authorizer = $q->param('authorizer');
+			$authorizer =~ s/^\s*(.*)\s*,\s*(.*)\s*$/\2 \1/;
+			$authorizer =~ s/'/\\'/g;
+			$sql .= "AND authorizer='" . $authorizer . "' ";
+		}
 		if ( $q->param('enterer') )	{
 			my $enterer = $q->param('enterer');
+			$enterer =~ s/^\s*(.*)\s*,\s*(.*)\s*$/\2 \1/;
 			$enterer =~ s/'/\\'/g;
 			$sql .= "AND enterer='" . $enterer . "' ";
 		}
 		$sql .= "AND project_name='".$q->param('project_name')."' " if ($q->param('project_name'));
-
 		
 		my $orderBy = "ORDER BY ";
 		my $refsortby = $q->param('refsortby');
