@@ -136,25 +136,51 @@ Select the research group or project:
 
 <tr class="lightGrey">
 <td valign=top>
-Select the date of the oldest collections/occurrences you want to tally:
+Include collections/occurrences that fall between these dates:
 </td>
 <td align="left">
 <table align="left">
 <tr align="left">
+<td>
+From:
+</td>
 <td align="left">
-<select name=year>
+<select name=year_begin>
 <option selected></option>
 <SCRIPT>fillYears();</SCRIPT>
 </select>
 </td>
 <td>
-<select name=month>
+<select name=month_begin>
 <option selected></option>
 <SCRIPT>fillMonths();</SCRIPT>
 </select>
 </td>
 <td>
-<select name=day>
+<select name=day_begin>
+<option selected></option>
+<SCRIPT>fillDays();</SCRIPT>
+</select>
+</td>
+</tr>
+<tr align="left">
+<td>
+To:
+</td>
+<td align="left">
+<select name=year_end>
+<option selected></option>
+<SCRIPT>fillYears();</SCRIPT>
+</select>
+</td>
+<td>
+<select name=month_end>
+<option selected></option>
+<SCRIPT>fillMonths();</SCRIPT>
+</select>
+</td>
+<td>
+<select name=day_end>
 <option selected></option>
 <SCRIPT>fillDays();</SCRIPT>
 </select>
