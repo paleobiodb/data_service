@@ -2140,7 +2140,7 @@ sub buildTaxonomicList {
 			$class_nos++ if($row->{class_no} && $row->{class_no} != 1000000);
 			$order_nos++ if($row->{order_no} && $row->{order_no} != 1000000);
 			$family_nos++ if($row->{family_no} && $row->{family_no} != 1000000);
-			$reference_nos++ if($row->{reference_no});
+			$reference_nos++ if($row->{reference_no} && $row->{reference_no} != $collection_refno);
 			$abund_values++ if($row->{abund_value});
 			$comments++ if($row->{comments});
 		}
