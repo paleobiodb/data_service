@@ -1951,7 +1951,7 @@ sub displayOpinionChoiceForm {
 	
 	my $results = $sql->allResultsArrayRef();
 	
-	print "<CENTER><H3>Which opinion about " . $self->taxonNameHTML() . " do you want to edit?</H3>\n";
+	print "<CENTER><H3>Which opinion about " . $self->taxonNameHTML() . " do you want to edit?</H3>\n<br>\n";
 	
 	print "<FORM method=\"POST\" action=\"bridge.pl\">\n";
 	print "<input type=hidden name=\"action\" value=\"displayOpinionForm\">\n";
@@ -1974,12 +1974,16 @@ sub displayOpinionChoiceForm {
 	}
 	
 	print "<TR><TD><INPUT type=\"radio\" name=\"opinion_no\" id=\"opinion_no\" value=\"-1\" checked>Create a <b>new</b> opinion record</TD></TR>\n";
-	print "</TABLE><BR>\n";
 
-	print "<center><p><i>An \"opinion\" is when an author classifies or synonymizes a taxon. Select an old opinion if it was entered incorrectly or incompletely. Create a new one if the author whose opinion you are looking at right now is not in the above list.</i></p></center>\n";
+	print "<tr><td align=\"center\"><p><INPUT type=submit value=\"Submit\"></p><br></td></tr>\n";
+
+	print "<tr><td align=\"left\"><p><span class=\"tiny\">An \"opinion\" is when an author classifies or synonymizes a taxon.<br>\nSelect an old opinion if it was entered incorrectly or incompletely.<br>\nCreate a new one if the author whose opinion you are looking at right now is not in the above list.<br>\n";
+	print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n";
+	print "</span></p></td></tr>\n";
+
+	print "</TABLE><BR>\n";
 	
-	print "<INPUT type=submit value=\"Submit\">\n";
-	print "<\FORM></CENTER><BR>\n";
+	print "<\FORM></CENTER>\n";
 }
 
 
