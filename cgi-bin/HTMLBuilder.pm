@@ -136,14 +136,14 @@ sub populateHTML
   my ($self, $htmlTemplateName, $row, $fieldNames, $prefkeys) = @_;
   my @row = @$row;
   my @fieldNames = @$fieldNames;
-  # print "look: " . join(',', @fieldNames);
+  #print "look: " . join(',', @fieldNames);
 
   my $htmlTemplateString = $self->getTemplateString($htmlTemplateName,\@$prefkeys);
   
   # Substitute in the application URL if it is supplied
   my $exec_url = $self->{_exec_url};
-  #print "Here: $exec_url";
-  $htmlTemplateString =~ s/(<.+?)\$exec_url/$1$exec_url/gims;
+
+  $htmlTemplateString =~ s/(<.+?)\$exec_url/$1$exec_url/gim;
 
   # Do substitutions
   my $fieldNum = 0;
@@ -163,20 +163,20 @@ sub populateHTML
     # Do div tags (eventually, other tags should support show/hide attributes)
 	# revised by JA 16.7.02
 	if ($val ne "")	{
-		$htmlTemplateString =~ s/(<div show="$fieldName">)(.*?)(<\/div>)/$2/gims;
+		$htmlTemplateString =~ s/(<div show="$fieldName">)(.*?)(<\/div>)/$2/gim;
 	} else	{
-		$htmlTemplateString =~ s/<div show="$fieldName">.*?<\/div>//gims;
+		$htmlTemplateString =~ s/<div show="$fieldName">.*?<\/div>//gim;
 	}
     
     # Do spans with show
-    $htmlTemplateString =~ s/<span show="$fieldName">.*?<\/span>//gims unless $val ne "";
+    $htmlTemplateString =~ s/<span show="$fieldName">.*?<\/span>//gim unless $val ne "";
 
     # Do span tags
-    $htmlTemplateString =~ s/<span\s+id="$fieldName">.*?<\/span>/$val/gims if $val ne "";
+    $htmlTemplateString =~ s/<span\s+id="$fieldName">.*?<\/span>/$val/gim if $val ne "";
 
 	# Variable substitution (of form %%variable%%) -- tone
     if ( $fieldName =~ /^%%.*%%$/ ) { 
-		$htmlTemplateString =~ s/$fieldName/$val/gims; 
+		$htmlTemplateString =~ s/$fieldName/$val/gim; 
 	}
 
     $keepMatching = 1;
@@ -246,7 +246,7 @@ sub populateHTML
         $sl->setSelected($val);
         $sl->setAllowNulls(0);
         my $selectString = $sl->toHTML();
-        $htmlTemplateString =~ s/\Q$stuff/$selectString/gims;
+        $htmlTemplateString =~ s/\Q$stuff/$selectString/gim;
         $keepMatching = 1;
       }
 
@@ -350,7 +350,7 @@ sub populateHTML
 			if( $stuff =~ /disabled/ims )			{ $tf->setDisabled(); }
 
 			my $htmlString = $tf->toHTML();
-			$htmlTemplateString =~ s/\Q$stuff/$htmlString/gims;
+			$htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
         }
         # Do hiddens
         elsif($stuff =~ /type="?hidden"?/ims)
@@ -359,7 +359,7 @@ sub populateHTML
           $hn->setValue($val);
           $hn->setName($fieldName);
           my $htmlString = $hn->toHTML();
-          $htmlTemplateString =~ s/\Q$stuff/$htmlString/gims;
+          $htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
         }
         $keepMatching = 1;
       }
@@ -381,7 +381,7 @@ sub populateHTML
         $ta->setRows($formRows);
         $ta->setCols($formCols);
         my $htmlString = $ta->toHTML();
-        $htmlTemplateString =~ s/\Q$stuff/$htmlString/gims;
+        $htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
         
         $keepMatching = 1;
       }
@@ -395,7 +395,7 @@ sub populateHTML
         my $ah = Anchor->new();
         $ah->setHref("$exec_url?action=$val");
         my $htmlString = $ah->toHTML();
-        $htmlTemplateString =~ s/\Q$stuff/$htmlString/gims;
+        $htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
         
         $keepMatching = 0;
       }
