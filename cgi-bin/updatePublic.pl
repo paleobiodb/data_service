@@ -85,11 +85,18 @@ $dbh->disconnect();
 # get a list of all the files in this directory
 @images = `ls $IMGDIR/*.jpg`;
 
+if ($DEBUG) { print "images: @images \n"; }
+
 # only do the jpegs for now, because who knows what will happen
 # if you change the file extension to .gif on a jpeg.
 
-$filename = $images[int(rand $#images)];
+$img_idx = int(rand($#images));
+if ($DEBUG) { print "index: $img_idx \n"; }
+
+$filename = $images[$img_idx];
 chomp($filename);
+
+if ($DEBUG) { print "filename: $filename \n"; }
 
 `cp -f $filename $IMGDIR/fossil.jpg`;
 
