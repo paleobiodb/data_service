@@ -25,7 +25,7 @@ sub startTaxonInfo {
 	my $q = shift;
 
 	print main::stdIncludes( "std_page_top" );
-	print searchForm($hbo, $q);
+	searchForm($hbo, $q);
 	print main::stdIncludes("std_page_bottom");
 }
 
@@ -45,8 +45,6 @@ sub searchForm{
 
 	print $hbo->populateHTML('js_search_taxon_form' , [ ], [ ]);
 
-	my $html = "";
-			 
 	unless($search_again){
 		print "<div class=\"title\">Taxon search form</div>";
 	}
@@ -2138,6 +2136,43 @@ sub getOriginalCombination{
 	# If we fall through above but $has_status was not set, we just
 	# return the original $taxon_no passed in.
 	return $taxon_no;
+}
+
+
+# JA 18.11.04
+# wrapper for selectMostRecentParentOpinion (a much older function) that keeps
+#  climbing the classification tree until a "belongs to" relation is found,
+#  skipping over non-belongs to, non-nomen opinions
+# WARNING: except in unusual circumstances (e.g., you want to know if the child
+#  taxon is or isn't currently a synonym), this function really should be used
+#  in preference to selectMostRecentParentOpinion
+# also, unlike selectMostRecentParentOpinion this function returns a single
+#  reference (as opposed to an index to an array of references or a parent no)
+# I'm not 100% this routine works because the debugging case I was using
+#  turns out to have involved corrupt data
+sub  selectMostRecentBelongsToOpinion	{
+	my $dbt = shift;
+	my $array_ref = shift;
+	my @parent_refs = @{$array_ref};
+
+	# this is kind of tricky: we're going to get an index for
+	#  a hash array even if a parent no is wanted, because
+	#  otherwise we can't test for a "belongs to" status
+	my $index = selectMostRecentParentOpinion($dbt, $array_ref, 1);
+
+	while ( $parent_refs[$index]->{status} ne "belongs to" && $parent_refs[$index]->{status} !~ /^nomen/ )	{
+		my $sql = "SELECT * FROM opinions WHERE child_no=" . $parent_refs[$index]->{parent_no};
+		my @new_parent_refs = @{$dbt->getData($sql)};
+		my $new_index = selectMostRecentParentOpinion($dbt, \@new_parent_refs, 1);
+		if ( $new_index )	{
+			@parent_refs = @new_parent_refs;
+			$index = $new_index;
+		} else	{
+			last;
+		}
+	}
+
+	return $parent_refs[$index];
 }
 
 
