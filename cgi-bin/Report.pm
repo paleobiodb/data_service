@@ -186,6 +186,19 @@ sub tallyFieldTerms	{
 	
 	# flush all output immediately to stdout
 	$| =1;
+
+	# get a list of Sepkoski's genera, if needed JA 28.2.03
+	if ( $q->param('Sepkoski') eq "Y" )	{
+		$sql = "SELECT taxon_name FROM authorities WHERE authorizer_no=48 AND taxon_rank='genus'";
+		my $sth = $dbh->prepare($sql) || die "Prepare query failed\n";
+		$sth->execute() || die "Execute query failed\n";
+		my @jackrefs = @{$sth->fetchall_arrayref()};
+		$sth->finish();
+		for $jackref (@jackrefs)  {
+			$jacklist .= "','" . ${$jackref}[0];
+		}
+		$jacklist =~ s/^,'//;
+	}
 	
 	# if output is means or records, count records at each collection
 	# this section rewritten to do a bona fide database query by JA 2.8.02
@@ -194,12 +207,16 @@ sub tallyFieldTerms	{
 	 #   being counted
 		# query the database
 		# get only the necessary columns
-		$sql = "SELECT collection_no,created,species_name FROM occurrences ".
+		$sql = "SELECT collection_no,created,genus_name,species_name FROM occurrences ".
 			   "WHERE ";
 		if($datelimit){
 			$sql .= "created >= $datelimit AND ";
 		}
 		$sql .= "species_name != 'indet.'";
+		# restrict query to Compendium genera
+		if ( $jacklist )	{
+			$sql .= " AND genus_name IN ('" . $jacklist . "')";
+		}
 		$self->dbg("non-collection sql: $sql<br>");
 		my $sth = $dbh->prepare($sql) || die "Prepare query failed\n";
 		$sth->execute() || die "Execute query failed\n";
@@ -207,8 +224,9 @@ sub tallyFieldTerms	{
 		$sth->finish();
 
 		foreach my $rowref ( @rowrefs ){
-			my ($collno,$created,$species) = @{$rowref};
+			my ($collno,$created,$genus,$species) = @{$rowref};
 			$recs[$collno]++;
+			push @{$taxlist[$collno]} , $genus;
 		}
 	}
 	$self->dbg("numrecs: ".@recs."<br>");
@@ -245,16 +263,28 @@ sub tallyFieldTerms	{
 	# find the genus or class in the occurrence table
 	# this section rewritten to do a bona fide database query by JA 2.8.02
 	# query the database for the necessary fields
+	# WARNING: list of Compendium genera isn't referenced because
+	#  class list is supposed to come from the Compendium; needs to
+	#  be rewritten once /classdata reads are replaced with a proper
+	#  authorities table query JA 28.2.03
 		$gsql = "SELECT collection_no,occurrence_no,genus_name ".
 			    "FROM occurrences WHERE genus_name IN ($genus_names_string)";
+		if($datelimit){
+			$sql .= " AND created >= $datelimit";
+		}
 		$self->dbg("genus_name sql: $gsql<br>");
 		my $sth = $dbh->prepare($gsql) || die "Prepare query failed\n";
 		$sth->execute() || die "Execute query failed\n";
 		my @rowrefs = @{$sth->fetchall_arrayref()};
 
+		# nuke the lists of genera because they'll need to be
+		#   recomputed
+		@taxlist = ();
+
 		foreach my $rowref ( @rowrefs )	{
 			my ($collno,$occno,$genus) = @{$rowref};
 			$include[$collno]++;
+			push @{$taxlist[$collno]} , $genus;
 		}
 		$sth->finish();
 		$doesappear = scalar(@rowrefs);
@@ -376,6 +406,12 @@ sub tallyFieldTerms	{
 					$recs[$columns[$LOCIDCOL]] = $include[$columns[$LOCIDCOL]];
 				}
 				$rectotal = $rectotal + $recs[$columns[$LOCIDCOL]];
+				# record that the genera in this collection
+				#  have been included in the tallies JA 28.2.03
+				my @temp = @{$taxlist[$columns[$LOCIDCOL]]};
+				for my $t ( @temp )	{
+					$genuscounted{$t}++;
+				}
 				if (($columns[8] eq "") || ($columns[8] eq "U.S.A."))	{
 					$columns[8] = "USA";
 				}
@@ -424,6 +460,7 @@ sub tallyFieldTerms	{
 			 }
 	
 			 if ($q->param('searchfield'.$r) eq "continent")	{
+if ($region{$columns[$fieldno[$r]]} eq "") { print "$columns[$fieldno[$r]]<br>\n"; }
 					 $columns[$fieldno[$r]] = $region{$columns[$fieldno[$r]]};
 			 }
 	
@@ -766,7 +803,9 @@ sub tallyFieldTerms	{
 		else  {
 			print "<p>\n<b>$lines</b> collections";
 			if ($q->param('output') ne "collections")	{
-				print " and <b>$rectotal</b> occurrences";
+				print " and <b>$rectotal</b> occurrences of <b>";
+				my @temp = keys(%genuscounted);
+				printf "%d</b> taxa",$#temp + 1;
 			}
 			print " were checked<p>\n";
 		}
