@@ -83,12 +83,12 @@
     //  End -->
     </script>
 
-  <h2>Collection edit form</h2>
+  <div class="title">Collection edit form</div>
   <h3>You are now editing collection number <span id="collection_no"></span></h3>
   <p>
     See the <A HREF="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</A>
-    for instructions. <font color=#ff0000><b>Required fields are in bold
-    red</b></font>.
+    for instructions. <span class="required">Required fields are in bold
+    red</span>.
   </p>
   
   <form name="form" action="$exec_url" method="POST" onSubmit="return checkFields();">
@@ -120,10 +120,10 @@
   
   <table border=0>
     <tr>
-      <td><font color=red><b>Access level:</b></font></td>
+      <td><span class="required">Access level:</span></td>
       <td><select id="access_level"></select></td>
       <td> </td>
-      <td> <font color=red><b>Release date:</b></font></td>
+      <td><span class="required">Release date:</span></td>
       <td><select id="release_date"></select></td>
     </tr>
   </table>
@@ -131,7 +131,7 @@
   <table>
     <tr>
       <td>
-        <font color=#ff0000><B>Collection name</FONT></B> (truncated at 80 
+        <span class="required">Collection name</span> (truncated at 80 
         characters):
       </td>
       <td>
@@ -163,7 +163,7 @@
   <div show="session_reference_string"> <p>Current session reference <span class=tiny>(select to make primary):</span><br> <table cellspacing=0 cellpadding=0><span id="session_reference_string"></span></table></div>
 
   <p>
-    <font color=#FF0000><b>Author's main reason for describing collection</b></font>:<select id="collection_type"></select> analysis
+    <span class="required">Author's main reason for describing collection</span>:<select id="collection_type"></select> analysis
   </p>
 
   <P>
@@ -174,10 +174,10 @@
   <table border=0>
     <tr>
       <td>
-        <font color=#ff0000><b>Country*</FONT></b>: <br><select id="country"></select>
+        <span class="required">Country*</span>: <br><select id="country"></select>
       </td>
       <td>
-        <font color=#ff0000><b>State*</FONT></B>/province: <br><input id="state" maxlength=255>
+        <span class="required">State*</span>/province: <br><input id="state" maxlength=255>
       </td>
       <td>
         County/parish/etc.: <br><input id="county" maxlength=255>
@@ -192,11 +192,11 @@
   <table>
     <tr>
       <td></td>
-      <td><font color=#ff0000><b>Degrees</b></font></td>
+      <td><span class="required">Degrees</span></td>
       <td>Minutes</td>
       <td>Seconds</td>
       <td>Decimal value*</td>
-      <td><font color="red"><b>Direction</b></font></td>
+      <td><span class="required">Direction</span></td>
     </tr>
     <tr>
       <td>Latitude</td>
@@ -285,7 +285,7 @@
     </tr>
 
      <tr>
-      <td><font color=#ff0000><b>Maximum (oldest) time interval:</b></font><br><select id="eml_max_interval"></select>
+      <td><span class="required">Maximum (oldest) time interval:</span><br><select id="eml_max_interval"></select>
                           <input id="max_interval" maxlength=255>
       </td>
       <td>Minimum (youngest) time interval:<br><select id="eml_min_interval"></select>
