@@ -8,7 +8,7 @@ use TimeLookup;
 use Globals;
 
 # Flags and constants
-my $DEBUG = 0;			# The debug level of the calling program
+my $DEBUG = 1;			# The debug level of the calling program
 my $dbh;				# The database handle
 my $dbt;				# The DBTransactionManager object
 my $q;					# Reference to the parameters
@@ -24,6 +24,7 @@ my $PI = 3.14159265;
 my $C72 = cos(72 * $PI / 180);
 my $AILEFT = 100;
 my $AITOP = 580;
+my @coll_counts = ();
 
 sub acos { atan2( sqrt(1 - $_[0] * $_[0]), $_[0] ) }
 sub tan { sin($_[0]) / cos($_[0]) }
@@ -37,7 +38,7 @@ sub new {
 	$q = shift;
 	$s = shift;
 	$dbt = shift;
-	my $self = {};
+	my $self = {maptime=>0,plate=>()};
 
 	bless $self, $class;
 
@@ -56,70 +57,318 @@ sub setQAndUpdateScale {
 	# so come up with a better way later..
 }
 
-
-
-sub testing {
-	my $self = shift;
-	Debug::dbPrint("made it to Map::testing");
-}
-
-
 sub buildMap {
 	Debug::dbPrint("Made it to buildMap");
 	
 	my $self = shift;
-	
 
 	$|=1;					# Freeflowing data
 
-	$maptime = $q->param('maptime');
-	if ( $maptime eq "" )	{
-		$maptime = 0;
+	$self->{'maptime'} = $q->param('maptime');
+	if ( $self->{'maptime'} eq "" )	{
+		$self->{'maptime'} = 0;
 	}
 
 	$self->mapGetScale();
 	$self->mapDefineOutlines();
-	if ( $maptime > 0 )	{
+	if ( $self->{'maptime'} > 0 )	{
 		$self->mapGetRotations();
 	}
-	$self->mapQueryDb();
-	return $self->mapDrawMap();
 
+
+    %fieldnames = ( "research group" => "research_group",
+		            "state/province" => "state",
+		            "time interval" => "interval_name",
+		            "lithology" => "lithology1",
+		            "paleoenvironment" => "environment",
+		            "taxon" => "genus_name" );
+
+    $img_link = $self->mapSetupImage();
+    for my $ptset (1..4) {
+        $dotsizeterm = $q->param("pointsize$ptset");
+        $dotshape = $q->param("pointshape$ptset");
+        $dotcolor = $q->param("dotcolor$ptset");
+        $bordercolor = $dotcolor;
+
+        if ($q->param("dotborder$ptset") ne "no" )	{
+            if($q->param('mapbgcolor') eq "black" || $q->param("dotborder$ptset") eq "white" )	{
+                $bordercolor = "white";
+            } else {
+                $bordercolor = "borderblack";
+            }
+        }
+
+        if ($dotsizeterm eq "tiny")	{
+            $dotsize = 1;
+        } elsif ($dotsizeterm eq "small")	{
+            $dotsize = 1.5;
+        } elsif ($dotsizeterm eq "medium")	{
+            $dotsize = 2;
+        } elsif ($dotsizeterm eq "large")	{
+            $dotsize = 3;
+        } elsif ($dotsizeterm eq "huge")	{
+            $dotsize = 4;
+        }
+        $maxdotsize = $dotsize;
+        if ($dotsizeterm eq "proportional")	{
+          $maxdotsize = 7;
+        }
+
+        if ($ptset > 1) {
+            $extraField = $fieldnames{$q->param('mapsearchfields'.$ptset)} 
+                                        || 
+                          $q->param('mapsearchfields'.$ptset);
+            $extraFieldValue = $q->param('mapsearchterm'.$ptset);
+
+            if ($extraField && $extraFieldValue) {
+                $q->param($extraField => $extraFieldValue);
+                my $dataRowsRef = $self->mapQueryDb();
+                $self->mapDrawPoints($dataRowsRef);
+            }
+        } elsif ($ptset == 1) {
+            my $dataRowsRef = $self->mapQueryDb();
+            $self->mapDrawPoints($dataRowsRef);
+        }
+           
+    }
+    $self->mapFinishImage();
+
+    return $img_link;
 }
 
+#this is the complement to buildMapOnly, used in TaxonInfo
+sub drawMapOnly {
+    my $self = shift; 
+    my $dataRowsRef = shift;
 
-# same as buildMap, but doesn't call mapDrawMap, and returns dataRows.
+    $img_link = $self->mapSetupImage();
+
+    $dotsizeterm = $q->param("pointsize1") || "tiny";
+    $dotshape = $q->param("pointshape1") || "circles";
+    $dotcolor = $q->param("dotcolor1") || "black";
+    $bordercolor = $dotcolor;
+
+    if ($q->param("dotborder1") ne "no")	{
+        if($q->param('mapbgcolor') eq "black" || $q->param("dotborder1") eq "white" )	{
+            $bordercolor = "white";
+        } else {
+            $bordercolor = "borderblack";
+        }
+    }
+
+    if ($dotsizeterm eq "tiny")	{ $dotsize = 1; } 
+    elsif ($dotsizeterm eq "small")	{ $dotsize = 1.5; }
+    elsif ($dotsizeterm eq "medium") { $dotsize = 2;} 
+    elsif ($dotsizeterm eq "large") {$dotsize = 3;} 
+    elsif ($dotsizeterm eq "huge")	{$dotsize = 4;}
+    $maxdotsize = $dotsize;
+    if ($dotsizeterm eq "proportional")	{ $maxdotsize = 7; }
+
+    $self->mapDrawPoints($dataRowsRef);
+    $self->mapFinishImage();
+    return $img_link;
+}    
+
+# same as buildMap, but doesn't call mapDrawPoints/mapSetupImage/mapFinishImage, and returns dataRows.
 sub buildMapOnly {
 	my $self = shift;
 	my $in_list = (shift or "");
 
 	$|=1;					# Freeflowing data
 
-	$maptime = $q->param('maptime');
-	if ( $maptime eq "" )	{
-		$maptime = 0;
+	$self->{maptime} = $q->param('maptime');
+	if ( $self->{maptime} eq "" )	{
+		$self->{maptime} = 0;
 	}
 
 	$self->mapGetScale();
 	$self->mapDefineOutlines();
-	if ( $maptime > 0 )	{
+	if ( $self->{maptime} > 0 )	{
 		$self->mapGetRotations();
 	}
-	$self->mapQueryDb($in_list);
 
-	# Get rows okayed by permissions module
-	my $p = Permissions->new ( $s );
-	my @dataRows = ( );
-	my $limit = 1000000;
-	my $ofRows = 0;
-	# NOTE: this statement handle is apparently picked up from the
-	# mapQueryDb method, though it's not 'self' or passed in...
-	# (It stays in scope only because it was initialized through $dbh
-	# which is global)
-	$p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
-
-	return \@dataRows;
+    # Returns a reference to array returned from permissions
+	return $self->mapQueryDb($in_list);
 }
+
+# This function prints footer for the image, makes clickable background tiles,
+# converts and outputs the image to different formats, and closes up everything
+sub mapFinishImage {
+    my $self = shift;
+
+    $im->arc(97,$height+6,10,10,0,360,$col{'black'});
+    $im->string(gdTinyFont,5,$height+1,"plotting software c 2002 J. Alroy",$col{'black'});
+    print AI "0 To\n";
+    printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+5,$AITOP-$height-8;
+    my $mycolor = $aicol{'black'};
+    $mycolor =~ s/ K/ k/;
+    printf AI "0 Tr\n0 O\n%s\n",$mycolor;
+    print AI "/_Courier 10 Tf\n";
+    printf AI "0 Tw\n";
+    print AI "(plotting software c 2002 J. Alroy) Tx 1 0 Tk\nTO\n";
+    print AI "0 To\n";
+    printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+111,$AITOP-$height-10;
+    print AI "/_Courier 18 Tf\n";
+    print AI "(o) Tx 1 0 Tk\nTO\n";
+    if ( $self->{maptime} > 0 )	{
+        if ( $width > 300 )	{
+            $im->arc($width-103,$height+6,10,10,0,360,$col{'black'});
+            $im->string(gdTinyFont,$width-225,$height+1,"tectonic reconstruction c 2002 C. R. Scotese",$col{'black'});
+        } else	{
+            $im->arc($width-103,$height+18,10,10,0,360,$col{'black'});
+            $im->string(gdTinyFont,$width-225,$height+13,"tectonic reconstruction c 2002 C. R. Scotese",$col{'black'});
+            $scoteseoffset = 12;
+        }
+        print AI "0 To\n";
+        printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$width-270,$AITOP-$height-8-$scoteseoffset;
+        print AI "/_Courier 10 Tf\n";
+        print AI "(tectonic reconstruction c 2002 C. R. Scotese) Tx 1 0 Tk\nTO\n";
+        print AI "0 To\n";
+        printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$width-128,$AITOP-$height-10-$scoteseoffset;
+        print AI "/_Courier 18 Tf\n";
+        print AI "(o) Tx 1 0 Tk\nTO\n";
+    }
+
+    # cap the byline with a horizontal line
+    $im->line(0,$height,$width,$height,$col{'black'});
+    print AI "u\n";  # start the group
+    print AI "$mycolor\n";
+    printf AI "0.5 w\n";
+    printf AI "%.1f %.1f m\n",$AILEFT,$AITOP-$height;
+    printf AI "%.1f %.1f l\n",$AILEFT+$width,$AITOP-$height;
+    print AI "S\n";
+    print AI "U\n";  # terminate the group
+
+    binmode STDOUT;
+    print MAPGIF $im->png;
+    close MAPGIF;
+    chmod 0664, "$GIF_DIR/$gifname";
+
+    my $image = Image::Magick->new;
+
+    open GIF,"<$GIF_DIR/$gifname";
+    $image->Read(file=>\*GIF);
+
+    open AIFOOT,"<./data/AI.footer";
+    while (<AIFOOT>){
+        print AI $_;
+    }
+    close AIFOOT;
+
+    open JPG,">$GIF_DIR/$jpgname";
+    $image->Write(file=>JPG);
+    chmod 0664, "$GIF_DIR/$jpgname";
+
+    open PICT,">$GIF_DIR/$pictname";
+    $image->Write(file=>PICT);
+    chmod 0664, "$GIF_DIR/$pictname";
+
+    close GIF;
+
+    # make clickable background rectangles for repositioning the map
+
+    # need a list of possible parameters
+    my @params = ('research_group', 'authorizer', 'enterer', 'modified_since', 'date', 'month', 'year', 'country', 'state', 'interval_name', 'formation', 'lithology1', 'environment', 'taxon_rank', 'genus_name', 'pointsize1', 'dotcolor1', 'pointshape1', 'dotborder1', 'mapsearchfields2', 'mapsearchterm2', 'pointsize2', 'dotcolor2', 'pointshape2', 'dotborder2', 'mapsearchfields3', 'mapsearchterm3', 'pointsize3', 'dotcolor3', 'pointshape3', 'dotborder3', 'mapsearchfields4', 'mapsearchterm4', 'pointsize4', 'dotcolor4', 'pointshape4', 'dotborder4', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngnocolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor');
+
+    my $clickstring = "$BRIDGE_HOME?action=displayMapResults";
+    for $p ( @params )	{
+        if ( $q->param($p) )	{
+            $clickstring .= "&" . $p . "=" . $q->param($p);
+        }
+    }
+    for my $i ( 1..10 )	{
+        for my $j ( 1..10 )	{
+            my $xbot = int(( $i - 1 ) / 10 * $width);
+            my $xtop = int($i / 10 * $width);
+            my $ybot = int(( $j - 1 ) / 10 * $height);
+            my $ytop = int($j / 10 * $height);
+            $newlng = int($midlng + ( ( 360 / $scale ) * ( $i - 5 ) / 10 ));
+            $newlat = int($midlat - ( ( 180 / $scale ) * ( $j - 5 ) / 10 ));
+            $latlngstring = "&maplng=" . $newlng;
+            $latlngstring .= "&maplat=" . $newlat;
+            # need this because mapscale is varied for the "Zoom"
+            #  buttons below
+            $latlngstring .= "&mapscale=" . $scale;
+            print MAPOUT "<area shape=\"rect\" coords=\"" . $xbot . "," . $ybot . "," . $xtop . "," . $ytop . "\" href=\"" , $clickstring , $latlngstring , "\">\n";
+        }
+    }
+
+    print MAPOUT "</map>\n";
+    print MAPOUT "</table>\n";
+
+    print MAPOUT "<table cellpadding=0 width=100%>\n<tr>\n";
+    print MAPOUT "<td valign=\"middle\">\n";
+    print MAPOUT "<table cellpadding=0 cellspacing=1><tr>\n<td align=\"right\" valign=\"top\" bgcolor=\"black\">\n";
+    print MAPOUT "<table cellpadding=5 cellspacing=1>\n";
+    if(!$q->param("taxon_info_script")){
+        print MAPOUT "<tr><td width=110 valign=\"top\" bgcolor=\"white\" class=\"small\">";
+        if ($coll_counts[0] > 1)	{
+            print MAPOUT "<b>$coll_counts[0]&nbsp;collections</b> fall ";
+        } elsif ($coll_counts[0] == 1)	{
+            print MAPOUT "<b>Exactly&nbsp;one collection</b> falls ";
+        }  else	{
+            # PM 09/13/02 Added bit about missing lat/long data to message
+            print MAPOUT "<b>Sorry!</b> Either the collections were missing lat/long data, or no collections fall ";
+        }
+        print MAPOUT "within the mapped area, have lat/long data, and matched your query";
+        print MAPOUT "</td>\n";
+    }
+
+    if ($dotsizeterm eq "proportional")	{
+        print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
+        print MAPOUT "<br>Sizes of $dotshape are proportional to counts of collections at each point.\n"
+    }
+
+    print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
+    print MAPOUT "You may download the image in ";
+    print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
+    print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">PNG</a></b>, ";
+    print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
+    print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format\n";
+    print MAPOUT "</td></tr>\n";
+
+    print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
+    print MAPOUT "Click on a point to recenter the map\n";
+    print MAPOUT "</td></tr>\n";
+
+    unless($q->param("taxon_info_script") eq "yes"){
+        $clickstring .= "&maplng=" . $midlng;
+        $clickstring .= "&maplat=" . $midlat;
+
+        $zoom1 = 2;
+        while ( $scale + $zoom1 > 12 )	{
+            $zoom1--;
+        }
+        $zoom2 = 2;
+        while ( $scale - $zoom2 < 1 )	{
+            $zoom2--;
+        }
+
+        print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
+        $temp = $clickstring . "&mapscale=" . ( $scale + $zoom1 );
+        print MAPOUT "<p class=\"large\"><b><a href=\"$temp\">Zoom&nbsp;in</a></b></p>\n";
+        print MAPOUT "</td></tr>\n";
+
+        print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
+        $temp = $clickstring . "&mapscale=" . ( $scale - $zoom2 );
+        print MAPOUT "<p class=\"large\"><b><a href=\"$temp\">Zoom&nbsp;out</a></b></p>\n";
+        print MAPOUT "</td></tr>\n";
+
+        print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
+        print MAPOUT "<p class=\"large\"><b><a href='?action=displayMapForm'>Search&nbsp;again</a></b></p>\n";
+        print MAPOUT "</td></tr>\n";
+    }
+    print MAPOUT "</tr></table>\n";
+    print MAPOUT "</td></tr></table>\n";
+    print MAPOUT "</td>\n";
+
+    print MAPOUT "<td align=center><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
+    print MAPOUT "</table>\n";
+
+    print MAPOUT "</center>";
+    close MAPOUT;
+}
+
 
 
 
@@ -128,191 +377,155 @@ sub mapQueryDb	{
 	my $in_list = (shift or "");
 
 	# if a research project (not a group) is requested, get a list of
-		#  references included in that project JA 3.10.02
-		my $reflist;
-		if ( $q->param('research_group') =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/ )	{
-			$sql = "SELECT reference_no FROM refs WHERE project_name LIKE '%";
-			$sql .= $q->param('research_group') . "%'";
+    #  references included in that project JA 3.10.02
+    my $reflist;
+    if ( $q->param('research_group') =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/ )	{
+        $sql = "SELECT reference_no FROM refs WHERE project_name LIKE '%";
+        $sql .= $q->param('research_group') . "%'";
 
-			$sth = $dbh->prepare($sql);
-			$sth->execute();
-			@refrefs = @{$sth->fetchall_arrayref()};
-			$sth->finish();
+        $sth = $dbh->prepare($sql);
+        $sth->execute();
+        @refrefs = @{$sth->fetchall_arrayref()};
+        $sth->finish();
 
-			for $refref (@refrefs)  {
-				$reflist .= "," . ${$refref}[0];
-			}
-			$reflist =~ s/^,//;
-		}
+        for $refref (@refrefs)  {
+            $reflist .= "," . ${$refref}[0];
+        }
+        $reflist =~ s/^,//;
+    }
 
-		# make a list of collections falling in a time interval
-		# JA 20.7.03
-		my $intlist;
-		if ( $q->param('interval_name') =~ /[A-Za-z]/ )	{
-			my ($collref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, '', $q->param('interval_name'), '', '');
-			my @colls = @{$collref};
-			$intlist = join ',', @colls;
-		}
+    # make a list of collections falling in a time interval
+    # JA 20.7.03
+    my $intlist;
+    if ( $q->param('interval_name') =~ /[A-Za-z]/ )	{
+        my ($collref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, '', $q->param('interval_name'), '', '');
+        my @colls = @{$collref};
+        $intlist = join ',', @colls;
+    }
 
+    # query the occurrences table to get a list of useable collections
+    # Also handles species name searches JA 19-20.8.02
+    my $genus;
+    my $species;
+    if($q->param('genus_name')){
+        # PM 09/13/02 added the '\s+' pattern for space matching.
+        if($q->param('genus_name') =~ /\w+\s+\w+/){
+            ($genus,$species) = split /\s+/,$q->param('genus_name');
+        }
+        elsif($q->param('taxon_rank') eq "species"){
+            $species = $q->param('genus_name');
+        }
+        else{
+            $genus = $q->param('genus_name');
+        }
+        $sql = qq|SELECT collection_no FROM occurrences WHERE |;
+        if($q->param('taxon_rank') eq "Higher taxon" ||
+                $q->param('taxon_rank') eq "Higher-taxon"){
+            $self->dbg("genus_name q param:".$q->param('genus_name')."<br>");
+            $sql .= "genus_name IN (";
+            if($in_list eq ""){
+                $self->dbg("RE-RUNNING TAXONOMIC SEARCH in Map.pm<br>");
+                # JA: replaced recurse call with taxonomic_search call
+                #  7.5.04 because I am not maintaining recurse
+                $in_list=PBDBUtil::taxonomic_search($q->param('genus_name'),$dbt);
+            }
+            $sql .= $in_list . ")";
+        }
+        else{
+            if($genus){
+                $sql .= "genus_name='" . $genus;
+                if($species){
+                    $sql .= "' AND ";
+                }
+            }
+            if($species){
+            $sql .= "species_name='" . $species;
+            }
+            $sql .= "'";
+        }
+        $sth2 = $dbh->prepare($sql);
+        # DEBUG: PM 09/13/02
+        $self->dbg("mapQueryDb sql: $sql<br>");
+        $sth2->execute();
+        # DEBUG: PM 09/10/02
+        #$self->dbg("results from collection_no search in db: <br>");
+        %collok = ();
+        while (my $occRef = $sth2->fetchrow_hashref())	{
+            my %occ = %{$occRef};
+            if ($occ{'collection_no'} ne ""){
+                #$self->dbg($occ{'collection_no'});
+                $collok{$occ{'collection_no'}} = "Y";
+                #print "<!-- $occ{'collection_no'} -->\n";
+            }
+        }
+        $sth2->finish();
+    }
 
-		# query the occurrences table to get a list of useable collections
-		# Also handles species name searches JA 19-20.8.02
-		my $genus;
-		my $species;
-		if($q->param('genus_name')){
-			# PM 09/13/02 added the '\s+' pattern for space matching.
-			if($q->param('genus_name') =~ /\w+\s+\w+/){
-				($genus,$species) = split /\s+/,$q->param('genus_name');
-			}
-			elsif($q->param('taxon_rank') eq "species"){
-				$species = $q->param('genus_name');
-			}
-			else{
-				$genus = $q->param('genus_name');
-			}
-			$sql = qq|SELECT collection_no FROM occurrences WHERE |;
-			if($q->param('taxon_rank') eq "Higher taxon" ||
-					$q->param('taxon_rank') eq "Higher-taxon"){
-				$self->dbg("genus_name q param:".$q->param('genus_name')."<br>");
-				$sql .= "genus_name IN (";
-				if($in_list eq ""){
-					$self->dbg("RE-RUNNING TAXONOMIC SEARCH in Map.pm<br>");
-			# JA: replaced recurse call with taxonomic_search call
-			#  7.5.04 because I am not maintaining recurse
-					$in_list=PBDBUtil::taxonomic_search($q->param('genus_name'),$dbt);
-					#my $name = $q->param('genus_name');
-					#$in_list = `./recurse $name`;
-				}
-				$sql .= $in_list . ")";
-			}
-			else{
-				if($genus){
-					$sql .= "genus_name='" . $genus;
-					if($species){
-						$sql .= "' AND ";
-					}
-				}
-				if($species){
-				$sql .= "species_name='" . $species;
-				}
-				$sql .= "'";
-			}
-			$sth2 = $dbh->prepare($sql);
-			# DEBUG: PM 09/13/02
-			$self->dbg("mapQueryDb sql: $sql<br>");
-			$sth2->execute();
-			# DEBUG: PM 09/10/02
-			$self->dbg("results from collection_no search in db: <br>");
-			%collok = ();
-			while (my $occRef = $sth2->fetchrow_hashref())	{
-				my %occ = %{$occRef};
-				if ($occ{'collection_no'} ne ""){
-				  $self->dbg($occ{'collection_no'});
-				  $collok{$occ{'collection_no'}} = "Y";
-print "<!-- $occ{'collection_no'} -->\n";
-				}
-			}
-			$sth2->finish();
-		}
+    # figure out what collection table values are being matched 
+    # in what fields
+    @allfields = (	'research_group',
+            'enterer',
+            'authorizer',
+            'country',
+            'state',
+            'time interval',
+            'formation', 
+            'lithology1', 
+            'environment',
+            'modified_since');
 
-		# figure out what collection table values are being matched 
-		# in what fields
-		@allfields = (	'research_group',
-				'enterer',
-				'authorizer',
-				'country',
-				'state',
-				'period',
-				'epoch',
-				'stage', 
-				'formation', 
-				'lithology1', 
-				'environment',
-				'modified_since');
+    # Handle days/weeks/months ago requests JA 25.6.02
+    if ($q->param('modified_since'))	{
+        #local $Class::Date::DATE_FORMAT="%Y%m%d%H%M%S";
+        $nowDate = now();
+        if ( "yesterday" eq $q->param('modified_since') )	{
+            $nowDate = $nowDate-'1D';
+        }
+        elsif ( "two days ago" eq $q->param('modified_since') )	{
+            $nowDate = $nowDate-'2D';
+        }
+        elsif ( "three days ago" eq $q->param('modified_since') )	{
+            $nowDate = $nowDate-'3D';
+        }
+        elsif ( "last week" eq $q->param('modified_since') )	{
+            $nowDate = $nowDate-'7D';
+        }
+        elsif ( "two weeks ago" eq $q->param('modified_since') )	{
+            $nowDate = $nowDate-'14D';
+        }
+        elsif ( "three weeks ago" eq $q->param('modified_since') )	{
+            $nowDate = $nowDate-'21D';
+        }
+        elsif ( "last month" eq $q->param('modified_since') )	{
+            $nowDate = $nowDate-'1M';
+        }
+        my ($a,$b,$c);
+        ($a,$b) = split / /,$nowDate;
+        ($a,$b,$c) = split /-/,$a,3;
+        $q->param('year' => $a);
+        $q->param('month' => $b);
+        $q->param('date' => $c);
+    }
+    if ($q->param('year'))	{
+        $q->param('modified_since' => $q->param('year')." ".$q->param('month')." ".$q->param('date'));
+    }
 
-		# Handle days/weeks/months ago requests JA 25.6.02
-		if ($q->param('modified_since'))	{
-			#local $Class::Date::DATE_FORMAT="%Y%m%d%H%M%S";
-			$nowDate = now();
-			if ( "yesterday" eq $q->param('modified_since') )	{
-				$nowDate = $nowDate-'1D';
-			}
-			elsif ( "two days ago" eq $q->param('modified_since') )	{
-				$nowDate = $nowDate-'2D';
-			}
-			elsif ( "three days ago" eq $q->param('modified_since') )	{
-				$nowDate = $nowDate-'3D';
-			}
-			elsif ( "last week" eq $q->param('modified_since') )	{
-				$nowDate = $nowDate-'7D';
-			}
-			elsif ( "two weeks ago" eq $q->param('modified_since') )	{
-				$nowDate = $nowDate-'14D';
-			}
-			elsif ( "three weeks ago" eq $q->param('modified_since') )	{
-				$nowDate = $nowDate-'21D';
-			}
-			elsif ( "last month" eq $q->param('modified_since') )	{
-				$nowDate = $nowDate-'1M';
-			}
-			my ($a,$b) = split / /,$nowDate;
-			my ($a,$b,$c) = split /-/,$a,3;
-			$q->param('year' => $a);
-			$q->param('month' => $b);
-			$q->param('date' => $c);
-		}
-		if ($q->param('year'))	{
-			$q->param('modified_since' => $q->param('year')." ".$q->param('month')." ".$q->param('date'));
-		}
-
-		# Clean up the environment field
-		my $environment = $q->param('environment');
-		if ( $environment =~ /General/ )	{
-			$q->param(environment => '');
-		} elsif ( $environment =~ /Carbonate/ )	{
-		$q->param(environment => 'carbonate indet.');
-	} elsif ( $environment =~ /Siliciclastic/ )	{
-		$q->param(environment => 'marginal marine indet.');
-	} elsif ( $environment =~ /Terrestrial/ )	{
-		$q->param(environment => 'fluvial-lacustrine indet.');
-	}
+    # Clean up the environment field
+    my $environment = $q->param('environment');
+    if ( $environment =~ /General/ )	{
+        $q->param(environment => '');
+    } elsif ( $environment =~ /Carbonate/ )	{
+        $q->param(environment => 'carbonate indet.');
+    } elsif ( $environment =~ /Siliciclastic/ )	{
+        $q->param(environment => 'marginal marine indet.');
+    } elsif ( $environment =~ /Terrestrial/ )	{
+        $q->param(environment => 'fluvial-lacustrine indet.');
+    }
 
 	for my $field ( @allfields ) {
 		if ( $q->param($field) && $q->param( $field ) ne "all")	{
 			$filledfields{$field} = $q->param ( $field );
 		}
-	}
-
-	# keep track of the search string so it can be printed later
-	if ( ! $ptset )	{
-	if ( $q->param('genus_name') )	{
-		if ( $species )	{
-			$searchstring = "species = ";
-			if ( $genus )	{
-				$searchstring .= $genus." ".$species;
-			} else	{
-				$searchstring .= $species;
-			}
-		} elsif ( $q->param('taxon_rank') eq "Higher-taxon" )	{
-			$searchstring = "taxon = ";
-			$searchstring .= $q->param('genus_name');
-		} else	{
-			$searchstring = "genus = ";
-			$searchstring .= $q->param('genus_name');
-		}
-		$searchstring .= ", ";
-	}
-	if ($cont ne "")	{
-		$searchstring .= "continent = $cont, ";
-	}
-	for $curField (@allfields)	{
-		if ($filledfields{$curField} ne "")	{
-			$searchstring .= "$curField = $filledfields{$curField}, ";
-		}
-	}
-	$searchstring =~ s/, $//;
-	# clean "1" that appears at end of "lithology1"
-	$searchstring =~ s/1//;
 	}
 
 	# Start the SQL 
@@ -321,7 +534,7 @@ print "<!-- $occ{'collection_no'} -->\n";
 	# PM 09/10/02. Specify a default WHERE clause of the collection
 	# numbers returned above. This drastically reduces database load for
 	# the map drawing section of the taxon information script.
-	my $collection_no_list = join(",",keys(%collok));
+	my $collection_no_list = join(", ",keys(%collok));
 	my $where = "";
 	# %collok is only populated if $q->param("genus_name") was provided
 	if($collection_no_list ne ""){
@@ -335,40 +548,22 @@ print "<!-- $occ{'collection_no'} -->\n";
 
 	for $t (keys %filledfields)	{
 		if ( $filledfields{$t} )	{
-		# LEGACY CODE
-#			# handle period
-#			if ($t eq "period")	{
-#				$where = &::buildWhere ( $where, qq| (period_max='$filledfields{$t}' OR period_min='$filledfields{$t}')| );
-#			}
-#			# handle epoch 
-#			elsif ($t eq "epoch")	{
-#				$where = &::buildWhere ( $where, qq| (epoch_max='$filledfields{$t}' OR epoch_min='$filledfields{$t}')| );
-#			}
-#			# handle stage
-#			elsif ($t eq "stage")	{
-#				$where = &::buildWhere ( $where, qq| (intage_max LIKE "$filledfields{$t}%" OR intage_min LIKE "$filledfields{$t}%" OR locage_max LIKE "$filledfields{$t}%" OR locage_min LIKE "$filledfields{$t}%")| );
-#			}
+			# handle stage
+			if ($t eq "interval_name")	{
+                my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh,$dbt,'',$filledfields{$t},'','','intervals');
+                @intervals = @{$inlistref};
+                if (@intervals) {
+				    $where = &::buildWhere ( $where, qq| max_interval_no IN (|.join(",",@intervals).qq|)| );
+                }
+			}
 			# handle lithology
-			if ($t eq "lithology1")	{
+			elsif ($t eq "lithology1")	{
 				$where = &::buildWhere ( $where, qq| (lithology1='$filledfields{$t}' OR lithology2='$filledfields{$t}')| );
 			}
 			# handle modified date
 			elsif ($t eq "modified_since")	{
-				
-				
 				my ($yy,$mm,$dd) = split / /,$filledfields{$t},3;
-				if (length $mm == 1)	{
-					$mm = "0".$mm;
-				}
-				if (length $dd == 1)	{
-					$dd = "0".$dd;
-				}
-				if ($mm =~ /[a-z]/)	{
-					$filledfields{$t} = $yy . Globals::monthNameToNumber($mm) . $dd."000000";
-				}
-				else	{
-					$filledfields{$t} = $yy.$mm.$dd."000000";
-				}
+                $filledfields{$t} = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yy,$mm,$dd));
 				if ( $q->param("beforeafter") eq "created after" )	{
 					$where = &::buildWhere ( $where, qq| created>$filledfields{$t}| );
 				} elsif ( $q->param("beforeafter") eq "created before" )	{
@@ -383,8 +578,7 @@ print "<!-- $occ{'collection_no'} -->\n";
 				$where .= " AND reference_no IN (" . $reflist . ")";
 			} elsif ( $t eq "research_group" ) {
 				# research_group is now a set -- tone 7 jun 2002
-#				$where .= " AND FIND_IN_SET(research_group, '".$q->param("research_group")."')";
-				$where .= " AND FIND_IN_SET('".$q->param("research_group")."', research_group)>0";
+				$where .= " AND FIND_IN_SET(".$dbh->quote($q->param("research_group")).", research_group)";
 			} else {
 				$where = &::buildWhere ( $where, qq| $t='$filledfields{$t}'| );
 			}
@@ -395,10 +589,20 @@ print "<!-- $occ{'collection_no'} -->\n";
 	$sql =~ s/FROM collections  AND /FROM collections WHERE /;
 	$sql =~ s/\s+/ /gs;
 	$self->dbg ( "Final sql: $sql<br>" );
-	# NOTE: Results attached to this statement handle are used in mapDrawMap
+	# NOTE: Results attached to this statement handle are used in mapDrawPoints
 	$sth = $dbh->prepare($sql);
 	$sth->execute();
 
+    # Pass collections thru permissions
+    my $p = Permissions->new($s);
+	my $limit = 1000000;
+	my $ofRows = 0;
+    my @dataRows = ();
+
+    $p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
+    $self->dbg ( "Returned $ofRows rows okayed by permissions module" );
+
+    return \@dataRows;	
 }
 
 
@@ -407,23 +611,23 @@ sub mapGetScale	{
 
 	$projection = $q->param('projection');
 
-  $scale = 1;
-  $scale = $q->param('mapscale');
-  $scale =~ s/x //i;
+    $scale = 1;
+    $scale = $q->param('mapscale');
+    $scale =~ s/x //i;
 
-  ($cont,$coords) = split / \(/,$q->param('mapfocus');
-  $coords =~ s/\)//;  # cut off the right parenthesis.
-  ($midlat,$midlng) = split /,/,$coords;
- # the user might enter a zero for one value or the other, so just one
- #  non-zero value is needed
-  if ( $q->param('maplat') || $q->param('maplng') )	{
-    $midlat = $q->param('maplat');
-    $midlng = $q->param('maplng');
-  }
+    ($cont,$coords) = split / \(/,$q->param('mapfocus');
+    $coords =~ s/\)//;  # cut off the right parenthesis.
+    ($midlat,$midlng) = split /,/,$coords;
+    # the user might enter a zero for one value or the other, so just one
+    #  non-zero value is needed
+    if ( $q->param('maplat') || $q->param('maplng') )	{
+        $midlat = $q->param('maplat');
+        $midlng = $q->param('maplng');
+    }
 
-  # NOTE: shouldn't these be module globals??
-  $offlng = 180 * ( $scale - 1 ) / $scale;
-  $offlat = 90 * ( $scale - 1 ) / $scale;
+    # NOTE: shouldn't these be module globals??
+    $offlng = 180 * ( $scale - 1 ) / $scale;
+    $offlat = 90 * ( $scale - 1 ) / $scale;
 }
 
 
@@ -457,7 +661,6 @@ sub mapDefineOutlines	{
 		}
 		$lat--;
 	}
-	MASK;
 
 	if ( ! open COAST,"<$COAST_DIR/noaa.coastlines.$resostem" ) {
 		$self->htmlError ( "Couldn't open [$COAST_DIR/noaa.coastlines.$resostem]: $!" );
@@ -478,7 +681,7 @@ sub mapDefineOutlines	{
 		# save data
 		# NOTE: separators are saved intentionally so they
 		#  can be used for that purpose later on
-		if ( $a =~ /#/ || ( $a =~ /[0-9]/ && $cellage{$ia}{$ib} >= $maptime ) )	{
+		if ( $a =~ /#/ || ( $a =~ /[0-9]/ && $cellage{$ia}{$ib} >= $self->{maptime} ) )	{
 			push @worldlng,$a;
 			push @worldlat,$b;
 		}
@@ -501,7 +704,7 @@ sub mapDefineOutlines	{
 			} else	{
 				$ib = int($b - 0.5);
 			}
-			if ( $a =~ /#/ || ( $a =~ /[0-9]/ && $cellage{$ia}{$ib} >= $maptime ) )	{
+			if ( $a =~ /#/ || ( $a =~ /[0-9]/ && $cellage{$ia}{$ib} >= $self->{maptime} ) )	{
 				push @borderlng,$a;
 				push @borderlat,$b;
 			}
@@ -525,7 +728,7 @@ sub mapDefineOutlines	{
 			} else	{
 				$ib = int($b - 0.5);
 			}
-			if ( $a =~ /#/ || ( $a =~ /[0-9]/ && $cellage{$ia}{$ib} >= $maptime ) )	{
+			if ( $a =~ /#/ || ( $a =~ /[0-9]/ && $cellage{$ia}{$ib} >= $self->{maptime} ) )	{
 				push @usalng,$a;
 				push @usalat,$b;
 			}
@@ -536,7 +739,6 @@ sub mapDefineOutlines	{
 
 # read Scotese's plate ID and rotation data files
 sub mapGetRotations	{
-
 	my $self = shift;
 
 	if ( ! open IDS,"<$COAST_DIR/plateidsv2.lst" ) {
@@ -552,6 +754,7 @@ sub mapGetRotations	{
 		my ($x,$y,$z) = split /,/,$_;
 		$plate{$x}{$y} = $z;
 	}
+    $self->{plate} = \%plate;
 
 	if ( ! open ROT,"<$COAST_DIR/master01c.rot" ) {
 		$self->htmlError ( "Couldn't open [$COAST_DIR/master01c.rot]: $!" );
@@ -569,7 +772,7 @@ sub mapGetRotations	{
 	}
 	close ROT;
 	# rotations for the Recent are all zero; poles are same as 10 Ma
-	if ( $maptime > 0 && $maptime < 10 )	{
+	if ( $self->{maptime} > 0 && $self->{maptime} < 10 )	{
 		for $p (1..999)	{
 			$rotx{0}{$p} = $rotx{10}{$p};
 			$roty{0}{$p} = $roty{10}{$p};
@@ -577,22 +780,22 @@ sub mapGetRotations	{
 		}
 	}
 
-# use world's dumbest linear interpolation to estimate pole of rotation and
-#  angle of rotation values if this time interval is non-standard
-	if ( ! $roty{$maptime}{'1'} )	{
+    # use world's dumbest linear interpolation to estimate pole of rotation and
+    #  angle of rotation values if this time interval is non-standard
+	if ( ! $roty{$self->{maptime}}{'1'} )	{
 
-		my $basema = $maptime;
+		my $basema = $self->{maptime};
 		while ( ! $roty{$basema}{'1'} && $basema >= 0 )	{
 			$basema--;
 		}
-		my $topma = $maptime;
+		my $topma = $self->{maptime};
 		while ( ! $roty{$topma}{'1'} && $topma < 1000 )	{
 			$topma++;
 		}
 
 		if ( $topma < 1000 )	{
-			$basewgt = ( $topma - $maptime ) / ( $topma - $basema );
-			$topwgt = ( $maptime - $basema ) / ( $topma - $basema );
+			$basewgt = ( $topma - $self->{maptime} ) / ( $topma - $basema );
+			$topwgt = ( $self->{maptime} - $basema ) / ( $topma - $basema );
 			for $pid (1..1000)	{
 				my $x1 = $rotx{$basema}{$pid};
 				my $x2 = $rotx{$topma}{$pid};
@@ -601,24 +804,24 @@ sub mapGetRotations	{
 				my $z1 = $rotdeg{$basema}{$pid};
 				my $z2 = $rotdeg{$topma}{$pid};
 
-				$rotx{$maptime}{$pid} = ( $basewgt * $x1 ) + ( $topwgt * $x2 ) ;
+				$rotx{$self->{maptime}}{$pid} = ( $basewgt * $x1 ) + ( $topwgt * $x2 ) ;
 				# the amazing "Madagascar 230 Ma" correction
 				if ( ( $x1 > 0 && $x2 < 0 ) || ( $x1 < 0 && $x2 > 0 ) )	{
 					if ( abs($x1 - $x2) > 180 )	{ # Madagascar case
-						$rotx{$maptime}{$pid} = ( ( 180 - $x1 ) + ( 180 - $x2 ) ) / 2;
+						$rotx{$self->{maptime}}{$pid} = ( ( 180 - $x1 ) + ( 180 - $x2 ) ) / 2;
 					} elsif ( abs($x1 - $x2) > 90 )	{ # Africa plate 701/150 Ma case
 						$y2 = -1 * $y2;
 						$z2 = -1 * $z2;
 						if ( abs($x1) > abs($x2) )	{
-							$rotx{$maptime}{$pid} = ( 180 + $x1 + $x2 ) / 2;
+							$rotx{$self->{maptime}}{$pid} = ( 180 + $x1 + $x2 ) / 2;
 						} else	{
-							$rotx{$maptime}{$pid} = ( 180 - $x1 - $x2 ) / 2;
+							$rotx{$self->{maptime}}{$pid} = ( 180 - $x1 - $x2 ) / 2;
 						}
 					}
 				}
 
-				$roty{$maptime}{$pid} = ( $basewgt * $y1 ) + ( $topwgt * $y2 );
-				$rotdeg{$maptime}{$pid} = ( $basewgt * $z1 ) + ( $topwgt * $z2 );
+				$roty{$self->{maptime}}{$pid} = ( $basewgt * $y1 ) + ( $topwgt * $y2 );
+				$rotdeg{$self->{maptime}}{$pid} = ( $basewgt * $z1 ) + ( $topwgt * $z2 );
 			}
 		}
 	}
@@ -626,16 +829,10 @@ sub mapGetRotations	{
 }
 
 
-# actually draws the map
-sub mapDrawMap {
+sub mapSetupImage {
+    my $self = shift;
 
-  my $self = shift;
-  my $perm_rows = shift;
-
-
-  $self->dbg($q->Dump);
-
-  # erase all files that haven't been accessed in more than a day
+    # erase all files that haven't been accessed in more than a day
 	opendir(DIR,"$GIF_DIR") or die "couldn't open $GIF_DIR ($!)";
 	# grab only files with extensions;  not subdirs or . or ..
 	my @filenames = grep { /.*?\.(\w+)/ } readdir(DIR);
@@ -648,368 +845,146 @@ sub mapDrawMap {
 	}
 
 
-  # get the next number for file creation.
-  if ( ! open GIFCOUNT,"<$GIF_DIR/gifcount" ) {
+    # get the next number for file creation.
+    if ( ! open GIFCOUNT,"<$GIF_DIR/gifcount" ) {
 		$self->htmlError ( "Couldn't open [$GIF_DIR/gifcount]: $!" );
-  }
-  $gifcount = <GIFCOUNT>;
-  chomp($gifcount);
-  close GIFCOUNT;
-
-  $gifcount++;
-  if ( ! open GIFCOUNT,">$GIF_DIR/gifcount" ) {
-		$self->htmlError ( "Couldn't open [$GIF_DIR/gifcount]: $!" );
-  }
-  print GIFCOUNT "$gifcount";
-  close GIFCOUNT;
-
-  $gifcount++;
-
-  # set up the filenames
-  $gifname = "pbdbmap" . $gifcount . ".png";
-  $htmlname = "pbdbmap".$gifcount.".html";
-  $epsname = "pbdbmap" . $gifcount . ".eps";
-  $ainame = "pbdbmap" . $gifcount . ".ai";
-  $jpgname = "pbdbmap" . $gifcount . ".jpg";
-  $pictname = "pbdbmap" . $gifcount . ".pict";
-  if ( ! open MAPGIF,">$GIF_DIR/$gifname" ) {
-		$self->htmlError ( "Couldn't open [$GIF_DIR/$gifname]: $!" );
-  }
-
-
-
-  $hmult = 1.6;
-  $vmult = 2;
-  $hpix = 360;
-  $vpix = 180;
-  if ( $q->param('projection') eq "orthographic" )	{
-    $hpix = 280;
-    $vpix = 280;
-  } elsif ( ( $cont =~ /Africa/ || $cont =~ /South America/ ) &&
-            $scale > 1.5 )	{
-    $hpix = 280;
-    $vpix = 240;
-  }
-  # PM 09/10/02 - Draw a half-sized map for the taxon information script.
-  if($q->param("taxon_info_script") eq "yes")	{
-	$q->param('mapsize' => '75%');
-  }
-  $x = $q->param('mapsize');
-  $x =~ s/%//;
-  $hmult = $hmult * $x / 100;
-  $vmult = $vmult * $x / 100;
-  if ( $q->param("projection") eq "orthographic")	{
-    $hmult = $hmult * 1.25;
-  }
-  $height = $vmult * $vpix;
-  $width = $hmult * $hpix;
-
-  # recenter the image if the GIF size is non-standard
-  $gifoffhor = ( 360 - $hpix ) / ( $scale * 2 );
-  $gifoffver = ( 180 - $vpix ) / ( $scale * 2 );
-
-#--
-%fieldnames = ( "research group" => "research_group",
-		"state/province" => "state",
-		"age/stage" => "stage",
-		"lithology" => "lithology1",
-		"paleoenvironment" => "environment",
-		"taxon" => "genus_name" );
-
-	$maxsetpts = 1;
-	if ( $q->param('mapsearchfields2') && $q->param('mapsearchterm2') )	{
-		$maxsetpts = 2;
-	}
-	if ( $q->param('mapsearchfields3') && $q->param('mapsearchterm3') )	{
-		$maxsetpts = 3;
-	}
-	if ( $q->param('mapsearchfields4') && $q->param('mapsearchterm4') )	{
-		$maxsetpts = 4;
-	}
-
- for $ptset (1..$maxsetpts)	{
-	if ( $ptset > 1 )	{
-		my $extraterm;
-		if ( $ptset == 2 )	{
-			$extraterm = $q->param('mapsearchfields2');
-		} elsif ( $ptset == 3 )	{
-			$extraterm = $q->param('mapsearchfields3');
-		} else	{
-			$extraterm = $q->param('mapsearchfields4');
-		}
-		if ( $fieldnames{$extraterm} )	{
-			$extraterm = $fieldnames{$extraterm};
-		}
-
-		if ( $ptset == 2 )	{
-			$q->param($extraterm => $q->param('mapsearchterm2') );
-		} elsif ( $ptset == 3 )	{
-			$q->param($extraterm => $q->param('mapsearchterm3') );
-		} else	{
-			$q->param($extraterm => $q->param('mapsearchterm4') );
-		}
-
-		$self->mapQueryDb();
-	}
-	$setsuffix = $ptset;
-	if ( $ptset == 1 )	{
-  		$setsuffix = "";
-	}
-
-  $dotsizeterm = $q->param("pointsize$setsuffix");
-  $dotshape = $q->param("pointshape$setsuffix");
-
-  if ($dotsizeterm eq "tiny")	{
-    $dotsize = 1;
-  } elsif ($dotsizeterm eq "small")	{
-    $dotsize = 1.5;
-  } elsif ($dotsizeterm eq "medium")	{
-    $dotsize = 2;
-  } elsif ($dotsizeterm eq "large")	{
-    $dotsize = 3;
-  } elsif ($dotsizeterm eq "huge")	{
-    $dotsize = 4;
-  }
-  $maxdotsize = $dotsize;
-  if ($dotsizeterm eq "proportional")	{
-    $maxdotsize = 7;
-  }
-
-	# Get rows okayed by permissions module
-	my $p = Permissions->new ( $s );
-	my @dataRows = ( );
-	# from buildMapOnly, we may have already run the permissions step.
-	# Note that even if we have data passing the permissions step, we
-	# still might not get any points to draw since the data may be lacking
-	# lat/long info.
-	if($perm_rows){
-		@dataRows = @{$perm_rows};
-	}
-	my $limit = 1000000;
-	my $ofRows = 0;
-	# NOTE: this statement handle is apparently picked up from the
-	# mapQueryDb method, though it's not 'self' or passed in...
-	# (It stays in scope only because it was initialized through $dbh
-	# which is global)
-	if(scalar @dataRows < 1){
-		$p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
-		$self->dbg ( "Returned $ofRows rows okayed by permissions module" );
-	}
-
-	
-
-
-
-  # draw collection data points
-  %atCoord = ();
-  %longVal = ();
-  %latVal = ();
-	foreach $collRef ( @dataRows ) {
- 		%coll = %{$collRef};
- 		if ( ( $coll{'latdeg'} > 0 || $coll{'latmin'} > 0 || $coll{'latdec'} > 0 ) &&
-         ( $coll{'lngdeg'} > 0 || $coll{'lngmin'} > 0 || $coll{'lngdec'} > 0 ) &&
-			( $collok{$coll{'collection_no'}} eq "Y" ||
-			! $q->param('genus_name') )
-		) {
-
-		#{
-			#my @keys = keys %coll;
-			#$self->dbg("keys: @keys");
-			#my $val = $coll{'latdeg'};
-			#$self->dbg("latdeg = $val");
-			#my $val = $coll{'lngdeg'};
-			#$self->dbg("lngdeg = $val");
-		#}
-
-
-      # When magnification is high, want to use minutes 
-      # in addition to degrees, so the resolution is a bit higher
-      if ($scale > 6)  
-      {
-          $lngoff = $coll{'lngdeg'};
-          $lnghalf = ".00";
-          # doubles the number of points longitudinally
-          if ( $coll{'lngmin'} >= 30 || ($coll{'lngdec'} =~ /^\d/ && $coll{'lngdec'} >= .50) )	{
-            $lngoff = $lngoff + 0.5;
-            $lnghalf = ".50";
-          }
-
-          # E/W modification appears unnecessary, but code is here just in case
-          if ( $coll{'lngdir'} eq "East" )	{
-            $lngoff = $lngoff + 0.0;
-          } elsif ( $coll{'lngdir'} eq "West" )	{
-            $lngoff = $lngoff - 0.0;
-          }
-          
-          $latoff = $coll{'latdeg'};
-          $lathalf = ".00";
-          # quadruples the number of point rows latitudinally
-          if ( $coll{'latmin'} >= 45 || ($coll{'latdec'} =~ /^\d/ && $coll{'latdec'} >= .75) )	{
-            $latoff = $latoff + 0.75;
-            $lathalf = ".75";
-          } elsif ( $coll{'latmin'} >= 30 || ($coll{'latdec'} =~ /^\d/ && $coll{'latdec'} >= .50) )	{
-            $latoff = $latoff + 0.5;
-            $lathalf = ".50";
-          } elsif ( $coll{'latmin'} >= 15 || ($coll{'latdec'} =~ /^\d/ && $coll{'latdec'} >= .25) )	{
-            $latoff = $latoff + 0.25;
-            $lathalf = ".25";
-          }
-          
-          if ( $coll{'latdir'} eq "North" )	{
-            $latoff = $latoff + 0.25;
-          } elsif ( $coll{'latdir'} eq "South" )	{
-            $latoff = $latoff - 0.25;
-          }
-          $coordres = 'half';
-      } else {
-          $lngoff = $coll{'lngdeg'};
-          # E/W modification appears unnecessary, but code is here just in case
-          if ( $coll{'lngdir'} eq "East" )	{
-            $lngoff = $lngoff + 0.0;
-          } elsif ( $coll{'lngdir'} eq "West" )	{
-            $lngoff = $lngoff - 0.0;
-          }
-          $lngres = 'full';
-          $latoff = $coll{'latdeg'};
-          $lathalf = ".00";
-          $lnghalf = ".00";
-          # doubles the number of point rows latitudinally
-          if ( $coll{'latmin'} >= 30 || $coll{'latdec'} =~ /^[5-9]/ )	{
-            $latoff = $latoff + 0.5;
-            $lathalf = ".50";
-          }
-          if ( $coll{'latdir'} eq "North" )	{
-            $latoff = $latoff + 0.5;
-          } elsif ( $coll{'latdir'} eq "South" )	{
-            $latoff = $latoff - 0.5;
-          }
-          $coordres = 'full';
-      }
-        
-
-      
-      ($x1,$y1,$hemi) = $self->getCoords($lngoff,$latoff);
-
-
-
-      if ( $x1 > 0 && $y1 > 0 && $x1-$maxdotsize > 0 &&
-			$x1+$maxdotsize < $width &&
-			$y1-$maxdotsize > 0 &&
-			$y1+$maxdotsize < $height )	{
-       
-        $atCoord{$x1}{$y1}++;
-        $longVal{$x1} = $coll{'lngdeg'} . $lnghalf . " " . $coll{'lngdir'};
-        $latVal{$y1} = $coll{'latdeg'} . $lathalf . " " . $coll{'latdir'};
-
-        $self->dbg("Collection ".$coll{'collection_no'}." pixels($x1,$y1) " 
-                 . "with degrees(".$coll{'lngdeg'}." ".$coll{'lngmin'}."/".$coll{'lngdec'}.",".$coll{'latdeg'}." ".$coll{'latmin'}."/".$coll{'latdec'}.")"
-                 . "binned to degrees(".$longVal{$x1}.",".$latVal{$y1}.")");
-
-	    $hemiVal{$x1}{$y1} = $hemi;
-        $matches++;
-      }
-
     }
-  }
+    $gifcount = <GIFCOUNT>;
+    chomp($gifcount);
+    close GIFCOUNT;
 
-#12/11/2003 testing
-#{
-#	my $test = values(%atCoordl);
-#	$self->dbg("atCoord: $test");
-#	my $test = values(%longVal);
-#	$self->dbg("longVal: $test");
-#	my $test = values(%latgVal);
- #	$self->dbg("latgVal: $test");
-#}
-#end testing
+    $gifcount++;
+    if ( ! open GIFCOUNT,">$GIF_DIR/gifcount" ) {
+          $self->htmlError ( "Couldn't open [$GIF_DIR/gifcount]: $!" );
+    }
+    print GIFCOUNT "$gifcount";
+    close GIFCOUNT;
 
+    $gifcount++;
 
-	$self->dbg("matches: $matches<br>");
-	# Bail if we don't have anything to draw.
-	if($matches < 1 && $q->param('taxon_info_script') eq "yes"){
-		print "NO MATCHING COLLECTION DATA AVAILABLE<br>";
-		return;
-	}
+    # set up the filenames
+    $gifname = "pbdbmap" . $gifcount . ".png";
+    $htmlname = "pbdbmap".$gifcount.".html";
+    $ainame = "pbdbmap" . $gifcount . ".ai";
+    $jpgname = "pbdbmap" . $gifcount . ".jpg";
+    $pictname = "pbdbmap" . $gifcount . ".pict";
+    if ( ! open MAPGIF,">$GIF_DIR/$gifname" ) {
+          $self->htmlError ( "Couldn't open [$GIF_DIR/$gifname]: $!" );
+    }
 
-#--
+	# Write this to a file, not stdout
+	open(MAPOUT,">$GIF_DIR/$htmlname") or die "couldn't open $GIF_DIR/$htmlname ($!)";
 
+    $hmult = 1.6;
+    $vmult = 2;
+    $hpix = 360;
+    $vpix = 180;
+    if ( $q->param('projection') eq "orthographic" )	{
+        $hpix = 280;
+        $vpix = 280;
+    } elsif ( ( $cont =~ /Africa/ || $cont =~ /South America/ ) &&
+              $scale > 1.5 )	{
+        $hpix = 280;
+        $vpix = 240;
+    }
+    # PM 09/10/02 - Draw a half-sized map for the taxon information script.
+    if($q->param("taxon_info_script") eq "yes")	{
+          $q->param('mapsize' => '75%');
+    }
+    $x = $q->param('mapsize');
+    $x =~ s/%//;
+    $hmult = $hmult * $x / 100;
+    $vmult = $vmult * $x / 100;
+    if ( $q->param("projection") eq "orthographic")	{
+        $hmult = $hmult * 1.25;
+    }
+    $height = $vmult * $vpix;
+    $width = $hmult * $hpix;
 
-  if ( $width > 300 )	{
-    $im = new GD::Image($width,$height+12);
-    $totalheight = $height + 12;
-  } else	{
-    $im = new GD::Image($width,$height+24);
-    $totalheight = $height + 24;
-  }
+    # recenter the image if the GIF size is non-standard
+    $gifoffhor = ( 360 - $hpix ) / ( $scale * 2 );
+    $gifoffver = ( 180 - $vpix ) / ( $scale * 2 );
 
-  open AI,">$GIF_DIR/$ainame";
-  open AIHEAD,"<./data/AI.header";
-  while (<AIHEAD>)	{
-    print AI $_;
-  }
-  close AIHEAD;
+    if ( $width > 300 )	{
+        if (!$im)  {
+            $im = new GD::Image($width,$height+12);
+        }
+        $totalheight = $height + 12;
+    } else	{
+        if (!$im)  {
+            $im = new GD::Image($width,$height+24);
+        }
+        $totalheight = $height + 24;
+    }
 
-  $sizestring = $width . "x";
-  $sizestring .= $height + 12;
+    open AI,">$GIF_DIR/$ainame";
+    open AIHEAD,"<./data/AI.header";
+    while (<AIHEAD>)	{
+        print AI $_;
+    }
+    close AIHEAD;
 
-  $col{'white'} = $im->colorAllocate(255,255,255);
-  $aicol{'white'} = "0.00 0.00 0.00 0.00 K";
-  $col{'borderblack'} = $im->colorAllocate(1,1,1);
-  $aicol{'borderblack'} = "0.02 0.02 0.02 0.99 K";
-  $col{'black'} = $im->colorAllocate(0,0,0);
-  $aicol{'black'} = "0.00 0.00 0.00 1.00 K";
-  $col{'gray'} = $im->colorAllocate(127,127,127);
-  $aicol{'gray'} = "0.43 0.31 0.29 0.13 K";
-  $col{'light gray'} = $im->colorAllocate(191,191,191);
-  $aicol{'light gray'} = "0.23 0.16 0.13 0.02 K";
-  $col{'offwhite'} = $im->colorAllocate(254,254,254);
-  $aicol{'offwhite'} = "0.0039 0.0039 0.00 0.00 K";
-  $col{'dark red'} = $im->colorAllocate(127,0,0);
-  $aicol{'dark red'} = "0.33 0.94 0.95 0.25 K";
-  $col{'red'} = $im->colorAllocate(255,0,0);
-  $aicol{'red'} = "0.01 0.96 0.91 0.0 K";
-  $col{'pink'} = $im->colorAllocate(255,159,255);
-  $aicol{'pink'} = "0.03 0.38 0.00 0.00 K";
-  $col{'brown'} = $im->colorAllocate(127,63,0);
-  $aicol{'brown'} = "0.33 0.61 0.98 0.25 K";
-  $col{'light brown'} = $im->colorAllocate(223,191,159);
-  $aicol{'light brown'} = "0.11 0.20 0.28 0.02 K";
-  $col{'ochre'} = $im->colorAllocate(191,127,0);
-  $aicol{'ochre'} = "0.20 0.41 0.97 0.07 K";
-  $col{'orange'} = $im->colorAllocate(255,127,0);
-  $aicol{'orange'} = "0.02 0.50 0.93 0.00 K";
-  $col{'light orange'} = $im->colorAllocate(255,159,63);
-  $aicol{'light orange'} = "0.02 0.24 0.58 0.00 K";
-  $col{'yellow'} = $im->colorAllocate(255,255,0);
-  $aicol{'yellow'} = "0.03 0.02 0.91 0.00 K";
-  $col{'light yellow'} = $im->colorAllocate(255,255,127);
-  $aicol{'light yellow'} = "0.02 0.01 0.50 0.00 K";
-  $col{'green'} = $im->colorAllocate(0,255,0);
-  $aicol{'green'} = "0.93 0.00 1.00 0.00 K";
-  $col{'light green'} = $im->colorAllocate(127,255,127);
-  $aicol{'light green'} = "0.51 0.00 0.58 0.00 K";
-  $col{'turquoise'} = $im->colorAllocate(95,191,159);
-  $aicol{'turquoise'} = "0.64 0.02 0.33 0.00 K";
-  $col{'jade'} = $im->colorAllocate(0,143,63);
-  $aicol{'jade'} = "0.93 0.05 0.91 0.01 K";
-  $col{'teal'} = $im->colorAllocate(0,127,127);
-  $aicol{'teal'} = "0.95 0.17 0.40 0.04 K";
-  $col{'dark blue'} = $im->colorAllocate(0,0,127);
-  $aicol{'dark blue'} = "0.98 0.98 0.02 0.00 K";
-  $col{'blue'} = $im->colorAllocate(63,63,255);
-  $aicol{'blue'} = "0.80 0.68 0.00 0.00 K";
-  $col{'light blue'} = $im->colorAllocate(63,159,255);
-  $aicol{'light blue'} = "0.79 0.15 0.00 0.00 K";
-  $col{'sky blue'} = $im->colorAllocate(0,255,255);
-  $aicol{'sky blue'} = "0.84 0.00 0.00 0.00 K";
-  $col{'lavender'} = $im->colorAllocate(127,127,255);
-  $aicol{'lavender'} = "0.53 0.42 0.00 0.00 K";
-  $col{'violet'} = $im->colorAllocate(191,0,255);
-  $aicol{'violet'} = "0.18 0.94 0.00 0.00 K";
-  $col{'light violet'} = $im->colorAllocate(191,159,255);
-  $aicol{'light violet'} = "0.24 0.33 0.00 0.00 K";
-  $col{'purple'} = $im->colorAllocate(223,0,255);
-  $aicol{'purple'} = "0.06 0.93 0.00 0.00 K";
+    $sizestring = $width . "x";
+    $sizestring .= $height + 12;
+
+    $col{'white'} = $im->colorAllocate(255,255,255);
+    $aicol{'white'} = "0.00 0.00 0.00 0.00 K";
+    $col{'borderblack'} = $im->colorAllocate(1,1,1);
+    $aicol{'borderblack'} = "0.02 0.02 0.02 0.99 K";
+    $col{'black'} = $im->colorAllocate(0,0,0);
+    $aicol{'black'} = "0.00 0.00 0.00 1.00 K";
+    $col{'gray'} = $im->colorAllocate(127,127,127);
+    $aicol{'gray'} = "0.43 0.31 0.29 0.13 K";
+    $col{'light gray'} = $im->colorAllocate(191,191,191);
+    $aicol{'light gray'} = "0.23 0.16 0.13 0.02 K";
+    $col{'offwhite'} = $im->colorAllocate(254,254,254);
+    $aicol{'offwhite'} = "0.0039 0.0039 0.00 0.00 K";
+    $col{'dark red'} = $im->colorAllocate(127,0,0);
+    $aicol{'dark red'} = "0.33 0.94 0.95 0.25 K";
+    $col{'red'} = $im->colorAllocate(255,0,0);
+    $aicol{'red'} = "0.01 0.96 0.91 0.0 K";
+    $col{'pink'} = $im->colorAllocate(255,159,255);
+    $aicol{'pink'} = "0.03 0.38 0.00 0.00 K";
+    $col{'brown'} = $im->colorAllocate(127,63,0);
+    $aicol{'brown'} = "0.33 0.61 0.98 0.25 K";
+    $col{'light brown'} = $im->colorAllocate(223,191,159);
+    $aicol{'light brown'} = "0.11 0.20 0.28 0.02 K";
+    $col{'ochre'} = $im->colorAllocate(191,127,0);
+    $aicol{'ochre'} = "0.20 0.41 0.97 0.07 K";
+    $col{'orange'} = $im->colorAllocate(255,127,0);
+    $aicol{'orange'} = "0.02 0.50 0.93 0.00 K";
+    $col{'light orange'} = $im->colorAllocate(255,159,63);
+    $aicol{'light orange'} = "0.02 0.24 0.58 0.00 K";
+    $col{'yellow'} = $im->colorAllocate(255,255,0);
+    $aicol{'yellow'} = "0.03 0.02 0.91 0.00 K";
+    $col{'light yellow'} = $im->colorAllocate(255,255,127);
+    $aicol{'light yellow'} = "0.02 0.01 0.50 0.00 K";
+    $col{'green'} = $im->colorAllocate(0,255,0);
+    $aicol{'green'} = "0.93 0.00 1.00 0.00 K";
+    $col{'light green'} = $im->colorAllocate(127,255,127);
+    $aicol{'light green'} = "0.51 0.00 0.58 0.00 K";
+    $col{'turquoise'} = $im->colorAllocate(95,191,159);
+    $aicol{'turquoise'} = "0.64 0.02 0.33 0.00 K";
+    $col{'jade'} = $im->colorAllocate(0,143,63);
+    $aicol{'jade'} = "0.93 0.05 0.91 0.01 K";
+    $col{'teal'} = $im->colorAllocate(0,127,127);
+    $aicol{'teal'} = "0.95 0.17 0.40 0.04 K";
+    $col{'dark blue'} = $im->colorAllocate(0,0,127);
+    $aicol{'dark blue'} = "0.98 0.98 0.02 0.00 K";
+    $col{'blue'} = $im->colorAllocate(63,63,255);
+    $aicol{'blue'} = "0.80 0.68 0.00 0.00 K";
+    $col{'light blue'} = $im->colorAllocate(63,159,255);
+    $aicol{'light blue'} = "0.79 0.15 0.00 0.00 K";
+    $col{'sky blue'} = $im->colorAllocate(0,255,255);
+    $aicol{'sky blue'} = "0.84 0.00 0.00 0.00 K";
+    $col{'lavender'} = $im->colorAllocate(127,127,255);
+    $aicol{'lavender'} = "0.53 0.42 0.00 0.00 K";
+    $col{'violet'} = $im->colorAllocate(191,0,255);
+    $aicol{'violet'} = "0.18 0.94 0.00 0.00 K";
+    $col{'light violet'} = $im->colorAllocate(191,159,255);
+    $aicol{'light violet'} = "0.24 0.33 0.00 0.00 K";
+    $col{'purple'} = $im->colorAllocate(223,0,255);
+    $aicol{'purple'} = "0.06 0.93 0.00 0.00 K";
 
 	# create an interlaced GIF with a white background
 	$im->interlaced('true');
@@ -1025,7 +1000,7 @@ sub mapDrawMap {
 	# color in the continents based on Scotese's age data
 	if ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') )	{
 
-		open MASK,"<$COAST_DIR/masks2/tiltmask.$maptime";
+		open MASK,"<$COAST_DIR/masks2/tiltmask.".$self->{maptime};
 		while (<MASK>)	{
 			s/\n//;
 			my ($lat,$lng) = split /\t/,$_;
@@ -1174,550 +1149,455 @@ sub mapDrawMap {
 			}
 		}
 
-		%maskedpt = ();
 		print AI "U\n";  # terminate the group
 	}
 
-	# Write this to a file, not stdout
-	open(MAPOUT,">$GIF_DIR/$htmlname") or die "couldn't open $GIF_DIR/$htmlname ($!)";
+    # draw coastlines
+    # first rescale the coordinates depending on the rotation
+    if ( $q->param('mapcontinent') ne "standard" || $q->param('projection') ne "rectilinear" )	{
+        for $c (0..$#worldlat)	{
+            if ( $worldlat[$c] =~ /[0-9]/ )	{
+                ($worldlng[$c],$worldlat[$c],$worldlngraw[$c],$worldlatraw[$c],$worldplate[$c]) = $self->projectPoints($worldlng[$c],$worldlat[$c]);
+            }
+        }
+        if ( $q->param('borderlinecolor') ne "none" )	{
+            for $c (0..$#borderlat)	{
+                if ( $borderlat[$c] =~ /[0-9]/ )	{
+                    ($borderlng[$c],$borderlat[$c],$borderlngraw[$c],$borderlatraw[$c],$borderplate[$c]) = $self->projectPoints($borderlng[$c],$borderlat[$c]);
+                }
+            }
+        }
+        if ( $q->param('usalinecolor') ne "none" )	{
+            for $c (0..$#usalat)	{
+                if ( $usalat[$c] =~ /[0-9]/ )	{
+                    ($usalng[$c],$usalat[$c],$usalngraw[$c],$usalatraw[$c],$usaplate[$c]) = $self->projectPoints($usalng[$c],$usalat[$c]);
+                }
+            }
+        }
+    }
+    if ( $q->param('linethickness') eq "thick" )	{
+        $thickness = 0.5;
+        $aithickness = 1.5;
+    } elsif ( $q->param('linethickness') eq "medium" )	{
+        $thickness = 0.25;
+        $aithickness = 1;
+    } else	{
+        $thickness = 0;
+        $aithickness = 0.5;
+    }
+
+    # draw coastlines
+    # do NOT connect neighboring points that (1) are on different tectonic plates,
+    #  or (2) now are widely separated because one point has rotated onto the
+    #  other edge of the map
+    $coastlinecolor  = $q->param('coastlinecolor');
+    print AI "u\n";  # start the group
+    for $c (0..$#worldlat-1)	{
+        if ( $worldlat[$c] !~ /NaN/ && $worldlat[$c+1] !~ /NaN/ &&
+             $worldlat[$c] =~ /[0-9]/ && $worldlat[$c+1] =~ /[0-9]/ &&
+             $worldplate[$c] == $worldplate[$c+1] &&
+             abs ( $worldlatraw[$c] - $worldlatraw[$c+1] ) < 5 &&
+             abs ( $worldlngraw[$c] - $worldlngraw[$c+1] ) < 5 )	{
+            my $x1 = $self->getLng($worldlng[$c]);
+            my $y1 = $self->getLat($worldlat[$c]);
+            my $x2 = $self->getLng($worldlng[$c+1]);
+            my $y2 = $self->getLat($worldlat[$c+1]);
+            if ( $x1 !~ /NaN/ && $y1 !~ /NaN/ && $x2 !~ /NaN/ && $y2 !~ /NaN/ )	{
+                $im->line( $x1, $y1, $x2, $y2, $col{$coastlinecolor} );
+                print AI "$aicol{$coastlinecolor}\n";
+                printf AI "%.1f w\n",$aithickness;
+                printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
+                printf AI "%.1f %.1f l\n",$AILEFT+$x2,$AITOP-$y2;
+                print AI "S\n";
+                # extra lines offset horizontally
+                if ( $thickness > 0 )	{
+                    $im->line( $x1-$thickness,$y1,$x2-$thickness,$y2,$col{$coastlinecolor});
+                    $im->line( $x1+$thickness,$y1,$x2+$thickness,$y2,$col{$coastlinecolor});
+                    # extra lines offset vertically
+                    $im->line( $x1,$y1-$thickness,$x2,$y2-$thickness,$col{$coastlinecolor});
+                    $im->line( $x1,$y1+$thickness,$x2,$y2+$thickness,$col{$coastlinecolor});
+                }
+            }
+        }
+    }
+    print AI "U\n";  # terminate the group
+
+    # draw the international borders
+    if ( $q->param('borderlinecolor') ne "none" )	{
+        $borderlinecolor = $q->param('borderlinecolor');
+        print AI "u\n";  # start the group
+        for $c (0..$#borderlat-1)	{
+            if ( $borderlat[$c] !~ /NaN/ && $borderlat[$c+1] !~ /NaN/ &&
+                 $borderlat[$c] =~ /[0-9]/ && $borderlat[$c+1] =~ /[0-9]/ &&
+                 $borderplate[$c] == $borderplate[$c+1] &&
+                 abs ( $borderlatraw[$c] - $borderlatraw[$c+1] ) < 5 &&
+                 abs ( $borderlngraw[$c] - $borderlngraw[$c+1] ) < 5 )	{
+                my $x1 = $self->getLng($borderlng[$c]);
+                my $y1 = $self->getLat($borderlat[$c]);
+                my $x2 = $self->getLng($borderlng[$c+1]);
+                my $y2 = $self->getLat($borderlat[$c+1]);
+                if ( $x1 !~ /NaN/ && $y1 !~ /NaN/ && $x2 !~ /NaN/ && $y2 !~ /NaN/ )	{
+                  $im->line( $x1, $y1, $x2, $y2, $col{$borderlinecolor} );
+                  print AI "$aicol{$borderlinecolor}\n";
+                  print AI "0.5 w\n";
+                  printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
+                  printf AI "%.1f %.1f l\n",$AILEFT+$x2,$AITOP-$y2;
+                  print AI "S\n";
+                }
+            }
+        }
+        print AI "U\n";  # terminate the group
+    }
+
+    # draw USA state borders
+    if ( $q->param('usalinecolor') ne "none" )	{
+        $usalinecolor = $q->param('usalinecolor');
+        print AI "u\n";  # start the group
+        for $c (0..$#usalat-1)	{
+            if ( $usalat[$c] !~ /NaN/ && $usalat[$c+1] !~ /NaN/ &&
+                 $usalat[$c] =~ /[0-9]/ && $usalat[$c+1] =~ /[0-9]/ &&
+                 $usaplate[$c] == $usaplate[$c+1] &&
+                 abs ( $usalatraw[$c] - $usalatraw[$c+1] ) < 5 &&
+                 abs ( $usalngraw[$c] - $usalngraw[$c+1] ) < 5 )	{
+                my $x1 = $self->getLng($usalng[$c]);
+                my $y1 = $self->getLat($usalat[$c]);
+                my $x2 = $self->getLng($usalng[$c+1]);
+                my $y2 = $self->getLat($usalat[$c+1]);
+                if ( $x1 !~ /NaN/ && $y1 !~ /NaN/ && $x2 !~ /NaN/ && $y2 !~ /NaN/ )	{
+                    $im->line( $x1, $y1, $x2, $y2, $col{$usalinecolor} );
+                    print AI "$aicol{$usalinecolor}\n";
+                    print AI "0.5 w\n";
+                    printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
+                    printf AI "%.1f %.1f l\n",$AILEFT+$x2,$AITOP-$y2;
+                    print AI "S\n";
+                }
+            }
+        }
+        print AI "U\n";  # terminate the group
+    }
+
+    if ( $q->param('gridposition') ne "in back" )	{
+        $self->drawGrids();
+    }
+
+    return "$GIF_DIR/$htmlname";
+}
+
+# Draw the points for collections on the map
+sub mapDrawPoints{
+    my $self = shift;
+    my $dataRowsRef = shift;
+
+    # draw collection data points
+    %atCoord = ();
+    %longVal = ();
+    %latVal = ();
+    my $matches = 0;
+	foreach $collRef ( @{$dataRowsRef} ) {
+ 		%coll = %{$collRef};
+ 		if ( ( $coll{'latdeg'} > 0 || $coll{'latmin'} > 0 || $coll{'latdec'} > 0 ) &&
+         ( $coll{'lngdeg'} > 0 || $coll{'lngmin'} > 0 || $coll{'lngdec'} > 0 ) &&
+			( $collok{$coll{'collection_no'}} eq "Y" ||
+			! $q->param('genus_name') )) {
+            # When magnification is high, want to use minutes 
+            # in addition to degrees, so the resolution is a bit higher
+            if ($scale > 6)  {
+                $lngoff = $coll{'lngdeg'};
+                $lnghalf = ".00";
+                # doubles the number of points longitudinally
+                if ( $coll{'lngmin'} >= 30 || ($coll{'lngdec'} =~ /^\d/ && $coll{'lngdec'} >= .50) )	{
+                  $lngoff = $lngoff + 0.5;
+                  $lnghalf = ".50";
+                }
+
+                # E/W modification appears unnecessary, but code is here just in case
+                if ( $coll{'lngdir'} eq "East" )	{
+                  $lngoff = $lngoff + 0.0;
+                } elsif ( $coll{'lngdir'} eq "West" )	{
+                  $lngoff = $lngoff - 0.0;
+                }
+                
+                $latoff = $coll{'latdeg'};
+                $lathalf = ".00";
+                # quadruples the number of point rows latitudinally
+                if ( $coll{'latmin'} >= 45 || ($coll{'latdec'} =~ /^\d/ && $coll{'latdec'} >= .75) )	{
+                  $latoff = $latoff + 0.75;
+                  $lathalf = ".75";
+                } elsif ( $coll{'latmin'} >= 30 || ($coll{'latdec'} =~ /^\d/ && $coll{'latdec'} >= .50) )	{
+                  $latoff = $latoff + 0.5;
+                  $lathalf = ".50";
+                } elsif ( $coll{'latmin'} >= 15 || ($coll{'latdec'} =~ /^\d/ && $coll{'latdec'} >= .25) )	{
+                  $latoff = $latoff + 0.25;
+                  $lathalf = ".25";
+                }
+                
+                if ( $coll{'latdir'} eq "North" )	{
+                  $latoff = $latoff + 0.25;
+                } elsif ( $coll{'latdir'} eq "South" )	{
+                  $latoff = $latoff - 0.25;
+                }
+                $coordres = 'half';
+            } else {
+                $lngoff = $coll{'lngdeg'};
+                # E/W modification appears unnecessary, but code is here just in case
+                if ( $coll{'lngdir'} eq "East" )	{
+                  $lngoff = $lngoff + 0.0;
+                } elsif ( $coll{'lngdir'} eq "West" )	{
+                  $lngoff = $lngoff - 0.0;
+                }
+                $lngres = 'full';
+                $latoff = $coll{'latdeg'};
+                $lathalf = ".00";
+                $lnghalf = ".00";
+                # doubles the number of point rows latitudinally
+                if ( $coll{'latmin'} >= 30 || $coll{'latdec'} =~ /^[5-9]/ )	{
+                  $latoff = $latoff + 0.5;
+                  $lathalf = ".50";
+                }
+                if ( $coll{'latdir'} eq "North" )	{
+                  $latoff = $latoff + 0.5;
+                } elsif ( $coll{'latdir'} eq "South" )	{
+                  $latoff = $latoff - 0.5;
+                }
+                $coordres = 'full';
+            }
+          
+            ($x1,$y1,$hemi) = $self->getCoords($lngoff,$latoff);
+
+            if ( $x1 > 0 && $y1 > 0 && $x1-$maxdotsize > 0 &&
+                $x1+$maxdotsize < $width &&
+                $y1-$maxdotsize > 0 &&
+                $y1+$maxdotsize < $height )	{
+                    $atCoord{$x1}{$y1}++;
+                    $longVal{$x1} = $coll{'lngdeg'} . $lnghalf . " " . $coll{'lngdir'};
+                    $latVal{$y1} = $coll{'latdeg'} . $lathalf . " " . $coll{'latdir'};
+
+                    #$self->dbg("Collection ".$coll{'collection_no'}." pixels($x1,$y1) " 
+                    #         . "with degrees(".$coll{'lngdeg'}." ".$coll{'lngmin'}."/".$coll{'lngdec'}.",".$coll{'latdeg'}." ".$coll{'latmin'}."/".$coll{'latdec'}.")"
+                    #         . "binned to degrees(".$longVal{$x1}.",".$latVal{$y1}.")");
+
+                    $hemiVal{$x1}{$y1} = $hemi;
+                    $matches++;
+            }
+        }
+    }
+    
+    push @coll_counts, $matches;
+	$self->dbg("matches: $matches<br>");
+	# Bail if we don't have anything to draw.
+	if($matches < 1 && $q->param('taxon_info_script') eq "yes"){
+		print "NO MATCHING COLLECTION DATA AVAILABLE<br>";
+		return;
+	}
 
 	print MAPOUT "<table><tr><td>\n<map name=\"PBDBmap\">\n";
 
- # draw coastlines
- # first rescale the coordinates depending on the rotation
-  if ( $q->param('mapcontinent') ne "standard" || $q->param('projection') ne "rectilinear" )	{
-    for $c (0..$#worldlat)	{
-      if ( $worldlat[$c] =~ /[0-9]/ )	{
-        ($worldlng[$c],$worldlat[$c],$worldlngraw[$c],$worldlatraw[$c],$worldplate[$c]) = $self->projectPoints($worldlng[$c],$worldlat[$c]);
-      }
-    }
-    if ( $q->param('borderlinecolor') ne "none" )	{
-      for $c (0..$#borderlat)	{
-        if ( $borderlat[$c] =~ /[0-9]/ )	{
-          ($borderlng[$c],$borderlat[$c],$borderlngraw[$c],$borderlatraw[$c],$borderplate[$c]) = $self->projectPoints($borderlng[$c],$borderlat[$c]);
-        }
-      }
-    }
-    if ( $q->param('usalinecolor') ne "none" )	{
-      for $c (0..$#usalat)	{
-        if ( $usalat[$c] =~ /[0-9]/ )	{
-          ($usalng[$c],$usalat[$c],$usalngraw[$c],$usalatraw[$c],$usaplate[$c]) = $self->projectPoints($usalng[$c],$usalat[$c]);
-        }
-      }
-    }
-  }
-  if ( $q->param('linethickness') eq "thick" )	{
-    $thickness = 0.5;
-    $aithickness = 1.5;
-  } elsif ( $q->param('linethickness') eq "medium" )	{
-    $thickness = 0.25;
-    $aithickness = 1;
-  } else	{
-    $thickness = 0;
-    $aithickness = 0.5;
-  }
 
-  # draw coastlines
-  # do NOT connect neighboring points that (1) are on different tectonic plates,
-  #  or (2) now are widely separated because one point has rotated onto the
-  #  other edge of the map
-  $coastlinecolor  = $q->param('coastlinecolor');
-  print AI "u\n";  # start the group
-  for $c (0..$#worldlat-1)	{
-    if ( $worldlat[$c] !~ /NaN/ && $worldlat[$c+1] !~ /NaN/ &&
-         $worldlat[$c] =~ /[0-9]/ && $worldlat[$c+1] =~ /[0-9]/ &&
-         $worldplate[$c] == $worldplate[$c+1] &&
-         abs ( $worldlatraw[$c] - $worldlatraw[$c+1] ) < 5 &&
-         abs ( $worldlngraw[$c] - $worldlngraw[$c+1] ) < 5 )	{
-      my $x1 = $self->getLng($worldlng[$c]);
-      my $y1 = $self->getLat($worldlat[$c]);
-      my $x2 = $self->getLng($worldlng[$c+1]);
-      my $y2 = $self->getLat($worldlat[$c+1]);
-      if ( $x1 !~ /NaN/ && $y1 !~ /NaN/ && $x2 !~ /NaN/ && $y2 !~ /NaN/ )	{
-        $im->line( $x1, $y1, $x2, $y2, $col{$coastlinecolor} );
-        print AI "$aicol{$coastlinecolor}\n";
-        printf AI "%.1f w\n",$aithickness;
-        printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
-        printf AI "%.1f %.1f l\n",$AILEFT+$x2,$AITOP-$y2;
-        print AI "S\n";
-     # extra lines offset horizontally
-        if ( $thickness > 0 )	{
-          $im->line( $x1-thickness,$y1,$x2-$thickness,$y2,$col{$coastlinecolor});
-          $im->line( $x1+thickness,$y1,$x2+$thickness,$y2,$col{$coastlinecolor});
-     # extra lines offset vertically
-          $im->line( $x1,$y1-$thickness,$x2,$y2-$thickness,$col{$coastlinecolor});
-          $im->line( $x1,$y1+$thickness,$x2,$y2+$thickness,$col{$coastlinecolor});
-        }
-      }
-    }
-  }
-  print AI "U\n";  # terminate the group
-
-  # draw the international borders
-  if ( $q->param('borderlinecolor') ne "none" )	{
-    $borderlinecolor = $q->param('borderlinecolor');
     print AI "u\n";  # start the group
-    for $c (0..$#borderlat-1)	{
-      if ( $borderlat[$c] !~ /NaN/ && $borderlat[$c+1] !~ /NaN/ &&
-           $borderlat[$c] =~ /[0-9]/ && $borderlat[$c+1] =~ /[0-9]/ &&
-           $borderplate[$c] == $borderplate[$c+1] &&
-           abs ( $borderlatraw[$c] - $borderlatraw[$c+1] ) < 5 &&
-           abs ( $borderlngraw[$c] - $borderlngraw[$c+1] ) < 5 )	{
-        my $x1 = $self->getLng($borderlng[$c]);
-      	my $y1 = $self->getLat($borderlat[$c]);
-        my $x2 = $self->getLng($borderlng[$c+1]);
-        my $y2 = $self->getLat($borderlat[$c+1]);
-        if ( $x1 !~ /NaN/ && $y1 !~ /NaN/ && $x2 !~ /NaN/ && $y2 !~ /NaN/ )	{
-          $im->line( $x1, $y1, $x2, $y2, $col{$borderlinecolor} );
-          print AI "$aicol{$borderlinecolor}\n";
-          print AI "0.5 w\n";
-          printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
-          printf AI "%.1f %.1f l\n",$AILEFT+$x2,$AITOP-$y2;
-          print AI "S\n";
-        }
-      }
-    }
-    print AI "U\n";  # terminate the group
-  }
-
- # draw USA state borders
-  if ( $q->param('usalinecolor') ne "none" )	{
-    $usalinecolor = $q->param('usalinecolor');
-    print AI "u\n";  # start the group
-    for $c (0..$#usalat-1)	{
-      if ( $usalat[$c] !~ /NaN/ && $usalat[$c+1] !~ /NaN/ &&
-           $usalat[$c] =~ /[0-9]/ && $usalat[$c+1] =~ /[0-9]/ &&
-           $usaplate[$c] == $usaplate[$c+1] &&
-           abs ( $usalatraw[$c] - $usalatraw[$c+1] ) < 5 &&
-           abs ( $usalngraw[$c] - $usalngraw[$c+1] ) < 5 )	{
-        my $x1 = $self->getLng($usalng[$c]);
-      	my $y1 = $self->getLat($usalat[$c]);
-        my $x2 = $self->getLng($usalng[$c+1]);
-        my $y2 = $self->getLat($usalat[$c+1]);
-        if ( $x1 !~ /NaN/ && $y1 !~ /NaN/ && $x2 !~ /NaN/ && $y2 !~ /NaN/ )	{
-          $im->line( $x1, $y1, $x2, $y2, $col{$usalinecolor} );
-          print AI "$aicol{$usalinecolor}\n";
-          print AI "0.5 w\n";
-          printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
-          printf AI "%.1f %.1f l\n",$AILEFT+$x2,$AITOP-$y2;
-          print AI "S\n";
-        }
-      }
-    }
-    print AI "U\n";  # terminate the group
-  }
-
-if ( $q->param('gridposition') ne "in back" )	{
-	$self->drawGrids();
-}
-
-  $dotcolor = $q->param("dotcolor$setsuffix");
-  $bordercolor = $dotcolor;
-  if ($q->param("dotborder$setsuffix") ne "no" )	{
-	if($q->param('mapbgcolor') eq "black" || $q->param("dotborder$setsuffix") eq "white" )	{
-		$bordercolor = "white";
-	}
-	else	{
-		$bordercolor = "borderblack";
-	}
-  }
-
-  print AI "u\n";  # start the group
-  for $x1 (keys %longVal)	{
-	for $y1 (keys %latVal)	{
-		if ($atCoord{$x1}{$y1} > 0)	{
-			if ($dotsizeterm eq "proportional")	{
-				$dotsize = int($atCoord{$x1}{$y1}**0.5) + 1;
-			}
-		# There is no way for a public user to use this at the moment.
-        #if( $q->param('user') =~ /paleodb/ && $q->param('user') !~ /public/ ){
-			print MAPOUT "<area shape=\"rect\" coords=\"";
-			if ( $hemiVal{$x1}{$y1} eq "N" )	{
-				printf MAPOUT "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1+0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1+0.5+(1.5*$dotsize));
-			} else	{
-				printf MAPOUT "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1-0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1-0.5+(1.5*$dotsize));
-			}
-			print MAPOUT "\" href=\"$BRIDGE_HOME?action=displayCollResults";
-			for $t (keys %filledfields)	{
-				if ($filledfields{$t} ne "")	{
-					my $temp = $filledfields{$t};
-					$temp =~ s/"//g;
-					$temp =~ s/ /\+/g;
-					print MAPOUT "&$t=$temp";
-
-					# HACK: force search to use wildcards if lithology or formation is searched, in order
-					#  to avoid problems with values that include double quotes
-					if ($t =~ /(formation)|(lithology1)/)	{
-						print MAPOUT "&wild=Y";
-					}
-				}
-			}
-			if ( $q->param('interval_name') )	{
-				print MAPOUT "&max_interval=" . $q->param('interval_name');
-			}
-			if ( $q->param('genus_name') )	{
-				# get rid of spaces in a genus-species name
-				my $clean_name = $q->param('genus_name');
-				$clean_name =~ s/ /\+/g;
-				print MAPOUT "&genus_name=" . $clean_name;
-				print MAPOUT "&taxon_rank=" . $q->param('taxon_rank');
-			}
-			($latdeg,$latdir) = split / /,$latVal{$y1};
-			($lngdeg,$lngdir) = split / /,$longVal{$x1};
-            ($latdeg, $latdec) = split /\./,$latdeg;
-            ($lngdeg, $lngdec) = split /\./,$lngdeg;
-            #resolution = full or half degree
-			print MAPOUT "&coordres=$coordres"; 
-			print MAPOUT "&latdeg=$latdeg&latdec_range=$latdec&latdir=$latdir&lngdeg=$lngdeg&lngdec_range=$lngdec&lngdir=$lngdir\">\n";
-		#}
-
-        my $mycolor = $aicol{$dotcolor};
-        $mycolor =~ s/ K/ k/;
-        if ( $dotshape !~ /circles/ && $dotshape !~ /crosses/ )	{
-          print AI "0 O\n";
-          print AI "$mycolor\n";
-          print AI "0 G\n";
-          print AI "4 M\n";
-        } elsif ( $dotshape !~ /circles/ )	{
-          print AI "$mycolor\n";
-          print AI "0 G\n";
-        }
-    # draw a circle and fill it
-        if ($dotshape =~ /^circles$/)	{
-          if ( $x1+($dotsize*1.5)+1 < $width && $x1-($dotsize*1.5)-1 > 0 &&
-               $y1+($dotsize*1.5)+1 < $height && $y1-($dotsize*1.5)-1 > 0 )	{
-            $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,360,$col{$bordercolor});
-            $im->fillToBorder($x1,$y1,$col{$bordercolor},$col{$dotcolor});
-            $im->fillToBorder($x1+$dotsize,$y1,$col{$bordercolor},$col{$dotcolor});
-            $im->fillToBorder($x1-$dotsize,$y1,$col{$bordercolor},$col{$dotcolor});
-            $im->fillToBorder($x1,$y1+$dotsize,$col{$bordercolor},$col{$dotcolor});
-            $im->fillToBorder($x1,$y1-$dotsize,$col{$bordercolor},$col{$dotcolor});
-		my $diam = $dotsize * 3;
-		my $rad = $diam / 2;
-		my $aix = $AILEFT+$x1+$rad;
-		my $aiy = $AITOP-$y1;
-		my $obl = $diam * 0.27612;
-		print AI "$mycolor\n";
-		print AI "0 G\n";
-		printf AI "%.1f %.1f m\n",$aix,$aiy;
-		printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix,$aiy-$obl,$aix-$rad+$obl,$aiy-$rad,$aix-$rad,$aiy-$rad;
-		printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad-$obl,$aiy-$rad,$aix-$diam,$aiy-$obl,$aix-$diam,$aiy;
-		printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$diam,$aiy+$obl,$aix-$rad-$obl,$aiy+$rad,$aix-$rad,$aiy+$rad;
-		printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad+$obl,$aiy+$rad,$aix,$aiy+$obl,$aix,$aiy;
-		if ( $bordercolor !~ "borderblack" )	{
-			print AI "f\n";
-		} else	{
-			print AI "b\n";
-          	}
-          }
-        }
-        elsif ($dotshape =~ /^crosses$/)	{
-          $im->line($x1-$dotsize,$y1-$dotsize,$x1+$dotsize,$y1+$dotsize,$col{$dotcolor});
-          $im->line($x1-$dotsize+0.50,$y1-$dotsize+0.50,$x1+$dotsize+0.50,$y1+$dotsize+0.50,$col{$dotcolor});
-          $im->line($x1-$dotsize+0.50,$y1-$dotsize-0.50,$x1+$dotsize+0.50,$y1+$dotsize-0.50,$col{$dotcolor});
-          $im->line($x1-$dotsize-0.50,$y1-$dotsize+0.50,$x1+$dotsize-0.50,$y1+$dotsize+0.50,$col{$dotcolor});
-          $im->line($x1-$dotsize-0.50,$y1-$dotsize-0.50,$x1+$dotsize-0.50,$y1+$dotsize-0.50,$col{$dotcolor});
-          printf AI "2 w\n";
-          printf AI "%.1f %.1f m\n",$AILEFT+$x1-$dotsize,$AITOP-$y1+$dotsize;
-          printf AI "%.1f %.1f l\n",$AILEFT+$x1+$dotsize,$AITOP-$y1-$dotsize;
-          print AI "S\n";
-
-          $im->line($x1+$dotsize,$y1-$dotsize,$x1-$dotsize,$y1+$dotsize,$col{$dotcolor});
-          $im->line($x1+$dotsize+0.50,$y1-$dotsize+0.50,$x1-$dotsize+0.50,$y1+$dotsize+0.50,$col{$dotcolor});
-          $im->line($x1+$dotsize+0.50,$y1-$dotsize-0.50,$x1-$dotsize+0.50,$y1+$dotsize-0.50,$col{$dotcolor});
-          $im->line($x1+$dotsize-0.50,$y1-$dotsize+0.50,$x1-$dotsize-0.50,$y1+$dotsize+0.50,$col{$dotcolor});
-          $im->line($x1+$dotsize-0.50,$y1-$dotsize-0.50,$x1-$dotsize-0.50,$y1+$dotsize-0.50,$col{$dotcolor});
-          print AI "$aicol{$dotcolor}\n";
-          printf AI "2 w\n";
-          printf AI "%.1f %.1f m\n",$AILEFT+$x1+$dotsize,$AITOP-$y1+$dotsize;
-          printf AI "%.1f %.1f l\n",$AILEFT+$x1-$dotsize,$AITOP-$y1-$dotsize;
-          print AI "S\n";
-        }
-        elsif ($dotshape =~ /^diamonds$/)	{
-          my $poly = new GD::Polygon;
-          $poly->addPt($x1,$y1+($dotsize*2));
-          $poly->addPt($x1+($dotsize*2),$y1);
-          $poly->addPt($x1,$y1-($dotsize*2));
-          $poly->addPt($x1-($dotsize*2),$y1);
-          $im->filledPolygon($poly,$col{$dotcolor});
-          printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1-($dotsize*2);
-          printf AI "%.1f %.1f L\n",$AILEFT+$x1+($dotsize*2),$AITOP-$y1;
-          printf AI "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1+($dotsize*2);
-          printf AI "%.1f %.1f L\n",$AILEFT+$x1-($dotsize*2),$AITOP-$y1;
-          printf AI "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1-($dotsize*2);
-        }
-        elsif ($dotshape =~ /^stars$/)	{
-          my $poly = new GD::Polygon;
-          printf AI "%.1f %.1f m\n",$AILEFT+$x1+($dotsize*sin(9*36*$PI/180)),$AITOP-$y1+($dotsize*cos(9*36*$PI/180));
-          for $p (0..9)	{
-            if ( $p % 2 == 1 )	{
-              $poly->addPt($x1+($dotsize*sin($p*36*$PI/180)),$y1-($dotsize*cos($p*36*$PI/180)));
-              printf AI "%.1f %.1f L\n",$AILEFT+$x1+($dotsize*sin($p*36*$PI/180)),$AITOP-$y1+($dotsize*cos($p*36*$PI/180));
-            } else	{
-              $poly->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180)),$y1-($dotsize/$C72*cos($p*36*$PI/180)));
-              printf AI "%.1f %.1f L\n",$AILEFT+$x1+($dotsize/$C72*sin($p*36*$PI/180)),$AITOP-$y1+($dotsize/$C72*cos($p*36*$PI/180));
-            }
-          }
-          $im->filledPolygon($poly,$col{$dotcolor});
-        }
-    # or draw a triangle
-        elsif ($dotshape =~ /^triangles$/)	{
-          my $poly = new GD::Polygon;
-       # lower left vertex
-          $poly->addPt($x1+($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
-       # top middle vertex
-          $poly->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
-       # lower right vertex
-          $poly->addPt($x1-($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
-          $im->filledPolygon($poly,$col{$dotcolor});
-          printf AI "%.1f %.1f m\n",$AILEFT+$x1+($dotsize*2),$AITOP-$y1-($dotsize*2*sin(60*$PI/180));
-          printf AI "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1+($dotsize*2*sin(60*$PI/180));
-          printf AI "%.1f %.1f L\n",$AILEFT+$x1-($dotsize*2),$AITOP-$y1-($dotsize*2*sin(60*$PI/180));
-          printf AI "%.1f %.1f L\n",$AILEFT+$x1+($dotsize*2),$AITOP-$y1-($dotsize*2*sin(60*$PI/180));
-        }
-    # or draw a square
-        else	{
-          $im->filledRectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),$col{$dotcolor});
-          printf AI "%.1f %.1f m\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1-($dotsize*1.5);
-          printf AI "%.1f %.1f L\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1+($dotsize*1.5);
-          printf AI "%.1f %.1f L\n",$AILEFT+$x1+($dotsize*1.5),$AITOP-$y1+($dotsize*1.5);
-          printf AI "%.1f %.1f L\n",$AILEFT+$x1+($dotsize*1.5),$AITOP-$y1-($dotsize*1.5);
-          printf AI "%.1f %.1f L\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1-($dotsize*1.5);
-        }
-        if ( $dotshape !~ /circles/ && $dotshape !~ /crosses/ )	{
-          if ( $bordercolor !~ "borderblack" )	{
-            print AI "f\n";
-          } else	{
-            print AI "b\n";
-          }
-        }
-      }
-    }
-  }
-  print AI "U\n";  # terminate the group
-
- # redraw the borders if they are not the same color as the points
-  if ($dotcolor ne $bordercolor)	{
     for $x1 (keys %longVal)	{
-      for $y1 (keys %latVal)	{
-        if ($atCoord{$x1}{$y1} > 0)	{
-          if ($dotsizeterm eq "proportional")	{
-            $dotsize = int($atCoord{$x1}{$y1}**0.5) + 1;
-          }
-          if ($dotshape =~ /^circles$/)	{
-            $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,$hpix,$col{$bordercolor});
-          } elsif ($dotshape =~ /^crosses$/)	{ # don't do anything
-          } elsif ($dotshape =~ /^diamonds$/)	{
-            my $poly = new GD::Polygon;
-            $poly->addPt($x1,$y1+($dotsize*2));
-            $poly->addPt($x1+($dotsize*2),$y1);
-            $poly->addPt($x1,$y1-($dotsize*2));
-            $poly->addPt($x1-($dotsize*2),$y1);
-            $im->polygon($poly,$col{$bordercolor});
-          } elsif ($dotshape =~ /^stars$/)	{
-            my $poly = new GD::Polygon;
-            for $p (0..9)	{
-              if ( $p % 2 == 1 )	{
-                $poly->addPt($x1+($dotsize*sin($p*36*$PI/180)),$y1-($dotsize*cos($p*36*$PI/180)));
-            } else	{
-                $poly->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180)),$y1-($dotsize/$C72*cos($p*36*$PI/180)));
-              }
+	    for $y1 (keys %latVal)	{
+		    if ($atCoord{$x1}{$y1} > 0)	{
+			    if ($dotsizeterm eq "proportional")	{
+				    $dotsize = int($atCoord{$x1}{$y1}**0.5) + 1;
+			    }
+			    print MAPOUT "<area shape=\"rect\" coords=\"";
+			    if ( $hemiVal{$x1}{$y1} eq "N" )	{
+				    printf MAPOUT "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1+0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1+0.5+(1.5*$dotsize));
+			    } else	{
+				    printf MAPOUT "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1-0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1-0.5+(1.5*$dotsize));
+			    }
+			    print MAPOUT "\" href=\"$BRIDGE_HOME?action=displayCollResults";
+			    for $t (keys %filledfields)	{
+				    if ($filledfields{$t} ne "")	{
+					    my $temp = $filledfields{$t};
+					    $temp =~ s/"//g;
+					    $temp =~ s/ /\+/g;
+					    print MAPOUT "&$t=$temp";
+				    }
+			    }
+			    if ( $q->param('interval_name') )	{
+				    print MAPOUT "&max_interval=" . $q->param('interval_name');
+			    }
+			    if ( $q->param('genus_name') )	{
+				    # get rid of spaces in a genus-species name
+				    my $clean_name = $q->param('genus_name');
+				    $clean_name =~ s/ /\+/g;
+				    print MAPOUT "&genus_name=" . $clean_name;
+				    print MAPOUT "&taxon_rank=" . $q->param('taxon_rank');
+			    }
+			    ($latdeg,$latdir) = split / /,$latVal{$y1};
+			    ($lngdeg,$lngdir) = split / /,$longVal{$x1};
+                ($latdeg, $latdec) = split /\./,$latdeg;
+                ($lngdeg, $lngdec) = split /\./,$lngdeg;
+                #resolution = full or half degree
+                print MAPOUT "&coordres=$coordres"; 
+                print MAPOUT "&latdeg=$latdeg&latdec_range=$latdec&latdir=$latdir&lngdeg=$lngdeg&lngdec_range=$lngdec&lngdir=$lngdir\">\n";
+
+                my $mycolor = $aicol{$dotcolor};
+                $mycolor =~ s/ K/ k/;
+                if ( $dotshape !~ /circles/ && $dotshape !~ /crosses/ )	{
+                    print AI "0 O\n";
+                    print AI "$mycolor\n";
+                    print AI "0 G\n";
+                    print AI "4 M\n";
+                } elsif ( $dotshape !~ /circles/ )	{
+                    print AI "$mycolor\n";
+                    print AI "0 G\n";
+                }
+                # draw a circle and fill it
+
+                if ($dotshape =~ /^circles$/)	{
+                  if ( $x1+($dotsize*1.5)+1 < $width && $x1-($dotsize*1.5)-1 > 0 &&
+                       $y1+($dotsize*1.5)+1 < $height && $y1-($dotsize*1.5)-1 > 0 )	{
+                    $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,360,$col{$bordercolor});
+                    $im->fillToBorder($x1,$y1,$col{$bordercolor},$col{$dotcolor});
+                    $im->fillToBorder($x1+$dotsize,$y1,$col{$bordercolor},$col{$dotcolor});
+                    $im->fillToBorder($x1-$dotsize,$y1,$col{$bordercolor},$col{$dotcolor});
+                    $im->fillToBorder($x1,$y1+$dotsize,$col{$bordercolor},$col{$dotcolor});
+                    $im->fillToBorder($x1,$y1-$dotsize,$col{$bordercolor},$col{$dotcolor});
+                my $diam = $dotsize * 3;
+                my $rad = $diam / 2;
+                my $aix = $AILEFT+$x1+$rad;
+                my $aiy = $AITOP-$y1;
+                my $obl = $diam * 0.27612;
+                print AI "$mycolor\n";
+                print AI "0 G\n";
+                printf AI "%.1f %.1f m\n",$aix,$aiy;
+                printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix,$aiy-$obl,$aix-$rad+$obl,$aiy-$rad,$aix-$rad,$aiy-$rad;
+                printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad-$obl,$aiy-$rad,$aix-$diam,$aiy-$obl,$aix-$diam,$aiy;
+                printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$diam,$aiy+$obl,$aix-$rad-$obl,$aiy+$rad,$aix-$rad,$aiy+$rad;
+                printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad+$obl,$aiy+$rad,$aix,$aiy+$obl,$aix,$aiy;
+                if ( $bordercolor !~ "borderblack" )	{
+                    print AI "f\n";
+                } else	{
+                    print AI "b\n";
+                    }
+                  }
+                } elsif ($dotshape =~ /^crosses$/)	{
+                  $im->line($x1-$dotsize,$y1-$dotsize,$x1+$dotsize,$y1+$dotsize,$col{$dotcolor});
+                  $im->line($x1-$dotsize+0.50,$y1-$dotsize+0.50,$x1+$dotsize+0.50,$y1+$dotsize+0.50,$col{$dotcolor});
+                  $im->line($x1-$dotsize+0.50,$y1-$dotsize-0.50,$x1+$dotsize+0.50,$y1+$dotsize-0.50,$col{$dotcolor});
+                  $im->line($x1-$dotsize-0.50,$y1-$dotsize+0.50,$x1+$dotsize-0.50,$y1+$dotsize+0.50,$col{$dotcolor});
+                  $im->line($x1-$dotsize-0.50,$y1-$dotsize-0.50,$x1+$dotsize-0.50,$y1+$dotsize-0.50,$col{$dotcolor});
+                  printf AI "2 w\n";
+                  printf AI "%.1f %.1f m\n",$AILEFT+$x1-$dotsize,$AITOP-$y1+$dotsize;
+                  printf AI "%.1f %.1f l\n",$AILEFT+$x1+$dotsize,$AITOP-$y1-$dotsize;
+                  print AI "S\n";
+
+                  $im->line($x1+$dotsize,$y1-$dotsize,$x1-$dotsize,$y1+$dotsize,$col{$dotcolor});
+                  $im->line($x1+$dotsize+0.50,$y1-$dotsize+0.50,$x1-$dotsize+0.50,$y1+$dotsize+0.50,$col{$dotcolor});
+                  $im->line($x1+$dotsize+0.50,$y1-$dotsize-0.50,$x1-$dotsize+0.50,$y1+$dotsize-0.50,$col{$dotcolor});
+                  $im->line($x1+$dotsize-0.50,$y1-$dotsize+0.50,$x1-$dotsize-0.50,$y1+$dotsize+0.50,$col{$dotcolor});
+                  $im->line($x1+$dotsize-0.50,$y1-$dotsize-0.50,$x1-$dotsize-0.50,$y1+$dotsize-0.50,$col{$dotcolor});
+                  print AI "$aicol{$dotcolor}\n";
+                  printf AI "2 w\n";
+                  printf AI "%.1f %.1f m\n",$AILEFT+$x1+$dotsize,$AITOP-$y1+$dotsize;
+                  printf AI "%.1f %.1f l\n",$AILEFT+$x1-$dotsize,$AITOP-$y1-$dotsize;
+                  print AI "S\n";
+                } elsif ($dotshape =~ /^diamonds$/)	{
+                  my $poly = new GD::Polygon;
+                  $poly->addPt($x1,$y1+($dotsize*2));
+                  $poly->addPt($x1+($dotsize*2),$y1);
+                  $poly->addPt($x1,$y1-($dotsize*2));
+                  $poly->addPt($x1-($dotsize*2),$y1);
+                  $im->filledPolygon($poly,$col{$dotcolor});
+                  printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1-($dotsize*2);
+                  printf AI "%.1f %.1f L\n",$AILEFT+$x1+($dotsize*2),$AITOP-$y1;
+                  printf AI "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1+($dotsize*2);
+                  printf AI "%.1f %.1f L\n",$AILEFT+$x1-($dotsize*2),$AITOP-$y1;
+                  printf AI "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1-($dotsize*2);
+                }
+                elsif ($dotshape =~ /^stars$/)	{
+                  my $poly = new GD::Polygon;
+                  printf AI "%.1f %.1f m\n",$AILEFT+$x1+($dotsize*sin(9*36*$PI/180)),$AITOP-$y1+($dotsize*cos(9*36*$PI/180));
+                  for $p (0..9)	{
+                    if ( $p % 2 == 1 )	{
+                      $poly->addPt($x1+($dotsize*sin($p*36*$PI/180)),$y1-($dotsize*cos($p*36*$PI/180)));
+                      printf AI "%.1f %.1f L\n",$AILEFT+$x1+($dotsize*sin($p*36*$PI/180)),$AITOP-$y1+($dotsize*cos($p*36*$PI/180));
+                    } else	{
+                      $poly->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180)),$y1-($dotsize/$C72*cos($p*36*$PI/180)));
+                      printf AI "%.1f %.1f L\n",$AILEFT+$x1+($dotsize/$C72*sin($p*36*$PI/180)),$AITOP-$y1+($dotsize/$C72*cos($p*36*$PI/180));
+                    }
+                  }
+                  $im->filledPolygon($poly,$col{$dotcolor});
+                }
+            # or draw a triangle
+                elsif ($dotshape =~ /^triangles$/)	{
+                  my $poly = new GD::Polygon;
+               # lower left vertex
+                  $poly->addPt($x1+($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
+               # top middle vertex
+                  $poly->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
+               # lower right vertex
+                  $poly->addPt($x1-($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
+                  $im->filledPolygon($poly,$col{$dotcolor});
+                  printf AI "%.1f %.1f m\n",$AILEFT+$x1+($dotsize*2),$AITOP-$y1-($dotsize*2*sin(60*$PI/180));
+                  printf AI "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1+($dotsize*2*sin(60*$PI/180));
+                  printf AI "%.1f %.1f L\n",$AILEFT+$x1-($dotsize*2),$AITOP-$y1-($dotsize*2*sin(60*$PI/180));
+                  printf AI "%.1f %.1f L\n",$AILEFT+$x1+($dotsize*2),$AITOP-$y1-($dotsize*2*sin(60*$PI/180));
+                }
+            # or draw a square
+                else	{
+                  $im->filledRectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),$col{$dotcolor});
+                  printf AI "%.1f %.1f m\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1-($dotsize*1.5);
+                  printf AI "%.1f %.1f L\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1+($dotsize*1.5);
+                  printf AI "%.1f %.1f L\n",$AILEFT+$x1+($dotsize*1.5),$AITOP-$y1+($dotsize*1.5);
+                  printf AI "%.1f %.1f L\n",$AILEFT+$x1+($dotsize*1.5),$AITOP-$y1-($dotsize*1.5);
+                  printf AI "%.1f %.1f L\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1-($dotsize*1.5);
+                }
+                if ( $dotshape !~ /circles/ && $dotshape !~ /crosses/ )	{
+                  if ( $bordercolor !~ "borderblack" )	{
+                    print AI "f\n";
+                  } else	{
+                    print AI "b\n";
+                  }
+                }
             }
-            $im->polygon($poly,$col{$bordercolor});
-          } elsif ($dotshape =~ /^triangles$/)	{
-            my $poly = new GD::Polygon;
-            $poly->addPt($x1+($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
-            $poly->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
-            $poly->addPt($x1-($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
-            $im->polygon($poly,$col{$bordercolor});
-          } else	{
-            $im->rectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),$col{$bordercolor});
+        }
+    }
+    print AI "U\n";  # terminate the group
+
+    # redraw the borders if they are not the same color as the points
+    if ($dotcolor ne $bordercolor)	{
+      for $x1 (keys %longVal)	{
+        for $y1 (keys %latVal)	{
+          if ($atCoord{$x1}{$y1} > 0)	{
+            if ($dotsizeterm eq "proportional")	{
+              $dotsize = int($atCoord{$x1}{$y1}**0.5) + 1;
+            }
+            if ($dotshape =~ /^circles$/)	{
+              $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,$hpix,$col{$bordercolor});
+            } elsif ($dotshape =~ /^crosses$/)	{ # don't do anything
+            } elsif ($dotshape =~ /^diamonds$/)	{
+              my $poly = new GD::Polygon;
+              $poly->addPt($x1,$y1+($dotsize*2));
+              $poly->addPt($x1+($dotsize*2),$y1);
+              $poly->addPt($x1,$y1-($dotsize*2));
+              $poly->addPt($x1-($dotsize*2),$y1);
+              $im->polygon($poly,$col{$bordercolor});
+            } elsif ($dotshape =~ /^stars$/)	{
+              my $poly = new GD::Polygon;
+              for $p (0..9)	{
+                if ( $p % 2 == 1 )	{
+                  $poly->addPt($x1+($dotsize*sin($p*36*$PI/180)),$y1-($dotsize*cos($p*36*$PI/180)));
+              } else	{
+                  $poly->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180)),$y1-($dotsize/$C72*cos($p*36*$PI/180)));
+                }
+              }
+              $im->polygon($poly,$col{$bordercolor});
+            } elsif ($dotshape =~ /^triangles$/)	{
+              my $poly = new GD::Polygon;
+              $poly->addPt($x1+($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
+              $poly->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
+              $poly->addPt($x1-($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
+              $im->polygon($poly,$col{$bordercolor});
+            } else	{
+              $im->rectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),$col{$bordercolor});
+            }
           }
         }
       }
     }
-  }
- } # END DATA POINT DRAWING SECTION
-
-  $im->arc(97,$height+6,10,10,0,360,$col{'black'});
-  $im->string(gdTinyFont,5,$height+1,"plotting software c 2002 J. Alroy",$col{'black'});
-  print AI "0 To\n";
-  printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+5,$AITOP-$height-8;
-  my $mycolor = $aicol{'black'};
-  $mycolor =~ s/ K/ k/;
-  printf AI "0 Tr\n0 O\n%s\n",$mycolor;
-  print AI "/_Courier 10 Tf\n";
-  printf AI "0 Tw\n";
-  print AI "(plotting software c 2002 J. Alroy) Tx 1 0 Tk\nTO\n";
-  print AI "0 To\n";
-  printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+111,$AITOP-$height-10;
-  print AI "/_Courier 18 Tf\n";
-  print AI "(o) Tx 1 0 Tk\nTO\n";
-  if ( $maptime > 0 )	{
-    if ( $width > 300 )	{
-      $im->arc($width-103,$height+6,10,10,0,360,$col{'black'});
-      $im->string(gdTinyFont,$width-225,$height+1,"tectonic reconstruction c 2002 C. R. Scotese",$col{'black'});
-    } else	{
-      $im->arc($width-103,$height+18,10,10,0,360,$col{'black'});
-      $im->string(gdTinyFont,$width-225,$height+13,"tectonic reconstruction c 2002 C. R. Scotese",$col{'black'});
-      $scoteseoffset = 12;
-    }
-    print AI "0 To\n";
-    printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$width-270,$AITOP-$height-8-$scoteseoffset;
-    print AI "/_Courier 10 Tf\n";
-    print AI "(tectonic reconstruction c 2002 C. R. Scotese) Tx 1 0 Tk\nTO\n";
-    print AI "0 To\n";
-    printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$width-128,$AITOP-$height-10-$scoteseoffset;
-    print AI "/_Courier 18 Tf\n";
-    print AI "(o) Tx 1 0 Tk\nTO\n";
-  }
-
-  # cap the byline with a horizontal line
-  $im->line(0,$height,$width,$height,$col{'black'});
-  print AI "u\n";  # start the group
-  print AI "$mycolor\n";
-  printf AI "0.5 w\n";
-  printf AI "%.1f %.1f m\n",$AILEFT,$AITOP-$height;
-  printf AI "%.1f %.1f l\n",$AILEFT+$width,$AITOP-$height;
-  print AI "S\n";
-  print AI "U\n";  # terminate the group
-
-  binmode STDOUT;
-  print MAPGIF $im->png;
-  close MAPGIF;
-  chmod 0664, "$GIF_DIR/$gifname";
-
-  my $image = Image::Magick->new;
-
-  open GIF,"<$GIF_DIR/$gifname";
-  $image->Read(file=>\*GIF);
-
-  open AIFOOT,"<./data/AI.footer";
-  while (<AIFOOT>)	{
-    print AI $_;
-  }
-  close AIFOOT;
-
-  open JPG,">$GIF_DIR/$jpgname";
-  $image->Write(file=>JPG);
-  chmod 0664, "$GIF_DIR/$jpgname";
-
-  open PICT,">$GIF_DIR/$pictname";
-  $image->Write(file=>PICT);
-  chmod 0664, "$GIF_DIR/$pictname";
-
-  close GIF;
-
-	# make clickable background rectangles for repositioning the map
-
-	# need a list of possible parameters
-	my @params = ('research_group', 'authorizer', 'enterer', 'modified_since', 'date', 'month', 'year', 'country', 'state', 'interval_name', 'formation', 'lithology1', 'environment', 'taxon_rank', 'genus_name', 'pointsize', 'dotcolor', 'pointshape', 'dotborder', 'mapsearchfields2', 'mapsearchterm2', 'pointsize2', 'dotcolor2', 'pointshape2', 'dotborder2', 'mapsearchfields3', 'mapsearchterm3', 'pointsize3', 'dotcolor3', 'pointshape3', 'dotborder3', 'mapsearchfields4', 'mapsearchterm4', 'pointsize4', 'dotcolor4', 'pointshape4', 'dotborder4', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngnocolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor');
-
-	my $clickstring = "$BRIDGE_HOME?action=displayMapResults";
-	for $p ( @params )	{
-		if ( $q->param($p) )	{
-			$clickstring .= "&" . $p . "=" . $q->param($p);
-		}
-	}
-	for my $i ( 1..10 )	{
-		for my $j ( 1..10 )	{
-			my $xbot = ( $i - 1 ) / 10 * $width;
-			my $xtop = $i / 10 * $width;
-			my $ybot = ( $j - 1 ) / 10 * $height;
-			my $ytop = $j / 10 * $height;
-			$newlng = int($midlng + ( ( 360 / $scale ) * ( $i - 5 ) / 10 ));
-			$newlat = int($midlat - ( ( 180 / $scale ) * ( $j - 5 ) / 10 ));
-			$latlngstring = "&maplng=" . $newlng;
-			$latlngstring .= "&maplat=" . $newlat;
-			# need this because mapscale is varied for the "Zoom"
-			#  buttons below
-			$latlngstring .= "&mapscale=" . $scale;
-			print MAPOUT "<area shape=\"rect\" coords=\"" . $xbot . "," . $ybot . "," . $xtop . "," . $ytop . "\" href=\"" , $clickstring , $latlngstring , "\">\n";
-		}
-	}
-
-	print MAPOUT "</map>\n";
-	print MAPOUT "</table>\n";
-
-	print MAPOUT "<table cellpadding=0 width=100%>\n<tr>\n";
-	print MAPOUT "<td valign=\"middle\">\n";
-	print MAPOUT "<table cellpadding=0 cellspacing=1><tr>\n<td align=\"right\" valign=\"top\" bgcolor=\"black\">\n";
-	print MAPOUT "<table cellpadding=5 cellspacing=1>\n";
-	if(!$q->param("taxon_info_script")){
-	  print MAPOUT "<tr><td width=110 valign=\"top\" bgcolor=\"white\" class=\"small\">";
-	  if ($matches > 1)	{
-		print MAPOUT "<b>$matches&nbsp;collections</b> fall ";
-	  }
-	  elsif ($matches == 1)	{
-		print MAPOUT "<b>Exactly&nbsp;one collection</b> falls ";
-	  }
-	  else	{
-		# PM 09/13/02 Added bit about missing lat/long data to message
-		print MAPOUT "<b>Sorry!</b> Either the collections were missing lat/long data, or no collections fall ";
-	  }
-	  print MAPOUT "within the mapped area, have lat/long data, and matched your query";
-	  #if ($searchstring ne "")	{
-	  #  $searchstring =~ s/_/ /g;
-	  #  print " \"<i>$searchstring</i>\"";
-	  #}
-	  print MAPOUT "</td>\n";
-	}
-
-  if ($dotsizeterm eq "proportional")	{
-	  print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
-    print MAPOUT "<br>Sizes of $dotshape are proportional to counts of collections at each point.\n"
-	 # print MAPOUT "</td></tr>\n";
-  }
-
-	print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
-	print MAPOUT "You may download the image in ";
-	print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
-	print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">PNG</a></b>, ";
-	print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
-	print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format\n";
-	print MAPOUT "</td></tr>\n";
-
-	print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
-	print MAPOUT "Click on a point to recenter the map\n";
-	print MAPOUT "</td></tr>\n";
-
-	unless($q->param("taxon_info_script") eq "yes"){
-		$clickstring .= "&maplng=" . $midlng;
-		$clickstring .= "&maplat=" . $midlat;
-
-		$zoom1 = 2;
-		while ( $scale + $zoom1 > 12 )	{
-			$zoom1--;
-		}
-		$zoom2 = 2;
-		while ( $scale - $zoom2 < 1 )	{
-			$zoom2--;
-		}
-
-		print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
-		$temp = $clickstring . "&mapscale=" . ( $scale + $zoom1 );
-		print MAPOUT "<p class=\"large\"><b><a href=\"$temp\">Zoom&nbsp;in</a></b></p>\n";
-		print MAPOUT "</td></tr>\n";
-
-		print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
-		$temp = $clickstring . "&mapscale=" . ( $scale - $zoom2 );
-		print MAPOUT "<p class=\"large\"><b><a href=\"$temp\">Zoom&nbsp;out</a></b></p>\n";
-		print MAPOUT "</td></tr>\n";
-
-		print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
-		print MAPOUT "<p class=\"large\"><b><a href='?action=displayMapForm'>Search&nbsp;again</a></b></p>\n";
-		print MAPOUT "</td></tr>\n";
-	}
-	print MAPOUT "</tr></table>\n";
-	print MAPOUT "</td></tr></table>\n";
-	print MAPOUT "</td>\n";
-
-  print MAPOUT "<td align=center><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
-  print MAPOUT "</table>\n";
-
-  print MAPOUT "</center>";
-  close MAPOUT;
-  return "$GIF_DIR/$htmlname";
 }
 
 sub getCoords	{
@@ -1759,11 +1639,12 @@ sub projectPoints	{
 	#  north pole; use the GCD between them to get the latitude;
 	#  add the degree offset to its longitude to get the new value;
 	#  re-rotate point back into the original coordinate system
-	if ( $maptime > 0 && ( $midlng != $x || $midlat != $y ) && $pointclass ne "grid" && $projected{$x}{$y} eq "" )	{
+	if ( $self->{maptime} > 0 && ( $midlng != $x || $midlat != $y ) && $pointclass ne "grid" && $projected{$x}{$y} eq "" )	{
 
-		my $ma = $maptime;
+		my $ma = $self->{maptime};
 		$oldx = $x;
 		$oldy = $y;
+
 
 	# integer coordinates are needed to determine the plate ID
 		my $q; 
@@ -1780,8 +1661,9 @@ sub projectPoints	{
 		}
 
 	# what plate is this point on?
-		$pid = $plate{$q}{$r};
-
+    my %plate = %{$self->{plate}};
+	$pid = $plate{$q}{$r};
+        
 	# if there are no data, just bomb out
 		if ( $pid eq "" || $rotx{$ma}{$pid} eq "" || $roty{$ma}{$pid} eq "" )	{
 			return('NaN','NaN');
