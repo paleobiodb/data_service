@@ -39,6 +39,7 @@ use TimeLookup;
 use Ecology;
 use Strata;
 use PrintHierarchy;
+use URI::Escape;
 use POSIX qw(ceil floor);
 
 # god awful Poling modules
@@ -1980,13 +1981,16 @@ sub displaySearchColls {
 sub displayCollResults {
 	my $in_list = shift;	# optional parameter from taxon info script
 	
-	my $limit;
-	if (!($limit = $q->param("limit"))) { $limit = 30; }
+	my $limit = $q->param('limit') || 30 ;
+    my $rowOffset = $q->param('rowOffset') || 0;
+
+    # limit passed to permissions module
+    my $perm_limit = $limit + $rowOffset;
 
 	# effectively don't limit the number of collections put into the
 	#  initial set to examine when adding a new one
 	if ( $q->param('type') eq "add" )	{
-		$limit = 1000000;
+		$perm_limit = 1000000;
 	}
 	
 	my $ofRows = 0;
@@ -2048,7 +2052,7 @@ sub displayCollResults {
 
 	# Get rows okayed by permissions module
 	my (@dataRows, $ofRows);
-	$p->$method( $sth, \@dataRows, $limit, \$ofRows );
+	$p->$method( $sth, \@dataRows, $perm_limit, \$ofRows );
 
 	# make sure collections really are within 100 km of the submitted
 	#  lat/long coordinate JA 6.4.04
@@ -2108,7 +2112,6 @@ sub displayCollResults {
     	return \@dataRows;
     }
 	
-	
     if ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
 		# go right to the chase with ReIDs if a taxon_rank was specified
 		if ($q->param('type') eq "reid" && $q->param('taxon_rank') ne 'Higher-taxon') {
@@ -2126,17 +2129,37 @@ sub displayCollResults {
 		%pref = getPreferences($s->get('enterer'));
 
 		print stdIncludes( "std_page_top" );
-		print "<center><h3>Your search produced ";
-		if ( $displayRows != $ofRows ) {
-			print "$ofRows matches.  Here are the first $displayRows.";
-		} elsif ( $ofRows == 1 ) {
-			print "exactly one match";
-		} else	{
-			print "$displayRows matches";
-		}
-		print "</h3></center>\n";
 
+        # Display header link that says which collections we're currently viewing
+
+
+        print "<center>";
+        if ($ofRows > 1)
+        {
+            my $printRows;
+            print "<h3>Your search produced $ofRows matches.</h3>\n";
+            if ($ofRows > $limit) {
+                print "<h4>Here are";
+                if ($rowOffset > 0) {
+                    print " rows ".($rowOffset+1)." to ";
+                    $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
+                    print $printRows;
+                    print ".</h4>\n";
+                } else {
+                    print " the first ";
+                    $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
+                    print $printRows;
+                    print " rows.</h4>\n";
+                }
+            }
+		} elsif ( $ofRows == 1 ) {
+            print "<h3>Your search produced exactly one match.</h3>\n";
+		} else	{
+            print "<h3>Your search produced no matches.</h3>\n";
+		}
+		print "</center>\n";
 		print "<br>\n";
+
 	  	print "<table width='100%' border=0 cellpadding=4 cellspacing=0>\n";
  
 		# print columns header
@@ -2150,8 +2173,8 @@ sub displayCollResults {
 		";
 
 		# Loop through each data row of the result set
-		my $count = 0;
-		foreach my $dataRow (@dataRows) {
+        for(my $count=$rowOffset;$count<scalar(@dataRows);$count++) {
+            my $dataRow = $dataRows[$count];
 			# Get the reference_no of the row
 	        $sql = "SELECT * FROM refs WHERE reference_no=" . $dataRow->{"reference_no"};
 			my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -2236,13 +2259,13 @@ sub displayCollResults {
 					<td valign=top>$reference</td>
 					</tr>
 					";
-			$count++;
   		}
-		print "</table>\n";
+
+        print "</table>\n";
     }
     elsif ( $displayRows == 1 ) { # if only one row to display...
-		my $dataRow = $dataRows[0];
-		my $collection_no = $dataRow->{'collection_no'};
+        my $dataRow = $dataRows[0];
+        my $collection_no = $dataRow->{'collection_no'};
 		$q->param(collection_no=>"$collection_no");
 		$q->param('use_primary' => $q->param('use_primary')) if($q->param('use_primary'));
 		# Do the action directly if there is only one row
@@ -2260,11 +2283,44 @@ sub displayCollResults {
 		}
     }
 
+    ###
+    # Display the footer links
+    ###
+    print "<center><p>";
+
+    # this q2  var is necessary because the processCollectionSearch
+    # method alters the CGI object's internals above, and deletes some fields 
+    # so, we create a new CGI object with everything intact
+    my $q2 = new CGI; 
+    my @params = $q2->param;
+    my $getString = "rowOffset=".($rowOffset+$limit);
+    foreach $param_key (@params) {
+        if ($param_key ne "rowOffset") {
+            if ($q2->param($param_key) ne "") {
+                $getString .= "&".uri_escape($param_key)."=".uri_escape($q2->param($param_key));
+            }
+        }
+    }
+
+    if (($rowOffset + $limit) < $ofRows) {
+        my $numLeft;
+        if (($rowOffset + $limit + $limit) > $ofRows) { 
+            $numLeft = "last " . ($ofRows - $rowOffset - $limit);
+        } else {
+            $numLeft = "next " . $limit;
+        }
+        print "<a href='$exec_url?$getString'><b>Get $numLeft collections</b></a> - ";
+    } 
+
 	if ( $type eq "add" )	{
-		print "<center><p><a href='$exec_url?action=displaySearchCollsForAdd&type=add'><b>Do another search</b></a></p></center>\n";
+		print "<a href='$exec_url?action=displaySearchCollsForAdd&type=add'><b>Do another search</b></a>";
 	} else	{
-		print "<center><p><a href='$exec_url?action=displaySearchColls&type=$type'><b>Do another search</b></a></p></center>\n";
+		print "<a href='$exec_url?action=displaySearchColls&type=$type'><b>Do another search</b></a>";
 	}
+
+    print "</center></p>";
+    # End footer links
+    
 
 	if ( $type eq "add" ) {
 		print qq|<form action="$exec_url">\n|;
@@ -2401,7 +2457,6 @@ sub processCollectionsSearch {
 							"lithology2"		=> 1,
 							"environment"		=> 1 );
 
-					
 	my $sql = DBTransactionManager->new(\%GLOBALVARS);
 	$sql->setWhereSeparator("AND");
 		
@@ -2632,28 +2687,30 @@ IS NULL))";
 	
 	# Handle lithology and lithology adjectives
 	if ( $q->param('lithadj'))	{
-		my $lithadjName = $dbh->quote($wildcardToken . $q->param('lithadj') . $wildcardToken);
-		push(@terms, "(lithadj$comparator" . $lithadjName . ")");
+		#my $lithadjName = $dbh->quote($wildcardToken . $q->param('lithadj') . $wildcardToken);
+		#push(@terms, "(lithadj$comparator" . $lithadjName . ")");
+        push(@terms, qq|FIND_IN_SET(|.$dbh->quote($q->param('lithadj')).qq|,lithadj)|);
 		$q->param('lithadj' => '');
 	}
 		
-	if ( $q->param('lithology1'))	{
-		my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology1') . $wildcardToken);
-		push(@terms, "(lithology1$comparator" . $lithologyName . ")");
-		$q->param('lithology1' => '');
-	}
+	#if ( $q->param('lithology1'))	{
+	#	my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology1') . $wildcardToken);
+	#	push(@terms, "(lithology1$comparator" . $lithologyName . ")");
+	#	$q->param('lithology1' => '');
+	#}
 	
 	if ( $q->param('lithadj2'))	{
-		my $lithadjName = $dbh->quote($wildcardToken . $q->param('lithadj2') . $wildcardToken);
-		push(@terms, "(lithadj2$comparator" . $lithadjName . ")");
+		#my $lithadjName = $dbh->quote($wildcardToken . $q->param('lithadj2') . $wildcardToken);
+		#push(@terms, "(lithadj2$comparator" . $lithadjName . ")");
+        push(@terms, qq|FIND_IN_SET(|.$dbh->quote($q->param('lithadj2')).qq|,lithadj2)|);
 		$q->param('lithadj2' => '');
 	}
 		
-	if ( $q->param('lithology2'))	{
-		my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology2') . $wildcardToken);
-		push(@terms, "(lithology2$comparator" . $lithologyName . ")");
-		$q->param('lithology2' => '');
-	}
+	#if ( $q->param('lithology2'))	{
+	#	my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology2') . $wildcardToken);
+	#	push(@terms, "(lithology2$comparator" . $lithologyName . ")");
+	#	$q->param('lithology2' => '');
+	#}
 		
 	# research_group is now a set -- tone 7 jun 2002
 	my $resgrp = $q->param('research_group');
@@ -2788,9 +2845,8 @@ IS NULL))";
 	$sortString = $q->param('sortby') if $q->param('sortby');
 	$sortString .= " DESC" if $sortString && $q->param('sortorder') eq 'desc';
 
-	# Handle limit
-	my $limitString = "";
-	#	$limitString = " LIMIT " . $q->param('limit') if $q->param('limit');
+	# Handle limit - don't set this cause of Permissions module
+    my $limitString = "";
 
 	# form the SQL query from the newterms list.
 	$sql->clear();
