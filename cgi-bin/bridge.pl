@@ -5188,8 +5188,8 @@ sub checkNearMatch ()	{
 		print "<form method=POST action=$exec_url>";
 		print "<input type=hidden name=\"action\" value=\"processCheckNearMatch\">";
 		print "<input type=hidden name=\"tablename\" value=\"$tableName\">";
-		print "<input type=hidden name=\"fields\" value=\"$flat_fields\"">;
-		print "<input type=hidden name=\"vals\" value=\"$flat_vals\"">;
+		print "<input type=hidden name=\"fields\" value=\"$flat_fields\">";
+		print "<input type=hidden name=\"vals\" value=\"$flat_vals\">";
 		print "<center><input type=submit name=\"whattodo\" value=\"Cancel\">&nbsp;";
 		print "<input type=submit name=\"whattodo\" value=\"Continue\"></form>";
 		print qq|<p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p></center><br>\n|;
