@@ -24,7 +24,7 @@ sub startLoadImage{
 		#	user may get stuck having to enter info on "Carnivora".
 		# save away destination on the queue?
 	print main::stdIncludes("std_page_top");
-	print "<center><h2>Image upload</h2></center>";
+	print "<DIV class=\"title\">Image upload</DIV>";
 	print "<p>You can't upload an image unless we have taxonomic information ".
 		  "on the subject of the image. If this search doesn't find it, you ".
 		  "will be asked to ".
@@ -36,7 +36,7 @@ sub startLoadImage{
 	print "<input type=text size=30 name=\"taxon_name\">".
 		  "<input type=hidden name=\"action\" value=\"processStartImage\">".
 		  "</td></tr>";
-	print "<tr><td><center><input type=submit></center></td></tr></table></center>";
+	print "<tr><td><BR><center><input type=submit></center></td></tr></table></center>";
 	print main::stdIncludes("std_page_bottom");
 
 }

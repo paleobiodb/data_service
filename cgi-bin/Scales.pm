@@ -23,7 +23,7 @@ sub startSearchScale	{
 
 	# Print the form
 	print main::stdIncludes("std_page_top");
-	print "<center><h3>Select a time scale to view</h3>\n";
+	print "<DIV class=\"title\">Select a time scale to view</DIV>\n<CENTER>";
 
 	# Retrieve each scale's name from the database
 	my $sql = "SELECT authorizer_no,scale_no,scale_name,reference_no FROM scales";
