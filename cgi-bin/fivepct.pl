@@ -138,13 +138,15 @@ else	{
 	&DisplayQueryPage;
 }
 
+# print a link to the main menu at the bottom 6.2.04
+print "<center><p><b><a href=\"http://paleodb.org/cgi-bin/bridge.pl?action=displayMenuPage&clear=clearQueue\">Back to the main menu</a></b></p></center>";
+
 
 sub PrintHeader	{
 
 	print "<html>\n<head>\n<title>5% Project</title>\n\n";
-	print "<link REL=\"stylesheet\" TYPE=\"text/css\" HREF=\"/StyleSheets/common.css\">"; 
-	print "</head>\n\n";
-	print "<body>\n";
+	print "<link REL=\"stylesheet\" TYPE=\"text/css\" HREF=\"/StyleSheets/common.css\">\n";
+	print "<body bgcolor=\"white\" background=\"/public/PDbg.gif\">\n";
 }
 
 sub DisplayQueryPage	{

@@ -4,13 +4,13 @@ use CGI::Carp qw(fatalsToBrowser);
 use DBI;
 use Permissions;
 use Session;
-use DBConnection;
 
 # made from a copy of fivepct.pl 19.8.03
 
+require "connection.pl";
 
 my $q = CGI->new();
-my $dbh = DBConnection::connect();
+my $dbh = DBI->connect("DBI:mysql:database=$db;host=$host", $user, $password, {RaiseError => 1});
 my $s = Session->new();
 $s->validateUser($dbh, $q->cookie('session_id'));
 
@@ -134,6 +134,9 @@ elsif ( $q->param("action") eq "update" )	{
 else	{
 	&DisplayQueryPage;
 }
+
+# print a link to the main menu at the bottom 6.2.04
+print "<center><p><b><a href=\"http://paleodb.org/cgi-bin/bridge.pl?action=displayMenuPage&clear=clearQueue\">Back to the main menu</a></b></p></center>";
 
 
 sub PrintHeader	{
