@@ -359,9 +359,19 @@ sub findBoundaries	{
 
 	$dbh = shift;
 	$dbt = shift;
+    $skip_orphaned_intervals = shift;
 
 	&findBestScales();
 	&findImmediateCorrelates();
+
+
+    use Data::Dumper;
+#    print "<br><br>bestincludedmax".Dumper(\%bestincludedmax); 
+#    print "<br><br>bestscale".Dumper(\%bestscale); 
+#    print "<br><br>bestboundary".Dumper(\%bestboundary); 
+#    print "<br><br>immediatemax".Dumper(\%immediatemax); 
+#    print "<br><br>immediatemin".Dumper(\%immediatemin); 
+#    print "<br><br>bestnext".Dumper(\%bestnext); 
 
 	# set lower boundaries for intervals having direct estimates
 	for my $i ( keys %bestscale )	{
@@ -495,6 +505,21 @@ sub findBoundaries	{
 		}
 	}
 
+    # Ufimian case. Optionally remove intervals which no longer map to any location
+    # in the composite scale
+    if ($skip_orphaned_intervals) {
+        while(($k,$v)=each %bestnext) {
+            $refbestnext{$v}=1;
+        }
+        for my $int_no (keys %lowerbound) {
+            if (!$refbestnext{$int_no}) {
+                #print "no ref for $int_no"; 
+                delete $lowerbound{$int_no};
+                delete $upperbound{$int_no};
+            } 
+        }
+    }
+
 	# make a hash table where keys are interval names
 	# needed by Download.pm
 	$sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
@@ -505,8 +530,8 @@ sub findBoundaries	{
 		if ( $ir->{eml_interval} )	{
 			$in = $ir->{eml_interval} . " " . $in;
 		}
-		$upperboundbyname{$in} = $upperbound{$ir->{interval_no}};
-		$lowerboundbyname{$in} = $lowerbound{$ir->{interval_no}};
+		$upperboundbyname{$in} = $upperbound{$ir->{interval_no}} if exists $upperbound{$ir->{interval_no}};
+		$lowerboundbyname{$in} = $lowerbound{$ir->{interval_no}} if exists $lowerbound{$ir->{interval_no}};
 	}
 
 	return (\%upperbound,\%lowerbound,\%upperboundbyname,\%lowerboundbyname);
