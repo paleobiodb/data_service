@@ -176,7 +176,7 @@ sub processShowEditForm	{
 		if ( $times[$i]->{interval_no} )	{
 
 			my $sqlstem = "SELECT eml_interval FROM intervals WHERE interval_no=";
-			$sql .= $times[$i]->{interval_no};
+			$sql = $sqlstem . $times[$i]->{interval_no};
 			my @emls = @{$dbt->getData($sql)};
 			$eml_interval = $emls[0]->{eml_interval};
 
