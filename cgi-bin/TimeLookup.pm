@@ -181,12 +181,18 @@ sub processBinLookup	{
 		"149" => "Permian 2", # Artinskian
 		"150" => "Permian 1", # Sakmarian
 		"151" => "Permian 1", # Asselian
-		"49" => "Carboniferous 5", # Gzelian
-		"50" => "Carboniferous 5", # Kasimovian
+		"49" => "Carboniferous 6", # Gzelian
+		"50" => "Carboniferous 6", # Kasimovian
+	# used up to 9.8.04
+	#	"49" => "Carboniferous 5", # Gzelian
+	#	"50" => "Carboniferous 5", # Kasimovian
 		"51" => "Carboniferous 5", # Moscovian
 		"52" => "Carboniferous 4", # Bashkirian
-		"166" => "Carboniferous 4", # Alportian
-		"167" => "Carboniferous 4", # Chokierian
+		"166" => "Carboniferous 3", # Alportian
+		"167" => "Carboniferous 3", # Chokierian
+	# used up to 9.8.04
+	#	"166" => "Carboniferous 4", # Alportian
+	#	"167" => "Carboniferous 4", # Chokierian
 		"168" => "Carboniferous 3", # Arnsbergian
 		"169" => "Carboniferous 3", # Pendleian
 		"170" => "Carboniferous 3", # Brigantian
@@ -236,7 +242,18 @@ sub processBinLookup	{
 		}
 
 	# now look up the subtended intervals falling in the bin
+	# these get tacked on to @intervals, which also includes the
+	#  immediately subtended intervals of this bin
 		&mapIntervals();
+
+	# we also want to know the bin assignments of the not-immediately
+	#  subtended intervals, say, for some function to print a list of all
+	#  subtended intervals
+	# this is only going to be returned if the request was for boundaries
+	#  and not for assignments of collections
+		for my $i ( @intervals )	{
+			$binning{$i} = $binname;
+		}
 
 	# the boundary estimates for included intervals might contradict
 	#  direct estimates for larger intervals; if so, alter the
@@ -296,7 +313,7 @@ sub processBinLookup	{
 	if ( $returndata ne "boundaries" )	{
 		return (\%intervalInScale,\%upperbinbound,\%lowerbinbound);
 	} else	{
-		return (\%upperbinbound,\%lowerbinbound);
+		return (\%upperbinbound,\%lowerbinbound,\%binning);
 	}
 
 }
