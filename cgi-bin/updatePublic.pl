@@ -52,7 +52,7 @@ $sth->execute();
 my $enterer_total = $stats[0];
 $sth->finish();
 
-$sql = "SELECT count(distinct institutions) FROM person WHERE institution IS NOT NULL";
+$sql = "SELECT count(distinct institution) FROM person WHERE institution IS NOT NULL";
 $sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
 $sth->execute();
 @stats = $sth->fetchrow_array();
