@@ -1174,7 +1174,7 @@ sub doMap{
 
 
 
-sub oCollections{
+sub doCollections{
 	my $exec_url = shift;
 	my $q = shift;
 	my $dbt = shift;
@@ -1202,7 +1202,7 @@ sub oCollections{
 	for my $ir ( @intrefs )	{
 		$interval_name{$ir->{'interval_no'}} = $ir->{'interval_name'};
 		if ( $ir->{'eml_interval'} )	{
-			$interval_name{$ir->{'interval_no'}} = $ir->{'interval_eml'} . " " . $ir->{'interval_name'};
+			$interval_name{$ir->{'interval_no'}} = $ir->{'eml_interval'} . " " . $ir->{'interval_name'};
 		}
 	}
 
