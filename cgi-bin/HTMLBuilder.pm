@@ -151,10 +151,14 @@ sub populateHTML
   {
     my $val = $row[$fieldNum];
     
-    # Convert quotes in vals
-	if ($val !~ /a href="/)	{
-    	$val =~ s/"/&quot;/g;
+	my @split_val = split(/(<.*?>)/,$val);
+	foreach my $token (@split_val){
+		if($token !~ /[<>]/){
+			$val =~ s/"/&quot;/g;
+		}
 	}
+	$val = join('',@split_val);
+
 	# Reformat modified field JA 27.6.02
 	if ($fieldName eq "modified")	{
 		$val = date($val);
