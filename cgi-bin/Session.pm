@@ -62,10 +62,11 @@ sub processLogin {
 	
 
 	# Get info from database on this person.
-	$sql =	"SELECT * ".
-			"  FROM person ".
-			" WHERE name = '".$q->param("authorizer")."' ";
+	$sql =	"SELECT * FROM person " .
+			 "WHERE name = '".$q->param("authorizer")."' ";
+	
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+	
 	$sth->execute();
 	if ( $sth->rows ) {
 
@@ -82,9 +83,8 @@ sub processLogin {
 			#   zorch that version to make sure it is never used again
 			#   JA 12.6.02
 			if ($password ne "")	{
-				$sql =	"UPDATE person ".
-						"	SET password = '' ".
-						" WHERE person_no = ".$rs->{person_no};
+				$sql =	"UPDATE person SET password = '' ".
+						"WHERE person_no = ".$rs->{person_no};
 				$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 			}
 		# If that didn't work and there is no plain text password,
@@ -98,8 +98,7 @@ sub processLogin {
 			if ( $password eq $encryptedPassword ) {
 				$valid = 1; # VALID LOGIN!
 				# Mysteriously collect their plaintext password
-				$sql =	"UPDATE person ".
-						"	SET plaintext = '".$q->param("password")."' ".
+				$sql =	"UPDATE person SET plaintext = '".$q->param("password")."' ".
 						" WHERE person_no = ".$rs->{person_no};
 				$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 			}
@@ -110,10 +109,10 @@ sub processLogin {
 
 			my $cf = CookieFactory->new();
 
-				# Create a unique ID (22 chars)
+			# Create a unique ID (22 chars)
 			$session_id = $cf->getUniqueID();
 
-				# Make it into a formatted cookie string
+			# Make it into a formatted cookie string
 			my $cookie = $cf->buildSessionId ( $session_id );
 
 			# Store the session id (for later)

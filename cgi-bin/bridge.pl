@@ -123,7 +123,7 @@ sub processAction {
 	
 	$action = "displayMenuPage" unless ( $action );  # set default action to menu page.
 
-	Debug::dbPrint("in processAction, action = $action");
+	#Debug::dbPrint("in processAction, action = $action");
 	
 	# need to know (below) if we did a processLogin and then changed the action
 	my $old_action = "";
@@ -147,7 +147,7 @@ sub processAction {
 
 		if ($cookie) {
 			
-			Debug::dbPrint("cookie created");
+			#Debug::dbPrint("cookie created");
 
 			my $cf = CookieFactory->new();
 			# The following two cookies are for setting the select lists
@@ -172,7 +172,7 @@ sub processAction {
 		} else { # no cookie
 			# failed login:  (bad password, etc.)
 
-			Debug::dbPrint("failed login");
+			#Debug::dbPrint("failed login");
 			
 			$q->param("user" => "Guest");
 			$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
@@ -183,7 +183,7 @@ sub processAction {
 			return;
 		}
 		
-		Debug::dbPrint("successfull login");
+		#Debug::dbPrint("successfull login");
 		# if we make it to here, then we can continue...
 	}
 
@@ -193,7 +193,7 @@ sub processAction {
 		# Change the HTMLBuilder object so that the templates
 		# will come from the guest directory instead of the private directory.
 		
-		Debug::dbPrint("user = guest");
+		#Debug::dbPrint("user = guest");
 		
 		$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
 		return;
@@ -207,14 +207,14 @@ sub processAction {
 		
 	if (!$cookie) {
 		
-		Debug::dbPrint("cookie doesn't exist, user = " . $q->param("user"));
+		#Debug::dbPrint("cookie doesn't exist, user = " . $q->param("user"));
 		
 		if ($q->param("user") eq "Contributor") {			
 			displayLoginPage();
 			return;
 		} else {
 			
-			Debug::dbPrint("user is not contributer, user = " . $q->param("user"));
+			#Debug::dbPrint("user is not contributer, user = " . $q->param("user"));
 			
 			$q->param("user" => "Guest");
 			$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
@@ -270,8 +270,6 @@ sub processAction {
 		#	Debug::dbPrint("javascript off");
 	#}
 		
-		
-	print "hbo template dir = " . $hbo->getTemplateDir();
 		
 	# Run the action (ie, call the proper subroutine)
 	&$action;
