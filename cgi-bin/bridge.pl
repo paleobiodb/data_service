@@ -1574,8 +1574,8 @@ sub processCollectionsSearch {
 				$wildCard = "'";
 			}
 			if ( $genus )	{
-				if($q->param("taxon_rank") eq "Higher taxon" &&
-				   $q->param("taxon_info_script") eq "yes" ){
+				if($q->param("taxon_rank") eq "Higher taxon" ||
+						$q->param("taxon_rank") eq "Higher-taxon"){
 					$sql .= "genus_name IN (";
 					if($in_list eq ""){
 						dbg("RE-RUNNING TAXONOMIC SEARCH in bridge<br>");

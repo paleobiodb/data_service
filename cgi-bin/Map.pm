@@ -131,7 +131,8 @@ sub buildMapOnly {
 				$genus = $q->param('genus_name');
 			}
 			$sql = qq|SELECT collection_no FROM occurrences WHERE |;
-			if($q->param('taxon_rank') eq "Higher taxon"){
+			if($q->param('taxon_rank') eq "Higher taxon" ||
+					$q->param('taxon_rank') eq "Higher-taxon"){
 				$self->dbg("genus_name q param:".$q->param('genus_name')."<br>");
 				$sql .= "genus_name IN (";
 				if($in_list eq ""){
