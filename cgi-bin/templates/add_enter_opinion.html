@@ -10,7 +10,7 @@
 %%message%%
 %%error_message%%
 
-<H2>Add/Edit Opinion Record for %%taxon_name%%</H2>
+<H2>Add/edit opinion record for %%taxon_name%%</H2>
 
 <FORM method="POST" action="%%exec_url%%">
 
@@ -109,7 +109,7 @@ for anything else (subgenus or higher), it should say:
 "Valid rank, classified as belonging to"	
 -->
 
-<TR><TD>
+<TR><TD valign=top>
 <input type="radio" name="taxon_status" value="belongs to" %%taxon_status_belongs_to%%></TD>
 
 %%START_OPTIONAL_species_only%%
@@ -144,7 +144,7 @@ for anything else (subgenus or higher), it should say:
 </TD>
 </TR>
 
-<TR><TD>
+<TR><TD valign=top>
 <input type="radio" name="taxon_status" value="invalid1" %%taxon_status_invalid1%%>
 </TD>
 <TD colspan=2><b>Invalid</b> and another name should be used.
@@ -161,7 +161,7 @@ for anything else (subgenus or higher), it should say:
 </TD>
 </TR>
 
-<TR><TD>
+<TR><TD valign=top>
 <input type="radio" name="taxon_status" value="invalid2" %%taxon_status_invalid2%%> </TD>
 <TD colspan=2><b>Invalid</b> and no other name can be applied. Status:
 

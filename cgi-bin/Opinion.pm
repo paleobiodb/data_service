@@ -1076,9 +1076,11 @@ sub displayOpinionSummary {
 		
 		print "<H3> The opinion $opinionHTML has been $enterupdate the database</H3><p>To verify that the information was entered correctly, click on the add more data link below.</p>";
 		
-		print "<TABLE align=center BORDER=0 WIDTH=80\%><TR><TD align=center>
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=" . $self->{opinion_no} ."\"><B>Add more data about this opinion</B></A></TD>
-		<TD align=center>-</TD><TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&amp;goal=opinion\"><B>Add/edit an opinion about another taxon</B></A></TD></TR></TABLE>";
+		print "<TABLE border=0><TR><TD align=left>";
+		print "<p><A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=" . $self->{opinion_no} ."\"><B>Add more data about this opinion</B></A></p>";
+		print "<p><A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionList&taxon_no=" . $self->childNumber() . " \"><B>Add/edit a different opinion about this taxon</B></A></p>";
+		print "<p><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&amp;goal=opinion\"><B>Add/edit an opinion about another taxon</B></A></p>";
+		print "</TD></TR></TABLE>";
 	}
 	
 	print "<BR>";

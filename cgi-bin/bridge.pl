@@ -738,7 +738,7 @@ sub displayOpinionForm {
 			$s->enqueue( $dbh, $toQueue );
 	
 			$q->param( "type" => "select" );
-			displaySearchRefs("You must choose a reference before adding a new opinion.");
+			displaySearchRefs("You must choose a reference before adding a new opinion");
 			return;
 		}
 	}
@@ -3677,7 +3677,7 @@ sub startReidentifyOccurrences {
 #
 # Modified 3/2004 by rjp.
 #
-sub startTaxonomy	{
+sub startTaxonomy {
 
 	my $taxonName = $q->param('taxon_name');
 	
@@ -3697,23 +3697,6 @@ sub startTaxonomy	{
 	# directly to the appropriate page.
 	processTaxonomySearch();
 	
-
-	# if there's no selected taxon you'll have to search for one
-	#if ($taxonName eq '') {
-	#	$s->enqueue( $dbh, "action=displayTaxonomySearchForm" );
-	#} 
-	#elsif (! $q->param('taxon_no') ) {
-	#	$s->enqueue( $dbh, "action=displayTaxonomySearchForm&taxon_name=$taxonName");
-	#} 
-	# otherwise go right to the edit page
-	#else {
-	#	my $temp = "action=displayTaxonomyEntryForm&taxon_name=$taxonName";
-	#	$temp .= "&taxon_no=" . $q->param('taxon_no');
-	#	$s->enqueue( $dbh, $temp );
-	#}
-	
-	#$q->param( "type" => "select" );
-	#displaySearchRefs("Please choose a reference first" );
 }
 
 
@@ -5235,9 +5218,9 @@ sub processTaxonomySearch	{
 	
 	# Try to find this taxon in the authorities table
 
-	my $sql = "SELECT * FROM authorities WHERE taxon_name = '" . $taxonName . "'";
+	my $sql = "SELECT * FROM authorities WHERE taxon_name = ?";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
+	$sth->execute($taxonName);
 	my $matches = 0;
 	
 	my $subSQL;
@@ -5341,12 +5324,21 @@ sub processTaxonomySearch	{
 		} elsif ($goal eq 'opinion')  {
 			displayOpinionList();
 		}
-	}
-	# Otherwise, print a form so the user can pick the taxon
-	else	{
+		
+	# rjp, 3/12/2004, note, we're not doing this yet because
+	# it would skip the display of homonyms:
+	#} elsif (($matches == 1) && ($goal eq 'opinion')) {
+		# for opinions, since we don't display the radio button with the add
+		# a new taxon option, we should take them directly to the opinion list
+		# if we only have one match.
+	#	displayOpinionList();
+		
+	} else	{
+		# Otherwise, print a form so the user can pick the taxon
+		
 		print stdIncludes("std_page_top");
 		print "<center>\n";
-		print "<h3>Which \"$taxonName\" do you mean?</h3>\n";
+		print "<h3>Which '<i>" . $taxonName . "</i>' do you mean?</h3>\n";
 		print "<form method=\"POST\" action=\"bridge.pl\">\n";
 		
 		if ($goal eq 'authority') {	
@@ -5390,7 +5382,7 @@ sub processTaxonomySearch	{
 
 # JA 17,20.8.02
 #
-# rjp: pass this a reference to a hash returned from a SELECT * on the authorities table
+# rjp: pass this a reference to a hash returned from a SELECT * on the authorities table.
 # 
 # it returns some HTML to display the authority information.
 sub formatAuthorityLine	{
@@ -5403,9 +5395,9 @@ sub formatAuthorityLine	{
 	
 	# italicize if genus or species.
 	if ( $taxData{'taxon_rank'} =~ m/(species)|(genus)/) {
-		$authLine .= "<i>" . $taxData{'taxon_name'} . "</i>";
+		$authLine .= "<i>" . $taxData{'taxon_name'} . "</i> ";
 	} else {
-		$authLine .= $taxData{'taxon_name'};
+		$authLine .= $taxData{'taxon_name'} . " ";
 	}
 	
 	
