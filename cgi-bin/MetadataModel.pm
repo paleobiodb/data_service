@@ -28,10 +28,9 @@ sub loadMetadata
 	$self->{_priKeyFlags} = $sth->{mysql_is_pri_key};
 	$self->{_fieldTypeCodes} = $sth->{mysql_type};
 	$self->{_precisions} = $sth->{PRECISION};
-	# Get the table name (I'm starting to think that DBI kinda sucks!)
-	my $selectString = $sth->{Statement};
-	my ($tableName) = ($selectString =~ /SELECT.+?FROM\s+(\w+)/ims);
-	$self->{_tableName} = $tableName;
+	# Get the table name (returns an array of all tables)
+	my @tables = @{$sth->{mysql_table}};
+	$self->{_tableName} = $tables[0];
 	
 	# Needs work: This is an evil hack.  Normalize the database or get better metadata
 	my %SET_FIELDS_BY_TABLE_NAME = (refs=>[project_name=>1],
