@@ -97,7 +97,7 @@ if ( $action eq "logout" ) { &logout(); }
 
 # Send Password must be run before login
 if ( $action eq "sendPassword" ) { 
-	&sendPassword();
+	sendPassword();
 	print $q->redirect( -url=>$BRIDGE_HOME );
 	exit;
 }
@@ -229,7 +229,7 @@ sub logout {
 	my $session_id = $q->cookie("session_id");
 
 	if ( $session_id ) {
-		$sql =	"DELETE FROM SESSION_DATA ".
+		$sql =	"DELETE FROM session_data ".
 		 		" WHERE session_id = '".$q->cookie("session_id")."' ";
 		$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 	}
@@ -781,12 +781,12 @@ sub displayCurveForm {
 
 sub displayCurveResults {
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes ( "std_page_top" );
 
 	my $c = Curve->new( $dbh, $q, $s, $dbt );
 	$c->buildCurve ( );
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes ("std_page_bottom");
 }
 
 # Show a generic page
@@ -796,7 +796,7 @@ sub displayPage {
 		# Try the parameters
 		$page = $q->param("page"); 
 		if ( ! $page ) {
-			&htmlError ( "$0.displayPage(): Unknown page..." );
+			htmlError ( "$0.displayPage(): Unknown page..." );
 		}
 	}
 
@@ -4818,7 +4818,11 @@ sub displayTaxonomySearchForm	{
 	print stdIncludes ("std_page_bottom");
 }
 
+
 # JA 17.8.02
+#
+# Called when the user searches for a taxon from the search_taxonomy_form 
+#
 # edited by rjp 1/22/2004 to fix bug where
 # original combination is not used when user searches for a recombination.
 sub processTaxonomySearch	{
@@ -5110,9 +5114,9 @@ sub displayTaxonomyEntryForm	{
 		$authorityRow{'parent_taxon_name'} = '';
 	}
 	
+	# used to be js_taxonomy_checkform
+	$html .= "\n<SCRIPT src=\"/JavaScripts/CheckTaxonomyForm.js\" language=\"JavaScript\" type=\"text/javascript\">\n";
 	
-
-	$html = stdIncludes("js_taxonomy_checkform");
 	$html .= $hbo->populateHTML ('enter_taxonomy_top', [ $authorityRow{'taxon_no'}, $authorityRow{'type_taxon_no'}, $taxon, length($taxon)] , [ 'taxon_no', 'type_taxon_no',"%%taxon_name%%","%%taxon_size%%" ] );
 	$html .= $hbo->populateHTML('enter_tax_ref_form', \%authorityRow);
 	# Don't show the 'ref_is_authority' checkbox if there is already authorinfo
@@ -5226,6 +5230,93 @@ sub displayTaxonomyEntryForm	{
 
 	print stdIncludes ("std_page_bottom");
 }
+
+
+
+
+
+## New authorities record(s) form loop
+sub new_authority_form {
+	my $new_taxon_name_param = shift;
+	my $stemName = shift;
+	my $ipRef = shift;
+	my @insertParams = @$ipRef;
+	
+
+	my $new_name = $q->param("$new_taxon_name_param");
+	# Puts the action 'displayTaxonomyResults' into the form
+	my $html = $hbo->populateHTML('enter_authority_top', [ $new_name ], [ 'taxon_name' ] );
+	$html =~ s/<hr>//;
+	$html =~ s/^(.*)/<hr>$1/;
+	$html =~ s/missing_taxon_name/$new_name/;
+	if ( $new_taxon_name_param =~ /type/ )	{
+		if ( $new_name =~ / / )	{
+			$html =~ s/no authority data for/no authority data for the type species/;
+		} else	{
+			$html =~ s/no authority data for/no authority data for the type taxon/;
+		}
+	} else	{
+		$html =~ s/no authority data for/no authority data for the parent taxon/;
+	}
+	print $html;
+	# Print the ref info part of the form, which has no populated vals
+	#  other than the taxon rank pulldown, the usual ref fields, and
+	#  the current ref
+	my @tempParams = ( "author1init", "author1last",
+			"author2init", "author2last", "otherauthors",
+			"pubyr", "pages", "figures", "comments");
+	my @tempVals = ( "", "",  "", "", "",  "", "", "", "" );
+	unshift @tempParams, 'taxon_rank';
+	if ( $new_name =~ / / )	{
+		my ($word1,$word2,$word3) = split / /,$new_name;
+		if ( $word3 )	{
+			unshift @tempVals, "subspecies";
+		} else	{
+			unshift @tempVals, "species";
+		}
+	} else	{
+		unshift @tempVals, "genus";
+	}
+
+	# Display the current ref
+	my $sql = "SELECT * FROM refs WHERE reference_no=";
+	$sql .= $s->get("reference_no");
+	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+	$sth->execute();
+	my @refRow = $sth->fetchrow_array();
+	my @refFieldNames = @{$sth->{NAME}};
+	$sth->finish();
+	my $refRowString = '<table>'.
+					   $hbo->populateHTML('reference_display_row',
+										  \@refRow,\@refFieldNames).
+					   '</table>';
+
+	# Add gray background and make font small
+	$refRowString =~ s/<tr>/<tr class='darkList'>/;
+	$refRowString =~ s/<td/<td class='small' /;
+	push @tempVals, $refRowString;
+	push @tempParams, 'ref_string';
+
+	$html = $hbo->populateHTML ("enter_tax_ref_form", \@tempVals, \@tempParams );
+
+	# Suppress the type taxon field because this name would have
+	#  to be checked against the authorities table, and life is
+	#  already way too complicated!
+	$html =~ s/Name of type taxon://;
+	$html =~ s/<input id="type_taxon_name" name="type_taxon_name" size=50>//;
+
+	# Make sure all the "new" ref field names are modified so
+	# they can be retrieved when the form data are processed
+	for my $p ( @insertParams )	{
+		my $newp = $stemName . "_" . $p;
+		$html =~ s/name="$p/name="$newp/g;
+		$html =~ s/id="$p/id="$newp/g;
+	}
+	$html =~ s/%%taxon_name%%/$new_name/;
+	print $html;
+}
+
+
 
 
 
@@ -5383,6 +5474,8 @@ sub processTaxonomyEntryForm {
 } # end processTaxonomyForm
 
 
+
+
 # used in conjunction with processTaxonomyEntryForm()
 sub checkNewTaxon {
 	my @params_to_check = ('type', 'parent', 'parent_genus');
@@ -5392,9 +5485,14 @@ sub checkNewTaxon {
 	my @insertParams = ("taxon_rank", "type_taxon_name",
 			"author1init", "author1last",
 			"author2init", "author2last", "otherauthors",
-			"pubyr", "pages", "figures", "comments");
+			"pubyr", "pages", "figures", "comments", "2nd_pages", "2nd_figures", "ref_is_authority");
+	
+	# ************************
+	# rjp note, 2/17/2004, I added "2nd_pages", "2nd_figures",
+	# and "ref_is_authority" to this list.. 
+	# ************************
+			
 	my @taxonParams = ("taxon_no", "taxon_name",
-			"ref_is_authority",
 			"taxon_status", "parent_taxon_name", "parent_taxon_rank",
 			"diagnosis", "synonym", "parent_taxon_name2",
 			"parent_genus_taxon_name", "nomen",
@@ -5474,16 +5572,27 @@ sub checkNewTaxon {
 
 		# Stash all the query params as hidden values
 		# WARNING: some fields don't correspond to database fields, e.g.,
-		#  type_taxon_name, parent_taxon_name2, and parent_genus_taxon_name
+		# type_taxon_name, parent_taxon_name2, and parent_genus_taxon_name
 		if ($matches[0] != 1 || $matches[1] != 1 || $matches[2] != 1) {
 			print stdIncludes ("std_page_top");
-			print stdIncludes("js_taxonomy_checkform");
+
+			# used to be js_taxonomy_checkform
+			print "\n<SCRIPT src=\"/JavaScripts/CheckTaxonomyForm.js\" language=\"JavaScript\" type=\"text/javascript\">\n";
+			
 			print "<form method=\"POST\" action=\"$exec_url\" onSubmit=\"return checkForm();\">\n";
 			$open_form_printed = 1;
+			
+			# print a little message which can be checked from the java scripts
+			# which perform the form validation.
+			print "<input type=\"hidden\" name=\"no_authority_data\" value=\"YES\">";
+			
 			for my $p ( @taxonParams ) {
+				
 				if ( $q->param($p) ) {
+					
 					print "<input type=hidden name=\"$p\" value=\"";
 					print $q->param($p) , "\">\n";
+					
 				}
 			}
 		}
@@ -5537,11 +5646,14 @@ sub checkNewTaxon {
 			if ($q->param("$new_taxon_name") && !$q->param("$new_taxon_no")) {
 				if (!$printed) {
 					print stdIncludes ("std_page_top");
-					print stdIncludes("js_taxonomy_checkform");
+
+					# used to be js_taxonomy_checkform
+					print "\n<SCRIPT src=\"/JavaScripts/CheckTaxonomyForm.js\" language=\"JavaScript\" type=\"text/javascript\">\n";
+					
 					print "<form method=\"POST\" action=\"$exec_url\" ".
 						  "onSubmit=\"return checkForm();\">\n";
 				}
-				new_authority_form($new_taxon_name, $stemName, @insertParams);
+				new_authority_form($new_taxon_name, $stemName, \@insertParams);
 				$printed = 1;
 			}
 		}
@@ -5572,12 +5684,15 @@ sub checkNewTaxon {
 			if ($matches[$index] == 0) {
 				if (!$open_form_printed) {
 					print stdIncludes ("std_page_top");
-					print stdIncludes("js_taxonomy_checkform");
+
+					# used to be js_taxonomy_checkform
+					print "\n<SCRIPT src=\"/JavaScripts/CheckTaxonomyForm.js\" language=\"JavaScript\" type=\"text/javascript\">\n";
+					
 					print "<form method=\"POST\" action=\"$exec_url\" ".
 						  "onSubmit=\"return checkForm();\">\n";
 					$open_form_printed = 1;
 				}
-				new_authority_form($new_taxon_name, $stemName, @insertParams);
+				new_authority_form($new_taxon_name, $stemName, \@insertParams);
 				$printed = 1;
 			}
 			## IF ANY 0's PRINT, ALL THE 1's HAVE TO PRINT TOO
@@ -5610,87 +5725,14 @@ sub checkNewTaxon {
 
 
 
-## New authorities record(s) form loop
-sub new_authority_form{
-	my ($new_taxon_name_param, $stemName, @insertParams) = @_;
-
-	my $new_name = $q->param("$new_taxon_name_param");
-	# Puts the action 'displayTaxonomyResults' into the form
-	my $html = $hbo->populateHTML('enter_authority_top', [ $new_name ], [ 'taxon_name' ] );
-	$html =~ s/<hr>//;
-	$html =~ s/^(.*)/<hr>$1/;
-	$html =~ s/missing_taxon_name/$new_name/;
-	if ( $new_taxon_name_param =~ /type/ )	{
-		if ( $new_name =~ / / )	{
-			$html =~ s/no authority data for/no authority data for the type species/;
-		} else	{
-			$html =~ s/no authority data for/no authority data for the type taxon/;
-		}
-	} else	{
-		$html =~ s/no authority data for/no authority data for the parent taxon/;
-	}
-	print $html;
-	# Print the ref info part of the form, which has no populated vals
-	#  other than the taxon rank pulldown, the usual ref fields, and
-	#  the current ref
-	my @tempParams = ( "author1init", "author1last",
-			"author2init", "author2last", "otherauthors",
-			"pubyr", "pages", "figures", "comments");
-	my @tempVals = ( "", "",  "", "", "",  "", "", "", "" );
-	unshift @tempParams, 'taxon_rank';
-	if ( $new_name =~ / / )	{
-		my ($word1,$word2,$word3) = split / /,$new_name;
-		if ( $word3 )	{
-			unshift @tempVals, "subspecies";
-		} else	{
-			unshift @tempVals, "species";
-		}
-	} else	{
-		unshift @tempVals, "genus";
-	}
-
-	# Display the current ref
-	my $sql = "SELECT * FROM refs WHERE reference_no=";
-	$sql .= $s->get("reference_no");
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-	my @refRow = $sth->fetchrow_array();
-	my @refFieldNames = @{$sth->{NAME}};
-	$sth->finish();
-	my $refRowString = '<table>'.
-					   $hbo->populateHTML('reference_display_row',
-										  \@refRow,\@refFieldNames).
-					   '</table>';
-
-	# Add gray background and make font small
-	$refRowString =~ s/<tr>/<tr class='darkList'>/;
-	$refRowString =~ s/<td/<td class='small' /;
-	push @tempVals, $refRowString;
-	push @tempParams, 'ref_string';
-
-	$html = $hbo->populateHTML ("enter_tax_ref_form", \@tempVals, \@tempParams );
-
-	# Suppress the type taxon field because this name would have
-	#  to be checked against the authorities table, and life is
-	#  already way too complicated!
-	$html =~ s/Name of type taxon://;
-	$html =~ s/<input id="type_taxon_name" name="type_taxon_name" size=50>//;
-
-	# Make sure all the "new" ref field names are modified so
-	#  they can be retrieved when the form data are processed
-	for my $p ( @insertParams )	{
-		my $newp = $stemName . "_" . $p;
-		$html =~ s/name="$p/name="$newp/g;
-		$html =~ s/id="$p/id="$newp/g;
-	}
-	$html =~ s/%%taxon_name%%/$new_name/;
-	print $html;
-}
-
 
 
 # JA 13-18,27.8.02
 # modified slightly by rjp, 2/2004.
+#
+# called from checkNewTaxon() and also directly by 
+# a form when the user enters a species but the genus is unknown.
+# The form asks for info about the genus.
 sub displayTaxonomyResults	{
 
 	print stdIncludes ("std_page_top");
@@ -5778,7 +5820,7 @@ sub displayTaxonomyResults	{
 	}
 
 	# Fix up the type taxon/specimen fields now that all the taxa
-	#  definitely are in the authorities table
+	# definitely are in the authorities table
 	my @prefixes = ("", "parent_");
 	for my $pf ( @prefixes )	{
 		my $tnm = $pf . "taxon_name";
@@ -5952,6 +5994,10 @@ sub displayTaxonomyResults	{
 	print stdIncludes ("std_page_bottom");
 
 }
+
+
+
+
 
 # JA 27.8.02
 sub insertSwappedTaxon	{
@@ -7252,9 +7298,9 @@ sub htmlError {
 	my $message = shift;
 
 	# print $q->header( -type => "text/html" );
-    print &stdIncludes ( "std_page_top" );
+    print stdIncludes ( "std_page_top" );
 	print $message;
-    print &stdIncludes ("std_page_bottom");
+    print stdIncludes ("std_page_bottom");
 	exit 1;
 }
 
