@@ -6,9 +6,6 @@ package PBDBUtil;
 # useful to the pbdb codebase.
 my $DEBUG = 0;
 
-# TaxonInfo GLOBAL CACHE for reference_no<->pubyr
-my %ref_pubyr = ();
-
 ## debug($level, $message)
 # 	Description:	print out diagnostic messages according to severity,
 #			as determined by $level.
@@ -450,7 +447,8 @@ sub new_search_recurse{
     # select for taxon_no of seed in authorities:
     $sql = "SELECT authorities.taxon_no, authorities.pubyr as apubyr, ".
            "authorities.reference_no as areference_no, opinions.child_no, ".
-           "opinions.pubyr as opubyr, opinions.reference_no as oreference_no ".
+           "opinions.pubyr as opubyr, opinions.reference_no as oreference_no, ".
+		   "opinions.opinion_no ".
            "FROM authorities, opinions ".
            "WHERE authorities.taxon_no = opinions.parent_no ".
            "AND taxon_no=$seed_no";
@@ -466,6 +464,17 @@ sub new_search_recurse{
 
         # validate all the children
         foreach my $child (@results){
+			# Don't revisit same child: this has to be done with the opinion
+			# number (not the child_no) or the results will be incomplete.
+			# Note: this is done mostly to avoid self referential data (and 
+			# therefore deep recursion) but also speeds the whole thing up
+			# A LOT!
+            if(exists $visited_children{$child->{opinion_no}}){
+                next;
+            }
+            else{
+                $visited_children{$child->{opinion_no}} = 1;
+            }
             #print "\tchild_no: ".$child->{child_no};
             # get pubyr
             $child->{pubyr} = get_real_pubyr($dbt,$child,"opubyr","oreference_no");
@@ -554,17 +563,21 @@ sub taxonomic_search{
     my $sql = "SELECT taxon_no from authorities WHERE taxon_name='$name'";
     my @results = @{$dbt->getData($sql)};
 
+    # global to this method and methods called by it
+    local %ref_pubyr = ();
+    local %visited_children = ();
+
 	# We might not get a number or rank if this name isn't in authorities yet.
 	if(!$results[0]){
 		return "'$name'";
 	}
 
 	my $results = new_search_recurse($results[0]->{taxon_no}, $dbt);
-	my @nums_list = split(/,/, $results);
+	#my @nums_list = split(/,/, $results);
 	
-	my @clean = ();
-	@nums_list = @{simple_array_push_unique(\@clean, \@nums_list)};
-	$results = join(",",@nums_list);
+	#my @clean = ();
+	#@nums_list = @{simple_array_push_unique(\@clean, \@nums_list)};
+	#$results = join(",",@nums_list);
 	
     $sql = "SELECT taxon_name FROM authorities WHERE taxon_no IN ($results)";
     @results = @{$dbt->getData($sql)};
