@@ -1535,7 +1535,7 @@ sub processCollectionsSearch {
 		} elsif ( $q->param('taxon_rank') eq "species" )	{
 			$species = $q->param('genus_name');
 			$q->param('species_name' => $species);
-		} else	{
+		} else	{ # this is for genus only...
 			$genus = $q->param('genus_name');
 		}
 		my @tables = ("occurrences","reidentifications");
@@ -3206,7 +3206,7 @@ sub displayReIDCollsAndOccsSearchForm
 	# Display the collection search form
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no,'',$q->param('type')], ['authorizer', 'enterer', 'action', 'reid_reference_no','lithology1','type'], \@prefkeys);
+	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no,'',$q->param('type'),'',''], ['authorizer', 'enterer', 'action', 'reid_reference_no','lithology1','type','lithology2','environment'], \@prefkeys);
 
 	buildAuthorizerPulldown ( \$html );
 	buildEntererPulldown ( \$html );
@@ -3248,7 +3248,16 @@ sub displayOccsForReID
 {
 	my $genus_name = $q->param('g_name');
 	my $species_name = $q->param('species_name');
+
+	if(!$genus_name && !$species_name){
+		$genus_name = $q->param('genus_name');
+	}
+
 	my $collection_no = $q->param('collection_no');
+	my $sql = "";
+	my $where = "";
+
+	dbg("genus_name: $genus_name, species_name: $species_name<br>");
 
 	my $current_session_ref = $s->get("reference_no");
 	# make sure they've selected a reference
@@ -3298,20 +3307,20 @@ sub displayOccsForReID
 	}
 	elsif($collection_no){
 		$sql = "SELECT * FROM occurrences ";
-		$where = " WHERE collection_no=$collection_no";
+		$where = buildWhere($where, "collection_no=$collection_no");
 	}
 	$where = buildWhere ( $where, "occurrence_no > $lastOccNum LIMIT 11" );
 
 	# Tack it all together
 	$sql .= $where;
  
-	dbg ( "$sql<HR>" );
+	dbg("$sql<br>");
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 
 	# Get the current reference data
 	$sql = "SELECT * FROM refs WHERE reference_no=".$s->get("reference_no");
-	dbg ( "$sql<HR>" );
+	dbg("$sql<br>");
 	my $sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth2->execute();
 	my $array_ref_of_hash_refs = $sth->fetchall_arrayref({});
@@ -3450,7 +3459,7 @@ sub displayOccsForReID
 	if ( $rowCount > 10 ) {
 		print "<td align=center>";
 		print qq|<b><a href="$exec_url?action=displayOccsForReID|;
-		print qq|&genus_name=$genus_name| if $genus_name;
+		print qq|&g_name=$genus_name| if $genus_name;
 		print qq|&species_name=$species_name| if $species_name;
 		print qq|&collection_no=$collection_no&last_occ_num=$lastOccNum"> View next 10 occurrences</a></b>\n|;
 		print "</td>";
@@ -5437,7 +5446,7 @@ sub RefQuery	{
 
 	if ( $refsearchstring ) { $refsearchstring = "for '$refsearchstring' "; }
 
-	if ( $refsearchstring ne "" || $q->param('authorizer') ||
+	if ( $refsearchstring ne "" || $q->param('enterer') ||
 		 $q->param('project_name') )	{
 		$sql =	"SELECT * FROM refs ";
 
@@ -5451,7 +5460,7 @@ sub RefQuery	{
 		if ( $pubyr ) { $where = &buildWhere ( $where, "pubyr='$pubyr'" ); }
 		if ( $reftitle ) { $where = &buildWhere ( $where, " ( reftitle LIKE '%$reftitle%' OR reftitle LIKE '$reftitle%' )" ); }
 		if ( $refno ) { $where = &buildWhere ( $where, "reference_no=$refno" ); }
-		if ( $q->param('authorizer') ) { $where = &buildWhere ( $where, "authorizer='".$q->param('authorizer')."'" ); }
+		if ( $q->param('enterer') ) { $where = &buildWhere ( $where, "authorizer='".$q->param('enterer')."'" ); }
 		if ( $q->param('project_name') ) { $where = &buildWhere ( $where, "project_name='".$q->param('project_name')."'" ); }
 
 		# sort the results in any of multiple ways JA 26-27.7.02
