@@ -268,9 +268,12 @@ sub deleteRefAssociation{
 	my $sql = "DELETE FROM secondary_refs where collection_no=$collection_no ".
 			  "AND reference_no=$reference_no";
 	my $sth = $dbh->prepare($sql) or print "SQL failed to prepare: $sql<br>";
-    if($sth->execute() != 1){
+	my $res = $sth->execute();
+	debug(1,"execute returned:$res.<br>");
+    if($res != 1){
 		print "<font color=\"FF0000\">Failed to delete secondary ref for".
 			  "collection $collection_no and reference $reference_no.<br>".
+			  "Return code:$res.<br>".
 			  "Please notify the database administrator with this message.".                  "</font><br>";
 		return 0;
 	}
