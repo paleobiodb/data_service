@@ -827,7 +827,7 @@ sub displayTaxonSynonymy{
 	print "<center><h3>Taxonomic history</h3></center>";
 	print "<ul>";
 
-	# Get the original combination
+	# Get the original combination (of the verified name, not the focal name)
 	my $original_combination_no = getOriginalCombination($dbt, $taxon_no);
 	PBDBUtil::debug(1,"original combination_no: $original_combination_no");
 	
@@ -848,13 +848,16 @@ sub displayTaxonSynonymy{
 		foreach my $rec (@results){
 			push(@parent_list,$rec->{parent_no});
 		}
+		# don't forget the original (verified) here, either: the focal taxon	
+		# should be one of its children so it will be included below.
+		push(@parent_list, $original_combination_no);
 	}
 
 	# Select all synonymies for the above list of taxa.
 	$sql = "SELECT DISTINCT(child_no), status FROM opinions ".
 		   "WHERE parent_no IN (".
 			join(',',@parent_list).") ".
-		   "AND status like '%synonym%'";
+		   "AND (status like '%synonym%' OR status='homonym of' OR status='replaced by')";
 	@results = @{$dbt->getData($sql)};
 
 	# Reduce these results to original combinations:
@@ -1155,6 +1158,8 @@ sub getSynonymyParagraph{
 sub getOriginalCombination{
 	my $dbt = shift;
 	my $taxon_no = shift;
+	# You know you're an original combination when you have no children
+	# that have recombined or corrected as relations to you.
 	my $sql = "SELECT DISTINCT(child_no), status FROM opinions ".
 			  "WHERE parent_no=$taxon_no AND (status='recombined as' OR ".
 			  "status='corrected as')";
