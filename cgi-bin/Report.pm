@@ -279,43 +279,45 @@ sub tallyFieldTerms	{
 	}
 
 	## NEW (Database)
-	my %fieldnos = ("authorizer" => 0, "enterer" => 1,
-				"country" => 8, "continent" => 8, "state" => 9,
-				"period" => 28, "epoch" => 31,
-				"international age/stage" => 34, "local age/stage" => 38,
-				"chronological data type" => 53, "formation" => 43,
-				"paleoenvironment" => 61,
-				"scale of geographic resolution" => 24,
-				"scale of stratigraphic resolution" => 52,
-				"tectonic setting" => 62,
-				"preservation mode" => 63, "publication type" => 65,
-				"list coverage" => 66);
-	my @fieldnokeys = keys %fieldnos;
+	my %fieldnames = ("authorizer" => "authorizer", "enterer" => "enterer",
+				"research group" => "research_group",
+				"country" => "country", "continent" => "country", "state" => "state",
+				"period" => "period_max", "epoch" => "epoch_max",
+				"international age/stage" => "intage_max", "local age/stage" => "locage_max",
+				"chronological data type" => "stratcomments", "formation" => "formation",
+				"paleoenvironment" => "environment",
+				"scale of geographic resolution" => "geogscale",
+				"scale of stratigraphic resolution" => "stratscale",
+				"tectonic setting" => "tectonic_setting",
+				"preservation mode" => "pres_mode",
+				"assemblage components" => "assembl_comps",
+				"publication type" => "collection_type",
+				"list coverage" => "collection_coverage");
 
 	# section condensed by JA 3.8.02	
 	# WARNING: if "chronological data type " is selected, script
 	#  wipes out the stratigraphic comments field on the assumption it
 	#   won't be needed
 	for ($i = 1; $i <= $nsearchfields; $i++)	{
-		if ( $fieldnos{$q->param('searchfield'.$i)} ne "")	{
+		if ( $fieldnames{$q->param('searchfield'.$i)} ne "")	{
 			# Global array @fieldno created here...
-			$fieldno[$i] = $fieldnos{$q->param('searchfield'.$i)};
+			$field[$i] = $fieldnames{$q->param('searchfield'.$i)};
 		}
 		if ($q->param('searchfield'.$i) eq "international age/stage")	{
-			$field2no[$i] = 36;
+			$field2[$i] = 36;
 		}
 		elsif ($q->param('searchfield'.$i) eq "local age/stage")	{
-			$field2no[$i] = 40;
+			$field2[$i] = 40;
 		}
 		elsif ($q->param('searchfield'.$i) eq "lithification")	{
-			$fieldno[$i] = $LITHIFCOL;
+			$field[$i] = $LITHIFCOL;
 		}
 		elsif ($q->param('searchfield'.$i) eq "lithology - all combinations")	{
-			$fieldno[$i] = $LITH1COL;
+			$field[$i] = $LITH1COL;
 		}
 		elsif ($q->param('searchfield'.$i) eq "lithology - weighted")	{
-			$fieldno[$i] = $LITH1COL;
-			$field2no[$i] = $LITH2COL;
+			$field[$i] = $LITH1COL;
+			$field2[$i] = $LITH2COL;
 		}
 	}
 	
@@ -358,37 +360,33 @@ sub tallyFieldTerms	{
 		}
     }
 
-	$self->dbg("collection table sql: $csql<br>");
-	my $sth = $dbh->prepare($csql) || die "Prepare query failed\n";
-	$sth->execute() || die "Execute query failed\n";
-	@all_coll_rows = @{$sth->fetchall_arrayref()};
-	$sth->finish();
+	@all_coll_rows = @{$dbt->getData($csql)};
 
 	foreach my $rowref ( @all_coll_rows ) {
-		@columns = @{$rowref};
+		%collrow = %{$rowref};
 
-			if ( $columns[$LOCIDCOL] > 0 &&
-				( $include[$columns[$LOCIDCOL]] > 0 ||
+			if ( $collrow{'collection_no'} > 0 &&
+				( $include[$collrow{'collection_no'}] > 0 ||
 				  $q->param('taxon_name') eq "" ) )	{
 				$lines++;
 				
-				if ($include[$columns[$LOCIDCOL]] > 0)	{
-					$recs[$columns[$LOCIDCOL]] = $include[$columns[$LOCIDCOL]];
+				if ($include[$collrow{'collection_no'}] > 0)	{
+					$recs[$collrow{'collection_no'}] = $include[$collrow{'collection_no'}];
 				}
-				$rectotal = $rectotal + $recs[$columns[$LOCIDCOL]];
+				$rectotal = $rectotal + $recs[$collrow{'collection_no'}];
 				# record that the genera in this collection
 				#  have been included in the tallies JA 28.2.03
-				my @temp = @{$taxlist[$columns[$LOCIDCOL]]};
+				my @temp = @{$taxlist[$collrow{'collection_no'}]};
 				for my $t ( @temp )	{
 					$genuscounted{$t}++;
 				}
-				if (($columns[8] eq "") || ($columns[8] eq "U.S.A."))	{
-					$columns[8] = "USA";
+				if (($collrow{'country'} eq "") || ($collrow{'country'} eq "U.S.A."))	{
+					$collrow{'country'} = "USA";
 				}
 	 # concatenate two lithology fields if interbedded/mixed with is non-null
-				if (($columns[$LITH2COL] ) && ($field2no[1] == 0) &&
-					  ($field2no[2] == 0))	{
-					$columns[$LITH1COL] = $columns[$LITH1COL]." + ".$columns[$LITH2COL];
+				if (($collrow{'lithology2'} ) && ($field2[1] == 0) &&
+					  ($field2[2] == 0))	{
+					$collrow{'lithology1'} = $collrow{'lithology1'}." + ".$collrow{'lithology2'};
 				}
 				
 	 # determine the identity of the BEST type of chronological data
@@ -396,59 +394,59 @@ sub tallyFieldTerms	{
 	 # local age/stage, epoch, and period (latter assumed to be known)
 			 if (($q->param('searchfield1') eq "chronological data type") || ($q->param('searchfield2') eq "chronological data type"))	{
 
-				if (($columns[34] ) || ($columns[36] ))	{
-					$columns[53] = "International age/stage";
+				if ( $collrow{'intage_max'} || $collrow{'intage_min'} )	{
+					$collrow{'stratcomments'} = "International age/stage";
 				}
-				elsif (($columns[38] ) || ($columns[40] ))	{
-					$columns[53] = "Local age/stage";
+				elsif ( $collrow{'locage_max'}  || $collrow{'locage_min'} )	{
+					$collrow{'stratcomments'} = "Local age/stage";
 				}
-				elsif ($columns[31] )	{
-					$columns[53] = "Epoch";
+				elsif ( $collrow{'epoch_max'} )	{
+					$collrow{'stratcomments'} = "Epoch";
 				}
 				else	{
-					$columns[53] = "Period";
+					$collrow{'stratcomments'} = "Period";
 				}
 			}
 			for ($r = 1; $r <= $nsearchfields; $r++)	{
 	 # remove quotes, question marks, and extra spaces from field
-			 $columns[$fieldno[$r]] =~ s/"//g;
-			 $columns[$fieldno[$r]] =~ s/ \?//g;
-			 $columns[$fieldno[$r]] =~ s/\? //g;
-			 $columns[$fieldno[$r]] =~ s/\?//g;
-			 $columns[$fieldno[$r]] =~ s/  / /g;
-			 $columns[$fieldno[$r]] =~ s/^ //g;
-			 $columns[$fieldno[$r]] =~ s/ $//g;
+			 $collrow{$field[$r]} =~ s/"//g;
+			 $collrow{$field[$r]} =~ s/ \?//g;
+			 $collrow{$field[$r]} =~ s/\? //g;
+			 $collrow{$field[$r]} =~ s/\?//g;
+			 $collrow{$field[$r]} =~ s/  / /g;
+			 $collrow{$field[$r]} =~ s/^ //g;
+			 $collrow{$field[$r]} =~ s/ $//g;
 	
-			 if ($field2no[$r] > 0)	{
-				 $columns[$field2no[$r]] =~ s/"//g;
-				 $columns[$field2no[$r]] =~ s/ \?//g;
-				 $columns[$field2no[$r]] =~ s/\? //g;
-				 $columns[$field2no[$r]] =~ s/\?//g;
-				 $columns[$field2no[$r]] =~ s/  / /g;
-				 $columns[$field2no[$r]] =~ s/^ //g;
-				 $columns[$field2no[$r]] =~ s/ $//g;
+			 if ($field2[$r] > 0)	{
+				 $collrow{$field2[$r]} =~ s/"//g;
+				 $collrow{$field2[$r]} =~ s/ \?//g;
+				 $collrow{$field2[$r]} =~ s/\? //g;
+				 $collrow{$field2[$r]} =~ s/\?//g;
+				 $collrow{$field2[$r]} =~ s/  / /g;
+				 $collrow{$field2[$r]} =~ s/^ //g;
+				 $collrow{$field2[$r]} =~ s/ $//g;
 			 }
 	
 			 if ($q->param('searchfield'.$r) eq "continent")	{
-if ($region{$columns[$fieldno[$r]]} eq "") { print "$columns[$fieldno[$r]]<br>\n"; }
-					 $columns[$fieldno[$r]] = $region{$columns[$fieldno[$r]]};
+if ($region{$collrow{$field[$r]}} eq "") { print "$collrow{$field[$r]}<br>\n"; }
+					 $collrow{$field[$r]} = $region{$collrow{$field[$r]}};
 			 }
 	
 			 $termid[$r] = 0;
 			 $term2id[$r] = 0;
 			 for ($i=1;$i<=$nterms[$r];$i++)	{
-				if ($columns[$fieldno[$r]] eq $fieldterms[$r][$i])	{
+				if ($collrow{$field[$r]} eq $fieldterms[$r][$i])	{
 					$termid[$r] = $i;
-					if (($field2no[$r] > 0) && ($columns[$fieldno[$r]] ) &&
-					    ($columns[$field2no[$r]] ))	{
+					if (($field2[$r] > 0) && ($collrow{$field[$r]} ) &&
+					    ($collrow{$field2[$r]} ))	{
 					  $timesused[$r][$i] = $timesused[$r][$i] + 0.5;
-					  $recsused[$r][$i] = $recsused[$r][$i] + ($recs[$columns[$LOCIDCOL]]/2);
+					  $recsused[$r][$i] = $recsused[$r][$i] + ($recs[$collrow{'collection_no'}]/2);
 					}
-					elsif (($columns[$fieldno[$r]] ) ||
-					       ($columns[$field2no[$r]] eq "") ||
-					       ($field2no[$r] eq ""))	{
+					elsif (($collrow{$field[$r]} ) ||
+					       ($collrow{$field2[$r]} eq "") ||
+					       ($field2[$r] eq ""))	{
 					  $timesused[$r][$i]++;
-					  $recsused[$r][$i] = $recsused[$r][$i] + $recs[$columns[$LOCIDCOL]];
+					  $recsused[$r][$i] = $recsused[$r][$i] + $recs[$collrow{'collection_no'}];
 					}
 					$i = $nterms[$r] + 2;
 				}
@@ -456,30 +454,30 @@ if ($region{$columns[$fieldno[$r]]} eq "") { print "$columns[$fieldno[$r]]<br>\n
 			 if (($i == $nterms[$r] + 1) || ($i == 1))	{
 				$nterms[$r]++;
 				$termid[$r] = $nterms[$r];
-				$fieldterms[$r][$nterms[$r]] = $columns[$fieldno[$r]];
-				if (($field2no[$r] > 0) && ($columns[$fieldno[$r]] ) &&
-					 ($columns[$field2no[$r]] ))	{
+				$fieldterms[$r][$nterms[$r]] = $collrow{$field[$r]};
+				if (($field2[$r] > 0) && ($collrow{$field[$r]} ) &&
+					 ($collrow{$field2[$r]} ))	{
 					$timesused[$r][$nterms[$r]] = 0.5;
-					$recsused[$r][$nterms[$r]] = $recs[$columns[$LOCIDCOL]]/2;
+					$recsused[$r][$nterms[$r]] = $recs[$collrow{'collection_no'}]/2;
 				}
-				elsif (($columns[$fieldno[$r]] ) ||
-					     ($columns[$field2no[$r]] eq "") ||
-					     ($field2no[$r] eq ""))	{
+				elsif (($collrow{$field[$r]} ) ||
+					     ($collrow{$field2[$r]} eq "") ||
+					     ($field2[$r] eq ""))	{
 					$timesused[$r][$nterms[$r]] = 1;
-					$recsused[$r][$nterms[$r]] = $recs[$columns[$LOCIDCOL]];
+					$recsused[$r][$nterms[$r]] = $recs[$collrow{'collection_no'}];
 				}
 			 }
-			 if (($field2no[$r] > 0) && ($columns[$field2no[$r]] ))	{
+			 if (($field2[$r] > 0) && ($collrow{$field2[$r]} ))	{
 				for ($i=1;$i<=$nterms[$r];$i++) {
-					if ($columns[$field2no[$r]] eq $fieldterms[$r][$i])	{
+					if ($collrow{$field2[$r]} eq $fieldterms[$r][$i])	{
 					  $term2id[$r] = $i;
-					  if ($columns[$fieldno[$r]] )	{
+					  if ($collrow{$field[$r]} )	{
 					    $timesused[$r][$i] = $timesused[$r][$i] + 0.5;
-					    $recsused[$r][$i] = $recsused[$r][$i] + ($recs[$columns[$LOCIDCOL]]/2);
+					    $recsused[$r][$i] = $recsused[$r][$i] + ($recs[$collrow{'collection_no'}]/2);
 					  }
 					  else	{
 					    $timesused[$r][$i]++;
-					    $recsused[$r][$i] = $recsused[$r][$i] + $recs[$columns[$LOCIDCOL]];
+					    $recsused[$r][$i] = $recsused[$r][$i] + $recs[$collrow{'collection_no'}];
 					  }
 					  $i = $nterms[$r] + 2;
 					}
@@ -487,14 +485,14 @@ if ($region{$columns[$fieldno[$r]]} eq "") { print "$columns[$fieldno[$r]]<br>\n
 				if (($i == $nterms[$r] + 1) || ($i == 1))	{
 					$nterms[$r]++;
 					$term2id[$r] = $nterms[$r];
-					$fieldterms[$r][$nterms[$r]] = $columns[$field2no[$r]];
-					if ($columns[$fieldno[$r]] )	{
+					$fieldterms[$r][$nterms[$r]] = $collrow{$field2[$r]};
+					if ($collrow{$field[$r]} )	{
 					  $timesused[$r][$nterms[$r]] = 0.5;
-					  $recsused[$r][$nterms[$r]] = $recs[$columns[$LOCIDCOL]]/2;
+					  $recsused[$r][$nterms[$r]] = $recs[$collrow{'collection_no'}]/2;
 					}
 					else	{
 					  $timesused[$r][$nterms[$r]] = 1;
-					  $recsused[$r][$nterms[$r]] = $recs[$columns[$LOCIDCOL]];
+					  $recsused[$r][$nterms[$r]] = $recs[$collrow{'collection_no'}];
 					}
 				}
 			 }
@@ -502,19 +500,19 @@ if ($region{$columns[$fieldno[$r]]} eq "") { print "$columns[$fieldno[$r]]<br>\n
 			if ($nsearchfields > 1)	{
 				if (($term2id[1] == 0) && ($term2id[2] == 0))	{
 					$co[$termid[1]][$termid[2]]++;
-					$corec[$termid[1]][$termid[2]] = $corec[$termid[1]][$termid[2]] + $recs[$columns[$LOCIDCOL]];
+					$corec[$termid[1]][$termid[2]] = $corec[$termid[1]][$termid[2]] + $recs[$collrow{'collection_no'}];
 				}
 				elsif (($term2id[1] == 0) && ($term2id[2] > 0))	{
 					$co[$termid[1]][$termid[2]] = $co[$termid[1]][$termid[2]] + 0.5;
 					$co[$termid[1]][$term2id[2]] = $co[$termid[1]][$term2id[2]] + 0.5;
-					$corec[$termid[1]][$termid[2]] = $corec[$termid[1]][$termid[2]] + ($recs[$columns[$LOCIDCOL]])/2;
-					$corec[$termid[1]][$term2id[2]] = $corec[$termid[1]][$term2id[2]] + ($recs[$columns[$LOCIDCOL]])/2;
+					$corec[$termid[1]][$termid[2]] = $corec[$termid[1]][$termid[2]] + ($recs[$collrow{'collection_no'}])/2;
+					$corec[$termid[1]][$term2id[2]] = $corec[$termid[1]][$term2id[2]] + ($recs[$collrow{'collection_no'}])/2;
 				}
 				elsif (($term2id[1] > 0) && ($term2id[2] == 0))	{
 					$co[$termid[1]][$termid[2]] = $co[$termid[1]][$termid[2]] + 0.5;
 					$co[$term2id[1]][$termid[2]] = $co[$term2id[1]][$termid[2]] + 0.5;
-					$corec[$termid[1]][$termid[2]] = $corec[$termid[1]][$termid[2]] + ($recs[$columns[$LOCIDCOL]])/2;
-					$corec[$term2id[1]][$termid[2]] = $corec[$term2id[1]][$termid[2]] + ($recs[$columns[$LOCIDCOL]])/2;
+					$corec[$termid[1]][$termid[2]] = $corec[$termid[1]][$termid[2]] + ($recs[$collrow{'collection_no'}])/2;
+					$corec[$term2id[1]][$termid[2]] = $corec[$term2id[1]][$termid[2]] + ($recs[$collrow{'collection_no'}])/2;
 				}
 				else	{
 					$co[$termid[1]][$termid[2]] = $co[$termid[1]][$termid[2]] + 0.25;
@@ -522,10 +520,10 @@ if ($region{$columns[$fieldno[$r]]} eq "") { print "$columns[$fieldno[$r]]<br>\n
 					$co[$termid[1]][$term2id[2]] = $co[$termid[1]][$term2id[2]] + 0.25;
 					$co[$term2id[1]][$term2id[2]] = $co[$term2id[1]][$term2id[2]] + 0.25;
 	
-					$corec[$termid[1]][$termid[2]] = $corec[$termid[1]][$termid[2]] + ($recs[$columns[$LOCIDCOL]])/4;
-					$corec[$term2id[1]][$termid[2]] = $corec[$term2id[1]][$termid[2]] + ($recs[$columns[$LOCIDCOL]])/4;
-					$corec[$termid[1]][$term2id[2]] = $corec[$termid[1]][$term2id[2]] + ($recs[$columns[$LOCIDCOL]])/4;
-					$corec[$term2id[1]][$term2id[2]] = $corec[$term2id[1]][$term2id[2]] + ($recs[$columns[$LOCIDCOL]])/4;
+					$corec[$termid[1]][$termid[2]] = $corec[$termid[1]][$termid[2]] + ($recs[$collrow{'collection_no'}])/4;
+					$corec[$term2id[1]][$termid[2]] = $corec[$term2id[1]][$termid[2]] + ($recs[$collrow{'collection_no'}])/4;
+					$corec[$termid[1]][$term2id[2]] = $corec[$termid[1]][$term2id[2]] + ($recs[$collrow{'collection_no'}])/4;
+					$corec[$term2id[1]][$term2id[2]] = $corec[$term2id[1]][$term2id[2]] + ($recs[$collrow{'collection_no'}])/4;
 				}
 			}
 			}
