@@ -26,6 +26,7 @@
 # Session object when creating the SQLBuilder object, ie, pass it in new().
 # Then use the appropriate permission sensitive methods to fetch the results.
 
+
 package SQLBuilder;
 
 use strict;
@@ -389,15 +390,18 @@ sub executeSQL {
 }
 
 
-# Pass this an SQL query.
 # Returns the entire result set as a matrix using read permissions
 # checking on all rows.
 #
 # SQL Query **must** include "collection_no" as the first column.
+#
+# ****SPEED NOTE****
+# This method is much faster than nextResultArrayUsingPermissions() if you
+# have many result rows to fetch.
 sub allResultsArrayRefUsingPermissions {
 	my SQLBuilder $self = shift;
 	
-	my $sql = shift;
+	my $sql = $self->SQLExpr();
 	
 	if ( (! $self->{perm}) || (! $self->{session})) {
 		Debug::logError("SQLBuilder must have valid permissions and sessions objects to execute this query.");
@@ -426,7 +430,6 @@ sub allResultsArrayRefUsingPermissions {
 	
 	
 	return $result;
-
 }
 
 
@@ -436,6 +439,10 @@ sub allResultsArrayRefUsingPermissions {
 # Also, **make sure** the SQL query includes the necessary
 # column called "collection_no" AS THE FIRST column **********!!!
 #
+# ****SPEED NOTE****
+# If you will be retrieving multiple rows, this is about twice as slow
+# as using the allResultsArrayRefUsingPermissions() method which returns them
+# all at once.  So, only use this one if there will only be a few rows.
 sub nextResultArrayUsingPermissions {
 	my SQLBuilder $self = shift;
 	

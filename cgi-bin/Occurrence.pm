@@ -134,23 +134,31 @@ sub formatAsHTML {
 	my $class = "";
 	my $order = "";
 	my $family = "";
+	
 
 	# grab the author names for the first reference.
 	my $ref = Reference->new();
 	$ref->setWithReferenceNumber($self->referenceNumber());
 	my $authors = $ref->authors();
 	
+	
 	# figure out how many (if any) reidentifications exist
-	my $allReids = $sql->allResultsArrayRefUsingPermissions("SELECT reid.collection_no, reid.genus_reso, 
+	# and simultaneously grab all rows as well.
+	$sql->setSQLExpr("SELECT reid.collection_no, reid.genus_reso, 
 		reid.genus_name, reid.species_reso,
 		reid.species_name, r.pubyr, reid.comments, reid.reference_no
 		FROM reidentifications reid, refs r
 		WHERE reid.reference_no = r.reference_no AND reid.occurrence_no = $occ_no
 		ORDER BY r.pubyr ASC");
+	my $reids = $sql->allResultsArrayRefUsingPermissions();
 		
-		
+	# the number of reids.
+	my $numReids;
 	
-	my $numReids = $sql->getSingleSQLResult("SELECT count(*) FROM reidentifications WHERE occurrence_no = $occ_no");
+	if ($reids) {
+		$numReids = scalar(@{$reids});
+	} else { $numReids = 0; }
+	
 	
 	# We have to treat the originally identified taxon differently from the reids
 	# because we want to display it differently in the table (without an = sign, 
@@ -212,23 +220,19 @@ sub formatAsHTML {
 		return $html;	
 	}
 	
-	$sql->setSQLExpr("SELECT reid.collection_no, reid.genus_reso, reid.genus_name, reid.species_reso,
-		reid.species_name, r.pubyr, reid.comments, reid.reference_no
-		FROM reidentifications reid, refs r
-		WHERE reid.reference_no = r.reference_no AND reid.occurrence_no = $occ_no
-		ORDER BY r.pubyr ASC");
+	# if we make it to here, then we have 1 or more reids, stored
+	# in the $allReids reference we got earlier...
 	
-	$sql->executeSQL();
-	my $index = 0;	
-	while (@result = $sql->nextResultArrayUsingPermissions()) {
-		$ref->setWithReferenceNumber($result[7]);
+	my $index = 0;
+	foreach my $result (@{$reids}) {
+		$ref->setWithReferenceNumber($result->[7]);
 	 	$authors = $ref->authors();
 		
 		if ($index == $numReids - 1) {
 			# then we're on the last one, so 
 			# we should figure out the class, order, and family.
 			
-			$taxon->setWithTaxonName("$result[2] $result[4]");
+			$taxon->setWithTaxonName("$result->[2] $result->[4]");
 			$class = $taxon->nameForRank("class");
 			$order = $taxon->nameForRank("order");
 			$family = $taxon->nameForRank("family");
@@ -236,7 +240,7 @@ sub formatAsHTML {
 		
 		# if a cell has a style (from a style sheet)
 		# this is used to make the entries which are indet non-italic, and the others italic.
-		if ($result[4] eq 'indet.') {
+		if ($result->[4] eq 'indet.') {
 			$style = "class=\"indet\""; 
 		} else {
 			$style = "class=\"nonindet\"";
@@ -246,11 +250,11 @@ sub formatAsHTML {
 				<$TD>$class</TD>
 				<$TD>$order</TD>
 				<$TD>$family</TD>
-				<$TD $style>= <A HREF=\"" . URLMaker::URLForTaxonName($result[2], $result[4]) .
-					 "\">$result[1] $result[2] $result[3] $result[4]</A></TD>
-				<$TD><A HREF=\"" . URLMaker::URLForReferenceNumber($result[7]) . "\">$authors</A></TD>
+				<$TD $style>= <A HREF=\"" . URLMaker::URLForTaxonName($result->[2], $result->[4]) .
+					 "\">$result->[1] $result->[2] $result->[3] $result->[4]</A></TD>
+				<$TD><A HREF=\"" . URLMaker::URLForReferenceNumber($result->[7]) . "\">$authors</A></TD>
 				<$TD></TD>
-				<$TD>$result[6]</TD>
+				<$TD>$result->[6]</TD>
 				</TR>";
 	
 		
