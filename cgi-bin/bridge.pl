@@ -2387,7 +2387,7 @@ sub processCollectionsSearch {
 	my $in_list = shift;  # for taxon info script
 	
 	#Debug::dbPrint("inlist = $in_list\n");
-	
+
 	# This is a list of all pulldowns in the collection search form.  
 	# These cannot use the LIKE wildcard, i.e. they must be
 	# exact matches regardless of the request.
@@ -2680,7 +2680,7 @@ IS NULL))";
 		#Debug::dbPrint("field $fieldName");
 		
 		$val = $q->param($fieldName);
-		if (defined $q->param($fieldName))  {
+		if (defined $q->param($fieldName) && $q->param($fieldName))  {
 			if ( $pulldowns{$fieldName} ) {
 				# It is in a pulldown... no wildcards
 				push(@terms, "$fieldName = '$val'");
