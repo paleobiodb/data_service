@@ -68,11 +68,16 @@ sub setAuthorsString
 #  * K. T. Frog, et al.
 #  * K. T. Frog, et alia
 #  * K. T. Frog and R. M. Nixon
+#  * K.T. Frog and R.M. Nixon
 #  * K. T. Frog & R. M. Nixon
 #  * K. T. Frog, R. M. Nixon and C. Kangaroo
 #  * K. T. Frog, R. M. Nixon & C. Kangaroo
 #  * K. T. Frog, R. M. Nixon, C. Kangaroo
 #  * K. T. Frog and R. M. Nixon and C. Kangaroo
+#  * Frog K. T., Nixon R. M.
+#  * Frog K. T., and Nixon R. M.
+#  * Frog K. T., & Nixon R. M.
+#  * Frog K.T., & Nixon R.M.
 # Dots and spaces may be omitted from initials. The trailing dot following
 # 'et al.' may be omitted.  The leading ', ' before 'et al.' may be omitted.
 # Initials may be omitted altogether for any author
@@ -510,7 +515,7 @@ sub getAuthorsString
   }
   elsif(($au1init || $au1last) && ($au2init || $au2last))
   {
-    $retVal .= ', and ';
+    $retVal .= ' and ';
   }
   $retVal .= $au2init;
   $retVal .= ' ' if $au2init && $au2last;
