@@ -23,17 +23,23 @@ It gives information on the <a href="#Collections">main collection record form</
 
 <h3>General comments</h3>
 
+<h4>This section is very important. Please read all of it very carefully.</h4>
+
 <ul>
 <li>If you have any questions, please write to either the <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">Database coordinator</a> or <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">Database manager</a>.<p>
 
 <li>Each data record should include <i>one</i> fossil collection.
 A geographic locality or stratigraphic level may include many collections.
 So, if the authors give a table listing the taxa in several bulk samples or fossiliferous horizons, enter each column of data as a separate collection record.
+Likewise, if two papers describe material clearly, entirely collected at completely different times from the same place, make two collection records.
 We can always lump such records later when we do analyses; we cannot separate out such collections if they have been lumped during data entry. <i>Lumping collections destroys data.</i><p>
 
 <li>However, <i>don't</i> split every paper as a new collection record.
 A "collection" is any set of fossils whose exact geographic and stratigraphic position cannot be distinguished, regardless of when they were collected or described, and by whom.
-So, if five people describe five new, unrelated species in five different papers, don't make five collection records unless different physical collections from different places and/or strata are involved.<p>
+So, if five people describe five new, unrelated species in five different papers, don't make five collection records unless different physical collections from different places and/or strata are involved.
+Instead, enter the occurrences from the oldest paper first, and then add the occurrences from each younger paper in order to the existing taxonomic list.
+<i>Do not</i> make a separate collection just because the older paper gave more vague geographic and stratigraphic data - if two taxonomic lists apply to mostly or entirely the same physical set of specimens, there definitely should be only one collection record and taxonomic occurrence list.
+If a newer paper merely changes the name of an existing occurrence, use the "Reidentify occurrences" script to record the name change.<p>
 
 <li><i>Never</i> make a new collection record just because your authorizer doesn't own an old record for the same actual hole in the ground.
 Instead, add occurrences to the other authorizer's taxonomic list.
@@ -41,6 +47,12 @@ The system <i>does</i> allow you to do this.
 For example, if authorizer A owns Mazon Creek and put in plants, but you work for authorizer B and want to put in invertebrates, add your occurrences to A's list.<p>
 
 <li>When in doubt, enter the data. Enter all the taxa on the list, including algae, vertebrates, microfossils, trace fossils, etc. Give complete citations. Give the longest possible name for a collection.<p>
+
+<li>The collection record represents our best current knowledge about the collection.
+So, if the original paper said "Eocene" but a later paper narrowed the age to "Middle Eocene," enter "Middle Eocene" as the time interval.
+Both references need to be associated with the collection, which you do by making each reference in turn your "current" reference, and then editing the collection record while that reference is "current."
+<i>Important note:</i> occurrences do <i>not</i> represent the most recent name put on an occurrence that first appeared in an older paper.
+Instead, always enter the original name in the occurrence list and then record name changes using the "Reidentify occurrences" function.<p>
 
 <li>Lay off the "submit" button. We <i>know</i> it's really frustrating to wait to hear back from our server once you send in a record - but if you keep hitting "submit," you'll tie up the server even more, slowing down the system and potentially corrupting the data files by creating multiple, identical copies of the same record.
 Remember, the extra hang time could just as well be the fault of your browser, your local network, or a logjam on the Internet as a problem with the NCEAS server.<p>
@@ -90,8 +102,20 @@ A <FONT COLOR="#ff0000">required</FONT> field, intended to provide a unique iden
 An optional field for alternative names by which the collection may be known.  This may permit the recognition in the database of two or more collections contributed by different researchers that were derived from the same, or overlapping, venues.  Museum numbers for collections should also be entered here.<p>
 
 <b>Subset of collection #</b><br>
-If this new collection is a subset of a more general collection, enter the collection ID number of this larger collection.
-For example, if you have a bulk sample from a roadcut and an older, previously entered paper describes the general fauna from the roadcut, create a new collection for the bulk sample and enter the ID of the older, general faunal collection here.<p>
+If this new collection is a spatiotemporal subset of a more general collection, enter the collection ID number of this larger collection.
+For example, if you have a new bulk sample from a roadcut and an older, previously entered paper describes the general fauna from the roadcut, create a new collection for the bulk sample and enter the ID number of the older, general faunal collection here.
+<i>However,</i> we strongly prefer to avoid entering both general collections and subset collections.
+So, never create both general and subset collections if they largely represent the same physical acts of collection.
+In other words, don't make two collections if the taxonomic lists pertain to mostly or entirely the same actual specimens.
+In those cases, record the small-scale collection and just record some comments mentioning any stray occurrences you can't nail down to a specific hole in the ground.<p>
+
+<b>References</b><br>
+The references that should be associated with a collection are computed for you by the system.
+Whenever you edit the collection while you are using a reference (i.e., the "current" reference), that reference is associated with the collection record.
+Likewise, if you add occurrences to a taxonomic list while using a reference, that reference becomes associated.
+We track one reference as the "primary" reference.
+The primary reference is the first to be published that (1) appears in a book or peer reviewed journal (if earlier references were in gray literature); (2) gives at least one taxonomic occurrence; and (3) gives key data including the geographic location and geological time interval of the collection.
+Once more than one reference is associated with a collection, you can change the one that is designated as the primary reference by clicking a radio button. <p>
 
 <b>Author's main reason for describing collection</b><br>
 A <FONT COLOR="#ff0000">required</FONT> field.
@@ -178,7 +202,7 @@ If the lat/lon for the geographic location were taken from a GPS device or inter
 <A NAME="StratigraphicInformation"></A>
 
 <p>
-<b>Period,</b> <b>Epoch/series,</b> <b>International age/stage</b>, and <b>Local age/stage</a><br>
+<b>Period,</b> <b>Epoch/series,</b> <b>International age/stage</b>, and <b>Local age/stage</b><br>
 These fields were used previously to record time data, but have now been abandoned.
 The field contents are printed when you view an old collection but will be empty for a new collection.
 The information is printed to help you correct the data in the <i>Time interval</i> field (see).</p>
@@ -493,8 +517,8 @@ Provide any additional information that you think is important with respect to t
 <hr>
 <a name="Occurrences"></a>
 <H3>Taxonomic occurrences</H3>
-
 <p>
+
 <b>Genus name modifier</b><br>
 An optional menu of modifiers like "aff." and "cf." that apply to the genus name. You may not enter more than one modifier, so pick the most relevant one. In
 order of preference, these are "n. gen.," "aff.," "cf.," "ex gr.," and "?". 
@@ -553,6 +577,16 @@ Enter the ID number of the relevant reference if the occurrence is not documente
 
 <b>Comments</b><br>
 If you have modified the identification that originally appeared in the main reference, make sure to add a comment indicating what you have done and describing the original identification.<p>
+
+<b>Classification</b><br>
+After you submit the occurrences, you will see a taxonomic list that includes the appropriate higher order names (class, order, and family) that go along with each occurrence.
+If a name is not classified or the higher order names are wrong, take the following steps:
+<ul>
+<li>Make sure the name is on the master list of names (= the "authorities" table) by using the "Add/edit taxonomic name" function to look for it.
+<li>The version we have actually may be a different thing (e.g., your name is of a plant and we only have a record for an animal name that is spelt the same way). If so, then create a new authority record, and afterwards create an opinion record.
+<li>If the name is on the master list but is simply not classified, use the "Add/edit taxonomic opinion" function to record the next higher taxon it belongs to (e.g., for a genus, record the family, subfamily, or tribe it belongs to).
+</ul>
+
 <hr>
 </BODY>
 </HTML>
