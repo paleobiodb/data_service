@@ -6300,10 +6300,13 @@ sub processNewReIDs {
 		# added 11.7.02 JA (omitted by Garot!)
 			push(@fieldList, 'created');
 			push(@row, '"' . now() . '"');
+
+
 		# need these to check whether to add secondary refs
 		#  (see below) JA 6.5.04
 			my $collection_no;
 			my $reference_no = $s->get('reference_no');
+            my ($genus_name,$genus_reso,$species_reso,$species_name);
 			for(my $j = 0;$j < $numFields;$j++)
 			{
 				my $fieldName = $fieldNames[$j];
@@ -6313,6 +6316,10 @@ sub processNewReIDs {
 				if ( $fieldName eq "collection_no" )	{
 					$collection_no = $curVal;
 				}
+                $genus_reso = $curVal if ($fieldName eq 'genus_reso');
+                $genus_name= $curVal if ($fieldName eq 'genus_name');
+                $species_reso = $curVal if ($fieldName eq 'species_reso');
+                $species_name = $curVal if ($fieldName eq 'species_name');
 				
 				next if  $fieldName eq 'reference_no';
 				# Skip rows that don't have a required data item
@@ -6351,8 +6358,37 @@ sub processNewReIDs {
 				}
 				#print "<br>$i $fieldName: $val";
 			}
+
+            
+            # guess the taxon no by trying to find a single match for the name
+            #  in the authorities table JA 1.4.04
+            # see Reclassify.pm for a similar operation
+            # only do this for non-informal taxa
+            # missing from here, added in 03/23/2005 PS
+            my $taxon_no = 0;
+            if ( $genus_reso !~ /informal/ )  {
+                my @taxon_nos;
+                # Try Genus+species first, if possible
+                if ( $species_name !~ /^(indet\.|sp\.)/i && $species_reso !~ /informal/) {
+                    @taxon_nos = TaxonInfo::getTaxonNos($dbt,"$genus_name $species_name");
+                    if (scalar(@taxon_nos) == 1) {
+                        $taxon_no = $taxon_nos[0];
+                    }
+                }    
+                # Lastly try just Genus. If taxon_nos > 0, we found 1 match, or too many
+                # In either case, we're hosed
+                if ( !scalar(@taxon_nos) ) {
+                    @taxon_nos = TaxonInfo::getTaxonNos($dbt,$genus_name);
+                    if (scalar(@taxon_nos) == 1) {
+                        $taxon_no = $taxon_nos[0];
+                    }    
+                } 
+            }
+            #print "sn $species_name sr $species_reso gn $genus_name gr $genus_reso t# $taxon_no<br>";
+			push(@fieldList, 'taxon_no');
+			push(@row, $taxon_no);
  
-			push(@fieldList, 'modifier');;
+			push(@fieldList, 'modifier');
 			push(@row, $dbh->quote($s->get('enterer')));
 #			push(@fieldList, 'authorizer', 'enterer', 'modifier');;
 #			push(@row, $dbh->quote($s->get('authorizer')), $dbh->quote($s->get('enterer')), $dbh->quote($s->get('enterer')));
