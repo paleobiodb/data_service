@@ -52,7 +52,12 @@ sub getResearchProjectRefsStr{
         for $refref (@refrefs)  {
             $reflist .= "," . ${$refref}[0];
         }
-        $reflist =~ s/^,//;
+        if ($reflist) {
+            $reflist =~ s/^,//;
+        } else {
+            # in case of an empty list
+            $reflist = "0";
+        }    
     }
 	return $reflist;
 }
@@ -549,13 +554,15 @@ sub get_real_pubyr{
 }
 
 ##
-#
-#
+# Recursively find all taxon_nos or genus names belonging to a taxon
 ##
+# Hacked to return taxon_nos as well, and an array if a user assigns return value to an array PS 12/29/2004
 sub taxonomic_search{
 	my $name = shift;
 	my $dbt = shift;
 	my $taxon_no = (shift or "");
+    my $return_taxon_nos = (shift or "");
+
 	my $sql = "";
 	my @results = ();
 	if($taxon_no eq ""){
@@ -571,19 +578,35 @@ sub taxonomic_search{
 
 	# We might not get a number or rank if this name isn't in authorities yet.
 	if(!$taxon_no){
-		return "'$name'";
+        if ($return_taxon_nos ne "") {
+            return wantarray ? (-1) : "-1";
+        } else {
+    		return wantarray ? ($name) : "'$name'";
+        }
 	}
 	new_search_recurse($taxon_no, $dbt, 1);
-	my $results = join(',', keys %passed);
-	
+	my $results;
+
+    if ($return_taxon_nos ne "") {
+        if (wantarray) {
+            return keys %passed;
+        } else {
+            return join(',', keys %passed);
+        }
+    } else {
+        $results = join(',',keys %passed);
+    }
     $sql = "SELECT taxon_name FROM authorities WHERE taxon_no IN ($results)";
     @results = @{$dbt->getData($sql)};
 
-	foreach my $item (@results){
-        $item = "'".$item->{taxon_name}."'";
-	}
-
-	$results = join(",",@results);
+    if (wantarray) {
+        return @results;
+    } else {
+        foreach my $item (@results){
+            $item = "'".$item->{taxon_name}."'";
+        }
+        return join(',', @results);
+    }
 	
 	return $results;
 }
@@ -879,6 +902,66 @@ sub authorAndPubyrFromTaxonNo{
     }
 	# This could be empty, so it's up to the caller to test the return vals.
 	return \%return_vals;
+}
+
+## sub getPaleoCoords
+#	Description: Converts a set of floating point coordinates + min/max interval numbers.
+#	             determines the age from the interval numbers and returns the paleocoords.
+#	Arguments:   $dbh - database handle
+#				 $dbt - database transaction object	
+#				 $max_interval_no,$min_interval_no - max/min interval no
+#				 $f_lngdeg, $f_latdeg - decimal lontitude and latitude
+#	Returns:	 $paleolng, $paleolat - decimal paleo longitude and latitutde, or undefined
+#                variables if a paleolng/lat can't be found 
+#
+##
+sub getPaleoCoords {
+    my $dbh = shift;
+    my $dbt = shift;
+    my $max_interval_no = shift;
+    my $min_interval_no = shift;
+    my $f_lngdeg = shift;
+    my $f_latdeg = shift;
+
+    use TimeLookup;
+    use Map;    
+
+    # Get time interval information
+    @_ = TimeLookup::findBoundaries($dbh,$dbt);
+    my %upperbound = %{$_[0]};
+    my %lowerbound = %{$_[1]};
+ 
+
+    my ($paleolat, $paleolng,$rx,$ry,$pid); 
+    if ($f_latdeg <= 90 && $f_latdeg >= -90  && $f_lngdeg <= 180 && $f_lngdeg >= -180 ) {
+        my $colllowerbound =  $lowerbound{$max_interval_no};
+        my $collupperbound;
+        if ($min_interval_no)  {
+            $collupperbound = $upperbound{$min_interval_no};
+        } else {        
+            $collupperbound = $upperbound{$max_interval_no};
+        }
+        my $collage = ( $colllowerbound + $collupperbound ) / 2;
+        $collage = int($collage+0.5);
+        main::dbg("collage $collage max_i $max_interval_no min_i $min_interval_no colllowerbound $colllowerbound collupperbound $collupperbound ");
+
+        # Get Map rotation information - needs maptime to be set (to collage)
+        # rotx, roty, rotdeg get set by the function, needed by projectPoints below
+        my $map_o = new Map;
+        $map_o->{maptime} = $collage;
+        $map_o->mapGetRotations();
+
+        my ($lngdeg, $latdeg);
+        ($lngdeg,$latdeg,$rx,$ry,$pid) = $map_o->projectPoints($f_lngdeg,$f_latdeg);
+        main::dbg("lngdeg: $lngdeg latdeg $latdeg");
+        if ( $lngdeg ne "NaN" && $latdeg ne "NaN" )       {
+            $paleolng = $lngdeg;
+            $paleolat = $latdeg;
+        } 
+    }
+
+    main::dbg("Paleolng: $paleolng Paleolat $paleolat x $lngdeg y $latdeg fx $f_lngdeg fy $f_latdeg collage $collage rx $rx ry $ry pid $pid");
+    return ($paleolng, $paleolat);
 }
 
 
