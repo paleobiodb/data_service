@@ -228,6 +228,9 @@ sub checkStartForm{
 		print "<center><h3>No results found</h3>";
 		print "<p><b>Please search again</b></center>";
 		print searchForm($q, 1); # param for not printing header with form
+		if($s->get("enterer") ne "Guest" && $s->get("enterer") ne ""){
+			print "<center><p><a href=\"/cgi-bin/bridge.pl?action=startTaxonomy\"><b>Add taxonomic information</b></a></center>";
+		}
 		print main::stdIncludes("std_page_bottom");
 	}
 	# if we got just one result, it could be higher taxon, or an exact
@@ -298,11 +301,11 @@ sub displayTaxonInfoResults{
 	my $dbh = shift;
 	my $s = shift;
 	my $dbt = shift;
+
 	my $genus_name = $q->param("genus_name");
 	my $taxon_type = $q->param("taxon_rank");
 	my $taxon_no = 0;
 
-	require Map;
 	# Looking for "Genus (23456)" or something like that.	
 	$genus_name =~ /(.*?)\((\d+)\)/;
 	$taxon_no = $2;
@@ -323,7 +326,7 @@ sub displayTaxonInfoResults{
 		my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='".
 				  $entered_name."'";
 		$taxon_no = ${$dbt->getData($sql)}[0]->{taxon_no};
-		# urlencode name in case we got a 'Genus species' combo
+		# Strip extraneous spaces in name in case we got a 'Genus species' combo
 		$entered_name =~ s/\s+/ /g;
 	}
 	my $entered_no = $taxon_no;
@@ -340,13 +343,215 @@ sub displayTaxonInfoResults{
 	# Get the sql IN list for a Higher taxon:
 	my $in_list = "";
 	if($taxon_type eq "Higher taxon"){
-		#$in_list = PBDBUtil::taxonomic_search($q->param('genus_name'), $dbt, $taxon_no);
 		my $name = $q->param('genus_name');
 		$in_list = `./recurse $name`;
 	}
 
+
 	print main::stdIncludes("std_page_top");
-	print "<center><h2>$genus_name</h2></center>";
+
+	# Write out a hidden with the 'genus_name' and 'taxon_rank' for subsequent
+	# hits to this page
+	print "<form name=module_nav_form method=POST action=\"$exec_url\">";
+    print "<input type=hidden name=action value=processModuleNavigation>";
+    print "<input type=hidden name=genus_name value=\"".
+		  $q->param('genus_name')."\">";
+    print "<input type=hidden name=taxon_rank value=\"$taxon_type\">";
+
+	# Now, the checkboxes and submit button, 
+
+	my @modules_to_display = $q->param('modules');
+	my %module_num_to_name = (1 => "classification",
+							  2 => "taxonomic history",
+							  3 => "map",
+							  4 => "collections");
+
+	# Set the default:
+	if(!@modules_to_display){
+		$modules_to_display[0] = 1;
+	}
+	
+	# Put in order
+	@modules_to_display = sort {$a <=> $b} @modules_to_display;
+
+	# First module has the checkboxes on the side.
+	print "<table width=\"80%\"><tr><td></td>";
+	print "<td align=center><h2>$genus_name</h2></td></tr>";	
+	print "<tr><td><table cellspacing=2><tr><td bgcolor=black>";
+	print "<table bgcolor=\"E0E0E0\"><tr><td valign=\"top\">".
+		  "<center><b><div class=\"large\">Display</div></b></center></td></tr>";
+	print "<tr><td align=left valign=top>";
+	foreach my $key (sort keys %module_num_to_name){
+		print "<nobr><input type=checkbox name=modules value=$key";
+		foreach my $checked (@modules_to_display){
+			if($key == $checked){
+				print " checked";
+				last;
+			}
+		}
+		print ">$module_num_to_name{$key}</nobr><br>";
+	}
+
+	# image thumbs:
+	my @selected_images = $q->param('image_thumbs');
+	require Images;
+	my @thumbs = Images::processViewImages($dbt, $q, $s);
+	foreach my $thumb (@thumbs){
+		print "<input type=checkbox name=image_thumbs value=";
+		print $thumb->{image_no};
+		foreach my $image_num (@selected_images){
+			if($image_num == $thumb->{image_no}){
+				print " checked";
+				last;
+			}
+		}
+		print ">";
+		my $thumb_path = $thumb->{path_to_image};
+		$thumb_path =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
+		print "<img align=middle src=\"$thumb_path\" border=1 vspace=3><br>";
+	}
+
+	print "<p><center><input type=submit value=\"update\"></center>";
+	print "</td></tr></table></td></tr></table></td>";
+	print "<td>";
+	# First module here
+	my $first_module = shift @modules_to_display;
+	doModules($dbt,$dbh,$q,$s,$exec_url,$first_module,$genus,$species,$in_list);
+	print "</td></tr></table>";
+	print "<hr width=\"100%\">";
+
+	# Go through the list
+	foreach my $module (@modules_to_display){
+		print "<center><table>";
+		print "<tr><td>";
+		doModules($dbt,$dbh,$q,$s,$exec_url,$module,$genus,$species,$in_list);
+		print "</td></tr>";
+		print "</table></center>";
+		print "<hr width=\"100%\">";
+	}
+	# images are last
+	if(@selected_images){
+		print "<center><h3>Images</h3></center>";
+		foreach my $image (@selected_images){
+			foreach my $res (@thumbs){
+				if($image == $res->{image_no}){
+					print "<center><table><tr><td>";
+					print "<center><img src=\"".$res->{path_to_image}.
+						  "\" border=1></center><br>";
+					print "<i>".$res->{caption}."</i><br>";
+					print "<div class=\"small\"><b>Original name of image:</b> ".$res->{original_filename}."</div>";
+					print "</td></tr></table></center>";
+					print "<hr width=\"100%\">";
+					last;
+				}
+			}
+		}
+	}
+
+	my $clean_entered_name = $entered_name;
+	$clean_entered_name =~ s/ /\+/g;
+
+	print "<div style=\"font-family : Arial, Verdana, Helvetica; font-size : 14px;\">";
+	if($s->get("enterer") ne "Guest" && $s->get("enterer") ne ""){
+		# Entered Taxon
+		print "<center><a href=\"/cgi-bin/bridge.pl?action=".
+			  "startTaxonomy&taxon_name=$clean_entered_name";
+		if($entered_no){
+			  print "&taxon_no=$entered_no";
+		}
+		print "\"><b>Edit taxonomic data for $entered_name</b></a> - ";
+		
+		unless($entered_name eq $genus_name){
+
+			my $clean_genus_name = $genus_name;
+			$clean_genus_name =~ s/ /\+/g;
+
+			# Verified Taxon
+			print "<a href=\"/cgi-bin/bridge.pl?action=".
+				  "startTaxonomy&taxon_name=$clean_genus_name";
+			if($taxon_no){
+				  print "&taxon_no=$taxon_no";
+			}
+			print "\"><b>Edit taxonomic data for $genus_name</b></a> - \n";
+		}
+		print "<a href=\"/cgi-bin/bridge.pl?action=startImage\">".
+			  "<b>Enter an image</b></a> - \n";
+	}
+
+	print "<a href=\"/cgi-bin/bridge.pl?action=beginTaxonInfo\">".
+		  "<b>Get info on another taxon</b></a></center></div>\n";
+
+	print "</form><p>";
+	print main::stdIncludes("std_page_bottom");
+}
+
+sub doModules{
+	my $dbt = shift;
+	my $dbh = shift;
+	my $q = shift;
+	my $s = shift;
+	my $exec_url = shift;
+	my $module = shift;
+	my $genus = shift;
+	my $species = shift;
+	my $in_list = shift;
+	
+	# If $q->param("genus_name") has a space, it's a "Genus species" combo,
+	# otherwise it's a "Higher taxon."
+	($genus, $species) = split /\s+/, $q->param("genus_name");
+
+	# classification
+	if($module == 1){
+		print "<table width=\"100%\">".
+			  "<tr><td align=\"middle\"><h3>Classification</h3></td></tr>".
+			  "<tr><td valign=\"top\" align=\"middle\">";
+
+		print displayTaxonClassification($dbt, $genus, $species, $taxon_no);
+		print "</td></tr></table>";
+
+	}
+	# synonymy
+	elsif($module == 2){
+		print displayTaxonSynonymy($dbt, $genus, $species);
+	}
+	# map
+	elsif($module == 3){
+		print "<center><table><tr><td align=\"middle\"><h3>Distribution</h3></td></tr>".
+			  "<tr><td align=\"middle\" valign=\"top\">";
+		# MAP USES $q->param("genus_name") to determine what it's doing.
+		my $map_html_path = doMap($dbh, $dbt, $q, $s, $in_list);
+		if($map_html_path =~ /^\/public/){
+			# reconstruct the full path the image.
+			$map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
+		}
+		open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
+		while(<MAP>){
+			print;
+		}
+		close MAP;
+		print "</td></tr></table></center>";
+		# trim the path down beyond apache's root so we don't have a full
+		# server path in our html.
+		$map_html_path =~ s/.*?(\/public.*)/$1/;
+		print "<input type=hidden name=\"map_num\" value=\"$map_html_path\">";
+	}
+	# collections
+	elsif($module == 4){
+		print doCollections($exec_url, $q, $in_list);
+	}
+}
+
+sub doMap{
+	my $dbh = shift;
+	my $dbt = shift;
+	my $q = shift;
+	my $s = shift;
+	my $in_list = shift;
+	my $map_num = $q->param('map_num');
+
+	if($q->param('map_num')){
+		return $q->param('map_num');
+	}
 
 	$q->param(-name=>"taxon_info_script",-value=>"yes");
 	my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape', 'dotcolor', 'dotborder');
@@ -373,31 +578,26 @@ sub displayTaxonInfoResults{
 		$q->param('projection'=>'rectilinear');
 	}
 
-	print "<table width=\"100%\">".
-		  "<tr><td align=\"middle\"><h3>Classification</h3></td><td align=\"middle\"><h3>Distribution</h3></td></tr>";
-	print "<tr><td width=\"40%\" valign=\"top\" align=\"middle\">";
-
-	# If $q->param("genus_name") has a space, it's a "Genus species" combo,
-	# otherwise it's a "Higher taxon."
-	my ($genus, $species) = split /\s+/, $q->param("genus_name");
-
-	displayTaxonClassification($dbt, $genus, $species, $taxon_no);
-
-	print"</td><td width=\"60%\" align=\"middle\" valign=\"top\">";
-	# MAP USES $q->param("genus_name") to determine what it's doing.
+	require Map;
 	my $m = Map->new( $dbh, $q, $s, $dbt );
 	my $perm_rows = $m->buildMapOnly($in_list);
 	my @perm_rows = @{$perm_rows};
 	if(@perm_rows > 0){
-		$m->mapDrawMap($perm_rows);
+		return $m->mapDrawMap($perm_rows);
 	}
 	else{
-		print "<i>No distribution data available.</i>";
+		return "<i>No distribution data available.</i>";
 	}
-	print "</td></tr></table>";
-	print "<hr>";
+}
+
+sub doCollections{
+	my $exec_url = shift;
+	my $q = shift;
+	my $in_list = shift;
+	my $output = "";
 
 	$q->param(-name=>"limit",-value=>1000000);
+	$q->param(-name=>"taxon_info_script",-value=>"yes");
 
 	# Get all the data from the database
 	@data = @{main::displayCollResults($in_list)};	
@@ -424,67 +624,30 @@ sub displayTaxonInfoResults{
 		# Do this locally because the module never gets exec_url
 		#   from bridge.pl
 		my $exec_url = $q->url();
-		print "<center><h3>Collections</h3></center>";
-		print "<table width=\"100%\"><tr bgcolor=\"white\">";
-		print "<th align=\"middle\">Time - place</th>";
-		print "<th align=\"left\">PBDB collection number</th></tr>";
+		$output .= "<center><h3>Collections</h3></center>";
+		$output .= "<table width=\"100%\"><tr bgcolor=\"white\">";
+		$output .= "<th align=\"middle\">Time - place</th>";
+		$output .= "<th align=\"left\">PBDB collection number</th></tr>";
 		my $row_color = 0;
 		foreach my $key (@sorted){
 			if($row_color % 2 == 0){
-				print "<tr bgcolor=\"E0E0E0\">";
+				$output .= "<tr bgcolor=\"E0E0E0\">";
 			} 
 			else{
-				print "<tr bgcolor=\"white\">";
+				$output .= "<tr bgcolor=\"white\">";
 			}
-			print "<td align=\"middle\" valign=\"top\">".
+			$output .= "<td align=\"middle\" valign=\"top\">".
 				  "<span class=tiny>$key</span></td><td align=\"left\">";
 			foreach  my $val (@{$time_place_coll{$key}}){
 				my $link=Collections::createCollectionDetailLink($exec_url,$val,$val);
-				print "$link ";
+				$output .= "$link ";
 			}
-			print "</td></tr>\n";
+			$output .= "</td></tr>\n";
 			$row_color++;
 		}
-		print "</table><hr>";
+		$output .= "</table>";
 	}
-	
-	#subroutine to do the synonymy
-	displayTaxonSynonymy($dbt, $genus, $species);
-
-	my $clean_entered_name = $entered_name;
-	$clean_entered_name =~ s/ /\+/g;
-
-	if($q->param("user") ne "Guest"){
-		# Entered Taxon
-		print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
-			  "startTaxonomy&taxon_name=$clean_entered_name";
-		if($entered_no){
-			  print "&taxon_no=$entered_no";
-		}
-		print "\">Edit taxonomic data for $entered_name</a>".
-			  "</b></p></center>\n";
-		
-		unless($entered_name eq $genus_name){
-
-			my $clean_genus_name = $genus_name;
-			$clean_genus_name =~ s/ /\+/g;
-
-			# Verified Taxon
-			print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
-				  "startTaxonomy&taxon_name=$clean_genus_name";
-			if($taxon_no){
-				  print "&taxon_no=$taxon_no";
-			}
-			print "\">Edit taxonomic data for $genus_name</a>".
-				  "</b></p></center>\n";
-		}
-	}
-
-	print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
-		  "beginTaxonInfo\">Get info on another taxon</a>".
-		  "</b></p></center>\n";
-
-	print main::stdIncludes("std_page_bottom");
+	return $output;
 }
 
 ##
@@ -514,13 +677,13 @@ sub displayTaxonClassification{
 	my %classification = ();
 
 	# if we didn't get a species, figure out what rank we got
-	if($genus && $species eq ""){
+	if($genus && ($species eq "")){
 		$taxon_name = $genus;
 		# Initialize the classification hash:
 		my $sql="SELECT taxon_rank FROM authorities WHERE taxon_name='$genus'";
 		my @results = @{$dbt->getData($sql)};
 		$taxon_rank = $results[0]->{taxon_rank};
-		$classification{$results[0]->{taxon_rank}} = $genus;
+		${$classification{$taxon_rank}}[0] = $genus;
 	}
 	else{
 		$taxon_name = $genus;
@@ -528,8 +691,8 @@ sub displayTaxonClassification{
 		$taxon_rank = "species";
 		# Initialize our classification hash with the info
 		# that came in as an argument to this method.
-		$classification{"species"} = $species;
-		$classification{"genus"} = $genus;
+		${$classification{"species"}}[0] = $species;
+		${$classification{"genus"}}[0] = $genus;
 	}
 
 	# default to a number that doesn't exist in the database.
@@ -554,6 +717,7 @@ sub displayTaxonClassification{
 		}
 		else{
 			$results[0] = {"taxon_no" => $easy_number};
+			${$classification{$taxon_rank}}[1] = $easy_number;
 			# reset to zero so we don't try to use this on successive loops.
 			$easy_number = 0;
 		}
@@ -561,6 +725,7 @@ sub displayTaxonClassification{
 		if(defined $results[0]){
 			# Save the taxon_no for keying into the opinions table.
 			$child_no = $results[0]->{taxon_no};
+			${$classification{$taxon_rank}}[1] = $results[0]->{taxon_no};
 
 			# Insurance for self referential / bad data in database.
 			# NOTE: can't use the tertiary operator with hashes...
@@ -588,6 +753,8 @@ sub displayTaxonClassification{
 				# COULD CALL SELF WITH EMPTY SPECIES NAME AND AN EXIT...
 				if(defined $results[0]){
 					$child_no = $results[0]->{taxon_no};
+					${$classification{genus}}[0] = $genus;
+					${$classification{genus}}[1] = $results[0]->{taxon_no};
 
 					if($child_no_visits{$child_no}){
 						$child_no_visits{$child_no} += 1; 
@@ -655,7 +822,9 @@ sub displayTaxonClassification{
 					$taxon_rank = $auth_hash_ref->{"taxon_rank"};
 					$taxon_name = $auth_hash_ref->{"taxon_name"};
 					#print "ADDING $taxon_rank of $taxon_name<br>";
-					$classification{$taxon_rank} = $taxon_name;
+					#$classification{$taxon_rank} = [];
+					${$classification{$taxon_rank}}[0] = $taxon_name;
+					${$classification{$taxon_rank}}[1] = $parent_no;
 				}
 				else{
 					# No results might not be an error: 
@@ -676,7 +845,8 @@ sub displayTaxonClassification{
 		}
 	}
 
-	print "<table width=\"50%\"><tr><th>Rank</th><th>Name</th></tr>";
+	my $output = "";
+	$output .= "<table width=\"50%\"><tr valign=top><th>Rank</th><th>Name</th><th>Author</th><th>Publication year</th></tr>";
 	my $counter = 0;
 	# Print these out in correct order
 	my @taxon_rank_order = ('superkingdom','kingdom','subkingdom','superphylum','phylum','subphylum','superclass','class','subclass','infraclass','superorder','order','suborder','infraorder','superfamily','family','subfamily','tribe','subtribe','genus','subgenus','species','subspecies');
@@ -685,15 +855,25 @@ sub displayTaxonClassification{
 	my $lastrank;
 	foreach my $rank (@taxon_rank_order){
 		# Don't provide links for any rank higher than 'order'
+		my %auth_yr;
 		if(exists $classification{$rank}){
-		  if($taxon_rank_order{$rank} < 11){
+		  if(exists $classification{$rank}[1]){
+			%auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$classification{$rank}[1])};
+		  }
+		  $auth_yr{author1last} =~ s/\s+/&nbsp;/;	
+		  # Don't link 'sp, 'sp.', 'indet' or 'indet.' either.
+		  if($taxon_rank_order{$rank} < 11 || $classification{$rank}[0] =~ /(sp\.{0,1}|indet\.{0,1})$/){
 			if($counter % 2 == 0){
-				print "<tr bgcolor=\"E0E0E0\"><td align=\"middle\">$rank</td>".
-					  "<td align=\"middle\">$classification{$rank}</td></tr>\n";
+				$output .="<tr bgcolor=\"E0E0E0\"><td align=\"middle\">$rank".
+						  "</td><td align=\"middle\">$classification{$rank}[0]".
+						  "</td><td>$auth_yr{author1last}</td>".
+						  "<td>$auth_yr{pubyr}</td></tr>\n";
 			}
 			else{
-				print "<tr><td align=\"middle\">$rank</td>".
-					  "<td align=\"middle\">$classification{$rank}</td></tr>\n";
+				$output .="<tr><td align=\"middle\">$rank</td>".
+					      "<td align=\"middle\">$classification{$rank}[0]</td>".
+						  "<td>$auth_yr{author1last}</td>".
+						  "<td>$auth_yr{pubyr}</td></tr>\n";
 			}
 		  }
 		  else{
@@ -707,34 +887,39 @@ sub displayTaxonClassification{
 				$temp_rank = "Higher taxon";
 			}
 			$temp_rank =~ s/\s/+/g;
-			$classification{$rank} =~ s/\s/+/g;
+			$classification{$rank}[0] =~ s/\s/+/g;
 			if($counter % 2 == 0){
-				print "<tr bgcolor=\"E0E0E0\"><td align=\"middle\">$rank</td>".
-					  "<td align=\"middle\"><a href=\"/cgi-bin/bridge.pl?".
-					  "action=checkTaxonInfo&taxon_rank=$temp_rank&taxon_name=".
-					  "$classification{$rank}\">".
-					  "$classification{$rank}</a></td></tr>\n";
+				$output .="<tr bgcolor=\"E0E0E0\"><td align=\"middle\">$rank".
+						  "</td><td align=\"middle\">".
+						  "<a href=\"/cgi-bin/bridge.pl?action=checkTaxonInfo".
+						  "&taxon_rank=$temp_rank&taxon_name=".
+					      "$classification{$rank}[0]\">".
+					      "$classification{$rank}[0]</a></td>".
+						  "<td>$auth_yr{author1last}</td>".
+						  "<td>$auth_yr{pubyr}</td></tr>\n";
 			}
 			else{
-				print "<tr><td align=\"middle\">$rank</td>".
-					  "<td align=\"middle\"><a href=\"/cgi-bin/bridge.pl?".
-					  "action=checkTaxonInfo&taxon_rank=$temp_rank&taxon_name=".
-					  "$classification{$rank}\">".
-					  "$classification{$rank}</a></td></tr>\n";
+				$output .="<tr><td align=\"middle\">$rank</td>".
+					      "<td align=\"middle\"><a href=\"/cgi-bin/bridge.pl?".
+					      "action=checkTaxonInfo&taxon_rank=$temp_rank&".
+						  "taxon_name=$classification{$rank}[0]\">".
+					      "$classification{$rank}[0]</a></td>".
+						  "<td>$auth_yr{author1last}</td>".
+						  "<td>$auth_yr{pubyr}</td></tr>\n";
 			}
 		  }
 			$counter++;
 			# Keep track of the last successful item  and rank so we have the 
 			# lowest on the chain when we're all done.
-			$lastgood = $classification{$rank};
+			$lastgood = $classification{$rank}[0];
 			$lastrank = $rank;
 		}
 	}
-	print "</table>";
+	$output .= "</table>";
 	# Now, print out a hyperlinked list of all taxa below the one at the
 	# bottom of the Classification section.
 	if($counter <1){
-		print "<i>No classification data available for this taxon</i><br>";
+		$output .= "<i>No classification data available for this taxon</i><br>";
 	}
 	my $index;
 	for($index=0; $index<@taxon_rank_order; $index++){
@@ -770,8 +955,7 @@ sub displayTaxonClassification{
 			# BAIL
 			last CHILDREN;
 		}
-		print "<p><i>This taxon includes:</i> ";
-		my $output="";
+		$output .= "<p><i>This taxon includes:</i> ";
 		foreach my $item (@quickie){
 			# Need to do some URL encoding:
 			my $taxon_name = $item->{taxon_name};
@@ -793,9 +977,9 @@ sub displayTaxonClassification{
 			$output .= $item->{taxon_name}."</a>,\n";
 		}
 		$output =~ s/,\s*$//;
-		print $output;
 	}
 	} # CHILDREN block
+	return $output;
 }
 
 ## displayTaxonSynonymy
@@ -807,6 +991,7 @@ sub displayTaxonSynonymy{
 	my $species = (shift or "");
 	my $taxon_rank;
 	my $taxon_name;
+	my $output = "";
 
 	if($genus && $species eq ""){
 		$taxon_name = $genus;
@@ -826,6 +1011,8 @@ sub displayTaxonSynonymy{
 		$taxon_rank = "species";
 	}
 
+	$output .= "<center><h3>Taxonomic history</h3></center>";
+
 	my $sql = "SELECT taxon_no, reference_no, author1last, pubyr, ".
 			  "ref_is_authority FROM authorities ".
 			  "WHERE taxon_name='$taxon_name' AND taxon_rank='$taxon_rank'";
@@ -835,12 +1022,10 @@ sub displayTaxonSynonymy{
 	PBDBUtil::debug(1,"taxon name: $taxon_name");
 	PBDBUtil::debug(1,"taxon number from authorities: $taxon_no");
 	unless($taxon_no){
-		print "<i>No taxonomic history is available for $taxon_rank $taxon_name.</i><br>";
-		return 0;
+		return ($output .= "<i>No taxonomic history is available for $taxon_rank $taxon_name.</i><br>");
 	}
 
-	print "<center><h3>Taxonomic history</h3></center>";
-	print "<ul>";
+	$output .= "<ul>";
 
 	# Get the original combination (of the verified name, not the focal name)
 	my $original_combination_no = getOriginalCombination($dbt, $taxon_no);
@@ -889,16 +1074,16 @@ sub displayTaxonSynonymy{
 	}
 
 	# Print the info for the original combination of the passed in taxon first.
-	print getSynonymyParagraph($dbt, $original_combination_no);
+	$output .= getSynonymyParagraph($dbt, $original_combination_no);
 
 	# Now alphabetize the rest:
 	@paragraphs = sort {lc($a) cmp lc($b)} @paragraphs;
 	foreach my $rec (@paragraphs){
-		print $rec;
+		$output .= $rec;
 	}
 
-	print "</ul>";
-	print "<hr>";
+	$output .= "</ul>";
+	return $output;
 }
 
 ##
@@ -1370,7 +1555,6 @@ sub verify_chosen_taxon{
 	my $dbt = shift;
 	my $sql = "";
  	my @results = ();
-#	my $temp_num=0;
 
 	# First, see if this name has any recombinations:
 	if(!$num){
@@ -1384,7 +1568,6 @@ sub verify_chosen_taxon{
 			#$temp_num = $results[0]->{taxon_no};
 		}
 	}
-	#if($temp_num){
 	if($num){
 		$sql = "SELECT child_no,taxon_name FROM opinions,authorities ".
 			   "WHERE parent_no=$num AND taxon_no=child_no ".
