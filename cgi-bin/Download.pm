@@ -589,7 +589,9 @@ sub getCollectionsWhereClause {
 		}
 		
 		# note, this should really be handled by a function?  maybe in bridge.pl.
-		my $created_date = $q->param('year').$month.$day;						 
+		my $created_date = $q->param('year').$month.$day."000000";
+		# note, the version of mysql on flatpebble needs the 000000 at the end, but the
+		# version on the linux box doesn't need it.  weird.						 
 	
 		my $created_string;
 		# if so, did they want to look before or after?
