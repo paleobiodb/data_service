@@ -998,12 +998,12 @@ sub printResults	{
 					print TABLE ",NaN";
 				}
 				print TABLE ",$singletons[$i]";
-				if ($chaostat > 0 && $msubsrichness[$i] > 0 )	{
+				if ($chaostat > 0 )	{
 				  printf TABLE ",%.1f",$chaostat;
 				} else    {
 				  print TABLE ",NaN";
 				}
-				if ($jolly[$i] > 0 && $msubsrichness[$i] > 0 )	{
+				if ($jolly[$i] > 0 )	{
 				  printf TABLE ",%.1f",$jolly[$i];
 				} else    {
 				  print TABLE ",NaN";
@@ -1084,7 +1084,7 @@ sub printResults	{
 					  $gapstat = "NaN";
 					}
 					if ($msubschaom[$i] > 0)	{
-					  $msubschaostat = $richness[$i] + ($msubschaol[$i] * $msubschaol[$i] / (2 * $msubschaom[$i]));
+					  $msubschaostat = $msubsrichness[$i] + ($msubschaol[$i] * $msubschaol[$i] / (2 * $msubschaom[$i]));
 					}
 					else	{
 					  $msubschaostat = "NaN";
