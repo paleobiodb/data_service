@@ -302,9 +302,11 @@ sub mapFinishImage {
     print MAPOUT "<table cellpadding=5 cellspacing=1>\n";
     if(!$q->param("taxon_info_script")){
         print MAPOUT "<tr><td width=110 valign=\"top\" bgcolor=\"white\" class=\"small\">";
-        if ($coll_counts[0] > 1)	{
-            print MAPOUT "<b>$coll_counts[0]&nbsp;collections</b> fall ";
-        } elsif ($coll_counts[0] == 1)	{
+        my $max_count = 0;
+        for (@coll_counts) { $max_count = $_ if ($_ > $max_count); }
+        if ($max_count > 1)	{
+            print MAPOUT "<b>$max_count&nbsp;collections</b> fall ";
+        } elsif ($max_count == 1)	{
             print MAPOUT "<b>Exactly&nbsp;one collection</b> falls ";
         }  else	{
             # PM 09/13/02 Added bit about missing lat/long data to message
@@ -365,7 +367,6 @@ sub mapFinishImage {
     print MAPOUT "<td align=center><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
     print MAPOUT "</table>\n";
 
-    print MAPOUT "</center>";
     close MAPOUT;
 }
 
@@ -1301,6 +1302,8 @@ sub mapSetupImage {
         $self->drawGrids();
     }
 
+	print MAPOUT "<table><tr><td>\n<map name=\"PBDBmap\">\n";
+
     return "$GIF_DIR/$htmlname";
 }
 
@@ -1410,9 +1413,6 @@ sub mapDrawPoints{
 		print "NO MATCHING COLLECTION DATA AVAILABLE<br>";
 		return;
 	}
-
-	print MAPOUT "<table><tr><td>\n<map name=\"PBDBmap\">\n";
-
 
     print AI "u\n";  # start the group
     for $x1 (keys %longVal)	{
