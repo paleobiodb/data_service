@@ -1877,10 +1877,10 @@ sub processCollectionsSearch {
 			
 	# Remove it from further consideration
 	$q->param("research_group" => "");
-
-	Debug::dbPrint("terms = @terms");
+		
 	
 	# Compose the WHERE clause
+	# loop through all of the possible fields checking if each one has a value in it
 	my $fieldCount = -1;
 	foreach $fieldName ( @fieldNames ) {
 		$fieldCount++;
@@ -1898,9 +1898,14 @@ sub processCollectionsSearch {
 		}
 	}
 	
-				
-
-
+	# note, we have one field in the collection search form which is unique because it can
+	# either be geological_group, formation, or member.  Therefore, it has a special name, 
+	# group_formation_member, and we'll have to deal with it separately.
+	# added by rjp on 1/13/2004
+	if (my $val = $q->param("group_formation_member")) {
+		push(@terms, "(geological_group = '$val' OR formation = '$val' OR member = '$val')");
+	}
+	
 	# if first search failed and wild cards were used, try again
 	#  stripping first wildcard JA 22.2.02
 	if ( !@terms && $wildcardToken ne "")	{
