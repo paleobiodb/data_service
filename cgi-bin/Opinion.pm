@@ -728,8 +728,11 @@ sub submitOpinionForm {
 		# I have no idea why Poling didn't do this himself; typical
 		#  incompetence
 		# note: the ref no and parent no don't need to match
+		# WARNING: we don't check at all to see if the author/taxon
+		#  matches when one opinion (old or new) is a ref_has_opinion
+		#  record and the other is not
 		my $sql = $self->getTransactionManager();
-		my $osql = "SELECT parent_no FROM opinions WHERE ref_has_opinion!='YES' AND child_no=".$q->param('taxon_no')." AND author1last='".$q->param('author1last')."' AND author2last='".$q->param('author2last')."' AND pubyr=".$q->param('pubyr');
+		my $osql = "SELECT parent_no FROM opinions WHERE ref_has_opinion!='YES' AND child_no=".$q->param('taxon_no')." AND author1last='".$q->param('author1last')."' AND author2last='".$q->param('author2last')."' AND pubyr='".$q->param('pubyr')."'";
 		my $oref = ${$sql->getData($osql)}[0];
 		if ( $oref ) {
 			$errors->add("The author's opinion on ".$childTaxonName." already has been entered - an author can only have one opinion on a name");
@@ -1069,9 +1072,14 @@ sub submitOpinionForm {
 		# chose in the synonym popup.
 		$fieldsToEnter{status} = $q->param('synonym');
 		
-		# the parent rank should be the same as the child rank
-		if (!($parentRank->isEqualTo($childRank))) {
+		# the parent rank should be the same as the child rank...
+		if ( ! $parentRank->isEqualTo($childRank) && $fieldsToEnter{status} ne "rank changed as" ) {
 			$errors->add("The rank of a taxon and the rank of its synonym must be the same");
+		}
+		# JA: ... except if the status is "rank changed as," which is
+		#  actually the opposite case
+		elsif ( $parentRank->isEqualTo($childRank) && $fieldsToEnter{status} eq "rank changed as" ) {
+			$errors->add("If you change a taxon's rank, its old and ew ranks must be different");
 		}
 		
 	} elsif ($taxonStatusRadio eq INVALID2) {
