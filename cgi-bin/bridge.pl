@@ -19,7 +19,7 @@ use Permissions;
 
 require "connection.pl";	# Contains our database connection info
 
-my $DEBUG = 0;				# Shows debug information regarding the page
+my $DEBUG = 1;				# Shows debug information regarding the page
 							#   if set to 1
 
 my $DUPLICATE = 2;
@@ -152,6 +152,8 @@ if ($s->get("enterer") ne "" && $s->get("enterer") ne "Guest")	{
 	$sql .= "' WHERE name='" . $s->get("enterer") . "'";
 	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 }
+
+dbg($q->Dump);
 
 # ACTION
 &$action;
@@ -1677,6 +1679,11 @@ sub displayCollectionDetails {
     my $refString = $bibRef->toString();
     push(@row, $refString);
     push(@fieldNames, 'reference_string');
+
+	# get the secondary_references
+	require PBDBUtil;
+	push(@row, PBDBUtil::getSecondaryRefsString($dbh,$collection_no));
+	push(@fieldNames, 'secondary_reference_string');
 
 	# Get any subset collections JA 25.6.02
 	$sql = "SELECT collection_no FROM collections where collection_subset=" . $collection_no;
