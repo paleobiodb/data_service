@@ -26,6 +26,8 @@ sub cleanArrays	{
 	%pubyr = ();
 	%bestscale = ();
 	%bestscaleyr = ();
+	%bestboundary = ();
+	%bestboundyr = ();
 	%yesints = ();
 	%immediatemax = ();
 	%immediatemin = ();
@@ -306,7 +308,7 @@ sub findBoundaries	{
 	for my $i ( keys %bestscale )	{
 		$j = $immediatemax{$i};
 		while ( $j > 0 && $lowerbound{$i} > 0 )	{
-			if ( $lowerbound{$i} > $lowerbound{$j} && ( $bestscaleyr{$i} > $bestscaleyr{$j} || $lowerbound{$j} == 0) )	{
+			if ( $lowerbound{$i} > $lowerbound{$j} && $bestboundyr{$i} > $bestboundyr{$j} )	{
 				$lowerbound{$j} = $lowerbound{$i};
 	# stop if the next, more broad interval already has an older estimate
 			} elsif ( $lowerbound{$i} < $lowerbound{$j} )	{
@@ -438,13 +440,14 @@ sub findBestScales	{
 			if ( $corr->{next_interval_no} > 0 )	{
 				$bestnext{$corr->{interval_no}} = $corr->{next_interval_no};
 			}
-			if ( $corr->{lower_boundary} > 0 )	{
-				$bestboundary{$corr->{interval_no}} = $corr->{lower_boundary};
-			}
 			# need this for orphan intervals like the Gallic that
 			#  aren't the immediatemax of anything in the most
 			#  recent time scales
 			$bestincludedmax{$corr->{max_interval_no}} = $corr->{interval_no};
+		}
+		if ( $pubyr{$corr->{scale_no}} > $bestboundyr{$corr->{interval_no}} && $corr->{lower_boundary} > 0 )	{
+			$bestboundyr{$corr->{interval_no}} = $pubyr{$corr->{scale_no}};
+			$bestboundary{$corr->{interval_no}} = $corr->{lower_boundary};
 		}
 	}
 
