@@ -19,6 +19,7 @@ sub new{
 
 	$self->{_dbh} = shift;
 	$self->{_session} = shift;
+	$self->{_id} = 0;
 
 	#_initialize();
 
@@ -91,6 +92,10 @@ sub getData{
 		# non-SELECT:
 		else{
 			my $num = $sth->execute();
+			# If we did an insert, make the record id available
+			if($sql =~ /INSERT/i){
+				$self->{_id} = $self->{_dbh}->{'mysql_insertid'};
+			}
 			$sth->finish();
 			return $num;
 		}
@@ -99,6 +104,15 @@ sub getData{
 		return [];
 	}
 }
+
+## getID
+#
+##
+sub getID{
+	my $self = shift;
+
+	return $self->{_id};
+}	
 
 ## checkSQL
 #
