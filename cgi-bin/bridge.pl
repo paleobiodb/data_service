@@ -89,6 +89,7 @@ my $GUEST_TEMPLATE_DIR = "./guest_templates";
 my $HTML_DIR = $ENV{BRIDGE_HTML_DIR};
 my $OUTPUT_DIR = "public/data";
 
+
 # some generally useful trig stuff needed by processCollectionsSearchForAdd
 my $PI = 3.14159265;
 sub acos { atan2( sqrt(1 - $_[0] * $_[0]), $_[0] ) }
@@ -132,6 +133,11 @@ my $action = "";
 
 my @rowData;
 
+# don't let users into the contributors' area unless they're on the main site
+#  or backup server (as opposed to a mirror site) JA 3.8.04
+if ( $HOST_URL !~ /paleobackup.nceas.ucsb.edu/ && $HOST_URL !~ /paleodb.org/ )	{
+	 $q->param("user" => "Guest");
+}
 
 
 
