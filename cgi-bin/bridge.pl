@@ -1307,6 +1307,7 @@ sub displaySearchColls {
 #  * User submits completed collection search form
 #  * System displays matching collection results
 sub displayCollResults {
+	my $in_list = shift; # for taxon info script
 
 	my $limit = $q->param("limit");
 	if ( ! $limit ) { $limit = 10; }
@@ -1315,7 +1316,7 @@ sub displayCollResults {
 	my $p = Permissions->new ( $s );
 
 	# Build the SQL
-    $sql = processCollectionsSearch();
+    $sql = processCollectionsSearch($in_list);
 
 	# Run it
 	my $sth = $dbh->prepare( $sql );
@@ -1512,6 +1513,7 @@ sub displayCollResults {
 
 # NOTE: this routine is used only by displayCollResults
 sub processCollectionsSearch {
+	my $in_list = shift;  # for taxon info script
 
 	# This is a list of all pulldowns in the collection search.  
 	# These cannot use the LIKE wildcard, i.e. they must be
@@ -1572,7 +1574,19 @@ sub processCollectionsSearch {
 				$wildCard = "'";
 			}
 			if ( $genus )	{
-				$sql .= "genus_name" . $relationString . $genus . $wildCard;
+				if($q->param("taxon_rank") eq "Higher taxon" &&
+				   $q->param("taxon_info_script") eq "yes" ){
+					$sql .= "genus_name IN (";
+					if($in_list eq ""){
+						dbg("RE-RUNNING TAXONOMIC SEARCH in bridge<br>");
+						$in_list = PBDBUtil::taxonomic_search(
+												$q->param('genus_name'), $dbt);
+					}
+					$sql .= $in_list . ") ";
+				}
+				else{
+					$sql .= "genus_name" . $relationString . $genus . $wildCard;
+				}
 				if ( $sub_genus || $species )	{
 					$sql .= " AND ";
 				}
@@ -1749,9 +1763,9 @@ sub processCollectionsSearch {
 		
 		if ( $q->param('genus_name') ) {
 			if (@terms)	{
-				$sql .= " AND collection_no in ( " . join ( ", ", @okcolls )." ) ";
+				$sql .= " AND collection_no IN ( " . join ( ", ", @okcolls )." ) ";
 			} else	{
-				$sql .= " collection_no in ( " . join ( ", ", @okcolls )." ) ";
+				$sql .= " collection_no IN ( " . join ( ", ", @okcolls )." ) ";
 			}
 		}
 
@@ -1963,6 +1977,28 @@ sub buildTaxonomicList {
 			my @occrow = @{$rowref};
 
 			$formattedrow = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
+
+			# Link taxa to the TaxonInfo script
+			# ---------------------------------
+			# If genus is informal, don't link.
+			$formattedrow =~ s/(<i>|<\/i>)//g;
+			if($formattedrow =~ /informal(.*)?<genus>/){
+				# do nothing
+			}
+			# If species is informal, link only the genus.
+			elsif($formattedrow =~ /<genus>(.*)?<\/genus>(.*)?informal/s){
+				$formattedrow =~ s/<genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$1&taxon_rank=Genus&user=Contributor"><i>$1$2$3<\/i><\/a>/s;
+			}
+			elsif($formattedrow =~ /<species>indet/s){
+				# shouldn't be any <i> tags for indet's.
+				$formattedrow =~ s/<genus>(.*)?<\/genus>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$1&taxon_rank=Higher+taxon&user=Contributor">$1 indet.<\/a>/;
+				$formattedrow =~ s/<species>(.*)?<\/species>//;
+			}
+			else{
+				# match multiple rows as a single (use the 's' modifier)
+				$formattedrow =~ s/<genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$1+$3&taxon_rank=Genus+and+species&user=Contributor"><i>$1$2$3<\/i><\/a>/s;
+			}
+
 			$formattedrow .= getReidHTMLTableByOccNum(pop(@occrow),$collection_refno);
 			# if there's a link in here somewhere, there must be a new ref
 			#   (kludgy, but saves the trouble of passing newreference back
