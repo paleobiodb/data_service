@@ -1573,39 +1573,42 @@ sub displayCollResults {
 			#dbg ( join( "][", keys ( %{$dataRow} ) ) );
 			#dbg ( join( "][", values ( %{$dataRow} ) ) );
 
-			# The LINK 
+			# should it be a dark row, or a light row?  Alternate them...
  			if ( $count % 2 == 0 ) {
 				print "<tr class=\"darkList\">";
  			} else {
 				print "<tr>";
 			}
 			
-		  	print "
-			<td align=center valign=top><a href='$exec_url?action=$action&collection_no=$collection_no";
+		  	print "<td align=center valign=top>
+			<a href='$exec_url?action=$action&collection_no=$collection_no";
+			
 			# for collection edit:
 			if($q->param('use_primary')){
 				print "&use_primary=yes";
 			}
+			
 			# These may be useful to displayOccsForReID
 			if($q->param('genus_name')){
 				print "&genus_name=".$q->param('genus_name');
 			}
+			
 			if($q->param('species_name')){
 				print "&species_name=".$q->param('species_name');
 			}
-			print "&blanks='".$pref{'blanks'}."'>$collection_no</a></td>
-	<td valign=top>$authorizerName</td>
-	<td valign=top><b>" . $dataRow->{"collection_name"} . $timeplace . "</td>
-	<td align=right valign=top>$referenceNo</td>
-	<td valign=top>$reference</td>
-</tr>
-";
+			
+			print	"&blanks='".$pref{'blanks'}."'>$collection_no</a></td>
+					<td valign=top>$authorizerName</td>
+					<td valign=top><b>" . $dataRow->{"collection_name"} . $timeplace . "</td>
+					<td align=right valign=top>$referenceNo</td>
+					<td valign=top>$reference</td>
+					</tr>
+					";
 			$count++;
   		}
 		print "</table>\n";
     }
-    elsif ( $displayRows == 1 )
-    {
+    elsif ( $displayRows == 1 ) { # if only one row to display...
 		my $dataRow = $dataRows[0];
 		my $collection_no = $dataRow->{'collection_no'};
 		$q->param(collection_no=>"$collection_no");
@@ -1614,12 +1617,12 @@ sub displayCollResults {
 		&$action;
 		exit;
     } else {
-		# If this is an add, then way cool.  Otherwise give an error
+		# If this is an add,  Otherwise give an error
 		if ( $type eq "add" ) {
-			&displayEnterCollPage();
+			displayEnterCollPage();
 			return;
 		} else {
-			print &stdIncludes ( "std_page_top" );
+			print stdIncludes ( "std_page_top" );
 			print "<center>\n<h3>Your search produced no matches</h3>";
 			print "<p>Please try again with fewer search terms.</p>\n</center>\n";
 		}
@@ -1634,7 +1637,7 @@ sub displayCollResults {
 		print qq|</center>\n</form>\n|;
 	}
 		
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes("std_page_bottom");
 
 } # end sub displayCollResults
 
@@ -1673,7 +1676,7 @@ sub processCollectionsSearch {
 	# Handles species name searches JA 19-20.8.02
 
 	my $genus_name = $q->param('genus_name');
-
+	
 	if ($genus_name) {
 		# Fix up the genus name and set the species name if there is a space 
 		my $genus;
@@ -1703,8 +1706,8 @@ sub processCollectionsSearch {
 			# this is for genus only...
 			$genus = $q->param('genus_name');
 		}
-		
-		my @tables = ("occurrences","reidentifications");
+				
+		my @tables = ("occurrences", "reidentifications");
 		$sql->setSelectExpr("collection_no, count(*)");
 		for my $tableName (@tables) {
 			$sql->setFromExpr($tableName);
@@ -1719,7 +1722,7 @@ sub processCollectionsSearch {
 			}
 			
 			if ( $genus )	{
-				if($q->param("taxon_rank") eq "Higher taxon" ||
+				if ($q->param("taxon_rank") eq "Higher taxon" ||
 						$q->param("taxon_rank") eq "Higher-taxon"){
 										
 					if ($in_list eq "") {
@@ -1733,19 +1736,23 @@ sub processCollectionsSearch {
 					$sql->addWhereItem("genus_name IN ($in_list)");
 										
 				} else {
-					$sql->addWhereItem("genus_name $relationString $genus $wildCard");
+					$sql->addWhereItem("genus_name".$relationString.$genus.$wildCard);
 				}
-			
 			}
+			
 			if ( $sub_genus ) {
 				$sql->addWhereItem("subgenus_name" . $relationString.$subgenus.$wildCard);
 			}
+			
 			if ( $species )	{
 				$sql->addWhereItem("species_name" . $relationString . $species . $wildCard);
 			}
 
 			$sql->setGroupByExpr("collection_no");
-			dbg ( "$sql->SQLExpr()<HR>" );
+			
+			#dbg ( "$sql->SQLExpr()<HR>" );
+			#Debug::dbPrint("proccessCollectionsSearch SQL =" . $sql->SQLExpr());
+			
 			$sth = $dbh->prepare($sql->SQLExpr());
 			$sth->execute();
 			
