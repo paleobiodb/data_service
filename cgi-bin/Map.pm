@@ -14,6 +14,10 @@ my $BRIDGE_HOME = "/cgi-bin/bridge.pl";
 my $GIF_HTTP_ADDR="/public/maps";               # For maps
 my $COAST_DIR = $ENV{MAP_COAST_DIR};        # For maps
 my $GIF_DIR = $ENV{MAP_GIF_DIR};      # For maps
+my $PI = 3.14159265;
+my $C72 = cos(72 * $PI / 180);
+sub acos { atan2( sqrt(1 - $_[0] * $_[0]), $_[0] ) }
+sub tan { sin($_[0]) / cos($_[0]) }
 
 sub new {
 	my $class = shift;
@@ -105,11 +109,13 @@ sub mapQueryDb	{
 	@allfields = (	'research_group',
 			'authorizer',
 			'country',
+			'state',
 			'period',
 			'epoch',
 			'stage', 
 			'formation', 
-			'lithology', 
+			'lithology1', 
+			'environment',
 			'modified_since');
 
 	# Handle days/weeks/months ago requests JA 25.6.02
@@ -175,11 +181,13 @@ sub mapQueryDb	{
 		$searchstring .= "continent = $cont, ";
 	}
 	for $curField (keys %filledfields)	{
-		if ($filledfields{$s} ne "")	{
-			$searchstring .= "$curField = $filledfields{$s}, ";
+		if ($filledfields{$curField} ne "")	{
+			$searchstring .= "$curField = $filledfields{$curField}, ";
 		}
 	}
 	$searchstring =~ s/, $//;
+	# clean "1" that appears at end of "lithology1"
+	$searchstring =~ s/1//;
 
 	# Start the SQL 
 	$sql = qq|SELECT *, DATE_FORMAT(release_date, '%Y%m%d') rd_short  FROM collections |;
@@ -209,7 +217,7 @@ sub mapQueryDb	{
 				$where = &::buildWhere ( $where, qq| (intage_max LIKE "$filledfields{$t}%" OR intage_min LIKE "$filledfields{$t}%" OR locage_max LIKE "$filledfields{$t}%" OR locage_min LIKE "$filledfields{$t}%")| );
 			}
 			# handle lithology
-			elsif ($t eq "lithology")	{
+			elsif ($t eq "lithology1")	{
 				$where = &::buildWhere ( $where, qq| (lithology1='$filledfields{$t}' OR lithology2='$filledfields{$t}')| );
 			}
 			# handle modified date
@@ -261,48 +269,58 @@ sub mapGetScale	{
 
   $scale = 1;
   $cont = $q->param('mapcontinent');
-  if ($cont ne "global")	{
-    $scale = $q->param('mapscale');
-    $scale =~ s/x //i;
+  $scale = $q->param('mapscale');
+  $scale =~ s/x //i;
+
+  if ($cont ne "standard")	{
     if ($cont =~ /Africa/)	{
       $midlng = 35;
+      $midlat = 10;
+    } elsif ($cont =~ /Antarctica/)	{
+      $midlng = 0;
+      $midlat = -89;
+    } elsif ($cont =~ /Arctic/)	{
+      $midlng = 0;
+      $midlat = 89;
+    } elsif ($cont =~ /Asia \(north\)/)	{
+      $midlng = 100;
+      $midlat = 50;
+    } elsif ($cont =~ /Asia \(south\)/)	{
+      $midlng = 100;
+      $midlat = 20;
+    } elsif ($cont =~ /Australia/)	{
+      $midlng = 135;
+      $midlat = -28;
+    } elsif ($cont =~ /Europe/)	{
+      $midlng = 10;
+      $midlat = 50;
+    } elsif ($cont =~ /North America/)	{
+      $midlng = -100;
+      $midlat = 35;
+    } elsif ($cont =~ /South America/)	{
+      $midlng = -50;
       $midlat = -10;
     }
-    elsif ($cont =~ /Asia \(north\)/)	{
-      $midlng = 100;
-      $midlat = -50;
-    }
-    elsif ($cont =~ /Asia \(south\)/)	{
-      $midlng = 100;
-      $midlat = -20;
-    }
-    elsif ($cont =~ /Australia/)	{
-      $midlng = 135;
-      $midlat = 28;
-    }
-    elsif ($cont =~ /Europe/)	{
-      $midlng = 10;
-      $midlat = -50;
-    }
-    if ($cont =~ /North America/)	{
-      $midlng = -100;
-      $midlat = -35;
-    }
-    elsif ($cont =~ /South America/)	{
-      $midlng = -50;
-      $midlat = 10;
-    }
-    # NOTE: shouldn't these be module globals??
-    $offlng = ( $midlng + 180 ) - ( 180 / $scale );
-    $offlat = ( $midlat + 90 ) - ( 90 / $scale );
   }
+  # NOTE: shouldn't these be module globals??
+  $offlng = 180 * ( $scale - 1 ) / $scale;
+  $offlat = 90 * ( $scale - 1 ) / $scale;
 }
 
+# extract outlines taken from NOAA's NGDC Coastline Extractor
 sub mapDefineOutlines	{
 	my $self = shift;
 
-	if ( ! open COAST,"<$COAST_DIR/noaa.coastlines" ) {
-		$self->htmlError ( "Couldn't open [$COAST_DIR/noaa.coastlines]: $!" );
+	if ( $q->param('mapresolution') eq "coarse" )	{
+		$resostem = 50;
+	} elsif ( $q->param('mapresolution') eq "medium" )	{
+		$resostem = 25;
+	} elsif ( $q->param('mapresolution') eq "fine" )	{
+		$resostem = 10;
+	}
+
+	if ( ! open COAST,"<$COAST_DIR/noaa.coastlines.$resostem" ) {
+		$self->htmlError ( "Couldn't open [$COAST_DIR/noaa.coastlines.$resostem]: $!" );
 	}
 	while (<COAST>)	{
 		($a,$b) = split /\t/,$_;
@@ -311,13 +329,37 @@ sub mapDefineOutlines	{
 			push @worldlat,$b;
 		}
 	}
-	close COAST;
+
+	if ( $q->param('borderlinecolor') ne "none" )	{
+		if ( ! open BORDER,"<$COAST_DIR/noaa.borders.$resostem" ) {
+			$self->htmlError ( "Couldn't open [$COAST_DIR/noaa.borders.$resostem]: $!" );
+		}
+		while (<BORDER>)	{
+			($a,$b) = split /\t/,$_;
+			if ($a ne "")	{
+				push @borderlng,$a;
+				push @borderlat,$b;
+			}
+		}
+		close BORDER;
+	}
+	if ( $q->param('usalinecolor') ne "none" )	{
+		if ( ! open USA,"<$COAST_DIR/noaa.usa.$resostem" ) {
+			$self->htmlError ( "Couldn't open [$COAST_DIR/noaa.usa.$resostem]: $!" );
+		}
+		while (<USA>)	{
+			($a,$b) = split /\t/,$_;
+			if ($a ne "")	{
+				push @usalng,$a;
+				push @usalat,$b;
+			}
+		}
+		close USA;
+	}
 }
 
 sub mapDrawMap	{
   my $self = shift;
-
-print "($SELECT_LISTS{'mapbgcolor'}[0])<br>($SELECT_LISTS{'oceancolor'}[0])<br>\n";
 
   # erase the last map that was drawn
   if ( ! open GIFCOUNT,"<$GIF_DIR/gifcount" ) {
@@ -351,10 +393,11 @@ print "($SELECT_LISTS{'mapbgcolor'}[0])<br>($SELECT_LISTS{'oceancolor'}[0])<br>\
   $vmult = 2;
   $hpix = 360;
   $vpix = 180;
-  if ( $q->param('projection') eq "polar" )	{
+  if ( $q->param('projection') eq "orthographic" )	{
     $hpix = 280;
     $vpix = 280;
-  } elsif ($cont =~ /Africa/ || $cont =~ /South America/)	{
+  } elsif ( ( $cont =~ /Africa/ || $cont =~ /South America/ ) &&
+            $scale > 1.5 )	{
     $hpix = 280;
     $vpix = 240;
   }
@@ -363,7 +406,7 @@ print "($SELECT_LISTS{'mapbgcolor'}[0])<br>($SELECT_LISTS{'oceancolor'}[0])<br>\
 	$hmult = 0.8;
 	$vmult = 1.0;
   }
-  if ( $q->param("projection") eq "polar")	{
+  if ( $q->param("projection") eq "orthographic")	{
     $hmult = $hmult * 1.25;
   }
   $height = $vmult * $vpix;
@@ -375,42 +418,46 @@ print "($SELECT_LISTS{'mapbgcolor'}[0])<br>($SELECT_LISTS{'oceancolor'}[0])<br>\
   $im = new GD::Image($width,$height);
 
   $col{'white'} = $im->colorAllocate(255,255,255);
-  $col{'black'} = $im->colorAllocate(0,0,0);
   $col{'borderblack'} = $im->colorAllocate(1,1,1);
+  $col{'black'} = $im->colorAllocate(0,0,0);
   $col{'gray'} = $im->colorAllocate(127,127,127);
   $col{'lightgray'} = $im->colorAllocate(191,191,191);
-  $col{'blue'} = $im->colorAllocate(63,63,255);
+  $col{'offwhite'} = $im->colorAllocate(254,254,254);
+  $col{'pink'} = $im->colorAllocate(255,191,191);
   $col{'red'} = $im->colorAllocate(255,0,0);
   $col{'darkred'} = $im->colorAllocate(127,0,0);
+  $col{'brown'} = $im->colorAllocate(127,63,0);
+  $col{'ochre'} = $im->colorAllocate(191,127,0);
+  $col{'orange'} = $im->colorAllocate(255,127,0);
   $col{'yellow'} = $im->colorAllocate(255,255,0);
   $col{'green'} = $im->colorAllocate(0,255,0);
-  $col{'orange'} = $im->colorAllocate(255,127,0);
-  $col{'purple'} = $im->colorAllocate(223,0,255);
-  $col{'violet'} = $im->colorAllocate(191,0,255);
-  $col{'pink'} = $im->colorAllocate(255,191,191);
-  $col{'darkviolet'} = $im->colorAllocate(127,0,127);
-  $col{'darkblue'} = $im->colorAllocate(0,0,255);
+  $col{'emerald'} = $im->colorAllocate(0,159,0);
   $col{'teal'} = $im->colorAllocate(0,255,255);
+  $col{'blue'} = $im->colorAllocate(63,63,255);
+  $col{'darkblue'} = $im->colorAllocate(0,0,255);
+  $col{'violet'} = $im->colorAllocate(191,0,255);
+  $col{'darkviolet'} = $im->colorAllocate(127,0,127);
+  $col{'purple'} = $im->colorAllocate(223,0,255);
 
   $dotcolor = $q->param('dotcolor');
   $bordercolor = $dotcolor;
   if ($q->param('dotborder') eq "with")	{
-	if($q->param('mapbgcolor') eq "black"){
-		$bordercolor='white';
+	if($q->param('mapbgcolor') eq "black")	{
+		$bordercolor = "white";
 	}
-	else{
-		$bordercolor = 'borderblack';
+	else	{
+		$bordercolor = "borderblack";
 	}
   }
   $dotsizeterm = $q->param('pointsize');
   $dotshape = $q->param('pointshape');
-  if ($dotsizeterm eq "small")	{
+  if ($dotsizeterm eq "tiny")	{
+    $dotsize = 1.5;
+  } elsif ($dotsizeterm eq "small")	{
     $dotsize = 2;
-  }
-  elsif ($dotsizeterm eq "medium")	{
+  } elsif ($dotsizeterm eq "medium")	{
     $dotsize = 3;
-  }
-  elsif ($dotsizeterm eq "large")	{
+  } elsif ($dotsizeterm eq "large")	{
     $dotsize = 4;
   }
   $maxdotsize = $dotsize;
@@ -422,14 +469,20 @@ print "($SELECT_LISTS{'mapbgcolor'}[0])<br>($SELECT_LISTS{'oceancolor'}[0])<br>\
 	# create an interlaced GIF with a white background
 	$im->interlaced('true');
 	if ( $q->param('mapbgcolor') ne "transparent" )	{
-		if ( $q->param("projection") ne "polar" )	{
+		if ( $q->param("projection") ne "orthographic" )	{
 			$im->fill(100,100,$col{$q->param('mapbgcolor')});
 		} else	{
-		# for a polar projection, draw a circle and fill it
-			my $origx = $self->getLng($midlng);
-			my $origy = $self->getLat($midlat * -1);
-          		$im->arc($origx,$origy,180*$hmult*$scale,180*$hmult*$scale,0,360,$col{$q->param('coastlinecolor')});
-			$im->fill($origx,$origy,$col{$q->param('mapbgcolor')});
+		# for a orthographic projection, draw a circle and fill it
+			$im->transparent('');
+			my ($origx,$origy) = $self->projectPoints($midlng,$midlat);
+			$origx = $self->getLng($origx);
+			$origy = $self->getLat($origy);
+			my $edgecolor = $col{$q->param('coastlinecolor')};
+			if ( $q->param('coastlinecolor') eq "white" )	{
+				$edgecolor = $col{'offwhite'};
+			}
+          		$im->arc($origx,$origy,180*$hmult*$scale,180*$hmult*$scale,0,360,$edgecolor);
+			$im->fillToBorder($origx,$origy,$edgecolor,$col{$q->param('mapbgcolor')});
 		}
 	} else	{
 		$im->transparent('');
@@ -450,60 +503,121 @@ print "($SELECT_LISTS{'mapbgcolor'}[0])<br>($SELECT_LISTS{'oceancolor'}[0])<br>\
 
 	$self->dbg ( "Returned $ofRows rows okayed by permissions module" );
 
- # draw grids
-  $grids = $q->param('gridsize');
-  if ($grids > 0)	{
-    for my $lat (1..int($vpix/$grids)-1)	{
-      $color = $col{$q->param('gridcolor')};
-      if ($lat * $grids == 90)	{
-        $color = $col{'gray'};
-      }
-      if ( $q->param('projection') ne "polar" )	{
-        $im->line(0,$scale*$vmult*$lat*$grids,$scale*$hmult*$hpix,$scale*$vmult*$lat*$grids,$color);
-      } else	{
-          my ($lng1,$lat1) = $self->projectPoints($midlng - 89, ($lat * $grids) - 89 + $midlat);
-          my ($lng2,$lat2) = $self->projectPoints($midlng + 89, ($lat * $grids) - 89 + $midlat);
-#printf "%d %d %d<br>\n",$midlng-90,$midlng+90,($lat*$grids)-90+$midlat;
-#printf "%d %d %d %d<br>\n",$lng1,$lat1,$lng2,$lat2;
-          $im->line($self->getLng($lng1),$self->getLat($lat1),$self->getLng($lng2),$self->getLat($lat2),$color);
-#         $im->line($self->getLng(-180),$self->getLat(($lat*$grids)-90),$self->getLng(180),$self->getLat(($lat*$grids)-90),$color); FOO
-      }
-    }
-    for my $lng (1..int($hpix/$grids)-1)	{
-      $color = $col{$q->param('gridcolor')};
-      if ($lng * $grids == 180)	{
-        $color = $col{'gray'};
-      }
-      $im->line($scale*$hmult*$lng*$grids,0,$scale*$hmult*$lng*$grids,$scale*$vmult*$vpix,$color);
-    }
-  }
-
  # draw coastlines
- # first rescale the coordinates, if necessary
-  if ( $q->param('projection') eq "polar")	{
+ # first rescale the coordinates depending on the rotation
+  if ( $q->param('mapcontinent') ne "standard" || $q->param('projection') ne "rectilinear" )	{
     for $c (0..$#worldlat)	{
       if ( $worldlat[$c] ne "" )	{
         ($worldlng[$c],$worldlat[$c]) = $self->projectPoints($worldlng[$c],$worldlat[$c]);
       }
     }
+    if ( $q->param('borderlinecolor') ne "none" )	{
+      for $c (0..$#borderlat)	{
+        if ( $borderlat[$c] ne "" )	{
+          ($borderlng[$c],$borderlat[$c]) = $self->projectPoints($borderlng[$c],$borderlat[$c]);
+        }
+      }
+    }
+    if ( $q->param('usalinecolor') ne "none" )	{
+      for $c (0..$#usalat)	{
+        if ( $usalat[$c] ne "" )	{
+          ($usalng[$c],$usalat[$c]) = $self->projectPoints($usalng[$c],$usalat[$c]);
+        }
+      }
+    }
+  }
+  if ( $q->param('linethickness') eq "thick" )	{
+    $thickness = 0.5;
+  } elsif ( $q->param('linethickness') eq "medium" )	{
+    $thickness = 0.25;
+  } else	{
+    $thickness = 0;
   }
   for $c (0..$#worldlat-1)	{
-    if ( $worldlat[$c] ne "" && $worldlat[$c+1] ne "" )	{
+    if ( $worldlat[$c] ne "" && $worldlat[$c+1] ne "" &&
+         ( abs ( $worldlng[$c] - $worldlng[$c+1] ) < 345 ) )	{
       $im->line( $self->getLng($worldlng[$c]),$self->getLat($worldlat[$c]),$self->getLng($worldlng[$c+1]),$self->getLat($worldlat[$c+1]),$col{$q->param('coastlinecolor')});
+     # extra lines offset horizontally
+      if ( $thickness > 0 )	{
+        $im->line( $self->getLng($worldlng[$c])-$thickness,$self->getLat($worldlat[$c]),$self->getLng($worldlng[$c+1])-$thickness,$self->getLat($worldlat[$c+1]),$col{$q->param('coastlinecolor')});
+        $im->line( $self->getLng($worldlng[$c])+$thickness,$self->getLat($worldlat[$c]),$self->getLng($worldlng[$c+1])+$thickness,$self->getLat($worldlat[$c+1]),$col{$q->param('coastlinecolor')});
+     # extra lines offset vertically
+        $im->line( $self->getLng($worldlng[$c]),$self->getLat($worldlat[$c])-$thickness,$self->getLng($worldlng[$c+1]),$self->getLat($worldlat[$c+1])-$thickness,$col{$q->param('coastlinecolor')});
+        $im->line( $self->getLng($worldlng[$c]),$self->getLat($worldlat[$c])+$thickness,$self->getLng($worldlng[$c+1]),$self->getLat($worldlat[$c+1])+$thickness,$col{$q->param('coastlinecolor')});
+      }
+    }
+  }
+  if ( $q->param('borderlinecolor') ne "none" )	{
+    for $c (0..$#borderlat-1)	{
+      if ( $borderlat[$c] ne "" && $borderlat[$c+1] ne "" &&
+           ( abs ( $borderlng[$c] - $borderlng[$c+1] ) < 345 ) )	{
+        $im->line( $self->getLng($borderlng[$c]),$self->getLat($borderlat[$c]),$self->getLng($borderlng[$c+1]),$self->getLat($borderlat[$c+1]),$col{$q->param('borderlinecolor')});
+      }
+    }
+  }
+  if ( $q->param('usalinecolor') ne "none" )	{
+    for $c (0..$#usalat-1)	{
+      if ( $usalat[$c] ne "" && $usalat[$c+1] ne "" &&
+           ( abs ( $usalng[$c] - $usalng[$c+1] ) < 345 ) )	{
+        $im->line( $self->getLng($usalng[$c]),$self->getLat($usalat[$c]),$self->getLng($usalng[$c+1]),$self->getLat($usalat[$c+1]),$col{$q->param('usalinecolor')});
+      }
+    }
+  }
+
+ # draw grids
+  $grids = $q->param('gridsize');
+  if ($grids > 0)	{
+    if ( $q->param('projection') eq "rectilinear" )	{
+      for my $lat (1..int($vpix/$grids)-1)	{
+        $color = $col{$q->param('gridcolor')};
+        if ($lat * $grids == 90)	{
+          $color = $col{'gray'};
+        }
+        $im->line(0,$scale*$vmult*$lat*$grids,$scale*$hmult*$hpix,$scale*$vmult*$lat*$grids,$color);
+      }
+      for my $lng (k..int($hpix/$grids)-1)	{
+        $color = $col{$q->param('gridcolor')};
+        if ($lng * $grids == 180)	{
+          $color = $col{'gray'};
+        }
+        $im->line($scale*$hmult*$lng*$grids,0,$scale*$hmult*$lng*$grids,$scale*$vmult*$vpix,$color);
+      }
+    }
+  # draw grids given a orthographic projection
+    else	{
+      for my $lat ( int(-90/$grids)..int(90/$grids) )	{
+        for my $deg (-180..179)	{
+          my ($lng1,$lat1) = $self->projectPoints($deg , $lat * $grids);
+          my ($lng2,$lat2) = $self->projectPoints($deg + 1 , $lat * $grids);
+          if ( $lng1 && $lng2 )	{
+            $im->line($self->getLng($lng1),$self->getLat($lat1),$self->getLng($lng2),$self->getLat($lat2),$col{$q->param('gridcolor')});
+          }
+        }
+      }
+      for my $lng ( int(-180/$grids)..int(180/$grids) )	{
+        for my $deg (-90..89)	{
+          my ($lng1,$lat1) = $self->projectPoints($lng * $grids, $deg);
+          my ($lng2,$lat2) = $self->projectPoints($lng * $grids, $deg + 1);
+          if ( $lat1 && $lat2 )	{
+            $im->line($self->getLng($lng1),$self->getLat($lat1),$self->getLng($lng2),$self->getLat($lat2),$col{$q->param('gridcolor')});
+          }
+        }
+      }
     }
   }
 
   # draw collection data points
   foreach $collRef ( @dataRows ) {
     %coll = %{$collRef};
-    if ( ( $coll{'latdeg'} || $coll{'latmin'} || $coll{'latdec'} ) &&
-         ( $coll{'lngdeg'} || $coll{'lngmin'} || $coll{'lngdec'} ) && 
+    if ( ( $coll{'latdeg'} > 0 || $coll{'latmin'} > 0 || $coll{'latdec'} > 0 ) &&
+         ( $coll{'lngdeg'} > 0 || $coll{'lngmin'} > 0 || $coll{'lngdec'} > 0 ) && 
 			( $collok{$coll{'collection_no'}} eq "Y" || 
 			! $q->param('genus_name') ) 
 		) {
 
       ($x1,$y1) = $self->getCoords($coll{'lngdeg'},$coll{'latdeg'});
-      if ( $x1-$maxdotsize > 0 && 
+
+      if ( $x1 > 0 && $y1 > 0 && $x1-$maxdotsize > 0 && 
 			$x1+$maxdotsize < $width &&
 			$y1-$maxdotsize > 0 && 
 			$y1+$maxdotsize < $height )	{
@@ -524,7 +638,7 @@ print "($SELECT_LISTS{'mapbgcolor'}[0])<br>($SELECT_LISTS{'oceancolor'}[0])<br>\
 		# There is no way for a public user to use this at the moment.
         #if( $q->param('user') =~ /paleodb/ && $q->param('user') !~ /public/ ){
 			print "<area shape=\"rect\" coords=\"";
-			printf "%d,%d,%d,%d", int($x1-$dotsize), int($y1-$dotsize), int($x1+$dotsize), int($y1+$dotsize);
+			printf "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1+(1.5*$dotsize));
 			print "\" href=\"$BRIDGE_HOME?action=displayCollResults";
 			for $t (keys %filledfields)	{
 				if ($filledfields{$t} ne "")	{
@@ -535,7 +649,7 @@ print "($SELECT_LISTS{'mapbgcolor'}[0])<br>($SELECT_LISTS{'oceancolor'}[0])<br>\
 
 					# HACK: force search to use wildcards if lithology or formation is searched, in order
 					#  to avoid problems with values that include double quotes
-					if ($t =~ /(formation)|(lithology)/)	{
+					if ($t =~ /(formation)|(lithology1)/)	{
 						print "&wild=Y";
 					}
 				}
@@ -549,29 +663,68 @@ print "($SELECT_LISTS{'mapbgcolor'}[0])<br>($SELECT_LISTS{'oceancolor'}[0])<br>\
 			print "&latdeg=$latdeg&latdir=$latdir&lngdeg=$lngdeg&lngdir=$lngdir\">\n";
 		#}
 
-    # draw a circle
+    # draw a circle and fill it
         if ($dotshape =~ /^circles$/)	{
-          $im->arc($x1,$y1,($dotsize*2)+2,($dotsize*2)+2,0,360,$col{$bordercolor});
+          $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,360,$col{$bordercolor});
+          if ( $x1+($dotsize*3)+2 < $width && $x1-($dotsize*3)-2 > 0 &&
+               $y1+($dotsize*3)+2 < $height && $y1-($dotsize*3)-2 > 0 )	{
+            $im->fillToBorder($x1,$y1,$col{$bordercolor},$col{$dotcolor});
+            $im->fillToBorder($x1+$dotsize,$y1,$col{$bordercolor},$col{$dotcolor});
+            $im->fillToBorder($x1-$dotsize,$y1,$col{$bordercolor},$col{$dotcolor});
+            $im->fillToBorder($x1,$y1+$dotsize,$col{$bordercolor},$col{$dotcolor});
+            $im->fillToBorder($x1,$y1-$dotsize,$col{$bordercolor},$col{$dotcolor});
+          }
+        }
+        elsif ($dotshape =~ /^crosses$/)	{
+          $im->line($x1-$dotsize,$y1-$dotsize,$x1+$dotsize,$y1+$dotsize,$col{$dotcolor});
+          $im->line($x1-$dotsize+0.50,$y1-$dotsize+0.50,$x1+$dotsize+0.50,$y1+$dotsize+0.50,$col{$dotcolor});
+          $im->line($x1-$dotsize+0.50,$y1-$dotsize-0.50,$x1+$dotsize+0.50,$y1+$dotsize-0.50,$col{$dotcolor});
+          $im->line($x1-$dotsize-0.50,$y1-$dotsize+0.50,$x1+$dotsize-0.50,$y1+$dotsize+0.50,$col{$dotcolor});
+          $im->line($x1-$dotsize-0.50,$y1-$dotsize-0.50,$x1+$dotsize-0.50,$y1+$dotsize-0.50,$col{$dotcolor});
+
+          $im->line($x1+$dotsize,$y1-$dotsize,$x1-$dotsize,$y1+$dotsize,$col{$dotcolor});
+          $im->line($x1+$dotsize+0.50,$y1-$dotsize+0.50,$x1-$dotsize+0.50,$y1+$dotsize+0.50,$col{$dotcolor});
+          $im->line($x1+$dotsize+0.50,$y1-$dotsize-0.50,$x1-$dotsize+0.50,$y1+$dotsize-0.50,$col{$dotcolor});
+          $im->line($x1+$dotsize-0.50,$y1-$dotsize+0.50,$x1-$dotsize-0.50,$y1+$dotsize+0.50,$col{$dotcolor});
+          $im->line($x1+$dotsize-0.50,$y1-$dotsize-0.50,$x1-$dotsize-0.50,$y1+$dotsize-0.50,$col{$dotcolor});
+        }
+        elsif ($dotshape =~ /^diamonds$/)	{
+          my $poly = new GD::Polygon;
+          $poly->addPt($x1,$y1+($dotsize*2));
+          $poly->addPt($x1+($dotsize*2),$y1);
+          $poly->addPt($x1,$y1-($dotsize*2));
+          $poly->addPt($x1-($dotsize*2),$y1);
+          $im->filledPolygon($poly,$col{$dotcolor});
+        }
+        elsif ($dotshape =~ /^stars$/)	{
+          my $poly = new GD::Polygon;
+          $poly->addPt($x1,$y1-($dotsize/$C72));
+          $poly->addPt($x1+($dotsize*sin(36*$PI/180)),$y1-($dotsize*cos(36*$PI/180)));
+          $poly->addPt($x1+($dotsize/$C72*sin(72*$PI/180)),$y1-($dotsize/$C72*cos(72*$PI/180)));
+          $poly->addPt($x1+($dotsize*sin(108*$PI/180)),$y1-($dotsize*cos(108*$PI/180)));
+          $poly->addPt($x1+($dotsize/$C72*sin(144*$PI/180)),$y1-($dotsize/$C72*cos(144*$PI/180)));
+          $poly->addPt($x1+($dotsize*sin(180*$PI/180)),$y1-($dotsize*cos(180*$PI/180)));
+          $poly->addPt($x1+($dotsize/$C72*sin(216*$PI/180)),$y1-($dotsize/$C72*cos(216*$PI/180)));
+          $poly->addPt($x1+($dotsize*sin(252*$PI/180)),$y1-($dotsize*cos(252*$PI/180)));
+          $poly->addPt($x1+($dotsize/$C72*sin(288*$PI/180)),$y1-($dotsize/$C72*cos(288*$PI/180)));
+          $poly->addPt($x1+($dotsize*sin(324*$PI/180)),$y1-($dotsize*cos(324*$PI/180)));
+          $im->filledPolygon($poly,$col{$dotcolor});
         }
     # or draw a triangle
         elsif ($dotshape =~ /^triangles$/)	{
           my $poly = new GD::Polygon;
        # lower left vertex
-          $poly->addPt($x1+$dotsize,$y1+$dotsize);
+          $poly->addPt($x1+($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
        # top middle vertex
-          $poly->addPt($x1,$y1-$dotsize);
+          $poly->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
        # lower right vertex
-          $poly->addPt($x1-$dotsize,$y1+$dotsize);
-          $im->polygon($poly,$col{$dotcolor});
+          $poly->addPt($x1-($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
+          $im->filledPolygon($poly,$col{$dotcolor});
         }
     # or draw a square
         else	{
-          $im->rectangle($x1-$dotsize,$y1-$dotsize,$x1+$dotsize,$y1+$dotsize,$col{$bordercolor});
+          $im->filledRectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),$col{$dotcolor});
         }
-        $im->fill($x1+1,$y1+1,$col{$dotcolor});
-        $im->fill($x1+1,$y1-1,$col{$dotcolor});
-        $im->fill($x1-1,$y1+1,$col{$dotcolor});
-        $im->fill($x1-1,$y1-1,$col{$dotcolor});
       }
     }
   }
@@ -585,15 +738,37 @@ print "($SELECT_LISTS{'mapbgcolor'}[0])<br>($SELECT_LISTS{'oceancolor'}[0])<br>\
             $dotsize = int($atCoord{$x1}{$y1}**0.5) + 1;
           }
           if ($dotshape =~ /^circles$/)	{
-            $im->arc($x1,$y1,($dotsize*2)+2,($dotsize*2)+2,0,$hpix,$col{$bordercolor});
+            $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,$hpix,$col{$bordercolor});
+          } elsif ($dotshape =~ /^crosses$/)	{
+          } elsif ($dotshape =~ /^diamonds$/)	{
+            my $poly = new GD::Polygon;
+            $poly->addPt($x1,$y1+($dotsize*2));
+            $poly->addPt($x1+($dotsize*2),$y1);
+            $poly->addPt($x1,$y1-($dotsize*2));
+            $poly->addPt($x1-($dotsize*2),$y1);
+            $im->polygon($poly,$col{$bordercolor});
+          } elsif ($dotshape =~ /^stars$/)	{
+            my $poly = new GD::Polygon;
+            $poly->addPt($x1,$y1-($dotsize/$C72));
+            $poly->addPt($x1+($dotsize*sin(36*$PI/180)),$y1-($dotsize*cos(36*$PI/180)));
+            $poly->addPt($x1+($dotsize/$C72*sin(72*$PI/180)),$y1-($dotsize/$C72*cos(72*$PI/180)));
+            $poly->addPt($x1+($dotsize*sin(108*$PI/180)),$y1-($dotsize*cos(108*$PI/180)));
+            $poly->addPt($x1+($dotsize/$C72*sin(144*$PI/180)),$y1-($dotsize/$C72*cos(144*$PI/180)));
+            $poly->addPt($x1+($dotsize*sin(180*$PI/180)),$y1-($dotsize*cos(180*$PI/180)));
+            $poly->addPt($x1+($dotsize/$C72*sin(216*$PI/180)),$y1-($dotsize/$C72*cos(216*$PI/180)));
+            $poly->addPt($x1+($dotsize*sin(252*$PI/180)),$y1-($dotsize*cos(252*$PI/180)));
+            $poly->addPt($x1+($dotsize/$C72*sin(288*$PI/180)),$y1-($dotsize/$C72*cos(288*$PI/180)));
+            $poly->addPt($x1+($dotsize*sin(324*$PI/180)),$y1-($dotsize*cos(324*$PI/180)));
+         #   $im->polygon($poly,$col{$bordercolor});
+            $im->polygon($poly,$col{'borderblack'});
           } elsif ($dotshape =~ /^triangles$/)	{
             my $poly = new GD::Polygon;
-            $poly->addPt($x1+$dotsize,$y1+$dotsize);
-            $poly->addPt($x1,$y1-$dotsize);
-            $poly->addPt($x1-$dotsize,$y1+$dotsize);
+            $poly->addPt($x1+($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
+            $poly->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
+            $poly->addPt($x1-($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
             $im->polygon($poly,$col{$bordercolor});
           } else	{
-            $im->rectangle($x1-$dotsize,$y1-$dotsize,$x1+$dotsize,$y1+$dotsize,$col{$bordercolor});
+            $im->rectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),$col{$bordercolor});
           }
         }
       }
@@ -651,28 +826,115 @@ sub getCoords	{
 	($x,$y) = $self->projectPoints($x,$y);
 	# Get pixel values, but shift everything a half degree so dots
 	#  are at midpoints of 1 by 1 deg rectangles
-	return($self->getLng($x - 0.5),$self->getLat($y + 0.5));
+	if ( $x && $y )	{
+		return($self->getLng($x - 0.5),$self->getLat($y + 0.5));
+	} else	{
+		return;
+	}
 }
 
 sub projectPoints	{
 	my $self = shift;
 
 	my ($x,$y) = @_;
-	if ( $q->param('projection') eq "polar" )	{
+
+	# rotate point if origin is not at 0/0
+	if ( $midlat != 0 || $midlng != 0 )	{
+
+	# recenter the longitude on the new origin
+		$x = $x - $midlng;
+		if ( $x <= -180 )	{
+			$x = $x + 360;
+		} elsif ( $x >= 180 )	{
+			$x = $x - 360;
+		}
+
+	# find the great circle distance to the new origin
+		my $gcd = ( 180 / $PI ) * acos( ( sin($y*$PI/180) * sin($midlat*$PI/180) ) + ( cos($y*$PI/180) * cos($midlat*$PI/180) * cos($x*$PI/180) ) );
+
+	# find the great circle distance to the point opposite the new pole
+		my $oppgcd;
+		if ( $x > 0 )	{
+			$oppgcd = ( 180 / $PI ) * acos( ( sin($y*$PI/180) * sin($midlat*$PI/-180) ) + ( cos($y*$PI/180) * cos($midlat*$PI/-180) * cos((180-$x)*$PI/180) ) );
+		} else	{
+			$oppgcd = ( 180 / $PI ) * acos( ( sin($y*$PI/180) * sin($midlat*$PI/-180) ) + ( cos($y*$PI/180) * cos($midlat*$PI/-180) * cos((180+$x)*$PI/180) ) );
+		}
+
+	# find the great circle distance to the new north pole
+		my $npgcd;
+		if ( $midlat <= 0 )	{ # pole is at same longitude as origin
+			$npgcd = ( 180 / $PI ) * acos( ( sin($y*$PI/180) * sin(($midlat+90)*$PI/180) ) + ( cos($y*$PI/180) * cos(($midlat+90)*$PI/180) * cos($x*$PI/180) ) );
+		} else	{ # pole is at opposite longitude
+			$npgcd = ( 180 / $PI ) * acos( ( sin($y*$PI/180) * sin((90-$midlat)*$PI/180) ) + ( cos($y*$PI/180) * cos((90-$midlat)*$PI/180) * cos((180-$x)*$PI/180) ) );
+		}
+
+	# now finally shift the point's coordinate relative to the new origin
+
+	# find new latitude exploiting fact that great circle distance from
+	#  point to the new north pole must be 90 - latitude
+
+		$y = 90 - $npgcd;
+
+	# find new longitude
+
+		if ( abs($x) > 0.005 && abs($x) < 179.999 )	{
+			if ( $gcd > 90 )	{
+				if ( abs($y) +0.001 >= $oppgcd && abs($y) - 0.001 <= $oppgcd )	{
+					$oppgcd = $oppgcd + 0.001;
+				}
+				if ( $x > 0 )	{
+					$x = 180 - ( 180 / $PI * acos( cos($oppgcd * $PI / 180) / cos($y * $PI / 180) ) );
+				} else	{
+					$x = -180 + ( 180 / $PI * acos( cos($oppgcd * $PI / 180) / cos($y * $PI / 180) ) );
+				}
+			} else	{
+				if ( abs($y) +0.001 >= $gcd && abs($y) - 0.001 <= $gcd )	{
+					$gcd = $gcd + 0.001;
+				}
+				if ( $x > 0 )	{
+					$x = 180 / $PI * acos( cos($gcd * $PI / 180) / cos($y * $PI / 180) );
+				} else	{
+					$x = -1 * 180 / $PI * acos( cos($gcd * $PI / 180) / cos($y * $PI / 180) );
+				}
+			}
+		} else	{
+		# toss out points with extreme values that blow up the arcos
+		#  function due to rounding error
+			$x = "";
+			$y = "";
+		}
+	} # end of rotation algorithm
+
+	if ( $q->param('projection') eq "orthographic" && $x ne "" )	{
+
 		# how far is this point from the origin?
-		my $dist = ( ($x - $midlng)**2 + ($y + $midlat)**2 )**0.5;
+		my $dist = ($x**2 + $y**2)**0.5;
 		# dark side of the Earth is invisible!
 		if ( $dist > 90 )	{
 			return;
 		}
 		# transform to radians
-		$dist = ($dist / 360) * 3.14159265;
-		$x = $x - $midlng;
-		$x = $x * cos($dist) * ( 1 / cos( 3.14159265 * 90 / 360 ) ) ;
-		$x = $x + $midlng;
-		$y = $y + $midlat;
-		$y = $y * cos($dist) * ( 1 / cos( 3.14159265 * 90 / 360 ) ) ;
-		$y = $y - $midlat;
+		$dist = $PI * $dist / 360;
+		$x = $x * cos($dist) * ( 1 / cos( $PI / 4 ) ) ;
+		$y = $y * cos($dist) * ( 1 / cos( $PI / 4 ) ) ;
+		# fool tests for returned null data elsewhere in the script
+		if ( $x == 0 )	{
+			$x = 0.001;
+		}
+		if ( $y == 0 )	{
+			$y = 0.001;
+		}
+	} elsif ( $q->param('projection') eq "Mollweide" && $x ne "")	{
+	# WARNING: this is an approximation of the Mollweide projection;
+	#  a factor of 180 deg for the longitude would seem intuitive,
+	#  but 190 gives a better visual match to assorted Google images
+		$x = $x * cos($y * $PI / 190);
+		$y = $y * cos($y * $PI / 360);
+	} elsif ( $q->param('projection') eq "Eckert" && $x ne "")	{
+	# WARNING: this is an approximation of the Eckert IV projection
+	#  and is not nearly as complicated
+		$x = $x * cos($y * $PI / 300);
+		$y = $y * cos($y * $PI / 360);
 	}
 	return($x,$y);
 }
