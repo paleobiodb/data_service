@@ -4762,7 +4762,8 @@ sub new_authority_form{
 	#  they can be retrieved when the form data are processed
 	for my $p ( @insertParams )	{
 		my $newp = $stemName . "_" . $p;
-		$html =~ s/name="$p/name="$newp/;
+		$html =~ s/name="$p/name="$newp/g;
+		$html =~ s/id="$p/id="$newp/g;
 	}
 	$html =~ s/\$taxon_name/$new_name/;
 	print $html;
@@ -4932,15 +4933,15 @@ sub displayTaxonomyResults	{
 	# Set ref info for the opinion, because same field names are used
 	#  in the auth and opinions tables
 	if ( $q->param('opinion_author1last') )	{
-		$q->param(author1init => $q->param('opinion_author1init') );
-		$q->param(author1last => $q->param('opinion_author1last') );
-		$q->param(author2init => $q->param('opinion_author2init') );
-		$q->param(author2last => $q->param('opinion_author2last') );
-		$q->param(otherauthors => $q->param('opinion_otherauthors') );
-		$q->param(pubyr => $q->param('opinion_pubyr') );
-		$q->param(pages => $q->param('opinion_pages') );
-		$q->param(figures => $q->param('opinion_figures') );
-		$q->param(comments => $q->param('opinion_comments') );
+		$q->param(author1init => ($q->param('opinion_author1init')||'') );
+		$q->param(author1last => ($q->param('opinion_author1last')||'') );
+		$q->param(author2init => ($q->param('opinion_author2init')||'') );
+		$q->param(author2last => ($q->param('opinion_author2last')||'') );
+		$q->param(otherauthors => ($q->param('opinion_otherauthors')||'') );
+		$q->param(pubyr => ($q->param('opinion_pubyr')||'') );
+		$q->param(pages => ($q->param('opinion_pages')||'') );
+		$q->param(figures => ($q->param('opinion_figures')||'') );
+		$q->param(comments => ($q->param('opinion_comments')||'') );
 	} else	{
 		$q->param(author1init => '');
 		$q->param(author1last => '');
@@ -5661,6 +5662,8 @@ sub insertRecord {
 				
 				# Set: separate with commas
 				my @formVals = $q->param($fieldName);
+				# 254 is the code for both sets and enums, and this should NOT
+				# be done for enums!!!
 				if ( $fieldTypeCodes[$fieldCount] == 254 ) {
 					my $numSetValues = @formVals;
 					if ( $numSetValues ) {
