@@ -2005,7 +2005,11 @@ sub displayCollResults {
 
 			# if the points are less than 100 km apart, save
 			#  the collection
-			if ( 111 * GCD($mylat,$lat,abs($mylng-$lng)) < 100 )	{
+			if ( $mylat == $lat && $mylng == $lng )	{
+				push @tempDataRows, $dr;
+				$ofRows++;
+			}
+			elsif ( 111 * GCD($mylat,$lat,abs($mylng-$lng)) < 100 )	{
 				push @tempDataRows, $dr;
 				$ofRows++;
 			} else	{
