@@ -168,20 +168,76 @@ function auth ( ) {
 <table width="100%">
 
 <tr><td valign=top><font size=-1>
-Research group or project:
-<td valign=top><font size=-1>
+Research group or project:</font></td>
 
+<td valign=top><font size=-1>
 <select id="research_group">
 </select>
+</font></td>
 
 <tr><td valign="top"><font size=-1>Data authorizer:</font></td>
 <td valign="bottom"><select name="authorizer"></select>
 <a href="javascript: auth();">Me</a></td>
+</tr>
+
+<tr><td nowrap>
+<font size=-1>
+Use data records created 
+<select name="created_before_after">
+<option selected>before</option>
+<option>after</option>
+</select>:
+</td>
+
+<td>
+<select name="date">
+<option selected>
+<option>31</option><option>30</option><option>29</option>
+<option>28</option><option>27</option><option>26</option>
+<option>25</option><option>24</option><option>23</option>
+<option>22</option><option>21</option><option>20</option>
+<option>19</option><option>18</option><option>17</option>
+<option>16</option><option>15</option><option>14</option>
+<option>13</option><option>12</option><option>11</option>
+<option>10</option><option>9</option><option>8</option>
+<option>7</option><option>6</option><option>5</option>
+<option>4</option><option>3</option><option>2</option>
+<option>1</option>
+</select>
+
+<select name="month">
+<option selected></option>
+<option>December</option>
+<option>November</option>
+<option>October</option>
+<option>September</option>
+<option>August</option>
+<option>July</option>
+<option>June</option>
+<option>May</option>
+<option>April</option>
+<option>March</option>
+<option>February</option>
+<option>January</option>
+</select>
+
+<select name="year">
+<option selected></option>
+<option>2004</option>
+<option>2003</option>
+<option>2002</option>
+<option>2001</option>
+<option>2000</option>
+<option>1999</option>
+<option>1998</option>
+</select>
+</td>
+</tr>
 
 <tr><td valign=top><font size=-1>
-Taxonomic name <small><i>(genus or higher rank)</i></small>:
+Taxonomic name <small><i>(genus or higher rank)</i></small>:</font></td>
 <td valign=top><font size=-1>
-<input  name=genus_name size=25>
+<input  name=genus_name size=25></td></tr>
 
 <!-- LEGACY
 <tr><td valign=top><font size=-1>
@@ -215,10 +271,13 @@ Included time interval(s):
 	</td></tr></table></td></tr>
 -->
 
+
 <tr><td valign=top><font size=-1>
-If you only want lists from one time span, enter the oldest and youngest intervals:
+If you only want lists from one time span, enter the oldest and youngest intervals:</font></td>
+
 <td valign=top><font size=-1>
 <input name=max_interval_name size=25> - <input name=min_interval_name size=25>
+</font></td></font></td></tr>
 
 <!-- LEGACY
 <tr><td valign=top><font size=-1>
@@ -233,12 +292,15 @@ Likewise for a single age/stage:
 -->
 
 <tr><td valign=top><font size=-1>
-Environment:
+Environment:</font></td>
+
 <td valign=top><font size=-1>
 <select id="environment"></select>
+</font></td></tr>
 
 <tr><td valign=top><font size=-1>
 Select a single continent:
+</font></td>
 
 <td valign=top><font size=-1>
 <table bgcolor="EEEEEE"><tr><td class="cell">
@@ -251,91 +313,120 @@ Select a single continent:
 <input type=checkbox name="North America" value="YES" onClick="continentClick();">North America
 <input type=checkbox name="South America" value="YES" onClick="continentClick();">South America<br>
 </td></tr></table>
+</font></td>
 
 <tr><td valign=top><font size=-1>
-... or a single country:
+... or a single country:</font></td>
 
 <td valign=top><font size=-1>
 <select id="country"></select>
+</font></td>
 
 <tr><td valign=top><font size=-1>
 Lump lists from the same county and formation? - WARNING: algorithm not yet functional
+<!--if not functional, then why is it here??-->
+</font></td>
+
 <td valign=top><font size=-1><select name=lumplists>
-<option selected>no, keep them separate
-<option>yes, lump them
-</select>
+<option selected>no, keep them separate</option>
+<option>yes, lump them</option>
+</select></font></td></tr>
 
 <tr><td valign=top><font size=-1>
 Lump occurrences of the same genus from the same collection?
+</font></td>
+
 <td valign=top><font size=-1><select name=lumpgenera>
-<option selected value="NO">no, keep them separate
-<option value="YES">yes, lump them
+<option selected value="NO">no, keep them separate</option>
+<option value="YES">yes, lump them</option>
 </select>
+</font></td></tr>
 
 <tr><td valign=top><font size=-1>
-Include lists with poor geographic data (no county or lat/long)?
+Include lists with poor geographic data (no county or lat/long)?</font></td>
 <td valign=top><font size=-1><select name=strictgeography>
-<option selected value="YES">yes, include them
-<option value="NO">no, exclude them
+<option selected value="YES">yes, include them</option>
+<option value="NO">no, exclude them</option>
 </select>
+</font></td></tr>
 
 <tr><td valign=top><font size=-1>
-Include lists with poor temporal data (no epoch or stage)?
+Include lists with poor temporal data (no epoch or stage)?</font></td>
 <td valign=top><font size=-1><select name=strictchronology>
-<option selected value="YES">yes, include them
-<option value="NO">no, exclude them
+<option selected value="YES">yes, include them</option>
+<option value="NO">no, exclude them</option>
 </select>
+</font></td></tr>
 
 <tr><td valign=top><font size=-1>
-Include generically indeterminate occurrences?
+Include generically indeterminate occurrences?</font></td>
 <td valign=top><font size=-1><select name=indet>
-<option selected value="YES">yes, include them
-<option value="NO">no, exclude them
+<option selected value="YES">yes, include them</option>
+<option value="NO">no, exclude them</option>
 </select>
+</font></td></tr>
 
 <tr><td valign=top><font size=-1>
-Type of output:
+Type of output:</font></td>
 <td valign=top><font size=-1><select name=collections_put>
-<option selected>comma-delimited text
-<option>tab-delimited text
-<option>CONJUNCT
+<option selected>comma-delimited text</option>
+<option>tab-delimited text</option>
+<option>CONJUNCT</option>
 </select>
-<p>
+</font></td></tr>
+
 
 <tr><td valign=top><font size=-1>
-Occurrence fields you want:<br>
+Occurrence fields you want:</font><br>
 <font size=-2>(the collection ID and genus name fields are always output)</font>
+</td>
 
 <td valign=top><font size=-1>
 <table bgcolor="EEEEEE">
-<tr><td><font size=-1><input type=checkbox name=occurrences_authorizer value="YES" onClick="occurrencesClick();">authorizer
-<td><font size=-1><input type=checkbox name=occurrences_enterer value="YES" onClick="occurrencesClick();">enterer
-<td><font size=-1><input type=checkbox name=occurrences_modifier value="YES" onClick="occurrencesClick();">modifier
-<td><font size=-1><input type=checkbox name=occurrences_occurrence_no value="YES" onClick="occurrencesClick();">occurrence no
-<tr><td><font size=-1><input type=checkbox name=occurrences_reference_no value="YES" onClick="occurrencesClick();">reference no
+<tr><td><font size=-1><input type=checkbox name=occurrences_authorizer value="YES" onClick="occurrencesClick();">authorizer</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_enterer value="YES" onClick="occurrencesClick();">enterer</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_modifier value="YES" onClick="occurrencesClick();">modifier</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_occurrence_no value="YES" onClick="occurrencesClick();">occurrence no</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=occurrences_reference_no value="YES" onClick="occurrencesClick();">reference no</font></td>
 <!--input type=checkbox name=occurrences_collection_no value="YES">collection no-->
 <!--input type=checkbox name=occurrences_genus_reso value="YES">genus reso-->
 <!--input type=checkbox name=occurrences_genus_name value="YES">genus name-->
 <!--input type=checkbox name=occurrences_species_reso value="YES">species reso-->
-<td><font size=-1><input type=checkbox name=occurrences_class_name value="YES" onCLick="occurrencesClick();">class name
-<td><font size=-1><input type=checkbox name=occurrences_order_name value="YES" onCLick="occurrencesClick();">order name
-<td><font size=-1><input type=checkbox name=occurrences_family_name value="YES" onCLick="occurrencesClick();">family name
-<tr><td><font size=-1><input type=checkbox name=occurrences_subgenus_name value="YES" onClick="occurrencesClick();">subgenus name
-<td><font size=-1><input type=checkbox name=occurrences_species_name value="YES" onClick="occurrencesClick();">species name
-<td><font size=-1><input type=checkbox name=occurrences_abund_value value="YES" onClick="occurrencesClick();">abund value
-<td><font size=-1><input type=checkbox name=occurrences_abund_unit value="YES" onClick="occurrencesClick();">abund unit
-<tr><td><font size=-1><input type=checkbox name=occurrences_comments value="YES" onClick="occurrencesClick();">comments
-<td><font size=-1><input type=checkbox name=occurrences_plant_organ value="YES" onClick="occurrencesClick();">plant organ
-<td><font size=-1><input type=checkbox name=occurrences_plant_organ2 value="YES" onClick="occurrencesClick();">plant organ 2
-<tr><td><font size=-1><input type=checkbox name=occurrences_created value="YES" onClick="occurrencesClick();">created
-<td><font size=-1><input type=checkbox name=occurrences_modified value="YES" onClick="occurrencesClick();">modified
-<tr><td colspan=2><font size=-1><input type=checkbox name=collections_only value="YES" onClick="occurrencesNoneClick();"><nobr><b>NONE</b> (get collection data only)</nobr>
-<td colspan=2><font size=-1><input type=checkbox name=distinct_taxa_only value="YES" onClick="occurrencesNoneClick();"><nobr>get distinct genera only</nobr>
+<td><font size=-1><input type=checkbox name=occurrences_class_name value="YES" onCLick="occurrencesClick();">class name</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_order_name value="YES" onCLick="occurrencesClick();">order name</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_family_name value="YES" onCLick="occurrencesClick();">family name</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=occurrences_subgenus_name value="YES" onClick="occurrencesClick();">subgenus name</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_species_name value="YES" onClick="occurrencesClick();">species name</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_abund_value value="YES" onClick="occurrencesClick();">abund value</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_abund_unit value="YES" onClick="occurrencesClick();">abund unit</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=occurrences_comments value="YES" onClick="occurrencesClick();">comments</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_plant_organ value="YES" onClick="occurrencesClick();">plant organ</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_plant_organ2 value="YES" onClick="occurrencesClick();">plant organ 2</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=occurrences_created value="YES" onClick="occurrencesClick();">created</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_modified value="YES" onClick="occurrencesClick();">modified</font></td>
+</tr>
+
+<tr><td colspan=2><font size=-1><input type=checkbox name=collections_only value="YES" onClick="occurrencesNoneClick();"><nobr><b>NONE</b> (get collection data only)</nobr></font></td>
+<td colspan=2><font size=-1><input type=checkbox name=distinct_taxa_only value="YES" onClick="occurrencesNoneClick();"><nobr>get distinct genera only</nobr></font></td>
+</tr>
+
 </table>
+</td></tr>
+
+
 
 <tr><td valign=top><font size=-1>
-Ecology/taphonomy fields you want:<br>
+Ecology/taphonomy fields you want:<br></font>
 <font size=-2>(values are for directly scored taxa only)</font>
+</td>
 
 <td valign=top>
 <nobr>
@@ -343,9 +434,11 @@ Ecology/taphonomy fields you want:<br>
 <select id="ecology2"></select>
 <select id="ecology3"></select>
 </nobr>
+</td></tr>
 
 <tr><td valign=top><font size=-1>
 Main collection data fields you want:
+</font></td>
 
 <td valign=top>
 
@@ -554,6 +647,7 @@ Main collection data fields you want:
 
 	</td>
 </tr>
+
 </table>
 
 <p align=center>
