@@ -5,8 +5,14 @@ package Globals;
 use strict;
 
 
+# who is the "god" user (ie, full access to everything?)
+# This is an inline function, so it should be fast.
+sub god (){
+	return 'J. Alroy';	
+}
+
 # pass this a full month name such as "December" and it will return the month number, ie, 12.
-sub monthNameToNumber {
+sub monthNameToNumber ($) {
 	my $name = shift;
 	
 	my %month2num = (  "January" => "01", "February" => "02", "March" => "03",
