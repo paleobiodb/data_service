@@ -629,6 +629,7 @@ sub doQuery {
 	$p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
 
 	$sth->finish();
+	$self->dbg("Rows that passed Permissions: number of rows $ofRows, length of dataRows array: ".@dataRows."<br>");
 
 	# Run through the result set.
 	my $acceptedCount = 0;
@@ -753,7 +754,7 @@ sub setupOutput {
 			'quote_char'  => '"',
 			'escape_char' => '"',
 			'sep_char'    => $sepChar,
-			'binary'      => 0
+			'binary'      => 1
 	});
 	
 	my $authorizer = $s->get("authorizer");
@@ -766,7 +767,7 @@ sub setupOutput {
 	$refsOutFileName = $authorizer . "-refs.$outFileExtension";
 
 	if ( ! open(OUTFILE, ">$OUT_FILE_DIR/$occsOutFileName") ) {
-	die ( "Could not open output file: $!<BR>\n" );
+	die ( "Could not open output file: $OUT_FILE_DIR/$occsOutFileName ($!) <BR>\n" );
 	}
 	if ( ! open(REFSFILE, ">$OUT_FILE_DIR/$refsOutFileName") ) {
 	die ( "Could not open output file: $!<BR>\n" );
