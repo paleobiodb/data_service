@@ -747,7 +747,7 @@ if ($region{$collrow{$field[$r]}} eq "") { print "$collrow{$field[$r]}<br>\n"; }
 		print OUTFILE $q->param('searchfield1').",";
 		for ($i = 0; $i <= $maxterms2; $i++)	{
 			if (($timesused[2][$i] > 0) || ($recsused[2][$i]))	{
-				if ( $fieldterms[2][$i] && $fieldterms[2][$i] != 0 )	{
+				if ( $fieldterms[2][$i] && $fieldterms[2][$i] ne "0" )	{
 					print "<td>$fieldterms[2][$i] ";
 					print OUTFILE "\"$fieldterms[2][$i]\"";
 				}
@@ -762,7 +762,7 @@ if ($region{$collrow{$field[$r]}} eq "") { print "$collrow{$field[$r]}<br>\n"; }
 		print OUTFILE "TOTALS\n";
 		for ($i = 0; $i <= $maxterms1; $i++)	{
 			if (($timesused[1][$i] > 0) || ($recsused[1][$i] > 0))	{
-				if ( $fieldterms[1][$i] && $fieldterms[1][$i] != 0 )	{
+				if ( $fieldterms[1][$i] && $fieldterms[1][$i] ne "0" )	{
 					print "<tr><td>$fieldterms[1][$i] ";
 					print OUTFILE "\"$fieldterms[1][$i]\",";
 				}
