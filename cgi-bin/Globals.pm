@@ -213,6 +213,8 @@ sub formatAuthors {
 # pass this a hashref, and it will return a new hashref
 # which contains a copy of the hash refererred to by the first hashref.
 #
+# Note, I think there's a better way to do this..
+#
 # rjp, 3/2004
 sub copyHash {
     my $ref = shift;
@@ -228,4 +230,32 @@ sub copyHash {
 }
 
 
+# Pass this an array ref and 
+# an element to delete.
+#
+# It will search through the array and
+# delete *any* and all occurrences of the passed
+# element if it finds them. 
+#
+# It returns a reference to a new array but *doesn't* modify the original.
+#
+# Does a string compare (eq)
+sub deleteElementFromArray {
+	my $ref = shift;
+	my $toDelete = shift;
+	
+	my @newArray;
+	
+	foreach my $element (@$ref) {
+		if ($element ne $toDelete) {
+			push(@newArray, $element);
+		}
+	}
+	
+	return \@newArray;
+}
+
+
 1;
+
+
