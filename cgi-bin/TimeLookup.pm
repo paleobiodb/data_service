@@ -400,7 +400,21 @@ sub findBoundaries	{
 		}
 	}
 
-	return (\%upperbound,\%lowerbound);
+	# make a hash table where keys are interval names
+	# needed by Download.pm
+	$sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
+	my @intrefs = @{$dbt->getData($sql)};
+
+	for my $ir ( @intrefs )	{
+		my $in = $ir->{interval_name};
+		if ( $ir->{eml_interval} )	{
+			$in = $ir->{eml_interval} . " " . $in;
+		}
+		$upperboundbyname{$ir->{interval_name}} = $upperbound{$ir->{interval_no}};
+		$lowerboundbyname{$ir->{interval_name}} = $lowerbound{$ir->{interval_no}};
+	}
+
+	return (\%upperbound,\%lowerbound,\%upperboundbyname,\%lowerboundbyname);
 
 }
 
