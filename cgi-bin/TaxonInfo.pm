@@ -698,6 +698,8 @@ sub displayTaxonInfoResults {
 		for my $ref (@results)	{
 			push @childlist,$ref->{child_no};
 		}
+        #use Data::Dumper; print Dumper(\@results);
+        #print $sql;
 		# For each child, confirm that this is the most recent opinion
 		for my $child (@childlist)	{
 			my $sql = "SELECT parent_no,pubyr,reference_no,status FROM opinions WHERE child_no=";
@@ -732,6 +734,7 @@ sub displayTaxonInfoResults {
 				}
 			}
 		}
+        push @synonyms, $taxon_no;
 		$in_list =  \@synonyms;
 	}
 
