@@ -1906,9 +1906,9 @@ sub displayCollResults {
 	my $limit;
 	if (!($limit = $q->param("limit"))) { $limit = 30; }
 
-	# force the user to see up to 100 collections when adding a new one
+	# force the user to see up to 200 collections when adding a new one
 	if ( $q->param('type') eq "add" )	{
-		$limit = 100;
+		$limit = 200;
 	}
 	
 	my $ofRows = 0;
