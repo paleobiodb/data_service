@@ -24,6 +24,7 @@ use Scales;
 use TimeLookup;
 use Ecology;
 use PrintHierarchy;
+use Debug;
 
 require "connection.pl";	# Contains our database connection info
 
@@ -179,19 +180,6 @@ dbg($q->Dump);
 # --------------------------------------- subroutines --------------------------------
 
 
-# prints the passed string to a debug file
-# called "debug_bridge_log"
-# added by ryan on 12/18/2003
-sub debugPrint {
-	open LOG, ">>debug_bridge_log";
-	my $date = `date`;
-	chomp($date);
-
-	my $string = shift;
-	chomp($string);
-
-	print LOG "$date: $string \n\n";
-}
 
 
 # Logout
@@ -665,12 +653,24 @@ sub displayMapForm {
 	print &stdIncludes ("std_page_bottom");
 }
 
+
+
 sub displayMapResults {
+
+	Debug::dbPrint("made it to displayMapResult");
 
 	print &stdIncludes ( "std_page_top" );
 
-	my $m = Map->new( $dbh, $q, $s, $dbt );
-	my $file = $m->buildMap ( );
+	my $m = Map::->new( $dbh, $q, $s, $dbt );
+
+	if ($m) { Debug::dbPrint("made new map"); }
+
+	$m->testing();
+	
+	my $file = $m->buildMap();
+
+	Debug::dbPrint("built map");
+
     open(MAP, $file) or die "couldn't open $file ($!)";
     while(<MAP>){
         print;
@@ -679,6 +679,8 @@ sub displayMapResults {
 
 	print &stdIncludes ("std_page_bottom");
 }
+
+
 
 sub displayDownloadForm {
 	print &stdIncludes ( "std_page_top" );
@@ -1999,10 +2001,10 @@ sub processCollectionsSearch {
 			}
 		}
 
-		debugPrint("IndexToDelete = $indexToDelete");
+		Debug::dbPrint("IndexToDelete = $indexToDelete");
 
 		if ($indexToDelete >= 0) {
-			debugPrint("deleting index $indexToDelete");
+			dbPrint("deleting index $indexToDelete");
 			splice (@terms, $indexToDelete, 1);	# remove this index from the array
 		}
 	}
@@ -2013,7 +2015,7 @@ sub processCollectionsSearch {
 		" FROM collections ".
 			" WHERE ". join(' AND ', @terms);
 
-#	debugPrint("full SQL == $sql");
+#	dbPrint("full SQL == $sql");
 
 
 	# modified to handle time lookup in-list JA 17.7.03

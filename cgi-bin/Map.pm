@@ -1,11 +1,13 @@
 package Map;
+
+use Debug;
 use GD;
 use Class::Date qw(date localdate gmdate now);
 use Image::Magick;
 use TimeLookup;
 
 # Flags and constants
-my $DEBUG=0;			# The debug level of the calling program
+my $DEBUG = 0;			# The debug level of the calling program
 my $dbh;				# The database handle
 my $dbt;				# The DBTransactionManager object
 my $q;					# Reference to the parameters
@@ -14,7 +16,7 @@ my $sql;				# Any SQL string
 my $rs;					# Generic recordset
 
 my $BRIDGE_HOME = "/cgi-bin/bridge.pl";
-my $GIF_HTTP_ADDR="/public/maps";               # For maps
+my $GIF_HTTP_ADDR = "/public/maps";               # For maps
 my $COAST_DIR = $ENV{MAP_COAST_DIR};        # For maps
 my $GIF_DIR = $ENV{MAP_GIF_DIR};      # For maps
 my $PI = 3.14159265;
@@ -24,6 +26,7 @@ my $AITOP = 580;
 
 sub acos { atan2( sqrt(1 - $_[0] * $_[0]), $_[0] ) }
 sub tan { sin($_[0]) / cos($_[0]) }
+
 # returns great circle distance given two latitudes and a longitudinal offset
 sub GCD { ( 180 / $PI ) * acos( ( sin($_[0]*$PI/180) * sin($_[1]*$PI/180) ) + ( cos($_[0]*$PI/180) * cos($_[1]*$PI/180) * cos($_[2]*$PI/180) ) ) }
 
@@ -36,11 +39,35 @@ sub new {
 	my $self = {};
 
 	bless $self, $class;
+
 	return $self;
 }
 
-sub buildMap {
+
+
+# added 12/11/2003 to allow Taxoninfo to set the center coordinates for the map
+# *after* the map object has been created.
+sub setQAndUpdateScale {
 	my $self = shift;
+	$q = shift;
+	
+	$self->mapGetScale;  # to update this value..  This is a bad way to do it,
+	# so come up with a better way later..
+}
+
+
+
+sub testing {
+	my $self = shift;
+	Debug::dbPrint("made it to Map::testing");
+}
+
+
+sub buildMap {
+	Debug::dbPrint("Made it to buildMap");
+	
+	my $self = shift;
+	
 
 	$|=1;					# Freeflowing data
 
@@ -59,7 +86,8 @@ sub buildMap {
 
 }
 
-## same as buildMap, but doesn't call mapDrawMap, and returns number of colls.
+
+# same as buildMap, but doesn't call mapDrawMap, and returns dataRows.
 sub buildMapOnly {
 	my $self = shift;
 	my $in_list = (shift or "");
@@ -93,11 +121,12 @@ sub buildMapOnly {
 }
 
 
-	sub mapQueryDb	{
-		my $self = shift;
-		my $in_list = (shift or "");
 
-		# if a research project (not a group) is requested, get a list of
+sub mapQueryDb	{
+	my $self = shift;
+	my $in_list = (shift or "");
+
+	# if a research project (not a group) is requested, get a list of
 		#  references included in that project JA 3.10.02
 		my $reflist;
 		if ( $q->param('research_group') =~ /(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/ )	{
@@ -365,6 +394,7 @@ print "<!-- $occ{'collection_no'} -->\n";
 
 }
 
+
 sub mapGetScale	{
 	my $self = shift;
 
@@ -375,7 +405,7 @@ sub mapGetScale	{
   $scale =~ s/x //i;
 
   ($cont,$coords) = split / \(/,$q->param('mapfocus');
-  $coords =~ s/\)//;
+  $coords =~ s/\)//;  # cut off the right parenthesis.
   ($midlat,$midlng) = split /,/,$coords;
   if ( $q->param('maplat') && $q->param('maplng') )	{
     $midlat = $q->param('maplat');
@@ -386,6 +416,7 @@ sub mapGetScale	{
   $offlng = 180 * ( $scale - 1 ) / $scale;
   $offlat = 90 * ( $scale - 1 ) / $scale;
 }
+
 
 # extract outlines taken from NOAA's NGDC Coastline Extractor
 sub mapDefineOutlines	{
@@ -586,10 +617,12 @@ sub mapGetRotations	{
 }
 
 
-sub mapDrawMap{
+# actually draws the map
+sub mapDrawMap {
 
   my $self = shift;
   my $perm_rows = shift;
+
 
   $self->dbg($q->Dump);
 
@@ -634,11 +667,7 @@ sub mapDrawMap{
 		$self->htmlError ( "Couldn't open [$GIF_DIR/$gifname]: $!" );
   }
 
-  # figure out the desired size of the rectangle surrounding the map
-  $maxLat = $q->param('maxlat');
-  $minLat = $q->param('minlat');
-  $maxLng = $q->param('maxlng');
-  $minLng = $q->param('minlng');
+
 
   $hmult = 1.6;
   $vmult = 2;
@@ -739,7 +768,7 @@ sub mapDrawMap{
 	my $p = Permissions->new ( $s );
 	my @dataRows = ( );
 	# from buildMapOnly, we may have already run the permissions step.
-	# Note that even if we have data passing the permissions step, we 
+	# Note that even if we have data passing the permissions step, we
 	# still might not get any points to draw since the data may be lacking
 	# lat/long info.
 	if($perm_rows){
@@ -756,18 +785,31 @@ sub mapDrawMap{
 		$self->dbg ( "Returned $ofRows rows okayed by permissions module" );
 	}
 
+	
+
+
 
   # draw collection data points
   %atCoord = ();
   %longVal = ();
   %latgVal = ();
-  foreach $collRef ( @dataRows ) {
-    %coll = %{$collRef};
-    if ( ( $coll{'latdeg'} > 0 || $coll{'latmin'} > 0 || $coll{'latdec'} > 0 ) &&
-         ( $coll{'lngdeg'} > 0 || $coll{'lngmin'} > 0 || $coll{'lngdec'} > 0 ) && 
-			( $collok{$coll{'collection_no'}} eq "Y" || 
-			! $q->param('genus_name') ) 
+	foreach $collRef ( @dataRows ) {
+ 		%coll = %{$collRef};
+ 		if ( ( $coll{'latdeg'} > 0 || $coll{'latmin'} > 0 || $coll{'latdec'} > 0 ) &&
+         ( $coll{'lngdeg'} > 0 || $coll{'lngmin'} > 0 || $coll{'lngdec'} > 0 ) &&
+			( $collok{$coll{'collection_no'}} eq "Y" ||
+			! $q->param('genus_name') )
 		) {
+
+		#{
+			#my @keys = keys %coll;
+			#$self->dbg("keys: @keys");
+			#my $val = $coll{'latdeg'};
+			#$self->dbg("latdeg = $val");
+			#my $val = $coll{'lngdeg'};
+			#$self->dbg("lngdeg = $val");
+		#}
+
 
       $lngoff = $coll{'lngdeg'};
       # E/W modification appears unnecessary, but code is here just in case
@@ -790,9 +832,11 @@ sub mapDrawMap{
       }
       ($x1,$y1,$hemi) = $self->getCoords($lngoff,$latoff);
 
-      if ( $x1 > 0 && $y1 > 0 && $x1-$maxdotsize > 0 && 
+
+
+      if ( $x1 > 0 && $y1 > 0 && $x1-$maxdotsize > 0 &&
 			$x1+$maxdotsize < $width &&
-			$y1-$maxdotsize > 0 && 
+			$y1-$maxdotsize > 0 &&
 			$y1+$maxdotsize < $height )	{
         $atCoord{$x1}{$y1}++;
         $longVal{$x1} = $coll{'lngdeg'} . " " . $coll{'lngdir'};
@@ -802,6 +846,18 @@ sub mapDrawMap{
       }
     }
   }
+
+#12/11/2003 testing
+#{
+#	my $test = values(%atCoordl);
+#	$self->dbg("atCoord: $test");
+#	my $test = values(%longVal);
+#	$self->dbg("longVal: $test");
+#	my $test = values(%latgVal);
+ #	$self->dbg("latgVal: $test");
+#}
+#end testing
+
 
 	$self->dbg("matches: $matches<br>");
 	# Bail if we don't have anything to draw.
