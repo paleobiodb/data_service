@@ -127,12 +127,15 @@ div.emphasized {
 
 
 /*	used for titles at top of forms, ie, "Collection Search Form" */
-.title {
+.title,.title_small_overhead {
 	padding-top: 0.8em;
 	padding-bottom: 0.8em;
 	font-weight: bold;
 	font-size: 1.6em;
 	text-align: center;
+}
+.title_small_overhead {
+	padding-top: 0.0em;
 }
 
 /*	most titles have a smaller details section after them,
@@ -317,6 +320,60 @@ td.indet {
 td.nonindet {
 	font-style: italic;
 }
+
+.tabOn, .tabOff, .tabHoverOn, .tabHoverOff {
+    /*background-color: #EEEEEE;*/
+	color : white; 
+    background-color: #909090;
+    font-weight: bold;
+    /*border: 1px solid #0044CC;*/
+    border: 1px solid #D9D9D9;
+    position: inline;
+    top: 10;
+    width: 140;
+    text-align: center;
+    z-index: 2;
+    padding: 3;
+    cursor: pointer;
+    cursor: hand;
+}
+
+.tabOff {
+    font-weight: normal;
+    background-color: #C9C9C9;
+	border-color: #E0E0E0;
+}
+
+.tabHoverOn{
+    background-color: #B0B0B0;
+}
+
+.tabHoverOff{
+    background-color: #D0D0D0;
+}
+
+.panel{
+    position: absolute;
+    /*top: 32;*/
+    left: 10;
+    width: 95%;
+    z-index: 1;
+    /*height: 85%;*/
+    visibility: hidden;
+    /*font: 12pt Verdana,sans-serif;*/
+    /*color: navy;*/
+    /*border: thin solid navy;*/
+    padding: 10;
+    /*overflow: auto;*/
+}
+
+A:link.tabOn, A:visited.tabOn, A:active.tabOn, A:link.tabOff, A:visited.tabOff, A:active.tabOff { 
+	color : white; text-decoration:none; 
+}
+
+A:hover.tabOn, A:hover.tabOff{ 
+	color : black;  text-decoration:none; 
+}       
 
 /* for a small reference display line */
 span.smallRef {
