@@ -1721,6 +1721,11 @@ sub displayCollectionDetails {
 sub buildTaxonomicList {
 	my $collection_no = shift;
 	my $collection_refno = shift;
+	my $gnew_names = shift;
+	my @gnew_names = @{$gnew_names};
+	my $snew_names = shift;
+	my @snew_names = @{$snew_names};
+	my $new_found = 0;
 	my $return = "";
 
 	# This is the taxonomic list part
@@ -1751,15 +1756,41 @@ sub buildTaxonomicList {
 		my $newreference;
 		my $abundance;
 		my $comments;
+		my $genus_index = -1;
+		my $species_index = -1;
+
+		# helps in setting bold genus/species names
+		for($i=0; $i<@occFieldNames; $i++){
+			if($occFieldNames[$i] eq 'genus_name'){
+				$genus_index = $i;
+			}
+			elsif($occFieldNames[$i] eq 'species_name'){
+				$species_index = $i;
+			}
+		}
 
 		my $count = 0;
 		foreach my $rowref ( @rowrefs ) {
+			# check for unrecognized genus names
+			foreach my $nn (@gnew_names){
+				if($rowref->[$genus_index] eq $nn){
+					$rowref->[$genus_index] = "<b>".$rowref->[$genus_index];
+					$rowref->[$species_index]=$rowref->[$species_index]."</b>";
+					$new_found = 1;
+				}
+			}
+
+			# check for unrecognized species names
+			foreach my $nn (@snew_names){
+				if($rowref->[$species_index] eq $nn){
+					$rowref->[$species_index]=$rowref->[$species_index]."</b>";
+					$rowref->[$genus_index] = "<b>".$rowref->[$genus_index];
+					$new_found = 1;
+				}
+			}
 
 			my $drow = DataRow->new($rowref, $md);
 
-			my @occrow = @{$rowref};
-
-        
 			$genus = "Genus and species" if $drow->getValue('genus_name') || $drow->getValue('species_name');
 			$abundance = 'Abundance' if $drow->getValue('abund_value');
 			$comments = 'Comments' if $drow->getValue('comments');
@@ -1774,7 +1805,10 @@ sub buildTaxonomicList {
 			else	{
 				$drow->setValue("reference_no",'');
 			}
-			$formattedrow = $hbo->populateHTML("taxa_display_row", $rowref, \@occFieldNames );
+
+			my @occrow = @{$rowref};
+
+			$formattedrow = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
 			$formattedrow .= "<tr>\n\t<td colspan='6'>".getReidHTMLTableByOccNum(pop(@occrow),$collection_refno)."</td>\n</tr>";
 			# if there's a link in here somewhere, there must be a new ref
 			#   (kludgy, but saves the trouble of passing newreference back
@@ -1794,9 +1828,16 @@ sub buildTaxonomicList {
 		# Taxonomic list header
 		$return = "
 <div align='center'>
-<h2>Taxonomic list for collection $collection_no</h2>
+<h2>Taxonomic list for collection $collection_no</h2>";
 
-<table border=\"0\" cellpadding=\"3\" cellspacing=\"0\">
+		if($new_found){
+			$return .= "<h3><font color=red>WARNING!</font> Taxon names in ".
+					   "<b>bold</b> are new to the database.<br>Please make ".
+					   "sure the spelling is correct.</h3>";
+		}
+
+		$return .=
+"<table border=\"0\" cellpadding=\"3\" cellspacing=\"0\">
 <tr>
 	<td nowrap><u>$genus</u></td>
 	<td><u>$newreference</u></td>
@@ -2607,6 +2648,15 @@ sub processEditOccurrences {
 		$all_params{$name} = [$q->param($name)];
 	}
 
+	# for identifying unrecognized (new to the db) genus/species names.
+	my @gnew_names = ();
+	my @snew_names = ();
+	my $gnew_names_ref = $all_params{'genus_name'};
+	my $snew_names_ref = $all_params{'species_name'};
+	# get all genus names in order to check for a new name
+	push(@gnew_names, PBDBUtil::newGenusNames($dbh,$gnew_names_ref));
+	push(@snew_names, PBDBUtil::newSpeciesNames($dbh,$snew_names_ref));
+
 	# list of required fields
 	my @required_fields = ("authorizer", "enterer", "collection_no", "genus_name", "species_name", "reference_no");
 	# hashes of which fields per table are integral (vs. text) type
@@ -2627,7 +2677,7 @@ sub processEditOccurrences {
 			}
 		}
 		my $sql = "";
-
+		
 		# CASE 1
 		# if we have a reid_no and an occurrence_no, we're updating a reid
 		if(exists($all_params{reid_no}) 
@@ -2946,7 +2996,7 @@ sub processEditOccurrences {
 	# Show the rows for this collection to the user
 	my $collection_no = ${$all_params{collection_no}}[0];
 
-	print &buildTaxonomicList ( $collection_no, 0 );
+	print &buildTaxonomicList ( $collection_no, 0,\@gnew_names, \@snew_names );
 
 	# Show a link to re-edit
 	print "
