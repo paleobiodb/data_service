@@ -74,6 +74,7 @@ if ( $q->param("action") eq "search" )	{
 	$sth->finish();
 
 	if ( $found > 0 )	{
+		print "<center><p><b>$found</b> references were found</p></center>\n\n";
 		print "<center><p><input type=submit value=\"Update\"></p></center>\n\n";
 	} else	{
 		print "<center><p>No references were found! Please <a href=\"fivepct.pl?action=display\">try again</a>.</p></center>\n";
