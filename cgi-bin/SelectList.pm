@@ -59,6 +59,12 @@ sub setAllowNulls
   $self->{_allowNulls} = shift;
 }
 
+sub setMainTagStuff
+{
+	my $self = shift;
+	$self->{_maintagstuff} = shift;
+}
+
 sub toHTML
 {
   my $self = shift;
@@ -66,11 +72,12 @@ sub toHTML
 	my @items = @{$self->{_itemList}};
 	my $retVal = $self->{htmlString};
 	
-  $retVal = qq|<select name="$self->{_name}"|;
+	$retVal = qq|<select name="$self->{_name}"|;
 	$retVal .= qq| size="$self->{_size}"| if $self->{_size};
+	$retVal .= qq| $self->{_maintagstuff} | if $self->{_maintagstuff};
 	$retVal .= '>';
 	
-  $retVal .= "<option>" if $self->{_allowNulls} && $items[0] ne '';
+	$retVal .= "<option>" if $self->{_allowNulls} && $items[0] ne '';
 	
 	my $selectedItem = $self->getSelected();
 	foreach my $item (@items)
