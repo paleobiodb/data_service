@@ -593,6 +593,12 @@ sub getIntervalRange	{
 		}
 	}
 
+# WARNING: you could get past this point even having selected two periods
+#  from different scales; if you did that the right behavior is to return
+#  let the user do this anyway because they might want exactly those two time
+#  intervals, which is OK; bestbothscale will be used to return an error code
+#  by returnCollectionList
+
 # get the "next" (youngest) interval nos for each interval in the scale
 	if ( $bestbothscale )	{
 		$sql = "SELECT interval_no,next_interval_no FROM correlations WHERE ";
@@ -635,6 +641,9 @@ sub getIntervalRange	{
 	if ( ! @intervals )	{
 		return;
 	}
+
+# note that we're not doing a proper return because we're just setting
+#  module globals
 
 # for convenience, make a hash array where the keys are the intervals
 	for my $i ( @intervals )	{
@@ -743,8 +752,9 @@ sub returnCollectionList	{
 		push @collections, $collref->{collection_no};
 	}
 
-# return the matching collections
-	return \@collections;
+# return the matching collections plus a value indicating whether the
+#  intervals are in the same scale (computed by getIntervalRange)
+	return(\@collections,$bestbothscale);
 }
 
 
