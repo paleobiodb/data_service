@@ -354,6 +354,8 @@ sub dbConnect {
 # pass this an entire SQL query string
 # and it will return a single result
 # (ie, assumes that there aren't multiple rows)
+# Note, this doesn't return a result row, it just
+# returns the first element of the result.
 #
 # clearly - don't need to call execute() before using this one.
 sub getSingleSQLResult {
@@ -361,7 +363,7 @@ sub getSingleSQLResult {
 
 	my $sql = shift;
 	my $dbh = $self->{dbh};
-	return $dbh->selectrow_array($sql);
+	return ($dbh->selectrow_array($sql))[0];
 }
 
 
@@ -388,6 +390,28 @@ sub executeSQL {
 	# save the sth for later use in fetching rows.
 	$self->{sth} = $sth;
 }
+
+
+
+
+
+# Returns the entire result set as a matrix with NO permissions checking
+#
+# ****SPEED NOTE****
+# This method is much faster than nextResultArray() if you
+# have many result rows to fetch.
+sub allResultsArrayRef {
+	my SQLBuilder $self = shift;
+	
+	my $sql = $self->SQLExpr();
+	
+	# fetch all array rows 	
+	my $ref = ($self->{dbh})->selectall_arrayref($sql);
+	
+	return $ref;
+}
+
+
 
 
 # Returns the entire result set as a matrix using read permissions
@@ -528,6 +552,8 @@ sub nextResultArrayRef {
 		
 	return $result;
 }
+
+
 
 
 

@@ -131,9 +131,11 @@ sub formatAsHTML {
 	my $taxon = TaxonHierarchy->new();
 	
 	# initialize these to be empty..
-	my $class = "";
-	my $order = "";
-	my $family = "";
+	my $taxClass = "";
+	my $taxOrder = "";
+	my $taxFamily = "";
+	
+	Debug::dbPrint("formatAsHTML, occ_no = $occ_no\n");
 	
 
 	# grab the author names for the first reference.
@@ -171,17 +173,20 @@ sub formatAsHTML {
 	WHERE o.reference_no = r.reference_no AND o.occurrence_no = $occ_no");
 		
 	$sql->executeSQL();
-	
+
 	@result = $sql->nextResultArrayUsingPermissions();
 	
 	if ($numReids <= 0) {
 		# get the taxa information for the original id
 		$taxon->setWithTaxonName("$result[2] $result[4]");
-		$class = $taxon->nameForRank("class");
-		$order = $taxon->nameForRank("order");
-		$family = $taxon->nameForRank("family");
+		
+		$taxClass = $taxon->nameForRank("class");
+		
+		
+		$taxOrder = $taxon->nameForRank("order");
+		$taxFamily = $taxon->nameForRank("family");
 	}
-	
+
 	# Class	Order	Family	Taxon	Reference	Abundance	Comments
 	
 	# some HTML tags
@@ -197,9 +202,9 @@ sub formatAsHTML {
 	}
 	
 	$html = "<TR>
-				<$TD>$class</TD>
-				<$TD>$order</TD>
-				<$TD>$family</TD>
+				<$TD>$taxClass</TD>
+				<$TD>$taxOrder</TD>
+				<$TD>$taxFamily</TD>
 				<$TD $style><A HREF=\"" . URLMaker::URLForTaxonName($result[2], $result[4]) .
 				"\">$result[1] $result[2] $result[3] $result[4]</A></TD>
 				<$TD><A HREF=\"" . URLMaker::URLForReferenceNumber($result[8]) . "\">$authors</A></TD>
@@ -233,9 +238,9 @@ sub formatAsHTML {
 			# we should figure out the class, order, and family.
 			
 			$taxon->setWithTaxonName("$result->[2] $result->[4]");
-			$class = $taxon->nameForRank("class");
-			$order = $taxon->nameForRank("order");
-			$family = $taxon->nameForRank("family");
+			$taxClass = $taxon->nameForRank("class");
+			$taxOrder = $taxon->nameForRank("order");
+			$taxFamily = $taxon->nameForRank("family");
 		}
 		
 		# if a cell has a style (from a style sheet)
@@ -247,9 +252,9 @@ sub formatAsHTML {
 		}
 		
 		$html .= "\n\n<TR>
-				<$TD>$class</TD>
-				<$TD>$order</TD>
-				<$TD>$family</TD>
+				<$TD>$taxClass</TD>
+				<$TD>$taxOrder</TD>
+				<$TD>$taxFamily</TD>
 				<$TD $style>= <A HREF=\"" . URLMaker::URLForTaxonName($result->[2], $result->[4]) .
 					 "\">$result->[1] $result->[2] $result->[3] $result->[4]</A></TD>
 				<$TD><A HREF=\"" . URLMaker::URLForReferenceNumber($result->[7]) . "\">$authors</A></TD>
