@@ -71,7 +71,7 @@ use Globals;
 # It will be passed to most classes when we're creating new objects.
 %GLOBALVARS;
 
-my $DEBUG = 1;		# Shows debug information regarding the page if set to 1
+my $DEBUG = 0;		# Shows debug information regarding the page if set to 1
 
 my $DUPLICATE = 2;	# not sure what this is for?
 
@@ -2151,7 +2151,6 @@ sub displayCollResults {
 		# Loop through each data row of the result set
 		my $count = 0;
 		foreach my $dataRow (@dataRows) {
-
 			# Get the reference_no of the row
 	        $sql = "SELECT * FROM refs WHERE reference_no=" . $dataRow->{"reference_no"};
 			my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -2660,15 +2659,28 @@ IS NULL))";
 	if($resgrp && $resgrp =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
 		my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
 		if($resprojstr ne ""){
-			push(@terms, " reference_no IN (" . $resprojstr . ")");
+			push(@terms, "(collections.reference_no IN ($resprojstr) OR "
+		                . "secondary_refs.reference_no IN ($resprojstr))");
 		}   
+        $joinSecondaryRefs = 1;
 	} elsif($resgrp){
-		push ( @terms, "FIND_IN_SET('".$q->param("research_group")."', research_group)" );
+		push ( @terms, "FIND_IN_SET('".$q->param("research_group")."', collections.research_group)" );
 	}
 			
 	# Remove it from further consideration
 	$q->param("research_group" => "");
-	
+
+    # Do a left join on secondary refs so we can match those guys as well
+    # Set joinSecondaryRefs to 1 so we know how to set up the FROM and SELECT
+    # parts of the query later in the function.
+    # PS 11/29/2004
+	if ($q->param("reference_no")) {
+        $joinSecondaryRefs = 1;
+		push @terms, " (collections.reference_no=".$q->param("reference_no")." OR "
+                     ." secondary_refs.reference_no=".$q->param("reference_no").") ";
+    }
+	# Remove it from further consideration
+    $q->param("reference_no" => "");
 	
 	# Compose the WHERE clause
 	# loop through all of the possible fields checking if each one has a value in it
@@ -2683,10 +2695,10 @@ IS NULL))";
 		if (defined $q->param($fieldName) && $q->param($fieldName) ne '')  {
 			if ( $pulldowns{$fieldName} ) {
 				# It is in a pulldown... no wildcards
-				push(@terms, "$fieldName = '$val'");
+				push(@terms, "collections.$fieldName = '$val'");
 			} else {
 				$val = qq|"$wildcardToken$val$wildcardToken"| if $fieldTypes[$fieldCount] == 0;
-				push(@terms, "$fieldName$comparator$val");
+				push(@terms, "collections.$fieldName$comparator$val");
 			}
 		}
 	}
@@ -2696,9 +2708,9 @@ IS NULL))";
 	# group_formation_member, and we'll have to deal with it separately.
 	# added by rjp on 1/13/2004
 	if (my $val = $q->param("group_formation_member")) {
-		push(@terms, "(geological_group $comparator '$wildcardToken$val$wildcardToken' 
-						OR formation $comparator '$wildcardToken$val$wildcardToken' 
-						OR member $comparator '$wildcardToken$val$wildcardToken')");
+		push(@terms, "(collections.geological_group $comparator '$wildcardToken$val$wildcardToken' 
+						OR collections.formation $comparator '$wildcardToken$val$wildcardToken' 
+						OR collections.member $comparator '$wildcardToken$val$wildcardToken')");
 	}
 	
 	#Debug::dbPrint("terms = @terms");
@@ -2712,14 +2724,14 @@ IS NULL))";
 			if ( my $val = $q->param($fieldName)) {
 				$val =~ s/"//g;
 				$val = qq|"$val$wildcardToken"| if $fieldTypes[$fieldCount] == 0;
-				push(@terms, "$fieldName$comparator$val");
+				push(@terms, "collections.$fieldName$comparator$val");
 			}
 		}
 	}
 
 	if ( ! @terms && ! @timeinlist ) {
 		if ( $q->param("genus_name") ) {
-			push @terms,"collection_no is not NULL";
+			push @terms,"collections.collection_no is not NULL";
 		} else {
 			my $message =	"<center>\n";
 			if ( ! $timesearch )	{
@@ -2744,13 +2756,11 @@ IS NULL))";
 	}
 		
 	# Compose the columns list
-	my @columnList = (	"collection_no",
-								"authorizer",
+	my @columnList = (	        "authorizer",
 								"collection_name",
 								"access_level",
 								"research_group",
 								"release_date",
-								"DATE_FORMAT(release_date, '%Y%m%d') rd_short",
 								"country", "state", 
 								"period_max", 
 								"period_min", "epoch_max", 
@@ -2772,79 +2782,22 @@ IS NULL))";
 	my $limitString = "";
 	#	$limitString = " LIMIT " . $q->param('limit') if $q->param('limit');
 
-
-	# if the user is trying to search for a reference number, then
-	# we have to also search for collections which use this as a 
-	# secondary reference number.
-	# added by rjp on 12/18/2003.
-
-	my $noSecondaryRefs = 0;
-	if (my $refno = $q->param("reference_no")) {
-	
-		my $msql = "SELECT collection_no FROM secondary_refs 
-						WHERE reference_no LIKE $refno ";
-
-		my $i;
-
-		my @results = @{$dbt->getData($msql)};
-		for ($i = 0; $i <= $#results; $i++) {
-			$results[$i] = $results[$i]->{collection_no};
-		}
-
-		$msql = "SELECT collection_no FROM collections
-					WHERE reference_no LIKE $refno ";
-
-		my @r2 = @{$dbt->getData($msql)};
-		for ($i = 0; $i <= $#r2; $i++) {
-			$r2[$i] = $r2[$i]->{collection_no};
-		}
-
-		# combine the two arrays together
-		push @results, @r2;
-
-		if ($#results >= 0) {
-			# add it to the terms list	if we got any results
-			push @terms, " collection_no IN (" . join(', ', @results) . ") ";
-		}
-
-		if (!@results) {
-			# we didn't find anything, so record this fact...
-			$noSecondaryRefs = 1;
-		}
-	}
-
-	
-	# make a new terms list which is the same as @terms, except that
-	# we cut out any terms starting with "reference_no".
-	# note, technically this is only needed if they specify a reference_no,
-	# but it shouldn't hurt anything if there isn't one.
-
-	if (! $noSecondaryRefs) {
-		# only do this if we managed to find some terms from secondary refs 
-		# above..
-		my $indexToDelete = -1;
-		for ($i = 0; $i <= $#terms; $i++) {
-			if ($terms[$i] =~ m/reference_no/) {
-				$indexToDelete = $i;
-			}
-		}
-
-		#Debug::dbPrint("IndexToDelete = $indexToDelete");
-
-		if ($indexToDelete >= 0) {
-			if ($DEBUG) { dbPrint("deleting index $indexToDelete"); }
-			splice (@terms, $indexToDelete, 1);	# remove this index from the array
-		}
-	}
-
-
-	#Debug::dbPrint("terms before adding to where = @terms");
-	
 	# form the SQL query from the newterms list.
 	$sql->clear();
-	$sql->setFromExpr("collections");
 	$sql->setWhereSeparator("AND");
-	$sql->setSelectExpr(join(', ', @columnList, 'reference_no'));
+    if ($joinSecondaryRefs) {
+        $sql->setFromExpr("collections LEFT JOIN secondary_refs " 
+                       . "ON collections.collection_no = secondary_refs.collection_no");
+	    $selectExpr = "DISTINCT collections.collection_no, DATE_FORMAT(release_date, '%Y%m%d') rd_short, collections.reference_no";
+        foreach $column (@columnList) {
+            $selectExpr .= ", collections.$column";
+        }
+        $sql->setSelectExpr($selectExpr);
+    } else {
+	    $sql->setFromExpr("collections");
+        push @columnList, "collection_no, DATE_FORMAT(release_date, '%Y%m%d') rd_short, reference_no";
+	    $sql->setSelectExpr(join(', ', @columnList));
+    } 
 	foreach my $t (@terms) {
 		$sql->addWhereItem($t);
 	}
@@ -2875,11 +2828,11 @@ IS NULL))";
 			}
 		}
 		#if (@terms)	{
-			$sql->addWhereItem("collection_no IN ( " . join ( ", ", @okcolls ) . " )");
+			$sql->addWhereItem("collections.collection_no IN ( " . join ( ", ", @okcolls ) . " )");
 		#} 
 	} elsif ( @timeinlist )	{
 		#if (@terms) {
-			$sql->addWhereItem("collection_no IN ( " . join(", ", @timeinlist) . " )");
+			$sql->addWhereItem("collections.collection_no IN ( " . join(", ", @timeinlist) . " )");
 		#}
 	}
 
