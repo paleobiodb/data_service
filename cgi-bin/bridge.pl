@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # bridge.pl is the starting point for all parts of PBDB system.  Everything passes through
-# here to start with.
+# here to start with. test5
 
 #use strict;	# eventually, should have use strict set.. rjp 2/2004.
 
@@ -65,6 +65,7 @@ my $DUPLICATE = 2;	# not sure what this is for?
 my $sql="";					# Any SQL string
 my $return="";				# Generic return value
 my $rs;						# Generic recordset
+my $md; 					# metadata model
 
 # Paths from the Apache environment variables (in the httpd.conf file).
 my $HOST_URL = $ENV{BRIDGE_HOST_URL};
@@ -1162,70 +1163,81 @@ sub stdIncludes {
 # Shows the search form
 # for references
 #
+# Does different things depending on the type in the 
+# $q type parameter.  Type can be select, edit, or add.
+# 
+# Can optionally pass it a message to display at the top.
+#
+# modified by rjp, 3/2004
 sub displaySearchRefs {
 
-	my $message = shift;			# Message telling them why they are here
+	my $message = shift;	# Message telling them why they are here
+	
+	# type is select, edit, or add.
 	my $type = $q->param("type");
 
-	my @row;
-	my @fields = ( "action" );
-	TYPE: {
-		if ( $type eq "select" ) { push ( @row, "displayRefResults" ); last; }
-		if ( $type eq "edit" ) { push ( @row, "displaySelectRefForEditPage" ); last; }
-		if ( $type eq "add" ) { push ( @row, "displayRefResultsForAdd" ); last; }
-
+	my %fields;
+	
+	if ($type eq 'select') {
+		$fields{action} = 'displayRefResults';
+	} elsif ($type eq 'edit') {
+		$fields{action} = 'displaySelectRefForEditPage';
+	} elsif ($type eq 'add') {
+		$fields{action} = 'displayRefResultsForAdd';
+	} else {
 		# Unspecified
-		push ( @row, "displayRefResults" );
+		$fields{action} = 'displayRefResults';
 	}
-
-	# Prepend the message and the type
-	unshift ( @row, $message, $type );
-	unshift ( @fields, "%%message%%", "type" );
+	
+	$fields{type} = $type;
+	$fields{message} = $message;
+	
 
 	# If we have a default reference_no set, show another button.
 	# Don't bother to show if we are in select mode.
-	unshift ( @fields, "%%use_current%%" );
-	my $reference_no = $s->get("reference_no");
-	if ( $reference_no && $type ne "add" ) {
-		unshift ( @row, "<input type='submit' name='use_current' value='Use current reference ($reference_no)'>\n" );
-	} else {
-		unshift ( @row, "" );
+	
+	my $reference_no = $s->currentReference();
+	$fields{reference_no} = $reference_no;
+	
+	if (! ($reference_no && $type ne "add" )) {
+		$fields{'OPTIONAL_use_current'} = 0;
 	}
+
 
 	# Users editing collections may want to have their current reference
 	# swapped with the primary reference of the collection to be edited.
-	unshift ( @fields, "%%use_primary%%" );
-	if ($q->param('action') eq "startEditCollection" ) {
-		unshift ( @row, "<input type='submit' name='use_primary' value=\"Use collection's reference\">\n" );
-	} else {
-		unshift ( @row, "" );
+	if (!($q->param('action') eq "startEditCollection" )) {
+		$fields{'OPTIONAL_use_primary'} = 0;
 	}
 
-	unshift @row,"";
-	unshift @fields,"authorizer";
-	unshift @row,"";
-	unshift @fields,"project_name";
-
-	print stdIncludes( "std_page_top" );
+	$fields{authorizer} = '';
+	$fields{project_name} = '';
+	
 	my $html = "";
 
-	unless($q->param('user') eq "Guest"){
+	unless ($s->guest()) {
 		$html .= stdIncludes("js_pulldown_me");
 	}
 
-	$html .= $hbo->populateHTML("search_refs_form", \@row, \@fields);
-	buildEntererPulldown( \$html, $enterer, 1 );
-	my $enterer = $s->get("enterer");
-	$html =~ s/%%enterer%%/$enterer/;
-	my $authorizer = $s->get("authorizer");
-	$html =~ s/%%authorizer%%/$authorizer/;
+	Debug::dbPrint($hbo->entererPopupMenu($s->get('enterer'), 1));
 	
-	my $goal = $q->param('goal');
+	# build popup menus for the enterer and authorizer.
+	$fields{enterer_popup} = $hbo->entererPopupMenu($s->get('enterer'), 1);
+	$fields{authorizer} = $s->get('authorizer');
 	
-	$html =~ s/%%goal%%/$goal/;
-	
-	print $html;
+	$fields{goal} = $q->param('goal');
 
+	# build the project name select list with a pre-assigned list.		
+	$fields{project_name_popup} = $hbo->buildSelectWithHardList('project_name', '');
+	
+
+
+	
+	$html .= $hbo->newPopulateHTML("search_refs_form", \%fields);
+	
+	# print the HTML.	
+	print stdIncludes( "std_page_top" );
+	print $html;
 	print stdIncludes("std_page_bottom");
 }
 
@@ -1233,9 +1245,10 @@ sub displaySearchRefs {
 
 # Print out the number of refs found by a ref search JA 26.7.02
 sub describeRefResults	{
-
 	my $numRows = shift;
 	my $overlimit = shift;
+	
+	Debug::dbPrint("numRows = $numRows, overlimit = $overlimit");
 
 	print "<center><h3>Your search $refsearchstring produced ";
 	if ($numRows > 30 || $numRows < $overlimit)	{
@@ -1306,15 +1319,20 @@ sub displayRefResults {
 	unless($q->param('use_primary')) {
 		# this calls the subroutine RefQuery which fills a *global* variable
 		# called $sth with the query results
-		$overlimit = RefQuery();
+		$overlimit = RefQuery($q);
+		
 		@rows = @{$sth->fetchall_arrayref()};
 		$numRows = @rows;
+		Debug::dbPrint("Refs here1, overlimit = $overlimit");
 	} else {
 		$q->param('use_primary' => "yes");
 		$numRows = 1;
+		Debug::dbPrint("Refs here2");
 	}
 
+
 	if ( $numRows == 1 ) {
+		Debug::dbPrint("Refs here3");
 		# Do the action, don't show results...
 
 		# Set the reference_no
@@ -1338,8 +1356,11 @@ sub displayRefResults {
 
 		# if there's an action, go straight back to it without showing the ref
 		if ( $action)	{
+			Debug::dbPrint("Refs here4");
 			&{$action};			# Run the action
 		} else	{  
+			Debug::dbPrint("Refs here5");
+		
 			# otherwise, display a page showing the ref JA 10.6.02
 			print stdIncludes( "std_page_top" );
 			print "<h3>Here is the full reference...</h3>\n";
@@ -1375,9 +1396,13 @@ sub displayRefResults {
 		return;		# Out of here!
 	}
 
+	
+	Debug::dbPrint("Refs here6");
+		
 	print stdIncludes( "std_page_top" );
 
 	if ( $numRows ) {
+		Debug::dbPrint("Refs here7");
 
 		describeRefResults($numRows,$overlimit);
 
@@ -1409,10 +1434,14 @@ sub displayRefResults {
 
 		printGetRefsButton($numRows,$overlimit);
 
+		Debug::dbPrint("Refs here8");
+		
 	} else {
 		print "<center>\n<h3>Your search $refsearchstring produced no matches</h3>\n";
 		print "<p>Please try again with fewer search terms.</p>\n</center>\n";
 		print "<center>\n<p>";
+		
+		Debug::dbPrint("Refs here9");
 	}
 
 	print qq|<a href="$exec_url?action=displaySearchRefs&type=select"><b>Do another search</b></a>\n|;
@@ -1421,6 +1450,8 @@ sub displayRefResults {
 	}
 	print "</p></center><br>\n";
 
+	Debug::dbPrint("Refs here10");
+
 	print stdIncludes("std_page_bottom");
 }
 
@@ -1428,10 +1459,12 @@ sub displayRefResults {
 
 sub displayRefResultsForAdd {
 
-	my $overlimit = RefQuery();
+	my $overlimit = RefQuery($q);
 
 	my @rows = @{$sth->fetchall_arrayref()};
 	my $numRows = @rows;
+  
+  	Debug::dbPrint("displayRefResultsForAdd, numRows = " . $numRows);
   
 	if ( ! $numRows ) {
 		# No matches?  Great!  Get them where the were going.
@@ -1449,7 +1482,7 @@ sub displayRefResultsForAdd {
 	print qq|<input type=hidden name="action" value="displayRefAdd">\n|;
 
 	# carry search terms over for populating form
-	foreach my $s_param ("name","year","reftitle","project_name"){
+	foreach my $s_param ("name","year","reftitle","project_name") {
 		if($q->param($s_param)){
 			print "<input type=hidden name=\"$s_param\" value=\"".
 				  $q->param($s_param)."\">\n";
@@ -1459,10 +1492,13 @@ sub displayRefResultsForAdd {
 	# Print the references found
 	print "<table border=0 cellpadding=5 cellspacing=0>\n";
 	my $row = 1;
+	my $md = MetadataModel->new($sth);
 	foreach my $rowref ( @rows ) {
+
 	    my $drow = DataRow->new($rowref, $md);
+	    #print $drow->getValue('reference_no') . "<BR>";
 		# This is view only... you may not select
-    	print makeRefString ( $drow, 0, $row, $numRows );
+    	print makeRefString( $drow, 0, $row, $numRows );
 		$row++;
 	}
 	print "</table>\n";
@@ -1586,7 +1622,7 @@ sub processNewRef {
 sub displaySelectRefForEditPage
 {
 
-	my $overlimit = RefQuery();
+	my $overlimit = RefQuery($q);
 	
 	my @rowrefs = @{$sth->fetchall_arrayref()};
 	my $numRows = @rowrefs;
@@ -7507,6 +7543,7 @@ sub makeRefString	{
 		return $retRefString;
 	}
 	my $tempRefNo = $bibRef->get("_reference_no");
+	
 	# getCollsWithRef creates a new <tr> for the collections.
 	$retRefString .= getCollsWithRef($tempRefNo, $row, $rowcount);
 
@@ -7630,28 +7667,36 @@ sub getCollsWithRef	{
 }
 
 
-# This creates a *global* variable called $sth which contains the query results
-# Perhaps change this so it returns the $sth instead of using a global?
-# JA 25.2.02
-sub RefQuery {
 
+# rjp - 3/2004. 
+# This apparently grabs the reference_no from the global session
+# parameter.  It also grabs the name, year, reftitle, pubtitle, and reference_no
+# from the CGI object ($q).  It then performs a database query and that's it..
+#
+# Sets the global $sth variable so we can access the results later.
+#
+# Pass this the CGI object ($q) 
+sub RefQuery {
+	my $q = shift;
+	
 	# Use current reference button?
-	if ( $q->param("use_current") ) {
-		my $sql = "SELECT * FROM refs WHERE reference_no = ".$s->get("reference_no");
-		dbg( "Using current: $sql<HR>" );
+	if ($q->param('use_current')) {
+		# if so, grab the current reference info.
+		my $sql = "SELECT * FROM refs WHERE reference_no = ?";
 		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute();
+		$sth->execute($s->currentReference());
 		$md = MetadataModel->new($sth);
 		@fieldNames = @{$sth->{NAME}};
 		return;
 	}
 
 	# do these really need to be globals?  rjp 12/29/03
-	$name = $q->param('name');
-	$pubyr = $q->param('year');
-	$reftitle = $q->param('reftitle');
+	# I'm changing them to locals, rjp, 3/15/2004.
+	my $name = $q->param('name');
+	my $pubyr = $q->param('year');
+	my $reftitle = $q->param('reftitle');
 	my $pubtitle = $q->param('pubtitle');
-	$refno = $q->param('reference_no');
+	my $refno = $q->param('reference_no');
 	
 	$refsearchstring = qq|$name| if $name;
 	$refsearchstring .= qq| $pubyr| if $pubyr;
@@ -7670,34 +7715,36 @@ sub RefQuery {
 
 		if ($name) {
 			$sql->addWhereItem(
-				" ( author1last LIKE '%$name%' OR ".
-				"   author2last LIKE '%$name%' OR ".
-				"   otherauthors LIKE '%$name%' ) " );
+				" ( author1last LIKE '\%$name\%' OR ".
+				"   author2last LIKE '\%$name\%' OR ".
+				"   otherauthors LIKE '\%$name\%' ) " );
 		}
 		
 		#append each relevant clause onto the $where string.
 		$sql->addWhereItem("pubyr = '$pubyr'") 											if ($pubyr);
-		$sql->addWhereItem("(reftitle LIKE '%$reftitle%' OR reftitle LIKE '$reftitle%')")	if ($reftitle);
-		$sql->addWhereItem(" ( pubtitle LIKE '%$pubtitle%')")								if ($pubtitle);
+		$sql->addWhereItem("(reftitle LIKE '\%$reftitle\%' OR reftitle LIKE '$reftitle%')")	if ($reftitle);
+		$sql->addWhereItem(" ( pubtitle LIKE '\%$pubtitle\%')")								if ($pubtitle);
 		$sql->addWhereItem("reference_no = $refno")										if ($refno);
 		$sql->addWhereItem("enterer='" . $q->param('enterer') . "'") 						if ( $q->param('enterer') );
 		$sql->addWhereItem("project_name='".$q->param('project_name')."'")				if ($q->param('project_name'));
 		
 		
 		my $orderBy = "";
-		if ($q->param('refsortby') eq "year")	{
+		my $refsortby = $q->param('refsortby');
+		
+		if ($refsortby eq 'year') {
 			$orderBy .= "pubyr, ";
-		} elsif ($q->param('refsortby') eq "publication")	{
+		} elsif ($refsortby eq 'publication') {
 			$orderBy .= "pubtitle, ";
-		} elsif ($q->param('refsortby') eq "authorizer")	{
+		} elsif ($refsortby eq 'authorizer') {
 			$orderBy .= "authorizer, ";
-		} elsif ($q->param('refsortby') eq "enterer")	{
+		} elsif ($refsortby eq 'enterer') {
 			$orderBy .= "enterer, ";
-		} elsif ($q->param('refsortby') eq "entry date")	{
+		} elsif ($refsortby eq 'entry date') {
 			$orderBy .= "reference_no, ";
 		}
 		
-		if ($q->param('refsortby'))	{
+		if ($refsortby)	{
 			$orderBy .= "author1last, author1init, author2last, pubyr";
 		}
 		
@@ -7712,10 +7759,14 @@ sub RefQuery {
 		#$sth = $dbh->prepare( $sqlString ) || die ( "$sqlString<hr>$!" );
 		#$sth->execute();
 		#my @rows = @{$sth->fetchall_arrayref()};
-		my @rows = $sql->allResultsArrayRef();
+		my @rows = @{$sql->allResultsArrayRef()};
+		
+		Debug::dbPrint("refQuery 1, rows = " . length(@rows));
 		
 		# If too many refs were found, set a limit
 		if (@rows > 30)	{
+			Debug::dbPrint("refQuery 2, rows = " . length(@rows));
+			
 			$overlimit = @rows;
 			$q->param('refsSeen' => 30 + $q->param('refsSeen') );
 
