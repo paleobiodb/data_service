@@ -4823,10 +4823,23 @@ sub displayTaxonomySearchForm	{
 #
 # Called when the user searches for a taxon from the search_taxonomy_form 
 #
-# edited by rjp 1/22/2004 to fix bug where
-# original combination is not used when user searches for a recombination.
+# Edited by rjp 1/22/2004 to fix bug where
+# original combination is not used when user 
+# searches for a recombination.
+#
+# Edited again by rjp, 2/18/2004.
+#
+#
 sub processTaxonomySearch	{
 	my $taxonName = $q->param('taxon_name');
+		
+	# check for proper spacing of the taxon..
+	if (Validation::taxonRank($taxonName) eq 'invalid') {
+		Globals::printWarning("Ill-formed taxon.  Check capitalization and spacing.");
+		return;
+	}
+	
+	
 	my $startingName = $taxonName;	# record to use after the while loop
 	
 	my $taxonObject = Taxon->new();
@@ -4842,7 +4855,7 @@ sub processTaxonomySearch	{
 	my $subSTH;
 	
 	my $html;
-	my $originalWasRecombination = 0;  #not a recombination to start with
+	my $originalWasRecombination = 0;  # not a recombination to start with
 	while ( my %authorityRow = %{$sth->fetchrow_hashref()} )	{
 		$matches++;
 		
@@ -4896,13 +4909,11 @@ sub processTaxonomySearch	{
 		$html = "<i><FONT SIZE=-1>(\"$startingName\" is a recombination)</FONT></i><BR><BR>" . $html;
 	}
 	
-	# If there were no matches, present the entry form immediately
+	# If there were no matches, present the new taxon entry form immediately
 	if ( $matches == 0 )	{
 		displayTaxonomyEntryForm();
 	}
 	# Otherwise, print a form so the user can pick the taxon
-	
-	
 	else	{
 		print stdIncludes ("std_page_top");
 		print "<center>\n";
@@ -4925,23 +4936,29 @@ sub processTaxonomySearch	{
 
 }
 
+
+
 # JA 17,20.8.02
-
+#
+# rjp: pass this a reference to a hash returned from a SELECT * on the authorities table
+# 
+# it returns some HTML to display the authority information.
 sub formatAuthorityLine	{
-
 	my $taxDataRef = shift;
 	my %taxData = %{$taxDataRef};
 
 	my $authLine;
 
 	# Print the name
-	if ( $taxData{'taxon_rank'} =~ /(species)|(genus)/ )	{
-		$authLine .= "<i>";
+	
+	# italicize if genus or species.
+	if ( $taxData{'taxon_rank'} =~ m/(species)|(genus)/) {
+		$authLine .= "<i>" . $taxData{'taxon_name'} . "</i>";
+	} else {
+		$authLine .= $taxData{'taxon_name'};
 	}
-	$authLine .= "$taxData{'taxon_name'} ";
-	if ( $taxData{'taxon_rank'} =~ /(species)|(genus)/ )	{
-		$authLine .= "</i>";
-	}
+	
+	
 	# If the authority is a PBDB ref, retrieve and print it
 	if ( $taxData{'ref_is_authority'} )	{
 		my $sql = "SELECT * FROM refs WHERE reference_no=";
@@ -4949,12 +4966,12 @@ sub formatAuthorityLine	{
 		my $sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth2->execute();
 		my %refRow = %{$sth2->fetchrow_hashref()} ;
-		$authLine .= &formatShortRef( \%refRow );
+		$authLine .= formatShortRef( \%refRow );
 		$sth2->finish();
 	}
 	# Otherwise, use what authority info can be found
 	else	{
-		$authLine .= &formatShortRef( \%taxData );
+		$authLine .= formatShortRef( \%taxData );
 	}
 
 	# Print name of higher taxon JA 10.4.03
@@ -5005,18 +5022,26 @@ sub formatAuthorityLine	{
 
 
 # JA 13-20.8.02
+#
 # rjp - called when the user chooses the add taxon link from the main
 # menu, selects a reference, and then searches for a taxon name to add.
-# Displays the taxon entyr form called "enter_taxonomy_form.html".
+#
+# Displays the taxon entry form called "enter_taxonomy_form.html".
+#
 sub displayTaxonomyEntryForm	{
 	
-	#print &stdIncludes ("js_tipsPopup");
-	# now handled by common.js.  rjp, 1/2004.
-
-	my $taxon = $q->param('taxon_name');  # name of the taxon they are going to enter an opinion on.
-	my $author;
+	# grab the taxon name from the CGI parameters.  
+	my $taxon = $q->param('taxon_name'); 
 	
-	print stdIncludes ("std_page_top");
+	# check for proper spacing of the taxon..
+	my $rankFromSpacing = Validation::taxonRank($taxon);
+	
+	if ($rankFromSpacing eq 'invalid') {
+		Globals::printWarning("Ill-formed taxon.  Check capitalization and spacing.");
+		return;
+	}
+	
+	my $author;
 
 	# If the taxon already is known, get data about it from
 	# the authorities table
@@ -5027,6 +5052,7 @@ sub displayTaxonomyEntryForm	{
 
 		# Retrieve the authorizer name (needed below)
 		my $sql = "SELECT name FROM person WHERE person_no = " . $authorityRow{'authorizer_no'};
+		
 		$authorityRow{'authorizer'} = @{$dbt->getData($sql)}[0]->{name};
 
 		# Retrieve the type taxon name or type specimen name, as appropriate
@@ -5054,51 +5080,21 @@ sub displayTaxonomyEntryForm	{
 	# Print the entry form
 
 	# Determine the fields and values to be populated by populateHTML
-	# rjp - if there's a space in the taxon name, then assume that it's a species,
-	# otherwise, it could be anything, and we'll have to present a popup menu for the user to pick from.
 	if ($authorityRow{"taxon_rank"} eq "") {
-		if ($taxon =~ / /) {
-			$authorityRow{"taxon_rank"} = "species";
+		if ($rankFromSpacing ne 'invalid' && $rankFromSpacing ne 'higher') {
+			$authorityRow{"taxon_rank"} = $rankFromSpacing;
 		}
 	}
 
-	# Retrieve the taxon's primary ref or (failing that) the current ref
-	# so it can be displayed
-	my $sql;
-	if ( $authorityRow{'reference_no'} )	{
-		$sql = "SELECT * FROM refs WHERE reference_no=" . $authorityRow{'reference_no'};
-	} else	{
-		$sql = "SELECT * FROM refs WHERE reference_no=" . $s->get("reference_no");
-	}
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-	my %refHash = %{$sth->fetchrow_hashref()};
-	$sth->finish();
-
-	# If the authority is the primary ref for the record, then retrieve
-	#  the ref data from the refs table
-	# Don't do this for comments because those would apply to the ref,
-	#  not the naming event
-# COMMENTED OUT by JA 24.9.03 because it appears to do nothing but populate
-#  the form with redundant data when ref is authority
-#	if($authorityRow{'ref_is_authority'}){
-#		for my $key (%authorityRow){
-#			if($refHash{$key} && $key ne "comments" )	{
-#				$authorityRow{$key} = $refHash{$key};
-#			}
-#		}
-#	}
-	my $ref_hash_ref = @{$dbt->getData($sql)}[0];
-	my $refRowString = '<table>' . $hbo->populateHTML('reference_display_row', $ref_hash_ref ) . '</table>';
-
-	# Add gray background and make font small
-	#$refRowString =~ s/<tr>/<tr class='darkList'>/;
-	$refRowString =~ s/<td/<td class='small' /;
-	$authorityRow{'ref_string'} = $refRowString;
+	# retrieve the taxon's reference information..
+	my $ref = Reference->new();
+	$ref->setWithReferenceNumber($authorityRow{'reference_no'} || $s->get("reference_no"));
+	$authorityRow{'ref_string'} = $ref->formatAsHTML();
+	
 
 	# THESE have never been retrieved from the db or anywhere, so this block
 	# of code has no effect.  I'm leaving it, in case it gets used sometime
-	# in the future.
+	# in the future. (JA??)
 	#
 	#my @opinionFields = ( "opinion_author1init", "opinion_author1last", "opinion_author2init", "opinion_author2last", "opinion_otherauthors", "opinion_pubyr", "opinion_pages", "opinion_figures", "opinion_2nd_pages", "opinion_2nd_figures", "opinion_comments", "diagnosis");
 	#for $f ( @opinionFields )	{
@@ -5107,8 +5103,8 @@ sub displayTaxonomyEntryForm	{
 	#}
 
 	# If this is a species, prepopulate the "Valid" name field in the
-	#   status section
-	if($taxon =~ / /) {
+	# status section
+	if ($rankFromSpacing eq 'species') {
 		$authorityRow{'parent_taxon_name'} = $taxon;
 	} else {
 		$authorityRow{'parent_taxon_name'} = '';
@@ -5226,10 +5222,12 @@ sub displayTaxonomyEntryForm	{
 	# Substitute in the taxon name
     $html =~ s/%%taxon_name%%/$taxon/g;
 
+	
+	# actually print the form.
+	print stdIncludes ("std_page_top");
 	print $html;
-
 	print stdIncludes ("std_page_bottom");
-}
+} # end of displayTaxonomyEntryForm()
 
 
 
