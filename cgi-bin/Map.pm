@@ -1634,7 +1634,7 @@ sub projectPoints	{
 		}
 
 	}
-	if ( $oldx eq "" && $oldy eq "" && $projected{$x}{$y} ne "" )	{
+	if ( $oldx eq "" && $oldy eq "" && $projected{$x}{$y} ne "" && $pointclass ne "grid" )	{
 		($x,$y,$pid) = split /:/,$projected{$x}{$y};
 	}
 
