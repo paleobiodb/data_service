@@ -804,6 +804,8 @@ sub insertNewRecord {
 		return 0;	
 	}
 	
+	Debug::dbPrint("here1");
+	
 	# loop through each key in the passed hash and
 	# build up the insert statement.
 	
@@ -825,10 +827,14 @@ sub insertNewRecord {
 		}
 	}
 	
+	Debug::dbPrint("here2");
+	
 	# remove the trailing comma
 	$toInsert =~ s/, $/ /;
 	
 	$toInsert = "INSERT INTO $tableName SET " . $toInsert;
+	
+	Debug::dbPrint("here3, toInsert = $toInsert");
 	
 	# actually insert into the database
 	my $insertResult = $dbh->do($toInsert);
@@ -922,7 +928,7 @@ sub internalUpdateRecord {
 	my $dbh = $self->{dbh};
 	
 
-	
+	Debug::dbPrint("we're in internalUpdateRecord, emptyOnly = $emptyOnly");
 	
 	# make sure they're allowed to update data!
 	my $s = $self->{session};
@@ -931,15 +937,20 @@ sub internalUpdateRecord {
 		return 0;
 	}
 	
+
+	
 	# make sure the whereClause and tableName aren't empty!  That would be bad.
 	if (($tableName eq '') || ($whereClause eq '')) {
 		return 0;	
 	}
 	
+	
 	# make sure the table name is valid
 	if ((! $self->isValidTableName($tableName)) || (! $hashRef)) {
+		Debug::logError("invalid tablename or hashref in SQLBuilder::internalUpdateRecord");
 		return 0;	
 	}
+
 	
 	# make sure they're actually setting some non empty values
 	# in the hashref, otherwise it would be equivalent to deleting the record!
@@ -1020,7 +1031,9 @@ sub internalUpdateRecord {
 					# if the column in the database for this row is
 					# already empty...
 					my $dbcolval = ($selResults->{$row})->{$key};
-					if (($dbcolval eq '') || ($dbcolval == 0)) {
+					Debug::dbPrint("dbcolval for $key = $dbcolval");
+					if (! ($dbcolval)) {
+						Debug::dbPrint("I think dbvolval is empty");
 						# then add the key to the update statement.
 						$toUpdate .= "$key = " . $dbh->quote($hashRef->{$key}) . ", ";
 					}

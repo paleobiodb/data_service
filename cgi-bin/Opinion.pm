@@ -463,6 +463,8 @@ sub displayOpinionForm {
 			
 	# actually build the synonym popup menu.
 	$fields{synonym_select} = $hbo->buildSelect(\@synArray, 'synonym', $fields{status});
+
+	
 	
 	
 	# Now we should figure out the parent taxon name for this opinion.
@@ -493,6 +495,14 @@ sub displayOpinionForm {
 	
 		$fields{'message'} = "<p align=center><i>This record was created by a different authorizer ($authName) so you can only edit empty fields.</i></p>";
 		
+	
+		# set the nomen and synonyms correctly 
+		if ($fields{taxon_status} eq INVALID1) {
+			$fields{synonym} = $fields{status};
+		} elsif ($fields{taxon_status} eq INVALID2) {
+			$fields{nomen} = $fields{status};
+		}
+	
 		# we should always make the ref_has_opinion radio buttons disabled
 		# because only the original authorizer can edit these.
 		
@@ -509,7 +519,6 @@ sub displayOpinionForm {
 		
 		# depending on the status, we should disable some fields.		
 		if ($fields{'status'}) {
-			
 			push(@nonEditables, 'taxon_status');
 			push(@nonEditables, 'nomen');
 			push(@nonEditables, 'synonym');
@@ -517,7 +526,7 @@ sub displayOpinionForm {
 			push(@nonEditables, 'parent_taxon_name2');
 		}
 		
-		if (($fields{'status'} ne RECOMBINED_AS) || ($fields{status} ne BELONGS_TO)) {
+		if (($fields{'status'} ne RECOMBINED_AS) && ($fields{status} ne BELONGS_TO)) {
 			push(@nonEditables, 'diagnosis');
 		}
 				
@@ -535,7 +544,6 @@ sub displayOpinionForm {
 		if ($fields{'2nd_pages'}) { push(@nonEditables, '2nd_pages'); }
 		if ($fields{'2nd_figures'}) { push(@nonEditables, '2nd_figures'); }
 		if ($fields{'taxon_status'}) { push(@nonEditables, 'taxon_status'); }
-
 		
 	}
 	
@@ -897,7 +905,7 @@ sub submitOpinionForm {
 	# is belongs to or recombined as.
 	if ( (! (($taxonStatusRadio eq RECOMBINED_AS) ||
 			($taxonStatusRadio eq BELONGS_TO) )) && ($q->param('diagnosis'))) {
-		$errors->add("Don't enter a diagnosis unless you choose the belongs to or recombined as  radio button.");
+		$errors->add("Don't enter a diagnosis unless you choose the belongs to or recombined as  radio button");
 	}
 	
 	
@@ -921,6 +929,7 @@ sub submitOpinionForm {
 	delete $fieldsToEnter{'2nd_figures'};
 	delete $fieldsToEnter{'parent_taxon_name'};
 	delete $fieldsToEnter{'parent_taxon_name2'};
+	delete $fieldsToEnter{'taxon_status'};
 	delete $fieldsToEnter{'nomen'};
 	delete $fieldsToEnter{'synonym'};
 
