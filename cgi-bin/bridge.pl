@@ -17,7 +17,8 @@ use Report;
 use Curve;
 use Permissions;
 use PBDBUtil;
-#use TaxonInfo;
+use TaxonInfo;
+use DBTransactionManager;
 
 require "connection.pl";	# Contains our database connection info
 
@@ -57,6 +58,9 @@ my $old_action = "";
 
 # Get the database connection
 my $dbh = DBI->connect("DBI:mysql:database=$db;host=$host", $user, $password, {RaiseError => 1});
+
+# Make a Global Transaction Manager object
+my $dbt = DBTransactionManager->new($dbh, $s);
 
 # Need to do this before printing anything else out, if debugging.
 #print $q->header('text/html') if $DEBUG;
@@ -2304,11 +2308,11 @@ sub beginTaxonInfo{
 }
 
 sub checkTaxonInfo{
-	TaxonInfo::checkStartForm($q, $dbh, $s);
+	TaxonInfo::checkStartForm($q, $dbh, $s, $dbt);
 }
 
 sub displayTaxonInfoResults{
-	TaxonInfo::displayTaxonInfoResults($q, $dbh, $s);
+	TaxonInfo::displayTaxonInfoResults($q, $dbh, $s, $dbt);
 }
 ## END Taxon Info Stuff
 ##############
