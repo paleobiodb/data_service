@@ -5,9 +5,9 @@
 <center><h4>Whose opinion on $taxon_name are you entering?</h4></center>
 
 <center>
-<p><input type=checkbox name="ref_has_opinion" value="YES"> The current reference argues for this opinion.<br>
-<b>Pages*:</b> <input id="opinion_pages" size=12>
-<b>Figures*:</b> <input id="opinion_figures" size=12></p>
+<p><input type="checkbox" id="ref_has_opinion" name="ref_has_opinion" value="YES"> The current reference argues for this opinion.<br>
+<b>Pages*:</b> <input id="opinion_pages" name="opinion_pages" size=12>
+<b>Figures*:</b> <input id="opinion_figures" name="opinion_figures" size=12></p>
 
 <p>... <i>or</i> the opinion is repeated from an earlier authority, which is:</p>
 </center>
@@ -16,14 +16,14 @@
 <tr>
 <td><td class=tiny>initials <td class=tiny>last name
 <td><td class=tiny>initials <td class=tiny>last name
-<tr><td align=right><b>First author:</b> <td><input id="opinion_author1init" size=6> <td><input id="opinion_author1last" size=20><br>
-<td align=right><b>Second author:</b> <td><input id="opinion_author2init" size=6> <td><input id="opinion_author2last" size=20><br>
+<tr><td align=right><b>First author:</b> <td><input id="opinion_author1init" name="opinion_author1init" size=6> <td><input id="opinion_author1last" name="opinion_author1last" size=20><br>
+<td align=right><b>Second author:</b> <td><input id="opinion_author2init" name="opinion_author2init" size=6> <td><input id="opinion_author2last" name="opinion_author2init" size=20><br>
 </tr>
-<tr><td valign=top align=right><b>Other authors:</b> <td colspan=5><textarea id="opinion_otherauthors" rows=3 cols=80></textarea><br>
+<tr><td valign=top align=right><b>Other authors:</b> <td colspan=5><textarea id="opinion_otherauthors" name="opinion_otherauthors" rows=3 cols=80></textarea><br>
 </tr>
-<tr><td align=right><b>Year:</b> <td colspan=1><input id="opinion_pubyr" size=6>
-<td colspan=4><b>Pages*:</b> <input id="opinion_2nd_pages" size=12>
-<b>Figures*:</b> <input id="opinion_2nd_figures" size=12>
+<tr><td align=right><b>Year:</b> <td colspan=1><input id="opinion_pubyr" name="opinion_pubyr" size=6>
+<td colspan=4><b>Pages*:</b> <input id="opinion_2nd_pages" name="opinion_2nd_pages" size=12>
+<b>Figures*:</b> <input id="opinion_2nd_figures" name="opinion_2nd_figures" size=12>
 </td></tr>
 </table>
 
@@ -41,9 +41,9 @@
 
 <tr><td align=right valign=top>
 <input type="radio" name="taxon_status" value="belongs_to"> </td><td colspan=2><b>Valid</b>, classified as belonging to 
-<input id="parent_taxon_name" size=50><br>
+<input id="parent_taxon_name" name="parent_taxon_name" size=50><br>
 </td></tr>
-<tr><td></td><td valign="top" align=right> Diagnosis:</td><td><textarea id="diagnosis" rows=3 cols=80></textarea>
+<tr><td></td><td valign="top" align=right> Diagnosis:</td><td><textarea id="diagnosis" name="diagnosis" rows=3 cols=80></textarea>
 </td></tr>
 
 <tr><td align=right>
@@ -67,7 +67,7 @@ Status:
 Please check the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> for an explanation of these terms.
 </span></center>
 </p>
-<p><b>Comments:</b> <textarea id="opinion_comments" rows=2 cols=80></textarea></p>
+<p><b>Comments:</b> <textarea id="opinion_comments" name="opinion_comments" rows=2 cols=80></textarea></p>
 
 <right>
 <input type=submit value="Submit">
