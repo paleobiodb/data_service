@@ -832,31 +832,31 @@ sub getEcology	{
 	my $i;
 
 	for $i (0..$#ecos)	{
-		$ecotaph[1]{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology1')};
+		$ecotaph{'1'.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology1')};
 	}
 	if ( $q->param('ecology2') )	{
 		for $i (0..$#ecos)	{
-			$ecotaph[2]{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology2')};
+			$ecotaph{'2'.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology2')};
 		}
 	}
 	if ( $q->param('ecology3') )	{
 		for $i (0..$#ecos)	{
-			$ecotaph[3]{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology3')};
+			$ecotaph{'3'.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology3')};
 		}
 	}
 	if ( $q->param('ecology4') )	{
 		for $i (0..$#ecos)	{
-			$ecotaph[4]{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology4')};
+			$ecotaph{'4'.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology4')};
 		}
 	}
 	if ( $q->param('ecology5') )	{
 		for $i (0..$#ecos)	{
-			$ecotaph[5]{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology5')};
+			$ecotaph{'5'.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology5')};
 		}
 	}
 	if ( $q->param('ecology6') )	{
 		for $i (0..$#ecos)	{
-			$ecotaph[6]{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology6')};
+			$ecotaph{'6'.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology6')};
 		}
 	}
 }
@@ -864,17 +864,18 @@ sub getEcology	{
 # JA 28.2.04
 # this is a little confusing; the ancestor ecotaph values are keyed by name,
 #  whereas the genus values are now keyed by number - made necessary by fact
-#  that occurrence are linked to taxon numbers and not names to avoid problems
+#  that occurrences are linked to taxon numbers and not names to avoid problems
 #  with homonymy
 sub getAncestralEcology	{
 
 	my $etfield = shift;
 	my $genus = shift;
+	my $ancestor_hash = shift;
 
-	my @parents = split ',',$ancestor_hash{$genus};
+	my @parents = split ',',$ancestor_hash;
 	for $p ( @parents )	{
-		if ( $ecotaph[$etfield]{$p} && ! $ecotaph[$etfield]{$genus} )	{
-			$ecotaph[$etfield]{$genus} = $ecotaph[$etfield]{$p};
+		if ( $ecotaph{$etfield.$p} && ! $ecotaph{$etfield.$genus} )	{
+			$ecotaph{$etfield.$genus} = $ecotaph{$etfield.$p};
 			last;
 		}
 	}
@@ -1148,10 +1149,10 @@ sub doQuery {
 		# finally, get the higher order names
 		my @genera = keys %totaloccsbyno;
 		my $levels = "family,order,class,phylum";
-		%ancestor_hash=%{Classification::get_classification_hash($dbt,$levels,\@genera)};
+		my %ancestor_hash=%{Classification::get_classification_hash($dbt,$levels,\@genera)};
 		for $etfield ( 1..$etfields )	{
 			for my $g ( @genera )	{
-				&getAncestralEcology($etfield,$g);
+				&getAncestralEcology($etfield,$g,$ancestor_hash{$g});
 			}
 		}
 	}
@@ -1187,17 +1188,17 @@ sub doQuery {
 			if ( $q->param('binned_field') )	{
 				# special processing for ecology data
 				if ( $q->param('binned_field') eq "ecology" )	{
-					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph[1]{$genusNo}}++;
-					$occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$ecotaph[1]{$genusNo}}{$genusNo}++;
-					if ( $occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$ecotaph[1]{$genusNo}}{$genusNo} == 1 )	{
-						$taxabybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph[1]{$genusNo}}++;
+					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph{'1'.$genusNo}}++;
+					$occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$ecotaph{'1'.$genusNo}.$genusNo}++;
+					if ( $occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$ecotaph{'1'.$genusNo}.$genusNo} == 1 )	{
+						$taxabybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph{'1'.$genusNo}}++;
 					}
-					$occsbycategory{$ecotaph[1]{$genusNo}}++;
+					$occsbycategory{$ecotaph{'1'.$genusNo}}++;
 				} else	{
 				# default processing
 					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}++;
-					$occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}{$genusNo}++;
-					if ( $occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}{$genusNo} )	{
+					$occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}.$genusNo}++;
+					if ( $occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}.$genusNo} == 1 )	{
 						$taxabybinandcategory{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}++;
 					}
 					$occsbycategory{$row->{$q->param('binned_field')}}++;
@@ -1290,22 +1291,22 @@ sub doQuery {
 		# WARNING: this only works on genus or higher-order data,
 		#  assuming species won't be scored separately
 		if ( $q->param('ecology1') )	{
-			push @reid_row , $ecotaph[1]{$genusNo};
+			push @reid_row , $ecotaph{'1'.$genusNo};
 		}
 		if ( $q->param('ecology2') )	{
-			push @reid_row , $ecotaph[2]{$genusNo};
+			push @reid_row , $ecotaph{'2'.$genusNo};
 		}
 		if ( $q->param('ecology3') )	{
-			push @reid_row , $ecotaph[3]{$genusNo};
+			push @reid_row , $ecotaph{'3'.$genusNo};
 		}
 		if ( $q->param('ecology4') )	{
-			push @reid_row , $ecotaph[4]{$genusNo};
+			push @reid_row , $ecotaph{'4'.$genusNo};
 		}
 		if ( $q->param('ecology5') )	{
-			push @reid_row , $ecotaph[5]{$genusNo};
+			push @reid_row , $ecotaph{'5'.$genusNo};
 		}
 		if ( $q->param('ecology6') )	{
-			push @reid_row , $ecotaph[6]{$genusNo};
+			push @reid_row , $ecotaph{'6'.$genusNo};
 		}
 
 		if( $q->param('collections_only') ){
@@ -1491,7 +1492,7 @@ sub doQuery {
 <tr><td>$acceptedIntervals time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleOutFileName\">$scaleOutFileName</a></td></tr>\n";
 	}
 print "</table>
-<p align='center'><a href='?action=displayDownloadForm'>Do another download</a>
+<p align='center'><b><a href='?action=displayDownloadForm'>Do another download</a></b>
 </p>
 </center>
 ";
