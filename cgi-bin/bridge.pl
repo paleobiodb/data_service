@@ -5623,11 +5623,19 @@ sub processNewReIDs {
 		# added 11.7.02 JA (omitted by Garot!)
 			push(@fieldList, 'created');
 			push(@row, '"' . now() . '"');
+		# need these to check whether to add secondary refs
+		#  (see below) JA 6.5.04
+			my $collection_no;
+			my $reference_no = $s->get('reference_no');
 			for(my $j = 0;$j < $numFields;$j++)
 			{
 				my $fieldName = $fieldNames[$j];
 				my @tmpVals = $q->param($fieldName);
 				my $curVal = $tmpVals[$i];
+
+				if ( $fieldName eq "collection_no" )	{
+					$collection_no = $curVal;
+				}
 				
 				next if  $fieldName eq 'reference_no';
 				# Skip rows that don't have a required data item
@@ -5665,6 +5673,7 @@ sub processNewReIDs {
 			$return = checkDuplicates( "reid_no", \$recID, "reidentifications", \@fieldList, \@row );
 			if ( ! $return ) { return $return; }
 
+
 			if ( $return != $DUPLICATE ) {
 				$sql = "INSERT INTO reidentifications (" . join(',', @fieldList).") VALUES (".join(', ', @row) . ")" || die $!;
 				$sql =~ s/\s+/ /gms;
@@ -5672,6 +5681,9 @@ sub processNewReIDs {
 				$dbh->do( $sql ) || die ( "$sql<HR>$!" );
       
 				$recID = $dbh->{'mysql_insertid'};
+				unless(PBDBUtil::isRefPrimaryOrSecondary($dbh, $collection_no, $reference_no))	{
+					PBDBUtil::setSecondaryRef($dbh,$collection_no, $reference_no);
+				}
 				if ($#successfulRows == -1)	{
 					print "<center><h3><font color='red'>Newly entered reidentifications</font></h3></center>\n";
 				}
