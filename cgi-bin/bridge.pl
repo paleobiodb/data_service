@@ -4690,13 +4690,15 @@ sub displayTaxonomyEntryForm	{
 	#  the ref data from the refs table
 	# Don't do this for comments because those would apply to the ref,
 	#  not the naming event
-	if($authorityRow{'ref_is_authority'}){
-		for my $key (%authorityRow){
-			if($refHash{$key} && $key ne "comments" )	{
-				$authorityRow{$key} = $refHash{$key};
-			}
-		}
-	}
+# COMMENTED OUT by JA 24.9.03 because it appears to do nothing but populate
+#  the form with redundant data when ref is authority
+#	if($authorityRow{'ref_is_authority'}){
+#		for my $key (%authorityRow){
+#			if($refHash{$key} && $key ne "comments" )	{
+#				$authorityRow{$key} = $refHash{$key};
+#			}
+#		}
+#	}
 	my $ref_hash_ref = @{$dbt->getData($sql)}[0];
 	my $refRowString = '<table>' . $hbo->populateHTML('reference_display_row', $ref_hash_ref ) . '</table>';
 
@@ -4882,7 +4884,8 @@ sub checkNewTaxon{
 
 	# If the focal taxon is a species, don't check the type, because
 	#  it will be a specimen number and not a taxon JA 1.3.03
-	if ( $q->param('taxon_rank') eq "species" )	{
+	if ( $q->param('taxon_rank') eq "species" ||
+		$q->param('taxon_rank') eq "subspecies" )	{
 		@params_to_check = ('parent', 'parent_genus');
 		# Third param is never checked, so set match value to 1
 		# JA 30.3.03
@@ -5110,7 +5113,12 @@ sub new_authority_form{
 	my @tempVals = ( "", "",  "", "", "",  "", "", "", "" );
 	unshift @tempParams, 'taxon_rank';
 	if ( $new_name =~ / / )	{
-		unshift @tempVals, "species";
+		my ($word1,$word2,$word3) = split / /,$new_name;
+		if ( $word3 )	{
+			unshift @tempVals, "subspecies";
+		} else	{
+			unshift @tempVals, "species";
+		}
 	} else	{
 		unshift @tempVals, "genus";
 	}
@@ -5372,7 +5380,7 @@ sub displayTaxonomyResults	{
 
 	my $taxon = $q->param('taxon_name');
 
-	my $opinion = &printTaxonomicOpinions( $taxon, '', \@lastOpinions );
+	my $opinion = &printTaxonomicOpinions( $taxon, $q->param('taxon_no'), \@lastOpinions );
 	if ( $opinion )	{
 		if ( $taxon_is_new )	{
 			print "<center><h4>$taxon has been entered into the Database</h4></center>\n\n";
