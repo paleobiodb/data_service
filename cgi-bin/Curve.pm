@@ -107,6 +107,7 @@ sub setArrays	{
 	# Setup the variables
 	$DDIR="./data";
 	$PUBLIC_DIR = $ENV{CURVE_PUBLIC_DIR};
+	$CURVE_HOST = $ENV{CURVE_HOST};
 	$CLASS_DATA_DIR = "$DDIR/classdata";
 					                                # the default working directory
 	$PRINTED_DIR = "/public/data";
@@ -1862,20 +1863,20 @@ sub printResults	{
 	
 		print "\nThe following data files have been created and can be downloaded by clicking on their names:<p>\n";
 		print "<ul>\n";
-		print "<li>The above diversity curve data (<a href=\"http://$PRINTED_DIR/curvedata.csv\">curvedata.csv</a>)<p>\n";
+		print "<li>The above diversity curve data (<a href=\"http://$CURVE_HOST$PRINTED_DIR/curvedata.csv\">curvedata.csv</a>)<p>\n";
 	
 		if ($q->param('stepsize') ne "")	{
-			print "<li>The subsampling curves (<a href=\"http://$PRINTED_DIR/subcurve.tab\">subcurve.tab</a>)<p>\n";
+			print "<li>The subsampling curves (<a href=\"http://$CURVE_HOST$PRINTED_DIR/subcurve.tab\">subcurve.tab</a>)<p>\n";
 		}
 	
-		print "<li>An abstract of the collections assigned to each bin (<a href=\"http://$PRINTED_DIR/binning.csv\">binning.csv</a>)<p>\n";
+		print "<li>An abstract of the collections assigned to each bin (<a href=\"http://$CURVE_HOST$PRINTED_DIR/binning.csv\">binning.csv</a>)<p>\n";
 	
-		print "<li>A first-by-last occurrence count matrix (<a href=\"http://$PRINTED_DIR/firstlast.txt\">firstlast.txt</a>)<p>\n";
+		print "<li>A first-by-last occurrence count matrix (<a href=\"http://$CURVE_HOST$PRINTED_DIR/firstlast.txt\">firstlast.txt</a>)<p>\n";
 	
-		print "<li>A list of each genus, the number of collections including it,  and the ID number of the intervals in which it was found (<a href=\"http://$PRINTED_DIR/presences.txt\">presences.txt</a>)<p>\n";
+		print "<li>A list of each genus, the number of collections including it,  and the ID number of the intervals in which it was found (<a href=\"http://$CURVE_HOST$PRINTED_DIR/presences.txt\">presences.txt</a>)<p>\n";
 	
 		if ( $s->get('enterer') ne "Guest" )	{
-			print "<li>A list of collections that could not be placed in temporal bins (<a href=\"http://$PRINTED_DIR/orphans.txt\">orphans.txt</a>)<p>\n";
+			print "<li>A list of collections that could not be placed in temporal bins (<a href=\"http://$CURVE_HOST$PRINTED_DIR/orphans.txt\">orphans.txt</a>)<p>\n";
 			print "</ul>\n";
 		}
 	
