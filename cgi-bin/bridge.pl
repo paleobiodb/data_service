@@ -547,11 +547,7 @@ sub displayMenuPage	{
 		}
 	}
 	print &stdIncludes ("std_page_top");
-	if ($s->get('enterer') =~ /(J. Alroy)|(M. Kosnik)/ )	{
-		print $hbo->populateHTML('menu.test', \@rowData, \@fieldNames);
-	} else	{
-		print $hbo->populateHTML('menu', \@rowData, \@fieldNames);
-	}
+	print $hbo->populateHTML('menu', \@rowData, \@fieldNames);
 	print &stdIncludes ("std_page_bottom");
 
 }
