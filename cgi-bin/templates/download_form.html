@@ -225,7 +225,7 @@ Name of taxon or taxa <small><i>(genus or higher rank)</i></small>:</font></td>
 <input  name=genus_name size=25></td></tr>
 
 <tr><td valign=top><font size=-1>
-If you only want lists from one time span, enter the oldest and youngest intervals:</font></td>
+If you only want lists from one time span, enter the oldest and youngest intervals <small><i>(do NOT enter numbers or terms like "Middle")</i></small>:</font></td>
 
 <td valign=top><font size=-1>
 <input name=max_interval_name size=25> - <input name=min_interval_name size=25>
@@ -335,21 +335,32 @@ Longitudinal range:</font</td>
 <tr><td valign=top><font size=-1>
 Paleolatitude must be
 <select name="paleolatdirection">
-<option>greater than
 <option>less than
+<option>farther north than
+<option>farther south than
 </select>
 
 <td valign=top><font size=-1>
 <select name="paleolatlimit">
 <option>0
+<option>5
 <option>10
+<option>15
 <option>20
+<option>23.5
+<option>25
 <option>30
+<option>35
 <option>40
+<option>45
 <option>50
+<option>55
 <option>60
+<option>65
 <option>70
+<option>75
 <option>80
+<option>85
 </select>
 degrees
 </font></td>
@@ -375,7 +386,7 @@ Geographic scale of collections:</font></td>
 </font></td></tr>
 
 <tr><td valign=top><font size=-1>
-Temporal scale of collections:</font></td>
+Stratigraphic scale of collections:</font></td>
 
 <td valign=top><font size=-1>
 <input type=checkbox name="bed" value="YES" checked>bed
@@ -541,7 +552,7 @@ Note that the collection ID and genus name fields are always output.</p>
 	<tr>
 	<td class="cell" nowrap><input type=checkbox name=collections_period_max value="YES">period</td>
 	<td class="cell" nowrap><input type=checkbox name=collections_epoch_max value="YES">epoch</td>
-	<td class="cell" nowrap><input type=checkbox name=collections_locage_max value="YES">10 m.y. bin</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_locage_max value="YES" checked>10 m.y. bin</td>
 	<td class="cell" nowrap>&nbsp;</td></tr>
 	</tr>
 
