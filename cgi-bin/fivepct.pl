@@ -73,7 +73,8 @@ if ( $q->param("action") eq "search" )	{
 		print "</b></td>\n";
 		print "<td valign=top>$refrow{'author'} \n";
 		print "\"$refrow{'title'}\" \n";
-		print "<i>$refrow{'pub'}</i> </td>\n";
+		print "<i>$refrow{'pub'}</i><br>\n";
+		print "<font size=1px>[$refrow{'subjects'}]</font></td>\n";
 		print "</tr>\n";
 	}
 	print "</table>\n\n";
