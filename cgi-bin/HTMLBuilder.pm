@@ -325,7 +325,7 @@ sub populateHTML
 
       # Do <input> tags
       # To Do: This should match any valid input tag, not just one with id="" next to <input
-      elsif ( $htmlTemplateString =~ /(<input\s+id="{0,1}$fieldName"{0,1}.*?>)/im)
+      elsif ( $htmlTemplateString =~ /(<input\s+(type"{0,1}.*?"{0,1}\s+){0,1}id="{0,1}$fieldName"{0,1}.*?>)/im)
       {
         my $stuff = $1;
         #print "\n\n<!-- $stuff -->\n\n";
