@@ -1,47 +1,57 @@
 <table border=0 align=center>
   <tr>
     <td>
-      <h1 align=center>Paleobiology Database functions</h1>
-      <table border=0 cellpadding=15>
+      <table border=0>
+      <tr><td colspan=2><h1 align=center>Paleobiology Database functions</h1></td></tr>
         <tr>
-          <td valign=top>
-            <h2>Reference functions</h2>
+          <td valign=top class=small>
+          <h2>Data entry</h2>
+            <h3>References</h3>
             <ul>
-              <li><a href="$exec_url?action=displaySearchRefs&type=select">Search for or select a reference</a>
               <li><a href="$exec_url?action=displaySearchRefs&type=add">Add a new reference</a>
               <li><a href="$exec_url?action=editCurrentRef">Edit current reference</a>
               <li><a href="$exec_url?action=displaySearchRefs&type=edit">Edit a different reference</a>
             </ul>
-          </td>
-          <td valign=top>
-            <h2>Collection functions</h2>
+            <h3>Time scales</h3>
             <ul>
-              <li><a href="$exec_url?action=displaySearchColls&type=view">Search collections</a>
-              <li><a href="$exec_url?action=displayMapForm">Show collections on a map</a>
+              <li><a href="$exec_url?action=startScale"">Add or edit a time scale</a>
+            </ul>
+            <h3>Collections</h3>
+            <ul>
               <li><a href="$exec_url?action=startAddCollection">Add a new collection</a>
               <li><a href="$exec_url?action=startEditCollection">Edit an old collection</a>
             </ul>
-          </td>
-        </tr>
-        <tr>
-          <td valign=top>
-            <h2>Taxonomy and occurrence functions</h2>
+            <h3>Occurrences</h3>
             <ul>
-              <!--li><a id="search_occs" href="">Search occurrences</a-->
-              <li><a href="$exec_url?action=startAddEditOccurrences">Add/edit occurrences for a collection</a>
+              <li><a href="$exec_url?action=startAddEditOccurrences">Add/edit occurrences for a collection</a>&nbsp;&nbsp;
               <li><a href="$exec_url?action=startReidentifyOccurrences">Reidentify occurrences</a>
-              <li><a href="$exec_url?action=beginTaxonInfo">Search for a taxon</a>
+            </ul>
+            <h3>Taxa</h3>
+            <ul>
               <li><a href="$exec_url?action=startTaxonomy">Add taxonomic information</a>
-              <li><a href="$exec_url?action=startImage">Add an image</a>
+              <li><a href="$exec_url?action=startImage">Add an image of a taxon</a>
             </ul>
           </td>
-          <td valign=top>
-            <h2>Miscellaneous functions</h2>
+          <td valign=top class=small>
+          <h2>Other</h2>
+            <h3>Search</h3>
+            <ul>
+              <li><a href="$exec_url?action=displaySearchRefs&type=select">Search for or select a reference</a>
+              <li><a href="$exec_url?action=displaySearchColls&type=view">Search for collections</a>
+              <li><a href="$exec_url?action=displayMapForm">Show collections on a map</a>
+              <li><a href="$exec_url?action=beginTaxonInfo">Search for a taxon</a>
+            </ul>
+            <p><font color="white">.</font></p>
+            <h3>Data analysis</h3>
+            <ul>
+              <li><a href="$exec_url?action=displayDownloadForm">Download data sets</a>
+              <li><a href="$exec_url?action=displayReportForm"">Generate data summary tables</a>
+            </ul>
+            <p><font color="white">.</font></p>
+            <h3>Account management</h3>
             <ul>
               <li><a href="$exec_url?action=logout">Change login</a>
               <li><a href="$exec_url?action=displayPreferencesPage">Set preferences</a>
-              <li><a href="$exec_url?action=displayDownloadForm">Download data sets</a>
-              <li><a href="$exec_url?action=displayReportForm"">Generate data summary tables</a>
             </ul>
           </td>
         </tr>
