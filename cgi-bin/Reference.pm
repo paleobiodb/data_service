@@ -10,9 +10,10 @@ use strict;
 use DBI;
 use DBConnection;
 use SQLBuilder;
+use URLMaker;
 
 use fields qw(	reference_no
-			
+				pubyr
 				SQLBuilder
 							);  # list of allowable data fields.
 
@@ -50,6 +51,11 @@ sub setWithReferenceNumber {
 	
 	if (my $input = shift) {
 		$self->{reference_no} = $input;
+		
+		# get the pubyr and save it
+		my $sql = $self->getSQLBuilder();
+		my $pubyr = $sql->getSingleSQLResult("SELECT pubyr FROM refs WHERE reference_no = $input");
+		$self->{pubyr} = $pubyr;
 	}
 }
 
@@ -61,6 +67,12 @@ sub referenceNumber {
 	return ($self->{reference_no});	
 }
 
+# return the publication year for this reference
+sub pubyr {
+	my Reference $self = shift;
+	return ($self->{pubyr});
+}
+
 
 # get all authors and year for reference
 sub authors {
@@ -69,25 +81,37 @@ sub authors {
 	my $sql = $self->getSQLBuilder();
 	
 	my $ref_no = $self->{reference_no};
-	$sql->setSQLExpr("SELECT author1last, author2last, otherauthors, pubyr FROM refs WHERE reference_no = $ref_no");
+	$sql->setSQLExpr("SELECT author1last, author2last, otherauthors FROM refs WHERE reference_no = $ref_no");
 	$sql->executeSQL();
 	
-	my @result = $sql->nextResultRow();
+	my @result = $sql->nextResultArray();
 	$sql->finishSQL();
 	
-	my $auth = $result[0];
-	if ($result[1]) {	 # more than one author
+	my $auth = $result[0];	# first author
+	if ($result[2]) {	# we have other authors (implying more than two)
+		$auth .= " et al."; 
+	} elsif ($result[1]) {	# exactly two authors
 		$auth .= " and $result[1]";
-		
-		if ($result[2]) {  # other authors
-			$auth .= " et all";
-		}
 	}
 	
-	$auth .= " $result[3]";  # pubyr
-	
+	$auth .= " $self->{pubyr}";  # pubyr
+		
 	return $auth;
 }
+
+
+# returns a reference URL
+sub referenceURL {	
+	my Reference $self = shift;
+
+	my $url = URLMaker::URLForReferenceNumber($self->{reference_no});
+	my $authors = $self->authors();
+	
+	return ("<A HREF=\"$url\">$authors</A>");
+	
+}
+
+
 
 
 # end of Reference.pm

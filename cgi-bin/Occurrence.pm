@@ -23,6 +23,8 @@ use fields qw(
 				reference_no
 				genus_name
 				species_name
+				abund_value
+				comments
 				
 				reidList
 				latestClassNum
@@ -91,7 +93,8 @@ sub setWithOccurrenceNumber {
 		$self->{occurrence_no} = $input;
 
 		# set the result_no parameter
-		$sql->setSQLExpr("SELECT reference_no, genus_name, species_name FROM occurrences WHERE occurrence_no = $input");
+		$sql->setSQLExpr("SELECT reference_no, genus_name, species_name, abund_value, comments
+						FROM occurrences WHERE occurrence_no = $input");
 		$sql->executeSQL();
 		my @result = $sql->nextResultArray();
 		
@@ -99,12 +102,26 @@ sub setWithOccurrenceNumber {
 		
 		$self->{genus_name} = $result[1];
 		$self->{species_name} = $result[2];
+		$self->{abund_value} = $result[3];
+		$self->{comments} = $result[4];
 		
 		$sql->finishSQL();
 
 	}
 }
 
+
+# returns comments for this occurrence
+sub comments {
+	my Occurrence $self = shift;	
+	return $self->{comments};		
+}
+
+# return the abundvalue for this occurrence
+sub abundValue {
+	my Occurrence $self = shift;	
+	return $self->{abund_value};	
+}
 
 # return the occurrenceNumber
 sub occurrenceNumber {
@@ -351,7 +368,6 @@ sub buildHTML {
 	$self->buildReidList();
 	my $reidListRef = $self->{reidList};
 	
-	# Class	Order	Family	Taxon	Reference	Abundance	Comments
 	
 	# some HTML tags
 	my $TD = "TD nowrap";
@@ -383,13 +399,17 @@ sub buildHTML {
 			$fontEnd = "</SPAN>";
 		}
 		
+		# Class	Order	Family	Taxon	Reference	Abundance	Comments
+		my $specimens = $row->[5];
+		$specimens =~ s/^1 specimens$/1 specimen/;  # remove s from specimens if only one.
+		
 		$html .= "<TR>
 				<$TD>$fontStart$row->[0]$fontEnd</TD>
 				<$TD>$fontStart$row->[1]$fontEnd</TD>
 				<$TD>$fontStart$row->[2]$fontEnd</TD>
 				<$TD $style>$fontStart$row->[3]</A>$fontEnd</TD>
 				<$TD>$fontStart$row->[4]$fontEnd</TD>
-				<$TD>$fontStart$row->[5]$fontEnd</TD>
+				<$TD>$fontStart$specimens$fontEnd</TD>
 				<$TD>$fontStart$row->[6]$fontEnd</TD>
 			</TR>";
 		

@@ -118,6 +118,10 @@ sub getTaxonNameFromNumber {
 # it's a genus species pair, but we only have an entry for the genus, not the pair.
 # returns -1 if it can't find the number. 
 # Note, not all taxa are in this table, so it won't work for something that dosen't exist.
+#
+# Note, this also won't work very well for homonyms, etc.. For example, if two entries exist
+# in the authorities table with the same taxon_name, then we'll always just grab the first one.
+# This doesn't really make much sense, but it's the best we can do for now.
 sub getTaxonNumberFromName {
 	my TaxonHierarchy $self = shift;
 
@@ -189,7 +193,22 @@ sub nameForRank {
 	}
 	
 	return "";
+}
+
+# same as nameForRank(), but returns a taxon_no.
+sub numberForRank {
+	my TaxonHierarchy $self = shift;
+	my $key = shift; 
 	
+	if (! ($self->{taxaHash}) ) {
+		# if the hash doesn't exist, then create it
+		$self->createTaxaHash();
+	}
+
+	my $hash = $self->{taxaHash};
+	my %hash = %$hash;
+	
+	return $hash{$key};
 }
 
 

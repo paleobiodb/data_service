@@ -114,7 +114,6 @@ sub userHasReadPermissionForCollectionNumber {
 	
 	# first, check the cache to see if we already have a value for this collection no
 	if (my $cacheVal = $cacheRef->{$cnum}) {
-		Debug::dbPrint("using cache\n");
 		return $cacheVal;	# if this entry in the cache hash exists,
 		# then we already know the permissions, and can just return it (0 or 1).
 	}

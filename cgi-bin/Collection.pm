@@ -126,11 +126,7 @@ sub HTMLFormattedTaxonomicList {
 
 	my $result = $sql->allResultsArrayRefUsingPermissions();
 
-	$html .= "<TABLE BORDER=0 cellpadding=4 cellspacing=0><TR><TH>Class</TH><TH>Order</TH>
-				<TH>Family</TH><TH>Taxon</TH><TH>Reference</TH>
-				<TH>Abundance</TH><TH>Comments</TH></TR>";
-	
-	$html =~ s/<th/<th class=style1/ig;
+
 	
 
 	# build up an array of occurrence objects.. Then we'll sort the array
@@ -195,10 +191,39 @@ sub HTMLFormattedTaxonomicList {
 	
 	
 	# now that we have sorted it, compose the HTML
+	#
+	# One catch.  We're supposed to remove any column which is completely empty.  However,
+	# this is easy to do - just remove the text from the associated header, and the 
+	# column will appear to be empty!
+
 	my $count = 0;
 	my $color = "";
+	my @nonEmptys = (0, 0, 0, 0, 0, 0, 0);	# keep track of empty columns
 	foreach my $row (@occArray) {
 		my $newRow = $row->formatAsHTML();
+		
+		# check to see if any fields in this row have information in them
+		# so we can delete empty columns at the end
+		if ($row->mostRecentReidClassNumber()) {
+			$nonEmptys[0] = 1;
+		}
+		if ($row->mostRecentReidOrderNumber()) {
+			$nonEmptys[1] = 1;
+		}
+		if ($row->mostRecentReidFamilyNumber()) {
+			$nonEmptys[2] = 1;
+		} 
+		$nonEmptys[3] = 1;  # note, skipping the taxon field..  shouldn't ever be blank
+		if ($row->referenceNumber() != $self->referenceNumber()) {
+			$nonEmptys[4] = 1;
+		}
+		if ($row->abundValue()) {
+			$nonEmptys[5] = 1;
+		}
+		if ($row->comments()) {
+			$nonEmptys[6] = 1;
+		}
+		
 		
 		# make every other row dark
 		if ($count % 2) { 
@@ -209,8 +234,26 @@ sub HTMLFormattedTaxonomicList {
 			
 		$count++;
 	}
+		
+	$html .= "</TABLE></CENTER>";
 	
-	$html .= "</TABLE>";
+	#Debug::dbPrint("@nonEmptys\n");
+	
+	# now, add the header, but first clear the text for any columns which we determined
+	# to be empty.  See note above about this.
+	my @headers = ("Class", "Order", "Family", "Taxon", "Reference", "Abundance", "Comments");
+	for (my $i = 0; $i < scalar(@headers); $i++) {
+		if (!($nonEmptys[$i])) {	# if a column is empty, then clear the text
+			@headers[$i] = "";
+		}
+	}
+	
+	my $head = "<CENTER><TABLE BORDER=0 cellpadding=4 cellspacing=0><TR><TH>$headers[0]</TH><TH>$headers[1]</TH>
+				<TH>$headers[2]</TH><TH>$headers[3]</TH><TH>$headers[4]</TH>
+				<TH>$headers[5]</TH><TH>$headers[6]</TH></TR>";
+	
+	$head =~ s/<th/<th class=style1/ig;
+	$html = $head . $html;
 	
 	return $html;	
 }

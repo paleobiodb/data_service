@@ -6,21 +6,27 @@
 package URLMaker;
 
 use strict;
-
+use CGI;
 
 # Includes the following functions:
 #----------------------------------
-# URLForGenusAndSpecies
+# escapeURL
+# URLForTaxonName
 # URLForReferenceNumber
-
-
-# *********
-# Note, these should be escaped ...  do this soon?
 
 
 
 my $BADLINK = "";		# redirect them to this link if the info passed in was not valid
 						# just an empty string for now.
+
+
+# pass it a URL string, and it will return a properly 
+# escaped URL string						
+sub escapeURL {
+	my $url = shift;
+	return (CGI::escape($url));
+}
+
 
 
 # pass it two names such as a genus and species
@@ -54,7 +60,7 @@ sub URLForTaxonName {
 		$name .= "+$second";
 	}
 	
-	return "/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$name&taxon_rank=$rank";
+	return escapeURL("/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$name&taxon_rank=$rank");
 }
 
 
@@ -64,8 +70,8 @@ sub URLForReferenceNumber {
 	if (!$ref) {
 		return $BADLINK;
 	}
-	
-	return "/cgi-bin/bridge.pl?action=displayRefResults&type=view&reference_no=$ref";
+
+	return escapeURL("/cgi-bin/bridge.pl?action=displayRefResults&type=view&reference_no=$ref");
 }
 
 
