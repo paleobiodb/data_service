@@ -250,6 +250,7 @@ sub assignGenera	{
 
 	# following fields need to be pulled from the input file:
 	#  collection_no (should be mandatory)
+	#  reference_no (optional, if refs are categories instead of genera)
 	#  genus_name (mandatory)
 	#  species_name (optional)
 	#  abund_value and abund_unit (iff method 5 is selected)
@@ -270,7 +271,9 @@ sub assignGenera	{
 	for my $fn (@fieldnames)	{
 		if ( $fn eq "collection_no" )	{
 			$field_collection_no = $fieldcount;
-		} elsif ( $fn eq "genus_name" )	{
+		} elsif ( $fn eq "occurrences.reference_no" && $q->param('count_refs') eq "yes" )	{
+			$field_genus_name = $fieldcount;
+		} elsif ( $fn eq "genus_name" && $q->param('count_refs') ne "yes" )	{
 			$field_genus_name = $fieldcount;
 		} elsif ( $fn eq "occurrences.species_name" )	{
 			$field_species_name = $fieldcount;
@@ -295,9 +298,15 @@ sub assignGenera	{
 	} elsif ( ! $field_bin )	{
 		print "<h3>The data can't be analyzed because the epoch or 10 m.y. bin field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
-	# this one also always should be present anyway
+	# this one also always should be present anyway, unless the user
+	#  screwed up and didn't download the ref numbers despite wanting
+	#  refs counted instead of genera
 	} elsif ( ! $field_genus_name )	{
-		print "<h3>The data can't be analyzed because the genus name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		if ( $q->param('count_refs') ne "yes" )	{
+			print "<h3>The data can't be analyzed because the genus name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		} else	{
+			print "<h3>The data can't be analyzed because the reference number field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		}
 		exit;
 	# these two might be missing
 	} elsif ( ! $field_abund_value && $samplingmethod == 5 )	{
@@ -1040,16 +1049,21 @@ sub printResults	{
 	}
 	
 	if ($listsread > 0)	{
-		$listorfm = "Lists";
+		$listorfm = "Lists"; # I'm not sure why this is a variable
+					# but what the heck
+		$generaorrefs = "genera";
+		if ( $q->param('count_refs') eq "yes" )	{
+			$generaorrefs = "references";
+		}
 		if ($q->param('samplesize') ne "")	{
 			print "<hr>\n<h3>Raw data</h3>\n\n";
 		}
 		print "<table cellpadding=4>\n";
 		print "<tr><td class=small valign=top><b>Interval</b>\n";
-		print "<td class=small align=center valign=top><b>Sampled<br>genera</b>";
-		print "<td class=small align=center valign=top><b>Range-through<br>genera</b> ";
-		print "<td class=small align=center valign=top><b>Boundary-crosser<br>genera</b> ";
-		print "<td class=small align=center valign=top><b>Two&nbsp;timer<br>genera</b> ";
+		print "<td class=small align=center valign=top><b>Sampled<br>$generaorrefs</b>";
+		print "<td class=small align=center valign=top><b>Range-through<br>$generaorrefs</b> ";
+		print "<td class=small align=center valign=top><b>Boundary-crosser<br>$generaorrefs</b> ";
+		print "<td class=small align=center valign=top><b>Two&nbsp;timer<br>$generaorrefs</b> ";
 		print "<td class=small align=center valign=top><b>First<br>appearances</b> <td class=small align=center valign=top><b>Origination<br>rate</b> <td class=small align=center valign=top><b>Last<br>appearances</b><td class=small align=center valign=top><b>Extinction<br>rate</b> <td class=small align=center valign=top><b>Singletons</b> ";
 		print "<td class=small align=center valign=top><b>Chao-2<br>estimate</b> ";
 		print "<td class=small align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
@@ -1062,8 +1076,8 @@ sub printResults	{
 			print "<td class=small align=center valign=top><b>Specimens</b> ";
 		}
 		print "<td class=small align=center valign=top><b>Mean<br>richness</b> <td class=small align=center valign=top><b>Median<br>richness</b> ";
-		print TABLE "Bin,Bin name,Sampled genera,Range-through genera,Boundary-crosser genera,";
-		print TABLE "Two timer genera,";
+		print TABLE "Bin,Bin name,Sampled $generaorrefs,Range-through $generaorrefs,Boundary-crosser $generaorrefs,";
+		print TABLE "Two timer $generaorrefs,";
 		print TABLE "First appearances,Origination rate,Last appearances,Extinction rate,Singletons,";
 		print TABLE "Chao-2 estimate,Jolly-Seber estimate,";
 		if ($samplingmethod != 5)	{
@@ -1182,8 +1196,8 @@ sub printResults	{
 			print "\n<hr>\n<h3>Results of subsampling analysis</h3>\n\n";
 			print "<table cellpadding=4>\n";
 			print "<tr><td class=small valign=top><b>Interval</b>\n";
-#			print "<td class=small align=center valign=top><b>Sampled<br>genera</b> ";
-#			print "<td class=small align=center valign=top><b>Range-through<br>genera</b> ";
+#			print "<td class=small align=center valign=top><b>Sampled<br>$generaorrefs</b> ";
+#			print "<td class=small align=center valign=top><b>Range-through<br>$generaorrefs</b> ";
 			print "<td class=small align=center valign=top><b>Items<br>sampled</b> ";
 			print "<td class=small align=center valign=top><b>Median ";
 			printf "%s diversity</b>",$q->param('diversity');
@@ -1215,7 +1229,7 @@ sub printResults	{
 				print "<td class=small align=center valign=top><b>Michaelis-Menten<br>estimate</b> ";
 			}
 			print TABLE "Bin,Bin name,";
-#			print TABLE "Sampled genera,Range-through genera,";
+#			print TABLE "Sampled $generaorrefs,Range-through $generaorrefs,";
 			print TABLE "Items sampled,";
 			print TABLE "Median ";
 			printf TABLE "%s diversity,",$q->param('diversity');
