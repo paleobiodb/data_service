@@ -29,10 +29,11 @@ div.legend {
 
 div.table {
 	background-color: rgb(245,245,245);
-	padding-left:1em;
-	padding-right:1em;
-	padding-top:1em;
-	padding-bottom:1em;
+	padding: 1em 1em 1em 1em;
+	
+	border-style: solid;
+	border-color: RGB(200,200,200);
+	border-width: 1px 1px 1px 1px;
 	
 	margin-top:0.8em;
 	margin-bottom:0.8em;
@@ -44,6 +45,11 @@ span.table {
 	font-weight: bold;
 	font-size: 120%;
 	width:auto;
+	
+	border-style: solid;
+	border-width: 0px 0px 5px 0px;
+	border-color: RGB(0,0,100);
+	
 	
 	padding-left:0.6em;
 	padding-right:0.6em;
@@ -74,12 +80,14 @@ p.field {
 	background-color: rgb(220,220,220);
 	font-weight: bold;
 	font-size: 100%;
+	
 	width: auto;
 	
-	padding-left:0.2em;
-	padding-right:0.2em;
-	padding-top:0.2em;
-	padding-bottom:0.2em;
+	padding: 0.1em 0.4em 0.1em 0.4em;
+	
+	border-style: solid;
+	border-width: 1px 1px 1px 1px;
+	border-color: RGB(200,200,200);
 	
 }
 
@@ -87,11 +95,23 @@ p.field {
 	font-size: 95%;
 	font-weight: normal;
 	font-style: normal;
+	margin: 0em 0em 0em 0.5em;
 }
 
 .important {
 	color: maroon;
 }
+
+
+A.toplink {
+	color: RGB(0,0,150);
+	margin: 0em 0em 0em 1em;
+}
+
+A.toplink:hover {
+	color: red;
+}
+
 
 </style>
 </HEAD>
@@ -100,6 +120,7 @@ p.field {
 
 <p class="title">Description of Tables in Paleobiology Database (PBDB).</p>
 
+<A NAME="top">
 <div class="legend">
 <span class="table">Table Name</span>
 <p class="tableDesc">Table Description</p>
@@ -141,19 +162,75 @@ p.field {
 </UL>
 </div>
 <BR>
+</A>
+
 
 <div>
 
 <div class="table">
 <A NAME="authorities"><span class="table">authorities</span></A>
+<A HREF="#top" class="toplink">top</A>
+
 <p class="tableDesc">Records who originally named each taxa and the year of naming. 
 It also records the reference that this naming came from - either the taxa was directly 
 named in a particular reference, or the reference said that the taxa was named earlier by 
 a certain person.</p>
+
+
+<p class="field">
+<span class="fieldName">authorizer_no</span>
+</p>
+<p class="field">
+<span class="fieldName">enterer_no</span>
+</p>
+<p class="field">
+<span class="fieldName">modifier_no</span>
+</p>
+
+
+<p class="field">
+<span class="fieldName">reference_no</span>
+</p>
 <p class="field">
 <span class="fieldName">ref_is_authority</span>
 <span class="fieldDesc"></span>
 </p>
+<p class="field">
+<span class="fieldName">author1init</span>
+</p>
+<p class="field">
+<span class="fieldName">author1last</span>
+</p>
+<p class="field">
+<span class="fieldName">author2last</span>
+</p>
+<p class="field">
+<span class="fieldName">author2init</span>
+</p>
+<p class="field">
+<span class="fieldName">otherauthors</span>
+</p>
+<p class="field">
+<span class="fieldName">pub_yr</span>
+<span class="fieldDesc">Year the taxon was named.</span>
+</p>
+<p class="field">
+<span class="fieldName">pages</span>
+</p>
+<p class="field">
+<span class="fieldName">figures</span>
+</p>
+<p class="field">
+<span class="fieldName">comments</span>
+</p>
+<p class="field">
+<span class="fieldName">created</span>
+</p>
+<p class="field">
+<span class="fieldName">modified</span>
+</p>
+
+
 <p class="field">
 <span class="fieldName"><span class="primaryKey">taxon_no</span></span>
 <span class="fieldDesc">Can use this to refer back to the opinions table
@@ -171,22 +248,23 @@ it's just one word.</span>
 <span class="fieldDesc">class, species, genus, etc. </span>
 </p>
 <p class="field">
-<span class="fieldName">pub_yr</span>
-<span class="fieldDesc">Year the taxon was named.</span>
-</p>
-<p class="field">
 <span class="fieldName">type_taxon_no</span>
 <span class="fieldDesc">Optional field - for example, Felidae 
 has the type taxon felis.  So this is a reference to another taxon_no in
 the authorities table.</span>
 </p>
-
+<p class="field">
+<span class="fieldName">type_specimen</span>
+</p>
 
 </div>
 
 
+
+
 <div class="table">
 <A NAME="collections"><span class="table">collections</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Holds one record for each collection in the database.  
 A collection can be thought of as a particular <i>hole</i> in the ground.
 <SPAN class="important">Access levels apply to these records</SPAN>
@@ -226,6 +304,7 @@ look at the access_level field to determine who should have access.</span>
 
 <div class="table">
 <A NAME="corrleations"><span class="table">correlations</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Correlates the <A HREF="#scales">scales</A> table with the <A HREF="#intervals">intervals</A> table.</p>
 <p class="field">
 <span class="fieldName"><span class="primaryKey">correlation_no</span></span>
@@ -243,6 +322,7 @@ look at the access_level field to determine who should have access.</span>
 
 <div class="table">
 <A NAME="ecotaph"><span class="table">ecotaph</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Attributes of taxa, what they look like, body mass, ocean/land, etc.</p>
 <p class="field">
 <span class="fieldName"><span class="primaryKey">ecotaph_no</span></span>
@@ -252,6 +332,7 @@ look at the access_level field to determine who should have access.</span>
 
 <div class="table">
 <A NAME="fivepct"><span class="table">fivepct</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Holds a sample containing 5% of the data 
 in the GeoRef database which is a database of references.
 Not important to the rest of the database.</p>
@@ -259,6 +340,7 @@ Not important to the rest of the database.</p>
 
 <div class="table">
 <A NAME="images"><span class="table">images</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Records paths to images of occurrences which have been entered into the database.
   Not much in here yet.</p>
 </div>
@@ -266,6 +348,7 @@ Not important to the rest of the database.</p>
   
 <div class="table">
 <A NAME="intervals"><span class="table">intervals</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Each time interval (ie, Cenozoic, etc.) <i>may</i> have an entry in this table.  
 The <A HREF="#correlations">correlations</A> table lists the relative orderings of the intervals,
 and the <A HREF="#scales">scales</A> table lists opinions about time scales.</p>
@@ -280,6 +363,7 @@ and the <A HREF="#scales">scales</A> table lists opinions about time scales.</p>
 
 <div class="table">
 <A NAME="marinepct"><span class="table">marinepct</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Holds references for the 1% study - similar to the 
 <A HREF="#fivepct">fivepct</A> table..  Not important to the rest of 
 the database.</p>
@@ -288,6 +372,7 @@ the database.</p>
 
 <div class="table">
 <A NAME="occurrences"><span class="table">occurrences</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Holds one record for each distinct taxonomic occurrence within a 
 particular collection (usually).
 <SPAN class="important">Access levels apply to these records</SPAN>
@@ -337,6 +422,7 @@ For example, if genus_name is a higher taxon, then species would be "indet."</sp
 
 <div class="table">
 <A NAME="opinions"><span class="table">opinions</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Records information about taxa that have been renamed.  Note,
 don't confuse this with the <A HREF="#reidentifications">reidentifications</A> table which 
 is used for reidentifications of a particular fossil at a particular collection.
@@ -403,6 +489,7 @@ and get the year from the reference instead.</span>
 
 <div class="table">
 <A NAME="person"><span class="table">person</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Data enterers, authorizers, etc.  Basically, everyone who can log into the site. </p>
 
 <p class="field">
@@ -418,6 +505,7 @@ and get the year from the reference instead.</span>
 
 <div class="table">
 <A NAME="refs"><span class="table">refs</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Holds one record for each reference (ie, paper).</p>
 <p class="field">
 <span class="fieldName"><span class="primaryKey">reference_no</span></span>
@@ -455,6 +543,7 @@ and get the year from the reference instead.</span>
 
 <div class="table">
 <A NAME="reidentifications"><span class="table">reidentifications</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Lists reidentifications of occurences
 and which reference number reidentified them.  For example, this would 
 occur if a fossil was incorrectly classified and later re-classified as something else.
@@ -486,6 +575,7 @@ occur if a fossil was incorrectly classified and later re-classified as somethin
 
 <div class="table">
 <A NAME="scales"><span class="table">scales</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Listing of time scales.  Each one will have been defined by a certain reference.
 See also the <A HREF="#intervals">intevals</A> and <A HREF="#correlations">correlations</A> tables.</p>
 <p class="field">
@@ -503,6 +593,7 @@ See also the <A HREF="#intervals">intevals</A> and <A HREF="#correlations">corre
 
 <div class="table">
 <A NAME="secondary_refs"><span class="table">secondary_refs</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Allows people to enter more than one reference for a collection. 
 Basically just ties a collection number to a reference number, so if you wanted to have several
 references, you'd have an entry in here for each refernce (not including the primary reference).</p>
@@ -516,6 +607,7 @@ references, you'd have an entry in here for each refernce (not including the pri
 
 <div class="table">
 <A NAME="session_data"><span class="table">session_data</span></A>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Holds session id, current enterer, authorizer, etc. which we store in cookies.</p>
 <p class="field">
 <span class="fieldName">queue</span>
@@ -525,6 +617,7 @@ references, you'd have an entry in here for each refernce (not including the pri
 	
 <div class="table">
 <span class="table">statistics</span>
+<A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Hourly statistics about the database (displayed on the home pages).</p>
 <p class="field">
 <span class="fieldName">reference_total</span>
