@@ -135,6 +135,11 @@ sub addWhereItem {
 	}
 }
 
+# clears the list of where items
+sub clearWhereItems {
+	my SQLBuilder $self = shift;
+	$self->{whereItems} = ();
+}
 
 # returns a list of all the items.
 sub whereItems {
