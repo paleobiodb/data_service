@@ -78,7 +78,7 @@ sub setWithOccurrenceNumber {
 		# set the result_no parameter
 		$sql->setSQLExpr("SELECT reference_no, genus_name, species_name FROM occurrences WHERE occurrence_no = $input");
 		$sql->executeSQL();
-		my @result = $sql->nextResultRow();
+		my @result = $sql->nextResultArray();
 		
 		$self->{reference_no} = $result[0];
 		
@@ -156,7 +156,7 @@ sub formatAsHTML {
 		
 	$sql->executeSQL();
 	
-	@result = $sql->nextResultRowUsingPermissions();
+	@result = $sql->nextResultArrayUsingPermissions();
 	
 	if ($numReids <= 0) {
 		# get the taxa information for the original id
@@ -212,7 +212,7 @@ sub formatAsHTML {
 	
 	$sql->executeSQL();
 	my $index = 0;	
-	while (@result = $sql->nextResultRowUsingPermissions()) {
+	while (@result = $sql->nextResultArrayUsingPermissions()) {
 		$ref->setWithReferenceNumber($result[7]);
 	 	$authors = $ref->authors();
 		

@@ -25,8 +25,6 @@ use fields qw(
 # Flags and constants
 # These are class variables.
 my $DEBUG = 0;		# DEBUG flag
-#my $s;				# Reference to the session variables
-
 
 
 # **Note: Must pass the session variable when creating this object.
@@ -34,10 +32,10 @@ sub new {
 	my $class = shift;
 	my Permissions $self = fields::new($class);
 	
-	my $s = shift;		# session object
-	$self->{session} = $s;
+	my $session = shift;		# session object
+	$self->{session} = $session;
 	
-	if (! $s) {
+	if (! $session) {
 		Debug::logError("Permissions must be created with valid Session object!");
 		return undef;
 	}
@@ -73,17 +71,21 @@ sub userHasReadPermissionForCollectionNumber {
 	}
 	
 	my $s = $self->{session};
-
+	
+	if (! $s) {
+		return 0;
+	}
+	
 	# Get today's date in the lexical comparison format
 	my $now = $self->getDate();
-	
+
 	my $sql = $self->{SQLBuilder};
 	$sql->setSQLExpr("SELECT access_level, 
 						DATE_FORMAT(release_date,'%Y%m%d') rd_short,
 						research_group, authorizer 
-						FROM collections WHERE collection_no = $cnum");
+						FROM collections WHERE collection_no = $cnum");						
 	$sql->executeSQL();
-	my @result = $sql->nextResultRow();
+	my @result = $sql->nextResultArray();
 	
 	if (! @result) {
 		return 0;

@@ -20,7 +20,7 @@
 # you request the entire SQL statement at once.
 #
 # To execute an SQL expression, just call the executeSQL() method *after* you have set the SQL statement
-# To retrieve the results, call nextResultRow() repeatedly, and call finishSQL() when finished.
+# To retrieve the results, call nextResultArray() repeatedly, and call finishSQL() when finished.
 #
 # To execute an SQL expression using Permissions checking, make sure to pass the current
 # Session object when creating the SQLBuilder object, ie, pass it in new().
@@ -72,13 +72,19 @@ sub new {
 	# set up some default values
 	$self->clear();	
 
-	$self->{session} = $session;
+	if ($session) {
+		$self->{session} = $session;
 	
-	# create the permissions object as well
-	# note, if the session object didn't really exist, then
-	# the permissions object will catch the error, so don't have to check for it here.
-	my $perm = Permissions->new($session);
-	$self->{perm} = $perm;
+		# create the permissions object as well
+		# note, if the session object didn't really exist, then
+		# the permissions object will catch the error, so don't have to check for it here.
+		my $perm = Permissions->new($session);
+		$self->{perm} = $perm;
+	}
+	
+	# connect to the database
+	# note, not sure if it's a good idea to do this every time.. might slow things down.
+	$self->dbConnect();
 	
 	return $self;
 }
@@ -347,32 +353,25 @@ sub dbConnect {
 # pass this an entire SQL query string
 # and it will return a single result
 # (ie, assumes that there aren't multiple rows)
+#
+# clearly - don't need to call execute() before using this one.
 sub getSingleSQLResult {
 	my SQLBuilder $self = shift;
 
 	my $sql = shift;
-	
-	if (! $sql) { return undef; };
-	
-	$self->setSQLExpr($sql);
-	$self->executeSQL();
-	my @result = $self->nextResultRow();
-	
-	if (@result) {
-		return $result[0];
-	}
-	
-	return undef;
+	my $dbh = $self->{dbh};
+	return $dbh->selectrow_array($sql);
 }
 
 
 # executes the SQL
 # can use this with or without permissions
+#
+# note, not needed for all methods, for example, getSingleSQLResult() doesn't use this.
 sub executeSQL {
 	my SQLBuilder $self = shift;
 
-	# connect to the database, if we need to.
-	my $dbh = $self->dbConnect();	
+	my $dbh = $self->{dbh};
 	my ($sql, $sth);
 
 	# if the user had already run a query, then $sth will
@@ -381,12 +380,53 @@ sub executeSQL {
 	if ($sth) { $sth->finish(); }
 
 	my $sql = $self->SQLExpr();
-				
+			
 	$sth = $dbh->prepare( $sql );
 	$sth->execute();
 	
 	# save the sth for later use in fetching rows.
 	$self->{sth} = $sth;
+}
+
+
+# Pass this an SQL query.
+# Returns the entire result set as a matrix using read permissions
+# checking on all rows.
+#
+# SQL Query **must** include "collection_no" as the first column.
+sub allResultsArrayRefUsingPermissions {
+	my SQLBuilder $self = shift;
+	
+	my $sql = shift;
+	
+	if ( (! $self->{perm}) || (! $self->{session})) {
+		Debug::logError("SQLBuilder must have valid permissions and sessions objects to execute this query.");
+		return undef; 	
+	}
+	
+	
+	my $result; 	# that we'll return
+	
+	# fetch all array rows 	
+	my $ref = ($self->{dbh})->selectall_arrayref($sql);
+	
+	
+	# loop through result set
+	if (defined $ref) {
+		foreach my $row (@{$ref}) {
+			# collection_no *must* be the first column for this to work
+			my $collection_no = $row->[0];
+			
+			# check permissions
+			if (($self->{perm})->userHasReadPermissionForCollectionNumber($collection_no)) {
+				push(@$result, $row);	# add it on to the return result.
+			} 
+		}
+	}
+	
+	
+	return $result;
+
 }
 
 
@@ -396,7 +436,7 @@ sub executeSQL {
 # Also, **make sure** the SQL query includes the necessary
 # column called "collection_no" AS THE FIRST column **********!!!
 #
-sub nextResultRowUsingPermissions {
+sub nextResultArrayUsingPermissions {
 	my SQLBuilder $self = shift;
 	
 	my $sth = $self->{sth};
@@ -417,7 +457,7 @@ sub nextResultRowUsingPermissions {
 		return ();		# return empty array
 	}
 	
-	# collection_no *should* be the first column.
+	# collection_no *must* be the first column for this to work.
 	my $collection_no = $result[0];
 	
 	if (($self->{perm})->userHasReadPermissionForCollectionNumber($collection_no)) {
@@ -425,7 +465,7 @@ sub nextResultRowUsingPermissions {
 	} else {
 		# user is not allowed to read this row.
 		# so return the next row.. if it exists
-		return ($self->nextResultRowUsingPermission($collection_no));
+		return ($self->nextResultArrayUsingPermission($collection_no));
 	}
 			
 }
@@ -438,7 +478,7 @@ sub nextResultRowUsingPermissions {
 #  
 # must be called *after* first calling executeSQL(),
 # otherwise will return empty arry.
-sub nextResultRow {
+sub nextResultArray {
 	my SQLBuilder $self = shift;
 
 	my $sth = $self->{sth};
@@ -458,6 +498,28 @@ sub nextResultRow {
 	}
 		
 	return @result;
+}
+
+# same as nextResultArray, but gets it
+# as an array reference
+sub nextResultArrayRef {
+	my SQLBuilder $self = shift;
+
+	my $sth = $self->{sth};
+	
+	if (! $sth) {
+		return ();  # return empty array if sth doesn't exist	
+	}
+	
+	# fetch the next array row and return it.	
+	my $result = $sth->fetchrow_arrayref();
+	$self->{sth} = $sth;  # important - save it back in the parameter.
+	
+	if (! $result) {
+		$self->finishSQL();
+	}
+		
+	return $result;
 }
 
 
