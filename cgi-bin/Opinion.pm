@@ -435,12 +435,12 @@ sub displayOpinionForm {
 	# Invalid1: 'subjective synonym of', 'objective synonym of',
 	# 'homonym of','replaced by','corrected as'
 	#
-	# Invalid2: 'nomen dubium','nomen nudum','nomen oblitem',
+	# Invalid2: 'nomen dubium','nomen nudum','nomen oblitum',
 	# 'nomen vanum' 
 	#
 
 	my @synArray = ('subjective synonym of', 'objective synonym of', 'homonym of','replaced by','corrected as');
-	my @nomArray = ('nomen dubium','nomen nudum','nomen oblitem', 'nomen vanum');
+	my @nomArray = ('nomen dubium','nomen nudum','nomen oblitum', 'nomen vanum');
 	
 	my @valid = (BELONGS_TO, RECOMBINED_AS, 'revalidated');
 

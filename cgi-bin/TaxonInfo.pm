@@ -796,6 +796,7 @@ sub displayTaxonInfoResults {
 			my @recombs = keys %recombined;
 			push @recombs,$child;
 			for my $comb_no (@recombs)	{
+				Debug::dbPrint("test1 = $comb_no");
 				my $sql = "SELECT taxon_name FROM authorities WHERE taxon_no=";
 				$sql .= $comb_no;
 				my @results = @{$dbt->getData($sql)};
@@ -994,6 +995,8 @@ sub doModules{
 	# otherwise it's a "Higher taxon."
 	($genus, $species) = split /\s+/, $q->param("genus_name");
 
+	Debug::dbPrint("module = $module");
+
 	# classification
 	if($module == 1){
 		print "<table width=\"100%\">".
@@ -1006,7 +1009,9 @@ sub doModules{
 	}
 	# synonymy
 	elsif($module == 2){
+		Debug::dbPrint("synhere8");
 		print displayTaxonSynonymy($dbt, $genus, $species, $taxon_no);
+		Debug::dbPrint("synhere9");	
 	}
 	elsif ( $module == 3 )	{
 		print displaySynonymyList($dbt, $q, $genus, $species, $taxon_no);
@@ -1600,13 +1605,17 @@ sub displayTaxonSynonymy{
 	my $taxon_rank;
 	my $taxon_name;
 	my $output = "";  # html output...
-
+	
+	Debug::dbPrint("in displayTaxonSynonymy, taxon_no = $taxon_no");
+	
 	# figure out the taxon rank (class, genus, species, etc.)
 	$taxon_name = $genus;
 	if ($genus && ($species eq "")) {
 		my $sql="SELECT taxon_rank FROM authorities WHERE taxon_no=$taxon_no";
 #		my $sql="SELECT taxon_rank FROM authorities WHERE taxon_name='$genus'";
 		my @results = @{$dbt->getData($sql)};
+		Debug::dbPrint("synhere1");
+		
 		$taxon_rank = $results[0]->{taxon_rank};
 	} else {
 		if ($genus eq "") {
@@ -1624,6 +1633,8 @@ sub displayTaxonSynonymy{
 			  "WHERE taxon_no=$taxon_no";
 #			  "WHERE taxon_name='$taxon_name' AND taxon_rank='$taxon_rank'";
 	my @results = @{$dbt->getData($sql)};
+	Debug::dbPrint("synhere2");
+	
 #	my $taxon_no = $results[0]->{taxon_no};
 	PBDBUtil::debug(1,"taxon rank: $taxon_rank");
 	PBDBUtil::debug(1,"taxon name: $taxon_name");
@@ -1636,6 +1647,7 @@ sub displayTaxonSynonymy{
 
 	# Get the original combination (of the verified name, not the focal name)
 	my $original_combination_no = getOriginalCombination($dbt, $taxon_no);
+	Debug::dbPrint("synhere3");
 	PBDBUtil::debug(1,"original combination_no: $original_combination_no");
 	
 	# Select all parents of the original combination whose status' are
@@ -1644,6 +1656,7 @@ sub displayTaxonSynonymy{
 		   "WHERE child_no=$original_combination_no ".	
 		   "AND (status='recombined as' OR status='corrected as')";
 	@results = @{$dbt->getData($sql)};
+	Debug::dbPrint("synhere4");
 
 	# Combine parent numbers from above for the next select below. If nothing
 	# was returned from above, use the original combination number.
@@ -1665,11 +1678,14 @@ sub displayTaxonSynonymy{
 			join(',',@parent_list).") ".
 		   "AND (status like '%synonym%' OR status='homonym of' OR status='replaced by')";
 	@results = @{$dbt->getData($sql)};
+	Debug::dbPrint("synhere5");
 
 	# Reduce these results to original combinations:
 	foreach my $rec (@results) {
 		$rec = getOriginalCombination($dbt, $rec->{child_no});	
 	}
+
+	Debug::dbPrint("synhere5a");
 
 	# NOTE: "corrected as" could also occur at higher taxonomic levels.
 
@@ -1678,7 +1694,9 @@ sub displayTaxonSynonymy{
 		my $list_item = getSynonymyParagraph($dbt, $child);
 		push(@paragraphs, "<br><br>$list_item\n") if($list_item ne "");
 	}
-
+	
+	Debug::dbPrint("synhere6");
+	
 	# Print the info for the original combination of the passed in taxon first.
 	$output .= getSynonymyParagraph($dbt, $original_combination_no);
 
@@ -1688,6 +1706,8 @@ sub displayTaxonSynonymy{
 		$output .= $rec;
 	}
 
+	Debug::dbPrint("synhere7");
+	
 	$output .= "</ul>";
 	return $output;
 }
@@ -1709,7 +1729,7 @@ sub getSynonymyParagraph{
 				   'nomen dubium' => 'considered a nomen dubium ',
 				   'nomen nudum' => 'considered a nomen nudum ',
 				   'nomen vanum' => 'considered a nomen vanum ',
-				   'nomen oblitem' => 'considered a nomen oblitem ',
+				   'nomen oblitum' => 'considered a nomen oblitum ',
 				   'subjective synonym of' => 'synonymized subjectively with ',
 				   'objective synonym of' => 'synonymized objectively with ');
 	my $text = "";
@@ -1717,9 +1737,14 @@ sub getSynonymyParagraph{
 	# "Named by" part first:
 	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
 	# - select taxon_name, author1last, pubyr, reference_no, comments from authorities
+	
+	Debug::dbPrint("synpara1, taxon_no = $taxon_no");
+	
 	my $sql = "SELECT taxon_name, author1last, pubyr, reference_no, comments, ".
 			  "ref_is_authority FROM authorities WHERE taxon_no=$taxon_no";
 	my @auth_rec = @{$dbt->getData($sql)};
+	Debug::dbPrint("synpara2");
+	
 	# Get ref info from refs if 'ref_is_authority' is set
 	if($auth_rec[0]->{ref_is_authority} =~ /YES/i){
 		PBDBUtil::debug(1,"author and year from refs<br>");
@@ -1733,6 +1758,8 @@ sub getSynonymyParagraph{
 		$sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs ".
 			   "WHERE reference_no=".$auth_rec[0]->{reference_no};
 		@results = @{$dbt->getData($sql)};
+		Debug::dbPrint("synpara3");
+		
 		$text .= "<li><i>".$auth_rec[0]->{taxon_name}."</i> was named by ".
 			  	 $results[0]->{author1last};
 		if($results[0]->{otherauthors} ne ""){
@@ -1781,6 +1808,7 @@ sub getSynonymyParagraph{
 		   "FROM opinions WHERE child_no=$taxon_no AND status != 'belongs to'".
 		   " AND status NOT LIKE 'nomen%'";
 	@results = @{$dbt->getData($sql)};
+	Debug::dbPrint("synpara4");
 
 	my %synonymies = ();
 	my @syn_years = ();
@@ -1793,6 +1821,8 @@ sub getSynonymyParagraph{
 				   "FROM refs ".
 				   "WHERE reference_no=".$row->{reference_no};
 			my @real_ref = @{$dbt->getData($sql)};
+			Debug::dbPrint("synpara5");
+			
 			$row->{author1last} = $real_ref[0]->{author1last};
 			$row->{author2last} = $real_ref[0]->{author2last};
 			$row->{otherauthors} = $real_ref[0]->{otherauthors};
@@ -1824,6 +1854,8 @@ sub getSynonymyParagraph{
 		   "FROM opinions WHERE child_no=$taxon_no AND (status='belongs to' ".
 		   "OR status like 'nomen%')";
 	@results = @{$dbt->getData($sql)};
+	Debug::dbPrint("synpara6");
+	
 	my %nomen_or_reval = ();
 	my @nomen_or_reval_numbers = ();
 	my $has_nomen = 0;
@@ -1835,6 +1867,8 @@ sub getSynonymyParagraph{
 				   "FROM refs ".
 				   "WHERE reference_no=".$row->{reference_no};
 			my @real_ref = @{$dbt->getData($sql)};
+			Debug::dbPrint("synpara7");
+			
 			$row->{author1last} = $real_ref[0]->{author1last};
 			$row->{author2last} = $real_ref[0]->{author2last};
 			$row->{otherauthors} = $real_ref[0]->{otherauthors};
@@ -1847,6 +1881,9 @@ sub getSynonymyParagraph{
 			$has_nomen = 1 
 		}
 	}
+	
+	Debug::dbPrint("synpara8");
+	
 	@nomen_or_reval_numbers = sort{$nomen_or_reval{$a}->{pubyr} <=> $nomen_or_reval{$b}->{pubyr}} @nomen_or_reval_numbers;	
 	# Since these are arranged numerically now chop of any leading "belongs to"
 	# recs whose pubyr is not newer than the oldest synonymy. Keep the whole 
@@ -1865,6 +1902,9 @@ sub getSynonymyParagraph{
 			last;
 		}
 	}
+	
+	Debug::dbPrint("synpara9");
+	
 	# Combine all adjacent like status types from %nomen_or_reval.
 	# (They're chronological: nomen, reval, reval, nomen, nomen, reval, etc.)
 	my %additional = ();
@@ -1880,6 +1920,8 @@ sub getSynonymyParagraph{
 		}
 		$last_status = $nomen_or_reval{$nomen_or_reval_numbers[$index]}->{status};
 	}
+
+	Debug::dbPrint("synpara10");
 
 	# Put revalidations and nomen*'s in synonymies hash.
 	if(scalar(keys %synonymies) or $has_nomen){
@@ -1912,22 +1954,43 @@ sub getSynonymyParagraph{
 		# And put it at the end.
 		push(@syn_keys, $new_oldest_key);
 	}
+	
+	Debug::dbPrint("synpara11");
 
 	# Loop through unique parent number from the opinions table.
 	# Each parent number is a hash key whose value is an array ref of records.
 	for(my $index = 0; $index < @syn_keys; $index++){
 		# $syn_keys[$index] is a parent_no, so $synonymies{$syn_keys[$index]}
 		# is a record from the immediately preceeding 'opinions' select.
+
+		
 		$text .= "; it was ".$synmap{$synonymies{$syn_keys[$index]}[0]->{status}};
 		$sql = "SELECT taxon_name FROM authorities ".
 			   "WHERE taxon_no=";
-		if($synonymies{$syn_keys[$index]}[0]->{status} =~ /nomen/ or
-		   $synonymies{$syn_keys[$index]}[0]->{status} =~ /belongs/){
-			$sql .= $synonymies{$syn_keys[$index]}[0]->{parent_no};
+		
+		my $tn = 0;
+		if ($synonymies{$syn_keys[$index]}[0]->{status} =~ /nomen/ or
+		   $synonymies{$syn_keys[$index]}[0]->{status} =~ /belongs/) {
+			
+			Debug::dbPrint("err1");
+		   
+			$tn = $synonymies{$syn_keys[$index]}[0]->{parent_no};
+		} else {	
+		
+			Debug::dbPrint("err2");
+			$tn = $syn_keys[$index];
 		}
-		else{	
-			$sql .=  $syn_keys[$index];
+		
+		# Added by rjp, 3/29/2004 to fix an error caused by a missing parent number.
+		# Still not sure why the number was empty to begin with, but this seems to 
+		# fix it for now.
+		if (!$tn) {
+			next;
 		}
+		$sql .= $tn;
+		
+		Debug::dbPrint("errparent_no = " . $tn);
+		
 		@results = @{$dbt->getData($sql)};
 		unless($synmap{$synonymies{$syn_keys[$index]}[0]->{status}} eq "revalidated by "){
 			$text .= "<i>".$results[0]->{taxon_name}."</i> by ";
@@ -1974,6 +2037,9 @@ sub getSynonymyParagraph{
 		$text =~ s/^i/I/;
 	}
 
+
+	Debug::dbPrint("synparalast");
+	
 	return $text;
 }
 
@@ -2123,6 +2189,7 @@ sub deal_with_homonyms{
 				$index = selectMostRecentParentOpinion($dbt, \@ref_ref, 1);
 			}
 			# Then, add another key to the hash for "clarification_info"
+			Debug::dbPrint("test2 = " .  $ref_ref[$index]->{parent_no} );
 			$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=".
 				   $ref_ref[$index]->{parent_no};
 			@ref_ref = @{$dbt->getData($sql)};
@@ -2231,6 +2298,8 @@ sub verify_chosen_taxon{
 	# Otherwise, return the name and number of the parent.
 	else{
 		my $parent_no = $results[$index]->{parent_no};
+		Debug::dbPrint("test3 = " . $results[$index]->{parent_no});
+		
 		$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=".
 			   $results[$index]->{parent_no};
 		@results = @{$dbt->getData($sql)};
@@ -2392,7 +2461,11 @@ sub displaySynonymyList	{
 	for my $syn (@syns)	{
 		$sql = "SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status!='belongs to' AND parent_no=" . $syn;
 		my @userefs =  @{$dbt->getData($sql)};
+		
+		Debug::dbPrint("test4 = $syn");
+		
 		$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=" . $syn;
+		
 		my $parent_name = @{$dbt->getData($sql)}[0]->{taxon_name};
 		if ( $q->param("taxon_rank") =~ /(genus)|(species)/i )	{
 			$parent_name = "<i>" . $parent_name . "</i>";
