@@ -2739,7 +2739,7 @@ sub startImage{
 	Images::startLoadImage($dbh, $dbt, $s, $exec_url);
 }
 sub processStartImage{
-	Images::processStartLoadImage($dbt, $q, $exec_url);
+	Images::processStartLoadImage($dbt, $q, $s, $exec_url);
 }
 sub processLoadImage{
 	Images::processLoadImageForm($dbt, $q, $s, $exec_url);
