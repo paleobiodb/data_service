@@ -24,6 +24,10 @@ my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no occurre
 my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
 my @mesoCenozoic = qw(triassic jurassic cretaceous tertiary);
 
+my %ecotaph1 = ();
+my %ecotaph2 = ();
+my %ecotaph3 = ();
+
 my $csv;
 my $OUT_HTTP_DIR = "/paleodb/data";
 my $OUT_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
@@ -55,6 +59,9 @@ sub buildDownload {
 
 	$self->setupOutput ( );
 	$self->retellOptions ( );
+	if ( $q->param('ecology1') )	{
+		$self->getEcology ( );
+	}
 	$self->doQuery ( );
 
 }
@@ -396,7 +403,7 @@ sub getResGrpString {
 
 	my $resgrp = $q->param('research_group');
 
-	if($resgrp && $resgrp =~ /(^ETE$)|(^5%$)|(^PACED$)|(^PGAP$)/){
+	if($resgrp && $resgrp =~ /(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
 		my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
 		if($resprojstr ne ""){
 			$result = " collections.reference_no IN (" . $resprojstr . ")";
@@ -581,6 +588,37 @@ sub getNotNullString {
 	return $retVal;
 }
 
+# create a hash table relating taxon names to eco/taphonomic categories
+# JA 12.8.03
+sub getEcology	{
+	my $self = shift;
+
+	my $sql = "SELECT ecotaph.taxon_no,taxon_name," . $q->param('ecology1');
+	if ( $q->param('ecology2') )	{
+		$sql .= "," . $q->param('ecology2');
+	}
+	if ( $q->param('ecology3') )	{
+		$sql .= "," . $q->param('ecology3');
+	}
+	$sql .= " FROM ecotaph LEFT JOIN authorities ON ecotaph.taxon_no = authorities.taxon_no";
+	my @ecos = @{$dbt->getData($sql)};
+for $i (0..5){print "$ecos[$i]->{taxon_name}<br>\n"; }
+
+	for $i (0..$#ecos)	{
+		$ecotaph1{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology1')};
+	}
+	if ( $q->param('ecology2') )	{
+		for $i (0..$#ecos)	{
+			$ecotaph2{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology2')};
+		}
+	}
+	if ( $q->param('ecology3') )	{
+		for $i (0..$#ecos)	{
+			$ecotaph3{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology3')};
+		}
+	}
+}
+
 # Assembles and executes the query.  Does a join between the occurrences and
 # collections tables, filters the results against the appropriate 
 # cgi-bin/data/classdata/ file if necessary, does another select for all fields
@@ -714,6 +752,16 @@ sub doQuery {
 	my $reidCols = join($sepChar, @reidHeaderCols);
 	if ( $reidCols ) { $header .= $sepChar.$reidCols; }
 
+	if ( $q->param('ecology1') )	{
+		$header .= $sepChar.$q->param('ecology1');
+	}
+	if ( $q->param('ecology2') )	{
+		$header .= $sepChar.$q->param('ecology2');
+	}
+	if ( $q->param('ecology3') )	{
+		$header .= $sepChar.$q->param('ecology3');
+	}
+
 	# Collection header
 	@collectionHeaderCols = $self->getOutFields('collections');	# Need this (for later...)
 	my $collectionCols = join ( $sepChar, @collectionHeaderCols );
@@ -798,6 +846,19 @@ sub doQuery {
 		foreach my $column ( @collectionHeaderCols ){
 			$column =~ s/^collections\.//;
 			push ( @coll_row, $row->{$column} );
+		}
+
+		# Push the eco/taphonomic data, if any, onto the reid rows
+		# WARNING: this only works on genus or higher-order data,
+		#  assuming species won't be scored separately
+		if ( $q->param('ecology1') )	{
+			push @reid_row , $ecotaph1{$genusName};
+		}
+		if ( $q->param('ecology2') )	{
+			push @reid_row , $ecotaph2{$genusName};
+		}
+		if ( $q->param('ecology3') )	{
+			push @reid_row , $ecotaph3{$genusName};
 		}
 
 		if( $q->param('collections_only') ){
