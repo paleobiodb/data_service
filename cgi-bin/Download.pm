@@ -1001,8 +1001,16 @@ sub doQuery {
 			# WARNING: algorithm assumes that only enum fields are
 			#  ever selected for processing
 			if ( $q->param('binned_field') )	{
-				$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}++;
-				$occsbycategory{$row->{$q->param('binned_field')}}++;
+				# special processing for ecology data
+				if ( $q->param('binned_field') eq "ecology" )	{
+#print "$genusName : $ecotaph[1]{$genusName} : $intervallookup{$row->{collection_no}}<br>\n"; $foo++;if($foo==99){exit};
+					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph[1]{$genusName}}++;
+					$occsbycategory{$ecotaph[1]{$genusName}}++;
+				} else	{
+				# default processing
+					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}++;
+					$occsbycategory{$row->{$q->param('binned_field')}}++;
+				}
 			}
 		}
 
@@ -1189,7 +1197,11 @@ sub doQuery {
 		# now print the results
 		print SCALEFILE "interval\ttotal occurrences";
 		for my $val ( @enumvals )	{
-			print SCALEFILE "\t$val";
+			if ( $val eq "" )	{
+				print SCALEFILE "\tno data";
+			} else	{
+				print SCALEFILE "\t$val";
+			}
 		}
 		print SCALEFILE "\n";
 		for my $ir ( @intervalrefs )	{
@@ -1197,7 +1209,11 @@ sub doQuery {
 			print SCALEFILE "$ir->{interval_name}";
 			print SCALEFILE "\t$occsbybin{$ir->{interval_name}}";
 			for my $val ( @enumvals )	{
-				print SCALEFILE "\t$occsbybinandcategory{$ir->{interval_name}}{$val}";
+				if ( $occsbybinandcategory{$ir->{interval_name}}{$val} eq "" )	{
+					print SCALEFILE "\t0";
+				} else	{
+					print SCALEFILE "\t$occsbybinandcategory{$ir->{interval_name}}{$val}";
+				}
 			}
 			print SCALEFILE "\n";
 		}
