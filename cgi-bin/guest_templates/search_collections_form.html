@@ -26,8 +26,9 @@ function checkForm ( ) {
 		&& frm.epoch.value == ""
 		&& frm.intage.value == ""
 		&& frm.locage.value == ""
-		&& frm.formation.value == ""
-		&& frm.member.value == "" 
+		&& frm.group_formation_member.value == ""
+		//&& frm.formation.value == ""
+		//&& frm.member.value == "" 
 		&& frm.authorizer.selectedIndex == -1
 		&& frm.enterer.selectedIndex == -1
 		&& frm.research_group.selectedIndex == -1 
@@ -82,9 +83,23 @@ function checkForm ( ) {
 	<tr>
       <td>Collection name: <br><input name=collection_names size=30><br></td>
 	  <td>Collection number: <br><input name=collection_no size=30><br></td>
-	  <td><nobr><select name="taxon_rank"><option>Higher-taxon<option>Genus<option>Genus and species<option>species</select>
-name:</nobr>
+	</tr>
+	<tr>
+	<td><nobr><select name="taxon_rank"><option>Higher-taxon<option>Genus<option>Genus and species<option>species</select>
+name:</nobr><BR>
 <input name=genus_name size=30><br></td>
+
+	  <td>Research group: <br>
+<select name="research_group">
+<option selected>
+<option>ETE
+<option>marine invertebrate
+<option>PACED
+<option>paleobotany
+<option>taphonomy
+<option>vertebrate
+</select>
+</td>
 	</tr>
 	<tr>
 	  <td>Country: <br><input name=country size=30><br></td>
@@ -104,24 +119,16 @@ name:</nobr>
 -->
 	</tr>
 	<tr>
-	  <td>Formation: <br><input name=formation size=30><br></td>
-	  <td>Member: <br><input name=member size=30><br></td>
-	  <td>Research group: <br>
-<select name="research_group">
-<option selected>
-<option>ETE
-<option>marine invertebrate
-<option>PACED
-<option>paleobotany
-<option>taphonomy
-<option>vertebrate
-</select>
-</td>
+	  <td>Group, formation, or member:<BR><input name="group_formation_member" size=30></select><BR></td>
+	  <td>Paleoenvironment: <br><select name=environment><option><option>paralic indet.<option>estuarine/bay<option>lagoonal<option><option>coastal indet.<option>foreshore<option>shoreface<option>transition zone/lower shoreface<option>offshore<option><option>deltaic indet.<option>delta plain<option>interdistributary bay<option>delta front<option>prodelta<option><option>deep-water indet.<option>submarine fan<option>basinal (siliciclastic)<option><option>carbonate indet.<option>peritidal<option>shallow subtidal<option>sand shoal<option>reef, buildup or bioherm<option>deep subtidal ramp<option>deep subtidal shelf<option>deep subtidal indet.<option>offshore ramp<option>offshore shelf<option>offshore indet.<option>slope<option>basinal (carbonate)</select><br></td>
+
+	  <!--<td>Formation: <br><input name=formation size=30><br></td>
+	  <td>Member: <br><input name=member size=30><br></td>-->
+
 	</tr>
 	<tr>
 	  <td>Primary Lithology: <br><select name=lithology1><option><option>claystone<option>mudstone<option>"shale"<option>siltstone<option>sandstone<option>conglomerate<option><option>marl<option><option>lime mudstone<option>wackestone<option>packstone<option>grainstone<option>"reef rocks"<option>"limestone"<option>dolomite<option>"carbonate"<option><option>chert<option>phosphorite<option>ironstone</select><br></td>
 	  <td>Secondary Lithology: <br><select name=lithology2><option><option>claystone<option>mudstone<option>"shale"<option>siltstone<option>sandstone<option>conglomerate<option><option>marl<option><option>lime mudstone<option>wackestone<option>packstone<option>grainstone<option>"reef rocks"<option>"limestone"<option>dolomite<option>"carbonate"<option><option>chert<option>phosphorite<option>ironstone</select><br></td>
-	  <td>Paleoenvironment: <br><select name=environment><option><option>paralic indet.<option>estuarine/bay<option>lagoonal<option><option>coastal indet.<option>foreshore<option>shoreface<option>transition zone/lower shoreface<option>offshore<option><option>deltaic indet.<option>delta plain<option>interdistributary bay<option>delta front<option>prodelta<option><option>deep-water indet.<option>submarine fan<option>basinal (siliciclastic)<option><option>carbonate indet.<option>peritidal<option>shallow subtidal<option>sand shoal<option>reef, buildup or bioherm<option>deep subtidal ramp<option>deep subtidal shelf<option>deep subtidal indet.<option>offshore ramp<option>offshore shelf<option>offshore indet.<option>slope<option>basinal (carbonate)</select><br></td>
 	  <td></td>
 	</table>
 	<hr>
