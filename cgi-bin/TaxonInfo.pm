@@ -352,6 +352,7 @@ sub displayTaxonInfoResults{
 
 	# Write out a hidden with the 'genus_name' and 'taxon_rank' for subsequent
 	# hits to this page
+	my $exec_url = $q->url();
 	print "<form name=module_nav_form method=POST action=\"$exec_url\">";
     print "<input type=hidden name=action value=processModuleNavigation>";
     print "<input type=hidden name=genus_name value=\"".
