@@ -587,11 +587,20 @@ sub taxonomic_search{
 	new_search_recurse($taxon_no, $dbt, 1);
 	my $results;
 
-    # Dirty trick PS 01/10/2004 - if a taxon_no of 0 is passed in a occurrence query, any
+    # Dirty trick PS 01/10/2005 - if a taxon_no of 0 is passed in a occurrence query, any
     #  occurrence that doesn't have a taxon no gets added in (~90000) and any collection
     #  with one of these occurrences gets added in (~19000). So delete it. Not sure why
     #  this 0 gets passed back sometimes right now
     delete $passed{0};
+
+    # Get recombination taxon nos also, and add those in PS 02/14/2005
+    foreach $taxon_no (keys %passed) {
+        $recomb_no = getCorrectedName($dbt,$taxon_no,'number');
+        if ($recomb_no != $taxon_no) {
+            PBDBUtil::debug(2,"recomb no is $recomb_no for taxon no $taxon_no");
+            $passed{$recomb_no} = 1;
+        }
+    }
 
     if ($return_taxon_nos ne "") {
         if (wantarray) {
@@ -1092,6 +1101,7 @@ sub getChildren {
 sub getCorrectedName{
     my $dbt = shift;
     my $child_no = shift;
+    my $return_type = shift; #default is to return row, optionally return taxon_no
 
     # will get what its renamed to.  A bit tricky, as you want to the most recent opinion, but normally the 'belongs to' comes first
     # so you have to use an order by so it comes second.  can't use filter the belongs to in the where clause cause the taxon may
@@ -1106,13 +1116,21 @@ sub getCorrectedName{
     my @rows = @{$dbt->getData($sql)};
     if (@rows) {
         if ($rows[0]->{'is_recomb'}) {
-            return $rows[0];
+            if ($return_type eq 'number') {
+                return $rows[0]->{'taxon_no'};
+            } else {
+                return $rows[0];
+            }
         } else {
-            my @me;
-            #no recomb, just return the name/no of the child
-            $sql = "SELECT a.taxon_no, a.taxon_name, a.taxon_rank from authorities a WHERE a.taxon_no=$child_no";
-            @me = @{$dbt->getData($sql)};
-            return $me[0];
+            if ($return_type eq 'number') {
+                return $child_no;
+            } else {
+                my @me;
+                #no recomb, just return the name/no of the child
+                $sql = "SELECT a.taxon_no, a.taxon_name, a.taxon_rank from authorities a WHERE a.taxon_no=$child_no";
+                @me = @{$dbt->getData($sql)};
+                return $me[0];
+            }        
         }
     } else {
         #bad input, bad output
