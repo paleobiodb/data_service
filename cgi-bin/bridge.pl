@@ -2031,9 +2031,9 @@ sub buildTaxonomicList {
 <h3>Taxonomic list for $coll_name[0] (PBDB collection $collection_no)</h3>";
 
 		if($new_found){
-			$return .= "<h4><font color=red>WARNING!</font> Taxon names in ".
-					   "<b>bold</b> are new to the database.<br>Please make ".
-					   "sure the spelling is correct.</h4>";
+			$return .= "<h3><font color=red>WARNING!</font> Taxon names in ".
+					   "<b>bold</b> are new to the database.</h3><p>Please make ".
+					   "sure the spelling is correct. If it isn't, DON'T hit the back button; hit the \"Edit occurrences\" button below.</p>";
 		}
 
 		$return .=
