@@ -1470,6 +1470,7 @@ sub doQuery {
 			 "Triassic 4", "Triassic 3", "Triassic 2",
 			 "Triassic 1", "Permian 5", "Permian 4",
 			 "Permian 3", "Permian 2", "Permian 1",
+			 "Carboniferous 6",
 			 "Carboniferous 5", "Carboniferous 4",
 			 "Carboniferous 3", "Carboniferous 2",
 			 "Carboniferous 1", "Devonian 5",
