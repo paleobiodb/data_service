@@ -54,7 +54,6 @@ sub displayOccurrenceReclassify	{
 
 	my $sql = "SELECT collection_name FROM collections WHERE collection_no=" . $q->param('collection_no');
 	my $coll_name = ${$dbt->getData($sql)}[0]->{collection_name};
-print "$sql = $coll_name";
 	print "<center><h3>Classification of taxa in collection ",$q->param('collection_no')," ($coll_name)</h3>";
 
 	# get all the occurrences
