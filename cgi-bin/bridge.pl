@@ -34,6 +34,7 @@ use Occurrence;
 use Collection;
 use TaxonHierarchy;
 
+use Validation;
 use Debug;
 use Globals;
 
@@ -58,6 +59,13 @@ my $OUTPUT_DIR = "public/data";
 my $q = CGI->new();
 my $s = Session->new();
 $csv = Text::CSV_XS->new();
+
+
+# this cleans all of the CGI parameters by removing HTML, escaping quotes, etc.
+# added by rjp, 2/2004
+Validation::cleanCGIParams($q);
+#Debug::printAllParams($q);
+
 
 # Get the URL pointing to this executable
 # WARNING (JA 13.6.02): must do this before making the HTMLBuilder object!
@@ -199,6 +207,8 @@ dbg($q->Dump);
 #} else {
 #	Debug::dbPrint("javascript off");
 #}
+
+
 
 
 
@@ -4988,7 +4998,7 @@ sub formatAuthorityLine	{
 # menu, selects a reference, and then searches for a taxon name to add.
 # Displays the taxon entyr form called "enter_taxonomy_form.html".
 sub displayTaxonomyEntryForm	{
-
+	
 	#print &stdIncludes ("js_tipsPopup");
 	# now handled by common.js.  rjp, 1/2004.
 
@@ -5034,13 +5044,10 @@ sub displayTaxonomyEntryForm	{
 
 	# Determine the fields and values to be populated by populateHTML
 	# rjp - if there's a space in the taxon name, then assume that it's a species,
-	# otherwise, it's a genus only.
+	# otherwise, it could be anything, and we'll have to present a popup menu for the user to pick from.
 	if ($authorityRow{"taxon_rank"} eq "") {
 		if ($taxon =~ / /) {
 			$authorityRow{"taxon_rank"} = "species";
-		}
-		else {
-			$authorityRow{"taxon_rank"} = "genus";
 		}
 	}
 
@@ -5128,7 +5135,7 @@ sub displayTaxonomyEntryForm	{
 			for my $f (keys %authorityRow) {
 				if ($authorityRow{$f}) {
 					$html =~ s/<input name="$f".*?>/<u>$authorityRow{$f}<\/u>/;
-					$html =~ s/<select name="$f".*?<\/select>/<u>$authorityRow{$f}<\/u>/;
+					$html =~ s/<select name="$f".*?<\/select>/<input name="$f" type=hidden value=species><u>$authorityRow{$f}<\/u>/;
 					$html =~ s/<textarea name="$f".*?<\/textarea>/<u>$authorityRow{$f}<\/u>/;
 				}
 			}
@@ -5184,22 +5191,24 @@ sub displayTaxonomyEntryForm	{
 		$rank = "species";  # must be a species if it has a space in it.	
 	}
 	
+	
 	if ( $rank eq "species" ) {
 		# then it's a genus, species pair.
 		
 		$taxon =~ m/^\s*(.+)\s+.*$/;
 		my $genusName = $1;
 		
-		$html =~ s/%%belongs_to_message%%/recombined into a different genus as/; 
+		$html =~ s/%%recombined_message%%/recombined into a different genus as/; 
 		$html =~ s/%%genus%%/$genusName/;
 		$html =~ s/%%rank%%/species/g;
 		
 		$html =~ s/%%species_only_start%%//;
 		$html =~ s/%%species_only_end%%//;
-		
+				
 		$html =~ s/Name of type taxon/Type specimen/g;
 	} else { # must be a higher taxon	
-		$html =~ s/%%belongs_to_message%%/classified as belonging to/; 
+				
+		$html =~ s/%%recombined_message%%/classified as belonging to/; 
 		$html =~ s/%%rank%%/$rank/g;
 		$html =~ s/%%species_only_start%%((.)|\s)*%%species_only_end%%//;	# remove the row which is only shown for species.
 		
@@ -5225,8 +5234,8 @@ sub displayTaxonomyEntryForm	{
 #
 # taxon_name is the original name that the user entered before getting to this form
 # The parent name is the new one they are entering at the bottom of the form (if they enter one).
-sub processTaxonomyEntryForm {
-
+sub processTaxonomyEntryForm {	
+	
 	# do some validity checking.. make sure that the new taxon name isn't the same
 	# as the original.., that it is capitalized correctly, etc.
 	#
@@ -5246,7 +5255,7 @@ sub processTaxonomyEntryForm {
 		# figure out which name we should check to make sure it's not equal to the original
 		# based on which radio button the user has selected at the bottom
 		my $nameToCheck = "";
-		if ($q->param('taxon_status') eq 'belongs_to') {
+		if ($q->param('taxon_status') eq 'recombined_as') {
 			$nameToCheck = $newTaxon1;
 		} elsif ($q->param('taxon_status') eq 'invalid1') {
 			$nameToCheck = $newTaxon2;
@@ -5266,13 +5275,8 @@ sub processTaxonomyEntryForm {
 		}
 	}
 	
-	
-	# if the user selected the "original_valid" radio button at the bottom, then we need to set the 
-	# parent_taxon_name to whatever they initially passed into the form (and possibly edited).
-	if ($q->param('taxon_status' eq 'original_valid')) {
-		$q->param(parent_taxon_name => $q->param('taxon_name_corrected'));
-		$q->param(parent_taxon_name2 => $q->param('taxon_name_corrected'));
-	}
+			
+
 	
 	
 	# Pages and figures each can come from two different widgets, so merge them
@@ -5290,11 +5294,8 @@ sub processTaxonomyEntryForm {
 	}
 	
 	
-	
-	
-
 	# taxon_status is one of five values:
-	# no_opinion, original_valid, belongs_to, invalid1, invalid2.
+	# no_opinion, belongs_to, recombined_as, invalid1, invalid2.
 	# These are the radio buttons on the bottom of the form.
 	
 	# "Invalid and another name should be used"
@@ -5315,6 +5316,23 @@ sub processTaxonomyEntryForm {
 		$q->param('taxon_name' => $q->param('taxon_name_corrected'));
 	}
 
+	
+	
+	
+	# if the user selected the "belongs_to" radio button at the bottom, then we need to set the 
+	# parent_taxon_name to whatever they initially passed into the form (and possibly edited).
+	# Note, this button is only visible if the taxon_rank of taxon_name is species.  Therefore,
+	# the parent_taxon rank will *always* be genus for this case.
+	if ($q->param('taxon_status') eq 'belongs_to') {
+		# note - this seems strange, but apparently works because the name is changed
+		# in the if statements a few lines down from here.
+		$q->param(parent_taxon_name => $q->param('taxon_name'));	
+		$q->param(parent_taxon_rank => 'genus');
+
+	}
+	
+	
+	
 	# Set the parent name for valid species
 	# Don't set the parent taxon rank if the parent is a genus,
 	# because that information will be taken from the form
@@ -5345,6 +5363,7 @@ sub processTaxonomyEntryForm {
 		}
 	}
 	
+	#Debug::printAllParams($q);
 	
 	# If an unrecognized type or parent taxon name was entered, stash the form 
 	# data and ask if the user wants to add the name to the authorities table
@@ -5403,7 +5422,7 @@ sub checkNewTaxon {
 				next;
 			}
 
-			$sql = "SELECT * FROM authorities WHERE taxon_name='".
+			$sql = "SELECT * FROM authorities WHERE taxon_name = '".
 					$q->param($new_taxon_name) . "'";
 			my @results = @{$dbt->getData($sql)};
 
@@ -5652,20 +5671,22 @@ sub new_authority_form{
 		$html =~ s/name="$p/name="$newp/g;
 		$html =~ s/id="$p/id="$newp/g;
 	}
-	$html =~ s/\$taxon_name/$new_name/;
+	$html =~ s/%%taxon_name%%/$new_name/;
 	print $html;
 }
 
 
+
 # JA 13-18,27.8.02
+# modified slightly by rjp, 2/2004.
 sub displayTaxonomyResults	{
 
-	print &stdIncludes ("std_page_top");
+	print stdIncludes ("std_page_top");
 	# Process the form data relevant to the authorities table
 
 	# Update or insert the authority data, as appropriate
 	# Assumption here is that you definitely want to create the taxon name
-	#  if it doesn't exist yet
+	# if it doesn't exist yet
 	my $taxon_no;
 	if ( $q->param('taxon_no') > 0 )	{
 		updateRecord( 'authorities', 'taxon_no', $q->param('taxon_no') );
@@ -5689,7 +5710,7 @@ sub displayTaxonomyResults	{
 				"pubyr", "pages", "figures", "comments");
 
 	# Process authority data on a new type and/or parent taxon name, if
-	#  either was submitted on a previous page
+	# either was submitted on a previous page
 
 	if ( ( $q->param('parent_taxon_name') && ! $q->param('parent_taxon_no') ) ||
 		 ( $q->param('parent_genus_taxon_name') &&
@@ -5705,20 +5726,20 @@ sub displayTaxonomyResults	{
 
 		if ( $q->param('type_taxon_name') && ! $q->param('type_taxon_no') &&
 			 $q->param('taxon_name') !~ / / )	{
-			$my_taxon_no = &insertSwappedTaxon('type_', \@insertFields);
+			$my_taxon_no = insertSwappedTaxon('type_', \@insertFields);
 			$savedParams{'type_taxon_no'} = $my_taxon_no;
 		}
 
 		# Do exactly the same thing for the parent taxon
 		if ( $q->param('parent_taxon_name') && ! $q->param('parent_taxon_no') )	{
-			$my_taxon_no = &insertSwappedTaxon('parent_', \@insertFields);
+			$my_taxon_no = insertSwappedTaxon('parent_', \@insertFields);
 			$q->param( parent_taxon_no => $my_taxon_no );
 		}
 
 		# Do exactly the same thing for the parent genus (relevant only
 		#   if a species is recombined into a "new" genus)
 		if ( $q->param('parent_genus_taxon_name') && ! $q->param('parent_genus_taxon_no') )	{
-			$my_taxon_no = &insertSwappedTaxon('parent_genus_', \@insertFields);
+			$my_taxon_no = insertSwappedTaxon('parent_genus_', \@insertFields);
 			$q->param( parent_genus_taxon_no => $my_taxon_no );
 		}
 
@@ -5770,9 +5791,9 @@ sub displayTaxonomyResults	{
 	# Process the form data relevant to the opinions table
 
 	# Set values implied by selection of radio buttons
-	if ( $q->param('taxon_status') eq "belongs_to" )	{
+	if ( $q->param('taxon_status') eq 'belongs_to')	{
 		$q->param(status => 'belongs to');
-	} elsif ( $q->param('taxon_status') eq "recombined" )	{
+	} elsif ( $q->param('taxon_status') eq "recombined_as" )	{
 		$q->param(status => 'recombined as');
 		# If the parent name is not a species, the species simply has
 		#  been assigned to a genus, so the status is "belongs to"
@@ -5783,6 +5804,8 @@ sub displayTaxonomyResults	{
 		$q->param(status => $q->param('synonym') );
 	} elsif ( $q->param('taxon_status') eq "invalid2" )	{
 		$q->param(status => $q->param('nomen') );
+		$q->param(parent_no => 0); ##***********##
+		$q->param(parent_taxon_no => 0);
 	}
 	elsif($q->param('taxon_status') eq "no_opinion"){
 		$q->param(status => "");
@@ -5855,6 +5878,8 @@ sub displayTaxonomyResults	{
 		dbg("insertRecord called from displayTaxonomyResults (new opinion)<br>");
 		push @lastOpinions , insertRecord( 'opinions', 'opinion_no', \$opinion_no, '9', 'parent_no' );
 	}
+	
+	
 
 	# If a species was recombined, create another opinion to record
 	#  that the new combination belongs to the new genus
@@ -6248,7 +6273,7 @@ sub displayGenusNamesDLResults
 	$sth->execute();
 	my @rows = @{$sth->fetchall_arrayref()};
 	
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes ( "std_page_top" );
 	
 	my $numRows = @rows;
 	if ( $numRows > 0)
@@ -6275,15 +6300,15 @@ sub displayGenusNamesDLResults
 		print "<h1>No genus names for class $class_name</h1>";
 	}
 	
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes ("std_page_bottom");
 }
 
 
 sub authorityRow
 {
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes ( "std_page_top" );
 	print '<form><table>' . $hbo->populateHTML('authority_entry_row') . '</table></form>';
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes ("std_page_bottom");
 }
 
 sub displayTaxonGeneralForm
@@ -6329,24 +6354,28 @@ sub displayTaxonGeneralForm
 		print '</table>';
 		print '<input type=submit value="Process taxa">';
 		
-	  print &stdIncludes ("std_page_bottom");
+	  print stdIncludes ("std_page_bottom");
 	  
 }
 
 sub displayProjectStatusPage
 {
-	  print &stdIncludes ( "std_page_top" );
+	  print stdIncludes ( "std_page_top" );
 	  print $hbo->populateHTML('project_status_page');
-	  print &stdIncludes ("std_page_bottom");
+	  print stdIncludes ("std_page_bottom");
 }
 
+
+# not used?
 sub displaySubmitBugForm
 {
-	  print &stdIncludes ( "std_page_top" );
+	  print stdIncludes ( "std_page_top" );
 	  print $hbo->populateHTML('bug_report_form', [$s->get('enterer'), 'Cosmetic'], ['enterer', 'severity']);
-	  print &stdIncludes ("std_page_bottom");
+	  print stdIncludes ("std_page_bottom");
 }
 
+
+# not used?
 sub processBugReport
 {
 		$q->param(enterer=>$s->get('enterer'));
@@ -6354,11 +6383,12 @@ sub processBugReport
 		$return = insertRecord('bug_reports', 'bug_id', 0);
 		if ( ! $return ) { return $return; }
     
-		print &stdIncludes ( "std_page_top" );
+		print stdIncludes ( "std_page_top" );
 		print "<h3>Your bug report has been added</h3>";
-		print &stdIncludes ("std_page_bottom");
+		print stdIncludes ("std_page_bottom");
 }
 
+# not used?
 sub displayBugs {
 	$sql = "SELECT * FROM bug_reports";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -6367,7 +6397,7 @@ sub displayBugs {
 	  my @rowrefs = @{$sth->fetchall_arrayref()};
 	  $sth->finish();
 	  
-	  print &stdIncludes ( "std_page_top" );
+	  print stdIncludes ( "std_page_top" );
 	  print "<table border=0>";
 	  foreach my $rowref (@rowrefs)
 	  {
@@ -6375,8 +6405,10 @@ sub displayBugs {
 	    print $hbo->populateHTML('bug_display_row', $rowref, $fieldNamesRef);
 	  }
 	  print "</table>";
-	  print &stdIncludes ("std_page_bottom");
+	  print stdIncludes ("std_page_bottom");
 }
+
+
 
 sub updateRecord {
 
@@ -6465,7 +6497,7 @@ sub updateRecord {
 
 	# Trying to find why the modifier is sometimes coming through 
 	# blank.  This should stop it.
-	if ( $updateString !~ /modifier/ ) { &htmlError ( "modifier not specified" ); }
+	if ( $updateString !~ /modifier/ ) { htmlError ( "modifier not specified" ); }
 
 #if ( $s->get("authorizer") eq "M. Uhen" ) { print "$updateString<br>\n"; } 
 	$dbh->do( $updateString ) || die ( "$updateString<HR>$!" );
@@ -6487,7 +6519,7 @@ sub insertRecord {
 	# Have to be logged in
 	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
 		$s->enqueue( $dbh, "action=insertRecord" );
-		&displayLoginPage ( "Please log in first." );
+		displayLoginPage ( "Please log in first." );
 		exit;
 	}
 
@@ -6537,7 +6569,7 @@ sub insertRecord {
 		# Set the pubtitle to the pull-down pubtitle unless it's set in the form
 		$q->param(pubtitle => $q->param('pubtitle_pulldown')) unless $q->param("pubtitle");
 
-		&setPersonValues( $tableName );
+		setPersonValues( $tableName );
 
 		my $fieldCount = 0;
 		# Loop over all database fields
