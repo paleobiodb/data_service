@@ -7,9 +7,20 @@ use strict;
 
 # who is the "god" user (ie, full access to everything?)
 # This is an inline function, so it should be fast.
-sub god (){
+sub god () {
 	return 'J. Alroy';	
 }
+
+
+# pass this a warning message and it will print it directly
+# to the web page.  Note, you still need to add the standard page 
+# header and footer before and after this.
+sub printWarning() {
+	my $warning = shift;
+
+	print "<CENTER><H3><FONT COLOR='red'>Warning</FONT> $warning</H3></CENTER>\n";
+}
+
 
 # pass this a full month name such as "December" and it will return the month number, ie, 12.
 sub monthNameToNumber ($) {
