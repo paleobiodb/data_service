@@ -279,9 +279,19 @@ the authorities table.</span>
 <A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Holds one record for each collection in the database.  
 A collection can be thought of as a particular <i>hole</i> in the ground.
-
 <SPAN class="important">Access levels apply to these records</SPAN>
 </p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
 <p class="field">
 <span class="fieldName">collection_name</span>
 <span class="fieldDesc"></span>
@@ -322,6 +332,16 @@ look at the access_level field to determine who should have access.</span>
 <p class="tableDesc">Correlates the <A HREF="#scales">scales</A> table with the <A HREF="#intervals">intervals</A> table.</p>
 
 <p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
+<p class="field">
 <span class="fieldName"><A NAME="correlation_no" class="primaryKey">correlation_no</A></span>
 </p>
 <p class="field">
@@ -339,6 +359,17 @@ look at the access_level field to determine who should have access.</span>
 <A NAME="ecotaph"><span class="table">ecotaph</span></A>
 <A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Attributes of taxa, what they look like, body mass, ocean/land, etc.</p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
 <p class="field">
 <span class="fieldName"><A NAME="ecotaph_no" class="primaryKey">ecotaph_no</A></span>
 </p>
@@ -358,6 +389,25 @@ Not important to the rest of the database.</p>
 <A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Records paths to images of occurrences which have been entered into the database.
   Not much in here yet.</p>
+  
+  <p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName"><A NAME="image_no" class="primaryKey">image_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName">path_to_field</span>
+</p>
+
 </div>
   
   
@@ -367,6 +417,17 @@ Not important to the rest of the database.</p>
 <p class="tableDesc">Each time interval (ie, Cenozoic, etc.) <i>may</i> have an entry in this table.  
 The <A HREF="#correlations">correlations</A> table lists the relative orderings of the intervals,
 and the <A HREF="#scales">scales</A> table lists opinions about time scales.</p>
+
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
 
 <p class="field">
 <span class="fieldName"><A NAME="interval_no" class="primaryKey">interval_no</A></span>
@@ -392,6 +453,17 @@ the database.</p>
 <p class="tableDesc">Holds one record for each distinct taxonomic occurrence within a 
 particular collection (usually).
 <SPAN class="important">Access levels apply to these records</SPAN>
+</p>
+
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
 </p>
 
 <p class="field">
@@ -444,7 +516,15 @@ For example, if genus_name is a higher taxon, then species would be "indet."</sp
 don't confuse this with the <A HREF="#reidentifications">reidentifications</A> table which 
 is used for reidentifications of a particular fossil at a particular collection.
 
-
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
 </p>
 <p class="field">
 <span class="fieldName"><A NAME="opinion_no" class="primaryKey">opinion_no</A></span>
@@ -528,6 +608,17 @@ and get the year from the reference instead.</span>
 <A NAME="refs"><span class="table">refs</span></A>
 <A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Holds one record for each reference (ie, paper).</p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
 <p class="field">
 <span class="fieldName"><A NAME="reference_no" class="primaryKey">reference_no</A></span>
 </p>
@@ -572,6 +663,16 @@ occur if a fossil was incorrectly classified and later re-classified as somethin
 </p>
 
 <p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
+<p class="field">
 <span class="fieldName"><A NAME="reid_no" class="primaryKey">reid_no</A></span>
 </p>
 <p class="field">
@@ -601,6 +702,15 @@ occur if a fossil was incorrectly classified and later re-classified as somethin
 <p class="tableDesc">Listing of time scales.  Each one will have been defined by a certain reference.
 See also the <A HREF="#intervals">intevals</A> and <A HREF="#correlations">correlations</A> tables.</p>
 
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
 <p class="field">
 <span class="fieldName"><A NAME="scale_no" class="primaryKey">scale_no</A></span>
 </p>
@@ -633,6 +743,19 @@ references, you'd have an entry in here for each refernce (not including the pri
 <A NAME="session_data"><span class="table">session_data</span></A>
 <A HREF="#top" class="toplink">top</A>
 <p class="tableDesc">Holds session id, current enterer, authorizer, etc. which we store in cookies.</p>
+
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#reference_no">reference_no</A></span>
+</p>
+
 <p class="field">
 <span class="fieldName">queue</span>
 <span class="fieldDesc">Holds list of parameters from the user's form submission(?).</span>
