@@ -80,7 +80,14 @@ sub processPrintHierarchy	{
 	print $q->param('taxon_name') . "</h3></center>";
 	$id{$ref->{taxon_no}} = 10**(3*($MAX-1));
 	my $rank = $shortrank{$ref->{taxon_rank}};
-	$name{$ref->{taxon_no}} = "<b>" . $rank . "</b> " . $q->param('taxon_name');
+	$name{$ref->{taxon_no}} = "<b>" . $rank . "</b> ";
+	if ( $ref->{taxon_rank} =~ /genus/ )	{
+		$name{$ref->{taxon_no}} .= "<i>";
+	}
+	$name{$ref->{taxon_no}} .= $q->param('taxon_name');
+	if ( $ref->{taxon_rank} =~ /genus/ )	{
+		$name{$ref->{taxon_no}} .= "</i>";
+	}
 	$outrank{$ref->{taxon_no}} = $ref->{taxon_rank};
 	$outname{$ref->{taxon_no}} = $q->param('taxon_name');
 
@@ -207,7 +214,7 @@ sub processPrintHierarchy	{
 	}
 
 # now print out the data
-	open OUT, ">$OUT_FILE_DIR/hierarchy.csv";
+	open OUT, ">$OUT_FILE_DIR/classification.csv";
 	print "<center><table>\n";
 	@sorted = keys %id;
 	@sorted = sort { $id{$a} cmp $id{$b} } @sorted;
@@ -226,9 +233,9 @@ sub processPrintHierarchy	{
 	print "</table></center><p>\n";
 	close OUT;
 
-	chmod 0664, "$OUT_FILE_DIR/hierarchy.csv";
+	chmod 0664, "$OUT_FILE_DIR/classification.csv";
 
-	print "<hr><center><p>$nrecords records were printed to the file <b><a href='$OUT_HTTP_DIR/hierarchy.csv'>hierarchy.csv</a></b></p></center>";
+	print "<hr><center><p>Data for <b>$nrecords taxa</b> were printed to the file <b><a href='$OUT_HTTP_DIR/classification.csv'>classification.csv</a></b></p></center>";
 
 	print "<center><p>You may <b><a href=\"$exec_url?action=startStartPrintHierarchy\">classify another taxon</a></b></p></center>\n";
 	print main::stdIncludes( "std_page_bottom" );
