@@ -9,7 +9,7 @@ package Reference;
 use strict;
 use DBI;
 use DBConnection;
-use SQLBuilder;
+use DBTransactionManager;
 use URLMaker;
 use CGI::Carp qw(fatalsToBrowser);
 
@@ -31,7 +31,7 @@ use fields qw(
 				author2last
 				otherauthors
 				
-				SQLBuilder
+				DBTransactionManager
 							);  # list of allowable data fields.
 
 						
@@ -52,15 +52,15 @@ sub new {
 # for internal use only!
 # returns the SQL builder object
 # or creates it if it has not yet been created
-sub getSQLBuilder {
+sub getTransactionManager {
 	my Reference $self = shift;
 	
-	my $SQLBuilder = $self->{SQLBuilder};
-	if (! $SQLBuilder) {
-	    $SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
+	my $DBTransactionManager = $self->{DBTransactionManager};
+	if (! $DBTransactionManager) {
+	    $DBTransactionManager = DBTransactionManager->new($self->{GLOBALVARS});
 	}
 	
-	return $SQLBuilder;
+	return $DBTransactionManager;
 }
 
 
@@ -72,7 +72,7 @@ sub setWithReferenceNumber {
 		$self->{reference_no} = $input;
 		
 		# get the pubyr and save it
-		my $sql = $self->getSQLBuilder();
+		my $sql = $self->getTransactionManager();
 		$sql->setSQLExpr("SELECT reftitle, pubtitle, pubyr, pubvol, pubno, firstpage, lastpage, author1init, author1last, author2init, author2last, otherauthors FROM refs WHERE reference_no = $input");
 		$sql->executeSQL();
 		

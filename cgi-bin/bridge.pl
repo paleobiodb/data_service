@@ -37,7 +37,6 @@ use Scales;
 use TimeLookup;
 use Ecology;
 use PrintHierarchy;
-use SQLBuilder;
 
 use Occurrence;
 use Collection;
@@ -54,7 +53,7 @@ use Globals;
 #*************************************
 # 
 # Some of these variable names are used throughout the code
-# $sql 		: Generally is any SQL string, although it may also be an SQLBuilder object.
+# $sql 		: Generally is any SQL string, although it may also be an DBTransactionManager object.
 # $q		: The CGI object - used for getting parameters from HTML forms.
 # $s		: The session object - used for keeping track of users, see Session.pm
 # $hbo		: HTMLBuilder object, used for populating HTML templates with data. 
@@ -114,7 +113,7 @@ $GLOBALVARS{hbo} = $hbo;
 my $dbh = DBConnection::connect();
 
 # Make a Transaction Manager object
-my $dbt = DBTransactionManager->new($dbh, $s);
+my $dbt = DBTransactionManager->new(\%GLOBALVARS);
 
 my $action = "";
 
@@ -2116,7 +2115,7 @@ sub processCollectionsSearch {
 							"environment"		=> 1 );
 
 					
-	my $sql = SQLBuilder->new(\%GLOBALVARS);
+	my $sql = DBTransactionManager->new(\%GLOBALVARS);
 	$sql->setWhereSeparator("AND");
 		
 	# If a genus name is requested, query the occurrences table to get
@@ -4940,7 +4939,7 @@ sub displayOccsForReID
 	}
 
 	# Build the SQL
-	my $where = SQLBuilder->new(\%GLOBALVARS);
+	my $where = DBTransactionManager->new(\%GLOBALVARS);
 	$where->setWhereSeparator("AND");
 	
 	if($genus_name ne '' or $species_name ne ''){
@@ -7756,7 +7755,7 @@ sub RefQuery {
 	if ( $refsearchstring ) { $refsearchstring = "for '$refsearchstring' "; }
 
 	if ( $refsearchstring ne "" || $q->param('enterer') || $q->param('project_name') ) {
-		my $sql = SQLBuilder->new(\%GLOBALVARS);
+		my $sql = DBTransactionManager->new(\%GLOBALVARS);
 		$sql->setSelectExpr("*");
 		$sql->setFromExpr("refs");
 
@@ -7866,7 +7865,7 @@ sub htmlError {
 
 
 # **********
-# deprecated.  please use the SQLBuilder class instead for this.
+# deprecated.  please use the DBTransactionManager class instead for this.
 # rjp, 1/2004. 
 sub buildWhere {
 	my $where = shift;

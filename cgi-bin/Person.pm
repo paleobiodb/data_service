@@ -8,7 +8,7 @@ package Person;
 use strict;
 use DBI;
 use DBConnection;
-use SQLBuilder;
+use DBTransactionManager;
 use URLMaker;
 use CGI::Carp qw(fatalsToBrowser);
 use Constants;
@@ -16,7 +16,7 @@ use Constants;
 use fields qw(	
 				GLOBALVARS
 				
-				SQLBuilder
+				DBTransactionManager
 							);  # list of allowable data fields.
 
 						
@@ -34,15 +34,15 @@ sub new {
 # for internal use only!
 # returns the SQL builder object
 # or creates it if it has not yet been created
-sub getSQLBuilder {
+sub getTransactionManager {
 	my Person $self = shift;
 	
-	my $SQLBuilder = $self->{SQLBuilder};
-	if (! $SQLBuilder) {
-	    $SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
+	my $DBTransactionManager = $self->{DBTransactionManager};
+	if (! $DBTransactionManager) {
+	    $DBTransactionManager = DBTransactionManager->new($self->{GLOBALVARS});
 	}
 	
-	return $SQLBuilder;
+	return $DBTransactionManager;
 }
 
 
@@ -56,7 +56,7 @@ sub listOfAuthorizers {
 	
 	my $activeOnly = shift;
 	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	$sql->setSelectExpr("name, reversed_name FROM person");
 	$sql->setWhereSeparator("AND");
@@ -85,7 +85,7 @@ sub listOfEnterers {
 	
 	my $activeOnly = shift;
 	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	my $temp = "SELECT name, reversed_name FROM person ";
 	if ($activeOnly) { $temp .= " WHERE active = 1 "; }
@@ -105,7 +105,7 @@ sub isValidName {
 	my Person $self = shift;
 	my $name = shift;
 	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM person WHERE
 		name = '$name' OR reversed_name = '$name'");

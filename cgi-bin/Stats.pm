@@ -25,14 +25,14 @@ package Stats;
 
 use strict;
 
-use SQLBuilder;
+use DBTransactionManager;
 use Debug;
 
 
 # these are the data fields for the object
 use fields qw(	
 				
-				SQLBuilder
+				DBTransactionManager
 		 	);  # list of allowable data fields.
 						
 						
@@ -52,22 +52,22 @@ sub new {
 # for internal use only!
 # returns the SQL builder object
 # or creates it if it has not yet been created
-sub getSQLBuilder {
+sub getTransactionManager {
 	my Stats $self = shift;
 	
-	my SQLBuilder $SQLBuilder = $self->{SQLBuilder};
-	if (! $SQLBuilder) {
-		$SQLBuilder = SQLBuilder->new();
+	my DBTransactionManager $DBTransactionManager = $self->{DBTransactionManager};
+	if (! $DBTransactionManager) {
+		$DBTransactionManager = DBTransactionManager->new();
 	}
 	
-	return $SQLBuilder;
+	return $DBTransactionManager;
 }
 
 
 sub collectionStats {
 	my Stats $self = shift;
 
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	$sql->setSQLExpr("SELECT count(*), YEAR(created), MONTH(created) 
 			FROM collections GROUP BY YEAR(created), MONTH(created)");
 	$sql->executeSQL();
@@ -84,7 +84,7 @@ sub collectionStats {
 sub occurrenceStats {
 	my Stats $self = shift;
 
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	$sql->setSQLExpr("SELECT count(*), YEAR(created), MONTH(created) 
 			FROM occurrences GROUP BY YEAR(created), MONTH(created)");
 	$sql->executeSQL();

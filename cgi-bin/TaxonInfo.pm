@@ -6,7 +6,7 @@ use Globals;
 use Debug;
 
 use URLMaker;
-use SQLBuilder;
+use DBTransactionManager;
 use Taxon;
 
 use POSIX qw(ceil floor);
@@ -170,8 +170,8 @@ sub newCheckStartForm {
 	
 	$GLOBALVARS{session} = $s;
 	
-	my $sql1 = SQLBuilder->new(\%GLOBALVARS);
-	my $sql2 = SQLBuilder->new(\%GLOBALVARS);
+	my $sql1 = DBTransactionManager->new(\%GLOBALVARS);
+	my $sql2 = DBTransactionManager->new(\%GLOBALVARS);
 	
 	$sql1->setLimitExpr($LIMIT);
 	$sql2->setLimitExpr($LIMIT);

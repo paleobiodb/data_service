@@ -15,7 +15,7 @@ package Permissions;
 
 use strict;
 
-use SQLBuilder;
+use DBTransactionManager;
 use Debug;
 use CGI::Carp qw(fatalsToBrowser);
 
@@ -28,7 +28,7 @@ use fields qw(
 				readWriteCache
 				GLOBALVARS
 				session
-				SQLBuilder
+				DBTransactionManager
 				
 				date
 			);  # list of data members
@@ -36,7 +36,7 @@ use fields qw(
 # cache			:	reference to a cache hash of collection numbers and permissions.
 # date			:	stored for speed.. This object will never be alive more than a few seconds, so it's okay.
 # session		:	the session object passed in with new()
-# SQLBuilder	:	SQLBuilder object so we don't have to keep recreating it.
+# DBTransactionManager	:	DBTransactionManager object so we don't have to keep recreating it.
 			
 
 # Flags and constants
@@ -62,11 +62,11 @@ sub new {
 		return undef;
 	}
 	
-	# create SQLBuilder object
-	my $sql = SQLBuilder->new();
+	# create DBTransactionManager object
+	my $sql = DBTransactionManager->new();
 	# Note - be very careful - do it this way, otherwise we get an infinite loop.
 	$sql->setSession($session);
-	$self->{SQLBuilder} = $sql;  # store in data member
+	$self->{DBTransactionManager} = $sql;  # store in data member
 	
 	# create empty caches
 	my %emptyR = ();
@@ -152,7 +152,7 @@ sub queryDatabaseForReadPerm {
 	my $ses = $self->{session};
 	
 
-	my $sql = $self->{SQLBuilder};
+	my $sql = $self->{DBTransactionManager};
 	$sql->setSQLExpr("SELECT access_level, 
 						DATE_FORMAT(release_date,'%Y%m%d') rd_short,
 						research_group, authorizer 

@@ -5,7 +5,7 @@ use PBDBUtil;
 use Classification;
 use TimeLookup;
 use Globals;
-use SQLBuilder;
+use DBTransactionManager;
 
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
@@ -545,7 +545,7 @@ sub getDataForAuthorizer{
 sub getOccurrencesWhereClause {
 	my $self = shift;
 	
-	my $where = SQLBuilder->new();
+	my $where = DBTransactionManager->new();
 	$where->setWhereSeparator("AND");
 	
 	my $authorizer = $self->getDataForAuthorizer();
@@ -565,7 +565,7 @@ sub getOccurrencesWhereClause {
 sub getCollectionsWhereClause {
 	my $self = shift;
 	
-	my $where = SQLBuilder->new();
+	my $where = DBTransactionManager->new();
 	$where->setWhereSeparator("AND");
 	
 	my $authorizer = $self->getDataForAuthorizer();

@@ -12,7 +12,7 @@ use CGI::Carp qw(fatalsToBrowser);
 use Debug;
 use Globals;
 use Constants;
-use SQLBuilder;
+use DBTransactionManager;
 
 
 # I THINK THESE ARE BOGUS. THERE ARE NO SUCH METHODS/VARIABLES IN THIS MODULE
@@ -465,7 +465,7 @@ sub personNameForNumber {
 		return '';
 	}
 	
-	my $sql = SQLBuilder->new();
+	my $sql = DBTransactionManager->new();
 	my @result = $sql->getSingleSQLResult("SELECT name FROM person WHERE person_no = '$num'");
 	
 	if (@result) {

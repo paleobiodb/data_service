@@ -12,7 +12,7 @@ package Collection;
 
 use strict;
 
-use SQLBuilder;
+use DBTransactionManager;
 use Occurrence;
 use Debug;
 
@@ -26,7 +26,7 @@ use fields qw(
 				
 				reference_no
 				
-				SQLBuilder
+				DBTransactionManager
 							);  # list of allowable data fields.
 
 #	session				:	The current Session object, needed for permissions
@@ -52,15 +52,15 @@ sub new {
 # for internal use only!
 # returns the SQL builder object
 # or creates it if it has not yet been created
-sub getSQLBuilder {
+sub getTransactionManager {
 	my Collection $self = shift;
 	
-	my SQLBuilder $SQLBuilder = $self->{SQLBuilder};
-	if (! $SQLBuilder) {
-	    $SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
+	my DBTransactionManager $DBTransactionManager = $self->{DBTransactionManager};
+	if (! $DBTransactionManager) {
+	    $DBTransactionManager = DBTransactionManager->new($self->{GLOBALVARS});
 	}
 	
-	return $SQLBuilder;
+	return $DBTransactionManager;
 }
 
 
@@ -68,7 +68,7 @@ sub getSQLBuilder {
 sub setWithCollectionNumber {
 	my Collection $self = shift;
 		
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	if (my $input = shift) {
 		$self->{collection_no} = $input;
@@ -130,7 +130,7 @@ sub HTMLFormattedTaxonomicList {
 
 	my $occ = Occurrence->new($self->{GLOBALVARS});
 	
-	my $sql = $self->getSQLBuilder();	
+	my $sql = $self->getTransactionManager();	
 	$sql->setSQLExpr("SELECT collection_no, occurrence_no FROM occurrences 
 			 		WHERE collection_no = $collection_no");
 

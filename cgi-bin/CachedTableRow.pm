@@ -20,7 +20,7 @@ package CachedTableRow;
 use strict;
 use DBI;
 use DBConnection;
-use SQLBuilder;
+use DBTransactionManager;
 use Debug;
 use CGI::Carp qw(fatalsToBrowser);
 
@@ -40,7 +40,7 @@ use fields qw(
 			
 				row
 				
-				SQLBuilder
+				DBTransactionManager
 							);  # list of allowable data fields.
 
 
@@ -88,15 +88,15 @@ sub new {
 # for internal use only!
 # returns the SQL builder object
 # or creates it if it has not yet been created
-sub getSQLBuilder {
+sub getTransactionManager {
 	my CachedTableRow $self = shift;
 	
-	my $SQLBuilder = $self->{SQLBuilder};
-	if (! $SQLBuilder) {
-	    $SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
+	my $DBTransactionManager = $self->{DBTransactionManager};
+	if (! $DBTransactionManager) {
+	    $DBTransactionManager = DBTransactionManager->new($self->{GLOBALVARS});
 	}
 	
-	return $SQLBuilder;
+	return $DBTransactionManager;
 }
 
 
@@ -127,7 +127,7 @@ sub setUpdateEmptyOnly {
 sub fetchDatabaseRow {
 	my CachedTableRow $self = shift;
 	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	# if it doesn't exist, make one up
 	if (! $self->{where}) {
@@ -188,7 +188,7 @@ sub setDatabaseRow {
         return;
     }
     
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
     my $count;  # how many match in the db.
     
 	if (!$where) {

@@ -11,7 +11,7 @@ use Constants;
 
 use DBI;
 use DBConnection;
-use SQLBuilder;
+use DBTransactionManager;
 use URLMaker;
 use CGI::Carp qw(fatalsToBrowser);
 use Class::Date qw(date localdate gmdate now);
@@ -36,7 +36,7 @@ use fields qw(
 				parentName
 				
 				cachedDBRow
-				SQLBuilder
+				DBTransactionManager
 							);  # list of allowable data fields.
 
 						
@@ -55,15 +55,15 @@ sub new {
 # for internal use only!
 # returns the SQL builder object
 # or creates it if it has not yet been created
-sub getSQLBuilder {
+sub getTransactionManager {
 	my Opinion $self = shift;
 	
-	my $SQLBuilder = $self->{SQLBuilder};
-	if (! $SQLBuilder) {
-		$SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
+	my $DBTransactionManager = $self->{DBTransactionManager};
+	if (! $DBTransactionManager) {
+		$DBTransactionManager = DBTransactionManager->new($self->{GLOBALVARS});
 	}
 	
-	return $SQLBuilder;
+	return $DBTransactionManager;
 }
 
 
@@ -249,7 +249,7 @@ sub displayOpinionForm {
 	my $q = shift;
 	
 	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	my %fields;  # a hash of fields and values that
 				 # we'll pass to HTMLBuilder to pop. the form.
@@ -621,7 +621,7 @@ sub submitOpinionForm {
 		return;	
 	}
 	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	$sql->setSession($s);
 	
 	my $errors = Errors->new();
@@ -790,7 +790,7 @@ sub submitOpinionForm {
 			$own_opinion_no_clause = " AND opinion_no != " . $self->opinionNumber() . " ";
 		}
 		
-		my $sql = $self->getSQLBuilder();
+		my $sql = $self->getTransactionManager();
 		my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM opinions WHERE 
 		child_no = $child_no AND
 		ref_has_opinion = 'YES' AND reference_no = $reference_no $own_opinion_no_clause");

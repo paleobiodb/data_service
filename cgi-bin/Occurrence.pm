@@ -1,6 +1,5 @@
 #!/usr/bin/perl
 
-# created by rjp, 1/2004.
 # represents information about an occurrence
 # has methods to set the occurrence number,
 # and then to retrieve information about it
@@ -11,7 +10,7 @@ package Occurrence;
 use strict;
 
 use Taxon;
-use SQLBuilder;
+use DBTransactionManager;
 use Reference;
 use URLMaker;
 use CGI::Carp qw(fatalsToBrowser);
@@ -35,7 +34,7 @@ use fields qw(
 				
 				html
 				
-				SQLBuilder
+				DBTransactionManager
 							);  # list of allowable data fields.
 
 #	session				:	The current Session object, needed for permissions
@@ -72,15 +71,15 @@ sub new {
 # for internal use only!
 # returns the SQL builder object
 # or creates it if it has not yet been created
-sub getSQLBuilder {
+sub getTransactionManager {
 	my Occurrence $self = shift;
 	
-	my $SQLBuilder = $self->{SQLBuilder};
-	if (! $SQLBuilder) {
-	    $SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
+	my $DBTransactionManager = $self->{DBTransactionManager};
+	if (! $DBTransactionManager) {
+	    $DBTransactionManager = DBTransactionManager->new($self->{GLOBALVARS});
 	}
 	
-	return $SQLBuilder;
+	return $DBTransactionManager;
 }
 
 
@@ -88,7 +87,7 @@ sub getSQLBuilder {
 sub setWithOccurrenceNumber {
 	my Occurrence $self = shift;
 	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	if (my $input = shift) {
 		$self->{occurrence_no} = $input;
@@ -142,7 +141,7 @@ sub referenceNumber {
 sub collectionReferenceNumber {
 	my Occurrence $self = shift;
 
-	my $sql = SQLBuilder->new($self->{GLOBALVARS});
+	my $sql = DBTransactionManager->new($self->{GLOBALVARS});
 
 	return $sql->getSingleSQLResult("SELECT c.reference_no FROM 
 								collections c, occurrences o
@@ -199,7 +198,7 @@ sub buildReidList {
 	my @reidList = ();	# this is the list we'll save...
 	
 	my (@result, $year);	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	my $occ_no = $self->{occurrence_no};
 	my $taxon = Taxon->new($self->{GLOBALVARS});

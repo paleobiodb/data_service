@@ -19,7 +19,7 @@ use Constants;
 
 use DBI;
 use DBConnection;
-use SQLBuilder;
+use DBTransactionManager;
 use CGI::Carp qw(fatalsToBrowser);
 use Class::Date qw(date localdate gmdate now);
 use Errors;
@@ -49,7 +49,7 @@ use fields qw(
 						
 			taxaHash
 				
-			SQLBuilder
+			DBTransactionManager
 
 					);  # list of allowable data fields.
 
@@ -291,7 +291,7 @@ sub rank {
 	
 	if (! $self->{taxonRank}) {	
 		# if we haven't already fetched the rank, then fetch it.
-		my $sql = $self->getSQLBuilder();
+		my $sql = $self->getTransactionManager();
 	
 		my $r = $sql->getSingleSQLResult("SELECT taxon_rank FROM authorities WHERE taxon_no = $self->{taxonNumber}");
 	
@@ -401,31 +401,31 @@ sub URLForTaxonName {
 # returns the SQL builder object
 # or creates it if it has not yet been created
 # NOTE *** Be very careful not to call this whithin a method
-# which is *already* using SQLBuilder.. For example if you call
+# which is *already* using DBTransactionManager.. For example if you call
 # a method from a loop which itself calls  
-# getSQLBuilder, then you have a problem.
-sub getSQLBuilder {
+# getTransactionManager, then you have a problem.
+sub getTransactionManager {
 	my Taxon $self = shift;
 	
 	my $globals = $self->{GLOBALVARS};
 	my $ses = $globals->{session};
 	
 	if ($ses) {
-		Debug::dbPrint("getSQLBuilder, ses exists");
+		Debug::dbPrint("getTransactionManager, ses exists");
 		} else {
-		Debug::dbPrint("getSQLBuilder, no ses");
+		Debug::dbPrint("getTransactionManager, no ses");
 		}
 
 	
-	my $SQLBuilder = $self->{SQLBuilder};
-	if (! $SQLBuilder) {
-		Debug::dbPrint("getSQLBuilder creating sql builder...");
-		$SQLBuilder = SQLBuilder->new($self->{GLOBALVARS});
-		Debug::dbPrint("getSQLBuilder done creating sql builder...");
+	my $DBTransactionManager = $self->{DBTransactionManager};
+	if (! $DBTransactionManager) {
+		Debug::dbPrint("getTransactionManager creating sql builder...");
+		$DBTransactionManager = DBTransactionManager->new($self->{GLOBALVARS});
+		Debug::dbPrint("getTransactionManager done creating sql builder...");
 
 	}
 	
-	return $SQLBuilder;
+	return $DBTransactionManager;
 }
 
 
@@ -436,7 +436,7 @@ sub getTaxonNameFromNumber {
 	
 	if (my $input = shift) {
 
-		my $sql = $self->getSQLBuilder();
+		my $sql = $self->getTransactionManager();
 		
 		Debug::dbPrint("Taxon::getTaxonNameFromNumber 1");
 		my $tn = $sql->getSingleSQLResult("SELECT taxon_name FROM authorities 
@@ -457,7 +457,7 @@ sub getTaxonNameFromNumber {
 sub numberOfDBInstancesForName {
 	my Taxon $self = shift;
 	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM authorities WHERE taxon_name = '" . $self->{taxonName} . "'");
 
@@ -481,7 +481,7 @@ sub getTaxonNumberFromName {
 
 
 	if (my $input = shift) {
-		my $sql = $self->getSQLBuilder();
+		my $sql = $self->getTransactionManager();
 		
 		my $tn = $sql->getSingleSQLResult("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
 		Debug::dbPrint("getTaxonNumberFromName here1");
@@ -532,7 +532,7 @@ sub nameForRank {
 	
 	if ($id) {
 		# now we need to get the name for it
-		my $sql = $self->getSQLBuilder();
+		my $sql = $self->getTransactionManager();
 		return $sql->getSingleSQLResult("SELECT taxon_name FROM authorities WHERE taxon_no = $id");
 	}
 	
@@ -571,7 +571,7 @@ sub numberForRank {
 sub originalCombination {
 	my Taxon $self = shift;
 	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	my $tn = $self->taxonNumber();  # number we're starting with
 	
@@ -616,7 +616,7 @@ sub isOriginalCombination {
 sub createTaxaHash {
 	my Taxon $self = shift;
 
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	# first go up the hierarchy from the passed in taxon
 	# ie, go to the parent of the passed in taxon
@@ -632,7 +632,7 @@ sub createTaxaHash {
 	my $resultRef;  # sql query results
 	
 	# another sql object for executing subqueries.
-	my $subSQL = SQLBuilder->new($self->{GLOBALVARS});
+	my $subSQL = DBTransactionManager->new($self->{GLOBALVARS});
 	
 	# first, insert the current taxon into the hash
 	my $ownTaxonRank = $subSQL->getSingleSQLResult("SELECT taxon_rank FROM 
@@ -724,7 +724,7 @@ sub createTaxaHash {
 sub listOfChildren {
 	my Taxon $self = shift;
 
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	my $rank = $self->rankString(); # rank of the parent taxon
 	my $tn = $self->{taxonNumber};  # number of the parent taxon
 	my $tname = $self->taxonName();
@@ -861,20 +861,14 @@ sub moveNonBelongsToOpinionsToTaxon {
 	my Taxon $newChild = shift; # the passed taxon which we're
 								# moving opinions *to*
 	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	my $oldTaxonNo = $self->taxonNumber();
 	my $newTaxonNo = $newChild->taxonNumber();
 	
 	if ((!$oldTaxonNo) || (!$newTaxonNo)) { return FALSE; }
 	
-	# create a DBTransactionManager object to do this update on multiple
-	# rows.
-	my $dbt = DBTransactionManager->new($sql->dbh(), ($self->{GLOBALVARS})->{session});
-	
-	if (!$dbt) { return FALSE; }
-	
-	my $result = $dbt->getData("UPDATE opinions SET child_no = $newTaxonNo, 
+	my $result = $sql->getData("UPDATE opinions SET child_no = $newTaxonNo, 
 	modified = modified WHERE child_no = $oldTaxonNo 
 	AND status != 'belongs to'");
 	
@@ -901,7 +895,7 @@ sub displayAuthorityForm {
 	my $s = shift;
 	my $q = shift;
 	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	my %fields;  # a hash of fields and values that
 				 # we'll pass to HTMLBuilder to pop. the form.
@@ -1290,7 +1284,7 @@ sub submitAuthorityForm {
 		return;	
 	}
 	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	$sql->setSession($s);
 	
 	my $errors = Errors->new();
@@ -1893,7 +1887,7 @@ sub displayOpinionChoiceForm {
 		return;
 	}
 	
-	my $sql = $self->getSQLBuilder();
+	my $sql = $self->getTransactionManager();
 	
 	 
 	# This is kind of messy SQL, but it is actually pretty simple.  It grabs all
