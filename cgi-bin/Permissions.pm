@@ -166,6 +166,7 @@ sub queryDatabaseForReadPerm {
 	
 	my $access_level = $resultRef->[0];
 	my $rd_short = $resultRef->[1];
+
 	
 	
 	if ($rd_short < $self->{date}) {
@@ -187,7 +188,7 @@ sub queryDatabaseForReadPerm {
 					# and if the current authorizer authorized this record, then they can read it too.
 	}
 	
-	if (($access_level eq "database members") && ($session_auth ne "guest")){
+	if (($access_level eq "database members") && ($session_auth !~ /guest/i) && ($session_auth ne "")){
 		return 1;	# okay as long as user isn't a guest
 	}
 	
@@ -267,8 +268,8 @@ sub getReadRows {
 				if ( $row->{access_level} eq "the public" ) { $okToRead = "public access"; last; }
 	
 				# DB member?
-				if ( $row->{access_level} eq "database members" ) {
-					if ( $s->get("authorizer") ne "guest" ) { 
+				if ( $row->{access_level} =~ /database members/i ) {
+					if ( $s->get("authorizer") !~ /guest/i && $s->get("authorizer") ne "" ) { 
 						$okToRead = "db member"; 
 					} else {
 						$failedReason = "not db member";
