@@ -3,6 +3,33 @@
 //created by rjp, 1/2004.
 
 
+// pass this a taxon name as a string,
+// and it will look at the number of spaces to determine
+// the rank.
+//
+// 0 spaces = higher
+// 1 space  = species
+// 2 spaces = subspecies
+//
+// it will return a string, either "higher", "species", or "subspecies"
+// ** note, we can't tell the difference between a genus and a higher taxon
+// by just looking at the spacing.. so a genus name will return as "higher" as well. 
+function taxonRank(taxon) {
+	var hasOneSpace = /.+[ ]{1}.+/;
+	var hasTwoSpaces = /.+[ ]{2}.+/;
+	
+	if (hasTwoSpaces.test(taxon)) {
+		return "subspecies";	
+	}
+	
+	if (hasOneSpace.test(taxon)) {
+		return "species";	
+	}
+
+	return "higher";
+}
+
+
 //show a popup window with the passed URL.
 function tipsPopup (URL) {
 	window.open(URL, 'tips', 'toolbar=1,scrollbars=1,location=1,statusbar=0,menubar=0,resizable=1,width=640,height=480');
