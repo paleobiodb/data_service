@@ -23,6 +23,12 @@ use fields qw(
 				reference_no
 				genus_name
 				species_name
+				
+				reidList
+				latestClassNum
+				latestOrderNum
+				latestFamilyNum
+				
 				SQLBuilder
 							);  # list of allowable data fields.
 
@@ -31,7 +37,13 @@ use fields qw(
 #	reference_no		:	For this occurrence_no, figured out from database
 #	genus_name			:	
 #	species_name		:	 
-						
+#
+#	reidList			:	List created by buildReidList() which will be used by 
+#							formatAsHTML(), latestClassNum(), etc.
+#	latestClassNum		:	Only filled if the user has called buildReidList() first.
+#							Contains taxon_no for most recent reidentified class of this occurrence.
+#	latestOrderNum		:	Same as latestClassNum, but for order.
+#	latestFamilyNum		:	Same as latestClassNum, but for family.
 						
 
 # pass the current Session object.
@@ -106,6 +118,32 @@ sub referenceNumber {
 }
 
 
+# returns the taxon_no for the class of the most
+# recent reid.
+#
+# ** Note ** only works if the user has already
+# called buildReidList() first. 
+sub mostRecentReidClassNumber {
+	my Occurrence $self = shift;
+
+	return 0;
+}
+
+
+# same as mostRecentReidClassNumber, but for order.
+sub mostRecentReidOrderNumber {
+	my Occurrence $self = shift;
+
+	return 0;
+}
+
+# same as mostRecentReidClassNumber, but for family.
+sub mostRecentReidFamilyNumber {
+	my Occurrence $self = shift;
+
+	return 0;
+}
+
 
 
 
@@ -117,24 +155,26 @@ sub occurrenceDetailsLink {
 }
 
 
-# get HTML formatted occurrence entry
-# for entry in a table, ie, on the collections page under the listing of occurrences.
-sub formatAsHTML {
+# Builds a listing of reidentifications for this occurrence.
+# Basically, an array with each element being a reference to an array in
+# the format that we'll eventually return as HTML.
+#
+# IE, each row is: Class, Order, Family, Taxon, Reference, Abundance, Comments.
+sub buildReidList {
 	my Occurrence $self = shift;
 	
-	my (@result, $year, $html);	
+	my @reidList = ();	# this is the list we'll save...
+	
+	my (@result, $year);	
 	my $sql = $self->getSQLBuilder();
 	
 	my $occ_no = $self->{occurrence_no};
-	
 	my $taxon = TaxonHierarchy->new();
-	
 	
 	# initialize these to be empty..
 	my $taxClass = "";
 	my $taxOrder = "";
 	my $taxFamily = "";
-	
 	
 	# grab the author names for the first reference.
 	my $ref = Reference->new();
@@ -183,31 +223,14 @@ sub formatAsHTML {
 		$taxFamily = $taxon->nameForRank("family");
 	}
 
-	# Class	Order	Family	Taxon	Reference	Abundance	Comments
+	my @reidRow = ($taxClass, $taxOrder, $taxFamily,
+					"<A HREF=\"" . URLMaker::URLForTaxonName($result[2], $result[4]) .
+					"\">$result[1] $result[2] $result[3] $result[4]</A>",
+					"<A HREF=\"" . URLMaker::URLForReferenceNumber($result[8]) . "\">$authors</A>",
+					"$result[5] $result[6]",
+					$result[7] );
 	
-	# some HTML tags
-	my $TD = "TD nowrap";
-	my $style;
-	
-	# if a cell has a style (from a style sheet)
-	# this is used to make the entries which are indet non-italic, and the others italic.
-	if ($result[4] eq 'indet.') {
-		$style = "class=\"indet\""; 
-	} else {
-		$style = "class=\"nonindet\"";
-	}
-	
-	$html = "<TR>
-				<$TD>$taxClass</TD>
-				<$TD>$taxOrder</TD>
-				<$TD>$taxFamily</TD>
-				<$TD $style><A HREF=\"" . URLMaker::URLForTaxonName($result[2], $result[4]) .
-				"\">$result[1] $result[2] $result[3] $result[4]</A></TD>
-				<$TD><A HREF=\"" . URLMaker::URLForReferenceNumber($result[8]) . "\">$authors</A></TD>
-				<$TD>$result[5] $result[6]</TD>
-				<$TD>$result[7]</TD>
-			</TR>";
-	
+	push (@reidList, \@reidRow);	# add this row to the list of reids for this taxon.
 	
 	$sql->finishSQL();
 
@@ -218,7 +241,10 @@ sub formatAsHTML {
 	
 	# If no reids, then RETURN
 	if ($numReids <= 0) {
-		return $html;	
+		# save the list in a data field.
+		$self->{reidList} = \@reidList;
+		
+		return;	
 	}
 	
 	# if we make it to here, then we have 1 or more reids, stored
@@ -238,33 +264,65 @@ sub formatAsHTML {
 			$taxOrder = $taxon->nameForRank("order");
 			$taxFamily = $taxon->nameForRank("family");
 		}
-		
-		# if a cell has a style (from a style sheet)
-		# this is used to make the entries which are indet non-italic, and the others italic.
-		if ($result->[4] eq 'indet.') {
-			$style = "class=\"indet\""; 
-		} else {
-			$style = "class=\"nonindet\"";
-		}
-		
-		$html .= "\n\n<TR>
-				<$TD>$taxClass</TD>
-				<$TD>$taxOrder</TD>
-				<$TD>$taxFamily</TD>
-				<$TD $style>= <A HREF=\"" . URLMaker::URLForTaxonName($result->[2], $result->[4]) .
-					 "\">$result->[1] $result->[2] $result->[3] $result->[4]</A></TD>
-				<$TD><A HREF=\"" . URLMaker::URLForReferenceNumber($result->[7]) . "\">$authors</A></TD>
-				<$TD></TD>
-				<$TD>$result->[6]</TD>
-				</TR>";
 	
+		my @reidRow = ($taxClass, $taxOrder, $taxFamily,
+					"= <A HREF=\"" . URLMaker::URLForTaxonName($result->[2], $result->[4]) .
+					 "\">$result->[1] $result->[2] $result->[3] $result->[4]</A>",
+					"<A HREF=\"" . URLMaker::URLForReferenceNumber($result->[7]) . "\">$authors</A>",
+					"",
+					$result->[6]);
+	
+		push (@reidList, \@reidRow);	# add this row to the list of reids for this taxon.	
 		
 		$index++;
 	}
 	
 	$sql->finishSQL();
 	
+	# save the list in a data field.
+	$self->{reidList} = \@reidList;
+}
+
+
+# get HTML formatted occurrence entry
+# for entry in a table, ie, on the collections page under the listing of occurrences.
+sub formatAsHTML {
+	my Occurrence $self = shift;
 	
+	$self->buildReidList();
+	my $reidListRef = $self->{reidList};
+	
+	# Class	Order	Family	Taxon	Reference	Abundance	Comments
+	
+	# some HTML tags
+	my $TD = "TD nowrap";
+	my $style;
+	my $html;
+	
+	# loop through all rows in the reidList
+	# each of these will become a row of HTML code.
+	foreach my $row (@{$reidListRef}) {
+	
+		# if a cell has a style (from a style sheet)
+		# this is used to make the entries which are indet. non-italic, and the others italic.
+		$style = "class=\"nonindet\"";
+		if ($row->[3] =~ m/indet[.]/) {
+			$style = "class=\"indet\""; 
+		}
+		
+		
+		$html .= "<TR>
+				<$TD>$row->[0]</TD>
+				<$TD>$row->[1]</TD>
+				<$TD>$row->[2]</TD>
+				<$TD $style>$row->[3]</A></TD>
+				<$TD>$row->[4]</TD>
+				<$TD>$row->[5]</TD>
+				<$TD>$row->[6]</TD>
+			</TR>";		
+	}
+	
+
 	return $html;	
 }
 
