@@ -50,7 +50,7 @@ sub processLogin {
 
 	# We want them to specify both an authorizer and an enterer
 	# otherwise kick them out to the public site.
-	if (!(authorizer && enterer)) {
+	if (!($authorizer && $enterer)) {
 		return "";
 	}
 
@@ -73,12 +73,12 @@ sub processLogin {
 	# basically takes the part after the comma and puts it in the front..
 	# so "Sepkoski, J." becomes "J. Sepkoski"
 	if ($auth =~ /,/) {
-		$auth =~ s/^\s*(.*)\s*,\s*(.*)\s*$/\2 \1/;
+		$auth =~ s/^\s*(.*)\s*,\s*(.*)\s*$/$2 $1/;
 		$q->param(authorizer => $auth);
 	}
 	
 	if ($ent =~ /,/) {
-		$ent =~ s/^\s*(.*)\s*,\s*(.*)\s*$/\2 \1/;
+		$ent =~ s/^\s*(.*)\s*,\s*(.*)\s*$/$2 $1/;
 		$q->param(enterer => $ent);
 	}
 	
@@ -164,7 +164,7 @@ sub processLogin {
 			$self->{authorizer_no} = $results[0];
 			
 			$sth->execute($enterer);
-			my @results = $sth->fetchrow_array();
+			@results = $sth->fetchrow_array();
 			$self->{enterer_no} = $results[0];
 			
 			$sth->finish();
