@@ -37,7 +37,7 @@ my $AITOP = 580;
 
 my %coll_count = ();
 
-sub acos { atan2( sqrt(1 - $_[0] * $_[0]), $_[0] ) }
+sub acos { my $a = ($_[0] > 1.0) ? 1.0 : $_[0]; atan2( sqrt(1 - $a * $a), $a ) }
 sub tan { sin($_[0]) / cos($_[0]) }
 
 # returns great circle distance given two latitudes and a longitudinal offset
