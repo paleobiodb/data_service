@@ -4623,7 +4623,7 @@ sub displayTaxonomyEntryForm	{
 		# Retrieve the authorizer name (needed below)
 		my $sql = "SELECT name FROM person WHERE person_no=";
 		$sql .= $authorityRow{'authorizer_no'};
-		$authorityRow{'authorizer'} = @{$dbt->getData($sql)}[0]->{authorizer};
+		$authorityRow{'authorizer'} = @{$dbt->getData($sql)}[0]->{name};
 
 		# Retrieve the type taxon name or type specimen name, as appropriate
 		if ( $authorityRow{'type_taxon_no'} )	{
