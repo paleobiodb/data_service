@@ -14,6 +14,7 @@ use URLMaker;
 use CGI::Carp qw(fatalsToBrowser);
 use Class::Date qw(date localdate gmdate now);
 use CachedTableRow;
+use Rank;
 
 
 use fields qw(	
@@ -92,7 +93,7 @@ sub opinionNumber {
 
 
 # the parent_no is the parent in a relationship such as
-# recombined_as.  It's the *new* one.
+# recombined as.  It's the *new* one.
 sub parentNumber {
 	my Opinion $self = shift;
 
@@ -194,6 +195,11 @@ sub formatAsHTML {
 
 
 
+# names of radio buttons, etc. used in the form.
+use constant BELONGS_TO => 'belongs to';
+use constant RECOMBINED_AS => 'recombined as';
+use constant INVALID1 => 'invalid1';
+use constant INVALID2 => 'invalid2';
 
 
 
@@ -209,6 +215,7 @@ sub displayOpinionForm {
 	my $hbo = shift;
 	my $s = shift;
 	my $q = shift;
+	
 	
 	my $sql = $self->getSQLBuilder();
 	
@@ -391,7 +398,7 @@ sub displayOpinionForm {
 	my @synArray = ('subjective synonym of', 'objective synonym of', 'homonym of','replaced by','corrected as');
 	my @nomArray = ('nomen dubium','nomen nudum','nomen oblitem', 'nomen vanum');
 	
-	my @valid = ('belongs to', 'recombined as', 'revalidated');
+	my @valid = (BELONGS_TO, RECOMBINED_AS, 'revalidated');
 
 	
 	if ($fields{status} ne '') {
@@ -403,24 +410,24 @@ sub displayOpinionForm {
 				# "Invalid and no other name can be applied"
 				
 				$fields{'taxon_status_invalid2'} = 'checked';
-				$fields{taxon_status} = 'invalid2';
+				$fields{taxon_status} = INVALID2;
 				
 			} else {
 				# else, we should pick the invalid1 radio button.
 				# "Invalid and another name should be used"
 				
 				$fields{'taxon_status_invalid1'} = 'checked';
-				$fields{taxon_status} = 'invalid1';
+				$fields{taxon_status} =  INVALID1;
 			}
 		} else {
 			# it must be a valid status
 	
-			if ($fields{status} eq 'recombined as') {
+			if ($fields{status} eq RECOMBINED_AS) {
 				$fields{'taxon_status_recombined_as'} = 'checked';
-				$fields{taxon_status} = 'recombined_as';
+				$fields{taxon_status} = RECOMBINED_AS;
 			} else {
 				$fields{taxon_status_belongs_to} = 'checked';
-				$fields{taxon_status} = 'belongs_to';
+				$fields{taxon_status} = BELONGS_TO;
 			}
 		}
 	}
@@ -484,7 +491,7 @@ sub displayOpinionForm {
 			push(@nonEditables, 'parent_taxon_name2');
 		}
 		
-		if ($fields{'status'} ne 'recombined as') {
+		if (($fields{'status'} ne RECOMBINED_AS) || ($fields{status} ne BELONGS_TO)) {
 			push(@nonEditables, 'diagnosis');
 		}
 				
@@ -740,14 +747,67 @@ sub submitOpinionForm {
 	
 	
 	
+	# Set up a few variables to represent the state of the form..
+	
+	# the taxon_status radio is in ('belongs to', 'recombined as', 'invalid1', 'invalid2).
+	my $taxonStatusRadio = $q->param('taxon_status');
+	
+	# figure out the name of the child taxon.
+	my $childTaxon = Taxon->new();
+	$childTaxon->setWithTaxonNumber($q->param('taxon_no'));
+	my $childTaxonName = $childTaxon->taxonName();
+	my $childRank = Rank->new($q->param('taxon_rank'));
+	
+	# figure out the name of the parent taxon.
+	# This is dependent on the taxonStatusRadio value
+	my $parentTaxonName;
+	my $parentTaxon = Taxon->new();
+	my $parentRank;
+	
+	if ($taxonStatusRadio eq BELONGS_TO) {
+		# if this is the radio button, then the parent taxon depends
+		# on whether the child is a higher taxon or not.
+		if ($childRank->isHigher()) {
+			$parentTaxonName = $q->param('parent_taxon_name');	
+		} else {
+			# it's a species or subspecies, so just grab the genus
+			# name from the child taxon..
+			
+			$parentTaxonName = Validation::genusFromString($childTaxonName);
+			Debug::dbPrint("we're here and parentTaxonName = $parentTaxonName");
+		}		
+	} elsif ($taxonStatusRadio eq RECOMBINED_AS) {
+		$parentTaxonName = $q->param('parent_taxon_name');
+	} elsif ($taxonStatusRadio eq INVALID1) {
+		$parentTaxonName = $q->param('parent_taxon_name2');
+	}	
+	
+	
+	# figure out the parent rank.
+	$parentRank = Rank->new();
+	$parentRank->setWithTaxonNameFullLookup($parentTaxonName);
+	
+	
+	# make sure it's valid, if it exists.
+	
+	if ($parentTaxonName) {
+		$parentTaxon->setWithTaxonName($parentTaxonName);
+		
+		if (! ($parentRank->isValid())) {
+			$errors->add("The parent taxon name '" . $parentTaxonName . "' is not valid");
+		}
+		
+		if (! $parentTaxon->taxonNumber()) {
+			$errors->add("The parent taxon '" . $parentTaxonName ."' doesn't exist in our database.  Please go back and enter an authority record for the parent taxon <i>before</i> entering this opinion.");	
+		}
+	}
+
+	
 	# We have to do different things depending on which status radio button
 	# the user selected.
 	
 	# They must select a radio button, otherwise, give them an error message
 
-	my $taxonStatusRadio = $q->param('taxon_status');
-	my $parentTaxonName;
-	my $parentTaxonNumber;
 	
 	if (! $taxonStatusRadio) {
 		$errors->add("You must select a status radio button before submitting this record");	
@@ -759,46 +819,37 @@ sub submitOpinionForm {
 	# on which radio button they chose and also sets the 'status' field to the
 	# correct value for the database table.
 	
-	if ($taxonStatusRadio eq 'belongs_to') {
-		$fieldsToEnter{status} = 'belongs to';
+	if ($taxonStatusRadio eq BELONGS_TO) {
+		$fieldsToEnter{status} = BELONGS_TO;
 		
-		# a little bit tricky here.. If the child rank is species or subspecies,
-		# then the belongs_to radio button will read "belongs to genus genus_name",
-		# but we have no input field... 
-		
-		if (($q->param('taxon_rank') eq 'species') || ($q->param('taxon_rank') eq 'subspecies')) {
-			# grab the child taxon name
-			my $child = Taxon->new();
-			$child->setWithTaxonNumber($q->param('taxon_no'));
-			
-			$parentTaxonName = $child->taxonName();
-			# replace the parent taxon name with the genus...
-			$parentTaxonName =~ s/^(\w+)\b.*$/$1/;			
-		} else {
-			# it's not a species or subspecies
-		
-			# then we need to check that they entered a valid taxon 
-			# in the parent_taxon_name field.
-			$parentTaxonName = $q->param('parent_taxon_name');
+		# for belongs to, the parent rank should always be higher than the child rank.
+		if (! ($parentRank->isHigherThan($childRank)) ) {
+			$errors->add("The parent taxon rank (" . $parentRank->rank() . ") must be higher than the child taxon rank (" . $childRank->rank() . ")");	
 		}
-
 		
-	} elsif ($taxonStatusRadio eq 'recombined_as') {
-		$fieldsToEnter{status} = 'recombined as';
+	} elsif ($taxonStatusRadio eq RECOMBINED_AS) {
+		$fieldsToEnter{status} = RECOMBINED_AS;
 		
-		# then we need to check that they entered a valid taxon 
-		# in the parent_taxon_name field.
-		$parentTaxonName = $q->param('parent_taxon_name');
+		if (! ($parentRank->isSpecies())) {
+			$errors->add("The parent rank for a recombined relationship must be species");	
+		}
 		
-	} elsif ($taxonStatusRadio eq 'invalid1') {
-		# check that they entered a valid taxon in the parent_taxon_name2 field.
-		$parentTaxonName = $q->param('parent_taxon_name2');
+		if ($parentTaxonName eq $childTaxonName) {
+			$errors->add("The parent taxon and child taxon can't be the same for a recombined relationship");	
+		}
+		
+	} elsif ($taxonStatusRadio eq INVALID1) {
 		
 		# in this case, the status is not "invalid1", it's whatever they
 		# chose in the synonym popup.
 		$fieldsToEnter{status} = $q->param('synonym');
 		
-	} elsif ($taxonStatusRadio eq 'invalid2') {
+		# the parent rank should be the same as the child rank
+		if (!($parentRank->isEqualTo($childRank))) {
+			$errors->add("For a synonym, the parent rank should match the child rank");
+		}
+		
+	} elsif ($taxonStatusRadio eq INVALID2) {
 		
 		# in this case, the status is not "invalid2", it's whatever they
 		# chose in the nomen popup.
@@ -806,77 +857,34 @@ sub submitOpinionForm {
 	} 
 	
 	
-	# we're required to have a parent for EVERY instance except 
+	# we're required to have a parent taxon for EVERY instance except 
 	# for a nomen whatever...
-	if ($taxonStatusRadio !~ m/nomen/) {
+	if ($taxonStatusRadio ne INVALID2) {
 		if (! $parentTaxonName) {
 			$errors->add("You must enter a parent taxon name");
 		}
 	}
 	
 	
+	
 	# The diagnosis field only applies to the case where the status
 	# is belongs to or recombined as.
-	if ( (! (($taxonStatusRadio eq 'recombined_as') ||
-			($taxonStatusRadio eq 'belongs_to') )) && ($q->param('diagnosis'))) {
+	if ( (! (($taxonStatusRadio eq RECOMBINED_AS) ||
+			($taxonStatusRadio eq BELONGS_TO) )) && ($q->param('diagnosis'))) {
 		$errors->add("Don't enter a diagnosis unless you choose the belongs to or recombined as  radio button.");
 	}
 	
 	
-	
-	if ($parentTaxonName) {
-		# check the parent taxon name to make sure it's valid and exists
-		# in the database.
-		my $parentRankFromSpaces = Validation::taxonRank($parentTaxonName);
-		if ($parentRankFromSpaces eq 'invalid') {
-			$errors->add("Invalid parent taxon name, please check spacing and capitalization");	
-		}
-	
-		if ($taxonStatusRadio eq 'invalid1') {
-			my $childRank = $q->param('taxon_rank');
-			
-			if ($parentRankFromSpaces eq 'higher') {
-				if (($childRank eq 'species') || ($childRank eq 'subspecies')) {
-					$errors->add("The rank of your child taxon ($childRank) doesn't match the rank of your parent taxon");	
-				}
-					
-			} else {
-				# parent rank is not higher
-				if ($childRank ne $parentRankFromSpaces) {
-					$errors->add("The rank of your child taxon ($childRank) doesn't match the rank of your parent taxon ($parentRankFromSpaces)");
-				}
-			}
-		}
-		
-		
-		# **NOTE: we should also check that the parent taxon rank for the
-		# belonging to field is higher than the child taxon rank.. However, this
-		# is difficult to do until the Rank class is finished.
-	
-		# see if the parent name exists in the authorities table
-	
-		my $parentTaxon = Taxon->new();
-		$parentTaxon->setWithTaxonName($parentTaxonName);
-		$parentTaxonNumber = $parentTaxon->taxonNumber();
-	
-	
-		if (! $parentTaxonNumber) {
-			$errors->add("The parent taxon '" . $parentTaxonName . "' doesn't exist in our database.  Please enter an authority record for the parent taxon name <i>before</i> entering this opinion.");	
-		}
-		
-	}
-	
-	
 
-	
+
 	# assign the parent_no and child_no fields if they don't already exist.
 	if (!$fieldsToEnter{child_no} ) { $fieldsToEnter{child_no} = $q->param('taxon_no'); }
 	
-	# if we have figured out a parentTaxonNumber from the parent_name, then we
+	# if we have a parent name, then we
 	# want to use it.. Otherwise, it would be impossible to change the parent
 	# of an opinion.
-	if ($parentTaxonNumber) {
-		$fieldsToEnter{parent_no} = $parentTaxonNumber; 
+	if ($parentTaxon) {
+		$fieldsToEnter{parent_no} = $parentTaxon->taxonNumber(); 
 	}
 
 
@@ -898,12 +906,11 @@ sub submitOpinionForm {
 	}
 	
 	
-	Debug::dbPrint("new entry = $isNewEntry");
-	Debug::dbPrint("fields to enter = ");
-	Debug::printHash(\%fieldsToEnter);
+	#Debug::dbPrint("new entry = $isNewEntry");
+	#Debug::dbPrint("fields to enter = ");
+	#Debug::printHash(\%fieldsToEnter);
 	#Debug::dbPrint($editAny);
 	#return;
-	
 
 	
 	# at this point, we should have a nice hash array (%fieldsToEnter) of
