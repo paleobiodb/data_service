@@ -68,7 +68,7 @@
 		if ( ! overrideEntry ( value ) && ! overridePulldown ( pulldown ) ) {
 			// Species must be all lowercase, no numbers
  			if ( lowercase.test( value ) == false ) {
-				return "Species name \"" + value + "\" on row " + ( i + 1 ) + " must be lowercase, no numbers, no other characters.\n"; 
+				return "Species name \"" + value + "\" on row " + ( i + 1 ) + " must be lower case, no numbers, no other characters.\n"; 
 			}
 
 			// Also check for 'sp' without . typo
