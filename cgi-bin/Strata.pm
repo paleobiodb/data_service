@@ -122,8 +122,7 @@ sub displayStrataSearch{
     $conflict_found = checkConflict(\@dataRows,$q);
     if ($conflict_found) {
         displayStrataChoice($q, $conflict_found, \@dataRows);
-	    print main::stdIncludes("std_page_bottom");
-        exit;    
+        return;    
     }
 
     # build data structures, looped through later
@@ -400,7 +399,6 @@ sub displayStrataChoice() {
     print "<p>&nbsp;</p>";
 
 	print main::stdIncludes("std_page_bottom");
-    exit;    
 }
 
 1;
