@@ -1,0 +1,101 @@
+    <script language="JavaScript">
+    <!-- Begin
+
+	// This is a handy little function for seeing what properties an object has
+	function showProperties ( obj ) {
+		var result = "";
+
+		for ( var i in obj ) {
+			result += "o." + i + " = " + obj[i] + "<BR>\n";
+		}
+		document.write ( result );
+	}
+
+
+    function checkForm() {
+		var frm = document.forms[0];
+		var errors = "";
+
+		// checks
+		if ( frm.name.value == "" ) errors += "You must specify the person's name.\n";
+		if ( frm.email.value == "" ) errors += "You must specify the E-mail address.\n";
+
+		if ( frm.is_authorizer[0].checked ) {
+			if ( frm.plaintext.value == "" ) errors += "Authorizers must have a password.\n";
+		}
+
+		// Report errors
+		if ( errors != "" ) {
+			errors = "   !!! Errors detected !!!   \n" + 
+					 "---------------------------------------\n\n" +
+					 errors + "\n" +
+					 "---------------------------------------\n\n" +
+					 "See the tip sheet for instructions.";
+			alert ( errors );
+			return false;
+		} 
+		return true;
+	}
+
+    //  End -->
+    </script>
+
+<form action="admin.pl" method="POST" onSubmit="return checkForm();">
+<input type=hidden name="action" value="processPerson%%type%%">
+<input id="person_no" type="hidden">
+
+
+<div align="center">
+<h2>Person Form</h2>
+<table border=0 cellpadding=4 cellspacing=1 bgcolor="Silver">
+
+<tr>
+	<td bgcolor="White">Name: *<BR><font size="1">e.g. J. Smith</font></td>
+	<td bgcolor="White"><input id="name" type="text" maxlength="64"></td>
+</tr>
+<tr>
+	<td bgcolor="White" nowrap>Reversed Name:</td>
+	<td bgcolor="White"><input id="reversed_name" type="text" value="" maxlength="64"></td>
+</tr>
+<tr>
+	<td bgcolor="White">Password: </td>
+	<td bgcolor="White"><input id="plaintext" type="text" value="" maxlength="20"></td>
+</tr>
+<tr>
+	<td bgcolor="White" nowrap>E-mail address: *</td>
+	<td bgcolor="White"><input id="email" type="text" value="" size="30" maxlength="255"></td>
+</tr>
+<tr>
+	<td bgcolor="White" nowrap>Is authorizer?</td>
+	<td bgcolor="White">
+		<input id="is_authorizer" type="radio" name="is_authorizer" value="1"> Yes
+		<input id="is_authorizer" type="radio" name="is_authorizer" value="0" checked> No
+	</td>
+</tr>
+<tr>
+	<td bgcolor="White" nowrap>Is active?</td>
+	<td bgcolor="White">
+		<input id="active" type="radio" name="active" value="1" checked> Yes
+		<input id="active" type="radio" name="active" value="0"> No
+	</td>
+</tr>
+
+<tr>
+	<td bgcolor="White" rowspan="5" valign="top">Groups:</td>
+</tr>
+<tr><td bgcolor="White"><input id="marine_invertebrate" type="checkbox" name="marine_invertebrate" value="1"> Marine Invertebrate</td></tr>
+<tr><td bgcolor="White"><input id="paleobotany" type="checkbox" name="paleobotany" value="1"> Paleobotany</td></tr>
+<tr><td bgcolor="White"><input id="taphonomy" type="checkbox" name="taphonomy" value="1"> Taphonomy</td></tr>
+<tr><td bgcolor="White"><input id="vertebrate" type="checkbox" name="vertebrate" value="1"> Vertebrate</td></tr>
+
+<tr>
+	<td bgcolor="White" colspan="2" align="center">
+	<input type="submit" value="%%type%% person">	
+	</td>
+</tr>
+</table>
+</div>
+
+<p align="center">* == required field</p>
+
+</form>

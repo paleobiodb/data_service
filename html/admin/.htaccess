@@ -1,0 +1,6 @@
+AuthUserFile /home/httpd/html/admin/.passwd
+AuthGroupFile /dev/null
+AuthName "Paleobiology Database Administration"
+AuthType Basic
+
+require user admin

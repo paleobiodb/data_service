@@ -1,0 +1,169 @@
+<HTML> <HEAD> <TITLE>Paleobiology Database Data Entry: Paleoenvironment Tips</TITLE> </HEAD> <BODY BGCOLOR="white" BACKGROUND="PDbg.gif" TEXT=BLACK LINK="#0033FF" VLINK="#990099">
+
+<h2 ALIGN="CENTER">Basic Data Entry Form Tip Sheet:<BR> Paleoenvironment/Tectonic Setting</h2>
+
+<CENTER>
+<I>This page was written by Steve Holland (<a href="mailto:stratum@gly.uga.edu">stratum@gly.uga.edu</A>).</I>
+</CENTER>
+<P>
+
+
+<UL>
+	<LI><h3><A HREF="#Paleoenvironment">Paleoenvironments</A></h3>
+	<UL>
+		<LI><H3><A HREF="#Terrestrial">Terrestrial and Fresh-Water Environments</A></H3>
+		<LI><H3><A HREF="#SiliciMarine">Siliciclastic Marine Environments</A></H3>
+		<UL>
+			<LI><H4><A HREF="#Paralic">Paralic</A></H4>
+			<LI><H4><A HREF="#NonDeltaicCoastal">Non-Deltaic Coastal</A></H4>
+			<LI><H4><A HREF="#DeltaicCoastal">Deltaic Coastal</A></H4>
+			<LI><H4><A HREF="#DeepWater">Deep-Water</A></H4>
+		</UL>
+		<LI><H3><A HREF="#Carbonate">Carbonate Marine Environments</A></H3>
+	</UL>
+	<LI><h3><A HREF="#TectonicSetting">Tectonic Settings</A></h3>
+	<LI><h3><A HREF="#Glossary">Glossary of commonly used terms</A></h3>
+</UL>
+
+
+<HR> 
+<A NAME="Paleoenvironment"></A><h2>Paleoenvironment</h2>
+
+<h3>General comment on facies interpretations</h3><P>
+
+Facies interpretations are best made from a combination of lithologic features and geologic context.  The lithologic features (rock type, sedimentary structures, etc.) of any given facies may commonly be very similar to those of another facies.  In cases like these, geologic context becomes important. Attention should be paid to overlying and underlying facies, but only where the contacts with those facies are gradational.  Upward-shallowing is the most common stratigraphic motif, so underlying facies are generally deeper and overlying facies are generally shallower.  Where contacts between facies are sharp, such as at flooding surfaces and sequence boundaries, context is much less informative and should not be relied upon.  Paleogeographic context can also be important where the geographic position of a given facies belt can be evaluated relative to surrounding facies belts.  Again, in these conditions, a given facies interpretation can be checked on its regional context.<P>
+
+<HR>
+
+<A NAME="Terrestrial"></A><h3>Terrestrial and Fresh-water</h3><P>
+Terrestrial and aquatic environments are limited to those without marine influence<P>
+
+<B>Cave</B><P> Accumulations of sediments within caves. <P>
+<B>Fissure</B><P> Accumulations of sediments within non-cave fissures. <P>
+<B>Eolian</B><P> All eolian environments, including carbonate and siliciclastic settings.  Includes dune and interdune areas.<P>
+<B>Tar</B><P> Self-explanatory. <P>
+<B>Volcanic</B><P> Includes all volcanic depositional settings in terrestrial and aquatic settings. <P>
+<B>Lacustrine</B><P> All fresh-water lake deposits, including ox-bows and alkaline lakes. Includes lakes with carbonate deposition.<P>
+<B>Alluvial Fan</B><P> Steep-gradient alluvial environments dominated by debris flow and braided stream deposition. <P>
+<B>Fluvial undifferentiated</B><P> Includes all fluvial environments, both channel and overbank.  Use only when finer divisions cannot be recognized. <P>
+<B>Fluvial-deltaic undifferentiated</B><P> Includes all fluvial environments (channel and overbank) that are known to be associated with a marine deltaic setting. <P>
+<B>Fluvial-lacustrine undifferentiated</B><P> Includes all fluvial environments (channel and overbank) that are known to be associated with a major lacustrine system, that is, more than just small floodplain lakes and oxbows. <P>
+<B>Fluvial channel</B><P> Limited to in-channel fluvial deposits.  Includes all channel morphologies: high and low-sinuosity meandering streams, straight streams, anastomosing streams, and braided streams.  Includes all types of in-channel and bank-attached bars (e.g., point bars), as well as channel lag settings. <P>
+<B>Overbank</B><P> Includes all non-channel fluvial environments, but here excludes eolian, lacustrine, and mire settings.  Includes levee, crevasse splay, and paleosols. In overbank or floodplain settings, if fossils are found in coal or peat, use mire.  If fossils are found from eolian settings on a floodplain, use eolian.  Likewise, if fossils are found from a lacustrine deposit located within a floodplain (e.g., ox-bow lake), use lacustrine.<P>
+<B>Mire</B><P> All <I>in situ</I> coal and peat-forming settings. <P>
+
+<HR>
+
+<A NAME="SiliciMarine"></A><h3>Siliciclastic Marine</h3><P>
+
+
+<A NAME="Paralic"></A><H3>Siliciclastic Paralic</H3><P>
+
+Paralic environments include coastal settings characterized by both marine and freshwater influence.  <P>
+
+<B>Indeterminate</B><P> Should be applied for coastal settings that are characterized by brackish water conditions, known to lie landward of a barrier-island system, but in which the estuarine / Lagoonal distinction cannot be made.  In general, this can be a difficult distinction to make without regional mapping, so many paralic environments might be considered indeterminate.  The distinction lies largely in the orientation of the body of the facies.  Coast-parallel systems would be considered Lagoonal, whereas coast-perpendicular systems would be considered estuarine/bay.  Some Lagoonal systems pass laterally into estuarine/bay systems, further complicating the distinction between these two in the rock record.<P>
+
+<B>Estuarine/Bay</B><P> Estuarine Systems have three divisions, but typically collections will be made from only one of these three systems.  The Outer Zone is heavily affected by waves and tides, and as such, will be relatively coarse-grained and contain primarily sands with variable amounts of shell material. Large-scale tabular and trough crossbedding is common and may display bidirectional paleocurrent indicators.  The amount of bioturbation is commonly minor.  Marine to brackish fauna is typical of the Outer Zone.  The Middle Zone represents the broad central portion of an estuary and is relatively protected from waves, tides, and fluvial influence.  Mixing of salt and fresh-water favors flocculation of clays; consequently the Middle Zone is predominantly mudstone. Storm events may generate thin beds of rippled sandstones and siltstones, but these will generally form a minor portion of the facies.  Bioturbation is generally light in the Middle Zone compared to offshore and some Prodelta settings and the fauna will suggest brackish water conditions.  Middle Zone facies may also include coals from prograding salt marshes on the flanks of the estuary.  The Inner Zone of the estuary is strongly influenced by fluvial conditions.  Typically, small bayhead deltas build out into the estuary within the inner zone and form several-meter-thick coarsening upward successions.  Such bayhead deltas are characterized by basal mudstones, overlain by thinly interbedded mudstones and siltstones & sandstones, which are in turn overlain by progressively thicker-bedded sandstones and possibly conglomerates.  Sandstones will contain small-scale unidirectional ripples and cross-bedding, some minor planar lamination, and minor or no bioturbation. Coals may also be present at the top of these coarsening-upward successions from prograding marshes and swamps.  In terms of regional context, the Inner Zone passes up depositional dip into fluvial and coastal plain facies. <P>
+
+<B>Lagoonal</B><P> Contains many of the same divisions as Estuarine/bay systems, but the overall orientation of the Lagoonal system is coast-parallel, rather than coast-perpendicular.  Lagoonal settings may range from hypersaline to hyposaline conditions, and some may be characterized by normal marine conditions, depending on the amount of tidal flushing.  At their seaward side, sands supplied from the adjacent barrier island and tidal inlets predominate and will share features of the Outer Zone of the estuary.  The bulk of the Lagoonal system will consist of sediments similar to the Middle Zone of the estuary.  The landward side of the Lagoonal system may be characterized by coals from prograding salt marshes and swamps, but may also contain small, thin bayhead deltas from small rivers feeding into the lagoon. <P>
+
+<HR>
+
+<A NAME="NonDeltaicCoastal"></A><H3>Siliciclastic Non-Deltaic Coastal</H3><P>
+
+<B>Indeterminate</B><P> Non-deltaic coastal facies are sufficiently well-established that the indeterminate category should be rarely used, and perhaps only when the crudest lithologic data is not available.  Even a simple sand-shale ratio should be enough to choose from the environments below.<P>
+
+<B>Foreshore</B><P> Sandstone, characterized by gently seaward-dipping planar lamination.  However, depending on the size and orientation of the outcrop, this dip may not be apparent and the rock may simply be described as planar-laminated sandstone.  Bioturbation generally light and consisting of vertical burrows. The thickness of this facies should approximate tidal range, so should be no more than a few meters thick.  Commonly overlain by coal.<P>
+
+<B>Shoreface</B><P> Sandstone, with large-scale trough cross-bedding.  May also contain intervals of large-scale tabular cross-bedding and burrowed sandstone. Paleocurrents may be complicated and multi-modal. Bioturbation common, although cross-bedding is usually the dominant feature.  Facies overlain by Foreshore in conformable successions.<P>
+
+<B>Lower Shoreface / Transition Zone</B><P> Interbedded sandstone and shale, typically in roughly equal proportions.  Sandstone beds commonly display large-scale or small-scale hummocky cross-stratification, but may also display large-scale trough cross bedding, vortex (wave) ripples, and planar lamination. Storm beds are the dominant feature of the Lower Shoreface, and many beds may contain prominent sole marks, including gutter casts, groove casts, burrow casts, and a variety of bipolar prod marks.  Bioturbation tends to be more common here than in Shoreface, which overlies this facies in conformable successions.<P>
+
+<B>Offshore</B><P> Dominantly shale, but may contain some thin siltstone & sandstone beds.  Siltstone & sandstone beds deposited as storm beds (see Lower Shoreface for list of features).  Shales may be intensely bioturbated if bottom waters are oxygen-rich or they may be laminated and dark-colored if bottom conditions are dysoxic.  Lower Shoreface overlies the Offshore in conformable successions, thus distal Offshore facies tend to have fewer and thinner sandstone storm beds than the proximal Offshore, where it grades into the Lower Shoreface.<P>
+
+<HR>
+
+<A NAME="DeltaicCoastal"></A><H3>Siliciclastic Deltaic Coastal</H3><P>
+
+Common classifications of deltaic systems recognize three end-members: river-dominated, tide-dominated, and wave-dominated.  Tide-dominated deltas are largely associated with Estuarine systems and are lumped with them above. Wave-dominated deltas are difficult to distinguish from siliciclastic non-deltaic coasts and should therefore be lumped with those settings above. The remaining deltaic setting, river-dominated deltas, is treated here.<P>
+
+<B>Indeterminate</B><P> Category should not be commonly used, and generally should be necessary only when lithologic information is extremely scarce and of poor quality.  Interdistributary bay and prodelta are easily confused, which is possibly the strongest reason for using this indeterminate category.  Delta front settings can be distinguished from the interdistributary bay and prodelta on gross lithology alone.  <P>
+
+<B>Delta Plain</B><P> Generally fine-grained, mudstone dominated facies, but containing channel sandstones and crevasse splays.  Very similar to overbank environment on terrestrial and freshwater list.  However, channel sands in the delta plain environment generally have marine influence, usually manifested by <I>Teredolites</I>, tidally-modified bedforms, paired clay drapes, etc.  Paleosols in delta plain settings tend to be more hydromorphic than those from floodplains, although this distinction is not consistent and should not be used to distinguish these two settings.  High-water table may also be reflected in abundance of mire and lacustrine facies.<P>
+
+<B>Interdistributary Bay</B><P> Generally fine-grained, mudstone dominated facies. May contain thin sandstones supplied as crevasse splays, characterized by an erosional bases, planar lamination, and current ripples, which may be climbing. Thin sandstone stormbeds may also be present (see Lower Shoreface for features). Small bay-head deltas that form coarsening-upward successions may also be found (see Inner Zone of Estuarine/Bay for details).  Easily confused with Prodelta settings, but can be distinguished on several criteria.  Interdistributary bay sediments may be closely associated with subaerial exposure features, such as coal beds, rooted horizons, tracked horizons, and paleosols.  Interdistributary bay settings also tend to be more hyposaline, but not as a rule.<P>
+
+<B>Delta Front</B><P> Forms an upward coarsening succession, beginning with interbedded sandstones and shales and culminating in massive sandstones of the distributary mouth bar.  Individual beds of sandstone are commonly shelf turbidites, consisting of an erosional base (with groove casts and unipolar tool marks), an interval of planar lamination, and capped by small-scale, possibly climbing, current ripples.  Sandstone beds thicken and amalgamate upwards. Bioturbation can be locally common, as can organic matter and coaly fragments. Although some evidence of waves may be present in the form of vortex ripples or hummocky cross-stratification, delta front environments can be distinguished from Shoreface & Lower Shoreface settings by the predominance of Offshore-directed, unidirectional flow features, such as current ripples, rather than the abundant wave-formed features (vortex ripples & hummocky cross-stratification) typical of non-deltaic coasts. <P>
+
+<B>Prodelta</B><P> Very similar to the Offshore environment of the siliciclastic non-deltaic coasts.  Shales predominate, but thin beds of rippled sandstones and siltstones may be present in low numbers.  Shales may be bioturbated, but tend to be more commonly laminated in Prodelta settings because of fresh-water input and large supply of organic matter that drives dysoxic conditions.  Sandstone and siltstone beds may display erosional bases with gutter casts, groove marks, and other tool marks, as well as planar lamination, small-scale unidirectional cross-stratification or hummocky cross-stratification, or vortex (wave) ripples. Overlain by Delta Front facies in conformable successions.<P>
+
+<HR>
+
+<A NAME="DeepWater"></A><H3>Siliciclastic deep-water</H3><P>
+
+<B>Indeterminate</B><P> Should not be generally needed, as Submarine Fan and basinal settings can be distinguished on gross lithology, if it is known from other criteria that the overall setting is deep water.  Indeterminate may be necessary if the overall context is known, but lithologic information is crude or absent.<P>
+
+<B>Submarine Fan</B><P> Most commonly, interbedded sandstone and shale in varying proportions, with sandstones deposited as turbidites.  Inner fan environments tend to consist of poorly organized and channelized conglomerates deposited as debris flows.  These debris flows may display inverse grading of clasts.  Middle and outer fan environments are much more common.  Middle fan environments are dominated by thick proximal sandstone turbidites separated by thin mudstones. Proximal turbidites are characterized by an erosional base with groove casts and unipolar tool marks, a basal massive to graded sandstone, and an upper planar-laminated sandstone.  Proximal turbidites can be tens of centimeters to meters thick.  Inner fan environments are characterized by a more even mix of shale and sandstones deposited as distal turbidites.  Distal turbidites are thinner (centimeters), have weakly erosional bases, and display all or part of a vertical succession beginning with planar lamination and ending with climbing small-scale cross-lamination.  Surrounding mudstones may be bioturbated or not, depending on level of bottom oxygenation.  Turbidite successions can look superficially like storm beds and are distinguished by the presence of unidirectional flow indicators (current ripples, unipolar tool marks) and the absence of wave influence features (vortex ripples, bipolar tool marks, hummocky cross-stratification). Submarine Fan successions are commonly much thicker than storm bed successions and can be up to 1000's of meters thick.<P>
+
+<B>Basinal (siliciclastic)</B><P> Shale, with perhaps a few thin distal turbidites (see Submarine Fan, above).  Bioturbation may be pervasive to absent, depending on degree of bottom-wate oxygenation.  Tends to form thick accumulations and intergrades with outer fan environments.  Easily confused with Prodelta and Offshore settings, and must be distinguished on the basis of context (geographic setting, and conformably overlying facies).  <P>
+
+<HR>
+
+<A NAME="Carbonate"></A><h3>Carbonate</h3><P>
+
+<B>Indeterminate</B><P> May need to be commonly used, particularly where bedding, sedimentary structures, and detailed lithologic information is absent.  Also may be need to used in units that have been heavily dolomitized.<P>
+
+<B>Peritidal</B><P> Thinly-bedded, generally grain-poor carbonate units (lime mudstones, wackestones).  Desiccation cracks common, as are vortex (wave) ripples and intraclast conglomerates.  Commonly finely laminated.  May contain fenestrae (birdseye structures).  Vertical succession characterized by an upward decrease in bedding thickness and density of trace fossils.  May also contain evaporite nodules and dolomite, although dolomite can be present in any carbonate facies.  Commonly sharply overlain by a conglomerate that passes upwards into more open-marine limestones.<P>
+
+<B>Shallow Subtidal</B><P>
+
+Generally thickly bedded and highly bioturbated variably muddy to grainy carbonates.  Wackestones and packstones are most common, but lime mudstones and grainstones may also be present.  May contain either an open marine fauna or a more restricted fauna suggestive of hypersaline conditions. Passes upwards in conformable successions into Peritidal facies.  NOTE: The commonly used carbonate term "lagoonal" is equivalent to Shallow Subtidal as used here; for all reports of carbonate lagoonal environments, use Shallow Subtidal.<P>
+
+<B>Sand Shoal</B><P> Commonly thickly bedded grainy carbonates, frequently displaying large-scale trough or tabular cross-bedding.  Also planar lamination and low-angle seaward-inclined lamination.  Grainstones most common and may be dominated by skeletal material, peloids, or ooids.  In conformable successions, may pass upwards into Peritidal facies.  <P>
+
+<B>Reef, Buildup, or Bioherm</B><P> Thickly bedded, lens-shaped units.  May consist of clearly intergrown organisms (corals, oysters, rudists, algae) that define a framework structure (reef) or consist of a mound of fine-grained material (e.g., Wausortian mounds).<P>
+
+<B>Deep Subtidal Ramp</B><P> Interbedded grain-rich and grain-poor carbonate units. Grain-rich units are generally packstones or grainstones, consisting of intraclasts, skeletal material, peloids, or ooids.  Grain-rich beds commonly have erosional bases and may have crudely developed to well-developed normal grading.  Grain-rich beds may be capped by laminated calcisiltite that displays small-scale hummocky cross-stratification or climbing wave-ripple lamination. Grain-poor beds may consist of lime mudstone or terrigenous shale, in roughly equal proportions to grain-rich beds.  Deep Subtidal Facies commonly grade upwards into Shallow Subtidal or Sand Shoal facies, forming an upward coarsening and upward bed-thickening succession.  Deep Subtidal Ramp Facies are distinguished from Deep Subtidal Shelf Facies solely on regional platform characteristics: ramps maintain a more or less even slope into deep water, whereas shelfs have a pronounced break in slope from Shallow Subtidal and sand shoal environments into Deep Subtidal environments.<P>
+
+<B>Deep Subtidal Shelf</B><P> Very similar to Deep Subtidal Ramp.  See above for details.<P>
+
+<B>Offshore Ramp</B><P> Dominantly grain-poor carbonates or terrigenous shales with minor numbers of thin grain-rich carbonate beds deposited as distal storm beds (see Deep Subtidal ramp for details).  Bioturbation may be extensive if bottom waters are oxygenated or minimal and accompanied by dark colored rocks if bottom conditions were dysoxic.  Passes upwards in conformable successions into Deep Subtidal facies.  As for the Deep Subtidal environments, the Offshore Ramp and Offshore Shelf can be distinguished only on the basis of the presence or absence of a pronounced shelf/slope break.  <P>
+
+<B>Offshore Shelf</B><P> Very similar to Offshore ramp.  See above for details.<P>
+
+<B>Slope</B><P> A mixture of grain-poor limestones and grain-rich limestones, often in thick beds.  Grain-rich limestones may be deposited as rock falls (poorly sorted breccias, often with extraordinarily large clasts), debris flows (poorly sorted limestone conglomerates, sometimes with inverse grading), and turbidites (see siliciclastic Submarine Fans for details on turbidites).  Commonly forms very thick (100s-1000s m) successions.<P>
+
+<B>Basinal (Carbonate)</B><P> A variety of lime mudstones and calcareous ooze lithologies.  Can be highly bioturbated or finely laminated, depending upon bottom oxygenation.  May contain some distal carbonate turbidites.  Grades into Slope facies.  Commonly forms very thick successions.  <P>
+
+<HR>
+
+<A NAME="TectonicSetting"></A><h2>Tectonic Setting</h2>
+
+<B>Rift</B><P> Basins characterized by normal faults and stretching-dominated subsidence.  Includes not only relatively long basins that evolve into passive margins, but also shorter spurs that cease to subside and become failed rifts or aulacogens.  <P>
+
+<B>Passive Margin</B><P> Basins with adjacent oceanic lithosphere and characterized by thermal subsidence following an initial rifting stage.  Basins are assymmetrical, with greatest amount of accommodation occurring on the oceanic side, far from the sediment source (as opposed to foreland basins).  <P>
+
+<B>Back-arc Basin</B><P> Similar to passive margins, but generally smaller in scale. Back-arc Basins occur behind a volcanic arc, away from the plate margin. A modern example would be the Sea of Japan.  Note that this setting can be characterized by extension, in which case a back-arc basin forms, or by contraction, in which case a retroarc foreland basin forms.<P>
+
+<B>Cratonic Basin</B><P> Basins characterized by slow thermal subsidence, occurring in the interior of continents, and tending to be bulls-eye shaped.  Also included here are mid-continental arches separating cratonic basins, such as the Cincinnati, Findlay, Kankakee, and Transcontinental Arches of North America.<P>
+
+<B>Pull-Apart Basin</B><P> Generally small (<50 km) basins characterized by extremely rapid stretching and thermal subsidence.  Tend to have very short histories (~10 m.y.) of rapid subsidence followed by rapid filling with sediment.  Best examples include Los Angeles Basin and related basins along releasing bends of the San Andreas fault system.<P>
+
+<B>Foreland Basin</B><P> Large basins characterized by flexural subsidence driven by the emplacement of loads in the form of thrust sheets and accretionary wedges. Basins are asymmetrical, with thickest portions adjacent to thrust loads, which also serve as the predominant sediment source.  Subsidence histories show characteristic stair-step pattern of episodic thrust loading followed by long (10's m.y.) periods of tectonic quiescence.  Includes both peripheral foreland basins, in which the edge of continental lithosphere is loaded, typically by an accretionary wedge, island arc, etc., and retroarc foreland basins, in which crustal shortening occurs on the continent itself, behind a volcanic arc. Examples include the Applachian Basin and the Sevier Basin and associated Western Interior Seaway of North America.  <P>
+
+<B>Forearc Basin</B><P> Large basins characterized by complicated array of subsidence mechanisms that differ from basin to basin.  Forearc basins are situated between a volcanic arc and associated accretionary wedge.  A good modern examples is Puget Sound.<P>
+
+<HR>
+<A NAME="Glossary"></A><h2>Glossary of commonly used terms</h2>
+<h3>Paleoenvironments</h3>
+<UL>
+	<LI>Lagoonal: The lagoonal term is used here only for siliciclastics.  For all carbonate settings reported in the literature as lagoonal, use the term Shallow Subtidal.  See section on <A HREF="#Carbonate">Carbonate Environments</A>.  
+</UL>
+<P>
+<h3>Tectonic Settings</h3>
+<UL>
+	<LI>Island arc: use "forearc basin"
+</UL>
+
+
+</BODY> </HTML>

@@ -1,0 +1,84 @@
+<HTML>
+<HEAD>
+<TITLE>Lithology Tip Sheet</TITLE>
+<META NAME="Template" CONTENT="geordi:NCEAS Applications:Microsoft Office 98:Templates:Web Pages:Blank Web Page">
+</HEAD>
+<body bgcolor="white" background="PDbg.gif" text=black link="#0033FF" vlink="#990099">
+
+<P><!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN"></P>
+<H2 ALIGN="CENTER">Explanation of Lithologic Terms on Pull-Down Menu</H2>
+<B><P>claystone:</B> all fine-grained siliciclastic rocks consisting entirely of clay, whether lithified or not. Includes clay, claystone. Also see siltstone, mudstone and "shale".</P>
+<B><P>mudstone:</B> fine-grained siliciclastic rocks containing between silt and clay sized particles, but not less than 33% of either. May be lithified or not. Includes mud, mudstone. Also see siltstone, claystone and "shale".</P>
+<B><P>"shale":</B> fine-grained siliciclastic rocks containing unknown proportions of clay and silt, but containing at least 33% clay. May be lithified or not. Avoid using this category, except in cases where the proportions of clay and silt are not known. This will be a catch-all category for poorly described fine-grained siliciclastic rocks. Also see: claystone, mudstone, siltstone.</P>
+<B><P>siltstone:</B> fine-grained siliciclastic rocks containing less than 33% clay and more than 67% silt size particles. May be lithified or not. Also see claystone, mudstone and "shale".</P>
+<B><P>sandstone:</B> siliciclastic rocks composed dominantly of grains less than 2 mm in diameter and greater than 65 µ (roughly the limit of what is visible with a 10x hand lens)</P>
+<B><P>conglomerate:</B> siliciclastic rocks dominantly composed of grains greater than 2 mm. Carbonate rocks composed of grains greater than 2 mm should be named using one of the carbonate names below.</P>
+<B><P>marl: </B>a rock consisting of 35% to 65% clay and 35% to 65% lime mud.<B> </P>
+<P>lime mudstone:</B> a limestone composed almost entirely of lime mud (micrite) and less than 10% grains (ooids, peloids, bioclasts, or intraclasts). Note that a lime mudstone is a carbonate rock. A rock composed of siliciclastic mud but with carbonate cement should be treated as one of the fine-grained siliciclastic rocks ("shale", claystone, mudstone, siltstone).</P>
+<B><P>wackestone:</B> a limestone composed of lime mud (micrite) and greater than 10% grains (ooids, peloids, bioclasts, or intraclasts). Wackestones are matrix-supported, that is, grains do not support one another with lime mud simply filling in between grains.</P>
+<B><P>packstone:</B> a limestone composed of grains (ooids, peloids, bioclasts, or intraclasts) and lime mud (micrite). Rock is grain-supported and micrite simply fills in spaces between grains that are in contact with one another.</P>
+<B><P>grainstone:</B> a limestone composed of grains, but lacking lime mud (micrite). Spaces between grains are filled with spar (cement). </P>
+<B><P>"reef rocks":</B> carbonate rocks in which growing organisms trapped and bound sediment between them. Includes bafflestone, boundstone, etc.</P>
+<B><P>"limestone":</B> category to use when a limestone cannot be classified into one of the preceding lithologies. Avoid using if possible. Chalks should be placed into this category. </P>
+<B><P>dolomite:</B> category to use for all carbonate rocks composed primarily of dolomite.</P>
+<B><P>"carbonate":</B> category to use for a carbonate rock that cannot be classified as either a limestone or a dolomite. Avoid using if possible.</P>
+<B><P>chert:</B> a rock composed of cryptocrystalline silica. May form beds or nodules. If chert is not the dominant material in the rock, but is instead an accessory to another rock type, say a grainstone, then the rock should be called a grainstone, and siliceous should be selected as an adjective.</P>
+<B><P>phosphorite:</B> a rock composed dominantly of grains of phosphate, which may be in the form of ooids, peloids, or other forms. If phosphate is not the dominant material in the rock, but is instead an accessory to another rock type, say a grainstone, then the rock should be called a grainstone, and phosphatic should be selected as an adjective.</P>
+<B><P>ironstone:</B> a rock composed dominantly of hematite, chamosite, goethite, etc. If iron minerals are not the dominant material in the rock, but are instead an accessory to another rock type, say a grainstone, then the rock should be called a grainstone, and ferruginous should be selected as an adjective.</P>
+<P><HR></P>
+<H2 ALIGN="CENTER">Translation of Lithologic Terms to Terms on Pull-Down Lithology Menu</H2>
+<B><P>arenite:</B> sandstone</P>
+<B><P>arkosic arenite:</B> sandstone</P>
+<B><P>arkosic wacke:</B> sandstone; adjective: argillaceous</P>
+<B><P>bafflestone:</B> "reef rocks"</P>
+<B><P>biomicrite:</B> wackestone; adjective: shelly/skeletal</P>
+<B><P>biomicrudite:</B> wackestone; adjective: shelly/skeletal</P>
+<B><P>biosparite:</B> grainstone; adjective: shelly/skeletal</P>
+<B><P>boundstone:</B> "reef rocks"</P>
+<B><P>buff:</B> yellow</P>
+<B><P>calcarenite:</B> grainstone</P>
+<B><P>calcilutite:</B> lime mudstone</P>
+<B><P>calcirudite:</B> "limestone"</P>
+<B><P>calcisiltite:</B> grainstone</P>
+<B><P>carbonate:</B> "carbonate"</P>
+<B><P>chalk:</B> "limestone"</P>
+<B><P>chert:</B> chert</P>
+<B><P>clay:</B> claystone; lithification: unlithified</P>
+<B><P>claystone:</B> claystone</P>
+<B><P>conglomerate:</B> conglomerate</P>
+<B><P>dolomite:</B> dolomite</P>
+<B><P>flat-pebble conglomerate:</B> grainstone or packstone; adjective: flat-pebble</P>
+<B><P>floatstone:</B> "reef rocks"</P>
+<B><P>grainstone:</B> grainstone</P>
+<B><P>graywacke:</B> sandstone; adjective: argillaceous</P>
+<B><P>indurated:</B> lithified</P>
+<B><P>intramicrite:</B> wackestone; adjective: intraclastic</P>
+<B><P>intramicrudite:</B> "limestone"; adjective: flat-pebble</P>
+<B><P>intrasparite:</B> grainstone; adjective: intraclastic</P>
+<B><P>ironstone:</B> ironstone</P>
+<B><P>lime mudstone:</B> lime mudstone</P>
+<B><P>limestone:</B> "limestone"</P>
+<B><P>lithic arenite:</B> sandstone</P>
+<B><P>lithic wacke:</B> sandstone; adjective: argillaceous</P>
+<B><P>lithographic limestone:</B> lime mudstone</P>
+<B><P>marl:</B> marl</P>
+<B><P>micrite:</B> lime mudstone</P>
+<B><P>oomicrite:</B> wackestone; adjective: ooidal</P>
+<B><P>oosparite:</B> grainstone; adjective: ooidal</P>
+<B><P>packstone:</B> packstone</P>
+<B><P>pelmicrite:</B> wackestone; adjective: peloidal</P>
+<B><P>pelsparite:</B> grainstone; adjective: peloidal</P>
+<B><P>phosphorite:</B> phosphorite</P>
+<B><P>quartz arenite:</B> sandstone</P>
+<B><P>quartz wacke:</B> sandstone; adjective: argillaceous</P>
+<B><P>rudstone:</B> "limestone"</P>
+<B><P>sand:</B> sandstone; lithification: unlithified</P>
+<B><P>sandstone:</B> sandstone</P>
+<B><P>shale:</B> "shale"</P>
+<B><P>silt:</B> siltstone; lithification: unlithified</P>
+<B><P>siltstone:</B> siltstone</P>
+<B><P>wacke:</B> sandstone</P>
+<B><P>wackestone:</B> wackestone</P>
+<P><HR></P>
+<P>Can't find your term? We may need to add your term to the list. Contact Steven Holland at <A HREF="mailto:stratum@gly.uga.edu"><A NAME="Steven_Holland">stratum@gly.uga.edu</A></A>.</P></BODY>
+</HTML>

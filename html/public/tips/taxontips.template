@@ -1,0 +1,251 @@
+<html>
+<head>
+<title>Taxonomy Data Entry Tip Sheet</title>
+</head>
+<body bgcolor="white" background="PDbg.gif" text=black link="#0055FF" vlink="#990099">
+
+<font face="arial,helvetica">
+<center>
+<h2>The Paleobiology Database:<br>Taxonomy Data Entry Tip Sheet</h2>
+</center>
+
+<b>Contents:</b>
+<a href="#General">General comments</a> - 
+<a href="#AuthorityStructure">Authority table structure</a> - 
+<a href="#AuthorityFAQ">Authority table FAQ</a> - 
+<a href="#OpinionStructure">Opinion table structure</a> - 
+<a href="#OpinionProcedure">Opinion table procedure</a> - 
+<a href="#OpinionFAQ">Opinion table FAQ</a><p>
+<hr>
+
+<font size=-1>
+<i>This page was written by John Alroy on 28 August 2000, updated on 25 July, 3/7 August 2001.</i><p>
+</font>
+
+<hr>
+
+<center>
+<a name="General"></a>
+<h3>General comments</h3>
+</center>
+
+There are five basic kinds of taxonomic data:
+
+<ol>
+<li><u>Authority information</u>: a taxon is named
+<li><u>Classification</u>: a taxon is classed within another taxon
+<li><u>Phylogeny</u>: a taxon is derived evolutionarily from a parent taxon (a cladist would say "grouped in a clade")
+<li><u>Synonymy</u>: a taxon is synonymized into another, senior taxon
+<li><u>Validity</u>: a taxon is declared to have no biological meaning
+</ol>
+
+Currently, we do not handle phylogenetic data and put all the other information into just two tables. The <i>authority table,</i> which takes data from the authority form, lists all taxa we know about, who named them, and when. The <i>opinion table,</i> which takes data from the classification and synonymy forms, lists all classification, synonymy, and validity information, giving the authority and year for each opinion. Taxa can appear only once in the authority table but many times in the opinion table.<p>
+
+We use three forms to enter authority and opinion data: a general-purpose form, a form for entering all subtaxa and synonyms of a single name, and a form for entering all proposed taxonomic assignments of a single name.<p>
+
+Our main goal is to correct names used in other tables, especially identifications in taxonomic lists associated with fossil collections. To do this, we need to make sure that every species is used in combination only with one genus in any one data analysis, and that every genus is allocated to a higher taxon we can use in our analyses.<p>
+
+If only one synonymy/combination gets used at a time, then who cares about all the other stuff? Why do we keep track of every opinion ever published on every name? There are several reasons:<p>
+
+<ul>
+<li>Taxonomists need the details to do their job. Without the whole taxonomic history of a name, it can be difficult or impossible to decide which opinion is most reasonable.
+<li>Taxonomic history can tell us about our sampling of biological diversity. We can roughly estimate how many species are left to be discovered by comparing the cumulative amount of taxonomic activity to the cumulative number of known species through historical time.
+<li>Taxonomic history tells us about the quality of taxonomy. Rates of synonymization may vary among groups, among geological intervals, or through historical time, indicating where there needs to be more study and whether we can trust certain data sets.
+</ul>
+
+<i>Note:</i> we have not decided yet whether to store "date of public release" and "access level" fields for authority and opinion data.
+If we do so, these fields would be handled in exactly the same way as the analogous fields in the collections table. <p>
+
+<hr>
+
+<center>
+<a name="AuthorityStructure"></a>
+<h3>The authority table</h3>
+</center>
+
+<b>Structure</b><p>
+
+The authority table includes ten key fields.
+
+<ol>
+<li><u>The Paleobiology Database reference number</u>. This refers to the paper you are actually reading. It is computed automatically and does not need to be entered by hand.
+<li><u>Rank of taxon</u>. The original taxonomic rank of the taxon that was named. We currently use the following ranks: <i>superkingdom, kingdom, subkingdom, superphylum, phylum, subphylum, superclass, class, subclass, superorder, order, suborder, infraorder, superfamily, family, subfamily, tribe, subtribe, genus, subgenus, species.</i>
+<li><u>Taxon name</u>. The original name of the taxon, a single word except for genus-species combinations. IMPORTANT: no information on "status" is recorded in this table, because the taxon always is considered valid by its original author and therefore always "belongs to" a parent taxon.
+This classification information should be entered using the classification form.
+<li><u>Original combination?</u>. Pull down either "yes" or "no if (a) the taxon is a species and (b) you are certain that the species name has or has not been listed with its original genus, as opposed to any other genus it later was moved into.
+<li><u>Rank of type</u>. The original taxonomic rank of the type. Select "specimen" if the taxon is a species and you are recording the type specimen's number in the next field.
+<li><u>Type taxon/number</u>. The type falling within the more inclusive taxon that was named (e.g., the type genus of a new family, type species of a new species, or type specimen of a new species). Enter a museum ID number like "AMNH 77000" if the type is a specimen of a species.
+<li><u>Authority</u>. The last name(s) of the author(s) who named the taxon, if different from the authors of the reference you are using. Examples: "Smith"; "Smith and Jones"; "Smith et al."
+<li><u>Year</u>. The year this taxon was named by the authority.
+<li><u>Body part</u>. The part of the body represented by the type specimen. Optional; fill this out only if the taxon is a species.
+<li><u>Comments</u>. You may need to explain difficult cases here.
+</ol>
+
+<hr>
+<a name="AuthorityFAQ"></a>
+
+<b>Authority table FAQ</b><p>
+
+Answers to frequently asked questions about authorities.<p>
+
+<i>What if I don't know the authority?</i> <u>Skip it.</u><br>
+Without the authority, normally there is nothing useful about the taxon's naming to report. In some rare cases you may know the type taxon but not the authority. This kind of partial information indicates sloppy scholarship on the part of the author whose paper you are reading, so we advise not entering the data.<p>
+
+<i>What if I don't know if this is the original spelling or combination?</i> <u>Just put it in.</u><br>
+Fairly often, a new paper will give the authority and year for a species but not give the original genus/species combination, and possibly not even the original spelling (which might have been grammatically incorrect).
+If the combination is not original, publications usually <i>but not always</i> indicate this by putting the authority's names in parentheses, as in "(Jones)."
+If so, pull down "no" in the original combination menu.
+But if you can't tell, it's better to put the author and year information in than not to; just leave the original combination menu blank.<p>
+
+<i>What if I don't know the type?</i> <u>Put in what you have anyway.</u><br>
+Type information may be hard to obtain from secondary sources. Just put in the taxon's name and authority info; you can add the type information later if you find it in another paper.<p>
+
+<i>What if the name is a primary homonym?</i> <u>Also use the opinion table.</u><br>
+
+<i>What if the original spelling is wrong?</i> <u>Use the opinion table.</u><br>
+Some kinds of spelling irregularities are handled automatically by our scripts (e.g., unorthodox capitalization). However, genuine disagreements about grammatically proper endings of names (especially species names) are common. In these cases, enter the original spelling in the authority table and treat any spelling emendation as a synonymy, putting in the new spelling in the "parent taxon" field and selecting "corrected as" from the pull-down menu.<p>
+
+<hr>
+
+<a name="OpinionStructure"></a>
+<center>
+<h3>The opinion table</h3>
+</center>
+
+<b>Structure</b><p>
+
+The opinion table includes nine key fields.
+
+<ol>
+<li><u>The Paleobiology Database reference number</u>. Again, based on the paper you are actually reading; computed automatically so you don't have to enter it.
+<li><u>Rank of taxon</u>. The taxonomic rank of the taxon that is being discussed, according to the current reference.
+<li><u>Taxon name</u>. If you know it, the original name of the taxon as given by the original authority, regardless of what synonym or combination was favored by any later authors. If not, whatever name is given in the reference.
+<li><u>Status</u>. The status of the taxon.
+ <ul>
+ <li>"<i>belongs to</i>" means the taxon is valid and falls within the parent taxon.
+ <li>"<i>recombined as</i>" means a species is valid but has been moved to another genus. Put the new combination in the parent taxon field.
+ <li>"<i>subjective synonym of</i>" means that the taxon is invalid because the same taxon was given a different name by an earlier author (although the types are different). List the older, valid name (i.e., the senior synonym) in the parent taxon field.
+ <li>"<i>objective synonym of</i>" means that the taxon is invalid because <i>exactly the same</i> type specimen was used by an earlier author as the basis of a different name. List the older, valid name in the parent taxon field.
+ <li>"<i>homonym of</i>" means that the taxon is invalid because another taxon with the same name has priority over it. List the older, valid name in the parent taxon field.
+ <li>"<i>replaced by</i>" means that the taxon is a homonym and has been replaced by a new name. List the younger, valid replacement in the parent taxon field.
+ <li>"<i>corrected as</i>" means that the original spelling was grammatically incorrect and a new spelling has been proposed. Put the old spelling in the taxon field and the new spellling in the parent taxon field.
+ <li>"<i>nomen dubium</i>" means that the taxon is probably invalid and needs to be investigated. Leave "parent taxon" empty.
+ <li>"<i>nomen nudum</i>" means that the original description didn't follow the rules of nomenclature properly, so the name has no scientific meaning. Leave "parent taxon" empty.
+ <li>"<i>nomen oblitum</i>" means that the name has gone unused for many decades and is being set aside for purposes of synonymy. Leave "parent taxon" empty.
+ <li>"<i>nomen vanum</i>" means that the type material is indeterminate and there is no reasonable chance that further research might help. Leave "parent taxon" empty.
+ </ul>
+<li><u>Rank of parent taxon</u>. Either (a) the rank of the more inclusive taxon (if the lower taxon is valid); (b) the rank of the senior synonym, senior homonym, replacement name, or corrected name; or (c) nothing if the taxon is a nomen dubium or what have you.
+<li><u>Parent taxon</u>. Either (a) the higher taxon that includes the lower taxon being discussed; (b) the senior synonym/homonym/replacement name/corrected name; or (c) nothing, because an invalid taxon (nomen dubium, etc.) cannot be placed in or synonymized with anything.
+<li><u>Authority</u>. The name(s) of the author(s) who gave this opinion on the taxon being discussed, if different from the authors of the reference you are using.
+<li><u>Year</u>. The year this opinion was published by the authority.
+<li><u>Comments</u>. Explain difficult cases here.
+</ol>
+
+<i>Notes:</i>
+<ul>
+<li>We also store authorizer's taxonomic preferences. These are cases where an authorizer has selected one of several conflicting opinions on the status of a name. However, these data are stored in a different table.
+<li>Authority and year are entered in the classification and synonymy forms but <i>are not</i> stored in this table. See tips</a>.
+</ul>
+
+<hr>
+<a name="OpinionProcedure"></a>
+
+<b>Opinion table procedure</b><p>
+
+General procedure for entering taxonomic opinion data.<p>
+
+<blockquote>
+The table handles <u>classification</u>, <u>synonymy</u>, and <u>validity</u>. Generally speaking, you use different pull-down values to indicate each of these three types of actions. However, there are many fine points. Here are the common cases. Note that species and higher taxa are treated differently.<p>
+
+<i>Higher taxa:</i>
+
+<ul>
+<li><i>All you know about taxon X is what this paper says.</i> Make one entry for X using the standard classification form.
+<li><i>Taxon X originally was in yet higher taxon G but is now in higher taxon H</i> (<u>classification</u>). Make two entries using the classification history form. First, write out X in the taxon name field; write out G in full in the parent taxon field; select the appropriate (non-identical) rank fields; and write out the original authority (the authority who first named X). Second, write out X, H, the ranks, and the new authority for the new placement of X in a second record.
+<li><i>Taxon X has been shuffled among many higher taxa</i> (<u>classification</u>). Make multiple entries using the classification history form, with each record giving the higher taxon favored by that authority. Make a different entry for each paper that renders an opinion, even if lots of authorities said the same thing or if the same authority said the same thing in different papers. <i>You have to do this even if the classification of the taxon has never been debated - in those cases, give the original authority's classification info.</i>
+<li><i>Taxon X turns out to be valid and in the correct higher taxon</i> (<u>classification</u>). Make multiple entries if you know of multiple opinions, <i>even</i> if the original opinion turns out to be right.
+<li><i>Taxon X is a synonym or homonym of taxon Y</i> (<u>synonymy</u>). Using any of the classification or synonymy forms, select the appropriate value in the status field and write out the senior (correct) name X in the parent taxon field.
+<li><i>Taxon X is invalid</i> (<u>validity</u>). Select "nomen dubium," "nomen nudum," "nomen oblitum" or "nomen vanum" and leave the rank of parent taxon and parent taxon fields <i>blank</i>.
+</ul>
+
+<i>Species:</i>
+
+<ul>
+<li><i>Species X originally was in genus G but is now in genus H</i> (<u>classification</u>). Write out species X with the genus name G in the taxon name field; write out the new name in full in the parent taxon field; select "Genus and species" for both rank fields.
+<li><i>Species X turns out to be valid and in the correct combination</i> (<u>classification</u>). Write out the same, full species name in both the taxon field and the parent taxon field, and pull down "Genus and species" in both rank fields. <i>Unlike genera and other higher taxa, species only need to be classified if their genus assignment and/or status has been debated.</i>
+<li><i>Species X is a synonym or homonym of species Y</i> (<u>synonymy</u>). Select the appropriate status and write out the senior synonym X in full (both genus and species) in the parent taxon field.
+<li><i>Species X is invalid</i> (<u>validity</u>). Select "nomen dubium," "nomen nudum," "nomen oblitum" or "nomen vanum" and leave the senior synonym field <i>blank</i>.
+</ul>
+</blockquote>
+
+<hr>
+<a name="OpinionFAQ"></a>
+
+<b>Opinion table FAQ</b><p>
+
+Answers to frequently asked questions about classification and synonymy (= taxonomic opinions).<p>
+
+<i>How do I handle a new species, as opposed to a new genus or family?</i> <u>Use the authority table instead.</u><br>
+By definition, we know that the naming author classifies a new species in a particular genus because the genus name appears in the the genus-species combination. So, you <i>don't</i> have to enter the naming author's opinion about that species into the opinion table. For example, Linnaeus named the species <i>Homo sapiens</i> in the genus <i>Homo,</i> so <i>Homo sapiens</i> goes in the authority table but <i>not</i> the opinions table. However, at the same time there may be useful classification information about the genus: so the new genus <i>Cosoryx</i> Frick 1937 was classified by Frick in the Antilocapridae, and that information needs to go in the opinions table even though all of Frick's new species in that genus only go in the authority table.<p>
+
+<i>What if some other author had the same opinion?</i> <u>Record it.</u><br>
+We need to keep track of every separate opinion no matter how many authors have said the same thing. The reason is that a debate over the placement of a name can see-saw back and forth. So, if we don't know about every last opinion then we can't tell which opinion is most up-to-date. Just as bad, we can't confirm whether any given author really knew the whole story when they wrote their opinion. For example, a half-dozen papers all have said that <i>Hyopsodus gracilis</i> should be included in the genus <i>Smilodectes;</i> we need to record every one of these opinions.<p>
+
+<i>What if multiple papers <u>report</u> the same opinion?</i> <u>Record just one case.</u><br>
+Just because we record every opinion, that doesn't mean we record every secondary report of a single opinion rendered in a single, older paper. Instead, get the information down the first time you see it and don't worry about it if you see another paper giving the same second-hand information. For example, Cope 1871 moved Marsh's species <i>Hyopsodus gracilis</i> into <i>Notharctus gracilis</i>. Many later authors reported this transferral; we only need to record it once.<p>
+
+<i>What if a secondary report turns out to be wrong?</i> <u>Fix it and change the ref.</u><br>
+If you realize that our current data table includes some incorrect second-hand information about somebody's taxonomic opinion -- for example, because you actually have tracked down the original paper and it doesn't agree -- then edit the opinion record accordingly: select the new reference, put in the correct names, and then add a comment noting that the other reference got the story wrong.
+The most common case like this involves incorrect reporting of the original date of publication of a name (often because a paper in a serial's volume from year Y didn't actually come out until year Y+1).<p>
+
+<i>What if I don't know the original combination?</i> <u>Put it in anyway, but be careful.</u><br>
+The scripts will try to figure out which original genus-species combination you are talking about. 
+However, if the database doesn't yet know that the original combination was put by someone into the combination you are using, there is a danger that you will be asked to create a new authority table entry that will actually be a duplicate.
+For example, suppose we know that <i>Hyopsodus gracilis</i> Marsh 1871 exists but have never heard of <i>Notharctus gracilis</i>; if you record an opinion Notharctus gracilis, you may be asked to create a new authority record for this "new" name, so we may end up with duplicates in the authority table.
+This is very bad!
+The best solution is to always use the original combination if you can.<p>
+
+<i>What about aff., cf., question marks and so on?</i> <u>Skip them.</u><br>
+Just leave that stuff out. The qualifiers apply to the identification of a particular specimen, not to the classification/synonymy of the taxon in general. So, identifications do not (and should not) go into any of the taxonomy forms.<p>
+
+<i>What about "in part" or "partim" synonymies?</i> <u>Skip them.</u><br>
+Frequently, a synonym list describes cases where an author has used a name (say, Q) but the material turns out to be something else (namely, the species R at the top of the synonym list). In those cases, Q is still valid and no taxonomic judgment has been passed at all, so you don't do anything with the taxonomy tables. Instead, you might need to fix an identification in the relevant taxonomic list.<i>Warning:</i> "partim" synonymies are often indicated by the terms "in part" or "partim" or by putting both the original authority and the author using the name together right after the species name (e.g., "Homo sapiens (Linnaeus) Alroy 1992"). However, sometimes there is no clear indication at all, which leads me to...<p>
+
+<i>How do I know whether it's a "real" synonymy?</i> <u>Check for the original combination.</u><br>
+Sometimes a combination occurs in a synonymy list and the species X is different from the species Y at the top of the list, but X and Y are <i>not</i> synonyms. Unless the author says so explicitly, the only way to know is to see if the list does or doesn't include the <i>original</i> combination of X. If it does, it's a real synonymy. If it doesn't, it's a "partim" synonymy (some specimens of X are Y but the type isn't), so you can ignore it. Optimally, you should check every ambiguous case against the current opinions table to make sure that the original combination is listed.<p>
+
+<i>What is a "homonym"?</i> <u>Two taxa have exactly the same name, so one has to go.</u><br>
+Sometimes a paper claims to be naming a "new" taxon, but exactly the same name was used earlier by another author for something completely different.
+Homonyms can cause big problems in statistical analyses.
+Therefore, homonyms should always be recorded in the opinion table.
+A "primary" homonym is a species that was a homonym the second it was named; a "secondary" was OK in its original combination, but later was moved to another genus that already included a species of exactly the same name (these cases are very rare!).<p>
+
+<i>How do I record homonyms?</i> <u>As one "homonym of" record plus (if possible) a "replaced by" record.</u><br>
+Handle homonymy cases by recording (a) that the homonym X is a "homonym of" the older name Y, and also (b) that the homonym X is "replaced by" the replacement name Z (if there is one) - two lines of data, not just one.
+Example: <i>Dakotamys</i> Tedrow and Korth 1987 (Oligocene rodent) is a homonym of <i>Dakotamys</i> Eaton 1995 (Cretaceous multituberculate).
+<i>Dakotallomys</i> Tedrow and Korth 1999 replaces <i>Dakotamys</i> Tedrow and Korth 1987 non Eaton 1995 - a separate data record.
+If a genus (or other higher taxon) is a homonym, also make separate records for each included species (or lower taxon) to show that they are allocated to the replacement genus name; if a species is a homonym, all you need to do is record the "replaced by" and "homonym of" data.<p>
+
+<i>What does "nomen dubium" and so on mean?</i> <u>Trouble.</u><br>
+All of these terms mean that the taxon (usually either a genus or species) is flat-out invalid: no material other than the type specimen should ever be assigned to it. The terms differ as follows:
+<ul>
+<li><i>nomen dubium</i> (taxon is probably invalid). This term commonly is applied to inadequately diagnosed and/or indeterminate taxa, the idea being that more detailed inspection or collection of topotypic material might eventually validate the name. The term <i>nomen inquirendum</i> means much the same thing, but indicates that the author has not carefully looked into the situation; treat these cases as nomina dubia.
+<li><i>nomen nudum</i> (original description didn't follow the rules). For example, if a faunal review lists a name but gives no description, that usage is a nomen nudum. Likewise, if a taxonomic paper fails to identify, describe, and illustrate the type specimen of a new taxon, that taxon is a nomen nudum. If an author first briefly mentions a name and only later describes it, technically the first mention is a "nomen nudum" and the second mention is a "validation" of the name; but because the name was later validated, we don't really need to record this fact.
+<li><i>nomen oblitum</i> (unused name). Typically, these cases are discussed when the name is potentially a senior synonym of some other name, but it has gone completely unmentioned in the literature for so long (i.e., at least a half-century) that the author chooses to ignore the synonymy. These cases are rare because international codes place more emphasis on priority than stability.
+<li><i>nomen vanum</i> (type material is indeterminate). Typically, the type specimen is incomplete, damaged, or poorly preserved, or has been lost since its description; the original description isn't detailed enough to fix its identity; and there is no chance of obtaining more specimens from the type locality, often because the exact locality is unknown.
+</ul>
+<p>
+
+<i>What if the taxon is "incertae sedis"?</i> <u>Record the lowest-ranking higher taxon.</u><br>
+A taxon is incertae sedis if it can't be allocated to a taxon at the immediately superior rank, e.g., if the author can't tell which family should include a genus. However, there is always <i>some</i> higher taxon that does clearly include any "incertae sedis" taxon -- so even if the family can't be determined, the ordinal affinity of a genus may be clear. In these cases, simply record the parent taxon of the lowest possible rank (so if you know the order but not the family for a genus, list the order here).<p>
+
+<i>What if I have to read between the lines?</i> <u>Use your judgment.</u><br>
+Many, many authors refuse to come right out and say what they want to do with a taxon, e.g., implying that they would classify a certain genus in a certain family but not formally doing it, or implying that two names are synonymous but not specifically synonymizing the junior name.
+If the author's intention is clear, use the information; if not, skip it.
+This kind of interpretation may take careful reading of lengthy taxonomic discussions.<p>
+
+<hr>
+
+</body>
+</html>
+
