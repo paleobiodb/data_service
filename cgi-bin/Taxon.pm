@@ -1385,8 +1385,8 @@ sub displayAuthoritySummary {
 		<p>To verify that the information was entered correctly, click on the add more data link below.</p>";
 		
 		print "<TABLE align=center BORDER=0 WIDTH=80\%><TR>
-		<TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $self->{taxonNumber} ."\"><B>Add more data about " . $dbrec->{taxon_name} . "</B></A></TD>
-		<TD align=center>-</TD>
+		<TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $self->{taxonNumber} ."\"><B>Add more data about " . $dbrec->{taxon_name} . "</B></A></TD></TR><TR>
+		<TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionList&taxon_no=" . $self->taxonNumber() . "&taxon_name=" . $dbrec->{taxon_name} . "\"><B>Add/edit opinion about " . $dbrec->{taxon_name} . "</B></A></TD></TR><TR>
 		<TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority\"><B>Add more data about another taxon</B></A></TD></TR></TABLE>";	
 
 	}
