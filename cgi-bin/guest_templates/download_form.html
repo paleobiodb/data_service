@@ -357,8 +357,6 @@ Note that the collection ID and genus name fields are always output.</p>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_authorizer value="YES">authorizer</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_enterer value="YES">enterer</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_modifier value="YES">modifier</td>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
 	<!--td><input type=checkbox name=collections_collection_no value="YES">collection_no-->
 	</tr>
 
@@ -367,15 +365,13 @@ Note that the collection ID and genus name fields are always output.</p>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_reference_no value="YES">reference number</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_collection_name value="YES">collection name</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_collection_aka value="YES">collection aka</td>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
 	</tr>
 
 	<tr>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_country value="YES">country</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_state value="YES">state</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_county value="YES">county</td>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
+	<td class="cell" nowrap><font size=-1>&nbsp;</td>
 	</tr>
 
 	<tr>
@@ -398,24 +394,60 @@ Note that the collection ID and genus name fields are always output.</p>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_latlng_basis value="YES">lat/long basis</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_geogscale value="YES">geog scale</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_geogcomments value="YES">geog comments</td>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
+	<td class="cell" nowrap><font size=-1>&nbsp;</td>
 	</tr>
 
 	<tr>
-	<td class="cell" nowrap><input type=checkbox name=collections_period_max value="YES">period</td>
-	<td class="cell" nowrap><input type=checkbox name=collections_epoch_max value="YES">epoch</td>
-	<td class="cell" nowrap><input type=checkbox name=collections_locage_max
- value="YES" checked>10 m.y. bin</td>
-	<td class="cell" nowrap>&nbsp;</td></tr>
+	<td class="cell" nowrap colspan=4><font size=-1>&nbsp;</td>
 	</tr>
+
+    <tr>
+    <td class="cell" nowrap><input type=checkbox name=collections_period value="YES">period</td>
+    <td class="cell" nowrap><input type=checkbox name=collections_epoch value="YES">epoch</td>
+    <td class="cell" nowrap><input type=checkbox name=collections_10mybin value="YES">10 m.y. bin</td>
+    <td class="cell" nowrap>&nbsp;</td>
+    </tr>
+                                                                                                                                                             
+    <tr>
+    <td class="cell" nowrap><input type=checkbox name=collections_max_interval_no value="YES">max interval</td>
+    <td class="cell" nowrap><input type=checkbox name=collections_min_interval_no value="YES">min interval</td>
+    <td class="cell" nowrap>&nbsp;</td>
+    <td class="cell" nowrap>&nbsp;</td>
+    </tr>
+
+    <tr>
+    <td class="cell" nowrap colspan=4>&nbsp;</td></tr>
+    </tr>
+                                                                                                                                                             
+    <tr>
+    <td class="cell" nowrap colspan=4><i>The following 8 fields are obsolete</i></td></tr>
+    </tr>
+                                                                                                                                                             
+    <tr>
+    <td class="cell" nowrap><input type=checkbox name=collections_epoch_max value="YES">epoch max</td>
+    <td class="cell" nowrap><input type=checkbox name=collections_epoch_min value="YES">epoch min</td>
+    <td class="cell" nowrap><input type=checkbox name=collections_period_max value="YES">period max</td>
+    <td class="cell" nowrap><input type=checkbox name=collections_period_min value="YES">period min</td>
+    </tr>
+                                                                                                                                                             
+    <tr>
+    <td class="cell" nowrap><input type=checkbox name=collections_intage_max value="YES">international age max</td>
+    <td class="cell" nowrap><input type=checkbox name=collections_intage_min value="YES">international age min</td>
+    <td class="cell" nowrap><input type=checkbox name=collections_locage_max value="YES">local age/stage max</td>
+    <td class="cell" nowrap><input type=checkbox name=collections_locage_min value="YES">local age/stage min</td>
+    </tr>
+                                                                                                                                                             
+    <tr>
+    <td class="cell" nowrap colspan=4>&nbsp;</td></tr>
+    </tr>
+
+
 
 	<tr>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_zone value="YES">zone</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_geological_group value="YES">geological group</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_formation value="YES">formation</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_member value="YES">member</td>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
 	</tr>
 
 	<tr>
@@ -423,7 +455,6 @@ Note that the collection ID and genus name fields are always output.</p>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_localbed value="YES">local bed</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_localorder value="YES">local order</td>
 	<td class="cell" nowrap><font size=-1>&nbsp;</td>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
 	</tr>
 
 	<tr>
@@ -431,15 +462,17 @@ Note that the collection ID and genus name fields are always output.</p>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_regionalbed value="YES">regional bed</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_regionalorder value="YES">regional order</td>
 	<td class="cell" nowrap><font size=-1>&nbsp;</td>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
 	</tr>
 
 	<tr>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_stratscale value="YES">strat scale</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_stratcomments value="YES">strat comments</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_lithdescript value="YES">lith description</td>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
+	<td class="cell" nowrap><font size=-1>&nbsp;</td>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap colspan=4><font size=-1>&nbsp;</td>
 	</tr>
 
 	<tr>
@@ -447,7 +480,6 @@ Note that the collection ID and genus name fields are always output.</p>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_lithification value="YES">lithification 1</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_lithology1 value="YES">lithology 1</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_fossilsfrom1 value="YES">fossils from 1</td>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
 	</tr>
 
 	<tr>
@@ -455,47 +487,56 @@ Note that the collection ID and genus name fields are always output.</p>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_lithification2 value="YES">lithification 2</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_lithology2 value="YES">lithology 2</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_fossilsfrom2 value="YES">fossils from 2</td>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
 	</tr>
 
 	<tr>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_environment value="YES">environment</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_tectonic_setting value="YES">tectonic setting</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_geology_comments value="YES">geology comments</td>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td></tr>
+	<td class="cell" nowrap><font size=-1>&nbsp;</td>
+	</tr>
+
+	<tr>
+	<td class="cell" nowrap colspan=4><font size=-1>&nbsp;</td>
 	</tr>
 
 	<tr>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_pres_mode value="YES">preservation</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_lagerstatten value="YES">Lagerst&auml;tten type</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_concentration value="YES">concentration</td>
-	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_assembl_comps value="YES">assemblage components</td></tr>
+	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_assembl_comps value="YES">assemblage components</td>
+    </tr>
 
 	<tr>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_orientation value="YES">spatial orientation</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_preservation_quality value="YES">preservation quality</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_art_whole_bodies value="YES">articulated whole bodies</td>
-	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_disart_assoc_maj_elems value="YES">associated major elements</td></tr>
+	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_disart_assoc_maj_elems value="YES">associated major elements</td>
+    </tr>
 
 	<tr>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_disassoc_maj_elems value="YES">disassociated major elements</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_disassoc_minor_elems value="YES">disassociated minor elements</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_sorting value="YES">size sorting</td>
-	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_fragmentation value="YES">fragmentation</td></tr>
+	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_fragmentation value="YES">fragmentation</td>
+    </tr>
 
 	<tr>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_bioerosion value="YES">bioerosion</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_encrustation value="YES">encrustation</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_feed_pred_traces value="YES">feeding/predation traces</td>
-	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_temporal_resolution value="YES">temporal resolution</td></tr>
+	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_temporal_resolution value="YES">temporal resolution</td>
+    </tr>
 
 	<tr>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_spatial_resolution value="YES">spatial resolution</td>
-	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_taphonomy_comments value="YES">taphonomy comments</td></tr>
+	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_taphonomy_comments value="YES">taphonomy comments</td>
+	<td class="cell" nowrap><font size=-1>&nbsp;</td>
+	<td class="cell" nowrap><font size=-1>&nbsp;</td>
+    </tr>
 
 	<tr>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td>
+	<td class="cell" nowrap colspan=4><font size=-1>&nbsp;</td>
 	</tr>
 
 	<tr>
@@ -510,13 +551,11 @@ Note that the collection ID and genus name fields are always output.</p>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_collection_comments value="YES">collection comments</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_taxonomy_comments value="YES">taxonomy comments</td>
 	<td class="cell" nowrap><font size=-1>&nbsp;</td>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td>
 	</tr>
 
 	<tr>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_created value="YES">created</td>
 	<td class="cell" nowrap><font size=-1><input type=checkbox name=collections_modified value="YES">modified</td>
-	<td class="cell" nowrap><font size=-1>&nbsp;</td>
 	<td class="cell" nowrap><font size=-1>&nbsp;</td>
 	<td class="cell" nowrap><font size=-1>&nbsp;</td>
 	</tr>

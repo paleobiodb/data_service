@@ -21,7 +21,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out.
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdec latdir lngdeg lngmin lngsec lngdec lngdir latlng_basis altitude_value altitude_unit geogscale geogcomments zone period_max epoch_max locage_max max_interval_no min_interval_no research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 otherenvironment rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdec latdir lngdeg lngmin lngsec lngdec lngdir latlng_basis altitude_value altitude_unit geogscale geogcomments period epoch 10mybin max_interval_no min_interval_no emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 otherenvironment rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
 my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name reference_no comments created modified modified_temp plant_organ);
 my @refsFieldNames = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage created modified publication_type comments project_name project_ref_no);
@@ -298,11 +298,27 @@ sub retellOptions {
 					"collections_latlng_basis", 
 					"collections_geogscale", 
 					"collections_geogcomments", 
-					"collections_period_max", 
-					"collections_epoch_max", 
-					"collections_locage_max", 
+                    "collections_period",
+                    "collections_epoch",
+                    "collections_10mybin",
 					"collections_max_interval_no", 
 					"collections_min_interval_no", 
+                    "collections_emlperiod_max",
+                    "collections_period_max",
+                    "collections_emlperiod_min",
+                    "collections_period_min",
+                    "collections_emlepoch_max",
+                    "collections_epoch_max",
+                    "collections_emlepoch_min",
+                    "collections_epoch_min",
+                    "collections_emlintage_max",
+                    "collections_intage_max",
+                    "collections_emlintage_min",
+                    "collections_intage_min",
+                    "collections_emllocage_max",
+                    "collections_locage_max",
+                    "collections_emllocage_min",
+                    "collections_locage_min",
 					"collections_zone", 
 					"collections_geological_group", 
 					"collections_formation", 
@@ -338,7 +354,7 @@ sub retellOptions {
 					"collections_created", 
 					"collections_modified" );
 
-	my @collectionOutputResult = ( "collection_no" );	# A freebie
+   	my @collectionOutputResult = ( "collection_no" );	# A freebie
 	if ( ! $q->param("collections_only") ) { push ( @collectionOutputResult, "genus_reso", "genus_name" ); }
 	# hey, if you want the data binned into time intervals you have to
 	#  download the interval names into the occurrences table too
@@ -405,12 +421,20 @@ sub getOutFields {
 	my $self = shift;
 	my $tableName = shift;
 	my $isReID = shift;
+    # isQuery states whether we're going to use the output in a SQL query or not.
+    # important because some fields are created via TimeLookup (epoch, period, 10mybin)
+    # so should be in output fields, but not in a SELECT fields list
+    my $isQuery = shift; 
 	my @outFields;
 	
 	my @fieldNames;
 	
 	if($tableName eq "collections") {
-		@fieldNames = @collectionsFieldNames;
+        if ($isQuery) {
+		    @fieldNames = grep {!/^(epoch|period|10mybin)$/} @collectionsFieldNames;
+        } else {
+		    @fieldNames = @collectionsFieldNames;
+        } 
 	} elsif($tableName eq "occurrences") {
 		if($isReID eq 'reidentifications'){
 			@fieldNames = @reidentificationsFieldNames;
@@ -459,8 +483,9 @@ sub getOutFieldsString {
 	my $self = shift;
 	my $tableName = shift;
 	my $isReID = shift;
+    my $isQuery = shift;
 
-	my $outFieldsString = join ( ",\n", $self->getOutFields($tableName, $isReID) );
+	my $outFieldsString = join ( ",\n", $self->getOutFields($tableName, $isReID, $isQuery) );
 	return $outFieldsString;
 }
 
@@ -1075,7 +1100,6 @@ sub doQuery {
 		%mybin = %{$_[0]};
 	}
 
-
 	# Getting only collection data:
 	if($collections_only eq 'YES'){
 		$sql =  "SELECT collections.reference_no, collections.collection_no, ".
@@ -1111,7 +1135,7 @@ sub doQuery {
 
 	# may be getting this for either of the above cases
 	$outFieldsString = '';
-	$outFieldsString = $self->getOutFieldsString('collections');
+	$outFieldsString = $self->getOutFieldsString('collections',FALSE,TRUE);
 	my $comma = ", ";
 	$comma = "" if $outFieldsString eq "";
 
@@ -1252,8 +1276,10 @@ sub doQuery {
 
 	# trivial clean up: "period_max" is actually a computed period value,
 	#  so call it "period"; likewise "epoch_max"/"epoch"
-	$header =~ s/period_max/period/;
-	$header =~ s/epoch_max/epoch/;
+    # LEGACY - now its actually called period/epoch, so no need to change
+    # PS 11/22/2004
+	#$header =~ s/period_max/period/;
+	#$header =~ s/epoch_max/epoch/;
 
 	print OUTFILE "$header\n";
 	$self->dbg ( "Output header: $header" );
@@ -1513,14 +1539,14 @@ sub doQuery {
 			# WARNING: this won't work at all if the period_max
 			#   and/or epoch_max fields are ever removed from
 			#   the database
-			} elsif ( $column eq "period_max" )	{
+			} elsif ( $column eq "period" )	{
 				$row->{$column} = $myperiod{$row->{collection_no}};
-			} elsif ( $column eq "epoch_max" )	{
+			} elsif ( $column eq "epoch" )	{
 				$row->{$column} = $myepoch{$row->{collection_no}};
 			# WARNING: similar trick here in which useless legacy
 			#  field locage_max is used as a placeholder for the
 			#  bin name
-			} elsif ( $column eq "locage_max" )	{
+			} elsif ( $column eq "10mybin" )	{
 				$row->{$column} = $mybin{$row->{collection_no}};
 			}
 
@@ -1790,6 +1816,20 @@ sub setupOutput {
 
 	chmod 0664, "$OUT_FILE_DIR/$occsOutFileName";
 	chmod 0664, "$OUT_FILE_DIR/$refsOutFileName";
+
+    # this sets a bunch of checkbox values to true if a corresponding checkbox is also true
+    # so that the download script may be a bit simpler. 
+    # must be called before retellOptions
+    # i.e  if intage_max == YES, then set emlintage_max == YES as well 
+    # PS 11/22/2004
+    $q->param('collections_emlperiod_max' => "YES") if ($q->param('collections_period_max'));
+    $q->param('collections_emlperiod_min' => "YES") if ($q->param('collections_period_min'));
+    $q->param('collections_emlintage_max' => "YES") if ($q->param('collections_intage_max'));
+    $q->param('collections_emlintage_min' => "YES") if ($q->param('collections_intage_min'));
+    $q->param('collections_emlepoch_max' => "YES")  if ($q->param('collections_epoch_max'));
+    $q->param('collections_emlepoch_min' => "YES")  if ($q->param('collections_epoch_min'));
+    $q->param('collections_emllocage_max' => "YES") if ($q->param('collections_locage_max'));
+    $q->param('collections_emllocage_min' => "YES") if ($q->param('collections_locage_min'));
 }
 
 sub formatRow {
