@@ -2,6 +2,7 @@ package Strata;
 
 use TaxonInfo;
 use Permissions;
+use URI::Escape;
 
 # written by PS  12/01/2004
 
@@ -137,11 +138,11 @@ sub displayStrataSearch{
             $coll_link = "";
             if ($formation) {
                 $coll_link =  qq|<a href="$exec_url?action=displayCollResults&geological_group=|
-                         . $q->param('search_term')
-                         . qq|&formation=$formation">$formation</a>|;
+                         . uri_escape($q->param('search_term'))
+                         . qq|&formation=|.uri_escape($formation).qq|">$formation</a>|;
             } else {
                 $coll_link =  qq|<a href="$exec_url?action=displayCollResults&geological_group=|
-                         . $q->param('search_term')
+                         . uri_escape($q->param('search_term'))
                          . qq|&formation=NULL_OR_EMPTY">Unknown</a>|;
             }
             $html .=  "$coll_link ($formations{$formation}), ";
@@ -158,11 +159,11 @@ sub displayStrataSearch{
             $coll_link = "";
             if ($member) {
                 $coll_link =  qq|<a href="$exec_url?action=displayCollResults&formation=|
-                         . $q->param('search_term')
-                         . qq|&member=$member">$member</a>|;
+                         . uri_escape($q->param('search_term'))
+                         . qq|&member=|.uri_escape($member).qq|">$member</a>|;
             } else {
                 $coll_link =  qq|<a href="$exec_url?action=displayCollResults&formation=|
-                         . $q->param('search_term')
+                         . uri_escape($q->param('search_term'))
                          . qq|&member=NULL_OR_EMPTY">Unknown</a>|;
             } 
             $html .= "$coll_link ($members{$member}), ";
@@ -179,8 +180,8 @@ sub displayStrataSearch{
         if ($lith_count{$lithology}) {
              $cnt = $lith_count{$lithology};
              $coll_link = qq|<a href="$exec_url?action=displayCollResults| 
-                        . "&group_formation_member=".$q->param('search_term')                 
-                        . qq|&lithologies=$lithology">$lithology</a>|;
+                        . "&group_formation_member=".uri_escape($q->param('search_term'))
+                        . qq|&lithologies=|.uri_escape($lithology).qq|">$lithology</a>|;
             
             $html .= "$coll_link ($lith_count{$lithology}), ";
         }      
@@ -195,8 +196,8 @@ sub displayStrataSearch{
     foreach $environment (@env_list) {
         if ($environment_count{$environment}) {
             $coll_link = qq|<a href="$exec_url?action=displayCollResults| 
-                          . "&group_formation_member=".$q->param('search_term')                 
-                          . qq|&environment=$environment">$environment</a>|;
+                          . "&group_formation_member=".uri_escape($q->param('search_term'))
+                          . qq|&environment=|.uri_escape($environment).qq|">$environment</a>|;
             $html .= "$coll_link ($environment_count{$environment}), ";
         }
     }
