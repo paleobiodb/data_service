@@ -11,7 +11,9 @@ use CGI::Carp qw(fatalsToBrowser);
 
 use Debug;
 use Globals;
+use Constants;
 use SQLBuilder;
+
 
 # I THINK THESE ARE BOGUS. THERE ARE NO SUCH METHODS/VARIABLES IN THIS MODULE
 @EXPORT = qw(setName setHref toHTML);
@@ -502,6 +504,53 @@ sub guest {
 
 	return ( $self->{authorizer} eq "Guest" );
 }
+
+
+# rjp, 3/2004
+# This was made a more generic function since it may be used my multiple
+# forms - currently this is just the authority and opinion forms (as of 3/24/2004)
+#
+# Pass this two aguments:
+# First is a boolean which is true if they're editing a *NEW* record.  This is
+# usually called $isNewEntry or something like that.
+#
+# Second argument is the authorizer_no of the record, if it already exists.
+#
+# Returns a boolean - true if they can edit any field in this form, and false
+# otherwise.
+sub editAnyFormField {
+	my $self = shift;
+	
+	my $isNewEntry = shift;
+	my $authorizer_no = shift;
+	
+	my $editAny = FALSE;
+	
+	if ($isNewEntry) {
+		$editAny = TRUE;	# new entries can edit any field.
+	} else {
+		# edits of pre-existing records have more restrictions. 
+	
+		# if the authorizer of the record doesn't match the current
+		# authorizer, then *only* let them edit empty fields.
+		$editAny = FALSE;
+	
+		# if the authorizer of the record matches the authorizer
+		# who is currently trying to edit this data, then allow them to change
+		# any field.
+		if ($self->authorizerNumber() == $authorizer_no) {
+			$editAny = TRUE;
+		}
+		
+		if ($self->isSuperUser()) {
+			# super user can edit any field no matter what.
+			$editAny = TRUE;	
+		}
+	}
+	
+	return $editAny;
+}
+
 
 
 # returns a string of all keys and values set in this
