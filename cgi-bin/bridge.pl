@@ -5511,7 +5511,7 @@ sub displayOccsForReID
 			print "    <td>" . $row{"plant_organ2"} . "</td>\n";
 		}
 		print "</tr>";
-		print $hbo->populateHTML('reid_entry_row', [$row{'occurrence_no'}, $row{'collection_no'}, $row{'authorizer'}, $row{'enterer'} ], ['occurrence_no', 'collection_no', 'authorizer', 'enterer'], \@prefkeys);
+		print $hbo->populateHTML('reid_entry_row', [$row{'occurrence_no'}, $row{'collection_no'}, $s->get('authorizer'), $s->get('enterer') ], ['occurrence_no', 'collection_no', 'authorizer', 'enterer'], \@prefkeys);
 
 		# print other reids for the same occurrence
 		$sql = "SELECT * FROM reidentifications WHERE occurrence_no=" . $row{'occurrence_no'};
