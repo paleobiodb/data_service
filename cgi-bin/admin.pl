@@ -7,6 +7,7 @@ use DBI;
 use FileHandle;
 use HTMLBuilder;
 use Class::Date qw(date localdate gmdate now);
+use Globals;
 
 use DBConnection;
 
@@ -127,10 +128,10 @@ sub createList {
 	# column names
 	$return .= "<table border=0 cellpadding=4 cellspacing=1 bgcolor='Silver'>\n";
 	$return .= "<tr>\n";
-	if ( $edit ) { $return .= "<td bgcolor='#E0E0E0'>Action</a>"; }
+	if ( $edit ) { $return .= "<td class='darkList'>Action</a>"; }
 	for ( my $i=0; $i<$columns; $i++ ) {
 		if ( $fieldNames[$i] !~ /preferences/ )	{
-			$return .= "<td bgcolor='#E0E0E0'>".$fieldNames[$i]."</td>";
+			$return .= "<td class='darkList'>".$fieldNames[$i]."</td>";
 		} else	{
 			$prefCol = $i;
 		}

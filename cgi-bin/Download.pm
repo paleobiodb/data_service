@@ -77,7 +77,7 @@ sub retellOptions {
 	<center>
 	<table border='0' width='600'>
 	<tr>
-	<td colspan='2' bgcolor='#E0E0E0'><b><font size='+1'>Download criteria</font></b></td>
+	<td colspan='2' class='darkList'><b><font size='+1'>Download criteria</font></b></td>
 	</tr>";
 
 	$html .= $self->retellOptionsRow ( "Research group or project", $q->param("research_group") );
@@ -991,7 +991,7 @@ sub doQuery {
 	}
 	print "
 <table border='0' width='600'>
-<tr><td bgcolor='#E0E0E0'><b><font size='+1'>Output files</font></b></td></tr>
+<tr><td class='darkList'><b><font size='+1'>Output files</font></b></td></tr>
 <tr><td>$acceptedCount $outputType were printed to <a href='$OUT_HTTP_DIR/$occsOutFileName'>$occsOutFileName</a></td></tr>
 <tr><td>$acceptedRefs references were printed to <a href='$OUT_HTTP_DIR/$refsOutFileName'>$refsOutFileName</a></td></tr>
 </table>

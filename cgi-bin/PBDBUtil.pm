@@ -1,5 +1,7 @@
 package PBDBUtil;
 
+use Globals;
+
 ### NOTE: SET UP EXPORTER AND EXPORT SUB NAMES.
 
 # This package contains a collection of methods that are universally 
@@ -105,7 +107,7 @@ sub getSecondaryRefsString{
 			$result_string .="<table border=0 cellpadding=0 cellspacing=0 width=\"100%\"><tr width=\"100%\">";
 		}
 		else{
-			$result_string .= "<table border=0 cellpadding=0 cellspacing=0 width=\"100%\"><tr bgcolor=E0E0E0 width=\"100%\">";
+			$result_string .= "<table border=0 cellpadding=0 cellspacing=0 width=\"100%\"><tr class='darkList' width=\"100%\">";
 		}
 		if($selectable){
 			$result_string .= "<td width=\"1%\" valign=top><input type=radio name=secondary_reference_no value=" . $ref->{reference_no} . "></td>\n";
@@ -166,7 +168,7 @@ sub getSecondaryRefsString{
 				$result_string .= "<tr>";
 			}	
 			else{
-				$result_string .= "<tr bgcolor=E0E0E0>";
+				$result_string .= "<tr class='darkList'>";
 			}
 			$result_string .= "<td bgcolor=red><input type=checkbox name=delete_ref value=$ref->{reference_no}></td><td><span class=tiny>remove&nbsp;</span></td></tr>\n";
 		}

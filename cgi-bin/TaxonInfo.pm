@@ -2,6 +2,7 @@ package TaxonInfo;
 
 use PBDBUtil;
 use Classification;
+use Globals;
 use Debug;
 
 $DEBUG = 0;
@@ -537,7 +538,7 @@ sub displayTaxonInfoResults{
 	print "<table width=\"80%\"><tr><td></td>";
 	print "<td align=center><h2>$genus_name</h2></td></tr>";	
 	print "<tr><td valign=top><table cellspacing=2><tr><td bgcolor=black>";
-	print "<table bgcolor=\"E0E0E0\"><tr><td valign=\"top\">".
+	print "<table class='darkList'><tr><td valign=\"top\">".
 		  "<center><b><div class=\"large\">Display</div></b></center></td></tr>";
 	print "<tr><td align=left valign=top>";
 	foreach my $key (sort keys %module_num_to_name){
@@ -906,7 +907,10 @@ sub doCollections{
 	$q->param(-name=>"limit",-value=>1000000);
 	$q->param(-name=>"taxon_info_script",-value=>"yes");
 
-	# Get all the data from the database
+	Debug::dbPrint("in_list = $in_list");
+	
+	# Get all the data from the database, bypassing most of the normal behavior
+	# of displayCollResults
 	@data = @{main::displayCollResults($in_list)};	
 
 	require Collections;
@@ -939,7 +943,7 @@ sub doCollections{
 		my $row_color = 0;
 		foreach my $key (@sorted){
 			if($row_color % 2 == 0){
-				$output .= "<tr bgcolor=\"E0E0E0\">";
+				$output .= "<tr class='darkList'>";
 			} 
 			else{
 				$output .= "<tr bgcolor=\"white\">";
@@ -1162,7 +1166,7 @@ sub displayTaxonClassification{
 		  # Don't link 'sp, 'sp.', 'indet' or 'indet.' either.
 		  if($taxon_rank_order{$rank} < 11 || $classification{$rank}[0] =~ /(sp\.{0,1}|indet\.{0,1})$/){
 			if($counter % 2 == 0){
-				$output .="<tr bgcolor=\"E0E0E0\"><td align=\"middle\">$rank".
+				$output .="<tr class='darkList'><td align=\"middle\">$rank".
 						  "</td><td align=\"middle\">$classification{$rank}[0]".
 						  "</td><td>$auth_yr{author1last}</td>".
 						  "<td>$auth_yr{pubyr}</td></tr>\n";
@@ -1187,7 +1191,7 @@ sub displayTaxonClassification{
 			$temp_rank =~ s/\s/+/g;
 			$classification{$rank}[0] =~ s/\s/+/g;
 			if($counter % 2 == 0){
-				$output .="<tr bgcolor=\"E0E0E0\"><td align=\"middle\">$rank".
+				$output .="<tr class='darkList'><td align=\"middle\">$rank".
 						  "</td><td align=\"middle\">".
 						  "<a href=\"/cgi-bin/bridge.pl?action=checkTaxonInfo".
 						  "&taxon_rank=$temp_rank&taxon_name=".

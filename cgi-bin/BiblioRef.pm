@@ -2,6 +2,7 @@ package BiblioRef;
 
 use DataRow;
 use AuthorNames;
+use Globals;
 
 sub new
 {
@@ -57,7 +58,7 @@ sub toString
 
 	# Choose the row background color
 	if ( $row % 2 != 0 && $rowcount > 1) {
-		$retVal .= "<tr bgcolor=\"#E0E0E0\">\n";
+		$retVal .= "<tr class='darkList'>\n";
 	}
 	else	{
 		$retVal .= "<tr>\n";
