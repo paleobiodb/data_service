@@ -1,5 +1,9 @@
+#!/usr/bin/perl
+
 # Written by rjp, 1/2004.
+#
 # Used to validate data entered by a user, for example, in HTML forms.
+# Can also be used to clean up data from a user (remove weird characters, etc.)
 
 #
 # Each validate routine expects a to receive two parameters:
@@ -15,6 +19,7 @@
 
 package Validation;
 use strict;
+
 
 # pass this a string and it returns a "cleaned" copy of it.
 # basically removes any funny characters which shouldn't be in the database,
@@ -34,6 +39,23 @@ sub clean {
 	return $in;
 }
 
+
+# pass this a CGI object, normally called $q, and it will
+# go through and run the clean() function on every parameter in it.
+#
+# doesn't return anything.
+sub cleanCGIParams {
+	my $q = shift;
+	
+	if (! $q) { return; }
+	
+	my @params = $q->param();
+	foreach my $p (@params) {
+		$q->param($p => clean($q->param($p)));
+		
+		#dbPrint("$p = " . $q->param($p));	
+	}
+}
 
 
 # this routine is meant for internal use only
