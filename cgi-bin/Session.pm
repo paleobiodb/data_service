@@ -54,7 +54,14 @@ sub processLogin {
 	if (!(authorizer && enterer)) {
 		return "";
 	}
-	
+
+	# first clean up the names to avoid the O'Regan bug
+	#   written by JA 24.8.03 and moved up to here by JA 1.4.04
+	my $authorizer = $q->param("authorizer");
+	my $enterer = $q->param("enterer");
+	$authorizer =~ s/'/\\'/g;
+	$enterer =~ s/'/\\'/g;
+
 	# also check that both names exist in the database.
 	my $person = Person->new();
 	if (! ($person->isValidName($enterer) &&
@@ -144,13 +151,6 @@ sub processLogin {
 
 			# Store the session data into the db
 			# The research groups are stored so as not to do many db lookups
-
-			# first clean up the names to avoid the O'Regan bug
-			#   JA 24.8.03
-			my $authorizer = $q->param("authorizer");
-			my $enterer = $q->param("enterer");
-			$authorizer =~ s/'/\\'/g;
-			$enterer =~ s/'/\\'/g;
 
 			
 			# record the authorizer_no and enterer_no
