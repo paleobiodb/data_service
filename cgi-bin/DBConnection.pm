@@ -22,16 +22,16 @@ my $userName =		"pbdbuser";
 
 # backup = "pbdb_paul"
 # server = "pbdb"
-my $dbName;
+my $dbName = "pbdb";
 
 # something like flatpebble.nceas.ucsb.edu, or paleobackup.nceas.ucsb.edu..
-my $hostname = `hostname`;  
+#my $hostname = `hostname`;  
 
-if ($hostname =~ m/paleobackup/) {
-	$dbName = "pbdb_paul";	
-} else {
-	$dbName = "pbdb";	# the live server.	
-}
+# if ($hostname =~ m/paleobackup/) {
+#	$dbName = "pbdb_paul";	
+#} else {
+#	$dbName = "pbdb";	# the live server.	
+#}
 
 
 # the password is stored in a file.  This path will work on both the linux box
