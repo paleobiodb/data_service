@@ -17,6 +17,7 @@ use Report;
 use Curve;
 use Permissions;
 use PBDBUtil;
+use TaxonInfo;
 
 require "connection.pl";	# Contains our database connection info
 
@@ -1280,6 +1281,12 @@ sub displayCollResults {
 	#$p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
     my $displayRows = @dataRows;				# This is the actual number of rows displayed
 
+    # the taxon info script displays the rows differently than say, 
+    # the displayCollectionDetails method.
+    if ($q->param("taxon_info_script") eq "yes"){
+    	return \@dataRows;
+    }
+
     if ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
 		# get the enterer's preferences (needed to determine the number
 		#  of displayed blanks) JA 1.8.02
@@ -2208,6 +2215,22 @@ sub startReidentifyOccurrences {
 	$q->param( "type" => "select" );
 	&displaySearchRefs ( );
 }
+
+##############
+## Taxon Info Stuff
+sub beginTaxonInfo{
+	TaxonInfo::startTaxonInfo();
+}
+
+sub checkTaxonInfo{
+	TaxonInfo::checkStartForm($q, $dbh, $s);
+}
+
+sub displayTaxonInfoResults{
+	TaxonInfo::displayTaxonInfoResults($q, $dbh, $s);
+}
+## END Taxon Info Stuff
+##############
 
 # JA 13.8.02
 sub startTaxonomy	{
