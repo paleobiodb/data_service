@@ -690,19 +690,6 @@ sub setPreferences	{
 }
 
 
-sub newAuthorityTesting {
-	print stdIncludes("std_page_top");
-	print "<H2>Regular taxonomic entry is disabled until the new forms have been completed (which should be in a few days).</H2>
-	We'd appreciate your help debugging the new version of the authority/opinion entry forms.  Click
-	<A HREF=\"http://paleobackup.nceas.ucsb.edu:8110/cgi-bin/bridge.pl?user=Contributor&action=displayHomePage\">here</A> to log in to our backup server so you can try out the new form.  <B>Any data you enter or edit on the backup server will not affect data on the live server.</B> <BR><BR>
-	Go to the main menu on the backup server, and click on the <i>Add/edit taxononomic name<i> link, or the <i>Add/edit taxonomic opinion</i> link.  Feel free to try entering bogus data, corrupt existing data, etc. - it's the backup server, so it doesn't matter.  Send your bug reports to alroy at nceas.ucsb.edu, and cc it to poling at nceas.ucsb.edu.<BR><BR>
-	Also note that you can only enter authority information for a taxon at this time.  The new opinion form has not yet been completed.<BR><BR>
-	Testing begins: March 8th, 2004.  Unless we receive bug reports from you, the new forms will appear on the real server sometime in the week of March 14th.<BR><BR>";
-	
-	print stdIncludes("std_page_bottom");
-}
-
-
 # rjp, 3/2004
 #
 # Displays a form with authority data about a taxon.
