@@ -623,7 +623,7 @@ sub doModules{
 	}
 	# collections
 	elsif($module == 5){
-		print doCollections($exec_url, $q, $in_list);
+		print doCollections($exec_url, $q, $dbt, $in_list);
 	}
 }
 
@@ -679,6 +679,7 @@ sub doMap{
 sub doCollections{
 	my $exec_url = shift;
 	my $q = shift;
+	my $dbt = shift;
 	my $in_list = shift;
 	my $output = "";
 
@@ -694,7 +695,7 @@ sub doCollections{
 	# time-place string together as a hash.
 	%time_place_coll = ();
 	foreach my $row (@data){
-	    $res = Collections::createTimePlaceString($row);
+	    $res = Collections::createTimePlaceString($row,$dbt);
 	    if(exists $time_place_coll{$res}){
 			push(@{$time_place_coll{$res}}, $row->{"collection_no"});
 	    }
@@ -704,7 +705,8 @@ sub doCollections{
 	    }
 	}
 
-	my @sorted = sort by_time_place_string (keys %time_place_coll);
+	my @sorted = sort (keys %time_place_coll);
+#	my @sorted = sort by_time_place_string (keys %time_place_coll);
 
 	if(scalar @sorted > 0){
 		# Do this locally because the module never gets exec_url
@@ -712,7 +714,8 @@ sub doCollections{
 		my $exec_url = $q->url();
 		$output .= "<center><h3>Collections</h3></center>";
 		$output .= "<table width=\"100%\"><tr bgcolor=\"white\">";
-		$output .= "<th align=\"middle\">Time - place</th>";
+		$output .= "<th align=\"middle\">Country or state</th>";
+		$output .= "<th align=\"middle\">Time interval</th>";
 		$output .= "<th align=\"left\">PBDB collection number</th></tr>";
 		my $row_color = 0;
 		foreach my $key (@sorted){
