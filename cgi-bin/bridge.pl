@@ -2170,7 +2170,7 @@ sub rarefyAbundances	{
 	close OUT;
 	print "</table></center>\n<p>\n\n";
 	print "<center><i>Results are based on 200 random sampling trials. Average species count is an arithmetic mean, whereas confidence intervals are nonparametric.</i><p>\n\n";
-	print "<i>The data can be downloaded from a <a href=\"$HOST_URL/$OUTPUT_DIR/rarefaction.csv\">comma-delimited text file</a>.</i></center><p>\n\n";
+	print "<i>The data can be downloaded from a <a href=\"$HOST_URL/$OUTPUT_DIR/rarefaction.csv\">tab-delimited text file</a>.</i></center><p>\n\n";
 
 	print &stdIncludes ("std_page_bottom");
 
