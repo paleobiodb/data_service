@@ -1,5 +1,5 @@
 //some common java script functions which are used throughout the web site.
-//**note, these are for use on BOTH the PUBLIC and PRIVATE page.
+//note, these are for use on BOTH the PUBLIC and PRIVATE page.
 //created by rjp, 1/2004.
 
 
@@ -7,14 +7,14 @@ function checkBrowserVersion() {
 	var match = /Microsoft/i;
 	
 	if (match.test(navigator.appName)) {
-		document.write("<div class=\"warning\">Internet Explorer is not recommended for this web site. Most other standards compliant browsers such as  <A HREF=\"http://www.mozilla.org/\">Mozilla</A>, <A HREF=\"http://www.mozilla.org/products/firefox/\">Firefox</A>, or <A HREF=\"http://www.apple.com/safari/\">Safari</A> should work fine.</div>");
+		document.write("<div class=\"warning\">Internet Explorer is not recommended for this web site.<BR> Read the web browsers <A HREF=\"javascript: tipsPopup('/public/tips/browser_tips.html')\">tip sheet</A> for information on which browser to download.</div>");
 	}
 }
 
 
-//*****************************
+//
 // for validation of form input
-//*****************************
+//
 
 // returns true if the input is in a proper format for a last name
 function properLastName(input) {
