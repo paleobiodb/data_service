@@ -80,6 +80,26 @@ function taxonRank(taxon) {
 }
 
 
+// pass this a specific rank such as subspecies, genus, order, family, etc. 
+// and a general rank which is one of the results returned by the taxonRank() function
+// subspecies, species, higher, or invalid.
+//
+// returns true if they match (ie, if order and higher, then it matches), or false otherwise.
+function specificRankMatchesGeneralRank(specific, general) {
+	var toreturn = true;
+	
+	if (general == "subspecies") {	
+		toreturn = (specific == "subspecies");
+	} else if (general == "species") {
+		toreturn = (specific == "species");
+	} else if (general == "invalid") {
+		toreturn = false;	
+	}
+	
+	return toreturn;
+}
+
+
 // Error is a JavaScript class for error reporting..  
 // To use it, first create a new instance of the object, for example
 // var err = new Error();  // you can optionally pass an error message in the constructor

@@ -118,11 +118,11 @@ div.emphasized {
 	background-color: RGB(230,230,230);
 	
 	border-style: solid;  /*solid, dashed, dotted, grooved */
-    border-color: RGB(200,200,200);
-    border-left-width: 0px;
-    border-right-width: 0px;
-    border-bottom-width: 0px;
-    border-top-width: 0px;
+    border-color: RGB(220,220,220);
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+    border-top-width: 1px;
 }
 
 
