@@ -2381,12 +2381,11 @@ sub processCollectionsSearch {
 										
 					if ($in_list eq "") {
 						dbg("RE-RUNNING TAXONOMIC SEARCH in bridge<br>");
-		# WARNING: following line commented out by Muhl, probably
-		#  because he replaced it with a call to ./recurse;
-		#  uncommented by Poling, probably because he was an idiot
-						# $in_list = PBDBUtil::taxonomic_search($q->param('genus_name'), $dbt);
-                        my $name = $q->param('genus_name');
-                        $in_list = `./recurse $name`;
+			# JA: Muhl switched to recurse call, I'm switching back
+			#  because I'm not maintaining recurse
+						$in_list = PBDBUtil::taxonomic_search($q->param('genus_name'), $dbt);
+                        			# my $name = $q->param('genus_name');
+                        			# $in_list = `./recurse $name`;
 					}
 					
 					$sql->addWhereItem("genus_name IN ($in_list)");
