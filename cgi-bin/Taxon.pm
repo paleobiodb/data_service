@@ -80,7 +80,6 @@ use fields qw(
 # (string) nameForRank(string rank)
 # (int) numberForRank(string rank)
 # (int) originalCombination
-# (\@) listOfChildren()
 #
 
 
@@ -715,79 +714,6 @@ sub createTaxaHash {
 	#store the hash in the object data field
 	$self->{taxaHash} = \%hash;
 }
-
-
-
-# Returns a reference to a sorted array of the "children" to this taxon, ie, the ones
-# right below it in ranking.  Each element is a taxon object.
-# Note, for now, this just looks at the opinions and
-# authorities table, so if a taxon exists in an occurrence, but doesn't exist in the
-# authorities table, it won't be listed.  Also, note that for children of a genus 
-# (ie, species), it will also do a pattern match for the taxon_name in the authorities
-# table so that taxa will be included in the list for which opinions don't exist.  Ie,
-# if a taxon exists in the authorities table, but doesn't have any opinions about it,
-# then it will still be listed.
-#
-# For example, if the taxon is a Genus, it will return a list of species.
-#  
-sub listOfChildren {
-	my Taxon $self = shift;
-
-	my $sql = $self->getTransactionManager();
-	my $rank = $self->rankString(); # rank of the parent taxon
-	my $tn = $self->{taxonNumber};  # number of the parent taxon
-	my $tname = $self->taxonName();
-	
-	$sql->setSQLExpr("SELECT DISTINCT taxon_name, taxon_no
-			   		FROM opinions, authorities
-					WHERE parent_no = $tn 
-					AND status = 'belongs to' AND child_no = taxon_no 
-					ORDER BY taxon_name");
-	
-	my $results = $sql->allResultsArrayRef();
-	
-	# build up a hash of taxa names so we can more easily insert the addional
-	# names that we'll fetch below..
-	
-	my %taxaHash;
-	foreach my $r (@$results) {
-		$taxaHash{$r->[0]} = $r->[1];  # key is name, value is taxon_no	
-	}
-	
-	# if the parent rank is a genus, then we will also look through the authorities
-	# table for taxa starting with the genus name, but possibly which don't have
-	# opinions about them.
-	if ($rank eq GENUS) {
-		# note, the space after in '$tname \%' is important.
-		$sql->setSQLExpr("SELECT DISTINCT taxon_name, taxon_no FROM authorities 
-			WHERE taxon_name LIKE '$tname \%' ORDER BY taxon_name");
-	
-		$results = $sql->allResultsArrayRef();
-	
-		foreach my $r (@$results) {
-			$taxaHash{$r->[0]} = $r->[1]; # key is name, value is taxon_no
-		}		
-	}
-	
-	# at this point, we should have a hash which contains keys for each taxa to display
-	# so, get the keys, sort them, and we're done.
-	
-	my @taxa;
-	my @taxaKeys = keys(%taxaHash);
-	foreach my $k (@taxaKeys) {
-		my $newT = Taxon->new($self->{GLOBALVARS});
-		$newT->setWithTaxonNumber($taxaHash{$k});
-		push(@taxa, $newT);  # add the new taxon object onto the taxa array
-	}
-	
-
-	# at this point, we have an array of taxon objects.
-	# so, we'll sort it based on taxon_name
-	@taxa = sort { $a->taxonName() cmp $b->taxonName() } @taxa;
-	return \@taxa;
-}
-
-
 
 # debugging
 sub printTaxaHash {
