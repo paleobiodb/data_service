@@ -1430,18 +1430,29 @@ sub processCollectionsSearch {
 						"environment"		=> 1 );
 
 					
+	my $genus_name = $q->param('genus_name');
+
 	# If a genus name is requested, query the occurrences table to get
 	#   a list of useable collections
 	# WARNING: wild card searches in this case DO require exact matches
 	#   at the beginning of the genus name
 	# Also searches reIDs table JA 16.8.02
 	# Handles species name searches JA 19-20.8.02
-	if ( $q->param('genus_name') )	{
+	if($genus_name){
 		# Fix up the genus name and set the species name if there is a space 
 		my $genus;
+		my $sub_genus;
 		my $species;
-		if ( $q->param('genus_name') =~ / / )	{
-			($genus,$species) = split / /,$q->param('genus_name');
+		if($genus_name =~ / /){
+			# Look for a subgenus in parentheses
+			if($genus_name =~ /\([A-Za-z]+\)/ && 
+							($q->param('taxon_rank') ne 'species')){
+				$genus_name =~ /([A-Z][a-z]+)\s\(([A-Z][a-z]+)\)\s?([a-z]*)/;
+				($genus, $sub_genus, $species) = ($1, $2, $3);
+			}
+			else{
+				($genus,$species) = split / /,$q->param('genus_name');
+			}
 		} elsif ( $q->param('taxon_rank') eq "species" )	{
 			$species = $q->param('genus_name');
 		} else	{
@@ -1461,6 +1472,12 @@ sub processCollectionsSearch {
 			}
 			if ( $genus )	{
 				$sql .= "genus_name" . $relationString . $genus . $wildCard;
+				if ( $sub_genus || $species )	{
+					$sql .= " AND ";
+				}
+			}
+			if ( $sub_genus )	{
+				$sql .= "subgenus_name" . $relationString.$subgenus.$wildCard;
 				if ( $species )	{
 					$sql .= " AND ";
 				}
@@ -1745,6 +1762,8 @@ sub buildTaxonomicList {
 	my $collection_refno = shift;
 	my $gnew_names = shift;
 	my @gnew_names = @{$gnew_names};
+	my $subgnew_names = shift;
+	my @subgnew_names = @{$subgnew_names};
 	my $snew_names = shift;
 	my @snew_names = @{$snew_names};
 	my $new_found = 0;
@@ -1779,12 +1798,16 @@ sub buildTaxonomicList {
 		my $abundance;
 		my $comments;
 		my $genus_index = -1;
+		my $subgenus_index = -1;
 		my $species_index = -1;
 
 		# helps in setting bold genus/species names
 		for($i=0; $i<@occFieldNames; $i++){
 			if($occFieldNames[$i] eq 'genus_name'){
 				$genus_index = $i;
+			}
+			elsif($occFieldNames[$i] eq 'subgenus_name'){
+				$subgenus_index = $i;
 			}
 			elsif($occFieldNames[$i] eq 'species_name'){
 				$species_index = $i;
@@ -1797,6 +1820,14 @@ sub buildTaxonomicList {
 			foreach my $nn (@gnew_names){
 				if($rowref->[$genus_index] eq $nn){
 					$rowref->[$genus_index] = "<b>".$rowref->[$genus_index]."</b>";
+					$new_found = 1;
+				}
+			}
+
+			# check for unrecognized subgenus names
+			foreach my $nn (@subgnew_names){
+				if($rowref->[$subgenus_index] eq $nn){
+					$rowref->[$subgenus_index] = "<b>".$rowref->[$subgenus_index]."</b>";
 					$new_found = 1;
 				}
 			}
@@ -2673,13 +2704,16 @@ sub processEditOccurrences {
 	}
 
 	# for identifying unrecognized (new to the db) genus/species names.
-	my @gnew_names = ();
-	my @snew_names = ();
+	my @gnew_names = (); # genus
+	my @subgnew_names = (); # subgenus
+	my @snew_names = (); # species
 	my $gnew_names_ref = $all_params{'genus_name'};
+	my $subgnew_names_ref = $all_params{'subgenus_name'};
 	my $snew_names_ref = $all_params{'species_name'};
 	# get all genus names in order to check for a new name
-	push(@gnew_names, PBDBUtil::newGenusNames($dbh,$gnew_names_ref));
-	push(@snew_names, PBDBUtil::newSpeciesNames($dbh,$snew_names_ref));
+	push(@gnew_names, PBDBUtil::newTaxonNames($dbh,$gnew_names_ref,'genus'));
+	push(@subgnew_names, PBDBUtil::newTaxonNames($dbh,$subgnew_names_ref,'subgenus'));
+	push(@snew_names, PBDBUtil::newTaxonNames($dbh,$snew_names_ref,'species'));
 
 	# list of required fields
 	my @required_fields = ("authorizer", "enterer", "collection_no", "genus_name", "species_name", "reference_no");
@@ -3020,7 +3054,7 @@ sub processEditOccurrences {
 	# Show the rows for this collection to the user
 	my $collection_no = ${$all_params{collection_no}}[0];
 
-	print &buildTaxonomicList ( $collection_no, 0,\@gnew_names, \@snew_names );
+	print &buildTaxonomicList ( $collection_no, 0,\@gnew_names,\@subgnew_names,\@snew_names );
 
 	# Show a link to re-edit
 	print "
