@@ -4191,6 +4191,7 @@ sub displayTaxonomyResults	{
 		updateRecord( 'authorities', 'taxon_no', $q->param('taxon_no') );
 	} else	{
 		$q->param(reference_no => $s->get('reference_no') );
+		dbg("insertRecord called from displayTaxonomyResults (new name)<br>");
 		insertRecord( 'authorities', 'taxon_no', \$taxon_no, '9', 'taxon_name' );
 		$q->param(taxon_no => $taxon_no);
 		$taxon_is_new = 1;
@@ -4363,6 +4364,7 @@ sub displayTaxonomyResults	{
 		# Make sure the ref no was set (won't happen if the child taxon
 		#  already existed)
 		$q->param(reference_no => $s->get('reference_no') );
+		dbg("insertRecord called from displayTaxonomyResults (new opinion)<br>");
 		push @lastOpinions , insertRecord( 'opinions', 'opinion_no', \$opinion_no, '9', 'parent_no' );
 	}
 
@@ -4378,6 +4380,7 @@ sub displayTaxonomyResults	{
 		my $opinion_no;
 		# Don't save another copy of the comments
 		$q->param(comments => '');
+		dbg("insertRecord called from displayTaxonomyResults (recombined)<br>");
 		push @lastOpinions , insertRecord( 'opinions', 'opinion_no', \$opinion_no, '9', 'parent_no' );
 	}
 
@@ -4437,6 +4440,7 @@ sub insertSwappedTaxon	{
 	# Add the taxon
 	# WARNING: by using taxon_no (the primary key) as the fifth field,
 	# this fools checkNearTaxon into always adding the record
+	dbg("insertRecord called from insertSwappedTaxon<br>");
 	insertRecord( 'authorities', 'taxon_no', \$my_taxon_no, '9', 'taxon_no' );
 
 	print "<center><h4>$temp_taxon has been entered into the Database</h4></center>\n\n";
@@ -5119,58 +5123,9 @@ sub insertRecord {
 	if($fields_ref && $vals_ref && ($tableName eq "refs")){
 		processNewRef($recID);
 	}
-	# Show entered rec (and other, related recs?) and give a link to
-	# do more of the same
-	elsif($fields_ref && $vals_ref && ($tableName eq "opinions")){
-		my $sql="SELECT * FROM opinions WHERE opinion_no=$recID";
-		my @results = @{$dbt->getData($sql)};
-
-		my $sql="SELECT * FROM authorities WHERE taxon_no=".
-				$results[0]->{parent_no};
-		my @other_results = @{$dbt->getData($sql)};
-
-		print stdIncludes("std_page_top");
-		print "<center><b>Record added:</b>";
-		print "<table><tr>";
-		print "<td>$results[0]->{status} $other_results[0]->{taxon_name} ".
-			  "$results[0]->{author1last} $results[0]->{pubyr} ";
-
-		my $sql="SELECT p1.name as name1, p2.name as name2, ".
-				"p3.name as name3 ".
-				"FROM person as p1, person as p2, person as p3 WHERE ".
-				"p1.person_no=$results[0]->{authorizer_no} ".
-				"AND p2.person_no=$results[0]->{enterer_no} ".
-				"AND p3.person_no=$results[0]->{modifier_no}";
-		my @results = @{$dbt->getData($sql)};
-
-		print "<font class=\"tiny\">[".
-			  "$results[0]->{name1}/$results[0]->{name2}/".
-			  "$results[0]->{name3}]".
-			  "</font></td>";
-		print "</tr></table>";
-		print "<p><a href=\"/cgi-bin/bridge.pl?action=startTaxonomy\">Enter more taxonomic information</a></center>";
-
-		print stdIncludes("std_page_bottom");
-	}
-	elsif($fields_ref && $vals_ref && ($tableName eq "authorities")){
-        my $sql="SELECT * FROM authorities WHERE taxon_no=$recID";
-        my @results = @{$dbt->getData($sql)};
-
-		print stdIncludes("std_page_top");
-		print "<center><b>Record added:</b>";
-        print "<table><tr>";
-        print "<td>$results[0]->{taxon_rank} $results[0]->{taxon_name} ".
-              "$results[0]->{author1last} $results[0]->{pubyr} ";
-
-        print "</td></tr></table>";
-		print "<p><a href=\"/cgi-bin/bridge.pl?action=startTaxonomy\">Enter more taxonomic information</a></center>";
-		print stdIncludes("std_page_bottom");
-	}
-	else{
-		print stdIncludes("std_page_top");
-		print "<center><b>Record added.</b></center>";
-		print stdIncludes("std_page_bottom");
-	}
+	# NOTE: we can also be in a reentry scenario (via processCheckNearMatch)
+	# with the taxonomy scripts (authorities or opinions tables) but the
+	# taxonomy scripts handle the display when this method returns to them.
 
 	$$primary_key = $recID;
 	return 1;
