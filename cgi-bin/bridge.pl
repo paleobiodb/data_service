@@ -2383,7 +2383,10 @@ sub startTaxonomy	{
 		$s->enqueue( $dbh, "action=displayTaxonomySearchForm" );
 	# otherwise go right to the edit page
 	} else	{
-		$s->enqueue( $dbh, "action=displayTaxonomyEntryForm" );
+		my $temp = "action=displayTaxonomyEntryForm?taxon_name=";
+		$temp .= $q->param('taxon_name');
+		$temp .= "&taxon_no=" . $q->param('taxon_no');
+		$s->enqueue( $dbh, $temp );
 	}
 	$q->param( "type" => "select" );
 	&displaySearchRefs ( "Please choose a reference first" );
