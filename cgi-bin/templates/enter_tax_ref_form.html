@@ -1,11 +1,11 @@
 
 <center>
-<p><input id="ref_is_authority" type=checkbox value="YES"> It was first named in the data record's primary reference, which is:</p>
+<p><input id="ref_is_authority" name="ref_is_authority" type=checkbox value="YES"> It was first named in the data record's primary reference, which is:</p>
 
 <span id="ref_string"></span>
 <br>
-<b>Pages*:</b> <input id="pages" size=12>
-<b>Figures*:</b> <input id="figures" size=12><p>
+<b>Pages*:</b> <input id="pages" name="pages" size=12>
+<b>Figures*:</b> <input id="figures" name="figures" size=12><p>
 
 <p>... <i>or</i> it was named in an earlier publication, which is:</p>
 
@@ -13,14 +13,14 @@
 <tr>
 <td><td class=tiny>initials <td class=tiny>last name
 <td><td class=tiny>initials <td class=tiny>last name
-<tr><td align=right><b>First author:</b> <td><input id="author1init" size=6> <td><input id="author1last" size=20><br>
-<td align=right><b>Second author:</b> <td><input id="author2init" size=6> <td><input id="author2last" size=20><br>
+<tr><td align=right><b>First author:</b> <td><input id="author1init" name="author1init" size=6> <td><input id="author1last" name="author1last" size=20><br>
+<td align=right><b>Second author:</b> <td><input id="author2init" name="author2init" size=6> <td><input id="author2last" name="author2last" size=20><br>
 </tr>
-<tr><td valign=top align=right><b>Other authors:</b> <td colspan=5><textarea id="otherauthors" rows=3 cols=80></textarea><br>
+<tr><td valign=top align=right><b>Other authors:</b> <td colspan=5><textarea id="otherauthors" name="otherauthors" rows=3 cols=80></textarea><br>
 </tr>
-<tr><td align=right><b>Year:</b> <td colspan=1><input id="pubyr" size=6>
-<td colspan=4><b>Pages*:</b> <input id="2nd_pages" size=12>
-<b>Figures*:</b> <input id="2nd_figures" size=12>
+<tr><td align=right><b>Year:</b> <td colspan=1><input id="pubyr" name="pubyr" size=6>
+<td colspan=4><b>Pages*:</b> <input id="2nd_pages" name="2nd_pages" size=12>
+<b>Figures*:</b> <input id="2nd_figures" name="2nd_figures" size=12>
 </tr>
 </table>
 
@@ -33,11 +33,11 @@
 <center>
 <table>
 <tr>
-<td align=right><b>Original rank:</b> </td> <td><select id="taxon_rank"></select> </td>
+<td align=right><b>Original rank:</b> </td> <td><select id="taxon_rank" name="taxon_rank"></select> </td>
 </tr><tr>
-<td align=right><b>Name of type taxon:</b> </td> <td><input id="type_taxon_name" size=50>
+<td align=right><b>Name of type taxon:</b> </td> <td><input id="type_taxon_name" name="type_taxon_name" size=50>
 </td></tr>
-<tr><td align=right><b>Comments:</b> <td colspan=5><textarea id="comments" rows=2 cols=80></textarea><br>
+<tr><td align=right><b>Comments:</b> <td colspan=5><textarea id="comments" name="comments" rows=2 cols=80></textarea><br>
 </table>
 </center>
 
