@@ -21,7 +21,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out.
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdec latdir lngdeg lngmin lngsec lngdec lngdir latlng_basis altitude_value altitude_unit geogscale geogcomments zone period_max epoch_max max_interval_no min_interval_no research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 otherenvironment rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdec latdir lngdeg lngmin lngsec lngdec lngdir latlng_basis altitude_value altitude_unit geogscale geogcomments zone period_max epoch_max locage_max max_interval_no min_interval_no research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 otherenvironment rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
 my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name reference_no comments created modified modified_temp plant_organ);
 my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
@@ -217,6 +217,7 @@ sub retellOptions {
 					"collections_geogcomments", 
 					"collections_period_max", 
 					"collections_epoch_max", 
+					"collections_locage_max", 
 					"collections_max_interval_no", 
 					"collections_min_interval_no", 
 					"collections_zone", 
@@ -634,7 +635,12 @@ sub getNotNullString {
 # get a hash table mapping interval numbers into intervals of the selected
 #   time scale
 sub getTimeLookup	{
-	my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, $q->param('time_scale'));
+	my $intervalInScaleRef;
+	if ( $q->param('time_scale') eq "PBDB 10 m.y. bins" )	{
+		$intervalInScaleRef = TimeLookup::processBinLookup($dbh,$dbt);
+	} else	{
+		$intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, $q->param('time_scale'));
+	}
 	%intervallookup = %{$intervalInScaleRef};
 }
 
@@ -757,6 +763,12 @@ sub doQuery {
 	if ( $q->param('collections_epoch_max') )	{
 		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '4');
 		%myepoch = %{$intervalInScaleRef};
+	}
+	# get the PBDB 10 m.y. bin names for the collections JA 3.3.04
+	# WARNING: the locage_max field is just being used as a dummy
+	if ( $q->param('collections_locage_max') )	{
+		my $intervalInScaleRef = TimeLookup::processBinLookup($dbh,$dbt);
+		%mybin = %{$intervalInScaleRef};
 	}
 
 
@@ -1084,6 +1096,11 @@ sub doQuery {
 				$row->{$column} = $myperiod{$row->{collection_no}};
 			} elsif ( $column eq "epoch_max" )	{
 				$row->{$column} = $myepoch{$row->{collection_no}};
+			# WARNING: similar trick here in which useless legacy
+			#  field locage_max is used as a placeholder for the
+			#  bin name
+			} elsif ( $column eq "locage_max" )	{
+				$row->{$column} = $mybin{$row->{collection_no}};
 			}
 
 			push ( @coll_row, $row->{$column} );
@@ -1182,10 +1199,42 @@ sub doQuery {
 	# print out a list of time intervals with counts of occurrences
 	if ( $q->param('time_scale') )	{
 		open SCALEFILE,">$OUT_FILE_DIR/$scaleOutFileName";
-		# we need a list of interval names in the order they appear
+		my @intervalnames;
+
+		#  list of 10 m.y. bin names
+		if ( $q->param('time_scale') =~ /bin/ )	{
+			@intervalnames = ("Cenozoic 6", "Cenozoic 5",
+			 "Cenozoic 4", "Cenozoic 3", "Cenozoic 2", "Cenozoic 1",
+			 "Cretaceous 8", "Cretaceous 7", "Cretaceous 6",
+			 "Cretaceous 5", "Cretaceous 4", "Cretaceous 3",
+			 "Cretaceous 2", "Cretaceous 1", "Jurassic 6",
+			 "Jurassic 5", "Jurassic 4", "Jurassic 3",
+			 "Jurassic 2", "Jurassic 1", "Triassic 5",
+			 "Triassic 4", "Triassic 3", "Triassic 2",
+			 "Triassic 1", "Permian 5", "Permian 4",
+			 "Permian 3", "Permian 2", "Permian 1",
+			 "Carboniferous 5", "Carboniferous 4",
+			 "Carboniferous 3", "Carboniferous 2",
+			 "Carboniferous 1", "Devonian 5",
+			 "Devonian 4", "Devonian 3", "Devonian 2",
+			 "Devonian 1", "Silurian 2", "Silurian 1",
+			 "Ordovician 5", "Ordovician 4", "Ordovician 3",
+			 "Ordovician 2", "Ordovician 1", "Cambrian 5",
+			 "Cambrian 4", "Cambrian 3", "Cambrian 2",
+			 "Cambrian 1" );
+		} else	{
+		# or we need a list of interval names in the order they appear
 		#   in the scale, which is stored in the correlations table
-		my $sql = "SELECT intervals.eml_interval,intervals.interval_name,intervals.interval_no,correlations.correlation_no FROM intervals,correlations WHERE intervals.interval_no=correlations.interval_no AND correlations.scale_no=" . $q->param('time_scale') . " ORDER BY correlations.correlation_no";
-		my @intervalrefs = @{$dbt->getData($sql)};
+			my $sql = "SELECT intervals.eml_interval,intervals.interval_name,intervals.interval_no,correlations.correlation_no FROM intervals,correlations WHERE intervals.interval_no=correlations.interval_no AND correlations.scale_no=" . $q->param('time_scale') . " ORDER BY correlations.correlation_no";
+			my @intervalrefs = @{$dbt->getData($sql)};
+			for my $ir ( @intervalrefs )	{
+				my $iname = $ir->{interval_name};
+				if ( $ir->{eml_interval} ne "" )	{
+					$iname = $ir->{eml_interval} . " " . $iname;
+				}
+				push @intervalnames, $iname;
+			}
+		}
 
 		# need a list of enum values that actually have counts
 		# NOTE: we're only using occsbycategory to generate this list,
@@ -1210,12 +1259,9 @@ sub doQuery {
 			}
 		}
 		print SCALEFILE "\n";
-		for my $ir ( @intervalrefs )	{
+
+		for my $intervalName ( @intervalnames )	{
 			$acceptedIntervals++;
-			$intervalName = $ir->{interval_name};
-			if ( $ir->{eml_interval} ne "" )	{
-				$intervalName = $ir->{eml_interval} . " " . $intervalName;
-			}
 			print SCALEFILE "$intervalName";
 			print SCALEFILE "\t$occsbybin{$intervalName}";
 			for my $val ( @enumvals )	{
