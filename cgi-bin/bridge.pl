@@ -73,7 +73,7 @@ use Globals;
 # It will be passed to most classes when we're creating new objects.
 %GLOBALVARS;
 
-my $DEBUG = 0;		# Shows debug information regarding the page if set to 1
+my $DEBUG = 1;		# Shows debug information regarding the page if set to 1
 
 my $DUPLICATE = 2;	# not sure what this is for?
 
@@ -2137,25 +2137,25 @@ sub displayCollResults {
         if ($ofRows > 1)
         {
             my $printRows;
-            print "<h3>Your search produced $ofRows matches.</h3>\n";
+            print "<h3>Your search produced $ofRows matches</h3>\n";
             if ($ofRows > $limit) {
                 print "<h4>Here are";
                 if ($rowOffset > 0) {
                     print " rows ".($rowOffset+1)." to ";
                     $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
                     print $printRows;
-                    print ".</h4>\n";
+                    print "</h4>\n";
                 } else {
                     print " the first ";
                     $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
                     print $printRows;
-                    print " rows.</h4>\n";
+                    print " rows</h4>\n";
                 }
             }
 		} elsif ( $ofRows == 1 ) {
-            print "<h3>Your search produced exactly one match.</h3>\n";
+            print "<h3>Your search produced exactly one match</h3>\n";
 		} else	{
-            print "<h3>Your search produced no matches.</h3>\n";
+            print "<h3>Your search produced no matches</h3>\n";
 		}
 		print "</center>\n";
 		print "<br>\n";
@@ -2305,9 +2305,9 @@ sub displayCollResults {
     if (($rowOffset + $limit) < $ofRows) {
         my $numLeft;
         if (($rowOffset + $limit + $limit) > $ofRows) { 
-            $numLeft = "last " . ($ofRows - $rowOffset - $limit);
+            $numLeft = "the last " . ($ofRows - $rowOffset - $limit);
         } else {
-            $numLeft = "next " . $limit;
+            $numLeft = "the next " . $limit;
         }
         print "<a href='$exec_url?$getString'><b>Get $numLeft collections</b></a> - ";
     } 
