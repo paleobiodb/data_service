@@ -67,20 +67,14 @@ function checkForm ( ) {
 		&& frm.genus_name.value == ""
 		&& frm.country.value == ""
 		&& frm.state.value == ""
-		&& frm.epoch.value == ""
-		&& frm.intage.value == ""
-		&& frm.locage.value == ""
+		&& frm.max_interval.value == ""
 		&& frm.group_formation_member.value == ""
-		//&& frm.formation.value == ""
-		//&& frm.member.value == "" 
-		&& frm.authorizer.selectedIndex == -1
-		&& frm.enterer.selectedIndex == -1
-		&& frm.research_group.selectedIndex == -1 
-		&& frm.period.selectedIndex == -1
-		&& frm.lithology1.selectedIndex == -1
-		&& frm.lithology2.selectedIndex == -1
-		&& frm.environment.selectedIndex == -1 ) {
-		errors = "Please supply a search term.";
+		&& frm.authorizer.selectedIndex == 0
+		&& frm.enterer.selectedIndex == 0
+		&& frm.research_group.selectedIndex == 0 
+		&& frm.lithology1.selectedIndex == 0
+		&& frm.environment.selectedIndex == 0 ) {
+		errors = "Please supply a search term";
 	}
 
 	if ( errors != "" ) { 
