@@ -210,7 +210,7 @@ sub checkWhereClause{
 	# all AND clauses.
 	$sql =~ /WHERE\s+([A-Z0-9_\.\(]+)\s*(=|LIKE|IN|!=|>|<|>=|<=)\s*(.+)?\s*/i;
 
-	print "\$1: $1, \$2: $2 \$3: $3<br>";
+	#print "\$1: $1, \$2: $2 \$3: $3<br>";
 	if(!$1){
 		return 0;
 	}
