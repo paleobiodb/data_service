@@ -687,7 +687,6 @@ sub displayTaxonInfoResults {
 	# or a "nomen *" relationship, then do the display page on what was entered.
 	# If any other relationship exists for the most recent parent, display info 
 	# on that parent.  
-	#my @verified = verify_chosen_taxon($dbt, $taxon_no);
 	#$genus_name = $verified[0];
 	#$taxon_no = $verified[1];
     #print "verified $genus_name, $taxon_no orig $entered_name, $entered_no<br>";
@@ -1557,8 +1556,8 @@ sub displayTaxonClassification{
                 } else {
                     $link_sp = $species;
                 }
-                $output .= "<tr class=\"darkList\"><td>genus</td><td>$link_genus</td><td>&nbsp;</td></tr>";
-                $output .= "<tr><td>species</td><td>$link_sp</td><td>&nbsp;</td></tr>";
+                $output .= qq|<tr class="darkList"><td align="middle">genus</td><td align="middle">$link_genus</td><td>&nbsp;</td></tr>|;
+                $output .= qq|<tr><td align="middle">species</td><td align="middle">$link_sp</td><td>&nbsp;</td></tr>|;
             } 
             $output .= "</table>";
 
@@ -2265,48 +2264,6 @@ sub array_push_unique{
 		}
 	}
 	return \@orig;
-}
-
-# If the entered taxon is a synonym or recombination, then return the synonym or recombination
-# Else just return what the user pased in
-# DEPRECATED PS 
-sub verify_chosen_taxon{
-	my $dbt = shift;
-	my $taxon_no = shift;
-
-	my $sql = "";
- 	my @results = ();
-
-    $taxon_no = getOriginalCombination($dbt,$taxon_no);
-    #$taxon_name = ${$dbt->getData("SELECT taxon_name FROM authorities WHERE taxon_no=$taxon_no")}[0]->{'taxon_name'};
-
-    $row = PBDBUtil::getCorrectedName($dbt,$taxon_no,0,1);
-    $taxon_no=$row->{'taxon_no'};
-    $taxon_name=$row->{'taxon_name'};
-	#$sql = "SELECT parent_no, pubyr, reference_no, status ".
-	#	   "FROM opinions WHERE child_no=$taxon_no";
-	#@results = @{$dbt->getData($sql)};
-
-    #print "taxon no is $taxon_no taxon name is $taxon_name<br>";
-
-	# Elephas maximus won't return anything for the same reason mentioned above.
-	#if (scalar(@results) > 0) {
-    #    my $index = selectMostRecentParentOpinion($dbt, \@results, 1);
-    #    use Data::Dumper;
-    #    print Dumper(\@results)."<br>";
-    #    print "index is $index<br>";
-
-        # if the most recent parent is a 'belongs to' relationship, just return
-        # what we were given (or found in recombinations).
-        # Otherwise, return the name and number of the parent.
-    #    if($results[$index]->{status} ne "belongs to" &&
-    #       $results[$index]->{status} !~ /nomen/i){
-    #        $taxon_no = $results[$index]->{parent_no};
-    #        $taxon_name = ${$dbt->getData("SELECT taxon_name FROM authorities WHERE taxon_no=$taxon_no")}[0]->{'taxon_name'};
-    #    }
-    #}
-
-	return ($taxon_name, $taxon_no);
 }
 
 # JA 1.8.03
