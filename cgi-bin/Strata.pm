@@ -122,6 +122,7 @@ sub displayStrataSearch{
     $conflict_found = checkConflict(\@dataRows,$q);
     if ($conflict_found) {
         displayStrataChoice($q, $conflict_found, \@dataRows);
+	    print main::stdIncludes("std_page_bottom");
         exit;    
     }
 
