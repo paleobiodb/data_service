@@ -1,8 +1,9 @@
+%%NOESCAPE_enterer_authorizer_lists%%
 
-<form method=post action="%%exec_url%%">
-<input id="action" type=hidden name="action" value="%%action%%">
-<input id="type" type=hidden name="type" value="%%type%%">
-<input id="goal" type=hidden name="goal" value="%%goal%%">
+<form method=post action="$exec_url">
+<input id="action" type=hidden name="action" value="">
+<input id="type" type=hidden name="type" value="">
+<input id="goal" type=hidden name="goal" value="">
 
 <div class="title">Reference search form</div>
 
@@ -15,21 +16,23 @@
 <tr>
 	<th align=right>Author's last name:</th>
 	<td><input id="name" name="name" type=text size=20>
+	</td>
 
-	&nbsp;&nbsp;<b>Year:</b>
+	<th align=right>Year:</th>
+	<td>
 	<input id="year" name="year" type=text size=5 maxlength=4>
 	</td>
 
 <tr>
 	<th align=right>Title includes: </th>
-	<td colspan=2>
+	<td colspan=4>
 	<input id="reftitle" name="reftitle" type=text size=40>
 	</td> 
 </tr>
 
 <tr>
 	<th align=right>Name of book or serial:</th>
-	<td colspan=2>
+	<td colspan=4>
 	<input id="pubtitle" name="pubtitle" type=text size=40>
 	</td>
 </tr>
@@ -39,49 +42,37 @@
 	<td>
 	<input id="reference_no" name="reference_no" type=text size=7 maxlength=5>
 	</td>
-</tr>
 
-<tr>
-	<th align=right valign=top>Enterer:</th>
-	<td>
-	
-	<select name="enterer">
-	%%enterer_popup%%	
-	</select>
-	
-	&nbsp;<a href="javascript: me( );">Me</a>
-	</td> 
-</tr>
-
-<tr>
 	<th align=right valign=top>Project: </th>
 	<td valign=top>
-	<select id="project_name">
-	%%project_name_popup%%
-	</select>
+	<select id="project_name"></select>
 
-	<b>Sort by:</b> 
+</tr>
+
+<tr>
+	<th align=right>Authorizer:</th>
+	<td><input id="authorizer" name="authorizer" size=18 onKeyUp="doCompleteAuthorizer(event, authorizerNames());"></td>
+
+	<th align=right>Enterer:</th>
+	<td><input id="enterer" name="enterer" size=18 onKeyUp="doCompleteEnterer(event, entererNames());"></td>
+</tr>
+
+<tr>
+	<th align=right valign=top>Sort by:</th>
+	<td>
 	<select name="refsortby"><option>author<option>year<option>publication<option>authorizer<option>enterer<option>entry date</select>
 	<p>
 	</td> 
 </tr>
 
 <tr>
-	<th></th>
-	<td colspan="3">
+	<td colspan="4" align="center">
 	<BR>
-	<input type=submit value="Search"> 
-	%%START_OPTIONAL_use_current%%
-	<input type="submit" name="use_current" value="Use current reference (%%reference_no%%)">
-	%%END_OPTIONAL_use_current%%
-	
-	%%START_OPTIONAL_use_primary%%
-	<input type="submit" name="use_primary" value="Use collection's reference">
-	%%END_OPTIONAL_use_primary%%
-	
+	<input type=submit value="Search"> %%use_current%% %%use_primary%%
 	</td>
 </tr>
 </table>
 <BR>
 
 </form>
+
