@@ -215,9 +215,7 @@ sub validateUser {
 
 			# Store some values (for later)
 			$self->{session_id} = $session_id;
-			# ERROR (EXTRA UNUSED KEYS): this stores keys and values
-			# SHOULD BE:  foreach my $field ( keys(%{$rs}) ) {
-			foreach my $field ( %{$rs} ) {
+			foreach my $field ( keys %{$rs} ) {
 				$self->{$field} = $rs->{$field};
 			}
 
