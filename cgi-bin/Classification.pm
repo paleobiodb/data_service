@@ -33,7 +33,7 @@ sub get_classification_hash{
 	my $highest_level = 21;
 	my %taxon_rank_order = ('superkingdom'=>0,'kingdom'=>1,'subkingdom'=>2,'superphylum'=>3,'phylum'=>4,'subphylum'=>5,'superclass'=>6,'class'=>7,'subclass'=>8,'infraclass'=>9,'superorder'=>10,'order'=>11,'suborder'=>12,'infraorder'=>13,'superfamily'=>14,'family'=>15,'subfamily'=>16,'tribe'=>17,'subtribe'=>18,'genus'=>19,'subgenus'=>20,'species'=>21,'subspecies'=>22);
     # this gets the 'min' number, or highest we climb
-    if (@ranks[0] eq 'parent') {
+    if ($ranks[0] eq 'parent') {
         $highest_level = 0;
     } else {
         foreach (@ranks) {
@@ -64,7 +64,7 @@ sub get_classification_hash{
 
             # If the name is ambiguous (multiple authorities entries), taxon_no/child_no are undef so nothing gets set
             if (scalar(@taxon_nos) == 1) {
-                $taxon_no = @taxon_nos[0];
+                $taxon_no = $taxon_nos[0];
             }    
             $taxon_name = $hash_key;
         }
@@ -171,7 +171,7 @@ sub get_classification_hash{
                         $prev_link->{'number'} = $parent_no;
                         $prev_link->{'name'} = $parent_name;
                         $prev_link->{'rank'} = $parent_rank;
-                        $prev_link->{'recomb_no'} => $recomb_no;
+                        $prev_link->{'recomb_no'} = $recomb_no;
                         push @{$prev_link->{'synonyms'}}, \%node;
                     } else {
                         if (exists $rank_hash{$parent_rank} || $ranks[0] eq 'parent' || $ranks[0] eq 'all') {
