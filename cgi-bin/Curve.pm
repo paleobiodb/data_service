@@ -959,12 +959,12 @@ sub printResults	{
 					print "<td class=small align=center valign=top>NaN";
 				}
 				print "<td class=small align=center valign=top>$singletons[$i] ";
-				if ($chaostat > 0 && $msubsrichness[$i] > 0 )	{
+				if ($chaostat > 0 )	{
 				  printf "<td class=small align=center valign=top>%.1f ",$chaostat;
 				} else    {
 				  print "<td class=small align=center valign=top>NaN ";
 				}
-				if ($jolly[$i] > 0 && $msubsrichness[$i] > 0 )	{
+				if ($jolly[$i] > 0 )	{
 				  printf "<td class=small align=center valign=top>%.1f ",$jolly[$i];
 				} else    {
 				  print "<td class=small align=center valign=top>NaN ";
