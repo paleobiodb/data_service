@@ -1,0 +1,26 @@
+
+<script language="Javascript" type="text/javascript">
+         function checkInput()	{
+               var rank = document.forms[0].taxon_rank.options[document.forms[0].taxon_rank.selectedIndex].text;
+               var value = document.forms[0].taxon_name.value;
+               var author = document.forms[0].author.value;
+               var pubyr = document.forms[0].pubyr.value;
+               if (value == "" && author == "" && pubyr == "")	{
+                       alert('Please enter a search term');
+
+                       return false;
+               }
+               if (valuematch(/[A-Za-z]+\\s+[a-z]+/) && rank != 'Genus and species')	{
+                       alert('Please choose rank "Genus and species" to search for a species');
+                       return false;
+               }
+               if (rank == 'Genus and species' && valuematch(/^[A-Z]{1}[a-z]+\\s+[a-z]+\$/) == null)	{
+                       alert('Please enter a name in the form "Genus species"');
+                       return false;
+               }
+               else	{
+                       return true;
+               }
+         }
+</script>
+
