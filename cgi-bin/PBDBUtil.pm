@@ -615,4 +615,145 @@ sub simple_array_push_unique{
     return \@orig;
 }
 
+sub get_classification_hash{
+	my $dbt = shift;
+    my $taxon_name = shift;
+    $taxon_name =~ /(\w+)\s+(\w+)/;
+    my ($genus, $species) = ($1, $2);
+    if($species){
+        $rank = "species";
+    }
+    else{
+        $rank = "genus";
+    }
+
+    my $child_no = -1;
+    my $parent_no = -1;
+    my %parent_no_visits = ();
+    my %child_no_visits = ();
+    my %classification = ();
+
+    my $status = "";
+    my $first_time = 1;
+    # Loop at least once, but as long as it takes to get full classification
+    while($parent_no){
+        # Keep $child_no at -1 if no results are returned.
+        my $sql = "SELECT taxon_no FROM authorities WHERE ".
+                  "taxon_name='$taxon_name' AND taxon_rank = '$rank'";
+        my @results = @{$dbt->getData($sql)};
+        if(defined $results[0]){
+            # Save the taxon_no for keying into the opinions table.
+            $child_no = $results[0]->{taxon_no};
+
+            # Insurance for self referential / bad data in database.
+            # NOTE: can't use the tertiary operator with hashes...
+            # How strange...
+            if(exists $child_no_visits{$child_no}){
+                $child_no_visits{$child_no} += 1;
+            }
+            else{
+                $child_no_visits{$child_no} = 1;
+            }
+            last if($child_no_visits{$child_no}>1);
+
+        }
+        # no taxon number: if we're doing "Genus species", try to find a parent
+        # for just the Genus, otherwise give up.
+        else{
+            if($genus && $species){
+                $sql_auth_inv = "SELECT taxon_no, taxon_rank ".
+                   "FROM authorities ".
+                   "WHERE taxon_name = '$genus'";
+                @results = @{$dbt->getData($sql_auth_inv)};
+                # THIS IS LOOKING IDENTICAL TO ABOVE...
+                # COULD CALL SELF WITH EMPTY SPECIES NAME AND AN EXIT...
+                if(defined $results[0]){
+                    $child_no = $results[0]->{taxon_no};
+					$rank = $results[0]->{taxon_rank};
+
+                    if($child_no_visits{$child_no}){
+                        $child_no_visits{$child_no} += 1;
+                    }
+                    else{
+                        $child_no_visits{$child_no} = 1;
+                    }
+                    last if($child_no_visits{$child_no}>1);
+                }
+            }
+            else{
+                last;
+            }
+        }
+
+        # Now see if the opinions table has a parent for this child
+        my $sql_opin =  "SELECT status, parent_no, pubyr, reference_no ".
+                        "FROM opinions ".
+                        "WHERE child_no=$child_no AND status='belongs to'";
+        @results = @{$dbt->getData($sql_opin)};
+
+        if($first_time && $rank eq "species" && scalar @results < 1){
+            my ($genus, $species) = split(/\s+/,$taxon_name);
+            my $last_ditch_sql = "SELECT taxon_no ".
+                                 "FROM authorities ".
+                                 "WHERE taxon_name = '$genus' ".
+                                 "AND taxon_rank = 'Genus'";
+            @results = @{$dbt->getData($last_ditch_sql)};
+            my $child_no = $results[0]->{taxon_no};
+            if($child_no > 0){
+                $last_ditch_sql = "SELECT status, parent_no, pubyr, ".
+                                  "reference_no FROM opinions ".
+                                  "WHERE child_no=$child_no AND ".
+                                  "status='belongs to'";
+                @results = @{$dbt->getData($last_ditch_sql)};
+            }
+        }
+        $first_time = 0;
+
+        if(scalar @results){
+            $parent_no=TaxonInfo::selectMostRecentParentOpinion($dbt,\@results);
+                
+            # Insurance for self referential or otherwise bad data in database.
+            if($parent_no_visits{$parent_no}){
+                $parent_no_visits{$parent_no} += 1;
+            }       
+            else{
+                $parent_no_visits{$parent_no}=1;
+            }           
+            last if($parent_no_visits{$parent_no}>1);
+                    
+            if($parent_no){
+                # Get the name and rank for the parent
+                my $sql_auth = "SELECT taxon_name, taxon_rank ".
+                           "FROM authorities ".
+                           "WHERE taxon_no=$parent_no";
+                @results = @{$dbt->getData($sql_auth)};
+                if(scalar @results){
+                    $auth_hash_ref = $results[0];
+                    # reset name and rank for next loop pass
+                    $rank = $auth_hash_ref->{"taxon_rank"};
+                    $taxon_name = $auth_hash_ref->{"taxon_name"};
+                    $classification{$rank} = $taxon_name;
+                }       
+                else{   
+                    # No results might not be an error: 
+                    # it might just be lack of data
+                    # print "ERROR in sql: $sql_auth<br>";
+                    last;
+                }
+            }                    
+            # If we didn't get a parent or status ne 'belongs to'
+            else{                
+                $parent_no = 0;
+            }
+        }   
+        else{   
+            # No results might not be an error: it might just be lack of data
+            # print "ERROR in sql: $sql_opin<br>";
+            last;                 
+        }       
+    }       
+    return \%classification;
+}       
+
+
 1;
