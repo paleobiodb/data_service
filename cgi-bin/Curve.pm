@@ -768,15 +768,13 @@ sub subsample	{
 			for $i (1..$chrons)	{
 				$tsampled[$i] = $tsampled[$i] + $sampled[$i];
 			}
-			@tsubstwotimers = ();
-#FOO - NEED THIS?
-			@tsubsthreetimers = ();
-			@tsubslocalbc = ();
-			@tsubslocalrt = ();
-			@tsubsrangethrough = ();
-			@tsubssingletons = ();
-			@tsubsoriginate = ();
-			@tsubsextinct = ();
+			@tlocalbc = ();
+			@tlocalrt = ();
+			@ttwotimers = ();
+			@trangethrough = ();
+			@tsingletons = ();
+			@toriginate = ();
+			@textinct = ();
 			for $i (1..$ngen)	{
 				$first = 0;
 				$last = 0;
@@ -788,31 +786,35 @@ sub subsample	{
 					  $first = $j;
 					}
 					if ( $present[$i][$j] < 0 && $present[$i][$j+1] < 0 )	{
-						$tsubstwotimers[$j]++;
+						$ttwotimers[$j]++;
+						$mtwotimers[$j]++;
 					}
-#FOO - NEED THIS?
 					if ( $present[$i][$j-1] < 0 && $present[$i][$j] < 0 && $present[$i][$j+1] < 0 )	{
-						$tsubsthreetimers[$j]++;
+						$mthreetimers[$j]++;
+						$sumthreetimers++;
+					}
+					if ( $present[$i][$j-1] < 0 && $present[$i][$j] >= 0 && $present[$i][$j+1] < 0 )	{
+						$sumthreetimergaps++;
 					}
 					if ( $j > 1 && $j < $chrons - 1 && ( $present[$i][$j-1] < 0 || $present[$i][$j] < 0 ) && ( $present[$i][$j+1] < 0 || $present[$i][$j+2] < 0 ) )	{
-						$tsubslocalbc[$j]++;
+						$tlocalbc[$j]++;
 					}
 					if ( ( $present[$i][$j-1] < 0 && $present[$i][$j+1] < 0 ) || $present[$i][$j] < 0 )	{
-						$tsubslocalrt[$j]++;
+						$tlocalrt[$j]++;
 					}
 				}
 				for $j ($last..$first)	{
 					$msubsrangethrough[$j]++;
-					$tsubsrangethrough[$j]++;
+					$trangethrough[$j]++;
 				}
 				if ($first == $last)	{
 					$msubssingletons[$first]++;
-					$tsubssingletons[$first]++;
+					$tsingletons[$first]++;
 				}
 				$msubsoriginate[$first]++;
 				$msubsextinct[$last]++;
-				$tsubsoriginate[$first]++;
-				$tsubsextinct[$last]++;
+				$toriginate[$first]++;
+				$textinct[$last]++;
 				for $j ($last..$first)	{
 					if ( abs($present[$i][$j]) > 0 )	{
 						if ($present[$i][$j] == -1)	{
@@ -835,68 +837,48 @@ sub subsample	{
 					$msubsrichness[$i] = $msubsrichness[$i] + $subsrichness[$i];
 				}
 				if ($q->param('diversity') =~ /^boundary-crossers/)	{
-					$outrichness[$i][$trials] = $tsubsrangethrough[$i] - $tsubsoriginate[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $tsubsrangethrough[$i] - $tsubsoriginate[$i];
+					$outrichness[$i][$trials] = $trangethrough[$i] - $toriginate[$i];
+					$meanoutrichness[$i] = $meanoutrichness[$i] + $trangethrough[$i] - $toriginate[$i];
 				}
 				elsif ($q->param('diversity') =~ /range-through\b/)	{
-					$outrichness[$i][$trials] = $tsubsrangethrough[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $tsubsrangethrough[$i];
+					$outrichness[$i][$trials] = $trangethrough[$i];
+					$meanoutrichness[$i] = $meanoutrichness[$i] + $trangethrough[$i];
 				}
 				elsif ($q->param('diversity') =~ /range-through minus/)	{
-					$outrichness[$i][$trials] = $tsubsrangethrough[$i] - $tsubssingletons[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $tsubsrangethrough[$i] - $tsubssingletons[$i];
+					$outrichness[$i][$trials] = $trangethrough[$i] - $tsingletons[$i];
+					$meanoutrichness[$i] = $meanoutrichness[$i] + $trangethrough[$i] - $tsingletons[$i];
 				}
 				elsif ($q->param('diversity') =~ /sampled-in-bin/)	{
 					$outrichness[$i][$trials] = $subsrichness[$i];
 					$meanoutrichness[$i] = $meanoutrichness[$i] + $subsrichness[$i];
 				}
 				elsif ($q->param('diversity') =~ /sampled minus/)	{
-					$outrichness[$i][$trials] = $subsrichness[$i] - $tsubssingletons[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $subsrichness[$i] - $tsubssingletons[$i];
+					$outrichness[$i][$trials] = $subsrichness[$i] - $tsingletons[$i];
+					$meanoutrichness[$i] = $meanoutrichness[$i] + $subsrichness[$i] - $tsingletons[$i];
 				}
 				elsif ($q->param('diversity') =~ /two timers/)	{
-					$outrichness[$i][$trials] = $tsubstwotimers[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $tsubstwotimers[$i];
-		# compute the three timer correction of sampling in bin
-		#  diversity, invented and coded 20.8.04 JA
-					if ( $tsubsthreetimers[$i] > 0 )	{
-						my $newsib = $tsubstwotimers[$i-1] * $tsubstwotimers[$i] / $tsubsthreetimers[$i];
-						$msubsnewsib[$i] = $msubsnewsib[$i] + $newsib;
-		# also compute the back-estimated BC count assuming SIB
-		#  includes taxa piled up by background turnover JA 20.8.04
-		# based on Raup 1985 eqn. A29, assuming that SIB is the total
-		#  "progeny" produced by some standing diversity level during
-		#  the time bin
-						if ( $tsubsthreetimers[$i+1] > 0 )	{
-							my $lam = log($tsubstwotimers[$i-1] / $tsubsthreetimers[$i]);
-							my $mu = log($tsubstwotimers[$i] / $tsubsthreetimers[$i+1]);
-							my $newbc;
-							if ( $lam != $mu )	{
-								$newbc = $newsib * ($mu - $lam) / ($mu - ($lam * exp($lam - $mu)));
-							} else	{
-								$newbc = $newsib / ( 1 + $lam );
-							}
-							$msubsnewbc[$i] = $msubsnewbc[$i] + $newbc;
-						}
-					}
+					$outrichness[$i][$trials] = $ttwotimers[$i];
+					$meanoutrichness[$i] = $meanoutrichness[$i] + $ttwotimers[$i];
 				}
 				elsif ($q->param('diversity') =~ /local boundary-crossers/)	{
-					$outrichness[$i][$trials] = $tsubslocalbc[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $tsubslocalbc[$i];
+					$outrichness[$i][$trials] = $tlocalbc[$i];
+					$meanoutrichness[$i] = $meanoutrichness[$i] + $tlocalbc[$i];
 				}
 				elsif ($q->param('diversity') =~ /local range-through/)	{
-					$outrichness[$i][$trials] = $tsubslocalrt[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $tsubslocalrt[$i];
+					$outrichness[$i][$trials] = $tlocalrt[$i];
+					$meanoutrichness[$i] = $meanoutrichness[$i] + $tlocalrt[$i];
 				}
 			}
 	 # end of trials loop
 		}
 		$trials = $q->param('samplingtrials');
+
 		for $i (1..$chrons)	{
 			if ($msubsrangethrough[$i] > 0)	{
 				$tsampled[$i] = $tsampled[$i]/$trials;
 				$msubsrichness[$i] = $msubsrichness[$i]/$trials;
-				$msubsnewsib[$i] = $msubsnewsib[$i]/$trials;
+				$mtwotimers[$i] = $mtwotimers[$i]/$trials;
+				$mthreetimers[$i] = $mthreetimers[$i]/$trials;
 				$msubsnewbc[$i] = $msubsnewbc[$i]/$trials;
 				$msubsrangethrough[$i] = $msubsrangethrough[$i]/$trials;
 				$meanoutrichness[$i] = $meanoutrichness[$i]/$trials;
@@ -917,6 +899,59 @@ sub subsample	{
 	for $i (1..$chrons)	{
 		@{$outrichness[$i]} = sort { $a <=> $b } @{$outrichness[$i]};
 	}
+
+	# three-timer gap proportion JA 23.8.04
+	if ( $sumthreetimers + $sumthreetimergaps > 0 )	{
+		$threetimerp = $sumthreetimers / ( $sumthreetimers + $sumthreetimergaps);
+	}
+
+	# compute extinction rate, origination rate, corrected BC, and 
+	#  corrected SIB using three timer equations (Meaning of Life
+	#  Equations or Fundamental Equations of Paleobiology) plus three-timer
+	#  gap analysis sampling probability plus eqn. A29 of Raup 1985
+	#  JA 22-23.8.04
+	# as usual, the notation here is confusing because the next youngest
+	#  interval is i - 1, not i + 1; also, mnewsib i is the estimate for
+	#  the bin between boundaries i and i - 1
+
+	if ($q->param('diversity') =~ /two timers/)	{
+
+		# get the turnover rates
+		# note that the rates are offset by the sampling probability,
+		#  so we need to add it
+		my $minrate = 0;
+		for $i (1..$chrons)	{
+			if ( $mtwotimers[$i] > 0 && $mtwotimers[$i-1] > 0 && $mthreetimers[$i] > 0 )	{
+				$mu[$i] = ( log ( $mthreetimers[$i] / $mtwotimers[$i] ) * -1 ) + log ( $threetimerp );
+				$lam[$i] = ( log ( $mthreetimers[$i] / $mtwotimers[$i-1] ) * -1 ) + log ( $threetimerp );
+			}
+		}
+
+		# get the corrected boundary crosser estimates
+		for $i (1..$chrons)	{
+			if ( $mtwotimers[$i] > 0 )	{
+				$mnewbc[$i] = $mtwotimers[$i] / ( $threetimerp**2 );
+			}
+		}
+
+		# get the SIB counts using the BC counts and the Raup equation
+		for $i (1..$chrons)	{
+			if ( $mu[$i] != $lam[$i] )	{
+				$mnewsib[$i] = $mnewbc[$i] * ( ( $mu[$i] - ( $lam[$i] * exp ( ( $lam[$i] - $mu[$i] ) ) ) ) / ( $mu[$i] - $lam[$i] ) );
+			} else	{
+				$mnewsib[$i] = $mnewbc[$i] * ( 1 + $lam[$i] );
+			}
+		}
+
+		# get the midpoint diversity estimates
+		for $i (1..$chrons)	{
+			if ( $mnewbc[$i] > 0 && $mnewbc[$i-1] > 0 )	{
+				$mmidptdiv[$i] = $mnewbc[$i] * exp ( 0.5 * ( $lam[$i] - $mu[$i] ) );
+			}
+		}
+	}
+	# end of Meaning of Life Equations
+
 
 	# compute Jolly-Seber estimator
 	for $i (reverse 1..$chrons)	{
@@ -1151,19 +1186,25 @@ sub printResults	{
 #			print "<td class=small align=center valign=top><b>Sampled<br>genera</b> ";
 #			print "<td class=small align=center valign=top><b>Range-through<br>genera</b> ";
 			print "<td class=small align=center valign=top><b>Items<br>sampled</b> ";
-			print "<td class=small align=center valign=top><b>Median<br>richness</b> ";
+			print "<td class=small align=center valign=top><b>Median ";
+			printf "%s diversity</b>",$q->param('diversity');
 			print "<td class=small align=center valign=top><b>1-sigma CI</b> ";
-			print "<td class=small align=center valign=top><b>Mean<br>richness</b> ";
+			print "<td class=small align=center valign=top><b>Mean ";
+			printf "%s diversity</b>",$q->param('diversity');
 			if ($q->param('diversity') =~ /two timers/)	{
-				print "<td class=small align=center valign=top><b>Corrected SIB</b> ";
 				print "<td class=small align=center valign=top><b>Corrected BC<br>diversity</b> ";
+				print "<td class=small align=center valign=top><b>Estimated midpoint<br>diversity</b> ";
+				print "<td class=small align=center valign=top><b>Raw SIB<br>diversity</b> ";
+				print "<td class=small align=center valign=top><b>Corrected SIB<br>diversity</b> ";
+				print "<td class=small align=center valign=top><b>Origination<br>rate</b> ";
+				print "<td class=small align=center valign=top><b>Extinction<br>rate</b> ";
 			}
-			print "<td class=small align=center valign=top><b>First<br>appearances</b> ";
 			if ($q->param('diversity') =~ /boundary-crossers/)	{
+				print "<td class=small align=center valign=top><b>First<br>appearances</b> ";
 				print "<td class=small align=center valign=top><b>Origination<br>rate</b> ";
 			}
-			print "<td class=small align=center valign=top><b>Last<br>appearances</b> ";
 			if ($q->param('diversity') =~ /boundary-crossers/)	{
+				print "<td class=small align=center valign=top><b>Last<br>appearances</b> ";
 				print "<td class=small align=center valign=top><b>Extinction<br>rate</b> ";
 			}
 			print "<td class=small align=center valign=top><b>Singletons</b> ";
@@ -1176,19 +1217,26 @@ sub printResults	{
 			}
 			print TABLE "Bin,Bin name,";
 #			print TABLE "Sampled genera,Range-through genera,";
-			print TABLE "Items sampled,Median richness,";
+			print TABLE "Items sampled,";
+			print TABLE "Median ";
+			printf TABLE "%s diversity,",$q->param('diversity');
 			print TABLE "1-sigma lower CI,1-sigma upper CI,";
-			print TABLE "Mean richness,";
+			print TABLE "Mean ";
+			printf TABLE "%s diversity,",$q->param('diversity');
 			if ($q->param('diversity') =~ /two timers/)	{
-				print TABLE "Corrected SIB,";
-				print TABLE "Corrected BC,";
+				print TABLE "Corrected BC diversity,";
+				print TABLE "Estimated midpoint diversity,";
+				print TABLE "Raw SIB diversity,";
+				print TABLE "Corrected SIB diversity,";
+				print TABLE "Origination rate,";
+				print TABLE "Extinction rate,";
 			}
-			print TABLE "First appearances,";
 			if ($q->param('diversity') =~ /boundary-crossers/)	{
+				print TABLE "First appearances,";
 				print TABLE "Origination rate,";
 			}
-			print TABLE "Last appearances,";
 			if ($q->param('diversity') =~ /boundary-crossers/)	{
+				print TABLE "Last appearances,";
 				print TABLE "Extinction rate,";
 			}
 			print TABLE "Singletons,";
@@ -1228,22 +1276,30 @@ sub printResults	{
 					$r = int(0.8413*$trials)+1;
 					print "<td class=small align=center valign=top>$outrichness[$i][$qq]-$outrichness[$i][$r] ";
 					print "<td class=small align=center valign=top>$meanoutrichness[$i] ";
+
+		# print assorted stats yielded by two timer analysis JA 23.8.04
 					if ($q->param('diversity') =~ /two timers/)	{
-						printf "<td class=small align=center valign=top>%.1f ",$msubsnewsib[$i];
-						printf "<td class=small align=center valign=top>%.1f ",$msubsnewbc[$i];
+						printf "<td class=small align=center valign=top>%.1f ",$mnewbc[$i];
+						printf "<td class=small align=center valign=top>%.1f ",$mmidptdiv[$i];
+			# we want the raw standardized SIB data for comparison
+			#  with the correction
+						printf "<td class=small align=center valign=top>%.1f ",$msubsrichness[$i];
+						printf "<td class=small align=center valign=top>%.1f ",$mnewsib[$i];
+						printf "<td class=small align=center valign=top>%.3f ",$lam[$i];
+						printf "<td class=small align=center valign=top>%.3f ",$mu[$i];
 					}
-					printf "<td class=small align=center valign=top>%.1f ",$msubsoriginate[$i];
 			# Foote origination rate
 					if ($q->param('diversity') =~ /boundary-crossers/)	{
+						printf "<td class=small align=center valign=top>%.1f ",$msubsoriginate[$i];
 						if ( $meanoutrichness[$i-1] > 0 && $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 )	{
 							printf "<td class=small align=center valign=top>%.4f ",log( $meanoutrichness[$i-1] / ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) );
 						} else	{
 							print "<td class=small align=center valign=top>NaN ";
 						}
 					}
-					printf "<td class=small align=center valign=top>%.1f ",$msubsextinct[$i];
 			# Foote extinction rate
 					if ($q->param('diversity') =~ /boundary-crossers/)	{
+						printf "<td class=small align=center valign=top>%.1f ",$msubsextinct[$i];
 						if ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 && $meanoutrichness[$i] > 0 )	{
 							printf "<td class=small align=center valign=top>%.4f ",log( ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanoutrichness[$i] ) * -1;
 						} else	{
@@ -1261,21 +1317,25 @@ sub printResults	{
 					print TABLE ",$outrichness[$i][$r]";
 					print TABLE ",$meanoutrichness[$i]";
 					if ($q->param('diversity') =~ /two timers/)	{
-						printf TABLE ",%.1f",$msubsnewsib[$i];
-						printf TABLE ",%.1f",$msubsnewbc[$i];
+						printf TABLE ",%.1f",$mnewbc[$i];
+						printf TABLE ",%.1f",$mmidptdiv[$i];
+						printf TABLE ",%.3f",$msubsrichness[$i];
+						printf TABLE ",%.1f",$mnewsib[$i];
+						printf TABLE ",%.3f",$lam[$i];
+						printf TABLE ",%.3f",$mu[$i];
 					}
-					printf TABLE ",%.1f",$msubsoriginate[$i];
 			# Foote origination rate
 					if ($q->param('diversity') =~ /boundary-crossers/)	{
+						printf TABLE ",%.1f",$msubsoriginate[$i];
 						if ( $meanoutrichness[$i-1] > 0 && $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 )	{
 							printf TABLE ",%.4f",log( $meanoutrichness[$i-1] / ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) );
 						} else	{
 							print TABLE ",NaN";
 						}
 					}
-					printf TABLE ",%.1f",$msubsextinct[$i];
 			# Foote extinction rate
 					if ($q->param('diversity') =~ /boundary-crossers/)	{
+						printf TABLE ",%.1f",$msubsextinct[$i];
 						if ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 && $meanoutrichness[$i] > 0 )	{
 							printf TABLE ",%.4f",log( ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanoutrichness[$i] ) * -1;
 						} else	{
@@ -1327,6 +1387,9 @@ sub printResults	{
 			print "The selected method was <b>".$q->param('samplingmethod')."</b>.<p>\n";
 			print "The number of items selected per temporal bin was <b>".$q->param('samplesize')."</b>.<p>\n";
 			print "The total number of trials was <b>".$q->param('samplingtrials')."</b>.<p>\n";
+			if ( $threetimerp )	{
+				printf "The gap proportion based on three timer analysis of the subsampled data is <b>%.3f</b>.<p>\n",$threetimerp;
+			}
 			print "<hr>\n";
 		}
 	
