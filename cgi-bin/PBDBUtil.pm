@@ -369,4 +369,95 @@ sub isRefSecondary{
 	return 0;
 }
 
+## sub newGenusNames
+#	Description:	checks whether each of the genus_names given to it are
+#					currently in the database, returning an array of those
+#					that aren't.
+#
+#	Arguments:		$dbh		database handle
+#					$names		reference to an array of genus_names
+#
+#	Returns:		Array of genus_names NOT currently in the database.
+#
+##
+sub newGenusNames{
+	my $dbh = shift;
+	my $names = shift;
+	my @names = @{$names};
+	my @result = ();
+
+	# put each string in single quotes for the query
+	foreach my $single (@names){
+		$single = "\'$single\'";
+	}
+	my $sql = "SELECT count(genus_name), genus_name FROM occurrences ".
+			  "WHERE genus_name IN (".join(',',@names).") GROUP BY genus_name";
+	my $sth = $dbh->prepare($sql) or die "Failure preparing sql: $sql ($!)";
+	$sth->execute();
+	my @res = @{$sth->fetchall_arrayref({})};
+	$sth->finish();
+
+	# remove the single quotes for comparison
+	foreach my $single (@names){
+		$single =~ /^'(.*)?'$/;
+		$single = $1;
+	}
+	
+	NAME:
+	foreach my $check (@names){
+		foreach my $check_res (@res){ 
+			next NAME if($check_res->{genus_name} eq $check);
+		}
+		push(@result, $check);
+	}
+	
+	return @result;
+}
+
+## sub newSpeciesNames
+#	Description:	checks whether each of the species_names given to it are
+#					currently in the database, returning an array of those
+#					that aren't.
+#
+#	Arguments:		$dbh		database handle
+#					$names		reference to an array of species_names
+#
+#	Returns:		Array of species_names NOT currently in the database.
+#
+##
+sub newSpeciesNames{
+	my $dbh = shift;
+	my $names = shift;
+	my @names = @{$names};
+	my @result = ();
+
+	# put each string in single quotes
+	foreach my $single (@names){
+		$single = "\'$single\'";
+	}
+	my $sql = "SELECT count(species_name), species_name FROM occurrences ".
+			  "WHERE species_name IN (".join(',',@names).") GROUP BY species_name";
+	my $sth = $dbh->prepare($sql) or die "Failure preparing sql: $sql ($!)";
+	$sth->execute();
+	my @res = @{$sth->fetchall_arrayref({})};
+	$sth->finish();
+	
+	# remove the single quotes for comparison
+	foreach my $single (@names){
+		$single =~ /^'(.*)?'$/;
+		$single = $1;
+	}
+	
+	NAME:
+	foreach my $check (@names){
+		foreach my $check_res (@res){
+			next NAME if($check_res->{species_name} eq $check);
+		}
+		push(@result, $check);
+	}
+	
+	return @result;
+}
+
+
 1;
