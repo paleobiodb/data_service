@@ -794,7 +794,7 @@ sub subsample	{
 						$sumthreetimers++;
 					}
 					if ( $present[$i][$j-1] < 0 && $present[$i][$j] >= 0 && $present[$i][$j+1] < 0 )	{
-						$sumthreetimergaps++;
+						$sumparttimers++;
 					}
 					if ( $j > 1 && $j < $chrons - 1 && ( $present[$i][$j-1] < 0 || $present[$i][$j] < 0 ) && ( $present[$i][$j+1] < 0 || $present[$i][$j+2] < 0 ) )	{
 						$tlocalbc[$j]++;
@@ -901,8 +901,8 @@ sub subsample	{
 	}
 
 	# three-timer gap proportion JA 23.8.04
-	if ( $sumthreetimers + $sumthreetimergaps > 0 )	{
-		$threetimerp = $sumthreetimers / ( $sumthreetimers + $sumthreetimergaps);
+	if ( $sumthreetimers + $sumparttimers > 0 )	{
+		$threetimerp = $sumthreetimers / ( $sumthreetimers + $sumparttimers);
 	}
 
 	# compute extinction rate, origination rate, corrected BC, and 
@@ -919,7 +919,6 @@ sub subsample	{
 		# get the turnover rates
 		# note that the rates are offset by the sampling probability,
 		#  so we need to add it
-		my $minrate = 0;
 		for $i (1..$chrons)	{
 			if ( $mtwotimers[$i] > 0 && $mtwotimers[$i-1] > 0 && $mthreetimers[$i] > 0 )	{
 				$mu[$i] = ( log ( $mthreetimers[$i] / $mtwotimers[$i] ) * -1 ) + log ( $threetimerp );
