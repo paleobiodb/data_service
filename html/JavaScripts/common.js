@@ -187,18 +187,18 @@ function fillYears() {
 
 
 function fillMonths() {
-	document.write("<option>December</option>");
-	document.write("<option>November</option>");
-	document.write("<option>October</option>");
-	document.write("<option>September</option>");
-	document.write("<option>August</option>");
-	document.write("<option>July</option>");
-	document.write("<option>June</option>");
-	document.write("<option>May</option>");
-	document.write("<option>April</option>");
-	document.write("<option>March</option>");
-	document.write("<option>February</option>");
-	document.write("<option>January</option>");
+	document.write("<option value=12>December</option>");
+	document.write("<option value=11>November</option>");
+	document.write("<option value=10>October</option>");
+	document.write("<option value=9>September</option>");
+	document.write("<option value=8>August</option>");
+	document.write("<option value=7>July</option>");
+	document.write("<option value=6>June</option>");
+	document.write("<option value=5>May</option>");
+	document.write("<option value=4>April</option>");
+	document.write("<option value=3>March</option>");
+	document.write("<option value=2>February</option>");
+	document.write("<option value=1>January</option>");
 }
 
 function fillDays() {
