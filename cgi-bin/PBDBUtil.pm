@@ -566,7 +566,7 @@ sub taxonomic_search{
 	my $sql = "";
 	my @results = ();
 	if($taxon_no eq ""){
-		$sql = "SELECT taxon_no from authorities WHERE taxon_name='$name'";
+		$sql = "SELECT taxon_no from authorities WHERE taxon_name=".$dbt->dbh->quote($name);
 		@results = @{$dbt->getData($sql)};
 		$taxon_no = $results[0]->{taxon_no};
 	}
@@ -577,7 +577,7 @@ sub taxonomic_search{
 	local %passed = ();
 
 	# We might not get a number or rank if this name isn't in authorities yet.
-	if(!$taxon_no){
+	if(! $taxon_no){
         if ($return_taxon_nos ne "") {
             return wantarray ? (-1) : "-1";
         } else {
@@ -587,14 +587,20 @@ sub taxonomic_search{
 	new_search_recurse($taxon_no, $dbt, 1);
 	my $results;
 
+    # Dirty trick PS 01/10/2004 - if a taxon_no of 0 is passed in a occurrence query, any
+    #  occurrence that doesn't have a taxon no gets added in (~90000) and any collection
+    #  with one of these occurrences gets added in (~19000). So delete it. Not sure why
+    #  this 0 gets passed back sometimes right now
+    delete $passed{0};
+
     if ($return_taxon_nos ne "") {
         if (wantarray) {
             return keys %passed;
         } else {
-            return join(',', keys %passed);
+            return join(', ', keys %passed);
         }
     } else {
-        $results = join(',',keys %passed);
+        $results = join(', ',keys %passed);
     }
     $sql = "SELECT taxon_name FROM authorities WHERE taxon_no IN ($results)";
     @results = @{$dbt->getData($sql)};
@@ -605,7 +611,7 @@ sub taxonomic_search{
         foreach my $item (@results){
             $item = "'".$item->{taxon_name}."'";
         }
-        return join(',', @results);
+        return join(', ', @results);
     }
 	
 	return $results;
@@ -638,6 +644,7 @@ sub simple_array_push_unique{
 #  places in bridge.pl related to construction of taxonomic lists by
 #  buildTaxonomicList
 # extensive rewrite 2.4.04 by JA to accomodate taxon numbers instead of names
+# DEPRECATED 01/11/2004 PS - functionality was almost identical to Classification::get_classification_hash, so use that
 sub get_classification_hash{
 	my $dbt = shift;
     my $taxon_no = shift;
