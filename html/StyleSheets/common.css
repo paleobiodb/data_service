@@ -17,10 +17,12 @@ body {
 
 /* generic warning message */
 .warning {
-	border-style: single;
 	border-color: lightgrey;
 	border-width: 2;
 	border-style: solid;
+	
+	padding-top:0.2ex;
+	padding-bottom:0.2ex;
 	
     font-weight: bold;	
 	color: red;
@@ -31,7 +33,13 @@ body {
 	text-align: center;
 }
 
-
+table.navbox {
+	border-style: solid;
+	border-width: 1;
+	border-color: lightgrey;
+	
+	background-color: 0077FF;
+}
 
 TD      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
 TH      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
