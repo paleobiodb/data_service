@@ -219,7 +219,7 @@ sub setSecondaryRef{
 			  "Please notify the database administrator with this message.".
 			  "</font><br>";
 	}
-	debug(1,"ref $reference_no added as secondary for collection $collection_no<br>");
+	debug(1,"ref $reference_no added as secondary for collection $collection_no");
 	return 1;
 }
 
@@ -245,7 +245,7 @@ sub refIsDeleteable{
 			  "WHERE collection_no=$collection_no ".
 			  "AND reference_no=$reference_no";
 
-	debug(1,"isDeleteable sql: $sql<br>");
+	debug(1,"isDeleteable sql: $sql");
 	my $sth = $dbh->prepare($sql) or print "SQL failed to prepare: $sql<br>";
 	$sth->execute();
 	my @rows = @{$sth->fetchall_arrayref({})};
@@ -253,11 +253,11 @@ sub refIsDeleteable{
 	my $num = $res{'count(occurrence_no)'};
 	$sth->finish();
 	if($num >= 1){
-		debug(1,"Reference $reference_no has $num occurrences and is not deletable<br>");
+		debug(1,"Reference $reference_no has $num occurrences and is not deletable");
 		return 0;
 	}
 	else{
-		debug(1,"Reference $reference_no has $num occurrences and IS deletable<br>");
+		debug(1,"Reference $reference_no has $num occurrences and IS deletable");
 		return 1;
 	}
 }
@@ -283,7 +283,7 @@ sub deleteRefAssociation{
 			  "AND reference_no=$reference_no";
 	my $sth = $dbh->prepare($sql) or print "SQL failed to prepare: $sql<br>";
 	my $res = $sth->execute();
-	debug(1,"execute returned:$res.<br>");
+	debug(1,"execute returned:$res.");
     if($res != 1){
 		print "<font color=\"FF0000\">Failed to delete secondary ref for".
 			  "collection $collection_no and reference $reference_no.<br>".
@@ -324,7 +324,7 @@ sub isRefPrimaryOrSecondary{
 
 	# If the ref is the primary, nothing need be done.
 	if($results{reference_no} == $reference_no){
-		debug(1,"ref $reference_no exists as primary for collection $collection_no<br>");
+		debug(1,"ref $reference_no exists as primary for collection $collection_no");
 		return 1;
 	}
 
@@ -340,7 +340,7 @@ sub isRefPrimaryOrSecondary{
 	# Check the refs for a match
 	foreach my $ref (@results){
 		if($ref->{reference_no} == $reference_no){
-		debug(1,"ref $reference_no exists as secondary for collection $collection_no<br>");
+		debug(1,"ref $reference_no exists as secondary for collection $collection_no");
 			return 2;
 		}
 	}
@@ -377,7 +377,7 @@ sub isRefSecondary{
 	# Check the refs for a match
 	foreach my $ref (@results){
 		if($ref->{reference_no} == $reference_no){
-		debug(1,"ref $reference_no exists as secondary for collection $collection_no<br>");
+		debug(1,"ref $reference_no exists as secondary for collection $collection_no");
 			return 1;
 		}
 	}
@@ -881,7 +881,7 @@ sub authorAndPubyrFromTaxonNo{
     my @auth_rec = @{$dbt->getData($sql)};
     # Get ref info from refs if 'ref_is_authority' is set
     if($auth_rec[0]->{ref_is_authority} =~ /YES/i){
-        PBDBUtil::debug(1,"author and year from refs<br>");
+        PBDBUtil::debug(2,"author and year from refs");
         if($auth_rec[0]->{reference_no}){
 			$sql = "SELECT author1last, author2last, otherauthors, pubyr FROM refs ".
 				   "WHERE reference_no=".$auth_rec[0]->{reference_no};
@@ -898,7 +898,7 @@ sub authorAndPubyrFromTaxonNo{
     # If ref_is_authority is not set, use the authorname and pubyr in this
     # record.
     elsif($auth_rec[0]->{author1last} && $auth_rec[0]->{pubyr}){
-        PBDBUtil::debug(1,"author and year from authorities<br>");
+        PBDBUtil::debug(2,"author and year from authorities");
         $return_vals{author1last} = $auth_rec[0]->{author1last};
 	if ( $auth_rec[0]->{otherauthors} )	{
 		$return_vals{author1last} .= " et al.";
@@ -997,6 +997,168 @@ sub splitInterval {
     $interval_name =~ s/^($eml_vals)\s+//;
     $eml_interval = $1;
     return ($eml_interval,$interval_name);
+}
+
+# Gets the childen of a taxon, sorted in hierarchical fashion
+# Separated 01/19/2004 PS. 
+#  Inputs:
+#   * 1st arg: $dbt
+#   * 2nd arg: taxon name or taxon number
+#   * 3nd arg: max depth: no of iterations to go down
+#  Outputs: an array of records refs
+sub getChildren { 
+    my $dbt = shift;
+    my $taxon_name_or_no = shift;
+    my $max_depth = shift;
+    my $get_synonymns = shift;
+
+    use Data::Dumper;
+
+    # described above, return'd vars
+    my %tree_cache = ();
+    my $tree_head;
+
+    if ($taxon_name_or_no =~ /^\d+$/) {
+        $taxon_no = $taxon_name_or_no;
+    } else {
+        @taxon_nos = TaxonInfo::getTaxonNos($taxon_no);
+        if (scalar(@taxon_nos) == 1) {
+            $taxon_no = $taxon_name_or_no;
+        }    
+    }
+    if (!$taxon_no) {
+        return undef; # bad... ambiguous name or no no
+    } 
+    my @parents = ($taxon_no);
+    %tree_node = ('taxon_no'=>$taxon_no, 'children'=>[]);
+    $tree_cache{$taxon_no} = \%tree_node;
+    $tree_head = \%tree_node;
+
+    # Max depth = max number of iterations
+	for $level ( 1..$max_depth)	{
+        # go through the parent list
+		my @children = ();
+		$childcount = 0;
+		for $p ( @parents )	{
+        	# find all children of this parent
+			my $sql = "SELECT DISTINCT child_no,status FROM opinions WHERE status='belongs to' AND parent_no=" . $p;
+			@childrefs = @{$dbt->getData($sql)};
+
+			# now the hard part: make sure the most recent opinion
+			#  on each child name is a "belongs to" and places
+			#  the child in the parent we care about
+			@goodrefs = ();
+			for my $ref ( @childrefs )	{
+                # Took out section with getOriginalCombination - belongs to can only be attached to
+                # original combinations so we start off with original combination, don't need to backtrack PS 01/21/2004
+                # rewrote this section 21.4.04 to use selectMostRecentParentOpinion
+                # switched to selectMostRecentBelongsToOpinion JA 18.11.04
+				$sql = "SELECT child_no,parent_no,status,reference_no,ref_has_opinion,pubyr FROM opinions WHERE child_no=" . $ref->{child_no};
+				@crefs = @{$dbt->getData($sql)};
+
+				my $currentref = TaxonInfo::selectMostRecentBelongsToOpinion($dbt, \@crefs, 1);
+				$lastopinion = $currentref ->{status};
+				$lastparent = $currentref->{parent_no};
+
+                if ( $lastopinion =~ /belongs to/ && $lastparent == $p )	{
+                    push @goodrefs , $ref;
+                } else { 
+                    if ($DEBUG) {
+                        my $lp_name = @{$dbt->getData("SELECT taxon_name from authorities where taxon_no=$lastparent")}[0]->{'taxon_name'} if $lastparent;
+                        my $ci_name = @{$dbt->getData("SELECT taxon_name from authorities where taxon_no=$ref->{child_no}")}[0]->{'taxon_name'};
+                        debug(1,"Failed ($ref->{child_no}-$ci_name)-$lastopinion-($lastparent-$lp_name) does not belong to $p");
+                    }
+                }
+            }
+
+            for my $ref ( @goodrefs ){
+                $childcount++;
+                # rock 'n' roll: save the child name
+                push @children,$ref->{child_no};
+                
+                my ($name,$syn,$rank);
+                $name_ref = getCorrectedName($dbt,$ref->{child_no});
+                $name = $name_ref->{taxon_name};
+                $rank = $name_ref->{taxon_rank};
+               
+                # Save the child into the tree
+                my $node = $tree_cache{$p};
+                my %new_node = ('taxon_no'=>$ref->{child_no}, 
+                                'taxon_name'=>$name,
+                                'taxon_rank'=>$rank,
+                                'level'=>$level,
+                                'children'=>[]);
+                push @{$node->{'children'}}, \%new_node;
+                $tree_cache{$ref->{child_no}} = \%new_node;
+            }
+		}
+        # replace the parent list with the child list
+		@parents = @children;
+	}
+
+    # Perform he final sort
+    my @sorted_records;
+    getChildrenTraverseTree($tree_head, \@sorted_records);
+    # Remove the head (is the parameter pased in)
+    shift @sorted_records;
+    #print "<pre>";
+    #print "\n\nTH:\n ".Dumper($tree_head);
+    #print "\n\nTC:\n ".Dumper(\%tree_cache);
+    #print "\n\nSK:\n ".Dumper(\@sort_keys);
+    #print "\n\nNAMES:\n ".Dumper(\%names);
+    #print "\n\nRANKS:\n ".Dumper(\%ranks);
+    ##print "\n\nLEVELS:\n ".Dumper(\%levels);
+    #print "</pre>";
+    return \@sorted_records;
+}
+
+# If the taxon no is an original combination, get the name of the thing its recombined to
+sub getCorrectedName{
+    my $dbt = shift;
+    my $child_no = shift;
+
+    # will get what its renamed to.  A bit tricky, as you want to the most recent opinion, but normally the 'belongs to' comes first
+    # so you have to use an order by so it comes second.  can't use filter the belongs to in the where clause cause the taxon may
+    # genuinely belong to something else (not recomb). surround the select in () so aliased fields can be used in order by.
+    my $sql = "(SELECT a.taxon_no, a.taxon_name, a.taxon_rank, (o.status in ('recombined as','corrected as','rank changed as')) as is_recomb, IF(o.pubyr, o.pubyr, r.pubyr) as pubyr, (r.publication_type='compendium') AS is_compendium" 
+         . " FROM opinions o " 
+         . " LEFT JOIN authorities a ON o.parent_no = a.taxon_no " 
+         . " LEFT JOIN refs r ON r.reference_no=o.reference_no " 
+         . " WHERE o.child_no=$child_no) " 
+         . " ORDER BY is_compendium ASC, pubyr DESC, is_recomb DESC LIMIT 1";
+
+    my @rows = @{$dbt->getData($sql)};
+    if (@rows) {
+        if ($rows[0]->{'is_recomb'}) {
+            return $rows[0];
+        } else {
+            my @me;
+            #no recomb, just return the name/no of the child
+            $sql = "SELECT a.taxon_no, a.taxon_name, a.taxon_rank from authorities a WHERE a.taxon_no=$child_no";
+            @me = @{$dbt->getData($sql)};
+            return $me[0];
+        }
+    } else {
+        #bad input, bad output
+        return undef;        
+    }
+}
+
+# Utilitiy function to do depth first traversal
+# Internal use for getChildren function only right now
+sub getChildrenTraverseTree {
+    my $node = shift;
+    my $sort_keys = shift;
+
+    my @children = @{$node->{'children'}};
+    push @{$sort_keys}, $node;
+    if (@children) {
+        # Sort the children. The map function converts an array of nodes to an array of taxon nos 
+        # Then sort based on those taxon nos using the sort_hash (the taxon names)
+        #@children = sort {$sort_hash->{$a} cmp $sort_hash->{$b}} map {$_->{'taxon_no'}} @children;
+        @children = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @children;
+        getChildrenTraverseTree($_,$sort_keys) for @children;
+    } 
 }
 
 
