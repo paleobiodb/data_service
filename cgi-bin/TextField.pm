@@ -23,6 +23,7 @@ sub setText
 {
   my $self = shift;
   $self->{_text} = shift;
+  $self->{_text} =~ s/"/&quot;/g;
 }
 
 sub setSize
