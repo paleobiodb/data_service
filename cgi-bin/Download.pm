@@ -1053,7 +1053,6 @@ sub doQuery {
 
 	# may be getting this for either of the above cases
 	my $collectionsWhereClause = $self->getCollectionsWhereClause();
-print "$collectionsWhereClause"; #FOO
 
 	#print "collectionsWhereClause = $collectionsWhereClause<BR>";
 	
@@ -1529,9 +1528,8 @@ print "$collectionsWhereClause"; #FOO
 			 "Jurassic 5", "Jurassic 4", "Jurassic 3",
 			 "Jurassic 2", "Jurassic 1", "Triassic 5",
 			 "Triassic 4", "Triassic 3", "Triassic 2",
-			 "Triassic 1", "Permian 5", "Permian 4",
+			 "Triassic 1", "Permian 4",
 			 "Permian 3", "Permian 2", "Permian 1",
-			 "Carboniferous 6",
 			 "Carboniferous 5", "Carboniferous 4",
 			 "Carboniferous 3", "Carboniferous 2",
 			 "Carboniferous 1", "Devonian 5",
