@@ -1375,6 +1375,7 @@ sub displaySearchColls {
 	print &stdIncludes ("std_page_bottom");
 }
 
+
 #  * User submits completed collection search form
 #  * System displays matching collection results
 sub displayCollResults {
@@ -1389,7 +1390,13 @@ sub displayCollResults {
 	# Build the SQL
     $sql = processCollectionsSearch($in_list);
 	# Run it
+
+#	print "in sub displayCollResults, sql = $sql<BR><BR>";
+
 	my $sth = $dbh->prepare( $sql );
+
+#	print "after preparing, sql = $sql<BR><BR>";
+
 	$sth->execute();
 
 	if ( $q->param ( "type" ) ) {
@@ -1583,9 +1590,15 @@ sub displayCollResults {
 	}
 		
 	print &stdIncludes ("std_page_bottom");
-}
+
+} # end sub displayCollResults
+
+
+
 
 # NOTE: this routine is used only by displayCollResults
+# pass it a list of parameters, and it will compose and return
+# an appropriate SQL query.
 sub processCollectionsSearch {
 	my $in_list = shift;  # for taxon info script
 
@@ -1593,54 +1606,61 @@ sub processCollectionsSearch {
 	# These cannot use the LIKE wildcard, i.e. they must be
 	# exact matches regardless of the request.
 	my %pulldowns = (	"authorizer"		=> 1,
-						"enterer"			=> 1,
-						"research_group"	=> 1,
-						"period"			=> 1,
-						"lithadj"		=> 1,
-						"lithology1"		=> 1,
-						"lithadj2"		=> 1,
-						"lithology2"		=> 1,
-						"environment"		=> 1 );
+							"enterer"			=> 1,
+							"research_group"	=> 1,
+							"period"				=> 1,
+							"lithadj"			=> 1,
+							"lithology1"		=> 1,
+							"lithadj2"			=> 1,
+							"lithology2"		=> 1,
+							"environment"		=> 1 );
 
 					
-	my $genus_name = $q->param('genus_name');
 
 	# If a genus name is requested, query the occurrences table to get
-	#   a list of useable collections
+	# a list of useable collections
+	#
 	# WARNING: wild card searches in this case DO require exact matches
-	#   at the beginning of the genus name
+	# at the beginning of the genus name
 	# Also searches reIDs table JA 16.8.02
 	# Handles species name searches JA 19-20.8.02
-	if($genus_name){
+
+	my $genus_name = $q->param('genus_name');
+
+	if ($genus_name) {
 		# Fix up the genus name and set the species name if there is a space 
 		my $genus;
 		my $sub_genus;
 		my $species;
-		if($genus_name =~ / /){
+		
+		if ($genus_name =~ / /){
 			# Look for a subgenus in parentheses
-			if($genus_name =~ /\([A-Z][a-z]+\)/ && 
-							($q->param('taxon_rank') ne 'species')){
+			if ($genus_name =~ /\([A-Z][a-z]+\)/ && 
+				($q->param('taxon_rank') ne 'species')) {
+
 				$genus_name =~ /([A-Z][a-z]+)\s\(([A-Z][a-z]+)\)\s?([a-z]*)/;
 				($genus, $sub_genus, $species) = ($1, $2, $3);
+				
 				# These param reassignments maybe useful to displayOccsForReID
 				$q->param('species_name' => $species);
 				$q->param('g_name' => $genus);
-			}
-			else{
+			} else {
 				($genus,$species) = split / /,$q->param('genus_name');
 				$q->param('species_name' => $species);
 				$q->param('g_name' => $genus);
 			}
-		} elsif ( $q->param('taxon_rank') eq "species" )	{
+		} elsif ( $q->param('taxon_rank') eq "species" ) {
 			$species = $q->param('genus_name');
 			$q->param('species_name' => $species);
-		} else	{ # this is for genus only...
+		} else { 
+			# this is for genus only...
 			$genus = $q->param('genus_name');
 		}
+		
 		my @tables = ("occurrences","reidentifications");
-		for my $tableName (@tables)	{
-			$sql =	"SELECT collection_no,count(*) ".
-					"  FROM " . $tableName . " WHERE ";
+		for my $tableName (@tables) {
+			$sql =	"SELECT collection_no, count(*) ".
+					" FROM " . $tableName . " WHERE ";
 
 			if ( $q->param("wild") =~ /Y/ ) {
 				$relationString = " LIKE '";
@@ -1649,20 +1669,23 @@ sub processCollectionsSearch {
 				$relationString = "='";
 				$wildCard = "'";
 			}
+			
 			if ( $genus )	{
 				if($q->param("taxon_rank") eq "Higher taxon" ||
 						$q->param("taxon_rank") eq "Higher-taxon"){
+						
 					$sql .= "genus_name IN (";
+					
 					if($in_list eq ""){
 						dbg("RE-RUNNING TAXONOMIC SEARCH in bridge<br>");
 						$in_list = PBDBUtil::taxonomic_search(
-												$q->param('genus_name'), $dbt);
+											$q->param('genus_name'), $dbt);
                         my $name = $q->param('genus_name');
                         $in_list = `./recurse $name`;
 					}
+					
 					$sql .= $in_list . ") ";
-				}
-				else{
+				} else {
 					$sql .= "genus_name" . $relationString . $genus . $wildCard;
 				}
 				if ( $sub_genus || $species )	{
@@ -1683,6 +1706,7 @@ sub processCollectionsSearch {
 			dbg ( "$sql<HR>" );
 			$sth = $dbh->prepare($sql);
 			$sth->execute();
+			
 			my @result = @{$sth->fetchall_arrayref()};
 			for $r (0..$#result)	{
 				push @okcolls, @{$result[$r]}[0] ;
@@ -1729,202 +1753,274 @@ sub processCollectionsSearch {
   		$wildcardToken = "%";
 	}
 
-		my @terms;
-		# Handle modified date
-		if ( $q->param('modified_since'))	{
-		  push(@terms, "modified>" . $q->param('modified_since'));
-		  $q->param('modified_since' => '');
-		}
-		# Handle collection name (must also search aka field) JA 7.3.02
-		if ( $q->param('collection_names')) {
-		  my $collectionName = $dbh->quote($wildcardToken . $q->param('collection_names') . $wildcardToken);
-		  push(@terms, "(collection_name$comparator" . $collectionName . " OR collection_aka$comparator" . $collectionName . ")");
-		  $q->param('collection_names' => '');
-		}
-		# Handle half-latitude degrees passed by Map.pm JA 28.8.03
-		if ( $q->param('lathalf') eq "Y" )	{
-		  push @terms, "(latmin>=30 OR latdec LIKE '5%' OR latdec LIKE '6%' OR latdec LIKE '7%' OR latdec LIKE '8%' OR latdec LIKE '9%')";
-		  $q->param('lathalf' => '');
-		} elsif ( $q->param('lathalf') eq "N" )	{
-		  push @terms, "((latmin<30 OR latmin IS NULL) AND (latdec IS NULL OR (latdec NOT LIKE '5%' AND latdec NOT LIKE '6%' AND latdec NOT LIKE '7%' AND latdec NOT LIKE '8%' AND latdec NOT LIKE '9%')))";
-		  $q->param('lathalf' => '');
-		}
-		# Handle period
-		if ( $q->param('period')) {
-		  my $periodName = $dbh->quote($wildcardToken . $q->param('period') . $wildcardToken);
-		  push(@terms, "(period_min$comparator" . $periodName . " OR period_max$comparator" . $periodName . ")");
-		  $q->param('period' => '');
-		}
-		# Handle intage
-		if ( $q->param('intage')) {
-		  my $intageName = $dbh->quote($wildcardToken . $q->param('intage') . $wildcardToken);
-		  push(@terms, "(intage_min$comparator" . $intageName . " OR intage_max$comparator" . $intageName . ")");
-		  $q->param('intage' => '');
-		}
-		# Handle locage
-		if ( $q->param('locage')) {
-		  my $locageName = $dbh->quote($wildcardToken . $q->param('locage') . $wildcardToken);
-		  push(@terms, "(locage_min$comparator" . $locageName . " OR locage_max$comparator" . $locageName . ")");
-		  $q->param('locage' => '');
-		}
-		# Handle epoch
-		if ( $q->param('epoch')) {
-		  my $epochName = $dbh->quote($wildcardToken . $q->param('epoch') . $wildcardToken);
-		  push(@terms, "(epoch_min$comparator" . $epochName . " OR epoch_max$comparator" . $epochName . ")");
-		  $q->param('epoch' => '');
-		}
-		# Handle lithology and lithology adjectives
-		if ( $q->param('lithadj'))	{
-		  my $lithadjName = $dbh->quote($wildcardToken . $q->param('lithadj') . $wildcardToken);
-		  push(@terms, "(lithadj$comparator" . $lithadjName . ")");
-		  $q->param('lithadj' => '');
-		}
-		if ( $q->param('lithology1'))	{
-		  my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology1') . $wildcardToken);
-		  push(@terms, "(lithology1$comparator" . $lithologyName . ")");
-		  $q->param('lithology1' => '');
-		}
-		if ( $q->param('lithadj2'))	{
-		  my $lithadjName = $dbh->quote($wildcardToken . $q->param('lithadj2') . $wildcardToken);
-		  push(@terms, "(lithadj2$comparator" . $lithadjName . ")");
-		  $q->param('lithadj2' => '');
-		}
-		if ( $q->param('lithology2'))	{
-		  my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology2') . $wildcardToken);
-		  push(@terms, "(lithology2$comparator" . $lithologyName . ")");
-		  $q->param('lithology2' => '');
-		}
-		# research_group is now a set -- tone 7 jun 2002
-		my $resgrp = $q->param('research_group');
-		if($resgrp && $resgrp =~ /(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
-			my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
-				if($resprojstr ne ""){
-					push(@terms, " reference_no IN (" . $resprojstr . ")");
-				}   
+	my @terms;
+	# Handle modified date
+	if ( $q->param('modified_since'))	{
+	  push(@terms, "modified>" . $q->param('modified_since'));
+	  $q->param('modified_since' => '');
+	}
+	
+	# Handle collection name (must also search aka field) JA 7.3.02
+	if ( $q->param('collection_names')) {
+		my $collectionName = $dbh->quote($wildcardToken . $q->param('collection_names') . $wildcardToken);
+		push(@terms, "(collection_name$comparator" . $collectionName . " OR collection_aka$comparator" . $collectionName . ")");
+		$q->param('collection_names' => '');
+	}
+	
+	# Handle half-latitude degrees passed by Map.pm JA 28.8.03
+	if ( $q->param('lathalf') eq "Y" )	{
+		push @terms, "(latmin>=30 OR latdec LIKE '5%' OR latdec LIKE '6%' OR latdec LIKE '7%' OR latdec LIKE '8%' OR latdec LIKE '9%')";
+		$q->param('lathalf' => '');
+	} elsif ( $q->param('lathalf') eq "N" )	{
+		push @terms, "((latmin<30 OR latmin IS NULL) AND (latdec IS NULL OR (latdec NOT LIKE '5%' AND latdec NOT LIKE '6%' AND latdec NOT LIKE '7%' AND latdec NOT LIKE '8%' AND latdec NOT LIKE '9%')))";
+		$q->param('lathalf' => '');
+	}
+
+	# Handle period
+	if ( $q->param('period')) {
+		my $periodName = $dbh->quote($wildcardToken . $q->param('period') . $wildcardToken);
+		push(@terms, "(period_min$comparator" . $periodName . " OR period_max$comparator" . $periodName . ")");
+		$q->param('period' => '');
+	}
+	
+	# Handle intage
+	if ( $q->param('intage')) {
+		my $intageName = $dbh->quote($wildcardToken . $q->param('intage') . $wildcardToken);
+		push(@terms, "(intage_min$comparator" . $intageName . " OR intage_max$comparator" . $intageName . ")");
+		$q->param('intage' => '');
+	}
+	
+	# Handle locage
+	if ( $q->param('locage')) {
+		my $locageName = $dbh->quote($wildcardToken . $q->param('locage') . $wildcardToken);
+		push(@terms, "(locage_min$comparator" . $locageName . " OR locage_max$comparator" . $locageName . ")");
+		$q->param('locage' => '');
+	}
+	
+	# Handle epoch
+	if ( $q->param('epoch')) {
+		my $epochName = $dbh->quote($wildcardToken . $q->param('epoch') . $wildcardToken);
+		push(@terms, "(epoch_min$comparator" . $epochName . " OR epoch_max$comparator" . $epochName . ")");
+		$q->param('epoch' => '');
+	}
+	
+	# Handle lithology and lithology adjectives
+	if ( $q->param('lithadj'))	{
+		my $lithadjName = $dbh->quote($wildcardToken . $q->param('lithadj') . $wildcardToken);
+		push(@terms, "(lithadj$comparator" . $lithadjName . ")");
+		$q->param('lithadj' => '');
+	}
+		
+	if ( $q->param('lithology1'))	{
+		my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology1') . $wildcardToken);
+		push(@terms, "(lithology1$comparator" . $lithologyName . ")");
+		$q->param('lithology1' => '');
+	}
+	
+	if ( $q->param('lithadj2'))	{
+		my $lithadjName = $dbh->quote($wildcardToken . $q->param('lithadj2') . $wildcardToken);
+		push(@terms, "(lithadj2$comparator" . $lithadjName . ")");
+		$q->param('lithadj2' => '');
+	}
+		
+	if ( $q->param('lithology2'))	{
+		my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology2') . $wildcardToken);
+		push(@terms, "(lithology2$comparator" . $lithologyName . ")");
+		$q->param('lithology2' => '');
+	}
+		
+	# research_group is now a set -- tone 7 jun 2002
+	my $resgrp = $q->param('research_group');
+	if($resgrp && $resgrp =~ /(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
+		my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
+		if($resprojstr ne ""){
+			push(@terms, " reference_no IN (" . $resprojstr . ")");
 		}   
-		elsif($resgrp){
-			push ( @terms, "FIND_IN_SET('".$q->param("research_group")."', research_group)" );
-		}
-		# Remove it from further consideration
-		$q->param("research_group" => "");
+	} elsif($resgrp){
+		push ( @terms, "FIND_IN_SET('".$q->param("research_group")."', research_group)" );
+	}
+			
+	# Remove it from further consideration
+	$q->param("research_group" => "");
 
-		# Compose the WHERE clause
-		my $fieldCount = -1;
-		foreach $fieldName ( @fieldNames ) {
-			$fieldCount++;
-			if ( my $val = $q->param($fieldName) ) {
-				$val =~ s/"//g;
-				if ( $pulldowns{$fieldName} ) {
-					# It is in a pulldown... no wildcards
-					push(@terms, "$fieldName = '$val'");
-				} else {
-					$val = qq|"$wildcardToken$val$wildcardToken"| if $fieldTypes[$fieldCount] == 0;
-					push(@terms, "$fieldName$comparator$val");
-				}
+	# Compose the WHERE clause
+	my $fieldCount = -1;
+	foreach $fieldName ( @fieldNames ) {
+		$fieldCount++;
 
-			}
-		}
-
-		# if first search failed and wild cards were used, try again
-		#  stripping first wildcard JA 22.2.02
-		if ( !@terms && $wildcardToken ne "")	{
-			foreach $fieldName (@fieldNames) {
-				$fieldCount++;
-				if ( my $val = $q->param($fieldName)) {
-					$val =~ s/"//g;
-					$val = qq|"$val$wildcardToken"| if $fieldTypes[$fieldCount] == 0;
-					push(@terms, "$fieldName$comparator$val");
-				}
-			}
-		}
-		
-		if ( ! @terms && ! @timeinlist ) {
-			if ( $q->param("genus_name") ) {
-				push @terms,"collection_no is not NULL";
+		if ( my $val = $q->param($fieldName) ) {
+			$val =~ s/"//g;
+	
+			if ( $pulldowns{$fieldName} ) {
+				# It is in a pulldown... no wildcards
+				push(@terms, "$fieldName = '$val'");
 			} else {
-				my $message =	"<center>\n";
-				if ( ! $timesearch )	{
-$message .= "<h4>Please specify at least one search term</h4>\n";
-				} else	{
-$message .= "<h4>Please enter a valid time term or broader time range</h4>\n";
-				}
-$message .= "<p>
-<a href='?action=displaySearchColls&type=".$q->param("type")."'><b>Try again</b></a>
-</p>
-</center>
-";
+				$val = qq|"$wildcardToken$val$wildcardToken"| if $fieldTypes[$fieldCount] == 0;
+				push(@terms, "$fieldName$comparator$val");
+			}
+		}
+	}
+
+	# if first search failed and wild cards were used, try again
+	#  stripping first wildcard JA 22.2.02
+	if ( !@terms && $wildcardToken ne "")	{
+		foreach $fieldName (@fieldNames) {
+				
+			$fieldCount++;
+			if ( my $val = $q->param($fieldName)) {
+				$val =~ s/"//g;
+				$val = qq|"$val$wildcardToken"| if $fieldTypes[$fieldCount] == 0;
+				push(@terms, "$fieldName$comparator$val");
+			}
+		}
+	}
+		
+	if ( ! @terms && ! @timeinlist ) {
+		if ( $q->param("genus_name") ) {
+			push @terms,"collection_no is not NULL";
+		} else {
+			my $message =	"<center>\n";
+			if ( ! $timesearch )	{
+				$message .= "<h4>Please specify at 
+					least one search term</h4>\n";
+			} else	{
+				$message .= "<h4>Please enter a 
+					valid time term or broader time range</h4>\n";
+			}
+			
+			$message .= "<p>
+				<a href='?action=displaySearchColls&type="
+				.$q->param("type")."'><b>Try again</b></a>
+				</p>
+				</center>";
 				&htmlError ( $message );
-			}
 		}
+	}
 		
-		# Compose the columns list
-		my @columnList = (	"collection_no",
-							"authorizer",
-							"collection_name",
-							"access_level",
-							"research_group",
-							"release_date",
-							"DATE_FORMAT(release_date, '%Y%m%d') rd_short",
-			"country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no");
+	# Compose the columns list
+	my @columnList = (	"collection_no",
+								"authorizer",
+								"collection_name",
+								"access_level",
+								"research_group",
+								"release_date",
+								"DATE_FORMAT(release_date, '%Y%m%d') rd_short",
+								"country", "state", 
+								"period_max", 
+								"period_min", "epoch_max", 
+								"epoch_min", "intage_max", 
+								"intage_min", "locage_max", 
+								"locage_min", "max_interval_no", 
+								"min_interval_no");
 		
-		# Handle extra columns
-		push(@columnList, $q->param('column1')) if $q->param('column1');
-		push(@columnList, $q->param('column2')) if $q->param('column2');
+	# Handle extra columns
+	push(@columnList, $q->param('column1')) if $q->param('column1');
+	push(@columnList, $q->param('column2')) if $q->param('column2');
 		
-		# Handle sort order
-		my $sortString = "";
-		$sortString = "ORDER BY " . $q->param('sortby') if $q->param('sortby');
-		$sortString .= " DESC" if $sortString && $q->param('sortorder') eq 'desc';
+	# Handle sort order
+	my $sortString = "";
+	$sortString = "ORDER BY " . $q->param('sortby') if $q->param('sortby');
+	$sortString .= " DESC" if $sortString && $q->param('sortorder') eq 'desc';
 
-		# Handle limit
-		my $limitString = "";
-		#	$limitString = " LIMIT " . $q->param('limit') if $q->param('limit');
-		
-		# Compose the SELECT query
-		$sql =	"SELECT ".join(', ', @columnList, 'reference_no').
-				"  FROM collections ".
-				" WHERE ".join(' AND ', @terms);
+	# Handle limit
+	my $limitString = "";
+	#	$limitString = " LIMIT " . $q->param('limit') if $q->param('limit');
+	
 
-		# modified to handle time lookup in-list JA 17.7.03
-		# previous fix assumed OR logic, modified to use AND logic
-		#  JA 5.12.03
-		if ( $q->param('genus_name') ) {
-			if ( @timeinlist )	{
-				my %collintimeinlist = ();
-				for my $t ( @timeinlist )	{
-					$collintimeinlist{$t} = "Y";
-				}
-				my @newokcolls = ();
-				for my $o ( @okcolls )	{
-					if ( $collintimeinlist{$o} eq "Y" )	{
-						push @newokcolls, $o;
-					}
-				}
-				@okcolls = @newokcolls;
-				if ( ! @okcolls )	{
-					push @okcolls, 0;
-				}
-			}
-			if (@terms)	{
-				$sql .= " AND collection_no IN ( " . join ( ", ", @okcolls )." ) ";
-			} else	{
-				$sql .= " collection_no IN ( " . join ( ", ", @okcolls )." ) ";
-			}
-		} elsif ( @timeinlist )	{
-			if (@terms)	{
-				$sql .= " AND collection_no IN ( " . join ( ", ", @timeinlist )." ) ";
-			} else	{
-				$sql .= " collection_no IN ( " . join ( ", ", @timeinlist )." ) ";
-			}
+	# if the user is trying to search for a reference number, then
+	# we have to also search for collections which use this as a 
+	# secondary reference number.
+	# added by ryan on 12/18/2003.
+	if (my $refno = $q->param("reference_no")) {
+		my $msql = "SELECT collection_no FROM secondary_refs 
+						WHERE reference_no LIKE $refno ";
+
+		my $i;
+
+		my @results = @{$dbt->getData($msql)};
+		for ($i = 0; $i <= $#results; $i++) {
+			$results[$i] = $results[$i]->{collection_no};
 		}
 
-		# Sort and limit
-		$sql .= " $sortString $limitString";
+		$msql = "SELECT collection_no FROM collections
+					WHERE reference_no LIKE $refno ";
 
-		dbg ( "$sql<HR>" );
+		my @r2 = @{$dbt->getData($msql)};
+		for ($i = 0; $i <= $#r2; $i++) {
+			$r2[$i] = $r2[$i]->{collection_no};
+		}
+	
+		# combine the two arrays together
+		push @results, @r2;
 
-		return $sql;
-}
+		if ($#results >= 0) {
+			# add it to the terms list	if we got any results
+			push @terms, " collection_no IN (" . join(', ', @results) . ") ";
+		}
+	}
+
+	
+	# make a new terms list which is the same as @terms, except that
+	# we cut out any terms starting with "reference_no".
+	# note, technically this is only needed if they specify a reference_no,
+	# but it shouldn't hurt anything if there isn't one.
+	my @newterms;
+	for ($i = 0; $i <= $#terms; $i++) {
+		push(@newterms, $terms[$i]) if (!($terms[$i] =~ m/reference_no/));
+	}
+
+	# form the SQL query from the newterms list.	
+	$sql = "SELECT " . join(', ', @columnList, 'reference_no').
+		" FROM collections ".
+			" WHERE ". join(' AND ', @newterms);
+
+
+
+
+	# modified to handle time lookup in-list JA 17.7.03
+	# previous fix assumed OR logic, modified to use AND logic
+	#  JA 5.12.03
+	if ( $q->param('genus_name') ) {
+		if ( @timeinlist )	{
+			my %collintimeinlist = ();
+			for my $t ( @timeinlist )	{
+				$collintimeinlist{$t} = "Y";
+			}
+			my @newokcolls = ();
+			for my $o ( @okcolls )	{
+				if ( $collintimeinlist{$o} eq "Y" )	{
+					push @newokcolls, $o;
+				}
+			}
+			@okcolls = @newokcolls;
+			if ( ! @okcolls )	{
+				push @okcolls, 0;
+			}
+		}
+		if (@terms)	{
+			$sql .= " AND collection_no IN ( " . join ( ", ", @okcolls )." ) ";
+		} else	{
+			$sql .= " collection_no IN ( " . join ( ", ", @okcolls )." ) ";
+		}
+	} elsif ( @timeinlist )	{
+		if (@terms)	{
+			$sql .= " AND collection_no IN ( " . join ( ", ", @timeinlist )." ) ";
+		} else	{
+			$sql .= " collection_no IN ( " . join ( ", ", @timeinlist )." ) ";
+		}
+	}
+
+	# Sort and limit
+	$sql .= " $sortString $limitString";
+
+	dbg ( "$sql<HR>" );
+	#print ("sql = $sql<BR>");
+
+	return $sql;
+
+} # end sub processCollectionsSearch
+
+
 
 
 #  * User selects a collection from the displayed list
