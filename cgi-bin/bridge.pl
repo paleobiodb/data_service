@@ -2863,8 +2863,6 @@ sub rarefyAbundances	{
 
 	print &stdIncludes ("std_page_top");
 
-	print "<center><h3>Rarefaction curve for ", $q->param(collection_name), " (PBDB collection ", $q->param(collection_no), ")</h3></center>\n\n";
-
 	$sql = "SELECT abund_value FROM occurrences WHERE collection_no=";
 	$sql .= $q->param(collection_no);
 	$sql .= " AND abund_value>0";
@@ -2873,9 +2871,13 @@ sub rarefyAbundances	{
 	$sth->execute();
 	my @ids;
 	my $abundsum;
+	my $abundmax;
 	while ( my @abundrow = @{$sth->fetchrow_arrayref()} )	{
 		push @abund , $abundrow[0];
 		$abundsum = $abundsum + $abundrow[0];
+		if ( $abundrow[0] > $abundmax )	{
+			$abundmax = $abundrow[0];
+		}
 		$ntaxa++;
 		for my $i (1..$abundrow[0])	{
 			push @ids , $ntaxa;
@@ -2883,7 +2885,8 @@ sub rarefyAbundances	{
 	}
 	$sth->finish();
 
-	# compute Shannon-Wiener and Simpson indices
+	# compute Berger-Parker, Shannon-Wiener, and Simpson indices
+	my $bpd = $abundmax / $abundsum;
 	my $swh;
 	my $simpson;
 	for my $a ( @abund )	{
@@ -2899,6 +2902,25 @@ sub rarefyAbundances	{
 	} else	{
 		$simpson = 0;
 	}
+	# compute Fisher's alpha using May 1975 eqns. 3.12 and F.13
+	my $alpha = 100;
+	my $lastalpha;
+	while ( abs($alpha - $lastalpha) > 0.001 )	{
+		$lastalpha = $alpha;
+		$alpha = $ntaxa / log(1 + ($abundsum / $alpha));
+	}
+	# compute Buzas-Gibson index
+	$bge = exp($swh) / $ntaxa;
+
+	print "<center><h3>Diversity statistics for ", $q->param(collection_name), " (PBDB collection ", $q->param(collection_no), ")</h3></center>\n\n";
+
+	print "<center><table><tr><td align=\"left\">\n";
+	printf "<p>Shannon-Wiener <i>H</i>: <b>%.3f</b><br>\n",$swh;
+	printf "Simpson's <i>D</i>*: <b>%.3f</b><br>\n",$simpson;
+	printf "Berger-Parker <i>d</i>: <b>%.3f</b><br>\n",$bpd;
+	printf "Fisher's <i>alpha</i>**: <b>%.3f</b><br>\n",$alpha;
+	printf "Buzas-Gibson <i>E</i> (evenness): <b>%.3f</b></p>\n</td></tr></table>\n",$bge;
+	print "<div class=small><p>* = with Lande 1996 correction; ** = solved iteratively based on richness and total abundance</p></div></center>\n";
 
 	# rarefy the abundances
 	my $maxtrials = 200;
@@ -2929,6 +2951,8 @@ sub rarefyAbundances	{
 		$isalevel[$sl] = "Y";
 	}
 
+	print "<hr><center><h3>Rarefaction curve for ", $q->param(collection_name), " (PBDB collection ", $q->param(collection_no), ")</h3></center>\n\n";
+
 	open OUT,">$HTML_DIR/$OUTPUT_DIR/rarefaction.csv";
 	print "<center><table>\n";
 	print "<tr><td><u>Specimens</u></td><td><u>Species (mean)</u></td><td><u>Species (median)</u></td><td><u>95% confidence limits</u></td></tr>\n";
@@ -2942,8 +2966,6 @@ sub rarefyAbundances	{
 	}
 	close OUT;
 	print "</table></center>\n<p>\n\n";
-	printf "<center><p>Shannon-Wiener <i>H</i>: <b>%.3f</b></p>\n",$swh;
-	printf "<p>Simpson's <i>D</i> (with Lande 1996 correction): <b>%.3f</b></p>\n",$simpson;
 	print "<p><i>Results are based on 200 random sampling trials.\n";
 	print "The data can be downloaded from a <a href=\"$HOST_URL/$OUTPUT_DIR/rarefaction.csv\">tab-delimited text file</a>.</i></p></center>\n\n";
 
