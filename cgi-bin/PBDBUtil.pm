@@ -971,15 +971,21 @@ sub getChildren {
 			@goodrefs = ();
 			for my $ref ( @childrefs )	{
                 # Took out section with getOriginalCombination - belongs to can only be attached to
-                # original combinations so we start off with original combination, don't need to backtrack PS 01/21/2004
-                # rewrote this section 21.4.04 to use selectMostRecentParentOpinion
-                # switched to selectMostRecentBelongsToOpinion JA 18.11.04
-				$sql = "SELECT child_no,parent_no,status,reference_no,ref_has_opinion,pubyr FROM opinions WHERE child_no=" . $ref->{child_no};
-				@crefs = @{$dbt->getData($sql)};
+                # original combinations so we start off with original combination, don't need to backtrack PS 01/21/2005
 
-				my $currentref = TaxonInfo::selectMostRecentBelongsToOpinion($dbt, \@crefs, 1);
-				$lastopinion = $currentref ->{status};
-				$lastparent = $currentref->{parent_no};
+                # Don't let recombined as screw things up, we get those separately afterwards
+                # (the taxon_nos in %passed will always be original combinations since orig. combs always have all the belongs to links)
+                $sql = "SELECT parent_no, pubyr, status, reference_no".
+                       " FROM opinions ".
+                       " WHERE status NOT IN ('recombined as','rank changed as','corrected as') ".
+                       " AND child_no=".$ref->{child_no};
+
+                # go back up and check each child's parent(s)
+                my @other_results = @{$dbt->getData($sql)};
+                my $index = TaxonInfo::selectMostRecentParentOpinion($dbt, \@other_results , 1);
+
+				$lastopinion = $other_results[$index]->{status};
+				$lastparent = $other_results[$index]->{parent_no};
 
                 if ( $lastopinion =~ /belongs to/ && $lastparent == $p )	{
                     push @goodrefs , $ref;
