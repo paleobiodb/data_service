@@ -703,65 +703,18 @@ sub displayTaxonInfoResults {
 	# Get the sql IN list for a Higher taxon:
 	my $in_list = "";
 
-	if($taxon_type eq "Higher taxon"){
+	if($orig_taxon_no) {
 	# JA: replaced recurse call with taxonomic_search call 7.5.04 because
 	#  I am not maintaining recurse
 		#my $name = $q->param('genus_name');
 		#$in_list = `./recurse $name`;
-		@in_list=PBDBUtil::taxonomic_search($q->param('genus_name'),$dbt,'','return_taxon_nos');
+        @in_list=PBDBUtil::taxonomic_search($q->param('genus_name'),$dbt,'','return_taxon_nos');
         $in_list=\@in_list;
-	} elsif ( ! $taxon_no )	{
-	# Don't go looking for junior synonyms if this taxon isn't even
-	#  in the authorities table (because it has no taxon_no) JA 8.7.03
+	} else {
+	    # Don't go looking for junior synonyms if this taxon isn't even
+	    #  in the authorities table (because it has no taxon_no) JA 8.7.03
 		$in_list = [$q->param('genus_name')];
-	} else	{
-		# Find all the junior synonyms of this genus or species JA 4.7.03
-		# First find all taxa that ever were children of this taxon no
-		my $sql = "SELECT child_no, count(*) FROM opinions WHERE parent_no=";
-		$sql .= $taxon_no . " AND status != 'belongs to' GROUP BY child_no";
-		my @results = @{$dbt->getData($sql)};
-		for my $ref (@results)	{
-			push @childlist,$ref->{child_no};
-		}
-        #use Data::Dumper; print Dumper(\@results);
-        #print $sql;
-		# For each child, confirm that this is the most recent opinion
-		for my $child (@childlist)	{
-			my $sql = "SELECT parent_no,pubyr,reference_no,status FROM opinions WHERE child_no=";
-			$sql .= $child . " AND status!='belongs to'";
-			my @results = @{$dbt->getData($sql)};
-			my $currentParent = "";
-			my %recombined = ();
-
-		# rewrote this section to employ selectMostRecentParentOpinion
-		# JA 5.4.04
-			$currentParent = selectMostRecentParentOpinion($dbt, \@results);
-
-			my $maxyr = 0;
-			for my $ref (@results)	{
-				if ( $ref->{status} eq "recombined as" )	{
-					$recombined{$ref->{parent_no}}++;
-				}
-			}
-			# If the most recent opinion makes this a synonym, record its
-			#  name AND those of recombinations
-			if ( $currentParent == $taxon_no )	{
-				my @recombs = keys %recombined;
-				push @recombs,$child;
-				for my $comb_no (@recombs)	{
-					Debug::dbPrint("test1 = $comb_no");
-					my $sql = "SELECT taxon_no FROM authorities WHERE taxon_no=";
-					$sql .= $comb_no;
-					my @results = @{$dbt->getData($sql)};
-					for my $ref (@results)	{
-						push @synonyms, $ref->{taxon_no};
-					}
-				}
-			}
-		}
-        push @synonyms, $taxon_no;
-		$in_list =  \@synonyms;
-	}
+	} 
 
 	print main::stdIncludes("std_page_top");
 
