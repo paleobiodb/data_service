@@ -9,7 +9,7 @@
 		if ( frm.collection_name.value == "") {
 			missinginfo += "\n    - Collection name (required)";
 		}
-		if ( frm.collection_type.value == "") {
+		if ( frm.collection_type.selectedIndex == 0 ) {
 			missinginfo += "\n    - Reason for describing collection (required)";
 		}
 		if ( frm.period_max.selectedIndex == 0 ) {
