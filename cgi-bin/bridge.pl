@@ -2559,13 +2559,48 @@ sub processCollectionsSearch {
 	}
 	
 	# Handle half-latitude degrees passed by Map.pm JA 28.8.03
-	if ( $q->param('lathalf') eq "Y" )	{
-		push @terms, "(latmin>=30 OR latdec LIKE '5%' OR latdec LIKE '6%' OR latdec LIKE '7%' OR latdec LIKE '8%' OR latdec LIKE '9%')";
-		$q->param('lathalf' => '');
-	} elsif ( $q->param('lathalf') eq "N" )	{
-		push @terms, "((latmin<30 OR latmin IS NULL) AND (latdec IS NULL OR (latdec NOT LIKE '5%' AND latdec NOT LIKE '6%' AND latdec NOT LIKE '7%' AND latdec NOT LIKE '8%' AND latdec NOT LIKE '9%')))";
-		$q->param('lathalf' => '');
+	# LEGACY
+	#if ( $q->param('lathalf') eq "Y" )	{
+	#	push @terms, "(latmin>=30 OR latdec LIKE '5%' OR latdec LIKE '6%' OR latdec LIKE '7%' OR latdec LIKE '8%' OR latdec LIKE '9%')";
+	#	$q->param('lathalf' => '');
+	#} elsif ( $q->param('lathalf') eq "N" )	{
+	#	push @terms, "((latmin<30 OR latmin IS NULL) AND (latdec IS NULL OR (latdec NOT LIKE '5%' AND latdec NOT LIKE '6%' AND latdec NOT LIKE '7%' AND latdec NOT LIKE '8%' AND latdec NOT LIKE '9%')))";
+	#	$q->param('lathalf' => '');
+	#}
+
+	# Handle half/quarter degrees for long/lat respectively passed by Map.pm PS 11/23/2004
+    if ( $q->param("coordres") eq "half") {
+		if ($q->param("latdec_range") eq "00") {
+			push @terms, "((latmin >= 0 AND latmin <15) OR " 
+ 						. "(latdec regexp '^(0|1|(2(0|1|2|3|4)))') OR "
+                        . "(latmin IS NULL AND latdec IS NULL))";
+		} elsif($q->param("latdec_range") eq "25") {
+			push @terms, "((latmin >= 15 AND latmin <30) OR "
+ 						. "(latdec regexp '^(4|3|(2(5|6|7|8|9)))'))";
+		} elsif($q->param("latdec_range") eq "50") {
+			push @terms, "((latmin >= 30 AND latmin <45) OR "
+ 						. "(latdec regexp '^(5|6|(7(0|1|2|3|4)))'))";
+		} else {
+			push @terms, "(latmin >= 45 OR (latdec regexp '^(9|8|(7(5|6|7|8|9)))'))";
+		}
+
+		if ( $q->param('lngdec_range') eq "50" )	{
+			push @terms, "(lngmin>=30 OR (lngdec regexp '^(5|6|7|8|9)'))";
+		} else {
+			push @terms, "(lngmin<30 OR (lngdec regexp '^(0|1|2|3|4)') OR (lngmin IS NULL AND lngdec
+IS NULL))";
+		}
+    # assume coordinate resolution is 'full', which means full/half degress for long/lat
+    # respectively 
+	} else { 
+		if ( $q->param('latdec_range') eq "50" )	{
+			push @terms, "(latmin>=30 OR (latdec regexp '^(5|6|7|8|9)'))";
+		} else {
+			push @terms, "(latmin<30 OR (latdec regexp '^(0|1|2|3|4)') OR (latmin IS NULL AND latdec
+IS NULL))";
+		}
 	}
+
 
 	# Handle period
 	if ( $q->param('period')) {
@@ -2632,7 +2667,7 @@ sub processCollectionsSearch {
 	}
 			
 	# Remove it from further consideration
-	$q->param("research_group" => "");
+	$q->param("research_group" => undef);
 		
 	
 	# Compose the WHERE clause
@@ -2644,11 +2679,8 @@ sub processCollectionsSearch {
 		
 		#Debug::dbPrint("field $fieldName");
 		
-		#$val = $q->param("\'". $fieldName . "\'");
 		$val = $q->param($fieldName);
-		if ($val) {
-			#Debug::dbPrint("found field named $fieldName with value $val");
-				
+		if (defined $q->param($fieldName))  {
 			if ( $pulldowns{$fieldName} ) {
 				# It is in a pulldown... no wildcards
 				push(@terms, "$fieldName = '$val'");
@@ -2855,7 +2887,7 @@ sub processCollectionsSearch {
 	$sql->setOrderByExpr($sortString);
 	$sql->setLimitExpr($limitString);
 
-	dbg( "$sql->SQLExpr()<HR>" );
+	dbg( $sql->SQLExpr()."<HR>" );
 	#Debug::dbPrint("proccessCollectionsSearch SQL Num. 2 =" . $sql->SQLExpr());
 	
 	return $sql->SQLExpr();

@@ -193,7 +193,7 @@ sub mapQueryDb	{
 					}
 				}
 				if($species){
-					$sql .= "species_name='" . $species;
+				$sql .= "species_name='" . $species;
 				}
 				$sql .= "'";
 			}
@@ -760,12 +760,14 @@ sub mapDrawMap {
   $dotshape = $q->param("pointshape$setsuffix");
 
   if ($dotsizeterm eq "tiny")	{
-    $dotsize = 1.5;
+    $dotsize = 1;
   } elsif ($dotsizeterm eq "small")	{
-    $dotsize = 2;
+    $dotsize = 1.5;
   } elsif ($dotsizeterm eq "medium")	{
-    $dotsize = 3;
+    $dotsize = 2;
   } elsif ($dotsizeterm eq "large")	{
+    $dotsize = 3;
+  } elsif ($dotsizeterm eq "huge")	{
     $dotsize = 4;
   }
   $maxdotsize = $dotsize;
@@ -801,7 +803,7 @@ sub mapDrawMap {
   # draw collection data points
   %atCoord = ();
   %longVal = ();
-  %latgVal = ();
+  %latVal = ();
 	foreach $collRef ( @dataRows ) {
  		%coll = %{$collRef};
  		if ( ( $coll{'latdeg'} > 0 || $coll{'latmin'} > 0 || $coll{'latdec'} > 0 ) &&
@@ -820,25 +822,72 @@ sub mapDrawMap {
 		#}
 
 
-      $lngoff = $coll{'lngdeg'};
-      # E/W modification appears unnecessary, but code is here just in case
-      if ( $coll{'lngdir'} eq "East" )	{
-        $lngoff = $lngoff + 0.0;
-      } elsif ( $coll{'lngdir'} eq "West" )	{
-        $lngoff = $lngoff - 0.0;
+      # When magnification is high, want to use minutes 
+      # in addition to degrees, so the resolution is a bit higher
+      if ($scale > 6)  
+      {
+          $lngoff = $coll{'lngdeg'};
+          $lnghalf = ".00";
+          # doubles the number of points longitudinally
+          if ( $coll{'lngmin'} >= 30 || ($coll{'lngdec'} =~ /^\d/ && $coll{'lngdec'} >= .50) )	{
+            $lngoff = $lngoff + 0.5;
+            $lnghalf = ".50";
+          }
+
+          # E/W modification appears unnecessary, but code is here just in case
+          if ( $coll{'lngdir'} eq "East" )	{
+            $lngoff = $lngoff + 0.0;
+          } elsif ( $coll{'lngdir'} eq "West" )	{
+            $lngoff = $lngoff - 0.0;
+          }
+          
+          $latoff = $coll{'latdeg'};
+          $lathalf = ".00";
+          # quadruples the number of point rows latitudinally
+          if ( $coll{'latmin'} >= 45 || ($coll{'latdec'} =~ /^\d/ && $coll{'latdec'} >= .75) )	{
+            $latoff = $latoff + 0.75;
+            $lathalf = ".75";
+          } elsif ( $coll{'latmin'} >= 30 || ($coll{'latdec'} =~ /^\d/ && $coll{'latdec'} >= .50) )	{
+            $latoff = $latoff + 0.5;
+            $lathalf = ".50";
+          } elsif ( $coll{'latmin'} >= 15 || ($coll{'latdec'} =~ /^\d/ && $coll{'latdec'} >= .25) )	{
+            $latoff = $latoff + 0.25;
+            $lathalf = ".25";
+          }
+          
+          if ( $coll{'latdir'} eq "North" )	{
+            $latoff = $latoff + 0.25;
+          } elsif ( $coll{'latdir'} eq "South" )	{
+            $latoff = $latoff - 0.25;
+          }
+          $coordres = 'half';
+      } else {
+          $lngoff = $coll{'lngdeg'};
+          # E/W modification appears unnecessary, but code is here just in case
+          if ( $coll{'lngdir'} eq "East" )	{
+            $lngoff = $lngoff + 0.0;
+          } elsif ( $coll{'lngdir'} eq "West" )	{
+            $lngoff = $lngoff - 0.0;
+          }
+          $lngres = 'full';
+          $latoff = $coll{'latdeg'};
+          $lathalf = ".00";
+          $lnghalf = ".00";
+          # doubles the number of point rows latitudinally
+          if ( $coll{'latmin'} >= 30 || $coll{'latdec'} =~ /^[5-9]/ )	{
+            $latoff = $latoff + 0.5;
+            $lathalf = ".50";
+          }
+          if ( $coll{'latdir'} eq "North" )	{
+            $latoff = $latoff + 0.5;
+          } elsif ( $coll{'latdir'} eq "South" )	{
+            $latoff = $latoff - 0.5;
+          }
+          $coordres = 'full';
       }
-      $latoff = $coll{'latdeg'};
-      $lathalf = "";
-      # doubles the number of point rows latitudinally
-      if ( $coll{'latmin'} >= 30 || $coll{'latdec'} =~ /^[5-9]/ )	{
-        $latoff = $latoff + 0.5;
-        $lathalf = ".5";
-      }
-      if ( $coll{'latdir'} eq "North" )	{
-        $latoff = $latoff + 0.5;
-      } elsif ( $coll{'latdir'} eq "South" )	{
-        $latoff = $latoff - 0.5;
-      }
+        
+
+      
       ($x1,$y1,$hemi) = $self->getCoords($lngoff,$latoff);
 
 
@@ -847,12 +896,19 @@ sub mapDrawMap {
 			$x1+$maxdotsize < $width &&
 			$y1-$maxdotsize > 0 &&
 			$y1+$maxdotsize < $height )	{
+       
         $atCoord{$x1}{$y1}++;
-        $longVal{$x1} = $coll{'lngdeg'} . " " . $coll{'lngdir'};
+        $longVal{$x1} = $coll{'lngdeg'} . $lnghalf . " " . $coll{'lngdir'};
         $latVal{$y1} = $coll{'latdeg'} . $lathalf . " " . $coll{'latdir'};
-	$hemiVal{$x1}{$y1} = $hemi;
+
+        $self->dbg("Collection ".$coll{'collection_no'}." pixels($x1,$y1) " 
+                 . "with degrees(".$coll{'lngdeg'}." ".$coll{'lngmin'}."/".$coll{'lngdec'}.",".$coll{'latdeg'}." ".$coll{'latmin'}."/".$coll{'latdec'}.")"
+                 . "binned to degrees(".$longVal{$x1}.",".$latVal{$y1}.")");
+
+	    $hemiVal{$x1}{$y1} = $hemi;
         $matches++;
       }
+
     }
   }
 
@@ -1307,14 +1363,12 @@ if ( $q->param('gridposition') ne "in back" )	{
 				print MAPOUT "&taxon_rank=" . $q->param('taxon_rank');
 			}
 			($latdeg,$latdir) = split / /,$latVal{$y1};
-			if ( $latdeg =~ /\.5/ )	{
-				$latdeg =~ s/\.5//;
-				print MAPOUT "&lathalf=Y";
-			} else	{
-				print MAPOUT "&lathalf=N";
-			}
 			($lngdeg,$lngdir) = split / /,$longVal{$x1};
-			print MAPOUT "&latdeg=$latdeg&latdir=$latdir&lngdeg=$lngdeg&lngdir=$lngdir\">\n";
+            ($latdeg, $latdec) = split /\./,$latdeg;
+            ($lngdeg, $lngdec) = split /\./,$lngdeg;
+            #resolution = full or half degree
+			print MAPOUT "&coordres=$coordres"; 
+			print MAPOUT "&latdeg=$latdeg&latdec_range=$latdec&latdir=$latdir&lngdeg=$lngdeg&lngdec_range=$lngdec&lngdir=$lngdir\">\n";
 		#}
 
         my $mycolor = $aicol{$dotcolor};
