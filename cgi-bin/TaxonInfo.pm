@@ -670,10 +670,17 @@ sub displayTaxonInfoResults {
 	# or a "nomen *" relationship, then do the display page on what was entered.
 	# If any other relationship exists for the most recent parent, display info 
 	# on that parent.  
-	my @verified = verify_chosen_taxon($genus_name, $taxon_no, $dbt);
-	$genus_name = $verified[0];
+	#my @verified = verify_chosen_taxon($dbt, $taxon_no);
+	#$genus_name = $verified[0];
+	#$taxon_no = $verified[1];
+    #print "verified $genus_name, $taxon_no orig $entered_name, $entered_no<br>";
+
+    my $orig_taxon_no = getOriginalCombination($dbt,$taxon_no);
+    my $c_row = PBDBUtil::getCorrectedName($dbt,$orig_taxon_no,0,1);
+    $taxon_no=$c_row->{'taxon_no'};
+    $genus_name =$c_row->{'taxon_name'};
+
 	$q->param("genus_name" => $genus_name);
-	$taxon_no = $verified[1];
 
 	# Get the sql IN list for a Higher taxon:
 	my $in_list = "";
@@ -833,7 +840,7 @@ sub displayTaxonInfoResults {
 	print "</td></tr></table></td></tr></table></td>";
 	print "<td>";
 	# First module here
-	doModules($dbt,$dbh,$q,$s,$exec_url,$first_module,$genus,$species,$in_list,$taxon_no);
+	doModules($dbt,$dbh,$q,$s,$exec_url,$first_module,$genus,$species,$in_list,$orig_taxon_no);
 	print "</td></tr></table>";
 	print "<hr width=\"100%\">";
 
@@ -841,7 +848,7 @@ sub displayTaxonInfoResults {
 	foreach my $module (@modules_to_display){
 		print "<center><table>";
 		print "<tr><td>";
-		doModules($dbt,$dbh,$q,$s,$exec_url,$module,$genus,$species,$in_list,$taxon_no);
+		doModules($dbt,$dbh,$q,$s,$exec_url,$module,$genus,$species,$in_list,$orig_taxon_no);
 		print "</td></tr>";
 		print "</table></center>";
 		print "<hr width=\"100%\">";
@@ -1659,7 +1666,7 @@ sub displayTaxonClassification{
     my $taxon_records = PBDBUtil::getChildren($dbt,$classification{$lastrank}[1],1,1);
 	if (@{$taxon_records}) {
     	my @child_taxa_links;
-		my @invalid_taxa_links;
+		#my @invalid_taxa_links;
     	foreach $record (@{$taxon_records}) {
             $rank = $record->{'taxon_rank'} eq 'species' ? "Genus+and+species" 
                   : $record->{'taxon_rank'} eq 'genus'   ? "Genus"
@@ -1670,22 +1677,22 @@ sub displayTaxonClassification{
             my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$record->{taxon_name}&taxon_rank=$rank">$record->{taxon_name}|;
             $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
             $link .= "</a>";
-			if ($record->{'is_invalid'}) { 
-        		push @invalid_taxa_links, $link;
-			} else {
+			#if ($record->{'is_invalid'}) { 
+        	#	push @invalid_taxa_links, $link;
+			#} else {
         		push @child_taxa_links, $link;
-			}
+			#}
     	}
 		if (@child_taxa_links) {
-	    	$output .= "<p><i>Children of this taxon include:</i><br>"; 
+	    	$output .= "<p><i>This taxon includes:</i><br>"; 
 			$output .= join(", ",@child_taxa_links);
 			$output .= "</p>";
 		}
-		if (@invalid_taxa_links) {
-	    	$output .= "<p><i>Invalid children of this taxon include:</i><br>"; 
-			$output .= join(", ",@invalid_taxa_links);
-			$output .= "</p>";
-		}
+		#if (@invalid_taxa_links) {
+	    #	$output .= "<p><i>Invalid children of this taxon include:</i><br>"; 
+		#	$output .= join(", ",@invalid_taxa_links);
+		#	$output .= "</p>";
+		#}
 	}
 
     # Get sister taxa as well
@@ -1693,7 +1700,7 @@ sub displayTaxonClassification{
     my $taxon_records = PBDBUtil::getChildren($dbt,$classification{$next_to_last_rank}[1],1,1);
 	if (@{$taxon_records}) {
     	my @child_taxa_links;
-		my @invalid_taxa_links;
+		#my @invalid_taxa_links;
     	foreach $record (@{$taxon_records}) {
             next if ($record->{'taxon_no'} == $classification{$lastrank}[1]);
             $rank = $record->{'taxon_rank'} eq 'species' ? "Genus+and+species" 
@@ -1708,11 +1715,11 @@ sub displayTaxonClassification{
                 my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$record->{taxon_name}&taxon_rank=$rank">$record->{taxon_name}|;
                 $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
                 $link .= "</a>";
-                if ($is_invalid->{$taxon_no}) { 
-        		    push @invalid_taxa_links, $link;
-                } else {
+                #if ($is_invalid->{$taxon_no}) { 
+        		#    push @invalid_taxa_links, $link;
+                #} else {
         		    push @child_taxa_links, $link;
-                }
+                #}
             }
     	}
 		if (@child_taxa_links) {
@@ -1720,11 +1727,11 @@ sub displayTaxonClassification{
 			$output .= join(", ",@child_taxa_links);
 			$output .= "</p>";
 		}
-		if (@invalid_taxa_links) {
-	    	$output .= "<p><i>Invalid sister taxa include:</i><br>"; 
-			$output .= join(", ",@invalid_taxa_links);
-			$output .= "</p>";
-		}
+		#if (@invalid_taxa_links) {
+	    #	$output .= "<p><i>Invalid sister taxa include:</i><br>"; 
+		#	$output .= join(", ",@invalid_taxa_links);
+		#	$output .= "</p>";
+		#}
 	}
 
 	return $output;
@@ -1750,7 +1757,6 @@ sub displayTaxonSynonymy{
 		my $sql="SELECT taxon_rank FROM authorities WHERE taxon_no=$taxon_no";
 #		my $sql="SELECT taxon_rank FROM authorities WHERE taxon_name='$genus'";
 		my @results = @{$dbt->getData($sql)};
-		Debug::dbPrint("synhere1");
 		
 		$taxon_rank = $results[0]->{taxon_rank};
 	} else {
@@ -1769,7 +1775,6 @@ sub displayTaxonSynonymy{
 			  "WHERE taxon_no=$taxon_no";
 #			  "WHERE taxon_name='$taxon_name' AND taxon_rank='$taxon_rank'";
 	my @results = @{$dbt->getData($sql)};
-	Debug::dbPrint("synhere2");
 	
 #	my $taxon_no = $results[0]->{taxon_no};
 	PBDBUtil::debug(1,"taxon rank: $taxon_rank");
@@ -1783,7 +1788,6 @@ sub displayTaxonSynonymy{
 
 	# Get the original combination (of the verified name, not the focal name)
 	my $original_combination_no = getOriginalCombination($dbt, $taxon_no);
-	Debug::dbPrint("synhere3");
 	PBDBUtil::debug(1,"original combination_no: $original_combination_no");
 	
 	# Select all parents of the original combination whose status' are
@@ -1792,7 +1796,6 @@ sub displayTaxonSynonymy{
 		   "WHERE child_no=$original_combination_no ".	
 		   "AND (status='recombined as' OR status='corrected as' OR status='rank changed as')";
 	@results = @{$dbt->getData($sql)};
-	Debug::dbPrint("synhere4");
 
 	# Combine parent numbers from above for the next select below. If nothing
 	# was returned from above, use the original combination number.
@@ -1814,14 +1817,12 @@ sub displayTaxonSynonymy{
 			join(',',@parent_list).") ".
 		   "AND (status like '%synonym%' OR status='homonym of' OR status='replaced by')";
 	@results = @{$dbt->getData($sql)};
-	Debug::dbPrint("synhere5");
 
 	# Reduce these results to original combinations:
 	foreach my $rec (@results) {
 		$rec = getOriginalCombination($dbt, $rec->{child_no});	
 	}
 
-	Debug::dbPrint("synhere5a");
 
 	# NOTE: "corrected as" could also occur at higher taxonomic levels.
 
@@ -1831,7 +1832,6 @@ sub displayTaxonSynonymy{
 		push(@paragraphs, "<br><br>$list_item\n") if($list_item ne "");
 	}
 	
-	Debug::dbPrint("synhere6");
 	
 	# Print the info for the original combination of the passed in taxon first.
 	$output .= getSynonymyParagraph($dbt, $original_combination_no);
@@ -1842,7 +1842,6 @@ sub displayTaxonSynonymy{
 		$output .= $rec;
 	}
 
-	Debug::dbPrint("synhere7");
 	
 	$output .= "</ul>";
 	return $output;
@@ -1875,12 +1874,9 @@ sub getSynonymyParagraph{
 	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
 	# - select taxon_name, author1last, pubyr, reference_no, comments from authorities
 	
-	Debug::dbPrint("synpara1, taxon_no = $taxon_no");
-	
 	my $sql = "SELECT taxon_name, author1last, pubyr, reference_no, comments, ".
 			  "ref_is_authority FROM authorities WHERE taxon_no=$taxon_no";
 	my @auth_rec = @{$dbt->getData($sql)};
-	Debug::dbPrint("synpara2");
 	
 	# Get ref info from refs if 'ref_is_authority' is set
 	if($auth_rec[0]->{ref_is_authority} =~ /YES/i){
@@ -1895,7 +1891,6 @@ sub getSynonymyParagraph{
 		$sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs ".
 			   "WHERE reference_no=".$auth_rec[0]->{reference_no};
 		@results = @{$dbt->getData($sql)};
-		Debug::dbPrint("synpara3");
 		
 		$text .= "<li><i>".$auth_rec[0]->{taxon_name}."</i> was named by ".
 			  	 $results[0]->{author1last};
@@ -1945,7 +1940,6 @@ sub getSynonymyParagraph{
 		   "FROM opinions WHERE child_no=$taxon_no AND status != 'belongs to'".
 		   " AND status NOT LIKE 'nomen%'";
 	@results = @{$dbt->getData($sql)};
-	Debug::dbPrint("synpara4");
 
 	my %synonymies = ();
 	my @syn_years = ();
@@ -1958,7 +1952,6 @@ sub getSynonymyParagraph{
 				   "FROM refs ".
 				   "WHERE reference_no=".$row->{reference_no};
 			my @real_ref = @{$dbt->getData($sql)};
-			Debug::dbPrint("synpara5");
 			
 			$row->{author1last} = $real_ref[0]->{author1last};
 			$row->{author2last} = $real_ref[0]->{author2last};
@@ -1991,7 +1984,6 @@ sub getSynonymyParagraph{
 		   "FROM opinions WHERE child_no=$taxon_no AND (status='belongs to' ".
 		   "OR status like 'nomen%')";
 	@results = @{$dbt->getData($sql)};
-	Debug::dbPrint("synpara6");
 	
 	my %nomen_or_reval = ();
 	my @nomen_or_reval_numbers = ();
@@ -2004,22 +1996,35 @@ sub getSynonymyParagraph{
 				   "FROM refs ".
 				   "WHERE reference_no=".$row->{reference_no};
 			my @real_ref = @{$dbt->getData($sql)};
-			Debug::dbPrint("synpara7");
 			
 			$row->{author1last} = $real_ref[0]->{author1last};
 			$row->{author2last} = $real_ref[0]->{author2last};
 			$row->{otherauthors} = $real_ref[0]->{otherauthors};
 			$row->{pubyr} = $real_ref[0]->{pubyr};
 		}
+        # if this belongs to is paired with recombination, don't count it again, so skip it
+        $found = 0; 
+        while (($parent_no,$syn_array)=each %synonymies) {
+            foreach $record (@$syn_array) {
+                if ($row->{author1last} eq $record->{author1last} &&
+                    $row->{author2last} eq $record->{author2last} &&
+                    $row->{otherauthors} eq $record->{otherauthors} &&
+                    $row->{pubyr} eq $record->{pubyr} && 
+                    $record->{'status'} =~ /^(corrected|recombined|rank changed)/) {
+                    $found = 1;
+                 }
+            }
+        }
+        next if $found;
+       
 		# use opinion numbers to keep recs separate for now
 		$nomen_or_reval{$row->{opinion_no}} = $row;
 		push(@nomen_or_reval_numbers, $row->{opinion_no});
 		if($row->{status} =~ /nomen/){
-			$has_nomen = 1 
+			$has_nomen = 1;
 		}
 	}
 	
-	Debug::dbPrint("synpara8");
 	
 	@nomen_or_reval_numbers = sort{$nomen_or_reval{$a}->{pubyr} <=> $nomen_or_reval{$b}->{pubyr}} @nomen_or_reval_numbers;	
 	# Since these are arranged numerically now chop of any leading "belongs to"
@@ -2040,8 +2045,6 @@ sub getSynonymyParagraph{
 		}
 	}
 	
-	Debug::dbPrint("synpara9");
-	
 	# Combine all adjacent like status types from %nomen_or_reval.
 	# (They're chronological: nomen, reval, reval, nomen, nomen, reval, etc.)
 	my %additional = ();
@@ -2057,8 +2060,6 @@ sub getSynonymyParagraph{
 		}
 		$last_status = $nomen_or_reval{$nomen_or_reval_numbers[$index]}->{status};
 	}
-
-	Debug::dbPrint("synpara10");
 
 	# Put revalidations and nomen*'s in synonymies hash.
 	if(scalar(keys %synonymies) or $has_nomen){
@@ -2092,8 +2093,6 @@ sub getSynonymyParagraph{
 		push(@syn_keys, $new_oldest_key);
 	}
 	
-	Debug::dbPrint("synpara11");
-
 	# Loop through unique parent number from the opinions table.
 	# Each parent number is a hash key whose value is an array ref of records.
 	for(my $index = 0; $index < @syn_keys; $index++){
@@ -2108,25 +2107,16 @@ sub getSynonymyParagraph{
 		my $tn = 0;
 		if ($synonymies{$syn_keys[$index]}[0]->{status} =~ /nomen/ or
 		   $synonymies{$syn_keys[$index]}[0]->{status} =~ /belongs/) {
-			
-			Debug::dbPrint("err1");
-		   
 			$tn = $synonymies{$syn_keys[$index]}[0]->{parent_no};
 		} else {	
-		
-			Debug::dbPrint("err2");
 			$tn = $syn_keys[$index];
 		}
 		
 		# Added by rjp, 3/29/2004 to fix an error caused by a missing parent number.
-		# Still not sure why the number was empty to begin with, but this seems to 
-		# fix it for now.
 		if (!$tn) {
 			next;
 		}
 		$sql .= $tn;
-		
-		Debug::dbPrint("errparent_no = " . $tn);
 		
 		@results = @{$dbt->getData($sql)};
 		unless($synmap{$synonymies{$syn_keys[$index]}[0]->{status}} eq "revalidated by "){
@@ -2174,9 +2164,6 @@ sub getSynonymyParagraph{
 		$text =~ s/^i/I/;
 	}
 
-
-	Debug::dbPrint("synparalast");
-	
 	return $text;
 }
 
@@ -2429,78 +2416,46 @@ sub array_push_unique{
 	return \@orig;
 }
 
-# Verify taxon:  If what was entered's most recent parent is a "belongs to"
-# or a "nomen *" relationship, then do the display page on what was entered.
-# If any other relationship exists for the most recent parent, display info 
-# on that parent.
+# If the entered taxon is a synonym or recombination, then return the synonym or recombination
+# Else just return what the user pased in
+# DEPRECATED PS 
 sub verify_chosen_taxon{
-	my $taxon = shift;
-	my $num = shift;
 	my $dbt = shift;
+	my $taxon_no = shift;
+
 	my $sql = "";
  	my @results = ();
 
-	# First, see if this name has any recombinations:
-	if(!$num){
-		$sql = "SELECT taxon_no FROM authorities WHERE taxon_name='$taxon'";
-		@results = @{$dbt->getData($sql)};
-		# Elephas maximus won't return anything, but the script will still
-		# work for it because we have one occurrence in the db. (so don't
-		# let it choke out here)
-		if(@results > 0){
-			$num = $results[0]->{taxon_no};
-			#$temp_num = $results[0]->{taxon_no};
-		}
-	}
-	if($num){
-		$sql = "SELECT child_no,taxon_name FROM opinions,authorities ".
-			   "WHERE parent_no=$num AND taxon_no=child_no ".
-			   #"WHERE parent_no=$temp_num AND taxon_no=child_no ".
-			   "AND status='recombined as'";
-		@results = @{$dbt->getData($sql)};
-		# might not get any recombinations; that's fine - keep going either way.
-		if(scalar @results > 0){
-			$num = $results[0]->{child_no};
-			$taxon = $results[0]->{taxon_name};
-		}
-	}
+    $taxon_no = getOriginalCombination($dbt,$taxon_no);
+    #$taxon_name = ${$dbt->getData("SELECT taxon_name FROM authorities WHERE taxon_no=$taxon_no")}[0]->{'taxon_name'};
 
-	# Now, get the senior synonym or most current combination:
-	$sql = "SELECT authorities.taxon_no,opinions.parent_no,opinions.pubyr, ".
-			  "opinions.status, opinions.reference_no ".
-			  "FROM authorities, opinions ".
-			  "WHERE authorities.taxon_name='$taxon' ".
-			  "AND authorities.taxon_no = opinions.child_no";
+    $row = PBDBUtil::getCorrectedName($dbt,$taxon_no,0,1);
+    $taxon_no=$row->{'taxon_no'};
+    $taxon_name=$row->{'taxon_name'};
+	#$sql = "SELECT parent_no, pubyr, reference_no, status ".
+	#	   "FROM opinions WHERE child_no=$taxon_no";
+	#@results = @{$dbt->getData($sql)};
 
-	if($num){
-		$sql = "SELECT parent_no, pubyr, reference_no, status ".
-			   "FROM opinions WHERE child_no=$num";
-	}
-	@results = @{$dbt->getData($sql)};
-	
+    #print "taxon no is $taxon_no taxon name is $taxon_name<br>";
+
 	# Elephas maximus won't return anything for the same reason mentioned above.
-	if(@results <1){
-		return ($taxon, $num);
-	}
-	
-	my $index = selectMostRecentParentOpinion($dbt, \@results, 1);
+	#if (scalar(@results) > 0) {
+    #    my $index = selectMostRecentParentOpinion($dbt, \@results, 1);
+    #    use Data::Dumper;
+    #    print Dumper(\@results)."<br>";
+    #    print "index is $index<br>";
 
-	# if the most recent parent is a 'belongs to' relationship, just return
-	# what we were given (or found in recombinations).
-	if($results[$index]->{status} eq "belongs to" ||
-	  							$results[$index]->{status} =~ /nomen/i){
-		return ($taxon, $num);
-	}
-	# Otherwise, return the name and number of the parent.
-	else{
-		my $parent_no = $results[$index]->{parent_no};
-		Debug::dbPrint("test3 = " . $results[$index]->{parent_no});
-		
-		$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=".
-			   $results[$index]->{parent_no};
-		@results = @{$dbt->getData($sql)};
-		return ($results[0]->{taxon_name},$parent_no);
-	}
+        # if the most recent parent is a 'belongs to' relationship, just return
+        # what we were given (or found in recombinations).
+        # Otherwise, return the name and number of the parent.
+    #    if($results[$index]->{status} ne "belongs to" &&
+    #       $results[$index]->{status} !~ /nomen/i){
+    #        $taxon_no = $results[$index]->{parent_no};
+    #        $taxon_name = ${$dbt->getData("SELECT taxon_name FROM authorities WHERE taxon_no=$taxon_no")}[0]->{'taxon_name'};
+    #    }
+    #}
+
+	return ($taxon_name, $taxon_no);
 }
 
 # JA 1.8.03
@@ -2645,7 +2600,7 @@ sub displaySynonymyList	{
 # don't do this if the parent is actually the focal taxon
 	my @synparents;
 	for my $syn (@syns)	{
-		$sql = "SELECT parent_no FROM opinions WHERE status='recombined as' AND child_no=" . $syn . " AND parent_no!=" . $taxon_no;
+		$sql = "SELECT parent_no FROM opinions WHERE status='recombined as' AND child_no=" . $syn . " AND parent_no != " . $taxon_no;
 		@synparentrefs = @{$dbt->getData($sql)};
 		for $synparentref ( @synparentrefs )	{
 			push @synparents, $synparentref->{parent_no};
@@ -2725,54 +2680,54 @@ sub displaySynonymyList	{
 
 # likewise appearances in the authority table
 	for my $syn (@syns)	{
-	if ( $isoriginal{$syn} eq "YES" )	{
-		$sql = "SELECT taxon_name,author1last,author2last,otherauthors,pubyr,pages,figures,ref_is_authority,reference_no FROM authorities WHERE taxon_no=" . $syn;
-		@userefs = @{$dbt->getData($sql)};
-	# save the instance as a key with pubyr as a value
-	# note that @userefs only should have one value because taxon_no
-	#  is the primary key
-		for $useref ( @userefs )	{
-			my $auth_taxon_name = $useref->{taxon_name};
-			if ( $q->param("taxon_rank") =~ /(genus)|(species)/i )	{
-				$auth_taxon_name = "<i>" . $auth_taxon_name . "</i>";
-			}
-			if ( $useref->{pubyr} )	{
-				$synkey = "<td>" . $useref->{pubyr} . "</td><td>" . $auth_taxon_name . " " . $useref->{author1last};
-				if ( $useref->{otherauthors} )	{
-					$synkey .= " et al.";
-				} elsif ( $useref->{author2last} )	{
-					$synkey .= " and " . $useref->{author2last};
-				}
-				$mypubyr = $useref->{pubyr};
-		# no pub data, get it from the refs table
-			} else	{
-				$sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $useref->{reference_no};
-				$refref = @{$dbt->getData($sql)}[0];
-				$synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $auth_taxon_name . " " . $refref->{author1last};
-				if ( $refref->{otherauthors} )	{
-					$synkey .= " et al.";
-				} elsif ( $refref->{author2last} )	{
-					$synkey .= " and " . $refref->{author2last};
-				}
-				$mypubyr = $refref->{pubyr};
-			}
-			if ( $useref->{pages} )	{
-				if ( $useref->{pages} =~ /[ -]/ )	{
-					$synkey .= " pp. " . $useref->{pages};
-				} else	{
-					$synkey .= " p. " . $useref->{pages};
-				}
-			}
-			if ( $useref->{figures} )	{
-				if ( $useref->{figures} =~ /[ -]/ )	{
-					$synkey .= " figs. " . $useref->{figures};
-				} else	{
-					$synkey .= " fig. " . $useref->{figures};
-				}
-			}
-			$synline{$synkey} = $mypubyr;
-		}
-	}
+        if ( $isoriginal{$syn} eq "YES" )	{
+            $sql = "SELECT taxon_name,author1last,author2last,otherauthors,pubyr,pages,figures,ref_is_authority,reference_no FROM authorities WHERE taxon_no=" . $syn;
+            @userefs = @{$dbt->getData($sql)};
+        # save the instance as a key with pubyr as a value
+        # note that @userefs only should have one value because taxon_no
+        #  is the primary key
+            for $useref ( @userefs )	{
+                my $auth_taxon_name = $useref->{taxon_name};
+                if ( $q->param("taxon_rank") =~ /(genus)|(species)/i )	{
+                    $auth_taxon_name = "<i>" . $auth_taxon_name . "</i>";
+                }
+                if ( $useref->{pubyr} )	{
+                    $synkey = "<td>" . $useref->{pubyr} . "</td><td>" . $auth_taxon_name . " " . $useref->{author1last};
+                    if ( $useref->{otherauthors} )	{
+                        $synkey .= " et al.";
+                    } elsif ( $useref->{author2last} )	{
+                        $synkey .= " and " . $useref->{author2last};
+                    }
+                    $mypubyr = $useref->{pubyr};
+            # no pub data, get it from the refs table
+                } else	{
+                    $sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $useref->{reference_no};
+                    $refref = @{$dbt->getData($sql)}[0];
+                    $synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $auth_taxon_name . " " . $refref->{author1last};
+                    if ( $refref->{otherauthors} )	{
+                        $synkey .= " et al.";
+                    } elsif ( $refref->{author2last} )	{
+                        $synkey .= " and " . $refref->{author2last};
+                    }
+                    $mypubyr = $refref->{pubyr};
+                }
+                if ( $useref->{pages} )	{
+                    if ( $useref->{pages} =~ /[ -]/ )	{
+                        $synkey .= " pp. " . $useref->{pages};
+                    } else	{
+                        $synkey .= " p. " . $useref->{pages};
+                    }
+                }
+                if ( $useref->{figures} )	{
+                    if ( $useref->{figures} =~ /[ -]/ )	{
+                        $synkey .= " figs. " . $useref->{figures};
+                    } else	{
+                        $synkey .= " fig. " . $useref->{figures};
+                    }
+                }
+                $synline{$synkey} = $mypubyr;
+            }
+        }
 	}
 
 # sort the synonymy list by pubyr
