@@ -606,19 +606,41 @@ sub setPreferences	{
 }
 
 
-# rjp, 2/2004
+# rjp, 3/2004
+#
+# Displays a form with authority data about a taxon.
+# Don't need to pass it anything - it will grab the taxon_no
+# or the taxon_name out of the CGI ($q) object.
 sub displayAuthorityForm {
 	my $taxon = Taxon->new();
-	$taxon->setWithTaxonName("Equasus");
 	
-	$taxon->displayAuthorityForm($hbo, $s);
-		
+	
+	if ($q->param('taxon_no')) {
+		$taxon->setWithTaxonNumber($q->param('taxon_no'));
+	} elsif ($q->param('taxon_name')) {
+		$taxon->setWithTaxonName($q->param('taxon_name'));
+	}
+	
+	
+	$taxon->displayAuthorityForm($hbo, $s, $q);	
 }
+
 
 # rjp, 3/2004
 sub submitAuthorityForm {
 	my $taxon = Taxon->new();
-	$taxon->setWithTaxonName($q->param('taxon_name_corrected'));
+	
+	if (!$q->param('taxon_name_corrected')) {
+		Debug::logError("bridge::submitAuthorityForm failed because taxon_name_corrected doesn't exist.");
+		return;
+	}
+	
+	if ($q->param('taxon_no')) {
+		$taxon->setWithTaxonNumber($q->param('taxon_no'));
+	} else {
+		$taxon->setWithTaxonName($q->param('taxon_name_corrected'));
+	}
+	
 	$taxon->submitAuthorityForm($hbo, $s, $q);
 }
 

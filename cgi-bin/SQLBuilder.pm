@@ -771,10 +771,8 @@ sub isValidTableName {
 # directly to column names in the database.  Note, not all columns need to 
 # be listed; only the ones which you are inserting data for.
 #
-# Returns a true value for success, or false otherwise.
-# Note, if it makes it to the insert statement, then it returns
-# the result code from the dbh->do() method.
-#
+# Returns an array.  First element is esult code from the dbh->do() method,
+# second element is primary key value of the last insert (very useful!).
 #
 # Note, for now, this just blindly inserts whatever the user passes.
 # However, in the future, since insert is an operation which won't occur very 
@@ -834,9 +832,13 @@ sub insertNewRecord {
 	
 	# actually insert into the database
 	my $insertResult = $dbh->do($toInsert);
+	
+	# figure out the id of the last insert, ie, the primary key value.
+	my $idNum = $self->getSingleSQLResult("SELECT LAST_INSERT_ID() FROM $tableName");
+
 		
 	# return the result code from the do() method.
-	return $insertResult;
+	return ($insertResult, $idNum);
 }
 
 
