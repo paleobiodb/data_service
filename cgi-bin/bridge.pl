@@ -5269,7 +5269,9 @@ sub processTaxonomyEntryForm {
 	
 	# if the user selected the "original_valid" radio button at the bottom, then we need to set the 
 	# parent_taxon_name to whatever they initially passed into the form (and possibly edited).
-	$q->param(parent_taxon_name => $q->param('taxon_name_corrected'));
+	if ($q->param('taxon_status' eq 'original_valid') {
+		$q->param(parent_taxon_name => $q->param('taxon_name_corrected'));
+	}
 	
 	
 	# Pages and figures each can come from two different widgets, so merge them
