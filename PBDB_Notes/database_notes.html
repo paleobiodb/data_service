@@ -148,12 +148,21 @@ a certain person.</p>
 </p>
 <p class="field">
 <span class="fieldName">taxon_name</span>
-<span class="fieldDesc"></span>
+<span class="fieldDesc">Name of this taxon (of type taxon_rank).</span>
 </p>
 <p class="field">
 <span class="fieldName">taxon_rank</span>
 <span class="fieldDesc">class, species, genus, etc.</span>
 </p>
+
+<p class="field">
+<span class="fieldName">type_taxon_no</span>
+<span class="fieldDesc">Optional field - for example, Felidae 
+has the type taxon felis.  So this is a reference to another taxon_no in
+the authorities table.</span>
+</p>
+
+
 </div>
 
 
@@ -240,9 +249,14 @@ and the <A HREF="#scales">scales</A> table lists opinions about time scales.</p>
 </p>
 <p class="field">
 <span class="fieldName">abund_value</span>
-<span class="fieldDesc">Abundance of this occurrence in the collection, may be the number of specimens,
+<span class="fieldDesc">Abundance of this occurrence in the collection</span>
+</p>
+<p class="field">
+<span class="fieldName">abund_unit</span>
+<span class="fieldDesc">Units for the abund_value: may be the number of specimens,
 % of area covered, etc. - several different options.</span>
 </p>
+
 </div>
 
 <div class="table">
@@ -254,6 +268,14 @@ and the <A HREF="#scales">scales</A> table lists opinions about time scales.</p>
 <p class="field">
 <span class="fieldName">reference_no</span>
 <span class="fieldDesc">The reference where the opinion came from.</span>
+</p>
+<p class="field">
+<span class="fieldName">child_no</span>
+<span class="fieldDesc">Key to the authorities table, the child of this taxa rank.</span>
+</p>
+<p class="field">
+<span class="fieldName">parent_no</span>
+<span class="fieldDesc">Key to the authorities table, the parent of this taxa rank.</span>
 </p>
 
 </div>
@@ -271,9 +293,33 @@ and the <A HREF="#scales">scales</A> table lists opinions about time scales.</p>
 <span class="fieldName"><span class="primaryKey">reference_no</span></span>
 </p>
 <p class="field">
-<span class="fieldName">reference_name</span>
-<span class="fieldDesc"></span>
+<span class="fieldName">reftitle</span>
+<span class="fieldDesc">Title of the reference (ie, paper title).</span>
 </p>
+<p class="field">
+<span class="fieldName">pubtitle</span>
+<span class="fieldDesc">Title of the publication (ie, magazine name).</span>
+</p>
+<p class="field">
+<span class="fieldName">pubyr</span>
+<span class="fieldDesc">Year the reference was published.</span>
+</p>
+<p class="field">
+<span class="fieldName">author1last</span>
+<span class="fieldDesc">Last name of the first author.</span>
+</p>
+<p class="field">
+<span class="fieldName">author2last</span>
+<span class="fieldDesc">Last name of the second author</span>
+</p>
+<p class="field">
+<span class="fieldName">otherauthors</span>
+<span class="fieldDesc">All other authors.</span>
+</p>
+
+
+
+
 
 </div>
 
@@ -293,6 +339,15 @@ occur if a fossil was incorrectly classified and later re-classified as somethin
 <span class="fieldName">occurrence_no</span>
 <span class="fieldDesc">Occurrence number which was reidentified.</span>
 </p>
+<p class="field">
+<span class="fieldName">genus_name</span>
+<span class="fieldDesc">Newly reidentified genus for this occurrence.</span>
+</p>
+<p class="field">
+<span class="fieldName">species_name</span>
+<span class="fieldDesc">Newly reidentified species for this occurrence.</span>
+</p>
+
 
 
 </div>
