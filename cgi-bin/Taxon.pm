@@ -1030,7 +1030,7 @@ sub submitAuthorityForm {
 		$fieldsToEnter{figures} = $q->param('2nd_figures');
 		
 		if (! $q->param('author1last')) {
-			$errors->add('You must enter at least one author');	
+			$errors->add('You must enter at least a first author last name');	
 		}
 		
 		# make sure the pages/figures fields above this are empty.
@@ -1073,6 +1073,13 @@ sub submitAuthorityForm {
 			$errors->add("Improper year format");
 		}
 		
+		if (($q->param('otherauthors')) && (! $q->param('author2last') )) {
+			# don't let them enter other authors if the second author field
+			# isn't filled in.
+		
+			$errors->add("Don't enter other authors if you haven't entered a second author");
+		}
+		
 		
 	} else {
 		# ref_is_authority is YES
@@ -1086,12 +1093,7 @@ sub submitAuthorityForm {
 	}
 	
 	
-	if (($q->param('otherauthors')) && (! $q->param('author2last') )) {
-		# don't let them enter other authors if the second author field
-		# isn't filled in.
-		
-		$errors->add("Don't enter other authors if you haven't entered a second author");
-	}
+
 	
 	
 	# check and make sure the taxon_name_corrected field in the form makes sense

@@ -677,7 +677,7 @@ sub submitOpinionForm {
 		$fieldsToEnter{figures} = $q->param('2nd_figures');
 		
 		if (! $q->param('author1last')) {
-			$errors->add('You must enter at least one author');	
+			$errors->add('You must enter at least a first author last name');	
 		}
 		
 		# make sure the pages/figures fields above this are empty.
@@ -720,6 +720,13 @@ sub submitOpinionForm {
 			$errors->add("Improper year format");
 		}
 		
+		if (($q->param('otherauthors')) && (! $q->param('author2last') )) {
+			# don't let them enter other authors if the second author field
+			# isn't filled in.
+		
+			$errors->add("Don't enter other authors if you haven't entered a second author");
+		}
+		
 		
 	} else {
 		# ref_has_opinion is YES
@@ -733,12 +740,7 @@ sub submitOpinionForm {
 	}
 	
 	
-	if (($q->param('otherauthors')) && (! $q->param('author2last') )) {
-		# don't let them enter other authors if the second author field
-		# isn't filled in.
-		
-		$errors->add("Don't enter other authors if you haven't entered a second author");
-	}
+
 	
 
 	
@@ -833,6 +835,10 @@ sub submitOpinionForm {
 		
 		if (! $parentTaxon->taxonNumber()) {
 			$errors->add("The parent taxon '" . $parentTaxonName ."' doesn't exist in our database.  Please go back and enter an authority record for the parent taxon <i>before</i> entering this opinion.");	
+		}
+		
+		if ($parentTaxonName eq $childTaxonName) {
+			$errors->add("The parent and child taxon names should not be the same");	
 		}
 	}
 
