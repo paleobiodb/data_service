@@ -69,7 +69,7 @@ sub cleanCGIParams {
 		
 		$i = 0;
 		foreach my $pItem (@plist) {
-			@plist[$i] = clean($pItem);
+			$plist[$i] = clean($pItem);
 			$i++;
 		}
 		
@@ -199,7 +199,8 @@ sub properInitial {
 	my $input = shift;
 	
 	if ((!$input) || $input eq "") { return 0; }
-	
+
+
 	if ($input !~ m/^[A-Za-z][A-Za-z .-]*$/) {
 		return 0;
 	}
