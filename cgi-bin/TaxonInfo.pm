@@ -674,7 +674,6 @@ sub displayTaxonInfoResults {
 	$genus_name = $verified[0];
 	$q->param("genus_name" => $genus_name);
 	$taxon_no = $verified[1];
-	
 
 	# Get the sql IN list for a Higher taxon:
 	my $in_list = "";
@@ -684,56 +683,55 @@ sub displayTaxonInfoResults {
 	#  I am not maintaining recurse
 		#my $name = $q->param('genus_name');
 		#$in_list = `./recurse $name`;
-		$in_list=PBDBUtil::taxonomic_search($q->param('genus_name'),$dbt);
+		$in_list=PBDBUtil::taxonomic_search($q->param('genus_name'),$dbt,'','return_taxon_nos');
 	} elsif ( ! $taxon_no )	{
 	# Don't go looking for junior synonyms if this taxon isn't even
 	#  in the authorities table (because it has no taxon_no) JA 8.7.03
 		$in_list = "'".$q->param('genus_name')."'";
 	} else	{
-
-	# Find all the junior synonyms of this genus or species JA 4.7.03
-	# First find all taxa that ever were children of this taxon no
-	my $sql = "SELECT child_no, count(*) FROM opinions WHERE parent_no=";
-	$sql .= $taxon_no . " AND status != 'belongs to' GROUP BY child_no";
-	my @results = @{$dbt->getData($sql)};
-	for my $ref (@results)	{
-		push @childlist,$ref->{child_no};
-	}
-	# For each child, confirm that this is the most recent opinion
-	for my $child (@childlist)	{
-		my $sql = "SELECT parent_no,pubyr,reference_no,status FROM opinions WHERE child_no=";
-		$sql .= $child . " AND status!='belongs to'";
+		# Find all the junior synonyms of this genus or species JA 4.7.03
+		# First find all taxa that ever were children of this taxon no
+		my $sql = "SELECT child_no, count(*) FROM opinions WHERE parent_no=";
+		$sql .= $taxon_no . " AND status != 'belongs to' GROUP BY child_no";
 		my @results = @{$dbt->getData($sql)};
-		my $currentParent = "";
-		my %recombined = ();
-
-	# rewrote this section to employ selectMostRecentParentOpinion
-	# JA 5.4.04
-		$currentParent = selectMostRecentParentOpinion($dbt, \@results);
-
-		my $maxyr = 0;
 		for my $ref (@results)	{
-			if ( $ref->{status} eq "recombined as" )	{
-				$recombined{$ref->{parent_no}}++;
-			}
+			push @childlist,$ref->{child_no};
 		}
-		# If the most recent opinion makes this a synonym, record its
-		#  name AND those of recombinations
-		if ( $currentParent == $taxon_no )	{
-			my @recombs = keys %recombined;
-			push @recombs,$child;
-			for my $comb_no (@recombs)	{
-				Debug::dbPrint("test1 = $comb_no");
-				my $sql = "SELECT taxon_name FROM authorities WHERE taxon_no=";
-				$sql .= $comb_no;
-				my @results = @{$dbt->getData($sql)};
-				for my $ref (@results)	{
-					push @synonyms, "'".$ref->{taxon_name}."'";
+		# For each child, confirm that this is the most recent opinion
+		for my $child (@childlist)	{
+			my $sql = "SELECT parent_no,pubyr,reference_no,status FROM opinions WHERE child_no=";
+			$sql .= $child . " AND status!='belongs to'";
+			my @results = @{$dbt->getData($sql)};
+			my $currentParent = "";
+			my %recombined = ();
+
+		# rewrote this section to employ selectMostRecentParentOpinion
+		# JA 5.4.04
+			$currentParent = selectMostRecentParentOpinion($dbt, \@results);
+
+			my $maxyr = 0;
+			for my $ref (@results)	{
+				if ( $ref->{status} eq "recombined as" )	{
+					$recombined{$ref->{parent_no}}++;
+				}
+			}
+			# If the most recent opinion makes this a synonym, record its
+			#  name AND those of recombinations
+			if ( $currentParent == $taxon_no )	{
+				my @recombs = keys %recombined;
+				push @recombs,$child;
+				for my $comb_no (@recombs)	{
+					Debug::dbPrint("test1 = $comb_no");
+					my $sql = "SELECT taxon_no FROM authorities WHERE taxon_no=";
+					$sql .= $comb_no;
+					my @results = @{$dbt->getData($sql)};
+					for my $ref (@results)	{
+						push @synonyms, $ref->{taxon_no};
+					}
 				}
 			}
 		}
-	}
-	$in_list =  join ',',@synonyms;
+		$in_list =  join ',',@synonyms;
 	}
 
 	print main::stdIncludes("std_page_top");
@@ -993,7 +991,9 @@ sub doModules{
 				print;
 			}
 			close MAP;
-		}
+		} else {
+		    print "<i>No distribution data are available</i>";
+        }
 		print "</td></tr></table></center>";
 		# trim the path down beyond apache's root so we don't have a full
 		# server path in our html.
@@ -1167,8 +1167,8 @@ sub doMap{
 	
 		# now actually draw the map
 		return $m->drawMapOnly($dataRowsRef);
-	} else {
-		return "<i>No distribution data are available</i>";
+	}  else {
+        return;
 	}
 }
 
@@ -1325,7 +1325,7 @@ sub doCollections{
 			$row_color++;
 		}
 		$output .= "</table>";
-	}
+	} 
 	return $output;
 }
 
@@ -2488,26 +2488,25 @@ sub displayEcology	{
 	# WARNING: this will completely screw up if the name has homonyms
 	# JA: changed this on 4.4.04 to use taxon_no instead of taxon_name,
 	#  avoiding homonym problem
-	push my @tempnames, $taxon_no;
-	my @ancestors = Classification::get_classification_hash($dbt,'class',\@tempnames,'yes');
+	my $ancestor_ref = Classification::get_classification_hash($dbt,'class,order,family',[$taxon_no],'numbers');
+    my @ancestors = split(/,/,$ancestor_ref->{$taxon_no},-1);
 
-	Debug::dbPrint("ancestors = @ancestors");
-	
 	my $tempVals;
-	if ( @ancestors )	{
+	if ( @ancestors)	{
 		for my $a ( @ancestors )	{
-			$sql = "SELECT * FROM ecotaph WHERE taxon_no=" . $a;
-			
-			Debug::dbPrint("sql = $sql");
-			
-			$tempVals = @{$dbt->getData($sql)}[0];
-			if ( $tempVals )	{
-				for my $field ( @ecotaphFields )	{
-					if ( $tempVals->{$field} && ! $ecotaphVals->{$field} && $field ne "created" && $field ne "modified" )	{
-						$ecotaphVals->{$field} = $tempVals->{$field};
-					}
-				}
-			}
+            if ($a) {
+                $sql = "SELECT * FROM ecotaph WHERE taxon_no=" . $a;
+                main::dbg($sql);
+                
+                $tempVals = @{$dbt->getData($sql)}[0];
+                if ( $tempVals )	{
+                    for my $field ( @ecotaphFields )	{
+                        if ( $tempVals->{$field} && ! $ecotaphVals->{$field} && $field ne "created" && $field ne "modified" )	{
+                            $ecotaphVals->{$field} = $tempVals->{$field};
+                        }
+                    }
+                }
+            }
 		}
 	}
 
@@ -2737,5 +2736,25 @@ sub displaySynonymyList	{
 	return "";
 
 }
+
+# Small utility function, added 01/06/2004
+# Used in Report, Map, Download, but haven't bothered to change TaxonInfo to use it
+sub getTaxonNos {
+    my $dbt = shift;
+    my $name = shift;
+    my $rank = shift;
+    my @taxon_nos = ();
+    if ($dbt && $name)  {
+        my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name=".$dbt->dbh->quote($name);
+        if ($rank) {
+            $sql .= " AND taxon_rank=".$dbt->dbh->quote($name);
+        }
+        @results = @{$dbt->getData($sql)};
+        push @taxon_nos, $_->{'taxon_no'} for @results;
+    }
+                                                                                                                                                         
+    return @taxon_nos;
+}
+
 
 1;
