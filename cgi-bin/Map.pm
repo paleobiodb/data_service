@@ -454,7 +454,8 @@ sub mapDrawMap	{
   # draw collection data points
   foreach $collRef ( @dataRows ) {
     %coll = %{$collRef};
-    if ( $coll{'latdeg'}  && $coll{'lngdeg'}  && 
+    if ( ( $coll{'latdeg'} || $coll{'latmin'} || $coll{'latdec'} ) &&
+         ( $coll{'lngdeg'} || $coll{'lngmin'} || $coll{'lngdec'} ) && 
 			( $collok{$coll{'collection_no'}} eq "Y" || 
 			! $q->param('genus_name') ) 
 		) {
