@@ -3910,7 +3910,7 @@ sub processEnterCollectionForm {
     print $hbo->populateHTML('collection_display_fields', \@row, \@fields);
     print $hbo->populateHTML('collection_display_buttons', \@row, \@fields);
     print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
-	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Enter another collection with the same reference</a></p></b></center>|;
+	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></p></b></center>|;
  
 	print stdIncludes("std_page_bottom");
 }
@@ -5162,10 +5162,11 @@ sub processEditOccurrences {
 	# Show a link to re-edit
 	print "
 	<p><center><b>
-	<a href='$exec_url?action=displayOccurrenceAddEdit&collection_no=$collection_no'>Edit occurrences for this collection</a><br>
-	<a href='$exec_url?action=displayEditCollection&collection_no=$collection_no'>Edit the main collection record</a><br>
-	<a href='$exec_url?action=displaySearchColls&type=edit_occurrence'>Add/edit occurrences for a different collection with the current reference</a><br>
-	<a href='$exec_url?action=displaySearchCollsForAdd&type=add'>Enter another collection with the same reference</a></b><p></center>
+	<a href='$exec_url?action=displayOccurrenceAddEdit&collection_no=$collection_no'>Add/edit&nbsp;this&nbsp;collection's&nbsp;occurrences</a> -
+	<a href='$exec_url?action=startStartReclassifyOccurrences&collection_no=$collection_no'><b>Reclassify&nbsp;this&nbsp;collection's&nbsp;occurrences</b></a> -
+	<a href='$exec_url?action=displayEditCollection&collection_no=$collection_no'>Edit&nbsp;the&nbsp;main&nbsp;collection&nbsp;record</a> -
+	<a href='$exec_url?action=displaySearchColls&type=edit_occurrence'>Add/edit&nbsp;occurrences&nbsp;for&nbsp;a&nbsp;different&nbsp;collection</a> -
+	<a href='$exec_url?action=displaySearchCollsForAdd&type=add'>Add&nbsp;another&nbsp;collection</a></b><p></center>
 ";
 
 	print stdIncludes("std_page_bottom");
