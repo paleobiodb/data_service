@@ -323,7 +323,7 @@ sub isInitial
   return 1 if $token =~ /\A\w\.?\Z/ && uc($token) eq $token;
   # True if token is a single upper case character possibly followed
   # by a dot, followed by a dash, followed by another character and dot.
-  return 1 if $token =~ /\A\w\.-\w\.\Z/ && uc($token) eq $token;
+  return 1 if $token =~ /\A\w\.?-\w\.?\Z/ && uc($token) eq $token;
   # True if token is exactly two upper case characters JA 14.3.02
   return 1 if $token =~ /\A\w\w\Z/ && uc($token) eq $token;
   # ... or exactly three upper case characters JA 27.3.02
