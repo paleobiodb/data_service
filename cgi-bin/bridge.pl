@@ -1992,23 +1992,28 @@ sub processCollectionsSearch {
 	if (! $noSecondaryRefs) {
 		# only do this if we managed to find some terms from secondary refs 
 		# above..
-		my $indexToDelete;
+		my $indexToDelete = -1;
 		for ($i = 0; $i <= $#terms; $i++) {
 			if ($terms[$i] =~ m/reference_no/) {
 				$indexToDelete = $i;
 			}
 		}
-		splice (@terms, $indexToDelete, 1);	# remove this index from the array
+
+		debugPrint("IndexToDelete = $indexToDelete");
+
+		if ($indexToDelete >= 0) {
+			debugPrint("deleting index $indexToDelete");
+			splice (@terms, $indexToDelete, 1);	# remove this index from the array
+		}
 	}
 
-	debugPrint("newterms = @terms");
 
 	# form the SQL query from the newterms list.	
 	$sql = "SELECT " . join(', ', @columnList, 'reference_no').
 		" FROM collections ".
 			" WHERE ". join(' AND ', @terms);
 
-	debugPrint("full SQL = $sql");
+#	debugPrint("full SQL == $sql");
 
 
 	# modified to handle time lookup in-list JA 17.7.03
