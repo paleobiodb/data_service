@@ -15,6 +15,7 @@ my $q;					# Reference to the parameters
 my $s;					# Reference to the session data
 my $sql;				# Any SQL string
 my $rs;					# Generic recordset
+my @warnings;           # Possible errors in user input
 $|=1;
 
 # These arrays contain names of possible fields to be checked by a user in the
@@ -40,7 +41,7 @@ my $bestbothscale;
 
 # for measuring execution time
 my ($th0, $th1);
-use Time::HiRes qw(gettimeofday);
+if ($DEBUG) { use Time::HiRes qw(gettimeofday); }
 $th0 = gettimeofday() if ($DEBUG);
 
 sub new {
@@ -91,7 +92,6 @@ sub buildDownload {
     $th1 = gettimeofday() if ($DEBUG);
     $self->dbg("Exec time compendiumAgeRanges: ".sprintf ("%5.3f",($th1 - $th0)));
 
-    
 	$self->doQuery ( );
     $th1 = gettimeofday() if ($DEBUG);
     $self->dbg("Exec time doQuery: ".sprintf ("%5.3f",($th1 - $th0)));
@@ -126,10 +126,10 @@ sub retellOptions {
 		my $dataPublishedBeforeAfter = $q->param("published_before_after") . " " . $q->param("pubyr");
 		$html .= $self->retellOptionsRow ( "Data records published", $dataPublishedBeforeAfter);
 	}
-	if ( $q->param("genus_name") !~ / / )	{
-		$html .= $self->retellOptionsRow ( "Taxon name", $q->param("genus_name") );
+	if ( $q->param("taxon_name") !~ /[ ,]/ )	{
+		$html .= $self->retellOptionsRow ( "Taxon name", $q->param("taxon_name") );
 	} else	{
-		$html .= $self->retellOptionsRow ( "Taxon names", $q->param("genus_name") );
+		$html .= $self->retellOptionsRow ( "Taxon names", $q->param("taxon_name") );
 	}
 	$html .= $self->retellOptionsRow ( "Class", $q->param("class") );
 
@@ -944,11 +944,8 @@ sub getOccurrencesWhereClause {
 	my $authorizer = $q->param('authorizer');
 	
 	$where->addWhereItem(" occurrences.authorizer='$authorizer' ") if ($authorizer ne "");
-	
-	if($q->param('genus_name') ne ""){
-		my $genusNames = $self->getGenusNames($q->param('genus_name'));
-		$where->addWhereItem(" occurrences.genus_name IN (".$genusNames.")");
-	}
+
+    $where->addWhereItem($self->getTaxonString()) if ($q->param('taxon_name') ne "");
 	
     $where->addWhereItem(" occurrences.abund_value NOT LIKE \"\" AND occurrences.abund_value IS NOT NULL ") if $q->param("without_abundance") eq 'NO';
 	$where->addWhereItem(" occurrences.species_name!='indet.' ") if $q->param('indet') eq 'NO';
@@ -1317,6 +1314,11 @@ sub doQuery {
     }
 	print OUTFILE "$header\n";
 	$self->dbg ( "Output header: $header" );
+    
+    #
+    # Print warnings
+    #
+    $self->printWarnings(@warnings);
 
 	#
 	# Loop through the result set
@@ -1452,22 +1454,24 @@ sub doQuery {
     # and for retrieving the class/order/family hash for the occurences output file
     # right below here
 	my @genera = keys %totaloccs;
+	my @genera_nos = keys %totaloccsbyno;
 	@genera = sort @genera;
 
 	my %master_class;
     if ($q->param("output_data") eq "occurrences") {
         my $levels = "";
         if($q->param("occurrences_family_name") eq "YES"){
-            $levels .= "family";
+            $levels .= ",class";
         }
         if($q->param("occurrences_order_name") eq "YES"){
-            $levels .= "order";
+            $levels .= ",order";
         }
         if($q->param("occurrences_class_name") eq "YES"){
-            $levels .= "class";
+            $levels .= ",family";
         }
+        $levels =~ s/^,//;
         if ($levels) {
-    	    %master_class=%{Classification::get_classification_hash($dbt,$levels,\@genera)};
+    	    %master_class=%{Classification::get_classification_hash($dbt,$levels,\@genera_nos)};
         }
     }    
 
@@ -1713,15 +1717,12 @@ sub doQuery {
 			$curLine = $self->formatRow(($genusName));
 		} else{
             my @firstCols = ($collection_no);
-            my @parents = split ',',$master_class{$row->{'occ_genus_name'}};
-            if ($q->param("occurrences_class_name") eq "YES") {
-                push (@firstCols, $parents[0]);
-            }
-            if ($q->param("occurrences_order_name") eq "YES") {
-                push (@firstCols, $parents[1]);
-            }
-            if ($q->param("occurrences_family_name") eq "YES") {
-                push (@firstCols, $parents[2]);
+            if ($q->param("occurrences_class_name") eq "YES" || 
+                $q->param("occurrences_order_name") eq "YES" ||
+                $q->param("occurrences_family_name") eq "YES") {
+                # -1 at the end is essential so trailing whitespace shows up in the array
+                my @parents = split(/,/,$master_class{$row->{'occ_taxon_no'}},-1);
+                push @firstCols, @parents;
             }
             push (@firstCols,$genus_reso,$genusName,$reid_genus_reso,$reid_genus_name);
 			$curLine = $self->formatRow((@firstCols, @occs_row, @reid_row, @coll_row));
@@ -2029,44 +2030,53 @@ sub formatRow {
 
 # JA: Paul replaced taxonomic_search call with recurse call because it's faster,
 #  but I'm reverting because I'm not maintaining recurse
-sub getGenusNames {
+# renamed from getGenusNames to getTaxonString to reflect changes in how this works PS 01/06/2004
+sub getTaxonString {
 	my $self = shift;
-	my $genus_name = (shift || "");
 
-	my $cslist;
+	my @taxon_nos_unique;
+    my $taxon_nos_string;
+    my $genus_names_string;
 
-	if ( $genus_name !~ /[ \-,:;]/ )	{
-		$cslist = PBDBUtil::taxonomic_search($genus_name, $dbt);
-		# I'm not sure why this wasn't here before JA 11.8.04
-		if ( $cslist !~ /'/ )	{
-			$cslist = "'" . $cslist . "'";
-		}
-	}
-	# might have to extract multiple names JA 11.8.04
-	else	{
-		# do a little cleanup
-		$genus_name =~ s/[-,:;]/ /g;
-		while ( $genus_name =~ /  / )	{
-			$genus_name =~ s/  / /g;
-		}
-		# get the names
-		my @taxonnames = split / /, $genus_name;
-		# get the included taxa
-		for my $tn  ( @taxonnames )	{
-			my $templist = PBDBUtil::taxonomic_search($tn, $dbt);
-			if ( $templist !~ /'/ )	{
-				$templist = "'" . $templist . "'";
-			}
-			if ( ! $cslist )	{
-				$cslist = $templist;
-			} else	{
-				$cslist = $cslist . "," . $templist;
-			}
-		}
-	}
+    @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
 
-	#my $cslist = `./recurse $genus_name`;
-	return $cslist;
+    my %taxon_nos_unique = ();
+    foreach $taxon (@taxa) {
+        @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon);
+        $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
+        if (scalar(@taxon_nos) == 0) {
+            $genus_names_string .= ", ".$dbh->quote($taxon);
+        } elsif (scalar(@taxon_nos) == 1) {
+            my @all_taxon_nos = PBDBUtil::taxonomic_search('',$dbt,$taxon_nos[0],'return taxon nos');
+            # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
+            @taxon_nos_unique{@all_taxon_nos} = ();
+        } else { #result > 1
+            push @warnings, "The taxon name '$taxon' was not included because it is ambiguous and belongs to multiple taxonomic hierarchies. Right the download script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
+        }
+    }
+    $taxon_nos_string = join(", ", keys %taxon_nos_unique);
+    $genus_names_string =~ s/^,//;    
+
+	my $sql;
+    if ($taxon_nos_string) {
+        $sql .= " OR occurrences.taxon_no IN (".$taxon_nos_string.") OR reidentifications.taxon_no IN (".$taxon_nos_string.")";
+    } 
+    if ($genus_names_string) {
+        $sql .= " OR occurrences.genus_name IN (".$genus_names_string.") OR reidentifications.genus_name IN (".$genus_names_string.")";
+    }
+    $sql =~ s/^ OR //g;
+    return "(".$sql.")";
+}
+sub printWarnings{
+    my $self = shift;
+    if (scalar(@_)) {
+        my $plural = (scalar(@_) > 1) ? "s" : "";
+        print "<br><table width=600 border=0>" .
+              "<tr><td class=darkList><font size='+1'><b>Warning$plural</b></font></td></tr>" .
+              "<tr><td>";
+        print "<li class='medium'>$_</li>" for (@_);
+        print "</td></tr></table><br>";
+    }
 }
 
 sub dbg {
