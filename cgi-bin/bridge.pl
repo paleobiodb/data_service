@@ -320,8 +320,12 @@ sub getPrefFields	{
 		"geogcomments" => "location details",
 		"stratcomments" => "stratigraphic comments",
 		"lithdescript" => "complete lithology description",
+		"mapsize" => "image size",
+		"maptime" => "reconstruction date",
 		"mapfocus" => "map focus", "mapscale" => "magnification",
-		"mapbgcolor" => "background color",
+		"mapresolution" => "resolution",
+		"mapbgcolor" => "background/ocean color",
+		"crustcolor" => "continental crust color",
 		"gridsize" => "grid line spacing", "gridcolor" => "grid line color",
 		"coastlinecolor" => "coastline color",
 		"borderlinecolor" => "international border color",
@@ -340,7 +344,8 @@ sub getPrefFields	{
 		# comments fields
 			"geogcomments", "stratcomments", "lithdescript",
 		# map form fields
-			"projection", "mapfocus", "mapscale", "mapbgcolor",
+			"mapsize", "projection", "maptime", "mapfocus",
+			"mapscale", "mapresolution", "mapbgcolor", "crustcolor",
 			"gridsize", "gridcolor", "coastlinecolor",
 			"borderlinecolor", "usalinecolor",
 			"pointsize", "pointshape",
@@ -587,9 +592,9 @@ sub displayHomePage {
 sub displayMapForm {
 
 	# List fields that should be preset
-	my @fieldNames = ('lithology1', 'environment', 'projection', 'maptime', 'mapfocus', 'mapscale', 'mapresolution', 'mapbgcolor', 'gridsize', 'gridcolor', 'linethickness', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder');
+	my @fieldNames = ( 'research_group', 'period_max', 'lithology1', 'environment', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapscale', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder', 'mapsearchfields2', 'pointsize2', 'pointshape2', 'dotcolor2', 'dotborder2', 'mapsearchfields3', 'pointsize3', 'pointshape3', 'dotcolor3', 'dotborder3', 'mapsearchfields4', 'pointsize4', 'pointshape4', 'dotcolor4', 'dotborder4' );
 	# Set default values
-	my @row = ('', '', 'orthographic', '', 'Europe', 'X 1', 'coarse', 'white', '30 degrees', 'gray', 'medium', 'black', 'black', 'none', 'medium', 'circles', 'blue', 'with');
+	my @row = ( '', '', '', '', '100%', 'rectilinear', '0', 'Europe', 'X 1', 'medium', 'white', 'none', '30 degrees', 'gray', 'in back', 'medium', 'black', 'none', 'none', 'medium', 'circles', 'red', 'with', '', 'medium', 'squares', 'blue', 'with', '', 'medium', 'triangles', 'yellow', 'with', '', 'medium', 'diamonds', 'green', 'with' );
 	
 	# Read preferences if there are any JA 8.7.02
 	%pref = &getPreferences($s->get('enterer'));
@@ -612,6 +617,7 @@ sub displayMapForm {
 
 	# Spit out the HTML
 	print &stdIncludes ( "std_page_top" );
+	print $hbo->populateHTML('js_map_checkform');
 	print $html;
 	print &stdIncludes ("std_page_bottom");
 }
