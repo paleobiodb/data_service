@@ -4,11 +4,8 @@
 # provides a global way to connect to the database.
 # replaces older connection.pl file which made use of global variables including the password.
 
-# **************
-# Note, VERY IMPORTANT
-# This file is *DIFFERENT* on the backup server and the server.
-# Make sure to *NOT* copy this back and forth because the wrong database name might be used.
-# **************
+# Note: now does a hostname lookup to figure out which machine it's on.. So it's 
+# now safe (as of 3/11/2004) to copy this file to both servers.
 
 package DBConnection;
 
@@ -20,11 +17,22 @@ my $driver =		"mysql";
 my $hostName =		"localhost";
 my $userName =		"pbdbuser";
 
-# alter this line to the correct database name depending on whether we're running
-# on the backup machine or the real server.
+
+# figure out if we're on the backup server or the real server..
+
 # backup = "pbdb_paul"
 # server = "pbdb"
-my $dbName =		"pbdb_paul";
+my $dbName;
+
+# something like flatpebble.nceas.ucsb.edu, or paleobackup.nceas.ucsb.edu..
+my $hostname = `hostname`;  
+
+if ($hostname =~ m/paleobackup/) {
+	$dbName = "pbdb_paul";	
+} else {
+	$dbName = "pbdb";	# the live server.	
+}
+
 
 # the password is stored in a file.  This path will work on both the linux box
 # and the XServe since we have a symbolic link set up.
