@@ -3712,6 +3712,7 @@ sub printIntervalsJava	{
 	print "function checkFields() {\n";
 	print "  var noname = \"\";\n";
 	print "  var badname = \"\";\n";
+	print "  var badname2 = \"\";\n";
 	print "  var frm = document.forms[0];\n";
 	print "  var index = frm.eml_max_interval.selectedIndex;\n";
 	print "  var eml1 = frm.eml_max_interval.options[index].value;\n";
@@ -3752,15 +3753,29 @@ sub printIntervalsJava	{
 		}
 	}
 	print " && time2 != \"\" ) {\n";
-	print "    badname += \"YES\";\n";
+	print "    badname2 += \"YES\";\n";
 	print "  }\n";
 
-	print "  if ( badname != \"\" ) {\n";
-	print "    badname =\"WARNING!\\n\" +\n";
-	print "    \"The maximum and/or minimum interval fields have unrecognized values.\\n\" +\n";
-	print "    \"Please correct them and submit the form again.\\n\" +\n";
-	print "    \"Hint: try epoch names instead.\\n\";\n";
-	print "    alert(badname);\n";
+	print "  if ( badname != \"\" || badname2 != \"\" ) {\n";
+	print "    alertmessage = \"WARNING!\\n\"; }\n";
+
+	print "  if ( badname != \"\" && badname2 != \"\" ) {\n";
+        print "    alertmessage += eml1 + \" \" + time1 + ";
+	print " \" and \" + eml2 + \" \" + time2 +";
+	print " \" aren't official time terms.\\n\"; }\n";
+
+	print "  else if ( badname != \"\" ) {\n";
+	print "    alertmessage += eml1 + \" \" + time1; }\n";
+	print "  else if ( badname2 != \"\" ) {\n";
+	print "    alertmessage += eml2 + \" \" + time2; }\n";
+	print "  if ( badname != \"\" && badname2 != \"\" ) {\n";
+	print "    alertmessage += \"Please correct them and submit the form again.\\n\"; }\n";
+	print "  else if ( badname != \"\" || badname2 != \"\" ) {\n";
+	print "    alertmessage += \" isn't an official time term.\\n\" +\n";
+	print "    \"Please correct it and submit the form again.\\n\"; }\n";
+	print "  if ( alertmessage != \"\" ) {\n";
+	print "    alertmessage += \"Hint: try epoch names instead.\";\n";
+	print "    alert(alertmessage);\n";
 	print "    return false;\n";
 	print "  }\n";
 
