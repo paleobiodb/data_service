@@ -145,7 +145,7 @@ Y. Alm&eacute;ras and S. Elmi. 1998. Les brachiopodes jurassiques moyens de la b
   <table>
     <tr>
       <td>
-        Scale of geographic resolution: <select name="geogscale"><option><option>small collection<option>outcrop<option>local area<option>basin</select>
+        Scale of geographic resolution: <select name="geogscale"><option><option>hand sample<option>small collection<option>outcrop<option>local area<option>basin</select>
       </td>
     </tr>
   </table>
@@ -310,7 +310,7 @@ Y. Alm&eacute;ras and S. Elmi. 1998. Les brachiopodes jurassiques moyens de la b
     <tr>
       <td>
 		  	<!--General:-->
-        <select name="environment"><option><option>--General--<option><option>marine indet.<option>terrestrial indet.<option><option>--Carbonate--<option><option>carbonate indet.<option>peritidal<option>shallow subtidal indet.<option>open shallow subtidal<option>lagoonal/restricted shallow subtidal<option>sand shoal<option>reef, buildup or bioherm<option>deep subtidal ramp<option>deep subtidal shelf<option>deep subtidal indet.<option>offshore ramp<option>offshore shelf<option>offshore indet.<option>slope<option>basinal (carbonate)<option><option>--Siliciclastic--<option><option>marginal marine indet.<option>paralic indet.<option>estuarine/bay<option>lagoonal<option><option>coastal indet.<option>foreshore<option>shoreface<option>transition zone/lower shoreface<option>offshore<option><option>deltaic indet.<option>delta plain<option>interdistributary bay<option>delta front<option>prodelta<option><option>deep-water indet.<option>submarine fan<option>basinal (siliciclastic)<option><option>--Terrestrial--<option>fluvial-lacustrine indet.<option><option>fluvial indet.<option>&quot;channel&quot;<option>channel lag<option>coarse channel fill<option>fine channel fill<option>&quot;floodplain&quot;<option>wet floodplain<option>dry floodplain<option>levee<option>crevasse splay<option><option>lacustrine indet.<option>lacustrine - large<option>lacustrine - small<option>pond<option>crater lake<option><option>karst indet.<option>fissure fill<option>cave<option>sinkhole<option><option>eolian indet.<option>dune<option>interdune<option>loess<option><option>fluvial-deltaic indet.<option>deltaic indet.<option>delta plain<option>interdistributary bay<option><option>alluvial fan<option>estuary<option>glacial<option>mire/swamp<option>spring<option>tar</select>
+        <select name="environment"><option><option>--General--<option><option>marine indet.<option>terrestrial indet.<option><option>--Carbonate--<option><option>carbonate indet.<option>peritidal<option>shallow subtidal indet.<option>open shallow subtidal<option>lagoonal/restricted shallow subtidal<option>sand shoal<option>reef, buildup or bioherm<option>deep subtidal ramp<option>deep subtidal shelf<option>deep subtidal indet.<option>offshore ramp<option>offshore shelf<option>offshore indet.<option>slope<option>basinal (carbonate)<option>basinal (siliceous)<option><option>--Siliciclastic--<option><option>marginal marine indet.<option>paralic indet.<option>estuarine/bay<option>lagoonal<option><option>coastal indet.<option>foreshore<option>shoreface<option>transition zone/lower shoreface<option>offshore<option><option>deltaic indet.<option>delta plain<option>interdistributary bay<option>delta front<option>prodelta<option><option>deep-water indet.<option>submarine fan<option>basinal (siliciclastic)<option><option>--Terrestrial--<option>fluvial-lacustrine indet.<option><option>fluvial indet.<option>&quot;channel&quot;<option>channel lag<option>coarse channel fill<option>fine channel fill<option>&quot;floodplain&quot;<option>wet floodplain<option>dry floodplain<option>levee<option>crevasse splay<option><option>lacustrine indet.<option>lacustrine - large<option>lacustrine - small<option>pond<option>crater lake<option><option>karst indet.<option>fissure fill<option>cave<option>sinkhole<option><option>eolian indet.<option>dune<option>interdune<option>loess<option><option>fluvial-deltaic indet.<option>deltaic indet.<option>delta plain<option>interdistributary bay<option><option>alluvial fan<option>estuary<option>glacial<option>mire/swamp<option>spring<option>tar</select>
         <br>
         Read descriptions of
                 <A HREF="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">Carbonate</A>,
@@ -542,8 +542,18 @@ original material is preserved!</i></p>
 <!-- OPTIONAL taphonomy -->
       <u>Spatial orientation</u> <select name="orientation"><option><option>life position<option>random<option>preferred</select>
   <p>
- 
-  <u>Preservation of anatomical detail</u> <select name="preservation_quality"><option><option>excellent<option>good<option>medium<option>poor<option>variable</select>
+
+  <table>
+  <tr>
+    <td>
+      Preservation of anatomical detail <select id="preservation_quality"></select>
+    </td>
+    <td>
+      Abundance in sediment <select id="abund_in_sediment"></select>
+    </td>
+  </tr>
+  </table>
+
   <p>
 <!-- END taphonomy -->
 
