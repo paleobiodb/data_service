@@ -860,16 +860,13 @@ sub insertNewRecord {
 	$toInsert =~ s/, $/ /;
 	
 	$toInsert = "INSERT INTO $tableName SET " . $toInsert;
-	
+	main::dbg("InsertingNewRecord sql: $toInsert");
 	
 	Debug::printHash($fields);
-	Debug::dbPrint("here3, toInsert = $toInsert");
 	
 	# actually insert into the database
 	my $insertResult = $dbh->do($toInsert);
 	
-	# figure out the id of the last insert, ie, the primary key value.
-#	my $idNum = $self->getSingleSQLResult("SELECT LAST_INSERT_ID() as l FROM $tableName");
 	# bug fix here by JA 2.4.04
 	my $idNum = ${$self->getData("SELECT LAST_INSERT_ID() AS l FROM $tableName")}[0]->{l};
 		
@@ -1203,6 +1200,7 @@ sub getData{
 	my $sql = shift;
 #	my $type = (shift or "neither");
 	my $attr_hash_ref = shift;
+    my $dbh = $self->{'dbh'};
 
 	# First, check the sql for any obvious problems
 	my $sql_result = $self->checkSQL($sql);
@@ -1320,16 +1318,20 @@ sub checkSQL{
 		return 1;
 	}
 	elsif($type eq "INSERT" || $type eq "REPLACE"){
+        # This shit is fucking up so I'm commenting it out 
+        # Its not necessary anyways PS 03/09/2004
+
 		# Check that the columns and values lists are not empty
 		# NOTE: down the road, we could check required fields
 		# against table names.
-		$sql =~ /(\(.*?\))\s+VALUES\s+(\(.*?\))/i;
-		if($1 eq "()" or $1 eq "" or $2 eq "()" or $2 eq "" ){
-			return 0;
-		}
-		else{
+		#$sql =~ /(\(.*?\))\s+VALUES\s*(\(.*?\))/i;
+        #print "INSERT VALS for ==$sql== 1(($1)) 2:(($2))<BR>";
+		#if($1 eq "()" or $1 eq "" or $2 eq "()" or $2 eq "" ){
+		#	return 0;
+		#}
+		#else{
 			return 2;
-		}
+		#}
 	}
 	elsif($type eq "UPDATE"){
 		# NOTE (FUTURE): on a table by table basis, make sure required 
