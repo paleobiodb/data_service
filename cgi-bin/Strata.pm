@@ -102,7 +102,7 @@ sub displayStrataSearch{
             if ($q->param("group_hint")) {
                 $q->param("geological_group" => $q->param("group_hint"));
             }
-        } elsif ($conflict_found eq "different members") {
+        } elsif ($conflict_found eq "different formations") {
             if ($q->param("formation_hint")) {
                 $q->param("formation" => $q->param("formation_hint"));
             }    
@@ -160,7 +160,6 @@ sub displayStrataSearch{
 
         # environment data
         my $environment = $row->{'environment'};
-        $environment =~ s/(^")|("$)//g;
         $environment_count{$environment} += 1 if ($environment);
 
         #main::dbg("c_no: $row->{collection_no} l1: $row->{lithology1} l2: $row->{lithology2} e: $row->{environment}");
@@ -360,32 +359,40 @@ sub displayStrataChoice() {
     main::dbg("In display strata choice for reason: $conflict_reason");
 	print main::stdIncludes("std_page_top");
     print "<center>";
+    my $count = 0;
     if ($conflict_reason eq "different groups") {
-        print "The ".$q->param('search_term')." formation belongs to multiple groups.  Please select the one you want: <br>";
+        print "The ".$q->param('search_term')." formation belongs to multiple groups.  Please select the one you want: <p>";
         foreach $grp (keys %group_links) {
-            print "<a href=\"$exec_url?action=displayStrataSearch"
+            print " - " if ($count++) != 0;
+            print "<b><a href=\"$exec_url?action=displayStrataSearch"
                 . "&geological_group=".uri_escape($grp)
-                . "&search_term=".uri_escape($q->param('search_term'))."\">$grp</a><br>";
+                . "&search_term=".uri_escape($q->param('search_term'))."\">$grp</a></b>";
         }          
+        print "</p>";
     } elsif ($conflict_reason eq "different formations") {
-        print "The ".$q->param('search_term')." member belongs to multiple formations.  Please select the one you want: <br>";
+        print "The ".$q->param('search_term')." member belongs to multiple formations.  Please select the one you want: <p>";
         foreach $fm (keys %formation_links) {
-            print "<a href=\"$exec_url?action=displayStrataSearch"
+            print " - " if ($count++) != 0;
+            print "<b><a href=\"$exec_url?action=displayStrataSearch"
                 . "&formation=".uri_escape($fm)
-                . "&search_term=".uri_escape($q->param('search_term'))."\">$fm</a><br>";
+                . "&search_term=".uri_escape($q->param('search_term'))."\">$fm</a></b> ";
         }          
+        print "</p>";
     } elsif ($conflict_reason eq "different lines") {
-        print "The term ".$q->param('search_term')." is ambiguous.  Please select the one you want: <br>";
+        print "The term ".$q->param('search_term')." is ambiguous and belongs to multiple formations or groups.  Please select the one you want: <p>";
         foreach $fm (keys %formation_links) {
-            print "member of the <a href=\"$exec_url?action=displayStrataSearch"
+            print " - " if ($count++) != 0;
+            print "<b><a href=\"$exec_url?action=displayStrataSearch"
                 . "&formation=".uri_escape($fm)
-                . "&search_term=".uri_escape($q->param('search_term'))."\">$fm</a> formation<br>";
+                . "&search_term=".uri_escape($q->param('search_term'))."\">$fm (formation)</a></b> ";
         }          
         foreach $grp (keys %group_links) {
-            print "formation of the <a href=\"$exec_url?action=displayStrataSearch"
+            print " - " if ($count++) != 0;
+            print "<b><a href=\"$exec_url?action=displayStrataSearch"
                 . "&geological_group=".uri_escape($grp)
-                . "&search_term=".uri_escape($q->param('search_term'))."\">$grp</a> group<br>";
+                . "&search_term=".uri_escape($q->param('search_term'))."\">$grp (group)</a></b><br> ";
         }          
+        print "</p>";
     }
     print "</center>";
 
