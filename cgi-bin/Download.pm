@@ -1164,7 +1164,9 @@ sub doQuery {
 			#  paleolatitude
 			# we're expecting something like "greater than"
 			#  or "less than" as a query parameter
-			if ( $q->param('paleolatdirection') =~ /greater/ && abs($temp[8]) >= $q->param('paleolatlimit') )	{
+			if ( $q->param('paleolatdirection') =~ /north/ && $temp[8] >= $q->param('paleolatlimit') )	{
+				$goodlats{$temp[0]}++;
+			} elsif ( $q->param('paleolatdirection') =~ /south/ && $temp[8] <= $q->param('paleolatlimit') )	{
 				$goodlats{$temp[0]}++;
 			} elsif ( $q->param('paleolatdirection') =~ /less/ && abs($temp[8]) < $q->param('paleolatlimit') )	{
 				$goodlats{$temp[0]}++;
@@ -1650,7 +1652,7 @@ sub getGenusNames {
 
 	my $cslist;
 
-	if ( $genus_name !~ /[ -,:;]/ )	{
+	if ( $genus_name !~ /[ \-,:;]/ )	{
 		$cslist = PBDBUtil::taxonomic_search($genus_name, $dbt);
 		# I'm not sure why this wasn't here before JA 11.8.04
 		if ( $cslist !~ /'/ )	{
