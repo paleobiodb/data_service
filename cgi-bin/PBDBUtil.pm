@@ -1009,8 +1009,8 @@ sub splitInterval {
 sub getChildren { 
     my $dbt = shift;
     my $taxon_name_or_no = shift;
-    my $max_depth = shift;
-    my $get_synonymns = shift;
+    my $max_depth = (shift || 1);
+    my $get_junior_synonyms = (shift || 0);
 
     use Data::Dumper;
 
@@ -1088,6 +1088,9 @@ sub getChildren {
                                 'taxon_rank'=>$rank,
                                 'level'=>$level,
                                 'children'=>[]);
+                if ($get_junior_synonyms) {
+                    $new_node{'synonyms'} = getSynonyms($dbt,$ref->{child_no});
+                } 
                 push @{$node->{'children'}}, \%new_node;
                 $tree_cache{$ref->{child_no}} = \%new_node;
             }
@@ -1144,7 +1147,7 @@ sub getCorrectedName{
     }
 }
 
-# Utilitiy function to do depth first traversal
+# INTERNAL USE: function to do depth first traversal
 # Internal use for getChildren function only right now
 sub getChildrenTraverseTree {
     my $node = shift;
@@ -1159,6 +1162,32 @@ sub getChildrenTraverseTree {
         @children = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @children;
         getChildrenTraverseTree($_,$sort_keys) for @children;
     } 
+}
+
+# Trivial function get junior synonyms of a function
+sub getSynonyms {
+    my $dbt = shift;
+    my $parent_no = shift;    
+    my @synonyms;
+
+    # Get children of parent
+    my $sql = "SELECT DISTINCT child_no FROM opinions WHERE parent_no=$parent_no" 
+            . " AND status IN ('subjective synonym of','objective synonym of')"; #add replaced by?
+    @rows = @{$dbt->getData($sql)};
+    foreach $row (@rows) {
+        $sql = "SELECT a.taxon_no, a.taxon_name, a.taxon_rank, o.parent_no, o.pubyr, o.reference_no ".
+               "FROM opinions o, authorities a ".
+               "WHERE o.child_no = a.taxon_no ".
+               "AND o.child_no=".$row->{'child_no'};
+        # go back up and check each child's parent(s)
+        @parents = @{$dbt->getData($sql)};
+
+        $index = TaxonInfo::selectMostRecentParentOpinion($dbt,\@parents,1);
+        if ($parents[$index]->{'parent_no'} == $parent_no) {
+            push @synonyms,$parents[$index];
+        }    
+    }
+    return \@synonyms;
 }
 
 
