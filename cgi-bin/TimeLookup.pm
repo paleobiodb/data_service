@@ -118,6 +118,11 @@ sub processBinLookup	{
 
 	&cleanArrays();
 
+	# get a lookup of the boundary ages for all intervals
+	@_ = &findBoundaries($dbh,$dbt);
+	my %upperbound = %{$_[0]};
+	my %lowerbound = %{$_[1]};
+
 	# this hash array defines the binning
 	%binning = ("33" => "Cenozoic 6", # Pleistocene
 		"34" => "Cenozoic 6", # Pliocene
@@ -160,13 +165,13 @@ sub processBinLookup	{
 		"139" => "Triassic 1", # Anisian
 		"46" => "Triassic 1", # Early Triassic
 		"715" => "Permian 5", # Changhsingian
-		"716" => "Permian 5", # Wuchiapingian
+		"716" => "Permian 4", # Wuchiapingian
 		"145" => "Permian 4", # Capitanian
-		"146" => "Permian 4", # Wordian
-		"717" => "Permian 4", # Roadian
-		"148" => "Permian 3", # Kungurian
-		"149" => "Permian 3", # Artinskian
-		"150" => "Permian 2", # Sakmarian
+		"146" => "Permian 3", # Wordian
+		"717" => "Permian 3", # Roadian
+		"148" => "Permian 2", # Kungurian
+		"149" => "Permian 2", # Artinskian
+		"150" => "Permian 1", # Sakmarian
 		"151" => "Permian 1", # Asselian
 		"49" => "Carboniferous 5", # Gzelian
 		"50" => "Carboniferous 5", # Kasimovian
@@ -197,12 +202,10 @@ sub processBinLookup	{
 		"30" => "Ordovician 3", # Middle Ordovician
 		"641" => "Ordovician 2", # Latorpian
 		"559" => "Ordovician 1", # Tremadocian
-		"69" => "Cambrian 5", # Merioneth
-		"70" => "Cambrian 4", # St David's
-		"212" => "Cambrian 3", # Lenian
-		"213" => "Cambrian 2", # Atdabanian
-		"214" => "Cambrian 2"); #  Tommotian
-		# Nemakit-Daldynian is omitted
+		"69" => "Cambrian 4", # Merioneth
+		"70" => "Cambrian 3", # St David's
+		"71" => "Cambrian 2", # Caerfai
+		"748" => "Cambrian 1"); # Manykaian
 
 	my @binnames = values %binning;
 
@@ -227,6 +230,43 @@ sub processBinLookup	{
 	# now look up the subtended intervals falling in the bin
 		&mapIntervals();
 
+	# the boundary estimates for included intervals might contradict
+	#  direct estimates for larger intervals; if so, alter the
+	#  offending estimates
+		for my $i ( @intervals )	{
+			my $max = $immediatemax{$i};
+			while ( $max > 0 )	{
+				if ( $lowerbound{$i} > $lowerbound{$max} )	{
+					$lowerbound{$i} = $lowerbound{$max};
+				}
+				$max = $immediatemax{$max};
+			}
+			my $min = $immediatemin{$i};
+			if ( $min == 0 )	{
+				$min = $immediatemax{$i};
+			}
+			while ( $min > 0 )	{
+				if ( $upperbound{$i} < $upperbound{$min} )	{
+					$upperbound{$i} = $upperbound{$min};				}
+				my $lastmin = $min;
+				$min = $immediatemin{$min};
+				if ( $min == 0 )	{
+					$min = $immediatemax{$lastmin};
+				}
+			}
+		}
+
+	# find the boundary ages for the bin by checking the boundaries of
+	#  all intervals falling within it
+		for my $i ( @intervals )	{
+			if ( $upperbound{$i} < $upperbinbound{$binname} || $upperbinbound{$binname} eq "" )	{
+				$upperbinbound{$binname} = $upperbound{$i};
+			}
+			if ( $lowerbound{$i} > $lowerbinbound{$binname} )	{
+				$lowerbinbound{$binname} = $lowerbound{$i};
+			}
+		}
+
 	# get a list of collections in this bin
 		$sql = "SELECT collection_no FROM collections WHERE ";
 		$sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
@@ -241,7 +281,126 @@ sub processBinLookup	{
 		}
 
 	}
-	return \%intervalInScale;
+
+	return (\%intervalInScale,\%upperbinbound,\%lowerbinbound);
+
+}
+
+# find the numerical upper and lower bound for each and every interval
+# JA 5.3.04
+sub findBoundaries	{
+
+	$dbh = shift;
+	$dbt = shift;
+
+	&findBestScales();
+	&findImmediateCorrelates();
+
+	# set lower boundaries for intervals having direct estimates
+	for my $i ( keys %bestscale )	{
+		$lowerbound{$i} = $bestboundary{$i};
+	}
+
+	# percolate upwards the boundary estimates
+	# first the lower boundaries (high numbers)
+	for my $i ( keys %bestscale )	{
+		$j = $immediatemax{$i};
+		while ( $j > 0 && $lowerbound{$i} > 0 )	{
+			if ( $lowerbound{$i} > $lowerbound{$j} )	{
+				$lowerbound{$j} = $lowerbound{$i};
+	# stop if the next, more broad interval already has an older estimate
+			} elsif ( $lowerbound{$i} < $lowerbound{$j} )	{
+				last;
+			}
+			$j = $immediatemax{$j};
+		}
+	}
+
+	# Gallic case: no direct estimate and percolation didn't work because
+	#  interval isn't the immediatemax of anything in the most recent time
+	#  scales, so try grabbing the lowerbound of the immediately included
+	#  interval in the last scale to use the outmoded term
+	# WARNING: this won't work if not just the interval but its
+	#  immediately included interval are outmoded
+	for my $i ( keys %bestscale )	{
+		if ( $lowerbound{$i} eq "" )	{
+			$lowerbound{$i} = $lowerbound{$bestincludedmax{$i}};
+		}
+	}
+
+	# set upper boundaries for intervals having direct estimates
+	# NOTE: now we're using the percolated lower boundaries instead of
+	#   the original estimates
+	for my $i ( keys %bestscale )	{
+		$upperbound{$i} = $lowerbound{$bestnext{$i}};
+	}
+
+	# percolate upwards the upper boundaries (low numbers)
+	# NOTE: only do this if the upper boundaries aren't set at all and
+	#  the included interval is the youngest in its scale to map into
+	#  the including interval
+	for my $i ( keys %bestscale )	{
+		my $j = $immediatemin{$i};
+		if ( $j == 0 )	{
+			$j = $immediatemax{$i};
+		}
+		my $nextj = $immediatemin{$bestnext{$i}};
+		if ( $nextj == 0 )	{
+			$nextj = $immediatemax{$bestnext{$i}};
+		}
+		while ( $j > 0  && $upperbound{$i} > 0 )	{
+	# here's that tricky conditional
+			if ( $upperbound{$j} == 0 && $j != $nextj )	{
+				$upperbound{$j} = $upperbound{$i};
+	# stop if the next, more broad interval already has a younger estimate
+			} elsif ( $upperbound{$i} > $upperbound{$j} && $upperbound{$j} > 0 )	{
+				last;
+			}
+			$lastj = $j;
+			$j = $immediatemin{$j};
+			if ( $j == 0 )	{
+				$j = $immediatemax{$j};
+			}
+			$nextj = $immediatemin{$bestnext{$lastj}};
+			if ( $nextj == 0 )	{
+				$nextj = $immediatemax{$bestnext{$lastj}};
+			}
+		}
+	}
+
+	# Pridoli case: upper bound was undefined originally but now exists,
+	#  so set it
+	for my $i ( keys %bestscale )	{
+		if ( $upperbound{$i} eq "" && $lowerbound{$bestnext{$i}} > 0 )	{
+			$upperbound{$i} = $lowerbound{$bestnext{$i}};
+		}
+	}
+
+	# for the intervals that neither (1) had directly defined boundaries,
+	#  nor (2) had included intervals with useable boundaries, try the
+	#  boundaries for the next higher-ranked interval that has estimates
+	for my $i ( keys %bestscale )	{
+	# if the interval already has a defined lower boundary,
+	#   nothing will happen
+		my $j = $i;
+		while ( $lowerbound{$i} eq "" && $j > 0 )	{
+			$j = $immediatemax{$j};
+			$lowerbound{$i} = $lowerbound{$j};
+		}
+	# now find the upper boundary, again doing nothing if there already
+	#  is a defined value
+		my $j = $i;
+		while ( $upperbound{$i} eq "" && $j > 0 )	{
+			my $lastj = $j;
+			$j = $immediatemin{$j};
+			if ( $j == 0 )	{
+				$j = $immediatemax{$lastj};
+			}
+			$upperbound{$i} = $upperbound{$j};
+		}
+	}
+
+	return (\%upperbound,\%lowerbound);
 
 }
 
@@ -256,12 +415,22 @@ sub findBestScales	{
 	}
 
 # figure out which scale to trust for each interval
-	$sql = "SELECT interval_no,scale_no FROM correlations";
+	$sql = "SELECT interval_no,scale_no,next_interval_no,max_interval_no,lower_boundary FROM correlations";
 	my @corrs = @{$dbt->getData($sql)};
 	for my $corr ( @corrs )	{
 		if ( $pubyr{$corr->{scale_no}} > $bestscaleyr{$corr->{interval_no}} )	{
 			$bestscaleyr{$corr->{interval_no}} = $pubyr{$corr->{scale_no}};
 			$bestscale{$corr->{interval_no}} = $corr->{scale_no};
+			if ( $corr->{next_interval_no} > 0 )	{
+				$bestnext{$corr->{interval_no}} = $corr->{next_interval_no};
+			}
+			if ( $corr->{lower_boundary} > 0 )	{
+				$bestboundary{$corr->{interval_no}} = $corr->{lower_boundary};
+			}
+			# need this for orphan intervals like the Gallic that
+			#  aren't the immediatemax of anything in the most
+			#  recent time scales
+			$bestincludedmax{$corr->{max_interval_no}} = $corr->{interval_no};
 		}
 	}
 
@@ -459,20 +628,23 @@ sub mapIntervals	{
 				last;
 			}
 
+
+	# find the min correlate
 			my $lastmin = $min;
-
-	# first check the max correlate
-			$max = $immediatemax{$max};
-
-	# ... and then the min correlate
 			if ( $min > 0 )	{
 				$min = $immediatemin{$min};
+	# the min interval might have only had a max; if so check that too
+				if ( $min == 0 )	{
+					$min = $immediatemax{$lastmin};
+				}
+			} else	{
+	# even if the interval had no min, its parent might have
+				$min = $immediatemin{$max};
 			}
 
-	# the min interval might have only had a max; if so check that too
-			if ( $min == 0 && $lastmin > 0 )	{
-				$min = $immediatemin{$lastmin};
-			}
+	# now find the max correlate
+			$max = $immediatemax{$max};
+
 	# if the "grandparents" are within the list, add the interval
 	#    we started with and bomb out
 			if ( $yesints{$max} && ( $yesints{$min} || $min == 0 ) )	{
