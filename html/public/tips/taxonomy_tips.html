@@ -20,7 +20,7 @@
 <hr>
 
 <font size=-1>
-<i>This page was written by John Alroy on 28 August 2000, updated on 25 July, 3/7 August 2001, 14-17 August 2002, and 28 March 2003.</i><p>
+<i>This page was written by John Alroy on 28 August 2000, updated on 25 July, 3/7 August 2001, 14-17 August 2002, 28 March 2003, and 19 April 2004.</i><p>
 </font>
 
 <hr>
@@ -29,8 +29,14 @@
 <h3>General comments</h3>
 </center><p>
 
+<p><b>WARNING:</b> Do NOT use the taxonomy scripts unless you understand all of the terms listed in the four "what the terms mean" sections on this page</a>.</p>
+
 Currently, we do not handle phylogenetic data and put all the other information into just two tables. The <i>authority table</i> lists all taxa we know about, who named them, and when.
 The <i>opinion table</i> lists all classification, synonymy, and validity information, giving the authority and year for each opinion. Taxa can appear only once in the authority table but many times in the opinion table.<p>
+
+<p>You will use two different scripts to enter data into these two tables.
+Follow the "Add/edit taxonomic names" link on the main menu to enter authority data.
+Follow the "Add/edit taxonomic opinions" link on the main menu to enter classification, synonymy, and validity data.</p>
 
 Our main goal is to correct names used in other tables, especially identifications in taxonomic lists associated with fossil collections. To do this, we need to make sure that every species is used in combination only with one genus in any one data analysis, and that every genus is allocated to a higher taxon we can use in our analyses.<p>
 
@@ -44,6 +50,12 @@ If only one synonymy/combination gets used at a time, then who cares about all t
 
 <hr>
 <center>
+<a name="Definitions"></a>
+<h3>Definitions of taxonomic terms</a></h3>
+</center><p>
+
+<hr>
+<center>
 <a name="Authority"></a>
 <h3>Who named the taxon?</a></h3>
 </center><p>
@@ -53,12 +65,29 @@ IMPORTANT: At this point the name of the taxon must be correct. (1) Be very sure
 Make sure you put in the original name instead.<p>
 
 Every taxon has to be named in a publication, which is called the authority. For example, <i>Homo sapiens</i> was named in a 1758 publication by Linnaeus, so the authority is <i>Linnaeus 1758</i>.
-You can record the authority in one of two ways. (1) You are entering data from the same paper in which the taxon was named. So, if you are reading Linnaeus 1758, check the box that says "It was first named in the data record's primary reference." (2) You are working from another, later paper that discusses the species and gives some information about the authority. So, enter as much as you can about the author names and the year the taxon was named.<p>
+You can record the authority in one of two ways. (1) You are entering data from the same paper in which the taxon was named. So, if you are reading Linnaeus 1758, select the radio button that says "It was first named in the data record's primary reference." (2) You are working from another, later paper that discusses the species and gives some information about the authority. So, select the button that says "it was named in an earlier publication" and enter as much as you can about the author names and the year the taxon was named.<p>
 
-In this section you may also enter the numbers of the pages and figures of the taxon's original description. DON'T enter page numbers for the whole paper!<p>
+<p>Create a new authority record for any taxon name that is spelt differently.
+So, if Linnaeus named the family "Equidae" but someone later created a subfamily called "Equinae," or reranked "Equidae" as the subfamily "Equinae," then Linnaeus is the author of that name too, but you need to make a new authority record anyway.</p>
 
-<i>Note:</i> if you are adding more data for a name that previously was entered, (1) the "data record's primary reference" for the taxon may be different from your current reference, and (2) the "data record's primary reference" box will be checked <i>and</i> the reference information will be displayed below.
-The scripts won't be confused by these facts, so don't worry about them.<p>
+<p>Never create more than one authority record for a taxon, even if the original record is owned by some other authorizer and/or entered by some other enterer; the original record has different names of authors, dates of publication, etc.; or if you are about to classify the taxon in a new way.
+But <i>do</i> create a new record if the taxon is actually different even though its name is spelt the same way.
+This can happen when names are homonyms (see below).</p>
+
+<center>
+<h4>What the terms mean</h4>
+</center><p>
+
+<ul>
+ <li>"<i>primary reference</i>" means the reference that told you who named the taxon, regardless of whether the taxon was named in that paper.
+The primary reference is the "current reference" you are using when you create the record in the first place.
+If you are adding more data for a name that previously was entered, (1) the primary reference may be different from your current reference, and (2) the primary reference radio button will be checked <i>and</i> the reference information will be displayed.
+The scripts won't be confused by these facts, so don't worry about them.
+ <li>"<i>pages</i>" means the page number, or numbers, on which the taxon was named.
+DON'T enter page numbers for the whole paper!
+Usually the first page of the formal definition is good enough.
+ <li>"<i>figures</i>" means a list of figure numbers that show the type specimen.
+</ul>
 
 <hr>
 <center>
@@ -72,7 +101,11 @@ In this section you record key data about the taxon that should have been publis
 The Linnean taxonomic rank of the taxon that is being discussed, as it was originally published by the original author.
 Use the "unranked clade" value if the original author does not use ranks but does use formal Latin names for higher taxa.
 Also use this term for non-standard ranks such as "Mirorder" or "Parvorder."
-Use the "informal" value only if the taxon has not been named formally and you are entering it to keep track of (say) a leaf morphotype category. DO NOT enter common English names such as "antelope", "oyster," or "conifer" as new taxa. These terms always can be translated into formal scientific names such as "Bovidae," so they should not be entered anywhere in the Database.<p>
+DO NOT enter common English names such as "antelope", "oyster," or "conifer" as new taxa.
+These terms always can be translated into formal scientific names such as "Bovidae," so they should not be entered anywhere in the Database.
+Likewise, never create an authority record for an informal name such as a leaf type category, or for an "indeterminate" higher taxon that includes an "incertae sedis" taxon.
+Instead, "incertae sedis" taxa should be classified into the next higher-ranked taxon that <i>is</i> formally defined.
+So if all you know is that the genus is a plant, put in the opinion that it belongs to "Plantae."<p>
 
 <b>Name of type taxon</b><br>
 The name of the type taxon, as originally given when the taxon was named.
@@ -81,13 +114,46 @@ For example, if you are entering data for a genus, enter the name of its type sp
 <b>Comments</b><br>
 Note any problems here. For example, make a note if: you are not sure you have the taxon's authority right; different sources say the taxon was named in different years; a technical error was made by the authority, such as not designating or figuring a type specimen; or the type specimen's fossil collection cannot be recorded because the type locality data are inadequate.<p>
 
+<center>
+<h4>What the terms mean</h4>
+</center><p>
+
+<ul>
+ <li>"<i>original rank</i>" means the rank in the Linnean hierarchy that was given to the taxon when it was first named.
+Don't change this value even if someone later changed the rank.
+ <li>"<i>type taxon</i>" means the taxon at the next lower rank that is the name-bearer.
+So, if <i>Equus caballus</i> is the type species of the genus <i>Equus,</i> then <i>Equus</i> must always include <i>E. caballus</i>, and if <i>E. caballus</i> is moved to another genus, then <i>Equus</i> becomes invalid.
+ <li>"<i>type specimen</i>" means the museum number of the actual physical specimen that is the name-bearer of a species.
+If a set of specimens that form a biological species (the "hypodigm") includes a type specimen, that species must have the name associated with that specimen.
+If there are two type specimens in a biological species, the names are synonyms (see below).
+</ul>
+
 <hr>
 <center>
 <a name="Status"></a>
 <h3>Whose opinion are you entering?</h3>
+</center>
+
+<p>Every opinion has to be tied to a reference. If the opinion is based on what you read in your current reference, check the "current reference" box. If not, enter as much information as you can about the earlier publication that argued this opinion. For example, if the current paper says "Xus was synonymized with Yus by Jones 1984" but says nothing more about the status of Xus, enter "Jones" and "1984" in this section and don't check the box.</p>
+
+<p>It is important to enter a new opinion every time a paper publishes any opinion on a name.
+Do this anyway even if the opinion is not novel (someone else said it first, even if it's the same person).
+Always enter the author's own opinion, but also enter other opinions that the author is repeating from the literature, as long as we have no other version of that opinion in the Database.
+For example, suppose that Linnaeus classifed <i>Equus</i> as belonging to "Equidae" in 1758.
+Nobody working on the Database actually has a copy of Linnaeus, but your current reference says that Linnaeus said what he said.
+So, create an opinion record where "the opinion is repeated from an earlier authority" and you put "Linnaeus 1758" in the first author last name and publication year fields.
+Only do this once, so if yet another paper mentions Linnaeus' opinion, do NOT create a new opinion record.</p>
+
+<center>
+<h4>What the terms mean</h4>
 </center><p>
 
-Every opinion has to be tied to a reference. If the opinion is based on what you read in your current reference, check the "current reference" box. If not, enter as much information as you can about the earlier publication that argued this opinion. For example, if the current paper says "Xus was synonymized with Yus by Jones 1984" but says nothing more about the status of Xus, enter "Jones" and "1984" in this section and don't check the box.
+<ul>
+ <li>"<i>pages</i>" means the page, or pages, on which the opinion is expressed.
+This field is optional and is just meant to help someone find the opinion if they want to read the paper.
+ <li>"<i>figures</i>" means the page or pages or plate numbers where specimens of the species are illustrated.
+Again, this is for informational purposes only.
+</ul>
 
 <hr>
 <center>
@@ -124,7 +190,10 @@ The possible status values are:
  <li>"<i>objective synonym of</i>" means that the taxon is invalid because <i>exactly the same</i> type specimen was used by an earlier author as the basis of a different name. List the older, valid name in the parent taxon field.
  <li>"<i>homonym of</i>" means that the taxon is invalid because another taxon with exactly the same name has priority over it. List the older, valid name in the parent taxon field.
  <li>"<i>replaced by</i>" means that the taxon is a homonym and has been replaced by a new name. List the younger, valid replacement in the parent taxon field.
- <li>"<i>corrected as</i>" means that the original spelling was grammatically incorrect and a new spelling has been proposed. Put the old spelling in the taxon field and the new spellling in the parent taxon field.
+ <li>"<i>corrected as</i>" means that the original spelling was grammatically incorrect and a new spelling has been proposed. Put the old spelling in the taxon field and the new spelling in the parent taxon field.
+ <li>"<i>rank changed as</i>" means that the original spelling was changed because the taxon's rank was changed.
+Create a new authority record for the new spelling.
+The put the old spelling in the taxon field and the new spelling in the parent taxon field.
 </ul>
 
 <p><i>Invalidation.</i> The taxon is invalid and you can't even tell if it's the same as something else.
