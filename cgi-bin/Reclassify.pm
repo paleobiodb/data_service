@@ -245,6 +245,7 @@ my %master_class=%{Classification::get_classification_hash($dbt, $levels, [ $t->
 	# print the informal and otherwise unclassifiable names
 	if ( @badoccrefs )	{
 		print "<h4>Taxa that cannot be classified</h4>";
+		print "<p><i>Check these names for typos and/or create new taxonomic authority records for them</i></p>\n";
 		print "<table border=0 cellpadding=0 cellspacing=0>\n";
 	}
 	$rowcolor = 0;
@@ -267,7 +268,6 @@ my %master_class=%{Classification::get_classification_hash($dbt, $levels, [ $t->
 	}
 	if ( @badoccrefs )	{
 		print "</table>\n";
-		print "<p><i>Check these names for typos and/or create new taxonomic authority records for them</i></p>\n";
 	}
 
 	print "<p>\n";
