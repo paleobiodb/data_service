@@ -1315,10 +1315,13 @@ sub submitAuthorityForm {
 	if ($q->param('ref_is_authority') eq 'NO') {
 		$fieldsToEnter{pages} = $q->param('2nd_pages');
 		$fieldsToEnter{figures} = $q->param('2nd_figures');
-		
-		if (! $q->param('author1last')) {
-			$errors->add('You must enter at least the last name of a first author');	
-		}
+
+	# commented out 10.5.04 by JA because we often need to add (say) genera
+	#  without any data when we create and classify species for which we
+	#  do have data
+#		if (! $q->param('author1last')) {
+#			$errors->add('You must enter at least the last name of a first author');	
+#		}
 		
 		# make sure the pages/figures fields above this are empty.
 		my @vals = ($q->param('pages'), $q->param('figures'));
