@@ -1,4 +1,6 @@
-# Represents an SQL statement.  May be expanded in the future or replaced with a CPAN module...
+# Represents an SQL select statement.  May be expanded in the future or replaced with a CPAN module...
+# Note, although this *ONLY WORKS FOR SELECT STATEMENTS* for now, it may eventually be expanded
+# to include other types of statements such as UPDATE, etc.
 #
 # Written by Ryan, 1/2004.
 #
