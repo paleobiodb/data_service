@@ -2009,13 +2009,7 @@ sub displayCollResults {
 		# you won't have an in list if you are adding
 		($sql,$mylat,$mylng) = &processCollectionsSearchForAdd();
 	} else	{
-		# if the in list was computed by TaxonInfo then it had its
-		#  single quotes stripped, so put them back
-		if ( $in_list )	{
-			my @names = split ',',$in_list;
-			$in_list = "'" . join('\',\'',@names) . "'";
-		}
-		$sql = processCollectionsSearch($in_list);
+		$sql = &processCollectionsSearch($in_list);
 	}
 	my $sth = $dbh->prepare( $sql );
 	

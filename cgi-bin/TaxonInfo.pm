@@ -734,7 +734,6 @@ sub displayTaxonInfoResults {
 	$in_list =  join ',',@synonyms;
 	}
 
-
 	print main::stdIncludes("std_page_top");
 
 	# Write out a hidden with the 'genus_name' and 'taxon_rank' for subsequent
@@ -808,9 +807,7 @@ sub displayTaxonInfoResults {
 	# image thumbs:
 	my @selected_images = $q->param('image_thumbs');
 	require Images;
-	# not sure why, but somehow $in_list gets fatally cluttered with
-	#  single quotes before this point
-	$in_list =~ s/\'//g;
+
 	my @thumbs = Images::processViewImages($dbt, $q, $s, $in_list);
 	foreach my $thumb (@thumbs){
 		print "<input type=checkbox name=image_thumbs value=";
@@ -931,6 +928,7 @@ sub doModules{
 	my $species = shift;
 	my $in_list = shift;
 	my $taxon_no = shift;
+
 	
 	$GLOBALVARS{session} = $s;
 	

@@ -317,7 +317,7 @@ sub processViewImages{
 	if ( $in_list )	{
 		@taxa = split /,/,$in_list;
 	} else	{
-		push @taxa , $taxon_name;
+		push @taxa , ',',$taxon_name,',';
 	}
 
 	for my $t ( @taxa )	{
@@ -325,7 +325,7 @@ sub processViewImages{
 			  " original_filename ".
 			  "FROM authorities, images ".
 			  "WHERE authorities.taxon_no = images.taxon_no AND ".
-			  "taxon_name='$t'";
+			  "taxon_name=$t";
 		push @results , @{$dbt->getData($sql)};
 	}
 	
