@@ -30,6 +30,7 @@ use Ecology;
 use PrintHierarchy;
 use SQLBuilder;
 use Debug;
+use Globals;
 
 
 my $DEBUG = 0;				# Shows debug information regarding the page
@@ -769,9 +770,8 @@ sub displayPage {
 
 # This is a wrapper to put the goodies into the standard page bottom
 sub stdIncludes {
-
 	my $page = shift;
-	my $reference = &buildReference ( $s->get("reference_no"), "bottom" );
+	my $reference = buildReference ( $s->get("reference_no"), "bottom" );
 	my $enterer;
 
 	ENTERER: {
@@ -1423,26 +1423,23 @@ sub displaySearchColls {
 # It is a list of synonyms of taxa to find (ie, find collections which 
 # have occurrences of any taxa in this list).
 sub displayCollResults {
-	my $in_list = shift; # for taxon info script
+	my $in_list = shift;	# optional parameter from taxon info script
 	
-	my $limit = $q->param("limit");
-	if ( ! $limit ) { $limit = 30; }
+	my $limit;
+	if (!($limit = $q->param("limit"))) { $limit = 30; }
+	
 	my $ofRows = 0;
-	my $method = "getReadRows";					# Default is readable rows
+	my $method = "getReadRows";			# Default is readable rows
 	my $p = Permissions->new ( $s );
+	my $type;							# from the hidden type field in the form.
 
 	# Build the SQL
-    $sql = processCollectionsSearch($in_list);
-	# Run it
-
-#	print "in sub displayCollResults, sql = $sql<BR><BR>";
-	Debug::dbPrint("sqldcr = $sql");
-	
+    my $sql = processCollectionsSearch($in_list);
 	my $sth = $dbh->prepare( $sql );
+	
+	Debug::dbPrint("displayCollResults SQL = $sql");
 
-#	print "after preparing, sql = $sql<BR><BR>";
-
-	$sth->execute();
+	$sth->execute();  	# run the query
 
 	if ( $q->param ( "type" ) ) {
 		$type = $q->param ( "type" );			# It might have been passed (ReID)
@@ -1452,50 +1449,52 @@ sub displayCollResults {
 		$type = $queue{type};
 	}
 
-	# We create different links depending on their destination
-	TYPE: {
-		if ( $type eq "add" )	{ $action = "displayCollectionDetails"; $method = "getReadRows"; last; }
-		if ( $type eq "edit" )	{ $action = "displayEditCollection"; $method = "getWriteRows"; last; }
-		if ( $type eq "view" )	{ $action = "displayCollectionDetails"; $method = "getReadRows"; last; }
-        # PZM 09/17/02 changed to 'getReadRows' from 'getWriteRows'
-        # because we will be displaying both readable and writeable
-        # data in 'displayOccurrenceAddEdit'
-        if ( $type eq "edit_occurrence" )   { $action = "displayOccurrenceAddEdit"; $method =
-"getReadRows"; last; }
-		if ( $type eq "reid" )	{ $action = "displayOccsForReID"; $method = "getReadRows"; last; }
-
-		# Unknown
+	# We create different links depending on their destination, using the hidden type field.
+	if ( $type eq "add" )		{ $action = "displayCollectionDetails"; $method = "getReadRows"; }
+	elsif ( $type eq "edit" )	{ $action = "displayEditCollection"; $method = "getWriteRows"; }
+	elsif ( $type eq "view" )	{ $action = "displayCollectionDetails"; $method = "getReadRows"; }
+	# PZM 09/17/02 changed to 'getReadRows' from 'getWriteRows'
+	# because we will be displaying both readable and writeable
+	# data in 'displayOccurrenceAddEdit'
+	elsif ( $type eq "edit_occurrence" )   { $action = "displayOccurrenceAddEdit"; $method =
+"getReadRows"; }
+	elsif ( $type eq "reid" )	{ $action = "displayOccsForReID"; $method = "getReadRows"; }
+	else {
+		# type is unknown, so use defaults.
 		$action = "displayCollectionDetails";
 		$method = "getReadRows";
 	}
 
 	# Get rows okayed by permissions module
-	$p->$method ( $sth, \@dataRows, $limit, \$ofRows );
-	#$p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
-    my $displayRows = @dataRows;				# This is the actual number of rows displayed
+	my (@dataRows, $ofRows);
+	$p->$method( $sth, \@dataRows, $limit, \$ofRows );
+	
+    my $displayRows = @dataRows;	# get number of rows to display
 
     # the taxon info script displays the rows differently than say, 
-    # the displayCollectionDetails method.
-    if ($q->param("taxon_info_script") eq "yes"){
+    # the displayCollectionDetails method, so just return the data from the query.
+    if ($q->param("taxon_info_script") eq "yes") {
     	return \@dataRows;
     }
-
+	
+	
     if ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
 		# go right to the chase with ReIDs if a taxon_rank was specified
-		if($q->param('type') eq "reid" && $q->param('taxon_rank') ne 'Higher-taxon'){
+		if ($q->param('type') eq "reid" && $q->param('taxon_rank') ne 'Higher-taxon') {
 			# get all collection #'s and call displayOccsForReID
 			my @reidColls;
-			foreach my $res (@dataRows){
+			foreach my $res (@dataRows) {
 				push(@reidColls, $res->{collection_no});
 			}
-			displayOccsForReID(\@reidColls);	
+			displayOccsForReID(\@reidColls);
 			exit;
 		}
+		
 		# get the enterer's preferences (needed to determine the number
-		#  of displayed blanks) JA 1.8.02
-		%pref = &getPreferences($s->get('enterer'));
+		# of displayed blanks) JA 1.8.02
+		%pref = getPreferences($s->get('enterer'));
 
-		print &stdIncludes ( "std_page_top" );
+		print stdIncludes( "std_page_top" );
 		print "<center><h3>Your search produced ";
 		if ( $displayRows != $ofRows ) {
 			print "$ofRows matches.  Here are the first $displayRows.";
@@ -1507,22 +1506,22 @@ sub displayCollResults {
 		print "<br>\n";
 	  	print "<table width='100%' border=0 cellpadding=4 cellspacing=0>\n";
  
-		# Create columns header
+		# print columns header
 		print "
-<tr>
-	<th>Collection</th>
-	<th align=left>Authorizer</th>
-	<th align=left nowrap>Collection name</th>
-	<th align=left colspan=2>Reference</th>
-</tr>
-";
+		<tr>
+		<th>Collection</th>
+		<th align=left>Authorizer</th>
+		<th align=left nowrap>Collection name</th>
+		<th align=left colspan=2>Reference</th>
+		</tr>
+		";
 
 		# Loop through each data row of the result set
 		my $count = 0;
 		foreach my $dataRow (@dataRows) {
 
 			# Get the reference_no of the row
-	        $sql = "SELECT * FROM refs WHERE reference_no=".$dataRow->{"reference_no"};
+	        $sql = "SELECT * FROM refs WHERE reference_no=" . $dataRow->{"reference_no"};
 			my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	        $sth->execute();
 
@@ -1571,17 +1570,18 @@ sub displayCollResults {
 		  	my $authorizerName = $dataRow->{"authorizer"};
 			$authorizerName =~ s/ /&nbsp;/g;
 
-#dbg ( join( "][", keys ( %{$dataRow} ) ) );
-#dbg ( join( "][", values ( %{$dataRow} ) ) );
+			#dbg ( join( "][", keys ( %{$dataRow} ) ) );
+			#dbg ( join( "][", values ( %{$dataRow} ) ) );
 
 			# The LINK 
  			if ( $count % 2 == 0 ) {
-				print "<tr bgcolor=\"#E0E0E0\">";
+				print "<tr class=\"darkList\">";
  			} else {
 				print "<tr>";
 			}
+			
 		  	print "
-	<td align=center valign=top><a href='$exec_url?action=$action&collection_no=$collection_no";
+			<td align=center valign=top><a href='$exec_url?action=$action&collection_no=$collection_no";
 			# for collection edit:
 			if($q->param('use_primary')){
 				print "&use_primary=yes";
@@ -2633,7 +2633,7 @@ sub buildTaxonomicList {
 		for(my $index = 0; $index < @sorted; $index++){
 			# Color the background of alternating rows gray JA 10.6.02
 			if($index % 2 == 0 && @sorted > 2){
-				$sorted[$index]->{html} =~ s/<td/<td bgcolor='#E0E0E0'/g;
+				$sorted[$index]->{html} =~ s/<td/<td class='darkList'/g;
 			}
 			$sorted_html .= $sorted[$index]->{html};
 		}
@@ -3350,7 +3350,7 @@ sub displayEditCollection {
 		# This part allows current session ref to be selected as primary
 		$refRowString = "<table border=0 cellpadding=8><tr><td>".
 						 "<table border=0 cellpadding=2 cellspacing=0><tr>".
-						 "</td></tr><tr bgcolor=E0E0E0><td valign=top>".
+						 "</td></tr><tr class='darkList'><td valign=top>".
 						 "<input type=radio name=secondary_reference_no value=".
 						 $session_ref."></td><td></td>";
 		$sr = getCurrRefDisplayStringForColl($dbh, $collection_no,$session_ref);
@@ -4890,7 +4890,7 @@ sub displayTaxonomyEntryForm	{
 	my $refRowString = '<table>' . $hbo->populateHTML('reference_display_row', $ref_hash_ref ) . '</table>';
 
 	# Add gray background and make font small
-	$refRowString =~ s/<tr>/<tr bgcolor='#E0E0E0'>/;
+	$refRowString =~ s/<tr>/<tr class='darkList'>/;
 	$refRowString =~ s/<td/<td class='small' /;
 	$authorityRow{'ref_string'} = $refRowString;
 
@@ -5324,7 +5324,7 @@ sub new_authority_form{
 					   '</table>';
 
 	# Add gray background and make font small
-	$refRowString =~ s/<tr>/<tr bgcolor='#E0E0E0'>/;
+	$refRowString =~ s/<tr>/<tr class='darkList'>/;
 	$refRowString =~ s/<td/<td class='small' /;
 	push @tempVals, $refRowString;
 	push @tempParams, 'ref_string';
@@ -6693,7 +6693,7 @@ sub getCollsWithRef	{
 		# Make sure the background color matches what was set back when
 		#  bibRef->toString was used in makeRefString
 		if ($row % 2 != 0 && $rowcount > 1)	{
-			$retString .= "<tr bgcolor='#E0E0E0'>\n";
+			$retString .= "<tr class='darkList'>\n";
 		}
 		else	{
 			$retString .= "<tr>\n";
