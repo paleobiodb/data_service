@@ -149,7 +149,7 @@ sub mapQueryDb	{
 		# JA 20.7.03
 		my $intlist;
 		if ( $q->param('interval_name') =~ /[A-Za-z]/ )	{
-			my $collref = TimeLookup::processLookup($dbh, $dbt, '', $q->param('interval_name'), '', '');
+			my ($collref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, '', $q->param('interval_name'), '', '');
 			my @colls = @{$collref};
 			$intlist = join ',', @colls;
 		}
