@@ -422,29 +422,6 @@ sub dbh {
 	return $self->dbConnect();
 }
 
-
-# Note - 3/30/2004 - alroy doesn't want us to use this
-# method anymore.  He would like us to use getData instead.
-#
-# pass this an entire SQL query string
-# and it will return a single result
-# (ie, assumes that there aren't multiple rows)
-# Note, this doesn't return a result row, it just
-# returns the first element of the result.
-#
-# clearly - don't need to call execute() before using this one.
-sub getSingleSQLResult {
-	my DBTransactionManager $self = shift;
-
-	my $sql = shift;
-	Debug::dbPrint("getSingleSQLResult here 1, sql = $sql");
-	
-	my $dbh = $self->{dbh};
-	
-	return ($dbh->selectrow_array($sql))[0];
-}
-
-
 # executes the SQL
 # can use this with or without permissions
 #
@@ -461,7 +438,7 @@ sub executeSQL {
 	$sth = $self->{sth};
 	if ($sth) { $sth->finish(); }
 
-	my $sql = $self->SQLExpr();
+	$sql = $self->SQLExpr();
 			
 	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
@@ -519,7 +496,7 @@ sub allResultsArrayRefUsingPermissions {
 	my $sql = $self->SQLExpr();
 	
 	if ( (! $self->{perm}) || (! $self->{session})) {
-		Debug::logError("DBTransactionManager must have valid permissions and sessions objects to execute this query.");
+		croak("DBTransactionManager must have valid permissions and sessions objects to execute this query.");
 		return undef; 	
 	}
 	
@@ -566,7 +543,7 @@ sub nextResultArrayUsingPermissions {
 	my $sth = $self->{sth};
 	
 	if ((! $sth) || (! $self->{perm}) || (! $self->{session})) {
-		Debug::logError("DBTransactionManager must have valid permissions and sessions objects to execute this query.");
+		croak("DBTransactionManager must have valid permissions and sessions objects to execute this query.");
 		return (); 	
 	}
 	
@@ -819,7 +796,7 @@ sub insertNewRecord {
 	# make sure they're allowed to insert data!
 	my $s = $self->{session};
 	if (!$s || $s->guest() || $s->get('enterer') eq '') {
-		Debug::logError("invalid session or enterer in DBTransactionManager::insertNewRecord");
+		croak("invalid session or enterer in DBTransactionManager::insertNewRecord");
 		return;
 	}
 	
@@ -861,8 +838,6 @@ sub insertNewRecord {
 	
 	$toInsert = "INSERT INTO $tableName SET " . $toInsert;
 	main::dbg("InsertingNewRecord sql: $toInsert");
-	
-	Debug::printHash($fields);
 	
 	# actually insert into the database
 	my $insertResult = $dbh->do($toInsert);
@@ -964,14 +939,12 @@ sub internalUpdateRecord {
 
 	my $fields = Globals::copyHash($hashRef);
 	
-	Debug::dbPrint("we're in internalUpdateRecord, emptyOnly = $emptyOnly");
-    Debug::dbPrint("tableName = $tableName, where = $whereClause, key = $primaryKey");
-
+	main::dbg("we're in internalUpdateRecord, emptyOnly = $emptyOnly tableName = $tableName, where = $whereClause, key = $primaryKey");
 
 	# make sure they're allowed to update data!
 	my $s = $self->{session};
 	if (!$s || $s->guest() || $s->get('enterer') eq '')	{
-		Debug::logError("invalid session or enterer in DBTransactionManager::internalUpdateRecord");
+		croak("invalid session or enterer in DBTransactionManager::internalUpdateRecord");
 		return 0;
 	}
 	
@@ -982,7 +955,7 @@ sub internalUpdateRecord {
 	
 	# make sure the table name is valid
 	if ((! $self->isValidTableName($tableName)) || (! $fields)) {
-		Debug::logError("invalid tablename or hashref in DBTransactionManager::internalUpdateRecord");
+		croak("invalid tablename or hashref in DBTransactionManager::internalUpdateRecord");
 		return 0;	
 	}
 
@@ -1006,61 +979,24 @@ sub internalUpdateRecord {
 	delete($fields->{enterer});
 	delete($fields->{enterer_no});
 	
-	
-	# **********
-	# note, commented out the below check 3/22/04 because we're always going to be
-	# setting the modifier or modifier_no, so we'll never have all empty fields.
-	
-	# make sure they're actually setting some non empty values
-	# in the %fields, otherwise it would be equivalent to deleting the record!
-	#{	
-	#	my $atLeastOneNotEmpty = 0;
-	#	
-	#	foreach my $key (keys(%$fields)) {
-	#		
-	#		if ($fields->{$key}) {
-	#			$atLeastOneNotEmpty = 1;
-	#		}
-	#	}
-	#	
-	#	if (! $atLeastOneNotEmpty) {
-	#		Debug::logError("DBTransactionManager::internalUpdateRecord, tried to update a record with all empty values.");
-	#		return 0;
-	#	}
-	#}
-	
-	
-	Debug::dbPrint("WHERE = $whereClause");
-	
 	# figure out how many records this update statement will affect
 	# return if they try to update too many at once, because it's probably an error.
-#	my $count = $self->getSingleSQLResult("SELECT count(*) FROM $tableName WHERE $whereClause");
 	my $count = ${$self->getData("SELECT COUNT(*) as c FROM $tableName WHERE
 					$whereClause")}[0]->{c};
 	
 	if ($count > $self->{maxNumUpdatesAllowed}) {
-		Debug::logError("DBTransactionManager::internalUpdateRecord, tried to update $count records at once which is more than the maximum allowed of " . $self->{maxNumUpdatesAllowed});
+		croak("DBTransactionManager::internalUpdateRecord, tried to update $count records at once which is more than the maximum allowed of " . $self->{maxNumUpdatesAllowed});
 		return;
 	}
-	
-
-
-	Debug::printHash($fields);
 	
 	# loop through each key in the passed hash and
 	# build up the update statement.
 	
 	# get the description of the table
 	my @colNames = @{$self->allTableColumns($tableName)};
-	
-	
 	my $toUpdate;
-	
-	
 	if ($emptyOnly) {
 		# only allow updates of fields which are already empty.
-		
-		Debug::dbPrint("empty only update");
 		
 		# fetch all of the rows we're going to try to update from the database
 		my $select = DBTransactionManager->new($self->{GLOBALVARS});
@@ -1091,9 +1027,7 @@ sub internalUpdateRecord {
 					# if the column in the database for this row is
 					# already empty...
 					my $dbcolval = ($selResults->{$row})->{$key};
-					Debug::dbPrint("dbcolval for $key = $dbcolval");
 					if (! ($dbcolval)) {
-						Debug::dbPrint("I think dbvolval is empty");
 						# then add the key to the update statement.
 						$toUpdate .= "$key = " . $dbh->quote($fields->{$key}) . ", ";
 					}
@@ -1109,13 +1043,13 @@ sub internalUpdateRecord {
 			$toUpdate =~ s/, $/ /;
 	
 			if (!$toUpdate) {
-				Debug::logError("DBTransactionManager::internalUpdateRecord, tried to update without a set clause in update blanks only.");
+				croak("DBTransactionManager::internalUpdateRecord, tried to update without a set clause in update blanks only.");
 				return;
 			}
 			
 			$toUpdate = "UPDATE $tableName SET $toUpdate WHERE $whereClause";
 	
-			Debug::dbPrint($toUpdate);
+			main::dbg("Empty field update: ".$toUpdate);
 			
 			# actually update the row in the database
 			my $updateResult = $dbh->do($toUpdate);	
@@ -1123,16 +1057,10 @@ sub internalUpdateRecord {
 		
 	} else {
 		# update any field, doesn't matter if it's empty or not
-	
-		Debug::dbPrint("DBTransactionManager:: update any record...");
-		
 		$toUpdate = '';
-		
-		Debug::printArray(\@colNames);
 		
 		my @keys = keys(%$fields);
 		foreach my $key (@keys) {
-			Debug::dbPrint("key = $key, value = " . $fields->{$key});
 			# if it's a valid column name, then add it to the update
 			if (Globals::isIn(\@colNames, $key)) {
 					$toUpdate .= "$key = " . $dbh->quote($fields->{$key}) . ", ";
@@ -1143,13 +1071,13 @@ sub internalUpdateRecord {
 		$toUpdate =~ s/, $/ /;
 		
 		if (!$toUpdate) {
-			Debug::logError("DBTransactionManager::internalUpdateRecord, tried to update without a set clause in update any field.");
+			croak("DBTransactionManager::internalUpdateRecord, tried to update without a set clause in update any field.");
 			return;
 		}
 		
 		$toUpdate = "UPDATE $tableName SET $toUpdate WHERE $whereClause";
 		
-		Debug::dbPrint("update = $toUpdate");
+		main::dbg("Regular update: $toUpdate");
 		
 		# actually update the row in the database
 		my $updateResult = $dbh->do($toUpdate);
@@ -1158,8 +1086,6 @@ sub internalUpdateRecord {
 		return $updateResult;
 	
 	}
-	
-	
 }
 
 
