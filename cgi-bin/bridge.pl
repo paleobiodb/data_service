@@ -640,7 +640,12 @@ sub displayMapResults {
 	print &stdIncludes ( "std_page_top" );
 
 	my $m = Map->new( $dbh, $q, $s, $dbt );
-	$m->buildMap ( );
+	my $file = $m->buildMap ( );
+    open(MAP, $file) or die "couldn't open $file ($!)";
+    while(<MAP>){
+        print;
+    }
+    close MAP;
 
 	print &stdIncludes ("std_page_bottom");
 }
@@ -648,7 +653,7 @@ sub displayMapResults {
 sub displayDownloadForm {
 	print &stdIncludes ( "std_page_top" );
 	my $auth = $q->cookie('authorizer');
-	my $html = $hbo->populateHTML( 'download_form', ['',$auth], [ 'country','%%authorizer%%' ] );
+	my $html = $hbo->populateHTML( 'download_form', ['',$auth,''], [ 'country','%%authorizer%%','environment' ] );
 	buildAuthorizerPulldown ( \$html );
 	$html =~ s/<OPTION value=''>Select authorizer\.\.\./<option value='All'>All/m;
 	print $html;
@@ -2736,13 +2741,24 @@ sub processStartImage{
 sub processLoadImage{
 	Images::processLoadImageForm($dbt, $q, $s, $exec_url);
 }
-sub viewImage{
-	Images::startViewImages($dbt, $q, $exec_url);
-}
 sub processViewImage{
 	Images::processViewImages($dbt, $q, $s, $exec_url);
 }
 ## END Image stuff
+##############
+
+##############
+### Module Navigation
+
+sub processModuleNavigation{
+	# check query params
+
+	# figure out what params to set to keep the nav at its incoming state
+	# 	pass these proper params into the moduleNavigation method, below
+	TaxonInfo::displayTaxonInfoResults($q, $dbh, $s, $dbt);
+}
+
+### End Module Navigation
 ##############
 
 
