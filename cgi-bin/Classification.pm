@@ -9,6 +9,10 @@ sub get_classification_hash{
 	my $taxon_names = shift;
 	my $get_ancestors = shift;
 
+	# WARNING: these might be numbers instead of names if the ID numbers
+	#  of the taxa are known, in which case the function will return
+	#  a classification hash (full_class) with keys as numbers instead
+	#  of names
 	my @taxon_names = @{$taxon_names};
 	my @levels = split(',', $levels);
 	my $highest_level = $levels[-1];
@@ -40,22 +44,29 @@ sub get_classification_hash{
     # Loop at least once, but as long as it takes to get full classification
     while($parent_no){
         # Keep $child_no at -1 if no results are returned.
-        my $sql = "SELECT taxon_no, taxon_rank FROM authorities WHERE ".
-                  "taxon_name='$taxon_name'";
-		if($rank){
-			$sql .= " AND taxon_rank = '$rank'";
-		}
+        my $sql = "SELECT taxon_no, taxon_name, taxon_rank FROM authorities WHERE ";
+	# normally, do a lookup based on the name
+	if ( $taxon_name =~ /[A-Za-z]/ )	{
+		$sql .= "taxon_name='$taxon_name'";
+	}
+	# but if an ID number was passed into the function, use it instead
+	else	{
+		$sql .= "taxon_no='$taxon_name'";
+	}
+	if($rank){
+		$sql .= " AND taxon_rank = '$rank'";
+	}
         my @results = @{$dbt->getData($sql)};
         if(defined $results[0]){
             # Save the taxon_no for keying into the opinions table.
             $child_no = $results[0]->{taxon_no};
             my $base_rank = $results[0]->{taxon_rank};
             if ( $base_rank =~ /family/ )	{
-              $family{$taxon_name} = $taxon_name;
+              $family{$taxon_name} = $results[0]->{taxon_name};
             } elsif ( $base_rank =~ /order/ )	{
-              $order{$taxon_name} = $taxon_name;
+              $order{$taxon_name} = $results[0]->{taxon_name};
             } elsif ( $base_rank =~ /class/ )	{
-              $class{$taxon_name} = $taxon_name;
+              $class{$taxon_name} = $results[0]->{taxon_name};
             }
 
             # Insurance for self referential / bad data in database.
