@@ -178,6 +178,22 @@ dbg($q->Dump);
 
 # --------------------------------------- subroutines --------------------------------
 
+
+# prints the passed string to a debug file
+# called "debug_bridge_log"
+# added by ryan on 12/18/2003
+sub debugPrint {
+	open LOG, ">>debug_bridge_log";
+	my $date = `date`;
+	chomp($date);
+
+	my $string = shift;
+	chomp($string);
+
+	print LOG "$date: $string \n\n";
+}
+
+
 # Logout
 # Clears the SESSION_DATA table of this session.
 sub logout {
@@ -1925,13 +1941,16 @@ sub processCollectionsSearch {
 	# Handle limit
 	my $limitString = "";
 	#	$limitString = " LIMIT " . $q->param('limit') if $q->param('limit');
-	
+
 
 	# if the user is trying to search for a reference number, then
 	# we have to also search for collections which use this as a 
 	# secondary reference number.
 	# added by ryan on 12/18/2003.
+
+	my $noSecondaryRefs = 0;
 	if (my $refno = $q->param("reference_no")) {
+	
 		my $msql = "SELECT collection_no FROM secondary_refs 
 						WHERE reference_no LIKE $refno ";
 
@@ -1949,13 +1968,18 @@ sub processCollectionsSearch {
 		for ($i = 0; $i <= $#r2; $i++) {
 			$r2[$i] = $r2[$i]->{collection_no};
 		}
-	
+
 		# combine the two arrays together
 		push @results, @r2;
 
 		if ($#results >= 0) {
 			# add it to the terms list	if we got any results
 			push @terms, " collection_no IN (" . join(', ', @results) . ") ";
+		}
+
+		if (!@results) {
+			# we didn't find anything, so record this fact...
+			$noSecondaryRefs = 1;
 		}
 	}
 
@@ -1964,17 +1988,27 @@ sub processCollectionsSearch {
 	# we cut out any terms starting with "reference_no".
 	# note, technically this is only needed if they specify a reference_no,
 	# but it shouldn't hurt anything if there isn't one.
-	my @newterms;
-	for ($i = 0; $i <= $#terms; $i++) {
-		push(@newterms, $terms[$i]) if (!($terms[$i] =~ m/reference_no/));
+
+	if (! $noSecondaryRefs) {
+		# only do this if we managed to find some terms from secondary refs 
+		# above..
+		my $indexToDelete;
+		for ($i = 0; $i <= $#terms; $i++) {
+			if ($terms[$i] =~ m/reference_no/) {
+				$indexToDelete = $i;
+			}
+		}
+		splice (@terms, $indexToDelete, 1);	# remove this index from the array
 	}
+
+	debugPrint("newterms = @terms");
 
 	# form the SQL query from the newterms list.	
 	$sql = "SELECT " . join(', ', @columnList, 'reference_no').
 		" FROM collections ".
-			" WHERE ". join(' AND ', @newterms);
+			" WHERE ". join(' AND ', @terms);
 
-
+	debugPrint("full SQL = $sql");
 
 
 	# modified to handle time lookup in-list JA 17.7.03
