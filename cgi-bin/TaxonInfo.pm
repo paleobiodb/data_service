@@ -629,14 +629,14 @@ sub displayTaxonClassification{
 	print "<table width=\"50%\"><tr><th>Rank</th><th>Name</th></tr>";
 	my $counter = 0;
 	# Print these out in correct order
-	my @taxon_rank_order = ('superkingdom','kingdom','subkingdom','superphylum','phylum','subphylum','superclass','class','superorder','order','suborder','infraorder','superfamily','family','subfamily','tribe','subtribe','genus','subgenus','species','subspecies');
-	my %taxon_rank_order = ('superkingdom'=>0,'kingdom'=>1,'subkingdom'=>2,'superphylum'=>3,'phylum'=>4,'subphylum'=>5,'superclass'=>6,'class'=>7,'superorder'=>8,'order'=>9,'suborder'=>10,'infraorder'=>11,'superfamily'=>12,'family'=>13,'subfamily'=>14,'tribe'=>15,'subtribe'=>16,'genus'=>17,'subgenus'=>18,'species'=>19,'subspecies'=>20);
+	my @taxon_rank_order = ('superkingdom','kingdom','subkingdom','superphylum','phylum','subphylum','superclass','class','subclass','infraclass','superorder','order','suborder','infraorder','superfamily','family','subfamily','tribe','subtribe','genus','subgenus','species','subspecies');
+	my %taxon_rank_order = ('superkingdom'=>0,'kingdom'=>1,'subkingdom'=>2,'superphylum'=>3,'phylum'=>4,'subphylum'=>5,'superclass'=>6,'class'=>7,'subclass'=>8,'infraclass'=>9,'superorder'=>10,'order'=>11,'suborder'=>12,'infraorder'=>13,'superfamily'=>14,'family'=>15,'subfamily'=>16,'tribe'=>17,'subtribe'=>18,'genus'=>19,'subgenus'=>20,'species'=>21,'subspecies'=>22);
 	my $lastgood;
 	my $lastrank;
 	foreach my $rank (@taxon_rank_order){
 		# Don't provide links for any rank higher than 'order'
 		if(exists $classification{$rank}){
-		  if($taxon_rank_order{$rank} < 9){
+		  if($taxon_rank_order{$rank} < 11){
 			if($counter % 2 == 0){
 				print "<tr bgcolor=\"E0E0E0\"><td align=\"middle\">$rank</td>".
 					  "<td align=\"middle\">$classification{$rank}</td></tr>\n";
@@ -692,13 +692,13 @@ sub displayTaxonClassification{
 	}
 	# NOTE: Don't do this if the last rank was 'species.'
 	CHILDREN:{
-	if($index < 19){ # species is position 19
+	if($index < 21){ # species is position 21
 		#$lastrank = $taxon_rank_order[$index+1];
 		#if($lastrank eq "genus"){
 		#	$lastrank = "Genus";
 		#}
-		# genus is position 17.
-		#elsif($index < 17){
+		# genus is position 19.
+		#elsif($index < 19){
 		#	$lastrank = "Higher taxon";
 		#}
 		my $sql = "SELECT taxon_no FROM authorities ".
