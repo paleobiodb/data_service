@@ -287,11 +287,13 @@ sub displayPreferencesPage	{
 }
 
 # Get the current preferences JA 25.6.02
-sub	getPreferences	{
+sub getPreferences	{
 	my $enterer = shift;
 	my %pref;
 
 	my $sql = "SELECT preferences FROM person WHERE name='";
+	# escape single quotes, as in "O'Regan"
+	$enterer =~ s/'/\\'/g;
 	$sql .= $enterer . "'";
 
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -462,6 +464,8 @@ sub setPreferences	{
 
 	$sql =~ s/' -:- /'/;
  	$sql .= "' WHERE name='";
+	# escape single quotes, as in "O'Regan"
+	$enterer =~ s/'/\\'/g;
  	$sql .= $enterer;
  	$sql .= "'";
  	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
