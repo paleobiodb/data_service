@@ -434,6 +434,9 @@ sub getIntervalString	{
 	if ( $max )	{
 		my $collref = TimeLookup::processLookup($dbh, $dbt, '', $max, '', $min);
 		my @colls = @{$collref};
+		if ( ! @colls )	{
+			print "<p><b>WARNING: Can't complete the download because the specified time intervals are unknown</b></p>\n"; exit;
+		}
 		return " ( collections.collection_no IN ( " . join (',',@colls) . " ) )";
 	}
 
@@ -633,17 +636,20 @@ sub doQuery {
 	my %COLLS_DONE;
 	my %REFS_DONE;
 	my $collections_only = $q->param('collections_only');
+	my $distinct_taxa_only = $q->param('distinct_taxa_only');
 
 	# Getting only collection data:
 	if($collections_only eq 'YES'){
 		$sql =  "SELECT collections.reference_no, collections.collection_no, ".
 				" DATE_FORMAT(collections.release_date, '%Y%m%d') rd_short, ".
 				" collections.access_level, ";
-	}
+	# Getting distinct taxon names from occurrences table (JA 12.9.03)
+	} elsif ( $distinct_taxa_only eq "YES" )	{
+		$sql = "SELECT DISTINCT occurrences.genus_name ";
 	# Getting occurrence and collection data:
 	# Create the sql: we're doing a join on occurrences and collections
 	# so as to select all the data at once.
-	else{
+	} else{
 		$sql =	"SELECT occurrences.reference_no, ".
 				"occurrences.genus_reso, occurrences.genus_name, ".
 				"occurrences.collection_no, ".
@@ -689,10 +695,9 @@ sub doQuery {
 #				$sql .= "\nWHERE ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))";
 #			}
 #		}
-	}
 	# complete the collections/occurrences join query string
-	else{
-		$sql .= ", collections.collection_no, ".
+	} else{
+		$sql .= ", collections.collection_no, " .
 				" DATE_FORMAT(collections.release_date, '%Y%m%d') rd_short, ".
 				" collections.access_level, ".
 				" collections.research_group ".$comma.$outFieldsString.
@@ -712,6 +717,8 @@ sub doQuery {
 	# GROUP BY basically does a 'DISTINCT' on these two columns (for join only)
 	if($q->param('lumpgenera') eq 'YES' && $collections_only ne 'YES'){
 		$sql .= " GROUP BY occurrences.genus_name, occurrences.collection_no";
+	} elsif ( $distinct_taxa_only eq "YES" )	{
+		$sql .= " GROUP BY occurrences.genus_name";
 	}
 
 	$sql =~ s/\s+/ /g;
@@ -724,15 +731,23 @@ sub doQuery {
 	# print column names to occurrence output file JA 19.8.01
 	my $header = "";
 	if($q->param('collections_put') eq 'comma-delimited text'){
-		$header =  "collection_no";
-		if( ! $q->param('collections_only') ){
+		if( ! $q->param('distinct_taxa_only') ){
+			$header =  "collection_no";
+		} else	{
+			$header = "genus_name";
+		}
+		if( ! $q->param('collections_only') && ! $q->param('distinct_taxa_only') ){
 			$header .= ",genus_reso,genus_name,reid_genus_reso,reid_genus_name";
 		}
 		$sepChar = ',';
 	}
 	elsif( $q->param('collections_put') eq 'tab-delimited text'){
-		$header =  "collection_no";
-		if( ! $q->param('collections_only') ){
+		if( ! $q->param('distinct_taxa_only') ){
+			$header =  "collection_no";
+		} else	{
+			$header = "genus_name";
+		}
+		if( ! $q->param('collections_only') && ! $q->param('distinct_taxa_only') ){
 			$header .= "\tgenus_reso\tgenus_name\treid_genus_reso\treid_genus_name";
 		}
 		$sepChar = "\t";
@@ -863,8 +878,9 @@ sub doQuery {
 
 		if( $q->param('collections_only') ){
 			$curLine = $self->formatRow(($collection_no, @occs_row, @coll_row));
-		}
-		else{
+		} elsif ( $q->param('distinct_taxa_only') )	{
+			$curLine = $self->formatRow(($genusName));
+		} else{
 			$curLine = $self->formatRow(($collection_no, $genus_reso, $genusName, $reid_genus_reso, $reid_genus_name, @occs_row, @reid_row, @coll_row));
 		}
 		print OUTFILE "$curLine\n";
@@ -1029,6 +1045,7 @@ sub foc{
 		# I'm just using a hash to guarantee uniqueness. 
 		# I'll only need the keys...
 		next if($parsed_line[$genus_reso_pos] =~ /informal/);
+		$parsed_line[$genus_pos] =~ s/\n//;
 		$genera{$parsed_line[$genus_pos]} = 1;
 	}
 
@@ -1037,6 +1054,9 @@ sub foc{
 	my @genera = keys %genera;
 	%master_class=%{Classification::get_classification_hash($dbt,$levels,\@genera)};
 	my $insert_pos = $genus_pos-1;
+	if ( $insert_pos < 0 )	{
+		$insert_pos = 0;
+	}
 	if($levels =~ /class/){
 		splice(@headers, $insert_pos++, 0, "class_name");
 	}
@@ -1052,8 +1072,12 @@ sub foc{
 		my @fkeys = ();
 		my @okeys = ();
 		my $key = $parsed_line[$genus_pos];
+		$key =~ s/\n//;
 		my @parents = split ',',$master_class{$key};
 		$insert_pos = $genus_pos-1;
+		if ( $insert_pos < 0 )	{
+			$insert_pos = 0;
+		}
 		# first insert class
 		if ( $levels =~ /class/ )	{
 			my $class = $parents[0];
