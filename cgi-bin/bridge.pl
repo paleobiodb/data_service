@@ -8076,14 +8076,8 @@ sub getCollsWithRef	{
 
 
 
-# rjp - 3/2004. 
-# This apparently grabs the reference_no from the global session
-# parameter.  It also grabs the name, year, reftitle, pubtitle, and reference_no
-# from the CGI object ($q).  It then performs a database query and that's it..
-#
-# Sets the global $sth variable so we can access the results later.
-#
-# Pass this the CGI object ($q) 
+# Greg Ederer function that is our standard method for querying the refs table
+# completely messed up by Poling 3.04 and restored by JA 10.4.04
 sub RefQuery {
 	my $q = shift;
 	
@@ -8117,29 +8111,39 @@ sub RefQuery {
 	if ( $refsearchstring ) { $refsearchstring = "for '$refsearchstring' "; }
 
 	if ( $refsearchstring ne "" || $q->param('enterer') || $q->param('project_name') ) {
-		my $sql = DBTransactionManager->new(\%GLOBALVARS);
-		$sql->setSelectExpr("*");
-		$sql->setFromExpr("refs");
+
+		# here's where the restoration starts
+		# note that WHERE clause is mandatory
+		my $sql = "SELECT * FROM refs WHERE ";
 
 		if ($name) {
-			$sql->addWhereItem(
-				" ( author1last LIKE '\%$name\%' OR ".
+			# have to escape single quotes
+			$name =~ s/'/\\'/g;
+			$sql .= " ( author1last LIKE '\%$name\%' OR ".
 				"   author2last LIKE '\%$name\%' OR ".
-				"   otherauthors LIKE '\%$name\%' ) " );
+				"   otherauthors LIKE '\%$name\%' ) ";
 		}
 		
-		#append each relevant clause onto the $where string.
-		$sql->addWhereItem("pubyr = '$pubyr'") 											if ($pubyr);
-		$sql->addWhereItem("(reftitle LIKE '\%$reftitle\%' OR reftitle LIKE '$reftitle%')")	if ($reftitle);
-		$sql->addWhereItem(" ( pubtitle LIKE '\%$pubtitle\%')")								if ($pubtitle);
-		$sql->addWhereItem("reference_no = $refno")										if ($refno);
-		$sql->addWhereItem("enterer='" . $q->param('enterer') . "'") 						if ( $q->param('enterer') );
-		$sql->addWhereItem("project_name='".$q->param('project_name')."'")				if ($q->param('project_name'));
+		#append each relevant clause onto the where clause
+		# escape single quotes where relevant
+		$sql .= "AND pubyr = '$pubyr' " if ($pubyr);
+		$reftitle =~ s/'/\\'/g if ($reftitle);
+		$sql .= "AND (reftitle LIKE '\%$reftitle\%' OR reftitle LIKE '$reftitle%') " if ($reftitle);
+		$pubtitle =~ s/'/\\'/g if ($pubtitle);
+		$sql .= "AND ( pubtitle LIKE '\%$pubtitle\%') " if ($pubtitle);
+		$sql .= "AND reference_no = $refno " if ($refno);
+		if ( $q->param('enterer') )	{
+			my $enterer = $q->param('enterer');
+			$enterer =~ s/'/\\'/g;
+			$sql .= "AND enterer='" . $enterer . "' ";
+		}
+		$sql .= "AND project_name='".$q->param('project_name')."' " if ($q->param('project_name'));
+
 		
-		
-		my $orderBy = "";
+		my $orderBy = "ORDER BY ";
 		my $refsortby = $q->param('refsortby');
-		
+
+		# order by clause is mandatory
 		if ($refsortby eq 'year') {
 			$orderBy .= "pubyr, ";
 		} elsif ($refsortby eq 'publication') {
@@ -8155,19 +8159,17 @@ sub RefQuery {
 		if ($refsortby)	{
 			$orderBy .= "author1last, author1init, author2last, pubyr";
 		}
-		
-		$sql->setOrderByExpr($orderBy);
-		
-		$sqlString = $sql->SQLExpr();
-		
-		#$sqlString =~ s/\s+/ /gms;
-		#dbg ( "$sqlString<HR>" );
 
+		$orderBy =~ s/, $//;
+		$sql .= $orderBy;
+
+		# clean up the SQL
+		$sql =~ s/WHERE AND/WHERE /;
+		
 		# Execute the ref query
-		#$sth = $dbh->prepare( $sqlString ) || die ( "$sqlString<hr>$!" );
-		#$sth->execute();
-		#my @rows = @{$sth->fetchall_arrayref()};
-		my @rows = @{$sql->allResultsArrayRef()};
+		$sth = $dbh->prepare( $sql ) || die ( "$sqlString<hr>$!" );
+		$sth->execute();
+		my @rows = @{$sth->fetchall_arrayref()};
 		
 		Debug::dbPrint("refQuery 1, rows = " . length(@rows));
 		
@@ -8178,8 +8180,7 @@ sub RefQuery {
 			$overlimit = @rows;
 			$q->param('refsSeen' => 30 + $q->param('refsSeen') );
 
-			$sql->setLimitExpr($q->param('refsSeen'));
-			$sqlString = $sql->SQLExpr();
+			$sql = $sql . " LIMIT " .$q->param('refsSeen');
 		}
 		
 		
@@ -8197,7 +8198,7 @@ sub RefQuery {
 		close REFOUTPUT;
 		
 		# Rerun the query
-		$sth = $dbh->prepare( $sqlString ) || die ( "$sqlString<hr>$!" );
+		$sth = $dbh->prepare( $sql ) || die ( "$sqlString<hr>$!" );
 		$sth->execute();
 		$md = MetadataModel->new($sth);
 		@fieldNames = @{$sth->{NAME}};
