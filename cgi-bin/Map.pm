@@ -571,6 +571,8 @@ sub mapDrawMap	{
   my $self = shift;
   my $perm_rows = shift;
 
+  $self->dbg($q->Dump);
+
   # erase the last map that was drawn
   if ( ! open GIFCOUNT,"<$GIF_DIR/gifcount" ) {
 		$self->htmlError ( "Couldn't open [$GIF_DIR/gifcount]: $!" );
@@ -1444,23 +1446,25 @@ if ( $q->param('gridposition') ne "in back" )	{
   print "<tr><td align=center><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
   print "</table>\n";
 
-  print "<center>\n<table><tr>\n";
-  if ($matches > 1)	{
-    print "<td class=\"large\"><b>$matches collections fall ";
+  if(!$q->param("taxon_info_script")){
+	  print "<center>\n<table><tr>\n";
+	  if ($matches > 1)	{
+		print "<td class=\"large\"><b>$matches collections fall ";
+	  }
+	  elsif ($matches == 1)	{
+		print "<td class=\"large\"><b>Exactly one collection falls ";
+	  }
+	  else	{
+		# PM 09/13/02 Added bit about missing lat/long data to message
+		print "<td class=\"large\"><b>Sorry! Either the collections were missing lat/long data, or no collections fall ";
+	  }
+	  print "within the mapped area, have lat/long data, and matched your query.";
+	  #if ($searchstring ne "")	{
+	  #  $searchstring =~ s/_/ /g;
+	  #  print " \"<i>$searchstring</i>\"";
+	  #}
+	  print "</b></td></tr></table>\n";
   }
-  elsif ($matches == 1)	{
-    print "<td class=\"large\"><b>Exactly one collection falls ";
-  }
-  else	{
-    # PM 09/13/02 Added bit about missing lat/long data to message
-    print "<td class=\"large\"><b>Sorry! Either the collections were missing lat/long data, or no collections fall ";
-  }
-  print "within the mapped area, have lat/long data, and matched your query.";
-  #if ($searchstring ne "")	{
-  #  $searchstring =~ s/_/ /g;
-  #  print " \"<i>$searchstring</i>\"";
-  #}
-  print "</b></td></tr></table>\n";
   if ($dotsizeterm eq "proportional")	{
     print "<br>Sizes of $dotshape are proportional to counts of collections at each point.\n"
   }
