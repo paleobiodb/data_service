@@ -394,7 +394,7 @@ sub tallyFieldTerms	{
 	}
 
 	## Research group conditional
-    if($resgrp && $resgrp =~ /(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
+    if($resgrp && $resgrp =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
         require PBDBUtil;
         my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
         if($resprojstr ne ""){
