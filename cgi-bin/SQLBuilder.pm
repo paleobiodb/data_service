@@ -21,7 +21,10 @@
 
 package SQLBuilder;
 use strict;
-use fields qw(	selectExpr
+use fields qw(	
+				dbh
+				SQLExpr
+				selectExpr
 				fromExpr
 				whereExpr
 				groupByExpr
@@ -33,7 +36,10 @@ use fields qw(	selectExpr
 				whereItems
 							);  # list of allowable data fields.
 
+# dbh is a handle to the database
+# SQLExpr is the entire SQL expression *if* the user set it explicitly
 
+							
 
 sub new {
 	my $class = shift;
@@ -49,6 +55,7 @@ sub new {
 # clears everything
 sub clear {
 	my SQLBuilder $self = shift;
+	$self->{SQLExpr} = '';
 	$self->{selectExpr} = '';
 	$self->{fromExpr} = '';
 	$self->{groupByExpr} = '';
@@ -57,6 +64,17 @@ sub clear {
 	$self->{limitExpr} = '';
 	$self->{whereSeparator} = 'and';
 	$self->{whereItems} = ();
+}
+
+# directly set the entire SQL expression
+# note, doing this will *override* any of the other
+# set/get methods.. Only use in weird cases.
+# not a recommended way of doing it..
+sub setSQLExpr {
+	my SQLBuilder $self = shift;
+	if (my $input = shift) {
+		$self->{SQLExpr} = $input;
+	}	
 }
 
 # set directly
@@ -249,7 +267,15 @@ sub limitExpr {
 # selectExpr is left blank.  Well, it will work, but the result won't be a well formed query.
 sub SQLExpr {
 	my SQLBuilder $self = shift;
+	
 	my $expr = "";
+	if ($self->{SQLExpr}) {
+		# then the user set the SQL expression directly (not recommended)
+		return ($self->{SQLExpr});
+	}
+	
+	# otherwise, if the user didn't set the expresion explicitly,
+	# then form it from the components.
 
 	$expr .= " SELECT " .	$self->selectExpr()		if $self->selectExpr();
 	$expr .= " FROM "  .	$self->fromExpr()		if $self->fromExpr();
@@ -261,5 +287,44 @@ sub SQLExpr {
 	
 	return $expr;
 }
+
+
+# for internal use only!
+# connects to MySQL database if needed (ie, if we weren't already connected)
+# returns handle to the database
+sub dbConnect {
+	my SQLBuilder $self = shift;
+	
+	my $dbh = $self->{dbh};
+	
+	if (! $dbh) {
+		# connect if needed
+		$dbh = DBConnection::connect();
+		$self->{dbh} = $dbh;
+	}
+	
+	return $dbh;	
+}
+
+
+
+# executes the SQL and returns a result array
+# if there were no errors.
+sub resultArrayForExecutingSQL {
+	my SQLBuilder $self = shift;
+
+	my $dbh = $self->dbConnect();
+	
+	my ($sql, $sth);
+	my $sql = $self->SQLExpr();
+				
+	$sth = $dbh->prepare( $sql );
+	$sth->execute();
+	my @result = $sth->fetchrow_array();
+	$sth->finish();	
+	
+	return @result;
+}
+
 
 1;
