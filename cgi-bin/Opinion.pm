@@ -15,6 +15,11 @@ use CGI::Carp qw(fatalsToBrowser);
 use Class::Date qw(date localdate gmdate now);
 use CachedTableRow;
 use Rank;
+use Globals;
+
+
+
+use constant YES => 'YES';
 
 
 use fields qw(	
@@ -122,7 +127,7 @@ sub authors {
 	
 	my $auth;
 	
-	if ($hr->{ref_has_opinion} eq 'YES') {
+	if ($hr->{ref_has_opinion} eq YES) {
 		# then get the author info for that reference
 		my $ref = Reference->new();
 		$ref->setWithReferenceNumber($hr->{reference_no});
@@ -236,7 +241,7 @@ sub displayOpinionForm {
 	# Figure out if it's the first time displaying this form, or if it's already been displayed,
 	# for example, if we're showing some errors about the last attempt at submission.
 	my $secondTime = 0;  # is this the second time displaying this form?
-	if ($q->param('second_submission') eq 'YES') {
+	if ($q->param('second_submission') eq YES) {
 		# this means that we're displaying the form for the second
 		# time with some error messages.
 		$secondTime = 1;
@@ -255,7 +260,7 @@ sub displayOpinionForm {
 	my $isNewEntry = 1;
 	if ($q->param('is_new_entry') eq 'NO') {
 		$isNewEntry = 0;
-	} elsif ($q->param('is_new_entry') eq 'YES') {
+	} elsif ($q->param('is_new_entry') eq YES) {
 		$isNewEntry = 1;	
 	} elsif ($self->{opinion_no}) {
 		$isNewEntry = 0;  # it must be an edit if we have an opinion_no for it.
@@ -298,7 +303,7 @@ sub displayOpinionForm {
 	# Store whether or not this is a new entry in a hidden variable so 
 	# we'll have access to this information even after a taxon_no has been assigned...	
 	if ($isNewEntry) {
-		$fields{is_new_entry} = 'YES';
+		$fields{is_new_entry} = YES;
 	} else {
 		$fields{is_new_entry} = 'NO';
 		
@@ -328,7 +333,7 @@ sub displayOpinionForm {
 	
 	#print "ref_is_authority = " . $fields{'ref_is_authority'};
 	
-	if ($fields{'ref_has_opinion'} eq 'YES') {
+	if ($fields{'ref_has_opinion'} eq YES) {
 		# reference_no is the authority
 		$fields{'ref_has_opinion_checked'} = 'checked';
 		$fields{'ref_has_opinion_notchecked'} = '';
@@ -355,14 +360,15 @@ sub displayOpinionForm {
 		}
 	}
 	
-	my $rankToUse = $taxon->rank();
-	$fields{taxon_rank} = $rankToUse;
+	
+	my $childRank = Rank->new($taxon->rank());
+	$fields{taxon_rank} = $childRank->rank();
 	
 	
 	# We display a couple of different things depending on whether
 	# the rank is species or higher...
 	
-	if (! ($rankToUse eq 'species' || $rankToUse eq 'subspecies')) {
+	if (! ($childRank->isSpecies() || $childRank->isSubspecies())) {
 		# remove the species only field.
 		$fields{'OPTIONAL_species_only'} = 0;
 	} else {		
@@ -401,7 +407,26 @@ sub displayOpinionForm {
 	my @valid = (BELONGS_TO, RECOMBINED_AS, 'revalidated');
 
 	
-	if ($fields{status} ne '') {
+	Debug::dbPrint("fields{status} = " . $fields{status});
+ 	Debug::dbPrint("fields{taxon_status} = " . $fields{taxon_status});
+	
+	
+	# note, taxon_status is the name of the radio buttons in the form.
+	# status is the name in the database.
+	# 
+	# So, if this is the second time through (after displaying errors), we
+	# need to re-assign the status field based off of what the user entered.
+	if ($secondTime) {
+		$fields{status} = $fields{taxon_status};
+		if ($fields{status} eq INVALID1) {
+			$fields{status} = $fields{synonym};
+		} elsif ($fields{status} eq INVALID2) {
+			$fields{status} = $fields{nomen};
+		}
+	}
+	
+	
+	if ($fields{status}) {
 		if (! (Globals::isIn(\@valid, $fields{status}))) {
 			# it's an invalid status
 		
@@ -441,12 +466,13 @@ sub displayOpinionForm {
 	
 	
 	# Now we should figure out the parent taxon name for this opinion.
-	
-	my $parent = Taxon->new();
-	$parent->setWithTaxonNumber($fields{parent_no});
-	$fields{parent_taxon_name} = $parent->taxonName();
-	$fields{'parent_taxon_name2'} = $fields{parent_taxon_name};
-	
+	# but only if it's not the second time through.
+	if (! $secondTime) {
+		my $parent = Taxon->new();
+		$parent->setWithTaxonNumber($fields{parent_no});
+		$fields{parent_taxon_name} = $parent->taxonName();
+		$fields{'parent_taxon_name2'} = $fields{parent_taxon_name};
+	}
 	
 	
 	# if the authorizer of this record doesn't match the current
@@ -474,7 +500,7 @@ sub displayOpinionForm {
 		
 		# depending on the status of the ref_has_opinion radio, we should
 		# make the other reference fields non-editable.
-		if ($fields{'ref_has_opinion'} eq 'YES') {
+		if ($fields{'ref_has_opinion'} eq YES) {
 			push (@nonEditables, ('author1init', 'author1last', 'author2init', 'author2last', 'otherauthors', 'pubyr', '2nd_pages', '2nd_figures'));
 		} else {
 			push (@nonEditables, ('pages', 'figures'));		
@@ -552,7 +578,7 @@ sub submitOpinionForm {
 	# then this variable will be true.  This would happen if they had errors
 	# the first time, and then resubmitted it.
 	my $isSecondSubmission;
-	if ($q->param('second_submission') eq 'YES') {
+	if ($q->param('second_submission') eq YES) {
 		$isSecondSubmission = 1;
 	} else {
 		$isSecondSubmission = 0;
@@ -561,7 +587,7 @@ sub submitOpinionForm {
 	
 	# is this a new entry, or an edit of an old record?
 	my $isNewEntry;
-	if ($q->param('is_new_entry') eq 'YES') {
+	if ($q->param('is_new_entry') eq YES) {
 		$isNewEntry = 1;	
 	} else {
 		$isNewEntry = 0;
@@ -628,7 +654,7 @@ sub submitOpinionForm {
 	}
 	
 	
-	if ( 	($q->param('ref_has_opinion') ne 'YES') && 
+	if ( 	($q->param('ref_has_opinion') ne YES) && 
 			($q->param('ref_has_opinion') ne 'NO')) {
 		
 		$errors->add("You must choose one of the reference radio buttons");
@@ -922,7 +948,7 @@ sub submitOpinionForm {
 		# some errors to the user and this is at least the second time through (well,
 		# next time will be the second time through - whatever).
 
-		$q->param(-name=>'second_submission', -values=>['YES']);
+		$q->param(-name=>'second_submission', -values=>[YES]);
 			
 		# stick the errors in the CGI object for display.
 		my $message = $errors->errorMessage();

@@ -299,8 +299,6 @@ sub isInformal {
 
 
 
-
-
 # is this object a valid rank?
 sub isValid {
 	my Rank $self = shift;
@@ -404,8 +402,29 @@ sub isLowerThan {
 
 
 
+# pass this another rank object and it will
+# return a true value if they're equal ranks.
+sub isEqualTo {
+	my Rank $self = shift;
+	my Rank $other = shift;
 
-
+	if (!$other) {
+		return 0;	
+	}
+	
+	my $sokh = $self->{onlyKnowHigher};
+	my $ookh = $other->{onlyKnowHigher};
+	
+	if ($sokh|| $ookh) {
+		# we can't tell if they're equal if we only
+		# know that either one (or both) is a higher taxon.
+		return 0;
+	} else {
+		# we know the full rank of both objects.
+		
+		return ($self->{rankNum} == $other->{rankNum});
+	}
+}
 
 
 # meant for testing only..
