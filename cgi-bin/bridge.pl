@@ -3941,6 +3941,10 @@ sub startEditCollection {
 # hacked to queue displaySearchCollsForAdd JA 5.4.04
 sub startAddCollection {
 
+	# clear the queue because you never add a collection en route to
+	#  doing something else JA 6.4.04
+	$s->clearQueue( $dbh );
+
 	# 1. Need to ensure they have a ref
 	# 2. Need to get a collection
 	
