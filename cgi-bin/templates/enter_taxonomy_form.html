@@ -3,9 +3,12 @@
 
 <DIV class="mainSection">
 
-<center><h2>Whose opinion on %%taxon_name%% are you entering?</h2></center>
+<h2>Whose opinion on %%taxon_name%% are you entering?</h2>
 
-<div class="emphasized"><input type="checkbox" id="ref_has_opinion" name="ref_has_opinion" value="YES"> The current reference argues for this opinion.</div>
+<div class="emphasized">
+<input type="checkbox" id="ref_has_opinion" name="ref_has_opinion" value="YES"> 
+The current reference argues for this opinion.
+</div>
 
 <center>
 <p>
@@ -16,21 +19,36 @@
 
 <div class="emphasized">... <i>or</i> the opinion is repeated from an earlier authority, which is:</div>
 <BR>
-<center>
-<table>
-<tr>
-<td><td class=tiny>initials <td class=tiny>last name
-<td><td class=tiny>initials <td class=tiny>last name
-<tr><td align=right><b>First author:</b> <td><input id="opinion_author1init" name="opinion_author1init" size=6> <td><input id="opinion_author1last" name="opinion_author1last" size=20><br>
-<td align=right><b>Second author:</b> <td><input id="opinion_author2init" name="opinion_author2init" size=6> <td><input id="opinion_author2last" name="opinion_author2last" size=20><br>
-</tr>
-<tr><td valign=top align=right><b>Other authors:</b> <td colspan=5><textarea id="opinion_otherauthors" name="opinion_otherauthors" rows=3 cols=70></textarea><br>
-</tr>
-<tr><td align=right><b>Year:</b> <td colspan=1><input id="opinion_pubyr" name="opinion_pubyr" size=6>
-<td colspan=4><b>Pages*:</b> <input id="opinion_2nd_pages" name="opinion_2nd_pages" size=12>
-<b>Figures*:</b> <input id="opinion_2nd_figures" name="opinion_2nd_figures" size=12>
-</td></tr>
-</table>
+
+<CENTER>
+<TABLE>
+
+<TR>
+<TD></TD><TD class=tiny>initials</TD>
+<TD class=tiny>last name</TD>
+<TD></TD><TD class=tiny>initials</TD>
+<TD class=tiny>last name</TD>
+<TR><TD align=right><b>First author:</b></TD>
+<TD><input id="opinion_author1init" name="opinion_author1init" size=6></TD>
+<TD><input id="opinion_author1last" name="opinion_author1last" size=20></TD>
+<TD align=right><b>Second author:</b></TD>
+<TD><input id="opinion_author2init" name="opinion_author2init" size=6></TD>
+<TD><input id="opinion_author2last" name="opinion_author2last" size=20></TD>
+</TR>
+
+<TR><TD valign=top align=right><b>Other authors:</b></TD>
+<TD colspan=5><textarea id="opinion_otherauthors" name="opinion_otherauthors" rows=3 cols=70></textarea></TD>
+</TR>
+
+<TR><TD align=right><b>Year:</b></TD>
+<TD colspan=1><input id="opinion_pubyr" name="opinion_pubyr" size=6></TD>
+<TD colspan=4><b>Pages*:</b> <input id="opinion_2nd_pages" name="opinion_2nd_pages" size=12>
+<b>Figures*:</b> <input id="opinion_2nd_figures" name="opinion_2nd_figures" size=12></TD>
+</TR>
+
+</TABLE>
+</CENTER>
+
 
 <center>
 <p><span class="tiny">* Leave blank if this reference is the same as the one in the authority section above. Enter numbers of pages and figures that describe and show <i>any</i> specimens.</span></p>
@@ -40,51 +58,72 @@
 
 
 <DIV class="mainSection">
-<center><h2>What did they say about the status of %%taxon_name%%?</h2></center>
 
-<center>
+
+<h2>What did they say about the status of %%taxon_name%%?</h2>
+
+
+<CENTER>
 
 <TABLE BORDER=0>
-<tr><td align=right>
-<input type="radio" name="taxon_status" value="no_opinion" checked> </td><td colspan=2>
-<b>Don't enter an opinion</b>; I'm just editing authority information.
-</td></tr>
+
+<TR>
+<TD align=right>
+<input type="radio" name="taxon_status" value="no_opinion" checked></TD>
+<TD colspan=2><b>Don't enter an opinion</b>; I'm just editing authority information.</TD>
+</TR>
 
 <!-- the following row should only appear if the rank is species -->
 %%species_only_start%%
-<tr><td align=right>
-<input type="radio" name="taxon_status" value="belongs_to"> </td>
-<td colspan=2><b>Valid %%rank%%</b> as originally combined; belongs to genus <i>%%genus%%</i>.
-</td></tr>
+<TR><TD align=right>
+<input type="radio" name="taxon_status" value="belongs_to"> </TD>
+<TD colspan=2><b>Valid %%rank%%</b> as originally combined; belongs to genus <i>%%genus%%</i>.</TD>
+</TR>
 %%species_only_end%%
 
 <!-- Replace the recombined_message in the script.  
 If rank is a higher taxon, then it should say "classified as belonging to."  
 Otherwise, it should say "recombined into a different genus as." -->
-<tr><td align=right valign=top>
-<input type="radio" name="taxon_status" value="recombined_as"> </td><td colspan=2><b>Valid %%rank%%</b>, %%recombined_message%%
+<TR><TD align=right valign=top>
+<input type="radio" name="taxon_status" value="recombined_as"> </TD>
+<TD colspan=2><b>Valid %%rank%%</b>, %%recombined_message%%
 <input id="parent_taxon_name" name="parent_taxon_name" size=50><br>
-</td></tr>
-<tr>
-<td></td>
-<td valign="center" align=left>Diagnosis:<BR>
-<textarea id="diagnosis" name="diagnosis" rows=3 cols=70></textarea>
-</td></tr>
+</TD></TR>
 
-<tr><td align=right>
+<TR>
+<TD></TD>
+<TD valign="middle" align=left>Diagnosis:<BR>
+<textarea id="diagnosis" name="diagnosis" rows=3 cols=70></textarea>
+</TD>
+</TR>
+
+<TR><TD align=right>
 <input type="radio" name="taxon_status" value="invalid1">
-</td><td colspan=2><b>Invalid</b> and another name should be used.
-</td></tr>
-<tr><td></td><td colspan=2>
-Status:
+</TD>
+<TD colspan=2><b>Invalid</b> and another name should be used.
+</TD>
+</TR>
+
+<TR>
+<TD></TD>
+<TD colspan=2>Status:
 <select name="synonym"><option>subjective synonym of <option>objective synonym of <option>homonym of <option>replaced by <option>corrected as </select>
 <input name="parent_taxon_name2" size=50>
-</td></tr>
+</TD>
+</TR>
 
-<tr><td align=right>
-<input type="radio" name="taxon_status" value="invalid2"> </td><td colspan=2><b>Invalid</b> and no other name can be applied. Status:
-<select name="nomen"><option>nomen dubium <option>nomen nudum <option>nomen oblitem <option>nomen vanum </select>
-</td></tr>
+<TR><TD align=right>
+<input type="radio" name="taxon_status" value="invalid2"> </TD>
+<TD colspan=2><b>Invalid</b> and no other name can be applied. Status:
+
+<select name="nomen">
+<option>nomen dubium</option>
+<option>nomen nudum</option>
+<option>nomen oblitem</option>
+<option>nomen vanum</option>
+</select>
+</TD>
+</TR>
 
 
 <TR>
@@ -97,7 +136,11 @@ Please check the
 for an explanation of these terms. <BR>
 </span></TD>
 </TR>
-<TR><TD> </TD></TR>
+
+<TR>
+<TD colspan=2></TD>
+</TR>
+
 <TR>
 <TD colspan=2 align=left valign=top>
 <b>Comments:</b><BR>
@@ -106,21 +149,12 @@ for an explanation of these terms. <BR>
 </TR>
 
 </TABLE>
-
-<!--
-<tr><td align=right><b>Comments:</b></td>
-<td colspan=5><textarea id="comments" name="comments" rows=2 cols=70></textarea></td>
-</tr>
--->
-
-
+</CENTER>
 
 </DIV>
 
 <CENTER>
-<right>
 <input type=submit value="Submit">
-</right>
 
 <p>
 <center><span class="tiny">

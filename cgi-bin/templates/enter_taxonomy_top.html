@@ -1,5 +1,13 @@
 <!--Start enter_taxonomy_top.html-->
 
+
+<STYLE type="text/css">
+    H2 { text-align: center; }
+</STYLE>
+
+
+
+
 <form method="POST" action="$exec_url" onSubmit="return checkForm();">
 
 <input type="hidden" id="action" name="action" value="processTaxonomyEntryForm">
@@ -9,14 +17,14 @@
 
 <DIV class="mainSection">
 
-<CENTER>
 <H2>Who named <input type="text" id="taxon_name_corrected" name="taxon_name_corrected" size=%%taxon_size%% value="%%taxon_name%%">&nbsp;?</H2>
 
+<CENTER>
 <span class="tiny">
 See the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Authority')">tip sheet</a>.
 If the name is misspelled, <a href="$exec_url?action=displayTaxonomySearchForm">try another search</a>.
 </span>
-</center>
+</CENTER>
 
 <!--End enter_taxonomy_top.html-->
 
