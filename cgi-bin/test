@@ -1,0 +1,13 @@
+text I succeeded in setting up your account, giving you a complete copy of our scripts and web sites, and enabling an instance of Apache that you can use for testing purposes. Your account name is madin (creative, huh?) and the password is that plus the number six at the end (had to have a number in there somewhere). Obviously, you should change the password ASAP.
+
+Oa you get in to your account, you will find everything important in apache/cgi-bin and apache/html. The main script is called bridge.pl and its modules are all *.pm files in the same cgi-bin directory. apache/html has some static files in paleodb and public  that you might want to change sometime, but nothing too crucial. cgi-bin is where you'll be most of the time, so I have created a link to it by issuing
+
+ln -s apache/cgi-bin cgi
+
+from your home directory.
+
+You'll need to restart your copy of Apache wherever we reboot the machine. To do this, from your home directory you issue
+
+from your home directory.
+./bin/apachectl start
+hdsjfha
