@@ -784,6 +784,7 @@ sub stdIncludes {
 								[ "%%reference%%", "%%enterer%%" ] );
 }
 
+
 # Shows the search form
 sub displaySearchRefs {
 
@@ -847,6 +848,8 @@ sub displaySearchRefs {
 	print &stdIncludes ("std_page_bottom");
 }
 
+
+
 # Print out the number of refs found by a ref search JA 26.7.02
 sub describeRefResults	{
 
@@ -878,6 +881,9 @@ sub describeRefResults	{
 
 }
 
+
+
+
 sub printGetRefsButton	{
 
 	my $numRows = shift;
@@ -904,6 +910,8 @@ sub printGetRefsButton	{
 
 }
 
+
+
 # This shows the actual references
 sub displayRefResults {
 
@@ -911,12 +919,16 @@ sub displayRefResults {
 	my @rows;
 	my $numRows;
 
-	unless($q->param('use_primary')){
+	# use_primary is true if the user has clicked on the "Current reference" link at
+	# the top or bottom of the page.  Basically, don't bother doing a complicated 
+	# query if we don't have to.
+	unless($q->param('use_primary')) {
+		# this calls the subroutine RefQuery which fills a *global* variable
+		# called $sth with the query results
 		$overlimit = &RefQuery();
 		@rows = @{$sth->fetchall_arrayref()};
 		$numRows = @rows;
-	}
-	else{
+	} else {
 		$q->param('use_primary' => "yes");
 		$numRows = 1;
 	}
@@ -945,10 +957,9 @@ sub displayRefResults {
 
 		# if there's an action, go straight back to it without showing the ref
 		if ( $action)	{
-			&{$action};									# Run the action
-		}
-		# otherwise, display a page showing the ref JA 10.6.02
-		else	{
+			&{$action};			# Run the action
+		} else	{  
+			# otherwise, display a page showing the ref JA 10.6.02
 			print &stdIncludes ( "std_page_top" );
 			print "<h3>Here is the full reference...</h3>\n";
 			print "<table border=0 cellpadding=4 cellspacing=0>\n";
@@ -979,8 +990,8 @@ sub displayRefResults {
 			print "</table><p>\n";
 			print &stdIncludes ( "std_page_bottom" );
 		}
-#		if ( ! $action ) { $action = "displayMenuPage"; } # bad Tone code
-		return;										# Out of here!
+		#	if ( ! $action ) { $action = "displayMenuPage"; } # bad Tone code
+		return;		# Out of here!
 	}
 
 	print &stdIncludes ( "std_page_top" );
@@ -1031,6 +1042,8 @@ sub displayRefResults {
 
 	print &stdIncludes ("std_page_bottom");
 }
+
+
 
 sub displayRefResultsForAdd {
 
@@ -6722,8 +6735,11 @@ sub getCollsWithRef	{
 	return $retString;
 }
 
+
+# This creates a *global* variable called $sth which contains the query results
+# Perhaps change this so it returns the $sth instead of using a global?
 # JA 25.2.02
-sub RefQuery	{
+sub RefQuery {
 
 	# Use current reference button?
 	if ( $q->param("use_current") ) {
@@ -6736,21 +6752,24 @@ sub RefQuery	{
 		return;
 	}
 
+	# do these really need to be globals?  ryan 12/29/03
 	$name = $q->param('name');
 	$pubyr = $q->param('year');
 	$reftitle = $q->param('reftitle');
+	my $pubtitle = $q->param('pubtitle');
 	$refno = $q->param('reference_no');
+	
 	$refsearchstring = qq|$name| if $name;
 	$refsearchstring .= qq| $pubyr| if $pubyr;
 	$refsearchstring .= qq| $reftitle| if $reftitle;
+	$refsearchstring .= qq| $pubtitle| if $pubtitle;
 	$refsearchstring .= qq| reference $refno| if $refno;
 	$refsearchstring =~ s/^ //;
 	my $overlimit;
 
 	if ( $refsearchstring ) { $refsearchstring = "for '$refsearchstring' "; }
 
-	if ( $refsearchstring ne "" || $q->param('enterer') ||
-		 $q->param('project_name') )	{
+	if ( $refsearchstring ne "" || $q->param('enterer') || $q->param('project_name') ) {
 		$sql =	"SELECT * FROM refs ";
 
 		my $where = "";
@@ -6760,8 +6779,11 @@ sub RefQuery	{
 											"   author2last LIKE '%$name%' OR ".
 											"   otherauthors LIKE '%$name%' ) " );
 		}
+		
+		#append each relevant clause onto the $where string.
 		if ( $pubyr ) { $where = &buildWhere ( $where, "pubyr='$pubyr'" ); }
 		if ( $reftitle ) { $where = &buildWhere ( $where, " ( reftitle LIKE '%$reftitle%' OR reftitle LIKE '$reftitle%' )" ); }
+		if ( $pubtitle ) { $where = &buildWhere ( $where, " ( pubtitle LIKE '%$pubtitle%')") }
 		if ( $refno ) { $where = &buildWhere ( $where, "reference_no=$refno" ); }
 		if ( $q->param('enterer') ) { $where = &buildWhere ( $where, "enterer='".$q->param('enterer')."'" ); }
 		if ( $q->param('project_name') ) { $where = &buildWhere ( $where, "project_name='".$q->param('project_name')."'" ); }
@@ -6771,6 +6793,7 @@ sub RefQuery	{
 		if ($q->param('refsortby'))	{
 			$where .= " ORDER BY ";
 		}
+		
 		if ($q->param('refsortby') eq "year")	{
 			$where .= "pubyr, ";
 		} elsif ($q->param('refsortby') eq "publication")	{
@@ -6789,20 +6812,23 @@ sub RefQuery	{
 		$sql =~ s/\s+/ /gms;
 		dbg ( "$sql<HR>" );
 
-	# Execute the ref query
+		# Execute the ref query
 		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute();
 		my @rows = @{$sth->fetchall_arrayref()};
-	# If too many refs were found, set a limit
+		
+		# If too many refs were found, set a limit
 		if (@rows > 30)	{
 			$overlimit = @rows;
 			$q->param('refsSeen' => 30 + $q->param('refsSeen') );
 			$sql .= " LIMIT " . $q->param('refsSeen');
 		}
-	# Dump the refs to a flat file JA 1.7.02
+		
+		# Dump the refs to a flat file JA 1.7.02
 		my $authname = $s->get('authorizer');
 		$authname =~ s/\. //;
 		open REFOUTPUT,">$HTML_DIR/$OUTPUT_DIR/$authname.refs";
+		
 		for my $rowRef (@rows)	{
 			my @row = @{$rowRef};
 			if ($csv->combine(@row))	{
@@ -6810,19 +6836,20 @@ sub RefQuery	{
 			}
 		}
 		close REFOUTPUT;
-	# Rerun the query
+		
+		# Rerun the query
 		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute();
 		$md = MetadataModel->new($sth);
 		@fieldNames = @{$sth->{NAME}};
-	}
-	else {
+	} else {
 		print &stdIncludes ("std_page_top");
 		print "<center><h4>Sorry! You can't do a search without filling in at least one field</h4>\n";
 		print "<p><a href='$exec_url?action=displaySearchRefs&type=".$q->param("type")."'><b>Do another search</b></a></p></center>\n";
 		print &stdIncludes ("std_page_bottom");
 		exit(0);
 	}
+	
 	return $overlimit;
 }
 
@@ -6838,6 +6865,7 @@ sub htmlError {
 }
 
 # Builds a WHERE clause smartly
+# basically appends "AND $clause" to the end of the where if it already exists
 sub buildWhere {
 	my $where = shift;
 	my $clause = shift;
@@ -6849,6 +6877,7 @@ sub buildWhere {
 	}
 	return $where;
 }
+
 
 # Build the reference ( at the bottom of the page )
 sub buildReference {
