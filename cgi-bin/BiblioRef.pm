@@ -72,7 +72,7 @@ sub toString
 
 	# Project name
 	if ($self->{_project_name})	{
-		$retVal .= "	<td valign=top><font color=red>".$self->{_project_name};
+		$retVal .= "	<td valign=\"top\"><font color=\"red\">".$self->{_project_name};
 		$retVal .= $self->{_project_ref_no} if $self->{_project_ref_no};
 		$retVal .= "</font></td>\n";
 	} else {
@@ -106,7 +106,7 @@ sub toString
 	$retVal .= "-" if $self->{_firstpage} && $self->{_lastpage};
 	$retVal .= $self->{_lastpage};
 	# also displays authorizer and enterer JA 23.2.02
-	$retVal .= "<font size='small'> [".$self->{_authorizer}."/".$self->{_enterer}."]</font>\n";
+	$retVal .= "<font size=\"small\"> [".$self->{_authorizer}."/".$self->{_enterer}."]</font>\n";
 	$retVal .= "</td>\n";
 	$retVal .= "</tr>\n";
 
