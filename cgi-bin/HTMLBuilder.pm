@@ -16,6 +16,7 @@ use Anchor;
 use Class::Date qw(date localdate gmdate now);
 use Debug;
 
+use CGI;
 
 my $stuff;
 
@@ -203,6 +204,44 @@ my %SELECT_LISTS = (assigned_to=>["Ederer", "Alroy"],
 my $rowCount = 0;
 
 
+
+
+
+
+# pass this a hashref
+# and it will escapeHTML on all 
+# fields, except the ones that look like they're already html...
+#
+# Should do this before displaying the values in a form.
+sub escapeHTMLOnFields {
+	my $ref = shift;
+	
+	if (!$ref) {
+		return;
+	}
+	
+	foreach my $key (keys(%$ref)) {
+		my $val = $ref->{$key};
+		
+		# only compile once.
+		# we don't want to HTML escape field which are already 
+		# formatted as HTML!  So we'll do a simple check to see if they
+		# have anything that looks like an HTML tag in them..
+		if ($val =~ m/ (?:< (?:[-A-Za-z"=0-9%._]|\s)* >)+ /xgo) {
+			#Debug::dbPrint("I think this is HTML: " . $ref->{$key});
+		} else {
+			$ref->{$key} = CGI::escapeHTML($ref->{$key});
+		}
+	}
+}
+
+
+
+
+
+
+
+
 # rjp, 3/2004..
 # pass it a template name, and a hash ref of field names as keys 
 # and values to substitute as values.  Similar to the older populateHTML, but
@@ -243,18 +282,55 @@ sub newPopulateHTML {
 	my $hashRef = shift;		# hash of fields and values to populate with
 	my $nonEditableRef = shift;		# array of input fields to make non-editable
 	
+	if (! $hashRef) {
+		Debug::logError("improper hashref in HTMLBuilder::newPopulateHTML.");
+		return;
+	}
+		
 	my %fields = %$hashRef;
 	
+	# escape the fields we're populating with for proper html encoding.
+	escapeHTMLOnFields(\%fields);
+	
+	#Debug::dbPrint("in newPopulateHTML, fields = ");
+	#Debug::printHash(\%fields);
+	
+	# read the template from the templates or guest_templates folder.
 	my $html = $self->newReadTemplate($templateName);
 	if (! $html) {
 		return "<HTML><BODY><DIV class=\"warning\">Error: No template '" . $templateName ."' found...</DIV></BODY></HTML>";	
 	}
+
+	
 	
 	# loop through all keys in the passed hash and
 	# replace field names with their values
-
 	my $hiddenInputs;
 	
+	# do a preliminary loop through all keys in the fields hash
+	# and see if we should add any keys such as a nicely formatted
+	# reference entry, or a taxon_rank popup.
+	foreach my $key (keys(%fields)) {
+		if ($key eq 'taxon_rank') {
+			# if it's name is taxon_rank, then we'll look for any fields
+			# in the template called "taxon_rank_popup" and fill them with
+			# a popup menu of ranks.
+			Debug::dbPrint( "yes, it's taxon_rank" );
+			$fields{taxon_rank_popup} = $self->rankPopupMenu($fields{taxon_rank});
+		}
+		
+		if ($key eq 'reference_no') {
+			# if it's name is reference_no, then we'll look for any fields
+			# in the template called "formatted_reference" and fill them with
+			# a nicely formatted reference entry based on the reference_no.
+			my $ref = Reference->new();
+			$ref->setWithReferenceNumber($fields{reference_no});
+			$fields{formatted_reference} = $ref->formatAsHTML();
+		}	
+	}
+	
+	# now do the main loop through the keys which will search and replace values
+	# in the template.
 	foreach my $key (keys(%fields)) {
 		
 		if ($key =~ m/OPTIONAL/i) {
@@ -266,21 +342,32 @@ sub newPopulateHTML {
 				
 				$html =~ s/[%][%]START_$key[%][%].*[%][%]END_$key[%][%]//gs;
 			}
-			
 			next;
 		}
 		
-		$html =~ s/([%][%]$key[%][%])/$fields{$key}/sg;
-		
-		if (!$1) {
+		# replace all fields in the template which are of the form
+		# %%fieldname%% with their replacement values.
+		my $numReplacements = ($html =~ s/([%][%]$key[%][%])/$fields{$key}/sg);
+		#if ($numReplacements <= 0) {
+			#print "$key<BR>";
 			# if we didn't match anything, then
 			# create it as a hidden input, if it doesn't already exist somewhere.
-			if ($html !~ m/$key/) {
-				$hiddenInputs .= "<INPUT type=\"hidden\" name=\"$key\" id=\"$key\" value=\"" .
+		#	if ($html !~ m/$key/) {
+		#		$hiddenInputs .= "<INPUT type=\"hidden\" name=\"$key\" id=\"$key\" value=\"" .
+		#		$fields{$key} . "\">\n";
+		#	}
+		#}
+	}
+	
+	
+	
+	# now we should also make hiddens out of any field that the user wants
+	# to make non-editable.  This will allow us to still have access to their values.
+	if ($nonEditableRef) {
+		foreach my $key (@$nonEditableRef) {
+			$hiddenInputs .= "<INPUT type=\"hidden\" name=\"$key\" id=\"$key\" value=\"" .
 				$fields{$key} . "\">\n";
-			}
 		}
-		
 	}
 	
 	
@@ -341,10 +428,10 @@ sub makeNonEditableInputs {
 	# Note: the x modifier ignores whitespace in the pattern, so we
 	# can space it out to make it more legible
 		
-	my $validChars = '(?:[A-Za-z"=0-9%._]|\s)*';
+	my $validChars = '(?:[-A-Za-z"=0-9%._]|\s)*';
 		
 	foreach my $key (@$nameRef) {
-		
+		#Debug::dbPrint("nonEditable: $key");
 		# first, search for textarea fields and replace them with disabled boxes.
 		# <textarea id="comments" name="comments" rows=2 cols=70>type Eurasian E. caballus</textarea>
 		$html =~ s/ ( <textarea \s+ ) ( $validChars (?:name|id) \s* = \s* ["]?$key["]? $validChars > ) /$1 disabled readonly $2/igsx;
@@ -353,11 +440,10 @@ sub makeNonEditableInputs {
 		$html =~ s/( <select \s+ ) ( $validChars (?:name|id) \s* = \s* ["]?$key["]? $validChars > ) /$1 disabled readonly $2/igsx; 
 		
 		# Next search for other fields such as input and replace them with static boxes.
-		$html =~ s/ ( < input (?! $validChars hidden $validChars > ) ) ( $validChars (?:name|id) \s* = \s* ["]?$key["]? $validChars > ) /$1 disabled readonly $2/igsx;
+		$html =~ s/ ( < input (?! $validChars hidden $validChars > ) ) ( $validChars (?:name|id) \s* = \s* ["]?$key["]? $validChars value \s* = \s* ["]?.*["]?  $validChars > ) /$1 disabled readonly $2/igsx;
 	
 		# search for radio and checkboxes.
-		$html =~ s/ ( < input (?= $validChars (?: radio|checkbox) $validChars > ) $validChars ) (  name = ["]?$key["]?  $validChars > ) /$1 disabled $2/igsx;
-		
+		$html =~ s/ ( < input (?= $validChars (?: radio|checkbox) $validChars > ) $validChars ) (  name = ["]?$key["]?  $validChars > ) /$1 disabled $2/igsx;	
 	}
 	
 	return $html;

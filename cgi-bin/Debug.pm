@@ -107,10 +107,36 @@ sub printHash {
 	dbPrint($toprint);
 }
 
+
+# prints the passed arrayref in
+# a nice user readable form
+sub printArray {
+	my $ar = shift;
+	
+	if (!$ar) {
+		return;
+	}
+	
+	my @array = @$ar;
+	
+	my $toprint;
+	
+	foreach my $key (@array) {
+		$toprint .= "$key\n";	
+	}
+	
+	dbPrint($toprint);
+}
+
 # prints each parameter in the passed CGI object
 # note, this is normally called $q in our programs.
 sub printAllCGIParams {
 	my $q = shift;
+
+	if (!$q) {
+		dbPrint("CGI object doesn't exist in printAllCGIParams()");
+		return;
+	}
 	
 	quickPrint("_____________________________________________________________");
 	dbPrint("Printing list of all CGI parameters:");

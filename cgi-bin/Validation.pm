@@ -29,11 +29,13 @@ sub clean {
 	my $in = shift;
 	
 	# remove html code
-	# looks for "<" followed by optional "/" followed by one or more
-	# characters which *aren't* "<" or ">" followed by ">".  This pretty
-	# much defines an HTML tag, so this should remove all of them.
 	
-	$in =~ s/<[\/]?[^<>]+>//g;
+		#my $validChars = '(?:[-A-Za-z"=0-9%._]|\s)*';
+
+	#Debug::dbPrint("in = $in");
+	$in =~ s/ < [\/]? (?:[-A-Za-z"=0-9%._]|\s)+ >//gx;
+
+	#Debug::dbPrint("new in = $in");
 
 	# comment out the escape quote marks for now..
 	# because it would be an issue if some other code tried to escape them again... 
@@ -61,11 +63,14 @@ sub cleanCGIParams {
 	
 	my @params = $q->param();
 	my @plist;
+	my $i;
 	foreach my $p (@params) {
 		@plist = $q->param($p);
 		
+		$i = 0;
 		foreach my $pItem (@plist) {
-			clean($pItem);
+			@plist[$i] = clean($pItem);
+			$i++;
 		}
 		
 		$q->param($p => @plist);
@@ -157,6 +162,55 @@ sub genusFromString {
 	
 	return $1;
 }
+
+
+
+# returns true if the input is in a proper format for a last name
+sub properLastName {
+	my $input = shift;
+	
+	if ((!$input) || $input eq "") { return 0; }
+	
+	#Debug::dbPrint("properLastName($input) returns " . 
+	
+	if ($input !~ m/^[A-Za-z ,-.\']+$/) {
+		return 0;	
+	}
+	
+	return 1;
+}
+
+# returns true if the input is in a proper format for an initial 
+sub properInitial {
+	my $input = shift;
+	
+	if ((!$input) || $input eq "") { return 0; }
+	
+	if ($input !~ m/^[A-Za-z .]+$/) {
+		return 0;
+	}
+	
+	return 1;
+}
+
+# returns true if it's a proper year format which begins with a 1 or 2,
+# ie, 1900 and something or 2000 something.
+sub properYear {
+	my $input = shift;
+	
+	if ((!$input) || $input eq "") { return 0; }
+	
+	if ($input !~ m/^[12]\d{3}$/) {
+		return 0;
+	}
+	
+	return 1;
+}
+
+
+
+
+
 
 
 1;

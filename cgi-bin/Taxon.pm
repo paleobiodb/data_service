@@ -621,9 +621,17 @@ sub displayAuthorityForm {
 	my $s = shift;
 	my $q = shift;
 	
-	my %fields;  # a hash of fields and values that we'll pass to HTMLBuilder to pop. the form.
-	my @nonEditables; 	# fields that the user can't edit.
 	
+	my $sql = $self->getSQLBuilder();
+	
+	my %fields;  # a hash of fields and values that
+				 # we'll pass to HTMLBuilder to pop. the form.
+				 
+	my @nonEditables; 	# fields we'll pass to HTMLBuilder that the user can't edit.
+	
+	
+	# grab a list of all columns in the authorities table.
+	my @allTableColumns = @{$sql->allTableColumns('authorities')};	
 	
 	my $secondTime = 0;  # is this the second time displaying this form?
 	if (($q) && ($q->{second_submission}) ) {
@@ -637,8 +645,8 @@ sub displayAuthorityForm {
 		%fields = %$fieldRef;
 	}
 	
-	Debug::dbPrint("second_submission = $secondTime");
-	Debug::dbPrint("fields, second sub = " . $fields{second_submission});
+	#Debug::dbPrint("second_submission = $secondTime");
+	#Debug::dbPrint("fields, second sub = " . $fields{second_submission});
 	
 	
 	# is this a new entry, or an edit of an old record?
@@ -673,18 +681,12 @@ sub displayAuthorityForm {
 	
 	# populate the correct pages/figures fields depending
 	# on the ref_is_authority value.
-
-	my $ref = Reference->new();
 	
 	if ($isNewEntry) {
 		# for a new entry, use the current reference from the session.
-		$ref->setWithReferenceNumber($s->currentReference());
-	} else {
-		# for an old entry, use the reference_number in the record. 
-		$ref->setWithReferenceNumber($fields{reference_no});
-	}
+		$fields{reference_no} = $s->currentReference();
+	} 
 	
-	$fields{primary_reference} = $ref->formatAsHTML();
 	
 	if ($fields{'ref_is_authority'} eq 'YES') {
 		# reference_no is the authority
@@ -740,7 +742,7 @@ sub displayAuthorityForm {
 		$rankToUse = 'genus';
 	}
 	
-	$fields{taxon_rank} = $hbo->rankPopupMenu($rankToUse);
+	$fields{taxon_rank} = $rankToUse;
 	
 
 	# if the authorizer of this record doesn't match the current
@@ -748,7 +750,6 @@ sub displayAuthorityForm {
 	# then only let them edit empty fields.
 	#
 	# otherwise, they can edit any field.
-	my @nonEditables;
 	
 	if ((! $isNewEntry) && ($s->get('authorizer_no') != $fields{authorizer_no})) {
 	
@@ -757,7 +758,7 @@ sub displayAuthorityForm {
 		# we should always make the ref_is_authority radio buttons disabled
 		# because only the original authorizer can edit these.
 		
-		push (@nonEditables, "ref_is_authority");
+		push (@nonEditables, 'ref_is_authority');
 		
 		# depending on the status of the ref_is_authority radio, we should
 		# make the other reference fields non-editable.
@@ -771,12 +772,16 @@ sub displayAuthorityForm {
 		my @keys = keys(%fields);
 		
 		# find all fields which are not empty and add them to the list.
-		foreach my $f (@keys) {
+		# however, we only want to make non-editable *real* fields which are
+		# actually in the description of the authorities table.. So 			
+		# loop through all columns in the authorities table to do this.
+		foreach my $f (@allTableColumns) {	
 			if (($fields{$f} ne '') || ($fields{$f} != 0) ) {
 				push(@nonEditables, $f);
 			}
-		}		
+		}
 	}
+	
 	
 	# print the form	
 	print main::stdIncludes("std_page_top");
@@ -801,6 +806,8 @@ sub submitAuthorityForm {
 	my $q = shift;		# session
 
 	my $sql = $self->getSQLBuilder();
+	$sql->setSession($s);
+	
 	my $errors = Errors->new();
 	
 	# if this is the second time they submitted the form (or third, fourth, etc.),
@@ -837,13 +844,14 @@ sub submitAuthorityForm {
 		# if the authorizer of the authority record doesn't match the current
 		# authorizer, then *only* let them edit empty fields.
 	
-		my $editAny = 0;
+		$editAny = 0;
 	
 		# if the authorizer of the authority record matches the authorizer
 		# who is currently trying to edit this data, then allow them to change
 		# any field.
+		
 		if ($s->get('authorizer_no') == $dbFields{authorizer_no}) {
-			$editAny = 1;	
+			$editAny = 1;
 		}
 		
 		if ($s->isSuperUser()) {
@@ -851,7 +859,7 @@ sub submitAuthorityForm {
 			$editAny = 1;	
 		}
 	}
-	
+
 	
 	# build up a hash of fields/values to enter into the database
 	my %fieldsToEnter;
@@ -860,16 +868,23 @@ sub submitAuthorityForm {
 		$fieldsToEnter{authorizer_no} = $s->authorizerNumber();
 		$fieldsToEnter{enterer_no} = $s->entererNumber();
 		$fieldsToEnter{reference_no} = $s->currentReference();
+		
+		if (! $fieldsToEnter{reference_no} ) {
+			$errors->add("You must set your current reference before submitting a new authority.");	
+		}
+		
 	} else {
 		$fieldsToEnter{modifier_no} = $s->entererNumber();	
 	}
 	
 	
-	if (	($q->param('ref_is_authority') ne 'YES') && 
+	if ( 		
+			($q->param('ref_is_authority') ne 'YES') && 
 			($q->param('ref_is_authority') ne 'NO')) {
-		#Debug::dbPrint("radio error");
+		
 		$errors->add("You must choose one of the reference radio buttons.");
 	}
+	
 	
 	# merge the pages and 2nd_pages, figures and 2nd_figures fields together
 	# since they are one field in the database.
@@ -879,8 +894,59 @@ sub submitAuthorityForm {
 		$fieldsToEnter{figures} = $q->param('2nd_figures');
 		
 		if (! $q->param('author1last')) {
-			$errors->add('You must enter an author.');	
+			$errors->add('You must enter at least one author.');	
 		}
+		
+		# make sure the pages/figures fields above this are empty.
+		my @vals = ($q->param('pages'), $q->param('figures'));
+		if (!(Globals::isEmpty(\@vals))) {
+			$errors->add("Don't enter pages or figures for a primary reference if you chose the 'named in an earlier publication' radio button.");	
+		}
+		
+		# make sure the format of the author initials is proper
+		if  (( $q->param('author1init') && 
+			(! Validation::properInitial($q->param('author1init')))
+			) ||
+			( $q->param('author2init') && 
+			(! Validation::properInitial($q->param('author2init')))
+			)
+			) {
+			
+			$errors->add("Improper author initial format.");		
+		}
+		
+
+		# make sure the format of the author names is proper
+		if  ( $q->param('author1last')) {
+			if (! (Validation::properLastName($q->param('author1last'))) ) {
+				$errors->add("Improper first author last name.");
+			}
+		}
+			
+			
+		if  ( $q->param('author2last') && 
+			(! Validation::properLastName( $q->param('author2last') ) )
+			) {
+		
+			$errors->add("Improper second author last name.");	
+		}
+
+			
+		if ( ($q->param('pubyr') && 
+			(! Validation::properYear($q->param('pubyr'))))) {
+			$errors->add("Improper year format.");
+		}
+		
+		
+	} else {
+		# ref_is_authority is YES
+		# so make sure the other publication info is empty.
+		my @vals = ($q->param('author1init'), $q->param('author1last'), $q->param('author2init'), $q->param('author2last'), $q->param('otherauthors'), $q->param('pubyr'), $q->param('2nd_pages'), $q->param('2nd_figures'));
+		
+		if (!(Globals::isEmpty(\@vals))) {
+			$errors->add("Don't enter earlier publication information if you chose the 'first named in primary reference' radio button.");	
+		}
+		
 	}
 	
 	
@@ -991,30 +1057,43 @@ sub submitAuthorityForm {
 			
 			$errors->add("The taxon \"" . $fieldsToEnter{taxon_name} . " " . $oldTaxon->authors() . " " . $oldTaxon->pubyr() . "\" already exists in our database. Are you sure you want to submit this record?");
 		}
-		
-		if ($errors->count() > 0) {
-			
-			$q->param(-name=>'second_submission', -values=>['1']);
-			
-			# stick the errors in the CGI object for display.
-			my $message = $errors->errorMessage();
-						
-			$q->param(-name=>'error_message', -values=>[$message]);
-			
-			
-			$self->displayAuthorityForm($hbo, $s, $q);
-			
-			return;
-		}
-		
-		$sql->insertNewRecord('authorities', \%fieldsToEnter);
-		
-		# now that we've inserted, we should grab the taxon_no
 	}
 	
-	foreach my $fieldToEnter (keys(%fieldsToEnter)) {
-		Debug::dbPrint("$fieldToEnter = " . $fieldsToEnter{$fieldToEnter});
+	
+	
+	if ($errors->count() > 0) {
+			
+		$q->param(-name=>'second_submission', -values=>['1']);
+			
+		# stick the errors in the CGI object for display.
+		my $message = $errors->errorMessage();
+						
+		$q->param(-name=>'error_message', -values=>[$message]);
+			
+			
+		$self->displayAuthorityForm($hbo, $s, $q);
+			
+		return;
 	}
+	
+	
+	
+	if ($isNewEntry) {
+		$sql->insertNewRecord('authorities', \%fieldsToEnter);
+	} else {
+			
+		if ($editAny) {
+			# allow updates of any fields in the database.
+			$sql->updateRecord('authorities', \%fieldsToEnter, "taxon_no = '" . $self->{taxonNumber} . "'", 'taxon_no');
+		} else {
+			# only allow updates of fields which are already blank in the database.	
+			$sql->updateRecordEmptyFieldsOnly('authorities', \%fieldsToEnter, "taxon_no = '" . $self->{taxonNumber} . "'", 'taxon_no');
+		}
+	}
+	
+	
+	print "<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm\">Add/edit authority</A>";
+
 }
 
 

@@ -41,7 +41,7 @@ It was first named in the data record's primary reference, which is:
 <BR>
 
 <CENTER>
-<SPAN id="ref_string">%%primary_reference%%</span>
+<SPAN id="ref_string">%%formatted_reference%%</span>
 <p>
 <b>Pages*:</b> <input id="pages" name="pages" size=12 value="%%pages%%">
 <b>Figures*:</b> <input id="figures" name="figures" size=12 value="%%figures%%">
@@ -94,13 +94,17 @@ It was first named in the data record's primary reference, which is:
 
 <TABLE>
 <TR><td align=right><b>Original rank:</b></td>
-<td><select id="taxon_rank" name="taxon_rank">
-%%taxon_rank%%
+<td>
+<!-- Note: any field named "taxon_rank" will be replaced as
+usual.  However, any field called "taxon_rank_popup" will be replaced with
+a popup menu of taxon ranks with the current "taxon_rank" selected. -->
+<select id="taxon_rank" name="taxon_rank">
+%%taxon_rank_popup%%
 </select></td>
 </TR>
 
 %%START_OPTIONAL_type_taxon_name%%
-<!-- note. this should only appear if the rank is higher than species -->
+<!-- Note: this should only appear if the rank is higher than species -->
 <TR><td align=right><b>Name of type taxon:</b><BR>
 <i class="tiny">e.g., "Homo sapiens"</i></td>
 <td><input id="type_taxon_name" name="type_taxon_name" size=50 value="%%type_taxon_name%%">

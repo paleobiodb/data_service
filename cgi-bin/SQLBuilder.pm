@@ -69,6 +69,8 @@ use fields qw(
 				whereItems
 				
 				tableNames
+				
+				maxNumUpdatesAllowed
 							);  # list of allowable data fields.
 
 # dbh				:	handle to the database
@@ -78,7 +80,8 @@ use fields qw(
 
 # tableNames		:	array ref of all table names in the database, not set by default.
 							
-							
+# maxNumUpdatesAllowed	: how many updates should we allow at the same time?
+				
 # If using permissions, or performing updates or inserts, then
 # you must pass the current Session object
 # when calling new().  If not using permissions, update, or inserts
@@ -105,6 +108,10 @@ sub new {
 	# connect to the database
 	# note, not sure if it's a good idea to do this every time.. might slow things down.
 	$self->dbConnect();
+	
+	# don't allow more than 50 simultaneous updates
+	$self->{maxNumUpdatesAllowed} = 10;
+	
 	
 	return $self;
 }
@@ -693,6 +700,29 @@ sub getTableDesc {
 }
 
 
+# allowable for external use.
+#
+# Pass it a table name.
+# Returns an arrayref of all column names in this table. 
+sub allTableColumns {
+	my SQLBuilder $self = shift;
+	
+	my $tableName = shift;
+	
+	
+	# it will always be the first row returned since
+	# we're just using describe on this table.
+	
+	my @desc = @{$self->getTableDesc($tableName)};
+	my @colNames; 	# names of columns in table
+	foreach my $row (@desc) {
+		push(@colNames, $row->[0]);	
+	}
+	
+	return \@colNames;
+}
+
+
 # for internal use only, doesn't return anything
 #
 # simply grabs a list of all table names in the database
@@ -731,6 +761,9 @@ sub isValidTableName {
 }
 
 
+
+
+
 # rjp, 2/2004.
 #
 # Pass it a table name such as "occurrences", and a
@@ -758,6 +791,7 @@ sub insertNewRecord {
 	my $tableName = shift;
 	my $hashRef = shift;
 
+	my $dbh = $self->{dbh};
 	
 	# make sure they're allowed to insert data!
 	my $s = $self->{session};
@@ -789,7 +823,7 @@ sub insertNewRecord {
 		
 		# if it's a valid column name, then add it to the insert
 		if (Globals::isIn(\@colName, $key)) {
-			$toInsert .= "$key = '" . $hashRef->{$key} . "', ";
+			$toInsert .= "$key = " . $dbh->quote($hashRef->{$key}) . ", ";
 		}
 	}
 	
@@ -799,7 +833,7 @@ sub insertNewRecord {
 	$toInsert = "INSERT INTO $tableName SET " . $toInsert;
 	
 	# actually insert into the database
-	my $insertResult = $self->{dbh}->do($toInsert);
+	my $insertResult = $dbh->do($toInsert);
 		
 	# return the result code from the do() method.
 	return $insertResult;
@@ -875,6 +909,8 @@ sub internalUpdateRecord {
 	my $whereClause = shift;
 	my $primaryKey = shift;
 	
+	my $dbh = $self->{dbh};
+	
 	# make sure they're allowed to update data!
 	my $s = $self->{session};
 	if (!$s || $s->get('enterer') eq 'Guest' || $s->get('enterer') eq '')	{
@@ -892,6 +928,18 @@ sub internalUpdateRecord {
 		return 0;	
 	}
 	
+	Debug::dbPrint("WHERE = $whereClause");
+	
+	# figure out how many records this update statement will affect
+	# return if they try to update too many at once, because it's probably an error.
+	my $count = $self->getSingleSQLResult("SELECT count(*) FROM $tableName WHERE $whereClause");
+	if ($count > $self->{maxNumUpdatesAllowed}) {
+		Debug::logError("SQLBuilder::internalUpdateRecord, tried to update $count records at once which is more than the maximum allowed of " . $self->{maxNumUpdatesAllowed});
+		return;
+	}
+	
+	Debug::dbPrint("internalUpdateRecord");
+
 
 	# loop through each key in the passed hash and
 	# build up the update statement.
@@ -909,6 +957,8 @@ sub internalUpdateRecord {
 	
 	if ($emptyOnly) {
 		# only allow updates of fields which are already empty.
+		
+		Debug::dbPrint("empty only update");
 		
 		# fetch all of the rows we're going to try to update from the database
 		my $select = SQLBuilder->new();
@@ -934,7 +984,7 @@ sub internalUpdateRecord {
 					my $dbcolval = ($selResults->{$row})->{$key};
 					if (($dbcolval eq '') || ($dbcolval == 0)) {
 						# then add the key to the update statement.
-						$toUpdate .= "$key = '" . $hashRef->{$key} . "', ";
+						$toUpdate .= "$key = " . $dbh->quote($hashRef->{$key}) . ", ";
 					}
 				}	
 			}
@@ -949,13 +999,16 @@ sub internalUpdateRecord {
 	
 			$toUpdate = "UPDATE $tableName SET $toUpdate WHERE $whereClause";
 	
+			Debug::dbPrint($toUpdate);
+			
 			# actually update the row in the database
-			my $updateResult = $self->{dbh}->do($toUpdate);	
+			my $updateResult = $dbh->do($toUpdate);	
 		}
 		
 	} else {
 		# update any field, doesn't matter if it's empty or not
 	
+		Debug::dbPrint("non-empty update");
 		
 		$toUpdate = '';
 		
@@ -964,7 +1017,7 @@ sub internalUpdateRecord {
 			
 			# if it's a valid column name, then add it to the update
 			if (Globals::isIn(\@colName, $key)) {
-					$toUpdate .= "$key = '" . $hashRef->{$key} . "', ";
+					$toUpdate .= "$key = " . $dbh->quote($hashRef->{$key}) . ", ";
 			}
 		}
 		
@@ -974,7 +1027,7 @@ sub internalUpdateRecord {
 		$toUpdate = "UPDATE $tableName SET $toUpdate WHERE $whereClause";
 		
 		# actually update the row in the database
-		my $updateResult = $self->{dbh}->do($toUpdate);
+		my $updateResult = $dbh->do($toUpdate);
 			
 		# return the result code from the do() method.
 		return $updateResult;
