@@ -2148,7 +2148,7 @@ sub displayCollectionDetails {
 	$sql = "SELECT * FROM collections WHERE collection_no=" . $collection_no;
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
-	
+		
 	my @fieldNames = @{$sth->{NAME}};
 	my $numFields  = $sth->{NUM_OF_FIELDS};
 	
@@ -2164,8 +2164,10 @@ sub displayCollectionDetails {
   
 	# Get the name of the authorizer
 	my $fieldCount = 0;
-	my ($authorizer, $refNo);
-    
+	my ($authorizer, $refNo, $sesAuthorizer);
+	
+	$sesAuthorizer = $s->get('authorizer');
+ 	
     foreach my $tmpVal (@fieldNames) {
 		if ( $tmpVal eq 'authorizer') {
 			$authorizer = $row[$fieldCount];
@@ -2180,6 +2182,7 @@ sub displayCollectionDetails {
 		$fieldCount++;
 	}
 
+	
     # Get the reference
     $sql = "SELECT * FROM refs WHERE reference_no=$refNo";
 	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -2215,20 +2218,22 @@ sub displayCollectionDetails {
     }
     push(@row, $subString);
     push(@fieldNames, 'subset_string');
-
+	
 	# get the max/min interval names
 	my ($r,$f) = getMaxMinNamesAndDashes(\@row,\@fieldNames);
 	@row = @{$r};
 	@fieldNames = @{$f};
 
-    print &stdIncludes ( "std_page_top" );
-
+    print stdIncludes ( "std_page_top" );
+	
     print $hbo->populateHTML('collection_display_fields', \@row, \@fieldNames);
+		
     # If the viewer is the authorizer (or it's me), display the record with edit buttons
-    if ( $authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy') {
+    if ( ($authorizer eq $sesAuthorizer) || ($sesAuthorizer eq Globals::god())) {
 		print $hbo->populateHTML('collection_display_buttons', \@row, \@fieldNames);
     }
 
+	
 	print "<HR>\n";
 	
 	# rjp, 1/2004.  This is the new routine which handles all reids instead

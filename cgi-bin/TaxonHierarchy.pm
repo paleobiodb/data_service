@@ -175,7 +175,6 @@ sub taxonName {
 # pass this a rank such as "family", "class", "genus", etc. and it will
 # return the name of the taxon at that rank as determined by the taxaHash.
 sub nameForRank {
-	Debug::dbPrint("nameforrank");
 	my TaxonHierarchy $self = shift;
 	my $key = shift; 
 	
@@ -184,7 +183,6 @@ sub nameForRank {
 		$self->createTaxaHash();
 	}
 
-	Debug::dbPrint("hash created");
 	
 	my $hash = $self->{taxaHash};
 	my %hash = %$hash;
@@ -257,7 +255,6 @@ sub createTaxaHash {
 	
 	# get the initial taxon the user set
 	my $tn = $self->taxonNumber();
-	Debug::dbPrint("tn = $tn");
 	if (! $tn) { return };
 	
 	my %hash;  # hash of the results

@@ -14,6 +14,8 @@ use TaxonHierarchy;
 use SQLBuilder;
 use Reference;
 use URLMaker;
+use CGI::Carp qw(fatalsToBrowser);
+
 
 # these are the data fields for the object
 use fields qw(	
@@ -231,7 +233,6 @@ sub buildReidList {
 		
 	# the number of reids.
 	my $numReids;
-	
 	if ($reids) {
 		$numReids = scalar(@{$reids});
 	} else { $numReids = 0; }
@@ -248,13 +249,14 @@ sub buildReidList {
 	WHERE o.reference_no = r.reference_no AND o.occurrence_no = $occ_no");
 		
 	$sql->executeSQL();
+	
 
 	@result = $sql->nextResultArrayUsingPermissions();
 	
 	if ($numReids <= 0) {
 		# get the taxa information for the original id
+	
 		$taxon->setWithTaxonName("$result[2] $result[4]");
-		
 		$taxClass = $taxon->nameForRank("class");
 		$classNum = $taxon->numberForRank("class");
 		$taxOrder = $taxon->nameForRank("order");
@@ -262,6 +264,7 @@ sub buildReidList {
 		$taxFamily = $taxon->nameForRank("family");
 		$familyNum = $taxon->numberForRank("family");
 	}
+
 
 	$referenceString = "";
 	if ($colRefNo != $result[8]) {
@@ -279,7 +282,6 @@ sub buildReidList {
 	
 	$sql->finishSQL();
 
-	
 	# now we'll do the reids if they need to be done
 	# Again - this is done separately because we display reids slightly differently
 	# than the original id.
@@ -293,7 +295,8 @@ sub buildReidList {
 		$self->{latestFamilyNum} = $familyNum;
 		return;	
 	}
-	
+
+
 	# if we make it to here, then we have 1 or more reids, stored
 	# in the $allReids reference we got earlier...
 	
@@ -334,12 +337,15 @@ sub buildReidList {
 	
 	$sql->finishSQL();
 	
+
 	# save the list in a data field.
 	$self->{reidList} = \@reidList;
 	
 	$self->{latestClassNum} = $classNum;
 	$self->{latestOrderNum} = $orderNum;
 	$self->{latestFamilyNum} = $familyNum;
+	
+
 }
 
 
@@ -410,7 +416,7 @@ sub buildHTML {
 				<$TD $style>$fontStart$row->[3]</A>$fontEnd</TD>
 				<$TD>$fontStart$row->[4]$fontEnd</TD>
 				<$TD>$fontStart$specimens$fontEnd</TD>
-				<$TD>$fontStart$row->[6]$fontEnd</TD>
+				<TD>$fontStart$row->[6]$fontEnd</TD>
 			</TR>";
 		
 		$count++;
