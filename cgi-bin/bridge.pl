@@ -605,6 +605,21 @@ sub setPreferences	{
 
 }
 
+
+# rjp, 2/2004
+sub displayAuthorityForm {
+	my $taxon = Taxon->new();
+	$taxon->setWithTaxonName("Equus");
+	
+	print stdIncludes("std_page_top");
+	$taxon->displayAuthorityForm($hbo);
+	print stdIncludes("std_page_bottom");
+	
+	
+}
+
+
+
 # Given an html page, substitute the enterer data
 sub buildEntererPulldown {
 	my $html = shift;			# HTML page into which we substitute
