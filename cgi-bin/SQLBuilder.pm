@@ -48,6 +48,7 @@ use Debug;
 use Session;
 use Globals;
 use CGI::Carp qw(fatalsToBrowser);
+use Class::Date qw(date localdate gmdate now);
 
 
 use fields qw(	
@@ -419,6 +420,8 @@ sub getSingleSQLResult {
 
 	my $sql = shift;
 	my $dbh = $self->{dbh};
+	
+	Debug::dbPrint("getSingleSQLResult, sql = $sql");
 	return ($dbh->selectrow_array($sql))[0];
 }
 
@@ -787,22 +790,30 @@ sub isValidTableName {
 sub insertNewRecord {
 	my SQLBuilder $self = shift;
 	my $tableName = shift;
-	my $hashRef = shift;
+	my $hashRef = shift;  # don't update this
+	
+	# make our own local copy of the hash so we can modify it.
+	my $fields = Globals::copyHash($hashRef);
 
 	my $dbh = $self->{dbh};
 	
 	# make sure they're allowed to insert data!
 	my $s = $self->{session};
-	if (!$s || $s->get('enterer') eq 'Guest' || $s->get('enterer') eq '') {
+	if (!$s || $s->guest() || $s->get('enterer') eq '') {
 		Debug::logError("invalid session or enterer in SQLBuilder::insertNewRecord");
 		return;
 	}
 	
-	
 	# make sure the table name is valid
-	if ((! $self->isValidTableName($tableName)) || (! $hashRef)) {
+	if ((! $self->isValidTableName($tableName)) || (! $fields)) {
 		return 0;	
 	}
+	
+	# when inserting records, we should always set the created date to now()
+	# and make sure the authorizer/authorizer_no and enterer/enterer_no are set.
+	$fields->{authorizer} = $s->get('authorizer');
+	$fields->{authorizer_no} = $s->authorizerNumber();
+	$fields->{created} = now();
 	
 	Debug::dbPrint("here1");
 	
@@ -818,12 +829,12 @@ sub insertNewRecord {
 	
 	my $toInsert = "";
 	
-	my @keys = keys(%$hashRef);
+	my @keys = keys(%$fields);
 	foreach my $key (@keys) {
 		
 		# if it's a valid column name, then add it to the insert
 		if (Globals::isIn(\@colName, $key)) {
-			$toInsert .= "$key = " . $dbh->quote($hashRef->{$key}) . ", ";
+			$toInsert .= "$key = " . $dbh->quote($fields->{$key}) . ", ";
 		}
 	}
 	
@@ -834,7 +845,7 @@ sub insertNewRecord {
 	$toInsert = "INSERT INTO $tableName SET " . $toInsert;
 	
 	
-	Debug::printHash($hashRef);
+	Debug::printHash($fields);
 	Debug::dbPrint("here3, toInsert = $toInsert");
 	
 	# actually insert into the database
@@ -876,7 +887,7 @@ sub updateRecord {
 	my $primaryKey = shift;
 	
 	$self->internalUpdateRecord(0, $tableName, $hashRef, $whereClause, $primaryKey);
-
+    
 }
 
 
@@ -887,6 +898,8 @@ sub updateRecord {
 #
 # Note, it *WILL* allow updates of the modifier_no field since we need to modify that field 
 # each time!
+# ****NOTE**** this doesn't check write permissions yet...
+# WARNING!!
 sub updateRecordEmptyFieldsOnly {
 	my SQLBuilder $self = shift;
 	
@@ -905,9 +918,6 @@ sub updateRecordEmptyFieldsOnly {
 # should only update empty columns.  True (1) means that 
 # we should only update empty columns, false (0) means update any column.
 #
-# Note, it *WILL* allow updates of the modifier_no field since we need to modify that field 
-# each time!
-#
 # Also pass it a table name, a hashref of key/value pairs to update, 
 # a where clause so we know which records to update, and the primary
 # key name for this table.
@@ -917,61 +927,92 @@ sub updateRecordEmptyFieldsOnly {
 #
 # ** Only allows update on one table at a time...
 #
+# Note, this figures out the modifier_no/modifier name from the session. 
+# The modified date is set automatically by the database unless we
+# try to override that.  It also prevents users from updating the created date
+# and the authorizer/authorizer_no and enterer/entere_no fields since 
+# those shouldn't ever be updated.
+#
 # rjp, 3/2004.
 sub internalUpdateRecord {
 	my SQLBuilder $self = shift;
 	my $emptyOnly = shift;
 	my $tableName = shift;
-	my $hashRef = shift;
+	my $hashRef = shift;        # don't use this, use $fields instead.
 	my $whereClause = shift;
 	my $primaryKey = shift;
 	
 	my $dbh = $self->{dbh};
 	
+	# we want to make a copy of the hashRef so we can change values in it 
+	# without worrying about affecting the original.
 
-	Debug::dbPrint("we're in internalUpdateRecord, emptyOnly = $emptyOnly");
+	my $fields = Globals::copyHash($hashRef);
 	
+	Debug::dbPrint("we're in internalUpdateRecord, emptyOnly = $emptyOnly");
+    Debug::dbPrint("tableName = $tableName, where = $whereClause, key = $primaryKey");
+
+
 	# make sure they're allowed to update data!
 	my $s = $self->{session};
-	if (!$s || $s->get('enterer') eq 'Guest' || $s->get('enterer') eq '')	{
+	if (!$s || $s->guest() || $s->get('enterer') eq '')	{
 		Debug::logError("invalid session or enterer in SQLBuilder::internalUpdateRecord");
 		return 0;
 	}
-	
-
 	
 	# make sure the whereClause and tableName aren't empty!  That would be bad.
 	if (($tableName eq '') || ($whereClause eq '')) {
 		return 0;	
 	}
 	
-	
 	# make sure the table name is valid
-	if ((! $self->isValidTableName($tableName)) || (! $hashRef)) {
+	if ((! $self->isValidTableName($tableName)) || (! $fields)) {
 		Debug::logError("invalid tablename or hashref in SQLBuilder::internalUpdateRecord");
 		return 0;	
 	}
 
 	
+	# figure out the modifer and modifier_no
+	# Note, some tables record the modifier_no, and some record the modifer name
+	# so we have to set both.  If the field isn't in the table, then it shouldn't
+	# hurt anything.
+	$fields->{modifier} = $s->get('enterer');
+	$fields->{modifier_no} = $s->entererNumber();
+	# we never want to change the modified date - we should let the database
+	# take care of setting this value correctly.
+	delete($fields->{modified});
+	
+	# Since we're updating a record, we should never change the created
+	# date, authorizer, or enterer if present.  So, delete both of those values
+	# just to be safe.  These values are only set when we first create a record.
+	delete($fields->{created});
+	delete($fields->{authorizer});
+	delete($fields->{authorizer_no});
+	delete($fields->{enterer});
+	delete($fields->{enterer_no});
+	
+	
+	# **********
+	# note, commented out the below check 3/22/04 because we're always going to be
+	# setting the modifier or modifier_no, so we'll never have all empty fields.
+	
 	# make sure they're actually setting some non empty values
-	# in the hashref, otherwise it would be equivalent to deleting the record!
-	{	
-		my $atLeastOneNotEmpty = 0;
-		
-		foreach my $key (keys(%$hashRef)) {
-			
-			if ($hashRef->{$key}) {
-				$atLeastOneNotEmpty = 1;
-			}
-		}
-		
-		if (! $atLeastOneNotEmpty) {
-			Debug::logError("SQLBuilder::internalUpdateRecord, tried to update a record with all empty values.");
-			return 0;
-		}
-	}
-	
-	
+	# in the %fields, otherwise it would be equivalent to deleting the record!
+	#{	
+	#	my $atLeastOneNotEmpty = 0;
+	#	
+	#	foreach my $key (keys(%$fields)) {
+	#		
+	#		if ($fields->{$key}) {
+	#			$atLeastOneNotEmpty = 1;
+	#		}
+	#	}
+	#	
+	#	if (! $atLeastOneNotEmpty) {
+	#		Debug::logError("SQLBuilder::internalUpdateRecord, tried to update a record with all empty values.");
+	#		return 0;
+	#	}
+	#}
 	
 	
 	Debug::dbPrint("WHERE = $whereClause");
@@ -987,7 +1028,7 @@ sub internalUpdateRecord {
 	Debug::dbPrint("internalUpdateRecord");
 
 
-	Debug::printHash($hashRef);
+	Debug::printHash($fields);
 	
 	# loop through each key in the passed hash and
 	# build up the update statement.
@@ -1016,13 +1057,13 @@ sub internalUpdateRecord {
 		
 			# loop through each key (column) that the user want's to
 			# update.
-			my @keys = keys(%$hashRef);
+			my @keys = keys(%$fields);
 			foreach my $key (@keys) {
 		
-				# if it's the modifier_no, then we'll update it regardless
+				# if it's the modifier_no or modifier, then we'll update it regardless
 				# of whether the current field in the database is empty or not.
-				if ($key eq 'modifier_no') {
-					$toUpdate .= "$key = " . $dbh->quote($hashRef->{$key}) . ", ";
+				if (($key eq 'modifier_no') || ($key eq 'modifier')) {
+					$toUpdate .= "$key = " . $dbh->quote($fields->{$key}) . ", ";
 				}
 		
 				# if it's a valid column name, and the column is empty,
@@ -1036,7 +1077,7 @@ sub internalUpdateRecord {
 					if (! ($dbcolval)) {
 						Debug::dbPrint("I think dbvolval is empty");
 						# then add the key to the update statement.
-						$toUpdate .= "$key = " . $dbh->quote($hashRef->{$key}) . ", ";
+						$toUpdate .= "$key = " . $dbh->quote($fields->{$key}) . ", ";
 					}
 				}	
 			}
@@ -1071,12 +1112,12 @@ sub internalUpdateRecord {
 		
 		Debug::printArray(\@colNames);
 		
-		my @keys = keys(%$hashRef);
+		my @keys = keys(%$fields);
 		foreach my $key (@keys) {
-			Debug::dbPrint("key = $key, value = " . $hashRef->{$key});
+			Debug::dbPrint("key = $key, value = " . $fields->{$key});
 			# if it's a valid column name, then add it to the update
 			if (Globals::isIn(\@colNames, $key)) {
-					$toUpdate .= "$key = " . $dbh->quote($hashRef->{$key}) . ", ";
+					$toUpdate .= "$key = " . $dbh->quote($fields->{$key}) . ", ";
 			}
 		}
 		
