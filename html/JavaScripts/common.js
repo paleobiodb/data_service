@@ -30,6 +30,36 @@ function taxonRank(taxon) {
 }
 
 
+// pass this a taxon name and it will return a true value
+// if the capitilization if proper, or a false value
+// if the capitilization isn't working. 
+function checkProperCapitalization(taxon) {
+	if (! taxon || taxon == "") {
+		return true;  // we'll say that it's proper, although it's not since nothing exists.
+	}
+
+	var rank = taxonRank(taxon);
+	
+	if (rank == "subspecies" || rank == "species") {
+		var match = /^[A-Z][a-z]+\s+[a-z]+$/;
+		// see if the first letter of the first word is capitalized.
+		// and the first letter of the second word is not capitalized
+		
+		return match.test(taxon)
+		
+	} else if (rank == "higher") {
+		var match = /^[A-Z]/;
+		// see if the first letter is capitalized.
+		
+		return match.test(taxon)
+	}
+	
+	return false;
+}
+
+
+
+
 
 // Error is a JavaScript class for error reporting..  
 // To use it, first create a new instance of the object, for example
@@ -43,7 +73,7 @@ function taxonRank(taxon) {
 
 // constructor, optionally pass it the first error message.
 function Error(msg) {
-	this.starting = "Please fix the following errors:\n\n";
+	this.starting = "\tPlease fix the following errors:\n\n";
 	this.message = "";
 	this.internalcount = 0;
 	
@@ -82,6 +112,8 @@ Error.prototype.appendErrors = function(newError) {
 }
 
 // End of error class.
+
+
 
 
 //show a popup window with the passed URL.
