@@ -173,7 +173,11 @@ sub processAction {
 	# Grab the action from the form.  This is what subroutine we should run.
 	$action = $q->param("action");
 	
-	$action = "displayMenuPage" unless ( $action );  # set default action to menu page.
+	if ( $q->param("user") eq "Guest" || ! $q->param("user") )	{
+		$action = "displayHomePage" unless ( $action );  # set default action to home page
+	} else	{
+		$action = "displayMenuPage" unless ( $action );  # set default action to menu page
+	}
 
 	#Debug::dbPrint("in processAction, action = $action");
 	
@@ -699,7 +703,7 @@ sub setPreferences	{
  	$sth->execute();
  	$sth->finish();
 
-	print "<p>\n<a href=\"$exec_url?action=displayPreferencesPage\"><b>Reset preferences</b></a></td></tr></table><p>\n";
+	print "<p>\n<a href=\"$exec_url?action=displayPreferencesPage\"><b>Set preferences</b></a></td></tr></table><p>\n";
 	my %continue = $s->unqueue($dbh);
 	if($continue{action}){
 		print "<center><p>\n<a href=\"$exec_url?action=$continue{action}\"><b>Continue</b></a><p></center>\n";
@@ -998,7 +1002,7 @@ sub displayMenuPage	{
 
 
 
-# displays the "Contributer's Area" home page.
+# well, displays the home page
 sub displayHomePage {
 
 	#Debug::dbPrint("made it to displayHomePage");
@@ -1041,7 +1045,6 @@ sub displayHomePage {
 						"institution_total", 
 						"country_total", "main_menu", "login" );
 	$sth->finish();
-
 
 	print stdIncludes("std_page_top");
 	print $hbo->populateHTML('home', \@rowData, \@fieldNames);
