@@ -20,6 +20,7 @@ sub new
 
     $self->{_authorizer} = $data->getValue('authorizer');
     $self->{_enterer} = $data->getValue('enterer');
+    $self->{_modifier} = $data->getValue('modifier');
     
     $self->{_author1init} = $data->getValue('author1init');
     $self->{_author1last} = $data->getValue('author1last');
@@ -106,7 +107,12 @@ sub toString
 	$retVal .= "-" if $self->{_firstpage} && $self->{_lastpage};
 	$retVal .= $self->{_lastpage};
 	# also displays authorizer and enterer JA 23.2.02
-	$retVal .= "<font size=\"small\"> [".$self->{_authorizer}."/".$self->{_enterer}."]</font>\n";
+	$retVal .= "<font size=\"small\"> [".$self->{_authorizer}."/".
+			   $self->{_enterer};
+	if($self->{_modifier}){
+		$retVal .= "/".$self->{_modifier};
+	}
+	$retVal .= "]</font>\n";
 	$retVal .= "</td>\n";
 	$retVal .= "</tr>\n";
 
