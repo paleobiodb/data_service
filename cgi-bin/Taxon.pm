@@ -843,8 +843,7 @@ sub displayAuthorityForm {
 		Debug::logError("Taxon::displayAuthorityForm had invalid arguments passed to it.");
 		return;
 	}
-	
-	
+
 	# Figure out if it's the first time displaying this form, or if it's already been displayed,
 	# for example, if we're showing some errors about the last attempt at submission.
 	my $secondTime = 0;  # is this the second time displaying this form?
@@ -1040,7 +1039,7 @@ sub displayAuthorityForm {
 	# ones in the database.  For example, if they enter a  new taxon named
 	# 'Equus newtaxon' and we have three entries in authorities for 'Equus'
 	# then we should present a menu and ask them which one to use.
-	
+
 	if ($isNewEntry && ($rankToUse eq SPECIES || $rankToUse eq SUBSPECIES)) {
 		my $tname = $fields{taxon_name};
 		my ($one, $two, $three) = split(/ /, $tname);
@@ -1107,8 +1106,8 @@ sub displayAuthorityForm {
 		#  to use $dbt objects in the normal way creates a bookkeeping
 		#  nightmare
 		# JA 30.4.04
-				my %master_class=%{Classification::get_classification_hash($sql, [ "family,order,class" ] , [ $row->[0] ] )};
-				my @parents = split ',',$master_class{$row->[0]};
+				my %master_class=%{Classification::get_classification_hash($sql,"class,order,family",[$row->[0]])};
+				my @parents = split(/,/,$master_class{$row->[0]},-1);
 				if ( $parents[2] )      {
 					$select .= " [" . $parents[2] . "]";
 				} elsif ( $parents[1] ) {
