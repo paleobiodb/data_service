@@ -66,6 +66,15 @@ function continentClick ( ) {
 	}
 }
 
+function countryChange() {
+	var frm = document.forms[0];
+	
+	if (frm.country.value != "") {
+		frm.global.checked = true;
+		globalClick();
+	}
+}
+
 function occurrencesNoneClick ( ) {
 
 	var frm = document.forms[0];
@@ -322,7 +331,7 @@ Select a single continent:
 ... or a single country:</font></td>
 
 <td valign=top><font size=-1>
-<select id="country"></select>
+<select id="country" onChange="countryChange()"></select>
 </font></td>
 
 <tr><td valign=top><font size=-1>
