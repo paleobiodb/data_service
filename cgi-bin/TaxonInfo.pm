@@ -936,7 +936,7 @@ sub doCollections{
 		#   from bridge.pl
 		my $exec_url = $q->url();
 		$output .= "<center><h3>Collections</h3></center>";
-		$output .= "<table width=\"100%\"><tr bgcolor=\"white\">";
+		$output .= "<table width=\"100%\"><tr>";
 		$output .= "<th align=\"middle\">Country or state</th>";
 		$output .= "<th align=\"middle\">Time interval</th>";
 		$output .= "<th align=\"left\">PBDB collection number</th></tr>";
