@@ -12,18 +12,20 @@ sub god () {
 }
 
 
+
+
 # pass this a warning message and it will print it directly
 # to the web page.  Note, you still need to add the standard page 
 # header and footer before and after this.
-sub printWarning() {
+sub printWarning {
 	my $warning = shift;
 
-	print "<CENTER><H3><FONT COLOR='red'>Warning</FONT> $warning</H3></CENTER>\n";
+	print "<CENTER><H3><FONT COLOR='red'>Warning:</FONT> $warning</H3></CENTER>\n";
 }
 
 
 # pass this a full month name such as "December" and it will return the month number, ie, 12.
-sub monthNameToNumber ($) {
+sub monthNameToNumber {
 	my $name = shift;
 	
 	my %month2num = (  "January" => "01", "February" => "02", "March" => "03",

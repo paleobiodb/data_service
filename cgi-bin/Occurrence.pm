@@ -256,7 +256,10 @@ sub buildReidList {
 	if ($numReids <= 0) {
 		# get the taxa information for the original id
 	
-		$taxon->setWithTaxonName("$result[2] $result[4]");
+		if (! ($taxon->setWithTaxonName("$result[2] $result[4]"))) {
+			$taxon->setWithTaxonName("$result[2]");
+		}
+		
 		$taxClass = $taxon->nameForRank("class");
 		$classNum = $taxon->numberForRank("class");
 		$taxOrder = $taxon->nameForRank("order");
@@ -309,7 +312,10 @@ sub buildReidList {
 			# then we're on the last one, so 
 			# we should figure out the class, order, and family.
 			
-			$taxon->setWithTaxonName("$result->[2] $result->[4]");
+			if (! ($taxon->setWithTaxonName("$result->[2] $result->[4]"))) {
+				$taxon->setWithTaxonName("$result->[2]");
+			}
+
 			$taxClass = $taxon->nameForRank("class");
 			$classNum = $taxon->numberForRank("class");
 			$taxOrder = $taxon->nameForRank("order");

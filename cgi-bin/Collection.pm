@@ -5,6 +5,9 @@
 
 # note, this is ***DIFFERENT* from the Collections.pm file.
 
+# Good collection numbers to test occurrence list with:
+# 18597, 34898, 12344, 18284
+
 package Collection;
 
 use strict;
@@ -65,7 +68,7 @@ sub getSQLBuilder {
 # sets the collection
 sub setWithCollectionNumber {
 	my Collection $self = shift;
-	
+		
 	my $sql = $self->getSQLBuilder();
 	
 	if (my $input = shift) {
@@ -81,6 +84,8 @@ sub setWithCollectionNumber {
 		
 		$sql->finishSQL();
 	}
+	
+	#Debug::dbPrint("collection_name = " . $self->{collection_name});
 }
 
 
@@ -107,12 +112,18 @@ sub referenceNumber {
 }
 
 
+
+
+
 # returns HTML formatted taxonomic list of
 # all occurrences (that the user has permission to see)
 # in this collection record.
+#
+# rather large due to complicated sorting requirements.
 sub HTMLFormattedTaxonomicList {
 	my Collection $self = shift;
 
+	
 	my $collection_no = $self->{collection_no};
 		
 	my $html = "<CENTER><H3>Taxonomic list for " . $self->{collection_name} .
@@ -127,7 +138,6 @@ sub HTMLFormattedTaxonomicList {
 	my $result = $sql->allResultsArrayRefUsingPermissions();
 
 
-	
 
 	# build up an array of occurrence objects.. Then we'll sort the array
 	my @occArray = ();

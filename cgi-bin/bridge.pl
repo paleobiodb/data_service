@@ -286,9 +286,9 @@ sub displayLoginPage {
 
 	# Show the login page
 	print $q->header( -type => "text/html", -Cache_Control=>'no-cache'); 
-    print &stdIncludes ( "std_page_top" );
+    print stdIncludes ( "std_page_top" );
 	print $html;
-    print &stdIncludes ("std_page_bottom");
+    print stdIncludes ("std_page_bottom");
 	exit;
 }
 
@@ -794,7 +794,10 @@ sub displayPage {
 	}
 }
 
+
 # This is a wrapper to put the goodies into the standard page bottom
+# or top.  Pass it the name of a template such as "std_page_top" and 
+# it will return the HTML code.
 sub stdIncludes {
 	my $page = shift;
 	my $reference = buildReference ( $s->get("reference_no"), "bottom" );
@@ -5183,20 +5186,28 @@ sub processTaxonomyEntryForm {
 	# as the original.., that it is capitalized correctly, etc.
 	#
 	# rjp, 1/2004.
-	{
+	
+	if (!($q->param('taxon_status') eq 'no_opinion')) {
 		my $originalTaxon = uc($q->param('taxon_name_corrected'));
 		my $newTaxon1 = $q->param('parent_taxon_name');
 		my $newTaxon2 = $q->param('parent_taxon_name2');
-	
+		my $warning = 0;
+		
 		# make sure the first letter is capitalized.
 		if ($newTaxon1 ne ucfirst($newTaxon1) || $newTaxon2 ne ucfirst($newTaxon2)) {
-			Globals::printWarning("Invalid capitalization of taxon name.  Please go back and re-enter it.");
-			return;
+			$warning = "Invalid capitalization of taxon name.  Please go back and re-enter it.";
 		}
 		
 		# make sure the new taxon != old taxon.
 		if ($originalTaxon eq uc($newTaxon1) || $originalTaxon eq uc($newTaxon2)) {
-			Globals::printWarning("The new taxon name is the same as the original.  Please go back and re-enter it.");
+			$warning = "The new taxon name is the same as the original.  Please go back and re-enter it.";
+		}
+		
+		if ($warning) {
+			print stdIncludes ("std_page_top");
+			Globals::printWarning($warning);
+			print stdIncludes ("std_page_bottom");
+			
 			return;
 		}
 	}
