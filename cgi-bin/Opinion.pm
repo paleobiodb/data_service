@@ -767,8 +767,7 @@ sub submitOpinionForm {
 			my $ref = Reference->new();
 			$ref->setWithReferenceNumber($q->param('reference_no'));
 			if ($pubyr > $ref->pubyr()) {
-				$errors->add("The publication year ($pubyr) can't be more 
-				recent than that of the primary reference (" . $ref->pubyr() . ")");
+				$errors->add("The publication year ($pubyr) can't be more recent than that of the primary reference (" . $ref->pubyr() . ")");
 			}
 		}
 		
@@ -778,7 +777,7 @@ sub submitOpinionForm {
 			# don't let them enter other authors if the second author field
 			# isn't filled in.
 		
-			$errors->add("Don't enter other authors if you haven't entered a second author");
+			$errors->add("Don't enter other author names if you haven't entered a second author");
 		}
 		
 		
@@ -817,8 +816,7 @@ sub submitOpinionForm {
 		AND reference_no = $reference_no $own_opinion_no_clause")}[0]->{c};
 		
 		if ($count > 0) {
-			$errors->add("You can only enter one opinion on a taxon 
-			from each reference");
+			$errors->add("You can only enter one opinion on a taxon from each reference");
 		}
 	}
 	
@@ -838,8 +836,7 @@ sub submitOpinionForm {
 		= " . $taxon->pubyr());
 		if (( $taxon->pubyr() > $ref->pubyr() ) ||
 			( $taxon->pubyr() > $pubyr && $pubyr > 1700 ) ) {
-			$errors->add("The publication year for this opinion can't be
-			earlier than the year the taxon was named");	
+			$errors->add("The publication year for this opinion can't be earlier than the year the taxon was named");	
 		}
 	}
 	
@@ -952,19 +949,19 @@ sub submitOpinionForm {
 		$parentTaxon->setWithTaxonName($parentTaxonName);
 		
 		if (! ($parentRank->isValid())) {
-			$errors->add("The parent taxon name '" . $parentTaxonName . "' is not valid");
+			$errors->add("The taxon name '" . $parentTaxonName . "' is invalid");
 		}
 		
-		if (Validation::looksLikeBadSubgenus($parentTaxonName)) {
-			$errors->add("Invalid parent taxon format; don't use parentheses");
+		elsif (Validation::looksLikeBadSubgenus($parentTaxonName)) {
+			$errors->add("The taxon name '$parentTaxonName' is invalid; you can't use parentheses");
 		}
 		
 		if (! $parentTaxon->taxonNumber()) {
-			$errors->add("The parent taxon '" . $parentTaxonName ."' doesn't exist in our database.  Please go back and enter an authority record for the parent taxon <i>before</i> entering this opinion.");	
+			$errors->add("The taxon '" . $parentTaxonName ."' doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$parentTaxonName\">create a new authority record for '$parentTaxonName'</a> <i>before</i> entering this opinion.");	
 		}
 		
 		if ($parentTaxonName eq $childTaxonName) {
-			$errors->add("The taxon and its parent should not have the same name");	
+			$errors->add("The taxon you are entering and the one it belongs to can't have the same name");	
 		}
 	}
 
@@ -976,7 +973,7 @@ sub submitOpinionForm {
 
 	
 	if (! $taxonStatusRadio) {
-		$errors->add("You must select a status radio button before submitting this record");	
+		$errors->add("You must choose one of the status radio buttons");	
 	}
 	
 	# Note: the actual field in the database is called 'status'	
@@ -990,7 +987,7 @@ sub submitOpinionForm {
 		
 		# for belongs to, the parent rank should always be higher than the child rank.
 		if (! ($parentRank->isHigherThan($childRank)) ) {
-			$errors->add("The parent taxon's rank (" . $parentRank->rank() . ") must be higher than the taxon's rank (" . $childRank->rank() . ")");	
+			$errors->add("The rank of the higher taxon (currently " . $parentRank->rank() . ") must be higher than the rank of $childTaxonName (" . $childRank->rank() . ")");	
 		}
 		
 		
@@ -1005,23 +1002,19 @@ sub submitOpinionForm {
 		$fieldsToEnter{status} = RECOMBINED_AS;
 		
 		if (! ($parentRank->isSpecies())) {
-			$errors->add("If a species is recombined 
-			its new rank must be 'species'");	
+			$errors->add("If a species is recombined its new rank must be 'species'");	
 		}
 		
 		if ($parentTaxonName eq $childTaxonName) {
-			$errors->add("Original and new combinations
-			can't be exactly the same");	
+			$errors->add("Original and new combinations can't be exactly the same");	
 		}
 		
 		if (!$childRank->isSpecies()) {
-			$errors->add("If a species is recombined
-			its old rank must be 'species'");
+			$errors->add("If a species is recombined its old rank must be 'species'");
 		}
 		
 		if ($childTaxon->firstWord() eq $parentTaxon->firstWord()) {
-			$errors->add("The genus of the new combination 
-			 must be different from the genus of the old combination");
+			$errors->add("The genus name in the new combination must be different from the genus name in the old combination");
 		}
 		
 		
@@ -1038,8 +1031,7 @@ sub submitOpinionForm {
 			# figure out what the original combination was.
 			my $originalCombination = $childTaxon->originalCombinationTaxon();
 			
-			$errors->add("The taxon is not the original combination.  
-					The original combination is " . $originalCombination->taxonName() . ".");
+			$errors->add("The taxon's name is not the original combination. The original combination is " . $originalCombination->taxonName() . ".");
 		}
 		
 		
@@ -1053,7 +1045,7 @@ sub submitOpinionForm {
 		
 		# the parent rank should be the same as the child rank
 		if (!($parentRank->isEqualTo($childRank))) {
-			$errors->add("The rank of a name and its synonym must be the same");
+			$errors->add("The rank of a taxon and the rank of its synonym must be the same");
 		}
 		
 	} elsif ($taxonStatusRadio eq INVALID2) {
@@ -1069,7 +1061,7 @@ sub submitOpinionForm {
 	# for a nomen whatever...
 	if ($taxonStatusRadio ne INVALID2) {
 		if (! $parentTaxonName) {
-			$errors->add("You must enter a parent taxon name");
+			$errors->add("You must enter the name of the taxon this one belongs to");
 		}
 	}
 	
