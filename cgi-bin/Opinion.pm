@@ -83,6 +83,12 @@ sub setWithOpinionNumber {
 }
 
 
+sub opinionNumber {
+	my Opinion $self = shift;
+
+	return $self->{opinion_no};	
+}
+
 
 # returns the authors of the opinion record
 sub authors {
@@ -337,31 +343,32 @@ sub displayOpinionForm {
 	my @valid = ('belongs to', 'recombined as', 'revalidated');
 
 	
-	if (! (Globals::isIn(\@valid, $fields{status}))) {
-		# it's an invalid status
+	if ($fields{status} ne '') {
+		if (! (Globals::isIn(\@valid, $fields{status}))) {
+			# it's an invalid status
 		
-		if ($fields{status} =~ m/nomen/) {
-			# it's a nomen status..
-			# "Invalid and no other name can be applied"
-			
-			$fields{'taxon_status_invalid2'} = 'checked';
-			
+			if ($fields{status} =~ m/nomen/) {
+				# it's a nomen status..
+				# "Invalid and no other name can be applied"
+				
+				$fields{'taxon_status_invalid2'} = 'checked';
+				
+			} else {
+				# else, we should pick the invalid1 radio button.
+				# "Invalid and another name should be used"
+				
+				$fields{'taxon_status_invalid1'} = 'checked';	
+			}
 		} else {
-			# else, we should pick the invalid1 radio button.
-			# "Invalid and another name should be used"
-			
-			$fields{'taxon_status_invalid1'} = 'checked';	
-		}
-	} else {
-		# it must be a valid status
-
-		if ($fields{status} eq 'recombined as') {
-			$fields{taxon_status_recombined_as} = 'checked';
-		} else {
-			$fields{taxon_status_belongs_to} = 'checked';
+			# it must be a valid status
+	
+			if ($fields{status} eq 'recombined as') {
+				$fields{taxon_status_recombined_as} = 'checked';
+			} else {
+				$fields{taxon_status_belongs_to} = 'checked';
+			}
 		}
 	}
-	
 	
 	
 	# actually build the nomen popup menu.
@@ -385,10 +392,7 @@ sub displayOpinionForm {
 	my $parent = Taxon->new();
 	$parent->setWithTaxonNumber($fields{parent_no});
 	$fields{parent_taxon_name} = $parent->taxonName();
-	
 
-	
-	
 	
 	
 	# if the authorizer of this record doesn't match the current
@@ -409,7 +413,7 @@ sub displayOpinionForm {
 	
 		$fields{'message'} = "<p align=center><i>This record was created by a different authorizer ($authName) so you can only edit empty fields.</i></p>";
 		
-		#  we should always make the ref_has_opinion radio buttons disabled
+		# we should always make the ref_has_opinion radio buttons disabled
 		# because only the original authorizer can edit these.
 		
 		push (@nonEditables, 'ref_has_opinion');
@@ -452,6 +456,432 @@ sub displayOpinionForm {
 	print $hbo->newPopulateHTML("add_enter_opinion", \%fields, \@nonEditables);
 	print main::stdIncludes("std_page_bottom");
 }
+
+
+
+
+
+
+# Call this when you want to submit an opinion form.
+# Pass it the HTMLBuilder object, $hbo, the cgi parameters, $q, and the session, $s.
+#
+# The majority of this method deals with validation of the input to make
+# sure the user didn't screw up, and to display an appropriate error message if they did.
+#
+# rjp, 3/2004.
+sub submitOpinionForm {
+	my Opinion $self = shift;
+	my $hbo = shift;
+	my $s = shift;		# the cgi parameters
+	my $q = shift;		# session
+
+	if ((!$hbo) || (!$s) || (!$q)) {
+		Debug::logError("Taxon::submitOpinionForm had invalid arguments passed to it.");
+		return;	
+	}
+	
+	my $sql = $self->getSQLBuilder();
+	$sql->setSession($s);
+	
+	my $errors = Errors->new();
+	
+	# if this is the second time they submitted the form (or third, fourth, etc.),
+	# then this variable will be true.  This would happen if they had errors
+	# the first time, and then resubmitted it.
+	my $isSecondSubmission;
+	if ($q->param('second_submission') eq 'YES') {
+		$isSecondSubmission = 1;
+	} else {
+		$isSecondSubmission = 0;
+	}
+	
+	
+	# is this a new entry, or an edit of an old record?
+	my $isNewEntry;
+	if ($q->param('is_new_entry') eq 'YES') {
+		$isNewEntry = 1;	
+	} else {
+		$isNewEntry = 0;
+	}
+
+	
+	# grab all the current data from the database about this record
+	# if it's not a new entry (ie, if it already existed).	
+	my %dbFields;
+	if (! $isNewEntry) {
+		my $results = $self->databaseOpinionRecord();
+
+		if ($results) {
+			%dbFields = %$results;
+		}
+	}
+	
+		
+	# this $editAny variable is true if they can edit any field,
+	# false if they can't.
+	my $editAny = 0;
+	
+	if ($isNewEntry) {
+		$editAny = 1;	# new entries can edit any field.
+	} else {
+		# edits of pre-existing records have more restrictions. 
+	
+		# if the authorizer of the opinion record doesn't match the current
+		# authorizer, then *only* let them edit empty fields.
+	
+		$editAny = 0;
+	
+		# if the authorizer of the opinion record matches the authorizer
+		# who is currently trying to edit this data, then allow them to change
+		# any field.
+		
+		if ($s->get('authorizer_no') == $dbFields{authorizer_no}) {
+			$editAny = 1;
+		}
+		
+		if ($s->isSuperUser()) {
+			# super user can edit any field no matter what.
+			$editAny = 1;	
+		}
+	}
+
+	
+
+	
+	# build up a hash of fields/values to enter into the database
+	my %fieldsToEnter;
+	
+	if ($isNewEntry) {
+		$fieldsToEnter{authorizer_no} = $s->authorizerNumber();
+		$fieldsToEnter{enterer_no} = $s->entererNumber();
+		$fieldsToEnter{reference_no} = $s->currentReference();
+		
+		if (! $fieldsToEnter{reference_no} ) {
+			$errors->add("You must set your current reference before submitting a new opinion");	
+		}
+		
+	} else {
+		$fieldsToEnter{modifier_no} = $s->entererNumber();	
+	}
+	
+	
+	if ( 	($q->param('ref_has_opinion') ne 'YES') && 
+			($q->param('ref_has_opinion') ne 'NO')) {
+		
+		$errors->add("You must choose one of the reference radio buttons");
+	}
+	
+	
+	# merge the pages and 2nd_pages, figures and 2nd_figures fields together
+	# since they are one field in the database.
+	
+	if ($q->param('ref_has_opinion') eq 'NO') {
+		$fieldsToEnter{pages} = $q->param('2nd_pages');
+		$fieldsToEnter{figures} = $q->param('2nd_figures');
+		
+		if (! $q->param('author1last')) {
+			$errors->add('You must enter at least one author');	
+		}
+		
+		# make sure the pages/figures fields above this are empty.
+		my @vals = ($q->param('pages'), $q->param('figures'));
+		if (!(Globals::isEmpty(\@vals))) {
+			$errors->add("Don't enter pages or figures for a primary reference if you chose the 'named in an earlier publication' radio button");	
+		}
+		
+		# make sure the format of the author initials is proper
+		if  (( $q->param('author1init') && 
+			(! Validation::properInitial($q->param('author1init')))
+			) ||
+			( $q->param('author2init') && 
+			(! Validation::properInitial($q->param('author2init')))
+			)
+			) {
+			
+			$errors->add("Improper author initial format");		
+		}
+		
+
+		# make sure the format of the author names is proper
+		if  ( $q->param('author1last')) {
+			if (! (Validation::properLastName($q->param('author1last'))) ) {
+				$errors->add("Improper first author last name");
+			}
+		}
+			
+			
+		if  ( $q->param('author2last') && 
+			(! Validation::properLastName( $q->param('author2last') ) )
+			) {
+		
+			$errors->add("Improper second author last name");	
+		}
+
+			
+		if ( ($q->param('pubyr') && 
+			(! Validation::properYear($q->param('pubyr'))))) {
+			$errors->add("Improper year format");
+		}
+		
+		
+	} else {
+		# ref_has_opinion is YES
+		# so make sure the other publication info is empty.
+		my @vals = ($q->param('author1init'), $q->param('author1last'), $q->param('author2init'), $q->param('author2last'), $q->param('otherauthors'), $q->param('pubyr'), $q->param('2nd_pages'), $q->param('2nd_figures'));
+		
+		if (!(Globals::isEmpty(\@vals))) {
+			$errors->add("Don't enter other publication information if you chose the 'first named in primary reference' radio button");	
+		}
+		
+	}
+	
+	
+	if (($q->param('otherauthors')) && (! $q->param('author2last') )) {
+		# don't let them enter other authors if the second author field
+		# isn't filled in.
+		
+		$errors->add("Don't enter other authors if you haven't entered a second author");
+	}
+	
+
+	
+	# Now loop through all fields submitted from the form.
+	# If a field is not empty, then see if we're allowed to edit it in the database.
+	# If we can edit it, then make sure the name is correct (since a few fields like
+	# 2nd_pages, etc. don't match the database field names) and add it to the 
+	# %fieldsToEnter hash.
+	
+	
+	#Debug::dbPrint("dbFields = ");
+	#Debug::printHash(\%dbFields);
+	
+	foreach my $formField ($q->param()) {
+		
+		my $okayToEdit = $editAny;
+		if (! $okayToEdit) {
+			# then we should do some more checks, because maybe they are allowed
+			# to edit it aferall..  If the field they want to edit is empty in the
+			# database, then they can edit it.
+			
+			if (! $dbFields{$formField}) {
+				# If the field in the database is empty, then it's okay
+				# to edit it.
+				$okayToEdit = 1;
+			}
+		}
+		
+		if ($okayToEdit) {
+			
+			# if the value isn't already in our fields to enter
+			if (! $fieldsToEnter{$formField}) {
+				$fieldsToEnter{$formField} = $q->param($formField);
+			}
+		}
+		
+		#Debug::dbPrint("okayToEdit = $okayToEdit, $formField = " . $q->param($formField));
+		
+	} # end foreach formField.
+	
+	
+	
+	# We have to do different things depending on which status radio button
+	# the user selected.
+	
+	# They must select a radio button, otherwise, give them an error message
+
+	my $taxonStatusRadio = $q->param('taxon_status');
+	my $parentTaxonName;
+	my $parentTaxonNumber;
+	
+	if (! $taxonStatusRadio) {
+		$errors->add("You must select a status radio button before submitting this record");	
+	}
+	
+	# Note: the actual field in the database is called 'status'
+	
+	if ($taxonStatusRadio eq 'belongs_to') {
+		$fieldsToEnter{status} = 'belongs to';
+		
+	} elsif ($taxonStatusRadio eq 'recombined_as') {
+		$fieldsToEnter{status} = 'recombined as';
+		
+		# then we need to check that they entered a valid taxon 
+		# in the parent_taxon_name field.
+		$parentTaxonName = $q->param('parent_taxon_name');
+	
+		if (! $parentTaxonName) {
+			$errors->add("You must enter a parent taxon name");
+		}
+		
+	} elsif ($taxonStatusRadio eq 'invalid1') {
+		# check that they entered a valid taxon in the parent_taxon_name2 field.
+		$parentTaxonName = $q->param('parent_taxon_name2');
+		
+		if (! $parentTaxonName) {
+			$errors->add("You must enter a parent taxon name");
+		}
+		
+		# in this case, the status is not "invalid1", it's whatever they
+		# chose in the synonym popup.
+		$fieldsToEnter{status} = $q->param('synonym');
+		
+	} elsif ($taxonStatusRadio eq 'invalid2') {
+		
+		# in this case, the status is not "invalid2", it's whatever they
+		# chose in the nomen popup.
+		$fieldsToEnter{status} = $q->param('nomen');
+	} 
+	
+	
+	
+	if ($parentTaxonName) {
+		# check the parent taxon name to make sure it's valid and exists
+		# in the database.
+		my $parentRankFromSpaces = Validation::taxonRank($parentTaxonName);
+		if ($parentRankFromSpaces eq 'invalid') {
+			$errors->add("Invalid parent taxon name, please check spacing and capitalization");	
+		}
+	
+		# see if the parent name exists in the authorities table
+	
+		my $parentTaxon = Taxon->new();
+		$parentTaxon->setWithTaxonName($parentTaxonName);
+		$parentTaxonNumber = $parentTaxon->taxonNumber();
+	
+		if (! $parentTaxonNumber) {
+			$errors->add("The parent taxon '" . $parentTaxonName . "' doesn't exist in our database.  Please enter an authority record for the parent taxon name <i>before</i> entering this opinion.");	
+		}
+	}
+	
+	
+	
+	# assign the parent_no and child_no fields if they don't already exist.
+	if (!$fieldsToEnter{child_no} ) { $fieldsToEnter{child_no} = $q->param('taxon_no'); }
+	
+	# if we have figured out a parentTaxonNumber from the parent_name, then we
+	# want to use it.. Otherwise, it would be impossible to change the parent
+	# of an opinion.
+	if ($parentTaxonNumber) {
+		$fieldsToEnter{parent_no} = $parentTaxonNumber; 
+	}
+
+
+	# Delete some fields that may be present since these don't correspond
+	# to fields in the database table.. (ie, they're in the form, but not in the table)
+	delete $fieldsToEnter{action};
+	delete $fieldsToEnter{'2nd_authors'};
+	delete $fieldsToEnter{'2nd_figures'};
+	delete $fieldsToEnter{'parent_taxon_name'};
+	delete $fieldsToEnter{'parent_taxon_name2'};
+	delete $fieldsToEnter{'nomen'};
+	delete $fieldsToEnter{'synonym'};
+
+	
+	# correct the ref_has_opinion field.  In the HTML form, it can be "YES" or "NO"
+	# but in the database, it should be "YES" or "" (empty).
+	if ($fieldsToEnter{ref_has_opinion} eq 'NO') {
+		$fieldsToEnter{ref_has_opinion} = '';
+	}
+	
+	
+	Debug::dbPrint("new entry = $isNewEntry");
+	Debug::dbPrint("fields to enter = ");
+	Debug::printHash(\%fieldsToEnter);
+	#Debug::dbPrint($editAny);
+	#return;
+	
+
+	
+	# at this point, we should have a nice hash array (%fieldsToEnter) of
+	# fields and values to enter into the authorities table.
+	
+
+	if ($errors->count() > 0) {
+		# put a message in a hidden to let us know that we have already displayed
+		# some errors to the user and this is at least the second time through (well,
+		# next time will be the second time through - whatever).
+
+		$q->param(-name=>'second_submission', -values=>['YES']);
+			
+		# stick the errors in the CGI object for display.
+		my $message = $errors->errorMessage();
+						
+		$q->param(-name=>'error_message', -values=>[$message]);
+			
+			
+		$self->displayOpinionForm($hbo, $s, $q);
+			
+		return;
+	}
+	
+	
+	# now we'll actually insert or update into the database.
+	
+	
+	my $resultOpinionNumber;
+	
+	if ($isNewEntry) {
+		my $code;	# result code from dbh->do.
+	
+		# grab the date for the created field.
+		$fieldsToEnter{created} = now();
+		
+		# make sure we have a taxon_no for this entry...
+		if (! $fieldsToEnter{child_no} ) {
+			Debug::logError("Opinion::submitOpinionForm, tried to insert a record without knowing its child_no (original taxon).");
+			return;	
+		}
+		
+			
+		($code, $resultOpinionNumber) = $sql->insertNewRecord('opinions', \%fieldsToEnter);
+		
+	} else {
+		# if it's an old entry, then we'll update.
+		
+		# Delete some fields that should never be updated...
+		delete $fieldsToEnter{authorizer_no};
+		delete $fieldsToEnter{enterer_no};
+		delete $fieldsToEnter{created};
+		delete $fieldsToEnter{reference_no};
+		
+		
+		if (!($self->{opinion_no})) {
+			Debug::logError("Opinion::submitOpinionForm, tried to update a record without knowing its opinion_no..  Oops.");
+			return;
+		}
+			
+		$resultOpinionNumber = $self->{opinion_no};
+		
+		if ($editAny) {
+			Debug::dbPrint("Opinion update any record");
+			# allow updates of any fields in the database.
+			$sql->updateRecord('opinions', \%fieldsToEnter, "opinion_no = '" . $self->{opinion_no} . "'", 'opinion_no');
+		} else {
+			
+			
+			#Debug::dbPrint("Opinion update empty records only");
+			#Debug::printHash(\%fieldsToEnter);
+			
+			my $whereClause = "opinion_no = '" . $self->{opinion_no} . "'";
+			
+			# only allow updates of fields which are already blank in the database.	
+			$sql->updateRecordEmptyFieldsOnly('opinions', \%fieldsToEnter, $whereClause, 'opinion_no');
+		}
+	}
+	
+	
+	
+	# now show them what they inserted...
+	
+	# note, if we set our own taxon number to be the new one, then if they had errors,
+	# it will screw up the isNewEntry calculation...
+	#my $t = Taxon->new();
+	#$t->setWithTaxonNumber($resultTaxonNumber);
+	#$t->displayOpinionSummary($isNewEntry);
+	
+}
+
+
 
 
 
