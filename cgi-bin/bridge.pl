@@ -2293,7 +2293,8 @@ sub processCollectionsSearchForAdd	{
 	my $sql = "SELECT collection_no, authorizer, collection_name, access_level, research_group, release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, country, state, latdeg, latmin, latsec, latdec, latdir, lngdeg, lngmin, lngsec, lngdec, lngdir, max_interval_no, min_interval_no, reference_no FROM collections WHERE ";
 
 	# get a list of interval numbers that fall in the geological period
-	@intervals = @{TimeLookup::processLookup($dbh,$dbt,'',$q->param('period_max'),'','','intervals')};
+	my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh,$dbt,'',$q->param('period_max'),'','','intervals');
+	@intervals = @{$inlistef};
 
 	$sql .= "max_interval_no IN (" . join(',', @intervals) . ") AND ";
 
@@ -2504,7 +2505,7 @@ sub processCollectionsSearch {
 	my @timeinlist;
 	my $listsintime;
 	if ( $q->param('max_interval') )	{
- 		$inlistref = TimeLookup::processLookup($dbh, $dbt, $q->param('eml_max_interval'), $q->param('max_interval'), $q->param('eml_min_interval'), $q->param('min_interval'));
+ 		my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, $q->param('eml_max_interval'), $q->param('max_interval'), $q->param('eml_min_interval'), $q->param('min_interval'));
  		@timeinlist = @{$inlistref};
 		$timesearch = "Y";
 		$q->param(eml_max_interval => '');
