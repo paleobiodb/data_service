@@ -418,30 +418,45 @@ sub mapQueryDb	{
         else{
             $genus = $q->param('genus_name');
         }
-        $sql = qq|SELECT collection_no FROM occurrences WHERE |;
+        $sql = qq|SELECT occurrences.collection_no FROM occurrences LEFT JOIN reidentifications ON occurrences.occurrence_no = reidentifications.occurrence_no WHERE |;
         if($q->param('taxon_rank') eq "Higher taxon" ||
-                $q->param('taxon_rank') eq "Higher-taxon"){
-            $self->dbg("genus_name q param:".$q->param('genus_name')."<br>");
-            $sql .= "genus_name IN (";
-            if($in_list eq ""){
-                $self->dbg("RE-RUNNING TAXONOMIC SEARCH in Map.pm<br>");
-                # JA: replaced recurse call with taxonomic_search call
-                #  7.5.04 because I am not maintaining recurse
-                $in_list=PBDBUtil::taxonomic_search($q->param('genus_name'),$dbt);
-            }
-            $sql .= $in_list . ")";
+           $q->param('taxon_rank') eq "Higher-taxon"){
+
+			if ($in_list eq "") {
+				$self->dbg("genus_name q param:".$q->param('genus_name')."<br>");
+
+				my $genus_names_string; 
+				my $taxon_nos_string;
+
+				@taxon_nos = TaxonInfo::getTaxonNos($dbt, $q->param('genus_name'));
+				$self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
+				if (scalar(@taxon_nos) == 0) {
+					$genus_names_string .= $dbh->quote($q->param('genus_name'));
+				} elsif (scalar(@taxon_nos) == 1) {
+					$taxon_nos_string = PBDBUtil::taxonomic_search('',$dbt,$taxon_nos[0],'return taxon nos');
+				} else { #result > 1
+					push @warnings, "The taxon name '$taxon' was not included because it is ambiguous and belongs to multiple taxonomic hierarchies. Right the download script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
+				}
+
+				if ($taxon_nos_string) {
+					$sql .= " (occurrences.taxon_no IN (".$taxon_nos_string.") OR reidentifications.taxon_no IN (".$taxon_nos_string."))";
+				} elsif ($genus_names_string) {
+					$sql .= " (occurrences.genus_name IN (".$genus_names_string.") OR reidentifications.genus_name IN (".$genus_names_string."))";
+				}
+			} else {
+				$sql .= " (occurrences.taxon_no IN (".$in_list.") OR reidentifications.taxon_no IN (".$in_list."))";
+			}
         }
         else{
             if($genus){
-                $sql .= "genus_name='" . $genus;
+                $sql .= "(occurrences.genus_name=" . $dbh->quote($genus) . " OR reidentifications.genus_name=" . $dbh->quote($genus) . ")" ;
                 if($species){
-                    $sql .= "' AND ";
+                    $sql .= " AND ";
                 }
             }
             if($species){
-            $sql .= "species_name='" . $species;
+                $sql .= "(occurrences.species_name=" . $dbh->quote($species) . " OR reidentifications.species_name=" . $dbh->quote($genus) . ")";
             }
-            $sql .= "'";
         }
         $sth2 = $dbh->prepare($sql);
         # DEBUG: PM 09/13/02
@@ -537,9 +552,14 @@ sub mapQueryDb	{
 	my $collection_no_list = join(", ",keys(%collok));
 	my $where = "";
 	# %collok is only populated if $q->param("genus_name") was provided
-	if($collection_no_list ne ""){
-		$where = "WHERE collection_no IN($collection_no_list) ";
-	}
+    if ($q->param('genus_name')) {
+        if($collection_no_list ne ""){
+            $where = "WHERE collection_no IN($collection_no_list) ";
+        } else {
+            # we want nothing, so we don't fetch the whole table if the genus name doesn't exist
+            $where = "WHERE collection_no IN (-1) ";
+        }
+    }
 
 	# handle time interval JA 20.7.03
 	if ( $q->param('interval_name') =~ /[A-Za-z]/ )	{
