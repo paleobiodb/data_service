@@ -40,7 +40,7 @@ use Ecology;
 use PrintHierarchy;
 
 # god awful Poling modules
-#use Occurrence; - entirely deprecated, only every called by Collection.pm
+#use Occurrence; - entirely deprecated, only ever called by Collection.pm
 #use Collection; - entirely deprecated, replicates buildTaxonomicList
 use Taxon;
 use Opinion;
@@ -2959,11 +2959,12 @@ sub buildTaxonomicList {
 				$grand_master_hash{order_no} = ($classification{order_no} or 1000000);
 				$grand_master_hash{family_no} = ($classification{family_no} or 1000000);
 			}
+		# otherwise this occurrence has never been reidentified
 			else {
-				# this occurrence has never been reidentified
 				
-				my $arg = $rowref->{'genus_name'}." ".$rowref->{'species_name'};
-				%classification = %{PBDBUtil::get_classification_hash($dbt,$arg)};
+		# get the classification (by PM): changed 2.4.04 by JA to
+		#  use the occurrence number instead of the taxon name
+				%classification = %{PBDBUtil::get_classification_hash($dbt,$rowref->{occurrence_no})};
 
 				# for sorting, later
 				$grand_master_hash{class_no} = ($classification{class_no} or 1000000);
@@ -3228,7 +3229,8 @@ sub getReidHTMLTableByOccNum {
 			" species_name, ".
 			" reidentifications.comments as comments, ".
 			" reidentifications.reference_no as reference_no, ".
-			" pubyr ".
+			" pubyr, ".
+			" taxon_no ".
 			" FROM reidentifications,refs ";
 	if ($isReidNo) {
 		$sql .= " WHERE reid_no = $occNum";
@@ -3258,13 +3260,13 @@ sub getReidHTMLTableByOccNum {
 	foreach my $rowRef ( @rows ) {
 		my @row = @{$rowRef};
 		# format the reference (PM)
-		# JA: -2 means second to last element in the array
-		$row[-2] = buildReference($row[-2],"list");
-		# JA: what PM is doing here is creating a genus + species
-		#  combo, because those names are the 1st and 5th in the row
-		my $arg = $row[1]." ". $row[5];
+		# JA: -3 means second to last element in the array
+		$row[-3] = buildReference($row[-3],"list");
+		# JA: originally PM created a genus + species combo and
+		#  passed it to PBDBUtil, but now the function operates on
+		#  taxon ID numbers, so that's now sent instead
 		# 3rd arg becomes the 1st since the other 2 were shifted off already.
-		%{$_[0]} = %{PBDBUtil::get_classification_hash($dbt, $arg)};
+		%{$_[0]} = %{PBDBUtil::get_classification_hash($dbt, $row[9])};
 
 		# JA 2.4.04: changed this so it only works on the most
 		#  recently published reID
