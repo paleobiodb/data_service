@@ -7,6 +7,17 @@ function showPanel(panelNum) {
      hidePanel();
     }
     document.getElementById ('panel'+panelNum).style.visibility = 'visible';
+	// This hopefully deals with a safari bug in which the text in textareas was being blank (not
+	// showing up, even if you selected the textarea and typed).  The bug would be fixed if you
+	// scrolled up and down, so we do that for the user:
+	if (window.scrollBy) {
+		var ua = navigator.userAgent.toLowerCase();
+		var isSafari = (ua.indexOf('safari') != - 1);
+		if (window.innerHeight && isSafari) {
+			window.scrollBy(0, window.innerHeight);
+			window.scrollBy(0, -1*window.innerHeight);
+		}
+	}
     currentPanel = panelNum;
     setState(panelNum);
 }
