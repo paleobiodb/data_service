@@ -4127,6 +4127,12 @@ sub checkNewTaxon{
 	push @taxonParams, @insertParams;
 	my $open_form_printed = 0;
 
+	# If the focal taxon is a species, don't check the type, because
+	#  it will be a specimen number and not a taxon JA 1.3.03
+	if ( $q->param('taxon_rank') eq "species" )	{
+		@params_to_check = ('parent', 'parent_genus');
+	}
+
 	# First, check for pre-existing names in authorities.
 	# If we find them, store their taxon_no's because the user will have to
 	# choose which is meant if more than one is found.
