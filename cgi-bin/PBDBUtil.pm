@@ -1,5 +1,7 @@
 package PBDBUtil;
 
+### NOTE: SET UP EXPORTER AND EXPORT SUB NAMES.
+
 # This package contains a collection of methods that are universally 
 # useful to the pbdb codebase.
 my $DEBUG = 0;
@@ -53,7 +55,7 @@ sub getResearchProjectRefsStr{
 	return $reflist;
 }
 
-## getSecondaryRefsString($dbh, $collection_no)
+## getSecondaryRefsString($dbh, $collection_no, $selectable, $deletable)
 # 	Description:	constructs table rows of refs record data including
 #					reference_no, reftitle, author info, pubyr and authorizer
 #					and enterer.
@@ -61,16 +63,23 @@ sub getResearchProjectRefsStr{
 #	Parameters:		$dbh			database handle
 #					$collection_no	the collection number to which the 
 #									references pertain.
+#					$selectable		make this ref selectable (display a radio
+#									button)	
+#					$deletable		make this ref deletable (display a check
+#									box)	
 #
 #	Returns:		table rows
 ##
 sub getSecondaryRefsString{
     my $dbh = shift;
     my $collection_no = shift;
-
+	my $selectable = shift;
+	my $deletable = shift;
+	
     my $sql = "SELECT refs.reference_no, refs.author1init, refs.author1last, ".
 			  "refs.author2init, refs.author2last, refs.otherauthors, ".
-              "refs.pubyr, refs.authorizer, refs.enterer, refs.reftitle ".
+              "refs.pubyr, refs.reftitle, refs.pubtitle, refs.pubvol, ".
+			  "refs.pubno, refs.firstpage, refs.lastpage ".
               "FROM refs, secondary_refs ".
               "WHERE refs.reference_no = secondary_refs.reference_no ".
               "AND secondary_refs.collection_no = $collection_no";
@@ -82,24 +91,21 @@ sub getSecondaryRefsString{
 	# Authorname Formatting
 	use AuthorNames;
 
-	my $result_string = "";
+	my $result_string = "<table border=0 cellpadding=8 cellspacing=0 width=\"100%\"><tr><td width=\"100%\">";
 	# Format each row from the database as a table row.
 	my $row_color = 0;
     foreach my $ref (@results){
 		# add in a couple of single-space cells around the reference_no
 		# to match the formatting of Reference from BiblioRef.pm
 		if($row_color % 2){
-			$result_string .= "<tr>";
+			$result_string .="<table border=0 cellpadding=0 cellspacing=0 width=\"100%\"><tr width=\"100%\">";
 		}
 		else{
-			$result_string .= "<tr bgcolor='E0E0E0'>";
+			$result_string .= "<table border=0 cellpadding=0 cellspacing=0 width=\"100%\"><tr bgcolor=E0E0E0 width=\"100%\">";
 		}
-## ADAPT THIS FOR LATER...
-#if ( $selectable ) {
-#        $retVal .= "    <td width='5%' valign=top><input type='radio' name='reference_no' value='" . $self->{_reference_no} . "'></td>\n";
-		$result_string .= "<td><small><b>$ref->{reference_no}</b></small></td>".
-						  "<td colspan=3><small>$ref->{reftitle}</small>".
-						  "</td></tr><tr><td></td>\n";
+		if($selectable){
+			$result_string .= "<td width=\"1%\" valign=top><input type=radio name=secondary_reference_no value=" . $ref->{reference_no} . "></td>\n";
+		}
 
 		# Get all the authornames for formatting
 		my %temp = ('author1init',$ref->{author1init},
@@ -109,13 +115,254 @@ sub getSecondaryRefsString{
 					'otherauthors',$ref->{otherauthors}
 					);
 		my $an = AuthorNames->new(\%temp);
-		$result_string .= "<td><small>".$an->toString()."</small></td>".
-						  "<td><small>$ref->{pubyr}</small></td>".
-						  "<td><small>[$ref->{authorizer}/$ref->{enterer}]".
-						  "</small></td></tr>\n";
+
+		$result_string .= "<td valign=top width=\"5%\"><small>".
+						  "<b>$ref->{reference_no}</b></small></td>".
+						  "<td rowspan=2 valign=top width=\"95%\">".
+						  "<small>&nbsp;".$an->toString().
+						  ".&nbsp;$ref->{pubyr}.&nbsp;";
+		if($ref->{reftitle}){
+			$result_string .= "$ref->{reftitle}.";
+		}
+		if($ref->{pubtitle}){
+			$result_string .="&nbsp;<i>$ref->{pubtitle}</i>&nbsp;";
+		}
+
+		$result_string .= "<b>";
+
+		if($ref->{pubvol}){
+			$result_string .= "$ref->{pubvol}";
+		}
+		if($ref->{pubno}){
+			 $result_string .= "($ref->{pubno})";
+		}
+
+		$result_string .= "</b>";
+
+		if($ref->{firstpage}){
+			$result_string .= ":$ref->{firstpage}";
+		}
+		if($ref->{lastpage}){
+			$result_string .= "-$ref->{lastpage}";
+		}
+
+		$result_string .= "</td></tr>";
+					
+		# put in a checkbox for deletion if no occs with this ref are tied
+		# to the collection
+		if($deletable && refIsDeleteable($dbh,$collection_no,$ref->{reference_no})){
+			if($row_color % 2){
+				$result_string .= "<tr>";
+			}	
+			else{
+				$result_string .= "<tr bgcolor=E0E0E0>";
+			}
+			$result_string .= "<td bgcolor=red><input type=checkbox name=delete_ref value=$ref->{reference_no}></td><td><span class=tiny>remove&nbsp;</span></td></tr>\n";
+		}
+		$result_string .= "</table>\n";
+		$row_color++;
     }
 	$sth->finish();
+	$result_string .= "</td></tr></table>";
 	return $result_string;
+}
+
+## setSecondaryRef($dbh, $collection_no, $reference_no)
+# 	Description:	Checks if reference_no is the primary reference or a 
+#					secondary reference	for this collection.  If yes to either
+#					of those, nothing is done, and the method returns.
+#					If the ref exists in neither place, it is added as a
+#					secondary reference for the collection.
+#
+#	Parameters:		$dbh			the database handle
+#					$collection_no	the collection being added or edited or the
+#									collection to which the occurrence or ReID
+#									being added or edited belongs.
+#					$reference_no	the reference for the occ, reid, or coll
+#									being updated or inserted.	
+#
+#	Returns:		boolean for running to completion.	
+##
+sub setSecondaryRef{
+	my $dbh = shift;
+	my $collection_no = shift;
+	my $reference_no = shift;
+
+	return if(isRefSecondary($dbh, $collection_no, $reference_no));
+
+	# If we got this far, the ref is not associated with the collection,
+	# so add it to the secondary_refs table.
+	$sql = "INSERT INTO secondary_refs (collection_no, reference_no) ".
+		   "VALUES ($collection_no, $reference_no)";	
+    $sth = $dbh->prepare($sql);
+    if($sth->execute() != 1){
+		print "<font color=\"FF0000\">Failed to create secondary reference ".
+			  "for collection $collection_no and reference $reference_no.<br>".
+			  "Please notify the database administrator with this message.".
+			  "</font><br>";
+	}
+	debug(1,"ref $reference_no added as secondary for collection $collection_no<br>");
+	return 1;
+}
+
+## refIsDeleteable($dbh, $collection_no, $reference_no)
+#
+#	Description		determines whether a reference may be disassociated from
+#					a collection based on whether the reference has any
+#					occurrences tied to the collection
+#
+#	Parameters		$dbh			database handle
+#					$collection_no	collection to which ref is tied
+#					$reference_no	reference in question
+#
+#	Returns			boolean
+#
+##
+sub refIsDeleteable{
+	my $dbh = shift;
+	my $collection_no = shift;
+	my $reference_no = shift;
+	
+	my $sql = "SELECT count(occurrence_no) FROM occurrences ".
+			  "WHERE collection_no=$collection_no ".
+			  "AND reference_no=$reference_no";
+
+	debug(1,"isDeleteable sql: $sql<br>");
+	my $sth = $dbh->prepare($sql) or print "SQL failed to prepare: $sql<br>";
+	$sth->execute();
+	my @rows = @{$sth->fetchall_arrayref({})};
+	my %res = %{$rows[0]};
+	my $num = $res{'count(occurrence_no)'};
+	$sth->finish();
+	if($num >= 1){
+		debug(1,"Reference $reference_no has $num occurrences and is not deletable<br>");
+		return 0;
+	}
+	else{
+		debug(1,"Reference $reference_no has $num occurrences and IS deletable<br>");
+		return 1;
+	}
+}
+
+## deleteRefAssociation($dbh, $collection_no, $reference_no)
+#
+#	Description		Removes association between collection_no and reference_no
+#					in the secondary_refs table.
+#
+#	Parameters		$dbh			database handle
+#					$collection_no	collection to which ref is tied
+#					$reference_no	reference in question
+#
+#	Returns			boolean
+#
+##
+sub deleteRefAssociation{
+	my $dbh = shift;
+	my $collection_no = shift;
+	my $reference_no = shift;
+
+	my $sql = "DELETE FROM secondary_refs where collection_no=$collection_no ".
+			  "AND reference_no=$reference_no";
+	my $sth = $dbh->prepare($sql) or print "SQL failed to prepare: $sql<br>";
+    if($sth->execute() != 1){
+		print "<font color=\"FF0000\">Failed to delete secondary ref for".
+			  "collection $collection_no and reference $reference_no.<br>".
+			  "Please notify the database administrator with this message.".                  "</font><br>";
+		return 0;
+	}
+	$sth->finish();
+	return 1;
+}
+
+## isRefPrimaryOrSecondary($dbh, $collection_no, $reference_no)
+#
+#	Description	Checks the collections and secondary_refs tables to see if
+#				$reference_no is either the primary or secondary reference
+#				for $collection
+#
+#	Parameters	$dbh			database handle
+#				$collection_no	collection with which ref may be associated
+#				$reference_no	reference to check for association.
+#
+#	Returns		positive value if association exists (1 for primary, 2 for
+#				secondary), or zero if no association currently exists.
+##	
+sub isRefPrimaryOrSecondary{
+	my $dbh = shift;
+	my $collection_no = shift;
+	my $reference_no = shift;
+
+	# First, see if the ref is the primary.
+	my $sql = "SELECT reference_no from collections ".
+			  "WHERE collection_no=$collection_no";
+
+    my $sth = $dbh->prepare($sql);
+    $sth->execute();
+    my %results = %{$sth->fetchrow_hashref()};
+    $sth->finish();
+
+	# If the ref is the primary, nothing need be done.
+	if($results{reference_no} == $reference_no){
+		debug(1,"ref $reference_no exists as primary for collection $collection_no<br>");
+		return 1;
+	}
+
+	# Next, see if the ref is listed as a secondary
+	$sql = "SELECT reference_no from secondary_refs ".
+			  "WHERE collection_no=$collection_no";
+
+    $sth = $dbh->prepare($sql);
+    $sth->execute();
+    my @results = @{$sth->fetchall_arrayref({})};
+    $sth->finish();
+
+	# Check the refs for a match
+	foreach my $ref (@results){
+		if($ref->{reference_no} == $reference_no){
+		debug(1,"ref $reference_no exists as secondary for collection $collection_no<br>");
+			return 2;
+		}
+	}
+
+	# If we got this far, the ref is neither primary nor secondary
+	return 0;
+}
+
+## isRefSecondary($dbh, $collection_no, $reference_no)
+#
+#	Description	Checks the secondary_refs tables to see if
+#				$reference_no is a secondary reference for $collection
+#
+#	Parameters	$dbh			database handle
+#				$collection_no	collection with which ref may be associated
+#				$reference_no	reference to check for association.
+#
+#	Returns		boolean
+##	
+sub isRefSecondary{
+	my $dbh = shift;
+	my $collection_no = shift;
+	my $reference_no = shift;
+
+	# Next, see if the ref is listed as a secondary
+	$sql = "SELECT reference_no from secondary_refs ".
+			  "WHERE collection_no=$collection_no";
+
+    $sth = $dbh->prepare($sql);
+    $sth->execute();
+    my @results = @{$sth->fetchall_arrayref({})};
+    $sth->finish();
+
+	# Check the refs for a match
+	foreach my $ref (@results){
+		if($ref->{reference_no} == $reference_no){
+		debug(1,"ref $reference_no exists as secondary for collection $collection_no<br>");
+			return 1;
+		}
+	}
+
+	# Not in secondary_refs table
+	return 0;
 }
 
 1;
