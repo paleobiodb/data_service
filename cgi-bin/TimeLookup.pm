@@ -82,7 +82,7 @@ sub processScaleLookup	{
 
 	&findBestScales();
 	&findImmediateCorrelates();
-    
+
     my %intervalToScale = ();
 # for each interval in the scale, find all other intervals mapping into it
 	for my $intref ( @intrefs )	{
@@ -821,7 +821,7 @@ sub splitInterval {
     my $interval_name = shift;
                                                                                                                                                              
     my @terms = split(/ /,$interval_name);
-    $interval_name = pop(@terms) or '';
+    $interval_name = pop(@terms);
     my $eml = '';
                                                                                                                                                              
     if (scalar(@terms) == 1) {
@@ -843,8 +843,37 @@ sub splitInterval {
                                                                                                                                                              
     return ($eml,$interval_name);
 }
-                                                                                                                                                             
 
+# Returns an array of interval names in the correct order for a given scale
+# With the newest interval first
+# PS 02/28/3004
+sub getScaleOrder {
+    my $dbt = shift;
+    my $scale_no = shift;
 
+    my @scale_list = ();
+
+    my $count;
+    my $sql = "SELECT correlations.interval_no, next_interval_no, interval_name FROM correlations, intervals".
+              " WHERE correlations.interval_no=intervals.interval_no".
+              " AND scale_no=".$dbt->dbh->quote($scale_no). 
+              " AND next_interval_no=0";
+    my @results = @{$dbt->getData($sql)};
+    while (scalar(@results)) {
+        if ($count++ > 200) { die "infinite loop in getScaleOrder"; }
+        my $row = $results[0];
+        if ($row->{'eml_interval'}) {
+            push @scale_list, $row->{'eml_interval'} . ' ' .$row->{'interval_name'};
+        } else {
+            push @scale_list, $row->{'interval_name'};
+        }
+        $sql = "SELECT eml_interval, interval_name, correlations.interval_no FROM correlations, intervals".
+               " WHERE correlations.interval_no=intervals.interval_no".
+               " AND next_interval_no=$row->{interval_no}";
+        @results = @{$dbt->getData($sql)};
+    }
+        
+    return @scale_list;
+}
 
 1;
