@@ -2,7 +2,7 @@ package TaxonInfo;
 
 use PBDBUtil;
 
-$DEBUG = 1;
+$DEBUG = 0;
 
 ## startTaxonInfo
 #
