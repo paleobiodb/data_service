@@ -59,7 +59,7 @@ my $old_action = "";
 my $dbh = DBI->connect("DBI:mysql:database=$db;host=$host", $user, $password, {RaiseError => 1});
 
 # Need to do this before printing anything else out, if debugging.
-print $q->header('text/html') if $DEBUG;
+#print $q->header('text/html') if $DEBUG;
 
 # Logout?
 # Run before debugging information
@@ -75,23 +75,31 @@ if ( $action eq "sendPassword" ) {
 # Login?
 LOGIN: {
 	# Display Login page
-	if ( $action eq "displayLogin" ) { displayLoginPage (); last; }
+	if($action eq "displayLogin"){
+		displayLoginPage();
+		last;
+	}
 
 	# Process Login
-	if ( $action eq "processLogin" ) {
+	if($action eq "processLogin"){
 		$cookie = $s->processLogin ( $dbh, $q ); 
-		if ( $cookie ) {
+		if($cookie){
 			my $cf = CookieFactory->new();
 			# The following two cookies are for setting the select lists
 			# on the login page.
-			my $cookieEnterer = $cf->buildCookie("enterer", $q->param("enterer"));
-			my $cookieAuthorizer = $cf->buildCookie("authorizer", $q->param("authorizer"));
-			print $q->header(	-type => "text/html", 
-								-cookie => [$cookie, $cookieEnterer, $cookieAuthorizer],
-								-expires =>"now" );
+			my $cookieEnterer = $cf->buildCookie("enterer",
+												 $q->param("enterer"));
+			my $cookieAuthorizer = $cf->buildCookie("authorizer",
+													$q->param("authorizer"));
+			print $q->header(-type => "text/html", 
+							 -cookie => [$cookie, 
+										 $cookieEnterer, $cookieAuthorizer],
+							 -expires =>"now" );
 
 			# Destination
-			if ( $q->param("destination") ne "" ) { $action = $q->param("destination"); }
+			if($q->param("destination") ne ""){
+				$action = $q->param("destination");
+			}
 			if($action eq "processLogin"){
 				$action = "displayMenuPage";
 				$old_action = "processLogin";
@@ -101,7 +109,7 @@ LOGIN: {
 	}
 
 	# Guest page? 
-	if ( $q->param("user") eq "Guest" ) {
+	if($q->param("user") eq "Guest"){
 		# Change the HTMLBuilder object
 		$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
 		last;
@@ -109,10 +117,8 @@ LOGIN: {
 
 	# Validate User
 	my $temp_cookie = $q->cookie('session_id');
-	dbg("cookie (param): $temp_cookie<br>");
-	$cookie = $s->validateUser ( $dbh, $q->cookie('session_id') );
-	dbg("cookie (validated): $cookie<br>");
-	if ( !$cookie )	{
+	$cookie = $s->validateUser($dbh, $q->cookie('session_id'));
+	if(!$cookie){
 		if($q->param("user") eq "Contributor"){
 			displayLoginPage();
 		}
@@ -123,24 +129,13 @@ LOGIN: {
 	}
 }
 
-if ( ! $DEBUG ) {
+if(!$DEBUG){
 	# The right combination will allow me to conditionally set the DEBUG flag
-	if ( $s->get("enterer") eq "J. Sepkoski" && $s->get("authorizer") eq "J. Alroy" ) {
+	if($s->get("enterer") eq "J. Sepkoski" && 
+									$s->get("authorizer") eq "J. Alroy" ) {
 		$DEBUG = 1;
 	}
 }
-
-
-dbg("
-<p>
-	<font color='red' size='+1' face='arial'>
-	You are in DEBUG mode!
-	</font>
-	<BR>
-	Cookie [$cookie]<BR>
-	Action [$action] DB [$db] Authorizer [".$s->get("authorizer")."] Enterer [".$s->get("enterer")."]<BR>
-</p>
-");
 
 # Record the date of the action in the person table JA 27/30.6.02
 if ($s->get("enterer") ne "" && $s->get("enterer") ne "Guest")	{
@@ -150,11 +145,14 @@ if ($s->get("enterer") ne "" && $s->get("enterer") ne "Guest")	{
 	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 }
 
-dbg($q->Dump);
-
 unless($action eq 'displayLogin' or $old_action eq 'processLogin'){
 	print $q->header('text/html');
 }
+
+dbg("<p><font color='red' size='+1' face='arial'>You are in DEBUG mode!</font><br> Cookie [$cookie]<BR> Action [$action] DB [$db] Authorizer [".$s->get("authorizer")."] Enterer [".$s->get("enterer")."]<BR></p>");
+
+dbg($q->Dump);
+
 # ACTION
 &$action;
 
@@ -1279,7 +1277,7 @@ sub displayCollResults {
         # data in 'displayOccurrenceAddEdit'
         if ( $type eq "edit_occurrence" )   { $action = "displayOccurrenceAddEdit"; $method =
 "getReadRows"; last; }
-		if ( $type eq "reid" )	{ $action = "displayOccsForReID"; $method = "getWriteRows"; last; }
+		if ( $type eq "reid" )	{ $action = "displayOccsForReID"; $method = "getReadRows"; last; }
 
 		# Unknown
 		$action = "displayCollectionDetails";
@@ -1298,6 +1296,16 @@ sub displayCollResults {
     }
 
     if ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
+		# go right to the chase with ReIDs if a taxon_rank was specified
+		if($q->param('type') eq "reid" && $q->param('taxon_rank') ne 'Higher-taxon'){
+			# get all collection #'s and call displayOccsForReID
+			my @reidColls;
+			foreach my $res (@dataRows){
+				push(@reidColls, $res->{collection_no});
+			}
+			displayOccsForReID(\@reidColls);	
+			exit;
+		}
 		# get the enterer's preferences (needed to determine the number
 		#  of displayed blanks) JA 1.8.02
 		%pref = &getPreferences($s->get('enterer'));
@@ -1389,7 +1397,15 @@ sub displayCollResults {
 				print "<tr>";
 			}
 		  	print "
-	<td align=center valign=top><a href='$exec_url?action=$action&collection_no=$collection_no&blanks='".$pref{'blanks'}."'>$collection_no</a></td>
+	<td align=center valign=top><a href='$exec_url?action=$action&collection_no=$collection_no";
+			# These may be useful to displayOccsForReID
+			if($q->param('genus_name')){
+				print "&genus_name=".$q->param('genus_name');
+			}
+			if($q->param('species_name')){
+				print "&species_name=".$q->param('species_name');
+			}
+			print "&blanks='".$pref{'blanks'}."'>$collection_no</a></td>
 	<td valign=top>$authorizerName</td>
 	<td valign=top><b>" . $dataRow->{"collection_name"} . $timeplace . "</td>
 	<td align=right valign=top>$referenceNo</td>
@@ -1462,16 +1478,22 @@ sub processCollectionsSearch {
 		my $species;
 		if($genus_name =~ / /){
 			# Look for a subgenus in parentheses
-			if($genus_name =~ /\([A-Za-z]+\)/ && 
+			if($genus_name =~ /\([A-Z][a-z]+\)/ && 
 							($q->param('taxon_rank') ne 'species')){
 				$genus_name =~ /([A-Z][a-z]+)\s\(([A-Z][a-z]+)\)\s?([a-z]*)/;
 				($genus, $sub_genus, $species) = ($1, $2, $3);
+				# These param reassignments maybe useful to displayOccsForReID
+				$q->param('species_name' => $species);
+				$q->param('g_name' => $genus);
 			}
 			else{
 				($genus,$species) = split / /,$q->param('genus_name');
+				$q->param('species_name' => $species);
+				$q->param('g_name' => $genus);
 			}
 		} elsif ( $q->param('taxon_rank') eq "species" )	{
 			$species = $q->param('genus_name');
+			$q->param('species_name' => $species);
 		} else	{
 			$genus = $q->param('genus_name');
 		}
@@ -1692,13 +1714,12 @@ sub displayCollectionDetails {
 	my $numFields  = $sth->{NUM_OF_FIELDS};
 	
 	my @fieldTypes = @{$sth->{mysql_type}};
-	#for($i = 0;$i < $numFields;$i++)
-	#{
+	#for($i = 0;$i < $numFields;$i++){
 	#	if ( $fieldTypes[$i] == 254)
 	#	{
 	#	  print $fieldNames[$i] . ": " . $fieldTypes[$i] . "<br>";
 	#	}
-	#
+	#}
 	my @row = $sth->fetchrow_array();
 	$sth->finish();
   
@@ -1769,6 +1790,7 @@ sub displayCollectionDetails {
 	if ( $authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy')	{
 		print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames);
 	}
+	print $hbo->populateHTML('reid_display_buttons', \@row, \@fieldNames);
 
 
 	print &stdIncludes ("std_page_bottom");
@@ -3102,7 +3124,7 @@ sub processEditOccurrences {
 	print "
 	<p align='center'><b>
 	<a href='$exec_url?action=displayEditCollection&collection_no=$collection_no'>Edit the main collection record</a>
-	<br><a href='$exec_url?action=displayOccurrenceAddEdit&collection_no=$collection_no'>Add/edit more occurrences for this collection</a>
+	<br><a href='$exec_url?action=displayOccurrenceAddEdit&collection_no=$collection_no'>Edit occurrences for this collection</a>
 	<br><a href='$exec_url?action=displaySearchColls&type=edit_occurrence'>Add/edit occurrences for a different collection with the current reference</a></b></p>
 ";
 
@@ -3140,7 +3162,7 @@ sub displayReIDCollsAndOccsSearchForm
 	# Display the collection search form
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no,''], ['authorizer', 'enterer', 'action', 'reid_reference_no','lithology1'], \@prefkeys);
+	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no,'',$q->param('type')], ['authorizer', 'enterer', 'action', 'reid_reference_no','lithology1','type'], \@prefkeys);
 
 	buildAuthorizerPulldown ( \$html );
 	buildEntererPulldown ( \$html );
@@ -3161,18 +3183,30 @@ sub displayReIDCollsAndOccsSearchForm
 sub displayReIDForm {
 
     # If this is a genus/species search, go right to the reid form.
-    if ( $q->param('genus_name') ne '') {
-		&displayOccsForReID();
-    } else {
-
-    	# Must be a collection search
+	#if($q->param("taxon_rank") ne ''){
 		$q->param("type" => "reid");
 	    &displayCollResults ();
-    }
+	#}
+	# Not sure why this is here, which of course means I'm not sure why this
+	# entire method exists...  11/26/02 PM
+    #else{ #( $q->param('genus_name') ne '') {
+	#	&displayOccsForReID();
+	#}
+    #} else {
+#
+#    	# Must be a collection search
+#		$q->param("type" => "reid");
+#	    &displayCollResults ();
+#    }
 }
 
 sub displayOccsForReID
 {
+	my $collNos = shift;
+	my @colls;
+	if($collNos){
+		@colls = @{$collNos};
+	}
 
 	my $onFirstPage = 0;
 	my $printCollDetails = 0;
@@ -3180,7 +3214,7 @@ sub displayOccsForReID
 	print &stdIncludes ( "std_page_top" );
 	print $hbo->populateHTML('js_occurrence_checkform');
     
-	my $genus_name = $q->param('genus_name');
+	my $genus_name = $q->param('g_name');
 	my $species_name = $q->param('species_name');
 	my $collection_no = $q->param('collection_no');
 
@@ -3191,10 +3225,7 @@ sub displayOccsForReID
 	}
 
 	# Build the SQL
-	if ( $collection_no ) {
-		$sql = "SELECT * FROM occurrences ";
-		$where = " WHERE collection_no=$collection_no";
-	} else {
+	if($genus_name ne '' or $species_name ne ''){
 		$printCollectionDetails = 1;
 
 		$sql = "SELECT * FROM occurrences ";
@@ -3204,6 +3235,16 @@ sub displayOccsForReID
 		if ( $species_name ) {
 			$where = buildWhere ( $where, "species_name='$species_name'" );
 		}
+		if(@colls > 0){
+			$where = buildWhere($where,"collection_no IN(".join(',',@colls).")");
+		}
+		elsif($collection_no > 0){
+			$where = buildWhere($where, "collection_no=$collection_no");
+		}
+	}
+	elsif($collection_no){
+		$sql = "SELECT * FROM occurrences ";
+		$where = " WHERE collection_no=$collection_no";
 	}
 	$where = buildWhere ( $where, "occurrence_no > $lastOccNum LIMIT 11" );
 
@@ -3216,8 +3257,12 @@ sub displayOccsForReID
 
 	# Get the current reference data
 	$sql = "SELECT * FROM refs WHERE reference_no=".$s->get("reference_no");
+	dbg ( "$sql<HR>" );
 	my $sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth2->execute();
+	my $array_ref_of_hash_refs = $sth->fetchall_arrayref({});
+	my @array_of_hash_refs = @{$array_ref_of_hash_refs};
+	dbg("got ".@array_of_hash_refs." occs for reid<br>");
 
     my $md = MetadataModel->new($sth2);
 	my $refRow = $sth2->fetchrow_arrayref();
@@ -3227,7 +3272,7 @@ sub displayOccsForReID
 	my $refString = $bibRef->toString();
 
 	my $rowCount = 0;
-	while (my $rowRef = $sth->fetchrow_hashref())
+	foreach my $rowRef (@array_of_hash_refs)
 	{
 		# If we have 11 rows, skip the last one; and we need a next button
 		$rowCount++;
