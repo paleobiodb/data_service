@@ -2504,6 +2504,7 @@ sub processEditCollectionForm {
     print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
     
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit">Edit another collection using the same reference</a></p></b></center>|;
+	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=add">Add a collection with the same reference</a></p></b></center>|;
 
 	print &stdIncludes ("std_page_bottom");
 }
