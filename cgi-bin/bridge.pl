@@ -4574,7 +4574,28 @@ sub displayOccurrenceAddEdit {
 	$sth->finish();
 
 	print stdIncludes( "std_page_top" );
-	print $hbo->populateHTML('js_occurrence_checkform');
+
+	my %pref = getPreferences($s->get('enterer'));
+	my @prefkeys = keys %pref;
+
+	my $html = $hbo->populateHTML('js_occurrence_checkform');
+
+	# only print the JavaScript involving subgenera if the user
+	#  wants to see them
+	if ( $pref{'subgenera'} eq "yes" )	{
+		$html =~ s/\/\/ check subgenera/\/\/ check subgenera
+				if ( frm.subgenus_name[i].value != "" ) {
+					errors += checkName ( "Subgenus", frm.subgenus_name[i].value, frm.subgenus_reso[i], i );
+				}
+/;
+		$html =~ s/\/\/ check subgenus/\/\/ check subgenus
+                                if ( frm.subgenus_name.value != "" ) {
+                                        errors += checkName ( "Subgenus", frm.subgenus_name.value, frm.subgenus_reso, 1 );
+                                }
+/; 
+	}
+
+	print $html;
 
 	$sql = "SELECT * FROM occurrences WHERE collection_no=$collection_no";
 	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -4590,8 +4611,6 @@ sub displayOccurrenceAddEdit {
 	push @tempRow, $collection_name;
 	push @tempFieldName, "collection_name";
 
-	%pref = getPreferences($s->get('enterer'));
-	my @prefkeys = keys %pref;
 	print $hbo->populateHTML('occurrence_header_row', \@tempRow, \@tempFieldName, \@prefkeys);
 
     # of records, each represented as a hash
