@@ -18,6 +18,8 @@ my $PI = 3.14159265;
 my $C72 = cos(72 * $PI / 180);
 sub acos { atan2( sqrt(1 - $_[0] * $_[0]), $_[0] ) }
 sub tan { sin($_[0]) / cos($_[0]) }
+# returns great circle distance given two latitudes and a longitudinal offset
+sub GCD { ( 180 / $PI ) * acos( ( sin($_[0]*$PI/180) * sin($_[1]*$PI/180) ) + ( cos($_[0]*$PI/180) * cos($_[1]*$PI/180) * cos($_[2]*$PI/180) ) ) }
 
 sub new {
 	my $class = shift;
@@ -37,6 +39,9 @@ sub buildMap {
 
 	$self->mapGetScale();
 	$self->mapDefineOutlines();
+	if ( $q->param('maptime') > 0 )	{
+		$self->mapGetRotations();
+	}
 	$self->mapQueryDb();
 	$self->mapDrawMap();
 
@@ -335,7 +340,82 @@ sub mapDefineOutlines	{
 	}
 }
 
+# read Scotese's plate ID and rotation data files
+sub mapGetRotations	{
+
+	my $self = shift;
+
+# which plates are in the eastern hemisphere?
+
+	@easternplates = (0, 103, 304, 306, 308, 309, 311, 320, 321, 323, 330, 331, 401, 402, 403, 405, 406, 408, 410, 413, 416, 420, 501, 502, 503, 504, 508, 510, 511, 512, 513, 514, 515, 604, 609, 610, 611, 615, 616, 617, 619, 620, 621, 628, 632, 637, 640, 652, 654, 655, 656, 659, 664, 671, 672, 673, 675, 676, 679, 682, 684, 697, 702, 704, 709, 712, 716, 800, 801, 802, 803, 804, 805, 806, 807, 808, 813, 814, 815, 819, 824, 833, 834, 835, 847, 872, 875, 895, 901, 985, 992);
+
+	if ( $q->param('maptime') > 95 )	{
+		@extraplates = (307, 701, 707, 714, 715); # 301 305 307 315
+		push @easternplates,@extraplates;
+	}
+
+	for $e (@easternplates)	{
+		$iseast{$e} = 1;
+	}
+
+	if ( ! open IDS,"<$COAST_DIR/plateidsv2.lst" ) {
+		$self->htmlError ( "Couldn't open [$COAST_DIR/plateidsv2.lst]: $!" );
+	}
+
+	# skip the first line
+	<IDS>;
+
+	# read the plate IDs: numbers are longitude, latitude, and ID number
+	while (<IDS>)	{
+		s/\n//;
+		my ($x,$y,$z) = split /,/,$_;
+		$plate{$x}{$y} = $z;
+	}
+
+	my $self = shift;
+	if ( ! open ROT,"<$COAST_DIR/master01c.rot" ) {
+		$self->htmlError ( "Couldn't open [$COAST_DIR/master01c.rot]: $!" );
+	}
+
+	# skip the first line
+	<ROT>;
+
+	# read the rotations
+	# numbers are millions of years ago; plate ID; latitude and longitude
+	#  of pole of rotation; and degrees rotated
+	while (<ROT>)	{
+		s/\n//;
+		my @temp = split /,/,$_;
+		$rotx{$temp[0]}{$temp[1]} = $temp[3];
+		$roty{$temp[0]}{$temp[1]} = $temp[2];
+		$rotdeg{$temp[0]}{$temp[1]} = $temp[4];
+	}
+	close ROT;
+
+# use world's dumbest linear interpolation to estimate pole of rotation and
+#  angle of rotation values if this time interval is non-standard
+	my $maptime = $q->param('maptime');
+	if ( ! $roty{$maptime}{'1'} )	{
+		my $basema = $maptime;
+		while ( $roty{$basema}{'1'} <= 0 && $basema > 1 )	{
+			$basema--;
+		}
+		my $topma = $maptime;
+		while ( $roty{$topma}{'1'} <= 0 && $topma < 1000 )	{
+			$topma++;
+		}
+		if ( $basema > 1 && $topma < 1000 )	{
+			for $pid (1..1000)	{
+				$rotx{$maptime}{$pid} = ( $rotx{$basema}{$pid} + $rotx{$topma}{$pid} ) / 2;
+				$roty{$maptime}{$pid} = ( $roty{$basema}{$pid} + $roty{$topma}{$pid} ) / 2;
+				$rotdeg{$maptime}{$pid} = ( $rotdeg{$basema}{$pid} + $rotdeg{$topma}{$pid} ) / 2;
+			}
+		}
+	}
+}
+
 sub mapDrawMap	{
+
   my $self = shift;
 
   # erase the last map that was drawn
@@ -485,20 +565,20 @@ sub mapDrawMap	{
   if ( $q->param('mapcontinent') ne "standard" || $q->param('projection') ne "rectilinear" )	{
     for $c (0..$#worldlat)	{
       if ( $worldlat[$c] ne "" )	{
-        ($worldlng[$c],$worldlat[$c],$worldlngraw[$c],$worldlatraw[$c]) = $self->projectPoints($worldlng[$c],$worldlat[$c]);
+        ($worldlng[$c],$worldlat[$c],$worldlngraw[$c],$worldlatraw[$c],$worldplate[$c]) = $self->projectPoints($worldlng[$c],$worldlat[$c]);
       }
     }
     if ( $q->param('borderlinecolor') ne "none" )	{
       for $c (0..$#borderlat)	{
         if ( $borderlat[$c] ne "" )	{
-          ($borderlng[$c],$borderlat[$c],$borderlngraw[$c],$borderlatraw[$c]) = $self->projectPoints($borderlng[$c],$borderlat[$c]);
+          ($borderlng[$c],$borderlat[$c],$borderlngraw[$c],$borderlatraw[$c],$borderplate[$c]) = $self->projectPoints($borderlng[$c],$borderlat[$c]);
         }
       }
     }
     if ( $q->param('usalinecolor') ne "none" )	{
       for $c (0..$#usalat)	{
         if ( $usalat[$c] ne "" )	{
-          ($usalng[$c],$usalat[$c],$usalngraw[$c],$usalatraw[$c]) = $self->projectPoints($usalng[$c],$usalat[$c]);
+          ($usalng[$c],$usalat[$c],$usalngraw[$c],$usalatraw[$c],$usaplate[$c]) = $self->projectPoints($usalng[$c],$usalat[$c]);
         }
       }
     }
@@ -510,9 +590,15 @@ sub mapDrawMap	{
   } else	{
     $thickness = 0;
   }
+
+  # draw coastlines
+  # do NOT connect neighboring points that (1) are on different tectonic plates,
+  #  or (2) now are widely separated because one point has rotated onto the
+  #  other edge of the map
   for $c (0..$#worldlat-1)	{
     if ( $worldlat[$c] ne "" && $worldlat[$c+1] ne "" &&
-         ( abs ( $worldlngraw[$c] - $worldlngraw[$c+1] ) < 345 ) )	{
+         $worldplate[$c] == $worldplate[$c+1] &&
+         ( abs ( $worldlngraw[$c] - $worldlngraw[$c+1] ) < 5 ) )	{
       $im->line( $self->getLng($worldlng[$c]),$self->getLat($worldlat[$c]),$self->getLng($worldlng[$c+1]),$self->getLat($worldlat[$c+1]),$col{$q->param('coastlinecolor')});
      # extra lines offset horizontally
       if ( $thickness > 0 )	{
@@ -524,18 +610,24 @@ sub mapDrawMap	{
       }
     }
   }
+
+  # draw the international borders
   if ( $q->param('borderlinecolor') ne "none" )	{
     for $c (0..$#borderlat-1)	{
       if ( $borderlat[$c] ne "" && $borderlat[$c+1] ne "" &&
-           ( abs ( $borderlngraw[$c] - $borderlngraw[$c+1] ) < 345 ) )	{
+           $borderplate[$c] == $borderplate[$c+1] &&
+           ( abs ( $borderlngraw[$c] - $borderlngraw[$c+1] ) < 5 ) )	{
         $im->line( $self->getLng($borderlng[$c]),$self->getLat($borderlat[$c]),$self->getLng($borderlng[$c+1]),$self->getLat($borderlat[$c+1]),$col{$q->param('borderlinecolor')});
       }
     }
   }
+
+ # draw USA state borders
   if ( $q->param('usalinecolor') ne "none" )	{
     for $c (0..$#usalat-1)	{
       if ( $usalat[$c] ne "" && $usalat[$c+1] ne "" &&
-           ( abs ( $usalngraw[$c] - $usalngraw[$c+1] ) < 345 ) )	{
+           $usaplate[$c] == $usaplate[$c+1] &&
+           ( abs ( $usalngraw[$c] - $usalngraw[$c+1] ) < 5 ) )	{
         $im->line( $self->getLng($usalng[$c]),$self->getLat($usalat[$c]),$self->getLng($usalng[$c+1]),$self->getLat($usalat[$c+1]),$col{$q->param('usalinecolor')});
       }
     }
@@ -546,8 +638,8 @@ sub mapDrawMap	{
   if ($grids > 0)	{
     for my $lat ( int(-90/$grids)..int(90/$grids) )	{
       for my $deg (-180..179)	{
-        my ($lng1,$lat1) = $self->projectPoints($deg , $lat * $grids);
-        my ($lng2,$lat2) = $self->projectPoints($deg + 1 , $lat * $grids);
+        my ($lng1,$lat1) = $self->projectPoints($deg , $lat * $grids, "grid");
+        my ($lng2,$lat2) = $self->projectPoints($deg + 1 , $lat * $grids, "grid");
         if ( $lng1 && $lng2 )	{
           $im->line($self->getLng($lng1),$self->getLat($lat1),$self->getLng($lng2),$self->getLat($lat2),$col{$q->param('gridcolor')});
         }
@@ -555,8 +647,8 @@ sub mapDrawMap	{
     }
     for my $lng ( int(-180/$grids)..int(180/$grids) )	{
       for my $deg (-90..89)	{
-        my ($lng1,$lat1) = $self->projectPoints($lng * $grids, $deg);
-        my ($lng2,$lat2) = $self->projectPoints($lng * $grids, $deg + 1);
+        my ($lng1,$lat1) = $self->projectPoints($lng * $grids, $deg, "grid");
+        my ($lng2,$lat2) = $self->projectPoints($lng * $grids, $deg + 1, "grid");
         if ( $lat1 && $lat2 )	{
           $im->line($self->getLng($lng1),$self->getLat($lat1),$self->getLng($lng2),$self->getLat($lat2),$col{$q->param('gridcolor')});
         }
@@ -794,74 +886,76 @@ sub getCoords	{
 sub projectPoints	{
 	my $self = shift;
 
-	my ($x,$y) = @_;
+	my ($x,$y,$pointclass) = @_;
+	my $pid;
 
-	# rotate point if origin is not at 0/0
-	if ( $midlat != 0 || $midlng != 0 )	{
+	# rotate point if a paleogeographic map is being made
+	# strategy: rotate point such that the pole of rotation is the
+	#  north pole; use the GCD between them to get the latitude;
+	#  add the degree offset to its longitude to get the new value;
+	#  re-rotate point back into the original coordinate system
+	if ( $q->param('maptime') > 0 && ( $midlng != $x || $midlat != $y ) && $pointclass ne "grid" )	{
+		my $ma = $q->param('maptime');
 
-	# recenter the longitude on the new origin
-		$x = $x - $midlng;
+	# integer coordinates are needed to determine the plate ID
+		my $q = int($x+0.5);
+		my $r = int($y+0.5);
+
+	# what plate is this point on?
+		$pid = $plate{$q}{$r};
+
+	# if there are no data, just bomb out
+		if ( $pid eq "" || $rotx{$ma}{$pid} eq "" || $roty{$ma}{$pid} eq "" )	{
+			return;
+		}
+
+	# how far are we going?
+		my $rotation = $rotdeg{$ma}{$pid};
+
+	# if the plate is in the eastern hemisphere, it's
+	#  rotating negatively (counter-clockwise)
+		if ( $iseast{$pid} > 0 )	{
+			$rotation = -1 * $rotation;
+		}
+
+	# rotate the point into the coordinate system defined by the POR
+	# the POR is the north pole, so the origin is 90 deg south of it
+	# locate the old origin in the "new" system while you're at it
+	# for a southern hemisphere POR, flip the longitude
+		my $neworigx;
+		my $neworigy;
+		if ( $roty{$ma}{$pid} > 0 )	{
+			$neworigx = $rotx{$ma}{$pid};
+			$neworigy = $roty{$ma}{$pid}-90;
+		} elsif ( $rotx{$ma}{$pid} > 0 )	{
+			$neworigx = $rotx{$ma}{$pid}-180;
+			$neworigy = -1*($roty{$ma}{$pid}+90);
+		} else	{
+			$neworigx = $rotx{$ma}{$pid}+180;
+			$neworigy = -1*($roty{$ma}{$pid}+90);
+		}
+
+		($x,$y) = rotatePoint($x,$y,$neworigx,$neworigy);
+
+	# adjust the longitude
+		$x = $x + $rotation;
+
 		if ( $x <= -180 )	{
 			$x = $x + 360;
 		} elsif ( $x >= 180 )	{
 			$x = $x - 360;
 		}
 
-	# find the great circle distance to the new origin
-		my $gcd = ( 180 / $PI ) * acos( ( sin($y*$PI/180) * sin($midlat*$PI/180) ) + ( cos($y*$PI/180) * cos($midlat*$PI/180) * cos($x*$PI/180) ) );
+	# put the point back in the old projection
+		($x,$y) = rotatePoint($x,$y,$neworigx,$neworigy,"reversed");
 
-	# find the great circle distance to the point opposite the new pole
-		my $oppgcd;
-		if ( $x > 0 )	{
-			$oppgcd = ( 180 / $PI ) * acos( ( sin($y*$PI/180) * sin($midlat*$PI/-180) ) + ( cos($y*$PI/180) * cos($midlat*$PI/-180) * cos((180-$x)*$PI/180) ) );
-		} else	{
-			$oppgcd = ( 180 / $PI ) * acos( ( sin($y*$PI/180) * sin($midlat*$PI/-180) ) + ( cos($y*$PI/180) * cos($midlat*$PI/-180) * cos((180+$x)*$PI/180) ) );
-		}
+	}
 
-	# find the great circle distance to the new north pole
-		my $npgcd;
-		if ( $midlat <= 0 )	{ # pole is at same longitude as origin
-			$npgcd = ( 180 / $PI ) * acos( ( sin($y*$PI/180) * sin(($midlat+90)*$PI/180) ) + ( cos($y*$PI/180) * cos(($midlat+90)*$PI/180) * cos($x*$PI/180) ) );
-		} else	{ # pole is at opposite longitude
-			$npgcd = ( 180 / $PI ) * acos( ( sin($y*$PI/180) * sin((90-$midlat)*$PI/180) ) + ( cos($y*$PI/180) * cos((90-$midlat)*$PI/180) * cos((180-$x)*$PI/180) ) );
-		}
+	# rotate point if origin is not at 0/0
+	if ( $midlat != 0 || $midlng != 0 )	{
+		($x,$y) = rotatePoint($x,$y,$midlng,$midlat);
+	}
 
-	# now finally shift the point's coordinate relative to the new origin
-
-	# find new latitude exploiting fact that great circle distance from
-	#  point to the new north pole must be 90 - latitude
-
-		$y = 90 - $npgcd;
-
-	# find new longitude
-
-		if ( abs($x) > 0.005 && abs($x) < 179.999 && abs($y) < 90 )	{
-			if ( $gcd > 90 )	{
-				if ( abs( abs($y) - abs($oppgcd) ) < 0.001 )	{
-					$oppgcd = $oppgcd + 0.001;
-				}
-				if ( $x > 0 )	{
-					$x = 180 - ( 180 / $PI * acos( cos($oppgcd * $PI / 180) / cos($y * $PI / 180) ) );
-				} else	{
-					$x = -180 + ( 180 / $PI * acos( cos($oppgcd * $PI / 180) / cos($y * $PI / 180) ) );
-				}
-			} else	{
-				if ( abs( abs($y) - abs($gcd) ) < 0.001 )	{
-					$gcd = $gcd + 0.001;
-				}
-				if ( $x > 0 )	{
-					$x = 180 / $PI * acos( cos($gcd * $PI / 180) / cos($y * $PI / 180) );
-				} else	{
-					$x = -1 * 180 / $PI * acos( cos($gcd * $PI / 180) / cos($y * $PI / 180) );
-				}
-			}
-		} else	{
-		# toss out points with extreme values that blow up the arcos
-		#  function due to rounding error
-			$x = "";
-			$y = "";
-		}
-	} # end of rotation algorithm
 	$rawx = $x;
 	$rawy = $x;
 
@@ -896,7 +990,93 @@ sub projectPoints	{
 		$x = $x * cos($y * $PI / 300);
 		$y = $y * cos($y * $PI / 360);
 	}
-	return($x,$y,$rawx,$rawy);
+	return($x,$y,$rawx,$rawy,$pid);
+}
+
+sub rotatePoint	{
+
+	my ($x,$y,$origx,$origy,$direction) = @_;
+
+	# flip the pole of rotation if you're going backwards
+	if ( $direction eq "reversed" )	{
+		$origx = -1 * $origx;
+		$origy = -1 * $origy;
+	}
+	# recenter the longitude on the new origin
+	else	{
+		$x = $x - $origx;
+		if ( $x <= -180 )	{
+			$x = $x + 360;
+		} elsif ( $x >= 180 )	{
+			$x = $x - 360;
+		}
+	}
+
+	# find the great circle distance to the new origin
+	my $gcd = GCD($y,$origy,$x);
+
+	# find the great circle distance to the point opposite the new pole
+	my $oppgcd;
+	if ( $x > 0 )	{
+		$oppgcd = GCD($y,-1*$origy,180-$x);
+	} else	{
+		$oppgcd = GCD($y,-1*$origy,180+$x);
+	}
+
+	# find the great circle distance to the new north pole
+	my $npgcd;
+	if ( $origy <= 0 )	{ # pole is at same longitude as origin
+		$npgcd = GCD($y,90+$origy,$x);
+	} else	{ # pole is at opposite longitude
+		$npgcd = GCD($y,90-$origy,180-$x);
+	}
+
+	# now finally shift the point's coordinate relative to the new origin
+
+	# find new latitude exploiting fact that great circle distance from
+	#  point to the new north pole must be 90 - latitude
+
+	$y = 90 - $npgcd;
+
+	# find new longitude
+	if ( abs($x) > 0.005 && abs($x) < 179.999 && abs($y) < 90 )	{
+		if ( $gcd > 90 )	{
+			if ( abs( abs($y) - abs($oppgcd) ) < 0.001 )	{
+				$oppgcd = $oppgcd + 0.001;
+			}
+			if ( $x > 0 )	{
+				$x = 180 - ( 180 / $PI * acos( cos($oppgcd * $PI / 180) / cos($y * $PI / 180) ) );
+			} else	{
+				$x = -180 + ( 180 / $PI * acos( cos($oppgcd * $PI / 180) / cos($y * $PI / 180) ) );
+			}
+		} else	{
+			if ( abs( abs($y) - abs($gcd) ) < 0.001 )	{
+				$gcd = $gcd + 0.001;
+			}
+			if ( $x > 0 )	{
+				$x = 180 / $PI * acos( cos($gcd * $PI / 180) / cos($y * $PI / 180) );
+			} else	{
+				$x = -1 * 180 / $PI * acos( cos($gcd * $PI / 180) / cos($y * $PI / 180) );
+			}
+		}
+	} else	{
+	# toss out points with extreme values that blow up the arcos
+	#  function due to rounding error
+		$x = "";
+		$y = "";
+	}
+
+	# recenter the longitude on the old origin
+	if ( $direction eq "reversed" )	{
+		$x = $x - $origx;
+		if ( $x <= -180 )	{
+			$x = $x + 360;
+		} elsif ( $x >= 180 )	{
+			$x = $x - 360;
+		}
+	}
+	return ($x,$y);
+
 }
 
 sub getLng	{
