@@ -1386,7 +1386,7 @@ sub printGetRefsButton	{
 		my $oldSearchTerms;
 		my @oldParams = ("name", "year", "reftitle", "reference_no",
 						 "enterer", "project_name", "refsortby",
-						 "refsSeen");
+						 "refsSeen", "authorizer");
 		for my $parameter (@oldParams)	{
 			if ($q->param($parameter))	{
 				$oldSearchTerms .= "&" . $parameter . "=" . $q->param($parameter);
