@@ -24,10 +24,10 @@ function checkForm ( ) {
 		&& frm.country.value == ""
 		&& frm.state.value == ""
 		&& frm.group_formation_member.value == ""
-		&& frm.research_group.selectedIndex == -1 
-		&& frm.lithology1.selectedIndex == -1
-		&& frm.lithology2.selectedIndex == -1
-		&& frm.environment.selectedIndex == -1 ) {
+		&& frm.research_group.selectedIndex == 0
+		&& frm.lithology1.selectedIndex == 0
+		&& frm.lithology2.selectedIndex == 0
+		&& frm.environment.selectedIndex == 0 ) {
 		errors = "Please supply a search term.";
 	}
 
