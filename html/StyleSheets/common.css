@@ -28,7 +28,9 @@ body {
 	color: red;
 	background-color: lightyellow;
 
-	width:ex;
+	width:auto;
+	margin-left:20px;
+	margin-right:20px;
 	
 	text-align: center;
 }
