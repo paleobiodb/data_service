@@ -1711,38 +1711,58 @@ sub processCollectionsSearch {
 		# Handle modified date
 		if ( $q->param('modified_since'))	{
 		  push(@terms, "modified>" . $q->param('modified_since'));
+		  $q->param('modified_since' => '');
 		}
 		# Handle collection name (must also search aka field) JA 7.3.02
 		if ( $q->param('collection_names')) {
 		  my $collectionName = $dbh->quote($wildcardToken . $q->param('collection_names') . $wildcardToken);
 		  push(@terms, "(collection_name$comparator" . $collectionName . " OR collection_aka$comparator" . $collectionName . ")");
+		  $q->param('collection_names' => '');
 		}
 		# Handle period
 		if ( $q->param('period')) {
 		  my $periodName = $dbh->quote($wildcardToken . $q->param('period') . $wildcardToken);
 		  push(@terms, "(period_min$comparator" . $periodName . " OR period_max$comparator" . $periodName . ")");
+		  $q->param('period' => '');
 		}
 		# Handle intage
 		if ( $q->param('intage')) {
 		  my $intageName = $dbh->quote($wildcardToken . $q->param('intage') . $wildcardToken);
 		  push(@terms, "(intage_min$comparator" . $intageName . " OR intage_max$comparator" . $intageName . ")");
+		  $q->param('intage' => '');
 		}
 		# Handle locage
 		if ( $q->param('locage')) {
 		  my $locageName = $dbh->quote($wildcardToken . $q->param('locage') . $wildcardToken);
 		  push(@terms, "(locage_min$comparator" . $locageName . " OR locage_max$comparator" . $locageName . ")");
+		  $q->param('locage' => '');
 		}
 		# Handle epoch
 		if ( $q->param('epoch')) {
 		  my $epochName = $dbh->quote($wildcardToken . $q->param('epoch') . $wildcardToken);
 		  push(@terms, "(epoch_min$comparator" . $epochName . " OR epoch_max$comparator" . $epochName . ")");
+		  $q->param('epoch' => '');
 		}
 		# Handle lithology and lithology adjectives
-		if ( $q->param('lithology'))	{
-		  my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology') . $wildcardToken);
-		  push(@terms, "(lithology1$comparator" . $lithologyName . " OR lithology2$comparator" . $lithologyName . ")");
+		if ( $q->param('lithadj'))	{
 		  my $lithadjName = $dbh->quote($wildcardToken . $q->param('lithadj') . $wildcardToken);
-		  push(@terms, "(lithadj$comparator" . $lithadjName. " OR lithadj2$comparator" . $lithadjName . ")");
+		  push(@terms, "(lithadj$comparator" . $lithadjName . ")");
+		  $q->param('lithadj' => '');
+		}
+		if ( $q->param('lithology1'))	{
+		  my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology1') . $wildcardToken);
+		  push(@terms, "(lithology1$comparator" . $lithologyName . ")");
+		  $q->param('lithology1' => '');
+		}
+		if ( $q->param('lithadj2'))	{
+		  my $lithadjName = $dbh->quote($wildcardToken . $q->param('lithadj2') . $wildcardToken);
+		  push(@terms, "(lithadj2$comparator" . $lithadjName . ")");
+		  $q->param('lithadj2' => '');
+		}
+		if ( $q->param('lithology2'))	{
+		  my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology2') . $wildcardToken);
+		  push(@terms, "(lithology2$comparator" . $lithologyName . ")");
+		  $q->param('lithology2' => '');
 		}
 		# research_group is now a set -- tone 7 jun 2002
 		my $resgrp = $q->param('research_group');
@@ -1831,7 +1851,7 @@ sub processCollectionsSearch {
 		$sql =	"SELECT ".join(', ', @columnList, 'reference_no').
 				"  FROM collections ".
 				" WHERE ".join(' AND ', @terms);
-		
+
 		if ( $q->param('genus_name') ) {
 			if (@terms)	{
 				$sql .= " AND collection_no IN ( " . join ( ", ", @okcolls )." ) ";
