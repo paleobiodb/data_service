@@ -166,7 +166,7 @@ sub retellOptions {
                 $envs .= ", terrestrial";
             }
             if ( $q->param("environment_unknown") ) {
-                $envs = ", unknown";
+                $envs .= ", unknown";
             }    
             $envs =~ s/^,//;
             $html .= $self->retellOptionsRow( "Environments", $envs);
