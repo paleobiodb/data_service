@@ -15,23 +15,7 @@ sub startPrintHierarchy	{
 	$|=1;
 
 	print main::stdIncludes( "std_page_top" );
-
-	print "<div class=\"title\">Taxon classification search form</div>\n";
-
-	print "<form method=post action=\"/cgi-bin/bridge.pl\"> " .
-		"<input id=\"action\" type=hidden name=\"action\"" .
-		"value=\"startProcessPrintHierarchy\">" .
-		"<center><table>\n" .
-		"<tr><td valign=middle align=right>Taxon name:" .
-		"<input name=\"taxon_name\" type=\"text\" size=25>" .
-		"</td>\n" .
-		"<td valign=middle>Hierarchical levels:" .
-		"<select name=\"maximum_levels\"><option>1<option>2<option selected>3<option>4<option>5</select>" .
-		"<td align=left>" .
-		"<input id=\"submit\" name=\"submit\" value=\"Show hierarchy\"" .
-		" type=\"submit\">" .
-		"</td></tr></table></center></form>\n" ;
-
+    print $hbo->populateHTML('print_hierarchy_form', [],[]);
 	print main::stdIncludes("std_page_bottom");
 
 	return;
@@ -88,12 +72,17 @@ sub processPrintHierarchy	{
     # now print out the data
 	open OUT, ">$OUT_FILE_DIR/classification.csv";
 	print "<center><table>\n";
+    print "<tr>";
+    for ($i=0;$i<=$MAX;$i++) {
+           print "<td style=\"width:20;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>"; 
+    }
+    print "</tr>";
 	foreach $record ( @{$taxon_records})	{
 		print "<tr>";
-		for $i ( 0..$record->{'level'} )	{
+		for ($i=0;$i<$record->{'level'};$i++) {
 			print "<td></td>";
 		}
-		print "<td>";
+		print "<td style=\"white-space: nowrap;\" colspan=".($MAX + 1 - $record->{'level'}).">";
         $shortrank = $shortranks{$record->{'taxon_rank'}};
         $title = "<b>$shortrank</b> ";
         if ( $record->{'taxon_rank'} =~ /(species)|(genus)/ ) {
