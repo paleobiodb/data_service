@@ -23,6 +23,12 @@ use fields qw(	reference_no
 				firstpage
 				lastpage
 				
+				author1init
+				author1last
+				author2init
+				author2last
+				otherauthors
+				
 				SQLBuilder
 							);  # list of allowable data fields.
 
@@ -63,7 +69,7 @@ sub setWithReferenceNumber {
 		
 		# get the pubyr and save it
 		my $sql = $self->getSQLBuilder();
-		$sql->setSQLExpr("SELECT reftitle, pubtitle, pubyr, pubvol, pubno, firstpage, lastpage FROM refs WHERE reference_no = $input");
+		$sql->setSQLExpr("SELECT reftitle, pubtitle, pubyr, pubvol, pubno, firstpage, lastpage, author1init, author1last, author2init, author2last, otherauthors FROM refs WHERE reference_no = $input");
 		$sql->executeSQL();
 		
 		my $results = $sql->nextResultArrayRef();
@@ -75,6 +81,12 @@ sub setWithReferenceNumber {
 		$self->{pubno} = $results->[4];
 		$self->{firstpage} = $results->[5];
 		$self->{lastpage} = $results->[6];
+		
+		$self->{author1init} = $results->[7];
+		$self->{author1last} = $results->[8];
+		$self->{author2init} = $results->[9];
+		$self->{author2last} = $results->[10];
+		$self->{otherauthors} = $results->[11];
 	}
 }
 
@@ -138,29 +150,55 @@ sub pages {
 }
 
 
-# get all authors and year for reference
-sub authors {
+# for internal use only
+# gets author information for the reference
+#
+# pass it true to get initials, or 
+# false to not get them..
+sub internalGetAuthors {
 	my Reference $self = shift;
 	
-	my $sql = $self->getSQLBuilder();
+	my $getInitials = shift;  # should we get initials or not?
 	
 	my $ref_no = $self->{reference_no};
-	$sql->setSQLExpr("SELECT author1last, author2last, otherauthors FROM refs WHERE reference_no = $ref_no");
-	$sql->executeSQL();
 	
-	my @result = $sql->nextResultArray();
-	$sql->finishSQL();
+	my $auth = $self->{author1last};	# first author
+
+	if ($getInitials) {
+		$auth = $self->{author1init} . " " . $auth;	# first author
+	}
 	
-	my $auth = $result[0];	# first author
-	if ($result[2]) {	# we have other authors (implying more than two)
+	if ($self->{otherauthors}) {	# we have other authors (implying more than two)
 		$auth .= " et al."; 
-	} elsif ($result[1]) {	# exactly two authors
-		$auth .= " and $result[1]";
+	} elsif ($self->{author2last}) {	# exactly two authors
+		$auth .= " and ";
+		
+		if ($getInitials) {
+			$auth .= $self->{author2init} . " ";
+		}
+			
+		$auth .= $self->{author2last};
 	}
 	
 	$auth .= " $self->{pubyr}";  # pubyr
 		
 	return $auth;
+}
+
+
+# get all authors and year for reference
+sub authors {
+	my Reference $self = shift;
+	
+	return $self->internalGetAuthors(0);  # no initials
+}
+
+
+# gets author names with initials for reference
+sub authorsWithInitials {
+	my Reference $self = shift;
+	
+	return $self->internalGetAuthors(1);  # initials
 }
 
 
@@ -180,7 +218,7 @@ sub formatAsHTML() {
 	my Reference $self = shift;
 	
 	my $html = "<SPAN class=\"smallRef\"><b>" . $self->referenceNumber() . "</b> ";
-	$html .= $self->authors() . ". ";
+	$html .= $self->authorsWithInitials() . ". ";
 	if ($self->{reftitle})	{ $html .= $self->{reftitle}; }
 	if ($self->{pubtitle})	{ $html .= " <i>" . $self->{pubtitle} . "</i>"; }
 	if ($self->{pubvol}) 	{ $html .= " <b>" . $self->{pubvol} . "</b>"; }

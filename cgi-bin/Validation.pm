@@ -114,5 +114,36 @@ sub isInteger {
 }
 
 
+# pass this a taxon name as a string,
+# and it will look at the number of spaces to determine
+# the rank.  Returns "invalid" if it's not a valid spacing..
+#
+# 0 spaces = higher
+# 1 space  = species
+# 2 spaces = subspecies
+#
+# it will return a string, either "higher", "species", "subspecies", or "invalid"
+# ** note, we can't tell the difference between a genus and a higher taxon
+# by just looking at the spacing.. so a genus name will return as "higher" as well.
+#
+# by rjp, 2/2004 
+sub taxonRank {
+	my $taxon = shift;
+
+	
+	if ($taxon =~ m/^[A-Z][a-z]+[ ][a-z]+[ ][a-z]+\n?$/) {
+		return "subspecies";	
+	}
+	
+	if ($taxon =~ m/^[A-Z][a-z]+[ ][a-z]+\n?$/) {
+		return "species";	
+	}
+
+	if ($taxon =~ m/^[A-Z][a-z]+\n?$/) {
+		return "higher";
+	}
+	
+	return "invalid";
+}
 
 1;
