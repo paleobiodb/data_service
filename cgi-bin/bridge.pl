@@ -777,6 +777,15 @@ sub displaySearchRefs {
 		unshift ( @row, "" );
 	}
 
+	# Users editing collections may want to have their current reference
+	# swapped with the primary reference of the collection to be edited.
+	unshift ( @fields, "%%use_primary%%" );
+	if ($q->param('action') eq "startEditCollection" ) {
+		unshift ( @row, "<input type='submit' name='use_primary' value=\"Use collection's reference\">\n" );
+	} else {
+		unshift ( @row, "" );
+	}
+
 	unshift @row,"";
 	unshift @fields,"authorizer";
 	unshift @row,"";
@@ -860,16 +869,27 @@ sub printGetRefsButton	{
 # This shows the actual references
 sub displayRefResults {
 
-	my $overlimit = &RefQuery();
-  
-	my @rows = @{$sth->fetchall_arrayref()};
-	my $numRows = @rows;
+	my $overlimit;
+	my @rows;
+	my $numRows;
+
+	unless($q->param('use_primary')){
+		$overlimit = &RefQuery();
+		@rows = @{$sth->fetchall_arrayref()};
+		$numRows = @rows;
+	}
+	else{
+		$q->param('use_primary' => "yes");
+		$numRows = 1;
+	}
 
 	if ( $numRows == 1 ) {
 		# Do the action, don't show results...
 
 		# Set the reference_no
-		$s->setReferenceNo ( $dbh, ${@rows[0]}[3] );		# Why isn't the primary key the first column?
+		unless($q->param('use_primary')){
+			$s->setReferenceNo ( $dbh, ${@rows[0]}[3] );		# Why isn't the primary key the first column?
+		}
 		# print "reference_no is ".${@rows[0]}[3]."<BR>\n";
 
 
@@ -953,7 +973,9 @@ sub displayRefResults {
 
 		$sth->finish();
 
-		print qq|<input type=submit value="Select reference">\n| if ( ! $s->guest( ) );
+		if(!$s->guest()){
+			print qq|<input type=submit value="Select reference"></form>\n|;
+		}
 
 		&printGetRefsButton($numRows,$overlimit);
 
@@ -963,7 +985,11 @@ sub displayRefResults {
 		print "<center>\n<p>";
 	}
 
-	print qq|<a href="$exec_url?action=displaySearchRefs&type=select"><b>Do another search</b></a></p></center><br>\n|;
+	print qq|<a href="$exec_url?action=displaySearchRefs&type=select"><b>Do another search</b></a>\n|;
+	if(!$s->guest()){
+		print qq| - <a href="$exec_url?action=displayRefAdd"><b>Enter a new reference</b></a>\n|; 
+	}
+	print "</p></center><br>\n";
 
 	print &stdIncludes ("std_page_bottom");
 }
@@ -1288,7 +1314,7 @@ sub displaySearchColls {
 
 	# Have to have a reference #, unless we are just searching
 	my $reference_no = $s->get("reference_no");
-	if ( ! $reference_no && $type ne "view" ) {
+	if ( ! $reference_no && $type ne "view" && !$q->param('use_primary') ) {
 		# Come back here... requeue our option
 		$s->enqueue ( $dbh, "action=displaySearchColls&type=$type" );
 		&displaySearchRefs ( "Please choose a reference first" );
@@ -1312,6 +1338,10 @@ sub displaySearchColls {
 	$html =~ s/%%enterer%%/$enterer/;
 	my $authorizer = $s->get("authorizer");
 	$html =~ s/%%authorizer%%/$authorizer/;
+	# propagate this through the next server hit.
+	if($q->param('use_primary')){
+		$html =~ s/%%use_primary%%/yes/;
+	}
 
 	# Set the type
 	$html =~ s/%%type%%/$type/;
@@ -1479,6 +1509,10 @@ sub displayCollResults {
 			}
 		  	print "
 	<td align=center valign=top><a href='$exec_url?action=$action&collection_no=$collection_no";
+			# for collection edit:
+			if($q->param('use_primary')){
+				print "&use_primary=yes";
+			}
 			# These may be useful to displayOccsForReID
 			if($q->param('genus_name')){
 				print "&genus_name=".$q->param('genus_name');
@@ -1502,6 +1536,7 @@ sub displayCollResults {
 		my $dataRow = $dataRows[0];
 		my $collection_no = $dataRow->{'collection_no'};
 		$q->param(collection_no=>"$collection_no");
+		$q->param('use_primary' => $q->param('use_primary')) if($q->param('use_primary'));
 		# Do the action directly if there is only one row
 		&$action;
 		exit;
@@ -2592,10 +2627,6 @@ sub displayEditCollection {
 		exit;
 	}
 	
-	my $session_ref = $s->get('reference_no');
-
-	print &stdIncludes ("std_page_top");
-
 	my $collection_no = $q->param('collection_no');
 	$sql = "SELECT * FROM collections WHERE collection_no=" . $collection_no;
 	dbg ( "$sql<HR>" );
@@ -2604,6 +2635,13 @@ sub displayEditCollection {
 	my @fieldNames = @{$sth->{NAME}};
 	my @row = $sth->fetchrow_array();
 	$sth->finish();
+
+	if($q->param('use_primary')){
+		$s->put('reference_no', $row[5]);
+	}
+
+	my $session_ref = $s->get('reference_no');
+	print &stdIncludes ("std_page_top");
 
 	# Get the reference for this collection
 	my $curColNum = 0;
