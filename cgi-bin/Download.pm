@@ -759,9 +759,17 @@ sub getCollectionsWhereClause {
 		my $created_string;
 		# if so, did they want to look before or after?
 		if ($q->param('created_before_after') eq "before") {
-			$created_string = " occurrences.created < $created_date ";
+			if ( $q->param('collections_only') eq 'YES' )	{
+				$created_string = " collections.created < $created_date ";
+			} else	{
+				$created_string = " occurrences.created < $created_date ";
+			}
 		} elsif ($q->param('created_before_after') eq "after") {
-			$created_string = " occurrences.created > $created_date ";
+			if ( $q->param('collections_only') eq 'YES' )	{
+				$created_string = " collections.created > $created_date ";
+			} else	{
+				$created_string = " occurrences.created > $created_date ";
+			}
 		}
 		
 		$where->addWhereItem($created_string);
