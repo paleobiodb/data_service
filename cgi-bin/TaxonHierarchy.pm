@@ -56,6 +56,8 @@ sub setWithTaxonNumber {
 
 # Sets the initial taxon with the taxon_name from the database.
 # If the taxon is not in the database, then it does nothing.
+#
+# returns a boolean, 1 if it worked, 0, if it couldn't.
 sub setWithTaxonName {
 	my TaxonHierarchy $self = shift;
 	my $newname;
@@ -70,8 +72,11 @@ sub setWithTaxonName {
 			$self->{taxonNumber} = $tn;
 			$self->{taxonName} = $newname;
 		
+			return 1;	# it worked
 		}	
 	}
+	
+	return 0;
 }	
 
 
@@ -229,8 +234,9 @@ sub originalCombination {
 	
 	my $tn = $self->taxonNumber();  # number we're starting with
 	
+	
 	my $cn = $sql->getSingleSQLResult("SELECT child_no FROM opinions WHERE parent_no = $tn 
-		AND status = 'recombined as' OR status = 'corrected as'");
+		AND status IN ('recombined as', 'corrected as')");
 	
 	if (! $cn) {
 		return $tn;		# return the number we started with if there are no recombinations	
