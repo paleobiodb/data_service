@@ -1211,13 +1211,44 @@ sub doCollections{
 	@data = @{main::displayCollResults($in_list)};	
 	require Collections;
 
+	# figure out which intervals are too vague to use to set limits on
+	#  the joint upper and lower boundaries
+	# "vague" means there's some other interval falling entirely within
+	#  this one JA 26.1.05
+	my %seeninterval;
+	my %toovague;
+	for my $row ( @data )	{
+		if ( ! $seeninterval{$row->{'max_interval_no'}." ".$row->{'min_interval_no'}} )	{
+			$max1 = $lowerbound{$row->{'max_interval_no'}};
+			$min1 = $upperbound{$row->{'min_interval_no'}};
+			if ( $min1 == 0 )	{
+				$min1 = $upperbound{$row->{'max_interval_no'}};
+			}
+			for $intervalkey ( keys %seeninterval )	{
+				my ($maxno,$minno) = split / /,$intervalkey;
+				$max2 = $lowerbound{$maxno};
+				$min2 = $upperbound{$minno};
+				if ( $min2 == 0 )	{
+					$min2 = $upperbound{$maxno};
+				}
+				if ( $max1 < $max2 && $max1 > 0 && $min1 > $min2 && $min2 > 0 )	{
+					$toovague{$intervalkey}++;
+				}
+				elsif ( $max1 > $max2 && $max2 > 0 && $min1 < $min2 && $min1 > 0 )	{
+					$toovague{$row->{'max_interval_no'}." ".$row->{'min_interval_no'}}++;
+				}
+			}
+			$seeninterval{$row->{'max_interval_no'}." ".$row->{'min_interval_no'}}++;
+		}
+	}
+
 	# Process the data:  group all the collection numbers with the same
 	# time-place string together as a hash.
 	%time_place_coll = ();
-	my $oldestupperbound;
-	my $oldestuppername;
 	my $oldestlowerbound;
+	my $oldestlowername;
 	my $youngestupperbound = 9999;
+	my $youngestuppername;
 	foreach my $row (@data){
 	    $res = Collections::createTimePlaceString($row,$dbt);
 	    if(exists $time_place_coll{$res}){
@@ -1240,16 +1271,18 @@ sub doCollections{
 			$upper = $upperbound{$row->{'min_interval_no'}};
 			$min_interval_name{$res} = $interval_name{$row->{'min_interval_no'}};
 		}
-		# we also need to track the interval with the oldest upper
-		#  bound, because this will be the reported first appearance
-		if ( $upper > $oldestupperbound )	{
-			$oldestupperbound = $upper;
-			$oldestuppername = $max_interval_name{$res};
-			$oldestlowerbound = $lowerbound{$row->{'max_interval_no'}};
-		}
-		# also store the overall upper bound for printing below
-		if ( $upper < $youngestupperbound )	{
-			$youngestupperbound = $upper;
+		# also store the overall lower and upper bounds for
+		#  printing below JA 26.1.05
+		# don't do this if the interval is too vague (see above)
+		if ( ! $toovague{$row->{'max_interval_no'}." ".$row->{'min_interval_no'}} )	{
+			if ( $lowerbound{$row->{'max_interval_no'}} > $oldestlowerbound )	{
+				$oldestlowerbound = $lowerbound{$row->{'max_interval_no'}};
+				$oldestlowername = $max_interval_name{$res};
+			}
+			if ( $upper < $youngestupperbound )	{
+				$youngestupperbound = $upper;
+				$youngestuppername = $min_interval_name{$res};
+			}
 		}
 		# WARNING: we're assuming upper boundary ages will never be
 		#  greater than 999 million years
@@ -1270,6 +1303,7 @@ sub doCollections{
 	$oldestlowerbound =~ s/00$//;
 	$youngestupperbound =~ s/00$//;
 
+
 	# sort the time-place strings temporally or by geographic location
 	my @sorted = sort { $bounds_coll{$b} <=> $bounds_coll{$a} || $a cmp $b } keys %bounds_coll;
 
@@ -1283,23 +1317,23 @@ sub doCollections{
 
 		# print the first and last appearance (i.e., the age range)
 		#  JA 25.6.04
-        if ($age_range_format eq "for_strata_module") {
-            $output .= "<p><b>Age range:</b> ";
-            $output .= $oldestuppername;
-            if ( $oldestuppername ne $min_interval_name{$sorted[$#sorted]} )	{
-                $output .= " to " . $min_interval_name{$sorted[$#sorted]};
-            }
-            $output .= " <i>or</i> " . $oldestlowerbound . " to " . $youngestupperbound . " Ma";
-            $output .= "</p><br>\n<hr>\n";
-        } else {
-            $output .= "<center><h3>Age range</h3>\n";
-            $output .= $oldestuppername;
-            if ( $oldestuppername ne $min_interval_name{$sorted[$#sorted]} )	{
-                $output .= " to " . $min_interval_name{$sorted[$#sorted]};
-            }
-            $output .= " <i>or</i> " . $oldestlowerbound . " to " . $youngestupperbound . " Ma";
-            $output .= "<center><p>\n<hr>\n";
-        }
+		if ($age_range_format eq "for_strata_module") {
+			$output .= "<p><b>Age range:</b> ";
+			$output .= $oldestlowername;
+			if ( $oldestlowername ne $youngestuppername )	{
+				$output .= " to " . $youngestuppername;
+			}
+			$output .= " <i>or</i> " . $oldestlowerbound . " to " . $youngestupperbound . " Ma";
+			$output .= "</p><br>\n<hr>\n";
+		} else {
+			$output .= "<center><h3>Age range</h3>\n";
+			$output .= $oldestlowername;
+			if ( $oldestlowername ne $youngestuppername )	{
+	i			$output .= " to " . $youngestuppername;
+			}
+			$output .= " <i>or</i> " . $oldestlowerbound . " to " . $youngestupperbound . " Ma";
+			$output .= "<center><p>\n<hr>\n";
+		}
 
 		$output .= "<center><h3>Collections</h3></center>\n";
 
