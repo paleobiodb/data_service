@@ -776,46 +776,6 @@ sub databaseAuthorityRecord {
 	return $row->row(); 	
 }
 
-
-# Pass this a Taxon object
-#
-# It will take all opinions relating to itself
-# which are not of status 'belongs to' and move them
-# to the passed Taxon object.
-#
-# So basically, this will figure out the taxon_no
-# of the current Taxon, look up all the opinions which have
-# that taxon_no as their child_no, and change the child_no
-# of all those opinions to the taxon_no of the passed Taxon (as
-# long as they're not 'belongs to' opinions).
-#
-# Returns a boolean - true if it succeeded.  
-sub moveNonBelongsToOpinionsToTaxon {
-	my Taxon $self = shift;		# the Taxon we're moving opinions *from*
-	my Taxon $newChild = shift; # the passed taxon which we're
-								# moving opinions *to*
-	
-	my $sql = $self->getTransactionManager();
-	
-	my $oldTaxonNo = $self->taxonNumber();
-	my $newTaxonNo = $newChild->taxonNumber();
-	
-	if ((!$oldTaxonNo) || (!$newTaxonNo)) { return FALSE; }
-	
-	my $result = $sql->getData("UPDATE opinions SET child_no = $newTaxonNo, 
-	modified = modified WHERE child_no = $oldTaxonNo 
-	AND status != 'belongs to'");
-	
-	if ($result) {
-		return TRUE;
-	} else {
-		return FALSE;
-	}
-
-}
-
-
-
 # Pass this an HTMLBuilder object,
 # a session object, and the CGI object.
 # 
@@ -1714,11 +1674,17 @@ sub submitAuthorityForm {
 		if ($parentTaxon) {
 			Debug::dbPrint("we're here 2 in Taxon");
 			my $opinionRow = CachedTableRow->new($self->{GLOBALVARS}, 'opinions');
+
+            # Get original combination for parent no PS 04/22/2005
+            my $orig_parent_no = $parentTaxon->taxonNumber();
+            if ($orig_parent_no) {
+                $orig_parent_no = TaxonInfo::getOriginalCombination($sql,$orig_parent_no);
+            }
 			
 			my %opinionHash;
 			$opinionHash{status} = 'belongs to';
 			$opinionHash{child_no} = $resultTaxonNumber;
-			$opinionHash{parent_no} = $parentTaxon->taxonNumber();
+			$opinionHash{parent_no} = $orig_parent_no;
 			$opinionHash{authorizer_no} = $fieldsToEnter{authorizer_no};
 			$opinionHash{enterer_no} = $fieldsToEnter{enterer_no};
 			$opinionHash{ref_has_opinion} = $fieldsToEnter{ref_is_authority};
