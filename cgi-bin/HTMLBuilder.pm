@@ -22,6 +22,8 @@ use Person;
 use CGI;
 
 my $stuff;
+my %CACHED_TEMPLATES;
+my %SELECT_LISTS;
 
 sub new {
   my $class = shift();
@@ -29,7 +31,7 @@ sub new {
   my $dbh = shift();
   my $exec_url = shift();
 
-  my $self = {};
+  my $self = {SELECT_LISTS=>\%SELECT_LISTS};
   bless $self, $class;
 
   $self->setTemplateDir($templateDir);
@@ -49,8 +51,7 @@ sub getTemplateDir {
 }
 # Note: geogscale has labels different from values <OPTION value="small collection">small collection (&lt; 10 x 10 m)<OPTION value=outcrop>outcrop (&lt; 1 x 1 km)<OPTION value="local area">local area (&lt; 100 x 100 km)<OPTION value=basin>basin (&gt; 100 x 100 km)</OPTION>
 
-my %CACHED_TEMPLATES;
-my %SELECT_LISTS = (assigned_to=>["Ederer", "Alroy"],
+%SELECT_LISTS = (assigned_to=>["Ederer", "Alroy"],
                     severity=>["Cosmetic", "Annoying", "Important", "Critical"],
 					taxon_rank=>['subspecies', 'species', 'subgenus', 'genus', 'subtribe', 'tribe', 'subfamily', 'family', 'superfamily', 'infraorder', 'suborder', 'order', 'superorder', 'infraclass', 'subclass', 'class', 'superclass', 'subphylum', 'phylum', 'superphylum', 'subkingdom', 'kingdom', 'superkingdom', 'unranked clade'],
 					parent_taxon_rank=>['', 'species', 'subgenus', 'genus', 'subtribe', 'tribe', 'subfamily', 'family', 'superfamily', 'infraorder', 'suborder', 'order', 'superorder', 'infraclass', 'subclass', 'class', 'superclass', 'subphylum', 'phylum', 'superphylum', 'subkingdom', 'kingdom', 'superkingdom', 'unranked clade'],

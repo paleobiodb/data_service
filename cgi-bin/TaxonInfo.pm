@@ -810,6 +810,7 @@ sub displayTaxonInfoResults {
 	require Images;
 	# not sure why, but somehow $in_list gets fatally cluttered with
 	#  single quotes before this point
+    print "in list $in_list" ;
 	$in_list =~ s/\'//g;
 	my @thumbs = Images::processViewImages($dbt, $q, $s, $in_list);
 	foreach my $thumb (@thumbs){
@@ -1168,6 +1169,9 @@ sub doCollections{
 	my $dbt = shift;
 	my $dbh = shift;
 	my $in_list = shift;
+    # age_range_format changes appearance html formatting of age/range information
+    # used by the strata module
+    my $age_range_format = shift;  
 	my $output = "";
 
 	$q->param(-name=>"limit",-value=>1000000);
@@ -1190,11 +1194,10 @@ sub doCollections{
 			$interval_name{$ir->{'interval_no'}} = $ir->{'interval_no'} . " " . $ir->{'interval_name'};
 		}
 	}
-	
+
 	# Get all the data from the database, bypassing most of the normal behavior
 	# of displayCollResults
 	@data = @{main::displayCollResults($in_list)};	
-
 	require Collections;
 
 	# Process the data:  group all the collection numbers with the same
@@ -1269,13 +1272,23 @@ sub doCollections{
 
 		# print the first and last appearance (i.e., the age range)
 		#  JA 25.6.04
-		$output .= "<center><h3>Age range</h3>\n";
-		$output .= $oldestuppername;
-		if ( $oldestuppername ne $min_interval_name{$sorted[$#sorted]} )	{
-			$output .= " to " . $min_interval_name{$sorted[$#sorted]};
-		}
-		$output .= " <i>or</i> " . $oldestlowerbound . " to " . $youngestupperbound . " Ma";
-		$output .= "<center><p>\n<hr>\n";
+        if ($age_range_format eq "for_strata_module") {
+            $output .= "<p><b>Age range:</b> ";
+            $output .= $oldestuppername;
+            if ( $oldestuppername ne $min_interval_name{$sorted[$#sorted]} )	{
+                $output .= " to " . $min_interval_name{$sorted[$#sorted]};
+            }
+            $output .= " <i>or</i> " . $oldestlowerbound . " to " . $youngestupperbound . " Ma";
+            $output .= "</p><br>\n<hr>\n";
+        } else {
+            $output .= "<center><h3>Age range</h3>\n";
+            $output .= $oldestuppername;
+            if ( $oldestuppername ne $min_interval_name{$sorted[$#sorted]} )	{
+                $output .= " to " . $min_interval_name{$sorted[$#sorted]};
+            }
+            $output .= " <i>or</i> " . $oldestlowerbound . " to " . $youngestupperbound . " Ma";
+            $output .= "<center><p>\n<hr>\n";
+        }
 
 		$output .= "<center><h3>Collections</h3></center>\n";
 

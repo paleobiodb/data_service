@@ -37,6 +37,7 @@ use Images;
 use TaxonInfo;
 use TimeLookup;
 use Ecology;
+use Strata;
 use PrintHierarchy;
 use POSIX qw(ceil floor);
 
@@ -2693,7 +2694,10 @@ IS NULL))";
 		
 		$val = $q->param($fieldName);
 		if (defined $q->param($fieldName) && $q->param($fieldName) ne '')  {
-			if ( $pulldowns{$fieldName} ) {
+        
+            if ($q->param($fieldName) eq "NULL_OR_EMPTY") {
+                push(@terms, "(collections.$fieldName IS NULL OR collections.$fieldName='')");
+			} elsif ( $pulldowns{$fieldName} ) {
 				# It is in a pulldown... no wildcards
 				push(@terms, "collections.$fieldName = '$val'");
 			} else {
@@ -2711,6 +2715,12 @@ IS NULL))";
 		push(@terms, "(collections.geological_group $comparator '$wildcardToken$val$wildcardToken' 
 						OR collections.formation $comparator '$wildcardToken$val$wildcardToken' 
 						OR collections.member $comparator '$wildcardToken$val$wildcardToken')");
+	}
+
+    # This field is only passed by links created in the Strata module PS 12/01/2004
+	if (my $val = $q->param("lithologies")) {
+		push(@terms, "(collections.lithology1$comparator '$wildcardToken$val$wildcardToken' 
+					   OR collections.lithology2$comparator '$wildcardToken$val$wildcardToken')"); 
 	}
 	
 	#Debug::dbPrint("terms = @terms");
@@ -2933,6 +2943,23 @@ sub displayCollectionDetails {
 	my ($r,$f) = getMaxMinNamesAndDashes(\@row,\@fieldNames);
 	@row = @{$r};
 	@fieldNames = @{$f};
+
+    # have the geological group/formation/members hyperlink to strata search
+    for($index=0;$index < $#fieldNames;$index++) {
+        if ($fieldNames[$index] eq "geological_group") {
+            if ($row[$index]) {
+                $row[$index] = "<a href=\"$exec_url?action=displayStrataSearch&search_term=$row[$index]\">$row[$index]</a>";
+            }    
+        } elsif($fieldNames[$index] eq "formation") {
+            if ($row[$index]) {
+                $row[$index] = "<a href=\"$exec_url?action=displayStrataSearch&search_term=$row[$index]\">$row[$index]</a>";
+            }    
+        } elsif($fieldNames[$index] eq "member") {
+            if ($row[$index]) {
+                $row[$index] = "<a href=\"$exec_url?action=displayStrataSearch&search_term=$row[$index]\">$row[$index]</a>";
+            }    
+        }
+    }
 
     print stdIncludes( "std_page_top" );
 	
@@ -4393,7 +4420,6 @@ sub startTaxonomy {
 	
 }
 
-
 # JA 13.8.02
 #
 # modified by rjp 3/2004: This displays a form where the user can type in 
@@ -4523,6 +4549,16 @@ sub startProcessEcologyForm	{
 	Ecology::processEcologyForm($dbh, $dbt, $q, $s, $exec_url);
 }
 ## END Ecology stuff
+##############
+
+
+
+##############
+## Strata stuff
+sub displayStrataSearch {
+    Strata::displayStrataSearch($dbh,$dbt,$hbo,$q,$s);
+}
+## END Strata stuff
 ##############
 
 ##############
