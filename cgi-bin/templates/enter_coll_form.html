@@ -49,20 +49,20 @@
 		if ( frm.latmin.value != "") {
         		var	numeric = /^[0-9]*$/;
 			if ( numeric.test ( frm.latmin.value ) == false ) {
-				missinginfo += "\n    - Latitude Minutes (must be numeric)";
+				missinginfo += "\n    - Latitude minutes (must be numeric)";
 			}
 			if ( parseInt(frm.latmin.value) > 60 ) {
-				missinginfo += "\n    - Latitude Minutes (must be < 60)";
+				missinginfo += "\n    - Latitude minutes (must be < 60)";
 			}
 		}
 		// added check for latsec, PM 8/27/02
 		if ( frm.latsec.value != "") {
         		var	numeric = /^[0-9]*$/;
 			if ( numeric.test ( frm.latsec.value ) == false ) {
-				missinginfo += "\n    - Latitude Seconds (must be numeric)";
+				missinginfo += "\n    - Latitude seconds (must be numeric)";
 			}
 			if ( parseInt(frm.latsec.value) > 60 ) {
-				missinginfo += "\n    - Latitude Seconds (must be < 60)";
+				missinginfo += "\n    - Latitude seconds (must be < 60)";
 			}
 		}
 		// We want valid numeric values regardless of the geogscale type 
@@ -81,20 +81,20 @@
 		if ( frm.lngmin.value != "") {
         		var	numeric = /^[0-9]*$/;
 			if ( numeric.test ( frm.lngmin.value ) == false ) {
-				missinginfo += "\n    - Longitude Minutes (must be numeric)";
+				missinginfo += "\n    - Longitude minutes (must be numeric)";
 			}
 			if ( parseInt(frm.lngmin.value) > 60 ) {
-				missinginfo += "\n    - Longitude Minutes (must be < 60)";
+				missinginfo += "\n    - Longitude minutes (must be < 60)";
 			}
 		}
 		// added check for lngsec, PM 8/27/02
 		if ( frm.lngsec.value != "") {
         		var	numeric = /^[0-9]*$/;
 			if ( numeric.test ( frm.lngsec.value ) == false ) {
-				missinginfo += "\n    - Longitude Seconds (must be numeric)";
+				missinginfo += "\n    - Longitude seconds (must be numeric)";
 			}
 			if ( parseInt(frm.lngsec.value) > 60 ) {
-				missinginfo += "\n    - Longitude Seconds (must be < 60)";
+				missinginfo += "\n    - Longitude seconds (must be < 60)";
 			}
 		}
 
@@ -151,7 +151,7 @@
 				  frm.country.options[index].text == "Uganda" ||
 				  frm.country.options[index].text == "Indonesia" ) &&
 				 ( parseInt(frm.latdeg.value) > 15 ||
-				   frm.latdir.options[indexLng].text != "East" ) ) {
+				   frm.lngdir.options[indexLng].text != "East" ) ) {
 				missinginfo += "\n    - Lat/long (mismatch country)";
 			}
 		}
