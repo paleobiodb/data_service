@@ -1,0 +1,35 @@
+<HTML>
+<HEAD>
+
+<SCRIPT language="JavaScript" type="text/javascript">
+<!--
+function showOpinion() {
+	window.location = "http://www.paleodb.org/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=" + document.forms[0].number.value;
+}
+
+function showAuthority() {
+	window.location = "http://www.paleodb.org/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" + document.forms[0].number.value;
+}
+
+-->
+</SCRIPT>
+
+</HEAD>
+<BODY>
+<H2>Admin Shortcuts</H2>
+
+<DIV>
+Enter a key number such as taxon_no, opinion_no, etc. and click on the appropriate button.  Note, you must already be logged into the database.</DIV>
+
+<BR>
+
+<FORM>
+Key Number: <INPUT name="number" id="number">
+<BR><BR>
+<INPUT type=button value="Opinion" onClick="return showOpinion();">
+<INPUT type=button value="Authority" onClick="return showAuthority();">
+</FORM>
+
+
+</BODY>
+</HTML>
