@@ -3258,6 +3258,9 @@ sub processEditCollectionForm {
 		}
 		my $no = ${$dbt->getData($sql)}[0]->{interval_no};
 		$q->param(min_interval_no => $no);
+	} else	{
+		# WARNING: assumes that you do have a non-zero max interval no
+		$q->param(min_interval_no => '0');
 	}
 	# bomb out if no such interval exists JA 28.7.03
 	if ( $q->param('max_interval_no') < 1 )	{
