@@ -287,7 +287,7 @@ sub deleteRefAssociation{
     if($res != 1){
 		print "<font color=\"FF0000\">Failed to delete secondary ref for".
 			  "collection $collection_no and reference $reference_no.<br>".
-			  "Return code:$res.<br>".
+			  "Return code:$res<br>".
 			  "Please notify the database administrator with this message.".                  "</font><br>";
 		return 0;
 	}
@@ -446,6 +446,8 @@ sub new_search_recurse{
     my $seed_no = shift;
     my $dbt = shift;
 	my $first_time = shift;
+    my $recursed = (shift || 0);
+    $recursed += 1;
     my $sql = "";
     my @results = ();
     #my $validated_list = $seed_no;
@@ -496,9 +498,10 @@ sub new_search_recurse{
             my $most_recent = $other_results[$index]->{pubyr};
 			## if this is the very first original seed, all children are good,
             # so don't do a pubyr check.
+            #print "c $child->{child_no} ";
             if($first_time){
                 $passed{$child->{child_no}} = 1;
-                new_search_recurse($child->{child_no}, $dbt, 0);
+                new_search_recurse($child->{child_no}, $dbt, 0, $recursed);
             }
             # This adds current child and children with older parents, but
             # not children with parents younger than the seed parent.
@@ -506,7 +509,7 @@ sub new_search_recurse{
                 # Recursion: call self on all validated children
                 #print "\nRECURSING WITH ".$child->{child_no}." SEED: $seed_no\n";
                 $passed{$child->{child_no}} = 1;
-                new_search_recurse($child->{child_no}, $dbt, 0);
+                new_search_recurse($child->{child_no}, $dbt, 0, $recursed);
             }
         }
     }
