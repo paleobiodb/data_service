@@ -13,7 +13,7 @@ body {
 
 /* how should the regular links look? */
 A:link	{ color : #0033FF; text-decoration:none; }
-A:visited	{ color : #5522FF; text-decoration:none; }
+A:visited	{ color : RGB(110,0,255); text-decoration:none; }
 A:active	{ color : #00AAFF; text-decoration:none; }
 A:hover	{ color : RGB(200,0,120); text-decoration:none; }
 
@@ -78,13 +78,21 @@ LI { font-size: 13px; }
 	color: white;	
 }
 
+/* puts a nice border around tables */
+table.niceBorder {
+	border-style: solid;  /*solid, dashed, dotted, grooved */
+    border-color: RGB(200,200,200);
+    border-width: 4px 4px 4px 4px;
+	
+	padding: 1em 1em 1em 1em;
+}
 
 /*	Meant to be a main section, for example, in an entry form. 
 	Used to help divide the page and make it easier to use.*/
 div.mainSection {
     padding: 1em 1em 1em 1em;
     
-	/*background-color: white;*/
+	/*background-color: RGB(240,240,240);*/
     
 	margin: 1em 1em 1em 1em;
 	
