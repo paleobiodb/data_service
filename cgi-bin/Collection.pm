@@ -110,7 +110,6 @@ sub referenceNumber {
 # returns HTML formatted taxonomic list of
 # all occurrences (that the user has permission to see)
 # in this collection record.
-#
 sub HTMLFormattedTaxonomicList {
 	my Collection $self = shift;
 
@@ -136,33 +135,72 @@ sub HTMLFormattedTaxonomicList {
 
 	# build up an array of occurrence objects.. Then we'll sort the array
 	my @occArray = ();
-	
 	foreach my $row (@{$result}) {
 		$occ = Occurrence->new($self->{session});
 		$occ->setWithOccurrenceNumber($row->[1]);
-		$occ->buildHTML();
+		$occ->buildHTML();	# have to do this now so we can sort on values from this..
 		push(@occArray, $occ);
 	}
 	
-
 	# now we should have an array of occurrences to list.
-	# so, sort it.
-	my @sorted = sort {
+	# so, sort it based on class, order, and family.
+	my @occArray = sort {
 			$a->mostRecentReidClassNumber() <=> $b->mostRecentReidClassNumber() ||
 			$a->mostRecentReidOrderNumber() <=> $b->mostRecentReidOrderNumber() ||
-			$a->mostRecentReidFamilyNumber() <=> $b->mostRecentReidFamilyNumber() 
+			$a->mostRecentReidFamilyNumber() <=> $b->mostRecentReidFamilyNumber() ||
+			$a->occurrenceNumber() <=> $b->occurrenceNumber()
 	} @occArray;
 	
-	foreach my $row (@sorted) {
-		Debug::dbPrint($row->mostRecentReidClassNumber() . "\n");
+	# note, it's a special case if the class, order, and family fields are all blank.
+	# in this case, we want to *guess* and stick the occurrence *after* the occurrence
+	# with the smallest difference in occurrence_no from it.  So basically, scan
+	# all of the occurrence numbers, find the one with the least difference from the occurrence
+	# we're trying to insert, and insert it after that one.
+	#
+	# Make an array of occurrences which have class, order, family = 0 and pull them out
+	# of the main @occArray.  Then figure out where they should go and stick them back in it.
+	my @occToReposition = ();
+	for (my $count = 0; $count < scalar(@occArray); $count++) {
+		$occ = $occArray[$count];
+		
+		if ($occ->mostRecentReidClassNumber() == 0 && $occ->mostRecentReidOrderNumber() == 0 &&
+		$occ->mostRecentReidFamilyNumber() == 0) {
+			# all three fields are 0, so pull it off the @occArray and stick it in the reposition array
+			push (@occToReposition, splice(@occArray, $count, 1));
+			$count--;	# have to decrement count here since we just removed an element.
+		}
 	}
+	
+	# so now, we have an array of occurrences to position correctly within the original array.
+	foreach my $newOcc (@occToReposition) {
+		my $occNum = $newOcc->occurrenceNumber();
+		
+		my $diff = 10000;	# some large number.
+		my $pos = 0;
+		my $count = 0;
+		# look for a position to stick it in
+		foreach my $oldOcc (@occArray) {
+			my $temp = abs($oldOcc->occurrenceNumber() - $occNum);
+			if ($temp < $diff) {
+				$diff = $temp;	# record this difference
+				$pos = $count;	# record where we are
+			}
+			$count++;
+		}
+		
+		# now that we have figured out where to stick it, stick it there.
+		splice(@occArray, $pos, 0, $newOcc);
+	}
+	## End of sorting section
+	
 	
 	# now that we have sorted it, compose the HTML
 	my $count = 0;
 	my $color = "";
-	foreach my $row (@sorted) {
+	foreach my $row (@occArray) {
 		my $newRow = $row->formatAsHTML();
 		
+		# make every other row dark
 		if ($count % 2) { 
 			$newRow =~ s/<tr/<tr class=darkList/ig;
 		}
@@ -171,7 +209,6 @@ sub HTMLFormattedTaxonomicList {
 			
 		$count++;
 	}
-	
 	
 	$html .= "</TABLE>";
 	
