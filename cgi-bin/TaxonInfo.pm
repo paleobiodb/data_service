@@ -391,8 +391,6 @@ sub checkStartForm{
 #	Description:	by the time we get here, the occurrences table has been queried.
 #					ALSO by the time we're here, we have either a single name
 #					higher taxon, or a "Genus species" combination.
-#
-##
 sub displayTaxonInfoResults{
 	my $q = shift;
 	my $dbh = shift;
@@ -732,9 +730,9 @@ sub doModules{
 }
 
 
-# pass this a reference to the collection list array and it
+# PASS this a reference to the collection list array and it
 # should figure out the min/max/center lat/lon 
-# returns an array of parameters (see end of routine for order)
+# RETURNS an array of parameters (see end of routine for order)
 # written 12/11/2003 by rjp.
 sub calculateCollectionBounds {
 	my $collections = shift;  #collections to plot
@@ -927,7 +925,6 @@ sub doCollections{
 	}
 
 	my @sorted = sort (keys %time_place_coll);
-#	my @sorted = sort by_time_place_string (keys %time_place_coll);
 
 	if(scalar @sorted > 0){
 		# Do this locally because the module never gets exec_url
@@ -960,18 +957,7 @@ sub doCollections{
 	return $output;
 }
 
-##
-#
-#
-##
-sub by_time_place_string{
-	$a =~ /.*?-\s*(.*)/;
-	my $first = $1;
-	$b =~ /.*?-\s*(.*)/;
-	my $second = $1;
 
-	return $first cmp $second;
-}
 
 ## displayTaxonClassification
 #
@@ -982,6 +968,7 @@ sub displayTaxonClassification{
 	my $genus = (shift or "");
 	my $species = (shift or "");
 	my $easy_number = (shift or "");
+	
 	my $taxon_rank;
 	my $taxon_name;
 	my %classification = ();
@@ -1292,32 +1279,29 @@ sub displayTaxonClassification{
 	return $output;
 }
 
-## displayTaxonSynonymy
-#
-##
+
+
 sub displayTaxonSynonymy{
 	my $dbt = shift;
 	my $genus = (shift or "");
 	my $species = (shift or "");
 	my $taxon_no = (shift or "");
+	
 	my $taxon_rank;
 	my $taxon_name;
-	my $output = "";
+	my $output = "";  # html output...
 
-	if($genus && $species eq ""){
-		$taxon_name = $genus;
-		# Initialize the classification hash:
+	# figure out the taxon rank (class, genus, species, etc.)
+	$taxon_name = $genus;
+	if ($genus && ($species eq "")) {
 		my $sql="SELECT taxon_rank FROM authorities WHERE taxon_no=$taxon_no";
 #		my $sql="SELECT taxon_rank FROM authorities WHERE taxon_name='$genus'";
 		my @results = @{$dbt->getData($sql)};
 		$taxon_rank = $results[0]->{taxon_rank};
-	}
-	else{
-		$taxon_name = $genus;
-		if($genus eq ""){
+	} else {
+		if ($genus eq "") {
 			$taxon_name = $species;
-		}
-		else{
+		} else {
 			$taxon_name .= " $species";
 		}
 		$taxon_rank = "species";
@@ -1334,7 +1318,7 @@ sub displayTaxonSynonymy{
 	PBDBUtil::debug(1,"taxon rank: $taxon_rank");
 	PBDBUtil::debug(1,"taxon name: $taxon_name");
 	PBDBUtil::debug(1,"taxon number from authorities: $taxon_no");
-	unless($taxon_no){
+	unless($taxon_no) {
 		return ($output .= "<i>No taxonomic history is available for $taxon_rank $taxon_name.</i><br>");
 	}
 
@@ -1354,11 +1338,10 @@ sub displayTaxonSynonymy{
 	# Combine parent numbers from above for the next select below. If nothing
 	# was returned from above, use the original combination number.
 	my @parent_list = ();
-	if(scalar @results <1){
+	if (scalar @results <1) {
 		push(@parent_list, $original_combination_no);
-	}
-	else{
-		foreach my $rec (@results){
+	} else {
+		foreach my $rec (@results) {
 			push(@parent_list,$rec->{parent_no});
 		}
 		# don't forget the original (verified) here, either: the focal taxon	
@@ -1374,14 +1357,14 @@ sub displayTaxonSynonymy{
 	@results = @{$dbt->getData($sql)};
 
 	# Reduce these results to original combinations:
-	foreach my $rec (@results){
+	foreach my $rec (@results) {
 		$rec = getOriginalCombination($dbt, $rec->{child_no});	
 	}
 
 	# NOTE: "corrected as" could also occur at higher taxonomic levels.
 
 	# Get synonymies for all of these original combinations
-	foreach my $child (@results){
+	foreach my $child (@results) {
 		my $list_item = getSynonymyParagraph($dbt, $child);
 		push(@paragraphs, "<br><br>$list_item\n") if($list_item ne "");
 	}
@@ -1391,7 +1374,7 @@ sub displayTaxonSynonymy{
 
 	# Now alphabetize the rest:
 	@paragraphs = sort {lc($a) cmp lc($b)} @paragraphs;
-	foreach my $rec (@paragraphs){
+	foreach my $rec (@paragraphs) {
 		$output .= $rec;
 	}
 
@@ -1399,9 +1382,7 @@ sub displayTaxonSynonymy{
 	return $output;
 }
 
-##
-#
-##
+
 sub getSynonymyParagraph{
 	my $dbt = shift;
 	my $taxon_no = shift;
@@ -1680,9 +1661,7 @@ sub getSynonymyParagraph{
 	return $text;
 }
 
-## getOriginalCombination
-#
-##
+
 sub getOriginalCombination{
 	my $dbt = shift;
 	my $taxon_no = shift;
@@ -1716,9 +1695,7 @@ sub getOriginalCombination{
 	return $taxon_no;
 }
 
-## selectMostRecentParentOpinion
-#
-##
+
 sub selectMostRecentParentOpinion{
 	my $dbt = shift;
 	my $array_ref = shift;
