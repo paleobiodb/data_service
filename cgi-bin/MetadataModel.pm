@@ -35,12 +35,12 @@ sub loadMetadata
 	
 	# Needs work: This is an evil hack.  Normalize the database or get better metadata
 	my %SET_FIELDS_BY_TABLE_NAME = (refs=>[project_name=>1],
-																	collections=>{lithadj=>1,pres_mode=>1,assembl_comps=>1,collection_coverage=>1,coll_meth=>1,lithadj2=>,feed_pred_traces=>1},
-																	#occurrences=>[],
-																	#authorities=>[],
-																	#opinions=>[],
-																	#reidentifications=>[]
-																	);
+									collections=>{lithadj=>1,pres_mode=>1,assembl_comps=>1,collection_coverage=>1,coll_meth=>1,lithadj2=>,feed_pred_traces=>1},
+									#occurrences=>[],
+									#authorities=>[],
+									#opinions=>[],
+									#reidentifications=>[]
+									);
 	$self->{_setFields} = \%SET_FIELDS_BY_TABLE_NAME;
 }
 
