@@ -2680,7 +2680,7 @@ IS NULL))";
 		#Debug::dbPrint("field $fieldName");
 		
 		$val = $q->param($fieldName);
-		if (defined $q->param($fieldName) && $q->param($fieldName))  {
+		if (defined $q->param($fieldName) && $q->param($fieldName) ne '')  {
 			if ( $pulldowns{$fieldName} ) {
 				# It is in a pulldown... no wildcards
 				push(@terms, "$fieldName = '$val'");
