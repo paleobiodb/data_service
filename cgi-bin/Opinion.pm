@@ -1164,22 +1164,54 @@ sub submitOpinionForm {
 		push @authVals , $parentTaxonName;
 
 	# next we need to steal data from the opinion
-	# don't bother with pages, figures, or comments
-		my @allAuthFields = ( "authorizer_no", "enterer_no",
-			"reference_no", "taxon_rank", "author1init",
-			"author1last", "author2init", "author2last",
-			"otherauthors", "pubyr");
-		for my $af ( @allAuthFields )	{
+		my @opAuthFields = ( "authorizer_no", "enterer_no",
+			"reference_no" );
+		for my $af ( @opAuthFields )	{
 			if ( $fieldsToEnter{$af} )	{
 				push @authFields , $af;
 				push @authVals , $fieldsToEnter{$af};
 			}
 		}
 
-	# ref is authority is stolen from ref has opinion
-		if ( $fieldsToEnter{ref_has_opinion} )	{
-			push @authFields, "ref_is_authority";
-			push @authVals , "YES";
+	# author information comes from the original combination,
+	#  not the opinion
+	# I'm doing this the "old" way instead of using some
+	#  ridiculously complicated Poling-style objects
+		my $sql = $self->getTransactionManager();
+		my $asql = "SELECT * FROM authorities WHERE taxon_no=" . $fieldsToEnter{child_no};
+		my $aref = ${$sql->getData($asql)}[0];
+		my @origAuthFields = ( "taxon_rank", "pages",
+			"figures", "comments" );
+		for my $af ( @origAuthFields )	{
+			if ( $aref->{$af} )	{
+				push @authFields , $af;
+				push @authVals , $aref->{$af};
+			}
+		}
+		@origAuthFields = ( "author1init", "author1last",
+			"author2init", "author2last",
+			"otherauthors", "pubyr" );
+		if ( $aref->{'author1last'} )	{
+			for my $af ( @origAuthFields )	{
+				if ( $aref->{$af} )	{
+					push @authFields , $af;
+					push @authVals , $aref->{$af};
+				}
+			}
+		}
+
+	# ref is authority is always false, and just to make sure that
+	#  makes sense, we're going to steal the author info from the
+	#  original combination's reference if we don't have it already
+		else	{
+			my $rsql = "SELECT * FROM refs WHERE reference_no=" . $aref->{'reference_no'};
+			my $rref = ${$sql->getData($rsql)}[0];
+			for my $af ( @origAuthFields )	{
+				if ( $rref->{$af} )	{
+					push @authFields , $af;
+					push @authVals , $rref->{$af};
+				}
+			}
 		}
 
 	# have to store created date
@@ -1189,7 +1221,6 @@ sub submitOpinionForm {
 	# go for it
 		my $insertsql = "INSERT INTO authorities (" . join(',', @authFields ) . ") VALUES ('" . join("', '", @authVals) . "')";
 		my $sql = $self->getTransactionManager();
-print "$insertsql ";
 		$sql->getData($insertsql);
 		$parentTaxon->setWithTaxonName($parentTaxonName);
 		$fieldsToEnter{parent_no} = $parentTaxon->taxonNumber(); 
