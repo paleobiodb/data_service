@@ -4,7 +4,8 @@ require Exporter;
 @ISA = qw(Exporter);
 @EXPORT = qw(populateHTML setTemplateDir);
 
-#use strict;
+use strict;
+
 use SelectList;
 use TextField;
 use Checkbox;
@@ -14,6 +15,9 @@ use Hidden;
 use Anchor;
 use Class::Date qw(date localdate gmdate now);
 use Debug;
+
+
+my $stuff;
 
 sub new {
   my $class = shift();
@@ -196,6 +200,70 @@ my %SELECT_LISTS = (assigned_to=>["Ederer", "Alroy"],
 my $rowCount = 0;
 
 
+# rjp, 2/2004..
+# pass it a template name, and a hash ref of field names as keys 
+# and values to substitute as values.
+# Note: all values to substitute will be assumed to take the format %%fieldname%% in
+# the template file, but when passing the field name, the %% are not necessary.
+#
+# returns fully populated HTML string.
+sub newPopulateHTML {
+	my $self = shift;
+	my $templateName = shift;
+	my $hashRef = shift;
+	
+	my %fields = %$hashRef;
+	
+	my $html = $self->newReadTemplate($templateName);
+	if (! $html) {
+		return "<HTML><BODY>No template found...</BODY></HTML>";	
+	}
+	
+	# loop through all keys in the passed hash and
+	# replace field names with their values
+	my @keys = keys(%fields);
+
+	foreach my $key (@keys) {
+		$html =~ s/[%]{2}$key[%]{2}/$fields{$key}/ig;
+	}
+	
+	return $html;
+}
+
+
+# rjp, 2/2004
+#
+# pass it a template name and it will return it
+# note, it will either get it from the templates or the guest_templates
+# directory depending on whether or not the user is logged in.
+#
+# returns 0 if it can't find the template.
+sub newReadTemplate {
+	my $self = shift;
+	my $template = shift;
+	
+	if ($template eq '') {
+		return 0; 
+	}
+	
+	my $dir = $self->getTemplateDir() . "/$template" . ".html";
+	
+	my $success = open(TEMPLATE, "<$dir");
+	unless ($success) {
+		# if we can't open the file...
+		return 0;
+	}
+	
+	# read the entire file in at once.
+	my $string = do { local $/, <TEMPLATE> };
+	
+	close(TEMPLATE);
+	
+	return $string;
+}
+
+
+
 
 sub populateHTML {
   # Get the template name, the row (list of values)
@@ -356,7 +424,9 @@ sub populateHTML {
           $sl->setList(@{$SELECT_LISTS{$fieldName}});
         }
 		# Set the size attribute if it has one
-		if($stuff =~ /size="?(\d+)"?/)
+	
+		
+		if ($stuff =~ /size="?(\d+)"?/)
 		{
 			my $size = $1;
 			$sl->setSize($size);
@@ -382,7 +452,7 @@ sub populateHTML {
 			if ( @checkboxes > 1 ) {
 				my %CHECK_VALS;
 				my @checkVals = split(/\s*,\s*/, $val);
-				foreach $checkVal (@checkVals) {
+				foreach my $checkVal (@checkVals) {
 					$CHECK_VALS{$checkVal} = 1;
 				}
 				
@@ -529,16 +599,16 @@ sub populateHTML {
 
 # Reads in the HTML template
 sub getTemplateString {
-
 	my ($self, $templateName, $prefkeys) = @_;
+	
 	my $templateString;
 	my $htmlTemplateDir = $self->getTemplateDir();
 	my %pref;
-	for $p (@$prefkeys)	{
+	for my $p (@$prefkeys)	{
 		$pref{$p} = "yes";
 	}
 
-	$templateFile = "$htmlTemplateDir/" . ${templateName};
+	my $templateFile = "$htmlTemplateDir/" . ${templateName};
 	if (${templateName} !~ /\.ftp$/ && ${templateName} !~ /\.pdf$/ &&
 		${templateName} !~ /\.eps$/ && ${templateName} !~ /\.gif$/ )	{
 		$templateFile .= ".html";

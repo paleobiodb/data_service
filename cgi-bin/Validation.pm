@@ -146,4 +146,17 @@ sub taxonRank {
 	return "invalid";
 }
 
+# pass this a species or subspecies and it will
+# return the Genus by doing a simple search/replace
+#
+# rjp, 2/2004.
+sub genusFromString {
+	my $input = shift;
+
+	$input =~ m/^([A-Z][a-z]+) /;
+	
+	return $1;
+}
+
+
 1;

@@ -31,6 +31,15 @@ sub escapeURL {
 	#return (CGI::escape($url));
 }
 
+# pass it a url segment
+# such as Homo+sapiens
+# and it will replace the + signs with spaces and return it.
+sub urlSegmentToSpaces {
+	my $seg = shift;
+	
+	$seg =~ s/[+]/ /g;
+	return $seg;
+}
 
 
 # pass it two names such as a genus and species

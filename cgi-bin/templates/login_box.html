@@ -1,3 +1,5 @@
+<!-- templates/login_box.html -->
+
 <HTML>
 <HEAD>
 <link REL="stylesheet" TYPE="text/css" HREF="/StyleSheets/common.css">
@@ -32,23 +34,26 @@
 
 <SCRIPT>checkBrowserVersion();</SCRIPT>
 
-	
+<!-- On optional message, for example, if they enter the wrong user name or password. -->
+%%message%%
+
 <p>If you are a data contributor, please log in.</p>
 
 <form method="POST" action="bridge.pl">
 
 <input type=hidden name="action" value="processLogin">
-<input type=hidden name="destination" value="">
+<input type=hidden name="destination" value="%%destination%%">
+<!--rjp - should I add this? <input type=hidden name="user" value="Contributer">-->
 
 <TABLE BORDER=0 cellpadding=4 class="test">
 <TR>
 <TD align=right>Authorizer:</TD>
-<TD><INPUT  id="authorizer" name="authorizer" size=18 onKeyUp="doCompleteAuthorizer(event);"></TD>
+<TD><INPUT id="authorizer" name="authorizer" size=18 onKeyUp="doCompleteAuthorizer(event);"></TD>
 </TR>
 
 <TR>
 <TD align=right>Enterer:</TD>
-<TD><INPUT  id="enterer" name="enterer" size=18 onKeyUp="doCompleteEnterer(event);"></TD>
+<TD><INPUT id="enterer" name="enterer" size=18 onKeyUp="doCompleteEnterer(event);"></TD>
 </TR>
 
 <TR>
