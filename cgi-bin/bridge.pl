@@ -1339,7 +1339,7 @@ sub displaySearchColls {
 	# Show the "search collections" form
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-    my $html = $hbo->populateHTML('search_collections_form', [ '', '', '', '','' ], [ 'research_group', 'lithology1', 'lithology2', 'environment',$type ], \@prefkeys);
+    my $html = $hbo->populateHTML('search_collections_form', [ '', '', '', '','' ], [ 'research_group', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment',$type ], \@prefkeys);
 	buildAuthorizerPulldown ( \$html );
 	buildEntererPulldown ( \$html );
 
@@ -3681,7 +3681,7 @@ sub displayReIDCollsAndOccsSearchForm
 	# Display the collection search form
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no,'',$q->param('type'),'',''], ['authorizer', 'enterer', 'action', 'reid_reference_no','lithology1','type','lithology2','environment'], \@prefkeys);
+	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no,'',$q->param('type'),'',''], ['authorizer', 'enterer', 'action', 'reid_reference_no', 'lithadj', 'lithology1','type','lithadj2', 'lithology2','environment'], \@prefkeys);
 
 	buildAuthorizerPulldown ( \$html );
 	buildEntererPulldown ( \$html );
