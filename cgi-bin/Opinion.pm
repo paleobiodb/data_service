@@ -1004,7 +1004,9 @@ sub submitOpinionForm {
     # We must point to the original parent_no
     my $first_parent_no = $fieldsToEnter{'parent_no'};
     if ($fieldsToEnter{'parent_no'}) {
-        $fieldsToEnter{'parent_no'} = TaxonInfo::getOriginalCombination($dbt,$fieldsToEnter{'parent_no'});
+        if ($fieldsToEnter{'status'} !~ /recombined|corrected|rank/) {
+           $fieldsToEnter{'parent_no'} = TaxonInfo::getOriginalCombination($dbt,$fieldsToEnter{'parent_no'});
+        }
     }
 	
     main::dbg("submitOpinionForm, fields are: <pre>".Dumper(\%fieldsToEnter)."</pre>");
