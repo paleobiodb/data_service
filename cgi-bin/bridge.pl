@@ -4205,27 +4205,18 @@ sub displayTaxonomyEntryForm	{
 	my %authorityRow;
 	if ( $q->param('taxon_no') )	{
 		my $sql = "SELECT * FROM authorities WHERE taxon_no=" . $q->param('taxon_no');
-		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute();
-		%authorityRow = %{$sth->fetchrow_hashref()};
-		$sth->finish();
+		%authorityRow = %{@{$dbt->getData($sql)}[0]};
 
 		# Retrieve the authorizer name (needed below)
 		my $sql = "SELECT name FROM person WHERE person_no=";
 		$sql .= $authorityRow{'authorizer_no'};
-		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute();
-		$authorityRow{'authorizer'} = ${$sth->fetchrow_arrayref()}[0];
-		$sth->finish();
+		$authorityRow{'authorizer'} = @{$dbt->getData($sql)}[0]->{authorizer};
 
 		# Retrieve the type taxon name or type specimen name, as appropriate
 		if ( $authorityRow{'type_taxon_no'} )	{
 			my $sql = "SELECT taxon_name FROM authorities WHERE taxon_no=";
 			$sql .= $authorityRow{'type_taxon_no'};
-			my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-			$sth->execute();
-			$authorityRow{'type_taxon_name'} = ${$sth->fetchrow_arrayref()}[0];
-			$sth->finish();
+			$authorityRow{'type_taxon_name'} = @{$dbt->getData($sql)}[0]->{taxon_name};
 		}
 		elsif ( $authorityRow{'type_specimen'} )	{
 			$authorityRow{'type_taxon_name'} = $authorityRow{'type_specimen'};
@@ -4235,14 +4226,11 @@ sub displayTaxonomyEntryForm	{
 	# Print the entry form
 
 	# Determine the fields and values to be populated by populateHTML
-	my @authorityFields = ( "taxon_no", "taxon_rank", "type_taxon_name", "ref_is_authority", "author1init", "author1last", "author2init", "author2last", "otherauthors", "pubyr", "pages", "figures", "2nd_pages", "2nd_figures", "comments");
-	for $f ( @authorityFields )	{
-		if ( $f ne "taxon_rank" || $authorityRow{$f} ne "" )	{
-			push @authorityVals, $authorityRow{$f};
-		} elsif ( $taxon =~ / / )	{
-			push @authorityVals, "species";
-		} else	{
-			push @authorityVals, "genus";
+	if($authorityRow{"taxon_rank"} eq "" ){
+		if($taxon =~ / /){
+			$authorityRow{"taxon_rank"} = "species";
+		}else{
+			$authorityRow{"taxon_rank"} = "genus";
 		}
 	}
 
@@ -4264,53 +4252,69 @@ sub displayTaxonomyEntryForm	{
 	#  the ref data from the refs table
 	# Don't do this for comments because those would apply to the ref,
 	#  not the naming event
-	if ( $authorityRow{'ref_is_authority'} )	{
-		for my $r ( @authorityFields )	{
-			if ( $refHash{$r} && $r ne "comments" )	{
-				$authorityRow{$r} = $refHash{$r};
+	if($authorityRow{'ref_is_authority'}){
+		for my $key (%authorityRow){
+			if($refHash{$key} && $key ne "comments" )	{
+				$authorityRow{$key} = $refHash{$key};
 			}
 		}
 	}
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-	my @refRow = $sth->fetchrow_array();
-	my @refFieldNames = @{$sth->{NAME}};
-	$sth->finish();
-	my $refRowString = '<table>' . $hbo->populateHTML('reference_display_row', \@refRow, \@refFieldNames) . '</table>';
+	my $ref_hash_ref = @{$dbt->getData($sql)}[0];
+	my $refRowString = '<table>' . $hbo->populateHTML('reference_display_row', $ref_hash_ref ) . '</table>';
 
 	# Add gray background and make font small
 	$refRowString =~ s/<tr>/<tr bgcolor='#E0E0E0'>/;
 	$refRowString =~ s/<td/<td class='small' /;
-	push @authorityVals, $refRowString;
-	push @authorityFields , 'ref_string';
+	$authorityRow{'ref_string'} = $refRowString;
 
-	my @opinionFields = ( "opinion_author1init", "opinion_author1last", "opinion_author2init", "opinion_author2last", "opinion_otherauthors", "opinion_pubyr", "opinion_pages", "opinion_figures", "opinion_2nd_pages", "opinion_2nd_figures", "opinion_comments", "diagnosis");
-	for $f ( @opinionFields )	{
-		push @authorityFields, $f;
-		push @authorityVals, $authorityRow{$f};
-	}
+	# THESE have never been retrieved from the db or anywhere, so this block
+	# of code has no effect.  I'm leaving it, in case it gets used sometime
+	# in the future.
+	#
+	#my @opinionFields = ( "opinion_author1init", "opinion_author1last", "opinion_author2init", "opinion_author2last", "opinion_otherauthors", "opinion_pubyr", "opinion_pages", "opinion_figures", "opinion_2nd_pages", "opinion_2nd_figures", "opinion_comments", "diagnosis");
+	#for $f ( @opinionFields )	{
+	#	push @authorityFields, $f;
+	#	push @authorityVals, $authorityRow{$f};
+	#}
 
 	# If this is a species, prepopulate the "Valid" name field in the
 	#   status section
-	if ( $taxon =~ / / )	{
-		unshift @authorityVals, $taxon;
-	} else	{
-		unshift @authorityVals, '';
+	if($taxon =~ / /){
+		$authorityRow{'parent_taxon_name'} = $taxon;
 	}
-	unshift @authorityFields, 'parent_taxon_name';
+	else{
+		$authorityRow{'parent_taxon_name'} = '';
+	}
 
 	$html = &stdIncludes("js_taxonomy_checkform");
 	$html .= $hbo->populateHTML ('enter_taxonomy_top', [ $authorityRow{'taxon_no'}, $authorityRow{'type_taxon_no'}, $taxon, length($taxon)] , [ 'taxon_no', 'type_taxon_no',"%%taxon_name%%","%%taxon_size%%" ] );
-	$html .= $hbo->populateHTML('enter_tax_ref_form', \@authorityVals , \@authorityFields );
-	$html .= $hbo->populateHTML('enter_taxonomy_form', \@authorityVals , \@authorityFields );
+	$html .= $hbo->populateHTML('enter_tax_ref_form', \%authorityRow);
+	# Don't show the 'ref_is_authority' checkbox if there is already authorinfo
+	if($authorityRow{author1init} || $authorityRow{author1last} ||
+	   $authorityRow{author2init} || $authorityRow{author2last} ||
+	   $authorityRow{otherauthors}){
+		$html =~ s/<p><input(.*)?"ref_is_authority"(.*)?> It was first named in the current reference, which is:<\/p>//;
+		$html =~ s/<p>... <i>or<\/i> it was named in an earlier publication, which is:<\/p>//;
+	}
+	$html .= $hbo->populateHTML('enter_taxonomy_form', \%authorityRow);
+	# NOTE: we should be filtering the above html just as we did above (remove
+	# the 'ref_has_opinion' input, etc if opinion_author* exists) but at 
+	# present there is no use in doing this since none of those opinion_author*
+	# fields are being passed into the template builder.
+	#if($authorityRow{opinion_author1init} || $authorityRow{opinion_author1last} ||
+	#   $authorityRow{opinion_author2init} || $authorityRow{opinion_author2last} ||
+	#   $authorityRow{opinion_otherauthors}){
+	#	$html =~ s/<p><input(.*)?"ref_has_opinion"(.*)?> The current reference argues for this opinion.<\/p>//;
+	#	$html =~ s/<p>... <i>or<\/i> it was named in an earlier publication, which is:<\/p>//;
+	#}
 
 	# Remove widgets if the current authorizer does not own the record and
 	#  the existing data are non-null
 	if($s->get('authorizer') ne $authorityRow{'authorizer'}){
 		$html =~ s/<input type=text name="taxon_name_corrected" size=\d+ value="($taxon)".*?>/$1/;
 	}
-	for $f ( @authorityFields )	{
-		if ( $authorityRow{$f} &&
+	for my $f (keys %authorityRow){
+		if($authorityRow{$f} &&
 			 $s->get('authorizer') ne $authorityRow{'authorizer'} )	{
 			$html =~ s/<input name="$f".*?>/<u>$authorityRow{$f}<\/u>/;
 			$html =~ s/<select name="$f".*?<\/select>/<u>$authorityRow{$f}<\/u>/;
