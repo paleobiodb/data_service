@@ -50,11 +50,13 @@ sub createTimePlaceString{
 
     my $isql = "SELECT interval_name FROM intervals WHERE interval_no=" . $data_hash->{"max_interval_no"};
     my $interval_name =  @{$dbt->getData($isql)}[0]->{"interval_name"};
-
+	
+	my $interval_name2;
+	
     my $isql = "SELECT interval_name FROM intervals WHERE interval_no=" . $data_hash->{"min_interval_no"};
     my @inames =  @{$dbt->getData($isql)};
     if ( @inames )	{
-    	my $interval_name2 = @inames[0]->{interval_name};
+		$interval_name2 = @inames[0]->{interval_name};
     }
 
     $timeplace .= $interval_name;

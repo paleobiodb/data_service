@@ -381,7 +381,7 @@ sub checkStartForm{
 
 ## displayTaxonInfoResults
 #
-#	Description:	by the time we get here, the occs table has been queried.
+#	Description:	by the time we get here, the occurrences table has been queried.
 #					ALSO by the time we're here, we have either a single name
 #					higher taxon, or a "Genus species" combination.
 #

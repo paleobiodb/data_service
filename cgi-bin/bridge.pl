@@ -1,7 +1,11 @@
 #!/usr/bin/perl
+
+# bridge.pl is the glue between all the other modules.
+
 use CGI;
 use CGI::Carp qw(fatalsToBrowser);
 use HTMLBuilder;
+use DBConnection;
 use DBI;
 use Session;
 use Class::Date qw(date localdate gmdate now);
@@ -27,7 +31,6 @@ use PrintHierarchy;
 use SQLBuilder;
 use Debug;
 
-require "connection.pl";	# Contains our database connection info
 
 my $DEBUG = 0;				# Shows debug information regarding the page
 							#   if set to 1
@@ -59,14 +62,16 @@ my $hbo = HTMLBuilder->new( $TEMPLATE_DIR, $dbh, $exec_url );
 
 # Figure out the action
 my $action = $q->param("action");
-$action = "displayMenuPage" unless ( $action );
+$action = "displayMenuPage" unless ( $action );  # set default action to menu page.
+
 # need to know (below) if we did a processLogin and then changed the action
 my $old_action = "";
 
 # Get the database connection
-my $dbh = DBI->connect("DBI:mysql:database=$db;host=$host", $user, $password, {RaiseError => 1});
+my $dbh = DBConnection::connect();
 
 # Make a Global Transaction Manager object
+# rjp 1/2004 - note, if it's *global* then why is it declared with *my*??
 my $dbt = DBTransactionManager->new($dbh, $s);
 
 # Need to do this before printing anything else out, if debugging.
@@ -1120,8 +1125,7 @@ sub selectReference {
 	displayMenuPage ( );
 }
 
-sub displayRefAdd
-{
+sub displayRefAdd {
 	my @fieldNames = (	"publication_type", 
 						"authorizer",
 						"enterer",
@@ -1142,6 +1146,7 @@ sub displayRefAdd
 					  "year" => "pubyr",
 					  "reftitle" => "reftitle",
 					  "project_name" => "project_name");
+
 	foreach my $s_param (keys %query_hash){
 		if($q->param($s_param)){
 			push(@row, $q->param($s_param));
@@ -1962,7 +1967,7 @@ sub processCollectionsSearch {
 	# if the user is trying to search for a reference number, then
 	# we have to also search for collections which use this as a 
 	# secondary reference number.
-	# added by ryan on 12/18/2003.
+	# added by rjp on 12/18/2003.
 
 	my $noSecondaryRefs = 0;
 	if (my $refno = $q->param("reference_no")) {
@@ -6745,7 +6750,7 @@ sub RefQuery {
 
 	# Use current reference button?
 	if ( $q->param("use_current") ) {
-		$sql = "SELECT * FROM refs WHERE reference_no = ".$s->get("reference_no");
+		my $sql = "SELECT * FROM refs WHERE reference_no = ".$s->get("reference_no");
 		dbg ( "Using current: $sql<HR>" );
 		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute();
@@ -6754,7 +6759,7 @@ sub RefQuery {
 		return;
 	}
 
-	# do these really need to be globals?  ryan 12/29/03
+	# do these really need to be globals?  rjp 12/29/03
 	$name = $q->param('name');
 	$pubyr = $q->param('year');
 	$reftitle = $q->param('reftitle');
@@ -6772,39 +6777,25 @@ sub RefQuery {
 	if ( $refsearchstring ) { $refsearchstring = "for '$refsearchstring' "; }
 
 	if ( $refsearchstring ne "" || $q->param('enterer') || $q->param('project_name') ) {
-		#$sql =	"SELECT * FROM refs ";
-
-		my $where = SQLBuilder->new();
-		$where->setSelectExpr("*");
-		$where->setFromExpr("refs");
+		my $sql = SQLBuilder->new();
+		$sql->setSelectExpr("*");
+		$sql->setFromExpr("refs");
 
 		if ($name) {
-			$where->addWhereItem(
+			$sql->addWhereItem(
 				" ( author1last LIKE '%$name%' OR ".
 				"   author2last LIKE '%$name%' OR ".
 				"   otherauthors LIKE '%$name%' ) " );
 		}
 		
 		#append each relevant clause onto the $where string.
-		$where->addWhereItem("pubyr = '$pubyr'") 											if ($pubyr);
-		$where->addWhereItem("(reftitle LIKE '%$reftitle%' OR reftitle LIKE '$reftitle%')")	if ($reftitle);
-		$where->addWhereItem(" ( pubtitle LIKE '%$pubtitle%')")								if ($pubtitle);
-		$where->addWhereItem("reference_no = $refno")										if ($refno);
-		$where->addWhereItem("enterer='" . $q->param('enterer') . "'") 						if ( $q->param('enterer') );
-		$where->addWhereItem("project_name='".$q->param('project_name')."'")				if ($q->param('project_name'));
+		$sql->addWhereItem("pubyr = '$pubyr'") 											if ($pubyr);
+		$sql->addWhereItem("(reftitle LIKE '%$reftitle%' OR reftitle LIKE '$reftitle%')")	if ($reftitle);
+		$sql->addWhereItem(" ( pubtitle LIKE '%$pubtitle%')")								if ($pubtitle);
+		$sql->addWhereItem("reference_no = $refno")										if ($refno);
+		$sql->addWhereItem("enterer='" . $q->param('enterer') . "'") 						if ( $q->param('enterer') );
+		$sql->addWhereItem("project_name='".$q->param('project_name')."'")				if ($q->param('project_name'));
 		
-		#if ( $pubyr ) { $where = &buildWhere ( $where, "pubyr='$pubyr'" ); }
-		#if ( $reftitle ) { $where = &buildWhere ( $where, " ( reftitle LIKE '%$reftitle%' OR reftitle LIKE '$reftitle%' )" ); }
-		#if ( $pubtitle ) { $where = &buildWhere ( $where, " ( pubtitle LIKE '%$pubtitle%')") }
-		#if ( $refno ) { $where = &buildWhere ( $where, "reference_no=$refno" ); }
-		#if ( $q->param('enterer') ) { $where = &buildWhere ( $where, "enterer='".$q->param('enterer')."'" ); }
-		#if ( $q->param('project_name') ) { $where = &buildWhere ( $where, "project_name='".$q->param('project_name')."'" ); }
-
-		# sort the results in any of multiple ways JA 26-27.7.02
-		# default is first author
-		#if ($q->param('refsortby'))	{
-			#$where .= " ORDER BY ";
-		#}
 		
 		my $orderBy = "";
 		if ($q->param('refsortby') eq "year")	{
@@ -6823,9 +6814,9 @@ sub RefQuery {
 			$orderBy .= "author1last, author1init, author2last, pubyr";
 		}
 		
-		$where->setOrderByExpr($orderBy);
+		$sql->setOrderByExpr($orderBy);
 		
-		$sqlString = $where->SQLExpr();
+		$sqlString = $sql->SQLExpr();
 		
 		$sqlString =~ s/\s+/ /gms;
 		dbg ( "$sqlString<HR>" );
@@ -6840,8 +6831,8 @@ sub RefQuery {
 			$overlimit = @rows;
 			$q->param('refsSeen' => 30 + $q->param('refsSeen') );
 
-			$where->setLimitExpr($q->param('refsSeen'));
-			$sqlString = $where->SQLExpr();
+			$sql->setLimitExpr($q->param('refsSeen'));
+			$sqlString = $sql->SQLExpr();
 		}
 		
 		
@@ -6885,8 +6876,10 @@ sub htmlError {
 	exit 1;
 }
 
-# Builds a WHERE clause smartly
-# basically appends "AND $clause" to the end of the where if it already exists
+
+# **********
+# deprecated.  please use the SQLBuilder class instead for this.
+# Ryan, 1/2004. 
 sub buildWhere {
 	my $where = shift;
 	my $clause = shift;

@@ -4,16 +4,16 @@ use CGI::Carp qw(fatalsToBrowser);
 use DBI;
 use Permissions;
 use Session;
+use DBConnection;
 
 # written 20.10.02
 # restricts searches to refs with a particular status; uses GeoRef numbers
 #   instead of table key numbers 21.10.02
 # searches and displays language field 2.3.03
 
-require "connection.pl";
 
 my $q = CGI->new();
-my $dbh = DBI->connect("DBI:mysql:database=$db;host=$host", $user, $password, {RaiseError => 1});
+my $dbh = DBConnection::connect();
 my $s = Session->new();
 $s->validateUser($dbh, $q->cookie('session_id'));
 

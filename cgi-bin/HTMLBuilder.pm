@@ -4,6 +4,7 @@ require Exporter;
 @ISA = qw(Exporter);
 @EXPORT = qw(populateHTML setTemplateDir);
 
+#use strict;
 use SelectList;
 use TextField;
 use Checkbox;
@@ -194,6 +195,7 @@ my %SELECT_LISTS = (assigned_to=>["Ederer", "Alroy"],
 my $rowCount = 0;
 
 
+
 sub populateHTML {
   # Get the template name, the row (list of values)
   # and a list of fieldnames to scan for
@@ -275,7 +277,7 @@ sub populateHTML {
 		$htmlTemplateString =~ s/$fieldName/$val/gim; 
 	}
 
-    $keepMatching = 1;
+    my $keepMatching = 1;
     while($keepMatching)
     {
       $keepMatching = 0;

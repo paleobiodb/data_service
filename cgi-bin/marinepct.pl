@@ -4,13 +4,13 @@ use CGI::Carp qw(fatalsToBrowser);
 use DBI;
 use Permissions;
 use Session;
+use DBConnection;
 
 # made from a copy of fivepct.pl 19.8.03
 
-require "connection.pl";
 
 my $q = CGI->new();
-my $dbh = DBI->connect("DBI:mysql:database=$db;host=$host", $user, $password, {RaiseError => 1});
+my $dbh = DBConnection::connect();
 my $s = Session->new();
 $s->validateUser($dbh, $q->cookie('session_id'));
 

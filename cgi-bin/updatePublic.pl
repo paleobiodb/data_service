@@ -5,13 +5,12 @@
 # suggested by T. Olszewski
 # also prints count of different researchers JA 9.5.02
 # prints same data to paleodb/index page JA 10.5.02
-# image randomization routine modified by ryan, 12/03.
+# image randomization routine modified by rjp, 12/03.
 
 # NOTE: assumes /etc/cron.hourly will call the script
 
 use DBI;
-
-require "/pbdb/cgi/connection.pl";
+use DBConnection;
 
 $IMGDIR="/pbdb/html/public/images";
 
@@ -20,7 +19,7 @@ my $sql;
 my $sth;
 my @stats;
 
-my $dbh = DBI->connect("DBI:mysql:$db", $user, $password) || die ( "Could not connect" );
+my $dbh = DBConnection::connect();
 
 $sql = "SELECT count(*) FROM refs";
 $sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
@@ -62,7 +61,7 @@ if ( $DEBUG ) { print "$sql\n"; }
 $dbh->disconnect();
 
 
-#added by poling on 12/9/2003
+#added by rjp on 12/9/2003
 
 # get a list of all the files in this directory
 @images = `ls $IMGDIR/*.jpg`;
@@ -75,31 +74,5 @@ chomp($filename);
 
 `cp $filename $IMGDIR/fossil.jpg`;
 
-
-#@images = ( "1Coral", "1Radiolites", "2Coral", "2Hippurites",
-#      "Barosaurus", "Confuciusornis", "cynodont", "DiamondO2.gif",
-#      "Dromiceio", "EURYPT1", "fishes", "GenselClusters2",
-#      "IvanyBonellitia1", "IvanyCrinoid", "IvanyCucullaea",
-#      "IvanyEurhomalea", "IvanyGulfCoastII2", "IvanyHatchAthleta",
-#      "IvanyHatchClams", "IvanySnails", "IvanyTrigonostoma2",
-#      "IvanyVenericardia", "PVL_Dinornis", "PVSJ_407_skull_Ll1",
-#      "SLWleaf1", "SLWleaf2", "SLWleaf3", "SLWleaf6", "SLWleaf7",
-#      "SLWleaf9", "SLWleaf10", "SLWleaf11", "SLWleaf12");
-
-#$filename = $images[int(rand $#images)];
-#if ( $filename !~ /\.gif$/ )	{
-#	$filename .= ".jpg";
-#}
-
-#open NAME, ">$IMGDIR/filename";
-#print NAME "$filename\n";
-#close NAME;
-#open IN, "<$IMGDIR/$filename";
-#open OUT, ">$IMGDIR/fossil.jpg";
-#while (<IN>)	{
-#  print OUT $_;
-#}
-#close IN;
-#close OUT;
 
 

@@ -6,7 +6,9 @@ use TaxonInfo;
 sub get_classification_hash{
 	my $dbt = shift;
 	my $levels = shift;
-    my $taxon_names = shift;
+	my $taxon_names = shift;
+	my $get_ancestors = shift;
+
 	my @taxon_names = @{$taxon_names};
 	my @levels = split(',', $levels);
 	my $highest_level = $levels[-1];
@@ -17,6 +19,7 @@ sub get_classification_hash{
     my %order = ();
     my %class = ();
     my %full_class = ();
+    my @ancestors = ();
 
   foreach my $item (@taxon_names){
 # Rank will start as genus
@@ -92,7 +95,7 @@ sub get_classification_hash{
                 $parent_no_visits{$parent_no}=1;
             }           
             last if($parent_no_visits{$parent_no}>1);
-                    
+
             if($parent_no){
                 # Get the name and rank for the parent
                 my $sql_auth = "SELECT taxon_name, taxon_rank ".
@@ -126,6 +129,7 @@ sub get_classification_hash{
 				$class{$family{$base_taxon_name}} = $taxon_name;
 				$class{$order{$base_taxon_name}} = $taxon_name;
 			}
+			push @ancestors,$parent_no;
                 }       
                 else{   
                     # No results might not be an error: 
@@ -154,7 +158,11 @@ sub get_classification_hash{
   # }
     $full_class{$base_taxon_name} = $class{$base_taxon_name} .",". $order{$base_taxon_name} .",". $family{$base_taxon_name};
   }
-  return \%full_class;
+  if ( $get_ancestors )	{
+    return @ancestors;
+  } else	{
+    return \%full_class;
+  }
 }
 
 1;

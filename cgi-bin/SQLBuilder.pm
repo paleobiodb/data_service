@@ -15,6 +15,9 @@
 #
 # You can also access any expression directly by using the method of its name, for example, whereExpr(),
 # or you can access the entire SQL statement by using the SQLExpr() method.
+#
+# Note, expressions are *NOT* returned with the leading WHERE, SELECT, HAVING, etc. keywords *unless*
+# you request the entire SQL statement at once.
 
 package SQLBuilder;
 use strict;
@@ -68,7 +71,7 @@ sub selectExpr {
 	my SQLBuilder $self = shift;
 	if ($self->{selectExpr}) {
 		# if they set it explicitly, then just return it.
-		return " SELECT " . $self->{selectExpr};	
+		return $self->{selectExpr};	
 	}
 	
 	return "";
@@ -87,7 +90,7 @@ sub fromExpr {
 	my SQLBuilder $self = shift;
 	if ($self->{fromExpr}) {
 		# if they set it explicitly, then just return it.
-		return " FROM " . $self->{fromExpr};	
+		return $self->{fromExpr};	
 	}
 	
 	return "";
@@ -153,13 +156,13 @@ sub whereExpr {
 
 	if ($self->{whereExpr}) {
 		# if they set it explicitly, then just return it.
-		return " WHERE " . $self->{whereExpr};	
+		return $self->{whereExpr};	
 	}
 	
 	# if we get to here, then they *didn't* set it explicitly, so we have to build it.
 	my @itemsList = $self->whereItems();
 		
-	my $expr = " WHERE " . join(" " . $self->whereSeparator() . " ", @itemsList);	
+	my $expr = join(" " . $self->whereSeparator() . " ", @itemsList);	
 	
 	return $expr;
 }
@@ -176,7 +179,7 @@ sub groupByExpr {
 	my SQLBuilder $self = shift;
 	if ($self->{groupByExpr}) {
 		# if they set it explicitly, then just return it.
-		return " GROUP BY " . $self->{groupByExpr};
+		return $self->{groupByExpr};
 	}
 	
 	return "";
@@ -194,7 +197,7 @@ sub havingExpr {
 	my SQLBuilder $self = shift;
 	if ($self->{havingExpr}) {
 		# if they set it explicitly, then just return it.
-		return " HAVING " . $self->{havingExpr};	
+		return $self->{havingExpr};	
 	}
 	
 	return "";	
@@ -212,7 +215,7 @@ sub orderByExpr {
 	my SQLBuilder $self = shift;
 	if ($self->{orderByExpr}) {
 		# if they set it explicitly, then just return it.
-		return " ORDER BY " . $self->{orderByExpr};	
+		return $self->{orderByExpr};	
 	}
 	
 	return "";
@@ -230,7 +233,7 @@ sub limitExpr {
 	my SQLBuilder $self = shift;
 	if ($self->{limitExpr}) {
 		# if they set it explicitly, then just return it.
-		return " LIMIT " . $self->{limitExpr};	
+		return $self->{limitExpr};	
 	}
 	
 	return "";	
@@ -241,13 +244,17 @@ sub limitExpr {
 # selectExpr is left blank.  Well, it will work, but the result won't be a well formed query.
 sub SQLExpr {
 	my SQLBuilder $self = shift;
-	my $expr =	$self->selectExpr()		. 
-				$self->fromExpr()		.
-				$self->whereExpr()		.
-				$self->groupByExpr()	.
-				$self->havingExpr()		.
-				$self->orderByExpr()	.
-				$self->limitExpr();
+	my $expr = "";
+
+	$expr .= " SELECT " .	$self->selectExpr()		if $self->selectExpr();
+	$expr .= " FROM "  .	$self->fromExpr()		if $self->fromExpr();
+	$expr .= " WHERE " .	$self->whereExpr()		if $self->whereExpr();
+	$expr .= " GROUP BY " .	$self->groupByExpr()	if $self->groupByExpr();
+	$expr .= " HAVING " .	$self->havingExpr()		if $self->havingExpr();
+	$expr .= " ORDER BY " .	$self->orderByExpr()	if $self->orderByExpr();
+	$expr .= " LIMIT " .	$self->limitExpr()		if $self->limitExpr();
+	
+	return $expr;
 }
 
 1;

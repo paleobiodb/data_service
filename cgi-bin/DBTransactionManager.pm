@@ -38,7 +38,7 @@ sub _initialize{
 ## get_data
 #
 #	description:	this method is the meat of this class. It handles basic
-#					SQL syntax checking, it executes the statment, and it
+#					SQL syntax checking, it executes the statement, and it
 #					returns data that successfully makes it past the 
 #					Permissions module.
 #

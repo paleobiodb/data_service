@@ -3,7 +3,7 @@ package Debug;
 
 # prints the passed string to a debug file
 # called "debug_log"
-# added by ryan on 12/18/2003
+# added by rjp on 12/18/2003
 sub dbPrint {
 	$| = 1;	# flushes buffer immediately
 

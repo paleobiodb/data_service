@@ -8,7 +8,7 @@ use FileHandle;
 use HTMLBuilder;
 use Class::Date qw(date localdate gmdate now);
 
-require "connection.pl";
+use DBConnection;
 
 # Flags and constants
 my $DEBUG = 0;			# Shows debug information regarding the page
@@ -18,7 +18,7 @@ my $sql="";				# Any SQL string
 my $rs;					# Generic recordset
 my $TEMPLATE_DIR = $ENV{ADMIN_TEMPLATE_DIR};
 
-my $dbh = DBI->connect("DBI:mysql:database=$db;host=$host", $user, $password, {RaiseError => 1});
+my $dbh = DBConnection::connect();
 
 # Make a few objects
 my $q = CGI->new();

@@ -1,5 +1,7 @@
 package MetadataModel;
 
+# originally written by Ederer.
+
 sub new
 {
 	my ($class, $sth) = @_;
