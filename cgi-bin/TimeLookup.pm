@@ -130,7 +130,7 @@ sub processBinLookup	{
 		"84" => "Cenozoic 5", # Middle Miocene
 		"85" => "Cenozoic 5", # Early Miocene
 		"36" => "Cenozoic 4", # Oligocene
-		"106" => "Cenozoic 3", # Priabonian
+		"88" => "Cenozoic 3", # Late Eocene
 		"107" => "Cenozoic 3", # Bartonian
 		"108" => "Cenozoic 2", # Lutetian
 		"90" => "Cenozoic 2", # Early Eocene
