@@ -1,0 +1,167 @@
+<html>
+<head>
+        <title id="title">Paleobiology Database</title>
+
+<STYLE type="text/css"> <!--
+        TD      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
+        TH      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
+        P       { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
+        LI       { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
+        H2      { font-family : Arial, Verdana, Helvetica; }
+        H3      { font-family : Arial, Verdana, Helvetica; }
+        H4      { font-family : Arial, Verdana, Helvetica; }
+        .menu { font-family : Arial, Verdana, Helvetica; color : White; font-siz
+e : 12px; text-decoration:none; }
+        .small { font-family : Arial, Verdana, Helvetica; font-size : 12px; text
+-decoration:none; }
+        .large { font-family : Arial, Verdana, Helvetica; font-size : 16px; text
+-decoration:none; }
+        .cell { font-family : Arial, Verdana, Helvetica; font-size : 12px; text-
+decoration:none; }
+                -->
+</STYLE>
+
+
+
+    <script language="JavaScript">
+    <!-- Begin
+
+        function tipsPopup (URL) {
+                window.open(URL, 'tips', 'toolbar=1,scrollbars=1,location=1,stat
+usbar=0,menubar=0,resizable=1,width=640,height=480');
+        }
+    //  End -->
+    </script>
+
+</head>
+
+<body bgcolor="white" background="/public/PDbg.gif" vlink="#5522FF" alink="#00AA
+FF" link="#0033FF">
+
+<div align="center">
+<h2>Tip Sheet for Batch Uploads</h2>
+</div>
+
+<p class=small>
+<i>This page was written by John Alroy, February 2004</i>
+</p>
+
+
+
+<h3>General comments</h3>
+
+<p>Paleobiology Database staff members may perform batch uploads of pre-existing data files in some cases.
+We prefer not to do so unless it is necessary.
+Our criteria for agreeing to an upload are discussed on the <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=paleodbFAQ#upload">FAQ page</a>.
+Our reasons for avoiding uploads include:</p>
+
+<ul>
+<li>Corrupt data.
+All of our normal JavaScript and CGI script tests on data are circumvented by a batch upload.
+We have no easy way to confirm that data values are correct and mandatory fields are included other than eyeballing the data.
+Inevitably, some of the data that go in do not meet PBDB standards.
+<li>Redundant data.
+Likewise, we have no simple way to confirm that the data you are uploading do not duplicate records we already have.
+Normally, our scripts do check for redundant reference and collection records.
+In the past, we have had major problems with duplicate records being batch uploaded.
+<li>Uploading errors.
+You might have done a great job preparing your data, but we might mess up ourselves.
+For example, occurrence records might not be matched up to collection records correctly; data fields or values might be left out accidentally; or we might make a systematic error in translating field values.
+<li>Our time.
+With all the complications listed above, we have to be extremely careful with the upload procedure, going through multiple test runs before the final try.
+We have to spend valuable time confirming that data values are correct, fields in the data files directly map into PBDB and fields, and fields are identified correctly.
+We also often have to write a custom script to do the upload.
+Finally, there's a lag time involved in correspondence with the authorizer during the testing phase.
+<li>Your time.
+Because an upload can take weeks, you might get the job done faster simply by hand entering the data.
+<li>Expense.
+Uploads have to be handled by the database manager, who is paid three or four times as much as a research assistant.
+So, we'd rather have an assistant work for a month on a manual upload than have the DBM work for two weeks on a batch upload.
+</ul>
+
+<hr>
+
+<h3>Procedure</h3>
+
+<p>Once you decide to ask for an upload, please follow these steps.</p>
+
+<ul>
+<li><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">Write us</a> a letter stating the size and scope of your data set, and asking whether and when we can do the upload.
+<li>Format your data files correctly (see below).
+<li>Hand-check each reference record and collection record to make sure we don't already have the same (or a similar) record in the Database.
+Remove duplicates.
+<li>Unless you're not uploading any new references, wait for us to go through the rest of the upload procedure (see below) just for the references.
+Then match the new reference numbers to each of the new collection, occurrence, etc. records.
+Remember, every record must match to a reference number.
+<li>E-mail us the data files.
+<li>Wait for us to write back and ask you to check over the test upload data on the backup server.
+<li>Write back to ask for corrections or confirm that everything is okay.
+Repeat these steps if necessary.
+<li>Once you give us the go ahead, wait for us to perform the final upload and tell you it's done.
+</ul>
+
+<hr>
+
+<h3>Formatting</h3>
+
+<p>General rules:</p>
+
+<ul>
+<li>There should be a reference number column in each table giving the official PBDB reference number for each and every record.
+<li>Small things count.
+For fields that have fixed values (e.g., pulldowns), make sure there are no extra or missing spaces, quotes, periods, etc.
+<li>Flat files are best.
+We prefer ASCII formatted, tab delimited files over Excel spread sheet files.
+<li>Always give both your name (the authorizer) and the name of the person (or people) who actually keystroked the data (the enterer).
+If there is more than one enterer, you must have an enterer name column in the data file giving the name for each record in our standard format (e.g., "A. Smith").
+</ul>
+
+<p>References:</p>
+<ul>
+<li>The first initials and last names for the first and second authors must go in separate fields.
+All of the other author names must go in one other field.
+<li>The year field must be filled with an actual year.
+"pers. commun." or "unpublished" is unacceptable.
+<li>Be very careful that if a journal name is present in the form's pulldown menu, it is spelt exactly the same way in your data file.
+</ul>
+
+<p>Collections:</p>
+<ul>
+<li>The reference number field is mandatory, and the best approach is for us to upload the references first so you can put the offical PBDB reference numbers into your data file by hand.
+However, another solution is for you to assign arbitrary numbers starting with 1 to your references, and then include these numbers in a column of your collections table.
+So, if your collection came from the 15th reference listed in your references table, put the number "15" in the reference number field of your collection record.
+We'll then try to figure out how those numbers correspond to what's in the reference field.
+<li>Be sure to spell the country name exactly as it is given in the pulldown menu.
+Use "United States" instead of "USA," "U.S.A.," or "United States of America."
+<li>The latitude/longitude fields must be split up.
+The degree values (i.e., the integers before the decimal point) must be in their own fields.
+Minutes and seconds each go in a separate field.
+The part after the decimal must go in a separate field; do not start those numbers with a decimal point, because its presence is assumed.
+The direction (e.g., "North") also goes in a separate field.
+<li>Make sure that exact locality information such as township and range goes only in the "Location details" field and not in any other comment field.
+<li>The early/middle/late pulldown value for an interval (e.g., "Late/Upper" in "Late/Upper Cambrian") must go in its own field.
+Only the actual name (e.g., "Cambrian") should go in the interval name field.
+<li>Interval names must appear exactly as they are seen in one or more of the <a href="/cgi-bin/bridge.pl?action=startScale">offical time scales</a> used by the Database.
+<li>Be particularly careful to include double quotes for lithology names like "shale" or "limestone" that need them.
+<li>It is common to include information in the taphonomy and collecting information sections on "Modes of preservation" (usually "body"), "Assemblage components" (often "macrofossils"), and "Collection types" (usually "field collection").
+</ul>
+
+<p>Occurrences:</p>
+<ul>
+<li>The reference numbers are handled as with reference numbers in the collections table.
+<li>The collection number field is mandatory but we can't compute it until the collections are assigned numbers.
+So, give the collections sequential, arbitrary numbers and place the appropriate numbers in a collection number field.
+<li>Put modifiers (e.g., "cf.") and actual names (e.g., "Equus") in separate fields.
+<li>If you're going to use informal names, make sure to put "informal" in the modifier field.
+<li>Always correctly capitalize genus and species names.
+Never use all caps, for example.
+<li>Never include any spaces, quotes, parentheses, etc. in a genus/higher taxon or species name field.
+A name is a name, period.
+<li>Speaking of periods, always include the period in "indet." or "sp."
+<li>Make sure to include the abundance units field if you are including abundance values.
+<li>Correct spelling of names is absolutely crucial.
+Make a list of all the distinct taxon names appearing in your data, alphabetize it, and hand-check for spelling variants and errors.
+</ul>
+
+</body>
+
