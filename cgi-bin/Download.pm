@@ -1,6 +1,7 @@
 package Download;
 
 use PBDBUtil;
+use Classification;
 
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
@@ -783,6 +784,34 @@ sub doQuery {
 		}
 	}
 
+	close OUTFILE;
+	close REFSFILE;
+	
+	# Post process, if necessary (family, order, class names)
+	my $family_level = $q->param("occurrences_family_name");
+	my $order_level = $q->param("occurrences_order_name");
+	my $class_level = $q->param("occurrences_class_name");
+	my $post_file = "$OUT_FILE_DIR/$occsOutFileName";
+	my $levels = "";
+	if($family_level eq "YES"){
+		$levels = "family";
+	}
+	if($order_level eq "YES"){
+		if($levels ne ""){
+			$levels .= ",";
+		}
+		$levels .= "order";
+	}
+	if($class_level eq "YES"){
+		if($levels ne ""){
+			$levels .= ",";
+		}
+		$levels .= "class";
+	}
+	if($levels ne ""){
+		foc($post_file, $levels);
+	}
+
 	# Tell what happened
 	if ( ! $acceptedCount ) { $acceptedCount = 0; }
 	if ( ! $acceptedRefs ) { $acceptedRefs = 0; }
@@ -800,9 +829,6 @@ sub doQuery {
 </p>
 </center>
 ";
-	
-	close OUTFILE;
-	close REFSFILE;
 	
 }
 
@@ -877,6 +903,136 @@ sub dbg {
 	if ( $DEBUG && $message ) { print "<font color='green'>$message</font><BR>\n"; }
 
 	return $DEBUG;					# Either way, return the current DEBUG value
+}
+
+sub foc{
+	my $filename = shift;
+	my $levels = shift;
+
+	open(FILE,$filename) or die "couldn't open $filename ($!)";
+	my $headers = <FILE>;
+	my @lines = <FILE>;
+	close FILE;
+
+	# Parse the headers to find the positions of 'genus_name' and 'genus_reso'
+	my @headers = split(',', $headers);
+	my $genus_reso_pos = -1;
+	my $genus_pos = -1;
+	for($i=0; $i<@headers; $i++){
+		if($headers[$i] eq "genus_reso"){
+			$genus_reso_pos = $i;
+		}
+		if($headers[$i] eq "genus_name"){
+			$genus_pos = $i;
+			last;
+		}
+
+	}
+
+	# get a list of unique genus names
+	my %genera;
+
+	foreach my $item (@lines){
+		my @parsed_line = split(',', $item);
+		# I'm just using a hash to guarantee uniqueness. 
+		# I'll only need the keys...
+		next if($parsed_line[$genus_reso_pos] =~ /informal/);
+		$genera{$parsed_line[$genus_pos]} = 1;
+	}
+
+	# get the classifications
+	my %master_class;
+	my @genera = keys %genera;
+	%master_class=%{Classification::get_classification_hash($dbt,$levels,\@genera)};
+	my $insert_pos = $genus_pos+1;
+	if($levels =~ /family/){
+		splice(@headers, $insert_pos++, 0, "family_name");
+	}
+	if($levels =~ /order/){
+		splice(@headers, $insert_pos++, 0, "order_name");
+	}
+	if($levels =~ /class/){
+		splice(@headers, $insert_pos, 0, "class_name");
+	}
+	my @altered_lines = ();
+	foreach my $item (@lines){
+		my @parsed_line = split(',', $item);
+		my @fkeys = ();
+		my @okeys = ();
+		$insert_pos = $genus_pos+1;
+		my $key = $parsed_line[$genus_pos];
+		# if we have a scalar, then that's all we have, and it needs to be 
+		# dereferenced.
+		# Family:
+		if($levels =~ /family/){
+			if(UNIVERSAL::isa($master_class{$key}, "SCALAR")){
+				my $family = ${$master_class{$key}};
+				if($family && $family ne ""){
+					splice(@parsed_line, $insert_pos++, 0, $family);
+				}
+			}
+			# otherwise, the hash key is already dereferenced, so just print it.
+			elsif(UNIVERSAL::isa($master_class{$key}, "HASH")){
+				@fkeys = keys %{$master_class{$key}};
+				if(scalar @fkeys > 0){
+					splice(@parsed_line, $insert_pos++, 0, $fkeys[0]);
+				}
+
+				# BELOW: apparently this doesn't work because the iterator for 
+				# the $master_class{$key} hash has to be reset via a call to 
+				# (e.g) keys() as above.
+				#($fkeys, $order_ref) = each(%{$master_class{$key}});
+				#print $fkeys;
+			}
+			else{
+				splice(@parsed_line, $insert_pos++, 0, "");
+			}
+		}
+		# Order or Class:
+		if($levels =~ /order/ || $levels =~ /class/){
+			# This is necessary again in case we just get a request for order
+			# or class
+			@fkeys = keys %{$master_class{$key}};
+			# order and class
+			if($master_class{$key}->{$fkeys[0]} &&
+					UNIVERSAL::isa($master_class{$key}->{$fkeys[0]}, "HASH")){
+				@okeys = keys %{$master_class{$key}->{$fkeys[0]}};
+				if($levels =~ /order/){
+					splice(@parsed_line, $insert_pos++, 0, $okeys[0]);
+				}
+				# Class:
+				if($levels =~ /class/){
+					my $class = $master_class{$key}->{$fkeys[0]}->{$okeys[0]};
+					if($class){
+						splice(@parsed_line, $insert_pos++, 0, ${$class});
+					}
+					else{
+						splice(@parsed_line, $insert_pos++, 0, "");
+					}
+				}
+			}
+			# just order
+			elsif($master_class{$key}->{$fkeys[0]} && $master_class{$key}->{$fkeys[0]} ne ""){
+				if($levels =~ /order/){
+					splice(@parsed_line, $insert_pos++, 0,${$master_class{$key}->{$fkeys[0]}});
+				}
+			}
+			else{
+				if($levels =~ /order/){
+					splice(@parsed_line, $insert_pos++, 0,"");
+				}
+			}
+		}
+		my $altered = join(',', @parsed_line);	
+		push(@altered_lines, $altered);
+	}
+	open(FILE,">$filename") or die "couldn't open $filename ($!)";
+	$headers = join(",", @headers);
+	print FILE $headers;
+	foreach my $line (@altered_lines){
+		print FILE $line;
+	}
+	close FILE;
 }
 
 1;
