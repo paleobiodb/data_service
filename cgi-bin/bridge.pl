@@ -2166,14 +2166,16 @@ sub displayEditCollection {
 	# Secondary refs, followed by current ref
 	$refRowString = PBDBUtil::getSecondaryRefsString($dbh,$collection_no,1,1);
 
+    # secondary_references
+    push(@row, $refRowString);
+    push(@fieldNames, 'secondary_reference_string');
+
 	# Check if current session ref is at all associated with the collection
 	# If not, tack it on to $refRowString (with radio button for selecting
 	# as the primary ref, as with the secondary refs below).
 	unless(PBDBUtil::isRefPrimaryOrSecondary($dbh,$collection_no,$session_ref)){
 		# This part allows current session ref to be selected as primary
-		$refRowString .= "<p>Current session reference&nbsp;".
-						 "<span class=tiny>(select to make primary):</span>".
-						 "<table border=0 cellpadding=8><tr><td>".
+		$refRowString = "<table border=0 cellpadding=8><tr><td>".
 						 "<table border=0 cellpadding=2 cellspacing=0><tr>".
 						 "</td></tr><tr bgcolor=E0E0E0><td valign=top>".
 						 "<input type=radio name=secondary_reference_no value=".
@@ -2190,7 +2192,7 @@ sub displayEditCollection {
 
     # get the secondary_references
     push(@row, $refRowString);
-    push(@fieldNames, 'secondary_reference_string');
+    push(@fieldNames, 'session_reference_string');
 
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
