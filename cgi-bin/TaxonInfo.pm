@@ -2452,6 +2452,7 @@ sub displaySynonymyList	{
 	print "<center><h3>Synonymy</h3></center>";
 
 # find all distinct children where relation is NOT "belongs to"
+#  (mostly synonyms and earlier combinations)
 	$sql = "SELECT DISTINCT child_no FROM opinions WHERE status!='belongs to' AND parent_no=" . $taxon_no;
 	my @childrefs = @{$dbt->getData($sql)};
 
@@ -2468,9 +2469,12 @@ sub displaySynonymyList	{
 	}
 
 # go through list finding all "recombined as" something else cases for each
+# need to do this because synonyms might have their own recombinations, and
+#  the original combination might have alternative combinations
+# don't do this if the parent is actually the focal taxon
 	my @synparents;
 	for my $syn (@syns)	{
-		$sql = "SELECT parent_no FROM opinions WHERE status='recombined as' AND child_no=" . $syn;
+		$sql = "SELECT parent_no FROM opinions WHERE status='recombined as' AND child_no=" . $syn . " AND parent_no!=" . $taxon_no;
 		@synparentrefs = @{$dbt->getData($sql)};
 		for $synparentref ( @synparentrefs )	{
 			push @synparents, $synparentref->{parent_no};
@@ -2483,15 +2487,28 @@ sub displaySynonymyList	{
 # add the focal taxon itself to the synonymy list
 	push @syns,$taxon_no;
 
-# go through list finding all instances of use as a parent
+# go through all the alternative names and mark the original combinations
+#  (or really "never recombinations")
+	for $syn (@syns)	{
+		$sql = "SELECT count(*) AS c FROM opinions WHERE parent_no=$syn AND status='recombined as'";
+		 $timesrecombined = ${$dbt->getData($sql)}[0]->{c};
+		if ( ! $timesrecombined )	{
+			$isoriginal{$syn} = "YES";
+		}
+	}
+
+# now we have a list of the focal taxon, its alternative combinations, its
+#  synonyms, and their alternative combinations
+# go through the list finding all instances of each name's use as a parent
+#  in a recombination or synonymy
+# so, we are getting the INSTANCES and not just the alternative names,
+#  which we already know
 	for my $syn (@syns)	{
 		$sql = "SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status!='belongs to' AND parent_no=" . $syn;
 		my @userefs =  @{$dbt->getData($sql)};
-		
-		Debug::dbPrint("test4 = $syn");
-		
+
 		$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=" . $syn;
-		
+
 		my $parent_name = @{$dbt->getData($sql)}[0]->{taxon_name};
 		if ( $q->param("taxon_rank") =~ /(genus)|(species)/i )	{
 			$parent_name = "<i>" . $parent_name . "</i>";
@@ -2537,10 +2554,12 @@ sub displaySynonymyList	{
 
 # likewise appearances in the authority table
 	for my $syn (@syns)	{
+	if ( $isoriginal{$syn} eq "YES" )	{
 		$sql = "SELECT taxon_name,author1last,author2last,otherauthors,pubyr,pages,figures,ref_is_authority,reference_no FROM authorities WHERE taxon_no=" . $syn;
 		@userefs = @{$dbt->getData($sql)};
-		push @userefs, @authrefs;
-	# save each instance as a key with pubyr as a value
+	# save the instance as a key with pubyr as a value
+	# note that @userefs only should have one value because taxon_no
+	#  is the primary key
 		for $useref ( @userefs )	{
 			my $auth_taxon_name = $useref->{taxon_name};
 			if ( $q->param("taxon_rank") =~ /(genus)|(species)/i )	{
@@ -2582,6 +2601,7 @@ sub displaySynonymyList	{
 			}
 			$synline{$synkey} = $mypubyr;
 		}
+	}
 	}
 
 # sort the synonymy list by pubyr
