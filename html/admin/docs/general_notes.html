@@ -1,0 +1,89 @@
+<HTML>
+<HEAD>
+<TITLE>PBDB General Notes</TITLE>
+<style type="text/css">
+
+H2 {
+	font-weight:bold;
+	font-size: 150%;
+}
+
+LI.index {
+	font-weight: normal;
+}
+
+DIV.section {
+	margin: 1em 1em 1em 1em;
+	padding: 1em 1em 1em 1em;
+	background-color: RGB(240,240,240);
+	border-color: RGB(200,200,200);
+	border-width: 1px 1px 1px 1px;
+	border-style: solid;
+}
+
+SPAN.table {
+	color: darkblue;
+	font-weight: bold;
+}
+
+SPAN.term {
+	font-style: italic;
+
+}
+
+SPAN.field {
+	font-style: italic;
+	color:darkblue;	
+}
+
+SPAN.title {
+	background-color: RGB(220,220,220);
+	font-weight: bold;
+}
+
+</style>
+</HEAD>
+
+<BODY>
+
+<H2>PBDB General Notes</H2>
+
+
+<div>
+<UL>
+<LI class="index"><A HREF="#accesspolicies">Access Policies</A></LI>
+<LI class="index"><A HREF="#editingpolicies">Editing Policies</A></LI>
+</UL>
+</div>
+<BR>
+
+<DIV class="section">
+<A NAME="accesspolicices"><SPAN class="title">Access Policies</SPAN></A>
+
+<DIV>
+<p>
+Access is controlled to the <SPAN class="table">collections</SPAN>, <SPAN class="table">occurrences</SPAN>, and <SPAN class="table">reidentifications</SPAN> tables. The access information is stored in the <SPAN class="table">collections</SPAN> table in the form of an <SPAN class="field">access_level</SPAN> ('the public', 'database members', 'group members', 'authorizers only'), and a <SPAN class="field">release_date</SPAN> which denotes the date at which the access level reverts to public.
+</p>
+<p>
+If the <SPAN class="field">release_date</SPAN> has passed, the actual <SPAN class="field">access_level</SPAN> field of the record is <i>not</i> changed, however the scripts know that anyone may now view the record.
+</p>
+</DIV>
+
+</DIV>
+
+
+
+<DIV class="section">
+<A NAME="editingpolicies"><SPAN class="title">Editing Policies</SPAN></A>
+
+<DIV>
+<p>Not sure.  A user can only edit their own records?
+</p>
+</DIV>
+
+</DIV>
+
+
+
+</BODY>
+</HTML>
