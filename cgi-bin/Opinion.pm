@@ -1409,10 +1409,13 @@ sub displayOpinionChoiceForm{
     my $q = shift;
     my $suppressAddNew = (shift || 0);
     my $dbh = $dbt->dbh;
+
+    my $orig_taxon_no = TaxonInfo::getOriginalCombination($dbt,$q->param("taxon_no"));
+    
     my $sql = "SELECT o.opinion_no FROM opinions o "; 
     if ($q->param("taxon_no")) {
         $sql .= " LEFT JOIN refs r ON r.reference_no=o.reference_no";
-        $sql .= " WHERE o.child_no=".int($q->param("taxon_no"));
+        $sql .= " WHERE o.child_no=$orig_taxon_no";
         $sql .= " ORDER BY IF((o.ref_has_opinion != 'YES' AND o.pubyr), o.pubyr, r.pubyr) ASC";
     } elsif ($q->param("reference_no")) {
         $sql .= " LEFT JOIN authorities a ON a.taxon_no=o.child_no";
@@ -1430,8 +1433,15 @@ sub displayOpinionChoiceForm{
     print "<center>";
     if ($q->param("taxon_no")) {
         my $t = Taxon->new();
-        $t->setWithTaxonNumber($q->param('taxon_no'));
-        print "<h3>Which opinion about ".$t->taxonNameHTML()." do you want to edit?</h3><br>\n";
+        $t->setWithTaxonNumber($orig_taxon_no);
+        print "<h3>Which opinion about ".$t->taxonNameHTML()." do you want to edit?</h3>\n";
+
+        if ($orig_taxon_no != $q->param('taxon_no')) {
+            my $t2 = Taxon->new();
+            $t2->setWithTaxonNumber($q->param('taxon_no'));
+            print "<I>(Recombination of ".$t2->taxonNameHTML().")</I><BR>";
+        }
+        print "<BR>"; 
     } else {
         print "<br><h3>Select an opinion to edit:</h3><br>\n";
     }
@@ -1439,7 +1449,7 @@ sub displayOpinionChoiceForm{
     print qq|<form method="POST" action="bridge.pl">
              <input type="hidden" name="action" value="displayOpinionForm">\n|;
     if ($q->param("taxon_no")) {
-        print qq|<input type="hidden" name="taxon_no" value="|.$q->param('taxon_no').qq|">\n|;
+        print qq|<input type="hidden" name="taxon_no" value="$orig_taxon_no">\n|;
     }
     print "<table border=0>";
     foreach my $row (@results) {
