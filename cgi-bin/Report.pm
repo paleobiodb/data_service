@@ -122,7 +122,7 @@ sub tallyFieldTerms	{
 					                      "Tertiary", "Cretaceous", "Jurassic",
 					                      "Triassic", "Permian", "Carboniferous",
 					                      "Devonian", "Silurian", "Ordovician",
-					                      "Cambrian", "Neoproterozoic";
+					                      "Cambrian", "Vendian", "Sturtian";
 			$nterms[$suffix] = $#{$fieldterms[$suffix]};
 		}
 		elsif (($q->param('searchfield'.$suffix) eq "epoch") ||
@@ -434,7 +434,8 @@ sub tallyFieldTerms	{
 #  assigning collections to periods
 	if ( $q->param('searchfield1') eq "period" ||
 	     $q->param('searchfield2') eq "period" )	{
-		for my $period ('Cambrian','Ordovician','Silurian','Devonian',
+		for my $period ('Sturtian','Vendian',
+			'Cambrian','Ordovician','Silurian','Devonian',
 			'Carboniferous','Permian','Triassic','Jurassic',
 			'Cretaceous','Tertiary','Quaternary','Modern')	{
 			my $collref = TimeLookup::processLookup($dbh, $dbt, '', $period, '', '');
