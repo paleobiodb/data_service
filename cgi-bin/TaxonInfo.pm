@@ -1067,7 +1067,7 @@ sub doMap{
 	}
 
 	$q->param(-name=>"taxon_info_script",-value=>"yes");
-	my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape', 'dotcolor', 'dotborder');
+	my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape1', 'dotcolor1', 'dotborder1');
 	my %user_prefs = main::getPreferences($s->get('enterer'));
 	foreach my $pref (@map_params){
 		if($user_prefs{$pref}){
@@ -1075,11 +1075,11 @@ sub doMap{
 		}
 	}
 	# Not covered by prefs:
-	if(!$q->param('pointshape')){
-		$q->param('pointshape' => 'circles');
+	if(!$q->param('pointshape1')){
+		$q->param('pointshape1' => 'circles');
 	}
-	if(!$q->param('dotcolor')){
-		$q->param('dotcolor' => 'red');
+	if(!$q->param('dotcolor1')){
+		$q->param('dotcolor1' => 'red');
 	}
 	if(!$q->param('coastlinecolor')){
 		$q->param('coastlinecolor' => 'black');
@@ -1092,7 +1092,7 @@ sub doMap{
 	$q->param('mapscale'=>'X 1');
 
 
-	$q->param('pointsize'=>'tiny');
+	$q->param('pointsize1'=>'tiny');
 
 	if(!$q->param('projection') or $q->param('projection') eq ""){
 		$q->param('projection'=>'rectilinear');
@@ -1100,15 +1100,13 @@ sub doMap{
 
 	require Map;
 	my $m = Map->new( $dbh, $q, $s, $dbt );
-	my $perm_rows = $m->buildMapOnly($in_list);
-	my @perm_rows = @{$perm_rows};
+	my $dataRowsRef = $m->buildMapOnly($in_list);
 
-	if(@perm_rows > 0) {
-
+	if(scalar(@{$dataRowsRef}) > 0) {
 		# this section added by rjp on 12/11/2003
 		# at this point, we need to figure out the bounds 
 		# of the collections and the center point.  
-		my @bounds = calculateCollectionBounds(\@perm_rows);
+		my @bounds = calculateCollectionBounds($dataRowsRef);
 
 		$q->param('maplat' => shift(@bounds));
 		$q->param('maplng' => shift(@bounds));
@@ -1154,7 +1152,7 @@ sub doMap{
 		
 	
 		# now actually draw the map
-		return $m->mapDrawMap($perm_rows);
+		return $m->drawMapOnly($dataRowsRef);
 	} else {
 		return "<i>No distribution data are available</i>";
 	}
