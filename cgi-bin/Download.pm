@@ -517,7 +517,7 @@ sub doQuery {
 	# Create the sql: we're doing a join on occurrences and collections
 	# so as to select all the data at once.
 	else{
-		$sql =	"SELECT DISTINCT(occurrences.reference_no), ".
+		$sql =	"SELECT occurrences.reference_no, ".
 				"occurrences.genus_reso, occurrences.genus_name, ".
 				"occurrences.collection_no ";
 		$outFieldsString = $self->getOutFieldsString('occurrences');
