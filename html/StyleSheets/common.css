@@ -53,6 +53,10 @@ A:hover.menu {
 
 
 TD, TH { font-size: 14px; }
+H1, H2, H3, H4 { 
+	padding: 0px 0px 0px 0px;
+	margin: 0.1em 0.1em 0.5em 0.1em;
+}
 
 LI { font-size: 13px; }
 .tiny {  font-size : 10px; text-decoration:none; }
@@ -69,25 +73,27 @@ LI { font-size: 13px; }
 	width:0px;	
 }
    
-
+/* the menu at the top and bottom of each page. */
 .menu {
 	color: white;	
 }
 
 
+/*	Meant to be a main section, for example, in an entry form. 
+	Used to help divide the page and make it easier to use.*/
 div.mainSection {
     padding: 1em 1em 1em 1em;
     
 	/*background-color: white;*/
     
-	margin: 1em 2em 1em 2em;
+	margin: 1em 1em 1em 1em;
 	
     border-style: solid;  /*solid, dashed, dotted, grooved */
-    border-color: grey;
-    border-left-width: 2px;
-    border-right-width: 2px;
-    border-bottom-width: 2px;
-    border-top-width: 2px;
+    border-color: RGB(200,200,200);
+    border-left-width: 4px;
+    border-right-width: 4px;
+    border-bottom-width: 4px;
+    border-top-width: 4px;
 }
 
 /* nothing here yet */
@@ -96,6 +102,7 @@ div.subSection {
 }
 
 
+/* Usually used for a single line of text which needs a bit more emphasis to stand out */
 div.emphasized {
 	padding: 0.2em 0.2em 0.2em 0.2em;
 	margin: 0em 2em 0em 2em;
@@ -111,8 +118,7 @@ div.emphasized {
 }
 
 
-/*	used for titles at top of forms, 
-	ie, "Collection Search Form" */
+/*	used for titles at top of forms, ie, "Collection Search Form" */
 .title {
 	padding-top: 0.8em;
 	padding-bottom: 0.8em;
@@ -180,7 +186,7 @@ div.emphasized {
 	background-color:white;
 }
 
-
+/* The navigation box at the left of pages such as the taxon display page */
 table.navbox {
 	border-style: solid;
 	border-width: 1;
