@@ -208,18 +208,29 @@ sub validateUser {
 		# Ensure their session_id corresponds to a valid database entry
 		$sql = "SELECT * FROM SESSION_DATA WHERE session_id='$session_id'";
 		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute();
-		if ( $sth->rows ) {
+		# execute returns number of rows affected for NON-select statements
+		# and true/false (success) for select statements.
+		if($sth->execute()){
+			my $rs = $sth->fetchrow_hashref();
+			
+			if($rs->{session_id} eq $session_id){
 
-			my $rs = $sth->fetchrow_hashref ( );
-
-			# Store some values (for later)
-			$self->{session_id} = $session_id;
-			foreach my $field ( keys %{$rs} ) {
-				$self->{$field} = $rs->{$field};
+				# Store some values (for later)
+				$self->{session_id} = $session_id;
+				foreach my $field ( keys %{$rs} ) {
+					$self->{$field} = $rs->{$field};
+				}
+				# now update the SESSION_DATA record to the current time
+				$sql = "UPDATE SESSION_DATA set record_date=NULL ".
+					   "WHERE session_id='$session_id'";
+				$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+				if($sth->execute() == 1){
+					return $session_id;
+				}
+				else{
+					die "$sth->errstr";
+				}
 			}
-
-			return $session_id;
 		}
 	}
 	return "";
