@@ -1484,21 +1484,20 @@ sub displayCollResults {
 	        $reference .= " (" . $refDataRow->getValue("pubyr") . ")";
 
 			# Build a short descriptor of the collection's time place
-			# JA 20.8.02
+			# first part JA 7.8.03
 
 			my $timeplace;
-			my @timeterms = ( "intage", "locage", "epoch", "period" );
-			for my $tt (@timeterms)	{
-				if ( ! $timeplace )	{
-					$timeplace = $dataRow->{$tt."_max"};
-					if ( $dataRow->{$tt."_min"} && $dataRow->{$tt."_min"} ne $dataRow->{$tt."_max"} )	{
-						$timeplace .= "/" . $dataRow->{$tt."_min"};
-					}
-				}
-				if ( $timeplace )	{
-					last;
-				}
+
+			my $tsql = "SELECT interval_name FROM intervals WHERE interval_no=" . $dataRow->{max_interval_no};
+			my $maxintname = @{$dbt->getData($tsql)}[0];
+			$timeplace = $maxintname->{interval_name};
+			if ( $dataRow->{min_interval_no} > 0 )	{
+				$tsql = "SELECT interval_name FROM intervals WHERE interval_no=" . $dataRow->{min_interval_no};
+				my $minintname = @{$dbt->getData($tsql)}[0];
+				$timeplace .= "/" . $minintname->{interval_name};
 			}
+
+			# rest of timeplace construction JA 20.8.02
 
 			$timeplace .= " - ";
 			if ( $dataRow{"state"} )	{
@@ -1851,7 +1850,7 @@ $message .= "<p>
 							"research_group",
 							"release_date",
 							"DATE_FORMAT(release_date, '%Y%m%d') rd_short",
-			"country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min");
+			"country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no");
 		
 		# Handle extra columns
 		push(@columnList, $q->param('column1')) if $q->param('column1');
