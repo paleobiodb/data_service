@@ -8,6 +8,7 @@ use Debug;
 use URLMaker;
 use DBTransactionManager;
 use Taxon;
+use TimeLookup;
 
 use POSIX qw(ceil floor);
 
@@ -829,7 +830,7 @@ sub displayTaxonInfoResults {
 							  3 => "synonymy",
 							  4 => "ecology/taphonomy",
 							  5 => "map",
-							  6 => "collections");
+							  6 => "age range/collections");
 
 	# Set the default:
 	if(!@modules_to_display){
@@ -1043,7 +1044,7 @@ sub doModules{
 	}
 	# collections
 	elsif($module == 6){
-		print doCollections($exec_url, $q, $dbt, $in_list);
+		print doCollections($exec_url, $q, $dbt, $dbh, $in_list);
 	}
 }
 
@@ -1219,11 +1220,30 @@ sub doCollections{
 	my $exec_url = shift;
 	my $q = shift;
 	my $dbt = shift;
+	my $dbh = shift;
 	my $in_list = shift;
 	my $output = "";
 
 	$q->param(-name=>"limit",-value=>1000000);
 	$q->param(-name=>"taxon_info_script",-value=>"yes");
+
+	# get a lookup of the boundary ages for all intervals JA 25.6.04
+	# the boundary age hashes are keyed by interval nos
+        @_ = TimeLookup::findBoundaries($dbh,$dbt);
+        my %upperbound = %{$_[0]};
+        my %lowerbound = %{$_[1]};
+
+	# get all the interval names because we need them to print the
+	#  total age range below
+	my $isql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
+	my @intrefs =  @{$dbt->getData($isql)};
+	my %interval_name;
+	for my $ir ( @intrefs )	{
+		$interval_name{$ir->{'interval_no'}} = $ir->{'interval_name'};
+		if ( $ir->{'eml_interval'} )	{
+			$interval_name{$ir->{'interval_no'}} = $ir->{'interval_no'} . " " . $ir->{'interval_name'};
+		}
+	}
 	
 	# Get all the data from the database, bypassing most of the normal behavior
 	# of displayCollResults
@@ -1242,19 +1262,58 @@ sub doCollections{
 	    else{
 			$time_place_coll{$res} = [$row->{"collection_no"}];
 			push(@order,$res);
+		# create a hash array where the keys are the time-place strings
+		#  and each value is a number recording the min and max
+		#  boundary estimates for the temporal bins JA 25.6.04
+		# this is kind of tricky because we want bigger bins to come
+		#  before the bins they include, so the second part of the
+		#  number recording the upper boundary has to be reversed
+		my $upper = $upperbound{$row->{'max_interval_no'}};
+		$max_interval_name{$res} = $interval_name{$row->{'max_interval_no'}};
+		$min_interval_name{$res} = $max_interval_name{$res};
+		if ( $row->{'max_interval_no'} != $row->{'min_interval_no'} &&
+			$row->{'min_interval_no'} > 0 )	{
+			$upper = $upperbound{$row->{'min_interval_no'}};
+			$min_interval_name{$res} = $interval_name{$row->{'min_interval_no'}};
+		}
+		# WARNING: we're assuming upper boundary ages will never be
+		#  greater than 1000 million years
+		# also, we're just going to ignore fractions of m.y. estimates
+		#  because those would screw up the sort below
+		$upper = int($upper);
+		$upper = 1000 - $upper;
+		if ( $upper < 10 )	{
+			$upper = "00" . $upper;
+		} elsif ( $upper < 100 )	{
+			$upper = "0" . $upper;
+		}
+		$bounds_coll{$res} = int($lowerbound{$row->{'max_interval_no'}}) . $upper;
 	    }
 	}
 
-	my @sorted = sort (keys %time_place_coll);
+	# sort the time-place strings temporally
+	my @sorted = sort { $bounds_coll{$b} <=> $bounds_coll{$a} } keys %bounds_coll;
+
+	# legacy: originally the sorting was just on the key
+#	my @sorted = sort (keys %time_place_coll);
 
 	if(scalar @sorted > 0){
 		# Do this locally because the module never gets exec_url
 		#   from bridge.pl
 		my $exec_url = $q->url();
-		$output .= "<center><h3>Collections</h3></center>";
+		$output .= "<center><h3>Collections</h3></center>\n";
+
+		# print the first and last appearance (i.e., the age range)
+		#  JA 25.6.04
+		$output .= "<center>Age range: <b>" . $max_interval_name{$sorted[0]};
+		if ( $max_interval_name{$sorted[0]} ne $min_interval_name{$sorted[$#sorted]} )	{
+			$output .= " to " . $min_interval_name{$sorted[$#sorted]};
+		}
+		$output .= "</b><center><p>\n";
+
 		$output .= "<table width=\"100%\"><tr>";
-		$output .= "<th align=\"middle\">Country or state</th>";
 		$output .= "<th align=\"middle\">Time interval</th>";
+		$output .= "<th align=\"middle\">Country or state</th>";
 		$output .= "<th align=\"left\">PBDB collection number</th></tr>";
 		my $row_color = 0;
 		foreach my $key (@sorted){
