@@ -410,8 +410,32 @@ sub reportBuildDataTables {
 
     # Provide arrays of sorted keys for the two totals with which
     # to index into the hashes
-    @{$self->{'sortKeys1'}} = sort {$self->{'totals1'}{$b} <=> $self->{'totals1'}{$a}} keys %{$self->{'totals1'}};
-    @{$self->{'sortKeys2'}} = sort {$self->{'totals2'}{$b} <=> $self->{'totals2'}{$a}} keys %{$self->{'totals2'}};
+    if ($q->param('searchfield1') eq "Harland 2: Periods") {
+        @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,2);
+    } elsif ($q->param('searchfield1') eq "Harland 4: Epochs") {
+        @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,4);
+    } elsif ($q->param('searchfield1') eq "Harland 6: Stages") {
+        @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,6);
+    } else {
+        @{$self->{'sortKeys1'}} = sort {$self->{'totals1'}{$b} <=> $self->{'totals1'}{$a}} keys %{$self->{'totals1'}};
+    }    
+    # Remove keys with colls/occs in the DB. Have to go in reverse so 
+    # we splice the right thing
+    for(my $i=scalar(@{$self->{'sortKeys1'}})-1;$i>=0;$i--) {
+        splice @{$self->{'sortKeys1'}},$i,1 if (!exists $self->{'totals1'}{@{$self->{'sortKeys1'}}[$i]}); 
+    }    
+    if ($q->param('searchfield2') eq "Harland 2: Periods") {
+        @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,2);
+    } elsif ($q->param('searchfield2') eq "Harland 4: Epochs") {
+        @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,4);
+    } elsif ($q->param('searchfield2') eq "Harland 6: Stages") {
+        @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,6);
+    } else {
+        @{$self->{'sortKeys2'}} = sort {$self->{'totals2'}{$b} <=> $self->{'totals2'}{$a}} keys %{$self->{'totals2'}};
+    }    
+    for(my $i=scalar(@{$self->{'sortKeys2'}})-1;$i>=0;$i--) {
+        splice @{$self->{'sortKeys2'}},$i,1 if (!exists $self->{'totals2'}{@{$self->{'sortKeys2'}}[$i]}); 
+    }    
 
     # Only return the X most prevalent rows or columns
     # By splicing away the ends of the sortKeys arrays. the actual dataTable isn't touched.
