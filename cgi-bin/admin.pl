@@ -105,7 +105,7 @@ sub processPersonEdit {
 sub displayPersonList {
 
 	print $hb->getTemplateString ( "std_page_top" );
-	print &createList ( "person", 1, "reversed_name" );
+	print createList ( "person", 1, "reversed_name" );
 	
 }
 
@@ -197,15 +197,20 @@ sub displayActions	{
 	print $hb->getTemplateString ( "std_page_top" );
 	print $hb->getTemplateString ( "index" );
 
-	$sql = "SELECT name,last_action FROM person";
+	my $sql = "SELECT name, last_action FROM person";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
+	
+	my $lastlogin;
 	while ( my @values = $sth->fetchrow_array() ) {
 		$lastlogin{$values[0]} = $values[1];
 	}
 	$sth->finish();
+	
 	@names = sort({ $lastlogin{$b} <=> $lastlogin{$a} } keys %lastlogin);
+	
 	print "<p><center><table cellpadding=6>\n";
+	
 	for $i (0..29)	{
 		if ($lastlogin{$names[$i]} > 20020630150000)	{
 			$d = date($lastlogin{$names[$i]});
@@ -213,12 +218,12 @@ sub displayActions	{
 			print "<td>$names[$i]</td><td>$d</td></tr>\n";
 		}
 	}
+	
 	print "</table></center>\n";
 
 }
 
-sub insertRecord
-{
+sub insertRecord {
 	my $table = shift;
 	my $primaryKeyName = shift;
 	my $primaryKey = shift;
