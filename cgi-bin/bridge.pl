@@ -4197,6 +4197,8 @@ sub displayEnterCollPage {
             unshift(@htmlValues, $s->get('authorizer'),
                 $s->get('enterer'),
                 $refRowString);
+
+	        %pref = getPreferences($s->get('enterer'));
                   
             $sth->finish();
         } else { 
@@ -4937,9 +4939,11 @@ sub displayEditCollection {
                                                                                                                                                              
     push(@row, stdIncludes("std_page_bottom"));
     push(@fieldNames, 'page_footer');
-                                                                                                                                                             
+
     # Output the main part of the page
+    %pref = getPreferences($s->get('enterer'));
     my @prefkeys = keys %pref;
+
     print $hbo->populateHTML("collection_form", \@row, \@fieldNames, \@prefkeys);
 }
 
