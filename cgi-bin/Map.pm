@@ -577,7 +577,7 @@ sub mapDrawMap	{
     print "<br>Sizes of $dotshape are proportional to counts of collections at each point.\n"
   }
 
-  print "</font><p>\n<a href='?action=displayMapForm'>Search&nbsp;again</a>\n<p>\n";
+  print "</font><p>\n<b><a href='?action=displayMapForm'>Search&nbsp;again</a></b>\n<p>\n";
 
   print "</center></body>\n</html>\n";
 
