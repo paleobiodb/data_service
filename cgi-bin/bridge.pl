@@ -4099,7 +4099,11 @@ sub processTaxonomySearch	{
 		print "<input type=hidden name=\"taxon_name\" value=\"$taxon\">\n";
 		print "<table>\n";
 		print $html;
-		print "<tr><td><input type=radio name=taxon_no value=''> </td><td>None of the above - create a <b>new</b> taxon record</i></td></tr>\n";
+		if ( $matches == 1 )	{
+			print "<tr><td><input type=radio name=taxon_no value=''> </td><td>No, not the one above - create a <b>new</b> taxon record</i></td></tr>\n";
+		} else	{
+			print "<tr><td><input type=radio name=taxon_no value=''> </td><td>None of the above - create a <b>new</b> taxon record</i></td></tr>\n";
+		}
 		print "</table><p>\n";
 		print "<input type=submit value=\"Submit\">\n</form>\n";
 		print "</center>\n";
@@ -4138,6 +4142,40 @@ sub formatAuthorityLine	{
 	# Otherwise, use what authority info can be found
 	else	{
 		$authLine .= &formatShortRef( \%taxData );
+	}
+
+	# Print name of higher taxon JA 10.4.03
+	# Get the status and parent of the most recent opinion
+	$sql = "SELECT opinions.parent_no, opinions.pubyr, " .
+		"opinions.reference_no, opinions.status " .
+		"FROM opinions WHERE opinions.child_no=" .
+		$taxData{'taxon_no'};
+	@opRefs = @{$dbt->getData($sql)};
+	my $most_recent = 0;
+	my $bestRef = 0;
+	for my $opRef ( @opRefs )	{
+		$opRef->{pubyr} = PBDBUtil::get_real_pubyr($dbt,$opRef);
+		if ( $opRef->{pubyr} > $most_recent )	{
+			$most_recent = $opRef->{pubyr};
+			$bestRef = $opRef;
+		}
+	}
+	my %opRow = %{$bestRef};
+	my $status = $opRow{'status'};
+	my $parent_no = $opRow{'parent_no'};
+	# Not quite there; still need the name corresponding to this parent
+	$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=";
+	$sql .= $parent_no;
+	my $sth2 = $dbh->prepare( $sql );
+	$sth2->execute();
+	my $parent_name = @{$sth2->fetchrow_arrayref}[0];
+	$sth2->finish();
+	if ( $status && $parent_no )	{
+		$authLine .= " [";
+		if ( $status ne "belongs to" )	{
+			$authLine .= " = ";
+		}
+		$authLine .= "<i>$parent_name</i>]";
 	}
 
 	return $authLine;
