@@ -5,6 +5,14 @@ use Classification;
 use Globals;
 use Debug;
 
+use Validation;
+use URLMaker;
+use SQLBuilder;
+use Taxon;
+
+use POSIX qw(ceil floor);
+
+
 $DEBUG = 0;
 
 
@@ -49,38 +57,293 @@ sub searchForm{
 			 "	}\n".
 			 "}\n".
 			 "</script>\n";
-	$html .= "<form method=post action=\"/cgi-bin/bridge.pl\" ".
-			"onSubmit=\"return checkInput();\">".
-		   "<input id=\"action\" type=hidden name=\"action\"".
-		   " value=\"checkTaxonInfo\">".
-		   "<input id=\"user\" type=hidden name=\"user\"".
-		   " value=\"".$q->param("user")."\">".
-		   "<center><table border=0>".
-		   "<tr><td valign=\"middle\" align=\"left\" colspan=\"2\">".
-		   "<nobr><select name=\"taxon_rank\"><option>Higher taxon".
-		   "<option selected>Genus<option>Genus and species<option>species".
-		   "</select>".
-		   "name:&nbsp;".
-		   "<input name=\"taxon_name\" type=\"text\" size=25>".
-		   "</nobr></td>".
-		   "<tr><td valign=\"middle\" align=\"left\">".
-		   "<nobr>Author:&nbsp;<input id=\"author\" name=\"author\" size=12>".
-		   "Year:&nbsp;<nobr><input id=\"pubyr\" name=\"pubyr\" size=5></nobr>".
-		   "</td>".
-		   "<td align=\"middle\">".
-		   "<input id=\"submit\" name=\"submit\" value=\"Get info\"".
-		   " type=\"submit\"></td></tr></table>".
-		   "<p><i>The taxon name field is required.</i></p>\n".
-		   "</center></form>";
+			 
+	$html .= "<FORM method=post action=\"/cgi-bin/bridge.pl\" onSubmit=\"return checkInput();\">
+	
+		   <input id=\"action\" type=hidden name=\"action\" value=\"checkTaxonInfo\">
+		   <input id=\"user\" type=hidden name=\"user\" value=\"".$q->param("user")."\">
+		   
+
+		   <TABLE align=center border=0>
+		   <TR>
+		   <TD align=right>Rank:</TD>
+		   <TD>
+		   <SELECT name=\"taxon_rank\">
+		   
+		  <!-- <option selected></option> -->
+		   
+		   <option>Higher taxon</option>
+		   <option selected>Genus<option>Genus and species</option>
+		   <option>species</option>
+		   </SELECT>
+		   </TD>
+		   <TD align=right>Name:</TD>
+		   <TD>
+		   <INPUT name=\"taxon_name\" type=\"text\" size=25>
+		   </TD>
+		   </TR>
+		   
+		   <TR>
+		   <TD align=right>Author:</TD>
+		   <TD>
+		   <INPUT id=\"author\" name=\"author\" size=12>
+		   </TD>
+		   <TD align=right>Year:</TD>
+		   <TD>
+		   <INPUT id=\"pubyr\" name=\"pubyr\" size=5>
+		   </TD>
+		   </TR>
+
+		<!--
+		   <TR>
+		   <TD align=right>
+		   <INPUT id=\"authorities_only\" type=checkbox name=\"authorities_only\" value=\"YES\" checked>
+		   </TD>
+		   <TD align=left>
+		   Search in authorities only.
+		   </TD>
+		   </TR>
+		 -->
+		  	
+		  	</TABLE>
+		  	<BR> 
+		  
+		   <CENTER>
+		   <input id=\"submit\" name=\"submit\" value=\"Get info\"
+		    type=\"submit\"></td></tr></table>
+		   <!--<p><i>The taxon name field is required.</i></p>-->
+		   </CENTER>
+		   <BR>
+		   </form>";
 
 	return $html;
 }
 
 
-# Send the data to the display routine.
-# Pass it the cgi object, database handle, session object, and 
-# DBTransactionManager handle.
-sub checkStartForm{
+# pass this a taxon name string with spaces between each part,
+# ie, Homo sapiens, or Homo, or Bogus bogus bogus, and it will
+# return a hash three strings - the Genus/Higher taxon (higher), 
+# species (species), and subspecies name (subspecies). 
+sub splitTaxonName {
+	my $input = shift;
+	
+	$input =~ m/^([A-Z][a-z]+)([ ][a-z]+)?([ ][a-z]+)?/;
+	my $genusOrHigher = $1;
+	my $species = $2;
+	my $subspecies = $3;
+	
+	# if they only passed in a species name, then it won't be capitialized.
+	if (! $genusOrHigher) {
+		$input =~ m/(^[a-z]+).*$/;
+		$species = $1;
+	}
+	
+	my %toreturn;
+	$toreturn{'higher'} = $genusOrHigher;
+	$toreturn{'species'} = $species;
+	$toreturn{'subspecies'} = $subspecies;
+
+	return %toreturn;
+}
+
+
+# Note, this is not finished yet.. Don't use it for anything other than testing.
+# Started writing this to deal with a bug report.. but have abandoned it for now.
+# rjp 2/2004.
+sub newCheckStartForm {
+	my $q = shift;
+	my $dbh = shift;
+	my $s = shift;
+	my $dbt = shift;
+	
+	my $LIMIT = 500;	# don't allow more than this many results...
+	
+	my $sql1 = SQLBuilder->new($s);
+	my $sql2 = SQLBuilder->new($s);
+	
+	$sql1->setLimitExpr($LIMIT);
+	$sql2->setLimitExpr($LIMIT);
+	
+	# grab the parameters off the form.
+	my $taxon_rank = $q->param('taxon_rank');
+	my $taxon_name = $q->param('taxon_name');
+	my $author = $q->param('author');
+	my $pubyr = $q->param('pubyr');
+
+	# build up the SQL to check for ref_is_authority authors/pubyrs and 
+	# authors/pubyrs stored in the actual authorities table simultaneously.
+	$sql1->setWhereSeparator("AND");
+	$sql2->setWhereSeparator("AND");
+	
+			
+	$sql1->setSelectExpr("a.taxon_no");
+	$sql2->setSelectExpr("taxon_no");
+	
+	$sql1->setFromExpr("authorities a, refs r");
+	$sql2->setFromExpr("authorities");
+	
+	$sql1->addWhereItem("a.ref_is_authority = 'YES'");
+	
+	# add author to the query
+	if ($author ne '') {
+		$sql1->addWhereItem(" (r.author1last = '" . $author ."' OR 
+			r.author2last = '" . $author . "' OR 
+			r.otherauthors LIKE '\%" . $author ."\%')");
+		$sql2->addWhereItem(" (author1last = '" . $author ."' OR 
+			author2last = '" . $author . "' OR 
+			otherauthors LIKE '\%" . $author ."\%')");
+	}
+	
+	# add pubyr to the query
+	if ($pubyr ne '') {
+		$sql1->addWhereItem("r.pubyr = '" . $pubyr . "'");
+		$sql2->addWhereItem("pubyr = '" . $pubyr . "'");
+	}
+	
+	# add taxon_rank to the query
+	if ($taxon_rank ne '') {
+		
+		# figure out the SQL for the rank.
+		my $rankSQL;
+		
+		if ($taxon_rank eq 'Higher taxon') {
+			$rankSQL = "taxon_rank NOT IN ('subspecies', 'species', 'subgenus', 'genus')";
+		} elsif ($taxon_rank eq 'Genus') {
+			$rankSQL = "taxon_rank = 'genus'";
+		} elsif ($taxon_rank eq 'Genus and Species') {
+			$rankSQL = "taxon_rank = 'species'";
+		} elsif ($taxon_rank eq 'species') {
+			# note, "species" is a special case for this form - we're supposed to literally
+			# search for a species, not genus.. Ie, only the second part of the name.
+			$rankSQL = "taxon_rank = 'species'";
+		}
+		
+		$sql1->addWhereItem($rankSQL);
+		$sql2->addWhereItem($rankSQL);
+	}
+	
+	my %ranks;
+	# add taxon_name to the query
+	if ($taxon_name ne '') {
+		my $nameSQL;
+		
+		# split the taxon name into its constituents.
+		%ranks = splitTaxonName($taxon_name);
+
+		if ($taxon_rank eq 'species') {
+			# special case, for this form, we just want the second name, not the Genus and species.
+			
+			$nameSQL = "taxon_name LIKE '%". $ranks{'species'} ."%'"; 	
+		} else {
+			$nameSQL = "taxon_name = '" . $taxon_name . "'";
+		}
+		
+		$sql1->addWhereItem($nameSQL);
+		$sql2->addWhereItem($nameSQL);
+	}
+	
+
+	$sql1->addWhereItem("a.reference_no = r.reference_no");
+	
+
+	my @taxa;  # array of all taxa to return (Taxon objects)
+	my $taxon;
+	
+	# execute the SQL queries and add the results (taxa) to the @taxa array
+	
+	my $resultRef = $sql1->allResultsArrayRef();
+	print "sql = " . $sql1->SQLExpr() . "<BR><BR>";
+	
+	foreach my $result (@$resultRef) {
+		$taxon = Taxon->new();
+		$taxon->setWithTaxonNumber($result->[0]);
+		push (@taxa, $taxon);
+	}
+	
+	$resultRef = $sql2->allResultsArrayRef();
+	print "sql = " . $sql2->SQLExpr() . "<BR><BR>";
+	
+	foreach my $result (@$resultRef) {
+		$taxon = Taxon->new();
+		$taxon->setWithTaxonNumber($result->[0]);
+		push (@taxa, $taxon);	
+	}
+	
+	
+	# at this point, we have found all of the taxa which are in the authorities
+	# table.. This still leaves us with no listing for the taxa which only 
+	# exist in the occurrences and reids table...
+	
+	# only look for these if the authorities_only checkbox is turned off.
+	
+	if ($q->param("authorities_only") ne "YES") {
+		# Note, if a genus_name exists in several occurrence or reid records, then
+		# this will find one for each distinct collection number.
+		
+		my $halfLIMIT = floor($LIMIT/2);
+		
+		# if they just search for a genus, then the $ranks variable
+		# will list it as a higher taxon because it can't tell.. However,
+		# if they search for genus and species, then it will be in the genus variable.
+		my $genus = $ranks{'genus'} || $ranks{'higher'};
+		my $species = $ranks{'species'};
+		
+		my $genusSQL = "";
+		my $speciesSQL = "";
+		
+		if ($genus ne '') {
+			$genusSQL = " genus_name LIKE '%$genus%' ";
+		}
+		if ($species ne '') {
+			$speciesSQL = " species_name LIKE '%$species%' ";
+		}
+		
+		print "genus = $genus, species = $species";
+		
+		if ($genus || $species) {
+			my $tempstr = "SELECT DISTINCT collection_no, genus_name FROM reidentifications
+			WHERE $genusSQL $speciesSQL LIMIT $halfLIMIT 
+			UNION 
+			SELECT DISTINCT collection_no, genus_name FROM occurrences
+			WHERE $genusSQL $speciesSQL LIMIT $halfLIMIT";
+	
+			
+			$sql1->clear();
+			$sql1->setSQLExpr($tempstr);
+			
+			print "sql = " . $sql1->SQLExpr() . "<BR><BR>";
+		
+			# must use permissions for reidentifications and occurrences
+			$resultRef = $sql1->allResultsArrayRefUsingPermissions();
+		
+			foreach my $result (@$resultRef) {
+				$taxon = Taxon->new();
+				
+				my $name = $result->[1];
+				if ($result->[2]) {
+					$name .= " " . $result->[2];
+				}
+				
+				$taxon->setWithTaxonName($name);
+				push (@taxa, $taxon);
+			}
+		}
+	}	
+	
+	
+	# print out the results
+	foreach my $taxon (@taxa) {
+		print $taxon->taxonName() . " (" . $taxon->taxonNumber() . ") <BR>";	
+	}
+	
+	return; 
+
+}
+	
+	
+	
+sub checkStartForm {	
+	
 	my $q = shift;
 	my $dbh = shift;
 	my $s = shift;
@@ -386,7 +649,9 @@ sub checkStartForm{
 
 		print main::stdIncludes("std_page_bottom");
 	}
+
 }
+
 
 
 
@@ -399,29 +664,28 @@ sub displayTaxonInfoResults{
 	my $s = shift;
 	my $dbt = shift;
 
-	
 	my $genus_name = $q->param("genus_name");
 	my $taxon_type = $q->param("taxon_rank");
 	my $taxon_no = 0;
 
-	# Looking for "Genus (23456)" or something like that.	
+	# Looking for "Genus (23456)" or something like that.
+	
+	# rjp, note, 2/20/2004 - this won't work if the taxon isn't 
+	# in the authorities table...	
 	$genus_name =~ /(.*?)\((\d+)\)/;
 	$taxon_no = $2;
-
-	if($taxon_no){
-		$genus_name = $1;
-		$genus_name =~ s/\s+$//; # remove trailing spaces.
+	
+	# cut off the other stuff if it exists.
+	$genus_name = Validation::genusFromString($1);
+	
+	if ($taxon_no) {  # if it's in the authorities table
 		$q->param("genus_name" => $genus_name);
-	}
-	else{
-		# just do this
-		$genus_name =~ s/\s+$//; # remove trailing spaces.
-	}
+	} 
 
 	
 	# Keep track of entered name for link at bottom of page
 	my $entered_name = $genus_name;
-	if(!$taxon_no){
+	if (!$taxon_no) {
 		my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='".
 				  $entered_name."'";
 		$taxon_no = ${$dbt->getData($sql)}[0]->{taxon_no};
@@ -543,6 +807,7 @@ sub displayTaxonInfoResults{
 	print "<table class='darkList'><tr><td valign=\"top\">".
 		  "<center><b><div class=\"large\">Display</div></b></center></td></tr>";
 	print "<tr><td align=left valign=top>";
+	
 	foreach my $key (sort keys %module_num_to_name){
 		print "<nobr><input type=checkbox name=modules value=$key";
 		foreach my $checked (@modules_to_display){
