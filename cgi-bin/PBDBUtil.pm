@@ -573,11 +573,6 @@ sub taxonomic_search{
 	}
 
 	my $results = new_search_recurse($results[0]->{taxon_no}, $dbt);
-	#my @nums_list = split(/,/, $results);
-	
-	#my @clean = ();
-	#@nums_list = @{simple_array_push_unique(\@clean, \@nums_list)};
-	#$results = join(",",@nums_list);
 	
     $sql = "SELECT taxon_name FROM authorities WHERE taxon_no IN ($results)";
     @results = @{$dbt->getData($sql)};
