@@ -838,7 +838,7 @@ sub updateRecord {
 
 
 # same as updateRecord(), but only 
-# updates the fields which are empty in the table row..
+# updates the fields which are empty or zero in the table row..
 # ie, if you pass it a field which is already populated in this database
 # row, then it won't update that field.
 sub updateRecordEmptyFieldsOnly {
@@ -931,7 +931,8 @@ sub internalUpdateRecord {
 					
 					# if the column in the database for this row is
 					# already empty...
-					if (($selResults->{$row})->{$key} eq '') {
+					my $dbcolval = ($selResults->{$row})->{$key};
+					if (($dbcolval eq '') || ($dbcolval == 0)) {
 						# then add the key to the update statement.
 						$toUpdate .= "$key = '" . $hashRef->{$key} . "', ";
 					}
