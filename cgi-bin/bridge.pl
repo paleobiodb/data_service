@@ -30,14 +30,16 @@ use Report;
 use Curve;
 use Permissions;
 use PBDBUtil;
-use TaxonInfo;
 use DBTransactionManager;
-use Images;
+use Reclassify;
 use Scales;
+use Images;
+use TaxonInfo;
 use TimeLookup;
 use Ecology;
 use PrintHierarchy;
 
+# god awful Poling modules
 use Occurrence;
 use Collection;
 use Taxon;
@@ -102,7 +104,11 @@ my $exec_url = $q->url();
 
 # this cleans all of the CGI parameters by removing HTML, escaping quotes, etc.
 # added by rjp, 2/2004
-Validation::cleanCGIParams($q);
+# don't do this for reclassification because italics need to be passed through
+#  JA 1.4.04
+if ( $q->param('action') ne "startProcessReclassifyForm" )	{
+	Validation::cleanCGIParams($q);
+}
 
 
 # Make the HTMLBuilder object with the private template directory..  
@@ -331,6 +337,8 @@ sub logout {
 }
 
 # sendPassword
+# JA 1.4.04: not sure who wrote this - probably Muhl - but it's not used
+#  and is intended to e-mail the user his/her password
 sub sendPassword {
 	my $authorizer = $q->param("authorizer");
 
@@ -427,7 +435,9 @@ sub displayLoginPage {
 	$fields{NOESCAPE_enterer_authorizer_lists} = $javaScript;
 	
 	
-	
+	# calls Poling's newPopulateHTML, written without authorization
+	#  and of unknown robustness (should be deprecated and replaced
+	#  by a call to populateHTML)
 	my $html = $hbo->newPopulateHTML('login_box', \%fields);
 	
 	
@@ -1908,6 +1918,11 @@ sub displayCollResults {
 	elsif ( $type eq "edit_occurrence" )   { $action = "displayOccurrenceAddEdit"; $method =
 "getReadRows"; }
 	elsif ( $type eq "reid" )	{ $action = "displayOccsForReID"; $method = "getReadRows"; }
+	# added by JA 31.3.04
+	elsif ( $type eq "reclassify_occurrence" )	{
+		$action = "startDisplayOccurrenceReclassify";
+		$method = "getWriteRows";
+	}
 	else {
 		# type is unknown, so use defaults.
 		$action = "displayCollectionDetails";
@@ -3817,7 +3832,23 @@ sub displayTaxonomySearchForm	{
 	print stdIncludes("std_page_bottom");
 }
 
+##############
+## Reclassify stuff
 
+sub startStartReclassifyOccurrences	{
+	Reclassify::startReclassifyOccurrences($q, $s, $dbh, $dbt);
+}
+
+sub startDisplayOccurrenceReclassify	{
+	Reclassify::displayOccurrenceReclassify($q, $s, $dbh, $dbt);
+}
+
+sub startProcessReclassifyForm	{
+	Reclassify::processReclassifyForm($q, $s, $dbh, $dbt, $exec_url);
+}
+
+## END Reclassify stuff
+##############
 
 ##############
 ## Taxon Info Stuff
