@@ -181,18 +181,7 @@ sub htmlError {
 	exit 1;
 }
 
-# Builds a WHERE clause smartly
-sub buildWhere {
-	my $where = shift;
-	my $clause = shift;
-	
-	if ( $where ) {
-		$where .= " AND $clause ";
-	} else {
-		$where = " WHERE $clause ";
-	}
-	return $where;
-}
+
 
 sub displayHomePage {
 
