@@ -310,7 +310,7 @@ sub processViewImages{
 	my $s = shift;
 	my $taxon_name = $q->param('genus_name');
 
-	my $sql = "SELECT authorities.taxon_no, image_no, path_to_image, caption, ".
+	my $sql = "SELECT authorities.taxon_no, image_no, images.reference_no, path_to_image, caption, ".
 			  " original_filename ".
 			  "FROM authorities, images ".
 			  "WHERE authorities.taxon_no = images.taxon_no AND ".
