@@ -82,7 +82,8 @@ sub getSecondaryRefsString{
 			  "refs.pubno, refs.firstpage, refs.lastpage ".
               "FROM refs, secondary_refs ".
               "WHERE refs.reference_no = secondary_refs.reference_no ".
-              "AND secondary_refs.collection_no = $collection_no";
+              "AND secondary_refs.collection_no = $collection_no ".
+			  "ORDER BY author1last, author1init, author2last, pubyr";
     my $sth = $dbh->prepare($sql);
     $sth->execute();
     my @results = @{$sth->fetchall_arrayref({})};
