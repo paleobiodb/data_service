@@ -55,7 +55,7 @@ sub processStartLoadImage{
 	
 	# Strip off 'indet' or 'sp' or whatever. Use only the genus name in those
 	# cases. 
-	my $taxon_name =~ s/indet\.{0,1}|s[p]+\.{0,1}//;
+	$taxon_name =~ s/\s+(indet|sp|spp)\.{0,1}$//;
 
 	my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='$taxon_name'";
 	my @results = @{$dbt->getData($sql)};
@@ -71,12 +71,13 @@ sub processStartLoadImage{
 		exit;
 	}
 	# If logged in and name exists in Authorities, go to image upload page.
-	displayLoadImageForm($exec_url, $taxon_name);
+	displayLoadImageForm($exec_url, $taxon_name, $taxon_no);
 }
 
 sub displayLoadImageForm{
 	my $exec_url = shift;
-	my $taxon_name;
+	my $taxon_name = shift;
+	my $taxon_no = shift;
 
 	# Spit out upload html page
 	# list constraints: image size and image type
@@ -90,6 +91,7 @@ sub displayLoadImageForm{
 	print "<b>File to upload:</b>&nbsp;<input type=file name=\"image_file\" ".
 		  "accept=\"image/*\">".
 		  "<input type=hidden name=\"taxon_name\" value=\"$taxon_name\">".
+		  "<input type=hidden name=\"taxon_no\" value=\"$taxon_no\">".
 		  "<input type=hidden name=\"action\" value=\"processLoadImage\">";
 	print "<table><tr><td valign=top><p><b>Caption:</b></td><td>".
 		  "<textarea cols=60 rows 4 name=\"caption\">".
@@ -101,62 +103,206 @@ sub displayLoadImageForm{
 sub processLoadImageForm{
 	my $dbt = shift;
 	my $q = shift;
+	my $s = shift;
+	my $exec_url = shift;
+	my $MEGABYTE = 1048576;
 	my $file_name = $q->param('image_file');
+	my $taxon_name = $q->param('taxon_name');
+	$taxon_name =~ s/\s+/_/g;
+	my $taxon_no = $q->param('taxon_no');
+
+	if($DEBUG){
+		print "FILE NAME: $file_name<br>";
+	}
+
 	my $caption = $q->param('caption');
+	if($caption eq "Optional image description here."){
+		$caption = "";
+	}
 
 	# test that we actually got a file
 	if(!$file_name && $q->cgi_error){
 		print $q->header(-status=>$->cgi_error);
-		exit 0;
+		exit;
 	}
 
 	# check the file type: we only want images
 	my $type = $q->uploadInfo($file_name)->{'Content-Type'};
 	if($type !~ /image/){
-		die "Image files of type jpg, png or gif only please!";
+		print main::stdIncludes("std_page_top");
+		print "<center><p>Image files of type jpg, png or gif only please!<br>";
+		print "<p><a href=\"$exec_url?action=startImage\">".
+			  "<b>Enter another image</b></a>&nbsp;&#149;&nbsp;".
+			  "<a href=\"$exec_url?action=viewImage\"><b>View images</b></a>".
+			  "</center>";
+		print main::stdIncludes("std_page_bottom");
+		exit;
 	}
 
 	# find file's suffix:
-	my $file_name =~ /.*?\.(\w)+$/;
-	# write it to a temp location
-	my $temp_file = "/tmp/uploaded_fossil_image.$1";
-	open(OUTFILE, ">$temp_file") or die "Couldn't write out image ($!)";
-	my $fh = $query->upload('uploaded_file');
-	while ($_ = <$fh>) {
-		print OUTFILE $_;
+	$file_name =~ /.*?\.(\w+)$/;
+	my $suffix = $1;
+	if($file_name !~ /(jpg|gif|png)/i){
+		print main::stdIncludes("std_page_top");
+		print "<center><p>Please upload only images of type jpg, gif or png.<br>";
+		print "<p><a href=\"$exec_url?action=startImage\">".
+			  "<b>Enter another image</b></a>&nbsp;&#149;&nbsp;".
+			  "<a href=\"$exec_url?action=viewImage\"><b>View images</b></a>".
+			  "</center>";
+		print main::stdIncludes("std_page_bottom");
+		exit;
 	}
-	close OUTFILE;
 
-	# test the file size
-		# unlink if too big,
-		# send back error message
+	# read the image into memory
+	my $buffer;
+	# Read 1 MB into $buffer
+	my $bytes_read = read($file_name, $buffer, $MEGABYTE); 
 
+	# test the file size, send back error message if too big
+	if($bytes_read > $MEGABYTE-1){
+		print main::stdIncludes("std_page_top");
+		print "<center><p>Image is too large.  Please only upload images ".
+			  "less than one megabyte in size<br>";
+		print "<p><a href=\"$exec_url?action=startImage\">".
+			  "<b>Enter another image</b></a>&nbsp;&#149;&nbsp;".
+			  "<a href=\"$exec_url?action=viewImage\"><b>View images</b></a>".
+			  "</center>";
+		print main::stdIncludes("std_page_bottom");
+		exit;
+	}
 
 	# find the image's md5 checksum (to check uniqueness)
 	require Digest::MD5;
 
 	my $image_digest = Digest::MD5->new();
 
-	open(FILE, $temp_file) or die "can't open $temp_file ($!)";
-	binmode(FILE);
-	while(<FILE>){
-		$image_digest->add($_);
-	}
-	close FILE;
+	$image_digest->add($buffer);
 
 	my $digest =  $image_digest->hexdigest();
+
+	if($DEBUG){
+		print "DIGEST: $digest<br>";
+	}
 	
 	# test this checksum against other files' in the db image table
-	# if this checksum already exists, 
-		# unlink file
-		# send back an error message
+	# if this checksum already exists send back an error message
+	my $sql = "SELECT file_md5_hexdigest,path_to_image FROM images ".
+			  "WHERE file_md5_hexdigest='$digest'";
+	my @results = @{$dbt->getData($sql)};
+	if(@results){
+		print main::stdIncludes("std_page_top");
+		print "<center><p>This image <a href=\"".$results[0]->{path_to_image}.
+			  "\">already exists</a> in the database<br>";
+		print "<p><a href=\"$exec_url?action=startImage\">".
+			  "<b>Enter another image</b></a>&nbsp;&#149;&nbsp;".
+			  "<a href=\"$exec_url?action=viewImage\"><b>View images</b></a>".
+			  "</center>";
+		print main::stdIncludes("std_page_bottom");
+		exit; 
+	}
 
-	# once we're sure this is a new, valid image
+	# Need authorizer/enterer numbers from names
+	$sql = "SELECT person_no FROM person WHERE name='".$s->get('enterer')."'";
+	my $enterer = @{$dbt->getData($sql)}[0]->{person_no};
+	$sql = "SELECT person_no FROM person WHERE name='".$s->get('authorizer')."'";
+	my $authorizer = @{$dbt->getData($sql)}[0]->{person_no};
+	if(!$enterer or !$authorizer){
+		main::displayLoginPage("Please log in first.");
+		exit;
+	}
+
+	# create a timestamp for record creation
+	my @timing = localtime(time);
+	my $year = 1900+$timing[5];
+	my $month = $timing[4] < 10?"0".$timing[4]:$timing[4];
+	my $day = $timing[3] < 10?"0".$timing[3]:$timing[3];
+	my $hour = $timing[2] < 10?"0".$timing[2]:$timing[2];
+	my $minute = $timing[1] < 10?"0".$timing[1]:$timing[1];
+	my $sec = $timing[0] < 10?"0".$timing[0]:$timing[0];
+	my $now = "$year-$month-$day $hour:$minute:$sec";
+
+	# Once we're sure this is a new, valid image
+	#	write the image to the filesystem
+	my $enterer_name = $s->get('enterer');
+	$enterer_name =~ s/\s+//g;
+	$enterer_name =~ s/\.//g;
+	my $docroot = $ENV{DOCUMENT_ROOT};
+	my $subdirs = "/images/$enterer_name";
+	my $base = "${docroot}$subdirs";
+	my $number = 1; 
+	# open enterer's directory.  if it doesn't exist, create it.
+
+	if(! -e $base){
+		my $success = mkdir($base);	
+		if(!$success){
+			die "couldn't create enterer's directory. ".
+				"Please notify the webmaster.<br>";
+		}
+	}
+	else{ # read all the files in the directory
+		opendir(DIR,$base) or die "can't open $base ($!)";
+		my @files = grep { /$taxon_name/ } readdir(DIR);
+		closedir(DIR);
+
+		# find any files with the same taxon_name, 
+		# and get their maximum number suffix
+		if(@files){
+			foreach my $file (@files){
+				my $temp_num = $file =~ /(\d+)\./;
+				if($temp_num > $number){
+					$number = $temp_num;
+				}
+			}
+			# increment the count for the new file
+			$number++;
+		}
+	}
+
+	# Write the file out to the filesystem.
+	my $new_file = "${taxon_name}_$number.$suffix";
+	open(NEWFILE,">$docroot$subdirs/$new_file") or die "couldn't create $docroot$subdirs/$new_file ($!)\n";
+	print NEWFILE $buffer;
+	close NEWFILE;
+
+	# Write out a thumbnail
+	require Image::Magick;
+	my ($image, $x);
+	$image = Image::Magick->new;
+	$x = $image->Read(filename=>"$docroot$subdirs/$new_file");
+	warn "$x" if "$x";
+	$x = $image->Scale('50x50');
+	warn "$x" if "$x";
+	my $new_thumb = "${taxon_name}_${number}_thumb.$suffix";
+	$x = $image->Write("$docroot$subdirs/$new_thumb");
+	warn "$x" if "$x";
+
+	my @values = ($authorizer, $enterer, $taxon_no, "'$now'", "'$subdirs/$new_file'", "'$file_name'", "'$caption'", "'$digest'");
+
 	#	insert a new record into the db
-	#	copy the image from /tmp to its final resting place.
-	#	(unlink from /tmp, or are we doing a mv?)
+	$sql = "INSERT INTO images (authorizer_no, enterer_no, taxon_no, ".
+		   "created, path_to_image, original_filename, caption, file_md5_hexdigest) ".
+		   "VALUES (".join(',',@values).")";
+	if(!$dbt->getData($sql)){
+		print $dbt->getErr() ;
+		# If we had an error inserting, remove the image from the filesystem too
+		my $removed = unlink($new_file);
+		if($removed != 1){
+			die "<p>Image db insert and file removal both failed. Please ".
+				"notify the webmaster.<br>";
+		}
+	}
+	else{
+		print main::stdIncludes("std_page_top");
+		print "<center><p>Inserted record number ".$dbt->getID()."<br>";
+		print "<p><a href=\"$exec_url?action=startImage\">".
+			  "<b>Enter another image</b></a>&nbsp;&#149;&nbsp;".
+			  "<a href=\"$exec_url?action=viewImage\"><b>View images</b></a>".
+			  "</center>";
+		print main::stdIncludes("std_page_bottom");
+	}
 }
 
+# DONE, ABOVE
 sub checkLoadedImage{
 	# Check size of uploaded image
 		# if too big, send back a rejection message explaining it was too big
@@ -177,17 +323,94 @@ sub checkLoadedImage{
 # VIEWING
 ###
 
-sub viewImages{
+sub startViewImages{
+	my $dbt = shift;
+	my $q = shift;
+	my $exec_url = shift;
+
 	# Enter in a taxonomic name for images you wish to view.
-	# Query the IMAGES table to see what we have.
-	#	If we have nothing, return a message saying so
+	print main::stdIncludes("std_page_top");
+	print "<center><h2>View images</h2></center>";
+	print "<center><p><form name=\"image_form\" action=\"$exec_url\" ".
+		  "method=\"POST\"><table><tr><td>";
+	print "<b>Taxonomic name of specimen to view:&nbsp</b>";
+	print "<input type=text size=30 name=\"taxon_name\">".
+		  "<input type=hidden name=\"action\" value=\"processViewImage\">".
+		  "</td></tr>";
+	print "<tr><td><center><input type=submit></center></td></tr></table></center>";
+	print main::stdIncludes("std_page_bottom");
+}
+
+sub processViewImages{
+	my $dbt = shift;
+	my $q = shift;
+	my $s = shift;
+	my $exec_url = shift;
+	my $taxon_name = $q->param('taxon_name');
+	my $selected_index = $q->param('selected_index');
+	if(!$selected_index){
+		$selected_index = 0;
+	}
+
+	my $sql = "SELECT authorities.taxon_no, image_no, path_to_image, caption ".
+			  "FROM authorities, images ".
+			  "WHERE authorities.taxon_no = images.taxon_no AND ".
+			  "taxon_name='$taxon_name'";
+	my @results = @{$dbt->getData($sql)};
+	
 	# 	If we have images, build a page:
 	#		nav bar with thumbnails 
 	#		clicking nav bar brings up images: alone on a page with a "back"
 	#			link?  Or on same page in main space with navbar still on
 	#			the side/top? If the latter, what fills the space when the
 	#			page first comes up - the first image in the series?
+	if(@results){
+		taxonImageDisplay($selected_index, $taxon_name, \@results);
+	}
+	else{
+		print main::stdIncludes("std_page_top");
+		print "<center><p>No images found for taxon <i>$taxon_name</i><br>";
+		if($s->get("enterer") ne "Guest" or $s->get("enterer") ne ""){
+			print "<p><a href=\"$exec_url?action=startImage\">".
+				  "<b>Enter an image</b></a>&nbsp;&#149;&nbsp;";
+		}
+		print "<a href=\"$exec_url?action=viewImage\"><b>View images</b></a>".
+			  "</center>";
+		print main::stdIncludes("std_page_bottom");
+	}
 }
 
+sub taxonImageDisplay{
+	my $selected_index = shift;
+	my $taxon_name = shift;
+	my $data = shift;
+	my @data = @{$data};
+
+	print main::stdIncludes("std_page_top");
+
+	if(@data == 1){
+		my $thumb = $data[0]->{path_to_image};
+		$thumb =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
+		print "<table><tr><td>"; 
+			  "<a href=\"".$im->{path_to_image}."\">".
+			  "<img src=\"".$thumb."\"></a></td></tr>".
+			  "<tr><td><center>".$im->{caption}.
+			  "</center></td></tr></table>";
+	}
+	else{
+# HMMM, MAY HAVE TO DO THIS AS A 'GET' TYPE, WITH ALL PARAMS IN THE LINKS
+# <a href="$exec_url?action=processViewImage&name=$taxon_name&selected_index=$selected_index><img src=""></a>
+		print "<form name=\"image_display\" method=POST>";
+		print "<input type=\"hidden\" name=\"action\" value=\"processViewImage\">";
+		print "<input type=\"hidden\" name=\"taxon_name\" value=\"$taxon_name\">";
+		foreach my $im (@results){
+			my $thumb = $im->{path_to_image};
+			$thumb =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
+		}
+		print "</form>";
+	}
+	
+	print main::stdIncludes("std_page_bottom");
+}
 
 1;
