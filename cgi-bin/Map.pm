@@ -41,8 +41,8 @@ my %coll_count = ();
 
 sub acos {
     my $a;
-    if ($_[0] > 1.0) {
-        $a = 1.0;
+    if ($_[0] > 1 || $_[0] < -1) {
+        $a = 1;
         carp "Map.pm warning, bad args passed to acos: $_[0] x $x oppgcd $oppgcd y $y";
     } else {
         $a = $_[0];
