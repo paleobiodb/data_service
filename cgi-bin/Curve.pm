@@ -957,6 +957,20 @@ sub subsample	{
 				$mmidptdiv[$i] = $mnewbc[$i] * exp ( 0.5 * ( $lam[$i] - $mu[$i] ) );
 			}
 		}
+		# get mesa diversity estimates 25.9.04
+		# note: the idea is that mesa diversity is either starting
+		#  diversity plus originating taxa, or ending diversity plus
+		#  ending taxa, but in either case this reduces to t1 t2 / t12
+		# algebraically, if t1 and t2 are biased by p^2 and t12 is
+		#  biased by p^2, then mesa diversity is biased by p, so divide
+		#  it by p
+		# again, chrons are in reverse order, so we are looking at
+		#  i - 1 instead of i + 1
+		for $i (1..$chrons)	{
+			if ( $mnewbc[$i] > 0 && $mnewbc[$i-1] > 0 )	{
+				$mmesa[$i] = $mtwotimers[$i] * $mtwotimers[$i-1] / ( $mthreetimers[$i] * $threetimerp );
+			}
+		}
 	}
 	# end of Meaning of Life Equations
 
@@ -1059,23 +1073,23 @@ sub printResults	{
 			print "<hr>\n<h3>Raw data</h3>\n\n";
 		}
 		print "<table cellpadding=4>\n";
-		print "<tr><td class=small valign=top><b>Interval</b>\n";
-		print "<td class=small align=center valign=top><b>Sampled<br>$generaorrefs</b>";
-		print "<td class=small align=center valign=top><b>Range-through<br>$generaorrefs</b> ";
-		print "<td class=small align=center valign=top><b>Boundary-crosser<br>$generaorrefs</b> ";
-		print "<td class=small align=center valign=top><b>Two&nbsp;timer<br>$generaorrefs</b> ";
-		print "<td class=small align=center valign=top><b>First<br>appearances</b> <td class=small align=center valign=top><b>Origination<br>rate</b> <td class=small align=center valign=top><b>Last<br>appearances</b><td class=small align=center valign=top><b>Extinction<br>rate</b> <td class=small align=center valign=top><b>Singletons</b> ";
-		print "<td class=small align=center valign=top><b>Chao-2<br>estimate</b> ";
-		print "<td class=small align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
-		print "<td class=small align=center valign=top><b>$listorfm</b> ";
+		print "<tr><td class=tiny valign=top><b>Interval</b>\n";
+		print "<td class=tiny align=center valign=top><b>Sampled<br>$generaorrefs</b>";
+		print "<td class=tiny align=center valign=top><b>Range-through<br>$generaorrefs</b> ";
+		print "<td class=tiny align=center valign=top><b>Boundary-crosser<br>$generaorrefs</b> ";
+		print "<td class=tiny align=center valign=top><b>Two&nbsp;timer<br>$generaorrefs</b> ";
+		print "<td class=tiny align=center valign=top><b>First<br>appearances</b> <td class=small align=center valign=top><b>Origination<br>rate</b> <td class=small align=center valign=top><b>Last<br>appearances</b><td class=small align=center valign=top><b>Extinction<br>rate</b> <td class=small align=center valign=top><b>Singletons</b> ";
+		print "<td class=tiny align=center valign=top><b>Chao-2<br>estimate</b> ";
+		print "<td class=tiny align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
+		print "<td class=tiny align=center valign=top><b>$listorfm</b> ";
 		if ($samplingmethod != 5)	{
-			print "<td class=small align=center valign=top><b>Occurrences</b> ";
-			print "<td class=small align=center valign=top><b>Occurrences<br>-squared</b> ";
+			print "<td class=tiny align=center valign=top><b>Occurrences</b> ";
+			print "<td class=tiny align=center valign=top><b>Occurrences<br>-squared</b> ";
 		}
 		else	{
-			print "<td class=small align=center valign=top><b>Specimens</b> ";
+			print "<td class=tiny align=center valign=top><b>Specimens</b> ";
 		}
-		print "<td class=small align=center valign=top><b>Mean<br>richness</b> <td class=small align=center valign=top><b>Median<br>richness</b> ";
+		print "<td class=tiny align=center valign=top><b>Mean<br>richness</b> <td class=small align=center valign=top><b>Median<br>richness</b> ";
 		print TABLE "Bin,Bin name,Sampled $generaorrefs,Range-through $generaorrefs,Boundary-crosser $generaorrefs,";
 		print TABLE "Two timer $generaorrefs,";
 		print TABLE "First appearances,Origination rate,Last appearances,Extinction rate,Singletons,";
@@ -1098,50 +1112,50 @@ sub printResults	{
 				}
 				$temp = $chname[$i];
 				$temp =~ s/ /&nbsp;/;
-				print "<tr><td class=small valign=top>$temp";
-				print "<td class=small align=center valign=top>$richness[$i] ";
-				print "<td class=small align=center valign=top>$rangethrough[$i] ";
+				print "<tr><td class=tiny valign=top>$temp";
+				print "<td class=tiny align=center valign=top>$richness[$i] ";
+				print "<td class=tiny align=center valign=top>$rangethrough[$i] ";
 		# compute boundary crossers
 		# this is total range through diversity minus singletons minus
 		#  first-appearing crossers into the next bin; the latter is
 		#  originations - singletons, so the singletons cancel out and
 		#  you get total diversity minus originations
 				$bcrich[$i] = $rangethrough[$i] - $originate[$i];
-				printf "<td class=small align=center valign=top>%d ",$bcrich[$i];
-				printf "<td class=small align=center valign=top>%d ",$twotimers[$i];
-				print "<td class=small align=center valign=top>$originate[$i] ";
+				printf "<td class=tiny align=center valign=top>%d ",$bcrich[$i];
+				printf "<td class=tiny align=center valign=top>%d ",$twotimers[$i];
+				print "<td class=tiny align=center valign=top>$originate[$i] ";
 			# Foote origination rate - note: extinction counts must
 			#  exclude singletons
 				if ( $bcrich[$i-1] > 0 && $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 )	{
-					printf "<td class=small align=center valign=top>%.4f",log( $bcrich[$i-1] / ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) );
+					printf "<td class=tiny align=center valign=top>%.4f",log( $bcrich[$i-1] / ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) );
 				} else	{
-					print "<td class=small align=center valign=top>NaN";
+					print "<td class=tiny align=center valign=top>NaN";
 				}
-				print "<td class=small align=center valign=top>$extinct[$i] ";
+				print "<td class=tiny align=center valign=top>$extinct[$i] ";
 			# Foote extinction rate
 				if ( $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 && $bcrich[$i] > 0 )	{
-					printf "<td class=small align=center valign=top>%.4f",log( ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) / $bcrich[$i] ) * -1;
+					printf "<td class=tiny align=center valign=top>%.4f",log( ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) / $bcrich[$i] ) * -1;
 				} else	{
-					print "<td class=small align=center valign=top>NaN";
+					print "<td class=tiny align=center valign=top>NaN";
 				}
-				print "<td class=small align=center valign=top>$singletons[$i] ";
+				print "<td class=tiny align=center valign=top>$singletons[$i] ";
 				if ($chaostat > 0 )	{
-				  printf "<td class=small align=center valign=top>%.1f ",$chaostat;
+				  printf "<td class=tiny align=center valign=top>%.1f ",$chaostat;
 				} else    {
-				  print "<td class=small align=center valign=top>NaN ";
+				  print "<td class=tiny align=center valign=top>NaN ";
 				}
 				if ($jolly[$i] > 0 )	{
-				  printf "<td class=small align=center valign=top>%.1f ",$jolly[$i];
+				  printf "<td class=tiny align=center valign=top>%.1f ",$jolly[$i];
 				} else    {
-				  print "<td class=small align=center valign=top>NaN ";
+				  print "<td class=tiny align=center valign=top>NaN ";
 				}
-				print "<td class=small align=center valign=top>$listsinchron[$i] ";
-				print "<td class=small align=center valign=top>$occsinchron[$i] ";
+				print "<td class=tiny align=center valign=top>$listsinchron[$i] ";
+				print "<td class=tiny align=center valign=top>$occsinchron[$i] ";
 				if ($samplingmethod != 5)	{
-					print "<td class=small align=center valign=top>$occsinchron2[$i] ";
+					print "<td class=tiny align=center valign=top>$occsinchron2[$i] ";
 				}
-				printf "<td class=small align=center valign=top>%.1f ",$occsinchron[$i]/$listsinchron[$i];
-				printf "<td class=small align=center valign=top>%.1f ",$median[$i];
+				printf "<td class=tiny align=center valign=top>%.1f ",$occsinchron[$i]/$listsinchron[$i];
+				printf "<td class=tiny align=center valign=top>%.1f ",$median[$i];
 	
 				print TABLE $chrons - $i + 1;
 				print TABLE ",$chname[$i]";
@@ -1195,38 +1209,39 @@ sub printResults	{
 		if ($q->param('samplesize') ne "")	{
 			print "\n<hr>\n<h3>Results of subsampling analysis</h3>\n\n";
 			print "<table cellpadding=4>\n";
-			print "<tr><td class=small valign=top><b>Interval</b>\n";
-#			print "<td class=small align=center valign=top><b>Sampled<br>$generaorrefs</b> ";
-#			print "<td class=small align=center valign=top><b>Range-through<br>$generaorrefs</b> ";
-			print "<td class=small align=center valign=top><b>Items<br>sampled</b> ";
-			print "<td class=small align=center valign=top><b>Median ";
+			print "<tr><td class=tiny valign=top><b>Interval</b>\n";
+#			print "<td class=tiny align=center valign=top><b>Sampled<br>$generaorrefs</b> ";
+#			print "<td class=tiny align=center valign=top><b>Range-through<br>$generaorrefs</b> ";
+			print "<td class=tiny align=center valign=top><b>Items<br>sampled</b> ";
+			print "<td class=tiny align=center valign=top><b>Median ";
 			printf "%s diversity</b>",$q->param('diversity');
-			print "<td class=small align=center valign=top><b>1-sigma CI</b> ";
-			print "<td class=small align=center valign=top><b>Mean ";
+			print "<td class=tiny align=center valign=top><b>1-sigma CI</b> ";
+			print "<td class=tiny align=center valign=top><b>Mean ";
 			printf "%s diversity</b>",$q->param('diversity');
 			if ($q->param('diversity') =~ /two timers/)	{
-				print "<td class=small align=center valign=top><b>Corrected BC<br>diversity</b> ";
-				print "<td class=small align=center valign=top><b>Estimated midpoint<br>diversity</b> ";
-				print "<td class=small align=center valign=top><b>Raw SIB<br>diversity</b> ";
-				print "<td class=small align=center valign=top><b>Corrected SIB<br>diversity</b> ";
-				print "<td class=small align=center valign=top><b>Origination<br>rate</b> ";
-				print "<td class=small align=center valign=top><b>Extinction<br>rate</b> ";
+				print "<td class=tiny align=center valign=top><b>Corrected BC<br>diversity</b> ";
+				print "<td class=tiny align=center valign=top><b>Estimated midpoint<br>diversity</b> ";
+				print "<td class=tiny align=center valign=top><b>Estimated mesa<br>diversity</b> ";
+				print "<td class=tiny align=center valign=top><b>Raw SIB<br>diversity</b> ";
+				print "<td class=tiny align=center valign=top><b>Corrected SIB<br>diversity</b> ";
+				print "<td class=tiny align=center valign=top><b>Origination<br>rate</b> ";
+				print "<td class=tiny align=center valign=top><b>Extinction<br>rate</b> ";
 			}
 			if ($q->param('diversity') =~ /boundary-crossers/)	{
-				print "<td class=small align=center valign=top><b>First<br>appearances</b> ";
-				print "<td class=small align=center valign=top><b>Origination<br>rate</b> ";
+				print "<td class=tiny align=center valign=top><b>First<br>appearances</b> ";
+				print "<td class=tiny align=center valign=top><b>Origination<br>rate</b> ";
 			}
 			if ($q->param('diversity') =~ /boundary-crossers/)	{
-				print "<td class=small align=center valign=top><b>Last<br>appearances</b> ";
-				print "<td class=small align=center valign=top><b>Extinction<br>rate</b> ";
+				print "<td class=tiny align=center valign=top><b>Last<br>appearances</b> ";
+				print "<td class=tiny align=center valign=top><b>Extinction<br>rate</b> ";
 			}
-			print "<td class=small align=center valign=top><b>Singletons</b> ";
-			print "<td class=small align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
-			print "<td class=small align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
-			print "<td class=small align=center valign=top><b>Chao-2<br>estimate</b> ";
-			print "<td class=small align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
+			print "<td class=tiny align=center valign=top><b>Singletons</b> ";
+			print "<td class=tiny align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
+			print "<td class=tiny align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
+			print "<td class=tiny align=center valign=top><b>Chao-2<br>estimate</b> ";
+			print "<td class=tiny align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
 			if ( $samplingmethod == 2)	{
-				print "<td class=small align=center valign=top><b>Michaelis-Menten<br>estimate</b> ";
+				print "<td class=tiny align=center valign=top><b>Michaelis-Menten<br>estimate</b> ";
 			}
 			print TABLE "Bin,Bin name,";
 #			print TABLE "Sampled $generaorrefs,Range-through $generaorrefs,";
@@ -1239,6 +1254,7 @@ sub printResults	{
 			if ($q->param('diversity') =~ /two timers/)	{
 				print TABLE "Corrected BC diversity,";
 				print TABLE "Estimated midpoint diversity,";
+				print TABLE "Estimated mesa diversity,";
 				print TABLE "Raw SIB diversity,";
 				print TABLE "Corrected SIB diversity,";
 				print TABLE "Origination rate,";
@@ -1279,47 +1295,48 @@ sub printResults	{
 					}
 					$temp = $chname[$i];
 					$temp =~ s/ /&nbsp;/;
-					print "<tr><td class=small valign=top>$temp";
-#					printf "<td class=small align=center valign=top>%.1f ",$msubsrichness[$i];
-#					printf "<td class=small align=center valign=top>%.1f ",$msubsrangethrough[$i];
-					printf "<td class=small align=center valign=top>%.1f ",$tsampled[$i];
+					print "<tr><td class=tiny valign=top>$temp";
+#					printf "<td class=tiny align=center valign=top>%.1f ",$msubsrichness[$i];
+#					printf "<td class=tiny align=center valign=top>%.1f ",$msubsrangethrough[$i];
+					printf "<td class=tiny align=center valign=top>%.1f ",$tsampled[$i];
 					$s = int(0.5*$trials)+1;
-					print "<td class=small align=center valign=top>$outrichness[$i][$s] ";
+					print "<td class=tiny align=center valign=top>$outrichness[$i][$s] ";
 					$qq = int(0.1587*$trials)+1;
 					$r = int(0.8413*$trials)+1;
-					print "<td class=small align=center valign=top>$outrichness[$i][$qq]-$outrichness[$i][$r] ";
-					print "<td class=small align=center valign=top>$meanoutrichness[$i] ";
+					print "<td class=tiny align=center valign=top>$outrichness[$i][$qq]-$outrichness[$i][$r] ";
+					print "<td class=tiny align=center valign=top>$meanoutrichness[$i] ";
 
 		# print assorted stats yielded by two timer analysis JA 23.8.04
 					if ($q->param('diversity') =~ /two timers/)	{
-						printf "<td class=small align=center valign=top>%.1f ",$mnewbc[$i];
-						printf "<td class=small align=center valign=top>%.1f ",$mmidptdiv[$i];
+						printf "<td class=tiny align=center valign=top>%.1f ",$mnewbc[$i];
+						printf "<td class=tiny align=center valign=top>%.1f ",$mmidptdiv[$i];
+						printf "<td class=tiny align=center valign=top>%.1f ",$mmesa[$i];
 			# we want the raw standardized SIB data for comparison
 			#  with the correction
-						printf "<td class=small align=center valign=top>%.1f ",$msubsrichness[$i];
-						printf "<td class=small align=center valign=top>%.1f ",$mnewsib[$i];
-						printf "<td class=small align=center valign=top>%.3f ",$lam[$i];
-						printf "<td class=small align=center valign=top>%.3f ",$mu[$i];
+						printf "<td class=tiny align=center valign=top>%.1f ",$msubsrichness[$i];
+						printf "<td class=tiny align=center valign=top>%.1f ",$mnewsib[$i];
+						printf "<td class=tiny align=center valign=top>%.3f ",$lam[$i];
+						printf "<td class=tiny align=center valign=top>%.3f ",$mu[$i];
 					}
 			# Foote origination rate
 					if ($q->param('diversity') =~ /boundary-crossers/)	{
-						printf "<td class=small align=center valign=top>%.1f ",$msubsoriginate[$i];
+						printf "<td class=tiny align=center valign=top>%.1f ",$msubsoriginate[$i];
 						if ( $meanoutrichness[$i-1] > 0 && $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 )	{
-							printf "<td class=small align=center valign=top>%.4f ",log( $meanoutrichness[$i-1] / ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) );
+							printf "<td class=tiny align=center valign=top>%.4f ",log( $meanoutrichness[$i-1] / ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) );
 						} else	{
-							print "<td class=small align=center valign=top>NaN ";
+							print "<td class=tiny align=center valign=top>NaN ";
 						}
 					}
 			# Foote extinction rate
 					if ($q->param('diversity') =~ /boundary-crossers/)	{
-						printf "<td class=small align=center valign=top>%.1f ",$msubsextinct[$i];
+						printf "<td class=tiny align=center valign=top>%.1f ",$msubsextinct[$i];
 						if ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 && $meanoutrichness[$i] > 0 )	{
-							printf "<td class=small align=center valign=top>%.4f ",log( ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanoutrichness[$i] ) * -1;
+							printf "<td class=tiny align=center valign=top>%.4f ",log( ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanoutrichness[$i] ) * -1;
 						} else	{
-							print "<td class=small align=center valign=top>NaN ";
+							print "<td class=tiny align=center valign=top>NaN ";
 						}
 					}
-					printf "<td class=small align=center valign=top>%.1f ",$msubssingletons[$i];
+					printf "<td class=tiny align=center valign=top>%.1f ",$msubssingletons[$i];
 					print TABLE $chrons - $i + 1;
 					print TABLE ",$chname[$i]";
 #					printf TABLE ",%.1f",$msubsrichness[$i];
@@ -1332,6 +1349,7 @@ sub printResults	{
 					if ($q->param('diversity') =~ /two timers/)	{
 						printf TABLE ",%.1f",$mnewbc[$i];
 						printf TABLE ",%.1f",$mmidptdiv[$i];
+						printf TABLE ",%.1f",$mmesa[$i];
 						printf TABLE ",%.3f",$msubsrichness[$i];
 						printf TABLE ",%.1f",$mnewsib[$i];
 						printf TABLE ",%.3f",$lam[$i];
@@ -1357,36 +1375,36 @@ sub printResults	{
 					}
 					printf TABLE ",%.1f",$msubssingletons[$i];
 					if ($gapstat > 0)	{
-					  printf "<td class=small align=center valign=top>%.3f ",$gapstat;
-					  printf "<td class=small align=center valign=top>%.1f ",$richness[$i] / $gapstat;
+					  printf "<td class=tiny align=center valign=top>%.3f ",$gapstat;
+					  printf "<td class=tiny align=center valign=top>%.1f ",$richness[$i] / $gapstat;
 					  printf TABLE ",%.3f",$gapstat;
 					  printf TABLE ",%.3f",$richness[$i] / $gapstat;
 					}
 					else	{
-					  print "<td class=small align=center valign=top>NaN <td class=small align=center valign=top>NaN ";
+					  print "<td class=tiny align=center valign=top>NaN <td class=small align=center valign=top>NaN ";
 					  print TABLE ",NaN,NaN";
 					}
 					if ($msubschaostat > 0 && $msubsrichness[$i] > 0 )	{
-					  printf "<td class=small align=center valign=top>%.1f ",$msubschaostat;
+					  printf "<td class=tiny align=center valign=top>%.1f ",$msubschaostat;
 					  printf TABLE ",%.1f",$msubschaostat;
 					} else    {
-					  print "<td class=small align=center valign=top>NaN ";
+					  print "<td class=tiny align=center valign=top>NaN ";
 					  print TABLE ",NaN";
 					}
 					if ($msubsjolly[$i] > 0 && $msubsrichness[$i] > 0 )	{
-					  printf "<td class=small align=center valign=top>%.1f ",$msubsjolly[$i];
+					  printf "<td class=tiny align=center valign=top>%.1f ",$msubsjolly[$i];
 					  printf TABLE ",%.1f",$msubsjolly[$i];
 					} else    {
-					  print "<td class=small align=center valign=top>NaN ";
+					  print "<td class=tiny align=center valign=top>NaN ";
 					  print TABLE ",NaN";
 					}
 					if ( $samplingmethod == 2)	{
 						if ($michaelis[$i] > 0 && $msubsrichness[$i] > 0 )	{
-					  	printf "<td class=small align=center valign=top>%.1f ",$michaelis[$i];
+					  	printf "<td class=tiny align=center valign=top>%.1f ",$michaelis[$i];
 					  	printf TABLE ",%.1d",$michaelis[$i];
 						}
 						else    {
-						  print "<td class=small align=center valign=top>NaN ";
+						  print "<td class=tiny align=center valign=top>NaN ";
 						  print TABLE ",NaN";
 						}
 					}
