@@ -1257,6 +1257,10 @@ sub deal_with_homonyms{
 					   $ref->{taxon_no}." AND status IN ('recombined as',".
 					   "'replaced by','corrected as')";
 				@ref_ref = @{$dbt->getData($sql)};
+				if(scalar @ref_ref < 1){
+					# Dead end.
+					return $array_ref;	
+				}
 				# try above again:
 				$sql = "SELECT parent_no, status, pubyr, reference_no ".
 					   "FROM opinions WHERE child_no=".$ref_ref[0]->{child_no};	
