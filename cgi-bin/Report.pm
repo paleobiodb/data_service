@@ -437,13 +437,16 @@ sub tallyFieldTerms	{
 
 # for each period, get a list of all collections, then make a hash array
 #  assigning collections to periods
-	for my $period ('Cambrian','Ordovician','Silurian','Devonian',
+	if ( $q->param('searchfield1') eq "period" ||
+	     $q->param('searchfield2') eq "period" )	{
+		for my $period ('Cambrian','Ordovician','Silurian','Devonian',
 			'Carboniferous','Permian','Triassic','Jurassic',
 			'Cretaceous','Tertiary','Quaternary','Modern')	{
-		my $collref = TimeLookup::processLookup($dbh, $dbt, '', $period, '', '');
-		my @colls = @{$collref};
-		for my $coll ( @colls )	{
-			$myperiod{$coll} = $period;
+			my $collref = TimeLookup::processLookup($dbh, $dbt, '', $period, '', '');
+			my @colls = @{$collref};
+			for my $coll ( @colls )	{
+				$myperiod{$coll} = $period;
+			}
 		}
 	}
 
