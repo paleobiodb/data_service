@@ -140,8 +140,16 @@ sub formatAsHTML {
 	$ref->setWithReferenceNumber($self->referenceNumber());
 	my $authors = $ref->authors();
 	
-	
 	# figure out how many (if any) reidentifications exist
+	my $allReids = $sql->allResultsArrayRefUsingPermissions("SELECT reid.collection_no, reid.genus_reso, 
+		reid.genus_name, reid.species_reso,
+		reid.species_name, r.pubyr, reid.comments, reid.reference_no
+		FROM reidentifications reid, refs r
+		WHERE reid.reference_no = r.reference_no AND reid.occurrence_no = $occ_no
+		ORDER BY r.pubyr ASC");
+		
+		
+	
 	my $numReids = $sql->getSingleSQLResult("SELECT count(*) FROM reidentifications WHERE occurrence_no = $occ_no");
 	
 	# We have to treat the originally identified taxon differently from the reids
