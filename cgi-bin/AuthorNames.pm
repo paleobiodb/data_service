@@ -95,7 +95,7 @@ sub parseAuthorsString
   # Combine 'et al' into a single token (we fix this below)
   $inString =~ s/\bet\s+al(ia)?\b/et_al/;
   # Get rid of commas before suffixes (we'll put these back later)
-  $instring =~ s/,\s+(jr\.?|sr\.?|i{2, 3}|^iv$)/ $1/gi;
+  $inString =~ s/,\s*(jr\.?|sr\.?|i{2,3}|iv)/ $1/gi;
   # Surround commas with spaces (this turns commas into tokens because we split on spaces)
   $inString =~ s/,/ , /g;
   
@@ -114,8 +114,7 @@ sub parseAuthorsString
   my $au2Last;
   my $otherAuthors;
   my $stage = 1;
-  for(my $i = 0;$i < $numRawTokens;$i++)
-  {
+  for(my $i = 0;$i < $numRawTokens;$i++){
     my $token = $rawTokens[$i];
     
     # Fix 'et_al.'
@@ -134,7 +133,7 @@ sub parseAuthorsString
       { 
         $stage = 2;
       }
-      # Otherwise, if this is a suffix, append it to the first name
+      # Otherwise, if this is a suffix, append it to the last name
       elsif($tokenType == $SUFFIX)
       {
         $token =~ s/(.+)/\u$1/;
@@ -159,7 +158,7 @@ sub parseAuthorsString
           $au1Init .= " $token";
         }
       }
-      # Othewise, if this is a name
+      # Otherwise, if this is a name
       elsif($tokenType == $LNAME)
       {
         # If the last character was a comma, or an 'and' we have completed the first author's name
@@ -325,9 +324,9 @@ sub isInitial
   # by a dot, followed by a dash, followed by another character and dot.
   return 1 if $token =~ /\A\w\.?-\w\.?\Z/ && uc($token) eq $token;
   # True if token is exactly two upper case characters JA 14.3.02
-  return 1 if $token =~ /\A\w\w\Z/ && uc($token) eq $token;
+  return 1 if $token ne 'II' && $token ne 'IV' && $token =~ /\A\w\w\Z/ && uc($token) eq $token;
   # ... or exactly three upper case characters JA 27.3.02
-  return 1 if $token =~ /\A\w\w\w\Z/ && uc($token) eq $token;
+  return 1 if $token ne 'III' && $token =~ /\A\w\w\w\Z/ && uc($token) eq $token;
   
   return 0;
 }
@@ -349,7 +348,7 @@ sub isSuffix
   
   # True if token is any of 'Jr', 'Sr', 'II' or 'III', 'IV' possibly
   # "iv" must fill entire token JA 1.10.02
-  return 1 if $token =~ /(jr\.?|sr\.?|i{2, 3}|^iv$)/i;
+  return 1 if $token =~ /(jr\.?|sr\.?|i{2,3}|iv)/i;
   
   return 0;
 }
@@ -409,7 +408,7 @@ sub getAuthor1Last
 sub setAuthor1Last
 {
   my ($self, $auLName) = @_;
-  
+
   $self->{au1Last} = $auLName unless $auLName eq '';
 }
 
