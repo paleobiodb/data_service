@@ -813,6 +813,9 @@ sub getEnvironmentString{
             if ( $q->param("environment_siliciclastic") ) {
                 $env_sql .= " OR collections.environment IN ($siliciclastic_str)";
             }
+            if ( $q->param("environment_carbonate") && $q->param("environment_siliciclastic") )	{
+		$env_sql .= " OR collections.environment IN ('marine indet.')";
+            }
             if ( $q->param("environment_terrestrial") ) {
                 $env_sql .= " OR collections.environment IN ($terrestrial_str)";
             }
