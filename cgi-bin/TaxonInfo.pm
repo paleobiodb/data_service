@@ -1333,7 +1333,7 @@ sub verify_chosen_taxon{
 	my $dbt = shift;
 	my $sql = "";
  	my @results = ();
-	my $temp_num=0;
+#	my $temp_num=0;
 
 	# First, see if this name has any recombinations:
 	if(!$num){
