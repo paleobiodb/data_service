@@ -29,10 +29,15 @@ sub searchForm{
 			 "function checkInput(){\n".
 			 "	var rank = document.forms[0].taxon_rank.value;\n".
 			 "	var value = document.forms[0].taxon_name.value;\n".
-			 "	if(value.match(/\\w+\\s+\\w+/) && rank != 'Genus and species'){\n".
+			 "	if(value == \"\"){\n".
+			 "		alert('Please enter a taxon name.');\n".
+			 "		return false;\n".
+			 "	}\n".
+			 "	if(value.match(/[A-Za-z]+\\s+[A-Za-z]+/) && rank != 'Genus and species'){\n".
 			 "		alert('Please choose rank \"Genus and species\" for this search');\n".
 			 "		return false;\n".
-			 "	}else if(rank == 'Genus and species' && !value.match(/\\w+\\s+\\w+/)){\n".
+			 "	}\n".
+			 "	if(rank == 'Genus and species' && value.match(/^[A-Z]{1}[a-z]+\\s+[a-z]+\$/) == null){\n".
 			 "		alert('Please enter a name in the form \"Genus species\"');\n".
 			 "		return false;\n".
 			 "	}\n".
