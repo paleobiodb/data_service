@@ -39,29 +39,36 @@ sub createTimePlaceString{
 #	}
 #   }
 
-    $data_hash->{"country"} =~ s/ /&nbsp;/;
-    $timeplace = $data_hash->{"country"};
-    if($data_hash->{"state"}){
-	$data_hash->{"state"} =~ s/ /&nbsp;/;
-	$timeplace = $timeplace . " (" . $data_hash->{"state"} . ")";
+    my $isql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $data_hash->{"max_interval_no"};
+    my $intref = @{$dbt->getData($isql)}[0];
+    my $interval_name = $intref->{'interval_name'};
+    if ( $intref->{'eml_interval'} )	{
+      $interval_name = $intref->{'eml_interval'} . " " . $interval_name;
     }
-
-    $timeplace .= "</span></td><td align=\"middle\" valign=\"top\"><span class=tiny>";
-
-    my $isql = "SELECT interval_name FROM intervals WHERE interval_no=" . $data_hash->{"max_interval_no"};
-    my $interval_name =  @{$dbt->getData($isql)}[0]->{"interval_name"};
 	
 	my $interval_name2;
 	
-    my $isql = "SELECT interval_name FROM intervals WHERE interval_no=" . $data_hash->{"min_interval_no"};
-    my @inames =  @{$dbt->getData($isql)};
-    if ( @inames )	{
-		$interval_name2 = @inames[0]->{interval_name};
+    my $isql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $data_hash->{"min_interval_no"};
+    $intref =  @{$dbt->getData($isql)}[0];
+    if ( $intref )	{
+		$interval_name2 = $intref->{interval_name};
+		if ( $intref->{'eml_interval'} )	{
+			$interval_name2 = $intref->{'eml_interval'} . " " . $interval_name2;
+		}
     }
 
     $timeplace .= $interval_name;
     if ( $interval_name2 )	{
-    	$timeplace .= "/" . $interval_name2;
+    	$timeplace .= " - " . $interval_name2;
+    }
+
+    $timeplace .= "</span></td><td align=\"middle\" valign=\"top\"><span class=tiny>";
+
+    $data_hash->{"country"} =~ s/ /&nbsp;/;
+    $timeplace .= $data_hash->{"country"};
+    if($data_hash->{"state"}){
+	$data_hash->{"state"} =~ s/ /&nbsp;/;
+	$timeplace = $timeplace . " (" . $data_hash->{"state"} . ")";
     }
 
     $timeplace = "</b> <span class=$class>" . $timeplace . "</span>\n";
