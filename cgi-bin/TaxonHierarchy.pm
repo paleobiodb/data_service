@@ -176,6 +176,17 @@ sub taxonName {
 	return $self->{taxonName};	
 }
 
+# returns the rank of the taxon this object represents,
+# for example, class, family, order, genus, species, etc.
+sub rank {
+	my TaxonHierarchy $self = shift;
+	
+	my $sql = $self->getSQLBuilder();
+
+	my $r = $sql->getSingleSQLResult("SELECT taxon_rank FROM authorities WHERE taxon_no = $self->{taxonNumber}");
+
+	return $r;
+}
 
 # pass this a rank such as "family", "class", "genus", etc. and it will
 # return the name of the taxon at that rank as determined by the taxaHash.

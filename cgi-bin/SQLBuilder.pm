@@ -386,7 +386,7 @@ sub executeSQL {
 
 	my $sql = $self->SQLExpr();
 			
-	$sth = $dbh->prepare( $sql );
+	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 	
 	# save the sth for later use in fetching rows.
@@ -510,7 +510,7 @@ sub nextResultArrayUsingPermissions {
 # returns it as an array
 #  
 # must be called *after* first calling executeSQL(),
-# otherwise will return empty arry.
+# otherwise will return empty array.
 sub nextResultArray {
 	my SQLBuilder $self = shift;
 
@@ -570,6 +570,8 @@ sub finishSQL {
 		$self->{sth} = undef;
 	}
 }
+
+
 
 
 # end of SQLBuilder.pm
