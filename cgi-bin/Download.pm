@@ -912,7 +912,7 @@ sub getCollectionTypeString{
             $colltypes .= ",'biostratigraphic'";
         }
         if ($q->param('collection_type_paleoecologic')) {
-            $colltypes .= ",paleoecologic'";
+            $colltypes .= ",'paleoecologic'";
         }
         if ($q->param('collection_type_taphonomic')) {
             $colltypes .= ",'taphonomic'";
@@ -924,7 +924,7 @@ sub getCollectionTypeString{
             $colltypes .= ",'general faunal/floral'";
         }
         if ($q->param('collection_type_unknown')) {
-            $colltypes .= ", ''";
+            $colltypes .= ",''";
         }
         $colltypes =~ s/^,//;
         if ( $colltypes)	{
@@ -1187,7 +1187,7 @@ sub doQuery {
 	}
 	# get the PBDB 10 m.y. bin names for the collections JA 3.3.04
 	# WARNING: the locage_max field is just being used as a dummy
-	if ( $q->param('collections_10mybin') )	{
+	if ( $q->param('collections_10mybin') || $q->param('compendium_ranges') eq 'NO' )	{
 		@_ = TimeLookup::processBinLookup($dbh,$dbt);
 		%mybin = %{$_[0]};
 	}
@@ -1375,7 +1375,7 @@ sub doQuery {
 		if ( $q->param('compendium_ranges') eq 'NO' )	{
 			if ( ! $incompendium{$row->{occ_genus_name}.$mybin{$row->{collection_no}}} )	{
 				$exclude++;
-				print "exc. compendum ".$row->{'collection_no'};
+#				print "exc. compendum ".$row->{'collection_no'};
 			}
 		}
 		# lump bed/group of beds scale collections with the exact same
