@@ -66,6 +66,9 @@ sub buildDownload {
 	if ( $q->param('ecology1') )	{
 		$self->getEcology ( );
 	}
+	if ( $q->param('compendium_ranges') ne 'YES' )	{
+		$self->getCompendiumAgeRanges ( );
+	}
 	$self->doQuery ( );
 
 }
@@ -215,6 +218,7 @@ sub retellOptions {
 	$html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
 	$html .= $self->retellOptionsRow ( "Include occurrences qualified by \"aff.\" or quotes?", $q->param("poor_genus_reso") );
 	$html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
+	$html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
 	$html .= $self->retellOptionsRow ( "Output data format", $q->param("collections_put") );
 
 	my @occurrenceOutputFields = (	"occurrences_authorizer",
@@ -988,6 +992,18 @@ sub getAncestralEcology	{
 	}
 }
 
+sub getCompendiumAgeRanges	{
+	my $self = shift;
+
+	open IN,"<./data/compendium.ranges";
+	while (<IN>)	{
+		s/\n//;
+		my ($genus,$bin) = split /\t/,$_;
+		$incompendium{$genus.$bin}++;
+	}
+	close IN;
+}
+
 # Assembles and executes the query.  Does a join between the occurrences and
 # collections tables, filters the results against the appropriate 
 # cgi-bin/data/classdata/ file if necessary, does another select for all fields
@@ -1272,10 +1288,18 @@ sub doQuery {
 		if ( $q->param('split_subgenera') eq 'YES' && $row->{subgenus_name} )	{
 			$row->{genus_name} = $row->{subgenus_name};
 		}
+		my $exclude = 0;
+		# get rid of occurrences of genera either (1) not in the
+		#  Compendium or (2) falling outside the official Compendium
+		#  age range JA 27.8.04
+		if ( $q->param('compendium_ranges') ne 'YES' )	{
+			if ( ! $incompendium{$row->{genus_name}.$mybin{$row->{collection_no}}} )	{
+				$exclude++;
+			}
+		}
 		# lump bed/group of beds scale collections with the exact same
 		#  formation/member and geographic coordinate JA 21.8.04
-		my $exclude = 0;
-		if ( $q->param('lump_by_mbr') eq 'YES' )	{
+		if ( $exclude == 0 && $q->param('lump_by_mbr') eq 'YES' )	{
 			my $mbrstring = $row->{'latdeg'}.$row->{'latmin'}.$row->{'latsec'}.$row->{'latdec'}.$row->{'latdir'}.$row->{'lngdeg'}.$row->{'lngmin'}.$row->{'lngsec'}.$row->{'lngdec'}.$row->{'lngdir'}.$row->{'formation'}.$row->{'member'}.$row->{'max_interval_no'}.$row->{'min_interval_no'};
 			if ( $mbrseen{$mbrstring} )	{
 				$row->{collection_no} = $mbrseen{$mbrstring};
