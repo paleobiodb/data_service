@@ -624,6 +624,11 @@ sub get_classification_hash{
       return;
     }
 
+    # this might be a recombined species name, so we need the original
+    #   combination or we won't be able to follow the opinion chain upwards
+    #   JA 29.4.04
+    $taxon_no = TaxonInfo::getOriginalCombination($dbt, $taxon_no);
+
 #   my $taxon_name = shift;
 #   $taxon_name =~ /(\w+)\s+(\w+)/;
 #   my ($genus, $species) = ($1, $2);
