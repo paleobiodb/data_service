@@ -320,34 +320,37 @@ sub retellOptions {
     }
 
 	$html .= $self->retellOptionsRow ( "Lump by coordinate and formation/member?", $q->param("lump_by_mbr") );
-	$html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
-	$html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
-	$html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
-	$html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", $q->param("sp") );
-	$html .= $self->retellOptionsRow ( "Include occurrences qualified by \"aff.\" or quotes?", $q->param("poor_genus_reso") );
-	$html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
-	$html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
-    $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
 
-    if ($q->param('output_data') eq "occurrences") {
-        my $occFields = ();
-        push (@occFields, 'class_name') if ($q->param("occurrences_class_name") eq "YES");
-        push (@occFields, 'order_name') if ($q->param("occurrences_order_name") eq "YES");
-        push (@occFields, 'family_name') if ($q->param("occurrences_family_name") eq "YES");
-        push (@occFields, 'genus_reso','genus_name');
-        foreach my $field ( @occurrencesFieldNames ) {
-            if( $q->param ( "occurrences_".$field ) ){ 
-                push ( @occFields, "occurrences_".$field ); 
+    if ($q->param('output_data') ne 'collections') {
+        $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
+        $html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
+        $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
+        $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", $q->param("sp") );
+        $html .= $self->retellOptionsRow ( "Include occurrences qualified by \"aff.\" or quotes?", $q->param("poor_genus_reso") );
+        $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
+        $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
+        $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
+
+        if ($q->param('output_data') eq "occurrences") {
+            my $occFields = ();
+            push (@occFields, 'class_name') if ($q->param("occurrences_class_name") eq "YES");
+            push (@occFields, 'order_name') if ($q->param("occurrences_order_name") eq "YES");
+            push (@occFields, 'family_name') if ($q->param("occurrences_family_name") eq "YES");
+            push (@occFields, 'genus_reso','genus_name');
+            foreach my $field ( @occurrencesFieldNames ) {
+                if( $q->param ( "occurrences_".$field ) ){ 
+                    push ( @occFields, "occurrences_".$field ); 
+                }
             }
-        }
-        push(@occFields,"reidentifications_genus_name" );
-        foreach my $field ( @reidentificationsFieldNames ) {
-            if( $q->param ( "occurrences_".$field) ){ 
-                push ( @occFields, "reidentifications_".$field ); 
+            push(@occFields,"reidentifications_genus_name" );
+            foreach my $field ( @reidentificationsFieldNames ) {
+                if( $q->param ( "occurrences_".$field) ){ 
+                    push ( @occFields, "reidentifications_".$field ); 
+                }
             }
+            $html .= $self->retellOptionsRow ( "Occurrence output fields", join ( "<BR>", @occFields) );
         }
-	    $html .= $self->retellOptionsRow ( "Occurrence output fields", join ( "<BR>", @occFields) );
-    }
+    } 
 
     if ($q->param('output_data') eq 'genera') {
 	    $html .= $self->retellOptionsRow ( "Collection output fields", "genus_name");
@@ -656,11 +659,14 @@ sub getIntervalString	{
 	if ( $max )	{
 		($collref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, $eml_max, $max, $eml_min, $min);
 		my @colls = @{$collref};
-		if ( ! @colls )	{
-			print "<p><b>WARNING: Can't complete the download because the specified time intervals are unknown</b></p>\n"; exit;
-		}
-		return " ( collections.collection_no IN ( " . join (',',@colls) . " ) )";
+		if ( @colls )	{
+		    return " ( collections.collection_no IN ( " . join (',',@colls) . " ) )";
+		} else {
+            return " ( collections.collection_no IN (0) )";
+        }
 	}
+
+    
 
 	return "";
 }
@@ -1230,18 +1236,26 @@ sub doQuery {
     }
 
     #
-    # Handle generation of the FROM, WHERE, GROUP BY parts of the query, and JOIN conditions
+    # Handle generation of the FROM, WHERE, parts of the query, and JOIN conditions
     #      
     if ($q->param('output_data') eq 'collections') {
 	    $sql .=" FROM collections";
+        my $qualifier = 'WHERE';
+        if ($q->param('taxon_name') ne '') {
+            $sql .= ",occurrences LEFT JOIN reidentifications ON".
+                    " occurrences.occurrence_no = reidentifications.occurrence_no ".
+                    " WHERE collections.collection_no = occurrences.collection_no";
+
+            my $taxonWhereClause = $self->getTaxonString();
+            if ($taxonWhereClause ne '') { 
+                $sql .= " AND $taxonWhereClause"; 
+            }
+            $qualifier = 'AND';        
+        }
         my $collectionsWhereClause = $self->getCollectionsWhereClause();
-	    if($collectionsWhereClause ne ''){ $sql .= " WHERE $collectionsWhereClause "; }
-        # GROUP BY basically does a 'DISTINCT' on these two columns (for join only)
-        if($q->param('lumpgenera') eq 'YES') {
-            $sql .= " GROUP BY occurrences.genus_name, occurrences.collection_no";
-        } 
+	    if($collectionsWhereClause ne ''){ $sql .= " $qualifier $collectionsWhereClause "; }
     } else { # both genera and occurrences 
-	    $sql .=" FROM occurrences, collections";
+	    $sql .=" FROM collections, occurrences";
 		if ( $q->param('pubyr') > 0 )	{
 			$sql .= " LEFT JOIN refs ON refs.reference_no=occurrences.reference_no";
 		}
@@ -1253,10 +1267,20 @@ sub doQuery {
 	    if($collectionsWhereClause ne ''){ $sql .= " AND $collectionsWhereClause "; }
 		my $occWhereClause = $self->getOccurrencesWhereClause();
 	    if($occWhereClause ne ''){ $sql .= " AND $occWhereClause "; }
+
     }
-    
+   
+    # Handle GROUP BY
 	if ( $q->param('output_data') eq "genera" )	{
         $sql .= " GROUP BY occurrences.genus_name";
+    } elsif ($q->param('output_data') eq 'occurrences') {
+        if($q->param('lumpgenera') eq 'YES') {
+           $sql .= " GROUP BY occurrences.genus_name, occurrences.collection_no";
+        } 
+    } else { # = collections
+        if ($q->param('taxon_name') ne '') {
+            $sql .= " GROUP BY collections.collection_no";
+        }
     }
 	
     #
@@ -1851,6 +1875,7 @@ sub doQuery {
 	# Tell what happened
 	if ( ! $acceptedCount ) { $acceptedCount = 0; }
 	if ( ! $acceptedRefs ) { $acceptedRefs = 0; }
+    if ( ! $accectedGenera) { $acceptedGenera = 0; }
 	print "
 <table border='0' width='600'>
 <tr><td class='darkList'><b><font size='+1'>Output files</font></b></td></tr>
@@ -2018,6 +2043,37 @@ sub setupOutput {
             $q->param("reidentifications_$field"=>'YES');
         }
     }
+
+    # Get EML values, check interval names
+    if ($q->param('max_interval_name')) {
+        if ($q->param('max_interval_name') =~ /[a-zA-Z]/) {
+            my ($eml, $name) = PBDBUtil::splitInterval($dbt,$q->param('max_interval_name'));
+            my $ret = PBDBUtil::checkInterval($dbt,$eml,$name);
+            if (!$ret) {
+                push @warnings, "We have no record of ".$q->param('max_interval_name')." in the database, so it was ignored";
+                $q->param('max_interval_name'=>'');
+                $q->param('max_eml_interval'=>'');
+            } else {
+                $q->param('max_interval_name'=>$name);
+                $q->param('max_eml_interval'=>$eml);
+            }
+        }
+    }
+    if ($q->param('min_interval_name')) {
+        if ($q->param('min_interval_name') =~ /[a-zA-Z]/) {
+            my ($eml, $name) = PBDBUtil::splitInterval($dbt,$q->param('min_interval_name'));
+            my $ret = PBDBUtil::checkInterval($dbt,$eml,$name);
+            if (! $ret) {
+                push @warnings, "We have no record of ".$q->param('min_interval_name')." in the database, so it was ignored";
+                $q->param('min_interval_name'=>'');
+                $q->param('min_eml_interval'=>'');
+            } else {
+                $q->param('min_interval_name'=>$name);
+                $q->param('min_eml_interval'=>$eml);
+            }
+        }
+    }
+
 }
 
 sub formatRow {
