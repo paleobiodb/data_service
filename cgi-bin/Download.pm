@@ -114,17 +114,30 @@ sub retellOptions {
 		$html .= $self->retellOptionsRow ( "Data records created", $dataCreatedBeforeAfter);
 	}
 	
-	$html .= $self->retellOptionsRow ( "Oldest interval", $q->param("max_interval_name") );
-	$html .= $self->retellOptionsRow ( "Youngest interval", $q->param("min_interval_name") );
-	$html .= $self->retellOptionsRow ( "Lithologies", $q->param("lithology") );
-	$html .= $self->retellOptionsRow ( "Environment", $q->param("environment") );
 	if ( $q->param("genus_name") !~ / / )	{
 		$html .= $self->retellOptionsRow ( "Taxon name", $q->param("genus_name") );
 	} else	{
 		$html .= $self->retellOptionsRow ( "Taxon names", $q->param("genus_name") );
 	}
 	$html .= $self->retellOptionsRow ( "Class", $q->param("class") );
-	$html .= $self->retellOptionsRow ( "Only your own data?", $q->param("owndata") ) if ( !  $s->guest ( ) );
+
+	$html .= $self->retellOptionsRow ( "Oldest interval", $q->param("max_interval_name") );
+	$html .= $self->retellOptionsRow ( "Youngest interval", $q->param("min_interval_name") );
+	if ( ! $q->param("lithology_carbonate") || ! $q->param("lithology_mixed") || ! $q->param("lithology_siliciclastic") )	{
+		my $liths;
+		if ( $q->param("lithology_carbonate") )	{
+			$liths = "carbonate";
+		}
+		if ( $q->param("lithology_mixed") )	{
+			$liths .= ", mixed";
+		}
+		if ( $q->param("lithology_siliciclastic") )	{
+			$liths .= ", siliciclastic";
+		}
+		$liths =~ s/^,//;
+		$html .= $self->retellOptionsRow ( "Lithologies", $liths );
+	}
+	$html .= $self->retellOptionsRow ( "Environment", $q->param("environment") );
 
 	# Continents or country
 	my @continents = ( );
@@ -599,14 +612,53 @@ sub getStageString {
 # JA 1.7.04
 # WARNING: relies on fixed lists of lithologies; if these ever change in
 #  the database, this section will need to be modified
+# major rewrite JA 14.8.04 to handle checkboxes instead of pulldown
 sub getLithologyString	{
 	my $self = shift;
-	my $lithology = $q->param('lithology');
-	if ( $lithology eq "siliciclastic only" )	{
-		return qq| ( collections.lithology1 IN ('"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate') AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ('"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate') ) ) |;
-	} elsif ( $lithology eq "carbonate only" )	{
-		return qq| ( collections.lithology1 IN ('lime mudstone','wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"') AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ('lime mudstone','wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"') ) ) |;
+	my $carbonate = $q->param('lithology_carbonate');
+	my $mixed = $q->param('lithology_mixed');
+	my $silic = $q->param('lithology_siliciclastic');
+
+	# if all the boxes were unchecked, just return (idiot proofing)
+	if ( ! $carbonate && ! $mixed && ! $silic )	{
+		return "";
 	}
+	# only do something if some of the boxes aren't checked
+	if  ( ! $carbonate || ! $mixed || ! $silic )	{
+
+		$silic_str = qq|'"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate'|;
+		$mixed_str = qq|'"mixed carbonate-siliciclastic"','marl'|;
+		$carbonate_str = qq|'lime mudstone','wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"'|;
+
+		# the logic is basically different for every combination,
+		#  so go through all of them
+		# carbonate only
+		if  ( $carbonate && ! $mixed && ! $silic )	{
+			return qq| ( collections.lithology1 IN ($carbonate_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($carbonate_str) ) ) |;
+		}
+		# mixed only
+		elsif  ( ! $carbonate && $mixed && ! $silic )	{
+			return qq| ( collections.lithology1 IN ($mixed_str) OR collections.lithology2 IN ($mixed_str) OR ( collections.lithology1 IN ($carbonate_str) && collections.lithology2 IN ($silic_str) ) OR ( collections.lithology1 IN ($silic_str) && collections.lithology2 IN ($carbonate_str) ) ) |;
+		}
+		# siliciclastic only
+		elsif  ( ! $carbonate && ! $mixed && $silic )	{
+			return qq| ( collections.lithology1 IN ($silic_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($silic_str) ) ) |;
+		}
+		# carbonate and siliciclastic but NOT mixed
+		elsif  ( $carbonate && ! $mixed && $silic )	{
+			return qq| ( ( collections.lithology1 IN ($carbonate_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($carbonate_str) ) ) OR ( collections.lithology1 IN ($silic_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($silic_str) ) ) ) |;
+		}
+		# carbonate and mixed
+		elsif  ( $carbonate && $mixed && ! $silic )	{
+			return qq| ( ( collections.lithology1 IN ($mixed_str) OR collections.lithology2 IN ($mixed_str) OR ( collections.lithology1 IN ($carbonate_str) && collections.lithology2 IN ($silic_str) ) OR ( collections.lithology1 IN ($silic_str) && collections.lithology2 IN ($carbonate_str) ) ) OR ( collections.lithology1 IN ($carbonate_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($carbonate_str) ) ) ) |;
+		}
+		# mixed and siliciclastic
+		elsif  ( ! $carbonate && $mixed && $silic )	{
+			return qq| ( ( collections.lithology1 IN ($mixed_str) OR collections.lithology2 IN ($mixed_str) OR ( collections.lithology1 IN ($carbonate_str) && collections.lithology2 IN ($silic_str) ) OR ( collections.lithology1 IN ($silic_str) && collections.lithology2 IN ($carbonate_str) ) ) OR ( collections.lithology1 IN ($silic_str) AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ($silic_str) ) ) ) |;
+		}
+
+	}
+
 	return "";
 }
 
@@ -1001,6 +1053,7 @@ sub doQuery {
 
 	# may be getting this for either of the above cases
 	my $collectionsWhereClause = $self->getCollectionsWhereClause();
+print "$collectionsWhereClause"; #FOO
 
 	#print "collectionsWhereClause = $collectionsWhereClause<BR>";
 	
