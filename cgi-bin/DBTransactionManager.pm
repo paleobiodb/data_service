@@ -14,10 +14,11 @@ use CGI::Carp qw(fatalsToBrowser);
 ##
 sub new{
 	my $class = shift;
-	my $dbh = shift;
-	my $session = shift;
 	my $self = {};
 	bless $self, $class;
+
+	$self->{_dbh} = shift;
+	$self->{_session} = shift;
 
 	#_initialize();
 
@@ -49,21 +50,21 @@ sub _initialize{
 #					column in the table, in the order of the NAMES attribute,
 #					which is why "NAMES" is required (to correlate order).
 #
-#	returns:		For select statements, returns an array of hash references
-#					to rows of all data returned.
+#	returns:		For select statements, returns a reference to an array of 
+#					hash references	to rows of all data returned.
 #					For non-select statements, returns the number of rows
 #					affected.
 ##
 sub getData{
 	my $self = shift;
 	my $sql = shift;
-	my $type = shift;
+	my $type = shift or "neither";
 	my $attr_hash_ref = shift;
 
 	# First, check the sql for any obvious problems
 	my $sql_result = $self->checkSQL($sql);
 	if($sql_result){
-		my $sth = $dbh->prepare($sql) or die $dbh->errstr;
+		my $sth = $self->{_dbh}->prepare($sql) or die $self->{_dbh}->errstr;
 		# execute returns the number of rows affected for non-select statements.
 		# SELECT:
 		if($sql_result == 1){
@@ -83,7 +84,7 @@ sub getData{
 #	in Permissions.pm could be done as copied methods with new names, or adding
 #	functionality (conditionals) to the existing methods so they behave 
 #	differently depending on how they're called.
-			return @data;
+			return \@data;
 		}
 		# non-SELECT:
 		else{
