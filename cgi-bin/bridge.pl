@@ -863,6 +863,13 @@ sub displayRefResults {
 		$q->param( "type" => $queue{type} );		# Store the type, just in case
 		$q->param( "collection_no" => $queue{collection_no} );
 		my $action = $queue{action};
+
+		# Get all query params that may have been stuck on the queue
+		# back into the query object:
+		foreach my $key (keys %queue){
+			$q->param($key => $queue{$key});
+		}
+
 		# if there's an action, go straight back to it without showing the ref
 		if ( $action)	{
 			&{$action};									# Run the action
@@ -2383,7 +2390,7 @@ sub startTaxonomy	{
 		$s->enqueue( $dbh, "action=displayTaxonomySearchForm" );
 	# otherwise go right to the edit page
 	} else	{
-		my $temp = "action=displayTaxonomyEntryForm?taxon_name=";
+		my $temp = "action=displayTaxonomyEntryForm&taxon_name=";
 		$temp .= $q->param('taxon_name');
 		$temp .= "&taxon_no=" . $q->param('taxon_no');
 		$s->enqueue( $dbh, $temp );
