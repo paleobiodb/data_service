@@ -358,7 +358,7 @@ print "<!-- $occ{'collection_no'} -->\n";
 				
 				my ($yy,$mm,$dd) = split / /,$filledfields{$t},3;
 				if (length $mm == 1)	{
-					$dd = "0".$mm;
+					$mm = "0".$mm;
 				}
 				if (length $dd == 1)	{
 					$dd = "0".$dd;
@@ -369,7 +369,15 @@ print "<!-- $occ{'collection_no'} -->\n";
 				else	{
 					$filledfields{$t} = $yy.$mm.$dd."000000";
 				}
-				$where = &::buildWhere ( $where, qq| modified>$filledfields{$t}| );
+				if ( $q->param("beforeafter") eq "created after" )	{
+					$where = &::buildWhere ( $where, qq| created>$filledfields{$t}| );
+				} elsif ( $q->param("beforeafter") eq "created before" )	{
+					$where = &::buildWhere ( $where, qq| created<$filledfields{$t}| );
+				} elsif ( $q->param("beforeafter") eq "modified after" )	{
+					$where = &::buildWhere ( $where, qq| modified>$filledfields{$t}| );
+				} elsif ( $q->param("beforeafter") eq "modified before" )	{
+					$where = &::buildWhere ( $where, qq| modified<$filledfields{$t}| );
+				}
 			# following written by JA 3.10.02
 			} elsif ( $t eq "research_group" && $q->param('research_group') =~ /(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/ )	{
 				$where .= " AND reference_no IN (" . $reflist . ")";
