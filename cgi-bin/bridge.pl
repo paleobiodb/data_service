@@ -586,9 +586,9 @@ sub displayHomePage {
 sub displayMapForm {
 
 	# List fields that should be preset
-	my @fieldNames = ('lithology1', 'environment', 'projection', 'mapfocus', 'mapscale', 'mapresolution', 'mapbgcolor', 'gridsize', 'gridcolor', 'linethickness', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder');
+	my @fieldNames = ('lithology1', 'environment', 'projection', 'maptime', 'mapfocus', 'mapscale', 'mapresolution', 'mapbgcolor', 'gridsize', 'gridcolor', 'linethickness', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder');
 	# Set default values
-	my @row = ('', '', 'orthographic', 'Europe', 'X 1', 'coarse', 'white', '30 degrees', 'gray', 'medium', 'black', 'black', 'none', 'medium', 'circles', 'blue', 'with');
+	my @row = ('', '', 'orthographic', '', 'Europe', 'X 1', 'coarse', 'white', '30 degrees', 'gray', 'medium', 'black', 'black', 'none', 'medium', 'circles', 'blue', 'with');
 	
 	# Read preferences if there are any JA 8.7.02
 	%pref = &getPreferences($s->get('enterer'));
