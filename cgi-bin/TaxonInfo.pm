@@ -2,6 +2,7 @@ package TaxonInfo;
 
 use PBDBUtil;
 use Classification;
+use Debug;
 
 $DEBUG = 0;
 
@@ -21,7 +22,7 @@ sub searchForm{
 	my $html = "";
 
 	unless($search_again){
-		$html .= "<center><h3>Taxon search form</h3></center>";
+		$html .= "<div class=\"title\">Taxon search form</div>";
 	}
 
 	$html .= "\n<script language=\"Javascript\">\n".
@@ -48,12 +49,12 @@ sub searchForm{
 			 "}\n".
 			 "</script>\n";
 	$html .= "<form method=post action=\"/cgi-bin/bridge.pl\" ".
-			 "onSubmit=\"return checkInput();\">".
+			"onSubmit=\"return checkInput();\">".
 		   "<input id=\"action\" type=hidden name=\"action\"".
 		   " value=\"checkTaxonInfo\">".
 		   "<input id=\"user\" type=hidden name=\"user\"".
 		   " value=\"".$q->param("user")."\">".
-		   "<center><table width=\"300\">".
+		   "<center><table border=0>".
 		   "<tr><td valign=\"middle\" align=\"left\" colspan=\"2\">".
 		   "<nobr><select name=\"taxon_rank\"><option>Higher taxon".
 		   "<option selected>Genus<option>Genus and species<option>species".
@@ -1962,10 +1963,15 @@ sub displayEcology	{
 	push my @tempnames, $taxon_name;
 	my @ancestors = Classification::get_classification_hash($dbt,'class',\@tempnames,'yes');
 
+	Debug::dbPrint("ancestors = @ancestors");
+	
 	my $tempVals;
 	if ( @ancestors )	{
 		for my $a ( @ancestors )	{
 			$sql = "SELECT * FROM ecotaph WHERE taxon_no=" . $a;
+			
+			Debug::dbPrint("sql = $sql");
+			
 			$tempVals = @{$dbt->getData($sql)}[0];
 			if ( $tempVals )	{
 				for my $field ( @ecotaphFields )	{

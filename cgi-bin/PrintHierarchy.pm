@@ -16,7 +16,7 @@ sub startPrintHierarchy	{
 
 	print main::stdIncludes( "std_page_top" );
 
-	print "<center><h3>Taxon classification search form</h3></center>\n";
+	print "<div class=\"title\">Taxon classification search form</div>\n";
 
 	print "<form method=post action=\"/cgi-bin/bridge.pl\"> " .
 		"<input id=\"action\" type=hidden name=\"action\"" .

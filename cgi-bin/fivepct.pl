@@ -142,12 +142,9 @@ else	{
 sub PrintHeader	{
 
 	print "<html>\n<head>\n<title>5% Project</title>\n\n";
-	print "<STYLE type=\"text/css\"> <!--\n";
-	print "H3	{ font-family : Arial, Verdana, Helvetica; }\n";
-	print "TD	{ font-family : Arial, Verdana, Helvetica; font-size : 12px }\n";
-	print "P	{ font-family : Arial, Verdana, Helvetica; font-size : 14px; }\n";
-	print "	-->\n</STYLE>\n\n</head>\n\n";
-	print "<body bgcolor=\"white\" background=\"/public/PDbg.gif\">\n";
+	print "<link REL=\"stylesheet\" TYPE=\"text/css\" HREF=\"/StyleSheets/common.css\">"; 
+	print "</head>\n\n";
+	print "<body>\n";
 }
 
 sub DisplayQueryPage	{
