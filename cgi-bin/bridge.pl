@@ -253,6 +253,8 @@ sub displayPreferencesPage	{
 	my $enterer = $q->cookie("enterer");
 	my $destination = $q->param("destination");
 
+	$s->enqueue( $dbh, "action=$destination" );
+
 	my %pref = &getPreferences($enterer);
 
 	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = &getPrefFields();
@@ -458,6 +460,10 @@ sub setPreferences	{
  	$sth->finish();
 
 	print "<p>\n<a href=\"$exec_url?action=displayPreferencesPage\"><b>Reset preferences</b></a></td></tr></table><p>\n";
+	my %continue = $s->unqueue($dbh);
+	if($continue{action}){
+		print "<center><p>\n<a href=\"$exec_url?action=$continue{action}\"><b>Continue</b></a><p></center>\n";
+	}
     print &stdIncludes ("std_page_bottom");
 	exit;
 
