@@ -6,15 +6,43 @@ $DEBUG = 0;
 # WARNING: the logic assumes you want all intervals falling ENTIRELY WITHIN
 #  the time interval you have queried
 
+my $dbh;
+my $dbt;
+
+sub cleanArrays	{
+
+	$eml_max_interval = "";
+	$max_interval_name = "";
+	$eml_min_interval = "";
+	$min_interval_name = "";
+
+# this is the master list of interval numbers to be used
+	@intervals = ();
+# without making this local, repeated calls to TimeLookup will accrete
+#  more and more "good" intervals
+	@tempintervals = ();
+
+	%intervalInScale = ();
+	%pubyr = ();
+	%bestscale = ();
+	%bestscaleyr = ();
+	%yesints = ();
+	%immediatemax = ();
+	%immediatemin = ();
+
+}
+
 sub processLookup	{
 
-	my $dbh = shift;
-	my $dbt = shift;
+	$dbh = shift;
+	$dbt = shift;
 
-	my $eml_max_interval = shift;
-	my $max_interval_name = shift;
-	my $eml_min_interval = shift;
-	my $min_interval_name = shift;
+	&cleanArrays();
+
+	$eml_max_interval = shift;
+	$max_interval_name = shift;
+	$eml_min_interval = shift;
+	$min_interval_name = shift;
 
 	if ( ! $min_interval_name )	{
 		$eml_min_interval = $eml_max_interval;
@@ -24,13 +52,65 @@ sub processLookup	{
 		$max_interval_name = $min_interval_name;
 	}
 
-# this is the master list of interval numbers to be used
-	my @intervals;
+	&findBestScales();
+	&getIntervalRange();
+	&findImmediateCorrelates();
+	&mapIntervals();
+	&returnCollectionList();
+
+}
+
+sub processScaleLookup	{
+
+	$dbh = shift;
+	$dbt = shift;
+	$focal_scale = shift;
+
+	&cleanArrays();
+
+# get an array of the interval numbers falling in the requested scale
+	$sql = "SELECT interval_no FROM correlations WHERE scale_no=" . $focal_scale;
+	my @intrefs = @{$dbt->getData($sql)};
+
+	&findBestScales();
+	&findImmediateCorrelates();
+
+# for each interval in the scale, find all other intervals mapping into it
+	for my $intref ( @intrefs )	{
+
+		@intervals = ();
+		@tempintervals = ();
+		push @intervals , $intref->{interval_no};
+		%yesints = ();
+		$yesints{$intref->{interval_no}} = "Y";
+		&mapIntervals();
+
+	# get the name of the interval
+		$sql = "SELECT interval_name FROM intervals WHERE interval_no=" . $intref->{interval_no};
+		my $interval_name = @{$dbt->getData($sql)}[0]->{interval_name};
+
+	# get a list of collections in this interval
+		$sql = "SELECT collection_no FROM collections WHERE ";
+		$sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
+		$sql .= "AND ( min_interval_no IN ( " . join(',',@intervals) . " ) ";
+		$sql .= " OR min_interval_no < 1 )";
+		my @collrefs = @{$dbt->getData($sql)};
+
+	# make a hash array in which keys are collection numbers and
+	#   values are the name of this interval in the focal scale
+		for my $collref ( @collrefs )   {
+			$intervalInScale{$collref->{collection_no}} = $interval_name;
+		}
+
+	}
+	return \%intervalInScale;
+}
+
+sub findBestScales	{
 
 # find the pubyr of each time scale's ref
 	$sql = "SELECT scale_no,reference_no FROM scales";
 	my @refnos = @{$dbt->getData($sql)};
-	my %pubyr = ();
 	for my $r ( 0..$#refnos )	{
 		$sql = "SELECT pubyr FROM refs WHERE reference_no=" . $refnos[$r]->{reference_no};
 		$pubyr{$refnos[$r]->{scale_no}} = @{$dbt->getData($sql)}[0]->{pubyr};
@@ -45,6 +125,10 @@ sub processLookup	{
 			$bestscale{$corr->{interval_no}} = $corr->{scale_no};
 		}
 	}
+
+}
+
+sub getIntervalRange	{
 
 # BEGIN if input was numeric values
 	if ( $max_interval_name > 0 && $min_interval_name > 0 )	{
@@ -149,7 +233,6 @@ sub processLookup	{
 
 # using the best scale, run up from the max to the min and add all the intervals
 		my $nowat = $max_interval_no;
-		my @tempintervals = ();
 		while ( $nowat != $min_interval_no && $nowat > 0 )	{
 			push @tempintervals, $nowat;
 			$nowat = $next{$nowat};
@@ -182,22 +265,17 @@ sub processLookup	{
 		return;
 	}
 
-# without making this local, repeated calls to TimeLookup will accrete
-#  more and more "good" intervals
-	my @tempintervals;
-
 # for convenience, make a hash array where the keys are the intervals
-	my %yesints = ();
 	for my $i ( @intervals )	{
 		$yesints{$i} = "Y";
 	}
 
-# check every known interval to see if it maps to the master list
-# logic: if the interval's max and min correlates both map to the list,
-#  the interval is entirely within the queried interval
+}
 
-# now go through the intervals
-# need a list of them first
+# find the immediate max and min correlates of each interval for use in
+#   mapIntervals
+sub findImmediateCorrelates	{
+
 	$sql = "SELECT interval_no FROM intervals";
 # since the keys are primary the highest number for an interval is just
 #  the table size plus 1
@@ -210,9 +288,16 @@ sub processLookup	{
 			$sql = "SELECT max_interval_no,min_interval_no FROM correlations WHERE interval_no=" . $i . " AND scale_no=" . $bestscale{$i};
 			my $maxmin = @{$dbt->getData($sql)}[0];
 			$immediatemax{$i} = $maxmin->{max_interval_no};
-			$immedatemin{$i} = $maxmin->{min_interval_no};
+			$immediatemin{$i} = $maxmin->{min_interval_no};
 		}
 	}
+
+}
+
+# check every known interval to see if it maps to the master list
+# logic: if the interval's max and min correlates both map to the list,
+#  the interval is entirely within the queried interval
+sub mapIntervals	{
 
 	my $max;
 	my $min;
@@ -261,20 +346,25 @@ sub processLookup	{
 
 	}
 
+
 # add the list of correlated intervals to the list of submitted intervals
 	if ( @tempintervals )	{
 		push @intervals, @tempintervals;
 	}
 
+}
+
 # query the collections table for collections where the max is in the list
 #   and so is the min
+sub returnCollectionList	{
+
 	$sql = "SELECT collection_no FROM collections WHERE ";
 	$sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
 	$sql .= "AND ( min_interval_no IN ( " . join(',',@intervals) . " ) ";
 	$sql .= " OR min_interval_no < 1 )";
 	my @collrefs = @{$dbt->getData($sql)};
 
-	my @collections;
+	my @collections = ();
 	for my $collref ( @collrefs )	{
 		push @collections, $collref->{collection_no};
 	}
