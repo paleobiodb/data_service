@@ -8,7 +8,7 @@ use Globals;
 use DBTransactionManager;
 
 # Flags and constants
-my $DEBUG=0;			# The debug level of the calling program
+#my $DEBUG=0;			# The debug level of the calling program
 my $dbh;				# The database handle
 my $dbt;				# The new and improved database object
 my $q;					# Reference to the parameters
@@ -41,7 +41,7 @@ my $bestbothscale;
 
 # for measuring execution time
 my ($th0, $th1);
-if ($DEBUG) { use Time::HiRes qw(gettimeofday); }
+#if ($DEBUG) { use Time::HiRes qw(gettimeofday); }
 $th0 = gettimeofday() if ($DEBUG);
 
 sub new {
@@ -491,7 +491,7 @@ sub getResGrpString {
 
 	my $resgrp = $q->param('research_group');
 
-	if($resgrp && $resgrp =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
+	if($resgrp && $resgrp =~ /(^decapod$)|(^EJECT$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
 		my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
 		if($resprojstr ne ""){
 			$result = " collections.reference_no IN (" . $resprojstr . ")";
