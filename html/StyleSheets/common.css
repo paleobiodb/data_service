@@ -213,6 +213,7 @@ table.navbox {
 	border-color: lightgrey;
 	
 	background-color: 0077FF;
+	margin-bottom: 20px;
 }
 
 
@@ -231,4 +232,7 @@ td.nonindet {
 	font-style: italic;
 }
 
-
+/* for a small reference display line */
+span.smallRef {
+	font-size: 0.9em;
+}

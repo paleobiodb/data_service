@@ -15,7 +15,14 @@ use CGI::Carp qw(fatalsToBrowser);
 
 
 use fields qw(	reference_no
+				reftitle
+				pubtitle
 				pubyr
+				pubvol
+				pubno
+				firstpage
+				lastpage
+				
 				SQLBuilder
 							);  # list of allowable data fields.
 
@@ -56,8 +63,18 @@ sub setWithReferenceNumber {
 		
 		# get the pubyr and save it
 		my $sql = $self->getSQLBuilder();
-		my $pubyr = $sql->getSingleSQLResult("SELECT pubyr FROM refs WHERE reference_no = $input");
-		$self->{pubyr} = $pubyr;
+		$sql->setSQLExpr("SELECT reftitle, pubtitle, pubyr, pubvol, pubno, firstpage, lastpage FROM refs WHERE reference_no = $input");
+		$sql->executeSQL();
+		
+		my $results = $sql->nextResultArrayRef();
+		
+		$self->{reftitle} = $results->[0];
+		$self->{pubtitle} = $results->[1];
+		$self->{pubyr} = $results->[2];
+		$self->{pubvol} = $results->[3];
+		$self->{pubno} = $results->[4];
+		$self->{firstpage} = $results->[5];
+		$self->{lastpage} = $results->[6];
 	}
 }
 
@@ -73,6 +90,51 @@ sub referenceNumber {
 sub pubyr {
 	my Reference $self = shift;
 	return ($self->{pubyr});
+}
+
+# return the reference title for this reference
+sub reftitle {
+	my Reference $self = shift;
+	return ($self->{reftitle});
+}
+
+
+# return the publication title for this reference
+sub pubtitle {
+	my Reference $self = shift;
+	return ($self->{pubtitle});
+}
+
+# return the publication volume for this reference
+sub pubvol {
+	my Reference $self = shift;
+	return ($self->{pubvol});
+}
+# return the publication number for this reference
+sub pubno {
+	my Reference $self = shift;
+	return ($self->{pubno});
+}
+# return the publication first page for this reference
+sub firstpage {
+	my Reference $self = shift;
+	return ($self->{firstpage});
+}
+# return the publication last page for this reference
+sub lastpage {
+	my Reference $self = shift;
+	return ($self->{lastpage});
+}
+
+sub pages {
+	my Reference $self = shift;
+	
+	my $p = $self->{firstpage};
+	if ($self->{lastpage}) {
+		$p .= "-" . $self->{lastpage};	
+	}
+	
+	return $p;	
 }
 
 
@@ -113,7 +175,22 @@ sub referenceURL {
 	
 }
 
+# returns a nicely formatted HTML reference line.
+sub formatAsHTML() {
+	my Reference $self = shift;
+	
+	my $html = "<SPAN class=\"smallRef\"><b>" . $self->referenceNumber() . "</b> ";
+	$html .= $self->authors() . ". ";
+	if ($self->{reftitle})	{ $html .= $self->{reftitle}; }
+	if ($self->{pubtitle})	{ $html .= " <i>" . $self->{pubtitle} . "</i>"; }
+	if ($self->{pubvol}) 	{ $html .= " <b>" . $self->{pubvol} . "</b>"; }
+	if ($self->{pubno})		{ $html .= "<b>(" . $self->{pubno} . ")</b>"; }
 
+	if ($self->pages())		{ $html .= ":" . $self->pages(); }
+	$html .= "</SPAN>";
+	
+	return $html;
+}
 
 
 # end of Reference.pm
