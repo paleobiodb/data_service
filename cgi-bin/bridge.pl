@@ -30,6 +30,8 @@ use Ecology;
 use PrintHierarchy;
 use SQLBuilder;
 
+use Occurrence;
+use Collection;
 use TaxonHierarchy;
 
 use Debug;
@@ -1341,7 +1343,7 @@ sub displayRefEdit
         $row[1] = $s->get('enterer');
     }
 	
-	Debug::dbPrint("row = @row");
+	#Debug::dbPrint("row = @row");
 
 	print qq|<form method="POST" action="$exec_url" onSubmit='return checkForm();'>\n|;
 	print qq|<input type=hidden name="action" value="processReferenceEditForm"\n|;
@@ -2215,7 +2217,7 @@ sub displayCollectionDetails {
     push(@fieldNames, 'subset_string');
 
 	# get the max/min interval names
-	my ($r,$f) = &getMaxMinNamesAndDashes(\@row,\@fieldNames);
+	my ($r,$f) = getMaxMinNamesAndDashes(\@row,\@fieldNames);
 	@row = @{$r};
 	@fieldNames = @{$f};
 
@@ -2228,7 +2230,17 @@ sub displayCollectionDetails {
     }
 
 	print "<HR>\n";
-	my $taxa_list = buildTaxonomicList($collection_no, $refNo);
+	
+	# rjp, 1/2004.  This is the new routine which handles all reids instead
+	# of just the first and the last.  To rever to the old way, comment
+	# out the following three lines, and uncomment the fourth.
+	my $collection = Collection->new($s);
+	$collection->setWithCollectionNumber($collection_no);
+	my $taxa_list = $collection->HTMLFormattedTaxonomicList();
+	
+	#my $taxa_list = buildTaxonomicList($collection_no, $refNo);
+	
+	
 	print $taxa_list;
 
 	if ( $taxa_list =~ /Abundance/ )	{
@@ -2351,19 +2363,37 @@ sub getMaxMinNamesAndDashes	{
 }
 
 
+
+
+
+# 1/2004, rjp: now only used to display list for editing/adding occurrences
+# The normal list display has been replaced by the method formatAsHTML() in the
+# Occurrence class.
+#
+# builds the list of occurrences shown in places such as the collections form
+# must pass it the collection_no
+# reference_no (optional or not?? - not sure).
+#
+# optional arguments:
+#
+# gnew_names	:	reference to array of new genus names the user is entering (from the form)
+# subgnew_names	:	reference to array of new subgenus names the user is entering
+# snew_names	:	reference to array of new species names the user is entering
 sub buildTaxonomicList {
 	my $collection_no = shift;
 	my $collection_refno = shift;
-	my $gnew_names = shift;
-	my $subgnew_names = shift;
-	my $snew_names = shift;
+	
+	my $gnew_names = shift;				
+	my $subgnew_names = shift;			
+	my $snew_names = shift;	
 	
 
+	# dereference arrays.
 	my @gnew_names = @{$gnew_names};
 	my @subgnew_names = @{$subgnew_names};
 	my @snew_names = @{$snew_names};
 	
-	my $new_found = 0;
+	my $new_found = 0;		# have we found new taxa?  (ie, not in the database)
 	my $return = "";
 
 	# This is the taxonomic list part
@@ -2379,27 +2409,33 @@ sub buildTaxonomicList {
 			"       reference_no, ".
 			"       occurrence_no ".
 			"  FROM occurrences ".
-			" WHERE collection_no=$collection_no";
+			" WHERE collection_no = $collection_no";
 
 	my @rowrefs = @{$dbt->getData($sql)};
 
-	if(@rowrefs){
+	if (@rowrefs) {
 		my @grand_master_list = ();
 
-		foreach my $rowref (@rowrefs){
+		# loop through each row returned by the query
+		foreach my $rowref (@rowrefs) {
 			my $output = '';
 			my %grand_master_hash = ();
 			my %classification = ();
 
 			# For sorting, later
-			$grand_master_hash{occurrence_no} = $rowref->{occurrence_no};
-			$grand_master_hash{comments} = $rowref->{comments};
-			$grand_master_hash{abund_value} = $rowref->{abund_value};
-			$grand_master_hash{reference_no} = $rowref->{reference_no};
+			$grand_master_hash{occurrence_no}	= 	$rowref->{occurrence_no};
+			$grand_master_hash{comments} 		= 	$rowref->{comments};
+			$grand_master_hash{abund_value}		= 	$rowref->{abund_value};
+			$grand_master_hash{reference_no}	= 	$rowref->{reference_no};
 
+			
+			# if the user submitted a form such as adding a new occurrence or 
+			# editing an existing occurrence, then we'll bold face any of the
+			# new taxa which we don't already have in the database.
+			
 			# check for unrecognized genus names
 			foreach my $nn (@gnew_names){
-				if($rowref->{genus_name} eq $nn){
+				if ($rowref->{genus_name} eq  $nn) {
 					$rowref->{genus_name} = "<b>".$rowref->{genus_name}."</b>";
 					$new_found = 1;
 				}
@@ -2423,11 +2459,13 @@ sub buildTaxonomicList {
 
 			my $formatted_reference = '';
 
+			# if the reference_no for this occurrence isn't equal to the one
+			# passed in to this function, then build a reference link for it.
+			# otherwise, leave it blank (?)
 			my $newrefno = $rowref->{'reference_no'};
 			if ($newrefno != $collection_refno)	{
 				$rowref->{reference_no} = buildReference($newrefno,"list");
-			}
-			else{
+			} else {
 				$rowref->{reference_no} = '';
 			}
 
@@ -2435,17 +2473,20 @@ sub buildTaxonomicList {
 			my $reidTable = "";
 			my @occrow = ();
 			my @occFieldNames = ();
+			
+			# put all keys and values from the current occurrence
+			# into two separate arrays.
 			while((my $key, my $value) = each %{$rowref}){
 				push(@occFieldNames, $key);
 				push(@occrow, $value);
 			}
-
+	
 			# get the most recent reidentification of this occurrence.  
 			my $mostRecentReID = PBDBUtil::getMostRecentReIDforOcc($dbt,$rowref->{occurrence_no});
 			
+			# if the occurrence has been reidentified at least once, then 
+			# display the original and reidentifications.
 			if ($mostRecentReID) {
-				# this occurrence has been reidentified at least once
-				
 				$output = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
 				
 				# rjp, 1/2004, change this so it displays *all* reidentifications, not just
@@ -2453,7 +2494,7 @@ sub buildTaxonomicList {
 				
 				$output .= getReidHTMLTableByOccNum($mostRecentReID, 1, \%classification);
 				
-				Debug::dbPrint("mostRecentReID = $mostRecentReID");
+				#Debug::dbPrint("mostRecentReID = $mostRecentReID");
 
 				$grand_master_hash{class_no} = ($classification{class_no} or 1000000);
 				$grand_master_hash{order_no} = ($classification{order_no} or 1000000);
@@ -2463,15 +2504,14 @@ sub buildTaxonomicList {
 				# this occurrence has never been reidentified
 				
 				my $arg = $rowref->{'genus_name'}." ".$rowref->{'species_name'};
-				%classification=%{PBDBUtil::get_classification_hash($dbt,$arg)};
+				%classification = %{PBDBUtil::get_classification_hash($dbt,$arg)};
 
 				# for sorting, later
 				$grand_master_hash{class_no} = ($classification{class_no} or 1000000);
 				$grand_master_hash{order_no} = ($classification{order_no} or 1000000);
 				$grand_master_hash{family_no} = ($classification{family_no} or 1000000);
 
-				if($classification{'class'} || $classification{'order'} ||
-						$classification{'family'} ){
+				if ($classification{'class'} || $classification{'order'} || $classification{'family'} ) {
 					push(@occrow, "bogus");
 					push(@occFieldNames, 'higher_taxa');
 					push(@occrow, $classification{'class'});
@@ -2484,8 +2524,7 @@ sub buildTaxonomicList {
 
 				$output = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
 
-				if($classification{'class'} || $classification{'order'} ||
-						$classification{'family'} ){
+				if ($classification{'class'} || $classification{'order'} || $classification{'family'} ){
 					pop(@occrow);
 					pop(@occrow);
 					pop(@occrow);
@@ -2540,23 +2579,27 @@ sub buildTaxonomicList {
 			$comments++ if($row->{comments});
 		}
 
+			
+			
+			
+			
 		$sql = "SELECT collection_name FROM collections ".
 			   "WHERE collection_no=$collection_no";
 		my @coll_name = @{$dbt->getData($sql)};
 
 		# Taxonomic list header
 		$return = "
-<div align='center'>
-<h3>Taxonomic list for ".$coll_name[0]->{collection_name}." (PBDB collection $collection_no)</h3>";
+		<div align='center'>
+		<h3>Taxonomic list for " . $coll_name[0]->{collection_name} .
+		" (PBDB collection $collection_no)</h3>";
 
-		if($new_found){
+		if ($new_found) {
 			$return .= "<h3><font color=red>WARNING!</font> Taxon names in ".
 					   "<b>bold</b> are new to the occurrences table.</h3><p>Please make ".
 					   "sure the spelling is correct. If it isn't, DON'T hit the back button; hit the \"Edit occurrences\" button below.</p>";
 		}
 
-		$return .=
-"<table border=\"0\" cellpadding=\"3\" cellspacing=\"0\"><tr>";
+		$return .= "<table border=\"0\" cellpadding=\"3\" cellspacing=\"0\"><tr>";
 
 		if($class_nos == 0){
 			$return .= "<td nowrap></td>";
@@ -2691,7 +2734,8 @@ sub buildTaxonomicList {
 		for(my $index = 0; $index < @sorted; $index++){
 			# Color the background of alternating rows gray JA 10.6.02
 			if($index % 2 == 0 && @sorted > 2){
-				$sorted[$index]->{html} =~ s/<td/<td class='darkList'/g;
+				#$sorted[$index]->{html} =~ s/<td/<td class='darkList'/g;
+				$sorted[$index]->{html} =~ s/<tr/<tr class='darkList'/g;
 			}
 			$sorted_html .= $sorted[$index]->{html};
 		}
@@ -2706,6 +2750,12 @@ sub buildTaxonomicList {
 
 
 
+# note: rjp 1/2004 - I *think* this gets an HTML formatted table
+# of reidentifications for a particular taxon
+# to be used in the taxon list of the collections page.
+#
+# pass it an occurrence number or reid number 
+# the second parameter tells whether it's a reid_no (true) or occurrence_no (false).
 sub getReidHTMLTableByOccNum {
 	my $occNum = shift;
 	my $isReidNo = shift;
@@ -2719,11 +2769,10 @@ sub getReidHTMLTableByOccNum {
 			"       comments, ".
 			"       reference_no ".
 			"  FROM reidentifications ";
-	if($isReidNo){
-			$sql .= " WHERE reid_no=$occNum";
-	}
-	else{
-			$sql .= " WHERE occurrence_no=$occNum";
+	if ($isReidNo) {
+		$sql .= " WHERE reid_no = $occNum";
+	} else {
+		$sql .= " WHERE occurrence_no = $occNum";
 	}
 
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -2733,7 +2782,9 @@ sub getReidHTMLTableByOccNum {
 	@rows = @{$sth->fetchall_arrayref()};
 
 	my $retVal = "";
+	
 	# NOT SURE ABOUT THIS LOOP. DON'T WE JUST WANT ONE (THE MOST RECENT)?
+	# note, rjp, 12/23/2004 - No, we want all of them.
 	foreach my $rowRef ( @rows ) {
 		my @row = @{$rowRef};
 		# format the reference
@@ -2767,6 +2818,7 @@ sub getReidHTMLTableByOccNum {
 
 	return $retVal;
 }
+
 
 # JA 21.2.03
 sub rarefyAbundances	{
@@ -3894,6 +3946,7 @@ sub processEditOccurrences {
 	}
 
 	# for identifying unrecognized (new to the db) genus/species names.
+	# these are the new taxa names that the user is trying to enter
 	my @gnew_names = (); # genus
 	my @subgnew_names = (); # subgenus
 	my @snew_names = (); # species
@@ -4245,12 +4298,12 @@ sub processEditOccurrences {
 		}
 	}
 
-	print &stdIncludes ( "std_page_top" );
+	print stdIncludes ( "std_page_top" );
 
 	# Show the rows for this collection to the user
 	my $collection_no = ${$all_params{collection_no}}[0];
 
-	print &buildTaxonomicList ( $collection_no, 0,\@gnew_names,\@subgnew_names,\@snew_names );
+	print buildTaxonomicList ( $collection_no, 0,\@gnew_names,\@subgnew_names,\@snew_names );
 
 	# Show a link to re-edit
 	print "
@@ -4261,7 +4314,7 @@ sub processEditOccurrences {
 	<a href='$exec_url?action=displaySearchColls&type=add'>Enter another collection with the same reference</a></b><p></center>
 ";
 
-	print &stdIncludes ("std_page_bottom");
+	print stdIncludes ("std_page_bottom");
 }
 
 
