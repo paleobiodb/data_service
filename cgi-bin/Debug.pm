@@ -1,5 +1,5 @@
 # For debugging and error logging to log files
-# by rjp, 12/2004
+# originally written by rjp, 12/2004
 #
 
 package Debug;
@@ -23,6 +23,24 @@ sub dbPrint {
 	select $ofh;
 	
 	print LOG "$date: $string \n";
+}
+
+
+# same as dbPrint, but without the timestamp
+sub quickPrint {
+
+	open LOG, ">>debug_log";
+	
+	my $string = shift;
+	chomp($string);
+ 
+ 	# make the file "hot" to ensure that the buffer is flushed properly.
+	# see http://perl.plover.com/FAQs/Buffering.html for more info on this.
+ 	my $ofh = select LOG;
+	$| = 1;
+	select $ofh;
+	
+	print LOG "$string \n";
 }
 
 
@@ -70,18 +88,36 @@ sub logError {
 
 # prints each parameter in the passed CGI object
 # note, this is normally called $q in our programs.
-sub printAllParams {
+sub printAllCGIParams {
 	my $q = shift;
-	dbPrint("Printing list of all parameters:\n");
+	
+	quickPrint("_____________________________________________________________");
+	dbPrint("Printing list of all CGI parameters:");
 	my @params = $q->param();
 	my @list;
 	foreach my $p (@params) {
 		# have to do this carefully because each param can either be a 
 		# scalar value, or a list value.
 		@list = $q->param($p); 
-		dbPrint("$p = " . "'" . join(", ", @list) . "'");	
+		$result .= "$p = " . "'" . join(", ", @list) . "'\n";	
 	}
-	dbPrint("End of parameter list\n\n");	
+	quickPrint("\n$result");
+	quickPrint("End of CGI parameter list\n_____________________________________________________________\n");	
+}
+
+
+# prints out all session parameters
+# for debugging purposes
+#
+# pass it a session object
+sub printAllSessionParams {
+	my $s = shift;
+	
+	quickPrint("_____________________________________________________________");
+	dbPrint("Printing list of all Session parameters:");
+	quickPrint("\n" . $s->allKeysAndValues);
+	quickPrint("End of Session parameter list\n_____________________________________________________________\n");	
+
 }
 
 1
