@@ -934,7 +934,6 @@ sub mapSetupImage {
 			unlink "$GIF_DIR/$file";
 		}
 	}
-    use Data::Dumper; print Dumper(@filenames);
 
     # get the next number for file creation.
     if ( ! open GIFCOUNT,"<$GIF_DIR/gifcount" ) {
