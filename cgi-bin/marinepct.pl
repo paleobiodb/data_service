@@ -135,7 +135,7 @@ else	{
 }
 
 # print a link to the main menu at the bottom 6.2.04
-print "<center><p><b><a href=\"http://paleodb.org/cgi-bin/bridge.pl?action=displayMenuPage&clear=clearQueue\">Back to the main menu</a></b></p></center>";
+print "<center><p><b><a href=\"/cgi-bin/bridge.pl?action=displayMenuPage&clear=clearQueue\">Back to the main menu</a></b></p></center>";
 
 
 sub PrintHeader	{
