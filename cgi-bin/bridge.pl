@@ -683,7 +683,6 @@ sub displayCurveForm {
 	print &stdIncludes ( "std_page_top" );
 
 	print $hbo->populateHTML( 'curve_form', [ '', '', '', '' ] , [ 'research_group', 'collection_type', 'lithology1', 'lithology2' ] );
-print "FOO";
 
 	print &stdIncludes ("std_page_bottom");
 }
