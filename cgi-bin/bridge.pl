@@ -622,10 +622,14 @@ sub displayMapForm {
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML ('map_form', \@row, \@fieldNames, \@prefkeys);
+
 	buildAuthorizerPulldown ( \$html );
+	buildEntererPulldown ( \$html );
 
 	my $authorizer = $s->get("authorizer");
 	$html =~ s/%%authorizer%%/$authorizer/;
+	my $enterer = $s->get("enterer");
+	$html =~ s/%%enterer%%/$enterer/;
 
 	# Spit out the HTML
 	print &stdIncludes ( "std_page_top" );
