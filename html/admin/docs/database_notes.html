@@ -1,6 +1,6 @@
 <HTML>
 <HEAD>
-<TITLE>Database Tables Descriptions</TITLE>
+<TITLE>Database Table Descriptions</TITLE>
 <style type="text/css">
 
 .title {
@@ -196,7 +196,7 @@ a certain person.</p>
 
 <p class="field">
 <span class="fieldName">ref_is_authority</span>
-<span class="fieldDesc">If true, then reference info comes from reference_no, 
+<span class="fieldDesc">If set to 'YES', then reference info comes from reference_no, 
 otherwise it comes from the author1init, author1last, etc. fields.</span>
 </p>
 
@@ -264,6 +264,9 @@ the authorities table.</span>
 </p>
 <p class="field">
 <span class="fieldName">type_specimen</span>
+<span class="fieldDesc">If the taxon rank is species, then the type_specimen is
+the actual fossil that the species was named after.
+</span>
 </p>
 
 </div>
@@ -553,13 +556,23 @@ to the status field.  Possible values include 'belongs to', 'recombined as', 'su
 <p class="field">
 <span class="fieldName">ref_has_opinion</span>
 <span class="fieldDesc">Basically means that the opinion comes
-from a refs table entry.  If this exists, then go to the 
+from a refs table entry.  If this exists and is equal to 'YES', then go to the 
 refs table to get the publication year (use the reference_no field).</span>
 </p>
 <p class="field">
 <span class="fieldName">pubyr</span>
 <span class="fieldDesc">Year of the opinion.  If blank, then look at ref_has_opinion 
 and get the year from the reference instead.</span>
+</p>
+<p class="field">
+<span class="fieldName">pages</span>
+</p>
+<p class="field">
+<span class="fieldName">figures</span>
+</p>
+
+<p class="field">
+<span class="fieldName">comments</span>
 </p>
 <p class="field">
 <span class="fieldName">author1init</span>
@@ -578,8 +591,9 @@ and get the year from the reference instead.</span>
 </p>
 
 
-
 </div>
+
+
 
 <div class="table">
 <A NAME="person"><span class="table">person</span></A>
