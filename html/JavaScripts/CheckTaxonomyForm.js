@@ -244,8 +244,8 @@ function checkReferenceInfo(checked, type, currentPages, currentFigures, firstAu
 			if (!(properLastName(firstAuthorLast))) {
 				errors.add("Ill-formed or missing " + type + " last name.");
 			}
-			if (!(properYear(year))) {
-				errors.add("Ill-formed or missing " + type + " year.");
+			if (year && !(properYear(year))) {
+				errors.add("Ill-formed " + type + " year.");
 			}
 		
 			if (firstAuthorInitial != "") {
