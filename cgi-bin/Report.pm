@@ -32,6 +32,7 @@ use Text::CSV_XS;
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
 my $dbh;
+my $dbt;
 my $q;					# Reference to the parameters
 
 $DDIR=$ENV{REPORT_DDIR};
@@ -56,6 +57,8 @@ sub new {
 	my $class = shift;
 	$dbh = shift;
 	$q = shift;
+	$s = shift;
+	$dbt = shift;
 	my $self = {};
 
 	bless $self, $class;
@@ -141,27 +144,10 @@ sub tallyFieldTerms	{
 		$self->dbg("nterms[$suffix]: $nterms[$suffix]<br>");
 	}
 	
-	if (index($q->param('genus'),",") > 0 || index($q->param('genus')," ") > 0){
-		# User could enter comma or space separated (or both) names.
-		@genera = split("[, ]",$q->param('genus'));
-		for $gen (@genera)  {
-			# lowercase all the letters
-			$gen = "\L$gen";
-			# uppercase the first letter
-			$gen = "\u$gen";
-		}
-	}
-	else{
-		# @genera is a one element array.
-		push(@genera,$q->param('genus'));
-	}
-	
 	print "<html>\n";
 	print "<head><title>Paleobiology Database tabular report";
-	if ($q->param('genus') )	{
-		print ": ".$q->param('genus');
-	} elsif ($q->param('class') )	{
-		print ": ".$q->param('class');
+	if ($q->param('taxon_name') )	{
+		print ": ".$q->param('taxon_name');
 	}
 	print "</title></head>\n";
 	print "<body bgcolor=\"white\" background=\"";
@@ -170,19 +156,12 @@ sub tallyFieldTerms	{
 	
 	print "<center>\n";
 	print "<h2>Paleobiology Database tabular report";
-	if ($q->param('genus') )	{
-		print ": ".$q->param('genus');
-	} elsif ($q->param('class') )	{
-		print ": ".$q->param('class');
+	if ($q->param('taxon_name') )	{
+		print ": ".$q->param('taxon_name');
 	}
 	print "</h2>\n\n";
 	
 	$csv = Text::CSV_XS->new();
-	
-	if (($q->param('genus') ) && ($q->param('class') ))	{
-		print "Can't run the search because both the \"genus\" and \"class\" fields are filled in<p>\n";
-		exit(0);
-	}
 	
 	# flush all output immediately to stdout
 	$| =1;
@@ -237,29 +216,8 @@ sub tallyFieldTerms	{
 	$self->dbg("total count: $totaltotal<br>");
 
 	# restrict counts to a particular genus or taxonomic class
-	if($q->param('class') || $q->param('genus')){
-		if($q->param('class')){
-			if(!open DATA_FILE,"<$DDIR/classdata/class.".$q->param('class')){
-				$self->htmlError( "$0:Couldn't open $DDIR/classdata/class".
-									$q->param('class')."<BR>$!");
-			}
-			while (<DATA_FILE>)	{
-				($temp,$temp2) = split(/,/,$_,2);
-				$inclass{$temp} = 1;
-			}
-			close DATA_FILE;
-			my @genus_names = keys %inclass;
-			foreach my $name (@genus_names){
-				$name = "'$name'";
-			}
-			$genus_names_string = join(",",@genus_names);
-		}
-		elsif($q->param('genus')){
-			foreach my $name (@genera){
-                $name = "'$name'";
-            }
-            $genus_names_string = join(",",@genera);
-		}
+	if ( $q->param('taxon_name') )	{
+		$genus_names_string = PBDBUtil::taxonomic_search($q->param('taxon_name'),$dbt);
 	# find the genus or class in the occurrence table
 	# this section rewritten to do a bona fide database query by JA 2.8.02
 	# query the database for the necessary fields
@@ -270,7 +228,7 @@ sub tallyFieldTerms	{
 		$gsql = "SELECT collection_no,occurrence_no,genus_name ".
 			    "FROM occurrences WHERE genus_name IN ($genus_names_string)";
 		if($datelimit){
-			$sql .= " AND created >= $datelimit";
+			$gsql .= " AND created >= $datelimit";
 		}
 		$self->dbg("genus_name sql: $gsql<br>");
 		my $sth = $dbh->prepare($gsql) || die "Prepare query failed\n";
@@ -290,12 +248,7 @@ sub tallyFieldTerms	{
 		$doesappear = scalar(@rowrefs);
 	
 		if ($doesappear == 0)	{
-			if ($q->param('genus') )	{
-				print "The genus \"<i>".$q->param('genus')."</i>\"";
-			}
-			elsif ($q->param('class') )   {
-				print "The class \"".$q->param('class')."\"";
-			}
+			print "The taxon \"<i>".$q->param('taxon_name')."</i>\"";
 			print " does not appear anywhere in the database.<p>\n";
 			exit(0);
 		}
@@ -397,9 +350,9 @@ sub tallyFieldTerms	{
 	foreach my $rowref ( @all_coll_rows ) {
 		@columns = @{$rowref};
 
-			if (($columns[$LOCIDCOL] > 0) &&
-					(($include[$columns[$LOCIDCOL]] > 0) ||
-					 (($q->param('class') eq "") && ($q->param('genus') eq ""))))	{
+			if ( $columns[$LOCIDCOL] > 0 &&
+				( $include[$columns[$LOCIDCOL]] > 0 ||
+				  $q->param('taxon_name') eq "" ) )	{
 				$lines++;
 				
 				if ($include[$columns[$LOCIDCOL]] > 0)	{
@@ -810,11 +763,8 @@ if ($region{$columns[$fieldno[$r]]} eq "") { print "$columns[$fieldno[$r]]<br>\n
 			print " were checked<p>\n";
 		}
 	}
-	if ($q->param('genus') )	{
-		print "The search was restricted to collections including <i>".$q->param('genus')."</i><p>\n";
-	}
-	elsif ($q->param('class') )	{
-		print "The search was restricted to collections including the class \"".$q->param('class')."\"<p>\n";
+	if ($q->param('taxon_name') )	{
+		print "The search was restricted to collections including <i>".$q->param('taxon_name')."</i><p>\n";
 	}
 
 	print "\nThe report data have been saved to \"<a href=\"/public/data/report.csv\">report.csv</a>\"<p>\n";
