@@ -3,6 +3,7 @@ use CGI;
 use CGI::Carp qw(fatalsToBrowser);
 use DBI;
 use Permissions;
+use Session;
 
 # written 20.10.02
 # restricts searches to refs with a particular status; uses GeoRef numbers
@@ -12,6 +13,8 @@ require "connection.pl";
 
 my $q = CGI->new();
 my $dbh = DBI->connect("DBI:mysql:database=$db;host=$host", $user, $password, {RaiseError => 1});
+my $s = Session->new();
+$s->validateUser($dbh, $q->cookie('session_id'));
 
 print $q->header( -type => "text/html" );
 &PrintHeader();
@@ -24,7 +27,7 @@ if ( $q->param("action") eq "search" )	{
 
 	@statusvals = ("unknown","junk","desirable","copied","entered");
 
-	$sql = "SELECT ref_no,title,author,pub,subjects,status FROM fivepct WHERE ";
+	$sql = "SELECT ref_no,title,author,pub,subjects,status,modifier FROM fivepct WHERE ";
 	if ( $q->param("status") ne "all" )	{
 		$sql .= "status='" . $q->param("status") . "' AND ";
 	}
@@ -56,7 +59,7 @@ if ( $q->param("action") eq "search" )	{
 			print "<tr><td><b>status</b></td><td><b>ID#</b></td><td><b>reference</b></td>\n";
 		}
 		$idstring = "status_" . $refrow{'ref_no'};
-		print "<tr><td valign=top><select name=$idstring>";
+		print "<tr><td valign='top' align='center'><select name=$idstring>";
 		for $s (@statusvals)	{
 			if ($refrow{'status'} eq $s)	{
 				print "<option selected>$s";
@@ -64,7 +67,7 @@ if ( $q->param("action") eq "search" )	{
 				print "<option>$s";
 			}
 		}
-		print "</select> </td>\n";
+		print "</select><i>$refrow{'modifier'}</i> </td>\n";
 		print "<td valign=top><b>";
 		printf "%d",20*$refrow{'ref_no'};
 		print "</b></td>\n";
@@ -98,6 +101,7 @@ elsif ( $q->param("action") eq "update" )	{
 		if ( $refrow{'status'} ne $q->param($idstring) )	{
 			$sql = "UPDATE fivepct SET status='";
 			$sql .= $q->param($idstring);
+			$sql .= "', modifier='" . $s->get("enterer");
 			$sql .= "' WHERE ref_no=" . $r;
 			my $sth2 = $dbh->prepare($sql);
 			$sth2->execute();
