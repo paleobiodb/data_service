@@ -166,6 +166,9 @@ function auth ( ) {
 //  End -->
 </script>
 
+<SCRIPT src="/JavaScripts/common.js" language="JavaScript" type="text/javascript">
+</SCRIPT>
+
 <center>
 <h2>Download request form</h2>
 </center>
@@ -219,27 +222,14 @@ Use data records created
 
 <select name="month">
 <option selected></option>
-<option>December</option>
-<option>November</option>
-<option>October</option>
-<option>September</option>
-<option>August</option>
-<option>July</option>
-<option>June</option>
-<option>May</option>
-<option>April</option>
-<option>March</option>
-<option>February</option>
-<option>January</option>
+<SCRIPT>fillMonths();</SCRIPT>
 </select>
 
 
 <select name="year">
 <option selected></option>
 
-
-<SCRIPT src="/JavaScripts/fillYears.js" language="JavaScript" type="text/javascript">
-</SCRIPT>
+<SCRIPT>fillYears();</SCRIPT>
 
 </select>
 </td>
