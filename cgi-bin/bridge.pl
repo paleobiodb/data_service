@@ -4147,81 +4147,132 @@ sub displayEnterCollPage {
 		displayLoginPage( "Please log in first." );
 		exit;
 	}
-	# Have to have a reference #
-	my $reference_no = $s->get("reference_no");
-	if ( ! $reference_no ) {
-		$s->enqueue( $dbh, "action=displayEnterCollPage" );
-		displaySearchRefs( "Please choose a reference first" );
-		exit;
-	}	
-
-	# Get the field names
-	$sql = "SELECT * FROM collections WHERE collection_no=0";
-	dbg( "$sql<HR>" );
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-	my @fieldNames = @{$sth->{NAME}};
-	$sth->finish();
-
-	# Get the reference data
-	$sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
-	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-
-    my $md = MetadataModel->new($sth);
-	$refRowRef = $sth->fetchrow_arrayref();
-    my $drow = DataRow->new($refRowRef, $md);
-    my $bibRef = BiblioRef->new($drow);
-	@refFieldNames = @{$sth->{NAME}};
-	$sth->finish();
-
-	$refRowString = "<table>" . $bibRef->toString() . '</table>';
-
 	# Need to build the research_group checkboxes
 
-	# Tack a few extra fields
-	push @htmlValues, '' for @fieldNames;
-    @htmlFields = @fieldNames;
-    unshift(@htmlFields,    'authorizer',
-        'enterer',
-        'reference_no',
-        'ref_string',
-        'country',
-        'eml_max_interval',
-        'max_interval',
-        'eml_min_interval',
-        'min_interval' );
-    unshift(@htmlValues,   $s->get('authorizer'),
-        $s->get('enterer'),
-        $reference_no,
-        $refRowString,
-        '',
-        '',
-        '',
-        '',
-        '' );
+    my (@fieldNames,@htmlFields,@htmlValues);
+    if ($q->param('prefill_collection_no') =~ /^\d+$/) {
+        dbg("Prefilling form with ".$q->param('prefill_collection_no'));
+        $sql = "SELECT * FROM collections WHERE collection_no=" . $q->param('prefill_collection_no');
+        my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+        $sth->execute();
+        @fieldNames = @{$sth->{NAME}};
+        $row = $sth->fetchrow_hashref();
+        if ($row) {
+            foreach $field (@fieldNames) {
+                if ($field !~ /^(authorizer|enterer|modifier|created|modified|collection_no)/) {
+                    push @htmlFields,$field;
+                    push @htmlValues,$row->{$field};
+                }
+            }
+            # get the max/min interval names
+            my ($v,$f) = getMaxMinNamesAndDashes(\@htmlValues,\@htmlFields);
+            @htmlValues = @{$v};
+            @htmlFields = @{$f};
 
-	%pref = getPreferences($s->get('enterer'));
-	# Get the enterer's preferences JA 25.6.02
-	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = getPrefFields();
-	for $p (@{$setFieldNames})	{
-		if ($pref{$p} ne "")	{
-			unshift @htmlValues,$pref{$p};
-			unshift @htmlFields,$p;
-		}
-	}
+            $reference_no = $row->{'reference_no'};
+            # Get the reference data
+            $sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
+            $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+            $sth->execute();
 
-	# carry over the lat/long coordinates the user entered while doing
-	#  the mandatory collection search JA 6.4.04
-	my @coordfields = ("latdeg","latmin","latsec","latdec","latdir",
-			"lngdeg","lngmin","lngsec","lngdec","lngdir");
-	for my $cf (@coordfields)	{
-		if ( $q->param($cf) )	{
-			unshift @htmlValues,$q->param($cf);
-			unshift @htmlFields,$cf;
-		}
-	}
+            my $md = MetadataModel->new($sth);
+            $refRowRef = $sth->fetchrow_arrayref();
+            my $drow = DataRow->new($refRowRef, $md);
+            my $bibRef = BiblioRef->new($drow);
+            @refFieldNames = @{$sth->{NAME}};
+            $sth->finish();
 
+            $refRowString = "<table>" . $bibRef->toString() . '</table>';
+
+            unshift(@htmlFields, 'authorizer',
+                'enterer',
+                'ref_string');
+            unshift(@htmlValues, $s->get('authorizer'),
+                $s->get('enterer'),
+                $refRowString);
+                  
+            $sth->finish();
+        } else { 
+            die "Tried to prefill entry form with non-existant collection no: ".$q->param('prefill_collection_no');
+        }
+    } else {
+        # Have to have a reference #
+        my $reference_no = $s->get("reference_no");
+        if ( ! $reference_no ) {
+            $s->enqueue( $dbh, "action=displayEnterCollPage" );
+            displaySearchRefs( "Please choose a reference first" );
+            exit;
+        }	
+
+        # Get the reference data
+        $sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
+        $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+        $sth->execute();
+
+        my $md = MetadataModel->new($sth);
+        $refRowRef = $sth->fetchrow_arrayref();
+        my $drow = DataRow->new($refRowRef, $md);
+        my $bibRef = BiblioRef->new($drow);
+        @refFieldNames = @{$sth->{NAME}};
+        $sth->finish();
+
+        $refRowString = "<table>" . $bibRef->toString() . '</table>';
+
+        # Get the field names
+        $sql = "SELECT * FROM collections WHERE collection_no=0";
+        dbg( "$sql<HR>" );
+        my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+        $sth->execute();
+        @fieldNames = @{$sth->{NAME}};
+        $sth->finish();
+        # Tack a few extra fields
+        push @htmlValues, '' for @fieldNames;
+        @htmlFields = @fieldNames;
+        unshift(@htmlFields,    'authorizer',
+            'enterer',
+            'reference_no',
+            'ref_string',
+            'country',
+            'eml_max_interval',
+            'max_interval',
+            'eml_min_interval',
+            'min_interval' );
+        unshift(@htmlValues,   $s->get('authorizer'),
+            $s->get('enterer'),
+            $reference_no,
+            $refRowString,
+            '',
+            '',
+            '',
+            '',
+            '' );
+
+        %pref = getPreferences($s->get('enterer'));
+        # Get the enterer's preferences JA 25.6.02
+        my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = getPrefFields();
+        for $p (@{$setFieldNames})	{
+            if ($pref{$p} ne "")	{
+                unshift @htmlValues,$pref{$p};
+                unshift @htmlFields,$p;
+            }
+        }
+
+        # carry over the lat/long coordinates the user entered while doing
+        #  the mandatory collection search JA 6.4.04
+        my @coordfields = ("latdeg","latmin","latsec","latdec","latdir",
+                "lngdeg","lngmin","lngsec","lngdec","lngdir");
+        for my $cf (@coordfields)	{
+            if ( $q->param($cf) )	{
+                unshift @htmlValues,$q->param($cf);
+                unshift @htmlFields,$cf;
+            }
+        }
+    }
+
+    # Remove these from being displayed
+    unshift(@htmlFields,'secondary_reference_string','session_reference_string');
+    unshift(@htmlValues,'','');
+    
 	print stdIncludes( "std_page_top" );
 
 	print printIntervalsJava();
@@ -4512,7 +4563,8 @@ sub processEnterCollectionForm {
     print $hbo->populateHTML('collection_display_fields', \@row, \@fields);
     print $hbo->populateHTML('collection_display_buttons', \@row, \@fields);
     print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
-	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></p></b></center>|;
+	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></p></b>|;
+	print qq| <b><p><a href="$exec_url?action=displayEnterCollPage&prefill_collection_no=$recID">Add another collection with fields prefilled based on this collection</a></p></b></center>|;
  
 	print stdIncludes("std_page_bottom");
 }
