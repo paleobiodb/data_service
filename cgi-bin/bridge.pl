@@ -6432,7 +6432,7 @@ sub processTaxonomySearch	{
             print stdIncludes("std_page_top");
             return;
         } else {
-    		print "<h3>No taxa found</h3>\n<br>\n";
+    		print "<center><h3>No taxa found</h3></center>\n<br>\n";
         }
         
     # rjp, 3/12/2004, note, we're not doing this yet because

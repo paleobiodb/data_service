@@ -1420,9 +1420,19 @@ sub displayOpinionChoiceForm{
         print "No terms were entered.";
     }
     my @results = @{$dbt->getData($sql)};
-                                                                                                                                                             
+
+    if (scalar(@results) == 0 && $suppressAddNew) {
+        print "<center><h3>No opinions found</h3></center><br><br>";
+        return;
+    }
     print "<center>";
-    print "<h3>Select an opinion to edit:</h3>\n";
+    if ($q->param("taxon_no")) {
+        my $t = Taxon->new();
+        $t->setWithTaxonNumber($q->param('taxon_no'));
+        print "<h3>Which opinion about ".$t->taxonNameHTML()." do you want to edit?</h3><br>\n";
+    } else {
+        print "<br><h3>Select an opinion to edit:</h3><br>\n";
+    }
                                                                                                                                                              
     print qq|<form method="POST" action="bridge.pl">
              <input type="hidden" name="action" value="displayOpinionForm">\n|;
