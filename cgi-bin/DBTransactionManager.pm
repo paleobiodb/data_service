@@ -120,6 +120,10 @@ sub checkSQL{
 	# Is this a SELECT, INSERT, UPDATE or DELETE?
 	$sql =~/^(\w+)\s+/;
 	my $type = $1;
+
+	if(!$self->checkWhereClause($sql)){
+		die "Bad WHERE clause in SQl: $sql<br>";
+	}
 	
 	if($type eq "SELECT"){
 		return 1;
@@ -153,6 +157,38 @@ sub checkSQL{
 		else{
 			return 4;
 		}
+	}
+}
+
+##
+#
+##
+sub checkWhereClause{
+	my $self = shift;
+	my $sql = shift;
+	
+	# This method is a 'pass-through' if there is no WHERE clause.
+	if($sql !~ /WHERE/){
+		return 1;
+	}
+
+	# This is only 'first-pass' safe. Could be more robust if we check
+	# all AND clauses.
+	$sql =~ /WHERE\s+([A-Z_]*)\s*=\s*(.*)?\s+(AND)/;
+
+	print "\$1: $1, \$2: $2, \$3: $3<br>";
+	if(!$1){
+		return 0;
+	}
+	if($1 && !$2){
+		return 0;
+	}
+	if($1 && $2 && ($2 eq "AND")){
+		return 0;
+	}
+	# passed so far
+	else{
+		return 1;
 	}
 }
 
