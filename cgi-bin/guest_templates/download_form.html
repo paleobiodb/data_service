@@ -66,6 +66,15 @@ function continentClick ( ) {
 	}
 }
 
+function countryChange() {
+	var frm = document.forms[0];
+
+	if (frm.country.value != "") {
+		frm.global.checked = true;
+		globalClick();
+	}
+}
+
 function occurrencesNoneClick ( ) {
 
 	var frm = document.forms[0];
@@ -207,6 +216,29 @@ Check the continents you want to include:
 <input type=checkbox name="Europe" value="YES" onClick="continentClick();">Europe
 <input type=checkbox name="North America" value="YES" onClick="continentClick();">North America
 <input type=checkbox name="South America" value="YES" onClick="continentClick();">South America<br>
+
+<tr><td valign=top><font size=-1>
+... or a single country:</font></td>
+
+<td valign=top><font size=-1>
+<select id="country" onChange="countryChange()"></select>
+</font></td>
+
+<tr><td valign=top><font size=-1>
+Latitudinal range:</font</td>
+
+<td valign=top><font size=-1>
+<input name="latmin" size="4" value="-90">&deg; to
+<input name="latmax" size="4" value="90">&deg;
+</font></td>
+
+<tr><td valign=top><font size=-1>
+Longitudinal range:</font</td>
+
+<td valign=top><font size=-1>
+<input name="lngmin" size="4" value="-180">&deg; to
+<input name="lngmax" size="4" value="180">&deg;
+</font></td>
 
 <tr><td><font size=-1>
 Lump lists that are from the same county and formation? - WARNING: algorithm not yet functional
