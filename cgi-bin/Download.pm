@@ -5,6 +5,7 @@ use PBDBUtil;
 use Classification;
 use TimeLookup;
 use Globals;
+use WhereClause;
 
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
@@ -550,23 +551,21 @@ sub getOccurrencesWhereClause {
 	return $retVal;
 }
 
+
 sub getCollectionsWhereClause {
 	my $self = shift;
-	my $retVal = "";
-	# LEGACY CODE
-	#	my $time_interval = $self->getTimeIntervalString();
+
+	my $clause = WhereClause->new();  # create the clause object
+	$clause->setSeparator("AND");
+
 	
 	my $authorizer = $self->getDataForAuthorizer();
 	# This is handled by getOccurrencesWhereClause if we're getting occs data.
 	if($authorizer ne "All" && $q->param('collections_only') eq 'YES'){
-		$retVal .= " collections.authorizer='$authorizer' ";
+		$clause->addItem("collections.authorizer='$authorizer'");
 	}
-	# LEGACY CODE
-	#	$retVal .= " AND " if $retVal && $time_interval;
-	#	$retVal .= "(" . $time_interval . ")" if $time_interval;
-	$retVal .= " AND " if $retVal && $self->getResGrpString();
-	$retVal .= $self->getResGrpString() if $self->getResGrpString();
-	$retVal .= " AND " if $retVal && $self->getCountryString();
+
+	$clause->addItem($self->getResGrpString()) if $self->getResGrpString();	
 	
 	# should we filter the data based on collection creation date?
 	# added by Ryan on 12/30/2003, some code copied from Curve.pm.
@@ -597,45 +596,21 @@ sub getCollectionsWhereClause {
 			$created_string = " collections.created > $created_date ";
 		}
 		
-
-		if (length($retVal) > 0) {
-			$retVal .= " AND ";
-		}
-		
-		$retVal .= $created_string;
-		
+		$clause->addItem($created_string);
 	}
 	
-	if ($retVal) { $retVal .= " AND "; }
-	$retVal .= $self->getCountryString() if $self->getCountryString();
-	$retVal .= " AND " if $retVal && $self->getIntervalString();
-	$retVal .= $self->getIntervalString() if $self->getIntervalString();
-	# LEGACY CODE
-	#	$retVal .= " AND " if $retVal && $self->getEpochString();
-	#	$retVal .= $self->getEpochString() if $self->getEpochString();
-	#	$retVal .= " AND " if $retVal && $self->getStageString();
-	#	$retVal .= $self->getStageString() if $self->getStageString();
-	$retVal .= " AND " if $retVal && $self->getEnvironmentString();
-	$retVal .= $self->getEnvironmentString() if $self->getEnvironmentString();
-	
+	$clause->addItem($self->getCountryString()) if $self->getCountryString();
+	$clause->addItem($self->getIntervalString()) if $self->getIntervalString();
+	$clause->addItem($self->getEnvironmentString()) if $self->getEnvironmentString();
 
 	my $regionsString = $self->getRegionsString();
 	if($regionsString ne "") {
-		if($retVal ne "") {
-			$retVal .= " AND ";
-		}
-		$retVal .= "($regionsString)";
+		$clause->addItem($regionString);
 	}
 
-	# this is a hack for now which will remove duplicate AND statements (AND AND).
-	# later, we will hopefully have a class for generating SQL statements.	
-	$retVal =~ s/AND( )+AND/AND/i;
-	$retVal =~ s/AND( )+$//i;
-	
-	#print "at end retVal = $retVal<BR>";
-	
-	return $retVal;
+	return $clause->whereClause();
 }
+
 
 sub getNotNullString {
 	my $self = shift;
