@@ -590,8 +590,10 @@ sub mapDrawMap	{
 
   if ( $width > 300 )	{
     $im = new GD::Image($width,$height+12);
+    $totalheight = $height + 12;
   } else	{
     $im = new GD::Image($width,$height+24);
+    $totalheight = $height + 24;
   }
 
   open AI,">$GIF_DIR/$ainame";
@@ -1089,9 +1091,9 @@ if ( $q->param('gridposition') ne "in back" )	{
         #if( $q->param('user') =~ /paleodb/ && $q->param('user') !~ /public/ ){
 			print "<area shape=\"rect\" coords=\"";
 			if ( $hemiVal{$x1}{$y1} eq "N" )	{
-				printf "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1+(1.5*$dotsize));
+				printf "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1+0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1+0.5+(1.5*$dotsize));
 			} else	{
-				printf "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1-(4.0*$dotsize)), int($x1+(1.5*$dotsize)), int($y1-(1.0*$dotsize));
+				printf "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1-0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1-0.5+(1.5*$dotsize));
 			}
 			print "\" href=\"$BRIDGE_HOME?action=displayCollResults";
 			for $t (keys %filledfields)	{
@@ -1357,7 +1359,7 @@ if ( $q->param('gridposition') ne "in back" )	{
   print "</map>\n";
   print "</table>\n";
   print "<table cellpadding=10 width=100%>\n";
-  print "<tr><td align=center><img border=\"0\" alt=\"PBDB map\" height=\"$height\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
+  print "<tr><td align=center><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
   print "</table>\n";
 
   print "<center>\n<table><tr>\n";
@@ -1406,11 +1408,13 @@ sub getCoords	{
 	($x,$y) = $self->projectPoints($x,$y);
 	# Get pixel values, but shift everything a half degree so dots
 	#  are at midpoints of 1 by 1 deg rectangles
-	if ( $x && $y )	{
+	$x = $self->getLng($x - 0.5);
+	$y = $self->getLat($y - 0.5);
+	if ( $x ne "NaN" && $y ne "NaN" )	{
 		if ( $y > 0 )	{
-			return($self->getLng($x - 0.5),$self->getLat($y + 0.5),"N");
+			return($x,$y,"N");
 		} else	{
-			return($self->getLng($x - 0.5),$self->getLat($y + 0.5),"S");
+			return($x,$y,"S");
 		}
 	} else	{
 		return;
