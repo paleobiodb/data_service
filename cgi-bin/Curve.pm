@@ -247,7 +247,8 @@ sub assignGenera	{
 	}
 	my $occsfilecsv = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.csv";
 	my $occsfiletab = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.tab";
-    if (-e $occsfiletab && ((-M $occsfiletab) < (-M $occsfilecsv))) {
+    if ((-e $occsfiletab && -e $occsfilecsv && ((-M $occsfiletab) < (-M $occsfilecsv))) ||
+        (-e $occsfiletab && !-e $occsfilecsv)){
         $self->dbg("using tab $occsfiletab");
         $occsfile = $occsfiletab;
         $sepChar = "\t";
