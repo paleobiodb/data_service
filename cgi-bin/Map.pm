@@ -268,40 +268,17 @@ sub mapGetScale	{
 	my $self = shift;
 
   $scale = 1;
-  $cont = $q->param('mapcontinent');
   $scale = $q->param('mapscale');
   $scale =~ s/x //i;
 
-  if ($cont ne "standard")	{
-    if ($cont =~ /Africa/)	{
-      $midlng = 35;
-      $midlat = 10;
-    } elsif ($cont =~ /Antarctica/)	{
-      $midlng = 0;
-      $midlat = -89;
-    } elsif ($cont =~ /Arctic/)	{
-      $midlng = 0;
-      $midlat = 89;
-    } elsif ($cont =~ /Asia \(north\)/)	{
-      $midlng = 100;
-      $midlat = 50;
-    } elsif ($cont =~ /Asia \(south\)/)	{
-      $midlng = 100;
-      $midlat = 20;
-    } elsif ($cont =~ /Australia/)	{
-      $midlng = 135;
-      $midlat = -28;
-    } elsif ($cont =~ /Europe/)	{
-      $midlng = 10;
-      $midlat = 50;
-    } elsif ($cont =~ /North America/)	{
-      $midlng = -100;
-      $midlat = 35;
-    } elsif ($cont =~ /South America/)	{
-      $midlng = -50;
-      $midlat = -10;
-    }
+  my ($cont,$coords) = split / \(/,$q->param('mapfocus');
+  $coords =~ s/\)//;
+  ($midlat,$midlng) = split /,/,$coords;
+  if ( $q->param('maplat') && $q->param('maplng') )	{
+    $midlat = $q->param('maplat');
+    $midlng = $q->param('maplng');
   }
+
   # NOTE: shouldn't these be module globals??
   $offlng = 180 * ( $scale - 1 ) / $scale;
   $offlat = 90 * ( $scale - 1 ) / $scale;
@@ -508,20 +485,20 @@ sub mapDrawMap	{
   if ( $q->param('mapcontinent') ne "standard" || $q->param('projection') ne "rectilinear" )	{
     for $c (0..$#worldlat)	{
       if ( $worldlat[$c] ne "" )	{
-        ($worldlng[$c],$worldlat[$c]) = $self->projectPoints($worldlng[$c],$worldlat[$c]);
+        ($worldlng[$c],$worldlat[$c],$worldlngraw[$c],$worldlatraw[$c]) = $self->projectPoints($worldlng[$c],$worldlat[$c]);
       }
     }
     if ( $q->param('borderlinecolor') ne "none" )	{
       for $c (0..$#borderlat)	{
         if ( $borderlat[$c] ne "" )	{
-          ($borderlng[$c],$borderlat[$c]) = $self->projectPoints($borderlng[$c],$borderlat[$c]);
+          ($borderlng[$c],$borderlat[$c],$borderlngraw[$c],$borderlatraw[$c]) = $self->projectPoints($borderlng[$c],$borderlat[$c]);
         }
       }
     }
     if ( $q->param('usalinecolor') ne "none" )	{
       for $c (0..$#usalat)	{
         if ( $usalat[$c] ne "" )	{
-          ($usalng[$c],$usalat[$c]) = $self->projectPoints($usalng[$c],$usalat[$c]);
+          ($usalng[$c],$usalat[$c],$usalngraw[$c],$usalatraw[$c]) = $self->projectPoints($usalng[$c],$usalat[$c]);
         }
       }
     }
@@ -535,7 +512,7 @@ sub mapDrawMap	{
   }
   for $c (0..$#worldlat-1)	{
     if ( $worldlat[$c] ne "" && $worldlat[$c+1] ne "" &&
-         ( abs ( $worldlng[$c] - $worldlng[$c+1] ) < 345 ) )	{
+         ( abs ( $worldlngraw[$c] - $worldlngraw[$c+1] ) < 345 ) )	{
       $im->line( $self->getLng($worldlng[$c]),$self->getLat($worldlat[$c]),$self->getLng($worldlng[$c+1]),$self->getLat($worldlat[$c+1]),$col{$q->param('coastlinecolor')});
      # extra lines offset horizontally
       if ( $thickness > 0 )	{
@@ -550,7 +527,7 @@ sub mapDrawMap	{
   if ( $q->param('borderlinecolor') ne "none" )	{
     for $c (0..$#borderlat-1)	{
       if ( $borderlat[$c] ne "" && $borderlat[$c+1] ne "" &&
-           ( abs ( $borderlng[$c] - $borderlng[$c+1] ) < 345 ) )	{
+           ( abs ( $borderlngraw[$c] - $borderlngraw[$c+1] ) < 345 ) )	{
         $im->line( $self->getLng($borderlng[$c]),$self->getLat($borderlat[$c]),$self->getLng($borderlng[$c+1]),$self->getLat($borderlat[$c+1]),$col{$q->param('borderlinecolor')});
       }
     }
@@ -558,7 +535,7 @@ sub mapDrawMap	{
   if ( $q->param('usalinecolor') ne "none" )	{
     for $c (0..$#usalat-1)	{
       if ( $usalat[$c] ne "" && $usalat[$c+1] ne "" &&
-           ( abs ( $usalng[$c] - $usalng[$c+1] ) < 345 ) )	{
+           ( abs ( $usalngraw[$c] - $usalngraw[$c+1] ) < 345 ) )	{
         $im->line( $self->getLng($usalng[$c]),$self->getLat($usalat[$c]),$self->getLng($usalng[$c+1]),$self->getLat($usalat[$c+1]),$col{$q->param('usalinecolor')});
       }
     }
@@ -567,40 +544,21 @@ sub mapDrawMap	{
  # draw grids
   $grids = $q->param('gridsize');
   if ($grids > 0)	{
-    if ( $q->param('projection') eq "rectilinear" )	{
-      for my $lat (1..int($vpix/$grids)-1)	{
-        $color = $col{$q->param('gridcolor')};
-        if ($lat * $grids == 90)	{
-          $color = $col{'gray'};
+    for my $lat ( int(-90/$grids)..int(90/$grids) )	{
+      for my $deg (-180..179)	{
+        my ($lng1,$lat1) = $self->projectPoints($deg , $lat * $grids);
+        my ($lng2,$lat2) = $self->projectPoints($deg + 1 , $lat * $grids);
+        if ( $lng1 && $lng2 )	{
+          $im->line($self->getLng($lng1),$self->getLat($lat1),$self->getLng($lng2),$self->getLat($lat2),$col{$q->param('gridcolor')});
         }
-        $im->line(0,$scale*$vmult*$lat*$grids,$scale*$hmult*$hpix,$scale*$vmult*$lat*$grids,$color);
-      }
-      for my $lng (k..int($hpix/$grids)-1)	{
-        $color = $col{$q->param('gridcolor')};
-        if ($lng * $grids == 180)	{
-          $color = $col{'gray'};
-        }
-        $im->line($scale*$hmult*$lng*$grids,0,$scale*$hmult*$lng*$grids,$scale*$vmult*$vpix,$color);
       }
     }
-  # draw grids given a orthographic projection
-    else	{
-      for my $lat ( int(-90/$grids)..int(90/$grids) )	{
-        for my $deg (-180..179)	{
-          my ($lng1,$lat1) = $self->projectPoints($deg , $lat * $grids);
-          my ($lng2,$lat2) = $self->projectPoints($deg + 1 , $lat * $grids);
-          if ( $lng1 && $lng2 )	{
-            $im->line($self->getLng($lng1),$self->getLat($lat1),$self->getLng($lng2),$self->getLat($lat2),$col{$q->param('gridcolor')});
-          }
-        }
-      }
-      for my $lng ( int(-180/$grids)..int(180/$grids) )	{
-        for my $deg (-90..89)	{
-          my ($lng1,$lat1) = $self->projectPoints($lng * $grids, $deg);
-          my ($lng2,$lat2) = $self->projectPoints($lng * $grids, $deg + 1);
-          if ( $lat1 && $lat2 )	{
-            $im->line($self->getLng($lng1),$self->getLat($lat1),$self->getLng($lng2),$self->getLat($lat2),$col{$q->param('gridcolor')});
-          }
+    for my $lng ( int(-180/$grids)..int(180/$grids) )	{
+      for my $deg (-90..89)	{
+        my ($lng1,$lat1) = $self->projectPoints($lng * $grids, $deg);
+        my ($lng2,$lat2) = $self->projectPoints($lng * $grids, $deg + 1);
+        if ( $lat1 && $lat2 )	{
+          $im->line($self->getLng($lng1),$self->getLat($lat1),$self->getLng($lng2),$self->getLat($lat2),$col{$q->param('gridcolor')});
         }
       }
     }
@@ -877,9 +835,9 @@ sub projectPoints	{
 
 	# find new longitude
 
-		if ( abs($x) > 0.005 && abs($x) < 179.999 )	{
+		if ( abs($x) > 0.005 && abs($x) < 179.999 && abs($y) < 90 )	{
 			if ( $gcd > 90 )	{
-				if ( abs($y) +0.001 >= $oppgcd && abs($y) - 0.001 <= $oppgcd )	{
+				if ( abs( abs($y) - abs($oppgcd) ) < 0.001 )	{
 					$oppgcd = $oppgcd + 0.001;
 				}
 				if ( $x > 0 )	{
@@ -888,7 +846,7 @@ sub projectPoints	{
 					$x = -180 + ( 180 / $PI * acos( cos($oppgcd * $PI / 180) / cos($y * $PI / 180) ) );
 				}
 			} else	{
-				if ( abs($y) +0.001 >= $gcd && abs($y) - 0.001 <= $gcd )	{
+				if ( abs( abs($y) - abs($gcd) ) < 0.001 )	{
 					$gcd = $gcd + 0.001;
 				}
 				if ( $x > 0 )	{
@@ -904,6 +862,8 @@ sub projectPoints	{
 			$y = "";
 		}
 	} # end of rotation algorithm
+	$rawx = $x;
+	$rawy = $x;
 
 	if ( $q->param('projection') eq "orthographic" && $x ne "" )	{
 
@@ -936,7 +896,7 @@ sub projectPoints	{
 		$x = $x * cos($y * $PI / 300);
 		$y = $y * cos($y * $PI / 360);
 	}
-	return($x,$y);
+	return($x,$y,$rawx,$rawy);
 }
 
 sub getLng	{
