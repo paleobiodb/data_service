@@ -149,7 +149,7 @@ sub get_classification_hash{
                 }
 
                 # bail if we're already above the rank of 'class'
-                last if($parent_rank && 
+                last if($parent_rank && $taxon_rank_order{$parent_rank} && 
                         $taxon_rank_order{$parent_rank} < $highest_level);
 
                 # set this var to set up next loop
