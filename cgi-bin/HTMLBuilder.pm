@@ -6,6 +6,8 @@ require Exporter;
 
 use strict;
 
+use Constants;
+
 use SelectList;
 use TextField;
 use Checkbox;
@@ -477,18 +479,24 @@ sub newPopulateHTML {
 			# a popup menu of ranks.
 			
 			# if the rank is 'subspecies' or 'species', then we should
-			# only show those two in the list.
+			# only show the appropriate one in the list.
 			#
 			# however, if the rank is genus or higher, then we show everything
 			# from genus on up.
 			my $rank = $fields{taxon_rank};
 			my @toExclude;
-			if (($rank eq 'subspecies') || ($rank eq 'species')) {
-				@toExclude = ('subgenus', 'genus', 'subtribe', 'tribe', 'subfamily', 'family', 'superfamily', 'infraorder', 'suborder', 'order', 'superorder', 'subclass', 'class', 'superclass', 'subphylum', 'phylum', 'superphylum', 'subkingdom', 'kingdom', 'superkingdom', 'unranked clade', 'informal');
+			
+			# grab the entire list of ranks..
+			@toExclude = @{$SELECT_LISTS{taxon_rank}};
+
+			if (($rank eq 'subspecies') || ($rank eq 'species')) {  
+				# then we don't want to exclude it.
+				@toExclude = @{Globals::deleteElementFromArray(\@toExclude, $rank)};
 			} else {
-				@toExclude = ('subspecies', 'species');
+				@toExclude = (SUBSPECIES, SPECIES);
 			}
 			
+			Debug::dbPrint("toExclude = @toExclude");
 			
 			$fields{taxon_rank_popup} = $self->rankPopupMenu($rank, \@toExclude);
 		}
