@@ -1,12 +1,20 @@
 # Represents the where clause of an SQL statement.  May be expanded in the future
 # to represent the entire statement.
-
+# Written by Ryan, 1/2004.
 
 package WhereClause;
-
 use strict;
-
 use fields qw(separator items);  # list of allowable data fields.
+
+# This class implements the following methods:
+#----------------------------------------------
+# new
+# separator
+# setSeparator
+# addItem
+# clear
+# items
+# whereClause
 
 
 sub new {
@@ -47,7 +55,6 @@ sub addItem {
 	my $item = shift;
 
 	push(@{$self->{items}}, $item);
-	#push($self->{items}, $item);
 }
 
 
@@ -55,6 +62,13 @@ sub addItem {
 sub items {
 	my WhereClause $self = shift;
 	return @{$self->{items}};
+}
+
+
+# removes all items
+sub clear {
+	my WhereClause $self = shift;
+	$self->{items} = ();
 }
 
 
