@@ -822,18 +822,31 @@ sub getSynonymyParagraph{
 					 $auth_rec[0]->{taxon_name}."<br>.";
 			return $text;	
 		}
-		$sql = "SELECT author1last, pubyr FROM refs ".
+		$sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs ".
 			   "WHERE reference_no=".$auth_rec[0]->{reference_no};
 		@results = @{$dbt->getData($sql)};
 		$text .= "<li><i>".$auth_rec[0]->{taxon_name}."</i> was named by ".
-			  	 $results[0]->{author1last}." ".($results[0]->{pubyr});
+			  	 $results[0]->{author1last};
+		if($results[0]->{otherauthors} ne ""){
+			$text .= " et al. ";
+		}
+		elsif($results[0]->{author2last} ne ""){
+			# We have at least 120 refs where the author2last is 'et al.'
+			if($key_list[$j]->{author2last} eq "et al."){
+				$text .= " et al. ";
+			}
+			else{
+				$text .= " and ".$results[0]->{author2last}." ";
+			}
+		}
+		$text .= " (".$results[0]->{pubyr}.")";
 	}
 	# If ref_is_authority is not set, use the authorname and pubyr in this
 	# record.
 	elsif($auth_rec[0]->{author1last} && $auth_rec[0]->{pubyr}){
 		PBDBUtil::debug(1,"author and year from authorities<br>");
 		$text .= "<li><i>".$auth_rec[0]->{taxon_name}."</i> was named by ".
-			  	 $auth_rec[0]->{author1last}." ".($auth_rec[0]->{pubyr});
+			  	 $auth_rec[0]->{author1last}." (".$auth_rec[0]->{pubyr}.")";
 	}
 	# if there's nothing from above, give up.
 	else{
@@ -847,7 +860,8 @@ sub getSynonymyParagraph{
 #--
 
 	# Now, synonymies:
-	$sql = "SELECT parent_no, status, reference_no, pubyr, author1last ".
+	$sql = "SELECT parent_no, status, reference_no, pubyr, author1last, ".
+		   "author2last, otherauthors ".
 		   "FROM opinions WHERE child_no=$taxon_no AND status != 'belongs to'".
 		   " AND status NOT LIKE 'nomen%'";
 	@results = @{$dbt->getData($sql)};
@@ -858,10 +872,13 @@ sub getSynonymyParagraph{
 		# get the proper reference (record first, refs table second)
 		if(!$row->{author1last} || !$row->{pubyr}){
 			# select into the refs table.
-			$sql = "SELECT author1last, pubyr FROM refs ".
-				   "WHERE reference_no=$row->{reference_no}";
+			$sql = "SELECT author1last,author2last,otherauthors,pubyr ".
+				   "FROM refs ".
+				   "WHERE reference_no=".$row->{reference_no};
 			my @real_ref = @{$dbt->getData($sql)};
 			$row->{author1last} = $real_ref[0]->{author1last};
+			$row->{author2last} = $real_ref[0]->{author2last};
+			$row->{otherauthors} = $real_ref[0]->{otherauthors};
 			$row->{pubyr} = $real_ref[0]->{pubyr};
 		}
 	# NOTE/QUESTION: IS IT TRUE THAT ALL RECORDS THAT HAVE THIS CHILD [status]ED
@@ -893,14 +910,26 @@ sub getSynonymyParagraph{
 		# sort the list by date (ascending)
 		@key_list = sort {$a->{pubyr} <=> $b->{pubyr}} @key_list;
 		for(my $j = 0; $j < @key_list; $j++){
-			$text .= $key_list[$j]->{author1last}.
-						 " (".$key_list[$j]->{pubyr}."), ";
+			$text .= $key_list[$j]->{author1last};
+			if($key_list[$j]->{otherauthors} ne ""){
+				$text .= " et al. ";
+			}
+			elsif($key_list[$j]->{author2last} ne ""){
+				# We have at least 120 refs where the author2last is 'et al.'
+				if($key_list[$j]->{author2last} eq "et al."){
+					$text .= " et al. ";
+				}
+				else{
+					$text .= " and ".$key_list[$j]->{author2last}." ";
+				}
+			}
+			$text .= " (".$key_list[$j]->{pubyr}."), ";
 		}
 		if($text =~ /,\s+$/){
 			# remove the last comma
 			$text =~ s/,\s+$//;
 			# replace the last comma-space sequence with ' and '
-			$text =~ s/(, ([\w_']+\s\(\d{4}\)))$/ and $2/;
+			$text =~ s/(,\s+([a-zA-Z\-']+\s+(and\s+[a-zA-Z\-']+\s+){0,1}\(\d{4}\)))$/ and $2/;
 			# put a semi-colon on the end to separate from any following syns.
 		}
 	}
