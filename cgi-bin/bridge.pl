@@ -4163,19 +4163,28 @@ sub formatAuthorityLine	{
 	my %opRow = %{$bestRef};
 	my $status = $opRow{'status'};
 	my $parent_no = $opRow{'parent_no'};
-	# Not quite there; still need the name corresponding to this parent
-	$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=";
-	$sql .= $parent_no;
-	my $sth2 = $dbh->prepare( $sql );
-	$sth2->execute();
-	my $parent_name = @{$sth2->fetchrow_arrayref}[0];
-	$sth2->finish();
 	if ( $status && $parent_no )	{
+	# Not quite there; still need the name corresponding to this parent
+		$sql = "SELECT taxon_name,taxon_rank FROM authorities WHERE taxon_no=";
+		$sql .= $parent_no;
+		$sth2 = $dbh->prepare( $sql );
+		$sth2->execute();
+		my %parentRow = %{$sth2->fetchrow_hashref()};
+		$sth2->finish();
 		$authLine .= " [";
 		if ( $status ne "belongs to" )	{
 			$authLine .= " = ";
 		}
-		$authLine .= "<i>$parent_name</i>]";
+		if ( $parentRow{'taxon_rank'} eq "genus" ||
+		     $parentRow{'taxon_rank'} eq "species" )	{
+			$authLine .= "<i>";
+		}
+		$authLine .= $parentRow{'taxon_name'};
+		if ( $parentRow{'taxon_rank'} eq "genus" ||
+		     $parentRow{'taxon_rank'} eq "species" )	{
+			$authLine .= "</i>";
+		}
+		$authLine .= "]";
 	}
 
 	return $authLine;
