@@ -250,10 +250,10 @@ sub createTaxaHash {
 	
 	$hash{$ownTaxonRank} = $tn;
 
-	
 	# go up the hierarchy to the top (kingdom)
 	# from the rank the user started with.
 	while ($tn) {
+
 		# note, the "ORDER BY o.parent_no DESC" is important - this means that if we have two
 		# rows with the same pubyr, then it will always fetch the last one added since 
 		# the numbers increment on each addition.
@@ -299,9 +299,12 @@ sub createTaxaHash {
 					
 		$tn = $parent;
 		
+		#print "here, tn = $tn\n";	
+
 		#print "tn = $tn, id = $idNum, pubyr = $pubyr\n";
 	}
 	
+	#print "\t\tout of loop\n";
 	
 	# now go down the hierarchy to the bottom
 	# starting from the taxon the user originally passed in
@@ -349,8 +352,10 @@ sub createTaxaHash {
 		$hash{$child} = $pubyr;
 				
 		$tn = $child;
+		
+		print "tn = $tn, id = $idNum, pubyr = $pubyr\n";
 	}
-	
+	print "\t\tout of loop\n";
 	
 	# print out for debugging purposes.
 #	my @keys = keys(%hash);
