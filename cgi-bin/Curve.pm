@@ -498,6 +498,9 @@ sub assignGenera	{
 			if ( $present[$i][$j] < 0 && $present[$i][$j+1] < 0 )	{
 				$twotimers[$j]++;
 			}
+			if ( $j > 1 && $j < $chrons - 1 && ( $present[$i][$j-1] < 0 || $present[$i][$j] < 0 ) && ( $present[$i][$j+1] < 0 || $present[$i][$j+2] < 0 ) )	{
+				$localbc[$j]++;
+			}
 			if ( ( $present[$i][$j-1] < 0 && $present[$i][$j+1] < 0 ) || $present[$i][$j] < 0 )	{
 				$localrt[$j]++;
 			}
@@ -766,6 +769,7 @@ sub subsample	{
 				$tsampled[$i] = $tsampled[$i] + $sampled[$i];
 			}
 			@tsubstwotimers = ();
+			@tsubslocalbc = ();
 			@tsubslocalrt = ();
 			@tsubsrangethrough = ();
 			@tsubssingletons = ();
@@ -784,6 +788,10 @@ sub subsample	{
 					if ( $present[$i][$j] < 0 && $present[$i][$j+1] < 0 )	{
 						$msubstwotimers[$j]++;
 						$tsubstwotimers[$j]++;
+					}
+					if ( $j > 1 && $j < $chrons - 1 && ( $present[$i][$j-1] < 0 || $present[$i][$j] < 0 ) && ( $present[$i][$j+1] < 0 || $present[$i][$j+2] < 0 ) )	{
+						$msubslocalbc[$j]++;
+						$tsubslocalbc[$j]++;
 					}
 					if ( ( $present[$i][$j-1] < 0 && $present[$i][$j+1] < 0 ) || $present[$i][$j] < 0 )	{
 						$msubslocalrt[$j]++;
@@ -823,7 +831,7 @@ sub subsample	{
 				if ($msubsrangethrough[$i] > 0)	{
 					$msubsrichness[$i] = $msubsrichness[$i] + $subsrichness[$i];
 				}
-				if ($q->param('diversity') =~ /boundary-crossers/)	{
+				if ($q->param('diversity') =~ /^boundary-crossers/)	{
 					$outrichness[$i][$trials] = $tsubsrangethrough[$i] - $tsubsoriginate[$i];
 					$meanoutrichness[$i] = $meanoutrichness[$i] + $tsubsrangethrough[$i] - $tsubsoriginate[$i];
 				}
@@ -847,6 +855,10 @@ sub subsample	{
 					$outrichness[$i][$trials] = $tsubstwotimers[$i];
 					$meanoutrichness[$i] = $meanoutrichness[$i] + $tsubstwotimers[$i];
 				}
+				elsif ($q->param('diversity') =~ /local boundary-crossers/)	{
+					$outrichness[$i][$trials] = $tsubslocalbc[$i];
+					$meanoutrichness[$i] = $meanoutrichness[$i] + $tsubslocalbc[$i];
+				}
 				elsif ($q->param('diversity') =~ /local range-through/)	{
 					$outrichness[$i][$trials] = $tsubslocalrt[$i];
 					$meanoutrichness[$i] = $meanoutrichness[$i] + $tsubslocalrt[$i];
@@ -860,6 +872,7 @@ sub subsample	{
 				$tsampled[$i] = $tsampled[$i]/$trials;
 				$msubsrichness[$i] = $msubsrichness[$i]/$trials;
 				$msubstwotimers[$i] = $msubstwotimers[$i]/$trials;
+				$msubslocalbc[$i] = $msubslocalbc[$i]/$trials;
 				$msubslocalrt[$i] = $msubslocalrt[$i]/$trials;
 				$msubsrangethrough[$i] = $msubsrangethrough[$i]/$trials;
 				$meanoutrichness[$i] = $meanoutrichness[$i]/$trials;
@@ -977,8 +990,9 @@ sub printResults	{
 		print "<tr><td class=small valign=top><b>Interval</b>\n";
 		print "<td class=small align=center valign=top><b>Sampled<br>genera</b>";
 		print "<td class=small align=center valign=top><b>Range-through<br>genera</b> ";
-		print "<td class=small align=center valign=top><b>Boundary-crosser <br>genera</b> ";
+		print "<td class=small align=center valign=top><b>Boundary-crosser<br>genera</b> ";
 		print "<td class=small align=center valign=top><b>Two&nbsp;timer<br>genera</b> ";
+		print "<td class=small align=center valign=top><b>Local&nbsp;boundary-crosser<br>genera</b> ";
 		print "<td class=small align=center valign=top><b>Local&nbsp;range-through<br>genera</b> ";
 		print "<td class=small align=center valign=top><b>First<br>appearances</b> <td class=small align=center valign=top><b>Origination<br>rate</b> <td class=small align=center valign=top><b>Last<br>appearances</b><td class=small align=center valign=top><b>Extinction<br>rate</b> <td class=small align=center valign=top><b>Singletons</b> ";
 		print "<td class=small align=center valign=top><b>Chao-2<br>estimate</b> ";
@@ -994,6 +1008,7 @@ sub printResults	{
 		print "<td class=small align=center valign=top><b>Mean<br>richness</b> <td class=small align=center valign=top><b>Median<br>richness</b> ";
 		print TABLE "Bin,Bin name,Sampled genera,Range-through genera,Boundary-crosser genera,";
 		print TABLE "Two timer genera,";
+		print TABLE "Local boundary-crosser genera,";
 		print TABLE "Local range-through genera,";
 		print TABLE "First appearances,Origination rate,Last appearances,Extinction rate,Singletons,";
 		print TABLE "Chao-2 estimate,Jolly-Seber estimate,";
@@ -1026,6 +1041,7 @@ sub printResults	{
 				$bcrich[$i] = $rangethrough[$i] - $originate[$i];
 				printf "<td class=small align=center valign=top>%d ",$bcrich[$i];
 				printf "<td class=small align=center valign=top>%d ",$twotimers[$i];
+				printf "<td class=small align=center valign=top>%d ",$localbc[$i];
 				printf "<td class=small align=center valign=top>%d ",$localrt[$i];
 				print "<td class=small align=center valign=top>$originate[$i] ";
 			# Foote origination rate - note: extinction counts must
@@ -1068,6 +1084,7 @@ sub printResults	{
 		# boundary crossers
 				printf TABLE ",%d",$bcrich[$i];
 				printf TABLE ",%d",$twotimers[$i];
+				printf TABLE ",%d",$localbc[$i];
 				printf TABLE ",%d",$localrt[$i];
 				print TABLE ",$originate[$i]";
 			# Foote origination rate
