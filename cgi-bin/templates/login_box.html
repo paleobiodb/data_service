@@ -12,15 +12,38 @@
 	function checkPassword ( ) {
 		var frm = document.forms[0];
 		if ( frm.password.value == "" ) {
-			alert ( "Don't forget to enter your password!" );
+			return "Don't forget to enter your password!" ;
+		}
+		else{
+			return "";
+		}
+	}
+
+	function checkAuthEnt(){
+		var frm = document.forms[0];
+		if(frm.authorizer.value == "" || frm.enterer.value == ""){
+			return "\nPlease enter both Authorizer and Enterer.";
+		}
+		else{
+			return "";
+		}
+	}
+
+	function checkForm(){
+		var text = checkPassword() + checkAuthEnt();
+		if(text != ""){
+			alert(text);
 			return false;
+		}
+		else{
+			return true;
 		}
 	}
 
     //  End -->
     </script>
 
-<form method="POST" action="bridge.pl" onSubmit="return checkPassword();">
+<form method="POST" action="bridge.pl" onSubmit="return checkForm();">
 
 <input type=hidden name="action" value="processLogin">
 <input type=hidden name="destination" value="%%destination%%">
