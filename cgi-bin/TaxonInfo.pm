@@ -490,6 +490,7 @@ sub displayTaxonSynonymy{
 
 	print "<h3>Taxonomic history</h3>";
 	# Do the "was named by" part first:
+	print "<ul>";
 
 	# Get ref info from refs if 'ref_is_authority' is set
 	if($results[0]->{ref_is_authority} =~ /YES/i){
@@ -502,14 +503,14 @@ sub displayTaxonSynonymy{
 		$sql = "SELECT author1last, pubyr FROM refs ".
 			   "WHERE reference_no=$results[0]->{reference_no}";
 		@results = @{$db->getData($sql)};
-		print "<i>$genus $species</i> was named by ".
+		print "<li><i>$genus $species</i> was named by ".
 			  "$results[0]->{author1last} ($results[0]->{pubyr})";
 	}
 	# If ref_is_authority is not set, use the authorname and pubyr in this
 	# record.
 	elsif($results[0]->{author1last} && $results[0]->{pubyr}){
 		PBDBUtil::debug(1,"author and year from authorities<br>");
-		print "<i>$genus $species</i> was named by ".
+		print "<li><i>$genus $species</i> was named by ".
 			  "$results[0]->{author1last} ($results[0]->{pubyr})";
 	}
 	# if there's nothing from above, give up.
@@ -517,7 +518,48 @@ sub displayTaxonSynonymy{
 		return 0;
 	}
 
-	# Now, go get synonymies:
+	# Now, go get synonymies for the taxon as child
+	my $syn_html = getSynonymyParagraph($dbh, $session, $child_no);
+	print "<li>$syn_html" if($syn_html ne "");
+
+	# and for the taxon as parent
+	$sql = "SELECT child_no FROM opinions WHERE parent_no=$child_no";
+	@results = @{$db->getData($sql)};
+	foreach my $child (@results){
+		my $other_paras = "";
+		# Need to print out "[taxon_name] was named by [author] ([pubyr])".
+		# - select taxon_name, author1last, pubyr, reference_no from authorities
+		$sql = "SELECT taxon_name, author1last, pubyr, reference_no ".
+			   "FROM opinions WHERE taxon_no=$child->{child_no}";
+		my @auth_rec = @{$db->getData($sql)};
+		# - if not pubyr and author1last, get same from refs
+		unless($auth_rec[0]->{author1last} && $auth_rec[0]->{pubyr}){
+			$sql = "SELECT author1last, pubyr ".
+				   "FROM refs WHERE reference_no=$auth_rec[0]->{reference_no}";
+			my @ref_rec = @{$db->getData($sql)};
+			$auth_rec[0]->{author1last} = $ref_rec[0]->{author1last};
+			$auth_rec[0]->{pubyr} = $ref_rec[0]->{pubyr};
+		}
+		$other_paras .= "<i>$auth_rec[0]->{taxon_name}</i> was named by ".
+						"$auth_rec[0]->{author1last} ($auth_rec[0]->{pubyr})";
+		$other_paras .= getSynonymyParagraph($dbh, $session,
+											   $child->{child_no});
+		print "<li>$other_paras" if($other_paras ne "");
+	}
+
+	print "</ul>";
+	print "<hr>";
+}
+
+##
+#
+##
+sub getSynonymyParagraph{
+	my $dbh = shift;
+	my $session = shift;
+	my $child_no = shift;
+
+	my $db = DBTransactionManager->new($dbh,$session);
 
 	$sql = "SELECT parent_no, status, reference_no, pubyr, author1last ".
 		   "FROM opinions WHERE child_no=$child_no";
@@ -568,10 +610,7 @@ sub displayTaxonSynonymy{
 	# remove the last semi-colon.
 	$syn_html =~ s/;$//;
 
-	# print it all out
-	print $syn_html;
-
-	print "<hr>";
+	return $syn_html;
 }
 
 ## selectMostRecentParentOpinion
