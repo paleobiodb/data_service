@@ -131,7 +131,7 @@ sub displayStrataSearch{
     # Display formations in groups, members in formations
     my ($cnt,$plural,$coll_link,$html);
     if ($is_geological_group) {
-        $html = "<p><b>Formations in ". ucfirst($q->param('search_term'))." Group:</b> ";
+        $html = "<p><b>Formations in the ". ucfirst($q->param('search_term'))." Group:</b> ";
         foreach $formation (sort(keys(%formations))) {
             $cnt = $formations{$formation};
             #$plural = ($cnt == 1) ? "" : "s";
@@ -143,7 +143,7 @@ sub displayStrataSearch{
             } else {
                 $coll_link =  qq|<a href="$exec_url?action=displayCollResults&geological_group=|
                          . uri_escape($q->param('search_term'))
-                         . qq|&formation=NULL_OR_EMPTY">Unknown</a>|;
+                         . qq|&formation=NULL_OR_EMPTY">unknown</a>|;
             }
             $html .=  "$coll_link ($formations{$formation}), ";
         }
@@ -153,7 +153,7 @@ sub displayStrataSearch{
     }
 
     if ($is_formation) {
-        $html = "<p><b>Members in ".ucfirst($q->param('search_term'))." Formation:</b> ";
+        $html = "<p><b>Members in the ".ucfirst($q->param('search_term'))." Formation:</b> ";
         foreach $member (sort(keys(%members))) {
             $cnt = $members{$member};
             $coll_link = "";
@@ -164,7 +164,7 @@ sub displayStrataSearch{
             } else {
                 $coll_link =  qq|<a href="$exec_url?action=displayCollResults&formation=|
                          . uri_escape($q->param('search_term'))
-                         . qq|&member=NULL_OR_EMPTY">Unknown</a>|;
+                         . qq|&member=NULL_OR_EMPTY">unknown</a>|;
             } 
             $html .= "$coll_link ($members{$member}), ";
         }
@@ -175,33 +175,41 @@ sub displayStrataSearch{
 
     # Display lithologies present
     my @lith_list = @{$hbo->{SELECT_LISTS}{lithology1}};
-    $html = "<p><b>Lithologies:</b> ";
-    foreach $lithology (@lith_list) {
-        if ($lith_count{$lithology}) {
-             $cnt = $lith_count{$lithology};
-             $coll_link = qq|<a href="$exec_url?action=displayCollResults| 
-                        . "&group_formation_member=".uri_escape($q->param('search_term'))
-                        . qq|&lithologies=|.uri_escape($lithology).qq|">$lithology</a>|;
-            
-            $html .= "$coll_link ($lith_count{$lithology}), ";
-        }      
+        $html = "<p><b>Lithologies:</b> ";
+    if (%lith_count) {
+        foreach $lithology (@lith_list) {
+            if ($lith_count{$lithology}) {
+                 $cnt = $lith_count{$lithology};
+                 $coll_link = qq|<a href="$exec_url?action=displayCollResults| 
+                            . "&group_formation_member=".uri_escape($q->param('search_term'))
+                            . qq|&lithologies=|.uri_escape($lithology).qq|">$lithology</a>|;
+                
+                $html .= "$coll_link ($lith_count{$lithology}), ";
+            }      
+        }
+        $html =~ s/, $//g;
+    } else { 
+        $html .= "<i>unknown</i>";
     }
-    $html =~ s/, $//g;
     $html .= "</p>\n";
     print $html;
 
     # Display environments present
     my @env_list = @{$hbo->{SELECT_LISTS}{environment}};
     $html = "<p><b>Paleoenvironments:</b> ";
-    foreach $environment (@env_list) {
-        if ($environment_count{$environment}) {
-            $coll_link = qq|<a href="$exec_url?action=displayCollResults| 
-                          . "&group_formation_member=".uri_escape($q->param('search_term'))
-                          . qq|&environment=|.uri_escape($environment).qq|">$environment</a>|;
-            $html .= "$coll_link ($environment_count{$environment}), ";
+    if (%environment_count) {
+        foreach $environment (@env_list) {
+            if ($environment_count{$environment}) {
+                $coll_link = qq|<a href="$exec_url?action=displayCollResults| 
+                              . "&group_formation_member=".uri_escape($q->param('search_term'))
+                              . qq|&environment=|.uri_escape($environment).qq|">$environment</a>|;
+                $html .= "$coll_link ($environment_count{$environment}), ";
+            }
         }
+        $html =~ s/, $//g;
+    } else { 
+        $html .= "<i>unknown</i>";
     }
-    $html =~ s/, $//g;
     $html .= "</p>\n";
     print $html;
 
