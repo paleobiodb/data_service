@@ -151,6 +151,19 @@ sub taxonRank {
 	return "invalid";
 }
 
+# pass this a taxon name, it will return a true value if
+# it looks like a bad subgenus name.  Checks for two cases:
+# 1: two capitalized words in a row such as Equus Blahhus blah
+# 2: parenthesis anywhere in the name.
+#
+sub looksLikeBadSubgenus {
+	my $taxon = shift;
+	return (($taxon =~ m/[)(]/) || 
+			($taxon =~ m/^[A-Z][a-z]+[ ][A-Z][a-z]+/) );
+}
+
+
+
 # pass this a species or subspecies and it will
 # return the Genus by doing a simple search
 #

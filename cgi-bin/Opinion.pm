@@ -906,7 +906,7 @@ sub submitOpinionForm {
 		
 		# for belongs to, the parent rank should always be higher than the child rank.
 		if (! ($parentRank->isHigherThan($childRank)) ) {
-			$errors->add("The parent taxon's rank (" . $parentRank->rankString() . ") must be higher than the taxon's rank (" . $childRank->rankString() . ")");	
+			$errors->add("The parent taxon's rank (" . $parentRank->rank() . ") must be higher than the taxon's rank (" . $childRank->rank() . ")");	
 		}
 		
 		

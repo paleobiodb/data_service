@@ -177,7 +177,7 @@ sub setWithTaxonNameFullLookup {
 		my $taxon = Taxon->new();
 		$taxon->setWithTaxonName($taxonName);
 		
-		$self->setWithRankString($taxon->rank());
+		$self->setWithRankString($taxon->rankString());
 	}
 }
 
