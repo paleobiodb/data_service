@@ -665,7 +665,7 @@ sub displayMapResults {
 
 	if ($m) { Debug::dbPrint("made new map"); }
 
-	$m->testing();
+	#$m->testing();
 	
 	my $file = $m->buildMap();
 
@@ -2014,10 +2014,10 @@ sub processCollectionsSearch {
 			}
 		}
 
-		Debug::dbPrint("IndexToDelete = $indexToDelete");
+		#Debug::dbPrint("IndexToDelete = $indexToDelete");
 
 		if ($indexToDelete >= 0) {
-			dbPrint("deleting index $indexToDelete");
+			if ($DEBUG) { dbPrint("deleting index $indexToDelete"); }
 			splice (@terms, $indexToDelete, 1);	# remove this index from the array
 		}
 	}
