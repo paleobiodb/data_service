@@ -201,9 +201,10 @@ sub processEcologyForm	{
 			my $v = join ',',@temp;
 		# values could be strings, so escape single quotes and pad
 		#  with single quotes
-			$v =~ s/'/\'/;
-			$v = "'" . $v . "'";
-			push @fieldValues, $v;
+			#$v =~ s/'/\'/;
+			#$v = "'" . $v . "'";
+			#push @fieldValues, $v;
+            push @fieldValues, $dbh->quote($v);
 		}
 	}
 
@@ -256,7 +257,7 @@ sub processEcologyForm	{
 		$sql = "SELECT modified FROM ecotaph WHERE taxon_no=" . $taxon_no;
 		my @modifieds = @{$dbt->getData($sql)};
 		$sql = "UPDATE ecotaph SET modified=modified,created=";
-		$sql .= $modifieds[0]->{modified} . " WHERE taxon_no=" . $taxon_no;
+		$sql .= $dbh->quote($modifieds[0]->{modified}) . " WHERE taxon_no=" . $taxon_no;
 		$dbt->getData($sql);
 		print "<center><h3>Ecological/taphonomic data for $taxon_name have been added</h3></center>\n";
 	}
