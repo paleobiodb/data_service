@@ -660,7 +660,7 @@ sub displayMapResults {
 sub displayDownloadForm {
 	print &stdIncludes ( "std_page_top" );
 	my $auth = $q->cookie('authorizer');
-	my $html = $hbo->populateHTML( 'download_form', [ '', '', $auth, '' ], [ 'research_group', 'country','%%authorizer%%','environment' ] );
+	my $html = $hbo->populateHTML( 'download_form', [ '', '', $auth, '', '', '', '' ], [ 'research_group', 'country','%%authorizer%%','environment','ecology1','ecology2','ecology3' ] );
 	buildAuthorizerPulldown ( \$html );
 	$html =~ s/<OPTION value=''>Select authorizer\.\.\./<option value='All'>All/m;
 	print $html;
@@ -1781,7 +1781,7 @@ sub processCollectionsSearch {
 		}
 		# research_group is now a set -- tone 7 jun 2002
 		my $resgrp = $q->param('research_group');
-		if($resgrp && $resgrp =~ /(^ETE$)|(^5%$)|(^PACED$)|(^PGAP$)/){
+		if($resgrp && $resgrp =~ /(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
 			my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
 				if($resprojstr ne ""){
 					push(@terms, " reference_no IN (" . $resprojstr . ")");
