@@ -810,7 +810,6 @@ sub displayTaxonInfoResults {
 	require Images;
 	# not sure why, but somehow $in_list gets fatally cluttered with
 	#  single quotes before this point
-    print "in list $in_list" ;
 	$in_list =~ s/\'//g;
 	my @thumbs = Images::processViewImages($dbt, $q, $s, $in_list);
 	foreach my $thumb (@thumbs){
