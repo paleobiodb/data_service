@@ -116,14 +116,15 @@ sub processPrintHierarchy	{
 				# find the most recent opinion, and if it is
 				#   NOT "recombined as" the taxon then continue
 				if ( $orgcombref )	{
-					$sql = "SELECT parent_no,status,reference_no,ref_has_opinion,pubyr FROM opinions WHERE child_no=" . $orgcombref->{child_no};
+					$sql = "SELECT child_no,parent_no,status,reference_no,ref_has_opinion,pubyr FROM opinions WHERE child_no=" . $orgcombref->{child_no};
 					@crefs = @{$dbt->getData($sql)};
 
 			# rewrote this section to employ selectMostRecentParentOpinion JA 5.4.04
+			# switched to selectMostRecentBelongsToOpinion JA 18.11.04
 
-					my $index = TaxonInfo::selectMostRecentParentOpinion($dbt, \@crefs, 1);
-					$lastopinion = $crefs[$index]->{status};
-					$lastparent = $crefs[$index]->{parent_no};
+					my $currentref = TaxonInfo::selectMostRecentBelongsToOpinion($dbt, \@crefs, 1);
+					$lastopinion = $currentref ->{status};
+					$lastparent = $currentref ->{parent_no};
 
 					if ( $lastopinion ne "recombined as" || $lastparent != $ref->{child_no} )	{
 						next;
@@ -134,12 +135,13 @@ sub processPrintHierarchy	{
 			#  is invalid or recombined into something else,
 			#  thanks to the "next"
 			# rewrote this section 21.4.04 to use selectMostRecentParentOpinion
-				$sql = "SELECT parent_no,status,reference_no,ref_has_opinion,pubyr FROM opinions WHERE child_no=" . $ref->{child_no};
+			# switched to selectMostRecentBelongsToOpinion JA 18.11.04
+				$sql = "SELECT child_no,parent_no,status,reference_no,ref_has_opinion,pubyr FROM opinions WHERE child_no=" . $ref->{child_no};
 				@crefs = @{$dbt->getData($sql)};
 
-				my $index = TaxonInfo::selectMostRecentParentOpinion($dbt, \@crefs, 1);
-				$lastopinion = $crefs[$index]->{status};
-				$lastparent = $crefs[$index]->{parent_no};
+				my $currentref = TaxonInfo::selectMostRecentBelongsToOpinion($dbt, \@crefs, 1);
+				$lastopinion = $currentref ->{status};
+				$lastparent = $currentref->{parent_no};
 
 				if ( $lastopinion =~ /belongs to/ && $lastparent == $p )	{
 					push @goodrefs , $ref;
