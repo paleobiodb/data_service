@@ -958,7 +958,7 @@ sub mapSetupImage {
 	closedir(DIR);
 
 	foreach my $file (@filenames){
-		if((-A "$GIF_DIR/$file") > 1){
+		if((-M "$GIF_DIR/$file") > 1){
 			unlink "$GIF_DIR/$file";
 		}
 	}
