@@ -2730,11 +2730,17 @@ sub displayTaxonInfoResults{
 sub startImage{
 	Images::startLoadImage($dbh, $dbt, $s, $exec_url);
 }
-sub processStartImage(){
+sub processStartImage{
 	Images::processStartLoadImage($dbt, $q, $exec_url);
 }
-sub processLoadImage(){
-	Images::processLoadImageForm($dbt, $q);
+sub processLoadImage{
+	Images::processLoadImageForm($dbt, $q, $s, $exec_url);
+}
+sub viewImage{
+	Images::startViewImages($dbt, $q, $exec_url);
+}
+sub processViewImage{
+	Images::processViewImages($dbt, $q, $s, $exec_url);
 }
 ## END Image stuff
 ##############
@@ -4621,9 +4627,9 @@ sub checkNewTaxon{
 			print "<center><input type=submit value=\"Submit\"></center>\n</form>\n";
 			print &stdIncludes ("std_page_bottom");
 		}
-		else{
-			displayTaxonomyResults();
-		}
+		#else{
+		#	displayTaxonomyResults();
+		#}
 	}
 	else{ # not reentry, so all matches were either 0 or 1
 		my $printed = 0;
@@ -5590,7 +5596,9 @@ sub insertRecord {
 	# after finding a potential conflict entering a new record, and the 
 	# user said to go ahead and add the reference anyway.  See the INSERT, 
 	# below, for final details...
+	dbg( "fields_ref:$fields_ref,vals_ref:$vals_ref<br>");
 	unless($fields_ref && $vals_ref){
+		dbg("insertRecord: first pass<br>");
 
 		my $searchVal = $q->param($searchField);
 
@@ -5637,7 +5645,13 @@ sub insertRecord {
 				if ( $fieldTypeCodes[$fieldCount] == 254 ) {
 					my $numSetValues = @formVals;
 					if ( $numSetValues ) {
-						$val = join(',', @formVals);
+						my @valid = ();
+						foreach my $item (@formVals){
+							if($item ne ""){
+								push(@valid, $item);
+							}
+						}
+						$val = join(',', @valid);
 					}
 				}
 		  
@@ -5670,6 +5684,7 @@ sub insertRecord {
 	} # END 'unless($fields_ref && $vals_ref)' - see top of method
 
 	if($fields_ref && $vals_ref){
+		dbg("insertRecord: reentry from checkNearMatch<br>");
 		@fields = @{$fields_ref};
 		@vals = @{$vals_ref};
 	}
@@ -5763,6 +5778,7 @@ sub checkNearMatch ()	{
 
 	my $sql = "SELECT * FROM $tableName WHERE " . $searchField;
 	$sql .= "='" . $searchVal . "'";
+	dbg("checkNearMatch SQL:$sql<br>");
 	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 
@@ -5977,7 +5993,7 @@ sub checkDuplicates () {
 	}
 	$sql =~ s/ AND $//;
 	$sql = "SELECT $idName FROM $tableName WHERE ".$sql;
-	dbg ( "$sql<HR>" );
+	dbg("checkDuplicates SQL:$sql<HR>");
 
 	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
