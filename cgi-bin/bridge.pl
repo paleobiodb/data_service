@@ -1788,7 +1788,7 @@ sub displayCollectionDetails {
 	my $taxa_list = buildTaxonomicList($collection_no, $refNo);
 	print $taxa_list;
 
-	if(($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy') && $taxa_list ne "")	{
+	if($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy')	{
 		print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames);
 	}
 	if($taxa_list ne ""){
