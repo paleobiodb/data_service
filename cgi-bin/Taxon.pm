@@ -1400,11 +1400,40 @@ sub submitAuthorityForm {
 	}
 	
 	
-
 	# check and make sure the taxon_name_corrected field in the form makes sense
 	if (!($q->param('taxon_name_corrected'))) {
 		$errors->add("You can't submit the form with an empty taxon name!");	
 	}
+	
+	# to prevent complications, we will prevent the user from changing 
+	# a genus name on a species, or a species name on a subspecies if they
+	# are editing an old record.
+	if (! $isNewEntry) {
+		my $newTaxon = Taxon->new();
+		$newTaxon->setWithTaxonName($q->param('taxon_name_corrected'));
+		my $oldTaxon = $self;
+		
+		my $rank = $self->rank();
+		if ($rank->isSpecies()) {
+			# make sure they didn't try to change the genus name.
+			if ($oldTaxon->firstWord() ne $newTaxon->firstWord()) {
+				$errors->add("You can't change the genus name of a species
+				which already exists.  Contact the database manager
+				if you need to do this.");
+			}
+			
+		} elsif ($rank->isSubspecies()) {
+			# make sure they didn't try to change the species name.
+			if (($oldTaxon->firstWord() ne $newTaxon->firstWord()) || 
+				($oldTaxon->secondWord() ne $newTaxon->secondWord()) ){
+				$errors->add("You can't change the species name of a subspecies
+				which already exists.  Contact the database manager
+				if you need to do this.");
+			}
+
+		}
+	}
+	
 	
 	{ # so we have our own scope for these variables.
 		my $rankFromSpaces = Validation::taxonRank($q->param('taxon_name_corrected'));
@@ -1469,6 +1498,10 @@ sub submitAuthorityForm {
 		#Debug::dbPrint("okayToEdit = $okayToEdit, $formField = " . $q->param($formField));
 		
 	} # end foreach formField.
+
+
+	my $taxonRank = $q->param('taxon_rank'); 	# rank in popup menu
+
 	
 	# If they entered a type_taxon_name, then we'll have to look it
 	# up in the database because it's stored in the authorities table as a 
@@ -1500,7 +1533,6 @@ sub submitAuthorityForm {
 			my $ttaxon = Taxon->new($self->{GLOBALVARS});
 			$ttaxon->setWithTaxonNumber($number);
 			
-			my $taxonRank = $q->param('taxon_rank'); 	# rank in popup menu
 			
 			if (($taxonRank eq GENUS) || ($taxonRank eq SUBGENUS)) {
 				# then the type taxon rank must be species
@@ -1547,6 +1579,38 @@ sub submitAuthorityForm {
 	#return;
 	
 
+	# If the rank was species or subspecies, then we also need to insert
+	# an opinion record automatically which has the state of "belongs to"
+	# For example, if the child taxon is "Equus blah" then we need to 
+	# make sure we have an opinion that it belongs to "Equus".
+	#
+	# 3/22/2004, this is bit of a  **HACK** for now.  Eventually,
+	# the opinion object should do this for us (?)
+	my $parentTaxon;
+
+	if ( $isNewEntry && (($taxonRank eq SPECIES) || ($taxonRank eq SUBSPECIES)) ) {
+		# we want to do this for new entries & for edits.
+				
+		Debug::dbPrint("we're here 1 in Taxon");
+
+		$parentTaxon = Taxon->new($self->{GLOBALVARS});
+		$parentTaxon->setWithTaxonNumber($q->param('parent_taxon_no'));
+		
+		if (! $parentTaxon->taxonNumber()) {
+			$errors->add("The parent taxon '" . $parentTaxon->taxonName() . 
+			"' which this $taxonRank belongs to doesn't exist in our 
+			database.  Please add an authority record for this genus
+			before continuing.");
+		}
+	}
+	## end of hack
+	####
+		
+	
+
+
+
+
 	
 	# at this point, we should have a nice hash array (%fieldsToEnter) of
 	# fields and values to enter into the authorities table.
@@ -1581,29 +1645,6 @@ sub submitAuthorityForm {
 		}
 	}
 	
-
-
-	
-	# if the rank was species or subspecies, then we also need to insert
-	# an opinion record automatically which has the state of "belongs to"
-	#
-	# 3/22/2004, this is a ******HACK****** for now.  Eventually,
-	# the opinion object should do this for us
-	my $parentTaxon;
-	if ( ($fieldsToEnter{taxon_rank} eq SPECIES) ||
-		 ($fieldsToEnter{taxon_rank} eq SUBSPECIES) ) {
-				
-		Debug::dbPrint("we're here 1 in Taxon");
-
-		$parentTaxon = Taxon->new($self->{GLOBALVARS});
-		$parentTaxon->setWithTaxonNumber($q->param('parent_taxon_no'));
-		
-		if (! $parentTaxon->taxonNumber()) {
-			$errors->add("The parent taxon which this " . $fieldsToEnter{taxon_rank} . " belongs to doesn't exist in our database.  Please add an authority record for this genus before continuing.");
-		}
-	}
-	## end of hack
-	####
 
 
 	
