@@ -612,9 +612,9 @@ sub mapGetScale	{
 
 	$projection = $q->param('projection');
 
-    $scale = 1;
     $scale = $q->param('mapscale');
     $scale =~ s/x //i;
+    $scale = $scale || 1; #default value
 
     ($cont,$coords) = split / \(/,$q->param('mapfocus');
     $coords =~ s/\)//;  # cut off the right parenthesis.
