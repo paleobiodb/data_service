@@ -1903,10 +1903,12 @@ sub displayCollResults {
 		# you won't have an in list if you are adding
 		($sql,$mylat,$mylng) = &processCollectionsSearchForAdd();
 	} else	{
-		# the in list was computed by TaxonInfo and had its single
-		#  quotes stripped, so put them back
-		my @names = split ',',$in_list;
-		$in_list = "'" . join('\',\'',@names) . "'";
+		# if the in list was computed by TaxonInfo then it had its
+		#  single quotes stripped, so put them back
+		if ( $in_list )	{
+			my @names = split ',',$in_list;
+			$in_list = "'" . join('\',\'',@names) . "'";
+		}
 		$sql = processCollectionsSearch($in_list);
 	}
 	my $sth = $dbh->prepare( $sql );
@@ -2353,8 +2355,10 @@ sub processCollectionsSearch {
 										
 					if ($in_list eq "") {
 						dbg("RE-RUNNING TAXONOMIC SEARCH in bridge<br>");
-						$in_list = PBDBUtil::taxonomic_search(
-											$q->param('genus_name'), $dbt);
+		# WARNING: following line commented out by Muhl, probably
+		#  because he replaced it with a call to ./recurse;
+		#  uncommented by Poling, probably because he was an idiot
+						# $in_list = PBDBUtil::taxonomic_search($q->param('genus_name'), $dbt);
                         my $name = $q->param('genus_name');
                         $in_list = `./recurse $name`;
 					}
