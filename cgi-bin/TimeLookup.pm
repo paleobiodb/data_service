@@ -57,13 +57,13 @@ sub processLookup	{
 	}
 
 	&findBestScales();
-	&getIntervalRange();
+	my $bestbothscale = &getIntervalRange();
 	&findImmediateCorrelates();
 	&mapIntervals();
 	if ( $return_type eq "intervals" )	{
 		return \@intervals;
 	}
-	&returnCollectionList();
+	&returnCollectionList($bestbothscale);
 
 }
 
@@ -501,6 +501,8 @@ sub findBestScales	{
 
 sub getIntervalRange	{
 
+	my $bestbothscale;
+
 # BEGIN if input was numeric values
 	if ( $max_interval_name > 0 && $min_interval_name > 0 )	{
 
@@ -584,7 +586,6 @@ sub getIntervalRange	{
 # if the scale's pubyr is most recent, record the scale number
 	my %seen = ();
 	my $maxyr;
-	my $bestbothscale;
 	for my $scale ( @scales )	{
 		$seen{$scale->{scale_no}}++;
 		if ( $pubyr{$scale->{scale_no}} > $maxyr && $seen{$scale->{scale_no}} == 2 )	{
@@ -642,13 +643,14 @@ sub getIntervalRange	{
 		return;
 	}
 
-# note that we're not doing a proper return because we're just setting
-#  module globals
+# note that we're not doing a proper return of $yesints and @intervals
+# because we're just setting module globals (call me lazy)
 
 # for convenience, make a hash array where the keys are the intervals
 	for my $i ( @intervals )	{
 		$yesints{$i} = "Y";
 	}
+	return $bestbothscale;
 
 }
 
@@ -740,6 +742,7 @@ sub mapIntervals	{
 # query the collections table for collections where the max is in the list
 #   and so is the min
 sub returnCollectionList	{
+	my $bestbothscale = shift;
 
 	$sql = "SELECT collection_no FROM collections WHERE ";
 	$sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
