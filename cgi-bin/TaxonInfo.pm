@@ -1329,7 +1329,7 @@ sub doCollections{
 			$output .= "<center><h3>Age range</h3>\n";
 			$output .= $oldestlowername;
 			if ( $oldestlowername ne $youngestuppername )	{
-	i			$output .= " to " . $youngestuppername;
+	 			$output .= " to " . $youngestuppername;
 			}
 			$output .= " <i>or</i> " . $oldestlowerbound . " to " . $youngestupperbound . " Ma";
 			$output .= "<center><p>\n<hr>\n";
