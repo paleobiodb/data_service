@@ -59,11 +59,13 @@ package Curve;
 
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
+my $dbh;
 my $q;					# Reference to the parameters
 my $s;
 
 sub new {
 	my $class = shift;
+	$dbh = shift;
 	$q = shift;
 	$s = shift;
 	my $self = {};
@@ -112,28 +114,7 @@ sub setArrays	{
 					                                # the default working directory
 	$PRINTED_DIR = "/public/data";
 	$BACKGROUND="/public/PDbg.gif";
-	$LOCS_FILE="$DDIR/pmpd-locs";           # location of the primary collection data
-	$OCCS_FILE="$DDIR/pmpd-occs";           # location of the occurences data
 	$GEN_FILE="$DDIR/pmpd-genera";
-	$ENTERERCOL=1;
-	$LOCIDCOL=3;
-	$PERIODCOL=24;
-	$EPOCCOL=26;
-	$ISTAGCOL1=28;
-	$ISTAGCOL2=30;
-	$LSTAGCOL1=32;
-	$LSTAGCOL2=34;
-	$FORMATIONCOL=36;
-	$MEMBERCOL=37;
-	$STRATSCALECOL=44;
-	$LITH1COL=49;
-	$LITH2COL=51;
-    $CREATEDCOL=63;
-	$RESGRPCOL=65;
-	$OCCIDCOL=3;
-	$GENCOL=6;
-	$SPCOL=8;
-	$ABCOL=9;
 	
 	$OUTPUT_DIR = $PUBLIC_DIR;
 	# customize the subdirectory holding the output files
@@ -666,9 +647,6 @@ sub setSteps	{
 sub assignLocs	{
 	my $self = shift;
 
-	if ( ! open LOCS,"<$LOCS_FILE" ) {
-		$self->htmlError ( "$0:Couldn't open $LOCS_FILE<BR>$!" );
-	}
 	if ( ! open ORPHANS,">$OUTPUT_DIR/orphans.txt" ) {
 		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/orphans.txt<BR>$!" );
 	}
@@ -680,8 +658,44 @@ sub assignLocs	{
 	$lithquery2 =~ s/all //g;
 	$lithquery2 =~ s/ lithologies//g;
 	
-	$csv = Text::CSV_XS->new();
-	while (<LOCS>)	{
+	my $sql = "SELECT * FROM collections WHERE ";
+	if ( $q->param('research_group') ne "" )	{
+		# Handle "groups" that are actually projects
+		if ( $q->param('research_group') eq "PGAP" ||
+		     $q->param('research_group') eq "5%" )	{
+			my $sql2 = "SELECT reference_no FROM refs WHERE project_name LIKE '%" . $q->param('research_group') . "%'";
+			my $sth = $dbh->prepare( $sql2 ) || die ( "$sql2<hr>$!" );
+			$sth->execute();
+			my @refrefs = @{$sth->fetchall_arrayref()};
+
+			for $refref (@refrefs)  {
+				$reflist .= "," . ${$refref}[0];
+			}
+			$reflist =~ s/^,//;
+
+			$sth->finish();
+
+			$sql .= "AND reference_no IN (" . $reflist . ") ";
+		} else	{
+			$sql .= "AND research_group='" . $q->param('research_group') . "' ";
+		}
+	}
+	if ( $q->param('collection_type') ne "" )	{
+		$sql .= "AND collection_type='" . $q->param('collection_type') . "' ";
+	}
+	if ( $q->param('requiredfm') ne "" )	{
+		$sql .= "AND formation!=''";
+	}
+	if ( $q->param('requiredmbr') ne "" )	{
+		$sql .= "AND member!=''";
+	}
+
+	$sql =~ s/WHERE ^//;
+	$sql =~ s/WHERE AND /WHERE /;
+	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+	$sth->execute();
+	while ( my $collrowref = $sth->fetchrow_hashref() )  {
+		my %collrow = %{$collrowref};
 	 # clean up funny accented characters JA 30.10.01
 		s/à/a/g; # a grave
 		s/â/a/g; # a funny hat
@@ -701,10 +715,8 @@ sub assignLocs	{
         s/ //g; # dagger
         s/…//g; # some damn thang
         s/[^" \+\(\)\-=A-Za-z0-9,\.\/]//g;
-		if ( $csv->parse($_) )	{
-			@columns = $csv->fields();
 	
-			$rawagedata = $columns[$PERIODCOL]." ".$columns[$EPOCCOL]." ".$columns[$ISTAGCOL1]." ".$columns[$ISTAGCOL2]." ".$columns[$LSTAGCOL1]." ".$columns[$LSTAGCOL2];
+			$rawagedata = $collrow{'period_max'}." ".$collrow{'epoch_max'}." ".$collrow{'intage_max'}." ".$collrow{'intage_min'}." ".$collrow{'locage_max'}." ".$collrow{'locage_min'};
 	
 			if ($q->param('North America') eq "Y" || $q->param('Europe') eq "Y" ||
 					$q->param('South America') eq "Y" || $q->param('Africa') eq "Y" ||
@@ -712,197 +724,189 @@ sub assignLocs	{
 					$q->param('Asia') eq "Y" || $q->param('Australia') eq "Y")	{
 	
 		# clean country field
-				$columns[8] =~ s/  / /g;
-				$columns[8] = "STARTFIELD".$columns[8]."ENDFIELD";
-				$columns[8] =~ s/STARTFIELD //g;
-				$columns[8] =~ s/STARTFIELD//g;
-				$columns[8] =~ s// ENDFIELD/g;
-				$columns[8] =~ s/ENDFIELD//g;
+				$collrow{'country'} =~ s/  / /g;
+				$collrow{'country'} = "STARTFIELD".$collrow{'country'}."ENDFIELD";
+				$collrow{'country'} =~ s/STARTFIELD //g;
+				$collrow{'country'} =~ s/STARTFIELD//g;
+				$collrow{'country'} =~ s// ENDFIELD/g;
+				$collrow{'country'} =~ s/ENDFIELD//g;
 				
-				if ($columns[8] eq "" || $columns[8] eq "U.S.A." ||
-					  $columns[8] eq "USA") {
-					$columns[8]="United States";
+				if ($collrow{'country'} eq "" || $collrow{'country'} eq "U.S.A." ||
+					  $collrow{'country'} eq "USA") {
+					$collrow{'country'}="United States";
 				}
 	
 	
 		# toss lists from regions that are not included
 			 if (($q->param('North America') ne "Y") &&
-					 ($region{$columns[8]} eq "North America"))	{
-				 $columns[$LOCIDCOL] = 0;
+					 ($region{$collrow{'country'}} eq "North America"))	{
+				 $collrow{'collection_no'} = 0;
 			 }
 			 elsif ($q->param('South America') ne "Y" &&
-					    $region{$columns[8]} eq "South America")	{
-				 $columns[$LOCIDCOL] = 0;
+					    $region{$collrow{'country'}} eq "South America")	{
+				 $collrow{'collection_no'} = 0;
 			 }
 			 elsif ($q->param('Europe') ne "Y" &&
-					    $region{$columns[8]} eq "Europe")	{
-				 $columns[$LOCIDCOL] = 0;
+					    $region{$collrow{'country'}} eq "Europe")	{
+				 $collrow{'collection_no'} = 0;
 			 }
 			 elsif ($q->param('Africa') ne "Y" &&
-					    $region{$columns[8]} eq "Africa")	{
-				 $columns[$LOCIDCOL] = 0;
+					    $region{$collrow{'country'}} eq "Africa")	{
+				 $collrow{'collection_no'} = 0;
 			 }
 			 elsif ($q->param('Asia') ne "Y" &&
-					    $region{$columns[8]} eq "Asia")	{
-				 $columns[$LOCIDCOL] = 0;
+					    $region{$collrow{'country'}} eq "Asia")	{
+				 $collrow{'collection_no'} = 0;
 			 }
 			 elsif ($q->param('Australia') ne "Y" &&
-					    $region{$columns[8]} eq "Australia")	{
-				 $columns[$LOCIDCOL] = 0;
+					    $region{$collrow{'country'}} eq "Australia")	{
+				 $collrow{'collection_no'} = 0;
 			 }
-				elsif ($region{$columns[8]} eq "")	{
-					$columns[$LOCIDCOL] = 0;
+				elsif ($region{$collrow{'country'}} eq "")	{
+					$collrow{'collection_no'} = 0;
 			 }
 		 }
 	
 		# save country name to be printed in binning.csv file
-		 if ($columns[$LOCIDCOL] > 0)	{
-			 $country[$columns[$LOCIDCOL]] = $columns[8];
+		 if ($collrow{'collection_no'} > 0)	{
+			 $country[$collrow{'collection_no'}] = $collrow{'country'};
 		 }
 	
 	 # toss lists with no county or lat/long
-			if (($q->param('strictgeography') eq "no, exclude them") && ($columns[10] eq "") &&
-					(($columns[11] eq "") || ($columns[16] eq "")))	{
-				$columns[$LOCIDCOL] = 0;
+			if (($q->param('strictgeography') eq "no, exclude them") && ($collrow{'county'} eq "") &&
+					(($collrow{'latdeg'} eq "") || ($collrow{'lngdeg'} eq "")))	{
+				$collrow{'collection_no'} = 0;
 		 }
 	
 			if ($q->param('strictchronology') eq "no, exclude them")	{
 	 # toss lists with no age/stage data at all
-				if (($columns[$ISTAGCOL1] eq "") && ($columns[$ISTAGCOL2] eq "") &&
-					($columns[$LSTAGCOL1] eq "") && ($columns[$LSTAGCOL2] eq ""))	{
-					$columns[$LOCIDCOL] = 0;
+				if (($collrow{'intage_max'} eq "") && ($collrow{'intage_min'} eq "") &&
+					($collrow{'locage_max'} eq "") && ($collrow{'locage_min'} eq ""))	{
+					$collrow{'collection_no'} = 0;
 			 }
 	 # toss lists with a range of possible international age/stage values
-				elsif (($columns[$ISTAGCOL1] ne "") && ($columns[$ISTAGCOL2] ne "") &&
-					     ($columns[$ISTAGCOL1] ne $columns[$ISTAGCOL2]))	{
-					$columns[$LOCIDCOL] = 0;
+				elsif (($collrow{'intage_max'} ne "") && ($collrow{'intage_min'} ne "") &&
+					     ($collrow{'intage_max'} ne $collrow{'intage_min'}))	{
+					$collrow{'collection_no'} = 0;
 				}
 	 # toss lists with a range of possible local age/stage values
-				elsif (($columns[33] ne "") && ($columns[$LSTAGCOL2] ne "") &&
-					     ($columns[$LSTAGCOL1] ne $columns[$LSTAGCOL2]))	{
-					$columns[$LOCIDCOL] = 0;
+				elsif (($collrow{'llocage_max'} ne "") && ($collrow{'locage_min'} ne "") &&
+					     ($collrow{'locage_max'} ne $collrow{'locage_min'}))	{
+					$collrow{'collection_no'} = 0;
 				}
 			}
 
 	 # toss lists with excluded creation dates
 			if ( $created_date > 0 )	{
 			# clean up the creation date field
-				my $date = $columns[$CREATEDCOL];
+				my $date = $collrow{'created'};
 				$date =~ s/[ \-:]//g;
 				if ( $q->param('created_before_after') eq "before" &&
 					 $date > $created_date )	{
-					$columns[$LOCIDCOL] = 0;
+					$collrow{'collection_no'} = 0;
 				} elsif ( $q->param('created_before_after') eq "after" &&
 					 $date < $created_date )	{
-					$columns[$LOCIDCOL] = 0;
+					$collrow{'collection_no'} = 0;
 				}
 			}
 	
 	 # toss lists with broad scale of resolution
 			if ($q->param('stratscale') ne "")	{
 				$ao = 0;
-				if ($columns[$STRATSCALECOL] =~ /group of bed/)	{
+				if ($collrow{'stratscale'} =~ /group of bed/)	{
 					$ao = 3;
 				}
-				elsif ($columns[$STRATSCALECOL] =~ /^bed$/)	{
+				elsif ($collrow{'stratscale'} =~ /^bed$/)	{
 					$ao = 4;
 				}
-				elsif ($columns[$STRATSCALECOL] =~ /member/)	{
+				elsif ($collrow{'stratscale'} =~ /member/)	{
 					$ao = 2;
 				}
-				elsif ($columns[$STRATSCALECOL] =~ /formation/)	{
+				elsif ($collrow{'stratscale'} =~ /formation/)	{
 					$ao = 1;
 				}
 				if ($q->param('stratscale') =~ /group of bed/ &&
 					  ($q->param('stratscale_minmax') eq "broadest" && $ao < 3 ||
 					   $q->param('stratscale_minmax') eq "narrowest" && $ao > 3))	{
-					$columns[$LOCIDCOL] = 0;
+					$collrow{'collection_no'} = 0;
 				}
 				elsif ($q->param('stratscale') =~ /^bed$/ &&
 					  ($q->param('stratscale_minmax') eq "broadest" && $ao < 4 ||
 					   $q->param('stratscale_minmax') eq "narrowest" && $ao > 4))	{
-					$columns[$LOCIDCOL] = 0;
+					$collrow{'collection_no'} = 0;
 				}  
 				elsif ($q->param('stratscale') =~ /member/ &&
 					  ($q->param('stratscale_minmax') eq "broadest" && $ao < 2 ||
 					   $q->param('stratscale_minmax') eq "narrowest" && $ao > 2))	{
-					$columns[$LOCIDCOL] = 0;
+					$collrow{'collection_no'} = 0;
 				}  
 				elsif ($q->param('stratscale') =~ /formation/ &&
 					  ($q->param('stratscale_minmax') eq "broadest" && $ao == 0 ||
 					   $q->param('stratscale_minmax') eq "narrowest" && $ao > 1))	{
-					$columns[$LOCIDCOL] = 0;
+					$collrow{'collection_no'} = 0;
 				}
-			}
-	 # toss lists without formation data if this is required
-			if ($q->param('requiredfm') ne "" && $columns[$FORMATIONCOL] eq "")	{
-				$columns[$LOCIDCOL] = 0;
-			}
-	 # toss lists without member data if this is required
-			if ($q->param('requiredmbr') ne "" && $columns[$MEMBERCOL] eq "")	{
-				$columns[$LOCIDCOL] = 0;
 			}
 	
 			if ($q->param('lithology1') ne "")	{
-				if ($columns[$LITH1COL] eq "" && $columns[$LITH2COL] eq "")	{
-					$columns[$LOCIDCOL] = 0;
+				if ($collrow{'lithology1'} eq "" && $collrow{'lithology2'} eq "")	{
+					$collrow{'collection_no'} = 0;
 				}
 			# evaluate all... lithologies
 				elsif ($q->param('lithology1') =~ /^all /)	{
-				 $lithdata = $LTYPE{$columns[$LITH1COL]}.$LTYPE{$columns[$LITH2COL]};
+				 $lithdata = $LTYPE{$collrow{'lithology1'}}.$LTYPE{$collrow{'lithology2'}};
 			 # if two non-null lithologies are present and query is exactly one
 			 #   lithology, toss the list
 					if (($q->param('lithonlyor') eq "equal") &&
-					    ($LTYPE{$columns[$LITH1COL]} ne $LTYPE{$columns[$LITH2COL]}) &&
-					    ($LTYPE{$columns[$LITH1COL]} ne "") &&
-					    ($LTYPE{$columns[$LITH2COL]} ne ""))	{
-					  $columns[$LOCIDCOL] = 0;
+					    ($LTYPE{$collrow{'lithology1'}} ne $LTYPE{$collrow{'lithology2'}}) &&
+					    ($LTYPE{$collrow{'lithology1'}} ne "") &&
+					    ($LTYPE{$collrow{'lithology2'}} ne ""))	{
+					  $collrow{'collection_no'} = 0;
 					}
 			# toss list if query is exact and category doesn't match
 			# WARNING: assumes that if only one lithology is present, the submit
 			#  script has correctly placed it in the primary lithology field
 					elsif (($q->param('lithonlyor') eq "equal") &&
-					       ($LTYPE{$columns[$LITH1COL]} eq "carbonate" || $LTYPE{$columns[$LITH1COL]} eq "other") &&
+					       ($LTYPE{$collrow{'lithology1'}} eq "carbonate" || $LTYPE{$collrow{'lithology1'}} eq "other") &&
 					       ($q->param('lithology1') eq "all siliciclastic lithologies"))	{
-					  $columns[$LOCIDCOL] = 0;
+					  $collrow{'collection_no'} = 0;
 					}
 					elsif (($q->param('lithonlyor') eq "equal") &&
-					       ($LTYPE{$columns[$LITH1COL]} eq "siliciclastic" || $LTYPE{$columns[$LITH1COL]} eq "other") &&
+					       ($LTYPE{$collrow{'lithology1'}} eq "siliciclastic" || $LTYPE{$collrow{'lithology1'}} eq "other") &&
 					       ($q->param('lithology1') eq "all carbonate lithologies"))	{
-					  $columns[$LOCIDCOL] = 0;
+					  $collrow{'collection_no'} = 0;
 					}
 					elsif (($q->param('lithonlyor') eq "include") &&
-					       ($LTYPE{$columns[$LITH1COL]} ne "siliciclastic") &&
-					       ($LTYPE{$columns[$LITH2COL]} ne "siliciclastic") &&
+					       ($LTYPE{$collrow{'lithology1'}} ne "siliciclastic") &&
+					       ($LTYPE{$collrow{'lithology2'}} ne "siliciclastic") &&
 					       ($q->param('lithology1') eq "all siliciclastic lithologies"))	{
-					  $columns[$LOCIDCOL] = 0;
+					  $collrow{'collection_no'} = 0;
 					}
 					elsif (($q->param('lithonlyor') eq "include") &&
-					       ($LTYPE{$columns[$LITH1COL]} ne "carbonate") &&
-					       ($LTYPE{$columns[$LITH2COL]} ne "carbonate") &&
+					       ($LTYPE{$collrow{'lithology1'}} ne "carbonate") &&
+					       ($LTYPE{$collrow{'lithology2'}} ne "carbonate") &&
 					       ($q->param('lithology1') eq "all carbonate lithologies"))	{
-					  $columns[$LOCIDCOL] = 0;
+					  $collrow{'collection_no'} = 0;
 					}
 					elsif ($q->param('lithonlyor') eq "combine" &&
 					       ($lithdata !~ $lithquery1 ||
 					        $lithdata !~ $lithquery2))	{
-					  $columns[$LOCIDCOL] = 0;
+					  $collrow{'collection_no'} = 0;
 					}
 				}
 	 # evaluate uncombined (i.e., not all...) lithologies
 				else	{
-					$lithdata = $columns[$LITH1COL].$columns[$LITH2COL];
+					$lithdata = $collrow{'lithology1'}.$collrow{'lithology2'};
 	 # for "equal" lith searches, toss lists with any other lithology
 	 # WARNING: assumes first pull-down is used and second isn't
 					if (($q->param('lithonlyor') eq "equal") &&
 					    ($lithdata ne $q->param('lithology1')))	{
-					  $columns[$LOCIDCOL] = 0;
+					  $collrow{'collection_no'} = 0;
 					}
 	 # for "include" lith searches, toss lists that entirely lack the lithology
 	 # WARNING: ditto
 					elsif ($q->param('lithonlyor') eq "include" &&
 					       $lithdata !~ $q->param('lithology1'))	{
-					  $columns[$LOCIDCOL] = 0;
+					  $collrow{'collection_no'} = 0;
 					}
 	 # for "combine" lith searches, toss lists that lack either search lithology
 					elsif ($q->param('lithonlyor') eq "combine" &&
@@ -910,55 +914,50 @@ sub assignLocs	{
 					        $lithdata !~ $q->param('lithology2') ||
 					        length $lithdata != length($q->param('lithology1')) +
 					        length($q->param('lithology2'))))	{
-					  $columns[$LOCIDCOL] = 0;
+					  $collrow{'collection_no'} = 0;
 					}
 				}
 			}
 	 # if a category of paleoenvironments is specified and this collection does
 	 #   not fall in that category, exclude it
 			if ($q->param('paleoenvironment') ne "")	{
-				if ($q->param('paleoenvironment') ne $ENVTYPE{$columns[53]})	{
-					$columns[$LOCIDCOL] = 0;
+				if ($q->param('paleoenvironment') ne $ENVTYPE{$collrow{'environment'}} )	{
+					$collrow{'collection_no'} = 0;
 				}
-			}
-	 # toss lists from other research groups if only one is used
-			if ($q->param('research_group') ne $columns[$RESGRPCOL] &&
-				$q->param('research_group') ne "")	{
-				$columns[$LOCIDCOL] = 0;
 			}
 	
 	 # ASSIGN COLLECTION TO TEMPORAL BIN
-			if ($columns[$LOCIDCOL] > 0)	{
+			if ($collrow{'collection_no'} > 0)	{
 				$stagemin = "";
 				$stagemax = "";
 	 # start by trying to use stage data
 	 # first move local age/stage data into international age/stage fields
-				if (($columns[$ISTAGCOL1] eq "") && ($columns[$LSTAGCOL1] ne ""))	{
-					$columns[$ISTAGCOL1] = $columns[$LSTAGCOL1];
+				if (($collrow{'intage_max'} eq "") && ($collrow{'locage_max'} ne ""))	{
+					$collrow{'intage_max'} = $collrow{'locage_max'};
 				}
-				if (($columns[$ISTAGCOL2] eq "") && ($columns[$LSTAGCOL2] ne ""))	{
-					$columns[$ISTAGCOL2] = $columns[$LSTAGCOL2];
+				if (($collrow{'intage_min'} eq "") && ($collrow{'locage_min'} ne ""))	{
+					$collrow{'intage_min'} = $collrow{'locage_min'};
 				}
 		 # duplicate the min/max stage name if it is empty but max/min is known
-				if (($columns[$ISTAGCOL2] eq "") && ($columns[$ISTAGCOL1] ne ""))	{
-					$columns[$ISTAGCOL2] = $columns[$ISTAGCOL1];
-					$columns[$ISTAGCOL2-1] = $columns[$ISTAGCOL1-1];
+				if (($collrow{'intage_min'} eq "") && ($collrow{'intage_max'} ne ""))	{
+					$collrow{'intage_min'} = $collrow{'intage_max'};
+					$collrow{'emlintage_min'} = $collrow{'emlintage_max'};
 				}
-				elsif (($columns[$ISTAGCOL1] eq "") && ($columns[$ISTAGCOL2] ne ""))	{
-					$columns[$ISTAGCOL1] = $columns[$ISTAGCOL2];
-					$columns[$ISTAGCOL1-1] = $columns[$ISTAGCOL2-1];
+				elsif (($collrow{'intage_max'} eq "") && ($collrow{'intage_min'} ne ""))	{
+					$collrow{'intage_max'} = $collrow{'intage_min'};
+					$collrow{'emlintage_max'} = $collrow{'emlintage_min'};
 				}
-				if ($columns[$ISTAGCOL1] ne "")	{
+				if ($collrow{'intage_max'} ne "")	{
 					$c1temp = "";
-					$c1temp = $columns[$ISTAGCOL1];
+					$c1temp = $collrow{'intage_max'};
 					$c1temp =~ s/\? //;
 					$c1temp =~ s/ \?//;
 					$c1temp =~ s/\?//;
 					$c1temp =~ s/ian$//;
 		 # use max value if it exists because this is the maximum field
 		 # first try prepending the E/M/L data 
-					if ($columns[$ISTAGCOL1-1] ne "")	{
-					  $prec1temp = $columns[$ISTAGCOL1-1]." ".$c1temp;
+					if ($collrow{'emlintage_max'} ne "")	{
+					  $prec1temp = $collrow{'emlintage_max'}." ".$c1temp;
 					  if ($maxstage{$prec1temp} ne "")	{
 					    $stagemax = $maxstage{$prec1temp};
 					    $stagemin = $minstage{$prec1temp};
@@ -973,15 +972,15 @@ sub assignLocs	{
 					  }
 					}
 				}
-				if ($columns[$ISTAGCOL2] ne "")	{
+				if ($collrow{'intage_min'} ne "")	{
 					$c2temp = "";
-					$c2temp = $columns[$ISTAGCOL2];
+					$c2temp = $collrow{'intage_min'};
 					$c2temp =~ s/\? //;
 					$c2temp =~ s/ \?//;
 					$c2temp =~ s/\?//;
 					$c2temp =~ s/ian$//;
-					if ($columns[$ISTAGCOL2-1] ne "")	{
-					  $prec2temp = $columns[$ISTAGCOL2-1]." ".$c2temp;
+					if ($collrow{'emlintage_max'} ne "")	{
+					  $prec2temp = $collrow{'emlintage_max'}." ".$c2temp;
 					  if ($stagemax eq "" || $stagemax < $maxstage{$prec2temp})	{
 					    $stagemax = $maxstage{$prec2temp};
 					  }
@@ -1006,40 +1005,40 @@ sub assignLocs	{
 					$stagemax = $stagemin;
 				}
 			# if none of that works but there is stage data, the stage is bogus
-				if ($stagemax eq "" && $columns[$ISTAGCOL1] ne "")	{
-					if (!$badnames{$columns[$ISTAGCOL1]})	{
-					  $badnames{$columns[$ISTAGCOL1]} = "<i>$columns[$ENTERERCOL]" . ":</i>";
+				if ($stagemax eq "" && $collrow{'intage_max'} ne "")	{
+					if (!$badnames{$collrow{'intage_max'}})	{
+					  $badnames{$collrow{'intage_max'}} = "<i>$collrow{'enterer'}" . ":</i>";
 					}
-					$badnames{$columns[$ISTAGCOL1]} .= " $columns[$LOCIDCOL]";
+					$badnames{$collrow{'intage_max'}} .= " $collrow{'collection_no'}";
 				}
-				if ($stagemin eq "" && $columns[$ISTAGCOL2] ne "")	{
-					if (!$badnames{$columns[$ISTAGCOL2]})	{
-					  $badnames{$columns[$ISTAGCOL2]} = "<i>$columns[$ENTERERCOL]" . ":</i>" ;
+				if ($stagemin eq "" && $collrow{'intage_min'} ne "")	{
+					if (!$badnames{$collrow{'intage_min'}})	{
+					  $badnames{$collrow{'intage_min'}} = "<i>$collrow{'enterer'}" . ":</i>" ;
 					}
-					if ($badnames{$columns[$ISTAGCOL2]} !~ / $columns[$LOCIDCOL]$/)	{
-					  $badnames{$columns[$ISTAGCOL2]} .= " $columns[$LOCIDCOL]";
+					if ($badnames{$collrow{'intage_min'}} !~ / $collrow{'collection_no'}$/)	{
+					  $badnames{$collrow{'intage_min'}} .= " $collrow{'collection_no'}";
 					}
 				}
 	 # IF STAGE DATA FAIL, TRY EPOCH DATA
-				if ($columns[$EPOCCOL] ne "" && $stagemin eq "")	{
+				if ($collrow{'epoch_max'} ne "" && $stagemin eq "")	{
 		 # find the stage min/max for this epoch
-					if ($columns[$EPOCCOL-1] ne "")	{
+					if ($collrow{'emlepoch_max'} ne "")	{
 					  @parts = ();
 				# if E/M/L has more than one value...
-					  @parts = split(/ - /,$columns[$EPOCCOL-1]);
+					  @parts = split(/ - /,$collrow{'emlepoch_max'});
 					  if ($#parts > 0)	{
-					    $minterm = $parts[1]." ".$columns[$EPOCCOL];
-					    $maxterm = $parts[0]." ".$columns[$EPOCCOL];
+					    $minterm = $parts[1]." ".$collrow{'epoch_max'};
+					    $maxterm = $parts[0]." ".$collrow{'epoch_max'};
 					  }
 				# but if E/M/L is a single word...
 					  else	{
-					    $minterm = $parts[0]." ".$columns[$EPOCCOL];
-					    $maxterm = $parts[0]." ".$columns[$EPOCCOL];
+					    $minterm = $parts[0]." ".$collrow{'epoch_max'};
+					    $maxterm = $parts[0]." ".$collrow{'epoch_max'};
 					  }
 					}
 					else	{
-					  $minterm = $columns[$EPOCCOL];
-					  $maxterm = $columns[$EPOCCOL];
+					  $minterm = $collrow{'epoch_max'};
+					  $maxterm = $collrow{'epoch_max'};
 					}
 					$stagemin = $minstage{$minterm};
 					$stagemax = $maxstage{$maxterm};
@@ -1064,88 +1063,82 @@ sub assignLocs	{
 		 # if the "epoch" is just Lower/Middle/Upper then add the period name to it
 		 # WARNING: this may or may not be useful if the scale = epochs option is
 		 #   ever debugged, but right now it does nothing useful
-			 #  if ((index($columns[$EPOCCOL],"Lower") > -1) ||
-			 #      (index($columns[$EPOCCOL],"Early") > -1))	{
-			 #    $columns[$EPOCCOL] = "Lower"." ".$columns[$PERIODCOL];
+			 #  if ((index($collrow{'epoch_max'},"Lower") > -1) ||
+			 #      (index($collrow{'epoch_max'},"Early") > -1))	{
+			 #    $collrow{'epoch_max'} = "Lower"." ".$collrow{'period_max'};
 			 #  }
-			 #  elsif (index($columns[$EPOCCOL],"Middle") > -1)	{
-			 #    $columns[$EPOCCOL] = "Middle"." ".$columns[$PERIODCOL];
+			 #  elsif (index($collrow{'epoch_max'},"Middle") > -1)	{
+			 #    $collrow{'epoch_max'} = "Middle"." ".$collrow{'period_max'};
 			 #  }
-			 #  elsif ((index($columns[$EPOCCOL],"Upper") > -1) ||
-			 #         (index($columns[$EPOCCOL],"Late") > -1))	{
-			 #    $columns[$EPOCCOL] = "Upper"." ".$columns[$PERIODCOL];
+			 #  elsif ((index($collrow{'epoch_max'},"Upper") > -1) ||
+			 #         (index($collrow{'epoch_max'},"Late") > -1))	{
+			 #    $collrow{'epoch_max'} = "Upper"." ".$collrow{'period_max'};
 			 #  }
-			 #  if ($sensyn{$columns[$EPOCCOL]} ne "")	{
-			 #    $columns[$EPOCCOL] = $sensyn{$columns[$EPOCCOL]};
+			 #  if ($sensyn{$collrow{'epoch_max'}} ne "")	{
+			 #    $collrow{'epoch_max'} = $sensyn{$collrow{'epoch_max'}};
 			 #  }
 		# END BINNING 
 		# if list is assignable, do so
 				if ($belongsto[$stagemax] == $belongsto[$stagemin] && $stagemin ne "" &&
-					  ($columns[$FORMATIONCOL] ne "" || $q->param('lumpbyfm') ne "Y"))	{
+					  ($collrow{'formation'} ne "" || $q->param('lumpbyfm') ne "Y"))	{
 		 # if using the geographic dispersion algorithm, increment the number of
 		 #   lists in this country, state, and county or lat/long combination
 					$i = $belongsto[$stagemin];
 			 # assign formation ID number
 					if ($q->param('lumpbyfm') eq "Y")	{
-					  $columns[$FORMATIONCOL] =~ s/ fm$//i;
-					  $columns[$FORMATIONCOL] =~ s/ fm\.$//i;
-					  $columns[$FORMATIONCOL] =~ s/ formation$//i;
-					  $columns[$FORMATIONCOL] =~ tr/A-Z/a-z/;
+					  $collrow{'formation'} =~ s/ fm$//i;
+					  $collrow{'formation'} =~ s/ fm\.$//i;
+					  $collrow{'formation'} =~ s/ formation$//i;
+					  $collrow{'formation'} =~ tr/A-Z/a-z/;
 				# append the chron ID number so each formation-chron combo is unique
-					  $columns[$FORMATIONCOL] = $columns[$FORMATIONCOL].$i;
-					  if ($formationID{$columns[$FORMATIONCOL]} eq "")	{
+					  $collrow{'formation'} = $collrow{'formation'}.$i;
+					  if ($formationID{$collrow{'formation'}} eq "")	{
 					    $nformations++;
-					    $formationID{$columns[$FORMATIONCOL]} = $nformations;
+					    $formationID{$collrow{'formation'}} = $nformations;
 					  }
-					  $formation[$columns[$LOCIDCOL]] = $formationID{$columns[$FORMATIONCOL]};
+					  $formation[$collrow{'collection_no'}] = $formationID{$collrow{'formation'}};
 				 # WARNING! this irrevocably modifies the collection ID number
-					  $columns[$LOCIDCOL] = $formationID{$columns[$FORMATIONCOL]};
+					  $collrow{'collection_no'} = $formationID{$collrow{'formation'}};
 					}
 	
-					$chid[$columns[$LOCIDCOL]] = $i;
+					$chid[$collrow{'collection_no'}] = $i;
 	
-	if ($columns[$STRATSCALECOL] =~ /group of/)	{
-	$sscale[$columns[$LOCIDCOL]] = 3;
+	if ($collrow{'stratscale'} =~ /group of/)	{
+		$sscale[$collrow{'collection_no'}] = 3;
 	}
-	elsif ($columns[$STRATSCALECOL] =~ /bed/)	{
-	$sscale[$columns[$LOCIDCOL]] = 4;
+	elsif ($collrow{'stratscale'} =~ /bed/)	{
+		$sscale[$collrow{'collection_no'}] = 4;
 	}
-	elsif ($columns[$STRATSCALECOL] =~ /member/)	{
-	$sscale[$columns[$LOCIDCOL]] = 2;
+	elsif ($collrow{'stratscale'} =~ /member/)	{
+		$sscale[$collrow{'collection_no'}] = 2;
 	}
-	elsif ($columns[$STRATSCALECOL] =~ /form/)	{
-	$sscale[$columns[$LOCIDCOL]] = 1;
+	elsif ($collrow{'stratscale'} =~ /form/)	{
+		$sscale[$collrow{'collection_no'}] = 1;
 	}
 	else	{
-	$sscale[$columns[$LOCIDCOL]] = 0;
+		$sscale[$collrow{'collection_no'}] = 0;
 	}
 	
 					if ($q->param('disperse') eq "yes")	{
-					  $temp = $i.$columns[8].$columns[9];
-					  if ($columns[10] ne "")	{
-					    $temp = $temp.$columns[10];
+					  $temp = $i.$collrow{'country'}.$collrow{'state'};
+					  if ($collrow{'county'} ne "")	{
+					    $temp = $temp.$collrow{'county'};
 					  }
 					  else	{
-					    $temp = $temp.$columns[11].$columns[15].$columns[16].$columns[20];
+					    $temp = $temp.$collrow{'latdeg'}.$collrow{'latdir'}.$collrow{'lngdeg'}.$collrow{'lngdir'};
 					  }
 					  $locsatpoint{$temp}++;
-					  $locpoint[$columns[$LOCIDCOL]] = $temp;
+					  $locpoint[$collrow{'collection_no'}] = $temp;
 					}
 				}
 	 # if collection cannot be placed in an interval, print its temporal
 	 #   data to a complaint file
 				else	{
 					$rawagedata =~ s/  / /g;
-					print ORPHANS "$columns[$LOCIDCOL]\t$stagemin - $stagemax\t$columns[6]\t$columns[8] $columns[9]\t$rawagedata\n";
+					print ORPHANS "$collrow{'collection_no'}\t$stagemin - $stagemax\t$collrow{'geogcomments'}\t$collrow{'country'} $collrow{'state'}\t$rawagedata\n";
 				}
 			}
 		}
-		else	{
-			$err = $csv->error_input;
-			print "Can't read collection record as follows: ", $err, "\n";
-		}
-	}
-	close LOCS;
 	close ORPHANS;
 
 }
@@ -1165,14 +1158,6 @@ sub assignGenera	{
 	}
 	close GEN;
 	
-	# replacements suggested by Ederer 12.7.01
-	$csv = Text::CSV_XS->new({
-			'quote_char'  => '"',
-			'escape_char' => '"',
-			'sep_char'    => ',',
-			'binary'      => 1
-	});
-	
 	if ( ! open GEN,">>$GEN_FILE" ) {
 		#$self->htmlError ( "$0:Couldn't open $GEN_FILE for append.<BR>$!" );
 		print "Couldn't open $GEN_FILE for append.<BR>\n";
@@ -1180,85 +1165,78 @@ sub assignGenera	{
 	
 	# when using a genus count cutoff for lists, the number of
 	#   genera in each list must be counted ahead of time
-		if ( ! open OCCS,"<$OCCS_FILE" ) {
-			$self->htmlError ( "$0:Couldn't open $OCCS_FILE<BR>$!" );
-		}
-		while (<OCCS>)  {
-			if ( $csv->parse($_) )        {
-				@columns = $csv->fields();
+		my $sql = "SELECT occurrence_no,collection_no,genus_name,species_name,abund_value,abund_unit FROM occurrences";
+		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+		$sth->execute();
+		while ( my $occrowref = $sth->fetchrow_hashref() )  {
+			my %occrow = %{$occrowref};
 	
 		# get rid of records with no specimen/individual counts for method 5
-				if ($samplingmethod == 5)   {
-					if ($columns[$ABCOL] eq "" || $columns[$ABCOL] == 0 ||
-					    ($columns[10] ne "specimens" && $columns[10] ne "individuals"))
-	{
-					  $columns[$OCCIDCOL] = 0;
-					}
+			if ($samplingmethod == 5)   {
+				if ($occrow{'abund_value'} eq "" || $occrow{'abund_value'} == 0 ||
+				    ($occrow{'abund_unit'} ne "specimens" && $occrow{'abund_unit'} ne "individuals"))	{
+				  $occrow{'occurrence_no'} = 0;
 				}
+			}
 	
 		# give collection identity of its formation if lumping
-				$collno = $columns[$OCCIDCOL+1];
-				if ($q->param('lumpbyfm') eq "Y")	{
-					$collno = $formation[$collno];
-				}
+			$collno = $occrow{'collection_no'};
+			if ($q->param('lumpbyfm') eq "Y")	{
+				$collno = $formation[$collno];
+			}
 	
-				if (($columns[$OCCIDCOL] > 0) && ($columns[$SPCOL] ne "indet.") &&
-					  ($columns[$SPCOL] ne "indet") && ($chid[$collno] > 0))      {
-					$temp = $columns[$GENCOL];
-					($temp,$temp2) = split(/ \(/,$temp,2);
-					$temp =~ s/"//g;
-					$temp =~ s/\?//g;
-	
-					$temp =~ s/  / /g;
-					$temp =~ s/ $//;
+			if (( $occrow{'occurrence_no'} > 0) && ( $occrow{'species_name'} ne "indet.") &&
+				  ( $occrow{'species_name'} ne "indet") && ($chid[$collno] > 0))      {
+				$temp = $occrow{'genus_name'};
+				($temp,$temp2) = split(/ \(/,$temp,2);
+				$temp =~ s/"//g;
+				$temp =~ s/\?//g;
+
+				$temp =~ s/  / /g;
+				$temp =~ s/ $//;
 	
 		 # update file keeping list of all distinct genus names
-					$ao = 0;
-					$ao = $genid{$temp};
-					if ($ao == 0)	{
-					  $ngen++;
-					  $genus[$ngen] = $temp;
-					  $genid{$temp} = $ngen;
-					   print GEN "$temp\n";
-					}
-	
-					if ($required{$temp} ne "" || $q->param('class') eq "")  {
-					  $nsp = 1;
-					  if ($samplingmethod == 5)       {
-					    $nsp = $columns[$ABCOL];
-					  }
-	
+				$ao = 0;
+				$ao = $genid{$temp};
+				if ($ao == 0)	{
+				  $ngen++;
+				  $genus[$ngen] = $temp;
+				  $genid{$temp} = $ngen;
+				   print GEN "$temp\n";
+				}
+
+				if ($required{$temp} ne "" || $q->param('class') eq "")  {
+				  $nsp = 1;
+				  if ($samplingmethod == 5)       {
+				    $nsp = $occrow{'abund_value'};
+				  }
+
 				# check to see if genus already is listed in collection
-					  $xx = $lastocc[$collno];
-					  while ($xx > 0)	{
-					    if ($occs[$xx] ne $genid{$temp})	{
-					      $xx = $stone[$xx];
-					    }
-					    else	{
-					      $abund[$xx] = $abund[$xx] + $columns[$ABCOL];
-					      $xx = -9;
-					    }
-					  }
+				  $xx = $lastocc[$collno];
+				  while ($xx > 0)	{
+				    if ($occs[$xx] ne $genid{$temp})	{
+				      $xx = $stone[$xx];
+				    }
+				    else	{
+				      $abund[$xx] = $abund[$xx] + $occrow{'abund_value'};
+				      $xx = -9;
+				    }
+				  }
 				 # if not, add genus to master occurrence list
-					  if ($xx != -9)	{
-					    push @occs,$genid{$temp};
-					    push @stone,$lastocc[$collno];
-					    push @abund,$columns[$ABCOL];
-					    $lastocc[$collno] = $#occs;
-					    $toccsinlist[$collno] = $toccsinlist[$collno] + $nsp;
-					    if ($required{$temp} eq "required")	{
-					      $hasrequired[$collno]++;
-					    }
-					  }
-					}
+				  if ($xx != -9)	{
+				    push @occs,$genid{$temp};
+				    push @stone,$lastocc[$collno];
+				    push @abund,$occrow{'abund_value'};
+				    $lastocc[$collno] = $#occs;
+				    $toccsinlist[$collno] = $toccsinlist[$collno] + $nsp;
+				    if ($required{$temp} eq "required")	{
+				      $hasrequired[$collno]++;
+				    }
+				  }
 				}
 			}
-			else  {
-				$err = $csv->error_input;
-				print "Can't read occurrence record as follows: ", $err, "\n";
-			}
 		}
-		close OCCS;
+		$sth->finish();
 	
 	 # get rid of too-small or too-large lists if a cutoff is being used
 	 # because all the crucial stats computed later on depend on starting
