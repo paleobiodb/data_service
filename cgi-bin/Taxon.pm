@@ -359,8 +359,20 @@ sub pubyr {
 	if (!$hr) {
 		return '';	
 	}
-	
-	return $hr->{pubyr};
+
+	# JA: Poling originally just returned hr's pubyr, but that depends on
+	#  whether the ref is authority
+	if ( ! $hr->{ref_is_authority} )	{
+		return $hr->{pubyr};
+	}
+
+	# okay, so because ref is authority we need to grab the pubyr off of
+	#  that ref
+	# I hate to do it, but I'm using Poling's ridiculously baroque
+	#  Reference module to do so just for consistency
+	my $ref = Reference->new();
+	$ref->setWithReferenceNumber($hr->{reference_no});
+	return $ref->{pubyr};
 }
 
 

@@ -184,8 +184,24 @@ sub pubyr {
 	if (!$hr) {
 		return '';	
 	}
-	
-	return $hr->{pubyr};
+
+	# JA: I have no idea why Poling even wrote this function because
+	#  originally he didn't bother to correctly compute the pubyr when
+	#  ref is authority, but here it is (same as pubyr function in
+	#  Taxon.pm)
+
+	if ( ! $hr->{ref_is_authority} )        {
+		return $hr->{pubyr};
+	}
+
+	# okay, so because ref is authority we need to grab the pubyr off of
+	#  that ref
+	# I hate to do it, but I'm using Poling's ridiculously baroque
+	#  Reference module to do so just for consistency
+	my $ref = Reference->new();
+	$ref->setWithReferenceNumber($hr->{reference_no});
+	return $ref->{pubyr};
+
 }
 
 
@@ -817,6 +833,7 @@ sub submitOpinionForm {
 		$ref->setWithReferenceNumber($q->param('reference_no'));
 		
 		my $pubyr = $q->param('pubyr');
+print "FOO RPY (" , $ref->pubyr() ,") TPY (" , $taxon->pubyr() , ")";
 		
 		Debug::dbPrint("ref pub yr = " . $ref->pubyr() . ", taxon pub yr
 		= " . $taxon->pubyr());
