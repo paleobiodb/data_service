@@ -12,6 +12,7 @@
 		// the number of radio buttons regardless of their checked status.
 		// Note the the length of each may be different since there's not
 		// necessarily a one to one correspondence.
+	  if(frm.secondary_reference_no && frm.delete_ref){
 		var i;
 		var radio_vals = new Array();
 		for(i=0; i<frm.secondary_reference_no.length; i++){
@@ -29,6 +30,7 @@
 				}
 			}
 		}
+	  } // if secondary_reference_no
 
 		if ( frm.period_max.selectedIndex == 0 ) {
 			missinginfo += "\n    - Period maximum (required)";
