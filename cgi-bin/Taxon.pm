@@ -904,8 +904,26 @@ sub displayAuthorityForm {
 		# if only one record, then we don't have to ask the user anything.
 		# otherwise, we should ask them to pick which one.
 		my $select;
+		my $errors = Errors->new();
+		my $parentRankToPrint;
+
+		my $parentRankShouldBe;
+		if ($rankToUse eq 'species') {
+			$parentRankShouldBe = "(taxon_rank = 'genus' OR taxon_rank = 'subgenus')";
+			$parentRankToPrint = "genus or subgenus";
+		} elsif ($rankToUse eq 'subspecies') {
+			$parentRankShouldBe = "taxon_rank = 'species'";
+			$parentRankToPrint = "species";
+		}
+
+		
 		if ($count >= 1) {
-			$sql->setSQLExpr("SELECT taxon_no, taxon_name FROM authorities WHERE taxon_name = '" . $name . "'");
+			
+			# make sure that the parent we select is the correct parent,
+			# for example, we don't want to grab a family or something higher
+			# by accident.
+			
+			$sql->setSQLExpr("SELECT taxon_no, taxon_name FROM authorities WHERE taxon_name = '" . $name . "' AND $parentRankShouldBe");
 			my $results = $sql->allResultsArrayRef();
 		
 			my $select;
@@ -920,18 +938,25 @@ sub displayAuthorityForm {
 			<SELECT name=\"parent_taxon_no\">
 			$select
 			</SELECT>";
+		} else {
+			# count = 0, so we need to warn them to enter the parent taxon first.
+			$errors->add("The $parentRankToPrint '$name' for this $rankToUse doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$name\">create a new authority record for '$name'</A> before trying to add this $rankToUse.");
+			
+			$errors->setDisplayEndingMessage(0); 
+			
+			#/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority
+#/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=56942
+			print main::stdIncludes("std_page_top");
+			print $errors->errorMessage();
+			print main::stdIncludes("std_page_bottom");
+			
+			#print $q->redirect("http://localhost/cgi-bin/bridge.pl?action=startTaxonomy&goal=authority");			
+			
+			return;
 		}
 
 		
 	}
-	
-	
-	
-	
-	
-	
-	
-	
 	
 	
 	
@@ -1382,16 +1407,17 @@ sub submitAuthorityForm {
 	#
 	# 3/22/2004, this is a ******HACK****** for now.  Eventually,
 	# the opinion object should do this for us
-	my $genusTaxon;
+	my $parentTaxon;
 	if ( ($fieldsToEnter{taxon_rank} eq 'species') ||
 		 ($fieldsToEnter{taxon_rank} eq 'subspecies') ) {
 				
 		Debug::dbPrint("we're here 1 in Taxon");
-		my $genusName = Validation::genusFromString($fieldsToEnter{taxon_name});
-		$genusTaxon = Taxon->new($self->{GLOBALVARS});
-		$genusTaxon->setWithTaxonName($genusName);
-		if (! $genusTaxon->taxonNumber()) {
-			$errors->add("The genus which this " . $fieldsToEnter{taxon_rank} . " belongs to doesn't exist in our database.  Please add an authority record for this genus before continuing.");
+
+		$parentTaxon = Taxon->new($self->{GLOBALVARS});
+		$parentTaxon->setWithTaxonNumber($q->param('parent_taxon_no'));
+		
+		if (! $parentTaxon->taxonNumber()) {
+			$errors->add("The parent taxon which this " . $fieldsToEnter{taxon_rank} . " belongs to doesn't exist in our database.  Please add an authority record for this genus before continuing.");
 		}
 	}
 	## end of hack
@@ -1437,14 +1463,14 @@ sub submitAuthorityForm {
 		#
 		# this is a bit of a hack for now, we should be doing this by creating
 		# an opinion object, populating it, and having it set itself.  Do this later.
-		if ($genusTaxon) {
+		if ($parentTaxon) {
 			Debug::dbPrint("we're here 2 in Taxon");
 			my $opinionRow = CachedTableRow->new($self->{GLOBALVARS}, 'opinions');
 			
 			my %opinionHash;
 			$opinionHash{status} = 'belongs to';
 			$opinionHash{child_no} = $resultTaxonNumber;
-			$opinionHash{parent_no} = $genusTaxon->taxonNumber();
+			$opinionHash{parent_no} = $parentTaxon->taxonNumber();
 			$opinionHash{authorizer_no} = $fieldsToEnter{authorizer_no};
 			$opinionHash{enterer_no} = $fieldsToEnter{authorizer_no};
 			$opinionHash{ref_has_opinion} = $fieldsToEnter{ref_is_authority};

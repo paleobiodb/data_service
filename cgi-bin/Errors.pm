@@ -14,6 +14,7 @@ use Globals;
 use fields qw(	
 				count
 				errorString
+				displayEndingMessage
 			
 				);  # list of allowable data fields.
 
@@ -24,6 +25,7 @@ sub new {
 	my Errors $self = fields::new($class);
 	
 	$self->{count} = 0;
+	$self->{displayEndingMessage} = 1;
 
 	return $self;
 }
@@ -47,6 +49,13 @@ sub count {
 	return $self->{count};
 }
 
+# pass this a boolean,
+# should we display the ending message ("make corrections as necessary, etc.") or not?
+sub setDisplayEndingMessage {
+	my Errors $self = shift;	
+	$self->{displayEndingMessage} = shift;
+}
+
 # returns the error message.
 sub errorMessage {
 	my Errors $self = shift;
@@ -64,9 +73,13 @@ sub errorMessage {
 	my $errString = "<DIV class=\"errorMessage\">
 				<UL STYLE=\"text-align:left;\"><DIV class=\"errorTitle\">Please fix the following $count</DIV>" . 
 				$self->{errorString} . "</UL>
-				<SPAN class=\"tiny\">(hint: if you get a formatting error, check for extra spaces in the fields)</SPAN><BR><BR>
-				Make corrections as necessary and resubmit the form.<BR>
-				To cancel, use the back button on your browser.</DIV>";
+				<SPAN class=\"tiny\">(hint: if you get a formatting error, check for extra spaces in the fields)</SPAN><BR><BR>";
+
+	if ($self->{displayEndingMessage}) { 
+		$errString .= "<BR><BR>Make corrections as necessary and resubmit the form.<BR>To cancel, use the back button on your browser.";
+	}
+	
+	$errString .= "</DIV>";
 		
 	return $errString;
 }
