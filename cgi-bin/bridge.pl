@@ -2909,18 +2909,22 @@ sub rarefyAbundances	{
 		$lastalpha = $alpha;
 		$alpha = $ntaxa / log(1 + ($abundsum / $alpha));
 	}
+	# compute PIelou's J index
+	my $pj = $swh / log($ntaxa);
 	# compute Buzas-Gibson index
-	$bge = exp($swh) / $ntaxa;
+	my $bge = exp($swh) / $ntaxa;
 
 	print "<center><h3>Diversity statistics for ", $q->param(collection_name), " (PBDB collection ", $q->param(collection_no), ")</h3></center>\n\n";
 
 	print "<center><table><tr><td align=\"left\">\n";
-	printf "<p>Shannon-Wiener <i>H</i>: <b>%.3f</b><br>\n",$swh;
+	printf "<p>Total richness: <b>%d taxa</b><br>\n",$ntaxa;
+	printf "Shannon-Wiener <i>H</i>: <b>%.3f</b><br>\n",$swh;
 	printf "Simpson's <i>D</i>*: <b>%.3f</b><br>\n",$simpson;
 	printf "Berger-Parker <i>d</i>: <b>%.3f</b><br>\n",$bpd;
-	printf "Fisher's <i>alpha</i>**: <b>%.3f</b><br>\n",$alpha;
+	printf "Fisher's <i>alpha</i>**: <b>%.2f</b><br>\n",$alpha;
+	printf "Pielou's <i>J</i> (evenness): <b>%.3f</b><br>\n",$pj;
 	printf "Buzas-Gibson <i>E</i> (evenness): <b>%.3f</b></p>\n</td></tr></table>\n",$bge;
-	print "<div class=small><p>* = with Lande 1996 correction; ** = solved iteratively based on richness and total abundance</p></div></center>\n";
+	print "<div class=small><p>* = with Lande 1996 correction; ** = solved recursively based on richness and total abundance</p></div></center>\n";
 
 	# rarefy the abundances
 	my $maxtrials = 200;
