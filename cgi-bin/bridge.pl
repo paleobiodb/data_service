@@ -3044,17 +3044,7 @@ sub displayReIDCollsAndOccsSearchForm
 
 	print &stdIncludes ( "std_page_top" );
   
-	# Display the genus/species search form
 	print "<h4>You may now reidentify either a set of occurrences matching a genus or higher taxon name, or all the occurrences in one collection.</h4>";
-	print "<table align=center><tr><td>\n";
-	print "<h2>Occurrences search form</h2>";
-	print qq|<form method=POST action="$exec_url">\n|;
-	print '<input type=hidden name=action value="displayReIDForm">';
-	print qq|<input name="reference_no" value="$reference_no" type=hidden>\n|;
-	print $hbo->populateHTML('genus_species_search');
-	print qq|\n<tr><td align=right><input type=submit name=submit value="Search occurrences">\n|;
-	print "</form>";
-	print "</td></tr></table><hr>\n";
   
 	# Display the collection search form
 	%pref = &getPreferences($s->get('enterer'));
@@ -3209,7 +3199,9 @@ sub displayOccsForReID
 		</td>
 	</tr>
 ";
-		print &makeRefString($drow);
+		# Last parameter is "suppress_colls" so collection numbers aren't shown.
+		my $ref_string = makeRefString($drow,0,0,0,1);
+		print $ref_string;
 		# print $bibRef->toString();
 
 		print "
@@ -5088,11 +5080,15 @@ sub makeRefString	{
 	my $selectable = shift;
 	my $row = shift;
 	my $rowcount = shift;
+	my $supress_colls = shift;
 
 	my $retRefString  = "";
 	my $bibRef = BiblioRef->new ( $drow );
 
 	$retRefString = $bibRef->toString( $selectable, $row, $rowcount );
+	if($supress_colls){
+		return $retRefString;
+	}
 	my $tempRefNo = $bibRef->get("_reference_no");
 	return getCollsWithRef ( $retRefString, $tempRefNo, $row, $rowcount );
 }
