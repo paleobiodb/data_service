@@ -3136,7 +3136,7 @@ sub displayReIDCollsAndOccsSearchForm
 	# Display the collection search form
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no], ['authorizer', 'enterer', 'action', 'reid_reference_no'], \@prefkeys);
+	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no,''], ['authorizer', 'enterer', 'action', 'reid_reference_no','lithology1'], \@prefkeys);
 
 	buildAuthorizerPulldown ( \$html );
 	buildEntererPulldown ( \$html );
