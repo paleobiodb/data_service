@@ -67,7 +67,7 @@ if ( $q->param("action") eq "search" )	{
 				print "<option>$s";
 			}
 		}
-		print "</select><i>$refrow{'modifier'}</i> </td>\n";
+		print "</select><br><i>$refrow{'modifier'}</i> </td>\n";
 		print "<td valign=top><b>";
 		printf "%d",20*$refrow{'ref_no'};
 		print "</b></td>\n";
