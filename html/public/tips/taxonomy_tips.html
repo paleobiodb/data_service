@@ -250,25 +250,37 @@ Our taxonomic information script generates this kind of a list automatically (yo
 There are two basic conventions for creating them.</p>
 
 <p>First, authors may use a short format that only lists synonyms and alternative combinations in the earlier literature.
-This convention is followed by most American authors.
+This convention is followed by most American authors, and some authors from other continents including Europe.
 Each row represents either (a) a naming event (the fact that so-and-so named such-and-such in such-and-such a year), or (b) a recombination.
-Here's what you do:</p>
+You can tell a name is a recombination if:</p>
+
+<ul>
+<li>The author name is listed in parentheses, as in "(Smith 1900)" - the author's name following an original combination is never in parentheses.
+<li>The same species is listed earlier in the synonymy list, but in a different genus.
+</ul>
+
+Here's how you handle an American-style list:</p>
 
 <ul>
 <li>The first line should show the naming event for the valid species (the one at the top of the list).
 Just create an authority record for that name, if none exists yet.
-<li>If the line shows a naming event and the name is not the valid species, it's a junior synonym.
+<li>If the line shows a naming event and the name is not the valid species at the top of the list, it's a junior synonym.
 Make sure there is an authority record for the synonym, then enter the opinion that the <i>current</i> author thinks it is a synonym.
 <li>If the line shows a recombination, either of the valid species or of a synonym, (a) do NOT create an authority record, but (b) do create an opinion that the original combination of that name was recombined by that author in that year.
 </ul>
 
-<p>The second format is a long format that is commonly used by European authors.
+<p>The second format is a long format that is commonly (but not only) used by European authors, and also sometimes by authors from other continents.
 It includes not just the synonymy/recombination information listed by the Americans, but also any cases where an earlier author described some material <i>of a totally different, valid species</i> and the present author has reidentified <i>just that material, but not the type</i> as the valid species under consideration.
+You can tell right away that you are dealing with a European-style list if you see the letter "v" to the left of some of the names.
+This is abbreviated Latin meaning "I saw it" and indicating that this is a list of specimens, not just species.
+Another way to tell is when some lines end <i>partim,</i> meaning that only some of the specimens, and not the type specimens, are being assigned to this species.
+So, a <i>partim</i> assignment is never ever a synonymy.
 It is extremely difficult and dangerous to work with these lists, because you often can't tell if a name is a synonym/recombination or just some reidentified material.
 Here are some hints:</p>
 
 <ul>
-<li>If the name in the list is clearly a recombination of the valid species at the top, you need to enter the opinion that that author in the list recombined the name. 
+<li>If the name in the list is followed by <i>partim,</i> ignore it.
+<li>If a name is clearly a recombination of the valid species at the top (because the species name is the same but the genus name is different), you need to enter the opinion that that author in the list recombined the name. 
 <li>If the name is totally different, check the rest of the text and see if it says specifically that this name is a synonym.
 <li>If the author doesn't come out and say the name is a synonym, it still might be.
 You can tell if the list includes a name (say, <i>Omomys pucillus</i> Wortman 1904) and elsewhere the paper says that Wortman named <i>Omomys pucillus</i> in that same year.
@@ -277,7 +289,7 @@ Now enter an opinion that the second author recombined the name.
 <li>If none of that worked, you don't know what's going on, so give up.
 </ul>
 
-<p>Here's an example of an American (= easy) synonymy list and instructions for entering it.</p>
+<p>Here's an example of an American (= easy) synonymy list with real species names taken from a single make-believe paper ("Smith 2004"), and instructions for entering it.</p>
 
 <center><i>Omomys carteri</i></center>
 <ul>
@@ -297,10 +309,10 @@ Now enter an opinion that the second author recombined the name.
 
 <ol>
 <li>Leidy (1869) named <i>carteri.</i>
-Enter the authority.
+Create the authority record if it doesn't already exist.
 <li>Marsh's <i>vagus, pucillus, nanus,</i> and <i>lepidus</i> are synonyms.
-First create authority records for them.
-The enter opinions that the current author (say, Smith 2004) thinks they are synonyms.
+First create authority records for them if needed.
+The enter opinions that the current author (Smith 2004) thinks they are synonyms.
 <li>Wortman (1904) also thought that <i>carteri</i> belonged to <i>Omomys</i>.
 Enter that opinion.
 <li>Wortman (1904) thought that <i>pucillus</i> was valid but recombined it into <i>Omomys</i>.
@@ -309,8 +321,8 @@ Enter that opinion too.
 Enter an opinion for each case.
 </ol>
 
-<p>Note that if this were a European list, we'd only be able to enter the opinions on <i>carteri</i> saying that it was recombined.
-However, we might be able to figure out from the text that (say) <i>pucillus</i> is a synonym, allowing us to enter two opinions: the synonymy proposed by Smith (2004), plus the one recombination of that name by Wortman.</p>
+<p>Note that if this were a European list, we'd only be able to enter the four opinions on <i>carteri</i> saying that it was always placed in its original genus.
+However, we might be able to figure out from the text that (say) <i>pucillus</i> is a synonym, allowing us to enter two opinions: the synonymy proposed by Smith (2004), plus the one recombination of <i>pucillus</i> by Wortman.</p>
 
 </body>
 
