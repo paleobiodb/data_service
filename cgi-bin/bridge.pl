@@ -40,8 +40,8 @@ use Ecology;
 use PrintHierarchy;
 
 # god awful Poling modules
-use Occurrence;
-use Collection;
+#use Occurrence; - entirely deprecated, only every called by Collection.pm
+#use Collection; - entirely deprecated, replicates buildTaxonomicList
 use Taxon;
 use Opinion;
 
