@@ -32,6 +32,12 @@ sub processLogin {
 	# This cleans out ALL records in SESSION_DATA older than 48 hours.
 	$self->houseCleaning( $dbh );
 
+	# We want them to specify both an authorizer and an enterer
+	# otherwise kick them out to the public site.
+	if(!($q->param("authorizer") && $q->param("enterer"))){
+		return "";
+	}
+
 	# Get info from database on this person.
 	$sql =	"SELECT * ".
 			"  FROM person ".
