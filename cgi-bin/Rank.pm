@@ -15,6 +15,8 @@ package Rank;
 
 use strict;
 
+use Constants;
+
 use CGI::Carp qw(fatalsToBrowser);
 use Validation;
 use Taxon;
@@ -41,15 +43,15 @@ use fields qw(
 			
 # List of all allowable taxonomic ranks in order
 # of hierarchy.  
-my %rankToNum = (  "subspecies" => 1, "species" => 2, "subgenus" => 3,
-                   "genus" => 4, "subtribe" => 5, "tribe" => 6,
-                   "subfamily" => 7, "family" => 8, "superfamily" => 9,
-                   "infraorder" => 10, "suborder" => 11,
-                   "order" => 12, "superorder" => 13, "infraclass" => 14,
-			       "subclass" => 15, "class" => 16, "superclass" => 17,
-			       "subphylum" => 18, "phylum" => 19, "superphylum" => 20,
-				   "subkingdom" => 21, "kingdom" => 22, "superkingdom" => 23,
-				   "unranked clade" => 24, "informal" => 25);
+my %rankToNum = (  'subspecies' => 1, 'species' => 2, 'subgenus' => 3,
+                   'genus' => 4, 'subtribe' => 5, 'tribe' => 6,
+                   'subfamily' => 7, 'family' => 8, 'superfamily' => 9,
+                   'infraorder' => 10, 'suborder' => 11,
+                   'order' => 12, 'superorder' => 13, 'infraclass' => 14,
+			       'subclass' => 15, 'class' => 16, 'superclass' => 17,
+			       'subphylum' => 18, 'phylum' => 19, 'superphylum' => 20,
+				   'subkingdom' => 21, 'kingdom' => 22, 'superkingdom' => 23,
+				   'unranked clade' => 24, 'informal' => 25);
 
 			
 
@@ -59,6 +61,7 @@ sub new {
 	my $class = shift;
 	my Rank $self = fields::new($class);
 	
+	Debug::dbPrint("ranktest, SPECIES = " . SPECIES);
 	my $rankString = shift;  #optional rank string.
 	
 	$self->{isValid} = 0;  # not valid by default.
@@ -194,6 +197,172 @@ sub rank {
 }
 
 
+
+# is this object a valid rank?
+sub isValid {
+	my Rank $self = shift;
+	
+	return $self->{isValid};
+}
+
+
+# is the rank a higher rank?  IE: anything higher than species...
+sub isHigher {
+	my Rank $self = shift;
+	
+	return $self->{isHigher};
+}
+
+
+# Pass it another rank object and it will tell you
+# if it is higher than the passed object.
+# Returns boolean.
+#
+# If it can't figure it out, it will return 0
+sub isHigherThan {
+	my Rank $self = shift;
+	
+	my Rank $other = shift;
+	
+	if (! ($self->{isValid} && $other->{isValid})) {
+		return 0;	
+	}
+	
+	
+	# we'll have to change our action based on
+	# whether we only know that it's a higher rank,
+	# or if we know its exact rank.
+	
+	my $sokh = $self->{onlyKnowHigher};
+	my $ookh = $other->{onlyKnowHigher};
+		
+	if ($sokh && $ookh) {
+		return 0;	
+	} elsif ($sokh) {
+		# we know that we're a higher taxon, so we can 
+		# only compare to the other rank if it's a species or subspecies.
+		if ($other->isSpecies() || $other->isSubspecies()) {
+			return 1;
+		}
+		
+		return 0;
+	} elsif ($ookh) {
+		# we can never know for sure.
+		return 0;
+	} else {
+		# we know the full rank of both objects.
+
+		return (($self->{rankNum}) > ($other->{rankNum}));
+	}
+}
+
+# same as isHigherThan(), but pass it
+# a rank string such as "species" instead
+# of a rank object.
+sub isHigherThanString {
+	my Rank $self = shift;
+	my $string = shift;
+	
+	my $than = Rank->new($string);
+	return ($self->isHigherThan($than));
+}
+
+
+
+# Pass it another rank object and it will tell you
+# if it is lower than the passed object.
+# Returns boolean.
+#
+# If it can't figure it out, it will return 0
+sub isLowerThan {
+	my Rank $self = shift;
+	
+	my Rank $other = shift;
+	
+	if (! ($self->{isValid} && $other->{isValid})) {
+		return 0;	
+	}
+	
+	# we'll have to change our action based on
+	# whether we only know that it's a higher rank,
+	# or if we know its exact rank.
+	
+	my $sokh = $self->{onlyKnowHigher};
+	my $ookh = $other->{onlyKnowHigher};
+	
+	if ($sokh && $ookh) {
+		return 0;	
+	} elsif ($sokh) {
+		# we can never know for sure.
+		return 0;
+	} elsif ($ookh) {
+		
+		# we know that the other rank is a higher taxon, so we can 
+		# only compare to self if we're species or subspecies.
+		if ($self->isSpecies() || $self->isSubspecies()) {
+			return 1;
+		}
+		
+		return 0;
+	} else {
+		# we know the full rank of both objects.
+		
+		return ($self->{rankNum} < $other->{rankNum});
+	}
+	
+}
+
+
+
+# same as isLowerThan(), but pass it
+# a rank string such as "species" instead
+# of a rank object.
+sub isLowerThanString {
+	my Rank $self = shift;
+	my $string = shift;
+	
+	my $than = Rank->new($string);
+	return ($self->isLowerThan($than));
+}
+
+
+
+# pass this another rank object and it will
+# return a true value if they're equal ranks.
+sub isEqualTo {
+	my Rank $self = shift;
+	my Rank $other = shift;
+
+	if (!$other) {
+		return 0;	
+	}
+	
+	my $sokh = $self->{onlyKnowHigher};
+	my $ookh = $other->{onlyKnowHigher};
+	
+	if ($sokh|| $ookh) {
+		# we can't tell if they're equal if we only
+		# know that either one (or both) is a higher taxon.
+		return 0;
+	} else {
+		# we know the full rank of both objects.
+		
+		return ($self->{rankNum} == $other->{rankNum});
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 ###################
 ## simple accessors
 ###################
@@ -303,132 +472,11 @@ sub isInformal {
 
 
 
-# is this object a valid rank?
-sub isValid {
-	my Rank $self = shift;
-	
-	return $self->{isValid};
-}
-
-
-# is the rank a higher rank?  IE: anything higher than species...
-sub isHigher {
-	my Rank $self = shift;
-	
-	return $self->{isHigher};
-}
-
-
-# Pass it another rank object and it will tell you
-# if it is higher than the passed object.
-# Returns boolean.
-#
-# If it can't figure it out, it will return 0
-sub isHigherThan {
-	my Rank $self = shift;
-	
-	my Rank $other = shift;
-	
-	if (! ($self->{isValid} && $other->{isValid})) {
-		return 0;	
-	}
-	
-	
-	# we'll have to change our action based on
-	# whether we only know that it's a higher rank,
-	# or if we know its exact rank.
-	
-	my $sokh = $self->{onlyKnowHigher};
-	my $ookh = $other->{onlyKnowHigher};
-		
-	if ($sokh && $ookh) {
-		return 0;	
-	} elsif ($sokh) {
-		# we know that we're a higher taxon, so we can 
-		# only compare to the other rank if it's a species or subspecies.
-		if ($other->isSpecies() || $other->isSubspecies()) {
-			return 1;
-		}
-		
-		return 0;
-	} elsif ($ookh) {
-		# we can never know for sure.
-		return 0;
-	} else {
-		# we know the full rank of both objects.
-
-		return (($self->{rankNum}) > ($other->{rankNum}));
-	}
-}
-
-# Pass it another rank object and it will tell you
-# if it is lower than the passed object.
-# Returns boolean.
-#
-# If it can't figure it out, it will return 0
-sub isLowerThan {
-	my Rank $self = shift;
-	
-	my Rank $other = shift;
-	
-	if (! ($self->{isValid} && $other->{isValid})) {
-		return 0;	
-	}
-	
-	# we'll have to change our action based on
-	# whether we only know that it's a higher rank,
-	# or if we know its exact rank.
-	
-	my $sokh = $self->{onlyKnowHigher};
-	my $ookh = $other->{onlyKnowHigher};
-	
-	if ($sokh && $ookh) {
-		return 0;	
-	} elsif ($sokh) {
-		# we can never know for sure.
-		return 0;
-	} elsif ($ookh) {
-		
-		# we know that the other rank is a higher taxon, so we can 
-		# only compare to self if we're species or subspecies.
-		if ($self->isSpecies() || $self->isSubspecies()) {
-			return 1;
-		}
-		
-		return 0;
-	} else {
-		# we know the full rank of both objects.
-		
-		return ($self->{rankNum} < $other->{rankNum});
-	}
-	
-}
 
 
 
-# pass this another rank object and it will
-# return a true value if they're equal ranks.
-sub isEqualTo {
-	my Rank $self = shift;
-	my Rank $other = shift;
 
-	if (!$other) {
-		return 0;	
-	}
-	
-	my $sokh = $self->{onlyKnowHigher};
-	my $ookh = $other->{onlyKnowHigher};
-	
-	if ($sokh|| $ookh) {
-		# we can't tell if they're equal if we only
-		# know that either one (or both) is a higher taxon.
-		return 0;
-	} else {
-		# we know the full rank of both objects.
-		
-		return ($self->{rankNum} == $other->{rankNum});
-	}
-}
+
 
 
 # meant for testing only..
@@ -436,11 +484,11 @@ sub test {
 	my $rank1 = Rank->new();
 	my $rank2 = Rank->new();
 
-	$rank2->setWithRankString("genus");
+	$rank2->setWithRankString(GENUS);
 	#$rank1->setWithTaxonNameFullLookup('Aelurodon validus');
 	#$rank->setWithTaxonNameSpacingOnly('Aelurodon validus');
 
-	$rank1->setWithRankString("genus");
+	$rank1->setWithRankString(GENUS);
 	#$rank2->setWithRank($rank1);
 	#$rank2->setWithTaxonNameFullLookup('Equidae');
 
@@ -455,8 +503,8 @@ sub test {
 	print $rank1->rank() . " (isLowerThan = $isLowerThan) " . $rank2->rank() . "\n";
 	
 	
-	my $family = Rank->new("family");
-	my $genus = Rank->new("genus");
+	my $family = Rank->new(FAMILY);
+	my $genus = Rank->new(GENUS);
 	
 	if (! $family->isHigherThan($genus)) {
 		print "family should be higher than genus\n";	

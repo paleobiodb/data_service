@@ -17,6 +17,10 @@ our @ISA = qw(Exporter);
 
 # every constant you want to export must be listed in this list.
 our @EXPORT = qw(
+					TRUE
+					FALSE
+
+
 					SUBSPECIES
 					SPECIES
 					SUBGENUS
@@ -43,6 +47,11 @@ our @EXPORT = qw(
 					UNRANKEDCLADE
 					INFORMAL
 				);
+
+
+
+use constant TRUE => 1;
+use constant FALSE => 0;
 
 
 use constant SUBSPECIES => 'subspecies';

@@ -7,6 +7,8 @@
 package Opinion;
 
 use strict;
+use Constants;
+
 use DBI;
 use DBConnection;
 use SQLBuilder;
@@ -365,26 +367,18 @@ sub displayOpinionForm {
 	}
 	
 	
-	my $childRank = Rank->new($taxon->rank());
+	my $childRank = Rank->new($taxon->rankString());
 	$fields{taxon_rank} = $childRank->rank();
 	
 	
 	# We display a couple of different things depending on whether
 	# the rank is species or higher...
-	
-	if (! $childRank->isSpecies() ) {
-		# remove the species only field.
-		$fields{'OPTIONAL_species_only'} = 0;	
-	}
-	
-	if (! $childRank->isSubspecies() ) {
-		# remove the subspecies only field.
-		$fields{'OPTIONAL_subspecies_only'} = 0;
-	}
+
+	$fields{'OPTIONAL_species_only'} = $childRank->isSpecies();
+	$fields{'OPTIONAL_subspecies_only'} = $childRank->isSubspecies();	
+	$fields{'OPTIONAL_not_species'} = $childRank->isHigherThanString(SPECIES);
 	
 	if ( $childRank->isSubspecies || $childRank->isSpecies ) {		
-		# remove the field which is only for subgenus or higher
-		$fields{'OPTIONAL_not_species'} = 0;
 		
 		# if it's a species or subspecies, then we need to figure out
 		# the genus or species.  Eventually, this should be handled by the Rank class,
@@ -826,17 +820,14 @@ sub submitOpinionForm {
 			# it's a species or subspecies, so just grab the genus or species
 			# name from the child taxon..
 			
-			my $tname = $childTaxonName;
-			my ($one, $two, $three) = split(/ /, $tname);
-			
 			if ($childRank->isSpecies()) {
 				# then the parent is genus.
-				$parentTaxonName = $one;
+				$parentTaxonName = $childTaxon->firstWord();
 			} elsif ($childRank->isSubspecies()) {
 				# then the parent is a species
-				$parentTaxonName = "$one $two";
+				$parentTaxonName = $childTaxon->firstWord() . " " . $childTaxon->secondWord();
 			}
-			Debug::dbPrint("we're here and parentTaxonName = $parentTaxonName");
+
 		}		
 	} elsif ($taxonStatusRadio eq RECOMBINED_AS) {
 		$parentTaxonName = $q->param('parent_taxon_name');
@@ -844,6 +835,7 @@ sub submitOpinionForm {
 		$parentTaxonName = $q->param('parent_taxon_name2');
 	}	
 	
+	Debug::dbPrint("parentTaxonName = $parentTaxonName");
 	
 	# figure out the parent rank.
 	$parentRank = Rank->new();
@@ -890,12 +882,14 @@ sub submitOpinionForm {
 		
 		# for belongs to, the parent rank should always be higher than the child rank.
 		if (! ($parentRank->isHigherThan($childRank)) ) {
-			$errors->add("The parent taxon rank (" . $parentRank->rank() . ") must be higher than the child taxon rank (" . $childRank->rank() . ")");	
+			$errors->add("The parent taxon rank (" . $parentRank->rankString() . ") must be higher than the child taxon rank (" . $childRank->rankString() . ")");	
 		}
 		
 		
 		
 	} elsif ($taxonStatusRadio eq RECOMBINED_AS) {
+		## Tons of things to check for the Recombined As..  
+	
 		$fieldsToEnter{status} = RECOMBINED_AS;
 		
 		if (! ($parentRank->isSpecies())) {
@@ -905,6 +899,134 @@ sub submitOpinionForm {
 		if ($parentTaxonName eq $childTaxonName) {
 			$errors->add("The parent taxon and child taxon can't be the same for a recombined relationship");	
 		}
+		
+		if (!$childRank->isSpecies()) {
+			$errors->add("The child rank must be species for a recombined as relationship");
+		}
+		
+		if ($childTaxon->firstWord() eq $parentTaxon->firstWord()) {
+			$errors->add("The genus of the child taxon must be different from the genus of the parent taxon");
+		}
+		
+		
+		# This check is a little tricky.  If they are creating a recombined as
+		# record, we also need to create a belongs to record at the same time.
+		# But due to historical reasons, rather than saying that the original
+		# taxon belongs to the genus (or species) of the new taxon, 
+		# we have to say that the new taxon belongs to the genus (or species)
+		# of the new taxon.  We may change this at some point in the future.
+		#
+		# So, if the taxon they're entering an opinion about it Equus blaheri
+		# and they say that it was recombined as Homo blaheri, then 
+		# we should also enter a separate opinion that Homo blaheri belongs to 
+		# Homo.  If they were using a subspecies, this would be the same, except
+		# that the belongs to would apply to a species instead of a genus.
+		#
+		# Note, this is pretty similar to what we do in the Authority form.  Perhaps
+		# these two functionalities should be combined somehow?
+		
+		if ($parentRank->isLowerThanString(GENUS)) {
+			Debug::dbPrint("howdy we're here 1");
+			my $belongsToParent = Taxon->new();
+			if ($parentRank->isSubspecies()) {
+				# then the parent for the new belongs to relationship will be
+				# a species.
+
+				$belongsToParent->setWithTaxonName($parentTaxon->firstWord() .
+							" " . $parentTaxon->secondWord());
+							
+			} elsif ($parentRank->isSpecies()) {
+				# then the parent for the new belongs to relationship will be
+				# a genus.
+				$belongsToParent->setWithTaxonName($parentTaxon->firstWord());
+				
+				Debug::dbPrint("parent taxon name = " . $parentTaxon->taxonName() .
+							", parent taxon first word = " . $parentTaxon->firstWord() );
+				Debug::dbPrint("howdy we're here 2, parentname = "
+					. $belongsToParent->taxonName());							
+			}
+	
+			if (! $belongsToParent->existsInDatabase()) {
+				$errors->add("The parent of this taxon, " . 
+					$belongsToParent->taxonName() . 
+					" doesn't exist in our database.  
+					Please enter an authority record for it before continuing.");
+			}
+				
+			## This code is almost the same as that from Taxon.pm.  Perhaps they should
+			# be consolidated.
+		
+		
+		
+			# figure out how many authoritiy records could be used for the
+			# belongs to relationship.
+			my $count = $belongsToParent->numberOfDBInstancesForName();
+		
+			# if only one record, then we don't have to ask the user anything.
+			# otherwise, we should ask them to pick which one.
+			my $select;
+			my $parentRankToPrint;
+
+			my $parentRankShouldBe;
+			if ($parentRank->isSpecies()) {
+				$parentRankShouldBe = "(taxon_rank = 'genus' OR taxon_rank = 'subgenus')";
+				$parentRankToPrint = "genus or subgenus";
+			} elsif ($parentRank->isSubspecies()) {
+				$parentRankShouldBe = "taxon_rank = 'species'";
+				$parentRankToPrint = "species";
+			}
+
+			Debug::dbPrint("parentRankShouldBe = $parentRankShouldBe");
+		
+			if ($count >= 1) {
+			
+				# make sure that the parent we select is the correct parent,
+				# for example, we don't want to grab a family or something higher
+				# by accident.
+			
+				$sql->setSQLExpr("SELECT taxon_no, taxon_name FROM authorities WHERE taxon_name = '" . $belongsToParent->taxonName() . "' AND $parentRankShouldBe");
+				my $results = $sql->allResultsArrayRef();
+		
+				my $select;
+				foreach my $row (@$results) {
+					my $taxon = Taxon->new($self->{GLOBALVARS});
+					$taxon->setWithTaxonNumber($row->[0]);
+					$select .= "<OPTION value=\"$row->[0]\">" .
+					$taxon->taxonName() . " " . $taxon->authors() . "</OPTION>";
+				}
+
+				$q->param(-name=>'parent_taxon_popup', -values=>["<b>Parent taxon:</b>
+				<SELECT name=\"parent_taxon_no\">
+				$select
+				</SELECT>"]);
+			} else {
+				# count = 0, so we need to warn them to enter the parent taxon first.
+				$errors->add("The $parentRankToPrint '" . $belongsToParent->taxonName() . 
+					"' for this " . $belongsToParent->rankString() . " doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=" . $belongsToParent->taxonName() . "\">create a new authority record for '" . $belongsToParent->taxonName() ."'</A> before trying to add this " . $belongsToParent->rankString() . ".");
+				
+			}
+		}
+
+
+		# The last big check we need to do is to make sure that the child numbers in
+		# recombined as relationships point to the original combination.  So, if
+		# the user is adding an opinion about taxon A and they say that it has been
+		# recombined as B, we need to make sure that A is an original, ie, that there
+		# are no opinion relationships where A is the parent and the status is recombined_as.
+		#
+		# If there are cases where A is not the original, then we need to go back down
+		# the list and find the original before adding the opinion.
+		
+		if (!($childTaxon->isOriginalCombination())) {
+			# figure out what the original combination was.
+			my $originalCombination = $childTaxon->originalCombinationTaxon();
+			
+			$errors->add("The child taxon is not the original combination.  
+					The original combination is " . $originalCombination->taxonName() . ".");
+		}
+		
+		
+		
 		
 	} elsif ($taxonStatusRadio eq INVALID1) {
 		

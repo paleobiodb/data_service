@@ -2153,7 +2153,7 @@ sub array_push_unique{
 # Verify taxon:  If what was entered's most recent parent is a "belongs to"
 # or a "nomen *" relationship, then do the display page on what was entered.
 # If any other relationship exists for the most recent parent, display info 
-# on that parent.  
+# on that parent.
 sub verify_chosen_taxon{
 	my $taxon = shift;
 	my $num = shift;

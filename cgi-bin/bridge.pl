@@ -5719,7 +5719,7 @@ sub displayTaxonomyEntryForm	{
 	# figure out the rank of the taxon.
 	my $taxonObject = Taxon->new(\%GLOBALVARS);
 	$taxonObject->setWithTaxonName($taxon);
-	my $rank = $taxonObject->rank();
+	my $rank = $taxonObject->rankString();
 
 	
 	if ($rank eq "") {

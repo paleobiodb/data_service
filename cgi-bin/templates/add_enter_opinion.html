@@ -124,7 +124,7 @@ for anything else (subgenus or higher), it should say:
 
 
 %%START_OPTIONAL_not_species%%
-<!-- this should only be visible if it's not a species or subspecies -->
+<!-- this should only be visible if it's **NOT** a species or subspecies -->
 <TD colspan=2><b>Valid %%taxon_rank%%</b>, classified as belonging to 
 <input id="parent_taxon_name" name="parent_taxon_name" size="50" value="%%parent_taxon_name%%"><br>
 </TD>
@@ -133,13 +133,23 @@ for anything else (subgenus or higher), it should say:
 </TR>
 
 %%START_OPTIONAL_species_only%%
-<!-- this should only be visible for species or subspecies -->
+<!-- this should only be visible for species -->
 <TR><TD valign=top>
 <input type="radio" name="taxon_status" value="recombined as" %%taxon_status_recombined_as%%></TD>
 <TD colspan=2><b>Valid %%taxon_rank%%</b>, recombined into a different genus as  
 <input id="parent_taxon_name" name="parent_taxon_name" size="50" value="%%parent_taxon_name%%"><br>
 </TD></TR>
 %%END_OPTIONAL_species_only%%
+
+%%START_OPTIONAL_subspecies_only%%
+<!-- this should only be visible for subspecies -->
+<TR><TD valign=top>
+<input type="radio" name="taxon_status" value="recombined as" %%taxon_status_recombined_as%%></TD>
+<TD colspan=2><b>Valid %%taxon_rank%%</b>, recombined into a different species as  
+<input id="parent_taxon_name" name="parent_taxon_name" size="50" value="%%parent_taxon_name%%"><br>
+</TD></TR>
+%%END_OPTIONAL_subspecies_only%%
+
 
 
 <!-- the diagnosis box applies to either of the valid radio buttons -->
@@ -148,6 +158,11 @@ for anything else (subgenus or higher), it should say:
 <TD valign="middle" align=left>Diagnosis:<BR>
 <textarea id="diagnosis" name="diagnosis" rows=3 cols=70>%%diagnosis%%</textarea>
 </TD>
+
+<BR><BR>
+&nbsp &nbsp
+%%parent_taxon_popup%%
+
 </TR>
 
 <TR><TD valign=top>

@@ -1,12 +1,22 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -w
 
 # created by rjp, 1/2004.
-# Represents a single taxon, usually from the authorities table
-# (if it doesn't exist in the authorities table, then not all methods will work)
+#
+# Represents a single taxon from the authorities database table. 
+# Note: if the taxon doesn't exist in the authorities table, then not all methods will work,
+# for example, asking for the taxon number for a taxon which isn't in the database will
+# return an empty string.
+#
+# Includes various methods for setting the taxon such as by name/number, accessors for
+# various authority table fields such as taxon_rank, and methods to fetch/submit information
+# from the database.
 
 package Taxon;
 
 use strict;
+
+use Constants;
+
 use DBI;
 use DBConnection;
 use SQLBuilder;
@@ -20,14 +30,20 @@ use URLMaker;
 use Reference;
 
 
-
-
 use fields qw(	
 
 			GLOBALVARS
 			taxonName
+			
+			existsInDatabase
+			
+			one
+			two
+			three
+			
 			taxonNumber
-			taxonRank					
+			taxonRank
+			taxonRankString
 				
 			cachedDBRow
 						
@@ -38,8 +54,13 @@ use fields qw(
 					);  # list of allowable data fields.
 
 # taxonName is the name of the original taxon the user set
+# one, two, three are the first, second, and third words in the
+# taxon name, if it has them.  If not, they will be empty.
+#
+# existsInDatabase is a boolean which tells us whether it exists in the authority table or not.
 # taxonNumber is the number for the original taxon
-# taxonRank is the rank of this taxon, note, this won't be populated until the user calls rank()
+# taxonRank is the rank of this taxon, note, this won't be populated until the user calls rank().  It is a Rank object.
+# taxonRankString is a string like "species" or "genus"
 # taxaHash is a hash of taxa numbers and ranks.
 #
 # cachedDBRow is a cached Database row for this authority record.
@@ -53,7 +74,8 @@ use fields qw(
 # (void) setWithTaxonName(string name)
 #
 # (int) taxonNumber()
-# (string) rank()
+# (Rank) rank()
+# (string) rankString()
 #
 # (string) nameForRank(string rank)
 # (int) numberForRank(string rank)
@@ -69,11 +91,18 @@ sub new {
 	
 	$self->{GLOBALVARS} = shift;
 	
+	$self->{existsInDatabase} = 0;
 	# set up some default values
 	#$self->clear();	
 
 	return $self;
 }
+
+
+####
+## Methods to set the Taxon.
+##
+####
 
 
 # sets the inital taxon with the taxon_no from the database.
@@ -90,6 +119,11 @@ sub setWithTaxonNumber {
 			# if we found a taxon_name for this taxon_no, then 
 			# set the appropriate fields
 			$self->{taxonName} = $tn;
+			$self->{existsInDatabase} = 1;
+			
+			$self->splitTaxonName();
+		} else {
+			$self->{existsInDatabase} = 0;
 		}
 	}
 }
@@ -104,32 +138,35 @@ sub setWithTaxonName {
 	my Taxon $self = shift;
 	my $newname;
 	
-	Debug::dbPrint("Taxon::setWithTaxonName 1");
 	if (my $input = shift) {
-		
-			Debug::dbPrint("Taxon::setWithTaxonName 2");
-		
+			
 		$self->{taxonName} = $input;
+
+		$self->splitTaxonName();
 		
 		# now we need to get the taxonNo from the database if it exists.
 		my ($tn, $newname) = $self->getTaxonNumberFromName($input);
-		
-			Debug::dbPrint("Taxon::setWithTaxonName 3");
+
 			
 		if ($tn) {
 			# if we found a taxon_no for this taxon_name, then 
 			# set the appropriate fields
 			
-				Debug::dbPrint("Taxon::setWithTaxonName 4");
 			$self->{taxonNumber} = $tn;
 			$self->{taxonName} = $newname;
+			
+			$self->{existsInDatabase} = 1;
+			
 		
 			return 1;	# it worked
-		}	
+		} else {
+			$self->{existsInDatabase} = 0;
+		}
 	}
 	
 	return 0;
 }	
+
 
 # same as setWithTaxonName(), but DOES NOT look up the corresponding
 # taxon number in the database.. Just sets the name field.
@@ -138,7 +175,226 @@ sub setWithTaxonNameOnly {
 	my $newname = shift;
 	
 	$self->{taxonName} = $newname;
+	$self->{existsInDatabase} = 0;
+	$self->splitTaxonName();
 }
+
+
+####
+## End of methods to set the Taxon.
+##
+####
+
+
+
+
+# internal use only
+# splits the taxon name into three parts (if it can)
+# and assigns them to variables.
+sub splitTaxonName {
+	my Taxon $self = shift;
+	
+	my $tname = $self->{taxonName};
+	my ($one, $two, $three) = split(/ /, $tname);
+	
+	$self->{one} = $one;
+	$self->{two} = $two;
+	$self->{three} = $three;
+	
+	Debug::dbPrint("splitting taxon, and taxon name = $tname and one = $one and two = $two and three = $three");
+
+}
+
+
+
+####
+## Some accessors for the Taxon.
+##
+####
+
+
+# returns the first word in the taxon name.
+sub firstWord {
+	my Taxon $self = shift;
+	Debug::dbPrint("firstWord and one = " . $self->{one});
+	
+	return $self->{one};
+}
+
+# returns the first word in the taxon name.
+sub secondWord {
+	my Taxon $self = shift;
+	return $self->{two};
+}
+
+# returns the first word in the taxon name.
+sub thirdWord {
+	my Taxon $self = shift;
+	return $self->{three};
+}
+
+# Returns a boolean - does this taxon exist
+# in the database or not?  
+#
+# This is determined when the taxon
+# object is created.. Note that it might not update correctly if
+# the taxon is submitted while this object is already in existance.
+sub existsInDatabase {
+	my Taxon $self = shift;
+	
+	return $self->{existsInDatabase};
+}
+
+
+
+# return the taxonNumber for the originally specified taxon.
+sub taxonNumber {
+	my Taxon $self = shift;
+
+	return $self->{taxonNumber};	
+}
+
+
+# return the taxonName for the initially specifed taxon.
+sub taxonName {
+	my Taxon $self = shift;
+
+	return $self->{taxonName};	
+}
+
+
+# return the taxonName for the initially specifed taxon.
+# but with proper italicization
+sub taxonNameHTML {
+	my Taxon $self = shift;
+
+	my $rank = Rank->new($self->rankString());
+	
+	if ($rank->isSubspecies() || $rank->isSpecies() || $rank->isSubgenus() || $rank->isGenus()) {
+		return "<i>" . $self->{taxonName} . "</i>";
+	} else {
+		return $self->{taxonName};	
+	}
+}
+
+
+# returns the rank of the taxon this object represents,
+# for example, class, family, order, genus, species, etc.
+# as a Rank object
+sub rank {
+	my Taxon $self = shift;
+
+	if (! $self->{existsInDatabase}) {
+		return '';  # if it doesn't exist, then we can't
+		# look it up, can we?  ;-)
+	}
+	
+	if (! $self->{taxonRank}) {	
+		# if we haven't already fetched the rank, then fetch it.
+		my $sql = $self->getSQLBuilder();
+	
+		my $r = $sql->getSingleSQLResult("SELECT taxon_rank FROM authorities WHERE taxon_no = $self->{taxonNumber}");
+	
+		my $rank = Rank->new($r);
+		
+		$self->{taxonRank} = $rank;
+		$self->{taxonRankString} = $rank->rank();
+	}
+
+	return ($self->{taxonRank});
+}
+
+
+# same as rank(), but rather than returning a Rank object,
+# this returns a rank string such as "species"
+sub rankString {
+	my Taxon $self = shift;
+	
+	if (! $self->{taxonRankString}) {
+		# calling this will attempt to populate the taxonRankString parameter.
+		$self->rank();
+	}
+	
+	return $self->{taxonRankString};
+}
+
+
+
+# returns the authors of the authority record for this taxon (if any)
+sub authors {
+	my Taxon $self = shift;
+	
+	# get all info from the database about this record.
+	my $hr = $self->databaseAuthorityRecord();
+	
+	if (!$hr) {
+		return '';	
+	}
+	
+	my $auth;
+	
+	if ($hr->{ref_is_authority}) {
+		# then get the author info for that reference
+		my $ref = Reference->new();
+		$ref->setWithReferenceNumber($hr->{reference_no});
+		
+		$auth = $ref->authorsWithInitials();
+	} else {
+	
+		$auth = Globals::formatAuthors(1, $hr->{author1init}, $hr->{author1last}, $hr->{author2init}, $hr->{author2last}, $hr->{otherauthors} );
+		$auth .= " " . $self->pubyr();
+	}
+	
+	return $auth;
+}
+
+sub pubyr {
+	my Taxon $self = shift;
+
+	# get all info from the database about this record.
+	my $hr = $self->databaseAuthorityRecord();
+	
+	if (!$hr) {
+		return '';	
+	}
+	
+	return $hr->{pubyr};
+}
+
+
+
+
+# returns a URL string for the taxon name which links to the 
+# checkTaxonInfo routine.
+sub URLForTaxonName {
+	my Taxon $self = shift;
+	
+	my $rank = $self->rankString();
+	my $name = $self->taxonName();
+	
+	my $url = "bridge.pl?action=checkTaxonInfo&taxon_name=$name&taxon_rank=";
+	
+	if ($rank eq SPECIES) {
+		$url .= 'Genus+and+species';
+	} elsif ($rank eq GENUS) {
+		$url .= 'Genus';
+	} else {
+		$url .= 'Higher+taxon';	
+	}
+	
+	return URLMaker::escapeURL($url);
+}
+
+
+
+###
+## End of simple accessors
+###
+
+
+
+
+
 
 
 # for internal use only!
@@ -196,6 +452,20 @@ sub getTaxonNameFromNumber {
 }
 
 
+# figures out how many times this taxonName occurs in the 
+# database and returns a count.
+sub numberOfDBInstancesForName {
+	my Taxon $self = shift;
+	
+	my $sql = $self->getSQLBuilder();
+	
+	my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM authorities WHERE taxon_name = '" . $self->{taxonName} . "'");
+
+	return $count;
+}
+
+
+
 # **For internal use only - get the number of a taxon from the name
 # returns an ARRAY with two elements: the taxon_no, and the new taxon_name.
 # This is done because the taxon_name may be shortened, for example, if
@@ -240,53 +510,6 @@ sub getTaxonNumberFromName {
 
 
 
-# return the taxonNumber for the originally specified taxon.
-sub taxonNumber {
-	my Taxon $self = shift;
-
-	return $self->{taxonNumber};	
-}
-
-
-# return the taxonName for the initially specifed taxon.
-sub taxonName {
-	my Taxon $self = shift;
-
-	return $self->{taxonName};	
-}
-
-
-# return the taxonName for the initially specifed taxon.
-# but with proper italicization
-sub taxonNameHTML {
-	my Taxon $self = shift;
-
-	my $rank = Rank->new($self->rank());
-	
-	if ($rank->isSubspecies() || $rank->isSpecies() || $rank->isSubgenus() || $rank->isGenus()) {
-		return "<i>" . $self->{taxonName} . "</i>";
-	} else {
-		return $self->{taxonName};	
-	}
-}
-
-
-# returns the rank of the taxon this object represents,
-# for example, class, family, order, genus, species, etc.
-sub rank {
-	my Taxon $self = shift;
-
-	if (! $self->{taxonRank}) {	
-		# if we haven't already fetched the rank, then fetch it.
-		my $sql = $self->getSQLBuilder();
-
-		my $r = $sql->getSingleSQLResult("SELECT taxon_rank FROM authorities WHERE taxon_no = $self->{taxonNumber}");
-	
-		$self->{taxonRank} = $r;	
-	}
-
-	return $self->{taxonRank};
-}
 
 
 
@@ -334,74 +557,12 @@ sub numberForRank {
 }
 
 
-# returns the authors of the authority record for this taxon (if any)
-sub authors {
-	my Taxon $self = shift;
-	
-	# get all info from the database about this record.
-	my $hr = $self->databaseAuthorityRecord();
-	
-	if (!$hr) {
-		return '';	
-	}
-	
-	my $auth;
-	
-	if ($hr->{ref_is_authority}) {
-		# then get the author info for that reference
-		my $ref = Reference->new();
-		$ref->setWithReferenceNumber($hr->{reference_no});
-		
-		$auth = $ref->authorsWithInitials();
-	} else {
-	
-		$auth = Globals::formatAuthors(1, $hr->{author1init}, $hr->{author1last}, $hr->{author2init}, $hr->{author2last}, $hr->{otherauthors} );
-		$auth .= " " . $self->pubyr();
-	}
-	
-	return $auth;
-}
 
-sub pubyr {
-	my Taxon $self = shift;
-
-	# get all info from the database about this record.
-	my $hr = $self->databaseAuthorityRecord();
-	
-	if (!$hr) {
-		return '';	
-	}
-	
-	return $hr->{pubyr};
-}
-
-
-
-
-# returns a URL string for the taxon name which links to the 
-# checkTaxonInfo routine.
-sub URLForTaxonName {
-	my Taxon $self = shift;
-	
-	my $rank = $self->rank();
-	my $name = $self->taxonName();
-	
-	my $url = "bridge.pl?action=checkTaxonInfo&taxon_name=$name&taxon_rank=";
-	
-	if ($rank eq 'species') {
-		$url .= 'Genus+and+species';
-	} elsif ($rank eq 'genus') {
-		$url .= 'Genus';
-	} else {
-		$url .= 'Higher+taxon';	
-	}
-	
-	return URLMaker::escapeURL($url);
-}
-
-
-# for the taxon the user set with setTaxonNumber/Name(), 
-# finds the original combination of this taxon (ie, genus and species).
+# Finds the original combination of this taxon (ie, genus and species).
+# This takes the taxon name and looks for opinion records which deal with
+# the taxon and which have status of "recombined as" or "corrected as."  It then
+# goes down the links to find the original name in the authority table.
+#
 # Note, if the current taxon doesn't have an entry in the opinions table,
 # it will just return the taxon number we started with (the one the user originally set).
 #
@@ -414,7 +575,8 @@ sub originalCombination {
 	
 	my $tn = $self->taxonNumber();  # number we're starting with
 	
-	
+	# this works because all 'recombined as' and 'corrected as' opinions should point
+	# to the original (rather than having a chain).
 	my $cn = $sql->getSingleSQLResult("SELECT child_no FROM opinions WHERE parent_no = $tn 
 		AND status IN ('recombined as', 'corrected as')");
 	
@@ -423,6 +585,26 @@ sub originalCombination {
 	}
 	
 	return $cn;
+}
+
+# same as originalCombination()
+# but returns a pre-populated Taxon object.
+sub originalCombinationTaxon {
+	my Taxon $self = shift;
+	
+	my $original = Taxon->new();
+	$original->setWithTaxonNumber($self->originalCombination());
+	
+	return $original;
+}
+
+
+# returns boolean - is this the original
+# combination ('recombined as' or 'corrected as') ?
+sub isOriginalCombination {
+	my Taxon $self = shift;
+
+	return ($self->taxonNumber() == $self->originalCombination())
 }
 
 
@@ -543,7 +725,7 @@ sub listOfChildren {
 	my Taxon $self = shift;
 
 	my $sql = $self->getSQLBuilder();
-	my $rank = $self->rank(); # rank of the parent taxon
+	my $rank = $self->rankString(); # rank of the parent taxon
 	my $tn = $self->{taxonNumber};  # number of the parent taxon
 	my $tname = $self->taxonName();
 	
@@ -566,7 +748,7 @@ sub listOfChildren {
 	# if the parent rank is a genus, then we will also look through the authorities
 	# table for taxa starting with the genus name, but possibly which don't have
 	# opinions about them.
-	if ($rank eq 'genus') {
+	if ($rank eq GENUS) {
 		# note, the space after in '$tname \%' is important.
 		$sql->setSQLExpr("SELECT DISTINCT taxon_name, taxon_no FROM authorities 
 			WHERE taxon_name LIKE '$tname \%' ORDER BY taxon_name");
@@ -859,14 +1041,14 @@ sub displayAuthorityForm {
 	
 	if ($rankToUse eq 'higher') {
 		# the popup menu doesn't have "higher", so use "genus" instead.
-		$rankToUse = 'genus';
+		$rankToUse = GENUS;
 	}
 	
 	
 	# if the rank is species, then display the type_specimen input
 	# field.  Otherwise display the type_taxon_name field.
 	
-	if ($rankToUse eq 'species' || $rankToUse eq 'subspecies') {
+	if ($rankToUse eq SPECIES || $rankToUse eq SUBSPECIES) {
 		# remove the type_taxon_name field.
 		$fields{'OPTIONAL_type_taxon_name'} = 0;
 	} else {
@@ -887,12 +1069,12 @@ sub displayAuthorityForm {
 	# 'Equus newtaxon' and we have three entries in authorities for 'Equus'
 	# then we should present a menu and ask them which one to use.
 	
-	if ($isNewEntry && ($rankToUse eq 'species' || $rankToUse eq 'subspecies')) {
+	if ($isNewEntry && ($rankToUse eq SPECIES || $rankToUse eq SUBSPECIES)) {
 		my $tname = $fields{taxon_name};
 		my ($one, $two, $three) = split(/ /, $tname);
 		
 		my $name;
-		if ($rankToUse eq 'species') {
+		if ($rankToUse eq SPECIES) {
 			$name = $one;
 		} else {
 			$name = "$one $two";
@@ -908,10 +1090,10 @@ sub displayAuthorityForm {
 		my $parentRankToPrint;
 
 		my $parentRankShouldBe;
-		if ($rankToUse eq 'species') {
+		if ($rankToUse eq SPECIES) {
 			$parentRankShouldBe = "(taxon_rank = 'genus' OR taxon_rank = 'subgenus')";
 			$parentRankToPrint = "genus or subgenus";
-		} elsif ($rankToUse eq 'subspecies') {
+		} elsif ($rankToUse eq SUBSPECIES) {
 			$parentRankShouldBe = "taxon_rank = 'species'";
 			$parentRankToPrint = "species";
 		}
@@ -1234,10 +1416,10 @@ sub submitAuthorityForm {
 			$errors->add("Invalid taxon name, please check spacing and capitalization");	
 		}
 		
-		if ( (($rankFromSpaces eq 'subspecies') && ($trank ne 'subspecies')) ||
-			(($rankFromSpaces eq 'species') && ($trank ne 'species')) ||
+		if ( (($rankFromSpaces eq SUBSPECIES) && ($trank ne SUBSPECIES)) ||
+			(($rankFromSpaces eq SPECIES) && ($trank ne SPECIES)) ||
 			(($rankFromSpaces eq 'higher') && 
-			(  ($trank eq 'subspecies') || ($trank eq 'species') )
+			(  ($trank eq SUBSPECIES) || ($trank eq SPECIES) )
 			) ) {
 
 			$errors->add("The original rank '" . $trank . "' doesn't match the spacing of the taxon name '" . $q->param('taxon_name_corrected') . "'");
@@ -1320,14 +1502,14 @@ sub submitAuthorityForm {
 			
 			my $taxonRank = $q->param('taxon_rank'); 	# rank in popup menu
 			
-			if (($taxonRank eq 'genus') || ($taxonRank eq 'subgenus')) {
+			if (($taxonRank eq GENUS) || ($taxonRank eq SUBGENUS)) {
 				# then the type taxon rank must be species
-				if ($ttaxon->rank() ne 'species') {
+				if ($ttaxon->rankString() ne SPECIES) {
 					$errors->add("The type taxon rank doesn't make sense");	
 				}
 			} else {
 				# for any other rank, the type taxon rank must not be species.
-				if ($ttaxon->rank() eq 'species') {
+				if ($ttaxon->rankString() eq SPECIES) {
 					$errors->add("The type taxon rank doesn't make sense");	
 				}
 			}
@@ -1408,8 +1590,8 @@ sub submitAuthorityForm {
 	# 3/22/2004, this is a ******HACK****** for now.  Eventually,
 	# the opinion object should do this for us
 	my $parentTaxon;
-	if ( ($fieldsToEnter{taxon_rank} eq 'species') ||
-		 ($fieldsToEnter{taxon_rank} eq 'subspecies') ) {
+	if ( ($fieldsToEnter{taxon_rank} eq SPECIES) ||
+		 ($fieldsToEnter{taxon_rank} eq SUBSPECIES) ) {
 				
 		Debug::dbPrint("we're here 1 in Taxon");
 
