@@ -1010,11 +1010,15 @@ sub displayHomePage {
 	push ( @rowData,	$rs->{reference_total},
 						$rs->{collection_total}, 
 						$rs->{occurrence_total}, 
-						$rs->{enterer_total}, '', '' );
+						$rs->{enterer_total}, 
+						$rs->{institution_total}, 
+						$rs->{country_total}, '', '' );
 	push ( @fieldNames,	"reference_total",
 						"collection_total", 
 						"occurrence_total", 
-						"enterer_total", "main_menu", "login" );
+						"enterer_total", 
+						"institution_total", 
+						"country_total", "main_menu", "login" );
 	$sth->finish();
 
 
