@@ -100,7 +100,7 @@ sub buildMapOnly {
 		# if a research project (not a group) is requested, get a list of
 		#  references included in that project JA 3.10.02
 		my $reflist;
-		if ( $q->param('research_group') =~ /(^ETE$)|(^5%$)|(^PACED$)|(^PGAP$)/ )	{
+		if ( $q->param('research_group') =~ /(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/ )	{
 			$sql = "SELECT reference_no FROM refs WHERE project_name LIKE '%";
 			$sql .= $q->param('research_group') . "%'";
 
@@ -343,7 +343,7 @@ print "<!-- $occ{'collection_no'} -->\n";
 				}
 				$where = &::buildWhere ( $where, qq| modified>$filledfields{$t}| );
 			# following written by JA 3.10.02
-			} elsif ( $t eq "research_group" && $q->param('research_group') =~ /(^ETE$)|(^5%$)|(^PACED$)|(^PGAP$)/ )	{
+			} elsif ( $t eq "research_group" && $q->param('research_group') =~ /(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/ )	{
 				$where .= " AND reference_no IN (" . $reflist . ")";
 			} elsif ( $t eq "research_group" ) {
 				# research_group is now a set -- tone 7 jun 2002
