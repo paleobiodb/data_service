@@ -374,7 +374,7 @@ sub put {
 	my $key = shift;
 	my $value = shift;
 
-	$self->{$key} = $val;	# HOW IS THIS SUPPOSED TO WORK?(value <-> val)
+	$self->{$key} = $value;	
 	$stateChanged = 1;	# Unsure what this is --tone
 }
 
