@@ -34,6 +34,8 @@ my $OUT_HTTP_DIR = "/paleodb/data";
 my $OUT_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
 my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
 my $outFileBaseName;
+my $geogscales;
+my $stratscales;
 
 
 sub new {
@@ -153,8 +155,46 @@ sub retellOptions {
 	
 	$html .= $self->retellOptionsRow ( "Lump lists of same county & formation?", $q->param("lumplist") );
 	$html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
-	$html .= $self->retellOptionsRow ( "Include poor geographical data?", $q->param("strictgeography") );
-	$html .= $self->retellOptionsRow ( "Include poor temporal data?", $q->param("strictchronology") );
+
+	if ( $q->param('small_collection') )	{
+		$geogscales = "'small collection'";
+	}
+	if ( $q->param('outcrop') )	{
+		$geogscales .= ",'outcrop'";
+	}
+	if ( $q->param('local_area') )	{
+		$geogscales .= ",'local area'";
+	}
+	if ( $q->param('basin') )	{
+		$geogscales .= ",'basin'";
+	}
+	$geogscales =~ s/^,//;
+	$tempgeogscales = $geogscales;
+	$tempgeogscales =~ s/'//g;
+
+	$html .= $self->retellOptionsRow ( "Geographic scale of collections", $tempgeogscales );
+
+	if ( $q->param('bed') )	{
+		$stratscales = "bed";
+	}
+	if ( $q->param('group_of_beds') )	{
+		$stratscales .= ",'group of beds'";
+	}
+	if ( $q->param('member') )	{
+		$stratscales .= ",'member'";
+	}
+	if ( $q->param('formation') )	{
+		$stratscales .= ",'formation'";
+	}
+	if ( $q->param('group') )	{
+		$stratscales .= ",'group'";
+	}
+	$stratscales =~ s/^,//;
+	$tempstratscales = $stratscales;
+	$tempstratscales =~ s/'//g;
+
+	$html .= $self->retellOptionsRow ( "Temporal scale of collections", $tempstratscales );
+
 	$html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
 	$html .= $self->retellOptionsRow ( "Output data format", $q->param("collections_put") );
 
@@ -673,6 +713,10 @@ sub getCollectionsWhereClause {
 	$where->addWhereItem($self->getLatLongString()) if $self->getLatLongString();
 	$where->addWhereItem($self->getIntervalString()) if $self->getIntervalString();
 	$where->addWhereItem($self->getEnvironmentString()) if $self->getEnvironmentString();
+	# NOTE: these two variables are module globals composed in
+	#  retellOptions - messy but simple and it works
+	$where->addWhereItem(" geogscale in ($geogscales) ") if $geogscales;
+	$where->addWhereItem(" stratscale in ($stratscales) ") if $stratscales;
 		
 	my $regionsString = $self->getRegionsString();
 	if($regionsString ne "") {
@@ -896,15 +940,15 @@ sub doQuery {
 		if($collectionsWhereClause ne ""){
 			$sql .= " WHERE $collectionsWhereClause ";
 		}
-		if($q->param('strictgeography') eq 'NO'){
-			if($sql =~ /WHERE/i){
-				$sql .= "\nAND (collections.county IS NOT NULL OR (collections.latdeg IS NOT NULL AND collections.lngdeg IS NOT NULL))\n";
-			}
-			else{
-				$sql .= "\nWHERE (collections.county IS NOT NULL OR (collections.latdeg IS NOT NULL AND collections.lngdeg IS NOT NULL))\n";
-			}
-		}
 		# LEGACY CODE
+#		if($q->param('strictgeography') eq 'NO'){
+#			if($sql =~ /WHERE/i){
+#				$sql .= "\nAND (collections.county IS NOT NULL OR (collections.latdeg IS NOT NULL AND collections.lngdeg IS NOT NULL))\n";
+#			}
+#			else{
+#				$sql .= "\nWHERE (collections.county IS NOT NULL OR (collections.latdeg IS NOT NULL AND collections.lngdeg IS NOT NULL))\n";
+#			}
+#		}
 		#		if($q->param('strictchronology') eq 'NO'){
 			#			if($sql =~ /WHERE/){
 				#				$sql .= "\nAND ((" . $self->getNotNullString(('collections.epoch_max')) . ") OR (" . $self->getNotNullString(('collections.locage_min', 'collections.locage_max', 'collections.intage_max', 'collections.intage_min')) . "))";
