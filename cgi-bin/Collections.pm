@@ -1,5 +1,7 @@
 package Collections;
 
+use strict;
+
 ## sub createTimePlaceString($hash_ref)
 #
 #    description:  Creates a string representing the time and place for
