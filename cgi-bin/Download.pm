@@ -137,6 +137,19 @@ sub retellOptions {
 			$html .= $self->retellOptionsRow ( "Continents", join (  ", ", @continents ) );
 		}
 	}
+
+	if ( $q->param("latmin") > -90 && $q->param("latmin") < 90 )	{
+		$html .= $self->retellOptionsRow ( "Minimum latitude", $q->param("latmin") . "&deg;" );
+	}
+	if ( $q->param("latmax") > -90 && $q->param("latmax") < 90 )	{
+		$html .= $self->retellOptionsRow ( "Maximum latitude", $q->param("latmax") . "&deg;" );
+	}
+	if ( $q->param("lngmin") > -180 && $q->param("lngmin") < 180 )	{
+		$html .= $self->retellOptionsRow ( "Minimum longitude", $q->param("lngmin") . "&deg;" );
+	}
+	if ( $q->param("lngmax") > -180 && $q->param("lngmax") < 180 )	{
+		$html .= $self->retellOptionsRow ( "Maximum longitude", $q->param("lngmax") . "&deg;" );
+	}
 	
 	$html .= $self->retellOptionsRow ( "Lump lists of same county & formation?", $q->param("lumplist") );
 	$html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
@@ -443,6 +456,59 @@ sub getCountryString {
 	return "";
 }
 
+# 29.4.04 JA
+sub getLatLongString	{
+	my $self = shift;
+
+	my $latmin = $q->param('latmin');
+	my $latmax = $q->param('latmax');
+	my $lngmin = $q->param('lngmin');
+	my $lngmax = $q->param('lngmax');
+	my $abslatmin = abs($latmin);
+	my $abslatmax = abs($latmax);
+	my $abslngmin = abs($lngmin);
+	my $abslngmax = abs($lngmax);
+
+	# all the boundaries must be given
+	if ( $latmin eq "" || $latmax eq "" || $lngmin eq "" || $lngmax eq "" )	{
+		return "";
+	}
+	# at least one of the boundaries must be non-trivial
+	if ( $latmin <= -90 && $latmax >= 90 && $lngmin <= -180 || $lngmax >= 180 )	{
+		return "";
+	}
+
+	my $latlongclause = " ( ";
+
+	if ( $latmin >= 0 )	{
+		$latlongclause .= " ( latdeg>=$abslatmin && latdir='North' ) ";
+	} else	{
+		$latlongclause .= " ( ( latdeg<$abslatmin && latdir='South' ) OR latdir='North' ) ";
+	}
+	$latlongclause .= "AND";
+	if ( $latmax >= 0 )	{
+		$latlongclause .= " ( ( latdeg<$abslatmax && latdir='North' ) OR latdir='South' ) ";
+	} else	{
+		$latlongclause .= " ( latdeg>=$abslatmax && latdir='South' ) ";
+	}
+	$latlongclause .= "AND";
+	if ( $lngmin >= 0 )	{
+		$latlongclause .= " ( lngdeg>=$abslngmin AND lngdir='East' ) ";
+	} else	{
+		$latlongclause .= " ( ( lngdeg<$abslngmin AND lngdir='West' ) OR lngdir='East' ) ";
+	}
+	$latlongclause .= "AND";
+	if ( $lngmax >= 0 )	{
+		$latlongclause .= " ( lngdeg<$abslngmax AND lngdir='East' ) OR lngdir='West' ) ";
+	} else	{
+		$latlongclause .= " ( lngdeg>=$abslngmax AND lngdir='West' ) ";
+	}
+
+	$latlongclause .= " ) ";
+
+	return $latlongclause;
+}
+
 sub getIntervalString	{
 	my $self = shift;
 	my $max = $q->param('max_interval_name');
@@ -604,6 +670,7 @@ sub getCollectionsWhereClause {
 	}
 	
 	$where->addWhereItem($self->getCountryString()) if $self->getCountryString();
+	$where->addWhereItem($self->getLatLongString()) if $self->getLatLongString();
 	$where->addWhereItem($self->getIntervalString()) if $self->getIntervalString();
 	$where->addWhereItem($self->getEnvironmentString()) if $self->getEnvironmentString();
 		
