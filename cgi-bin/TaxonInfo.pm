@@ -1386,7 +1386,7 @@ sub displayTaxonClassification{
 					   "FROM authorities ".
 					   "WHERE taxon_name = '$taxon_name' ".
 					   "AND taxon_rank = '$taxon_rank'";
-			PBDBUtil::debug(1,"authorities inv: $sql_auth_inv<br>");
+			PBDBUtil::debug(1,"authorities inv: $sql_auth_inv");
 			@results = @{$dbt->getData($sql_auth_inv)};
 		}
 		else{
@@ -1410,7 +1410,7 @@ sub displayTaxonClassification{
 			else{
 				$child_no_visits{$child_no} = 1;
 			}
-			PBDBUtil::debug(1,"child_no_visits{$child_no}:$child_no_visits{$child_no}.<br>");
+			PBDBUtil::debug(2,"child_no_visits{$child_no}:$child_no_visits{$child_no}.");
 			last if($child_no_visits{$child_no}>1); 
 
 		}
@@ -1436,7 +1436,7 @@ sub displayTaxonClassification{
 					else{
 						$child_no_visits{$child_no} = 1;
 					}
-					PBDBUtil::debug(1,"child_no_visits{$child_no}:$child_no_visits{$child_no}.<br>");
+					PBDBUtil::debug(1,"child_no_visits{$child_no}:$child_no_visits{$child_no}.");
 					last if($child_no_visits{$child_no}>1); 
 				}
 			}
@@ -1449,7 +1449,7 @@ sub displayTaxonClassification{
 		my $sql_opin =  "SELECT status, parent_no, pubyr, reference_no ".
 						"FROM opinions ".
 						"WHERE child_no=$child_no AND status='belongs to'";
-		PBDBUtil::debug(1,"opinions: $sql_opin<br>");
+		PBDBUtil::debug(1,"opinions: $sql_opin");
 		@results = @{$dbt->getData($sql_opin)};
 
 		if($first_time && $taxon_rank eq "species" && scalar @results < 1){
@@ -1480,7 +1480,7 @@ sub displayTaxonClassification{
 			else{
 				$parent_no_visits{$parent_no}=1;
 			}
-			PBDBUtil::debug(1,"parent_no_visits{$parent_no}:$parent_no_visits{$parent_no}.<br>");
+			PBDBUtil::debug(1,"parent_no_visits{$parent_no}:$parent_no_visits{$parent_no}.");
 			last if($parent_no_visits{$parent_no}>1); 
 
 			if($parent_no){
@@ -1488,7 +1488,7 @@ sub displayTaxonClassification{
 				my $sql_auth = "SELECT taxon_name, taxon_rank ".
 					       "FROM authorities ".
 					       "WHERE taxon_no=$parent_no";
-				PBDBUtil::debug(1,"authorities: $sql_auth<br>");
+				PBDBUtil::debug(1,"authorities: $sql_auth");
 				@results = @{$dbt->getData($sql_auth)};
 				if(scalar @results){
 					$auth_hash_ref = $results[0];
@@ -1527,8 +1527,8 @@ sub displayTaxonClassification{
 	# Print these out in correct order
 	my @taxon_rank_order = ('superkingdom','kingdom','subkingdom','superphylum','phylum','subphylum','superclass','class','subclass','infraclass','superorder','order','suborder','infraorder','superfamily','family','subfamily','tribe','subtribe','genus','subgenus','species','subspecies');
 	my %taxon_rank_order = ('superkingdom'=>0,'kingdom'=>1,'subkingdom'=>2,'superphylum'=>3,'phylum'=>4,'subphylum'=>5,'superclass'=>6,'class'=>7,'subclass'=>8,'infraclass'=>9,'superorder'=>10,'order'=>11,'suborder'=>12,'infraorder'=>13,'superfamily'=>14,'family'=>15,'subfamily'=>16,'tribe'=>17,'subtribe'=>18,'genus'=>19,'subgenus'=>20,'species'=>21,'subspecies'=>22);
-	my $lastgood;
 	my $lastrank;
+    my $next_to_last_rank;
 	foreach my $rank (@taxon_rank_order){
 		# Don't provide links for any rank higher than 'order'
 		my %auth_yr;
@@ -1597,7 +1597,7 @@ sub displayTaxonClassification{
 			$counter++;
 			# Keep track of the last successful item  and rank so we have the 
 			# lowest on the chain when we're all done.
-			$lastgood = $classification{$rank}[0];
+            $next_to_last_rank = $lastrank;
 			$lastrank = $rank;
 		}
 	}
@@ -1616,65 +1616,67 @@ sub displayTaxonClassification{
 	# JA 30.4.04: my rewrite of this section assumes that taxon_no has been
 	#  passed in
 	# Poling had completely fucked this up with a renegade rewrite
-	CHILDREN:{
-	if($index < 21){ # species is position 21
-		#$lastrank = $taxon_rank_order[$index+1];
-		#if($lastrank eq "genus"){
-		#	$lastrank = "Genus";
-		#}
-		# genus is position 19.
-		#elsif($index < 19){
-		#	$lastrank = "Higher taxon";
-		#}
-#		my $sql = "SELECT taxon_no FROM authorities ".
-#				  "WHERE taxon_name='$lastgood'";
-#		PBDBUtil::debug(1,"lastgood sql: $sql");
-#		my @quickie = @{$dbt->getData($sql)};
-#		if(scalar @quickie < 1){
-			# BAIL
-#			last CHILDREN;
-#		}
+    # PS 01/20/2004 - Use getChildren function
 
-	# first get a list of possibly included taxa
-	$sql = "SELECT DISTINCT taxon_name,taxon_rank,taxon_no FROM opinions,authorities WHERE taxon_no=child_no AND status='belongs to' AND parent_no=$taxon_no ORDER BY taxon_name";
-	my @childrefs = @{$dbt->getData($sql)};
-
-	# for each taxon, confirm that the most recent opinion places the taxon
-	#  in taxon_no
-	# this opinion must be a belongs to because that's always the status
-	#  for this child - parent pair
-	my @children;
-	my @childranks;
-	for my $childref (@childrefs)	{
-		$sql = "SELECT parent_no, status, pubyr, reference_no ".
-			   "FROM opinions WHERE child_no=" . $childref->{taxon_no};
-		my @ref_ref = @{$dbt->getData($sql)};
-		my $itsparent = selectMostRecentParentOpinion($dbt, \@ref_ref);
-	# if current parent is the focal taxon, save to a list
-		if ( $itsparent == $taxon_no )	{
-			push @children, $childref->{taxon_name};
-			push @childranks, $childref->{taxon_rank};
-		}
-	}
-
-	# go through the remaining list making links
-	if (@children)	{
-		$output .= "<p><i>This taxon includes:</i><br>";
-		for my $i (0..$#children)	{
-			if ( $childranks[i] eq "species" )	{
-				$childranks[$i] = "Genus+and+species";
-			} elsif ( $childranks[i] eq "genus" )	{
-				$childranks[$i] = "Genus";
-			} else	{
-				$childranks[$i] = "Higher+taxon";
+    my $taxon_records = PBDBUtil::getChildren($dbt,$classification{$lastrank}[1],1,1);
+	if (@{$taxon_records}) {
+    	my @child_taxa_links;
+		my @invalid_taxa_links;
+    	foreach $record (@{$taxon_records}) {
+            $rank = $record->{'taxon_rank'} eq 'species' ? "Genus+and+species" 
+                  : $record->{'taxon_rank'} eq 'genus'   ? "Genus"
+                                                         : "Higher+Taxon"; 
+			if ($record->{'is_invalid'}) { 
+        		push @invalid_taxa_links, qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$record->{taxon_name}&taxon_rank=$rank">$record->{taxon_name}</a>|;
+			} else {
+        		push @child_taxa_links, qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$record->{taxon_name}&taxon_rank=$rank">$record->{taxon_name}</a>|;
 			}
-			$output .= "<a href=\"bridge.pl?action=checkTaxonInfo&taxon_name=$children[$i]&taxon_rank=$childranks[$i]\">$children[$i]</a>, ";
+    	}
+		if (@child_taxa_links) {
+	    	$output .= "<p><i>Children of this taxon include:</i><br>"; 
+			$output .= join(", ",@child_taxa_links);
+			$output .= "</p>";
+		}
+		if (@invalid_taxa_links) {
+	    	$output .= "<p><i>Invalid children of this taxon include:</i><br>"; 
+			$output .= join(", ",@invalid_taxa_links);
+			$output .= "</p>";
 		}
 	}
-	$output =~ s/, $//;
 
+    # Get sister taxa as well
+    # PS 01/20/2004
+    my $taxon_records = PBDBUtil::getChildren($dbt,$classification{$next_to_last_rank}[1],1,1);
+	if (@{$taxon_records}) {
+    	my @child_taxa_links;
+		my @invalid_taxa_links;
+    	foreach $record (@{$taxon_records}) {
+            next if ($record->{'taxon_no'} == $classification{$lastrank}[1]);
+            $rank = $record->{'taxon_rank'} eq 'species' ? "Genus+and+species" 
+                  : $record->{'taxon_rank'} eq 'genus'   ? "Genus"
+                                                         : "Higher+Taxon"; 
+            if ($lastrank ne $record->{'taxon_rank'}) {
+                PBDBUtil::debug(1,"rank mismatch $lastrank -- $record->{taxon_rank} for sister $record->{taxon_name}");
+            } else {
+                if ($is_invalid->{$taxon_no}) { 
+        		    push @invalid_taxa_links, qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$record->{taxon_name}&taxon_rank=$rank">$record->{taxon_name}</a>|;
+                } else {
+        		    push @child_taxa_links, qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$record->{taxon_name}&taxon_rank=$rank">$record->{taxon_name}</a>|;
+                }
+            }
+    	}
+		if (@child_taxa_links) {
+	    	$output .= "<p><i>Sister taxa include:</i><br>"; 
+			$output .= join(", ",@child_taxa_links);
+			$output .= "</p>";
+		}
+		if (@invalid_taxa_links) {
+	    	$output .= "<p><i>Invalid sister taxa include:</i><br>"; 
+			$output .= join(", ",@invalid_taxa_links);
+			$output .= "</p>";
+		}
 	}
-	} # CHILDREN block
+
 	return $output;
 }
 
@@ -1832,7 +1834,7 @@ sub getSynonymyParagraph{
 	
 	# Get ref info from refs if 'ref_is_authority' is set
 	if($auth_rec[0]->{ref_is_authority} =~ /YES/i){
-		PBDBUtil::debug(1,"author and year from refs<br>");
+		PBDBUtil::debug(2,"author and year from refs");
 		# If we didn't get an author and pubyr and also didn't get a 
 		# reference_no, we're at a wall and can go no further.
 		if(!$auth_rec[0]->{reference_no}){
@@ -1868,7 +1870,7 @@ sub getSynonymyParagraph{
 	# record.
 	elsif($auth_rec[0]->{author1last}){
 #	elsif($auth_rec[0]->{author1last} && $auth_rec[0]->{pubyr}){
-		PBDBUtil::debug(1,"author and year from authorities<br>");
+		PBDBUtil::debug(2,"author and year from authorities");
 		$text .= "<li><i>".$auth_rec[0]->{taxon_name}."</i> was named by ".
 			  	 $auth_rec[0]->{author1last};
 		if ( $auth_rec[0]->{pubyr} )	{
@@ -2132,6 +2134,7 @@ sub getSynonymyParagraph{
 sub getOriginalCombination{
 	my $dbt = shift;
 	my $taxon_no = shift;
+	my $loop_no = (shift || 0);
 	# You know you're an original combination when you have no children
 	# that have recombined or corrected as relations to you.
 	my $sql = "SELECT DISTINCT(child_no), status FROM opinions ".
@@ -2154,7 +2157,9 @@ sub getOriginalCombination{
 	# If all results in the loop above gave results, follow the first one
 	# down (assuming they all point to the same place eventually) recursively.
 	if($has_status){
-		$taxon_no = getOriginalCombination($dbt,$results[0]->{child_no});
+		$loop_no++;
+		if ($loop_no > 10) { die ("loop in getOrigComb $results[0]->{child_no} $sql"); }
+		$taxon_no = getOriginalCombination($dbt,$results[0]->{child_no},$loop_no);
 	}
 
 	# If we fall through above but $has_status was not set, we just
@@ -2199,7 +2204,6 @@ sub  selectMostRecentBelongsToOpinion	{
 	return $parent_refs[$index];
 }
 
-
 sub selectMostRecentParentOpinion{
 	my $dbt = shift;
 	my $array_ref = shift;
@@ -2215,7 +2219,7 @@ sub selectMostRecentParentOpinion{
 		}
 	}
 	elsif(scalar @array_of_hash_refs > 1){
-		PBDBUtil::debug(1,"FOUND MORE THAN ONE PARENT<br>");
+		PBDBUtil::debug(2,"FOUND MORE THAN ONE PARENT");
 		# find the most recent opinion
 		# Algorithm: For each opinion (parent), if opinions.pubyr exists, 
 		# use it.  If not, get the pubyr from the reference and use it.
