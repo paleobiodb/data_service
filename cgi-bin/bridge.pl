@@ -5679,13 +5679,11 @@ sub processNewReIDs {
 				print "<center><h3>The following reidentifications already were entered</h3></center>\n";
 			}
 
-			$sql = "SELECT * FROM reidentifications WHERE reid_no=$recID";
+			$sql = "SELECT reid_no,occurrence_no,collection_no,reference_no,genus_reso,genus_name,species_reso,species_name,comments FROM reidentifications WHERE reid_no=$recID";
 			dbg ( "$sql<HR>" );
 			$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 			$sth->execute();
 			my @retrievedRow = $sth->fetchrow_array();
-			splice @retrievedRow, 0, 3;
-			splice @retrievedRow, $#retrievedRow - 5, 6;
 			my @colnames = ("Reid no", "Occurrence", "Collection",
               "Reference", "Corrected name", "", "", "", "Comments" );
 			$sth->finish();
