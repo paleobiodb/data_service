@@ -33,6 +33,46 @@ sub new {
 }
 
 
+# sets the inital taxon with the taxon_no from the database.
+sub setWithTaxonNumber {
+	my TaxonHierarchy $self = shift;
+	
+	if (my $input = shift) {
+		# now we need to get the taxonName from the database if it exists.
+		my $tn = $self->getTaxonNameFromNumber($input);
+		
+		$self->{taxonNumber} = $input;
+
+		if ($tn) {
+			# if we found a taxon_name for this taxon_no, then 
+			# set the appropriate fields
+			$self->{taxonName} = $tn;
+		}
+	}
+}
+
+
+# Sets the initial taxon with the taxon_name from the database.
+# If the taxon is not in the database, then it does nothing.
+sub setWithTaxonName {
+	my TaxonHierarchy $self = shift;
+	my $newname;
+	
+	if (my $input = shift) {
+		# now we need to get the taxonNo from the database if it exists.
+		my ($tn, $newname) = $self->getTaxonNumberFromName($input);
+		
+		if ($tn) {
+			# if we found a taxon_no for this taxon_name, then 
+			# set the appropriate fields
+			$self->{taxonNumber} = $tn;
+			$self->{taxonName} = $newname;
+		
+		}	
+	}
+}	
+
+
 # for internal use only!
 # returns the SQL builder object
 # or creates it if it has not yet been created
@@ -60,15 +100,9 @@ sub getTaxonNameFromNumber {
 	if (my $input = shift) {
 
 		my $sql = $self->getSQLBuilder();
-		$sql->setSQLExpr("SELECT taxon_name FROM authorities 
+		my $tn = $sql->getSingleSQLResult("SELECT taxon_name FROM authorities 
 				WHERE taxon_no = $input");
 
-		$sql->executeSQL();
-		
-		my @result = $sql->nextResultRow();
-		my $tn = $result[0];
-		$sql->finishSQL();
-		
 		if ($tn) {
 			return $tn;
 		}
@@ -89,12 +123,8 @@ sub getTaxonNumberFromName {
 
 	if (my $input = shift) {
 		my $sql = $self->getSQLBuilder();
-		$sql->setSQLExpr("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
-		$sql->executeSQL();
 		
-		my @result = $sql->nextResultRow();
-		my $tn = $result[0];
-		$sql->finishSQL();
+		my $tn = $sql->getSingleSQLResult("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
 		
 		if ($tn) {
 			return ($tn, $input);
@@ -105,12 +135,7 @@ sub getTaxonNumberFromName {
 		# (ie, we'll assume that it was a genus species, and cut off the species)
 		$input =~ s/^(.*)\s.*$/$1/;
 		
-		$sql->setSQLExpr("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
-		$sql->executeSQL();
-
-		my @result = $sql->nextResultRow();
-		my $tn = $result[0];
-		$sql->finishSQL();
+		my $tn = $sql->getSingleSQLResult("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
 		
 		if ($tn) {
 			return ($tn, $input);
@@ -122,43 +147,7 @@ sub getTaxonNumberFromName {
 
 
 
-# sets the inital taxon with the taxon_no from the database.
-sub setWithTaxonNumber {
-	my TaxonHierarchy $self = shift;
-	
-	if (my $input = shift) {
-		# now we need to get the taxonName from the database if it exists.
-		my $tn = $self->getTaxonNameFromNumber($input);
-		
-		if ($tn) {
-			# if we found a taxon_name for this taxon_no, then 
-			# set the appropriate fields
-			$self->{taxonName} = $tn;
-			$self->{taxonNumber} = $input;
-		}
-	}
-}
 
-
-# Sets the initial taxon with the taxon_name from the database.
-# If the taxon is not in the database, then it does nothing.
-sub setWithTaxonName {
-	my TaxonHierarchy $self = shift;
-	my $newname;
-	
-	if (my $input = shift) {
-		# now we need to get the taxonNo from the database if it exists.
-		my ($tn, $newname) = $self->getTaxonNumberFromName($input);
-		
-		if ($tn) {
-			# if we found a taxon_no for this taxon_name, then 
-			# set the appropriate fields
-			$self->{taxonNumber} = $tn;
-			$self->{taxonName} = $newname;
-		
-		}	
-	}
-}	
 
 
 # return the taxonNumber for the originally specified taxon.
@@ -195,15 +184,39 @@ sub nameForRank {
 	
 	if ($id) {
 		# now we need to get the name for it
-		my $sql = SQLBuilder->new();
-		$sql->setSQLExpr("SELECT taxon_name FROM authorities WHERE taxon_no = $id");
-		$sql->executeSQL();
-		return ($sql->nextResultRow())[0];
+		my $sql = $self->getSQLBuilder();
+		return $sql->getSingleSQLResult("SELECT taxon_name FROM authorities WHERE taxon_no = $id");
 	}
 	
 	return "";
 	
 }
+
+
+# for the taxon the user set with setTaxonNumber/Name(), 
+# finds the original combination of this taxon (ie, genus and species).
+# Note, if the current taxon doesn't have an entry in the opinions table,
+# it will just return the taxon number we started with (the one the user originally set).
+#
+# returns a taxon_no (integer).
+# if it can't find one, returns 0 (false).
+sub originalCombination {
+	my TaxonHierarchy $self = shift;
+	
+	my $sql = $self->getSQLBuilder();
+	
+	my $tn = $self->taxonNumber();  # number we're starting with
+	
+	my $cn = $sql->getSingleSQLResult("SELECT child_no FROM opinions WHERE parent_no = $tn 
+		AND status = 'recombined as' OR status = 'corrected as'");
+	
+	if (! $cn) {
+		return $tn;		# return the number we started with if there are no recombinations	
+	}
+	
+	return $cn;
+}
+
 
 
 # for internal use only
@@ -226,7 +239,7 @@ sub createTaxaHash {
 	
 	my $ref_has_opinion;  # boolean
 	my ($pubyr, $idNum);
-	my (@result, @subResult);  # sql query results
+	my $resultRef;  # sql query results
 	
 	# another sql object for executing subqueries.
 	my $subSQL = SQLBuilder->new();
@@ -255,34 +268,27 @@ sub createTaxaHash {
 		$idNum = 0;
 		
 		my $tempYR;
-		while (@result = $sql->nextResultRow()) {			
-			if ($ref_has_opinion = $result[2]) {
+		while ($resultRef = $sql->nextResultArrayRef()) {			
+			if ($ref_has_opinion = $resultRef->[2]) {
 				# if ref_has_opinion is YES, then we need to look to the reference
 				# to find the pubyr
-				$tempYR = $result[4]; # pubyr from reference
+				$tempYR = $resultRef->[4]; # pubyr from reference
 			} else {
-				$tempYR = $result[1];  # pubyr from opinion
+				$tempYR = $resultRef->[1];  # pubyr from opinion
 			}
 				
 			if ($tempYR > $pubyr) {
 				$pubyr = $tempYR;
-				$idNum = $result[0];
+				$idNum = $resultRef->[0];
 			}
 			
-		} # end while @result.
+		} # end while $resultRef.
 
 		$sql->finishSQL();
 		my $parent = $idNum;  # this is the parent with the most recent pubyr.
 
-		
-		
 		# get the rank of the parent
-		$sql->setSQLExpr("SELECT taxon_rank FROM authorities WHERE taxon_no = $parent");
-		$sql->executeSQL();
-			
-		@result = $sql->nextResultRow();
-		my $pRank = $result[0];
-		$sql->finishSQL();
+		my $pRank = $sql->getSingleSQLResult("SELECT taxon_rank FROM authorities WHERE taxon_no = $parent");
 		
 		# insert it into the hash, so we have the parent rank as the key
 		# and the parent number as the value.
@@ -312,35 +318,28 @@ sub createTaxaHash {
 		$idNum = 0;
 		
 		my $tempYR;
-		while (@result = $sql->nextResultRow()) {
-			if ($ref_has_opinion = $result[2]) {
+		while ($resultRef = $sql->nextResultArrayRef()) {
+			if ($ref_has_opinion = $resultRef->[2]) {
 				# if ref_has_opinion is YES, then we need to look to the reference
 				# to find the pubyr
-				$tempYR = $result[4]; # pubyr from reference
+				$tempYR = $resultRef->[4]; # pubyr from reference
 			} else {
-				$tempYR = $result[1];  # pubyr from opinion
+				$tempYR = $resultRef->[1];  # pubyr from opinion
 			}
 				
 			if ($tempYR > $pubyr) {
 				$pubyr = $tempYR;
-				$idNum = $result[0];
+				$idNum = $resultRef->[0];
 			}
 			
-		} # end while @result.
+		} # end while $resultRef.
 	
 	
 		$sql->finishSQL();
 		my $child = $idNum;  # this is the child with the most recent pubyr.
 
 		# get the rank of the parent
-		$sql->clear();
-		$sql->setSQLExpr("SELECT taxon_rank FROM authorities WHERE taxon_no = $child");
-		$sql->executeSQL();		
-			
-		@result = $sql->nextResultRow();
-		my $cRank = $result[0];
-		$sql->finishSQL();
-
+		my $cRank = $sql->getSingleSQLResult("SELECT taxon_rank FROM authorities WHERE taxon_no = $child");
 		
 		# insert it into the hash, so we have the parent rank as the key
 		# and the parent taxon_no as the value.
@@ -363,7 +362,7 @@ sub createTaxaHash {
 #		
 #			$sql->setSQLExpr("SELECT taxon_name FROM authorities WHERE taxon_no = '$taxon_no'");
 #			$sql->executeSQL();
-#			my @result = $sql->nextResultRow();
+#			my @result = $sql->nextResultArray();
 #			my $taxon_name = $result[0];
 #			print "$key = $taxon_name\n";
 #		}
