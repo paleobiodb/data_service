@@ -749,8 +749,11 @@ sub displayTaxonInfoResults {
 	my $in_list = "";
 
 	if($taxon_type eq "Higher taxon"){
-		my $name = $q->param('genus_name');
-		$in_list = `./recurse $name`;
+	# JA: replaced recurse call with taxonomic_search call 7.5.04 because
+	#  I am not maintaining recurse
+		#my $name = $q->param('genus_name');
+		#$in_list = `./recurse $name`;
+		$in_list=PBDBUtil::taxonomic_search($q->param('genus_name'),$dbt);
 	} elsif ( ! $taxon_no )	{
 	# Don't go looking for junior synonyms if this taxon isn't even
 	#  in the authorities table (because it has no taxon_no) JA 8.7.03
