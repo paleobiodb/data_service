@@ -3069,8 +3069,8 @@ sub displayReIDCollsAndOccsSearchForm
 
 sub displayReIDForm {
 
-    # If this is a genus/species search, compose the required SQL query
-    if ( $q->param('submit') eq 'Search occurrences') {
+    # If this is a genus/species search, go right to the reid form.
+    if ( $q->param('genus_name') ne '') {
 		&displayOccsForReID();
     } else {
 
