@@ -20,34 +20,17 @@ use Rank;
 use Globals;
 use Session;
 use Classification;
+use CGI::Carp;
+use Data::Dumper;
 
+# list of allowable data fields.
+use fields qw(GLOBALVARS opinion_no reference_no cachedDBRow DBTransactionManager );  
 
-# names of radio buttons, etc. used in the form.
-use constant BELONGS_TO => 'belongs to';
-use constant RECOMBINED_AS => 'recombined as';
-use constant INVALID1 => 'invalid1';
-use constant INVALID2 => 'invalid2';
-
-
-
-use fields qw(	
-                GLOBALVARS
-				opinion_no
-                reference_no
-				
-				cachedDBRow
-				DBTransactionManager
-							);  # list of allowable data fields.
-
-						
 # optionally pass it a reference to the GLOBALVARS hash.
 sub new {
 	my $class = shift;
-		
 	my Opinion $self = fields::new($class);
-	
 	$self->{GLOBALVARS} = shift;
-	
 	return $self;
 }
 
@@ -88,7 +71,6 @@ sub databaseOpinionRecord {
 		$self->{cachedDBRow} = $row;  # save for future use.
 	}
 	
-	#Debug::dbPrint($row->get('taxon_name'));
 	return $row->row(); 	
 }
 
@@ -132,7 +114,7 @@ sub authors {
 	
 	my $auth;
 	
-	if ($hr->{ref_has_opinion} eq YES) {
+	if ($hr->{ref_has_opinion} eq 'YES') {
 		# then get the author info for that reference
 		my $ref = Reference->new();
 		$ref->setWithReferenceNumber($hr->{reference_no});
@@ -237,14 +219,11 @@ sub displayOpinionForm {
 	my $hbo = shift;
 	my $s = shift;
 	my $q = shift;
-	my $parentnosref = shift;
-	my @parentnos;
-	if ( $parentnosref )	{
-		@parentnos = @{$parentnosref};
-	}
+    my $error_message = shift;
 	
 	
-	my $sql = $self->getTransactionManager();
+	my $dbt = $self->getTransactionManager();
+    my $dbh = $dbt->dbh;
 	
 	my %fields;  # a hash of fields and values that
 				 # we'll pass to HTMLBuilder to pop. the form.
@@ -255,238 +234,129 @@ sub displayOpinionForm {
 	my @nonEditables; 	
 	
 	if ((!$hbo) || (! $s) || (! $q)) {
-		Debug::logError("Taxon::displayOpinionForm had invalid arguments passed to it.");
+		croak("Opinion::displayOpinionForm had invalid arguments passed to it.");
 		return;
 	}
-	
-	
-	# Figure out if it's the first time displaying this form, or if it's already been displayed,
-	# for example, if we're showing some errors about the last attempt at submission.
-	my $secondTime = 0;  # is this the second time displaying this form?
-	if ($q->param('second_submission') eq YES) {
-		# this means that we're displaying the form for the second
-		# time with some error messages.
-		$secondTime = 1;
-			
-		# so grab all of the fields from the CGI object
-		# and stick them in our fields hash.
-		my $fieldRef = Globals::copyCGIToHash($q);
-		%fields = %$fieldRef;
-	}
-	
-	#Debug::dbPrint("second_submission = $secondTime");
-	#Debug::dbPrint("fields, second sub = " . $fields{second_submission});
 
-	# Is this supposed to be a new entry, or just an edit of an old record?
-	# We'll look for a hidden field first, just in case we're re-displaying the form.
-	my $isNewEntry = 1;
-	if ($q->param('is_new_entry') eq 'NO') {
-		$isNewEntry = 0;
-	} elsif ($q->param('is_new_entry') eq YES) {
-		$isNewEntry = 1;	
-	} elsif ($self->{opinion_no}) {
-		$isNewEntry = 0;  # it must be an edit if we have an opinion_no for it.
-	}
+    # Simple variable assignments
+    my $isNewEntry = ($q->param('opinion_no') > 0) ? 0 : 1;
+    my $reSubmission = ($error_message) ? 1 : 0;
+	my @valid = ('belongs to', 'recombined as', 'revalidated');
+	my @synArray = ('subjective synonym of', 'objective synonym of', 'homonym of','replaced by','corrected as','rank changed as');
+	my @nomArray = ('nomen dubium','nomen nudum','nomen oblitum', 'nomen vanum');
 
-	#Debug::dbPrint("isNewEntry = $isNewEntry");
-	
-	# if the opinion is already in the opinions table,
-	# then grab the data from that table row.
+
+    # If a drop down is presented, do not use the parent_no from it if they switched radio buttons
+    if (($q->param('orig_taxon_status') && $q->param('orig_taxon_status') ne $q->param('taxon_status'))) {
+        $q->param('parent_no'=>''); 
+    }
+   
+    # Grab the appropriate data to auto-fill the form
 	my $dbFieldsRef;
-	if (! $isNewEntry) {	
-		$dbFieldsRef = $self->databaseOpinionRecord();
-		Debug::dbPrint("querying database");
-		
-		# we only want to stick the database data in the
-		# fields to populate if it's the first time displaying the form,
-		# otherwise we'll overwrite any changes the user has already made to the form.
-		if (!$secondTime) {
-			%fields = %$dbFieldsRef;		
-			$fields{opinion_no} = $self->{opinion_no};
-		}
-	}
-
-	
-	#### 
-	## At this point, it's safe to start assigning things to the %fields
-	## hash.  However, it shouldn't be done before here, because the hash
-	## might be overwritten in two places above.
-	####
-
-
-	# figure out the taxon name and number
-	my $taxon = Taxon->new($self->{GLOBALVARS});
-	$taxon->setWithTaxonNumber($q->param('taxon_no'));
-	$fields{taxon_name} = $taxon->taxonName();
-	$fields{taxon_no} = $taxon->taxonNumber();
-
-	
-	
-	# Store whether or not this is a new entry in a hidden variable so 
-	# we'll have access to this information even after a taxon_no has been assigned...	
-	if ($isNewEntry) {
-		$fields{is_new_entry} = YES;
+	if ($reSubmission) {
+		%fields = %{$q->Vars};
+        if (!$isNewEntry) {
+            $dbFieldsRef = $self->databaseOpinionRecord();
+            $fields{'child_no'} = $dbFieldsRef->{'child_no'};
+        }
 	} else {
-		$fields{is_new_entry} = 'NO';
-		
-		# record the opinion number for later use if it's not a new entry.. (ie, if it's an edit).
-		$fields{opinion_no} = $self->{opinion_no};
-	}
-	
-	
-	# fill out the authorizer/enterer/modifier info at the bottom of the page
-	if (!$isNewEntry) {
-		if ($fields{authorizer_no}) { $fields{authorizer_name} = " <B>Authorizer:</B> " . $s->personNameForNumber($fields{authorizer_no}); }
-		
-		if ($fields{enterer_no}) { $fields{enterer_name} = " <B>Enterer:</B> " . $s->personNameForNumber($fields{enterer_no}); }
-		
-		if ($fields{modifier_no}) { $fields{modifier_name} = " <B>Modifier:</B> " . $s->personNameForNumber($fields{modifier_no}); }
-	}
-	
-	
-	# populate the correct pages/figures fields depending
-	# on the ref_has_opinion value.
-		
-	if ($isNewEntry) {
-		# for a new entry, use the current reference from the session.
-		$fields{reference_no} = $s->currentReference();
-	} 
-	
-	
-	#print "ref_is_authority = " . $fields{'ref_is_authority'};
-	
-	if ($fields{'ref_has_opinion'} eq YES) {
-		# reference_no is the authority
-		$fields{'ref_has_opinion_checked'} = 'checked';
-		$fields{'ref_has_opinion_notchecked'} = '';
-	
-	} else {
-		# reference_no does not hold the opinion info..
-		
-		if ((!$isNewEntry) || $secondTime) {
-			# we only want to check a reference radio button
-			# if they're editing an old record.  This will force them to choose
-			# one for a new record.  However, if it's the second time
-			# through, then it's okay to check one since they already did.
-			$fields{'ref_has_opinion_checked'} = '';
-			$fields{'ref_has_opinion_notchecked'} = 'checked';
-			
-			$fields{'ref_has_opinion'} = 'NO';
-		}
-		
-		if (!$secondTime) {
+        if ($isNewEntry) {
+            $fields{'child_no'} = $q->param('child_no');
+		    $fields{'reference_no'} = $s->currentReference();
+        } else {
+            $dbFieldsRef = $self->databaseOpinionRecord();
+            %fields = %$dbFieldsRef;		
+            
+            $fields{'child_no'} = $dbFieldsRef->{'child_no'};
+
 			$fields{'2nd_pages'} = $fields{'pages'};
 			$fields{'2nd_figures'} = $fields{'figures'};
 			$fields{'pages'} = '';
 			$fields{'figures'} = '';
-		}
+
+            # if its from the DB, populate appropriate form vars
+            for (@valid) { 
+                if ($_ eq $fields{'status'}) {
+                    $fields{'taxon_status'} = $_; 
+                }
+            }    
+            for (@synArray) { 
+                if ($_ eq $fields{'status'}) {
+                    $fields{'taxon_status'} = 'invalid1'; 
+                    $fields{'synonym'} = $_;
+                    last;
+                }
+            }    
+            for (@nomArray) { 
+                if ($_ eq $fields{'status'}) {
+                    $fields{'taxon_status'} = 'invalid2'; 
+                    $fields{'nomen'} = $_;
+                    last;
+                }
+            }    
+            #$fields{opinion_no} = $self->{opinion_no};
+        }
+    }
+
+    # Assign error message
+    $fields{'error_message'} = $error_message if ($error_message);
+
+    # This block gets a list of potential homonyms, either from the database for an edit || resubmission
+    # or from the values passed in for a new && resubmission
+    my @parent_nos = ();
+    #my @recombined_nos = ();
+    my $parentName = "";
+    #my $recombinedName = "";
+    if ($fields{'parent_no'} > 0) {
+        # This will happen on an edit (first submission) or resubmission w/homonyms
+        # SQL trick: get not only the authoritiy data for parent_no, but all its homonyms as well
+        my $sql = "SELECT a2.* FROM authorities a1, authorities a2 WHERE a1.taxon_name=a2.taxon_name AND a1.taxon_no=".$dbh->quote($fields{'parent_no'});
+        my @results= @{$dbt->getData($sql)}; 
+        foreach my $row (@results) {
+            push @parent_nos, $row->{'taxon_no'};
+            $parentName = $row->{'taxon_name'};
+        }
+    } else {
+        # This block will happen on a resubmission w/o homonyms
+        if ($fields{'taxon_status'} eq 'belongs to') { 
+            $parentName = $q->param('belongs_to_parent');
+        } elsif ($fields{'taxon_status'} eq 'recombined as') { 
+            $parentName = $q->param('recombined_as_parent');
+        } elsif ($fields{'taxon_status'} eq 'invalid1') { 
+            $parentName = $q->param('synonym_parent');
+        }
+        if ($parentName) {
+            my $sql = "SELECT * FROM authorities WHERE taxon_name=".$dbh->quote($parentName);
+            my @results= @{$dbt->getData($sql)}; 
+            foreach my $row (@results) {
+                push @parent_nos, $row->{'taxon_no'};
+            }
+        }
+    }
+
+    main::dbg("parentName $parentName parent_nos ".Dumper(@parent_nos));
+
+    if (!$isNewEntry) {
+	    # fill out the authorizer/enterer/modifier info at the bottom of the page
+		if ($fields{authorizer_no}) { $fields{authorizer_name} = " <B>Authorizer:</B> " . $s->personNameForNumber($fields{authorizer_no}); }
+		if ($fields{enterer_no}) { $fields{enterer_name} = " <B>Enterer:</B> " . $s->personNameForNumber($fields{enterer_no}); }
+		if ($fields{modifier_no}) { $fields{modifier_name} = " <B>Modifier:</B> " . $s->personNameForNumber($fields{modifier_no}); }
+    }
+
+    # Handle radio button
+    if ($fields{'ref_has_opinion'} eq 'YES') {
+		$fields{'ref_has_opinion_checked'} = 'checked';
+		$fields{'ref_has_opinion_notchecked'} = '';
+    } elsif (exists $fields{'ref_has_opinion'}) {
+		$fields{'ref_has_opinion_checked'} = '';
+		$fields{'ref_has_opinion_notchecked'} = 'checked';
 	}
-	
-	
-	my $childRank = Rank->new($taxon->rankString());
-	$fields{taxon_rank} = $childRank->rank();
-	
-	
-	# We display a couple of different things depending on whether
-	# the rank is species or higher...
-
-	$fields{'OPTIONAL_species_only'} = $childRank->isSpecies();
-	$fields{'OPTIONAL_subspecies_only'} = $childRank->isSubspecies();	
-	$fields{'OPTIONAL_not_species'} = $childRank->isHigherThanString(SPECIES);
-	
-
-	# figure out which radio button to select for the status:
-	# status is one of these:
-	#
-	# Valid: 'belongs to','recombined as','revalidated'
-	#
-	# Invalid1: 'subjective synonym of', 'objective synonym of',
-	# 'homonym of','replaced by','corrected as','ranked changed as'
-	#
-	# Invalid2: 'nomen dubium','nomen nudum','nomen oblitum',
-	# 'nomen vanum' 
-	#
-
-	my @synArray = ('subjective synonym of', 'objective synonym of', 'homonym of','replaced by','corrected as','rank changed as');
-	my @nomArray = ('nomen dubium','nomen nudum','nomen oblitum', 'nomen vanum');
-	
-	my @valid = (BELONGS_TO, RECOMBINED_AS, 'revalidated');
 
 	
-	Debug::dbPrint("fields{status} = " . $fields{status});
- 	Debug::dbPrint("fields{taxon_status} = " . $fields{taxon_status});
-	
-	
-	# note, taxon_status is the name of the radio buttons in the form.
-	# status is the name in the database.
-	# 
-	# So, if this is the second time through (after displaying errors), we
-	# need to re-assign the status field based off of what the user entered.
-	if ($secondTime) {
-		$fields{status} = $fields{taxon_status};
-		if ($fields{status} eq INVALID1) {
-			$fields{status} = $fields{synonym};
-		} elsif ($fields{status} eq INVALID2) {
-			$fields{status} = $fields{nomen};
-		}
-	}
-	
-	
-		
-	# Now we should figure out the parent taxon name for this opinion.
-	my $parent = Taxon->new($self->{GLOBALVARS});
-	$parent->setWithTaxonNumber($fields{parent_no});
-	
-	
-	if ($fields{status}) {
-		if (! (Globals::isIn(\@valid, $fields{status}))) {
-			# it's an invalid status
-		
-			if ($fields{status} =~ m/nomen/) {
-				# it's a nomen status..
-				# "Invalid and no other name can be applied"
-				
-				$fields{'taxon_status_invalid2'} = 'checked';
-				$fields{taxon_status} = INVALID2;
-				
-			} else {
-				# else, we should pick the invalid1 radio button.
-				# "Invalid and another name should be used"
-				
-				$fields{'taxon_status_invalid1'} = 'checked';
-				$fields{taxon_status} =  INVALID1;
-				
-				if (! $secondTime) {
-					$fields{'parent_taxon_name2'} = $parent->taxonName();
-				}
-			}
-		} else {
-			# it must be a valid status
-	
-			if ($fields{status} eq RECOMBINED_AS) {
-				$fields{'taxon_status_recombined_as'} = 'checked';
-				$fields{taxon_status} = RECOMBINED_AS;
-			} else {
-				$fields{taxon_status_belongs_to} = 'checked';
-				$fields{taxon_status} = BELONGS_TO;
-			}
-			
-			if (! $secondTime) {
-				$fields{'parent_taxon_name'} = $parent->taxonName();
-			}
-		}
-	}
-	
-	
-	# actually build the nomen popup menu.
-	$fields{nomen_select} = $hbo->buildSelect(\@nomArray, 'nomen', $fields{status});
-			
-	# actually build the synonym popup menu.
-	$fields{synonym_select} = $hbo->buildSelect(\@synArray, 'synonym', $fields{status});
-
-	
-	
-
+	my $child = Taxon->new($self->{GLOBALVARS}); $child->setWithTaxonNumber($fields{'child_no'});
+	my $childName = $child->taxonName();
+	my $childRank = $child->rankString();
+    $fields{'child_name'} = $childName;
 	
 	
 	# if the authorizer of this record doesn't match the current
@@ -499,22 +369,13 @@ sub displayOpinionForm {
 	
 	if ($s->isSuperUser()) {
 		$fields{'message'} = "<p align=center><i>You are the superuser, so you can edit any field in this record!</i></p>";
-	} elsif ((! $isNewEntry) && ($sesAuth != $dbFieldsRef->{authorizer_no}) &&
-	($dbFieldsRef->{authorizer_no} != 0)) {
+	} elsif ((! $isNewEntry) && ($sesAuth != $dbFieldsRef->{authorizer_no}) && ($dbFieldsRef->{authorizer_no} != 0)) {
 	
 		# grab the authorizer name for this record.
 		my $authName = $s->personNameForNumber($fields{authorizer_no});
 	
 		$fields{'message'} = "<p align=center><i>This record was created by a different authorizer ($authName) so you can only edit empty fields.</i></p>";
 		
-	
-		# set the nomen and synonyms correctly 
-		if ($fields{taxon_status} eq INVALID1) {
-			$fields{synonym} = $fields{status};
-		} elsif ($fields{taxon_status} eq INVALID2) {
-			$fields{nomen} = $fields{status};
-		}
-	
 		# we should always make the ref_has_opinion radio buttons disabled
 		# because only the original authorizer can edit these.
 		
@@ -522,7 +383,7 @@ sub displayOpinionForm {
 		
 		# depending on the status of the ref_has_opinion radio, we should
 		# make the other reference fields non-editable.
-		if ($fields{'ref_has_opinion'} eq YES) {
+		if ($fields{'ref_has_opinion'} eq 'YES') {
 			push (@nonEditables, ('author1init', 'author1last', 'author2init', 'author2last', 'otherauthors', 'pubyr', '2nd_pages', '2nd_figures'));
 		} else {
 			push (@nonEditables, ('pages', 'figures'));		
@@ -534,11 +395,12 @@ sub displayOpinionForm {
 			push(@nonEditables, 'taxon_status');
 			push(@nonEditables, 'nomen');
 			push(@nonEditables, 'synonym');
-			push(@nonEditables, 'parent_taxon_name');
-			push(@nonEditables, 'parent_taxon_name2');
+			push(@nonEditables, 'belongs_to_parent');
+			push(@nonEditables, 'recombined_as_parent');
+			push(@nonEditables, 'synonym_parent');
 		}
 		
-		if (($fields{'status'} ne RECOMBINED_AS) && ($fields{status} ne BELONGS_TO)) {
+		if (($fields{'status'} ne 'recombined as') && ($fields{status} ne 'belongs to')) {
 			push(@nonEditables, 'diagnosis');
 		}
 				
@@ -552,104 +414,88 @@ sub displayOpinionForm {
 		
 		# we'll also have to add a few fields separately since they don't exist in the database,
 		# but only in our form.
-		
 		if ($fields{'2nd_pages'}) { push(@nonEditables, '2nd_pages'); }
 		if ($fields{'2nd_figures'}) { push(@nonEditables, '2nd_figures'); }
 		if ($fields{'taxon_status'}) { push(@nonEditables, 'taxon_status'); }
 		
 	}
-<<<<<<< Opinion.pm
+
+    # its important that we save this in case the user selected a parent_no from the pulldown
+    # AND switches the taxon_status radio. In that case we have to throw out the parent_no
+    $fields{'orig_taxon_status'} = $fields{'taxon_status'};
 
 	# if this is a second pass and we have a list of alternative taxon
 	#  numbers, make a pulldown menu listing the taxa JA 25.4.04
 	my $pulldown;
-	if ( @parentnos )	{
-		$pulldown = "<select name=parent_taxon_no>\n";
-		$pulldown .= "<option selected>\n";
-	# grab the parent taxon name from the database - kind of ugly to do
-	#  this so late, but really the information exists nowhere else
-		my $pnamesql = "SELECT taxon_name FROM authorities WHERE taxon_no=" . $parentnos[0];
-		my $pname = ${$sql->getData($pnamesql)}[0]->{taxon_name};
-		for my $i (@parentnos)	{
-			$pulldown .= "<option value=\"" . $i . "\">";
-			$pulldown .= $pname . " ";
-		# lucky us, Poling made $sql local to the whole subroutine
-			my %auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($sql,$i)};
-			$pulldown .= $auth_yr{author1last} . " " . $auth_yr{pubyr};
-		# tack on the closest higher order name
-		# a little clunky, but it works and doesn't require messing
-		#  with get_classification_hash
-			my %master_class=%{Classification::get_classification_hash($sql, [ "family,order,class" ] , [ $i ] )};
-			my @parents = split ',',$master_class{$i};
-			if ( $parents[2] )	{
-				$pulldown .= " [" . $parents[2] . "]";
-			} elsif ( $parents[1] )	{
-				$pulldown .= " [" . $parents[1] . "]";
-			} elsif ( $parents[0] )	{
-				$pulldown .= " [" . $parents[0] . "]";
-			}
-			$pulldown .= "\n";
-		}
-		$pulldown .= "</select>\n";
+	if ( scalar(@parent_nos) > 1) {
+#		$pulldown = '<select name="parent_no" onChange=\'if (this.selectedIndex == 0) { alert("Is zero"); }\'>';
+        $pulldown .= qq|<input type="radio" name="parent_no" value=""> \nOther: <input type="text" name="belongs_to_parent" value=""><br>\n|;
+	    my %classification=%{Classification::get_classification_hash($dbt,"parent",\@parent_nos)};
+        foreach my $parent_no (@parent_nos) {
+			my %auth = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$parent_no)};
+            my $selected = ($fields{'parent_no'} == $parent_no) ? "CHECKED" : "";
+#			$pulldown .= "<option value='$parent_no' $selected>$parentName, $auth{author1last} $auth{pubyr} [$classification{$parent_no}]</option>\n";
+			$pulldown .= qq|<input type="radio" name="parent_no" $selected value='$parent_no'> $parentName, $auth{author1last} $auth{pubyr} [$classification{$parent_no}]<br>\n|;
+        }
+#		$pulldown .= "</select>\n";
 	}
 
-	# format the "belongs to" section of the form
-	my $belongstotext;
+    # Each of the 'taxon_status' row options
+	my $belongs_to_row;
+    my $recombined_as_row;
+    my $synonym_row;
+    my $nomen_row;
+
 	# species get special treatment
-	if ( $fields{taxon_rank} =~ /species/ )	{
-		$belongstotext = "<TD colspan=2><b>Valid ".$fields{taxon_rank}."</b> as originally combined; belongs to ";
-		# if the user needs to choose from several possible parent
-		#  genera or species, print the pulldown
-		# note that we don't have to include the parent name in a
-		#  hidden because it will be computed from the child name
-		if ( $fields{'status'} eq BELONGS_TO && @parentnos )	{
-			$pulldown =~ s/<select name=parent_taxon_no>/<select name=belongs_to_parent_taxon_no>/;
-			$belongstotext .= $pulldown . "<br>";
-		}
-		# or print the species or genus name as plain text
-		else	{
-			my ($one,$two,$three) = split / /,$fields{taxon_name};
-			if ( $three )	{
-				$belongstotext .= "<i>" . $one . " " . $two . "</i>.";
-			} else	{
-				$belongstotext .= "<i>" . $one . "</i>.";
-			}
-		}
-	}
-	# standard approach for genera or higher taxa
-	else	{
-		$belongstotext = "<TD colspan=2><b>Valid ".$fields{taxon_rank}."</b>, classified as belonging to ";
-		if ( $fields{'status'} eq BELONGS_TO && @parentnos )	{
-			$pulldown =~ s/<select name=parent_taxon_no>/<select name=belongs_to_parent_taxon_no>/;
-	# have to store the actual name in case the submission fails and the
-	#  pulldown has to be recomputed
-			$pulldown .= "<br>\n<input type=\"hidden\" name=\"parent_taxon_name\" value=\"%%parent_taxon_name%%\">\n";
-			$belongstotext .= $pulldown . "<br>";
-		}
-		else	{
-			$belongstotext .= "<input id=\"parent_taxon_name\" name=\"parent_taxon_name\" size=\"50\" value=\"%%parent_taxon_name%%\"><br>";
-		}
-	}
-	$fields{belongs_to} = $belongstotext;
+	if ( $childRank =~ /species/ )	{
+        my $selected = ($fields{'taxon_status'} eq 'recombined as') ? "CHECKED" : "";
+        my $colspan = ($pulldown && $selected) ? "": "colspan=2";
+        my $parentRank = ($childRank eq 'subspecies') ? 'species' : 'genus';
+		$recombined_as_row = qq|<tr><td valign="top"><input type="radio" name="taxon_status" $selected value="recombined as"></td>|;
+        if ($childRank eq 'subspecies') {
+            $recombined_as_row .= "<td colspan=2><b>Valid $childRank</b>, but recombined into a different species.</td></tr>";
+            $recombined_as_row .= "<tr><td></td><td $colspan nowrap valign='top'>New genus, species, and subspecies: ";
+        } else {
+            $recombined_as_row .= "<td colspan=2><b>Valid $childRank</b>, but recombined into a different genus.</td></tr>";
+            $recombined_as_row .= "<tr><td></td><td $colspan nowrap valign='top'>New genus and species: ";
+        }
+        if ($pulldown && $selected) {
+            $pulldown =~ s/belongs_to_parent/recombined_as_parent/;
+            $recombined_as_row .= "<td width='100%'>$pulldown</td>";
+        } else {
+            my $parentTaxon = ($selected) ? $parentName : "";
+			$recombined_as_row .= qq|<input name="recombined_as_parent" size="50" value="$parentTaxon">|;
+        }   
+            
+        $recombined_as_row .= "</td></tr>";
 
-	# if the rank is species or subspecies, throw in a recombined option
-	if ( $fields{taxon_rank} =~ /species/ )	{
-		my $recombinedtext = "<TR><TD valign=top>
-<input type=\"radio\" name=\"taxon_status\" value=\"recombined as\" %%taxon_status_recombined_as%%></TD>
-<TD colspan=2><b>Valid %%taxon_rank%%</b>, but recombined into a different genus.<br>
-New genus and species:<br>";
-		if ( $fields{taxon_rank} eq "subspecies" )	{
-			$recombinedtext =~ s/different genus/different species/;
-			$recombinedtext =~ s/genus and species/genus, species, and subspecies/;
+        $selected = ($fields{'taxon_status'} eq 'belongs to') ? "CHECKED" : "";
+        $colspan = ($pulldown && $selected) ? "": "colspan=2";
+        $belongs_to_row = qq|<tr><td valign="top"><input type="radio" name="taxon_status" value="belongs to" $selected></td>\n|;
+        $belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid $childRank</b> as originally combined; belongs to |;
+        # or print the species or genus name as plain text
+        if ($pulldown && $selected) {
+            $belongs_to_row .= "<td width='100%'>$pulldown</td>";
+		} else	{
+            my @parentBits = split /\s+/,$childName;
+            pop @parentBits;
+            my $parentTaxon = join(" ",@parentBits);
+            $belongs_to_row .= "<i>$parentTaxon</i>.";
+#            $belongs_to_row .= qq|<input type="hidden" name="belongs_to_parent" value="$parentTaxon">|;
 		}
-		$fields{recombined_as} = $recombinedtext;
-		if ( $fields{'status'} eq RECOMBINED_AS && @parentnos )	{
-			$pulldown =~ s/<select name=parent_taxon_no>/<select name=recombined_parent_taxon_no>/;
-			$fields{recombined_input} = $pulldown . "<br>\n<input type=\"hidden\" name=\"parent_taxon_name\" value=\"%%parent_taxon_name%%\">\n";
-		}
-		else	{
-			my $inputfield = "<input id=\"parent_taxon_name\" name=\"parent_taxon_name\" size=\"50\" value=\"%%parent_taxon_name%%\"><br></td></tr>";
-			$fields{recombined_input} = $inputfield;
+        $belongs_to_row.= "</td></tr>";
+	} else	{
+	    # standard approach for genera or higher taxa
+        my $selected = ($fields{'taxon_status'} eq 'belongs to') ? "CHECKED" : "";
+        my $colspan = ($pulldown && $selected) ? "": "colspan=2";
+        $belongs_to_row .= qq|<tr><td valign="top"><input type="radio" name="taxon_status" value="belongs to" $selected></td>\n|;
+		$belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid $childRank</b>, classified as belonging to |;
+
+        if ($pulldown && $selected) {
+            $belongs_to_row .= "<td width='100%'>$pulldown</td>";
+		} else	{
+            my $parentTaxon = ($selected) ? $parentName : "";
+			$belongs_to_row .= qq|<input name="belongs_to_parent" size="50" value="$parentTaxon">|;
 		}
 	}
 
@@ -658,18 +504,37 @@ New genus and species:<br>";
 	#  tacking on either another pulldown or an input to store the name
 	# need a pulldown if this is a second pass and we have multiple
 	#  alternative senior synonyms
-	if ( $fields{taxon_status} eq INVALID1 && @parentnos )	{
-		$pulldown =~ s/<select name=parent_taxon_no>/<select name=synonym_parent_taxon_no>/;
-		$fields{synonym_select} .= $pulldown . "\n<input type=\"hidden\" name=\"parent_taxon_name2\" value=\"%%parent_taxon_name2%%\">\n";
+    my $selected = ($fields{'taxon_status'} eq 'invalid1') ? "CHECKED" : "";
+    my $colspan = ($pulldown && $selected) ? "": "colspan=2";
+    $synonym_row = qq|<tr><td valign="top"><input type="radio" name="taxon_status" value="invalid1" $selected></td>|;
+	$synonym_row .= "<td colspan=2 valign='top'><b>Invalid</b>, and another name should be used.</td></tr>";
+    $synonym_row .= "<tr><td></td><td $colspan valign='top' nowrap>Status: "; 
+	# actually build the synonym popup menu.
+	$synonym_row .= $hbo->buildSelect(\@synArray, 'synonym', $fields{synonym});
+	if ($pulldown && $selected) {
+        $pulldown =~ s/belongs_to_parent/synonym_parent/;
+		$synonym_row .= "<td width='100%'>$pulldown</td>"; 
+	} else	{
+        my $parentTaxon = ($selected) ? $parentName : "";
+		$synonym_row .= qq|<input name="synonym_parent" size="50" value="$parentTaxon">|;
 	}
-	# standard version
-	else	{
-		$fields{synonym_select} .= "<input name=\"parent_taxon_name2\" size=\"50\" value=\"%%parent_taxon_name2%%\">";
-	}
+    $synonym_row .= "</td></tr>";
 
-=======
+	# actually build the nomen popup menu.
+    $selected = ($fields{'taxon_status'} eq 'invalid2') ? "CHECKED" : "";
+    $nomen_row = qq|<tr><td valign="top"><input type="radio" name="taxon_status" value="invalid2" $selected></td>|;
+	$nomen_row .= "<td colspan=2><b>Invalid</b>, and no other name can be used.</td></tr>";
+    $nomen_row .= "<tr><td></td><td colspan=2>Status: "; 
+    $nomen_row .= $hbo->buildSelect(\@nomArray, 'nomen', $fields{nomen});
+    $nomen_row .= "</td></tr>";
 
->>>>>>> 1.44
+    main::dbg("showOpinionForm, fields are: <pre>".Dumper(\%fields)."</pre>");
+
+	$fields{belongs_to_row} = $belongs_to_row;
+	$fields{nomen_row} = $nomen_row;
+	$fields{synonym_row} = $synonym_row;
+	$fields{recombined_as_row} = $recombined_as_row;
+
 	# print the form	
 	print main::stdIncludes("std_page_top");
 
@@ -708,34 +573,18 @@ sub submitOpinionForm {
 		'unranked clade' => 24, 'informal' => 25 );
 
 	if ((!$hbo) || (!$s) || (!$q)) {
-		Debug::logError("Taxon::submitOpinionForm had invalid arguments passed to it.");
+		croak("Taxon::submitOpinionForm had invalid arguments passed to it.");
 		return;	
 	}
 	
-	my $sql = $self->getTransactionManager();
-	$sql->setSession($s);
+	my $dbt = $self->getTransactionManager();
+	$dbt->setSession($s);
+    my $dbh = $dbt->dbh;
 	
 	my $errors = Errors->new();
 		
-	# if this is the second time they submitted the form (or third, fourth, etc.),
-	# then this variable will be true.  This would happen if they had errors
-	# the first time, and then resubmitted it.
-	my $isSecondSubmission;
-	if ($q->param('second_submission') eq YES) {
-		$isSecondSubmission = 1;
-	} else {
-		$isSecondSubmission = 0;
-	}
-	
-	
-	# is this a new entry, or an edit of an old record?
-	my $isNewEntry;
-	if ($q->param('is_new_entry') eq YES) {
-		$isNewEntry = 1;	
-	} else {
-		$isNewEntry = 0;
-	}
-
+	# Simple checks
+    my $isNewEntry = ($q->param('opinion_no') > 0) ? 0 : 1;
 	
 	# grab all the current data from the database about this record
 	# if it's not a new entry (ie, if it already existed).	
@@ -773,24 +622,27 @@ sub submitOpinionForm {
 	# Set up a few variables to represent the state of the form..
 	
 	# the taxon_status radio is in ('belongs to', 'recombined as', 'invalid1', 'invalid2).
-	my $taxonStatusRadio = $q->param('taxon_status');
 	
-	# figure out the name of the child taxon.
+    # Get the original combination
+    my $orig_child_no = TaxonInfo::getOriginalCombination($dbt,$q->param('child_no'));
 	my $childTaxon = Taxon->new($self->{GLOBALVARS});
-	$childTaxon->setWithTaxonNumber($q->param('taxon_no'));
-	my $childTaxonName = $childTaxon->taxonName();
-	my $childRank = Rank->new($q->param('taxon_rank'));
-	
-	
+	$childTaxon->setWithTaxonNumber($orig_child_no);
+	my $childName = $childTaxon->taxonName();
+	my $childRank = $childTaxon->rankString();
+
+    # If a drop down is presented, do not use the parent_no from it if they switched radio buttons
+    if (($q->param('orig_taxon_status') && $q->param('orig_taxon_status') ne $q->param('taxon_status'))) {
+        $q->param('parent_no'=>''); 
+    }
+
 	###
 	## Deal with the reference section at the top of the form.  This
 	## is almost identical to the way we deal with it in the authority form
 	## so this functionality should probably be merged at some point.
 	###
 	
-	if ( 	($q->param('ref_has_opinion') ne YES) && 
-			($q->param('ref_has_opinion') ne 'NO')) {
-		
+	if (($q->param('ref_has_opinion') ne 'YES') && 
+		($q->param('ref_has_opinion') ne 'NO')) {
 		$errors->add("You must choose one of the reference radio buttons");
 	}
 
@@ -806,17 +658,18 @@ sub submitOpinionForm {
 		# WARNING: we don't check at all to see if the author/taxon
 		#  matches when one opinion (old or new) is a ref_has_opinion
 		#  record and the other is not
-		my $sql = $self->getTransactionManager();
-		my $osql = "SELECT parent_no FROM opinions WHERE ref_has_opinion!='YES' AND child_no=".$q->param('taxon_no')." AND author1last='".$q->param('author1last')."' AND author2last='".$q->param('author2last')."' AND pubyr='".$q->param('pubyr')."'";
-		my $oref = ${$sql->getData($osql)}[0];
-		if ( $oref ) {
-			$errors->add("The author's opinion on ".$childTaxonName." already has been entered - an author can only have one opinion on a name");
-		}
+        if ($isNewEntry) {
+		    my $osql = "SELECT parent_no FROM opinions WHERE ref_has_opinion!='YES' AND child_no=".$q->param('child_no')." AND author1last='".$q->param('author1last')."' AND author2last='".$q->param('author2last')."' AND pubyr='".$q->param('pubyr')."'";
+            my $oref = ${$dbt->getData($osql)}[0];
+            if ( $oref ) {
+                $errors->add("The author's opinion on ".$childName." already has been entered - an author can only have one opinion on a name");
+            }
+        }
 
 		# merge the pages and 2nd_pages, figures and 2nd_figures fields
 		# together since they are one field in the database.
-		$fieldsToEnter{pages} = $q->param('2nd_pages');
-		$fieldsToEnter{figures} = $q->param('2nd_figures');
+		$fieldsToEnter{'pages'} = $q->param('2nd_pages');
+		$fieldsToEnter{'figures'} = $q->param('2nd_figures');
 		
 		if (! $q->param('author1last')) {
 			$errors->add('You must enter at least the last name of the first author');	
@@ -828,39 +681,25 @@ sub submitOpinionForm {
 			$errors->add("Don't enter pages or figures for a primary reference if you chose the 'named in an earlier publication' radio button");	
 		}
 		
-		# make sure the format of the author initials is proper
-		if  (( $q->param('author1init') && 
-			(! Validation::properInitial($q->param('author1init')))
-			) ||
-			( $q->param('author2init') && 
-			(! Validation::properInitial($q->param('author2init')))
-			)
-			) {
-			
+		# make sure the format of the author names is proper
+		if  (( $q->param('author1init') && (! Validation::properInitial($q->param('author1init')))) ||
+             ( $q->param('author2init') && (! Validation::properInitial($q->param('author2init')))) ) {
 			$errors->add("The first author's initials are improperly formatted");		
 		}
-		
-
-		# make sure the format of the author names is proper
-		if  ( $q->param('author1last')) {
-			if (! (Validation::properLastName($q->param('author1last'))) ) {
-				$errors->add("The first author's last name is improperly formatted");
-			}
+		if  ( $q->param('author1last') && !Validation::properLastName($q->param('author1last')) ) {
+            $errors->add("The first author's last name is improperly formatted");
 		}
-			
-			
-		if  ( $q->param('author2last') && 
-			(! Validation::properLastName( $q->param('author2last') ) )
-			) {
-		
+		if  ( $q->param('author2last') && !Validation::properLastName($q->param('author2last')) ) {
 			$errors->add("The second author's last name is improperly formatted");	
 		}
+		if ($q->param('otherauthors') && !$q->param('author2last') ) {
+			$errors->add("Don't enter other author names if you haven't entered a second author");
+		}
 
-			
 		if ($q->param('pubyr')) {
 			my $pubyr = $q->param('pubyr');
 			
-			if (! Validation::properYear( $pubyr ) ) {
+			if (! Validation::properYear($pubyr)) {
 				$errors->add("The year is improperly formatted");
 			}
 			
@@ -872,18 +711,21 @@ sub submitOpinionForm {
 				$errors->add("The publication year ($pubyr) can't be more recent than that of the primary reference (" . $ref->pubyr() . ")");
 			}
 		}
-		
-
-		
-		if (($q->param('otherauthors')) && (! $q->param('author2last') )) {
-			# don't let them enter other authors if the second author field
-			# isn't filled in.
-		
-			$errors->add("Don't enter other author names if you haven't entered a second author");
-		}
-		
-		
 	} else {
+		# if they chose ref_has_opinion, then we also need to make sure that there
+		# are no other opinions about the current taxon (child_no) which use 
+		# this as the reference.  
+        if ($isNewEntry) {
+		    my $sql = "SELECT parent_no FROM opinions ".
+                      " WHERE ref_has_opinion='YES'".
+                      " AND child_no=".$dbh->quote($q->param('child_no')).
+                      " AND reference_no=".$dbh->quote($q->param('reference_no'));
+            my $row = ${$dbt->getData($sql)}[0];
+            if ( $row) {
+                $errors->add("The author's opinion on ".$childName." already has been entered - an author can only have one opinion on a name");
+            }
+        }
+
 		# ref_has_opinion is YES
 		# so make sure the other publication info is empty.
 		my @vals = ($q->param('author1init'), $q->param('author1last'), $q->param('author2init'), $q->param('author2last'), $q->param('otherauthors'), $q->param('pubyr'), $q->param('2nd_pages'), $q->param('2nd_figures'));
@@ -893,356 +735,178 @@ sub submitOpinionForm {
 		}
 		
 		
-		# if they chose ref_has_opinion, then we also need to make sure that there
-		# are no other opinions about the current taxon (child_no) which use 
-		# this as the reference.  So, look for all opinions with ref_has_opinion = 'YES'
-		# and child_no = our current child_no and matching reference_no's.
-		my $child_no = $q->param('taxon_no');
-		my $reference_no = $q->param('reference_no');
-		
-		# if we're editing an opinion, then we also need to make sure that
-		# we don't include the current opinion in the count.
-		my $own_opinion_no_clause;
-		if (! $isNewEntry) {
-			$own_opinion_no_clause = " AND opinion_no != " . $self->opinionNumber() . " ";
-		}
-		
-		my $sql = $self->getTransactionManager();
-#		my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM opinions WHERE 
-#		child_no = $child_no AND
-#		ref_has_opinion = 'YES' AND reference_no = $reference_no
-#		$own_opinion_no_clause");
-
-		my $count = ${$sql->getData("SELECT COUNT(*) as c FROM opinions WHERE 
-		child_no = $child_no AND ref_has_opinion = 'YES' 
-		AND reference_no = $reference_no $own_opinion_no_clause")}[0]->{c};
-		
-		if ($count > 0) {
-			$errors->add("The author's opinion on ".$childTaxonName." already has been entered - an author can only have one opinion on a name");
-		}
 	}
-	
-	
 	
 	{
 		# also make sure that the pubyr of this opinion isn't older than
 		# the pubyr of the authority record the opinion is about.
 		my $taxon = Taxon->new();
-		$taxon->setWithTaxonNumber($q->param('taxon_no'));
+		$taxon->setWithTaxonNumber($q->param('child_no'));
 		my $ref = Reference->new();
 		$ref->setWithReferenceNumber($q->param('reference_no'));
 		
 		my $pubyr = $q->param('pubyr');
 		
-		Debug::dbPrint("ref pub yr = " . $ref->pubyr() . ", taxon pub yr
-		= " . $taxon->pubyr());
 		if (( $taxon->pubyr() > $ref->pubyr() ) ||
 			( $taxon->pubyr() > $pubyr && $pubyr > 1700 ) ) {
-			$errors->add("The publication year for this opinion can't be earlier than the year the taxon was named");	
+			$errors->add("The publication year ($pubyr) for this opinion can't be earlier than the year the taxon was named (".$taxon->pubyr().")");	
 		}
 	}
-	
-	
-	## End of dealing with the reference section
-	####
 
+    # Flatten the status
+    my $status;
+    if ($q->param('taxon_status') =~ /belongs to|recombined as/) {
+        $status = $q->param('taxon_status');
+    } elsif ($q->param('taxon_status') eq 'invalid1') {
+        $status = $q->param('synonym');
+    } elsif ($q->param('taxon_status') eq 'invalid2') {
+        $status = $q->param('nomen');
+    }
+	$fieldsToEnter{'status'} = $status;
 
-	####
-	## Now loop through all fields submitted from the form.
-	## If a field is not empty, then see if we're allowed to edit it in the database.
-	## If we can edit it, then make sure the name is correct (since a few fields like
-	## 2nd_pages, etc. don't match the database field names) and add it to the 
-	## %fieldsToEnter hash.
-	####
+	if (!$status) {
+		$errors->add("You must choose one of the status radio buttons");	
+	}
+
+    # Whether or not we'll create a new record in the authorities table for a 
+    # 'corrected as', 'rank changed as', or 'recombined as'
+    my $parentName = '';
+    my $parentRank = '';
+    my %createAuthority = ();
+
+    if ($q->param('parent_no')) {
+        # This is a second pass through, b/c there was a homonym issue, the user
+        # was presented with a pulldown to distinguish between homonyms, and has submitted the form
+        # To simplify, assumed the users choice is locked in at this point, so we only have 1 available option
+        my $sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_no=".$dbh->quote($q->param('parent_no'));
+        my $row = ${$dbt->getData($sql)}[0];
+        if (!$row) {
+            croak("Fatal error, parent_taxon_no ".$q->param('parent_no')." was set but not in the authorities table");
+        }
+        $parentName = $row->{'taxon_name'};
+        $parentRank = $row->{'taxon_rank'};
+        #$fields{'parent_no'} = $q->param('parent_no');
+    } else {
+        # This block of code deals with a first pass through, when no homonym problems have yet popped up
+        # We want to:
+        #  * Parse out the parent name, if appropriate 
+        #  * Hit the DB to make sure theres exactly 1 copy of the parent name (error if > 1 or 0)
+        if ($status eq 'belongs to') {
+            if (defined($q->param('belongs_to_parent'))) {
+                $parentName = $q->param('belongs_to_parent');	
+            } else {
+                # No box was selected bc it was species or subspecies, who is belongs to
+                # is implicit in the name, so we just grab it from there
+                my @parentParts = split(/\s+/,$childName);
+                pop @parentParts;
+                $parentName = join(' ',@parentParts);
+            }
+        } elsif ($status eq 'recombined as') {
+            my @parentParts = split(/\s+/,$q->param('recombined_as_parent'));
+            $parentName = $q->param('recombined_as_parent');
+        } elsif ($status =~ /synonym|homonym|replaced by|rank changed as|corrected as/) {
+            $parentName = $q->param('synonym_parent');
+        } elsif ($status =~ /nomen/) {
+            $parentName = undef;
+        }
+
+        # Get a single parent no or we have an error
+        if ($status !~ /nomen/) {
+            if (!$parentName) {
+                $errors->add("You must enter the name of the taxon this one belongs to");
+            } else {    
+                my $sql  = "SELECT taxon_no, taxon_rank, taxon_name FROM authorities WHERE taxon_name=".$dbh->quote($parentName);
+                my @parentArray = @{$dbt->getData($sql)};
+                if (scalar(@parentArray) > 1) {
+                    $errors->add("The taxon '" . $parentName ."' exists multiple times in the database. Please select the one you want.");	
+                } elsif (scalar(@parentArray) == 0) {
+                    if ($status =~ /recombined|corrected as/) {
+                        %createAuthority = ('taxon_rank'=>$childRank, 'taxon_name'=>$parentName);
+                        $parentRank = $childRank;
+                    } else {
+                        $errors->add("The taxon '" . $parentName ."' doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$parentName\">create a new authority record for '$parentName'</a> <i>before</i> entering this opinion.");	
+                    }
+                } elsif (scalar(@parentArray) == 1) {
+                    $q->param("parent_no"=>$parentArray[0]->{'taxon_no'});
+                    #$fields{'parent_no'} = $parentArray[0]->{'taxon_no'};
+                    $parentRank = $parentArray[0]->{'taxon_rank'};
+                }
+            }
+        } else {
+            $q->param("parent_no"=>0);
+            #$fields{'parent_no'} = '0';
+        }
+    }
+  
+
+    # Additional error checking related to ranks mostly
+    # Only bother if we're down to one parent
+    main::dbg("childRank $childRank childName $childName parentRank $parentRank parentName $parentName");
+    if ($q->param('parent_no')) {
+	    if ($status eq 'belongs to') {
+		    # for belongs to, the parent rank should always be higher than the child rank.
+		    # unless either taxon is an unranked clade (JA)
+		    if ($rankToNum{$parentRank} <= $rankToNum{$childRank} && 
+                $parentRank ne "unranked clade" && 
+                $childRank ne "unranked clade") {
+		    	$errors->add("The rank of the higher taxon $parentName ($parentRank) must be higher than the rank of $childName ($childRank)");	
+		    }
+        }    
+        if ($status eq 'recombined as') {
+		    my ($childParentName) = split /\s+/,$childName;
+		    my ($parentParentName) = split /\s+/,$parentName;
+		    if ( $childParentName eq $parentParentName)	{
+			    $errors->add("The genus name in the new combination must be different from the genus name in the old combination");
+		    }
+		    if ($parentRank ne 'species' )	{
+			    $errors->add("If a species is recombined its new rank must be 'species'");	
+		    }
+		    if ($childRank ne 'species') {
+			    $errors->add("If a species is recombined its old rank must be 'species'");
+		    }
+        }    
+        if ($status =~ /synonym|homonym|replaced/) {
+    		# the parent rank should be the same as the child rank...
+	    	if ( $parentRank ne $childRank) {
+		    	$errors->add("The rank of a taxon and the rank of its synonym, homonym, or replacement name must be the same");
+            }    
+		} 
+
+        if ($status eq 'rank changed as') {
+		    # JA: ... except if the status is "rank changed as," which is actually the opposite case
+		    if ( $parentRank eq $childRank) {
+			    $errors->add("If you change a taxon's rank, its old and new ranks must be different");
+            }
+	    } 
+
+    	if ($parentName eq $childName) {
+	    	$errors->add("The taxon you are entering and the one it belongs to can't have the same name");	
+	    }
+    }	
+
 	
-	#Debug::dbPrint("dbFields = ");
-	#Debug::printHash(\%dbFields);
-	
+	# The diagnosis field only applies to the case where the status
+	# is belongs to or recombined as.
+	if ( (! (($status eq 'recombined as') || ($status eq 'belongs to') )) && ($q->param('diagnosis'))) {
+		$errors->add("Don't enter a diagnosis unless you choose the 'belongs to' or 'recombined as' radio button");
+	}
+
+    # Add editable fields to fieldsToEnter hash
 	foreach my $formField ($q->param()) {
-		
 		my $okayToEdit = $editAny;
 		if (! $okayToEdit) {
-			# then we should do some more checks, because maybe they are allowed
-			# to edit it aferall..  If the field they want to edit is empty in the
-			# database, then they can edit it.
-			
 			if (! $dbFields{$formField}) {
-				# If the field in the database is empty, then it's okay
-				# to edit it.
 				$okayToEdit = 1;
 			}
 		}
-		
 		if ($okayToEdit) {
-			
-			# if the value isn't already in our fields to enter
-			# then add it to the fields to enter
 			if (! $fieldsToEnter{$formField}) {
 				$fieldsToEnter{$formField} = $q->param($formField);
 			}
 		}
-		
-		#Debug::dbPrint("okayToEdit = $okayToEdit, $formField = " . $q->param($formField));
-		
-	} # end foreach formField.
-	
-	
-	
-	###
-	## Most of the rest of this function is just error checking.
-	##
-	###
-	
-	
-	###
-	# Figure out the name of the parent taxon.
-	# This is dependent on the taxonStatusRadio value
-	###
-	# JA: we're also going to set the parent no if a pulldown was used
-	#  AND the status didn't change (happens only on second passes)
-	
-	my $parentTaxonName;
-
-	# tracks whether we going to have to create a new parent on the fly
-	my $createParent;
-
-	if ($taxonStatusRadio eq BELONGS_TO) {
-		# if this is the radio button, then the parent taxon depends
-		# on whether the child is a higher taxon or not.
-		if ($childRank->isHigher()) {
-			$parentTaxonName = $q->param('parent_taxon_name');	
-		} else {
-			# it's a species or subspecies, so just grab the genus or species
-			# name from the child taxon..
-			my ($one,$two,$three) = split / /,$childTaxonName;
-			if ($childRank->isSpecies()) {
-				# then the parent is genus.
-				$parentTaxonName = $one;
-			} elsif ($childRank->isSubspecies()) {
-				# then the parent is a species
-				$parentTaxonName = $one . " " . $two;
-			}
-
-		}		
-		if ( $q->param('belongs_to_parent_taxon_no') )	{
-			$fieldsToEnter{parent_no} =  $q->param('belongs_to_parent_taxon_no');
-		}
-	} elsif ($taxonStatusRadio eq RECOMBINED_AS) {
-		$parentTaxonName = $q->param('parent_taxon_name');
-		if ( $q->param('recombined_parent_taxon_no') )	{
-			$fieldsToEnter{parent_no} =  $q->param('recombined_parent_taxon_no');
-		}
-	} elsif ($taxonStatusRadio eq INVALID1) {
-		$parentTaxonName = $q->param('parent_taxon_name2');
-		if ( $q->param('synonym_parent_taxon_no') )	{
-			$fieldsToEnter{parent_no} =  $q->param('synonym_parent_taxon_no');
-		}
 	}
-
-#FOO
-# does the insert actually work?
-
-	Debug::dbPrint("parentTaxonName = $parentTaxonName");
-
-	# make sure it's valid, if it exists.
-
-	# do a bunch of things based on the parent taxon name:
-	# (1) set the parent no if the name matches once
-	# (2) if more than once, save a list of possible numbers
-	# (3) do some error checking on the name per se
-	# note that we'll do the search and save the list even if we already
-	#  know the "right" parent number because the user selected it in
-	#  an earlier pass, just in case other errors redirect the user to
-	#  the input form
-
-	my $parentRank;
-	my @parentnos;
-
-	# if the user submitted a parent number after choosing one from
-	#  a select list populated during a second pass, then get the rank
-	#  so the parent can be entered if error checks pass
-	if ( $fieldsToEnter{parent_no} )	{
-		my $sql = $self->getTransactionManager();
-		my $ranksql = "SELECT taxon_rank FROM authorities WHERE taxon_no=" . $fieldsToEnter{parent_no};
-		$parentRank = ${$sql->getData($ranksql)}[0]->{taxon_rank};
-	}
-
-	if ($parentTaxonName) {
-
-	#  find taxa matching the name
-		my $sql = $self->getTransactionManager();
-		my $parentsql = "SELECT taxon_no,taxon_rank FROM authorities WHERE taxon_name='" . $parentTaxonName . "'";
-
-		my @parentrefs = @{$sql->getData($parentsql)};
-
-	# if there are multiple matches there's big trouble
-	# basically, (1) we're going to stop the user with an error, and
-	#  (2) we're going to save an array of the taxon numbers so
-	#  displayOpinionForm can populate a pulldown menu
-		if ( $#parentrefs > 0 )	{
-			for my $i (0..$#parentrefs)	{
-				push @parentnos , $parentrefs[$i]->{taxon_no};
-			}
-		# give the user a pass on the error if the parent number
-		#   was preselected
-			if ( ! $fieldsToEnter{parent_no} )	{
-				$errors->add("You need to select the taxon that " . $childTaxonName . " belongs to");
-			}
-		}
-
-	# there's a single match, so set the no and rank
-	# this is redundant but harmless if the user preselected a parent no
-		if ( $#parentrefs == 0 )	{
-			$fieldsToEnter{parent_no} = $parentrefs[0]->{taxon_no};
-			$parentRank = $parentrefs[0]->{taxon_rank};
-		}
-
-		if (Validation::looksLikeBadSubgenus($parentTaxonName)) {
-			$errors->add("The taxon name '$parentTaxonName' is invalid; you can't use parentheses");
-		}
-
-	# if the parent taxon doesn't exist yet, we have big trouble
-		if ( ! @parentrefs )	{
-		# if the parent is a recombination, we're going to let them
-		#  get away with creating a new taxon on the fly JA 14.4.04
-			if ( $taxonStatusRadio eq RECOMBINED_AS )	{
-				$createParent = 1;
-			}
-		# but if it's a proper parent we're just going to complain
-			else	{
-				$errors->add("The taxon '" . $parentTaxonName ."' doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$parentTaxonName\">create a new authority record for '$parentTaxonName'</a> <i>before</i> entering this opinion.");	
-			}
-		}
-		
-		if ($parentTaxonName eq $childTaxonName) {
-			$errors->add("The taxon you are entering and the one it belongs to can't have the same name");	
-		}
-	}
-
-	
-	# We have to do different things depending on which status radio button
-	# the user selected.
-	
-	# They must select a radio button, otherwise, give them an error message
-
-	
-	if (! $taxonStatusRadio) {
-		$errors->add("You must choose one of the status radio buttons");	
-	}
-	
-	# Note: the actual field in the database is called 'status'	
-	
-	# This huge if statement basically figures out the parentTaxonName depending
-	# on which radio button they chose and also sets the 'status' field to the
-	# correct value for the database table.
-	
-	if ($taxonStatusRadio eq BELONGS_TO) {
-		$fieldsToEnter{status} = BELONGS_TO;
-		
-		# for belongs to, the parent rank should always be higher than the child rank.
-		# unless either taxon is an unranked clade (JA)
-		# or there's no parent rank because there are multiple matching
-		#  parents and the user hasn't selected one yet (JA)
-		if ( $rankToNum{$parentRank} < $rankToNum{$childRank->rank()} && $parentRank ne "unranked clade" && $childRank->rank() ne "unranked clade" && $parentRank ) {
-			$errors->add("The rank of the higher taxon (currently " . $parentRank . ") must be higher than the rank of $childTaxonName (" . $childRank->rank() . ")");	
-		}
-		
-		
-		
-	} elsif ($taxonStatusRadio eq RECOMBINED_AS) {
-		#####
-		## RECOMBINED AS
-		#####
-		
-		## Tons of things to check for the Recombined As..  
-	
-		$fieldsToEnter{status} = RECOMBINED_AS;
-		
-		if ( $parentTaxonName !~ / / )	{
-			$errors->add("If a species is recombined its new rank must be 'species'");	
-		}
-		
-		if ($parentTaxonName eq $childTaxonName) {
-			$errors->add("Original and new combinations can't be exactly the same");	
-		}
-		
-		if (!$childRank->isSpecies()) {
-			$errors->add("If a species is recombined its old rank must be 'species'");
-		}
-
-		my ($cgen,$foo) = split / /,$childTaxonName;
-		my ($pgen,$foo) = split / /,$parentTaxonName;
-		if ( $cgen eq $pgen )	{
-			$errors->add("The genus name in the new combination must be different from the genus name in the old combination");
-		}
-		
-		
-		# The last big check we need to do is to make sure that the child numbers in
-		# recombined as relationships point to the original combination.  So, if
-		# the user is adding an opinion about taxon A and they say that it has been
-		# recombined as B, we need to make sure that A is an original, ie, that there
-		# are no opinion relationships where A is the parent and the status is recombined_as.
-		#
-		# If there are cases where A is not the original, then we need to go back down
-		# the list and find the original before adding the opinion.
-		
-		if (!($childTaxon->isOriginalCombination())) {
-			# figure out what the original combination was.
-			my $originalCombination = $childTaxon->originalCombinationTaxon();
-			
-			$errors->add("The taxon's name is not the original combination. The original combination is " . $originalCombination->taxonName() . ".");
-		}
-		
-		
-		
-		
-	} elsif ($taxonStatusRadio eq INVALID1) {
-		
-		# in this case, the status is not "invalid1", it's whatever they
-		# chose in the synonym popup.
-		$fieldsToEnter{status} = $q->param('synonym');
-		
-		# the parent rank should be the same as the child rank...
-		if ( $parentRank ne $childRank->rank() && $fieldsToEnter{status} ne "rank changed as" ) {
-			$errors->add("The rank of a taxon and the rank of its synonym must be the same");
-		}
-		# JA: ... except if the status is "rank changed as," which is
-		#  actually the opposite case
-		elsif ( $parentRank eq $childRank->rank() && $fieldsToEnter{status} eq "rank changed as" ) {
-			$errors->add("If you change a taxon's rank, its old and ew ranks must be different");
-		}
-		
-	} elsif ($taxonStatusRadio eq INVALID2) {
-		
-		# in this case, the status is not "invalid2", it's whatever they
-		# chose in the nomen popup.
-		$fieldsToEnter{status} = $q->param('nomen');
-		$fieldsToEnter{parent_no} = undef;
-	} 
-	
-	
-	# we're required to have a parent taxon for EVERY instance except 
-	# for a nomen whatever...
-	if ($taxonStatusRadio ne INVALID2) {
-		if (! $parentTaxonName) {
-			$errors->add("You must enter the name of the taxon this one belongs to");
-		}
-	}
-	
-	
-	
-	# The diagnosis field only applies to the case where the status
-	# is belongs to or recombined as.
-	if ( (! (($taxonStatusRadio eq RECOMBINED_AS) ||
-			($taxonStatusRadio eq BELONGS_TO) )) && ($q->param('diagnosis'))) {
-		$errors->add("Don't enter a diagnosis unless you choose the 'belongs to' or 'recombined as' radio button");
-	}
-	
-	
 	# assign the child_no field if it doesn't already exist.
-	# JA: I'm pretty sure Poling only ever assigns this variable here,
-	#  so the conditional is actually superfluous
-	if (!$fieldsToEnter{child_no} ) { $fieldsToEnter{child_no} = $q->param('taxon_no'); }
+	$fieldsToEnter{'child_no'} = $q->param('child_no'); 
 
 	# Delete some fields that may be present since these don't correspond
 	# to fields in the database table.. (ie, they're in the form, but not in the table)
@@ -1262,33 +926,17 @@ sub submitOpinionForm {
 		$fieldsToEnter{ref_has_opinion} = '';
 	}
 	
-	
-	#Debug::dbPrint("new entry = $isNewEntry");
-	#Debug::dbPrint("fields to enter = ");
-	#Debug::printHash(\%fieldsToEnter);
-	#Debug::dbPrint($editAny);
-	#return;
-
-	
 	# at this point, we should have a nice hash array (%fieldsToEnter) of
 	# fields and values to enter into the authorities table.
-	
-
 	if ($errors->count() > 0) {
 		# put a message in a hidden to let us know that we have already displayed
 		# some errors to the user and this is at least the second time through (well,
 		# next time will be the second time through - whatever).
 
-		$q->param(-name=>'second_submission', -values=>[YES]);
-			
 		# stick the errors in the CGI object for display.
 		my $message = $errors->errorMessage();
-						
-		$q->param(-name=>'error_message', -values=>[$message]);
-			
-			
-		$self->displayOpinionForm($hbo, $s, $q, \@parentnos);
-			
+
+		$self->displayOpinionForm($hbo, $s, $q, $message);
 		return;
 	}
 	
@@ -1300,83 +948,63 @@ sub submitOpinionForm {
 	# WARNING: this is very dangerous; typos in parent names will
 	# create bogus combinations, and likewise if the opinion create/update
 	#  code below bombs
-	if ( $createParent )	{
-		my @authFields;
-		my @authVals;
+	if (%createAuthority) {
+	    # next we need to steal data from the opinion
+        $createAuthority{'authorizer_no'} = $s->get('authorizer_no');
+        $createAuthority{'enterer_no'} = $s->get('enterer_no');
+        $createAuthority{'reference_no'} = $fieldsToEnter{'reference_no'};
 
-	# sine qua non: the new taxon's name is the parent name
-		push @authFields , "taxon_name";
-		push @authVals , $parentTaxonName;
-
-	# next we need to steal data from the opinion
-		my @opAuthFields = ( "authorizer_no", "enterer_no",
-			"reference_no" );
-		for my $af ( @opAuthFields )	{
-			if ( $fieldsToEnter{$af} )	{
-				push @authFields , $af;
-				push @authVals , $fieldsToEnter{$af};
-			}
-		}
-
-	# author information comes from the original combination,
-	#  not the opinion
-	# I'm doing this the "old" way instead of using some
-	#  ridiculously complicated Poling-style objects
-		my $sql = $self->getTransactionManager();
-		my $asql = "SELECT * FROM authorities WHERE taxon_no=" . $fieldsToEnter{child_no};
-		my $aref = ${$sql->getData($asql)}[0];
-		my @origAuthFields = ( "taxon_rank", "pages",
-			"figures", "comments" );
+        # author information comes from the original combination,
+        # I'm doing this the "old" way instead of using some
+        #  ridiculously complicated Poling-style objects
+		my $sql = "SELECT * FROM authorities WHERE taxon_no=" . $fieldsToEnter{child_no};
+		my $aref = ${$dbt->getData($sql)}[0];
+		my @origAuthFields = ( "taxon_rank", "pages","figures", "comments" );
 		for my $af ( @origAuthFields )	{
 			if ( $aref->{$af} )	{
-				push @authFields , $af;
-				push @authVals , $aref->{$af};
+                $createAuthority{$af}=$aref->{$af};
 			}
 		}
-		@origAuthFields = ( "author1init", "author1last",
-			"author2init", "author2last",
-			"otherauthors", "pubyr" );
+		@origAuthFields = ( "author1init", "author1last","author2init", "author2last","otherauthors", "pubyr" );
 		if ( $aref->{'author1last'} )	{
 			for my $af ( @origAuthFields )	{
 				if ( $aref->{$af} )	{
-					push @authFields , $af;
-					push @authVals , $aref->{$af};
+                    $createAuthority{$af}=$aref->{$af};
 				}
 			}
 		}
-
-	# ref is authority is always false, and just to make sure that
-	#  makes sense, we're going to steal the author info from the
-	#  original combination's reference if we don't have it already
+        # ref is authority is always false, and just to make sure that
+        #  makes sense, we're going to steal the author info from the
+        #  original combination's reference if we don't have it already
 		else	{
 			my $rsql = "SELECT * FROM refs WHERE reference_no=" . $aref->{'reference_no'};
-			my $rref = ${$sql->getData($rsql)}[0];
+			my $rref = ${$dbt->getData($rsql)}[0];
 			for my $af ( @origAuthFields )	{
 				if ( $rref->{$af} )	{
-					push @authFields , $af;
-					push @authVals , $rref->{$af};
+                    $createAuthority{$af}=$rref->{$af};
 				}
 			}
 		}
 
-	# have to store created date
-		push @authFields, "created";
-		push @authVals , now();
+    	# have to store created date
+        $createAuthority{'created'} = now();
 
-	# go for it
-	# Poling screwed this up by getting the first authority record
-	#  that matches the entered name, instead of the last
-		my $insertsql = "INSERT INTO authorities (" . join(',', @authFields ) . ") VALUES ('" . join("', '", @authVals) . "')";
-		my $sql = $self->getTransactionManager();
-		$sql->getData($insertsql);
-	# get the LAST authority record matching this name JA 25.4.04
-		my $matchsql = "SELECT taxon_no FROM authorities WHERE taxon_name='" . $parentTaxonName . "'";
-		my @parentrefs = @{$sql->getData($matchsql)};
-		$fieldsToEnter{parent_no} = $parentrefs[$#parentrefs]->{taxon_no}; 
+		my $insertsql = "INSERT INTO authorities (" . join(',', keys %createAuthority) . ") VALUES ('" . join("', '", values %createAuthority) . "')";
+		$dbt->getData($insertsql);
+        $fieldsToEnter{'parent_no'} = $dbt->getID();
+        main::dbg("INSERTSQL is $insertsql and got back id $fieldsToEnter{parent_no}");
 	}
 
 	my $resultOpinionNumber;
+    my $resultReferenceNumber = $fieldsToEnter{'reference_no'};
+
+    # We must point to the original parent_no
+    my $first_parent_no = $fieldsToEnter{'parent_no'};
+    if ($fieldsToEnter{'parent_no'}) {
+        $fieldsToEnter{'parent_no'} = TaxonInfo::getOriginalCombination($dbt,$fieldsToEnter{'parent_no'});
+    }
 	
+    main::dbg("submitOpinionForm, fields are: <pre>".Dumper(\%fieldsToEnter)."</pre>");
 	if ($isNewEntry) {
 		my $code;	# result code from dbh->do.
 	
@@ -1385,7 +1013,7 @@ sub submitOpinionForm {
 		
 		# make sure we have a taxon_no for this entry...
 		if (! $fieldsToEnter{child_no} ) {
-			Debug::logError("Opinion::submitOpinionForm, tried to insert a record without knowing its child_no (original taxon).");
+			croak("Opinion::submitOpinionForm, tried to insert a record without knowing its child_no (original taxon).");
 			return;	
 		}
 		
@@ -1395,32 +1023,20 @@ sub submitOpinionForm {
 		
 		delete $fieldsToEnter{opinion_no};
 		
-		($code, $resultOpinionNumber) = $sql->insertNewRecord('opinions', \%fieldsToEnter);
+		($code, $resultOpinionNumber) = $dbt->insertNewRecord('opinions', \%fieldsToEnter);
 		
-		###
 		# At this point, *if* the status of the new opinion was 'recombined as',
-		# then we need to make sure we're migrating non 'belongs to' opinions to
-		# the original combination.
-		#
-		# For example, if we have the taxon 'Equus blah' which has some arbitrary
-		# number of opinions about it, and the user is entering an opinion that
-		# 'Homo blah' has been 'recombined as' 'Equus blah', then we should
-		# move all the non 'belongs to' opinions from 'Equus blah' onto 'Homo blah'
-		###
-		
-		if ($code && 
-			($fieldsToEnter{status} eq 'recombined as') &&
-			($childRank->isSpecies() || $childRank->isSubspecies())) {
-			
-			my $oldTaxon = Taxon->new();  # ie, 'Equus blah'
-			$oldTaxon->setWithTaxonNumber($fieldsToEnter{parent_no});
-			
-			my $newTaxon = Taxon->new();  # ie, 'Homo blah'
-			$newTaxon->setWithTaxonNumber($fieldsToEnter{child_no});
-			
-			$oldTaxon->moveNonBelongsToOpinionsToTaxon($newTaxon);
+		# migrated opinions to the original combination.
+		if ($code && ($fieldsToEnter{'status'} =~ /recombined as|corrected as|rank changed as/)) { 
+            if ($fieldsToEnter{'child_no'} && $fieldsToEnter{'parent_no'}) {
+                my $rsql = "UPDATE opinions SET child_no=$fieldsToEnter{child_no} WHERE child_no=$fieldsToEnter{parent_no}";
+                main::dbg("Move opinions sql: $rsql");;
+                my $return = $dbt->getData($rsql);
+                if (!$return) {
+                    carp "Failed to move opinions off of recombined|corrected as|rank changed as taxon ($fieldsToEnter{parent_no} to original combination ($fieldsToEnter{child_no}) for opinion no $code";
+                }
+            }
 		}	
-		
 	} else {
 		# if it's an old entry, then we'll update.
 		
@@ -1432,106 +1048,48 @@ sub submitOpinionForm {
 		
 		
 		if (!($self->{opinion_no})) {
-			Debug::logError("Opinion::submitOpinionForm, tried to update a record without knowing its opinion_no..  Oops.");
+			croak("Opinion::submitOpinionForm, tried to update a record without knowing its opinion_no..  Oops.");
 			return;
 		}
 			
 		$resultOpinionNumber = $self->{opinion_no};
 		
 		if ($editAny) {
-			Debug::dbPrint("Opinion update any record");
-			# allow updates of any fields in the database.
-			$sql->updateRecord('opinions', \%fieldsToEnter, "opinion_no = '" . $self->{opinion_no} . "'", 'opinion_no');
+			$dbt->updateRecord('opinions', \%fieldsToEnter, "opinion_no = '" . $self->{opinion_no} . "'", 'opinion_no');
 		} else {
-			
-			
-			#Debug::dbPrint("Opinion update empty records only");
-			#Debug::printHash(\%fieldsToEnter);
-			
-			my $whereClause = "opinion_no = '" . $self->{opinion_no} . "'";
-			
-			# only allow updates of fields which are already blank in the database.	
-			$sql->updateRecordEmptyFieldsOnly('opinions', \%fieldsToEnter, $whereClause, 'opinion_no');
+			$dbt->updateRecordEmptyFieldsOnly('opinions', \%fieldsToEnter, "opinion_no = '" . $self->{opinion_no} . "'", 'opinion_no');
 		}
 	}
 	
-	
-	
-	# now show them what they inserted/updated...
-	my $o = Opinion->new();
-	$o->setWithOpinionNumber($resultOpinionNumber);
-    $o->{reference_no} = $q->param('reference_no'); # bad hack so link in summary display ok PS
-	$o->displayOpinionSummary($isNewEntry);
-	
-}
+    my $o = Opinion->new(); $o->setWithOpinionNumber($resultOpinionNumber);
+    my $opinionHTML = $o->formatAsHTML();
+    $opinionHTML =~ s/according to/of/i;
 
-
-
-
-
-# displays info about the opinion record the user just entered...
-# pass it a boolean
-# is it a new entry or not..
-sub displayOpinionSummary {
-	my Opinion $self = shift;
-	my $newEntry = shift;
-
-	my $sql = $self->getTransactionManager();
-
-	my $enterupdate;
-	if ($newEntry) {
-		$enterupdate = 'entered into';
-	} else {
-		$enterupdate = 'updated in'	
-	}
-	
+    # At this point, we've run getOriginalCombination on $fields{parent_no}, so it may
+    # be an original combination of parent_name. if it is, display a message
+    my $recomb_message;
+    if ($first_parent_no != $fieldsToEnter{'parent_no'}) {
+        my $origParentName = ${$dbt->getData("SELECT taxon_name FROM authorities WHERE taxon_no=$fieldsToEnter{parent_no}")}[0]->{'taxon_name'};
+        $recomb_message = "<h4>($parentName is a recombination/correction of $origParentName)</h4>";
+    }
+    
 	print main::stdIncludes("std_page_top");
-	
-	
-	print "<CENTER>";
-	
-	my $opinion = Opinion->new();
-	$opinion->setWithOpinionNumber($self->opinionNumber());
-	
-	my $dbrec = $opinion->databaseOpinionRecord();
-	
-	if (!$dbrec) {
-		print "<DIV class=\"warning\">Error inserting/updating opinion record.  Please start over and try again.</DIV>";	
-	} else {
-
-	# following computation could be done with Poling's objects, but
-	#  he can go to hell - actually faster and easier this way
-		my $asql = "SELECT taxon_name,taxon_rank FROM authorities WHERE taxon_no=" . $self->childNumber();
-		my $ref = ${$sql->getData($asql)}[0];
-
-		my $tempTaxon = $ref->{taxon_name};
-		$tempTaxon =~ s/ /+/g;
-		
-		my $opinionHTML = $opinion->formatAsHTML();
-		$opinionHTML =~ s/according to/of/i;
-		
-		print "<H3> The opinion $opinionHTML has been $enterupdate the database</H3>";
-		
-		print "<center>
-		<p><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonInfoResults&taxon_rank=" . $ref->{taxon_rank} . "&genus_name=" . $tempTaxon . "+(" . $self->childNumber() .")\"><B>Get&nbsp;general&nbsp;information&nbsp;about&nbsp;" . $ref->{taxon_name} . "</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=" . $self->{opinion_no} ."\"><B>Edit&nbsp;this&nbsp;opinion</B></A>&nbsp;-
-<<<<<<< Opinion.pm
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionList&taxon_no=" . $self->childNumber() . " \"><B>Add/edit&nbsp;a&nbsp;different&nbsp;opinion&nbsp;about&nbsp;" . $ref->{taxon_name} . "</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&amp;goal=opinion\"><B>Add/edit&nbsp;an&nbsp;opinion&nbsp;about&nbsp;another&nbsp;taxon</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority\"><B>Add/edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
-=======
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=" . $self->{reference_no} . " \"><B>Edit&nbsp;a&nbsp;different&nbsp;opinion&nbsp;with&nbsp;same&nbsp;reference</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=startDisplayOpinionChoiceForm&taxon_no=" . $self->childNumber() . " \"><B>Add/edit&nbsp;a&nbsp;different&nbsp;opinion&nbsp;about&nbsp;" . $ref->{taxon_name} . "</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&amp;goal=opinion\"><B>Add/edit&nbsp;an&nbsp;opinion&nbsp;about&nbsp;another&nbsp;taxon</B></A>&nbsp;-
-        <A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority\"><B>Add/edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
-
->>>>>>> 1.44
-		</center>";
-	}
-	
-	print "<BR>";
-	print "</CENTER>";
-	
+	my $enterupdate = ($isNewEntry) ? 'entered into' : 'updated in';
+    print <<EOF;
+<div align=center>
+  <h3> The opinion $opinionHTML has been $enterupdate the database</h3>
+  $recomb_message
+  <p>
+    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_no=$fieldsToEnter{child_no}"><B>Get general information about $childName</b></a></span> -
+    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=$resultOpinionNumber"><B>Edit this opinion</b></a></span> -
+    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber"><B>Edit a different opinion with same reference</b></a></span> -
+    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=startDisplayOpinionChoiceForm&taxon_no=$fieldsToEnter{child_no}"><B>Add/edit a different opinion about $childName</b></a></span> -
+    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=opinion"><B>Add/edit an opinion about another taxon</b></a></span> -
+    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority"><B>Add/edit authority data about another taxon</b></a></span>
+  </p>
+  <br>
+</div>
+EOF
 	print main::stdIncludes("std_page_bottom");
 }
 
@@ -1545,21 +1103,21 @@ sub displayOpinionChoiceForm{
     my $suppressAddNew = (shift || 0);
     my $dbh = $dbt->dbh;
 
-    my $orig_taxon_no = TaxonInfo::getOriginalCombination($dbt,$q->param("taxon_no"));
+    my $orig_child_no = TaxonInfo::getOriginalCombination($dbt,$q->param("taxon_no"));
     
-    my $sql = "SELECT o.opinion_no FROM opinions o "; 
+    my $osql = "SELECT o.opinion_no FROM opinions o "; 
     if ($q->param("taxon_no")) {
-        $sql .= " LEFT JOIN refs r ON r.reference_no=o.reference_no";
-        $sql .= " WHERE o.child_no=$orig_taxon_no";
-        $sql .= " ORDER BY IF((o.ref_has_opinion != 'YES' AND o.pubyr), o.pubyr, r.pubyr) ASC";
+        $osql .= " LEFT JOIN refs r ON r.reference_no=o.reference_no";
+        $osql .= " WHERE o.child_no=$orig_child_no";
+        $osql .= " ORDER BY IF((o.ref_has_opinion != 'YES' AND o.pubyr), o.pubyr, r.pubyr) ASC";
     } elsif ($q->param("reference_no")) {
-        $sql .= " LEFT JOIN authorities a ON a.taxon_no=o.child_no";
-        $sql .= " WHERE o.reference_no=".int($q->param("reference_no"));
-        $sql .= " ORDER BY a.taxon_name";
+        $osql .= " LEFT JOIN authorities a ON a.taxon_no=o.child_no";
+        $osql .= " WHERE o.reference_no=".int($q->param("reference_no"));
+        $osql .= " ORDER BY a.taxon_name";
     } else {
         print "No terms were entered.";
     }
-    my @results = @{$dbt->getData($sql)};
+    my @results = @{$dbt->getData($osql)};
 
     if (scalar(@results) == 0 && $suppressAddNew) {
         print "<center><h3>No opinions found</h3></center><br><br>";
@@ -1568,12 +1126,12 @@ sub displayOpinionChoiceForm{
     print "<center>";
     if ($q->param("taxon_no")) {
         my $t = Taxon->new();
-        $t->setWithTaxonNumber($orig_taxon_no);
+        $t->setWithTaxonNumber($orig_child_no);
         print "<h3>Which opinion about ".$t->taxonNameHTML()." do you want to edit?</h3>\n";
 
-        if ($orig_taxon_no != $q->param('taxon_no')) {
+        if ($orig_child_no!= $q->param('taxon_no')) {
             my $t2 = Taxon->new();
-            $t2->setWithTaxonNumber($q->param('taxon_no'));
+            $t2->setWithTaxonNumber($q->param('child_no'));
             print "<I>(Recombination of ".$t2->taxonNameHTML().")</I><BR>";
         }
         print "<BR>"; 
@@ -1584,7 +1142,7 @@ sub displayOpinionChoiceForm{
     print qq|<form method="POST" action="bridge.pl">
              <input type="hidden" name="action" value="displayOpinionForm">\n|;
     if ($q->param("taxon_no")) {
-        print qq|<input type="hidden" name="taxon_no" value="$orig_taxon_no">\n|;
+        print qq|<input type="hidden" name="child_no" value="$orig_child_no">\n|;
     }
     print "<table border=0>";
     foreach my $row (@results) {
