@@ -13,27 +13,34 @@ use SQLBuilder;
 use CGI::Carp qw(fatalsToBrowser);
 use Class::Date qw(date localdate gmdate now);
 use Errors;
-
+use CachedTableRow;
 
 use URLMaker;
 use Reference;
 
 
-use fields qw(	taxonName
-				taxonNumber
-				taxonRank
-				
-				taxaHash
-				
-				SQLBuilder
 
-							);  # list of allowable data fields.
+
+use fields qw(	
+
+			taxonName
+			taxonNumber
+			taxonRank					
+				
+			cachedDBRow
+						
+			taxaHash
+				
+			SQLBuilder
+
+					);  # list of allowable data fields.
 
 # taxonName is the name of the original taxon the user set
 # taxonNumber is the number for the original taxon
 # taxonRank is the rank of this taxon, note, this won't be populated until the user calls rank()
 # taxaHash is a hash of taxa numbers and ranks.
-				
+#
+# cachedDBRow is a cached Database row for this authority record.
 
 				
 				
@@ -227,6 +234,7 @@ sub rank {
 }
 
 
+
 # pass this a rank such as "family", "class", "genus", etc. and it will
 # return the name of the taxon at that rank as determined by the taxaHash.
 sub nameForRank {
@@ -268,6 +276,48 @@ sub numberForRank {
 	
 	return $hash{$key};
 }
+
+
+# returns the authors of the authority record for this taxon (if any)
+sub authors {
+	my Taxon $self = shift;
+	
+	# get all info from the database about this record.
+	my $hr = $self->databaseRecord();
+	
+	if (!$hr) {
+		return '';	
+	}
+	
+	my $auth;
+	
+	if ($hr->{ref_is_authority}) {
+		# then get the author info for that reference
+		my $ref = Reference->new();
+		$ref->setWithReferenceNumber($hr->{reference_no});
+		
+		$auth = $ref->authorsWithInitials();
+	} else {
+	
+		$auth = Globals::formatAuthors(1, $hr->{author1init}, $hr->{author1last}, $hr->{author2init}, $hr->{author2last}, $hr->{otherauthors} );
+	}
+	
+	return $auth;
+}
+
+sub pubyr {
+	my Taxon $self = shift;
+
+	# get all info from the database about this record.
+	my $hr = $self->databaseRecord();
+	
+	if (!$hr) {
+		return '';	
+	}
+	
+	return $hr->{pubyr};
+}
+
 
 
 # returns a URL string for the taxon name which links to the 
@@ -537,14 +587,19 @@ sub databaseRecord {
 		return;	
 	}
 	
-	my $sql = $self->getSQLBuilder();
-	my $dbh = $sql->dbh();
+	my $row = $self->{cachedDBRow};
 	
-	# grab all the current data for this taxon from the database	
-	my $sth = $dbh->prepare("SELECT * FROM authorities WHERE taxon_no = ?");
-	$sth->execute($self->{taxonNumber});
+	if (! $row ) {
+		# if a cached version of this row query doesn't already exist,
+		# then go ahead and fetch the data.
+	
+		$row = CachedTableRow->new('authorities', "taxon_no = '" . $self->{taxonNumber} . "'");
 
-	return $sth->fetchrow_hashref(); 	
+		$self->{cachedDBRow} = $row;  # save for future use.
+	}
+	
+	#Debug::dbPrint($row->get('taxon_name'));
+	return $row->row(); 	
 }
 
 
@@ -592,6 +647,7 @@ sub displayAuthorityForm {
 		$isNewEntry = 0;  # it must exist if we have a taxon_no for it.
 	}
 	
+	Debug::dbPrint("isNewEntry = $isNewEntry");
 	
 	# if the taxon is already in the authorities table,
 	# then grab the data from that table row.
@@ -696,7 +752,7 @@ sub displayAuthorityForm {
 	
 	if ((! $isNewEntry) && ($s->get('authorizer_no') != $fields{authorizer_no})) {
 	
-		print "<p align=center><i>You did not create this record, so you can only edit empty fields.</i></p>";
+		$fields{'message'} = "<p align=center><i>You did not create this record, so you can only edit empty fields.</i></p>";
 		
 		# we should always make the ref_is_authority radio buttons disabled
 		# because only the original authorizer can edit these.
@@ -930,7 +986,10 @@ sub submitAuthorityForm {
 			# the submit button the second time around, we won't display the 
 			# same warning message again.
 			
-			$errors->add("The taxon '" . $fieldsToEnter{taxon_name} . "' already exists in our database. Are you sure you want to submit this record?");
+			my $oldTaxon = Taxon->new();
+			$oldTaxon->setWithTaxonName($fieldsToEnter{taxon_name});
+			
+			$errors->add("The taxon \"" . $fieldsToEnter{taxon_name} . " " . $oldTaxon->authors() . " " . $oldTaxon->pubyr() . "\" already exists in our database. Are you sure you want to submit this record?");
 		}
 		
 		if ($errors->count() > 0) {
