@@ -405,7 +405,7 @@ sub displayTaxonInfoResults{
 
 	# Process the data:  group all the collection numbers with the same
 	# time-place string together as a hash.
-	%time_place_coll;
+	%time_place_coll = ();
 	foreach my $row (@data){
 	    $res = Collections::createTimePlaceString($row);
 	    if(exists $time_place_coll{$res}){
@@ -800,8 +800,8 @@ sub displayTaxonClassification{
 ##
 sub displayTaxonSynonymy{
 	my $dbt = shift;
-	my $genus = shift or "";
-	my $species = shift or "";
+	my $genus = (shift or "");
+	my $species = (shift or "");
 	my $taxon_rank;
 	my $taxon_name;
 
