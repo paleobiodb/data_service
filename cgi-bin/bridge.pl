@@ -2378,7 +2378,13 @@ sub startTaxonomy	{
 	# 1. Need to ensure they have a ref
 	# 2. Need to perform a taxonomy search
 
-	$s->enqueue( $dbh, "action=displayTaxonomySearchForm" );
+	# if there's no selected taxon you'll have to search for one
+	if ( ! $q->param('taxon_name') || ! $q->param('taxon_no') )	{
+		$s->enqueue( $dbh, "action=displayTaxonomySearchForm" );
+	# otherwise go right to the edit page
+	} else	{
+		$s->enqueue( $dbh, "action=displayTaxonomyEntryForm" );
+	}
 	$q->param( "type" => "select" );
 	&displaySearchRefs ( "Please choose a reference first" );
 }
