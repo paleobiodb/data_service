@@ -726,7 +726,8 @@ sub get_classification_hash{
         # Now see if the opinions table has a parent for this child
         my $sql_opin =  "SELECT status, parent_no, pubyr, reference_no ".
                         "FROM opinions ".
-                        "WHERE child_no=$child_no AND status='belongs to'";
+                        "WHERE child_no=$child_no";
+                      #  "WHERE child_no=$child_no AND status='belongs to'";
         @results = @{$dbt->getData($sql_opin)};
 
 # JA: PM wrote the following in case the taxon being classified was a species,
