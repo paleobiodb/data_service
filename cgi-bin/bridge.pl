@@ -655,7 +655,48 @@ sub buildAuthorizerPulldown {
 	$$html =~ s/<select name="authorizer">/$&\n$select/;
 }
 
+# JA 29.2.04
+sub buildTimeScalePulldown	{
+	my $html = shift;			# HTML page into which we substitute
 
+	# get the time scales and their ID numbers
+	my $sql = "SELECT scale_no,scale_name FROM scales";
+	my @timescalerefs = @{$dbt->getData($sql)};
+
+	# alphabetize the time scale names
+	my %tsid;
+	for $ts ( @timescalerefs )	{
+		$tsid{$ts->{scale_name}} = $ts->{scale_no};
+	}
+	my @tsnames = keys %tsid;
+	@tsnames = sort @tsnames;
+
+	# move the Harland global scales to the start of the list
+	my @harlandnames;
+	my @temptsnames;
+	for my $ts ( @tsnames )	{
+		if ( $ts =~ /Harland .:/ )	{
+			push @harlandnames, $ts;
+		} else	{
+			push @temptsnames, $ts;
+		}
+	}
+	@tsnames = @harlandnames;
+	push @tsnames, @temptsnames;
+
+	# build the select list
+	my $timescale = "<select name=\"time_scale\">\n<option selected>\n";
+	for my $ts ( @tsnames )	{
+		$timescale .= "<option value=\"$tsid{$ts}\">$ts\n";
+	}
+	$timescale .= "</select>\n";
+
+	# add a blank after the Harland periods
+	$timescale =~ s/<option value="6">Harland 6: Stages/<option value="6">Harland 6: Stages\n<option>\n/;
+
+	# put the select list into the web page
+	$$html =~ s/%%time scale%%/$timescale/;
+}
 
 # displays the main menu page for the data enterers
 sub displayMenuPage	{
@@ -819,6 +860,7 @@ sub displayDownloadForm {
 	my $html = $hbo->populateHTML( 'download_form', [ '', '', $auth, '', '', '', '' ], [ 'research_group', 'country','%%authorizer%%','environment','ecology1','ecology2','ecology3','ecology4','ecology5','ecology6' ] );
 	buildAuthorizerPulldown( \$html );
 	$html =~ s/<OPTION value=''>Select authorizer\.\.\./<option value='All'>All/m;
+	buildTimeScalePulldown ( \$html );
 	print $html;
 	print stdIncludes("std_page_bottom");
 }
