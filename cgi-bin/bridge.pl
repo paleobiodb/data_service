@@ -5301,7 +5301,6 @@ sub displayTaxonomyResults	{
 		$q->param(pubyr => ($q->param('opinion_pubyr')||'') );
 		$q->param(pages => ($q->param('opinion_pages')||'') );
 		$q->param(figures => ($q->param('opinion_figures')||'') );
-		$q->param(comments => ($q->param('opinion_comments')||'') );
 	} else	{
 		$q->param(author1init => '');
 		$q->param(author1last => '');
@@ -5313,6 +5312,8 @@ sub displayTaxonomyResults	{
 		$q->param(figures => '');
 		$q->param(comments => '');
 	}
+	# always do this JA 24.8.03
+	$q->param(comments => ($q->param('opinion_comments')||'') );
 
 	# If a new opinion was submitted, insert it
 	my @lastOpinions;
@@ -6115,6 +6116,7 @@ sub setPersonValues	{
 				$pt = $s->get('enterer');
 			}
 			if ( $pt )	{
+				$pt =~ s/'/\\'/g;  # fix O'Regan bug JA 24.8.03
 				my $sql = "SELECT person_no FROM person WHERE name='";
 				$sql .= $pt . "'";
 				my $sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
