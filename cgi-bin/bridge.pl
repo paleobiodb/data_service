@@ -2130,7 +2130,7 @@ sub processEnterCollectionForm {
     print $hbo->populateHTML('collection_display_fields', \@row, \@fields);
     print $hbo->populateHTML('collection_display_buttons', \@row, \@fields);
     print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
-	#print qq|<p><center><b><a href="$exec_url?action=displayEnterCollPage">Enter another collection with the same reference</a></b></center>|;
+	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=add">Enter another collection with the same reference</a></b></center>|;
  
 	print &stdIncludes ("std_page_bottom");
 }
@@ -2399,6 +2399,8 @@ sub processEditCollectionForm {
     print $hbo->populateHTML('collection_display_buttons', \@row, \@fields);
     print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
     
+	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit">Enter another collection using the same reference</a></b></center>|;
+
 	print &stdIncludes ("std_page_bottom");
 }
 
@@ -3065,11 +3067,10 @@ sub processEditOccurrences {
 
 	# Show a link to re-edit
 	print "
-	<p align='center'>
-	<a href='$exec_url?action=displayOccurrenceAddEdit&collection_no=$collection_no'><b>Add/edit more occurrences for this collection</b></a>
-	<BR>
-	<b><a href='$exec_url?action=displayEditCollection&collection_no=$collection_no'>Edit the main collection record</a></b></p>
-
+	<p align='center'><b>
+	<a href='$exec_url?action=displayEditCollection&collection_no=$collection_no'>Edit the main collection record</a>
+	<br><a href='$exec_url?action=displayOccurrenceAddEdit&collection_no=$collection_no'>Add/edit more occurrences for this collection</a>
+	<br><a href='$exec_url?action=displaySearchColls&type=edit_occurrence'>Add/edit occurrences for a different collection with the current reference</a></b></p>
 ";
 
 	print &stdIncludes ("std_page_bottom");
