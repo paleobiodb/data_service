@@ -155,7 +155,12 @@ if(!$DEBUG){
 if ($s->get("enterer") ne "" && $s->get("enterer") ne "Guest")	{
 	my $nowString = now();
 	my $sql = "UPDATE person SET last_action='" . $nowString;
-	$sql .= "' WHERE name='" . $s->get("enterer") . "'";
+	my $enterer = $s->get("enterer");
+	# fix O'Regan-type names JA 24.8.03
+	if ( $enterer !~ /\\/ )	{
+		$enterer =~ s/'/\\'/g;
+	}
+	$sql .= "' WHERE name='" . $enterer . "'";
 	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 }
 
@@ -502,9 +507,9 @@ sub buildEntererPulldown {
 	my $select = "<OPTION value=''>Select enterer...</OPTION>\n";
 	while ( $rs = $sth->fetchrow_hashref ( ) ) {
 		if ( $enterer eq $rs->{enterer} ) {
-			$select .= "<OPTION value='".$rs->{enterer}."' selected>".$rs->{reversed_name}."<\/OPTION>\n";
+			$select .= "<OPTION value=\"".$rs->{enterer}."\" selected>".$rs->{reversed_name}."<\/OPTION>\n";
 		} else {
-			$select .= "<OPTION value='".$rs->{enterer}."'>".$rs->{reversed_name}."<\/OPTION>\n";
+			$select .= "<OPTION value=\"".$rs->{enterer}."\">".$rs->{reversed_name}."<\/OPTION>\n";
 		}
 	}
 	$$html =~ s/<select name="enterer">/$&\n$select/;
@@ -527,9 +532,9 @@ sub buildAuthorizerPulldown {
 	my $select = "<OPTION value=''>Select authorizer...</OPTION>\n";
 	while ( $rs = $sth->fetchrow_hashref ( ) ) {
 		if ( $authorizer eq $rs->{authorizer} ) {
-			$select .= "<OPTION value='".$rs->{authorizer}."' selected>".$rs->{reversed_name}."<\/OPTION>\n";
+			$select .= "<OPTION value=\"".$rs->{authorizer}."\" selected>".$rs->{reversed_name}."<\/OPTION>\n";
 		} else {
-			$select .= "<OPTION value='".$rs->{authorizer}."'>".$rs->{reversed_name}."<\/OPTION>\n";
+			$select .= "<OPTION value=\"".$rs->{authorizer}."\">".$rs->{reversed_name}."<\/OPTION>\n";
 		}
 	}
 	$$html =~ s/<select name="authorizer">/$&\n$select/;
