@@ -52,9 +52,14 @@ my $hbo = HTMLBuilder->new( $TEMPLATE_DIR, $dbh, $exec_url );
 # Figure out the action
 my $action = $q->param("action");
 $action = "displayMenuPage" unless ( $action );
+# need to know (below) if we did a processLogin and then changed the action
+my $old_action = "";
 
 # Get the database connection
 my $dbh = DBI->connect("DBI:mysql:database=$db;host=$host", $user, $password, {RaiseError => 1});
+
+# Need to do this before printing anything else out, if debugging.
+print $q->header('text/html') if $DEBUG;
 
 # Logout?
 # Run before debugging information
@@ -73,59 +78,49 @@ LOGIN: {
 	if ( $action eq "displayLogin" ) { displayLoginPage (); last; }
 
 	# Process Login
-	if ( $action eq "processLogin" ) { 
+	if ( $action eq "processLogin" ) {
 		$cookie = $s->processLogin ( $dbh, $q ); 
 		if ( $cookie ) {
 			my $cf = CookieFactory->new();
-            my $cookieEnterer = $cf->buildCookie( "enterer", $q->param("enterer") );
-            my $cookieAuthorizer = $cf->buildCookie( "authorizer", $q->param("authorizer") );
+			# The following two cookies are for setting the select lists
+			# on the login page.
+			my $cookieEnterer = $cf->buildCookie("enterer", $q->param("enterer"));
+			my $cookieAuthorizer = $cf->buildCookie("authorizer", $q->param("authorizer"));
 			print $q->header(	-type => "text/html", 
-								-cookie => [ $cookie, $cookieEnterer, $cookieAuthorizer ],
+								-cookie => [$cookie, $cookieEnterer, $cookieAuthorizer],
 								-expires =>"now" );
 
 			# Destination
 			if ( $q->param("destination") ne "" ) { $action = $q->param("destination"); }
-			if ( $action eq "processLogin" ) { $action = "displayMenuPage"; }
+			if($action eq "processLogin"){
+				$action = "displayMenuPage";
+				$old_action = "processLogin";
+			}
 		}
 		last; 
 	}
 
 	# Guest page? 
 	if ( $q->param("user") eq "Guest" ) {
-		$cookie = $s->processGuestLogin ( $dbh, $q ); 
-		print $q->header(	-type => "text/html", -cookie => $cookie, -expires =>"now" );
 		# Change the HTMLBuilder object
 		$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
 		last;
 	}
 
 	# Validate User
+	my $temp_cookie = $q->cookie('session_id');
+	dbg("cookie (param): $temp_cookie<br>");
 	$cookie = $s->validateUser ( $dbh, $q->cookie('session_id') );
-	if ( $cookie )	{
-		# If the user is a guest: (a) if they are going to a contributors'
-		#  page, zorch the cookie, forcing a login below; (b) if not, just
-		#  make sure to send them to the guest dir JA 13.6.02
-		if ( $s->guest() )	{
-			if ($q->param("user") eq "Contributor" )	{
-				$cookie = '';
-				last;
-			} else	{
-				$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
-			}
+	dbg("cookie (validated): $cookie<br>");
+	if ( !$cookie )	{
+		if($q->param("user") eq "Contributor"){
+			displayLoginPage();
 		}
-		# Print an HTTP header
-		print $q->header(	-type => "text/html", -cookie => $cookie, -expires =>"now" );
-		last;
+		# IS IT POSSIBLE TO GET HERE?
+		else{
+			$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
+		}
 	}
-}
-
-if ( ! $cookie ) {
-	# No cookie?  Send 'em back to the login page
-	my $destination = "?action=displayLogin";
-	# We'll remember where they're going
-	if ( $action ne "login" ) { $destination .= "&destination=$action"; }
-  	print $q->redirect( -url=>$BRIDGE_HOME.$destination );
-	exit;
 }
 
 if ( ! $DEBUG ) {
@@ -157,6 +152,9 @@ if ($s->get("enterer") ne "" && $s->get("enterer") ne "Guest")	{
 
 dbg($q->Dump);
 
+unless($action eq 'displayLogin' or $old_action eq 'processLogin'){
+	print $q->header('text/html');
+}
 # ACTION
 &$action;
 
@@ -174,7 +172,7 @@ sub logout {
 		$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 	}
 
-	print $q->redirect( -url=>$BRIDGE_HOME );
+	print $q->redirect( -url=>$BRIDGE_HOME."?user=Contributor" );
 	exit;
 }
 
