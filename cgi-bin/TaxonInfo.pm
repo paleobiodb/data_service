@@ -1282,12 +1282,17 @@ sub displayTaxonClassification{
 	my $genus = (shift or "");
 	my $species = (shift or "");
 	my $easy_number = (shift or "");
+# JA: we're saving taxon_no for use way below when we get the children of
+#  the taxon
+	my $taxon_no = $easy_number;
 	
 	my $taxon_rank;
 	my $taxon_name;
 	my %classification = ();
 
 	# if we didn't get a species, figure out what rank we got
+	# JA: WARNING - this will fail if there are multiple identically spelt
+	#  names and they are of different ranks
 	if($genus && ($species eq "")){
 		$taxon_name = $genus;
 		# Initialize the classification hash:
@@ -1541,6 +1546,7 @@ sub displayTaxonClassification{
 	$output .= "</table>";
 	# Now, print out a hyperlinked list of all taxa below the one at the
 	# bottom of the Classification section.
+	# JA: counter always will be zero if no taxon_no was passed in
 	if($counter <1){
 		$output .= "<i>No classification data are available</i><br>";
 	}
@@ -1549,6 +1555,9 @@ sub displayTaxonClassification{
 		last if($lastrank eq $taxon_rank_order[$index]);
 	}
 	# NOTE: Don't do this if the last rank was 'species.'
+	# JA 30.4.04: my rewrite of this section assumes that taxon_no has been
+	#  passed in
+	# Poling had completely fucked this up with a renegade rewrite
 	CHILDREN:{
 	if($index < 21){ # species is position 21
 		#$lastrank = $taxon_rank_order[$index+1];
@@ -1559,40 +1568,53 @@ sub displayTaxonClassification{
 		#elsif($index < 19){
 		#	$lastrank = "Higher taxon";
 		#}
-		my $sql = "SELECT taxon_no FROM authorities ".
-				  "WHERE taxon_name='$lastgood'";
-		PBDBUtil::debug(1,"lastgood sql: $sql");
-		my @quickie = @{$dbt->getData($sql)};
-		if(scalar @quickie < 1){
+#		my $sql = "SELECT taxon_no FROM authorities ".
+#				  "WHERE taxon_name='$lastgood'";
+#		PBDBUtil::debug(1,"lastgood sql: $sql");
+#		my @quickie = @{$dbt->getData($sql)};
+#		if(scalar @quickie < 1){
 			# BAIL
-			last CHILDREN;
+#			last CHILDREN;
+#		}
+
+	# first get a list of possibly included taxa
+	$sql = "SELECT DISTINCT taxon_name,taxon_rank,taxon_no FROM opinions,authorities WHERE taxon_no=child_no AND status='belongs to' AND parent_no=$taxon_no ORDER BY taxon_name";
+	my @childrefs = @{$dbt->getData($sql)};
+
+	# for each taxon, confirm that the most recent opinion places the taxon
+	#  in taxon_no
+	# this opinion must be a belongs to because that's always the status
+	#  for this child - parent pair
+	my @children;
+	my @childranks;
+	for my $childref (@childrefs)	{
+		$sql = "SELECT parent_no, status, pubyr, reference_no ".
+			   "FROM opinions WHERE child_no=" . $childref->{taxon_no};
+		my @ref_ref = @{$dbt->getData($sql)};
+		my $itsparent = selectMostRecentParentOpinion($dbt, \@ref_ref);
+	# if current parent is the focal taxon, save to a list
+		if ( $itsparent == $taxon_no )	{
+			push @children, $childref->{taxon_name};
+			push @childranks, $childref->{taxon_rank};
 		}
-		
-		
-		# rjp, 2/2004 - this is the new way to get a taxonomic list.
-		# This new version will list species which have no opinion records
-		# (only authority records).
-		{ 
-			my $taxHigh = Taxon->new();
-			$taxHigh->setWithTaxonNumber($quickie[0]->{taxon_no});
-			my @taxa = @{$taxHigh->listOfChildren()};
-		
-			my $r;
-			foreach my $t (@taxa) {
-				$r .= "<A HREF=\"" . $t->URLForTaxonName() . "\">" .
-					 $t->taxonName() . "</A>, ";
+	}
+
+	# go through the remaining list making links
+	if (@children)	{
+		$output .= "<p><i>This taxon includes:</i><br>";
+		for my $i (0..$#children)	{
+			if ( $childranks[i] eq "species" )	{
+				$childranks[$i] = "Genus+and+species";
+			} elsif ( $childranks[i] eq "genus" )	{
+				$childranks[$i] = "Genus";
+			} else	{
+				$childranks[$i] = "Higher+taxon";
 			}
-			
-			$r =~ s/, $//;
-			
-			if (@taxa > 0) { # if we found 1 or more...
-				$output .= "<p><i>This taxon includes:</i><BR>";
-				$output .= $r;
-			}
+			$output .= "<a href=\"bridge.pl?action=checkTaxonInfo&taxon_name=$children[$i]&taxon_rank=$childranks[$i]\">$children[$i]</a>, ";
 		}
-		
-		# end of new section, 
-				
+	}
+	$output =~ s/, $//;
+
 	}
 	} # CHILDREN block
 	return $output;
