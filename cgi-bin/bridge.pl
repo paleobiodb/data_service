@@ -1830,7 +1830,7 @@ sub processCollectionsSearch {
 	my $numFields = $sth->{NUM_OF_FIELDS};
 	$sth->finish();
 	
-	Debug::dbPrint("fieldNames = @fieldNames\n\nfieldTypes = @fieldTypes\n\nnumFields = $numFields");
+	#Debug::dbPrint("fieldNames = @fieldNames\n\nfieldTypes = @fieldTypes\n\nnumFields = $numFields");
     
 	# Handle wildcards
 	my $comparator = "=";
@@ -2148,8 +2148,7 @@ sub processCollectionsSearch {
 	$sql->setLimitExpr($limitString);
 
 	dbg ( "$sql->SQLExpr()<HR>" );
-	#print ("sql = $sql<BR>");
-	Debug::dbPrint("proccessCollectionsSearch SQL Num. 2 =" . $sql->SQLExpr());
+	#Debug::dbPrint("proccessCollectionsSearch SQL Num. 2 =" . $sql->SQLExpr());
 	
 	return $sql->SQLExpr();
 
