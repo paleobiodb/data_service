@@ -7,7 +7,6 @@
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
 
-
 // check the form to make sure it's legal to submit
 function checkForm() {
 	var frm = document.forms[0];
@@ -25,12 +24,12 @@ function checkForm() {
 		// figure out the rank of the taxon name.	
 		rank = taxonRank(frm.taxon_name_corrected.value);
 		originalRank = taxonRank(frm.taxon_name.value);
-	
+
 		//alert("original = " + originalRank + " corrected = " + rank);
 	
 		if (rank == "invalid") {
 			errors.add("The taxon being edited is ill-formed.");
-			}
+		}
 		
 		// make sure that the rank they started with in taxon_name is the
 		// same as the edited rank.  This is the only check we have to do with the
@@ -38,57 +37,38 @@ function checkForm() {
 		if (rank != originalRank) {
 			errors.add("The taxon's rank in the top field can't be changed.");
 		}
+		
+		
 	}
 			
+	
+	// if the user enters a new taxon which is a species and the genus has not been 
+	// entered, they will be taken to a form which has the same fields, but with
+	// parent_ prepended on each one.
+	// 
+	// so we have to check for this.
+	//
+	if (frm.no_authority_data) {  
+		// no_authority_data is inserted by a perl script if the parent taxon
+		// doesn't have any authority data in the database.
+		originalRank = taxonRank(frm.parent_taxon_name.value);
 		
-
-	// First, make sure that they either selected the 
-	// "it was first named in" check box,
-	// or fill in some information in the authority reference fields.
-	if (frm.ref_is_authority.checked) {
-		// then make sure that the fields are blank
+		// check the authority reference info..
+		errors.appendErrors(checkReferenceInfo(frm.parent_ref_is_authority.checked, "authority", frm.parent_pages.value, frm.parent_figures.value, frm.parent_author1init.value, frm.parent_author1last.value, frm.parent_author2init.value, frm.parent_author2last.value, frm.parent_otherauthors.value, frm.parent_pubyr.value, frm.elements['parent_2nd_pages'].value, frm.elements['parent_2nd_figures'].value));
 		
-		if (! authorityRefsAreBlank()) {
-			errors.add("Don't fill in authority reference fields if the 'first named in primary reference' checkbox is checked.");		
+		if (!(specificRankMatchesGeneralRank(originalRank, frm.parent_taxon_rank.value))) {
+			errors.add("Original rank is invalid.");
 		}
-	} else {  // ref_is_authority is not checked
-		// so we need to check the validity of the reference information.
-		if (authorityRefsAreBlank()) {
-			errors.add("You must fill in an authority reference or check the 'first named in primary reference' checkbox.");
-		} else {
-			//the authority refs aren't blank
-			
-			//at a minimum, we need the author last name and pubyr.
-			if (!(properLastName(frm.author1last.value))) {
-				errors.add("Ill-formed or missing authority last name.");
-			}
-			if (!(properYear(frm.pubyr.value))) {
-				errors.add("Ill-formed or missing authority year.");
-			}
 		
-			if (frm.author1init.value != "") {
-				if (! properInitial(frm.author1init.value)) {
-					errors.add("Ill-formed authority initial");
-				}
-			}
-			
-			if (frm.author2last.value != "") {
-				if (! properInitial(frm.author2last.value)) {
-					errors.add("Ill-formed authority last name");
-				}
-			}
-			
-			if (frm.author2init.value != "") {
-				if (! properInitial(frm.author2init.value)) {
-					errors.add("Ill-formed authority initial");
-				}
-			}
-
+	} else {
 	
-		}	
+		// check the authority reference info..
+		errors.appendErrors(checkReferenceInfo(frm.ref_is_authority.checked, "authority", frm.pages.value, frm.figures.value, frm.author1init.value, frm.author1last.value, frm.author2init.value, frm.author2last.value, frm.otherauthors.value, frm.pubyr.value, frm.elements['2nd_pages'].value, frm.elements['2nd_figures'].value));
+		
+		if (!(specificRankMatchesGeneralRank(rank, frm.taxon_rank.value))) {
+			errors.add("Original rank is invalid.");
+		}
 	}
-
-	
 	
 	if (frm.opinion_present) {
 		// Check taxonomic opinion data if any are present on the page
@@ -131,51 +111,10 @@ function checkOpinion() {
 		// if they're entering opinion data, then we need to check the
 		// opinion reference section.
 	
-		// First, make sure that they either selected the 
-		//"current reference argues for this opinion" check box,
-		// or fill in some information in the opinion reference fields.
-		if (frm.ref_has_opinion.checked) {
-			// then make sure that the fields are blank
-			
-			if (! opinionRefsAreBlank()) {
-				errors.add("Don't fill in opinion reference fields if the 'current reference argues for this opinion' checkbox is checked.");		
-			}
-		} else {  // ref_has_opinion is not checked
-			// so we need to check the validity of the reference information.
-			if (opinionRefsAreBlank()) {
-				errors.add("You must filll in an opinion reference or check the 'current reference argues for this opinion' check box.");
-			} else {
-				//the opinion refs aren't blank
-				
-				//at a minimum, we need the author last name and pubyr.
-				if (!(properLastName(frm.opinion_author1last.value))) {
-					errors.add("Ill-formed or missing opinion last name.");
-				}
-				if (!(properYear(frm.opinion_pubyr.value))) {
-					errors.add("Ill-formed or missing opinion year.");
-				}
-			
-				if (frm.opinion_author1init.value != "") {
-					if (! properInitial(frm.opinion_author1init.value)) {
-						errors.add("Ill-formed opinion initial");
-					}
-				}
-				
-				if (frm.opinion_author2last.value != "") {
-					if (! properInitial(frm.opinion_author2last.value)) {
-						errors.add("Ill-formed opinion last name");
-					}
-				}
-				
-				if (frm.opinion_author2init.value != "") {
-					if (! properInitial(frm.opinion_author2init.value)) {
-						errors.add("Ill-formed opinion initial");
-					}
-				}
+	
+		// check the opinion reference info..
+		errors.appendErrors(checkReferenceInfo(frm.ref_has_opinion.checked, "opinion", frm.opinion_pages.value, frm.opinion_figures.value, frm.opinion_author1init.value, frm.opinion_author1last.value, frm.opinion_author2init.value, frm.opinion_author2last.value, frm.opinion_otherauthors.value, frm.opinion_pubyr.value, frm.elements['opinion_2nd_pages'].value, frm.elements['opinion_2nd_figures'].value));
 
-		
-			}	
-		}
 	}
 	
 	
@@ -285,9 +224,8 @@ function checkReferenceInfo(checked, type, currentPages, currentFigures, firstAu
 		(year == "") &&
 		(otherAuthors == "") &&
 		(pages == "") &&
-		(figures.value == ""));
-		
-	
+		(figures == ""));
+			
 	// First, make sure that they either selected the 
 	// use current reference check box
 	// or fill in some information in the reference fields.
@@ -338,37 +276,6 @@ function checkReferenceInfo(checked, type, currentPages, currentFigures, firstAu
 }
 
 
-/*
-// returns true if opinion reference fields are blank.
-function opinionRefsAreBlank() {
-	var frm = document.forms[0];
-	
-	return ((frm.opinion_author1init.value == "") &&
-		(frm.opinion_author1last.value == "") &&
-		(frm.opinion_author2init.value == "") &&
-		(frm.opinion_author2last.value == "") &&
-		(frm.opinion_pubyr.value == "") &&
-		(frm.opinion_otherauthors.value == "") &&
-		(frm.elements['opinion_2nd_pages'].value == "") &&
-		(frm.elements['opinion_2nd_figures'].value == ""));				
-}
-
-
-// returns true if authority reference fields are blank.
-function authorityRefsAreBlank() {
-	var frm = document.forms[0];
-	
-	return ((frm.author1init.value == "") &&
-		(frm.author1last.value == "") &&
-		(frm.author2init.value == "") &&
-		(frm.author2last.value == "") &&
-		(frm.pubyr.value == "") &&
-		(frm.otherauthors.value == "") &&
-		(frm.elements['2nd_pages'].value == "") &&
-		(frm.elements['2nd_figures'].value == ""));				
-}
-
-*/
 
 
 
