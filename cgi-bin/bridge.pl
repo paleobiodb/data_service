@@ -1862,6 +1862,42 @@ sub displayCollectionDetails {
     push(@fieldNames, 'subset_string');
 
     print &stdIncludes ( "std_page_top" );
+
+	# check whether we have period/epoch/locage/intage max AND/OR min:
+	for my $term ("epoch_","intage_","locage_","period_"){
+		my $max = 0;
+		my $min = 0;
+		for my $index (0..scalar(@fieldNames)){
+			if($fieldNames[$index] eq $term."max" && $row[$index]){
+				$max = 1;
+			}
+			elsif($fieldNames[$index] eq $term."min" && $row[$index]){
+				$min = 1;
+			}
+		}
+		# Do this regardless:
+		push(@fieldNames,$term."title");
+		if($max || $min){
+			# There is no corresponding span, so this is just a placeholder, 
+			# but necessary so that htmlbuilder doesn't wipe the contents of 
+			# the div tags.
+			push(@row, "dummy"); 
+
+			if($max && $min){
+				push(@fieldNames,$term."dash");
+				push(@row, " - ");
+			}
+			elsif($min && !$max){
+				push(@fieldNames, $term."min_only");
+				push(@row, "<small>(minimum)</small>");
+			}
+		}
+		# This will cause the whole "*_title" section to be erased.
+		else{
+			push(@row,"");
+		}
+	}
+
     print $hbo->populateHTML('collection_display_fields', \@row, \@fieldNames);
     # If the viewer is the authorizer (or it's me), display the record with edit buttons
     if ( $authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy') {
