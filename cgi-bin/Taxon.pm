@@ -1861,7 +1861,8 @@ sub displayAuthoritySummary {
 		<p><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonInfoResults&taxon_rank=" . $dbrec->{taxon_rank} . "&genus_name=" . $tempTaxon . "+(" . $self->{taxonNumber} .")\"><B>Get&nbsp;general&nbsp;information&nbsp;about&nbsp;" . $dbrec->{taxon_name} . "</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $self->{taxonNumber} ."\"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;" . $dbrec->{taxon_name} . "</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionList&taxon_no=" . $self->taxonNumber() . "&taxon_name=" . $dbrec->{taxon_name} . "\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;" . $dbrec->{taxon_name} . "</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority\"><B>Add&nbsp;authority&nbsp;data&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority\"><B>Add/edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;another&nbsp;taxon</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=opinion\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
 		</center>";	
 
 	}
