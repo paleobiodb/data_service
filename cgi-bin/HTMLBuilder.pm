@@ -213,7 +213,8 @@ my $rowCount = 0;
 
 # pass this a hashref
 # and it will escapeHTML on all 
-# fields, except the ones that look like they're already html...
+# fields, except the ones that look like they're already html, or the 
+# ones which have "NOESCAPE" in the key name.
 #
 # Should do this before displaying the values in a form.
 sub escapeHTMLOnFields {
@@ -230,7 +231,11 @@ sub escapeHTMLOnFields {
 		# we don't want to HTML escape field which are already 
 		# formatted as HTML!  So we'll do a simple check to see if they
 		# have anything that looks like an HTML tag in them..
-		if ($val =~ m/ (?:< (?:[-A-Za-z"=0-9%._]|\s)* >)+ /xgo) {
+		#
+		# Also, we'll not escape any key which has "NOESCAPE" somewhere in the
+		# key name.
+		if (($key =~ m/NOESCAPE/) || 
+			($val =~ m/ (?:< (?:[-A-Za-z"=0-9%._]|\s)* >)+ /xgo) ) {
 			#Debug::dbPrint("I think this is HTML: " . $ref->{$key});
 		} else {
 			$ref->{$key} = CGI::escapeHTML($ref->{$key});
