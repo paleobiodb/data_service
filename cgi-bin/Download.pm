@@ -5,7 +5,7 @@ use PBDBUtil;
 use Classification;
 use TimeLookup;
 use Globals;
-use WhereClause;
+use SQLBuilder;
 
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
@@ -535,38 +535,36 @@ sub getDataForAuthorizer{
 sub getOccurrencesWhereClause {
 	my $self = shift;
 	
-	my $clause = WhereClause->new();
-	$clause->setSeparator("AND");
+	my $where = SQLBuilder->new();
+	$where->setWhereSeparator("AND");
 	
 	my $authorizer = $self->getDataForAuthorizer();
-
-	$clause->addItem("occurrences.authorizer='$authorizer'") if ($authorizer ne "ALL");
-
+	
+	$where->addWhereItem(" occurrences.authorizer='$authorizer' ") if ($authorizer ne "All");
+	
 	if($q->param('genus_name') ne ""){
-		my $genusNames = $self->getGenusNames($q->param('genus_name'));		
-		$clause->addItem("occurrences.genus_name IN ($genusNames)");
+		my $genusNames = $self->getGenusNames($q->param('genus_name'));
+		$where->addWhereItem(" occurrences.genus_name IN (".$genusNames.")");
 	}
 	
-	$clause->addItem("occurrences.species_name!='indet.'") if ($q->param('indet') eq 'NO');
+	$where->addWhereItem(" occurrences.species_name!='indet.' ") if $q->param('indet') eq 'NO';
 	
-	return $clause->whereClause;
+	return $where->whereExpr();
 }
-
 
 sub getCollectionsWhereClause {
 	my $self = shift;
-
-	my $clause = WhereClause->new();  # create the clause object
-	$clause->setSeparator("AND");
-
+	
+	my $where = SQLBuilder->new();
+	$where->setWhereSeparator("AND");
 	
 	my $authorizer = $self->getDataForAuthorizer();
 	# This is handled by getOccurrencesWhereClause if we're getting occs data.
 	if($authorizer ne "All" && $q->param('collections_only') eq 'YES'){
-		$clause->addItem("collections.authorizer='$authorizer'");
+		$where->addWhereItem(" collections.authorizer='$authorizer' ");
 	}
-
-	$clause->addItem($self->getResGrpString()) if $self->getResGrpString();	
+	
+	$where->addWhereItem($self->getResGrpString()) if $self->getResGrpString();	
 	
 	# should we filter the data based on collection creation date?
 	# added by Ryan on 12/30/2003, some code copied from Curve.pm.
@@ -597,21 +595,20 @@ sub getCollectionsWhereClause {
 			$created_string = " collections.created > $created_date ";
 		}
 		
-		$clause->addItem($created_string);
+		$where->addWhereItem($created_string);
 	}
 	
-	$clause->addItem($self->getCountryString()) if $self->getCountryString();
-	$clause->addItem($self->getIntervalString()) if $self->getIntervalString();
-	$clause->addItem($self->getEnvironmentString()) if $self->getEnvironmentString();
-
+	$where->addWhereItem($self->getCountryString()) if $self->getCountryString();
+	$where->addWhereItem($self->getIntervalString()) if $self->getIntervalString();
+	$where->addWhereItem($self->getEnvironmentString()) if $self->getEnvironmentString();
+		
 	my $regionsString = $self->getRegionsString();
 	if($regionsString ne "") {
-		$clause->addItem($regionString);
+		$where->addWhereItem("($regionsString)");
 	}
 
-	return $clause->whereClause();
+	return $where->whereExpr();
 }
-
 
 sub getNotNullString {
 	my $self = shift;
@@ -732,7 +729,7 @@ sub doQuery {
 			$sql .= " WHERE $collectionsWhereClause ";
 		}
 		if($q->param('strictgeography') eq 'NO'){
-			if($sql =~ /WHERE/){
+			if($sql =~ /WHERE/i){
 				$sql .= "\nAND (collections.county IS NOT NULL OR (collections.latdeg IS NOT NULL AND collections.lngdeg IS NOT NULL))\n";
 			}
 			else{
