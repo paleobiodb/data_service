@@ -59,6 +59,9 @@ sub buildDownload {
 
 	$self->setupOutput ( );
 	$self->retellOptions ( );
+	if ( $q->param('time_scale') )	{
+		$self->getTimeLookup ( );
+	}
 	if ( $q->param('ecology1') )	{
 		$self->getEcology ( );
 	}
@@ -253,6 +256,21 @@ sub retellOptions {
 
 	my @collectionOutputResult = ( "collection_no" );	# A freebie
 	if ( ! $q->param("collections_only") ) { push ( @collectionOutputResult, "genus_reso", "genus_name" ); }
+	# hey, if you want the data binned into time intervals you have to
+	#  download the interval names into the occurrences table too
+	if ( $q->param('time_scale') )	{
+		$q->param('collections_max_interval_no' => "YES");
+		$q->param('collections_min_interval_no' => "YES");
+	}
+	# and hey, if you want counts of some enum field split up within
+	#  time interval bins, you have to download that field
+	if ( $q->param('binned_field') )	{
+		if ( $q->param('binned_field') =~ /plant_organ/ )	{
+			$q->param('occurrences_' . $q->param('binned_field') => "YES");
+		} else	{
+			$q->param('collections_' . $q->param('binned_field') => "YES");
+		}
+	}
 	foreach my $field ( @collectionOutputFields ) {
 		if ( $q->param ( $field ) ) { push ( @collectionOutputResult, $field ); }
 	}
@@ -428,6 +446,12 @@ sub getIntervalString	{
 	my $self = shift;
 	my $max = $q->param('max_interval_name');
 	my $min = $q->param('min_interval_name');
+
+	# return immediately if the user already selected a full time scale
+	#  to bin the data
+	if ( $q->param('time_scale') )	{
+		return "";
+	}
 
 	if ( $max )	{
 		my $collref = TimeLookup::processLookup($dbh, $dbt, '', $max, '', $min);
@@ -605,6 +629,13 @@ sub getNotNullString {
 	}
 	$retVal =~ s/\A OR//;
 	return $retVal;
+}
+
+# get a hash table mapping interval numbers into intervals of the selected
+#   time scale
+sub getTimeLookup	{
+	my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, $q->param('time_scale'));
+	%intervallookup = %{$intervalInScaleRef};
 }
 
 # create a hash table relating taxon names to eco/taphonomic categories
@@ -957,6 +988,24 @@ sub doQuery {
 		my $reid_genus_name = $row->{reid_genus_name};
 		my $collection_no = $row->{collection_no};
 
+		# count up occurrences per time interval bin
+		if ( $q->param('time_scale') )	{
+			# only use occurrences from collections that map
+			#  into exactly one bin
+			if ( $intervallookup{$row->{collection_no}} )	{
+				$occsbybin{$intervallookup{$row->{collection_no}}}++;
+			}
+			# now things get nasty: if a field was selected to
+			#  break up into categories, add to the count involving
+			#  the appropriate enum value
+			# WARNING: algorithm assumes that only enum fields are
+			#  ever selected for processing
+			if ( $q->param('binned_field') )	{
+				$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}++;
+				$occsbycategory{$row->{$q->param('binned_field')}}++;
+			}
+		}
+
 		# compute relative abundance proportion and add to running total
 		# WARNING: sum is of logged abundances because geometric means
 		#   are desired
@@ -1120,7 +1169,39 @@ sub doQuery {
 			}
 			$acceptedGenera++;
 		}
-	close ABUNDFILE;
+		close ABUNDFILE;
+	}
+
+	# print out a list of time intervals with counts of occurrences
+	if ( $q->param('time_scale') )	{
+		open SCALEFILE,">$OUT_FILE_DIR/$scaleOutFileName";
+		# we need a list of interval names in the order they appear
+		#   in the scale, which is stored in the correlations table
+		my $sql = "SELECT intervals.interval_name,intervals.interval_no,correlations.correlation_no FROM intervals,correlations WHERE intervals.interval_no=correlations.interval_no AND correlations.scale_no=" . $q->param('time_scale') . " ORDER BY correlations.correlation_no";
+		my @intervalrefs = @{$dbt->getData($sql)};
+
+		# need a list of enum values that actually have counts
+		# NOTE: we're only using occsbycategory to generate this list,
+		#  but it is kind of cute
+		@enumvals = keys %occsbycategory;
+		@enumvals = sort @enumvals;
+
+		# now print the results
+		print SCALEFILE "interval\ttotal occurrences";
+		for my $val ( @enumvals )	{
+			print SCALEFILE "\t$val";
+		}
+		print SCALEFILE "\n";
+		for my $ir ( @intervalrefs )	{
+			$acceptedIntervals++;
+			print SCALEFILE "$ir->{interval_name}";
+			print SCALEFILE "\t$occsbybin{$ir->{interval_name}}";
+			for my $val ( @enumvals )	{
+				print SCALEFILE "\t$occsbybinandcategory{$ir->{interval_name}}{$val}";
+			}
+			print SCALEFILE "\n";
+		}
+		close SCALEFILE;
 	}
 
 	# Tell what happened
@@ -1135,8 +1216,12 @@ sub doQuery {
 <tr><td>$acceptedGenera genus names were printed to <a href='$OUT_HTTP_DIR/$generaOutFileName'>$generaOutFileName</a></td></tr>\n";
 	}
 	print "
-<tr><td>$acceptedRefs references were printed to <a href='$OUT_HTTP_DIR/$refsOutFileName'>$refsOutFileName</a></td></tr>
-</table>
+<tr><td>$acceptedRefs references were printed to <a href='$OUT_HTTP_DIR/$refsOutFileName'>$refsOutFileName</a></td></tr>\n";
+	if ( $q->param('time_scale') )	{
+		print "
+<tr><td>$acceptedIntervals time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleOutFileName\">$scaleOutFileName</a></td></tr>\n";
+	}
+print "</table>
 <p align='center'><a href='?action=displayDownloadForm'>Do another download</a>
 </p>
 </center>
@@ -1180,6 +1265,9 @@ sub setupOutput {
 		$occsOutFileName = $authorizer . "-cols.$outFileExtension";
 	}
 	$refsOutFileName = $authorizer . "-refs.$outFileExtension";
+	if ( $q->param('time_scale') )	{
+		$scaleOutFileName = $authorizer . "-scale.$outFileExtension";
+	}
 
 	if ( ! open(OUTFILE, ">$OUT_FILE_DIR/$occsOutFileName") ) {
 	die ( "Could not open output file: $OUT_FILE_DIR/$occsOutFileName ($!) <BR>\n" );
