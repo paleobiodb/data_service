@@ -1249,49 +1249,30 @@ sub displayTaxonClassification{
 		}
 		
 		
-		# rjp testing
+		# rjp, 2/2004 - this is the new way to get a taxonomic list.
+		# This new version will list species which have no opinion records
+		# (only authority records).
+		{ 
+			my $taxHigh = Taxon->new();
+			$taxHigh->setWithTaxonNumber($quickie[0]->{taxon_no});
+			my @taxa = @{$taxHigh->listOfChildren()};
 		
-		#my $taxHigh = TaxonHierarchy->new();
-		#$taxHigh->setWithTaxonNumber($quickie[0]->{taxon_no});
-		#Debug::dbPrint("children: \n" . $taxHigh->listOfChildren());
-		# end rjp testing
-		
-		
-		
-		
-		$sql = "SELECT DISTINCT(child_no), taxon_name, taxon_rank ".
-			   "FROM opinions, authorities ".
-			   "WHERE parent_no = ".$quickie[0]->{taxon_no}.
-			   " AND status = 'belongs to' AND child_no = taxon_no ".
-			   "ORDER BY taxon_name";
-		PBDBUtil::debug(1,"children sql: $sql");
-		@quickie = @{$dbt->getData($sql)};
-		if(scalar @quickie < 1){
-			# BAIL
-			last CHILDREN;
+			my $r;
+			foreach my $t (@taxa) {
+				$r .= "<A HREF=\"" . $t->URLForTaxonName() . "\">" .
+					 $t->taxonName() . "</A>, ";
+			}
+			
+			$r =~ s/, $//;
+			
+			if (@taxa > 0) { # if we found 1 or more...
+				$output .= "<p><i>This taxon includes:</i><BR>";
+				$output .= $r;
+			}
 		}
-		$output .= "<p><i>This taxon includes:</i> ";
-		foreach my $item (@quickie){
-			# Need to do some URL encoding:
-			my $taxon_name = $item->{taxon_name};
-			$taxon_name =~ s/\s/+/g;
-			my $taxon_rank = $item->{taxon_rank};
-			if($taxon_rank eq "species" && $taxon_name =~ /\w+\+\w+/){
-				$taxon_rank = "Genus and species";
-			}
-			elsif($taxon_rank eq "genus"){
-				$taxon_rank = "Genus";
-			}
-			if($taxon_rank ne "Genus" && $taxon_rank ne "Genus and species" &&
-					$taxon_rank ne "species"){
-				$taxon_rank = "Higher taxon";
-			}
-			$taxon_rank =~ s/\s/+/g;
-			$output .= qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo|;
-			$output.="&taxon_name=".$taxon_name."&taxon_rank=$taxon_rank\">";
-			$output .= $item->{taxon_name}."</a>,\n";
-		}
-		$output =~ s/,\s*$//;
+		
+		# end of new section, 
+				
 	}
 	} # CHILDREN block
 	return $output;

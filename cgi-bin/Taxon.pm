@@ -12,9 +12,13 @@ use DBConnection;
 use SQLBuilder;
 use CGI::Carp qw(fatalsToBrowser);
 
+use URLMaker;
+
 
 use fields qw(	taxonName
 				taxonNumber
+				taxonRank
+				
 				taxaHash
 				
 				SQLBuilder
@@ -22,6 +26,7 @@ use fields qw(	taxonName
 
 # taxonName is the name of the original taxon the user set
 # taxonNumber is the number for the original taxon
+# taxonRank is the rank of this taxon, note, this won't be populated until the user calls rank()
 # taxaHash is a hash of taxa numbers and ranks.
 				
 				
@@ -37,7 +42,7 @@ use fields qw(	taxonName
 # (string) nameForRank(string rank)
 # (int) numberForRank(string rank)
 # (int) originalCombination
-# (string) listOfChildren()
+# (\@) listOfChildren()
 #
 
 sub new {
@@ -197,12 +202,17 @@ sub taxonName {
 # for example, class, family, order, genus, species, etc.
 sub rank {
 	my Taxon $self = shift;
+
+	if (! $self->{taxonRank}) {	
+		# if we haven't already fetched the rank, then fetch it.
+		my $sql = $self->getSQLBuilder();
+
+		my $r = $sql->getSingleSQLResult("SELECT taxon_rank FROM authorities WHERE taxon_no = $self->{taxonNumber}");
 	
-	my $sql = $self->getSQLBuilder();
+		$self->{taxonRank} = $r;	
+	}
 
-	my $r = $sql->getSingleSQLResult("SELECT taxon_rank FROM authorities WHERE taxon_no = $self->{taxonNumber}");
-
-	return $r;
+	return $self->{taxonRank};
 }
 
 
@@ -246,6 +256,28 @@ sub numberForRank {
 	my %hash = %$hash;
 	
 	return $hash{$key};
+}
+
+
+# returns a URL string for the taxon name which links to the 
+# checkTaxonInfo routine.
+sub URLForTaxonName {
+	my Taxon $self = shift;
+	
+	my $rank = $self->rank();
+	my $name = $self->taxonName();
+	
+	my $url = "bridge.pl?action=checkTaxonInfo&taxon_name=$name&taxon_rank=";
+	
+	if ($rank eq 'species') {
+		$url .= 'Genus+and+species';
+	} elsif ($rank eq 'genus') {
+		$url .= 'Genus';
+	} else {
+		$url .= 'Higher+taxon';	
+	}
+	
+	return URLMaker::escapeURL($url);
 }
 
 
@@ -376,7 +408,7 @@ sub createTaxaHash {
 
 
 
-# Returns an array of the "children" to this taxon, ie, the ones
+# Returns a reference to a sorted array of the "children" to this taxon, ie, the ones
 # right below it in ranking.  Each element is a taxon object.
 # Note, for now, this just looks at the opinions and
 # authorities table, so if a taxon exists in an occurrence, but doesn't exist in the
@@ -392,7 +424,6 @@ sub listOfChildren {
 	my Taxon $self = shift;
 
 	my $sql = $self->getSQLBuilder();
-	my $result;
 	my $rank = $self->rank(); # rank of the parent taxon
 	my $tn = $self->{taxonNumber};  # number of the parent taxon
 	my $tname = $self->taxonName();
@@ -417,8 +448,9 @@ sub listOfChildren {
 	# table for taxa starting with the genus name, but possibly which don't have
 	# opinions about them.
 	if ($rank eq 'genus') {
+		# note, the space after in '$tname \%' is important.
 		$sql->setSQLExpr("SELECT DISTINCT taxon_name, taxon_no FROM authorities 
-			WHERE taxon_name LIKE '$tname\%' ORDER BY taxon_name");
+			WHERE taxon_name LIKE '$tname \%' ORDER BY taxon_name");
 	
 		$results = $sql->allResultsArrayRef();
 	
@@ -440,13 +472,9 @@ sub listOfChildren {
 	
 
 	# at this point, we have an array of taxon objects.
-	
-	foreach my $t (@taxa) {
-		$result .= $t->taxonName();
-	}
-	Debug::dbPrint($result);
-	
-	#return $result;
+	# so, we'll sort it based on taxon_name
+	@taxa = sort { $a->taxonName() cmp $b->taxonName() } @taxa;
+	return \@taxa;
 }
 
 
