@@ -96,6 +96,9 @@ sub buildCurve {
 	if ($q->param('stepsize') ne "")	{
 	  $self->setSteps;
 	}
+	if ( $q->param('recent_genera') =~ /yes/i )	{
+		$self->findRecentGenera;
+	}
 	$self->assignGenera;
 	$self->subsample;
 	$self->printResults;
@@ -402,6 +405,13 @@ sub assignGenera	{
 		}
 	# END of input file parsing routine
 
+	# if Jack's data are being used, declare Recent genera present
+	#  in bin 1
+		if ( $q->param('recent_genera') )	{
+			for my $taxon ( keys %isRecent )	{
+				$present[$genid{$taxon}][1]--;
+			}
+		}
 
 	 # get basic counts describing lists and their contents
 		for $collno (1..$#lastocc+1)	{
@@ -565,6 +575,25 @@ sub assignGenera	{
 
 }
 
+# JA 16.8.04
+sub findRecentGenera	{
+
+	my $self = shift;
+
+	# draw all comments pertaining to Jack's genera
+	my $asql = "SELECT comments,taxon_name FROM authorities WHERE authorizer_no=48 AND taxon_rank='genus'";
+	my @arefs = @{$dbt->getData($asql)};
+
+	# isRecent must be global!
+	for my $aref ( @arefs )	{
+		if ( $aref->{comments} =~ / R / || $aref->{comments} =~ / R$/)	{
+			$isRecent{$aref->{taxon_name}}++;
+		}
+	}
+	return;
+
+}
+
 sub subsample	{
 	my $self = shift;
 
@@ -575,6 +604,13 @@ sub subsample	{
 			@subsrichness = ();
 			@lastsubsrichness = ();
 			@present = ();
+		# if Jack's data are being used, declare Recent genera present
+		#  in bin 1
+			if ( $q->param('recent_genera') )	{
+				for my $taxon ( keys %isRecent )	{
+					$present[$genid{$taxon}][1]--;
+				}
+			}
 			for $i (1..$chrons)	{
 				if (($q->param('printall') eq "yes" && $listsinchron[$i] > 0)||
 					  (($usedoccsinchron[$i] > $q->param('samplesize') &&
