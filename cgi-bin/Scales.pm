@@ -68,7 +68,8 @@ sub startSearchScale	{
 
 	print "<tr><td><p></p></td></tr>\n";
 
-	if ( $session->get('enterer') ne "Guest" && $session->get('enterer') ne "" )	{
+#	if ( $session->get('enterer') ne "Guest" && $session->get('enterer') ne "" )	{
+	if ( $session->get('enterer') eq "J. Alroy" || $session->get('enterer') eq "S. Holland" )	{
 		print "<tr><td colspan=2 align=\"center\" valign=\"bottom\"><h3>... or select a time scale to add or edit</h3></td></tr>\n";
 
 		print "<tr><td align=\"right\"> ";
