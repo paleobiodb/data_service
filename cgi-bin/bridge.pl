@@ -1987,6 +1987,7 @@ sub buildTaxonomicList {
 		}
 
 		my $count = 0;
+		my %classification = ();
 		foreach my $rowref ( @rowrefs ) {
 			# check for unrecognized genus names
 			foreach my $nn (@gnew_names){
@@ -2014,24 +2015,52 @@ sub buildTaxonomicList {
 
 			my $drow = DataRow->new($rowref, $md);
 
-			$genus = "Genus and species" if $drow->getValue('genus_name') || $drow->getValue('species_name');
-			$abundance = 'Abundance' if $drow->getValue('abund_value');
-			$comments = 'Comments' if $drow->getValue('comments');
+			#$genus = "Genus and species" if $drow->getValue('genus_name') || $drow->getValue('species_name');
+			#$abundance = 'Abundance' if $drow->getValue('abund_value');
+			#$comments = 'Comments' if $drow->getValue('comments');
 			# replace the ref no with a formatted ref JA 10.6.02
 			# WARNING: uses buildReference function that was written to
 			#   be used in the bottom navigation bar
 			my $newrefno = $drow->getValue('reference_no');
 			if ($newrefno != $collection_refno)	{
 				$drow->setValue("reference_no",&buildReference($newrefno,"list"));
-				$newreference = 'Reference';
+				#$newreference = 'Reference';
 			}
 			else	{
 				$drow->setValue("reference_no",'');
 			}
 
 			my @occrow = @{$rowref};
+			my $arg = $drow->getValue('genus_name')." ". $drow->getValue('species_name');
+			%classification = %{PBDBUtil::get_classification_hash($dbt, $arg)};
+			if($classification{'class'} || $classification{'order'} ||
+					$classification{'family'} ){
+				push(@occrow, "bogus");
+				push(@occFieldNames, 'higher_taxa');
+				push(@occrow, $classification{'class'});
+				push(@occFieldNames, 'class');
+				push(@occrow, $classification{'order'});
+				push(@occFieldNames, 'order');
+				push(@occrow, $classification{'family'});
+				push(@occFieldNames, 'family');
+			}
 
 			$formattedrow = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
+
+			if($classification{'class'} || 
+					$classification{'order'} ||
+					$classification{'family'} ){
+				pop(@occrow);
+				pop(@occrow);
+				pop(@occrow);
+				pop(@occrow);
+				pop(@occFieldNames);
+				pop(@occFieldNames);
+				pop(@occFieldNames);
+				pop(@occFieldNames);
+			}
+
+			$formattedrow .= getReidHTMLTableByOccNum(pop(@occrow),$collection_refno);
 
 			# Link taxa to the TaxonInfo script
 			# ---------------------------------
@@ -2042,20 +2071,19 @@ sub buildTaxonomicList {
 			}
 			# If species is informal, link only the genus.
 			elsif($formattedrow =~ /<genus>(.*)?<\/genus>(.*)?informal/s){
-				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Genus&user=Contributor"><i>$1$2$3$4<\/i><\/a>/s;
+				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Genus&user=Contributor"><i>$1$2$3$4<\/i><\/a>/g;
 			}
 			elsif($formattedrow =~ /<species>indet/s){
 				# shouldn't be any <i> tags for indet's.
-				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Higher+taxon&user=Contributor">$1$2 indet.<\/a>/;
+				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Higher+taxon&user=Contributor">$1$2 indet.<\/a>/g;
 				$formattedrow =~ s/<species>(.*)?<\/species>//;
 			}
 			else{
 				# match multiple rows as a single (use the 's' modifier)
-				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2+$4&taxon_rank=Genus+and+species&user=Contributor"><i>$1$2$3$4<\/i><\/a>/s;
+				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2+$4&taxon_rank=Genus+and+species&user=Contributor"><i>$1$2$3$4<\/i><\/a>/g;
 			}
 			# ---------------------------------
 
-			$formattedrow .= getReidHTMLTableByOccNum(pop(@occrow),$collection_refno);
 			# if there's a link in here somewhere, there must be a new ref
 			#   (kludgy, but saves the trouble of passing newreference back
 			#   and forth)
@@ -2089,14 +2117,14 @@ sub buildTaxonomicList {
 		}
 
 		$return .=
-"<table border=\"0\" cellpadding=\"3\" cellspacing=\"0\">
-<tr>
-	<td nowrap><u>$genus</u></td>
-	<td><u>$newreference</u></td>
-	<td><u>$abundance</u></td>
-	<td><u>$comments</u></td>
-</tr>
-";
+"<table border=\"0\" cellpadding=\"3\" cellspacing=\"0\"><tr>";
+
+	$return .= "<td nowrap><u>Class</u></td><td><u>Order</u></td>".
+			   "<td><u>Family</u></td><td><u>Genus and species</u></td>";
+
+	$return .= "<td><u>Reference</u></td><td><u>Abundance</u></td>".
+			   "<td><u>Comments</u></td></tr>";
+
 		# Clean up abundance values (somewhat messy, but it works, and better
 		#   here than in populateHTML) JA 10.6.02
 		$output =~ s/(>1 specimen)s|(>1 individual)s/$1$2/g;
@@ -2138,7 +2166,32 @@ sub getReidHTMLTableByOccNum {
 		my @row = @{$rowRef};
 		# format the reference
 		$row[-1] = buildReference($row[-1],"list");
+		my $arg = $row[1]." ". $row[5];
+		%classification = %{PBDBUtil::get_classification_hash($dbt, $arg)};
+		if($classification{'class'} || $classification{'order'} ||
+				$classification{'family'} ){
+			push(@row, "bogus");
+			push(@fieldNames, 'higher_taxa');
+			push(@row, $classification{'class'});
+			push(@fieldNames, 'class');
+			push(@row, $classification{'order'});
+			push(@fieldNames, 'order');
+			push(@row, $classification{'family'});
+			push(@fieldNames, 'family');
+		}
 		$retVal .= $hbo->populateHTML("reid_taxa_display_row", \@row,\@fieldNames);
+		if($classification{'class'} || 
+				$classification{'order'} ||
+				$classification{'family'} ){
+			pop(@row);
+			pop(@row);
+			pop(@row);
+			pop(@row);
+			pop(@fieldNames);
+			pop(@fieldNames);
+			pop(@fieldNames);
+			pop(@fieldNames);
+		}
 	}
 
 	return $retVal;
