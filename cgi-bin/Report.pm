@@ -205,6 +205,7 @@ sub reportPrintOutfile{
         }
         push @line, $totalKeyword;
     } else {
+        @line = ($q->param('searchfield1'));
         push @line, $q->param('output');
         push @line, 'percent';
     }
