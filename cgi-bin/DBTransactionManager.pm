@@ -54,12 +54,12 @@ sub _initialize{
 #					hash references	to rows of all data returned.
 #					For non-select statements, returns the number of rows
 #					affected.
-#					Returns zero on failure.
+#					Returns empty anonymous array on failure.
 ##
 sub getData{
 	my $self = shift;
 	my $sql = shift;
-	my $type = shift or "neither";
+	my $type = (shift or "neither");
 	my $attr_hash_ref = shift;
 
 	# First, check the sql for any obvious problems
@@ -96,7 +96,7 @@ sub getData{
 		}
 	} # Don't execute anything that doesn't make it past checkSQL
 	else{
-		return 0;
+		return [];
 	}
 }
 
