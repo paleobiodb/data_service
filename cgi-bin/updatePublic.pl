@@ -6,6 +6,7 @@
 # also prints count of different researchers JA 9.5.02
 # prints same data to paleodb/index page JA 10.5.02
 # image randomization routine modified by rjp, 12/03.
+# added institution and country JA 15.4.04
 
 # NOTE: assumes /etc/cron.hourly will call the script
 
@@ -51,12 +52,28 @@ $sth->execute();
 my $enterer_total = $stats[0];
 $sth->finish();
 
+$sql = "SELECT count(distinct institutions) FROM person WHERE institution IS NOT NULL";
+$sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
+$sth->execute();
+@stats = $sth->fetchrow_array();
+my $institution_total = $stats[0];
+$sth->finish();
+
+$sql = "SELECT count(distinct country) FROM person WHERE country IS NOT NULL";
+$sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
+$sth->execute();
+@stats = $sth->fetchrow_array();
+my $country_total = $stats[0];
+$sth->finish();
+
 # Now put into our holding tank
 $sql =	"UPDATE statistics SET ".
 		"		reference_total = $reference_total, ".
 		"		collection_total = $collection_total, ".
 		"		occurrence_total = $occurrence_total, ".
-		"		enterer_total = $enterer_total ";
+		"		enterer_total = $enterer_total, ".
+		"		institution_total = $institution_total, ".
+		"		country_total = $country_total ";
 $dbh->do ( $sql );
 if ( $DEBUG ) { print "$sql\n"; }
 
