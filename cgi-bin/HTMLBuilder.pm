@@ -113,22 +113,39 @@ my %SELECT_LISTS = (assigned_to=>["Ederer", "Alroy"],
 					plant_organ=>['', 'leaf', 'seed/fruit', 'axis', 'plant debris', 'marine palyn', 'microspore', 'megaspore', 'flower', 'seed repro', 'non-seed repro', 'wood', 'sterile axis', 'fertile axis', 'root', 'cuticle', 'multi organs'],
 					plant_organ2=>['', 'leaf', 'seed/fruit', 'axis', 'plant debris', 'marine palyn', 'microspore', 'megaspore', 'flower', 'seed repro', 'non-seed repro', 'wood', 'sterile axis', 'fertile axis', 'root', 'cuticle'],
 					research_group=>['', 'ETE', 'marine invertebrate', 'paleobotany', 'taphonomy', 'vertebrate'],
+					mapsize=>[ '50%', '75%', '100%', '125%', '150%' ],
 					projection=>[ 'Eckert', 'Mollweide', 'orthographic', 'rectilinear' ],
-					maptime=>[ '0', '15', '30', '45', '60', '75', '110', '140', '150', '170', '190', '210', '230', '250', '260', '280', '310', '340', '370', '390', '410', '430', '450', '465', '480', '500', '510', '530' ],
 					mapfocus=>['standard (0,0)', 'Africa (10,20)', 'Antarctica (-90,0)', 'Arctic (90,0)', 'Asia (20,100)', 'Australia (-28,135)', 'Europe (50,10)', 'North America (35,-100)', 'Pacific (0,150)', 'South America (-10,-50)'],
 					mapscale=>['X 1', 'X 1.2', 'X 1.5', 'X 2', 'X 2.5', 'X 3', 'X 4', 'X 5'],
-					mapresolution=>['coarse', 'medium', 'fine'],
-					mapbgcolor=>[ 'transparent', 'black', 'gray', 'white', 'pink', 'red', 'brown', 'ochre', 'orange', 'yellow', 'green', 'emerald', 'teal', 'blue', 'violet', 'purple' ],
+					mapresolution=>[ 'coarse', 'medium', 'fine', 'very fine' ],
+					mapbgcolor=>[ 'transparent', 'black', 'gray', 'light gray', 'white', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
+					crustcolor=>[ 'none', 'black', 'gray', 'light gray', 'white', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
 					gridsize=>['30 degrees', '15 degrees', '10 degrees', 'none'],
-					gridcolor=>[ 'black', 'gray', 'white', 'pink', 'red', 'brown', 'ochre', 'orange', 'yellow', 'green', 'emerald', 'teal', 'blue', 'violet', 'purple' ],
+					gridcolor=>[ 'black', 'gray', 'light gray', 'white', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
+					gridposition=>[ 'in front', 'in back' ],
 					linethickness=>[ 'thin', 'medium', 'thick' ],
-					coastlinecolor=>[ 'black', 'gray', 'white', 'pink', 'red', 'brown', 'ochre', 'orange', 'yellow', 'green', 'emerald', 'teal', 'blue', 'violet', 'purple' ],
-					borderlinecolor=>[ 'none', 'black', 'gray', 'white', 'pink', 'red', 'brown', 'ochre', 'orange', 'yellow', 'green', 'emerald', 'teal', 'blue', 'violet', 'purple' ],
-					usalinecolor=>[ 'none', 'black', 'gray', 'white', 'pink', 'red', 'brown', 'ochre', 'orange', 'yellow', 'green', 'emerald', 'teal', 'blue', 'violet', 'purple' ],
+					coastlinecolor=>[ 'black', 'gray', 'light gray', 'white', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
+					borderlinecolor=>[ 'none', 'black', 'gray', 'light gray', 'white', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
+					usalinecolor=>[ 'none', 'black', 'gray', 'light gray', 'white', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
 					pointsize=>[ 'tiny', 'small', 'medium', 'large', 'proportional'],
+					pointsize2=>[ 'tiny', 'small', 'medium', 'large', 'proportional'],
+					pointsize3=>[ 'tiny', 'small', 'medium', 'large', 'proportional'],
+					pointsize4=>[ 'tiny', 'small', 'medium', 'large', 'proportional'],
 					pointshape=>[ 'circles', 'crosses', 'diamonds', 'squares', 'stars', 'triangles'],
-					dotcolor=>[ 'black', 'gray', 'white', 'pink', 'red', 'brown', 'ochre', 'orange', 'yellow', 'green', 'emerald', 'teal', 'blue', 'violet', 'purple' ],
+					pointshape2=>[ 'circles', 'crosses', 'diamonds', 'squares', 'stars', 'triangles'],
+					pointshape3=>[ 'circles', 'crosses', 'diamonds', 'squares', 'stars', 'triangles'],
+					pointshape4=>[ 'circles', 'crosses', 'diamonds', 'squares', 'stars', 'triangles'],
+					dotcolor=>[ 'black', 'gray', 'light gray', 'white', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
+					dotcolor2=>[ 'black', 'gray', 'light gray', 'white', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
+					dotcolor3=>[ 'black', 'gray', 'light gray', 'white', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
+					dotcolor4=>[ 'black', 'gray', 'light gray', 'white', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
 					dotborder=>[ 'with', 'without'],
+					dotborder2=>[ 'with', 'without'],
+					dotborder3=>[ 'with', 'without'],
+					dotborder4=>[ 'with', 'without'],
+					mapsearchfields2=>[ 'research group', 'country', 'state/province', 'period', 'epoch', 'age/stage', 'formation', 'lithology', 'paleoenvironment', 'taxon' ],
+					mapsearchfields3=>[ 'research group', 'country', 'state/province', 'period', 'epoch', 'age/stage', 'formation', 'lithology', 'paleoenvironment', 'taxon' ],
+					mapsearchfields4=>[ 'research group', 'country', 'state/province', 'period', 'epoch', 'age/stage', 'formation', 'lithology', 'paleoenvironment', 'taxon' ],
                     country=>['','United States', 'United Kingdom', 'China', 'Canada', 'France', 'Australia', 'Russian Federation', 'Afghanistan', 'Albania', 'Algeria', 'American Samoa', 'Andorra', 'Angola', 'Anguilla', 'Antarctica', 'Antigua and Barbuda', 'Argentina', 'Armenia', 'Aruba', 'Australia', 'Austria', 'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bermuda', 'Bhutan', 'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Bouvet Island', 'Brazil', 'British Indian Ocean Territory', 'Brunei Darussalam', 'Bulgaria', 'Burkina Faso', 'Burundi', 'Cambodia', 'Cameroon', 'Canada', 'Cape Verde', 'Cayman Islands', 'Central African Republic', 'Chad', 'Chile', 'China', 'Christmas Island', 'Cocos (Keeling) Islands', 'Colombia', 'Comoros', 'Congo', 'Congo, The Democratic Republic of the', 'Cook Islands', 'Costa Rica', "Cote D'Ivoire", 'Croatia', 'Cuba', 'Cyprus', 'Czech Republic', 'Denmark', 'Djibouti', 'Dominica', 'Dominican Republic', 'East Timor', 'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia', 'Ethiopia', 'Falkland Islands (Malvinas)', 'Faroe Islands', 'Fiji', 'Finland', 'France', 'France, Metropolitan', 'French Guiana', 'French Polynesia', 'French Southern Territories', 'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Gibraltar', 'Greece', 'Greenland', 'Grenada', 'Guadeloupe', 'Guam', 'Guatemala', 'Guinea', 'Guinea-Bissau', 'Guyana', 'Haiti', 'Heard Island and McDonald Islands', 'Holy See (Vatican City State)', 'Honduras', 'Hong Kong', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran, Islamic Republic of', 'Iraq', 'Ireland', 'Israel', 'Italy', 'Jamaica', 'Japan', 'Jordan', 'Kazakstan', 'Kenya', 'Kiribati', "Korea, Democratic People's Republic of", 'Korea, Republic of', 'Kuwait', 'Kyrgyzstan', "Lao People's Democratic Republic", 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libyan Arab Jamahiriya', 'Liechtenstein', 'Lithuania', 'Luxembourg', 'Macau', 'Macedonia, the Former Yugoslav Republic of', 'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall Islands', 'Martinique', 'Mauritania', 'Mauritius', 'Mayotte', 'Mexico', 'Micronesia, Federated States of', 'Moldova, Republic of', 'Monaco', 'Mongolia', 'Montserrat', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia', 'Nauru', 'Nepal', 'Netherlands', 'Netherlands Antilles', 'New Caledonia', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'Niue', 'Norfolk Island', 'Northern Mariana Islands', 'Norway', 'Oman', 'Pakistan', 'Palau', 'Palestinian Territory, Occupied', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Pitcairn', 'Poland', 'Portugal', 'Puerto Rico', 'Qatar', 'Reunion', 'Romania', 'Russian Federation', 'Rwanda', 'Saint Helena', 'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Pierre and Miquelon', 'Saint Vincent and the Grenadines', 'Samoa', 'San Marino', 'Sao Tome and Principe', 'Saudi Arabia', 'Senegal', 'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia', 'Slovenia', 'Solomon Islands', 'Somalia', 'South Africa', 'South Georgia and the South Sandwich Islands', 'Spain', 'Sri Lanka', 'Sudan', 'Suriname', 'Svalbard and Jan Mayen', 'Swaziland', 'Sweden', 'Switzerland', 'Syrian Arab Republic', 'Taiwan, Province of China', 'Tajikistan', 'Tanzania, United Republic of', 'Thailand', 'Togo', 'Tokelau', 'Tonga', 'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Turks and Caicos Islands', 'Tuvalu', 'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'United States Minor Outlying Islands', 'Uruguay', 'Uzbekistan', 'Vanuatu', 'Venezuela', 'Vietnam', 'Virgin Islands, British', 'Virgin Islands, U.S.', 'Wallis and Futuna', 'Western Sahara', 'Yemen', 'Yugoslavia', 'Zaire', 'Zambia', 'Zimbabwe'],
 				);
 
@@ -241,6 +258,15 @@ sub populateHTML
   						$sl->setMainTagStuff($1);
 					}
 				}
+# Set other main tag attributes if any (like class=)
+                if($selList =~ /<select\s+id="$fieldName"(.*?)>/)
+                {
+                    if($1){
+                        my $stuff = $1;
+                        $sl->setMainTagStuff($stuff);
+                    }
+                }
+
 		        $sl->setSelected($selVals[$selListCount]) if $selVals[$selListCount];
 		        $sl->setAllowNulls(0);
 		        my $htmlString = $sl->toHTML();
@@ -258,8 +284,8 @@ sub populateHTML
         my $sl = new SelectList;
         # Set the name
         $sl->setName($fieldName);
-		# Set other stuff
-		$sl->setMainTagStuff($otherstuff) if($otherstuff);
+	# Set other stuff
+	$sl->setMainTagStuff($otherstuff) if($otherstuff);
         # If an array having this field name exists, use it
         if(defined $SELECT_LISTS{$fieldName})
         {
