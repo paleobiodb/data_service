@@ -38,6 +38,7 @@ use TaxonInfo;
 use TimeLookup;
 use Ecology;
 use PrintHierarchy;
+use POSIX qw(ceil floor);
 
 # god awful Poling modules
 #use Occurrence; - entirely deprecated, only ever called by Collection.pm
@@ -87,6 +88,12 @@ my $TEMPLATE_DIR = "./templates";
 my $GUEST_TEMPLATE_DIR = "./guest_templates";
 my $HTML_DIR = $ENV{BRIDGE_HTML_DIR};
 my $OUTPUT_DIR = "public/data";
+
+# some generally useful trig stuff needed by processCollectionsSearchForAdd
+my $PI = 3.14159265;
+sub acos { atan2( sqrt(1 - $_[0] * $_[0]), $_[0] ) }
+# returns great circle distance given two latitudes and a longitudinal offset
+sub GCD { ( 180 / $PI ) * acos( ( sin($_[0]*$PI/180) * sin($_[1]*$PI/180) ) + ( cos($_[0]*$PI/180) * cos($_[1]*$PI/180) * cos($_[2]*$PI/180) ) ) }
 
 
 # Create the CGI, Session, and some other objects.
@@ -1657,7 +1664,7 @@ sub processNewRef {
     print '<table>' . $retVal . '</table>';
 
     print qq|<center><p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p>\n|;
-	print qq|<p><a href="$exec_url?action=displaySearchColls&type=add"><b>Add a new collection</b></a></p></center>|;
+	print qq|<p><a href="$exec_url?action=displaySearchCollsForAdd&type=add"><b>Add a new collection</b></a></p></center>|;
     print stdIncludes("std_page_bottom");
 }
 
@@ -1818,6 +1825,30 @@ sub processReferenceEditForm {
 }
 
 
+# 5.4.04 JA
+# print the special search form used when you are adding a collection
+# uses some code lifted from displaySearchColls
+sub displaySearchCollsForAdd	{
+
+	# Have to have a reference #, unless we are just searching
+	my $reference_no = $s->get("reference_no");
+	if ( ! $reference_no ) {
+		# Come back here... requeue our option
+		$s->enqueue( $dbh, "action=displaySearchCollsForAdd&type=add" );
+		displaySearchRefs( "Please choose a reference first" );
+		exit;
+	}
+
+	my $html = $hbo->populateHTML('search_collections_for_add_form' , [ '' , '' , '' , '' , '' , '' , '' , '' , '' , '' , '' ] , [ period_max , latdeg , latmin , latsec , latdec , latdir,  lngdeg , lngmin , lngsec , lngdec , lngdir ] );
+
+	# Spit out the HTML
+	print stdIncludes( "std_page_top" );
+	print $html;
+	print stdIncludes("std_page_bottom");
+
+}
+
+
 sub displaySearchColls {
 
 	# Get the type, passed or on queue
@@ -1886,6 +1917,11 @@ sub displayCollResults {
 	
 	my $limit;
 	if (!($limit = $q->param("limit"))) { $limit = 30; }
+
+	# force the user to see up to 100 collections when adding a new one
+	if ( $q->param('type') eq "add" )	{
+		$limit = 100;
+	}
 	
 	my $ofRows = 0;
 	my $method = "getReadRows";			# Default is readable rows
@@ -1893,7 +1929,16 @@ sub displayCollResults {
 	my $type;							# from the hidden type field in the form.
 
 	# Build the SQL
-    my $sql = processCollectionsSearch($in_list);
+	# which function to use depends on whether the user is adding a collection
+	my $sql;
+	my $mylat;
+	my $mylng;
+	if ( $q->param('type') eq "add" )	{
+		# you won't have an in list if you are adding
+		($sql,$mylat,$mylng) = &processCollectionsSearchForAdd();
+	} else	{
+		$sql = processCollectionsSearch($in_list);
+	}
 	my $sth = $dbh->prepare( $sql );
 	
 	#Debug::dbPrint("displayCollResults SQL = $sql");
@@ -1932,6 +1977,48 @@ sub displayCollResults {
 	# Get rows okayed by permissions module
 	my (@dataRows, $ofRows);
 	$p->$method( $sth, \@dataRows, $limit, \$ofRows );
+
+	# make sure collections really are within 100 km of the submitted
+	#  lat/long coordinate JA 6.4.04
+	if ( $q->param('type') eq "add" )	{
+		my @tempDataRows;
+		# have to recompute this
+		$ofRows = 0;
+		for my $dr (@dataRows)	{
+
+			# compute the coordinate
+			my $lat = $dr->{'latdeg'};
+			my $lng = $dr->{'lngdeg'};
+			if ( $dr->{'latmin'} )	{
+				$lat = $lat + ( $dr->{'latmin'} / 60 ) + ( $dr->{'latsec'} / 3600 );
+			} else	{
+				$lat = $lat . "." . $dr->{'latdec'};
+			}
+		
+			if ( $dr->{'lngmin'} )	{
+				$lng = $lng + ( $dr->{'lngmin'} / 60 ) + ( $dr->{'lngsec'} / 3600 );
+			} else	{
+				$lng = $lng . "." . $dr->{'lngdec'};
+			}
+
+			# west and south are negative
+			if ( $dr->{'latdir'} =~ /S/ )	{
+				$lat = $lat * -1;
+			}
+			if ( $dr->{'lngdir'} =~ /W/ )	{
+				$lng = $lng * -1;
+			}
+
+			# if the points are less than 100 km apart, save
+			#  the collection
+			if ( 111 * GCD($mylat,$lat,abs($mylng-$lng)) < 100 )	{
+				push @tempDataRows, $dr;
+				$ofRows++;
+			} else	{
+			}
+		}
+		@dataRows = @tempDataRows;
+	}
 	
     my $displayRows = @dataRows;	# get number of rows to display
 
@@ -1962,7 +2049,9 @@ sub displayCollResults {
 		print "<center><h3>Your search produced ";
 		if ( $displayRows != $ofRows ) {
 			print "$ofRows matches.  Here are the first $displayRows.";
-		} else {
+		} elsif ( $ofRows == 1 ) {
+			print "exactly one match";
+		} else	{
 			print "$displayRows matches";
 		}
 		print "</h3></center>\n";
@@ -2092,10 +2181,26 @@ sub displayCollResults {
 		}
     }
 
-	print "<center><p><a href='$exec_url?action=displaySearchColls&type=$type'><b>Do another search</b></a></p></center>\n";
+	if ( $type eq "add" )	{
+		print "<center><p><a href='$exec_url?action=displaySearchCollsForAdd&type=add'><b>Do another search</b></a></p></center>\n";
+	} else	{
+		print "<center><p><a href='$exec_url?action=displaySearchColls&type=$type'><b>Do another search</b></a></p></center>\n";
+	}
 
 	if ( $type eq "add" ) {
 		print qq|<form action="$exec_url">\n|;
+
+		# stash the lat/long coordinates to be populated on the
+		#  entry form JA 6.4.04
+		my @coordfields = ("latdeg","latmin","latsec","latdec","latdir",
+				"lngdeg","lngmin","lngsec","lngdec","lngdir");
+		for my $cf (@coordfields)	{
+			if ( $q->param($cf) )	{
+				print "<input type=\"hidden\" name=\"$cf\" value=\"";
+				print $q->param($cf) . "\">\n";
+			}
+		}
+
 		print qq|<input type="hidden" name="action" value="displayEnterCollPage">\n|;
 		print qq|<center>\n<input type=submit value="Add a new collection">\n|;
 		print qq|</center>\n</form>\n|;
@@ -2106,6 +2211,91 @@ sub displayCollResults {
 } # end sub displayCollResults
 
 
+# JA 5-6.4.04
+# compose the SQL to find collections of a certain age within 100 km of
+#  a coordinate (required when the user wants to add a collection)
+sub processCollectionsSearchForAdd	{
+
+	my $sql = "SELECT collection_no, authorizer, collection_name, access_level, research_group, release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, country, state, latdeg, latmin, latsec, latdec, latdir, lngdeg, lngmin, lngsec, lngdec, lngdir, max_interval_no, min_interval_no, reference_no FROM collections WHERE ";
+
+	# get a list of interval numbers that fall in the geological period
+	@intervals = @{TimeLookup::processLookup($dbh,$dbt,'',$q->param('period_max'),'','','intervals')};
+
+	$sql .= "max_interval_no IN (" . join(',', @intervals) . ") AND ";
+
+	# convert the coordinates to decimal values
+
+	my $lat = $q->param('latdeg');
+	my $lng = $q->param('lngdeg');
+	if ( $q->param('latmin') )	{
+		$lat = $lat + ( $q->param('latmin') / 60 ) + ( $q->param('latsec') / 3600 );
+	} else	{
+		$lat = $lat . "." . $q->param('latdec');
+	}
+		
+	if ( $q->param('lngmin') )	{
+		$lng = $lng + ( $q->param('lngmin') / 60 ) + ( $q->param('lngsec') / 3600 );
+	} else	{
+		$lng = $lng . "." . $q->param('lngdec');
+	}
+
+	# west and south are negative
+	if ( $q->param('latdir') =~ /S/ )	{
+		$lat = $lat * -1;
+	}
+	if ( $q->param('lngdir') =~ /W/ )	{
+		$lng = $lng * -1;
+	}
+
+	# maximum latitude is center point plus 100 km, etc.
+	# longitude is a little tricky because we have to deal with cosines
+	# it's important to use floor instead of int because they round off
+	#  negative numbers differently
+	$maxlat = floor($lat + 100 / 111);
+	$minlat = floor($lat - 100 / 111);
+	$maxlng = floor($lng + ( (100 / 111) / cos($lat * $PI / 180) ) );
+	$minlng = floor($lng - ( (100 / 111) / cos($lat * $PI / 180) ) );
+
+	# reset the limits if you go "north" of the north pole etc.
+	# note that we don't have to get complicated with resetting, say,
+	#  the minlat when you limit maxlat because there will always be
+	#  enough padding
+	# if you're too close to lat 0 or lng 0 there's no problem because
+	#  you'll just repeat some values like 1 or 2 in the inlist, but we
+	#  do need to prevent looking in just one hemisphere
+	# if you have a "wraparound" like this you need to look in both
+	#  hemispheres anyway, so don't add a latdir= or lngdir= clause
+	if ( $maxlat >= 90 )	{
+		$maxlat = 89;
+	} elsif ( $minlat <= -90 )	{
+		$minlat = -89;
+	} elsif ( ( $maxlat > 0 && $minlat > 0 ) || ( $maxlat < 0 && $minlat < 0 ) )	{
+		$sql .= "latdir='" . $q->param('latdir') . "' AND ";
+	}
+	if ( $maxlng >= 180 )	{
+		$maxlng = 179;
+	} elsif ( $minlng <= -180 )	{
+		$minlng = -179;
+	} elsif ( ( $maxlng > 0 && $minlng > 0 ) || ( $maxlng < 0 && $minlng < 0 ) )	{
+		$sql .= "lngdir='" . $q->param('lngdir') . "' AND ";
+	}
+
+	my $inlist;
+	for $l ($minlat..$maxlat)	{
+		$inlist .= abs($l) . ",";
+	}
+	$inlist =~ s/,$//;
+	$sql .= "latdeg IN (" . $inlist . ") AND ";
+
+	$inlist = "";
+	for $l ($minlng..$maxlng)	{
+		$inlist .= abs($l) . ",";
+	}
+	$inlist =~ s/,$//;
+	$sql .= "lngdeg IN (" . $inlist . ")";
+
+	return ($sql,$lat,$lng);
+}
 
 
 # NOTE: this routine is used only by displayCollResults
@@ -2425,12 +2615,16 @@ sub processCollectionsSearch {
 					valid time term or broader time range</h4>\n";
 			}
 			
-			$message .= "<p>
-				<a href='?action=displaySearchColls&type="
-				.$q->param("type")."'><b>Try again</b></a>
+			$message .= "<p>";
+			if ( $q->param("type") eq "add" )	{
+				$message .= "<a href='?action=displaySearchCollsForAdd&type=";
+			} else	{
+				$message .= "<a href='?action=displaySearchColls&type=";
+			}
+			$message .= $q->param("type") . "'><b>Try again</b></a>
 				</p>
 				</center>";
-				htmlError( $message );
+			htmlError( $message );
 		}
 	}
 		
@@ -3495,6 +3689,17 @@ sub displayEnterCollPage {
 		}
 	}
 
+	# carry over the lat/long coordinates the user entered while doing
+	#  the mandatory collection search JA 6.4.04
+	my @coordfields = ("latdeg","latmin","latsec","latdec","latdir",
+			"lngdeg","lngmin","lngsec","lngdec","lngdir");
+	for my $cf (@coordfields)	{
+		if ( $q->param($cf) )	{
+			unshift @row,$q->param($cf);
+			unshift @fieldNames,$cf;
+		}
+	}
+
 	print stdIncludes( "std_page_top" );
 
 	print printIntervalsJava();
@@ -3718,7 +3923,7 @@ sub processEnterCollectionForm {
     print $hbo->populateHTML('collection_display_fields', \@row, \@fields);
     print $hbo->populateHTML('collection_display_buttons', \@row, \@fields);
     print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
-	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=add">Enter another collection with the same reference</a></p></b></center>|;
+	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Enter another collection with the same reference</a></p></b></center>|;
  
 	print stdIncludes("std_page_bottom");
 }
@@ -3746,6 +3951,7 @@ sub startEditCollection {
 }
 
 # This subroutine intializes the process to get to the Add Collection page
+# hacked to queue displaySearchCollsForAdd JA 5.4.04
 sub startAddCollection {
 
 	# 1. Need to ensure they have a ref
@@ -3757,7 +3963,7 @@ sub startAddCollection {
 		displayLoginPage( "Please log in first." );
 		exit;
 	}
-	$s->enqueue( $dbh, "action=displaySearchColls&type=add" );
+	$s->enqueue( $dbh, "action=displaySearchCollsForAdd&type=add" );
 
 	$q->param( "type" => "select" );
 	displaySearchRefs( ); 
@@ -4209,7 +4415,7 @@ sub processEditCollectionForm {
     
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit">Edit another collection using the same reference</a></p></b></center>|;
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</a></p></b></center>|;
-	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=add">Add a collection with the same reference</a></p></b></center>|;
+	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add a collection with the same reference</a></p></b></center>|;
 
 	print stdIncludes("std_page_bottom");
 }
@@ -4968,7 +5174,7 @@ sub processEditOccurrences {
 	<a href='$exec_url?action=displayOccurrenceAddEdit&collection_no=$collection_no'>Edit occurrences for this collection</a><br>
 	<a href='$exec_url?action=displayEditCollection&collection_no=$collection_no'>Edit the main collection record</a><br>
 	<a href='$exec_url?action=displaySearchColls&type=edit_occurrence'>Add/edit occurrences for a different collection with the current reference</a><br>
-	<a href='$exec_url?action=displaySearchColls&type=add'>Enter another collection with the same reference</a></b><p></center>
+	<a href='$exec_url?action=displaySearchCollsForAdd&type=add'>Enter another collection with the same reference</a></b><p></center>
 ";
 
 	print stdIncludes("std_page_bottom");
