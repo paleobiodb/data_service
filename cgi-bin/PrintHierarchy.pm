@@ -104,7 +104,8 @@ sub processPrintHierarchy	{
 			@refs = @{$dbt->getData($sql)};
 
 			# now the hard part: make sure the most recent opinion
-			#  on this name is a "belongs to"
+			#  on each child name is a "belongs to" and places
+			#  the child in the parent we care about
 			@goodrefs = ();
 			for my $ref ( @refs )	{
 			# first check if the child is a recombination
@@ -129,16 +130,18 @@ sub processPrintHierarchy	{
 					}
 				}
 
-			# this won't be gotten to if the species is a
-			#  recombination, thanks to the "next"
+			# this won't be gotten to if the original combination
+			#  is invalid or recombined into something else,
+			#  thanks to the "next"
 			# rewrote this section 21.4.04 to use selectMostRecentParentOpinion
-				$sql = "SELECT status,reference_no,ref_has_opinion,pubyr FROM opinions WHERE child_no=" . $ref->{child_no};
+				$sql = "SELECT parent_no,status,reference_no,ref_has_opinion,pubyr FROM opinions WHERE child_no=" . $ref->{child_no};
 				@crefs = @{$dbt->getData($sql)};
 
 				my $index = TaxonInfo::selectMostRecentParentOpinion($dbt, \@crefs, 1);
 				$lastopinion = $crefs[$index]->{status};
+				$lastparent = $crefs[$index]->{parent_no};
 
-				if ( $lastopinion =~ /belongs to/ )	{
+				if ( $lastopinion =~ /belongs to/ && $lastparent == $p )	{
 					push @goodrefs , $ref;
 				}
 			}
