@@ -579,10 +579,12 @@ sub displayHomePage {
 # Shows the form for requesting a map
 sub displayMapForm {
 
-	# Read preferences if there are any JA 8.7.02
-	my @row = ('global', 'X 3', 'white', '30 degrees', 'gray', 'black', 'medium circles', 'blue', 'without');
-	my @fieldNames = ('projection', 'mapcontinent', 'mapscale', 'mapbgcolor', 'oceancolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder');
+	# List fields that should be preset
+	my @fieldNames = ('lithology1', 'environment', 'projection', 'mapcontinent', 'mapscale', 'mapresolution', 'mapbgcolor', 'gridsize', 'gridcolor', 'linethickness', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder');
+	# Set default values
+	my @row = ('coal', '', 'orthographic', 'Europe', 'X 1', 'coarse', 'white', '30 degrees', 'gray', 'medium', 'black', 'black', 'none', 'medium', 'circles', 'blue', 'with');
 	
+	# Read preferences if there are any JA 8.7.02
 	%pref = &getPreferences($s->get('enterer'));
 	# Get the enterer's preferences
 	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = &getPrefFields();
