@@ -22,26 +22,42 @@ function checkForm( )	{
 
 // End -->
 </script>
-<BR>
 
-<center><h3>Please enter the full name of the taxon you want to add or revise</h3></center>
-<BR>
+
+<STYLE TYPE="text/css">
+div { 
+	margin: 1em 5% 2em 5%; 
+	text-align: center;
+}
+h2 { margin: 0em 0em 1.5em 0em; }
+p { margin: 0em 5% 2em 5%; }
+span.s { margin: 0em 1em 0em 1em; };
+</STYLE>
+
+<DIV>
 <form method="POST" action="$exec_url" onSubmit="return checkForm();">
-
 <input type=hidden name="action" value="processTaxonomySearch">
 <input type=hidden name="destination" value="%%destination%%">
 
-<center>
-<table><tr><td>
-<b>Taxon name:</b> <input type="text" id="taxon_name" name="taxon_name" size=30><br>
-</td></tr>
+<h2>Please enter the full name of the taxon you want to add or revise</h2>
 
-<tr><td align="right">
-<input type=submit value="Search">
-</td></tr></table>
+<p>
+<b><span class="s">Taxon name:</span></b> <input name="taxon_name" value="" size="30">
+&nbsp&nbsp&nbsp
+<input type="submit" value="Search">
+</p>
 
-<p><span class="tiny">Don't abbreviate the name, and be careful to spell it correctly!<BR> You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</span></p>
+<p STYLE="text-align:left; margin: 0em 0em 0em 5%;"><span class="tiny">Don't abbreviate the name, and be careful to spell it correctly!<br> 
+<b>Warning:</b> enter higher-ranked taxa first, e.g., enter a genus before its species; enter a family before its genera.<br><BR>
+You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</span>
+</p>
 
-<center>
 </form>
+
+</DIV>
+
+
+
+
+
 
