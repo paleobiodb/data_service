@@ -312,15 +312,25 @@ sub processViewImages{
 	my $in_list = shift;
 	my @results;
 
-    if(($q->param('taxon_rank') eq "Higher taxon" || $q->param('taxon_rank') eq "Higher-taxon") && 
-       @$in_list){
+    #use Data::Dumper;
+    #print "inlist ".Dumper(@$in_list);
+
+    #if(($q->param('taxon_rank') eq "Higher taxon" || $q->param('taxon_rank') eq "Higher-taxon") && 
+    #   @$in_list){
+    foreach $taxon_no (@$in_list) {
+        if ($taxon_no =~ /^\d+$/) {
+            push @taxon_no_list,$taxon_no;
+        }
+    }
+    if (scalar @taxon_no_list) {
 		my $sql = "SELECT authorities.taxon_no, taxon_name, image_no, images.reference_no, path_to_image, caption, ".
 			  " original_filename ".
 			  "FROM authorities, images ".
 			  "WHERE authorities.taxon_no = images.taxon_no " . 
-			  "AND images.taxon_no IN (".join(",",@{$in_list}).")";
+			  "AND images.taxon_no IN (".join(",",@taxon_no_list).")";
 		@results = @{$dbt->getData($sql)};
-	}
+    }
+	#}
 	return @results;
 }
 
