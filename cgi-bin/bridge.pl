@@ -1867,6 +1867,10 @@ sub displayCollectionDetails {
 	my $taxa_list = buildTaxonomicList($collection_no, $refNo);
 	print $taxa_list;
 
+	if ( $taxa_list =~ /Abundance/ )	{
+		print $hbo->populateHTML('rarefy_display_buttons', \@row, \@fieldNames);
+	}
+
 	if($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy')	{
 		print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames);
 	}
@@ -2099,6 +2103,77 @@ sub getReidHTMLTableByOccNum {
 	}
 
 	return $retVal;
+}
+
+# JA 21.2.03
+sub rarefyAbundances	{
+
+	print &stdIncludes ("std_page_top");
+
+	print "<center><h3>Rarefaction curve for collection ",$q->param(collection_no),"</h3></center>\n\n";
+
+	$sql = "SELECT abund_value FROM occurrences WHERE collection_no=";
+	$sql .= $q->param(collection_no);
+	$sql .= " AND abund_value>0";
+	
+	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+	$sth->execute();
+	my @ids;
+	while ( my @abundrow = @{$sth->fetchrow_arrayref()} )	{
+		push @abund , $abundrow[0];
+		$ntaxa++;
+		for my $i (1..$abundrow[0])	{
+			push @ids , $ntaxa;
+		}
+	}
+	$sth->finish();
+
+	my $maxtrials = 200;
+	for my $trial (1..$maxtrials)	{
+		my @tempids = @ids;
+		my @seen = ();
+		my $running = 0;
+		for my $n (0..$#ids)	{
+			my $x = int(rand() * ($#ids + 1));
+			my $id = splice @tempids, $x, 1;
+			$sampledTaxa[$n] = $sampledTaxa[$n] + $running;
+			if ( $seen[$id] < $trial )	{
+				$sampledTaxa[$n]++;
+				$running++;
+			}
+			push @{$richnesses[$n]} , $running;
+			$seen[$id] = $trial;
+		}
+	}
+
+	my @slevels = (1,2,5,8,10,15,20,25,30,35,40,45,50,
+	      55,60,65,70,75,80,85,90,95,100,
+	      150,200,250,300,350,400,450,500,550,600,650,
+	      700,750,800,850,900,950,1000,
+	      1500,2000,2500,3000,3500,4000,4500,5000,5500,
+	      6000,6500,7000,7500,8000,8500,9000,9500,10000);
+	for my $sl (@slevels)	{
+		$isalevel[$sl] = "Y";
+	}
+
+	open OUT,">$HTML_DIR/$OUTPUT_DIR/rarefaction.csv";
+	print "<center><table>\n";
+	print "<tr><td><u>Specimens</u></td><td><u>Species</u></td><td><u>95% confidence limits</u></td></tr>\n";
+	print OUT "Specimens\tSpecies\tLower CI\tUpper CI\n";
+	for my $n (0..$#ids)	{
+		if ( $n == $#ids || $isalevel[$n+1] eq "Y" )	{
+			my @distrib = sort @{$richnesses[$n]};
+			printf "<tr><td align=center>%d</td> <td align=center>%.1f</td> <td align=center>%d - %d</td></tr>\n",$n + 1,$sampledTaxa[$n] / $maxtrials,$distrib[4],$distrib[195];
+			printf OUT "%d\t%.1f\t%d\t%d\n",$n + 1,$sampledTaxa[$n] / $maxtrials,$distrib[4],$distrib[195];
+		}
+	}
+	close OUT;
+	print "</table></center>\n<p>\n\n";
+	print "<center><i>Results are based on 200 random sampling trials.</i><p>\n\n";
+	print "<i>The data can be downloaded from a <a href=\"$HOST_URL/$OUTPUT_DIR/rarefaction.csv\">comma-delimited text file</a>.</i></center><p>\n\n";
+
+	print &stdIncludes ("std_page_bottom");
+
 }
 
 
