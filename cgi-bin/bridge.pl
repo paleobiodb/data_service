@@ -196,7 +196,6 @@ sub processAction {
 		#Debug::dbPrint("user = guest");
 		
 		$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
-		return;
 	}
 	
 	# Validate User
@@ -701,6 +700,8 @@ sub displayMenuPage	{
 
 # displays the "Contributer's Area" home page.
 sub displayHomePage {
+
+	#Debug::dbPrint("made it to displayHomePage");
 
 	# Clear Queue?  This is highest priority
 	if ( $q->param("clear") ) {
