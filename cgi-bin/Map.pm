@@ -682,11 +682,6 @@ sub mapDrawMap	{
 			s/\n//;
 			my ($lat,$lng) = split /\t/,$_;
 			$touched{$lng}{$lat} = 1;
-			if ( $streakend{$lng-1}{$lat} eq "" )	{
-				$streakstart{$lng}{$lat} = 1;
-				$firstlng = $lng;
-			}
-			$streakend{$firstlng}{$lat} = $lng;
 		}
 		close MASK;
 
@@ -695,16 +690,14 @@ sub mapDrawMap	{
 		$mycolor =~ s/ K/ k/;
 		print AI "u\n";  # start the group
 
-
 		# draw a rectangle for each touched cell
 		for $lat (-90..90)	{
 			for $lng (-180..180)	{
-				if ( $streakstart{$lng}{$lat} == 1 )	{
-					$streak = $streakend{$lng}{$lat} - $lng;
-					($xs[0],$ys[0],$rawxs[0],$rawys[0]) = $self->projectPoints($lng+1.0+$streak,$lat+1.0,"grid");
-					($xs[1],$ys[1],$rawxs[1],$rawys[1]) = $self->projectPoints($lng+1.0+$streak,$lat-1.0,"grid");
-					($xs[2],$ys[2],$rawxs[2],$rawys[2]) = $self->projectPoints($lng-1.0+$streak,$lat-1.0,"grid");
-					($xs[3],$ys[3],$rawxs[3],$rawys[3]) = $self->projectPoints($lng-1.0+$streak,$lat+1.0,"grid");
+				if ( $touched{$lng}{$lat} ne "" )	{
+					($xs[0],$ys[0],$rawxs[0],$rawys[0]) = $self->projectPoints($lng+1.0,$lat+1.0,"grid");
+					($xs[1],$ys[1],$rawxs[1],$rawys[1]) = $self->projectPoints($lng+1.0,$lat-1.0,"grid");
+					($xs[2],$ys[2],$rawxs[2],$rawys[2]) = $self->projectPoints($lng-1.0,$lat-1.0,"grid");
+					($xs[3],$ys[3],$rawxs[3],$rawys[3]) = $self->projectPoints($lng-1.0,$lat+1.0,"grid");
 					if ( abs($rawxs[0] - $rawxs[2]) > 180 )	{
 						$xs[2] = -1 * $xs[2];
 						$xs[3] = -1 * $xs[3];
@@ -718,45 +711,49 @@ sub mapDrawMap	{
 					my @newys = ();
 					# flatten upper right corner by
 					#  adding a point
-					if ( $touched{$lng}{$lat+1} eq "" &&
-					     $touched{$lng+1}{$lat} eq "" )	{
+					if ( $touched{$lng}{$lat+2} eq "" &&
+					     $touched{$lng+2}{$lat} eq "" )	{
 						push @newxs, $xs[0] - ($xs[0] - $xs[3]) / 2;
 						push @newys, $ys[0];
 						push @newxs, $xs[0];
 						push @newys, $ys[0] - ($ys[0] - $ys[1]) / 2;
+						$npts++;
 					} else	{
 						push @newxs, $xs[0];
 						push @newys, $ys[0];
 					}
 					# lower right corner
-					if ( $touched{$lng+1}{$lat} eq "" &&
-					     $touched{$lng}{$lat-1} eq "" )	{
+					if ( $touched{$lng+2}{$lat} eq "" &&
+					     $touched{$lng}{$lat-2} eq "" )	{
 						push @newxs, $xs[1];
 						push @newys, $ys[1] + ($ys[0] - $ys[1]) / 2;
 						push @newxs, $xs[1] - ($xs[1] - $xs[2]) / 2;
 						push @newys, $ys[1];
+						$npts++;
 					} else	{
 						push @newxs, $xs[1];
 						push @newys, $ys[1];
 					}
 					# lower left corner
-					if ( $touched{$lng}{$lat-1} eq "" &&
-					     $touched{$lng-1}{$lat} eq "" )	{
+					if ( $touched{$lng}{$lat-2} eq "" &&
+					     $touched{$lng-2}{$lat} eq "" )	{
 						push @newxs, $xs[2] + ($xs[1] - $xs[2]) / 2;
 						push @newys, $ys[2];
 						push @newxs, $xs[2];
 						push @newys, $ys[2] + ($ys[3] - $ys[2]) / 2;
+						$npts++;
 					} else	{
 						push @newxs, $xs[2];
 						push @newys, $ys[2];
 					}
 					# upper left corner
-					if ( $touched{$lng-1}{$lat} eq "" &&
-					     $touched{$lng}{$lat+1} eq "" )	{
+					if ( $touched{$lng-2}{$lat} eq "" &&
+					     $touched{$lng}{$lat+2} eq "" )	{
 						push @newxs, $xs[3];
 						push @newys, $ys[3] - ($ys[3] - $ys[2]) / 2;
 						push @newxs, $xs[3] + ($xs[0] - $xs[3]) / 2;
 						push @newys, $ys[3];
+						$npts++;
 					} else	{
 						push @newxs, $xs[3];
 						push @newys, $ys[3];
