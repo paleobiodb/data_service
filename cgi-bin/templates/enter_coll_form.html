@@ -1,5 +1,27 @@
 
 		var missinginfo = "";
+		var badinfo = "";
+		var hasgroup = /group/i;
+		var hasformation = /formation/i;
+		var hasmember = /member/i;
+
+		if ( hasgroup.test ( frm.geological_group.value ) == true )      {
+			badinfo += "\n  - A group name can't include the word \"group\"";
+		}
+		if ( hasformation.test ( frm.formation.value ) == true )      {
+			badinfo += "\n  - A formation name can't include the word \"formation\"";
+		}
+		if ( hasmember.test ( frm.member.value ) == true )      {
+			badinfo += "\n  - A member name can't include the word \"member\"";
+		}
+
+		if ( badinfo != "" ) {
+			badinfo ="WARNING!\n" +
+			badinfo + "\n" +
+			"\nPlease correct the data and resubmit the form.";
+			alert(badinfo);
+			return false;
+		}
 
 		if ( frm.collection_name.value == "") {
 			missinginfo += "\n    - Collection name (required)";
