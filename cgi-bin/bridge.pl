@@ -2294,7 +2294,7 @@ sub processCollectionsSearchForAdd	{
 
 	# get a list of interval numbers that fall in the geological period
 	my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh,$dbt,'',$q->param('period_max'),'','','intervals');
-	@intervals = @{$inlistef};
+	@intervals = @{$inlistref};
 
 	$sql .= "max_interval_no IN (" . join(',', @intervals) . ") AND ";
 
