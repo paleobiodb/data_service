@@ -1019,20 +1019,24 @@ sub doModules{
 			  "<tr><td align=\"middle\" valign=\"top\">";
 		# MAP USES $q->param("genus_name") to determine what it's doing.
 		my $map_html_path = doMap($dbh, $dbt, $q, $s, $in_list);
-		if($map_html_path =~ /^\/public/){
-			# reconstruct the full path the image.
-			$map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
+		if ( $map_html_path )	{
+			if($map_html_path =~ /^\/public/){
+				# reconstruct the full path the image.
+				$map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
+			}
+			open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
+			while(<MAP>){
+				print;
+			}
+			close MAP;
 		}
-		open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
-		while(<MAP>){
-			print;
-		}
-		close MAP;
 		print "</td></tr></table></center>";
 		# trim the path down beyond apache's root so we don't have a full
 		# server path in our html.
-		$map_html_path =~ s/.*?(\/public.*)/$1/;
-		print "<input type=hidden name=\"map_num\" value=\"$map_html_path\">";
+		if ( $map_html_path )	{
+			$map_html_path =~ s/.*?(\/public.*)/$1/;
+			print "<input type=hidden name=\"map_num\" value=\"$map_html_path\">";
+		}
 	}
 	# collections
 	elsif($module == 6){
