@@ -14,6 +14,7 @@ use CGI::Carp qw(fatalsToBrowser);
 use Class::Date qw(date localdate gmdate now);
 use Errors;
 use CachedTableRow;
+use Rank;
 
 use URLMaker;
 use Reference;
@@ -222,6 +223,21 @@ sub taxonName {
 	my Taxon $self = shift;
 
 	return $self->{taxonName};	
+}
+
+
+# return the taxonName for the initially specifed taxon.
+# but with proper italicization
+sub taxonNameHTML {
+	my Taxon $self = shift;
+
+	my $rank = Rank->new($self->rank());
+	
+	if ($rank->isSubspecies() || $rank->isSpecies() || $rank->isSubgenus() || $rank->isGenus()) {
+		return "<i>" . $self->{taxonName} . "</i>";
+	} else {
+		return $self->{taxonName};	
+	}
 }
 
 
@@ -840,7 +856,7 @@ sub displayAuthorityForm {
 	my $sesAuth = $s->get('authorizer_no');
 	
 	if ($s->isSuperUser()) {
-		$fields{'message'} = "<p align=center><i>You are the superuser, so you can edit any field in this record.</i></p>";
+		$fields{'message'} = "<p align=center><i>You are the superuser, so you can edit any field in this record!</i></p>";
 	} elsif ((! $isNewEntry) && ($sesAuth != $dbFieldsRef->{authorizer_no}) &&
 	($dbFieldsRef->{authorizer_no} != 0)) {
 	
@@ -1362,7 +1378,7 @@ sub displayAuthoritySummary {
 		print "<DIV class=\"warning\">Error inserting/updating authority record.  Please start over and try again.</DIV>";	
 	} else {
 		
-		print "<H2>" . $dbrec->{taxon_name} . " has been $enterupdate the database</H2>
+		print "<H3>" . $dbrec->{taxon_name} . " has been $enterupdate the database</H3>
 		<p>To verify that the information was entered correctly, click on the add more data link below.</p>";
 		
 		print "<TABLE align=center BORDER=0 WIDTH=80\%><TR>
@@ -1393,11 +1409,16 @@ sub displayOpinionChoiceForm {
 	
 	my $sql = $self->getSQLBuilder();
 	
-	$sql->setSQLExpr("SELECT opinion_no FROM opinions WHERE child_no = '" . $self->{taxonNumber} . "'");
+	 
+	# This is kind of messy SQL, but it is actually pretty simple.  It grabs all
+	# of the opinion numbers which are use this taxon as the child_no, and sorts
+	# them by pubyr looking either in the opinion pubyr field, or the refs pubyr field
+	# depending on the value of ref_has_opinion.
+	$sql->setSQLExpr("SELECT o.opinion_no FROM opinions as o, refs as r WHERE r.reference_no = o.reference_no AND o.child_no = " . $self->{taxonNumber} ." ORDER BY IF((o.ref_has_opinion != 'YES' AND o.pubyr), o.pubyr, r.pubyr) DESC");
 	
 	my $results = $sql->allResultsArrayRef();
 	
-	print "<CENTER><H2>Which opinion about " . $self->taxonName() . " do you want to edit?</H2>\n";
+	print "<CENTER><H3>Which opinion about " . $self->taxonNameHTML() . " do you want to edit?</H3>\n";
 	
 	print "<FORM method=\"POST\" action=\"bridge.pl\">\n";
 	print "<input type=hidden name=\"action\" value=\"displayOpinionForm\">\n";

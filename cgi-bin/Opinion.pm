@@ -188,13 +188,13 @@ sub formatAsHTML {
 	
 	if ($status =~ m/nomen/) {
 		# nomen anything...
-		return "'" . $child->taxonName() . " $statusPhrase'". " according to " . $self->authors() ;
+		return "'" . $child->taxonNameHTML() . " $statusPhrase'". " according to " . $self->authors() ;
 	} elsif ($status ne 'revalidated') {
 		
-		return "'" . $child->taxonName() . " $statusPhrase " .  $parent->taxonName() . "' according to " . $self->authors();
+		return "'" . $child->taxonNameHTML() . " $statusPhrase " .  $parent->taxonName() . "' according to " . $self->authors();
 	} else {
 		# revalidated
-		return "'" . $child->taxonName() . " $statusPhrase' according to " . $self->authors();
+		return "'" . $child->taxonNameHTML() . " $statusPhrase' according to " . $self->authors();
 	}
 }
 
@@ -486,7 +486,7 @@ sub displayOpinionForm {
 	my $sesAuth = $s->get('authorizer_no');
 	
 	if ($s->isSuperUser()) {
-		$fields{'message'} = "<p align=center><i>You are the superuser, so you can edit any field in this record.</i></p>";
+		$fields{'message'} = "<p align=center><i>You are the superuser, so you can edit any field in this record!</i></p>";
 	} elsif ((! $isNewEntry) && ($sesAuth != $dbFieldsRef->{authorizer_no}) &&
 	($dbFieldsRef->{authorizer_no} != 0)) {
 	
@@ -1074,7 +1074,7 @@ sub displayOpinionSummary {
 		my $opinionHTML = $opinion->formatAsHTML();
 		$opinionHTML =~ s/according to/of/i;
 		
-		print "<H2> The opinion $opinionHTML has been $enterupdate the database</H2><p>To verify that the information was entered correctly, click on the add more data link below.</p>";
+		print "<H3> The opinion $opinionHTML has been $enterupdate the database</H3><p>To verify that the information was entered correctly, click on the add more data link below.</p>";
 		
 		print "<TABLE align=center BORDER=0 WIDTH=80\%><TR><TD align=center>
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=" . $self->{opinion_no} ."\"><B>Add more data about this opinion</B></A></TD>
