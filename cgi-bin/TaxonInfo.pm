@@ -1405,80 +1405,129 @@ sub displayTaxonClassification{
 	my $species = (shift or "");
 	my $orig_no = (shift or ""); #Pass in original combination no
 
-    my ($output,$taxon_no,$taxon_rank,$taxon_name,$parent_no);
+    # Theres one case where we might want to do upward classification when theres no taxon_no:
+    #  The Genus+species isn't in authorities, but the genus is
+    my $genus_no = 0;
+    if ($genus && $species && !$orig_no) {
+        my @results = getTaxonNos($dbt,$genus);
+        if (@results == 1) {
+            $orig_no=$results[0];
+            $genus_no=$results[0]; 
+            $append_species=1;
+        }
+    }
+
+    #
+    # Do the classification
+    #
+    my ($taxon_no,$taxon_rank,$taxon_name,$recomb_no);
+    my @table_rows = ();
     if ($orig_no) {
-        my @table_rows = ();
-        my $correct_row = PBDBUtil::getCorrectedName($dbt,$orig_no);
-        $taxon_no = $correct_row->{'taxon_no'};    
-        $taxon_name = $correct_row->{'taxon_name'};    
-        $taxon_rank = $correct_row->{'taxon_rank'};    
-        if ($taxon_rank =~ /species/) {
-            @taxon_name = split(/\s+/,$taxon_name);
-            $taxon_name = $taxon_name[-1];
+        # format of table_rows: taxon_rank,taxon_name,taxon_no(original combination),taxon_no(recombination, if recombined)
+       
+        # This will happen if the genus has a taxon_no but not the species
+        if ($append_species) {
+            push @table_rows, ['species',$species,0,0];
         }
 
-        # Print the rank, name, and history of the taxon itself
-        my %auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$taxon_no)};
-        my $pub_info = $auth_yr{author1last}.' '.$auth_yr{pubyr};
-        if ($orig_no != $taxon_no) {
-            $pub_info = "(".$pub_info.")";
-        } 
-        unshift @table_rows, qq|<td align="middle">$taxon_rank</td>|.
-                             qq|<td align="middle">$taxon_name</td>|.
-                             qq|<td style="white-space: nowrap">$pub_info</td>|; 
+        # First, find the rank, name, publication info of the focal taxon
+        my $correct_row = PBDBUtil::getCorrectedName($dbt,$orig_no);
+        $recomb_no = $correct_row->{'taxon_no'};    
+        $taxon_name = $correct_row->{'taxon_name'};    
+        $taxon_rank = $correct_row->{'taxon_rank'};    
+        $recomb_no = ($orig_no != $recomb_no) ? $recomb_no: 0;
 
+        push @table_rows, [$taxon_rank,$taxon_name,$orig_no,$recomb_no];
+
+        # Now find the rank,name, and publication of all its parents
         $first_link = Classification::get_classification_hash($dbt,'all',[$orig_no],'linked_list');
         $next_link = $first_link->{$orig_no};
-        $parent_no = $next_link->{'number'};
-        $orig_rank = $taxon_rank;
         for(my $counter = 0;%$next_link && $counter < 30;$counter++) {
-            # getCorrectedName
-            my $correct_row = PBDBUtil::getCorrectedName($dbt,$next_link->{'number'});
-            $taxon_no = $correct_row->{'taxon_no'};    
-            $taxon_name = $correct_row->{'taxon_name'};    
-            $taxon_rank = $correct_row->{'taxon_rank'};    
-            if ($taxon_rank =~ /species/) {
-                @taxon_name = split(/\s+/,$taxon_name);
-                $taxon_name = $taxon_name[-1];
-            }
-
-            %auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$taxon_no)};
-            my $pub_info = $auth_yr{author1last}.' '.$auth_yr{pubyr};
-            if ($next_link->{'number'} != $taxon_no) {
-                $pub_info = "(".$pub_info.")";
-            } 
-            if ($next_link->{'rank'} =~ /(kingdom|phylum|class)/) {
-                $link = $next_link->{'name'};
-            } else {
-			    $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_no=$next_link->{number}">$taxon_name</a>|;
-            }
-            unshift @table_rows, qq|<td align="middle">$taxon_rank</td>|.
-                           qq|<td align="middle">$link</td>|.
-                           qq|<td style="white-space: nowrap">$pub_info</td>|; 
-
+            push @table_rows, [$next_link->{'rank'},$next_link->{'name'},$next_link->{'number'},$next_link->{'recomb_no'}];
             last if ($next_link->{'rank'} eq 'kingdom');
             $next_link = $next_link->{'next_link'};
 		}
 
-        # Print out the table in the reverse order that we initially made it
-        $output = "<table><tr valign=top><th>Rank</th><th>Name</th><th>Author</th></tr>";
-        for($i = 0; $i < scalar(@table_rows); $i++) {
-            if ($i % 2 == 0) {
-                $output .= '<tr class="darkList">'.$table_rows[$i].'</tr>'; 
-            } else {
-                $output .= '<tr>'.$table_rows[$i].'</tr>'; 
-            }
-        }
-        $output .= "</table>";
-        # PS 01/20/2004 - rewrite: Use getChildren function
-        #print "Orig no $orig_no taxon_no $taxon_no rank $taxon_rank parent $parent_no<br>";
+    } else {
+        # This block is if no taxon no is found - go off the occurrences table
+        push @table_rows,['species',"$genus $species",0,0] if $species;
+        push @table_rows,['genus',$genus,$genus_no,0];
+    }
 
-        my $taxon_records = [];
-        $taxon_records = PBDBUtil::getChildren($dbt,$orig_no,1,1) if $orig_no;
-        if (@{$taxon_records}) {
-            my @child_taxa_links;
-            foreach $record (@{$taxon_records}) {
-                my @syn_links;                                                         
+    #
+    # Print out the table in the reverse order that we initially made it
+    #
+    my $output = "<table><tr valign=top><th>Rank</th><th>Name</th><th>Author</th></tr>";
+    my $class = '';
+    for($i = scalar(@table_rows)-1;$i>=0;$i--) {
+        $class = $class eq '' ? 'class="darkList"' : '';
+        $output .= "<tr $class>";
+        my($taxon_rank,$taxon_name,$taxon_no,$recomb_no) = @{$table_rows[$i]};
+        if ($taxon_rank =~ /species/) {
+            @taxon_name = split(/\s+/,$taxon_name);
+            $taxon_name = $taxon_name[-1];
+        }
+        my %auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$taxon_no)} if $taxon_no;
+        my $pub_info = $auth_yr{author1last}.' '.$auth_yr{pubyr};
+        if ($recomb_no) {
+            $pub_info = "(".$pub_info.")" if $pub_info ne ' ';
+        } 
+        if ($taxon_no) {
+            #if ($species !~ /^sp(\.)*$|^indet(\.)*$/) {
+            $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_no=$taxon_no">$taxon_name</a>|;
+        } else {
+            my $show_rank = ($taxon_rank eq 'species') ? 'Genus and species' : 
+                            ($taxon_rank eq 'genus')   ? 'Genus' : 
+                                                         'Higher taxon'; 
+            $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_rank&taxon_rank=$show_rank">$taxon_name</a>|;
+        }
+        $output .= qq|<td align="middle">$taxon_rank</td>|.
+                   qq|<td align="middle">$link</td>|.
+                   qq|<td align="middle" style="white-space: nowrap">$pub_info</td>|; 
+        $output .= '</tr>';
+    }
+    $output .= "</table>";
+
+    #
+    # Begin getting sister/child taxa
+    # PS 01/20/2004 - rewrite: Use getChildren function
+    #
+    $focal_taxon_no = $table_rows[0][2];
+    $focal_taxon_rank = $table_rows[0][0];
+    $parent_taxon_no = $table_rows[1][2];
+
+    my $taxon_records = [];
+    $taxon_records = PBDBUtil::getChildren($dbt,$focal_taxon_no,1,1) if ($focal_taxon_no);
+    if (@{$taxon_records}) {
+        my @child_taxa_links;
+        foreach $record (@{$taxon_records}) {
+            my @syn_links;                                                         
+            my @synonyms = @{$record->{'synonyms'}};
+            push @syn_links, $_->{'taxon_name'} for @synonyms;
+            my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$record->{taxon_no}">$record->{taxon_name}|;
+            $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
+            $link .= "</a>";
+            push @child_taxa_links, $link;
+        }
+        if (@child_taxa_links) {
+            $output .= "<p><i>This taxon includes:</i><br>"; 
+            $output .= join(", ",@child_taxa_links);
+            $output .= "</p>";
+        }
+    }
+
+    # Get sister taxa as well
+    # PS 01/20/2004
+    $taxon_records = [];
+    $taxon_records = PBDBUtil::getChildren($dbt,$parent_taxon_no,1,1) if ($parent_taxon_no);
+    if (@{$taxon_records}) {
+        my @child_taxa_links;
+        foreach $record (@{$taxon_records}) {
+            next if ($record->{'taxon_no'} == $orig_no);
+            if ($focal_taxon_rank ne $record->{'taxon_rank'}) {
+                PBDBUtil::debug(1,"rank mismatch $focal_taxon_rank -- $record->{taxon_rank} for sister $record->{taxon_name}");
+            } else {
+                my @syn_links;
                 my @synonyms = @{$record->{'synonyms'}};
                 push @syn_links, $_->{'taxon_name'} for @synonyms;
                 my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$record->{taxon_no}">$record->{taxon_name}|;
@@ -1486,104 +1535,45 @@ sub displayTaxonClassification{
                 $link .= "</a>";
                 push @child_taxa_links, $link;
             }
-            if (@child_taxa_links) {
-                $output .= "<p><i>This taxon includes:</i><br>"; 
-                $output .= join(", ",@child_taxa_links);
-                $output .= "</p>";
-            }
         }
-
-        # Get sister taxa as well
-        # PS 01/20/2004
-        $taxon_records = [];
-        if ($parent_no) {
-            $taxon_records = PBDBUtil::getChildren($dbt,$parent_no,1,1);
-        }    
-        if (@{$taxon_records}) {
-            my @child_taxa_links;
-            foreach $record (@{$taxon_records}) {
-                next if ($record->{'taxon_no'} == $orig_no);
-                if ($orig_rank ne $record->{'taxon_rank'}) {
-                    PBDBUtil::debug(1,"rank mismatch $orig_rank -- $record->{taxon_rank} for sister $record->{taxon_name}");
-                } else {
-                    my @syn_links;
-                    my @synonyms = @{$record->{'synonyms'}};
-                    push @syn_links, $_->{'taxon_name'} for @synonyms;
-                    my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$record->{taxon_no}">$record->{taxon_name}|;
-                    $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
-                    $link .= "</a>";
-                    push @child_taxa_links, $link;
-                }
-            }
-            if (@child_taxa_links) {
-                $output .= "<p><i>Sister taxa include:</i><br>"; 
-                $output .= join(", ",@child_taxa_links);
-                $output .= "</p>";
-            }
+        if (@child_taxa_links) {
+            $output .= "<p><i>Sister taxa include:</i><br>"; 
+            $output .= join(", ",@child_taxa_links);
+            $output .= "</p>";
         }
-    } else {
-        # This block is if no taxon no is found - go off the occurrences table
-        my @results = ();
-        my $rank;
-        if ($genus && $species) { $rank = "Genus and species"; }
-        elsif ($genus)          { $rank = "Genus"; }
-        elsif ($species)        { $rank = "Species"; }
-
-        #if ($genus && $species) {
-        #    $sql = "SELECT taxon_no,genus_name,species_name FROM occurrences WHERE genus_name=".$dbh->quote($genus)." AND species_name=".$dbh->quote($species)." GROUP BY genus_name,species_name";
-        #    @results = @{$dbt->getData($sql)};
-        #}    
-        if ($genus) {
+    }
+####
+# Not imp'd - potentially additional sister taxa can be gotten by 
+# searching occurrences for 'parent_taxon_name' and splicing results in
+# If a taxon no exists, have to make sure its unique before we do this, to avoid homonyms
+# there still might be homonym problems we just don't knwo about though, screwing things up
+    if (0) {
+        $genus =  $parent_taxon_name;
             $sql = "(SELECT taxon_no,genus_name,species_name FROM occurrences WHERE genus_name=".$dbh->quote($genus)." GROUP BY species_name)";
             $sql .= " UNION ";
             $sql .= "(SELECT taxon_no,genus_name,species_name FROM reidentifications WHERE genus_name=".$dbh->quote($genus)." GROUP BY species_name)";
             $sql .= " ORDER BY species_name ASC";
             @results = @{$dbt->getData($sql)};
-        }
-        #if ($species && scalar(@results) == 0) {
-        #    $sql = "SELECT taxon_no,genus_name,species_name FROM occurrences WHERE species_name=".$dbh->quote($species)." GROUP BY genus_name,species_name";
-        #    @results = @{$dbt->getData($sql)};
-        #}
-        if (@results) {
-            $output = "<table><tr valign=top><th>Rank</th><th>Name</th><th>Author</th></tr>";
-			my $link_genus = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$genus&taxon_rank=Genus">$genus</a>|;
-            if ($rank eq 'Genus') {
-                $output .= "<tr class=\"darkList\"><td>genus</td><td>$link_genus</td><td>&nbsp;</td></tr>";
+   
+        my @taxa_links;
+        foreach $row (@results) {
+            next if ($species && $row->{'species_name'} eq $species);
+            if ($row->{'taxon_no'}) {
+                push @taxa_links, qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$row->{taxon_no}">$row->{genus_name} $row->{species_name}</a>|;
             } else {
-			    my $link_sp; 
-                if ($species !~ /^sp(\.)*$|^indet(\.)*$/) {
-                    $link_sp = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$genus $species&taxon_rank=Genus and species">$species</a>|;
-                } else {
-                    $link_sp = $species;
-                }
-                $output .= qq|<tr class="darkList"><td align="middle">genus</td><td align="middle">$link_genus</td><td>&nbsp;</td></tr>|;
-                $output .= qq|<tr><td align="middle">species</td><td align="middle">$link_sp</td><td>&nbsp;</td></tr>|;
-            } 
-            $output .= "</table>";
-
-            my @taxa_links;
-            foreach $row (@results) {
-                next if ($species && $row->{'species_name'} eq $species);
-                if ($row->{'taxon_no'}) {
-                    push @taxa_links, qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$row->{taxon_no}">$row->{genus_name} $row->{species_name}</a>|;
-                } else {
-                    push @taxa_links, qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$row->{genus_name} $row->{species_name}&taxon_rank=Genus and species">$row->{genus_name} $row->{species_name}</a>|;
-                }
+                push @taxa_links, qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$row->{genus_name} $row->{species_name}&taxon_rank=Genus and species">$row->{genus_name} $row->{species_name}</a>|;
             }
-            if (@taxa_links) {
-                if ($rank eq 'Genus') {
-                    $output .= "<p><i>This taxon includes:</i><br>"; 
-                } else {
-                    $output .= "<p><i>Sister taxa include:</i><br>"; 
-                }
-                $output .= join(", ",@taxa_links);
-                $output .= "</p>";
+        }
+        if (@taxa_links) {
+            if ($rank eq 'Genus') {
+                $output .= "<p><i>This taxon includes:</i><br>"; 
+            } else {
+                $output .= "<p><i>Sister taxa include:</i><br>"; 
             }
-        } else {
-		    $output .= "<i>No classification data are available</i><br>";
+            $output .= join(", ",@taxa_links);
+            $output .= "</p>";
         }
     }
-
 	return $output;
 }
 
