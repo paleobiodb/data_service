@@ -2,7 +2,7 @@ package TaxonInfo;
 
 use PBDBUtil;
 
-$DEBUG = 1;
+$DEBUG = 0;
 
 ## startTaxonInfo
 #
@@ -13,13 +13,17 @@ sub startTaxonInfo{
 		   " value=\"checkTaxonInfo\">".
 		   "<input id=\"user\" type=hidden name=\"user\"".
 		   " value=\"Contributor\">".
-		   "<table width=\"100%\"><tr><td valign=top align=\"middle\">".
+		   "<center><table width=\"75%\">".
+		   "<tr><td valign=\"middle\" align=\"right\" width=\"5%\">".
 		   "<nobr><select name=\"taxon_rank\"><option>Higher taxon".
 		   "<option>Genus<option>Genus and species<option>species".
-		   "</select></td><td align=\"right\">name:</nobr><td>".
-		   "<input name=\"taxon_name\" type=\"text\" size=25></td><td>".
+		   "</select></td>".
+		   "<td valign=\"middle\" align=\"left\" width=\"5%\">name:</td>".
+		   "<td width=\"5%\"><input name=\"taxon_name\" type=\"text\" size=25>".
+		   "</td>".
+		   "<td align=\"left\" width=\"5%\">".
 		   "<input id=\"submit\" name=\"submit\" value=\"Get info\"".
-		   " type=\"submit\"></tr></table></form>";
+		   " type=\"submit\"></td></tr></table></center></form>";
 
 	# Spit out the HTML
 	print main::stdIncludes( "std_page_top" );
@@ -45,13 +49,7 @@ sub checkStartForm{
 	my $sql =""; 
 	my @results;
 
-	# if we got here because we had to relogin (old session), we could
-	# have a query string that looks like 
-	# "action=displayLogin&destination=checkTaxonInfo"
-	# which would fall into the 'else' clause below and hammer the server
-	# printing a "choose one" page with ALL the genus/species in the db!
-	# NOTE: we could also check that we got at least one of genus/species
-	# non-empty before running any selects...
+	# If they gave us nothing, start again.
 	if($taxon_type eq "" or $taxon_name eq ""){
 	    print $q->redirect(-url=>$BRIDGE_HOME."?action=beginTaxonInfo&user=Contributor");
 	    exit;
@@ -65,9 +63,7 @@ sub checkStartForm{
 		@results = @{$dbt->getData($sql)};
 		# Check for homonyms
 		if(scalar @results > 1){
-## SOMETHING WRONG WITH THIS (first of all, check for dupes and don't even
-## call it if there aren't any...
-			#@results = @{deal_with_homonyms($dbt, \@results)};
+			@results = @{deal_with_homonyms($dbt, \@results)};
 		}
 		# reset 'taxon_name' key to 'genus_name' for uniformity down the line
 		foreach my $ref (@results){
@@ -92,9 +88,10 @@ sub checkStartForm{
 		$sql = "SELECT taxon_name, taxon_no FROM authorities ".
 			   "WHERE taxon_name = '$taxon_name' AND taxon_rank='species'";
 		@results = @{$dbt->getData($sql)};
+		# NOTE: this may not be necessary, but we'll leave it in for now.
 		# Check for homonyms
 		if(scalar @results > 1){
-			#@results = @{deal_with_homonyms($dbt, \@results)};
+			@results = @{deal_with_homonyms($dbt, \@results)};
 		}
 		# reset 'taxon_name' key to 'genus_name' for uniformity
 		foreach my $ref (@results){
@@ -151,10 +148,11 @@ sub checkStartForm{
 		$sql = "SELECT taxon_name, taxon_no FROM authorities WHERE ".
 			   "taxon_name like '% $taxon_name' AND taxon_rank='species'";
 		@results = @{$dbt->getData($sql)};
+		# DON'T NEED TO DO THIS WITH SPECIES, METHINKS...
 		# Check for homonyms
-		if(scalar @results > 1){
-			#@results = @{deal_with_homonyms($dbt, \@results)};
-		}
+		#if(scalar @results > 1){
+		#	@results = @{deal_with_homonyms($dbt, \@results)};
+		#}
 		# reset 'taxon_name' key to 'genus_name' for uniformity
 		foreach my $ref (@results){
 			my ($genus,$species) = split(/\s+/,$ref->{taxon_name});
@@ -181,7 +179,7 @@ sub checkStartForm{
 		#	  "genus: \&lt;<i>$genus</i>\&gt; and ".
 		#	  "species: \&lt;<i>$species</i>\&gt;.";
 		print "<br><br><p><b><a href=\"/cgi-bin/bridge.pl?action=".
-			  "beginTaxonInfo\">Search Again</a></b></center>";
+			  "beginTaxonInfo&user=Contributor\">Search Again</a></b></center>";
 		print main::stdIncludes("std_page_bottom");
 	}
 	# if we got just one result, it could be higher taxon, or an exact
@@ -199,23 +197,35 @@ sub checkStartForm{
 			  "<input id=\"action\" type=\"hidden\"".
 			  " name=\"action\"".
 			  " value=\"displayTaxonInfoResults\">".
-			  "<table width=\"100%\">";
+			  "<table width=\"75%\">";
 		my $newrow = 0;
-		foreach $hash (@results){
-			print "<tr>" if($newrow % 3 == 0);
-			print "<td><input type=\"radio\" name=\"genus_name\" value=\"";
-			print $hash->{genus_name}." ". $hash->{species_name};
-			if($hash->{clarification_info}){
-				print " (".$hash->{taxon_no}.")";
+		my $choices = @results;
+		my $NUMCOLS = 3;
+		my $numrows = int($choices / $NUMCOLS);
+		if($numrows == 0){
+			$numrows = 1;
+		}
+		elsif($choices % $numrows > 0){
+			$numrows++;
+		}
+		for(my $index=0; $index<$numrows; $index++){
+			print "<tr>";
+			for(my $counter=0; $counter<$NUMCOLS; $counter++){
+				last if($index+($counter*$numrows) >= @results);
+				print "<td><input type=\"radio\" name=\"genus_name\" value=\"";
+				print $results[$index+($counter*$numrows)]->{genus_name}.
+					  " ". $results[$index+($counter*$numrows)]->{species_name};
+				if($results[$index+($counter*$numrows)]->{clarification_info}){
+					print " (".$results[$index+($counter*$numrows)]->{taxon_no}.")";
+				}
+				print "\">&nbsp;<i>".$results[$index+($counter*$numrows)]->{genus_name}."\&nbsp;".
+					  $results[$index+($counter*$numrows)]->{species_name};
+				if($results[$index+($counter*$numrows)]->{clarification_info}){
+					print " (".$results[$index+($counter*$numrows)]->{clarification_info}.")";
+				}
+				print "</i></td>";
 			}
-			print "\">&nbsp;<i>".$hash->{genus_name}."\&nbsp;".
-				  $hash->{species_name};
-			if($hash->{clarification_info}){
-				print " (".$hash->{clarification_info}.")";
-			}
-			print "</i></td>";
-			$newrow++;
-			print "</tr>" if($newrow % 3 == 0);
+			print "</tr>";
 		}
 		print "<tr><td align=\"middle\" colspan=3>";
 		print "<input type=\"submit\" value=\"Get taxon info\">";
@@ -251,6 +261,17 @@ sub displayTaxonInfoResults{
 		$genus_name =~ s/\s+$//; # remove trailing spaces.
 		$q->param("genus_name" => $genus_name);
 	}
+
+	# Verify taxon:  If what was entered's most recent parent is a "belongs to"
+	# or a "nomen *" relationship, then do the display page on what was entered.
+	# If any other relationship exists for the most recent parent, display info 
+	# on that parent.  
+	my @verified = verify_chosen_taxon($genus_name, $taxon_no, $dbt);
+	$genus_name = $verified[0];
+	$q->param("genus_name" => $genus_name);
+	$taxon_no = $verified[1];
+	
+
 	print "genus_name: $genus_name, taxon_no: $taxon_no<br>";
 
 ## DEAL WITH param NO_MAP AND param NO_CLASSIFICATION
@@ -258,10 +279,8 @@ sub displayTaxonInfoResults{
 	print main::stdIncludes("std_page_top");
 	print "<center><h2>$genus_name</h2></center>";
 
-	# MAP USES $q->param("genus_name") to determine what it's doing.
-	my $m = Map->new( $dbh, $q, $s );
 	$q->param(-name=>"taxon_info_script",-value=>"yes");
-	my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize', 'pointshape', 'dotcolor', 'dotborder');
+	my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape', 'dotcolor', 'dotborder');
 	my %user_prefs = main::getPreferences($s->get('enterer'));
 	foreach my $pref (@map_params){
 		if($user_prefs{$pref}){
@@ -271,6 +290,7 @@ sub displayTaxonInfoResults{
 	# Not covered by prefs:
 	$q->param('mapresolution'=>'medium');
 	$q->param('mapscale'=>'X 1');
+	$q->param('pointsize'=>'tiny');
 
 	# NOTE: ERROR: need to change/remove the "search again" link generated
 	# at the bottom of this output.
@@ -284,12 +304,17 @@ sub displayTaxonInfoResults{
 
 	displayTaxonClassification($dbt, $genus, $species, $taxon_no);
 
-	print"</td><td width=\"60%\" align=\"middle\">";
-	# $m->buildMap();
-	# INSTEAD OF THIS CALL DO:
-	#  - build a similar method that does all but mapDrawMap, and returns
-	#    the number of collections.  Then, if it's greater than 0, we can
-	#    call mapDrawMap on the object ourselves.
+	print"</td><td width=\"60%\" align=\"middle\" valign=\"top\">";
+	# MAP USES $q->param("genus_name") to determine what it's doing.
+	my $m = Map->new( $dbh, $q, $s, $dbt );
+	my $perm_rows = $m->buildMapOnly();
+	my @perm_rows = @{$perm_rows};
+	if(@perm_rows > 0){
+		$m->mapDrawMap($perm_rows);
+	}
+	else{
+		print "<i>No distribution data available.</i>";
+	}
 	print "</td></tr></table>";
 	print "<hr>";
 
@@ -343,7 +368,8 @@ sub displayTaxonInfoResults{
 	displayTaxonSynonymy($dbt, $genus, $species);
 
 	print "<p><center><p><b><a href=\"/cgi-bin/bridge.pl?action=".
-		  "beginTaxonInfo\">Get info on another taxon</a></b></p></center>";
+		  "beginTaxonInfo&user=Contributor\">Get info on another taxon</a>".
+		  "</b></p></center>";
 
 	print main::stdIncludes("std_page_bottom");
 }
@@ -546,22 +572,113 @@ sub displayTaxonClassification{
 	my $counter = 0;
 	# Print these out in correct order
 	my @taxon_rank_order = ('superkingdom','kingdom','subkingdom','superphylum','phylum','subphylum','superclass','class','superorder','order','suborder','infraorder','superfamily','family','subfamily','tribe','subtribe','genus','subgenus','species','subspecies');
-	#foreach my $class (keys %classification){
+	my $lastgood;
+	my $lastrank;
 	foreach my $rank (@taxon_rank_order){
 	  if(exists $classification{$rank}){
 	    if($counter % 2 == 0){
-		print "<tr bgcolor=\"#E0E0E0\"><td align=\"middle\">$rank</td>".
-		      "<td align=\"middle\">$classification{$rank}</td></tr>";
+			# TEMPORARY until the recursive higher-taxon search is optimized
+			if($rank =~ /(\bfamily\b|\bgenus\b|\bspecies\b)/){
+				my $temp_rank;
+				if($rank eq 'genus'){
+					$temp_rank = 'Genus';
+				}
+				elsif($rank eq 'species'){
+					$temp_rank = 'species';
+				}
+				else{
+					$temp_rank = 'Higher taxon';
+				}
+			print "<tr bgcolor=\"#E0E0E0\"><td align=\"middle\">$rank</td>".
+				  "<td align=\"middle\"><a href=\"/cgi-bin/bridge.pl?action=".
+				  "checkTaxonInfo&taxon_rank=$temp_rank&taxon_name=".
+				  "$classification{$rank}&user=Contributor\">".
+				  "$classification{$rank}</a></td></tr>";
+			}
+			else{
+			print "<tr bgcolor=\"#E0E0E0\"><td align=\"middle\">$rank</td>".
+				  "<td align=\"middle\">$classification{$rank}</td></tr>";
+			}
 	    }
 	    else{
-		print "<tr><td align=\"middle\">$rank</td>".
-		      "<td align=\"middle\">$classification{$rank}</td></tr>";
+			# TEMPORARY until the recursive higher-taxon search is optimized
+			if($rank =~ /(\bfamily\b|\bgenus\b|\bspecies\b)/){
+				my $temp_rank;
+				if($rank eq 'genus'){
+					$temp_rank = 'Genus';
+				}
+				elsif($rank eq 'species'){
+					$temp_rank = 'species';
+				}
+				else{
+					$temp_rank = 'Higher taxon';
+				}
+			print "<tr><td align=\"middle\">$rank</td>".
+				  "<td align=\"middle\"><a href=\"/cgi-bin/bridge.pl?action=".
+				  "checkTaxonInfo&taxon_rank=$temp_rank&taxon_name=".
+				  "$classification{$rank}&user=Contributor\">".
+				  "$classification{$rank}</a></td></tr>";
+			}
+			else{
+			print "<tr><td align=\"middle\">$rank</td>".
+				  "<td align=\"middle\">$classification{$rank}</td></tr>";
+			}
 	    }
 	    $counter++;
+		# Keep track of the last successful item  and rank so we have the 
+		# lowest on the chain when we're all done.
+		$lastgood = $classification{$rank};
+		$lastrank = $rank;
 	  }
 	}
-
+	# Now,  print out a hyperlinked list of all taxa below the one at the
+	# bottom of the Classification section.
+	# NOTE: Don't do this if the last rank was 'species.'
 	print "</table>";
+	my $index;
+	for($index=0; $index<@taxon_rank_order; $index++){
+		last if($lastrank eq $taxon_rank_order[$index]);
+	}
+	CHILDREN:{
+	unless($index+1 >= @taxon_rank_order){
+		$lastrank = $taxon_rank_order[$index+1];
+		if($lastrank eq "genus"){
+			$lastrank = "Genus";
+		}
+		elsif($lastrank ne "species"){
+			$lastrank = "Higher taxon";
+		}
+		my $sql = "SELECT taxon_no FROM authorities ".
+				  "WHERE taxon_name='$lastgood'";
+		PBDBUtil::debug(1,"lastgood sql: $sql");
+		my @quickie = @{$dbt->getData($sql)};
+		if(scalar @quickie < 1){
+			# BAIL
+			last CHILDREN;
+		}
+		$sql = "SELECT DISTINCT(child_no),taxon_name ".
+			   "FROM opinions,authorities ".
+			   "WHERE parent_no=".$quickie[0]->{taxon_no}.
+			   " AND status='belongs to' AND child_no=taxon_no ".
+			   "ORDER BY child_no";
+		PBDBUtil::debug(1,"children sql: $sql");
+		@quickie = @{$dbt->getData($sql)};
+		if(scalar @quickie < 1){
+			# BAIL
+			last CHILDREN;
+		}
+		print "<p><i>This taxon includes:</i> ";
+		my $output="";
+		foreach my $item (@quickie){
+			$output .= qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo|;
+			$output.="&taxon_name=".$item->{taxon_name}."&taxon_rank=$lastrank";
+			$output .= qq|&user=Contributor">|;
+			$output .= $item->{taxon_name}."</a>, ";
+		}
+		$output =~ s/,\s*$//;
+		print $output;
+	}
+	} # CHILDREN block
 }
 
 ## displayTaxonSynonymy
@@ -685,7 +802,6 @@ sub getSynonymyParagraph{
 				   'subjective synonym of' => 'synonymized subjectively with ',
 				   'objective synonym of' => 'synonymized objectively with ');
 
-	# NOTE / QUESTION:  WE'RE NOT DOING ANYTHING WITH 'nomen *', RIGHT?????????
 	$sql = "SELECT parent_no, status, reference_no, pubyr, author1last ".
 		   "FROM opinions WHERE child_no=$child_no AND status != 'belongs to'".
 		   " AND status NOT LIKE 'nomen%'";
@@ -720,7 +836,7 @@ sub getSynonymyParagraph{
 	# Loop through unique parent numbers from the opinions table.
 	# Each parent number is a hash key whose value is an array ref of records.
 	for(my $index = 0; $index < @syn_keys; $index++){
-		# $syn_keys[$index] is a parent_no, so $synonymies{$syn_keys[$index]
+		# $syn_keys[$index] is a parent_no, so $synonymies{$syn_keys[$index]}
 		# is a record from the immediately preceeding 'opinions' select.
 		$syn_html .= "; it was ".$synmap{$synonymies{$syn_keys[$index]}[0]->{status}};
 		$sql = "SELECT taxon_name FROM authorities ".
@@ -745,12 +861,14 @@ sub getSynonymyParagraph{
 			# put a semi-colon on the end to separate from any following syns.
 		}
 	}
-	# Add a period at the end.
-	$syn_html .= '.';
-	# remove a leading semi-colon and any space.
-	$syn_html =~ s/^;\s+//;
-	# capitalize the first 'I' in the first word (It).
-	$syn_html =~ s/^i/I/;
+	if($syn_html ne ""){
+		# Add a period at the end.
+		$syn_html .= '.';
+		# remove a leading semi-colon and any space.
+		$syn_html =~ s/^;\s+//;
+		# capitalize the first 'I' in the first word (It).
+		$syn_html =~ s/^i/I/;
+	}
 
 	return $syn_html;
 }
@@ -866,6 +984,7 @@ sub deal_with_homonyms{
 
 
 ## Add items from new array to old array iff they are not duplicates
+## Where arrays are db record sets (arrays of hashes)
 sub array_push_unique{
 	my $orig_ref = shift;
 	my $new_ref = shift;
@@ -891,8 +1010,81 @@ sub array_push_unique{
 			}
 		}
 		unless($duplicate){
-			push(@orig, $old);
+			push(@orig, $item);
 		}
 	}
 	return \@orig;
 }
+
+# Verify taxon:  If what was entered's most recent parent is a "belongs to"
+# or a "nomen *" relationship, then do the display page on what was entered.
+# If any other relationship exists for the most recent parent, display info 
+# on that parent.  
+sub verify_chosen_taxon{
+	my $taxon = shift;
+	my $num = shift;
+	my $dbt = shift;
+	my $sql = "";
+ 	my @results = ();
+	my $temp_num=0;
+
+	# First, see if this name has any recombinations:
+	if(!$num){
+		$sql = "SELECT taxon_no FROM authorities WHERE taxon_name='$taxon'";
+		@results = @{$dbt->getData($sql)};
+		# Elephas maximus won't return anything, but the script will still
+		# work for it because we have one occurrence in the db. (so don't
+		# let it choke out here)
+		if(@results > 0){
+			$temp_num = $results[0]->{taxon_no};
+		}
+	}
+	if($temp_num){
+		$sql = "SELECT child_no,taxon_name FROM opinions,authorities ".
+			   "WHERE status='recombined as' ".
+			   "AND parent_no=$temp_num AND taxon_no=child_no";
+		@results = @{$dbt->getData($sql)};
+		# might not get any recombinations; that's fine - keep going either way.
+		if(scalar @results > 0){
+			$num = $results[0]->{child_no};
+			$taxon = $results[0]->{taxon_name};
+		}
+	}
+
+	# Now, get the senior synonym or most current combination:
+	$sql = "SELECT authorities.taxon_no,opinions.parent_no,opinions.pubyr, ".
+			  "opinions.status, opinions.reference_no ".
+			  "FROM authorities, opinions ".
+			  "WHERE authorities.taxon_name='$taxon' ".
+			  "AND authorities.taxon_no = opinions.child_no";
+
+	if($num){
+		$sql = "SELECT parent_no, pubyr, reference_no, status ".
+			   "FROM opinions WHERE child_no=$num";
+	}
+	@results = @{$dbt->getData($sql)};
+	
+	# Elephas maximus won't return anything for the same reason mentioned above.
+	if(@results <1){
+		return ($taxon, $num);
+	}
+	
+	my $index = selectMostRecentParentOpinion($dbt, \@results, 1);
+
+	# if the most recent parent is a 'belongs to' relationship, just return
+	# what we were given (or found in recombinations).
+	if($results[$index]->{status} eq "belongs to" ||
+	  							$results[$index]->{status} =~ /nomen/i){
+		return ($taxon, $num);
+	}
+	# Otherwise, return the name and number of the parent.
+	else{
+		$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=".
+			   $results[$index]->{parent_no};
+		@results = @{$dbt->getData($sql)};
+		return ($results[0]->{taxon_name},$results[$index]->{parent_no});
+	}
+}
+
+
+1;
