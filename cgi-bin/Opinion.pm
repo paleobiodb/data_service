@@ -12,6 +12,7 @@ use DBConnection;
 use SQLBuilder;
 use URLMaker;
 use CGI::Carp qw(fatalsToBrowser);
+use Class::Date qw(date localdate gmdate now);
 use CachedTableRow;
 
 
@@ -916,7 +917,12 @@ sub submitOpinionForm {
 			return;	
 		}
 		
-			
+		
+		# we'll have to remove the opinion_no from the fieldsToInsert if it 
+		# exists, because this is the primary key
+		
+		delete $fieldsToEnter{opinion_no};
+		
 		($code, $resultOpinionNumber) = $sql->insertNewRecord('opinions', \%fieldsToEnter);
 		
 	} else {
@@ -956,8 +962,9 @@ sub submitOpinionForm {
 	
 	
 	# now show them what they inserted...
-	
-	$self->displayOpinionSummary($isNewEntry);
+	my $o = Opinion->new();
+	$o->setWithOpinionNumber($resultOpinionNumber);
+	$o->displayOpinionSummary($isNewEntry);
 	
 }
 
