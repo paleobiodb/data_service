@@ -191,11 +191,11 @@ sub processBinLookup	{
 		"137" => "Triassic 3", # Carnian
 		"45" => "Triassic 2", # Middle Triassic
 	# used up to 19.3.05
-		"135" => "Triassic 5", # Rhaetian
-		"136" => "Triassic 5", # Norian
-		"137" => "Triassic 4", # Carnian
-		"138" => "Triassic 3", # Ladinian
-		"139" => "Triassic 2", # Anisian
+	#	"135" => "Triassic 5", # Rhaetian
+	#	"136" => "Triassic 5", # Norian
+	#	"137" => "Triassic 4", # Carnian
+	#	"138" => "Triassic 3", # Ladinian
+	#	"139" => "Triassic 2", # Anisian
 	# used up to 17.8.04
 	#	"136" => "Triassic 4", # Norian
 	#	"137" => "Triassic 3", # Carnian
