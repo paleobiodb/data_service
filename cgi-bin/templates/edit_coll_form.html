@@ -60,6 +60,14 @@
 			}
 		}
 
+		// added decimal vs. minutes checks JA 18.5.04
+		if ( frm.latdec.value != "" && frm.latmin.value != "" ) {
+			missinginfo += "\n    - Latitude: can't enter both decimal and minutes/seconds values";
+		}
+		if ( frm.lngdec.value != "" && frm.lngmin.value != "" ) {
+			missinginfo += "\n    - Longitude: can't enter both decimal and minutes/seconds values";
+		}
+
 		if ( frm.collection_size.value != "" ) {
         	var	numeric = /^[0-9]*$/;
 			if ( numeric.test ( frm.collection_size.value ) == false ) {
