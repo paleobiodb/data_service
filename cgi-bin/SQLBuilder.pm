@@ -810,9 +810,9 @@ sub insertNewRecord {
 
 # rjp, 3/2004.
 #
-# Pass it a table name such as "occurrences", and a
-# hash ref - the hash should contain keys which correspond
-# directly to column names in the database.  Note, not all columns need to 
+# Pass it a table name, a hashref of key/value pairs to update, 
+# a where clause so we know which records to update, and the primary
+# key name for this table.  Note, not all columns need to 
 # be listed; only the ones which you are inserting data for.
 #
 # Returns a true value for success, or false otherwise.
@@ -825,7 +825,15 @@ sub insertNewRecord {
 # WARNING!!
 #
 sub updateRecord {
+	my SQLBuilder $self = shift;
 	
+	my $tableName = shift;
+	my $hashRef = shift;
+	my $whereClause = shift;
+	my $primaryKey = shift;
+	
+	$self->internalUpdateRecord(0, $tableName, $hashRef, $whereClause, $primaryKey);
+
 }
 
 
@@ -834,7 +842,14 @@ sub updateRecord {
 # ie, if you pass it a field which is already populated in this database
 # row, then it won't update that field.
 sub updateRecordOnlyEmptyFields {
+	my SQLBuilder $self = shift;
 	
+	my $tableName = shift;
+	my $hashRef = shift;
+	my $whereClause = shift;
+	my $primaryKey = shift;
+	
+	$self->internalUpdateRecord(1, $tableName, $hashRef, $whereClause, $primaryKey);
 }
 
 
@@ -851,6 +866,7 @@ sub updateRecordOnlyEmptyFields {
 # Note: we could grab the primary key from the database, but I haven't figured
 # out how to do that yet, so for now, we'll just pass it.
 #
+# rjp, 3/2004.
 sub internalUpdateRecord {
 	my SQLBuilder $self = shift;
 	my $emptyOnly = shift;
