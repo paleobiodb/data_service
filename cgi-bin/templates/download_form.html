@@ -68,7 +68,7 @@ function continentClick ( ) {
 
 function countryChange() {
 	var frm = document.forms[0];
-	
+
 	if (frm.country.value != "") {
 		frm.global.checked = true;
 		globalClick();
@@ -335,6 +335,22 @@ Select a single continent:
 
 <td valign=top><font size=-1>
 <select id="country" onChange="countryChange()"></select>
+</font></td>
+
+<tr><td valign=top><font size=-1>
+Latitudinal range:</font</td>
+
+<td valign=top><font size=-1>
+<input name="latmin" size="4" value="-90">&deg; to
+<input name="latmax" size="4" value="90">&deg;
+</font></td>
+
+<tr><td valign=top><font size=-1>
+Longitudinal range:</font</td>
+
+<td valign=top><font size=-1>
+<input name="lngmin" size="4" value="-180">&deg; to
+<input name="lngmax" size="4" value="180">&deg;
 </font></td>
 
 <tr><td valign=top><font size=-1>
