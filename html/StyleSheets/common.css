@@ -173,6 +173,29 @@ div.emphasized {
 	text-align: center;
 }
 
+DIV.errorTitle {
+	color:red;
+	font-weight: bold;
+	font-size: 120%;
+	text-align: center;	
+	margin: 0em 0em 1em 0em;
+}
+
+DIV.errorMessage {
+	border-color: darkgrey;
+	border-width: 2;
+	border-style: solid;
+	
+	padding: 0.5em 0.5em 0.5em 0.5em;
+	
+	background-color: #EDEDFE;
+
+	width:auto;
+	margin: 1em 5em 1em 5em;
+	
+	text-align: center;
+}
+
 
 /* format for required entries in forms */
 .required {
@@ -235,4 +258,19 @@ td.nonindet {
 /* for a small reference display line */
 span.smallRef {
 	font-size: 0.9em;
+}
+
+/* for non-editable fields, such as in forms */
+span.nonEditable {
+	
+	background-color: white;
+	color: #323232;
+	
+	border-color: darkgrey;
+	border-width: 1px 1px 1px 1px;
+	border-style: solid;
+	
+	padding: 0.1em 0.2em 0.1em 0.2em;
+	
+	text-decoration: none;
 }

@@ -203,35 +203,166 @@ my %SELECT_LISTS = (assigned_to=>["Ederer", "Alroy"],
 my $rowCount = 0;
 
 
-# rjp, 2/2004..
+# rjp, 3/2004..
 # pass it a template name, and a hash ref of field names as keys 
-# and values to substitute as values.
+# and values to substitute as values.  Similar to the older populateHTML, but
+# much simpler, and doesn't do as much.  It also makes non-editable fields non-editable
+# using an HTML tag (readonly, or disabled) instead of making them underlined text
+# like the older populateHTML did.
+#
 # Note: all values to substitute will be assumed to take the format %%fieldname%% in
 # the template file, but when passing the field name, the %% are not necessary.
+#
+# Note: any fields which don't exist in the template will be created as hidden input fields.
+#
+# You can optionally pass an array ref of tag names to make non-editable.  This would typically
+# apply to <input> and <textarea>, although it will search for any HTML tag with a matching
+# name or id. 
+# For example,
+# if the input is <INPUT name="myname" id="myname" value="avalue">, then you would pass
+# "myname" in the array and the method will search and replace the entire input tag with
+# underlined text (non-editable).
+#
+# Can also remove optional sections.
+# Optional sections are denoted in the template by:
+#
+# %%START_OPTIONAL_userdefinedname%%
+# optional section here
+# %%END_OPTIONAL_userdefinedname%%
+#
+# By default, this routine will leave all optional sections in the code,
+# and will automatically remove the surrounding tags.
+# 
+# If you want to *delete* an optional section, then pass it
+# in the hash with the key = "OPTIONAL_userdefinedname" and the value = 0 (false).
 #
 # returns fully populated HTML string.
 sub newPopulateHTML {
 	my $self = shift;
-	my $templateName = shift;
-	my $hashRef = shift;
+	my $templateName = shift;	# template to populate (without .html extension)
+	my $hashRef = shift;		# hash of fields and values to populate with
+	my $nonEditableRef = shift;		# array of input fields to make non-editable
 	
 	my %fields = %$hashRef;
 	
 	my $html = $self->newReadTemplate($templateName);
 	if (! $html) {
-		return "<HTML><BODY>No template found...</BODY></HTML>";	
+		return "<HTML><BODY><DIV class=\"warning\">Error: No template '" . $templateName ."' found...</DIV></BODY></HTML>";	
 	}
 	
 	# loop through all keys in the passed hash and
 	# replace field names with their values
-	my @keys = keys(%fields);
 
-	foreach my $key (@keys) {
-		$html =~ s/[%]{2}$key[%]{2}/$fields{$key}/ig;
+	my $hiddenInputs;
+	
+	foreach my $key (keys(%fields)) {
+		
+		if ($key =~ m/OPTIONAL/i) {
+			# this is an optional section key - see note in the method documentation.
+
+			if (! $fields{$key}) {
+				# if the value for this optional key is false, then we should
+				# delete the entire optional section.
+				
+				$html =~ s/[%][%]START_$key[%][%].*[%][%]END_$key[%][%]//gs;
+			}
+			
+			next;
+		}
+		
+		$html =~ s/([%][%]$key[%][%])/$fields{$key}/sg;
+		
+		if (!$1) {
+			# if we didn't match anything, then
+			# create it as a hidden input, if it doesn't already exist somewhere.
+			if ($html !~ m/$key/) {
+				$hiddenInputs .= "<INPUT type=\"hidden\" name=\"$key\" id=\"$key\" value=\"" .
+				$fields{$key} . "\">\n";
+			}
+		}
+		
+	}
+	
+	
+	# now, we'll add the hiddens (fields which didn't exist in the template,
+	# but which were present in the list passed to us).
+	$html =~ s/[%][%]hiddens[%][%]/$hiddenInputs/;
+	
+	# now, we'll replace any leftover %%fields%% in the template with blanks
+	# so they don't show up...
+	$html =~ s/[%]{2}[^\s].*[^\s][%]{2}//g;
+	
+	# now we'll make any fields non-editable that were passed in the @nonEditableInputs
+	# array. This is optional.
+
+	if ($nonEditableRef) {
+		$html = makeNonEditableInputs($html, $nonEditableRef);
 	}
 	
 	return $html;
 }
+
+
+# Pass this an HTML string and an array ref
+# of tag names to make non editable..  
+#
+# It returns the modified HTML string.
+#
+# See the description for newPopulateHTML() for more details on this.
+# 
+# Mainly used by the new populateHTML method.
+# rjp, 2/2004
+sub makeNonEditableInputs {
+	my $html = shift;
+	my $nameRef = shift;
+	
+	if (!$nameRef) { return $html; };
+	
+	# static box to replace non-editable fields with.
+	my $toReplace = "<SPAN class=\"nonEditable\">";
+	my $end = "</SPAN>";
+	
+	
+	# note, very important, we have to make sure that it doesn't match
+	# hidden fields... That would screw stuff up.
+	
+	# <input type="hidden" id="taxon_name" name="taxon_name" value="%%taxon_name%%">
+	# <input type="text" id="taxon_name_corrected" name="taxon_name_corrected" size="%%taxon_size%%" value="%%taxon_name%%">
+		
+	# This matches an optional HTML element such as size="5"
+	# 	(?:[A-Za-z"=0-9%._]+ \s+)* 
+	
+	# This makes sure that we're not replacing a hidden field:
+	#	(?! (?:[A-Za-z"=0-9%._]|\s)+ hidden (?:[A-Za-z"=0-9%._]|\s)+ > ) 
+		
+	# Note that (?: phrase) is the same as using regular parenthesis, but it doesn't
+	# capture the value which makes it faster.
+		
+	# Note: the x modifier ignores whitespace in the pattern, so we
+	# can space it out to make it more legible
+		
+	my $validChars = '(?:[A-Za-z"=0-9%._]|\s)*';
+		
+	foreach my $key (@$nameRef) {
+		
+		# first, search for textarea fields and replace them with disabled boxes.
+		# <textarea id="comments" name="comments" rows=2 cols=70>type Eurasian E. caballus</textarea>
+		$html =~ s/ ( <textarea \s+ ) ( $validChars (?:name|id) \s* = \s* ["]?$key["]? $validChars > ) /$1 disabled readonly $2/igsx;
+		
+		# next, search for select boxes...		
+		$html =~ s/( <select \s+ ) ( $validChars (?:name|id) \s* = \s* ["]?$key["]? $validChars > ) /$1 disabled readonly $2/igsx; 
+		
+		# Next search for other fields such as input and replace them with static boxes.
+		$html =~ s/ ( < input (?! $validChars hidden $validChars > ) ) ( $validChars (?:name|id) \s* = \s* ["]?$key["]? $validChars > ) /$1 disabled readonly $2/igsx;
+	
+		# search for radio and checkboxes.
+		$html =~ s/ ( < input (?= $validChars (?: radio|checkbox) $validChars > ) $validChars ) (  name = ["]?$key["]?  $validChars > ) /$1 disabled $2/igsx;
+		
+	}
+	
+	return $html;
+}
+
 
 
 # rjp, 2/2004
@@ -263,6 +394,42 @@ sub newReadTemplate {
 	close(TEMPLATE);
 	
 	return $string;
+}
+
+
+# Creates a popup menu of taxon ranks (a select).
+#
+# Pass it a rank to select as the first argument,
+# and optionally pass it an array ref of ranks which you want to have excluded
+# from the list as the second argument.
+sub rankPopupMenu {
+	my $self = shift;
+	my $rankToSelect = shift;
+	my $toExcludeRef = shift; # optional
+	
+	my @toExclude;
+	if ($toExcludeRef) {
+		@toExclude = @$toExcludeRef;
+	}
+	
+	my @ranks = ('subspecies', 'species', 'subgenus', 'genus', 'subtribe', 'tribe', 'subfamily', 'family', 'superfamily', 'infraorder', 'suborder', 'order', 'superorder', 'subclass', 'class', 'superclass', 'subphylum', 'phylum', 'superphylum', 'subkingdom', 'kingdom', 'superkingdom', 'unranked clade', 'informal');
+	
+	my $html;
+	my $selected = "";
+	
+	foreach my $rank (@ranks) {
+		# add each rank unless it's in the exclude list.
+		if ($rank eq $rankToSelect) {
+			$selected = "selected";
+		} else {
+			$selected = '';
+		}
+
+		$html .= "<OPTION $selected>$rank</OPTION>" unless Globals::isIn(\@toExclude, $rank);
+		
+	}
+	
+	return $html;
 }
 
 

@@ -4,6 +4,8 @@
 
 package Debug;
 
+use strict;
+
 # prints the passed string to a debug file
 # called "debug_log"
 # added by rjp on 12/18/2003
@@ -85,6 +87,25 @@ sub logError {
 	print LOG "Error, $date: $string \n";	
 }
 
+# prints the passed hashref in
+# a nice user readable form
+sub printHash {
+	my $hr = shift;
+	
+	if (!$hr) {
+		return;
+	}
+	
+	my %hash = %$hr;
+	
+	my $toprint;
+	
+	foreach my $key (keys(%hash)) {
+		$toprint .= "$key = '" . $hash{$key} . "'\n";	
+	}
+	
+	dbPrint($toprint);
+}
 
 # prints each parameter in the passed CGI object
 # note, this is normally called $q in our programs.
@@ -95,6 +116,7 @@ sub printAllCGIParams {
 	dbPrint("Printing list of all CGI parameters:");
 	my @params = $q->param();
 	my @list;
+	my $result;
 	foreach my $p (@params) {
 		# have to do this carefully because each param can either be a 
 		# scalar value, or a list value.

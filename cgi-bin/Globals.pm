@@ -1,4 +1,5 @@
 # some global functions which can be used by any other module.
+# mostly written by rjp.
 
 package Globals;
 
@@ -24,6 +25,26 @@ sub printWarning {
 }
 
 
+# Pass this a CGI object.
+# Returns a hashref of all parameters in the CGI object.
+#
+sub copyCGIToHash {
+	my $q = shift;
+	
+	my %hash;
+	
+	if (!$q) {
+		return \%hash;
+	}
+	
+	foreach my $p ($q->param()) {
+		$hash{$p} = $q->param($p);	
+	}
+	
+	return \%hash;
+}
+
+
 # pass this a full month name such as "December" and it will return the month number, ie, 12.
 sub monthNameToNumber {
 	my $name = shift;
@@ -34,7 +55,7 @@ sub monthNameToNumber {
                          "October" => "10", "November" => "11",
                          "December" => "12");
 	
-	my $month = $month2num{$name};  # needs semicolon because it's a hash.. weird.
+	my $month = $month2num{$name}; 
 	
 	return $month;
 }
