@@ -339,7 +339,9 @@ sub displayTaxonInfoResults{
 	# Get the sql IN list for a Higher taxon:
 	my $in_list = "";
 	if($taxon_type eq "Higher taxon"){
-		$in_list = PBDBUtil::taxonomic_search($q->param('genus_name'), $dbt, $taxon_no);
+		#$in_list = PBDBUtil::taxonomic_search($q->param('genus_name'), $dbt, $taxon_no);
+		my $name = $q->param('genus_name');
+		$in_list = `./recurse $name`;
 	}
 
 	print main::stdIncludes("std_page_top");

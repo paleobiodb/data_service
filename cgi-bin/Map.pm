@@ -137,8 +137,10 @@ sub buildMapOnly {
 				$sql .= "genus_name IN (";
 				if($in_list eq ""){
 					$self->dbg("RE-RUNNING TAXONOMIC SEARCH in Map.pm<br>");
-					$in_list=PBDBUtil::taxonomic_search($q->param('genus_name'),
-														$dbt);
+					#$in_list=PBDBUtil::taxonomic_search($q->param('genus_name'),
+					#									$dbt);
+					my $name = $q->param('genus_name');
+					$in_list = `./recurse $name`;
 				}
 				$sql .= $in_list . ")";
 			}

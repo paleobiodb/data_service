@@ -782,7 +782,8 @@ sub getGenusNames {
 	my $self = shift;
 	my $genus_name = (shift || "");
 
-	my $cslist = PBDBUtil::taxonomic_search($genus_name, $dbt);
+	#my $cslist = PBDBUtil::taxonomic_search($genus_name, $dbt);
+	my $cslist = `./recurse $genus_name`;
 	return $cslist;
 }
 

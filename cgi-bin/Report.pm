@@ -232,7 +232,9 @@ sub tallyFieldTerms	{
 
 	# restrict counts to a particular genus or taxonomic class
 	if ( $q->param('taxon_name') )	{
-		$genus_names_string = PBDBUtil::taxonomic_search($q->param('taxon_name'),$dbt);
+		#$genus_names_string = PBDBUtil::taxonomic_search($q->param('taxon_name'),$dbt);
+		my $name = $q->param('taxon_name');
+		$genus_names_string = `./recurse $name`;
 	# find the genus or class in the occurrence table
 	# this section rewritten to do a bona fide database query by JA 2.8.02
 	# query the database for the necessary fields
