@@ -30,6 +30,59 @@ function taxonRank(taxon) {
 }
 
 
+
+// Error is a JavaScript class for error reporting..  
+// To use it, first create a new instance of the object, for example
+// var err = new Error();  // you can optionally pass an error message in the constructor
+// Then, call the add() method each time you want to add an error to it.
+// err.add("my error message");
+// When finished, you can print the alert by calling the showAlert method,
+// or you can directly grab the string.
+// err.showAlert();  //displays the alert message with the entire error
+// alert(err);  // same thing
+
+// constructor, optionally pass it the first error message.
+function Error(msg) {
+	this.starting = "Please fix the following errors:\n\n";
+	this.message = "";
+	this.internalcount = 0;
+	
+	if (msg) {
+		this.message = "* " + msg;	
+	}	
+	
+	this.ending = "\n\nRefer to the tip sheet for instructions.";
+}
+
+// adds an error with a bullet point to the list of error messages
+Error.prototype.add = function(msg) {
+	this.message += "\n* " + msg;
+	this.internalcount += 1;
+}
+
+Error.prototype.count = function() {
+	return this.internalcount;
+}
+
+// displays an alert message with the error
+Error.prototype.showAlert = function() {
+	alert(this);
+}
+
+// converts the error object to a string.
+Error.prototype.toString = function() {
+	return this.starting + this.message + this.ending;
+}
+
+// pass this method another Error object, and it will append the
+// new object onto the end of itself.
+Error.prototype.appendErrors = function(newError) {
+	this.message += newError.message;	
+}
+
+// End of error class.
+
+
 //show a popup window with the passed URL.
 function tipsPopup (URL) {
 	window.open(URL, 'tips', 'toolbar=1,scrollbars=1,location=1,statusbar=0,menubar=0,resizable=1,width=640,height=480');
