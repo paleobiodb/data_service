@@ -2143,7 +2143,7 @@ sub processEnterCollectionForm {
     print $hbo->populateHTML('collection_display_fields', \@row, \@fields);
     print $hbo->populateHTML('collection_display_buttons', \@row, \@fields);
     print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
-	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=add">Enter another collection with the same reference</a></b></center>|;
+	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=add">Enter another collection with the same reference</a></p></b></center>|;
  
 	print &stdIncludes ("std_page_bottom");
 }
