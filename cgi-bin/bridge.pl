@@ -1442,7 +1442,7 @@ sub displayCollResults {
 			# JA 20.8.02
 
 			my $timeplace;
-			my @timeterms = ( "locage", "intage", "epoch", "period" );
+			my @timeterms = ( "intage", "locage", "epoch", "period" );
 			for my $tt (@timeterms)	{
 				if ( ! $timeplace )	{
 					$timeplace = $dataRow->{$tt."_max"};
