@@ -600,7 +600,7 @@ sub taxonomic_search{
     unless ($suppress_recombinations) {
         foreach $taxon_no (keys %passed) {
             $recomb_no = getCorrectedName($dbt,$taxon_no,'number');
-            if ($recomb_no != $taxon_no) {
+            if ($recomb_no != $taxon_no && $recomb_no) {
                 PBDBUtil::debug(2,"recomb no is $recomb_no for taxon no $taxon_no");
                 $passed{$recomb_no} = 1;
             }
@@ -1109,6 +1109,7 @@ sub getCorrectedName{
     my $return_type = shift; #default is to return row, optionally return taxon_no if this is 'number'
     my $include_synonym = shift; #boolean, return corrected as synonym
     my $recurse_times = shift || 0;
+    if (!$child_no) { return undef};
 
     # will get what its renamed to.  A bit tricky, as you want to the most recent opinion, but normally the 'belongs to' comes first
     # so you have to use an order by so it comes second.  can't use filter the belongs to in the where clause cause the taxon may
@@ -1122,7 +1123,7 @@ sub getCorrectedName{
          . " ORDER BY is_compendium ASC, pubyr DESC, is_bt ASC LIMIT 1";
 
     my @rows = @{$dbt->getData($sql)};
-    if (@rows) {
+    if (scalar(@rows)) {
         my $status = $rows[0]->{'status'};
         if (($status eq 'recombined as' || $status eq 'corrected as' || $status eq 'rank changed as') || 
             ($include_synonym && ($status eq 'homonym of' || $status eq 'subjective synonym of' || $status eq 'objective synonym of' || $status eq 'revalidated' || $status eq 'replaced by'))) {
@@ -1133,13 +1134,16 @@ sub getCorrectedName{
                     return $rows[0];
                 }
             } else {
-                #print "t $rows[0]->{taxon_no} rt $return_type is $include_synonym, rt $recurse_times<BR>";
-                my $use_row = getCorrectedName($dbt,$rows[0]->{'taxon_no'},'',$include_synonym,$recurse_times+1);
+                my $use_row;
+                if ($rows[0]->{'taxon_no'}) {
+                    $use_row = getCorrectedName($dbt,$rows[0]->{'taxon_no'},'',$include_synonym,$recurse_times+1);
                 
-                if ($use_row->{'pubyr'} <= $rows[0]->{'pubyr'}) {
+                    if ($use_row->{'pubyr'} <= $rows[0]->{'pubyr'}) {
+                        $use_row = $rows[0];
+                    } 
+                } else {
                     $use_row = $rows[0];
-                } 
-
+                }
                 if ($return_type eq 'number') {
                     return $use_row->{'taxon_no'};
                 } else {
@@ -1223,6 +1227,5 @@ sub printErrors{
         print "</td></tr></table></div><br>";
     }
 }
-
 
 1;
