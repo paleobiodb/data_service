@@ -292,9 +292,11 @@ sub processLoadImageForm{
 	}
 	else{
 		print main::stdIncludes("std_page_top");
-		print "<center><p>The image of $taxon_name was uploaded successfully<br>";
+		my $clean_name = $taxon_name;
+		$clean_name =~ s/_/ /g;
+		print "<center><p>The image of $clean_name was uploaded successfully</p>";
 		print "<p><a href=\"$exec_url?action=startImage\">".
-			  "<b>Enter another image</b></a></center>";
+			  "<b>Enter another image</b></a></p></center>";
 		print main::stdIncludes("std_page_bottom");
 	}
 }
