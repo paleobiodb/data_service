@@ -76,6 +76,10 @@ function occurrencesNoneClick ( ) {
 		frm.occurrences_modifier.checked = false;
 		frm.occurrences_occurrence_no.checked = false;
 		frm.occurrences_species_name.checked = false;
+		frm.occurrences_subgenus_name.checked = false;
+		frm.occurrences_family_name.checked = false;
+		frm.occurrences_order_name.checked = false;
+		frm.occurrences_class_name.checked = false;
 		frm.occurrences_abund_value.checked = false;
 		frm.occurrences_abund_unit.checked = false;
 		frm.occurrences_reference_no.checked = false;
@@ -96,6 +100,10 @@ function occurrencesClick ( ) {
 			frm.occurrences_modifier.checked ||
 			frm.occurrences_occurrence_no.checked ||
 			frm.occurrences_species_name.checked ||
+			frm.occurrences_subgenus_name.checked ||
+			frm.occurrences_family_name.checked ||
+			frm.occurrences_order_name.checked ||
+			frm.occurrences_class_name.checked ||
 			frm.occurrences_abund_value.checked ||
 			frm.occurrences_abund_unit.checked ||
 			frm.occurrences_reference_no.checked ||
@@ -298,6 +306,9 @@ Occurrence fields you want (the collection ID and genus name fields are always o
 <!--input type=checkbox name=occurrences_genus_reso value="YES">genus_reso-->
 <!--input type=checkbox name=occurrences_genus_name value="YES">genus_name-->
 <!--input type=checkbox name=occurrences_species_reso value="YES">species_reso-->
+<tr><td><font size=-1><input type=checkbox name=occurrences_family_name value="YES" onCLick="occurrencesClick();">family_name
+<td><font size=-1><input type=checkbox name=occurrences_order_name value="YES" onCLick="occurrencesClick();">order_name
+<td><font size=-1><input type=checkbox name=occurrences_class_name value="YES" onCLick="occurrencesClick();">class_name
 <tr><td><font size=-1><input type=checkbox name=occurrences_subgenus_name value="YES" onClick="occurrencesClick();">subgenus_name
 <td><font size=-1><input type=checkbox name=occurrences_species_name value="YES" onClick="occurrencesClick();">species_name
 <td><font size=-1><input type=checkbox name=occurrences_abund_value value="YES" onClick="occurrencesClick();">abund_value
