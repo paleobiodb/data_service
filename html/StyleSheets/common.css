@@ -161,16 +161,14 @@ div.emphasized {
 	border-width: 2;
 	border-style: solid;
 	
-	padding-top:0.2ex;
-	padding-bottom:0.2ex;
-	
+	padding: 0.5em 0.5em 0.5em 0.5em;
+
     font-weight: bold;	
 	color: red;
 	background-color: lightyellow;
 
 	width:auto;
-	margin-left:20px;
-	margin-right:20px;
+	margin: 1em 5em 1em 5em;
 	
 	text-align: center;
 }
@@ -195,6 +193,20 @@ div.emphasized {
 }
 
 /* The navigation box at the left of pages such as the taxon display page */
+
+div.navbox {
+	border-style: solid;
+	border-width: 1;
+	border-color: lightgrey;
+	
+	text-align: center;
+	
+	background-color: 0077FF;
+
+	width: 100%;
+	margin: 10px 20px 20px 20px;
+}
+
 table.navbox {
 	border-style: solid;
 	border-width: 1;
@@ -202,6 +214,7 @@ table.navbox {
 	
 	background-color: 0077FF;
 }
+
 
 th.style1 {
 	text-align: left;

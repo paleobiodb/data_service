@@ -3,6 +3,15 @@
 //created by rjp, 1/2004.
 
 
+function checkBrowserVersion() {
+	var match = /Microsoft/i;
+	
+	if (match.test(navigator.appName)) {
+		document.write("<div class=\"warning\">Internet Explorer is not recommended for this web site. Most other standards compliant browsers such as  <A HREF=\"http://www.mozilla.org/\">Mozilla</A>, <A HREF=\"http://www.mozilla.org/products/firefox/\">Firefox</A>, or <A HREF=\"http://www.apple.com/safari/\">Safari</A> should work fine.</div>");
+	}
+}
+
+
 //*****************************
 // for validation of form input
 //*****************************
