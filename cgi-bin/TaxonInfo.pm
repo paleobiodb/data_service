@@ -477,6 +477,9 @@ sub displayTaxonInfoResults{
 		print "<a href=\"/cgi-bin/bridge.pl?action=startImage\">".
 			  "<b>Enter an image</b></a> - \n";
 	}
+	else{
+		print "<center>";
+	}
 
 	print "<a href=\"/cgi-bin/bridge.pl?action=beginTaxonInfo\">".
 		  "<b>Get info on another taxon</b></a></center></div>\n";
