@@ -553,8 +553,13 @@ sub buildAuthorizerPulldown {
 	$$html =~ s/<select name="authorizer">/$&\n$select/;
 }
 
+
+# displays the main menu page for the data enterers
 sub displayMenuPage	{
 	# Clear Queue?  This is highest priority
+	my @time = `date +%S_%N`;
+	
+	Debug::dbPrint("starting at @time");
 	if ( $q->param("clear") ) {
 		$s->clearQueue ( $dbh ); 
 	} else {
@@ -573,10 +578,14 @@ sub displayMenuPage	{
 			exit;
 		}
 	}
+	
+	
 	print &stdIncludes ("std_page_top");
 	print $hbo->populateHTML('menu', \@rowData, \@fieldNames);
 	print &stdIncludes ("std_page_bottom");
 
+		@time = `date +%S_%N`;
+	Debug::dbPrint("done at @time");
 }
 
 sub displayHomePage {
@@ -1317,6 +1326,8 @@ sub displayRefEdit
 	$sth->finish();
 
 	# Tack on a few extras
+	push (@fieldNames, '%%new_message%%');
+	push (@row, '');
 	#push ( @fieldNames, 'authorizer', 'enterer', '%%new_message%%' );
 	#push ( @row, $s->get('authorizer'), $s->get('enterer'), '');
 
@@ -1326,6 +1337,8 @@ sub displayRefEdit
     if($row[1] eq ""){
         $row[1] = $s->get('enterer');
     }
+	
+	Debug::dbPrint("row = @row");
 
 	print qq|<form method="POST" action="$exec_url" onSubmit='return checkForm();'>\n|;
 	print qq|<input type=hidden name="action" value="processReferenceEditForm"\n|;
