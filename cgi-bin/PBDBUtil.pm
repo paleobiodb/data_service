@@ -372,29 +372,35 @@ sub isRefSecondary{
 	return 0;
 }
 
-## sub newGenusNames
-#	Description:	checks whether each of the genus_names given to it are
+## sub newTaxonNames
+#	Description:	checks whether each of the names given to it are
 #					currently in the database, returning an array of those
 #					that aren't.
 #
 #	Arguments:		$dbh		database handle
 #					$names		reference to an array of genus_names
+#					$type		'genus_name', 'species_name' or 'subgenus_name'
 #
-#	Returns:		Array of genus_names NOT currently in the database.
+#	Returns:		Array of names NOT currently in the database.
 #
 ##
-sub newGenusNames{
+sub newTaxonNames{
 	my $dbh = shift;
 	my $names = shift;
+	my $type = shift;
+
 	my @names = @{$names};
 	my @result = ();
+	
+	# This should be 'genus_name', 'species_name' or 'subgenus_name'
+	$type .= '_name';
 
 	# put each string in single quotes for the query
 	foreach my $single (@names){
 		$single = "\'$single\'";
 	}
-	my $sql = "SELECT count(genus_name), genus_name FROM occurrences ".
-			  "WHERE genus_name IN (".join(',',@names).") GROUP BY genus_name";
+	my $sql = "SELECT count($type), $type FROM occurrences ".
+			  "WHERE $type IN (".join(',',@names).") GROUP BY $type";
 	my $sth = $dbh->prepare($sql) or die "Failure preparing sql: $sql ($!)";
 	$sth->execute();
 	my @res = @{$sth->fetchall_arrayref({})};
@@ -409,52 +415,7 @@ sub newGenusNames{
 	NAME:
 	foreach my $check (@names){
 		foreach my $check_res (@res){ 
-			next NAME if($check_res->{genus_name} eq $check);
-		}
-		push(@result, $check);
-	}
-	
-	return @result;
-}
-
-## sub newSpeciesNames
-#	Description:	checks whether each of the species_names given to it are
-#					currently in the database, returning an array of those
-#					that aren't.
-#
-#	Arguments:		$dbh		database handle
-#					$names		reference to an array of species_names
-#
-#	Returns:		Array of species_names NOT currently in the database.
-#
-##
-sub newSpeciesNames{
-	my $dbh = shift;
-	my $names = shift;
-	my @names = @{$names};
-	my @result = ();
-
-	# put each string in single quotes
-	foreach my $single (@names){
-		$single = "\'$single\'";
-	}
-	my $sql = "SELECT count(species_name), species_name FROM occurrences ".
-			  "WHERE species_name IN (".join(',',@names).") GROUP BY species_name";
-	my $sth = $dbh->prepare($sql) or die "Failure preparing sql: $sql ($!)";
-	$sth->execute();
-	my @res = @{$sth->fetchall_arrayref({})};
-	$sth->finish();
-	
-	# remove the single quotes for comparison
-	foreach my $single (@names){
-		$single =~ /^'(.*)?'$/;
-		$single = $1;
-	}
-	
-	NAME:
-	foreach my $check (@names){
-		foreach my $check_res (@res){
-			next NAME if($check_res->{species_name} eq $check);
+			next NAME if($check_res->{$type} eq $check);
 		}
 		push(@result, $check);
 	}
