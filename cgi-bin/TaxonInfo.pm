@@ -5,7 +5,9 @@ use Classification;
 use Globals;
 use Debug;
 
+# URLMaker is a lousy Poling module and this one shouldn't use it
 use URLMaker;
+use HTMLBuilder;
 use DBTransactionManager;
 use Taxon;
 use TimeLookup;
@@ -19,10 +21,11 @@ my %GLOBALVARS;
 
 
 sub startTaxonInfo {
+	my $hbo = shift;
 	my $q = shift;
 
 	print main::stdIncludes( "std_page_top" );
-	print searchForm($q);
+	print searchForm($hbo, $q);
 	print main::stdIncludes("std_page_bottom");
 }
 
@@ -30,99 +33,26 @@ sub startTaxonInfo {
 
 # JA: rjp did a big complicated reformatting of the following and I can't
 #  confirm that no damage was done in the course of it
+# him being an idiot, I think it's his fault that all the HTML originally was
+#  embedded instead of being in a template HTML file that's passed to
+#  populateHTML
+# possibly Muhl's fault because he uses populateHTML nowhere in this module
+# I fixed this 21.10.04
 sub searchForm{
+	my $hbo = shift;
 	my $q = shift;
 	my $search_again = (shift or 0);
 
-	my $html = "";
+	print $hbo->populateHTML('js_search_taxon_form' , [ ], [ ]);
 
+	my $html = "";
+			 
 	unless($search_again){
-		$html .= "<div class=\"title\">Taxon search form</div>";
+		print "<div class=\"title\">Taxon search form</div>";
 	}
 
-	$html .= "\n<script language=\"Javascript\">\n".
-			 "function checkInput(){\n".
-			 "	var rank = document.forms[0].taxon_rank.options[document.forms[0].taxon_rank.selectedIndex].text;\n".
-			 "	var value = document.forms[0].taxon_name.value;\n".
-			 "	var author = document.forms[0].author.value;\n".
-			 "	var pubyr = document.forms[0].pubyr.value;\n".
-			 "	if(value == \"\" && author == \"\" && pubyr == \"\"){\n".
-			 "		alert('Please enter a search term.');\n".
-			 "		return false;\n".
-			 "	}\n".
-			 "	if(value.match(/[A-Za-z]+\\s+[a-z]+/) && rank != 'Genus and species'){\n".
-			 "		alert('Please choose rank \"Genus and species\" to search for a species');\n".
-			 "		return false;\n".
-			 "	}\n".
-			 "	if(rank == 'Genus and species' && value.match(/^[A-Z]{1}[a-z]+\\s+[a-z]+\$/) == null){\n".
-			 "		alert('Please enter a name in the form \"Genus species\"');\n".
-			 "		return false;\n".
-			 "	}\n".
-			 "	else{\n".
-			 "		return true;\n".
-			 "	}\n".
-			 "}\n".
-			 "</script>\n";
-			 
-	$html .= "<FORM method=post action=\"/cgi-bin/bridge.pl\" onSubmit=\"return checkInput();\">
-	
-		   <input id=\"action\" type=hidden name=\"action\" value=\"checkTaxonInfo\">
-		   <input id=\"user\" type=hidden name=\"user\" value=\"".$q->param("user")."\">
-		   
+	print $hbo->populateHTML('search_taxon_form' , [ ], [ ]);
 
-		   <TABLE align=center border=0>
-		   <TR>
-		   <TD align=right>Rank:</TD>
-		   <TD>
-		   <SELECT name=\"taxon_rank\">
-		   
-		  <!-- <option selected></option> -->
-		   
-		   <option>Higher taxon</option>
-		   <option selected>Genus<option>Genus and species</option>
-		   <option>species</option>
-		   </SELECT>
-		   </TD>
-		   <TD align=right>Name:</TD>
-		   <TD>
-		   <INPUT name=\"taxon_name\" type=\"text\" size=25>
-		   </TD>
-		   </TR>
-		   
-		   <TR>
-		   <TD align=right>Author:</TD>
-		   <TD>
-		   <INPUT id=\"author\" name=\"author\" size=12>
-		   </TD>
-		   <TD align=right>Year:</TD>
-		   <TD>
-		   <INPUT id=\"pubyr\" name=\"pubyr\" size=5>
-		   </TD>
-		   </TR>
-
-		<!--
-		   <TR>
-		   <TD align=right>
-		   <INPUT id=\"authorities_only\" type=checkbox name=\"authorities_only\" value=\"YES\" checked>
-		   </TD>
-		   <TD align=left>
-		   Search in authorities only.
-		   </TD>
-		   </TR>
-		 -->
-		  	
-		  	</TABLE>
-		  	<BR> 
-		  
-		   <CENTER>
-		   <input id=\"submit\" name=\"submit\" value=\"Get info\"
-		    type=\"submit\"></td></tr></table>
-		   <!--<p><i>The taxon name field is required.</i></p>-->
-		   </CENTER>
-		   <BR>
-		   </form>";
-
-	return $html;
 }
 
 
@@ -832,8 +762,28 @@ sub displayTaxonInfoResults {
 							  5 => "map",
 							  6 => "age range/collections");
 
-	# Set the default:
-	if(!@modules_to_display){
+	# if the modules are known and the user is not a guest,
+	#  set the module preferences in the person table
+	# if the modules are not known try to pull them from the person table
+	# of course, we don't have to reset the preferences in that case
+	# JA 21.10.04
+	if ( $s->get("enterer") ne "Guest" && $s->get("enterer") ne "" )	{
+		if ( @modules_to_display )	{
+			my $pref = join ' ', @modules_to_display;
+			my $prefsql = "UPDATE person SET taxon_info_modules='$pref',last_action=last_action WHERE name='" . $s->get("enterer") . "'";
+print "FOO $prefsql<br>\n";
+			$dbt->getData($prefsql);
+		}
+		elsif ( ! @modules_to_display )	{
+			my $prefsql = "SELECT taxon_info_modules FROM person WHERE name='" . $s->get("enterer") . "'";
+			$pref = @{$dbt->getData($prefsql)}[0]->{taxon_info_modules};
+print "FOO2 ($pref)($prefsql)<br>\n";
+			@modules_to_display = split / /,$pref;
+		}
+	}
+
+	# if that didn't work, set the default
+	if ( ! @modules_to_display )	{
 		$modules_to_display[0] = 1;
 	}
 	
