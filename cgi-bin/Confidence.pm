@@ -653,13 +653,16 @@ sub calculateTaxaInterval {
 #            print "$keycounter: $timeHash{$keycounter}";
 #            print "<BR>";
 #        }
-    
+
     @_ = TimeLookup::findBoundaries($dbh,$dbt);
     my %upperbound = %{$_[0]};
     my %lowerbound = %{$_[1]};
     my %upperboundname = %{$_[2]};
     my %lowerboundname = %{$_[3]};
     
+    
+            print "upperbound ".Dumper(\%upperbound)."<br>";
+
 #        foreach my $keycounter (sort numerically keys(%upperbound)) {
 #            print "$keycounter: ";
 #                print "$upperbound{$keycounter} -- $lowerbound{$keycounter}";
@@ -691,16 +694,18 @@ sub calculateTaxaInterval {
         push @{$masterHash{$keycounter}}, $lowerbound{$keycounter};
     }
     #print "MH".Dumper(\%masterHash);
-#        foreach my $keycounter (sort numerically keys(%masterHash)) {
+        foreach my $keycounter (sort numerically keys(%masterHash)) {
+ 
 #            print "$keycounter: ";
 #            foreach my $arrcounter (@{$masterHash{$keycounter}}) {
 #                print "$arrcounter, ";
 #            }
 #            print "<BR>";
-#        }
+        }
 
 # ----------------------------------------------------------------------------
     my $rusty = 1;
+#    my $upper_crosser = 0;
     while(($tryout,$taxon_list)=each(%splist)){
         my @maxintervals;
         my @subsetinterval;
@@ -821,7 +826,10 @@ sub calculateTaxaInterval {
                 $upper = $last - $lastconfidencelengthlong;
                 $uppershort = $last - $lastconfidencelengthshort;
                 if ($upper > $uppershort) {$upper = $uppershort}
-                if ($upper < 0) {$upper = 0};
+                if ($upper < 0) {
+                	$upper = 0;
+                	$upper_crosser = 1;
+                }
                 if ($uppershort < 0) {$uppershort = 0};
             }
         
@@ -834,21 +842,12 @@ sub calculateTaxaInterval {
             $theHash{$tryout} = [$upper, $lower, $first, $last, $firstconfidencelengthlong, $intervallength, $uppershort, $lowershort, $correlation,$N,$firstconfidencelengthshort,$lastconfidencelengthlong,0];
             
 #IMPORTANT: UNLIKE OTHER METHODS, CAN"T CALCULATE SOLOW UNTIL FULL LIST IS BUILT
-
+    print "theHash ".Dumper(\%theHash)."<br>";
+#    print "anotherHash ".Dumper(\%anotherHash)."<br>";
         $rusty++;
     }
     
-#    @solowHash{"crania"} = [11,65,390.4];
-#    @solowHash{"porites"} = [11,3.55,42];
-#    @solowHash{"acropora"} = [6,3.55,57.9];
 
-#        foreach my $keycounter (keys(%solowHash)) {
-#            print "$keycounter: ";
-#            foreach my $arrcounter (@{$solowHash{$keycounter}}) {
-#                print "$arrcounter, ";
-#            }
-#            print "<BR>";
-#        }
 
     my @mx;
     foreach my $keycounter (keys(%solowHash)) {
@@ -860,60 +859,23 @@ sub calculateTaxaInterval {
     my $Smin = $mx[0];
 
     if ($conftype eq "Solow (1996)") {  
-#        print "HERE 1<BR>";
         commonEndPoint(\%solowHash,$C,$conffor);
-#        print "HERE 2<BR>";
-#        foreach my $keycounter (keys(%solowHash)) {
-#            print "$keycounter: ";
-#            foreach my $arrcounter (@{$solowHash{$keycounter}}) {
-#                print "$arrcounter, ";
-#            }
-#            print "<BR>";
-#        }
-        
-#        print "return: FS: $firstsig, FC: $firstconfidencelengthlong, LS: $lastsig, LC: $lastconfidencelengthlong<BR>";
-    
-
-#        print "MAX: $Smax, MIN: $Smin<BR>";
     
         foreach my $keycounter (keys(%theHash)) {
             if ($firstconfidencelengthlong != -999) {
                 $theHash{$keycounter}[1] = $Smax + $firstconfidencelengthlong;
                 $theHash{$keycounter}[4] = $firstconfidencelengthlong;
-#                    print "HERE 3<BR>";
             }
+            
             if ($lastconfidencelengthlong != -999) {
                 $theHash{$keycounter}[0] = $Smin - $lastconfidencelengthlong;
                 $theHash{$keycounter}[11] = $lastconfidencelengthlong;
-#                    print "HERE 4<BR>";
             }        
         }
-#        print "HERE 5<BR>";
-    }
-#            $theHash{$tryout} = [$upper, $lower, $first, $last, $firstconfidencelengthlong, $intervallength, $uppershort, $lowershort, $correlation,$N,$firstconfidencelengthshort,$lastconfidencelengthlong,0];
-
-
-#        foreach my $keycounter (keys(%theHash)) {
-#            print "$keycounter: ";
-#            foreach my $arrcounter (@{$theHash{$keycounter}}) {
-#                print "$arrcounter, ";
-#            }
-#            print "<BR>";
-#        }
-            
-                
-
-#        foreach my $keycounter (sort numerically keys(%masterHash)) {
-#            print "$keycounter: ";
-#            foreach my $arrcounter (@{$masterHash{$keycounter}}) {
-#                print "$arrcounter, ";
-#            }
-#            print "<BR>";
-#        }
-
-#print "Chi: " . chiSquaredDensity(4,0.05,0);    
+    } 
        
-#--------------------------------GD-------------------------------------------------------------
+#--------------------------------GD---------------------------------------------
+
     $fig_width = 130 + (16 * $fig_wide);
     $fig_lenth = 250 + 400;
     $AILEFT = 0;
@@ -945,51 +907,77 @@ sub calculateTaxaInterval {
 #-------------------------MAKING SCALE----------------
     my $upperlim = 1000;
     my $lowerlim = 0;
-    print "theHash ".Dumper(\%theHash)."<br>";
-    print "masterHash ".Dumper(\%masterHash);
+
+#    print "taxaHash ".Dumper(\%taxaHash)."<br>";
+#    print "theHash ".Dumper(\%theHash)."<br>";
+    
+    my %periodinclude;
+    my $mintemp;
+    my $maxtemp;
     foreach my $count (keys(%theHash)) {
         my $tempupp = 0;
         my $templow = 0;
-        foreach my $counter (sort numerically keys(%masterHash))	{ 
+        foreach my $counter (sort numerically keys(%masterHash))	{
+            if ($mintemp == 0) {
+                $mintemp = $counter;
+            }
             if ($masterHash{$counter}[2] > @{$theHash{$count}}[0] && $tempupp == 0)	{
-                $tempupp = $counter - 2;
+	            $tempupp = $counter - 2;
             }
             if ($masterHash{$counter}[1] > @{$theHash{$count}}[1] && $templow == 0)	{
-                $templow = $counter - 1;
-            } 
+                $templow = $counter;
+            }
+            $maxtemp = $counter;
         }
+        if ($tempupp < $mintemp) {
+        	push @{$masterHash{$mintemp - 1}}, ('', 0, @{$masterHash{$mintemp}}[1], 0);
+        	push @{$masterHash{$mintemp - 2}}, ('', 0, 0, 0);
+        	$periodinclude{$tempupp - 1} = $masterHash{$tempupp - 1}[2];
+        }
+    	print "masterHash ".Dumper(\%masterHash)."<br>";
+
+  #      $periodinclude{$tempupp} = $masterHash{$tempupp + 1}[1];
+
+        if ($templow > $maxtemp) {$templow = $maxtemp};
         if ($tempupp < $upperlim) {$upperlim = $tempupp};
         if ($templow > $lowerlim) {$lowerlim = $templow};
     }
-    print "upper lim is $upperlim lowe lim is $lowerlim";
-    my %periodinclude;
-    foreach my $counter ($upperlim..$lowerlim)	{
+
+	foreach my $counter ($upperlim..$lowerlim)	{
         $periodinclude{$counter} = $masterHash{$counter}[2];
     }
     
-#        foreach my $keycounter (sort numerically keys(%periodinclude)) {
-#            print "$keycounter: $periodinclude{$keycounter}";
-#            print "<BR>";
-#        }
-
-   
-    my $upperval = $periodinclude{$upperlim};
-    my $lowerval = $periodinclude{$lowerlim};    
+    
+#    print "<br>periodinclude " . Dumper(\%periodinclude) . "<br>";
+#	print "<br> mintemp: $mintemp    $upperlim     $lowerlim";
+	    
+    my $lowerval = $masterHash{$lowerlim}[2];
+    my $upperval = $masterHash{$upperlim}[1];
     my $totalval = $lowerval - $upperval;
+    
+#	print "<br> upperval: $upperval    lowerval: $lowerval    totalval: $totalval";
+    
     my $millionyr = 400 / $totalval;
     my $marker = 110;
     my $Smarker = 110;
     my $aimarker = 150;
     my $tempn = 0;
+#    my $first_rep = 0;
+    my $leng;
     foreach my $key (sort numerically keys(%periodinclude))	{
+
         my $temp = 230 + (($periodinclude{$key} - $upperval) * $millionyr);
-        if (($temp - $tempn) > 25 && $tempn > 0)	{
-            $gd->string(gdTinyFont, 10, ((($temp - $tempn)/2) + $tempn - 3) , @{$masterHash{$key}}[0], $black);
+	
+        if (($temp - $tempn) > 17 && $tempn > 0)	{
+            $leng = length(@{$masterHash{$key}}[0]);
+            $gd->string(gdTinyFont, 65 - ($leng * 5), ((($temp - $tempn)/2) + $tempn - 3) , @{$masterHash{$key}}[0], $black);
             aiText("null",10, ((($temp - $tempn)/2) + $tempn + 3) , @{$masterHash{$key}}[0],$aiblack);       #AI
-#            print "distance: " . ($temp - $tempn) . ", name: " . @{$masterHash{$key}}[0] . ", key: " . $key . "<BR>";
+#            $leng = length(@{$masterHash{$key}}[0]);
+#            print "<br> length is $leng";
         }
         if (($temp - $tempn) > 10)	{
-            $gd->string(gdTinyFont, 45, $temp - 3, sprintf("%.1f", $masterHash{$key}[2]), $black);
+            $leng = length(sprintf("%.1f", $masterHash{$key}[2]));
+            $gd->string(gdTinyFont, 72 - ($leng * 5), $temp - 3, sprintf("%.1f", $masterHash{$key}[2]), $black);
             aiText("null", $aimarker - 75, $temp + 3, sprintf("%.1f", $masterHash{$key}[2]),$aiblack);       #AI
         }
         if ($tempn != 0) {
@@ -1001,6 +989,7 @@ sub calculateTaxaInterval {
     }
     $gd->line($marker - 30, 230, $marker - 30, $fig_lenth - 20, $black);
     aiLine($aimarker - 30, 230,$aimarker - 30, 530, $aiblack);    #AI
+    
 # -------------------------------SORT OUTPUT----------------------------
     sub sortHashLasti {$theHash{$b}[2] <=> $theHash{$a}[2]};
     sub sortHashFirsti {$theHash{$b}[3] <=> $theHash{$a}[3]};
@@ -1068,7 +1057,7 @@ sub calculateTaxaInterval {
             $limup = 230 + (@{$theHash{$something}}[0] - $upperval) * $millionyr;
             $limdn = 230 + (@{$theHash{$something}}[1] - $upperval) * $millionyr;
         }
-        
+#        print "<br><br>limup $limup   limdn $limdn";
         my $limupshort = 230 + (@{$theHash{$something}}[6] - $upperval) * $millionyr;
         my $limdnshort = 230 + (@{$theHash{$something}}[7] - $upperval) * $millionyr;
         
@@ -1096,6 +1085,7 @@ sub calculateTaxaInterval {
                 aiLine($aimarker + 0,$limup,$aimarker + 5, $limup, $aiblack);
                 aiLine($aimarker + 0,$limupshort,$aimarker + 5, $limupshort, $aiblack);
                 if ($triangle == 1 && @{$theHash{$something}}[6] > 0) {
+                	#if ($upper_crosser == 1) {$limupshort = $limup};
                     $gd->line($marker + 1,$limupshort - 1,$marker + 4,$limupshort - 1, $black);
                     $gd->line($marker + 1,$limupshort - 2,$marker + 4,$limupshort - 2, $black);
                     $gd->line($marker + 2,$limupshort - 3,$marker + 3,$limupshort - 3, $black);
@@ -1206,7 +1196,7 @@ sub calculateTaxaInterval {
     }
 
     aiText("null", 90, 200, 'Ma', $aiblack);                                     #AI
-    aiText("null", $fig_width - 50,$fig_lenth - 0, "J. Madin 2004", $aiblack);      #AI
+#    aiText("null", $fig_width - 50,$fig_lenth - 0, "J. Madin 2004", $aiblack);      #AI
     open AIFOOT,"<./data/AI.footer";
     while (<AIFOOT>) {print AI $_};
     close AIFOOT;
