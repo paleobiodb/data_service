@@ -31,6 +31,7 @@ use constant INVALID2 => 'invalid2';
 use fields qw(	
                 GLOBALVARS
 				opinion_no
+                reference_no
 				
 				parentName
 				
@@ -235,7 +236,7 @@ sub formatAsHTML {
 	
 	if ($status =~ m/nomen/) {
 		# nomen anything...
-		return "'" . $child->taxonNameHTML() . " $statusPhrase'". " according to " . $self->authors() ;
+		return "'" . $child->taxonNameHTML() . " $statusPhrase' according to " . $self->authors() ;
 	} elsif ($status ne 'revalidated') {
 		
 		return "'" . $child->taxonNameHTML() . " $statusPhrase " .  $parent->taxonName() . "' according to " . $self->authors();
@@ -605,8 +606,7 @@ sub displayOpinionForm {
 		if ($fields{'taxon_status'}) { push(@nonEditables, 'taxon_status'); }
 		
 	}
-	
-	
+
 	# print the form	
 	print main::stdIncludes("std_page_top");
 	print $hbo->newPopulateHTML("add_enter_opinion", \%fields, \@nonEditables);
@@ -1331,6 +1331,7 @@ sub submitOpinionForm {
 	# now show them what they inserted/updated...
 	my $o = Opinion->new();
 	$o->setWithOpinionNumber($resultOpinionNumber);
+    $o->{reference_no} = $q->param('reference_no'); # bad hack so link in summary display ok PS
 	$o->displayOpinionSummary($isNewEntry);
 	
 }
@@ -1385,7 +1386,8 @@ sub displayOpinionSummary {
 		print "<center>
 		<p><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonInfoResults&taxon_rank=" . $ref->{taxon_rank} . "&genus_name=" . $tempTaxon . "+(" . $self->childNumber() .")\"><B>Get&nbsp;general&nbsp;information&nbsp;about&nbsp;" . $ref->{taxon_name} . "</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=" . $self->{opinion_no} ."\"><B>Edit&nbsp;this&nbsp;opinion</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionList&taxon_no=" . $self->childNumber() . " \"><B>Add/edit&nbsp;a&nbsp;different&nbsp;opinion&nbsp;about&nbsp;" . $ref->{taxon_name} . "</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=" . $self->{reference_no} . " \"><B>Edit&nbsp;a&nbsp;different&nbsp;opinion&nbsp;with&nbsp;same&nbsp;reference</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=startDisplayOpinionChoiceForm&taxon_no=" . $self->childNumber() . " \"><B>Add/edit&nbsp;a&nbsp;different&nbsp;opinion&nbsp;about&nbsp;" . $ref->{taxon_name} . "</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&amp;goal=opinion\"><B>Add/edit&nbsp;an&nbsp;opinion&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
 		</center>";
 	}
@@ -1396,12 +1398,63 @@ sub displayOpinionSummary {
 	print main::stdIncludes("std_page_bottom");
 }
 
-
-
-
-
-# end of Opinion.pm
-
+# Displays a form which lists all opinions that currently exist
+# for a reference no/taxon
+# Moved/Adapted from Taxon::displayOpinionChoiceForm PS 01/24/2004
+sub displayOpinionChoiceForm{
+    my $dbt = shift;
+    my $s = shift;
+    my $q = shift;
+    my $suppressAddNew = (shift || 0);
+    my $dbh = $dbt->dbh;
+    my $sql = "SELECT o.opinion_no FROM opinions o "; 
+    if ($q->param("taxon_no")) {
+        $sql .= " LEFT JOIN refs r ON r.reference_no=o.reference_no";
+        $sql .= " WHERE o.child_no=".int($q->param("taxon_no"));
+        $sql .= " ORDER BY IF((o.ref_has_opinion != 'YES' AND o.pubyr), o.pubyr, r.pubyr) ASC";
+    } elsif ($q->param("reference_no")) {
+        $sql .= " LEFT JOIN authorities a ON a.taxon_no=o.child_no";
+        $sql .= " WHERE o.reference_no=".int($q->param("reference_no"));
+        $sql .= " ORDER BY a.taxon_name";
+    } else {
+        print "No terms were entered.";
+    }
+    my @results = @{$dbt->getData($sql)};
+                                                                                                                                                             
+    print "<center>";
+    print "<h3>Select an opinion to edit:</h3>\n";
+                                                                                                                                                             
+    print qq|<form method="POST" action="bridge.pl">
+             <input type="hidden" name="action" value="displayOpinionForm">\n|;
+    if ($q->param("taxon_no")) {
+        print qq|<input type="hidden" name="taxon_no" value="|.$q->param('taxon_no').qq|">\n|;
+    }
+    print "<table border=0>";
+    foreach my $row (@results) {
+        my $o = Opinion->new();
+        $o->setWithOpinionNumber($row->{'opinion_no'});
+        my $html = $o->formatAsHTML();
+        print "<tr>".
+              qq|<td><input type="radio" id="radio" name="opinion_no" value="$row->{opinion_no}"></td>|.
+              "<td>$html</td>".
+              "</tr>\n";
+    }
+    unless ($suppressAddNew) {
+        print "<TR><TD><INPUT type=\"radio\" name=\"opinion_no\" id=\"opinion_no\" value=\"-1\" checked></td><td>Create a <b>new</b> opinion record</TD></TR>\n";
+    }    
+       
+    if ($suppressAddNew) {
+        print qq|<tr><td align="center" colspan=2><p><input type=submit value="Edit"></p><br></td></tr>|;
+    } else {
+        print qq|<tr><td align="center" colspan=2><p><input type=submit value="Submit"></p><br></td></tr>|;
+    }
+    print qq|<tr><td align="left" colspan=2><p><span class="tiny">An "opinion" is when an author classifies or synonymizes a taxon.<br>\nSelect an old opinion if it was entered incorrectly or incompletely.<br>\nCreate a new one if the author whose opinion you are looking at right now is not in the above list.<br>\n|;
+    print qq|You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</span></p>\n|;
+    print "</span></p></td></tr>\n";
+    print "</table>\n";
+    print "</form>\n";
+    print "</center>\n";
+}
 
 1;
 
