@@ -281,7 +281,6 @@ sub processLoadImageForm{
 	$sql = "INSERT INTO images (authorizer_no, enterer_no, reference_no, taxon_no, ".
 		   "created, path_to_image, original_filename, caption, file_md5_hexdigest) ".
 		   "VALUES (".join(',',@values).")";
-print "$sql\n";
 	if(!$dbt->getData($sql)){
 		print $dbt->getErr() ;
 		# If we had an error inserting, remove the image from the filesystem too
