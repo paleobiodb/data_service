@@ -4460,7 +4460,7 @@ sub startProcessReclassifyForm	{
 ##############
 ## Taxon Info Stuff
 sub beginTaxonInfo{
-	TaxonInfo::startTaxonInfo($q);
+	TaxonInfo::startTaxonInfo($hbo, $q);
 }
 
 sub checkTaxonInfo{
