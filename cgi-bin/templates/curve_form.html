@@ -1,5 +1,9 @@
 <HTML>
-<HEAD><TITLE>Paleobiology Database Diversity Curve Request Form</TITLE></HEAD>
+<HEAD><TITLE>Paleobiology Database Diversity Curve Request Form</TITLE>
+
+<SCRIPT src="/JavaScripts/common.js" language="JavaScript" type="text/javascript">
+</SCRIPT>
+</HEAD>
 <BODY bgcolor="white" background="/public/PDbg.gif" text=black link="#0033FF" vlink="#990099">
 
 <font face="arial,helvetica">
@@ -176,44 +180,20 @@ Use data records created</font>
 <td>
 <select name="date">
 <option selected></option>
-<option>31</option><option>30</option><option>29</option>
-<option>28</option><option>27</option><option>26</option>
-<option>25</option><option>24</option><option>23</option>
-<option>22</option><option>21</option><option>20</option>
-<option>19</option><option>18</option><option>17</option>
-<option>16</option><option>15</option><option>14</option>
-<option>13</option><option>12</option><option>11</option>
-<option>10</option><option>9</option><option>8</option>
-<option>7</option><option>6</option><option>5</option>
-<option>4</option><option>3</option><option>2</option>
-<option>1</option>
+<SCRIPT>fillDays();</SCRIPT>
+</select>
 </select>
 
 <select name="month">
 <option selected></option>
-<option>December</option>
-<option>November</option>
-<option>October</option>
-<option>September</option>
-<option>August</option>
-<option>July</option>
-<option>June</option>
-<option>May</option>
-<option>April</option>
-<option>March</option>
-<option>February</option>
-<option>January</option>
+<SCRIPT>fillMonths();</SCRIPT>
+</select>
 </select>
 
 <select name="year">
 <option selected></option>
-<option>2004</option>
-<option>2003</option>
-<option>2002</option>
-<option>2001</option>
-<option>2000</option>
-<option>1999</option>
-<option>1998</option>
+<SCRIPT>fillYears();</SCRIPT>
+</select>
 </select>
 </td>
 </tr>
