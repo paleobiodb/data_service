@@ -441,7 +441,8 @@ sub new_search_recurse{
 	my $first_time = shift;
     my $sql = "";
     my @results = ();
-    my $validated_list = $seed_no;
+    #my $validated_list = $seed_no;
+	$passed{$seed_no} = 1;
 
     #print "\nPrimary seed: $seed_no";
 
