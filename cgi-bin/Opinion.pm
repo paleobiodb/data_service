@@ -1142,11 +1142,12 @@ sub displayOpinionChoiceForm{
         my $t = Taxon->new();
         $t->setWithTaxonNumber($orig_child_no);
         print "<h3>Which opinion about ".$t->taxonNameHTML()." do you want to edit?</h3>\n";
+        my $c_row = PBDBUtil::getCorrectedName($dbt,$orig_child_no);
 
-        if ($orig_child_no!= $q->param('taxon_no')) {
+        if ($orig_child_no!= $c_row->{'taxon_no'}) {
             my $t2 = Taxon->new();
-            $t2->setWithTaxonNumber($q->param('taxon_no'));
-            print "<I>(Also known as ".$t2->taxonNameHTML().")</I><BR>";
+            $t2->setWithTaxonNumber($c_row->{'taxon_no'});
+            print "<I>(Currently known as ".$t2->taxonNameHTML().")</I><BR>";
         }
         print "<BR>"; 
     } else {
