@@ -76,7 +76,7 @@ sub errorMessage {
 				<SPAN class=\"tiny\">(hint: if you get a formatting error, check for extra spaces in the fields)</SPAN><BR><BR>";
 
 	if ($self->{displayEndingMessage}) { 
-		$errString .= "<BR><BR>Make corrections as necessary and resubmit the form.<BR>To cancel, use the back button on your browser.";
+		$errString .= "Make corrections as necessary and resubmit the form.<BR>To cancel, use the back button on your browser.";
 	}
 	
 	$errString .= "</DIV>";

@@ -1153,10 +1153,21 @@ sub displayAuthorityForm {
 			my $results = $sql->allResultsArrayRef();
 		
 			my $select;
+			
+			my $chosen;
 			foreach my $row (@$results) {
 				my $taxon = Taxon->new($self->{GLOBALVARS});
 				$taxon->setWithTaxonNumber($row->[0]);
-				$select .= "<OPTION value=\"$row->[0]\">" .
+	
+				# if they are redisplaying the form, we want to choose
+				# the appropriate one.
+				if ($q->param('parent_taxon_no') eq $row->[0]) {
+					$chosen = 'selected';
+				} else {
+					$chosen = '';
+				}
+				
+				$select .= "<OPTION value=\"$row->[0]\" $chosen>" .
 				$taxon->taxonName() . " " . $taxon->authors() . "</OPTION>";
 			}
 			
@@ -1845,7 +1856,7 @@ sub displayOpinionChoiceForm {
 	# of the opinion numbers which are use this taxon as the child_no, and sorts
 	# them by pubyr looking either in the opinion pubyr field, or the refs pubyr field
 	# depending on the value of ref_has_opinion.
-	$sql->setSQLExpr("SELECT o.opinion_no FROM opinions as o, refs as r WHERE r.reference_no = o.reference_no AND o.child_no = " . $self->{taxonNumber} ." ORDER BY IF((o.ref_has_opinion != 'YES' AND o.pubyr), o.pubyr, r.pubyr) DESC");
+	$sql->setSQLExpr("SELECT o.opinion_no FROM opinions as o, refs as r WHERE r.reference_no = o.reference_no AND o.child_no = " . $self->{taxonNumber} ." ORDER BY IF((o.ref_has_opinion != 'YES' AND o.pubyr), o.pubyr, r.pubyr) ASC");
 	
 	my $results = $sql->allResultsArrayRef();
 	
