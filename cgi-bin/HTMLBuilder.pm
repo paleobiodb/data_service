@@ -288,7 +288,13 @@ sub buildSelect {
 # Note: all values to substitute will be assumed to take the format %%fieldname%% in
 # the template file, but when passing the field name, the %% are not necessary.
 #
+
+## New Note: the automatic hidden fields feature has been disabled due to some problems.
+## if re-enabling it, be very careful because it may break forms such as
+## the add_enter_authority or add_enter_opinion.  3/2004.
 # Note: any fields which don't exist in the template will be created as hidden input fields.
+##
+
 #
 # You can optionally pass an array ref of tag names to make non-editable.  This would typically
 # apply to <input> and <textarea>, although it will search for any HTML tag with a matching
@@ -394,7 +400,10 @@ sub newPopulateHTML {
 				# if the value for this optional key is false, then we should
 				# delete the entire optional section.
 				
-				$html =~ s/[%][%]START_$key[%][%].*[%][%]END_$key[%][%]//gs;
+				# Note, the .*? is important, the ? forces this to be LAZY instead
+				# of greedy so we don't go too far..
+				
+				$html =~ s/[%][%]START_$key[%][%].*?[%][%]END_$key[%][%]//s;
 			}
 			next;
 		}
