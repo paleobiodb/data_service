@@ -1867,7 +1867,7 @@ sub displayCollectionDetails {
 	if($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy')	{
 		print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames);
 	}
-	if($taxa_list ne ""){
+	if($taxa_list ne "" && $q->param("user") ne "Guest"){
 		print $hbo->populateHTML('reid_display_buttons', \@row, \@fieldNames);
 	}
 
@@ -1981,23 +1981,24 @@ sub buildTaxonomicList {
 			# Link taxa to the TaxonInfo script
 			# ---------------------------------
 			# If genus is informal, don't link.
-			$formattedrow =~ s/(<i>|<\/i>)//g;
-			if($formattedrow =~ /informal(.*)?<genus>/){
+			#$formattedrow =~ s/(<i>|<\/i>)//g;
+			#if($formattedrow =~ /informal(.*)?<genus>/){
 				# do nothing
-			}
+			#}
 			# If species is informal, link only the genus.
-			elsif($formattedrow =~ /<genus>(.*)?<\/genus>(.*)?informal/s){
-				$formattedrow =~ s/<genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$1&taxon_rank=Genus&user=Contributor"><i>$1$2$3<\/i><\/a>/s;
-			}
-			elsif($formattedrow =~ /<species>indet/s){
+			#elsif($formattedrow =~ /<genus>(.*)?<\/genus>(.*)?informal/s){
+			#	$formattedrow =~ s/<genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$1&taxon_rank=Genus&user=Contributor"><i>$1$2$3<\/i><\/a>/s;
+			#}
+			#elsif($formattedrow =~ /<species>indet/s){
 				# shouldn't be any <i> tags for indet's.
-				$formattedrow =~ s/<genus>(.*)?<\/genus>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$1&taxon_rank=Higher+taxon&user=Contributor">$1 indet.<\/a>/;
-				$formattedrow =~ s/<species>(.*)?<\/species>//;
-			}
-			else{
+			#	$formattedrow =~ s/<genus>(.*)?<\/genus>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$1&taxon_rank=Higher+taxon&user=Contributor">$1 indet.<\/a>/;
+			#	$formattedrow =~ s/<species>(.*)?<\/species>//;
+			#}
+			#else{
 				# match multiple rows as a single (use the 's' modifier)
-				$formattedrow =~ s/<genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$1+$3&taxon_rank=Genus+and+species&user=Contributor"><i>$1$2$3<\/i><\/a>/s;
-			}
+			#	$formattedrow =~ s/<genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$1+$3&taxon_rank=Genus+and+species&user=Contributor"><i>$1$2$3<\/i><\/a>/s;
+			#}
+			# ---------------------------------
 
 			$formattedrow .= getReidHTMLTableByOccNum(pop(@occrow),$collection_refno);
 			# if there's a link in here somewhere, there must be a new ref
