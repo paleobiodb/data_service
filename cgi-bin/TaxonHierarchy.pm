@@ -36,6 +36,10 @@ sub new {
 # for internal use only!
 # returns the SQL builder object
 # or creates it if it has not yet been created
+# NOTE *** Be very careful not to call this whithin a method
+# which is *already* using SQLBuilder.. For example if you call
+# a method from a loop which itself calls  
+# getSQLBuilder, then you have a problem.
 sub getSQLBuilder {
 	my TaxonHierarchy $self = shift;
 	
@@ -122,6 +126,7 @@ sub setWithTaxonNumber {
 # If the taxon is not in the database, then it does nothing.
 sub setWithTaxonName {
 	my TaxonHierarchy $self = shift;
+
 	if (my $input = shift) {
 		# now we need to get the taxonNo from the database if it exists.
 		my $tn = $self->getTaxonNumberFromName($input);
@@ -131,7 +136,7 @@ sub setWithTaxonName {
 			# set the appropriate fields
 			$self->{taxonNumber} = $tn;
 			$self->{taxonName} = $input;
-		}
+		}	
 	}
 }	
 
@@ -149,6 +154,32 @@ sub taxonName {
 	my TaxonHierarchy $self = shift;
 
 	return $self->{taxonName};	
+}
+
+
+# pass this a rank such as "family" or "genus" and it will
+# return the name of the taxon at that rank as determined by the taxaHash.
+sub nameForRank {
+	my TaxonHierarchy $self = shift;
+	my $key = shift; 
+	
+	if (! ($self->{taxaHash}) ) {
+		# if the hash doesn't exist, then create it
+		$self->createTaxaHash();
+	}
+
+	my $hash = $self->{taxaHash};
+	my %hash = %$hash;
+	
+	my $id = $hash{$key};
+	
+	# now we need to get the name for it
+	my $sql = SQLBuilder->new();
+	$sql->setSQLExpr("SELECT taxon_name FROM authorities WHERE taxon_no = $id");
+	$sql->executeSQL();
+	
+	
+	return ($sql->nextResultRow())[0];
 }
 
 
@@ -176,12 +207,12 @@ sub createTaxaHash {
 	# go up the hierarchy to the top (kingdom)
 	# from the rank the user started with.
 	while ($tn) {
-		# note, the "ORDER BY o.parent_no ASC" is important - this means that if we have two
+		# note, the "ORDER BY o.parent_no DESC" is important - this means that if we have two
 		# rows with the same pubyr, then it will always fetch the last one added since 
 		# the numbers increment on each addition.
 		$sql->setSQLExpr("SELECT o.parent_no, o.pubyr, o.ref_has_opinion, 
 		o.reference_no, r.pubyr FROM opinions o, refs r 
-		WHERE o.child_no = $tn AND o.reference_no = r.reference_no ORDER BY o.parent_no ASC");
+		WHERE o.child_no = $tn AND o.reference_no = r.reference_no ORDER BY o.parent_no DESC");
 		$sql->executeSQL();
 
 		# loop through all result rows, and find the one with the most
@@ -239,7 +270,7 @@ sub createTaxaHash {
 	while ($tn) {
 		$sql->setSQLExpr("SELECT o.child_no, o.pubyr, o.ref_has_opinion,
 		o.reference_no, r.pubyr FROM opinions o, refs r 
-		WHERE o.parent_no = $tn AND o.reference_no = r.reference_no ORDER BY o.child_no ASC");
+		WHERE o.parent_no = $tn AND o.reference_no = r.reference_no ORDER BY o.child_no DESC");
 		$sql->executeSQL();
 
 		# loop through all result rows, and find the one with the most
@@ -289,26 +320,42 @@ sub createTaxaHash {
 	}
 	
 	
+	# print out for debugging purposes.
+#	my @keys = keys(%hash);
+#	foreach my $key (@keys) {
+#		$sql->clear();
+#		
+#		if (!($key =~ /\d/)) {
+#			my $taxon_no = $hash{$key};
+#		
+#			$sql->setSQLExpr("SELECT taxon_name FROM authorities WHERE taxon_no = '$taxon_no'");
+#			$sql->executeSQL();
+#			my @result = $sql->nextResultRow();
+#			my $taxon_name = $result[0];
+#			print "$key = $taxon_name\n";
+#		}
+#	}
+	# end of printing section for debugging
 	
+
+	#store the hash in the object data field
+	$self->{taxaHash} = \%hash;
+}
+
+
+# debugging
+sub printTaxaHash {
+	my TaxonHierarchy $self = shift;
+	my $hash = $self->{taxaHash};
+	my %hash = %$hash;
+	print "Printing Taxa Hash\n";
+	print "hash = '$hash'";
+	
+	# print out for debugging purposes.
 	my @keys = keys(%hash);
 	foreach my $key (@keys) {
-		$sql->clear();
-		
-		if (!($key =~ /\d/)) {
-			my $taxon_no = $hash{$key};
-		
-			$sql->setSQLExpr("SELECT taxon_name FROM authorities WHERE taxon_no = '$taxon_no'");
-			$sql->executeSQL();
-			my @result = $sql->nextResultRow();
-			my $taxon_name = $result[0];
-			print "$key = $taxon_name\n";
-		}
+		print "key = $key\n";
 	}
-		
-	
-	#store the hash in the object data field
-	$self->{taxaHash} = %hash;
-	
 
 }
 
