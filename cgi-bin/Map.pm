@@ -1196,7 +1196,10 @@ if ( $q->param('gridposition') ne "in back" )	{
 				}
 			}
 			if ( $q->param('genus_name') )	{
-				print "&genus_name=" . $q->param('genus_name');
+				# get rid of spaces in a genus-species name
+				my $clean_name = $q->param('genus_name');
+				$clean_name =~ s/ /\+/g;
+				print "&genus_name=" . $clean_name;
 				print "&taxon_rank=" . $q->param('taxon_rank');
 			}
 			($lngdeg,$lngdir) = split / /,$longVal{$x1};
