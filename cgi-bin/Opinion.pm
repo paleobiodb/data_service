@@ -409,7 +409,7 @@ sub displayOpinionForm {
 	
 		$fields{'message'} = "<p align=center><i>This record was created by a different authorizer ($authName) so you can only edit empty fields.</i></p>";
 		
-		# we should always make the ref_has_opinion radio buttons disabled
+		#  we should always make the ref_has_opinion radio buttons disabled
 		# because only the original authorizer can edit these.
 		
 		push (@nonEditables, 'ref_has_opinion');
