@@ -5988,7 +5988,6 @@ sub displayOccsForReID
 		print "
 <tr>
 	<td colspan=100>
-	<img src='/images/spacer.gif' width='50' height='1' alt='' border='0' align='left'>
 	<table border=0 cellspacing=0 cellpadding=0>
 	<tr>
 		<td colspan='4'>
