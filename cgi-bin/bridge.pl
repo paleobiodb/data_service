@@ -2571,7 +2571,14 @@ sub processCollectionsSearch {
 	my @timeinlist;
 	my $listsintime;
 	if ( $q->param('max_interval') )	{
- 		my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, $q->param('eml_max_interval'), $q->param('max_interval'), $q->param('eml_min_interval'), $q->param('min_interval'));
+        #These seeminly pointless four lines are necessary if this script is called from Download or whatever.
+        # if the $q->param($var) is not set (undef), the parameters array passed into processLookup doesn't get
+        # set properly, so make sure they can't be undef
+        my $eml_max = ($q->param('eml_max_interval') || '');
+        my $max = ($q->param('max_interval') || '');
+        my $eml_min = ($q->param('eml_min_interval') || '');
+        my $min = ($q->param('min_interval') || '');
+ 		my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, $eml_max,$max,$eml_min,$min);
  		@timeinlist = @{$inlistref};
 		$timesearch = "Y";
 		$q->param(eml_max_interval => '');

@@ -643,10 +643,10 @@ sub getLatLongString	{
 
 sub getIntervalString	{
 	my $self = shift;
-	my $max = $q->param('max_interval_name');
-	my $min = $q->param('min_interval_name');
-    my $eml_max  =$q->param("max_eml_interval");  
-    my $eml_min  =$q->param("min_eml_interval");  
+	my $max = ($q->param('max_interval_name') || "");
+	my $min = ($q->param('min_interval_name') || "");
+    my $eml_max  = ($q->param("max_eml_interval") || "");  
+    my $eml_min  = ($q->param("min_eml_interval") || "");  
 
 	my $collref;
 
