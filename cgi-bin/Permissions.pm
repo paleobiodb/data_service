@@ -4,6 +4,11 @@
 #
 # Relies on the access_level and release_date fields of the collection table.
 #
+# The useHasReadPermissionsForCollectionNumber() method is now cached for performance.
+# There are three caches, one for read, write, and read/write permissions.  They just use the
+# collection_no as a key and store a boolean integer value denoting if the user has permission or not.
+# This cache is only peristent as long as the object is in existance, so it should be perfectly safe.
+#
 # updated by rjp, 1/2004.
 
 package Permissions;
@@ -13,11 +18,20 @@ use strict;
 use SQLBuilder;
 use Debug;
 
+use constant CACHESIZE => 1000;		# number of entries in the cache.
+
 use fields qw(	
+				readCache
+				writeCache
+				readWriteCache
 				session
 				SQLBuilder
+				
+				date
 			);  # list of data members
 
+# cache			:	reference to a cache hash of collection numbers and permissions.
+# date			:	stored for speed.. This object will never be alive more than a few seconds, so it's okay.
 # session		:	the session object passed in with new()
 # SQLBuilder	:	SQLBuilder object so we don't have to keep recreating it.
 			
@@ -44,8 +58,24 @@ sub new {
 	my $sql = SQLBuilder->new();
 	$self->{SQLBuilder} = $sql;  # store in data member
 	
+	# create empty caches
+	my %emptyR = ();
+	my %emptyW = ();
+	my %emptyRW = ();
+	
+	$self->{readCache} = \%emptyR;
+	$self->{writeCache} = \%emptyW;
+	$self->{readWriteCache} = \%emptyRW;
+	
+	# store the date for speed.
+	# this is okay to do since the object won't be alive for more than a few seconds at a time.
+	$self->{date} = $self->getDate();
+	
 	return $self;
 }
+
+
+
 
 
 # pass it a collection_no
@@ -70,14 +100,48 @@ sub userHasReadPermissionForCollectionNumber {
 		return 0;  # false if no collection_no
 	}
 	
-	my $s = $self->{session};
-	
-	if (! $s) {
+	if (! $self->{session}) {
 		return 0;
 	}
 	
-	# Get today's date in the lexical comparison format
-	my $now = $self->getDate();
+	# grab a reference to the readCache.		
+	my $cacheRef = $self->{readCache};
+	
+	#my %cache = %$cacheRef;
+	#my @keys = keys(%cache);
+	#Debug::dbPrint("keys = @keys\n\n");
+	
+	
+	# first, check the cache to see if we already have a value for this collection no
+	if (my $cacheVal = $cacheRef->{$cnum}) {
+		Debug::dbPrint("using cache\n");
+		return $cacheVal;	# if this entry in the cache hash exists,
+		# then we already know the permissions, and can just return it (0 or 1).
+	}
+	
+	
+	# if we make it to here, then the value was not cached,
+	# so we actually have to query the database.
+	
+	my $perm = $self->queryDatabaseForReadPerm($cnum);
+	
+	$cacheRef->{$cnum} = $perm;	# store the new value in the cache
+	$self->{readCache} = $cacheRef;
+	
+	return $perm;	# return it.	
+}
+
+
+
+# For INTERNAL use only.
+# actually queries the database to get read permissions for the passed
+# collection_no.  This is only used when the value is not *already* in the readCache. 
+sub queryDatabaseForReadPerm {
+	my $self = shift;
+	my $cnum = shift;
+
+	my $ses = $self->{session};
+	
 
 	my $sql = $self->{SQLBuilder};
 	$sql->setSQLExpr("SELECT access_level, 
@@ -85,34 +149,33 @@ sub userHasReadPermissionForCollectionNumber {
 						research_group, authorizer 
 						FROM collections WHERE collection_no = $cnum");						
 	$sql->executeSQL();
-	my @result = $sql->nextResultArray();
+	my $resultRef = $sql->nextResultArrayRef();
 	
-	if (! @result) {
+	if (! $resultRef) {
 		return 0;
 	}
 	
-	my $access_level = $result[0];
-	my $rd_short = $result[1];
-	my $research_group = $result[2];
-	$research_group =~ tr/ /_/;		# replace spaces with underscores for comparison
+	my $access_level = $resultRef->[0];
+	my $rd_short = $resultRef->[1];
 	
-	my $authorizer = $result[3];
-
-	if ($rd_short < $now) {
+	
+	if ($rd_short < $self->{date}) {
 		# the release date has already passed, so it reverts to public access
 		return 1;		# okay to access.
 	}
 	
 	# if we make it to here, then the release date has not yet passed
-	my $session_auth = $s->get("authorizer");
+	my $session_auth = $ses->get("authorizer");
 	
-	if (($s->get("superuser") == 1) || ($session_auth eq $authorizer)) {
-		return 1;	# superuser can read anything
-					# and if the current authorizer authorized this record, then they can read it too.
-	}
+	my $authorizer = $resultRef->[3];	
 	
 	if ($access_level eq "the public") {
 		return 1;	# public access level is always visible, even if release date hasn't passed..	
+	}
+	
+	if (($ses->get("superuser") == 1) || ($session_auth eq $authorizer)) {
+		return 1;	# superuser can read anything
+					# and if the current authorizer authorized this record, then they can read it too.
 	}
 	
 	if (($access_level eq "database members") && ($session_auth ne "guest")){
@@ -123,14 +186,16 @@ sub userHasReadPermissionForCollectionNumber {
 		return 1;
 	}
 	
-	if (($access_level eq "group members") && ($s->get($research_group))){
+	my $research_group = $resultRef->[2];
+	$research_group =~ tr/ /_/;		# replace spaces with underscores for comparison
+	
+	if (($access_level eq "group members") && ($ses->get($research_group))){
 		# note, spaces have already been replaced with underscores in the $research_group variable
 		return 1;
 	}
 	
-	return 0;		# if we make it to here, then there must be a problem, so disallow access.
+	return 0;		# if we make it to here, then there must be a problem, so disallow access.	
 }
-
 
 
 
