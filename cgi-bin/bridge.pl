@@ -613,15 +613,24 @@ sub setPreferences	{
 # or the taxon_name out of the CGI ($q) object.
 sub displayAuthorityForm {
 	my $taxon = Taxon->new();
+		
+	# If the taxon_no from their choice is > 0, then we can
+	# set the taxon object with the taxon_no.  However, if it's
+	# equal to -1, that means that they choose the "No not the one" option
+	# at the bottom, and they want to add a new taxon, so just set the name,
+	# not the number.
+	#
+	# Lastly, if there's only a name, but not a number, then set
+	# the taxon with the name and look up the number.
 	
-	
-	if ($q->param('taxon_no')) {
+	if ($q->param('taxon_no') > 0) {
 		$taxon->setWithTaxonNumber($q->param('taxon_no'));
+	} elsif ($q->param('taxon_no') == -1) { 
+		$taxon->setWithTaxonNameOnly($q->param('taxon_name'));
 	} elsif ($q->param('taxon_name')) {
 		$taxon->setWithTaxonName($q->param('taxon_name'));
 	}
-	
-	
+		
 	$taxon->displayAuthorityForm($hbo, $s, $q);	
 }
 
@@ -5110,8 +5119,7 @@ sub processTaxonomySearch	{
 		# get the name of the original combination
 		$taxonName = $taxonObject->taxonName();
 	
-		$html .= "<tr><td><input type=radio name=taxon_no value=";
-		$html .= $originalCombination;
+		$html .= "<tr><td><input type=radio name=taxon_no value=\"$originalCombination\" ";
 		
 		# Check the button if this is the first match, which forces
 		#  users who want to create new taxa to check another button
@@ -5134,7 +5142,7 @@ sub processTaxonomySearch	{
 	
 	# If there were no matches, present the new taxon entry form immediately
 	if ( $matches == 0 )	{
-		displayTaxonomyEntryForm();
+		displayAuthorityForm();
 	}
 	# Otherwise, print a form so the user can pick the taxon
 	else	{
@@ -5142,16 +5150,23 @@ sub processTaxonomySearch	{
 		print "<center>\n";
 		print "<h3>Which \"$taxonName\" do you mean?</h3>\n";
 		print "<form method=\"POST\" action=\"bridge.pl\">\n";
-		print "<input type=hidden name=\"action\" value=\"displayTaxonomyEntryForm\">\n";
+		print "<input type=hidden name=\"action\" value=\"displayAuthorityForm\">\n";
 		print "<input type=hidden name=\"taxon_name\" value=\"$taxonName\">\n";
 		print "<table>\n";
 		print $html;
+		
+		print "<tr><td><input type=\"radio\" name=\"taxon_no\" value=\"-1\"> </td> <td>";
+		
 		if ( $matches == 1 )	{
-			print "<tr><td><input type=radio name=taxon_no value=''> </td><td>No, not the one above - create a <b>new</b> taxon record</i></td></tr>\n";
+			print "No, not the one above ";
 		} else	{
-			print "<tr><td><input type=radio name=taxon_no value=''> </td><td>None of the above - create a <b>new</b> taxon record</i></td></tr>\n";
+			print "None of the above ";
 		}
+		
+		print "- create a <b>new</b> taxon record</i></td> </tr>\n";
+		
 		print "</table><p>\n";
+		
 		print "<input type=submit value=\"Submit\">\n</form>\n";
 		print "</center>\n";
 		print stdIncludes("std_page_bottom");
@@ -5194,7 +5209,7 @@ sub formatAuthorityLine	{
 	}
 	# Otherwise, use what authority info can be found
 	else	{
-		$authLine .= formatShortRef( \%taxData );
+		$authLine .= " " . formatShortRef( \%taxData );
 	}
 
 	# Print name of higher taxon JA 10.4.03

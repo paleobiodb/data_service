@@ -3,6 +3,7 @@
     H2 { text-align: center; }
 </STYLE>
 
+
 %%message%%
 %%error_message%%
 
@@ -15,9 +16,15 @@
 
 <!-- some hidden values -->
 %%hiddens%%
+
 <input type="hidden" id="action" name="action" value="submitAuthorityForm">
+<input type="hidden" id="reference_no" name="reference_no" value="%%reference_no%%">
 <input type="hidden" id="taxon_no" name="taxon_no" value="%%taxon_no%%">
-<input type="hidden" id="taxon_name" name="taxon_name" value="%%taxon_name%%">
+<input type="hidden" id="is_new_entry" name="is_new_entry" value="%%is_new_entry%%">
+<input type="hidden" id="starting_taxon_name" name="starting_taxon_name" value="%%starting_taxon_name%%">
+<input type="hidden" id="second_submission" name="second_submission" value="%%second_submission%%">
+
+
 <!-- end of hiddens.  other fields may be converted to hidden if the user is not 
 supposed to edit them -->
 
@@ -129,7 +136,20 @@ a popup menu of taxon ranks with the current "taxon_rank" selected. -->
 
 </DIV>
 
+
+
 <CENTER>
+
+<TABLE BORDER=0 cellpadding=20>
+<TR>
+<TD>%%authorizer_name%%</TD>
+<TD>%%enterer_name%%</TD>
+<TD>%%modifier_name%%</TD>
+</TR>
+</TABLE>
+
+
+
 <INPUT type="submit" value="Submit">
 </CENTER>
 

@@ -400,7 +400,7 @@ sub newPopulateHTML {
 	
 	# now, we'll replace any leftover %%fields%% in the template with blanks
 	# so they don't show up...
-	$html =~ s/[%]{2}[^\s].*[^\s][%]{2}//g;
+	$html =~ s/[%][%][A-Za-z0-9_.-]+[%][%]//g;
 	
 	# now we'll make any fields non-editable that were passed in the @nonEditableInputs
 	# array. This is optional.

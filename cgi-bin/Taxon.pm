@@ -118,6 +118,15 @@ sub setWithTaxonName {
 	return 0;
 }	
 
+# same as setWithTaxonName(), but DOES NOT look up the corresponding
+# taxon number in the database.. Just sets the name field.
+sub setWithTaxonNameOnly {
+	my Taxon $self = shift;
+	my $newname = shift;
+	
+	$self->{taxonName} = $newname;
+}
+
 
 # for internal use only!
 # returns the SQL builder object
@@ -632,9 +641,11 @@ sub displayAuthorityForm {
 		return;
 	}
 	
-	# Figure out if it's the first time displaying this form, or if it's already been displayed.
+	
+	# Figure out if it's the first time displaying this form, or if it's already been displayed,
+	# for example, if we're showing some errors about the last attempt at submission.
 	my $secondTime = 0;  # is this the second time displaying this form?
-	if (($q) && ($q->{second_submission}) ) {
+	if ($q->param('second_submission') eq 'YES') {
 		# this means that we're displaying the form for the second
 		# time with some error messages.
 		$secondTime = 1;
@@ -648,22 +659,17 @@ sub displayAuthorityForm {
 	#Debug::dbPrint("second_submission = $secondTime");
 	#Debug::dbPrint("fields, second sub = " . $fields{second_submission});
 
-	
-	
-	# is this a new entry, or an edit of an old record?
-	# we'll look for a hidden field first, just in case we're re-displaying the form.
-	
+	# Is this supposed to be a new entry, or just an edit of an old record?
+	# We'll look for a hidden field first, just in case we're re-displaying the form.
 	my $isNewEntry = 1;
-	
-	if ($fields{is_new_entry} eq 'NO') {
+	if ($q->param('is_new_entry') eq 'NO') {
 		$isNewEntry = 0;
-	} 
-	
-	if ($self->{taxonNumber}) {
+	} elsif ($q->param('is_new_entry') eq 'YES') {
+		$isNewEntry = 1;	
+	} elsif ($self->{taxonNumber}) {
 		$isNewEntry = 0;  # it must be an edit if we have a taxon_no for it.
 	}
 
-	
 	#Debug::dbPrint("isNewEntry = $isNewEntry");
 	
 	# if the taxon is already in the authorities table,
@@ -673,24 +679,58 @@ sub displayAuthorityForm {
 		$dbFieldsRef = $self->databaseAuthorityRecord();
 		Debug::dbPrint("querying database");
 		
+		# we only want to stick the database data in the
+		# fields to populate if it's the first time displaying the form,
+		# otherwise we'll overwrite any changes the user has already made to the form.
 		if (!$secondTime) {
 			%fields = %$dbFieldsRef;		
 			$fields{taxon_no} = $self->{taxonNumber};
 		}
 	}
+
 	
-		
-	# we should also store whether or not this is a new entry
-	# in a hidden variable.	
+	#### 
+	## At this point, it's safe to start assigning things to the %fields
+	## hash.  However, it shouldn't be done before here, because the hash
+	## might be overwritten in two places above.
+	####
+	
+	
+	# Store whether or not this is a new entry in a hidden variable so 
+	# we'll have access to this information even after a taxon_no has been assigned...	
 	if ($isNewEntry) {
 		$fields{is_new_entry} = 'YES';
 	} else {
 		$fields{is_new_entry} = 'NO';
+		
+		# record the taxon number for later use if it's not a new entry.. (ie, if it's an edit).
+		$fields{taxon_no} = $self->{taxonNumber};
+	}
+	
+	# If we haven't already recorded this, then record the name of the starting taxon.
+	# This would be the name the user typed in in the search form, and since we're storing
+	# it in a hidden, but *only* if it doesn't already exist, then it should not be overwritten later.
+	if (! ($q->param('starting_taxon_name'))) {
+		$fields{starting_taxon_name} = $self->{taxonName};
+	}
+	
+	if ($self->{taxonName} eq '') {
+		$fields{taxon_name} = 'it';	
+	}
+
+		
+	# fill out the authorizer/enterer/modifier info at the bottom of the page
+	if (!$isNewEntry) {
+		if ($fields{authorizer_no}) { $fields{authorizer_name} = " <B>Authorizer:</B> " . $s->personNameForNumber($fields{authorizer_no}); }
+		
+		if ($fields{enterer_no}) { $fields{enterer_name} = " <B>Enterer:</B> " . $s->personNameForNumber($fields{enterer_no}); }
+		
+		if ($fields{modifier_no}) { $fields{modifier_name} = " <B>Modifier:</B> " . $s->personNameForNumber($fields{modifier_no}); }
 	}
 	
 	
-	Debug::printHash(\%fields);
-	
+	# Set the taxon_name parameter..  We can use this instead of
+	# taxon_name_corrected from now on down..
 	$fields{taxon_name} = $self->{taxonName};
 	if (! $secondTime) {  # otherwise the taxon_name_corrected will already have been set.
 		$fields{taxon_name_corrected} = $self->{taxonName};
@@ -704,9 +744,7 @@ sub displayAuthorityForm {
 	
 	# populate the correct pages/figures fields depending
 	# on the ref_is_authority value.
-	
-	Debug::dbPrint("isNewEntry = $isNewEntry");
-	
+		
 	if ($isNewEntry) {
 		# for a new entry, use the current reference from the session.
 		$fields{reference_no} = $s->currentReference();
@@ -831,19 +869,15 @@ sub displayAuthorityForm {
 		# we'll also have to add a few fields separately since they don't exist in the database,
 		# but only in our form.
 		
-		#if (($fields{'2nd_pages'} ne '') || ($fields{'2nd_pages'} != 0) ) {
-		if ($fields{'2nd_pages'}) {
-			push(@nonEditables, '2nd_pages');
-		}
-		
-		#if (($fields{'2nd_figures'} ne '') || ($fields{'2nd_figures'} != 0) ) {
-		if ($fields{'2nd_figures'}) {
-			push(@nonEditables, '2nd_figures');
-		}
+		if ($fields{'2nd_pages'}) { push(@nonEditables, '2nd_pages'); }
+		if ($fields{'2nd_figures'}) { push(@nonEditables, '2nd_figures'); }
+		if ($fields{'type_taxon_name'}) { push(@nonEditables, 'type_taxon_name'); }
+		if ($fields{'type_specimen'}) { push(@nonEditables, 'type_specimen'); }
 		
 		push(@nonEditables, 'taxon_name_corrected');
 	}
 	
+	if ($fields{taxon_name_corrected}) { $fields{taxon_size} = length($fields{taxon_name_corrected}) + 5; }
 	
 	# print the form	
 	print main::stdIncludes("std_page_top");
@@ -880,12 +914,20 @@ sub submitAuthorityForm {
 	# if this is the second time they submitted the form (or third, fourth, etc.),
 	# then this variable will be true.  This would happen if they had errors
 	# the first time, and then resubmitted it.
-	my $isSecondSubmission = $q->param('second_submission');
+	my $isSecondSubmission;
+	if ($q->param('second_submission') eq 'YES') {
+		$isSecondSubmission = 1;
+	} else {
+		$isSecondSubmission = 0;
+	}
+	
 	
 	# is this a new entry, or an edit of an old record?
-	my $isNewEntry = 1;  
-	if ($self->{taxonNumber}) {
-		$isNewEntry = 0;  # it must be an edit if we have a taxon_no for it.
+	my $isNewEntry;
+	if ($q->param('is_new_entry') eq 'YES') {
+		$isNewEntry = 1;	
+	} else {
+		$isNewEntry = 0;
 	}
 
 	#Debug::dbPrint("new entry = $isNewEntry");
@@ -1099,18 +1141,50 @@ sub submitAuthorityForm {
 		
 	} # end foreach formField.
 	
-	# if they entered a type_taxon_name, then we'll have to look it
+	# If they entered a type_taxon_name, then we'll have to look it
 	# up in the database because it's stored in the authorities table as a 
 	# type_taxon_no, not a name.
+	#
+	# Also, make sure the rank of the type taxon they type in makes sense.
+	# If the rank of the authority record is genus or subgenus, then the type taxon rank should
+	# be species.  	If the authority record is not genus or subgenus (ie, anything else), then
+	# the type taxon rank should *not* be species or subspecies.
 	if ($q->param('type_taxon_name')) {
+		
+		# check the spacing/capitilization of the type taxon name
+		my $ttRankFromSpaces = Validation::taxonRank($fieldsToEnter{type_taxon_name});
+		if ($ttRankFromSpaces eq 'invalid') {
+			$errors->add("Invalid type taxon name, please check spacing and capitalization.");	
+		}
+
+		
 		my $junk;
 		my $number;
 		($number, $junk) = $self->getTaxonNumberFromName($fieldsToEnter{type_taxon_name});
 		
 		if (!$number) {
 			# if it doesn't exist, tell them to go enter it first.
-			$errors->add("The type taxon '" . $q->param('type_taxon_name') . "' doesn't exist in our database.  Please submit this form without the type taxon and then go back and add it later.");
+			$errors->add("The type taxon '" . $q->param('type_taxon_name') . "' doesn't exist in our database.  If you made a typo, correct it and try again.  Otherwise, please submit this form without the type taxon and then go back and add it later.");
 		} else {
+			
+			# check to make sure the rank of the type taxon makes sense.
+			my $ttaxon = Taxon->new();
+			$ttaxon->setWithTaxonNumber($number);
+			
+			my $taxonRank = $q->param('taxon_rank'); 	# rank in popup menu
+			
+			if (($taxonRank eq 'genus') || ($taxonRank eq 'subgenus')) {
+				# then the type taxon rank must be species
+				if ($ttaxon->rank() ne 'species') {
+					$errors->add("The type taxon rank doesn't make sense.");	
+				}
+			} else {
+				# for any other rank, the type taxon rank must not be species.
+				if ($ttaxon->rank() eq 'species') {
+					$errors->add("The type taxon rank doesn't make sense.");	
+				}
+			}
+			
 			$fieldsToEnter{type_taxon_no} = $number;
 			$fieldsToEnter{type_taxon_name} = '';
 		}
@@ -1147,20 +1221,27 @@ sub submitAuthorityForm {
 	
 	# at this point, we should have a nice hash array (%fieldsToEnter) of
 	# fields and values to enter into the authorities table.
-	if ($isNewEntry) {
-		# if it's a new entry, then insert it into the database.
+	
+	
+	# *** NOTE, if they try to enter a record which has the same name and
+	# taxon_rank as an existing record, we should display a warning page stating
+	# this fact..  However, if they *really* want to submit a duplicate, we should 
+	# let them.  So we check the value of 'second_submission' which is true if 
+	# they have already submitted the form at least once.  If this is true, then 
+	# we'll go ahead an let them enter a duplicate.
+	#
+	# This only applies to new entries, and to edits where they changed the taxon_name_corrected
+	# field to be the name of a different taxon which already exists.
+	
+	#Debug::dbPrint("taxon_name = " . $fieldsToEnter{taxon_name});
+	#Debug::dbPrint("second_submission = " . $q->param('second_submission'));
 		
-		# *** NOTE, if they try to enter a new record which has the same name and
-		# taxon_rank as an existing record, we should display a warning page stating
-		# this fact..  However, if they *really* want to submit a duplicate, we should 
-		# let them.  So we check the value of 'second_submission' which is true if 
-		# they have already submitted the form at least once.  If this is true, then 
-		# we'll go ahead an let them enter a duplicate.
 		
-		$fieldsToEnter{created} = now();
-		
-		if (($self->getTaxonNumberFromName($fieldsToEnter{taxon_name})) && 
-			(! $q->param('second_submission')) ) {
+	if ($q->param('second_submission') ne 'YES') {
+		if ( ($isNewEntry && ($self->getTaxonNumberFromName($fieldsToEnter{taxon_name}))) ||
+		( 	(!$isNewEntry) && 
+			($q->param('starting_taxon_name') ne $fieldsToEnter{taxon_name}) &&
+			($self->getTaxonNumberFromName($fieldsToEnter{taxon_name}))	) ) {
 			
 			# only show warning on first subimission
 			
@@ -1178,8 +1259,7 @@ sub submitAuthorityForm {
 		# some errors to the user and this is at least the second time through (well,
 		# next time will be the second time through - whatever).
 
-		$q->param(-name=>'second_submission', -values=>['1']);
-		#$q->param(-name=>'reference_no', -values=>[$fieldsToEnter{reference_no}]);
+		$q->param(-name=>'second_submission', -values=>['YES']);
 			
 		# stick the errors in the CGI object for display.
 		my $message = $errors->errorMessage();
@@ -1199,7 +1279,10 @@ sub submitAuthorityForm {
 	
 	if ($isNewEntry) {
 		my $code;	# result code from dbh->do.
-		
+	
+		# grab the date for the created field.
+		$fieldsToEnter{created} = now();
+			
 		($code, $resultTaxonNumber) = $sql->insertNewRecord('authorities', \%fieldsToEnter);
 		
 	} else {
