@@ -986,7 +986,8 @@ sub submitOpinionForm {
 		$fieldsToEnter{status} = BELONGS_TO;
 		
 		# for belongs to, the parent rank should always be higher than the child rank.
-		if (! ($parentRank->isHigherThan($childRank)) ) {
+		# unless either taxon is an unranked clade (JA)
+		if (! ($parentRank->isHigherThan($childRank)) && $parentRank->rank() ne "unranked clade" && $childRank->rank() ne "unranked clade" ) {
 			$errors->add("The rank of the higher taxon (currently " . $parentRank->rank() . ") must be higher than the rank of $childTaxonName (" . $childRank->rank() . ")");	
 		}
 		
