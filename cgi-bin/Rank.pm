@@ -22,8 +22,17 @@ use fields qw(
 				isValid
 				isHigher
 				
+				onlyKnowHigher
+				
 				);  # list of allowable data fields.
 
+			
+# rankString	:		ie, species, subspecies, etc.
+# rankNum		:		number from rank hash below.
+# isValid		:		0 = not valid rank, 1 = valid rank.
+# isHigher		: 		0 = not higher, 1 = higher (subgenus or higher)			
+# onlyKnowHigher:		0 = no, 1 = we only know that it's a higher rank, 
+#						but we don't know what the exact rank is.
 			
 			
 # List of all allowable taxonomic ranks in order
@@ -49,6 +58,11 @@ sub new {
 	my $rankString = shift;  #optional rank string.
 	
 	$self->{isValid} = 0;  # not valid by default.
+	$self->{isHigher} = 0;
+	$self->{onlyKnowHigher} = 0;
+	$self->{rankNum} = 0;
+	$self->{rankString} = '';
+	
 	
 	if ($rankString) {
 		$self->setWithRankString($rankString);	
@@ -57,6 +71,21 @@ sub new {
 	return $self;
 }
 
+
+# pass this a Rank object and it sets itself to it..
+# basically, a copy constructor
+sub setWithRank {
+	my Rank $self = shift;
+	my Rank $other = shift;
+
+	if ($other) {
+		$self->{isValid} = $other->{isValid};
+		$self->{isHigher} = $other->{isHigher};
+		$self->{onlyKnowHigher} = $other->{onlyKnowHigher};
+		$self->{rankNum} = $other->{rankNum};
+		$self->{rankString} = $other->{rankString};
+	}
+}
 
 
 # pass this a rank string such as 'species'
@@ -107,6 +136,7 @@ sub setWithTaxonNameSpacingOnly {
 	
 	if ($spacingRank eq 'higher') {
 		$self->{isHigher} = 1;
+		$self->{onlyKnowHigher} = 1;
 		
 	} else {
 		$self->{rankString} = $spacingRank;
@@ -159,6 +189,117 @@ sub rank {
 }
 
 
+###################
+## simple accessors
+###################
+
+sub isSubspecies {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 1);	
+}
+sub isSpecies {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 2);	
+}
+sub isSubgenus {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 3);	
+}
+sub isGenus {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 4);	
+}
+sub isSubtribe {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 5);	
+}
+sub isTribe {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 6);	
+}
+sub isSubfamily {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 7);	
+}
+sub isFamily {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 8);	
+}
+sub isSuperfamily {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 9);	
+}
+sub isInfraorder {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 10);	
+}
+sub isSuborder {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 11);	
+}
+sub isOrder {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 12);	
+}
+sub isSuperorder {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 13);	
+}
+sub isInfraclass {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 14);	
+}
+sub isSubclass {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 15);	
+}
+sub isClass {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 16);	
+}
+sub isSuperclass {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 17);	
+}
+sub isSubphylum {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 18);	
+}
+sub isPhylum {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 19);	
+}
+sub isSuperphylum {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 20);	
+}
+sub isSubkingdom {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 21);	
+}
+sub isKingdom {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 22);	
+}
+sub isSuperkingdom {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 23);	
+}
+sub isUnrankedClade {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 24);	
+}
+sub isInformal {
+	my Rank $self = shift;
+	return ($self->{rankNum} == 25);	
+}
+
+
+
+
+
+
+
 # is this object a valid rank?
 sub isValid {
 	my Rank $self = shift;
@@ -183,14 +324,38 @@ sub isHigher {
 sub isHigherThan {
 	my Rank $self = shift;
 	
-	my $other = shift;
+	my Rank $other = shift;
 	
 	if (! ($self->{isValid} && $other->{isValid})) {
 		return 0;	
 	}
 	
 	
+	# we'll have to change our action based on
+	# whether we only know that it's a higher rank,
+	# or if we know its exact rank.
 	
+	my $sokh = $self->{onlyKnowHigher};
+	my $ookh = $other->{onlyKnowHigher};
+	
+	if ($sokh && $ookh) {
+		return 0;	
+	} elsif ($sokh) {
+		# we know that we're a higher taxon, so we can 
+		# only compare to the other rank if it's a species or subspecies.
+		if ($other->isSpecies() || $other->isSubspecies()) {
+			return 1;
+		}
+		
+		return 0;
+	} elsif ($ookh) {
+		# we can never know for sure.
+		return 0;
+	} else {
+		# we know the full rank of both objects.
+		
+		return ($self->{rankNum} > $other->{rankNum});
+	}
 }
 
 # Pass it another rank object and it will tell you
@@ -201,11 +366,67 @@ sub isHigherThan {
 sub isLowerThan {
 	my Rank $self = shift;
 	
+	my Rank $other = shift;
+	
+	if (! ($self->{isValid} && $other->{isValid})) {
+		return 0;	
+	}
+	
+	# we'll have to change our action based on
+	# whether we only know that it's a higher rank,
+	# or if we know its exact rank.
+	
+	my $sokh = $self->{onlyKnowHigher};
+	my $ookh = $other->{onlyKnowHigher};
+	
+	if ($sokh && $ookh) {
+		return 0;	
+	} elsif ($sokh) {
+		# we can never know for sure.
+		return 0;
+	} elsif ($ookh) {
+		
+		# we know that the other rank is a higher taxon, so we can 
+		# only compare to self if we're species or subspecies.
+		if ($self->isSpecies() || $self->isSubspecies()) {
+			return 1;
+		}
+		
+		return 0;
+	} else {
+		# we know the full rank of both objects.
+		
+		return ($self->{rankNum} < $other->{rankNum});
+	}
+	
 }
 
 
 
 
+
+
+
+# meant for testing only..
+sub test {
+	my $rank1 = Rank->new();
+	my $rank2 = Rank->new();
+
+	$rank1->setWithTaxonNameFullLookup('Aelurodon validus');
+	#$rank->setWithTaxonNameSpacingOnly('Aelurodon validus');
+
+	#$rank2->setWithRank($rank1);
+	$rank2->setWithTaxonNameFullLookup('Equidae');
+
+	print "rank1 rank = " . $rank1->rank() . "\n";
+	print "rank2 rank = " . $rank2->rank() . "\n";
+	
+	my $isHigherThan = $rank1->isHigherThan($rank2);
+	my $isLowerThan = $rank1->isLowerThan($rank2);
+	
+	print "isHigherThan = $isHigherThan\n";
+	print "isLowerThan = $isLowerThan\n";
+}
 
 
 
