@@ -1003,7 +1003,6 @@ sub doQuery {
 			if ( $q->param('binned_field') )	{
 				# special processing for ecology data
 				if ( $q->param('binned_field') eq "ecology" )	{
-#print "$genusName : $ecotaph[1]{$genusName} : $intervallookup{$row->{collection_no}}<br>\n"; $foo++;if($foo==99){exit};
 					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph[1]{$genusName}}++;
 					$occsbycategory{$ecotaph[1]{$genusName}}++;
 				} else	{
@@ -1185,7 +1184,7 @@ sub doQuery {
 		open SCALEFILE,">$OUT_FILE_DIR/$scaleOutFileName";
 		# we need a list of interval names in the order they appear
 		#   in the scale, which is stored in the correlations table
-		my $sql = "SELECT intervals.interval_name,intervals.interval_no,correlations.correlation_no FROM intervals,correlations WHERE intervals.interval_no=correlations.interval_no AND correlations.scale_no=" . $q->param('time_scale') . " ORDER BY correlations.correlation_no";
+		my $sql = "SELECT intervals.eml_interval,intervals.interval_name,intervals.interval_no,correlations.correlation_no FROM intervals,correlations WHERE intervals.interval_no=correlations.interval_no AND correlations.scale_no=" . $q->param('time_scale') . " ORDER BY correlations.correlation_no";
 		my @intervalrefs = @{$dbt->getData($sql)};
 
 		# need a list of enum values that actually have counts
@@ -1213,20 +1212,24 @@ sub doQuery {
 		print SCALEFILE "\n";
 		for my $ir ( @intervalrefs )	{
 			$acceptedIntervals++;
-			print SCALEFILE "$ir->{interval_name}";
-			print SCALEFILE "\t$occsbybin{$ir->{interval_name}}";
+			$intervalName = $ir->{interval_name};
+			if ( $ir->{eml_interval} ne "" )	{
+				$intervalName = $ir->{eml_interval} . " " . $intervalName;
+			}
+			print SCALEFILE "$intervalName";
+			print SCALEFILE "\t$occsbybin{$intervalName}";
 			for my $val ( @enumvals )	{
-				if ( $occsbybinandcategory{$ir->{interval_name}}{$val} eq "" )	{
+				if ( $occsbybinandcategory{$intervalName}{$val} eq "" )	{
 					print SCALEFILE "\t0";
 				} else	{
-					print SCALEFILE "\t$occsbybinandcategory{$ir->{interval_name}}{$val}";
+					print SCALEFILE "\t$occsbybinandcategory{$intervalName}{$val}";
 				}
 			}
 			for my $val ( @enumvals )	{
-				if ( $occsbybinandcategory{$ir->{interval_name}}{$val} eq "" )	{
+				if ( $occsbybinandcategory{$intervalName}{$val} eq "" )	{
 					print SCALEFILE "\t0.0000";
 				} else	{
-					printf SCALEFILE "\t%.4f",$occsbybinandcategory{$ir->{interval_name}}{$val} / $occsbybin{$ir->{interval_name}};
+					printf SCALEFILE "\t%.4f",$occsbybinandcategory{$intervalName}{$val} / $occsbybin{$intervalName};
 				}
 			}
 			print SCALEFILE "\n";
