@@ -1342,6 +1342,9 @@ sub displaySearchColls {
 	if($q->param('use_primary')){
 		$html =~ s/%%use_primary%%/yes/;
 	}
+	else{
+		$html =~ s/%%use_primary%%//;
+	}
 
 	# Set the type
 	$html =~ s/%%type%%/$type/;
@@ -1995,92 +1998,80 @@ sub buildTaxonomicList {
 			"       occurrence_no ".
 			"  FROM occurrences ".
 			" WHERE collection_no=$collection_no";
-	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-	my $md = MetadataModel->new($sth);
 
-	my @rowrefs = @{$sth->fetchall_arrayref()};
-	$sth->finish();
+	my @rowrefs = @{$dbt->getData($sql)};
 
 	if ( @rowrefs ) {
-		my @occFieldNames = $md->getFieldNames();
-		my $output;
-		my $genus;
-		my $newreference;
-		my $abundance;
-		my $comments;
-		my $genus_index = -1;
-		my $subgenus_index = -1;
-		my $species_index = -1;
+		my @grand_master_list = ();
 
-		# helps in setting bold genus/species names
-		for($i=0; $i<@occFieldNames; $i++){
-			if($occFieldNames[$i] eq 'genus_name'){
-				$genus_index = $i;
-			}
-			elsif($occFieldNames[$i] eq 'subgenus_name'){
-				$subgenus_index = $i;
-			}
-			elsif($occFieldNames[$i] eq 'species_name'){
-				$species_index = $i;
-			}
-		}
-
-		my $count = 0;
-		my %classification = ();
 		foreach my $rowref ( @rowrefs ) {
+			my $output = '';
+			my %grand_master_hash = ();
+			my %classification = ();
+			# For sorting, later
+			$grand_master_hash{occurrence_no} = $rowref->{occurrence_no};
+
 			# check for unrecognized genus names
 			foreach my $nn (@gnew_names){
-				if($rowref->[$genus_index] eq $nn){
-					$rowref->[$genus_index] = "<b>".$rowref->[$genus_index]."</b>";
+				if($rowref->{genus_name} eq $nn){
+					$rowref->{genus_name} = "<b>".$rowref->{genus_name}."</b>";
 					$new_found = 1;
 				}
 			}
 
 			# check for unrecognized subgenus names
 			foreach my $nn (@subgnew_names){
-				if($rowref->[$subgenus_index] eq $nn){
-					$rowref->[$subgenus_index] = "<b>".$rowref->[$subgenus_index]."</b>";
+				if($rowref->{subgenus_name} eq $nn){
+					$rowref->{subgenus_name} = "<b>".$rowref->{subgenus_name}."</b>";
 					$new_found = 1;
 				}
 			}
 
 			# check for unrecognized species names
 			foreach my $nn (@snew_names){
-				if($rowref->[$species_index] eq $nn){
-					$rowref->[$species_index]="<b>".$rowref->[$species_index]."</b>";
+				if($rowref->{species_name} eq $nn){
+					$rowref->{species_name}="<b>".$rowref->{species_name}."</b>";
 					$new_found = 1;
 				}
 			}
 
-			my $drow = DataRow->new($rowref, $md);
+			my $formatted_reference = '';
 
-			#$genus = "Genus and species" if $drow->getValue('genus_name') || $drow->getValue('species_name');
-			#$abundance = 'Abundance' if $drow->getValue('abund_value');
-			#$comments = 'Comments' if $drow->getValue('comments');
-			# replace the ref no with a formatted ref JA 10.6.02
-			# WARNING: uses buildReference function that was written to
-			#   be used in the bottom navigation bar
-			my $newrefno = $drow->getValue('reference_no');
+			my $newrefno = $rowref->{'reference_no'};
 			if ($newrefno != $collection_refno)	{
-				$drow->setValue("reference_no",&buildReference($newrefno,"list"));
-				#$newreference = 'Reference';
+				$rowref->{reference_no} = buildReference($newrefno,"list");
 			}
-			else	{
-				$drow->setValue("reference_no",'');
+			else{
+				$rowref->{reference_no} = '';
 			}
 
 			my $arg = "";
 			my $reidTable = "";
-			my @occrow = @{$rowref};
-			my $mostRecentReID = PBDBUtil::getMostRecentReIDforOcc($dbt,@occrow[10]);
+			my @occrow = ();
+			my @occFieldNames = ();
+			while((my $key, my $value) = each %{$rowref}){
+				push(@occFieldNames, $key);
+				push(@occrow, $value);
+			}
+
+			my $mostRecentReID = PBDBUtil::getMostRecentReIDforOcc($dbt,$rowref->{occurrence_no});
 			if($mostRecentReID){
-				$formattedrow = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
-				$formattedrow .= getReidHTMLTableByOccNum($mostRecentReID, 1);
+				$output = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
+				$output .= getReidHTMLTableByOccNum($mostRecentReID, 1, \%classification);
+
+				$grand_master_hash{class_no} = ($classification{class_no} or 1000000);
+				$grand_master_hash{order_no} = ($classification{order_no} or 1000000);
+				$grand_master_hash{family_no} = ($classification{family_no} or 1000000);
 			}
 			else{
-				my $arg = $drow->getValue('genus_name')." ".$drow->getValue('species_name');
+				my $arg = $rowref->{'genus_name'}." ".$rowref->{'species_name'};
 				%classification=%{PBDBUtil::get_classification_hash($dbt,$arg)};
+
+				# for sorting, later
+				$grand_master_hash{class_no} = ($classification{class_no} or 1000000);
+				$grand_master_hash{order_no} = ($classification{order_no} or 1000000);
+				$grand_master_hash{family_no} = ($classification{family_no} or 1000000);
+
 				if($classification{'class'} || $classification{'order'} ||
 						$classification{'family'} ){
 					push(@occrow, "bogus");
@@ -2093,7 +2084,7 @@ sub buildTaxonomicList {
 					push(@occFieldNames, 'family');
 				}
 
-				$formattedrow = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
+				$output = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
 
 				if($classification{'class'} || $classification{'order'} ||
 						$classification{'family'} ){
@@ -2108,53 +2099,42 @@ sub buildTaxonomicList {
 				}
 			}
 
-			# Link taxa to the TaxonInfo script
-			# ---------------------------------
 			# If genus is informal, don't link.
-			$formattedrow =~ s/(<i>|<\/i>)//g;
-			if($formattedrow =~ /informal(.*)?<genus>/){
+			$output =~ s/(<i>|<\/i>)//g;
+			if($output =~ /informal(.*)?<genus>/){
 				# do nothing
 			}
 			# If species is informal, link only the genus.
-			elsif($formattedrow =~ /<genus>(.*)?<\/genus>(.*)?informal/s){
-				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Genus"><i>$1$2$3$4<\/i><\/a>/g;
+			elsif($output =~ /<genus>(.*)?<\/genus>(.*)?informal/s){
+				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Genus"><i>$1$2$3$4<\/i><\/a>/g;
 			}
-			elsif($formattedrow =~ /<species>indet/s){
+			elsif($output =~ /<species>indet/s){
+				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Genus"><i>$1$2$3$4<\/i><\/a>/g;
 				# shouldn't be any <i> tags for indet's.
-				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2&taxon_rank=Higher+taxon">$1$2<\/a>/g;
-				$formattedrow =~ s/<species>(.*)?<\/species>//;
+				$output =~ s/<i>(.*)?indet(\.{0,1})<\/i><\/a>/$1indet$2<\/a>/;
 			}
 			else{
 				# match multiple rows as a single (use the 's' modifier)
-				$formattedrow =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2+$4&taxon_rank=Genus+and+species"><i>$1$2$3$4<\/i><\/a>/g;
+				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2+$4&taxon_rank=Genus+and+species"><i>$1 $2$3$4<\/i><\/a>/g;
 			}
 			# ---------------------------------
 
-			# if there's a link in here somewhere, there must be a new ref
-			#   (kludgy, but saves the trouble of passing newreference back
-			#   and forth)
-			if ($formattedrow =~ /a href/)	{
-				$newreference = 'Reference';
-			}
-			# Color the background of alternating rows gray JA 10.6.02
-			if ( $count % 2 == 0 && @rowrefs > 2) {
-				$formattedrow =~ s/<td/<td bgcolor='#E0E0E0'/g;
-			}
-            $output .= $formattedrow;
-			$count++;
+			# Clean up abundance values (somewhat messy, but works, and better
+			#   here than in populateHTML) JA 10.6.02
+			$output =~ s/(>1 specimen)s|(>1 individual)s/$1$2/g;
+			
+            $grand_master_hash{html} = $output;
+			push(@grand_master_list, \%grand_master_hash);
 		}
 
 		$sql = "SELECT collection_name FROM collections ".
 			   "WHERE collection_no=$collection_no";
-		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute();
-		my @coll_name = @{$sth->fetchrow_arrayref()};
-		$sth->finish();
+		my @coll_name = @{$dbt->getData($sql)};
 
 		# Taxonomic list header
 		$return = "
 <div align='center'>
-<h3>Taxonomic list for $coll_name[0] (PBDB collection $collection_no)</h3>";
+<h3>Taxonomic list for ".$coll_name[0]->{collection_name}." (PBDB collection $collection_no)</h3>";
 
 		if($new_found){
 			$return .= "<h3><font color=red>WARNING!</font> Taxon names in ".
@@ -2171,11 +2151,99 @@ sub buildTaxonomicList {
 	$return .= "<td><u>Reference</u></td><td><u>Abundance</u></td>".
 			   "<td><u>Comments</u></td></tr>";
 
-		# Clean up abundance values (somewhat messy, but it works, and better
-		#   here than in populateHTML) JA 10.6.02
-		$output =~ s/(>1 specimen)s|(>1 individual)s/$1$2/g;
-        
-		$return .= $output;
+		# Sort:
+		my @sorted = sort{ $a->{class_no} <=> $b->{class_no} ||
+						   $a->{order_no} <=> $b->{order_no} ||
+						   $a->{family_no} <=> $b->{family_no} ||
+						   $a->{occurrence_no} <=> $b->{occurrence_no}} @grand_master_list;
+		# Now sort the ones that had no class or order or family by occ_no.
+		my @occs_to_sort = ();
+		while($sorted[-1]->{class_no} == 1000000 &&
+			  $sorted[-1]->{order_no} == 1000000 &&
+			  $sorted[-1]->{family_no} == 1000000){
+			push(@occs_to_sort, pop @sorted);
+		}
+
+		# Put occs in order, AFTER the sorted occ with the closest smaller
+		# number.  First check if our occ number is one greater than any 
+		# existing sorted occ number.  If so, place after it.  If not, find
+		# the distance between it and all other occs less than it and then
+		# place it after the one with the smallest distance.
+		while(my $single = pop @occs_to_sort){
+			my $slot_found = 0;
+			my @variances = ();
+			# First, look for the "easy out" at the endpoints.
+			# Beginning?
+		# HMM, if $single is less than $sorted[0] we don't want to put
+		# it at the front unless it's less than ALL $sorted[$x].
+			#if($single->{occurrence_no} < $sorted[0]->{occurrence_no} && 
+			#	$sorted[0]->{occurrence_no} - $single->{occurrence_no} == 1){
+			#	unshift @sorted, $single;
+			#}
+			# Can I just stick it at the end?
+			if($single->{occurrence_no} > $sorted[-1]->{occurrence_no} &&
+				$single->{occurrence_no} - $sorted[-1]->{occurrence_no} == 1){
+				push @sorted, $single;
+			}
+			# Somewhere in the middle
+			else{
+				for($index = 0; $index < @sorted-1; $index++){
+					if($single->{occurrence_no} > 
+									$sorted[$index]->{occurrence_no}){ 
+						# if we find a variance of 1, bingo!
+						if($single->{occurrence_no} -
+								$sorted[$index]->{occurrence_no} == 1){
+							splice @sorted, $index+1, 0, $single;
+							$slot_found=1;
+							last;
+						}
+						else{
+							# store the (positive) variance
+							push(@variances, $single->{occurrence_no}-$sorted[$index]->{occurrence_no});
+						}
+					}
+					else{ # negative variance
+						push(@variances, 1000000);
+					}
+				}
+				# if we didn't find a variance of 1, place after smallest
+				# variance.
+				if(!$slot_found){
+					# end variance:
+					if($sorted[-1]->{occurrence_no}-$single->{occurrence_no}>0){
+						push(@variances,$sorted[-1]->{occurrence_no}-$single->{occurrence_no});
+					}
+					else{ # negative variance
+						push(@variances, 1000000);
+					}
+					# insert where the variance is the least
+					my $smallest = 1000000;
+					my $smallest_index = 0;
+					for(my $counter=0; $counter<@variances; $counter++){
+						if($variances[$counter] < $smallest){
+							$smallest = $variances[$counter];
+							$smallest_index = $counter;
+						}
+					}
+					# NOTE: besides inserting according to the position
+					# found above, this will insert an occ less than all other
+					# occ numbers at the very front of the list (the condition
+					# in the loop above will never be met, so $smallest_index
+					# will remain zero.
+					splice @sorted, $smallest_index+1, 0, $single;
+				}
+			}
+		}
+
+		my $sorted_html = '';
+		for(my $index = 0; $index < @sorted; $index++){
+			# Color the background of alternating rows gray JA 10.6.02
+			if($index % 2 == 0 && @sorted > 2){
+				$sorted[$index]->{html} =~ s/<td/<td bgcolor='#E0E0E0'/g;
+			}
+			$sorted_html .= $sorted[$index]->{html};
+		}
+		$return .= $sorted_html;
 
 		$return .= "
 </table>
@@ -2214,28 +2282,27 @@ sub getReidHTMLTableByOccNum {
 	@rows = @{$sth->fetchall_arrayref()};
 
 	my $retVal = "";
-	# NOT SURE ABOUT THIS LOOP. DON'T WE JUST WANT ONE?
+	# NOT SURE ABOUT THIS LOOP. DON'T WE JUST WANT ONE (THE MOST RECENT)?
 	foreach my $rowRef ( @rows ) {
 		my @row = @{$rowRef};
 		# format the reference
 		$row[-1] = buildReference($row[-1],"list");
 		my $arg = $row[1]." ". $row[5];
-		%classification = %{PBDBUtil::get_classification_hash($dbt, $arg)};
-		if($classification{'class'} || $classification{'order'} ||
-				$classification{'family'} ){
+		# 3rd arg becomes the 1st since the other 2 were shifted off already.
+		%{$_[0]} = %{PBDBUtil::get_classification_hash($dbt, $arg)};
+
+		if($_[0]->{'class'} || $_[0]->{'order'} || $_[0]->{'family'} ){
 			push(@row, "bogus");
 			push(@fieldNames, 'higher_taxa');
-			push(@row, $classification{'class'});
+			push(@row, $_[0]->{'class'});
 			push(@fieldNames, 'class');
-			push(@row, $classification{'order'});
+			push(@row, $_[0]->{'order'});
 			push(@fieldNames, 'order');
-			push(@row, $classification{'family'});
+			push(@row, $_[0]->{'family'});
 			push(@fieldNames, 'family');
 		}
 		$retVal .= $hbo->populateHTML("reid_taxa_display_row", \@row,\@fieldNames);
-		if($classification{'class'} || 
-				$classification{'order'} ||
-				$classification{'family'} ){
+		if($_[0]->{'class'} || $_[0]->{'order'} || $_[0]->{'family'} ){
 			pop(@row);
 			pop(@row);
 			pop(@row);
@@ -4128,12 +4195,15 @@ sub displayTaxonomyEntryForm	{
 	unshift @authorityFields, 'parent_taxon_name';
 
 	$html = &stdIncludes("js_taxonomy_checkform");
-	$html .= $hbo->populateHTML ('enter_taxonomy_top', [ $authorityRow{'taxon_no'}, $authorityRow{'type_taxon_no'} ] , [ 'taxon_no', 'type_taxon_no' ] );
+	$html .= $hbo->populateHTML ('enter_taxonomy_top', [ $authorityRow{'taxon_no'}, $authorityRow{'type_taxon_no'}, $taxon, length($taxon)] , [ 'taxon_no', 'type_taxon_no',"%%taxon_name%%","%%taxon_size%%" ] );
 	$html .= $hbo->populateHTML('enter_tax_ref_form', \@authorityVals , \@authorityFields );
 	$html .= $hbo->populateHTML('enter_taxonomy_form', \@authorityVals , \@authorityFields );
 
 	# Remove widgets if the current authorizer does not own the record and
 	#  the existing data are non-null
+	if($s->get('authorizer') ne $authorityRow{'authorizer'}){
+		$html =~ s/<input type=text name="taxon_name_corrected" size=\d+ value="($taxon)".*?>/$1/;
+	}
 	for $f ( @authorityFields )	{
 		if ( $authorityRow{$f} &&
 			 $s->get('authorizer') ne $authorityRow{'authorizer'} )	{
@@ -4169,7 +4239,7 @@ sub displayTaxonomyEntryForm	{
 	}
 
 	# Substitute in the taxon name
-	$html =~ s/\$taxon_name/$taxon/g;
+    $html =~ s/\$taxon_name/$taxon/g;
 
 	print $html;
 
@@ -4177,7 +4247,7 @@ sub displayTaxonomyEntryForm	{
 }
 
 # JA 15-22,27.8.02
-sub processTaxonomyEntryForm	{
+sub processTaxonomyEntryForm{
 
 # Pages and figures each can come from two different widgets, so merge them
 	if ( $q->param('2nd_pages') )	{
@@ -4199,6 +4269,11 @@ sub processTaxonomyEntryForm	{
 		$q->param(parent_taxon_name => $q->param('parent_taxon_name2') );
 		# senior synonym's rank is just the taxon's rank
 		$q->param(parent_taxon_rank => $q->param('taxon_rank') );
+	}
+
+	if($q->param('taxon_name_corrected') && 
+			$q->param('taxon_name_corrected') ne $q->param('taxon_name')){
+		$q->param('taxon_name' => $q->param('taxon_name_corrected'));
 	}
 
 	# Set the parent name for valid species
