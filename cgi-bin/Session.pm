@@ -46,10 +46,20 @@ sub processLogin {
 	# This cleans out ALL records in session_data older than 48 hours.
 	$self->houseCleaning( $dbh );
 
+	my $enterer = $q->param('enterer');
+	my $authorizer = $q->param('authorizer');
+
 	# We want them to specify both an authorizer and an enterer
 	# otherwise kick them out to the public site.
-	if (!($q->param("authorizer") && $q->param("enterer"))){
+	if (!(authorizer && enterer)) {
 		return "";
+	}
+	
+	# also check that both names exist in the database.
+	my $person = Person->new();
+	if (! ($person->isValidName($enterer) &&
+		$person->isValidName($authorizer)) ) {
+		return '';
 	}
 	
 	# need to reverse the login name.
@@ -70,7 +80,7 @@ sub processLogin {
 	}
 	
 
-	# Get info from database on this person.
+	# Get info from database on this authorizer.
 	$sql =	"SELECT * FROM person " .
 			 "WHERE name = '".$q->param("authorizer")."' ";
 	
