@@ -4694,6 +4694,54 @@ sub displayOccurrenceAddEdit {
 
 	print stdIncludes( "std_page_top" );
 
+	# get the occurrences right away because we need to make sure there
+	#  aren't too many to be displayed
+	$sql = "SELECT * FROM occurrences WHERE collection_no=$collection_no";
+	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+	$sth->execute();
+
+	my $p = Permissions->new($s);
+	my @all_data = $p->getReadWriteRowsForEdit($sth);
+
+	# first check to see if there are too many rows to display, in which
+	#  case display links going to different batches of occurrences and
+	#  then bomb out JA 26.7.04
+	# don't do this if the user already has gone through one of those
+	#  links, so rows_to_display has a useable value
+	if ( $#all_data > 49 && $q->param("rows_to_display") !~ / to / )	{
+		print "<center><h3>Please select the rows you wish to edit</h3></center>\n\n";
+		print "<center>\n";
+		print "<table><tr><td>\n";
+		print "<ul>\n";
+		for my $rowset ( 1..100 )	{
+			$endofblock = $rowset * 50;
+			$startofblock = $endofblock - 49;
+			if ( $#all_data >= $endofblock )	{
+				print "<li><a href=\"$exec_url?action=displayOccurrenceAddEdit&collection_no=$collection_no&rows_to_display=$startofblock+to+$endofblock\">Rows <b>$startofblock</b> to <b>$endofblock</b></a>\n";
+			}
+			if ( $#all_data < $endofblock + 50 )	{
+				$startofblock = $endofblock + 1;
+				$endofblock = $#all_data + 1;
+				print "<li><a href=\"$exec_url?action=displayOccurrenceAddEdit&collection_no=$collection_no&rows_to_display=$startofblock+to+$endofblock\">Rows <b>$startofblock</b> to <b>$endofblock</b></a>\n";
+				last;
+			}
+		}
+		print "</ul>\n\n";
+		print "</td></tr></table>\n";
+		print "</center>\n";
+		print stdIncludes("std_page_bottom");
+		exit;
+	}
+
+	# which rows should be displayed?
+	my $firstrow = 0;
+	my $lastrow = $#all_data;
+	if ( $q->param("rows_to_display") =~ / to / )	{
+		($firstrow,$lastrow) = split / to /,$q->param("rows_to_display");
+		$firstrow--;
+		$lastrow--;
+	}
+
 	my %pref = getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
 
@@ -4716,10 +4764,6 @@ sub displayOccurrenceAddEdit {
 
 	print $html;
 
-	$sql = "SELECT * FROM occurrences WHERE collection_no=$collection_no";
-	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-
 	print qq|<form method=post action="$exec_url" onSubmit='return checkForm();'>\n|;
 	print qq|<input name="action" value="processEditOccurrences" type=hidden>\n|;
 	print "<table>";
@@ -4732,11 +4776,11 @@ sub displayOccurrenceAddEdit {
 
 	print $hbo->populateHTML('occurrence_header_row', \@tempRow, \@tempFieldName, \@prefkeys);
 
-    # of records, each represented as a hash
-    my $p = Permissions->new($s);
-    my @all_data = $p->getReadWriteRowsForEdit($sth);
+    # main loop
+    # each record is represented as a hash
     my $gray_counter = 0;
-    foreach my $hash_ref (@all_data){
+    foreach my $all_data_index ($firstrow..$lastrow){
+	my $hash_ref = $all_data[$all_data_index];
         $hash_ref->{'authorizer'} = $s->get('authorizer');
         $hash_ref->{'enterer'} = $s->get('enterer');
 		# This essentially empty reid_no is necessary as 'padding' so that
