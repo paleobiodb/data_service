@@ -33,16 +33,21 @@ geographic dispersion algorithm
 <TABLE cellpadding=4>
 
 <tr><td valign=top>
-<font size=-1>Diversity measure to report:</font></td>
+<font size=-1>Diversity measure to report:<br></font>
+<i><font size=-2>Two timers will tell you the Meaning of Life.</font></i>
+</td>
 
 <td valign=top>
 <font size=-1>
 <select name=diversity>
-<option selected>boundary-crossers</option>
+<option>boundary-crossers</option>
 <option>range-through</option>
 <option>range-through minus singletons</option>
 <option>sampled-in-bin</option>
 <option>sampled minus singletons</option>
+<option selected>two timers</option>
+<option>local boundary-crossers</option>
+<option>local range-through</option>
 </select>
 </font>
 </td></tr>
@@ -96,6 +101,26 @@ a subsampling analysis.</font></i>
 </td>
 
 <tr><td valign=top>
+<font size=-1>Number of subsampling trials:<br></font>
+<i><font color="FF0000" size=-2>Required</font> <font size=-2>if you want to do a subsampling analysis.</font></i>
+</td>
+
+<td valign=top>
+<font size=-1>
+<select name=samplingtrials>
+<option selected></option>
+<option>1</option>
+<option>5</option>
+<option>10</option>
+<option>20</option>
+<option>50</option>
+<option>100</option>
+</select>
+</font>
+</td>
+</tr>
+
+<tr><td valign=top>
 <font size=-1>
 Intermediate numbers of items to report in subsampling curves:<br>
 </font>
@@ -120,28 +145,10 @@ Intermediate numbers of items to report in subsampling curves:<br>
 </td>
 
 <tr><td valign=top>
-<font size=-1>Number of subsampling trials:<br></font>
-<i><font color="FF0000" size=-2>Required</font> <font size=-2>if you want to do a subsampling analysis.</font></i>
-</td>
-
-<td valign=top>
-<font size=-1>
-<select name=samplingtrials>
-<option selected></option>
-<option>1</option>
-<option>5</option>
-<option>10</option>
-<option>20</option>
-<option>50</option>
-<option>100</option>
-</select>
+<font size=-1>Print subsampling stats for intervals with less items than the exact quota?<br>
 </font>
+<i><font size=-2>Not required.</font></i>
 </td>
-</tr>
-
-<tr><td valign=top>
-<font size=-1>Print subsampling stats for intervals with less items than the exact quota?
-</font></td>
 
 <td valign=top>
 <font size=-1>
