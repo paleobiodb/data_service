@@ -3,6 +3,39 @@
 //created by rjp, 1/2004.
 
 
+//*****************************
+// for validation of form input
+//*****************************
+
+// returns true if the input is in a proper format for a last name
+function properLastName(input) {
+	if ((!input) || input == "") { return false; }
+	
+	var match = /^[A-Za-z ,-.\']+$/;
+	
+	return match.test(input);
+}
+
+// returns true if the input is in a proper format for an initial 
+function properInitial(input) {
+	if ((!input) || input == "") { return false; }
+	
+	var match = /^[A-Za-z .]+$/;
+	
+	return match.test(input);
+}
+
+// returns true if it's a proper year format which begins with a 1 or 2,
+// ie, 1900 and something or 2000 something.
+function properYear(input) {
+	if ((!input) || input == "") { return false; }
+	
+	var match = /^[12]\d{3}$/;
+	
+	return match.test(input);
+}
+
+
 // pass this a taxon name as a string,
 // and it will look at the number of spaces to determine
 // the rank.
@@ -17,14 +50,14 @@
 //
 // by rjp, 2/2004 
 function taxonRank(taxon) {
-	var hasOneSpace = /.+[ ]{1}.+/;
-	var hasTwoSpaces = /.+[ ]{2}.+/;
+	var isSpecies = /^.+[ ]{1}.+$/;
+	var isSubspecies = /^.+[ ]{1}.+[ ]{1}.+$/;
 	
-	if (hasTwoSpaces.test(taxon)) {
+	if (isSubspecies.test(taxon)) {
 		return "subspecies";	
 	}
 	
-	if (hasOneSpace.test(taxon)) {
+	if (isSpecies.test(taxon)) {
 		return "species";	
 	}
 
