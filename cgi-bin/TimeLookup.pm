@@ -395,11 +395,39 @@ sub findBoundaries	{
 		}
 	}
 
+	# percolate downwards the lower boundaries (early Early Hemphillian
+	#  case)  26.1.05 JA
+	# need to do this when you have (say) zones with no age estimates,
+	#  but they fall into (say) age/stages with estimates
+	for my $i ( keys %bestscale )	{
+		if ( $lowerbound{$i} eq "" )	{
+			$j = $immediatemax{$i};
+			while ( $j > 0 && $lowerbound{$i} == "" )	{
+				$lowerbound{$i} = $lowerbound{$j};
+				$j = $immediatemax{$j};
+			}
+		}
+	}
+
 	# set upper boundaries for intervals having direct estimates
 	# NOTE: now we're using the percolated lower boundaries instead of
 	#   the original estimates
 	for my $i ( keys %bestscale )	{
-		$upperbound{$i} = $lowerbound{$bestnext{$i}};
+		if ( $lowerbound{$i} != $lowerbound{$bestnext{$i}} )	{
+			$upperbound{$i} = $lowerbound{$bestnext{$i}};
+		}
+		# if the next interval has an identical lower bound,
+		#  keep going up trying to find one with a different
+		#  lower bound JA 26.1.05
+		else	{
+			$tempbestnext = $bestnext{$i};
+			while ( $lowerbound{$i} == $lowerbound{$tempbestnext} && $tempbestnext > 0 )	{
+				$tempbestnext = $bestnext{$tempbestnext};
+				if ( $lowerbound{$i} != $lowerbound{$tempbestnext} )	{
+					$upperbound{$i} = $lowerbound{$tempbestnext};
+				}
+			}
+		}
 	}
 
 	# percolate upwards the upper boundaries (low numbers)
@@ -477,8 +505,8 @@ sub findBoundaries	{
 		if ( $ir->{eml_interval} )	{
 			$in = $ir->{eml_interval} . " " . $in;
 		}
-		$upperboundbyname{$ir->{interval_name}} = $upperbound{$ir->{interval_no}};
-		$lowerboundbyname{$ir->{interval_name}} = $lowerbound{$ir->{interval_no}};
+		$upperboundbyname{$in} = $upperbound{$ir->{interval_no}};
+		$lowerboundbyname{$in} = $lowerbound{$ir->{interval_no}};
 	}
 
 	return (\%upperbound,\%lowerbound,\%upperboundbyname,\%lowerboundbyname);
