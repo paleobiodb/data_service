@@ -349,7 +349,9 @@ is used for reidentifications of a particular fossil at a particular collection.
 <span class="fieldName"><span class="foreignKey">parent_no</span></span>
 <span class="fieldDesc">Key to the authorities table, parent of the child.  
 The child is the original, and the parent_no is the recombination/synonym/etc. according
-to the status field.</span>
+to the status field.  Possible values include 'belongs to', 'recombined as', 'subjective synonym of',
+'objective synonym of', 'homonym of', 'replaced by', 'corrected as', 'nomen dubium', 'nomen nudum', 
+'nomen oblitem', 'nomen vanum', 'revalidated'</span>
 </p>
 <p class="field">
 <span class="fieldName"><span class="foreignKey">child_no</span></span>
@@ -397,6 +399,15 @@ and get the year from the reference instead.</span>
 <div class="table">
 <A NAME="person"><span class="table">person</span></A>
 <p class="tableDesc">Data enterers, authorizers, etc.  Basically, everyone who can log into the site. </p>
+
+<p class="field">
+<span class="fieldName">name</span>
+</p>
+
+<p class="field">
+<span class="fieldName">password</span>
+</p>
+
 </div>
 
 
