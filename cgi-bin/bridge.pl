@@ -2130,6 +2130,7 @@ sub processEnterCollectionForm {
     print $hbo->populateHTML('collection_display_fields', \@row, \@fields);
     print $hbo->populateHTML('collection_display_buttons', \@row, \@fields);
     print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
+	#print qq|<p><center><b><a href="$exec_url?action=displayEnterCollPage">Enter another collection with the same reference</a></b></center>|;
  
 	print &stdIncludes ("std_page_bottom");
 }
@@ -2711,9 +2712,15 @@ sub processEditOccurrences {
 	my $subgnew_names_ref = $all_params{'subgenus_name'};
 	my $snew_names_ref = $all_params{'species_name'};
 	# get all genus names in order to check for a new name
-	push(@gnew_names, PBDBUtil::newTaxonNames($dbh,$gnew_names_ref,'genus'));
-	push(@subgnew_names, PBDBUtil::newTaxonNames($dbh,$subgnew_names_ref,'subgenus'));
-	push(@snew_names, PBDBUtil::newTaxonNames($dbh,$snew_names_ref,'species'));
+	if($gnew_names_ref){
+		push(@gnew_names, PBDBUtil::newTaxonNames($dbh,$gnew_names_ref,'genus'));
+	}
+	if($subgnew_names_ref){
+		push(@subgnew_names, PBDBUtil::newTaxonNames($dbh,$subgnew_names_ref,'subgenus'));
+	}
+	if($snew_names_ref){
+		push(@snew_names, PBDBUtil::newTaxonNames($dbh,$snew_names_ref,'species'));
+	}
 
 	# list of required fields
 	my @required_fields = ("authorizer", "enterer", "collection_no", "genus_name", "species_name", "reference_no");
