@@ -388,7 +388,7 @@ sub assignGenera	{
 
 
 	 # get basic counts describing lists and their contents
-		for $collno (1..$#lastocc)	{ #FOO
+		for $collno (1..$#lastocc+1)	{
 			$xx = $lastocc[$collno];
 			while ($xx > 0)	{
 				$nsp = 1;
@@ -413,14 +413,8 @@ sub assignGenera	{
 				$xx = $stone[$xx];
 			}
 		}
-	
-	# free some variables
-		@lastocc = ();
-		@occs = ();
-		@stone = ();
-		@abund = ();
-	
-	# compute median richness in each chron
+
+	# compute median richness of lists in each chron
 	for $i (1..$chrons)	{
 		@temp = ();
 		for $j (1..$listsinchron[$i])	{
@@ -434,18 +428,18 @@ sub assignGenera	{
 	
 	# compute sum of (squared) richnesses across lists
 	if (($samplingmethod == 1) || ($samplingmethod == 5))	{
-		for $i (1..$#occsinlist)	{
+		for $i (1..$#occsinlist+1)	{
 			$usedoccsinchron[$chid[$i]] = $usedoccsinchron[$chid[$i]] + $occsinlist[$i];
 		}
 	}
 	elsif ($samplingmethod == 3)	{
-		for $i (1..$#occsinlist)	{
+		for $i (1..$#occsinlist+1)	{
 			if ($occsinlist[$i] <= $q->param('samplesize'))	{
 				$usedoccsinchron[$chid[$i]] = $usedoccsinchron[$chid[$i]] + $occsinlist[$i];
 			}
 		}
 	}
-	for $i (1..$#occsinlist)	{
+	for $i (1..$#occsinlist+1)	{
 		if (($samplingmethod != 4) ||
 				($occsinlist[$i]**2 <= $q->param('samplesize')))	{
 			$occsinchron2[$chid[$i]] = $occsinchron2[$chid[$i]] + $occsinlist[$i]**2;
@@ -456,6 +450,9 @@ sub assignGenera	{
 	if ( ! open PADATA,">$OUTPUT_DIR/presences.txt" ) {
 		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/presences.txt<BR>$!" );
 	}
+
+	# compute sampled diversity, range through diversity, originations,
+	#  extinctions, singletons and doubletons (Chao l and m)
 	print PADATA "genus\ttotal occs";
 	for $i (reverse 1..$chrons)	{
 		print PADATA "\t$chname[$i]";
@@ -519,6 +516,51 @@ sub assignGenera	{
 		}
 		print FOOTE "\n";
 	}
+
+	# compute conjunction alpha
+	# this is the "thanks Jack" or "July 4th" equation; it is based on
+	#  my c. 1993 equation setting beta diversity = inverse of density
+	#  of conjunction matrix and Whittaker's alpha = gamma / beta
+	for my $collno (1..$#lastocc+1)	{
+	# need to have a temporary taxonomic list
+		my @temp = ();
+		my $xx = $lastocc[$collno];
+		while ($xx > 0)	{
+			push @temp , $occs[$xx];
+			$xx = $stone[$xx];
+		}
+	# go through the list computing conjunctions
+		for my $i ( 1..$#temp )	{
+			for my $j ( 0..$i-1 )	{
+				if ( $temp[$i] > $temp[$j] )	{
+					$conjunct{$chid[$collno]}{$temp[$i]."-".$temp[$j]}++;
+				} else	{
+					$conjunct{$chid[$collno]}{$temp[$i]."-".$temp[$j]}++;
+				}
+			}
+		}
+	}
+	# go through the bins finding the number of conjunctions and
+	#  then computing conjunction alpha
+	for my $chron ( 1..$chrons )	{
+		my @temp = keys %{$conjunct{$chron}};
+	# conjunction beta is the number of taxon pairs (size of conjunction
+	#  matrix) divided by the number of conjunctions
+		my $nconj = $#temp + 1;
+		if ( $nconj > 0 )	{
+			my $g = $richness[$chron];
+	# conjunction alpha is gamma over beta
+	# beta = g/(((g^2 - g) / 2)/c) , so this reduces:
+	#   g/(((g^2 - g) / 2)/c) = 2g/(c(g^2 - g)) = 2c/(g - 1)
+			$conjalpha[$chron] = 2 * $nconj / ($g - 1);
+		}
+	}
+
+	# free some variables
+	@lastocc = ();
+	@occs = ();
+	@stone = ();
+	@abund = ();
 
 }
 
@@ -809,6 +851,7 @@ sub printResults	{
 			print "<td class=small align=center valign=top><b>Specimens</b> ";
 		}
 		print "<td class=small align=center valign=top><b>Mean<br>richness</b> <td class=small align=center valign=top><b>Median<br>richness</b> ";
+		print "<td class=small align=center valign=top><b>Conjunction<br>alpha</b> ";
 		print TABLE "Bin,Bin name,Sampled genera,Range-through genera,Boundary-crosser genera,";
 		print TABLE "First appearances,Origination rate,Last appearances,Extinction rate,Singleton genera,";
 		if ($samplingmethod != 5)	{
@@ -817,7 +860,7 @@ sub printResults	{
 		else	{
 			print TABLE "$listorfm,Specimens,";
 		}
-		print TABLE "Mean richness,Median richness,Base (Ma),Midpoint (Ma)\n";
+		print TABLE "Mean richness,Median richness,Conjunction alpha,Base (Ma),Midpoint (Ma)\n";
 	
 		for $i (1..$chrons)	{
 			if ($rangethrough[$i] > 0 && $listsinchron[$i] > 0)	{
@@ -856,6 +899,7 @@ sub printResults	{
 				}
 				printf "<td class=small align=center valign=top>%.1f ",$occsinchron[$i]/$listsinchron[$i];
 				printf "<td class=small align=center valign=top>%.1f ",$median[$i];
+				printf "<td class=small align=center valign=top>%.1f ",$conjalpha[$i];
 	
 				print TABLE $chrons - $i + 1;
 				print TABLE ",$chname[$i]";
@@ -885,6 +929,7 @@ sub printResults	{
 				}
 				printf TABLE ",%.1f",$occsinchron[$i]/$listsinchron[$i];
 				printf TABLE ",%.1f",$median[$i];
+				printf TABLE ",%.1f",$conjalpha[$i];
 				printf TABLE ",%.1f",$basema{$chname[$i]};
 				printf TABLE ",%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
 				print "<p>\n";
