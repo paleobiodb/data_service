@@ -29,6 +29,9 @@ use TimeLookup;
 use Ecology;
 use PrintHierarchy;
 use SQLBuilder;
+
+use TaxonHierarchy;
+
 use Debug;
 use Globals;
 
@@ -4724,45 +4727,93 @@ sub displayTaxonomySearchForm	{
 }
 
 # JA 17.8.02
+# edited by rjp 1/22/2004 to fix bug where
+# original combination is not used when user searches for a recombination.
 sub processTaxonomySearch	{
-
-	my $taxon = $q->param('taxon_name');
-
+	my $taxonName = $q->param('taxon_name');
+	my $startingName = $taxonName;	# record to use after the while loop
+	
+	my $taxonObject = TaxonHierarchy->new();
+	
 	# Try to find this taxon in the authorities table
 
-	my $sql = "SELECT * FROM authorities WHERE taxon_name='" . $taxon . "'";
+	my $sql = "SELECT * FROM authorities WHERE taxon_name='" . $taxonName . "'";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 	my $matches = 0;
+	
+	my $subSQL;
+	my $subSTH;
+	
 	my $html;
+	my $originalWasRecombination = 0;  #not a recombination to start with
 	while ( my %authorityRow = %{$sth->fetchrow_hashref()} )	{
 		$matches++;
+		
+		my $taxonNum = $authorityRow{'taxon_no'};
+		
+		$taxonObject->setWithTaxonNumber($taxonNum);
+		
+		# now find the original combination of this taxon, and use that.
+		my $originalCombination = $taxonObject->originalCombination();
+		
+		# record if the original was a recombination or not
+		if ($originalCombination != $taxonNum) {
+			$originalWasRecombination = 1;
+			
+			# note, this is a bit of a hack, but works okay.
+			# if the taxon was a recombination, then select * on the original
+			# taxon combination and set %authorityRow to that so the 
+			# call to formatAuthorityLine() will work properly.
+			$subSQL = "SELECT * FROM authorities WHERE taxon_no = " . $originalCombination . "";
+			$subSTH = $dbh->prepare( $subSQL ) || die ( "$subSQL<hr>$!" );
+			$subSTH->execute();
+			%authorityRow = %{$subSTH->fetchrow_hashref()};
+		}
+		
+			
+		# set our object to the original combination taxon.
+		$taxonObject->setWithTaxonNumber($originalCombination);  
+	
+		# get the name of the original combination
+		$taxonName = $taxonObject->taxonName();
+	
 		$html .= "<tr><td><input type=radio name=taxon_no value=";
-		$html .= $authorityRow{'taxon_no'};
+		$html .= $originalCombination;
+		
 		# Check the button if this is the first match, which forces
 		#  users who want to create new taxa to check another button
 		if ( $matches == 1 )	{
 			$html .= " checked";
 		}
+		
 		$html .= "> </td><td>";
-		$html .= &formatAuthorityLine( \%authorityRow );
+		
+		$html .= formatAuthorityLine( \%authorityRow );
 		# Print the name
 		$html .= "</td></tr>\n";
 	}
 	$sth->finish();
 
+	if ($originalWasRecombination) {
+		# prepend a note to the html
+		$html = "<i><FONT SIZE=-1>(\"$startingName\" is a recombination)</FONT></i><BR><BR>" . $html;
+	}
+	
 	# If there were no matches, present the entry form immediately
 	if ( $matches == 0 )	{
-		&displayTaxonomyEntryForm();
+		displayTaxonomyEntryForm();
 	}
 	# Otherwise, print a form so the user can pick the taxon
+	
+	
 	else	{
-		print &stdIncludes ("std_page_top");
+		print stdIncludes ("std_page_top");
 		print "<center>\n";
-		print "<h3>Which \"$taxon\" do you mean?</h3>\n";
+		print "<h3>Which \"$taxonName\" do you mean?</h3>\n";
 		print "<form method=\"POST\" action=\"bridge.pl\">\n";
 		print "<input type=hidden name=\"action\" value=\"displayTaxonomyEntryForm\">\n";
-		print "<input type=hidden name=\"taxon_name\" value=\"$taxon\">\n";
+		print "<input type=hidden name=\"taxon_name\" value=\"$taxonName\">\n";
 		print "<table>\n";
 		print $html;
 		if ( $matches == 1 )	{
@@ -4773,7 +4824,7 @@ sub processTaxonomySearch	{
 		print "</table><p>\n";
 		print "<input type=submit value=\"Submit\">\n</form>\n";
 		print "</center>\n";
-		print &stdIncludes ("std_page_bottom");
+		print stdIncludes ("std_page_bottom");
 	}
 
 }
