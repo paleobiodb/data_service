@@ -67,8 +67,6 @@ sub errorMessage {
 		$count .= " errors";	
 	}
 	
-	Debug::dbPrint("in errorMessage");
-	
 	my $errString = "<DIV class=\"errorMessage\">
 				<UL STYLE=\"text-align:left;\"><DIV class=\"errorTitle\">Please fix the following $count</DIV>" . 
 				$self->{errorString} . "</UL>
@@ -79,8 +77,12 @@ sub errorMessage {
 	}
 	
 	$errString .= "</DIV>";
-		
-	return $errString;
+	
+    if ($self->{count} > 0) {
+	    return $errString;
+    } else {
+        return '';
+    }
 }
 
 # pass this method another Error object, and it will append the
