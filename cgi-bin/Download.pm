@@ -8,7 +8,7 @@ use Globals;
 use DBTransactionManager;
 
 # Flags and constants
-my $DEBUG=1;			# The debug level of the calling program
+my $DEBUG=0;			# The debug level of the calling program
 my $dbh;				# The database handle
 my $dbt;				# The new and improved database object
 my $q;					# Reference to the parameters
