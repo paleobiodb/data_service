@@ -1809,7 +1809,7 @@ sub buildTaxonomicList {
 			my @occrow = @{$rowref};
 
 			$formattedrow = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
-			$formattedrow .= "<tr>\n\t<td colspan='6'>".getReidHTMLTableByOccNum(pop(@occrow),$collection_refno)."</td>\n</tr>";
+			$formattedrow .= getReidHTMLTableByOccNum(pop(@occrow),$collection_refno);
 			# if there's a link in here somewhere, there must be a new ref
 			#   (kludgy, but saves the trouble of passing newreference back
 			#   and forth)
@@ -1871,30 +1871,25 @@ sub getReidHTMLTableByOccNum {
 			"       subgenus_name, ".
 			"       species_reso, ".
 			"       species_name, ".
+			"       comments, ".
 			"       reference_no ".
 			"  FROM reidentifications ".
 			" WHERE occurrence_no=$occNum";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
   
+	my @fieldNames = @{$sth->{NAME}};
 	@rows = @{$sth->fetchall_arrayref()};
 
 	my $retVal = "";
 	foreach my $rowRef ( @rows ) {
 		my @row = @{$rowRef};
-    
-		$retVal .= "<tr>\n\t<td valign=top nowrap><font size=-1><i>&nbsp; &nbsp &nbsp &nbsp =";
-		$reidrefno = pop @row;
-		$retVal .= join ( " ", @row) . "</i></font></td>\n";
-		if ($reidrefno != $collection_refno)	{
-			$retVal .= "<td valign=top nowrap><font size=-1>";
-			$retVal .= &buildReference($reidrefno,"list")."</font></td>\n";
-		}
-		$retVal .= "</tr>";
+		# format genus_name
+		$row[1] = "<font size=-1><i>&nbsp; &nbsp &nbsp &nbsp =".$row[1]."</i></font>";
+		# format the reference
+		$row[-1] = buildReference($row[-1],"list");
+		$retVal .= $hbo->populateHTML("taxa_display_row", \@row,\@fieldNames);
 	}
-
-	# Only return a table if there is one
-	if ( $retVal ) { $retVal = "<table>$retVal</table>"; }
 
 	return $retVal;
 }
