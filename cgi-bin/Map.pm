@@ -736,7 +736,19 @@ sub mapDrawMap	{
 			! $q->param('genus_name') ) 
 		) {
 
-      ($x1,$y1,$hemi) = $self->getCoords($coll{'lngdeg'},$coll{'latdeg'});
+      $lngoff = $coll{'lngdeg'};
+      if ( $lngoff > 0 )	{
+        $lngoff = $coll{'lngdeg'} + 0.5;
+      } elsif ( $lngoff < 0 )	{
+        $lngoff = $coll{'lngdeg'} - 0.5;
+      }
+      $latoff = $coll{'latdeg'};
+      if ( $latoff > 0 )	{
+        $latoff = $coll{'latdeg'} + 0.5;
+      } elsif ( $latoff < 0 )	{
+        $latoff = $coll{'latdeg'} - 0.5;
+      }
+      ($x1,$y1,$hemi) = $self->getCoords($lngoff,$latoff);
 
       if ( $x1 > 0 && $y1 > 0 && $x1-$maxdotsize > 0 && 
 			$x1+$maxdotsize < $width &&
