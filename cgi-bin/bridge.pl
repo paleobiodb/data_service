@@ -653,7 +653,7 @@ sub displayMapResults {
 sub displayDownloadForm {
 	print &stdIncludes ( "std_page_top" );
 	my $auth = $q->cookie('authorizer');
-	my $html = $hbo->populateHTML( 'download_form', ['',$auth,''], [ 'country','%%authorizer%%','environment' ] );
+	my $html = $hbo->populateHTML( 'download_form', [ '', '', $auth, '' ], [ 'research_group', 'country','%%authorizer%%','environment' ] );
 	buildAuthorizerPulldown ( \$html );
 	$html =~ s/<OPTION value=''>Select authorizer\.\.\./<option value='All'>All/m;
 	print $html;
