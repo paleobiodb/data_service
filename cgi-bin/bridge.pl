@@ -5535,7 +5535,7 @@ sub RefQuery	{
 		if ( $pubyr ) { $where = &buildWhere ( $where, "pubyr='$pubyr'" ); }
 		if ( $reftitle ) { $where = &buildWhere ( $where, " ( reftitle LIKE '%$reftitle%' OR reftitle LIKE '$reftitle%' )" ); }
 		if ( $refno ) { $where = &buildWhere ( $where, "reference_no=$refno" ); }
-		if ( $q->param('enterer') ) { $where = &buildWhere ( $where, "authorizer='".$q->param('enterer')."'" ); }
+		if ( $q->param('enterer') ) { $where = &buildWhere ( $where, "enterer='".$q->param('enterer')."'" ); }
 		if ( $q->param('project_name') ) { $where = &buildWhere ( $where, "project_name='".$q->param('project_name')."'" ); }
 
 		# sort the results in any of multiple ways JA 26-27.7.02
