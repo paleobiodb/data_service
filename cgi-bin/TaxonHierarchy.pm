@@ -22,7 +22,22 @@ use fields qw(	taxonName
 # taxonName is the name of the original taxon the user set
 # taxonNumber is the number for the original taxon
 # taxaHash is a hash of taxa numbers and ranks.
-							
+				
+				
+# includes the following public methods
+# -------------------------------------
+#
+# (void) setWithTaxonNumber(int number)
+# (void) setWithTaxonName(string name)
+#
+# (int) taxonNumber()
+# (string) rank()
+#
+# (string) nameForRank(string rank)
+# (int) numberForRank(string rank)
+# (int) originalCombination
+# (string) listOfChildren()
+#
 
 sub new {
 	my $class = shift;
@@ -176,6 +191,7 @@ sub taxonName {
 	return $self->{taxonName};	
 }
 
+
 # returns the rank of the taxon this object represents,
 # for example, class, family, order, genus, species, etc.
 sub rank {
@@ -187,6 +203,7 @@ sub rank {
 
 	return $r;
 }
+
 
 # pass this a rank such as "family", "class", "genus", etc. and it will
 # return the name of the taxon at that rank as determined by the taxaHash.
@@ -357,6 +374,50 @@ sub createTaxaHash {
 }
 
 
+
+# Returns a list of the "children" to this taxon, ie, the ones
+# right below it in ranking.  Note, for now, this just looks at the opinions and
+# authorities table, so if a taxon exists in an occurrence, but doesn't exist in the
+# authorities table, it won't be listed.  Also, note that for children of a genus 
+# (ie, species), it will also do a pattern match for the taxon_name in the authorities
+# table so that taxa will be included in the list for which opinions don't exist.  Ie,
+# if a taxon exists in the authorities table, but doesn't have any opinions about it,
+# then it will still be listed.
+#
+# For example, if the taxon is a Genus, it will return a list of species.
+# 
+# The list is formatted as HTML so each taxon is clickable. 
+sub listOfChildren {
+	my TaxonHierarchy $self = shift;
+
+	my $sql = $self->getSQLBuilder();
+	my $result;
+	my $rank = $self->rank(); # rank of the parent taxon
+	my $tn = $self->{taxonNumber};  # number of the parent taxon
+	
+	$sql->setSQLExpr("SELECT DISTINCT(child_no), taxon_name, taxon_rank
+			   		FROM opinions, authorities
+					WHERE parent_no = $tn 
+					AND status = 'belongs to' AND child_no = taxon_no 
+					ORDER BY taxon_name");
+	
+	my $results = $sql->allResultsArrayRef();
+	
+	foreach my $r (@$results) {
+		$result .= $r->[1] . ", ";	
+	}
+	
+	# if the parent rank is a genus, then we will also look through the authorities
+	# table for taxa starting with the genus name, but possibly which don't have
+	# opinions about them.
+	if ($rank eq 'genus') {
+			
+	}
+	
+	Debug::dbPrint(@$results . " children");
+	
+	return $result;
+}
 
 
 

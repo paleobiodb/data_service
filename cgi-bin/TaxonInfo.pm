@@ -1246,10 +1246,22 @@ sub displayTaxonClassification{
 			# BAIL
 			last CHILDREN;
 		}
-		$sql = "SELECT DISTINCT(child_no),taxon_name, taxon_rank ".
-			   "FROM opinions,authorities ".
-			   "WHERE parent_no=".$quickie[0]->{taxon_no}.
-			   " AND status='belongs to' AND child_no=taxon_no ".
+		
+		
+		# rjp testing
+		
+		#my $taxHigh = TaxonHierarchy->new();
+		#$taxHigh->setWithTaxonNumber($quickie[0]->{taxon_no});
+		#Debug::dbPrint("children: \n" . $taxHigh->listOfChildren());
+		# end rjp testing
+		
+		
+		
+		
+		$sql = "SELECT DISTINCT(child_no), taxon_name, taxon_rank ".
+			   "FROM opinions, authorities ".
+			   "WHERE parent_no = ".$quickie[0]->{taxon_no}.
+			   " AND status = 'belongs to' AND child_no = taxon_no ".
 			   "ORDER BY taxon_name";
 		PBDBUtil::debug(1,"children sql: $sql");
 		@quickie = @{$dbt->getData($sql)};
