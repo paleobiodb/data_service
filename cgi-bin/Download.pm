@@ -189,7 +189,7 @@ sub retellOptions {
 	}
 	$stratscales =~ s/^,//;
 
-	$html .= $self->retellOptionsRow ( "Temporal scale of collections", $stratscales );
+	$html .= $self->retellOptionsRow ( "Stratigraphic scale of collections", $stratscales );
 
 	$html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
 	$html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
@@ -701,7 +701,7 @@ sub getOccurrencesWhereClause {
 	}
 	
 	$where->addWhereItem(" occurrences.species_name!='indet.' ") if $q->param('indet') eq 'NO';
-	$where->addWhereItem(" occurrences.genus_reso not like '%informal%' ") if $q->param('informal') eq 'NO';
+	$where->addWhereItem(" (occurrences.genus_reso NOT LIKE '%informal%' OR occurrences.genus_reso IS NULL) ") if $q->param('informal') eq 'NO';
 
 	return $where->whereExpr();
 }
