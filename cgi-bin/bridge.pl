@@ -811,33 +811,13 @@ sub submitAuthorityForm {
 }
 
 
-# rjp, 3/2004
-# displays a list of opinions for the taxon
-# defined by taxon_no in the current CGI ($q) object.
-sub displayOpinionList {
-	my $taxon = Taxon->new(\%GLOBALVARS);
-		
-	# If the taxon_no from their choice is > 0, then we can
-	# set the taxon object with the taxon_no.  However, if it's
-	# equal to -1, that means that they choose the "No not the one" option
-	# at the bottom, and they want to add a new taxon, so just set the name,
-	# not the number.
-	#
-	# Lastly, if there's only a name, but not a number, then set
-	# the taxon with the name and look up the number.
-	
-	if ($q->param('taxon_no') > 0) {
-		$taxon->setWithTaxonNumber($q->param('taxon_no'));
-	} elsif ($q->param('taxon_name')) {
-		$taxon->setWithTaxonName($q->param('taxon_name'));
-	}
-		
+# Changed from displayOpinionList to just be a stub for function in Opinion module
+# PS 01/24/2004
+sub startDisplayOpinionChoiceForm{
 	print stdIncludes("std_page_top");
-	$taxon->displayOpinionChoiceForm();	
+    Opinion::displayOpinionChoiceForm($dbt,$s,$q);
 	print stdIncludes("std_page_bottom");
-	
 }
-
 
 # rjp, 3/2004
 #
@@ -1102,7 +1082,7 @@ sub displayMapResults {
 
 	print stdIncludes("std_page_top" );
 
-	my $m = Map::->new( $dbh, $q, $s, $dbt );
+	my $m = Map::->new( $dbh, $q, $s, $dbt, $hbo);
 
 	if ($m) { Debug::dbPrint("made new map"); }
 
@@ -1139,7 +1119,7 @@ sub displayDownloadResults {
 
 	print stdIncludes( "std_page_top" );
 
-	my $m = Download->new( $dbh, $dbt, $q, $s );
+	my $m = Download->new( $dbh, $dbt, $q, $s, $hbo );
 	$m->buildDownload( );
 
 	print stdIncludes("std_page_bottom");
@@ -1492,11 +1472,11 @@ sub displayRefResults {
 			print "<table border=0 cellpadding=0 cellspacing=0>";
 			# Now the pubyr:
 			# This spacing is to match up with the collections, below
-			if(${@rows[0]}[19]){
+			if(@{$rows[0]}[19]){
 				print "<tr><td>Publication type:&nbsp;<i>".${@rows[0]}[19]."</i></font></td></tr>";
 			}
 			# Now the comments:
-			if(${@rows[0]}[20]){
+			if(@{$rows[0]}[20]){
 				print "<tr><td>Comments:&nbsp;<i>".${@rows[0]}[20]."</i></font></td></tr>";
 			}
 			# getCollsWithRef creates a new <tr> for the collections.
@@ -1505,6 +1485,7 @@ sub displayRefResults {
 			# it in a subtable.
 			$refColls =~ s/^<tr>\n<td colspan=\"3\">&nbsp;<\/td>/<tr>/;
 			print $refColls;
+            print qq|<tr><td align=left><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=|.@{$rows[0]}[3].qq|">View taxonomic names and opinions</a></td></tr>|;
 			print "</table>\n";
 			print "</table><p>\n";
 			print stdIncludes( "std_page_bottom" );
@@ -1538,6 +1519,13 @@ sub displayRefResults {
 			if ( $row + 30 > $q->param('refsSeen') )	{
 				# Don't show radio buttons if Guest
 		   		print &makeRefString( $drow, ( ! $s->guest( ) ), $row, $numRows );
+
+                if ( $row % 2 != 0 ) {
+                    print "<tr class=\"darkList\">";
+                } else {
+                    print "<tr>";
+                }
+                print qq|<td colspan=3>&nbsp;</td><td><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=|.$rowref->[3].qq|">View taxonomic names and opinions</a></td></tr>|;
 			}
 			$row++;
 		}
@@ -2445,6 +2433,7 @@ sub processCollectionsSearchForAdd	{
 # an appropriate SQL query.
 sub processCollectionsSearch {
 	my $in_list = shift;  # for taxon info script
+    my @errors;
 	
 	#Debug::dbPrint("inlist = $in_list\n");
 
@@ -2523,10 +2512,25 @@ sub processCollectionsSearch {
 					$q->param("taxon_rank") eq "Higher-taxon"){
 										
 					if ($in_list eq "") {
+                        $in_list = '-1';
 						dbg("RE-RUNNING TAXONOMIC SEARCH in bridge<br>");
 						# JA: Muhl switched to recurse call, I'm switching back
 						#  because I'm not maintaining recurse
-						$in_list = PBDBUtil::taxonomic_search($q->param('genus_name'),$dbt,'','return taxon_nos');
+                        @taxon_nos = TaxonInfo::getTaxonNos($dbt,$q->param('genus_name'));
+                        if (scalar(@taxon_nos)  > 1) {
+                            # taxon is a homonym... make sure we get all versions of the homonym
+                            my %taxon_nos_unique = ();
+                            foreach $taxon_no (@taxon_nos) {
+                                my @all_taxon_nos = PBDBUtil::taxonomic_search('',$dbt,$taxon_no,'return taxon nos');
+                                # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
+                                @taxon_nos_unique{@all_taxon_nos} = ();
+                            }
+                            $in_list = join(", ", keys %taxon_nos_unique);
+                        } elsif (scalar(@taxon_nos) == 1) {
+						    $in_list = PBDBUtil::taxonomic_search('',$dbt,$taxon_nos[0],'return taxon_nos');
+                        }
+                                                    
+                        
                         # my $name = $q->param('genus_name');
                         # $in_list = `./recurse $name`;
 					}
@@ -2570,7 +2574,7 @@ sub processCollectionsSearch {
 	# if time intervals were requested, get an in-list
 	my @timeinlist;
 	my $listsintime;
-	if ( $q->param('max_interval') )	{
+	if ( $q->param('max_interval') || $q->param('min_interval'))	{
         #These seeminly pointless four lines are necessary if this script is called from Download or whatever.
         # if the $q->param($var) is not set (undef), the parameters array passed into processLookup doesn't get
         # set properly, so make sure they can't be undef
@@ -2578,6 +2582,12 @@ sub processCollectionsSearch {
         my $max = ($q->param('max_interval') || '');
         my $eml_min = ($q->param('eml_min_interval') || '');
         my $min = ($q->param('min_interval') || '');
+        if ($max =~ /[a-zA-Z]/ && !Validation::checkInterval($dbt,$eml_max,$max)) {
+            push @errors, "There is no record of $eml_max $max in the database";
+        }
+        if ($min =~ /[a-z][A-Z]/ && !Validation::checkInterval($dbt,$eml_min,$min)) {
+            push @errors, "There is no record of $eml_min $min in the database";
+        }
  		my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, $eml_max,$max,$eml_min,$min);
  		@timeinlist = @{$inlistref};
 		$timesearch = "Y";
@@ -2586,6 +2596,15 @@ sub processCollectionsSearch {
 		$q->param(eml_min_interval => '');
 		$q->param(min_interval => '');
 	}
+
+    # No more errors possible at this point, print them if we have them
+    if (@errors) {
+        print main::stdIncludes("std_page_top");
+        PBDBUtil::printErrors(@errors);
+        print main::stdIncludes("std_page_bottom");
+        exit;
+    }
+                                        
 
 	# Get the database metadata
 	my $sqlLiteral = "SELECT * FROM collections WHERE collection_no=0";
@@ -2688,30 +2707,34 @@ IS NULL))";
 	
 	# Handle lithology and lithology adjectives
 	if ( $q->param('lithadj'))	{
-		#my $lithadjName = $dbh->quote($wildcardToken . $q->param('lithadj') . $wildcardToken);
-		#push(@terms, "(lithadj$comparator" . $lithadjName . ")");
         push(@terms, qq|FIND_IN_SET(|.$dbh->quote($q->param('lithadj')).qq|,lithadj)|);
 		$q->param('lithadj' => '');
 	}
 		
-	#if ( $q->param('lithology1'))	{
-	#	my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology1') . $wildcardToken);
-	#	push(@terms, "(lithology1$comparator" . $lithologyName . ")");
-	#	$q->param('lithology1' => '');
-	#}
-	
 	if ( $q->param('lithadj2'))	{
-		#my $lithadjName = $dbh->quote($wildcardToken . $q->param('lithadj2') . $wildcardToken);
-		#push(@terms, "(lithadj2$comparator" . $lithadjName . ")");
         push(@terms, qq|FIND_IN_SET(|.$dbh->quote($q->param('lithadj2')).qq|,lithadj2)|);
 		$q->param('lithadj2' => '');
 	}
-		
-	#if ( $q->param('lithology2'))	{
-	#	my $lithologyName = $dbh->quote($wildcardToken . $q->param('lithology2') . $wildcardToken);
-	#	push(@terms, "(lithology2$comparator" . $lithologyName . ")");
-	#	$q->param('lithology2' => '');
-	#}
+
+    # Maybe special environment terms
+    if ( $q->param('environment')) {
+        my $environment;
+        if ($q->param('environment') =~ /General/) {
+            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_general'}});
+        } elsif ($q->param('environment') =~ /Terrestrial/) {
+            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_terrestrial'}});
+        } elsif ($q->param('environment') =~ /Siliciclastic/) {
+            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_siliciclastic'}});
+        } elsif ($q->param('environment') =~ /Carbonate/) {
+            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_carbonate'}});
+        } else {
+            $environment = $dbh->quote($q->param('environment'));
+        }
+        if ($environment) {
+            push(@terms, qq| collections.environment IN ($environment)|);
+        }
+        $q->param('environment'=>'');
+    }
 		
 	# research_group is now a set -- tone 7 jun 2002
 	my $resgrp = $q->param('research_group');
@@ -2783,6 +2806,7 @@ IS NULL))";
 		push(@terms, "(collections.lithology1 $comparator $val
 					   OR collections.lithology2 $comparator $val)"); 
 	}
+
 	
 	#Debug::dbPrint("terms = @terms");
 	
@@ -6277,37 +6301,47 @@ sub processNewReIDs {
 # Called when the user searches for a taxon from the search_taxonomy_form. 
 #
 # Edited by rjp 1/22/2004, 2/18/2004, 3/2004
+# Edited by PS 01/24/2004, accept reference_no instead of taxon_name optionally
 #
 sub processTaxonomySearch	{
+    my $suppressHeaderFooter = shift || 0;
 	my $taxonName = $q->param('taxon_name');
+    my $referenceNo = $q->param('reference_no');
 		
 	# check for proper spacing of the taxon..
 	my $errors = Errors->new();
 	$errors->setDisplayEndingMessage(0); 
-	
-	if ( (Validation::looksLikeBadSubgenus($taxonName)) ||
-		 ((Validation::taxonRank($taxonName) eq 'invalid')) ) {
-		$errors->add("Ill-formed taxon.  Check capitalization and spacing.");
-	}
+
+    if ($taxonName) {
+        if ( (Validation::looksLikeBadSubgenus($taxonName)) ||
+             ((Validation::taxonRank($taxonName) eq 'invalid')) ) {
+            $errors->add("Ill-formed taxon.  Check capitalization and spacing.");
+        }
+    } elsif (!$referenceNo) {
+        $errors->add("No taxon name or reference no passed.");
+    }
+    
 		
 	if ($errors->count()) {
-		print stdIncludes("std_page_top");
 		print $errors->errorMessage();
 		print stdIncludes("std_page_bottom");
 		return;
 	}
 	
-	
-	
-	my $startingName = $taxonName;	# record to use after the while loop
-	
 	my $taxonObject = Taxon->new(\%GLOBALVARS);
 	
 	# Try to find this taxon in the authorities table
 
-	my $sql = "SELECT * FROM authorities WHERE taxon_name = ?";
+    my ($sql, $sth);
+    $sql = "SELECT * FROM authorities WHERE ";
+    if ($taxonName) {
+	    $sql .= "taxon_name=".$dbh->quote($taxonName);
+    } else {
+        $sql .= "reference_no=".$dbh->quote($referenceNo);
+        $sql .= " ORDER BY taxon_name";
+    }
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute($taxonName);
+	$sth->execute();
 	my $matches = 0;
 	
 	my $subSQL;
@@ -6317,12 +6351,13 @@ sub processTaxonomySearch	{
 	
 	my $html;
 	my $originalWasRecombination = 0;  # not a recombination to start with
-	
+
+    my $taxonNum;
 	while ( my %authorityRow = %{$sth->fetchrow_hashref()} ) {
 		$matches++;
 		
-		my $taxonNum = $authorityRow{'taxon_no'};
-		
+		$taxonNum = $authorityRow{'taxon_no'};
+	    my $startingName = $authorityRow{'taxon_name'};	# record to use after the while loop
 		$taxonObject->setWithTaxonNumber($taxonNum);
 		
 		# now find the original combination of this taxon, and use that.
@@ -6362,81 +6397,73 @@ sub processTaxonomySearch	{
 		$html .= "> </td><td>";
 		
 		$html .= formatAuthorityLine( \%authorityRow );
-		# Print the name
-		$html .= "</td></tr>\n";
-	}
-	$sth->finish();
+        if ($originalWasRecombination) {
+            # prepend a note to the html
+            $html .= " <i><FONT SIZE=-1>(recombination of \"$startingName\")</FONT></i>";
+        }
+        # Print the name
+        $html .= "</td></tr>\n";
+    }
+    $sth->finish();
 
-	if ($originalWasRecombination) {
-		# prepend a note to the html
-		$html = "<i><FONT SIZE=-1>(\"$startingName\" is a recombination)</FONT></i><BR><BR>" . $html;
-	}
-	
-	# If there were no matches, present the new taxon entry form immediately
-	if ( $matches == 0 )	{
-		
-		my $action;
-		
-		if ($goal eq 'authority') {
-			$action = "displayAuthorityForm";
-		} elsif ($goal eq 'opinion')  {
-			# we can't let them enter an opinion about a taxon which doesn't
-			# yet exist.. So give them an error message.
-			print stdIncludes("std_page_top");
-			print "<DIV class=\"warning\">The taxon '" . $taxonName . "' doesn't exist in our database.  You can't enter an opinion about a nonexistent taxon.  Please go back and add an authority record for this taxon before adding an opinion.</DIV>"; 
-			print stdIncludes("std_page_top");
-			
-			return;
-
-
-			#$action = "displayOpinionList";
-		}
-		
-		# if matches == 0, then they're adding a new taxon,
-		# so we should always prompt them for a reference_no.
-		# unless the skip_ref_check paramter is set.	
-			
-		my $toQueue = "action=$action&skip_ref_check=1&taxon_name=$taxonName" . 
-		"&taxon_no=" . $q->param('taxon_no');
-		$s->enqueue( $dbh, $toQueue );
-	
-		$q->param( "type" => "select" );
-		displaySearchRefs("Please choose a reference before adding a new taxon" );
-			
-		return;
-		
-		
-		# if we make it to here, then they had a reference selected.
-		
-		#if ($goal eq 'authority') {
-		#	displayAuthorityForm();
-		#} elsif ($goal eq 'opinion')  {
-		#	displayOpinionList();
-		#}
-		
-	# rjp, 3/12/2004, note, we're not doing this yet because
-	# it would skip the display of homonyms:
-	# JA 19.4.04: I can't figure out Poling's reasoning, because $matches
-	#  must be > 1 if in fact there are homonyms, so I am uncommenting
-	#  the code
-	} elsif (($matches == 1) && ($goal eq 'opinion')) {
-	# for opinions, since we don't display the radio button with the add
-	# a new taxon option, we should take them directly to the opinion list
-	# if we only have one match.
-		displayOpinionList();
-		
+        
+    # If there were no matches, present the new taxon entry form immediately
+    if ( $matches == 0 )	{
+        my $action;
+        
+        if ($goal eq 'authority') {
+            $action = "displayAuthorityForm";
+            # if matches == 0, then they're adding a new taxon,
+            # so we should always prompt them for a reference_no.
+            # unless the skip_ref_check paramter is set.	
+                
+            my $toQueue = "action=$action&skip_ref_check=1&taxon_name=$taxonName" . 
+            "&taxon_no=" . $q->param('taxon_no');
+            $s->enqueue( $dbh, $toQueue );
+        
+            $q->param( "type" => "select" );
+            displaySearchRefs("Please choose a reference before adding a new taxon" );
+                
+            return;
+        } elsif ($goal eq 'opinion')  {
+            # we can't let them enter an opinion about a taxon which doesn't
+            # yet exist.. So give them an error message.
+            print "<DIV class=\"warning\">The taxon '" . $taxonName . "' doesn't exist in our database.  You can't enter an opinion about a nonexistent taxon.  Please go back and add an authority record for this taxon before adding an opinion.</DIV>"; 
+            print stdIncludes("std_page_top");
+            return;
+        } else {
+    		print "<h3>No taxa found</h3>\n<br>\n";
+        }
+        
+    # rjp, 3/12/2004, note, we're not doing this yet because
+    # it would skip the display of homonyms:
+    # JA 19.4.04: I can't figure out Poling's reasoning, because $matches
+    #  must be > 1 if in fact there are homonyms, so I am uncommenting
+    #  the code
+    } elsif (($matches == 1) && ($goal eq 'opinion')) {
+    # for opinions, since we don't display the radio button with the add
+    # a new taxon option, we should take them directly to the opinion list
+    # if we only have one match.
+        $q->param("taxon_no"=>$taxonNum);
+        print stdIncludes("std_page_top") unless $suppressHeaderFooter;
+        Opinion::displayOpinionChoiceForm($dbt,$s,$q);
+        print stdIncludes("std_page_bottom") unless $suppressHeaderFooter;
 	} else	{
 		# Otherwise, print a form so the user can pick the taxon
 		
-		print stdIncludes("std_page_top");
+	    print stdIncludes("std_page_top") unless $suppressHeaderFooter;
 		print "<center>\n";
-		print "<h3>Which '<i>" . $taxonName . "</i>' do you mean?</h3>\n<br>\n";
+        if ($q->param("taxonName")) { 
+    		print "<h3>Which '<i>" . $taxonName . "</i>' do you mean?</h3>\n<br>\n";
+        } else {
+    		print "<h3>Select a taxon to edit:</h3>\n<br>\n";
+        }
 		print "<form method=\"POST\" action=\"bridge.pl\">\n";
 		
-		if ($goal eq 'authority') {	
-			print "<input type=hidden name=\"action\" value=\"displayAuthorityForm\">\n";
+		if ($goal eq 'opinion') {
+			print "<input type=hidden name=\"action\" value=\"startDisplayOpinionChoiceForm\">\n";	
 		} else {
-			print "<input type=hidden name=\"action\" value=\"displayOpinionList\">\n";	
+			print "<input type=hidden name=\"action\" value=\"displayAuthorityForm\">\n";
 		}
 		
 		print "<input type=hidden name=\"taxon_name\" value=\"$taxonName\">\n";
@@ -6449,38 +6476,42 @@ sub processTaxonomySearch	{
 		# we only want to allow them to add a new taxon if they're trying to 
 		# edit an authority record.  It will screw things up if they try this with
 		# an opinion record.
-		if ($goal ne 'opinion') {
-			print "<tr><td align=\"right\"><input type=\"radio\" name=\"taxon_no\" value=\"-1\"></td>\n<td>";
-			
-			if ( $matches == 1 )	{
-				print "No, not the one above ";
-			} else	{
-				print "None of the above ";
-			}
-		
-			print "- create a <b>new</b> taxon record</i></td></tr>\n";
+		if ($goal eq 'authority') {
+            print "<tr><td align=\"right\"><input type=\"radio\" name=\"taxon_no\" value=\"-1\"></td>\n<td>";
+        
+            if ( $matches == 1 )	{
+                print "No, not the one above ";
+            } else	{
+                print "None of the above ";
+            }
+        
+            print "- create a <b>new</b> taxon record</i></td></tr>\n";
 		}
 		print "</table></td> </tr>\n";
 		
 		print "<tr><td align=\"center\" colspan=2>\n";
-		print "<p><input type=submit value=\"Submit\"></p>\n</form>\n<br>\n";
 
-		if ($goal ne 'opinion') {
-			print "<p align=\"left\"><span class=\"tiny\">You have a choice because there may be multiple biological species (e.g., a plant and an animal) with identical names.<br>\n";
+        if ($goal eq 'authority_edit_only') {
+		    print "<p><input type=submit value=\"Edit\"></p>\n</form>\n";
+        } else {
+		    print "<p><input type=submit value=\"Submit\"></p>\n</form>\n";
+        }
+
+		print "<p align=\"left\"><span class=\"tiny\">";
+		if ($goal ne 'authority_edit_only') {
+            print "You have a choice because there may be multiple biological species (e.g., a plant and an animal) with identical names.<br>\n";
+        }    
+		if ($goal eq 'authority')	{
 			print "Create a new taxon only if the old ones were named by different people in different papers.<br>\n";
-		} else	{
-			print "<p align=\"left\"><span class=\"tiny\">You have a choice because there are multiple biological species (e.g., a plant and an animal) with identical names.<br>\n";
 		}
-
 		print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n";
 
 		print "</td></tr>\n";
 		print "</table><p>\n";
 		
 		print "</center>\n";
-		print stdIncludes("std_page_bottom");
+	    print stdIncludes("std_page_bottom") unless $suppressHeaderFooter;
 	}
-
 }
 
 
@@ -6742,7 +6773,7 @@ sub displayTaxonomyEntryForm	{
 		$rank = "species";  # must be a species if it has a space in it.	
 	}
 	
-	
+
 	if ( $rank eq "species" ) {
 		# then it's a genus, species pair.
 		
@@ -8964,6 +8995,22 @@ sub buildReference {
 	}
 
 	return $reference;
+}
+
+# Displays taxonomic opinions and names associated with a reference_no
+# PS 10/25/2004
+sub displayTaxonomicNamesAndOpinions {
+    print stdIncludes( "std_page_top" );
+    $q->param("goal"=>"authority_edit_only");
+    $ref = Reference->new();
+    $ref->setWithReferenceNumber($q->param('reference_no'));
+    my $html = $ref->formatAsHTML();
+    $html =~ s/<b>\d+<\/b>//g; #Remove the reference_no
+    print "<center><h3>Showing taxonomic names and opinions that reference: ".$html."</h3></center><br>";
+
+    processTaxonomySearch(1);
+    Opinion::displayOpinionChoiceForm($dbt,$s,$q,1);
+    print stdIncludes("std_page_bottom");
 }
 
 # check for the presence of the nefarious V.J. Gupta
