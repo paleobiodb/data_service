@@ -136,7 +136,8 @@ for anything else (subgenus or higher), it should say:
 <!-- this should only be visible for species -->
 <TR><TD valign=top>
 <input type="radio" name="taxon_status" value="recombined as" %%taxon_status_recombined_as%%></TD>
-<TD colspan=2><b>Valid %%taxon_rank%%</b>, recombined into a different genus as  
+<TD colspan=2><b>Valid %%taxon_rank%%</b>, but recombined into a different genus.<br>
+New genus and species:<br>
 <input id="parent_taxon_name" name="parent_taxon_name" size="50" value="%%parent_taxon_name%%"><br>
 </TD></TR>
 %%END_OPTIONAL_species_only%%
@@ -145,7 +146,8 @@ for anything else (subgenus or higher), it should say:
 <!-- this should only be visible for subspecies -->
 <TR><TD valign=top>
 <input type="radio" name="taxon_status" value="recombined as" %%taxon_status_recombined_as%%></TD>
-<TD colspan=2><b>Valid %%taxon_rank%%</b>, recombined into a different species as  
+<TD colspan=2><b>Valid %%taxon_rank%%</b>, but recombined into a different species.<br>
+New genus, species, and subspecies:<br>
 <input id="parent_taxon_name" name="parent_taxon_name" size="50" value="%%parent_taxon_name%%"><br>
 </TD></TR>
 %%END_OPTIONAL_subspecies_only%%
