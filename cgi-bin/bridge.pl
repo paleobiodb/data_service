@@ -4637,6 +4637,9 @@ sub displayTaxonomyResults	{
 	} elsif ( $q->param('taxon_status') eq "invalid2" )	{
 		$q->param(status => $q->param('nomen') );
 	}
+	elsif($q->param('taxon_status') eq "no_opinion"){
+		$q->param(status => "");
+	}
 
 	# If any status has been recorded, retrieve the ID number
 	#  of the child and parent taxa
