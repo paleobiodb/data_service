@@ -1316,6 +1316,10 @@ sub doQuery {
 		} else{
 			$curLine = $self->formatRow(($collection_no, $genus_reso, $genusName, $reid_genus_reso, $reid_genus_name, @occs_row, @reid_row, @coll_row));
 		}
+		# get rid of carriage returns 24.5.04 JA
+		# failing to do this is lethal and I'm not sure why no-one
+		#  alerted me to this bug previously
+		$curLine =~ s/\n/ /g;
 		print OUTFILE "$curLine\n";
 		$acceptedCount++;
 		if(exists($REFS_DONE{$reference_no}) && $REFS_DONE{$reference_no} ne "Y"){
