@@ -282,6 +282,10 @@ sub newPopulateHTML {
 	my $hashRef = shift;		# hash of fields and values to populate with
 	my $nonEditableRef = shift;		# array of input fields to make non-editable
 	
+	Debug::dbPrint("nonEditables = ");
+	Debug::printArray($nonEditableRef);
+	
+	
 	if (! $hashRef) {
 		Debug::logError("improper hashref in HTMLBuilder::newPopulateHTML.");
 		return;
@@ -365,15 +369,20 @@ sub newPopulateHTML {
 	# to make non-editable.  This will allow us to still have access to their values.
 	if ($nonEditableRef) {
 		foreach my $key (@$nonEditableRef) {
-			$hiddenInputs .= "<INPUT type=\"hidden\" name=\"$key\" id=\"$key\" value=\"" .
+			
+			# only add it to the list if we haven't already done so.. This is to 
+			# prevent duplicates which will screw up the form processing script.
+			if ($hiddenInputs !~ m/["]$key["]/g) {
+				$hiddenInputs .= "<INPUT type=\"hidden\" name=\"$key\" id=\"$key\" value=\"" .
 				$fields{$key} . "\">\n";
+			}
 		}
 	}
 	
 	
-	# now, we'll add the hiddens (fields which didn't exist in the template,
-	# but which were present in the list passed to us).
-	$html =~ s/[%][%]hiddens[%][%]/$hiddenInputs/;
+	# replace the %%hiddens%% with hiddensgohere so we can go ahead and
+	# replace all the %% signs and fill in the non-editables before actually printing the hiddens.
+	$html =~ s/[%][%]hiddens[%][%]/hiddensgohere/;
 	
 	# now, we'll replace any leftover %%fields%% in the template with blanks
 	# so they don't show up...
@@ -382,9 +391,17 @@ sub newPopulateHTML {
 	# now we'll make any fields non-editable that were passed in the @nonEditableInputs
 	# array. This is optional.
 
+	#Debug::printArray($nonEditableRef);
+	
 	if ($nonEditableRef) {
 		$html = makeNonEditableInputs($html, $nonEditableRef);
 	}
+	
+	
+	# now, we'll add the hiddens (fields which didn't exist in the template,
+	# but which were present in the list passed to us).
+	$html =~ s/hiddensgohere/$hiddenInputs/;
+	
 	
 	return $html;
 }

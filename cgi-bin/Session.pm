@@ -10,6 +10,8 @@ use Class::Date qw(date localdate gmdate now);
 use CGI::Carp qw(fatalsToBrowser);
 
 use Debug;
+use Globals;
+use SQLBuilder;
 
 # I THINK THESE ARE BOGUS. THERE ARE NO SUCH METHODS/VARIABLES IN THIS MODULE
 @EXPORT = qw(setName setHref toHTML);
@@ -25,7 +27,12 @@ sub new {
   return $self;
 }
 
-# Does the login
+
+
+# Processes the login from the submitted authorizer/enterer names.
+# Creates a session_data table row if the login is valid.
+#
+# modified by rjp, 3/2004.
 sub processLogin {
 
 	my $self = shift;
@@ -68,6 +75,7 @@ sub processLogin {
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	
 	$sth->execute();
+	
 	if ( $sth->rows ) {
 
 		my $rs = $sth->fetchrow_hashref ( );
@@ -132,33 +140,47 @@ sub processLogin {
 			$authorizer =~ s/'/\\'/g;
 			$enterer =~ s/'/\\'/g;
 
-			$sql =	"INSERT INTO session_data ( ".
-					"	session_id, ".
-					"	authorizer, ".
-					"	enterer, ".
-					"	superuser, ".
-					"	marine_invertebrate, ".
-					"	paleobotany, ".
-					"	taphonomy, ".
-					"	vertebrate ".
-					"	) VALUES ( ".
-					"'$session_id', ".
-					"'". $authorizer ."', ".	
-					"'". $enterer ."', ".	
-					$superuser.", ".	
-					$rs->{marine_invertebrate}.", ".
-					$rs->{paleobotany}.", ".
-					$rs->{taphonomy}.", ".
-					$rs->{vertebrate}." ".
-					" ) ";
-			$dbh->do( $sql ) || die ( "$sql<HR>$!" );
+			
+			# record the authorizer_no and enterer_no
+			$sth = $dbh->prepare("SELECT person_no FROM person WHERE name = ?");
 
-			# A few other goodies
+			$sth->execute($authorizer);
+			my @results = $sth->fetchrow_array();
+			$self->{authorizer_no} = $results[0];
+			
+			$sth->execute($enterer);
+			my @results = $sth->fetchrow_array();
+			$self->{enterer_no} = $results[0];
+			
+			$sth->finish();
+			
+			
+			# record the authorizer and enterer names
 			$self->{authorizer} = $authorizer;
 			$self->{enterer} = $enterer;
 
-			$sth->finish ( );
+			
+			# Insert all of the session data into a row in the session_data table
+			# so we will still have access to it the next time the user tries to do something.
+			#
+			$sql =	"INSERT INTO session_data ( 
+						session_id, authorizer, authorizer_no, 
+						enterer, enterer_no, 
+						superuser, marine_invertebrate, 
+						paleobotany, taphonomy, vertebrate )
+						
+					VALUES (   
+					'$session_id', '$authorizer', '" . $self->{authorizer_no} . "',
+					'$enterer', '" . $self->{enterer_no} . "' , 
+					'$superuser', " .	
+					$rs->{marine_invertebrate} . ", " . $rs->{paleobotany} . ", " .
+					$rs->{taphonomy} . ", " . $rs->{vertebrate} . " ) ";
+					
+			$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 
+			$sth->finish ( );
+			
+	
 			return $cookie;
 		}
 	}
@@ -419,6 +441,60 @@ sub get {
 
 	return $self->{$key};
 }
+
+# pass this a person number and it 
+# will return the person's name
+sub personNameForNumber {
+	my $self = shift;
+	
+	my $num = shift;
+	
+	if (! $num) {
+		return '';
+	}
+	
+	my $sql = SQLBuilder->new();
+	my @result = $sql->getSingleSQLResult("SELECT name FROM person WHERE person_no = '$num'");
+	
+	if (@result) {
+		return $result[0];	
+	}
+	
+	return '';
+}
+
+sub authorizerNumber {
+	my $self = shift;
+	
+	return $self->{'authorizer_no'};
+}
+
+sub entererNumber {
+	my $self = shift;
+	
+	return $self->{'enterer_no'};
+}
+
+
+# returns the current reference number
+sub currentReference {
+	my $self = shift;
+	return $self->{reference_no};
+}
+
+# Is the current user superuser?  This is true
+# if the authorizer is alroy and the enterer is alroy.  
+sub isSuperUser {
+	my $self = shift;
+
+	if ( ($self->{authorizer} eq Globals::god()) && 
+	($self->{enterer} eq Globals::god())) {
+		return 1;	
+	}
+	
+	return 0;
+}
+
 
 # Tells if we are guest or not
 sub guest {

@@ -900,6 +900,8 @@ sub updateRecordEmptyFieldsOnly {
 # Note: we could grab the primary key from the database, but I haven't figured
 # out how to do that yet, so for now, we'll just pass it.
 #
+# ** Only allows update on one table at a time...
+#
 # rjp, 3/2004.
 sub internalUpdateRecord {
 	my SQLBuilder $self = shift;
@@ -911,11 +913,14 @@ sub internalUpdateRecord {
 	
 	my $dbh = $self->{dbh};
 	
+
+	
+	
 	# make sure they're allowed to update data!
 	my $s = $self->{session};
 	if (!$s || $s->get('enterer') eq 'Guest' || $s->get('enterer') eq '')	{
 		Debug::logError("invalid session or enterer in SQLBuilder::internalUpdateRecord");
-		return;
+		return 0;
 	}
 	
 	# make sure the whereClause and tableName aren't empty!  That would be bad.
@@ -927,6 +932,27 @@ sub internalUpdateRecord {
 	if ((! $self->isValidTableName($tableName)) || (! $hashRef)) {
 		return 0;	
 	}
+	
+	# make sure they're actually setting some non empty values
+	# in the hashref, otherwise it would be equivalent to deleting the record!
+	{	
+		my $atLeastOneNotEmpty = 0;
+		
+		foreach my $key (keys(%$hashRef)) {
+			
+			if ($hashRef->{$key}) {
+				$atLeastOneNotEmpty = 1;
+			}
+		}
+		
+		if (! $atLeastOneNotEmpty) {
+			Debug::logError("SQLBuilder::internalUpdateRecord, tried to update a record with all empty values.");
+			return 0;
+		}
+	}
+	
+	
+	
 	
 	Debug::dbPrint("WHERE = $whereClause");
 	
@@ -941,15 +967,13 @@ sub internalUpdateRecord {
 	Debug::dbPrint("internalUpdateRecord");
 
 
+	Debug::printHash($hashRef);
+	
 	# loop through each key in the passed hash and
 	# build up the update statement.
 	
 	# get the description of the table
-	my @desc = @{$self->getTableDesc($tableName)};
-	my @colName; 	# names of columns in table
-	foreach my $row (@desc) {
-		push(@colName, $row->[0]);	
-	}
+	my @colNames = @{$self->allTableColumns($tableName)};
 	
 	
 	my $toUpdate;
@@ -977,7 +1001,7 @@ sub internalUpdateRecord {
 		
 				# if it's a valid column name, and the column is empty,
 				# then add it to the update statement.
-				if (Globals::isIn(\@colName, $key)) {
+				if (Globals::isIn(\@colNames, $key)) {
 					
 					# if the column in the database for this row is
 					# already empty...
@@ -997,6 +1021,11 @@ sub internalUpdateRecord {
 			# remove the trailing comma
 			$toUpdate =~ s/, $/ /;
 	
+			if (!$toUpdate) {
+				Debug::logError("SQLBuilder::internalUpdateRecord, tried to update without a set clause in update blanks only.");
+				return;
+			}
+			
 			$toUpdate = "UPDATE $tableName SET $toUpdate WHERE $whereClause";
 	
 			Debug::dbPrint($toUpdate);
@@ -1008,15 +1037,17 @@ sub internalUpdateRecord {
 	} else {
 		# update any field, doesn't matter if it's empty or not
 	
-		Debug::dbPrint("non-empty update");
+		Debug::dbPrint("SQLBuilder:: update any record...");
 		
 		$toUpdate = '';
 		
+		Debug::printArray(\@colNames);
+		
 		my @keys = keys(%$hashRef);
 		foreach my $key (@keys) {
-			
+			Debug::dbPrint("key = $key, value = " . $hashRef->{$key});
 			# if it's a valid column name, then add it to the update
-			if (Globals::isIn(\@colName, $key)) {
+			if (Globals::isIn(\@colNames, $key)) {
 					$toUpdate .= "$key = " . $dbh->quote($hashRef->{$key}) . ", ";
 			}
 		}
@@ -1024,7 +1055,14 @@ sub internalUpdateRecord {
 		# remove the trailing comma
 		$toUpdate =~ s/, $/ /;
 		
+		if (!$toUpdate) {
+			Debug::logError("SQLBuilder::internalUpdateRecord, tried to update without a set clause in update any field.");
+			return;
+		}
+		
 		$toUpdate = "UPDATE $tableName SET $toUpdate WHERE $whereClause";
+		
+		Debug::dbPrint("update = $toUpdate");
 		
 		# actually update the row in the database
 		my $updateResult = $dbh->do($toUpdate);

@@ -609,14 +609,33 @@ sub setPreferences	{
 # rjp, 2/2004
 sub displayAuthorityForm {
 	my $taxon = Taxon->new();
+	$taxon->setWithTaxonName("Equasus");
+	
+	$taxon->displayAuthorityForm($hbo, $s);
+		
+}
+
+# rjp, 3/2004
+sub submitAuthorityForm {
+	my $taxon = Taxon->new();
+	$taxon->setWithTaxonName($q->param('taxon_name_corrected'));
+	$taxon->submitAuthorityForm($hbo, $s, $q);
+}
+
+
+# rjp, 2/2004
+sub displayOpinionForm {
+	my $taxon = Taxon->new();
 	$taxon->setWithTaxonName("Equus");
 	
 	print stdIncludes("std_page_top");
-	$taxon->displayAuthorityForm($hbo);
+	$taxon->displayOpinionForm($hbo);
 	print stdIncludes("std_page_bottom");
-	
-	
+		
 }
+
+
+
 
 
 

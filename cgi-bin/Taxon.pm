@@ -688,6 +688,8 @@ sub displayAuthorityForm {
 	} 
 	
 	
+	#print "ref_is_authority = " . $fields{'ref_is_authority'};
+	
 	if ($fields{'ref_is_authority'} eq 'YES') {
 		# reference_no is the authority
 		$fields{'ref_is_authority_checked'} = 'checked';
@@ -703,6 +705,8 @@ sub displayAuthorityForm {
 			# through, then it's okay to check one since they already did.
 			$fields{'ref_is_authority_checked'} = '';
 			$fields{'ref_is_authority_notchecked'} = 'checked';
+			
+			$fields{'ref_is_authority'} = 'NO';
 		}
 		
 		if (!$secondTime) {
@@ -753,7 +757,10 @@ sub displayAuthorityForm {
 	
 	if ((! $isNewEntry) && ($s->get('authorizer_no') != $fields{authorizer_no})) {
 	
-		$fields{'message'} = "<p align=center><i>You did not create this record, so you can only edit empty fields.</i></p>";
+		# grab the authorizer name for this record.
+		my $authName = $s->personNameForNumber($fields{authorizer_no});
+	
+		$fields{'message'} = "<p align=center><i>This record was created by a different authorizer ($authName) so you can only edit empty fields.</i></p>";
 		
 		# we should always make the ref_is_authority radio buttons disabled
 		# because only the original authorizer can edit these.
@@ -780,6 +787,21 @@ sub displayAuthorityForm {
 				push(@nonEditables, $f);
 			}
 		}
+		
+		# we'll also have to do the 2nd_figures and 2nd_pages separately since they don't actually
+		# exist in the database.
+		
+		#if (($fields{'2nd_pages'} ne '') || ($fields{'2nd_pages'} != 0) ) {
+		if ($fields{'2nd_pages'}) {
+			push(@nonEditables, '2nd_pages');
+		}
+		
+		#if (($fields{'2nd_figures'} ne '') || ($fields{'2nd_figures'} != 0) ) {
+		if ($fields{'2nd_figures'}) {
+			push(@nonEditables, '2nd_figures');
+		}
+		
+		push(@nonEditables, 'taxon_name_corrected');
 	}
 	
 	
@@ -805,6 +827,7 @@ sub submitAuthorityForm {
 	my $s = shift;		# the cgi parameters
 	my $q = shift;		# session
 
+	
 	my $sql = $self->getSQLBuilder();
 	$sql->setSession($s);
 	
@@ -821,6 +844,9 @@ sub submitAuthorityForm {
 		$isNewEntry = 0;  # it must exist if we have a taxon_no for it.
 	}
 
+	#Debug::dbPrint("new entry = $isNewEntry");
+	#return;
+	
 	# grab all the current data from the database about this record
 	# if it's not a new entry (ie, if it already existed).	
 	my %dbFields;
@@ -831,6 +857,7 @@ sub submitAuthorityForm {
 			%dbFields = %$results;
 		}
 	}
+	
 		
 	# this $editAny variable is true if they can edit any field,
 	# false if they can't.
@@ -861,6 +888,8 @@ sub submitAuthorityForm {
 	}
 
 	
+
+	
 	# build up a hash of fields/values to enter into the database
 	my %fieldsToEnter;
 	
@@ -878,8 +907,7 @@ sub submitAuthorityForm {
 	}
 	
 	
-	if ( 		
-			($q->param('ref_is_authority') ne 'YES') && 
+	if ( 	($q->param('ref_is_authority') ne 'YES') && 
 			($q->param('ref_is_authority') ne 'NO')) {
 		
 		$errors->add("You must choose one of the reference radio buttons.");
@@ -980,10 +1008,14 @@ sub submitAuthorityForm {
 	# 2nd_pages, etc. don't match the database field names) and add it to the 
 	# %fieldsToEnter hash.
 	
+	
+	#Debug::dbPrint("dbFields = ");
+	#Debug::printHash(\%dbFields);
+	
 	foreach my $formField ($q->param()) {
-		if (! $q->param($formField)) {
-			next;  # don't worry about empty fields.	
-		}
+		#if (! $q->param($formField)) {
+		#	next;  # don't worry about empty fields.	
+		#}
 		
 		my $okayToEdit = $editAny;
 		if (! $okayToEdit) {
@@ -999,7 +1031,11 @@ sub submitAuthorityForm {
 		}
 		
 		if ($okayToEdit) {
-			$fieldsToEnter{$formField} = $q->param($formField);
+			
+			# if the value isn't already in our fields to enter
+			if (! $fieldsToEnter{$formField}) {
+				$fieldsToEnter{$formField} = $q->param($formField);
+			}
 		}
 		
 		#Debug::dbPrint("okayToEdit = $okayToEdit, $formField = " . $q->param($formField));
@@ -1014,11 +1050,12 @@ sub submitAuthorityForm {
 
 	$fieldsToEnter{taxon_name} = $q->param('taxon_name_corrected');	
 
-	# delete some fields that may be present since these don't correspond
-	# to fields in the database table..
+	# Delete some fields that may be present since these don't correspond
+	# to fields in the database table.. (ie, they're in the form, but not in the table)
 	delete $fieldsToEnter{action};
 	delete $fieldsToEnter{'2nd_authors'};
 	delete $fieldsToEnter{'2nd_figures'};
+	delete $fieldsToEnter{'taxon_name_corrected'};
 	
 	# correct the ref_is_authority field.  In the HTML form, it can be "YES" or "NO"
 	# but in the database, it should be "YES" or "" (empty).
@@ -1026,6 +1063,12 @@ sub submitAuthorityForm {
 		$fieldsToEnter{ref_is_authority} = '';
 	}
 	
+	
+	#Debug::printHash(\%fieldsToEnter);
+	#Debug::dbPrint($editAny);
+	#return;
+	
+
 	
 	# at this point, we should have a nice hash array (%fieldsToEnter) of
 	# fields and values to enter into the authorities table.
@@ -1077,15 +1120,35 @@ sub submitAuthorityForm {
 	}
 	
 	
-	
+
 	if ($isNewEntry) {
 		$sql->insertNewRecord('authorities', \%fieldsToEnter);
 	} else {
+		# if it's an old entry, then we'll update.
+		
+		# Delete some fields that should never be updated...
+		delete $fieldsToEnter{authorizer_no};
+		delete $fieldsToEnter{enterer_no};
+		delete $fieldsToEnter{created};
+	
+		
+		
+		if (!($self->{taxonNumber})) {
+			Debug::logError("Taxon::submitAuthorityForm, tried to update a record without knowing its taxon_no..  Oops.");
+			return;
+		}
 			
+		
 		if ($editAny) {
+			Debug::dbPrint("Taxon update any record");
 			# allow updates of any fields in the database.
 			$sql->updateRecord('authorities', \%fieldsToEnter, "taxon_no = '" . $self->{taxonNumber} . "'", 'taxon_no');
 		} else {
+			
+			
+			Debug::dbPrint("Taxon update empty records only");
+			Debug::printHash(\%fieldsToEnter);
+			
 			# only allow updates of fields which are already blank in the database.	
 			$sql->updateRecordEmptyFieldsOnly('authorities', \%fieldsToEnter, "taxon_no = '" . $self->{taxonNumber} . "'", 'taxon_no');
 		}

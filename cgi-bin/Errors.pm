@@ -8,6 +8,7 @@ package Errors;
 
 use strict;
 use CGI::Carp qw(fatalsToBrowser);
+use Globals;
 
 
 use fields qw(	
@@ -50,7 +51,7 @@ sub count {
 sub errorMessage {
 	my Errors $self = shift;
 	
-	my $count = $self->{count};
+	my $count = Globals::numberToName($self->{count});
 	
 	if ($self->{count} == 1) {
 		$count = "error";
