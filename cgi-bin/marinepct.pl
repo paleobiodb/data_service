@@ -1,6 +1,5 @@
 #!/usr/bin/perl
 use CGI;
-use CGI::Carp qw(fatalsToBrowser);
 use DBI;
 use Permissions;
 use Session;

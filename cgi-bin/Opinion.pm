@@ -13,7 +13,6 @@ use DBI;
 use DBConnection;
 use DBTransactionManager;
 use URLMaker;
-use CGI::Carp qw(fatalsToBrowser);
 use Class::Date qw(date localdate gmdate now);
 use CachedTableRow;
 use Rank;
