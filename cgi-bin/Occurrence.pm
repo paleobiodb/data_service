@@ -52,7 +52,7 @@ sub setWithOccurrenceNumber {
 	
 	if (my $input = shift) {
 		$self->{occurrence_no} = $input;
-		
+
 		# set the result_no parameter
 		$sql->setSQLExpr("SELECT reference_no FROM occurrences WHERE occurrence_no = $input");
 		$sql->executeSQL();
@@ -61,7 +61,7 @@ sub setWithOccurrenceNumber {
 		$self->{reference_no} = $result[0];
 		
 		$sql->finishSQL();
-	
+
 	}
 }
 
@@ -98,9 +98,11 @@ sub formatAsHTML {
 	my $order = "";
 	my $family = "";
 
+	# grab the author names for the first reference.
 	my $ref = Reference->new();
 	$ref->setWithReferenceNumber($self->referenceNumber());
 	my $authors = $ref->authors();
+	
 	
 	# figure out how many (if any) reidentifications exist
 	$sql->setSQLExpr("SELECT count(*) FROM reidentifications WHERE occurrence_no = $occ_no");
@@ -109,7 +111,7 @@ sub formatAsHTML {
 	
 	
 	# get the information for the original ID.
-	$sql->setSQLExpr("SELECT o.genus_name, o.species_name, o.abund_value, o.abund_unit, o.comments
+	$sql->setSQLExpr("SELECT o.genus_name, o.species_reso, o.species_name, o.abund_value, o.abund_unit, o.comments
 	FROM occurrences o, refs r
 	WHERE o.reference_no = r.reference_no AND o.occurrence_no = $occ_no");
 		
@@ -131,17 +133,22 @@ sub formatAsHTML {
 				<TD>$class</TD>
 				<TD>$order</TD>
 				<TD>$family</TD>
-				<TD>$result[0] $result[1]</TD>
+				<TD>$result[0] $result[1] $result[2]</TD>
 				<TD>$authors</TD>
-				<TD>$result[2] $result[3]</TD>
-				<TD>$result[4]</TD>
+				<TD>$result[3] $result[4]</TD>
+				<TD>$result[5]</TD>
 			</TR>";
 	
 	
 	$sql->finishSQL();
 
+	# now we'll do the reids if they need to be done
+	# otherwise, RETURN.
+	if ($numReids <= 0) {
+		return $html;	
+	}
 	
-	$sql->setSQLExpr("SELECT reid.genus_name, reid.species_name, r.pubyr, reid.comments, reid.reference_no
+	$sql->setSQLExpr("SELECT reid.genus_name, reid.species_reso, reid.species_name, r.pubyr, reid.comments, reid.reference_no
 		FROM reidentifications reid, refs r
 		WHERE reid.reference_no = r.reference_no AND reid.occurrence_no = $occ_no
 		ORDER BY r.pubyr ASC");
@@ -149,7 +156,7 @@ sub formatAsHTML {
 	$sql->executeSQL();
 	my $index = 0;	
 	while (@result = $sql->nextResultRow()) {
-		$ref->setWithReferenceNumber($result[4]);
+		$ref->setWithReferenceNumber($result[5]);
 	 	$authors = $ref->authors();
 		
 		if ($index == $numReids - 1) {
@@ -166,10 +173,10 @@ sub formatAsHTML {
 				<TD>$class</TD>
 				<TD>$order</TD>
 				<TD>$family</TD>
-				<TD>= $result[0] $result[1]</TD>
+				<TD>= $result[0] $result[1] $result[2]</TD>
 				<TD>$authors</TD>
 				<TD></TD>
-				<TD>$result[3]</TD>
+				<TD>$result[4]</TD>
 				</TR>";
 	
 		
