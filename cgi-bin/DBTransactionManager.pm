@@ -883,7 +883,8 @@ sub insertNewRecord {
 	
 	# figure out the id of the last insert, ie, the primary key value.
 #	my $idNum = $self->getSingleSQLResult("SELECT LAST_INSERT_ID() as l FROM $tableName");
-	my $idNum = ${$self->getData("SELECT LAST_INSERT_ID() FROM $tableName")}[0]->{l};
+	# bug fix here by JA 2.4.04
+	my $idNum = ${$self->getData("SELECT LAST_INSERT_ID() AS l FROM $tableName")}[0]->{l};
 		
 	# return the result code from the do() method.
 	return ($insertResult, $idNum);
@@ -1360,7 +1361,8 @@ sub checkWhereClause {
 
 	# This is only 'first-pass' safe. Could be more robust if we check
 	# all AND clauses.
-	$sql =~ /WHERE\s+([A-Z0-9_\.\(]+)\s*(=|LIKE|IN|!=|>|<|>=|<=)\s*(.+)?\s*/i;
+	# modified by JA 1.4.04 to accept IS NULL
+	$sql =~ /WHERE\s+([A-Z0-9_\.\(]+)\s*(=|LIKE|IN|IS NULL|!=|>|<|>=|<=)\s*(.+)?\s*/i;
 
 	#print "\$1: $1, \$2: $2 \$3: $3<br>";
 	if(!$1){
