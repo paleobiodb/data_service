@@ -4226,11 +4226,16 @@ sub displayTaxonomyEntryForm	{
 	# Print the entry form
 
 	# Determine the fields and values to be populated by populateHTML
-	if($authorityRow{"taxon_rank"} eq "" ){
-		if($taxon =~ / /){
-			$authorityRow{"taxon_rank"} = "species";
-		}else{
-			$authorityRow{"taxon_rank"} = "genus";
+	if($authorityRow{"taxon_rank"} eq ""){
+		if($q->param("taxon_no")){
+			if($taxon =~ / /){
+				$authorityRow{"taxon_rank"} = "species";
+			}else{
+				$authorityRow{"taxon_rank"} = "genus";
+			}
+		}
+		else{ # entering a new name
+			$authorityRow{"taxon_rank"} = "";
 		}
 	}
 
