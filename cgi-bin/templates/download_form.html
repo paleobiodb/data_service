@@ -121,6 +121,28 @@ function collsCheckAll(){
 	}
 }
 
+// Zips pulldown to the current user
+function auth ( ) {
+    // Loop over all forms on the page
+    for ( var i=0; i < document.forms.length; i++ ) {
+        // If we have an authorizer pulldown
+        if ( document.forms[i].authorizer ) {
+
+            var options = document.forms[i].authorizer.options;
+
+            // Loop over each option to find our person
+            for ( var loop=0; loop < options.length; loop++) {
+                if ( options[loop].value == "%%authorizer%%" ) {
+                    options.selectedIndex = loop;
+                    break;
+                }
+            }
+            break;
+        }
+    }
+}
+
+
 //  End -->
 </script>
 
@@ -152,12 +174,7 @@ Research group or project:
 <option>PGAP
 </select>
 
-<tr><td valign=top><font size=-1>
-Download only your own taxonomic lists?
-<td valign=top><font size=-1><select name=owndata>
-<option selected value="YES">yes, download my data only
-<option value="NO">no, download everyone's data
-</select>
+<tr><td valign="top"><font size=-1>Data authorizer:</font><br><select name="authorizer"></select></td><td valign="bottom"><a href="javascript: auth();">Me</a></td>
 
 <tr><td valign=top><font size=-1>
 Included time interval(s):
