@@ -183,13 +183,13 @@ sub processLogin {
 						session_id, authorizer, authorizer_no, 
 						enterer, enterer_no, 
 						superuser, marine_invertebrate, 
-						paleobotany, taphonomy, vertebrate )
+						micropaleontology, paleobotany, taphonomy, vertebrate )
 						
 					VALUES (   
 					'$session_id', '$authorizer', '" . $self->{authorizer_no} . "',
 					'$enterer', '" . $self->{enterer_no} . "' , 
 					'$superuser', " .	
-					$rs->{marine_invertebrate} . ", " . $rs->{paleobotany} . ", " .
+					$rs->{marine_invertebrate} . ", " . $rs->{micropaleontology} . ", " . $rs->{paleobotany} . ", " .
 					$rs->{taphonomy} . ", " . $rs->{vertebrate} . " ) ";
 					
 			$dbh->do( $sql ) || die ( "$sql<HR>$!" );
