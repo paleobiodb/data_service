@@ -959,6 +959,14 @@ sub displayRefResultsForAdd {
 	# This is view only... you may not select
 	print qq|<input type=hidden name="action" value="displayRefAdd">\n|;
 
+	# carry search terms over for populating form
+	foreach my $s_param ("name","year","reftitle","project_name"){
+		if($q->param($s_param)){
+			print "<input type=hidden name=\"$s_param\" value=\"".
+				  $q->param($s_param)."\">\n";
+		}
+	}
+
 	# Print the references found
 	print "<table border=0 cellpadding=5 cellspacing=0>\n";
 	my $row = 1;
@@ -1020,6 +1028,17 @@ sub displayRefAdd
 	print qq|<FORM method="POST" action="$exec_url" onSubmit='return checkForm();'>\n|;
 	print qq|<input type=hidden name="action" value="processNewRef">\n|;
 
+	# Pre-populate the form with the search terms:
+	my %query_hash = ("name" => "author1last",
+					  "year" => "pubyr",
+					  "reftitle" => "reftitle",
+					  "project_name" => "project_name");
+	foreach my $s_param (keys %query_hash){
+		if($q->param($s_param)){
+			push(@row, $q->param($s_param));
+			push(@fieldNames, $query_hash{$s_param});
+		}
+	}
 	print $hbo->populateHTML("enter_ref_form", \@row, \@fieldNames);
 	print &stdIncludes ("std_page_bottom");
 }
