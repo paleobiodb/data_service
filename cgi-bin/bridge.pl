@@ -696,7 +696,7 @@ sub displayCurveResults {
 
 	print &stdIncludes ( "std_page_top" );
 
-	my $c = Curve->new( $dbh, $q, $s );
+	my $c = Curve->new( $dbh, $q, $s, $dbt );
 	$c->buildCurve ( );
 
 	print &stdIncludes ("std_page_bottom");
