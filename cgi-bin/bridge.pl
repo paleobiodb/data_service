@@ -2504,8 +2504,10 @@ sub rarefyAbundances	{
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 	my @ids;
+	my $abundsum;
 	while ( my @abundrow = @{$sth->fetchrow_arrayref()} )	{
 		push @abund , $abundrow[0];
+		$abundsum = $abundsum + $abundrow[0];
 		$ntaxa++;
 		for my $i (1..$abundrow[0])	{
 			push @ids , $ntaxa;
@@ -2513,6 +2515,24 @@ sub rarefyAbundances	{
 	}
 	$sth->finish();
 
+	# compute Shannon-Wiener and Simpson indices
+	my $swh;
+	my $simpson;
+	for my $a ( @abund )	{
+		my $p = $a / $abundsum;
+		$swh = $swh + ( $p * log($p) );
+		$simpson = $simpson + $p**2;
+	}
+	$swh = $swh * -1;
+	$simpson = 1 - $simpson;
+	# Lande 1996 correction
+	if ( $ntaxa > 1 )	{
+		$simpson = $simpson * $ntaxa / ( $ntaxa - 1 );
+	} else	{
+		$simpson = 0;
+	}
+
+	# rarefy the abundances
 	my $maxtrials = 200;
 	for my $trial (1..$maxtrials)	{
 		my @tempids = @ids;
@@ -2554,8 +2574,10 @@ sub rarefyAbundances	{
 	}
 	close OUT;
 	print "</table></center>\n<p>\n\n";
-	print "<center><i>Results are based on 200 random sampling trials.<p>\n\n";
-	print "<i>The data can be downloaded from a <a href=\"$HOST_URL/$OUTPUT_DIR/rarefaction.csv\">tab-delimited text file</a>.</i></center><p>\n\n";
+	printf "<center><p>Shannon-Wiener <i>H</i>: <b>%.3f</b></p>\n",$swh;
+	printf "<p>Simpson's <i>D</i> (with Lande 1996 correction): <b>%.3f</b></p>\n",$simpson;
+	print "<p><i>Results are based on 200 random sampling trials.\n";
+	print "The data can be downloaded from a <a href=\"$HOST_URL/$OUTPUT_DIR/rarefaction.csv\">tab-delimited text file</a>.</i></p></center>\n\n";
 
 	print &stdIncludes ("std_page_bottom");
 
