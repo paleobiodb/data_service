@@ -2814,6 +2814,12 @@ sub processEnterCollectionForm {
 	my $no = ${$dbt->getData($sql)}[0]->{interval_no};
 		$q->param(min_interval_no => $no);
 	}
+	# bomb out if no such interval exists JA 28.7.03
+	if ( $q->param('max_interval_no') < 1 )	{
+		print "<center><h3>You can't enter an unknown time interval name</h3>\n<p>Please go back, check the time scales, and enter a valid name</p></center>";
+		print &stdIncludes ("std_page_bottom");
+		return;
+	}
     
 	my $recID;
 	$return = insertRecord( 'collections', 'collection_no', \$recID, '99', 'period_max' );
@@ -3246,6 +3252,13 @@ sub processEditCollectionForm {
 		my $no = ${$dbt->getData($sql)}[0]->{interval_no};
 		$q->param(min_interval_no => $no);
 	}
+	# bomb out if no such interval exists JA 28.7.03
+	if ( $q->param('max_interval_no') < 1 )	{
+		print "<center><h3>You can't enter an unknown time interval name</h3>\n<p>Please go back, check the time scales, and enter a valid name</p></center>";
+		print &stdIncludes ("std_page_bottom");
+		return;
+	}
+    
 
     unless($q->param('fossilsfrom1'))	{
       $q->param(fossilsfrom1=>'NULL');
