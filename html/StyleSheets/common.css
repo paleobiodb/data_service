@@ -15,6 +15,10 @@ body {
 	background-image: url(/public/PDbg.gif);
 }
 
+.menu {
+	color: white;	
+}
+
 /* generic warning message */
 .warning {
 	border-color: lightgrey;
