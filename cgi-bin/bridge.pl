@@ -23,6 +23,7 @@ use Images;
 use Scales;
 use TimeLookup;
 use Ecology;
+use PrintHierarchy;
 
 require "connection.pl";	# Contains our database connection info
 
@@ -3093,6 +3094,17 @@ sub startProcessEcologyForm	{
 	Ecology::processEcologyForm($dbh, $dbt, $q, $s, $exec_url);
 }
 ## END Ecology stuff
+##############
+
+##############
+## PrintHierarchy stuff
+sub startStartPrintHierarchy	{
+	PrintHierarchy::startPrintHierarchy($dbh, $hbo);
+}
+sub startProcessPrintHierarchy	{
+	PrintHierarchy::processPrintHierarchy($dbh, $q, $dbt, $exec_url);
+}
+## END PrintHierarchy stuff
 ##############
 
 sub displayEditCollection {
