@@ -608,13 +608,15 @@ sub newPopulateHTML {
 	# now we should also make hiddens out of any field that the user wants
 	# to make non-editable.  This will allow us to still have access to their values.
 	if ($nonEditableRef) {
+	    my $validChars = '(?:[-A-Za-z"\'=0-9%._]|\s)*';
 		foreach my $key (@$nonEditableRef) {
-			
 			# only add it to the list if we haven't already done so.. This is to 
 			# prevent duplicates which will screw up the form processing script.
 			if ($hiddenInputs !~ m/["]$key["]/g) {
-				$hiddenInputs .= "<INPUT type=\"hidden\" name=\"$key\" id=\"$key\" value=\"" .
-				$fields{$key} . "\">\n";
+		        if ($html !~ / ( < input (?: $validChars hidden $validChars ) ) ( $validChars (?:name|id) \s* = \s* ["]?$key["]? $validChars value \s* = \s* ["]?.*["]?  $validChars > ) /isx) {
+    				$hiddenInputs .= "<INPUT type=\"hidden\" name=\"$key\" id=\"$key\" value=\"" .
+	    			$fields{$key} . "\">\n";
+                } 
 			}
 		}
 	}
@@ -685,8 +687,8 @@ sub makeNonEditableInputs {
 	# Note: the x modifier ignores whitespace in the pattern, so we
 	# can space it out to make it more legible
 		
-	my $validChars = '(?:[-A-Za-z"=0-9%._]|\s)*';
-		
+	my $validChars = '(?:[-A-Za-z"\'=0-9%._]|\s)*';
+
 	foreach my $key (@$nameRef) {
 		#Debug::dbPrint("nonEditable: $key");
 		# first, search for textarea fields and replace them with disabled boxes.
@@ -698,11 +700,11 @@ sub makeNonEditableInputs {
 		
 		# Next search for other fields such as input and replace them with static boxes.
 		$html =~ s/ ( < input (?! $validChars hidden $validChars > ) ) ( $validChars (?:name|id) \s* = \s* ["]?$key["]? $validChars value \s* = \s* ["]?.*["]?  $validChars > ) /$1 disabled readonly $2/igsx;
-	
+
 		# search for radio and checkboxes.
 		$html =~ s/ ( < input (?= $validChars (?: radio|checkbox) $validChars > ) $validChars ) (  name = ["]?$key["]?  $validChars > ) /$1 disabled $2/igsx;	
 	}
-	
+
 	return $html;
 }
 
@@ -920,7 +922,7 @@ sub populateHTML {
 
       # Do <input> tags
       # To Do: This should match any valid input tag, not just one with id="" next to <input
-      elsif ( $htmlTemplateString =~ /(<input\s+(type"{0,1}.*?"{0,1}\s+){0,1}id="{0,1}$fieldName"{0,1}.*?>)/im)
+      elsif ( $htmlTemplateString =~ /(<input\s+(type="{0,1}.*?"{0,1}\s+){0,1}id="{0,1}$fieldName"{0,1}.*?>)/im)
       {
         my $stuff = $1;
         #print "\n\n<!-- $stuff -->\n\n";
@@ -1100,7 +1102,7 @@ sub getTemplateString {
 		while(<HTMLTEMPLATEFILE>) {
 			if ($_ =~ /<!-- OPTIONAL/)	{
 				my ($a,$b) = split /OPTIONAL /,$_,2;
-				my ($a,$b) = split / -->/,$b,2;
+				($a,$b) = split / -->/,$b,2;
 				if ( $a ne "genus_and_species_only" && $pref{$a} ne "yes" || ( $a eq "genus_and_species_only" && $pref{$a} eq "yes" ) )	{
 					while ($_ !~ / END $a /)	{
 						$_ = <HTMLTEMPLATEFILE>;
