@@ -23,6 +23,7 @@ package SQLBuilder;
 use strict;
 use fields qw(	
 				dbh
+				sth
 				SQLExpr
 				selectExpr
 				fromExpr
@@ -64,6 +65,8 @@ sub clear {
 	$self->{limitExpr} = '';
 	$self->{whereSeparator} = 'and';
 	$self->{whereItems} = ();
+	
+	$self->finishSQL();  # finish the SQL query if there was one.
 }
 
 # directly set the entire SQL expression
@@ -308,23 +311,65 @@ sub dbConnect {
 
 
 
-# executes the SQL and returns a result array
-# if there were no errors.
-sub resultArrayForExecutingSQL {
+# executes the SQL 
+sub executeSQL {
 	my SQLBuilder $self = shift;
 
-	my $dbh = $self->dbConnect();
-	
+	# connect to the database, if we need to.
+	my $dbh = $self->dbConnect();	
 	my ($sql, $sth);
+
+	# if the user had already run a query, then $sth will
+	# exist, so we should call finish() on it to clean up.
+	$sth = $self->{sth};
+	if ($sth) { $sth->finish(); }
+
 	my $sql = $self->SQLExpr();
 				
 	$sth = $dbh->prepare( $sql );
 	$sth->execute();
+	
+	# save the sth for later use in fetching rows.
+	$self->{sth} = $sth;
+}
+
+
+# fetches the next result row from the $sth.  
+# must be called *after* first calling executeSQL(),
+# otherwise will return empty arry.
+sub nextResultRow {
+	my SQLBuilder $self = shift;
+
+	my $sth = $self->{sth};
+	
+	if (! $sth) {
+		return ();  # return empty array if sth doesn't exist	
+	}
+	
+	# otherwise, fetch the next array row and return it.	
 	my @result = $sth->fetchrow_array();
-	$sth->finish();	
+	$self->{sth} = $sth;  # important - save it back in the parameter.
+	
+	if (! @result) {
+		$self->finishSQL();
+	}
 	
 	return @result;
 }
+
+
+# clean up after finishing with a query.
+# should be called when the user is done accessing result sets from a query.
+sub finishSQL {
+	my SQLBuilder $self = shift;
+
+	my $sth = $self->{sth};
+	if ($sth) {
+		$sth->finish;
+		$self->{sth} = undef;
+	}
+}
+
 
 
 1;
