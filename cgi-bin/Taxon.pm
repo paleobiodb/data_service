@@ -1173,11 +1173,30 @@ sub displayAuthorityForm {
 					$chosen = '';
 				}
 				
-				$select .= "<OPTION value=\"$row->[0]\" $chosen>" .
-				$taxon->taxonName() . " " . $taxon->authors() . "</OPTION>";
+				$select .= "<option value=\"$row->[0]\" $chosen>";
+				$select .= $taxon->taxonName() . " " . $taxon->authors();
+		# tack on the closest higher order name
+		# a little clunky, but it works and doesn't require messing
+		#  with get_classification_hash
+		# thank goodness the $sql object exists here; Poling's failure
+		#  to use $dbt objects in the normal way creates a bookkeeping
+		#  nightmare
+		# JA 30.4.04
+				my %master_class=%{Classification::get_classification_hash($sql, [ "family,order,class" ] , [ $row->[0] ] )};
+				my @parents = split ',',$master_class{$row->[0]};
+				if ( $parents[2] )      {
+					$select .= " [" . $parents[2] . "]";
+				} elsif ( $parents[1] ) {
+					$select .= " [" . $parents[1] . "]";
+				} elsif ( $parents[0] ) {
+					$select .= " [" . $parents[0] . "]";
+				}
+
+				$select .= "</option>\n";
+
 			}
 			
-			$fields{parent_taxon_popup} = "<b>Parent taxon:</b>
+			$fields{parent_taxon_popup} = "<b>Belongs to:</b>
 			<SELECT name=\"parent_taxon_no\">
 			$select
 			</SELECT>";
