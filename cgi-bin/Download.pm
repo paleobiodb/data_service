@@ -1,7 +1,7 @@
 package Download;
 
 # Flags and constants
-my $DEBUG=1;			# The debug level of the calling program
+my $DEBUG=0;			# The debug level of the calling program
 my $dbh;				# The database handle
 my $q;					# Reference to the parameters
 my $s;					# Reference to the session data
@@ -19,9 +19,9 @@ my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
 my @mesoCenozoic = qw(triassic jurassic cretaceous tertiary);
 
 my $csv;
-my $OUT_FILE_DIR = "/home/pmuhl/apache/html/paleodb/data";
 my $OUT_HTTP_DIR = "/paleodb/data";
-my $DATAFILE_DIR = "/home/pmuhl/apache/cgi-bin/data";
+my $OUT_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
+my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
 my $outFileBaseName;
 
 
