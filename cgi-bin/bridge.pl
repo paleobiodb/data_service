@@ -2826,11 +2826,10 @@ IS NULL))";
 
     # This field is only passed by section search form PS 12/01/2004
     if (defined $q->param("section_name") && $q->param("section_name") eq '') {
-        push(@terms, "collections.localsection IS NOT NULL AND collections.localsection != '' AND collections.localbed REGEXP '^[0-9]\$'");
+        push(@terms, "((collections.regionalsection IS NOT NULL AND collections.regionalsection != '' AND collections.regionalbed REGEXP '^[0-9]\$') OR (collections.localsection IS NOT NULL AND collections.localsection != '' AND collections.localbed REGEXP '^[0-9]\$'))");
     } elsif ($q->param("section_name")) {
         my $val = $dbh->quote($wildcardToken.$q->param("section_name").$wildcardToken);
-        push(@terms, "((collections.regionalsection $comparator $val AND collections.localsection IS NOT NULL AND collections.localsection != '')
-                       OR collections.localsection $comparator $val) AND collections.localbed REGEXP '^[0-9]\$'"); 
+        push(@terms, "((collections.regionalsection $comparator $val AND collections.regionalbed REGEXP '^[0-9]\$') OR (collections.localsection $comparator $val AND collections.localbed REGEXP '^[0-9]\$'))"); 
     }                
 
     # This field is only passed by links created in the Strata module PS 12/01/2004
@@ -2890,7 +2889,7 @@ IS NULL))";
 								"research_group",
 								"release_date",
 								"country", "state", 
-                                "localsection", "regionalsection",
+                                "localsection", "regionalsection", "localbed", "regionalbed",
 								"period_max", 
 								"period_min", "epoch_max", 
 								"epoch_min", "intage_max", 
@@ -2904,7 +2903,7 @@ IS NULL))";
 		
 	# Handle sort order
 	my $sortString = "";
-	$sortString = $q->param('sortby') if $q->param('sortby');
+	$sortString = $q->param('sortby') if ($q->param('sortby') && $q->param('sortby') ne 'section_name');
 	$sortString .= " DESC" if $sortString && $q->param('sortorder') eq 'desc';
 
 	# Handle limit - don't set this cause of Permissions module
@@ -2917,15 +2916,17 @@ IS NULL))";
         $sql->setFromExpr("collections LEFT JOIN secondary_refs " 
                        . "ON collections.collection_no = secondary_refs.collection_no");
 	    $selectExpr = "DISTINCT collections.collection_no, DATE_FORMAT(release_date, '%Y%m%d') rd_short, collections.reference_no";
-        foreach $column (@columnList) {
-            $selectExpr .= ", collections.$column";
-        }
-        $sql->setSelectExpr($selectExpr);
     } else {
 	    $sql->setFromExpr("collections");
-        push @columnList, "collection_no, DATE_FORMAT(release_date, '%Y%m%d') rd_short, reference_no";
-	    $sql->setSelectExpr(join(', ', @columnList));
+        $selectExpr = "collection_no, DATE_FORMAT(release_date, '%Y%m%d') rd_short, reference_no";
     } 
+    foreach $column (@columnList) {
+        $selectExpr .= ", collections.$column";
+    }
+    if ($q->param('sortby') eq 'section_name') { # virtual column for sorting purposes
+        $selectExpr .= ", IF(collections.regionalsection != '' AND collections.regionalsection IS NOT NULL,collections.regionalsection,collections.localsection) AS section_name";
+    }
+    $sql->setSelectExpr($selectExpr);
 	foreach my $t (@terms) {
 		$sql->addWhereItem($t);
 	}
@@ -2968,11 +2969,14 @@ IS NULL))";
 	$sql->setOrderByExpr($sortString);
 	$sql->setLimitExpr($limitString);
 
-	dbg( $sql->SQLExpr()."<HR>" );
-	#Debug::dbPrint("proccessCollectionsSearch SQL Num. 2 =" . $sql->SQLExpr());
-	
-	return $sql->SQLExpr();
-
+    my $sql_expr;
+    if ($q->param('sortby') eq 'section_name') {
+	    $sql_expr = "(".$sql->SQLExpr().") ORDER BY section_name";
+    } else {
+	    $sql_expr = $sql->SQLExpr();
+    }    
+	dbg( $sql_expr."<HR>" );
+    return $sql_expr;   
 } # end sub processCollectionsSearch
 
 
@@ -3068,7 +3072,7 @@ sub displayCollectionDetails {
         $localsection_idx = $index if ($fieldNames[$index] eq "localsection");
     }
     if ($row[$localsection_idx]) {
-        $localsection_link = "<a href=\"$exec_url?action=showStratForm&taxon_resolution=species&skip_taxon_list=YES&input_type=strat"
+        $localsection_link = "<a href=\"$exec_url?action=displayStratTaxaForm&taxon_resolution=species&skip_taxon_list=YES&input_type=local"
                          . "&input=".uri_escape($row[$localsection_idx])."\">$row[$localsection_idx]</a>";
     }
     $row[$localsection_idx] = $localsection_link if ($localsection_link);
@@ -9058,9 +9062,9 @@ sub buildReference {
 # Confidence Intervals JSM #
 # ------------------------ #
 
-sub displaySectionResults{
+sub displaySearchSectionResults{
     print stdIncludes("std_page_top");
-    Confidence::displaySectionResults($q, $s, $dbt,$hbo);
+    Confidence::displaySearchSectionResults($q, $s, $dbt,$hbo);
     print stdIncludes("std_page_bottom");
 }
 
@@ -9070,44 +9074,43 @@ sub displaySearchSectionForm{
     print stdIncludes("std_page_bottom");
 }
 
-sub displayFirstForm   {
+sub displayTaxaIntervalsForm{
     print stdIncludes("std_page_top");
-    #Confidence::displayQueryPage($q, $s, $dbt, $splist);
-    Confidence::buildList($q, $s, $dbt);
+    Confidence::displayTaxaIntervalsForm($q, $s, $dbt,$hbo);
     print stdIncludes("std_page_bottom");
 }
 
-sub databaseCheckForm   {
+sub displayTaxaIntervalsResults{
     print stdIncludes("std_page_top");
-        Confidence::checkData($q, $s, $dbt, $splist);
+    Confidence::displayTaxaIntervalsResults($q, $s, $dbt,$hbo);
     print stdIncludes("std_page_bottom");
 }
 
 sub buildListForm {
     print stdIncludes("std_page_top");
-    Confidence::buildList($q, $s, $dbt);
+    Confidence::buildList($q, $s, $dbt,$hbo);
     print stdIncludes("std_page_bottom");
 }
 
-sub showStratForm {
+sub displayStratTaxaForm{
     print stdIncludes("std_page_top");
-        Confidence::showStrat($q, $s, $dbt, $splist);
+    Confidence::displayStratTaxa($q, $s, $dbt);
     print stdIncludes("std_page_bottom");
 }
 
 sub showOptionsForm {
 	print stdIncludes("std_page_top");
-	   Confidence::optionsForm($q, $s, $dbt, $splist);
+	Confidence::optionsForm($q, $s, $dbt, $splist);
 	print stdIncludes("std_page_bottom");
 }
 
-sub calculateTaxonomicInterval {
+sub calculateTaxaInterval {
 	print stdIncludes("std_page_top");
 	Confidence::calculateTaxaInterval($q, $s, $dbt, $splist);
 	print stdIncludes("std_page_bottom");
 }
 
-sub calculateStratigraphicInterval {
+sub calculateStratInterval {
 	print stdIncludes("std_page_top");
 	Confidence::calculateStratInterval($q, $s, $dbt, $splist);
 	print stdIncludes("std_page_bottom");
