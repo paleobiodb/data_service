@@ -271,8 +271,8 @@ sub nameForRank {
 		$self->createTaxaHash();
 	}
 
-	
 	my $hash = $self->{taxaHash};
+	if (!$hash) { return; }
 	my %hash = %$hash;
 	
 	my $id = $hash{$key};
@@ -297,6 +297,7 @@ sub numberForRank {
 	}
 
 	my $hash = $self->{taxaHash};
+	if (!$hash) { return; }
 	my %hash = %$hash;
 	
 	return $hash{$key};
@@ -915,6 +916,10 @@ sub displayAuthorityForm {
 #
 # The majority of this method deals with validation of the input to make
 # sure the user didn't screw up, and to display an appropriate error message if they did.
+#
+# Note: If the user submits a *new* authority which has a rank of species (or subspecies),
+# we should *automatically* create an opinion record with status "belongs to" to
+# show that this species belongs to the genus in its name.
 #
 # rjp, 3/2004.
 sub submitAuthorityForm {
