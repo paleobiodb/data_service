@@ -1,0 +1,783 @@
+<HTML>
+<HEAD>
+<TITLE>Database Tables Descriptions</TITLE>
+<style type="text/css">
+
+.title {
+	font-weight:bold;
+	font-size: 150%;
+}
+
+LI.index {
+	font-weight: normal;
+}
+
+div.legend {
+	/*background-color:lightblue;*/
+	border-width:3;
+	border-color:lightblue;
+	border-style: solid;
+	
+	padding-left:1em;
+	padding-right:1em;
+	padding-top:1em;
+	padding-bottom:1em;
+	
+	width:50%;
+}
+
+
+div.table {
+	background-color: rgb(245,245,245);
+	padding: 1em 1em 1em 1em;
+	
+	border-style: solid;
+	border-color: RGB(200,200,200);
+	border-width: 1px 1px 1px 1px;
+	
+	margin: 0.8em 1.0em 0.8em 1em;
+
+	min-width: 400px;	
+}
+
+span.table {
+	background-color: rgb(220,220,220);
+	font-weight: bold;
+	font-size: 120%;
+	
+	width:auto;
+	
+	border-style: solid;
+	border-width: 0px 0px 5px 0px;
+	border-color: RGB(0,0,100);
+	
+	padding: 0.2em 0.6em 0.2em 0.6em;
+}
+
+
+
+
+.tableDesc {
+	font-weight: normal;
+	font-style: italic;
+	padding-left:50px;
+}
+
+p.field {
+	padding-left:100px;
+}
+
+
+.fieldName {
+	background-color: rgb(220,220,220);
+	font-weight: bold;
+	font-size: 100%;
+	
+	width: auto;
+	
+	padding: 0.1em 0.4em 0.1em 0.4em;
+	
+	border-style: solid;
+	border-width: 1px 1px 1px 1px;
+	border-color: RGB(200,200,200);
+	
+}
+
+.fieldDesc {
+	font-size: 95%;
+	font-weight: normal;
+	font-style: normal;
+	margin: 0.2em 0.2em 0.2em 0.2em;
+	padding: 0.1em 0.1em 0.1em 0.4em;
+}
+
+.important {
+	color: maroon;
+}
+
+A.primaryKey {
+	color: red;
+	text-decoration: none;
+}
+
+A.foreignKey {
+	color: green;
+	text-decoration: none;
+}
+
+A.foreignKey:hover {
+	color: blue;
+	text-decoration: underline;
+}
+
+A.toplink {
+	color: RGB(0,0,150);
+	margin: 0em 0em 0em 1em;
+}
+
+A.toplink:hover {
+	color: red;
+}
+
+
+</style>
+</HEAD>
+
+<BODY>
+
+<p class="title">Description of Tables in Paleobiology Database (PBDB).</p>
+
+<A NAME="top">
+<div class="table">
+<span class="table">Table Name</span>
+<p class="tableDesc">Table Description</p>
+<p class="field">
+<span class="fieldName">Field Name</span>
+<span class="fieldDesc">Field Description</span>
+</p>
+<p class="field">
+<span class="fieldName"><A NAME="primarykey"  class="primaryKey">Primary Key</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A HREF="" class="foreignKey">Foreign Key</A></span>
+</p>
+
+
+</div>
+ 
+<BR>
+
+<div>
+<UL>
+<LI class="index"><A HREF="#authorities">authorities</A></LI>
+<LI class="index"><A HREF="#collections">collections</A></LI>
+<LI class="index"><A HREF="#correlations">correlations</A></LI>
+<LI class="index"><A HREF="#ecotaph">ecotaph</A></LI>
+<LI class="index"><A HREF="#fivepct">fivepct</A></LI>
+<LI class="index"><A HREF="#images">images</A></LI>
+<LI class="index"><A HREF="#intervals">intervals</A></LI>
+<LI class="index"><A HREF="#marinepct">marinepct</A></LI>
+<LI class="index"><A HREF="#occurrences">occurrences</A></LI>
+<LI class="index"><A HREF="#opinions">opinions</A></LI>
+<LI class="index"><A HREF="#person">person</A></LI>
+<LI class="index"><A HREF="#refs">refs</A></LI>
+<LI class="index"><A HREF="#reidentifications">reidentifications</A></LI>
+<LI class="index"><A HREF="#scales">scales</A></LI>
+<LI class="index"><A HREF="#secondary_refs">secondary_refs</A></LI>
+<LI class="index"><A HREF="#session_data">session_data</A></LI>
+<LI class="index"><A HREF="#statistics">statistics</A></LI>
+</UL>
+</div>
+<BR>
+</A>
+
+
+<div>
+
+<div class="table">
+<A NAME="authorities"><span class="table">authorities</span></A>
+<A HREF="#top" class="toplink">top</A>
+
+<p class="tableDesc">Records who originally named each taxa and the year of naming. 
+It also records the reference that this naming came from - either the taxa was directly 
+named in a particular reference, or the reference said that the taxa was named earlier by 
+a certain person.</p>
+
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName">ref_is_authority</span>
+<span class="fieldDesc">If true, then reference info comes from reference_no, 
+otherwise it comes from the author1init, author1last, etc. fields.</span>
+</p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#reference_no">reference_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName">author1init</span>
+</p>
+<p class="field">
+<span class="fieldName">author1last</span>
+</p>
+<p class="field">
+<span class="fieldName">author2last</span>
+</p>
+<p class="field">
+<span class="fieldName">author2init</span>
+</p>
+<p class="field">
+<span class="fieldName">otherauthors</span>
+</p>
+<p class="field">
+<span class="fieldName">pub_yr</span>
+<span class="fieldDesc">Year the taxon was named.</span>
+</p>
+<p class="field">
+<span class="fieldName">pages</span>
+</p>
+<p class="field">
+<span class="fieldName">figures</span>
+</p>
+<p class="field">
+<span class="fieldName">comments</span>
+</p>
+<p class="field">
+<span class="fieldName">created</span>
+</p>
+<p class="field">
+<span class="fieldName">modified</span>
+</p>
+
+
+<p class="field">
+<span class="fieldName"><A NAME="taxon_no" class="primaryKey">taxon_no</A></span>
+<span class="fieldDesc">Can use this to refer back to the opinions table
+by looking at the parent_no, and child_no fields.</span>
+</p>
+<p class="field">
+<span class="fieldName">taxon_name</span>
+<span class="fieldDesc">Name of this taxon (of type taxon_rank).
+Note, in this case, if the taxon_rank is species, 
+then it will be a two word species such as "Homo sapiens."  Otherwise,
+it's just one word.</span>
+</p>
+<p class="field">
+<span class="fieldName">taxon_rank</span>
+<span class="fieldDesc">class, species, genus, etc. </span>
+</p>
+<p class="field">
+<span class="fieldName">type_taxon_no</span>
+<span class="fieldDesc">Optional field - for example, Felidae 
+has the type taxon felis.  So this is a reference to another taxon_no in
+the authorities table.</span>
+</p>
+<p class="field">
+<span class="fieldName">type_specimen</span>
+</p>
+
+</div>
+
+
+
+
+<div class="table">
+<A NAME="collections"><span class="table">collections</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Holds one record for each collection in the database.  
+A collection can be thought of as a particular <i>hole</i> in the ground.
+<SPAN class="important">Access levels apply to these records</SPAN>
+</p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName">collection_name</span>
+<span class="fieldDesc"></span>
+</p>
+<p class="field">
+<span class="fieldName">collection_aka</span>
+<span class="fieldDesc">Another name for the collection.  The collection search script
+looks at both the collection_name and collection_aka when performing a search.</span>
+</p>
+<p class="field">
+<span class="fieldName"><A NAME="collection_no" class="primaryKey">collection_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#reference_no">reference_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName">access_level</span>
+<span class="fieldDesc">public, database members, group members, authorizer only.  
+If it's null, which might happen for some of our earliest records, then treat it
+as public.</span>
+</p>
+<p class="field">
+<span class="fieldName">release_date</span>
+<span class="fieldDesc">After this date, the data is fair game for everyone.  Before it, 
+look at the access_level field to determine who should have access.</span>
+</p>
+<p class="field">
+<span class="fieldName">research_group</span>
+<span class="fieldDesc"></span>
+</p>
+
+</div>
+
+
+<div class="table">
+<A NAME="correlations"><span class="table">correlations</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Correlates the <A HREF="#scales">scales</A> table with the <A HREF="#intervals">intervals</A> table.</p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName"><A NAME="correlation_no" class="primaryKey">correlation_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#interval_no">max_interval_no</A></span>
+<span class="fieldDesc">oldest interval covered by a particular scale.</span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#interval_no">min_interval_no</A></span>
+<span class="fieldDesc">youngest interval covered by a particular scale.</span>
+</p>
+</div>
+
+
+<div class="table">
+<A NAME="ecotaph"><span class="table">ecotaph</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Attributes of taxa, what they look like, body mass, ocean/land, etc.</p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName"><A NAME="ecotaph_no" class="primaryKey">ecotaph_no</A></span>
+</p>
+
+</div>
+
+<div class="table">
+<A NAME="fivepct"><span class="table">fivepct</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Holds a sample containing 5% of the data 
+in the GeoRef database which is a database of references.
+Not important to the rest of the database.</p>
+</div>
+
+<div class="table">
+<A NAME="images"><span class="table">images</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Records paths to images of occurrences which have been entered into the database.
+  Not much in here yet.</p>
+  
+  <p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName"><A NAME="image_no" class="primaryKey">image_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName">path_to_field</span>
+</p>
+
+</div>
+  
+  
+<div class="table">
+<A NAME="intervals"><span class="table">intervals</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Each time interval (ie, Cenozoic, etc.) <i>may</i> have an entry in this table.  
+The <A HREF="#correlations">correlations</A> table lists the relative orderings of the intervals,
+and the <A HREF="#scales">scales</A> table lists opinions about time scales.</p>
+
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName"><A NAME="interval_no" class="primaryKey">interval_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName">interval_name</span>
+</p>
+</div>
+
+
+<div class="table">
+<A NAME="marinepct"><span class="table">marinepct</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Holds references for the 1% study - similar to the 
+<A HREF="#fivepct">fivepct</A> table..  Not important to the rest of 
+the database.</p>
+</div>
+
+
+<div class="table">
+<A NAME="occurrences"><span class="table">occurrences</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Holds one record for each distinct taxonomic occurrence within a 
+particular collection (usually).
+<SPAN class="important">Access levels apply to these records</SPAN>
+</p>
+
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName"><A NAME="occurrence_no" class="primaryKey">occurrence_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#reference_no">reference_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#collection_no">collection_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName">genus_reso</span>
+<span class="fieldDesc"></span>
+</p>
+
+<p class="field">
+<span class="fieldName">genus_name</span>
+<span class="fieldDesc">First part of the name, <i>not</i> necessarily a genus!  
+Could be a higher taxon name.</span>
+</p>
+
+<p class="field">
+<span class="fieldName">species_reso</span>
+<span class="fieldDesc"></span>
+</p>
+
+<p class="field">
+<span class="fieldName">species_name</span>
+<span class="fieldDesc">Second part of the name, <i>not</i> necessarily a species!
+For example, if genus_name is a higher taxon, then species would be "indet."</span>
+</p>
+<p class="field">
+<span class="fieldName">abund_value</span>
+<span class="fieldDesc">Abundance of this occurrence in the collection</span>
+</p>
+<p class="field">
+<span class="fieldName">abund_unit</span>
+<span class="fieldDesc">Units for the abund_value: may be the number of specimens,
+% of area covered, etc. - several different options.</span>
+</p>
+</div>
+
+
+<div class="table">
+<A NAME="opinions"><span class="table">opinions</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Records information about taxa that have been renamed.  Note,
+don't confuse this with the <A HREF="#reidentifications">reidentifications</A> table which 
+is used for reidentifications of a particular fossil at a particular collection.
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+</p>
+<p class="field">
+<span class="fieldName"><A NAME="opinion_no" class="primaryKey">opinion_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#reference_no">reference_no</A></span>
+<span class="fieldDesc">The reference where the opinion came from.</span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#taxon_no">parent_no</A></span>
+<span class="fieldDesc">Key to the authorities table, parent of the child.  
+The child is the original, and the parent_no is the recombination/synonym/etc. according
+to the status field.  Possible values include 'belongs to', 'recombined as', 'subjective synonym of',
+'objective synonym of', 'homonym of', 'replaced by', 'corrected as', 'nomen dubium', 'nomen nudum', 
+'nomen oblitem', 'nomen vanum', 'revalidated'</span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#taxon_no">child_no</A></span>
+<span class="fieldDesc">The child_no field always points to the
+<span class="important">original</span> taxon_no in the <A HREF="#authorities">authorities</A> table.</span>
+</p>
+<p class="field">
+<span class="fieldName">status</span>
+<span class="fieldDesc">What does the opinion mean, for example, is it a recombination, synonym, etc.?</span>
+</p>
+<p class="field">
+<span class="fieldName">diagnosis</span>
+</p>
+<p class="field">
+<span class="fieldName">ref_has_opinion</span>
+<span class="fieldDesc">Basically means that the opinion comes
+from a refs table entry.  If this exists, then go to the 
+refs table to get the publication year (use the reference_no field).</span>
+</p>
+<p class="field">
+<span class="fieldName">pubyr</span>
+<span class="fieldDesc">Year of the opinion.  If blank, then look at ref_has_opinion 
+and get the year from the reference instead.</span>
+</p>
+<p class="field">
+<span class="fieldName">author1init</span>
+</p>
+<p class="field">
+<span class="fieldName">author1last</span>
+</p>
+<p class="field">
+<span class="fieldName">author2init</span>
+</p>
+<p class="field">
+<span class="fieldName">author2last</span>
+</p>
+<p class="field">
+<span class="fieldName">otherauthors</span>
+</p>
+
+
+
+</div>
+
+<div class="table">
+<A NAME="person"><span class="table">person</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Data enterers, authorizers, etc.  Basically, everyone who can log into the site. </p>
+
+<p class="field">
+<span class="fieldName"><A NAME="person_no" class="primaryKey">person_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName">name</span>
+</p>
+
+<p class="field">
+<span class="fieldName">password</span>
+</p>
+
+</div>
+
+
+<div class="table">
+<A NAME="refs"><span class="table">refs</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Holds one record for each reference (ie, paper).</p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName"><A NAME="reference_no" class="primaryKey">reference_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName">reftitle</span>
+<span class="fieldDesc">Title of the reference (ie, paper title).</span>
+</p>
+<p class="field">
+<span class="fieldName">pubtitle</span>
+<span class="fieldDesc">Title of the publication (ie, magazine name).</span>
+</p>
+<p class="field">
+<span class="fieldName">pubyr</span>
+<span class="fieldDesc">Year the reference was published.</span>
+</p>
+<p class="field">
+<span class="fieldName">author1last</span>
+<span class="fieldDesc">Last name of the first author.</span>
+</p>
+<p class="field">
+<span class="fieldName">author2last</span>
+<span class="fieldDesc">Last name of the second author</span>
+</p>
+<p class="field">
+<span class="fieldName">otherauthors</span>
+<span class="fieldDesc">All other authors.</span>
+</p>
+
+
+
+
+
+</div>
+
+<div class="table">
+<A NAME="reidentifications"><span class="table">reidentifications</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Lists reidentifications of occurences
+and which reference number reidentified them.  For example, this would 
+occur if a fossil was incorrectly classified and later re-classified as something else.
+<SPAN class="important">Access levels apply to these records</SPAN>
+</p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName"><A NAME="reid_no" class="primaryKey">reid_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#reference_no">reference_no</A></span>
+<span class="fieldDesc">Reference number which reidentified the occurrence.</span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#occurrence_no">occurrence_no</A></span>
+<span class="fieldDesc">Occurrence number which was reidentified.</span>
+</p>
+<p class="field">
+<span class="fieldName">genus_name</span>
+<span class="fieldDesc">Newly reidentified genus for this occurrence.</span>
+</p>
+<p class="field">
+<span class="fieldName">species_name</span>
+<span class="fieldDesc">Newly reidentified species for this occurrence.</span>
+</p>
+
+
+
+</div>
+
+<div class="table">
+<A NAME="scales"><span class="table">scales</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Listing of time scales.  Each one will have been defined by a certain reference.
+See also the <A HREF="#intervals">intevals</A> and <A HREF="#correlations">correlations</A> tables.</p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">modifier_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A NAME="scale_no" class="primaryKey">scale_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName">scale_name</span>
+</p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#reference_no">reference_no</A></span>
+</p>
+
+</div>
+
+<div class="table">
+<A NAME="secondary_refs"><span class="table">secondary_refs</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Allows people to enter more than one reference for a collection. 
+Basically just ties a collection number to a reference number, so if you wanted to have several
+references, you'd have an entry in here for each refernce (not including the primary reference).</p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#collection_no">collection_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#reference_no">reference_no</A></span>
+</p>
+</div>
+
+<div class="table">
+<A NAME="session_data"><span class="table">session_data</span></A>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Holds session id, current enterer, authorizer, etc. which we store in cookies.</p>
+
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">authorizer_no</A></span>
+</p>
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#person_no">enterer_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName"><A class="foreignKey" HREF="#reference_no">reference_no</A></span>
+</p>
+
+<p class="field">
+<span class="fieldName">queue</span>
+<span class="fieldDesc">Holds list of parameters from the user's form submission(?).</span>
+</p>
+</div>
+	
+<div class="table">
+<span class="table">statistics</span>
+<A HREF="#top" class="toplink">top</A>
+<p class="tableDesc">Hourly statistics about the database (displayed on the home pages).</p>
+<p class="field">
+<span class="fieldName">reference_total</span>
+</p>
+<p class="field">
+<span class="fieldName">collection_total</span>
+</p>
+<p class="field">
+<span class="fieldName">occurrence_total</span>
+</p>
+<p class="field">
+<span class="fieldName">enterer_total</span>
+</p>
+</div>
+
+</div>
+
+</BODY>
+</HTML>
