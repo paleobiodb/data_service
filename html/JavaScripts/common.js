@@ -38,21 +38,23 @@ function properYear(input) {
 
 // pass this a taxon name as a string,
 // and it will look at the number of spaces to determine
-// the rank.
+// the rank.  Returns "invalid" if it's not a valid spacing..
 //
 // 0 spaces = higher
 // 1 space  = species
 // 2 spaces = subspecies
 //
-// it will return a string, either "higher", "species", or "subspecies"
+// it will return a string, either "higher", "species", "subspecies", or "invalid"
 // ** note, we can't tell the difference between a genus and a higher taxon
 // by just looking at the spacing.. so a genus name will return as "higher" as well.
 //
 // by rjp, 2/2004 
 function taxonRank(taxon) {
-	var isSpecies = /^.+[ ]{1}.+$/;
-	var isSubspecies = /^.+[ ]{1}.+[ ]{1}.+$/;
+	var isSpecies = /^[A-Z][a-z]+[ ][a-z]+\n?$/;
+	var isSubspecies = /^[A-Z][a-z]+[ ][a-z]+[ ][a-z]+\n?$/;
+	var isHigher = /^[A-Z][a-z]+\n?$/;
 	
+	//alert ("taxon = '" + taxon + "'");
 	if (isSubspecies.test(taxon)) {
 		return "subspecies";	
 	}
@@ -61,41 +63,12 @@ function taxonRank(taxon) {
 		return "species";	
 	}
 
-	return "higher";
-}
-
-
-// pass this a taxon name and it will return a true value
-// if the capitilization if proper, or a false value
-// if the capitilization isn't working. 
-//
-// by rjp, 2/2004
-function checkTaxonCapitalization(taxon) {
-	if (! taxon || taxon == "") {
-		return true;  // we'll say that it's proper, although it's not since nothing exists.
-	}
-
-	var rank = taxonRank(taxon);
-	
-	if (rank == "subspecies" || rank == "species") {
-		var match = /^[A-Z][a-z]+\s+[a-z]+$/;
-		// see if the first letter of the first word is capitalized.
-		// and the first letter of the second word is not capitalized
-		
-		return match.test(taxon)
-		
-	} else if (rank == "higher") {
-		var match = /^[A-Z]/;
-		// see if the first letter is capitalized.
-		
-		return match.test(taxon)
+	if (isHigher.test(taxon)) {
+		return "higher";
 	}
 	
-	return false;
+	return "invalid";
 }
-
-
-
 
 
 // Error is a JavaScript class for error reporting..  

@@ -15,8 +15,14 @@ function checkForm() {
 
 	// figure out the rank of the taxon name.	
 	var rank = taxonRank(frm.taxon_name_corrected.value);
-	var originalRank = taxonRank(frm.taxon_name);
-			
+	var originalRank = taxonRank(frm.taxon_name.value);
+	
+	//alert("original = " + originalRank + " corrected = " + rank);
+	
+	if (rank == "invalid") {
+		errors.add("The taxon being edited is ill-formed.");
+	}
+		
 	// make sure that the rank they started with in taxon_name is the
 	// same as the edited rank.  This is the only check we have to do with the
 	// original taxon name.
@@ -97,8 +103,7 @@ function checkOpinion() {
 		
 	// figure out the rank of the taxon name.	
 	var rank = taxonRank(frm.taxon_name_corrected.value);
-	
-	
+		
 	var checkedRadio = "";
 	for (var i = 0; i < frm.taxon_status.length; i++) {
 		if (frm.taxon_status[i].checked) {
@@ -204,7 +209,7 @@ function checkOpinion() {
 			errors.add("Type taxon and higher taxon have the same name.");
 		}
 		
-		if (! checkTaxonCapitalization(frm.parent_taxon_name.value)) {
+		if (taxonRank(frm.parent_taxon_name.value) == "invalid") {
 			errors.add("'recombined as field' is ill-formed.");
 		}
 	
@@ -226,10 +231,10 @@ function checkOpinion() {
 		}
 	
 		if (field == frm.taxon_name_corrected.value) {
-			errors.add("The '" + frm.synonym.value + "' field matches the who named field at the top.");
+			errors.add("The '" + frm.synonym.value + "' field matches the taxon being edited.");
 		}
 	
-		if (! checkTaxonCapitalization(frm.parent_taxon_name2.value)) {
+		if (taxonRank(frm.parent_taxon_name2.value) == "invalid") {
 			errors.add("'" + frm.synonym.value + "' is ill-formed.");
 		}
 	
