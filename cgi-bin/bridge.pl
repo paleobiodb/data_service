@@ -5452,12 +5452,19 @@ sub displayOccsForReID
 		$where->setFromExpr("occurrences");
 		$where->addWhereItem("collection_no=$collection_no");
 	}
+
+	$where->addWhereItem("occurrence_no > $lastOccNum");
+
+	# some occs are out of primary key order, so order them JA 26.6.04
+	$where->setOrderByExpr("occurrence_no");
 	
-	$where->addWhereItem("occurrence_no > $lastOccNum LIMIT 11");
+	$where->setLimitExpr("11");
 
 	# Tack it all together
 	#$sql .= " WHERE " . $where->whereClause();
 	$sql = $where->SQLExpr();
+
+print "$sql<br>\n";#FOO
  
 	dbg("$sql<br>");
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
