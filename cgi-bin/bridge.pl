@@ -22,7 +22,7 @@ use DBTransactionManager;
 use Images;
 use Scales;
 use TimeLookup;
-use Ecomorph;
+use Ecology;
 
 require "connection.pl";	# Contains our database connection info
 
@@ -2890,6 +2890,11 @@ sub processEnterCollectionForm {
 		}
 		$curColNum++;
 	}
+
+	# get the max/min interval names
+	my ($r,$f) = &getMaxMinNamesAndDashes(\@row,\@fields);
+	@row = @{$r};
+	@fields = @{$f};
  
     print $hbo->populateHTML('collection_display_fields', \@row, \@fields);
     print $hbo->populateHTML('collection_display_buttons', \@row, \@fields);
@@ -3064,17 +3069,17 @@ sub processModuleNavigation{
 
 
 ##############
-## Ecomorph stuff
-sub startStartEcomorphSearch	{
-	Ecomorph::startEcomorphSearch($hbo, $s, $exec_url);
+## Ecology stuff
+sub startStartEcologySearch	{
+	Ecology::startEcologySearch($dbh, $hbo, $s, $exec_url);
 }
-sub startPopulateEcomorphForm	{
-	Ecomorph::populateEcomorphForm($dbh, $dbt, $hbo, $q, $s, $exec_url);
+sub startPopulateEcologyForm	{
+	Ecology::populateEcologyForm($dbh, $dbt, $hbo, $q, $s, $exec_url);
 }
-sub startProcessEcomorphForm	{
-	Ecomorph::processEcomorphForm($dbh, $dbt, $q, $s, $exec_url);
+sub startProcessEcologyForm	{
+	Ecology::processEcologyForm($dbh, $dbt, $q, $s, $exec_url);
 }
-## END Ecomorph stuff
+## END Ecology stuff
 ##############
 
 sub displayEditCollection {
