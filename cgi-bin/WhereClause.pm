@@ -1,10 +1,13 @@
 # Represents the where clause of an SQL statement.  May be expanded in the future
 # to represent the entire statement.
+# Note, there might already be a module on CPAN which does this for us.. Perhaps check into
+# this at a later date.
+#
 # Written by Ryan, 1/2004.
 
 package WhereClause;
 use strict;
-use fields qw(separator items);  # list of allowable data fields.
+use fields qw(separator items orderBy);  # list of allowable data fields.
 
 # This class implements the following methods:
 #----------------------------------------------
@@ -23,6 +26,7 @@ sub new {
 	
 	# set up some default values
 	$self->{separator} = 'and';
+	$self->{orderBy} = '';
 	$self->{items} = ();  # empty list for now
 
 	return $self;
@@ -50,18 +54,36 @@ sub setSeparator {
 
 
 # adds an item to the where clause.
+# does not allow addition of empty items
 sub addItem {
 	my WhereClause $self = shift;
 	my $item = shift;
 
-	push(@{$self->{items}}, $item);
+	if (($item) && ($item ne " ")) {
+		push(@{$self->{items}}, $item);
+	}
+}
+
+
+# pass this something to order by.
+sub setOrderBy {
+	my WhereClause $self = shift;
+	my $order = shift;
+
+	if ($order) {
+		$self->{orderBy} = $order;
+	}
 }
 
 
 # returns a list of all the items.
 sub items {
 	my WhereClause $self = shift;
-	return @{$self->{items}};
+	if ($self->{items}) {
+		return @{$self->{items}};
+	} else  {
+		return ();
+	}
 }
 
 
@@ -78,14 +100,13 @@ sub whereClause {
 	my WhereClause $self = shift;
 
 	my @itemsList = $self->items();
-	
-	#print "itemsList : @itemsList\n";
-	
+		
 	my $clause = join(" " . $self->separator() . " ", @itemsList);	
 	
-	#print "clause : $clause\n";
 	return $clause;
 }
+
+
 
 
 
