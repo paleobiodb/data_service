@@ -152,13 +152,13 @@ sub taxonRank {
 }
 
 # pass this a species or subspecies and it will
-# return the Genus by doing a simple search/replace
+# return the Genus by doing a simple search
 #
 # rjp, 2/2004.
 sub genusFromString {
 	my $input = shift;
 
-	$input =~ m/^([A-Z][a-z]+) /;
+	$input =~ m/^(\w+)\b/;
 	
 	return $1;
 }

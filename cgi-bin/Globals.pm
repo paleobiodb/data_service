@@ -7,6 +7,9 @@ use strict;
 use Debug;
 
 
+
+
+
 # who is the "god" user (ie, full access to everything?)
 # This is an inline function, so it should be fast.
 sub god () {

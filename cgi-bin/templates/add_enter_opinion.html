@@ -101,23 +101,42 @@ The current reference argues for this opinion:
 
 <TABLE BORDER=0>
 
-<!-- the following row should only appear if the rank is species -->
-%%START_OPTIONAL_species_only%%
+
+<!-- 
+for a species or subspecies, this should say:
+"Valid rank as originally combined; belongs to genus genus_name"  For
+for anything else (subgenus or higher), it should say:
+"Valid rank, classified as belonging to"	
+-->
+
 <TR><TD>
-<input type="radio" name="taxon_status" value="belongs_to" %%taxon_status_belongs_to%%> </TD>
+<input type="radio" name="taxon_status" value="belongs to" %%taxon_status_belongs_to%%></TD>
+
+%%START_OPTIONAL_species_only%%
+<!-- this should only be visible for species or subspecies -->
 <TD colspan=2><b>Valid %%taxon_rank%%</b> as originally combined; belongs to genus <i>%%genus%%</i>.</TD>
-</TR>
 %%END_OPTIONAL_species_only%%
 
-<!-- Replace the recombined_message in the script.  
-If rank is a higher taxon, then it should say "classified as belonging to."  
-Otherwise, it should say "recombined into a different genus as." -->
+%%START_OPTIONAL_not_species%%
+<!-- this should only be visible if it's not a species or subspecies -->
+<TD colspan=2><b>Valid %%taxon_rank%%</b>, classified as belonging to 
+<input id="parent_taxon_name" name="parent_taxon_name" size="50" value="%%parent_taxon_name%%"><br>
+</TD>
+%%END_OPTIONAL_not_species%%
+
+</TR>
+
+%%START_OPTIONAL_species_only%%
+<!-- this should only be visible for species or subspecies -->
 <TR><TD valign=top>
-<input type="radio" name="taxon_status" value="recombined_as" %%taxon_status_recombined_as%%></TD>
-<TD colspan=2><b>Valid %%taxon_rank%%</b>, %%recombined_message%% 
+<input type="radio" name="taxon_status" value="recombined as" %%taxon_status_recombined_as%%></TD>
+<TD colspan=2><b>Valid %%taxon_rank%%</b>, recombined into a different genus as  
 <input id="parent_taxon_name" name="parent_taxon_name" size="50" value="%%parent_taxon_name%%"><br>
 </TD></TR>
+%%END_OPTIONAL_species_only%%
 
+
+<!-- the diagnosis box applies to either of the valid radio buttons -->
 <TR>
 <TD></TD>
 <TD valign="middle" align=left>Diagnosis:<BR>
@@ -138,7 +157,7 @@ Otherwise, it should say "recombined into a different genus as." -->
 
 %%synonym_select%%
 
-<input name="parent_taxon_name2" size="50" value="%%parent_taxon_name%%">
+<input name="parent_taxon_name2" size="50" value="%%parent_taxon_name2%%">
 </TD>
 </TR>
 

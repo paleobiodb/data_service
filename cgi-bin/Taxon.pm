@@ -1362,13 +1362,17 @@ sub displayAuthoritySummary {
 		print "<DIV class=\"warning\">Error inserting/updating authority record.  Please start over and try again.</DIV>";	
 	} else {
 		
-		print "<H2>" . $dbrec->{taxon_name} . " has been $enterupdate the database</H2>";
+		print "<H2>" . $dbrec->{taxon_name} . " has been $enterupdate the database</H2>
+		<p>To verify that the information was entered correctly, click on the add more data link below.</p>";
 		
-		print "
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $self->{taxonNumber} ."\"><B>Add more data about " . $dbrec->{taxon_name} . "</B></A> - <A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm\"><B>Add more data about another taxon</B></A>";
+		print "<TABLE align=center BORDER=0 WIDTH=80\%><TR>
+		<TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $self->{taxonNumber} ."\"><B>Add more data about " . $dbrec->{taxon_name} . "</B></A></TD>
+		<TD align=center>-</TD>
+		<TD align=center><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm\"><B>Add more data about another taxon</B></A></TD></TR></TABLE>";	
+
 	}
 	
-	print "<BR><BR>";
+	print "<BR>";
 	print "</CENTER>";
 	
 	print main::stdIncludes("std_page_bottom");
@@ -1400,17 +1404,29 @@ sub displayOpinionChoiceForm {
 	print "<input type=hidden name=\"taxon_no\" value=\"" . $self->{taxonNumber} . "\">\n";
 	
 	print "<TABLE BORDER=0>\n";
+	
+	my $count = 0;
+	my $checked = '';
 	foreach my $row (@$results) {
 		my $opinion_no = $row->[0];
 		
 		my $opinion = Opinion->new();
 		$opinion->setWithOpinionNumber($opinion_no);
 		
-		print "<TR><TD><INPUT type=\"radio\" name=\"opinion_no\" id=\"opinion_no\" value=\"$opinion_no\">" . 
-		$opinion->formatAsHTML() . "</TD></TR>\n";	
+		if ($count == 0) {
+			# select the first radio button by default.
+			$checked = " checked";	
+		} else {
+			$checked = '';	
+		}
+		
+		print "<TR><TD><INPUT type=\"radio\" name=\"opinion_no\" id=\"opinion_no\" value=\"$opinion_no\" $checked>" . 
+		$opinion->formatAsHTML() . "</TD></TR>\n";
+		
+		$count++;
 	}
 	
-	print "<TR><TD><INPUT type=\"radio\" name=\"opinion_no\" id=\"opinion_no\" value=\"-1\" checked>Create a <b>new</b> opinion record.</TD></TR>\n";
+	print "<TR><TD><INPUT type=\"radio\" name=\"opinion_no\" id=\"opinion_no\" value=\"-1\">Create a <b>new</b> opinion record</TD></TR>\n";
 	print "</TABLE><BR>\n";
 	
 	print "<INPUT type=submit value=\"Submit\">\n";

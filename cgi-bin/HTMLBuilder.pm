@@ -403,7 +403,7 @@ sub newPopulateHTML {
 				# Note, the .*? is important, the ? forces this to be LAZY instead
 				# of greedy so we don't go too far..
 				
-				$html =~ s/[%][%]START_$key[%][%].*?[%][%]END_$key[%][%]//s;
+				$html =~ s/[%][%]START_$key[%][%].*?[%][%]END_$key[%][%]//sg;
 			}
 			next;
 		}
