@@ -623,12 +623,16 @@ sub getEcology	{
 		$etfields = 3;
 	}
 	if ( $q->param('ecology4') )	{
-		$sql .= "," . $q->param('ecology3');
+		$sql .= "," . $q->param('ecology4');
 		$etfields = 4;
 	}
 	if ( $q->param('ecology5') )	{
-		$sql .= "," . $q->param('ecology3');
+		$sql .= "," . $q->param('ecology5');
 		$etfields = 5;
+	}
+	if ( $q->param('ecology6') )	{
+		$sql .= "," . $q->param('ecology6');
+		$etfields = 6;
 	}
 	$sql .= " FROM ecotaph LEFT JOIN authorities ON ecotaph.taxon_no = authorities.taxon_no";
 	my @ecos = @{$dbt->getData($sql)};
@@ -655,6 +659,11 @@ sub getEcology	{
 	if ( $q->param('ecology5') )	{
 		for $i (0..$#ecos)	{
 			$ecotaph[5]{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology5')};
+		}
+	}
+	if ( $q->param('ecology6') )	{
+		for $i (0..$#ecos)	{
+			$ecotaph[6]{$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology6')};
 		}
 	}
 }
@@ -874,6 +883,9 @@ sub doQuery {
 	if ( $q->param('ecology5') )	{
 		$header .= $sepChar.$q->param('ecology5');
 	}
+	if ( $q->param('ecology6') )	{
+		$header .= $sepChar.$q->param('ecology6');
+	}
 
 	# Collection header
 	@collectionHeaderCols = $self->getOutFields('collections');	# Need this (for later...)
@@ -1038,6 +1050,9 @@ sub doQuery {
 		}
 		if ( $q->param('ecology5') )	{
 			push @reid_row , $ecotaph[5]{$genusName};
+		}
+		if ( $q->param('ecology6') )	{
+			push @reid_row , $ecotaph[6]{$genusName};
 		}
 
 		if( $q->param('collections_only') ){
