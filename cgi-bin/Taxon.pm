@@ -647,13 +647,22 @@ sub displayAuthorityForm {
 	
 	#Debug::dbPrint("second_submission = $secondTime");
 	#Debug::dbPrint("fields, second sub = " . $fields{second_submission});
+
 	
 	
 	# is this a new entry, or an edit of an old record?
-	my $isNewEntry = 1;  
+	# we'll look for a hidden field first, just in case we're re-displaying the form.
+	
+	my $isNewEntry = 1;
+	
+	if ($fields{is_new_entry} eq 'NO') {
+		$isNewEntry = 0;
+	} 
+	
 	if ($self->{taxonNumber}) {
 		$isNewEntry = 0;  # it must be an edit if we have a taxon_no for it.
 	}
+
 	
 	#Debug::dbPrint("isNewEntry = $isNewEntry");
 	
@@ -670,6 +679,18 @@ sub displayAuthorityForm {
 		}
 	}
 	
+		
+	# we should also store whether or not this is a new entry
+	# in a hidden variable.	
+	if ($isNewEntry) {
+		$fields{is_new_entry} = 'YES';
+	} else {
+		$fields{is_new_entry} = 'NO';
+	}
+	
+	
+	Debug::printHash(\%fields);
+	
 	$fields{taxon_name} = $self->{taxonName};
 	if (! $secondTime) {  # otherwise the taxon_name_corrected will already have been set.
 		$fields{taxon_name_corrected} = $self->{taxonName};
@@ -683,6 +704,8 @@ sub displayAuthorityForm {
 	
 	# populate the correct pages/figures fields depending
 	# on the ref_is_authority value.
+	
+	Debug::dbPrint("isNewEntry = $isNewEntry");
 	
 	if ($isNewEntry) {
 		# for a new entry, use the current reference from the session.
@@ -774,8 +797,10 @@ sub displayAuthorityForm {
 	# then only let them edit empty fields.
 	#
 	# otherwise, they can edit any field.
+	my $sesAuth = $s->get('authorizer_no');
 	
-	if ((! $isNewEntry) && ($s->get('authorizer_no') != $dbFieldsRef->{authorizer_no})) {
+	if ((! $isNewEntry) && ($sesAuth != $dbFieldsRef->{authorizer_no}) &&
+	($dbFieldsRef->{authorizer_no} != 0)) {
 	
 		# grab the authorizer name for this record.
 		my $authName = $s->personNameForNumber($fields{authorizer_no});
@@ -1026,7 +1051,9 @@ sub submitAuthorityForm {
 			(  ($trank eq 'subspecies') || ($trank eq 'species') )
 			) ) {
 
-			$errors->add("The original rank, '" . $trank . "' doesn't match the spacing of the taxon name, '" . $q->param('taxon_name_corrected') . "'.");		
+			$errors->add("The original rank '" . $trank . "' doesn't match the spacing of the taxon name '" . $q->param('taxon_name_corrected') . "'.");
+			
+			
 		}
 		
 		
@@ -1152,6 +1179,7 @@ sub submitAuthorityForm {
 		# next time will be the second time through - whatever).
 
 		$q->param(-name=>'second_submission', -values=>['1']);
+		#$q->param(-name=>'reference_no', -values=>[$fieldsToEnter{reference_no}]);
 			
 		# stick the errors in the CGI object for display.
 		my $message = $errors->errorMessage();
@@ -1212,35 +1240,48 @@ sub submitAuthorityForm {
 	
 	# now show them what they inserted...
 	
-	# update our internal taxon number since we should definitely have one by now..
-	$self->{taxonNumber} = $resultTaxonNumber;
-	$self->displayAuthoritySummary($hbo);
+	# note, if we set our own taxon number to be the new one, then if they had errors,
+	# it will screw up the isNewEntry calculation...
+	my $t = Taxon->new();
+	$t->setWithTaxonNumber($resultTaxonNumber);
+	$t->displayAuthoritySummary($isNewEntry);
 	
 }
 
 
 # displays info about the authority record the user just entered...
+# pass it a boolean
+# is it a new entry or not..
 sub displayAuthoritySummary {
 	my Taxon $self = shift;
+	my $newEntry = shift;
 
+	my $enterupdate;
+	if ($newEntry) {
+		$enterupdate = 'entered into';
+	} else {
+		$enterupdate = 'updated in'	
+	}
+	
 	print main::stdIncludes("std_page_top");
 	
-	print "<CENTER><H2>Authority entry</H2>";
 	
 	my $dbrec = $self->databaseAuthorityRecord();
 	
+	print "<CENTER>";
+	
 	if (!$dbrec) {
-		print "Error inserting/updating authority record.  Please start over and try again.";	
+		print "<DIV class=\"warning\">Error inserting/updating authority record.  Please start over and try again.</DIV>";	
 	} else {
 		
-		print "The information was submitted correctly.  To double check your entry,
-		click 
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $self->{taxonNumber} ."\">here</A>. There is no need to resubmit it.";
+		print "<H2>" . $dbrec->{taxon_name} . " has been $enterupdate the database</H2>";
+		
+		print "
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $self->{taxonNumber} ."\"><B>Add more data about " . $dbrec->{taxon_name} . "</B></A> - <A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm\"><B>Add more data about another taxon</B></A>";
 	}
 	
 	print "<BR><BR>";
-	print "<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm\">Add/edit authority</A>";
-	print "</CENTER><BR><BR>";
+	print "</CENTER>";
 	
 	print main::stdIncludes("std_page_bottom");
 }
