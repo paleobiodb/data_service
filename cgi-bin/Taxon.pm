@@ -832,12 +832,15 @@ sub displayAuthorityForm {
 
 	# if the authorizer of this record doesn't match the current
 	# authorizer, and if this is an edit (not a first entry),
-	# then only let them edit empty fields.
+	# then only let them edit empty fields.  However, if they're superuser
+	# (alroy, alroy), then let them edit anything.
 	#
 	# otherwise, they can edit any field.
 	my $sesAuth = $s->get('authorizer_no');
 	
-	if ((! $isNewEntry) && ($sesAuth != $dbFieldsRef->{authorizer_no}) &&
+	if ($s->isSuperUser()) {
+		$fields{'message'} = "<p align=center><i>You are the superuser, so you can edit any field in this record.</i></p>";
+	} elsif ((! $isNewEntry) && ($sesAuth != $dbFieldsRef->{authorizer_no}) &&
 	($dbFieldsRef->{authorizer_no} != 0)) {
 	
 		# grab the authorizer name for this record.
@@ -876,6 +879,7 @@ sub displayAuthorityForm {
 		
 		push(@nonEditables, 'taxon_name_corrected');
 	}
+	
 	
 	if ($fields{taxon_name_corrected}) { $fields{taxon_size} = length($fields{taxon_name_corrected}) + 5; }
 	
@@ -985,7 +989,7 @@ sub submitAuthorityForm {
 		$fieldsToEnter{reference_no} = $s->currentReference();
 		
 		if (! $fieldsToEnter{reference_no} ) {
-			$errors->add("You must set your current reference before submitting a new authority.");	
+			$errors->add("You must set your current reference before submitting a new authority");	
 		}
 		
 	} else {
@@ -996,7 +1000,7 @@ sub submitAuthorityForm {
 	if ( 	($q->param('ref_is_authority') ne 'YES') && 
 			($q->param('ref_is_authority') ne 'NO')) {
 		
-		$errors->add("You must choose one of the reference radio buttons.");
+		$errors->add("You must choose one of the reference radio buttons");
 	}
 	
 	
@@ -1008,13 +1012,13 @@ sub submitAuthorityForm {
 		$fieldsToEnter{figures} = $q->param('2nd_figures');
 		
 		if (! $q->param('author1last')) {
-			$errors->add('You must enter at least one author.');	
+			$errors->add('You must enter at least one author');	
 		}
 		
 		# make sure the pages/figures fields above this are empty.
 		my @vals = ($q->param('pages'), $q->param('figures'));
 		if (!(Globals::isEmpty(\@vals))) {
-			$errors->add("Don't enter pages or figures for a primary reference if you chose the 'named in an earlier publication' radio button.");	
+			$errors->add("Don't enter pages or figures for a primary reference if you chose the 'named in an earlier publication' radio button");	
 		}
 		
 		# make sure the format of the author initials is proper
@@ -1026,14 +1030,14 @@ sub submitAuthorityForm {
 			)
 			) {
 			
-			$errors->add("Improper author initial format.");		
+			$errors->add("Improper author initial format");		
 		}
 		
 
 		# make sure the format of the author names is proper
 		if  ( $q->param('author1last')) {
 			if (! (Validation::properLastName($q->param('author1last'))) ) {
-				$errors->add("Improper first author last name.");
+				$errors->add("Improper first author last name");
 			}
 		}
 			
@@ -1042,13 +1046,13 @@ sub submitAuthorityForm {
 			(! Validation::properLastName( $q->param('author2last') ) )
 			) {
 		
-			$errors->add("Improper second author last name.");	
+			$errors->add("Improper second author last name");	
 		}
 
 			
 		if ( ($q->param('pubyr') && 
 			(! Validation::properYear($q->param('pubyr'))))) {
-			$errors->add("Improper year format.");
+			$errors->add("Improper year format");
 		}
 		
 		
@@ -1058,7 +1062,7 @@ sub submitAuthorityForm {
 		my @vals = ($q->param('author1init'), $q->param('author1last'), $q->param('author2init'), $q->param('author2last'), $q->param('otherauthors'), $q->param('pubyr'), $q->param('2nd_pages'), $q->param('2nd_figures'));
 		
 		if (!(Globals::isEmpty(\@vals))) {
-			$errors->add("Don't enter earlier publication information if you chose the 'first named in primary reference' radio button.");	
+			$errors->add("Don't enter other publication information if you chose the 'first named in primary reference' radio button");	
 		}
 		
 	}
@@ -1068,7 +1072,7 @@ sub submitAuthorityForm {
 		# don't let them enter other authors if the second author field
 		# isn't filled in.
 		
-		$errors->add("Don't enter other authors if you haven't entered a second author.");
+		$errors->add("Don't enter other authors if you haven't entered a second author");
 	}
 	
 	
@@ -1084,7 +1088,7 @@ sub submitAuthorityForm {
 		
 		
 		if ($rankFromSpaces eq 'invalid') {
-			$errors->add("Invalid taxon name, please check spacing and capitalization.");	
+			$errors->add("Invalid taxon name, please check spacing and capitalization");	
 		}
 		
 		if ( (($rankFromSpaces eq 'subspecies') && ($trank ne 'subspecies')) ||
@@ -1093,7 +1097,7 @@ sub submitAuthorityForm {
 			(  ($trank eq 'subspecies') || ($trank eq 'species') )
 			) ) {
 
-			$errors->add("The original rank '" . $trank . "' doesn't match the spacing of the taxon name '" . $q->param('taxon_name_corrected') . "'.");
+			$errors->add("The original rank '" . $trank . "' doesn't match the spacing of the taxon name '" . $q->param('taxon_name_corrected') . "'");
 			
 			
 		}
@@ -1154,7 +1158,7 @@ sub submitAuthorityForm {
 		# check the spacing/capitilization of the type taxon name
 		my $ttRankFromSpaces = Validation::taxonRank($fieldsToEnter{type_taxon_name});
 		if ($ttRankFromSpaces eq 'invalid') {
-			$errors->add("Invalid type taxon name, please check spacing and capitalization.");	
+			$errors->add("Invalid type taxon name, please check spacing and capitalization");	
 		}
 
 		
@@ -1176,12 +1180,12 @@ sub submitAuthorityForm {
 			if (($taxonRank eq 'genus') || ($taxonRank eq 'subgenus')) {
 				# then the type taxon rank must be species
 				if ($ttaxon->rank() ne 'species') {
-					$errors->add("The type taxon rank doesn't make sense.");	
+					$errors->add("The type taxon rank doesn't make sense");	
 				}
 			} else {
 				# for any other rank, the type taxon rank must not be species.
 				if ($ttaxon->rank() eq 'species') {
-					$errors->add("The type taxon rank doesn't make sense.");	
+					$errors->add("The type taxon rank doesn't make sense");	
 				}
 			}
 			
