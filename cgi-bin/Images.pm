@@ -309,14 +309,25 @@ sub processViewImages{
 	my $dbt = shift;
 	my $q = shift;
 	my $s = shift;
+	my $in_list = shift;
 	my $taxon_name = $q->param('genus_name');
 
-	my $sql = "SELECT authorities.taxon_no, image_no, images.reference_no, path_to_image, caption, ".
+	my @results;
+	my @taxa;
+	if ( $in_list )	{
+		@taxa = split /,/,$in_list;
+	} else	{
+		push @taxa , $taxon_name;
+	}
+
+	for my $t ( @taxa )	{
+		my $sql = "SELECT authorities.taxon_no, taxon_name, image_no, images.reference_no, path_to_image, caption, ".
 			  " original_filename ".
 			  "FROM authorities, images ".
 			  "WHERE authorities.taxon_no = images.taxon_no AND ".
-			  "taxon_name='$taxon_name'";
-	my @results = @{$dbt->getData($sql)};
+			  "taxon_name='$t'";
+		push @results , @{$dbt->getData($sql)};
+	}
 	
 	return @results;
 }
