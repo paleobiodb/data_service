@@ -103,7 +103,8 @@ sub checkStartForm{
 	# Higher taxon
 	if($taxon_type eq "Higher taxon"){
 		$q->param("genus_name" => $taxon_name);
-		$sql = "SELECT taxon_name, taxon_no FROM authorities ".
+		$sql = "SELECT taxon_name, taxon_no, pubyr, author1last, ".
+			   "ref_is_authority, reference_no FROM authorities ".
 			   "WHERE taxon_name='$taxon_name'";
 		@results = @{$dbt->getData($sql)};
 		# Check for homonyms
@@ -115,7 +116,7 @@ sub checkStartForm{
 			$ref->{genus_name} = $ref->{taxon_name};
  			delete $ref->{taxon_name};
 		}
-		# if nothing from authorities, go to occurrencs and reidentifications
+		# if nothing from authorities, go to occurrences and reidentifications
 		if(scalar @results < 1){
 			$q->param("no_classification" => "true");
 			$sql = "SELECT DISTINCT(genus_name) FROM occurrences ".
@@ -130,7 +131,8 @@ sub checkStartForm{
 	}
 	# Exact match search for 'Genus and species'
 	elsif($taxon_type eq "Genus and species"){
-		$sql = "SELECT taxon_name, taxon_no FROM authorities ".
+		$sql = "SELECT taxon_name, taxon_no, pubyr, author1last, ".
+			   "ref_is_authority, reference_no FROM authorities ".
 			   "WHERE taxon_name = '$taxon_name' AND taxon_rank='species'";
 		@results = @{$dbt->getData($sql)};
 		# NOTE: this may not be necessary, but we'll leave it in for now.
@@ -162,7 +164,8 @@ sub checkStartForm{
 	}
 	# 'Genus'
 	elsif($taxon_type eq "Genus"){
-		$sql = "SELECT taxon_name, taxon_no FROM authorities WHERE ".
+		$sql = "SELECT taxon_name, taxon_no, pubyr, author1last, ".
+			   "ref_is_authority, reference_no FROM authorities WHERE ".
 			   "taxon_name='$taxon_name' AND taxon_rank='Genus'";
 		@results = @{$dbt->getData($sql)};
 		# Check for homonyms
@@ -190,7 +193,8 @@ sub checkStartForm{
 	}
 	# or a species
 	else{
-		$sql = "SELECT taxon_name, taxon_no FROM authorities WHERE ".
+		$sql = "SELECT taxon_name, taxon_no, pubyr, author1last, ".
+			   "ref_is_authority, reference_no FROM authorities WHERE ".
 			   "taxon_name like '% $taxon_name' AND taxon_rank='species'";
 		@results = @{$dbt->getData($sql)};
 		# DON'T NEED TO DO THIS WITH SPECIES, METHINKS...
@@ -240,6 +244,7 @@ sub checkStartForm{
 			  "<input id=\"action\" type=\"hidden\"".
 			  " name=\"action\"".
 			  " value=\"displayTaxonInfoResults\">".
+			  "<input name=\"taxon_rank\" type=\"hidden\" value=\"$taxon_type\">".
 			  "<table width=\"100%\">";
 		my $newrow = 0;
 		my $choices = @results;
@@ -261,12 +266,12 @@ sub checkStartForm{
 				if($results[$index+($counter*$numrows)]->{clarification_info}){
 					print " (".$results[$index+($counter*$numrows)]->{taxon_no}.")";
 				}
-				print "\"><i>&nbsp;".$results[$index+($counter*$numrows)]->{genus_name}."&nbsp;".
+				print "\"><i>&nbsp;".$results[$index+($counter*$numrows)]->{genus_name}."</i>&nbsp;".
 					  $results[$index+($counter*$numrows)]->{species_name};
 				if($results[$index+($counter*$numrows)]->{clarification_info}){
-					print " (".$results[$index+($counter*$numrows)]->{clarification_info}.")";
+					print " <small>".$results[$index+($counter*$numrows)]->{clarification_info}."</small>";
 				}
-				print "</i></td>";
+				print "</td>";
 			}
 			print "</tr>";
 		}
@@ -295,7 +300,6 @@ sub displayTaxonInfoResults{
 	my $taxon_no = 0;
 
 	require Map;
-
 	# Looking for "Genus (23456)" or something like that.	
 	$genus_name =~ /(.*?)\((\d+)\)/;
 	$taxon_no = $2;
@@ -333,7 +337,7 @@ sub displayTaxonInfoResults{
 	# Get the sql IN list for a Higher taxon:
 	my $in_list = "";
 	if($taxon_type eq "Higher taxon"){
-		$in_list = PBDBUtil::taxonomic_search($q->param('genus_name'), $dbt);
+		$in_list = PBDBUtil::taxonomic_search($q->param('genus_name'), $dbt, $taxon_no);
 	}
 
 	print main::stdIncludes("std_page_top");
@@ -1245,6 +1249,16 @@ sub deal_with_homonyms{
 	else{
 		# for each child, find its parent
 		foreach my $ref (@array_of_hash_refs){
+			# first, use the pubyr/author for clarification:
+			if($ref->{pubyr} && $ref->{author1last}){
+				$ref->{clarification_info} = $ref->{author1last}." ".$ref->{pubyr}." ";
+			}
+			elsif($ref->{ref_is_authority} && $ref->{reference_no}){
+				my $sql = "SELECT pubyr, author1last FROM refs ".
+						  "WHERE reference_no=".$ref->{reference_no};
+				my @auth_ref = @{$dbt->getData($sql)};
+				$ref->{clarification_info} = $auth_ref[0]->{author1last}." ".$auth_ref[0]->{pubyr}." ";
+			}
 			my $sql = "SELECT parent_no, status, pubyr, reference_no ".
 					  "FROM opinions WHERE child_no=".$ref->{taxon_no}.
 					  " AND status='belongs to'";	
@@ -1258,7 +1272,7 @@ sub deal_with_homonyms{
 					   "'replaced by','corrected as')";
 				@ref_ref = @{$dbt->getData($sql)};
 				if(scalar @ref_ref < 1){
-					# Dead end.
+					# Dead end: clarification_info?
 					return $array_ref;	
 				}
 				# try above again:
@@ -1283,7 +1297,7 @@ sub deal_with_homonyms{
 			$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=".
 				   $ref_ref[$index]->{parent_no};
 			@ref_ref = @{$dbt->getData($sql)};
-			$ref->{clarification_info} = $ref_ref[0]->{taxon_name};
+			$ref->{clarification_info} .= "(".$ref_ref[0]->{taxon_name}.")";
 		}
 	}
 	return \@array_of_hash_refs;
