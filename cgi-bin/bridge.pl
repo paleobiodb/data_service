@@ -672,7 +672,7 @@ sub displayReportResults {
 
 	print &stdIncludes ( "std_page_top" );
 
-	my $r = Report->new( $dbh, $q );
+	my $r = Report->new( $dbh, $q, $s, $dbt );
 	$r->buildReport ( );
 
 	print &stdIncludes ("std_page_bottom");
