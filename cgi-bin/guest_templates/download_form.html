@@ -156,7 +156,7 @@ Select the research group:
 <td><select name="authorizer"></select></td>
 
 <tr><td valign=top><font size=-1>
-If you only want lists from one time span, enter the oldest and youngest intervals:
+If you only want lists from one time span, enter the oldest and youngest intervals <small><i>(do NOT enter numbers or terms like "Middle")</i></small>:
 <td valign=top><font size=-1>
 <input name=max_interval_name size=25> - <input name=min_interval_name size=25>
 
@@ -212,7 +212,7 @@ Geographic scale of collections:</font></td>
 </font></td></tr>
 
 <tr><td valign=top><font size=-1>
-Temporal scale of collections:</font></td>
+Stratigraphic scale of collections:</font></td>
 
 <td valign=top><font size=-1>
 <input type=checkbox name="bed" value="YES" checked>bed
@@ -354,8 +354,9 @@ Note that the collection ID and genus name fields are always output.</p>
 	<tr>
 	<td class="cell" nowrap><input type=checkbox name=collections_period_max value="YES">period</td>
 	<td class="cell" nowrap><input type=checkbox name=collections_epoch_max value="YES">epoch</td>
-	<td class="cell" nowrap><input type=checkbox name=collections_max_interval_no value="YES">max interval</td>
-	<td class="cell" nowrap><input type=checkbox name=collections_min_interval_no value="YES">min interval</td>
+	<td class="cell" nowrap><input type=checkbox name=collections_locage_max
+ value="YES" checked>10 m.y. bin</td>
+	<td class="cell" nowrap>&nbsp;</td></tr>
 	</tr>
 
 	<tr>
