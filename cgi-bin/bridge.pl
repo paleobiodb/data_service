@@ -660,7 +660,7 @@ sub displayDownloadResults {
 }
 
 sub displayReportForm {
-    displayPage ('report_form');
+	print $hbo->populateHTML( 'report_form', '', [ 'research_group' ] );
 }
 
 sub displayReportResults {
@@ -1288,7 +1288,7 @@ sub displaySearchColls {
 	# Show the "search collections" form
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-    my $html = $hbo->populateHTML('search_collections_form', [ '', '', '','' ], [ 'lithology1', 'lithology2', 'environment',$type ], \@prefkeys);
+    my $html = $hbo->populateHTML('search_collections_form', [ '', '', '', '','' ], [ 'research_group', 'lithology1', 'lithology2', 'environment',$type ], \@prefkeys);
 	buildAuthorizerPulldown ( \$html );
 	buildEntererPulldown ( \$html );
 
