@@ -28,6 +28,7 @@
 package Report;
 
 use Text::CSV_XS;
+use PBDBUtil;
 
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
@@ -200,27 +201,78 @@ sub tallyFieldTerms	{
 	 # discard records created before a given date if records are
 	 #   being counted
 		# query the database
-		# get only the necessary columns
-		$sql = "SELECT collection_no,created,genus_name,species_name FROM occurrences ".
-			   "WHERE ";
-		if($datelimit){
-			$sql .= "created >= $datelimit AND ";
+		$sql = "SELECT occurrences.collection_no, occurrences.genus_name, ".
+			   "occurrences.species_name, occurrences.created ".
+			   "FROM occurrences ";
+		if($q->param('taxon_name')){
+		  # Get occs that haven't been reID'ed
+		  $sql .= "LEFT JOIN reidentifications ON occurrences.occurrence_no = ".
+				  "reidentifications.occurrence_no WHERE ".
+				  "reidentifications.occurrence_no IS NULL AND ";
 		}
-		$sql .= "species_name != 'indet.'";
 		# restrict query to Compendium genera
-		if ( $jacklist )	{
-			$sql .= " AND genus_name IN ('" . $jacklist . "')";
+		elsif ( $jacklist )	{
+				$sql .= " WHERE occurrences.genus_name IN ('".$jacklist."')";
 		}
+		# neither taxon name nor Jack's list.
+		else{
+			$sql .= " WHERE ";
+		}
+		if($datelimit){
+			$sql .= "occurrences.created >= $datelimit AND ";
+		}
+		elsif($q->param('taxon_name')){
+			my $name = $q->param('taxon_name');
+			$genus_names_string = `./recurse $name`;
+			if($genus_names_string){
+					$sql .= " occurrences.genus_name IN ($genus_names_string)";
+			}
+		}
+		# Might have to filter out the 'else' append, above, if no datelimit.
+		$sql =~ s/WHERE\s+$//;
+
 		$self->dbg("non-collection sql: $sql<br>");
 		my $sth = $dbh->prepare($sql) || die "Prepare query failed\n";
 		$sth->execute() || die "Execute query failed\n";
 		my @rowrefs = @{$sth->fetchall_arrayref()};
 		$sth->finish();
+		# get the reid'ed data:
+		if($q->param('taxon_name')){
+			$sql = "SELECT count(occurrence_no), occurrence_no, collection_no,".
+				   " genus_name, species_name, created ".
+				   "FROM reidentifications WHERE genus_name IN (".
+					$genus_names_string.") GROUP BY occurrence_no";
+			$self->dbg("reid sql: $sql<br>");
+			my $sth = $dbh->prepare($sql) || die "Prepare query failed\n";
+			$sth->execute() || die "Execute query failed\n";
+			my @temp =  @{$sth->fetchall_arrayref()};
+			foreach my $ref (@temp){
+				if($ref->[0] > 1){
+					# Put the most recent reID in this slot in the array
+					my $hr = PBDBUtil::getMostRecentReIDforOcc($dbt,$ref->[1],1);
+					my @record = ($hr->{collection_no}, $hr->{genus_name}, $hr->{species_name}, $hr->{created});
+					$ref = \@record;
+				}
+			}
+			push(@rowrefs, @temp);
+			$sth->finish();
+		}
 
 		foreach my $rowref ( @rowrefs ){
-			my ($collno,$created,$genus,$species) = @{$rowref};
+			my ($collno,$reid_collno,$genus,$reid_genus,$species,$reid_species) = @{$rowref};
 			$recs[$collno]++;
+			$include[$collno]++;
 			push @{$taxlist[$collno]} , $genus;
+			if($genus && $reid_genus && ($reid_genus ne $genus)){
+				push @{$taxlist[$collno]} , $reid_genus;
+			}
+		}
+		$doesappear = scalar(@rowrefs);
+	
+		if ($doesappear == 0)	{
+			print "The taxon \"<i>".$q->param('taxon_name')."</i>\"";
+			print " does not appear anywhere in the database.<p>\n";
+			exit(0);
 		}
 	}
 	$self->dbg("numrecs: ".@recs."<br>");
@@ -231,10 +283,10 @@ sub tallyFieldTerms	{
 	$self->dbg("total count: $totaltotal<br>");
 
 	# restrict counts to a particular genus or taxonomic class
-	if ( $q->param('taxon_name') )	{
+#	if ( $q->param('taxon_name') )	{
 		#$genus_names_string = PBDBUtil::taxonomic_search($q->param('taxon_name'),$dbt);
-		my $name = $q->param('taxon_name');
-		$genus_names_string = `./recurse $name`;
+#		my $name = $q->param('taxon_name');
+#		$genus_names_string = `./recurse $name`;
 	# find the genus or class in the occurrence table
 	# this section rewritten to do a bona fide database query by JA 2.8.02
 	# query the database for the necessary fields
@@ -242,34 +294,34 @@ sub tallyFieldTerms	{
 	#  class list is supposed to come from the Compendium; needs to
 	#  be rewritten once /classdata reads are replaced with a proper
 	#  authorities table query JA 28.2.03
-		$gsql = "SELECT collection_no,occurrence_no,genus_name ".
-			    "FROM occurrences WHERE genus_name IN ($genus_names_string)";
-		if($datelimit){
-			$gsql .= " AND created >= $datelimit";
-		}
-		$self->dbg("genus_name sql: $gsql<br>");
-		my $sth = $dbh->prepare($gsql) || die "Prepare query failed\n";
-		$sth->execute() || die "Execute query failed\n";
-		my @rowrefs = @{$sth->fetchall_arrayref()};
+#		$gsql = "SELECT collection_no,occurrence_no,genus_name ".
+#			    "FROM occurrences WHERE genus_name IN ($genus_names_string)";
+#		if($datelimit){
+#			$gsql .= " AND created >= $datelimit";
+#		}
+#		$self->dbg("genus_name sql: $gsql<br>");
+#		my $sth = $dbh->prepare($gsql) || die "Prepare query failed\n";
+#		$sth->execute() || die "Execute query failed\n";
+#		my @rowrefs = @{$sth->fetchall_arrayref()};
 
 		# nuke the lists of genera because they'll need to be
 		#   recomputed
-		@taxlist = ();
+#		@taxlist = ();
 
-		foreach my $rowref ( @rowrefs )	{
-			my ($collno,$occno,$genus) = @{$rowref};
-			$include[$collno]++;
-			push @{$taxlist[$collno]} , $genus;
-		}
-		$sth->finish();
-		$doesappear = scalar(@rowrefs);
+#		foreach my $rowref ( @rowrefs )	{
+#			my ($collno,$occno,$genus) = @{$rowref};
+#			$include[$collno]++;
+#			push @{$taxlist[$collno]} , $genus;
+#		}
+#		$sth->finish();
+#		$doesappear = scalar(@rowrefs);
 	
-		if ($doesappear == 0)	{
-			print "The taxon \"<i>".$q->param('taxon_name')."</i>\"";
-			print " does not appear anywhere in the database.<p>\n";
-			exit(0);
-		}
-	}
+#		if ($doesappear == 0)	{
+#			print "The taxon \"<i>".$q->param('taxon_name')."</i>\"";
+#			print " does not appear anywhere in the database.<p>\n";
+#			exit(0);
+#		}
+#	}
 	$self->dbg("include: @include<br>doesappear: $doesappear<br>");
 	
 	if ($q->param('searchfield2') )	{
@@ -332,10 +384,12 @@ sub tallyFieldTerms	{
 	$csql = "SELECT * FROM collections";
 
     my $resgrp = $q->param('research_group');
+	my $coll_where = 0;
 
 	## Date conditional
 	if($datelimit){
 		$csql .= " WHERE created >= $datelimit";
+		$coll_where = 1;
 	}
 
 	## Research group conditional
@@ -343,7 +397,7 @@ sub tallyFieldTerms	{
         require PBDBUtil;
         my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
         if($resprojstr ne ""){
-			if($datelimit){
+			if($coll_where){
 				$csql .= " AND collections.reference_no IN (" . $resprojstr . ")";
 			}
 			else{
@@ -352,15 +406,33 @@ sub tallyFieldTerms	{
         }
     }
     elsif($resgrp){
-		if($datelimit){
+		if($coll_where){
 			$csql .= " AND FIND_IN_SET( '$resgrp', collections.research_group )";
 		}
 		else{
 			$csql .= " WHERE FIND_IN_SET( '$resgrp', collections.research_group )";
 		}
     }
+	my @nums = ();
+	for(my $index=0; $index<@recs; $index++){
+		if($recs[$index]){
+			push @nums, "'$index'";
+		}
+	}
+	if(@nums){
+		if($coll_where){
+			$csql .= " AND collection_no IN (".join(",",@nums).")";
+		}
+		else{
+			$csql .= " WHERE collection_no IN (".join(",",@nums).")";
+		}
+	}
+
+	$self->dbg("coll_sql: $csql<br>");
 
 	@all_coll_rows = @{$dbt->getData($csql)};
+
+	$self->dbg("number of coll results: ".@all_coll_rows."<br>");
 
 	foreach my $rowref ( @all_coll_rows ) {
 		%collrow = %{$rowref};
