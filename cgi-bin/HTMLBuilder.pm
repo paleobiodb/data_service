@@ -13,6 +13,7 @@ use TextArea;
 use Hidden;
 use Anchor;
 use Class::Date qw(date localdate gmdate now);
+use Debug;
 
 sub new {
   my $class = shift();
@@ -200,6 +201,10 @@ sub populateHTML {
   # Get the template name, the row (list of values)
   # and a list of fieldnames to scan for
   my ($self, $htmlTemplateName, $row, $fieldNames, $prefkeys) = @_;
+  
+  #Debug::dbPrint("start of populateHTML");
+  #Debug::dbPrint("template = $htmlTemplateName, row = $row, fieldNames = $fieldNames, prefKeys = $prefKeys");
+  
   my @row;
   my @fieldNames;
   if(UNIVERSAL::isa($row, "HASH")){

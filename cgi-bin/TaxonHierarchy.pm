@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
-# currently for testing purposes only
 # created by rjp, 1/2004.
+# similar to TaxonInfo, may eventually replace it.
 
 package TaxonHierarchy;
 

@@ -5,6 +5,8 @@ require Exporter;
 use DBI;
 use CookieFactory;
 use Class::Date qw(date localdate gmdate now);
+use CGI::Carp qw(fatalsToBrowser);
+
 
 # I THINK THESE ARE BOGUS. THERE ARE NO SUCH METHODS/VARIABLES IN THIS MODULE
 @EXPORT = qw(setName setHref toHTML);

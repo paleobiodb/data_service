@@ -17,6 +17,8 @@ use strict;
 
 use SQLBuilder;
 use Debug;
+use CGI::Carp qw(fatalsToBrowser);
+
 
 use constant CACHESIZE => 1000;		# number of entries in the cache.
 

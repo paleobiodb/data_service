@@ -11,6 +11,8 @@ use DBI;
 use DBConnection;
 use SQLBuilder;
 use URLMaker;
+use CGI::Carp qw(fatalsToBrowser);
+
 
 use fields qw(	reference_no
 				pubyr

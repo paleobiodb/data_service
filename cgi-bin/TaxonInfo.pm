@@ -1388,9 +1388,15 @@ sub displayTaxonSynonymy{
 }
 
 
+# updated by rjp, 1/22/2004
+# gets paragraph displayed in places like the
+# taxonomic history, for example, if you search for a particular taxon
+# and then check the taxonomic history box at the left.
+#
 sub getSynonymyParagraph{
 	my $dbt = shift;
 	my $taxon_no = shift;
+	
 	my %synmap = ( 'recombined as' => 'recombined as ',
 				   'replaced by' => 'replaced with ',
 				   'corrected as' => 'corrected as ',

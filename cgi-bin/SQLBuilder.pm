@@ -34,6 +34,8 @@ use Permissions;
 use DBConnection;
 use Debug;
 use Session;
+use CGI::Carp qw(fatalsToBrowser);
+
 
 use fields qw(	
 				dbh
@@ -170,13 +172,13 @@ sub setWhereExpr {
 }
 
 # returns the separator
-sub whereSeparator {
+sub whereSeparator() {
 	my SQLBuilder $self = shift;
 	return $self->{whereSeparator};	
 }
 
 # set which separator to use
-sub setWhereSeparator {
+sub setWhereSeparator($) {
 	my SQLBuilder $self = shift;
 	my $newSep = shift;
 	
@@ -188,7 +190,7 @@ sub setWhereSeparator {
 
 # adds an item to the where clause.
 # does not allow addition of empty items
-sub addWhereItem {
+sub addWhereItem($) {
 	my SQLBuilder $self = shift;
 	my $item = shift;
 
