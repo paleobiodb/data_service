@@ -5661,23 +5661,17 @@ sub formatAuthorityLine	{
 
 	# Print name of higher taxon JA 10.4.03
 	# Get the status and parent of the most recent opinion
+	# shortened by calling selectMostRecentParentOpinion 5.4.04
 	$sql = "SELECT opinions.parent_no, opinions.pubyr, " .
 		"opinions.reference_no, opinions.status " .
 		"FROM opinions WHERE opinions.child_no=" .
 		$taxData{'taxon_no'};
 	@opRefs = @{$dbt->getData($sql)};
-	my $most_recent = 0;
-	my $bestRef = 0;
-	for my $opRef ( @opRefs )	{
-		$opRef->{pubyr} = PBDBUtil::get_real_pubyr($dbt,$opRef);
-		if ( $opRef->{pubyr} > $most_recent )	{
-			$most_recent = $opRef->{pubyr};
-			$bestRef = $opRef;
-		}
-	}
-	my %opRow = %{$bestRef};
+	my $index = selectMostRecentParentOpinion($dbt, \@opRefs, 1);
+	my %opRow = %{$opRefs[$index]};
 	my $status = $opRow{'status'};
 	my $parent_no = $opRow{'parent_no'};
+
 	if ( $status && $parent_no )	{
 	# Not quite there; still need the name corresponding to this parent
 		$sql = "SELECT taxon_name,taxon_rank FROM authorities WHERE taxon_no=";
@@ -6009,7 +6003,8 @@ sub new_authority_form {
 
 
 
-
+# JA 5.4.04: this was deprecated by rjp when he wrote the Taxon and
+#  Opinion modules
 
 # JA 15-22,27.8.02
 # modified by rjp, 1/2004
@@ -6164,7 +6159,8 @@ sub processTaxonomyEntryForm {
 } # end processTaxonomyForm
 
 
-
+# JA 5.4.04: used only by processTaxonomyEntryForm, so it was deprecated
+#  when Poling wrote his new taxonomy modules
 
 # used in conjunction with processTaxonomyEntryForm()
 sub checkNewTaxon {
