@@ -1239,6 +1239,8 @@ sub displayOpinionSummary {
 	my Opinion $self = shift;
 	my $newEntry = shift;
 
+	my $sql = $self->getTransactionManager();
+
 	my $enterupdate;
 	if ($newEntry) {
 		$enterupdate = 'entered into';
@@ -1259,17 +1261,26 @@ sub displayOpinionSummary {
 	if (!$dbrec) {
 		print "<DIV class=\"warning\">Error inserting/updating opinion record.  Please start over and try again.</DIV>";	
 	} else {
+
+	# following computation could be done with Poling's objects, but
+	#  he can go to hell - actually faster and easier this way
+		my $asql = "SELECT taxon_name,taxon_rank FROM authorities WHERE taxon_no=" . $self->childNumber();
+		my $ref = ${$sql->getData($asql)}[0];
+
+		my $tempTaxon = $ref->{taxon_name};
+		$tempTaxon =~ s/ /+/g;
 		
 		my $opinionHTML = $opinion->formatAsHTML();
 		$opinionHTML =~ s/according to/of/i;
 		
-		print "<H3> The opinion $opinionHTML has been $enterupdate the database</H3><p>To verify that the information was entered correctly, click on the add more data link below.</p>";
+		print "<H3> The opinion $opinionHTML has been $enterupdate the database</H3>";
 		
-		print "<TABLE border=0><TR><TD align=center>";
-		print "<p><A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=" . $self->{opinion_no} ."\"><B>Add more data about this opinion</B></A></p>";
-		print "<p><A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionList&taxon_no=" . $self->childNumber() . " \"><B>Add/edit a different opinion about this taxon</B></A></p>";
-		print "<p><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&amp;goal=opinion\"><B>Add/edit an opinion about another taxon</B></A></p>";
-		print "</TD></TR></TABLE>";
+		print "<center>
+		<p><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonInfoResults&taxon_rank=" . $ref->{taxon_rank} . "&genus_name=" . $tempTaxon . "+(" . $self->childNumber() .")\"><B>Get&nbsp;general&nbsp;information&nbsp;about&nbsp;" . $ref->{taxon_name} . "</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=" . $self->{opinion_no} ."\"><B>Edit&nbsp;this&nbsp;opinion</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionList&taxon_no=" . $self->childNumber() . " \"><B>Add/edit&nbsp;a&nbsp;different&nbsp;opinion&nbsp;about&nbsp;" . $ref->{taxon_name} . "</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&amp;goal=opinion\"><B>Add/edit&nbsp;an&nbsp;opinion&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
+		</center>";
 	}
 	
 	print "<BR>";
