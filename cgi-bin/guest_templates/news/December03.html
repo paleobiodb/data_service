@@ -2,14 +2,31 @@
 <h2>Paleobiology Database News for December, 2003</h2>
 </center>
 
+<hr>
+<center><h3>Data enterer of the year</h3></center>
+
 <!--
+
+create temporary table foo select enterer,created from refs;
+insert into foo select enterer,created from collections;
+insert into foo select enterer,created from occurrences;
+insert into foo select enterer,created from reidentifications;
+select enterer,count(distinct to_days(created),hour(created)) from foo where created>20030101010000 and created<20040101010000 group by enterer having count(distinct to_days(created),hour(created))>100 order by 2 desc;
+
+-->
+
+<center>
+<p><b>Erin Leckey</b>, University of California, Santa Barbara (262 hours of keystroking)</p>
+</center>
+
 <hr>
 <center><h3>Data entered this month</h3></center>
 
 <table width=100%><tr><td>
-<center><i> references,  collections, and  occurrences</i></center><p>
+<center><i>96 references, 297 collections, and 4622 occurrences</i></center><p>
 </td></tr></table>
 
+<!--
 <hr>
 <center><h3>Data uploads</h3></center>
 
