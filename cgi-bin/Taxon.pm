@@ -180,16 +180,16 @@ sub getTaxonNumberFromName {
 			return ($tn, $input);
 		}
 		
-		# if we make it to here, then that means that we didn't find the
-		# taxon in the authorities table, so try it with just the first part
-		# (ie, we'll assume that it was a genus species, and cut off the species)
-		$input =~ s/^(.*)\s.*$/$1/;
-		
-		my $tn = $sql->getSingleSQLResult("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
-		
-		if ($tn) {
-			return ($tn, $input);
-		}
+	#	# if we make it to here, then that means that we didn't find the
+	#	# taxon in the authorities table, so try it with just the first part
+	#	# (ie, we'll assume that it was a genus species, and cut off the species)
+	#	$input =~ s/^(.*)\s.*$/$1/;
+	#	
+	#	my $tn = $sql->getSingleSQLResult("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
+	#	
+	#	if ($tn) {
+	#		return ($tn, $input);
+	#	}
 	}
 	
 	return (0, "");
@@ -1068,15 +1068,23 @@ sub submitAuthorityForm {
 		
 	} # end foreach formField.
 	
+	# if they entered a type_taxon_name, then we'll have to look it
+	# up in the database because it's stored in the authorities table as a 
+	# type_taxon_no, not a name.
 	if ($q->param('type_taxon_name')) {
 		my $junk;
-		($fieldsToEnter{type_taxon_no}, $junk) = $self->getTaxonNumberFromName($fieldsToEnter{type_taxon_name});
-		$fieldsToEnter{type_taxon_name} = '';
+		my $number;
+		($number, $junk) = $self->getTaxonNumberFromName($fieldsToEnter{type_taxon_name});
+		
+		if (!$number) {
+			# if it doesn't exist, tell them to go enter it first.
+			$errors->add("The type taxon you entered doesn't exist in our database.  Please submit this form without the type taxon and then go back and add it later.");
+		} else {
+			$fieldsToEnter{type_taxon_no} = $number;
+			$fieldsToEnter{type_taxon_name} = '';
+		}
 	}
 
-
-	
-	
 	$fieldsToEnter{taxon_name} = $q->param('taxon_name_corrected');
 	
 
