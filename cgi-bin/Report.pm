@@ -48,6 +48,7 @@ sub buildReport {
     $self->{'totals2'} = {}; # Totals for searchfield2
     $self->{'sortKeys1'} = []; # Sorted keys for each index of the hash, pruned down to a size < max_rows and max_cols, respectively
     $self->{'sortKeys2'} = []; #   
+    $self->{'warnings'} = [];
     #$self->{'grandTotal1'} = 0;
     #$self->{'grandTotal2'} = 0;
     # the above vars calculate rows output in the printed table
@@ -81,6 +82,9 @@ sub reportDisplayHTML {
 		print ": ".$q->param('taxon_name');
 	}
 	print "</h2>\n";
+
+    # Print Warnings
+    $self->printWarnings();
     
     # Print Header
     my $isDoubleArray = scalar @{$self->{'sortKeys2'}};
@@ -579,9 +583,11 @@ sub reportQueryDB{
         if ($q->param('output') eq 'collections') {
             # this shouldn't be necessary, if you think about it, since we're matching where terms on occurrences anyways.
             $fromSQL .= " LEFT JOIN occurrences ON occurrences.collection_no = collections.collection_no";
+            $fromSQL .= " LEFT JOIN reidentifications ON reidentifications.occurrence_no = occurrences.occurrence_no";
         } else {    
             # if we're counting occurrences, we're not counting empty collections as well
             $fromSQL .= ", occurrences ";
+            $fromSQL .= " LEFT JOIN reidentifications ON reidentifications.occurrence_no = occurrences.occurrence_no";
             push @whereTerms,"occurrences.collection_no = collections.collection_no";
         }
         # get a list of Sepkoski's genera, if needed JA 28.2.03
@@ -603,28 +609,36 @@ sub reportQueryDB{
         # Changed PBDBUtil funct to optionally use taxon_nos and used those
         my $genus_names_string;
 		if($q->param('taxon_name')){
-            my @taxa = split(/\s*,\s*/,$q->param('taxon_name'));
-            my $taxon_nos_string = "";
-            if (scalar(@taxa) == 1) {
-                $taxon_nos_string = PBDBUtil::taxonomic_search($q->param('taxon_name'), $dbt,'','return taxon nos');
-            } elsif (scalar(@taxa) > 1) {
-                my %taxon_nos_unique = ();
-                foreach $taxon (@taxa) {
-                    my @taxon_nos = PBDBUtil::taxonomic_search($taxon, $dbt,'','return taxon nos');
+	        @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
+                                                                                                                                                         
+            my %taxon_nos_unique = ();
+            foreach $taxon (@taxa) {
+                @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon);
+                $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
+                if (scalar(@taxon_nos) == 0) {
+                    $genus_names_string .= ", ".$dbh->quote($taxon);
+                } elsif (scalar(@taxon_nos) == 1) {
+                    my @all_taxon_nos = PBDBUtil::taxonomic_search('', $dbt,$taxon_nos[0],'return taxon nos');
                     # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
-                    @taxon_nos_unique{@taxon_nos} = ();
+                    @taxon_nos_unique{@all_taxon_nos} = ();
+                } else { #result > 1
+                    push @{$self->{'warnings'}}, "The taxon name '$taxon' was not included because it is ambiguous and belongs to multiple taxonomic hierarchies. Right the report script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
                 }
-                $taxon_nos_string = join(",", keys %taxon_nos_unique);
             }
-            $fromSQL .= " LEFT JOIN reidentifications ON reidentifications.occurrence_no = occurrences.occurrence_no";   
+            $taxon_nos_string = join(", ", keys %taxon_nos_unique);
+            $genus_names_string =~ s/^,//;
+         
+            my $sql;
+            if ($taxon_nos_string) {
+                $sql .= " OR occurrences.taxon_no IN (".$taxon_nos_string.") OR reidentifications.taxon_no IN (".$taxon_nos_string.")";
+            }
+            if ($genus_names_string) {
+                $sql .= " OR occurrences.genus_name IN (".$genus_names_string.") OR reidentifications.genus_name IN (".$genus_names_string.")";
+            }
+            $sql =~ s/^ OR //g;
 
-			if($taxon_nos_string) {
-			    push @whereTerms, "(occurrences.taxon_no IN ($taxon_nos_string) OR reidentifications.taxon_no IN ($taxon_nos_string))";
-            } else {
-			    push @whereTerms, "(occurrences.taxon_no IN (-1) OR reidentifications.taxon_no IN (-1))";
-            }
-			
-		}
+            if ($sql) { push @whereTerms, "(".$sql.")"; }
+        }
     }
 
     # Construct the final SQL query and execute
@@ -739,6 +753,19 @@ sub getRegions	{
 	}
     return \%regions;
 	close REGIONS;
+}
+
+# This only shown for internal errors
+sub printWarnings{
+    my $self = shift;
+    if (scalar(@{$self->{'warnings'}})) {
+        my $plural = (scalar(@{$self->{'warnings'}}) > 1) ? "s" : "";
+        print "<br><table width=600 border=0>" .
+              "<tr><td class=darkList><font size='+1'><b>Warning$plural</b></font></td></tr>" .
+              "<tr><td>";
+        print "<li class='medium'>$_</li>" for (@{$self->{'warnings'}});
+        print "</td></tr></table><br>";
+    }
 }
 
 # This only shown for internal errors
