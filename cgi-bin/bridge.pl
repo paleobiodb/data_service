@@ -1980,11 +1980,14 @@ sub displaySearchColls {
 #
 # $in_list is an optional parameter which is used when 
 # the script is called from TaxonInfo in the doCollections() routine.
-# It is a list of synonyms of taxa to find (ie, find collections which 
+# It is a array of synonyms of taxa to find (ie, find collections which 
 # have occurrences of any taxa in this list).
 sub displayCollResults {
 	my $in_list = shift;	# optional parameter from taxon info script
-	
+    if ($q->param('taxon_list')) {
+        @in_list = split(/\s*,\s*/,$q->param('taxon_list'));
+        $in_list= \@in_list;
+    }
 	my $limit = $q->param('limit') || 30 ;
     my $rowOffset = $q->param('rowOffset') || 0;
 
@@ -2468,8 +2471,8 @@ sub processCollectionsSearch {
 	# Handles species name searches JA 19-20.8.02
 
 	my $genus_name = $q->param('genus_name');
-	
-	if ($genus_name) {
+
+	if ($genus_name || @$in_list) {
 		# Fix up the genus name and set the species name if there is a space 
 		my $genus;
 		my $sub_genus;
@@ -2497,8 +2500,8 @@ sub processCollectionsSearch {
 		} else { 
 			# this is for genus only...
 			$genus = $q->param('genus_name');
-		}
-				
+        }
+
 		my @tables = ("occurrences", "reidentifications");
 		$sql->setSelectExpr("collection_no, count(*)");
 		for my $tableName (@tables) {
@@ -2512,48 +2515,61 @@ sub processCollectionsSearch {
 				$relationString = "='";
 				$wildCard = "'";
 			}
-			
-			if ( $genus )	{
+		
+            if (@$in_list) {
+                # In list may be a text genus+species name, a taxon number, or both (if passed from Confidence.pm)
+                my ($taxon_nos_string,$genus_species_sql);
+                foreach $taxon_no_or_name (@$in_list) {
+                    if ($taxon_no_or_name =~ /^\d+$/) {
+                        $taxon_nos_string .= $taxon_no_or_name . ",";
+                    } else {
+                        my ($genus,$species) = split(/ /,$taxon_no_or_name);
+                        if ($genus) {
+                            $genus_species_sql .= " OR (genus_name=".$dbh->quote($genus);
+                            if ($species) {
+                                $genus_species_sql .= "AND species_name=".$dbh->quote($species);
+                            }
+                            $genus_species_sql .= ")";
+                        }
+                    }
+                }
+                $taxon_nos_string =~ s/,$//;
+                if (!$taxon_nos_string) {$taxon_nos_string = '-1';}
+
+				$sql->addWhereItem("(taxon_no IN ($taxon_nos_string) $genus_species_sql)");
+            } elsif ( $genus )	{
 				if ($q->param("taxon_rank") eq "Higher taxon" ||
 					$q->param("taxon_rank") eq "Higher-taxon"){
-										
-					if ($in_list eq "") {
-                        $in_list = '-1';
-						dbg("RE-RUNNING TAXONOMIC SEARCH in bridge<br>");
-						# JA: Muhl switched to recurse call, I'm switching back
-						#  because I'm not maintaining recurse
-                        @taxon_nos = TaxonInfo::getTaxonNos($dbt,$q->param('genus_name'));
-                        if (scalar(@taxon_nos)  > 1) {
-                            # taxon is a homonym... make sure we get all versions of the homonym
-                            my %taxon_nos_unique = ();
-                            foreach $taxon_no (@taxon_nos) {
-                                my @all_taxon_nos = PBDBUtil::taxonomic_search('',$dbt,$taxon_no,'return taxon nos');
-                                # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
-                                @taxon_nos_unique{@all_taxon_nos} = ();
-                            }
-                            $in_list = join(", ", keys %taxon_nos_unique);
-                        } elsif (scalar(@taxon_nos) == 1) {
-						    $in_list = PBDBUtil::taxonomic_search('',$dbt,$taxon_nos[0],'return taxon_nos');
+                    $taxon_nos_string = '-1';
+                    dbg("RE-RUNNING TAXONOMIC SEARCH in bridge<br>");
+                    # JA: Muhl switched to recurse call, I'm switching back
+                    #  because I'm not maintaining recurse
+                    @taxon_nos = TaxonInfo::getTaxonNos($dbt,$q->param('genus_name'));
+                    if (scalar(@taxon_nos)  > 1) {
+                        # taxon is a homonym... make sure we get all versions of the homonym
+                        my %taxon_nos_unique = ();
+                        foreach $taxon_no (@taxon_nos) {
+                            my @all_taxon_nos = PBDBUtil::taxonomic_search('',$dbt,$taxon_no,'return taxon nos');
+                            # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
+                            @taxon_nos_unique{@all_taxon_nos} = ();
                         }
-                                                    
-                        
-                        # my $name = $q->param('genus_name');
-                        # $in_list = `./recurse $name`;
-					}
-					
+                        $taxon_nos_string = join(", ", keys %taxon_nos_unique);
+                    } elsif (scalar(@taxon_nos) == 1) {
+                        $in_list = PBDBUtil::taxonomic_search('',$dbt,$taxon_nos[0],'return taxon_nos');
+                    }
+                                                
 					$sql->addWhereItem("taxon_no IN ($in_list)");
-										
 				} else {
 					$sql->addWhereItem("genus_name".$relationString.$genus.$wildCard);
 				}
-			}
 			
-			if ( $sub_genus ) {
-				$sql->addWhereItem("subgenus_name" . $relationString.$subgenus.$wildCard);
-			}
-			
-			if ( $species )	{
-				$sql->addWhereItem("species_name" . $relationString . $species . $wildCard);
+                if ( $sub_genus ) {
+                    $sql->addWhereItem("subgenus_name" . $relationString.$subgenus.$wildCard);
+                }
+                
+                if ( $species )	{
+                    $sql->addWhereItem("species_name" . $relationString . $species . $wildCard);
+                }
 			}
 
 			$sql->setGroupByExpr("collection_no");
@@ -2780,7 +2796,9 @@ IS NULL))";
 		#Debug::dbPrint("field $fieldName");
 		
 		if (defined $q->param($fieldName) && $q->param($fieldName) ne '')  {
-            if ($q->param($fieldName) eq "NULL_OR_EMPTY") {
+            if ($q->param($fieldName) eq "NOT_NULL_OR_EMPTY") {
+                push(@terms, "(collections.$fieldName IS NOT NULL AND collections.$fieldName!='')");
+            } elsif ($q->param($fieldName) eq "NULL_OR_EMPTY") {
                 push(@terms, "(collections.$fieldName IS NULL OR collections.$fieldName='')");
 			} elsif ( $pulldowns{$fieldName} ) {
 				# It is in a pulldown... no wildcards
@@ -2805,6 +2823,15 @@ IS NULL))";
 						OR collections.formation $comparator $val
 						OR collections.member $comparator $val)");
 	}
+
+    # This field is only passed by section search form PS 12/01/2004
+    if (defined $q->param("section_name") && $q->param("section_name") eq '') {
+        push(@terms, "collections.localsection IS NOT NULL AND collections.localsection != '' AND collections.localbed REGEXP '^[0-9]\$'");
+    } elsif ($q->param("section_name")) {
+        my $val = $dbh->quote($wildcardToken.$q->param("section_name").$wildcardToken);
+        push(@terms, "((collections.regionalsection $comparator $val AND collections.localsection IS NOT NULL AND collections.localsection != '')
+                       OR collections.localsection $comparator $val) AND collections.localbed REGEXP '^[0-9]\$'"); 
+    }                
 
     # This field is only passed by links created in the Strata module PS 12/01/2004
 	if ($q->param("lithologies")) {
@@ -2863,6 +2890,7 @@ IS NULL))";
 								"research_group",
 								"release_date",
 								"country", "state", 
+                                "localsection", "regionalsection",
 								"period_max", 
 								"period_min", "epoch_max", 
 								"epoch_min", "intage_max", 
@@ -2910,7 +2938,7 @@ IS NULL))";
 	####***** rjp 1/14/04 - what the heck does this do?  
 	#### I think there are some bugs in this logic related
 	#### to searching for a genus with a min/max time period..
-	if ( $q->param('genus_name') ) {
+	if ( $q->param('genus_name') || @$in_list) {
 		if ( @timeinlist )	{
 			my %collintimeinlist = ();
 			for my $t ( @timeinlist )	{
@@ -3033,6 +3061,18 @@ sub displayCollectionDetails {
 	my ($r,$f) = getMaxMinNamesAndDashes(\@row,\@fieldNames);
 	@row = @{$r};
 	@fieldNames = @{$f};
+
+    # have the local section link to a local section search
+    my ($localsection_idx, $localsection_link);
+    for($index=0;$index < $#fieldNames;$index++) {
+        $localsection_idx = $index if ($fieldNames[$index] eq "localsection");
+    }
+    if ($row[$localsection_idx]) {
+        $localsection_link = "<a href=\"$exec_url?action=showStratForm&taxon_resolution=species&skip_taxon_list=YES&input_type=strat"
+                         . "&input=".uri_escape($row[$localsection_idx])."\">$row[$localsection_idx]</a>";
+    }
+    $row[$localsection_idx] = $localsection_link if ($localsection_link);
+
 
     # have the geological group/formation/members hyperlink to strata search
     my ($group_idx, $formation_idx, $member_idx, $group_link, $formation_link, $member_link);
@@ -9018,9 +9058,22 @@ sub buildReference {
 # Confidence Intervals JSM #
 # ------------------------ #
 
+sub displaySectionResults{
+    print stdIncludes("std_page_top");
+    Confidence::displaySectionResults($q, $s, $dbt,$hbo);
+    print stdIncludes("std_page_bottom");
+}
+
+sub displaySearchSectionForm{
+    print stdIncludes("std_page_top");
+    Confidence::displaySearchSectionForm($q, $s, $dbt,$hbo);
+    print stdIncludes("std_page_bottom");
+}
+
 sub displayFirstForm   {
     print stdIncludes("std_page_top");
-        Confidence::displayQueryPage($q, $s, $dbt, $splist);
+    #Confidence::displayQueryPage($q, $s, $dbt, $splist);
+    Confidence::buildList($q, $s, $dbt);
     print stdIncludes("std_page_bottom");
 }
 
@@ -9032,7 +9085,7 @@ sub databaseCheckForm   {
 
 sub buildListForm {
     print stdIncludes("std_page_top");
-        Confidence::buildList($q, $s, $dbt, $splist);
+    Confidence::buildList($q, $s, $dbt);
     print stdIncludes("std_page_bottom");
 }
 
@@ -9050,13 +9103,13 @@ sub showOptionsForm {
 
 sub calculateTaxonomicInterval {
 	print stdIncludes("std_page_top");
-	   Confidence::calculateTaxaInterval($q, $s, $dbt, $splist);
+	Confidence::calculateTaxaInterval($q, $s, $dbt, $splist);
 	print stdIncludes("std_page_bottom");
 }
 
 sub calculateStratigraphicInterval {
 	print stdIncludes("std_page_top");
-	   Confidence::calculateStratInterval($q, $s, $dbt, $splist);
+	Confidence::calculateStratInterval($q, $s, $dbt, $splist);
 	print stdIncludes("std_page_bottom");
 }
 
@@ -9075,7 +9128,6 @@ sub displayTaxonomicNamesAndOpinions {
     Opinion::displayOpinionChoiceForm($dbt,$s,$q,1);
     print stdIncludes("std_page_bottom");
 }
-
 # check for the presence of the nefarious V.J. Gupta or M.M. Imam
 sub checkFraud{
     dbg("checkFraud called". $q->param('author1last'));
@@ -9113,6 +9165,6 @@ sub checkFraud{
         dbg("found imam in author2");    
         return 'Imam';
     }
-
     return 0;
 }
+
