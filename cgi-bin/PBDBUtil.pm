@@ -559,8 +559,14 @@ sub get_real_pubyr{
 sub taxonomic_search{
 	my $name = shift;
 	my $dbt = shift;
-    my $sql = "SELECT taxon_no from authorities WHERE taxon_name='$name'";
-    my @results = @{$dbt->getData($sql)};
+	my $taxon_no = (shift or "");
+	my $sql = "";
+	my @results = ();
+	if($taxon_no eq ""){
+		$sql = "SELECT taxon_no from authorities WHERE taxon_name='$name'";
+		@results = @{$dbt->getData($sql)};
+		$taxon_no = $results[0]->{taxon_no};
+	}
 
     # global to this method and methods called by it
     local %ref_pubyr = ();
@@ -568,11 +574,10 @@ sub taxonomic_search{
 	local %passed = ();
 
 	# We might not get a number or rank if this name isn't in authorities yet.
-	if(!$results[0]){
+	if(!$taxon_no){
 		return "'$name'";
 	}
-
-	new_search_recurse($results[0]->{taxon_no}, $dbt, 1);
+	new_search_recurse($taxon_no, $dbt, 1);
 	my $results = join(',', keys %passed);
 	
     $sql = "SELECT taxon_name FROM authorities WHERE taxon_no IN ($results)";
