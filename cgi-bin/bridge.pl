@@ -6879,7 +6879,7 @@ sub htmlError {
 
 # **********
 # deprecated.  please use the SQLBuilder class instead for this.
-# Ryan, 1/2004. 
+# rjp, 1/2004. 
 sub buildWhere {
 	my $where = shift;
 	my $clause = shift;

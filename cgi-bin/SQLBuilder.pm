@@ -2,7 +2,7 @@
 # Note, although this *ONLY WORKS FOR SELECT STATEMENTS* for now, it may eventually be expanded
 # to include other types of statements such as UPDATE, etc.
 #
-# Written by Ryan, 1/2004.
+# Written by rjp, 1/2004.
 #
 # Each section of the SQL statement can either be built up one component at a time, or set all at once.
 # (note, building up is only supported for the WHERE expression for now)

@@ -6,9 +6,6 @@ use Classification;
 $DEBUG = 0;
 
 
-## startTaxonInfo
-#
-##
 sub startTaxonInfo{
 	my $q = shift;
 
@@ -17,9 +14,6 @@ sub startTaxonInfo{
 	print main::stdIncludes("std_page_bottom");
 }
 
-## searchForm
-#
-##
 sub searchForm{
 	my $q = shift;
 	my $search_again = (shift or 0);
@@ -80,25 +74,35 @@ sub searchForm{
 	return $html;
 }
 
-## checkStartForm
-#
-#	Description:	Get the data to the display routine.
-##
+
+# Send the data to the display routine.
+# Pass it the cgi object, database handle, session object, and 
+# DBTransactionManager handle.
 sub checkStartForm{
 	my $q = shift;
 	my $dbh = shift;
 	my $s = shift;
 	my $dbt = shift;
+	
+	# the "Original Rank" popup menu on the entry form
 	my $taxon_type = $q->param("taxon_rank");
-	$taxon_type =~ s/\+/ /g;
+	
+	$taxon_type =~ s/\+/ /g;  # remove plus signs??  why?
+	
 	if($taxon_type ne "Genus" && $taxon_type ne "Genus and species" && 
-			$taxon_type ne "species"){
+			$taxon_type ne "species") {
 		$taxon_type = "Higher taxon";
+		# note, does this really make sense?  is a "subgenus" a "higher taxon"?
 	}
+	
+	# the "Name of type taxon" text entry field on the entry form
 	my $taxon_name = $q->param("taxon_name");
 	$taxon_name =~ s/\+/ /g;
+	
+	# Where do these two parameters come from?  The current reference?
 	my $author = $q->param("author");
 	my $pubyr = $q->param("pubyr");
+	
 	my $results = "";
 	my $genus = "";
 	my $species = "";
@@ -117,12 +121,15 @@ sub checkStartForm{
 		$sql = "SELECT reference_no FROM refs WHERE pubyr='" . $pubyr . "'";
 		@refrefs = @{$dbt->getData($sql)};
 	}
+	
 	for $refref ( @refrefs )	{
 		push @refnos, $refref->{reference_no};
 	}
+	
 	if ( @refnos )	{
 		$refinlist = "(" . join(',',@refnos) . ")";
 	}
+	
 	# whoops, author and/or year search failed  - make a match impossible
 	if ( ( $author || $pubyr ) && ! $refinlist )	{
 		$refinlist = "( -1 )";
@@ -728,7 +735,7 @@ sub doModules{
 # pass this a reference to the collection list array and it
 # should figure out the min/max/center lat/lon 
 # returns an array of parameters (see end of routine for order)
-# written 12/11/2003 by Ryan.
+# written 12/11/2003 by rjp.
 sub calculateCollectionBounds {
 	my $collections = shift;  #collections to plot
 
@@ -833,7 +840,7 @@ sub doMap{
 
 	if(@perm_rows > 0) {
 
-		# this section added by Ryan on 12/11/2003
+		# this section added by rjp on 12/11/2003
 		# at this point, we need to figure out the bounds 
 		# of the collections and the center point.  
 		my @bounds = calculateCollectionBounds(\@perm_rows);

@@ -104,7 +104,7 @@ sub retellOptions {
 	#	$html .= $self->retellOptionsRow ( "Epoch", $q->param("epoch") );
 	#	$html .= $self->retellOptionsRow ( "Single age/stage", $q->param("stage") );
 
-	# added by Ryan on 12/30/2003
+	# added by rjp on 12/30/2003
 	if ($q->param('year')) {
 		my $dataCreatedBeforeAfter = $q->param("created_before_after") . " " . $q->param("date") . " " . $q->param("month") . " " . $q->param("year");
 		$html .= $self->retellOptionsRow ( "Data records created", $dataCreatedBeforeAfter);
@@ -567,7 +567,7 @@ sub getCollectionsWhereClause {
 	$where->addWhereItem($self->getResGrpString()) if $self->getResGrpString();	
 	
 	# should we filter the data based on collection creation date?
-	# added by Ryan on 12/30/2003, some code copied from Curve.pm.
+	# added by rjp on 12/30/2003, some code copied from Curve.pm.
 	# (filter it if they enter a year at the minimum.
 	if ($q->param('year')) {
 		
