@@ -56,7 +56,7 @@ function doCheckFieldsBasicInfo() {
         }
     } // if secondary_reference_no
 
-    if ( frm.collection_type.options[frm.collection_type.selectedIndex].value == "") {
+    if ( frm.collection_type.selectedIndex == 0) {
         bad_info += "\n    - Reason for describing collection";
     }
 
