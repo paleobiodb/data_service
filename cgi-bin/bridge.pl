@@ -2862,7 +2862,8 @@ sub buildTaxonomicList {
 			"       species_reso, ".
 			"       comments, ".
 			"       reference_no, ".
-			"       occurrence_no ".
+			"       occurrence_no, ".
+			"       taxon_no ".
 			"  FROM occurrences ".
 			" WHERE collection_no = $collection_no";
 
@@ -2964,7 +2965,7 @@ sub buildTaxonomicList {
 				
 		# get the classification (by PM): changed 2.4.04 by JA to
 		#  use the occurrence number instead of the taxon name
-				%classification = %{PBDBUtil::get_classification_hash($dbt,$rowref->{occurrence_no})};
+				%classification = %{PBDBUtil::get_classification_hash($dbt,$rowref->{taxon_no})};
 
 				# for sorting, later
 				$grand_master_hash{class_no} = ($classification{class_no} or 1000000);
