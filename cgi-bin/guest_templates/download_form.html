@@ -156,6 +156,19 @@ Select the research group:
 <td><select name="authorizer"></select></td>
 
 <tr><td valign=top><font size=-1>
+Use occurrences published
+<select name="published_before_after">
+<option>before</option>
+<option selected>after</option>
+</select>:
+</font></td>
+
+<td><font size=-1>
+<input name="pubyr" size=6>
+</font></td>
+</tr>
+
+<tr><td valign=top><font size=-1>
 If you only want lists from one time span, enter the oldest and youngest intervals <small><i>(do NOT enter numbers or terms like "Middle")</i></small>:
 <td valign=top><font size=-1>
 <input name=max_interval_name size=25> - <input name=min_interval_name size=25>
@@ -244,11 +257,19 @@ Replace genus names with subgenus names, so subgenera are treated as separate ge
 </select>
 
 <tr><td valign=top><font size=-1>
-Include occurrences that are generically indeterminate?
+Include generically indeterminate occurrences?
 <td valign=top><font size=-1><select name=indet>
 <option value="YES">yes, include them
 <option selected value="NO">no, exclude them
 </select>
+
+<tr><td valign=top><font size=-1>
+Include specifically indeterminate occurrences?</font></td>
+<td valign=top><font size=-1><select name=sp>
+<option value="NO">no, exclude them</option>
+<option selected value="YES">yes, include them</option>
+</select>
+</font></td></tr>
 
 <tr><td valign=top><font size=-1>
 Include genus names that are qualified with "aff." or quotes?</font></td>

@@ -117,6 +117,11 @@ sub retellOptions {
 		$html .= $self->retellOptionsRow ( "Data records created", $dataCreatedBeforeAfter);
 	}
 	
+	# JA 31.8.04
+	if ($q->param('pubyr')) {
+		my $dataPublishedBeforeAfter = $q->param("published_before_after") . " " . $q->param("pubyr");
+		$html .= $self->retellOptionsRow ( "Data records published", $dataPublishedBeforeAfter);
+	}
 	if ( $q->param("genus_name") !~ / / )	{
 		$html .= $self->retellOptionsRow ( "Taxon name", $q->param("genus_name") );
 	} else	{
@@ -216,6 +221,7 @@ sub retellOptions {
 	$html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
 	$html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
 	$html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
+	$html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", $q->param("sp") );
 	$html .= $self->retellOptionsRow ( "Include occurrences qualified by \"aff.\" or quotes?", $q->param("poor_genus_reso") );
 	$html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
 	$html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
@@ -787,6 +793,16 @@ sub getOccurrencesWhereClause {
 	
 	my $where = DBTransactionManager->new();
 	$where->setWhereSeparator("AND");
+
+	if ( $q->param('pubyr') > 0 )	{
+		$where->addWhereItem(" refs.reference_no=occurrences.reference_no ");
+		if ( $q->param('published_before_after') eq "before" )	{
+			$pubyrrelation = "<";
+		} else	{
+			$pubyrrelation = ">";
+		}
+		$where->addWhereItem(" pubyr".$pubyrrelation.$q->param('pubyr')." ");
+	}
 	
 	my $authorizer = $q->param('authorizer');
 	
@@ -798,6 +814,7 @@ sub getOccurrencesWhereClause {
 	}
 	
 	$where->addWhereItem(" occurrences.species_name!='indet.' ") if $q->param('indet') eq 'NO';
+	$where->addWhereItem(" occurrences.species_name!='sp.' ") if $q->param('sp') eq 'NO';
 	$where->addWhereItem(" (occurrences.genus_reso NOT IN ('aff.','\"') OR occurrences.genus_reso IS NULL) ") if $q->param('poor_genus_reso') eq 'NO';
 	$where->addWhereItem(" (occurrences.genus_reso NOT LIKE '%informal%' OR occurrences.genus_reso IS NULL) ") if $q->param('informal') eq 'NO';
 
@@ -1130,7 +1147,11 @@ sub doQuery {
 				" DATE_FORMAT(collections.release_date, '%Y%m%d') rd_short, ".
 				" collections.access_level, ".
 				" collections.research_group ".$comma.$outFieldsString.
-				" FROM occurrences, collections LEFT JOIN reidentifications ON".
+				" FROM occurrences, collections";
+		if ( $q->param('pubyr') > 0 )	{
+			$sql .= ", refs";
+		}
+		$sql .= " LEFT JOIN reidentifications ON".
 				" occurrences.occurrence_no = reidentifications.occurrence_no ".
 				" WHERE collections.collection_no = occurrences.collection_no";
 
