@@ -318,7 +318,7 @@ sub processViewImages{
 			  " original_filename ".
 			  "FROM authorities, images ".
 			  "WHERE authorities.taxon_no = images.taxon_no " . 
-			  "AND images.taxon_no IN (".join(",",$in_list).")";
+			  "AND images.taxon_no IN (".join(",",@{$in_list}).")";
 		@results = @{$dbt->getData($sql)};
 	}
 	return @results;
