@@ -1492,7 +1492,7 @@ if ( $q->param('gridposition') ne "in back" )	{
 	# make clickable background rectangles for repositioning the map
 
 	# need a list of possible parameters
-	my @params = ('research_group', 'authorizer', 'enterer', 'modified_since', 'date', 'month', 'year', 'country', 'state', 'interval_name', 'formation', 'lithology1', 'environment', 'taxon_rank', 'genus_name', 'pointsize', 'dotcolor', 'pointshape', 'dotborder', 'mapsearchfields2', 'mapsearchterm2', 'pointsize2', 'dotcolor2', 'pointshape2', 'dotborder2', 'mapsearchfields3', 'mapsearchterm3', 'pointsize3', 'dotcolor3', 'pointshape3', 'dotborder3', 'mapsearchfields4', 'mapsearchterm4', 'pointsize4', 'dotcolor4', 'pointshape4', 'dotborder4', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'coastlinecolor', 'borderlinecolor', 'usalinecolor');
+	my @params = ('research_group', 'authorizer', 'enterer', 'modified_since', 'date', 'month', 'year', 'country', 'state', 'interval_name', 'formation', 'lithology1', 'environment', 'taxon_rank', 'genus_name', 'pointsize', 'dotcolor', 'pointshape', 'dotborder', 'mapsearchfields2', 'mapsearchterm2', 'pointsize2', 'dotcolor2', 'pointshape2', 'dotborder2', 'mapsearchfields3', 'mapsearchterm3', 'pointsize3', 'dotcolor3', 'pointshape3', 'dotborder3', 'mapsearchfields4', 'mapsearchterm4', 'pointsize4', 'dotcolor4', 'pointshape4', 'dotborder4', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngnocolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor');
 
 	my $clickstring = "$BRIDGE_HOME?action=displayMapResults";
 	for $p ( @params )	{
@@ -1566,13 +1566,22 @@ if ( $q->param('gridposition') ne "in back" )	{
 		$clickstring .= "&maplng=" . $midlng;
 		$clickstring .= "&maplat=" . $midlat;
 
+		$zoom1 = 2;
+		while ( $scale + $zoom1 > 12 )	{
+			$zoom1--;
+		}
+		$zoom2 = 2;
+		while ( $scale - $zoom2 < 1 )	{
+			$zoom2--;
+		}
+
 		print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
-		$temp = $clickstring . "&mapscale=" . ( $scale + 2 );
+		$temp = $clickstring . "&mapscale=" . ( $scale + $zoom1 );
 		print MAPOUT "<p class=\"large\"><b><a href=\"$temp\">Zoom&nbsp;in</a></b></p>\n";
 		print MAPOUT "</td></tr>\n";
 
 		print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
-		$temp = $clickstring . "&mapscale=" . ( $scale - 2 );
+		$temp = $clickstring . "&mapscale=" . ( $scale - $zoom2 );
 		print MAPOUT "<p class=\"large\"><b><a href=\"$temp\">Zoom&nbsp;out</a></b></p>\n";
 		print MAPOUT "</td></tr>\n";
 
@@ -2002,7 +2011,10 @@ sub drawGrids	{
   $gridcolor = $q->param('gridcolor');
   print AI "u\n";  # start the group
   if ($grids > 0)	{
+    $latlngnocolor = $q->param('latlngnocolor');
     for my $lat ( int(-90/$grids)..int(90/$grids) )	{
+      @edgexs = ();
+      @edgeys = ();
       for my $deg (-180..179)	{
         my ($lng1,$lat1) = $self->projectPoints($deg , $lat * $grids, "grid");
         my ($lng2,$lat2) = $self->projectPoints($deg + 1 , $lat * $grids, "grid");
@@ -2011,6 +2023,13 @@ sub drawGrids	{
           my $y1 = $self->getLat($lat1);
           my $x2 = $self->getLng($lng2);
           my $y2 = $self->getLat($lat2);
+          if ( $x1 > 0 && $y1 > 0 && $x1 ne "NaN" && $y1 ne "NaN" && ( $y2 eq "NaN" || $x2 eq "NaN" ) )	{
+            push @edgexs , $x1;
+            push @edgeys , $y1;
+          } elsif ( ( $x1 eq "NaN" || $y1 eq "NaN" ) && $x2 > 0 && $y2 > 0 && $x2 ne "NaN" && $y2 ne "NaN" )	{
+            push @edgexs , $x2;
+            push @edgeys , $y2;
+          }
           if ( $x1 ne "NaN" && $y1 ne "NaN" && $x2 ne "NaN" && $y2 ne "NaN" )	{
             $im->line( $x1, $y1, $x2, $y2, $col{$gridcolor} );
             print AI "$aicol{$gridcolor}\n";
@@ -2020,11 +2039,30 @@ sub drawGrids	{
           }
         }
       }
+      for my $i ( 0..$#edgexs )	{
+         my $xfudge = -4;
+         if ( $edgexs[$i] < 20 )	{
+           $xfudge = 4;
+         } elsif ( $edgexs[$i] > $width - 20 )	{
+           $xfudge = -12;
+         }
+         my $yfudge = -5;
+         if ( $edgeys[$i] < 20 )	{
+           $yfudge = -2;
+         } elsif ( $edgeys[$i] > $height - 20 )	{
+           $yfudge = -12;
+         }
+         $im->string(gdSmallFont,$edgexs[$i] + $xfudge,$edgeys[$i] + $yfudge,$lat * $grids,$col{$latlngnocolor});
+      }
     }
+
     for my $lng ( int(-180/$grids)..int(180/$grids) )	{
-      for my $deg (-90..89)	{
+      @edgexs = ();
+      @edgeys = ();
+      for my $doubledeg (-180..178)	{
+	my $deg = $doubledeg / 2;
         my ($lng1,$lat1) = $self->projectPoints($lng * $grids, $deg, "grid");
-        my ($lng2,$lat2) = $self->projectPoints($lng * $grids, $deg + 1, "grid");
+        my ($lng2,$lat2) = $self->projectPoints($lng * $grids, $deg + 0.5, "grid");
 	if ( $lng1 == 180 )	{
 		$lng1 = 179.5;
 	}
@@ -2036,6 +2074,13 @@ sub drawGrids	{
           my $y1 = $self->getLat($lat1);
           my $x2 = $self->getLng($lng2);
           my $y2 = $self->getLat($lat2);
+          if ( $x1 > 0 && $y1 > 0 && $x1 ne "NaN" && $y1 ne "NaN" && ( $y2 eq "NaN" || $x2 eq "NaN" ) )	{
+            push @edgexs , $x1;
+            push @edgeys , $y1;
+          } elsif ( ( $x1 eq "NaN" || $y1 eq "NaN" ) && $x2 > 0 && $y2 > 0 && $x2 ne "NaN" && $y2 ne "NaN" )	{
+            push @edgexs , $x2;
+            push @edgeys , $y2;
+          }
           if ( $x1 ne "NaN" && $y1 ne "NaN" && $x2 ne "NaN" && $y2 ne "NaN" )	{
             $im->line( $x1, $y1, $x2, $y2, $col{$gridcolor} );
             print AI "$aicol{$gridcolor}\n";
@@ -2044,6 +2089,27 @@ sub drawGrids	{
             print AI "S\n";
           }
         }
+      }
+      for my $i ( 0..$#edgexs )	{
+         my $xfudge = -4;
+         if ( $lng * $grids > 99 )	{
+           $xfudge = $xfudge - 4;
+         }
+         if ( $edgexs[$i] < 20 )	{
+           $xfudge = 4;
+         } elsif ( $edgexs[$i] > $width - 20 )	{
+           $xfudge = -12;
+           if ( $lng * $grids > 99 )	{
+             $xfudge = $xfudge - 4;
+           }
+         }
+         my $yfudge = -5;
+         if ( $edgeys[$i] < 20 )	{
+           $yfudge = -2;
+         } elsif ( $edgeys[$i] > $height - 20 )	{
+           $yfudge = -12;
+         }
+         $im->string(gdSmallFont,$edgexs[$i] + $xfudge,$edgeys[$i] + $yfudge,$lng * $grids,$col{$latlngnocolor});
       }
     }
   }
