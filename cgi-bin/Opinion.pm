@@ -1146,7 +1146,7 @@ sub displayOpinionChoiceForm{
         if ($orig_child_no!= $q->param('taxon_no')) {
             my $t2 = Taxon->new();
             $t2->setWithTaxonNumber($q->param('taxon_no'));
-            print "<I>(Recombination of ".$t2->taxonNameHTML().")</I><BR>";
+            print "<I>(Also known as ".$t2->taxonNameHTML().")</I><BR>";
         }
         print "<BR>"; 
     } else {
