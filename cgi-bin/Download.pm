@@ -118,7 +118,11 @@ sub retellOptions {
 	$html .= $self->retellOptionsRow ( "Youngest interval", $q->param("min_interval_name") );
 	$html .= $self->retellOptionsRow ( "Lithologies", $q->param("lithology") );
 	$html .= $self->retellOptionsRow ( "Environment", $q->param("environment") );
-	$html .= $self->retellOptionsRow ( "Genus name", $q->param("genus_name") );
+	if ( $q->param("genus_name") !~ / / )	{
+		$html .= $self->retellOptionsRow ( "Taxon name", $q->param("genus_name") );
+	} else	{
+		$html .= $self->retellOptionsRow ( "Taxon names", $q->param("genus_name") );
+	}
 	$html .= $self->retellOptionsRow ( "Class", $q->param("class") );
 	$html .= $self->retellOptionsRow ( "Only your own data?", $q->param("owndata") ) if ( !  $s->guest ( ) );
 
@@ -1200,27 +1204,29 @@ sub doQuery {
 	# now hit the secondary refs table, mark all of those references as
 	#  having been used, and print all the refs JA 16.7.04
 	my @collnos = keys %COLLECTIONS_USED;
-	$secondary_sql = "SELECT reference_no FROM secondary_refs WHERE collection_no IN (" . join (',',@collnos) . ")";
-	my @refrefs= @{$dbt->getData($secondary_sql)};
-	for my $refref (@refrefs)	{
-		$REFS_USED{$refref->{reference_no}}++;
-	}
-	my @refnos = keys %REFS_USED;
+	if ( @collnos )	{
+		$secondary_sql = "SELECT reference_no FROM secondary_refs WHERE collection_no IN (" . join (',',@collnos) . ")";
+		my @refrefs= @{$dbt->getData($secondary_sql)};
+		for my $refref (@refrefs)	{
+			$REFS_USED{$refref->{reference_no}}++;
+		}
+		my @refnos = keys %REFS_USED;
 
 	# print the header
-	print REFSFILE join (',',@refsFieldNames), "\n";
-	my $refCols = join($sepChar, @refsHeaderCols);
+		print REFSFILE join (',',@refsFieldNames), "\n";
+		my $refCols = join($sepChar, @refsHeaderCols);
 
 	# print the refs
-	$ref_sql = "SELECT * FROM refs WHERE reference_no IN (" . join (',',@refnos) . ")";
-	@refrefs= @{$dbt->getData($ref_sql)};
-	for my $refref (@refrefs)	{
-		my @refvals = ();
-		for my $r (@refsFieldNames)	{
-			push @refvals , $refref->{$r};
+		$ref_sql = "SELECT * FROM refs WHERE reference_no IN (" . join (',',@refnos) . ")";
+		@refrefs= @{$dbt->getData($ref_sql)};
+		for my $refref (@refrefs)	{
+			my @refvals = ();
+			for my $r (@refsFieldNames)	{
+				push @refvals , $refref->{$r};
+			}
+			printf REFSFILE "%s\n",$self->formatRow(@refvals);
+			$acceptedRefs++;
 		}
-		printf REFSFILE "%s\n",$self->formatRow(@refvals);
-		$acceptedRefs++;
 	}
 	close REFSFILE;
 
@@ -1636,13 +1642,44 @@ sub formatRow {
 	}
 }
 
-# JA Paul replaced taxonomic_search call with recurse call because it's faster,
+# JA: Paul replaced taxonomic_search call with recurse call because it's faster,
 #  but I'm reverting because I'm not maintaining recurse
 sub getGenusNames {
 	my $self = shift;
 	my $genus_name = (shift || "");
 
-	my $cslist = PBDBUtil::taxonomic_search($genus_name, $dbt);
+	my $cslist;
+
+	if ( $genus_name !~ /[ -,:;]/ )	{
+		$cslist = PBDBUtil::taxonomic_search($genus_name, $dbt);
+		# I'm not sure why this wasn't here before JA 11.8.04
+		if ( $cslist !~ /'/ )	{
+			$cslist = "'" . $cslist . "'";
+		}
+	}
+	# might have to extract multiple names JA 11.8.04
+	else	{
+		# do a little cleanup
+		$genus_name =~ s/[-,:;]/ /g;
+		while ( $genus_name =~ /  / )	{
+			$genus_name =~ s/  / /g;
+		}
+		# get the names
+		my @taxonnames = split / /, $genus_name;
+		# get the included taxa
+		for my $tn  ( @taxonnames )	{
+			my $templist = PBDBUtil::taxonomic_search($tn, $dbt);
+			if ( $templist !~ /'/ )	{
+				$templist = "'" . $templist . "'";
+			}
+			if ( ! $cslist )	{
+				$cslist = $templist;
+			} else	{
+				$cslist = $cslist . "," . $templist;
+			}
+		}
+	}
+
 	#my $cslist = `./recurse $genus_name`;
 	return $cslist;
 }
