@@ -5245,7 +5245,6 @@ sub displayTaxonomyEntryForm	{
 		$html =~ s/<p>... <i>or<\/i> it was named in an earlier publication, which is:<\/p>//;
 	}
 		
-	
 		
 	# Remove widgets if the current authorizer does not own the record and
 	# the existing data are non-null
