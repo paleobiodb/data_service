@@ -677,7 +677,7 @@ sub createTaxaHash {
 		# rows with the same pubyr, then it will always fetch the last one added since 
 		# the numbers increment on each addition.
 		my $opsql = "SELECT o.parent_no, o.pubyr, o.ref_has_opinion, o.reference_no, r.pubyr FROM opinions o, refs r WHERE o.child_no = $tn AND o.reference_no = r.reference_no AND status = 'belongs to' ORDER BY o.parent_no DESC";
-		@results = @{$sql->getData($opsql)};
+		my @results = @{$sql->getData($opsql)};
 
 		# this is the parent with the most recent pubyr.
 		my $parent = TaxonInfo::selectMostRecentParentOpinion($sql,\@results);
