@@ -346,11 +346,15 @@ sub displayTaxonInfoResults{
 	if($taxon_type eq "Higher taxon"){
 		my $name = $q->param('genus_name');
 		$in_list = `./recurse $name`;
+	} elsif ( ! $taxon_no )	{
+	# Don't go looking for junior synonyms if this taxon isn't even
+	#  in the authorities table (because it has no taxon_no) JA 8.7.03
+		$in_list = $q->param('genus_name');
 	} else	{
 
 	# Find all the junior synonyms of this genus or species JA 4.7.03
-	# Find all taxa that ever were children of this taxon no
-	$sql = "SELECT child_no,count(*) FROM opinions WHERE parent_no=";
+	# First find all taxa that ever were children of this taxon no
+	my $sql = "SELECT child_no,count(*) FROM opinions WHERE parent_no=";
 	$sql .= $taxon_no . " AND status!='belongs to' GROUP BY child_no";
 	my @results = @{$dbt->getData($sql)};
 	for my $ref (@results)	{
