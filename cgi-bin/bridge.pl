@@ -8189,7 +8189,8 @@ sub RefQuery {
 	my $reftitle = $q->param('reftitle');
 	my $pubtitle = $q->param('pubtitle');
 	my $refno = $q->param('reference_no');
-	
+
+	# build a string that will tell the user what they asked for
 	$refsearchstring = qq|$name| if $name;
 	$refsearchstring .= qq| $pubyr| if $pubyr;
 	$refsearchstring .= qq| $reftitle| if $reftitle;
@@ -8258,8 +8259,12 @@ sub RefQuery {
 			$orderBy .= "author1last, author1init, author2last, pubyr";
 		}
 
-		$orderBy =~ s/, $//;
-		$sql .= $orderBy;
+		# only append the ORDER clause if something is in it,
+		#  which we know because it doesn't end with "BY "
+		if ( $orderBy !~ /BY $/ )	{
+			$orderBy =~ s/, $//;
+			$sql .= $orderBy;
+		}
 
 		# clean up the SQL
 		$sql =~ s/WHERE AND/WHERE /;
