@@ -106,17 +106,6 @@ sub new {
 	
 	my $GLOBALVARS = shift;  # optional parameter
 	$self->{GLOBALVARS} = $GLOBALVARS;
-	if ($GLOBALVARS) {
-	    Debug::dbPrint("DBTransactionManager::new, globalVars exists");
-	    
-	    if ($GLOBALVARS->{session}) {
-	    	    Debug::dbPrint("DBTransactionManager::new, globalVars->session exists");
-
-	    }
-	 } else {	
-	 	Debug::dbPrint("DBTransactionManager::new, globalVars doesn't exist");
-	 }
-    
     
 	# set up some default values
 	$self->clear();	
@@ -829,7 +818,6 @@ sub insertNewRecord {
 	
 	# make sure they're allowed to insert data!
 	my $s = $self->{session};
-	if (!$self->{GLOBALVARS}) { Debug::dbPrint("GLOBALVARS doesn't exist"); }
 	if (!$s || $s->guest() || $s->get('enterer') eq '') {
 		Debug::logError("invalid session or enterer in DBTransactionManager::insertNewRecord");
 		return;
@@ -845,8 +833,6 @@ sub insertNewRecord {
 	$fields->{authorizer} = $s->get('authorizer');
 	$fields->{authorizer_no} = $s->authorizerNumber();
 	$fields->{created} = now();
-	
-	Debug::dbPrint("here1");
 	
 	# loop through each key in the passed hash and
 	# build up the insert statement.
@@ -1060,7 +1046,6 @@ sub internalUpdateRecord {
 		return;
 	}
 	
-	Debug::dbPrint("internalUpdateRecord");
 
 
 	Debug::printHash($fields);
