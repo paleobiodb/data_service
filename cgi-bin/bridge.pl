@@ -16,10 +16,11 @@ use Download;
 use Report;
 use Curve;
 use Permissions;
+use PBDBUtil;
 
 require "connection.pl";	# Contains our database connection info
 
-my $DEBUG = 1;				# Shows debug information regarding the page
+my $DEBUG = 0;				# Shows debug information regarding the page
 							#   if set to 1
 
 my $DUPLICATE = 2;
@@ -1521,7 +1522,6 @@ sub processCollectionsSearch {
 		# research_group is now a set -- tone 7 jun 2002
 		my $resgrp = $q->param('research_group');
 		if($resgrp && $resgrp =~ /(^ETE$)|(^5%$)|(^PGAP$)/){
-			require PBDBUtil;  
 			my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
 				if($resprojstr ne ""){
 					push(@terms, " reference_no IN (" . $resprojstr . ")");
@@ -1681,8 +1681,7 @@ sub displayCollectionDetails {
     push(@fieldNames, 'reference_string');
 
 	# get the secondary_references
-	require PBDBUtil;
-	push(@row, PBDBUtil::getSecondaryRefsString($dbh,$collection_no));
+	push(@row, PBDBUtil::getSecondaryRefsString($dbh,$collection_no,0,0));
 	push(@fieldNames, 'secondary_reference_string');
 
 	# Get any subset collections JA 25.6.02
@@ -2128,13 +2127,14 @@ sub startTaxonomy	{
 }
 
 sub displayEditCollection {
-
 	# Have to be logged in
 	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
 		$s->enqueue( $dbh, "action=displayEditCollection" );
 		&displayLoginPage ( "Please log in first." );
 		exit;
 	}
+	
+	my $session_ref = $s->get('reference_no');
 
 	print &stdIncludes ("std_page_top");
 
@@ -2148,29 +2148,49 @@ sub displayEditCollection {
 	$sth->finish();
 
 	# Get the reference for this collection
-	my $refColNum;
 	my $curColNum = 0;
+	my $reference_no;
 	foreach my $colName (@fieldNames) {
 		if ( $colName eq 'reference_no') {
-			$refColNum = $curColNum;
-			my $reference_no = $row[$refColNum];
-			$s->setReferenceNo ( $dbh, $reference_no );
-			
-			$sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
-			$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-			$sth->execute();
-			@refRow = $sth->fetchrow_array();
-			@refFieldNames = @{$sth->{NAME}};
-			$sth->finish();
-			$refRowString = '<table>' . $b->populateHTML('reference_display_row', \@refRow, \@refFieldNames) . '</table>';
-			
-			push(@row, $refRowString);
-			push(@fieldNames, 'ref_string');
-			
+			$reference_no = $row[$curColNum];
 			last;
 		}
 		$curColNum++;
 	}
+	# Current primary ref
+	my $refRowString = getCurrRefDisplayStringForColl($dbh, $collection_no, 
+												  $reference_no);
+	push(@row, $refRowString);
+	push(@fieldNames, 'ref_string');
+
+	# Secondary refs, followed by current ref
+	$refRowString = PBDBUtil::getSecondaryRefsString($dbh,$collection_no,1,1);
+
+	# Check if current session ref is at all associated with the collection
+	# If not, tack it on to $refRowString (with radio button for selecting
+	# as the primary ref, as with the secondary refs below).
+	unless(PBDBUtil::isRefPrimaryOrSecondary($dbh,$collection_no,$session_ref)){
+		# This part allows current session ref to be selected as primary
+		$refRowString .= "<p>Current session reference&nbsp;".
+						 "<span class=tiny>(select to make primary):</span>".
+						 "<table border=0 cellpadding=8><tr><td>".
+						 "<table border=0 cellpadding=2 cellspacing=0><tr>".
+						 "</td></tr><tr bgcolor=E0E0E0><td valign=top>".
+						 "<input type=radio name=secondary_reference_no value=".
+						 $session_ref."></td><td></td>";
+		$sr = getCurrRefDisplayStringForColl($dbh, $collection_no,$session_ref);
+		# put the radio on the same line as the ref
+		$sr =~ s/<tr>//;
+		$refRowString .= $sr."</table></td></tr></table>";
+		# Now, set up the current session ref to be added as a secondary even
+		# if it's not picked as a primary (it's currently neither).
+		$refRowString .= "\n<input type=hidden name=add_session_ref_as_2ndary ".
+						 "value=$session_ref>\n";
+	}
+
+    # get the secondary_references
+    push(@row, $refRowString);
+    push(@fieldNames, 'secondary_reference_string');
 
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
@@ -2181,12 +2201,51 @@ sub displayEditCollection {
 
 
 sub processEditCollectionForm {
+	# Save the old one in case a new one comes in
+	my $reference_no = $q->param("reference_no");
+	my $collection_no = $q->param("collection_no");
+	my $secondary = $q->param('secondary_reference_no');
 
 	print &stdIncludes ( "std_page_top" );
 
-	if ( $q->param('new_reference_no') )	{
-		$q->param(reference_no => $q->param('new_reference_no'));
+	# SECONDARY REF STUFF...
+	# If a radio button was checked, we're changing a secondary to the primary
+	if($q->param('secondary_reference_no')){
+		# The updateRecord() logic will take care of putting in the new primary
+		# reference for the collection
+		$q->param(reference_no => $secondary);
+		# Now, put the old primary ref into the secondary ref table
+		PBDBUtil::setSecondaryRef($dbh, $collection_no, $reference_no);
+		# and remove the new primary from the secondary table
+		if(PBDBUtil::isRefSecondary($dbh,$collection_no,$secondary)){
+			PBDBUtil::deleteRefAssociation($dbh, $collection_no, $secondary);
+		}
 	}
+	# If the current session ref isn't being made the primary, and it's not
+	# currently a secondary, add it as a secondary ref for the collection 
+	# (this query param doesn't show up if session ref is already a 2ndary.)
+	if(defined $q->param('add_session_ref_as_2ndary')){
+		my $session_ref = $q->param('add_session_ref_as_2ndary');
+		my $sess_ref_is_sec = PBDBUtil::isRefSecondary($dbh,$collection_no,
+														$session_ref);
+		if(($session_ref != $secondary) && (!$sess_ref_is_sec)){
+			PBDBUtil::setSecondaryRef($dbh, $collection_no, $session_ref);
+		}
+	}
+	# Delete secondary ref associations
+	my @refs_to_delete = $q->param("delete_ref");
+	dbg("secondary ref associations to delete: @refs_to_delete<br>");
+	if(scalar @refs_to_delete > 0){
+		foreach my $ref_no (@refs_to_delete){
+			# check if any occurrences with this ref are tied to the collection
+			if(PBDBUtil::refIsDeleteable($dbh, $collection_no, $ref_no)){
+				# removes secondary_refs association between the numbers.
+				dbg("removing secondary ref association (col,ref): $collection_no, $ref_no<br>");
+				PBDBUtil::deleteRefAssociation($dbh, $collection_no, $ref_no);
+			}
+		}
+	}
+
     unless($q->param('fossilsfrom1'))	{
       $q->param(fossilsfrom1=>'NULL');
     }
@@ -2201,6 +2260,8 @@ sub processEditCollectionForm {
 	my @row = $sth->fetchrow_array();
 	$q->param(created => $row[0]);
     $sth->finish();
+	# Why is this here? Maybe it should be called only if the release date
+	# is not already set.
 	&setReleaseDate();
 
 	# Updates here 
@@ -2208,6 +2269,7 @@ sub processEditCollectionForm {
  
     print "<center><h3><font color='red'>Collection record updated</font></h3></center>\n";
 
+	# Select the updated data back out of the database.
 	$sql = "SELECT * FROM collections WHERE collection_no=$recID";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
   	$sth->execute();
@@ -2216,42 +2278,55 @@ sub processEditCollectionForm {
 	my @row = $sth->fetchrow_array();
     $sth->finish();
     
-  	# Get the reference for this collection
-		my $refColNum;
-		my $curColNum = 0;
-		foreach my $colName (@fields) {
-			if ( $colName eq 'reference_no') {
-				$refColNum = $curColNum;
-				my $reference_no = $row[$refColNum];
-			# if the reference number is being corrected, copy the new number
-			#   onto the old one JA 26.6.02
-				if ( $q->param('new_reference_no') )	{
-					$reference_no = $q->param('new_reference_no');
-				}
-				$s->setReferenceNo ( $dbh, $reference_no );
-
-				$sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
-				$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-				$sth->execute();
-
-				@refRow = $sth->fetchrow_array();
-				@refFieldNames = @{$sth->{NAME}};
-				$sth->finish();
-				$refRowString = $b->populateHTML('reference_display_row', \@refRow, \@refFieldNames);
-				
-				push(@row, $refRowString);
-				push(@fields, 'reference_string');
-				
-				last;
-			}
-			$curColNum++;
+	my $curColNum = 0;
+	my $reference_no;
+	foreach my $colName (@fields){
+		if($colName eq 'reference_no'){
+			$reference_no = $row[$curColNum];
+			last;
 		}
+		$curColNum++;
+	}
+	my $refRowString = getCurrRefDisplayStringForColl($dbh, $recID, $reference_no);
+	push(@row, $refRowString);
+	push(@fields, 'reference_string');
+
+	# get the secondary_references
+	push(@row, PBDBUtil::getSecondaryRefsString($dbh,$collection_no,0,0));
+	push(@fields, 'secondary_reference_string');
+
     
     print $b->populateHTML('collection_display_fields', \@row, \@fields);
     print $b->populateHTML('collection_display_buttons', \@row, \@fields);
     print $b->populateHTML('occurrence_display_buttons', \@row, \@fields);
     
 	print &stdIncludes ("std_page_bottom");
+}
+
+## getCurrRefDisplayStringForColl($dbh, $collection_no, $reference_no, $session)
+#   Description:    builds the reference display row
+#
+#   Parameters:     $collection_no  the collection to which the ref belongs
+#                   $reference_no   the reference for which the string is
+#                                   being built.
+#                   $session        session object
+#
+#   Returns:        reference_display_row as processed by HTMLBuilder
+##
+sub getCurrRefDisplayStringForColl{
+    my $dbh = shift;
+    my $collection_no = shift;
+    my $reference_no = shift;
+
+    my $sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
+    my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+    $sth->execute();
+    my @refRow = $sth->fetchrow_array();
+    my @refFieldNames = @{$sth->{NAME}};
+    $sth->finish();
+    my $refRowString = $b->populateHTML('reference_display_row', \@refRow, \@refFieldNames);
+
+    return $refRowString;
 }
 
 
@@ -2560,6 +2635,7 @@ sub processEditOccurrences {
 
 			my $reid_no = ${$all_params{reid_no}}[$index];
 
+			# select the old data record to merge in the new data record.
 			$sql = "SELECT * FROM reidentifications where reid_no=".$reid_no;
 			my $sth = $dbh->prepare($sql) or die "Error preparing sql $sql ($!)";
 			$sth->execute() or die "Error executing $sql ($!)";
@@ -2656,6 +2732,19 @@ sub processEditOccurrences {
 
 			# Prepare, execute
 			$dbh->do($sql) || die ("$sql<hr>$!");	
+
+			# If @update_strings contains 'reference_no',
+			# check if new ref is primary or secondary for the
+			# given collection, and if not, add the coll_no<->ref_no
+			# association to the secondary_refs table.
+			my $flattened = join(" ",@update_strings);
+			if($flattened =~ /reference_no/){
+				dbg("calling setSecondaryRef (updating ReID)<br>");
+				unless(PBDBUtil::isRefPrimaryOrSecondary($dbh, $results{collection_no}, $results{reference_no})){
+					PBDBUtil::setSecondaryRef($dbh,$results{collection_no},
+											  $results{reference_no});
+				}
+			}
 		}
 		
 		# CASE 2
@@ -2760,6 +2849,19 @@ sub processEditOccurrences {
 
 			# Prepare, execute
 			$dbh->do( $sql ) || die ( "$sql<HR>$!" );	
+
+			# If @update_strings contains 'reference_no',
+			# check if new ref is primary or secondary for the
+			# given collection, and if not, add the coll_no<->ref_no
+			# association to the secondary_refs table.
+			my $flattened = join(" ",@update_strings);
+			if($flattened =~ /reference_no/){
+				dbg("calling setSecondaryRef (updating occurrence)<br>");
+				unless(PBDBUtil::isRefPrimaryOrSecondary($dbh, $results{collection_no}, $results{reference_no})){
+					PBDBUtil::setSecondaryRef($dbh,$results{collection_no},
+											  $results{reference_no});
+				}
+			}
 		}
 
 		# CASE 3
@@ -2819,6 +2921,20 @@ sub processEditOccurrences {
 						join(', ', @insert_values) . ")";
 				dbg("$sql<hr>$!");
 				$dbh->do($sql) || die("$sql<hr>$!");
+			}
+
+			# If @insert_names contains 'reference_no',
+			# check if new ref is primary or secondary for the
+			# given collection, and if not, add the coll_no<->ref_no
+			# association to the secondary_refs table.
+			my $flattened = join(" ",@insert_names);
+			if($flattened =~ /reference_no/){
+				dbg("calling setSecondaryRef inserting occurrence<br>");
+				unless(PBDBUtil::isRefPrimaryOrSecondary($dbh,${$all_params{collection_no}}[$index],${$all_params{reference_no}}[$index] )){
+					PBDBUtil::setSecondaryRef($dbh,
+										  ${$all_params{collection_no}}[$index],
+										  ${$all_params{reference_no}}[$index]);
+				}
 			}
 		}
 	}
@@ -4621,6 +4737,7 @@ sub insertRecord {
 		}
 		$fieldCount++;
 	}
+	dbg("insert VALS: @vals<br>");
 
 	# Check for a duplicate and bomb if one is found
 	$return = checkDuplicates ( $idName, $primary_key, $tableName, \@fields, \@vals );
@@ -4682,8 +4799,8 @@ sub checkNearMatch ()	{
 	my $fields = shift;
 	my $vals = shift;
 
-    # Escape quotes in names like O'Sullivan
-    $searchVal =~ s/(\w+)'{1}/$1\\'/;
+	# Escape quotes in names like O'Sullivan
+	$searchVal =~ s/(\w+)'{1}/$1\\'/;
 
 	my $sql = "SELECT * FROM $tableName WHERE " . $searchField;
 	$sql .= "='" . $searchVal . "'";
@@ -4889,7 +5006,8 @@ sub getCollsWithRef	{
 		else	{
 			$retString .= "<tr>\n";
 		}
-		$retString .= "<td colspan='3'>&nbsp;</td>\n<td><font size=-1>\n";
+		# I think this matches up with the radio,ref#,name cols from BiblioRef.
+		$retString .= "<td colspan=\"3\">&nbsp;</td>\n<td><font size=-1>\n";
 	}
 	if( ($displayRows == 0 && $displayRows2 == 0) 
 							&& ($sth->rows || $sth2->rows) ){
