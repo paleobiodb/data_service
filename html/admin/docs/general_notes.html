@@ -48,6 +48,12 @@ SPAN.title {
 	border-style: solid;
 }
 
+SPAN.HTMLtag {
+	color: darkblue;
+	font-family: monospace;
+
+}
+
 SPAN.emphasized {
 	background-color: RGB(230,230,230);
 	font-weight: bold;
@@ -63,14 +69,21 @@ SPAN.emphasized {
 
 <div>
 <UL>
-<LI class="index"><A HREF="#accesspolicies">Access Policies</A></LI>
-<LI class="index"><A HREF="#editingpolicies">Editing Policies</A></LI>
+
+<LI><B>Policies</B>
+<UL>
+	<LI class="index"><A HREF="#accesspolicies">Access Control</A></LI>
+	<LI class="index"><A HREF="#editingpolicies">Editing of Forms</A></LI>
+	<LI class="index"><A HREF="#HTMLpolicies">HTML Style</A></LI>
+</UL>
+</LI>
+
 </UL>
 </div>
 <BR>
 
 <DIV class="section">
-<A NAME="accesspolicices"><SPAN class="title">Access Policies</SPAN></A>
+<A NAME="accesspolicices"><SPAN class="title">Access Control</SPAN></A>
 
 <DIV>
 <p>
@@ -86,7 +99,7 @@ If the <SPAN class="field">release_date</SPAN> has passed, the actual <SPAN clas
 
 
 <DIV class="section">
-<A NAME="editingpolicies"><SPAN class="title">Editing Policies</SPAN></A>
+<A NAME="editingpolicies"><SPAN class="title">Editing of Forms</SPAN></A>
 
 <DIV>
 <p>
@@ -105,6 +118,37 @@ As long as the authorizer is the same as original, any enterer can edit any fiel
 <p><SPAN class="emphasized">refs</SPAN>
 Any (authorizer, enterer) pair can edit any field.
 </p>
+</DIV>
+
+</DIV>
+
+
+<DIV class="section">
+<A NAME="HTMLpolicies"><SPAN class="title">HTML Style</SPAN></A>
+
+<DIV>
+<p>
+To make it easier to perform search and replace using regular expressions on template files,
+all template HTML tags should conform to one standard.  This isn't as flexible, but it 
+will make the regular expressions easier to write/debug, and should be faster to process.
+</p>
+
+<p>
+Tags such as <SPAN class="HTMLtag">input</SPAN>, <SPAN class="HTMLtag">textarea</SPAN>,
+and <SPAN class="HTMLtag">select</SPAN> should all conform to this standard ordering:
+</p>
+
+<p><SPAN class="HTMLtag">&#060tag type="the_type" name="the_name" id="the_id" value="the_value"&#062</SPAN>
+
+<BR>
+
+Note, that the <SPAN class="HTMLtag">type</SPAN> and <SPAN class="HTMLtag">id</SPAN> portions are optional.  The main thing that will matter for the regular expressions is the ordering of the elements.  If tags don't follow the ordering, then it's possible that they won't be replaced 
+with hidden fields, etc..
+</p>
+
+
+
+
 </DIV>
 
 </DIV>
