@@ -343,7 +343,7 @@ sub retellOptionsRow {
 	my $value = shift;
 
 	if ( $value ) {
-		return "<tr><td valign='top'>$name</td><td><i>$value</i></td></tr>\n";
+		return "<tr><td valign='top'>$name</td><td valign='top'><i>$value</i></td></tr>\n";
 	}
 }
 
