@@ -2628,14 +2628,14 @@ sub processCollectionsSearch {
     if ( $q->param("coordres") eq "half") {
 		if ($q->param("latdec_range") eq "00") {
 			push @terms, "((latmin >= 0 AND latmin <15) OR " 
- 						. "(latdec regexp '^(0|1|(2(0|1|2|3|4)))') OR "
+ 						. "(latdec regexp '^(0|1|2\$|(2(0|1|2|3|4)))') OR "
                         . "(latmin IS NULL AND latdec IS NULL))";
 		} elsif($q->param("latdec_range") eq "25") {
 			push @terms, "((latmin >= 15 AND latmin <30) OR "
  						. "(latdec regexp '^(4|3|(2(5|6|7|8|9)))'))";
 		} elsif($q->param("latdec_range") eq "50") {
 			push @terms, "((latmin >= 30 AND latmin <45) OR "
- 						. "(latdec regexp '^(5|6|(7(0|1|2|3|4)))'))";
+ 						. "(latdec regexp '^(5|6|7\$|(7(0|1|2|3|4)))'))";
 		} elsif ($q->param('latdec_range') eq "75") {
 			push @terms, "(latmin >= 45 OR (latdec regexp '^(9|8|(7(5|6|7|8|9)))'))";
 		}
