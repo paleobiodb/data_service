@@ -284,6 +284,9 @@ sub assignGenera	{
 			$field_abund_unit = $fieldcount;
 		} elsif ( $fn eq "occurrences.abund_value" )	{
 			$field_abund_value = $fieldcount;
+		} elsif ( $fn eq "collections.period" )	{
+			$field_bin = $fieldcount;
+			$bin_type = "period";
 		} elsif ( $fn eq "collections.epoch" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "epoch";
@@ -299,7 +302,7 @@ sub assignGenera	{
 		exit;
 	# this one is crucial and might be missing
 	} elsif ( ! $field_bin )	{
-		print "<h3>The data can't be analyzed because the epoch or 10 m.y. bin field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because the period, epoch, or 10 m.y. bin field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	# this one also always should be present anyway, unless the user
 	#  screwed up and didn't download the ref numbers despite wanting
@@ -325,7 +328,12 @@ sub assignGenera	{
 	#  10 m.y. bin scheme ever changes, this will need to be updated
 	# also get the bin boundaries in Ma
 	my @binnames;
-	if ( $bin_type eq "epoch" )	{
+	if ( $bin_type eq "period" )	{
+        @binnames=("Quaternary","Tertiary","Cretaceous","Jurassic","Triassic","Permian","Carboniferous","Devonian","Silurian","Ordovician","Cambrian","Vendian","Sturtian"); 
+		@_ = TimeLookup::findBoundaries($dbh,$dbt);
+		%topma = %{$_[2]};
+		%basema = %{$_[3]};
+	} elsif ( $bin_type eq "epoch" )	{
 		@binnames = ("Holocene","Pleistocene","Pliocene","Miocene","Oligocene","Eocene","Paleocene","Late/Upper Cretaceous","Early/Lower Cretaceous","Late/Upper Jurassic","Middle Jurassic","Early/Lower Jurassic","Late/Upper Triassic","Middle Triassic","Early/Lower Triassic","Zechstein","Rotliegendes","Gzelian","Kasimovian","Moscovian","Bashkirian","Serpukhovian","Visean","Tournaisian","Late/Upper Devonian","Middle Devonian","Early/Lower Devonian","Pridoli","Ludlow","Wenlock","Llandovery","Ashgill","Caradoc","Llandeilo","Llanvirn","Arenig","Tremadoc","Merioneth","St Davids","Caerfai","Ediacara","Varanger");
 		@_ = TimeLookup::findBoundaries($dbh,$dbt);
 		%topma = %{$_[2]};
