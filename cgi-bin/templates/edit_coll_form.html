@@ -84,11 +84,11 @@
     </script>
 
   <div class="title">Collection edit form</div>
-  <h3>You are now editing collection number <span id="collection_no"></span></h3>
+  <div class="titleDetails">You are now editing collection number <span id="collection_no"></span></div>
   <p>
-    See the <A HREF="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</A>
-    for instructions. <span class="required">Required fields are in bold
-    red</span>.
+    <span class="required">Required fields are in red.</span> 
+	Consult the <A HREF="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</A>
+    for help. 
   </p>
   
   <form name="form" action="$exec_url" method="POST" onSubmit="return checkFields();">
