@@ -1530,10 +1530,9 @@ sub getCoords	{
 		$y = $y * -1;
 	}
 	($x,$y) = $self->projectPoints($x,$y);
-	# Get pixel values, but shift everything a half degree so dots
-	#  are at midpoints of 1 by 1 deg rectangles
-	$x = $self->getLng($x - 0.5);
-	$y = $self->getLat($y - 0.5);
+	# Get pixel values
+	$x = $self->getLng($x);
+	$y = $self->getLat($y);
 	if ( $x ne "NaN" && $y ne "NaN" )	{
 		if ( $y > 0 )	{
 			return($x,$y,"N");
