@@ -2001,10 +2001,10 @@ sub buildTaxonomicList {
 
 	my @rowrefs = @{$dbt->getData($sql)};
 
-	if ( @rowrefs ) {
+	if(@rowrefs){
 		my @grand_master_list = ();
 
-		foreach my $rowref ( @rowrefs ) {
+		foreach my $rowref (@rowrefs){
 			my $output = '';
 			my %grand_master_hash = ();
 			my %classification = ();
@@ -2130,6 +2130,7 @@ sub buildTaxonomicList {
             $grand_master_hash{html} = $output;
 			push(@grand_master_list, \%grand_master_hash);
 		}
+
 		# Look at @grand_master_list to see every record has class_no, order_no,
 		# family_no,  reference_no, abundance_unit and comments. 
 		# If ALL records are missing any of those, don't print the header
@@ -2163,53 +2164,55 @@ sub buildTaxonomicList {
 		$return .=
 "<table border=\"0\" cellpadding=\"3\" cellspacing=\"0\"><tr>";
 
-	if($class_nos == 0){
-		$return .= "<td nowrap></td>";
-	}
-	else{
-		$return .= "<td nowrap><u>Class</u></td>";
-	}
-	if($order_nos == 0){
-		$return .= "<td></td>";
-	}
-	else{
-		$return .= "<td><u>Order</u></td>";
-	}
-	if($family_nos == 0){
-		$return .= "<td></td>";
-	}
-	else{
-		$return .= "<td><u>Family</u></td>";
-	}
+		if($class_nos == 0){
+			$return .= "<td nowrap></td>";
+		}
+		else{
+			$return .= "<td nowrap><u>Class</u></td>";
+		}
+		if($order_nos == 0){
+			$return .= "<td></td>";
+		}
+		else{
+			$return .= "<td><u>Order</u></td>";
+		}
+		if($family_nos == 0){
+			$return .= "<td></td>";
+		}
+		else{
+			$return .= "<td><u>Family</u></td>";
+		}
 
-	# if ALL taxa have no genus or species, we have no list,
-	# so always print this.
-	$return .= "<td><u>Genus and species</u></td>";
+		# if ALL taxa have no genus or species, we have no list,
+		# so always print this.
+		$return .= "<td><u>Genus and species</u></td>";
 
-	if($reference_nos == 0){
-		$return .= "<td></td>";
-	}
-	else{
-		$return .= "<td><u>Reference</u></td>";
-	}
-	if($abund_values == 0){
-		$return .= "<td></td>";
-	}
-	else{
-		$return .= "<td><u>Abundance</u></td>";
-	}
-	if($comments == 0){
-		$return .= "<td></td>";
-	}
-	else{
-		$return .= "<td><u>Comments</u></td></tr>";
-	}
+		if($reference_nos == 0){
+			$return .= "<td></td>";
+		}
+		else{
+			$return .= "<td><u>Reference</u></td>";
+		}
+		if($abund_values == 0){
+			$return .= "<td></td>";
+		}
+		else{
+			$return .= "<td><u>Abundance</u></td>";
+		}
+		if($comments == 0){
+			$return .= "<td></td>";
+		}
+		else{
+			$return .= "<td><u>Comments</u></td></tr>";
+		}
 
 		# Sort:
 		my @sorted = sort{ $a->{class_no} <=> $b->{class_no} ||
 						   $a->{order_no} <=> $b->{order_no} ||
 						   $a->{family_no} <=> $b->{family_no} ||
 						   $a->{occurrence_no} <=> $b->{occurrence_no}} @grand_master_list;
+	# Don't do any more sorting if all occs had NO other classification info.
+	unless($class_nos == 0 && $order_nos == 0 && $family_nos == 0 ){
 		# Now sort the ones that had no class or order or family by occ_no.
 		my @occs_to_sort = ();
 		while($sorted[-1]->{class_no} == 1000000 &&
@@ -2288,6 +2291,7 @@ sub buildTaxonomicList {
 				}
 			}
 		}
+	}
 
 		my $sorted_html = '';
 		for(my $index = 0; $index < @sorted; $index++){
