@@ -176,8 +176,8 @@ sub populateHTML
   {
     my $val = $row[$fieldNum];
 
-	# insert spaces after commas for the lithadj* set members:0
-	if($fieldName =~ /lithadj*/){ 
+	# insert spaces after commas for the set members
+	if($fieldName =~ /(lithadj*|research_group|pres_mode|coll_meth|feed_pred_traces|assembl_comps|project_name)/){ 
 		$val =~ s/,/, /g;	
 	}
     
