@@ -287,7 +287,7 @@ sub assignGenera	{
 		} elsif ( $fn eq "collections.epoch" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "epoch";
-		} elsif ( $fn eq "collections.locage_max" )	{
+		} elsif ( $fn eq "collections.10mybin" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "10my";
 		}

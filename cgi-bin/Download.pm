@@ -1082,20 +1082,20 @@ sub doQuery {
 
 	# get the period names for the collections JA 22.2.04
 	# based on scale 2 = Harland periods
-	if ( $q->param('collections_period_max') )	{
+	if ( $q->param('collections_period') )	{
 		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '2');
 		%myperiod = %{$intervalInScaleRef};
 	}
 
 	# get the epoch names for the collections JA 22.2.04
 	# based on scale 4 = Harland epochs
-	if ( $q->param('collections_epoch_max') )	{
+	if ( $q->param('collections_epoch') )	{
 		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '4');
 		%myepoch = %{$intervalInScaleRef};
 	}
 	# get the PBDB 10 m.y. bin names for the collections JA 3.3.04
 	# WARNING: the locage_max field is just being used as a dummy
-	if ( $q->param('collections_locage_max') )	{
+	if ( $q->param('collections_10mybin') )	{
 		@_ = TimeLookup::processBinLookup($dbh,$dbt);
 		%mybin = %{$_[0]};
 	}
