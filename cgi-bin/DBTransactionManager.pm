@@ -94,6 +94,7 @@ sub getData{
 		# non-SELECT:
 		else{
 			my $num = $sth->execute();
+print "SQL: $sql\n";
 			$self->{_err} = $sth->errstr;
 			# If we did an insert, make the record id available
 			if($sql =~ /INSERT/i){
@@ -142,14 +143,15 @@ sub checkSQL{
 	my $self = shift;
 	my $sql = shift;
 
+	# NOTE: This messes with enumerated values
 	# uppercase the whole thing for ease of use
-	$sql = uc($sql);
+	#$sql = uc($sql);
 
 	# Is this a SELECT, INSERT, UPDATE or DELETE?
 	$sql =~/^(\w+)\s+/;
-	my $type = $1;
+	my $type = uc($1);
 
-	if(!$self->checkWhereClause($sql)){
+	if($type ne "INSERT" && !$self->checkWhereClause($sql)){
 		die "Bad WHERE clause in SQL: $sql";
 	}
 	
@@ -160,7 +162,7 @@ sub checkSQL{
 		# Check that the columns and values lists are not empty
 		# NOTE: down the road, we could check required fields
 		# against table names.
-		$sql =~ /(\(.*?\))\s+VALUES\s+(\(.*?\))/;
+		$sql =~ /(\(.*?\))\s+VALUES\s+(\(.*?\))/i;
 		if($1 eq "()" or $1 eq "" or $2 eq "()" or $2 eq "" ){
 			return 0;
 		}
@@ -173,14 +175,14 @@ sub checkSQL{
 		# fields aren't blanked out.
 
 		# Avoid full table updates.
-		if($sql !~ /WHERE/){
+		if($sql !~ /WHERE/i){
 			return 0;
 		}
 		return 3;
 	}
 	elsif($type eq "DELETE"){
 		# Try to avoid deleting all records from a table
-		if($sql !~ /WHERE/){
+		if($sql !~ /WHERE/i){
 			return 0;
 		}
 		else{
@@ -194,16 +196,18 @@ sub checkSQL{
 ##
 sub checkWhereClause{
 	my $self = shift;
-	my $sql = shift; # Note: this has already been uppercase-d by the caller.
+	# NOTE: disregard the following note...
+	# Note: this has already been uppercase-d by the caller.
+	my $sql = shift; 
 	
 	# This method is a 'pass-through' if there is no WHERE clause.
-	if($sql !~ /WHERE/){
+	if($sql !~ /WHERE/i){
 		return 1;
 	}
 
 	# This is only 'first-pass' safe. Could be more robust if we check
 	# all AND clauses.
-	$sql =~ /WHERE\s+([A-Z0-9_\.\(]+)\s*(=|LIKE|IN|!=)\s*(.+)?\s*/;
+	$sql =~ /WHERE\s+([A-Z0-9_\.\(]+)\s*(=|LIKE|IN|!=)\s*(.+)?\s*/i;
 
 	#print "\$1: $1, \$2: $2<br>";
 	if(!$1){
