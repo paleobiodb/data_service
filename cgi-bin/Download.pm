@@ -21,7 +21,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out.
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdec latdir lngdeg lngmin lngsec lngdec lngdir latlng_basis altitude_value altitude_unit geogscale geogcomments emlperiod_max emlperiod_min period_max emlepoch_max emlepoch_min epoch_max epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone max_interval_no min_interval_no research_group formation geological_group member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 period_min otherenvironment rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdec latdir lngdeg lngmin lngsec lngdec lngdir latlng_basis altitude_value altitude_unit geogscale geogcomments zone period_max epoch_max max_interval_no min_interval_no research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 otherenvironment rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
 my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no occurrence_no collection_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name reference_no comments created modified modified_temp plant_organ);
 my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
@@ -214,25 +214,12 @@ sub retellOptions {
 					"collections_latlng_basis", 
 					"collections_geogscale", 
 					"collections_geogcomments", 
-					"collections_emlperiod_max", 
 					"collections_period_max", 
-					"collections_emlperiod_min", 
-					"collections_period_min", 
-					"collections_emlepoch_max", 
 					"collections_epoch_max", 
-					"collections_emlepoch_min", 
-					"collections_epoch_min", 
-					"collections_emlintage_max", 
-					"collections_intage_max", 
-					"collections_emlintage_min", 
-					"collections_intage_min", 
-					"collections_emllocage_max", 
-					"collections_locage_max", 
-					"collections_emllocage_min", 
-					"collections_locage_min", 
-					"collections_zone", 
 					"collections_max_interval_no", 
 					"collections_min_interval_no", 
+					"collections_zone", 
+					"collections_geological_group", 
 					"collections_formation", 
 					"collections_member", 
 					"collections_localsection", 
@@ -685,6 +672,20 @@ sub doQuery {
 		}
 	}
 
+	# get the period names for the collections JA 22.2.04
+	# based on scale 2 = Harland periods
+	if ( $q->param('collections_period_max') )	{
+		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '2');
+		%myperiod = %{$intervalInScaleRef};
+	}
+
+	# get the epoch names for the collections JA 22.2.04
+	# based on scale 4 = Harland epochs
+	if ( $q->param('collections_epoch_max') )	{
+		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '4');
+		%myepoch = %{$intervalInScaleRef};
+	}
+
 
 	# Getting only collection data:
 	if($collections_only eq 'YES'){
@@ -838,6 +839,11 @@ sub doQuery {
 	my $collectionCols = join ( $sepChar, @collectionHeaderCols );
 	if ( $collectionCols ) { $header .= $sepChar.$collectionCols; }
 
+	# trivial clean up: "period_max" is actually a computed period value,
+	#  so call it "period"; likewise "epoch_max"/"epoch"
+	$header =~ s/period_max/period/;
+	$header =~ s/epoch_max/epoch/;
+
 	print OUTFILE "$header\n";
 	$self->dbg ( "Output header: $header" );
 	
@@ -921,7 +927,17 @@ sub doQuery {
 				$row->{$column} = $max_interval_name{$row->{$column}};
 			} elsif ( $column eq "min_interval_no" )	{
 				$row->{$column} = $min_interval_name{$row->{$column}};
+			# translate bogus period or epoch max into legitimate,
+			#   looked-up period or epoch names JA 22.2.04
+			# WARNING: this won't work at all if the period_max
+			#   and/or epoch_max fields are ever removed from
+			#   the database
+			} elsif ( $column eq "period_max" )	{
+				$row->{$column} = $myperiod{$row->{collection_no}};
+			} elsif ( $column eq "epoch_max" )	{
+				$row->{$column} = $myepoch{$row->{collection_no}};
 			}
+
 			push ( @coll_row, $row->{$column} );
 		}
 
