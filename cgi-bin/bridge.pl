@@ -4776,10 +4776,11 @@ sub displayOccurrenceAddEdit {
 	if ( ! $blanks ) { $blanks = 10; }
 
 	# Set the default species name (indet. or sp.) JA 9.7.02
-	if ($pref{'species_name'} ne "")	{
-		unshift @row, $pref{'species_name'};
-		unshift @fieldNames, "species_name";
-	}
+	# JA 21.4.04: have to ALWAYS do this or the id= tag in the form
+	#  won't be stripped, which causes the JavaScript to get confused
+	#  about row numbering
+	unshift @row, $pref{'species_name'};
+	unshift @fieldNames, "species_name";
 
 	for ( $i = 0; $i<$blanks ; $i++) {
 		print qq|<input type=hidden name="row_token" value="row_token">\n|;
