@@ -167,26 +167,36 @@ sub processBinLookup	{
 		"133" => "Jurassic 1", # Sinemurian
 		"134" => "Jurassic 1", # Hettangian
 		"135" => "Triassic 5", # Rhaetian
-		"136" => "Triassic 4", # Norian
-		"137" => "Triassic 3", # Carnian
-		"138" => "Triassic 2", # Ladinian
-		"139" => "Triassic 1", # Anisian
+	# used up to 17.8.04
+		"136" => "Triassic 5", # Norian
+		"137" => "Triassic 4", # Carnian
+		"138" => "Triassic 3", # Ladinian
+		"139" => "Triassic 2", # Anisian
+	#	"136" => "Triassic 4", # Norian
+	#	"137" => "Triassic 3", # Carnian
+	#	"138" => "Triassic 2", # Ladinian
+	#	"139" => "Triassic 1", # Anisian
 		"46" => "Triassic 1", # Early Triassic
-		"715" => "Permian 5", # Changhsingian
+		"143" => "Permian 4", # Changxingian
+		"715" => "Permian 4", # Changhsingian
+	# used up to 16.8.04
+	#	"715" => "Permian 5", # Changhsingian
 		"716" => "Permian 4", # Wuchiapingian
-		"145" => "Permian 4", # Capitanian
+		"145" => "Permian 3", # Capitanian
+	# used up to 16.8.04
+	#	"145" => "Permian 4", # Capitanian
 		"146" => "Permian 3", # Wordian
 		"717" => "Permian 3", # Roadian
 		"148" => "Permian 2", # Kungurian
 		"149" => "Permian 2", # Artinskian
 		"150" => "Permian 1", # Sakmarian
 		"151" => "Permian 1", # Asselian
-		"49" => "Carboniferous 6", # Gzelian
-		"50" => "Carboniferous 6", # Kasimovian
-	# used up to 9.8.04
-	#	"49" => "Carboniferous 5", # Gzelian
-	#	"50" => "Carboniferous 5", # Kasimovian
-		"51" => "Carboniferous 5", # Moscovian
+	# used up to 9.8.04, reverted back to 17.8.04
+		"49" => "Carboniferous 5", # Gzelian
+		"50" => "Carboniferous 5", # Kasimovian
+		"51" => "Carboniferous 4", # Moscovian
+	# used up to 17.8.04
+	#	"51" => "Carboniferous 5", # Moscovian
 		"52" => "Carboniferous 4", # Bashkirian
 		"166" => "Carboniferous 3", # Alportian
 		"167" => "Carboniferous 3", # Chokierian
@@ -213,8 +223,14 @@ sub processBinLookup	{
 		"62" => "Silurian 1", # Llandovery
 		"638" => "Ordovician 5", # Ashgillian
 		"639" => "Ordovician 4", # Caradocian
-		"30" => "Ordovician 3", # Middle Ordovician
-		"641" => "Ordovician 2", # Latorpian
+		"65" => "Ordovician 3", # Llandeilo
+		"66" => "Ordovician 3", # Llanvirn
+	# used up to 15.8.04
+	#	"30" => "Ordovician 3", # Middle Ordovician
+		"596" => "Ordovician 2", # Arenigian
+	#	"67" => "Ordovician 2", # Arenigian
+	# used up to 15.8.04
+	#	"641" => "Ordovician 2", # Latorpian
 		"559" => "Ordovician 1", # Tremadocian
 		"69" => "Cambrian 4", # Merioneth
 		"70" => "Cambrian 3", # St David's
