@@ -36,10 +36,10 @@ function auth ( ) {
 
 <table width="100%">
 
-<tr><td width="50%" valign=top><table>
+<tr><td width="40%" valign=top><table>
 <tr><td colspan=2 valign=top><h4>Search options</h4>
-<tr><td valign=top>Research group or project:
-<td>
+<tr><td valign=top>Research group<br> or project:
+<td valign=top>
 
 <select name="research_group">
 <option selected>all
@@ -54,11 +54,11 @@ function auth ( ) {
 
 <tr>
 	<td valign=top>Authorizer:</td>
-	<td><select name="authorizer"></select> &nbsp;<a href="javascript: auth( );">Me</a></td>
+	<td valign=top><select name="authorizer"></select> &nbsp;<a href="javascript: auth( );">Me</a></td>
 </tr>
 
 <tr><td valign=top>Modified since:
-<td>
+<td valign=top>
 <select name="modified_since">
 <option selected>
 <option>today
@@ -110,7 +110,7 @@ function auth ( ) {
 </tr>
 
 <tr><td valign=top>Country:
-<td><select name="country">
+<td valign=top><select name="country">
 <option selected>all
 <option>Argentina
 <option>Australia
@@ -138,8 +138,11 @@ function auth ( ) {
 <option>Yemen
 </select>
 
+<tr><td valign="top">State/province:
+<td valign=top><input name="state" size=25>
+
 <tr><td valign=top>Period:
-<td><select name="period">
+<td valign=top><select name="period">
 <option selected>all
 <option>Quaternary
 <option>Tertiary
@@ -156,116 +159,82 @@ function auth ( ) {
 </select>
 
 <tr><td valign=top>Epoch:
-<td><input name=epoch size=25>
+<td valign=top><input name=epoch size=25>
 
-<tr><td valign=top>Stage:
-<td><input name=stage size=25>
+<tr><td valign=top>Age/stage:
+<td valign=top><input name=stage size=25>
 
 <tr><td valign=top>Formation:
-<td><input name=formation size=25>
+<td valign=top><input name=formation size=25>
 
 <tr><td valign=top>Lithology:
-<td><select name="lithology">
-<option selected>all
-<option>claystone
-<option>mudstone
-<option>"shale"
-<option>siltstone
-<option>sandstone
-<option>conglomerate
-<option>
-<option>marl
-<option>
-<option>lime mudstone
-<option>wackestone
-<option>packstone
-<option>grainstone
-<option>"reef rocks"
-<option>"limestone"
-<option>dolomite
-<option>"carbonate"
-<option>
-<option>"coal"
-<option>peat
-<option>lignite
-<option>subbituminous coal
-<option>bituminous coal
-<option>anthracite
-<option>coal ball
-<option>
-<option>chert
-<option>phosphorite
-<option>ironstone
-<option>siderite
-<option>
-<option>phyllite
-<option>slate
-<option>schist
+<td valign=top><select id="lithology1">
 </select>
 
+<tr><td valign="top">Paleoenvironment:
+<td valign=top><select id="environment"></select>
+
 <tr><td valign=top>
-<nobr><select name="taxon_rank"><option>Higher-taxon<option>Genus<option>Genus and species<option>species</select>
-name:</nobr>
-<td><input name="genus_name" size=25>
+<nobr><select name="taxon_rank"><option>Higher-taxon<option selected>Genus<option>Genus and species<option>species</select>:</nobr>
+<td valign=top><input name="genus_name" size=25>
 
 </table>
 
-<td valign=top width="50%"><table>
+<td valign=top width="60%"><table>
 <tr><td colspan=2 valign=top><h4>View options</h4>
 <tr><td colspan=2><div class="small"><i>Don't forget to <a href="$exec_url?action=displayPreferencesPage">set your preferences</a>.</i><p></div></td></tr>
 
 <tr><td valign=top>Projection:
-<td><select id="projection">
+<td valign=top><select id="projection">
 </select>
 
-<tr><td valign=top>Featured continent:
-<td><select id="mapcontinent">
+<tr><td valign=top>Map focus:
+<td valign=top><select id="mapcontinent">
 </select>
 
-<tr><td valign=top>Magnification of continent:
+<tr><td valign=top>Magnification:
 <td valign=top><select id="mapscale">
 </select>
 
-<tr><td valign=top>Color of continents:
-<td><select id="mapbgcolor">
+<tr><td valign=top>Resolution:
+<td valign=top><select id="mapresolution">
 </select>
 
-<tr><td valign=top>Color of oceans:
-<td><select id="oceancolor">
+<tr><td valign=top>Background color:
+<td valign=top><select id="mapbgcolor">
 </select>
 
-<tr><td valign=top>Spacing of grid lines:
+<tr><td valign=top>Spacing and color of grid lines:
 <td valign=top><select id="gridsize">
 </select>
-
-<tr><td valign=top>Color of grid lines:
-<td valign=top><select id="gridcolor">
+<select id="gridcolor">
 </select>
 
-<tr><td valign=top>Color of coastlines:
-<td valign=top><select id="coastlinecolor">
+<tr><td valign=top>Thickness and color of coastlines:
+<td valign=top><select id="linethickness"></select>
+<select id="coastlinecolor"></select>
+
+<tr><td valign=top>International borders:
+<td valign=top><valign=top><select id="borderlinecolor">
 </select>
 
-<tr><td valign=top>Point size:
-<td valign=top><select id="pointsize">
+<tr><td valign=top>USA state borders:
+<td valign=top><valign=top><select id="usalinecolor">
 </select>
 
-<tr><td valign=top>Point shape:
-<td valign=top><select id="pointshape">
-</select>
-
-<tr><td valign=top>Color of points:
-<td valign=top><select id="dotcolor">
-</select><br>
-<select id="dotborder">
-</select>
+<tr><td valign=top>Data points:
+<td valign=top>
+<select id="pointsize"></select>
+<select id="dotcolor"></select>
+<select id="pointshape"></select>
+<select id="dotborder"></select>
 <font size=-1>black borders</font>
 
 </table>
 </table>
 
 <table width=100%>
-<tr><td width=50%><td width=50%><input type=submit value="Draw map">
+<tr><td width=40%><td width=60%><input type=submit value="Draw map">
 </table>
 
 </form>
