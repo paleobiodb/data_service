@@ -83,7 +83,7 @@
 			if ( frm.parent_taxon_name.value != "" && firstUpperRestLower.test ( frm.parent_taxon_name.value ) == false )	{
 				errors += "* Higher taxon's name is ill-formed.\n";
 			}
-			else if ( frm.parent_taxon_name.value != "" && hasSpace.test ( frm.parent_taxon_name.value ) != false )	{
+			else if ( frm.taxon_status[2].checked && frm.parent_taxon_name.value != "" && hasSpace.test ( frm.parent_taxon_name.value ) != false )	{
 				errors += "* Higher taxon's name is more than one word.\n";
 			}
 		}
