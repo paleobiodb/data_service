@@ -1,22 +1,34 @@
 #!/usr/bin/perl
 
 # created by rjp, 1/2004.
+# represents information about an occurrence
+# has methods to set the occurrence number,
+# and then to retrieve information about it
+# including an HTML formated entry in an occurrence table.
 
 package Occurrence;
 
 use strict;
-use DBI;
-use DBConnection;
 use SQLBuilder;
 use TaxonHierarchy;
 use Reference;
 
+# these are the data fields for the object
 use fields qw(	occurrence_no
 				reference_no
+				genus_name
+				species_name
 				SQLBuilder
 							);  # list of allowable data fields.
 
+
+#	occurrence_no		:	The occurrence_no for this occurrence, set by the user
+#	reference_no		:	For this occurrence_no, figured out from database
+#	genus_name			:	
+#	species_name		:	 
 						
+						
+
 
 sub new {
 	my $class = shift;
@@ -54,11 +66,14 @@ sub setWithOccurrenceNumber {
 		$self->{occurrence_no} = $input;
 
 		# set the result_no parameter
-		$sql->setSQLExpr("SELECT reference_no FROM occurrences WHERE occurrence_no = $input");
+		$sql->setSQLExpr("SELECT reference_no, genus_name, species_name FROM occurrences WHERE occurrence_no = $input");
 		$sql->executeSQL();
 		my @result = $sql->nextResultRow();
 		
 		$self->{reference_no} = $result[0];
+		
+		$self->{genus_name} = $result[1];
+		$self->{species_name} = $result[2];
 		
 		$sql->finishSQL();
 
@@ -79,6 +94,41 @@ sub referenceNumber {
 	
 	return ($self->{reference_no});
 }
+
+
+# internal class method
+# pass it a genus and species (or just a genus)
+# and it will return a URL pointing to more 
+# information about that genus (and possibly species).
+# For internal use only!
+sub detailsForGenusAndSpecies {
+	my $genus = shift;
+	my $species = shift;
+	
+	if ((! $genus) and (! $species)) {
+		return "";  # nothing!	
+	}
+	
+	my $name = $genus; 
+	
+	my $rank = "Genus";
+	if ($species) {
+		$name .= "+$species";
+		$rank .= "+and+Species";
+	}
+	
+	return "/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$name&taxon_rank=$rank";
+}
+
+
+
+# returns a URL for the details for this occurrence
+sub occurrenceDetailsLink {
+	my Occurrence $self = shift;
+
+	return (detailsForGenusAndSpecies($self->{genus_name}, $self->{species_name}));
+}
+
 
 
 # get HTML formatted occurrence entry
@@ -133,7 +183,8 @@ sub formatAsHTML {
 				<TD>$class</TD>
 				<TD>$order</TD>
 				<TD>$family</TD>
-				<TD>$result[0] $result[1] $result[2]</TD>
+				<TD><A HREF=\"" . detailsForGenusAndSpecies($result[0], $result[2]) .
+				"\">$result[0] $result[1] $result[2]</A></TD>
 				<TD>$authors</TD>
 				<TD>$result[3] $result[4]</TD>
 				<TD>$result[5]</TD>
@@ -173,7 +224,8 @@ sub formatAsHTML {
 				<TD>$class</TD>
 				<TD>$order</TD>
 				<TD>$family</TD>
-				<TD>= $result[0] $result[1] $result[2]</TD>
+				<TD>= <A HREF=\"" . detailsForGenusAndSpecies($result[0], $result[2]) .
+					 "\">$result[0] $result[1] $result[2]</A></TD>
 				<TD>$authors</TD>
 				<TD></TD>
 				<TD>$result[4]</TD>
