@@ -138,7 +138,7 @@
 				   frm.latdir.options[indexLat].text != "North" ) ) {
 				missinginfo += "\n    - Lat/long (mismatch country)";
 			}
-			// Changed 'West' check from latitude to longitude PM
+			// PM 09/19/02 Changed the "West" check to longitude from latitude
 			else if ( frm.country.options[index].text == "Brazil" &&
 				 ( parseInt(frm.latdeg.value) > 35 ||
 				   frm.lngdir.options[indexLng].text != "West" ) ) {
