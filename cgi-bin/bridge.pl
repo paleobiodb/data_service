@@ -410,7 +410,7 @@ sub displayLoginPage {
 	}
 	$entList =~ s/,\s*$//; # remove last comma and space if present.
 
-	my $javaScript = '<SCRIPT language=\"JavaScript\" type=\"text/javascript\">
+	my $javaScript = '<SCRIPT language="JavaScript" type="text/javascript">
 	// returns an array of enterer names
 	function entererNames() {
 		var names = new Array(' . $entList . ');

@@ -1,15 +1,14 @@
 // 2/2004 by rjp.
 
 // complete the authorizer field in the form.
-function doCompleteAuthorizer(e) {
-		
+// must also pass it an array refernece to
+// a list of names in alphabetical order
+function doCompleteAuthorizer(e, names) {
+	
     //return if they press delete.
     if (e.which == 8 || e.which == 127) {
         return true;
     }
-
-    //names in alphabetical order
-    var names = authorizerNames();
 
     var val = document.forms[0].authorizer.value;
     var sub = val.substr(0, val.length -1);
@@ -31,15 +30,15 @@ function doCompleteAuthorizer(e) {
 }
 
 // complete the enterer field in the form.
-function doCompleteEnterer(e) {
+// must also pass it an array refernece to
+// a list of names in alphabetical order
+function doCompleteEnterer(e, names) {
 
     //return if they press delete.
     if (e.which == 8 || e.which == 127) {
         return true;
     }
 
-    //names in alphabetical order
-	var names = entererNames();
 	    
     var val = document.forms[0].enterer.value;
     var sub = val.substr(0, val.length -1);
