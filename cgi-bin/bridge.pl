@@ -2030,40 +2030,43 @@ sub buildTaxonomicList {
 				$drow->setValue("reference_no",'');
 			}
 
+			my $arg = "";
+			my $reidTable = "";
 			my @occrow = @{$rowref};
-			my $arg = $drow->getValue('genus_name')." ". $drow->getValue('species_name');
-			%classification = %{PBDBUtil::get_classification_hash($dbt, $arg)};
-			if($classification{'class'} || $classification{'order'} ||
-					$classification{'family'} ){
-				push(@occrow, "bogus");
-				push(@occFieldNames, 'higher_taxa');
-				push(@occrow, $classification{'class'});
-				push(@occFieldNames, 'class');
-				push(@occrow, $classification{'order'});
-				push(@occFieldNames, 'order');
-				push(@occrow, $classification{'family'});
-				push(@occFieldNames, 'family');
+			my $mostRecentReID = PBDBUtil::getMostRecentReIDforOcc($dbt,@occrow[10]);
+			if($mostRecentReID){
+				$formattedrow = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
+				$formattedrow .= getReidHTMLTableByOccNum($mostRecentReID, 1);
 			}
+			else{
+				my $arg = $drow->getValue('genus_name')." ".$drow->getValue('species_name');
+				%classification=%{PBDBUtil::get_classification_hash($dbt,$arg)};
+				if($classification{'class'} || $classification{'order'} ||
+						$classification{'family'} ){
+					push(@occrow, "bogus");
+					push(@occFieldNames, 'higher_taxa');
+					push(@occrow, $classification{'class'});
+					push(@occFieldNames, 'class');
+					push(@occrow, $classification{'order'});
+					push(@occFieldNames, 'order');
+					push(@occrow, $classification{'family'});
+					push(@occFieldNames, 'family');
+				}
 
-			$formattedrow = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
+				$formattedrow = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
 
-			if($classification{'class'} || 
-					$classification{'order'} ||
-					$classification{'family'} ){
-				pop(@occrow);
-				pop(@occrow);
-				pop(@occrow);
-				pop(@occrow);
-				pop(@occFieldNames);
-				pop(@occFieldNames);
-				pop(@occFieldNames);
-				pop(@occFieldNames);
+				if($classification{'class'} || $classification{'order'} ||
+						$classification{'family'} ){
+					pop(@occrow);
+					pop(@occrow);
+					pop(@occrow);
+					pop(@occrow);
+					pop(@occFieldNames);
+					pop(@occFieldNames);
+					pop(@occFieldNames);
+					pop(@occFieldNames);
+				}
 			}
-
-			# CALL A METHOD THAT GETS THE MOST RECENT REID FOR THE GIVEN OCC,
-			# REARRANGE THIS (BELOW) METHOD TO USE THE REID NO ARG.
-			# ALSO, DON'T DO CLASSIFICATION HASH (ABOVE) IF WE GET A REID.
-			$formattedrow .= getReidHTMLTableByOccNum(pop(@occrow),$collection_refno);
 
 			# Link taxa to the TaxonInfo script
 			# ---------------------------------
@@ -2146,8 +2149,7 @@ sub buildTaxonomicList {
 sub getReidHTMLTableByOccNum {
 
 	my $occNum = shift;
-	# This appears to be unused:
-	my $collection_refno = shift;
+	my $isReidNo = shift;
 
 	$sql =	"SELECT genus_reso, ".
 			"       genus_name, ".
@@ -2157,8 +2159,14 @@ sub getReidHTMLTableByOccNum {
 			"       species_name, ".
 			"       comments, ".
 			"       reference_no ".
-			"  FROM reidentifications ".
-			" WHERE occurrence_no=$occNum";
+			"  FROM reidentifications ";
+	if($isReidNo){
+			$sql .= " WHERE reid_no=$occNum";
+	}
+	else{
+			$sql .= " WHERE occurrence_no=$occNum";
+	}
+
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
   
@@ -2166,6 +2174,7 @@ sub getReidHTMLTableByOccNum {
 	@rows = @{$sth->fetchall_arrayref()};
 
 	my $retVal = "";
+	# NOT SURE ABOUT THIS LOOP. DON'T WE JUST WANT ONE?
 	foreach my $rowRef ( @rows ) {
 		my @row = @{$rowRef};
 		# format the reference
@@ -3627,7 +3636,7 @@ sub displayOccsForReID
 		$sth2->execute();
 
 		print "<tr><td colspan=100>";
-		print getReidHTMLTableByOccNum($row{'occurrence_no'},0);
+		print getReidHTMLTableByOccNum($row{'occurrence_no'}, 0);
 		print "</td></tr>\n";
 		$sth2->finish();
 
