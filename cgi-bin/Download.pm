@@ -324,10 +324,10 @@ sub retellOptions {
 	$html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
 	$html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
 	$html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", $q->param("sp") );
-    $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
 	$html .= $self->retellOptionsRow ( "Include occurrences qualified by \"aff.\" or quotes?", $q->param("poor_genus_reso") );
 	$html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
 	$html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
+    $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
 
     if ($q->param('output_data') eq "occurrences") {
         my $occFields = ();
@@ -1603,9 +1603,9 @@ sub doQuery {
             if ($q->param('collections_lng') eq "YES") {
                 if ($q->param('collections_lng_format') eq 'decimal') {
                     if ($row->{'lngmin'} =~ /\d+/) {
-                        $row->{'lngdec'} = $row->{'lngdeg'} + $row->{'lngmin'}/60 + $row->{'lngsec'}/3600;
+                        $row->{'lngdec'} = sprintf("%.6f",$row->{'lngdeg'} + $row->{'lngmin'}/60 + $row->{'lngsec'}/3600);
                     } else {
-                        $row->{'lngdec'} = $row->{'lngdeg'}.".".int($row->{'lngdec'});
+                        $row->{'lngdec'} = sprintf("%.6f",$row->{'lngdeg'}.".".int($row->{'lngdec'}));
                     }    
                     $row->{'lngdec'} *= -1 if ($row->{'lngdir'} eq "West");
                 } else {
@@ -1621,9 +1621,9 @@ sub doQuery {
             if ($q->param('collections_lat') eq "YES") {
                 if ($q->param('collections_lat_format') eq 'decimal') {
                     if ($row->{'latmin'} =~ /\d+/) {
-                        $row->{'latdec'} = $row->{'latdeg'} + $row->{'latmin'}/60 + $row->{'latsec'}/3600;
+                        $row->{'latdec'} = sprintf("%.6f",$row->{'latdeg'} + $row->{'latmin'}/60 + $row->{'latsec'}/3600);
                     } else {
-                        $row->{'latdec'} = $row->{'latdeg'}.".".int($row->{'latdec'});
+                        $row->{'latdec'} = sprintf("%.6f",$row->{'latdeg'}.".".int($row->{'latdec'}));
                     }    
                     $row->{'latdec'} *= -1 if ($row->{'latdir'} eq "South");
                 } else {
@@ -2009,22 +2009,6 @@ sub setupOutput {
             $q->param("reidentifications_$field"=>'YES');
         }
     }
-
-    # If interval names are numbers, translate them into regular names
-    my $max_interval_no = $q->param("max_interval_name");
-    my $min_interval_no = $q->param("min_interval_name");
-    my ($eml_interval,$interval_name);
-    if ($min_interval_no=~ /^\d+$/) {
-        ($eml_interval,$interval_name) = $self->getIntervalName($min_interval_no);
-        if ($eml_interval) {$q->param("min_eml_interval"=>$eml_interval);}
-        if ($interval_name) {$q->param("min_interval_name"=>$interval_name);}
-    }
-    if ($max_interval_no=~ /^\d+$/) {
-        ($eml_interval,$interval_name) = $self->getIntervalName($max_interval_no);
-        if ($eml_interval) {$q->param("max_eml_interval"=>$eml_interval);}
-        if ($interval_name) {$q->param("max_interval_name"=>$interval_name);}
-    }
-
 }
 
 sub formatRow {
