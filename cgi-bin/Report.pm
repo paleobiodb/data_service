@@ -120,7 +120,7 @@ sub tallyFieldTerms	{
 	# 'searchfield1' and 'searchfield2'
 	for $suffix (1..2)	{
 		if ($q->param('searchfield'.$suffix) eq "period")	{
-			push @{ $fieldterms[$suffix] }, "", "Modern", "Quaternary",
+			push @{ $fieldterms[$suffix] }, "", "Holocene", "Quaternary",
 					                      "Tertiary", "Cretaceous", "Jurassic",
 					                      "Triassic", "Permian", "Carboniferous",
 					                      "Devonian", "Silurian", "Ordovician",
@@ -432,20 +432,14 @@ sub tallyFieldTerms	{
 
 	$self->dbg("number of coll results: ".@all_coll_rows."<br>");
 
-# for each period, get a list of all collections, then make a hash array
-#  assigning collections to periods
+# get a hash array mapping intervals into periods of the
+#   Harland et al. 1990 period scale (scale 2)
 	if ( $q->param('searchfield1') eq "period" ||
 	     $q->param('searchfield2') eq "period" )	{
-		for my $period ('Sturtian','Vendian',
-			'Cambrian','Ordovician','Silurian','Devonian',
-			'Carboniferous','Permian','Triassic','Jurassic',
-			'Cretaceous','Tertiary','Quaternary','Modern')	{
-			my $collref = TimeLookup::processLookup($dbh, $dbt, '', $period, '', '');
-			my @colls = @{$collref};
-			for my $coll ( @colls )	{
-				$myperiod{$coll} = $period;
-			}
-		}
+
+		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '2');
+		%myperiod = %{$intervalInScaleRef};
+
 	}
 
 # tick through all the collections and tally occurrences etc.
