@@ -46,6 +46,8 @@ sub processLookup	{
 	$eml_min_interval = shift;
 	$min_interval_name = shift;
 
+	my $return_type = shift;
+
 	if ( ! $min_interval_name )	{
 		$eml_min_interval = $eml_max_interval;
 		$min_interval_name = $max_interval_name;
@@ -58,6 +60,9 @@ sub processLookup	{
 	&getIntervalRange();
 	&findImmediateCorrelates();
 	&mapIntervals();
+	if ( $return_type eq "intervals" )	{
+		return \@intervals;
+	}
 	&returnCollectionList();
 
 }
