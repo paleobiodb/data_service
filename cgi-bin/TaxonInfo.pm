@@ -2184,7 +2184,7 @@ sub getOriginalCombination{
 	# If all results in the loop above gave results, follow the first one
 	# down (assuming they all point to the same place eventually) recursively.
 	if($has_status){
-		$taxon_no = getOriginialCombination($dbt,$results[0]->{child_no});
+		$taxon_no = getOriginalCombination($dbt,$results[0]->{child_no});
 	}
 
 	# If we fall through above but $has_status was not set, we just
