@@ -2097,6 +2097,8 @@ sub selectMostRecentParentOpinion{
 		my $years = 0;
 		my $index_winner = -1;
 		for(my $index = 0; $index < @array_of_hash_refs; $index++){
+			# pubyr is recorded directly in the opinion record,
+			#  so use it
 			if($array_of_hash_refs[$index]->{pubyr} &&
 					$array_of_hash_refs[$index]->{pubyr} > $years){
 				$years = $array_of_hash_refs[$index]->{pubyr};
@@ -2104,12 +2106,29 @@ sub selectMostRecentParentOpinion{
 			}
 			else{
 				# get the year from the refs table
-				my $sql = "SELECT pubyr FROM refs WHERE reference_no=".
+				# JA: also get the publication type because
+				#  everything else is preferred to compendia
+				my $sql = "SELECT pubyr,publication_type AS pt FROM refs WHERE reference_no=".
 						  $array_of_hash_refs[$index]->{reference_no};
 				my @ref_ref = @{$dbt->getData($sql)};
-				if($ref_ref[0]->{pubyr} && $ref_ref[0]->{pubyr} > $years){
+		# this is kind of ugly: use pubyr if it's the first one
+		#  encountered, or if the winner's pub type is compendium and
+		#  the current ref's is not, or if both are type compendium and
+		#  the current ref is more recent, or if neither are type
+		#  compendium and the current ref is more recent
+				if($ref_ref[0]->{pubyr} &&
+					( ! $years ||
+					( $ref_ref[0]->{pt} ne "compendium" &&
+					  $winner_pt eq "compendium" ) ||
+					( $ref_ref[0]->{pubyr} > $years &&
+					  $ref_ref[0]->{pt} eq "compendium" &&
+					  $winner_pt eq "compendium" ) ||
+					( $ref_ref[0]->{pubyr} > $years &&
+					  $ref_ref[0]->{pt} ne "compendium" &&
+					  $winner_pt ne "compendium" ) ) )	{
 					$years = $ref_ref[0]->{pubyr};
 					$index_winner = $index;
+					$winner_pt = $ref_ref[0]->{pt};
 				}
 			}	
 		}
