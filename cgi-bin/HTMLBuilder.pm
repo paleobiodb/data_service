@@ -319,8 +319,22 @@ sub newPopulateHTML {
 			# if it's name is taxon_rank, then we'll look for any fields
 			# in the template called "taxon_rank_popup" and fill them with
 			# a popup menu of ranks.
-			Debug::dbPrint( "yes, it's taxon_rank" );
-			$fields{taxon_rank_popup} = $self->rankPopupMenu($fields{taxon_rank});
+			
+			# if the rank is 'subspecies' or 'species', then we should
+			# only show those two in the list.
+			#
+			# however, if the rank is genus or higher, then we show everything
+			# from genus on up.
+			my $rank = $fields{taxon_rank};
+			my @toExclude;
+			if (($rank eq 'subspecies') || ($rank eq 'species')) {
+				@toExclude = ('subgenus', 'genus', 'subtribe', 'tribe', 'subfamily', 'family', 'superfamily', 'infraorder', 'suborder', 'order', 'superorder', 'subclass', 'class', 'superclass', 'subphylum', 'phylum', 'superphylum', 'subkingdom', 'kingdom', 'superkingdom', 'unranked clade', 'informal');
+			} else {
+				@toExclude = ('subspecies', 'species');
+			}
+			
+			
+			$fields{taxon_rank_popup} = $self->rankPopupMenu($rank, \@toExclude);
 		}
 		
 		if ($key eq 'reference_no') {

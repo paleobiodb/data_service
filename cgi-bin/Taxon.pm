@@ -604,12 +604,8 @@ sub databaseRecord {
 
 
 
-# Pass this an HTMLBuilder object
-# and a session object.  
-#
-# Optionally, pass it the CGI object ($q), but usually this is only done
-# if we're running the displayAuthorityForm for the second time (ie, if they
-# had errors the first time).
+# Pass this an HTMLBuilder object,
+# a session object, and the CGI object.
 # 
 # Displays the form which allows users to enter/edit authority
 # table data.
@@ -621,18 +617,22 @@ sub displayAuthorityForm {
 	my $s = shift;
 	my $q = shift;
 	
-	
 	my $sql = $self->getSQLBuilder();
 	
 	my %fields;  # a hash of fields and values that
 				 # we'll pass to HTMLBuilder to pop. the form.
 				 
-	my @nonEditables; 	# fields we'll pass to HTMLBuilder that the user can't edit.
+	# Fields we'll pass to HTMLBuilder that the user can't edit.
+	# (basically, any field which is not empty or 0 in the database,
+	# if the authorizer is not the original authorizer of the record).
+	my @nonEditables; 	
 	
+	if ((!$hbo) || (! $s) || (! $q)) {
+		Debug::logError("Taxon::displayAuthorityForm had invalid arguments passed to it.");
+		return;
+	}
 	
-	# grab a list of all columns in the authorities table.
-	my @allTableColumns = @{$sql->allTableColumns('authorities')};	
-	
+	# Figure out if it's the first time displaying this form, or if it's already been displayed.
 	my $secondTime = 0;  # is this the second time displaying this form?
 	if (($q) && ($q->{second_submission}) ) {
 		# this means that we're displaying the form for the second
@@ -652,20 +652,22 @@ sub displayAuthorityForm {
 	# is this a new entry, or an edit of an old record?
 	my $isNewEntry = 1;  
 	if ($self->{taxonNumber}) {
-		$isNewEntry = 0;  # it must exist if we have a taxon_no for it.
+		$isNewEntry = 0;  # it must be an edit if we have a taxon_no for it.
 	}
 	
-	Debug::dbPrint("isNewEntry = $isNewEntry");
+	#Debug::dbPrint("isNewEntry = $isNewEntry");
 	
 	# if the taxon is already in the authorities table,
 	# then grab the data from that table row.
-	# (unless we're going through for the second time);
-	if ((! $isNewEntry) && (!$secondTime) ) {	
-		my $results = $self->databaseRecord();
-		%fields = %$results;		
-	 	Debug::dbPrint("querying database");
+	my $dbFieldsRef;
+	if (! $isNewEntry) {	
+		$dbFieldsRef = $self->databaseRecord();
+		Debug::dbPrint("querying database");
 		
-		$fields{taxon_no} = $self->{taxonNumber};
+		if (!$secondTime) {
+			%fields = %$dbFieldsRef;		
+			$fields{taxon_no} = $self->{taxonNumber};
+		}
 	}
 	
 	$fields{taxon_name} = $self->{taxonName};
@@ -718,32 +720,50 @@ sub displayAuthorityForm {
 	}
 	
 		
-	
-	# if the rank is species, then display the type_specimen input
-	# field.  Otherwise display the type_taxon_name field.
+	# Figure out the rank based on spacing of the name.
 	my $rankFromSpaces = Validation::taxonRank($self->{taxonName});
+	my $rankFromDatabase = $dbFieldsRef->{taxon_rank};
+	my $rankFromForm = $q->param('taxon_rank'); 
 	
-	# note, if secondTime through, then this is still the database rank,
-	# but it was just pulled from the database on the first time through
-	# and then passed in the $q object.
-	my $databaseRank = $fields{taxon_rank};
-	
-	if ($rankFromSpaces eq 'species' || $rankFromSpaces eq 'subspecies') {
-		# remove the type_taxon_name field.
-		$fields{'OPTIONAL_type_taxon_name'} = 0;
-	} else {
-		# remove the type_specimen field.	
-		$fields{'OPTIONAL_type_specimen'} = 0;
-	}
+	my $rankToUse;
 	
 	# Now we need to deal with the taxon rank popup menu.
-	# if this authority record already existed, then use the taxon_rank
-	# from the database.  Otherwise, use the rank obtained from the 
-	# spacing of the name
-	my $rankToUse = ($databaseRank || $rankFromSpaces);
+	# If we've already displayed the form and the user is now making changes
+	# from an error message, then we should use the rank they chose on the last form.
+	# Else, if it's the first display of the form, then we use the rank from the database
+	# if it's an edit of an old record, or we use the rank from the spacing of the name
+	# they typed in if it's a new record.
+	
+	if ($secondTime) {
+		$rankToUse = $rankFromForm;	
+	} else { 
+		# first time
+		if ($isNewEntry) {
+			$rankToUse = $rankFromSpaces;	
+		} else {
+			# not a new entry
+			$rankToUse = $rankFromDatabase;
+		}
+	}
+	
+	
 	if ($rankToUse eq 'higher') {
 		# the popup menu doesn't have "higher", so use "genus" instead.
 		$rankToUse = 'genus';
+	}
+	
+	
+	# if the rank is species, then display the type_specimen input
+	# field.  Otherwise display the type_taxon_name field.
+	
+	if ($rankToUse eq 'species' || $rankToUse eq 'subspecies') {
+		# remove the type_taxon_name field.
+		$fields{'OPTIONAL_type_taxon_name'} = 0;
+	} else {
+		# must be a genus or higher taxon
+		
+		# remove the type_specimen field.	
+		$fields{'OPTIONAL_type_specimen'} = 0;
 	}
 	
 	$fields{taxon_rank} = $rankToUse;
@@ -755,7 +775,7 @@ sub displayAuthorityForm {
 	#
 	# otherwise, they can edit any field.
 	
-	if ((! $isNewEntry) && ($s->get('authorizer_no') != $fields{authorizer_no})) {
+	if ((! $isNewEntry) && ($s->get('authorizer_no') != $dbFieldsRef->{authorizer_no})) {
 	
 		# grab the authorizer name for this record.
 		my $authName = $s->personNameForNumber($fields{authorizer_no});
@@ -775,21 +795,16 @@ sub displayAuthorityForm {
 			push (@nonEditables, ('pages', 'figures'));		
 		}
 		
-		
-		my @keys = keys(%fields);
-		
-		# find all fields which are not empty and add them to the list.
-		# however, we only want to make non-editable *real* fields which are
-		# actually in the description of the authorities table.. So 			
-		# loop through all columns in the authorities table to do this.
-		foreach my $f (@allTableColumns) {	
-			if (($fields{$f} ne '') || ($fields{$f} != 0) ) {
+				
+		# find all fields in the database record which are not empty and add them to the list.
+		foreach my $f (keys(%$dbFieldsRef)) {	
+			if ($dbFieldsRef->{$f}) {
 				push(@nonEditables, $f);
 			}
 		}
 		
-		# we'll also have to do the 2nd_figures and 2nd_pages separately since they don't actually
-		# exist in the database.
+		# we'll also have to add a few fields separately since they don't exist in the database,
+		# but only in our form.
 		
 		#if (($fields{'2nd_pages'} ne '') || ($fields{'2nd_pages'} != 0) ) {
 		if ($fields{'2nd_pages'}) {
@@ -985,21 +1000,32 @@ sub submitAuthorityForm {
 		$errors->add("Don't enter other authors if you haven't entered a second author.");
 	}
 	
+	
+	# check and make sure the taxon_name_corrected field in the form makes sense
+	if (!($q->param('taxon_name_corrected'))) {
+		$errors->add("You can't submit the form with an empty taxon name!");	
+	}
+	
 	{ # so we have our own scope for these variables.
-		my $rankFromSpaces = Validation::taxonRank($q->param('taxon_name'));
+		my $rankFromSpaces = Validation::taxonRank($q->param('taxon_name_corrected'));
 		my $trank = $q->param('taxon_rank');
 		my $er = 0;
 		
+		
+		if ($rankFromSpaces eq 'invalid') {
+			$errors->add("Invalid taxon name, please check spacing and capitalization.");	
+		}
+		
 		if ( (($rankFromSpaces eq 'subspecies') && ($trank ne 'subspecies')) ||
 			(($rankFromSpaces eq 'species') && ($trank ne 'species')) ||
-			(($rankFromSpaces eq 'higher') && (
-					($trank eq 'subspecies') || 
-					($trank eq 'species')
-					
-					)) ) {
+			(($rankFromSpaces eq 'higher') && 
+			(  ($trank eq 'subspecies') || ($trank eq 'species') )
+			) ) {
 
 			$errors->add("The original rank, '" . $trank . "' doesn't match the spacing of the taxon name, '" . $q->param('taxon_name_corrected') . "'.");		
 		}
+		
+		
 	}
 	
 	# Now loop through all fields submitted from the form.
@@ -1048,7 +1074,11 @@ sub submitAuthorityForm {
 		$fieldsToEnter{type_taxon_name} = '';
 	}
 
-	$fieldsToEnter{taxon_name} = $q->param('taxon_name_corrected');	
+
+	
+	
+	$fieldsToEnter{taxon_name} = $q->param('taxon_name_corrected');
+	
 
 	# Delete some fields that may be present since these don't correspond
 	# to fields in the database table.. (ie, they're in the form, but not in the table)
