@@ -5875,7 +5875,7 @@ sub processTaxonomySearch	{
 		
 		print stdIncludes("std_page_top");
 		print "<center>\n";
-		print "<h3>Which '<i>" . $taxonName . "</i>' do you mean?</h3>\n";
+		print "<h3>Which '<i>" . $taxonName . "</i>' do you mean?</h3>\n<br>\n";
 		print "<form method=\"POST\" action=\"bridge.pl\">\n";
 		
 		if ($goal eq 'authority') {	
@@ -5908,7 +5908,7 @@ sub processTaxonomySearch	{
 		print "</table></td> </tr>\n";
 		
 		print "<tr><td align=\"center\" colspan=2>\n";
-		print "<p><input type=submit value=\"Submit\"></p>\n</form>\n";
+		print "<p><input type=submit value=\"Submit\"></p>\n</form>\n<br>\n";
 
 		if ($goal ne 'opinion') {
 			print "<p align=\"left\"><span class=\"tiny\">You have a choice because there may be multiple biological species (e.g., a plant and an animal) with identical names.<br>\n";
