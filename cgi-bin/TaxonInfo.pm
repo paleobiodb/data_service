@@ -2345,7 +2345,9 @@ sub displayEcology	{
 	# also get values for ancestors (always do this because data for the
 	#   taxon could be partial)
 	# WARNING: this will completely screw up if the name has homonyms
-	push my @tempnames, $taxon_name;
+	# JA: changed this on 4.4.04 to use taxon_no instead of taxon_name,
+	#  avoiding homonym problem
+	push my @tempnames, $taxon_no;
 	my @ancestors = Classification::get_classification_hash($dbt,'class',\@tempnames,'yes');
 
 	Debug::dbPrint("ancestors = @ancestors");
