@@ -573,10 +573,10 @@ sub tallyFieldTerms	{
 	}
 	
 	if ($q->param('searchfield1') =~ /lithology/)	{
-		$q->param('searchfield1') = "lithology";
+		$q->param('searchfield1' => "lithology");
 	}
 	if ($q->param('searchfield2') =~ /lithology/)	{
-		$q->param('searchfield2') = "lithology";
+		$q->param('searchfield2' => "lithology");
 	}
 	
 	if ($nsearchfields == 1)	{
