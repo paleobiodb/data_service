@@ -24,6 +24,7 @@ use Scales;
 use TimeLookup;
 use Ecology;
 use PrintHierarchy;
+use WhereClause;
 use Debug;
 
 require "connection.pl";	# Contains our database connection info
@@ -4299,31 +4300,31 @@ sub displayOccsForReID
 	}
 
 	# Build the SQL
+	my $where = WhereClause->new();
+	$where->setSeparator("AND");
+	
 	if($genus_name ne '' or $species_name ne ''){
 		$printCollectionDetails = 1;
 
 		$sql = "SELECT * FROM occurrences ";
-		if ( $genus_name ) {
-			$where = buildWhere ( $where, "genus_name='$genus_name'" );
+			
+		$where->addItem("genus_name='$genus_name'") if ( $genus_name );
+		$where->addItem("species_name='$species_name'") if ( $species_name );
+		
+		if (@colls > 0) {
+			$where->addItem("collection_no IN(".join(',',@colls).")");
+		} elsif ($collection_no > 0) {
+			$where->addItem("collection_no=$collection_no");
 		}
-		if ( $species_name ) {
-			$where = buildWhere ( $where, "species_name='$species_name'" );
-		}
-		if(@colls > 0){
-			$where = buildWhere($where,"collection_no IN(".join(',',@colls).")");
-		}
-		elsif($collection_no > 0){
-			$where = buildWhere($where, "collection_no=$collection_no");
-		}
-	}
-	elsif($collection_no){
+	} elsif ($collection_no) {
 		$sql = "SELECT * FROM occurrences ";
-		$where = buildWhere($where, "collection_no=$collection_no");
+		$where->addItem("collection_no=$collection_no");
 	}
-	$where = buildWhere ( $where, "occurrence_no > $lastOccNum LIMIT 11" );
+	
+	$where->addItem("occurrence_no > $lastOccNum LIMIT 11");
 
 	# Tack it all together
-	$sql .= $where;
+	$sql .= " WHERE " . $where->whereClause();
  
 	dbg("$sql<br>");
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -4414,12 +4415,8 @@ sub displayOccsForReID
 		print $ref_string;
 		# print $bibRef->toString();
 
-		print "
-	</table>
+		print "</table></td></tr>";
 
-	</td>
-</tr>
-";
 		$sth2->finish();
 
 		# Print the collections details
