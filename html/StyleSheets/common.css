@@ -1,5 +1,5 @@
 /* Common style sheet to be used for all pages. 
-   Created 1/2004. */
+   Created 1/2004 by rjp. */
 
 A:link	{ font-family : Arial, Verdana, Helvetica; color : #0033FF; text-decoration:none; }
 A:visited	{ font-family : Arial, Verdana, Helvetica; color : #5522FF; text-decoration:none; }
@@ -81,6 +81,14 @@ body {
 	text-align: center;
 }
 
+
+/* format for required entries in forms */
+.required {
+	color: red;
+	font-weight: bold;	
+}
+
+
 table.navbox {
 	border-style: solid;
 	border-width: 1;
@@ -90,9 +98,14 @@ table.navbox {
 }
 
 /*	the color for the dark row in a list which has alternating 
-	light and dark rows */
+	light and dark rows. */
 .darkList {
 	background-color:E0E0E0;
+}
+
+/*	color of light row in list, not used everywhere. */
+.lightList {
+	background-color:white;
 }
 
 
