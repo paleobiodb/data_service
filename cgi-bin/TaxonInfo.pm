@@ -771,13 +771,11 @@ sub displayTaxonInfoResults {
 		if ( @modules_to_display )	{
 			my $pref = join ' ', @modules_to_display;
 			my $prefsql = "UPDATE person SET taxon_info_modules='$pref',last_action=last_action WHERE name='" . $s->get("enterer") . "'";
-print "FOO $prefsql<br>\n";
 			$dbt->getData($prefsql);
 		}
 		elsif ( ! @modules_to_display )	{
 			my $prefsql = "SELECT taxon_info_modules FROM person WHERE name='" . $s->get("enterer") . "'";
 			$pref = @{$dbt->getData($prefsql)}[0]->{taxon_info_modules};
-print "FOO2 ($pref)($prefsql)<br>\n";
 			@modules_to_display = split / /,$pref;
 		}
 	}
