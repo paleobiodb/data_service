@@ -1739,6 +1739,14 @@ sub processCollectionsSearch {
 		  push(@terms, "(collection_name$comparator" . $collectionName . " OR collection_aka$comparator" . $collectionName . ")");
 		  $q->param('collection_names' => '');
 		}
+		# Handle half-latitude degrees passed by Map.pm JA 28.8.03
+		if ( $q->param('lathalf') eq "Y" )	{
+		  push @terms, "(latmin>=30 OR latdec LIKE '5%' OR latdec LIKE '6%' OR latdec LIKE '7%' OR latdec LIKE '8%' OR latdec LIKE '9%')";
+		  $q->param('lathalf' => '');
+		} elsif ( $q->param('lathalf') eq "N" )	{
+		  push @terms, "( ( latmin<30 AND latmin!='' ) OR latdec LIKE '0%' OR latdec LIKE '1%' OR latdec LIKE '2%' OR latdec LIKE '3%' OR latdec LIKE '4%')";
+		  $q->param('lathalf' => '');
+		}
 		# Handle period
 		if ( $q->param('period')) {
 		  my $periodName = $dbh->quote($wildcardToken . $q->param('period') . $wildcardToken);
