@@ -22,6 +22,7 @@ use DBTransactionManager;
 use Images;
 use Scales;
 use TimeLookup;
+use Ecomorph;
 
 require "connection.pl";	# Contains our database connection info
 
@@ -3009,16 +3010,6 @@ sub processEditScale	{
 ## END Scales stuff
 ##############
 
-sub startLookup	{
-
-	my $eml_max_interval = ""; my $max_interval_name = "40";
-	my $eml_min_interval = ""; my $min_interval_name = "30";
-
-	my $collref = TimeLookup::processLookup($dbh, $dbt, $eml_max_interval, $max_interval_name, $eml_min_interval, $min_interval_name);
-print join ',',@collections;
-	my @collections = @{$collref};
-
-}
 
 ##############
 ## Images stuff
@@ -3051,6 +3042,20 @@ sub processModuleNavigation{
 ### End Module Navigation
 ##############
 
+
+##############
+## Ecomorph stuff
+sub startStartEcomorphSearch	{
+	Ecomorph::startEcomorphSearch($hbo, $s, $exec_url);
+}
+sub startPopulateEcomorphForm	{
+	Ecomorph::populateEcomorphForm($dbh, $dbt, $hbo, $q, $s, $exec_url);
+}
+sub startProcessEcomorphForm	{
+	Ecomorph::processEcomorphForm($dbh, $dbt, $q, $s, $exec_url);
+}
+## END Ecomorph stuff
+##############
 
 sub displayEditCollection {
 	# Have to be logged in
@@ -4281,7 +4286,8 @@ sub displayOccsForReID
 		print qq|&g_name=$genus_name| if $genus_name;
 		print qq|&species_name=$species_name| if $species_name;
 		print qq|&collection_no=$collection_no&last_occ_num=$lastOccNum"> View next 10 occurrences</a></b>\n|;
-		print "</td>";
+		print "</td></tr>\n";
+		print "<tr><td class=small align=center><i>Warning: if you go to the next page without saving, your changes will be lost</i></td>\n";
 	}
 
 	print "</tr>\n</table><p>\n";
@@ -4405,6 +4411,11 @@ sub processNewReIDs {
 			my @colnames = ("Reid no", "Occurrence", "Collection",
               "Reference", "Corrected name", "", "", "", "Comments" );
 			$sth->finish();
+
+			$sql = "SELECT genus_reso,genus_name,species_reso,species_name FROM occurrences WHERE occurrence_no=" . $retrievedRow[1];
+			my $occref = @{$dbt->getData($sql)}[0];
+			my $occname = $occref->{genus_reso} . " " . $occref->{genus_name} . " " . $occref->{species_reso} . " " . $occref->{species_name};
+
 			my $rowString = "<tr><td>";
 			for $i (0..$#retrievedRow)	{
 				if ($retrievedRow[$i] ne "" ||
@@ -4414,12 +4425,15 @@ sub processNewReIDs {
 							$colnames[$i] eq "Comments")	{
 							$rowString .= "</td></tr>\n<tr><td colspan=4>";
 						}
-						else	{
+						elsif ( $colnames[$i] !~ /Reid/ )	{
 							$rowString .= "</td><td>";
 						}
 						$rowString .= "<b>" . $colnames[$i] . ":</b>&nbsp;";
 					}
 					$rowString .= $retrievedRow[$i] . " ";
+					if ( $colnames[$i] eq "Reference" )	{
+						$rowString .= "</td></tr>\n<tr><td colspan=4><b>Original name:</b>&nbsp;" . $occname;
+					}
 				}
 			}
 			$rowString .= "<p></td></tr><tr>";
