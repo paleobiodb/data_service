@@ -19,6 +19,8 @@
 		// checks
 		if ( frm.name.value == "" ) errors += "You must specify the person's name.\n";
 		if ( frm.email.value == "" ) errors += "You must specify the E-mail address.\n";
+		if ( frm.institution.value == "" ) errors += "You must specify the institution.\n";
+		if ( frm.country.value == "" ) errors += "You must specify the country.\n";
 
 		if ( frm.is_authorizer[0].checked ) {
 			if ( frm.plaintext.value == "" ) errors += "Authorizers must have a password.\n";
@@ -64,6 +66,14 @@
 <tr>
 	<td bgcolor="White" nowrap>E-mail address: *</td>
 	<td bgcolor="White"><input id="email" type="text" value="" size="30" maxlength="255"></td>
+</tr>
+<tr>
+	<td bgcolor="White">Institution: </td>
+	<td bgcolor="White"><input id="institution" type="text" value="" size="30" maxlength="80"></td>
+</tr>
+<tr>
+	<td bgcolor="White">Country: </td>
+	<td bgcolor="White"><input id="country" type="text" value="" size="30" maxlength="80"></td>
 </tr>
 <tr>
 	<td bgcolor="White" nowrap>Is authorizer?</td>
