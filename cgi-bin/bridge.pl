@@ -5235,6 +5235,12 @@ sub displayTaxonomyEntryForm	{
 # The parent name is the new one they are entering at the bottom of the form (if they enter one).
 sub processTaxonomyEntryForm {	
 	
+	if ($q->param('reference_no') == 0) {
+		my $sesRef = $s->get('reference_no');
+		$q->param(reference_no => $sesRef);  # temporary hack to fix the problem... rjp, 2/10/2004.
+		Debug::logError("error in processTaxonomyEntryForm tried to enter 0 reference_no, authorizer_no = " .  $s->get('authorizer') . " session reference_no = " . $s->get('reference_no'));		
+	}
+	
 	# do some validity checking.. make sure that the new taxon name isn't the same
 	# as the original.., that it is capitalized correctly, etc.
 	#
@@ -5683,6 +5689,17 @@ sub displayTaxonomyResults	{
 	print stdIncludes ("std_page_top");
 	# Process the form data relevant to the authorities table
 
+	my $sesRef = $s->get('reference_no');
+	my $cgiRef = $q->param('reference_no');
+	
+	# temporary hack to fix a bug,
+	# 2/10/2004 by rjp.
+	if (! $cgiRef) {
+		$q->param(reference_no => $sesRef);	
+	}
+	
+	Debug::dbPrint("sesref = $sesRef, cgiref = $cgiRef");
+	
 	# Update or insert the authority data, as appropriate
 	# Assumption here is that you definitely want to create the taxon name
 	# if it doesn't exist yet
