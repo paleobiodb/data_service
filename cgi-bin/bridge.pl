@@ -653,7 +653,7 @@ sub displayDownloadResults {
 
 	print &stdIncludes ( "std_page_top" );
 
-	my $m = Download->new( $dbh, $q, $s );
+	my $m = Download->new( $dbh, $dbt, $q, $s );
 	$m->buildDownload ( );
 
 	print &stdIncludes ("std_page_bottom");
