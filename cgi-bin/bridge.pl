@@ -2088,18 +2088,9 @@ sub getReidHTMLTableByOccNum {
 	my $retVal = "";
 	foreach my $rowRef ( @rows ) {
 		my @row = @{$rowRef};
-		# format genus_name
-		if($row[0]){
-			$row[1] = "<font size=-1><i>&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;".$row[0]."&nbsp;".$row[1]."</i></font>";
-			shift @row;
-			shift @fieldNames;
-		}
-		else{
-			$row[1] = "<font size=-1><i>&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;".$row[1]."</i></font>";
-		}
 		# format the reference
 		$row[-1] = buildReference($row[-1],"list");
-		$retVal .= $hbo->populateHTML("taxa_display_row", \@row,\@fieldNames);
+		$retVal .= $hbo->populateHTML("reid_taxa_display_row", \@row,\@fieldNames);
 	}
 
 	return $retVal;
