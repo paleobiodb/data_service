@@ -372,20 +372,27 @@ sub displayOpinionForm {
 	# We display a couple of different things depending on whether
 	# the rank is species or higher...
 	
-	if (! ($childRank->isSpecies() || $childRank->isSubspecies())) {
+	if (! $childRank->isSpecies() ) {
 		# remove the species only field.
-		$fields{'OPTIONAL_species_only'} = 0;
-	} else {		
-		
+		$fields{'OPTIONAL_species_only'} = 0;	
+	}
+	
+	if (! $childRank->isSubspecies() ) {
+		# remove the subspecies only field.
+		$fields{'OPTIONAL_subspecies_only'} = 0;
+	}
+	
+	if ( $childRank->isSubspecies || $childRank->isSpecies ) {		
 		# remove the field which is only for subgenus or higher
 		$fields{'OPTIONAL_not_species'} = 0;
 		
 		# if it's a species or subspecies, then we need to figure out
-		# the genus.  Eventually, this should be handled by the Rank class,
+		# the genus or species.  Eventually, this should be handled by the Rank class,
 		# but for now, we'll just grab the first "word" of the taxon_name
 		my $tname = $fields{taxon_name};
-		$tname =~ m/^(\w+)\b/i;
-		$fields{genus} = $1;
+		my ($one, $two, $three) = split(/ /, $tname);
+		$fields{genus} = $one;
+		$fields{species} = "$one $two";
 	
 		# don't do anything for now.
 	}
@@ -816,10 +823,19 @@ sub submitOpinionForm {
 		if ($childRank->isHigher()) {
 			$parentTaxonName = $q->param('parent_taxon_name');	
 		} else {
-			# it's a species or subspecies, so just grab the genus
+			# it's a species or subspecies, so just grab the genus or species
 			# name from the child taxon..
 			
-			$parentTaxonName = Validation::genusFromString($childTaxonName);
+			my $tname = $childTaxonName;
+			my ($one, $two, $three) = split(/ /, $tname);
+			
+			if ($childRank->isSpecies()) {
+				# then the parent is genus.
+				$parentTaxonName = $one;
+			} elsif ($childRank->isSubspecies()) {
+				# then the parent is a species
+				$parentTaxonName = "$one $two";
+			}
 			Debug::dbPrint("we're here and parentTaxonName = $parentTaxonName");
 		}		
 	} elsif ($taxonStatusRadio eq RECOMBINED_AS) {

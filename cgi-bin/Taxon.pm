@@ -356,7 +356,7 @@ sub authors {
 	} else {
 	
 		$auth = Globals::formatAuthors(1, $hr->{author1init}, $hr->{author1last}, $hr->{author2init}, $hr->{author2last}, $hr->{otherauthors} );
-		$auth .= $self->pubyr();
+		$auth .= " " . $self->pubyr();
 	}
 	
 	return $auth;
@@ -878,6 +878,64 @@ sub displayAuthorityForm {
 	
 	$fields{taxon_rank} = $rankToUse;
 	
+	
+	
+	## If this is a new species or subspecies, then we will automatically
+	# create an opinion record with a state of 'belongs to'.  However, we 
+	# have to make sure that we use the correct parent taxon if we have multiple
+	# ones in the database.  For example, if they enter a  new taxon named
+	# 'Equus newtaxon' and we have three entries in authorities for 'Equus'
+	# then we should present a menu and ask them which one to use.
+	
+	if ($isNewEntry && ($rankToUse eq 'species' || $rankToUse eq 'subspecies')) {
+		my $tname = $fields{taxon_name};
+		my ($one, $two, $three) = split(/ /, $tname);
+		
+		my $name;
+		if ($rankToUse eq 'species') {
+			$name = $one;
+		} else {
+			$name = "$one $two";
+		}
+		
+		# figure out how many authoritiy records could be the possible parent.
+		my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM authorities WHERE taxon_name = '" . $name . "'");
+		
+		# if only one record, then we don't have to ask the user anything.
+		# otherwise, we should ask them to pick which one.
+		my $select;
+		if ($count >= 1) {
+			$sql->setSQLExpr("SELECT taxon_no, taxon_name FROM authorities WHERE taxon_name = '" . $name . "'");
+			my $results = $sql->allResultsArrayRef();
+		
+			my $select;
+			foreach my $row (@$results) {
+				my $taxon = Taxon->new($self->{GLOBALVARS});
+				$taxon->setWithTaxonNumber($row->[0]);
+				$select .= "<OPTION value=\"$row->[0]\">" .
+				$taxon->taxonName() . " " . $taxon->authors() . "</OPTION>";
+			}
+			
+			$fields{parent_taxon_popup} = "<b>Parent taxon:</b>
+			<SELECT name=\"parent_taxon_no\">
+			$select
+			</SELECT>";
+		}
+
+		
+	}
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 
 	# if the authorizer of this record doesn't match the current
 	# authorizer, and if this is an edit (not a first entry),
@@ -926,6 +984,13 @@ sub displayAuthorityForm {
 		if ($fields{'type_taxon_name'}) { push(@nonEditables, 'type_taxon_name'); }
 		if ($fields{'type_specimen'}) { push(@nonEditables, 'type_specimen'); }
 		
+		push(@nonEditables, 'taxon_name_corrected');
+	}
+	
+	
+	## Make the taxon_name non editable if this is a new entry to simplify things
+	## New addition, 3/22/2004
+	if ($isNewEntry) {
 		push(@nonEditables, 'taxon_name_corrected');
 	}
 	
