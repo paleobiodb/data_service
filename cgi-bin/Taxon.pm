@@ -1243,6 +1243,7 @@ sub submitAuthorityForm {
 	$sql->setSession($s);
 	
 	my $errors = Errors->new();
+    my @warnings = ();
 	
 	# if this is the second time they submitted the form (or third, fourth, etc.),
 	# then this variable will be true.  This would happen if they had errors
@@ -1566,8 +1567,7 @@ sub submitAuthorityForm {
 			}
 			
 			if ($ttaxon->pubyr() > $pubyrToCheck ) {
-				$errors->add("The type taxon couldn't have been published after 
-				the current taxon");
+				push @warnings,"The type taxon was published after the current taxon.";
 			}
 			
 					
@@ -1820,7 +1820,7 @@ sub submitAuthorityForm {
 	# it will screw up the isNewEntry calculation...
 	my $t = Taxon->new($self->{GLOBALVARS});
 	$t->setWithTaxonNumber($resultTaxonNumber);
-	$t->displayAuthoritySummary($isNewEntry);
+	$t->displayAuthoritySummary($isNewEntry, \@warnings);
 	
 }
 
@@ -1831,6 +1831,7 @@ sub submitAuthorityForm {
 sub displayAuthoritySummary {
 	my Taxon $self = shift;
 	my $newEntry = shift;
+    my $warnings = shift;
 
 	my $enterupdate;
 	if ($newEntry) {
@@ -1850,6 +1851,12 @@ sub displayAuthoritySummary {
 		print "<DIV class=\"warning\">Error inserting/updating authority record.  Please start over and try again.</DIV>";	
 	} else {
 		
+        if (@$warnings) {
+		    print "<DIV class=\"warning\">";
+            print "Warnings inserting/updating authority record:<BR>"; 
+            print "<LI>$_</LI>" for (@$warnings);
+            print "</DIV>";
+        }
 		print "<H3>" . $dbrec->{taxon_name} . " " . $self->authors() . " has been $enterupdate the database</H3>";
 
 		my $tempTaxon = $dbrec->{taxon_name};
