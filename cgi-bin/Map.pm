@@ -94,7 +94,7 @@ sub buildMapOnly {
 
 	sub mapQueryDb	{
 		my $self = shift;
-		my $in_list = shift;
+		my $in_list = (shift or "");
 
 		# if a research project (not a group) is requested, get a list of
 		#  references included in that project JA 3.10.02
@@ -121,7 +121,7 @@ sub buildMapOnly {
 		my $species;
 		if($q->param('genus_name')){
 			# PM 09/13/02 added the '\s+' pattern for space matching.
-			if($q->param('genus_name') =~ /\w\s+\w/){
+			if($q->param('genus_name') =~ /\w+\s+\w+/){
 				($genus,$species) = split /\s+/,$q->param('genus_name');
 			}
 			elsif($q->param('taxon_rank') eq "species"){

@@ -641,7 +641,7 @@ sub displayMapResults {
 
 	print &stdIncludes ( "std_page_top" );
 
-	my $m = Map->new( $dbh, $q, $s );
+	my $m = Map->new( $dbh, $q, $s, $dbt );
 	$m->buildMap ( );
 
 	print &stdIncludes ("std_page_bottom");
