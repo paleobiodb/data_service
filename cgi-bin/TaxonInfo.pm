@@ -293,7 +293,7 @@ sub displayTaxonInfoResults{
 		$in_list = PBDBUtil::taxonomic_search($q->param('genus_name'), $dbt);
 	}
 
-## DEAL WITH param NO_MAP AND param NO_CLASSIFICATION
+	## DEAL WITH param NO_MAP AND param NO_CLASSIFICATION ??
 
 	print main::stdIncludes("std_page_top");
 	print "<center><h2>$genus_name</h2></center>";
@@ -311,7 +311,7 @@ sub displayTaxonInfoResults{
 	$q->param('mapscale'=>'X 1');
 	$q->param('pointsize'=>'tiny');
 
-	print "<table width=\"100%\">".
+	print "<table width=\"100%\" border=1>".
 		  "<tr><td align=\"middle\"><h3>Classification</h3></td><td align=\"middle\"><h3>Distribution</h3></td></tr>";
 	print "<tr><td width=\"40%\" valign=\"top\" align=\"middle\">";
 
@@ -675,7 +675,7 @@ sub displayTaxonClassification{
 			   "FROM opinions,authorities ".
 			   "WHERE parent_no=".$quickie[0]->{taxon_no}.
 			   " AND status='belongs to' AND child_no=taxon_no ".
-			   "ORDER BY child_no";
+			   "ORDER BY taxon_name";
 		PBDBUtil::debug(1,"children sql: $sql");
 		@quickie = @{$dbt->getData($sql)};
 		if(scalar @quickie < 1){
@@ -801,11 +801,16 @@ sub getSynonymyParagraph{
 	my $dbt = shift;
 	my $taxon_no = shift;
 	my %synmap = ( 'recombined as' => 'recombined as ',
-				   'corrected as' => 'corrected as',
+				   'corrected as' => 'corrected as ',
+				   'belongs to' => 'revalidated by ',
+				   'nomen dubium' => 'considered a nomen dubium ',
+				   'nomen nudum' => 'considered a nomen nudum ',
+				   'nomen vanum' => 'considered a nomen vanum ',
+				   'nomen oblitem' => 'considered a nomen oblitem ',
 				   'subjective synonym of' => 'synonymized subjectively with ',
 				   'objective synonym of' => 'synonymized objectively with ');
 	my $text = "";
-#--
+
 	# "Named by" part first:
 	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
 	# - select taxon_name, author1last, pubyr, reference_no from authorities
@@ -854,10 +859,8 @@ sub getSynonymyParagraph{
 		$text .= "<i>Cannot determine who named ".
 				 $auth_rec[0]->{taxon_rank}." ".
 				 $auth_rec[0]->{taxon_name}.".</i><br>";
-		# RETURN OR KEEP GOING?
 		return $text;
 	}
-#--
 
 	# Now, synonymies:
 	$sql = "SELECT parent_no, status, reference_no, pubyr, author1last, ".
@@ -867,6 +870,7 @@ sub getSynonymyParagraph{
 	@results = @{$dbt->getData($sql)};
 
 	my %synonymies = ();
+	my @syn_years = ();
 	# check for synonymies - status' of anything other than "belongs to"
 	foreach my $row (@results){
 		# get the proper reference (record first, refs table second)
@@ -881,8 +885,6 @@ sub getSynonymyParagraph{
 			$row->{otherauthors} = $real_ref[0]->{otherauthors};
 			$row->{pubyr} = $real_ref[0]->{pubyr};
 		}
-	# NOTE/QUESTION: IS IT TRUE THAT ALL RECORDS THAT HAVE THIS CHILD [status]ED
-	# TO THE SAME PARENT_NO *NECESSARILY* HAVE THE SAME STATUS????????
 		# put all syn's referring to the same taxon_name together
 		if(exists $synonymies{$row->{parent_no}}){
 			push(@{$synonymies{$row->{parent_no}}}, $row);
@@ -891,8 +893,90 @@ sub getSynonymyParagraph{
 			$synonymies{$row->{parent_no}} = [$row];
 		}
 	}
+	
+	# Sort the items in each synonymy value by pubyr
+	foreach my $key (keys %synonymies){
+		my @years = @{$synonymies{$key}};
+		@years = sort{$a->{pubyr} cmp $b->{pubyr}} @years;
+		$synonymies{$key} = \@years;
+		push(@syn_years, $years[0]->{pubyr});
+	}
+
+	# sort the list of beginning syn_years
+	@syn_years = sort{$a cmp $b} @syn_years;
+
+	#--
+	## Revalidations and nomen*'s
+	$sql = "SELECT parent_no, status, reference_no, pubyr, author1last, ".
+		   "author2last, otherauthors, opinion_no ".
+		   "FROM opinions WHERE child_no=$taxon_no AND (status='belongs to' ".
+		   "OR status like 'nomen%')";
+	@results = @{$dbt->getData($sql)};
+	my %nomen_or_reval = ();
+	my @nomen_or_reval_numbers = ();
+	foreach my $row (@results){
+		# get the proper reference (record first, refs table second)
+		if(!$row->{author1last} || !$row->{pubyr}){
+			# select into the refs table.
+			$sql = "SELECT author1last,author2last,otherauthors,pubyr ".
+				   "FROM refs ".
+				   "WHERE reference_no=".$row->{reference_no};
+			my @real_ref = @{$dbt->getData($sql)};
+			$row->{author1last} = $real_ref[0]->{author1last};
+			$row->{author2last} = $real_ref[0]->{author2last};
+			$row->{otherauthors} = $real_ref[0]->{otherauthors};
+			$row->{pubyr} = $real_ref[0]->{pubyr};
+			# use opinion numbers to keep recs separate for now
+			$nomen_or_reval{$row->{opinion_no}} = $row;
+			push(@nomen_or_reval_numbers, $row->{opinion_no});
+		}
+	}
+	@nomen_or_reval_numbers = sort{$nomen_or_reval{$a}->{pubyr} <=> $nomen_or_reval{$b}->{pubyr}} @nomen_or_reval_numbers;	
+	# Since these are arranged numerically now chop of any leading "belongs to"
+	# recs whose pubyr is not newer than the oldest synonymy. Keep the whole 
+	# list if the oldest thing going is a nomen* record.
+	for(my $index = 0; $index < @nomen_or_reval_numbers; $index++){
+		# Because of the redo, below:
+		last if(scalar @nomen_or_reval_numbers < 1);
+		last if($nomen_or_reval{$nomen_or_reval_numbers[$index]}->{status} =~ /nomen/);
+		# otherwise, it's a 'belongs to' status
+		if($nomen_or_reval{$nomen_or_reval_numbers[$index]}->{pubyr} < $syn_years[0]){
+			delete $nomen_or_reval{$nomen_or_reval_numbers[$index]};
+			shift @nomen_or_reval_numbers;
+			redo;
+		}
+		else{
+			last;
+		}
+	}
+	# Combine all adjacent like status types from %nomen_or_reval.
+	my %additional = ();
+	my $last_status;
+	my $last_key;
+	for(my $index = 0; $index < @nomen_or_reval_numbers; $index++){
+		if($last_status && $last_status eq $nomen_or_reval{$nomen_or_reval_numbers[$index]}->{status}){
+			push(@{$additional{$last_key}}, $nomen_or_reval{$nomen_or_reval_numbers[$index]});
+		}
+		else{
+			$last_key = "nomen_reval$index";
+			$additional{$last_key} = [$nomen_or_reval{$nomen_or_reval_numbers[$index]}];
+		}
+		$last_status = $nomen_or_reval{$nomen_or_reval_numbers[$index]}->{status};
+	}
+
+	# PUT IN SYNONYMIES HASH.
+	foreach my $key (keys %additional){
+		$synonymies{$key} = $additional{$key};
+	}
+
+	#--
+
+
 	# Now print it all out
 	my @syn_keys = keys %synonymies;
+
+	@syn_keys = sort{$synonymies{$a}[0]->{pubyr} cmp $synonymies{$b}[0]->{pubyr}} @syn_keys;
+
 	# Loop through unique parent number from the opinions table.
 	# Each parent number is a hash key whose value is an array ref of records.
 	for(my $index = 0; $index < @syn_keys; $index++){
@@ -900,10 +984,18 @@ sub getSynonymyParagraph{
 		# is a record from the immediately preceeding 'opinions' select.
 		$text .= "; it was ".$synmap{$synonymies{$syn_keys[$index]}[0]->{status}};
 		$sql = "SELECT taxon_name FROM authorities ".
-			   "WHERE taxon_no=".
-			   $syn_keys[$index];
+			   "WHERE taxon_no=";
+		if($synonymies{$syn_keys[$index]}[0]->{status} =~ /nomen/ or
+		   $synonymies{$syn_keys[$index]}[0]->{status} =~ /belongs/){
+			$sql .= $synonymies{$syn_keys[$index]}[0]->{parent_no};
+		}
+		else{	
+			$sql .=  $syn_keys[$index];
+		}
 		@results = @{$dbt->getData($sql)};
-		$text .= "<i>".$results[0]->{taxon_name}."</i> by ";
+		unless($synmap{$synonymies{$syn_keys[$index]}[0]->{status}} eq "revalidated by "){
+			$text .= "<i>".$results[0]->{taxon_name}."</i> by ";
+		}
 		# Dereference the hash value (array ref of opinions recs), so we can
 		# write out all of the authors/years for this synonymy.
 		my @key_list = @{$synonymies{$syn_keys[$index]}};
@@ -929,7 +1021,7 @@ sub getSynonymyParagraph{
 			# remove the last comma
 			$text =~ s/,\s+$//;
 			# replace the last comma-space sequence with ' and '
-			$text =~ s/(,\s+([a-zA-Z\-']+\s+(and\s+[a-zA-Z\-']+\s+){0,1}\(\d{4}\)))$/ and $2/;
+			$text =~ s/(,\s+([a-zA-Z\-']+\s+(and\s+[a-zA-Z\-']+\s+|et al.\s+){0,1}\(\d{4}\)))$/ and $2/;
 			# put a semi-colon on the end to separate from any following syns.
 		}
 	}
