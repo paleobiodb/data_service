@@ -89,6 +89,10 @@ p.field {
 	font-style: normal;
 }
 
+.important {
+	color: maroon;
+}
+
 </style>
 </HEAD>
 
@@ -185,7 +189,8 @@ the authorities table.</span>
 <A NAME="collections"><span class="table">collections</span></A>
 <p class="tableDesc">Holds one record for each collection in the database.  
 A collection can be thought of as a particular <i>hole</i> in the ground.
-Make sure to respect the access_level and release_date fields.</p>
+<SPAN class="important">Access levels apply to these records</SPAN>
+</p>
 <p class="field">
 <span class="fieldName">collection_name</span>
 <span class="fieldDesc"></span>
@@ -207,7 +212,10 @@ as public.</span>
 <span class="fieldDesc">After this date, the data is fair game for everyone.  Before it, 
 look at the access_level field to determine who should have access.</span>
 </p>
-
+<p class="field">
+<span class="fieldName">research_group</span>
+<span class="fieldDesc"></span>
+</p>
 
 </div>
 
@@ -275,7 +283,10 @@ the database.</p>
 
 <div class="table">
 <A NAME="occurrences"><span class="table">occurrences</span></A>
-<p class="tableDesc">Holds one record for each distinct taxonomic occurrence within a particular collection (usually).</p>
+<p class="tableDesc">Holds one record for each distinct taxonomic occurrence within a 
+particular collection (usually).
+<SPAN class="important">Access levels apply to these records</SPAN>
+</p>
 <p class="field">
 <span class="fieldName"><span class="primaryKey">occurrence_no</span></span>
 </p>
@@ -323,7 +334,10 @@ For example, if genus_name is a higher taxon, then species would be "indet."</sp
 <A NAME="opinions"><span class="table">opinions</span></A>
 <p class="tableDesc">Records information about taxa that have been renamed.  Note,
 don't confuse this with the <A HREF="#reidentifications">reidentifications</A> table which 
-is used for reidentifications of a particular fossil at a particular collection.</p>
+is used for reidentifications of a particular fossil at a particular collection.
+
+
+</p>
 <p class="field">
 <span class="fieldName"><span class="primaryKey">opinion_no</span></span>
 </p>
@@ -332,12 +346,19 @@ is used for reidentifications of a particular fossil at a particular collection.
 <span class="fieldDesc">The reference where the opinion came from.</span>
 </p>
 <p class="field">
-<span class="fieldName"><span class="foreignKey">child_no</span></span>
-<span class="fieldDesc">Key to the authorities table, the child of this taxa rank.</span>
+<span class="fieldName"><span class="foreignKey">parent_no</span></span>
+<span class="fieldDesc">Key to the authorities table, parent of the child.  
+The child is the original, and the parent_no is the recombination/synonym/etc. according
+to the status field.</span>
 </p>
 <p class="field">
-<span class="fieldName"><span class="foreignKey">parent_no</span></span>
-<span class="fieldDesc">Key to the authorities table, the parent of this taxa rank.</span>
+<span class="fieldName"><span class="foreignKey">child_no</span></span>
+<span class="fieldDesc">The child_no field always points to the
+<span class="important">original</span> taxon_no in the <A HREF="#authorities">authorities</A> table.</span>
+</p>
+<p class="field">
+<span class="fieldName">status</span>
+<span class="fieldDesc">What does the opinion mean, for example, is it a recombination, synonym, etc.?</span>
 </p>
 <p class="field">
 <span class="fieldName">diagnosis</span>
@@ -420,7 +441,9 @@ and get the year from the reference instead.</span>
 <A NAME="reidentifications"><span class="table">reidentifications</span></A>
 <p class="tableDesc">Lists reidentifications of occurences
 and which reference number reidentified them.  For example, this would 
-occur if a fossil was incorrectly classified and later re-classified as something else.</p>
+occur if a fossil was incorrectly classified and later re-classified as something else.
+<SPAN class="important">Access levels apply to these records</SPAN>
+</p>
 <p class="field">
 <span class="fieldName"><span class="primaryKey">reid_no</span></span>
 </p>
