@@ -4846,7 +4846,7 @@ sub processTaxonomySearch	{
 	
 	# Try to find this taxon in the authorities table
 
-	my $sql = "SELECT * FROM authorities WHERE taxon_name LIKE '" . $taxonName . "%'";
+	my $sql = "SELECT * FROM authorities WHERE taxon_name = '" . $taxonName . "'";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 	my $matches = 0;
@@ -4856,7 +4856,8 @@ sub processTaxonomySearch	{
 	
 	my $html;
 	my $originalWasRecombination = 0;  # not a recombination to start with
-	while ( my %authorityRow = %{$sth->fetchrow_hashref()} )	{
+	
+	while ( my %authorityRow = %{$sth->fetchrow_hashref()} ) {
 		$matches++;
 		
 		my $taxonNum = $authorityRow{'taxon_no'};
