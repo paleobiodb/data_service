@@ -1330,7 +1330,7 @@ sub mapDrawPoints{
                 $lngoff = $coll{'lngdeg'};
                 $lnghalf = ".00";
                 # doubles the number of points longitudinally
-                if ( $coll{'lngmin'} >= 30 || ($coll{'lngdec'} =~ /^\d/ && $coll{'lngdec'} >= .50) )	{
+                if ( $coll{'lngmin'} >= 30 || ($coll{'lngdec'} =~ /^(5|6|7|8|9)/))	{
                   $lngoff = $lngoff + 0.5;
                   $lnghalf = ".50";
                 }
@@ -1345,13 +1345,13 @@ sub mapDrawPoints{
                 $latoff = $coll{'latdeg'};
                 $lathalf = ".00";
                 # quadruples the number of point rows latitudinally
-                if ( $coll{'latmin'} >= 45 || ($coll{'latdec'} =~ /^\d/ && $coll{'latdec'} >= .75) )	{
+                if ( $coll{'latmin'} >= 45 || ($coll{'latdec'} =~ /^(9|8|7(9|8|7|6|5))/))	{
                   $latoff = $latoff + 0.75;
                   $lathalf = ".75";
-                } elsif ( $coll{'latmin'} >= 30 || ($coll{'latdec'} =~ /^\d/ && $coll{'latdec'} >= .50) )	{
+                } elsif ( $coll{'latmin'} >= 30 || ($coll{'latdec'} =~ /^(5|6|7)/ ))	{
                   $latoff = $latoff + 0.5;
                   $lathalf = ".50";
-                } elsif ( $coll{'latmin'} >= 15 || ($coll{'latdec'} =~ /^\d/ && $coll{'latdec'} >= .25) )	{
+                } elsif ( $coll{'latmin'} >= 15 || ($coll{'latdec'} =~ /^(4|3|2(9|8|7|6|5))/ ))	{
                   $latoff = $latoff + 0.25;
                   $lathalf = ".25";
                 }
