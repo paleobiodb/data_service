@@ -159,12 +159,21 @@ Again, this is for informational purposes only.
 <center>
 <a name="Opinions"></a>
 <h3>What did they say about its status?</h3>
-</center><p>
+</center>
 
-Once a taxon is named, the classification or validity of that taxon are a matter of opinion.
+<p>Once a taxon is named, the classification or validity of that taxon are a matter of opinion.
 Your job is to pick <i>one</i> opinion that best represents the author's viewpoint, or the viewpoint of the earlier publication that the author has mentioned.
-You may also enter the numbers of the pages and figures where the taxon is discussed in the paper whose opinion you are recording. DON'T enter page numbers for the whole paper!
-The scripts will display this information whenever you are entering new taxonomic data, or after you are done entering the data. It is <i>very</i> important to record opinion data if at all possible.
+It is <i>very</i> important to record opinion data if at all possible.
+Read this entire section carefully, including the "How to read a synonymy list" discussion below, before you do anything.</p>
+
+<p>The scripts will display opinion information whenever you are entering new taxonomic data, or after you are done entering the data.
+You also can see the data by using our script for displaying taxonomic information.
+Click "Search for a taxon" on the main menu, find the taxon, check off "taxonomic history" and "synonymy," and update.
+All the opinion data you entered should be visible.</p>
+
+<p>Note that you may also enter the numbers of the pages and figures where the taxon is discussed in the paper whose opinion you are recording.
+DON'T enter page numbers for the whole paper!</p>
+
 
 <center>
 <h4>What the terms mean</h4>
@@ -228,6 +237,80 @@ First, fill out a form with X in the taxon name field; G in full in the parent t
 <li><i>Species X is a synonym or homonym of species Y</i> (<u>synonymy</u>). Select the appropriate status (subjective synonym, objective synonym, homonym) and write out the senior synonym or replacement name X in full (both genus and species) in the parent taxon field. For homonyms, you need to enter TWO opinions: first, the opinion that X is a "homonym of" the other species spelt exactly the same way, and second, the opinion that X has been "replaced by" a new, differently spelt name.
 <li><i>Species X is invalid</i> (<u>validity</u>). Select "nomen dubium," "nomen nudum," "nomen oblitum" or "nomen vanum" and leave the senior synonym field <i>blank</i>.
 </ul>
+
+<center>
+<h4>How to read a synonymy list</h4>
+</center><p>
+
+In a carefully written paper, the systematic paleontology section for each species (and sometimes each genus or even higher taxon) begins with a list of species names found in the earlier literature.
+Each row in the list gives the species name that was used, the author and year of the paper where that name was used, and sometimes the page number as well.
+Our taxonomic information script generates this kind of a list automatically (you can get it by checking "synonymy" on the taxonomic information page and updating).</p>
+
+<p>Synonymy lists are useful but confusing.
+There are two basic conventions for creating them.</p>
+
+<p>First, authors may use a short format that only lists synonyms and alternative combinations in the earlier literature.
+This convention is followed by most American authors.
+Each row represents either (a) a naming event (the fact that so-and-so named such-and-such in such-and-such a year), or (b) a recombination.
+Here's what you do:</p>
+
+<ul>
+<li>The first line should show the naming event for the valid species (the one at the top of the list).
+Just create an authority record for that name, if none exists yet.
+<li>If the line shows a naming event and the name is not the valid species, it's a junior synonym.
+Make sure there is an authority record for the synonym, then enter the opinion that the <i>current</i> author thinks it is a synonym.
+<li>If the line shows a recombination, either of the valid species or of a synonym, (a) do NOT create an authority record, but (b) do create an opinion that the original combination of that name was recombined by that author in that year.
+</ul>
+
+<p>The second format is a long format that is commonly used by European authors.
+It includes not just the synonymy/recombination information listed by the Americans, but also any cases where an earlier author described some material <i>of a totally different, valid species</i> and the present author has reidentified <i>just that material, but not the type</i> as the valid species under consideration.
+It is extremely difficult and dangerous to work with these lists, because you often can't tell if a name is a synonym/recombination or just some reidentified material.
+Here are some hints:</p>
+
+<ul>
+<li>If the name in the list is clearly a recombination of the valid species at the top, you need to enter the opinion that that author in the list recombined the name. 
+<li>If the name is totally different, check the rest of the text and see if it says specifically that this name is a synonym.
+<li>If the author doesn't come out and say the name is a synonym, it still might be.
+You can tell if the list includes a name (say, <i>Omomys pucillus</i> Wortman 1904) and elsewhere the paper says that Wortman named <i>Omomys pucillus</i> in that same year.
+<li>Maybe you are sure that name X proposed by one author is a synonym, and later you see a recombination of that name in the list by a second author.
+Now enter an opinion that the second author recombined the name.
+<li>If none of that worked, you don't know what's going on, so give up.
+</ul>
+
+<p>Here's an example of an American (= easy) synonymy list and instructions for entering it.</p>
+
+<center><i>Omomys carteri</i></center>
+<ul>
+<li>1869 <i>Omomys carteri</i> Leidy
+<li>1872 <i>Palaeacodon vagus</i> Marsh
+<li>1872 <i>Hemiacodon pucillus</i> Marsh
+<li>1872 <i>Hemiacodon nanus</i> Marsh
+<li>1872 <i>Euryacodon lepidus</i> Marsh
+<li>1904 <i>Omomys carteri</i> Wortman
+<li>1904 <i>Omomys pucillus</i> Wortman
+<li>1958 <i>Omomys carteri</i> Gazin
+<li>1976 <i>Omomys carteri</i> Szalay
+<li>1990 <i>Omomys carteri</i> Westgate
+</ul>
+
+<p>What to do:</p>
+
+<ol>
+<li>Leidy (1869) named <i>carteri.</i>
+Enter the authority.
+<li>Marsh's <i>vagus, pucillus, nanus,</i> and <i>lepidus</i> are synonyms.
+First create authority records for them.
+The enter opinions that the current author (say, Smith 2004) thinks they are synonyms.
+<li>Wortman (1904) also thought that <i>carteri</i> belonged to <i>Omomys</i>.
+Enter that opinion.
+<li>Wortman (1904) thought that <i>pucillus</i> was valid but recombined it into <i>Omomys</i>.
+Enter that opinion too.
+<li>The last three authors (Gazin, Szalay, and Westgate) all agreed with Wortman that the original combination of <i>carteri</i> was correct.
+Enter an opinion for each case.
+</ol>
+
+<p>Note that if this were a European list, we'd only be able to enter the opinions on <i>carteri</i> saying that it was recombined.
+However, we might be able to figure out from the text that (say) <i>pucillus</i> is a synonym, allowing us to enter two opinions: the synonymy proposed by Smith (2004), plus the one recombination of that name by Wortman.</p>
 
 </body>
 
