@@ -1774,7 +1774,7 @@ sub submitAuthorityForm {
 			$opinionHash{child_no} = $resultTaxonNumber;
 			$opinionHash{parent_no} = $parentTaxon->taxonNumber();
 			$opinionHash{authorizer_no} = $fieldsToEnter{authorizer_no};
-			$opinionHash{enterer_no} = $fieldsToEnter{authorizer_no};
+			$opinionHash{enterer_no} = $fieldsToEnter{enterer_no};
 			$opinionHash{ref_has_opinion} = $fieldsToEnter{ref_is_authority};
 			$opinionHash{reference_no} = $fieldsToEnter{reference_no};
 			$opinionHash{author1init} = $fieldsToEnter{author1init};
