@@ -40,7 +40,7 @@ sub startEcologySearch	{
 
 	# reword the form and redirect the destination to populateEcologyForm
 	# WARNING: this is a low-down dirty trick; very inelegant
-	$form =~ s/to revise/to describe/;
+	$form =~ s/%%taxon_what_to_do%%/to describe/;
 	$form =~ s/processTaxonomySearch/startPopulateEcologyForm/;
 
 	print $form;
