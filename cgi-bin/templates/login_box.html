@@ -1,38 +1,8 @@
-<!-- templates/login_box.html -->
-
-<HTML>
-<HEAD>
-<link REL="stylesheet" TYPE="text/css" HREF="/StyleSheets/common.css">
-<link REL="icon" HREF="/public/favicon.ico" type="image/x-icon">
-<link REL="shortcut icon" HREF="/public/favicon.ico" type="image/x-icon">
-<script src="/JavaScripts/login.js" language="JavaScript" type="text/javascript"></script>
-<script src="/JavaScripts/common.js" language="JavaScript" type="text/javascript"></script>
-
 <!-- this will be populated by the CGI script with functions to 
 grab a list of enterers and authorizers from the database -->
 %%NOESCAPE_enterer_authorizer_lists%%
 
-<STYLE type="text/css">
-.test { 
-    background-color: #E6E6E6;
-	
-    border-width: 6px 6px 6px 6px;
-    border-style: solid;
-    border-color: #C8C8C8;
-    padding: 1em 1em 0.5em 1em;
-}
-</STYLE>
-
-</HEAD>
-<BODY>
-
-
 <CENTER>
-
-
-<div class="navbox">
-<IMG src="/public/PDlogo.gif">
-</div>
 
 
 <SCRIPT>checkBrowserVersion();</SCRIPT>
@@ -40,13 +10,12 @@ grab a list of enterers and authorizers from the database -->
 <!-- On optional message, for example, if they enter the wrong user name or password. -->
 %%message%%
 
-<p>If you are a data contributor, please log in.</p>
+<p>If you are a data contributor, please log in</p>
 
 <form method="POST" action="bridge.pl">
 
 <input type=hidden name="action" value="processLogin">
 <input type=hidden name="destination" value="%%destination%%">
-<!--rjp - should I add this? <input type=hidden name="user" value="Contributer">-->
 
 <TABLE BORDER=0 cellpadding=4 class="test">
 <TR>
@@ -72,9 +41,7 @@ grab a list of enterers and authorizers from the database -->
 </TABLE>
 </FORM>
 
-<p>If not, 
-please <A HREF="/cgi-bin/bridge.pl?user=Guest&action=displayHomePage">
-return to the public area</A>.</p>
+<p>If not, please <A HREF="/cgi-bin/bridge.pl?user=Guest&action=displayHomePage">return to the public area</A></p>
 
 </CENTER>
 
