@@ -245,9 +245,27 @@ sub assignGenera	{
 	if ( ! $temp[0] )	{
 		$temp[0] = "unknown";
 	}
-	my $occsfile = $temp[0] . $authlast . "-occs.csv";
+	my $occsfilecsv = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.csv";
+	my $occsfiletab = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.tab";
+    if ((-M $occsfiletab) < (-M $occsfilecsv)) {
+        $self->dbg("using tab $occsfiletab");
+        $occsfile = $occsfiletab;
+        $sepChar = "\t";
+    } else {
+        $self->dbg("using csv $occsfilecsv");
+        $occsfile = $occsfilecsv;
+        $sepChar = ",";
+    }
 
-	if ( ! open OCCS,"<$DOWNLOAD_FILE_DIR/$occsfile" )	{
+    $csv = Text::CSV_XS->new({
+        'quote_char'  => '"',
+        'escape_char' => '"',
+        'sep_char'    => $sepChar,
+        'binary'      => 1
+    });
+
+
+	if ( ! open OCCS,"<$occsfile" )	{
 		print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with epoch or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 	}
 
@@ -259,16 +277,20 @@ sub assignGenera	{
 	#  abund_value and abund_unit (iff method 5 is selected)
 	#  epoch or "locage_max" (can be 10 m.y. bin)
 	$_ = <OCCS>;
-	s/\n//;
-	my @fieldnames;
-	# tab-delimited file
-	if ( $_ =~ /\t/ )	{
-		@fieldnames = split /\t/,$_;
-	}
+    $status = $csv->parse($_);
+    if (!$status) { print "Warning, error parsing CSV line $count"; }
+    my @fieldnames = $csv->fields();
+    use Data::Dumper; print Dumper(@fieldnames);
+	#s/\n//;
+	#my @fieldnames;
+	## tab-delimited file
+	#if ( $_ =~ /\t/ )	{
+	#	@fieldnames = split /\t/,$_;
+	#}
 	# comma-delimited file
-	else	{
-		@fieldnames = split /,/,$_;
-	}
+	#else	{
+	#	@fieldnames = split /,/,$_;
+	#}
 	my $fieldcount = 0;
 	my $field_collection_no = -1;
 	for my $fn (@fieldnames)	{
@@ -352,17 +374,21 @@ sub assignGenera	{
 		$chname[$chrons] = $bn;
 	}
 
+    my $count=0;
 		while (<OCCS>)	{
-			s/\n//;
-			my @occrow;
+			#s/\n//;
+            $status = $csv->parse($_);
+            my @occrow = $csv->fields();
+            if (!$status) { print "Warning, error parsing CSV line $count"; }
+            $count++;
 			# tab-delimited file
-			if ( $_ =~ /\t/ )	{
-				@occrow = split /\t/,$_;
-			}
+			#if ( $_ =~ /\t/ )	{
+			#	@occrow = split /\t/,$_;
+			#}
 			# comma-delimited file
-			else	{
-				@occrow = split /,/,$_;
-			}
+			#else	{
+		#		@occrow = split /,/,$_;
+			#}
 
 		# set the bin ID number (chid) for the collection
 		# time interval name has some annoying quotes
