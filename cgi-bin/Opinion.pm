@@ -21,6 +21,14 @@ use Globals;
 use Session;
 
 
+# names of radio buttons, etc. used in the form.
+use constant BELONGS_TO => 'belongs to';
+use constant RECOMBINED_AS => 'recombined as';
+use constant INVALID1 => 'invalid1';
+use constant INVALID2 => 'invalid2';
+
+
+
 use fields qw(	
                 GLOBALVARS
 				opinion_no
@@ -224,11 +232,6 @@ sub formatAsHTML {
 
 
 
-# names of radio buttons, etc. used in the form.
-use constant BELONGS_TO => 'belongs to';
-use constant RECOMBINED_AS => 'recombined as';
-use constant INVALID1 => 'invalid1';
-use constant INVALID2 => 'invalid2';
 
 
 
@@ -938,116 +941,6 @@ sub submitOpinionForm {
 		}
 		
 		
-		# This check is a little tricky.  If they are creating a recombined as
-		# record, we also need to create a belongs to record at the same time.
-		# But due to historical reasons, rather than saying that the original
-		# taxon belongs to the genus (or species) of the new taxon, 
-		# we have to say that the new taxon belongs to the genus (or species)
-		# of the new taxon.  We may change this at some point in the future.
-		#
-		# So, if the taxon they're entering an opinion about it Equus blaheri
-		# and they say that it was recombined as Homo blaheri, then 
-		# we should also enter a separate opinion that Homo blaheri belongs to 
-		# Homo.  If they were using a subspecies, this would be the same, except
-		# that the belongs to would apply to a species instead of a genus.
-		#
-		# Note, this is pretty weird since Homo blaheri should *already* have an 
-		# opinion that it belongs to Homo - this opinion would have been created
-		# automatically when they entered the authority record for Homo blaheri.
-		# However, due to these historical reasons, for now, we're going to create
-		# a *duplicate* belongs to record in the sense that child_no and parent_no
-		# of it are the same as the one that already exists - but the author 
-		# information in the new belongs to record will be the same as for the 
-		# recombined as opinion that they're currently entering.  In the future
-		# we'll probably change this.
-		#
-		# Note, this is pretty similar to what we do in the Authority form.  Perhaps
-		# these two functionalities should be combined somehow?
-		
-		if ($parentRank->isLowerThanString(GENUS)) {
-			Debug::dbPrint("howdy we're here 1");
-			my $belongsToParent = Taxon->new();
-			if ($parentRank->isSubspecies()) {
-				# then the parent for the new belongs to relationship will be
-				# a species.
-
-				$belongsToParent->setWithTaxonName($parentTaxon->firstWord() .
-							" " . $parentTaxon->secondWord());
-							
-			} elsif ($parentRank->isSpecies()) {
-				# then the parent for the new belongs to relationship will be
-				# a genus.
-				$belongsToParent->setWithTaxonName($parentTaxon->firstWord());
-				
-				Debug::dbPrint("parent taxon name = " . $parentTaxon->taxonName() .
-							", parent taxon first word = " .
-							$parentTaxon->firstWord() );
-				Debug::dbPrint("howdy we're here 2, parentname = "
-					. $belongsToParent->taxonName());							
-			}
-	
-			if (! $belongsToParent->existsInDatabase()) {
-				$errors->add("The parent of this taxon, " . 
-					$belongsToParent->taxonName() . 
-					" doesn't exist in our database.  
-					Please enter an authority record for it before continuing.");
-			}
-				
-			## This code is almost the same as that from Taxon.pm.  Perhaps they should
-			# be consolidated.
-		
-		
-		
-			# figure out how many authoritiy records could be used for the
-			# belongs to relationship.
-			my $count = $belongsToParent->numberOfDBInstancesForName();
-		
-			# if only one record, then we don't have to ask the user anything.
-			# otherwise, we should ask them to pick which one.
-			my $select;
-			my $parentRankToPrint;
-
-			my $parentRankShouldBe;
-			if ($parentRank->isSpecies()) {
-				$parentRankShouldBe = "(taxon_rank = 'genus' OR taxon_rank = 'subgenus')";
-				$parentRankToPrint = "genus or subgenus";
-			} elsif ($parentRank->isSubspecies()) {
-				$parentRankShouldBe = "taxon_rank = 'species'";
-				$parentRankToPrint = "species";
-			}
-
-			Debug::dbPrint("parentRankShouldBe = $parentRankShouldBe");
-		
-			if ($count >= 1) {
-			
-				# make sure that the parent we select is the correct parent,
-				# for example, we don't want to grab a family or something higher
-				# by accident.
-			
-				$sql->setSQLExpr("SELECT taxon_no, taxon_name FROM authorities WHERE taxon_name = '" . $belongsToParent->taxonName() . "' AND $parentRankShouldBe");
-				my $results = $sql->allResultsArrayRef();
-		
-				my $select;
-				foreach my $row (@$results) {
-					my $taxon = Taxon->new($self->{GLOBALVARS});
-					$taxon->setWithTaxonNumber($row->[0]);
-					$select .= "<OPTION value=\"$row->[0]\">" .
-					$taxon->taxonName() . " " . $taxon->authors() . "</OPTION>";
-				}
-
-				$q->param(-name=>'parent_taxon_popup', -values=>["<b>Parent taxon:</b>
-				<SELECT name=\"parent_taxon_no\">
-				$select
-				</SELECT>"]);
-			} else {
-				# count = 0, so we need to warn them to enter the parent taxon first.
-				$errors->add("The $parentRankToPrint '" . $belongsToParent->taxonName() . 
-					"' for this " . $belongsToParent->rankString() . " doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=" . $belongsToParent->taxonName() . "\">create a new authority record for '" . $belongsToParent->taxonName() ."'</A> before trying to add this " . $belongsToParent->rankString() . ".");
-				
-			}
-		}
-
-
 		# The last big check we need to do is to make sure that the child numbers in
 		# recombined as relationships point to the original combination.  So, if
 		# the user is adding an opinion about taxon A and they say that it has been
@@ -1191,6 +1084,30 @@ sub submitOpinionForm {
 		
 		($code, $resultOpinionNumber) = $sql->insertNewRecord('opinions', \%fieldsToEnter);
 		
+		###
+		# At this point, *if* the status of the new opinion was 'recombined as',
+		# then we need to make sure we're migrating non 'belongs to' opinions to
+		# the original combination.
+		#
+		# For example, if we have the taxon 'Equus blah' which has some arbitrary
+		# number of opinions about it, and the user is entering an opinion that
+		# 'Homo blah' has been 'recombined as' 'Equus blah', then we should
+		# move all the non 'belongs to' opinions from 'Equus blah' onto 'Homo blah'
+		###
+		
+		if ($code && 
+			($fieldsToEnter{status} eq 'recombined as') &&
+			($childRank->isSpecies() || $childRank->isSubspecies())) {
+			
+			my $oldTaxon = Taxon->new();  # ie, 'Equus blah'
+			$oldTaxon->setWithTaxonNumber($fieldsToEnter{parent_no});
+			
+			my $newTaxon = Taxon->new();  # ie, 'Homo blah'
+			$newTaxon->setWithTaxonNumber($fieldsToEnter{child_no});
+			
+			$oldTaxon->moveNonBelongsToOpinionsToTaxon($newTaxon);
+		}	
+		
 	} else {
 		# if it's an old entry, then we'll update.
 		
@@ -1227,7 +1144,7 @@ sub submitOpinionForm {
 	
 	
 	
-	# now show them what they inserted...
+	# now show them what they inserted/updated...
 	my $o = Opinion->new();
 	$o->setWithOpinionNumber($resultOpinionNumber);
 	$o->displayOpinionSummary($isNewEntry);

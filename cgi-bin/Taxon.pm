@@ -843,6 +843,50 @@ sub databaseAuthorityRecord {
 }
 
 
+# Pass this a Taxon object
+#
+# It will take all opinions relating to itself
+# which are not of status 'belongs to' and move them
+# to the passed Taxon object.
+#
+# So basically, this will figure out the taxon_no
+# of the current Taxon, look up all the opinions which have
+# that taxon_no as their child_no, and change the child_no
+# of all those opinions to the taxon_no of the passed Taxon (as
+# long as they're not 'belongs to' opinions).
+#
+# Returns a boolean - true if it succeeded.  
+sub moveNonBelongsToOpinionsToTaxon {
+	my Taxon $self = shift;		# the Taxon we're moving opinions *from*
+	my Taxon $newChild = shift; # the passed taxon which we're
+								# moving opinions *to*
+	
+	my $sql = $self->getSQLBuilder();
+	
+	my $oldTaxonNo = $self->taxonNumber();
+	my $newTaxonNo = $newChild->taxonNumber();
+	
+	if ((!$oldTaxonNo) || (!$newTaxonNo)) { return FALSE; }
+	
+	# create a DBTransactionManager object to do this update on multiple
+	# rows.
+	my $dbt = DBTransactionManager->new($sql->dbh(), ($self->{GLOBALVARS})->{session});
+	
+	if (!$dbt) { return FALSE; }
+	
+	my $result = $dbt->getData("UPDATE opinions SET child_no = $newTaxonNo, 
+	modified = modified WHERE child_no = $oldTaxonNo 
+	AND status != 'belongs to'");
+	
+	if ($result) {
+		return TRUE;
+	} else {
+		return FALSE;
+	}
+
+}
+
+
 
 # Pass this an HTMLBuilder object,
 # a session object, and the CGI object.
@@ -1276,34 +1320,8 @@ sub submitAuthorityForm {
 		
 	# this $editAny variable is true if they can edit any field,
 	# false if they can't.
-	my $editAny = 0;
+	my $editAny = $s->editAnyFormField($isNewEntry, $dbFields{authorizer_no});
 	
-	if ($isNewEntry) {
-		$editAny = 1;	# new entries can edit any field.
-	} else {
-		# edits of pre-existing records have more restrictions. 
-	
-		# if the authorizer of the authority record doesn't match the current
-		# authorizer, then *only* let them edit empty fields.
-	
-		$editAny = 0;
-	
-		# if the authorizer of the authority record matches the authorizer
-		# who is currently trying to edit this data, then allow them to change
-		# any field.
-		
-		if ($s->get('authorizer_no') == $dbFields{authorizer_no}) {
-			$editAny = 1;
-		}
-		
-		if ($s->isSuperUser()) {
-			# super user can edit any field no matter what.
-			$editAny = 1;	
-		}
-	}
-
-	
-
 	
 	# build up a hash of fields/values to enter into the database
 	my %fieldsToEnter;
