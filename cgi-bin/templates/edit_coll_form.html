@@ -7,6 +7,29 @@
 		var missinginfo = "";
 		var frm = document.forms[0];
 
+		// Deleting the primary reference is not allowed.
+		// Note that the length of the radio group (or checkbox group) equals 
+		// the number of radio buttons regardless of their checked status.
+		// Note the the length of each may be different since there's not
+		// necessarily a one to one correspondence.
+		var i;
+		var radio_vals = new Array();
+		for(i=0; i<frm.secondary_reference_no.length; i++){
+			radio_vals[i] = parseInt(frm.secondary_reference_no[i].value);
+		}
+		var checked_vals = new Array();
+		for(i=0; i<frm.delete_ref.length; i++){
+			checked_vals[i] = parseInt(frm.delete_ref[i].value);
+		}
+		var j;
+		for(i=0; i<radio_vals.length; i++){
+			for(j=0; j<checked_vals.length; j++){
+				if(radio_vals[i] == checked_vals[j] && frm.secondary_reference_no[i].checked && frm.delete_ref[j].checked){
+					missinginfo += "\n    -Primary reference cannot be deleted";
+				}
+			}
+		}
+
 		if ( frm.period_max.selectedIndex == 0 ) {
 			missinginfo += "\n    - Period maximum (required)";
 		}
@@ -35,7 +58,7 @@
 				missinginfo += "\n    - Latitude (must be < 90)";
 			}
 		}
-		if ( frm.lngdeg.value != "" frm.geogscale.options[index].text != "basin" ) {
+		if ( frm.lngdeg.value != "" && frm.geogscale.options[index].text != "basin" ) {
 			var numeric = /^[0-9]*$/;
 			if ( numeric.test ( frm.lngdeg.value ) == false ) {
 				missinginfo += "\n    - Longitude (must be numeric)";
@@ -143,10 +166,10 @@
   </table>
 
   <p>Current primary reference:<br>
-  <span id="ref_string"></span>
-  Corrected primary reference (change if current number is wrong):
-  <input name="new_reference_no" size=10 maxlength=10><br>
+  <table cellspacing=0 cellpadding=8><span id="ref_string"></span></table>
   </p>
+  <p>Secondary references <span class=tiny>(select to make primary):</span><br>
+  <table cellspacing=0 cellpadding=0><span id="secondary_reference_string"></span></table>
 
   <p>
     <u>Author's main reason for describing collection</u>:<select id="collection_type"></select> analysis
