@@ -755,5 +755,30 @@ sub get_classification_hash{
     return \%classification;
 }       
 
+sub getMostRecentReIDforOcc{
+	my $dbt = shift;
+	my $occ = shift;
+	my $sql = "SELECT genus_name, species_name, reid_no, pubyr ".
+			  "FROM reidentifications, refs WHERE occurrence_no=$occ ".
+			  "AND reidentifications.reference_no = refs.reference_no";
+	my @results = @{$dbt->getData($sql)};
+
+	if(scalar @results < 1){
+		return "";
+	}
+	elsif(scalar @results == 1){
+		return $results[0]->{reid_no};
+	}
+	# find the most recent pubyr:
+	else{
+		my $most_recent = 0;
+		for(my $index=0; $index<@results; $index++){
+			if($results[$index]->{pubyr} > $most_recent){
+				$most_recent = $index; 
+			}
+		}	
+		return $results[$most_recent]->{reid_no};
+	}
+}
 
 1;
