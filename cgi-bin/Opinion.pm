@@ -833,12 +833,11 @@ sub submitOpinionForm {
 		$ref->setWithReferenceNumber($q->param('reference_no'));
 		
 		my $pubyr = $q->param('pubyr');
-print "FOO RPY (" , $ref->pubyr() ,") TPY (" , $taxon->pubyr() , ")";
 		
 		Debug::dbPrint("ref pub yr = " . $ref->pubyr() . ", taxon pub yr
 		= " . $taxon->pubyr());
-		if (($taxon->pubyr() > $ref->pubyr()) ||
-			($taxon->pubyr() > $pubyr) ) {
+		if (( $taxon->pubyr() > $ref->pubyr() ) ||
+			( $taxon->pubyr() > $pubyr && $pubyr > 1700 ) ) {
 			$errors->add("The publication year for this opinion can't be
 			earlier than the year the taxon was named");	
 		}
