@@ -110,6 +110,7 @@ sub referenceNumber {
 # returns HTML formatted taxonomic list of
 # all occurrences (that the user has permission to see)
 # in this collection record.
+#
 sub HTMLFormattedTaxonomicList {
 	my Collection $self = shift;
 
@@ -132,17 +133,35 @@ sub HTMLFormattedTaxonomicList {
 	
 	$html =~ s/<th/<th class=style1/ig;
 	
+
+	# build up an array of occurrence objects.. Then we'll sort the array
+	my @occArray = ();
+	
+	foreach my $row (@{$result}) {
+		$occ = Occurrence->new($self->{session});
+		$occ->setWithOccurrenceNumber($row->[1]);
+		$occ->buildHTML();
+		push(@occArray, $occ);
+	}
 	
 
-	# loop through each row returned by the query
+	# now we should have an array of occurrences to list.
+	# so, sort it.
+	my @sorted = sort {
+			$a->mostRecentReidClassNumber() <=> $b->mostRecentReidClassNumber() ||
+			$a->mostRecentReidOrderNumber() <=> $b->mostRecentReidOrderNumber() ||
+			$a->mostRecentReidFamilyNumber() <=> $b->mostRecentReidFamilyNumber() 
+	} @occArray;
+	
+	foreach my $row (@sorted) {
+		Debug::dbPrint($row->mostRecentReidClassNumber() . "\n");
+	}
+	
+	# now that we have sorted it, compose the HTML
 	my $count = 0;
 	my $color = "";
-
-	foreach my $row (@{$result}) {
-		$occ->setWithOccurrenceNumber($row->[1]);
-		Debug::dbPrint("row\n");
-
-		my $newRow =  $occ->formatAsHTML();
+	foreach my $row (@sorted) {
+		my $newRow = $row->formatAsHTML();
 		
 		if ($count % 2) { 
 			$newRow =~ s/<tr/<tr class=darkList/ig;
@@ -153,7 +172,7 @@ sub HTMLFormattedTaxonomicList {
 		$count++;
 	}
 	
-
+	
 	$html .= "</TABLE>";
 	
 	return $html;	

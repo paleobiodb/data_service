@@ -29,6 +29,8 @@ use fields qw(
 				latestOrderNum
 				latestFamilyNum
 				
+				html
+				
 				SQLBuilder
 							);  # list of allowable data fields.
 
@@ -44,6 +46,7 @@ use fields qw(
 #							Contains taxon_no for most recent reidentified class of this occurrence.
 #	latestOrderNum		:	Same as latestClassNum, but for order.
 #	latestFamilyNum		:	Same as latestClassNum, but for family.
+#	html				:	html formatted entry made by buildHTML() and retrieved by formatAsHTML()
 						
 
 # pass the current Session object.
@@ -126,7 +129,7 @@ sub referenceNumber {
 sub mostRecentReidClassNumber {
 	my Occurrence $self = shift;
 
-	return 0;
+	return ($self->{latestClassNum} || 0);
 }
 
 
@@ -134,14 +137,14 @@ sub mostRecentReidClassNumber {
 sub mostRecentReidOrderNumber {
 	my Occurrence $self = shift;
 
-	return 0;
+	return ($self->{latestOrderNum} || 0);
 }
 
 # same as mostRecentReidClassNumber, but for family.
 sub mostRecentReidFamilyNumber {
 	my Occurrence $self = shift;
 
-	return 0;
+	return ($self->{latestFamilyNum} || 0);
 }
 
 
@@ -155,6 +158,7 @@ sub occurrenceDetailsLink {
 }
 
 
+# Meant for internal use only.
 # Builds a listing of reidentifications for this occurrence.
 # Basically, an array with each element being a reference to an array in
 # the format that we'll eventually return as HTML.
@@ -172,9 +176,9 @@ sub buildReidList {
 	my $taxon = TaxonHierarchy->new();
 	
 	# initialize these to be empty..
-	my $taxClass = "";
-	my $taxOrder = "";
-	my $taxFamily = "";
+	my $taxClass = "";		my $classNum;
+	my $taxOrder = "";		my $orderNum;
+	my $taxFamily = "";		my $familyNum;
 	
 	# grab the author names for the first reference.
 	my $ref = Reference->new();
@@ -218,9 +222,12 @@ sub buildReidList {
 		# get the taxa information for the original id
 		$taxon->setWithTaxonName("$result[2] $result[4]");
 		
-		$taxClass = $taxon->nameForRank("class");		
+		$taxClass = $taxon->nameForRank("class");
+		$classNum = $taxon->numberForRank("class");
 		$taxOrder = $taxon->nameForRank("order");
+		$orderNum = $taxon->numberForRank("order");
 		$taxFamily = $taxon->nameForRank("family");
+		$familyNum = $taxon->numberForRank("family");
 	}
 
 	my @reidRow = ($taxClass, $taxOrder, $taxFamily,
@@ -243,7 +250,9 @@ sub buildReidList {
 	if ($numReids <= 0) {
 		# save the list in a data field.
 		$self->{reidList} = \@reidList;
-		
+		$self->{latestClassNum} = $classNum;
+		$self->{latestOrderNum} = $orderNum;
+		$self->{latestFamilyNum} = $familyNum;
 		return;	
 	}
 	
@@ -261,8 +270,11 @@ sub buildReidList {
 			
 			$taxon->setWithTaxonName("$result->[2] $result->[4]");
 			$taxClass = $taxon->nameForRank("class");
+			$classNum = $taxon->numberForRank("class");
 			$taxOrder = $taxon->nameForRank("order");
+			$orderNum = $taxon->numberForRank("order");
 			$taxFamily = $taxon->nameForRank("family");
+			$familyNum = $taxon->numberForRank("family");
 		}
 	
 		my @reidRow = ($taxClass, $taxOrder, $taxFamily,
@@ -281,12 +293,33 @@ sub buildReidList {
 	
 	# save the list in a data field.
 	$self->{reidList} = \@reidList;
+	
+	$self->{latestClassNum} = $classNum;
+	$self->{latestOrderNum} = $orderNum;
+	$self->{latestFamilyNum} = $familyNum;
 }
 
 
-# get HTML formatted occurrence entry
-# for entry in a table, ie, on the collections page under the listing of occurrences.
+# returns the html formatted entry for this occurrence
+# meant for public calling
 sub formatAsHTML {
+	my Occurrence $self = shift;
+
+	my $html = $self->{html};
+	if (! $html) {
+		$self->buildHTML();		# build the html if it wasn't already built
+		$html = $self->{html};
+	}
+
+	return $html;	
+}
+
+
+# builds HTML formatted occurrence entry
+# for entry in a table, ie, on the collections page under the listing of occurrences.
+#
+# Stores in parameter called html
+sub buildHTML {
 	my Occurrence $self = shift;
 	
 	$self->buildReidList();
@@ -322,8 +355,7 @@ sub formatAsHTML {
 			</TR>";		
 	}
 	
-
-	return $html;	
+	$self->{html} = $html;
 }
 
 
