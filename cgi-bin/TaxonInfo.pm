@@ -1,6 +1,7 @@
 package TaxonInfo;
 
 use PBDBUtil;
+use Classification;
 
 $DEBUG = 0;
 
@@ -420,8 +421,9 @@ sub displayTaxonInfoResults{
 	my @modules_to_display = $q->param('modules');
 	my %module_num_to_name = (1 => "classification",
 							  2 => "taxonomic history",
-							  3 => "map",
-							  4 => "collections");
+							  3 => "ecology/taphonomy",
+							  4 => "map",
+							  5 => "collections");
 
 	# Set the default:
 	if(!@modules_to_display){
@@ -434,7 +436,7 @@ sub displayTaxonInfoResults{
 	# First module has the checkboxes on the side.
 	print "<table width=\"80%\"><tr><td></td>";
 	print "<td align=center><h2>$genus_name</h2></td></tr>";	
-	print "<tr><td><table cellspacing=2><tr><td bgcolor=black>";
+	print "<tr><td valign=top><table cellspacing=2><tr><td bgcolor=black>";
 	print "<table bgcolor=\"E0E0E0\"><tr><td valign=\"top\">".
 		  "<center><b><div class=\"large\">Display</div></b></center></td></tr>";
 	print "<tr><td align=left valign=top>";
@@ -452,6 +454,9 @@ sub displayTaxonInfoResults{
 	# image thumbs:
 	my @selected_images = $q->param('image_thumbs');
 	require Images;
+	# not sure why, but somehow $in_list gets fatally cluttered with
+	#  single quotes before this point
+	$in_list =~ s/\'//g;
 	my @thumbs = Images::processViewImages($dbt, $q, $s, $in_list);
 	foreach my $thumb (@thumbs){
 		print "<input type=checkbox name=image_thumbs value=";
@@ -473,7 +478,7 @@ sub displayTaxonInfoResults{
 	print "<td>";
 	# First module here
 	my $first_module = shift @modules_to_display;
-	doModules($dbt,$dbh,$q,$s,$exec_url,$first_module,$genus,$species,$in_list);
+	doModules($dbt,$dbh,$q,$s,$exec_url,$first_module,$genus,$species,$in_list,$taxon_no);
 	print "</td></tr></table>";
 	print "<hr width=\"100%\">";
 
@@ -481,7 +486,7 @@ sub displayTaxonInfoResults{
 	foreach my $module (@modules_to_display){
 		print "<center><table>";
 		print "<tr><td>";
-		doModules($dbt,$dbh,$q,$s,$exec_url,$module,$genus,$species,$in_list);
+		doModules($dbt,$dbh,$q,$s,$exec_url,$module,$genus,$species,$in_list,$taxon_no);
 		print "</td></tr>";
 		print "</table></center>";
 		print "<hr width=\"100%\">";
@@ -571,6 +576,7 @@ sub doModules{
 	my $genus = shift;
 	my $species = shift;
 	my $in_list = shift;
+	my $taxon_no = shift;
 	
 	# If $q->param("genus_name") has a space, it's a "Genus species" combo,
 	# otherwise it's a "Higher taxon."
@@ -590,8 +596,12 @@ sub doModules{
 	elsif($module == 2){
 		print displayTaxonSynonymy($dbt, $genus, $species);
 	}
+	# ecology
+	elsif ( $module == 3 )	{
+		print displayEcology($dbt,$taxon_no,$genus,$species);
+	}
 	# map
-	elsif($module == 3){
+	elsif($module == 4){
 		print "<center><table><tr><td align=\"middle\"><h3>Distribution</h3></td></tr>".
 			  "<tr><td align=\"middle\" valign=\"top\">";
 		# MAP USES $q->param("genus_name") to determine what it's doing.
@@ -612,7 +622,7 @@ sub doModules{
 		print "<input type=hidden name=\"map_num\" value=\"$map_html_path\">";
 	}
 	# collections
-	elsif($module == 4){
+	elsif($module == 5){
 		print doCollections($exec_url, $q, $in_list);
 	}
 }
@@ -662,7 +672,7 @@ sub doMap{
 		return $m->mapDrawMap($perm_rows);
 	}
 	else{
-		return "<i>No distribution data available.</i>";
+		return "<i>No distribution data are available</i>";
 	}
 }
 
@@ -995,7 +1005,7 @@ sub displayTaxonClassification{
 	# Now, print out a hyperlinked list of all taxa below the one at the
 	# bottom of the Classification section.
 	if($counter <1){
-		$output .= "<i>No classification data available for this taxon</i><br>";
+		$output .= "<i>No classification data are available</i><br>";
 	}
 	my $index;
 	for($index=0; $index<@taxon_rank_order; $index++){
@@ -1181,8 +1191,8 @@ sub getSynonymyParagraph{
 
 	# "Named by" part first:
 	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
-	# - select taxon_name, author1last, pubyr, reference_no from authorities
-	my $sql = "SELECT taxon_name, author1last, pubyr, reference_no, ".
+	# - select taxon_name, author1last, pubyr, reference_no, comments from authorities
+	my $sql = "SELECT taxon_name, author1last, pubyr, reference_no, comments, ".
 			  "ref_is_authority FROM authorities WHERE taxon_no=$taxon_no";
 	my @auth_rec = @{$dbt->getData($sql)};
 	# Get ref info from refs if 'ref_is_authority' is set
@@ -1213,6 +1223,9 @@ sub getSynonymyParagraph{
 			}
 		}
 		$text .= " (".$results[0]->{pubyr}.")";
+		if ( $auth_rec[0]->{comments} )	{
+			$text .= " <span class=small>[" . $auth_rec[0]->{comments} . "]</span>";
+		}
 	}
 	# If ref_is_authority is not set, use the authorname and pubyr in this
 	# record.
@@ -1220,6 +1233,9 @@ sub getSynonymyParagraph{
 		PBDBUtil::debug(1,"author and year from authorities<br>");
 		$text .= "<li><i>".$auth_rec[0]->{taxon_name}."</i> was named by ".
 			  	 $auth_rec[0]->{author1last}." (".$auth_rec[0]->{pubyr}.")";
+		if ( $auth_rec[0]->{comments} )	{
+			$text .= " <span class=small>[" . $auth_rec[0]->{comments} . "]</span>";
+		}
 	}
 	# if there's nothing from above, give up.
 	else{
@@ -1275,7 +1291,7 @@ sub getSynonymyParagraph{
 
 	# Revalidations and nomen*'s
 	$sql = "SELECT parent_no, status, reference_no, pubyr, author1last, ".
-		   "author2last, otherauthors, opinion_no ".
+		   "author2last, otherauthors, comments, opinion_no ".
 		   "FROM opinions WHERE child_no=$taxon_no AND (status='belongs to' ".
 		   "OR status like 'nomen%')";
 	@results = @{$dbt->getData($sql)};
@@ -1406,7 +1422,11 @@ sub getSynonymyParagraph{
 					$text .= " and ".$key_list[$j]->{author2last}." ";
 				}
 			}
-			$text .= " (".$key_list[$j]->{pubyr}."), ";
+			$text .= " (".$key_list[$j]->{pubyr}.")";
+			if ( $key_list[$j]->{comments} )	{
+				$text .= "<span class=small> [" . $key_list[$j]->{comments} . "]</span>";
+			}
+			$text .= ", ";
 		}
 		if($text =~ /,\s+$/){
 			# remove the last comma
@@ -1692,6 +1712,101 @@ sub verify_chosen_taxon{
 		return ($results[0]->{taxon_name},$parent_no);
 	}
 }
+
+# JA 1.8.03
+sub displayEcology	{
+	my $dbt = shift;
+	my $taxon_no = shift;
+	my $genus = shift;
+	my $species = shift;
+
+	print "<center><h3>Ecology</h3></center>\n";
+
+	if ( ! $taxon_no )	{
+		print "<i>No ecological data are available</i>";
+		return;
+	}
+
+	my $taxon_name;
+	if ( $species )	{
+		$taxon_name = $genus . " " . $species;
+	} else	{
+		$taxon_name = $genus;
+	}
+
+	# get the field names from the ecotaph table
+	my %attrs = ("NAME"=>'');
+	my $sql = "SELECT * FROM ecotaph WHERE taxon_no=0";
+	%ecotaphRow = %{@{$dbt->getData($sql,\%attrs)}[0]};
+	for my $name (@{$attrs{"NAME"}})	{
+		$ecotaphRow{$name} = "";
+		push @ecotaphFields,$name;
+	}
+
+	# grab all the data for this taxon from the ecotaph table
+	$sql = "SELECT * FROM ecotaph WHERE taxon_no=" . $taxon_no;
+	$ecotaphVals = @{$dbt->getData($sql)}[0];
+
+	# also get values for ancestors (always do this because data for the
+	#   taxon could be partial)
+	# WARNING: this will completely screw up if the name has homonyms
+	push my @tempnames, $taxon_name;
+	my @ancestors = Classification::get_classification_hash($dbt,'class',\@tempnames,'yes');
+
+	my $tempVals;
+	if ( @ancestors )	{
+		for my $a ( @ancestors )	{
+			$sql = "SELECT * FROM ecotaph WHERE taxon_no=" . $a;
+			$tempVals = @{$dbt->getData($sql)}[0];
+			if ( $tempVals )	{
+				for my $field ( @ecotaphFields )	{
+					if ( $tempVals->{$field} && ! $ecotaphVals->{$field} && $field ne "created" && $field ne "modified" )	{
+						$ecotaphVals->{$field} = $tempVals->{$field};
+					}
+				}
+			}
+		}
+	}
+
+	if ( ! $ecotaphVals )	{
+		print "<i>No ecological data are available</i>";
+		return;
+	} else	{
+		print "<table cellspacing=5><tr>";
+		my $cols = 0;
+		for my $i (0..$#ecotaphFields)	{
+			my $name = $ecotaphFields[$i];
+			my $nextname = $ecotaphFields[$i+1];
+			my $n = $name;
+			my @letts = split //,$n;
+			$letts[0] =~ tr/[a-z]/[A-Z]/;
+			$n = join '',@letts;
+			$n =~ s/_/ /g;
+			$n =~ s/1$/&nbsp;1/g;
+			$n =~ s/2$/&nbsp;2/g;
+			if ( $ecotaphVals->{$name} && $name !~ /_no$/ )	{
+				$cols++;
+				my $v = $ecotaphVals->{$name};
+				$v =~ s/,/, /g;
+				print "<td valign=\"top\"><table><tr><td align=\"left\" valign=\"top\"><b>$n:</b></td><td align=\"right\" valign=\"top\">$v</td></tr></table></td> \n";
+			}
+			if ( $cols == 2 || $nextname =~ /^created$/ || $nextname =~ /^size_value$/ || $nextname =~ /1$/ )	{
+				print "</tr>\n<tr>\n";
+				$cols = 0;
+			}
+		}
+		if ( $cols > 0 )	{
+			print "</tr></table>\n";
+		} else	{
+			print "</table>\n";
+		}
+	}
+
+
+	return $text;
+
+}
+
 
 
 1;
