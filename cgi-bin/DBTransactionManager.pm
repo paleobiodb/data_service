@@ -1309,7 +1309,7 @@ sub checkSQL{
 	#$sql = uc($sql);
 
 	# Is this a SELECT, INSERT, UPDATE or DELETE?
-	$sql =~/^(\w+)\s+/;
+	$sql =~/^[\(]*(\w+)\s+/;
 	my $type = uc($1);
 
 	if($type ne "INSERT" && !$self->checkWhereClause($sql)){
