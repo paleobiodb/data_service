@@ -55,7 +55,7 @@ sub searchForm{
 		   "<center><table width=\"75%\">".
 		   "<tr><td valign=\"middle\" align=\"right\" width=\"5%\">".
 		   "<nobr><select name=\"taxon_rank\"><option>Higher taxon".
-		   "<option>Genus<option>Genus and species<option>species".
+		   "<option selected>Genus<option>Genus and species<option>species".
 		   "</select></td>".
 		   "<td valign=\"middle\" align=\"left\" width=\"5%\">name:</td>".
 		   "<td width=\"5%\"><input name=\"taxon_name\" type=\"text\" size=25>".
@@ -77,12 +77,19 @@ sub checkStartForm{
 	my $s = shift;
 	my $dbt = shift;
 	my $taxon_type = $q->param("taxon_rank");
+	$taxon_type =~ s/\+/ /g;
+	if($taxon_type ne "Genus" && $taxon_type ne "Genus and species" && 
+			$taxon_type ne "species"){
+		$taxon_type = "Higher taxon";
+	}
 	my $taxon_name = $q->param("taxon_name");
+	$taxon_name =~ s/\+/ /g;
 	my $results = "";
 	my $genus = "";
 	my $species = "";
 	my $sql =""; 
 	my @results;
+
 
 	# If they gave us nothing, start again.
 	if($taxon_type eq "" or $taxon_name eq ""){
@@ -332,8 +339,11 @@ sub displayTaxonInfoResults{
 	$q->param('mapresolution'=>'medium');
 	$q->param('mapscale'=>'X 1');
 	$q->param('pointsize'=>'tiny');
+	if(!$q->param('projection') or $q->param('projection') eq ""){
+		$q->param('projection'=>'rectilinear');
+	}
 
-	print "<table width=\"100%\" border=1>".
+	print "<table width=\"100%\">".
 		  "<tr><td align=\"middle\"><h3>Classification</h3></td><td align=\"middle\"><h3>Distribution</h3></td></tr>";
 	print "<tr><td width=\"40%\" valign=\"top\" align=\"middle\">";
 
@@ -380,28 +390,30 @@ sub displayTaxonInfoResults{
 
 	my @sorted = sort by_time_place_string (keys %time_place_coll);
 
-	print "<center><h3>Collections</h3></center>";
-	print "<table width=\"100%\"><tr bgcolor=\"white\">";
-	print "<th align=\"middle\">Time - place</th>";
-	print "<th align=\"left\">PBDB collection number</th></tr>";
-	my $row_color = 0;
-	foreach my $key (@sorted){
-		if($row_color % 2 == 0){
-		    print "<tr bgcolor=\"E0E0E0\">";
-		} 
-		else{
-		    print "<tr bgcolor=\"white\">";
+	if(scalar @sorted > 0){
+		print "<center><h3>Collections</h3></center>";
+		print "<table width=\"100%\"><tr bgcolor=\"white\">";
+		print "<th align=\"middle\">Time - place</th>";
+		print "<th align=\"left\">PBDB collection number</th></tr>";
+		my $row_color = 0;
+		foreach my $key (@sorted){
+			if($row_color % 2 == 0){
+				print "<tr bgcolor=\"E0E0E0\">";
+			} 
+			else{
+				print "<tr bgcolor=\"white\">";
+			}
+			print "<td align=\"middle\" valign=\"top\">".
+				  "<span class=tiny>$key</span></td><td align=\"left\">";
+			foreach  my $val (@{$time_place_coll{$key}}){
+				my $link=Collections::createCollectionDetailLink($exec_url,$val,$val);
+				print "$link ";
+			}
+			print "</td></tr>\n";
+			$row_color++;
 		}
-		print "<td align=\"middle\" valign=\"top\">".
-			  "<span class=tiny>$key</span></td><td align=\"left\">";
-		foreach  my $val (@{$time_place_coll{$key}}){
-		    my $link=Collections::createCollectionDetailLink($exec_url,$val,$val);
-		    print "$link ";
-		}
-		print "</td></tr>\n";
-		$row_color++;
+		print "</table><hr>";
 	}
-	print "</table><hr>";
 	
 	#subroutine to do the synonymy
 	displayTaxonSynonymy($dbt, $genus, $species);
@@ -606,67 +618,58 @@ sub displayTaxonClassification{
 	my $counter = 0;
 	# Print these out in correct order
 	my @taxon_rank_order = ('superkingdom','kingdom','subkingdom','superphylum','phylum','subphylum','superclass','class','superorder','order','suborder','infraorder','superfamily','family','subfamily','tribe','subtribe','genus','subgenus','species','subspecies');
+	my %taxon_rank_order = ('superkingdom'=>0,'kingdom'=>1,'subkingdom'=>2,'superphylum'=>3,'phylum'=>4,'subphylum'=>5,'superclass'=>6,'class'=>7,'superorder'=>8,'order'=>9,'suborder'=>10,'infraorder'=>11,'superfamily'=>12,'family'=>13,'subfamily'=>14,'tribe'=>15,'subtribe'=>16,'genus'=>17,'subgenus'=>18,'species'=>19,'subspecies'=>20);
 	my $lastgood;
 	my $lastrank;
 	foreach my $rank (@taxon_rank_order){
-	  if(exists $classification{$rank}){
-	    if($counter % 2 == 0){
-			# TEMPORARY until the recursive higher-taxon search is optimized
-			if($rank =~ /(\bfamily\b|\bgenus\b|\bspecies\b)/){
-				my $temp_rank;
-				if($rank eq 'genus'){
-					$temp_rank = 'Genus';
-				}
-				elsif($rank eq 'species'){
-					$temp_rank = 'species';
-				}
-				else{
-					$temp_rank = 'Higher taxon';
-				}
-			print "<tr bgcolor=\"#E0E0E0\"><td align=\"middle\">$rank</td>".
-				  "<td align=\"middle\"><a href=\"/cgi-bin/bridge.pl?action=".
-				  "checkTaxonInfo&taxon_rank=$temp_rank&taxon_name=".
-				  "$classification{$rank}&user=Contributor\">".
-				  "$classification{$rank}</a></td></tr>";
+		# Don't provide links for any rank higher than 'order'
+		if(exists $classification{$rank}){
+		  if($taxon_rank_order{$rank} < 9){
+			if($counter % 2 == 0){
+				print "<tr bgcolor=\"E0E0E0\"><td align=\"middle\">$rank</td>".
+					  "<td align=\"middle\">$classification{$rank}</td></tr>\n";
 			}
 			else{
-			print "<tr bgcolor=\"#E0E0E0\"><td align=\"middle\">$rank</td>".
-				  "<td align=\"middle\">$classification{$rank}</td></tr>";
+				print "<tr><td align=\"middle\">$rank</td>".
+					  "<td align=\"middle\">$classification{$rank}</td></tr>\n";
 			}
-	    }
-	    else{
-			# TEMPORARY until the recursive higher-taxon search is optimized
-			if($rank =~ /(\bfamily\b|\bgenus\b|\bspecies\b)/){
-				my $temp_rank;
-				if($rank eq 'genus'){
-					$temp_rank = 'Genus';
-				}
-				elsif($rank eq 'species'){
-					$temp_rank = 'species';
-				}
-				else{
-					$temp_rank = 'Higher taxon';
-				}
-			print "<tr><td align=\"middle\">$rank</td>".
-				  "<td align=\"middle\"><a href=\"/cgi-bin/bridge.pl?action=".
-				  "checkTaxonInfo&taxon_rank=$temp_rank&taxon_name=".
-				  "$classification{$rank}&user=Contributor\">".
-				  "$classification{$rank}</a></td></tr>";
+		  }
+		  else{
+			# URL encoding
+			my $temp_rank = $rank;
+			if($temp_rank eq "genus"){
+				$temp_rank = "Genus";
+			}
+			if($temp_rank ne "Genus" && $temp_rank ne "Genus and species" &&
+					$temp_rank ne "species"){
+				$temp_rank = "Higher taxon";
+			}
+			$temp_rank =~ s/\s/+/g;
+			$classification{$rank} =~ s/\s/+/g;
+			if($counter % 2 == 0){
+				print "<tr bgcolor=\"E0E0E0\"><td align=\"middle\">$rank</td>".
+					  "<td align=\"middle\"><a href=\"/cgi-bin/bridge.pl?".
+					  "action=checkTaxonInfo&taxon_rank=$temp_rank&taxon_name=".
+					  "$classification{$rank}&user=Contributor\">".
+					  "$classification{$rank}</a></td></tr>\n";
 			}
 			else{
-			print "<tr><td align=\"middle\">$rank</td>".
-				  "<td align=\"middle\">$classification{$rank}</td></tr>";
+				print "<tr><td align=\"middle\">$rank</td>".
+					  "<td align=\"middle\"><a href=\"/cgi-bin/bridge.pl?".
+					  "action=checkTaxonInfo&taxon_rank=$temp_rank&taxon_name=".
+					  "$classification{$rank}&user=Contributor\">".
+					  "$classification{$rank}</a></td></tr>\n";
 			}
-	    }
-	    $counter++;
-		# Keep track of the last successful item  and rank so we have the 
-		# lowest on the chain when we're all done.
-		$lastgood = $classification{$rank};
-		$lastrank = $rank;
-	  }
+		  }
+			$counter++;
+			# Keep track of the last successful item  and rank so we have the 
+			# lowest on the chain when we're all done.
+			$lastgood = $classification{$rank};
+			$lastrank = $rank;
+		}
 	}
 	print "</table>";
-	# Now,  print out a hyperlinked list of all taxa below the one at the
+	# Now, print out a hyperlinked list of all taxa below the one at the
 	# bottom of the Classification section.
 	if($counter <1){
 		print "<i>No classification data available for this taxon</i><br>";
@@ -677,14 +680,15 @@ sub displayTaxonClassification{
 	}
 	# NOTE: Don't do this if the last rank was 'species.'
 	CHILDREN:{
-	unless($index+1 >= @taxon_rank_order){
-		$lastrank = $taxon_rank_order[$index+1];
-		if($lastrank eq "genus"){
-			$lastrank = "Genus";
-		}
-		elsif($lastrank ne "species"){
-			$lastrank = "Higher taxon";
-		}
+	if($index < 19){ # species is position 19
+		#$lastrank = $taxon_rank_order[$index+1];
+		#if($lastrank eq "genus"){
+		#	$lastrank = "Genus";
+		#}
+		# genus is position 17.
+		#elsif($index < 17){
+		#	$lastrank = "Higher taxon";
+		#}
 		my $sql = "SELECT taxon_no FROM authorities ".
 				  "WHERE taxon_name='$lastgood'";
 		PBDBUtil::debug(1,"lastgood sql: $sql");
@@ -693,7 +697,7 @@ sub displayTaxonClassification{
 			# BAIL
 			last CHILDREN;
 		}
-		$sql = "SELECT DISTINCT(child_no),taxon_name ".
+		$sql = "SELECT DISTINCT(child_no),taxon_name, taxon_rank ".
 			   "FROM opinions,authorities ".
 			   "WHERE parent_no=".$quickie[0]->{taxon_no}.
 			   " AND status='belongs to' AND child_no=taxon_no ".
@@ -707,10 +711,25 @@ sub displayTaxonClassification{
 		print "<p><i>This taxon includes:</i> ";
 		my $output="";
 		foreach my $item (@quickie){
+			# Need to do some URL encoding:
+			my $taxon_name = $item->{taxon_name};
+			$taxon_name =~ s/\s/+/g;
+			my $taxon_rank = $item->{taxon_rank};
+			if($taxon_rank eq "species" && $taxon_name =~ /\w+\+\w+/){
+				$taxon_rank = "Genus and species";
+			}
+			elsif($taxon_rank eq "genus"){
+				$taxon_rank = "Genus";
+			}
+			if($taxon_rank ne "Genus" && $taxon_rank ne "Genus and species" &&
+					$taxon_rank ne "species"){
+				$taxon_rank = "Higher taxon";
+			}
+			$taxon_rank =~ s/\s/+/g;
 			$output .= qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo|;
-			$output.="&taxon_name=".$item->{taxon_name}."&taxon_rank=$lastrank";
+			$output.="&taxon_name=".$taxon_name."&taxon_rank=$taxon_rank";
 			$output .= qq|&user=Contributor">|;
-			$output .= $item->{taxon_name}."</a>, ";
+			$output .= $item->{taxon_name}."</a>,\n";
 		}
 		$output =~ s/,\s*$//;
 		print $output;
@@ -878,9 +897,9 @@ sub getSynonymyParagraph{
 	# if there's nothing from above, give up.
 	else{
 		$text .= "</ul>";
-		$text .= "<i>Cannot determine who named ".
+		$text .= "<i>The author of ".
 				 $auth_rec[0]->{taxon_rank}." ".
-				 $auth_rec[0]->{taxon_name}.".</i><br>";
+				 $auth_rec[0]->{taxon_name}." is not known.</i><br>";
 		return $text;
 	}
 
@@ -935,9 +954,10 @@ sub getSynonymyParagraph{
 	@results = @{$dbt->getData($sql)};
 	my %nomen_or_reval = ();
 	my @nomen_or_reval_numbers = ();
+	my $has_nomen = 0;
 	foreach my $row (@results){
 		# get the proper reference (record first, refs table second)
-		if(!$row->{author1last} || !$row->{pubyr}){
+		if(!($row->{author1last} && $row->{pubyr})){
 			# select into the refs table.
 			$sql = "SELECT author1last,author2last,otherauthors,pubyr ".
 				   "FROM refs ".
@@ -947,9 +967,12 @@ sub getSynonymyParagraph{
 			$row->{author2last} = $real_ref[0]->{author2last};
 			$row->{otherauthors} = $real_ref[0]->{otherauthors};
 			$row->{pubyr} = $real_ref[0]->{pubyr};
-			# use opinion numbers to keep recs separate for now
-			$nomen_or_reval{$row->{opinion_no}} = $row;
-			push(@nomen_or_reval_numbers, $row->{opinion_no});
+		}
+		# use opinion numbers to keep recs separate for now
+		$nomen_or_reval{$row->{opinion_no}} = $row;
+		push(@nomen_or_reval_numbers, $row->{opinion_no});
+		if($row->{status} =~ /nomen/){
+			$has_nomen = 1 
 		}
 	}
 	@nomen_or_reval_numbers = sort{$nomen_or_reval{$a}->{pubyr} <=> $nomen_or_reval{$b}->{pubyr}} @nomen_or_reval_numbers;	
@@ -961,7 +984,7 @@ sub getSynonymyParagraph{
 		last if(scalar @nomen_or_reval_numbers < 1);
 		last if($nomen_or_reval{$nomen_or_reval_numbers[$index]}->{status} =~ /nomen/);
 		# otherwise, it's a 'belongs to' status
-		if($nomen_or_reval{$nomen_or_reval_numbers[$index]}->{pubyr} < $syn_years[0]){
+		if(scalar @syn_years < 1 || $nomen_or_reval{$nomen_or_reval_numbers[$index]}->{pubyr} < $syn_years[0]){
 			delete $nomen_or_reval{$nomen_or_reval_numbers[$index]};
 			shift @nomen_or_reval_numbers;
 			redo;
@@ -987,14 +1010,36 @@ sub getSynonymyParagraph{
 	}
 
 	# Put revalidations and nomen*'s in synonymies hash.
-	foreach my $key (keys %additional){
-		$synonymies{$key} = $additional{$key};
+	if(scalar(keys %synonymies) or $has_nomen){
+		foreach my $key (keys %additional){
+			$synonymies{$key} = $additional{$key};
+		}
 	}
 
 	# Now print it all out
 	my @syn_keys = keys %synonymies;
 
+	# Order by ascending pubyr of first record in each synonymy list.
 	@syn_keys = sort{$synonymies{$a}[0]->{pubyr} cmp $synonymies{$b}[0]->{pubyr}} @syn_keys;
+	
+	# Exception to above:  the most recent opinion should appear last.
+	# Splice it
+	if(scalar @syn_keys > 1){
+		my $oldest = 0;
+		my $oldest_index = 0;
+		# The rows are already ordered by pubyr, so find the most recent last
+		# element in any row
+		for(my $index = 0; $index < @syn_keys; $index++){
+			my $date = ${$synonymies{$syn_keys[$index]}}[-1]->{pubyr};	
+			if($date > $oldest){
+				$oldest = $date;
+				$oldest_index = $index;
+			}
+		}	
+		my $new_oldest_key = splice(@syn_keys, $oldest_index, 1);
+		# And put it at the end.
+		push(@syn_keys, $new_oldest_key);
+	}
 
 	# Loop through unique parent number from the opinions table.
 	# Each parent number is a hash key whose value is an array ref of records.
