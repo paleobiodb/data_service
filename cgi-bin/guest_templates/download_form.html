@@ -246,13 +246,21 @@ Replace genus names with subgenus names, so subgenera are treated as separate ge
 <tr><td valign=top><font size=-1>
 Include occurrences that are generically indeterminate?
 <td valign=top><font size=-1><select name=indet>
-<option selected value="YES">yes, include them
-<option value="NO">no, exclude them
+<option value="YES">yes, include them
+<option selected value="NO">no, exclude them
 </select>
 
 <tr><td valign=top><font size=-1>
 Include genus names that are qualified with "aff." or quotes?</font></td>
 <td valign=top><font size=-1><select name=poor_genus_reso>
+<option value="NO">no, exclude them</option>
+<option selected value="YES">yes, include them</option>
+</select>
+</font></td></tr>
+
+<tr><td valign=top><font size=-1>
+Include occurrences falling outside their age ranges in Sepkoski's Compendium?</font></td>
+<td valign=top><font size=-1><select name=informal>
 <option value="NO">no, exclude them</option>
 <option selected value="YES">yes, include them</option>
 </select>
