@@ -936,8 +936,8 @@ sub submitOpinionForm {
 		}
 		
 		if ($childTaxon->firstWord() eq $parentTaxon->firstWord()) {
-			$errors->add("The genus of the child 
-			taxon must be different from the genus of the parent taxon");
+			$errors->add("The genus of the new combination 
+			 must be different from the genus of the old combination");
 		}
 		
 		
@@ -1188,7 +1188,7 @@ sub displayOpinionSummary {
 		
 		print "<H3> The opinion $opinionHTML has been $enterupdate the database</H3><p>To verify that the information was entered correctly, click on the add more data link below.</p>";
 		
-		print "<TABLE border=0><TR><TD align=left>";
+		print "<TABLE border=0><TR><TD align=center>";
 		print "<p><A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=" . $self->{opinion_no} ."\"><B>Add more data about this opinion</B></A></p>";
 		print "<p><A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionList&taxon_no=" . $self->childNumber() . " \"><B>Add/edit a different opinion about this taxon</B></A></p>";
 		print "<p><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&amp;goal=opinion\"><B>Add/edit an opinion about another taxon</B></A></p>";
