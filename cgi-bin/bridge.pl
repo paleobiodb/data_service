@@ -4210,6 +4210,7 @@ sub getCurrRefDisplayStringForColl{
 }
 
 
+# deprecated in favor of processEditOccurrences
 sub processNewOccurrences
 {
 	my $recID;
@@ -4288,6 +4289,7 @@ sub processNewOccurrences
 				push(@fieldList, $fieldName);
 			}
 		}
+
 #			$sql = "INSERT INTO occurrences (" . join(',', @fieldList) . ") VALUES (" . join(', ', @row) . ")" || die $!;
 #			$sql =~ s/\s+/ /gms;
 #print "$sql\n"; exit(0);
@@ -4524,7 +4526,41 @@ sub processEditOccurrences {
 			}
 		}
 		my $sql = "";
-		
+
+	# guess the taxon no by trying to find a single match for the name
+	#  in the authorities table JA 1.4.04
+	# see Reclassify.pm for a similar operation
+	# only do this for non-informal taxa
+		if ( $all_params{'genus_reso'}[$index] !~ /informal/ )	{
+			$taxon_name = $all_params{'genus_name'}[$index];
+			if ( $all_params{'species_reso'}[$index] !~ /informal/ && $all_params{'species_name'}[$index] ne "sp." && $all_params{'species_name'}[$index] ne "indet." )	{
+				$taxon_name .= " " . $all_params{'species_name'}[$index];
+			}
+			$sql = "SELECT taxon_no FROM authorities WHERE taxon_name='";
+			$sql .= $taxon_name . "'";
+			my @taxnorefs = @{$dbt->getData($sql)};
+			# exactly one match?
+			if ( $#taxnorefs == 0 )	{
+				$all_params{'taxon_no'}[$index] = $taxnorefs[0]->{taxon_no};
+			}
+			# no match? try genus alone
+			elsif ( ! @taxnorefs && $taxon_name =~ / / )	{
+				($taxon_name,$foo) = split / /,$taxon_name;
+				$sql = "SELECT taxon_no FROM authorities WHERE taxon_name='";
+				$sql .= $taxon_name . "'";
+				@taxnorefs = @{$dbt->getData($sql)};
+				if ( $#taxnorefs == 0 )	{
+					$all_params{'taxon_no'}[$index] = $taxnorefs[0]->{taxon_no};
+				} else	{
+					$all_params{'taxon_no'}[$index] = 0;
+				}
+			} else	{
+				$all_params{'taxon_no'}[$index] = 0;
+			}
+		}
+
+		# back to our normal code, pre-existing the above
+
 		# CASE 1
 		# if we have a reid_no and an occurrence_no, we're updating a reid
 		if(exists($all_params{reid_no}) 
@@ -4622,6 +4658,26 @@ sub processEditOccurrences {
 			# 'modifier' is set to enterer:
 			my $modifier = $dbh->quote($s->get('enterer'));
 			push(@update_strings,"modifier=$modifier");
+
+			# ugly hack: make sure taxon_no doesn't change unless
+			#  genus_name or species_name did JA 1.4.04
+			# this could lead to a bizarre case in which only
+			#  the modifier name changes, but who cares?
+			my $changed_taxon = "";
+			for my $us ( @update_strings )	{
+				if ( $us =~ /genus_name/ || $us =~ /species_name/ )	{
+					$changed_taxon = 1;
+					last;
+				}
+			}
+			if ( ! $changed_taxon )	{
+				for my $i ( 0..$#update_strings )	{
+					if ( $update_strings[$i] =~ /taxon_no/ )	{
+						splice @update_strings, $i, 1;
+						last;
+					}
+				}
+			}
 
 			# Update the reidentification row
 			$sql = "UPDATE reidentifications SET ".
@@ -4738,6 +4794,26 @@ sub processEditOccurrences {
 			# 'modifier' is set to enterer:
 			my $modifier = $dbh->quote($s->get('enterer'));
 			push(@update_strings,"modifier=$modifier");
+
+			# ugly hack: make sure taxon_no doesn't change unless
+			#  genus_name or species_name did JA 1.4.04
+			# this could lead to a bizarre case in which only
+			#  the modifier name changes, but who cares?
+			my $changed_taxon = "";
+			for my $us ( @update_strings )	{
+				if ( $us =~ /genus_name/ || $us =~ /species_name/ )	{
+					$changed_taxon = 1;
+					last;
+				}
+			}
+			if ( ! $changed_taxon )	{
+				for my $i ( 0..$#update_strings )	{
+					if ( $update_strings[$i] =~ /taxon_no/ )	{
+						splice @update_strings, $i, 1;
+						last;
+					}
+				}
+			}
 
 			# update the occurrence row
 			$sql = "UPDATE occurrences SET ".
