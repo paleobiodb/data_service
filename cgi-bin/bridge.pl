@@ -4901,7 +4901,7 @@ sub displayTaxonomyResults	{
 
 	# If any status has been recorded, retrieve the ID number
 	#  of the child and parent taxa
-	if ( $q->param('status') )	{
+	if ( $q->param('status') && ($q->param('status') ne "") )	{
 		$q->param(child_no => $q->param('taxon_no') );
 		$q->param(parent_no => $q->param('parent_taxon_no') );
 
@@ -4955,7 +4955,7 @@ sub displayTaxonomyResults	{
 
 	# If a new opinion was submitted, insert it
 	my @lastOpinions;
-	if ( $q->param('status') )	{
+	if ( $q->param('status') ne "" )	{
 #printf "C(%d) P(%d)<br>",$q->param('child_no'),$q->param('parent_no');
 #printf "TAX(%s = %d),P(%s = %d),G(%s = %d)<br>",$q->param('taxon_name') ,$q->param('taxon_no'), $q->param('parent_taxon_name'), $q->param('parent_taxon_no') , $q->param(parent_genus_taxon_name), $q->param('parent_genus_taxon_no');
 		my $opinion_no;
@@ -4968,7 +4968,7 @@ sub displayTaxonomyResults	{
 
 	# If a species was recombined, create another opinion to record
 	#  that the new combination belongs to the new genus
-	if ( $q->param('parent_genus_taxon_no') )	{
+	if ( $q->param('parent_genus_taxon_no') && ($q->param('status') ne ""))	{
 		$q->param(child_no => $q->param('parent_taxon_no') );
 		$q->param(parent_no => $q->param('parent_genus_taxon_no') );
 		# The relation is no longer "recombined as"
