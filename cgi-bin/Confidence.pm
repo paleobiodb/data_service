@@ -21,36 +21,41 @@ sub displayHomonymForm {
     $s=shift;
     $dbt=shift;
     $dbh=$dbt->dbh;
-    $homonym_name=shift;
-    $taxon_nos =shift;
+    $homonym_names = shift;
     $splist=shift;
 
     %splist = %$splist;
-    @taxon_nos = @$taxon_nos;
+    @homonym_names = @$homonym_names;
 
-    print "<CENTER><H3>The following taxonomic name belongs to multiple taxonomic <br>hierarchies.  Please choose the one you want.</H3>";
-    print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"databaseCheckForm\">";
-    print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"".$q->param('input_type')."\">\n";
+    my $pl1 = scalar(@homonym_names) > 1 ? "s" : "";
+    my $pl2 = scalar(@homonym_names) > 1 ? "" : "s";
+    print "<CENTER><H3>The following taxonomic name$pl1 belong$pl2 to multiple taxonomic <br>hierarchies.  Please choose the one$pl1 you want.</H3>";
+    print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"buildListForm\">";
     print "<INPUT TYPE=\"hidden\" NAME=\"split_taxon\" VALUE=\"".$q->param('split_taxon')."\">\n";
-    print "<INPUT TYPE=\"hidden\" NAME=\"found_homonym\" VALUE=\"1\">\n";
-                        
-    my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$homonym_name);
+    print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"taxon\">\n";
+                       
 
-    # Find the parent taxon and use that to clarify the choice
-    my %parents = %{Classification::get_classification_hash($dbt,'parent',\@taxon_nos,'names')};
+    my $i=0;
+    foreach $homonym_name (@homonym_names) {
+        my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$homonym_name);
 
-    print '<TABLE BORDER=0 CELLSPACING=3 CELLPADDING=3>'."\n";
-    print "<TR>";
-    foreach $taxon_no (@taxon_nos) {
-        print "<TD><INPUT TYPE='radio' CHECKED NAME='speciesname0' VALUE='$taxon_no'>$homonym_name [$parents{$taxon_no}]</TD>";
+        # Find the parent taxon and use that to clarify the choice
+        my %parents = %{Classification::get_classification_hash($dbt,'parent',\@taxon_nos,'names')};
+
+        print '<TABLE BORDER=0 CELLSPACING=3 CELLPADDING=3>'."\n";
+        print "<TR>";
+        foreach $taxon_no (@taxon_nos) {
+            print "<TD><INPUT TYPE='radio' CHECKED NAME='speciesname$i' VALUE='$taxon_no'>$homonym_name [$parents{$taxon_no}]</TD>";
+        }
+        print "<INPUT TYPE='hidden' NAME='keepspecies$i' VALUE='$homonym_name'>\n";
+        print "</TR>";
+        print "</TABLE>";
+        $i++;
     }
-    print "<INPUT TYPE='hidden' NAME='keepspecies0' VALUE='$homonym_name'>\n";
-    print "</TR>";
-    print "</TABLE>";
-    $count = 1;
-    for($count=1;($taxon,$taxon_list) = each %splist;$count++) {
-        print "<INPUT TYPE='hidden' NAME='speciesname$count' VALUE='$taxon_list'>";
-        print "<INPUT TYPE='hidden' NAME='keepspecies$count' VALUE='$taxon'>\n";
+    while(($taxon,$taxon_list) = each %splist) {
+        print "<INPUT TYPE='hidden' NAME='speciesname$i' VALUE='$taxon_list'>";
+        print "<INPUT TYPE='hidden' NAME='keepspecies$i' VALUE='$taxon'>\n";
+        $i++;
     }
     print "<BR><INPUT TYPE='submit' NAME='submit' VALUE='Submit'></CENTER></FORM><BR><BR>";
 }
@@ -81,13 +86,14 @@ sub displaySearchSectionForm{
 
 # Handles processing of the output from displaySectionSearchForm similar to displayCollResults
 # Goes to next step if 1 result returned, else displays a list of matches
-sub displaySectionResults{
+sub displaySearchSectionResults{
     my $q = shift;
     my $s = shift;
     my $dbt = shift;
     my $hbo = shift;
 
     my $limit = $q->param('limit') || 30;
+    $limit = $limit*2; # two columns
     my $rowOffset = $q->param('rowOffset') || 0;
 
     # limit passed to permissions module
@@ -99,7 +105,7 @@ sub displaySectionResults{
 
     # Build the SQL
     # which function to use depends on whether the user is adding a collection
-    $q->param('sortby'=>'localsection');
+    $q->param('sortby'=>'section_name');
     #if ($q->param('localsection') eq '') { $q->param('localsection'=>'NOT_NULL_OR_EMPTY'); }
     my $sql = main::processCollectionsSearch();
     my $sth = $dbt->dbh->prepare($sql);
@@ -120,6 +126,9 @@ sub displaySectionResults{
     my %int2period = %{TimeLookup::processScaleLookup($dbh,$dbt,'2','intervalToScale')};
 
     my $lastsection = '';
+    my $lastregion  = '';
+    my $found_localbed = 0;
+    my $found_regionalbed = 0;
     my (%period_list,%country_list);
     my @tableRows = ();
     my $rowCount = scalar(@dataRows);
@@ -138,7 +147,17 @@ sub displaySectionResults{
         }
         $time_str =~ s/^,//;
         $place_str =~ s/^,//;
-        return "<a href='bridge.pl?action=showStratForm&taxon_resolution=$taxon_resolution&show_taxon_list=$show_taxon_list&input=$lastsection&input_type=strat'>$lastsection</a><span class='tiny'> - $time_str - $place_str</span>";
+        my $link = '';
+        if ($lastregion && $found_regionalbed) {
+            $link .= "<a href='bridge.pl?action=displayStratTaxaForm&taxon_resolution=$taxon_resolution&show_taxon_list=$show_taxon_list&input=".uri_escape($lastregion)."&input_type=regional'>$lastregion</a>";
+            if ($lastsection) { $link .= " / "};
+        }    
+        if ($lastsection && $found_localbed) {
+            $link .= "<a href='bridge.pl?action=displayStratTaxaForm&taxon_resolution=$taxon_resolution&show_taxon_list=$show_taxon_list&input=".uri_escape($lastsection)."&input_type=local'>$lastsection</a>";
+        }    
+            
+        $link .= "<span class='tiny'> - $time_str - $place_str</span>";
+            
     }
 
     # We need to group the collections here in the code rather than SQL so that
@@ -147,12 +166,21 @@ sub displaySectionResults{
     if ($rowCount > 0) {
         for($i=0;$i<$rowCount;$i++) {
             $row = $dataRows[$i];
-            if ($row->{'localsection'} ne $lastsection && $lastsection ne '') {
+            if ($i != 0 && (($row->{'localsection'} ne $lastsection) || ($row->{'regionalsection'} ne $lastregion))) {
                 push @tableRows, formatSectionLine();
                 %period_list = ();
                 %country_list = ();
+                $found_regionalbed = 0;
+                $found_localbed = 0;
             }
+            if ($row->{'regionalbed'}) {
+                $found_regionalbed = 1;
+            }    
+            if ($row->{'localbed'}) {
+                $found_localbed = 1;
+            }    
             $lastsection = $row->{'localsection'};
+            $lastregion  = $row->{'regionalsection'};
             $period_list{$int2period{$row->{'max_interval_no'}}} = 1;
             $country_list{$row->{'country'}} = 1;
         }
@@ -183,14 +211,14 @@ sub displaySectionResults{
         print "<table width='100%' border=0 cellpadding=4 cellspacing=0>\n";
 
         # print columns header
-        print "
-        <tr>
-        <th align=left nowrap>Section name</th>
-        </tr>
-        ";
+        print '<tr><th align=left nowrap>Section name</th>';
+        if ($rowOffset + $limit/2 < $ofRows) { 
+            print '<th align=left nowrap>Section name</th>';
+        }    
+        print '</tr>';
    
         # print each of the rows generated above
-        for($i=$rowOffset;$i<$ofRows && $i < $rowOffset+$limit;$i++) {
+        for($i=$rowOffset;$i<$ofRows && $i < $rowOffset+$limit/2;$i++) {
             # should it be a dark row, or a light row?  Alternate them...
             if ( $i % 2 == 0 ) {
                 print "<tr class=\"darkList\">";
@@ -198,18 +226,31 @@ sub displaySectionResults{
                 print "<tr>";
             }
             print "<td>$tableRows[$i]</td>";
+            if ($i+$limit/2 < $ofRows) {
+                print "<td>".$tableRows[$i+$limit/2]."</td>";
+            } else {
+                print "<td>&nbsp;</td>";
+            }
             print "</tr>\n";
         }
  
         print "</table>\n";
     } elsif ($ofRows == 1 ) { # if only one row to display, cut to next page in chain
-        print "<center>\n<h3>Your search produced exactly one match ($lastsection)</h3></center>";
+        my $section;
+        if (!$lastsection || $q->param('section_name') eq $lastregion) {
+            $section = $lastregion;
+            $section_type='regional';
+        } else {    
+            $section = $lastsection;
+            $section_type='local';    
+        }
+        print "<center>\n<h3>Your search produced exactly one match ($section)</h3></center>";
 
         $my_q = new CGI({'show_taxon_list'=>$show_taxon_list,
                          'taxon_resolution'=>$taxon_resolution,
-                         'input'=>$lastsection,
-                         'input_type'=>'strat'});
-        showStrat($my_q,$s,$dbt);
+                         'input'=>$section,
+                         'input_type'=>$section_type});
+        displayStratTaxa($my_q,$s,$dbt);
         return;
     } else {
         print "<center>\n<h3>Your search produced no matches</h3>";
@@ -229,7 +270,7 @@ sub displaySectionResults{
     my $getString = "rowOffset=".($rowOffset+$limit);
     foreach $param_key (@params) {
         if ($param_key ne "rowOffset") {
-            if ($q2->param($param_key) ne "") {
+            if ($q2->param($param_key) ne "" || $param_key eq 'section_name') {
                 $getString .= "&".uri_escape($param_key)."=".uri_escape($q2->param($param_key));
             }
         }
@@ -252,143 +293,61 @@ sub displaySectionResults{
 }
 #----------------------FIRST-PAGE-----------------------------------------------
 
-#sub displayQueryPage    {
-#    my $q=shift;
-#    my $s=shift;
-#    my $dbt=shift;
-#    print "<DIV CLASS=\"title\">Confidence interval form</DIV><BR>";
-#    print "<CENTER><TABLE CELLPADDING=5 BORDER=0>";
-#    print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"databaseCheckForm\">";
-#    print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"taxon\">";
-#    print "<TR><TD ALIGN=\"right\"><B>Enter a taxonomic name:</B></TD>";
-#    print "<TD ALIGN=\"left\"><INPUT TYPE=\"text\" SIZE=\"20\" NAME=\"input\"></TD></TR>"; 
-#    print "<TR><TD ALIGN=\"right\"><B>Split taxon into its children:</B></TD>";
-#    print "<TD ALIGN=\"left\"><SELECT NAME=\"split_taxon\"><OPTION>yes</OPTION><OPTION>no</OPTION></SELECT></TD></TR>"; 
-#    print "</TABLE><BR>";
-#	print "<TEXTAREA ROWS=\"5\" COLUMNS=\"20\" NAME=\"input\"></TEXTAREA></TD></TR></TABLE>";
+sub displayTaxaIntervalsForm {
+    my $q = shift;
+    my $s = shift;
+    my $dbt = shift;
+    my $hbo = shift;
+    # Show the "search collections" form
+    %pref = main::getPreferences($s->get('enterer'));
+    my @prefkeys = keys %pref;
+    my $html = $hbo->populateHTML('taxa_intervals_form', [], [], \@prefkeys);
+                                                                                                                                                             
+    # Spit out the HTML
+    print $html;
+}
 
-#    print "<SPAN CLASS=\"tiny\">(This form will accept a taxa list copied from a text file)</SPAN><BR><BR><BR>";
-#    print "<INPUT NAME=\"full\" TYPE=\"submit\" VALUE=\"Submit\"></FORM></CENTER><BR><BR>";
-    
-#    return;
-#}
-
-sub checkData    {
+sub displayTaxaIntervalsResults{
     my $q=shift;
     my $s=shift;
     my $dbt=shift;
+    my $hbo=shift; 
     my $dbh=$dbt->dbh;
-#-------------------CHECK-IF-TAXON-------------------------------------------------
-    if ($q->param('input_type') eq 'taxon') {
 # ----------------------REMAKE SPECIES LIST-----ALSO REMOVE UNCHECKED--------------
+
+    # if homonyms found, display homonym chooser form
+    # if no homonyms: 
+    #   buildList:
+    #     if 'split_taxon' (aka analyze species separately) is 'yes'
+    #        display a list of taxa to choose (buildList)
+    #     else 
+    #       display options from
+    if ($q->param('input')) {
+        my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('input'));
+
         my %splist;
-        my $testspe =0;
-        my $testyes =0;
-        while ($q->param("speciesname$testspe"))  {
-            if ($q->param("keepspecies$testspe"))   {
-                $splist{$q->param("keepspecies$testspe")} = $q->param("speciesname$testspe");
-                $testyes++;
-            }
-            $testspe++;
-        }    
-
-        # This is sort of confusing (PS 02/10/2005)
-        # If the previous page was a homonym selection page, then speciesname0 
-        # will be the taxon_no of the homonym they entered and keepspecies0 
-        # will be the taxon_name of the homonym they entered.  Else its just a 
-        # normal name and we want to check for homonyms, and display a select form if we find one
-        # if we don't find one, we want to get a list of all the children that may belong to the
-        # higher taxon entered, optionally clumping them together.
-        if ($q->param('input') || $q->param('found_homonym')) {
-            if ($q->param('found_homonym')) {
-                @taxon_nos = ($q->param('speciesname0'));
-                # delete this so we can replace it with its children below, 
-                # if thats what the user wants
-                delete $splist{$q->param('keepspecies0')};
-                $q->param('input'=>$q->param('keepspecies0'));
-            } else {
-                @taxon_nos = TaxonInfo::getTaxonNos($dbt,$q->param('input'));
-            }
+        my @homonyms;
+        
+        foreach $taxon (@taxa) {
+            @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon);
             if (scalar(@taxon_nos) > 1) {
-                displayHomonymForm($q,$s,$dbt,$q->param('input'),\@taxon_nos,\%splist);
-                return;
+                push @homonyms, $taxon;
             } elsif (scalar(@taxon_nos) == 1) {
-                # Found the taxon in the authorities table, get its children
-                @child_taxon_nos = PBDBUtil::taxonomic_search('',$dbt,$taxon_nos[0],'return_taxon_nos');
-                $found = 0;
-                foreach $taxon_no (@child_taxon_nos) {
-                    $sql = "SELECT taxon_name,genus_name,species_name FROM occurrences ".
-                           " LEFT JOIN authorities ON occurrences.taxon_no=authorities.taxon_no ".
-                           " WHERE occurrences.taxon_no=$taxon_no LIMIT 1";
-                    @results = @{$dbt->getData($sql)};
-                    if (scalar(@results) > 0) {
-                        $found = 1;
-                        # split the children up into separate checkboxes, or clumped together under teh same checkbox
-                        if ($q->param('split_taxon') eq 'yes') {
-                            #print "genus $results[0]->{genus_name} $results[0]->{species_name} $results[0]->{taxon_name}<br>";
-                            #$splist{$results[0]->{'taxon_name'}} = $taxon_no;
-                            $splist{$results[0]->{'genus_name'}.' '.$results[0]->{'species_name'}} = $taxon_no;
-                        } else {
-                            $splist{$q->param('input')} .= ",".$taxon_no;
-                        }
-                    } 
-                }
-                if (exists $splist{$q->param('input')}) { 
-                    $splist{$q->param('input')} =~ s/^,//;
-                }
-                if (!$found) {
-                    print "<center><table><tr><th><font color=\"red\">Sorry, </font><font color=\"blue\"><i>".$q->param('input')."</i></font><font color=\"red\"> is not in the database</font></th></tr></table></CENTER><BR><BR>";
-                } 
-                buildList($q, $s, $dbt, \%splist);
+                $splist{$taxon} = $taxon_nos[0];
             } else {
-                # Didn't find squat in authorities table, check occurrences table to see if the input exists
-                my @taxon = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('input'));
-                if (scalar(@taxon) == 2) { #genus+species
-                    $sql = "SELECT collection_no FROM occurrences WHERE genus_name=" . $dbh->quote($taxon[0]);
-                    $sql .= " AND species_name=" . $dbh->quote($taxon[1]);
-                } elsif (scalar(@taxon) ==1) { #genus
-                    $sql = "SELECT collection_no FROM occurrences WHERE genus_name=" . $dbh->quote($taxon[0]);
-                } 
-                $sql .= " LIMIT 1";
-                main::dbg("Species sql: $sql");
-                $found = scalar(@{$dbt->getData($sql)});
-                if ($found) {
-                    $splist{$q->param('input')} = $q->param('input');
-                } else {
-                    print "<center><table><tr><th><font color=\"red\">Sorry, </font><font color=\"blue\"><i>".$q->param('input')."</i></font><font color=\"red\"> is not in the database</font></th></tr></table></CENTER><BR><BR>";
-                }
-                buildList($q, $s, $dbt, \%splist);
-            }
-        } else {
-            if (scalar(keys(%splist)) == 0)   {
-                #displayQueryPage($q, $s, $dbt);
-                buildList($q, $s, $dbt);
-                print "<CENTER><TABLE><TR><TH><FONT COLOR=\"red\">Sorry, couldn't understand your entry</FONT></TH></TR></TABLE></CENTER><br>";
-                return;
-            } else {
-                if ($testspe == $testyes)   {
-                    optionsForm($q, $s, $dbt, \%splist);
-                    return;
-                }
+                $splist{$taxon} = $taxon;
             }
         }
 
-        main::dbg("Species list: ".Dumper(\%splist));
-#-------------------CHECK-IF-STRAT-------------------------------------------------
-    } else {
-        my $strat = $q->param("input");
-        my $sql = "SELECT count(*) as cnt FROM collections WHERE localsection = " . $dbh->quote($strat) . " AND localbed REGEXP '^[0-9]\$'";
-        my $row = @{$dbt->getData($sql)}[0];
-    
-        if ($row->{'cnt'} > 0)    {
-            showStrat($q, $s, $dbt);
-            return;
-        } else  {
-            #displayQueryPage($q, $s, $dbt);
-            print "<center><table><tr><th><font color=\"red\">Sorry, </font><font color=\"blue\"><i>$strat</i></font><font color=\"red\"> is not in the database</font></th></tr></table></CENTER><BR><BR>";
-            return;
+        if (scalar(@homonyms) > 0) {
+            displayHomonymForm($q,$s,$dbt,\@homonyms,\%splist);
+        } else {
+            buildList($q, $s, $dbt, $hbo,\%splist);
         }
+    } else {
+        displayTaxaIntervalsForm($q, $s, $dbt,$hbo);
     }
+    main::dbg("Species list: ".Dumper(\%splist));
 }
 #--------------------------TAXON LIST BUILDER------------------------------------
 
@@ -396,71 +355,134 @@ sub buildList    {
     my $q=shift;
     my $s=shift;
     my $dbt=shift;
-    my $splist=shift;
-    my %splist=%$splist;
-    print "<DIV CLASS=\"title\">Confidence interval taxon list</DIV><BR>";
-    print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"databaseCheckForm\">";
-    print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"taxon\">";
-    print "<CENTER>";
+    my $hbo=shift;
+    my $dbh=$dbt->dbh;
+    my $splist_base=shift;
+    my %splist_base=%$splist_base;
+    my %splist;
+    my @notfound;
 
-    if (%splist) {
-        print "<TABLE CELLPADDING=5 BORDER=0>";
-        my @sortList = sort alphabetically keys(%splist);
-        my $columns = int(scalar(@sortList)/3)+1;
-        for($i=0;$i<$columns;$i++) {
-            print "<TR>";
-            for($j=$i;$j<scalar(@sortList);$j=$j+$columns) {
-                $splist{$sortList[$j]} =~ s/,$//; 
-                print "<TD><INPUT TYPE=checkbox NAME=keepspecies$j VALUE='$sortList[$j]' CHECKED=checked>" . 
-                      "<i>".$sortList[$j] . "</i><INPUT TYPE=hidden NAME=\"speciesname$j\" VALUE=\"$splist{$sortList[$j]}\"></TD>\n";
+    # Set from homonym form
+    if (!%splist_base) {
+        for (my $i=0;$q->param("speciesname$i");$i++)  {
+            $splist_base{$q->param("keepspecies$i")} = $q->param("speciesname$i");
+        }    
+    }
+
+    # Use taxonomic search to build up a list of taxon_nos that are 
+    # children of the potentially higher order taxonomic names entered in by the user
+    # splist_base is the list of higher order names that haven't been
+    # passed thru taxonomic_search
+    while(($taxon_name,$no_or_name)=each(%splist_base)) {
+        my $found = 0;
+        if ($no_or_name =~ /^\d+$/) {
+            # Found the taxon in the authorities table, get its children
+            my @children = PBDBUtil::taxonomic_search('',$dbt,$no_or_name,1,1);
+            foreach $taxon_no (@children) {
+                my ($row,$taxon_nos,$recombination_name);
+                $row = PBDBUtil::getCorrectedName($dbt,TaxonInfo::getOriginalCombination($dbt,$taxon_no));
+                # if the child is a recombination, get its recombined name, and append that to the list
+                if ($row->{'taxon_no'} != $taxon_no) {
+                    main::dbg("found recombination for $taxon_no: ".Dumper($row));
+                    $taxon_nos = "$row->{taxon_no},$taxon_no";
+                    $recombination_name = $row->{'taxon_name'};
+                } else {
+                    $taxon_nos = $taxon_no;
+                }
+
+                # Make sure its in the occurrences table first
+                $sql = "SELECT taxon_name,genus_name,species_name FROM occurrences ".
+                       " LEFT JOIN authorities ON occurrences.taxon_no=authorities.taxon_no ".
+                       " WHERE occurrences.taxon_no IN ($taxon_nos) LIMIT 1";
+                @results = @{$dbt->getData($sql)};
+                if (scalar(@results) > 0) {
+                    $found = 1;
+                    # split the children up into separate checkboxes by having different entries in %splist
+                    if ($q->param('split_taxon') eq 'yes') {
+                        if ($recombination_name) {
+                            $splist{$recombination_name} = $taxon_nos;
+                        } else {
+                            $splist{$results[0]->{'genus_name'}.' '.$results[0]->{'species_name'}} = $taxon_nos;
+                        }
+                    # or clumped together under the same checkbox by having a comma separated list associated with that higher name
+                    } else {
+                        $splist{$taxon_name} .= ",".$taxon_nos;
+                    }
+                } 
             }
-            print "</TR>";
-        }
-        print "</TABLE>";
-    }
+            if (exists $splist{$taxon_name}) {
+                $splist{$taxon_name} =~ s/^,//;
+            }
+        } else {
+            $sql = "SELECT collection_no FROM occurrences WHERE genus_name=".$dbh->quote($no_or_name);
+            main::dbg("genus sql: $sql");
+            $found = scalar(@{$dbt->getData($sql)});
+            if ($found) {
+                $splist{$q->param('input')} = $q->param('input');
+            }
+        }    
 
-    print "<TABLE CELLPADDING=5 BORDER=0>";
-    if (%splist) {
-        print "<TR><TH></TH><TD ALIGN=\"left\"><SPAN CLASS=\"tiny\">(To remove taxon from list, uncheck and press 'Submit')</SPAN></TD></TR>";
-    }
+        if (!$found) {
+            push @not_found, $taxon_name; 
+        #    print "<center><table><tr><th><font color=\"red\">Sorry, </font><font color=\"blue\">".
+        #          "<i>$taxon_name</i></font><font color=\"red\"> is not in the database</font>".
+        #          "</th></tr></table></CENTER><BR><BR>";
+        } 
+    } 
 
-    if (0 && %splist) {
-        for(my $i=0;($taxon_name,$taxon_list) = each(%splist);$i++){
-            print "<TR><TH ALIGN=\"right\"><INPUT TYPE=checkbox NAME=keepspecies$i VALUE='$taxon_name' CHECKED=checked></TH><TD ALIGN=\"left\"><i>$taxon_name</i><INPUT TYPE=hidden NAME=\"speciesname$i\" VALUE=\"$taxon_list\"></TD>";
-        }     
-        print "<TR><TH></TH><TD ALIGN=\"left\"><SPAN CLASS=\"tiny\">(To remove taxon from list, uncheck and press 'Submit')</SPAN></TD></TR>";
-        print "<TR><TH ALIGN=\"right\">Add another taxonomic name to list: </TH><TD ALIGN=\"left\">";
+    # Now print out the list generated above so the user can select potential species to exclude
+    # if they selected 'analyze taxa separately'. Otherwise skip to the options form
+    if (!scalar keys %splist) {
+        print "<center><h3><div class='warning'>Sorry, no occurrences of the taxa entered were found in the database.</div></h3></center>";
+        displayTaxaIntervalsForm($q,$s,$dbt,$hbo);
     } else {
-        print "<TR><TH ALIGN=\"right\">Add a taxonomic name to list: </TH><TD ALIGN=\"left\">";
-    }
-    print "<INPUT TYPE=\"text\" SIZE=\"30\" NAME=\"input\"></TD></TR>";
-    print "<TR><TD ALIGN=\"right\"><B>Split taxon into its children:</B></TD>";
-    print "<TD ALIGN=\"left\"><SELECT NAME=\"split_taxon\"><OPTION>yes</OPTION><OPTION>no</OPTION></SELECT></TD></TR>"; 
-    if (%splist) {
-        print "<TR><TH></TH><TD ALIGN=\"left\"><SPAN CLASS=\"tiny\">(To calculate confidence intervals, leave text box empty and press 'Submit')</SPAN></TD></TR>"; 
-    }    
-    print "</TABLE><BR>"; 
-    print "<INPUT TYPE=\"submit\" VALUE=\"Submit\">";
-    #print "<A HREF=\"/cgi-bin/bridge.pl?action=displayFirstForm\"><INPUT TYPE=\"button\" VALUE=\"Start again\"></A>";
-    print "</FORM></CENTER><BR><BR>";
+        if ($q->param('split_taxon') eq 'yes') {
+            print "<DIV CLASS=\"title\">Confidence interval taxon list</DIV><BR>";
+            print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"showOptionsForm\">";
+            print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"taxon\">";
+            print "<CENTER>";
 
-    return;
+            # Print out a list of taxa 3 columns wide
+            print "<TABLE CELLPADDING=5 BORDER=0>";
+            my @sortList = sort alphabetically keys(%splist);
+            my $columns = int(scalar(@sortList)/3)+1;
+            for($i=0;$i<$columns;$i++) {
+                print "<TR>";
+                for($j=$i;$j<scalar(@sortList);$j=$j+$columns) {
+                    $splist{$sortList[$j]} =~ s/,$//; 
+                    print "<TD><INPUT TYPE=checkbox NAME=keepspecies$j VALUE='$sortList[$j]' CHECKED=checked>" . 
+                          "<i>".$sortList[$j] . "</i><INPUT TYPE=hidden NAME=\"speciesname$j\" VALUE=\"$splist{$sortList[$j]}\"></TD>\n";
+                }
+                print "</TR>";
+            }
+            print "</TABLE>";
+
+            print "<TABLE CELLPADDING=5 BORDER=0>";
+            print "</TABLE><BR>"; 
+            print "<INPUT TYPE=\"submit\" VALUE=\"Submit\">";
+            print "</FORM></CENTER><BR><BR>";
+        } else {
+            optionsForm($q, $s, $dbt, \%splist);
+        }
+    }
 }
 #--------------DISPLAYS TAXA IN STRATIGRAPHIC SECTION FOR EDITING BY USER-------
 
-sub showStrat    {
+sub displayStratTaxa{
     my $q=shift;
     my $s=shift;
     my $dbt=shift;
     my $dbh=$dbt->dbh;
     my %splist;
-    my $local_sect = $q->param("input");
+    my $section_name = $q->param("input");
+    my $section_type = ($q->param("input_type") eq 'regional') ? 'regional' : 'local';
     my $sql = "SELECT occurrence_no, occurrences.taxon_no, genus_name, species_name, taxon_name, taxon_rank".
               " FROM collections, occurrences ".
               " LEFT JOIN authorities ON occurrences.taxon_no=authorities.taxon_no".
               " WHERE occurrences.collection_no=collections.collection_no ".
-              " AND localsection = " . $dbh->quote($local_sect) . " AND localbed REGEXP '^[0-9]\$'".
+              " AND ${section_type}section = " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^[0-9]\$'".
               " GROUP BY taxon_no,genus_name,species_name ";
+    main::dbg($sql);
     my @strat_taxa_list= @{$dbt->getData($sql)};
     my %taxonList;
     # We build a comma separated list of taxon_nos to pass in. If the taxon_resolution is species,
@@ -488,7 +510,7 @@ sub showStrat    {
         print "<DIV CLASS=\"title\">Stratigraphic section taxon list</DIV><BR>";
         print "<CENTER><TABLE CELLPADDING=5 BORDER=0>";
         print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"showOptionsForm\">";
-        print "<INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"".uri_escape($local_sect)."\">";
+        print "<INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"".uri_escape($section_name)."\">";
         print "<INPUT TYPE=\"hidden\" NAME=\"taxon_resolution\" VALUE=\"".$q->param("taxon_resolution")."\">";
         print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"".$q->param('input_type')."\">\n";
         my @sortList = sort alphabetically keys(%splist);
@@ -518,19 +540,25 @@ sub optionsForm    {
     my $dbt=shift;
     my $splist=shift;
     my %splist = %$splist;
-    my $local_sect = uri_unescape($q->param("input"));
+    # A large form is meant to be displayed on a page by itself, before the chart is drawn
+    # A small form is meant to displayed alongside a chart, so must be tall and skinny, and use different styles
+    my $form_type = (shift || "large");
+    
+    my $section_name = uri_unescape($q->param("input"));
     my $type = $q->param("input_type");
 
 # -----------------REMAKE STRAT LIST-----------(REMOVES UNCHECKED)-----------
-    my $testspe =0;
-    my $testyes =0;
-    while ($q->param("speciesname$testspe"))  {
-        if ($q->param("keepspecies$testspe"))   {
-            $splist{$q->param("keepspecies$testspe")} = $q->param("speciesname$testspe");
-            $testyes++;
-        }
-        $testspe++;
-    }    
+    if (!%splist) {
+        my $testspe =0;
+        my $testyes =0;
+        while ($q->param("speciesname$testspe"))  {
+            if ($q->param("keepspecies$testspe"))   {
+                $splist{$q->param("keepspecies$testspe")} = $q->param("speciesname$testspe");
+                $testyes++;
+            }
+            $testspe++;
+        }    
+    } 
 #----------------------BUILD LIST OF SCALES TO CHOOSE FROM--------------------
     my $sql = "SELECT authorizer_no,scale_no,scale_name,reference_no FROM scales";
     my @results = @{$dbt->getData($sql)};
@@ -553,43 +581,75 @@ sub optionsForm    {
         }
         $auth .= " " . $results2[0]->{pubyr};
         $auth = " [" . $auth . "]\n";
-        $scale_strings{$name} = $option . $name . $auth;
+        if ($form_type eq 'large') {
+            $scale_strings{$name} = $option . $name . $auth;
+        } else {
+            $scale_strings{$name} = $option . $name;
+        }
     }
         
 #------------------------------OPTIONS FORM----------------------------------
-    
-    print "<DIV CLASS=\"title\">Confidence interval options form</DIV>";
-    print "<CENTER><TABLE CELLPADDING=5 BORDER=0>";
+
     if ($type eq 'taxon')   {
-        print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"calculateTaxonomicInterval\">";
+        print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"calculateTaxaInterval\">";
     } else  {
-        print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"calculateStratigraphicInterval\">";
-        print "<INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"".uri_escape($local_sect)."\">";
+        print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"calculateStratInterval\">";
+        print "<INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"".uri_escape($section_name)."\">";
         print "<INPUT TYPE=\"hidden\" NAME=\"taxon_resolution\" VALUE=\"".$q->param("taxon_resolution")."\">";
     }    
     print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"".$q->param('input_type')."\">";
     for(my $i=0;($taxon_name,$taxon_list) = each(%splist);$i++){
         print "<INPUT TYPE=hidden NAME=keepspecies$i VALUE='$taxon_name' CHECKED=checked><INPUT TYPE=hidden NAME=\"speciesname$i\" VALUE=\"$taxon_list\">\n";
     }     
-    if ($type eq 'taxon')   {    
-        print "<TR><TH ALIGN=\"right\">Time-scale: </TH><TD ALIGN=\"left\"><SELECT NAME=\"scale\">";
-        my @sorted = sort keys %scale_strings;
-        for my $string (@sorted)        {
-            print $scale_strings{$string};
-        }       
-        print "</SELECT></TD></TR>";
-        print "<TR><TH></TH><TD><SPAN CLASS=\"tiny\">(Please select a time-scale that is appropriate for the taxa you have chosen)</SPAN></TD></TR>";
-    }
-    print "<TR><TH ALIGN=\"right\">Confidence interval method: </TH><TD ALIGN=\"left\"><SELECT NAME=\"conftype\"><OPTION>Strauss and Sadler (1989)<OPTION>Marshall (1994)<OPTION>Solow (1996)</SELECT><A HREF=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</A></TD></TR>";
-    #<OPTION>Marshall (1990)<OPTION>Marshall (1997)<OPTION>Solow (2003)<OPTION>Holland (2003)
-#    print "<TR><TH></TH><TD><SPAN CLASS=\"tiny\">(Warning: Know thine assumptions)</SPAN></TD></TR>";
-    print "<TR><TH ALIGN=\"right\">Estimate: </TH><TD ALIGN=\"left\"><SELECT NAME=\"conffor\"><OPTION>total duration<OPTION>first appearance<OPTION>last appearance<OPTION>no confidence intervals</SELECT></TD><TR>";
-    print "<TR><TH ALIGN=\"right\">Confidence level: </TH><TD ALIGN=\"left\"><SELECT NAME=\"alpha\"><OPTION>0.99<OPTION SELECTED>0.95<OPTION>0.8<OPTION>0.5<OPTION>0.25</SELECT></TD></TR>";
-    print "<TR><TH ALIGN=\"right\">Order taxa by: </TH><TD ALIGN=\"left\"><SELECT NAME=\"order\"><OPTION>name<OPTION SELECTED>first appearance<OPTION>last appearance<OPTION>stratigraphic range</SELECT></TD><TR></TABLE><BR>";
-    print "<INPUT NAME=\"full\" TYPE=\"submit\" VALUE=\"Submit\">";
-#    print "<A HREF=\"/cgi-bin/bridge.pl?action=displayFirstForm\"><INPUT TYPE=\"button\" VALUE=\"Start again\" STYLE=\"color:red\"></A>
-    print "</FORM></CENTER><BR><BR>";
 
+    if ($form_type eq 'large') {
+        print "<DIV CLASS=\"title\">Confidence interval options</DIV>";
+        print '<CENTER><TABLE CELLPADDING=5 BORDER=0>';
+        
+        if ($type eq 'taxon')   {    
+            print "<TR><TH align=\"right\"> Time-scale: </TH><TD><SELECT NAME=\"scale\">";
+            my @sorted = sort keys %scale_strings;
+            for my $string (@sorted)        {
+                print $scale_strings{$string};
+            }       
+            print "</SELECT></TD></TR>";
+        } 
+        
+        print "<TR><TH></TH><TD><SPAN CLASS=\"tiny\">(Please select a time-scale that is appropriate for the taxa you have chosen)</SPAN></TD></TR>";
+        print "<TR><TH align=\"right\"> Confidence interval method: </TH><TD> <SELECT NAME=\"conftype\"><OPTION>Strauss and Sadler (1989)<OPTION>Marshall (1994)<OPTION>Solow (1996)</SELECT><A HREF=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</A></TD></TR>";
+        #<OPTION>Marshall (1990)<OPTION>Marshall (1997)<OPTION>Solow (2003)<OPTION>Holland (2003)
+    #    print "<TR><TH></TH><TD><SPAN CLASS=\"tiny\">(Warning: Know thine assumptions)</SPAN></TD></TR>";
+        print "<TR><TH align=\"right\"> Estimate: </TH><TD> <SELECT NAME=\"conffor\"><OPTION>total duration<OPTION>first appearance<OPTION>last appearance<OPTION>no confidence intervals</SELECT></TD><TR>";
+        print "<TR><TH align=\"right\"> Confidence level: </TH><TD> <SELECT NAME=\"alpha\"><OPTION>0.99<OPTION SELECTED>0.95<OPTION>0.8<OPTION>0.5<OPTION>0.25</SELECT></TD></TR>";
+        print "<TR><TH align=\"right\"> Order taxa by: </TH><TD> <SELECT NAME=\"order\"><OPTION>name<OPTION SELECTED>first appearance<OPTION>last appearance<OPTION>stratigraphic range</SELECT></TD><TR></TABLE><BR>";
+        print "<INPUT NAME=\"full\" TYPE=\"submit\" VALUE=\"Submit\">";
+    #    print "<A HREF=\"/cgi-bin/bridge.pl?action=displayFirstForm\"><INPUT TYPE=\"button\" VALUE=\"Start again\" STYLE=\"color:red\"></A>
+        print "</FORM></CENTER><BR><BR>";
+    } else {
+        print '<CENTER><TABLE CLASS="darkList" CELLPADDING=5 BORDER=0 style="border: 1px #000000 solid">';
+        print '<TR><TH ALIGN="CENTER" COLSPAN=4><DIV CLASS="large">Options</DIV></TH><TR>';
+        
+        if ($type eq 'taxon')   {    
+            print "<TR><TH align=\"right\"> Time-scale: </TH><TD><SELECT NAME=\"scale\">";
+            my @sorted = sort keys %scale_strings;
+            for my $string (@sorted)        {
+                print $scale_strings{$string};
+            }       
+            print "</SELECT></TD>";
+        } else {
+            print "<TR>";
+        }
+        print "<TH align=\"right\"> Confidence level: </TH><TD><SELECT NAME=\"alpha\"><OPTION>0.99<OPTION SELECTED>0.95<OPTION>0.8<OPTION>0.5<OPTION>0.25</SELECT></TD></TR>";
+
+
+        print "<TR><TH align=\"right\"> Confidence interval method: </TD><TD><SELECT NAME=\"conftype\"><OPTION>Strauss and Sadler (1989)<OPTION>Marshall (1994)<OPTION>Solow (1996)</SELECT><A HREF=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</A></TD>";
+        print "<TH ALIGN=\"right\">Order taxa by: </TH><TD><SELECT NAME=\"order\"><OPTION>name<OPTION SELECTED>first appearance<OPTION>last appearance<OPTION>stratigraphic range</SELECT></TD><TR>";
+        
+        print "<TR><TH align=\"right\"> Estimate: </TH><TD><SELECT NAME=\"conffor\"><OPTION>total duration<OPTION>first appearance<OPTION>last appearance<OPTION>no confidence intervals</SELECT></TD><TR>";
+        print "</TABLE><BR>";
+        print "<INPUT NAME=\"full\" TYPE=\"submit\" VALUE=\"Submit\">";
+        print "</FORM></CENTER><BR><BR>";
+    }
     return;
 }
 
@@ -612,7 +672,6 @@ sub calculateTaxaInterval {
         $testspe++;
     }
     
-    my $fig_wide = scalar(keys(%splist));
     my $scale = $q->param("scale");
     my $C = $q->param("alpha");
 #    my $C = 1 - $CC;
@@ -635,11 +694,10 @@ sub calculateTaxaInterval {
     }
 
     my $order = $q->param("order");
-    my $local_sect = $q->param("input");
     my %theHash;
-    my %allscale;
     my %namescale;
     my @intervalnumber;
+    my @not_in_scale;
     $AILEFT;
     $AITOP;
     $fig_width;
@@ -653,39 +711,58 @@ sub calculateTaxaInterval {
 #            print "$keycounter: $timeHash{$keycounter}";
 #            print "<BR>";
 #        }
-
-    @_ = TimeLookup::findBoundaries($dbh,$dbt);
+    
+    #print "processcalelookup ".Dumper($_);
+    @_ = TimeLookup::findBoundaries($dbh,$dbt,$scale);
     my %upperbound = %{$_[0]};
     my %lowerbound = %{$_[1]};
-    my %upperboundname = %{$_[2]};
-    my %lowerboundname = %{$_[3]};
-    
-    
-            print "upperbound ".Dumper(\%upperbound)."<br>";
+#    my %upperboundname = %{$_[2]};
+#    my %lowerboundname = %{$_[3]};
 
+#    print "testing getScaleOrder ";
+#    @a = TimeLookup::getScaleOrder($dbt,$scale,'number',1);
+   #print Dumper(\@a);
+#    foreach $interval_no (@a) {
+#        print "$interval_no $upperbound{$interval_no} $lowerbound{$interval_no}<BR>";
+#    }
+#    die;
+   #print "findboundaries ".Dumper(\%upperbound,\%lowerbound);
 #        foreach my $keycounter (sort numerically keys(%upperbound)) {
 #            print "$keycounter: ";
 #                print "$upperbound{$keycounter} -- $lowerbound{$keycounter}";
 #            print "<BR>";
 #        }
 
-    my $sql = "SELECT interval_no, next_interval_no, lower_boundary FROM correlations WHERE scale_no = " . $scale . " "; # Get all the necessary stuff to create a scale
+    # Get all the necessary stuff to create a scale
+    my $sql = "SELECT correlations.interval_no, interval_name, eml_interval,next_interval_no, lower_boundary FROM correlations,intervals ".
+              " WHERE correlations.interval_no=intervals.interval_no" 
+              . " AND scale_no = " . $scale;
     my @results = @{$dbt->getData($sql)};
-    foreach my $counter (@results) {
-        $allscale{$counter->{interval_no}} = [$counter->{next_interval_no}, $counter->{lower_boundary}];
-        push @intervalnumber, $counter->{interval_no};
-    }
-    my $sql = "SELECT eml_interval, interval_no, interval_name FROM intervals WHERE interval_no IN (" . join(',',keys(%allscale)) . ")";
-    my @results = @{$dbt->getData($sql)};
-    
-    foreach my $counter (@results)	{
-        my $temp = $counter->{interval_name};
-        if ($eml_interval ne "")	{
-            $temp = $counter->{eml_interval} . " " . $counter->{interval_name};
+    my $last_lower_boundary=0;
+    foreach my $row (@results) {
+        if ($row->{'eml_interval'} ne "")	{
+            $namescale{$row->{'interval_no'}} = $row->{'eml_interval'} . " " . $row->{'interval_name'};
+        } else {
+            $namescale{$row->{'interval_no'}} = $row->{'interval_name'};
         }
-        $namescale{$counter->{interval_no}} = $temp;
+        push @intervalnumber, $row->{interval_no};
+        #if ($row->{'lower_boundary'}) {
+        #    $lower_boundary = $row->{'lower_boundary'};
+        #} else {
+        #    $lower_boundary = $lowerbound{$row->{'interval_no'}};
+        #}
+        #$lowerbound{$row->{'interval_no'}} = $lower_boundary;
+        #$upperbound{$row->{'interval_no'}} = $last_lower_boundary;
+        #$last_lower_boundary = $lower_boundary;
     }
-
+#    print "<BR>LB:".Dumper(\%lowerbound);
+#    print "<BR>UB:".Dumper(\%upperbound);
+#    print "<BR>NS:".Dumper(\%namescale);
+#    foreach $interval_no (sort {$a <=> $b} keys %namescale) {
+#        print "$interval_no $upperbound{$interval_no} $lowerbound{$interval_no}<BR>";
+#    }
+#    die;
+    
     my %solowHash;
     my %masterHash;
     foreach my $keycounter (keys(%namescale)) {
@@ -694,14 +771,14 @@ sub calculateTaxaInterval {
         push @{$masterHash{$keycounter}}, $lowerbound{$keycounter};
     }
     #print "MH".Dumper(\%masterHash);
-        foreach my $keycounter (sort numerically keys(%masterHash)) {
- 
+#        foreach my $keycounter (sort numerically keys(%masterHash)) {
+# 
 #            print "$keycounter: ";
 #            foreach my $arrcounter (@{$masterHash{$keycounter}}) {
 #                print "$arrcounter, ";
 #            }
 #            print "<BR>";
-        }
+#        }
 
 # ----------------------------------------------------------------------------
     my $rusty = 1;
@@ -765,45 +842,49 @@ sub calculateTaxaInterval {
 #            print "<BR>";
 #        }
 
-        foreach my $keycounter (keys(%namescale)) {
-            push @{$masterHash{$keycounter}}, scalar(@{$anotherHash{$namescale{$keycounter}}});
-        }
-        
-        
-#        print "$count<BR>";
-        
-        #------------FIND FIRST AND LAST OCCURRENCES---------------
-        my $firstint;
-        my $lastint;
-        my @gaplist;
-        my $temp = 0;
-        my $temptime;
-        my $m = 0;
-        
-        foreach my $keycounter (sort numerically keys(%masterHash)) {
-            if (@{$masterHash{$keycounter}}[$rusty + 2] ne "" && $temp == 0) {
-                $lastint = $keycounter;
-                $temptime = @{$masterHash{$keycounter}}[2];
-                $temp = 1;
+        if (! scalar keys %anotherHash) {
+            push @not_in_scale, $tryout;
+        } else {
+            push @masterHashOccMatrixOrder, $tryout;
+            foreach my $keycounter (keys(%namescale)) {
+                push @{$masterHash{$keycounter}}, scalar(@{$anotherHash{$namescale{$keycounter}}});
             }
-            if (@{$masterHash{$keycounter}}[$rusty + 2] ne "" && $temp == 1) {
-                $firstint = $keycounter;
-                push @gaplist, sprintf("%.1f", @{$masterHash{$keycounter}}[2] - $temptime);  #round to 1 decimal precision
-                $temptime = @{$masterHash{$keycounter}}[2];
-                $m++;
+            
+            
+    #        print "$count<BR>";
+            
+            #------------FIND FIRST AND LAST OCCURRENCES---------------
+            my $firstint;
+            my $lastint;
+            my @gaplist;
+            my $temp = 0;
+            my $temptime;
+            my $m = 0;
+            
+            foreach my $keycounter (sort numerically keys(%masterHash)) {
+                if (@{$masterHash{$keycounter}}[$rusty + 2] ne "" && $temp == 0) {
+                    $lastint = $keycounter;
+                    $temptime = @{$masterHash{$keycounter}}[2];
+                    $temp = 1;
+                }
+                if (@{$masterHash{$keycounter}}[$rusty + 2] ne "" && $temp == 1) {
+                    $firstint = $keycounter;
+                    push @gaplist, sprintf("%.1f", @{$masterHash{$keycounter}}[2] - $temptime);  #round to 1 decimal precision
+                    $temptime = @{$masterHash{$keycounter}}[2];
+                    $m++;
+                }
             }
-        }
-        
-        my $first = @{$masterHash{$firstint}}[2];
-        my $last = @{$masterHash{$lastint}}[1];
-        my $lastbottom = @{$masterHash{$lastint}}[2];
-        my $intervallength = $first - $last;
-        my $N = scalar(@gaplist);
+            
+            my $first = @{$masterHash{$firstint}}[2];
+            my $last = @{$masterHash{$lastint}}[1];
+            my $lastbottom = @{$masterHash{$lastint}}[2];
+            my $intervallength = $first - $last;
+            my $N = scalar(@gaplist);
 
-        @gaplist = @gaplist[1 .. (scalar(@gaplist) - 1)];
-        transpositionTest(\@gaplist, $N);   # TRANSPOSITION TEST
-        @gaplist = sort numerically @gaplist;
-        
+            @gaplist = @gaplist[1 .. (scalar(@gaplist) - 1)];
+            transpositionTest(\@gaplist, $N);   # TRANSPOSITION TEST
+            @gaplist = sort numerically @gaplist;
+            
 #        foreach my $gapcounter (@gaplist) {
 #            print "gaplist: $gapcounter<BR>";
 #        }
@@ -842,11 +923,13 @@ sub calculateTaxaInterval {
             $theHash{$tryout} = [$upper, $lower, $first, $last, $firstconfidencelengthlong, $intervallength, $uppershort, $lowershort, $correlation,$N,$firstconfidencelengthshort,$lastconfidencelengthlong,0];
             
 #IMPORTANT: UNLIKE OTHER METHODS, CAN"T CALCULATE SOLOW UNTIL FULL LIST IS BUILT
-    print "theHash ".Dumper(\%theHash)."<br>";
+#    print "theHash ".Dumper(\%theHash)."<br>";
 #    print "anotherHash ".Dumper(\%anotherHash)."<br>";
-        $rusty++;
+            $rusty++;
+        }
     }
     
+
 
 
     my @mx;
@@ -876,7 +959,8 @@ sub calculateTaxaInterval {
        
 #--------------------------------GD---------------------------------------------
 
-    $fig_width = 130 + (16 * $fig_wide);
+    my $fig_wide = scalar(keys(%theHash));
+    $fig_width = 170 + (16 * $fig_wide);
     $fig_lenth = 250 + 400;
     $AILEFT = 0;
     $AITOP = 580;   
@@ -934,7 +1018,6 @@ sub calculateTaxaInterval {
         	push @{$masterHash{$mintemp - 2}}, ('', 0, 0, 0);
         	$periodinclude{$tempupp - 1} = $masterHash{$tempupp - 1}[2];
         }
-    	print "masterHash ".Dumper(\%masterHash)."<br>";
 
   #      $periodinclude{$tempupp} = $masterHash{$tempupp + 1}[1];
 
@@ -946,6 +1029,9 @@ sub calculateTaxaInterval {
 	foreach my $counter ($upperlim..$lowerlim)	{
         $periodinclude{$counter} = $masterHash{$counter}[2];
     }
+#    print "<br><br>periodinclude".Dumper(\%periodinclude);
+#    print "<br><br>masterHash ".Dumper(\%masterHash)."<br>";
+#    print "<br><br>theHash ".Dumper(\%theHash)."<br>";
     
     
 #    print "<br>periodinclude " . Dumper(\%periodinclude) . "<br>";
@@ -958,30 +1044,38 @@ sub calculateTaxaInterval {
 #	print "<br> upperval: $upperval    lowerval: $lowerval    totalval: $totalval";
     
     my $millionyr = 400 / $totalval;
-    my $marker = 110;
-    my $Smarker = 110;
+    my $marker = 150;
+    my $Smarker = 150;
     my $aimarker = 150;
     my $tempn = 0;
 #    my $first_rep = 0;
     my $leng;
     foreach my $key (sort numerically keys(%periodinclude))	{
 
+#        print "$key $periodinclude{$key}"; 
         my $temp = 230 + (($periodinclude{$key} - $upperval) * $millionyr);
 	
         if (($temp - $tempn) > 17 && $tempn > 0)	{
-            $leng = length(@{$masterHash{$key}}[0]);
-            $gd->string(gdTinyFont, 65 - ($leng * 5), ((($temp - $tempn)/2) + $tempn - 3) , @{$masterHash{$key}}[0], $black);
-            aiText("null",10, ((($temp - $tempn)/2) + $tempn + 3) , @{$masterHash{$key}}[0],$aiblack);       #AI
+            my $interval_name = @{$masterHash{$key}}[0];
+            $interval_name =~ s/Early\/Lower/Early/;
+            $interval_name =~ s/Late\/Upper/Late/;
+            $leng = length($interval_name);
+            $gd->string(gdTinyFont, $marker - 35 - ($leng * 5), ((($temp - $tempn)/2) + $tempn - 3) , $interval_name, $black);
+            aiText("null",$aimarker - 140, ((($temp - $tempn)/2) + $tempn + 3) ,$interval_name,$aiblack);       #AI
 #            $leng = length(@{$masterHash{$key}}[0]);
 #            print "<br> length is $leng";
         }
         if (($temp - $tempn) > 10)	{
             $leng = length(sprintf("%.1f", $masterHash{$key}[2]));
-            $gd->string(gdTinyFont, 72 - ($leng * 5), $temp - 3, sprintf("%.1f", $masterHash{$key}[2]), $black);
+            $gd->string(gdTinyFont, $marker - 48  - ($leng * 5), $temp - 3, sprintf("%.1f", $masterHash{$key}[2]), $black);
             aiText("null", $aimarker - 75, $temp + 3, sprintf("%.1f", $masterHash{$key}[2]),$aiblack);       #AI
         }
         if ($tempn != 0) {
-            $image_map .= "<area shape=rect coords=\"10,".int($temp).",".($marker-30).",".int($tempn)."\" HREF=\"bridge.pl?action=displayCollResults&max_interval=".@{$masterHash{$key}}[0]."&taxon_list=".join(",",values %splist)."\" ALT=\"".@{$masterHash{$key}}[0]."\">";
+            my @interval_array = split(/ /,@{$masterHash{$key}}[0]);
+            my ($eml,$name);
+            if (scalar(@interval_array) > 1) {($eml,$name) = @interval_array; }
+            else {($name)=@interval_array;}
+            $image_map .= "<area shape=rect coords=\"10,".int($temp).",".($marker-30).",".int($tempn)."\" HREF=\"bridge.pl?action=displayCollResults&eml_max_interval=$eml&max_interval=$name&eml_min_interval=$eml&min_interval=$name&taxon_list=".join(",",values %splist)."\" ALT=\"".@{$masterHash{$key}}[0]."\">";
         }
         $gd->line($marker - 35, $temp, $marker - 30, $temp, $black);
         aiLine($aimarker - 35, $temp, $aimarker - 30, $temp,$aiblack);    #AI
@@ -1017,8 +1111,7 @@ sub calculateTaxaInterval {
         #-------------------- GREY BOXES (PS) ------------------------ 
         my $tempn =0;
         my $idx=-1;
-        my @list = keys(%splist);
-        for ($i=0;$i<scalar(@list);$i++) { if ($something eq $list[$i]) {$idx=3+$i} }
+        for ($i=0;$i<scalar(@masterHashOccMatrixOrder);$i++) { if ($something eq $masterHashOccMatrixOrder[$i]) {$idx=3+$i} }
                         
         foreach my $key (sort numerically keys(%periodinclude))	{
             my $temp = 230 + (($periodinclude{$key} - $upperval) * $millionyr);
@@ -1028,7 +1121,11 @@ sub calculateTaxaInterval {
                 aiFilledRectangle($aimarker,int($tempn),$aimarker+5,int($temp),$aigrey);
                 # use the taxon_no if possible
                 my $taxon_list = $splist{$something};
-                $image_map .= "<area shape=rect coords=\"$marker,".int($temp).",".($marker+5).",".int($tempn)."\" HREF=\"bridge.pl?action=displayCollResults&max_interval=".@{$masterHash{$key}}[0]."&min_interval=".@{$masterHash{$key}}[0]."&taxon_list=$taxon_list\" ALT=\"".@{$masterHash{$key}}[0]."\">";
+                my @interval_array = split(/ /,@{$masterHash{$key}}[0]);
+                my ($eml,$name);
+                if (scalar(@interval_array) > 1) {($eml,$name) = @interval_array; } 
+                else {($name)=@interval_array;} 
+                $image_map .= "<area shape=rect coords=\"$marker,".int($temp).",".($marker+5).",".int($tempn)."\" HREF=\"bridge.pl?action=displayCollResults&eml_max_interval=$eml&max_interval=$name&eml_min_interval=$eml&min_interval=$name&taxon_list=$taxon_list\" ALT=\"".@{$masterHash{$key}}[0]."\">";
             }
             $tempn =+ $temp;
         }
@@ -1122,7 +1219,7 @@ sub calculateTaxaInterval {
             $gd->stringUp(gdTinyFont, $marker-1, 206, "*", $black);
             aiTextVert(       "null", $aimarker-1,206, "*", $aiblack);
         }
-        $gd->string(gdSmallFont, 50, 200, 'Ma', $black);
+        $gd->string(gdSmallFont, 90, 200, 'Ma', $black);
         $gd->string(gdTinyFont, $fig_width - 70,$fig_lenth - 10, "J. Madin 2004", $black);
         aiTextVert(        "null", $aimarker+7, 200, "$something", $aiblack);      #AI
         $marker = $marker + 16;
@@ -1209,6 +1306,7 @@ sub calculateTaxaInterval {
     print "<DIV CLASS=\"title\">Confidence interval results</DIV>";
 
     print "<CENTER><A HREF=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">Help</A></CENTER>";
+
     
     if ($recent == 1)    {
         print "<center><table><tr><th><font color=\"red\">
@@ -1223,7 +1321,7 @@ sub calculateTaxaInterval {
     print $image_map;
     print "<CENTER><TABLE><TD><IMG SRC=\"/public/confidence/$imagenamepng\"  USEMAP=\"#ConfidenceMap\" ISMAP BORDER=0></TD><TD WIDTH=40></TD>";
   
-    print "<TD>";
+    print "<TD ALIGN=\"center\">";
     if($conftype eq "Strauss and Sadler (1989)") {
         my (@tableRowHeader, @tableColHeader, @table);
         @tableRowHeader = ('last occurrence (Ma)','first occurrence (Ma)','confidence interval (Ma)', 'number of horizons', 'transposition test');
@@ -1232,7 +1330,8 @@ sub calculateTaxaInterval {
             my @confVals = @{$theHash{$sortedKeys[$i]}};
             $table[$i] = [$confVals[3],$confVals[2],$confVals[4],$confVals[9],$confVals[8]];
         }
-        printResultTable('',\@tableRowHeader,\@tableColHeader,\@table);
+        my $transpose = (scalar(@sortedKeys) > 5) ? 1 : 0;
+        printResultTable('',\@tableRowHeader,\@tableColHeader,\@table,$transpose);
     } elsif($conftype eq "Marshall (1994)") {
         my (@tableRowHeader, @tableColHeader, @table);
         @tableRowHeader = ('last occurrence (Ma)','first occurrence (Ma)','lower confidence interval (Ma)', 'upper confidence interval (Ma)','number of horizons', 'transposition test');
@@ -1241,7 +1340,8 @@ sub calculateTaxaInterval {
             my @confVals = @{$theHash{$sortedKeys[$i]}};
             $table[$i] = [$confVals[3],$confVals[2],$confVals[10],$confVals[4],$confVals[9],$confVals[8]];
         }
-        printResultTable('',\@tableRowHeader,\@tableColHeader,\@table);
+        my $transpose = (scalar(@sortedKeys) > 5) ? 1 : 0;
+        printResultTable('',\@tableRowHeader,\@tableColHeader,\@table,$transpose);
     } elsif($conftype eq "Solow (1996)") {
         my (@tableRowHeader, @tableColHeader, @table);
         @tableRowHeader = ('last occurrence (Ma)','first occurrence (Ma)','number of horizons', 'transposition test');
@@ -1250,7 +1350,8 @@ sub calculateTaxaInterval {
             my @confVals = @{$theHash{$sortedKeys[$i]}};
             $table[$i] = [$confVals[3],$confVals[2],$confVals[9],$confVals[8]];
         }
-        printResultTable('table 1',\@tableRowHeader,\@tableColHeader,\@table);
+        my $transpose = (scalar(@sortedKeys) > 5) ? 1 : 0;
+        printResultTable('table 1',\@tableRowHeader,\@tableColHeader,\@table,$transpose);
         print "<BR><BR>";
         
         my $temp1;
@@ -1273,6 +1374,15 @@ sub calculateTaxaInterval {
         }
         print "</TABLE>";
     }
+    if (scalar @not_in_scale) {
+        if (scalar(@not_in_scale) > 1) {
+            print "<p></p><div style='border: 1px #000000 solid; font-weight: bold; text-align: center;'>Warning: The following taxa were excluded from the chart because they could not be mapped to the time scale specified:<br>";
+        } else {
+            print "<p></p><div style='border: 1px #000000 solid; font-weight: bold; text-align: center;'>Warning: The following taxon was excluded from the chart because it could not be mapped to the time scale specified:<br>";
+        }
+        print join(", ",@not_in_scale);
+        print "</div>";
+    }
     print "</TD></TR>";
         
     print "</TABLE></TD>";
@@ -1284,7 +1394,7 @@ sub calculateTaxaInterval {
     print ", <a href=\"/public/confidence/$imagenamejpg\" TARGET=\"xy\">JPEG</a>";
     print ", <a href=\"/public/confidence/$imagenameai\">AI</a><BR><BR></b>";
     #print "<INPUT TYPE=submit VALUE=\"Start again\"><BR><BR><BR>";
-    optionsForm($q, $s, $dbt, \%splist);
+    optionsForm($q, $s, $dbt, \%splist, 'small');
     print " <a href='bridge.pl?action=displayFirstForm'>Start again</a></b><p></center><BR><BR><BR>";
 
     return;
@@ -1293,22 +1403,35 @@ sub calculateTaxaInterval {
 # Used in CalculateTaxaInterval, print HTML table
 sub printResultTable { 
     $tableName = $_[0];
-    @tableRowHeader = @{$_[1]};
-    @tableColHeader = @{$_[2]};
+    $tableRowHeader = $_[1];
+    $tableColHeader = $_[2];
     @table = @{$_[3]};
+    $transpose = ($_[4] || 0);
+
+    if ($transpose) {
+        $temp = $tableRowHeader;
+        $tableRowHeader = $tableColHeader;
+        $tableColHeader = $temp;
+    }
+    @tableRowHeader = @$tableRowHeader;
+    @tableColHeader = @$tableColHeader;
 
     # RESULTS TABLE HEADER
     print "<TABLE CELLSPACING=1 BGCOLOR=\"black\" CELLPADDING=5><TR BGCOLOR=\"white\" ALIGN=\"CENTER\">";
-    print "<TD BGCOLOR=\"white\" ALIGN=\"CENTER\">$tableName</TD>";
+    print "<TD BGCOLOR=\"white\" ALIGN=\"CENTER\"><span style='font-size: 10pt;'><B>$tableName</B></span></TD>";
     foreach $col (@tableColHeader) { 
-        print "<TD BGCOLOR=\"white\" ALIGN=\"center\"><I><B>$col</B></I></TD>";
+        print "<TD BGCOLOR=\"white\" ALIGN=\"center\"><span style='font-size: 9pt;'><B><I>$col</I></B></span></TD>";
     }    
     print "</TR>";
     # RESULTS TABLE BODY
     for(my $rowNum=0;$rowNum<scalar(@tableRowHeader);$rowNum++){
-        print "<TR><TD BGCOLOR=\"white\" ALIGN=\"center\"><B>$tableRowHeader[$rowNum]</B></TD>";
+        print "<TR><TD BGCOLOR=\"white\" ALIGN=\"center\"><span style='font-size: 9pt;'><B>$tableRowHeader[$rowNum]</B></span></TD>";
         for(my $colNum=0;$colNum<scalar(@tableColHeader);$colNum++){
-            print "<TD BGCOLOR=\"white\" ALING=\"center\">".$table[$colNum][$rowNum]."</TD>";
+            if ($transpose) {
+                print "<TD BGCOLOR=\"white\" ALIGN=\"center\"><span style='font-size: 9pt;'>".$table[$rowNum][$colNum]."</span></TD>";
+            } else {
+                print "<TD BGCOLOR=\"white\" ALIGN=\"center\"><span style='font-size: 9pt'>".$table[$colNum][$rowNum]."</span></TD>";
+            }
         }
         print "</TR>";
     }
@@ -1327,7 +1450,8 @@ sub calculateStratInterval	{
     $fig_width;
     $fig_lenth;
     $aifig_size = 500;
-    my $local_sect = uri_unescape($q->param("input"));
+    my $section_name = uri_unescape($q->param("input"));
+    my $section_type = ($q->param("input_type") eq 'regional') ? 'regional' : 'local';
     my $alpha = $q->param("alpha");
 #   $alpha = 1 - $alpha;
     my $conffor = $q->param("conffor");
@@ -1356,11 +1480,11 @@ sub calculateStratInterval	{
     $taxon_nos_string =~ s/,$//;
     $genus_species_sql =~ s/^ OR//;
 
-    my $sql = "SELECT localbed, localorder, occurrences.collection_no, genus_name, species_name, taxon_name, taxon_rank FROM collections, occurrences". 
+    my $sql = "SELECT ${section_type}bed, ${section_type}order, occurrences.collection_no, genus_name, species_name, taxon_name, taxon_rank FROM collections, occurrences". 
               " LEFT JOIN authorities ON occurrences.taxon_no=authorities.taxon_no".
               " WHERE collections.collection_no=occurrences.collection_no".
-              " AND localsection=".$dbh->quote($local_sect).
-              " AND localbed REGEXP '^[0-9]\$'";
+              " AND ${section_type}section=".$dbh->quote($section_name).
+              " AND ${section_type}bed REGEXP '^[0-9]\$'";
     if ($taxon_nos_string && $genus_species_sql) {
         # Doing this as a union is much faster since it uses the indexes properly.  Otherwise doesn't know which index to use
         $sql = "($sql AND occurrences.taxon_no IN ($taxon_nos_string)) UNION ($sql AND ($genus_species_sql))";
@@ -1380,8 +1504,8 @@ sub calculateStratInterval	{
         } else {
             $genus_species = join ' ',$row->{'genus_name'},$row->{'species_name'};
         }
-        $localbed{$row->{'collection_no'}}=$row->{'localbed'};
-        push @{$mainHash{$genus_species}}, $row->{'localbed'};
+        $sectionbed{$row->{'collection_no'}}=$row->{$section_type.'bed'};
+        push @{$mainHash{$genus_species}}, $row->{$section_type.'bed'};
         if ($row->{'taxon_name'}) {
             $taxon_rank='Higher taxon';
             $taxon_rank='species' if ($row->{'taxon_rank'} eq 'species');
@@ -1401,8 +1525,8 @@ sub calculateStratInterval	{
 
 
 # ----------------------------GENERAL FIGURE DIMENSIONS---------------------------
-    my @tempp = sort numerically values %localbed;                        
-    main::dbg("sorted localbed values:".Dumper(\@tempp));
+    my @tempp = sort numerically values %sectionbed;                        
+    main::dbg("sorted sectionbed values:".Dumper(\@tempp));
     main::dbg("mainHash (genus->beds array):".Dumper(\%mainHash));
     my $number_horizons = scalar(@tempp);            # how many horizons for whole section
     my $maxhorizon = $tempp[$number_horizons-1];     # the maximum horizon number, e.g., 17 (+1, for upper bound)
@@ -1509,7 +1633,7 @@ sub calculateStratInterval	{
             aiLine(65,($fig_lenth - 20) - $i,70,($fig_lenth - 20) - $i,$aiblack);    #AI
             aiText("null",55-length($counter)*6,(($fig_lenth - 20) - $i) + 2,$counter,$aiblack);       #AI
             if ($counter > $minhorizon && $counter <= $maxhorizon) {
-                $image_map .= "<area shape=rect coords=\"".(55-length($counter)*6).",".int($fig_lenth - $i - 15).",55,".int($fig_lenth - $i - 30)."\" HREF=\"bridge.pl?action=displayCollResults&localsection=$local_sect&localbed=$counter\" ALT=\"local bed $counter of $local_sect\">";
+                $image_map .= "<area shape=rect coords=\"".(55-length($counter)*6).",".int($fig_lenth - $i - 15).",55,".int($fig_lenth - $i - 30)."\" HREF=\"bridge.pl?action=displayCollResults&${section_type}section=$section_name&${section_type}bed=$counter\" ALT=\"$section_type bed $counter of $section_name\">";
             }
             $j = $j + 8;
         }
@@ -1521,11 +1645,11 @@ sub calculateStratInterval	{
     }
     print AI "U\n";                                                     # AI terminate the group 
     $gd->line(70,$fig_lenth - 20 - $horizon_unit,70,$fig_lenth - (($fig_long + 1)*$horizon_unit) - 20,$black);   #GD    
-    $gd->stringUp(gdMediumBoldFont, 13,(250 + (($fig_lenth - 220)/2)), "Section: $local_sect", $black);
-    #$image_map .= "<area shape=rect coords=\"12,".int(260 + ($fig_lenth - 220)/2).",28,".int(260 + ($fig_lenth-380)/2-length($local_sect)*7)."\" HREF=\"bridge.pl?action=displayStrataSearch&localsection=$local_sect\" ALT=\"section $local_sect\">";
+    $gd->stringUp(gdMediumBoldFont, 13,(250 + (($fig_lenth - 220)/2)), "Section: $section_name", $black);
+    #$image_map .= "<area shape=rect coords=\"12,".int(260 + ($fig_lenth - 220)/2).",28,".int(260 + ($fig_lenth-380)/2-length($section_name)*7)."\" HREF=\"bridge.pl?action=displayStrataSearch&localsection=$section_name\" ALT=\"section $section_name\">";
     $gd->string(gdTinyFont, $fig_width - 70,$fig_lenth - 10, "J. Madin 2004", $black);
     aiLine(70,$fig_lenth - 20 - $horizon_unit,70,$fig_lenth - (($fig_long + 1)*$horizon_unit) - 20,$aiblack);   #AI    
-    aiTextVert("null", 13,(250 + (($fig_lenth - 220)/2)), "Section: $local_sect", $aiblack);
+    aiTextVert("null", 13,(250 + (($fig_lenth - 220)/2)), "Section: $section_name", $aiblack);
     aiText("null", $fig_width - 70,$fig_lenth - 10, "J. Madin 2004", $aiblack);    
 # -------------------------------SORT OUTPUT----------------------------
     sub sortHashLast {$stratHash{$a}[0] <=> $stratHash{$b}[0]};
@@ -1545,13 +1669,13 @@ sub calculateStratInterval	{
 # -------------------------------SPECIES BARS----------------------------
     foreach my $counter (@sortedKeys) {
         # -----------------GREY BOXES IN BAR (PS)--------------------------
-        my @localbeds = @{$mainHash{$counter}};
+        my @sectionbeds = @{$mainHash{$counter}};
         my %seenBeds = ();
-        foreach $bed (@localbeds) {
+        foreach $bed (@sectionbeds) {
             if (!$seenBeds{$bed}) {
                 $gd->filledRectangle($marker+1,$fig_lenth-20-(($bed-$lower_lim)*$horizon_unit),$marker+4,$fig_lenth-20-(($bed-1-$lower_lim)*$horizon_unit),$grey);
                 aiFilledRectangle($marker,$fig_lenth-20-(($bed-$lower_lim)*$horizon_unit),$marker+5,$fig_lenth-20-(($bed-1-$lower_lim)*$horizon_unit),$aigrey);
-                $image_map .= "<area shape=rect coords=\"".$marker.",".int($fig_lenth-20-(($bed-$lower_lim)*$horizon_unit)).",".($marker+5).",".int($fig_lenth-20-(($bed-1-$lower_lim)*$horizon_unit))."\" HREF=\"bridge.pl?action=displayCollResults&localsection=$local_sect&localbed=$bed&genus_name=$counter\" ALT=\"$counter in local bed $bed of section $local_sect\">";
+                $image_map .= "<area shape=rect coords=\"".$marker.",".int($fig_lenth-20-(($bed-$lower_lim)*$horizon_unit)).",".($marker+5).",".int($fig_lenth-20-(($bed-1-$lower_lim)*$horizon_unit))."\" HREF=\"bridge.pl?action=displayCollResults&${section_type}section=$section_name&${section_type}bed=$bed&genus_name=$counter\" ALT=\"$counter in $section_type bed $bed of section $section_name\">";
             }
             $seenBeds{$bed} = 1;
         }
@@ -1587,7 +1711,7 @@ sub calculateStratInterval	{
     close IMAGEP;
     $image_map .= "</map>";
 # ---------------------------------RESULTS-PAGE----------------------------------------
-    print "<DIV CLASS=\"title\">Confidence interval results for the <i>$local_sect</i> stratigraphic section</DIV><BR>";
+    print "<DIV CLASS=\"title\">Confidence interval results for the <i>$section_name</i> stratigraphic section</DIV><BR>";
     #if ($fig_width > 750)  {
     #   print "<CENTER><IMG WIDTH=750 SRC=\"/public/confidence/$imagenamepng\"></CENTER><BR><BR>";
     #} else {
