@@ -1,4 +1,6 @@
 package Session;
+
+
 require Exporter;
 @ISA = qw(Exporter);
 
@@ -7,6 +9,7 @@ use CookieFactory;
 use Class::Date qw(date localdate gmdate now);
 use CGI::Carp qw(fatalsToBrowser);
 
+use Debug;
 
 # I THINK THESE ARE BOGUS. THERE ARE NO SUCH METHODS/VARIABLES IN THIS MODULE
 @EXPORT = qw(setName setHref toHTML);
@@ -402,5 +405,27 @@ sub guest {
 
 	return ( $self->{authorizer} eq "Guest" );
 }
+
+
+# returns a string of all keys and values set in this
+# session.  intended for debugging purposes
+#
+# rjp, 2/2004
+sub allKeysAndValues() {
+	my $self = shift;
+	
+	my %hash = %$self;
+	
+	my @keys = keys(%hash);
+		
+	my $result;
+	foreach my $k (@keys) {
+		@list = $hash{$k}; 
+		$result .= "$k = " . "'" . join(", ", @list) . "'\n";	
+	}
+	
+	return $result;
+}
+
 
 1;
