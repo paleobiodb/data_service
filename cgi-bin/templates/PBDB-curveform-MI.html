@@ -67,6 +67,54 @@ Include lists that have not been fit into a single age/stage?
 </select>
 
 <tr><td colspan=2><b><font size=+1>Additional restrictions</font></b>
+
+<tr><td>
+Created 
+<select name="created_before_after">
+<option selected>before
+<option>after
+</select>
+
+</td><td>
+<select name="date">
+<option selected>
+<option>31 <option>30
+<option>29 <option>28 <option>27 <option>26 <option>25
+<option>24 <option>23 <option>22 <option>21 <option>20
+<option>19 <option>18 <option>17 <option>16 <option>15
+<option>14 <option>13 <option>12 <option>11 <option>10
+<option>9 <option>8 <option>7 <option>6 <option>5
+<option>4 <option>3 <option>2 <option>1
+</select>
+
+<select name="month">
+<option selected>
+<option>December
+<option>November
+<option>October
+<option>September
+<option>August
+<option>July
+<option>June
+<option>May
+<option>April
+<option>March
+<option>February
+<option>January
+</select>
+
+<select name="year">
+<option selected>
+<option>2003
+<option>2002
+<option>2001
+<option>2000
+<option>1999
+<option>1998
+</select>
+	</td>
+</tr>
+
 <tr><td>
 <font size=-1>
 <select name=stratscale_minmax>
@@ -223,6 +271,7 @@ fall in the following category:
 <tr><td valign=top>
 <font size=-1>
 If you don't want to analyze all taxonomic groups together, you may either check off a set of allowed or required groups or select a single class.
+Required groups must be present in every list; allowed groups also will be counted but may be in absent in some lists.
 <td>
 
 <font size=-1>
@@ -530,66 +579,6 @@ Use the geographic dispersion algorithm?
 <hr>
 <table cellpadding=4 width=100%>
 <tr><td valign=top>
-<font size=+1>
-<b>Authorizer name:</b>
-<td valign=top align=right>
-<font size=+1>
-<select name=authorizer>
-<option>J. Alroy
-<option>R. Bambach
-<option>K. Behrensmeyer
-<option>B. Bodenbender
-<option>N. Bonuso
-<option>C. Boyce
-<option>C. Brett
-<option>C. Brochu
-<option>M. Carrano
-<option>L. Churchill-Dickson
-<option>W. Clyde
-<option>D. Erwin
-<option>E. Fara
-<option>M. Foote
-<option>F. Fursich
-<option>R. Gastaldo
-<option>P. Gensel
-<option>T. Hansen
-<option>S. Holland
-<option>J. Hunter
-<option>L. Ivany
-<option>D. Jablonski
-<option>D. Jacobs
-<option>W. Kiessling
-<option>A. Knoll
-<option>K. Johnson
-<option>M. Kosnik
-<option>M. Kowalewski
-<option>C. Labandeira
-<option>S. Lidgard
-<option>R. Lupia
-<option>C. Maples
-<option>C. Marshall
-<option>M. McKinney
-<option>J. Meng
-<option>D. Meyer
-<option>A. Miller
-<option>K. Niklas
-<option>R. O'Keefe
-<option>T. Olszewski
-<option>M. Patzkowsky
-<option>D. Raup
-<option>A. Raymond
-<option>A. Rees
-<option>R. Rogers
-<option>K. Roy
-<option>C. Sidor
-<option>H. Sims
-<option>D. Smith
-<option>W. Stein
-<option>B. Tiffney
-<option>M. Uhen
-<option>P. Wagner
-<option>S. Wing
-</select>
 
 <tr><td valign=top>
 <td valign=top align=right><input type=submit value="Submit">
