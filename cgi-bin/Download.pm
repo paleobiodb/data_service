@@ -645,8 +645,10 @@ sub doQuery {
 		for $intnoref ( @intnorefs )	{
 			if ( $intnoref->{eml_interval} )	{
 				$max_interval_name{$intnoref->{interval_no}} = $intnoref->{eml_interval} . " " . $intnoref->{interval_name};
+				$min_interval_name{$intnoref->{interval_no}} = $intnoref->{eml_interval} . " " . $intnoref->{interval_name};
 			} else	{
 				$max_interval_name{$intnoref->{interval_no}} = $intnoref->{interval_name};
+				$min_interval_name{$intnoref->{interval_no}} = $intnoref->{interval_name};
 			}
 		}
 	}
