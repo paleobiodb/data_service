@@ -1078,7 +1078,7 @@ sub printResults	{
 		print "<td class=tiny align=center valign=top><b>Range-through<br>$generaorrefs</b> ";
 		print "<td class=tiny align=center valign=top><b>Boundary-crosser<br>$generaorrefs</b> ";
 		print "<td class=tiny align=center valign=top><b>Two&nbsp;timer<br>$generaorrefs</b> ";
-		print "<td class=tiny align=center valign=top><b>First<br>appearances</b> <td class=small align=center valign=top><b>Origination<br>rate</b> <td class=small align=center valign=top><b>Last<br>appearances</b><td class=small align=center valign=top><b>Extinction<br>rate</b> <td class=small align=center valign=top><b>Singletons</b> ";
+		print "<td class=tiny align=center valign=top><b>First<br>appearances</b> <td class=tiny align=center valign=top><b>Origination<br>rate</b> <td class=tiny align=center valign=top><b>Last<br>appearances</b><td class=tiny align=center valign=top><b>Extinction<br>rate</b> <td class=tiny align=center valign=top><b>Singletons</b> ";
 		print "<td class=tiny align=center valign=top><b>Chao-2<br>estimate</b> ";
 		print "<td class=tiny align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
 		print "<td class=tiny align=center valign=top><b>$listorfm</b> ";
@@ -1089,7 +1089,7 @@ sub printResults	{
 		else	{
 			print "<td class=tiny align=center valign=top><b>Specimens</b> ";
 		}
-		print "<td class=tiny align=center valign=top><b>Mean<br>richness</b> <td class=small align=center valign=top><b>Median<br>richness</b> ";
+		print "<td class=tiny align=center valign=top><b>Mean<br>richness</b> <td class=tiny align=center valign=top><b>Median<br>richness</b> ";
 		print TABLE "Bin,Bin name,Sampled $generaorrefs,Range-through $generaorrefs,Boundary-crosser $generaorrefs,";
 		print TABLE "Two timer $generaorrefs,";
 		print TABLE "First appearances,Origination rate,Last appearances,Extinction rate,Singletons,";
@@ -1381,7 +1381,7 @@ sub printResults	{
 					  printf TABLE ",%.3f",$richness[$i] / $gapstat;
 					}
 					else	{
-					  print "<td class=tiny align=center valign=top>NaN <td class=small align=center valign=top>NaN ";
+					  print "<td class=tiny align=center valign=top>NaN <td class=tiny align=center valign=top>NaN ";
 					  print TABLE ",NaN,NaN";
 					}
 					if ($msubschaostat > 0 && $msubsrichness[$i] > 0 )	{
