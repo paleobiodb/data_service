@@ -113,7 +113,7 @@ sub processLookup	{
 
 # push the numbers onto the master list
 	push @intervals, $max_interval_no;
-	if ( $max_interval_no != $min_interval_no )	{
+	if ( $max_interval_no != $min_interval_no && ( $min_interval_no > 0 ) )	{
 		push @intervals, $min_interval_no;
 	}
 
@@ -181,6 +181,10 @@ sub processLookup	{
 	if ( ! @intervals )	{
 		return;
 	}
+
+# without making this local, repeated calls to TimeLookup will accrete
+#  more and more "good" intervals
+	my @tempintervals;
 
 # for convenience, make a hash array where the keys are the intervals
 	my %yesints = ();
