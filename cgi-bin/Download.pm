@@ -534,21 +534,22 @@ sub getDataForAuthorizer{
 
 sub getOccurrencesWhereClause {
 	my $self = shift;
-	my $retVal = "";
+	
+	my $clause = WhereClause->new();
+	$clause->setSeparator("AND");
 	
 	my $authorizer = $self->getDataForAuthorizer();
 
-	$retVal .= " occurrences.authorizer='$authorizer' " if $authorizer ne "All";
+	$clause->addItem("occurrences.authorizer='$authorizer'") if ($authorizer ne "ALL");
 
 	if($q->param('genus_name') ne ""){
-		$retVal .= " AND " if $retVal;
-		my $genusNames = $self->getGenusNames($q->param('genus_name'));
-		$retVal .= " occurrences.genus_name IN (".$genusNames.")";
+		my $genusNames = $self->getGenusNames($q->param('genus_name'));		
+		$clause->addItem("occurrences.genus_name IN ($genusNames)");
 	}
-	$retVal .= " AND " if $retVal && $q->param('indet') eq 'NO';
-	$retVal .= " occurrences.species_name!='indet.' " if $q->param('indet') eq 'NO';
 	
-	return $retVal;
+	$clause->addItem("occurrences.species_name!='indet.'") if ($q->param('indet') eq 'NO');
+	
+	return $clause->whereClause;
 }
 
 
