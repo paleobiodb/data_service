@@ -1,0 +1,553 @@
+-- Table structure for table 'authorities'
+--
+
+CREATE TABLE authorities (
+  authorizer_no int(10) unsigned NOT NULL default '0',
+  enterer_no int(10) unsigned NOT NULL default '0',
+  modifier_no int(10) unsigned NOT NULL default '0',
+  taxon_no int(10) unsigned NOT NULL auto_increment,
+  reference_no int(10) unsigned NOT NULL default '0',
+  taxon_rank enum('','subspecies','species','subgenus','genus','subtribe','tribe','subfamily','family','superfamily','infraorder','suborder','order','superorder','infraclass','subclass','class','superclass','subphylum','phylum','superphylum','subkingdom','kingdom','superkingdom','unranked clade','informal') default NULL,
+  taxon_name varchar(80) NOT NULL default '',
+  type_taxon_no int(10) unsigned NOT NULL default '0',
+  type_specimen varchar(80) NOT NULL default '',
+  ref_is_authority varchar(4) NOT NULL default '',
+  author1init varchar(10) NOT NULL default '',
+  author1last varchar(80) NOT NULL default '',
+  author2init varchar(10) NOT NULL default '',
+  author2last varchar(80) NOT NULL default '',
+  otherauthors varchar(255) NOT NULL default '',
+  pubyr varchar(4) NOT NULL default '',
+  pages varchar(40) default NULL,
+  figures varchar(40) default NULL,
+  comments text NOT NULL,
+  created datetime NOT NULL default '0000-00-00 00:00:00',
+  modified timestamp(14) NOT NULL,
+  PRIMARY KEY  (taxon_no),
+  KEY reference_no (reference_no),
+  KEY taxon_name (taxon_name),
+  KEY type_taxon_no (type_taxon_no)
+) TYPE=MyISAM COMMENT='taxonomic names ';
+
+
+
+
+-- Table structure for table 'collections'
+--
+
+CREATE TABLE collections (
+  authorizer varchar(64) NOT NULL default '',
+  enterer varchar(64) NOT NULL default '',
+  modifier varchar(64) default NULL,
+  collection_no int(10) unsigned NOT NULL auto_increment,
+  collection_subset int(10) unsigned default NULL,
+  reference_no int(10) unsigned NOT NULL default '0',
+  collection_name varchar(80) NOT NULL default '',
+  collection_aka text,
+  country varchar(255) NOT NULL default '',
+  state varchar(255) default NULL,
+  county varchar(255) default NULL,
+  latdeg smallint(5) unsigned default NULL,
+  latmin smallint(5) unsigned default NULL,
+  latsec smallint(5) unsigned default NULL,
+  latdec varchar(10) default NULL,
+  latdir enum('North','South') default NULL,
+  lngdeg smallint(5) unsigned default NULL,
+  lngmin smallint(5) unsigned default NULL,
+  lngsec smallint(5) unsigned default NULL,
+  lngdec varchar(10) default NULL,
+  lngdir enum('East','West') default NULL,
+  latlng_basis enum('','stated in text','based on nearby landmark','based on political unit','estimated from map','unpublished field data') default NULL,
+  gps_datum enum('','NAD27 CONUS','NAD83','WGS72','WGS84') default NULL,
+  altitude_value int(11) default NULL,
+  altitude_unit enum('meters','feet') default NULL,
+  geogscale enum('small collection','outcrop','local area','basin') default NULL,
+  geogcomments text,
+  emlperiod_max enum('Late/Upper','Middle - Late/Upper','Middle','Early/Lower - Middle','Early/Lower') default NULL,
+  emlperiod_min enum('Late/Upper','Middle - Late/Upper','Middle','Early/Lower - Middle','Early/Lower') default NULL,
+  period_max enum('Modern','Quaternary','Tertiary','Cretaceous','Jurassic','Triassic','Permian','Carboniferous','Devonian','Silurian','Ordovician','Cambrian','Neoproterozoic') default NULL,
+  emlepoch_max enum('Late/Upper','Middle - Late/Upper','Middle','Early/Lower - Middle','Early/Lower') default NULL,
+  emlepoch_min enum('Late/Upper','Middle - Late/Upper','Middle','Early/Lower - Middle','Early/Lower') default NULL,
+  epoch_max varchar(255) default NULL,
+  epoch_min varchar(255) default NULL,
+  emlintage_max enum('Late/Upper','Middle - Late/Upper','Middle','Early/Lower - Middle','Early/Lower') default NULL,
+  intage_max varchar(255) default NULL,
+  emlintage_min enum('Late/Upper','Middle - Late/Upper','Middle','Early/Lower - Middle','Early/Lower') default NULL,
+  intage_min varchar(255) default NULL,
+  emllocage_max enum('Late/Upper','Middle - Late/Upper','Middle','Early/Lower - Middle','Early/Lower') default NULL,
+  locage_max varchar(255) default NULL,
+  emllocage_min enum('Late/Upper','Middle - Late/Upper','Middle','Early/Lower - Middle','Early/Lower') default NULL,
+  locage_min varchar(255) default NULL,
+  zone varchar(255) default NULL,
+  max_interval_no int(10) unsigned NOT NULL default '0',
+  min_interval_no int(10) unsigned NOT NULL default '0',
+  research_group set('ETE','marine invertebrate','PACED','paleobotany','paleoentomology','taphonomy','vertebrate') default NULL,
+  formation varchar(255) default NULL,
+  geological_group varchar(255) default NULL,
+  member varchar(255) default NULL,
+  localsection varchar(255) default NULL,
+  localbed varchar(255) default NULL,
+  localorder enum('bottom to top','top to bottom','no particular order') default NULL,
+  regionalsection varchar(255) default NULL,
+  regionalbed varchar(255) default NULL,
+  regionalorder enum('bottom to top','top to bottom','no particular order') default NULL,
+  stratscale enum('bed','group of beds','member','formation','group') default NULL,
+  stratcomments text,
+  lithdescript text,
+  lithadj set('lenticular','tabular','desiccation cracks','current ripples','dunes','hummocky CS','wave ripples','"cross stratification"','planar lamination','tool marks','flute casts','deformed bedding','grading','burrows','bioturbation','pedogenic','condensed','firmground','hardground','lag','argillaceous','micaceous','silty','sandy','conglomeratic','pebbly','very fine','fine','medium','coarse','very coarse','calcareous','carbonaceous','cherty/siliceous','concretionary','diatomaceous','dolomitic','ferruginous','glauconitic','gypsiferous','hematitic','pyritic','phosphatic','sideritic','tuffaceous','stromatolitic','volcaniclastic','flat-pebble','intraclastic','oncoidal','ooidal','peloidal','shelly/skeletal','black','brown','gray','green','red','red or brown','white','yellow','blue') default NULL,
+  lithification enum('lithified','poorly lithified','unlithified') default NULL,
+  lithology1 enum('"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate','"mixed carbonate-siliciclastic"','marl','lime mudstone','wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"','coal','peat','lignite','subbituminous coal','bituminous coal','anthracite','coal ball','tar','amber','chert','evaporite','phosphorite','ironstone','siderite','phyllite','slate','schist','quartzite','ash','tuff') default NULL,
+  fossilsfrom1 enum('Y') default NULL,
+  lithology2 enum('"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate','"mixed carbonate-siliciclastic"','marl','lime mudstone','wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"','coal','peat','lignite','subbituminous coal','bituminous coal','anthracite','coal ball','tar','amber','chert','evaporite','phosphorite','ironstone','siderite','phyllite','slate','schist','quartzite','ash','tuff') default NULL,
+  fossilsfrom2 enum('Y') default NULL,
+  environment enum('marine indet.','terrestrial indet.','carbonate indet.','peritidal','shallow subtidal indet.','open shallow subtidal','lagoonal/restricted shallow subtidal','sand shoal','reef, buildup or bioherm','deep subtidal ramp','deep subtidal shelf','deep subtidal indet.','offshore ramp','offshore shelf','offshore indet.','slope','basinal (carbonate)','marginal marine indet.','paralic indet.','estuarine/bay','lagoonal','coastal indet.','foreshore','shoreface','transition zone/lower shoreface','offshore','deltaic indet.','delta plain','interdistributary bay','delta front','prodelta','deep-water indet.','submarine fan','basinal (siliciclastic)','fluvial-lacustrine indet.','fluvial indet.','"channel"','channel lag','coarse channel fill','fine channel fill','"floodplain"','wet floodplain','dry floodplain','levee','crevasse splay','lacustrine indet.','lacustrine - large','lacustrine - small','pond','crater lake','karst indet.','fissure fill','cave','sinkhole','eolian indet.','dune','interdune','loess','fluvial-deltaic indet.','deltaic indet.','delta plain','interdistributary bay','alluvial fan','estuary','glacial','mire/swamp','spring','tar') default NULL,
+  tectonic_setting enum('rift','passive margin','back-arc basin','cratonic basin','deep ocean basin','forearc basin','foreland basin','intermontane basin','intramontane basin','piggyback basin','pull-apart basin','volcanic basin','impact basin','non-subsiding area') default NULL,
+  pres_mode set('body','cast','mold/impression','adpression','trace','concretion','soft parts','recrystallized','permineralized','dissolution traces','charcoalification','coalified','original aragonite','original calcite','original phosphate','original silica','original chitin','original carbon','original sporopollenin','original cellulose','replaced with calcite','replaced with dolomite','replaced with silica','replaced with pyrite','replaced with siderite','replaced with hematite','replaced with limonite','replaced with phosphate','replaced with carbon','replaced with other','amber','anthropogenic','bone collector','coprolite','midden') default NULL,
+  geology_comments text,
+  collection_type enum('archaeological','biostratigraphic','paleoecologic','taphonomic','taxonomic','general faunal/floral') default NULL,
+  collection_coverage set('all macrofossils','all microfossils','some genera','some macrofossils','some microfossils','species names','difficult macrofossils','ichnofossils') default NULL,
+  coll_meth set('field collection','observed (not collected)','survey of museum collection','bulk','core','salvage','selective quarrying','surface (float)','surface (in situ)','anthill','chemical','mechanical','peel or thin section','sieve','rock shop','library visit') default NULL,
+  collection_size mediumint(8) unsigned default NULL,
+  collection_size_unit enum('specimens','individuals') default NULL,
+  museum set('AMNH','BMNH','BPI','CAS','CIT','CM','DMNH','FMNH','GSC','LACM','MCZ','MfN','MNHN','NIGPAS','NMMNH','NYSM','OSU','OU','PIN','PRI','ROM','SDSM','SMF','TMM','UCM','UCMP','UF','UMMP','UNSM','USNM','UW','UWBM','YPM') default NULL,
+  collection_comments text,
+  taxonomy_comments text,
+  created datetime default NULL,
+  modified timestamp(14) NOT NULL,
+  release_date datetime default NULL,
+  access_level enum('the public','database members','group members','authorizer only') default NULL,
+  lithification2 enum('unlithified','poorly lithified','lithified','metamorphosed') default NULL,
+  lithadj2 set('lenticular','tabular','desiccation cracks','current ripples','dunes','hummocky CS','wave ripples','"cross stratification"','planar lamination','tool marks','flute casts','deformed bedding','grading','burrows','bioturbation','pedogenic','condensed','firmground','hardground','lag','argillaceous','micaceous','silty','sandy','conglomeratic','pebbly','very fine','fine','medium','coarse','very coarse','calcareous','carbonaceous','cherty/siliceous','concretionary','diatomaceous','dolomitic','ferruginous','glauconitic','gypsiferous','hematitic','pyritic','phosphatic','sideritic','tuffaceous','stromatolitic','volcaniclastic','flat-pebble','intraclastic','oncoidal','ooidal','peloidal','shelly/skeletal','black','brown','gray','green','red','red or brown','white','yellow','blue') default NULL,
+  period_min enum('Modern','Quaternary','Tertiary','Cretaceous','Jurassic','Triassic','Permian','Carboniferous','Devonian','Silurian','Ordovician','Cambrian','Neoproterozoic') default NULL,
+  otherenvironment varchar(255) default NULL,
+  rock_censused_unit enum('cm (line intercept)','cm2 (area)','cm3 (volume)','# of surfaces (quadrat)') default NULL,
+  rock_censused mediumint(8) unsigned default NULL,
+  spatial_resolution enum('autochthonous','parautochthonous','allochthonous') default NULL,
+  temporal_resolution enum('snapshot','time-averaged','condensed') default NULL,
+  feed_pred_traces set('drill holes','repair scars','fractures','punctures','tooth marks','gastric dissolution','burning','cutmarks','stone tools','external foliage feeding','arthropod mining','arthropod galling','arthropod boring','seed feeding','piercing/sucking','palynivory','oviposition') default NULL,
+  encrustation enum('none','occasional','frequent','extreme') default NULL,
+  bioerosion enum('none','occasional','frequent','extreme') default NULL,
+  fragmentation enum('none','occasional','frequent','extreme') default NULL,
+  sorting enum('very poor','poor','medium','well','very well') default NULL,
+  disassoc_minor_elems enum('none','some','many','all') default NULL,
+  disassoc_maj_elems enum('none','some','many','all') default NULL,
+  art_whole_bodies enum('none','some','many','all') default NULL,
+  disart_assoc_maj_elems enum('none','some','many','all') default NULL,
+  seq_strat enum('transgressive','regressive','transgressive systems tract','highstand systems tract','lowstand systems tract','parasequence boundary','transgressive surface','maximum flooding surface','sequence boundary') default NULL,
+  lagerstatten enum('conservation','concentrate') default NULL,
+  concentration enum('dispersed','','concentrated','-single event','-multiple events','-seasonal','-lag','-hiatal','-bonebed') default NULL,
+  orientation enum('life position','random','preferred') default NULL,
+  preservation_quality enum('excellent','good','medium','poor','variable') default NULL,
+  sieve_size_min decimal(6,3) default NULL,
+  sieve_size_max decimal(6,3) default NULL,
+  assembl_comps set('macrofossils','mesofossils','microfossils') default NULL,
+  taphonomy_comments text,
+  latdec_temp smallint(5) unsigned default NULL,
+  modified_temp datetime default NULL,
+  lngdec_temp smallint(5) unsigned default NULL,
+  PRIMARY KEY  (collection_no),
+  KEY reference_no (reference_no),
+  KEY collection_name (collection_name),
+  KEY authorizer (authorizer),
+  KEY enterer (enterer),
+  KEY country (country),
+  KEY state (state),
+  KEY county (county),
+  KEY formation (formation),
+  KEY period_max (period_max),
+  KEY period_min (period_min),
+  KEY lithology1 (lithology1),
+  KEY max_interval_no (max_interval_no),
+  KEY min_interval_no (min_interval_no)
+) TYPE=MyISAM;
+
+
+
+-- Table structure for table 'correlations'
+--
+
+CREATE TABLE correlations (
+  authorizer_no int(10) unsigned NOT NULL default '0',
+  enterer_no int(10) unsigned NOT NULL default '0',
+  modifier_no int(10) unsigned NOT NULL default '0',
+  correlation_no int(10) unsigned NOT NULL auto_increment,
+  reference_no int(10) unsigned NOT NULL default '0',
+  scale_no int(10) unsigned NOT NULL default '0',
+  interval_no int(10) unsigned NOT NULL default '0',
+  next_interval_no int(10) unsigned NOT NULL default '0',
+  max_interval_no int(10) unsigned NOT NULL default '0',
+  min_interval_no int(10) unsigned NOT NULL default '0',
+  lower_boundary decimal(7,3) unsigned default NULL,
+  corr_comments text NOT NULL,
+  created datetime NOT NULL default '0000-00-00 00:00:00',
+  modified timestamp(14) NOT NULL,
+  PRIMARY KEY  (correlation_no),
+  KEY reference_no (reference_no)
+) TYPE=MyISAM COMMENT='time scale correlations ';
+
+
+
+-- Table structure for table 'ecotaph'
+--
+
+CREATE TABLE ecotaph (
+  authorizer_no int(10) unsigned NOT NULL default '0',
+  enterer_no int(10) unsigned NOT NULL default '0',
+  modifier_no int(10) unsigned NOT NULL default '0',
+  ecotaph_no int(10) unsigned NOT NULL auto_increment,
+  reference_no int(10) unsigned NOT NULL default '0',
+  taxon_no int(10) unsigned NOT NULL default '0',
+  composition1 enum('','aragonite','"calcite"','high Mg calcite','low Mg calcite','hydroxyapatite','phosphatic','calcified cartilage','silica','agglutinated','chitin','lignin','"sclero-protein"','cutan/cutin','other','no hard parts') default NULL,
+  composition2 enum('','aragonite','"calcite"','high Mg calcite','low Mg calcite','hydroxyapatite','phosphatic','calcified cartilage','silica','agglutinated','chitin','lignin','"sclero-protein"','cutan/cutin','other') default NULL,
+  entire_body enum('','yes') default NULL,
+  body_part varchar(40) default NULL,
+  adult_length enum('','< 0.0001','0.0001 to 0.001','0.001 to 0.01','0.01 to 0.1','0.1 to < 1.0','1.0 to < 10','10 to < 100','100 to < 1000','1000 to < 10^4','10^4 to < 10^5','10^5 to < 10^6','10^6 to < 10^7','10^7 to < 10^8','10^8 to < 10^9','10^9 to < 10^10','10^10 to < 10^11','10^11 or more') default NULL,
+  adult_width enum('','< 0.0001','0.0001 to 0.001','0.001 to 0.01','0.01 to 0.1','0.1 to < 1.0','1.0 to < 10','10 to < 100','100 to < 1000','1000 to < 10^4','10^4 to < 10^5','10^5 to < 10^6','10^6 to < 10^7','10^7 to < 10^8','10^8 to < 10^9','10^9 to < 10^10','10^10 to < 10^11','10^11 or more') default NULL,
+  adult_height enum('','< 0.0001','0.0001 to 0.001','0.001 to 0.01','0.01 to 0.1','0.1 to < 1.0','1.0 to < 10','10 to < 100','100 to < 1000','1000 to < 10^4','10^4 to < 10^5','10^5 to < 10^6','10^6 to < 10^7','10^7 to < 10^8','10^8 to < 10^9','10^9 to < 10^10','10^10 to < 10^11','10^11 or more') default NULL,
+  adult_area enum('','< 0.0001','0.0001 to 0.001','0.001 to 0.01','0.01 to 0.1','0.1 to < 1.0','1.0 to < 10','10 to < 100','100 to < 1000','1000 to < 10^4','10^4 to < 10^5','10^5 to < 10^6','10^6 to < 10^7','10^7 to < 10^8','10^8 to < 10^9','10^9 to < 10^10','10^10 to < 10^11','10^11 or more') default NULL,
+  adult_volume enum('','< 0.0001','0.0001 to 0.001','0.001 to 0.01','0.01 to 0.1','0.1 to < 1.0','1.0 to < 10','10 to < 100','100 to < 1000','1000 to < 10^4','10^4 to < 10^5','10^5 to < 10^6','10^6 to < 10^7','10^7 to < 10^8','10^8 to < 10^9','10^9 to < 10^10','10^10 to < 10^11','10^11 or more') default NULL,
+  thickness enum('','thin','intermediate','thick') default NULL,
+  architecture enum('','porous','compact or dense') default NULL,
+  form enum('','sheet','blade','inflated sheet','inflated blade','roller-shaped','spherical') default NULL,
+  reinforcement enum('','no') default NULL,
+  folds enum('','none','minor','major') default NULL,
+  ribbing enum('','none','minor','major') default NULL,
+  spines enum('','none','minor','major') default NULL,
+  internal_reinforcement enum('','none','minor','major') default NULL,
+  polymorph enum('','yes') default NULL,
+  ontogeny set('','accretion','molting','addition of parts','modification of parts','replacement of parts') default NULL,
+  grouping enum('','colonial','gregarious','solitary') default NULL,
+  clonal enum('','yes') default NULL,
+  environment set('','hypersaline','marine','brackish','freshwater','terrestrial') default NULL,
+  locomotion enum('','stationary','facultatively mobile','passively mobile','actively mobile') default NULL,
+  attached enum('','yes') default NULL,
+  epibiont enum('','yes') default NULL,
+  life_habit enum('','boring','infaunal','semi-infaunal','epifaunal','nektobenthic','nektonic','planktonic','fossorial','ground dwelling','arboreal','volant','amphibious','herbaceous','arborescent','aquatic') default NULL,
+  diet1 enum('','chemoautotroph','"photoautotroph"','C3 autotroph','C4 autotroph','CAM autotroph','chemosymbiotic','photosymbiotic','herbivore','omnivore','carnivore','parasite','suspension feeder','deposit feeder','detritivore','saprophage','coprophage') default NULL,
+  diet2 enum('','chemoautotroph','"photoautotroph"','C3 autotroph','C4 autotroph','CAM autotroph','chemosymbiotic','photosymbiotic','herbivore','omnivore','carnivore','parasite','suspension feeder','deposit feeder','detritivore','saprophage','coprophage') default NULL,
+  reproduction enum('','oviparous','ovoviviparous','viviparous','alternating','homosporous','heterosporous','seeds','fruits') default NULL,
+  asexual enum('','yes') default NULL,
+  brooding enum('','yes') default NULL,
+  dispersal1 enum('','direct/internal','water','wind','animal') default NULL,
+  dispersal2 enum('','planktonic','non-planktonic','wind-dispersed','animal-dispersed','mobile','gravity') default NULL,
+  comments text NOT NULL,
+  created datetime NOT NULL default '0000-00-00 00:00:00',
+  modified timestamp(14) NOT NULL,
+  PRIMARY KEY  (ecotaph_no),
+  KEY authorizer_no (authorizer_no),
+  KEY enterer_no (enterer_no),
+  KEY modifier_no (modifier_no),
+  KEY reference_no (reference_no),
+  KEY taxon_no (taxon_no)
+) TYPE=MyISAM COMMENT='ecology/taphonomy';
+
+
+
+
+-- Table structure for table 'fivepct'
+--
+
+CREATE TABLE fivepct (
+  ref_no int(10) unsigned NOT NULL auto_increment,
+  title varchar(255) NOT NULL default '',
+  author varchar(255) NOT NULL default '',
+  pub text,
+  subjects text,
+  language varchar(20) default NULL,
+  status enum('unknown','junk','desirable','help','claimed','copied','discarded','entered') default NULL,
+  modified timestamp(14) NOT NULL,
+  modifier varchar(64) default NULL,
+  PRIMARY KEY  (ref_no)
+) TYPE=MyISAM;
+
+
+
+-- Table structure for table 'groups'
+--
+
+CREATE TABLE groups (
+  name varchar(40) default NULL,
+  group_name varchar(40) default NULL
+) TYPE=MyISAM;
+
+
+
+-- Table structure for table 'images'
+--
+
+CREATE TABLE images (
+  authorizer_no int(10) unsigned NOT NULL default '0',
+  enterer_no int(10) unsigned NOT NULL default '0',
+  reference_no int(10) unsigned default NULL,
+  image_no int(10) unsigned NOT NULL auto_increment,
+  taxon_no int(10) unsigned NOT NULL default '0',
+  created datetime default NULL,
+  path_to_image varchar(255) NOT NULL default '',
+  original_filename varchar(255) NOT NULL default '',
+  caption text,
+  file_md5_hexdigest varchar(32) NOT NULL default '',
+  PRIMARY KEY  (image_no),
+  KEY image_taxon_no (taxon_no),
+  KEY image_enterer_no (enterer_no),
+  KEY image_authorizer_no (authorizer_no),
+  KEY image_digest (file_md5_hexdigest)
+) TYPE=MyISAM;
+
+
+
+-- Table structure for table 'intervals'
+--
+
+CREATE TABLE intervals (
+  authorizer_no int(10) unsigned NOT NULL default '0',
+  enterer_no int(10) unsigned NOT NULL default '0',
+  modifier_no int(10) unsigned NOT NULL default '0',
+  eml_interval enum('','Late/Upper','late Late','middle Late','early Late','Middle','late Middle','middle Middle','early Middle','Early/Lower','late Early','middle Early','early Early') default NULL,
+  interval_no int(10) unsigned NOT NULL auto_increment,
+  reference_no int(10) unsigned NOT NULL default '0',
+  interval_name varchar(80) NOT NULL default '',
+  created datetime NOT NULL default '0000-00-00 00:00:00',
+  modified timestamp(14) NOT NULL,
+  PRIMARY KEY  (interval_no),
+  KEY reference_no (reference_no)
+) TYPE=MyISAM COMMENT='time intervals ';
+
+
+
+-- Table structure for table 'marinepct'
+--
+
+CREATE TABLE marinepct (
+  ref_no int(10) unsigned NOT NULL auto_increment,
+  title varchar(255) NOT NULL default '',
+  author varchar(255) NOT NULL default '',
+  pub text,
+  subjects text,
+  language varchar(20) default NULL,
+  status enum('unknown','junk','desirable','help','claimed','copied','discarded','entered') default NULL,
+  modified timestamp(14) NOT NULL,
+  modifier varchar(64) default NULL,
+  PRIMARY KEY  (ref_no)
+) TYPE=MyISAM;
+
+
+-- Table structure for table 'occurrences'
+--
+
+CREATE TABLE occurrences (
+  authorizer varchar(64) NOT NULL default '',
+  enterer varchar(64) NOT NULL default '',
+  modifier varchar(64) default NULL,
+  occurrence_no int(10) unsigned NOT NULL auto_increment,
+  collection_no int(10) unsigned NOT NULL default '0',
+  genus_reso enum('','aff.','cf.','ex gr.','n. gen.','?','"','informal','informal aff.','informal cf.') default NULL,
+  genus_name varchar(255) NOT NULL default '',
+  species_reso enum('','aff.','cf.','ex gr.','n. sp.','?','"','informal','informal aff.','informal cf.') default NULL,
+  species_name varchar(255) NOT NULL default '',
+  abund_value varchar(255) default NULL,
+  abund_unit varchar(20) default NULL,
+  reference_no int(10) unsigned NOT NULL default '0',
+  comments text,
+  created datetime default NULL,
+  modified timestamp(14) NOT NULL,
+  subgenus_reso enum('','aff.','cf.','ex gr.','n. subgen.','?','"','informal','informal aff.','informal cf.') default NULL,
+  subgenus_name varchar(255) default NULL,
+  plant_organ enum('','unassigned','leaf','seed/fruit','axis','plant debris','marine palyn','microspore','megaspore','flower','seed repro','non-seed repro','wood','sterile axis','fertile axis','root','cuticle','multi organs') default NULL,
+  plant_organ2 enum('','unassigned','leaf','seed/fruit','axis','plant debris','marine palyn','microspore','megaspore','flower','seed repro','non-seed repro','wood','sterile axis','fertile axis','root','cuticle') default NULL,
+  PRIMARY KEY  (occurrence_no),
+  KEY collection_no (collection_no),
+  KEY reference_no (reference_no),
+  KEY genus_name (genus_name),
+  KEY occurrences_species_name (species_name),
+  KEY occurrences_subgenus_name (subgenus_name)
+) TYPE=MyISAM;
+
+
+-- Table structure for table 'opinions'
+--
+
+CREATE TABLE opinions (
+  authorizer_no int(10) unsigned NOT NULL default '0',
+  enterer_no int(10) unsigned NOT NULL default '0',
+  modifier_no int(10) unsigned NOT NULL default '0',
+  opinion_no int(10) unsigned NOT NULL auto_increment,
+  reference_no int(10) unsigned NOT NULL default '0',
+  child_no int(10) unsigned NOT NULL default '0',
+  status enum('belongs to','recombined as','subjective synonym of','objective synonym of','homonym of','replaced by','corrected as','nomen dubium','nomen nudum','nomen oblitem','nomen vanum','revalidated') default NULL,
+  diagnosis text,
+  parent_no int(10) unsigned NOT NULL default '0',
+  ref_has_opinion varchar(4) default NULL,
+  author1init varchar(10) NOT NULL default '',
+  author1last varchar(80) NOT NULL default '',
+  author2init varchar(10) NOT NULL default '',
+  author2last varchar(80) NOT NULL default '',
+  otherauthors varchar(255) NOT NULL default '',
+  pubyr varchar(4) NOT NULL default '',
+  pages varchar(40) default NULL,
+  figures varchar(40) default NULL,
+  comments text NOT NULL,
+  created datetime NOT NULL default '0000-00-00 00:00:00',
+  modified timestamp(14) NOT NULL,
+  PRIMARY KEY  (opinion_no),
+  KEY parent_no (parent_no),
+  KEY child_no (child_no),
+  KEY reference_no (reference_no)
+) TYPE=MyISAM COMMENT='relationships between taxa';
+
+
+
+-- Table structure for table 'person'
+--
+
+CREATE TABLE person (
+  person_no int(10) unsigned NOT NULL auto_increment,
+  name varchar(64) NOT NULL default '',
+  reversed_name varchar(64) NOT NULL default '',
+  password varchar(13) default NULL,
+  plaintext varchar(20) default NULL,
+  email varchar(255) default NULL,
+  is_authorizer tinyint(1) NOT NULL default '0',
+  active tinyint(1) NOT NULL default '1',
+  marine_invertebrate tinyint(1) NOT NULL default '0',
+  PACED tinyint(1) default NULL,
+  paleobotany tinyint(1) NOT NULL default '0',
+  taphonomy tinyint(1) NOT NULL default '0',
+  vertebrate tinyint(1) NOT NULL default '0',
+  preferences text,
+  created datetime default NULL,
+  modified datetime default NULL,
+  last_action timestamp(14) NOT NULL,
+  superuser tinyint(1) default '0',
+  PRIMARY KEY  (person_no)
+) TYPE=MyISAM;
+
+
+-- Table structure for table 'refs'
+--
+
+CREATE TABLE refs (
+  authorizer varchar(64) NOT NULL default '',
+  enterer varchar(64) NOT NULL default '',
+  modifier varchar(64) default NULL,
+  reference_no int(10) unsigned NOT NULL auto_increment,
+  author1init varchar(10) default NULL,
+  author1last varchar(255) NOT NULL default '',
+  author2init varchar(10) default NULL,
+  author2last varchar(255) default NULL,
+  otherauthors varchar(255) default NULL,
+  pubyr varchar(4) NOT NULL default '',
+  reftitle text,
+  pubtitle text,
+  pubvol varchar(10) default NULL,
+  pubno varchar(10) default NULL,
+  firstpage varchar(10) default NULL,
+  lastpage varchar(10) default NULL,
+  created datetime default NULL,
+  created_backup datetime default NULL,
+  modified timestamp(14) NOT NULL,
+  publication_type enum('journal article','book/book chapter','Ph.D. thesis','M.S. thesis','abstract','unpublished','serial monograph','guidebook') default NULL,
+  comments text,
+  project_name set('ETE','5%','1%','PACED','PGAP') default NULL,
+  project_name_backup varchar(32) NOT NULL default '',
+  project_ref_no int(10) unsigned default NULL,
+  PRIMARY KEY  (reference_no),
+  KEY author1last (author1last),
+  KEY pubyr (pubyr)
+) TYPE=MyISAM;
+
+
+
+-- Table structure for table 'reidentifications'
+--
+
+CREATE TABLE reidentifications (
+  authorizer varchar(64) NOT NULL default '',
+  enterer varchar(64) NOT NULL default '',
+  modifier varchar(64) default NULL,
+  reid_no int(10) unsigned NOT NULL auto_increment,
+  occurrence_no int(10) unsigned NOT NULL default '0',
+  collection_no int(10) unsigned NOT NULL default '0',
+  reference_no int(10) unsigned NOT NULL default '0',
+  genus_reso enum('aff.','cf.','ex gr.','n. gen.','?','informal','informal aff.','informal cf.') default NULL,
+  genus_name varchar(255) NOT NULL default '',
+  species_reso enum('aff.','cf.','ex gr.','n. sp.','?','informal','informal aff.','informal cf.') default NULL,
+  species_name varchar(255) NOT NULL default '',
+  comments text,
+  created datetime default NULL,
+  modified timestamp(14) NOT NULL,
+  modified_temp datetime default NULL,
+  subgenus_reso enum('aff.','cf.','ex gr.','n. subgen.','?','informal','informal aff.','informal cf.') default NULL,
+  subgenus_name varchar(255) default NULL,
+  plant_organ enum('','unassigned','leaf','seed/fruit','axis','plant debris','marine palyn','microspore','megaspore','flower','seed repro','non-seed repro','wood','sterile axis','fertile axis','root','cuticle','multi organs') default NULL,
+  PRIMARY KEY  (reid_no),
+  KEY collection_no (collection_no),
+  KEY reference_no (reference_no),
+  KEY occurrence_no (occurrence_no)
+) TYPE=MyISAM;
+
+
+
+-- Table structure for table 'scales'
+--
+
+CREATE TABLE scales (
+  authorizer_no int(10) unsigned NOT NULL default '0',
+  enterer_no int(10) unsigned NOT NULL default '0',
+  modifier_no int(10) unsigned NOT NULL default '0',
+  scale_no int(10) unsigned NOT NULL auto_increment,
+  reference_no int(10) unsigned NOT NULL default '0',
+  scale_name varchar(80) NOT NULL default '',
+  continent enum('','global','Africa','Antarctica','Asia','Australia','Europe','New Zealand','North America','South America') default NULL,
+  basis enum('','archaeological','geomagnetic','paleontological') default NULL,
+  scale_rank enum('','period/system','subperiod/system','epoch/series','subepoch/series','age/stage','subage/stage','chron/zone') default NULL,
+  scale_comments text NOT NULL,
+  created datetime NOT NULL default '0000-00-00 00:00:00',
+  modified timestamp(14) NOT NULL,
+  PRIMARY KEY  (scale_no),
+  KEY reference_no (reference_no)
+) TYPE=MyISAM COMMENT='time scales ';
+
+
+-- Table structure for table 'secondary_refs'
+--
+
+CREATE TABLE secondary_refs (
+  collection_no int(10) unsigned NOT NULL default '0',
+  reference_no int(10) unsigned NOT NULL default '0',
+  PRIMARY KEY  (collection_no,reference_no),
+  KEY sec_ref_coll_no (collection_no),
+  KEY sec_ref_ref_no (reference_no)
+) TYPE=MyISAM;
+
+
+-- Table structure for table 'session_data'
+--
+
+CREATE TABLE session_data (
+  session_id varchar(30) NOT NULL default '',
+  authorizer varchar(64) NOT NULL default '',
+  enterer varchar(64) NOT NULL default '',
+  reference_no int(11) default NULL,
+  queue varchar(255) default NULL,
+  record_date timestamp(14) NOT NULL,
+  marine_invertebrate tinyint(1) default '0',
+  paleobotany tinyint(1) default '0',
+  taphonomy tinyint(1) default '0',
+  vertebrate tinyint(1) default '0',
+  superuser tinyint(1) default '0'
+) TYPE=MyISAM;
+
+
+-- Table structure for table 'statistics'
+--
+
+CREATE TABLE statistics (
+  statistics_no int(11) NOT NULL auto_increment,
+  reference_total int(11) default '0',
+  collection_total int(11) default '0',
+  occurrence_total int(11) default '0',
+  enterer_total int(11) default '0',
+  record_date timestamp(14) NOT NULL,
+  PRIMARY KEY  (statistics_no)
+) TYPE=MyISAM;
+
