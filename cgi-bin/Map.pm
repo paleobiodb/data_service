@@ -770,15 +770,16 @@ sub mapDrawMap{
 		) {
 
       $lngoff = $coll{'lngdeg'};
+      # E/W modification appears unnecessary, but code is here just in case
       if ( $coll{'lngdir'} eq "East" )	{
-        $lngoff = $lngoff + 0.5;
+        $lngoff = $lngoff + 0.0;
       } elsif ( $coll{'lngdir'} eq "West" )	{
-        $lngoff = $lngoff - 0.5;
+        $lngoff = $lngoff - 0.0;
       }
       $latoff = $coll{'latdeg'};
       $lathalf = "";
       # doubles the number of point rows latitudinally
-      if ( $coll{'latmin'} >= 30 || $coll{'latdec'} =~ /[^5-9]/ )	{
+      if ( $coll{'latmin'} >= 30 || $coll{'latdec'} =~ /^[5-9]/ )	{
         $latoff = $latoff + 0.5;
         $lathalf = ".5";
       }
@@ -1058,7 +1059,8 @@ sub mapDrawMap{
 
 	# Write this to a file, not stdout
 	open(MAPOUT,">$GIF_DIR/$htmlname") or die "couldn't open $GIF_DIR/$htmlname ($!)";
-	print MAPOUT "<table>\n<tr>\n<td>\n<map name=\"PBDBmap\">\n";
+
+	print MAPOUT "<table><tr><td>\n<map name=\"PBDBmap\">\n";
 
  # draw coastlines
  # first rescale the coordinates depending on the rotation
@@ -1487,44 +1489,103 @@ if ( $q->param('gridposition') ne "in back" )	{
 
   close GIF;
 
-  print MAPOUT "</map>\n";
-  print MAPOUT "</table>\n";
-  print MAPOUT "<table cellpadding=10 width=100%>\n";
-  print MAPOUT "<tr><td align=center><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
-  print MAPOUT "</table>\n";
+	# make clickable background rectangles for repositioning the map
 
-  if(!$q->param("taxon_info_script")){
-	  print MAPOUT "<center>\n<table><tr>\n";
+	# need a list of possible parameters
+	my @params = ('research_group', 'authorizer', 'enterer', 'modified_since', 'date', 'month', 'year', 'country', 'state', 'interval_name', 'formation', 'lithology1', 'environment', 'taxon_rank', 'genus_name', 'pointsize', 'dotcolor', 'pointshape', 'dotborder', 'mapsearchfields2', 'mapsearchterm2', 'pointsize2', 'dotcolor2', 'pointshape2', 'dotborder2', 'mapsearchfields3', 'mapsearchterm3', 'pointsize3', 'dotcolor3', 'pointshape3', 'dotborder3', 'mapsearchfields4', 'mapsearchterm4', 'pointsize4', 'dotcolor4', 'pointshape4', 'dotborder4', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'coastlinecolor', 'borderlinecolor', 'usalinecolor');
+
+	my $clickstring = "$BRIDGE_HOME?action=displayMapResults";
+	for $p ( @params )	{
+		if ( $q->param($p) )	{
+			$clickstring .= "&" . $p . "=" . $q->param($p);
+		}
+	}
+	for my $i ( 1..10 )	{
+		for my $j ( 1..10 )	{
+			my $xbot = ( $i - 1 ) / 10 * $width;
+			my $xtop = $i / 10 * $width;
+			my $ybot = ( $j - 1 ) / 10 * $height;
+			my $ytop = $j / 10 * $height;
+			$newlng = int($midlng + ( ( 360 / $scale ) * ( $i - 5 ) / 10 ));
+			$newlat = int($midlat - ( ( 180 / $scale ) * ( $j - 5 ) / 10 ));
+			$latlngstring = "&maplng=" . $newlng;
+			$latlngstring .= "&maplat=" . $newlat;
+			# need this because mapscale is varied for the "Zoom"
+			#  buttons below
+			$latlngstring .= "&mapscale=" . $scale;
+			print MAPOUT "<area shape=\"rect\" coords=\"" . $xbot . "," . $ybot . "," . $xtop . "," . $ytop . "\" href=\"" , $clickstring , $latlngstring , "\">\n";
+		}
+	}
+
+	print MAPOUT "</map>\n";
+	print MAPOUT "</table>\n";
+
+	print MAPOUT "<table cellpadding=0 width=100%>\n<tr>\n";
+	print MAPOUT "<td valign=\"top\">\n";
+	print MAPOUT "<table cellpadding=0 cellspacing=1><tr>\n<td align=\"right\" valign=\"top\" bgcolor=\"black\">\n";
+	print MAPOUT "<table cellpadding=5 cellspacing=1>\n";
+	if(!$q->param("taxon_info_script")){
+	  print MAPOUT "<tr><td width=110 valign=\"top\" bgcolor=\"white\" class=\"small\">";
 	  if ($matches > 1)	{
-		print MAPOUT "<td class=\"large\"><b>$matches collections fall ";
+		print MAPOUT "<b>$matches&nbsp;collections</b> fall ";
 	  }
 	  elsif ($matches == 1)	{
-		print MAPOUT "<td class=\"large\"><b>Exactly one collection falls ";
+		print MAPOUT "<b>Exactly&nbsp;one collection</b> falls ";
 	  }
 	  else	{
 		# PM 09/13/02 Added bit about missing lat/long data to message
-		print MAPOUT "<td class=\"large\"><b>Sorry! Either the collections were missing lat/long data, or no collections fall ";
+		print MAPOUT "<b>Sorry!</b> Either the collections were missing lat/long data, or no collections fall ";
 	  }
-	  print MAPOUT "within the mapped area, have lat/long data, and matched your query.";
+	  print MAPOUT "within the mapped area, have lat/long data, and matched your query";
 	  #if ($searchstring ne "")	{
 	  #  $searchstring =~ s/_/ /g;
 	  #  print " \"<i>$searchstring</i>\"";
 	  #}
-	  print MAPOUT "</b></td></tr></table>\n";
-  }
+	  print MAPOUT "</td>\n";
+	}
+
   if ($dotsizeterm eq "proportional")	{
+	  print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
     print MAPOUT "<br>Sizes of $dotshape are proportional to counts of collections at each point.\n"
+	 # print MAPOUT "</td></tr>\n";
   }
 
-  print MAPOUT "<p>You may download the image in ";
-  print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
-  print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">PNG</a></b>, ";
-  print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
-  print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format</p>\n";
+	print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
+	print MAPOUT "You may download the image in ";
+	print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
+	print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">PNG</a></b>, ";
+	print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
+	print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format\n";
+	print MAPOUT "</td></tr>\n";
 
-  unless($q->param("taxon_info_script") eq "yes"){
-	  print MAPOUT "</font><p>\n<hr><p><b><a href='?action=displayMapForm'>Search&nbsp;again</a></b></p>\n";
-  }
+	print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
+	print MAPOUT "Click on a point to recenter the map\n";
+	print MAPOUT "</td></tr>\n";
+
+	unless($q->param("taxon_info_script") eq "yes"){
+		$clickstring .= "&maplng=" . $midlng;
+		$clickstring .= "&maplat=" . $midlat;
+
+		print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
+		$temp = $clickstring . "&mapscale=" . ( $scale + 2 );
+		print MAPOUT "<p class=\"large\"><b><a href=\"$temp\">Zoom&nbsp;in</a></b></p>\n";
+		print MAPOUT "</td></tr>\n";
+
+		print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
+		$temp = $clickstring . "&mapscale=" . ( $scale - 2 );
+		print MAPOUT "<p class=\"large\"><b><a href=\"$temp\">Zoom&nbsp;out</a></b></p>\n";
+		print MAPOUT "</td></tr>\n";
+
+		print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
+		print MAPOUT "<p class=\"large\"><b><a href='?action=displayMapForm'>Search&nbsp;again</a></b></p>\n";
+		print MAPOUT "</td></tr>\n";
+	}
+	print MAPOUT "</tr></table>\n";
+	print MAPOUT "</td></tr></table>\n";
+	print MAPOUT "</td>\n";
+
+  print MAPOUT "<td align=center><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
+  print MAPOUT "</table>\n";
 
   print MAPOUT "</center>";
   close MAPOUT;
