@@ -3109,15 +3109,19 @@ sub buildTaxonomicList {
 			# If the authority is a PBDB ref, retrieve and print it
 				my $sql = "SELECT * FROM authorities WHERE taxon_no=" . $rowref->{taxon_no};
 				my %taxData = %{@{$dbt->getData($sql)}[0]};
-				if ( $taxData{'ref_is_authority'} )	{
-					$sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=";
-					$sql .= $taxData{'reference_no'};
-					my %refRow = %{@{$dbt->getData($sql)}[0]};
-					$rowref->{authority} = formatShortRef( \%refRow );
-				}
+			# JA 23.4.04: don't do this is the species name looks
+			#  like a species but the taxon's rank is not species
+				if ( $rowref->{species_name} =~ /(indet\.)|(sp\.)/ || $taxData{taxon_rank} eq "species" )	{
+					if ( $taxData{'ref_is_authority'} )	{
+						$sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=";
+						$sql .= $taxData{'reference_no'};
+						my %refRow = %{@{$dbt->getData($sql)}[0]};
+						$rowref->{authority} = formatShortRef( \%refRow );
+					}
 				# Otherwise, use what authority info can be found
-				else	{
-					$rowref->{authority} = formatShortRef( \%taxData );
+					else	{
+						$rowref->{authority} = formatShortRef( \%taxData );
+					}
 				}
 			}
 
@@ -3474,17 +3478,21 @@ sub getReidHTMLTableByOccNum {
 		my $authority = "";
 		if ( $row[-1] )	{
 		# If the authority is a PBDB ref, retrieve and print it
+		# JA 23.4.04: don't do this is the species name (column 5) looks
+		#  like a species but the taxon's rank is not species
 			my $sql = "SELECT * FROM authorities WHERE taxon_no=" . $row[-1];
 			my %taxData = %{@{$dbt->getData($sql)}[0]};
-			if ( $taxData{'ref_is_authority'} )	{
-				$sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=";
-				$sql .= $taxData{'reference_no'};
-				my %refRow = %{@{$dbt->getData($sql)}[0]};
-				$authority = formatShortRef( \%refRow );
-			}
+			if ( $row[5] =~ /(indet\.)|(sp\.)/ || $taxData{taxon_rank} eq "species" )	{
+				if ( $taxData{'ref_is_authority'} )	{
+					$sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=";
+					$sql .= $taxData{'reference_no'};
+					my %refRow = %{@{$dbt->getData($sql)}[0]};
+					$authority = formatShortRef( \%refRow );
+				}
 			# Otherwise, use what authority info can be found
-			else	{
-				$authority = formatShortRef( \%taxData );
+				else	{
+					$authority = formatShortRef( \%taxData );
+				}
 			}
 		}
 
