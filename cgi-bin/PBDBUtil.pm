@@ -486,16 +486,9 @@ sub new_search_recurse{
                    "AND opinions.child_no=".$child->{child_no};
             # go back up and check each child's parent(s)
             @other_results = @{$dbt->getData($sql)};
-            my $most_recent = 0;
             # find the most recent parent
-            foreach my $parent (@other_results){
-                #print "\tchild's parent: ".$parent->{parent_no};
-                # Get the pubyr for each parent from the authorities table
-                $parent->{pubyr} = get_real_pubyr($dbt,$parent);
-                if($parent->{pubyr} > $most_recent){
-                    $most_recent = $parent->{pubyr};
-                }
-            }
+            my $index = TaxonInfo::selectMostRecentParentOpinion($dbt, \@other_results , 1);
+            my $most_recent = $other_results[$index]->{pubyr};
 			## if this is the very first original seed, all children are good,
             # so don't do a pubyr check.
             if($first_time){
