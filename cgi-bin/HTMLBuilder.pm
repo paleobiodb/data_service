@@ -175,6 +175,11 @@ sub populateHTML
   foreach my $fieldName (@fieldNames)
   {
     my $val = $row[$fieldNum];
+
+	# insert spaces after commas for the lithadj* set members:0
+	if($fieldName =~ /lithadj*/){ 
+		$val =~ s/,/, /g;	
+	}
     
 	my @split_val = split(/(<.*?>)/,$val);
 	foreach my $token (@split_val){
