@@ -105,7 +105,7 @@ sub processPersonEdit {
 sub displayPersonList {
 
 	print $hb->getTemplateString ( "std_page_top" );
-	print createList ( "person", 1, "reversed_name" );
+	print createList( "person", 1, "reversed_name" );
 	
 }
 
@@ -124,6 +124,7 @@ sub createList {
 	@fieldNames = @{$sth->{NAME}};
 
 	my $columns = @fieldNames;
+
 
 	# column names
 	$return .= "<table border=0 cellpadding=4 cellspacing=1 bgcolor='Silver'>\n";
