@@ -1,59 +1,59 @@
-<html>
-  <head>
-    <title id="title">Paleobiology Database</title>
-  </head>
-<body bgcolor="white" background="http://paleodb.org/public/PDbg.gif" vlink="#5522FF" alink="#00AAFF" link="#0033FF">
-<table border=0>
-  <tr>
-    <td width=650>
-<FORM method="POST" action=""><input type=hidden name="action" value=""><hr>For a <b>new</b> reference you must fill out the remaining fields.
-Use the following format:<br><font size=-1><i><b>INITALS:</b> J. Q.<b> LAST NAME:</b> Doe<b> YEAR:</b> 1984 <b>TITLE:</b> A new species of ammonite from the North Horn Formation of Utah <b>SERIAL:</b> Bulletin of the Southern California Academy of Sciences <b>VOLUME:</b> 34 <b>NUMBER:</b> 2 <b>FIRST PAGE:</b> 113 <b>LAST PAGE:</b> 118</i><p></font>
+	<script language="JavaScript">
+	<!-- Begin
+	function tipsPopup (URL) {
+		window.open(URL, 'tips', 'toolbar=1,scrollbars=1,location=1,statusbar=0,menubar=0,resizable=1,width=640,height=480');
+	}
 
-<input id="reference_no" type=hidden name="reference_no">
-<input type="hidden" name="authorizer" value="J. Alroy">
-<input type="hidden" name="enterer" value="J. Alroy">
+	//  End -->
+	</script>
+
+<p>Use this format:<br><font size=-1><i><b>INITALS:</b> J. Q.<b> LAST NAME:</b> Doe<b> YEAR:</b> 1984 <b>TITLE:</b> A new species of ammonite from the North Horn Formation of Utah <b>SERIAL:</b> Bulletin of the Southern California Academy of Sciences <b>VOLUME:</b> 34 <b>NUMBER:</b> 2 <b>FIRST PAGE:</b> 113 <b>LAST PAGE:</b> 118</i></p></font>
+<p>If you need help, please consult the <a href="javascript:tipsPopup('/public/tips/ref_tips.html')">tip sheet</a>.</p>
+
+<center>
+<table border=1><tr><td>
 <table>
   <tr>
     <td><font color="#FF0000"><b>First author: </font></b></td>
-    <td><font color="#FF0000"><b>initials:</font></b> <input id="author1init" name=author1init size=8 value=""></td>
-    <td><font color="#FF0000"><b>Last name:</font> <input id="author1last" name=author1last size=20 value=></td>
+    <td><font color="#FF0000"><b>initials</font></b> <input id="author1init" name=author1init size=8 value="" maxlength=10></td>
+    <td><font color="#FF0000"><b>last name</font> <input id="author1last" name=author1last size=20 value=""  maxlength=255></td>
   </tr>
   <tr>
-    <td>Second author: <td>initials: <input id="author2init" name=author2init size=8 value=""></td>
-    <td>Last name: <input id="author2last" name=author2last size=20 value=""></td>
+    <td>Second author: <td>initials <input id="author2init" name=author2init size=8 value="" maxlength=10></td>
+    <td>last name <input id="author2last" name=author2last size=20 value="" maxlength=255></td>
   </tr>
 </table>
-Initials and names of additional authors:<br><textarea id="otherauthors" name=otherauthors rows=5 cols=60 wrap=virtual></textarea><p>
-<font color="#FF0000"><b>Publication year:</font></b> <input id="pubyr" name=pubyr size=5 value=""><br>
+Initials and names of additional authors:<br><textarea id="otherauthors" name=otherauthors rows=3 cols=60 wrap=virtual></textarea><p>
 <TABLE border=0>
   <tr>
-    <td>Publication type: </td>
-    <td>
-			<select name="publication_type"><option><option>journal article<option>book/book chapter<option>Ph.D. thesis<option>M.S. thesis<option>abstract<option>unpublished<option>serial monograph<option>guidebook</select>
-	  </td>
+    <td><font color="#FF0000"><b>Publication year:</font></b> </td>
+    <td><input id="pubyr" name=pubyr size=5 value="" maxlength=4><br> </td>
+    <td>Project code: <input id="project_name" name="project_name" type=checkbox value="ETE">ETE <input id="project_name" name="project_name" type=checkbox value="5%">5% </td> <tr>
+    <td><font color="#FF0000"><b>Publication type:</font></b> </td>
+    <td><select id="publication_type"></select> </td>
+    <td>Project ref number: <input id="project_ref_no" name=project_ref_no size=5> </td>
   </tr>
 </TABLE>
 <table>
   <tr>
-		<td valign=top><font color="#FF0000"><b>Title:</font></b><br><textarea id="reftitle" name=reftitle rows=2 cols=60 wrap=virtual></textarea><br></td>
+		<td valign=top><font color="#FF0000"><b>Title:</font></b><br><textarea id="reftitle" name="reftitle" rows="4" cols="60" wrap="virtual"></textarea><br></td>
   <tr>
-		<td valign=top>Full name of serial:<br><textarea id="pubtitle" name=pubtitle rows=2 cols=60 wrap=virtual></textarea><br></td>
+		<td valign=top>Select the serial's name:<br><select id="pubtitle_pulldown" name="pubtitle_pulldown"><option><option>Acta Palaeontologica Polonica<option>Alcheringa<option>Ameghiniana<option>American Journal of Botany<option>American Journal of Physical Anthropology<option>American Journal of Science<option>American Museum Novitates<option>Annals of Carnegie Museum<option>Botanical Journal of the Linnean Society<option>Breviora<option>Bulletin of the American Museum of Natural History<option>Bulletin of the Museum of Comparative Zoology<option>Canadian Journal of Earth Sciences<option>Cretaceous Research<option>Geobios<option>Geological Society America Bulletin<option>Geological Society of America Special Paper<option>Geology<option>International Journal of Plant Sciences<option>Journal of Geology<option>Journal of Human Evolution<option>Journal of Mammalogy<option>Journal of Paleontology<option>Journal of Vertebrate Paleontology<option>Lethaia<option>Nature<option>The Palaeobotanist<option>Palaeogeography, Palaeoclimatology, Palaeoecology<option>Palaeontographica Abteilung A<option>Palaeontographica Abteilung B<option>Palaeontologische Zeitschrift<option>Palaeontology<option>Palaios<option>PaleoBios<option>Paleontological Journal<option>Paludicola<option>Postilla<option>Proceedings of the National Academy of Sciences<option>Quaternary Research<option>Review of Palaeobotany and Palynology<option>Science<option>Tertiary Research<option>Transactions of the Royal Society of Edinburgh<option>United States Geological Survey Bulletin<option>United States Geological Survey Professional Paper<option>University of California Publications in Geological Sciences<option>Vertebrata PalAsiatica</select><br>... or enter the full name of the serial or book here:<br><textarea id="pubtitle" name="pubtitle" rows="3" cols="60" wrap="virtual"></textarea><br></td>
 	</tr>
 </table>
 <table>
   <tr>
-    <td>Volume: <input id="pubvol" name=pubvol size=4 value=""></td>
-    <td>Number: <input id="pubno" name=pubno size=3 value=""></td>
-    <td>First page: <input id="firstpage" name=firstpage size=4 value=""></td>
-    <td>Last page: <input id="lastpage" name=lastpage size=4 value=""></td>
+    <td>Volume: <input id="pubvol" name=pubvol size=4 value="" maxlength=10></td>
+    <td>Number: <input id="pubno" name=pubno size=3 value="" maxlength=10></td>
+    <td>Page numbers: <input id="firstpage" name=firstpage size=4 value="" maxlength=10></td>
+    <td>- <input id="lastpage" name=lastpage size=4 value="" maxlength=10></td>
   </tr>
 </table>
-
+<table>
+  <tr>
+    <td valign=top>Comments:<br><textarea id="comments" name="comments" rows="4" cols="60" wrap="virtual"></textarea></td>
+  </tr>
+</table>
+</table>
 <input type=submit value="Submit">
-</form>
-    </td>
-  </tr>
-</table>
-
-</body>
-</html>
+</center>
