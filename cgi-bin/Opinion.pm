@@ -269,10 +269,12 @@ sub displayOpinionForm {
             
             $fields{'child_no'} = $dbFieldsRef->{'child_no'};
 
-			$fields{'2nd_pages'} = $fields{'pages'};
-			$fields{'2nd_figures'} = $fields{'figures'};
-			$fields{'pages'} = '';
-			$fields{'figures'} = '';
+            if ($fields{'ref_has_opinion'} !~ /YES/i) {
+                $fields{'2nd_pages'} = $fields{'pages'};
+                $fields{'2nd_figures'} = $fields{'figures'};
+                $fields{'pages'} = '';
+                $fields{'figures'} = '';
+            }
 
             # if its from the DB, populate appropriate form vars
             for (@valid) { 
@@ -428,16 +430,15 @@ sub displayOpinionForm {
 	#  numbers, make a pulldown menu listing the taxa JA 25.4.04
 	my $pulldown;
 	if ( scalar(@parent_nos) > 1) {
-#		$pulldown = '<select name="parent_no" onChange=\'if (this.selectedIndex == 0) { alert("Is zero"); }\'>';
         $pulldown .= qq|<input type="radio" name="parent_no" value=""> \nOther: <input type="text" name="belongs_to_parent" value=""><br>\n|;
 	    my %classification=%{Classification::get_classification_hash($dbt,"parent",\@parent_nos)};
         foreach my $parent_no (@parent_nos) {
 			my %auth = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$parent_no)};
             my $selected = ($fields{'parent_no'} == $parent_no) ? "CHECKED" : "";
-#			$pulldown .= "<option value='$parent_no' $selected>$parentName, $auth{author1last} $auth{pubyr} [$classification{$parent_no}]</option>\n";
-			$pulldown .= qq|<input type="radio" name="parent_no" $selected value='$parent_no'> $parentName, $auth{author1last} $auth{pubyr} [$classification{$parent_no}]<br>\n|;
+            my $pub_info = "$auth{author1last} $auth{pubyr}";
+            $pub_info = ", ".$pub_info if ($pub_info !~ /^\s*$/);
+			$pulldown .= qq|<input type="radio" name="parent_no" $selected value='$parent_no'> ${parentName}$pub_info [$classification{$parent_no}]<br>\n|;
         }
-#		$pulldown .= "</select>\n";
 	}
 
     # Each of the 'taxon_status' row options
@@ -710,7 +711,9 @@ sub submitOpinionForm {
 			if ($pubyr > $ref->pubyr()) {
 				$errors->add("The publication year ($pubyr) can't be more recent than that of the primary reference (" . $ref->pubyr() . ")");
 			}
-		}
+		} else {
+            $errors->add("A publication year is required.");
+        }
 	} else {
 		# if they chose ref_has_opinion, then we also need to make sure that there
 		# are no other opinions about the current taxon (child_no) which use 
@@ -1025,17 +1028,27 @@ sub submitOpinionForm {
 		
 		($code, $resultOpinionNumber) = $dbt->insertNewRecord('opinions', \%fieldsToEnter);
 		
-		# At this point, *if* the status of the new opinion was 'recombined as',
-		# migrated opinions to the original combination.
 		if ($code && ($fieldsToEnter{'status'} =~ /recombined as|corrected as|rank changed as/)) { 
+		    # At this point, *if* the status of the new opinion was 'recombined as',
+		    # migrated opinions to the original combination.
             if ($fieldsToEnter{'child_no'} && $fieldsToEnter{'parent_no'}) {
                 my $rsql = "UPDATE opinions SET child_no=$fieldsToEnter{child_no} WHERE child_no=$fieldsToEnter{parent_no}";
-                main::dbg("Move opinions sql: $rsql");;
+                main::dbg("Move opinions to point FROM: $rsql");;
                 my $return = $dbt->getData($rsql);
                 if (!$return) {
                     carp "Failed to move opinions off of recombined|corrected as|rank changed as taxon ($fieldsToEnter{parent_no} to original combination ($fieldsToEnter{child_no}) for opinion no $code";
                 }
             }
+            # Secondly, opinions must point to the original combination as well
+            if ($fieldsToEnter{'child_no'} && $fieldsToEnter{'parent_no'}) {
+                my $rsql = "UPDATE opinions SET parent_no=$fieldsToEnter{child_no} WHERE parent_no=$fieldsToEnter{parent_no} AND child_no != $fieldsToEnter{child_no}";
+                main::dbg("Move opinions to point TO: $rsql");;
+                my $return = $dbt->getData($rsql);
+                if (!$return) {
+                    carp "Failed to move opinions to point to original comb ($fieldsToEnter{child_no} that pointed to recomb name ($fieldsToEnter{parent_no}) for opinion no $code";
+                }
+            }
+            
 		}	
 	} else {
 		# if it's an old entry, then we'll update.
@@ -1131,7 +1144,7 @@ sub displayOpinionChoiceForm{
 
         if ($orig_child_no!= $q->param('taxon_no')) {
             my $t2 = Taxon->new();
-            $t2->setWithTaxonNumber($q->param('child_no'));
+            $t2->setWithTaxonNumber($q->param('taxon_no'));
             print "<I>(Recombination of ".$t2->taxonNameHTML().")</I><BR>";
         }
         print "<BR>"; 
