@@ -46,7 +46,7 @@ $csv = Text::CSV_XS->new();
 my $exec_url = $q->url();
 
 # Make the HTMLBuilder object
-my $b = HTMLBuilder->new( $TEMPLATE_DIR, $dbh, $exec_url );
+my $hbo = HTMLBuilder->new( $TEMPLATE_DIR, $dbh, $exec_url );
 
 # Figure out the action
 my $action = $q->param("action");
@@ -94,7 +94,7 @@ LOGIN: {
 		$cookie = $s->processGuestLogin ( $dbh, $q ); 
 		print $q->header(	-type => "text/html", -cookie => $cookie, -expires =>"now" );
 		# Change the HTMLBuilder object
-		$b = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
+		$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
 		last;
 	}
 
@@ -109,7 +109,7 @@ LOGIN: {
 				$cookie = '';
 				last;
 			} else	{
-				$b = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
+				$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
 			}
 		}
 		# Print an HTTP header
@@ -228,7 +228,7 @@ sub displayLoginPage {
 	my $authorizer = $q->cookie("authorizer");
 	my $enterer = $q->cookie("enterer");
 	my $destination = $q->param("destination");
-    my $html = $b->getTemplateString ('login_box');
+    my $html = $hbo->getTemplateString ('login_box');
 
 	# Authorizer
 	buildAuthorizerPulldown ( \$html, $authorizer, 1 );
@@ -271,7 +271,7 @@ sub displayPreferencesPage	{
 
 	# Show the preferences entry page
     print &stdIncludes ( "std_page_top" );
-	print $b->populateHTML('preferences', \@rowData, \@fieldNames);
+	print $hbo->populateHTML('preferences', \@rowData, \@fieldNames);
     print &stdIncludes ("std_page_bottom");
 	exit;
 }
@@ -525,9 +525,9 @@ sub displayMenuPage	{
 	}
 	print &stdIncludes ("std_page_top");
 	if ($s->get('enterer') =~ /(J. Alroy)|(M. Kosnik)/ )	{
-		print $b->populateHTML('menu.test', \@rowData, \@fieldNames);
+		print $hbo->populateHTML('menu.test', \@rowData, \@fieldNames);
 	} else	{
-		print $b->populateHTML('menu', \@rowData, \@fieldNames);
+		print $hbo->populateHTML('menu', \@rowData, \@fieldNames);
 	}
 	print &stdIncludes ("std_page_bottom");
 
@@ -572,7 +572,7 @@ sub displayHomePage {
 
 
 	print &stdIncludes ("std_page_top");
-	print $b->populateHTML('home', \@rowData, \@fieldNames);
+	print $hbo->populateHTML('home', \@rowData, \@fieldNames);
 	print &stdIncludes ("std_page_bottom");
 }
 
@@ -595,7 +595,7 @@ sub displayMapForm {
 
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-    my $html = $b->populateHTML ('map_form', \@row, \@fieldNames, \@prefkeys);
+    my $html = $hbo->populateHTML ('map_form', \@row, \@fieldNames, \@prefkeys);
 	buildAuthorizerPulldown ( \$html );
 
 	my $authorizer = $s->get("authorizer");
@@ -619,7 +619,7 @@ sub displayMapResults {
 
 sub displayDownloadForm {
 	print &stdIncludes ( "std_page_top" );
-	print $b->populateHTML( 'download_form', '', [ 'country' ] );
+	print $hbo->populateHTML( 'download_form', '', [ 'country' ] );
 	print &stdIncludes ("std_page_bottom");
 }
 
@@ -676,7 +676,7 @@ sub displayPage {
 	if ( $page !~ /\.eps$/ && $page !~ /\.gif$/ )	{
 		print &stdIncludes ( "std_page_top" );
 	}
-	print $b->populateHTML( $page );
+	print $hbo->populateHTML( $page );
 	if ( $page !~ /\.eps$/ && $page !~ /\.gif$/ )	{
 		print &stdIncludes ("std_page_bottom");
 	}
@@ -700,7 +700,7 @@ sub stdIncludes {
 		$enterer = "none";
 	}
 
-	return $b->populateHTML (	$page, 
+	return $hbo->populateHTML (	$page, 
 								[ $reference, $enterer ], 
 								[ "%%reference%%", "%%enterer%%" ] );
 }
@@ -744,7 +744,7 @@ sub displaySearchRefs {
 	print &stdIncludes ( "std_page_top" );
 	my $html = &stdIncludes ( "js_pulldown_me" );
 
-	$html .= $b->populateHTML("search_refs_form", \@row, \@fields);
+	$html .= $hbo->populateHTML("search_refs_form", \@row, \@fields);
 	buildAuthorizerPulldown ( \$html, $authorizer, 1 );
 	my $enterer = $s->get("enterer");
 	$html =~ s/%%enterer%%/$enterer/;
@@ -972,12 +972,12 @@ sub displayRefAdd
 				"<p>If the reference is <b>new</b>, please fill out the following form.</p>" );
 
 	print &stdIncludes ( "std_page_top" );
-	print $b->populateHTML('js_reference_checkform');
+	print $hbo->populateHTML('js_reference_checkform');
 
 	print qq|<FORM method="POST" action="$exec_url" onSubmit='return checkForm();'>\n|;
 	print qq|<input type=hidden name="action" value="processNewRef">\n|;
 
-	print $b->populateHTML("enter_ref_form", \@row, \@fieldNames);
+	print $hbo->populateHTML("enter_ref_form", \@row, \@fieldNames);
 	print &stdIncludes ("std_page_bottom");
 }
 
@@ -1117,7 +1117,7 @@ sub displayRefEdit
 	}
 
 	print &stdIncludes ( "std_page_top" );
-	print $b->populateHTML('js_reference_checkform');
+	print $hbo->populateHTML('js_reference_checkform');
 
 	$sql =	"SELECT * ".
 			"  FROM refs ".
@@ -1135,7 +1135,7 @@ sub displayRefEdit
 
 	print qq|<form method="POST" action="$exec_url" onSubmit='return checkForm();'>\n|;
 	print qq|<input type=hidden name="action" value="processReferenceEditForm"\n|;
-	print $b->populateHTML('enter_ref_form', \@row, \@fieldNames);
+	print $hbo->populateHTML('enter_ref_form', \@row, \@fieldNames);
 
 	print &stdIncludes ("std_page_bottom");
 }
@@ -1192,7 +1192,7 @@ sub displaySearchColls {
 	# Show the "search collections" form
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-    my $html = $b->populateHTML('search_collections_form', [ '', '', '' ], [ 'lithology1', 'lithology2', 'environment' ], \@prefkeys);
+    my $html = $hbo->populateHTML('search_collections_form', [ '', '', '' ], [ 'lithology1', 'lithology2', 'environment' ], \@prefkeys);
 	buildAuthorizerPulldown ( \$html );
 	buildEntererPulldown ( \$html );
 
@@ -1701,17 +1701,17 @@ sub displayCollectionDetails {
     push(@fieldNames, 'subset_string');
 
     print &stdIncludes ( "std_page_top" );
-    print $b->populateHTML('collection_display_fields', \@row, \@fieldNames);
+    print $hbo->populateHTML('collection_display_fields', \@row, \@fieldNames);
     # If the viewer is the authorizer (or it's me), display the record with edit buttons
     if ( $authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy') {
-		print $b->populateHTML('collection_display_buttons', \@row, \@fieldNames);
+		print $hbo->populateHTML('collection_display_buttons', \@row, \@fieldNames);
     }
 
 	print "<HR>\n";
 	print &buildTaxonomicList ( $collection_no, $refNo );
 
 	if ( $authorizer eq $s->get('authorizer') || $s->get('authorizer') eq 'J. Alroy')	{
-		print $b->populateHTML('occurrence_display_buttons', \@row, \@fieldNames);
+		print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames);
 	}
 
 
@@ -1774,7 +1774,7 @@ sub buildTaxonomicList {
 			else	{
 				$drow->setValue("reference_no",'');
 			}
-			$formattedrow = $b->populateHTML("taxa_display_row", $rowref, \@occFieldNames );
+			$formattedrow = $hbo->populateHTML("taxa_display_row", $rowref, \@occFieldNames );
 			$formattedrow .= "<tr>\n\t<td colspan='6'>".getReidHTMLTableByOccNum(pop(@occrow),$collection_refno)."</td>\n</tr>";
 			# if there's a link in here somewhere, there must be a new ref
 			#   (kludgy, but saves the trouble of passing newreference back
@@ -1925,7 +1925,7 @@ sub displayEnterCollPage {
 	# Output the page
 	print &stdIncludes ( "std_page_top" );
 	my @prefkeys = keys %pref;
-	print $b->populateHTML('enter_coll_form', \@row, \@fieldNames, \@prefkeys);
+	print $hbo->populateHTML('enter_coll_form', \@row, \@fieldNames, \@prefkeys);
 	print &stdIncludes ("std_page_bottom");
 }
 
@@ -2024,7 +2024,7 @@ sub processEnterCollectionForm {
 			@refRow = $sth->fetchrow_array();
 			@refFieldNames = @{$sth->{NAME}};
 			$sth->finish();
-			$refRowString = $b->populateHTML('reference_display_row', \@refRow, \@refFieldNames);
+			$refRowString = $hbo->populateHTML('reference_display_row', \@refRow, \@refFieldNames);
 			
 			push(@row, $refRowString);
 			push(@fields, 'reference_string');
@@ -2034,9 +2034,9 @@ sub processEnterCollectionForm {
 		$curColNum++;
 	}
  
-    print $b->populateHTML('collection_display_fields', \@row, \@fields);
-    print $b->populateHTML('collection_display_buttons', \@row, \@fields);
-    print $b->populateHTML('occurrence_display_buttons', \@row, \@fields);
+    print $hbo->populateHTML('collection_display_fields', \@row, \@fields);
+    print $hbo->populateHTML('collection_display_buttons', \@row, \@fields);
+    print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
  
 	print &stdIncludes ("std_page_bottom");
 }
@@ -2196,7 +2196,7 @@ sub displayEditCollection {
 
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-	print $b->populateHTML('edit_coll_form', \@row, \@fieldNames, \@prefkeys);
+	print $hbo->populateHTML('edit_coll_form', \@row, \@fieldNames, \@prefkeys);
     
 	print &stdIncludes ("std_page_bottom");
 }
@@ -2298,9 +2298,9 @@ sub processEditCollectionForm {
 	push(@fields, 'secondary_reference_string');
 
     
-    print $b->populateHTML('collection_display_fields', \@row, \@fields);
-    print $b->populateHTML('collection_display_buttons', \@row, \@fields);
-    print $b->populateHTML('occurrence_display_buttons', \@row, \@fields);
+    print $hbo->populateHTML('collection_display_fields', \@row, \@fields);
+    print $hbo->populateHTML('collection_display_buttons', \@row, \@fields);
+    print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
     
 	print &stdIncludes ("std_page_bottom");
 }
@@ -2326,7 +2326,7 @@ sub getCurrRefDisplayStringForColl{
     my @refRow = $sth->fetchrow_array();
     my @refFieldNames = @{$sth->{NAME}};
     $sth->finish();
-    my $refRowString = $b->populateHTML('reference_display_row', \@refRow, \@refFieldNames);
+    my $refRowString = $hbo->populateHTML('reference_display_row', \@refRow, \@refFieldNames);
 
     return $refRowString;
 }
@@ -2459,7 +2459,7 @@ sub displayOccurrenceAddEdit {
 	$sth->finish();
 
 	print &stdIncludes ( "std_page_top" );
-	print $b->populateHTML('js_occurrence_checkform');
+	print $hbo->populateHTML('js_occurrence_checkform');
 
 	$sql = "SELECT * FROM occurrences WHERE collection_no=$collection_no";
 	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -2477,7 +2477,7 @@ sub displayOccurrenceAddEdit {
 
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-	print $b->populateHTML('occurrence_header_row', \@tempRow, \@tempFieldName, \@prefkeys);
+	print $hbo->populateHTML('occurrence_header_row', \@tempRow, \@tempFieldName, \@prefkeys);
 
     # of records, each represented as a hash
     my $p = Permissions->new($s);
@@ -2500,15 +2500,15 @@ sub displayOccurrenceAddEdit {
             # processEditOccurrences uses 'row_token' 
             # to determine which rows to update
             if($gray_counter%2==0){
-                $occHTML = $b->populateHTML("occurrence_read_only_row_gray", \@row, \@names, \@prefkeys);
+                $occHTML = $hbo->populateHTML("occurrence_read_only_row_gray", \@row, \@names, \@prefkeys);
             }
             else{
-                $occHTML = $b->populateHTML("occurrence_read_only_row", \@row, \@names, \@prefkeys);
+                $occHTML = $hbo->populateHTML("occurrence_read_only_row", \@row, \@names, \@prefkeys);
             }
         }
         else{
             print qq|<input type=hidden name="row_token" value="row_token">\n|;
-            $occHTML = $b->populateHTML("occurrence_edit_row", \@row, \@names, \@prefkeys);
+            $occHTML = $hbo->populateHTML("occurrence_edit_row", \@row, \@names, \@prefkeys);
         }
 		print $occHTML;
 
@@ -2525,15 +2525,15 @@ sub displayOccurrenceAddEdit {
             # Read Only
             if($hash_ref->{'writeable'} == 0){
                 if($gray_counter%2==0){
-                    $reidHTML = $b->populateHTML("occurrence_read_only_row_gray", \@re_row, \@re_names, \@prefkeys);
+                    $reidHTML = $hbo->populateHTML("occurrence_read_only_row_gray", \@re_row, \@re_names, \@prefkeys);
                 }
                 else{
-                    $reidHTML = $b->populateHTML("occurrence_read_only_row", \@re_row, \@re_names, \@prefkeys);
+                    $reidHTML = $hbo->populateHTML("occurrence_read_only_row", \@re_row, \@re_names, \@prefkeys);
                 }
             }
             else{
                 print qq|<input type=hidden name="row_token" value="row_token">\n|;
-                $reidHTML = $b->populateHTML("occurrence_edit_row", \@re_row, \@re_names, \@prefkeys);
+                $reidHTML = $hbo->populateHTML("occurrence_edit_row", \@re_row, \@re_names, \@prefkeys);
             }
             # Strip away abundance widgets (crucial because reIDs never may
             #  have abundances) JA 30.7.02
@@ -2584,7 +2584,7 @@ sub displayOccurrenceAddEdit {
 
 	for ( $i = 0; $i<$blanks ; $i++) {
 		print qq|<input type=hidden name="row_token" value="row_token">\n|;
-		print $b->populateHTML("occurrence_entry_row", \@row, \@fieldNames, \@prefkeys);
+		print $hbo->populateHTML("occurrence_entry_row", \@row, \@fieldNames, \@prefkeys);
 	}
 
 	print "</table><br>\n";
@@ -2993,7 +2993,7 @@ sub displayReIDCollsAndOccsSearchForm
 	print qq|<form method=POST action="$exec_url">\n|;
 	print '<input type=hidden name=action value="displayReIDForm">';
 	print qq|<input name="reference_no" value="$reference_no" type=hidden>\n|;
-	print $b->populateHTML('genus_species_search');
+	print $hbo->populateHTML('genus_species_search');
 	print qq|\n<tr><td align=right><input type=submit name=submit value="Search occurrences">\n|;
 	print "</form>";
 	print "</td></tr></table><hr>\n";
@@ -3001,7 +3001,7 @@ sub displayReIDCollsAndOccsSearchForm
 	# Display the collection search form
 	%pref = &getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
-	my $html = $b->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no], ['authorizer', 'enterer', 'action', 'reid_reference_no'], \@prefkeys);
+	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no], ['authorizer', 'enterer', 'action', 'reid_reference_no'], \@prefkeys);
 
 	buildAuthorizerPulldown ( \$html );
 	buildEntererPulldown ( \$html );
@@ -3039,7 +3039,7 @@ sub displayOccsForReID
 	my $printCollDetails = 0;
 
 	print &stdIncludes ( "std_page_top" );
-	print $b->populateHTML('js_occurrence_checkform');
+	print $hbo->populateHTML('js_occurrence_checkform');
     
 	my $genus_name = $q->param('genus_name');
 	my $species_name = $q->param('species_name');
@@ -3098,7 +3098,7 @@ sub displayOccsForReID
 		if ($rowCount == 1)	{
 			%pref = &getPreferences($s->get('enterer'));
 			@prefkeys = keys %pref;
-			print $b->populateHTML('reid_header_row', [ $refString ], [ 'ref_string' ], \@prefkeys);
+			print $hbo->populateHTML('reid_header_row', [ $refString ], [ 'ref_string' ], \@prefkeys);
 		}
 
 		my %row = %{$rowRef};
@@ -3119,7 +3119,7 @@ sub displayOccsForReID
 			print "    <td>" . $row{"plant_organ2"} . "</td>\n";
 		}
 		print "</tr>";
-		print $b->populateHTML('reid_entry_row', [$row{'occurrence_no'}, $row{'collection_no'}, $row{'authorizer'}, $row{'enterer'} ], ['occurrence_no', 'collection_no', 'authorizer', 'enterer'], \@prefkeys);
+		print $hbo->populateHTML('reid_entry_row', [$row{'occurrence_no'}, $row{'collection_no'}, $row{'authorizer'}, $row{'enterer'} ], ['occurrence_no', 'collection_no', 'authorizer', 'enterer'], \@prefkeys);
 
 		# print other reids for the same occurrence
 		$sql = "SELECT * FROM reidentifications WHERE occurrence_no=" . $row{'occurrence_no'};
@@ -3373,7 +3373,7 @@ sub displayTaxonomySearchForm	{
 
 	print &stdIncludes ("std_page_top");
 
-	print $b->populateHTML('search_taxonomy_form');
+	print $hbo->populateHTML('search_taxonomy_form');
 
 	print &stdIncludes ("std_page_bottom");
 }
@@ -3550,7 +3550,7 @@ sub displayTaxonomyEntryForm	{
 	my @refRow = $sth->fetchrow_array();
 	my @refFieldNames = @{$sth->{NAME}};
 	$sth->finish();
-	my $refRowString = '<table>' . $b->populateHTML('reference_display_row', \@refRow, \@refFieldNames) . '</table>';
+	my $refRowString = '<table>' . $hbo->populateHTML('reference_display_row', \@refRow, \@refFieldNames) . '</table>';
 
 	# Add gray background and make font small
 	$refRowString =~ s/<tr>/<tr bgcolor='#E0E0E0'>/;
@@ -3574,9 +3574,9 @@ sub displayTaxonomyEntryForm	{
 	unshift @authorityFields, 'parent_taxon_name';
 
 	$html = &stdIncludes("js_taxonomy_checkform");
-	$html .= $b->populateHTML ('enter_taxonomy_top', [ $authorityRow{'taxon_no'}, $authorityRow{'type_taxon_no'} ] , [ 'taxon_no', 'type_taxon_no' ] );
-	$html .= $b->populateHTML('enter_tax_ref_form', \@authorityVals , \@authorityFields );
-	$html .= $b->populateHTML('enter_taxonomy_form', \@authorityVals , \@authorityFields );
+	$html .= $hbo->populateHTML ('enter_taxonomy_top', [ $authorityRow{'taxon_no'}, $authorityRow{'type_taxon_no'} ] , [ 'taxon_no', 'type_taxon_no' ] );
+	$html .= $hbo->populateHTML('enter_tax_ref_form', \@authorityVals , \@authorityFields );
+	$html .= $hbo->populateHTML('enter_taxonomy_form', \@authorityVals , \@authorityFields );
 
 	# Remove widgets if the current authorizer does not own the record and
 	#  the existing data are non-null
@@ -3765,7 +3765,7 @@ sub checkNewTaxon	{
 		# Can't find the taxon? Get some info on it and submit it
 		if ( $matches == 0 && $moreData eq "YES" )	{
 			my $new_name = $q->param($new_taxon_name);
-			my $html = $b->populateHTML('enter_authority_top', [ $new_name ], [ 'taxon_name' ] );
+			my $html = $hbo->populateHTML('enter_authority_top', [ $new_name ], [ 'taxon_name' ] );
 			$html =~ s/missing_taxon_name/$new_name/;
 			if ( $stemName =~ /type/ )	{
 				if ( $new_name =~ / / )	{
@@ -3799,7 +3799,7 @@ sub checkNewTaxon	{
 			my @refRow = $sth->fetchrow_array();
 			my @refFieldNames = @{$sth->{NAME}};
 			$sth->finish();
-			my $refRowString = '<table>' . $b->populateHTML('reference_display_row', \@refRow, \@refFieldNames) . '</table>';
+			my $refRowString = '<table>' . $hbo->populateHTML('reference_display_row', \@refRow, \@refFieldNames) . '</table>';
 
 			# Add gray background and make font small
 			$refRowString =~ s/<tr>/<tr bgcolor='#E0E0E0'>/;
@@ -3807,7 +3807,7 @@ sub checkNewTaxon	{
 			push @tempVals, $refRowString;
 			push @tempParams, 'ref_string';
 
-			$html = $b->populateHTML ("enter_tax_ref_form", \@tempVals, \@tempParams );
+			$html = $hbo->populateHTML ("enter_tax_ref_form", \@tempVals, \@tempParams );
 
 			# Suppress the type taxon field because this name would have
 			#  to be checked against the authorities table, and life is
@@ -4275,10 +4275,10 @@ sub displayEnterAuthoritiesForm
 		print qq|<form method=POST action="$exec_url">\n|;
 		print qq|<input type=hidden name=action value=processNewAuthorities>\n|;
 		print qq|<input type=hidden name=reference_no value="$reference_no">\n|;
-		print $b->populateHTML('authority_header_row');
+		print $hbo->populateHTML('authority_header_row');
 		for($i = 0;$i < 20;$i++)
 		{
- 			print $b->populateHTML('authority_entry_row', ['genus', 'species', ''], ['taxon_rank', 'type_taxon_rank', 'body_part']);
+ 			print $hbo->populateHTML('authority_entry_row', ['genus', 'species', ''], ['taxon_rank', 'type_taxon_rank', 'body_part']);
 		}
 		print '</table>';
 		print '<input type=submit value="Add authorities">';
@@ -4411,7 +4411,7 @@ sub processNewAuthorities
 sub displaySearchDLGenusNamesForm
 {
 	print &stdIncludes ( "std_page_top" );
-	print $b->populateHTML('search_genus_names');
+	print $hbo->populateHTML('search_genus_names');
 	print &stdIncludes ("std_page_bottom");
 }
 
@@ -4457,7 +4457,7 @@ sub displayGenusNamesDLResults
 sub authorityRow
 {
 	print &stdIncludes ( "std_page_top" );
-	print '<form><table>' . $b->populateHTML('authority_entry_row') . '</table></form>';
+	print '<form><table>' . $hbo->populateHTML('authority_entry_row') . '</table></form>';
 	print &stdIncludes ("std_page_bottom");
 }
 
@@ -4482,7 +4482,7 @@ sub displayTaxonGeneralForm
 		}
 		$s->setReferenceNo ( $dbh, $reference_no );
 	  
-		print $b->populateHTML('taxon_general_page_top');
+		print $hbo->populateHTML('taxon_general_page_top');
 	  
 		# Display the reference
 		$sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
@@ -4491,7 +4491,7 @@ sub displayTaxonGeneralForm
 		my $refRowRef = $sth->fetchrow_arrayref();
 		my $refFieldNamesRef = $sth->{NAME};
 		$sth->finish();
-		print $b->populateHTML('reference_display_row', $refRowRef, $refFieldNamesRef);
+		print $hbo->populateHTML('reference_display_row', $refRowRef, $refFieldNamesRef);
 
 		print '<table>';
 		print qq|<form method=POST action="$exec_url">\n|;
@@ -4499,7 +4499,7 @@ sub displayTaxonGeneralForm
 		print qq|<input type=hidden name=reference_no value="$reference_no">\n|;
 		for($i = 0;$i < 10;$i++)
 		{
- 			print $b->populateHTML('taxon_general_entry_row', ['genus', 'species', ''], ['taxon_rank', 'type_taxon_rank', 'body_part']);
+ 			print $hbo->populateHTML('taxon_general_entry_row', ['genus', 'species', ''], ['taxon_rank', 'type_taxon_rank', 'body_part']);
 		}
 		print '</table>';
 		print '<input type=submit value="Process taxa">';
@@ -4511,14 +4511,14 @@ sub displayTaxonGeneralForm
 sub displayProjectStatusPage
 {
 	  print &stdIncludes ( "std_page_top" );
-	  print $b->populateHTML('project_status_page');
+	  print $hbo->populateHTML('project_status_page');
 	  print &stdIncludes ("std_page_bottom");
 }
 
 sub displaySubmitBugForm
 {
 	  print &stdIncludes ( "std_page_top" );
-	  print $b->populateHTML('bug_report_form', [$s->get('enterer'), 'Cosmetic'], ['enterer', 'severity']);
+	  print $hbo->populateHTML('bug_report_form', [$s->get('enterer'), 'Cosmetic'], ['enterer', 'severity']);
 	  print &stdIncludes ("std_page_bottom");
 }
 
@@ -4547,7 +4547,7 @@ sub displayBugs {
 	  foreach my $rowref (@rowrefs)
 	  {
 	    #print join(', ', @{$fieldNamesRef});
-	    print $b->populateHTML('bug_display_row', $rowref, $fieldNamesRef);
+	    print $hbo->populateHTML('bug_display_row', $rowref, $fieldNamesRef);
 	  }
 	  print "</table>";
 	  print &stdIncludes ("std_page_bottom");
@@ -4876,7 +4876,7 @@ sub checkNearMatch ()	{
 				push @rowData,$row{$d};
 			}
 			if ($tableName eq "refs")	{
-				print $b->populateHTML('reference_display_row', \@rowData, \@display);
+				print $hbo->populateHTML('reference_display_row', \@rowData, \@display);
 			}
 			$sth->finish();
 		}
@@ -4989,10 +4989,10 @@ sub getCollsWithRef	{
 
 	my $displayRows;
 	my $displayRows2;
+	# Get rows okayed by permissions module
+	my @dataRows = ();
+	my @dataRows2 = ();
 	if($sth->rows || $sth2->rows){
-		# Get rows okayed by permissions module
-		@dataRows = ();
-		@dataRows2 = ();
 		# primary
 		$p->getReadRows($sth, \@dataRows, $limit, \$ofRows);
     	$displayRows = @dataRows; # This is the actual number of rows displayed
@@ -5025,16 +5025,27 @@ sub getCollsWithRef	{
 	
 		# primary
 		foreach my $dataRow (@dataRows) {
-			my $collno = $dataRow->{"collection_no"};
-			my $linkFront = "<b><a href=\"$exec_url?action=displayCollectionDetails&collection_no=$collno\">";
-			$CollString .= $linkFront . $dataRow->{"collection_no"} . "</a></b> ";
-			$count++;
+			$dataRow->{'primary_bold'} = 1;
 		}
+		# put them together (primary and secondary)
+		push(@dataRows,@dataRows2);
+		@dataRows = sort {$a->{collection_no} <=> $b->{collection_no}} @dataRows;
 		# secondary
-		foreach my $dataRow (@dataRows2) {
-			my $collno = $dataRow->{"collection_no"};
-			my $linkFront = "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$collno\">";
-			$CollString .= $linkFront . $dataRow->{"collection_no"} . "</a> ";
+		foreach my $elem (@dataRows) {
+			my $collno = $elem->{"collection_no"};
+			my $linkFront = "";
+
+			if($elem->{'primary_bold'} == 1){
+				$linkFront = "<b>";
+			}
+
+			$linkFront .= "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$collno\">";
+			$CollString .= $linkFront . $elem->{"collection_no"} . "</a> ";
+
+			if($elem->{'primary_bold'} == 1){
+				$CollString .= "</b>";
+			}
+
 			$count++;
 		}
 		if($count){
