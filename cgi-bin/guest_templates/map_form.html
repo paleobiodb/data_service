@@ -8,7 +8,7 @@
 	<h2>Map request form</h2>
 	</div>
 
-    <form method=post action="$exec_url">
+    <form method=post action="$exec_url" onSubmit="return checkForm();">
 	<input id="action" type=hidden name="action" value="displayMapResults">
 
 	<hr>
@@ -19,21 +19,13 @@
 <tr><td colspan=2 valign=top><h4>Search options</h4>
 <tr><td valign=top>Research group<br>or project:
 <td valign=top>
-<select name="research_group">
-<option selected>all
-<option>marine invertebrate
-<option>paleobotany
-<option>taphonomy
-<option>vertebrate
-<option>ETE
-<option>5%
-<option>PGAP
+<select id="research_group">
 </select>
 
 
 <tr><td valign=top>Country:
 <td valign=top><select name="country">
-<option selected>all
+<option selected>
 <option>Argentina
 <option>Australia
 <option>Brazil
@@ -65,7 +57,7 @@
 
 <tr><td valign=top>Period:
 <td valign=top><select name="period">
-<option selected>all
+<option selected>
 <option>Quaternary
 <option>Tertiary
 <option>Cretaceous
@@ -100,14 +92,32 @@
 <nobr><select name="taxon_rank"><option>Higher-taxon<option selected>Genus<option>Genus and species<option>species</select>:</nobr>
 <td valign=top><input name="genus_name" size=25>
 
+<tr><td valign=top>Data points:
+<td valign=top>
+<select id="pointsize"></select>
+<select id="dotcolor"></select>
+<select id="pointshape"></select>
+<select id="dotborder"></select>
+<font size=-1>black borders</font>
+
+<tr><td><td align=center valign=top><br><i>Color palette</i>
+<tr><td><td align=center valign=top><img src="/public/palette.gif"></a>
 </table>
 
 <td valign=top width="60%"><table>
 <tr><td colspan=2 valign=top><h4>View options</h4>
 
+<tr><td valign=top>Image size:
+<td valign=top><select id="mapsize">
+</select>
+
 <tr><td valign=top>Projection:
 <td valign=top><select id="projection">
 </select>
+
+<tr><td valign=top>Reconstruction date:
+<td valign=top><input name="maptime" size=4 onChange="fillPeriodEpoch();">
+m.y. ago
 
 <tr><td valign=top>Map focus:
 <td valign=top><select id="mapfocus">
@@ -126,14 +136,20 @@ lng = <input name="maplng" size=4>
 <td valign=top><select id="mapresolution">
 </select>
 
-<tr><td valign=top>Background color:
+<tr><td valign=top>Background/ocean color:
 <td valign=top><select id="mapbgcolor">
 </select>
 
-<tr><td valign=top>Spacing and color of grid lines:
-<td valign=top><select id="gridsize">
+<tr><td valign=top>Continental crust color:
+<td valign=top><select id="crustcolor">
 </select>
+
+<tr><td valign=top>Spacing, color, and position of grid lines:
+<td valign=top><select id="gridsize">
+</select>,
 <select id="gridcolor">
+</select>,
+<select id="gridposition">
 </select>
 
 <tr><td valign=top>Thickness and color of coastlines:
@@ -148,14 +164,6 @@ lng = <input name="maplng" size=4>
 <td valign=top><valign=top><select id="usalinecolor">
 </select>
 
-<tr><td valign=top>Data points:
-<td valign=top>
-<select id="pointsize"></select>
-<select id="dotcolor"></select>
-<select id="pointshape"></select>
-<select id="dotborder"></select>
-<font size=-1>black borders</font>
-
 </table>
 </table>
 
@@ -164,4 +172,8 @@ lng = <input name="maplng" size=4>
 </table>
 
 </form>
+
+<center><p class=small>
+<i>For more information about the plate reconstructions visit the PALEOMAP website - <a href="http://www.scotese.com">http://www.scotese.com</a></i>
+<p></center>
 
