@@ -2203,10 +2203,11 @@ sub selectMostRecentParentOpinion{
 		for(my $index = 0; $index < @array_of_hash_refs; $index++){
 			# pubyr is recorded directly in the opinion record,
 			#  so use it
-			if($array_of_hash_refs[$index]->{pubyr} &&
-					$array_of_hash_refs[$index]->{pubyr} > $years){
-				$years = $array_of_hash_refs[$index]->{pubyr};
-				$index_winner = $index;
+			if ( $array_of_hash_refs[$index]->{pubyr} )	{
+				if ( $array_of_hash_refs[$index]->{pubyr} > $years)	{
+					$years = $array_of_hash_refs[$index]->{pubyr};
+					$index_winner = $index;
+				}
 			}
 			else{
 				# get the year from the refs table
