@@ -517,45 +517,6 @@ sub assignGenera	{
 		print FOOTE "\n";
 	}
 
-	# compute conjunction alpha
-	# this is the "thanks Jack" or "July 4th" equation; it is based on
-	#  my c. 1993 equation setting beta diversity = inverse of density
-	#  of conjunction matrix and Whittaker's alpha = gamma / beta
-	for my $collno (1..$#lastocc+1)	{
-	# need to have a temporary taxonomic list
-		my @temp = ();
-		my $xx = $lastocc[$collno];
-		while ($xx > 0)	{
-			push @temp , $occs[$xx];
-			$xx = $stone[$xx];
-		}
-	# go through the list computing conjunctions
-		for my $i ( 1..$#temp )	{
-			for my $j ( 0..$i-1 )	{
-				if ( $temp[$i] > $temp[$j] )	{
-					$conjunct{$chid[$collno]}{$temp[$i]."-".$temp[$j]}++;
-				} else	{
-					$conjunct{$chid[$collno]}{$temp[$i]."-".$temp[$j]}++;
-				}
-			}
-		}
-	}
-	# go through the bins finding the number of conjunctions and
-	#  then computing conjunction alpha
-	for my $chron ( 1..$chrons )	{
-		my @temp = keys %{$conjunct{$chron}};
-	# conjunction beta is the number of taxon pairs (size of conjunction
-	#  matrix) divided by the number of conjunctions
-		my $nconj = $#temp + 1;
-		if ( $nconj > 0 )	{
-			my $g = $richness[$chron];
-	# conjunction alpha is gamma over beta
-	# beta = g/(((g^2 - g) / 2)/c) , so this reduces:
-	#   g/(((g^2 - g) / 2)/c) = 2g/(c(g^2 - g)) = 2c/(g - 1)
-			$conjalpha[$chron] = 2 * $nconj / ($g - 1);
-		}
-	}
-
 	# free some variables
 	@lastocc = ();
 	@occs = ();
@@ -674,6 +635,7 @@ sub subsample	{
 					  }
 	
 		 # record data in the complete subsampling curve
+		 # (but only at intermediate step sizes requested by the user)
 					  if ($atstep[$sampled[$i]] > $atstep[$lastsampled[$i]])	{
 					    $z = $sampled[$i] - $lastsampled[$i];
 					    $y = $subsrichness[$i] - $lastsubsrichness[$i];
@@ -681,6 +643,14 @@ sub subsample	{
 					      $x = $stepback[$k] - $lastsampled[$i];
 					      $sampcurve[$i][$k] = $sampcurve[$i][$k] + ($x * $y / $z) + $lastsubsrichness[$i];
 					    }
+					  }
+		# for method 2 = UW, compute the honest to goodness
+		#  complete subsampling curve
+		# note: this is kind of redundant because the value keeps
+		#  getting erased up until the value from the last trial
+		#  is copied, but no harm is done
+					  if ( $samplingmethod == 2 )	{
+					    $fullsampcurve[$i][$sampled[$i]] = $subsrichness[$i];
 					  }
 	
 		 # erase the list or occurrence that has been drawn
@@ -791,6 +761,48 @@ sub subsample	{
 		@{$outrichness[$i]} = sort { $a <=> $b } @{$outrichness[$i]};
 	}
 
+	# fit Michaelis-Menten equation using Raaijmakers maximum likelihood
+	#  equation (Colwell and Coddington 1994, p. 106) 13.7.04
+	# do this only for method 2 (UW) because the method assumes you are
+	#  making a UW curve
+#FOO if this doesn't run for sub-samplesize chrons, those curves need to be
+#  forced
+	if ( $samplingmethod == 2)	{
+		for $i (1..$chrons)	{
+			if ($msubsrichness[$i] > 0)	{
+				# get means
+				my $sumx = 0;
+				my $sumy = 0;
+				my $curvelength;
+				for $j (1..$q->param('samplesize'))	{
+					if ( $fullsampcurve[$i][$j] > 0 )	{
+						$fullsampcurve[$i][$j] = $fullsampcurve[$i][$j] / $trials;
+						$curvelength++;
+						$xj[$j] = $fullsampcurve[$i][$j] / $j;
+						$yj[$j] = $fullsampcurve[$i][$j];
+						$sumx = $sumx + $xj[$j];
+						$sumy = $sumy + $yj[$j];
+					}
+				}
+				my $meanx = $sumx / $curvelength;
+				my $meany = $sumy / $curvelength;
+				# get sums of squares and cross-products
+				my $cov = 0;
+				my $ssqx = 0;
+				my $ssqy = 0;
+				for $j (1..$q->param('samplesize'))	{
+					if ( $fullsampcurve[$i][$j] > 0 )	{
+						$cov = $cov + ( ($xj[$j] - $meanx) * ($yj[$j] - $meany) );
+						$ssqx = $ssqx + ($xj[$j] - $meanx)**2;
+						$ssqy = $ssqy + ($yj[$j] - $meany)**2;
+					}
+				}
+				my $B = (($meanx * $ssqy) - ($meany * $cov)) / (($meany * $ssqx) - ($meanx * $cov));
+				$michaelis[$i] = $meany + ($B * $meanx);
+			}
+		}
+	}
+
 }
 
 sub printResults	{
@@ -851,7 +863,6 @@ sub printResults	{
 			print "<td class=small align=center valign=top><b>Specimens</b> ";
 		}
 		print "<td class=small align=center valign=top><b>Mean<br>richness</b> <td class=small align=center valign=top><b>Median<br>richness</b> ";
-		print "<td class=small align=center valign=top><b>Conjunction<br>alpha</b> ";
 		print TABLE "Bin,Bin name,Sampled genera,Range-through genera,Boundary-crosser genera,";
 		print TABLE "First appearances,Origination rate,Last appearances,Extinction rate,Singleton genera,";
 		if ($samplingmethod != 5)	{
@@ -860,7 +871,7 @@ sub printResults	{
 		else	{
 			print TABLE "$listorfm,Specimens,";
 		}
-		print TABLE "Mean richness,Median richness,Conjunction alpha,Base (Ma),Midpoint (Ma)\n";
+		print TABLE "Mean richness,Median richness,Base (Ma),Midpoint (Ma)\n";
 	
 		for $i (1..$chrons)	{
 			if ($rangethrough[$i] > 0 && $listsinchron[$i] > 0)	{
@@ -899,7 +910,6 @@ sub printResults	{
 				}
 				printf "<td class=small align=center valign=top>%.1f ",$occsinchron[$i]/$listsinchron[$i];
 				printf "<td class=small align=center valign=top>%.1f ",$median[$i];
-				printf "<td class=small align=center valign=top>%.1f ",$conjalpha[$i];
 	
 				print TABLE $chrons - $i + 1;
 				print TABLE ",$chname[$i]";
@@ -929,7 +939,6 @@ sub printResults	{
 				}
 				printf TABLE ",%.1f",$occsinchron[$i]/$listsinchron[$i];
 				printf TABLE ",%.1f",$median[$i];
-				printf TABLE ",%.1f",$conjalpha[$i];
 				printf TABLE ",%.1f",$basema{$chname[$i]};
 				printf TABLE ",%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
 				print "<p>\n";
@@ -962,6 +971,7 @@ sub printResults	{
 			print "<td class=small align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
 			print "<td class=small align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
 			print "<td class=small align=center valign=top><b>Chao-2<br>estimate</b> ";
+			print "<td class=small align=center valign=top><b>Michaelis-Menten<br>estimate</b> ";
 			print TABLE "Bin,Bin name,";
 			print TABLE "Sampled genera,Range-through genera,";
 			print TABLE "Items sampled,Median richness,";
@@ -978,7 +988,9 @@ sub printResults	{
 			print TABLE "Singleton genera,";
 			print TABLE "Gap analysis completeness,";
 			print TABLE "Gap analysis diversity,";
-			print TABLE "Chao-2 estimate,Base (Ma),Midpoint (Ma)\n";
+			print TABLE "Chao-2 estimate,";
+			print TABLE "Michaelis-Menten estimate,";
+			print TABLE "Base (Ma),Midpoint (Ma)\n";
 			for ($i = 1; $i <= $chrons; $i++)     {
 				if ($rangethrough[$i] > 0)  {
 					$gapstat = $richness[$i] - $originate[$i] - $extinct[$i] + $singletons[$i];
@@ -1071,6 +1083,16 @@ sub printResults	{
 					else    {
 					  print "<td class=small align=center valign=top>NaN ";
 					  print TABLE ",NaN";
+					}
+					if ( $samplingmethod == 2)	{
+						if ($michaelis[$i] > 0)	{
+					  	printf "<td class=small align=center valign=top>%.1f ",$michaelis[$i];
+					  	printf TABLE ",%.1d",$michaelis[$i];
+						}
+						else    {
+						  print "<td class=small align=center valign=top>NaN ";
+						  print TABLE ",NaN";
+						}
 					}
 					printf TABLE ",%.1f",$basema{$chname[$i]};
 					printf TABLE ",%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
