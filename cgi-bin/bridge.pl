@@ -881,58 +881,12 @@ sub submitOpinionForm {
 
 
 
+# sub buildEntererPulldown
+# moved to HTMLbuilder by rjp, 3/29/2004
 
 
-
-# Given an html page, substitute the enterer data
-sub buildEntererPulldown {
-	my $html = shift;			# HTML page into which we substitute
-	my $enterer = shift;		# Default value
-	my $active = shift;
-
-	# Get the active enterers
-	$sql =	"SELECT name as enterer, reversed_name FROM person ";
-	if ( $active ) { $sql .= " WHERE active = 1 "; }
-	$sql .= " ORDER BY reversed_name";
-
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-
-	my $select = "<OPTION value=''>Select enterer...</OPTION>\n";
-	while ( $rs = $sth->fetchrow_hashref ( ) ) {
-		if ( $enterer eq $rs->{enterer} ) {
-			$select .= "<OPTION value=\"".$rs->{enterer}."\" selected>".$rs->{reversed_name}."<\/OPTION>\n";
-		} else {
-			$select .= "<OPTION value=\"".$rs->{enterer}."\">".$rs->{reversed_name}."<\/OPTION>\n";
-		}
-	}
-	$$html =~ s/<select name="enterer">/$&\n$select/;
-}
-
-# Given an html page, substitute the authorizer data
-sub buildAuthorizerPulldown {
-	my $html = shift;			# HTML page into which we substitute
-	my $authorizer = shift;		# Default value
-	my $active = shift;
-
-	# Get the active authorizers
-	$sql =	"SELECT name as authorizer, reversed_name FROM person WHERE is_authorizer = 1 ";
-	if ( $active ) { $sql .= " AND active = 1 "; }
-	$sql .= " ORDER BY reversed_name";
-
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-
-	my $select = "<OPTION value=''>Select authorizer...</OPTION>\n";
-	while ( $rs = $sth->fetchrow_hashref ( ) ) {
-		if ( $authorizer eq $rs->{authorizer} ) {
-			$select .= "<OPTION value=\"".$rs->{authorizer}."\" selected>".$rs->{reversed_name}."<\/OPTION>\n";
-		} else {
-			$select .= "<OPTION value=\"".$rs->{authorizer}."\">".$rs->{reversed_name}."<\/OPTION>\n";
-		}
-	}
-	$$html =~ s/<select name="authorizer">/$&\n$select/;
-}
+# sub buildAuthorizerPulldown 
+# moved to HTMLBuilder, 3/29/2004 by rjp.
 
 # JA 29.2.04
 sub buildTimeScalePulldown	{
@@ -1092,8 +1046,8 @@ sub displayMapForm {
 	my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML('map_form', \@row, \@fieldNames, \@prefkeys);
 
-	buildAuthorizerPulldown( \$html );
-	buildEntererPulldown( \$html );
+	HTMLBuilder::buildAuthorizerPulldown( \$html );
+	HTMLBuilder::buildEntererPulldown( \$html );
 
 	my $authorizer = $s->get("authorizer");
 	$html =~ s/%%authorizer%%/$authorizer/;
@@ -1140,7 +1094,7 @@ sub displayDownloadForm {
 	print stdIncludes( "std_page_top" );
 	my $auth = $q->cookie('authorizer');
 	my $html = $hbo->populateHTML( 'download_form', [ '', '', $auth, '', '', '', '' ], [ 'research_group', 'country','%%authorizer%%','environment','ecology1','ecology2','ecology3','ecology4','ecology5','ecology6' ] );
-	buildAuthorizerPulldown( \$html );
+	HTMLBuilder::buildAuthorizerPulldown( \$html );
 	$html =~ s/<OPTION value=''>Select authorizer\.\.\./<option value='All'>All/m;
 	buildTimeScalePulldown ( \$html );
 	print $html;
@@ -1883,8 +1837,8 @@ sub displaySearchColls {
 	%pref = getPreferences($s->get('enterer'));
 	my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML('search_collections_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment',$type ], \@prefkeys);
-	buildAuthorizerPulldown( \$html );
-	buildEntererPulldown( \$html );
+	HTMLBuilder::buildAuthorizerPulldown( \$html );
+	HTMLBuilder::buildEntererPulldown( \$html );
 
 	# Set the Enterer
 	my $enterer = $s->get("enterer");
@@ -4906,8 +4860,8 @@ sub displayReIDCollsAndOccsSearchForm
 	my @prefkeys = keys %pref;
 	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no,'',$q->param('type'),'',''], ['authorizer', 'enterer', 'action', 'reid_reference_no', 'lithadj', 'lithology1','type','lithadj2', 'lithology2','environment'], \@prefkeys);
 
-	buildAuthorizerPulldown( \$html );
-	buildEntererPulldown( \$html );
+	HTMLBuilder::buildAuthorizerPulldown( \$html );
+	HTMLBuilder::buildEntererPulldown( \$html );
 
 	# Set the Enterer & Authorizer
 	my $enterer = $s->get("enterer");
