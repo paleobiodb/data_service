@@ -9,6 +9,8 @@
 
 # NOTE: assumes /etc/cron.hourly will call the script
 
+use lib "/pbdb/cgi/";
+
 use DBI;
 use DBConnection;
 
