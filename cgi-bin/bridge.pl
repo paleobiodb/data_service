@@ -2512,18 +2512,18 @@ sub processCollectionsSearch {
 			
 			if ( $genus )	{
 				if ($q->param("taxon_rank") eq "Higher taxon" ||
-						$q->param("taxon_rank") eq "Higher-taxon"){
+					$q->param("taxon_rank") eq "Higher-taxon"){
 										
 					if ($in_list eq "") {
 						dbg("RE-RUNNING TAXONOMIC SEARCH in bridge<br>");
-			# JA: Muhl switched to recurse call, I'm switching back
-			#  because I'm not maintaining recurse
-						$in_list = PBDBUtil::taxonomic_search($q->param('genus_name'), $dbt);
-                        			# my $name = $q->param('genus_name');
-                        			# $in_list = `./recurse $name`;
+						# JA: Muhl switched to recurse call, I'm switching back
+						#  because I'm not maintaining recurse
+						$in_list = PBDBUtil::taxonomic_search($q->param('genus_name'),$dbt,'','return taxon_nos');
+                        # my $name = $q->param('genus_name');
+                        # $in_list = `./recurse $name`;
 					}
 					
-					$sql->addWhereItem("genus_name IN ($in_list)");
+					$sql->addWhereItem("taxon_no IN ($in_list)");
 										
 				} else {
 					$sql->addWhereItem("genus_name".$relationString.$genus.$wildCard);
@@ -2540,7 +2540,7 @@ sub processCollectionsSearch {
 
 			$sql->setGroupByExpr("collection_no");
 			
-			#dbg ( "$sql->SQLExpr()<HR>" );
+			dbg ( "occ. sql to filter by taxon: ".$sql->SQLExpr()."<br>" );
 			#Debug::dbPrint("proccessCollectionsSearch SQL =" . $sql->SQLExpr());
 			
 			$sth = $dbh->prepare($sql->SQLExpr());
@@ -3318,40 +3318,42 @@ sub buildTaxonomicList {
 	#  the correct way to do it was to pass in $rowref->{occurrence_no} and
 	#  isReidNo = 0 instead of $mostRecentReID and isReidNo = 1
 				
-				$output .= getReidHTMLTableByOccNum($rowref->{occurrence_no}, 0, \%classification);
+				$output .= getReidHTMLTableByOccNum($rowref->{occurrence_no}, 0, \@class_values);
 				
 				#Debug::dbPrint("mostRecentReID = $mostRecentReID");
 
-				$grand_master_hash{class_no} = ($classification{class_no} or 1000000);
-				$grand_master_hash{order_no} = ($classification{order_no} or 1000000);
-				$grand_master_hash{family_no} = ($classification{family_no} or 1000000);
+				$grand_master_hash{class_no} = ($class_values[0] or 1000000);
+				$grand_master_hash{order_no} = ($class_values[1] or 1000000);
+				$grand_master_hash{family_no} = ($class_values[2] or 1000000);
 			}
 		# otherwise this occurrence has never been reidentified
 			else {
 				
 		# get the classification (by PM): changed 2.4.04 by JA to
 		#  use the occurrence number instead of the taxon name
-				%classification = %{PBDBUtil::get_classification_hash($dbt,$rowref->{taxon_no})};
+				$classification = Classification::get_classification_hash($dbt,'class,order,family',[$rowref->{taxon_no}]);
+                # Index 0 is class, 1 is order, 2 is family. add -1 to split to keep empty trailing fields
+                @class_values = split(/,/,$classification->{$rowref->{taxon_no}},-1);
 
 				# for sorting, later
-				$grand_master_hash{class_no} = ($classification{class_no} or 1000000);
-				$grand_master_hash{order_no} = ($classification{order_no} or 1000000);
-				$grand_master_hash{family_no} = ($classification{family_no} or 1000000);
+				$grand_master_hash{class_no} = ($class_values[0] or 1000000);
+				$grand_master_hash{order_no} = ($class_values[1] or 1000000);
+				$grand_master_hash{family_no} = ($class_values[2] or 1000000);
 
-				if ($classification{'class'} || $classification{'order'} || $classification{'family'} ) {
+				if ($class_values[0] || $class_values[1] || $class_values[2]) {
 					push(@occrow, "bogus");
 					push(@occFieldNames, 'higher_taxa');
-					push(@occrow, $classification{'class'});
+					push(@occrow, $class_values[0]);
 					push(@occFieldNames, 'class');
-					push(@occrow, $classification{'order'});
+					push(@occrow, $class_values[1]);
 					push(@occFieldNames, 'order');
-					push(@occrow, $classification{'family'});
+					push(@occrow, $class_values[2]);
 					push(@occFieldNames, 'family');
 				}
 
 				$output = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
 
-				if ($classification{'class'} || $classification{'order'} || $classification{'family'} ){
+				if ($class_values[0] || $class_values[1] || $class_values[2]) {
 					pop(@occrow);
 					pop(@occrow);
 					pop(@occrow);
@@ -3657,19 +3659,22 @@ sub getReidHTMLTableByOccNum {
 		#  passed it to PBDBUtil, but now the function operates on
 		#  taxon ID numbers, so that's now sent instead
 		# 3rd arg becomes the 1st since the other 2 were shifted off already.
-		%{$_[0]} = %{PBDBUtil::get_classification_hash($dbt, $row[9])};
+		$classification = Classification::get_classification_hash($dbt,'class,order,family',[$row[9]]);
+        # index 0 is class, 1 is order, 2 is family. add -1 to split to keep empty fields
+        @class_values = split(/,/,$classification->{$row[9]},-1);
+        @{$_[0]} = @class_values;
 
 		# JA 2.4.04: changed this so it only works on the most
 		#  recently published reID
 		if ( $rowRef == $rows[$#rows] )	{
-		if($_[0]->{'class'} || $_[0]->{'order'} || $_[0]->{'family'} ){
+		if($class_values[2] || $class_values[1] || $class_values[0]){
 			push(@row, "bogus");
 			push(@fieldNames, 'higher_taxa');
-			push(@row, $_[0]->{'class'});
+			push(@row, $class_values[0]);
 			push(@fieldNames, 'class');
-			push(@row, $_[0]->{'order'});
+			push(@row, $class_values[1]);
 			push(@fieldNames, 'order');
-			push(@row, $_[0]->{'family'});
+			push(@row, $class_values[2]);
 			push(@fieldNames, 'family');
 		}
 		}
@@ -3682,7 +3687,7 @@ sub getReidHTMLTableByOccNum {
 		$retVal .= $hbo->populateHTML("reid_taxa_display_row", \@row,\@fieldNames);
 
 		if ( $rowRef == $rows[$#rows] )	{
-		if($_[0]->{'class'} || $_[0]->{'order'} || $_[0]->{'family'} ){
+		if($class_values[2] || $class_values[1] || $class_values[0]){
 			pop(@row);
 			pop(@row);
 			pop(@row);
