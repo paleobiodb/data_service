@@ -999,12 +999,15 @@ sub processNewRef {
 	my $return;
 
 	print &stdIncludes ( "std_page_top" );
+	dbg("processNewRef reentry:$reentry<br>");
 
 	if($reentry){
 		$reference_no = $reentry;
 		$return = 1; # equivalent to 'success' from insertRecord
+		dbg("reentry TRUE<br>");
 	}
 	else{
+		dbg("reentry FALSE, calling insertRecord()<br>");
 		$return = insertRecord('refs', 'reference_no', \$reference_no, '5', 'author1last' );
 		if ( ! $return ) { return $return; }
 	}
@@ -4829,11 +4832,12 @@ sub insertRecord {
 	# Insert the record
 	$sql = "INSERT INTO $tableName (" . join(',', @fields) . ") VALUES (" . join(',', @vals) . ")";
 	$sql =~ s/\s+/ /gms;
-	dbg ( "$sql<HR>" );
+	dbg("$sql<HR>");
 	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 
 	# Retrieve and display the record
 	my $recID = $dbh->{'mysql_insertid'};
+	dbg("inserted record ID: $recID<br>");
 
 	# Once again, deal with the re-entry scenario (checkNearMatch found some
 	# matches, but the user chose to go ahead and enter the ref anyway)
@@ -4997,6 +5001,12 @@ sub checkNearMatch ()	{
 		print "<center><input type=submit name=\"whattodo\" value=\"Cancel\">&nbsp;";
 		print "<input type=submit name=\"whattodo\" value=\"Continue\"></form>";
 		print qq|<p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p></center><br>\n|;
+		# we don't want control to return to insertRecord() (which called this
+		# method and will insert the record after control returns to it after
+		# calling this method, thus potentially creating a duplicate record if
+		# the user chooses to continue.
+		# Terminate this server session, and wait for user's response.
+		exit;
 	}
 }
 
@@ -5020,7 +5030,7 @@ sub processCheckNearMatch{
 	my $table_name = $q->param('tablename');
 
 	if($what_to_do eq 'Continue'){
-		# these are mostly dummy vars, exect tablename and the last two.
+		# these are mostly dummy vars, except tablename and the last two.
 		insertRecord($table_name, 'reference_no', 0, 5, 'author1last', \@fields, \@vals);
 	}
 	else{
