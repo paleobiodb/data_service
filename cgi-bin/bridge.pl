@@ -660,7 +660,12 @@ sub displayDownloadResults {
 }
 
 sub displayReportForm {
+
+	print &stdIncludes ( "std_page_top" );
+
 	print $hbo->populateHTML( 'report_form', '', [ 'research_group' ] );
+
+	print &stdIncludes ("std_page_bottom");
 }
 
 sub displayReportResults {
