@@ -3713,6 +3713,7 @@ sub printIntervalsJava	{
 	print "  var noname = \"\";\n";
 	print "  var badname = \"\";\n";
 	print "  var badname2 = \"\";\n";
+	print "  var alertmessage = \"\";\n";
 	print "  var frm = document.forms[0];\n";
 	print "  var index = frm.eml_max_interval.selectedIndex;\n";
 	print "  var eml1 = frm.eml_max_interval.options[index].value;\n";
