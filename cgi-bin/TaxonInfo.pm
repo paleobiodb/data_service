@@ -388,17 +388,18 @@ sub checkStartForm{
 	}
 }
 
-## displayTaxonInfoResults
-#
-#	Description:	by the time we get here, the occurrences table has been queried.
-#					ALSO by the time we're here, we have either a single name
-#					higher taxon, or a "Genus species" combination.
+
+
+# by the time we get here, the occurrences table has been queried.
+# ALSO by the time we're here, we have either a single name
+# higher taxon, or a "Genus species" combination.
 sub displayTaxonInfoResults{
 	my $q = shift;
 	my $dbh = shift;
 	my $s = shift;
 	my $dbt = shift;
 
+	
 	my $genus_name = $q->param("genus_name");
 	my $taxon_type = $q->param("taxon_rank");
 	my $taxon_no = 0;
@@ -417,6 +418,7 @@ sub displayTaxonInfoResults{
 		$genus_name =~ s/\s+$//; # remove trailing spaces.
 	}
 
+	
 	# Keep track of entered name for link at bottom of page
 	my $entered_name = $genus_name;
 	if(!$taxon_no){
@@ -451,8 +453,8 @@ sub displayTaxonInfoResults{
 
 	# Find all the junior synonyms of this genus or species JA 4.7.03
 	# First find all taxa that ever were children of this taxon no
-	my $sql = "SELECT child_no,count(*) FROM opinions WHERE parent_no=";
-	$sql .= $taxon_no . " AND status!='belongs to' GROUP BY child_no";
+	my $sql = "SELECT child_no, count(*) FROM opinions WHERE parent_no=";
+	$sql .= $taxon_no . " AND status != 'belongs to' GROUP BY child_no";
 	my @results = @{$dbt->getData($sql)};
 	for my $ref (@results)	{
 		push @childlist,$ref->{child_no};
@@ -678,6 +680,7 @@ sub doModules{
 	my $species = shift;
 	my $in_list = shift;
 	my $taxon_no = shift;
+	
 	
 	# If $q->param("genus_name") has a space, it's a "Genus species" combo,
 	# otherwise it's a "Higher taxon."
@@ -906,8 +909,6 @@ sub doCollections{
 
 	$q->param(-name=>"limit",-value=>1000000);
 	$q->param(-name=>"taxon_info_script",-value=>"yes");
-
-	Debug::dbPrint("in_list = $in_list");
 	
 	# Get all the data from the database, bypassing most of the normal behavior
 	# of displayCollResults

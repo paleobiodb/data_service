@@ -64,7 +64,6 @@ $csv = Text::CSV_XS->new();
 # this cleans all of the CGI parameters by removing HTML, escaping quotes, etc.
 # added by rjp, 2/2004
 Validation::cleanCGIParams($q);
-#Debug::printAllParams($q);
 
 
 # Get the URL pointing to this executable
