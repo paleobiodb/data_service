@@ -29,6 +29,9 @@ sub get_classification_hash{
 # Rank will start as genus
     my $rank = "";
     my $taxon_name = $item;
+# Failing to clear this causes problems if multiple taxa are passed into
+#  this function or multiple names were passed in at once
+    my $taxon_no = "";
     my $base_taxon_name = $item;
     my %family = ();
     my %order = ();
@@ -46,10 +49,15 @@ sub get_classification_hash{
         # Keep $child_no at -1 if no results are returned.
         my $sql = "SELECT taxon_no, taxon_name, taxon_rank FROM authorities WHERE ";
 	# normally, do a lookup based on the name
-	if ( $taxon_name =~ /[A-Za-z]/ )	{
+	if ( $taxon_name =~ /[A-Za-z]/ && ! $taxon_no )	{
 		$sql .= "taxon_name='$taxon_name'";
 	}
-	# but if an ID number was passed into the function, use it instead
+	# if the number was computed in a previous round, use it
+	elsif ( $taxon_no )	{
+		$sql .= "taxon_no='$taxon_no'";
+	}
+	# if taxon no is blank and taxon name is a number, the latter was
+	#  passed into the function and this is the first round, so use it
 	else	{
 		$sql .= "taxon_no='$taxon_name'";
 	}
@@ -115,9 +123,10 @@ sub get_classification_hash{
                 @results = @{$dbt->getData($sql_auth)};
                 if(scalar @results){
 			$auth_hash_ref = $results[0];
-			# reset name and rank for next loop pass
+			# reset rank, name, and number for next loop pass
 			$rank = $auth_hash_ref->{"taxon_rank"};
 			$taxon_name = $auth_hash_ref->{"taxon_name"};
+			$taxon_no = $parent_no;
 			# Quit if we're already at 'class' rank level or higher.
 			last if($results[0]->{taxon_rank} && $taxon_rank_order{$results[0]->{taxon_rank}} < $taxon_rank_order{$highest_level});
 			if($rank eq "family"){
