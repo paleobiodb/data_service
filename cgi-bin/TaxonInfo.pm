@@ -421,9 +421,10 @@ sub displayTaxonInfoResults{
 	my @modules_to_display = $q->param('modules');
 	my %module_num_to_name = (1 => "classification",
 							  2 => "taxonomic history",
-							  3 => "ecology/taphonomy",
-							  4 => "map",
-							  5 => "collections");
+							  3 => "synonymy",
+							  4 => "ecology/taphonomy",
+							  5 => "map",
+							  6 => "collections");
 
 	# Set the default:
 	if(!@modules_to_display){
@@ -596,12 +597,15 @@ sub doModules{
 	elsif($module == 2){
 		print displayTaxonSynonymy($dbt, $genus, $species);
 	}
-	# ecology
 	elsif ( $module == 3 )	{
+		print displaySynonymyList($dbt, $q, $genus, $species);
+	}
+	# ecology
+	elsif ( $module == 4 )	{
 		print displayEcology($dbt,$taxon_no,$genus,$species);
 	}
 	# map
-	elsif($module == 4){
+	elsif($module == 5){
 		print "<center><table><tr><td align=\"middle\"><h3>Distribution</h3></td></tr>".
 			  "<tr><td align=\"middle\" valign=\"top\">";
 		# MAP USES $q->param("genus_name") to determine what it's doing.
@@ -622,7 +626,7 @@ sub doModules{
 		print "<input type=hidden name=\"map_num\" value=\"$map_html_path\">";
 	}
 	# collections
-	elsif($module == 5){
+	elsif($module == 6){
 		print doCollections($exec_url, $q, $dbt, $in_list);
 	}
 }
@@ -1811,6 +1815,171 @@ sub displayEcology	{
 
 }
 
+# JA 11-12,14.9.03
+sub displaySynonymyList	{
+	my $dbt = shift;
+	my $q = shift;
+	my $genus = (shift or "");
+	my $species = (shift or "");
+	my $taxon_name;
+	my $output = "";
 
+	if ( $genus && $species ne "" )	{
+		$taxon_name = $genus . " " . $species;
+	}
+	else{
+		$taxon_name = $genus;
+	}
+
+	print "<center><h3>Synonymy</h3></center>";
+
+# get the taxon's ID number
+	my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='" . $taxon_name . "'";
+	my $taxon_no = @{$dbt->getData($sql)}[0]->{taxon_no};
+
+# find all distinct children where relation is NOT "belongs to"
+	$sql = "SELECT DISTINCT child_no FROM opinions WHERE status!='belongs to' AND parent_no=" . $taxon_no;
+	my @childrefs = @{$dbt->getData($sql)};
+
+# for each one, find the most recent parent
+	for $childref ( @childrefs )	{
+		$sql = "SELECT parent_no, status, pubyr, reference_no ".
+			   "FROM opinions WHERE child_no=" . $childref->{child_no};
+		@ref_ref = @{$dbt->getData($sql)};
+		my $itsparent = selectMostRecentParentOpinion($dbt, \@ref_ref);
+	# if current parent is the focal taxon, save to a list
+		if ( $itsparent == $taxon_no )	{
+			push @syns, $childref->{child_no};
+		}
+	}
+
+# go through list finding all "recombined as" something else cases for each
+	my @synparents;
+	for my $syn (@syns)	{
+		$sql = "SELECT parent_no FROM opinions WHERE status='recombined as' AND child_no=" . $syn;
+		@synparentrefs = @{$dbt->getData($sql)};
+		for $synparentref ( @synparentrefs )	{
+			push @synparents, $synparentref->{parent_no};
+		}
+	}
+
+# save each "recombined as" taxon to the list
+	push @syns, @synparents;
+
+# add the focal taxon itself to the synonymy list
+	push @syns,$taxon_no;
+
+# go through list finding all instances of use as a parent
+	for my $syn (@syns)	{
+		$sql = "SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status!='belongs to' AND parent_no=" . $syn;
+		my @userefs =  @{$dbt->getData($sql)};
+		$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=" . $syn;
+		my $parent_name = @{$dbt->getData($sql)}[0]->{taxon_name};
+		if ( $q->param("taxon_rank") =~ /(genus)|(species)/i )	{
+			$parent_name = "<i>" . $parent_name . "</i>";
+		}
+		for $useref ( @userefs )	{
+			if ( $useref->{pubyr} )	{
+				$synkey = "<td>" . $useref->{pubyr} . "</td><td>" . $parent_name . " " . $useref->{author1last};
+				if ( $useref->{otherauthors} )	{
+					$synkey .= " et al.";
+				} elsif ( $useref->{author2last} )	{
+					$synkey .= " and " . $useref->{author2last};
+				}
+				$mypubyr = $useref->{pubyr};
+		# no pub data, get it from the refs table
+			} else	{
+				$sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $useref->{reference_no};
+				$refref = @{$dbt->getData($sql)}[0];
+				$synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $parent_name . " " . $refref->{author1last};
+				if ( $refref->{otherauthors} )	{
+					$synkey .= " et al.";
+				} elsif ( $refref->{author2last} )	{
+					$synkey .= " and " . $refref->{author2last};
+				}
+				$mypubyr = $refref->{pubyr};
+			}
+			if ( $useref->{pages} )	{
+				if ( $useref->{pages} =~ /[ -]/ )	{
+					$synkey .= " pp. " . $useref->{pages};
+				} else	{
+					$synkey .= " p. " . $useref->{pages};
+				}
+			}
+			if ( $useref->{figures} )	{
+				if ( $useref->{figures} =~ /[ -]/ )	{
+					$synkey .= " figs. " . $useref->{figures};
+				} else	{
+					$synkey .= " fig. " . $useref->{figures};
+				}
+			}
+			$synline{$synkey} = $mypubyr;
+		}
+	}
+
+# likewise appearances in the authority table
+	for my $syn (@syns)	{
+		$sql = "SELECT taxon_name,author1last,author2last,otherauthors,pubyr,pages,figures,ref_is_authority,reference_no FROM authorities WHERE taxon_no=" . $syn;
+		@userefs = @{$dbt->getData($sql)};
+		push @userefs, @authrefs;
+	# save each instance as a key with pubyr as a value
+		for $useref ( @userefs )	{
+			my $auth_taxon_name = $useref->{taxon_name};
+			if ( $q->param("taxon_rank") =~ /(genus)|(species)/i )	{
+				$auth_taxon_name = "<i>" . $auth_taxon_name . "</i>";
+			}
+			if ( $useref->{pubyr} )	{
+				$synkey = "<td>" . $useref->{pubyr} . "</td><td>" . $auth_taxon_name . " " . $useref->{author1last};
+				if ( $useref->{otherauthors} )	{
+					$synkey .= " et al.";
+				} elsif ( $useref->{author2last} )	{
+					$synkey .= " and " . $useref->{author2last};
+				}
+				$mypubyr = $useref->{pubyr};
+		# no pub data, get it from the refs table
+			} else	{
+				$sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $useref->{reference_no};
+				$refref = @{$dbt->getData($sql)}[0];
+				$synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $auth_taxon_name . " " . $refref->{author1last};
+				if ( $refref->{otherauthors} )	{
+					$synkey .= " et al.";
+				} elsif ( $refref->{author2last} )	{
+					$synkey .= " and " . $refref->{author2last};
+				}
+				$mypubyr = $refref->{pubyr};
+			}
+			if ( $useref->{pages} )	{
+				if ( $useref->{pages} =~ /[ -]/ )	{
+					$synkey .= " pp. " . $useref->{pages};
+				} else	{
+					$synkey .= " p. " . $useref->{pages};
+				}
+			}
+			if ( $useref->{figures} )	{
+				if ( $useref->{figures} =~ /[ -]/ )	{
+					$synkey .= " figs. " . $useref->{figures};
+				} else	{
+					$synkey .= " fig. " . $useref->{figures};
+				}
+			}
+			$synline{$synkey} = $mypubyr;
+		}
+	}
+
+# sort the synonymy list by pubyr
+	@synlinekeys = keys %synline;
+	@synlinekeys = sort { $synline{$a} <=> $synline{$b} } @synlinekeys;
+
+# print each line of the synonymy list
+	print "<table cellspacing=5>\n";
+	print "<tr><td><b>Year</b></td><td><b>Name and author</b></td></tr>\n";
+	for $synline ( @synlinekeys )	{
+		print "<tr>$synline</td></tr>\n";
+	}
+	print "</table>\n";
+
+	return "";
+
+}
 
 1;
