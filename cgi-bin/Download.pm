@@ -115,6 +115,7 @@ sub retellOptions {
 	
 	$html .= $self->retellOptionsRow ( "Oldest interval", $q->param("max_interval_name") );
 	$html .= $self->retellOptionsRow ( "Youngest interval", $q->param("min_interval_name") );
+	$html .= $self->retellOptionsRow ( "Lithologies", $q->param("lithology") );
 	$html .= $self->retellOptionsRow ( "Environment", $q->param("environment") );
 	$html .= $self->retellOptionsRow ( "Genus name", $q->param("genus_name") );
 	$html .= $self->retellOptionsRow ( "Class", $q->param("class") );
@@ -590,6 +591,20 @@ sub getStageString {
 	return "";
 }
 
+# JA 1.7.04
+# WARNING: relies on fixed lists of lithologies; if these ever change in
+#  the database, this section will need to be modified
+sub getLithologyString	{
+	my $self = shift;
+	my $lithology = $q->param('lithology');
+	if ( $lithology eq "siliciclastic only" )	{
+		return qq| ( collections.lithology1 IN ('"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate') AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ('"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate') ) ) |;
+	} elsif ( $lithology eq "carbonate only" )	{
+		return qq| ( collections.lithology1 IN ('wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"') AND ( collections.lithology2 IS NULL OR collections.lithology2='' OR collections.lithology2 IN ('wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"') ) ) |;
+	}
+	return "";
+}
+
 sub getEnvironmentString{
 	my $self = shift;
 	my $environment = $q->param('environment');
@@ -755,6 +770,7 @@ sub getCollectionsWhereClause {
 	$where->addWhereItem($self->getCountryString()) if $self->getCountryString();
 	$where->addWhereItem($self->getLatLongString()) if $self->getLatLongString();
 	$where->addWhereItem($self->getIntervalString()) if $self->getIntervalString();
+	$where->addWhereItem($self->getLithologyString()) if $self->getLithologyString();
 	$where->addWhereItem($self->getEnvironmentString()) if $self->getEnvironmentString();
 	$where->addWhereItem($self->getGeogscaleString()) if $self->getGeogscaleString();
 	$where->addWhereItem($self->getStratscaleString()) if $self->getStratscaleString();
