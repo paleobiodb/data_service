@@ -1976,7 +1976,7 @@ sub displayOpinionChoiceForm {
 	print "<TR><TD><INPUT type=\"radio\" name=\"opinion_no\" id=\"opinion_no\" value=\"-1\" checked>Create a <b>new</b> opinion record</TD></TR>\n";
 	print "</TABLE><BR>\n";
 
-	print "<center><p><i>An "opinion" is when an author classifies or synonymizes a taxon. Select an old opinion if it was entered incorrectly or incompletely. Create a new one if the author whose opinion you are looking at right now is not in the above list.</i></p></center>\n";
+	print "<center><p><i>An \"opinion\" is when an author classifies or synonymizes a taxon. Select an old opinion if it was entered incorrectly or incompletely. Create a new one if the author whose opinion you are looking at right now is not in the above list.</i></p></center>\n";
 	
 	print "<INPUT type=submit value=\"Submit\">\n";
 	print "<\FORM></CENTER><BR>\n";
