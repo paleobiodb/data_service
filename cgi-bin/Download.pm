@@ -634,14 +634,26 @@ sub getNotNullString {
 
 # get a hash table mapping interval numbers into intervals of the selected
 #   time scale
+# WARNING: the tables are used only to produce the occurrence counts
+#  output to the -scale file, not to produce assignments or age estimates
+#  for individual collections or occurrences
 sub getTimeLookup	{
 	my $intervalInScaleRef;
 	if ( $q->param('time_scale') eq "PBDB 10 m.y. bins" )	{
-		$intervalInScaleRef = TimeLookup::processBinLookup($dbh,$dbt);
+		@_ = TimeLookup::processBinLookup($dbh,$dbt);
+		%intervallookup = %{$_[0]};
+	# hash array is by name
+		%upperbinbound = %{$_[1]};
+		%lowerbinbound = %{$_[2]};
 	} else	{
 		$intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, $q->param('time_scale'));
+		%intervallookup = %{$intervalInScaleRef};
+		@_ = TimeLookup::findBoundaries($dbh,$dbt);
+	# first two hash arrays are by number, so used the next two,
+	#  which are by name
+		%upperbinbound = %{$_[2]};
+		%lowerbinbound = %{$_[3]};
 	}
-	%intervallookup = %{$intervalInScaleRef};
 }
 
 # create a hash table relating taxon names to eco/taphonomic categories
@@ -767,8 +779,8 @@ sub doQuery {
 	# get the PBDB 10 m.y. bin names for the collections JA 3.3.04
 	# WARNING: the locage_max field is just being used as a dummy
 	if ( $q->param('collections_locage_max') )	{
-		my $intervalInScaleRef = TimeLookup::processBinLookup($dbh,$dbt);
-		%mybin = %{$intervalInScaleRef};
+		@_ = TimeLookup::processBinLookup($dbh,$dbt);
+		%mybin = %{$_[0]};
 	}
 
 
@@ -1219,7 +1231,7 @@ sub doQuery {
 			 "Devonian 4", "Devonian 3", "Devonian 2",
 			 "Devonian 1", "Silurian 2", "Silurian 1",
 			 "Ordovician 5", "Ordovician 4", "Ordovician 3",
-			 "Ordovician 2", "Ordovician 1", "Cambrian 5",
+			 "Ordovician 2", "Ordovician 1",
 			 "Cambrian 4", "Cambrian 3", "Cambrian 2",
 			 "Cambrian 1" );
 		} else	{
@@ -1243,7 +1255,9 @@ sub doQuery {
 		@enumvals = sort @enumvals;
 
 		# now print the results
-		print SCALEFILE "interval\ttotal occurrences";
+		print SCALEFILE "interval";
+		print SCALEFILE "\tlower boundary\tupper boundary\tmidpoint";
+		print SCALEFILE "\ttotal occurrences";
 		for my $val ( @enumvals )	{
 			if ( $val eq "" )	{
 				print SCALEFILE "\tno data";
@@ -1263,13 +1277,12 @@ sub doQuery {
 		for my $intervalName ( @intervalnames )	{
 			$acceptedIntervals++;
 			print SCALEFILE "$intervalName";
-			print SCALEFILE "\t$occsbybin{$intervalName}";
+			printf SCALEFILE "\t%.2f",$lowerbinbound{$intervalName};
+			printf SCALEFILE "\t%.2f",$upperbinbound{$intervalName};
+			printf SCALEFILE "\t%.2f",($lowerbinbound{$intervalName} + $upperbinbound{$intervalName}) / 2;
+			printf SCALEFILE "\t%d",$occsbybin{$intervalName};
 			for my $val ( @enumvals )	{
-				if ( $occsbybinandcategory{$intervalName}{$val} eq "" )	{
-					print SCALEFILE "\t0";
-				} else	{
-					print SCALEFILE "\t$occsbybinandcategory{$intervalName}{$val}";
-				}
+				printf SCALEFILE "\t%d",$occsbybinandcategory{$intervalName}{$val};
 			}
 			for my $val ( @enumvals )	{
 				if ( $occsbybinandcategory{$intervalName}{$val} eq "" )	{
