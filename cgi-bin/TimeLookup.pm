@@ -506,16 +506,22 @@ sub findBoundaries	{
 	}
 
     # Ufimian case. Optionally remove intervals which no longer map to any location
-    # in the composite scale
+    # in the composite scale by deleting intervals that don't have any interval pointing
+    # to them.  
     if ($skip_orphaned_intervals) {
         while(($k,$v)=each %bestnext) {
             $refbestnext{$v}=1;
         }
         for my $int_no (keys %lowerbound) {
             if (!$refbestnext{$int_no}) {
-                #print "no ref for $int_no"; 
-                delete $lowerbound{$int_no};
-                delete $upperbound{$int_no};
+                # We have to make sure that this interval is not an interval that is starting a scale! 
+                my $sql = "SELECT * FROM correlations WHERE next_interval_no=$int_no";
+                my @result = @{$dbt->getData($sql)};
+                if (@result) {
+                    #print "no ref for $int_no"; 
+                    delete $lowerbound{$int_no};
+                    delete $upperbound{$int_no};
+                }
             } 
         }
     }
