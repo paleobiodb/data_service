@@ -25,7 +25,24 @@ sub searchForm{
 		$html .= "<center><h3>Taxon search form</h3></center>";
 	}
 
-	$html .= "<form method=post action=\"/cgi-bin/bridge.pl\">".
+	$html .= "\n<script language=\"Javascript\">\n".
+			 "function checkInput(){\n".
+			 "	var rank = document.forms[0].taxon_rank.value;\n".
+			 "	var value = document.forms[0].taxon_name.value;\n".
+			 "	if(value.match(/\\w+\\s+\\w+/) && rank != 'Genus and species'){\n".
+			 "		alert('Please choose rank \"Genus and species\" for this search');\n".
+			 "		return false;\n".
+			 "	}else if(rank == 'Genus and species' && !value.match(/\\w+\\s+\\w+/)){\n".
+			 "		alert('Please enter a name in the form \"Genus species\"');\n".
+			 "		return false;\n".
+			 "	}\n".
+			 "	else{\n".
+			 "		return true;\n".
+			 "	}\n".
+			 "}\n".
+			 "</script>\n";
+	$html .= "<form method=post action=\"/cgi-bin/bridge.pl\" ".
+			 "onSubmit=\"return checkInput();\">".
 		   "<input id=\"action\" type=hidden name=\"action\"".
 		   " value=\"checkTaxonInfo\">".
 		   "<input id=\"user\" type=hidden name=\"user\"".
@@ -905,8 +922,7 @@ sub getSynonymyParagraph{
 	# sort the list of beginning syn_years
 	@syn_years = sort{$a cmp $b} @syn_years;
 
-	#--
-	## Revalidations and nomen*'s
+	# Revalidations and nomen*'s
 	$sql = "SELECT parent_no, status, reference_no, pubyr, author1last, ".
 		   "author2last, otherauthors, opinion_no ".
 		   "FROM opinions WHERE child_no=$taxon_no AND (status='belongs to' ".
@@ -950,6 +966,7 @@ sub getSynonymyParagraph{
 		}
 	}
 	# Combine all adjacent like status types from %nomen_or_reval.
+	# (They're chronological: nomen, reval, reval, nomen, nomen, reval, etc.)
 	my %additional = ();
 	my $last_status;
 	my $last_key;
@@ -964,13 +981,10 @@ sub getSynonymyParagraph{
 		$last_status = $nomen_or_reval{$nomen_or_reval_numbers[$index]}->{status};
 	}
 
-	# PUT IN SYNONYMIES HASH.
+	# Put revalidations and nomen*'s in synonymies hash.
 	foreach my $key (keys %additional){
 		$synonymies{$key} = $additional{$key};
 	}
-
-	#--
-
 
 	# Now print it all out
 	my @syn_keys = keys %synonymies;
