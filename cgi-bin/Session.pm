@@ -29,7 +29,7 @@ sub processLogin {
 	my $valid = 0;
 
 	# First do some housekeeping
-	# This cleans out ALL records in SESSION_DATA older than 48 hours.
+	# This cleans out ALL records in session_data older than 48 hours.
 	$self->houseCleaning( $dbh );
 
 	# We want them to specify both an authorizer and an enterer
@@ -110,7 +110,7 @@ sub processLogin {
 			$authorizer =~ s/'/\\'/g;
 			$enterer =~ s/'/\\'/g;
 
-			$sql =	"INSERT INTO SESSION_DATA ( ".
+			$sql =	"INSERT INTO session_data ( ".
 					"	session_id, ".
 					"	authorizer, ".
 					"	enterer, ".
@@ -154,7 +154,7 @@ sub processGuestLogin {
 	my $session_id = $q->cookie("session_id");
 	if ( $session_id ) {
 		# Who are they?
-		$sql = "SELECT * FROM SESSION_DATA WHERE session_id='$session_id'";
+		$sql = "SELECT * FROM session_data WHERE session_id='$session_id'";
 		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute();
 		if ( $sth->rows ) {
@@ -162,7 +162,7 @@ sub processGuestLogin {
 			my $rs = $sth->fetchrow_hashref ( );
 			if ( $rs->{authorizer} ne "Guest" ) {
 				# Log out this non-guest enterer
-				$sql = "DELETE FROM SESSION_DATA WHERE session_id='$session_id'";
+				$sql = "DELETE FROM session_data WHERE session_id='$session_id'";
 				$dbh->do( $sql );
 			} else {
 
@@ -192,7 +192,7 @@ sub processGuestLogin {
 	$self->{session_id} = $session_id;
 
 	# Store the session data into the db
-	$sql =	"INSERT INTO SESSION_DATA ( ".
+	$sql =	"INSERT INTO session_data ( ".
 			"	session_id, ".
 			"	authorizer, ".
 			"	enterer ".
@@ -220,7 +220,7 @@ sub validateUser {
 	if ( $session_id ) {
 
 		# Ensure their session_id corresponds to a valid database entry
-		$sql = "SELECT * FROM SESSION_DATA WHERE session_id='$session_id'";
+		$sql = "SELECT * FROM session_data WHERE session_id='$session_id'";
 		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		# execute returns number of rows affected for NON-select statements
 		# and true/false (success) for select statements.
@@ -234,8 +234,8 @@ sub validateUser {
 				foreach my $field ( keys %{$rs} ) {
 					$self->{$field} = $rs->{$field};
 				}
-				# now update the SESSION_DATA record to the current time
-				$sql = "UPDATE SESSION_DATA set record_date=NULL ".
+				# now update the session_data record to the current time
+				$sql = "UPDATE session_data set record_date=NULL ".
 					   "WHERE session_id='$session_id'";
 				$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 				if($sth->execute() == 1){
@@ -250,20 +250,20 @@ sub validateUser {
 	return "";
 }
 
-# Cleans stale entries from the SESSION_DATA table.
+# Cleans stale entries from the session_data table.
 # 48 hours is the current time considered
 sub houseCleaning {
 	my $self = shift;
 	my $dbh = shift;
 
 	# COULD ALSO USE 'DATE_SUB'
-	$sql = 	"DELETE FROM SESSION_DATA ".
+	$sql = 	"DELETE FROM session_data ".
 			" WHERE record_date < DATE_ADD( now(), INTERVAL -2 DAY)";
 	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 
 	# COULD ALSO USE 'DATE_SUB'
 	# Nix the Guest users @ 1 day
-	$sql = 	"DELETE FROM SESSION_DATA ".
+	$sql = 	"DELETE FROM session_data ".
 			" WHERE record_date < DATE_ADD( now(), INTERVAL -1 DAY) ".
 			"	AND authorizer = 'Guest' ";
 	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
@@ -277,7 +277,7 @@ sub setReferenceNo {
 	my $reference_no = shift;
 
 	if ( $reference_no ) {
-		$sql =	"UPDATE SESSION_DATA ".
+		$sql =	"UPDATE session_data ".
 				"	SET reference_no = $reference_no ".
 				" WHERE session_id = '".$self->get("session_id")."'";
 		$dbh->do( $sql ) || die ( "$sql<HR>$!" );
@@ -298,7 +298,7 @@ sub enqueue {
 
 	# Get the current contents
 	$sql =	"SELECT queue ".
-			"  FROM SESSION_DATA ".
+			"  FROM session_data ".
 			" WHERE session_id = '".$self->get("session_id")."'";
     my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
     $sth->execute();
@@ -312,7 +312,7 @@ sub enqueue {
 	# If there was something, tack it on the front of the queue
 	if ( $current_contents ) { $queue = $queue."|".$current_contents; }
 
-	$sql =	"UPDATE SESSION_DATA ".
+	$sql =	"UPDATE session_data ".
 			"	SET queue = '$queue' ".
 			" WHERE session_id = '".$self->get("session_id")."'";
 	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
@@ -326,7 +326,7 @@ sub unqueue {
 	my %hash = {};
 
 	$sql =	"SELECT queue ".
-			"  FROM SESSION_DATA ".
+			"  FROM session_data ".
 			" WHERE session_id = '".$self->get("session_id")."'";
     my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
     $sth->execute();
@@ -344,7 +344,7 @@ sub unqueue {
 
 		# Write the rest out
 		$queue = join ( "|", @entries );
-		$sql =	"UPDATE SESSION_DATA ".
+		$sql =	"UPDATE session_data ".
 				"	SET queue = '$queue' ".
 				" WHERE session_id = '".$self->get("session_id")."'";
 		$dbh->do( $sql ) || die ( "$sql<HR>$!" );
@@ -370,7 +370,7 @@ sub clearQueue {
 	my $self = shift;
 	my $dbh = shift;
 
-	$sql =	"UPDATE SESSION_DATA ".
+	$sql =	"UPDATE session_data ".
 			"	SET queue = NULL ".
 			" WHERE session_id = '".$self->get("session_id")."'";
 	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
