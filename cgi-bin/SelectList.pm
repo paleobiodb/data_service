@@ -74,7 +74,11 @@ sub toHTML
 	
 	$retVal = qq|<select name="$self->{_name}"|;
 	$retVal .= qq| size="$self->{_size}"| if $self->{_size};
-	$retVal .= qq| $self->{_maintagstuff} | if $self->{_maintagstuff};
+	# if the select has both "id" and "name", we'll end up with repeated "name"
+	# attrs if we don't do this:
+	if($self->{_maintagstuff} && $self->{_maintagstuff} !~ /^\s*name="$self->{_name}"\s*$/){
+		$retVal .= qq| $self->{_maintagstuff} |;
+	}
 	$retVal .= '>';
 	
 	$retVal .= "<option>" if $self->{_allowNulls} && $items[0] ne '';
