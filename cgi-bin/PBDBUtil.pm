@@ -617,21 +617,34 @@ sub simple_array_push_unique{
     return \@orig;
 }
 
+# JA: this is a Paul Muhl function, not to be confused with
+#  Classification::get_classification_hash, that only is called in two
+#  places in bridge.pl related to construction of taxonomic lists by
+#  buildTaxonomicList
+# extensive rewrite 2.4.04 by JA to accomodate taxon numbers instead of names
 sub get_classification_hash{
 	my $dbt = shift;
-    my $taxon_name = shift;
-    $taxon_name =~ /(\w+)\s+(\w+)/;
-    my ($genus, $species) = ($1, $2);
-    if($species){
-        $rank = "species";
-    }
-    else{
-        $rank = '';
-        #$rank = "genus";
+    my $taxon_no = shift;
+
+ # don't even bother unless we know the taxon's ID number
+    if ( $taxon_no < 1 )	{
+      return;
     }
 
+#   my $taxon_name = shift;
+#   $taxon_name =~ /(\w+)\s+(\w+)/;
+#   my ($genus, $species) = ($1, $2);
+#   if($species){
+#       $rank = "species";
+#   }
+#   else{
+        $rank = '';
+#       #$rank = "genus";
+#   }
+
     my $child_no = -1;
-    my $parent_no = -1;
+#   my $parent_no = -1;
+    my $parent_no = $taxon_no;
     my %parent_no_visits = ();
     my %child_no_visits = ();
     my %classification = ();
@@ -640,17 +653,21 @@ sub get_classification_hash{
     my $first_time = 1;
     # Loop at least once, but as long as it takes to get full classification
     while($parent_no){
-        # Keep $child_no at -1 if no results are returned.
-        my $sql = "SELECT taxon_no, taxon_rank FROM authorities WHERE ".
-                  "taxon_name='$taxon_name'";
-		if($rank){
-			$sql .= " AND taxon_rank = '$rank'";
-		}
-        my @results = @{$dbt->getData($sql)};
-        if(defined $results[0]){
-            # Save the taxon_no for keying into the opinions table.
-            $child_no = $results[0]->{taxon_no};
+            $child_no = $parent_no;
 
+# following old PM section tried to guess the chid_no from the name
+        # Keep $child_no at -1 if no results are returned.
+#       my $sql = "SELECT taxon_no, taxon_rank FROM authorities WHERE ".
+#                 "taxon_name='$taxon_name'";
+#		if($rank){
+#			$sql .= " AND taxon_rank = '$rank'";
+#		}
+#       my @results = @{$dbt->getData($sql)};
+#       if(defined $results[0]){
+            # Save the taxon_no for keying into the opinions table.
+#           $child_no = $results[0]->{taxon_no};
+
+# JA: still do need the following
             # Insurance for self referential / bad data in database.
             # NOTE: can't use the tertiary operator with hashes...
             # How strange...
@@ -662,44 +679,48 @@ sub get_classification_hash{
             }
             last if($child_no_visits{$child_no}>1);
 
-        }
+#       }
         # no taxon number: if we're doing "Genus species", try to find a parent
         # for just the Genus, otherwise give up.
-        else{
-            if($genus && $species){
-                $sql_auth_inv = "SELECT taxon_no, taxon_rank ".
-                   "FROM authorities ".
-                   "WHERE taxon_name = '$genus'";
-                @results = @{$dbt->getData($sql_auth_inv)};
+#       else{
+#           if($genus && $species){
+#               $sql_auth_inv = "SELECT taxon_no, taxon_rank ".
+#                  "FROM authorities ".
+#                  "WHERE taxon_name = '$genus'";
+#               @results = @{$dbt->getData($sql_auth_inv)};
                 # THIS IS LOOKING IDENTICAL TO ABOVE...
                 # COULD CALL SELF WITH EMPTY SPECIES NAME AND AN EXIT...
-                if(defined $results[0]){
-                    $child_no = $results[0]->{taxon_no};
-					$rank = $results[0]->{taxon_rank};
+#               if(defined $results[0]){
+#                   $child_no = $results[0]->{taxon_no};
+#					$rank = $results[0]->{taxon_rank};
 
-                    if($child_no_visits{$child_no}){
-                        $child_no_visits{$child_no} += 1;
-                    }
-                    else{
-                        $child_no_visits{$child_no} = 1;
-                    }
-                    last if($child_no_visits{$child_no}>1);
-                }
-            }
-            else{
-                last;
-            }
-        }
+#                   if($child_no_visits{$child_no}){
+#                       $child_no_visits{$child_no} += 1;
+#                   }
+#                   else{
+#                       $child_no_visits{$child_no} = 1;
+#                   }
+#                   last if($child_no_visits{$child_no}>1);
+#               }
+#           }
+#           else{
+#               last;
+#           }
+#       }
 
-		# get the taxon_no and rank of the initial argument, in case it's a
+	# get the taxon_no and rank of the initial argument, in case it's a
         # higher taxon name with some c/o/f parents so we can sort better.
         # don't save the taxon_name in the hash because it will already be
         # displayed in the 'genus' field of the taxonomic list
         if($first_time and $child_no > 0 ){
+            $sql = "SELECT taxon_rank FROM authorities WHERE taxon_no=" . $child_no;
+            @results = @{$dbt->getData($sql)};
             $classification{$results[0]->{taxon_rank}."_no"} = $child_no;
         }
 
         # otherwise, give up...
+        # JA: this should never happen given that the function now starts
+        #  with a non-zero taxon no, but what the heck
         if($child_no < 1){
             return {};
         }
@@ -710,22 +731,27 @@ sub get_classification_hash{
                         "WHERE child_no=$child_no AND status='belongs to'";
         @results = @{$dbt->getData($sql_opin)};
 
-        if($first_time && $rank eq "species" && scalar @results < 1){
-            my ($genus, $species) = split(/\s+/,$taxon_name);
-            my $last_ditch_sql = "SELECT taxon_no ".
-                                 "FROM authorities ".
-                                 "WHERE taxon_name = '$genus' ".
-                                 "AND taxon_rank = 'Genus'";
-            @results = @{$dbt->getData($last_ditch_sql)};
-            my $child_no = $results[0]->{taxon_no};
-            if($child_no > 0){
-                $last_ditch_sql = "SELECT status, parent_no, pubyr, ".
-                                  "reference_no FROM opinions ".
-                                  "WHERE child_no=$child_no AND ".
-                                  "status='belongs to'";
-                @results = @{$dbt->getData($last_ditch_sql)};
-            }
-        }
+# JA: PM wrote the following in case the taxon being classified was a species,
+#  there were no opinions on it, but there were opinions on its genus; this
+#  is now a moot point because only explicit classification relationships are
+#  now allowed
+#       if($first_time && $rank eq "species" && scalar @results < 1){
+#           my ($genus, $species) = split(/\s+/,$taxon_name);
+#           my $last_ditch_sql = "SELECT taxon_no ".
+#                                "FROM authorities ".
+#                                "WHERE taxon_name = '$genus' ".
+#                                "AND taxon_rank = 'Genus'";
+#           @results = @{$dbt->getData($last_ditch_sql)};
+#           my $child_no = $results[0]->{taxon_no};
+#           if($child_no > 0){
+#               $last_ditch_sql = "SELECT status, parent_no, pubyr, ".
+#                                 "reference_no FROM opinions ".
+#                                 "WHERE child_no=$child_no AND ".
+#                                 "status='belongs to'";
+#               @results = @{$dbt->getData($last_ditch_sql)};
+#           }
+#       }
+
         $first_time = 0;
 
         if(scalar @results){
