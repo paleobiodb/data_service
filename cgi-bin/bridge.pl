@@ -1417,7 +1417,7 @@ sub displaySearchColls {
 #  * System displays matching collection results
 sub displayCollResults {
 	my $in_list = shift; # for taxon info script
-
+	
 	my $limit = $q->param("limit");
 	if ( ! $limit ) { $limit = 30; }
 	my $ofRows = 0;
@@ -1429,7 +1429,8 @@ sub displayCollResults {
 	# Run it
 
 #	print "in sub displayCollResults, sql = $sql<BR><BR>";
-
+	Debug::dbPrint("sql = $sql");
+	
 	my $sth = $dbh->prepare( $sql );
 
 #	print "after preparing, sql = $sql<BR><BR>";
@@ -1639,13 +1640,16 @@ sub displayCollResults {
 sub processCollectionsSearch {
 	my $in_list = shift;  # for taxon info script
 
-	# This is a list of all pulldowns in the collection search.  
+	Debug::dbPrint("inlist = $in_list");
+
+	
+	# This is a list of all pulldowns in the collection search form.  
 	# These cannot use the LIKE wildcard, i.e. they must be
 	# exact matches regardless of the request.
 	my %pulldowns = (	"authorizer"		=> 1,
 							"enterer"			=> 1,
 							"research_group"	=> 1,
-							"period"				=> 1,
+							"period"			=> 1,
 							"lithadj"			=> 1,
 							"lithology1"		=> 1,
 							"lithadj2"			=> 1,
@@ -1653,7 +1657,9 @@ sub processCollectionsSearch {
 							"environment"		=> 1 );
 
 					
-
+	my $sql = SQLBuilder->new();
+	$sql->setWhereSeparator("AND");
+	
 	# If a genus name is requested, query the occurrences table to get
 	# a list of useable collections
 	#
@@ -1695,9 +1701,13 @@ sub processCollectionsSearch {
 		}
 		
 		my @tables = ("occurrences","reidentifications");
+		$sql->setSelectExpr("collection_no, count(*)");
 		for my $tableName (@tables) {
-			$sql =	"SELECT collection_no, count(*) ".
-					" FROM " . $tableName . " WHERE ";
+			$sql->setFromExpr($tableName);
+			$sql->clearWhereItems();
+			
+			#$sql =	"SELECT collection_no, count(*) ".
+			#		" FROM " . $tableName . " WHERE ";
 
 			if ( $q->param("wild") =~ /Y/ ) {
 				$relationString = " LIKE '";
@@ -1710,8 +1720,9 @@ sub processCollectionsSearch {
 			if ( $genus )	{
 				if($q->param("taxon_rank") eq "Higher taxon" ||
 						$q->param("taxon_rank") eq "Higher-taxon"){
-						
-					$sql .= "genus_name IN (";
+					
+				
+					#$sql .= "genus_name IN (";
 					
 					if($in_list eq ""){
 						dbg("RE-RUNNING TAXONOMIC SEARCH in bridge<br>");
@@ -1721,27 +1732,34 @@ sub processCollectionsSearch {
                         $in_list = `./recurse $name`;
 					}
 					
-					$sql .= $in_list . ") ";
+					$sql->addWhereItem("genus_name IN ($in_list)");
+					
+					#$sql .= $in_list . ") ";
+					
 				} else {
-					$sql .= "genus_name" . $relationString . $genus . $wildCard;
+					$sql->addWhereItem("genus_name $relationString $genus $wildCard");
+					#$sql .= "genus_name" . $relationString . $genus . $wildCard;
 				}
-				if ( $sub_genus || $species )	{
-					$sql .= " AND ";
-				}
+				#if ( $sub_genus || $species )	{
+				#	$sql .= " AND ";
+				#}
 			}
 			if ( $sub_genus )	{
-				$sql .= "subgenus_name" . $relationString.$subgenus.$wildCard;
-				if ( $species )	{
-					$sql .= " AND ";
-				}
+				$sql->addWhereItem("subgenus_name" . $relationString.$subgenus.$wildCard);
+				#$sql .= "subgenus_name" . $relationString.$subgenus.$wildCard;
+				#if ( $species )	{
+				#	$sql .= " AND ";
+				#}
 			}
 			if ( $species )	{
-				$sql .= "species_name" . $relationString . $species . $wildCard;
+				$sql->addWhereItem("species_name" . $relationString . $species . $wildCard);
+				#$sql .= "species_name" . $relationString . $species . $wildCard;
 			}
 
-			$sql .= " GROUP BY collection_no";
-			dbg ( "$sql<HR>" );
-			$sth = $dbh->prepare($sql);
+			$sql->setGroupByExpr("collection_no");
+			#$sql .= " GROUP BY collection_no";
+			dbg ( "$sql->SQLExpr()<HR>" );
+			$sth = $dbh->prepare($sql->SQLExpr());
 			$sth->execute();
 			
 			my @result = @{$sth->fetchall_arrayref()};
@@ -1770,8 +1788,8 @@ sub processCollectionsSearch {
 	}
 
 	# Get the database metadata
-	$sql = "SELECT * FROM collections WHERE collection_no=0";
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+	my $sqlLiteral = "SELECT * FROM collections WHERE collection_no=0";
+	my $sth = $dbh->prepare( $sqlLiteral ) || die ( "$sqlLiteral<hr>$!" );
 	$sth->execute();
 
 	# Get a list of field names
@@ -1956,7 +1974,8 @@ sub processCollectionsSearch {
 		
 	# Handle sort order
 	my $sortString = "";
-	$sortString = "ORDER BY " . $q->param('sortby') if $q->param('sortby');
+	#$sortString = "ORDER BY " . $q->param('sortby') if $q->param('sortby');
+	$sortString = $q->param('sortby') if $q->param('sortby');
 	$sortString .= " DESC" if $sortString && $q->param('sortorder') eq 'desc';
 
 	# Handle limit
@@ -2029,10 +2048,18 @@ sub processCollectionsSearch {
 	}
 
 
-	# form the SQL query from the newterms list.	
-	$sql = "SELECT " . join(', ', @columnList, 'reference_no').
-		" FROM collections ".
-			" WHERE ". join(' AND ', @terms);
+	# form the SQL query from the newterms list.
+	$sql->clear();
+	$sql->setFromExpr("collections");
+	$sql->setWhereSeparator("AND");
+	$sql->setSelectExpr(join(', ', @columnList, 'reference_no'));
+	foreach my $t (@terms) {
+		$sql->addWhereItem($t);
+	}
+	
+	#$sql = "SELECT " . join(', ', @columnList, 'reference_no').
+	#	" FROM collections ".
+	#		" WHERE ". join(' AND ', @terms);
 
 #	dbPrint("full SQL == $sql");
 
@@ -2058,25 +2085,29 @@ sub processCollectionsSearch {
 			}
 		}
 		if (@terms)	{
-			$sql .= " AND collection_no IN ( " . join ( ", ", @okcolls )." ) ";
-		} else	{
-			$sql .= " collection_no IN ( " . join ( ", ", @okcolls )." ) ";
-		}
+			#$sql .= " AND collection_no IN ( " . join ( ", ", @okcolls )." ) ";
+			$sql->addWhereItem("collection_no IN ( " . join ( ", ", @okcolls ) . " )");
+		} #else	{
+			#$sql .= " collection_no IN ( " . join ( ", ", @okcolls )." ) ";
+		#}
 	} elsif ( @timeinlist )	{
 		if (@terms)	{
-			$sql .= " AND collection_no IN ( " . join ( ", ", @timeinlist )." ) ";
-		} else	{
-			$sql .= " collection_no IN ( " . join ( ", ", @timeinlist )." ) ";
-		}
+			$sql->addWhereItem("collection_no IN ( " . join ( ", ", @timeinlist )." ) ");
+			#$sql .= " AND collection_no IN ( " . join ( ", ", @timeinlist )." ) ";
+		} #else	{
+			#$sql .= " collection_no IN ( " . join ( ", ", @timeinlist )." ) ";
+		#}
 	}
 
 	# Sort and limit
-	$sql .= " $sortString $limitString";
+	$sql->setOrderByExpr($sortString);
+	$sql->setLimitExpr($limitString);
+	#$sql .= " $sortString $limitString";
 
-	dbg ( "$sql<HR>" );
+	dbg ( "$sql->SQLExpr()<HR>" );
 	#print ("sql = $sql<BR>");
 
-	return $sql;
+	return $sql->SQLExpr();
 
 } # end sub processCollectionsSearch
 
@@ -3238,9 +3269,9 @@ sub processViewImage{
 ## END Image stuff
 ##############
 
-##############
 ### Module Navigation
-
+# this is called when the user presses the Update button on the taxon info display
+# in the little box on the left with the check boxes.
 sub processModuleNavigation{
 	# check query params
 
