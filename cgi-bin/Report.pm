@@ -89,15 +89,17 @@ sub reportDisplayHTML {
     # Print Header
     my $isDoubleArray = scalar @{$self->{'sortKeys2'}};
     my $totalKeyword = ($q->param('output') eq 'average occurrences') ? 'AVERAGE' : 'TOTAL';
+    my $header1 = $q->param('searchfield1'); $header1 =~ s/\s+\([a-z ]+\)//i;
+    my $header2 = $q->param('searchfield2'); $header2 =~ s/\s+\([a-z ]+\)//i;
     print "<table border=0 class=dataTable cellspacing=0>";
     if ($isDoubleArray) {
         my $numCols = scalar(@{$self->{'sortKeys2'}});
         print "<tr><td class=dataTableTopULCorner>&nbsp;</td>";
-        print "<td class=dataTableTop colspan=$numCols align=center><b>".$q->param('searchfield2')."</b></td>";
+        print "<td class=dataTableTop colspan=$numCols align=center><b>$header2</b></td>";
         print "<td>&nbsp;</td></tr>";
     }
     print "<tr>";
-    print "<td class=dataTableULCorner align=center><b>".$q->param('searchfield1')."</b></td>";
+    print "<td class=dataTableULCorner align=center><b>$header1</b></td>";
     if ($isDoubleArray) { 
         foreach $key2 (@{$self->{'sortKeys2'}}) {
             print "<td class=dataTableColumn>$key2</td>";
@@ -198,14 +200,16 @@ sub reportPrintOutfile{
     # Print Header
     my $isDoubleArray = scalar @{$self->{'sortKeys2'}}; #var is true for two search terms, false for one
     my $totalKeyword = ($q->param('output') eq 'average occurrences') ? 'AVERAGE' : 'TOTAL';
+    my $header1 = $q->param('searchfield1'); $header1 =~ s/\s+\([a-z ]+\)//i;
+    my $header2 = $q->param('searchfield2'); $header2 =~ s/\s+\([a-z ]+\)//i;
     if ($isDoubleArray) {
-        @line = ($q->param('searchfield1').' / '.$q->param('searchfield2'));
+        @line = ("$header1 / $header2");
         foreach $key2 (@{$self->{'sortKeys2'}}) {
             push @line, $key2;
         }
         push @line, $totalKeyword;
     } else {
-        @line = ($q->param('searchfield1'));
+        @line = ($header1);
         push @line, $q->param('output');
         push @line, 'percent';
     }
@@ -411,11 +415,11 @@ sub reportBuildDataTables {
 
     # Provide arrays of sorted keys for the two totals with which
     # to index into the hashes
-    if ($q->param('searchfield1') eq "Harland 2: Periods") {
+    if ($q->param('searchfield1') eq "Harland 2: Periods (standard order)") {
         @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,2);
-    } elsif ($q->param('searchfield1') eq "Harland 4: Epochs") {
+    } elsif ($q->param('searchfield1') eq "Harland 4: Epochs (standard order)") {
         @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,4);
-    } elsif ($q->param('searchfield1') eq "Harland 6: Stages") {
+    } elsif ($q->param('searchfield1') eq "Harland 6: Stages (standard order)") {
         @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,6);
     } else {
         @{$self->{'sortKeys1'}} = sort {$self->{'totals1'}{$b} <=> $self->{'totals1'}{$a}} keys %{$self->{'totals1'}};
@@ -425,11 +429,11 @@ sub reportBuildDataTables {
     for(my $i=scalar(@{$self->{'sortKeys1'}})-1;$i>=0;$i--) {
         splice @{$self->{'sortKeys1'}},$i,1 if (!exists $self->{'totals1'}{@{$self->{'sortKeys1'}}[$i]}); 
     }    
-    if ($q->param('searchfield2') eq "Harland 2: Periods") {
+    if ($q->param('searchfield2') eq "Harland 2: Periods (standard order)") {
         @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,2);
-    } elsif ($q->param('searchfield2') eq "Harland 4: Epochs") {
+    } elsif ($q->param('searchfield2') eq "Harland 4: Epochs (standard order)") {
         @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,4);
-    } elsif ($q->param('searchfield2') eq "Harland 6: Stages") {
+    } elsif ($q->param('searchfield2') eq "Harland 6: Stages (standard order)") {
         @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,6);
     } else {
         @{$self->{'sortKeys2'}} = sort {$self->{'totals2'}{$b} <=> $self->{'totals2'}{$a}} keys %{$self->{'totals2'}};
@@ -568,8 +572,7 @@ sub reportQueryDB{
         'assemblage components'=>'assembl_comps', 'reason for describing collection'=>'collection_type',
         'list coverage'=>'collection_coverage', 'lithification'=>'lithification,lithification2',
         'lithology - all combinations'=>'lithology1,lithology2', 'lithology - weighted'=>'lithology1,lithology2',
-        'continent'=>'country', 'Harland 2: Periods'=>'max_interval_no', 'Harland 4: Epochs'=>'max_interval_no',
-        'Harland 6: Stages'=>'max_interval_no');
+        'continent'=>'country', 'Harland 2: Periods (most common order)'=>'max_interval_no', 'Harland 4: Epochs (most common order)'=>'max_interval_no', 'Harland 6: Stages (most common order)'=>'max_interval_no', 'Harland 2: Periods (standard order)'=>'max_interval_no', 'Harland 4: Epochs (standard order)'=>'max_interval_no', 'Harland 6: Stages (standard order)'=>'max_interval_no');
     foreach my $i (1..2) {
         if ($sqlFields{$q->param("searchfield$i")}) {
             push @{$self->{'searchFields'}[$i]}, split(/,/,$sqlFields{$q->param("searchfield$i")});
@@ -727,13 +730,13 @@ sub getTranslationTable {
     if ($param eq "interval name") {
         my $intervals = $self->getIntervalNames();
         %table = %{$intervals};
-    } elsif ($param eq "Harland 2: Periods") { 
+    } elsif ($param =~ /Harland 2: Periods/) { 
 		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt,'2','intervalToScale');
 		%table = %{$intervalInScaleRef};
-    } elsif ($param eq "Harland 4: Epochs") { 
+    } elsif ($param =~ /Harland 4: Epochs/) { 
 		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt,'4','intervalToScale');
 		%table = %{$intervalInScaleRef};
-    } elsif ($param eq "Harland 6: Stages") { 
+    } elsif ($param =~ /Harland 6: Stages/) { 
 		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt,'6','intervalToScale');
 		%table = %{$intervalInScaleRef};
     } elsif ($param eq "continent") {
