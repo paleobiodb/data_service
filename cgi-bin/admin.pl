@@ -100,29 +100,18 @@ sub processPersonEdit {
 
 }
 
-sub processPersonDelete {
-	my $person_no = $q->param("person_no");
-
-	$sql =	"DELETE FROM person WHERE person_no = $person_no";
-	dbg ( "$sql<HR>" );
-	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
-
-	&displayPersonList();
-}
-
-# Lists all persons for Edit/Delete
+# Lists all persons for Edit
 sub displayPersonList {
 
 	print $hb->getTemplateString ( "std_page_top" );
-	print &createList ( "person", 1, 1, "reversed_name" );
+	print &createList ( "person", 1, "reversed_name" );
 	
 }
 
-# Creates a list of all entries in a table for edit/delete
+# Creates a list of all entries in a table for edit
 sub createList {
 	my $table = shift;
 	my $edit = shift;
-	my $delete = shift;
 	my $sort = shift;
 	my $return = "";
 
@@ -138,18 +127,24 @@ sub createList {
 	# column names
 	$return .= "<table border=0 cellpadding=4 cellspacing=1 bgcolor='Silver'>\n";
 	$return .= "<tr>\n";
-	if ( $edit || $delete ) { $return .= "<td bgcolor='#E0E0E0'>Action</a>"; }
+	if ( $edit ) { $return .= "<td bgcolor='#E0E0E0'>Action</a>"; }
 	for ( my $i=0; $i<$columns; $i++ ) {
-		$return .= "<td bgcolor='#E0E0E0'>".$fieldNames[$i]."</td>";
+		if ( $fieldNames[$i] !~ /preferences/ )	{
+			$return .= "<td bgcolor='#E0E0E0'>".$fieldNames[$i]."</td>";
+		} else	{
+			$prefCol = $i;
+		}
 	}		
 	$return .= "</tr>\n";
 
 	# Print values
 	while ( my @values = $sth->fetchrow_array() ) {
 		$return .= "<tr>\n";
-		$return .= &buildControls ( $edit, $delete, $values[0] );
+		$return .= &buildControls ( $edit, $values[0] );
 		for ( my $i=0; $i<$columns; $i++ ) {
-			$return .= "<td bgcolor='White'>".$values[$i]."</td>";
+			if ( $i != $prefCol )	{
+				$return .= "<td bgcolor='White'>".$values[$i]."</td>";
+			}
 		}		
 		$return .= "</tr>\n";
 	}
@@ -163,18 +158,14 @@ sub createList {
 
 sub buildControls {
 	my $edit = shift;
-	my $delete = shift;
 	my $keyColumn = shift;
 
-	if ( ! $edit && ! $delete ) { return ""; }
+	if ( ! $edit ) { return ""; }
 
 	my $return = "<td bgcolor='White' nowrap><font size='1'>";
 
 	if ( $edit ) {
 		$return .= "<a href='".$q->url."?action=displayPerson&type=edit&person_no=$keyColumn'>Edit</a> ";
-	}
-	if ( $delete ) {
-		$return .= " &nbsp; <a href='".$q->url."?action=processPersonDelete&person_no=$keyColumn'><font color='red'>Delete</font></a> ";
 	}
 
 	$return .= "</font></td>";
