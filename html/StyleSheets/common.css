@@ -227,46 +227,51 @@ DIV.errorMessage {
 .dataTableCell, .dataTableCellTotal {
     border-left: 0px;
     border-top: 0px;
-    border-right: 2px #C0C0C0 solid;
-    border-bottom: 2px #C0C0C0 solid;
+    border-right: 1px #C0C0C0 solid;
+    border-bottom: 1px #C0C0C0 solid;
 }
 .dataTableColumn, .dataTableColumnTotal {
+    text-align: center;
+    //white-space: nowrap;
     background-color:#EEEEEE;
     border-top: 0px;
-    border-bottom: 2px #707070 solid;
+    border-bottom: 1px #707070 solid;
     border-left: 0px;
-    border-right: 2px #909090 solid;
+    border-right: 1px #909090 solid;
+    padding: 0px 3px 0px 3px;
 }
 .dataTableColumnTotal { border-right: 0px; }
 
 .dataTableRow, .dataTableRowTotal {
+    white-space: nowrap;
     background-color:#EEEEEE;
     border-left: 0px;
-    border-right: 2px #707070 solid;
+    border-right: 1px #707070 solid;
     border-top: 0px;
-    border-bottom: 2px #909090 solid;
+    border-bottom: 1px #909090 solid;
+    padding: 0px 3px 0px 3px;
 }
 
 .dataTableULCorner {
     background-color:#DDDDDD;
     border-left: 0px;
     border-top: 0px;
-    border-right: 2px #707070 solid;
-    border-bottom: 2px #707070 solid;
+    border-right: 1px #707070 solid;
+    border-bottom: 1px #707070 solid;
 }
 
 .dataTableTopULCorner{
     border-left: 0px;
     border-top: 0px;
-    border-right: 2px #707070 solid;
+    border-right: 1px #707070 solid;
     border-bottom: 0px;
 }
 .dataTableTop {
     background-color:#DDDDDD;
     border-left: 0px;
     border-top: 0px;
-    border-right: 2px #909090 solid;
-    border-bottom: 2px #909090 solid;
+    border-right: 1px #909090 solid;
+    border-bottom: 1px #909090 solid;
 }
 
 .headerList1 {
