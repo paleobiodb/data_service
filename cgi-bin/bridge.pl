@@ -20,11 +20,11 @@ use DBI;
 use Session;
 use Class::Date qw(date localdate gmdate now);
 use DataRow;
-use Locale::Country;
-use Locale::SubCountry;
+#use Locale::Country;
+#use Locale::SubCountry;
 use AuthorNames;
 use BiblioRef;
-use FileHandle;
+#use FileHandle;
 use Map;
 use Download;
 use Curve;
@@ -41,6 +41,7 @@ use Strata;
 use PrintHierarchy;
 use URI::Escape;
 use Report;
+use Text::CSV_XS;
 use POSIX qw(ceil floor);
 
 # god awful Poling modules
@@ -407,7 +408,8 @@ sub sendMessage {
 	my $to = shift;
 	my $subject  = shift;
 	my $body  = shift;
-	my $sm = FileHandle->new();
+#	my $sm = FileHandle->new();
+    my $sm = '';
 	my $sendmail = "/usr/sbin/sendmail -t";
 	my $from = "root\@flatpebble.nceas.ucsb.edu";
 
