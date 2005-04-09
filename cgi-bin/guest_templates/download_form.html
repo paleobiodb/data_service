@@ -396,12 +396,13 @@ function collsCheckAll(checkbox){
 </font></td></tr>
 
 <tr class="lightGrey">
-<td valign=top><font size=-1>Lump collections if they are from the exact same coordinate, formation, and member?</font></td>
+<td valign=top><font size=-1>Lump collections by:</font></td>
+
 <td valign=top><font size=-1>
-<select name=lump_by_mbr>
-<option selected value="NO">no, keep them separate
-<option value="YES">yes, lump them
-</select>
+<input type=checkbox name='lump_by_coord' value="YES"> exact coordinate
+<input type=checkbox name='lump_by_mbr' value="YES"> formation and member
+<input type=checkbox name='lump_by_ref' value="YES"> reference
+<input type=checkbox name='lump_by_interval' value="YES"> time interval
 </font></td></tr>
 
 <tr>
