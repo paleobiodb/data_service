@@ -435,8 +435,8 @@ sub getOutFields {
             'lump_by_coord'=>['latdeg','latmin','latsec','latdec','latdir',
                             'lngdeg','lngmin','lngsec','lngdec','lngdir'],
             'lump_by_interval'=>['max_interval_no','min_interval_no'],
-            'lump_by_mbr'=>['reference_no'],
-            'lump_by_ref'=>['formation','member']);
+            'lump_by_mbr'=>['formation','member'],
+            'lump_by_ref'=>['reference_no']);
 
         foreach $key (keys %impliedFields) {
             if ($q->param($key) eq "YES") {
