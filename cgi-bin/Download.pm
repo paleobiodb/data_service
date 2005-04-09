@@ -306,7 +306,10 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Stratigraphic scale of collections", $stratscales );
     }
 
-	$html .= $self->retellOptionsRow ( "Lump by coordinate and formation/member?", $q->param("lump_by_mbr") );
+	$html .= $self->retellOptionsRow ( "Lump by exact geographic coordinate?", $q->param("lump_by_coord") );
+	$html .= $self->retellOptionsRow ( "Lump by formation and member?", $q->param("lump_by_mbr") );
+	$html .= $self->retellOptionsRow ( "Lump by published reference?", $q->param("lump_by_ref") );
+	$html .= $self->retellOptionsRow ( "Lump by time interval?", $q->param("lump_by_interval") );
 
     if ($q->param('output_data') ne 'collections') {
         $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
@@ -429,9 +432,11 @@ sub getOutFields {
             'collections_paleolng'=>['paleolng'],
             'collections_lat'=>['latdeg', 'latmin', 'latsec', 'latdec', 'latdir'],
             'collections_lng'=>['lngdeg', 'lngmin', 'lngsec', 'lngdec', 'lngdir'],
-            'lump_by_mbr'=>['latdeg','latmin','latsec','latdec','latdir',
-                            'lngdeg','lngmin','lngsec','lngdec','lngdir',
-                            'formation','member','max_interval_no','min_interval_no']);
+            'lump_by_coord'=>['latdeg','latmin','latsec','latdec','latdir',
+                            'lngdeg','lngmin','lngsec','lngdec','lngdir'],
+            'lump_by_interval'=>['max_interval_no','min_interval_no'],
+            'lump_by_mbr'=>['reference_no'],
+            'lump_by_ref'=>['formation','member']);
 
         foreach $key (keys %impliedFields) {
             if ($q->param($key) eq "YES") {
@@ -1383,8 +1388,23 @@ sub doQuery {
 		}
 		# lump bed/group of beds scale collections with the exact same
 		#  formation/member and geographic coordinate JA 21.8.04
-		if ( $exclude == 0 && $q->param('lump_by_mbr') eq 'YES' )	{
-			my $mbrstring = $row->{'latdeg'}.$row->{'latmin'}.$row->{'latsec'}.$row->{'latdec'}.$row->{'latdir'}.$row->{'lngdeg'}.$row->{'lngmin'}.$row->{'lngsec'}.$row->{'lngdec'}.$row->{'lngdir'}.$row->{'formation'}.$row->{'member'}.$row->{'max_interval_no'}.$row->{'min_interval_no'};
+		if ( $exclude == 0 && ( $q->param('lump_by_coord') eq 'YES' || $q->param('lump_by_interval') eq 'YES' || $q->param('lump_by_mbr') eq 'YES' || $q->param('lump_by_ref') eq 'YES' ) )	{
+
+			my $mbrstring;
+
+			if ( $q->param('lump_by_coord') eq 'YES' )	{
+				$mbrstring = $row->{'latdeg'}.$row->{'latmin'}.$row->{'latsec'}.$row->{'latdec'}.$row->{'latdir'}.$row->{'lngdeg'}.$row->{'lngmin'}.$row->{'lngsec'}.$row->{'lngdec'}.$row->{'lngdir'};
+			}
+			if ( $q->param('lump_by_interval') eq 'YES' )	{
+				$mbrstring .= $row->{'max_interval_no'}.$row->{'min_interval_no'};
+			}
+			if ( $q->param('lump_by_mbr') eq 'YES' )	{
+				$mbrstring .= $row->{'formation'}.$row->{'member'};
+			}
+			if ( $q->param('lump_by_ref') eq 'YES' )	{
+				$mbrstring .= $row->{'reference_no'};
+			}
+
 			if ( $mbrseen{$mbrstring} )	{
 				$row->{collection_no} = $mbrseen{$mbrstring};
 				if ( $occseen{$row->{collection_no}.$row->{occ_genus_name}} > 0 )	{
