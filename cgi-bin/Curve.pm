@@ -145,13 +145,13 @@ sub setArrays	{
 	if ($q->param('samplingmethod') eq "classical rarefaction")	{
 		$samplingmethod = 1;
 	}
-	elsif ($q->param('samplingmethod') eq "by-list subsampling (lists tallied)")	{
+	elsif ($q->param('samplingmethod') eq "by-list subsampling (unweighted)")	{
 		$samplingmethod = 2;
 	}
-	elsif ($q->param('samplingmethod') eq "by-list subsampling (occurrences tallied)")	{
+	elsif ($q->param('samplingmethod') eq "by-list subsampling (occurrences weighted)")	{
 		$samplingmethod = 3;
 	}
-	elsif ($q->param('samplingmethod') eq "by-list subsampling (occurrences-squared tallied)")	{
+	elsif ($q->param('samplingmethod') eq "by-list subsampling (occurrences-squared weighted)")	{
 		$samplingmethod = 4;
 	}
 	elsif ($q->param('samplingmethod') eq "by-specimen subsampling")	{
