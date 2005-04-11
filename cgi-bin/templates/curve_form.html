@@ -63,9 +63,9 @@ Subsampling method:<br>
 <select name=samplingmethod>
 <option selected></option>
 <option>classical rarefaction</option>
-<option>by-list subsampling (lists tallied)</option>
-<option>by-list subsampling (occurrences tallied)</option>
-<option>by-list subsampling (occurrences-squared tallied)</option>
+<option>by-list subsampling (unweighted)</option>
+<option>by-list subsampling (occurrences weighted)</option>
+<option>by-list subsampling (occurrences-squared weighted)</option>
 <option>by-specimen subsampling</option>
 </select>
 </font>
@@ -77,7 +77,7 @@ Exact number of items (lists, occurrences, or occurrences-squared) to draw in ea
 <i><font color="FF0000" size=-2>Required</font> <font size=-2>if you want to do
 a subsampling analysis.</font></i>
 </font>
-</td>
+
 
 <td valign=top>
 <input name=samplesize>
@@ -166,6 +166,22 @@ Intermediate numbers of items to report in subsampling curves:<br>
 <td valign=top>
 <font size=-1>
 <select name=count_refs>
+<option selected>no</option>
+<option>yes</option>
+</select>
+</font>
+</font>
+</td>
+</tr>
+
+<tr><td valign=top>
+<font size=-1>Avoid collections coming from references that yield many collections?<br>
+</font>
+<i><font size=-2>Works only with unweighted or occurrences-weighted by-list subsampling.</font></i>
+</td>
+<td valign=top>
+<font size=-1>
+<select name=weight_by_ref>
 <option selected>no</option>
 <option>yes</option>
 </select>
