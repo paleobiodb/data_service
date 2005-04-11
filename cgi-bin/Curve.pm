@@ -1,3 +1,13 @@
+# this version incorporates an algorithm to disperse the data among different
+#  references (9.4.05)
+# it's not quite debugged because the number of occurrences drawn per bin is
+#  often too low
+# in any case, it doesn't seem to help decrease the variance in the curve,
+#  which was the whole point
+# that said, it does a good job of pushing up Maastrichtian diversity in the
+#  face of the Sohl and Koch data set problem
+
+
 # pmpd-curve.cgi
 # Written by John Alroy 25.3.99
 # updated to handle new database structure 31.3.99 JA
@@ -292,6 +302,7 @@ sub assignGenera	{
 	#else	{
 	#	@fieldnames = split /,/,$_;
 	#}
+
 	my $fieldcount = 0;
 	my $field_collection_no = -1;
 	for my $fn (@fieldnames)	{
@@ -307,6 +318,11 @@ sub assignGenera	{
 			$field_abund_unit = $fieldcount;
 		} elsif ( $fn eq "occurrences.abund_value" )	{
 			$field_abund_value = $fieldcount;
+		# only get the collection's ref no if we're weighting by
+		#  collections per ref and the sampling method is by-list
+		#  9.4.05
+		} elsif ( $fn eq "collections.reference_no" && $q->param('weight_by_ref') eq "yes" && $samplingmethod > 1 && $samplingmethod < 5 )	{
+			$field_refno = $fieldcount;
 		} elsif ( $fn eq "collections.period" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "period";
@@ -343,6 +359,9 @@ sub assignGenera	{
 		exit;
 	} elsif ( ! $field_abund_unit && $samplingmethod == 5 )	{
 		print "<h3>The data can't be analyzed because the abundance unit field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		exit;
+	} elsif ( ! $field_refno && $q->param('weight_by_ref') eq "yes" )	{
+		print "<h3>The data can't be analyzed because the reference number field <i>from the collections table</i> hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	}
 
@@ -407,13 +426,11 @@ sub assignGenera	{
 	
 			$collno = $occrow[$field_collection_no];
 
-		# we're not even going to look at indet. records; this
-		#  entire program is assuming you only want to use records
-		#  determinate at the genus level
-		# note that you actually could include these records in the
-		#  input file but we're still enforcing this exclusion
-			if (( $occrow[$field_genus_name] ne "" ) && ( $occrow[$field_species_name] ne "indet.") &&
-				  ( $occrow[$field_species_name] ne "indet") && ($chid[$collno] > 0))      {
+		# through 9.4.05, a conditional here excluded occurrences where
+		#  the species name was indet., to avoid counting higher taxa;
+		#  whether to do this really is the business of the user,
+		#  however
+			if ( $occrow[$field_genus_name] ne ""  && $chid[$collno] > 0 )      {
 				$temp = $occrow[$field_genus_name];
 		# we used to do some cleanups here that assumed error checking
 		#  on data entry didn't always work
@@ -425,15 +442,15 @@ sub assignGenera	{
 				$ao = 0;
 				$ao = $genid{$temp};
 				if ($ao == 0)	{
-				  $ngen++;
-				  $genus[$ngen] = $temp;
-				  $genid{$temp} = $ngen;
+					$ngen++;
+					$genus[$ngen] = $temp;
+					$genid{$temp} = $ngen;
 				}
 
-				  $nsp = 1;
-				  if ($samplingmethod == 5)       {
-				    $nsp = $occrow[$field_abund_value];
-				  }
+				$nsp = 1;
+				if ($samplingmethod == 5)       {
+					$nsp = $occrow[$field_abund_value];
+				}
 
 				# we used to knock out repeated occurrences of
 				#  the same genus here, but that's now handled
@@ -441,13 +458,22 @@ sub assignGenera	{
 
 				# add genus to master occurrence list and
 				#  store the abundances
-				  if ($xx != -9)	{
-				    push @occs,$genid{$temp};
-				    push @stone,$lastocc[$collno];
-				    push @abund,$occrow[$field_abund_value];
-				    $lastocc[$collno] = $#occs;
-				    $toccsinlist[$collno] = $toccsinlist[$collno] + $nsp;
-				  }
+				if ($xx != -9)	{
+					push @occs,$genid{$temp};
+					push @stone,$lastocc[$collno];
+					push @abund,$occrow[$field_abund_value];
+					$lastocc[$collno] = $#occs;
+
+					# count the collections belonging to
+					#  each ref and record which ref this
+					#  collection belongs to 9.4.05
+					if ( $collrefno[$collno] < 1 && $occrow[$field_refno] > 0 )	{
+						$collsfromref[$occrow[$field_refno]]++;
+						$collrefno[$collno] = $occrow[$field_refno];
+					}
+
+					$toccsinlist[$collno] = $toccsinlist[$collno] + $nsp;
+				}
 			}
 		}
 	# END of input file parsing routine
@@ -499,7 +525,7 @@ sub assignGenera	{
 		$k = int(($#temp + 1)/2);
 		$median[$i] = ($temp[$j] + $temp[$k])/2;
 	}
-	
+
 	# compute sum of (squared) richnesses across lists
 	if (($samplingmethod == 1) || ($samplingmethod == 5))	{
 		for $i (1..$#occsinlist+1)	{
@@ -519,7 +545,7 @@ sub assignGenera	{
 			$occsinchron2[$chid[$i]] = $occsinchron2[$chid[$i]] + $occsinlist[$i]**2;
 		}
 	}
-	
+
 	# tabulate genus ranges and turnover data
 	if ( ! open PADATA,">$OUTPUT_DIR/presences.txt" ) {
 		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/presences.txt<BR>$!" );
@@ -712,7 +738,17 @@ sub subsample	{
 					$tosub = $q->param('samplesize');
 					if ($samplingmethod == 3)	{
 			#     $tosub = $tosub - ($usedoccsinchron[$i]/$listsinchron[$i])/2;
-					  $tosub = ($tosub/($usedoccsinchron[$i]/$listsinchron[$i])) - 0.5;
+				# old fashioned method needed if using this
+				#  option 10.4.05
+				# oddly, the denominator of 2 in the old
+				#  equation appears to have been in error
+					  if ( $q->param('weight_by_ref') eq "yes" )	{
+					    $tosub = $tosub - ( $usedoccsinchron[$i] / $listsinchron[$i] ); 
+					  }
+				# modern method
+					  else	{
+					    $tosub = ($tosub/($usedoccsinchron[$i]/$listsinchron[$i])) - 0.5;
+					  }
 					}
 					elsif ($samplingmethod == 4)	{
 			#     $tosub = $tosub - ($occsinchron2[$i]/$listsinchron[$i])/2;
@@ -749,6 +785,18 @@ sub subsample	{
 					while ($tosub > 0 && $sampled[$i] < $inbin)	{
 					  $lastsampled[$i] = $sampled[$i];
 					  $j = int(rand $nitems) + 1;
+		# throw back collections with a probability proportional to
+		#  the number of collections belonging to the reference that
+		#  yielded the chosen collection 9.4.05
+		# WARNING: this only works for UW or OW (methods 2 and 3)
+					  if ( $collsfromref[$collrefno[$listid[$j]]] > 0 )	{
+					    if ( rand > 1 / $collsfromref[$collrefno[$listid[$j]]] && $q->param('weight_by_ref') eq "yes" && $samplingmethod > 1 && $samplingmethod < 4 )	{
+					      $j = int(rand $nitems) + 1;
+					      while ( rand > 1 / $collsfromref[$collrefno[$listid[$j]]] )	{
+					        $j = int(rand $nitems) + 1;
+					      }
+					    }
+					  }
 		 # modify the counter
 					  if (($samplingmethod < 3) || ($samplingmethod > 4))	{
 					    $tosub--;
@@ -757,7 +805,15 @@ sub subsample	{
 					  elsif ($samplingmethod == 3)	{
 					    $xx = $topocc[$listid[$j]] - $baseocc[$listid[$j]] + 1;
 					 #  $tosub = $tosub - $xx;
-					    $tosub--;
+					# old fashioned method needed if using
+					#  this option 10.4.05
+					    if ( $q->param('weight_by_ref') eq "yes" )	{
+					      $tosub = $tosub - $xx;
+					    }
+					#  standard method
+					    else	{
+					      $tosub--;
+					    }
 					    $sampled[$i] = $sampled[$i] + $xx;
 					  }
 					  else	{
