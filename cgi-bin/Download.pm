@@ -1547,13 +1547,13 @@ sub doQuery {
 	my %master_class;
     if ($q->param("output_data") eq "occurrences") {
         my $levels = "";
-        if($q->param("occurrences_family_name") eq "YES"){
+        if($q->param("occurrences_class_name") eq "YES"){
             $levels .= ",class";
         }
         if($q->param("occurrences_order_name") eq "YES"){
             $levels .= ",order";
         }
-        if($q->param("occurrences_class_name") eq "YES"){
+        if($q->param("occurrences_family_name") eq "YES"){
             $levels .= ",family";
         }
         $levels =~ s/^,//;
