@@ -124,10 +124,13 @@ sub retellOptions {
 	    $html .= $self->retellOptionsRow ( "Youngest interval", $q->param("min_eml_interval") . " " .$q->param("min_interval_name") );
     }
 
-    if ( ! $q->param("lithification_lithified") || ! $q->param("lithification_unlithified") || ! $q->param("lithification_unknown")) {
+    if ( ! $q->param("lithification_lithified") || ! $q->param("lithification_poorly_lithified") || ! $q->param("lithification_unlithified") || ! $q->param("lithification_unknown")) {
 	my $lithifs;
 	if ( $q->param("lithification_lithified") )	{
 		$lithifs .= ", lithified";
+	}
+	if ( $q->param("lithification_poorly_lithified") )	{
+		$lithifs .= ", poorly lithified";
 	}
 	if ( $q->param("lithification_unlithified") )	{
 		$lithifs .= ", unlithified";
@@ -720,17 +723,21 @@ sub getIntervalName {
 sub getLithificationString	{
 	my $self = shift;
 	my $lithified = $q->param('lithification_lithified');
+	my $poorly_lithified = $q->param('lithification_poorly_lithified');
 	my $unlithified = $q->param('lithification_unlithified');
 	my $unknown = $q->param('lithification_unknown');
 	my $lithif_sql = "";
 	my $lithvals = "";
         # if all the boxes were unchecked, just return (idiot proofing)
-        if ( ! $lithified && ! $unlithified && ! $unknown )	{
+        if ( ! $lithified && ! $poorly_lithified && ! $unlithified && ! $unknown )	{
             return "";
         }
 	# all other combinations
 	if ( $lithified )	{
 		$lithvals = " collections.lithification='lithified' ";
+	}
+	if ( $poorly_lithified )	{
+		$lithvals = " OR collections.lithification='poorly lithified' ";
 	}
 	if ( $unlithified )	{
 		$lithvals .= " OR collections.lithification='unlithified' ";
