@@ -124,6 +124,21 @@ sub retellOptions {
 	    $html .= $self->retellOptionsRow ( "Youngest interval", $q->param("min_eml_interval") . " " .$q->param("min_interval_name") );
     }
 
+    if ( ! $q->param("lithification_lithified") || ! $q->param("lithification_unlithified") || ! $q->param("lithification_unknown")) {
+	my $lithifs;
+	if ( $q->param("lithification_lithified") )	{
+		$lithifs .= ", lithified";
+	}
+	if ( $q->param("lithification_unlithified") )	{
+		$lithifs .= ", unlithified";
+	}
+	if ( $q->param("lithification_unknown") )	{
+		$lithifs .= ", unknown";
+	}
+	$lithifs =~ s/^, //;
+	$html .= $self->retellOptionsRow ( "Lithification", $lithifs );
+    }
+
     # Lithologies or lithology
     if ( $q->param("lithology1") ) {
         $html .= $self->retellOptionsRow("Lithology: ", $q->param("include_exclude_lithology1") . " " .$q->param("lithology1"));
@@ -701,6 +716,34 @@ sub getIntervalName {
     return ($interval_eml, $interval_name);
 }
 
+# JA 11.4.05
+sub getLithificationString	{
+	my $self = shift;
+	my $lithified = $q->param('lithification_lithified');
+	my $unlithified = $q->param('lithification_unlithified');
+	my $unknown = $q->param('lithification_unknown');
+	my $lithif_sql = "";
+	my $lithvals = "";
+        # if all the boxes were unchecked, just return (idiot proofing)
+        if ( ! $lithified && ! $unlithified && ! $unknown )	{
+            return "";
+        }
+	# all other combinations
+	if ( $lithified )	{
+		$lithvals = " collections.lithification='lithified' ";
+	}
+	if ( $unlithified )	{
+		$lithvals .= " OR collections.lithification='unlithified' ";
+	}
+	if ( $unknown )	{
+		$lithvals .= " OR collections.lithification='' OR collections.lithification IS NULL ";
+	}
+	$lithvals =~ s/^ OR//;
+	$lithif_sql = qq| ( $lithvals ) |;
+
+	return $lithif_sql;
+}
+
 
 # JA 1.7.04
 # WARNING: relies on fixed lists of lithologies; if these ever change in
@@ -1035,6 +1078,7 @@ sub getCollectionsWhereClause {
         $self->getLatLongString(),
         $self->getPaleoLatLongString(),
         $self->getIntervalString(),
+        $self->getLithificationString(),
         $self->getLithologyString(),
         $self->getEnvironmentString(),
         $self->getGeogscaleString(),
