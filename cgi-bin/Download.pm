@@ -732,12 +732,16 @@ sub getLithificationString	{
         if ( ! $lithified && ! $poorly_lithified && ! $unlithified && ! $unknown )	{
             return "";
         }
+	# likewise, if all the boxes are checked do nothing
+	elsif ( $lithified && $poorly_lithified && $unlithified && $unknown )	{
+            return "";
+        }
 	# all other combinations
 	if ( $lithified )	{
 		$lithvals = " collections.lithification='lithified' ";
 	}
 	if ( $poorly_lithified )	{
-		$lithvals = " OR collections.lithification='poorly lithified' ";
+		$lithvals .= " OR collections.lithification='poorly lithified' ";
 	}
 	if ( $unlithified )	{
 		$lithvals .= " OR collections.lithification='unlithified' ";
