@@ -1,13 +1,3 @@
-# this version incorporates an algorithm to disperse the data among different
-#  references (9.4.05)
-# it's not quite debugged because the number of occurrences drawn per bin is
-#  often too low
-# in any case, it doesn't seem to help decrease the variance in the curve,
-#  which was the whole point
-# that said, it does a good job of pushing up Maastrichtian diversity in the
-#  face of the Sohl and Koch data set problem
-
-
 # pmpd-curve.cgi
 # Written by John Alroy 25.3.99
 # updated to handle new database structure 31.3.99 JA
@@ -712,11 +702,11 @@ sub subsample	{
 			}
 			for $i (1..$chrons)	{
 				if (($q->param('printall') eq "yes" && $listsinchron[$i] > 0)||
-					  (($usedoccsinchron[$i] > $q->param('samplesize') &&
+					  (($usedoccsinchron[$i] >= $q->param('samplesize') &&
 					    $samplingmethod != 2 && $samplingmethod != 4) ||
-					   ($listsinchron[$i] > $q->param('samplesize') &&
+					   ($listsinchron[$i] >= $q->param('samplesize') &&
 					    $samplingmethod == 2) ||
-					   ($occsinchron2[$i] > $q->param('samplesize') &&
+					   ($occsinchron2[$i] >= $q->param('samplesize') &&
 					    $samplingmethod == 4)))	{
 		# figure out how many items must be drawn
 		# WARNING: an "item" in this section of code means a record or a list;
