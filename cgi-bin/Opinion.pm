@@ -991,8 +991,10 @@ sub submitOpinionForm {
 
     	# have to store created date
         $createAuthority{'created'} = now();
+        my @authFields = keys %createAuthority;
+        my @authValues = map { $dbh->quote($_) } (values %createAuthority);
 
-		my $insertsql = "INSERT INTO authorities (" . join(',', keys %createAuthority) . ") VALUES ('" . join("', '", values %createAuthority) . "')";
+		my $insertsql = "INSERT INTO authorities (" . join(',',@authFields).") VALUES (".join(',',@authValues).")";
 		$dbt->getData($insertsql);
         $fieldsToEnter{'parent_no'} = $dbt->getID();
         main::dbg("INSERTSQL is $insertsql and got back id $fieldsToEnter{parent_no}");
