@@ -16,34 +16,6 @@ sub god () {
 	return 'J. Alroy';	
 }
 
-# pass this a string,
-# and it escapes the quot marks in that string.
-sub escapeQuotes {
-	my $input = shift;
-	$input =~ s/(['"])/\\$1/g;
-	return $input;	
-}
-
-# pass this a hash ref, 
-# and it will escape all quote marks in the hash
-#
-# Note, this should really be one using the built in 
-# dbh->quote() method if it's for submitting data to the database..
-sub escapeQuotesOnValues {
-	my $ref = shift;
-	
-	if (! $ref) {
-		return;	
-	}
-	
-	foreach my $key (keys(%$ref)) {
-		# note, the o flag on the regex will make this only
-		# compile once so it will run quickly.
-		$ref->{$key} =~ s/(['])/\\'/go;
-		$ref->{$key} =~ s/(["])/\\"/go;
-	}
-}
-
 
 # pass this a warning message and it will print it directly
 # to the web page.  Note, you still need to add the standard page 
@@ -73,24 +45,6 @@ sub copyCGIToHash {
 	
 	return \%hash;
 }
-
-
-# pass this a full month name such as "December" and it will return the month number, ie, 12.
-sub monthNameToNumber {
-	my $name = shift;
-	
-	my %month2num = (  "January" => "01", "February" => "02", "March" => "03",
-                         "April" => "04", "May" => "05", "June" => "06",
-                         "July" => "07", "August" => "08", "September" => "09",
-                         "October" => "10", "November" => "11",
-                         "December" => "12");
-	
-	my $month = $month2num{$name}; 
-	
-	return $month;
-}
-
-
 
 # pass this a number like "5" and it will return the name ("five").
 # only works for numbers up through 19.  Above that and it will just return
@@ -151,11 +105,7 @@ sub isEmpty {
 	if (!$ref) {
 		return 1;  # it's empty if they don't pass anything!	
 	}
-	
 	my @ary = @$ref;
-	
-	Debug::dbPrint("fields = @ary");
-	
 	foreach my $v (@ary) {
 		if (($v ne '') || ($v != 0)) {
 			return 0;
