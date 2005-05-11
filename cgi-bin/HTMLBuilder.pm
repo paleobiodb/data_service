@@ -1,9 +1,4 @@
 package HTMLBuilder;
-
-require Exporter;
-@ISA = qw(Exporter);
-@EXPORT = qw(populateHTML setTemplateDir);
-
 use strict;
 
 use Constants;
@@ -22,33 +17,23 @@ use Person;
 use CGI;
 
 my $stuff;
-my %CACHED_TEMPLATES;
 my %SELECT_LISTS;
 
 sub new {
-  my $class = shift();
-  my $templateDir = shift();
-  my $dbh = shift();
-  my $exec_url = shift();
-
-  my $self = {SELECT_LISTS=>\%SELECT_LISTS};
-  bless $self, $class;
-
-  $self->setTemplateDir($templateDir);
-  $self->{_exec_url} = $exec_url;
-
-  return $self;
+    my $class = shift;
+    my $templateDir = shift;
+    my $dbt = shift;
+    my $exec_url = shift;
+    my $self = {};
+    bless $self, $class;
+    $self->{'SELECT_LISTS'} = \%SELECT_LISTS;
+    $self->{'CACHED_TEMPLATES'} = {};
+    $self->{'template_dir'} = $templateDir;
+    $self->{'exec_url'} = $exec_url;
+    $self->{'dbt'} = $dbt;
+    return $self;
 }
 
-sub setTemplateDir {
-  my ($self, $path) = @_;
-  $self->{_htmlTemplateDir} = $path;
-}
-
-sub getTemplateDir {
-  my $self = shift;
-  return $self->{_htmlTemplateDir};
-}
 # Note: geogscale has labels different from values <OPTION value="small collection">small collection (&lt; 10 x 10 m)<OPTION value=outcrop>outcrop (&lt; 1 x 1 km)<OPTION value="local area">local area (&lt; 100 x 100 km)<OPTION value=basin>basin (&gt; 100 x 100 km)</OPTION>
 
 %SELECT_LISTS = (assigned_to=>["Ederer", "Alroy"],
@@ -292,30 +277,18 @@ sub buildSelectWithHardList {
 sub buildSelect {
 	my $self = shift;
 	
-	my $ref = shift;
-	my $name = shift;
-	my $toSelect = shift;
+	my $name = $_[0];
+	my @keys = @{$_[1]};
+	my @values = @{$_[2]};
+	my $toSelect = $_[3];
 	
-	if ((! $ref) || (! $name)) {
-		return "error in buildSelect";	
+	my $html = "<select name=\"$name\" id=\"$name\">\n";
+
+    for(my $i=0;$i<scalar(@keys);$i++) {
+        my $selected = ($values[$i] eq $toSelect) ? "SELECTED" : "";
+		$html .= "<option value=\"$values[$i]\" $selected>$keys[$i]</option>\n";	
 	}
-	
-	my $html = "<SELECT name=\"$name\" id=\"$name\">\n";
-	
-	my @choices = @{$ref};
-	
-	foreach my $option (@choices) {
-		my $selected = '';
-		if ($option eq $toSelect) {
-			$selected = "selected";
-		} else {
-			$selected = "";
-		}
-		
-		$html .= "<OPTION $selected>$option</OPTION>\n";	
-	}
-	
-	$html .= "</SELECT>\n";
+	$html .= "</select>\n";
 	
 	return $html;
 }
@@ -334,8 +307,8 @@ sub buildSelect {
 #
 # class method
 sub buildAuthorizerPulldown {
-	my ($html, $authorizer, $active) = @_;
-	my $menu = authorizerPopupMenu($authorizer, $active);
+	my ($dbt, $html, $authorizer, $active) = @_;
+	my $menu = authorizerPopupMenu($dbt, $authorizer, $active);
 
 	$$html =~ s/<select name="authorizer">/$&\n$menu/;
 }
@@ -351,8 +324,8 @@ sub buildAuthorizerPulldown {
 #
 # class method
 sub buildEntererPulldown {
-	my ($html, $enterer, $active) = @_;
-	my $menu = entererPopupMenu($enterer, $active);
+	my ($dbt,$html, $enterer, $active) = @_;
+	my $menu = entererPopupMenu($dbt,$enterer, $active);
 	$$html =~ s/<select name="enterer">/$&\n$menu/;
 }
 
@@ -369,20 +342,20 @@ sub buildEntererPulldown {
 #
 # class method
 sub entererPopupMenu {
+    my $dbt = shift;
 	my $toSelect = shift;		# Default value
 	my $active = shift;
 
-	my $p = Person->new();
-	my $list = $p->listOfEnterers($active);
+	my $list = Person::listOfEnterers($dbt,$active);
 	
 	my $select = "<OPTION value=\"\">Select enterer...</OPTION>\n";
 	
 	my $selected = '';
 	foreach my $a (@$list) {
-		if ($a->[0] eq $toSelect) { $selected = 'selected'; } 
+		if ($a->{'name'} eq $toSelect) { $selected = 'selected'; } 
 		else { $selected = ''; };
 		
-		$select .= "<OPTION value=\"" . $a->[0] . "\" $selected>". $a->[1] . "</OPTION>\n";
+		$select .= "<OPTION value=\"" . $a->{'name'} . "\" $selected>". $a->{'reversed_name'} . "</OPTION>\n";
 	}
 	
 	return $select;
@@ -395,20 +368,20 @@ sub entererPopupMenu {
 #
 # class method
 sub authorizerPopupMenu {
+    my $dbt = shift;
 	my $toSelect = shift;		# Default value
 	my $active = shift;
 
-	my $p = Person->new();
-	my $list = $p->listOfAuthorizers($active);
+	my $list = Person::listOfAuthorizers($dbt,$active);
 	
 	my $select = "<OPTION value=\"\">Select authorizer...</OPTION>\n";
 	
 	my $selected = '';
 	foreach my $a (@$list) {
-		if ($a->[0] eq $toSelect) { $selected = 'selected'; } 
+		if ($a->{'name'} eq $toSelect) { $selected = 'selected'; } 
 		else { $selected = ''; };
 		
-		$select .= "<OPTION value=\"" . $a->[0] . "\" $selected>". $a->[1] . "</OPTION>\n";
+		$select .= "<OPTION value=\"" . $a->{'name'} . "\" $selected>". $a->{'reversed_name'} . "</OPTION>\n";
 	}
 	
 	return $select;
@@ -497,6 +470,7 @@ sub newPopulateHTML {
 	my $templateName = shift;	# template to populate (without .html extension)
 	my $hashRef = shift;		# hash of fields and values to populate with
 	my $nonEditableRef = shift;		# array of input fields to make non-editable
+    my $dbt = $self->{'dbt'};
 	
 	#Debug::dbPrint("nonEditables = ");
 	#Debug::printArray($nonEditableRef);
@@ -564,8 +538,7 @@ sub newPopulateHTML {
 			# if it's name is reference_no, then we'll look for any fields
 			# in the template called "formatted_reference" and fill them with
 			# a nicely formatted reference entry based on the reference_no.
-			my $ref = Reference->new();
-			$ref->setWithReferenceNumber($fields{reference_no});
+			my $ref = Reference->new($dbt,$fields{'reference_no'});
 			$fields{formatted_reference} = $ref->formatAsHTML();
 		}	
 	}
@@ -725,7 +698,7 @@ sub newReadTemplate {
 		return 0; 
 	}
 	
-	my $dir = $self->getTemplateDir() . "/$template" . ".html";
+	my $dir = $self->{'template_dir'}."/$template" . ".html";
 	
 	my $success = open(TEMPLATE, "<$dir");
 	unless ($success) {
@@ -1084,7 +1057,7 @@ sub getTemplateString {
 	my ($self, $templateName, $prefkeys) = @_;
 	
 	my $templateString;
-	my $htmlTemplateDir = $self->getTemplateDir();
+	my $htmlTemplateDir = $self->{'template_dir'};
 	my %pref;
 	for my $p (@$prefkeys)	{
 		$pref{$p} = "yes";
@@ -1096,8 +1069,8 @@ sub getTemplateString {
 		$templateFile .= ".html";
 	}
 
-	if( $CACHED_TEMPLATES{$templateName} ) {
-		$templateString = $CACHED_TEMPLATES{$templateName};
+	if( $self->{'CACHED_TEMPLATES'}{$templateName} ) {
+		$templateString = $self->{'CACHED_TEMPLATES'}{$templateName};
 	} elsif(open(HTMLTEMPLATEFILE, $templateFile)) {
 		while(<HTMLTEMPLATEFILE>) {
 			if ($_ =~ /<!-- OPTIONAL/)	{
@@ -1111,7 +1084,7 @@ sub getTemplateString {
 			}
 			$templateString .= $_;
 		}
-		$CACHED_TEMPLATES{$templateName} = $templateString;
+		$self->{'CACHED_TEMPLATES'}{$templateName} = $templateString;
 		close HTMLTEMPLATEFILE;
 	} else {
 		return $templateFile . "<br>";
