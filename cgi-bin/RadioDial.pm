@@ -1,8 +1,4 @@
 package Radiodial;
-require Exporter;
-@ISA = qw(Exporter);
-@EXPORT = qw(setName setValue setChecked toHTML);
-@EXPORT_OK = qw($test_val);
 
 sub new
 {

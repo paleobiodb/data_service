@@ -1,8 +1,4 @@
 package SelectList;
-require Exporter;
-@ISA = qw(Exporter);
-@EXPORT = qw(setName setList addItem setSelected toHTML);
-@EXPORT_OK = qw($test_val);
 
 sub new
 {

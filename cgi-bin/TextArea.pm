@@ -1,8 +1,4 @@
 package TextArea;
-require Exporter;
-@ISA = qw(Exporter);
-@EXPORT = qw(setName setText setRows setCols setWrapVirtual toHTML);
-@EXPORT_OK = qw($test_val);
 
 sub new
 {

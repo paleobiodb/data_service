@@ -1,8 +1,4 @@
 package TextField;
-require Exporter;
-@ISA = qw(Exporter);
-@EXPORT = qw(setName setText setAllowNulls toHTML);
-@EXPORT_OK = qw($test_val);
 
 sub new
 {

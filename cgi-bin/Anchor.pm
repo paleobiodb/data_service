@@ -1,9 +1,4 @@
 package Anchor;
-require Exporter;
-@ISA = qw(Exporter);
-
-@EXPORT = qw(setName setHref toHTML);
-@EXPORT_OK = qw($test_val);
 
 sub new
 {
