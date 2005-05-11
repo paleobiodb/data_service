@@ -191,7 +191,7 @@ sub processShowEditForm	{
 			@emls = @{$dbt->getData($sql)};
 			$eml_min_interval = $emls[0]->{eml_interval};
 
-			my $sqlstem = "SELECT interval_name FROM intervals WHERE interval_no=";
+			$sqlstem = "SELECT interval_name FROM intervals WHERE interval_no=";
 
 			$sql = $sqlstem . $times[$i]->{interval_no};
 			my @names = @{$dbt->getData($sql)};
