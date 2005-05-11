@@ -1,12 +1,14 @@
 package Classification;
 
 use TaxonInfo;
+use Data::Dumper;
 
 # Travel up the classification tree
 # Rewritten 01/11/2004 PS. Function is much more flexible, can do full upward classification of any 
 # of the taxon rank's, with caching to keep things fast for large arrays of input data. 
 #   * Use a upside-down tree data structure internally
 #  Arguments:
+#   * 0th arg: $dbt object
 #   * 1st arg: comma separated list of the ranks you want,i.e(class,order,family) 
 #              OR keyword 'parent' => gets first parent of taxon passed in 
 #              OR keyword 'all' => get full classification (not imp'd yet, not used yet);
@@ -14,10 +16,10 @@ use TaxonInfo;
 #   * 3rd arg: What to return: will either be comma-separated taxon_nos (numbers), taxon_names (names), or a linked_list (linked_list) 
 #  Return:
 #   * Returns a hash whose key is input (no or name), value is comma-separated lists
-#     * Each comma separated list is in the same order as the '$ranks' input variable was in
+#     * Each comma separated list is in the same order as the '$ranks' (1nd arg)input variable was in
 sub get_classification_hash{
 	my $dbt = shift;
-	my $ranks = shift;
+	my $ranks = shift; #all OR parent OR comma sep'd ranks i.e. 'class,order,family'
 	my $taxon_names_or_nos = shift;
 	my $return_type = shift || 'names'; #names OR numbers OR linked_list;
 
@@ -53,7 +55,7 @@ sub get_classification_hash{
     #main::dbg('taxon names or nos'.Dumper(@taxon_names_or_nos));
 
     foreach my $hash_key (@taxon_names_or_nos){
-        my ($taxon_no, $taxon_name, $parent_no, $child_no);
+        my ($taxon_no, $taxon_name, $parent_no, $child_no, $child_spelling_no);
        
         # We're using taxon_nos as input
         if ($hash_key =~ /^\d+$/) {
@@ -69,21 +71,15 @@ sub get_classification_hash{
             $taxon_name = $hash_key;
         }
         
-        my $orig_child = $taxon_no;
-        my $new_name;
         if ($taxon_no) {
             # Get original combination so we can move upward in the tree
-            #$taxon_no = TaxonInfo::getOriginalCombination($dbt, $taxon_no);
-#            ($new_name, $taxon_no) = TaxonInfo::verify_chosen_taxon('',$taxon_no,$dbt);
             $taxon_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
         }
 
-        my $new_child = $taxon_no;
         $child_no = $taxon_no;
         
         my $loopcount = 0;
         my $sql;
-        my @parents;
 
         # start the link with child_no;
         my $link = {};
@@ -92,112 +88,104 @@ sub get_classification_hash{
         my %visits = ();
         my $debug_print_link = 0;
         my $found_parent = 0;
-        my $recomb_no = 0;
+
+        # prime the pump 
+        my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no);
+        my $status = $parent_row->{'status'};
+        $child_no = $parent_row->{'parent_no'};
 
         # Loop at least once, but as long as it takes to get full classification
-        # Keep looping while we have more levels to go up - the $INIT deal is just a weird way of emulating
-        # a do { } while (scalar(@parents)); block.  DON'T use do...while cause 'last' doesn't work in it
-        for(my $INIT=0;$INIT==0||scalar(@parents) && !$found_parent;$INIT++) {
-            $loopcount++;
+        for(my $i=0;$child_no && !$found_parent;$i++) {
             #hasn't been necessary yet, but just in case
-            if ($loopcount >= 30) { $msg = "Infinite loop for $child_no?";croak $msg;} 
+            if ($i >= 30) { $msg = "Infinite loop for $child_no in get_classification_hash";carp $msg; last;} 
 
-            # bail if we couldn't find exactly one taxon_no for taxon_name entered above
-            last if (!$child_no);
-       
             # bail if we have a loop
             $visits{$child_no}++;
             last if ($visits{$child_no} > 1);
 
-            $sql = "SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank, o.status, o.pubyr, o.reference_no " 
-                 . " FROM authorities a,opinions o" 
-                 . " WHERE a.taxon_no=o.parent_no" 
-                 . " AND o.status NOT IN ('rank corrected as','recombined as','corrected as')" 
-                 . " AND o.child_no=".$child_no;
+            # A belongs to, rank changed as, corrected as, OR recombined as  - If the previous iterations status
+            # was one of these values, then we're found a valid parent (classification wise), so we can terminate
+            # at the end of this loop (after we've added the parent into the tree)
+            if ($status =~ /^(?:bel|ran|cor|rec)/o && $ranks[0] eq 'parent') {
+                $found_parent = 1;
+            }
 
-            #use Data::Dumper; print Dumper($sql);
-         
-            @parents = @{$dbt->getData($sql)};
-            if(scalar(@parents)){
-                $parent_index=TaxonInfo::selectMostRecentParentOpinion($dbt,\@parents,1);
-                #main::dbg("parent idx $parent_index");
-                #main::dbg(Dumper($parents[$parent_index]));
+            # Belongs to should always point to original combination
+            $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no,1);
+       
+            # No parent was found. This means we're at end of classification, althought
+            # we don't break out of the loop till the end of adding the node since we
+            # need to add the current child still
+            if ($parent_row) {
+                $parent_no  = $parent_row->{'parent_no'};
+                $child_spelling_no= $parent_row->{'child_spelling_no'};
+                $taxon_name = $parent_row->{'child_name'};
+                $taxon_rank = $parent_row->{'child_rank'};
+                $status = $parent_row->{'status'};
+            } else {
+                $parent_no=0;
+                $child_spelling_no=$child_no;
+                my @results = TaxonInfo::getTaxon($dbt,'taxon_no'=>$child_no);
+                $taxon_name=$results[0]->{'taxon_name'};
+                $taxon_rank=$results[0]->{'taxon_rank'};
+                $status = "";
+            }
 
-                # bail if its a junk nomem * relationship
-                last if ($parents[$parent_index]->{'status'} =~ /^nomen/);
-                #main::dbg(Dumper($parents[$parent_index]));
- 
-                # Belongs to should always point to original combination
-                $parent_no   = $parents[$parent_index]->{'taxon_no'};
-                $recomb_no   = 0;
-                if ($parent_no) {
-                    $correct_name = PBDBUtil::getCorrectedName($dbt,$parent_no);
-                    $parent_name = $correct_name->{'taxon_name'};
-                    $parent_rank = $correct_name->{'taxon_rank'};
-                    if ($correct_name->{'taxon_no'} != $parent_no) {
-                        $recomb_no = $correct_name->{'taxon_no'};
-                    }
-                } else { # This shouldn't happen but might bc of bad opinions
-                    $parent_name = $parents[$parent_index]->{'taxon_name'};
-                    $parent_rank = $parents[$parent_index]->{'taxon_rank'};
-                }
-                #main::dbg("parent no $parent_no name $parent_name rank $parent_rank");
-
-                if ($parents[$parent_index]->{'status'} eq 'belongs to' && $ranks[0] eq 'parent') {
-                    $found_parent = 1;
-                }
-                #if ($parents[$parent_index]->{'status'} eq 'recombined as') {
-                #    $debug_print_link = 1;
-                #    use Data::Dumper; print Dumper($parents[$parent_index]);
-                #    print $sql;
-                #}
-
-                # bail because we've already climbed up this part o' the tree and its cached
-                if (exists $link_cache{$parent_no}) {
-                    %{$link} = %{$link_cache{$parent_no}};
-                    last;
-                # populate this link, then set the link to be the next_link, climbing one up the tree
+            # bail because we've already climbed up this part o' the tree and its cached
+            if (exists $link_cache{$parent_no}) {
+                    print "Found cache";
+                %{$link} = %{$link_cache{$parent_no}};
+                last;
+            # populate this link, then set the link to be the next_link, climbing one up the tree
+            } else {
+                # Synonyms are tricky: We don't add the child (junior?) synonym onto the chain, only the parent
+                # Thus the child synonyms get their node values replace by the parent, with the old child data being
+                # placed into a "synonyms" field (an array of nodes)
+                if ($status =~ /^(?:repl|subj|obje)/o) {
+                    my %node = (
+                        'child_no'=>$prev_link->{'child_no'},
+                        'parent_no'=>$prev_link->{'parent_no'},
+                        'taxon_name'=>$prev_link->{'taxon_name'},
+                        'taxon_rank'=>$prev_link->{'taxon_rank'},
+                        'child_spelling_no'=>$prev_link->{'child_spelling_no'}
+                    );
+                    $prev_link->{'child_no'} = $child_no;
+                    $prev_link->{'parent_no'} = $parent_no;
+                    $prev_link->{'taxon_name'} = $taxon_name;
+                    $prev_link->{'taxon_rank'} = $taxon_rank;
+                    $prev_link->{'child_spelling_no'} = $child_spelling_no;
+                    push @{$prev_link->{'synonyms'}}, \%node;
                 } else {
-                    # Synonyms are tricky: We don't add the child (junior?) synonym onto the chain, only the parent
-                    # Thus the child synonyms get their node values replace by the parent, with the old child data being
-                    # placed into a "synonyms" field (an array of nodes)
-                    if ($parents[$parent_index]->{'status'} =~ /^(repl|subj|obje)/) {
+                    if (exists $rank_hash{$taxon_rank} || $ranks[0] eq 'parent' || $ranks[0] eq 'all') {
                         my %node = (
-                            'number'=>$prev_link->{'number'},
-                            'name'=>$prev_link->{'name'},
-                            'rank'=>$prev_link->{'rank'},
-                            'recomb_no'=>$prev_link->{'recomb_no'}
+                            'child_no'=>$child_no,
+                            'parent_no'=>$parent_no,
+                            'taxon_name'=>$taxon_name,
+                            'taxon_rank'=>$taxon_rank,
+                            'child_spelling_no' => $child_spelling_no,
+                            'next_link'=>{}
                         );
-                        $prev_link->{'number'} = $parent_no;
-                        $prev_link->{'name'} = $parent_name;
-                        $prev_link->{'rank'} = $parent_rank;
-                        $prev_link->{'recomb_no'} = $recomb_no;
-                        push @{$prev_link->{'synonyms'}}, \%node;
-                    } else {
-                        if (exists $rank_hash{$parent_rank} || $ranks[0] eq 'parent' || $ranks[0] eq 'all') {
-                            my %node = (
-                                'number'=>$parent_no,
-                                'name'=>$parent_name,
-                                'rank'=>$parent_rank,
-                                'recomb_no' => $recomb_no,
-                                'next_link'=>{}
-                            );
-                            %{$link} = %node;
-                            $prev_link = $link;
-                            $link = $node{'next_link'};
-                            $link_cache{$parent_no} = \%node;
+                        %{$link} = %node;
+                        $prev_link = $link;
+                        $link = $node{'next_link'};
+                        $link_cache{$parent_no} = \%node;
 
-                        }
                     }
                 }
+            }
 
-                # bail if we're already above the rank of 'class'
-                last if($ranks[0] ne 'all' && ($parent_rank && $taxon_rank_order{$parent_rank} && 
-                        $taxon_rank_order{$parent_rank} < $highest_level));
+            # bail if we've reached the maximum possible rank
+            last if($ranks[0] ne 'all' && ($taxon_rank && $taxon_rank_order{$taxon_rank} && 
+                    $taxon_rank_order{$taxon_rank} <= $highest_level));
 
-                # set this var to set up next loop
-                $child_no = $parent_no;
-            } 
+            # end of classification
+            last if (!$parent_row);
+            
+            # bail if its a junk nomem * relationship
+            last if ($status =~ /^nomen/);
+
+            # set this var to set up next loop
+            $child_no = $parent_no;
         }
         ##if ($debug_print_link) {
         #    use Data::Dumper; print "</center>orig child $orig_child new child $new_child<pre>".Dumper($link_head{$hash_key}).'</pre><center>';
@@ -206,6 +194,7 @@ sub get_classification_hash{
 
     #print "</center><pre>link cache\n".Dumper(\%link_cache);
     #print "\n\nlink head\n".Dumper(\%link_head).'</pre><center>';
+
 
     # flatten the links before passing it back
     if ($return_type ne 'linked_list') {
@@ -216,24 +205,24 @@ sub get_classification_hash{
             # Flatten out data, but first prepare it all
             if ($ranks[0] eq 'parent') {
                 if ($return_type eq 'names') {
-                    $list_ordered .= ','.$link->{'name'};
+                    $list_ordered .= ','.$link->{'taxon_name'};
                 } else {
-                    $list_ordered .= ','.$link->{'number'};
+                    $list_ordered .= ','.$link->{'child_spelling_no'};
                 }
             } else {
                 while (%$link) {
                     #if ($count++ > 5) { print "link: ".Dumper($link)."<br>"}
                     #if ($count++ > 12) { last; }
                     # Loop prevention by marking where we've been
-                    if (exists $visits{$link->{'number'}}) { 
+                    if (exists $visits{$link->{'parent_no'}}) { 
                         last; 
                     } else {
-                        $visits{$link->{'number'}} = 1;
+                        $visits{$link->{'parent_no'}} = 1;
                     }
                     if ($return_type eq 'names') {
-                        $list{$link->{'rank'}} = $link->{'name'}; 
+                        $list{$link->{'taxon_rank'}} = $link->{'taxon_name'}; 
                     } else {
-                        $list{$link->{'rank'}} = $link->{'number'}; 
+                        $list{$link->{'taxon_rank'}} = $link->{'child_spelling_no'}; 
                     }
                     $link = $link->{'next_link'};
                 }
