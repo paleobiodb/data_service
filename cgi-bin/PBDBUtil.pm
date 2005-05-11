@@ -6,7 +6,7 @@ use Data::Dumper;
 
 # This package contains a collection of methods that are universally 
 # useful to the pbdb codebase.
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 ## debug($level, $message)
 # 	Description:	print out diagnostic messages according to severity,
