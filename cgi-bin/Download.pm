@@ -2192,7 +2192,7 @@ sub getTaxonString {
         if (scalar(@taxon_nos) == 0) {
             $genus_names_string .= ", ".$dbh->quote($taxon);
         } elsif (scalar(@taxon_nos) == 1) {
-            my @all_taxon_nos = PBDBUtil::taxonomic_search('',$dbt,$taxon_nos[0],'return taxon nos');
+            my @all_taxon_nos = PBDBUtil::taxonomic_search($dbt,$taxon_nos[0]);
             # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
             @taxon_nos_unique{@all_taxon_nos} = ();
         } else { #result > 1
