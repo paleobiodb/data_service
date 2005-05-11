@@ -1,5 +1,7 @@
 #!/usr/bin/perl
 
+# Totally deprecated PS 04/30/2005, pointless to do this in PERL
+
 # created by rjp, 3/2004.
 # Represents a single row from any data table in the database
 #
@@ -246,7 +248,7 @@ sub setDatabaseRow {
         Debug::logError("Tried to update a row in the " . $self->{table} . " table, but update would have affected $count rows.  Bailing out.");    
     } else {
         # doesn't exist, so do an insert
-        Debug::dbPrint("we're trying to do an insert");
+#        Debug::dbPrint("we're trying to do an insert");
         my ($resultCode, $insertID) = $sql->insertNewRecord($self->{table}, $self->{row});
         
         $self->{primaryKeyValue} = $insertID;
@@ -333,12 +335,12 @@ sub testUpdate {
     $row->setPrimaryKeyName('opinion_no');
     $row->setPrimaryKeyValue(1234);
    
-    Debug::printHash($row->row());
+#    Debug::printHash($row->row());
     
     $row->set('pages', 'asdf');
     $row->setDatabaseRow();
     
-    Debug::printHash($row->row());
+#    Debug::printHash($row->row());
 }
 
 
@@ -362,7 +364,7 @@ sub testInsert {
     $row->setPrimaryKeyName('opinion_no');
     $row->setPrimaryKeyValue('80012');
    
-    Debug::printHash($row->row());
+#    Debug::printHash($row->row());
     
     $row->set('pages', 'qwerty');
     $row->set('status', 'belongs to');
@@ -370,7 +372,7 @@ sub testInsert {
     
     $row->setDatabaseRow();
     
-    Debug::printHash($row->row());
+#    Debug::printHash($row->row());
 }
 
 
