@@ -19,11 +19,6 @@ my $HOST_URL = $ENV{BRIDGE_HOST_URL};
 $OUTFILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
 $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
 
-                                        # the default working directory
-$BACKGROUND="/public/PDbg.gif";
-
-my $authorizer;
-
 sub new {
 	my $class = shift;
 	$dbh = shift;
@@ -396,11 +391,11 @@ sub reportBuildDataTables {
     # Set the totals variables.  For average occs, divide occurrence totals by collection totals
     if ($q->param('output') eq 'average occurrences') {
         while(($key1,$val1) = each %occs_totals1) { 
-            $self->{'totals1'}{$key1} = sprintf("%.1f",$occs_totals1{$key1}/$coll_totals1{$key1});
+            $self->{'totals1'}{$key1} = sprintf("%.1f",$val1/$coll_totals1{$key1});
         }    
         if ($t2FieldCnt > 0) {
             while(($key2,$val2) = each %occs_totals2) { 
-                $self->{'totals2'}{$key2} = sprintf("%.1f",$occs_totals2{$key2}/$coll_totals2{$key2});
+                $self->{'totals2'}{$key2} = sprintf("%.1f",$val2/$coll_totals2{$key2});
             }
         } 
     } elsif ($q->param('output') eq 'occurrences') {
@@ -630,10 +625,14 @@ sub reportQueryDB{
             }
         }
 
-        # compute the numeric equivalent of the date limit
-        if($q->param("year")){
-			push @whereTerms,"occurrences.created >= $creationDate";
-		}
+        if($q->param("year_begin")){
+            my $creationDate = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$q->param('year_begin'),$q->param('month_begin'),$q->param('day_begin')));
+            push @whereTerms,"occurrences.created >= $creationDate";
+        }    
+        if($q->param("year_end")){
+            my $creationDate = $dbh->quote(sprintf("%d-%02d-%02d 23:59:59",$q->param('year_end'),$q->param('month_end'),$q->param('day_end')));
+            push @whereTerms,"occurrences.created <= $creationDate";
+        }    
 
         # handle taxon names
 		# JA: replaced recurse call with taxonomic_search call 7.5.04
@@ -650,7 +649,7 @@ sub reportQueryDB{
                 if (scalar(@taxon_nos) == 0) {
                     $genus_names_string .= ", ".$dbh->quote($taxon);
                 } elsif (scalar(@taxon_nos) == 1) {
-                    my @all_taxon_nos = PBDBUtil::taxonomic_search('', $dbt,$taxon_nos[0],'return taxon nos');
+                    my @all_taxon_nos = PBDBUtil::taxonomic_search($dbt,$taxon_nos[0]);
                     # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
                     @taxon_nos_unique{@all_taxon_nos} = ();
                 } else { #result > 1
@@ -674,7 +673,7 @@ sub reportQueryDB{
     }
 
     # Construct the final SQL query and execute
-    my $selectSQL, $groupSQL;
+    my ($selectSQL, $groupSQL);
     if ($fromSQL =~ /occurrences/) {
         $selectSQL = 'COUNT(*) AS occurrences_cnt, COUNT(DISTINCT collections.collection_no) AS collections_cnt';
     } else {
