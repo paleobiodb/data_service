@@ -1,5 +1,9 @@
 #!/usr/bin/perl
 
+# Totally deprecated PS 04/30/2005 - Making a class to represent a string in Perl
+# is pointless. This module seems to combine the annoying verbosity of Java
+# with the richness and features of C
+
 # created by rjp, 3/2004.
 # Represents information about a taxon rank
 # 
