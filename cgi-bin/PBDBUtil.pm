@@ -1,12 +1,12 @@
 package PBDBUtil;
 
-use Globals;
+use Data::Dumper;
 
 ### NOTE: SET UP EXPORTER AND EXPORT SUB NAMES.
 
 # This package contains a collection of methods that are universally 
 # useful to the pbdb codebase.
-my $DEBUG = 0;
+my $DEBUG = 1;
 
 ## debug($level, $message)
 # 	Description:	print out diagnostic messages according to severity,
@@ -437,18 +437,20 @@ sub newTaxonNames{
 	return @result;
 }
 
-##
-#
-#
-##
+# Pass in a taxon_no and this function returns all taxa that are  a part of that taxon_no, recursively
+# This function isn't meant to be called itself but is a recursive utility function for taxonomic_search
 sub new_search_recurse {
     # Start with a taxon_name:
     my $dbt = shift;
-    my $seed_no = shift;
-	$passed{$seed_no} = 1;
+    my $passed = shift;
+    my $parent_no = shift;
+    my $parent_child_spelling_no = shift;
+	$passed->{$parent_no} = 1 if ($parent_no);
+	$passed->{$parent_child_spelling_no} = 1 if ($parent_child_spelling_no);
+    return if (!$parent_no);
 
     # Get the children
-    my $sql = "SELECT DISTINCT child_no FROM opinions WHERE parent_no=$seed_no";
+    my $sql = "SELECT DISTINCT child_no FROM opinions WHERE parent_no=$parent_no";
     my @results = @{$dbt->getData($sql)};
 
     #my $debug_msg = "";
@@ -456,328 +458,66 @@ sub new_search_recurse {
         # Validate all the children
         foreach my $child (@results){
 			# Don't revisit same child. Avoids loops in data structure, and speeds things up
-            if (exists $passed{$child->{child_no}}) {
+            if (exists $passed->{$child->{child_no}}) {
                 #print "already visited $child->{child_no}<br>";
                 next;    
             }
-            # Don't let recombined as screw things up, we get those separately afterwards
-            # (the taxon_nos in %passed will always be original combinations since orig. combs always have all the belongs to links)
-            $sql = "SELECT parent_no, pubyr, status, reference_no".
-                   " FROM opinions ".
-                   " WHERE status NOT IN ('recombined as','rank changed as','corrected as') ".
-                   " AND child_no=".$child->{child_no};
-            # go back up and check each child's parent(s)
-            my @other_results = @{$dbt->getData($sql)};
-            my $index = TaxonInfo::selectMostRecentParentOpinion($dbt, \@other_results , 1);
+            # (the taxon_nos in %$passed will always be original combinations since orig. combs always have all the belongs to links)
+            my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt, $child->{'child_no'});
 
-            if($other_results[$index]->{parent_no} == $seed_no){
-                new_search_recurse($dbt,$child->{child_no});
-                #$debug_msg .= "Adding child $child->{child_no} named ". 
-                #    ${$dbt->getData("SELECT taxon_name FROM authorities WHERE taxon_no=$child->{child_no}")}[0]->{'taxon_name'};
-            } #else {
-                #$debug_msg .= "Rejecting child $child->{child_no} named ". 
-                #    ${$dbt->getData("SELECT taxon_name FROM authorities WHERE taxon_no=$child->{child_no}")}[0]->{'taxon_name'};
-            #}
-            #$debug_msg .= " from parent $other_results[$index]->{parent_no} named ". ${$dbt->getData("SELECT taxon_name FROM authorities WHERE taxon_no=$other_results[$index]->{parent_no}")}[0]->{'taxon_name'}."<br>";
+            if($parent_row->{'parent_no'} == $parent_no){
+                my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE status IN  ('rank changed as','recombined as','corrected as') AND child_no=$child->{'child_no'} AND child_spelling_no !=$parent_row->{child_spelling_no}";
+                my @results = @{$dbt->getData($sql)}; 
+                foreach my $row (@results) {
+                    if ($row->{'child_spelling_no'}) {
+                        $passed->{$row->{'child_spelling_no'}}=1;
+                    }
+                }
+                undef @results;
+                new_search_recurse($dbt,$passed,$child->{'child_no'},$child->{'child_spelling_no'});
+            } 
         }
-    } #else{
-        #print "no children for seed $seed_no<br>";
-        #print "\nNO TAXON_NO FOUND FOR $seed_no\n";
-		#$visited_children{$seed_no} = 1;
-    #}
-    #print $debug_msg;
+    } 
 }
 
 ##
 # Recursively find all taxon_nos or genus names belonging to a taxon
 ##
-# Hacked to return taxon_nos as well, and an array if a user assigns return value to an array PS 12/29/2004
-# Added fetching of recombinations PS 02/14/2005.  if var suppress_recombinations is set, don't do this (useful)
-# in taxomic intervals, where we want to do that manually
 sub taxonomic_search{
-	my $name = shift;
 	my $dbt = shift;
-	my $taxon_no = (shift or "");
-    my $return_taxon_nos = (shift or "");
-    my $suppress_recombinations = (shift or "");
+	my $taxon_name_or_no = (shift or "");
+    my $taxon_no;
 
-	my $sql = "";
-	my @results = ();
-	if($taxon_no eq ""){
-		$sql = "SELECT taxon_no from authorities WHERE taxon_name=".$dbt->dbh->quote($name);
-		@results = @{$dbt->getData($sql)};
-		$taxon_no = $results[0]->{taxon_no};
-	}
-
-    # global to this method and methods called by it
-	local %passed = ();
-
-	# We might not get a number or rank if this name isn't in authorities yet.
-	if(! $taxon_no){
-        if ($return_taxon_nos ne "") {
-            return wantarray ? (-1) : "-1";
-        } else {
-    		return wantarray ? ($name) : "'$name'";
-        }
-	}
-	new_search_recurse($dbt,$taxon_no);
-
-    # Dirty trick PS 01/10/2005 - if a taxon_no of 0 is passed in a occurrence query, any
-    #  occurrence that doesn't have a taxon no gets added in (~90000) and any collection
-    #  with one of these occurrences gets added in (~19000). So delete it. Not sure why
-    #  this 0 gets passed back sometimes right now
-    delete $passed{0};
-
-    # Get recombination taxon nos also, and add those in PS 02/14/2005
-    unless ($suppress_recombinations) {
-        my $sql = "SELECT parent_no FROM opinions WHERE status IN ('recombined as','corrected as', 'rank changed as') AND child_no=?";
-        $sth = $dbt->dbh->prepare($sql) || die "$sql";
-        foreach $taxon_no (keys %passed) {
-            $sth->execute($taxon_no);
-            while(my @row=$sth->fetchrow_array()) {
-                $passed{$row[0]} = 1 if $row[0];
-            }
-        }
-    }
-
-	my $results;
-    if ($return_taxon_nos ne "") {
-        if (wantarray) {
-            return keys %passed;
-        } else {
-            return join(', ', keys %passed);
-        }
+    # We need to resolve it to be a taxon_no or we're done    
+    if ($taxon_name_or_no =~ /^\d+$/) {
+        $taxon_no = $taxon_name_or_no;
     } else {
-        $results = join(', ',keys %passed);
-    }
-    $sql = "SELECT taxon_name FROM authorities WHERE taxon_no IN ($results)";
-    @results = @{$dbt->getData($sql)};
-
-    if (wantarray) {
-        return @results;
-    } else {
-        foreach my $item (@results){
-            $item = "'".$item->{taxon_name}."'";
-        }
-        return join(', ', @results);
-    }
-	
-	return $results;
-}
-
-sub simple_array_push_unique{
-    my $orig_ref = shift;
-    my @orig = @{$orig_ref};
-    my $new_ref = shift;
-    my @new = @{$new_ref};
-    my $duplicate = 0;
-
-    foreach my $item (@new){
-        my $duplicate = 0;
-        foreach my $old (@orig){
-            if($item == $old){
-                $duplicate = 1;
-                last;
-            }
-        }
-        if($duplicate == 0){
-            push(@orig, $item);
-        }
-    }
-    return \@orig;
-}
-
-# JA: this is a Paul Muhl function, not to be confused with
-#  Classification::get_classification_hash, that only is called in two
-#  places in bridge.pl related to construction of taxonomic lists by
-#  buildTaxonomicList
-# extensive rewrite 2.4.04 by JA to accomodate taxon numbers instead of names
-# DEPRECATED 01/11/2004 PS - functionality was almost identical to Classification::get_classification_hash, so use that
-sub get_classification_hash{
-	my $dbt = shift;
-    my $taxon_no = shift;
-
- # don't even bother unless we know the taxon's ID number
-    if ( $taxon_no < 1 )	{
-      return;
-    }
-
-    # this might be a recombined species name, so we need the original
-    #   combination or we won't be able to follow the opinion chain upwards
-    #   JA 29.4.04
-    $taxon_no = TaxonInfo::getOriginalCombination($dbt, $taxon_no);
-
-#   my $taxon_name = shift;
-#   $taxon_name =~ /(\w+)\s+(\w+)/;
-#   my ($genus, $species) = ($1, $2);
-#   if($species){
-#       $rank = "species";
-#   }
-#   else{
-        $rank = '';
-#       #$rank = "genus";
-#   }
-
-    my $child_no = -1;
-#   my $parent_no = -1;
-    my $parent_no = $taxon_no;
-    my %parent_no_visits = ();
-    my %child_no_visits = ();
-    my %classification = ();
-
-    my $status = "";
-    my $first_time = 1;
-    # Loop at least once, but as long as it takes to get full classification
-    while($parent_no){
-            $child_no = $parent_no;
-
-# following old PM section tried to guess the chid_no from the name
-        # Keep $child_no at -1 if no results are returned.
-#       my $sql = "SELECT taxon_no, taxon_rank FROM authorities WHERE ".
-#                 "taxon_name='$taxon_name'";
-#		if($rank){
-#			$sql .= " AND taxon_rank = '$rank'";
-#		}
-#       my @results = @{$dbt->getData($sql)};
-#       if(defined $results[0]){
-            # Save the taxon_no for keying into the opinions table.
-#           $child_no = $results[0]->{taxon_no};
-
-# JA: still do need the following
-            # Insurance for self referential / bad data in database.
-            # NOTE: can't use the tertiary operator with hashes...
-            # How strange...
-            if(exists $child_no_visits{$child_no}){
-                $child_no_visits{$child_no} += 1;
-            }
-            else{
-                $child_no_visits{$child_no} = 1;
-            }
-            last if($child_no_visits{$child_no}>1);
-
-#       }
-        # no taxon number: if we're doing "Genus species", try to find a parent
-        # for just the Genus, otherwise give up.
-#       else{
-#           if($genus && $species){
-#               $sql_auth_inv = "SELECT taxon_no, taxon_rank ".
-#                  "FROM authorities ".
-#                  "WHERE taxon_name = '$genus'";
-#               @results = @{$dbt->getData($sql_auth_inv)};
-                # THIS IS LOOKING IDENTICAL TO ABOVE...
-                # COULD CALL SELF WITH EMPTY SPECIES NAME AND AN EXIT...
-#               if(defined $results[0]){
-#                   $child_no = $results[0]->{taxon_no};
-#					$rank = $results[0]->{taxon_rank};
-
-#                   if($child_no_visits{$child_no}){
-#                       $child_no_visits{$child_no} += 1;
-#                   }
-#                   else{
-#                       $child_no_visits{$child_no} = 1;
-#                   }
-#                   last if($child_no_visits{$child_no}>1);
-#               }
-#           }
-#           else{
-#               last;
-#           }
-#       }
-
-	# get the taxon_no and rank of the initial argument, in case it's a
-        # higher taxon name with some c/o/f parents so we can sort better.
-        # don't save the taxon_name in the hash because it will already be
-        # displayed in the 'genus' field of the taxonomic list
-        if($first_time and $child_no > 0 ){
-            $sql = "SELECT taxon_rank FROM authorities WHERE taxon_no=" . $child_no;
-            @results = @{$dbt->getData($sql)};
-            $classification{$results[0]->{taxon_rank}."_no"} = $child_no;
-        }
-
-        # otherwise, give up...
-        # JA: this should never happen given that the function now starts
-        #  with a non-zero taxon no, but what the heck
-        if($child_no < 1){
-            return {};
-        }
-
-        # Now see if the opinions table has a parent for this child
-        my $sql_opin =  "SELECT status, parent_no, pubyr, reference_no ".
-                        "FROM opinions ".
-                        "WHERE child_no=$child_no";
-                      #  "WHERE child_no=$child_no AND status='belongs to'";
-        @results = @{$dbt->getData($sql_opin)};
-
-# JA: PM wrote the following in case the taxon being classified was a species,
-#  there were no opinions on it, but there were opinions on its genus; this
-#  is now a moot point because only explicit classification relationships are
-#  now allowed
-#       if($first_time && $rank eq "species" && scalar @results < 1){
-#           my ($genus, $species) = split(/\s+/,$taxon_name);
-#           my $last_ditch_sql = "SELECT taxon_no ".
-#                                "FROM authorities ".
-#                                "WHERE taxon_name = '$genus' ".
-#                                "AND taxon_rank = 'Genus'";
-#           @results = @{$dbt->getData($last_ditch_sql)};
-#           my $child_no = $results[0]->{taxon_no};
-#           if($child_no > 0){
-#               $last_ditch_sql = "SELECT status, parent_no, pubyr, ".
-#                                 "reference_no FROM opinions ".
-#                                 "WHERE child_no=$child_no AND ".
-#                                 "status='belongs to'";
-#               @results = @{$dbt->getData($last_ditch_sql)};
-#           }
-#       }
-
-        $first_time = 0;
-
-        if(scalar @results){
-            $parent_no=TaxonInfo::selectMostRecentParentOpinion($dbt,\@results);
-                
-            # Insurance for self referential or otherwise bad data in database.
-            if($parent_no_visits{$parent_no}){
-                $parent_no_visits{$parent_no} += 1;
-            }       
-            else{
-                $parent_no_visits{$parent_no}=1;
-            }           
-            last if($parent_no_visits{$parent_no}>1);
-                    
-            if($parent_no){
-                # Get the name and rank for the parent
-                my $sql_auth = "SELECT taxon_name, taxon_rank ".
-                           "FROM authorities ".
-                           "WHERE taxon_no=$parent_no";
-                @results = @{$dbt->getData($sql_auth)};
-                if(scalar @results){
-                    $auth_hash_ref = $results[0];
-                    # reset name and rank for next loop pass
-                    $rank = $auth_hash_ref->{"taxon_rank"};
-                    $taxon_name = $auth_hash_ref->{"taxon_name"};
-                    $classification{$rank} = $taxon_name;
-                    $classification{$rank."_no"} = $parent_no;
-                }       
-                else{   
-                    # No results might not be an error: 
-                    # it might just be lack of data
-                    # print "ERROR in sql: $sql_auth<br>";
-                    last;
-                }
-            }                    
-            # If we didn't get a parent or status ne 'belongs to'
-            else{                
-                $parent_no = 0;
-            }
-        }   
-        else{   
-            # No results might not be an error: it might just be lack of data
-            # print "ERROR in sql: $sql_opin<br>";
-            last;                 
+        @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon_no);
+        if (scalar(@taxon_nos) == 1) {
+            $taxon_no = $taxon_name_or_no;
         }       
-    }       
-    return \%classification;
-}
+    }
+    if (!$taxon_no) {
+        return wantarray ? (-1) : "-1"; # bad... ambiguous name or none
+    }
+    # Make sure its an original combination
+    $taxon_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
 
+    my $passed = {};
+    
+    # get alternate spellings of focal taxon. all alternate spellings of
+    # children will be found by the new_search_recurse function
+    my $sql = "SELECT child_spelling_no FROM opinions WHERE status IN ('recombined as','corrected as','rank changed as') AND child_no=$taxon_no";
+    my @results = @{$dbt->getData($sql)};
+    foreach my $row (@results) {
+        $passed->{$row->{'child_spelling_no'}} = 1 if ($row->{'child_spelling_no'});
+    }
+
+    # get all its children
+	new_search_recurse($dbt,$passed,$taxon_no);
+
+    return (wantarray) ? keys(%$passed) : join(', ', keys(%$passed));
+}
 
 
 sub getMostRecentReIDforOcc{
@@ -919,26 +659,31 @@ sub getPaleoCoords {
     return ($paleolng, $paleolat);
 }
 
-# Gets the childen of a taxon, sorted in hierarchical fashion
+# Gets the childen of a taxon, sorted/output in various fashions
+# Algorithmically, this behaves more or less identically to taxonomic_search,
+# except its slower since it can potentially return much more data and is much more flexible
+# Data is kept track of internally in a tree format. Additional data is kept track of as well
+#  -- Alternate spellings get stored in a "spellings" field
+#  -- Synonyms get stored in a "synonyms" field
 # Separated 01/19/2004 PS. 
 #  Inputs:
 #   * 1st arg: $dbt
 #   * 2nd arg: taxon name or taxon number
 #   * 3nd arg: max depth: no of iterations to go down
+#   * 4th arg: what we want the data to look like. possible values are:
+#       tree: a tree-like data structure, more general and the format used internally
+#       sort_hierarchical: an array sorted in hierarchical fashion, suitable for PrintHierarchy.pm
+#       sort_alphabetical: an array sorted in alphabetical fashion, suitable for TaxonInfo.pm or Confidence.pm
+# 
 #  Outputs: an array of hash (record) refs
 #    See 'my %new_node = ...' line below for what the hash looks like
-sub getChildren { 
-    my $dbt = shift;
+sub getChildren {
+    my $dbt = shift; 
     my $taxon_name_or_no = shift;
     my $max_depth = (shift || 1);
-    my $get_synonyms = (shift || 0);
+    my $return_type = (shift || "sort_hierarchical");
 
-    use Data::Dumper;
-
-    # described above, return'd vars
-    my %tree_cache = ();
-    my $tree_head;
-
+    # We need to resolve it to be a taxon_no or we're done
     if ($taxon_name_or_no =~ /^\d+$/) {
         $taxon_no = $taxon_name_or_no;
     } else {
@@ -948,214 +693,91 @@ sub getChildren {
         }    
     }
     if (!$taxon_no) {
-        return undef; # bad... ambiguous name or no no
+        return undef; # bad... ambiguous name or none
     } 
-    my @parents = ($taxon_no);
-    %tree_node = ('taxon_no'=>$taxon_no, 'children'=>[]);
-    $tree_cache{$taxon_no} = \%tree_node;
-    $tree_head = \%tree_node;
+    
+    # described above, return'd vars
+    my $tree_root = {'taxon_no'=>$taxon_no, 'taxon_name'=>'ROOT','children'=>[]};
 
-    # Max depth = max number of iterations
-	for $level ( 1..$max_depth)	{
-        # go through the parent list
-		my @children = ();
-		$childcount = 0;
-		for $p ( @parents )	{
-        	# find all children of this parent
-			my $sql = "SELECT DISTINCT child_no,status FROM opinions WHERE status='belongs to' AND parent_no=" . $p;
-			@childrefs = @{$dbt->getData($sql)};
-
-			# now the hard part: make sure the most recent opinion
-			#  on each child name is a "belongs to" and places
-			#  the child in the parent we care about
-			@goodrefs = ();
-			for my $ref ( @childrefs )	{
-                # Took out section with getOriginalCombination - belongs to can only be attached to
-                # original combinations so we start off with original combination, don't need to backtrack PS 01/21/2005
-
-                # Don't let recombined as screw things up, we get those separately afterwards
-                # (the taxon_nos in %passed will always be original combinations since orig. combs always have all the belongs to links)
-                $sql = "SELECT parent_no, pubyr, status, reference_no".
-                       " FROM opinions ".
-                       " WHERE status NOT IN ('recombined as','rank changed as','corrected as') ".
-                       " AND child_no=".$ref->{child_no};
-
-                # go back up and check each child's parent(s)
-                my @other_results = @{$dbt->getData($sql)};
-                my $index = TaxonInfo::selectMostRecentParentOpinion($dbt, \@other_results , 1);
-
-				$lastopinion = $other_results[$index]->{status};
-				$lastparent = $other_results[$index]->{parent_no};
-
-                if ( $lastopinion =~ /belongs to/ && $lastparent == $p )	{
-                    push @goodrefs , $ref;
-                } else { 
-                    if ($DEBUG) {
-                        my $lp_name = @{$dbt->getData("SELECT taxon_name from authorities where taxon_no=$lastparent")}[0]->{'taxon_name'} if $lastparent;
-                        my $ci_name = @{$dbt->getData("SELECT taxon_name from authorities where taxon_no=$ref->{child_no}")}[0]->{'taxon_name'};
-                        debug(1,"Failed ($ref->{child_no}-$ci_name)-$lastopinion-($lastparent-$lp_name) does not belong to $p");
-                    }
-                }
-            }
-
-            for my $ref ( @goodrefs ){
-                $childcount++;
-                # rock 'n' roll: save the child name
-                push @children,$ref->{child_no};
-                
-                my ($name,$syn,$rank);
-                $name_ref = getCorrectedName($dbt,$ref->{child_no});
-                $name = $name_ref->{taxon_name};
-                $rank = $name_ref->{taxon_rank};
-               
-                # Save the child into the tree
-                my $node = $tree_cache{$p};
-                my %new_node = ('taxon_no'=>$ref->{child_no}, 
-                                'taxon_name'=>$name,
-                                'taxon_rank'=>$rank,
-                                'level'=>$level,
-                                'children'=>[]);
-                if ($get_synonyms) {
-                    $new_node{'synonyms'} = getSynonyms($dbt,$ref->{child_no});
-                } 
-                push @{$node->{'children'}}, \%new_node;
-                $tree_cache{$ref->{child_no}} = \%new_node;
-            }
-		}
-        # replace the parent list with the child list
-		@parents = @children;
-	}
-
-    # Perform he final sort
-    my @sorted_records;
-    getChildrenTraverseTree($tree_head, \@sorted_records);
-    # Remove the head (is the parameter pased in)
-    shift @sorted_records;
-    #print "<pre>";
-    #print "\n\nTH:\n ".Dumper($tree_head);
-    #print "\n\nTC:\n ".Dumper(\%tree_cache);
-    #print "\n\nSK:\n ".Dumper(\@sort_keys);
-    #print "\n\nNAMES:\n ".Dumper(\%names);
-    #print "\n\nRANKS:\n ".Dumper(\%ranks);
-    ##print "\n\nLEVELS:\n ".Dumper(\%levels);
-    #print "</pre>";
-    return \@sorted_records;
-}
-
-# If the taxon no is an original combination, get the name of the thing its recombined to
-sub getCorrectedName{
-    my $dbt = shift;
-    my $child_no = shift;
-    my $return_type = shift; #default is to return row, optionally return taxon_no if this is 'number'
-    my $include_synonym = shift; #boolean, return corrected as synonym
-    my $recurse_times = shift || 0;
-    if (!$child_no) { return undef};
-
-    # will get what its renamed to.  A bit tricky, as you want to the most recent opinion, but normally the 'belongs to' comes first
-    # so you have to use an order by so it comes second.  can't use filter the belongs to in the where clause cause the taxon may
-    # genuinely belong to something else (not recomb). surround the select in () so aliased fields can be used in order by.
-    my $sql = "(SELECT a.taxon_no, a.taxon_name, a.taxon_rank, (o.status = 'belongs to') AS is_bt, o.status,"
-         . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr, (r.publication_type='compendium') AS is_compendium" 
-         . " FROM opinions o " 
-         . " LEFT JOIN authorities a ON o.parent_no = a.taxon_no " 
-         . " LEFT JOIN refs r ON r.reference_no=o.reference_no " 
-         . " WHERE o.child_no=$child_no) " 
-         . " ORDER BY is_compendium ASC, pubyr DESC, is_bt ASC LIMIT 1";
-
-    #print $sql."<br>";
-
-    my @rows = @{$dbt->getData($sql)};
-    if (scalar(@rows)) {
-        my $status = $rows[0]->{'status'};
-        if (($status eq 'recombined as' || $status eq 'corrected as' || $status eq 'rank changed as') || 
-            ($include_synonym && ($status eq 'homonym of' || $status eq 'subjective synonym of' || $status eq 'objective synonym of' || $status eq 'revalidated' || $status eq 'replaced by'))) {
-            if ($recurse_times > 2) {
-                if ($return_type eq 'number') {
-                    return $rows[0]->{'taxon_no'};
-                } else {
-                    return $rows[0];
-                }
-            } else {
-                my $use_row;
-                if ($rows[0]->{'taxon_no'}) {
-                    $use_row = getCorrectedName($dbt,$rows[0]->{'taxon_no'},'',$include_synonym,$recurse_times+1);
-                
-                    if ($use_row->{'pubyr'} <= $rows[0]->{'pubyr'}) {
-                        $use_row = $rows[0];
-                    } 
-                } else {
-                    $use_row = $rows[0];
-                }
-                if ($return_type eq 'number') {
-                    return $use_row->{'taxon_no'};
-                } else {
-                    return $use_row;
-                }
-                #use Data::Dumper; print Dumper($row2);
-            }
-        } else {
-            if ($return_type eq 'number') {
-                return $child_no;
-            } else {
-                my @me;
-                #no recomb, just return the name/no of the child
-                $sql = "SELECT a.taxon_no, a.taxon_name, a.taxon_rank from authorities a WHERE a.taxon_no=$child_no";
-                @me = @{$dbt->getData($sql)};
-                return $me[0];
-            }        
-        }
-    } else {
-        if ($return_type eq 'number') {
-            return $child_no;
-        } else {
-            $sql = "SELECT a.taxon_no, a.taxon_name, a.taxon_rank from authorities a WHERE a.taxon_no=$child_no";
-            @me = @{$dbt->getData($sql)};
-            return $me[0];
-        }
+    # The sorted records are sorted in a hierarchical fashion suitable for passing to printHierachy
+    my @sorted_records = ();
+    getChildrenRecurse($dbt, $tree_root, $max_depth, 1, \@sorted_records);
+    #pop (@sorted_records); # get rid of the head
+   
+    if ($return_type eq 'tree') {
+        return $tree_root;
+    } elsif ($return_type eq 'sort_alphabetical') {
+        @sorted_records = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @sorted_records;
+        return \@sorted_records;
+    } else { # default 'sort_hierarchical'
+        return \@sorted_records;
     }
+   
 }
 
-# INTERNAL USE: function to do depth first traversal
-# Internal use for getChildren function only right now
-sub getChildrenTraverseTree {
+sub getChildrenRecurse { 
+    my $dbt = shift;
     my $node = shift;
-    my $sort_keys = shift;
+    my $max_depth = shift;
+    my $depth = shift;
+    my $sorted_records = shift;
+    
+    return if (!$node->{'taxon_no'});
 
-    my @children = @{$node->{'children'}};
-    push @{$sort_keys}, $node;
-    if (@children) {
-        # Sort the children. The map function converts an array of nodes to an array of taxon nos 
-        # Then sort based on those taxon nos using the sort_hash (the taxon names)
-        #@children = sort {$sort_hash->{$a} cmp $sort_hash->{$b}} map {$_->{'taxon_no'}} @children;
-        @children = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @children;
-        getChildrenTraverseTree($_,$sort_keys) for @children;
-    } 
-}
+    # find all children of this parent, do a join so we can do an order by on it
+    my $sql = "SELECT DISTINCT child_no FROM opinions, authorities WHERE opinions.child_spelling_no=authorities.taxon_no AND parent_no=$node->{taxon_no} ORDER BY taxon_name";
+    my @children = @{$dbt->getData($sql)};
 
-# Trivial function get synonyms of a taxon_no. Returns array of hash references to db table rows (like getData does)
-sub getSynonyms {
-    my $dbt = shift;
-    my $parent_no = shift;    
-    my @synonyms;
-
-    # Get children of parent
-    my $sql = "SELECT DISTINCT child_no FROM opinions WHERE parent_no=$parent_no" 
-            . " AND status IN ('subjective synonym of','objective synonym of')"; #add replaced by?
-    @rows = @{$dbt->getData($sql)};
-    foreach $row (@rows) {
-        $sql = "SELECT a.taxon_no, a.taxon_name, a.taxon_rank, o.parent_no, o.pubyr, o.reference_no ".
-               "FROM opinions o, authorities a ".
-               "WHERE o.child_no = a.taxon_no ".
-               "AND o.child_no=".$row->{'child_no'};
+    # Create the children and add them into the children array
+    for my $row (@children) {
+        # (the taxon_nos will always be original combinations since orig. combs always have all the belongs to links)
         # go back up and check each child's parent(s)
-        @parents = @{$dbt->getData($sql)};
+        my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$row->{'child_no'},1); 
+        if ($parent_row->{'parent_no'}==$node->{'taxon_no'})	{
+            # Get alternate spellings
+            my $sql = "SELECT DISTINCT taxon_no, taxon_name, taxon_rank FROM opinions, authorities ".
+                      "WHERE opinions.child_spelling_no=authorities.taxon_no ".
+                      "AND status IN  ('rank changed as','recombined as','corrected as') ".
+                      "AND child_no=$parent_row->{child_no} ".
+                      "AND child_spelling_no!=$parent_row->{child_spelling_no} ".
+                      "ORDER BY taxon_name"; 
+            my $spellings= $dbt->getData($sql);
 
-        $index = TaxonInfo::selectMostRecentParentOpinion($dbt,\@parents,1);
-        if ($parents[$index]->{'parent_no'} == $parent_no) {
-            push @synonyms,$parents[$index];
-        }    
+            # Create the node for the new child - note its taxon_no is always the original combination,
+            # but its name/rank are from the corrected name/recombined name
+            my $new_node = {'taxon_no'=>$parent_row->{'child_no'}, 
+                            'taxon_name'=>$parent_row->{'child_name'},
+                            'taxon_rank'=>$parent_row->{'child_rank'},
+                            'depth'=>$depth,
+                            'children'=>[],
+                            'spellings'=>$spellings,
+                            'synonyms'=>[]};
+          
+            # Populate the new node and place it in its right place
+            if ( $parent_row->{'status'} =~ /^(?:bel|rec|cor|ran)/o ) {
+                return if ($depth > $max_depth);
+                # Hierarchical sort, in depth first order
+                push @$sorted_records, $new_node;
+                getChildrenRecurse($dbt,$new_node,$max_depth,$depth+1,$sorted_records,$do_sort);
+                push @{$node->{'children'}}, $new_node;
+            } elsif ($parent_row->{'status'} =~ /^(?:subj|homo|obje|repl)/o) {
+                getChildrenRecurse($dbt,$new_node,$max_depth,$depth,$sorted_records,$do_sort);
+                push @{$node->{'synonyms'}}, $new_node;
+            }
+        }
     }
-    return \@synonyms;
+
+    if (0) {
+    print "synonyms for $node->{taxon_name}:";
+    print "$_->{taxon_name} " for (@{$node->{'synonyms'}}); 
+    print "\n<br>";
+    print "spellings for $node->{taxon_name}:";
+    print "$_->{taxon_name} " for (@{$node->{'spellings'}}); 
+    print "\n<br>";
+    print "children for $node->{taxon_name}:";
+    print "$_->{taxon_name} " for (@{$node->{'children'}}); 
+    print "\n<br>";
+    }
 }
 
 # Utilitiy, no other place to put it PS 01/26/2004
