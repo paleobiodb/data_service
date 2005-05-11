@@ -34,7 +34,7 @@ my $AITOP = 580;
                 "time interval" => "interval_name",
                 "lithology" => "lithology1",
                 "paleoenvironment" => "environment",
-                "taxon" => "genus_name" );
+                "taxon" => "taxon_name" );
 
 my %coll_count = ();
 
@@ -43,7 +43,7 @@ sub acos {
     my $a;
     if ($_[0] > 1 || $_[0] < -1) {
         $a = 1;
-        carp "Map.pm warning, bad args passed to acos: $_[0] x $x oppgcd $oppgcd y $y";
+        carp "Map.pm warning, bad args passed to acos: $_[0] x $x y $y";
     } else {
         $a = $_[0];
     }
@@ -161,7 +161,7 @@ sub mapCheckForm {
     # For all four datasets (point types) ... 
     for my $ptset (1..4) {
         my $interval_name = '';    
-        my $genus_name = '';
+        my $taxon_name = 'taxon_name';
         if ($ptset > 1) {
             $extraField = $fieldnames{$q->param('mapsearchfields'.$ptset)}
                                         ||
@@ -170,12 +170,12 @@ sub mapCheckForm {
                                                                                                                                                              
             if ($extraField eq 'interval_name') {
                 $interval_name = $extraFieldValue;
-            } elsif ($extraField eq 'genus_name') {
-                $genus_name = $extraFieldValue;
+            } elsif ($extraField eq 'taxon_name') {
+                $taxon_name = $extraFieldValue;
             }
         } elsif ($ptset == 1) {
             $interval_name = $q->param('interval_name');
-            $genus_name    = $q->param('genus_name');
+            $taxon_name    = $q->param('taxon_name');
         }
         
 
@@ -188,12 +188,12 @@ sub mapCheckForm {
         }
 
         # Generate warning for taxon with homonyms
-        if ($genus_name) {
+        if ($taxon_name) {
             if($q->param('taxon_rank') eq "Higher taxon" ||
                $q->param('taxon_rank') eq "Higher-taxon"){
-                my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $genus_name);
+                my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon_name);
                 if (scalar(@taxon_nos)  > 1) {
-                    push @errors, "The taxon name '$genus_name' is ambiguous and belongs to multiple taxonomic hierarchies. Right the map script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
+                    push @errors, "The taxon name '$taxon_name' is ambiguous and belongs to multiple taxonomic hierarchies. Right the map script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
                 }
             }
         }
@@ -327,11 +327,13 @@ sub mapFinishImage {
     close AIFOOT;
 
     open JPG,">$GIF_DIR/$jpgname";
-    $image->Write(file=>JPG);
+    $image->Write(file=>\*JPG);
+    close JPG;
     chmod 0664, "$GIF_DIR/$jpgname";
 
     open PICT,">$GIF_DIR/$pictname";
-    $image->Write(file=>PICT);
+    $image->Write(file=>\*PICT);
+    close PICT;
     chmod 0664, "$GIF_DIR/$pictname";
 
     close GIF;
@@ -339,7 +341,7 @@ sub mapFinishImage {
     # make clickable background rectangles for repositioning the map
 
     # need a list of possible parameters
-    my @params = ('research_group', 'authorizer', 'enterer', 'modified_since', 'date', 'month', 'year', 'country', 'state', 'interval_name', 'formation', 'lithology1', 'environment', 'taxon_rank', 'genus_name', 'pointsize1', 'dotcolor1', 'pointshape1', 'dotborder1', 'mapsearchfields2', 'mapsearchterm2', 'pointsize2', 'dotcolor2', 'pointshape2', 'dotborder2', 'mapsearchfields3', 'mapsearchterm3', 'pointsize3', 'dotcolor3', 'pointshape3', 'dotborder3', 'mapsearchfields4', 'mapsearchterm4', 'pointsize4', 'dotcolor4', 'pointshape4', 'dotborder4', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngnocolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor');
+    my @params = ('research_group', 'authorizer', 'enterer', 'modified_since', 'date', 'month', 'year', 'country', 'state', 'interval_name', 'formation', 'lithology1', 'environment', 'taxon_rank', 'taxon_name', 'pointsize1', 'dotcolor1', 'pointshape1', 'dotborder1', 'mapsearchfields2', 'mapsearchterm2', 'pointsize2', 'dotcolor2', 'pointshape2', 'dotborder2', 'mapsearchfields3', 'mapsearchterm3', 'pointsize3', 'dotcolor3', 'pointshape3', 'dotborder3', 'mapsearchfields4', 'mapsearchterm4', 'pointsize4', 'dotcolor4', 'pointshape4', 'dotborder4', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngnocolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor');
 
     my $clickstring = "$BRIDGE_HOME?action=displayMapResults";
     # Crate a new cgi object cause the original may have been changed
@@ -471,101 +473,92 @@ sub mapQueryDb	{
     # Also handles species name searches JA 19-20.8.02
     my $genus;
     my $species;
-    if($q->param('genus_name')){
-        # PM 09/13/02 added the '\s+' pattern for space matching.
-        if($q->param('genus_name') =~ /\w+\s+\w+/){
-            ($genus,$species) = split /\s+/,$q->param('genus_name');
-        }
-        elsif($q->param('taxon_rank') eq "species"){
-            $species = $q->param('genus_name');
-        }
-        else{
-            $genus = $q->param('genus_name');
-        }
-        $sql = qq|SELECT occurrences.collection_no FROM occurrences LEFT JOIN reidentifications ON occurrences.occurrence_no = reidentifications.occurrence_no WHERE |;
-
-        if (@$in_list) {
-                # In list may be a text genus+species name, a taxon number, or both (if passed from Confidence.pm)
-                my ($taxon_nos_string,$genus_species_sql);
-                foreach $taxon_no_or_name (@$in_list) {
-                    if ($taxon_no_or_name =~ /^\d+$/) {
-                        $taxon_nos_string .= $taxon_no_or_name . ",";
-                    } else {
-                        my ($genus,$species) = split(/ /,$taxon_no_or_name);
-                        if ($genus) {
-                            for $table (('reidentifications','occurrences')) {
-                                $genus_species_sql .= " OR ($table.genus_name=".$dbh->quote($genus);
-                                if ($species) {
-                                    $genus_species_sql .= " AND $table.species_name=".$dbh->quote($species);
-                                }
-                                $genus_species_sql .= ")";
-                            }
+    my $sql = qq|SELECT occurrences.collection_no FROM occurrences LEFT JOIN reidentifications ON occurrences.occurrence_no = reidentifications.occurrence_no WHERE |;
+    if (@$in_list) {
+        # In list may be a text genus+species name, a taxon number, or both (if passed from Confidence.pm)
+        my ($taxon_nos_string,$genus_species_sql);
+        foreach $taxon_no_or_name (@$in_list) {
+            if ($taxon_no_or_name =~ /^\d+$/) {
+                $taxon_nos_string .= $taxon_no_or_name . ",";
+            } else {
+                my ($genus,$species) = split(/ /,$taxon_no_or_name);
+                if ($genus) {
+                    for $table (('reidentifications','occurrences')) {
+                        $genus_species_sql .= " OR ($table.genus_name=".$dbh->quote($genus);
+                        if ($species) {
+                            $genus_species_sql .= " AND $table.species_name=".$dbh->quote($species);
                         }
+                        $genus_species_sql .= ")";
                     }
                 }
-                $taxon_nos_string =~ s/,$//;
-                if ($taxon_nos_string) {
-                }
-                $sql .= " (";
-                if (!$taxon_nos_string) {
-                    $genus_species_sql =~ s/^ OR//;
-                    $sql .= $genus_species_sql;
-                } else {
-                    $sql .= "occurrences.taxon_no IN ($taxon_nos_string) OR reidentifications.taxon_no IN ($taxon_nos_string) $genus_species_sql";
-                }
-                $sql .= ") ";
+            }
+        }
+        $taxon_nos_string =~ s/,$//;
+        $sql .= " (";
+        if (!$taxon_nos_string) {
+            $genus_species_sql =~ s/^ OR//;
+            $sql .= $genus_species_sql;
         } else {
-            if($q->param('taxon_rank') eq "Higher taxon" ||
-               $q->param('taxon_rank') eq "Higher-taxon"){
-                $self->dbg("genus_name q param:".$q->param('genus_name')."<br>");
+            $sql .= "occurrences.taxon_no IN ($taxon_nos_string) OR reidentifications.taxon_no IN ($taxon_nos_string) $genus_species_sql";
+        }
+        $sql .= ") ";
+    } elsif($q->param('taxon_name')){
+        # PM 09/13/02 added the '\s+' pattern for space matching.
+        if($q->param('taxon_name') =~ /\w+\s+\w+/){
+            ($genus,$species) = split /\s+/,$q->param('taxon_name');
+        } elsif($q->param('taxon_rank') eq "species"){
+            $species = $q->param('taxon_name');
+        } else{
+            $genus = $q->param('taxon_name');
+        }
 
-                my $genus_names_string; 
-                my $taxon_nos_string;
+        if($q->param('taxon_rank') eq "Higher taxon" ||
+           $q->param('taxon_rank') eq "Higher-taxon"){
+            $self->dbg("taxon_name q param:".$q->param('taxon_name')."<br>");
 
-                @taxon_nos = TaxonInfo::getTaxonNos($dbt, $q->param('genus_name'));
-                $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
-                if (scalar(@taxon_nos) == 0) {
-                    $genus_names_string .= $dbh->quote($q->param('genus_name'));
-                } elsif (scalar(@taxon_nos) == 1) {
-                    $taxon_nos_string = PBDBUtil::taxonomic_search('',$dbt,$taxon_nos[0],'return taxon nos');
-                } else { #result > 1
-                    push @warnings, "The taxon name '$taxon' was not included because it is ambiguous and belongs to multiple taxonomic hierarchies. Right the download script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
-                }
+            my $genus_names_string; 
+            my $taxon_nos_string;
 
-                if ($taxon_nos_string) {
-                    $sql .= " (occurrences.taxon_no IN (".$taxon_nos_string.") OR reidentifications.taxon_no IN (".$taxon_nos_string."))";
-                } elsif ($genus_names_string) {
-                    $sql .= " (occurrences.genus_name IN (".$genus_names_string.") OR reidentifications.genus_name IN (".$genus_names_string."))";
-                }
+            @taxon_nos = TaxonInfo::getTaxonNos($dbt, $q->param('taxon_name'));
+            $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
+            if (scalar(@taxon_nos) == 0) {
+                $genus_names_string .= $dbh->quote($q->param('taxon_name'));
+            } elsif (scalar(@taxon_nos) == 1) {
+                $taxon_nos_string = PBDBUtil::taxonomic_search($dbt,$taxon_nos[0]);
+            } else { #result > 1
+                push @warnings, "The taxon name '$taxon' was not included because it is ambiguous and belongs to multiple taxonomic hierarchies. Right the download script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
             }
-            else{
-                if($genus){
-                    $sql .= "(occurrences.genus_name=" . $dbh->quote($genus) . " OR reidentifications.genus_name=" . $dbh->quote($genus) . ")" ;
-                    if($species){
-                        $sql .= " AND ";
-                    }
-                }
+
+            if ($taxon_nos_string) {
+                $sql .= " (occurrences.taxon_no IN (".$taxon_nos_string.") OR reidentifications.taxon_no IN (".$taxon_nos_string."))";
+            } elsif ($genus_names_string) {
+                $sql .= " (occurrences.genus_name IN (".$genus_names_string.") OR reidentifications.genus_name IN (".$genus_names_string."))";
+            }
+        } else{
+            if($genus){
+                $sql .= "(occurrences.genus_name=" . $dbh->quote($genus) . " OR reidentifications.genus_name=" . $dbh->quote($genus) . ")" ;
                 if($species){
-                    $sql .= "(occurrences.species_name=" . $dbh->quote($species) . " OR reidentifications.species_name=" . $dbh->quote($genus) . ")";
+                    $sql .= " AND ";
                 }
             }
-        }
-        $sth2 = $dbh->prepare($sql);
-        # DEBUG: PM 09/13/02
-        $self->dbg("mapQueryDb sql: $sql<br>");
-        $sth2->execute();
-        # DEBUG: PM 09/10/02
-        #$self->dbg("results from collection_no search in db: <br>");
-        %collok = ();
-        while (my $occRef = $sth2->fetchrow_hashref())	{
-            my %occ = %{$occRef};
-            if ($occ{'collection_no'} ne ""){
-                #$self->dbg($occ{'collection_no'});
-                $collok{$occ{'collection_no'}} = "Y";
-                #print "<!-- $occ{'collection_no'} -->\n";
+            if($species){
+                $sql .= "(occurrences.species_name=" . $dbh->quote($species) . " OR reidentifications.species_name=" . $dbh->quote($genus) . ")";
             }
         }
-        $sth2->finish();
+    }
+   
+    # SQL from genus honing sections above
+    if ($sql) {
+        $self->dbg("mapQueryDb sql: $sql<br>");
+        my $sth = $dbh->prepare($sql);
+        $sth->execute();
+
+        while (my $occ = $sth->fetchrow_hashref())	{
+            if ($occ->{'collection_no'} ne ""){
+                $collok{$occ->{'collection_no'}} = "Y";
+            }
+        }
+        $sth->finish();
     }
 
     # figure out what collection table values are being matched 
@@ -587,23 +580,17 @@ sub mapQueryDb	{
         $nowDate = now();
         if ( "yesterday" eq $q->param('modified_since') )	{
             $nowDate = $nowDate-'1D';
-        }
-        elsif ( "two days ago" eq $q->param('modified_since') )	{
+        } elsif ( "two days ago" eq $q->param('modified_since') )	{
             $nowDate = $nowDate-'2D';
-        }
-        elsif ( "three days ago" eq $q->param('modified_since') )	{
+        } elsif ( "three days ago" eq $q->param('modified_since') )	{
             $nowDate = $nowDate-'3D';
-        }
-        elsif ( "last week" eq $q->param('modified_since') )	{
+        } elsif ( "last week" eq $q->param('modified_since') )	{
             $nowDate = $nowDate-'7D';
-        }
-        elsif ( "two weeks ago" eq $q->param('modified_since') )	{
+        } elsif ( "two weeks ago" eq $q->param('modified_since') )	{
             $nowDate = $nowDate-'14D';
-        }
-        elsif ( "three weeks ago" eq $q->param('modified_since') )	{
+        } elsif ( "three weeks ago" eq $q->param('modified_since') )	{
             $nowDate = $nowDate-'21D';
-        }
-        elsif ( "last month" eq $q->param('modified_since') )	{
+        } elsif ( "last month" eq $q->param('modified_since') )	{
             $nowDate = $nowDate-'1M';
         }
         my ($a,$b,$c);
@@ -631,8 +618,8 @@ sub mapQueryDb	{
 	# the map drawing section of the taxon information script.
 	my $collection_no_list = join(", ",keys(%collok));
 	my $where = "";
-	# %collok is only populated if $q->param("genus_name") was provided
-    if ($q->param('genus_name')) {
+	# %collok is only populated if $q->param("taxon_name") was provided
+    if ($q->param('taxon_name')) {
         if($collection_no_list ne ""){
             $where = "WHERE collection_no IN($collection_no_list) ";
         } else {
@@ -1418,7 +1405,7 @@ sub mapDrawPoints{
  		if ( ( $coll{'latdeg'} > 0 || $coll{'latmin'} > 0 || $coll{'latdec'} > 0 ) &&
          ( $coll{'lngdeg'} > 0 || $coll{'lngmin'} > 0 || $coll{'lngdec'} > 0 ) &&
 			( $collok{$coll{'collection_no'}} eq "Y" ||
-			! $q->param('genus_name') )) {
+			! $q->param('taxon_name') )) {
             # When magnification is high, want to use minutes 
             # in addition to degrees, so the resolution is a bit higher
             if ($scale > 6)  {
@@ -1465,7 +1452,6 @@ sub mapDrawPoints{
                 } elsif ( $coll{'lngdir'} eq "West" )	{
                   $lngoff = $lngoff - 0.0;
                 }
-                $lngres = 'full';
                 $latoff = $coll{'latdeg'};
                 $lathalf = ".00";
                 $lnghalf = ".00";
@@ -1535,11 +1521,11 @@ sub mapDrawPoints{
 			    if ( $q->param('interval_name') )	{
 				    print MAPOUT "&max_interval=" . $q->param('interval_name');
 			    }
-			    if ( $q->param('genus_name') )	{
+			    if ( $q->param('taxon_name') )	{
 				    # get rid of spaces in a genus-species name
-				    my $clean_name = $q->param('genus_name');
+				    my $clean_name = $q->param('taxon_name');
 				    $clean_name =~ s/ /\+/g;
-				    print MAPOUT "&genus_name=" . $clean_name;
+				    print MAPOUT "&taxon_name=" . $clean_name;
 				    print MAPOUT "&taxon_rank=" . $q->param('taxon_rank');
 			    }
 			    ($latdeg,$latdir) = split / /,$latVal{$y1};
