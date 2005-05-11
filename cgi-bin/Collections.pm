@@ -16,28 +16,10 @@ use strict;
 sub createTimePlaceString{
     my $data_hash = shift;
     my $dbt = shift;
-    my $class = shift or "tiny";
+    my $class = shift;
+    if (!$class) { $class = "tiny"; }
 
     my $timeplace = "";
-#   my @timeterms = ( "locage", "intage", "epoch", "period" );
-
-#   for my $tt (@timeterms){
-#       if (!$timeplace){
-#	    $timeplace = $data_hash->{$tt."_max"};
-#	    if ( $data_hash->{$tt."_min"} && $data_hash->{$tt."_min"} ne $data_hash->{$tt."_max"} ){
-#		# string could still be empty from missing the previous tt.
-#		if($timeplace ne ""){
-#		    $timeplace .= "/" . $data_hash->{$tt."_min"};
-#		}
-#		else{
-#		    $timeplace = $data_hash->{$tt."_min"};
-#		}
-#	    }
-#	}
-#	if($timeplace){
-#	    last;
-#	}
-#   }
 
     my $isql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $data_hash->{"max_interval_no"};
     my $intref = @{$dbt->getData($isql)}[0];
@@ -57,21 +39,22 @@ sub createTimePlaceString{
 		}
     }
 
+    $timeplace = "<span class=\"$class\">";
+    
     $timeplace .= $interval_name;
     if ( $interval_name2 )	{
     	$timeplace .= " - " . $interval_name2;
     }
 
-    $timeplace .= "</span></td><td align=\"middle\" valign=\"top\"><span class=tiny>";
+    $timeplace .= "</span></td><td align=\"middle\" valign=\"top\"><span class=\"$class\">";
 
     $data_hash->{"country"} =~ s/ /&nbsp;/;
     $timeplace .= $data_hash->{"country"};
     if($data_hash->{"state"}){
-	$data_hash->{"state"} =~ s/ /&nbsp;/;
-	$timeplace = $timeplace . " (" . $data_hash->{"state"} . ")";
+	    $data_hash->{"state"} =~ s/ /&nbsp;/;
+	    $timeplace .= " (" . $data_hash->{"state"} . ")";
     }
-
-    $timeplace = "</b> <span class=$class>" . $timeplace . "</span>\n";
+    $timeplace .= "</span>\n";
 
     return $timeplace;
 }
