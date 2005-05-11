@@ -199,10 +199,8 @@ sub processLoadImageForm{
 	}
 
 	# Need authorizer/enterer numbers from names
-	$sql = "SELECT person_no FROM person WHERE name='".$s->get('enterer')."'";
-	my $enterer = @{$dbt->getData($sql)}[0]->{person_no};
-	$sql = "SELECT person_no FROM person WHERE name='".$s->get('authorizer')."'";
-	my $authorizer = @{$dbt->getData($sql)}[0]->{person_no};
+	my $enterer = $s->get('enterer_no');
+	my $authorizer = $s->get('authorizer_no');
 	if(!$enterer or !$authorizer){
 		main::displayLoginPage("Please log in first.");
 		exit;
@@ -221,8 +219,7 @@ sub processLoadImageForm{
 	# Once we're sure this is a new, valid image
 	#	write the image to the filesystem
 	my $enterer_name = $s->get('enterer');
-	$enterer_name =~ s/\s+//g;
-	$enterer_name =~ s/\.//g;
+	$enterer_name =~ s/[^a-zA-Z]//g;
 	my $docroot = $ENV{DOCUMENT_ROOT};
 	my $subdirs = "/images/$enterer_name";
 	my $base = "${docroot}$subdirs";
