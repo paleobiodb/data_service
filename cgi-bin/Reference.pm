@@ -10,11 +10,10 @@ use strict;
 use DBI;
 use DBConnection;
 use DBTransactionManager;
-use URLMaker;
-
+use CGI::Carp;
+use Data::Dumper;
 
 use fields qw(
-				GLOBALVARS
 				reference_no
 				reftitle
 				pubtitle
@@ -29,124 +28,49 @@ use fields qw(
 				author2init
 				author2last
 				otherauthors
-				
-				DBTransactionManager
-							);  # list of allowable data fields.
+			
+                dbt);  # list of allowable data fields.
 
 						
 
 sub new {
 	my $class = shift;
+    my $dbt = shift;
+    my $reference_no = shift;
 	my Reference $self = fields::new($class);
-	
-	$self->{GLOBALVARS} = shift;
-	
-	# set up some default values
-	#$self->clear();	
 
-	return $self;
+    if (!$reference_no) { 
+        carp "Could not create Reference object with $reference_no";
+        return undef; 
+    }
+    my @fields = qw(reference_no reftitle pubtitle pubyr pubvol pubno firstpage lastpage author1init author1last author2init author2last otherauthors);
+	my $sql = "SELECT ".join(",",@fields)." FROM refs WHERE reference_no=".$dbt->dbh->quote($reference_no);
+    my @results = @{$dbt->getData($sql)};
+    if (@results) {
+        foreach $_ (@fields) {
+            $self->{$_}=$results[0]->{$_};
+        }
+        return $self;
+    } else {
+        carp "Could not create Reference object with $reference_no";
+        return undef; 
+    }
 }
-
-
-# for internal use only!
-# returns the SQL builder object
-# or creates it if it has not yet been created
-sub getTransactionManager {
-	my Reference $self = shift;
-	
-	my $DBTransactionManager = $self->{DBTransactionManager};
-	if (! $DBTransactionManager) {
-	    $DBTransactionManager = DBTransactionManager->new($self->{GLOBALVARS});
-	}
-	
-	return $DBTransactionManager;
-}
-
-
-# sets it with the reference number
-sub setWithReferenceNumber {
-	my Reference $self = shift;
-	
-	if (my $input = shift) {
-		$self->{reference_no} = $input;
-		
-		# get the pubyr and save it
-		my $sql = $self->getTransactionManager();
-		$sql->setSQLExpr("SELECT reftitle, pubtitle, pubyr, pubvol, pubno, firstpage, lastpage, author1init, author1last, author2init, author2last, otherauthors FROM refs WHERE reference_no = $input");
-		$sql->executeSQL();
-		
-		my $results = $sql->nextResultArrayRef();
-		
-		$self->{reftitle} = $results->[0];
-		$self->{pubtitle} = $results->[1];
-		$self->{pubyr} = $results->[2];
-		$self->{pubvol} = $results->[3];
-		$self->{pubno} = $results->[4];
-		$self->{firstpage} = $results->[5];
-		$self->{lastpage} = $results->[6];
-		
-		$self->{author1init} = $results->[7];
-		$self->{author1last} = $results->[8];
-		$self->{author2init} = $results->[9];
-		$self->{author2last} = $results->[10];
-		$self->{otherauthors} = $results->[11];
-	}
-}
-
 
 # return the referenceNumber
-sub referenceNumber {
+sub get {
 	my Reference $self = shift;
+    my $field = shift;
 
-	return ($self->{reference_no});	
-}
-
-# return the publication year for this reference
-sub pubyr {
-	my Reference $self = shift;
-	return ($self->{pubyr});
-}
-
-# return the reference title for this reference
-sub reftitle {
-	my Reference $self = shift;
-	return ($self->{reftitle});
-}
-
-
-# return the publication title for this reference
-sub pubtitle {
-	my Reference $self = shift;
-	return ($self->{pubtitle});
-}
-
-# return the publication volume for this reference
-sub pubvol {
-	my Reference $self = shift;
-	return ($self->{pubvol});
-}
-# return the publication number for this reference
-sub pubno {
-	my Reference $self = shift;
-	return ($self->{pubno});
-}
-# return the publication first page for this reference
-sub firstpage {
-	my Reference $self = shift;
-	return ($self->{firstpage});
-}
-# return the publication last page for this reference
-sub lastpage {
-	my Reference $self = shift;
-	return ($self->{lastpage});
+	return ($self->{$field});	
 }
 
 sub pages {
 	my Reference $self = shift;
 	
-	my $p = $self->{firstpage};
-	if ($self->{lastpage}) {
-		$p .= "-" . $self->{lastpage};	
+	my $p = $self->{'firstpage'};
+	if ($self->{'lastpage'}) {
+		$p .= "-" . $self->{'lastpage'};	
 	}
 	
 	return $p;	
@@ -166,24 +90,6 @@ sub internalGetAuthors {
 	my $auth = Globals::formatAuthors($getInitials, $self->{author1init}, $self->{author1last}, $self->{author2init}, $self->{author2last}, $self->{otherauthors} );
 	
 	my $ref_no = $self->{reference_no};
-	
-	#my $auth = $self->{author1last};	# first author
-
-	#if ($getInitials) {
-	#	$auth = $self->{author1init} . " " . $auth;	# first author
-	#}
-	
-	#if ($self->{otherauthors}) {	# we have other authors (implying more than two)
-	#	$auth .= " et al."; 
-	#} elsif ($self->{author2last}) {	# exactly two authors
-	#	$auth .= " and ";
-		
-	#	if ($getInitials) {
-	#		$auth .= $self->{author2init} . " ";
-	#	}
-			
-	#	$auth .= $self->{author2last};
-	#}
 	
 	$auth .= " $self->{pubyr}";  # pubyr
 		
@@ -207,19 +113,8 @@ sub authorsWithInitials {
 }
 
 
-# returns a reference URL
-sub referenceURL {	
-	my Reference $self = shift;
-
-	my $url = URLMaker::URLForReferenceNumber($self->{reference_no});
-	my $authors = $self->authors();
-	
-	return ("<A HREF=\"$url\">$authors</A>");
-	
-}
-
 # returns a nicely formatted HTML reference line.
-sub formatAsHTML() {
+sub formatAsHTML {
 	my Reference $self = shift;
 	
 	if ($self->{reference_no} == 0) {
@@ -227,7 +122,7 @@ sub formatAsHTML() {
 		return "no reference";	
 	}
 	
-	my $html = "<SPAN class=\"smallRef\"><b>" . $self->referenceNumber() . "</b> ";
+	my $html = "<SPAN class=\"smallRef\"><b>" . $self->{'reference_no'} . "</b> ";
 	$html .= $self->authorsWithInitials() . ". ";
 	if ($self->{reftitle})	{ $html .= $self->{reftitle}; }
 	if ($self->{pubtitle})	{ $html .= " <i>" . $self->{pubtitle} . "</i>"; }
@@ -240,6 +135,46 @@ sub formatAsHTML() {
 	return $html;
 }
 
+
+# JA 16-17.8.02
+sub formatShortRef  {
+    my $refDataRef = shift;
+    my %refData = %{$refDataRef};
+
+    my $shortRef = $refData{'author1init'} . " " . $refData{'author1last'};
+    if ( $refData{'otherauthors'} ) {
+        $shortRef .= " et al.";
+    } elsif ( $refData{'author2last'} ) {
+        # We have at least 120 refs where the author2last is 'et al.'
+        if($refData{'author2last'} ne "et al."){
+            $shortRef .= " and ";
+        } 
+        $shortRef .= $refData{'author2init'} . " ". $refData{'author2last'};
+    }
+    $shortRef .= " " . $refData{'pubyr'} if ($refData{'pubyr'});
+
+    return $shortRef;
+}
+# JA 16-17.8.02
+sub formatRef  {
+    my $refDataRef = shift;
+    my %refData = %{$refDataRef};
+
+    my $shortRef = $refData{'author1init'} . " " . $refData{'author1last'};
+    if ( $refData{'otherauthors'} ) {
+        $shortRef .= " et al.";
+    } elsif ( $refData{'author2last'} ) {
+        # We have at least 120 refs where the author2last is 'et al.'
+        if($refData{'author2last'} ne "et al."){
+            $shortRef .= " and ";
+        } 
+        $shortRef .= $refData{'author2init'} . " ". $refData{'author2last'};
+    }
+    $shortRef .= " (" . $refData{'pubyr'}.")" if ($refData{'pubyr'});
+    $shortRef .= " [" . $refData{'comments'}."]" if ($refData{'comments'});
+
+    return $shortRef;
+}
 
 # end of Reference.pm
 
