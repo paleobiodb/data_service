@@ -589,14 +589,15 @@ sub reportQueryDB{
     # ((release date < NOW and is public) OR is authorizer OR research_group in mygroups)
     # push @whereTerms, "(access_level='the public' AND NOW() > release_date) OR authorizer=".$dbh->quote($s->get('authorizer'));
     # No permissions conditionals, since this is non-specific data.
-   
+ 
+    my $createTable = ($q->param('output') eq 'collections') ? "collections" : "occurrences";
     if($q->param("year_begin")){
         my $creationDate = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$q->param('year_begin'),$q->param('month_begin'),$q->param('day_begin')));
-		push @whereTerms,"collections.created >= $creationDate";
+		push @whereTerms,"$createTable.created >= $creationDate";
     }    
     if($q->param("year_end")){
         my $creationDate = $dbh->quote(sprintf("%d-%02d-%02d 23:59:59",$q->param('year_end'),$q->param('month_end'),$q->param('day_end')));
-		push @whereTerms,"collections.created <= $creationDate";
+		push @whereTerms,"$createTable.created <= $creationDate";
     }    
 
     # Add in conditionals specific to occurrences
@@ -624,15 +625,6 @@ sub reportQueryDB{
                 push @whereTerms,"(occurrences.taxon_no IN ($sepkoskiGenera) OR reidentifications.taxon_no IN ($sepkoskiGenera))";
             }
         }
-
-        if($q->param("year_begin")){
-            my $creationDate = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$q->param('year_begin'),$q->param('month_begin'),$q->param('day_begin')));
-            push @whereTerms,"occurrences.created >= $creationDate";
-        }    
-        if($q->param("year_end")){
-            my $creationDate = $dbh->quote(sprintf("%d-%02d-%02d 23:59:59",$q->param('year_end'),$q->param('month_end'),$q->param('day_end')));
-            push @whereTerms,"occurrences.created <= $creationDate";
-        }    
 
         # handle taxon names
 		# JA: replaced recurse call with taxonomic_search call 7.5.04
