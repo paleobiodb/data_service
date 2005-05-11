@@ -21,10 +21,7 @@ sub startPrintHierarchy	{
 	return;
 }
 
-# WARNING: this routine assumes that the FIRST MATCHED name is the correct
-#   parent name in the authorities table, which WILL NOT work for homonyms
 sub processPrintHierarchy	{
-
 	my $dbh = shift;
 	my $q = shift;
 	my $dbt = shift;
@@ -67,7 +64,7 @@ sub processPrintHierarchy	{
     unshift @{$taxon_records}, {'taxon_no'=>$ref->{'taxon_no'},
                             'taxon_name'=>$q->param('taxon_name'),
                             'taxon_rank'=>$ref->{'taxon_rank'},
-                            'level'=>0};
+                            'depth'=>0};
 
     # now print out the data
 	open OUT, ">$OUT_FILE_DIR/classification.csv";
@@ -79,10 +76,10 @@ sub processPrintHierarchy	{
     print "</tr>";
 	foreach $record ( @{$taxon_records})	{
 		print "<tr>";
-		for ($i=0;$i<$record->{'level'};$i++) {
+		for ($i=0;$i<$record->{'depth'};$i++) {
 			print "<td></td>";
 		}
-		print "<td style=\"white-space: nowrap;\" colspan=".($MAX + 1 - $record->{'level'}).">";
+		print "<td style=\"white-space: nowrap;\" colspan=".($MAX + 1 - $record->{'depth'}).">";
         $shortrank = $shortranks{$record->{'taxon_rank'}};
         $title = "<b>$shortrank</b> ";
         if ( $record->{'taxon_rank'} =~ /(species)|(genus)/ ) {
@@ -91,6 +88,13 @@ sub processPrintHierarchy	{
             $title .= $record->{'taxon_name'};
         }
         print $title;
+
+        #if (@{$record->{'spellings'}}) {
+        #    print " [";
+        #    print "=$_->{taxon_name}, " for (@{$record->{'spellings'}});
+        #    print "]";
+        #}
+        
 		print "</td>";
 		print "</tr>\n";
         
