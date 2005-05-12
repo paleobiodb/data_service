@@ -8,7 +8,7 @@ use URI::Escape;
 use Data::Dumper; 
 use GD;
 
-$IMAGE_DIR = $ENV{BRIDGE_HTML_DIR} . "/public/confidence";
+$IMAGE_DIR = $ENV{'BRIDGE_HTML_DIR'} . "/public/confidence";
 
 # written 03.31.04 by Josh Madin as final product
 # Still doesn't allow choice of time-scale when examining the conf ints of taxa
@@ -68,11 +68,12 @@ sub displaySearchSectionForm{
     my $dbt = shift;
     my $hbo = shift;
     # Show the "search collections" form
-    %pref = main::getPreferences($s->get('enterer'));
+    %pref = main::getPreferences($s->get('enterer_no'));
     my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML('search_section_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment'], \@prefkeys);
-    HTMLBuilder::buildAuthorizerPulldown( \$html );
-    HTMLBuilder::buildEntererPulldown( \$html );
+
+    HTMLBuilder::buildAuthorizerPulldown($dbt, \$html );
+    HTMLBuilder::buildEntererPulldown($dbt, \$html );
                                                                                                                                                              
     # Set the Enterer
     my $enterer = $s->get("enterer");
@@ -114,32 +115,31 @@ sub displaySearchSectionResults{
     $action = "displayCollectionDetails"; $method = "getReadRows";
 
     # Get rows okayed by permissions module
-    my (@dataRows, $ofRows);
+    my @dataRows;
     $p->$method( $sth, \@dataRows, $perm_limit, \$ofRows );
 
     # get the enterer's preferences (needed to determine the number
     # of displayed blanks) JA 1.8.02
-    #%pref = getPreferences($s->get('enterer'));
 
-    my @period_order = TimeLookup::getScaleOrder($dbt,'2');
+    local @period_order = TimeLookup::getScaleOrder($dbt,'2');
     # Convert max_interval_no to a period like 'Quaternary'
     my %int2period = %{TimeLookup::processScaleLookup($dbh,$dbt,'2','intervalToScale')};
 
-    my $lastsection = '';
-    my $lastregion  = '';
-    my $found_localbed = 0;
-    my $found_regionalbed = 0;
-    my (%period_list,%country_list);
+    local $lastsection = '';
+    local $lastregion  = '';
+    local $found_localbed = 0;
+    local $found_regionalbed = 0;
+    local (%period_list,%country_list);
     my @tableRows = ();
     my $rowCount = scalar(@dataRows);
     my $row;
-    my $taxon_resolution = $q->param('taxon_resolution') || 'species';
-    my $show_taxon_list = $q->param('show_taxon_list') || 'NO';
+    local $taxon_resolution = $q->param('taxon_resolution') || 'species';
+    local $show_taxon_list = $q->param('show_taxon_list') || 'NO';
 
     # Only used below, in a couple places.  Print contents of a table row
     sub formatSectionLine {
         my ($time_str, $place_str);
-        foreach $period (@period_order) {
+        foreach my $period (@period_order) {
             $time_str .= ", ".$period if ($period_list{$period});
         }
         foreach $country (keys %country_list) {
@@ -187,7 +187,7 @@ sub displaySearchSectionResults{
         push @tableRows, formatSectionLine();
     }
 
-    my $ofRows = scalar(@tableRows);
+    $ofRows = scalar(@tableRows);
     if ($ofRows > 1) {       
         # Display header link that says which collections we're currently viewing
         print "<center>";
@@ -299,7 +299,7 @@ sub displayTaxaIntervalsForm {
     my $dbt = shift;
     my $hbo = shift;
     # Show the "search collections" form
-    %pref = main::getPreferences($s->get('enterer'));
+    %pref = main::getPreferences($s->get('enterer_no'));
     my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML('taxa_intervals_form', [], [], \@prefkeys);
                                                                                                                                                              
@@ -377,10 +377,10 @@ sub buildList    {
         my $found = 0;
         if ($no_or_name =~ /^\d+$/) {
             # Found the taxon in the authorities table, get its children
-            my @children = PBDBUtil::taxonomic_search('',$dbt,$no_or_name,1,1);
+            my @children = PBDBUtil::taxonomic_search($dbt,$no_or_name);
             foreach $taxon_no (@children) {
                 my ($row,$taxon_nos,$recombination_name);
-                $row = PBDBUtil::getCorrectedName($dbt,TaxonInfo::getOriginalCombination($dbt,$taxon_no));
+                #$row = PBDBUtil::getCorrectedName($dbt,TaxonInfo::getOriginalCombination($dbt,$taxon_no));
                 # if the child is a recombination, get its recombined name, and append that to the list
                 if ($row->{'taxon_no'} != $taxon_no) {
                     main::dbg("found recombination for $taxon_no: ".Dumper($row));
@@ -690,11 +690,8 @@ sub calculateTaxaInterval {
     my %namescale;
     my @intervalnumber;
     my @not_in_scale;
-    $AILEFT;
-    $AITOP;
-    $fig_width;
-    $fig_lenth;
-    $aifig_size = 500;
+    my($AILEFT,$AITOP,$fig_width,$fig_lenth);
+    my $aifig_size = 500;
 
     $_ = TimeLookup::processScaleLookup($dbh,$dbt,$scale);
     my %timeHash = %{$_};
@@ -1072,7 +1069,7 @@ sub calculateTaxaInterval {
         }
         $gd->line($marker - 35, $temp, $marker - 30, $temp, $black);
         aiLine($aimarker - 35, $temp, $aimarker - 30, $temp,$aiblack);    #AI
-        $tempn =+ $temp;
+        $tempn += $temp;
     }
     $gd->line($marker - 30, 230, $marker - 30, $fig_lenth - 20, $black);
     aiLine($aimarker - 30, 230,$aimarker - 30, 530, $aiblack);    #AI
@@ -1120,7 +1117,7 @@ sub calculateTaxaInterval {
                 else {($name)=@interval_array;} 
                 $image_map .= "<area shape=rect coords=\"$marker,".int($temp).",".($marker+5).",".int($tempn)."\" HREF=\"bridge.pl?action=displayCollResults&eml_max_interval=$eml&max_interval=$name&eml_min_interval=$eml&min_interval=$name&taxon_list=$taxon_list\" ALT=\"".@{$masterHash{$key}}[0]."\">";
             }
-            $tempn =+ $temp;
+            $tempn += $temp;
         }
  
         if ($dottemp == 0) { 
@@ -1226,9 +1223,9 @@ sub calculateTaxaInterval {
         for (my $counter = $Smarker; $counter <= ($marker - 11); $counter=$counter + 2) {
             $gd->line($counter,230 + ($Smin - $upperval) * $millionyr,$counter,230 + ($Smin - $upperval) * $millionyr, $black);
         }
-        my $temptemp = (230 + ($Smax - $upperval) * $millionyr);
+#        my $temptemp = (230 + ($Smax - $upperval) * $millionyr);
 #        print "barup: $temptemp <BR>";
-        my $temptemp = (230 + ($Smin - $upperval) * $millionyr);
+#        my $temptemp = (230 + ($Smin - $upperval) * $millionyr);
 #        print "barup: $temptemp <BR>";       
 
 #        print "dotmarkerlast: $dotmarkerlast <BR>";              
@@ -1438,11 +1435,8 @@ sub calculateStratInterval	{
     my $dbt=shift;
     my $dbh=$dbt->dbh;
     my $marker = 100;
-    $AILEFT;
-    $AITOP;
-    $fig_width;
-    $fig_lenth;
-    $aifig_size = 500;
+    my ($AILEFT,$AITOP,$fig_width,$fig_lenth);
+    my $aifig_size = 500;
     my $section_name = uri_unescape($q->param("input"));
     my $section_type = ($q->param("input_type") eq 'regional') ? 'regional' : 'local';
     my $alpha = $q->param("alpha");
@@ -1829,7 +1823,7 @@ sub transpositionTest {
         foreach my $i (0 .. ($N - 2)) {
             my $temp = 1;
             foreach my $j (($i + 1) .. ($N - 1)) {
-                if (@gaplist[$j] <  @gaplist[$i]) {
+                if ($gaplist[$j] <  $gaplist[$i]) {
                     $T++;
                 }
                 my $pmet = 0;
@@ -1838,18 +1832,18 @@ sub transpositionTest {
                         $pmet = 1;
                     }
                 }
-                if ((@gaplist[$i] == @gaplist[$j]) && ($pmet == 0)) {
+                if (($gaplist[$i] == $gaplist[$j]) && ($pmet == 0)) {
                     $temp++;
                 }
             }    
-            push @done, @gaplist[$i];
+            push @done, $gaplist[$i];
             $Tequal = $Tequal + ($temp*($temp - 1))/4;
         }
         $Total = $T + $Tequal;
         if($Total > ($Tmax/2)) {
             @gaplist = reverse(@gaplist);
         } else {
-            break;
+            last;
         }
     }
     $correlation = 0;
@@ -1934,10 +1928,10 @@ sub distributionFree {          #FOR MARSHALL 1994
         
         if ($upp > $N) {
             $firstconfidencelengthlong = 0;
-            $firstconfidencelengthshort = @gaplist[$low - 1];        
+            $firstconfidencelengthshort = $gaplist[$low - 1];        
         } else {
-            $firstconfidencelengthlong = @gaplist[$upp - 1];
-            $firstconfidencelengthshort = @gaplist[$low - 1];        
+            $firstconfidencelengthlong = $gaplist[$upp - 1];
+            $firstconfidencelengthshort = $gaplist[$low - 1];        
         }
         
     } else {
