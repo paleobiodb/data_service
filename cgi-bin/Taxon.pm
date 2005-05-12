@@ -10,6 +10,9 @@
 # Includes various methods for setting the taxon such as by name/number, accessors for
 # various authority table fields such as taxon_rank, and methods to fetch/submit information
 # from the database.
+#
+# Reworked PS 04/30/2005 - reworked accessor methods to make sense.  Also, return undef
+# if the taxon isn't in the authorities table, since a Taxon object with a taxon doesn't actually make sense
 
 package Taxon;
 
@@ -20,188 +23,49 @@ use Constants;
 use DBI;
 use DBConnection;
 use DBTransactionManager;
-use Class::Date qw(date localdate gmdate now);
 use Errors;
-use CachedTableRow;
-use Rank;
+use Data::Dumper;
+use CGI::Carp;
 
-use URLMaker;
 use Reference;
 
-
-use fields qw(	
-
-			GLOBALVARS
-			taxonName
-			
-			existsInDatabase
-			
-			one
-			two
-			three
-			
-			taxonNumber
-			taxonRank
-			taxonRankString
-				
-			cachedDBRow
-						
-			taxaHash
-				
-			DBTransactionManager
-
-					);  # list of allowable data fields.
-
-# taxonName is the name of the original taxon the user set
-# one, two, three are the first, second, and third words in the
-# taxon name, if it has them.  If not, they will be empty.
-#
-# existsInDatabase is a boolean which tells us whether it exists in the authority table or not.
-# taxonNumber is the number for the original taxon
-# taxonRank is the rank of this taxon, note, this won't be populated until the user calls rank().  It is a Rank object.
-# taxonRankString is a string like "species" or "genus"
-# taxaHash is a hash of taxa numbers and ranks.
-#
-# cachedDBRow is a cached Database row for this authority record.
-
-				
+use fields qw(dbt DBrow);
 				
 # includes the following public methods
 # -------------------------------------
-#
-# (void) setWithTaxonNumber(int number)
-# (void) setWithTaxonName(string name)
-#
-# (int) taxonNumber()
-# (Rank) rank()
-# (string) rankString()
-#
-# (string) nameForRank(string rank)
-# (int) numberForRank(string rank)
-# (int) originalCombination
-#
+# $var = $o->get('classFieldname') - i.e. $o->get('taxon_rank')
+# $var = $o->getRow() - gets the database row hash
+# $var = $o->pubyr() - publication year
+# $var = $o->authors() - formatted string of authors
+# $var = $o->taxonNameHTML() - html formatted name
 
-
-# optionally pass it the GLOBALVARS hash.
+# Called by $o = Taxon->new($dbt,$taxon_no)
+#  or $o = Taxon->new($dbt,$taxon_name).  If $taxon_name is ambiguous (a homonym), or it can't
+# find it in the DB, returns undef.
 sub new {
 	my $class = shift;
+    my $dbt = shift;
+    my $name_or_no = shift;
 	my Taxon $self = fields::new($class);
-	
-	$self->{GLOBALVARS} = shift;
-	
-	$self->{existsInDatabase} = 0;
-	# set up some default values
-	#$self->clear();	
+    $self->{'dbt'}=$dbt;
 
+    my ($sql,@results);
+    if ($name_or_no =~ /^\d+$/) {
+        $sql = "SELECT * FROM authorities where taxon_no=$name_or_no";
+        @results = @{$dbt->getData($sql)};
+    } elsif ($name_or_no) {
+        $sql = "SELECT * FROM authorities where taxon_name=".$dbt->dbh->quote($name_or_no);
+        @results = @{$dbt->getData($sql)};
+    } else {
+        carp "Could not create taxon object with passed variable $name_or_no.";
+        return;
+    }
+    if (@results) {
+        $self->{'DBrow'} = $results[0];
+    } 
 	return $self;
 }
 
-
-####
-## Methods to set the Taxon.
-##
-####
-
-
-# sets the inital taxon with the taxon_no from the database.
-sub setWithTaxonNumber {
-	my Taxon $self = shift;
-	
-	if (my $input = shift) {
-		# now we need to get the taxonName from the database if it exists.
-		my $tn = $self->getTaxonNameFromNumber($input);
-		
-		$self->{taxonNumber} = $input;
-
-		if ($tn) {
-			# if we found a taxon_name for this taxon_no, then 
-			# set the appropriate fields
-			$self->{taxonName} = $tn;
-			$self->{existsInDatabase} = 1;
-			
-			$self->splitTaxonName();
-		} else {
-			$self->{existsInDatabase} = 0;
-		}
-	}
-}
-
-
-# Sets the initial taxon with the taxon_name from the database.
-# If the taxon is not in the database, then it just sets the name,
-# but not the number.
-#
-# returns a boolean, 1 if it worked, 0, if it couldn't.
-sub setWithTaxonName {
-	my Taxon $self = shift;
-	my $newname;
-	
-	if (my $input = shift) {
-			
-		$self->{taxonName} = $input;
-
-		$self->splitTaxonName();
-		
-		# now we need to get the taxonNo from the database if it exists.
-		my ($tn, $newname) = $self->getTaxonNumberFromName($input);
-
-			
-		if ($tn) {
-			# if we found a taxon_no for this taxon_name, then 
-			# set the appropriate fields
-			
-			$self->{taxonNumber} = $tn;
-			$self->{taxonName} = $newname;
-			
-			$self->{existsInDatabase} = 1;
-			
-		
-			return 1;	# it worked
-		} else {
-			$self->{existsInDatabase} = 0;
-		}
-	}
-	
-	return 0;
-}	
-
-
-# same as setWithTaxonName(), but DOES NOT look up the corresponding
-# taxon number in the database.. Just sets the name field.
-sub setWithTaxonNameOnly {
-	my Taxon $self = shift;
-	my $newname = shift;
-	
-	$self->{taxonName} = $newname;
-	$self->{existsInDatabase} = 0;
-	$self->splitTaxonName();
-}
-
-
-####
-## End of methods to set the Taxon.
-##
-####
-
-
-
-
-# internal use only
-# splits the taxon name into three parts (if it can)
-# and assigns them to variables.
-sub splitTaxonName {
-	my Taxon $self = shift;
-	
-	my $tname = $self->{taxonName};
-	my ($one, $two, $three) = split(/ /, $tname);
-	
-	$self->{one} = $one;
-	$self->{two} = $two;
-	$self->{three} = $three;
-	
-	Debug::dbPrint("splitting taxon, and taxon name = $tname and one = $one and two = $two and three = $three");
-
-}
 
 
 
@@ -210,114 +74,33 @@ sub splitTaxonName {
 ##
 ####
 
-
-# returns the first word in the taxon name.
-sub firstWord {
-	my Taxon $self = shift;
-	Debug::dbPrint("firstWord and one = " . $self->{one});
-	
-	return $self->{one};
-}
-
-# returns the first word in the taxon name.
-sub secondWord {
-	my Taxon $self = shift;
-	return $self->{two};
-}
-
-# returns the first word in the taxon name.
-sub thirdWord {
-	my Taxon $self = shift;
-	return $self->{three};
-}
-
-# Returns a boolean - does this taxon exist
-# in the database or not?  
-#
-# This is determined when the taxon
-# object is created.. Note that it might not update correctly if
-# the taxon is submitted while this object is already in existance.
-sub existsInDatabase {
-	my Taxon $self = shift;
-	
-	return $self->{existsInDatabase};
-}
-
-
-
-# return the taxonNumber for the originally specified taxon.
-sub taxonNumber {
-	my Taxon $self = shift;
-
-	return $self->{taxonNumber};	
-}
-
-
-# return the taxonName for the initially specifed taxon.
-sub taxonName {
-	my Taxon $self = shift;
-
-	return $self->{taxonName};	
-}
-
-
 # return the taxonName for the initially specifed taxon.
 # but with proper italicization
 sub taxonNameHTML {
 	my Taxon $self = shift;
-
-	my $rank = Rank->new($self->rankString());
-	
-	if ($rank->isSubspecies() || $rank->isSpecies() || $rank->isSubgenus() || $rank->isGenus()) {
-		return "<i>" . $self->{taxonName} . "</i>";
+    if ($self->get('taxon_rank') =~ /(?:species|genus)$/) {
+		return "<i>" . $self->get('taxon_name') . "</i>";
 	} else {
-		return $self->{taxonName};	
+		return $self->get('taxon_name');	
 	}
 }
 
-
-# returns the rank of the taxon this object represents,
-# for example, class, family, order, genus, species, etc.
-# as a Rank object
-sub rank {
-	my Taxon $self = shift;
-
-	if (! $self->{existsInDatabase}) {
-		return '';  # if it doesn't exist, then we can't
-		# look it up, can we?  ;-)
-	}
-	
-	if (! $self->{taxonRank}) {	
-		# if we haven't already fetched the rank, then fetch it.
-		my $sql = $self->getTransactionManager();
-	
-		#my $r = $sql->getSingleSQLResult("SELECT taxon_rank FROM authorities WHERE taxon_no = $self->{taxonNumber}");
-		my $r = ${$sql->getData("SELECT taxon_rank FROM authorities 
-					WHERE taxon_no = $self->{taxonNumber} ")}[0]->{taxon_rank};
-	
-		my $rank = Rank->new($r);
-		
-		$self->{taxonRank} = $rank;
-		$self->{taxonRankString} = $rank->rank();
-	}
-
-	return ($self->{taxonRank});
+# Universal accessor
+sub get {
+    my Taxon $self = shift;
+    my $fieldName = shift;
+    if ($fieldName) {
+        return $self->{'DBrow'}{$fieldName};
+    } else {
+        return(keys(%{$self->{'DBrow'}}));
+    }
 }
 
-
-# same as rank(), but rather than returning a Rank object,
-# this returns a rank string such as "species"
-sub rankString {
-	my Taxon $self = shift;
-	
-	if (! $self->{taxonRankString}) {
-		# calling this will attempt to populate the taxonRankString parameter.
-		$self->rank();
-	}
-	
-	return $self->{taxonRankString};
+# Get the raw underlying database hash;
+sub getRow {
+    my Taxon $self = shift;
+    return $self->{'DBrow'};
 }
-
 
 
 # returns the authors of the authority record for this taxon (if any)
@@ -325,7 +108,7 @@ sub authors {
 	my Taxon $self = shift;
 	
 	# get all info from the database about this record.
-	my $hr = $self->databaseAuthorityRecord();
+	my $hr = $self->getRow();
 	
 	if (!$hr) {
 		return '';	
@@ -335,9 +118,7 @@ sub authors {
 	
 	if ($hr->{ref_is_authority}) {
 		# then get the author info for that reference
-		my $ref = Reference->new();
-		$ref->setWithReferenceNumber($hr->{reference_no});
-		
+		my $ref = Reference->new($self->{'dbt'},$hr->{'reference_no'});
 		$auth = $ref->authorsWithInitials();
 	} else {
 	
@@ -352,7 +133,7 @@ sub pubyr {
 	my Taxon $self = shift;
 
 	# get all info from the database about this record.
-	my $hr = $self->databaseAuthorityRecord();
+	my $hr = $self->getRow();
 	
 	if (!$hr) {
 		return '';	
@@ -368,413 +149,15 @@ sub pubyr {
 	#  that ref
 	# I hate to do it, but I'm using Poling's ridiculously baroque
 	#  Reference module to do so just for consistency
-	my $ref = Reference->new();
-	$ref->setWithReferenceNumber($hr->{reference_no});
+	my $ref = Reference->new($self->{'dbt'},$hr->{'reference_no'});
 	return $ref->{pubyr};
 }
-
-
-
-
-# returns a URL string for the taxon name which links to the 
-# checkTaxonInfo routine.
-sub URLForTaxonName {
-	my Taxon $self = shift;
-	
-	my $rank = $self->rankString();
-	my $name = $self->taxonName();
-	
-	my $url = "bridge.pl?action=checkTaxonInfo&taxon_name=$name&taxon_rank=";
-	
-	if ($rank eq SPECIES) {
-		$url .= 'Genus+and+species';
-	} elsif ($rank eq GENUS) {
-		$url .= 'Genus';
-	} else {
-		$url .= 'Higher+taxon';	
-	}
-	
-	return URLMaker::escapeURL($url);
-}
-
 
 
 ###
 ## End of simple accessors
 ###
 
-
-
-
-
-
-
-# for internal use only!
-# returns the SQL builder object
-# or creates it if it has not yet been created
-# NOTE *** Be very careful not to call this whithin a method
-# which is *already* using DBTransactionManager.. For example if you call
-# a method from a loop which itself calls  
-# getTransactionManager, then you have a problem.
-sub getTransactionManager {
-	my Taxon $self = shift;
-	
-	my $globals = $self->{GLOBALVARS};
-	my $ses = $globals->{session};
-	
-	if ($ses) {
-		Debug::dbPrint("getTransactionManager, ses exists");
-		} else {
-		Debug::dbPrint("getTransactionManager, no ses");
-		}
-
-	
-	my $DBTransactionManager = $self->{DBTransactionManager};
-	if (! $DBTransactionManager) {
-		Debug::dbPrint("getTransactionManager creating sql builder...");
-		$DBTransactionManager = DBTransactionManager->new($self->{GLOBALVARS});
-		Debug::dbPrint("getTransactionManager done creating sql builder...");
-
-	}
-	
-	return $DBTransactionManager;
-}
-
-
-# for internal use only - get the name for a taxon number
-# return empty string if it can't find the name.
-sub getTaxonNameFromNumber {
-	my Taxon $self = shift;
-	
-	if (my $input = shift) {
-
-		my $sql = $self->getTransactionManager();
-		
-		Debug::dbPrint("Taxon::getTaxonNameFromNumber 1");
-
-		#my $tn = $sql->getSingleSQLResult("SELECT taxon_name FROM authorities 
-		#		WHERE taxon_no = $input");
-
-		my $tn = ${$sql->getData("SELECT taxon_name FROM authorities 
-				WHERE taxon_no = $input")}[0]->{taxon_name};
-	
-
-		Debug::dbPrint("Taxon::getTaxonNameFromNumber 2");
-		if ($tn) {
-			return $tn;
-		}
-	}
-	
-	return "";
-}
-
-
-# figures out how many times this taxonName occurs in the 
-# database and returns a count.
-# JA: function not used anywhere and could be deleted
-sub numberOfDBInstancesForName {
-	my Taxon $self = shift;
-	
-	my $sql = $self->getTransactionManager();
-	
-#	my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM authorities WHERE taxon_name = '" . $self->{taxonName} . "'");
-	my $count = ${$sql->getData("SELECT COUNT(*) as c FROM authorities WHERE taxon_name = '" . $self->{taxonName} . "'")}[0]->{c};
-
-	return $count;
-}
-
-
-
-# **For internal use only - get the number of a taxon from the name
-# returns an ARRAY with two elements: the taxon_no, and the new taxon_name.
-# This is done because the taxon_name may be shortened, for example, if
-# it's a genus species pair, but we only have an entry for the genus, not the pair.
-# returns 0 if it can't find the number. 
-# Note, not all taxa are in this table, so it won't work for something that dosen't exist.
-#
-# Note, this also won't work very well for homonyms, etc.. For example, if two entries exist
-# in the authorities table with the same taxon_name, then we'll always just grab the first one.
-# This doesn't really make much sense, but it's the best we can do for now.
-sub getTaxonNumberFromName {
-	my Taxon $self = shift;
-
-
-	if (my $input = shift) {
-		my $sql = $self->getTransactionManager();
-		
-#		my $tn = $sql->getSingleSQLResult("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
-		my $tn = ${$sql->getData("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'")}[0]->{taxon_no};
-
-
-		Debug::dbPrint("getTaxonNumberFromName here1");
-		
-		if ($tn) {
-			return ($tn, $input);
-		}
-		
-	#	# if we make it to here, then that means that we didn't find the
-	#	# taxon in the authorities table, so try it with just the first part
-	#	# (ie, we'll assume that it was a genus species, and cut off the species)
-	#	$input =~ s/^(.*)\s.*$/$1/;
-	#	
-	#	my $tn = $sql->getSingleSQLResult("SELECT taxon_no FROM authorities WHERE taxon_name = '$input'");
-	#	
-	#	if ($tn) {
-	#		return ($tn, $input);
-	#	}
-	}
-	
-	return (0, "");
-}
-
-
-
-
-
-
-
-
-
-# pass this a rank such as "family", "class", "genus", etc. and it will
-# return the name of the taxon at that rank as determined by the taxaHash.
-sub nameForRank {
-	my Taxon $self = shift;
-	my $key = shift; 
-	
-	if (! ($self->{taxaHash}) ) {
-		# if the hash doesn't exist, then create it
-		$self->createTaxaHash();
-	}
-
-	my $hash = $self->{taxaHash};
-	if (!$hash) { return; }
-	my %hash = %$hash;
-	
-	my $id = $hash{$key};
-	
-	if ($id) {
-		# now we need to get the name for it
-		my $sql = $self->getTransactionManager();
-		#return $sql->getSingleSQLResult("SELECT taxon_name FROM authorities WHERE taxon_no = $id");
-
-		return ${$sql->getData("SELECT taxon_name FROM 
-			authorities WHERE taxon_no = $id")}[0]->{taxon_name};
-	}
-	
-	return "";
-}
-
-# same as nameForRank(), but returns a taxon_no.
-sub numberForRank {
-	my Taxon $self = shift;
-	my $key = shift; 
-	
-	if (! ($self->{taxaHash}) ) {
-		# if the hash doesn't exist, then create it
-		$self->createTaxaHash();
-	}
-
-	my $hash = $self->{taxaHash};
-	if (!$hash) { return; }
-	my %hash = %$hash;
-	
-	return $hash{$key};
-}
-
-
-
-# Finds the original combination of this taxon (ie, genus and species).
-# This takes the taxon name and looks for opinion records which deal with
-# the taxon and which have status of "recombined as," "corrected as," or "rank changed as."  It then
-# goes down the links to find the original name in the authority table.
-#
-# Note, if the current taxon doesn't have an entry in the opinions table,
-# it will just return the taxon number we started with (the one the user originally set).
-#
-# returns a taxon_no (integer).
-# if it can't find one, returns 0 (false).
-sub originalCombination {
-	my Taxon $self = shift;
-	
-	my $sql = $self->getTransactionManager();
-	
-	my $tn = $self->taxonNumber();  # number we're starting with
-	
-	# this works because all 'recombined as'/'corrected as'/'rank changed as' opinions should point
-	# to the original (rather than having a chain).
-#	my $cn = $sql->getSingleSQLResult("SELECT child_no FROM opinions WHERE parent_no =
-#  $tn AND status IN ('recombined as', 'corrected as')");
-		
-	my $cn = ${$sql->getData("SELECT child_no FROM opinions WHERE
-		parent_no = $tn AND status IN 
-		('recombined as', 'corrected as', 'rank changed as')")}[0]->{child_no};
-	
-	if (! $cn) {
-		return $tn;		# return the number we started with if there are no recombinations	
-	}
-	
-	return $cn;
-}
-
-# same as originalCombination()
-# but returns a pre-populated Taxon object.
-sub originalCombinationTaxon {
-	my Taxon $self = shift;
-	
-	my $original = Taxon->new();
-	$original->setWithTaxonNumber($self->originalCombination());
-	
-	return $original;
-}
-
-
-# returns boolean - is this the original
-# combination ('recombined as'/'corrected as'/'rank changed as') ?
-sub isOriginalCombination {
-	my Taxon $self = shift;
-
-	return ($self->taxonNumber() == $self->originalCombination())
-}
-
-
-
-# for internal use only
-# creates a hash of all taxa ranks and numbers
-# for the original taxa the user passed in.
-# Note, only goes *up* to higher taxa, not down.
-sub createTaxaHash {
-	my Taxon $self = shift;
-
-	my $sql = $self->getTransactionManager();
-	
-	# first go up the hierarchy from the passed in taxon
-	# ie, go to the parent of the passed in taxon
-	
-	# get the initial taxon the user set
-	my $tn = $self->taxonNumber();
-	if (! $tn) { return };
-	
-	my %hash;  # hash of the results
-	
-	my $ref_has_opinion;  # boolean
-	my ($pubyr, $idNum);
-	my $resultRef;  # sql query results
-	
-	# another sql object for executing subqueries.
-	my $subSQL = DBTransactionManager->new($self->{GLOBALVARS});
-	
-	# first, insert the current taxon into the hash
-#	my $ownTaxonRank = $subSQL->getSingleSQLResult("SELECT taxon_rank FROM 
-#								authorities WHERE taxon_no = $tn");
-	my $ownTaxonRank = ${$subSQL->getData("SELECT taxon_rank FROM 
-								authorities WHERE taxon_no = $tn")}[0]->{taxon_rank};
-	
-	$hash{$ownTaxonRank} = $tn;
-
-	# go up the hierarchy to the top (kingdom)
-	# from the rank the user started with.
-	# rewrote this section to employ normal, sensible getData function
-	#  instead of ridiculously arcane Poling $sql object function calls;
-	#  replaced lengthy computation of most recent parent number with call
-	#  to selectMostRecentParentOpinion JA 5.4.04
-	# WARNING: rewrite not debugged and probably a waste of time because
-	#  this function createTaxaHash is used only by nameForRank and
-	#  numberForRank, which in turn are used only by deprecated module
-	#  Occurrence.pm
-	while ($tn) {
-
-		# note, the "ORDER BY o.parent_no DESC" is important - this means that if we have two
-		# rows with the same pubyr, then it will always fetch the last one added since 
-		# the numbers increment on each addition.
-		my $opsql = "SELECT o.parent_no, o.pubyr, o.ref_has_opinion, o.reference_no, r.pubyr FROM opinions o, refs r WHERE o.child_no = $tn AND o.reference_no = r.reference_no AND status = 'belongs to' ORDER BY o.parent_no DESC";
-		my @results = @{$sql->getData($opsql)};
-
-		# this is the parent with the most recent pubyr.
-		my $parent = TaxonInfo::selectMostRecentParentOpinion($sql,\@results);
-
-		# get the rank of the parent
-		#my $pRank = $sql->getSingleSQLResult("SELECT taxon_rank 
-		#FROM authorities WHERE taxon_no = $parent");
-		my $pRank = ${$sql->getData("SELECT taxon_rank 
-			FROM authorities WHERE taxon_no = $parent")}[0]->{taxon_rank};
-		
-		# insert it into the hash, so we have the parent rank as the key
-		# and the parent number as the value.
-		$hash{$pRank} = $parent;
-		
-		# also insert the pubyr for this parent, keyed to the id number.
-		$hash{$parent} = $pubyr;		
-					
-		$tn = $parent;
-		#print "tn = $tn, id = $idNum, pubyr = $pubyr\n";
-	}
-	
-
-	#store the hash in the object data field
-	$self->{taxaHash} = \%hash;
-}
-
-# debugging
-sub printTaxaHash {
-	my Taxon $self = shift;
-	my $hash = $self->{taxaHash};
-	my %hash = %$hash;
-	print "Printing Taxa Hash\n";
-	print "hash = '$hash'";
-	
-	# print out for debugging purposes.
-	my @keys = keys(%hash);
-	foreach my $key (@keys) {
-		print "key = $key\n";
-	}
-	
-	
-	
-		# print out for debugging purposes.
-#	my @keys = keys(%hash);
-#	foreach my $key (@keys) {
-#		$sql->clear();
-#		
-#		if (!($key =~ /\d/)) {
-#			my $taxon_no = $hash{$key};
-#		
-#			$sql->setSQLExpr("SELECT taxon_name FROM authorities WHERE taxon_no = '$taxon_no'");
-#			$sql->executeSQL();
-#			my @result = $sql->nextResultArray();
-#			my $taxon_name = $result[0];
-#			print "$key = $taxon_name\n";
-#		}
-#	}
-	# end of printing section for debugging
-
-}
-
-
-
-# mainly meant for internal use
-# returns a hashref with all data (select *) for the current taxon,
-# *if* we have a taxon_no for it.  If we don't, then it returns nothing.
-sub databaseAuthorityRecord {
-	my Taxon $self = shift;
-
-	if (! $self->{taxonNumber}) {
-		return;	
-	}
-	
-	my $row = $self->{cachedDBRow};
-	
-	if (! $row ) {
-		# if a cached version of this row query doesn't already exist,
-		# then go ahead and fetch the data.
-	
-		$row = CachedTableRow->new($self->{GLOBALVARS}, 'authorities', "taxon_no = '" . $self->{taxonNumber} . "'");
-
-		$self->{cachedDBRow} = $row;  # save for future use.
-	}
-	
-	#Debug::dbPrint($row->get('taxon_name'));
-	return $row->row(); 	
-}
 
 # Pass this an HTMLBuilder object,
 # a session object, and the CGI object.
@@ -784,12 +167,11 @@ sub databaseAuthorityRecord {
 #
 # rjp, 3/2004
 sub displayAuthorityForm {
-	my Taxon $self = shift;
+    my $dbt = shift; 
 	my $hbo = shift;
 	my $s = shift;
 	my $q = shift;
-	
-	my $sql = $self->getTransactionManager();
+    my $error_message = shift;
 	
 	my %fields;  # a hash of fields and values that
 				 # we'll pass to HTMLBuilder to pop. the form.
@@ -799,122 +181,60 @@ sub displayAuthorityForm {
 	# if the authorizer is not the original authorizer of the record).
 	my @nonEditables; 	
 	
-	if ((!$hbo) || (! $s) || (! $q)) {
-		Debug::logError("Taxon::displayAuthorityForm had invalid arguments passed to it.");
+	if ((!$dbt) || (!$hbo) || (! $s) || (! $q)) {
+        carp "displayAuthorityform had invalid arguments passed to it";
 		return;
 	}
 
-	# Figure out if it's the first time displaying this form, or if it's already been displayed,
-	# for example, if we're showing some errors about the last attempt at submission.
-	my $secondTime = 0;  # is this the second time displaying this form?
-	if ($q->param('second_submission') eq 'YES') {
-		# this means that we're displaying the form for the second
-		# time with some error messages.
-		$secondTime = 1;
-			
-		# so grab all of the fields from the CGI object
-		# and stick them in our fields hash.
-		my $fieldRef = Globals::copyCGIToHash($q);
-		%fields = %$fieldRef;
-	}
-	
-	#Debug::dbPrint("second_submission = $secondTime");
-	#Debug::dbPrint("fields, second sub = " . $fields{second_submission});
 
-	# Is this supposed to be a new entry, or just an edit of an old record?
-	# We'll look for a hidden field first, just in case we're re-displaying the form.
-	my $isNewEntry = 1;
-	if ($q->param('is_new_entry') eq 'NO') {
-		$isNewEntry = 0;
-	} elsif ($q->param('is_new_entry') eq 'YES') {
-		$isNewEntry = 1;	
-	} elsif ($self->{taxonNumber}) {
-		$isNewEntry = 0;  # it must be an edit if we have a taxon_no for it.
-	}
+    # Simple variable assignments
+    my $isNewEntry = ($q->param('taxon_no') > 0) ? 0 : 1;
+    my $reSubmission = ($error_message) ? 1 : 0;
+    
+	# if the taxon is already in the authorities table, grab it
+    my $t;
+    if (!$isNewEntry) {
+        $t = Taxon->new($dbt,$q->param('taxon_no'));
+        if (!$t) {
+            carp "Could not create taxon object in displayAuthorityForm for taxon_no ".$q->param('taxon_no');
+            return;
+        }
+    }
 
-	#Debug::dbPrint("isNewEntry = $isNewEntry");
-	
-	# if the taxon is already in the authorities table,
-	# then grab the data from that table row.
-	my $dbFieldsRef;
-	if (! $isNewEntry) {	
-		$dbFieldsRef = $self->databaseAuthorityRecord();
-		Debug::dbPrint("querying database");
-		
-		# we only want to stick the database data in the
-		# fields to populate if it's the first time displaying the form,
-		# otherwise we'll overwrite any changes the user has already made to the form.
-		if (!$secondTime) {
-			%fields = %$dbFieldsRef;		
-			$fields{taxon_no} = $self->{taxonNumber};
-		}
-	}
+    # grab previous fields
+	if ($reSubmission) {
+        %fields = %{$q->Vars()};
+	} elsif (!$isNewEntry) {
+        %fields = %{$t->getRow()};
+    } else { # brand new, first submission
+	    $fields{'taxon_name'} = $q->param('taxon_name');
+		$fields{'reference_no'} = $s->get('reference_no');
+    }    
 
-	
-	#### 
-	## At this point, it's safe to start assigning things to the %fields
-	## hash.  However, it shouldn't be done before here, because the hash
-	## might be overwritten in two places above.
-	####
-	
-	
-	# Store whether or not this is a new entry in a hidden variable so 
-	# we'll have access to this information even after a taxon_no has been assigned...	
-	if ($isNewEntry) {
-		$fields{is_new_entry} = 'YES';
-	} else {
-		$fields{is_new_entry} = 'NO';
-		
-		# record the taxon number for later use if it's not a new entry.. (ie, if it's an edit).
-		$fields{taxon_no} = $self->{taxonNumber};
-	}
-	
-	# If we haven't already recorded this, then record the name of the starting taxon.
-	# This would be the name the user typed in in the search form, and since we're storing
-	# it in a hidden, but *only* if it doesn't already exist, then it should not be overwritten later.
-	if (! ($q->param('starting_taxon_name'))) {
-		$fields{starting_taxon_name} = $self->{taxonName};
-	}
-	
-	if ($self->{taxonName} eq '') {
-		$fields{taxon_name} = 'it';	
-	}
-
-		
 	# fill out the authorizer/enterer/modifier info at the bottom of the page
 	if (!$isNewEntry) {
-		if ($fields{authorizer_no}) { $fields{authorizer_name} = " <B>Authorizer:</B> " . $s->personNameForNumber($fields{authorizer_no}); }
-		
-		if ($fields{enterer_no}) { $fields{enterer_name} = " <B>Enterer:</B> " . $s->personNameForNumber($fields{enterer_no}); }
-		
-		if ($fields{modifier_no}) { $fields{modifier_name} = " <B>Modifier:</B> " . $s->personNameForNumber($fields{modifier_no}); }
+		if ($fields{'authorizer_no'}) { 
+            $fields{'authorizer_name'} = " <B>Authorizer:</B> " . Person::getPersonName($dbt,$fields{'authorizer_no'}); 
+        }
+		if ($fields{'enterer_no'}) { 
+            $fields{'enterer_name'} = " <B>Enterer:</B> " . Person::getPersonName($dbt,$fields{'enterer_no'}); 
+        }
+		if ($fields{'modifier_no'}) { 
+            $fields{'modifier_name'} = " <B>Modifier:</B> ".Person::getPersonName($dbt,$fields{'modifier_no'}); 
+        }
 	}
 	
-	
-	# Set the taxon_name parameter..  We can use this instead of
-	# taxon_name_corrected from now on down..
-	$fields{taxon_name} = $self->{taxonName};
-	if (! $secondTime) {  # otherwise the taxon_name_corrected will already have been set.
-		$fields{taxon_name_corrected} = $self->{taxonName};
-	}
 	
 	# if the type_taxon_no exists, then grab the name for that taxon.
-	if ((!$secondTime) && ($fields{type_taxon_no})) {
-		$fields{type_taxon_name} = $self->getTaxonNameFromNumber($fields{type_taxon_no});
+	if ((!$reSubmission) && ($fields{'type_taxon_no'})) {
+        my $type_taxon = Taxon->new($dbt,$fields{'type_taxon_no'});
+		$fields{'type_taxon_name'} = $type_taxon->get('taxon_name');
 	}
 	
 	
 	# populate the correct pages/figures fields depending
 	# on the ref_is_authority value.
-		
-	if ($isNewEntry) {
-		# for a new entry, use the current reference from the session.
-		$fields{reference_no} = $s->currentReference();
-	} 
-	
-	
 	#print "ref_is_authority = " . $fields{'ref_is_authority'};
-	
 	if ($fields{'ref_is_authority'} eq 'YES') {
 		# reference_no is the authority
 		$fields{'ref_is_authority_checked'} = 'checked';
@@ -923,7 +243,7 @@ sub displayAuthorityForm {
 	} else {
 		# reference_no is not the authority
 		
-		if ((!$isNewEntry) || $secondTime) {
+		if ((!$isNewEntry) || $reSubmission) {
 			# we only want to check a reference radio button
 			# if they're editing an old record.  This will force them to choose
 			# one for a new record.  However, if it's the second time
@@ -934,7 +254,7 @@ sub displayAuthorityForm {
 			$fields{'ref_is_authority'} = 'NO';
 		}
 		
-		if (!$secondTime) {
+		if (!$reSubmission) {
 			$fields{'2nd_pages'} = $fields{'pages'};
 			$fields{'2nd_figures'} = $fields{'figures'};
 			$fields{'pages'} = '';
@@ -943,12 +263,7 @@ sub displayAuthorityForm {
 	}
 	
 		
-	# Figure out the rank based on spacing of the name.
-	my $rankFromSpaces = Validation::taxonRank($self->{taxonName});
-	my $rankFromDatabase = $dbFieldsRef->{taxon_rank};
-	my $rankFromForm = $q->param('taxon_rank'); 
 	
-	my $rankToUse;
 	
 	# Now we need to deal with the taxon rank popup menu.
 	# If we've already displayed the form and the user is now making changes
@@ -957,40 +272,35 @@ sub displayAuthorityForm {
 	# if it's an edit of an old record, or we use the rank from the spacing of the name
 	# they typed in if it's a new record.
 	
-	if ($secondTime) {
-		$rankToUse = $rankFromForm;	
+	my $rankToUse;
+	if ($reSubmission) {
+		$rankToUse = $q->param('taxon_rank'); 
 	} else { 
 		# first time
 		if ($isNewEntry) {
-			$rankToUse = $rankFromSpaces;	
+	        # Figure out the rank based on spacing of the name.
+			$rankToUse = Validation::taxonRank($q->param('taxon_name'));
+	        if ($rankToUse eq 'higher') {
+		        # the popup menu doesn't have "higher", so use "genus" instead.
+		        $rankToUse = 'genus';
+	        }
 		} else {
 			# not a new entry
-			$rankToUse = $rankFromDatabase;
+			$rankToUse = $t->get('taxon_rank');
 		}
 	}
-	
-	
-	if ($rankToUse eq 'higher') {
-		# the popup menu doesn't have "higher", so use "genus" instead.
-		$rankToUse = GENUS;
-	}
-	
+	$fields{'taxon_rank'} = $rankToUse;
 	
 	# if the rank is species, then display the type_specimen input
 	# field.  Otherwise display the type_taxon_name field.
 	
-	if ($rankToUse eq SPECIES || $rankToUse eq SUBSPECIES) {
+	if ($rankToUse eq 'species' || $rankToUse eq 'subspecies') {
 		# remove the type_taxon_name field.
 		$fields{'OPTIONAL_type_taxon_name'} = 0;
 	} else {
-		# must be a genus or higher taxon
-		
 		# remove the type_specimen field.	
 		$fields{'OPTIONAL_type_specimen'} = 0;
 	}
-	
-	$fields{taxon_rank} = $rankToUse;
-	
 	
 	
 	## If this is a new species or subspecies, then we will automatically
@@ -1000,21 +310,19 @@ sub displayAuthorityForm {
 	# 'Equus newtaxon' and we have three entries in authorities for 'Equus'
 	# then we should present a menu and ask them which one to use.
 
-	if ($isNewEntry && ($rankToUse eq SPECIES || $rankToUse eq SUBSPECIES)) {
+	if ($isNewEntry && ($rankToUse eq 'species' || $rankToUse eq 'subspecies')) {
 		my $tname = $fields{taxon_name};
 		my ($one, $two, $three) = split(/ /, $tname);
 		
 		my $name;
-		if ($rankToUse eq SPECIES) {
+		if ($rankToUse eq 'species') {
 			$name = $one;
 		} else {
 			$name = "$one $two";
 		}
 		
 		# figure out how many authoritiy records could be the possible parent.
-#		my $count = $sql->getSingleSQLResult("SELECT COUNT(*) FROM authorities WHERE taxon_name = '" . $name . "'");
-		my $count = ${$sql->getData("SELECT COUNT(*) as c FROM authorities 
-			WHERE taxon_name = '" . $name . "'")}[0]->{c};
+		my $count = ${$dbt->getData("SELECT COUNT(*) as c FROM authorities WHERE taxon_name = '" . $name . "'")}[0]->{c};
 		
 		
 		# if only one record, then we don't have to ask the user anything.
@@ -1024,58 +332,41 @@ sub displayAuthorityForm {
 		my $parentRankToPrint;
 
 		my $parentRankShouldBe;
-		if ($rankToUse eq SPECIES) {
+		if ($rankToUse eq 'species') {
 			$parentRankShouldBe = "(taxon_rank = 'genus' OR taxon_rank = 'subgenus')";
 			$parentRankToPrint = "genus or subgenus";
-		} elsif ($rankToUse eq SUBSPECIES) {
+		} elsif ($rankToUse eq 'subspecies') {
 			$parentRankShouldBe = "taxon_rank = 'species'";
 			$parentRankToPrint = "species";
 		}
 
 		
 		if ($count >= 1) {
-			
 			# make sure that the parent we select is the correct parent,
 			# for example, we don't want to grab a family or something higher
 			# by accident.
 			
-			$sql->setSQLExpr("SELECT taxon_no, taxon_name FROM authorities WHERE taxon_name = '" . $name . "' AND $parentRankShouldBe");
-			my $results = $sql->allResultsArrayRef();
+			my $results = $dbt->getData("SELECT taxon_no, taxon_name FROM authorities WHERE taxon_name = '" . $name . "' AND $parentRankShouldBe");
 		
 			my $select;
 			
 			my $chosen;
 			foreach my $row (@$results) {
-				my $taxon = Taxon->new($self->{GLOBALVARS});
-				$taxon->setWithTaxonNumber($row->[0]);
+				my $taxon = Taxon->new($dbt,$row->{'taxon_no'});
 	
 				# if they are redisplaying the form, we want to choose
 				# the appropriate one.
-				if ($q->param('parent_taxon_no') eq $row->[0]) {
+				if ($q->param('parent_taxon_no') eq $row->{'taxon_no'}) {
 					$chosen = 'selected';
 				} else {
 					$chosen = '';
 				}
 				
-				$select .= "<option value=\"$row->[0]\" $chosen>";
-				$select .= $taxon->taxonName() . " " . $taxon->authors();
-		# tack on the closest higher order name
-		# a little clunky, but it works and doesn't require messing
-		#  with get_classification_hash
-		# thank goodness the $sql object exists here; Poling's failure
-		#  to use $dbt objects in the normal way creates a bookkeeping
-		#  nightmare
-		# JA 30.4.04
-				my %master_class=%{Classification::get_classification_hash($sql,"class,order,family",[$row->[0]])};
-				my @parents = split(/,/,$master_class{$row->[0]},-1);
-				if ( $parents[2] )      {
-					$select .= " [" . $parents[2] . "]";
-				} elsif ( $parents[1] ) {
-					$select .= " [" . $parents[1] . "]";
-				} elsif ( $parents[0] ) {
-					$select .= " [" . $parents[0] . "]";
-				}
-
+				$select .= "<option value=\"$row->{taxon_no}\" $chosen>";
+				$select .= $taxon->get('taxon_name') . " " . $taxon->authors();
+		        # tack on the closest higher order name
+				my %master_class=%{Classification::get_classification_hash($dbt,"parent",[$row->{'taxon_no'}])};
+				$select .= "[".$master_class{$row->{'taxon_no'}}."]";
 				$select .= "</option>\n";
 
 			}
@@ -1090,23 +381,10 @@ sub displayAuthorityForm {
 			
 			$errors->setDisplayEndingMessage(0); 
 			
-			#/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority
-#/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=56942
-			print main::stdIncludes("std_page_top");
 			print $errors->errorMessage();
-			print main::stdIncludes("std_page_bottom");
-			
-			#print $q->redirect("http://localhost/cgi-bin/bridge.pl?action=startTaxonomy&goal=authority");			
-			
 			return;
 		}
-
-		
 	}
-	
-	
-	
-	
 
 	# if the authorizer of this record doesn't match the current
 	# authorizer, and if this is an edit (not a first entry),
@@ -1118,11 +396,9 @@ sub displayAuthorityForm {
 	
 	if ($s->isSuperUser()) {
 		$fields{'message'} = "<p align=center><i>You are the superuser, so you can edit any field in this record!</i></p>";
-	} elsif ((! $isNewEntry) && ($sesAuth != $dbFieldsRef->{authorizer_no}) &&
-	($dbFieldsRef->{authorizer_no} != 0)) {
-	
+	} elsif (!$isNewEntry && $sesAuth != $t->get('authorizer_no') && $t->get('authorizer_no') != 0) {
 		# grab the authorizer name for this record.
-		my $authName = $s->personNameForNumber($fields{authorizer_no});
+		my $authName = Person::getPersonName($dbt,$fields{authorizer_no});
 	
 		$fields{'message'} = "<p align=center><i>This record was created by a different authorizer ($authName) so you can only edit empty fields.</i></p>";
 		
@@ -1141,8 +417,8 @@ sub displayAuthorityForm {
 		
 				
 		# find all fields in the database record which are not empty and add them to the list.
-		foreach my $f (keys(%$dbFieldsRef)) {	
-			if ($dbFieldsRef->{$f}) {
+		foreach my $f ($t->get()) {
+			if ($t->get($f)) {
 				push(@nonEditables, $f);
 			}
 		}
@@ -1155,23 +431,23 @@ sub displayAuthorityForm {
 		if ($fields{'type_taxon_name'}) { push(@nonEditables, 'type_taxon_name'); }
 		if ($fields{'type_specimen'}) { push(@nonEditables, 'type_specimen'); }
 		
-		push(@nonEditables, 'taxon_name_corrected');
+		push(@nonEditables, 'taxon_name');
 	}
 	
 	
 	## Make the taxon_name non editable if this is a new entry to simplify things
 	## New addition, 3/22/2004
 	if ($isNewEntry) {
-		push(@nonEditables, 'taxon_name_corrected');
+		push(@nonEditables, 'taxon_name');
 	}
-	
-	
-	if ($fields{taxon_name_corrected}) { $fields{taxon_size} = length($fields{taxon_name_corrected}) + 5; }
+
+    # add in the error message
+    if ($error_message) {
+        $fields{'error_message'}=$error_message;
+    }
 	
 	# print the form	
-	print main::stdIncludes("std_page_top");
 	print $hbo->newPopulateHTML("add_enter_authority", \%fields, \@nonEditables);
-	print main::stdIncludes("std_page_bottom");
 }
 
 
@@ -1189,91 +465,61 @@ sub displayAuthorityForm {
 #
 # rjp, 3/2004.
 sub submitAuthorityForm {
-	my Taxon $self = shift;
+    my $dbt = shift;
 	my $hbo = shift;
 	my $s = shift;		# the cgi parameters
 	my $q = shift;		# session
 
-	if ((!$hbo) || (!$s) || (!$q)) {
-		Debug::logError("Taxon::submitAuthorityForm had invalid arguments passed to it.");
+	if ((!$dbt) || (!$hbo) || (!$s) || (!$q)) {
+		carp("Taxon::submitAuthorityForm had invalid arguments passed to it.");
 		return;	
 	}
 	
-	my $sql = $self->getTransactionManager();
-	$sql->setSession($s);
-	
 	my $errors = Errors->new();
     my @warnings = ();
-	
-	# if this is the second time they submitted the form (or third, fourth, etc.),
-	# then this variable will be true.  This would happen if they had errors
-	# the first time, and then resubmitted it.
-	my $isSecondSubmission;
-	if ($q->param('second_submission') eq 'YES') {
-		$isSecondSubmission = 1;
-	} else {
-		$isSecondSubmission = 0;
-	}
-	
-	
-	# is this a new entry, or an edit of an old record?
-	my $isNewEntry;
-	if ($q->param('is_new_entry') eq 'YES') {
-		$isNewEntry = 1;	
-	} else {
-		$isNewEntry = 0;
-	}
 
-	#Debug::dbPrint("new entry = $isNewEntry");
-	#return;
-	
-	# grab all the current data from the database about this record
-	# if it's not a new entry (ie, if it already existed).	
-	my %dbFields;
-	if (! $isNewEntry) {
-		my $results = $self->databaseAuthorityRecord();
+    # Simple variable assignments
+    my $isNewEntry = ($q->param('taxon_no') > 0) ? 0 : 1;
 
-		if ($results) {
-			%dbFields = %$results;
-		}
-	}
-	
-		
-	# this $editAny variable is true if they can edit any field,
-	# false if they can't.
-	my $editAny = $s->editAnyFormField($isNewEntry, $dbFields{authorizer_no});
-	
+    # if the taxon is already in the authorities table, grab it
+    my $t;
+    if (!$isNewEntry) {
+        $t = Taxon->new($dbt,$q->param('taxon_no'));
+        if (!$t) {
+            carp "Could not create taxon object in submitAuthorityForm for taxon_no ".$q->param('taxon_no');
+            return;
+        }
+    }
+
 	
 	# build up a hash of fields/values to enter into the database
 	my %fieldsToEnter;
 	
 	if ($isNewEntry) {
-		$fieldsToEnter{authorizer_no} = $s->authorizerNumber();
-		$fieldsToEnter{enterer_no} = $s->entererNumber();
-		$fieldsToEnter{reference_no} = $s->currentReference();
+		$fieldsToEnter{authorizer_no} = $s->get('authorizer_no');
+		$fieldsToEnter{enterer_no} = $s->get('enterer_no');
+		$fieldsToEnter{reference_no} = $s->get('reference_no');
 		
 		if (! $fieldsToEnter{reference_no} ) {
 			$errors->add("You must set your current reference before submitting a new authority");	
 		}
 		
 	} else {
-		$fieldsToEnter{modifier_no} = $s->entererNumber();	
+		$fieldsToEnter{modifier_no} = $s->get('enterer_no');	
 	}
 	
 	
-	if ( 	($q->param('ref_is_authority') ne 'YES') && 
-			($q->param('ref_is_authority') ne 'NO')) {
-		
+	if (($q->param('ref_is_authority') ne 'YES') && 
+		($q->param('ref_is_authority') ne 'NO')) {
 		$errors->add("You must choose one of the reference radio buttons");
 	}
 	
 	
 	# merge the pages and 2nd_pages, figures and 2nd_figures fields together
 	# since they are one field in the database.
-	
 	if ($q->param('ref_is_authority') eq 'NO') {
-		$fieldsToEnter{pages} = $q->param('2nd_pages');
-		$fieldsToEnter{figures} = $q->param('2nd_figures');
+		$fieldsToEnter{'pages'} = $q->param('2nd_pages');
+		$fieldsToEnter{'figures'} = $q->param('2nd_figures');
 
 	# commented out 10.5.04 by JA because we often need to add (say) genera
 	#  without any data when we create and classify species for which we
@@ -1283,114 +529,89 @@ sub submitAuthorityForm {
 #		}
 		
 		# make sure the pages/figures fields above this are empty.
-		my @vals = ($q->param('pages'), $q->param('figures'));
-		if (!(Globals::isEmpty(\@vals))) {
+		if ($q->param('pages') || $q->param('figures')) {
 			$errors->add("Don't enter pages or figures for a primary reference if you chose the 'named in an earlier publication' radio button");	
 		}
-		
-		# make sure the format of the author initials is proper
-		if  (( $q->param('author1init') && 
-			(! Validation::properInitial($q->param('author1init')))
-			) ||
-			( $q->param('author2init') && 
-			(! Validation::properInitial($q->param('author2init')))
-			)
-			) {
+	
+        # make sure the format of the author names is proper
+        if  ($q->param('author1init') && ! Validation::properInitial($q->param('author1init'))) {
+            $errors->add("The first author's initials are improperly formatted");
+        }
+        if  ($q->param('author2init') && ! Validation::properInitial($q->param('author2init'))) {
+            $errors->add("The second author's initials are improperly formatted");
+        }
+        if  ( $q->param('author1last') && !Validation::properLastName($q->param('author1last')) ) {
+            $errors->add("The first author's last name is improperly formatted");
+        }
+        if  ( $q->param('author2last') && !Validation::properLastName($q->param('author2last')) ) {
+            $errors->add("The second author's last name is improperly formatted");
+        }
+        if ($q->param('otherauthors') && !$q->param('author2last') ) {
+            $errors->add("Don't enter other author names if you haven't entered a second author");
+        }	
 			
-			$errors->add("The author's initials are improperly formatted");		
-		}
-		
+		if ($q->param('pubyr')) {
+            my $pubyr = $q->param('pubyr');
 
-		# make sure the format of the author names is proper
-		if  ( $q->param('author1last')) {
-			if (! (Validation::properLastName($q->param('author1last'))) ) {
-				$errors->add("The first author's last name is improperly formatted");
-			}
-		}
-			
-			
-		if  ( $q->param('author2last') && 
-			(! Validation::properLastName( $q->param('author2last') ) )
-			) {
-		
-			$errors->add("The second author's last name is improperly formatted");	
-		}
-
-			
-		if (my $pubyr = $q->param('pubyr')) {
 			if (! Validation::properYear( $pubyr ) ) {
 				$errors->add("The year is improperly formatted");
 			}
 			
 			# make sure that the pubyr they entered (if they entered one)
 			# isn't more recent than the pubyr of the reference.  
-			my $ref = Reference->new();
-			$ref->setWithReferenceNumber($q->param('reference_no'));
-			if ($pubyr > $ref->pubyr()) {
+			my $ref = Reference->new($dbt,$q->param('reference_no'));
+			if ($pubyr > $ref->get('pubyr')) {
 				$errors->add("The publication year ($pubyr) can't be more 
-				recent than that of the primary reference (" . $ref->pubyr() . ")");
+				recent than that of the primary reference (" . $ref->get('pubyr') . ")");
 			}
 		}
-		
-		
-		if (($q->param('otherauthors')) && (! $q->param('author2last') )) {
-			# don't let them enter other authors if the second author field
-			# isn't filled in.
-		
-			$errors->add("Don't enter other authors if you haven't entered a second author");
-		}
-		
-		
 	} else {
 		# ref_is_authority is YES
 		# so make sure the other publication info is empty.
-		my @vals = ($q->param('author1init'), $q->param('author1last'), $q->param('author2init'), $q->param('author2last'), $q->param('otherauthors'), $q->param('pubyr'), $q->param('2nd_pages'), $q->param('2nd_figures'));
-		
-		if (!(Globals::isEmpty(\@vals))) {
+		if ($q->param('author1init') || $q->param('author1last') || 
+            $q->param('author2init') || $q->param('author2last') || 
+            $q->param('otherauthors')|| $q->param('pubyr') || 
+            $q->param('2nd_pages')   || $q->param('2nd_figures')) {
 			$errors->add("Don't enter other publication information if you chose the 'first named in primary reference' radio button");	
 		}
-		
 	}
 	
-	
-	# check and make sure the taxon_name_corrected field in the form makes sense
-	if (!($q->param('taxon_name_corrected'))) {
+	# check and make sure the taxon_name field in the form makes sense
+	if (!($q->param('taxon_name'))) {
 		$errors->add("You can't submit the form with an empty taxon name!");	
 	}
 	
 	# to prevent complications, we will prevent the user from changing 
 	# a genus name on a species, or a species name on a subspecies if they
 	# are editing an old record.
-	if (! $isNewEntry) {
-		my $newTaxon = Taxon->new();
-		$newTaxon->setWithTaxonName($q->param('taxon_name_corrected'));
-		my $oldTaxon = $self;
-		
-		my $rank = $self->rank();
-		if ($rank->isSpecies()) {
-			# make sure they didn't try to change the genus name.
-			if ($oldTaxon->firstWord() ne $newTaxon->firstWord()) {
-				$errors->add("You can't change the genus name of a species
-				that already exists.  Contact the database manager
-				if you need to do this.");
-			}
-			
-		} elsif ($rank->isSubspecies()) {
-			# make sure they didn't try to change the species name.
-			if (($oldTaxon->firstWord() ne $newTaxon->firstWord()) || 
-				($oldTaxon->secondWord() ne $newTaxon->secondWord()) ){
-				$errors->add("You can't change the species name of a subspecies
-				that already exists.  Contact the database manager
-				if you need to do this.");
-			}
+	if (!$isNewEntry && $t->get('taxon_rank') =~ /species/) {
+        my @new_name = split(/ /,$q->param('taxon_name'));
+        my @old_name = split(/ /,$t->get('taxon_name'));
 
-		}
+        my $error = 0;
+        if (scalar(@new_name) != scalar(@old_name)) {
+            $error =1;
+        }
+		# make sure no higher order names are changes (i.e. genus or subgenus if its a species)
+        for (my $i=0;$i<$#new_name;$i++) {
+			if ($new_name[$i] ne $old_name[$i]) {
+                $error=1;
+            }
+        }
+       
+        if ($error) {
+		    if ($t->get('taxon_rank') eq 'species') {
+				$errors->add("You can't change the genus or subgenus name of a species that already exists.  Contact the database manager if you need to do this.");
+		    } elsif ($t->get('taxon_rank') eq 'subspecies') {
+				$errors->add("You can't change the genus, subgenus, or species name of a subspecies that already exists.  Contact the database manager if you need to do this.");
+            }    
+        }
 	}
 	
 	
 	{ # so we have our own scope for these variables.
-		my $taxon_name_corrected = $q->param('taxon_name_corrected');
-		my $rankFromSpaces = Validation::taxonRank($taxon_name_corrected);
+		my $taxon_name = $q->param('taxon_name');
+		my $rankFromSpaces = Validation::taxonRank($taxon_name);
 		my $trank = $q->param('taxon_rank');
 		my $er = 0;
 		
@@ -1399,23 +620,15 @@ sub submitAuthorityForm {
 			$errors->add("The taxon's name is invalid; please check spacing and capitalization");	
 		}
 		
-		if (Validation::looksLikeBadSubgenus($taxon_name_corrected)) {
-			$errors->add("If you are attempting to enter a subgenus, 
-			only enter the subgenus name and don't use parentheses");
+		if (Validation::looksLikeBadSubgenus($taxon_name)) {
+			$errors->add("If you are attempting to enter a subgenus, only enter the subgenus name and don't use parentheses");
 		}
 		
-		if ( (($rankFromSpaces eq SUBSPECIES) && ($trank ne SUBSPECIES)) ||
-			(($rankFromSpaces eq SPECIES) && ($trank ne SPECIES)) ||
-			(($rankFromSpaces eq 'higher') && 
-			(  ($trank eq SUBSPECIES) || ($trank eq SPECIES) )
-			) ) {
-
-			$errors->add("The original rank '" . $trank . "' doesn't match the spacing of the taxon name '" . $taxon_name_corrected . "'");
-			
-			
+		if (($rankFromSpaces eq 'subspecies' && $trank ne 'subspecies') ||
+			($rankFromSpaces eq 'species'    && $trank ne 'species') ||
+			($rankFromSpaces eq 'higher'     && $trank =~ /species/)) {
+			$errors->add("The original rank '$trank' doesn't match the spacing of the taxon name '$taxon_name'");
 		}
-		
-		
 	}
 	
 	# Now loop through all fields submitted from the form.
@@ -1428,6 +641,9 @@ sub submitAuthorityForm {
 	#Debug::dbPrint("dbFields = ");
 	#Debug::printHash(\%dbFields);
 	
+	# this $editAny variable is true if they can edit any field,
+	# false if they can't.
+	my $editAny = ($isNewEntry || $s->isSuperUser() || $s->get('authorizer_no') == $t->get('authorizer_no')) ? 1 : 0;
 	foreach my $formField ($q->param()) {
 		#if (! $q->param($formField)) {
 		#	next;  # don't worry about empty fields.	
@@ -1439,7 +655,7 @@ sub submitAuthorityForm {
 			# to edit it aferall..  If the field they want to edit is empty in the
 			# database, then they can edit it.
 			
-			if (! $dbFields{$formField}) {
+			if (! $t->get($formField)) {
 				# If the field in the database is empty, then it's okay
 				# to edit it.
 				$okayToEdit = 1;
@@ -1482,10 +698,8 @@ sub submitAuthorityForm {
 			$errors->add("Invalid type taxon format; don't use parentheses");
 		}
 
-		
-		my $junk;
-		my $number;
-		($number, $junk) = $self->getTaxonNumberFromName($fieldsToEnter{type_taxon_name});
+
+        my $number = ${TaxonInfo::getTaxonNos($fieldsToEnter{'type_taxon_name'})}[0];
 		
 		if (!$number) {
 			# if it doesn't exist, tell them to go enter it first.
@@ -1495,18 +709,17 @@ sub submitAuthorityForm {
 			
 
 			# check to make sure the rank of the type taxon makes sense.
-			my $ttaxon = Taxon->new($self->{GLOBALVARS});
-			$ttaxon->setWithTaxonNumber($number);
+			my $ttaxon = Taxon->new($dbt,$number);
 			
 			
-			if (($taxonRank eq GENUS) || ($taxonRank eq SUBGENUS)) {
+			if (($taxonRank eq 'genus') || ($taxonRank eq 'subgenus')) {
 				# then the type taxon rank must be species
-				if ($ttaxon->rankString() ne SPECIES) {
+				if ($ttaxon->{'taxonRank'} ne 'species') {
 					$errors->add("The type taxon's rank doesn't make sense");	
 				}
 			} else {
 				# for any other rank, the type taxon rank must not be species.
-				if ($ttaxon->rankString() eq SPECIES) {
+				if ($ttaxon->{'taxonRank'} eq 'species') {
 					$errors->add("The type taxon's rank doesn't make sense");	
 				}
 			}
@@ -1518,10 +731,8 @@ sub submitAuthorityForm {
 			my $pubyrToCheck;
 			
 			if ($q->param('ref_is_authority') eq 'YES') {
-				my $ref = Reference->new();
-				$ref->setWithReferenceNumber($q->param('reference_no'));
-				
-				$pubyrToCheck = $ref->pubyr();
+				my $ref = Reference->new($dbt,$q->param('reference_no'));
+				$pubyrToCheck = $ref->get('pubyr');
 			} else {
 				$pubyrToCheck = $q->param('pubyr');
 			}
@@ -1542,7 +753,7 @@ sub submitAuthorityForm {
 	}
 	
 
-	$fieldsToEnter{taxon_name} = $q->param('taxon_name_corrected');
+	$fieldsToEnter{taxon_name} = $q->param('taxon_name');
 	
 
 	# Delete some fields that may be present since these don't correspond
@@ -1550,7 +761,6 @@ sub submitAuthorityForm {
 	delete $fieldsToEnter{action};
 	delete $fieldsToEnter{'2nd_authors'};
 	delete $fieldsToEnter{'2nd_figures'};
-	delete $fieldsToEnter{'taxon_name_corrected'};
 	
 	# correct the ref_is_authority field.  In the HTML form, it can be "YES" or "NO"
 	# but in the database, it should be "YES" or "" (empty).
@@ -1558,12 +768,6 @@ sub submitAuthorityForm {
 		$fieldsToEnter{ref_is_authority} = '';
 	}
 	
-	
-	#Debug::printHash(\%fieldsToEnter);
-	#Debug::dbPrint($editAny);
-	#return;
-	
-
 	# If the rank was species or subspecies, then we also need to insert
 	# an opinion record automatically which has the state of "belongs to"
 	# For example, if the child taxon is "Equus blah" then we need to 
@@ -1573,16 +777,13 @@ sub submitAuthorityForm {
 	# the opinion object should do this for us (?)
 	my $parentTaxon;
 
-	if ( $isNewEntry && (($taxonRank eq SPECIES) || ($taxonRank eq SUBSPECIES)) ) {
+	if ( $isNewEntry && (($taxonRank eq 'species') || ($taxonRank eq 'subspecies')) ) {
 		# we want to do this for new entries & for edits.
 				
-		Debug::dbPrint("we're here 1 in Taxon");
-
-		$parentTaxon = Taxon->new($self->{GLOBALVARS});
-		$parentTaxon->setWithTaxonNumber($q->param('parent_taxon_no'));
+		$parentTaxon = Taxon->new($dbt, $q->param('parent_taxon_no'));
 		
-		if (! $parentTaxon->taxonNumber()) {
-			$errors->add("The parent taxon '" . $parentTaxon->taxonName() . 
+		if (! $parentTaxon->get('taxon_no')) {
+			$errors->add("The parent taxon '" . $parentTaxon->get('taxon_name') . 
 			"' that this $taxonRank belongs to doesn't exist in our 
 			database.  Please add an authority record for this $taxonRank
 			before continuing.");
@@ -1590,12 +791,6 @@ sub submitAuthorityForm {
 	}
 	## end of hack
 	####
-		
-	
-
-
-
-
 	
 	# at this point, we should have a nice hash array (%fieldsToEnter) of
 	# fields and values to enter into the authorities table.
@@ -1604,109 +799,64 @@ sub submitAuthorityForm {
 	# *** NOTE, if they try to enter a record which has the same name and
 	# taxon_rank as an existing record, we should display a warning page stating
 	# this fact..  However, if they *really* want to submit a duplicate, we should 
-	# let them.  So we check the value of 'second_submission' which is true if 
-	# they have already submitted the form at least once.  If this is true, then 
-	# we'll go ahead an let them enter a duplicate.
+	# let them.  
 	#
-	# This only applies to new entries, and to edits where they changed the taxon_name_corrected
+	# This only applies to new entries, and to edits where they changed the taxon_name
 	# field to be the name of a different taxon which already exists.
-	
-	#Debug::dbPrint("taxon_name = " . $fieldsToEnter{taxon_name});
-	#Debug::dbPrint("second_submission = " . $q->param('second_submission'));
-		
-		
-	if ($q->param('second_submission') ne 'YES') {
-		if ( ($isNewEntry && ($self->getTaxonNumberFromName($fieldsToEnter{taxon_name}))) ||
-		( 	(!$isNewEntry) && 
-			($q->param('starting_taxon_name') ne $fieldsToEnter{taxon_name}) &&
-			($self->getTaxonNumberFromName($fieldsToEnter{taxon_name}))	) ) {
-			
-			# only show warning on first subimission
-			
-			my $oldTaxon = Taxon->new($self->{GLOBALVARS});
-			$oldTaxon->setWithTaxonName($fieldsToEnter{taxon_name});
-			
-			$errors->add("The taxon \"" . $fieldsToEnter{taxon_name} . " " . $oldTaxon->authors() . " " . $oldTaxon->pubyr() . "\" already exists in our database. Are you sure you want to submit this record?");
+	if ($q->param('confirmed_taxon_name') ne $q->param('taxon_name')) {
+        my @taxon = TaxonInfo::getTaxon($dbt,'taxon_name'=>$fieldsToEnter{'taxon_name'},'get_reference'=>1);
+        my $taxonExists = scalar(@taxon);
+        
+		if (($isNewEntry && $taxonExists) ||
+		    (!$isNewEntry && $taxonExists && $q->param('taxon_name') ne $t->get('taxon_name'))) {
+            my @pub_info = ();
+            foreach my $row (@taxon) {
+                push @pub_info, Reference::formatShortRef($row);
+            }
+            my $plural = ($taxonExists == 1) ? "" : "s";
+            $q->param('confirmed_taxon_name'=>$q->param('taxon_name'));
+			$errors->add("The taxon already appears $taxonExists time$plural in the database: ".join(", ",@pub_info).". If you really want to submit this record, hit submit again.");
 		}
 	}
 	
-
-
-	
 	if ($errors->count() > 0) {
-		# put a message in a hidden to let us know that we have already displayed
-		# some errors to the user and this is at least the second time through (well,
-		# next time will be the second time through - whatever).
-
-		$q->param(-name=>'second_submission', -values=>['YES']);
-			
-		# stick the errors in the CGI object for display.
+        # If theres an error message, then we know its the second time through
 		my $message = $errors->errorMessage();
-						
-		$q->param(-name=>'error_message', -values=>[$message]);
-			
-			
-		$self->displayAuthorityForm($hbo, $s, $q);
-			
+		displayAuthorityForm($dbt,$hbo, $s, $q, $message);
 		return;
 	}
 	
 	
 	# now we'll actually insert or update into the database.
-	
 	my $resultTaxonNumber;
+    my $status;
 	
 	if ($isNewEntry) {
-		my $code;	# result code from dbh->do.
-	
-		# grab the date for the created field.
-		$fieldsToEnter{created} = now();
-			
-		($code, $resultTaxonNumber) = $sql->insertNewRecord('authorities', \%fieldsToEnter);
-
+		($status, $resultTaxonNumber) = $dbt->insertRecord($s,'authorities', \%fieldsToEnter);
 		
-		# if the $genusTaxon object exists, then that means that we
+		# if the $parentTaxon object exists, then that means that we
 		# need to insert an opinion record which says that our taxon
-		# belongs to the genus represented in $genusTaxon.
-		#
-		# this is a bit of a hack for now, we should be doing this by creating
-		# an opinion object, populating it, and having it set itself.  Do this later.
+		# belongs to the genus represented in $parentTaxon.
 		if ($parentTaxon) {
-			Debug::dbPrint("we're here 2 in Taxon");
-			my $opinionRow = CachedTableRow->new($self->{GLOBALVARS}, 'opinions');
-
             # Get original combination for parent no PS 04/22/2005
-            my $orig_parent_no = $parentTaxon->taxonNumber();
+            my $orig_parent_no = $parentTaxon->get('taxon_no');
             if ($orig_parent_no) {
-                $orig_parent_no = TaxonInfo::getOriginalCombination($sql,$orig_parent_no);
-            }
+                $orig_parent_no = TaxonInfo::getOriginalCombination($dbt,$orig_parent_no);
+            }    
 			
-			my %opinionHash;
-			$opinionHash{status} = 'belongs to';
-			$opinionHash{child_no} = $resultTaxonNumber;
-			$opinionHash{parent_no} = $orig_parent_no;
-			$opinionHash{authorizer_no} = $fieldsToEnter{authorizer_no};
-			$opinionHash{enterer_no} = $fieldsToEnter{enterer_no};
-			$opinionHash{ref_has_opinion} = $fieldsToEnter{ref_is_authority};
-			$opinionHash{reference_no} = $fieldsToEnter{reference_no};
-			$opinionHash{author1init} = $fieldsToEnter{author1init};
-			$opinionHash{author1last} = $fieldsToEnter{author1last};
-			$opinionHash{author2init} = $fieldsToEnter{author2init};
-			$opinionHash{author2last} = $fieldsToEnter{author2last};
-			$opinionHash{otherauthors} = $fieldsToEnter{otherauthors};
-			$opinionHash{pubyr} = $fieldsToEnter{pubyr};
-			$opinionHash{pages} = $fieldsToEnter{pages};
-			$opinionHash{figures} = $fieldsToEnter{figures};
-			
-			$opinionRow->setWithHashRef(\%opinionHash);
-			
-			$opinionRow->setPrimaryKeyName('opinion_no');
-			$opinionRow->setUpdateEmptyOnly(0);
-			
-			$opinionRow->setDatabaseRow();
+			my %opinionHash = (
+                'status'=>'belongs to',
+                'child_no'=>$resultTaxonNumber,
+                'child_spelling_no'=>$resultTaxonNumber,
+                'parent_no'=>$orig_parent_no,
+                'parent_spelling_no'=>$parentTaxon->get('taxon_no'),
+                'ref_has_opinion'=>$fieldsToEnter{'ref_is_authority'}
+            );
+            my @fields = ('reference_no','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures');
+            $opinionHash{$_} = $fieldsToEnter{$_} for @fields;
+		
+            $dbt->insertRecord($s,'opinions',\%opinionHash);
 		}
-		#
-		#
 
 		# JA 2.4.04
 		# if the taxon name is unique, find matches to it in the
@@ -1714,7 +864,7 @@ sub submitAuthorityForm {
 
 		# start with a test for uniqueness
 		my $mysql = "SELECT count(*) AS c FROM authorities WHERE taxon_name='" . $fieldsToEnter{taxon_name} . "'";
-		if ( ${$sql->getData($mysql)}[0]->{c} == 1 )	{
+		if ( ${$dbt->getData($mysql)}[0]->{'c'} == 1 )	{
 
 			# start composing update sql
 			# NOTE: in theory, taxon no for matching records always
@@ -1737,116 +887,207 @@ sub submitAuthorityForm {
 			}
 
 			# update the occurrences table
-			$sql->getData($mysql);
+			$dbt->getData($mysql);
 
 			# and then the reidentifications table
 			$mysql =~ s/UPDATE occurrences /UPDATE reidentifications /;
-			$sql->getData($mysql);
+			$dbt->getData($mysql);
 		}
 
 	} else {
 		# if it's an old entry, then we'll update.
 		
 		# Delete some fields that should never be updated...
-		delete $fieldsToEnter{authorizer_no};
-		delete $fieldsToEnter{enterer_no};
-		delete $fieldsToEnter{created};
 		delete $fieldsToEnter{reference_no};
+		$resultTaxonNumber = $t->get('taxon_no');
 		
-		
-		if (!($self->{taxonNumber})) {
-			Debug::logError("Taxon::submitAuthorityForm, tried to update a record without knowing its taxon_no..  Oops.");
-			return;
-		}
-			
-		$resultTaxonNumber = $self->{taxonNumber};
-		
-		if ($editAny) {
-			Debug::dbPrint("Taxon update any record");
-			# allow updates of any fields in the database.
-			$sql->updateRecord('authorities', \%fieldsToEnter, "taxon_no = '" . $self->{taxonNumber} . "'", 'taxon_no');
-		} else {
-			
-			
-			#Debug::dbPrint("Taxon update empty records only");
-			#Debug::printHash(\%fieldsToEnter);
-			
-			my $whereClause = "taxon_no = '" . $self->{taxonNumber} . "'";
-			
-			# only allow updates of fields which are already blank in the database.	
-			$sql->updateRecordEmptyFieldsOnly('authorities', \%fieldsToEnter, $whereClause, 'taxon_no');
-		}
+		$status = $dbt->updateRecord($s,'authorities', 'taxon_no',$resultTaxonNumber, \%fieldsToEnter);
 	}
 	
-	
-	
-	# now show them what they inserted...
-	
-	# note, if we set our own taxon number to be the new one, then if they had errors,
-	# it will screw up the isNewEntry calculation...
-	my $t = Taxon->new($self->{GLOBALVARS});
-	$t->setWithTaxonNumber($resultTaxonNumber);
-	$t->displayAuthoritySummary($isNewEntry, \@warnings);
-	
-}
-
-
-# displays info about the authority record the user just entered...
-# pass it a boolean
-# is it a new entry or not..
-sub displayAuthoritySummary {
-	my Taxon $self = shift;
-	my $newEntry = shift;
-    my $warnings = shift;
-
+    # displays info about the authority record the user just entered...
 	my $enterupdate;
-	if ($newEntry) {
+	if ($isNewEntry) {
 		$enterupdate = 'entered into';
 	} else {
 		$enterupdate = 'updated in'	
 	}
-	
-	print main::stdIncludes("std_page_top");
-	
-	
-	my $dbrec = $self->databaseAuthorityRecord();
-	
 	print "<CENTER>";
-	
-	if (!$dbrec) {
+	if (!$status) {
 		print "<DIV class=\"warning\">Error inserting/updating authority record.  Please start over and try again.</DIV>";	
 	} else {
 		
-        if (@$warnings) {
+        if (@warnings) {
 		    print "<DIV class=\"warning\">";
             print "Warnings inserting/updating authority record:<BR>"; 
-            print "<LI>$_</LI>" for (@$warnings);
+            print "<LI>$_</LI>" for (@warnings);
             print "</DIV>";
         }
-		print "<H3>" . $dbrec->{taxon_name} . " " . $self->authors() . " has been $enterupdate the database</H3>";
+		print "<H3>" . $fieldsToEnter{'taxon_name'} . " " .Reference::formatShortRef(\%fieldsToEnter). " has been $enterupdate the database</H3>";
 
-		my $tempTaxon = $dbrec->{taxon_name};
+		my $tempTaxon = $fieldsToEnter{'taxon_name'};
 		$tempTaxon =~ s/ /+/g;
 
-        # Hack PS, no $q is passed in ;(
-        my $q = new CGI;
-        $q->param("reference_no");
-
 		print "<center>
-		<p><A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonInfoResults&taxon_rank=" . $dbrec->{taxon_rank} . "&genus_name=" . $tempTaxon . "+(" . $self->{taxonNumber} .")\"><B>Get&nbsp;general&nbsp;information&nbsp;about&nbsp;" . $dbrec->{taxon_name} . "</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $self->{taxonNumber} ."\"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;" . $dbrec->{taxon_name} . "</B></A>&nbsp;-
-        <A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=" . $q->param('reference_no') . " \"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;a&nbsp;different&nbsp;taxon&nbsp;with&nbsp;same&nbsp;reference</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=startDisplayOpinionChoiceForm&taxon_no=" . $self->taxonNumber() . "&taxon_name=" . $dbrec->{taxon_name} . "\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;" . $dbrec->{taxon_name} . "</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=authority\"><B>Add/edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;another&nbsp;taxon</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomySearchForm&goal=opinion\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
+		<p><A HREF=\"bridge.pl?action=checkTaxonInfo&taxon_no=$resultTaxonNumber\"><B>Get&nbsp;general&nbsp;information&nbsp;about&nbsp;" . $fieldsToEnter{taxon_name} . "</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $resultTaxonNumber ."\"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;" . $fieldsToEnter{taxon_name} . "</B></A>&nbsp;-
+        <A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=" . $fieldsToEnter{'reference_no'}. " \"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;a&nbsp;different&nbsp;taxon&nbsp;with&nbsp;same&nbsp;reference</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionChoiceForm&child_no=" . $resultTaxonNumber . "\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;" . $fieldsToEnter{taxon_name} . "</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityTaxonSearchForm\"><B>Add/edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;another&nbsp;taxon</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionTaxonSearchForm\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
 		</center>";	
 
 	}
 	
 	print "<BR>";
 	print "</CENTER>";
+}
+
+
+# JA 17.8.02
+#
+# When user searches for a taxon from startAuthority
+#
+# Edited by rjp 1/22/2004, 2/18/2004, 3/2004
+# Edited by PS 01/24/2004, accept reference_no instead of taxon_name optionally
+# Edited by PS 04/27/2004, moved here from bridge.pl, now handles only authority stuff, see process
+#
+sub submitAuthorityTaxonSearch {
+    my ($dbt,$s, $q) = @_;
+    my $dbh = $dbt->dbh;
+
+	# check for proper spacing of the taxon..
+	my $errors = Errors->new();
+	$errors->setDisplayEndingMessage(0); 
+
+    if ($q->param('taxon_name')) {
+        if ( (Validation::looksLikeBadSubgenus($q->param('taxon_name'))) ||
+             ((Validation::taxonRank($q->param('taxon_name')) eq 'invalid')) ) {
+            $errors->add("Ill-formed taxon.  Check capitalization and spacing.");
+        }
+    } elsif (!$q->param('reference_no')) {
+        $errors->add("No taxon name or reference passed.");
+    }
+    
+	if ($errors->count()) {
+		print $errors->errorMessage();
+		return;
+	}
+	# Try to find this taxon in the authorities table
+    my (@results);
+    if ($q->param('taxon_name')) {
+        @results = TaxonInfo::getTaxon($dbt,'taxon_name'=>$q->param('taxon_name'),'get_reference'=>1);
+    } elsif ($q->param('reference_no')) {
+        @results = TaxonInfo::getTaxon($dbt,'reference_no'=>$q->param('reference_no'),'get_reference'=>1);
+    }
+        
+    # If there were no matches, present the new taxon entry form immediately
+    # We're adding a new taxon
+    if (scalar(@results) == 0) {
+        if ($q->param('taxon_name')) {
+            my $toQueue = "action=displayAuthorityForm&skip_ref_check=1&taxon_no=-1&taxon_name=".$q->param('taxon_name');
+            $s->enqueue( $dbh, $toQueue );
+            
+            $q->param( "type" => "select" );
+            main::displaySearchRefs("Please choose a reference before adding a new taxon",1);
+        } else {
+            print "<div align=\"center\"><h3>No authorities found for this reference</h3></div>";
+        }
+        return;
+	# We have 1 or more matches.  Present a list so the user can either pick the taxon,
+    # or create a new taxon with the same name as an exisiting taxon
+	} else	{
+		print "<div align=\"center\">\n";
+        print "<table><tr><td align=\"center\">";
+        if ($q->param("taxon_name")) { 
+    		print "<h3>Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</h3>\n<br>\n";
+        } else {
+    		print "<h3>Select a taxon to edit:</h3>\n<br>\n";
+        }
+        print "<form method=\"POST\" action=\"bridge.pl\">\n";
+        print "<input type=hidden name=\"action\" value=\"displayAuthorityForm\">\n";
+		print "<input type=hidden name=\"taxon_name\" value=\"".$q->param('taxon_name')."\">\n";
+
+
+        # now create a table of choices
+		print "<table>\n";
+        my $checked = (scalar(@results) == 1) ? "CHECKED" : "";
+        foreach my $row (@results) {
+            # Check the button if this is the first match, which forces
+            #  users who want to create new taxa to check another button
+            print qq|<tr><td align="center"><input type="radio" name="taxon_no" value="$row->{taxon_no}" $checked></td>|;
+            print "<td>".formatAuthorityLine($dbt, $row)."</td></tr>";
+        }
+
+        # always give them an option to create a new taxon as well
+        if ($q->param('taxon_name')) {
+            print "<tr><td align=\"right\"><input type=\"radio\" name=\"taxon_no\" value=\"-1\"></td>\n<td>";
+            if ( scalar(@results) == 1 )	{
+                print "No, not the one above ";
+            } else	{
+                print "None of the above ";
+            }
+            print "- create a <b>new</b> taxon record</i></td></tr>\n";
+        }
+        
+		print "</table>";
+
+        # we print out difference buttons for two cases:
+        #  1: using a taxon name. give them an option to add a new taxon, so button is Submit
+        #  2: this is from a reference_no. No option to add a new taxon, so button is Edit
+        if ($q->param('taxon_name')) {
+		    print "<p><input type=submit value=\"Submit\"></p>\n</form>\n";
+		    print "<p align=\"left\"><span class=\"tiny\">";
+            print "You have a choice because there may be multiple biological species (e.g., a plant and an animal) with identical names.<br>\n";
+        } else {
+		    print "<p><input type=submit value=\"Edit\"></p>\n</form>\n";
+		    print "<p align=\"left\"><span class=\"tiny\">";
+        }
+		print "Create a new taxon only if the old ones were named by different people in different papers.<br>\n";
+		print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n<br>";
+
+        print "</td></tr></table>";
+		print "</div>\n";
+	}
+}
+
+# JA 17,20.8.02
+#
+# This will print out the name of a taxon, its publication info, and its first parent
+# for distinguishing between taxon of the same name
+# Assumes correct publication info is conveniently in the record itself
+#   I.E. data from getTaxon($dbt,'taxon_name'=>$taxon_name,'get_reference'=>1) -- see function for details
+# 
+# it returns some HTML to display the authority information.
+sub formatAuthorityLine	{
+    my $dbt = shift;
+    my $taxon = shift;
+	my $authLine;
+
+	# Print the name
+	# italicize if genus or species.
+	if ( $taxon->{'taxon_rank'} =~ /species|genus/) {
+		$authLine .= "<i>" . $taxon->{'taxon_name'} . "</i>";
+	} else {
+		$authLine .= $taxon->{'taxon_name'};
+	}
 	
-	print main::stdIncludes("std_page_bottom");
+	# If the authority is a PBDB ref, retrieve and print it
+    my $pub_info = Reference::formatShortRef($taxon);
+    if ($pub_info !~ /^\s*$/) {
+        $authLine .= ', '.$pub_info;
+    }
+
+	# Print name of higher taxon JA 10.4.03
+	# Get the status and parent of the most recent opinion
+	# shortened by calling selectMostRecentParentOpinion 5.4.04
+    # shortened by calling getMostRecentParentOpinion 4/20/2005 PSmore using classification function
+    my %parents = %{Classification::get_classification_hash($dbt,'parent',[$taxon->{'taxon_no'}],'names')};
+
+	if ( $parents{$taxon->{'taxon_no'}})	{
+		$authLine .= " [".$parents{$taxon->{'taxon_no'}}."]";
+	}
+
+	return $authLine;
 }
 
 # end of Taxon.pm
