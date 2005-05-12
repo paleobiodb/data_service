@@ -48,14 +48,15 @@ sub processLookup	{
 	if ( ! $min_interval_name )	{
 		$eml_min_interval = $eml_max_interval;
 		$min_interval_name = $max_interval_name;
-	} elsif ( ! $max_interval_name )	{
+	}
+    if ( ! $max_interval_name )	{
 		$eml_max_interval = $eml_min_interval;
 		$max_interval_name = $min_interval_name;
 	}
 
     $max_interval_no = getIntervalNo($dbt,$eml_max_interval,$max_interval_name);
     $min_interval_no = getIntervalNo($dbt,$eml_min_interval,$min_interval_name);
-    
+   
     # if numbers weren't found for either interval, bomb out!
     if (!$max_interval_no || !$min_interval_no) {
 		return;
@@ -814,8 +815,11 @@ sub getIntervalNo {
     my $dbh = $dbt->dbh;
 
 	my $sql = "SELECT interval_no FROM intervals ".
-              " WHERE eml_interval=".$dbh->quote($eml).
-              " AND interval_name=".$dbh->quote($name);
+              " WHERE interval_name=".$dbh->quote($name);
+    if ($eml) {
+        $sql .= " AND eml_interval=".$dbh->quote($eml);
+    }
+              
 	my $row = ${$dbt->getData($sql)}[0];
 	if ($row) {
         return $row->{'interval_no'};
