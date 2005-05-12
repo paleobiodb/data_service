@@ -51,10 +51,10 @@
 
 <tr>
 	<th align=right>Authorizer:</th>
-	<td><input id="authorizer" name="authorizer" size=18 onKeyUp="doCompleteAuthorizer(event, authorizerNames());"></td>
+	<td><input id="authorizer_reversed" name="authorizer_reversed" size=18 onKeyUp="doComplete(event, this, authorizerNames());"></td>
 
 	<th align=right>Enterer:</th>
-	<td><input id="enterer" name="enterer" size=18 onKeyUp="doCompleteEnterer(event, entererNames());"></td>
+	<td><input id="enterer_reversed" name="enterer_reversed" size=18 onKeyUp="doComplete(event, this, entererNames());"></td>
 </tr>
 
 <tr>
