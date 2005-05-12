@@ -1,9 +1,4 @@
 package Session;
-
-
-require Exporter;
-@ISA = qw(Exporter);
-
 use DBI;
 use CookieFactory;
 use Class::Date qw(date localdate gmdate now);
@@ -12,22 +7,21 @@ use Debug;
 use Globals;
 use Constants;
 use DBTransactionManager;
-
-
-# I THINK THESE ARE BOGUS. THERE ARE NO SUCH METHODS/VARIABLES IN THIS MODULE
-@EXPORT = qw(setName setHref toHTML);
-@EXPORT_OK = qw($test_val);
+use Data::Dumper;
+use CGI::Carp;
 
 my $sql;
 
 sub new {
   my $class = shift;
+  my $dbt = shift;
+  
   my $self = {};
   bless $self, $class;
+  $self->{'dbt'} = $dbt;
 
   return $self;
 }
-
 
 
 # Processes the login from the submitted authorizer/enterer names.
@@ -35,79 +29,60 @@ sub new {
 #
 # modified by rjp, 3/2004.
 sub processLogin {
-
 	my $self = shift;
-	my $dbh = shift;
-	my $q = shift;
+    my $q = shift;
+	my $authorizer  = shift;
+    my $enterer = shift;
+    my $password = shift;
+
+    my $dbt = $self->{'dbt'};
+    my $dbh = $dbt->dbh;
+    
 	my $valid = 0;
+
 
 	# First do some housekeeping
 	# This cleans out ALL records in session_data older than 48 hours.
 	$self->houseCleaning( $dbh );
 
-	my $enterer = $q->param('enterer');
-	my $authorizer = $q->param('authorizer');
 
 	# We want them to specify both an authorizer and an enterer
 	# otherwise kick them out to the public site.
-	if (!($authorizer && $enterer)) {
-		return "";
-	}
-
-	# clean up the names to avoid the O'Regan bug JA 1.4.04
-	$authorizer =~ s/'/\\'/g;
-	$enterer =~ s/'/\\'/g;
-	
-	# also check that both names exist in the database.
-	my $person = Person->new();
-	if (! ($person->isValidName($enterer) &&
-		$person->isValidName($authorizer)) ) {
+	if (!$authorizer || !$enterer || !$password) {
+        carp ("Error in processLogin: no authorizer, enterer, or password");
 		return '';
 	}
-	
-	# need to reverse the login name.
-	# added by rjp, 2/17/2004 to work correctly with the new login page.
-	my $auth = $q->param('authorizer');
-	my $ent = $q->param('enterer');
-	
-	# basically takes the part after the comma and puts it in the front..
-	# so "Sepkoski, J." becomes "J. Sepkoski"
-	if ($auth =~ /,/) {
-		$auth =~ s/^\s*(.*)\s*,\s*(.*)\s*$/$2 $1/;
-		$q->param(authorizer => $auth);
-	}
-	
-	if ($ent =~ /,/) {
-		$ent =~ s/^\s*(.*)\s*,\s*(.*)\s*$/$2 $1/;
-		$q->param(enterer => $ent);
-	}
-	
 
+	# also check that both names exist in the database.
+	if (! Person::checkName($dbt,$enterer) || ! Person::checkName($dbt,$authorizer)) {
+        carp ("Error in checkName: no authorizer, enterer");
+		return '';
+	}
+
+    my ($sql,@results,$authorizer_row,$enterer_row);
 	# Get info from database on this authorizer.
-	$sql =	"SELECT * FROM person " .
-			 "WHERE name = '".$q->param("authorizer")."' ";
-	
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	
-	$sth->execute();
-	
-	if ( $sth->rows ) {
+	$sql =	"SELECT * FROM person WHERE name=".$dbh->quote($authorizer);
+    @results =@{$dbt->getData($sql)};
+    $authorizer_row  = $results[0];
 
-		my $rs = $sth->fetchrow_hashref ( );
+	# Get info from database on this enterer.
+	$sql =	"SELECT * FROM person WHERE name=".$dbh->quote($enterer);
+    @results =@{$dbt->getData($sql)};
+    $enterer_row  = $results[0];
 
+    if ($authorizer_row) {
 		# Check the password
-		my $password = $rs->{password};
-		my $plaintext = $rs->{plaintext};
+		my $db_password = $authorizer_row->{'password'};
+		my $plaintext = $authorizer_row->{'plaintext'};
 
 		# First try the plain text version
-		if ( $plaintext eq $q->param("password") && $plaintext ne "") { 
-			$valid = 1; # VALID LOGIN!
+		if ( $plaintext && $plaintext eq $password) {
+			$valid = 1; 
 			# If that worked but there is still an old encrypted password,
 			#   zorch that version to make sure it is never used again
 			#   JA 12.6.02
-			if ($password ne "")	{
-				$sql =	"UPDATE person SET password = '' ".
-						"WHERE person_no = ".$rs->{person_no};
+			if ($db_password ne "")	{
+				$sql =	"UPDATE person SET password='' WHERE person_no = ".$authorizer_row->{'person_no'};
 				$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 			}
 		# If that didn't work and there is no plain text password,
@@ -115,23 +90,21 @@ sub processLogin {
 		} elsif ($plaintext eq "") {
 			# Legacy: Test the encrypted password
 			# For encrypted passwords
-			my $salt = substr ( $password, 0, 2);
-			my $encryptedPassword = crypt ( $q->param("password"), $salt );
+			my $salt = substr ( $db_password, 0, 2);
+			my $encryptedPassword = crypt ( $password, $salt );
 
-			if ( $password eq $encryptedPassword ) {
-				$valid = 1; # VALID LOGIN!
+			if ( $db_password eq $encryptedPassword ) {
+				$valid = 1; 
 				# Mysteriously collect their plaintext password
-				$sql =	"UPDATE person SET plaintext = '".$q->param("password")."' ".
-						" WHERE person_no = ".$rs->{person_no};
+				$sql =	"UPDATE person SET password='',plaintext=".$dbh->quote($password).
+						" WHERE person_no = ".$authorizer_row->{person_no};
 				$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 			}
 		}
 
 		# If valid, do some stuff
 		if ( $valid ) {
-
 			my $cf = CookieFactory->new();
-
 			# Create a unique ID (22 chars)
 			$session_id = $cf->getUniqueID();
 
@@ -143,58 +116,38 @@ sub processLogin {
 
 			# Are they superuser?
 			my $superuser = 0;
-			if ( $rs->{superuser} && $rs->{is_authorizer} && $q->param("enterer") eq $q->param("authorizer") ) { $superuser = 1; }
+			if ( $authorizer_row->{'superuser'} && $authorizer_row->{'is_authorizer'} && 
+                 $q->param("enterer") eq $q->param("authorizer") ) { 
+                 $superuser = 1; 
+            }
 
 			# Store the session data into the db
 			# The research groups are stored so as not to do many db lookups
-
-			# first clean up the names to avoid the O'Regan bug
-			#   JA 24.8.03
-			my $authorizer = $q->param("authorizer");
-			my $enterer = $q->param("enterer");
-			$authorizer =~ s/'/\\'/g;
-			$enterer =~ s/'/\\'/g;
-
-			
-			# record the authorizer_no and enterer_no
-			$sth = $dbh->prepare("SELECT person_no FROM person WHERE name = ?");
-
-			$sth->execute($authorizer);
-			my @results = $sth->fetchrow_array();
-			$self->{authorizer_no} = $results[0];
-			
-			$sth->execute($enterer);
-			@results = $sth->fetchrow_array();
-			$self->{enterer_no} = $results[0];
-			
-			$sth->finish();
-			
-			
-			# record the authorizer and enterer names
-			$self->{authorizer} = $authorizer;
-			$self->{enterer} = $enterer;
-
+			$self->{enterer_no} = $enterer_row->{'person_no'};
+            $self->{enterer} = $enterer_row->{'name'};
+            $self->{authorizer_no} = $authorizer_row->{'person_no'};
+            $self->{authorizer} = $authorizer_row->{'name'};
 			
 			# Insert all of the session data into a row in the session_data table
 			# so we will still have access to it the next time the user tries to do something.
 			#
-			$sql =	"INSERT INTO session_data ( 
-						session_id, authorizer, authorizer_no, 
-						enterer, enterer_no, 
-						superuser, marine_invertebrate, 
-						micropaleontology, paleobotany, taphonomy, vertebrate )
-						
-					VALUES (   
-					'$session_id', '$authorizer', '" . $self->{authorizer_no} . "',
-					'$enterer', '" . $self->{enterer_no} . "' , 
-					'$superuser', " .	
-					$rs->{marine_invertebrate} . ", " . $rs->{micropaleontology} . ", " . $rs->{paleobotany} . ", " .
-					$rs->{taphonomy} . ", " . $rs->{vertebrate} . " ) ";
-					
+            my %row = ('session_id'=>$session_id,
+                       'authorizer'=>$self->{'authorizer'},
+                       'authorizer_no'=>$self->{'authorizer_no'},
+                       'enterer'=>$self->{'enterer'},
+                       'enterer_no'=>$self->{'enterer_no'},
+                       'superuser'=>$superuser,
+                       'marine_invertebrate'=>$authorizer_row->{'marine_invertebrate'}, 
+                       'micropaleontology'=>$authorizer_row->{'micropaleontology'},
+                       'paleobotany'=>$authorizer_row->{'paleobotany'},
+                       'taphonomy'=>$authorizer_row->{'taphonomy'},
+                       'vertebrate'=>$authorizer_row->{'vertebrate'});
+           
+            my $keys = join(",",keys(%row));
+            my $values = join(",",map { $dbh->quote($_) } values(%row));
+            
+			$sql =	"INSERT INTO session_data ($keys) VALUES ($values)";
 			$dbh->do( $sql ) || die ( "$sql<HR>$!" );
-
-			$sth->finish ( );
-			
 	
 			return $cookie;
 		}
@@ -446,7 +399,6 @@ sub put {
 	my $value = shift;
 
 	$self->{$key} = $value;	
-	$stateChanged = 1;	# Unsure what this is --tone
 }
 
 # Gets a variable from memory
@@ -455,43 +407,6 @@ sub get {
 	my $key = shift;
 
 	return $self->{$key};
-}
-
-# pass this a person number and it 
-# will return the person's name
-sub personNameForNumber {
-	my $self = shift;
-	
-	my $num = shift;
-	
-	if (! $num) {
-		return '';
-	}
-	
-	my $sql = DBTransactionManager->new();
-	#my $result = $sql->getSingleSQLResult("SELECT name FROM person WHERE person_no = '$num'");
-	my $result = ${$sql->getData("SELECT name FROM person WHERE person_no = '$num'")}[0]->{name};
-	
-	return $result;
-}
-
-sub authorizerNumber {
-	my $self = shift;
-	
-	return $self->{'authorizer_no'};
-}
-
-sub entererNumber {
-	my $self = shift;
-	
-	return $self->{'enterer_no'};
-}
-
-
-# returns the current reference number
-sub currentReference {
-	my $self = shift;
-	return $self->{reference_no};
 }
 
 # Is the current user superuser?  This is true
@@ -514,54 +429,6 @@ sub guest {
 
 	return ( $self->{authorizer} eq "Guest" );
 }
-
-
-# rjp, 3/2004
-# This was made a more generic function since it may be used my multiple
-# forms - currently this is just the authority and opinion forms (as of 3/24/2004)
-#
-# Pass this two aguments:
-# First is a boolean which is true if they're editing a *NEW* record.  This is
-# usually called $isNewEntry or something like that.
-#
-# Second argument is the authorizer_no of the record, if it already exists.
-#
-# Returns a boolean - true if they can edit any field in this form, and false
-# otherwise.
-sub editAnyFormField {
-	my $self = shift;
-	
-	my $isNewEntry = shift;
-	my $authorizer_no = shift;
-	
-	my $editAny = FALSE;
-	
-	if ($isNewEntry) {
-		$editAny = TRUE;	# new entries can edit any field.
-	} else {
-		# edits of pre-existing records have more restrictions. 
-	
-		# if the authorizer of the record doesn't match the current
-		# authorizer, then *only* let them edit empty fields.
-		$editAny = FALSE;
-	
-		# if the authorizer of the record matches the authorizer
-		# who is currently trying to edit this data, then allow them to change
-		# any field.
-		if ($self->authorizerNumber() == $authorizer_no) {
-			$editAny = TRUE;
-		}
-		
-		if ($self->isSuperUser()) {
-			# super user can edit any field no matter what.
-			$editAny = TRUE;	
-		}
-	}
-	
-	return $editAny;
-}
-
-
 
 # returns a string of all keys and values set in this
 # session.  intended for debugging purposes
