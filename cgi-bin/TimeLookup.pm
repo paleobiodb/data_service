@@ -1,6 +1,9 @@
 package TimeLookup;
 
-$DEBUG = 0;
+use Data::Dumper;
+use CGI::Carp;
+
+#$DEBUG = 0;
 
 # written by JA 12.7.03
 # WARNING: the logic assumes you want all intervals falling ENTIRELY WITHIN
@@ -10,12 +13,6 @@ my $dbh;
 my $dbt;
 
 sub cleanArrays	{
-
-	$eml_max_interval = "";
-	$max_interval_name = "";
-	$eml_min_interval = "";
-	$min_interval_name = "";
-
 # this is the master list of interval numbers to be used
 	@intervals = ();
 # without making this local, repeated calls to TimeLookup will accrete
@@ -31,7 +28,6 @@ sub cleanArrays	{
 	%yesints = ();
 	%immediatemax = ();
 	%immediatemin = ();
-
 }
 
 sub processLookup	{
@@ -41,12 +37,13 @@ sub processLookup	{
 
 	&cleanArrays();
 
-	$eml_max_interval = shift;
-	$max_interval_name = shift;
-	$eml_min_interval = shift;
-	$min_interval_name = shift;
+	my $eml_max_interval = shift;
+	my $max_interval_name = shift;
+	my $eml_min_interval = shift;
+	my $min_interval_name = shift;
 
 	my $return_type = shift;
+    my $lookup_type = shift;
 
 	if ( ! $min_interval_name )	{
 		$eml_min_interval = $eml_max_interval;
@@ -56,10 +53,42 @@ sub processLookup	{
 		$max_interval_name = $min_interval_name;
 	}
 
-	&findBestScales();
-	my $bestbothscale = &getIntervalRange();
-	&findImmediateCorrelates();
-	&mapIntervals();
+    $max_interval_no = getIntervalNo($dbt,$eml_max_interval,$max_interval_name);
+    $min_interval_no = getIntervalNo($dbt,$eml_min_interval,$min_interval_name);
+    
+    # if numbers weren't found for either interval, bomb out!
+    if (!$max_interval_no || !$min_interval_no) {
+		return;
+    }
+
+    # push the numbers onto the master list
+    push @intervals, $max_interval_no;
+    $yesints{$max_interval_no} = 'Y';
+	push @intervals, $min_interval_no if ($max_interval_no != $min_interval_no);
+    $yesints{$min_interval_no} = 'Y';
+
+    my $bestbothscale;
+    if ($lookup_type == 1) {
+        ($ub,$lb) = findBoundaries($dbh,$dbt);
+        my ($max_boundary,$min_boundary);
+
+        $max_boundary = $lb->{$max_interval_no};
+        $min_boundary = $ub->{$min_interval_no};
+        if (!$max_boundary || !$min_boundary) {
+            main::dbg("Could not find boundaries $max_boundary, $min_boundary\n");
+            return;    
+        } 
+        main::dbg("Lookup type 1 with boundaries $max_boundary, $min_boundary\n");
+	    &findBestScales();
+	    &getIntervalRangeByBoundary($max_boundary,$min_boundary);
+    } else {
+        main::dbg("Lookup type 0\n");
+    	&findBestScales();
+	    &getIntervalRangeByNo($max_interval_no,$min_interval_no);
+	    &findImmediateCorrelates();
+        &mapIntervalsUpward();
+	    &mapIntervals();
+    }
 	if ( $return_type eq "intervals" )	{
 		return \@intervals;
 	}
@@ -372,7 +401,6 @@ sub findBoundaries	{
 	&findImmediateCorrelates();
 
 
-    use Data::Dumper;
 #    print "<br><br>bestincludedmax".Dumper(\%bestincludedmax); 
 #    print "<br><br>bestscale".Dumper(\%bestscale); 
 #    print "<br><br>bestboundary".Dumper(\%bestboundary); 
@@ -501,7 +529,7 @@ sub findBoundaries	{
 		}
 	# now find the upper boundary, again doing nothing if there already
 	#  is a defined value
-		my $j = $i;
+		$j = $i;
 		while ( $upperbound{$i} eq "" && $j > 0 )	{
 			my $lastj = $j;
 			$j = $immediatemin{$j};
@@ -516,7 +544,8 @@ sub findBoundaries	{
     # in the composite scale by deleting intervals that don't have any interval pointing
     # to them.  
     if ($skip_orphaned_intervals) {
-        while(($k,$v)=each %bestnext) {
+        #while(($k,$v)=each %bestnext) {
+        foreach $v (values %bestnext) {
             $refbestnext{$v}=1;
         }
         for my $int_no (keys %lowerbound) {
@@ -568,7 +597,7 @@ sub findBestScales	{
     for my $corr ( @corrs )	{
         if ($pubyr{$corr->{scale_no}} > $bestscaleyr{$corr->{interval_no}}) {
         #if ((!$scale_no && ($pubyr{$corr->{scale_no}} > $bestscaleyr{$corr->{interval_no}})) ||
-        #    ( $scale_no && ($corr->{scale_no}==$scale_no)))	{
+        #    ( $scale_no && ($corr->{scale_no}==$scale_no)))	
             $bestscaleyr{$corr->{interval_no}} = $pubyr{$corr->{scale_no}};
             $bestscale{$corr->{interval_no}} = $corr->{scale_no};
             if ( $corr->{next_interval_no} > 0 )	{
@@ -578,13 +607,13 @@ sub findBestScales	{
             #  aren't the immediatemax of anything in the most
             #  recent time scales
             $bestincludedmax{$corr->{max_interval_no}} = $corr->{interval_no};
-                }
-                if ( $pubyr{$corr->{scale_no}} > $bestboundyr{$corr->{interval_no}} && $corr->{lower_boundary} > 0 )	{
-                    $bestboundyr{$corr->{interval_no}} = $pubyr{$corr->{scale_no}};
-                    $bestboundary{$corr->{interval_no}} = $corr->{lower_boundary};
-                }
-            }
-            #; Hack for Confidence.pm.  If we specifiy a scale no, don't use the composite interval estimates
+        }
+        if ( $pubyr{$corr->{scale_no}} > $bestboundyr{$corr->{interval_no}} && $corr->{lower_boundary} > 0 )	{
+            $bestboundyr{$corr->{interval_no}} = $pubyr{$corr->{scale_no}};
+            $bestboundary{$corr->{interval_no}} = $corr->{lower_boundary};
+        }
+    }
+    #; Hack for Confidence.pm.  If we specifiy a scale no, don't use the composite interval estimates
     if ($scale_no) {
         for my $corr ( @corrs )	{
             if ($corr->{'scale_no'} == $scale_no) {
@@ -600,166 +629,199 @@ sub findBestScales	{
     }
 }
 
-sub getIntervalRange	{
+# Boundaries are given in millions of years
+# This will find all intervals between the two boundaries specified
+# and place those intervals into the globabl intervals hash
+sub getIntervalRangeByBoundary {
+    my ($max_boundary,$min_boundary);
+    if ($_[0] > $_[1]) {
+        $max_boundary = $_[0];
+        $min_boundary = $_[1];
+    } else {
+        $max_boundary = $_[1];
+        $min_boundary = $_[0];
+    }
+    main::dbg("Using numbers - max is $max_boundary and min is $min_boundary");
 
-	my $bestbothscale;
+    # Changed to use the nicer findBoundaries function, 
+    # instead of trying to figure out boundaries on its own, PS 04/08/2005
+    ($upperbound,$lowerbound) = findBoundaries($dbh,$dbt);
+    while (my ($i,$lbound) = each %$lowerbound) {
+        my $ubound = $upperbound->{$i};
+        if ($lbound && $ubound && $lbound <= $max_boundary && $ubound >= $min_boundary) {
+            push @intervals,$i;
+        }
+    }
+}
 
-# BEGIN if input was numeric values
-	if ( $max_interval_name > 0 && $min_interval_name > 0 )	{
 
-# rename the "names" as boundaries, just for fun
-		$max_boundary = $max_interval_name;
-		$min_boundary = $min_interval_name;
+# This function will find all intervals that an interval maps into
+sub getMaxIntervals {
+    my $dbt = shift;
+    my $interval_no = shift;
+    if (!%immediatemax) {
+        &findImmediateCorrelates();
+    }
+    my @intervals = ();
+    my @queue = ();
+    push @queue, $interval_no;
+    while (@queue) {
+        my $i = pop(@queue);
+        if (my $j = $immediatemax{$i}) {
+            push @intervals,$j;
+            push @queue,$j;
+        }    
+        if (my $j = $immediatemin{$i}) {
+            push @intervals,$j;
+            push @queue,$j;
+        }    
+    }
+    return @intervals;
+}
 
-# figure out the number of intervals
-		$sql = "SELECT interval_no FROM intervals";
-		my @results = @{$dbt->getData($sql)};
 
-# for each interval, get the next interval and lower boundary from
-#   the best scale
-		for $r ( 0..$#results )	{
-			$i = $r + 1;
-			if ( $bestscale{$i} > 0 )	{
+# Separated out of the old getIntervalRange, which did multiple separate things before PS 04/08/2005
+# This will get all the intervals that lie between two intervals on the same scale
+# and add those intervals to the global $yesints hash and @intervals hash
+sub getIntervalRangeByNo {
+    my ($orig_max_interval_no, $orig_min_interval_no) = @_;
 
-				$sql = "SELECT next_interval_no,lower_boundary FROM correlations WHERE interval_no=" . $i . " AND scale_no=" . $bestscale{$i};
-				my @intdata = @{$dbt->getData($sql)};
-
-# now get the lower boundary of the next interval
-				$sql = "SELECT lower_boundary FROM correlations WHERE interval_no=" . $intdata[0]->{next_interval_no} . " AND scale_no=" . $bestscale{$i};
-				my @nextlb = @{$dbt->getData($sql)};
-
-# if both boundaries are defined, compare them to the max and min boundaries
-				if ( $intdata[0]->{lower_boundary} > 0 && $nextlb[0]->{lower_boundary} > 0 )	{
-	# if the boundaries are within the max and min, beatify the interval
-					if ( $intdata[0]->{lower_boundary} <= $max_boundary && $nextlb[0]->{lower_boundary} >= $min_boundary )	{
-						push @intervals, $i;
-					}
-				}
-			}
-
-		}
-
-	} # END processing if input was numeric values
-
-# BEGIN if input was interval names and not numbers
-	if ( $max_interval_name =~ /[A-Za-z]/ )	{
-
-# find the scale no for the max interval
-	my $sql = "SELECT interval_no FROM intervals WHERE eml_interval='";
-	$sql .= $eml_max_interval . "' AND interval_name='";
-	$sql .= $max_interval_name . "'";
-	my @results = @{$dbt->getData($sql)}[0];
-	my $max_interval_no;
-	if ( @results )	{
-		$max_interval_no = $results[0]->{interval_no};
-	}
-
-# find the scale no for the min interval
-	my $sql = "SELECT interval_no FROM intervals WHERE eml_interval='";
-	$sql .= $eml_min_interval . "' AND interval_name='";
-	$sql .= $min_interval_name . "'";
-	@results = @{$dbt->getData($sql)}[0];
-	my $min_interval_no;
-	if ( @results )	{
-		$min_interval_no = $results[0]->{interval_no};
-	}
-
-# if numbers weren't found for either interval, bomb out!
-	if ( ! $max_interval_no && ! $min_interval_no )	{
-		return;
-	}
-
-# push the numbers onto the master list
-    if ($max_interval_no) {
-    	push @intervals, $max_interval_no;
-    }    
-	if ( $max_interval_no != $min_interval_no && ( $min_interval_no > 0 ) )	{
-		push @intervals, $min_interval_no;
-	}
-
-# find all scales including both numbers or (if there is one) the number
-    my @scales;
-    if ($max_interval_no) {
-        $sql = "SELECT scale_no FROM correlations WHERE interval_no=";
-        $sql .= $max_interval_no;
-        @scales = @{$dbt->getData($sql)};
+    # Search for scales the intervals both belong to, and use those if they exist
+    my $bestbothscale = findBestBothScale($orig_max_interval_no,$orig_min_interval_no);
+    my ($commonscale, $straggler_no, $max_interval_no, $min_interval_no);
+    # If they don't belong to a common scale, then maybe one of the intervals belongs to
+    # a scale thats common with the other interval
+    if (!$bestbothscale) {
+        @max_parents = getMaxIntervals($dbt,$orig_max_interval_no);
+        @min_parents = getMaxIntervals($dbt,$orig_min_interval_no);
+        foreach $max_parent (@max_parents) {
+            last if ($commonscale); 
+            $commonscale = findBestBothScale($max_parent,$orig_min_interval_no);
+            if ($commonscale) {
+                main::dbg("Found a common scale $commonscale between $orig_min_interval_no and parent $max_parent of $orig_max_interval_no");
+                $max_interval_no=$max_parent;
+                $min_interval_no=$orig_min_interval_no;
+                $bestbothscale = $commonscale;
+                $straggler_no = $orig_max_interval_no;
+            }
+        }
+        foreach $min_parent (@min_parents) {
+            last if ($commonscale); 
+            $commonscale = findBestBothScale($orig_max_interval_no,$min_parent);
+            if ($commonscale) {
+                main::dbg("Found a common scale $commonscale between $orig_max_interval_no and parent $min_parent of $orig_min_interval_no");
+                $max_interval_no=$orig_max_interval_no;
+                $min_interval_no=$min_parent;
+                $bestbothscale = $commonscale;
+                $straggler_no = $orig_min_interval_no;
+            }
+        }
+    } else {
+        $max_interval_no =  $orig_max_interval_no;
+        $min_interval_no =  $orig_min_interval_no;
     }
 
-    if ($min_interval_no) {
-        $sql = "SELECT scale_no FROM correlations WHERE interval_no=";
-        $sql .= $min_interval_no;
-        push @scales, @{$dbt->getData($sql)};
-    }
-
-# if the scale's pubyr is most recent, record the scale number
-	my %seen = ();
-	my $maxyr;
-	for my $scale ( @scales )	{
-		$seen{$scale->{scale_no}}++;
-		if ( $pubyr{$scale->{scale_no}} > $maxyr && $seen{$scale->{scale_no}} == 2 )	{
-			$bestbothscale = $scale->{scale_no};
-			$maxyr = $pubyr{$scale->{scale_no}};
+	if ($bestbothscale)	{
+		if ($max_interval_no == $min_interval_no) {
+			return;
 		}
-	}
-
-# WARNING: you could get past this point even having selected two periods
-#  from different scales; if you did that the right behavior is to return
-#  let the user do this anyway because they might want exactly those two time
-#  intervals, which is OK; bestbothscale will be used to return an error code
-#  by returnCollectionList
-
-# get the "next" (youngest) interval nos for each interval in the scale
-	if ( $bestbothscale )	{
 		$sql = "SELECT interval_no,next_interval_no FROM correlations WHERE ";
 		$sql .= "scale_no=" . $bestbothscale;
 		@results = @{$dbt->getData($sql)};
 		for my $r ( @results )	{
 			$next{$r->{interval_no}} = $r->{next_interval_no};
 		}
-
-# using the best scale, run up from the max to the min and add all the intervals
+		my $found_range = 0;
+        my $direction = 0;
+        # using the best scale, run up from the max to the min and add all the intervals
 		my $nowat = $max_interval_no;
-		while ( $nowat != $min_interval_no && $nowat > 0 )	{
+		while ($nowat = $next{$nowat}) {
+			if ($nowat == $min_interval_no)  {
+				$found_range = 1;
+                $direction = 1;
+				last;
+			}
 			push @tempintervals, $nowat;
-			$nowat = $next{$nowat};
 		}
 
-# if the min wasn't run across, maybe they're reversed, so go the other way
-		if ( $nowat < 1 )	{
-			my $nowat = $min_interval_no;
+        # if the min wasn't run across, maybe they're reversed, so go the other way
+		if ( !$found_range) {
+			$nowat = $min_interval_no;
 			@tempintervals = ();
-			while ( $nowat != $max_interval_no && $nowat > 0 )	{
+			while ( $nowat = $next{$nowat})	{
+				if ($nowat == $max_interval_no) {
+					$found_range = 1;
+                    $direction = 0;
+					last;
+				}
 				push @tempintervals, $nowat;
-				$nowat = $next{$nowat};
 			}
 		}
 
 # if the max wasn't run across, something is seriously wrong, so throw out
 #   the temporary list of intervals and go on
-		if ( $nowat < 1 )	{
+		if (!$found_range) {
 			@tempintervals = ();
+			carp("Something wrong in getIntervalRangeByNo: Could not find range of interval values
+for scale $bestbothscale and intervals $max_interval_no $min_interval_no"); 
 		} elsif ( @tempintervals )	{
+            if ($straggler_no && $bestscale{$straggler_no}) {
+                $sql = "(SELECT c2.interval_no, c2.next_interval_no, 2.max_interval_no, c2.min_interval_no FROM correlations c1, correlations c2 WHERE c1.interval_no=$straggler_no AND c1.max_interval_no=c2.max_interval_no AND c2.scale_no=$bestscale{$straggler_no})". 
+                       " union ".
+                my $sql = "SELECT interval_no, next_interval_no, max_interval_no, min_interval_no ". 
+                           " FROM correlations c1, c2 WHERE c1. c1.scale_no=$bestscale{$straggler_no}";
+                my @results = @{$dbt->getData($sql)};
+                main::dbg("Looking for stragglers in scale $bestscale{$straggler_no} for straggler $straggler_no and direction $direction");
+                my %next;
+		        for my $r ( @results )	{
+                    if ($direction == 0) {
+			            $next{$r->{interval_no}} = $r->{next_interval_no};
+                        main::dbg("$r->{interval_no} --> $r->{next_interval_no}, ");
+                    } else {
+			            $next{$r->{next_interval_no}} = $r->{interval_no};
+                        main::dbg("$r->{next_interval_no} --> $r->{interval_no}, ");
+                    }
+		        }
+                $nowat = $straggler_no;
+                while (($nowat = $next{$nowat}) && 
+                       (($immediatemax{$nowat} && $immediatemax{$nowat} == $immediatemax{$straggler_no}) || 
+                        ($immediatemin{$nowat} && $immediatemin{$nowat} == $immediatemin{$straggler_no}))) {
+                    push @tempintervals, $nowat;
+                    main::dbg("Found straggler $nowat");
+                }
+            } 
+        
 # only now add the temp list to the master list of intervals in the range
 			push @intervals, @tempintervals;
 		}
-	}
-
-	} # END of processing if input was interval names
-
-# if the search didn't match anything, bomb out
-	if ( ! @intervals )	{
-		return;
-	}
 
 # note that we're not doing a proper return of $yesints and @intervals
 # because we're just setting module globals (call me lazy)
-
 # for convenience, make a hash array where the keys are the intervals
-	for my $i ( @intervals )	{
-		$yesints{$i} = "Y";
-	}
-	return $bestbothscale;
+        for my $i ( @intervals )	{
+            $yesints{$i} = "Y";
+        }
+	} else {
+        main::dbg("Could not find bestbothscale for $max_interval_no, $min_interval_no in function getIntervalRangeByNo");
+    }
+}
 
+# A trivial function PS 04/08/2005
+sub getIntervalNo {
+    my $dbt = shift;
+    my $eml = shift;
+    my $name = shift;
+    my $dbh = $dbt->dbh;
+
+	my $sql = "SELECT interval_no FROM intervals ".
+              " WHERE eml_interval=".$dbh->quote($eml).
+              " AND interval_name=".$dbh->quote($name);
+	my $row = ${$dbt->getData($sql)}[0];
+	if ($row) {
+        return $row->{'interval_no'};
+	} else {
+        return undef;
+    }
 }
 
 # find the immediate max and min correlates of each interval for use in
@@ -784,6 +846,90 @@ sub findImmediateCorrelates	{
 
 }
 
+sub findBestBothScale{
+    my $max_interval_no = shift;
+    my $min_interval_no = shift;
+    # find the scale no for the max interval
+	my $sql = "SELECT scale_no FROM correlations WHERE interval_no=$max_interval_no";
+	my @max_scales = map {$_->{'scale_no'}} @{$dbt->getData($sql)};
+
+    # find the scale no for the min interval
+	$sql = "SELECT scale_no FROM correlations WHERE interval_no=$min_interval_no";
+	my @min_scales = map {$_->{'scale_no'}} @{$dbt->getData($sql)};
+
+    # if the scale's pubyr is most recent, record the scale number
+    my $bestbothscale;
+    my $max_pubyr = -1;
+	for my $max_scale (@max_scales) {
+	    for my $min_scale (@min_scales) {
+            if ($min_scale == $max_scale && $pubyr{$max_scale} > $max_pubyr) {
+                $bestbothscale = $max_scale;
+                $max_pubyr = $pubyr{$max_scale};
+            }
+        }
+    }    
+    return $bestbothscale;
+}
+
+# This finds upward mappings i.e. epochs implied by stages.  The algorithm is such:
+# If all the intervals in a particular scale in a particular broader interval (epoch/etc) are
+# present, then include that broader interval as well.  Do this repeatedly until we can't
+# find any more intervals to include
+# A problem might occur if we have a really tiny scale that doesn't cover all of
+# a broader interval. No way to reliable test for this, may have to find these
+# and exclude them manually - PS 04/13/2005
+sub mapIntervalsUpward {
+    my @new_intervals; 
+    my $first_time = 1;
+    while (@new_intervals || $first_time) {
+        my $intervals_str;
+        if ($first_time) {
+            $intervals_str = join(",",@intervals); 
+        } else {
+            $intervals_str = join(",",@new_intervals);
+        }
+        $first_time = 0;
+        $sql = "(select c2.scale_no,c2.interval_no, c2.max_interval_no, c2.min_interval_no from correlations c1, correlations c2 where c1.interval_no in ($intervals_str) and c1.max_interval_no=c2.max_interval_no)". 
+               " union ".
+               "(select c2.scale_no,c2.interval_no, c2.max_interval_no, c2.min_interval_no from correlations c1, correlations c2 where c1.interval_no in ($intervals_str) and c1.max_interval_no=c2.max_interval_no)"; 
+       
+#            print "classify upwards $sql";
+        my @results = @{$dbt->getData($sql)};
+        my %interval_set = ();
+        foreach my $row (@results) {
+            $interval_set{$row->{'max_interval_no'}}{$row->{'scale_no'}}{$row->{'interval_no'}} = 1 if ($row->{'max_interval_no'});
+            $interval_set{$row->{'min_interval_no'}}{$row->{'scale_no'}}{$row->{'interval_no'}} = 1 if ($row->{'min_interval_no'});
+        }
+#            print "YesInts".Dumper(\%yesints);
+        # Reset new_intervals.  The behavior is:
+        #  if we find new upward intervals, we want to continue looking upwards, as there might
+        #  be other intervals that we have yet to map. if we don't find any new upward intervals,
+        #  then we should stop looking, we're done
+        @new_intervals = ();
+        while(my ($higher_int,$scales)=each %interval_set) {
+            while (my ($scale_no,$children_ints) = each %$scales) {
+                # We add an interval if all intervals that map into that interval (in the same scale) are 
+                # already included, thus implying that this interval should be included as well
+                my $found = scalar(keys(%$children_ints));
+#                print "FOUND higher_int $higher_int with found_cnt = $found\n";
+                foreach $child_int (keys(%$children_ints)) {
+#                    print "Found child $child_int for higher int $higher_int\n";
+                    if ($yesints{$child_int}) {
+                        $found--;
+                    }
+                }
+                #print "Found leftofter $found\n";
+                if ($found == 0) {
+                    main::dbg("Adding interval $higher_int because all intervals in scale $scale_no that map into it are included");
+                    push @new_intervals, $higher_int;
+                    push @intervals, $higher_int;
+                    $yesints{$higher_int}='Y';
+                }
+            }
+        }
+    }
+}
+
 # check every known interval to see if it maps to the master list
 # logic: if the interval's max and min correlates both map to the list,
 #  the interval is entirely within the queried interval
@@ -791,58 +937,59 @@ sub mapIntervals	{
 
 	my $max;
 	my $min;
-
+   
 	for my $i ( 1..$ninterval )	{
 		if ( $bestscale{$i} > 0 )	{
-		$max = $immediatemax{$i};
-		$min = $immediatemin{$i};
+            $max = $immediatemax{$i};
+            $min = $immediatemin{$i};
 
-	# if both min and max in the "official" list, you're golden
-		if ( $yesints{$max} && ( $yesints{$min} || $min == 0 ) )	{
-			push @tempintervals , $i;
-			$max = 0;
-			$min = 0;
-		}
-	# if not, look at the max/min intervals of the max and min
-		while ( $max > 0 )	{
-		# this could happen if a correlate isn't actually in a scale
-			if ( ! $bestscale{$max} || ( ! $bestscale{$min} && $min > 0 ) )	{
-				last;
-			}
+        # if both min and max in the "official" list, you're golden
+            if ( $yesints{$max} && ( $yesints{$min} || $min == 0 ) )	{
+                push @tempintervals , $i;
+                $max = 0;
+                $min = 0;
+            }
+        # if not, look at the max/min intervals of the max and min
+            while ( $max > 0 )	{
+            # this could happen if a correlate isn't actually in a scale
+                if ( ! $bestscale{$max} || ( ! $bestscale{$min} && $min > 0 ) )	{
+                    last;
+                }
 
 
-	# find the min correlate
-			my $lastmin = $min;
-			if ( $min > 0 )	{
-				$min = $immediatemin{$min};
-	# the min interval might have only had a max; if so check that too
-				if ( $min == 0 )	{
-					$min = $immediatemax{$lastmin};
-				}
-			} else	{
-	# even if the interval had no min, its parent might have
-				$min = $immediatemin{$max};
-			}
+        # find the min correlate
+                my $lastmin = $min;
+                if ( $min > 0 )	{
+                    $min = $immediatemin{$min};
+        # the min interval might have only had a max; if so check that too
+                    if ( $min == 0 )	{
+                        $min = $immediatemax{$lastmin};
+                    }
+                } else	{
+        # even if the interval had no min, its parent might have
+                    $min = $immediatemin{$max};
+                }
 
-	# now find the max correlate
-			$max = $immediatemax{$max};
+        # now find the max correlate
+                $max = $immediatemax{$max};
 
-	# if the "grandparents" are within the list, add the interval
-	#    we started with and bomb out
-			if ( $yesints{$max} && ( $yesints{$min} || $min == 0 ) )	{
-				push @tempintervals , $i;
-				$max = 0;
-				$min = 0;
-			}
-		}
+        # if the "grandparents" are within the list, add the interval
+        #    we started with and bomb out
+                if ( $yesints{$max} && ( $yesints{$min} || $min == 0 ) )	{
+                    push @tempintervals , $i;
+                    $max = 0;
+                    $min = 0;
+                }
+            }
+        }
 	}
-
-	}
-
 
 # add the list of correlated intervals to the list of submitted intervals
 	if ( @tempintervals )	{
-		push @intervals, @tempintervals;
+        foreach my $ti (@tempintervals) {
+		    push @intervals, $ti;
+            $yesints{$ti} = 1;
+        }
 	}
 
 }
@@ -873,29 +1020,38 @@ sub returnCollectionList	{
 sub splitInterval {
     my $dbt = shift || return ('','');
     my $interval_name = shift;
-                                                                                                                                                             
+
     my @terms = split(/ /,$interval_name);
-    $interval_name = pop(@terms);
-    my $eml = '';
-                                                                                                                                                             
-    if (scalar(@terms) == 1) {
-        $eml = 'Early/Lower' if ($terms[0] =~ /lower|early/i);
-        $eml = 'Late/Upper' if ($terms[0] =~ /late|upper/i);
-        $eml = 'Middle' if ($terms[0] =~ /middle/i);
-    } elsif(scalar(@terms) > 1) {
+    my @eml_terms;
+    my @interval_terms;
+    foreach $term (@terms) {
+        if ($term =~ /early|lower|middle|late|upper/i) {
+            push @eml_terms, $term;
+        } else {
+            push @interval_terms, $term;
+        }
+    }
+    my $interval = join(" ",@interval_terms);
+
+    my $eml;
+    if (scalar(@eml_terms) == 1) {
+        $eml = 'Early/Lower' if ($eml_terms[0] =~ /lower|early/i);
+        $eml = 'Late/Upper' if ($eml_terms[0] =~ /late|upper/i);
+        $eml = 'Middle' if ($eml_terms[0] =~ /middle/i);
+    } elsif(scalar(@eml_terms) > 1) {
         my ($eml0, $eml1);
-        $eml0 = 'early'  if ($terms[0] =~ /early|lower/i);
-        $eml0 = 'middle' if ($terms[0] =~ /middle/i);
-        $eml0 = 'late'   if ($terms[0] =~ /late|upper/i);
-        $eml1 = 'Early'  if ($terms[1] =~ /early|lower/i);
-        $eml1 = 'Middle' if ($terms[1] =~ /middle/i);
-        $eml1 = 'Late'   if ($terms[1] =~ /late|upper/i);
+        $eml0 = 'early'  if ($eml_terms[0] =~ /early|lower/i);
+        $eml0 = 'middle' if ($eml_terms[0] =~ /middle/i);
+        $eml0 = 'late'   if ($eml_terms[0] =~ /late|upper/i);
+        $eml1 = 'Early'  if ($eml_terms[1] =~ /early|lower/i);
+        $eml1 = 'Middle' if ($eml_terms[1] =~ /middle/i);
+        $eml1 = 'Late'   if ($eml_terms[1] =~ /late|upper/i);
         if ($eml0 && $eml1) {
             $eml = $eml0.' '.$eml1;
         }
     }
                                                                                                                                                              
-    return ($eml,$interval_name);
+    return ($eml,$interval);
 }
 
 # Returns an array of interval names in the correct order for a given scale
@@ -920,17 +1076,15 @@ sub getScaleOrder {
         my $sql = "SELECT MAX(interval_no) as interval_no FROM correlations WHERE scale_no=".$dbt->dbh->quote($scale_no);
         my @results = @{$dbt->getData($sql)};
         my $interval_no = $results[0]->{'interval_no'};
+        my $count = 0;
         while (1) {
             if ($count++ > 200) {die "loop";}
             unshift @scale_list, $interval_no;
             if (!exists $bestnext{$interval_no}) {
                 if ($bestscale{$interval_no} != $scale_no) {
-                    print "*1 ";
                     #Backtrack till we can rejoin teh scale
                     foreach $orig_interval_no (@scale_list) {
-                        print "*2 ";
                         my $sql = "SELECT next_interval_no FROM correlations WHERE interval_no=$orig_interval_no AND scale_no=".$dbt->dbh->quote($scale_no);
-                        print $sql."<br>";
                         my @results = @{$dbt->getData($sql)};
                         if (scalar(@results)) {
                             $interval_no=$results[0]->{'next_interval_no'};
@@ -941,11 +1095,9 @@ sub getScaleOrder {
                         last;
                     }
                 } else {
-                     print "*4 ";
                     last;
                 }
             } else {
-                print "bn $interval_no $bestnext{$interval_no}<br>";
                 $interval_no=$bestnext{$interval_no};
             }
         }
