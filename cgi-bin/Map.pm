@@ -9,7 +9,7 @@ use TimeLookup;
 use Globals;
 
 # Flags and constants
-my $DEBUG = 0;			# The debug level of the calling program
+my $DEBUG = 1;			# The debug level of the calling program
 my $hbo;                # HTMLBuilder object
 my $dbh;				# The database handle
 my $dbt;				# The DBTransactionManager object
@@ -267,6 +267,7 @@ sub buildMapOnly {
 sub mapFinishImage {
     my $self = shift;
 
+    $im->filledRectangle(0,$height,$width,$totalheight,$col{$q->param('mapbgcolor')});
     $im->arc(97,$height+6,10,10,0,360,$col{'black'});
     $im->string(gdTinyFont,5,$height+1,"plotting software c 2002 J. Alroy",$col{'black'});
     print AI "0 To\n";
@@ -473,7 +474,7 @@ sub mapQueryDb	{
     # Also handles species name searches JA 19-20.8.02
     my $genus;
     my $species;
-    my $sql = qq|SELECT occurrences.collection_no FROM occurrences LEFT JOIN reidentifications ON occurrences.occurrence_no = reidentifications.occurrence_no WHERE |;
+    my $whereClause;
     if (@$in_list) {
         # In list may be a text genus+species name, a taxon number, or both (if passed from Confidence.pm)
         my ($taxon_nos_string,$genus_species_sql);
@@ -494,14 +495,14 @@ sub mapQueryDb	{
             }
         }
         $taxon_nos_string =~ s/,$//;
-        $sql .= " (";
+        $whereClause .= " (";
         if (!$taxon_nos_string) {
             $genus_species_sql =~ s/^ OR//;
-            $sql .= $genus_species_sql;
+            $whereClause .= $genus_species_sql;
         } else {
-            $sql .= "occurrences.taxon_no IN ($taxon_nos_string) OR reidentifications.taxon_no IN ($taxon_nos_string) $genus_species_sql";
+            $whereClause .= "occurrences.taxon_no IN ($taxon_nos_string) OR reidentifications.taxon_no IN ($taxon_nos_string) $genus_species_sql";
         }
-        $sql .= ") ";
+        $whereClause .= ") ";
     } elsif($q->param('taxon_name')){
         # PM 09/13/02 added the '\s+' pattern for space matching.
         if($q->param('taxon_name') =~ /\w+\s+\w+/){
@@ -530,25 +531,26 @@ sub mapQueryDb	{
             }
 
             if ($taxon_nos_string) {
-                $sql .= " (occurrences.taxon_no IN (".$taxon_nos_string.") OR reidentifications.taxon_no IN (".$taxon_nos_string."))";
+                $whereClause .= " (occurrences.taxon_no IN (".$taxon_nos_string.") OR reidentifications.taxon_no IN (".$taxon_nos_string."))";
             } elsif ($genus_names_string) {
-                $sql .= " (occurrences.genus_name IN (".$genus_names_string.") OR reidentifications.genus_name IN (".$genus_names_string."))";
+                $whereClause .= " (occurrences.genus_name IN (".$genus_names_string.") OR reidentifications.genus_name IN (".$genus_names_string."))";
             }
         } else{
             if($genus){
-                $sql .= "(occurrences.genus_name=" . $dbh->quote($genus) . " OR reidentifications.genus_name=" . $dbh->quote($genus) . ")" ;
+                $whereClause .= "(occurrences.genus_name=" . $dbh->quote($genus) . " OR reidentifications.genus_name=" . $dbh->quote($genus) . ")" ;
                 if($species){
-                    $sql .= " AND ";
+                    $whereClause .= " AND ";
                 }
             }
             if($species){
-                $sql .= "(occurrences.species_name=" . $dbh->quote($species) . " OR reidentifications.species_name=" . $dbh->quote($genus) . ")";
+                $whereClause .= "(occurrences.species_name=" . $dbh->quote($species) . " OR reidentifications.species_name=" . $dbh->quote($genus) . ")";
             }
         }
     }
    
     # SQL from genus honing sections above
-    if ($sql) {
+    if ($whereClause) {
+        my $sql = qq|SELECT occurrences.collection_no FROM occurrences LEFT JOIN reidentifications ON occurrences.occurrence_no = reidentifications.occurrence_no WHERE $whereClause|;
         $self->dbg("mapQueryDb sql: $sql<br>");
         my $sth = $dbh->prepare($sql);
         $sth->execute();
@@ -1012,12 +1014,12 @@ sub mapSetupImage {
 
     if ( $width > 300 )	{
         if (!$im)  {
-            $im = new GD::Image($width,$height+12);
+            $im = new GD::Image($width,$height+12,1);
         }
         $totalheight = $height + 12;
     } else	{
         if (!$im)  {
-            $im = new GD::Image($width,$height+24);
+            $im = new GD::Image($width,$height+24,1);
         }
         $totalheight = $height + 24;
     }
@@ -1093,10 +1095,8 @@ sub mapSetupImage {
 
 	# create an interlaced GIF with a white background
 	$im->interlaced('true');
-	$im->transparent('');
-	if ( $q->param('mapbgcolor') ne "transparent" )	{
-		($x,$y) = $self->drawBackground();
-	}
+	$im->transparent(-1);
+	($x,$y) = $self->drawBackground();
 
 	if ( $q->param('gridposition') eq "in back" )	{
 		$self->drawGrids();
@@ -1660,8 +1660,9 @@ sub mapDrawPoints{
     }
     print AI "U\n";  # terminate the group
 
+   
+    $im->setAntiAliased($col{$bordercolor});
     # redraw the borders if they are not the same color as the points
-    if ($dotcolor ne $bordercolor)	{
       for $x1 (keys %longVal)	{
         for $y1 (keys %latVal)	{
           if ($atCoord{$x1}{$y1} > 0)	{
@@ -1669,7 +1670,8 @@ sub mapDrawPoints{
               $dotsize = int($atCoord{$x1}{$y1}**0.5) + 1;
             }
             if ($dotshape =~ /^circles$/)	{
-              $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,$hpix,$col{$bordercolor});
+              # for consistency, antialiasing actually only supported for straight lines, not arcs
+              $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,$hpix,gdAntiAliased);
             } elsif ($dotshape =~ /^crosses$/)	{ # don't do anything
             } elsif ($dotshape =~ /^diamonds$/)	{
               my $poly = new GD::Polygon;
@@ -1677,7 +1679,8 @@ sub mapDrawPoints{
               $poly->addPt($x1+($dotsize*2),$y1);
               $poly->addPt($x1,$y1-($dotsize*2));
               $poly->addPt($x1-($dotsize*2),$y1);
-              $im->polygon($poly,$col{$bordercolor});
+              # straight diagonals aren't antialiased, this just here for consistency
+              $im->polygon($poly,gdAntiAliased);
             } elsif ($dotshape =~ /^stars$/)	{
               my $poly = new GD::Polygon;
               for $p (0..9)	{
@@ -1687,20 +1690,19 @@ sub mapDrawPoints{
                   $poly->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180)),$y1-($dotsize/$C72*cos($p*36*$PI/180)));
                 }
               }
-              $im->polygon($poly,$col{$bordercolor});
+              $im->polygon($poly,gdAntiAliased);
             } elsif ($dotshape =~ /^triangles$/)	{
               my $poly = new GD::Polygon;
               $poly->addPt($x1+($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
               $poly->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
               $poly->addPt($x1-($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
-              $im->polygon($poly,$col{$bordercolor});
+              $im->polygon($poly,gdAntiAliased);
             } else	{
-              $im->rectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),$col{$bordercolor});
+              $im->rectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),gdAntiAliased);
             }
           }
         }
       }
-    }
 }
 
 sub getCoords	{
