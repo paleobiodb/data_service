@@ -4379,7 +4379,7 @@ sub displayAuthorityTaxonSearchForm {
     my $action = 'submitAuthorityTaxonSearch';
 
     print stdIncludes("std_page_top");
-    print $hbo->populateHTML('taxon_search_form',[$page_title,$action],['page_title','action']);
+    print $hbo->populateHTML('search_taxon_form',[$page_title,$action],['page_title','action']);
     print stdIncludes("std_page_bottom");
 }
 
@@ -4430,7 +4430,7 @@ sub displayOpinionTaxonSearchForm {
     my $action = 'submitOpinionTaxonSearch';
 
     print stdIncludes("std_page_top");
-    print $hbo->populateHTML('taxon_search_form', [$page_title,$action], ['page_title','action']);
+    print $hbo->populateHTML('search_taxon_form', [$page_title,$action], ['page_title','action']);
     print stdIncludes("std_page_bottom");
 }
 

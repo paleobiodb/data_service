@@ -33,7 +33,7 @@ sub searchForm {
     } else {
         $page_title = "<h2>Taxon search form</h2>";
 	}
-	print $hbo->populateHTML('taxoninfo_search_form' , [$page_title,$page_subtitle], ['page_title','page_subtitle']);
+	print $hbo->populateHTML('search_taxoninfo_form' , [$page_title,$page_subtitle], ['page_title','page_subtitle']);
 
 }
 
