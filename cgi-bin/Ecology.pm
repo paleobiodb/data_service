@@ -149,7 +149,7 @@ sub processEcologyForm	{
 	my $dbh = shift;
 	my $dbt = shift;
 	my $q = shift;
-	my $session = shift;
+	my $s = shift;
 	my $exec_url = shift;
 
 	# print the header
@@ -211,11 +211,8 @@ sub processEcologyForm	{
 	# if ecotaph no exists, update the record
 	if ( $q->param('ecotaph_no') > 0 )	{
 	# set the modifier name
-		my $modifier = $dbh->quote($session->get('enterer'));
-		$sql = "SELECT person_no FROM person WHERE name=" . $modifier;
-		$modifier_no = @{$dbt->getData($sql)}[0]->{person_no};
 		unshift @fieldNames, 'modifier_no';
-		unshift @fieldValues, $modifier_no;
+		unshift @fieldValues, $s->get('enterer_no');
 
 		$sql = "UPDATE ecotaph SET ";
 		for $i (0..$#fieldNames)	{
@@ -233,21 +230,14 @@ sub processEcologyForm	{
 	# if there's no ecotaph no, insert a new record
 	else	{
 	# set the authorizer and enterer and reference no
-		my $authorizer = $dbh->quote($session->get('authorizer'));
-		$sql = "SELECT person_no FROM person WHERE name=" . $authorizer;
-		$authorizer_no = @{$dbt->getData($sql)}[0]->{person_no};
 		unshift @fieldNames, 'authorizer_no';
-		unshift @fieldValues, $authorizer_no;
+		unshift @fieldValues, $s->get('authorizer_no');
 
-		my $enterer = $dbh->quote($session->get('enterer'));
-		$sql = "SELECT person_no FROM person WHERE name=" . $enterer;
-		$enterer_no = @{$dbt->getData($sql)}[0]->{person_no};
 		unshift @fieldNames, 'enterer_no';
-		unshift @fieldValues, $enterer_no;
+		unshift @fieldValues, $s->get('enterer_no');
 
-		my $reference_no = $session->get('reference_no');
 		unshift @fieldNames, 'reference_no';
-		unshift @fieldValues, $reference_no;
+		unshift @fieldValues, $s->get('reference_no');
 
 	# insert the record
 		$sql = "INSERT INTO ecotaph (" . join(',',@fieldNames) . ") VALUES (" . join(',',@fieldValues) . ")";
