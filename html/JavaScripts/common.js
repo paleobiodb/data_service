@@ -19,84 +19,45 @@ function checkBrowserVersion() {
 // returns true if the input is in a proper format for a last name
 function properLastName(input) {
 	if ((!input) || input == "") { return false; }
-	
 	var match = /^[A-Za-z,-.\'][A-Za-z ,-.\']*$/;
-	
 	return match.test(input);
 }
 
 // returns true if the input is in a proper format for an initial 
 function properInitial(input) {
 	if ((!input) || input == "") { return false; }
-	
-	var match = /^[A-Za-z.][A-Za-z .]*$/;
-	
-	return match.test(input);
+	var match1 = /^[A-Z][A-Za-z .]*$/;
+	var match2 = /[.]/;
+	return (match1.test(input) && match2.test(input));
 }
 
 // returns true if it's a proper year format which begins with a 1 or 2,
 // ie, 1900 and something or 2000 something.
 function properYear(input) {
 	if ((!input) || input == "") { return false; }
-	
 	var match = /^[12]\d{3}$/;
-	
 	return match.test(input);
 }
 
-
-// pass this a taxon name as a string,
-// and it will look at the number of spaces to determine
-// the rank.  Returns "invalid" if it's not a valid spacing..
 //
-// 0 spaces = higher
-// 1 space  = species
-// 2 spaces = subspecies
-//
-// it will return a string, either "higher", "species", "subspecies", or "invalid"
-// ** note, we can't tell the difference between a genus and a higher taxon
-// by just looking at the spacing.. so a genus name will return as "higher" as well.
-//
-// by rjp, 2/2004 
-function taxonRank(taxon) {
-	var isSpecies = /^[A-Z][a-z]+[ ][a-z]+\n?$/;
-	var isSubspecies = /^[A-Z][a-z]+[ ][a-z]+[ ][a-z]+\n?$/;
-	var isHigher = /^[A-Z][a-z]+\n?$/;
-	
-	if (isSubspecies.test(taxon)) {
-		return "subspecies";	
-	}
-	
-	if (isSpecies.test(taxon)) {
-		return "species";	
-	}
-
-	if (isHigher.test(taxon)) {
-		return "higher";
-	}
-	
-	return "invalid";
+// by rjp, 2/2004, modified by PS
+function guessTaxonRank(taxon) {
+    var isSpecies = /^[A-Z][a-z]+[ ][a-z]+\n?$/;
+    var isSubspecies = /^[A-Z][a-z]+[ ][a-z]+[ ][a-z]+\n?$/;
+    var isHigher = /^[A-Z][a-z]+\n?$/;
+    
+    //alert ("taxon = '" + taxon + "'");
+    if (isSubspecies.test(taxon)) {
+        return "subspecies";    
+    } else if (isSpecies.test(taxon)) {
+        return "species";   
+    } else if (isHigher.test(taxon)) {
+        return "higher";
+    } else {
+        return "invalid";
+    }
 }
 
-
-// pass this a specific rank such as subspecies, genus, order, family, etc. 
-// and a general rank which is one of the results returned by the taxonRank() function
-// subspecies, species, higher, or invalid.
-//
-// returns true if they match (ie, if order and higher, then it matches), or false otherwise.
-function specificRankMatchesGeneralRank(specific, general) {
-	var toreturn = true;
-	
-	if (general == "subspecies") {	
-		toreturn = (specific == "subspecies");
-	} else if (general == "species") {
-		toreturn = (specific == "species");
-	} else if (general == "invalid") {
-		toreturn = false;	
-	}
-	
-	return toreturn;
-}
 
 
 // Error is a JavaScript class for error reporting..  
@@ -207,3 +168,13 @@ function fillDays() {
 		document.writeln("<OPTION>" + i + "</OPTION>");
 	}
 }
+
+function showElem() {
+
+}
+
+function hideElem() { 
+}
+
+
+
