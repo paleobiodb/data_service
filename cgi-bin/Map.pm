@@ -9,7 +9,7 @@ use TimeLookup;
 use Globals;
 
 # Flags and constants
-my $DEBUG = 1;			# The debug level of the calling program
+my $DEBUG = 0;			# The debug level of the calling program
 my $hbo;                # HTMLBuilder object
 my $dbh;				# The database handle
 my $dbt;				# The DBTransactionManager object
