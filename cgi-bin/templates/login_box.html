@@ -31,17 +31,17 @@ grab a list of enterers and authorizers from the database -->
 <TABLE BORDER=0 cellpadding=4 class="test">
 <TR>
 <TD align=right>Authorizer:</TD>
-<TD><INPUT id="authorizer" name="authorizer" size=18 onKeyUp="doCompleteAuthorizer(event, authorizerNames());"></TD>
+<TD><input name="authorizer_reversed" size=18 onKeyUp="doComplete(event, this, authorizerNames());"></TD>
 </TR>
 
 <TR>
 <TD align=right>Enterer:</TD>
-<TD><INPUT id="enterer" name="enterer" size=18 onKeyUp="doCompleteEnterer(event, entererNames());"></TD>
+<TD><input  name="enterer_reversed" size=18 onKeyUp="doComplete(event, this, entererNames());"></TD>
 </TR>
 
 <TR>
 <TD align=right>Password:</TD>
-<TD><INPUT id="password" name="password" type="password" size=18></TD>
+<TD><input id="password" name="password" type="password" size=18></TD>
 </TR>
 
 <TR>
