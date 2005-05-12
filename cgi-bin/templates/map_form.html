@@ -141,9 +141,9 @@ function auth ( ) {
 <tr><td valign="top">Paleoenvironment:
 <td valign=top><select id="environment"></select>
 
-<tr><td valign=top>
-<nobr><select name="taxon_rank"><option>Higher-taxon<option selected>Genus<option>Genus and species<option>species</select>:</nobr>
-<td valign=top><input name="genus_name" size=25>
+<tr><td valign=top nowrap>
+<select name="taxon_rank"><option>Higher-taxon<option selected>Genus<option>Genus and species<option>species</select>:
+</td><td valign=top><input name="taxon_name" size=25></td></tr>
 
 </table>
 
@@ -213,7 +213,7 @@ borders
 <td width=50%>
 
 <table>
-
+<tr>
 <td colspan=2><h4>Fourth set of data points</h4>
 
 <tr><td colspan=2 valign=top class=tiny><i>Data are the same except that...</i>
@@ -293,7 +293,7 @@ lng = <input name="maplng" size=4>
 </select>
 
 <tr><td valign=top>Color of lat/long numbers:
-<td valign=top><valign=top><select id="latlngnocolor">
+<td valign=top><select id="latlngnocolor">
 </select>
 
 <tr><td valign=top>Thickness and color of coastlines:
@@ -301,22 +301,22 @@ lng = <input name="maplng" size=4>
 <select id="coastlinecolor"></select>
 
 <tr><td valign=top>International borders:
-<td valign=top><valign=top><select id="borderlinecolor">
+<td valign=top><select id="borderlinecolor">
 </select>
 
 <tr><td valign=top>USA state borders:
-<td valign=top><valign=top><select id="usalinecolor">
+<td valign=top><select id="usalinecolor">
 </select>
 
 </table>
 
 <tr><td colspan=2><h4>Examples</h4>
 <tr><td valign=top><p><i>Colors</i></p>
-<img src="/public/palette.gif" WIDTH=270 HEIGHT=19></a>
+<img src="/public/palette.gif" WIDTH=270 HEIGHT=19>
 
 <td valign=top>
 <p><i>Projections</i></p>
-<img src="/public/projections.gif" WIDTH=261 HEIGHT=55></a>
+<img src="/public/projections.gif" WIDTH=261 HEIGHT=55>
 <table>
 
 </table>
