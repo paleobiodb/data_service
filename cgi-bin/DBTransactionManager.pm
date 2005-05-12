@@ -46,12 +46,9 @@
 package DBTransactionManager;
 
 use strict;
-use Permissions;
 use DBConnection;
-use Debug;
-use Session;
-use Globals;
 use Class::Date qw(date localdate gmdate now);
+use Data::Dumper;
 use CGI::Carp;
 use CGI;
 
@@ -61,7 +58,6 @@ use fields qw(
 				sth
 				perm
 				GLOBALVARS
-				session
 				
 				_id
 				_err
@@ -103,22 +99,11 @@ use fields qw(
 sub new {
 	my $class = shift;
 	my DBTransactionManager $self = fields::new($class);
+    my $dbh = shift;
+    $self->{'dbh'} = $dbh;
 	
-	my $GLOBALVARS = shift;  # optional parameter
-	$self->{GLOBALVARS} = $GLOBALVARS;
-    
 	# set up some default values
 	$self->clear();	
-
-	if ($GLOBALVARS && $GLOBALVARS->{session}) {
-	    $self->{session} = $GLOBALVARS->{session};
-	    
-		# create the permissions object as well
-		# note, if the session object didn't really exist, then
-		# the permissions object will catch the error, so don't have to check for it here.
-		my $perm = Permissions->new($GLOBALVARS->{session});
-		$self->{perm} = $perm;
-	}
 	
 	# connect to the database
 	# note, not sure if it's a good idea to do this every time.. might slow things down.
@@ -148,16 +133,6 @@ sub clear {
 	
 	$self->finishSQL();  # finish the SQL query if there was one.
 }
-
-# pass it a session.
-# deprecated.
-sub setSession {
-	my DBTransactionManager $self = shift;
-	my $s = shift;
-	
-	$self->{session} = $s;	
-}
-
 
 # directly set the entire SQL expression
 # note, doing this will *override* any of the other
@@ -447,215 +422,6 @@ sub executeSQL {
 	$self->{sth} = $sth;
 }
 
-
-# Returns the entire result set as a hash with NO permissions checking
-# optionally, pass it a key field to organize the results by
-sub allResultsHashRef {
-	my DBTransactionManager $self = shift;
-	my $key = shift;
-	
-	my $sql = $self->SQLExpr();
-	
-	# fetch all array rows 	
-	my $ref = ($self->{dbh})->selectall_hashref($sql, $key);
-	
-	return $ref;
-}
-
-
-# Returns the entire result set as a matrix with NO permissions checking
-#
-# ****SPEED NOTE****
-# This method is much faster than nextResultArray() if you
-# have many result rows to fetch.
-sub allResultsArrayRef {
-	my DBTransactionManager $self = shift;
-	
-	my $sql = $self->SQLExpr();
-	
-	# fetch all array rows 	
-	my $ref = ($self->{dbh})->selectall_arrayref($sql);
-	
-	return $ref;
-}
-
-
-
-
-# Returns the entire result set as a matrix using read permissions
-# checking on all rows.
-#
-# SQL Query **must** include "collection_no" as the first column.
-#
-# ****SPEED NOTE****
-# This method is much faster than nextResultArrayUsingPermissions() if you
-# have many result rows to fetch.
-sub allResultsArrayRefUsingPermissions {
-	my DBTransactionManager $self = shift;
-	
-	my $sql = $self->SQLExpr();
-	
-	if ( (! $self->{perm}) || (! $self->{session})) {
-		croak("DBTransactionManager must have valid permissions and sessions objects to execute this query.");
-		return undef; 	
-	}
-	
-	
-	my $result; 	# that we'll return
-	
-	# fetch all array rows 	
-	my $ref = ($self->{dbh})->selectall_arrayref($sql);
-	
-	
-	# loop through result set
-	if (defined $ref) {
-		foreach my $row (@{$ref}) {
-			# collection_no *must* be the first column for this to work
-			my $collection_no = $row->[0];
-			
-			# check permissions
-			if (($self->{perm})->userHasReadPermissionForCollectionNumber($collection_no)) {
-				push(@$result, $row);	# add it on to the return result.
-			} 
-		}
-	}
-	
-	
-	return $result;
-}
-
-
-# returns the next result row using read permissions as an array
-#
-# Also, **make sure** the SQL query includes the necessary
-# column called "collection_no" AS THE FIRST column **********!!!
-#
-# must be called *after* first calling executeSQL(),
-# otherwise will return empty array.
-#
-# ****SPEED NOTE****
-# If you will be retrieving multiple rows, this is about twice as slow
-# as using the allResultsArrayRefUsingPermissions() method which returns them
-# all at once.  So, only use this one if there will only be a few rows.
-sub nextResultArrayUsingPermissions {
-	my DBTransactionManager $self = shift;
-	
-	my $sth = $self->{sth};
-	
-	if ((! $sth) || (! $self->{perm}) || (! $self->{session})) {
-		croak("DBTransactionManager must have valid permissions and sessions objects to execute this query.");
-		return (); 	
-	}
-	
-	my @result;
-	
-	# fetch the next array row and return it.	
-	@result = $sth->fetchrow_array();
-	$self->{sth} = $sth;  # important - save it back in the parameter.
-	
-	if (! @result) {
-		$self->finishSQL();
-		return ();		# return empty array
-	}
-	
-	# collection_no *must* be the first column for this to work.
-	my $collection_no = $result[0];
-	
-	if (($self->{perm})->userHasReadPermissionForCollectionNumber($collection_no)) {
-		return @result;
-	} else {
-		# user is not allowed to read this row.
-		# so return the next row.. if it exists
-		return ($self->nextResultArrayUsingPermission($collection_no));
-	}
-			
-}
-
-
-
-# fetches the next result row WITHOUT using permissions of any kind.
-# returns it as an array
-#  
-# must be called *after* first calling executeSQL(),
-# otherwise will return empty array.
-#
-# ****SPEED NOTE****
-# This is slow compared to getting all results at once.
-sub nextResultArray {
-	my DBTransactionManager $self = shift;
-
-	my $sth = $self->{sth};
-	
-	if (! $sth) {
-		return ();  # return empty array if sth doesn't exist	
-	}
-	
-	my @result;
-	
-	# fetch the next array row and return it.	
-	@result = $sth->fetchrow_array();
-	$self->{sth} = $sth;  # important - save it back in the parameter.
-	
-	if (! @result) {
-		$self->finishSQL();
-	}
-		
-	return @result;
-}
-
-# same as nextResultArray, but gets it
-# as an array reference
-#
-# ****SPEED NOTE****
-# slower than getting all results at once.
-sub nextResultArrayRef {
-	my DBTransactionManager $self = shift;
-
-	my $sth = $self->{sth};
-	
-	if (! $sth) {
-		return ();  # return empty array if sth doesn't exist	
-	}
-	
-	# fetch the next array row and return it.	
-	my $result = $sth->fetchrow_arrayref();
-	$self->{sth} = $sth;  # important - save it back in the parameter.
-	
-	if (! $result) {
-		$self->finishSQL();
-	}
-		
-	return $result;
-}
-
-
-# as an hash reference
-#
-# ****SPEED NOTE****
-# slower than getting all results at once.
-sub nextResultHashRef {
-	my DBTransactionManager $self = shift;
-
-	my $sth = $self->{sth};
-	
-	if (! $sth) {
-		return ();  # return empty array if sth doesn't exist	
-	}
-	
-	# fetch the next array row and return it.	
-	my $result = $sth->fetchrow_hashref();
-	$self->{sth} = $sth;  # important - save it back in the parameter.
-	
-	if (! $result) {
-		$self->finishSQL();
-	}
-		
-	return $result;
-}
-
-
-
-
 # Clean up after finishing with a query.
 # should be called when the user is done accessing result sets from a query.
 #
@@ -770,322 +536,206 @@ sub isValidTableName {
 # directly to column names in the database.  Note, not all columns need to 
 # be listed; only the ones which you are inserting data for.
 #
-# Returns an array.  First element is esult code from the dbh->do() method,
-# second element is primary key value of the last insert (very useful!).
+# Returns an array.  First element is result code from the dbh->do() method,
+# second element is primary key value of the last insert.
 #
 # Note, for now, this just blindly inserts whatever the user passes.
-# However, in the future, since insert is an operation which won't occur very 
-# often (and not in a loop), we should do some more checking.
-# For example, we can make sure that NOT NULL fields are set before performing the
-# insert.. We can check the column types to make sure they match (integers, varchars, etc.).
-# We can make sure that the autoincrement fields aren't overwritten, etc..
-# 
-# Add this eventually..
+#
+# Reworked PS 04/30/2005 to be more flexible - uses code from bridge.pl::insertRecord
 #
 #
-sub insertNewRecord {
+sub insertRecord {
 	my DBTransactionManager $self = shift;
+    my $s = shift;
 	my $tableName = shift;
-	my $hashRef = shift;  # don't update this
+	my $fields = shift;  # don't update this
 	
-	# make our own local copy of the hash so we can modify it.
-	my $fields = Globals::copyHash($hashRef);
-
-	my $dbh = $self->{dbh};
+	my $dbh = $self->{'dbh'};
 	
 	# make sure they're allowed to insert data!
-	my $s = $self->{session};
 	if (!$s || $s->guest() || $s->get('enterer') eq '') {
 		croak("invalid session or enterer in DBTransactionManager::insertNewRecord");
 		return;
 	}
 	
-	# make sure the table name is valid
-	if ((! $self->isValidTableName($tableName)) || (! $fields)) {
-		return 0;	
-	}
-	
-	# when inserting records, we should always set the created date to now()
-	# and make sure the authorizer/authorizer_no and enterer/enterer_no are set.
-	$fields->{authorizer} = $s->get('authorizer');
-	$fields->{authorizer_no} = $s->authorizerNumber();
-	$fields->{created} = now();
-	
+    # get the column info from the table
+    my $sth = $dbh->column_info(undef,'pbdb',$tableName,'%');
+
 	# loop through each key in the passed hash and
 	# build up the insert statement.
-	
-	# get the description of the table
-	my @desc = @{$self->getTableDesc($tableName)};
-	my @colName; 	# names of columns in table
-	foreach my $row (@desc) {
-		push(@colName, $row->[0]);	
+    my @insertFields=();
+    my @insertValues=();
+    while (my $row = $sth->fetchrow_hashref()) {
+        my $field = $row->{'COLUMN_NAME'};
+        my $type = $row->{'TYPE_NAME'};
+        my $is_nullable = ($row->{'IS_NULLABLE'} eq 'YES') ? 1 : 0;
+        my $is_primary =  $row->{'mysql_is_pri_key'};
+
+        # we never insert these fields ourselves
+        next if ($field =~ /^(modifier|modifier_no)$/);
+        next if ($is_primary);
+
+        # handle these fields automatically
+        if ($field =~ /^(authorizer_no|authorizer|enterer_no|enterer)$/) {
+            # from the session object
+            push @insertFields, $field;
+            push @insertValues, $dbh->quote($s->get($field));
+        } elsif ($field eq 'modified') {
+            push @insertFields, $field;
+            push @insertValues, 'NOW()';
+        } elsif ($field eq 'created') {
+            push @insertFields, $field;
+            push @insertValues, 'NOW()';
+        } else {
+            # It exists in the passed in user hash
+            if (defined($fields->{$field})) {
+                # Multi-valued keys (i.e. checkboxes with the same name) passed from the CGI ($q) object have their values
+                # separated by \0.  See CPAN CGI documentation about this
+                my @vals = split(/\0/,$fields->{$field});
+                my $value;
+                if ($type eq 'SET') {
+                    $value = join(",",map {$dbh->quote($_)} @vals);
+                } else {
+                    $value = $vals[0];
+                    if ($value =~ /^\s*$/ && $is_nullable) {
+                        $value = 'NULL';
+                    } else {
+                        if (!$value) { $value = ''; }
+                        $value = $dbh->quote($value);
+                    }
+                }
+                push @insertFields, $field;
+                push @insertValues, $value;
+            }
+        }	
 	}
+
+    #print Dumper($fields);
+    #for(my $i=0;$i<scalar(@insertFields);$i++) {
+    #    main::dbg("$insertFields[$i] = $insertValues[$i]");
+    #}
+
+    if (@insertFields) {
+        my $insertSQL = "INSERT INTO $tableName (".join(",",@insertFields).") VALUES (".join(",",@insertValues).")";
+        main::dbg("insertRecord in DBTransaction manager called: sql: $insertSQL");
+        # actually insert into the database
+        my $insertResult = $dbh->do($insertSQL);
+        
+        # bug fix here by JA 2.4.04
+        my $idNum = ${$self->getData("SELECT LAST_INSERT_ID() AS l FROM $tableName")}[0]->{l};
 	
-	my $toInsert = "";
-	
-	my @keys = keys(%$fields);
-	foreach my $key (@keys) {
+        # return the result code from the do() method.
+	    return ($insertResult, $idNum);
+    }
 		
-		# if it's a valid column name, then add it to the insert
-		if (Globals::isIn(\@colName, $key)) {
-			$toInsert .= "$key = " . $dbh->quote($fields->{$key}) . ", ";
-		}
-	}
-	
-	
-	# remove the trailing comma
-	$toInsert =~ s/, $/ /;
-	
-	$toInsert = "INSERT INTO $tableName SET " . $toInsert;
-	main::dbg("InsertingNewRecord sql: $toInsert");
-	
-	# actually insert into the database
-	my $insertResult = $dbh->do($toInsert);
-	
-	# bug fix here by JA 2.4.04
-	my $idNum = ${$self->getData("SELECT LAST_INSERT_ID() AS l FROM $tableName")}[0]->{l};
-		
-	# return the result code from the do() method.
-	return ($insertResult, $idNum);
 }
 
-
-
-
-# rjp, 3/2004.
+# Reworked PS 04/30/2005 
+# Update a single record in a table with a simple primary key
 #
-# Pass it a table name, a hashref of key/value pairs to update, 
-# a where clause so we know which records to update, and the primary
-# key name for this table.  Note, not all columns need to 
-# be listed; only the ones which you are inserting data for.
-#
-# Returns a true value for success, or false otherwise.
-# Note, if it makes it to the update statement, then it returns
-# the result code from the dbh->do() method.
-#
-# see also updateRecordEmptyFieldsOnly() below.
-#
-# ****NOTE**** this doesn't check write permissions yet...
-# WARNING!!
+# Args: 
+#  s: session object
+#  update_empty_only: 1 means update only blank or null columns, 0 mean update anything
+#  data: hashref for all our key->value pairs we want to update
+#    note you can just throw it a $q->Vars or something, it won't throw
+#    stuff into there that isn't in the table definition, thats filtered out
 #
 sub updateRecord {
-	my DBTransactionManager $self = shift;
-	
+	my $self = shift;
+	my $s = shift;
 	my $tableName = shift;
-	my $hashRef = shift;
-	my $whereClause = shift;
-	my $primaryKey = shift;
+	my $primary_key_field = shift;
+	my $primary_key_value = shift;
+	my $data = shift;
 	
-	$self->internalUpdateRecord(0, $tableName, $hashRef, $whereClause, $primaryKey);
-    
-}
-
-
-# Same as updateRecord(), but only 
-# updates the fields which are empty or zero in the table row..
-# ie, if you pass it a field which is already populated in this database
-# row, then it won't update that field.
-#
-# Note, it *WILL* allow updates of the modifier_no field since we need to modify that field 
-# each time!
-# ****NOTE**** this doesn't check write permissions yet...
-# WARNING!!
-sub updateRecordEmptyFieldsOnly {
-	my DBTransactionManager $self = shift;
+    my $dbh = $self->dbh;
 	
-	my $tableName = shift;
-	my $hashRef = shift;
-	my $whereClause = shift;
-	my $primaryKey = shift;
-	
-	$self->internalUpdateRecord(1, $tableName, $hashRef, $whereClause, $primaryKey);
-}
-
-
-# for internal use only!!
-#
-# Pass it a boolean which will determine whether we 
-# should only update empty columns.  True (1) means that 
-# we should only update empty columns, false (0) means update any column.
-#
-# Also pass it a table name, a hashref of key/value pairs to update, 
-# a where clause so we know which records to update, and the primary
-# key name for this table.
-#
-# Note: we could grab the primary key from the database, but I haven't figured
-# out how to do that yet, so for now, we'll just pass it.
-#
-# ** Only allows update on one table at a time...
-#
-# Note, this figures out the modifier_no/modifier name from the session. 
-# The modified date is set automatically by the database unless we
-# try to override that.  It also prevents users from updating the created date
-# and the authorizer/authorizer_no and enterer/entere_no fields since 
-# those shouldn't ever be updated.
-#
-# rjp, 3/2004.
-sub internalUpdateRecord {
-	my DBTransactionManager $self = shift;
-	my $emptyOnly = shift;
-	my $tableName = shift;
-	my $hashRef = shift;        # don't use this, use $fields instead.
-	my $whereClause = shift;
-	my $primaryKey = shift;
-	
-	my $dbh = $self->{dbh};
-	
-	# we want to make a copy of the hashRef so we can change values in it 
-	# without worrying about affecting the original.
-
-	my $fields = Globals::copyHash($hashRef);
-	
-	main::dbg("we're in internalUpdateRecord, emptyOnly = $emptyOnly tableName = $tableName, where = $whereClause, key = $primaryKey");
-
 	# make sure they're allowed to update data!
-	my $s = $self->{session};
-	if (!$s || $s->guest() || $s->get('enterer') eq '')	{
-		croak("invalid session or enterer in DBTransactionManager::internalUpdateRecord");
+	if (!$s || $s->guest() || $s->get('enterer') eq '' || $s->get('enterer_no') !~ /^\d+$/)	{
+		croak("Invalid session or enterer in updateRecord");
 		return 0;
 	}
 	
 	# make sure the whereClause and tableName aren't empty!  That would be bad.
-	if (($tableName eq '') || ($whereClause eq '')) {
-		return 0;	
-	}
-	
-	# make sure the table name is valid
-	if ((! $self->isValidTableName($tableName)) || (! $fields)) {
-		croak("invalid tablename or hashref in DBTransactionManager::internalUpdateRecord");
+	if (($tableName eq '') || ($primary_key_field eq '')) {
+        croak ("No tablename or primary_key supplied to updateRecord"); 
 		return 0;	
 	}
 
-	
-	# figure out the modifer and modifier_no
-	# Note, some tables record the modifier_no, and some record the modifer name
-	# so we have to set both.  If the field isn't in the table, then it shouldn't
-	# hurt anything.
-	$fields->{modifier} = $s->get('enterer');
-	$fields->{modifier_no} = $s->entererNumber();
-	# we never want to change the modified date - we should let the database
-	# take care of setting this value correctly.
-	delete($fields->{modified});
-	
-	# Since we're updating a record, we should never change the created
-	# date, authorizer, or enterer if present.  So, delete both of those values
-	# just to be safe.  These values are only set when we first create a record.
-	delete($fields->{created});
-	delete($fields->{authorizer});
-	delete($fields->{authorizer_no});
-	delete($fields->{enterer});
-	delete($fields->{enterer_no});
-	
-	# figure out how many records this update statement will affect
-	# return if they try to update too many at once, because it's probably an error.
-	my $count = ${$self->getData("SELECT COUNT(*) as c FROM $tableName WHERE
-					$whereClause")}[0]->{c};
-	
-	if ($count > $self->{maxNumUpdatesAllowed}) {
-		croak("DBTransactionManager::internalUpdateRecord, tried to update $count records at once which is more than the maximum allowed of " . $self->{maxNumUpdatesAllowed});
-		return;
-	}
-	
-	# loop through each key in the passed hash and
-	# build up the update statement.
-	
-	# get the description of the table
-	my @colNames = @{$self->allTableColumns($tableName)};
-	my $toUpdate;
-	if ($emptyOnly) {
-		# only allow updates of fields which are already empty.
-		
-		# fetch all of the rows we're going to try to update from the database
-		my $select = DBTransactionManager->new($self->{GLOBALVARS});
-		$select->setSQLExpr("SELECT * FROM $tableName WHERE $whereClause");
-		my $selResults = $select->allResultsHashRef($primaryKey);
-	
-		# loop through each row that we're going to try and update
-		foreach my $row (keys(%$selResults)) {
-		
-			$toUpdate = '';
-		
-			# loop through each key (column) that the user want's to
-			# update.
-			my @keys = keys(%$fields);
-			foreach my $key (@keys) {
-				
-				# if it's a valid column name, and the column is empty,
-				# then add it to the update statement.
-				if (Globals::isIn(\@colNames, $key)) {
-				
-					# if it's the modifier_no or modifier, then we'll update it regardless
-					# of whether the current field in the database is empty or not.
-					if (($key eq 'modifier_no') || ($key eq 'modifier')) {
-						$toUpdate .= "$key = " . $dbh->quote($fields->{$key}) . ", ";
-					}
+	# get the record we're going to update from the table
+    my $sql = "SELECT * FROM $tableName WHERE $primary_key_field=$primary_key_value";
+    my @results = @{$self->getData($sql)};
+    if (scalar(@results) != 1) {
+        croak ("Error in updateRecord: $sql return ".scalar(@results)." values instead of 1");
+        return 0;
+    }
+    my $table_row = $results[0];
+    if (!$table_row) {
+        croak("Could not pull row from table $tableName for $primary_key_field=$primary_key_value");
+        return 0;
+    }
 
-					
-					# if the column in the database for this row is
-					# already empty...
-					my $dbcolval = ($selResults->{$row})->{$key};
-					if (! ($dbcolval)) {
-						# then add the key to the update statement.
-						$toUpdate .= "$key = " . $dbh->quote($fields->{$key}) . ", ";
-					}
-				}	
-			}
-		
-		
-			if (! $toUpdate) {  # if there's nothing to update, skip to the next one.
-				next;
-			}
-			
-			# remove the trailing comma
-			$toUpdate =~ s/, $/ /;
-	
-			if (!$toUpdate) {
-				croak("DBTransactionManager::internalUpdateRecord, tried to update without a set clause in update blanks only.");
-				return;
-			}
-			
-			$toUpdate = "UPDATE $tableName SET $toUpdate WHERE $whereClause";
-	
-			main::dbg("Empty field update: ".$toUpdate);
-			
-			# actually update the row in the database
-			my $updateResult = $dbh->do($toUpdate);	
-		}
-		
-	} else {
-		# update any field, doesn't matter if it's empty or not
-		$toUpdate = '';
-		
-		my @keys = keys(%$fields);
-		foreach my $key (@keys) {
-			# if it's a valid column name, then add it to the update
-			if (Globals::isIn(\@colNames, $key)) {
-					$toUpdate .= "$key = " . $dbh->quote($fields->{$key}) . ", ";
-			}
-		}
-		
-		# remove the trailing comma
-		$toUpdate =~ s/, $/ /;
-		
-		if (!$toUpdate) {
-			croak("DBTransactionManager::internalUpdateRecord, tried to update without a set clause in update any field.");
-			return;
-		}
-		
-		$toUpdate = "UPDATE $tableName SET $toUpdate WHERE $whereClause";
-		
-		main::dbg("Regular update: $toUpdate");
-		
-		# actually update the row in the database
-		my $updateResult = $dbh->do($toUpdate);
-			
-		# return the result code from the do() method.
-		return $updateResult;
-	
-	}
+    if ($primary_key_value !~ /^\d+$/) {
+        croak ("Non numeric primary key value supplied: $primary_key_field --> $primary_key_value");
+        return 0;
+    }
+
+    # People doing updates can only update previously empty fields, unless they own the record
+    my $updateEmptyOnly = ($s->isSuperUser() || 
+                           (exists $table_row->{'authorizer_no'} && $s->get('authorizer_no') == $table_row->{'authorizer_no'}) ||
+                           (exists $table_row->{'authorizer'} && $s->get('authorizer') == $table_row->{'authorizer'})) ? 0 : 1;
+
+
+    # get the column info from the table
+    my $sth = $dbh->column_info(undef,'pbdb',$tableName,'%');
+
+    my @updateTerms = ();
+    while (my $row = $sth->fetchrow_hashref()) {
+        my $field = $row->{COLUMN_NAME};
+        my $type = $row->{TYPE_NAME};
+        my $is_nullable = ($row->{IS_NULLABLE} eq 'YES') ? 1 : 0; 
+        # we never update these fields
+        next if ($field =~ /^(created|modified|authorizer|authorizer_no|enterer|enterer_no)$/);
+        next if ($field eq $primary_key_field);
+        
+        # if it's the modifier_no or modifier, then we'll update it regardless
+        if ($field eq 'modifier_no') {
+            push @updateTerms, "modifier_no=".$dbh->quote($s->get('enterer_no'));
+        } elsif ($field eq 'modifier') {
+            push @updateTerms, "modifier=".$dbh->quote($s->get('enterer'));
+        } else {
+            my $fieldIsEmpty = ($table_row->{$field} eq '' || !defined $table_row->{$field});
+            if (defined($data->{$field})) {
+                if (($updateEmptyOnly && $fieldIsEmpty) || !$updateEmptyOnly) {
+                    # Multi-valued keys (i.e. checkboxes with the same name) passed from the CGI ($q) object have their values
+                    # separated by \0.  See CPAN CGI documentation about this
+                    my @vals = split(/\0/,$data->{$field});
+                    my $value;
+                    if ($type eq 'SET') {
+                        $value = join(",",map {$dbh->quote($_)} @vals);
+                    } else {
+                        $value = $vals[0];
+                        if ($value =~ /^\s*$/ && $is_nullable) {
+                            $value = 'NULL';
+                        } else {
+                            if (!$value) { $value = ''; }
+                            $value = $dbh->quote($value);
+                        }
+                    }
+                    push @updateTerms, "$field=$value";
+                }
+            } 
+        }
+    }
+
+    if (@updateTerms) {
+        my $updateSql = "UPDATE $tableName SET ".join(",",@updateTerms)." WHERE $primary_key_field=$primary_key_value";
+        main::dbg("UPDATE SQL:".$updateSql);
+    	my $updateResult = $dbh->do($updateSql);
+                
+        # return the result code from the do() method.
+    	return $updateResult;
+    }
 }
 
 
