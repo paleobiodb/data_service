@@ -1,18 +1,150 @@
-<HTML>
-<HEAD>
-<link REL="stylesheet" TYPE="text/css" HREF="http://paleobackup.nceas.ucsb.edu:8110/StyleSheets/common.css">
-</HEAD>
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
 
-<STYLE type="text/css">
-    H2 { text-align: center; }
-</STYLE>
+function checkReference(frm,errors) {
+
+    var ref_has_publication_info = 0;
+    if (frm.ref_has_opinion) {
+        if (frm.ref_has_opinion.checked) {
+            ref_has_publication_info = 1;    
+        }
+    } else if (frm.ref_is_authority) {
+        if (frm.ref_has_opinion.checked) {
+            ref_has_publication_info = 1;    
+        }
+    }
+
+    // First, make sure that they either selected the 
+    // use current reference check box
+    // or fill in some information in the reference fields.
+    if (ref_has_publication_info) {
+        var other_pub_info_blank = (frm.author1init.value == '' &&
+                         frm.author1last.value == '' && 
+                         frm.author2init.value == '' &&
+                         frm.author2last.value == '' && 
+                         frm.otherauthors.value == '' &&
+                         frm.pubyr.value == '' &&
+                         frm.elements["2nd_pages.value"] == '' &&
+                         frm.elements["2nd_figures.value"] == '');
+        if (! other_pub_info_blank) {
+            errors.add("Don't fill in the named in earlier publication fields if the record was named in the primary reference.");
+        }
+    } else {  
+        // so we need to check the validity of the reference information.
+        var ref_pub_info_blank = (frm.pages.value == '' && frm.figures.value == '');
+        if (! ref_pub_info_blank) {
+            errors.add("You must fill in the primary reference pages and figures if the record was named in an earlier publication");
+        } else {
+            //at a minimum, we need the author last name and pubyr.
+            if (!(properYear(frm.pubyr.value))) {
+                errors.add("Ill-formed or missing publication year");
+            }
+
+            if (!(properLastName(frm.author1last.value))) {
+                errors.add("Ill-formed or missing last name for first author");
+            }
+            if (frm.author1init.value != "") {
+                if (! properInitial(frm.author1init.value)) {
+                    errors.add("Ill-formed initial for first author");
+                }
+            }
+
+            if (frm.author2last.value != "") {
+                if (! properInitial(frm.author2last.value)) {
+                    errors.add("Ill-formed last name for second author");
+                }
+            }
+            if (frm.author2init.value != "") {
+                if (! properInitial(frm.author2init.value)) {
+                    errors.add("Ill-formed initial for second author");
+                }
+            }
+        }
+    }
+    return errors;
+}
+
+function checkForm() {
+/* TBD another day, this is handled serverside so this isn't necessary
+    var frm = document.forms[0];
+    var errors = new Error();
+
+    errors = checkReference(frm,errors);
+
+    // figure out the rank of the taxon name.   
+    var spellingName = frm.child_spelling_name.value;
+    var spellingRank = guessTaxonRank(spellingName);
+
+    var checkedRadio = "";
+    for (var i = 0; i < frm.taxon_status.length; i++) {
+        if (frm.taxon_status[i].checked) {
+            checkedRadio = frm.taxon_status[i].value;
+        }
+    }
+
+    switch (checkedRadio) {
+        case "belongs_to":
+            var parentName = frm.belongs_to_parent.value;
+            var parentRank = guessTaxonRank(parentName);
+            
+            if (spellingRank == 'species' || spellingRank == 'subspecies') {
+            }
+            if (frm.taxon_name.value == "") {
+                if ( taxonRank(frm.taxon_name_corrected) == "higher" )  {
+                    errors.add("Higher taxon name is missing.");
+                } else  {
+                    errors.add("Name of combination is missing.");
+                }
+
+                break;
+            }
+
+            if (frm.taxon_name.value == frm.parent_taxon_name.value)    {
+                errors.add("Recombined field can't have the same name as the original taxon.");
+            }
+            break;
+        case "invalid1":
+            var field = frm.parent_taxon_name2.value;
+
+            if (field == "") {
+                errors.add("The '" + frm.synonym.value + "' field is empty.");
+            }
+
+            if (taxonRank(frm.parent_taxon_name2.value) != rank) {
+                errors.add("The '" + frm.synonym.value + "' rank doesn't match original rank.");
+            }
+
+            if (field == frm.taxon_name_corrected.value) {
+                errors.add("The '" + frm.synonym.value + "' field matches the taxon being edited.");
+            }
+
+            if (taxonRank(frm.parent_taxon_name2.value) == "invalid") {
+                errors.add("'" + frm.synonym.value + "' is ill-formed.");
+            }
+            break;
+    }
+
+    // Report errors
+    if (errors.count() > 0) {
+        errors.showAlert();
+        return false;
+    } else {
+        return true;
+    }
+    */
+    return true;
+}
+
+// END -->
+</script>
+
 
 %%message%%
 %%error_message%%
 
-<H2>Add/edit opinion record for %%child_name%%</H2>
+<div align="center"><H2>Add/edit opinion record for %%child_name%%</H2></div>
 
-<FORM method="POST" action="%%exec_url%%">
+<form method="POST" action="%%exec_url%%" onSubmit="checkForm()">
 
 <DIV class="mainSection">
 
@@ -27,27 +159,28 @@ which they are entering the authority record. -->
 <input type="hidden" id="child_no" name="child_no" value="%%child_no%%">
 <input type="hidden" id="opinion_no" name="opinion_no" value="%%opinion_no%%">
 <input type="hidden" id="orig_taxon_status" name="orig_taxon_status" value="%%orig_taxon_status%%">
+<input type="hidden" id="confirm_create_authority" name="confirm_create_authority" value="%%confirm_create_authority%%">
 
 <!-- end of hiddens.  other fields may be converted to hidden if the user is not 
 supposed to edit them -->
 
-<h2>Whose opinion on %%child_name%% are you entering?</h2>
+<div align="center"><h2>Whose opinion on %%child_name%% are you entering?</h2></div>
 
 <div class="emphasized">
 <input id="ref_has_opinion" name="ref_has_opinion" type="radio" value="YES" %%ref_has_opinion_checked%%>
 The current reference argues for this opinion:
 </div>
-<BR>
-<CENTER>
-<SPAN id="ref_string">%%formatted_reference%%</span>
+<br>
+<center>
+<span id="ref_string">%%formatted_reference%%</span>
 <p>
 <b>Pages*:</b> <input id="pages" name="pages" size=12 value="%%pages%%">
 <b>Figures*:</b> <input id="figures" name="figures" size=12 value="%%figures%%">
 </p>
-</CENTER>
+</center>
 
 
-<DIV class="emphasized">
+<div class="emphasized">
 <input id="ref_has_opinion" name="ref_has_opinion" type="radio" value="NO" %%ref_has_opinion_notchecked%%>
 
 ... <i>or</i> the opinion is repeated from an earlier authority, which is:</DIV>
@@ -89,66 +222,68 @@ The current reference argues for this opinion:
 
 
 
+<div class="mainSection">
+<div align="center"><h2>What did they say about %%child_name%%?</h2></div>
+  
+<div class="emphasized">
+<b>How was it classified?</b>
+</div>
+<table  width="100%" border=0 style="padding: 0em 2em 0em 2em;">
+  %%belongs_to_row%% 
+  <tr>
+    <td valign="middle" align=left colspan=3><b>Diagnosis:</b><br>
+      <textarea id="diagnosis" name="diagnosis" rows=3 cols=70>%%diagnosis%%</textarea>
+    </td>
+  </tr>
+  %%synonym_row%%
+  %%nomen_row%%
+  <tr>
+    <td colspan=3 align=left valign=top>
+      <b>Comments:</b><BR>
+      <textarea id="comments" name="comments" rows=2 cols=70>%%comments%%</textarea>
+    </td>
+  </tr>
+  
+  <tr>
+    <td></td>
+    <td align=center colspan=2>
+      <span class="tiny"><BR>Please check the 
+      <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> 
+      for an explanation of these terms. <BR>
+      </span>
+    </td>
+  </tr>
+</table>
+<br>
+<div class="emphasized">
+<b>How was it spelled?</b>
+</div>
 
+<table  width="100%" border=0 style="padding: 0em 2em 0em 2em;">
+  %%spelling_row%%
+  <tr><td colspan=2>
+    <small>Note that you should select a value regardless of whether this paper was the first to use this combination, spelling, or rank.<small>
+  </td></tr>
+</table>
+</div>
 
-<DIV class="mainSection">
-<H2>What did they say about the status of %%child_name%%?</H2>
-
-<TABLE BORDER=0>
-%%belongs_to_row%% 
-%%recombined_as_row%%
-<TR>
-<TD></TD>
-<TD valign="middle" align=left colspan=2>Diagnosis:<BR>
-<textarea id="diagnosis" name="diagnosis" rows=3 cols=70>%%diagnosis%%</textarea>
-</TD>
-</TR>
-%%synonym_row%%
-%%nomen_row%%
-<TR>
-<TD></TD>
-<TD align=center colspan=2>
-<span class="tiny"><BR>
-Please check the 
-<a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> 
-for an explanation of these terms. <BR>
-</span></TD>
-</TR>
-
-<TR>
-<TD colspan=3></TD>
-</TR>
-
-<TR>
-<TD colspan=3 align=left valign=top>
-<b>Comments:</b><BR>
-<textarea id="comments" name="comments" rows=2 cols=70>%%comments%%</textarea>
-</TD>
-</TR>
-
-</TABLE>
-
-
-</DIV>
-
-<CENTER>
-
-<TABLE BORDER=0 cellpadding=10>
-<TR>
-<TD>%%authorizer_name%%</TD>
-<TD>%%enterer_name%%</TD>
-<TD>%%modifier_name%%</TD>
-</TR>
-</TABLE>
+<div align="center">
+<table border=0 cellpadding=10>
+  <tr>
+    <td>%%authorizer_name%%</td>
+    <td>%%enterer_name%%</td>
+    <td>%%modifier_name%%</td>
+  </tr>
+</table>
 
 <input type=submit value="Submit">
 
 <p>
-<center><span class="tiny">
-Please read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> before you press submit.
-</span></center>
+  <span class="tiny">
+    Please read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> before you press submit.
+  </span>
 </p>
 
-</center>
+</div>
 
-</FORM>
+</form>
