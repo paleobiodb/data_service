@@ -1756,12 +1756,12 @@ sub getTaxon {
                    " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors".
                    " FROM authorities a LEFT JOIN refs r ON a.reference_no=r.reference_no";
         } else {
-            $sql = "SELECT * FROM authorities";
+            $sql = "SELECT * FROM authorities a";
         }
         my @terms = ();
         while (($field,$value)=each %options) {
             if ($field =~ /taxon_no|reference_no|taxon_name/) {
-                push @terms, "$field=".$dbt->dbh->quote($value);
+                push @terms, "a.$field=".$dbt->dbh->quote($value);
             }
         }
         if (@terms) {
