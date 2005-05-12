@@ -74,10 +74,7 @@ use fields qw(
 				whereSeparator
 				whereItems
 				
-				tableNames
-				
-				maxNumUpdatesAllowed
-							);  # list of allowable data fields.
+				tableNames);  # list of allowable data fields.
 
 # dbh				:	handle to the database
 # GLOBALVARS			:	optional GLOBAL hash, see top of bridge.pl for more info.
@@ -89,9 +86,6 @@ use fields qw(
 # _id, _err 		: 	from the old DBTransactionManager
 #
 							
-# maxNumUpdatesAllowed	: how many updates should we allow at the same time?
-		
-
 # If using permissions, or performing updates or inserts, then
 # you must pass the GLOBALVARS hashref to it
 # when calling new().  If not using permissions, update, or inserts
@@ -108,10 +102,6 @@ sub new {
 	# connect to the database
 	# note, not sure if it's a good idea to do this every time.. might slow things down.
 	$self->dbConnect();
-	
-	# don't allow more than 50 simultaneous updates
-	$self->{maxNumUpdatesAllowed} = 10;
-	
 	
 	return $self;
 }
