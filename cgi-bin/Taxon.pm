@@ -699,31 +699,28 @@ sub submitAuthorityForm {
 		}
 
 
-        my $number = ${TaxonInfo::getTaxonNos($fieldsToEnter{'type_taxon_name'})}[0];
+        my @type_taxa = TaxonInfo::getTaxon($dbt,'taxon_name'=>$fieldsToEnter{'type_taxon_name'},'get_reference'=>1);
 		
-		if (!$number) {
+		if (!@type_taxa) {
 			# if it doesn't exist, tell them to go enter it first.
 			$errors->add("The type taxon '" . $q->param('type_taxon_name') . "' doesn't exist in our database.  If you made a typo, correct it and try again.  Otherwise, please submit this form without the type taxon and then go back and add it later (after you have added an authority record for the type taxon).");
 		} else {
 			# the type taxon exists in the database, so do some checks on it.
 			
-
 			# check to make sure the rank of the type taxon makes sense.
-			my $ttaxon = Taxon->new($dbt,$number);
-			
+			my $ttaxon = $type_taxa[0];
 			
 			if (($taxonRank eq 'genus') || ($taxonRank eq 'subgenus')) {
 				# then the type taxon rank must be species
-				if ($ttaxon->{'taxonRank'} ne 'species') {
-					$errors->add("The type taxon's rank doesn't make sense");	
+				if ($ttaxon->{'taxon_rank'} ne 'species') {
+					$errors->add("The type taxon's rank should be a species");	
 				}
 			} else {
 				# for any other rank, the type taxon rank must not be species.
-				if ($ttaxon->{'taxonRank'} eq 'species') {
-					$errors->add("The type taxon's rank doesn't make sense");	
+				if ($ttaxon->{'taxon_rank'} eq 'species') {
+					$errors->add("The type taxon's rank shouldn't be a species");	
 				}
 			}
-
 
 			# make sure the publicaion date of the type taxon in the authorities
 			# table is <= the publication date of the current authority record
@@ -737,13 +734,12 @@ sub submitAuthorityForm {
 				$pubyrToCheck = $q->param('pubyr');
 			}
 			
-			if ($ttaxon->pubyr() > $pubyrToCheck ) {
+			if ($ttaxon->{'pubyr'} > $pubyrToCheck ) {
 				push @warnings,"The type taxon was published after the current taxon.";
 			}
 			
 					
-			$fieldsToEnter{type_taxon_no} = $number;
-			$fieldsToEnter{type_taxon_name} = '';
+			$fieldsToEnter{type_taxon_no} = $ttaxon->{'taxon_no'};
 		}
 	}
 	
