@@ -1,0 +1,77 @@
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+function checkForm() {
+	var frm = document.forms[0];
+	var errors = new Error();
+
+	var taxon = frm.taxon_name.value;
+	
+    var isSpecies = /^[A-Z][a-z]+[ ][a-z]+\n?$/;
+    var isSubspecies = /^[A-Z][a-z]+[ ][a-z]+[ ][a-z]+\n?$/;
+    var isHigher = /^[A-Z][a-z]+\n?$/;
+    var isSpeciesOnly = /^[a-z]+\n?$/;
+
+    var isValid;
+    if (isSubspecies.test(taxon) ||
+        isSpecies.test(taxon) ||
+        ishigher.test(taxon) || 
+        isSpeciesOnly.test(taxon)) {
+        isValid = 1;
+    } else {
+        isValid = 0;
+    }
+
+    if (!isValid) {
+		errors.add("Ill-formed taxon.  Check capitalization and spacing.");
+	}
+	
+	if (errors.count() > 0) {
+		errors.showAlert()
+		return false;
+	}
+	
+	return true;
+}
+
+// End -->
+</script>
+
+
+<form method="POST" action="bridge.pl" onSubmit="return checkForm();">
+<input name="action" type="hidden" value="checkTaxonInfo">
+<div align="center">
+
+<span id="page_title"></span><br>
+
+<table border=0 cellpadding=2 cellspacing=4>
+  <tr>
+    <td colspan=2 align="center">
+    </td>
+  </tr>
+  <tr>
+    <td>Name:</td>
+    <td colspan=2><input name="taxon_name" value="" size="35"></td>
+  </tr>
+  <tr>
+    <td>Author:</td>
+    <td align="left"><input name="author" value="" size="12"></td>
+    <td align="right">Publication year: <input name="pubyr" value="" size="4"></td>
+  </tr>
+  <tr>
+    <td colspan=3 align="center"><input type="submit" value="Search"></td>
+  </tr>
+  <tr>
+</table>
+        <div class="tiny" style="width: 600; text-align:left;"> 
+        Capitalize genus or higher ranked taxa.<br>
+        Don't enter the genus name if the species originally was combined in a subgenus.  Example: enter "Scalites tropidophora" instead of "Pleurotomaria (Scalites) tropidophora."<br>
+        Bare species may be entered, and must be entirely lowercase. i.e. 'hondurensis'<br>
+       </div> 
+</div>
+</form>
+
+
+
+
+
+
