@@ -1748,7 +1748,7 @@ sub getTaxon {
         my $sql;
         if ($options{'get_reference'}) {
             $sql = "SELECT a.taxon_no,a.taxon_rank,a.taxon_name,a.pages,a.figures,a.comments, ".
-                   " IF (a.ref_is_authority='YES',r.pubyr,r.pubyr) pubyr,".
+                   " IF (a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,".
                    " IF (a.ref_is_authority='YES',r.author1init,a.author1init) author1init,".
                    " IF (a.ref_is_authority='YES',r.author1last,a.author1last) author1last,".
                    " IF (a.ref_is_authority='YES',r.author2init,a.author2init) author2init,".
