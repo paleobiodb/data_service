@@ -6766,7 +6766,7 @@ sub processCheckNearMatch{
 			print qq|<p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p></center><br>\n|;
 		}
 		elsif($table_name eq "opinions" || $table_name eq "authorities"){
-			print qq|<p><a href="$exec_url?action=startTaxonomy"><b>Add more taxonomic information.</b></a></p></center><br>\n|;
+			print qq|<p><a href="$exec_url?action=displayAuthorityTaxonSearchForm"><b>Add more taxonomic information.</b></a></p></center><br>\n|;
 		}
 		print stdIncludes("std_page_bottom");
 	}
