@@ -692,7 +692,7 @@ sub mapQueryDb	{
 				# research_group is now a set -- tone 7 jun 2002
 				$where .= " AND FIND_IN_SET(".$dbh->quote($q->param("research_group")).", research_group)";
 			} else {
-				$where = &::buildWhere ( $where, qq| $t='$filledfields{$t}'| );
+				$where = &::buildWhere ( $where, "$t=".$dbh->quote($filledfields{$t}) );
 			}
 		}
 	}
@@ -2064,8 +2064,8 @@ sub drawBackground	{
 	if ( $edgecolor eq "white" )	{
 		$edgecolor = $col{'offwhite'};
 	}
+    $im->filledRectangle(0,0,$width,$height,$col{$mapbgcolor});
 	if ( $q->param('projection') eq "rectilinear" )	{
-          	$im->filledRectangle(0,0,$width,$height,$col{$mapbgcolor});
   		print AI "0 O\n";
             	printf AI "%s\n",$mycolor;
 		printf AI "%.1f %.1f m\n",$AILEFT,$AITOP;
@@ -2074,7 +2074,7 @@ sub drawBackground	{
 		printf AI "%.1f %.1f L\n",$AILEFT,$AITOP-$height;
 		printf AI "%.1f %.1f L\n",$AILEFT,$AITOP;
 	} else	{
-         	my $poly = new GD::Polygon;
+         	#my $poly = new GD::Polygon;
   		print AI "0 O\n";
            	printf AI "%s\n",$mycolor;
 		my $x1;
@@ -2102,7 +2102,7 @@ sub drawBackground	{
 				}
 				$x1 = $self->getLngTrunc($x1);
 				$y1 = $self->getLatTrunc($y1);
-				$poly->addPt($x1,$y1);
+				#$poly->addPt($x1,$y1);
 				if ( $lat == -90 && $hemi == 0 )	{
 					printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
 				} else	{
@@ -2110,7 +2110,7 @@ sub drawBackground	{
 				}
 			}
 		}
-		$im->filledPolygon($poly,$col{$mapbgcolor});
+		#$im->filledPolygon($poly,$col{$mapbgcolor});
 	}
 	print AI "f\n";
   	print AI "U\n";  # terminate the group
