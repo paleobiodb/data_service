@@ -232,20 +232,12 @@ sub displayTaxonInfoResults {
 	if($s->get("enterer") ne "Guest" && $s->get("enterer") ne ""){
 		# Entered Taxon
         if ($entered_no) {
-		    print "<center><a href=\"/cgi-bin/bridge.pl?action=submitAuthorityTaxonSearch&taxon_no=$entered_no";
+		    print "<center><a href=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=$entered_no\">";
         } else {
-		    print "<center><a href=\"/cgi-bin/bridge.pl?action=submitAuthorityTaxonSearch&taxon_no=-1&taxon_name=$entered_name";
+		    print "<center><a href=\"/cgi-bin/bridge.pl?action=submitAuthorityTaxonSearch&taxon_no=-1&taxon_name=$entered_name\">";
         }
-		print "\"><b>Edit taxonomic data for $entered_name</b></a> - ";
+		print "<b>Edit taxonomic data for $entered_name</b></a> - ";
 		
-		unless($entered_name eq $genus_name){
-			# Verified Taxon
-			print "<a href=\"/cgi-bin/bridge.pl?action=startTaxonomy&taxon_name=$genus_name";
-			if($taxon_no){
-				  print "&taxon_no=$taxon_no";
-			}
-			print "\"><b>Edit taxonomic data for $genus_name</b></a> - \n";
-		}
 		print "<a href=\"/cgi-bin/bridge.pl?action=startImage\">".
 			  "<b>Enter an image</b></a> - \n";
 	}
@@ -287,15 +279,15 @@ sub doNavBox {
 	# if the modules are not known try to pull them from the person table
 	# of course, we don't have to reset the preferences in that case
 	# JA 21.10.04
-	if ( $s->get("enterer") ne "Guest" && $s->get("enterer") ne "" )	{
+	if ( $s->get("enterer") ne "Guest" && $s->get("enterer_no") =~ /^\d+$/)	{
 		if ( @modules_to_display )	{
 			my $pref = join ' ', @modules_to_display;
-			my $prefsql = "UPDATE person SET taxon_info_modules='$pref',last_action=last_action WHERE name='" . $s->get("enterer") . "'";
+			my $prefsql = "UPDATE person SET taxon_info_modules='$pref',last_action=last_action WHERE person_no='" . $s->get("enterer_no") . "'";
 			$dbt->getData($prefsql);
 		}
 		elsif ( ! @modules_to_display )	{
-			my $prefsql = "SELECT taxon_info_modules FROM person WHERE person_no='" . $s->get("enterer_no") . "'";
-			$pref = @{$dbt->getData($prefsql)}[0]->{taxon_info_modules};
+			my $prefsql = "SELECT taxon_info_modules FROM person WHERE person_no=".$s->get("enterer_no");
+			$pref = ${$dbt->getData($prefsql)}[0]->{'taxon_info_modules'};
 			@modules_to_display = split / /,$pref;
 		}
 	}

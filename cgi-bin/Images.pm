@@ -28,7 +28,7 @@ sub startLoadImage{
 	print "<p>You can't upload an image unless we have taxonomic information ".
 		  "on the subject of the image. If this search doesn't find it, you ".
 		  "will be asked to ".
-		  "<a href=\"$exec_url?action=startTaxonomy\"> provide the ".
+		  "<a href=\"$exec_url?action=displayAuthorityTaxonSearchForm\"> provide the ".
 		  "taxonomic information</a> yourself.";
 	print "<center><p><form name=\"image_form\" action=\"$exec_url\" ".
 		  "method=\"POST\"><table><tr><td>";
@@ -63,7 +63,7 @@ sub processStartLoadImage{
 	if(!$taxon_no){
 		print main::stdIncludes("std_page_top");
 		print "<center><h2>$taxon_name not found</h2>";
-		print "<p><a href=\"$exec_url?action=startTaxonomy\"><b>Enter ".
+		print "<p><a href=\"$exec_url?action=displayAuthorityTaxonSearchForm\"><b>Enter ".
 			  "taxonomic information on $taxon_name</b></a>&nbsp;&#149;&nbsp;";
 		print "<a href=\"$exec_url?action=startImage\"><b>Begin image upload ".
 			  "from the start</b></a><p>&nbsp;";
