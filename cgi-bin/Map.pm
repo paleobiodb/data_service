@@ -267,7 +267,11 @@ sub buildMapOnly {
 sub mapFinishImage {
     my $self = shift;
 
-    $im->filledRectangle(0,$height,$width,$totalheight,$col{$q->param('mapbgcolor')});
+    my $mapbgcolor = $q->param('mapbgcolor');
+    if (!$mapbgcolor || $mapbgcolor eq 'transparent') {
+        $mapbgcolor = 'white';
+    }
+    $im->filledRectangle(0,$height,$width,$totalheight,$col{$mapbgcolor});
     $im->arc(97,$height+6,10,10,0,360,$col{'black'});
     $im->string(gdTinyFont,5,$height+1,"plotting software c 2002 J. Alroy",$col{'black'});
     print AI "0 To\n";
@@ -2046,6 +2050,10 @@ sub drawBackground	{
 	my $stage = shift;
 
 	my ($origx,$origy) = $self->projectPoints($midlng,$midlat);
+    my $mapbgcolor = $q->param('mapbgcolor');
+    if (!$mapbgcolor || $mapbgcolor eq 'transparent') {
+        $mapbgcolor = 'white';
+    }
 	$origx = $self->getLng($origx);
 	$origy = $self->getLat($origy);
 	$edgecolor = $col{$q->param('coastlinecolor')};
@@ -2057,7 +2065,7 @@ sub drawBackground	{
 		$edgecolor = $col{'offwhite'};
 	}
 	if ( $q->param('projection') eq "rectilinear" )	{
-          	$im->filledRectangle(0,0,$width,$height,$col{$q->param('mapbgcolor')});
+          	$im->filledRectangle(0,0,$width,$height,$col{$mapbgcolor});
   		print AI "0 O\n";
             	printf AI "%s\n",$mycolor;
 		printf AI "%.1f %.1f m\n",$AILEFT,$AITOP;
@@ -2102,7 +2110,7 @@ sub drawBackground	{
 				}
 			}
 		}
-		$im->filledPolygon($poly,$col{$q->param('mapbgcolor')});
+		$im->filledPolygon($poly,$col{$mapbgcolor});
 	}
 	print AI "f\n";
   	print AI "U\n";  # terminate the group
