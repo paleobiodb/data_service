@@ -181,21 +181,22 @@ sub displayTaxonInfoResults {
 
     print "<div class=\"float_box\">";
     print "<p>&nbsp;</p>";
-    @modules_to_display = doNavBox($dbt,$q,$s,$in_list);
+    ($modules_to_display,$thumbs) = doNavBox($dbt,$q,$s,$in_list);
     print "</div>";
 	print "<div align=\"center\"><h2>$taxon_name</h2></div>";
 	# Go through the list
-	foreach my $module (@modules_to_display){
+	foreach my $module (@$modules_to_display){
         print "<div align=\"center\">";
 		doModules($dbt,$dbh,$q,$s,$exec_url,$module,$genus,$species,$in_list,$taxon_no);
         print "</div>";
 		print "<hr>"; 
 	}
 	# images are last
+	my @selected_images = $q->param('image_thumbs');
 	if(@selected_images){
 		print "<center><h3>Images</h3></center>";
 		foreach my $image (@selected_images){
-			foreach my $res (@thumbs){
+			foreach my $res (@$thumbs){
 				if($image == $res->{image_no}){
 					print "<center><table><tr><td>";
 					print "<center><img src=\"".$res->{path_to_image}.
@@ -318,10 +319,10 @@ sub doNavBox {
 	}
 
 	# image thumbs:
-	my @selected_images = $q->param('image_thumbs');
 	require Images;
 
 	my @thumbs = Images::processViewImages($dbt, $q, $s, $in_list);
+	my @selected_images = $q->param('image_thumbs');
 	foreach my $thumb (@thumbs){
         print "<tr><td>";
 		print "<input type=checkbox name=image_thumbs value=";
@@ -342,7 +343,7 @@ sub doNavBox {
     print "<tr><td align=\"center\"><br><input type=submit value=\"update\"></td></tr>";
     print "</table>";
 
-    return @modules_to_display;
+    return (\@modules_to_display,\@thumbs);
 } 
 
 sub doModules{
