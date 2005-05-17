@@ -77,7 +77,7 @@ sub toHTML
 	}
 	$retVal .= '>';
 	
-	$retVal .= "<option>" if $self->{_allowNulls} && $items[0] ne '';
+	$retVal .= "<option value=\"\"></option>" if $self->{_allowNulls} && $items[0] ne '';
 	
 	my $selectedItem = $self->getSelected();
 	foreach my $item (@items)
@@ -91,7 +91,7 @@ sub toHTML
 		$tagString .= qq| value="$val"| if defined $val;
 		$tagString .= '>';
 		
-		$retVal .= $tagString . $item;
+		$retVal .= $tagString . $item . "</option>";
 	}
 	
   return $retVal;
