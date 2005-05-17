@@ -40,7 +40,8 @@ function checkForm() {
     <td>
       <div align="center">
         <form method="POST" action="bridge.pl" onSubmit="return checkForm();">
-          <input id="action" type="hidden">
+          <input name="action" type="hidden" value="submitTaxonSearch">
+          <input id="goal" type="hidden">
 
           <h2><span id="page_title"></span></h2><br>
 
