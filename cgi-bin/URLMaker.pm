@@ -1,5 +1,7 @@
 #!/usr/bin/perl
 
+# DEPRECATED 05/15/2005 PS ... bleh
+
 # written by rjp, 1/2004
 # module to create URL's for various common cases
 
