@@ -927,7 +927,7 @@ sub submitAuthorityForm {
 		<p><A HREF=\"bridge.pl?action=checkTaxonInfo&taxon_no=$resultTaxonNumber\"><B>Get&nbsp;general&nbsp;information&nbsp;about&nbsp;" . $fieldsToEnter{taxon_name} . "</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $resultTaxonNumber ."\"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;" . $fieldsToEnter{taxon_name} . "</B></A>&nbsp;-
         <A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=" . $fieldsToEnter{'reference_no'}. " \"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;a&nbsp;different&nbsp;taxon&nbsp;with&nbsp;same&nbsp;reference</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionChoiceForm&child_no=" . $resultTaxonNumber . "\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;" . $fieldsToEnter{taxon_name} . "</B></A>&nbsp;-
+		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionChoiceForm&taxon_no=" . $resultTaxonNumber . "\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;" . $fieldsToEnter{taxon_name} . "</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityTaxonSearchForm\"><B>Add/edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;another&nbsp;taxon</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionTaxonSearchForm\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
 		</center>";	
@@ -938,113 +938,6 @@ sub submitAuthorityForm {
 	print "</CENTER>";
 }
 
-
-# JA 17.8.02
-#
-# When user searches for a taxon from startAuthority
-#
-# Edited by rjp 1/22/2004, 2/18/2004, 3/2004
-# Edited by PS 01/24/2004, accept reference_no instead of taxon_name optionally
-# Edited by PS 04/27/2004, moved here from bridge.pl, now handles only authority stuff, see process
-#
-sub submitAuthorityTaxonSearch {
-    my ($dbt,$s, $q) = @_;
-    my $dbh = $dbt->dbh;
-
-	# check for proper spacing of the taxon..
-	my $errors = Errors->new();
-	$errors->setDisplayEndingMessage(0); 
-
-    if ($q->param('taxon_name')) {
-        if ( (Validation::looksLikeBadSubgenus($q->param('taxon_name'))) ||
-             ((Validation::taxonRank($q->param('taxon_name')) eq 'invalid')) ) {
-            $errors->add("Ill-formed taxon.  Check capitalization and spacing.");
-        }
-    } elsif (!$q->param('reference_no')) {
-        $errors->add("No taxon name or reference passed.");
-    }
-    
-	if ($errors->count()) {
-		print $errors->errorMessage();
-		return;
-	}
-	# Try to find this taxon in the authorities table
-    my (@results);
-    if ($q->param('taxon_name')) {
-        @results = TaxonInfo::getTaxon($dbt,'taxon_name'=>$q->param('taxon_name'),'get_reference'=>1);
-    } elsif ($q->param('reference_no')) {
-        @results = TaxonInfo::getTaxon($dbt,'reference_no'=>$q->param('reference_no'),'get_reference'=>1);
-    }
-        
-    # If there were no matches, present the new taxon entry form immediately
-    # We're adding a new taxon
-    if (scalar(@results) == 0) {
-        if ($q->param('taxon_name')) {
-            my $toQueue = "action=displayAuthorityForm&skip_ref_check=1&taxon_no=-1&taxon_name=".$q->param('taxon_name');
-            $s->enqueue( $dbh, $toQueue );
-            
-            $q->param( "type" => "select" );
-            main::displaySearchRefs("Please choose a reference before adding a new taxon",1);
-        } else {
-            print "<div align=\"center\"><h3>No authorities found for this reference</h3></div>";
-        }
-        return;
-	# We have 1 or more matches.  Present a list so the user can either pick the taxon,
-    # or create a new taxon with the same name as an exisiting taxon
-	} else	{
-		print "<div align=\"center\">\n";
-        print "<table><tr><td align=\"center\">";
-        if ($q->param("taxon_name")) { 
-    		print "<h3>Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</h3>\n<br>\n";
-        } else {
-    		print "<h3>Select a taxon to edit:</h3>\n<br>\n";
-        }
-        print "<form method=\"POST\" action=\"bridge.pl\">\n";
-        print "<input type=hidden name=\"action\" value=\"displayAuthorityForm\">\n";
-		print "<input type=hidden name=\"taxon_name\" value=\"".$q->param('taxon_name')."\">\n";
-
-
-        # now create a table of choices
-		print "<table>\n";
-        my $checked = (scalar(@results) == 1) ? "CHECKED" : "";
-        foreach my $row (@results) {
-            # Check the button if this is the first match, which forces
-            #  users who want to create new taxa to check another button
-            print qq|<tr><td align="center"><input type="radio" name="taxon_no" value="$row->{taxon_no}" $checked></td>|;
-            print "<td>".formatAuthorityLine($dbt, $row)."</td></tr>";
-        }
-
-        # always give them an option to create a new taxon as well
-        if ($q->param('taxon_name')) {
-            print "<tr><td align=\"right\"><input type=\"radio\" name=\"taxon_no\" value=\"-1\"></td>\n<td>";
-            if ( scalar(@results) == 1 )	{
-                print "No, not the one above ";
-            } else	{
-                print "None of the above ";
-            }
-            print "- create a <b>new</b> taxon record</i></td></tr>\n";
-        }
-        
-		print "</table>";
-
-        # we print out difference buttons for two cases:
-        #  1: using a taxon name. give them an option to add a new taxon, so button is Submit
-        #  2: this is from a reference_no. No option to add a new taxon, so button is Edit
-        if ($q->param('taxon_name')) {
-		    print "<p><input type=submit value=\"Submit\"></p>\n</form>\n";
-		    print "<p align=\"left\"><span class=\"tiny\">";
-            print "You have a choice because there may be multiple biological species (e.g., a plant and an animal) with identical names.<br>\n";
-        } else {
-		    print "<p><input type=submit value=\"Edit\"></p>\n</form>\n";
-		    print "<p align=\"left\"><span class=\"tiny\">";
-        }
-		print "Create a new taxon only if the old ones were named by different people in different papers.<br>\n";
-		print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n<br>";
-
-        print "</td></tr></table>";
-		print "</div>\n";
-	}
-}
 
 # JA 17,20.8.02
 #
