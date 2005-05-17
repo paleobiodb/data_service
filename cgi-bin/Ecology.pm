@@ -1,148 +1,77 @@
 package Ecology;
 
-$DEBUG = 0;
-
 # written by JA 27-31.7,1.8.03
 
-my @fields = ('taxon_no', 'composition1', 'composition2', 'entire_body', 'body_part', 'adult_length', 'adult_width', 'adult_height', 'adult_area', 'adult_volume', 'thickness', 'architecture', 'form', 'reinforcement', 'folds', 'ribbing', 'spines', 'internal_reinforcement', 'polymorph', 'ontogeny', 'grouping', 'clonal', 'taxon_environment', 'locomotion', 'attached', 'epibiont', 'life_habit', 'depth_habitat', 'diet1', 'diet2', 'reproduction', 'asexual', 'brooding', 'dispersal1', 'dispersal2', 'comments');
-
-sub startEcologySearch	{
-	my $dbh = shift;
-	my $hbo = shift;
-	my $session = shift;
-	my $exec_url = shift;
-	my $revisits = shift;
-
-	# Have to have a reference #
-	my $reference_no = $session->get("reference_no");
-	if ( ! $reference_no )  {
-		$session->enqueue( $dbh, "action=startStartEcologySearch" );
-		main::displaySearchRefs ( "Please choose a reference first" );
-		exit;
-	}
-
-
-	# Have to be logged in
-	if ($session->get('enterer') eq "Guest" or $session->get('enterer') eq "
-")	{
-		$session->enqueue($dbh, "action=startStartEcologySearch");
-		exit;
-	}
-
-	# print the search form
-	print main::stdIncludes("std_page_top");
-
-	if ( $revisits > 0 )	{
-		print "<center><h3>Sorry, that taxon is unknown</h3></center>\n";
-	}
-
-	my $form = $hbo->populateHTML('search_taxonomy_form','','');
-
-	# reword the form and redirect the destination to populateEcologyForm
-	# WARNING: this is a low-down dirty trick; very inelegant
-	$form =~ s/%%taxon_what_to_do%%/to describe/;
-	$form =~ s/processTaxonomySearch/startPopulateEcologyForm/;
-
-	print $form;
-
-	print main::stdIncludes("std_page_bottom");
-
-	return;
-
-}
+my @fields = ('composition1', 'composition2', 'entire_body', 'body_part', 'adult_length', 'adult_width', 'adult_height', 'adult_area', 'adult_volume', 'thickness', 'architecture', 'form', 'reinforcement', 'folds', 'ribbing', 'spines', 'internal_reinforcement', 'polymorph', 'ontogeny', 'grouping', 'clonal', 'taxon_environment', 'locomotion', 'attached', 'epibiont', 'life_habit', 'depth_habitat', 'diet1', 'diet2', 'reproduction', 'asexual', 'brooding', 'dispersal1', 'dispersal2', 'comments','minimum_body_mass','maximum_body_mass');
 
 sub populateEcologyForm	{
 	my $dbh = shift;
 	my $dbt = shift;
 	my $hbo = shift;
 	my $q = shift;
-	my $session = shift;
+	my $s = shift;
 	my $exec_url = shift;
 
-	# if there's no taxon no OR name, something's totally wrong,
-	#  so bomb out
-	if ( ! $q->param('taxon_no') && ! $q->param('taxon_name') )	{
+    # We need a taxon_no passed in, cause taxon_name is ambiguous
+	if ( ! $q->param('taxon_no')) {
 		print "<center><h3>Sorry, the taxon's name is unknown</h3></center>\n";
 		exit;
 	}
+    $taxon_no = int($q->param('taxon_no'));
 
-	# if there's no taxon no but there's a taxon name, query the
-	#  authorities table for the taxon no
+    # For form display purposes
+	$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=" . $taxon_no;
+	$taxon_name =  ${$dbt->getData($sql)}[0]->{'taxon_name'};
 
-	my $sql;
-	my $taxon_no;
-	if ( ! $q->param('taxon_no') )	{
-		$sql = "SELECT taxon_no FROM authorities WHERE taxon_name='" . $q->param('taxon_name') . "'";
-		my $taxref = @{$dbt->getData($sql)}[0];
-		if ( $taxref )	{
-			$taxon_no = $taxref->{taxon_no};
-		}
-	} else	{
-		$taxon_no = $q->param('taxon_no');
-	}
-
-	# if there's still no taxon name, get it
-	if ( ! $q->param('taxon_name') )	{
-	
-		$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=" . $taxon_no;
-		my $taxref = @{$dbt->getData($sql)}[0];
-		$q->param('taxon_name' => $taxref->{taxon_name});
-	}
-
-	# if the search failed, print the search form and exit
-
-	if ( ! $taxon_no )	{
-		&startEcologySearch($dbh,$hbo,$session,$exec_url,'1');
-		exit;
-	}
 
 	# query the ecotaph table for the old data
-
 	$sql = "SELECT * FROM ecotaph WHERE taxon_no=" . $taxon_no;
-	my $ecotaph = @{$dbt->getData($sql)}[0];
-
-	# find the fields with actual values
-
-	my @fieldNames;
-	my @fieldValues;
-	if ( $ecotaph )	{
-		push @fieldNames, 'ecotaph_no';
-		push @fieldValues, $ecotaph->{ecotaph_no};
-		for my $field ( @fields )	{
+	my $ecotaph = ${$dbt->getData($sql)}[0];
+    my @values = ();
+    if (!$ecotaph) {
+        # This is a new entry
+        if (!$q->param('skip_ref_check') || !$s->get('reference_no')) {
+                # Make them choose a reference first
+                my $toQueue = "action=startPopulateEcologyForm&skip_ref_check=1&goal=".$q->param('goal')."&taxon_no=$taxon_no";
+                $s->enqueue( $dbh, $toQueue );
+                $q->param( "type" => "select" );
+                main::displaySearchRefs("Please choose a reference before adding ecological/taphonomic data",1);
+                return;
+        } else {
+            push @values, '' for @fields;
+	        push (@fields,'taxon_no','taxon_name','reference_no','ecotaph_no');
+	        push (@values,$taxon_no ,$taxon_name ,$s->get('reference_no'),'-1');
+        }
+    } else {
+        # This is an edit, use fields from the DB
+	    for my $field ( @fields )	{
 			if ( $ecotaph->{$field} )	{
-				push @fieldNames, $field;
-				push @fieldValues, $ecotaph->{$field};
-			} else	{
-				push @fieldNames, $field;
-				push @fieldValues, '';
-			}
-		}
-	} else	{
-		for my $field ( @fields )	{
-			push @fieldNames, $field;
-			push @fieldValues, '';
-		}
-	}
-
-	# make sure the taxon no is carried over as a hidden value
-	unshift @fieldNames,'taxon_no';
-	unshift @fieldValues,$taxon_no;
+	    	    push @values, $ecotaph->{$field};
+            } else {
+                push @values, '';
+            }
+        }
+        # some additional fields not from the form row
+	    push (@fields, 'taxon_no','taxon_name','reference_no','ecotaph_no');
+	    push (@values, $taxon_no,$taxon_name,$ecotaph->{'reference_no'},$ecotaph->{'ecotaph_no'});
+    }
 
 	# populate the form
-
-	print main::stdIncludes("std_page_top");
-
-	my $form = $hbo->populateHTML(ecotaph_form, \@fieldValues, \@fieldNames);
-
-	my $taxon_name = $q->param('taxon_name');
-	$form =~ s/taxon_name/$taxon_name/;
-
-	print $form;
-
-	print main::stdIncludes("std_page_bottom");
-
+    if ($q->param('goal') eq 'ecovert') {
+        # For the vertebrate ecology form, we need to rename these three fields to alternate versions
+        # (ecovert_diet1, ecovert_diet2, ecovert_life_habit) so that HTMLBuilder will populate them with
+        # the alternate versions of the select lists.  For processEcologyForm we need to tranlate back 
+        # to DB-friendly names as well
+        for(my $i=0;$i<scalar(@fields);$i++) {
+            if ($fields[$i] =~ /^life_habit|diet1|diet2|reproduction$/) {
+                $fields[$i] = 'ecovert_'.$fields[$i];
+            }
+        }
+	    print $hbo->populateHTML('ecovert_form', \@values, \@fields);
+    } else {
+	    print $hbo->populateHTML('ecotaph_form', \@values, \@fields);
+    }
 	return;
-
 }
 
 sub processEcologyForm	{
@@ -152,112 +81,54 @@ sub processEcologyForm	{
 	my $s = shift;
 	my $exec_url = shift;
 
-	# print the header
-	print main::stdIncludes("std_page_top");
-
 	# can't proceed without a taxon no
-	if ( ! $q->param('taxon_no') )	{
+	if (!$q->param('taxon_no'))	{
 		print "<center><h3>Sorry, the ecology/taphonomy table can't be updated because the taxon is unknown</h3></center>\n";
-		print main::stdIncludes("std_page_bottom");
-		exit;
+		return;
 	}
-	my $taxon_no = $q->param('taxon_no');
-
+	my $taxon_no = int($q->param('taxon_no'));
 	my $sql;
 
 	# if ecotaph is blank but taxon no actually is in the ecotaph table,
 	#  something is really wrong, so exit
 	if ( $q->param('ecotaph_no') < 1 )	{
-	# query the ecotaph table
+    	# query the ecotaph table
 		$sql = "SELECT ecotaph_no FROM ecotaph WHERE taxon_no=" . $taxon_no;
-		my $ecotaph = @{$dbt->getData($sql)}[0];
+		my $ecotaph = ${$dbt->getData($sql)}[0];
 
-	# result is found, so bomb out
+    	# result is found, so bomb out
 		if ( $ecotaph )	{
-			print "<center><h3>Sorry, the ecology/taphonomy table can't be updated because the taxon is unknown</h3></center>\n";
-			print main::stdIncludes("std_page_bottom");
-			exit;
+			print "<center><h3>Sorry, ecology/taphonomy information already exists for this taxon, please edit the old record instead of creating a new one.</h3></center>\n";
+            return;
 		}
 	}
 
 	# get the taxon's name
 	$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=" . $taxon_no;
-	my $taxref = @{$dbt->getData($sql)}[0];
-	my $taxon_name = $taxref->{taxon_name};
-
-	# stash the field names and values for populated fields
-	my @fieldNames;
-	my @fieldValues;
-	for my $f ( @fields )	{
-		my @temp = $q->param($f);
-		# set fields will start with a blank param inserted by
-		#  HTMLBuilder, so strip it
-		if ( ! $temp[0] )	{
-			shift @temp;
-		}
-		if ( $temp[0] )	{
-			push @fieldNames, $f;
-		# there might be multiple values, so get an array
-			my $v = join ',',@temp;
-		# values could be strings, so escape single quotes and pad
-		#  with single quotes
-			#$v =~ s/'/\'/;
-			#$v = "'" . $v . "'";
-			#push @fieldValues, $v;
-            push @fieldValues, $dbh->quote($v);
-		}
-	}
+	my $taxon_name = ${$dbt->getData($sql)}[0]->{'taxon_name'};
 
 	# if ecotaph no exists, update the record
+    my %fields = $q->Vars();
+    if ($q->param('goal') eq 'ecovert') {
+        # Translate the special fields back to their names in the DB
+        $fields{'reproduction'} = $fields{'ecovert_reproduction'};
+        $fields{'life_habit'} = $fields{'ecovert_life_habit'};
+        $fields{'diet1'} = $fields{'ecovert_diet1'};
+        $fields{'diet2'} = $fields{'ecovert_diet2'};
+    }
 	if ( $q->param('ecotaph_no') > 0 )	{
-	# set the modifier name
-		unshift @fieldNames, 'modifier_no';
-		unshift @fieldValues, $s->get('enterer_no');
-
-		$sql = "UPDATE ecotaph SET ";
-		for $i (0..$#fieldNames)	{
-			$sql .= $fieldNames[$i] . "=" . $fieldValues[$i];
-			if ( $i < $#fieldNames )	{
-				$sql .= ",";
-			}
-		}
-		$sql .= " WHERE ecotaph_no=" . $q->param('ecotaph_no') ;
-		$dbt->getData($sql);
-
+        $dbt->updateRecord($s,'ecotaph','ecotaph_no',$q->param('ecotaph_no'),\%fields);
 		print "<center><h3>Ecological/taphonomic data for $taxon_name have been updated</h3></center>\n";
-	}
-
-	# if there's no ecotaph no, insert a new record
-	else	{
-	# set the authorizer and enterer and reference no
-		unshift @fieldNames, 'authorizer_no';
-		unshift @fieldValues, $s->get('authorizer_no');
-
-		unshift @fieldNames, 'enterer_no';
-		unshift @fieldValues, $s->get('enterer_no');
-
-		unshift @fieldNames, 'reference_no';
-		unshift @fieldValues, $s->get('reference_no');
-
-	# insert the record
-		$sql = "INSERT INTO ecotaph (" . join(',',@fieldNames) . ") VALUES (" . join(',',@fieldValues) . ")";
-		$dbt->getData($sql);
-
-	# set the created date
-		$sql = "SELECT modified FROM ecotaph WHERE taxon_no=" . $taxon_no;
-		my @modifieds = @{$dbt->getData($sql)};
-		$sql = "UPDATE ecotaph SET modified=modified,created=";
-		$sql .= $dbh->quote($modifieds[0]->{modified}) . " WHERE taxon_no=" . $taxon_no;
-		$dbt->getData($sql);
+	} else {
+        # Set the reference_no
+        $fields{'reference_no'} = $s->get('reference_no');
+        $dbt->insertRecord($s,'ecotaph',\%fields);
 		print "<center><h3>Ecological/taphonomic data for $taxon_name have been added</h3></center>\n";
 	}
 
-	print "<center><p><a href=\"$exec_url?action=startPopulateEcologyForm&taxon_no=$taxon_no\">Edit data for this taxon</a> - \n";
-	print "<a href=\"$exec_url?action=startStartEcologySearch\">Enter data for another taxon</a></p></center>\n";
-
-	print main::stdIncludes("std_page_bottom");
+    my $action = ($q->param('goal') eq 'ecovert') ? 'startStartEcologyVertebrateSearch' : 'startStartEcologyTaphonomySearch';
+	print "<center><p><a href=\"$exec_url?action=startPopulateEcologyForm&taxon_no=$taxon_no&goal=".$q->param('goal')."\">Edit data for this taxon</a> - \n";
+	print "<a href=\"$exec_url?action=$action\">Enter data for another taxon</a></p></center>\n";
 	return;
 }
-
-
-
+1;
