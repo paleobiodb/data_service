@@ -625,7 +625,7 @@ sub mapQueryDb	{
 	my $collection_no_list = join(", ",keys(%collok));
 	my $where = "";
 	# %collok is only populated if $q->param("taxon_name") was provided
-    if ($q->param('taxon_name')) {
+    if ($q->param('taxon_name') || @$in_list) {
         if($collection_no_list ne ""){
             $where = "WHERE collection_no IN($collection_no_list) ";
         } else {
