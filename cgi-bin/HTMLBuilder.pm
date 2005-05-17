@@ -146,14 +146,19 @@ sub new {
 					grouping=>['', 'colonial','gregarious','solitary'],
 					taxon_environment=>['', 'coastal', 'inner shelf', 'outer shelf', 'oceanic', 'oligotrophic', 'mesotrophic', 'eutrophic', 'hypersaline','marine','brackish','freshwater','terrestrial'],
 					locomotion=>['', 'stationary','facultatively mobile','passively mobile','actively mobile'],
-					life_habit=>['', 'boring','infaunal','semi-infaunal','epifaunal','nektobenthic','nektonic','planktonic','','fossorial','ground dwelling','arboreal','volant','amphibious','','herbaceous','arborescent','aquatic'],
+					ecovert_life_habit=>['','fossorial','ground dwelling','scansorial','arboreal','volant','amphibious','aquatic'],
+					life_habit=>['','boring','infaunal','semi-infaunal','epifaunal','nektobenthic','nektonic','planktonic','fossorial','ground dwelling','scansorial','arboreal','volant','amphibious','herbaceous','arborescent','aquatic'],
 					depth_habitat=>['','surface', 'thermocline', 'subthermocline', 'deep'],
-					diet1=>['', 'chemoautotroph','"photoautotroph"','C3 autotroph','C4 autotroph','CAM autotroph','chemosymbiotic','photosymbiotic','herbivore','omnivore','carnivore','parasite','suspension feeder','deposit feeder','detritivore','saprophage','coprophage'],
-					diet2=>['', 'none', 'chemoautotroph','"photoautotroph"','C3 autotroph','C4 autotroph','CAM autotroph','chemosymbiotic','photosymbiotic','herbivore','omnivore','carnivore','parasite','suspension feeder','deposit feeder','detritivore','saprophage','coprophage'],
+					ecovert_diet1=>['','herbivore','frugivore','folivore','browser','grazer','granivore','omnivore','insectivore','carnivore','piscivore','durophage'],
+					ecovert_diet2=>['','herbivore','frugivore','folivore','browser','grazer','granivore','omnivore','insectivore','carnivore','piscivore','durophage'],
+					diet1=>['','chemoautotroph','"photoautotroph"','C3 autotroph','C4 autotroph','CAM autotroph','chemosymbiotic','photosymbiotic','herbivore','frugivore','folivore','browser','grazer','granivore','omnivore','insectivore','carnivore','piscivore','durophage','parasite','suspension feeder','deposit feeder','detritivore','saprophage','coprophage'],
+					diet2=>['','chemoautotroph','"photoautotroph"','C3 autotroph','C4 autotroph','CAM autotroph','chemosymbiotic','photosymbiotic','herbivore','frugivore','folivore','browser','grazer','granivore','omnivore','insectivore','carnivore','piscivore','durophage','parasite','suspension feeder','deposit feeder','detritivore','saprophage','coprophage'],
+					ecovert_reproduction=>['', 'oviparous','ovoviviparous','viviparous'],
 					reproduction=>['', 'oviparous','ovoviviparous','viviparous','alternating','homosporous','heterosporous','seeds','fruits'],
 					dispersal1=>['', 'direct/internal','water','wind','animal'],
 					dispersal2=>['', 'planktonic','non-planktonic','wind-dispersed','animal-dispersed','mobile','gravity'],
-
+                    minimum_body_mass=>['','1 g','3 g','10 g',,'30 g','100 g','300 g','1 kg','3 kg','10 kg','30 kg','100 kg','300 kg','1000 kg','3000 kg','10000 kg','30000 kg','100000 kg'],
+                    maximum_body_mass=>['','1 g','3 g','10 g',,'30 g','100 g','300 g','1 kg','3 kg','10 kg','30 kg','100 kg','300 kg','1000 kg','3000 kg','10000 kg','30000 kg','100000 kg'],
 					research_group=>['', 'decapod','marine invertebrate', 'micropaleontology', 'paleobotany', 'paleoentomology', 'taphonomy', 'vertebrate', 'ETE', '5%', '1%', 'PACED', 'PGAP'],
 					eml_interval=>['', 'Late/Upper', 'late Late', 'middle Late', 'early Late', 'Middle', 'late Middle', 'middle Middle', 'early Middle', 'Early/Lower', 'late Early', 'middle Early', 'early Early'],
 					eml_max_interval=>['', 'Late/Upper', 'late Late', 'middle Late', 'early Late', 'Middle', 'late Middle', 'middle Middle', 'early Middle', 'Early/Lower', 'late Early', 'middle Early', 'early Early'],
@@ -745,7 +750,7 @@ sub populateHTML {
   my $htmlTemplateString = $self->getTemplateString($htmlTemplateName,\@$prefkeys);
   
   # Substitute in the application URL if it is supplied
-  my $exec_url = $self->{_exec_url};
+  my $exec_url = $self->{exec_url};
 
   $htmlTemplateString =~ s/(<.+?)\$exec_url/$1$exec_url/gim;
 
