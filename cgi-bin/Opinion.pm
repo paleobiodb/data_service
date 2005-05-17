@@ -1151,7 +1151,7 @@ sub submitOpinionForm {
     <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_no=$fields{child_no}"><B>Get general information about $childName</b></a></span> -
     <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=$resultOpinionNumber"><B>Edit this opinion</b></a></span> -
     <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber"><B>Edit a different opinion with same reference</b></a></span> -
-    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayOpinionChoiceForm&child_no=$fields{child_no}"><B>Add/edit a different opinion about $childName</b></a></span> -
+    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_no}"><B>Add/edit a different opinion about $childName</b></a></span> -
     <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayOpinionTaxonSearchForm"><B>Add/edit an opinion about another taxon</b></a></span> -
     <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayAuthorityTaxonSearchForm"><B>Add/edit authority data about another taxon</b></a></span>
   </p>
@@ -1170,21 +1170,22 @@ sub displayOpinionChoiceForm{
     my $dbh = $dbt->dbh;
 
     print "<div align=\"center\">";
-    if ($q->param("child_no")) {
-        my $orig_no = TaxonInfo::getOriginalCombination($dbt,$q->param('child_no'));
+    if ($q->param('taxon_no')) {
+        my $child_no = $q->param('taxon_no');
+        my $orig_no = TaxonInfo::getOriginalCombination($dbt,$child_no);
         my $sql = "SELECT o.opinion_no FROM opinions o ".
                   " LEFT JOIN refs r ON r.reference_no=o.reference_no".
                   " WHERE o.child_no=$orig_no".
                   " ORDER BY IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) ASC";
         my @results = @{$dbt->getData($sql)};
         
-        my $t = Taxon->new($dbt,$q->param('child_no'));
+        my $t = Taxon->new($dbt,$child_no);
         print "<h3>Which opinion about ".$t->taxonNameHTML()." do you want to edit?</h3>\n";
         
         print qq|<form method="POST" action="bridge.pl">
                  <input type="hidden" name="action" value="displayOpinionForm">\n
                  <input type="hidden" name="child_no" value="$orig_no">\n
-                 <input type="hidden" name="child_spelling_no" value="|.$q->param('child_no').qq|">\n|;
+                 <input type="hidden" name="child_spelling_no" value="$child_no">\n|;
         print "<table border=0>";
         foreach my $row (@results) {
             my $o = Opinion->new($dbt,$row->{'opinion_no'});
@@ -1230,89 +1231,6 @@ sub displayOpinionChoiceForm{
         print "</form>\n";
         print "</div>\n";
     }
-}
-
-# JA 17.8.02
-#
-# When user searches for a taxon from displayOpinionTaxonSearchForm
-#
-# Edited by rjp 1/22/2004, 2/18/2004, 3/2004
-# Edited by PS 01/24/2004, accept reference_no instead of taxon_name optionally
-# Edited by PS 04/27/2004, moved here from bridge.pl, now handles only opinion stuff, see process
-#
-sub submitOpinionTaxonSearch {
-    my ($dbt,$s,$q) = @_;
-    my $dbh = $dbt->dbh;
-	# check for proper spacing of the taxon..
-	my $errors = Errors->new();
-	$errors->setDisplayEndingMessage(0); 
-
-    if ($q->param('taxon_name')) {
-        if ( (Validation::looksLikeBadSubgenus($q->param('taxon_name'))) ||
-             ((Validation::taxonRank($q->param('taxon_name')) eq 'invalid')) ) {
-            $errors->add("Ill-formed taxon.  Check capitalization and spacing.");
-        }
-    } else {
-        $errors->add("No taxon name or reference passed.");
-    }
-    
-	if ($errors->count()) {
-		print $errors->errorMessage();
-		return;
-	}
-	# Try to find this taxon in the authorities table
-    my @results = TaxonInfo::getTaxon($dbt,"taxon_name"=>$q->param('taxon_name'),"get_reference"=>1);
-        
-    if ( scalar(@results) == 0 )	{
-        # if we can't find the taxon, print an error message
-        print "<div class=\"warning\">The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  You can't enter an opinion about a nonexistent taxon.  Please <a href=\"bridge.pl?action=submitAuthorityTaxonSearch&taxon_name=".$q->param('taxon_name')."\">enter</a> authority record for this taxon before adding an opinion.</DIV>"; 
-        return;
-    } elsif (scalar(@results) == 1) {
-        # we should take them directly to the opinion list if we only have one match.
-        #my $orig_no = TaxonInfo::getOriginalCombination($dbt,$results[0]->{'taxon_no'});
-        #$q->param("child_no"=>$orig_no);
-        $q->param("child_no"=>$results[0]->{'taxon_no'});
-        Opinion::displayOpinionChoiceForm($dbt,$s,$q);
-	} else	{
-		#mma Otherwise, print a form so the user can pick the taxon
-		print "<div align=\"center\">\n";
-    	print "<h3>Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</h3>\n<br>\n";
-		print "<form method=\"POST\" action=\"bridge.pl\">\n";
-		
-		print "<input type=hidden name=\"action\" value=\"displayOpinionChoiceForm\">\n";	
-		print "<input type=hidden name=\"child_spelling_name\" value=\"".$q->param('taxon_name')."\">\n";
-
-		print "<table>\n";
-        foreach my $row (@results) {
-            # I changed it pass the original combination number before, but now don't bother,
-            # we want to preserve the child_no vs. the child_spelling_no for later
-            print qq|<tr><td align="center"><input type="radio" name="child_no" value="$row->{taxon_no}"</td>|;
-            print "<td>".Taxon::formatAuthorityLine($dbt,$row);
-
-            # If the original combinatin no and the taxon no (which might be the spelling no) don't match up
-            # then we prepend a note so the user knows why the name at the top of the form in Opinions
-            # form isn't the name they see here
-            #if ($orig_no != $row->{'taxon_no'}) {
-            #    my $orig_taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$orig_no);
-            #    print " <i><div class='small'>(originally known as $orig_taxon->{taxon_name})</div></i>";
-            #}
-            # Print the name
-            print "</td></tr>\n";
-        }
-		
-		
-		# we only want to allow them to add a new taxon if they're trying to 
-		# edit an authority record.  It will screw things up if they try this with
-		# an opinion record.
-		print "</table>\n";
-	    print "<p><input type=submit value=\"Submit\"></p>";
-        print "</form>";
-
-		print "<p align=\"left\"><span class=\"tiny\">";
-        print "You have a choice because there may be multiple biological species (e.g., a plant and an animal) with identical names.<br>\n";
-		print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n";
-        print "</div>";
-	}
 }
 
 1;
