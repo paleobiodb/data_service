@@ -6,93 +6,30 @@ $DEBUG = 0;
 # UPLOADING
 ###
 
-sub startLoadImage{
-	my $dbh = shift;
-	my $dbt = shift;
-	my $session = shift;
-	my $exec_url = shift;
-
-	# Check that user is logged in (session -> enterer and authorizer BOTH)
-		# route to login if not
-	if($session->get('enterer') eq "Guest" or $session->get('enterer') eq ""){
-		$session->enqueue($dbh, "action=startLoadImage");
-		main::displayLoginPage("Please log in first.");
-		exit;
-	}
-	# Have user check that the taxonomic name exists in Authorities
-		# route to 'add taxonomic info' if not (NOTE: for "Carnivora sp." the
-		#	user may get stuck having to enter info on "Carnivora".
-		# save away destination on the queue?
-	print main::stdIncludes("std_page_top");
-	print "<DIV class=\"title\">Image upload</DIV>";
-	print "<p>You can't upload an image unless we have taxonomic information ".
-		  "on the subject of the image. If this search doesn't find it, you ".
-		  "will be asked to ".
-		  "<a href=\"$exec_url?action=displayAuthorityTaxonSearchForm\"> provide the ".
-		  "taxonomic information</a> yourself.";
-	print "<center><p><form name=\"image_form\" action=\"$exec_url\" ".
-		  "method=\"POST\"><table><tr><td>";
-	print "<b>Taxonomic name of specimen in image:&nbsp</b>";
-	print "<input type=text size=30 name=\"taxon_name\">".
-		  "<input type=hidden name=\"action\" value=\"processStartImage\">".
-		  "</td></tr>";
-	print "<tr><td><BR><center><input type=submit></center></td></tr></table></center>";
-	print main::stdIncludes("std_page_bottom");
-
-}
-
-sub processStartLoadImage{
-	my $dbt = shift;
-	my $q = shift;
-	my $s = shift;
-	my $exec_url = shift;
-	my $taxon_name = $q->param('taxon_name');
-
-	if(!$taxon_name){
-		main::startImage();
-		exit;
-	}
-	
-	# Strip off 'indet' or 'sp' or whatever. Use only the genus name in those
-	# cases. 
-	$taxon_name =~ s/\s+(indet|sp|spp)\.{0,1}$//;
-
-	my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='$taxon_name'";
-	my @results = @{$dbt->getData($sql)};
-	my $taxon_no = $results[0]->{taxon_no};
-	if(!$taxon_no){
-		print main::stdIncludes("std_page_top");
-		print "<center><h2>$taxon_name not found</h2>";
-		print "<p><a href=\"$exec_url?action=displayAuthorityTaxonSearchForm\"><b>Enter ".
-			  "taxonomic information on $taxon_name</b></a>&nbsp;&#149;&nbsp;";
-		print "<a href=\"$exec_url?action=startImage\"><b>Begin image upload ".
-			  "from the start</b></a><p>&nbsp;";
-		print main::stdIncludes("std_page_bottom");
-		exit;
-	}
-	# If logged in and name exists in Authorities, go to image upload page.
-	displayLoadImageForm($exec_url, $taxon_name, $taxon_no, $s);
-}
-
 sub displayLoadImageForm{
-	my $exec_url = shift;
-	my $taxon_name = shift;
-	my $taxon_no = shift;
+    my $dbt = shift;
+    my $q = shift;
 	my $s = shift;
 
 	# Spit out upload html page
 	# list constraints: image size and image type
+    my $exec_url = $q->url();
+    my ($taxon_no,$taxon_name);
+    my @results = TaxonInfo::getTaxon($dbt,'taxon_no'=>$q->param('taxon_no'));
+    if (@results) {
+        $taxon_no = $results[0]->{'taxon_no'}; 
+        $taxon_name = $results[0]->{'taxon_name'}; 
+    } else {
+        print "<div align=center><h2>Could not find taxon in database</h2></div>";
+        return;
+    }
 
-	print main::stdIncludes("std_page_top");
-	print "<center><h2>Image upload form</h2>";
-	print "<p>Files must be smaller than 1 MB and must either be of type ".
-		  "jpg, gif or png.";
-	print "<p><form name=\"load_image_form\" action=\"$exec_url\" ".
-		  "method=\"POST\" enctype=\"multipart/form-data\">";
-	print "<b>File to upload:</b>&nbsp;<input type=file name=\"image_file\" ".
-		  "accept=\"image/*\">".
-		  "<input type=hidden name=\"taxon_name\" value=\"$taxon_name\">".
+	print "<center><h2>Image upload form: $taxon_name</h2>";
+	print "<p>Files must be smaller than 1 MB and must either be of type jpg, gif or png.";
+	print "<p><form name=\"load_image_form\" action=\"$exec_url\" method=\"POST\" enctype=\"multipart/form-data\">";
+	print "<b>File to upload:</b>&nbsp;<input type=file name=\"image_file\" accept=\"image/*\">".
 		  "<input type=hidden name=\"taxon_no\" value=\"$taxon_no\">".
+		  "<input type=hidden name=\"taxon_name\" value=\"$taxon_name\">".
 		  "<input type=hidden name=\"action\" value=\"processLoadImage\">";
 	print "<table><tr><td valign=top><p><b>Caption:</b></td><td>".
 		  "<textarea cols=60 rows 4 name=\"caption\">".
@@ -101,15 +38,14 @@ sub displayLoadImageForm{
 	if ( $reference_no )	{
 		print  "<input type=checkbox name=reference_no value=$reference_no> <b>Check if image is from the current reference</b><p>\n\n";
 	}
-	print "<br><input type=submit></form></center>";
-	print main::stdIncludes("std_page_bottom");
+	print "<br><input type=\"submit\"></form></center>";
 }
 
-sub processLoadImageForm{
+sub processLoadImage{
 	my $dbt = shift;
 	my $q = shift;
 	my $s = shift;
-	my $exec_url = shift;
+    my $exec_url = $q->url();
 	my $MEGABYTE = 1048576;
 	my $file_name = $q->param('image_file');
 	my $taxon_name = $q->param('taxon_name');
@@ -127,31 +63,27 @@ sub processLoadImageForm{
 
 	# test that we actually got a file
 	if(!$file_name && $q->cgi_error){
-		print $q->header(-status=>$->cgi_error);
+		print $q->header(-status=>$q->cgi_error);
 		exit;
 	}
 
 	# check the file type: we only want images
 	my $type = $q->uploadInfo($file_name)->{'Content-Type'};
 	if($type !~ /image/){
-		print main::stdIncludes("std_page_top");
 		print "<center><p>Image files of type jpg, png or gif only please!<br>";
 		print "<p><a href=\"$exec_url?action=startImage\">".
 			  "<b>Enter another image</b></a></center>";
-		print main::stdIncludes("std_page_bottom");
-		exit;
+		return;
 	}
 
 	# find file's suffix:
 	$file_name =~ /.*?\.(\w+)$/;
 	my $suffix = $1;
 	if($file_name !~ /(jpg|gif|png)/i){
-		print main::stdIncludes("std_page_top");
 		print "<center><p>Please upload only images of type jpg, gif or png.<br>";
 		print "<p><a href=\"$exec_url?action=startImage\">".
 			  "<b>Enter another image</b></a></center>";
-		print main::stdIncludes("std_page_bottom");
-		exit;
+		return;
 	}
 
 	# read the image into memory
@@ -161,13 +93,11 @@ sub processLoadImageForm{
 
 	# test the file size, send back error message if too big
 	if($bytes_read > $MEGABYTE-1){
-		print main::stdIncludes("std_page_top");
 		print "<center><p>Image is too large.  Please only upload images ".
 			  "less than one megabyte in size<br>";
 		print "<p><a href=\"$exec_url?action=startImage\">".
 			  "<b>Enter another image</b></a></center>";
-		print main::stdIncludes("std_page_bottom");
-		exit;
+		return;
 	}
 
 	# find the image's md5 checksum (to check uniqueness)
@@ -189,13 +119,11 @@ sub processLoadImageForm{
 			  "WHERE file_md5_hexdigest='$digest'";
 	my @results = @{$dbt->getData($sql)};
 	if(@results){
-		print main::stdIncludes("std_page_top");
 		print "<center><p>This image <a href=\"".$results[0]->{path_to_image}.
 			  "\">already exists</a> in the database<br>";
 		print "<p><a href=\"$exec_url?action=startImage\">".
 			  "<b>Enter another image</b></a></center>";
-		print main::stdIncludes("std_page_bottom");
-		exit; 
+		return; 
 	}
 
 	# Need authorizer/enterer numbers from names
@@ -287,13 +215,11 @@ sub processLoadImageForm{
 		}
 	}
 	else{
-		print main::stdIncludes("std_page_top");
 		my $clean_name = $taxon_name;
 		$clean_name =~ s/_/ /g;
 		print "<center><p>The image of $clean_name was uploaded successfully</p>";
 		print "<p><a href=\"$exec_url?action=startImage\">".
 			  "<b>Enter another image</b></a></p></center>";
-		print main::stdIncludes("std_page_bottom");
 	}
 }
 
@@ -306,13 +232,9 @@ sub processViewImages{
 	my $q = shift;
 	my $s = shift;
 	my $in_list = shift;
+    
 	my @results;
 
-    #use Data::Dumper;
-    #print "inlist ".Dumper(@$in_list);
-
-    #if(($q->param('taxon_rank') eq "Higher taxon" || $q->param('taxon_rank') eq "Higher-taxon") && 
-    #   @$in_list){
     foreach $taxon_no (@$in_list) {
         if ($taxon_no =~ /^\d+$/) {
             push @taxon_no_list,$taxon_no;
