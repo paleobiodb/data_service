@@ -55,7 +55,7 @@ A:hover.menu {
 TD, TH { font-size: 14px; }
 H1, H2, H3, H4 { 
 	padding: 0px 0px 0px 0px;
-	margin: 0.1em 1em 0.5em 1em;
+	/*margin: 0.1em 1em 0.5em 1em;*/
 }
 
 LI { font-size: 13px; }
