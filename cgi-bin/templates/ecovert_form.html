@@ -1,0 +1,156 @@
+<center>
+<h2>Vertebrate ecology form: <span id="taxon_name"></span></h2>
+</center>
+
+<hr>
+
+<p><i>Note: this form is intended for adult morphologies only... Please see the <a href="javascript: tipsPopup('/public/tips/ecology_tips.html')">tip sheet</a>.</i></p>
+
+<form method="POST" action="$exec_url">
+
+<input type=hidden name="action" value="startProcessEcologyForm">
+<input id="taxon_no" name="taxon_no" type="hidden">
+<input id="ecotaph_no" name="ecotaph_no" type="hidden">
+<input type="hidden" name="goal" value="ecovert">
+
+<h3>Morphology and development</h3>
+
+<table cellpadding=10>
+  <tr>
+    <td colspan=3>
+      <table>
+        <tr><td>
+          <b>Adult size</b>
+        </td></tr>
+        <tr>
+          <td>
+            <span class="tiny">May refer to pollen, seeds,<br> leaves, etc. for plants but only<br>to entire bodies for animals</span>
+          </td>
+          <td colspan=2>
+            Measurements are of the entire body? 
+            <input id="entire_body" type=checkbox value="yes">yes
+          </td>
+        </tr>
+        <tr>
+          <td></td>
+          <td colspan=3>
+            If no, name of body part: <input id="body_part" size=20>
+        </tr>
+        <tr>
+          <td></td>
+          <td><span class="small"><u>length</u></span></td>
+          <td><span class="small"><u>width</u></span></td>
+          <td><span class="small"><u>height</u></span></td>
+        </tr>
+        <tr>
+          <td>Size estimate(s):</td>
+          <td valign="top"><select id="adult_length"></select>
+          <td valign="top"><select id="adult_width"></select>
+          <td valign="top"><select id="adult_height"></select>
+        </tr>
+        <tr> 
+          <td></td>
+          <td></td>
+          <td><span class="small"><u>area</u></span></td>
+          <td><span class="small"><u>volume</u></span></td>
+        </tr>
+        <tr>
+          <td></td>
+          <td></td>
+          <td valign="top"><select id="adult_area"></select>
+          <td valign="top"><select id="adult_volume"></select>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Minimum body mass</b>
+      <select id="minimum_body_mass"></select>
+    </td>
+    <td>
+      <b>Maximum body mass</b>
+      <select id="maximum_body_mass"></select>
+    </td>
+  </tr>
+  <tr>
+    <td valign=top>
+      <b>Adult polymorphism/dimorphism?</b>
+      <input id="polymorph" type=checkbox value="yes">yes
+      <br>
+    </td>
+    <td>
+      <b>Social grouping</b>
+      <select id="grouping"></select>
+    </td>
+  </tr>
+</table>
+
+<hr>
+<h3>Life history and behavior</h3>
+<table cellpadding=10>
+  <tr>
+    <td valign=top><b>General environment</b></td>
+    <td>
+      <input id="taxon_environment" type=checkbox value="hypersaline">hypersaline
+      <input id="taxon_environment" type=checkbox value="marine">marine
+      <input id="taxon_environment" type=checkbox value="brackish">brackish
+      <input id="taxon_environment" type=checkbox value="freshwater">freshwater
+      <input id="taxon_environment" type=checkbox value="terrestrial">terrestrial
+      <br>
+      <input id="taxon_environment" type=checkbox value="coastal">coastal
+      <input id="taxon_environment" type=checkbox value="inner shelf">inner shelf
+      <input id="taxon_environment" type=checkbox value="outer shelf">outer shelf
+      <input id="taxon_environment" type=checkbox value="oceanic">oceanic
+    </td>
+  </tr>
+</table>
+
+<table cellpadding=10>
+  <tr>
+    <td>
+      <b>Life habit</b>
+      <select id="ecovert_life_habit"></select><br>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Diet/feeding mode 1</b>
+      <select id="ecovert_diet1"></select><br>
+    </td>
+    <td>
+      <b>Diet/feeding mode 2</b>
+      <select id="ecovert_diet2"></select><br>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Reproduction</b>
+      <select id="ecovert_reproduction"></select><br>
+    </td>
+    <td>
+      <b>Brooding?</b>
+      <input id="brooding" type=checkbox value="yes">yes
+    </td>
+  </tr>
+</table>
+
+<hr>
+
+<table>
+  <tr>
+    <td valign="top">
+      <b>Comments:</b>
+    </td> 
+    <td>
+      <textarea id="comments" rows=3 wrap="virtual" cols=80></textarea>
+    </td>
+  </tr>
+</table>
+
+<table width=100%><tr><td align="center">
+  <input type=submit value="Submit">
+</td></tr></table>
+</form>
+<p>&nbsp;</p>
+
