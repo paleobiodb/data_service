@@ -1,10 +1,5 @@
-<html>
-<head><title>Paleobiology Database Ecology and Taphonomy Entry Form: Taxon Data</title></head>
-<body bgcolor="white" background="/public/PDbg.gif" text=black link="#0055FF" vl
-ink="#990099">
-
 <center>
-<h2>Ecology and Taphonomy Entry Form: taxon_name</h2>
+<h2>Ecology and taphonomy form: <span id="taxon_name"></span></h2>
 </center>
 
 <hr>
@@ -16,272 +11,245 @@ ink="#990099">
 <input type=hidden name="action" value="startProcessEcologyForm">
 <input id="taxon_no" name="taxon_no" type="hidden">
 <input id="ecotaph_no" name="ecotaph_no" type="hidden">
+<input type="hidden" name="goal" value="ecotaph">
+
 
 <h3>Morphology and development</h3>
 
 <table cellpadding=10>
-<tr>
-<td valign="top">
-<b>
-Skeletal composition 1</b>
-<select id="composition1">
-</select><br>
+  <tr>
+    <td valign="top">
+      <b>Skeletal composition 1</b>
+      <select id="composition1"></select><br>
+    </td>
+    <td valign="top">
+      <b>Skeletal composition 2</b>
+      <select id="composition2"></select><br>
+    </td>
+  </tr>
+  <tr><td colspan=3>
+    <table>
+      <tr><td>
+        <b>Adult size</b>
+      </td></tr>
+      <tr>
+        <td>
+          <span class="tiny">May refer to pollen, seeds,<br> leaves, etc. for plants but only<br>to entire bodies for animals</span>
+        </td>
+        <td colspan=2>
+          Measurements are of the entire body? 
+          <input id="entire_body" type=checkbox value="yes">yes
+        </td>
+      </tr>
+      <tr>
+        <td></td>
+        <td colspan=3>
+          If no, name of body part: <input id="body_part" size=20>
+      </tr>
+      <tr>
+        <td></td>
+        <td><span class="small"><u>length</u></span></td>
+        <td><span class="small"><u>width</u></span></td>
+        <td><span class="small"><u>height</u></span></td>
+      </tr>
+      <tr>
+        <td>Size estimate(s):</td>
+        <td valign="top"><select id="adult_length"></select>
+        <td valign="top"><select id="adult_width"></select>
+        <td valign="top"><select id="adult_height"></select>
+      </tr>
+      <tr> 
+        <td></td>
+        <td></td>
+        <td><span class="small"><u>area</u></span></td>
+        <td><span class="small"><u>volume</u></span></td>
+      </tr>
+      <tr>
+        <td></td>
+        <td></td>
+        <td valign="top"><select id="adult_area"></select>
+        <td valign="top"><select id="adult_volume"></select>
+      </tr>
+    </table>
+  </td></tr>
+  <tr>    
+    <td>
+      <b>Minimum body mass</b>
+      <select id="minimum_body_mass"></select>
+    </td>
+    <td>
+      <b>Maximum body mass</b>
+      <select id="maximum_body_mass"></select>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Relative thickness</b>
+      <select id="thickness"></select>
+    </td>
+    <td>
+      <b>Internal skeletal architecture</b>
+      <select id="architecture"></select>
+    </td>
+  </tr>
+  <tr>
+    <td valign=top>
+      <b>3-d form</b>
+      <select id="form"></select>
+    </td>
+    <td valign="top">
+      <b>Skeletal reinforcement</b><br>
+      <input id="reinforcement" type=checkbox value="no">none (smooth) <i>or...</i><br>
+      <nobr>
+        folds: <select id="folds"></select>
+      </nobr>
 
-<td valign="top">
-<b>
-Skeletal composition 2</b>
-<select id="composition2">
-</select><br>
+      <nobr>
+        ribbing: <select id="ribbing"></select>
+      </nobr>
 
-<tr> <td colspan=3>
-<table>
-<tr><td>
-<b>Adult size</b>
+      <nobr>
+        spines: <select id="spines"></select>
+      </nobr>
 
-<tr> <td>
-<span class="tiny">May refer to pollen, seeds,<br> leaves, etc. for plants but only<br>to entire bodies for animals</span>
-
-<td colspan=2>
-Measurements are of the entire body? 
-<input id="entire_body" type=checkbox value="yes">yes
-
-<tr>
-<td>
-<td colspan=3>
-If no, name of body part: <input id="body_part" size=20>
-
-<tr>
-<td>
-<td>
-<span class="small"><u>length</u></span>
-
-<td>
-<span class="small"><u>width</u></span>
-
-<td>
-<span class="small"><u>height</u></span>
-
-<tr>
-<td>
-Size estimate(s):
-
-<td valign="top">
-<select id="adult_length">
-</select>
-
-<td valign="top">
-<select id="adult_width">
-</select>
-
-<td valign="top">
-<select id="adult_height">
-</select>
-
-<tr> <td>
-<td>
-<td>
-<span class="small"><u>area</u></span>
-
-<td>
-<span class="small"><u>volume</u></span>
-
-<tr> <td>
-<td>
-<td valign="top">
-<select id="adult_area">
-</select>
-
-<td valign="top">
-<select id="adult_volume">
-</select>
-
-</table>
-
-<tr>
-<td>
-<b>Relative thickness</b>
-<select id="thickness">
-</select>
-
-<td>
-<b>Internal skeletal architecture</b>
-<select id="architecture">
-</select>
-
-<tr>
-<td valign=top>
-<b>3-d form</b>
-<select id="form">
-</select>
-
-<td valign="top">
-<b>Skeletal reinforcement</b><br>
-<input id="reinforcement" type=checkbox value="no">none (smooth) <i>or...</i><br>
-<nobr>
-folds:
-<select id="folds">
-</select>
-</nobr>
-
-<nobr>
-ribbing:
-<select id="ribbing">
-</select>
-</nobr>
-
-<nobr>
-spines:
-<select id="spines">
-</select>
-</nobr>
-
-<nobr>
-internal reinforcement:
-<select id="internal_reinforcement">
-</select>
-</nobr>
-
-<tr>
-<td valign=top>
-<b>
-Adult polymorphism/dimorphism?</b>
-<input id="polymorph" type=checkbox value="yes">yes
-<br>
-
-<td>
-<b>
-Ontogeny</b><br>
-<!-- new values based on Raup and Stanley? -->
-<input id="ontogeny" type=checkbox value="accretion">accretion
-<input id="ontogeny" type=checkbox value="molting">molting
-<input id="ontogeny" type=checkbox value="addition of parts">addition of parts<br>
-<input id="ontogeny" type=checkbox value="modification of parts">modification of parts
-<input id="ontogeny" type=checkbox value="replacement of parts">replacement of parts
-<br>
-
-<tr>
-<td>
-<b>
-Social grouping</b>
-<select id="grouping">
-</select><br>
-
-<td>
-<b>Clonal?</b>
-<input id="clonal" type=checkbox value="yes">yes
-
+      <nobr>
+        internal reinforcement: <select id="internal_reinforcement"></select>
+      </nobr>
+    </td>
+  </tr>
+  <tr>
+    <td valign=top>
+      <b>Adult polymorphism/dimorphism?</b>
+      <input id="polymorph" type=checkbox value="yes">yes
+      <br>
+    </td>
+    <td>
+      <b>Ontogeny</b><br>
+      <!-- new values based on Raup and Stanley? -->
+      <input id="ontogeny" type=checkbox value="accretion">accretion
+      <input id="ontogeny" type=checkbox value="molting">molting
+      <input id="ontogeny" type=checkbox value="addition of parts">addition of parts<br>
+      <input id="ontogeny" type=checkbox value="modification of parts">modification of parts
+      <input id="ontogeny" type=checkbox value="replacement of parts">replacement of parts
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Social grouping</b>
+      <select id="grouping"></select>
+    </td>
+    <td>
+      <b>Clonal?</b>
+      <input id="clonal" type=checkbox value="yes">yes
+    </td>
+  </tr>
 </table>
 
 <hr>
 <h3>Life history and behavior</h3>
 <table cellpadding=10>
-<tr>
-<td valign=top>
-<b>General environment</b>
+  <tr>
+    <td valign=top><b>General environment</b></td>
+    <td>
+      <input id="taxon_environment" type=checkbox value="hypersaline">hypersaline
+      <input id="taxon_environment" type=checkbox value="marine">marine
+      <input id="taxon_environment" type=checkbox value="brackish">brackish
+      <input id="taxon_environment" type=checkbox value="freshwater">freshwater
+      <input id="taxon_environment" type=checkbox value="terrestrial">terrestrial
+      <br>
+      <input id="taxon_environment" type=checkbox value="coastal">coastal
+      <input id="taxon_environment" type=checkbox value="inner shelf">inner shelf
+      <input id="taxon_environment" type=checkbox value="outer shelf">outer shelf
+      <input id="taxon_environment" type=checkbox value="oceanic">oceanic
 
-<td>
-<input id="taxon_environment" type=checkbox value="hypersaline">hypersaline
-<input id="taxon_environment" type=checkbox value="marine">marine
-<input id="taxon_environment" type=checkbox value="brackish">brackish
-<input id="taxon_environment" type=checkbox value="freshwater">freshwater
-<input id="taxon_environment" type=checkbox value="terrestrial">terrestrial
-
-<br>
-<input id="taxon_environment" type=checkbox value="coastal">coastal
-<input id="taxon_environment" type=checkbox value="inner shelf">inner shelf
-<input id="taxon_environment" type=checkbox value="outer shelf">outer shelf
-<input id="taxon_environment" type=checkbox value="oceanic">oceanic
-
-<br>
-<input id="taxon_environment" type=checkbox value="oligotrophic">oligotrophic
-<input id="taxon_environment" type=checkbox value="mesotrophic">mesotrophic
-<input id="taxon_environment" type=checkbox value="eutrophic">eutrophic
+      <br>
+      <input id="taxon_environment" type=checkbox value="oligotrophic">oligotrophic
+      <input id="taxon_environment" type=checkbox value="mesotrophic">mesotrophic
+      <input id="taxon_environment" type=checkbox value="eutrophic">eutrophic
+    </td>
+  </tr>
 </table>
 
 <table cellpadding=10>
-<tr>
-<td>
-<b>
-Locomotion</b>
-<select id="locomotion">
-</select><br>
-
-<td>
-<b>Attached?</b>
-<input id="attached" type=checkbox value="yes">yes
-
-&nbsp;
-&nbsp;
-<b>Epibiont?</b>
-<input id="epibiont" type=checkbox value="yes">yes
-
-<tr><td>
-<b>
-Life habit</b>
-<select id="life_habit">
-</select><br>
-
-<td>
-<b>
-Depth habitat</b>
-<select id="depth_habitat">
-</select><br>
-
-<tr>
-<td>
-<b>
-Diet/feeding mode 1</b>
-<select id="diet1">
-</select><br>
-
-<td>
-<b>
-Diet/feeding mode 2</b>
-<select id="diet2">
-</select><br>
-
-<tr>
-<td>
-<b>
-Reproduction</b>
-<select id="reproduction">
-</select><br>
-
-<td>
-<b>Asexual?</b>
-<input id="asexual" type=checkbox value="yes">yes
-
-&nbsp;
-&nbsp;
-<b>Brooding?</b>
-<input id="brooding" type=checkbox value="yes">yes
-
-<tr>
-<td valign="top">
-<b>
-Dispersal (gametes)</b><br>
-<span class="tiny">What carries the gametes?</span>
-<!-- does NOT include clones -->
-<select id="dispersal1">
-</select><br>
-
-<td valign="top">
-<b>
-Dispersal (larvae/seeds/juveniles)</b>
-<!-- does NOT include clones -->
-<select id="dispersal2">
-</select><br>
-
+  <tr>
+    <td>
+      <b>Locomotion</b>
+      <select id="locomotion"></select><br>
+    </td>
+    <td>
+      <b>Attached?</b>
+      <input id="attached" type=checkbox value="yes">yes
+      &nbsp;
+      &nbsp;
+      <b>Epibiont?</b>
+      <input id="epibiont" type=checkbox value="yes">yes
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Life habit</b>
+      <select id="life_habit"></select><br>
+    </td>
+    <td>
+    <b>Depth habitat</b>
+      <select id="depth_habitat"></select><br>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Diet/feeding mode 1</b>
+      <select id="diet1"></select><br>
+    </td>
+    <td>
+      <b>Diet/feeding mode 2</b>
+      <select id="diet2"></select><br>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Reproduction</b>
+      <select id="reproduction"></select><br>
+    </td>
+    <td>
+      <b>Asexual?</b>
+      <input id="asexual" type=checkbox value="yes">yes
+      &nbsp;
+      &nbsp;
+      <b>Brooding?</b>
+      <input id="brooding" type=checkbox value="yes">yes
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <b>Dispersal (gametes)</b><br>
+      <span class="tiny">What carries the gametes?</span>
+      <!-- does NOT include clones -->
+      <select id="dispersal1"></select><br>
+    </td>
+    <td valign="top">
+      <b>Dispersal (larvae/seeds/juveniles)</b>
+      <!-- does NOT include clones -->
+      <select id="dispersal2"></select><br>
+    </td>
+  </tr>
 </table>
 
 <hr>
 
-<table><tr><td valign="top"><b>Comments:</b></td> <td><textarea id="comments" rows=3 wrap="virtual" cols=80></textarea></td></tr></table>
+<table>
+  <tr>
+    <td valign="top">
+      <b>Comments:</b>
+    </td> 
+    <td>
+      <textarea id="comments" rows=3 wrap="virtual" cols=80></textarea>
+    </td>
+  </tr>
+</table>
 
-<table width=100%><tr><td align="right">
-<input type=submit value="Submit">
+<table width=100%><tr><td align="center">
+  <input type=submit value="Submit">
 </td></tr></table>
-<p>
-
-</body>
+</form>
+<p>&nbsp;</p>
 
