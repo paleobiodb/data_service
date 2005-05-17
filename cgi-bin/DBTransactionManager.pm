@@ -584,7 +584,7 @@ sub insertRecord {
                 my @vals = split(/\0/,$fields->{$field});
                 my $value;
                 if ($type eq 'SET') {
-                    $value = join(",",map {$dbh->quote($_)} @vals);
+                    $value = $dbh->quote(join(",",@vals));
                 } else {
                     $value = $vals[0];
                     if ($value =~ /^\s*$/ && $is_nullable) {
@@ -601,9 +601,9 @@ sub insertRecord {
 	}
 
     #print Dumper($fields);
-    #for(my $i=0;$i<scalar(@insertFields);$i++) {
-    #    main::dbg("$insertFields[$i] = $insertValues[$i]");
-    #}
+    for(my $i=0;$i<scalar(@insertFields);$i++) {
+        main::dbg("$insertFields[$i] = $insertValues[$i]");
+    }
 
     if (@insertFields) {
         my $insertSQL = "INSERT INTO $tableName (".join(",",@insertFields).") VALUES (".join(",",@insertValues).")";
@@ -702,7 +702,7 @@ sub updateRecord {
                     my @vals = split(/\0/,$data->{$field});
                     my $value;
                     if ($type eq 'SET') {
-                        $value = join(",",map {$dbh->quote($_)} @vals);
+                        $value = $dbh->quote(join(",",@vals));
                     } else {
                         $value = $vals[0];
                         if ($value =~ /^\s*$/ && $is_nullable) {
