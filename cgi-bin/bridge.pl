@@ -2265,9 +2265,8 @@ sub processCollectionsSearch {
 				push @okcolls, @{$result[$r]}[0] ;
 			}
 			if ($#okcolls == -1)	{
-				push @okcolls , 0;
+				push @okcolls , -1;
 			}
-
 			$sth->finish();
 		}
 	} # end of if genus block.
@@ -2536,7 +2535,7 @@ IS NULL))";
 		}
 	}
 
-	if ( ! @terms && ! @timeinlist ) {
+	if ( ! @terms && ! @timeinlist && ! @okcolls) {
 		if ( $q->param("taxon_name") ) {
 			push @terms,"collections.collection_no is not NULL";
 		} else {
@@ -4364,6 +4363,149 @@ sub startReidentifyOccurrences {
 }
 
 
+# JA 17.8.02
+#
+# Generic authority handling form, used as a front end for:
+#  add/edit authority, add/edit opinion, add image, add ecology data, search by ref no
+#
+# Edited by rjp 1/22/2004, 2/18/2004, 3/2004
+# Edited by PS 01/24/2004, accept reference_no instead of taxon_name optionally
+# Edited by PS 04/27/2004, moved here from bridge.pl, now handles only authority stuff, see process
+#
+sub submitTaxonSearch {
+    print stdIncludes("std_page_top");
+    processTaxonSearch($dbh, $dbt, $hbo, $q, $s, $exec_url);
+    print stdIncludes("std_page_bottom");
+}
+sub processTaxonSearch {
+    my ($dbh, $dbt, $hbo, $q, $s, $exec_url) = @_;
+	# check for proper spacing of the taxon..
+	my $errors = Errors->new();
+	$errors->setDisplayEndingMessage(0); 
+
+    if ($q->param('taxon_name')) {
+        if ( (Validation::looksLikeBadSubgenus($q->param('taxon_name'))) ||
+             ((Validation::taxonRank($q->param('taxon_name')) eq 'invalid')) ) {
+            $errors->add("Ill-formed taxon.  Check capitalization and spacing.");
+        }
+    } elsif (!$q->param('reference_no')) {
+        $errors->add("No taxon name or reference passed.");
+    }
+    
+	if ($errors->count()) {
+		print $errors->errorMessage();
+		return;
+	}
+	# Try to find this taxon in the authorities table
+    my (@results);
+    if ($q->param('taxon_name')) {
+        @results = TaxonInfo::getTaxon($dbt,'taxon_name'=>$q->param('taxon_name'),'get_reference'=>1);
+    } elsif ($q->param('reference_no')) {
+        @results = TaxonInfo::getTaxon($dbt,'reference_no'=>$q->param('reference_no'),'get_reference'=>1);
+    }
+        
+    # If there were no matches, present the new taxon entry form immediately
+    # We're adding a new taxon
+    if (scalar(@results) == 0) {
+        if ($q->param('goal') eq 'authority') {
+            if ($q->param('taxon_name')) {
+                my $toQueue = "action=displayAuthorityForm&skip_ref_check=1&taxon_no=-1&taxon_name=".$q->param('taxon_name');
+                $s->enqueue( $dbh, $toQueue );
+                
+                $q->param( "type" => "select" );
+                main::displaySearchRefs("Please choose a reference before adding a new taxon",1);
+            } else {
+                print "<div align=\"center\"><h3>No authorities found for this reference</h3></div>";
+            }
+        } else {
+            print "<div class=\"warning\">The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> authority record for this taxon first.</DIV>";
+            return;
+        }
+    # One match - good enough for most of these forms
+    } elsif (scalar(@results) == 1 && $q->param('goal') eq 'opinion') {
+        $q->param("taxon_no"=>$results[0]->{'taxon_no'});
+        Opinion::displayOpinionChoiceForm($dbt,$s,$q);
+    } elsif (scalar(@results) == 1 && $q->param('goal') eq 'image') {
+        $q->param('taxon_no'=>$results[0]->{'taxon_no'});
+        Images::displayLoadImageForm($dbt,$q,$s); 
+    } elsif (scalar(@results) == 1 && $q->param('goal') eq 'ecotaph') {
+        $q->param('taxon_no'=>$results[0]->{'taxon_no'});
+        Ecology::populateEcologyForm($dbh, $dbt, $hbo, $q, $s, $exec_url);
+    } elsif (scalar(@results) == 1 && $q->param('goal') eq 'ecovert') {
+        $q->param('taxon_no'=>$results[0]->{'taxon_no'});
+        Ecology::populateEcologyForm($dbh, $dbt, $hbo, $q, $s, $exec_url);
+	# We have more than one matches, or we have 1 match or more and we're adding an authority.
+    # Present a list so the user can either pick the taxon,
+    # or create a new taxon with the same name as an exisiting taxon
+	} else	{
+		print "<div align=\"center\">\n";
+        print "<table><tr><td align=\"center\">";
+        if ($q->param("taxon_name")) { 
+    		print "<h3>Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</h3>\n<br>\n";
+        } else {
+    		print "<h3>Select a taxon to edit:</h3>\n<br>\n";
+        }
+        $action = ($q->param('goal') eq 'authority')  ? 'displayAuthorityForm' 
+                : ($q->param('goal') eq 'opinion')    ? 'displayOpinionChoiceForm'
+                : ($q->param('goal') eq 'image')      ? 'displayLoadImageForm'
+                : ($q->param('goal') eq 'ecotaph')    ? 'startPopulateEcologyForm'
+                : ($q->param('goal') eq 'ecovert')    ? 'startPopulateEcologyForm'
+                : croak("Unknown goal given in submit taxon search");
+        print "<form method=\"POST\" action=\"bridge.pl\">\n";
+        print "<input type=hidden name=\"action\" value=\"$action\">\n";
+        if ($q->param('goal') eq 'ecotaph' || $q->param('goal') eq 'ecovert') {
+            print "<input type=hidden name=\"goal\" value=\"".$q->param('goal')."\">\n";
+        }
+		print "<input type=hidden name=\"taxon_name\" value=\"".$q->param('taxon_name')."\">\n";
+
+        # now create a table of choices
+		print "<table>\n";
+        my $checked = (scalar(@results) == 1) ? "CHECKED" : "";
+        foreach my $row (@results) {
+            # Check the button if this is the first match, which forces
+            #  users who want to create new taxa to check another button
+            print qq|<tr><td align="center"><input type="radio" name="taxon_no" value="$row->{taxon_no}" $checked></td>|;
+            print "<td>".Taxon::formatAuthorityLine($dbt, $row)."</td></tr>";
+        }
+
+        # always give them an option to create a new taxon as well
+        if ($q->param('goal') eq 'authority' && $q->param('taxon_name')) {
+            print "<tr><td align=\"right\"><input type=\"radio\" name=\"taxon_no\" value=\"-1\"></td>\n<td>";
+            if ( scalar(@results) == 1 )	{
+                print "No, not the one above ";
+            } else	{
+                print "None of the above ";
+            }
+            print "- create a <b>new</b> taxon record</i></td></tr>\n";
+        }
+        
+		print "</table>";
+
+        # we print out difference buttons for two cases:
+        #  1: using a taxon name. give them an option to add a new taxon, so button is Submit
+        #  2: this is from a reference_no. No option to add a new taxon, so button is Edit
+        if ($q->param('goal') eq 'authority') {
+            if ($q->param('taxon_name')) {
+		        print "<p><input type=submit value=\"Submit\"></p>\n</form>\n";
+		        print "<p align=\"left\"><span class=\"tiny\">";
+                print "You have a choice because there may be multiple biological species (e.g., a plant and an animal) with identical names.<br>\n";
+		        print "Create a new taxon only if the old ones were named by different people in different papers.<br></span></p>\n";
+            } else {
+		        print "<p><input type=submit value=\"Edit\"></p>\n</form>\n";
+            }
+        } else {
+            print "<p><input type=submit value=\"Submit\"></p>\n</form>\n";
+            print "<p align=\"left\"><span class=\"tiny\">";
+            print "You have a choice because there may be multiple biological species (e.g., a plant and an animal) with identical names.<br></span></p>\n";
+        }
+		print "<p align=\"left\"><span class=\"tiny\">";
+		print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n<br>";
+
+        print "</td></tr></table>";
+		print "</div>\n";
+	}
+}
+
 ##############
 ## Authority stuff
 
@@ -4376,17 +4518,10 @@ sub startReidentifyOccurrences {
 # Called when the user clicks on the "Add/edit taxonomic name" or 
 sub displayAuthorityTaxonSearchForm {
     my $page_title = 'Please enter the full name of the taxon you want to add or revise';
-    my $action = 'submitAuthorityTaxonSearch';
+    my $goal= 'authority';
 
     print stdIncludes("std_page_top");
-    print $hbo->populateHTML('search_taxon_form',[$page_title,$action],['page_title','action']);
-    print stdIncludes("std_page_bottom");
-}
-
-# Handle the form input for the function above
-sub submitAuthorityTaxonSearch {
-    print stdIncludes("std_page_top");
-    Taxon::submitAuthorityTaxonSearch($dbt,$s, $q);
+    print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
     print stdIncludes("std_page_bottom");
 }
 
@@ -4427,18 +4562,11 @@ sub submitAuthorityForm {
 # Step 1 in our opinion editing process
 sub displayOpinionTaxonSearchForm {
     my $page_title = 'Please enter the full name of the taxon you to add or edit an opinion for';
-    my $action = 'submitOpinionTaxonSearch';
+    my $goal = 'opinion';
 
     print stdIncludes("std_page_top");
-    print $hbo->populateHTML('search_taxon_form', [$page_title,$action], ['page_title','action']);
+    print $hbo->populateHTML('search_taxon_form', [$page_title,$goal], ['page_title','goal']);
     print stdIncludes("std_page_bottom");
-}
-
-# Handle the form input for the function above
-sub submitOpinionTaxonSearch {
-	    print stdIncludes("std_page_top");
-        Opinion::submitOpinionTaxonSearch($dbt,$s,$q);
-	    print stdIncludes("std_page_bottom");
 }
 
 # PS 01/24/2004
@@ -4553,16 +4681,24 @@ sub processEditScale	{
 ##############
 ## Images stuff
 sub startImage{
-	Images::startLoadImage($dbh, $dbt, $s, $exec_url);
+    $goal='image';
+    $page_title ='Please enter the full name of the taxon you want to add an image for';
+
+    print stdIncludes("std_page_top");
+    print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
+    print stdIncludes("std_page_bottom");
 }
-sub processStartImage{
-	Images::processStartLoadImage($dbt, $q, $s, $exec_url);
+
+sub displayLoadImageForm{
+    print stdIncludes("std_page_top");
+	Images::displayLoadImageForm($dbt, $q, $s);
+    print stdIncludes("std_page_bottom");
 }
+
 sub processLoadImage{
-	Images::processLoadImageForm($dbt, $q, $s, $exec_url);
-}
-sub processViewImage{
-	Images::processViewImages($dbt, $q, $s, $exec_url);
+    print stdIncludes("std_page_top");
+	Images::processLoadImage($dbt, $q, $s);
+    print stdIncludes("std_page_bottom");
 }
 ## END Image stuff
 ##############
@@ -4570,14 +4706,31 @@ sub processViewImage{
 
 ##############
 ## Ecology stuff
-sub startStartEcologySearch	{
-	Ecology::startEcologySearch($dbh, $hbo, $s, $exec_url);
+sub startStartEcologyTaphonomySearch{
+    $goal='ecotaph';
+    $page_title ='Please enter the full name of the taxon you want to describe';
+
+    print stdIncludes("std_page_top");
+    print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
+    print stdIncludes("std_page_bottom");
+}
+sub startStartEcologyVertebrateSearch{
+    $goal='ecovert';
+    $page_title ='Please enter the full name of the taxon you want to describe';
+
+    print stdIncludes("std_page_top");
+    print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
+    print stdIncludes("std_page_bottom");
 }
 sub startPopulateEcologyForm	{
+    print stdIncludes("std_page_top");
 	Ecology::populateEcologyForm($dbh, $dbt, $hbo, $q, $s, $exec_url);
+    print stdIncludes("std_page_bottom");
 }
 sub startProcessEcologyForm	{
+    print stdIncludes("std_page_top");
 	Ecology::processEcologyForm($dbh, $dbt, $q, $s, $exec_url);
+    print stdIncludes("std_page_bottom");
 }
 ## END Ecology stuff
 ##############
@@ -5759,7 +5912,7 @@ sub displayReIDCollsAndOccsSearchForm
 	# Display the collection search form
 	%pref = getPreferences($s->get('enterer_no'));
 	my @prefkeys = keys %pref;
-	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no,'',$q->param('type'),'',''], ['authorizer', 'enterer', 'action', 'reid_reference_no', 'lithadj', 'lithology1','type','lithadj2', 'lithology2','environment'], \@prefkeys);
+	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no,'',$q->param('type'),'','','',''], ['authorizer', 'enterer', 'action', 'reid_reference_no', 'lithadj', 'lithology1','type','lithadj2', 'lithology2','environment','eml_min_interval','eml_max_interval'], \@prefkeys);
 
 	HTMLBuilder::buildAuthorizerPulldown($dbt, \$html );
 	HTMLBuilder::buildEntererPulldown($dbt, \$html );
@@ -7227,7 +7380,8 @@ sub displayTaxonomicNamesAndOpinions {
     $html =~ s/<b>\d+<\/b>//g; #Remove the reference_no
     print "<center><h3>Showing taxonomic names and opinions that reference: ".$html."</h3></center><br>";
 
-    Taxon::submitAuthorityTaxonSearch($dbt,$s,$q);
+    $q->param('goal'=>'authority');
+    processTaxonSearch($dbh, $dbt, $hbo, $q, $s, $exec_url);
     Opinion::displayOpinionChoiceForm($dbt,$s,$q);
     print stdIncludes("std_page_bottom");
 }
