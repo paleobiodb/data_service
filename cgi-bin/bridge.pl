@@ -504,7 +504,6 @@ sub setPreferences	{
 		$q->param(assembl_comps => join(',', @formVals) );
 	}
 
-	my $enterer = $q->cookie("enterer");
  	my $sql = "UPDATE person SET preferences='";
 	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = &getPrefFields();
  # prepare the SQL to update the prefs
@@ -571,11 +570,9 @@ sub setPreferences	{
 	print "</td></tr></table>\n";
 
 	$sql =~ s/' -:- /'/;
- 	$sql .= "' WHERE name='";
-	# escape single quotes, as in "O'Regan"
-	$enterer =~ s/'/\\'/g;
- 	$sql .= $enterer;
- 	$sql .= "'";
+    my $enterer_no = int($s->get('enterer_no'));
+
+ 	$sql .= "' WHERE person_no=$enterer_no";
  	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
  	$sth->execute();
  	$sth->finish();
