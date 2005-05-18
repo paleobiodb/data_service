@@ -180,9 +180,14 @@ sub processAction {
 
 		if ($cookie) {
 			my $cf = CookieFactory->new();
-			print $q->header(-type => "text/html", 
-							 -cookie => $cookie,
-							 -expires =>"now" );
+            # The following two cookies are for setting the select lists
+            # on the login page.
+            my $cookieEnterer = $cf->buildCookie("enterer", $q->param("enterer"));
+            my $cookieAuthorizer = $cf->buildCookie("authorizer", $q->param("authorizer"));
+            
+            print $q->header(-type => "text/html", 
+                             -cookie => [$cookie, $cookieEnterer, $cookieAuthorizer],
+                             -expires =>"now" );
 
 			# Destination
 			if ($q->param("destination") ne "") {
@@ -800,7 +805,7 @@ sub displayMapResults {
 
 sub displayDownloadForm {
 	print stdIncludes( "std_page_top" );
-	my $auth = $q->cookie('authorizer');
+	my $auth = $s->get('authorizer');
 	my $html = $hbo->populateHTML( 'download_form', [ '', '', $auth, '', '', '', '','','','','' ], [ 'research_group', 'country','%%authorizer%%','environment','lithology1','ecology1','ecology2','ecology3','ecology4','ecology5','ecology6' ] );
 	HTMLBuilder::buildAuthorizerPulldown($dbt, \$html );
 	$html =~ s/<OPTION value=''>Select authorizer\.\.\./<option value='All'>All/m;
