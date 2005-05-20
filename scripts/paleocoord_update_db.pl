@@ -8,7 +8,9 @@
 # fixed a bug in which west and south original longs and lats weren't
 #  printed with negative signs; fixed a bug (GROUP couldn't be empty) 30.6.04
 
-use lib "../";
+
+use constant CGI_DIR => '/Volumes/pbdb_RAID/httpdocs/cgi-bin';
+use lib CGI_DIR;
 
 use Class::Date qw(date localdate gmdate now);
 use TimeLookup;
