@@ -26,8 +26,7 @@ my $dbt = DBTransactionManager->new($dbh, $s);
 
 my $fix = 1;
 #
-# This scripts  find (and optionally fixes) problems with opinions that doing POINT to the
-# original combination
+# This scripts  find (and optionally fixes) problems with chained reocmbinations
 #
 
 $count = 0;
