@@ -133,7 +133,7 @@ sub get_classification_hash{
 
             # bail because we've already climbed up this part o' the tree and its cached
             if (exists $link_cache{$parent_no}) {
-                    print "Found cache";
+                    #print "Found cache";
                 %{$link} = %{$link_cache{$parent_no}};
                 last;
             # populate this link, then set the link to be the next_link, climbing one up the tree
