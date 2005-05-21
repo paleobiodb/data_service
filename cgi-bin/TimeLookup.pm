@@ -68,7 +68,6 @@ sub processLookup	{
 	push @intervals, $min_interval_no if ($max_interval_no != $min_interval_no);
     $yesints{$min_interval_no} = 'Y';
 
-    my $bestbothscale;
     if ($lookup_type == 1) {
         ($ub,$lb) = findBoundaries($dbh,$dbt);
         my ($max_boundary,$min_boundary);
@@ -89,11 +88,14 @@ sub processLookup	{
 	    &findImmediateCorrelates();
         &mapIntervalsUpward();
 	    &mapIntervals();
+#        print Dumper(@intervals);
     }
 	if ( $return_type eq "intervals" )	{
 		return \@intervals;
 	}
-	&returnCollectionList($bestbothscale);
+    my $bestbothscale = findBestBothScale($max_interval_no,$min_interval_no);
+	my $colls = getCollectionList();
+    return ($colls,$bestbothscale);
 
 }
 
@@ -941,7 +943,7 @@ sub mapIntervals	{
 
 	my $max;
 	my $min;
-   
+  
 	for my $i ( 1..$ninterval )	{
 		if ( $bestscale{$i} > 0 )	{
             $max = $immediatemax{$i};
@@ -995,13 +997,11 @@ sub mapIntervals	{
             $yesints{$ti} = 1;
         }
 	}
-
 }
 
 # query the collections table for collections where the max is in the list
 #   and so is the min
-sub returnCollectionList	{
-	my $bestbothscale = shift;
+sub getCollectionList	{
 	my @collections = ();
 
     if (@intervals) {
@@ -1017,7 +1017,7 @@ sub returnCollectionList	{
     }
 # return the matching collections plus a value indicating whether the
 #  intervals are in the same scale (computed by getIntervalRange)
-	return(\@collections,$bestbothscale);
+	return \@collections;
 }
 
 # Utility function, parse input from form into valid eml+interval name pair, if possible
