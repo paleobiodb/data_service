@@ -3,6 +3,8 @@ package Classification;
 use TaxonInfo;
 use Data::Dumper;
 
+my $DEBUG = 0;
+
 # Travel up the classification tree
 # Rewritten 01/11/2004 PS. Function is much more flexible, can do full upward classification of any 
 # of the taxon rank's, with caching to keep things fast for large arrays of input data. 
@@ -83,16 +85,22 @@ sub get_classification_hash{
 
         # start the link with child_no;
         my $link = {};
-        my $prev_link = $link;
         $link_head{$hash_key} = $link;
         my %visits = ();
-        my $debug_print_link = 0;
         my $found_parent = 0;
+
+        #if ($child_no == 14513) {
+        #    $DEBUG = 1;
+        #}
 
         # prime the pump 
         my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no);
+        if ($DEBUG) { print "Start:".Dumper($parent_row)."<br>"; }
         my $status = $parent_row->{'status'};
         $child_no = $parent_row->{'parent_no'};
+        #if ($child_no == 14505) {
+        #    $DEBUG = 1;
+        #}
 
         # Loop at least once, but as long as it takes to get full classification
         for(my $i=0;$child_no && !$found_parent;$i++) {
@@ -112,6 +120,7 @@ sub get_classification_hash{
 
             # Belongs to should always point to original combination
             $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no,1);
+            if ($DEBUG) { print "Loop:".Dumper($parent_row)."<br>"; }
        
             # No parent was found. This means we're at end of classification, althought
             # we don't break out of the loop till the end of adding the node since we
@@ -132,44 +141,45 @@ sub get_classification_hash{
             }
 
             # bail because we've already climbed up this part o' the tree and its cached
-            if (exists $link_cache{$parent_no}) {
-                    #print "Found cache";
-                %{$link} = %{$link_cache{$parent_no}};
+            if ($parent_no && exists $link_cache{$parent_no}) {
+                $link->{'child_no'} = $child_no;
+                $link->{'parent_no'} = $parent_no;
+                $link->{'taxon_name'} = $taxon_name;
+                $link->{'taxon_rank'} = $taxon_rank;
+                $link->{'child_spelling_no'} = $child_spelling_no;
+                $link->{'next_link'} = $link_cache{$parent_no};
+                if ($DEBUG) { print "Found cache for $parent_no:".Dumper($link)."<br>";}
                 last;
             # populate this link, then set the link to be the next_link, climbing one up the tree
             } else {
                 # Synonyms are tricky: We don't add the child (junior?) synonym onto the chain, only the parent
                 # Thus the child synonyms get their node values replace by the parent, with the old child data being
-                # placed into a "synonyms" field (an array of nodes)
+                # saved into a "synonyms" field (an array of nodes)
+                if ($DEBUG) { print "Traverse $parent_no:".Dumper($link)."<br>";}
                 if ($status =~ /^(?:repl|subj|obje)/o) {
+                    if ($DEBUG) { print "Synonym node<br>";}
                     my %node = (
-                        'child_no'=>$prev_link->{'child_no'},
-                        'parent_no'=>$prev_link->{'parent_no'},
-                        'taxon_name'=>$prev_link->{'taxon_name'},
-                        'taxon_rank'=>$prev_link->{'taxon_rank'},
-                        'child_spelling_no'=>$prev_link->{'child_spelling_no'}
+                        'child_no'=>$child_no,
+                        'parent_no'=>$parent_no,
+                        'taxon_name'=>$taxon_name,
+                        'taxon_rank'=>$taxon_rank,
+                        'child_spelling_no'=>$child_spelling_no
                     );
-                    $prev_link->{'child_no'} = $child_no;
-                    $prev_link->{'parent_no'} = $parent_no;
-                    $prev_link->{'taxon_name'} = $taxon_name;
-                    $prev_link->{'taxon_rank'} = $taxon_rank;
-                    $prev_link->{'child_spelling_no'} = $child_spelling_no;
-                    push @{$prev_link->{'synonyms'}}, \%node;
+                    push @{$link->{'synonyms'}}, \%node;
+                    $link_cache{$child_no} = $link;
                 } else {
+                    if ($DEBUG) { print "Reg. node<br>";}
                     if (exists $rank_hash{$taxon_rank} || $ranks[0] eq 'parent' || $ranks[0] eq 'all') {
-                        my %node = (
-                            'child_no'=>$child_no,
-                            'parent_no'=>$parent_no,
-                            'taxon_name'=>$taxon_name,
-                            'taxon_rank'=>$taxon_rank,
-                            'child_spelling_no' => $child_spelling_no,
-                            'next_link'=>{}
-                        );
-                        %{$link} = %node;
-                        $prev_link = $link;
-                        $link = $node{'next_link'};
-                        $link_cache{$parent_no} = \%node;
-
+                        my $next_link = {};
+                        $link->{'child_no'} = $child_no;
+                        $link->{'parent_no'} = $parent_no;
+                        $link->{'taxon_name'} = $taxon_name;
+                        $link->{'taxon_rank'} = $taxon_rank;
+                        $link->{'child_spelling_no'} = $child_spelling_no;
+                        $link->{'next_link'}=$next_link;
+                        if ($DEBUG) { print Dumper($link)."<br>";}
+                        $link_cache{$child_no} = $link;
+                        $link = $next_link;
                     }
                 }
             }
@@ -187,9 +197,6 @@ sub get_classification_hash{
             # set this var to set up next loop
             $child_no = $parent_no;
         }
-        ##if ($debug_print_link) {
-        #    use Data::Dumper; print "</center>orig child $orig_child new child $new_child<pre>".Dumper($link_head{$hash_key}).'</pre><center>';
-        #}
     }
 
     #print "</center><pre>link cache\n".Dumper(\%link_cache);
