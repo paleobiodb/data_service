@@ -1261,7 +1261,7 @@ sub getMostRecentParentOpinion {
     # The taxon_name is the correct spelling of the child passed in, not the name of the parent, which is weird
     my $sql = "(SELECT ${child_fields}o.child_no, o.child_spelling_no, o.status, o.parent_no, o.parent_spelling_no, "
             . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr, "
-            . " (r.publication_type='compendium') AS is_compendium" 
+            . " (r.publication_type IS NOT NULL AND r.publication_type='compendium') AS is_compendium" 
             . " FROM opinions o " 
             . $child_join
             . " LEFT JOIN refs r ON r.reference_no=o.reference_no " 
@@ -1752,13 +1752,18 @@ sub getTaxon {
             $sql = "SELECT * FROM authorities a";
         }
         my @terms = ();
-        while (($field,$value)=each %options) {
-            if ($field =~ /taxon_no|reference_no|taxon_name/) {
-                push @terms, "a.$field=".$dbt->dbh->quote($value);
-            }
+        if ($options{'taxon_no'}) {
+            push @terms, 'a.taxon_no='.$dbt->dbh->quote($options{'taxon_no'});
+        }
+        if ($options{'taxon_name'}) {
+            push @terms, 'a.taxon_name like '.$dbt->dbh->quote($options{'taxon_name'});
+        }
+        if ($options{'reference_no'}) {
+            push @terms, 'a.reference_no='.$dbt->dbh->quote($options{'reference_no'});
         }
         if (@terms) {
             $sql .= " WHERE ".join(" AND ",@terms); 
+            $sql .= " ORDER BY taxon_name" if ($options{'reference_no'});
             @results = @{$dbt->getData($sql)};
         }
     }
