@@ -1189,7 +1189,9 @@ sub printResults	{
 		print "<td class=tiny align=center valign=top><b>Boundary-crosser<br>$generaorrefs</b> ";
 		print "<td class=tiny align=center valign=top><b>Two&nbsp;timer<br>$generaorrefs</b> ";
 		print "<td class=tiny align=center valign=top><b>Three&nbsp;timer<br>$generaorrefs</b> ";
-		print "<td class=tiny align=center valign=top><b>First<br>appearances</b> <td class=tiny align=center valign=top><b>Origination<br>rate</b> <td class=tiny align=center valign=top><b>Last<br>appearances</b><td class=tiny align=center valign=top><b>Extinction<br>rate</b> <td class=tiny align=center valign=top><b>Singletons</b> ";
+		print "<td class=tiny align=center valign=top><b>First<br>appearances</b> <td class=tiny align=center valign=top><b>Origination<br>rate</b> ";
+		print "<td class=tiny align=center valign=top><b>Last<br>appearances</b><td class=tiny align=center valign=top><b>Extinction<br>rate</b> ";
+		print "<td class=tiny align=center valign=top><b>Singletons</b> ";
 		print "<td class=tiny align=center valign=top><b>Chao-2<br>estimate</b> ";
 		print "<td class=tiny align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
 		print "<td class=tiny align=center valign=top><b>$listorfm</b> ";
@@ -1340,15 +1342,20 @@ sub printResults	{
 				print "<td class=tiny align=center valign=top><b>Raw SIB<br>diversity</b> ";
 				print "<td class=tiny align=center valign=top><b>Corrected SIB<br>diversity</b> ";
 				print "<td class=tiny align=center valign=top><b>Origination<br>rate</b> ";
+				print "<td class=tiny align=center valign=top><b>Origination<br>percentage</b> ";
 				print "<td class=tiny align=center valign=top><b>Extinction<br>rate</b> ";
+				print "<td class=tiny align=center valign=top><b>Extinction<br>percentage</b> ";
 			}
-			if ($q->param('diversity') =~ /boundary-crossers/)	{
+			elsif ($q->param('diversity') =~ /boundary-crossers/)	{
 				print "<td class=tiny align=center valign=top><b>First<br>appearances</b> ";
 				print "<td class=tiny align=center valign=top><b>Origination<br>rate</b> ";
-			}
-			if ($q->param('diversity') =~ /boundary-crossers/)	{
+				print "<td class=tiny align=center valign=top><b>Origination<br>percentage</b> ";
 				print "<td class=tiny align=center valign=top><b>Last<br>appearances</b> ";
 				print "<td class=tiny align=center valign=top><b>Extinction<br>rate</b> ";
+				print "<td class=tiny align=center valign=top><b>Extinction<br>percentage</b> ";
+			} else	{
+				print "<td class=tiny align=center valign=top><b>Origination<br>percentage</b> ";
+				print "<td class=tiny align=center valign=top><b>Extinction<br>percentage</b> ";
 			}
 			print "<td class=tiny align=center valign=top><b>Singletons</b> ";
 			print "<td class=tiny align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
@@ -1374,15 +1381,20 @@ sub printResults	{
 				print TABLE "Raw SIB diversity,";
 				print TABLE "Corrected SIB diversity,";
 				print TABLE "Origination rate,";
+				print TABLE "Origination percentage,";
 				print TABLE "Extinction rate,";
+				print TABLE "Extinction percentage,";
 			}
-			if ($q->param('diversity') =~ /boundary-crossers/)	{
+			elsif ($q->param('diversity') =~ /boundary-crossers/)	{
 				print TABLE "First appearances,";
 				print TABLE "Origination rate,";
-			}
-			if ($q->param('diversity') =~ /boundary-crossers/)	{
+				print TABLE "Origination percentage,";
 				print TABLE "Last appearances,";
 				print TABLE "Extinction rate,";
+				print TABLE "Extinction percentage,";
+			} else	{
+				print TABLE "Origination percentage,";
+				print TABLE "Extinction percentage,";
 			}
 			print TABLE "Singletons,";
 			print TABLE "Gap analysis completeness,";
@@ -1433,22 +1445,51 @@ sub printResults	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$msubsrichness[$i];
 						printf "<td class=tiny align=center valign=top>%.1f ",$mnewsib[$i];
 						printf "<td class=tiny align=center valign=top>%.3f ",$lam[$i];
+						if ( $meanoutrichness[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
+						} else	{
+							print "<td class=tiny align=center valign=top>NaN ";
+						}
 						printf "<td class=tiny align=center valign=top>%.3f ",$mu[$i];
+						if ( $meanoutrichness[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
+						} else	{
+							print "<td class=tiny align=center valign=top>NaN ";
+						}
 					}
-			# Foote origination rate
 					if ($q->param('diversity') =~ /boundary-crossers/)	{
+				# Foote origination rate
 						printf "<td class=tiny align=center valign=top>%.1f ",$msubsoriginate[$i];
 						if ( $meanoutrichness[$i-1] > 0 && $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 )	{
 							printf "<td class=tiny align=center valign=top>%.4f ",log( $meanoutrichness[$i-1] / ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) );
 						} else	{
 							print "<td class=tiny align=center valign=top>NaN ";
 						}
-					}
-			# Foote extinction rate
-					if ($q->param('diversity') =~ /boundary-crossers/)	{
+						if ( $meanoutrichness[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
+						} else	{
+							print "<td class=tiny align=center valign=top>NaN ";
+						}
+				# Foote extinction rate
 						printf "<td class=tiny align=center valign=top>%.1f ",$msubsextinct[$i];
 						if ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 && $meanoutrichness[$i] > 0 )	{
 							printf "<td class=tiny align=center valign=top>%.4f ",log( ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanoutrichness[$i] ) * -1;
+						} else	{
+							print "<td class=tiny align=center valign=top>NaN ";
+						}
+						if ( $meanoutrichness[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
+						} else	{
+							print "<td class=tiny align=center valign=top>NaN ";
+						}
+					} else	{
+						if ( $meanoutrichness[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
+						} else	{
+							print "<td class=tiny align=center valign=top>NaN ";
+						}
+						if ( $meanoutrichness[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
 						} else	{
 							print "<td class=tiny align=center valign=top>NaN ";
 						}
@@ -1471,22 +1512,51 @@ sub printResults	{
 						printf TABLE ",%.3f",$msubsrichness[$i];
 						printf TABLE ",%.1f",$mnewsib[$i];
 						printf TABLE ",%.3f",$lam[$i];
+						if ( $meanoutrichness[$i] > 0 )	{
+							printf TABLE ",%.1f",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
+						} else	{
+							print TABLE ",NaN";
+						}
 						printf TABLE ",%.3f",$mu[$i];
+						if ( $meanoutrichness[$i] > 0 )	{
+							printf TABLE ",%.1f",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
+						} else	{
+							print TABLE ",NaN";
+						}
 					}
-			# Foote origination rate
 					if ($q->param('diversity') =~ /boundary-crossers/)	{
+				# Foote origination rate
 						printf TABLE ",%.1f",$msubsoriginate[$i];
 						if ( $meanoutrichness[$i-1] > 0 && $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 )	{
 							printf TABLE ",%.4f",log( $meanoutrichness[$i-1] / ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) );
 						} else	{
 							print TABLE ",NaN";
 						}
-					}
-			# Foote extinction rate
-					if ($q->param('diversity') =~ /boundary-crossers/)	{
+						if ( $meanoutrichness[$i] > 0 )	{
+							printf TABLE ",%.1f",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
+						} else	{
+							print TABLE ",NaN";
+						}
+				# Foote extinction rate
 						printf TABLE ",%.1f",$msubsextinct[$i];
 						if ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 && $meanoutrichness[$i] > 0 )	{
 							printf TABLE ",%.4f",log( ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanoutrichness[$i] ) * -1;
+						} else	{
+							print TABLE ",NaN";
+						}
+						if ( $meanoutrichness[$i] > 0 )	{
+							printf TABLE ",%.1f",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
+						} else	{
+							print TABLE ",NaN";
+						}
+					} else	{
+						if ( $meanoutrichness[$i] > 0 )	{
+							printf TABLE ",%.1f",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
+						} else	{
+							print TABLE ",NaN";
+						}
+						if ( $meanoutrichness[$i] > 0 )	{
+							printf TABLE ",%.1f",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
 						} else	{
 							print TABLE ",NaN";
 						}
