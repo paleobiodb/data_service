@@ -104,7 +104,7 @@ sub checkTaxonInfo {
                 # If nothing, print out an error message
                 searchForm($hbo, $q, 1); # param for not printing header with form
                 if($s->get("enterer") ne "Guest" && $s->get("enterer") ne ""){
-                    print "<center><p><a href=\"bridge.pl?action=submitAuthorityTaxonSearch?taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
+                    print "<center><p><a href=\"bridge.pl?action=submitTaxonSearch?goal=authority&taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
                 }
             }
         } elsif(scalar @results == 1){
@@ -235,7 +235,7 @@ sub displayTaxonInfoResults {
         if ($entered_no) {
 		    print "<center><a href=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=$entered_no\">";
         } else {
-		    print "<center><a href=\"/cgi-bin/bridge.pl?action=submitAuthorityTaxonSearch&taxon_no=-1&taxon_name=$entered_name\">";
+		    print "<center><a href=\"/cgi-bin/bridge.pl?action=submitTaxonSearch&goal=authority&taxon_no=-1&taxon_name=$entered_name\">";
         }
 		print "<b>Edit taxonomic data for $entered_name</b></a> - ";
 		
