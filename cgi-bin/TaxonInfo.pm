@@ -1021,6 +1021,11 @@ sub displayTaxonSynonymy{
 
 	# NOTE: "corrected as" could also occur at higher taxonomic levels.
 
+    # Remove duplicates
+    my %results_no_dupes;
+    @results_no_dupes{@results} = ();
+    @results = keys %results_no_dupes;
+
 	# Get synonymies for all of these original combinations
 	foreach my $child (@results) {
 		my $list_item = getSynonymyParagraph($dbt, $child);
