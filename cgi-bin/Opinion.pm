@@ -871,7 +871,7 @@ sub submitOpinionForm {
                 $errors->add("The spelling '$childSpellingName' exists multiple times in the database. Please select the one you want");	
             } elsif (scalar(@spellings) == 0) {
                 if ($q->param('spelling_status') =~ /rank changed as/) {
-                    $errors->add("The taxon '$childSpellingName' doesn't exist in our database.  Please <a href=\"bridge.pl?action=submitAuthorityTaxonSearch&taxon_no=-1&taxon_name=$childSpellingName\">add this authority</a> through the authorities form before proceeding");	
+                    $errors->add("The taxon '$childSpellingName' doesn't exist in our database.  Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_no=-1&taxon_name=$childSpellingName\">add this authority</a> through the authorities form before proceeding");	
                 } else {
                     if ($q->param('confirm_create_authority') eq $q->param('child_spelling_name')) {
                         $createAuthority = 1;
