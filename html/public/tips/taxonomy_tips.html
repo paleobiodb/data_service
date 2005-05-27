@@ -23,7 +23,7 @@
 <hr>
 
 <font size=-1>
-<i>This page was written by John Alroy on 28 August 2000, updated on 25 July, 3/7 August 2001, 14-17 August 2002, 28 March 2003, and 19 - 22 April 2004.</i><p>
+<i>This page was written by John Alroy on 28 August 2000, updated on 25 July, 3/7 August 2001, 14-17 August 2002, 28 March 2003, 19 - 22 April 2004, and 26 May 2005.</i><p>
 </font>
 
 <hr>
@@ -77,7 +77,7 @@ You can record the authority in one of two ways:</p>
 
 <ul>
 <li>Never create more than one authority record for a taxon, even if the original record is owned by some other authorizer and/or entered by some other enterer; the original record mistakenly has different names of authors, dates of publication, etc.; or if you are about to classify the taxon in a new way.
-<i>But <i>do</i> create a new record if the taxon is actually biologically different even though its name is spelt the same way (i.e., it has a different type specimen or type taxon).
+But <i>do</i> create a new record if the taxon is actually biologically different even though its name is spelt the same way (i.e., it has a different type specimen or type taxon).
 This can happen when names are homonyms (see definitions of opinion terms below).</p>
 <li>Create a new authority record for any taxon name that is spelt differently.
 So, if Linnaeus named the family "Equidae" but someone later created a subfamily called "Equinae," or reranked "Equidae" as the subfamily "Equinae," then Linnaeus is the author of that name too, but you need to make a new authority record anyway.
@@ -127,10 +127,6 @@ In cases like that, simply add a comment to the original authority record saying
 Also use this term for non-standard ranks such as "Mirorder" or "Parvorder."
 <li>You may <i>not</i> define genera or species as "unranked clades"; this term only applies to higher taxa.
 </ul>
-
-<b>Name of type taxon</b><br>
-The name of the type taxon, as originally given when the taxon was named.
-For example, if you are entering data for a genus, enter the name of its type species here.<p>
 
 <b>Comments</b><br>
 Note any problems here. For example, make a note if: you are not sure you have the taxon's authority right; different sources say the taxon was named in different years; a technical error was made by the authority, such as not designating or figuring a type specimen; or the type specimen's fossil collection cannot be recorded because the type locality data are inadequate.<p>
@@ -200,16 +196,18 @@ DON'T enter page numbers for the whole paper!</p>
 <h4>What the terms mean</h4>
 </center><p>
 
-There are three major categories of opinions, as follows.<p>
+Information about how the taxon was both spelled and classified must be entered. 
 
-<i>Classification.</i> The taxon is valid, so classify it. First pick the "Valid" radio button and then enter the name of the higher taxon (for a genus, this is a family; for a species, this is a genus).
+<p><b>Classification</b></p>
+
+There are three major types of classification:<p>
+
+<i>Valid.</i> The taxon is valid, so classify it. First pick the "Valid" radio button and then enter the name of the higher taxon (for a genus, this is a family; for a species, this is a genus).
 <i>Important:</i> you also may enter the verbatim text of the formal diagnosis, if one is given.
 The database stores different values depending on whether the taxon is a species:
  <ul>
  <li>"<i>belongs to</i>" means a <u>higher taxon</u> (not a species) is valid and falls within an even higher parent taxon. A subgenus belongs to a genus; a genus belongs to a tribe, subfamily, family, or (if hard to classify) some even higher taxon; etc. Remember, lower belongs to higher - a genus belongs to a family,
  not the other way around!
- <li>"<i>recombined as</i>" means a <u>species</u> is valid but has been moved to another genus. Put the new combination in the parent taxon field.
-For example, Linnaeus called chimps "Homo troglodytes"; the name was recombined by Oken (1816) as "Pan troglodytes," which is still used.
 </ul>
 
 <p><i>Synonymy.</i> The taxon is invalid and the same as something else.
@@ -220,14 +218,9 @@ The possible status values are:
  <li>"<i>objective synonym of</i>" means that the taxon is invalid because <i>exactly the same</i> type specimen was used by an earlier author as the basis of a different name. List the older, valid name in the parent taxon field.
  <li>"<i>homonym of</i>" means that the taxon is invalid because another taxon with exactly the same name has priority over it. List the older, valid name in the parent taxon field.
  <li>"<i>replaced by</i>" means that the taxon is a homonym and has been replaced by a new name. List the younger, valid replacement in the parent taxon field.
- <li>"<i>corrected as</i>" means that the original spelling was grammatically incorrect and a new spelling has been proposed. Put the old spelling in the taxon field and the new spelling in the parent taxon field.
- <li>"<i>rank changed as</i>" means that the original spelling was changed because the taxon's rank was changed.
-Create a new authority record for the new spelling.
-Then put the old spelling in the taxon field and the new spelling in the parent taxon field.
-It does <i>not</i> matter if the new rank is higher or lower than the old one.
-</ul>
-
-<p><i>Invalidation.</i> The taxon is invalid and you can't even tell if it's the same as something else.
+ </ul>
+ 
+<p><i>Invalid. </i> The taxon is invalid and you can't even tell if it's the same as something else.
 Pick "Invalid and no other name can be applied" and then choose the status. The values are:
 <ul>
  <li>"<i>nomen dubium</i>" means that the taxon is probably invalid and needs to be investigated. Leave "parent taxon" empty.
@@ -235,6 +228,19 @@ Pick "Invalid and no other name can be applied" and then choose the status. The 
  <li>"<i>nomen oblitum</i>" means that the name has gone unused for many decades and is being set aside for purposes of synonymy. Leave "parent taxon" empty.
  <li>"<i>nomen vanum</i>" means that the type material is indeterminate and there is no reasonable chance that further research might help. Leave "parent taxon" empty.
 </ul>
+
+<p><b>Spelling</b></p>
+There are four possible values related to the spelling of an authority.<br>
+<ul>
+ <li>"<i>original spelling</i>" means that this was the spelling that the original author used
+ <li>"<i>recombined as</i>" means a <u>species</u> is valid but has been moved to another genus. Put the new combination in the parent taxon field.  To create a recombination, add the opinion to the original combination.
+For example, Linnaeus called chimps "Homo troglodytes"; the name was recombined by Oken (1816) as "Pan troglodytes," which is still used.
+ <li>"<i>corrected as</i>" means that the original spelling was grammatically incorrect and a new spelling has been proposed. To add a correction, add an opinion to the taxon with the <i>original spelling</i>, and type in the name of the corrected spelling in the text field of the "How was it spelled?" section. This new spelling does not have to be already exist in the database.
+ <li>"<i>rank changed as</i>" means that the original spelling was changed because the taxon's rank was changed.
+Create a new authority record for the new spelling. Add an opinion to the taxon with the original spelling, and place the name of the new spelling in the text field of the "How was it spelled?" section.
+It does <i>not</i> matter if the new rank is higher or lower than the old one.
+</ul>
+
 
 <hr>
 <center>
@@ -256,8 +262,8 @@ First, fill out a form with X in the taxon name field; G in full in the parent t
 <i>Species:</i>
 
 <ul>
-<li><i>Species X originally was in genus G but is now in genus H</i> (<u>classification</u>). Write out species X with the genus name G in the taxon name field; write out the new name in full in the parent taxon field; select "Genus and species" for both rank fields.
-<li><i>Species X turns out to be valid and in the correct combination</i> (<u>classification</u>). Write out the same, full species name in both the taxon field and the parent taxon field, and pull down "Genus and species" in both rank fields. <i>Unlike genera and other higher taxa, species only need to be classified if their genus assignment and/or status has been debated.</i>
+<li><i>Species X originally was in genus G but is now in genus H</i> (<u>classification</u>). Add an opinion to the taxon "genus G species X".  Write out "genus H" in the "How was it classified?" section, and Write out "genus H species X" in the "How was it spelled?" section, selecting the "This name is a recombination of 'genus G species X'" from the pulldown in the "How was it spelled?" section. 
+<li><i>Species X turns out to be valid and in the correct combination</i> (<u>classification</u>). Write out the same, full genus and species name in the "How was it spelled?" section, the corresponding genus name in the "How was it classified?" section, and select "This name is the original spelling" in the pulldown of the "How was it spelled?" section. <i>Unlike genera and other higher taxa, species only need to be classified if their genus assignment and/or status has been debated.</i>
 <li><i>Species X is a synonym or homonym of species Y</i> (<u>synonymy</u>). Select the appropriate status (subjective synonym, objective synonym, homonym) and write out the senior synonym or replacement name X in full (both genus and species) in the parent taxon field. For homonyms, you need to enter TWO opinions: first, the opinion that X is a "homonym of" the other species spelt exactly the same way, and second, the opinion that X has been "replaced by" a new, differently spelt name.
 <li><i>Species X is invalid</i> (<u>validity</u>). Select "nomen dubium," "nomen nudum," "nomen oblitum" or "nomen vanum" and leave the senior synonym field <i>blank</i>.
 </ul>
