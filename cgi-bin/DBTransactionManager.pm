@@ -578,7 +578,7 @@ sub insertRecord {
             push @insertValues, 'NOW()';
         } else {
             # It exists in the passed in user hash
-            if (defined($fields->{$field})) {
+            if (exists ($fields->{$field})) {
                 # Multi-valued keys (i.e. checkboxes with the same name) passed from the CGI ($q) object have their values
                 # separated by \0.  See CPAN CGI documentation about this
                 my @vals = split(/\0/,$fields->{$field});
@@ -590,7 +590,7 @@ sub insertRecord {
                     if ($value =~ /^\s*$/ && $is_nullable) {
                         $value = 'NULL';
                     } else {
-                        if (!$value) { $value = ''; }
+                        if (! defined $value) { $value = ''; }
                         $value = $dbh->quote($value);
                     }
                 }
@@ -694,8 +694,8 @@ sub updateRecord {
         } elsif ($field eq 'modifier') {
             push @updateTerms, "modifier=".$dbh->quote($s->get('enterer'));
         } else {
-            my $fieldIsEmpty = ($table_row->{$field} eq '' || !defined $table_row->{$field});
-            if (defined($data->{$field})) {
+            my $fieldIsEmpty = ($table_row->{$field} == 0 || $table_row->{$field} eq '' || !defined $table_row->{$field});
+            if (exists($data->{$field})) {
                 if (($updateEmptyOnly && $fieldIsEmpty) || !$updateEmptyOnly) {
                     # Multi-valued keys (i.e. checkboxes with the same name) passed from the CGI ($q) object have their values
                     # separated by \0.  See CPAN CGI documentation about this
@@ -708,7 +708,7 @@ sub updateRecord {
                         if ($value =~ /^\s*$/ && $is_nullable) {
                             $value = 'NULL';
                         } else {
-                            if (!$value) { $value = ''; }
+                            if (! defined $value) { $value = ''; }
                             $value = $dbh->quote($value);
                         }
                     }
@@ -718,13 +718,16 @@ sub updateRecord {
         }
     }
 
-    if (@updateTerms) {
+    # updateTerms will always be at least 1 in size (for modifer_no/modifier). If it isn't, nothing to update
+    if (scalar(@updateTerms) > 1) {
         my $updateSql = "UPDATE $tableName SET ".join(",",@updateTerms)." WHERE $primary_key_field=$primary_key_value";
         main::dbg("UPDATE SQL:".$updateSql);
     	my $updateResult = $dbh->do($updateSql);
                 
         # return the result code from the do() method.
     	return $updateResult;
+    } else {
+        return -1;
     }
 }
 
