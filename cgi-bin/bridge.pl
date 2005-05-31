@@ -4413,6 +4413,7 @@ sub processTaxonSearch {
             if ($q->param('taxon_name')) {
                 my $toQueue = "action=displayAuthorityForm&skip_ref_check=1&taxon_no=-1&taxon_name=".$q->param('taxon_name');
                 $s->enqueue( $dbh, $toQueue );
+
                 
                 $q->param( "type" => "select" );
                 main::displaySearchRefs("Please choose a reference before adding a new taxon",1);
@@ -4612,6 +4613,12 @@ sub displayOpinionForm {
 sub submitOpinionForm {
 	print stdIncludes("std_page_top");
 	Opinion::submitOpinionForm($dbt,$hbo, $s, $q);
+	print stdIncludes("std_page_bottom");
+}
+
+sub submitTypeTaxonSelect {
+	print stdIncludes("std_page_top");
+	Taxon::submitTypeTaxonSelect($dbt, $s, $q);
 	print stdIncludes("std_page_bottom");
 }
 
@@ -7016,6 +7023,18 @@ sub getCollsWithRef	{
     }    
 	$retString .= "<td colspan=\"3\">&nbsp;</td>\n<td><font size=-1>\n";
 
+    
+    # Handle Authorities
+    $sql = "SELECT count(*) c FROM authorities WHERE reference_no=$tempRefNo";
+    my $authority_count = ${$dbt->getData($sql)}[0]->{'c'};
+
+    if ($authority_count) {
+        $retString .= qq|<b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$tempRefNo">|;
+        my $plural = ($authority_count == 1) ? "" : "s";
+        $retString .= "$authority_count taxonomic name$plural";
+        $retString .= qq|</a></b>, |;
+    }
+    
     # Handle Opinions
     $sql = "SELECT count(*) c FROM opinions WHERE reference_no=$tempRefNo";
     my $opinion_count = ${$dbt->getData($sql)}[0]->{'c'};
@@ -7024,21 +7043,10 @@ sub getCollsWithRef	{
         $retString .= qq|<b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$tempRefNo">|;
         if ($opinion_count) {
             my $plural = ($opinion_count == 1) ? "" : "s";
-            $retString .= "$opinion_count Opinion$plural";
+            $retString .= "$opinion_count taxonomic opinion$plural";
         }
         $retString .= qq|</a></b>, |;
     }      
-    
-    # Handle Authorities
-    $sql = "SELECT count(*) c FROM authorities WHERE reference_no=$tempRefNo";
-    my $authority_count = ${$dbt->getData($sql)}[0]->{'c'};
-
-    if ($authority_count) {
-        $retString .= qq|<b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$tempRefNo">|;
-        my $plural = ($authority_count == 1) ? "y" : "ies";
-        $retString .= "$authority_count Authorit$plural";
-        $retString .= qq|</a></b>, |;
-    }
 
     # Handle Collections
 	# make sure displayed collections are readable by this person JA 24.6.02
@@ -7064,10 +7072,10 @@ sub getCollsWithRef	{
 
     my $collection_count = scalar(@$results);
     if ($collection_count == 0) {
-        $retString .= "0 Collections";
+        $retString .= "No collections";
     } else {
         my $plural = ($collection_count == 1) ? "" : "s";
-        $retString .= qq|<b><a href="bridge.pl?action=displayCollResults&type=view&wild=N&reference_no=$tempRefNo">$collection_count Collection$plural</a>:</b> |;
+        $retString .= qq|<b><a href="bridge.pl?action=displayCollResults&type=view&wild=N&reference_no=$tempRefNo">$collection_count collection$plural</a> </b> ( |;
         foreach $row (@$results) {
 			my $coll_link = qq|<a href="bridge.pl?action=displayCollectionDetails&collection_no=$row->{collection_no}">$row->{collection_no}</a>|;
             if ($row->{'is_primary'}) {
@@ -7075,6 +7083,7 @@ sub getCollsWithRef	{
             }
             $retString .= $coll_link . " ";
         }
+        $retString .= ")";
     } 
     
 
