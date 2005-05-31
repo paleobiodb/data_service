@@ -154,11 +154,9 @@ sub authors {
 	if ($hr->{ref_has_opinion} eq 'YES') {
 		# then get the author info for that reference
 		my $ref = Reference->new($self->{'dbt'},$hr->{'reference_no'});
-		$auth = $ref->authorsWithInitials();
+		$auth = $ref->authors();
 	} else {
-	
-		$auth = Globals::formatAuthors(1, $hr->{author1init}, $hr->{author1last}, $hr->{author2init}, $hr->{author2last}, $hr->{otherauthors} );
-		$auth .= " " . $self->pubyr();
+        $auth = Reference::formatShortRef($hr);	
 	}
 	
 	return $auth;
@@ -521,11 +519,11 @@ sub displayOpinionForm {
 
     # standard approach to get belongs to
     # build the spelling pulldown, if necessary, else the spelling box
-    my $higher_rank = "";
+    my ($higher_rank);
     if ($childRank eq 'subspecies') {
-        $higher_rank = 'species';
+        $higher_rank =  'species';
     } elsif ($childRank eq 'species') {
-        $higher_rank = 'genus';
+        $higher_rank =  'genus';
     }  else {
         $higher_rank = 'higher taxon';
     }
@@ -540,6 +538,24 @@ sub displayOpinionForm {
         my $parentTaxon = ($selected || ($isNewEntry && $childRank =~ /species/)) ? $parentName : "";
         $belongs_to_row .= qq|<input name="belongs_to_parent" size="50" value="$parentTaxon">|;
     }
+    $belongs_to_row .= "</td></tr>";
+    if (!$reSubmission && !$isNewEntry) {
+
+        my @taxa = Taxon::getTypeTaxonList($dbt,$fields{'child_no'},$fields{'reference_no'});
+        $fields{'type_taxon'} = 0;
+        foreach my $row (@taxa) {
+            if ($row->{'type_taxon_no'} == $fields{'child_no'}) {
+                $fields{'type_taxon'} = 1;
+            }
+        }
+    }
+    if ($childRank =~ /species|genus|tribe|family/) {
+        my $checked = ($fields{'type_taxon'}) ? "CHECKED" : "";
+        $belongs_to_row .= "<tr><td></td><td>".
+                       "<input name=\"type_taxon\" type=\"checkbox\" $checked  value=\"1\">".
+                       " This is the type $childRank".
+                       "</td></tr>";
+    }                       
 
 	# format the synonym section
 	# note: by now we already have a status pulldown ready to go; we're
@@ -604,6 +620,7 @@ sub displayOpinionForm {
 
 	print $html;
 }
+
 
 # Call this when you want to submit an opinion form.
 # Pass it the HTMLBuilder object, $hbo, the cgi parameters, $q, and the session, $s.
@@ -910,6 +927,10 @@ sub submitOpinionForm {
 	if (!$status) {
 		$errors->add("You must choose one of the status radio buttons");	
 	}
+    
+    if ($q->param('taxon_status') ne 'belongs to' && $q->param('type_taxon')) {
+        $errors->add("The valid species status radio button must be selected if the is the type taxon");
+    } 
 
     if ($q->param('spelling_status') eq 'rank changed as') {
         if ($childRank =~ /species/ || $parentRank =~ /species/ || $childName =~ / / || $parentName =~ / /) {
@@ -1144,7 +1165,7 @@ sub submitOpinionForm {
     $opinionHTML =~ s/according to/of/i;
 
 	my $enterupdate = ($isNewEntry) ? 'entered into' : 'updated in';
-    print <<EOF;
+    my $end_message = <<EOF;
 <div align=center>
   <h3> The opinion $opinionHTML has been $enterupdate the database</h3>
   <p>
@@ -1158,6 +1179,10 @@ sub submitOpinionForm {
   <br>
 </div>
 EOF
+
+    # See Taxon::displayTypeTaxonSelectForm for details
+    Taxon::displayTypeTaxonSelectForm($dbt,$s,$fields{'type_taxon'},$fields{'child_no'},$childName,$childRank,$resultReferenceNumber,$end_message);
+    
 }
 
 # Displays a form which lists all opinions that currently exist

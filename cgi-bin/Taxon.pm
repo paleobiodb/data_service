@@ -26,6 +26,7 @@ use DBTransactionManager;
 use Errors;
 use Data::Dumper;
 use CGI::Carp;
+use URI::Escape;
 
 use Reference;
 
@@ -119,11 +120,9 @@ sub authors {
 	if ($hr->{ref_is_authority}) {
 		# then get the author info for that reference
 		my $ref = Reference->new($self->{'dbt'},$hr->{'reference_no'});
-		$auth = $ref->authorsWithInitials();
+		$auth = $ref->authors();
 	} else {
-	
-		$auth = Globals::formatAuthors(1, $hr->{author1init}, $hr->{author1last}, $hr->{author2init}, $hr->{author2last}, $hr->{otherauthors} );
-		$auth .= " " . $self->pubyr();
+        $auth = Reference::formatShortref($hr);	
 	}
 	
 	return $auth;
@@ -224,13 +223,18 @@ sub displayAuthorityForm {
         }
 	}
 	
-	
-	# if the type_taxon_no exists, then grab the name for that taxon.
-	if ((!$reSubmission) && ($fields{'type_taxon_no'})) {
-        my $type_taxon = Taxon->new($dbt,$fields{'type_taxon_no'});
-		$fields{'type_taxon_name'} = $type_taxon->get('taxon_name');
-	}
-	
+
+	# If this taxon is a type taxon for something higher, mark the check box as checked
+    if (!$isNewEntry && !$reSubmission && $fields{'taxon_rank'} =~ /species/) {
+        my @taxa = getTypeTaxonList($dbt,$fields{'taxon_no'},$fields{'reference_no'});
+        $fields{'type_taxon'} = 0;
+        foreach my $row (@taxa) {
+            if ($row->{'type_taxon_no'} == $fields{'taxon_no'}) {
+                $fields{'type_taxon'} = 1;
+            }
+        }  
+    }
+    $fields{'type_taxon_checked'} = ($fields{'type_taxon'}) ? 'CHECKED' : '';
 	
 	# populate the correct pages/figures fields depending
 	# on the ref_is_authority value.
@@ -291,17 +295,11 @@ sub displayAuthorityForm {
 	}
 	$fields{'taxon_rank'} = $rankToUse;
 	
-	# if the rank is species, then display the type_specimen input
-	# field.  Otherwise display the type_taxon_name field.
-	
-	if ($rankToUse eq 'species' || $rankToUse eq 'subspecies') {
-		# remove the type_taxon_name field.
-		$fields{'OPTIONAL_type_taxon_name'} = 0;
-	} else {
-		# remove the type_specimen field.	
+	# remove the type taxon stuff, it'll be assigned in opinions
+	if (!($rankToUse eq 'species' || $rankToUse eq 'subspecies')) {
+		$fields{'OPTIONAL_type_taxon'} = 0;
 		$fields{'OPTIONAL_type_specimen'} = 0;
-	}
-	
+	} 
 	
 	## If this is a new species or subspecies, then we will automatically
 	# create an opinion record with a state of 'belongs to'.  However, we 
@@ -323,7 +321,7 @@ sub displayAuthorityForm {
 		
 		# figure out how many authoritiy records could be the possible parent.
 		my $count = ${$dbt->getData("SELECT COUNT(*) as c FROM authorities WHERE taxon_name = '" . $name . "'")}[0]->{c};
-		
+        $fields{'parent_name'} = $name;
 		
 		# if only one record, then we don't have to ask the user anything.
 		# otherwise, we should ask them to pick which one.
@@ -366,7 +364,7 @@ sub displayAuthorityForm {
 				$select .= $taxon->get('taxon_name') . " " . $taxon->authors();
 		        # tack on the closest higher order name
 				my %master_class=%{Classification::get_classification_hash($dbt,"parent",[$row->{'taxon_no'}])};
-				$select .= "[".$master_class{$row->{'taxon_no'}}."]";
+				$select .= "[".$master_class{$row->{'taxon_no'}}."]" if ($master_class{$row->{'taxon_no'}});
 				$select .= "</option>\n";
 
 			}
@@ -428,7 +426,6 @@ sub displayAuthorityForm {
 		
 		if ($fields{'2nd_pages'}) { push(@nonEditables, '2nd_pages'); }
 		if ($fields{'2nd_figures'}) { push(@nonEditables, '2nd_figures'); }
-		if ($fields{'type_taxon_name'}) { push(@nonEditables, 'type_taxon_name'); }
 		if ($fields{'type_specimen'}) { push(@nonEditables, 'type_specimen'); }
 		
 		push(@nonEditables, 'taxon_name');
@@ -496,18 +493,12 @@ sub submitAuthorityForm {
 	my %fieldsToEnter;
 	
 	if ($isNewEntry) {
-		$fieldsToEnter{authorizer_no} = $s->get('authorizer_no');
-		$fieldsToEnter{enterer_no} = $s->get('enterer_no');
-		$fieldsToEnter{reference_no} = $s->get('reference_no');
-		
-		if (! $fieldsToEnter{reference_no} ) {
+		$fieldsToEnter{'reference_no'} = $s->get('reference_no');
+		if (! $fieldsToEnter{'reference_no'} ) {
 			$errors->add("You must set your current reference before submitting a new authority");	
 		}
-		
-	} else {
-		$fieldsToEnter{modifier_no} = $s->get('enterer_no');	
-	}
-	
+        $fieldsToEnter{'type_taxon'} = ($q->param('type_taxon')) ? 1 : 0;
+	} 
 	
 	if (($q->param('ref_is_authority') ne 'YES') && 
 		($q->param('ref_is_authority') ne 'NO')) {
@@ -677,86 +668,7 @@ sub submitAuthorityForm {
 
 	my $taxonRank = $q->param('taxon_rank'); 	# rank in popup menu
 
-	
-	# If they entered a type_taxon_name, then we'll have to look it
-	# up in the database because it's stored in the authorities table as a 
-	# type_taxon_no, not a name.
-	#
-	# Also, make sure the rank of the type taxon they type in makes sense.
-	# If the rank of the authority record is genus or subgenus, then the type taxon rank should
-	# be species.  	If the authority record is not genus or subgenus (ie, anything else), then
-	# the type taxon rank should *not* be species or subspecies.
-	if ($q->param('type_taxon_name')) {
-		
-		# check the spacing/capitilization of the type taxon name
-		my $ttRankFromSpaces = Validation::taxonRank($fieldsToEnter{type_taxon_name});
-		if ($ttRankFromSpaces eq 'invalid') {
-			$errors->add("The type taxon's name is invalid; please check spacing and capitalization");	
-		}
-		
-		if (Validation::looksLikeBadSubgenus($fieldsToEnter{type_taxon_name})) {
-			$errors->add("Invalid type taxon format; don't use parentheses");
-		}
-
-
-        my @type_taxa = TaxonInfo::getTaxon($dbt,'taxon_name'=>$fieldsToEnter{'type_taxon_name'},'get_reference'=>1);
-		
-		if (!@type_taxa) {
-			# if it doesn't exist, tell them to go enter it first.
-			$errors->add("The type taxon '" . $q->param('type_taxon_name') . "' doesn't exist in our database.  If you made a typo, correct it and try again.  Otherwise, please submit this form without the type taxon and then go back and add it later (after you have added an authority record for the type taxon).");
-		} else {
-			# the type taxon exists in the database, so do some checks on it.
-			
-			# check to make sure the rank of the type taxon makes sense.
-			my $ttaxon = $type_taxa[0];
-			
-			if (($taxonRank eq 'genus') || ($taxonRank eq 'subgenus')) {
-				# then the type taxon rank must be species
-				if ($ttaxon->{'taxon_rank'} ne 'species') {
-					$errors->add("The type taxon's rank should be a species");	
-				}
-			} else {
-				# for any other rank, the type taxon rank must not be species.
-				if ($ttaxon->{'taxon_rank'} eq 'species') {
-					$errors->add("The type taxon's rank shouldn't be a species");	
-				}
-			}
-
-			# make sure the publicaion date of the type taxon in the authorities
-			# table is <= the publication date of the current authority record
-			# which is either in the pubyr field or the reference.
-			my $pubyrToCheck;
-			
-			if ($q->param('ref_is_authority') eq 'YES') {
-				my $ref = Reference->new($dbt,$q->param('reference_no'));
-				$pubyrToCheck = $ref->get('pubyr');
-			} else {
-				$pubyrToCheck = $q->param('pubyr');
-			}
-			
-			if ($ttaxon->{'pubyr'} > $pubyrToCheck ) {
-				push @warnings,"The type taxon was published after the current taxon.";
-			}
-			
-					
-			$fieldsToEnter{type_taxon_no} = $ttaxon->{'taxon_no'};
-		}
-	}
-	
-	# if they didn't enter a type taxon, then set the type_taxon number to zero.
-	if (! $q->param('type_taxon_name')) {
-		$fieldsToEnter{type_taxon_no} = 0;	
-	}
-	
-
 	$fieldsToEnter{taxon_name} = $q->param('taxon_name');
-	
-
-	# Delete some fields that may be present since these don't correspond
-	# to fields in the database table.. (ie, they're in the form, but not in the table)
-	delete $fieldsToEnter{action};
-	delete $fieldsToEnter{'2nd_authors'};
-	delete $fieldsToEnter{'2nd_figures'};
 	
 	# correct the ref_is_authority field.  In the HTML form, it can be "YES" or "NO"
 	# but in the database, it should be "YES" or "" (empty).
@@ -825,6 +737,7 @@ sub submitAuthorityForm {
 	
 	# now we'll actually insert or update into the database.
 	my $resultTaxonNumber;
+    my $resultReferenceNumber = $fieldsToEnter{'reference_no'};
     my $status;
 	
 	if ($isNewEntry) {
@@ -859,8 +772,8 @@ sub submitAuthorityForm {
 		#  occurrences table and set the taxon numbers appropriately
 
 		# start with a test for uniqueness
-		my $mysql = "SELECT count(*) AS c FROM authorities WHERE taxon_name='" . $fieldsToEnter{taxon_name} . "'";
-		if ( ${$dbt->getData($mysql)}[0]->{'c'} == 1 )	{
+		my $sql = "SELECT count(*) AS c FROM authorities WHERE taxon_name='" . $fieldsToEnter{taxon_name} . "'";
+		if ( ${$dbt->getData($sql)}[0]->{'c'} == 1 )	{
 
 			# start composing update sql
 			# NOTE: in theory, taxon no for matching records always
@@ -869,27 +782,28 @@ sub submitAuthorityForm {
 			#  genus, in which case we assume users will want the
 			#  new number for the species instead; that's why there
 			#  is no test to make sure the taxon no is empty
-			$mysql = "UPDATE occurrences SET modified=modified,taxon_no=" . $resultTaxonNumber . " WHERE ";
+			$sql = "UPDATE occurrences SET modified=modified,taxon_no=" . $resultTaxonNumber . " WHERE ";
 
 			# if the name has a space then match on both the
 			#  genus and species name fields
 			if ( $fieldsToEnter{taxon_name} =~ / / )	{
 				my ($a,$b) = split / /,$fieldsToEnter{taxon_name};
-				$mysql .= " genus_name='" . $a ."' AND species_name='" . $b . "'";
+				$sql .= " genus_name='" . $a ."' AND species_name='" . $b . "'";
 			}
 			# otherwise match only on the genus name field
 			else 	{
-				$mysql .= " genus_name='" . $fieldsToEnter{taxon_name} . "'";
+				$sql .= " genus_name='" . $fieldsToEnter{taxon_name} . "'";
 			}
 
 			# update the occurrences table
-			$dbt->getData($mysql);
+			$dbt->getData($sql);
+            main::dbg("sql to update occs: $sql");
 
 			# and then the reidentifications table
-			$mysql =~ s/UPDATE occurrences /UPDATE reidentifications /;
-			$dbt->getData($mysql);
+			$sql =~ s/UPDATE occurrences /UPDATE reidentifications /;
+			$dbt->getData($sql);
+            main::dbg("sql to update reids: $sql");
 		}
-
 	} else {
 		# if it's an old entry, then we'll update.
 		
@@ -918,24 +832,216 @@ sub submitAuthorityForm {
             print "<LI>$_</LI>" for (@warnings);
             print "</DIV>";
         }
-		print "<H3>" . $fieldsToEnter{'taxon_name'} . " " .Reference::formatShortRef(\%fieldsToEnter). " has been $enterupdate the database</H3>";
+        my $end_message = "<H3>" . $fieldsToEnter{'taxon_name'} . " " .Reference::formatShortRef(\%fieldsToEnter). " has been $enterupdate the database</H3>";
 
-		my $tempTaxon = $fieldsToEnter{'taxon_name'};
-		$tempTaxon =~ s/ /+/g;
-
-		print "<center>
+		$end_message .= "<center>
 		<p><A HREF=\"bridge.pl?action=checkTaxonInfo&taxon_no=$resultTaxonNumber\"><B>Get&nbsp;general&nbsp;information&nbsp;about&nbsp;" . $fieldsToEnter{taxon_name} . "</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $resultTaxonNumber ."\"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;" . $fieldsToEnter{taxon_name} . "</B></A>&nbsp;-
-        <A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=" . $fieldsToEnter{'reference_no'}. " \"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;a&nbsp;different&nbsp;taxon&nbsp;with&nbsp;same&nbsp;reference</B></A>&nbsp;-
+        <A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber\"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;a&nbsp;different&nbsp;taxon&nbsp;with&nbsp;same&nbsp;reference</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionChoiceForm&taxon_no=" . $resultTaxonNumber . "\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;" . $fieldsToEnter{taxon_name} . "</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityTaxonSearchForm\"><B>Add/edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;another&nbsp;taxon</B></A>&nbsp;-
 		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionTaxonSearchForm\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
 		</center>";	
 
+
+        displayTypeTaxonSelectForm($dbt,$s,$fieldsToEnter{'type_taxon'},$resultTaxonNumber,$fieldsToEnter{'taxon_name'},$fieldsToEnter{'taxon_rank'},$resultReferenceNumber,$end_message);
 	}
 	
 	print "<BR>";
 	print "</CENTER>";
+}
+
+# This section handles updating of the type_taxon_no field in the authorities table and is used both
+# when entering subspecies/species in the authorities form, and entering opinions in the opinions form
+# Behavior is:
+#  Find out how many possible higher taxa this taxon can be a type for:
+#    if its 0: this is bad, it should always be 1 unless the entering of the opinion was botched
+#    if its 1: do the insertion or deletion on the spot, if permissions allow it
+#    if its >1: print out a new form displaying a list of all parents for the user to check
+#  possible higher taxa must be linked by opinions from the same ref as this opinion
+sub displayTypeTaxonSelectForm {
+    my ($dbt,$s,$is_tt_form_value,$type_taxon_no,$type_taxon_name,$type_taxon_rank,$reference_no,$end_message) = @_;
+
+    main::dbg("displayTypeTaxonSelectForm called with is_tt_form_value $is_tt_form_value tt_no $type_taxon_no tt_name $type_taxon_name tt_rank $type_taxon_rank ref_no $reference_no");
+
+    my @warnings = ();
+    my @parents = getTypeTaxonList($dbt,$type_taxon_no,$reference_no);
+
+    # The end message is the normal links + "This record has been updated in the DB" message.  save that message
+    # for later if we're going to display another form.  If we're not, then show it
+    my $show_end_message = 1;
+
+    # This section handles updating of the type_taxon_no field in the authorities table:
+    # Behavior is:
+    #  Find out how many possible higher taxa this taxon can be a type for:
+    #    if its 0: this is bad, dump an error into the error log
+    #    if its 1: do the insertion or deletion
+    #    if its >1: display a list of all parents for the user to check
+    #  possible higher taxa must be linked by opinions from the same ref as this opinion
+    main::dbg("TYPE TAXON PARENTS:\n<PRE>".Dumper(\@parents)."</PRE>");
+    if ($is_tt_form_value) {
+        if (scalar(@parents) > 1) {
+            print "<div align=\"center\">";
+            print "<form method=\"POST\" action=\"bridge.pl\">\n";
+            print "<input type=\"hidden\" name=\"action\" value=\"submitTypeTaxonSelect\">\n";
+            print "<input type=\"hidden\" name=\"reference_no\" value=\"$reference_no\">\n";
+            print "<input type=\"hidden\" name=\"type_taxon_no\" value=\"$type_taxon_no\">\n";
+            print "<input type=\"hidden\" name=\"end_message\" value=\"".uri_escape($end_message)."\">\n";
+            print "<table><tr><td>\n";
+            print "<h2>For which taxa is $type_taxon_name a type $type_taxon_rank?</h2>";
+            foreach my $row (reverse @parents) {
+                my $checked = ($row->{'type_taxon_no'} == $type_taxon_no) ? 'CHECKED' : '';
+                my $disabled = ($s->get('authorizer_no') != $row->{'authorizer_no'} && $row->{'type_taxon_no'}) ? 'DISABLED READONLY' : '';
+                print "<input type=\"checkbox\" name=\"taxon_no\" value=\"$row->{taxon_no}\" $disabled $checked> ";
+                print "$row->{taxon_name} ($row->{taxon_rank})";
+                if ($row->{'type_taxon_no'} && $row->{'type_taxon_no'} != $type_taxon_no) {
+                    print " - <small>type taxon currently $row->{type_taxon_name} ($row->{type_taxon_rank})</small>";
+                }
+                if ($disabled) {
+                    print " - <small>authority record belongs to ".Person::getPersonName($dbt,$row->{'authorizer_no'})."</small>";
+                    if ($checked) {
+                        print "<input type=\"hidden\" name=\"taxon_no\" value=\"$row->{taxon_no}\">";
+                    }
+                }
+                print '<br>';
+            }
+            print "</td></tr></table>\n";
+            print "<input type=\"submit\" value=\"Submit\">";
+            print "</form>";
+            print "</div>";
+            $show_end_message = 0;
+        } elsif (scalar(@parents) == 1) {
+            my $return;
+            if ($parents[0]->{'type_taxon_no'} != $type_taxon_no) {
+                $return = $dbt->updateRecord($s,'authorities','taxon_no',$parents[0]->{'taxon_no'},{'type_taxon_no'=>$type_taxon_no});
+            }
+            if ($return == -1) {
+                push @warnings,"Can't set this as the type taxon for authority $parents[0]->{taxon_name}, its owned by a difference authorizer: ".Person::getPersonName($dbt,$parents[0]->{'authorizer_no'}).". Its type taxon is already set to: $parents[0]->{type_taxon_name} ($parents[0]->{type_taxon_rank})";
+            }
+        } else {
+            carp "Something is wrong in the opinions script, got no parents for current taxon after adding an opinion.  (in section dealing with type taxon)\n";
+        }
+    } else {
+        # This is not a type taxon.  Find all parents from the same reference, and set the
+        # type_taxon_no to 0 if its set to this taxon, otherwise leave it alone
+        main::dbg("Handling deletion of type taxon no $type_taxon_no");
+        foreach my $parent (@parents) {
+            if ($parent->{'type_taxon_no'} == $type_taxon_no) {
+                my $return = $dbt->updateRecord($s,'authorities','taxon_no',$parent->{'taxon_no'},{'type_taxon_no'=>'0'});
+                if ($return == -1) {
+                    push @warnings,"Can't unset this as the type taxon for authority $parent->{taxon_name}, its owned by a difference authorizer: ".Person::getPersonName($dbt,$parent->{'authorizer_no'});
+                }
+            }
+        }
+    }
+
+
+    if (@warnings) {
+        my $plural = (scalar(@warnings) > 1) ? "s" : "";
+        print "<br><div align=\"center\"><table width=600 border=0>" .
+              "<tr><td class=darkList><font size='+1'><b>Warning$plural</b></font></td></tr>" .
+              "<tr><td>";
+        print "<li class='medium'>$_</li>" for (@warnings);
+        print "</td></tr></table></div><br>";
+    }
+
+    if ($show_end_message) {
+        print $end_message;
+    }
+
+}
+
+
+sub submitTypeTaxonSelect {
+    my ($dbt,$s,$q) = @_;
+
+    my $type_taxon_no = $q->param('type_taxon_no');
+    my $reference_no = $q->param('reference_no');
+    my $end_message = uri_unescape($q->param('end_message'));
+    my @taxon_nos = $q->param('taxon_no');
+    my @warnings = ();
+
+    my @parents = getTypeTaxonList($dbt,$type_taxon_no,$reference_no);
+
+    foreach my $parent (@parents) {
+        my $found = 0;
+        foreach my $taxon_no (@taxon_nos) {
+            if ($parent->{'taxon_no'} == $taxon_no) {
+                $found = 1;
+            }
+        }
+
+        my $return;
+        if ($found) {
+            if ($parent->{'type_taxon_no'} != $type_taxon_no) {
+                $return = $dbt->updateRecord($s,'authorities','taxon_no',$parent->{'taxon_no'},{'type_taxon_no'=>$type_taxon_no});
+            }
+        } else {
+            if ($parent->{'type_taxon_no'} == $type_taxon_no) {
+                $return = $dbt->updateRecord($s,'authorities','taxon_no',$parent->{'taxon_no'},{'type_taxon_no'=>'0'});
+            }
+        }
+        if ($return == -1) {
+            push @warnings,"Can't change the type taxon for authority $parent->{taxon_name}, its owned by a difference authorizer: ".Person::getPersonName($dbt,$parent->{'authorizer_no'});
+        }
+    }
+
+    if (@warnings) {
+        my $plural = (scalar(@warnings) > 1) ? "s" : "";
+        print "<br><div align=\"center\"><table width=600 border=0>" .
+              "<tr><td class=darkList><font size='+1'><b>Warning$plural</b></font></td></tr>" .
+              "<tr><td>";
+        print "<li class='medium'>$_</li>" for (@warnings);
+        print "</td></tr></table></div><br>";
+    }
+
+    print $end_message;
+}
+    
+# This function returns an array of potential higher taxa for which the focal taxon can be a type.
+# The array is an array of hash refs with the following keys: taxon_no, taxon_name, taxon_rank, type_taxon_no, type_taxon_name, type_taxon_rank
+sub getTypeTaxonList {
+    my $dbt = shift;
+    my $type_taxon_no = shift;   
+    my $reference_no = shift;
+            
+    my $focal_taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$type_taxon_no);
+            
+    my $parents = Classification::get_classification_hash($dbt,'all',[$type_taxon_no],'array',$reference_no);
+    # This array holds possible higher taxa this taxon can be a type taxon for
+    # Note the reference_no passed to get_classification_hash - parents must be linked by opinions from
+    # the same reference as the reference_no of the opinion which is currently being inserted/edited
+    my @parents = @{$parents->{$type_taxon_no}}; # is an array ref
+        
+    if ($focal_taxon->{'taxon_rank'} =~ /species/) {
+        # A species may be a type for genus/subgenus only
+        my $i = 0;
+        for($i=0;$i<scalar(@parents);$i++) {
+            last if ($parents[$i]->{'taxon_rank'} !~ /species|genus|subgenus/);
+        }
+        splice(@parents,$i);
+    } else {
+        # A higher order taxon may be a type for subtribe/tribe/family/subfamily/superfamily
+        # Don't know about unranked clade, leave it for now
+        my $i = 0;
+        for($i=0;$i<scalar(@parents);$i++) {
+            last if ($parents[$i]->{'taxon_rank'} !~ /tribe|family|unranked clade/);        }   
+        splice(@parents,$i);
+    }
+    # This sets values in the hashes for the type_taxon_no, type_taxon_name, and type_taxon_rank
+    # in addition to the taxon_no, taxon_name, taxon_rank of the parent
+    foreach my  $parent (@parents) {
+        my $parent_taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$parent->{'taxon_no'});
+        $parent->{'authorizer_no'} = $parent_taxon->{'authorizer_no'};
+        $parent->{'type_taxon_no'} = $parent_taxon->{'type_taxon_no'};
+        if ($parent->{'type_taxon_no'}) {
+            my $type_taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$parent->{'type_taxon_no'});
+            $parent->{'type_taxon_name'} = $type_taxon->{'taxon_name'};
+            $parent->{'type_taxon_rank'} = $type_taxon->{'taxon_rank'};
+        }
+    }
+
+    return @parents;
 }
 
 
