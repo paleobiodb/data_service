@@ -114,17 +114,14 @@ a popup menu of taxon ranks with the current "taxon_rank" selected. -->
 
 </TR>
 
-%%START_OPTIONAL_type_taxon_name%%
-<!-- Note: this should only appear if the rank is higher than species -->
-<TR><td align=right><b>Name of type taxon:</b><BR>
-<i class="tiny">e.g., "Homo sapiens"</i></td>
-<td><input id="type_taxon_name" name="type_taxon_name" size=50 value="%%type_taxon_name%%">
+%%START_OPTIONAL_type_taxon%%
+<!-- Note: this should only appear if the rank is species -->
+<TR><td></td><td><input id="type_taxon" name="type_taxon" type="checkbox" %%type_taxon_checked%% value="1"><b>This is the type %%taxon_rank%%</b>
 </td>
 </TR>
-%%END_OPTIONAL_type_taxon_name%%
+%%END_OPTIONAL_type_taxon%%
 
 %%START_OPTIONAL_type_specimen%%
-<!-- note. this should only appear if the rank is species -->
 <TR><td align=right><b>Type specimen:</b></td>
 <td><input id="type_specimen" name="type_specimen" size=50 value="%%type_specimen%%">
 </td>
