@@ -76,42 +76,11 @@ sub pages {
 	return $p;	
 }
 
-
-# for internal use only
-# gets author information for the reference
-#
-# pass it true to get initials, or 
-# false to not get them..
-sub internalGetAuthors {
-	my Reference $self = shift;
-	
-	my $getInitials = shift;  # should we get initials or not?
-	
-	my $auth = Globals::formatAuthors($getInitials, $self->{author1init}, $self->{author1last}, $self->{author2init}, $self->{author2last}, $self->{otherauthors} );
-	
-	my $ref_no = $self->{reference_no};
-	
-	$auth .= " $self->{pubyr}";  # pubyr
-		
-	return $auth;
-}
-
-
 # get all authors and year for reference
 sub authors {
 	my Reference $self = shift;
-	
-	return $self->internalGetAuthors(0);  # no initials
+    return formatShortRef($self);
 }
-
-
-# gets author names with initials for reference
-sub authorsWithInitials {
-	my Reference $self = shift;
-	
-	return $self->internalGetAuthors(1);  # initials
-}
-
 
 # returns a nicely formatted HTML reference line.
 sub formatAsHTML {
@@ -123,7 +92,7 @@ sub formatAsHTML {
 	}
 	
 	my $html = "<SPAN class=\"smallRef\"><b>" . $self->{'reference_no'} . "</b> ";
-	$html .= $self->authorsWithInitials() . ". ";
+	$html .= $self->authors() . ". ";
 	if ($self->{reftitle})	{ $html .= $self->{reftitle}; }
 	if ($self->{pubtitle})	{ $html .= " <i>" . $self->{pubtitle} . "</i>"; }
 	if ($self->{pubvol}) 	{ $html .= " <b>" . $self->{pubvol} . "</b>"; }

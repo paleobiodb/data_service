@@ -115,51 +115,6 @@ sub isEmpty {
 	return 1;
 }
 
-
-# Pass this the following arguments:
-# printinitials 	: 0 = don't print, 1 = print
-# author1init
-# author1last
-# author2init
-# author2last
-# otherauthors
-#
-# It will return a properly formatted author name
-# list, ie, putting the "and", "et al.", in the right place.
-# 
-# The first three arguments are required - the rest are optional.
-# 
-# rjp, 3/2004.
-sub formatAuthors {
-	my $printInitials = shift;
-	my $author1init = shift;
-	my $author1last = shift;
-	my $author2init = shift;
-	my $author2last = shift;
-	my $otherauthors = shift;
-	
-	my $auth = $author1last;	# first author
-
-	if ($printInitials) {
-		$auth = $author1init . " " . $auth;	# first author
-	}
-	
-	if ($otherauthors) {	# we have other authors (implying more than two)
-		$auth .= " et al."; 
-	} elsif ($author2last) {	# exactly two authors
-		$auth .= " and ";
-		
-		if ($printInitials) {
-			$auth .= $author2init . " ";
-		}
-			
-		$auth .= $author2last;
-	}
-		
-	return $auth;
-}
-
-
 # pass this a hashref, and it will return a new hashref
 # which contains a copy of the hash refererred to by the first hashref.
 #
