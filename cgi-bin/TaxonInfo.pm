@@ -799,6 +799,7 @@ sub displayTaxonClassification{
 	my $species = (shift or "");
 	my $orig_no = (shift or ""); #Pass in original combination no
 
+
     # Theres one case where we might want to do upward classification when theres no taxon_no:
     #  The Genus+species isn't in authorities, but the genus is
     my $genus_no = 0;
@@ -825,22 +826,27 @@ sub displayTaxonClassification{
 
         # First, find the rank, name, of the focal taxon
         my $correct_row = getMostRecentParentOpinion($dbt,$orig_no,1);
-        $child_spelling_no = $correct_row->{'child_spelling_no'};    
-        $taxon_name = $correct_row->{'child_name'};    
-        $taxon_rank = $correct_row->{'child_rank'};    
+        if ($correct_row) {
+            $child_spelling_no = $correct_row->{'child_spelling_no'};    
+            $taxon_name = $correct_row->{'child_name'};    
+            $taxon_rank = $correct_row->{'child_rank'};    
+        } else {
+            my $t = getTaxon($dbt,'taxon_no'=>$orig_no);
+            $child_spelling_no = $t->{'taxon_no'};
+            $taxon_name = $t->{'taxon_name'};    
+            $taxon_rank = $t->{'taxon_rank'};    
+        }
 #        $is_recomb = ($orig_no != $child_spelling_no) ? 1:0;
 
         push @table_rows, [$taxon_rank,$taxon_name,$orig_no,$child_spelling_no];
 
         # Now find the rank,name, and publication of all its parents
-        $first_link = Classification::get_classification_hash($dbt,'all',[$orig_no],'linked_list');
-        $next_link = $first_link->{$orig_no};
-        for(my $counter = 0;%$next_link && $counter < 30;$counter++) {
-            push @table_rows, [$next_link->{'taxon_rank'},$next_link->{'taxon_name'},$next_link->{'child_no'},$next_link->{'child_spelling_no'}];
-            last if ($next_link->{'rank'} eq 'kingdom');
-            $next_link = $next_link->{'next_link'};
-		}
-
+        my $parent_hash = Classification::get_classification_hash($dbt,'all',[$orig_no],'array');
+        my $parent_array = $parent_hash->{$orig_no}; 
+        foreach $row (@$parent_array) {
+            push (@table_rows,[$row->{'taxon_rank'},$row->{'taxon_name'},$row->{'taxon_no'},$row->{'taxon_spelling_no'}]);
+            last if ($row->{'taxon_rank'} eq 'kingdom');
+        }
     } else {
         # This block is if no taxon no is found - go off the occurrences table
         push @table_rows,['species',"$genus $species",0,0] if $species;
@@ -898,6 +904,8 @@ sub displayTaxonClassification{
     # This section generates links for children if we have a taxon_no (in authorities table)
     $taxon_records = PBDBUtil::getChildren($dbt,$focal_taxon_no,1,'sort_alphabetical') if ($focal_taxon_no);
     if (@{$taxon_records}) {
+        my $sql = "SELECT type_taxon_no FROM authorities WHERE taxon_no=$focal_taxon_no";
+        my $type_taxon_no = ${$dbt->getData($sql)}[0]->{'type_taxon_no'};
         foreach $record (@{$taxon_records}) {
             my @syn_links;                                                         
             my @synonyms = @{$record->{'synonyms'}};
@@ -905,6 +913,9 @@ sub displayTaxonClassification{
             my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$record->{taxon_no}">$record->{taxon_name}|;
             $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
             $link .= "</a>";
+            if ($type_taxon_no && $type_taxon_no == $record->{'taxon_no'}) {
+                $link .= " <small>(is type $record->{taxon_rank})</small>";
+            }
             push @child_taxa_links, $link;
         }
     }    
@@ -1193,8 +1204,8 @@ sub getSynonymyParagraph{
                 $taxon_no = $first_row->{'parent_spelling_no'};
             }
             if ($taxon_no) {
-                @results = getTaxon($dbt,'taxon_no'=>$taxon_no);
-			    $text .= "<i>".$results[0]->{'taxon_name'}."</i>";
+                my $taxon = getTaxon($dbt,'taxon_no'=>$taxon_no);
+			    $text .= "<i>".$taxon->{'taxon_name'}."</i>";
             }
         }
         $text .= " by ";
@@ -1248,6 +1259,7 @@ sub getMostRecentParentOpinion {
 	my $child_no = shift;
     my $include_child_taxon_info = (shift || 0);
     my $include_reference = (shift || 0);
+    my $reference_no = (shift || 0);
     return if (!$child_no);
 
     my $child_fields = '';
@@ -1257,6 +1269,11 @@ sub getMostRecentParentOpinion {
         $child_join .= " LEFT JOIN authorities a1 ON o.child_spelling_no=a1.taxon_no";
     }
 
+    my $reference_clause = '';
+    if ($reference_no) {
+        $reference_clause = " AND o.reference_no=$reference_no";
+    }
+
     # This will return the most recent parent opinions. its a bit tricky cause: 
     # we're sorting by aliased fields. So surround the query in parens () to do this:
     # compendium types come last: sort asc. so the boolean is_compendium will 
@@ -1264,14 +1281,15 @@ sub getMostRecentParentOpinion {
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice
     #  surround the select in () so aliased fields can be used in order by.
     # The taxon_name is the correct spelling of the child passed in, not the name of the parent, which is weird
-    my $sql = "(SELECT ${child_fields}o.child_no, o.child_spelling_no, o.status, o.parent_no, o.parent_spelling_no, "
-            . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr, "
+    my $sql = "(SELECT ${child_fields}o.child_no, o.child_spelling_no, o.status, o.parent_no, o.parent_spelling_no,"
+            . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr,"
             . " (r.publication_type IS NOT NULL AND r.publication_type='compendium') AS is_compendium" 
-            . " FROM opinions o " 
+            . " FROM opinions o" 
             . $child_join
-            . " LEFT JOIN refs r ON r.reference_no=o.reference_no " 
-            . " WHERE o.child_no=$child_no) " 
-            . " ORDER BY is_compendium ASC, pubyr DESC LIMIT 1";
+            . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
+            . " WHERE o.child_no=$child_no" 
+            . $reference_clause
+            . ") ORDER BY is_compendium ASC, pubyr DESC LIMIT 1";
 
     my @rows = @{$dbt->getData($sql)};
     if (scalar(@rows)) {
@@ -1580,10 +1598,10 @@ sub displaySynonymyList	{
 		my @userefs =  @{$dbt->getData($sql)};
 
 
-        my @parents = getTaxon($dbt,'taxon_no'=>$syn);
+        my $parent = getTaxon($dbt,'taxon_no'=>$syn);
 
-		my $parent_name = $parents[0]->{'taxon_name'};
-		my $parent_rank = $parents[0]->{'taxon_rank'};
+		my $parent_name = $parent->{'taxon_name'};
+		my $parent_rank = $parent->{'taxon_rank'};
 		if ( $parent_rank =~ /genus|species/ )	{
 			$parent_name = "<i>" . $parent_name . "</i>";
 		} 
@@ -1772,7 +1790,11 @@ sub getTaxon {
             @results = @{$dbt->getData($sql)};
         }
     }
-    return @results;
+    if (wantarray) {
+        return @results;
+    } else {
+        return $results[0];
+    }
 }
 
 # Keep going until we hit a belongs to, recombined, corrected as, or nome *
@@ -1819,6 +1841,7 @@ sub getJuniorSynonyms {
     }
     return @synonyms;
 }
+
 
 
 1;
