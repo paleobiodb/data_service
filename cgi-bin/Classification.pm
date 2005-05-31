@@ -15,7 +15,9 @@ my $DEBUG = 0;
 #              OR keyword 'parent' => gets first parent of taxon passed in 
 #              OR keyword 'all' => get full classification (not imp'd yet, not used yet);
 #   * 2nd arg: Takes an array of taxon names or numbers
-#   * 3rd arg: What to return: will either be comma-separated taxon_nos (numbers), taxon_names (names), or a linked_list (linked_list) 
+#   * 3rd arg: What to return: will either be comma-separated taxon_nos (numbers), taxon_names (names), or an ordered array ref hashes (array)(like $dbt->getData returns)
+#   * 4th arg: Restrict the search to a certain reference_no.  This is used by the type_taxon part of the Opinions scripts, so
+#              an authority can be a type taxon for multiple possible higher taxa (off the same ref).
 #  Return:
 #   * Returns a hash whose key is input (no or name), value is comma-separated lists
 #     * Each comma separated list is in the same order as the '$ranks' (1nd arg)input variable was in
@@ -23,7 +25,10 @@ sub get_classification_hash{
 	my $dbt = shift;
 	my $ranks = shift; #all OR parent OR comma sep'd ranks i.e. 'class,order,family'
 	my $taxon_names_or_nos = shift;
-	my $return_type = shift || 'names'; #names OR numbers OR linked_list;
+	my $return_type = shift || 'names'; #names OR numbers OR array;
+    my $restrict_to_reference_no = shift;
+
+    return if ($restrict_to_reference_no eq '0'); # assurance against weird opinion.
 
 	my @taxon_names_or_nos = @{$taxon_names_or_nos};
     $ranks =~ s/\s+//g; #NO whitespace
@@ -94,7 +99,7 @@ sub get_classification_hash{
         #}
 
         # prime the pump 
-        my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no);
+        my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no,0,0,$restrict_to_reference_no);
         if ($DEBUG) { print "Start:".Dumper($parent_row)."<br>"; }
         my $status = $parent_row->{'status'};
         $child_no = $parent_row->{'parent_no'};
@@ -119,7 +124,7 @@ sub get_classification_hash{
             }
 
             # Belongs to should always point to original combination
-            $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no,1);
+            $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no,1,0,$restrict_to_reference_no);
             if ($DEBUG) { print "Loop:".Dumper($parent_row)."<br>"; }
        
             # No parent was found. This means we're at end of classification, althought
@@ -142,11 +147,10 @@ sub get_classification_hash{
 
             # bail because we've already climbed up this part o' the tree and its cached
             if ($parent_no && exists $link_cache{$parent_no}) {
-                $link->{'child_no'} = $child_no;
-                $link->{'parent_no'} = $parent_no;
+                $link->{'taxon_no'} = $child_no;
                 $link->{'taxon_name'} = $taxon_name;
                 $link->{'taxon_rank'} = $taxon_rank;
-                $link->{'child_spelling_no'} = $child_spelling_no;
+                $link->{'taxon_spelling_no'} = $child_spelling_no;
                 $link->{'next_link'} = $link_cache{$parent_no};
                 if ($DEBUG) { print "Found cache for $parent_no:".Dumper($link)."<br>";}
                 last;
@@ -159,11 +163,10 @@ sub get_classification_hash{
                 if ($status =~ /^(?:repl|subj|obje)/o) {
                     if ($DEBUG) { print "Synonym node<br>";}
                     my %node = (
-                        'child_no'=>$child_no,
-                        'parent_no'=>$parent_no,
+                        'taxon_no'=>$child_no,
                         'taxon_name'=>$taxon_name,
                         'taxon_rank'=>$taxon_rank,
-                        'child_spelling_no'=>$child_spelling_no
+                        'taxon_spelling_no'=>$child_spelling_no
                     );
                     push @{$link->{'synonyms'}}, \%node;
                     $link_cache{$child_no} = $link;
@@ -171,11 +174,10 @@ sub get_classification_hash{
                     if ($DEBUG) { print "Reg. node<br>";}
                     if (exists $rank_hash{$taxon_rank} || $ranks[0] eq 'parent' || $ranks[0] eq 'all') {
                         my $next_link = {};
-                        $link->{'child_no'} = $child_no;
-                        $link->{'parent_no'} = $parent_no;
+                        $link->{'taxon_no'} = $child_no;
                         $link->{'taxon_name'} = $taxon_name;
                         $link->{'taxon_rank'} = $taxon_rank;
-                        $link->{'child_spelling_no'} = $child_spelling_no;
+                        $link->{'taxon_spelling_no'} = $child_spelling_no;
                         $link->{'next_link'}=$next_link;
                         if ($DEBUG) { print Dumper($link)."<br>";}
                         $link_cache{$child_no} = $link;
@@ -203,45 +205,61 @@ sub get_classification_hash{
     #print "\n\nlink head\n".Dumper(\%link_head).'</pre><center>';
 
 
-    # flatten the links before passing it back
-    if ($return_type ne 'linked_list') {
-        while(($hash_key, $link) = each(%link_head)) {
-            my %list= ();
-            my %visits = ();
-            my $list_ordered = '';
-            # Flatten out data, but first prepare it all
-            if ($ranks[0] eq 'parent') {
-                if ($return_type eq 'names') {
-                    $list_ordered .= ','.$link->{'taxon_name'};
-                } else {
-                    $list_ordered .= ','.$link->{'child_spelling_no'};
-                }
+    # flatten the linked list before passing it back, either into:
+    #  return_type is numbers : comma separated taxon_nos, in order
+    #  return_type is names   : comma separated taxon_names, in order
+    #  return_type is array   : array reference to array of hashes, in order.  
+    while(($hash_key, $link) = each(%link_head)) {
+        my %list= ();
+        my %visits = ();
+        my $list_ordered;
+        if ($return_type eq 'array') {
+            $list_ordered = [];
+        } else {
+            $list_ordered = '';
+        }
+        # Flatten out data, but first prepare it all
+        if ($ranks[0] eq 'parent') {
+            if ($return_type eq 'array') {
+                push @$list_ordered,$link;
+            } elsif ($return_type eq 'names') {
+                $list_ordered .= ','.$link->{'taxon_name'};
             } else {
-                while (%$link) {
-                    #if ($count++ > 5) { print "link: ".Dumper($link)."<br>"}
-                    #if ($count++ > 12) { last; }
-                    # Loop prevention by marking where we've been
-                    if (exists $visits{$link->{'parent_no'}}) { 
-                        last; 
-                    } else {
-                        $visits{$link->{'parent_no'}} = 1;
-                    }
-                    if ($return_type eq 'names') {
-                        $list{$link->{'taxon_rank'}} = $link->{'taxon_name'}; 
-                    } else {
-                        $list{$link->{'taxon_rank'}} = $link->{'child_spelling_no'}; 
-                    }
-                    $link = $link->{'next_link'};
+                $list_ordered .= ','.$link->{'taxon_spelling_no'};
+            }
+        } else {
+            while (%$link) {
+                #if ($count++ > 5) { print "link: ".Dumper($link)."<br>"}
+                #if ($count++ > 12) { last; }
+                # Loop prevention by marking where we've been
+                if (exists $visits{$link->{'taxon_no'}}) { 
+                    last; 
+                } else {
+                    $visits{$link->{'taxon_no'}} = 1;
                 }
-                # The output list will be in the same order as the input list
-                # by looping over this array
+                if ($return_type eq 'array') {
+                    push @$list_ordered,$link;
+                } elsif ($return_type eq 'names') {
+                    $list{$link->{'taxon_rank'}} = $link->{'taxon_name'}; 
+                } else {
+                    $list{$link->{'taxon_rank'}} = $link->{'taxon_spelling_no'}; 
+                }
+                my $link_next = $link->{'next_link'};
+                delete $link->{'next_link'}; # delete this to make Data::Dumper output look nice 
+                $link = $link_next;
+            }
+            # The output list will be in the same order as the input list
+            # by looping over this array
+            if ($return_type ne 'array') {
                 foreach $rank (@ranks) {
                     $list_ordered .= ','.$list{$rank};
                 }
             }
-            $list_ordered =~ s/^,//g;
-            $link_head{$hash_key} = $list_ordered;
         }
+        if ($return_type ne 'array') {
+            $list_ordered =~ s/^,//g;
+        }
+        $link_head{$hash_key} = $list_ordered;
     }
 
     return \%link_head;
