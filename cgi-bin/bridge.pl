@@ -1353,6 +1353,8 @@ sub displayRefAdd {
 			push(@fieldNames, $query_hash{$s_param});
 		}
 	}
+    push @row, 'English';
+    push @fieldNames, 'language';
 	print $hbo->populateHTML("enter_ref_form", \@row, \@fieldNames);
 	print stdIncludes("std_page_bottom");
 }
@@ -2219,7 +2221,7 @@ sub processCollectionsSearch {
                 if (!$taxon_nos_string) {$taxon_nos_string = '-1';}
 
 				$sql->addWhereItem("(taxon_no IN ($taxon_nos_string) $genus_species_sql)");
-            } elsif ( $genus )	{
+            } elsif ( $genus || $species )	{
 				if ($q->param("taxon_rank") eq "Higher taxon" ||
 					$q->param("taxon_rank") eq "Higher-taxon"){
                     $taxon_nos_string = '-1';
@@ -2242,16 +2244,18 @@ sub processCollectionsSearch {
                                                 
 					$sql->addWhereItem("taxon_no IN ($in_list)");
 				} else {
-					$sql->addWhereItem("genus_name".$relationString.$genus.$wildCard);
-				}
+                    if ($genus) {
+					    $sql->addWhereItem("genus_name".$relationString.$genus.$wildCard);
+                    }
 			
-                if ( $sub_genus ) {
-                    $sql->addWhereItem("subgenus_name" . $relationString.$sub_genus.$wildCard);
-                }
-                
-                if ( $species )	{
-                    $sql->addWhereItem("species_name" . $relationString . $species . $wildCard);
-                }
+                    if ( $sub_genus ) {
+                        $sql->addWhereItem("subgenus_name" . $relationString.$sub_genus.$wildCard);
+                    }
+                    
+                    if ( $species )	{
+                        $sql->addWhereItem("species_name" . $relationString.$species.$wildCard);
+                    }
+				}
 			}
 
 			$sql->setGroupByExpr("collection_no");
@@ -2272,6 +2276,7 @@ sub processCollectionsSearch {
 			$sth->finish();
 		}
 	} # end of if genus block.
+
 	
 	
 	# if time intervals were requested, get an in-list
