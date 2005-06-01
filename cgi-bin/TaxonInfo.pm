@@ -632,7 +632,6 @@ sub doCollections{
 	# Get all the data from the database, bypassing most of the normal behavior
 	# of displayCollResults
 	@data = @{main::displayCollResults($in_list)};	
-	require Collections;
 
 	# figure out which intervals are too vague to use to set limits on
 	#  the joint upper and lower boundaries
@@ -673,52 +672,67 @@ sub doCollections{
 	my $youngestupperbound = 9999;
 	my $youngestuppername;
 	foreach my $row (@data){
-	    $res = Collections::createTimePlaceString($row,$dbt);
+        my $interval1 = $interval_name{$row->{'max_interval_no'}};
+        my $interval2 = $interval_name{$row->{'min_interval_no'}};
+        my $res = "<span class=\"tiny\">$interval1";
+        if ( $interval2 && $row->{'max_interval_no'} != $row->{'min_interval_no'}) {
+            $res .= " - " . $interval2;
+        }
+        $res .= "</span></td><td align=\"middle\" valign=\"top\"><span class=\"tiny\">";
+
+        $row->{"country"} =~ s/ /&nbsp;/;
+        $res .= $row->{"country"};
+        if($row->{"state"}){
+            $row->{"state"} =~ s/ /&nbsp;/;
+            $res .= " (" . $row->{"state"} . ")";
+        }
+        $res .= "</span>\n";
+
 	    if(exists $time_place_coll{$res}){
 			push(@{$time_place_coll{$res}}, $row->{"collection_no"});
 	    }
 	    else{
 			$time_place_coll{$res} = [$row->{"collection_no"}];
 			push(@order,$res);
-		# create a hash array where the keys are the time-place strings
-		#  and each value is a number recording the min and max
-		#  boundary estimates for the temporal bins JA 25.6.04
-		# this is kind of tricky because we want bigger bins to come
-		#  before the bins they include, so the second part of the
-		#  number recording the upper boundary has to be reversed
-		my $upper = $upperbound{$row->{'max_interval_no'}};
-		$max_interval_name{$res} = $interval_name{$row->{'max_interval_no'}};
-		$min_interval_name{$res} = $max_interval_name{$res};
-		if ( $row->{'max_interval_no'} != $row->{'min_interval_no'} &&
-			$row->{'min_interval_no'} > 0 )	{
-			$upper = $upperbound{$row->{'min_interval_no'}};
-			$min_interval_name{$res} = $interval_name{$row->{'min_interval_no'}};
-		}
-		# also store the overall lower and upper bounds for
-		#  printing below JA 26.1.05
-		# don't do this if the interval is too vague (see above)
-		if ( ! $toovague{$row->{'max_interval_no'}." ".$row->{'min_interval_no'}} )	{
-			if ( $lowerbound{$row->{'max_interval_no'}} > $oldestlowerbound )	{
-				$oldestlowerbound = $lowerbound{$row->{'max_interval_no'}};
-				$oldestlowername = $max_interval_name{$res};
-			}
-			if ( $upper < $youngestupperbound )	{
-				$youngestupperbound = $upper;
-				$youngestuppername = $min_interval_name{$res};
-			}
-		}
-		# WARNING: we're assuming upper boundary ages will never be
-		#  greater than 999 million years
-		# also, we're just going to ignore fractions of m.y. estimates
-		#  because those would screw up the sort below
-		$upper = int($upper);
-		$upper = 999 - $upper;
-		if ( $upper < 10 )	{
-			$upper = "00" . $upper;
-		} elsif ( $upper < 100 )	{
-			$upper = "0" . $upper;
-		}
-		$bounds_coll{$res} = int($lowerbound{$row->{'max_interval_no'}}) . $upper;
+            # create a hash array where the keys are the time-place strings
+            #  and each value is a number recording the min and max
+            #  boundary estimates for the temporal bins JA 25.6.04
+            # this is kind of tricky because we want bigger bins to come
+            #  before the bins they include, so the second part of the
+            #  number recording the upper boundary has to be reversed
+            my $upper = $upperbound{$row->{'max_interval_no'}};
+            $max_interval_name{$res} = $interval_name{$row->{'max_interval_no'}};
+            $min_interval_name{$res} = $max_interval_name{$res};
+            if ( $row->{'max_interval_no'} != $row->{'min_interval_no'} &&
+                $row->{'min_interval_no'} > 0 )	{
+                $upper = $upperbound{$row->{'min_interval_no'}};
+                $min_interval_name{$res} = $interval_name{$row->{'min_interval_no'}};
+            }
+            # also store the overall lower and upper bounds for
+            #  printing below JA 26.1.05
+            # don't do this if the interval is too vague (see above)
+            if ( ! $toovague{$row->{'max_interval_no'}." ".$row->{'min_interval_no'}} )	{
+                if ( $lowerbound{$row->{'max_interval_no'}} > $oldestlowerbound )	{
+                    $oldestlowerbound = $lowerbound{$row->{'max_interval_no'}};
+                    $oldestlowername = $max_interval_name{$res};
+                }
+                if ( $upper < $youngestupperbound )	{
+                    $youngestupperbound = $upper;
+                    $youngestuppername = $min_interval_name{$res};
+                }
+            }
+            # WARNING: we're assuming upper boundary ages will never be
+            #  greater than 999 million years
+            # also, we're just going to ignore fractions of m.y. estimates
+            #  because those would screw up the sort below
+            $upper = int($upper);
+            $upper = 999 - $upper;
+            if ( $upper < 10 )	{
+                $upper = "00" . $upper;
+            } elsif ( $upper < 100 )	{
+                $upper = "0" . $upper;
+            }
+            $bounds_coll{$res} = int($lowerbound{$row->{'max_interval_no'}}) . $upper;
 	    }
 	}
 
@@ -774,9 +788,8 @@ sub doCollections{
 			}
 			$output .= "<td align=\"middle\" valign=\"top\">".
 				  "<span class=tiny>$key</span></td><td align=\"left\">";
-			foreach  my $val (@{$time_place_coll{$key}}){
-				my $link=Collections::createCollectionDetailLink($exec_url,$val,$val);
-				$output .= "$link ";
+			foreach  my $collection_no (@{$time_place_coll{$key}}){
+				$output .= "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a> ";
 			}
 			$output .= "</td></tr>\n";
 			$row_color++;
@@ -1097,16 +1110,16 @@ sub getSynonymyParagraph{
 					 $auth_rec[0]->{taxon_name}."<br>.";
 			return $text;	
 		}
-		$sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs ".
+		$sql = "SELECT author1last,author2last,otherauthors,pubyr,comments FROM refs ".
 			   "WHERE reference_no=".$auth_rec[0]->{reference_no};
 		@results = @{$dbt->getData($sql)};
 		
 		$text .= "<li><i>".$auth_rec[0]->{taxon_name}."</i> was named by ".
-        $text .= Reference::formatRef($results[0]);
+        $text .= Reference::formatShortRef($results[0],'alt_pubyr'=>1,'show_comments'=>1);
 	} elsif($auth_rec[0]->{author1last}){
     #	elsif($auth_rec[0]->{author1last} && $auth_rec[0]->{pubyr}){
 		$text .= "<li><i>".$auth_rec[0]->{taxon_name}."</i> was named by ".
-        $text .= Reference::formatRef($auth_rec[0]);
+        $text .= Reference::formatShortRef($auth_rec[0],'alt_pubyr'=>1,'show_comments'=>1);
 	}
 	# if there's nothing from above, give up.
 	else{
@@ -1219,7 +1232,7 @@ sub getSynonymyParagraph{
             } else {
                 $comma = "";
             }
-            $text .= Reference::formatRef(${$group}[$i]) . $comma;
+            $text .= Reference::formatShortRef(${$group}[$i],'alt_pubyr'=>1,'show_comments'=>1) . $comma;
         }
 	}
 	if($text ne ""){
@@ -1461,50 +1474,61 @@ sub displayEcology	{
 	}
 
 	# get the field names from the ecotaph table
-	my %attrs = ("NAME"=>'');
-	my $sql = "SELECT * FROM ecotaph WHERE taxon_no=0";
-	%ecotaphRow = %{@{$dbt->getData($sql,\%attrs)}[0]};
-	for my $name (@{$attrs{"NAME"}})	{
-		$ecotaphRow{$name} = "";
-		push @ecotaphFields,$name;
-	}
+    my @ecotaphFields = $dbt->tableColumns('ecotaph');
+
+    # save a list of references
+    @references = ();
 
 	# grab all the data for this taxon from the ecotaph table
 	$sql = "SELECT * FROM ecotaph WHERE taxon_no=" . $taxon_no;
-	$ecotaphVals = @{$dbt->getData($sql)}[0];
-
-	# also get values for ancestors (always do this because data for the
-	#   taxon could be partial)
-	# WARNING: this will completely screw up if the name has homonyms
-	# JA: changed this on 4.4.04 to use taxon_no instead of taxon_name,
-	#  avoiding homonym problem
-	my $ancestor_ref = Classification::get_classification_hash($dbt,'class,order,family',[$taxon_no],'numbers');
-    my @ancestors = split(/,/,$ancestor_ref->{$taxon_no},-1);
-
-	my $tempVals;
-	if ( @ancestors)	{
-		for my $a ( @ancestors )	{
-            if ($a) {
-                $sql = "SELECT * FROM ecotaph WHERE taxon_no=" . $a;
-                main::dbg($sql);
-                
-                $tempVals = @{$dbt->getData($sql)}[0];
-                if ( $tempVals )	{
-                    for my $field ( @ecotaphFields )	{
-                        if ( $tempVals->{$field} && ! $ecotaphVals->{$field} && $field ne "created" && $field ne "modified" )	{
-                            $ecotaphVals->{$field} = $tempVals->{$field};
-                        }
-                    }
+	$ecotaphVals = ${$dbt->getData($sql)}[0];
+    push @references,$ecotaphVals->{'reference_no'} if ($ecotaphVals->{'reference_no'});
+    
+	# also get values for ancestors
+	my $parents = Classification::get_classification_hash($dbt,'all',[$taxon_no],'array');
+    for my $parent (@{$parents->{$taxon_no}}) {
+        $sql = "SELECT * FROM ecotaph WHERE taxon_no=$parent->{taxon_no}";
+        
+        my $row = ${$dbt->getData($sql)}[0];
+        if ( $row)	{
+            for my $field (@ecotaphFields){
+                if ( $row->{$field} && ! $ecotaphVals->{$field} && $field !~ /^(?:created|modified|_no$)/) {
+                    $ecotaphVals->{$field} = $row->{$field};
                 }
             }
-		}
-	}
+            if ($row->{'reference_no'}) {
+                my $seenref = 0;
+                foreach my $reference_no (@references) {
+                    if ($row->{'reference_no'} == $reference_no) {
+                        $seenref = 1;
+                    }
+                }
+                if (!$seenref) {
+                    push @references,$row->{'reference_no'};
+                }
+            }
+        }
+    }
 
 	if ( ! $ecotaphVals )	{
 		print "<i>No ecological data are available</i>";
 		return;
 	} else	{
-		print "<table cellspacing=5><tr>";
+		print "<table cellspacing=5>";
+        print "<tr><td colspan=2>";
+        if (scalar(@references) == 1) {
+            print "<b>Reference:</b> ";
+        } elsif (scalar(@references) > 1) {
+            print "<b>References:</b> ";
+        }
+        for(my $i=0;$i<scalar(@references);$i++) {
+            my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$references[$i]";
+            my $ref = ${$dbt->getData($sql)}[0];
+            $references[$i] = Reference::formatShortRef($ref,'show_id'=>1);
+        }
+        print join(", ",@references);
+        print "</td></tr>";
+        print "<tr>";
 		my $cols = 0;
 		for my $i (0..$#ecotaphFields)	{
 			my $name = $ecotaphFields[$i];
