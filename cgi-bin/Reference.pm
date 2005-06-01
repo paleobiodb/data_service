@@ -106,46 +106,45 @@ sub formatAsHTML {
 
 
 # JA 16-17.8.02
+# Moved and extended by PS 05/2005 to accept a number (reference_no) or hashref (if all the pertinent data has been grabbed already);
 sub formatShortRef  {
-    my $refDataRef = shift;
-    my %refData = %{$refDataRef};
+    my $refData = shift;
+    return if (!$refData);
 
-    my $shortRef = $refData{'author1init'} . " " . $refData{'author1last'};
-    if ( $refData{'otherauthors'} ) {
+    my %options = @_;
+    my $shortRef = "";
+
+    if ($options{'show_id'}) {
+        if ($refData->{'reference_no'}) {
+            $shortRef .= qq|<b><a href="bridge.pl?action=displayRefResults&no_set=1&reference_no=$refData->{reference_no}">$refData->{reference_no}</a></b> |;
+        }
+    }
+
+    $shortRef .= $refData->{'author1init'} . " " . $refData->{'author1last'};
+    if ( $refData->{'otherauthors'} ) {
         $shortRef .= " et al.";
-    } elsif ( $refData{'author2last'} ) {
+    } elsif ( $refData->{'author2last'} ) {
         # We have at least 120 refs where the author2last is 'et al.'
-        if($refData{'author2last'} ne "et al."){
+        if($refData->{'author2last'} ne "et al."){
             $shortRef .= " and ";
         } 
-        $shortRef .= $refData{'author2init'} . " ". $refData{'author2last'};
+        $shortRef .= $refData->{'author2init'} . " ". $refData->{'author2last'};
     }
-    $shortRef .= " " . $refData{'pubyr'} if ($refData{'pubyr'});
+    if ($refData->{'pubyr'}) {
+        if ($options{'alt_pubyr'}) {
+            $shortRef .= " (" . $refData->{'pubyr'} . ")"; 
+        } else {
+            $shortRef .= " " . $refData->{'pubyr'};
+        }
+    }
+
+    if ($options{'show_comments'}) {
+        if ($refData->{'comments'}) {
+            $shortRef .= " [" . $refData->{'comments'}."]";
+        }
+    }
 
     return $shortRef;
 }
-# JA 16-17.8.02
-sub formatRef  {
-    my $refDataRef = shift;
-    my %refData = %{$refDataRef};
-
-    my $shortRef = $refData{'author1init'} . " " . $refData{'author1last'};
-    if ( $refData{'otherauthors'} ) {
-        $shortRef .= " et al.";
-    } elsif ( $refData{'author2last'} ) {
-        # We have at least 120 refs where the author2last is 'et al.'
-        if($refData{'author2last'} ne "et al."){
-            $shortRef .= " and ";
-        } 
-        $shortRef .= $refData{'author2init'} . " ". $refData{'author2last'};
-    }
-    $shortRef .= " (" . $refData{'pubyr'}.")" if ($refData{'pubyr'});
-    $shortRef .= " [" . $refData{'comments'}."]" if ($refData{'comments'});
-
-    return $shortRef;
-}
-
-# end of Reference.pm
-
 
 1;
