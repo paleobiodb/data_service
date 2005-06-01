@@ -1131,7 +1131,7 @@ sub displayRefResults {
 		# Do the action, don't show results...
 
 		# Set the reference_no
-		unless($q->param('use_primary')){
+		unless($q->param('use_primary') || $q->param('no_set')){
 			$s->setReferenceNo( $dbh, ${$rows[0]}[3] );		# Why isn't the primary key the first column?
 		}
 		# print "reference_no is ".${@rows[0]}[3]."<BR>\n";
