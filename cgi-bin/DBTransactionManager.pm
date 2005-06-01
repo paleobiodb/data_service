@@ -441,16 +441,9 @@ sub finishSQL {
 #
 sub getTableDesc {
 	my DBTransactionManager $self = shift;
-	
 	my $tableName = shift;
-	
-	if (! $self->isValidTableName($tableName)) {
-		return 0;	
-	}
-
 	my $sql = "DESC $tableName";
 	my $ref = ($self->{dbh})->selectall_arrayref($sql);
-
 	return $ref;
 }
 
@@ -459,22 +452,19 @@ sub getTableDesc {
 #
 # Pass it a table name.
 # Returns an arrayref of all column names in this table. 
-sub allTableColumns {
+sub tableColumns {
 	my DBTransactionManager $self = shift;
-	
 	my $tableName = shift;
-	
 	
 	# it will always be the first row returned since
 	# we're just using describe on this table.
-	
 	my @desc = @{$self->getTableDesc($tableName)};
 	my @colNames; 	# names of columns in table
 	foreach my $row (@desc) {
 		push(@colNames, $row->[0]);	
 	}
 	
-	return \@colNames;
+	return @colNames;
 }
 
 
