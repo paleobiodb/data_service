@@ -1296,7 +1296,7 @@ sub getMostRecentParentOpinion {
     # The taxon_name is the correct spelling of the child passed in, not the name of the parent, which is weird
     my $sql = "(SELECT ${child_fields}o.child_no, o.child_spelling_no, o.status, o.parent_no, o.parent_spelling_no,"
             . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr,"
-            . " (r.publication_type IS NOT NULL AND r.publication_type='compendium') AS is_compendium" 
+            . " (r.publication_type IS NOT NULL AND r.publication_type='compendium' AND (o.pubyr IS NULL OR o.pubyr = '' OR o.pubyr = '0000')) AS is_compendium" 
             . " FROM opinions o" 
             . $child_join
             . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
