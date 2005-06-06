@@ -81,6 +81,13 @@
 			}
 		}
 
+
+		// Language
+		var index = frm.language.selectedIndex;
+		if ( index == 0 ) {
+			errors += "The primary language must be selected.\n"; 
+		} 
+
 		// Publication Type
 		var index = frm.publication_type.selectedIndex;
 		if ( index == -1 ) {
