@@ -39,31 +39,55 @@ my $dbt = DBTransactionManager->new($dbh, $s);
 %refset = ();
 $pubtitles = {};
 
-foreach $table (('marinepct','fivepct')) {
-    $sql = "SELECT ref_no, pubtitle, $table.language FROM $table, refs WHERE $table.ref_no=refs.reference_no";
-    print "\nExecuting sql for table $table: $sql\n";
-    @rs = @{$dbt->getData($sql)};
-    foreach $row (@rs) {
-        if ($row->{'language'}) {
-            if (exists $lang{$row->{'language'}}) {
-                $language = $row->{'language'};
-            } else {
-                $language = 'other';
-            }
-            if (!$refset{$row->{ref_no}}) {
-                $sql = "UPDATE refs SET modified=modified, language=".$dbh->quote($language)." WHERE reference_no=$row->{ref_no}";
-                $refset{$row->{ref_no}}++;
-                print $sql."\n";
-                $dbh->do($sql) if ($doUpdates);
-                #if ($row->{'pubtitle'}) {
-                #    $sql = "SELECT count(*) c FROM refs WHERE pubtitle LIKE BINARY ".$dbh->quote($row->{'pubtitle'});
-                #    @rs2 = @{$dbt->getData($sql)};
-                #    if ($rs2[0]->{c}) {
-                #        $pubtitles{$row->{pubtitle}}{$row->{language}} = $rs2[0]->{c};
-                #    }
-                #}
-            }
+%tables = ('marinepct'=>'1%','fivepct'=>'5%');
+
+#$sql = "SELECT ref_no, pubtitle, $table.language FROM $table, refs WHERE $table.ref_no=refs.reference_no";
+$sql1 = "SELECT * FROM refs WHERE project_ref_no IS NOT NULL AND project_name LIKE '5\\%'";
+$sql2 = "SELECT * FROM refs WHERE project_ref_no IS NOT NULL AND project_name LIKE '1\\%'";
+$sql = "($sql1) UNION ($sql2)";
+
+
+$sth = $dbh->prepare($sql);
+$sth->execute();
+
+while ($row = $sth->fetchrow_hashref()) {
+    $ref_no = $row->{project_ref_no}/20;
+    if ($row->{project_name} eq '1%') {
+        $table = "marinepct";
+    } elsif ($row->{project_name} eq '5%') {
+        $table = "fivepct";
+    } else {
+        die "Unknown project_name? $row->{project_name}";
+    }
+    $sql = "SELECT * FROM $table WHERE ref_no=$ref_no";
+    $lrow = ${$dbt->getData($sql)}[0];
+
+    if (!$lrow) {
+        die ("Could not find $ref_no in $table?");
+    }
+   
+    if ($lrow->{'language'}) {
+        if (exists $lang{$lrow->{'language'}}) {
+            $language = $lrow->{'language'};
+        } else {
+            $language = 'other';
         }
+        print "updating #$row->{reference_no} set by $ref_no in table $table.";
+        if ($row->{reftitle} ne $lrow->{title}) {
+            print "Titles not equal? title ref: $row->{reftitle} -- title in table: $lrow->{title}\n";
+        }
+        
+        $sql = "UPDATE refs SET modified=modified, language=".$dbh->quote($language)." WHERE reference_no=$row->{reference_no}";
+        $refset{$row->{ref_no}}++;
+        print $sql."\n";
+        $dbh->do($sql) if ($doUpdates);
+        #if ($row->{'pubtitle'}) {
+        #    $sql = "SELECT count(*) c FROM refs WHERE pubtitle LIKE BINARY ".$dbh->quote($row->{'pubtitle'});
+        #    @rs2 = @{$dbt->getData($sql)};
+        #    if ($rs2[0]->{c}) {
+        #        $pubtitles{$row->{pubtitle}}{$lrow->{language}} = $rs2[0]->{c};
+        #    }
+        #}
     }
 }
 
@@ -75,7 +99,9 @@ foreach $table (('marinepct','fivepct')) {
 #        print "\n";
 #    } else {
 #        while (($lang,$total) = each %$langref) {
-#            print "$total with same language $lang, pubtitle: $pubtitle\n";
+#            if ($total > 1) {
+#                print "$total with same language $lang, pubtitle: $pubtitle\n";
+#            }
 #        }
 #    }
 #}
