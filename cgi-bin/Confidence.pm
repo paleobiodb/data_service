@@ -376,37 +376,38 @@ sub buildList    {
     while(($taxon_name,$no_or_name)=each(%splist_base)) {
         my $found = 0;
         if ($no_or_name =~ /^\d+$/) {
-            # Found the taxon in the authorities table, get its children
             my @children = PBDBUtil::taxonomic_search($dbt,$no_or_name);
-            foreach $taxon_no (@children) {
-                my ($row,$taxon_nos,$recombination_name);
-                #$row = PBDBUtil::getCorrectedName($dbt,TaxonInfo::getOriginalCombination($dbt,$taxon_no));
-                # if the child is a recombination, get its recombined name, and append that to the list
-                if ($row->{'taxon_no'} != $taxon_no) {
-                    main::dbg("found recombination for $taxon_no: ".Dumper($row));
-                    $taxon_nos = "$row->{taxon_no},$taxon_no";
-                    $recombination_name = $row->{'taxon_name'};
-                } else {
-                    $taxon_nos = $taxon_no;
-                }
+            # Found the taxon in the authorities table, get its children
+#            my @children = PBDBUtil::getChildren($dbt,$taxon_no);
 
+            # Get alternate spellings
+#            my $sql = "SELECT DISTINCT taxon_no, taxon_name, taxon_rank FROM opinions, authorities ".
+#                      "WHERE opinions.child_spelling_no=authorities.taxon_no ".
+#                      "AND status IN  ('rank changed as','recombined as','corrected as') ".
+#                      "AND child_no=$taxon_no ".
+#                      "AND child_spelling_no!=$taxon_no".
+#                      "ORDER BY taxon_name";
+#            my $spellings= $dbt->getData($sql);
+
+            foreach $taxon_no (@children) {
                 # Make sure its in the occurrences table first
                 $sql = "SELECT taxon_name,genus_name,species_name FROM occurrences ".
                        " LEFT JOIN authorities ON occurrences.taxon_no=authorities.taxon_no ".
-                       " WHERE occurrences.taxon_no IN ($taxon_nos) LIMIT 1";
+                       " WHERE occurrences.taxon_no IN ($taxon_no) LIMIT 1";
                 @results = @{$dbt->getData($sql)};
                 if (scalar(@results) > 0) {
                     $found = 1;
                     # split the children up into separate checkboxes by having different entries in %splist
                     if ($q->param('split_taxon') eq 'yes') {
-                        if ($recombination_name) {
-                            $splist{$recombination_name} = $taxon_nos;
-                        } else {
-                            $splist{$results[0]->{'genus_name'}.' '.$results[0]->{'species_name'}} = $taxon_nos;
-                        }
+                        #if ($taxon_name) {
+                        #my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$taxon_no);
+                        #$splist{$taxon->{'taxon_name'}} = $taxon_no;
+                        #} else {
+                        $splist{$results[0]->{'genus_name'}.' '.$results[0]->{'species_name'}} = $taxon_no;
+                        #}
                     # or clumped together under the same checkbox by having a comma separated list associated with that higher name
                     } else {
-                        $splist{$taxon_name} .= ",".$taxon_nos;
+                        $splist{$taxon_name} .= ",".$taxon_no;
                     }
                 } 
             }
@@ -444,7 +445,7 @@ sub buildList    {
 
             # Print out a list of taxa 3 columns wide
             print "<TABLE CELLPADDING=5 BORDER=0>";
-            my @sortList = sort alphabetically keys(%splist);
+            my @sortList = sort {$a cmp $b} keys(%splist);
             my $columns = int(scalar(@sortList)/3)+1;
             for($i=0;$i<$columns;$i++) {
                 print "<TR>";
@@ -462,6 +463,7 @@ sub buildList    {
             print "<INPUT TYPE=\"submit\" VALUE=\"Submit\">";
             print "</FORM></CENTER><BR><BR>";
         } else {
+            $q->param('input_type'=>'taxon');
             optionsForm($q, $s, $dbt, \%splist);
         }
     }
@@ -696,17 +698,9 @@ sub calculateTaxaInterval {
     $_ = TimeLookup::processScaleLookup($dbh,$dbt,$scale);
     my %timeHash = %{$_};
 
-#        foreach my $keycounter (keys(%timeHash)) {
-#            print "$keycounter: $timeHash{$keycounter}";
-#            print "<BR>";
-#        }
-    
-    #print "processcalelookup ".Dumper($_);
     @_ = TimeLookup::findBoundaries($dbh,$dbt,$scale);
     my %upperbound = %{$_[0]};
     my %lowerbound = %{$_[1]};
-#    my %upperboundname = %{$_[2]};
-#    my %lowerboundname = %{$_[3]};
 
 #    print "testing getScaleOrder ";
 #    @a = TimeLookup::getScaleOrder($dbt,$scale,'number',1);
@@ -760,20 +754,11 @@ sub calculateTaxaInterval {
         push @{$masterHash{$keycounter}}, $upperbound{$keycounter};
         push @{$masterHash{$keycounter}}, $lowerbound{$keycounter};
     }
-    #print "MH".Dumper(\%masterHash);
-#        foreach my $keycounter (sort numerically keys(%masterHash)) {
-# 
-#            print "$keycounter: ";
-#            foreach my $arrcounter (@{$masterHash{$keycounter}}) {
-#                print "$arrcounter, ";
-#            }
-#            print "<BR>";
-#        }
 
 # ----------------------------------------------------------------------------
     my $rusty = 1;
 #    my $upper_crosser = 0;
-    while(($tryout,$taxon_list)=each(%splist)){
+    while(($taxon_name,$taxon_list)=each(%splist)){
         my @maxintervals;
         my @subsetinterval;
         my @nextinterval;
@@ -782,12 +767,12 @@ sub calculateTaxaInterval {
         my $sql;
 # ---------------------START TAXON CHECKER----------------------------------
         my @taxon_list = split(",",$taxon_list);
-        # We have a list of one of more numbers and we know $tryout exists in the authorities table
+        # We have a list of one of more numbers and we know $taxon_name exists in the authorities table
         if ($taxon_list[0] =~ /^\d+$/) {
             $sql = "SELECT collection_no FROM occurrences WHERE taxon_no IN (".join(",",map {$dbh->quote($_)} @taxon_list).")";
-            my $tryout_link = $tryout;
-            $tryout_link =~ s/\s*(indet(\.)*|sp\.)//;
-            $links{$tryout} = "bridge.pl?action=checkTaxonInfo&taxon_name=$tryout_link";
+            my $taxon_name_link = $taxon_name;
+            $taxon_name_link =~ s/\s*(indet(\.)*|sp\.)//;
+            $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name_link";
         } else {
         # No taxon_no for it, match against occurrences table
             my @taxon = split(/\s+/,$taxon_list[0]);
@@ -803,7 +788,7 @@ sub calculateTaxaInterval {
                 }
                 $sql = "SELECT collection_no FROM occurrences WHERE genus_name=" . $dbh->quote($taxon[0]);
             } 
-            $links{$tryout} = "bridge.pl?action=checkTaxonInfo&taxon_name=$tryout&taxon_rank=$taxon_rank";
+            $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name&taxon_rank=$taxon_rank";
         }
         my @col_nos = @{$dbt->getData($sql)};
         my @collnums;
@@ -823,25 +808,16 @@ sub calculateTaxaInterval {
             }
         }
        
-       main::dbg("anotherHash for $tryout:".Dumper(\%anotherHash));
-#        foreach my $keycounter (sort numerically keys(%anotherHash)) {
-#            print "$keycounter: ";
-##            foreach my $arrcounter (@{$anotherHash{$keycounter}}) {
-#                print "$arrcounter, ";
-#            }
-#            print "<BR>";
-#        }
-
+        main::dbg("anotherHash for $taxon_name:".Dumper(\%anotherHash));
+       
         if (! scalar keys %anotherHash) {
-            push @not_in_scale, $tryout;
+            push @not_in_scale, $taxon_name;
         } else {
-            push @masterHashOccMatrixOrder, $tryout;
-            foreach my $keycounter (keys(%namescale)) {
-                push @{$masterHash{$keycounter}}, scalar(@{$anotherHash{$namescale{$keycounter}}});
+            push @masterHashOccMatrixOrder, $taxon_name;
+            while (my ($interval_no,$interval_name) = each %namescale) {
+                push @{$masterHash{$interval_no}}, scalar(@{$anotherHash{$interval_name}});
             }
             
-            
-    #        print "$count<BR>";
             
             #------------FIND FIRST AND LAST OCCURRENCES---------------
             my $firstint;
@@ -851,16 +827,16 @@ sub calculateTaxaInterval {
             my $temptime;
             my $m = 0;
             
-            foreach my $keycounter (sort numerically keys(%masterHash)) {
-                if (@{$masterHash{$keycounter}}[$rusty + 2] ne "" && $temp == 0) {
-                    $lastint = $keycounter;
-                    $temptime = @{$masterHash{$keycounter}}[2];
+            foreach my $interval_no (sort numerically keys(%masterHash)) {
+                if (@{$masterHash{$interval_no}}[$rusty + 2] ne "" && $temp == 0) {
+                    $lastint = $interval_no;
+                    $temptime = @{$masterHash{$interval_no}}[2];
                     $temp = 1;
                 }
-                if (@{$masterHash{$keycounter}}[$rusty + 2] ne "" && $temp == 1) {
-                    $firstint = $keycounter;
-                    push @gaplist, sprintf("%.1f", @{$masterHash{$keycounter}}[2] - $temptime);  #round to 1 decimal precision
-                    $temptime = @{$masterHash{$keycounter}}[2];
+                if (@{$masterHash{$interval_no}}[$rusty + 2] ne "" && $temp == 1) {
+                    $firstint = $interval_no;
+                    push @gaplist, sprintf("%.1f", @{$masterHash{$interval_no}}[2] - $temptime);  #round to 1 decimal precision
+                    $temptime = @{$masterHash{$interval_no}}[2];
                     $m++;
                 }
             }
@@ -871,14 +847,10 @@ sub calculateTaxaInterval {
             my $intervallength = $first - $last;
             my $N = scalar(@gaplist);
 
-            @gaplist = @gaplist[1 .. (scalar(@gaplist) - 1)];
+            shift @gaplist;
             transpositionTest(\@gaplist, $N);   # TRANSPOSITION TEST
             @gaplist = sort numerically @gaplist;
             
-#        foreach my $gapcounter (@gaplist) {
-#            print "gaplist: $gapcounter<BR>";
-#        }
- 
             if ($conftype eq "Strauss and Sadler (1989)") {
                 straussSadler($count,$C,$conffor,$intervallength);
             }
@@ -887,7 +859,7 @@ sub calculateTaxaInterval {
             }
             
             if ($conftype eq "Solow (1996)") {  
-                $solowHash{$tryout} = [$m,$last,$first];
+                $solowHash{$taxon_name} = [$m,$last,$first];
             }
 
             my $upper = $last;
@@ -910,7 +882,7 @@ sub calculateTaxaInterval {
                 if ($lower < $lowershort) {$lower = $lowershort}
             }
         
-            $theHash{$tryout} = [$upper, $lower, $first, $last, $firstconfidencelengthlong, $intervallength, $uppershort, $lowershort, $correlation,$N,$firstconfidencelengthshort,$lastconfidencelengthlong,0];
+            $theHash{$taxon_name} = [$upper, $lower, $first, $last, $firstconfidencelengthlong, $intervallength, $uppershort, $lowershort, $correlation,$N,$firstconfidencelengthshort,$lastconfidencelengthlong,0];
             
 #IMPORTANT: UNLIKE OTHER METHODS, CAN"T CALCULATE SOLOW UNTIL FULL LIST IS BUILT
 #    print "theHash ".Dumper(\%theHash)."<br>";
@@ -982,9 +954,6 @@ sub calculateTaxaInterval {
     my $upperlim = 1000;
     my $lowerlim = 0;
 
-#    print "taxaHash ".Dumper(\%taxaHash)."<br>";
-#    print "theHash ".Dumper(\%theHash)."<br>";
-    
     my %periodinclude;
     my $mintemp;
     my $maxtemp;
