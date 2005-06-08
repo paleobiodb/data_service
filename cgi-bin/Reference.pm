@@ -114,11 +114,6 @@ sub formatShortRef  {
     my %options = @_;
     my $shortRef = "";
 
-    if ($options{'show_id'}) {
-        if ($refData->{'reference_no'}) {
-            $shortRef .= qq|<b><a href="bridge.pl?action=displayRefResults&no_set=1&reference_no=$refData->{reference_no}">$refData->{reference_no}</a></b> |;
-        }
-    }
 
     $shortRef .= $refData->{'author1init'} . " " . $refData->{'author1last'};
     if ( $refData->{'otherauthors'} ) {
@@ -141,6 +136,11 @@ sub formatShortRef  {
     if ($options{'show_comments'}) {
         if ($refData->{'comments'}) {
             $shortRef .= " [" . $refData->{'comments'}."]";
+        }
+    }
+    if ($options{'link_id'}) {
+        if ($refData->{'reference_no'}) {
+            $shortRef = qq|<a href="bridge.pl?action=displayRefResults&no_set=1&reference_no=$refData->{reference_no}">$shortRef</a>|;
         }
     }
 
