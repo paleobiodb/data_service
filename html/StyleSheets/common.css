@@ -58,6 +58,10 @@ H1, H2, H3, H4 {
 	/*margin: 0.1em 1em 0.5em 1em;*/
 }
 
+UL {
+    list-style-position: inside;
+}
+
 LI { font-size: 13px; }
 .tiny {  font-size : 10px; text-decoration:none; }
 .small {  font-size : 12px; text-decoration:none; }
