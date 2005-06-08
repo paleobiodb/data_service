@@ -62,6 +62,11 @@ function checkForm ( ) {
 	var frm = document.forms[0];
 	var errors = "";
 
+    var returnVal = checkIntervalNames();
+    if (!returnVal) {
+        return false;
+    }
+
 	if ( frm.collection_names.value == ""
         && frm.county.value == ""
         && frm.reference_no.value == ""
@@ -132,8 +137,8 @@ function checkForm ( ) {
 	  <td>County/parish: <br><input name=county size=30><br></td>
 	</tr>
 	<tr>
-	  <td>Oldest time interval (or age in Ma): <br><select id="eml_max_interval"></select><input name=max_interval size=15><br></td>
-	  <td>Youngest time interval/Ma: <br><select id="eml_min_interval"></select><input name=min_interval size=15><br></td>
+	  <td>Oldest time interval (or age in Ma): <br><select id="eml_max_interval"></select><input name="max_interval" size=15><br></td>
+	  <td>Youngest time interval/Ma: <br><select id="eml_min_interval"></select><input name="min_interval" size=15><br></td>
 	</tr>
 	<tr>
 	  
