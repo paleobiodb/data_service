@@ -1635,6 +1635,11 @@ sub displaySearchColls {
 	HTMLBuilder::buildAuthorizerPulldown($dbt, \$html );
 	HTMLBuilder::buildEntererPulldown($dbt, \$html );
 
+
+    # Dirty but until populateHTML gets retooled is necessary cause it overwrites these inputs when rewriting the form PS
+    $html =~ s/<input name="max_interval"/<input name="max_interval" onKeyUp="doComplete(event, this, intervalNames());"/;
+    $html =~ s/<input name="min_interval"/<input name="min_interval" onKeyUp="doComplete(event, this, intervalNames());"/;
+
 	# Set the Enterer
 	my $enterer = $s->get("enterer");
 	$html =~ s/%%enterer%%/$enterer/;
@@ -1653,6 +1658,7 @@ sub displaySearchColls {
 
 	# Spit out the HTML
 	print stdIncludes( "std_page_top" );
+    printIntervalsJava();
 	print $html;
 	print stdIncludes("std_page_bottom");
 }
@@ -2424,6 +2430,20 @@ IS NULL))";
 		$q->param('lithadj2' => '');
 	}
 
+    # Handle localbed, regionalbed
+    if ($q->param('regionalbed') && $q->param('regionalbed') =~ /^[0-9.]+$/) {
+        my $min = int($q->param('regionalbed'));
+        my $max = $min + 1;
+        push(@terms,qq|regionalbed >= $min and regionalbed <= $max|);
+        $q->param('regionalbed'=>'');
+    }
+    if ($q->param('localbed') && $q->param('localbed') =~ /^[0-9.]+$/) {
+        my $min = int($q->param('localbed'));
+        my $max = $min + 1;
+        push(@terms,qq|localbed >= $min and localbed <= $max|);
+        $q->param('localbed'=>'');
+    }
+
     # Maybe special environment terms
     if ( $q->param('environment')) {
         my $environment;
@@ -2512,10 +2532,10 @@ IS NULL))";
 
     # This field is only passed by section search form PS 12/01/2004
     if (defined $q->param("section_name") && $q->param("section_name") eq '') {
-        push(@terms, "((collections.regionalsection IS NOT NULL AND collections.regionalsection != '' AND collections.regionalbed REGEXP '^[0-9]+\$') OR (collections.localsection IS NOT NULL AND collections.localsection != '' AND collections.localbed REGEXP '^[0-9]+\$'))");
+        push(@terms, "((collections.regionalsection IS NOT NULL AND collections.regionalsection != '' AND collections.regionalbed REGEXP '^[0-9.]+\$') OR (collections.localsection IS NOT NULL AND collections.localsection != '' AND collections.localbed REGEXP '^[0-9.]+\$'))");
     } elsif ($q->param("section_name")) {
         my $val = $dbh->quote($wildcardToken.$q->param("section_name").$wildcardToken);
-        push(@terms, "((collections.regionalsection $comparator $val AND collections.regionalbed REGEXP '^[0-9]+\$') OR (collections.localsection $comparator $val AND collections.localbed REGEXP '^[0-9]+\$'))"); 
+        push(@terms, "((collections.regionalsection $comparator $val AND collections.regionalbed REGEXP '^[0-9.]+\$') OR (collections.localsection $comparator $val AND collections.localbed REGEXP '^[0-9.]+\$'))"); 
     }                
 
     # This field is only passed by links created in the Strata module PS 12/01/2004
@@ -4022,7 +4042,7 @@ function intervalNames() {
     return intervals;
 }
 
-function checkIntervalNames() {
+function checkIntervalNames(require_field) {
     var frm = document.forms[0];
     var badname1 = "";
     var badname2 = "";
@@ -4034,14 +4054,18 @@ function checkIntervalNames() {
     var emltime1 = eml1 + time1;
     var emltime2 = eml2 + time2;
                                                                                                                                                              
-    if ( time1 == "" )   {
-        var noname ="WARNING!\\n" +
+    if ( time1 == "")   {
+        if (require_field) {
+            var noname ="WARNING!\\n" +
                     "The maximum interval field is required.\\n" +
                     "Please fill it in and submit the form again.\\n" +
                     "Hint: epoch names are better than nothing.\\n";
-        alert(noname);
-        return false;
-    }
+            alert(noname);
+            return false;
+        } else {
+            return true;
+        }
+    } 
 EOF
     for $i (1..2) {
         my $check = "    if(";
@@ -4416,14 +4440,17 @@ sub processTaxonSearch {
     if (scalar(@results) == 0) {
         if ($q->param('goal') eq 'authority') {
             if ($q->param('taxon_name')) {
-                my $toQueue = "action=displayAuthorityForm&skip_ref_check=1&taxon_no=-1&taxon_name=".$q->param('taxon_name');
-                $s->enqueue( $dbh, $toQueue );
-
-                
-                $q->param( "type" => "select" );
-                main::displaySearchRefs("Please choose a reference before adding a new taxon",1);
+                if ($s->get('reference_no') && $q->param('use_reference') eq 'current') {
+                    $q->param('taxon_no'=> -1);
+                    Taxon::displayAuthorityForm($dbt, $hbo, $s, $q);
+                } else {
+                    my $toQueue = "action=displayAuthorityForm&skip_ref_check=1&taxon_no=-1&taxon_name=".$q->param('taxon_name');
+                    $s->enqueue( $dbh, $toQueue );
+                    $q->param( "type" => "select" );
+                    main::displaySearchRefs("Please choose a reference before adding a new taxon",1);
+                }
             } else {
-                print "<div align=\"center\"><h3>No authorities found for this reference</h3></div>";
+                print "<div align=\"center\"><h3>No taxonomic names found for this reference</h3></div>";
             }
         } else {
             print "<div class=\"warning\">The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> authority record for this taxon first.</DIV>";
@@ -4451,7 +4478,7 @@ sub processTaxonSearch {
         if ($q->param("taxon_name")) { 
     		print "<h3>Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</h3>\n<br>\n";
         } else {
-    		print "<h3>Select a taxon to edit:</h3>\n<br>\n";
+    		print "<h3>Select a taxon to edit:</h3>\n";
         }
         $action = ($q->param('goal') eq 'authority')  ? 'displayAuthorityForm' 
                 : ($q->param('goal') eq 'opinion')    ? 'displayOpinionChoiceForm'
@@ -4465,6 +4492,7 @@ sub processTaxonSearch {
             print "<input type=hidden name=\"goal\" value=\"".$q->param('goal')."\">\n";
         }
 		print "<input type=hidden name=\"taxon_name\" value=\"".$q->param('taxon_name')."\">\n";
+        print "<input type=hidden name=\"use_reference\" value=\"".$q->param('use_reference')."\">\n" if ($q->param('use_reference'));
 
         # now create a table of choices
 		print "<table>\n";
@@ -4507,7 +4535,9 @@ sub processTaxonSearch {
             print "You have a choice because there may be multiple biological species (e.g., a plant and an animal) with identical names.<br></span></p>\n";
         }
 		print "<p align=\"left\"><span class=\"tiny\">";
-		print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n<br>";
+        if (!$q->param('reference_no')) {
+		    print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n<br>";
+        }
 
         print "</td></tr></table>";
 		print "</div>\n";
@@ -4529,7 +4559,7 @@ sub displayAuthorityTaxonSearchForm {
     my $goal= 'authority';
 
     print stdIncludes("std_page_top");
-    print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
+    print $hbo->populateHTML('search_taxon_form',[$page_title,$goal,$q->param("use_reference")],['page_title','goal','use_reference']);
     print stdIncludes("std_page_bottom");
 }
 
@@ -4573,7 +4603,7 @@ sub displayOpinionTaxonSearchForm {
     my $goal = 'opinion';
 
     print stdIncludes("std_page_top");
-    print $hbo->populateHTML('search_taxon_form', [$page_title,$goal], ['page_title','goal']);
+    print $hbo->populateHTML('search_taxon_form', [$page_title,$goal,$q->param('use_reference')], ['page_title','goal','use_reference']);
     print stdIncludes("std_page_bottom");
 }
 
@@ -5931,6 +5961,10 @@ sub displayReIDCollsAndOccsSearchForm
 	HTMLBuilder::buildAuthorizerPulldown($dbt, \$html );
 	HTMLBuilder::buildEntererPulldown($dbt, \$html );
 
+    # Dirty but until populateHTML gets retooled is necessary cause it overwrites these inputs when rewriting the form PS
+    $html =~ s/<input name="max_interval"/<input name="max_interval" onKeyUp="doComplete(event, this, intervalNames());"/;
+    $html =~ s/<input name="min_interval"/<input name="min_interval" onKeyUp="doComplete(event, this, intervalNames());"/;
+
 	# Set the Enterer & Authorizer
 	my $enterer = $s->get("enterer");
 	$html =~ s/%%enterer%%/$enterer/;
@@ -5938,6 +5972,7 @@ sub displayReIDCollsAndOccsSearchForm
 	$html =~ s/%%authorizer%%/$authorizer/;
 
 	# Spit out the HTML
+    printIntervalsJava();
 	print $html;
   
 	print '</form>';
@@ -7371,7 +7406,7 @@ sub displayStratTaxaForm{
 
 sub showOptionsForm {
 	print stdIncludes("std_page_top");
-	Confidence::optionsForm($q, $s, $dbt, $splist);
+	Confidence::optionsForm($q, $s, $dbt);
 	print stdIncludes("std_page_bottom");
 }
 
@@ -7394,7 +7429,7 @@ sub displayTaxonomicNamesAndOpinions {
     $ref = Reference->new($dbt,$q->param('reference_no'));
     my $html = $ref->formatAsHTML();
     $html =~ s/<b>\d+<\/b>//g; #Remove the reference_no
-    print "<center><h3>Showing taxonomic names and opinions that reference: ".$html."</h3></center><br>";
+    print "<center><h3>Showing taxonomic names and opinions from reference: ".$html."</h3></center><br>";
 
     $q->param('goal'=>'authority');
     processTaxonSearch($dbh, $dbt, $hbo, $q, $s, $exec_url);
