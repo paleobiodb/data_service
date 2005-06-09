@@ -482,7 +482,7 @@ sub displayStratTaxa{
               " FROM collections, occurrences ".
               " LEFT JOIN authorities ON occurrences.taxon_no=authorities.taxon_no".
               " WHERE occurrences.collection_no=collections.collection_no ".
-              " AND ${section_type}section = " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^[0-9]+\$'".
+              " AND ${section_type}section = " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^[0-9.]+\$'".
               " GROUP BY taxon_no,genus_name,species_name ";
     main::dbg($sql);
     my @strat_taxa_list= @{$dbt->getData($sql)};
@@ -1440,7 +1440,7 @@ sub calculateStratInterval	{
               " LEFT JOIN authorities ON occurrences.taxon_no=authorities.taxon_no".
               " WHERE collections.collection_no=occurrences.collection_no".
               " AND ${section_type}section=".$dbh->quote($section_name).
-              " AND ${section_type}bed REGEXP '^[0-9]+\$'";
+              " AND ${section_type}bed REGEXP '^[0-9.]+\$'";
     if ($taxon_nos_string && $genus_species_sql) {
         # Doing this as a union is much faster since it uses the indexes properly.  Otherwise doesn't know which index to use
         $sql = "($sql AND occurrences.taxon_no IN ($taxon_nos_string)) UNION ($sql AND ($genus_species_sql))";
