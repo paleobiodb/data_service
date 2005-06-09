@@ -1524,7 +1524,7 @@ sub displayEcology	{
         for(my $i=0;$i<scalar(@references);$i++) {
             my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$references[$i]";
             my $ref = ${$dbt->getData($sql)}[0];
-            $references[$i] = Reference::formatShortRef($ref,'show_id'=>1);
+            $references[$i] = Reference::formatShortRef($ref,'link_id'=>1);
         }
         print join(", ",@references);
         print "</td></tr>";
