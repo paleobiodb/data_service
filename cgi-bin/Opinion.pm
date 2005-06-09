@@ -838,7 +838,11 @@ sub submitOpinionForm {
         # Get a single parent no or we have an error
         if ($q->param('taxon_status') ne 'invalid2') {
             if (!$parentName) {
-                $errors->add("You must enter the name of a higher taxon this taxon belongs to");
+                if ($q->param('taxon_status') eq 'invalid1') {
+                    $errors->add("You must enter the name of a taxon of equal rank to synonymize or replace this name with");
+                } else {
+                    $errors->add("You must enter the name of a higher taxon this taxon belongs to");
+                }
             } else {    
                 my @parents = TaxonInfo::getTaxon($dbt,'taxon_name'=>$parentName); 
                 if (scalar(@parents) > 1) {
@@ -924,12 +928,14 @@ sub submitOpinionForm {
     }
 	$fields{'status'} = $status;
 
-	if (!$status) {
-		$errors->add("You must choose one of the status radio buttons");	
-	}
+	if (!$q->param("taxon_status")) {
+		$errors->add("You must choose one of radio buttons in the \"How was it classified?\" section");	
+	} elsif (!$status) {
+        $errors->add("You must choose one of the values in the status pulldown");
+    }
     
     if ($q->param('taxon_status') ne 'belongs to' && $q->param('type_taxon')) {
-        $errors->add("The valid species status radio button must be selected if the is the type taxon");
+        $errors->add("The valid taxon radio button in the \"How was it classified?\" section must be selected if the is the type taxon");
     } 
 
     if ($q->param('spelling_status') eq 'rank changed as') {
@@ -1165,20 +1171,34 @@ sub submitOpinionForm {
     $opinionHTML =~ s/according to/of/i;
 
 	my $enterupdate = ($isNewEntry) ? 'entered into' : 'updated in';
-    my $end_message = <<EOF;
-<div align=center>
-  <h3> The opinion $opinionHTML has been $enterupdate the database</h3>
-  <p>
-    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_no=$fields{child_no}"><B>Get general information about $childName</b></a></span> -
-    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayOpinionForm&opinion_no=$resultOpinionNumber"><B>Edit this opinion</b></a></span> -
-    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber"><B>Edit a different opinion with same reference</b></a></span> -
-    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_no}"><B>Add/edit a different opinion about $childName</b></a></span> -
-    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayOpinionTaxonSearchForm"><B>Add/edit an opinion about another taxon</b></a></span> -
-    <span style='white-space: nowrap;'><a href="/cgi-bin/bridge.pl?action=displayAuthorityTaxonSearchForm"><B>Add/edit authority data about another taxon</b></a></span>
-  </p>
-  <br>
-</div>
-EOF
+
+    my $end_message .= qq|
+<div align="center">
+<h3> The opinion $opinionHTML has been $enterupdate the database</h3>
+<p>
+<table><tr><td><ul>
+  <li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></b></li>
+  <li><b>Add another opinion about $childSpellingName from: 
+    <a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">current reference</a> \| 
+    <a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">another reference</a>
+  </b></li>
+  <li><b>Add/edit opinion about another taxon from:
+    <a href="bridge.pl?action=displayOpinionTaxonSearchForm&use_reference=current">current reference</a> \|
+    <a href="bridge.pl?action=displayOpinionTaxonSearchForm">another reference</a>
+  </b></li>
+  <li><b>List/edit opinions: 
+    <a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}">about $childSpellingName</a> \| 
+    <a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">from this opinion's reference</a>
+  </b></li>
+  <li><b>Add/edit authority data: 
+    <a href="bridge.pl?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">$childSpellingName</a> \| 
+    <a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=current">different taxon, current reference</a> \|
+    <a href="bridge.pl?action=displayAuthorityTaxonSearchForm">different taxon</a>
+  </b></li>
+  <li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></a></li>   
+</ul></td></tr></table>
+</p>
+</div>|;
 
     # See Taxon::displayTypeTaxonSelectForm for details
     Taxon::displayTypeTaxonSelectForm($dbt,$s,$fields{'type_taxon'},$fields{'child_no'},$childName,$childRank,$resultReferenceNumber,$end_message);
@@ -1195,6 +1215,7 @@ sub displayOpinionChoiceForm{
     my $dbh = $dbt->dbh;
 
     print "<div align=\"center\">";
+    print "<table><tr><td>";
     if ($q->param('taxon_no')) {
         my $child_no = $q->param('taxon_no');
         my $orig_no = TaxonInfo::getOriginalCombination($dbt,$child_no);
@@ -1205,12 +1226,16 @@ sub displayOpinionChoiceForm{
         my @results = @{$dbt->getData($sql)};
         
         my $t = Taxon->new($dbt,$child_no);
+        print "<div align=\"center\">";
         print "<h3>Which opinion about ".$t->taxonNameHTML()." do you want to edit?</h3>\n";
         
         print qq|<form method="POST" action="bridge.pl">
                  <input type="hidden" name="action" value="displayOpinionForm">\n
                  <input type="hidden" name="child_no" value="$orig_no">\n
                  <input type="hidden" name="child_spelling_no" value="$child_no">\n|;
+        if ($q->param('use_reference') eq 'current' && $s->get('reference_no')) {
+            print qq|<input type="hidden" name="skip_ref_check" value="1">|;
+        }
         print "<table border=0>";
         foreach my $row (@results) {
             my $o = Opinion->new($dbt,$row->{'opinion_no'});
@@ -1220,7 +1245,10 @@ sub displayOpinionChoiceForm{
                   "</tr>\n";
         }
         print qq|<tr><td><input type="radio" name="opinion_no" value="-1" checked></td><td>Create a <b>new</b> opinion record</td></tr>\n|;
-        print qq|<tr><td align="center" colspan=2><p><input type=submit value="Submit"></p><br></td></tr>|;
+        print qq|</table>|;
+#        print qq|<tr><td align="center" colspan=2><p><input type=submit value="Submit"></p><br></td></tr>|;
+        print qq|<p><input type="submit" value="Submit"></p><br>|;
+        print "</div>";
     } elsif ($q->param("reference_no")) {
         my $sql = "SELECT o.opinion_no FROM opinions o ".
                   " LEFT JOIN authorities a ON a.taxon_no=o.child_no".
@@ -1228,10 +1256,11 @@ sub displayOpinionChoiceForm{
                   " ORDER BY a.taxon_name ASC";
         my @results = @{$dbt->getData($sql)};
         if (scalar(@results) == 0) {
-            print "<h3>No opinions found for this reference</h3><br><br>";
+            print "<div align=\"center\"<h3>No opinions found for this reference</h3></div><br><br>";
             return;
         }
-        print "<br><h3>Select an opinion to edit:</h3><br>\n";
+        print "<div align=\"center\">";
+        print "<h3>Select an opinion to edit:</h3>";
 
         print qq|<form method="POST" action="bridge.pl">
                  <input type="hidden" name="action" value="displayOpinionForm">\n|;
@@ -1243,16 +1272,22 @@ sub displayOpinionChoiceForm{
                   "<td>".$o->formatAsHTML()."</td>".
                   "</tr>\n";
         }
-        print qq|<tr><td align="center" colspan=2><p><input type=submit value="Edit"></p><br></td></tr>|;
+        print "</table>";
+#        print qq|<tr><td align="center" colspan=2><p><input type=submit value="Edit"></p><br></td></tr>|;
+        print qq|<p><input type=submit value="Edit"></p><br>|;
+        print "</div>";
     } else {
-        print "No terms were entered.";
+        print "<div align=\"center\">No terms were entered.</div>";
     }
     
-    if ($q->param("taxon_no") || $q->param('reference_no')) {
+    if ($q->param("taxon_no")) {
         print qq|<tr><td align="left" colspan=2><p><span class="tiny">An "opinion" is when an author classifies or synonymizes a taxon.<br>\nSelect an old opinion if it was entered incorrectly or incompletely.<br>\nCreate a new one if the author whose opinion you are looking at right now is not in the above list.<br>\n|;
+    } elsif ($q->param('reference_no')) {
+        print qq|<tr><td align="left" colspan=2><p><span class="tiny">An "opinion" is when an author classifies or synonymizes a taxon.<br>|;
         print qq|You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</span></p>\n|;
-        print "</span></p></td></tr>\n";
-        print "</table>\n";
+       # print "</span></p></td></tr>\n";
+       # print "</table>\n";
+        print "</td></tr></table>";
         print "</form>\n";
         print "</div>\n";
     }
