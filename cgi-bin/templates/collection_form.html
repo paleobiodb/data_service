@@ -11,7 +11,7 @@ function checkFields() {
     doCheckFieldsTaphonomy();
     doCheckFieldsCollectingInfo();
     
-    var returnVal = checkIntervalNames();
+    var returnVal = checkIntervalNames(1);
     if (!returnVal) {
         return false;
     }
