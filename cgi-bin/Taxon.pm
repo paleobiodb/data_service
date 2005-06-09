@@ -834,15 +834,28 @@ sub submitAuthorityForm {
         }
         my $end_message = "<H3>" . $fieldsToEnter{'taxon_name'} . " " .Reference::formatShortRef(\%fieldsToEnter). " has been $enterupdate the database</H3>";
 
-		$end_message .= "<center>
-		<p><A HREF=\"bridge.pl?action=checkTaxonInfo&taxon_no=$resultTaxonNumber\"><B>Get&nbsp;general&nbsp;information&nbsp;about&nbsp;" . $fieldsToEnter{taxon_name} . "</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=" . $resultTaxonNumber ."\"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;" . $fieldsToEnter{taxon_name} . "</B></A>&nbsp;-
-        <A HREF=\"/cgi-bin/bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber\"><B>Edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;a&nbsp;different&nbsp;taxon&nbsp;with&nbsp;same&nbsp;reference</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionChoiceForm&taxon_no=" . $resultTaxonNumber . "\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;" . $fieldsToEnter{taxon_name} . "</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityTaxonSearchForm\"><B>Add/edit&nbsp;authority&nbsp;data&nbsp;about&nbsp;another&nbsp;taxon</B></A>&nbsp;-
-		<A HREF=\"/cgi-bin/bridge.pl?action=displayOpinionTaxonSearchForm\"><B>Add/edit&nbsp;opinion&nbsp;about&nbsp;another&nbsp;taxon</B></A></p>
-		</center>";	
-
+    my $origResultTaxonNumber = TaxonInfo::getOriginalCombination($dbt,$resultTaxonNumber);
+		$end_message .= qq|
+<div align="center"><table><tr><td><ul>
+  <li><b>Add/edit authority data: 
+    <a href="bridge.pl?action=displayAuthorityForm&taxon_no=$resultTaxonNumber">$fieldsToEnter{taxon_name}</a> \| 
+    <a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=current">different taxon, current reference</a> \|
+    <a href="bridge.pl?action=displayAuthorityTaxonSearchForm">different taxon</a>
+  </b></li>
+  <li><b>Add opinion about $fieldsToEnter{taxon_name} from: 
+    <a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber">current reference</a> \| 
+    <a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber">another reference</a>
+  </b></li>
+  <li><b>Add/edit opinion about another taxon from:
+    <a href="bridge.pl?action=displayOpinionTaxonSearchForm&use_reference=current">current reference</a> \|
+    <a href="bridge.pl?action=displayOpinionTaxonSearchForm">another reference</a>
+  </b></li>
+  <li><b>List/edit opinions: 
+    <a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">about $fieldsToEnter{taxon_name}</a> \| 
+    <a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">from its reference</a>
+  </b></li>
+  <li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$resultTaxonNumber">Get general information about $fieldsToEnter{taxon_name}</a></a></li>
+</ul></td></tr></table></div>|;
 
         displayTypeTaxonSelectForm($dbt,$s,$fieldsToEnter{'type_taxon'},$resultTaxonNumber,$fieldsToEnter{'taxon_name'},$fieldsToEnter{'taxon_rank'},$resultReferenceNumber,$end_message);
 	}
