@@ -271,7 +271,7 @@ sub mapFinishImage {
     if (!$mapbgcolor || $mapbgcolor eq 'transparent') {
         $mapbgcolor = 'white';
     }
-    $im->filledRectangle(0,$height,$width,$totalheight,$col{$mapbgcolor});
+    $im->filledRectangle(0,$height,$width,$totalheight,$col{'white'});
     $im->arc(97,$height+6,10,10,0,360,$col{'black'});
     $im->string(gdTinyFont,5,$height+1,"plotting software c 2002 J. Alroy",$col{'black'});
     print AI "0 To\n";
@@ -1505,7 +1505,7 @@ sub mapDrawPoints{
 	    for $y1 (keys %latVal)	{
 		    if ($atCoord{$x1}{$y1} > 0)	{
 			    if ($dotsizeterm eq "proportional")	{
-				    $dotsize = int($atCoord{$x1}{$y1}**0.5) + 1;
+				    $dotsize = int($atCoord{$x1}{$y1}**0.5 / 2) + 1;
 			    }
 			    print MAPOUT "<area shape=\"rect\" coords=\"";
 			    if ( $hemiVal{$x1}{$y1} eq "N" )	{
@@ -1671,11 +1671,11 @@ sub mapDrawPoints{
         for $y1 (keys %latVal)	{
           if ($atCoord{$x1}{$y1} > 0)	{
             if ($dotsizeterm eq "proportional")	{
-              $dotsize = int($atCoord{$x1}{$y1}**0.5) + 1;
+              $dotsize = int($atCoord{$x1}{$y1}**0.5 / 2) + 1;
             }
             if ($dotshape =~ /^circles$/)	{
               # for consistency, antialiasing actually only supported for straight lines, not arcs
-              $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,$hpix,gdAntiAliased);
+              $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,$hpix,$col{$bordercolor});
             } elsif ($dotshape =~ /^crosses$/)	{ # don't do anything
             } elsif ($dotshape =~ /^diamonds$/)	{
               my $poly = new GD::Polygon;
@@ -2064,8 +2064,8 @@ sub drawBackground	{
 	if ( $edgecolor eq "white" )	{
 		$edgecolor = $col{'offwhite'};
 	}
-    $im->filledRectangle(0,0,$width,$height,$col{$mapbgcolor});
 	if ( $q->param('projection') eq "rectilinear" )	{
+        $im->filledRectangle(0,0,$width,$height,$col{$mapbgcolor});
   		print AI "0 O\n";
             	printf AI "%s\n",$mycolor;
 		printf AI "%.1f %.1f m\n",$AILEFT,$AITOP;
@@ -2074,7 +2074,8 @@ sub drawBackground	{
 		printf AI "%.1f %.1f L\n",$AILEFT,$AITOP-$height;
 		printf AI "%.1f %.1f L\n",$AILEFT,$AITOP;
 	} else	{
-         	#my $poly = new GD::Polygon;
+        $im->filledRectangle(0,0,$width,$height,$col{'white'});
+        my $poly = new GD::Polygon;
   		print AI "0 O\n";
            	printf AI "%s\n",$mycolor;
 		my $x1;
@@ -2102,7 +2103,7 @@ sub drawBackground	{
 				}
 				$x1 = $self->getLngTrunc($x1);
 				$y1 = $self->getLatTrunc($y1);
-				#$poly->addPt($x1,$y1);
+				$poly->addPt($x1,$y1);
 				if ( $lat == -90 && $hemi == 0 )	{
 					printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
 				} else	{
@@ -2110,7 +2111,7 @@ sub drawBackground	{
 				}
 			}
 		}
-		#$im->filledPolygon($poly,$col{$mapbgcolor});
+		$im->filledPolygon($poly,$col{$mapbgcolor});
 	}
 	print AI "f\n";
   	print AI "U\n";  # terminate the group
