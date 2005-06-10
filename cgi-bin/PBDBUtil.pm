@@ -729,9 +729,6 @@ sub getChildrenRecurse {
     my $sql = "SELECT DISTINCT child_no FROM opinions, authorities WHERE opinions.child_spelling_no=authorities.taxon_no AND parent_no=$node->{taxon_no} ORDER BY taxon_name";
     my @children = @{$dbt->getData($sql)};
     
-    my @a = map {$_->{child_no}} @children;
-    my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$node->{taxon_no});
-
     # Create the children and add them into the children array
     for my $row (@children) {
         # (the taxon_nos will always be original combinations since orig. combs always have all the belongs to links)
