@@ -45,55 +45,61 @@ sub processLookup	{
 	my $return_type = shift;
     my $lookup_type = shift;
 
-	if ( ! $min_interval_name )	{
+    # 10 M.Y. binning - i.e. Triassic 2
+    #if ($max_interval_name =~ /\w+ \d/) {
+    #    
+    #} 
+
+	if ( $min_interval_name eq '')	{
 		$eml_min_interval = $eml_max_interval;
 		$min_interval_name = $max_interval_name;
 	}
-    if ( ! $max_interval_name )	{
+    if ( $max_interval_name eq '') 	{
 		$eml_max_interval = $eml_min_interval;
 		$max_interval_name = $min_interval_name;
 	}
 
-    $max_interval_no = getIntervalNo($dbt,$eml_max_interval,$max_interval_name);
-    $min_interval_no = getIntervalNo($dbt,$eml_min_interval,$min_interval_name);
-   
-    # if numbers weren't found for either interval, bomb out!
-    if (!$max_interval_no || !$min_interval_no) {
-		return;
-    }
+    my $bestbothscale;
+    if ($max_interval_name =~ /^[0-9]+$/) {
+        #($ub,$lb) = findBoundaries($dbh,$dbt);
+        #my ($max_boundary,$min_boundary);
 
-    # push the numbers onto the master list
-    push @intervals, $max_interval_no;
-    $yesints{$max_interval_no} = 'Y';
-	push @intervals, $min_interval_no if ($max_interval_no != $min_interval_no);
-    $yesints{$min_interval_no} = 'Y';
-
-    if ($lookup_type == 1) {
-        ($ub,$lb) = findBoundaries($dbh,$dbt);
-        my ($max_boundary,$min_boundary);
-
-        $max_boundary = $lb->{$max_interval_no};
-        $min_boundary = $ub->{$min_interval_no};
-        if (!$max_boundary || !$min_boundary) {
-            main::dbg("Could not find boundaries $max_boundary, $min_boundary\n");
-            return;    
-        } 
+        #$max_boundary = $lb->{$max_interval_no};
+        #$min_boundary = $ub->{$min_interval_no};
+        #if (!$max_boundary || !$min_boundary) {
+        #    main::dbg("Could not find boundaries $max_boundary, $min_boundary\n");
+        #    return;    
+        #} 
         main::dbg("Lookup type 1 with boundaries $max_boundary, $min_boundary\n");
 	    &findBestScales();
-	    &getIntervalRangeByBoundary($max_boundary,$min_boundary);
+	    &getIntervalRangeByBoundary($max_interval_name,$min_interval_name);
     } else {
+        $max_interval_no = getIntervalNo($dbt,$eml_max_interval,$max_interval_name);
+        $min_interval_no = getIntervalNo($dbt,$eml_min_interval,$min_interval_name);
+   
+        # if numbers weren't found for either interval, bomb out!
+        if (!$max_interval_no || !$min_interval_no) {
+	    	return;
+        }
+
+        # push the numbers onto the master list
+        push @intervals, $max_interval_no;
+        $yesints{$max_interval_no} = 'Y';
+    	push @intervals, $min_interval_no if ($max_interval_no != $min_interval_no);
+        $yesints{$min_interval_no} = 'Y';
+
         main::dbg("Lookup type 0\n");
     	&findBestScales();
 	    &getIntervalRangeByNo($max_interval_no,$min_interval_no);
 	    &findImmediateCorrelates();
         &mapIntervalsUpward();
 	    &mapIntervals();
+        $bestbothscale = findBestBothScale($max_interval_no,$min_interval_no);
 #        print Dumper(@intervals);
     }
 	if ( $return_type eq "intervals" )	{
 		return \@intervals;
 	}
-    my $bestbothscale = findBestBothScale($max_interval_no,$min_interval_no);
 	my $colls = getCollectionList();
     return ($colls,$bestbothscale);
 
