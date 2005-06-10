@@ -64,7 +64,7 @@ use Globals;
 # rjp, 2/2004.
 
 
-my $DEBUG = 0;		# Shows debug information regarding the page if set to 1
+my $DEBUG = 1;		# Shows debug information regarding the page if set to 1
 
 # a constant value returned by a mysql insert record indicating a duplicate row already exists
 my $DUPLICATE = 2;	
@@ -2470,7 +2470,7 @@ IS NULL))";
 		my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
 		if($resprojstr ne ""){
 			push(@terms, "(collections.reference_no IN ($resprojstr) OR "
-		                . "secondary_refs.reference_no IN ($resprojstr))");
+		                . " secondary_refs.reference_no IN ($resprojstr))");
 		}   
         $joinSecondaryRefs = 1;
 	} elsif($resgrp){
@@ -4053,8 +4053,9 @@ function checkIntervalNames(require_field) {
     var time2 = frm.min_interval.value;
     var emltime1 = eml1 + time1;
     var emltime2 = eml2 + time2;
-                                                                                                                                                             
-    if ( time1 == "")   {
+    
+    var isInt = /^[0-9.]+\$/;
+    if ( time1 == "" || isInt.test(time1))   {
         if (require_field) {
             var noname ="WARNING!\\n" +
                     "The maximum interval field is required.\\n" +
