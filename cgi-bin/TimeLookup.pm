@@ -50,17 +50,14 @@ sub processLookup	{
     #    
     #} 
 
-	if ( $min_interval_name eq '')	{
-		$eml_min_interval = $eml_max_interval;
-		$min_interval_name = $max_interval_name;
-	}
-    if ( $max_interval_name eq '') 	{
-		$eml_max_interval = $eml_min_interval;
-		$max_interval_name = $min_interval_name;
-	}
-
     my $bestbothscale;
-    if ($max_interval_name =~ /^[0-9]+$/) {
+    if ($max_interval_name =~ /^[0-9]+$/ || $min_interval_name =~ /^[0-9]+$/) {
+        if ($max_interval_name !~ /^[0-9]+$/) {
+            $max_interval_name = 9999;
+        }
+        if ($min_interval_name !~ /^[0-9]+$/) {
+            $min_interval_name = 0;
+        }
         #($ub,$lb) = findBoundaries($dbh,$dbt);
         #my ($max_boundary,$min_boundary);
 
@@ -70,10 +67,18 @@ sub processLookup	{
         #    main::dbg("Could not find boundaries $max_boundary, $min_boundary\n");
         #    return;    
         #} 
-        main::dbg("Lookup type 1 with boundaries $max_boundary, $min_boundary\n");
+        main::dbg("Lookup type 1 with boundaries $max_interval_name, $min_interval_name\n");
 	    &findBestScales();
 	    &getIntervalRangeByBoundary($max_interval_name,$min_interval_name);
     } else {
+        if ( $min_interval_name eq '')	{
+            $eml_min_interval = $eml_max_interval;
+            $min_interval_name = $max_interval_name;
+        }
+        if ( $max_interval_name eq '') 	{
+            $eml_max_interval = $eml_min_interval;
+            $max_interval_name = $min_interval_name;
+        }
         $max_interval_no = getIntervalNo($dbt,$eml_max_interval,$max_interval_name);
         $min_interval_no = getIntervalNo($dbt,$eml_min_interval,$min_interval_name);
    
