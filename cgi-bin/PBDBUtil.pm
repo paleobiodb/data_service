@@ -721,12 +721,16 @@ sub getChildrenRecurse {
     my $max_depth = shift;
     my $depth = shift;
     my $sorted_records = shift;
+    my $parent_is_synonym = (shift || 0);
     
     return if (!$node->{'taxon_no'});
 
     # find all children of this parent, do a join so we can do an order by on it
     my $sql = "SELECT DISTINCT child_no FROM opinions, authorities WHERE opinions.child_spelling_no=authorities.taxon_no AND parent_no=$node->{taxon_no} ORDER BY taxon_name";
     my @children = @{$dbt->getData($sql)};
+    
+    my @a = map {$_->{child_no}} @children;
+    my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$node->{taxon_no});
 
     # Create the children and add them into the children array
     for my $row (@children) {
@@ -757,11 +761,11 @@ sub getChildrenRecurse {
             if ( $parent_row->{'status'} =~ /^(?:bel|rec|cor|ran)/o ) {
                 return if ($depth > $max_depth);
                 # Hierarchical sort, in depth first order
-                push @$sorted_records, $new_node;
-                getChildrenRecurse($dbt,$new_node,$max_depth,$depth+1,$sorted_records,$do_sort);
+                push @$sorted_records, $new_node if (!$parent_is_synonym);
+                getChildrenRecurse($dbt,$new_node,$max_depth,$depth+1,$sorted_records);
                 push @{$node->{'children'}}, $new_node;
             } elsif ($parent_row->{'status'} =~ /^(?:subj|homo|obje|repl)/o) {
-                getChildrenRecurse($dbt,$new_node,$max_depth,$depth,$sorted_records,$do_sort);
+                getChildrenRecurse($dbt,$new_node,$max_depth,$depth,$sorted_records,1);
                 push @{$node->{'synonyms'}}, $new_node;
             }
         }
