@@ -1172,31 +1172,25 @@ sub submitOpinionForm {
 
 	my $enterupdate = ($isNewEntry) ? 'entered into' : 'updated in';
 
-    my $end_message .= qq|
+    my $end_message = qq|
 <div align="center">
 <h3> The opinion $opinionHTML has been $enterupdate the database</h3>
 <p>
-<table><tr><td><ul>
+<table cellpadding=10><tr><td valign=top>
+  <li><b><a href="bridge.pl?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">Edit $childSpellingName</a></b></li>
+  <li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></b></li>   
+  <li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit names from same reference</a></b></li>
+  <li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=current">Add/edit another taxon</a></b></li>
+  <li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm">Add/edit another taxon from other reference</a></b></li>
+</td>
+<td valign=top>
   <li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></b></li>
-  <li><b>Add another opinion about $childSpellingName from: 
-    <a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">current reference</a> \| 
-    <a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">another reference</a>
-  </b></li>
-  <li><b>Add/edit opinion about another taxon from:
-    <a href="bridge.pl?action=displayOpinionTaxonSearchForm&use_reference=current">current reference</a> \|
-    <a href="bridge.pl?action=displayOpinionTaxonSearchForm">another reference</a>
-  </b></li>
-  <li><b>List/edit opinions: 
-    <a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}">about $childSpellingName</a> \| 
-    <a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">from this opinion's reference</a>
-  </b></li>
-  <li><b>Add/edit authority data: 
-    <a href="bridge.pl?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">$childSpellingName</a> \| 
-    <a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=current">different taxon, current reference</a> \|
-    <a href="bridge.pl?action=displayAuthorityTaxonSearchForm">different taxon</a>
-  </b></li>
-  <li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></a></li>   
-</ul></td></tr></table>
+  <li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></b></li>
+  <li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}">Edit other opinions about $childSpellingName</a></b></li>
+  <li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit opinions from same reference</a></b></li>
+  <li><b><a href="bridge.pl?action=displayOpinionTaxonSearchForm&use_reference=current">Add/edit opinion about another taxon</a></b></li>
+  <li><b><a href="bridge.pl?action=displayOpinionTaxonSearchForm">Add/edit opinion about another taxon from other reference</a></b></li>
+</td></tr></table>
 </p>
 </div>|;
 
