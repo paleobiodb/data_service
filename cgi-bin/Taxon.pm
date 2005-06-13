@@ -122,7 +122,7 @@ sub authors {
 		my $ref = Reference->new($self->{'dbt'},$hr->{'reference_no'});
 		$auth = $ref->authors();
 	} else {
-        $auth = Reference::formatShortref($hr);	
+        $auth = Reference::formatShortRef($hr);	
 	}
 	
 	return $auth;
