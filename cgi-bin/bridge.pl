@@ -64,7 +64,7 @@ use Globals;
 # rjp, 2/2004.
 
 
-my $DEBUG = 1;		# Shows debug information regarding the page if set to 1
+my $DEBUG = 0;		# Shows debug information regarding the page if set to 1
 
 # a constant value returned by a mysql insert record indicating a duplicate row already exists
 my $DUPLICATE = 2;	
@@ -2245,10 +2245,10 @@ sub processCollectionsSearch {
                         }
                         $taxon_nos_string = join(", ", keys %taxon_nos_unique);
                     } elsif (scalar(@taxon_nos) == 1) {
-                        $in_list = PBDBUtil::taxonomic_search($dbt,$taxon_nos[0]);
+                        $taxon_nos_string = PBDBUtil::taxonomic_search($dbt,$taxon_nos[0]);
                     }
                                                 
-					$sql->addWhereItem("taxon_no IN ($in_list)");
+					$sql->addWhereItem("taxon_no IN ($taxon_nos_string)");
 				} else {
                     if ($genus) {
 					    $sql->addWhereItem("genus_name".$relationString.$genus.$wildCard);
@@ -7428,13 +7428,17 @@ sub calculateStratInterval {
 sub displayTaxonomicNamesAndOpinions {
     print stdIncludes( "std_page_top" );
     $ref = Reference->new($dbt,$q->param('reference_no'));
-    my $html = $ref->formatAsHTML();
-    $html =~ s/<b>\d+<\/b>//g; #Remove the reference_no
-    print "<center><h3>Showing taxonomic names and opinions from reference: ".$html."</h3></center><br>";
+    if ($ref) {
+        my $html = $ref->formatAsHTML();
+        $html =~ s/<b>\d+<\/b>//g; #Remove the reference_no
+        print "<center><h3>Showing taxonomic names and opinions from reference: ".$html."</h3></center><br>";
 
-    $q->param('goal'=>'authority');
-    processTaxonSearch($dbh, $dbt, $hbo, $q, $s, $exec_url);
-    Opinion::displayOpinionChoiceForm($dbt,$s,$q);
+        $q->param('goal'=>'authority');
+        processTaxonSearch($dbh, $dbt, $hbo, $q, $s, $exec_url);
+        Opinion::displayOpinionChoiceForm($dbt,$s,$q);
+    } else {
+        print "<div align=\"center\" class=\"errorMessage\"><h3>An error has occurred.  No valid reference supplied</h3></div>\n";
+    }
     print stdIncludes("std_page_bottom");
 }
 # check for the presence of the nefarious V.J. Gupta or M.M. Imam
