@@ -1272,8 +1272,9 @@ sub getMostRecentParentOpinion {
 	my $child_no = shift;
     my $include_child_taxon_info = (shift || 0);
     my $include_reference = (shift || 0);
-    my $reference_no = (shift || 0);
+    my $reference_no = (shift || '');
     return if (!$child_no);
+    return if ($reference_no eq '0');
 
     my $child_fields = '';
     my $child_join = '';

@@ -28,7 +28,6 @@ sub get_classification_hash{
 	my $return_type = shift || 'names'; #names OR numbers OR array;
     my $restrict_to_reference_no = shift;
 
-    return if ($restrict_to_reference_no eq '0'); # assurance against weird opinion.
 
 	my @taxon_names_or_nos = @{$taxon_names_or_nos};
     $ranks =~ s/\s+//g; #NO whitespace

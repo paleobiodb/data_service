@@ -545,7 +545,7 @@ sub newPopulateHTML {
 			# in the template called "formatted_reference" and fill them with
 			# a nicely formatted reference entry based on the reference_no.
 			my $ref = Reference->new($dbt,$fields{'reference_no'});
-			$fields{formatted_reference} = $ref->formatAsHTML();
+			$fields{formatted_reference} = $ref->formatAsHTML() if ($ref);
 		}	
 	}
 	
