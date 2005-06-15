@@ -154,7 +154,7 @@ sub authors {
 	if ($hr->{ref_has_opinion} eq 'YES') {
 		# then get the author info for that reference
 		my $ref = Reference->new($self->{'dbt'},$hr->{'reference_no'});
-		$auth = $ref->authors();
+		$auth = $ref->authors() if ($ref);
 	} else {
         $auth = Reference::formatShortRef($hr);	
 	}
@@ -767,7 +767,7 @@ sub submitOpinionForm {
 			# make sure that the pubyr they entered (if they entered one)
 			# isn't more recent than the pubyr of the reference.  
 			my $ref = Reference->new($dbt,$q->param('reference_no'));
-			if ($pubyr > $ref->get('pubyr')) {
+			if ($ref && $pubyr > $ref->get('pubyr')) {
 				$errors->add("The publication year ($pubyr) can't be more recent than that of the primary reference (" . $ref->get('pubyr') . ")");
 			}
 		} else {
@@ -799,12 +799,11 @@ sub submitOpinionForm {
 		# also make sure that the pubyr of this opinion isn't older than
 		# the pubyr of the authority record the opinion is about
 		my $ref = Reference->new($dbt, $q->param('reference_no'));
-		
-		my $pubyr = $q->param('pubyr');
-		
-		if (( $childTaxon->pubyr() > $ref->get('pubyr') ) ||
-			( $childTaxon->pubyr() > $pubyr && $pubyr > 1700 ) ) {
-			$errors->add("The publication year ($pubyr) for this opinion can't be earlier than the year the taxon was named (".$childTaxon->pubyr().")");	
+		if ( $ref && $childTaxon->pubyr() > $ref->get('pubyr') ) {
+			$errors->add("The publication year (".$ref->get('pubyr').") for this opinion can't be earlier than the year the taxon was named (".$childTaxon->pubyr().")");	
+        }
+        if ( $childTaxon->pubyr() > $q->param('pubyr') && $q->param('pubyr') > 1700 ) {
+			$errors->add("The publication year (".$q->param('pubyr').") for the authority listed in this opinion can't be earlier than the year the taxon was named (".$childTaxon->pubyr().")");	
 		}
 	}
 

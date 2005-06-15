@@ -120,7 +120,7 @@ sub authors {
 	if ($hr->{ref_is_authority}) {
 		# then get the author info for that reference
 		my $ref = Reference->new($self->{'dbt'},$hr->{'reference_no'});
-		$auth = $ref->authors();
+		$auth = $ref->authors() if ($ref);
 	} else {
         $auth = Reference::formatShortRef($hr);	
 	}
@@ -551,11 +551,19 @@ sub submitAuthorityForm {
 			# make sure that the pubyr they entered (if they entered one)
 			# isn't more recent than the pubyr of the reference.  
 			my $ref = Reference->new($dbt,$q->param('reference_no'));
-			if ($pubyr > $ref->get('pubyr')) {
+			if ($ref && $pubyr > $ref->get('pubyr')) {
 				$errors->add("The publication year ($pubyr) can't be more 
 				recent than that of the primary reference (" . $ref->get('pubyr') . ")");
 			}
 		}
+        if ($q->param('taxon_rank') =~ /species/) {
+            if (!$q->param('author1last')) {
+                $errors->add("If entering a species or subspecies, enter at least the last name of the first author");
+            }
+            if (!$q->param('pubyr')) {
+                $errors->add("If entering a species or subspecies, the publication year is required");
+            }
+        }
 	} else {
 		# ref_is_authority is YES
 		# so make sure the other publication info is empty.
