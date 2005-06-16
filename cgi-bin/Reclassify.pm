@@ -317,12 +317,12 @@ sub processReclassifyForm	{
 
 		# update the occurrences table
 			$sql = "UPDATE occurrences SET taxon_no=";
-			$sql .= $new_taxon_no . ", modifier='";
-			$sql .= $s->get('enterer');
+			$sql .= $new_taxon_no . ", modifier=";
+			$sql .= $dbh->quote($s->get('enterer'));
 			if ( $old_taxon_no > 0 )	{
-				$sql .= "' WHERE taxon_no=" . $old_taxon_no;
+				$sql .= " WHERE taxon_no=" . $old_taxon_no;
 			} else	{
-				$sql .= "' WHERE taxon_no=0";
+				$sql .= " WHERE taxon_no=0";
 			}
 			$sql .= " AND occurrence_no=" . $occurrences[$i];
 			$dbt->getData($sql);
