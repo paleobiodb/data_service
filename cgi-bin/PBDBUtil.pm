@@ -492,9 +492,9 @@ sub taxonomic_search{
     if ($taxon_name_or_no =~ /^\d+$/) {
         $taxon_no = $taxon_name_or_no;
     } else {
-        @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon_no);
+        @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon_name_or_no);
         if (scalar(@taxon_nos) == 1) {
-            $taxon_no = $taxon_name_or_no;
+            $taxon_no = $taxon_nos[0];
         }       
     }
     if (!$taxon_no) {
