@@ -10,6 +10,9 @@ use GD;
 
 $IMAGE_DIR = $ENV{'BRIDGE_HTML_DIR'} . "/public/confidence";
 
+my $AILEFT = 100;
+my $AITOP = 450;   
+
 # written 03.31.04 by Josh Madin as final product
 # Still doesn't allow choice of time-scale when examining the conf ints of taxa
 
@@ -17,15 +20,11 @@ $IMAGE_DIR = $ENV{'BRIDGE_HTML_DIR'} . "/public/confidence";
 # and passing on the taxon_no.  All non-homonym taxa get passed as hidden fields
 # PS 02/08/2004
 sub displayHomonymForm {
-    $q=shift;
-    $s=shift;
-    $dbt=shift;
+    my ($q,$s,$dbt,$homonym_names,$splist) = @_;
     $dbh=$dbt->dbh;
-    $homonym_names = shift;
-    $splist=shift;
 
-    %splist = %$splist;
-    @homonym_names = @$homonym_names;
+    my %splist = %$splist;
+    my @homonym_names = @$homonym_names;
 
     my $pl1 = scalar(@homonym_names) > 1 ? "s" : "";
     my $pl2 = scalar(@homonym_names) > 1 ? "" : "s";
@@ -112,11 +111,9 @@ sub displaySearchSectionResults{
     my $sth = $dbt->dbh->prepare($sql);
     $sth->execute();    # run the query
 
-    $action = "displayCollectionDetails"; $method = "getReadRows";
-
     # Get rows okayed by permissions module
     my @dataRows;
-    $p->$method( $sth, \@dataRows, $perm_limit, \$ofRows );
+    $p->getReadRows( $sth, \@dataRows, $perm_limit, \$ofRows );
 
     # get the enterer's preferences (needed to determine the number
     # of displayed blanks) JA 1.8.02
@@ -423,12 +420,12 @@ sub buildList    {
             }
         }    
 
-        if (!$found) {
-            push @not_found, $taxon_name; 
+        #if (!$found) {
+        #    push @not_found, $taxon_name; 
         #    print "<center><table><tr><th><font color=\"red\">Sorry, </font><font color=\"blue\">".
         #          "<i>$taxon_name</i></font><font color=\"red\"> is not in the database</font>".
         #          "</th></tr></table></CENTER><BR><BR>";
-        } 
+        #} 
     } 
 
     # Now print out the list generated above so the user can select potential species to exclude
@@ -515,7 +512,7 @@ sub displayStratTaxa{
         print "<INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"".uri_escape($section_name)."\">";
         print "<INPUT TYPE=\"hidden\" NAME=\"taxon_resolution\" VALUE=\"".$q->param("taxon_resolution")."\">";
         print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"".$q->param('input_type')."\">\n";
-        my @sortList = sort alphabetically keys(%splist);
+        my @sortList = sort {$a cmp $b} keys(%splist);
         my $columns = int(scalar(@sortList)/3)+1;
         for($i=0;$i<$columns;$i++) {
             print "<TR>";
@@ -562,30 +559,21 @@ sub optionsForm    {
         }    
     } 
 #----------------------BUILD LIST OF SCALES TO CHOOSE FROM--------------------
-    my $sql = "SELECT authorizer_no,scale_no,scale_name,reference_no FROM scales";
-    my @results = @{$dbt->getData($sql)};
-    my %scale_strings;
-    for my $scaleref (@results)     {
-        my $option;
-        if ($scaleref->{scale_no} == 6)	{
-            $option = "<option VALUE=\"" . $scaleref->{scale_no} . "\" selected>";
-        } else {
-            $option = "<option VALUE=\"" . $scaleref->{scale_no} . "\">";
+    my $scale_select;
+    if ($type eq 'taxon')   {    
+        my $sql = "SELECT r.author1last,r.author2last,r.otherauthors,r.pubyr,s.scale_no,s.scale_name,s.reference_no FROM scales s LEFT JOIN refs r ON s.reference_no=r.reference_no ORDER BY s.scale_name";
+        my @results = @{$dbt->getData($sql)};
+        my (@keys,@values);
+        for my $row (@results) {
+            my $author_string = Reference::formatShortRef($row);
+            $author_string =~ s/^\s*//;
+            push @keys,"$row->{scale_name} [$author_string]";
+            push @values,$row->{'scale_no'};
         }
-        my $name = $scaleref->{scale_name};
-        my $sql2 = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $scaleref->{reference_no};
-        my @results2 = @{$dbt->getData($sql2)};
-        my $auth = $results2[0]->{author1last};
-        if ( $results2[0]->{otherauthors} || $results2[0]->{author2last} eq "et al." )  {
-                $auth .= " et al.";
-        } elsif ( $results2[0]->{author2last} ) {
-                $auth .= " and " . $results2[0]->{author2last};
-        }
-        $auth .= " " . $results2[0]->{pubyr};
-        $auth = " [" . $auth . "]\n";
-        $scale_strings{$name} = $option . $name . $auth;
+        my $scale_selected = ($q->param('scale') || 6); 
+        $scale_select = HTMLBuilder::buildSelect('scale',\@keys,\@values,$scale_selected);
     }
-        
+
 #------------------------------OPTIONS FORM----------------------------------
 
     if ($type eq 'taxon')   {
@@ -600,46 +588,54 @@ sub optionsForm    {
         print "<INPUT TYPE=hidden NAME=keepspecies$i VALUE='$taxon_name' CHECKED=checked><INPUT TYPE=hidden NAME=\"speciesname$i\" VALUE=\"$taxon_list\">\n";
     }     
 
+    my $methods = ['Strauss and Sadler (1989)','Marshall (1994)','Solow (1996)'];
+    my $method_select = HTMLBuilder::buildSelect('conftype',$methods,$methods,$q->param('conftype'));
+
+    my $estimates = ['total duration','first appearance','last appearance','no confidence intervals'];
+    my $estimate_select = HTMLBuilder::buildSelect('conffor',$estimates,$estimates,$q->param('conffor'));
+
+    my $confidences = ['0.99','0.95','0.8','0.5','0.25'];
+    my $confidence_select = HTMLBuilder::buildSelect('alpha',$confidences,$confidences,$q->param('alpha'));
+
+    my $order_by = ['name','first appearance','last appearance','stratigraphic range'];
+    my $order_by_select = HTMLBuilder::buildSelect('order',$order_by,$order_by,$q->param('order'));
+
+    my $colors = ['grey','black','red','blue','yellow','green','orange','purple'];
+    my $color_select = HTMLBuilder::buildSelect('color',$colors,$colors,$q->param('color'));
+
+    my $glyph_types = ['boxes','circles','hollow circles','squares','hollow squares','none'];
+    my $glyph_type_select = HTMLBuilder::buildSelect('glyph_type',$glyph_types,$glyph_types,$q->param('glyph_type'));
+    
     if ($form_type eq 'large') {
         print "<DIV CLASS=\"title\">Confidence interval options</DIV>";
         print '<CENTER><TABLE CELLPADDING=5 BORDER=0>';
         
         if ($type eq 'taxon')   {    
-            print "<TR><TH align=\"right\"> Time-scale: </TH><TD><SELECT NAME=\"scale\">";
-            my @sorted = sort keys %scale_strings;
-            for my $string (@sorted)        {
-                print $scale_strings{$string};
-            }       
-            print "</SELECT></TD></TR>";
+            print "<TR><TH align=\"right\"> Time-scale: </TH><TD>$scale_select</TD></TR>";
         } 
         
         print "<TR><TH></TH><TD><SPAN CLASS=\"tiny\">(Please select a time-scale that is appropriate for the taxa you have chosen)</SPAN></TD></TR>";
-        print "<TR><TH align=\"right\"> Confidence interval method: </TH><TD> <SELECT NAME=\"conftype\"><OPTION>Strauss and Sadler (1989)<OPTION>Marshall (1994)<OPTION>Solow (1996)</SELECT><A HREF=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</A></TD></TR>";
-        #<OPTION>Marshall (1990)<OPTION>Marshall (1997)<OPTION>Solow (2003)<OPTION>Holland (2003)
-    #    print "<TR><TH></TH><TD><SPAN CLASS=\"tiny\">(Warning: Know thine assumptions)</SPAN></TD></TR>";
-        print "<TR><TH align=\"right\"> Estimate: </TH><TD> <SELECT NAME=\"conffor\"><OPTION>total duration<OPTION>first appearance<OPTION>last appearance<OPTION>no confidence intervals</SELECT></TD><TR>";
-        print "<TR><TH align=\"right\"> Confidence level: </TH><TD> <SELECT NAME=\"alpha\"><OPTION>0.99<OPTION SELECTED>0.95<OPTION>0.8<OPTION>0.5<OPTION>0.25</SELECT></TD></TR>";
-        print "<TR><TH align=\"right\"> Order taxa by: </TH><TD> <SELECT NAME=\"order\"><OPTION>name<OPTION SELECTED>first appearance<OPTION>last appearance<OPTION>stratigraphic range</SELECT></TD><TR></TABLE><BR>";
+        print "<TR><TH align=\"right\"> Confidence interval method: </TH><TD> $method_select<A HREF=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</A></TD></TR>";
+        print "<TR><TH align=\"right\"> Estimate: </TH><TD> $estimate_select</TD><TR>";
+        print "<TR><TH align=\"right\"> Confidence level: </TH><TD>$confidence_select</TD></TR>";
+        print "<TR><TH align=\"right\"> Order taxa by: </TH><TD> $order_by_select</TD><TR>";
+        print "<TR><TH align=\"right\"> Draw occurrences with: </TH><TD> $color_select $glyph_type_select</TD><TR>";
+        print "</TABLE><BR>";
         print "<INPUT NAME=\"full\" TYPE=\"submit\" VALUE=\"Submit\">";
-    #    print "<A HREF=\"/cgi-bin/bridge.pl?action=displayFirstForm\"><INPUT TYPE=\"button\" VALUE=\"Start again\" STYLE=\"color:red\"></A>
         print "</FORM></CENTER><BR><BR>";
     } else {
         print '<CENTER><TABLE CLASS="darkList" CELLPADDING=5 BORDER=0 style="border: 1px #000000 solid">';
         print '<TR><TH ALIGN="CENTER" COLSPAN=4><DIV CLASS="large">Options</DIV></TH><TR>';
         
         if ($type eq 'taxon')   {    
-            print "<TR><TH align=\"right\"> Time-scale: </TH><TD COLSPAN=3><SELECT NAME=\"scale\">";
-            my @sorted = sort keys %scale_strings;
-            for my $string (@sorted)        {
-                print $scale_strings{$string};
-            }       
-            print "</SELECT></TD>";
+            print "<TR><TH align=\"right\"> Time-scale: </TH><TD COLSPAN=3>$scale_select</TD></TR>";
         } 
 
-        print "<TR><TH align=\"right\"> Confidence interval method: </TD><TD><SELECT NAME=\"conftype\"><OPTION>Strauss and Sadler (1989)<OPTION>Marshall (1994)<OPTION>Solow (1996)</SELECT><A HREF=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</A></TD>";
-        print "<TH align=\"right\"> Confidence level: </TH><TD><SELECT NAME=\"alpha\"><OPTION>0.99<OPTION SELECTED>0.95<OPTION>0.8<OPTION>0.5<OPTION>0.25</SELECT></TD></TR>";
-        print "<TR><TH align=\"right\"> Estimate: </TH><TD><SELECT NAME=\"conffor\"><OPTION>total duration<OPTION>first appearance<OPTION>last appearance<OPTION>no confidence intervals</SELECT></TD>";
-        print "<TH ALIGN=\"right\">Order taxa by: </TH><TD><SELECT NAME=\"order\"><OPTION>name<OPTION SELECTED>first appearance<OPTION>last appearance<OPTION>stratigraphic range</SELECT></TD><TR>";
+        print "<TR><TH align=\"right\"> Confidence interval method: </TD><TD> $method_select <A HREF=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</A></TD>";
+        print "<TH align=\"right\"> Confidence level: </TH><TD>$confidence_select</TD></TR>";
+        print "<TR><TH align=\"right\"> Estimate: </TH><TD>$estimate_select</TD>";
+        print "<TH ALIGN=\"right\">Order taxa by: </TH><TD>$order_by_select</TD><TR>";
+        print "<TR><TH align=\"right\">Draw occurrences with: </TH><TD COLSPAN=3>$color_select $glyph_type_select</TD></TR>";
         print "</TABLE><BR>";
         print "<INPUT NAME=\"full\" TYPE=\"submit\" VALUE=\"Submit\">";
         print "</FORM></CENTER><BR><BR>";
@@ -687,13 +683,10 @@ sub calculateTaxaInterval {
         return;
     }
 
-    my $order = $q->param("order");
     my %theHash;
     my %namescale;
     my @intervalnumber;
     my @not_in_scale;
-    my($AILEFT,$AITOP,$fig_width,$fig_lenth);
-    my $aifig_size = 500;
 
     $_ = TimeLookup::processScaleLookup($dbh,$dbt,$scale);
     my %timeHash = %{$_};
@@ -707,7 +700,7 @@ sub calculateTaxaInterval {
    #print Dumper(\@a);
 #    die;
    #print "findboundaries ".Dumper(\%upperbound,\%lowerbound);
-#        foreach my $keycounter (sort numerically keys(%upperbound)) {
+#        foreach my $keycounter (sort {$a <=> $b} keys(%upperbound)) {
 #            print "$keycounter: ";
 #                print "$upperbound{$keycounter} -- $lowerbound{$keycounter}";
 #            print "<BR>";
@@ -781,14 +774,9 @@ sub calculateTaxaInterval {
                 $sql .= " AND species_name=" . $dbh->quote($taxon[1]);
                 $taxon_rank = 'Genus and species';
             } elsif (scalar(@taxon) ==1) {
-                if (!$row->{'species_name'}) {
-                    $taxon_rank = 'Genus';
-                } else {
-                    $taxon_rank = 'Genus and species';
-                }
                 $sql = "SELECT collection_no FROM occurrences WHERE genus_name=" . $dbh->quote($taxon[0]);
             } 
-            $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name&taxon_rank=$taxon_rank";
+            $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name";
         }
         my @col_nos = @{$dbt->getData($sql)};
         my @collnums;
@@ -827,7 +815,7 @@ sub calculateTaxaInterval {
             my $temptime;
             my $m = 0;
             
-            foreach my $interval_no (sort numerically keys(%masterHash)) {
+            foreach my $interval_no (sort {$a <=> $b} keys(%masterHash)) {
                 if (@{$masterHash{$interval_no}}[$rusty + 2] ne "" && $temp == 0) {
                     $lastint = $interval_no;
                     $temptime = @{$masterHash{$interval_no}}[2];
@@ -849,7 +837,7 @@ sub calculateTaxaInterval {
 
             shift @gaplist;
             transpositionTest(\@gaplist, $N);   # TRANSPOSITION TEST
-            @gaplist = sort numerically @gaplist;
+            @gaplist = sort {$a <=> $b} @gaplist;
             
             if ($conftype eq "Strauss and Sadler (1989)") {
                 straussSadler($count,$C,$conffor,$intervallength);
@@ -871,7 +859,7 @@ sub calculateTaxaInterval {
                 if ($upper > $uppershort) {$upper = $uppershort}
                 if ($upper < 0) {
                 	$upper = 0;
-                	$upper_crosser = 1;
+                	#$upper_crosser = 1; ?? Not used PS
                 }
                 if ($uppershort < 0) {$uppershort = 0};
             }
@@ -899,7 +887,7 @@ sub calculateTaxaInterval {
         push @mx, $solowHash{$keycounter}[2];
         push @mx, $solowHash{$keycounter}[1];
     }  #there must be an easier may to find the maximum horizon!!
-    @mx = sort numerically @mx;
+    @mx = sort {$a <=> $b} @mx;
     my $Smax = $mx[scalar(@mx) - 1];
     my $Smin = $mx[0];
 
@@ -922,10 +910,8 @@ sub calculateTaxaInterval {
 #--------------------------------GD---------------------------------------------
 
     my $fig_wide = scalar(keys(%theHash));
-    $fig_width = 170 + (16 * $fig_wide);
-    $fig_lenth = 250 + 400;
-    $AILEFT = 0;
-    $AITOP = 580;   
+    my $fig_width = 170 + (16 * $fig_wide);
+    my $fig_length = 250 + 400;
 
     $image_count = getImageCount();
                                                                                                                                                              
@@ -941,15 +927,12 @@ sub calculateTaxaInterval {
         print AI $_;
     }
     close AIHEAD;
-    my $gd = GD::Image->new($fig_width,$fig_lenth);       
+    my $gd = GD::Image->new($fig_width,$fig_length);       
     my $poly = GD::Polygon->new();    
-    my $white  = $gd->colorAllocate(255, 255, 255);
-    my $aiwhite = "0.00 0.00 0.00 0.00 K"; 
-    my $grey= $gd->colorAllocate(  192,   192,   192);
-    my $aigrey = "0.33 0.33 0.33 0.12 k";
-    my $black  = $gd->colorAllocate(  0,   0,   0);
-    my $aiblack = "0.00 0.00 0.00 1.00 K";
-#    $gd->rectangle(0,0,$fig_width - 1,$fig_lenth - 1,$black);
+
+    my ($gdColors,$aiColors) = getPalette($gd); 
+    
+    $gd->rectangle(0,0,$fig_width - 1,$fig_length - 1,$gdColors->{'black'});
 #-------------------------MAKING SCALE----------------
     my $upperlim = 1000;
     my $lowerlim = 0;
@@ -960,7 +943,7 @@ sub calculateTaxaInterval {
     foreach my $count (keys(%theHash)) {
         my $tempupp = 0;
         my $templow = 0;
-        foreach my $counter (sort numerically keys(%masterHash))	{
+        foreach my $counter (sort {$a <=> $b} keys(%masterHash))	{
             if ($mintemp == 0) {
                 $mintemp = $counter;
             }
@@ -1009,53 +992,54 @@ sub calculateTaxaInterval {
     my $tempn = 0;
 #    my $first_rep = 0;
     my $leng;
-    foreach my $key (sort numerically keys(%periodinclude))	{
-
-#        print "$key $periodinclude{$key}"; 
-        my $temp = 230 + (($periodinclude{$key} - $upperval) * $millionyr);
+    foreach my $interval_no (sort {$a <=> $b} keys(%periodinclude))	{
+        my $temp = 230 + (($periodinclude{$interval_no} - $upperval) * $millionyr);
 	
         if (($temp - $tempn) > 17 && $tempn > 0)	{
-            my $interval_name = @{$masterHash{$key}}[0];
+            my $interval_name = @{$masterHash{$interval_no}}[0];
             $interval_name =~ s/Early\/Lower/Early/;
             $interval_name =~ s/Late\/Upper/Late/;
             $leng = length($interval_name);
-            $gd->string(gdTinyFont, $marker - 35 - ($leng * 5), ((($temp - $tempn)/2) + $tempn - 3) , $interval_name, $black);
-            aiText("null",$aimarker - 140, ((($temp - $tempn)/2) + $tempn + 3) ,$interval_name,$aiblack);       #AI
-#            $leng = length(@{$masterHash{$key}}[0]);
+            $gd->string(gdTinyFont, $marker - 35 - ($leng * 5), ((($temp - $tempn)/2) + $tempn - 3) , $interval_name, $gdColors->{'black'});
+            aiText("null",$aimarker - 140, ((($temp - $tempn)/2) + $tempn + 3) ,$interval_name,$aiColors->{'black'});       #AI
+#            $leng = length(@{$masterHash{$interval_no}}[0]);
 #            print "<br> length is $leng";
         }
         if (($temp - $tempn) > 10)	{
-            $leng = length(sprintf("%.1f", $masterHash{$key}[2]));
-            $gd->string(gdTinyFont, $marker - 48  - ($leng * 5), $temp - 3, sprintf("%.1f", $masterHash{$key}[2]), $black);
-            aiText("null", $aimarker - 75, $temp + 3, sprintf("%.1f", $masterHash{$key}[2]),$aiblack);       #AI
+            $leng = length(sprintf("%.1f", $masterHash{$interval_no}[2]));
+            $gd->string(gdTinyFont, $marker - 48  - ($leng * 5), $temp - 3, sprintf("%.1f", $masterHash{$interval_no}[2]), $gdColors->{'black'});
+            aiText("null", $aimarker - 75, $temp + 3, sprintf("%.1f", $masterHash{$interval_no}[2]),$aiColors->{'black'});       #AI
         }
         if ($tempn != 0) {
-            my @interval_array = split(/ /,@{$masterHash{$key}}[0]);
+            my @interval_array = split(/ /,@{$masterHash{$interval_no}}[0]);
             my ($eml,$name);
             if (scalar(@interval_array) > 1) {($eml,$name) = @interval_array; }
             else {($name)=@interval_array;}
-            $image_map .= "<area shape=rect coords=\"10,".int($temp).",".($marker-30).",".int($tempn)."\" HREF=\"bridge.pl?action=displayCollResults&eml_max_interval=$eml&max_interval=$name&eml_min_interval=$eml&min_interval=$name&taxon_list=".join(",",values %splist)."\" ALT=\"".@{$masterHash{$key}}[0]."\">";
+            $image_map .= "<area shape=rect coords=\"10,".int($temp).",".($marker-30).",".int($tempn)."\" HREF=\"bridge.pl?action=displayCollResults&eml_max_interval=$eml&max_interval=$name&eml_min_interval=$eml&min_interval=$name&taxon_list=".join(",",values %splist)."\" ALT=\"".@{$masterHash{$interval_no}}[0]."\">";
         }
-        $gd->line($marker - 35, $temp, $marker - 30, $temp, $black);
-        aiLine($aimarker - 35, $temp, $aimarker - 30, $temp,$aiblack);    #AI
-        $tempn += $temp;
+        $gd->line($marker - 35, $temp, $marker - 30, $temp, $gdColors->{'black'});
+        aiLine($aimarker - 35, $temp, $aimarker - 30, $temp,$aiColors->{'black'});    #AI
+        $tempn = $temp;
     }
-    $gd->line($marker - 30, 230, $marker - 30, $fig_lenth - 20, $black);
-    aiLine($aimarker - 30, 230,$aimarker - 30, 530, $aiblack);    #AI
+    $gd->line($marker - 30, 230, $marker - 30, $fig_length - 20, $gdColors->{'black'});
+    aiLine($aimarker - 30, 230,$aimarker - 30, 530, $aiColors->{'black'});    #AI
     
 # -------------------------------SORT OUTPUT----------------------------
-    sub sortHashLasti {$theHash{$b}[2] <=> $theHash{$a}[2]};
-    sub sortHashFirsti {$theHash{$b}[3] <=> $theHash{$a}[3]};
-    sub sortHashLenthi {$theHash{$a}[5] <=> $theHash{$b}[5]};
     my @sortedKeys = keys(%theHash);
-    if ($order eq "first appearance")   {
-        @sortedKeys = sort sortHashLasti sort sortHashFirsti sort alphabetically (@sortedKeys);
-    } elsif ($order eq "last appearance") {
-        @sortedKeys = sort sortHashFirsti sort sortHashLasti sort alphabetically (@sortedKeys);
-    } elsif ($order eq "name")   {
-        @sortedKeys = sort alphabetically (@sortedKeys);
+    if ($q->param('order') eq "first appearance")   {
+        @sortedKeys = sort {$theHash{$b}[2] <=> $theHash{$a}[2] ||
+                            $theHash{$b}[3] <=> $theHash{$a}[3] ||
+                            $a cmp $b} @sortedKeys;
+    } elsif ($q->param('order') eq "last appearance") {
+        @sortedKeys = sort {$theHash{$b}[3] <=> $theHash{$a}[3] ||
+                            $theHash{$b}[2] <=> $theHash{$a}[2] ||
+                            $a cmp $b} @sortedKeys;
+    } elsif ($q->param('order') eq "name")   {
+        @sortedKeys = sort {$a cmp $b} @sortedKeys;
     } else  {
-        @sortedKeys = sort sortHashLenthi sort sortHashFirsti sort alphabetically (@sortedKeys);    
+        @sortedKeys = sort {$theHash{$b}[5] <=> $theHash{$a}[5] ||
+                            $theHash{$b}[2] <=> $theHash{$a}[2] ||
+                            $a cmp $b} @sortedKeys;
     }
 #---------------------------BARS---------------------------
     my $dotmarkerfirst;
@@ -1063,30 +1047,49 @@ sub calculateTaxaInterval {
     my $dottemp = 0;
     my $barup;
     my $bardn;
-    foreach my $something (@sortedKeys) {
-        $barup = 230 + (@{$theHash{$something}}[3] - $upperval) * $millionyr;
-        $bardn = 230 + (@{$theHash{$something}}[2] - $upperval) * $millionyr;
+    foreach my $taxon_name (@sortedKeys) {
+        $barup = 230 + (@{$theHash{$taxon_name}}[3] - $upperval) * $millionyr;
+        $bardn = 230 + (@{$theHash{$taxon_name}}[2] - $upperval) * $millionyr;
       
         #-------------------- GREY BOXES (PS) ------------------------ 
         my $tempn =0;
         my $idx=-1;
-        for ($i=0;$i<scalar(@masterHashOccMatrixOrder);$i++) { if ($something eq $masterHashOccMatrixOrder[$i]) {$idx=3+$i} }
+        for ($i=0;$i<scalar(@masterHashOccMatrixOrder);$i++) { if ($taxon_name eq $masterHashOccMatrixOrder[$i]) {$idx=3+$i} }
                         
-        foreach my $key (sort numerically keys(%periodinclude))	{
+        foreach my $key (sort {$a <=> $b} keys(%periodinclude))	{
             my $temp = 230 + (($periodinclude{$key} - $upperval) * $millionyr);
            
             if (@{$masterHash{$key}}[$idx]) {
-                $gd->filledRectangle($marker+1,int($tempn),$marker+4,int($temp),$grey);
-                aiFilledRectangle($aimarker,int($tempn),$aimarker+5,int($temp),$aigrey);
+                my $interval_name  = ${$masterHash{$key}}[0];
+                next if (!$interval_name);
+                my $gdGlyphColor = exists($gdColors->{$q->param('color')}) ? $gdColors->{$q->param('color')} : $gdColors->{'grey'};
+                my $aiGlyphColor = exists($aiColors->{$q->param('color')}) ? $aiColors->{$q->param('color')} : $aiColors->{'grey'};
+                if ($q->param('glyph_type') eq 'circles') {
+                    $gd->filledArc($marker+3,int(($tempn+$temp)/2),5,5,0,360,$gdGlyphColor);
+                    aiFilledArc($marker+3,int(($tempn+$temp)/2),5,5,0,360,$aiGlyphColor);
+                } elsif ($q->param('glyph_type') eq 'hollow circles') {
+                    $gd->arc($marker+3,int(($tempn+$temp)/2),5,5,0,360,$gdGlyphColor);
+                    aiArc($marker+3,int(($tempn+$temp)/2),7,5,0,360,$aiGlyphColor);
+                } elsif ($q->param('glyph_type') eq 'squares') {
+                    $gd->filledRectangle($marker,int(($tempn+$temp)/2-2.5),$marker+5,int(($tempn+$temp)/2+2.5),$gdGlyphColor);
+                    aiFilledRectangle($marker,int(($tempn+$temp)/2-2.5),$marker+5,int(($tempn+$temp)/2+2.5),$aiGlyphColor);
+                } elsif ($q->param('glyph_type') eq 'hollow squares') {
+                    $gd->rectangle($marker,int(($tempn+$temp)/2+2.5),$marker+5,int(($tempn+$temp)/2-2.5),$gdGlyphColor);
+                    aiRectangle($marker,int(($tempn+$temp)/2+2.5),$marker+5,int(($tempn+$temp)/2-2.5),$aiGlyphColor);
+                } else {
+                    $gd->filledRectangle($marker+1,int($tempn),$marker+5,int($temp),$gdGlyphColor);
+                    aiFilledRectangle($aimarker,int($tempn),$aimarker+5,int($temp),$aiGlyphColor);
+                }
+
                 # use the taxon_no if possible
-                my $taxon_list = $splist{$something};
-                my @interval_array = split(/ /,@{$masterHash{$key}}[0]);
+                my $taxon_list = $splist{$taxon_name};
+                my @interval_array = split(/ /,$interval_name);
                 my ($eml,$name);
                 if (scalar(@interval_array) > 1) {($eml,$name) = @interval_array; } 
                 else {($name)=@interval_array;} 
                 $image_map .= "<area shape=rect coords=\"$marker,".int($temp).",".($marker+5).",".int($tempn)."\" HREF=\"bridge.pl?action=displayCollResults&eml_max_interval=$eml&max_interval=$name&eml_min_interval=$eml&min_interval=$name&taxon_list=$taxon_list\" ALT=\"".@{$masterHash{$key}}[0]."\">";
             }
-            $tempn += $temp;
+            $tempn = $temp;
         }
  
         if ($dottemp == 0) { 
@@ -1095,38 +1098,32 @@ sub calculateTaxaInterval {
             $dottemp = 1;
         }
         
-#        print "upper:" . @{$theHash{$something}}[0] . "<BR>";
-#        print "lower:" . @{$theHash{$something}}[1] . "<BR>";
-#        print "first:" . @{$theHash{$something}}[2] . "<BR>";
-#        print "last:" . @{$theHash{$something}}[3] . "<BR>";
-#        print "uppershort:" . @{$theHash{$something}}[6] . "<BR>";
-#        print "lowershort:" . @{$theHash{$something}}[7] . "<BR>";
+#        print "upper:" . @{$theHash{$taxon_name}}[0] . "<BR>";
+#        print "lower:" . @{$theHash{$taxon_name}}[1] . "<BR>";
+#        print "first:" . @{$theHash{$taxon_name}}[2] . "<BR>";
+#        print "last:" . @{$theHash{$taxon_name}}[3] . "<BR>";
+#        print "uppershort:" . @{$theHash{$taxon_name}}[6] . "<BR>";
+#        print "lowershort:" . @{$theHash{$taxon_name}}[7] . "<BR>";
 
         my $limup;
         my $limdn;
         my $triangle = 0;
-        if (@{$theHash{$something}}[7] == @{$theHash{$something}}[1]) {
-            $limup = 230 + (@{$theHash{$something}}[6] - $upperval) * $millionyr;
-            $limdn = 230 + (@{$theHash{$something}}[7] - $upperval) * $millionyr;
+        if (@{$theHash{$taxon_name}}[7] == @{$theHash{$taxon_name}}[1]) {
+            $limup = 230 + (@{$theHash{$taxon_name}}[6] - $upperval) * $millionyr;
+            $limdn = 230 + (@{$theHash{$taxon_name}}[7] - $upperval) * $millionyr;
             $triangle = 1;
         } else {
-            $limup = 230 + (@{$theHash{$something}}[0] - $upperval) * $millionyr;
-            $limdn = 230 + (@{$theHash{$something}}[1] - $upperval) * $millionyr;
+            $limup = 230 + (@{$theHash{$taxon_name}}[0] - $upperval) * $millionyr;
+            $limdn = 230 + (@{$theHash{$taxon_name}}[1] - $upperval) * $millionyr;
         }
 #        print "<br><br>limup $limup   limdn $limdn";
-        my $limupshort = 230 + (@{$theHash{$something}}[6] - $upperval) * $millionyr;
-        my $limdnshort = 230 + (@{$theHash{$something}}[7] - $upperval) * $millionyr;
+        my $limupshort = 230 + (@{$theHash{$taxon_name}}[6] - $upperval) * $millionyr;
+        my $limdnshort = 230 + (@{$theHash{$taxon_name}}[7] - $upperval) * $millionyr;
         
         # Draw confidence bar
-        $gd->line($marker,$barup,$marker,$bardn, $black);
-        $gd->line($marker + 5,$barup,$marker + 5,$bardn, $black);
-        $gd->line($marker,$barup,$marker + 5,$barup, $black);
-        $gd->line($marker,$bardn,$marker + 5,$bardn, $black);
-        
-        aiLine($aimarker,$barup,$aimarker,$bardn, $aiblack);    #AI
-        aiLine($aimarker + 5,$barup,$aimarker + 5,$bardn, $aiblack);    #AI
-        aiLine($aimarker,$barup,$aimarker + 5,$barup, $aiblack);    #AI
-        aiLine($aimarker,$bardn,$aimarker + 5,$bardn, $aiblack);    #AI
+        $gd->rectangle($marker,$barup,$marker+6,$bardn,$gdColors->{'black'});
+        aiRectangle($marker,$barup,$marker+6,$bardn,$aiColors->{'black'});
+
         my $recent = 0;
         if ($barup == 50)   {
             $recent = 1;  
@@ -1134,53 +1131,53 @@ sub calculateTaxaInterval {
             $recent = 2;
         } else  {
             if (($conffor eq "last appearance" || $conffor eq "total duration") && $conftype ne "Solow (1996)")	{
-                $gd->rectangle($marker + 2,$barup,$marker + 3,$limup, $black);
-                $gd->line($marker + 0,$limup,$marker + 5,$limup, $black); 
-                $gd->line($marker + 0,$limupshort,$marker + 5,$limupshort, $black);
-                aiRectangle($aimarker + 2,$barup,$aimarker + 3,$limup, $aiblack);
-                aiLine($aimarker + 0,$limup,$aimarker + 5, $limup, $aiblack);
-                aiLine($aimarker + 0,$limupshort,$aimarker + 5, $limupshort, $aiblack);
-                if ($triangle == 1 && @{$theHash{$something}}[6] > 0) {
+                $gd->rectangle($marker + 2,$barup,$marker + 3,$limup, $gdColors->{'black'});
+                $gd->line($marker + 0,$limup,$marker + 5,$limup, $gdColors->{'black'}); 
+                $gd->line($marker + 0,$limupshort,$marker + 5,$limupshort, $gdColors->{'black'});
+                aiRectangle($aimarker + 2,$barup,$aimarker + 3,$limup, $aiColors->{'black'});
+                aiLine($aimarker + 0,$limup,$aimarker + 5, $limup, $aiColors->{'black'});
+                aiLine($aimarker + 0,$limupshort,$aimarker + 5, $limupshort, $aiColors->{'black'});
+                if ($triangle == 1 && @{$theHash{$taxon_name}}[6] > 0) {
                 	#if ($upper_crosser == 1) {$limupshort = $limup};
-                    $gd->line($marker + 1,$limupshort - 1,$marker + 4,$limupshort - 1, $black);
-                    $gd->line($marker + 1,$limupshort - 2,$marker + 4,$limupshort - 2, $black);
-                    $gd->line($marker + 2,$limupshort - 3,$marker + 3,$limupshort - 3, $black);
-                    $gd->line($marker + 2,$limupshort - 4,$marker + 3,$limupshort - 4, $black);
-                    aiLine($aimarker + 1,$limupshort - 1,$aimarker + 4,$limupshort - 1, $aiblack);
-                    aiLine($aimarker + 1,$limupshort - 2,$aimarker + 4,$limupshort - 2, $aiblack);
-                    aiLine($aimarker + 2,$limupshort - 3,$aimarker + 3,$limupshort - 3, $aiblack);
-                    aiLine($aimarker + 2,$limupshort - 4,$aimarker + 3,$limupshort - 4, $aiblack);
+                    $gd->line($marker + 1,$limupshort - 1,$marker + 4,$limupshort - 1, $gdColors->{'black'});
+                    $gd->line($marker + 1,$limupshort - 2,$marker + 4,$limupshort - 2, $gdColors->{'black'});
+                    $gd->line($marker + 2,$limupshort - 3,$marker + 3,$limupshort - 3, $gdColors->{'black'});
+                    $gd->line($marker + 2,$limupshort - 4,$marker + 3,$limupshort - 4, $gdColors->{'black'});
+                    aiLine($aimarker + 1,$limupshort - 1,$aimarker + 4,$limupshort - 1, $aiColors->{'black'});
+                    aiLine($aimarker + 1,$limupshort - 2,$aimarker + 4,$limupshort - 2, $aiColors->{'black'});
+                    aiLine($aimarker + 2,$limupshort - 3,$aimarker + 3,$limupshort - 3, $aiColors->{'black'});
+                    aiLine($aimarker + 2,$limupshort - 4,$aimarker + 3,$limupshort - 4, $aiColors->{'black'});
                 }
             }
         }
         if (($conffor eq "first appearance" || $conffor eq "total duration") && $conftype ne "Solow (1996)")   {
-            $gd->rectangle($marker + 2,$bardn,$marker + 3,$limdn, $black);
-            $gd->line($marker + 0,$limdn,$marker + 5,$limdn, $black); 
-            $gd->line($marker + 0,$limdnshort,$marker + 5,$limdnshort, $black); 
-            aiRectangle($aimarker + 2,$bardn,$aimarker + 3,$limdn, $aiblack);
-            aiLine($aimarker + 0,$limdn,$aimarker + 5, $limdn, $aiblack);
-            aiLine($aimarker + 0,$limdnshort,$aimarker + 5, $limdnshort, $aiblack);
+            $gd->rectangle($marker + 2,$bardn,$marker + 3,$limdn, $gdColors->{'black'});
+            $gd->line($marker + 0,$limdn,$marker + 5,$limdn, $gdColors->{'black'}); 
+            $gd->line($marker + 0,$limdnshort,$marker + 5,$limdnshort, $gdColors->{'black'}); 
+            aiRectangle($aimarker + 2,$bardn,$aimarker + 3,$limdn, $aiColors->{'black'});
+            aiLine($aimarker + 0,$limdn,$aimarker + 5, $limdn, $aiColors->{'black'});
+            aiLine($aimarker + 0,$limdnshort,$aimarker + 5, $limdnshort, $aiColors->{'black'});
                 if ($triangle == 1) {
-                    $gd->line($marker + 1,$limdnshort + 1,$marker + 4,$limdnshort + 1, $black);
-                    $gd->line($marker + 1,$limdnshort + 2,$marker + 4,$limdnshort + 2, $black);
-                    $gd->line($marker + 2,$limdnshort + 3,$marker + 3,$limdnshort + 3, $black);
-                    $gd->line($marker + 2,$limdnshort + 4,$marker + 3,$limdnshort + 4, $black);
-                    aiLine($aimarker + 1,$limdnshort + 1,$aimarker + 4,$limdnshort + 1, $aiblack);
-                    aiLine($aimarker + 1,$limdnshort + 2,$aimarker + 4,$limdnshort + 2, $aiblack);
-                    aiLine($aimarker + 2,$limdnshort + 3,$aimarker + 3,$limdnshort + 3, $aiblack);
-                    aiLine($aimarker + 2,$limdnshort + 4,$aimarker + 3,$limdnshort + 4, $aiblack);
+                    $gd->line($marker + 1,$limdnshort + 1,$marker + 4,$limdnshort + 1, $gdColors->{'black'});
+                    $gd->line($marker + 1,$limdnshort + 2,$marker + 4,$limdnshort + 2, $gdColors->{'black'});
+                    $gd->line($marker + 2,$limdnshort + 3,$marker + 3,$limdnshort + 3, $gdColors->{'black'});
+                    $gd->line($marker + 2,$limdnshort + 4,$marker + 3,$limdnshort + 4, $gdColors->{'black'});
+                    aiLine($aimarker + 1,$limdnshort + 1,$aimarker + 4,$limdnshort + 1, $aiColors->{'black'});
+                    aiLine($aimarker + 1,$limdnshort + 2,$aimarker + 4,$limdnshort + 2, $aiColors->{'black'});
+                    aiLine($aimarker + 2,$limdnshort + 3,$aimarker + 3,$limdnshort + 3, $aiColors->{'black'});
+                    aiLine($aimarker + 2,$limdnshort + 4,$aimarker + 3,$limdnshort + 4, $aiColors->{'black'});
                 }
         }
-        $gd->stringUp(gdSmallFont, $marker-5, 200, "$something", $black);
+        $gd->stringUp(gdSmallFont, $marker-5, 200, "$taxon_name", $gdColors->{'black'});
 
-        $image_map .= "<area shape=rect coords=\"".($marker-5).",205,".($marker+7).",".(200-length($something)*6)."\" HREF=\"$links{$something}\" ALT=\"$something\">";
-        if (@{$theHash{$something}}[8] == 1) {
-            $gd->stringUp(gdTinyFont, $marker-1, 206, "*", $black);
-            aiTextVert(       "null", $aimarker-1,206, "*", $aiblack);
+        $image_map .= "<area shape=rect coords=\"".($marker-5).",205,".($marker+7).",".(200-length($taxon_name)*6)."\" HREF=\"$links{$taxon_name}\" ALT=\"$taxon_name\">";
+        if (@{$theHash{$taxon_name}}[8] == 1) {
+            $gd->stringUp(gdTinyFont, $marker-1, 206, "*", $gdColors->{'black'});
+            aiTextVert(       "null", $aimarker-1,206, "*", $aiColors->{'black'});
         }
-        $gd->string(gdSmallFont, 90, 200, 'Ma', $black);
-        $gd->string(gdTinyFont, $fig_width - 70,$fig_lenth - 10, "J. Madin 2004", $black);
-        aiTextVert(        "null", $aimarker+7, 200, "$something", $aiblack);      #AI
+        $gd->string(gdSmallFont, 90, 200, 'Ma', $gdColors->{'black'});
+        $gd->string(gdTinyFont, $fig_width - 70,$fig_length - 10, "J. Madin 2004", $gdColors->{'black'});
+        aiTextVert(        "null", $aimarker+7, 200, "$taxon_name", $aiColors->{'black'});      #AI
         $marker = $marker + 16;
         $aimarker = $aimarker + 16;
     }
@@ -1188,9 +1185,8 @@ sub calculateTaxaInterval {
     my $center = ((($marker - 11) - $Smarker) / 2) + $Smarker;
     
     if ($conftype eq "Solow (1996)" && $lastconfidencelengthlong != -999) {
-        $color = $black;
         for (my $counter = $Smarker; $counter <= ($marker - 11); $counter=$counter + 2) {
-            $gd->line($counter,230 + ($Smin - $upperval) * $millionyr,$counter,230 + ($Smin - $upperval) * $millionyr, $black);
+            $gd->line($counter,230 + ($Smin - $upperval) * $millionyr,$counter,230 + ($Smin - $upperval) * $millionyr, $gdColors->{'black'});
         }
 #        my $temptemp = (230 + ($Smax - $upperval) * $millionyr);
 #        print "barup: $temptemp <BR>";
@@ -1199,13 +1195,13 @@ sub calculateTaxaInterval {
 
 #        print "dotmarkerlast: $dotmarkerlast <BR>";              
         for (my $counter = (230 + ($Smin - $upperval) * $millionyr); $counter <= $dotmarkerlast; $counter=$counter + 2) {
-            $gd->line($Smarker, $counter,$Smarker,$counter, $black);
+            $gd->line($Smarker, $counter,$Smarker,$counter, $gdColors->{'black'});
 #        print "counter: $counter <BR>";
 
         }
         
         for (my $counter = (230 + ($Smin - $upperval) * $millionyr); $counter <= $barup; $counter=$counter + 2) {
-            $gd->line($marker - 11, $counter,$marker - 11,$counter, $black);
+            $gd->line($marker - 11, $counter,$marker - 11,$counter, $gdColors->{'black'});
 #        print "counter: $counter <BR>";
 
         }
@@ -1214,16 +1210,16 @@ sub calculateTaxaInterval {
         
         if (($Smin - $lastconfidencelengthlong) < 0) {
             $conftemp = $Smin;
-            $gd->line($center -2,230 + 0,$center + 3,230 +0, $black);
-            $gd->line($center -1,230 -1,$center + 2,230 -1, $black);
-            $gd->line($center -1,230 -2,$center + 2,230 -2, $black);
-            $gd->line($center ,230 -3,$center + 1,230 -3, $black);
-            $gd->line($center ,230 -4,$center + 1,230 -4, $black);  
+            $gd->line($center -2,230 + 0,$center + 3,230 +0, $gdColors->{'black'});
+            $gd->line($center -1,230 -1,$center + 2,230 -1, $gdColors->{'black'});
+            $gd->line($center -1,230 -2,$center + 2,230 -2, $gdColors->{'black'});
+            $gd->line($center ,230 -3,$center + 1,230 -3, $gdColors->{'black'});
+            $gd->line($center ,230 -4,$center + 1,230 -4, $gdColors->{'black'});  
         } else {
 #        print "conftemp: $conftemp <BR>";
-            $gd->line($Smarker,(230 + ($Smin - $conftemp - $upperval) * $millionyr),$marker - 11,(230 + ($Smin - $conftemp - $upperval) * $millionyr), $black); 
+            $gd->line($Smarker,(230 + ($Smin - $conftemp - $upperval) * $millionyr),$marker - 11,(230 + ($Smin - $conftemp - $upperval) * $millionyr), $gdColors->{'black'}); 
         }
-        $gd->rectangle($center , (230 + ($Smin - $conftemp - $upperval) * $millionyr), $center + 1,(230 + ($Smin - $upperval) * $millionyr), $black);
+        $gd->rectangle($center , (230 + ($Smin - $conftemp - $upperval) * $millionyr), $center + 1,(230 + ($Smin - $upperval) * $millionyr), $gdColors->{'black'});
         
 
         
@@ -1232,27 +1228,26 @@ sub calculateTaxaInterval {
 
     
     if ($conftype eq "Solow (1996)" && $firstconfidencelengthlong != -999) {
-        $color = $black;
         for (my $counter = $Smarker; $counter <= ($marker - 11); $counter=$counter + 2) {
-            $gd->line($counter,230 + ($Smax - $upperval) * $millionyr,$counter,230 + ($Smax - $upperval) * $millionyr, $black);
+            $gd->line($counter,230 + ($Smax - $upperval) * $millionyr,$counter,230 + ($Smax - $upperval) * $millionyr, $gdColors->{'black'});
         }
         for (my $counter = $dotmarkerfirst; $counter <= (230 + ($Smax - $upperval) * $millionyr); $counter=$counter + 2) {
-            $gd->line($Smarker, $counter,$Smarker,$counter, $black);
+            $gd->line($Smarker, $counter,$Smarker,$counter, $gdColors->{'black'});
 #        print "counter: $counter <BR>";
 
         }
         for (my $counter = $bardn; $counter <= (230 + ($Smax - $upperval) * $millionyr); $counter=$counter + 2) {
-            $gd->line($marker - 11, $counter,$marker - 11,$counter, $black);
+            $gd->line($marker - 11, $counter,$marker - 11,$counter, $gdColors->{'black'});
 #        print "counter: $counter <BR>";
 
         }
-        $gd->rectangle($center , (230 + ($Smax + $firstconfidencelengthlong - $upperval) * $millionyr), $center + 1,(230 + ($Smax - $upperval) * $millionyr), $black);
-        $gd->line($Smarker,(230 + ($Smax + $firstconfidencelengthlong - $upperval) * $millionyr),$marker - 11,(230 + ($Smax + $firstconfidencelengthlong - $upperval) * $millionyr), $black); 
+        $gd->rectangle($center , (230 + ($Smax + $firstconfidencelengthlong - $upperval) * $millionyr), $center + 1,(230 + ($Smax - $upperval) * $millionyr), $gdColors->{'black'});
+        $gd->line($Smarker,(230 + ($Smax + $firstconfidencelengthlong - $upperval) * $millionyr),$marker - 11,(230 + ($Smax + $firstconfidencelengthlong - $upperval) * $millionyr), $gdColors->{'black'}); 
 
     }
 
-    aiText("null", 90, 200, 'Ma', $aiblack);                                     #AI
-#    aiText("null", $fig_width - 50,$fig_lenth - 0, "J. Madin 2004", $aiblack);      #AI
+    aiText("null", 90, 200, 'Ma', $aiColors->{'black'});                                     #AI
+#    aiText("null", $fig_width - 50,$fig_length - 0, "J. Madin 2004", $aiColors->{'black'});      #AI
     open AIFOOT,"<./data/AI.footer";
     while (<AIFOOT>) {print AI $_};
     close AIFOOT;
@@ -1278,7 +1273,7 @@ sub calculateTaxaInterval {
     }
     
     print $image_map;
-    print "<CENTER><TABLE><TD><IMG SRC=\"/public/confidence/$imagenamepng\"  USEMAP=\"#ConfidenceMap\" ISMAP BORDER=0></TD><TD WIDTH=40></TD>";
+    print "<CENTER><TABLE><TD valign=\"top\"><IMG SRC=\"/public/confidence/$imagenamepng\"  USEMAP=\"#ConfidenceMap\" ISMAP BORDER=0></TD><TD WIDTH=40></TD>";
   
     print "<TD ALIGN=\"center\">";
     if($conftype eq "Strauss and Sadler (1989)") {
@@ -1290,7 +1285,7 @@ sub calculateTaxaInterval {
             $table[$i] = [$confVals[3],$confVals[2],$confVals[4],$confVals[9],$confVals[8]];
         }
         my $transpose = (scalar(@sortedKeys) > 5) ? 1 : 0;
-        printResultTable('',\@tableRowHeader,\@tableColHeader,\@table,$transpose);
+        printResultTable($image_count,'',\@tableRowHeader,\@tableColHeader,\@table,$transpose);
     } elsif($conftype eq "Marshall (1994)") {
         my (@tableRowHeader, @tableColHeader, @table);
         @tableRowHeader = ('last occurrence (Ma)','first occurrence (Ma)','lower confidence interval (Ma)', 'upper confidence interval (Ma)','number of horizons', 'transposition test');
@@ -1300,7 +1295,7 @@ sub calculateTaxaInterval {
             $table[$i] = [$confVals[3],$confVals[2],$confVals[10],$confVals[4],$confVals[9],$confVals[8]];
         }
         my $transpose = (scalar(@sortedKeys) > 5) ? 1 : 0;
-        printResultTable('',\@tableRowHeader,\@tableColHeader,\@table,$transpose);
+        printResultTable($image_count,'',\@tableRowHeader,\@tableColHeader,\@table,$transpose);
     } elsif($conftype eq "Solow (1996)") {
         my (@tableRowHeader, @tableColHeader, @table);
         @tableRowHeader = ('last occurrence (Ma)','first occurrence (Ma)','number of horizons', 'transposition test');
@@ -1310,7 +1305,7 @@ sub calculateTaxaInterval {
             $table[$i] = [$confVals[3],$confVals[2],$confVals[9],$confVals[8]];
         }
         my $transpose = (scalar(@sortedKeys) > 5) ? 1 : 0;
-        printResultTable('table 1',\@tableRowHeader,\@tableColHeader,\@table,$transpose);
+        printResultTable($image_count,'table 1',\@tableRowHeader,\@tableColHeader,\@table,$transpose);
         print "<BR><BR>";
         
         my $temp1;
@@ -1354,28 +1349,52 @@ sub calculateTaxaInterval {
     print ", <a href=\"/public/confidence/$imagenameai\">AI</a><BR><BR></b>";
     #print "<INPUT TYPE=submit VALUE=\"Start again\"><BR><BR><BR>";
     optionsForm($q, $s, $dbt, \%splist, 'small');
-    print " <a href='bridge.pl?action=displayFirstForm'>Start again</a></b><p></center><BR><BR><BR>";
+    print " <a href='bridge.pl?action=displayTaxaInteralsForm'>Start again</a></b><p></center><BR><BR><BR>";
 
     return;
 } #End Subroutine CalculateIntervals
 
 # Used in CalculateTaxaInterval, print HTML table
 sub printResultTable { 
-    $tableName = $_[0];
-    $tableRowHeader = $_[1];
-    $tableColHeader = $_[2];
-    @table = @{$_[3]};
-    $transpose = ($_[4] || 0);
+    $tableNo = $_[0];
+    $tableName = $_[1];
+    $tableRowHeader = $_[2];
+    $tableColHeader = $_[3];
+    @table = @{$_[4]};
+    $transpose = ($_[5] || 0);
 
-    if ($transpose) {
-        $temp = $tableRowHeader;
-        $tableRowHeader = $tableColHeader;
-        $tableColHeader = $temp;
-    }
+    
+
+    # Print it out to file
     @tableRowHeader = @$tableRowHeader;
     @tableColHeader = @$tableColHeader;
+    my $csv = Text::CSV_XS->new();
+    my $file = "$ENV{BRIDGE_HTML_DIR}/public/data/confidence$tableNo.csv";
+    open FILE_H,">$file";
+    $csv->combine(($tableName,@tableColHeader));
+    print FILE_H $csv->string(),"\n";
+    for(my $rowNum=0;$rowNum<scalar(@tableRowHeader);$rowNum++){
+        my @row = ($tableRowHeader[$rowNum]);
+        for(my $colNum=0;$colNum<scalar(@tableColHeader);$colNum++){
+            push @row, $table[$colNum][$rowNum];
+        }
+        if ($csv->combine(@row))    {
+            print FILE_H $csv->string(),"\n";
+        }
+    }
+    close FH;   
+
+    # Print it out to a HTML table
+    if ($transpose) {
+        @tableRowHeader = @$tableColHeader;
+        @tableColHeader = @$tableRowHeader;
+    } else {
+        @tableRowHeader = @$tableRowHeader;
+        @tableColHeader = @$tableColHeader;
+    }
 
     # RESULTS TABLE HEADER
+    print "<TABLE<TR><TD>";
     print "<TABLE CELLSPACING=1 BGCOLOR=\"black\" CELLPADDING=5><TR BGCOLOR=\"white\" ALIGN=\"CENTER\">";
     print "<TD BGCOLOR=\"white\" ALIGN=\"CENTER\"><span style='font-size: 10pt;'><B>$tableName</B></span></TD>";
     foreach $col (@tableColHeader) { 
@@ -1395,6 +1414,8 @@ sub printResultTable {
         print "</TR>";
     }
     print "</TABLE>";
+    print "<a href=\"/public/data/confidence$tableNo.csv\">Download confidence data</a>";
+    print "</TD></TR></TABLE>";
 }
 
 #--------------CALCULATE STRATIGRAPHIC RELATIVE CONFIDENCE INTERVALS----------------
@@ -1404,8 +1425,6 @@ sub calculateStratInterval	{
     my $dbt=shift;
     my $dbh=$dbt->dbh;
     my $marker = 100;
-    my ($AILEFT,$AITOP,$fig_width,$fig_lenth);
-    my $aifig_size = 500;
     my $section_name = uri_unescape($q->param("input"));
     my $section_type = ($q->param("input_type") eq 'regional') ? 'regional' : 'local';
     my $alpha = $q->param("alpha");
@@ -1413,7 +1432,6 @@ sub calculateStratInterval	{
     my $conffor = $q->param("conffor");
     my $conftype = $q->param("conftype");
     my $stratres = $q->param("stratres");
-    my $order = $q->param("order");
 
     my ($taxon_nos_string,$genus_species_sql);
     for(my $i=0;$q->param("speciesname$i");$i++) {
@@ -1481,7 +1499,7 @@ sub calculateStratInterval	{
 
 
 # ----------------------------GENERAL FIGURE DIMENSIONS---------------------------
-    my @tempp = sort numerically values %sectionbed;                        
+    my @tempp = sort {$a <=> $b} values %sectionbed;                        
     main::dbg("sorted sectionbed values:".Dumper(\@tempp));
     main::dbg("mainHash (genus->beds array):".Dumper(\%mainHash));
     my $number_horizons = scalar(@tempp);            # how many horizons for whole section
@@ -1494,14 +1512,14 @@ sub calculateStratInterval	{
     my $upper_horizon_lim = $upper_lim;
     my $lower_horizon_lim = $lower_lim;
 # ---------------------------STRAUSS AND SADLER----------------------------------
-    foreach my $counter (sort alphabetically keys(%mainHash))  {
+    foreach my $counter (sort {$a cmp $b} keys(%mainHash))  {
         my $conf = 0;
-        my @array = sort numerically @{$mainHash{$counter}};
+        my @array = sort {$a <=> $b} @{$mainHash{$counter}};
         my $count = scalar(@array);         # number of horizons
     #        print "$counter: $count<BR>";
         my $lower = $array[0] - 1;              # lower species horizon, say 6
         my $upper = $array[$count - 1]; # upper species horizon, say 10 (+ 1, for upper bound of interval)
-        my $lenth = $upper - $lower;        # total number of horizons for species, therefore 5;
+        my $length = $upper - $lower;        # total number of horizons for species, therefore 5;
         my $limit = 0;
         # -----------------------------------------
         if ($conffor eq 'last appearance' || $conffor eq 'first appearance' || $conffor eq 'total duration')  {
@@ -1522,12 +1540,12 @@ sub calculateStratInterval	{
             }
         }
         # -----------------------------------------
-        $limit = ($lenth * $conf)/$lenth;   # length of conf interval as number of horizons
+        $limit = ($length * $conf)/$length;   # length of conf interval as number of horizons
         $upper_horizon_lim = $upper + $limit;
         $lower_horizon_lim = $lower - $limit;
         if ($upper_horizon_lim > $upper_lim)   {$upper_lim = $upper_horizon_lim;}
         if ($lower_horizon_lim < $lower_lim)   {$lower_lim = $lower_horizon_lim;}
-        $stratHash{$counter} = [$lower, $upper, $limit, $lenth];  # fill in Hash array with necessary info
+        $stratHash{$counter} = [$lower, $upper, $limit, $length];  # fill in Hash array with necessary info
     }
 # ----------------------------THE MAX AND MIN CONFIDENCE RANGES-------------------
 
@@ -1549,10 +1567,8 @@ sub calculateStratInterval	{
     my $fig_long = $upper_lim - $lower_lim;
     my $horizon_unit = 400/$fig_long;
     my $lateral_unit = 16;
-    $fig_width = 120 + ($lateral_unit * $fig_wide);
-    $fig_lenth = 250 + 400;#($horizon_unit * $fig_long);
-    $AILEFT = 0;
-    $AITOP = 580;    
+    my $fig_width = 120 + ($lateral_unit * $fig_wide);
+    my $fig_length = 250 + 400;#($horizon_unit * $fig_long);
     my $image_map = "<map name='ConfidenceMap'>";
 # ------------------------------------GD------------------------
     $image_count = getImageCount();
@@ -1569,58 +1585,57 @@ sub calculateStratInterval	{
         print AI $_;
     }
     close AIHEAD;
-    my $gd = GD::Image->new($fig_width,$fig_lenth);   
+    my $gd = GD::Image->new($fig_width,$fig_length);   
     my $poly = GD::Polygon->new();    
-    my $white  = $gd->colorAllocate(255, 255, 255);
-    my $aiwhite = "0.00 0.00 0.00 0.00 K"; 
-    my $grey= $gd->colorAllocate(  192,   192,   192);
-    my $aigrey = "0.33 0.33 0.33 0.12 k";
-    my $black  = $gd->colorAllocate(  0,   0,   0);
-    my $aiblack = "0.00 0.00 0.00 1.00 K";
-    $gd->rectangle(0,0,$fig_width-1,$fig_lenth - 1,$black);
+
+    my ($gdColors,$aiColors) = getPalette($gd); 
+
+    $gd->rectangle(0,0,$fig_width-1,$fig_length - 1,$gdColors->{'black'});
 # ---------------------------------SCALE BAR---------------------
     my $i = 0;
     my $j = 0;
     print AI "u\n";                                                     # AI start the group 
     foreach my $counter (($lower_lim)..($upper_lim+1))  {
         if ($i > $j)    {
-            $gd->line(65,($fig_lenth - 20) - $i,70,($fig_lenth - 20) - $i,$black);   #GD
-            $gd->string(gdTinyFont,55-length($counter)*5,($fig_lenth - 20) - ($i) - 4,$counter,$black);      #GD
-            aiLine(65,($fig_lenth - 20) - $i,70,($fig_lenth - 20) - $i,$aiblack);    #AI
-            aiText("null",55-length($counter)*6,(($fig_lenth - 20) - $i) + 2,$counter,$aiblack);       #AI
+            $gd->line(65,($fig_length - 20) - $i,70,($fig_length - 20) - $i,$gdColors->{'black'});   #GD
+            $gd->string(gdTinyFont,55-length($counter)*5,($fig_length - 20) - ($i) - 4,$counter,$gdColors->{'black'});      #GD
+            aiLine(65,($fig_length - 20) - $i,70,($fig_length - 20) - $i,$aiColors->{'black'});    #AI
+            aiText("null",55-length($counter)*6,(($fig_length - 20) - $i) + 2,$counter,$aiColors->{'black'});       #AI
             if ($counter > $minhorizon && $counter <= $maxhorizon) {
-                $image_map .= "<area shape=rect coords=\"".(55-length($counter)*6).",".int($fig_lenth - $i - 15).",55,".int($fig_lenth - $i - 30)."\" HREF=\"bridge.pl?action=displayCollResults&${section_type}section=$section_name&${section_type}bed=$counter\" ALT=\"$section_type bed $counter of $section_name\">";
+                $image_map .= "<area shape=rect coords=\"".(55-length($counter)*6).",".int($fig_length - $i - 15).",55,".int($fig_length - $i - 30)."\" HREF=\"bridge.pl?action=displayCollResults&${section_type}section=$section_name&${section_type}bed=$counter\" ALT=\"$section_type bed $counter of $section_name\">";
             }
             $j = $j + 8;
         }
         if ($counter == $maxhorizon || $counter == $minhorizon) {
-            $gd->dashedLine(70,($fig_lenth - 20) - $i,$fig_width - 20,($fig_lenth - 20) - $i,$black);   #GD
-            aiLineDash(70,($fig_lenth - 20) - $i,$fig_width - 20,($fig_lenth - 20) - $i,$aiblack);      #AI
+            $gd->dashedLine(70,($fig_length - 20) - $i,$fig_width - 20,($fig_length - 20) - $i,$gdColors->{'black'});   #GD
+            aiLineDash(70,($fig_length - 20) - $i,$fig_width - 20,($fig_length - 20) - $i,$aiColors->{'black'});      #AI
         }
         $i = $i + $horizon_unit;
     }
     print AI "U\n";                                                     # AI terminate the group 
-    $gd->line(70,$fig_lenth - 20 - $horizon_unit,70,$fig_lenth - (($fig_long + 1)*$horizon_unit) - 20,$black);   #GD    
-    $gd->stringUp(gdMediumBoldFont, 13,(250 + (($fig_lenth - 220)/2)), "Section: $section_name", $black);
-    #$image_map .= "<area shape=rect coords=\"12,".int(260 + ($fig_lenth - 220)/2).",28,".int(260 + ($fig_lenth-380)/2-length($section_name)*7)."\" HREF=\"bridge.pl?action=displayStrataSearch&localsection=$section_name\" ALT=\"section $section_name\">";
-    $gd->string(gdTinyFont, $fig_width - 70,$fig_lenth - 10, "J. Madin 2004", $black);
-    aiLine(70,$fig_lenth - 20 - $horizon_unit,70,$fig_lenth - (($fig_long + 1)*$horizon_unit) - 20,$aiblack);   #AI    
-    aiTextVert("null", 13,(250 + (($fig_lenth - 220)/2)), "Section: $section_name", $aiblack);
-    aiText("null", $fig_width - 70,$fig_lenth - 10, "J. Madin 2004", $aiblack);    
+    $gd->line(70,$fig_length - 20 - $horizon_unit,70,$fig_length - (($fig_long + 1)*$horizon_unit) - 20,$gdColors->{'black'});   #GD    
+    $gd->stringUp(gdMediumBoldFont, 13,(250 + (($fig_length - 220)/2)), "Section: $section_name", $gdColors->{'black'});
+    #$image_map .= "<area shape=rect coords=\"12,".int(260 + ($fig_length - 220)/2).",28,".int(260 + ($fig_length-380)/2-length($section_name)*7)."\" HREF=\"bridge.pl?action=displayStrataSearch&localsection=$section_name\" ALT=\"section $section_name\">";
+    $gd->string(gdTinyFont, $fig_width - 70,$fig_length - 10, "J. Madin 2004", $gdColors->{'black'});
+    aiLine(70,$fig_length - 20 - $horizon_unit,70,$fig_length - (($fig_long + 1)*$horizon_unit) - 20,$aiColors->{'black'});   #AI    
+    aiTextVert("null", 13,(250 + (($fig_length - 220)/2)), "Section: $section_name", $aiColors->{'black'});
+    aiText("null", $fig_width - 70,$fig_length - 10, "J. Madin 2004", $aiColors->{'black'});    
 # -------------------------------SORT OUTPUT----------------------------
-    sub sortHashLast {$stratHash{$a}[0] <=> $stratHash{$b}[0]};
-    sub sortHashFirst {$stratHash{$a}[1] <=> $stratHash{$b}[1]};
-    sub sortHashLenth {$stratHash{$a}[3] <=> $stratHash{$b}[3]};
-            
     my @sortedKeys = keys(%stratHash);
-    if ($order eq "first appearance")   {
-        @sortedKeys = sort sortHashLast sort sortHashFirst sort alphabetically (@sortedKeys);
-    } elsif ($order eq "last appearance") {
-        @sortedKeys = sort sortHashFirst sort sortHashLast sort alphabetically (@sortedKeys);
-    } elsif ($order eq "name")   {
-        @sortedKeys = sort alphabetically (@sortedKeys);
+    if ($q->param('order') eq "first appearance") {
+        @sortedKeys = sort {$stratHash{$a}[0] <=> $stratHash{$b}[0] ||
+                            $stratHash{$a}[1] <=> $stratHash{$b}[1] ||
+                            $a cmp $b} @sortedKeys;
+    } elsif ($q->param('order') eq "last appearance") {
+        @sortedKeys = sort {$stratHash{$a}[1] <=> $stratHash{$b}[1] ||
+                            $stratHash{$a}[0] <=> $stratHash{$b}[0] ||
+                            $a cmp $b} @sortedKeys;
+    } elsif ($q->param('order') eq "name")   {
+        @sortedKeys = sort {$a cmp $b} @sortedKeys;
     } else  {
-        @sortedKeys = sort sortHashLenth sort sortHashFirst sort alphabetically (@sortedKeys);    
+        @sortedKeys = sort {$stratHash{$a}[3] <=> $stratHash{$b}[3] ||
+                            $stratHash{$a}[1] <=> $stratHash{$b}[1] ||
+                            $a cmp $b} @sortedKeys;
     }
 # -------------------------------SPECIES BARS----------------------------
     foreach my $counter (@sortedKeys) {
@@ -1629,34 +1644,49 @@ sub calculateStratInterval	{
         my %seenBeds = ();
         foreach $bed (@sectionbeds) {
             if (!$seenBeds{$bed}) {
-                $gd->filledRectangle($marker+1,$fig_lenth-20-(($bed-$lower_lim)*$horizon_unit),$marker+4,$fig_lenth-20-(($bed-1-$lower_lim)*$horizon_unit),$grey);
-                aiFilledRectangle($marker,$fig_lenth-20-(($bed-$lower_lim)*$horizon_unit),$marker+5,$fig_lenth-20-(($bed-1-$lower_lim)*$horizon_unit),$aigrey);
-                $image_map .= "<area shape=rect coords=\"".$marker.",".int($fig_lenth-20-(($bed-$lower_lim)*$horizon_unit)).",".($marker+5).",".int($fig_lenth-20-(($bed-1-$lower_lim)*$horizon_unit))."\" HREF=\"bridge.pl?action=displayCollResults&${section_type}section=$section_name&${section_type}bed=$bed&genus_name=$counter\" ALT=\"$counter in $section_type bed $bed of section $section_name\">";
+                my $gdGlyphColor = exists $gdColors->{$q->param('color')} ? $gdColors->{$q->param('color')} : $gdColors->{'grey'};
+                my $aiGlyphColor = exists $aiColors->{$q->param('color')} ? $aiColors->{$q->param('color')} : $aiColors->{'grey'};
+                if ($q->param('glyph_type') eq 'circles') {
+                    $gd->filledArc($marker+3,int($fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit)),5,5,0,360,$gdGlyphColor);
+                    aiFilledArc($marker+3,int($fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit)),5,5,0,360,$aiGlyphColor);
+                } elsif ($q->param('glyph_type') eq 'hollow circles') {
+                    $gd->arc($marker+3,int($fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit)),5,5,0,360,$gdGlyphColor);
+                    aiArc($marker+3,int($fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit)),5,5,0,360,$aiGlyphColor);
+                } elsif ($q->param('glyph_type') eq 'squares') {
+                    $gd->filledRectangle($marker+1,$fig_length-20-(($bed-$lower_lim)*5),$marker+4,$fig_length-20-(($bed-1-$lower_lim)*5),$gdGlyphColor);
+                    aiFilledRectangle($marker,$fig_length-20-(($bed-$lower_lim)*$horizon_unit),$marker+5,$fig_length-20-(($bed-1-$lower_lim)*$horizon_unit),$aiGlyphColor);
+                } elsif ($q->param('glyph_type') eq 'hollow squares') {
+                    $gd->rectangle($marker+1,$fig_length-20-(($bed-$lower_lim)*5),$marker+4,$fig_length-20-(($bed-1-$lower_lim)*5),$gdGlyphColor);
+                    aiRectangle($marker,$fig_length-20-(($bed-$lower_lim)*$horizon_unit),$marker+5,$fig_length-20-(($bed-1-$lower_lim)*$horizon_unit),$aiGlyphColor);
+                } else {
+                    $gd->filledRectangle($marker+1,$fig_length-20-(($bed-$lower_lim)*$horizon_unit),$marker+4,$fig_length-20-(($bed-1-$lower_lim)*$horizon_unit),$gdGlyphColor);
+                    aiFilledRectangle($marker,$fig_length-20-(($bed-$lower_lim)*$horizon_unit),$marker+5,$fig_length-20-(($bed-1-$lower_lim)*$horizon_unit),$aiGlyphColor);
+                }  
+
+                $image_map .= "<area shape=rect coords=\"".$marker.",".int($fig_length-20-(($bed-$lower_lim)*$horizon_unit)).",".($marker+5).",".int($fig_length-20-(($bed-1-$lower_lim)*$horizon_unit))."\" HREF=\"bridge.pl?action=displayCollResults&${section_type}section=$section_name&${section_type}bed=$bed&genus_name=$counter\" ALT=\"$counter in $section_type bed $bed of section $section_name\">";
             }
             $seenBeds{$bed} = 1;
         }
-        $gd->rectangle($marker, ($fig_lenth - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), $marker + 5, ($fig_lenth - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit) , $black);
-        aiRectangle(   $marker, ($fig_lenth - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), $marker + 5, ($fig_lenth - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit) , $aiblack);
+        $gd->rectangle($marker, ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), $marker + 6, ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit) , $gdColors->{'black'});
+        aiRectangle(   $marker, ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), $marker + 6, ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit) , $aiColors->{'black'});
 # -----------------CONFIDENCE BARS--------------------------
         if ($conffor eq "first appearance" || $conffor eq "total duration")	{
-            $color = $black;
-            $gd->rectangle(($marker + 2), ($fig_lenth - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), ($marker + 3), ($fig_lenth - 20) - ((-$lower_lim + ($stratHash{$counter}[0] - $stratHash{$counter}[2])) * $horizon_unit), $color);
-            aiRectangle(($marker + 2), ($fig_lenth - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), ($marker + 3), ($fig_lenth - 20) - ((-$lower_lim + ($stratHash{$counter}[0] - $stratHash{$counter}[2])) * $horizon_unit), $aicolor);            
+            $gd->rectangle(($marker + 2), ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), ($marker + 3), ($fig_length - 20) - ((-$lower_lim + ($stratHash{$counter}[0] - $stratHash{$counter}[2])) * $horizon_unit), $gdColors->{'black'});
+            aiRectangle(($marker + 2), ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), ($marker + 3), ($fig_length - 20) - ((-$lower_lim + ($stratHash{$counter}[0] - $stratHash{$counter}[2])) * $horizon_unit), $aiColors->{'black'});            
         }
         if ($conffor eq "last appearance" || $conffor eq "total duration")   {
-            $color = $black;
-            $gd->rectangle(($marker + 2), ($fig_lenth - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit), ($marker + 3), ($fig_lenth - 20) - ((-$lower_lim + ($stratHash{$counter}[1] + $stratHash{$counter}[2])) * $horizon_unit), $color);
-            aiRectangle((   $marker + 2), ($fig_lenth - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit), ($marker + 3), ($fig_lenth - 20) - ((-$lower_lim + ($stratHash{$counter}[1] + $stratHash{$counter}[2])) * $horizon_unit), $aicolor);
+            $gd->rectangle(($marker + 2), ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit), ($marker + 3), ($fig_length - 20) - ((-$lower_lim + ($stratHash{$counter}[1] + $stratHash{$counter}[2])) * $horizon_unit), $gdColors->{'black'});
+            aiRectangle((   $marker + 2), ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit), ($marker + 3), ($fig_length - 20) - ((-$lower_lim + ($stratHash{$counter}[1] + $stratHash{$counter}[2])) * $horizon_unit), $aiColors->{'black'});
         }    
-        $gd->stringUp(gdSmallFont, $marker-5, 200, "$counter", $black);
-        aiTextVert(        "null", $marker+7, 200, "$counter", $aiblack);
+        $gd->stringUp(gdSmallFont, $marker-5, 200, "$counter", $gdColors->{'black'});
+        aiTextVert(        "null", $marker+7, 200, "$counter", $aiColors->{'black'});
 #        $image_map .= "<area shape=rect coords=\"".($marker-5).",205,".($marker+7).",".(200-length($counter)*6)."\" HREF=\"bridge.pl?action=checkTaxonInfo&taxon_name=$counter\" ALT=\"$counter\">";
         $image_map .= "<area shape=rect coords=\"".($marker-5).",205,".($marker+7).",".(200-length($counter)*6)."\" HREF=\"$links{$counter}\" ALT=\"$counter\">";
 
         
         $marker = $marker + $lateral_unit;
     }
-    #$gd->stringFT($black,'/usr/X11R6/lib/X11/fonts/TTF/luximb.ttf',12,0,50,50,'Hello World');
+    #$gd->stringFT($gdColors->{'black'},'/usr/X11R6/lib/X11/fonts/TTF/luximb.ttf',12,0,50,50,'Hello World');
 # ------------------------------------MAKE FIGURE------------------------------
     open AIFOOT,"<./data/AI.footer";
     while (<AIFOOT>) {print AI $_};
@@ -1687,9 +1717,6 @@ sub calculateStratInterval	{
     return;
 } 
 
-sub alphabetically {lc($a) cmp lc($b)};
-sub numerically {$a <=> $b};
-
 sub aiLine {
     my $x1=shift;
     my $y1=shift;
@@ -1714,6 +1741,40 @@ sub aiLineDash {
     printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
     printf AI "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y2;
     print AI "S\n";
+}
+
+
+sub aiArc{
+    my ($x,$y,$diam,$null1,$null2,$null3,$color) = @_;
+
+    my $rad = $diam / 2;
+    my $aix = $AILEFT+$x+$rad;
+    my $aiy = $AITOP-$y;
+    my $obl = $diam * 0.27612;
+    print AI "$color\n";
+    print AI "0 G\n";
+    printf AI "%.1f %.1f m\n",$aix,$aiy;
+    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix,$aiy-$obl,$aix-$rad+$obl,$aiy-$rad,$aix-$rad,$aiy-$rad;
+    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad-$obl,$aiy-$rad,$aix-$diam,$aiy-$obl,$aix-$diam,$aiy;
+    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$diam,$aiy+$obl,$aix-$rad-$obl,$aiy+$rad,$aix-$rad,$aiy+$rad;
+    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad+$obl,$aiy+$rad,$aix,$aiy+$obl,$aix,$aiy;
+    print AI "b\n";
+}
+sub aiFilledArc{
+    my ($x,$y,$diam,$null1,$null2,$null3,$color) = @_;
+
+    my $rad = $diam / 2;
+    my $aix = $AILEFT+$x+$rad;
+    my $aiy = $AITOP-$y;
+    my $obl = $diam * 0.27612;
+    print AI "$color\n";
+    print AI "0 G\n";
+    printf AI "%.1f %.1f m\n",$aix,$aiy;
+    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix,$aiy-$obl,$aix-$rad+$obl,$aiy-$rad,$aix-$rad,$aiy-$rad;
+    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad-$obl,$aiy-$rad,$aix-$diam,$aiy-$obl,$aix-$diam,$aiy;
+    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$diam,$aiy+$obl,$aix-$rad-$obl,$aiy+$rad,$aix-$rad,$aiy+$rad;
+    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad+$obl,$aiy+$rad,$aix,$aiy+$obl,$aix,$aiy;
+    print AI "f\n";
 }
 
 sub aiFilledRectangle {
@@ -1858,7 +1919,7 @@ sub straussSadler {
     }
     $firstconfidencelengthlong = $intervallength * $alpha;
     $lastconfidencelengthlong = $firstconfidencelengthlong;
-    $confidencelengthshort = 0;
+#    $confidencelengthshort = 0; ?? PS
     $lastconfidencelengthshort = $firstconfidencelengthshort;
     
     return $firstconfidencelengthlong, $lastconfidencelengthlong, $firstconfidencelengthshort, $lastconfidencelengthshort;          
@@ -1869,7 +1930,7 @@ sub distributionFree {          #FOR MARSHALL 1994
     my @gaplist = @$gaplist;
     my $N = shift;
     my $C = shift;
-    @gaplist = sort numerically @gaplist;
+    @gaplist = sort {$a <=> $b} @gaplist;
             
     my $alpha = 0.95;       #STANDARD FOR CONFIDENCE PROBABILITIES OF CONFIDENCE INTERVALS ($C)
     my $gamma = (1 - $alpha)/2;
@@ -1929,7 +1990,7 @@ sub commonEndPoint {        #FOR SOLOW (1996)
         foreach my $keycounter (keys(%solowHash)) {
             push @mx, $solowHash{$keycounter}[2];
         }  #there must be an easier may to find the maximum horizon!!
-        @mx = sort numerically @mx;
+        @mx = sort {$a <=> $b} @mx;
         my $max = $mx[scalar(@mx) - 1];
 
         #-------------------------SIGNIFICANCE FINDER-----------------------------
@@ -1983,7 +2044,7 @@ sub commonEndPoint {        #FOR SOLOW (1996)
         foreach my $keycounter (keys(%tempsolowHash)) {
             push @mx, $tempsolowHash{$keycounter}[2];
         }  #there must be an easier may to find the maximum horizon!!
-        @mx = sort numerically @mx;
+        @mx = sort {$a <=> $b} @mx;
         my $max = $mx[scalar(@mx) - 1];
 
         #-------------------------SIGNIFICANCE FINDER-----------------------------
@@ -2134,6 +2195,37 @@ sub gamma {             #THE GAMMA FUNCTION
     return $res;
 }
 
+#Initialize gd's palette, and values 
+sub getPalette{
+#    $col{'green'} = $im->colorAllocate(0,255,0);
+#    $aicol{'green'} = "0.93 0.00 1.00 0.00 K";
+
+    my $gd = shift;
+    my $gdColors = {
+        'white'=> $gd->colorAllocate(255, 255, 255),
+        'grey'=> $gd->colorAllocate(122, 122, 122),
+        'black'=> $gd->colorAllocate(0,0,0),
+        'red'=>$gd->colorAllocate(255,0,0),
+        'blue'=>$gd->colorAllocate(63,63,255),
+        'yellow'=>$gd->colorAllocate(255,255,0),
+        'green'=>$gd->colorAllocate(0,143,63),
+        'orange'=>$gd->colorAllocate(255,127,0),
+        'purple'=>$gd->colorAllocate(223,0,255)
+    };
+    my $aiColors = {
+        'white'=>"0.00 0.00 0.00 0.00 K",
+        'grey'=> "0.20 0.20 0.20 0.52 k",
+        'black'=> "0.00 0.00 0.00 1.00 K",
+        'red'=> "0.01 0.96 0.91 0.0 K",
+        'blue'=>"0.80 0.68 0.00 0.00 K",
+        'yellow'=>"0.03 0.02 0.91 0.00 K",
+        'green'=>"0.93 0.05 0.91 0.01 K",
+        'orange'=>"0.02 0.50 0.93 0.00 K",
+        'purple'=>"0.06 0.93 0.00 0.00 K"
+    };
+    return ($gdColors,$aiColors);
+}
+
 # Cleans out files created more than 1 day ago, increments the image counter and passes back the number
 # corresponding to a new image 
 sub getImageCount {
@@ -2154,7 +2246,7 @@ sub getImageCount {
         $self->htmlError ( "Couldn't open [$IMAGE_DIR/imagecount]: $!" );
     }
     $image_count = <IMAGECOUNT>;
-    chomp($imagecount);
+    chomp($image_count);
     close IMAGECOUNT;
                                                                                                                                                              
     $image_count++;
