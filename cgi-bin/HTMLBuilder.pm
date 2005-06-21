@@ -281,7 +281,11 @@ sub buildSelectWithHardList {
 # It will return an HTML formatted select statement
 # with the approriate one selected.
 sub buildSelect {
-	my $self = shift;
+    if (UNIVERSAL::isa($_[0],'HTMLBuilder')) {
+        # If called from an object oriented interface, 
+        # don't need the object ref, just shift it off
+        shift;
+    }
 	
 	my $name = $_[0];
 	my @keys = @{$_[1]};
