@@ -466,7 +466,7 @@ sub new_search_recurse {
             my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt, $child->{'child_no'});
 
             if($parent_row->{'parent_no'} == $parent_no){
-                my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE status IN  ('rank changed as','recombined as','corrected as') AND child_no=$child->{'child_no'} AND child_spelling_no !=$parent_row->{child_spelling_no}";
+                my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE status IN  ('rank changed as','recombined as','corrected as') AND child_no=$child->{'child_no'}";
                 my @results = @{$dbt->getData($sql)}; 
                 foreach my $row (@results) {
                     if ($row->{'child_spelling_no'}) {
