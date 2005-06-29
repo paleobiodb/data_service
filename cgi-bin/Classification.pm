@@ -244,7 +244,7 @@ sub get_classification_hash{
                     $list{$link->{'taxon_rank'}} = $link->{'taxon_spelling_no'}; 
                 }
                 my $link_next = $link->{'next_link'};
-                delete $link->{'next_link'}; # delete this to make Data::Dumper output look nice 
+                #delete $link->{'next_link'}; # delete this to make Data::Dumper output look nice 
                 $link = $link_next;
             }
             # The output list will be in the same order as the input list
