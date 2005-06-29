@@ -338,6 +338,7 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
         $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
         $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
+        $html .= $self->retellOptionsRow ( "Minimum # of specimens to compute mean abundance", $q->param("min_mean_abundance") ) if ($q->param("min_mean_abundance"));
 
         if ($q->param('output_data') eq "occurrences") {
             my $occFields = ();
@@ -1481,7 +1482,6 @@ sub doQuery {
 		#  times a genus has abundance counts at all
 			if ( ( $row->{occ_abund_unit} eq "specimens" || $row->{occ_abund_unit} eq "individuals" ) && ( $row->{occ_abund_value} > 0 ) )	{
 				$nisp{$row->{collection_no}} = $nisp{$row->{collection_no}} + $row->{occ_abund_value};
-				$numberofcounts{$row->{occ_genus_name}}++;
 			}
 		# also make a master list of all collection numbers that are
 		#  used, so we can properly get all the primary AND secondary
@@ -1626,7 +1626,17 @@ sub doQuery {
 		# WARNING: sum is of logged abundances because geometric means
 		#   are desired
 		if ( ( $row->{occ_abund_unit} eq "specimens" || $row->{occ_abund_unit} eq "individuals" ) && ( $row->{occ_abund_value} > 0 ) )	{
-			$summedproportions{$row->{occ_genus_name}} = $summedproportions{$row->{occ_genus_name}} + log( $row->{occ_abund_value} / $nisp{$row->{collection_no}} );
+            if (int($q->param('min_mean_abundance'))) {
+                if ($nisp{$row->{collection_no}} >= int($q->param('min_mean_abundance'))) {
+		            $numberofcounts{$row->{occ_genus_name}}++;
+			        $summedproportions{$row->{occ_genus_name}} = $summedproportions{$row->{occ_genus_name}} + log( $row->{occ_abund_value} / $nisp{$row->{collection_no}} );
+                } else {
+                    $self->dbg("Skipping collection_no $row->{collection_no}, count $nisp{$row->{collection_no}} is below count ".$q->param('min_mean_abundance'));
+                }
+            } else {
+		        $numberofcounts{$row->{occ_genus_name}}++;
+			    $summedproportions{$row->{occ_genus_name}} = $summedproportions{$row->{occ_genus_name}} + log( $row->{occ_abund_value} / $nisp{$row->{collection_no}} );
+            }
 		}
 
 		#$self->dbg("reference_no: $reference_no<br>genus_reso: $genus_reso<br>genusName: $genusName<br>collection_no: $collection_no<br>");
