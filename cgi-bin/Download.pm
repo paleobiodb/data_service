@@ -2017,7 +2017,13 @@ sub setupOutput {
 	});
 	
 	my $authorizer = $s->get("authorizer");
-	if ( ! $authorizer ) { $authorizer = "unknown"; }
+	if ( ! $authorizer )	{
+		if ( $q->param("yourname") )	{
+			$authorizer = $q->param("yourname");
+		} else	{
+			$authorizer = "unknown";
+		}
+	}
 	$authorizer =~ s/(\s|\.)//g;
 	$occsOutFileName = $authorizer . "-occs.$outFileExtension";
 	$generaOutFileName = $authorizer . "-genera.$outFileExtension";
