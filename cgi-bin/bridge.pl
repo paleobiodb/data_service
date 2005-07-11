@@ -2826,10 +2826,10 @@ sub displayCollectionDetails {
 		
     # If the viewer is the authorizer (or it's me), display the record with edit buttons
 	print '<p><div align="center"><table><tr>';
-    if ( ($authorizer eq $sesAuthorizer) || ($sesAuthorizer eq Globals::god())) {
+    if ($q->param('user') ne 'Guest' && (($authorizer eq $sesAuthorizer) || ($sesAuthorizer eq Globals::god()))) {
 		print '<td>'.$hbo->populateHTML('collection_display_buttons', \@row, \@fieldNames).'</td>';
     }
-    if ($s->get('enterer') =~ /[a-zA-Z]+/) {
+    if ($q->param('user') ne 'Guest' && $s->get('enterer') =~ /[a-zA-Z]+/) {
 	    print '<td>'.$hbo->populateHTML('collection_display_buttons2', [$q->param('collection_no')],['prefill_collection_no']).'</td>';
     }
 	print '</tr></table></div></p>';
