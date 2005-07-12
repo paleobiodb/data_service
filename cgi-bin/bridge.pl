@@ -5611,9 +5611,6 @@ sub processEditOccurrences {
 					# if the form value is different than the db value, use it.
 					unless($results{$key} eq ${$all_params{$key}}[$index]){
 						$something_changed = 1;
-						# replace every single quote with two single quotes.
-						# Note: it seems to behave the same without the \Q too.
-						${$all_params{$key}}[$index] =~ s/\Q'/''/g;
 						$results{$key} = ${$all_params{$key}}[$index];
 						# Deal with empty values
 						if($results{$key} eq ""){
@@ -5631,7 +5628,7 @@ sub processEditOccurrences {
 							}
 						}
 						else{
-							push(@update_strings,"$key='$results{$key}'");
+							push(@update_strings,"$key=".$dbh->quote($results{$key}));
 						}
 					}
 				}
@@ -5752,9 +5749,6 @@ sub processEditOccurrences {
 					# if the form value is different than the db value, use it.
 					unless($results{$key} eq ${$all_params{$key}}[$index]){
 						$something_changed = 1;
-						# replace every single quote with two single quotes.
-						# Note: it seems to behave the same without the \Q too.
-						${$all_params{$key}}[$index] =~ s/\Q'/''/g;
 						$results{$key} = ${$all_params{$key}}[$index];
 						# Deal with empty values
 						if($results{$key} eq ""){
@@ -5772,7 +5766,7 @@ sub processEditOccurrences {
 							}
 						}
 						else{
-							push(@update_strings,"$key='$results{$key}'");
+							push(@update_strings,"$key=".$dbh->quote($results{$key}));
 						}
 					}
 				}
@@ -5868,10 +5862,7 @@ sub processEditOccurrences {
 						push(@insert_values, ${$all_params{$val}}[$index]);
 					}
 					else{
-						# escape all inner single quotes (like don't) BEFORE
-						# quoting the string.
-						${$all_params{$val}}[$index] =~ s/\Q'/''/g;
-						push(@insert_values, "'".${$all_params{$val}}[$index]."'");
+						push(@insert_values, $dbh->quote(${$all_params{$val}}[$index]));
 					}
 				}
 			}
