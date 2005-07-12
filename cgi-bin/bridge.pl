@@ -5539,7 +5539,9 @@ sub processEditOccurrences {
 			} else	{
 				$all_params{'taxon_no'}[$index] = 0;
 			}
-		}
+		} else {
+			$all_params{'taxon_no'}[$index] = 0;
+        }
 
 		# back to our normal code, pre-existing the above
 
