@@ -1400,7 +1400,9 @@ sub doQuery {
         my $collectionCols = join ( $sepChar, @collectionHeaderCols );
         if ( $collectionCols ) { $header .= $sepChar.$collectionCols; }
     }
-	print OUTFILE "$header\n";
+	if ( $q->param('output_format') ne "CONJUNCT" )	{
+		print OUTFILE "$header\n";
+	}
 	$self->dbg ( "Output header: $header" );
     
 	#
@@ -1839,8 +1841,38 @@ sub doQuery {
 		# failing to do this is lethal and I'm not sure why no-one
 		#  alerted me to this bug previously
 		$curLine =~ s/\n/ /g;
-		print OUTFILE "$curLine\n";
+		if ( $q->param('output_format') eq "CONJUNCT" )	{
+			if ( $lastcoll != $collection_no )	{
+				if ( $lastcoll )	{
+					print OUTFILE ".\n\n";
+				}
+				if ( $row->{collection_name} )	{
+					$row->{collection_name} =~ s/ /_/g;
+					printf OUTFILE "%s\n",$row->{collection_name};
+				} else	{
+					print OUTFILE "Collection_$collection_no\n";
+				}
+			}
+			if ( $row->{occ_genus_reso} && $row->{occ_genus_reso} !~ /informal/ && $row->{occ_genus_reso} !~ /"/ )	{
+				printf OUTFILE "%s ",$row->{occ_genus_reso};
+			}
+			print OUTFILE "$genusName ";
+			if ( $row->{occ_species_reso} && $row->{occ_species_reso} !~ /informal/ && $row->{occ_species_reso} !~ /"/ )	{
+				printf OUTFILE "%s ",$row->{occ_species_reso};
+			}
+			if ( ! $row->{occ_species_name} )	{
+				print OUTFILE "sp.\n";
+			} else	{
+				printf OUTFILE "%s\n",$row->{occ_species_name};
+			}
+			$lastcoll = $collection_no;
+		} else	{
+			print OUTFILE "$curLine\n";
+		}
 		$acceptedCount++;
+	}
+	if ( $q->param('output_format') eq "CONJUNCT" )	{
+		print OUTFILE ".\n\n";
 	}
 	close OUTFILE;
 
@@ -2002,6 +2034,9 @@ sub setupOutput {
 	{
 		$sepChar = "\t";
 		$outFileExtension = 'tab';
+	}
+	elsif($outputType eq 'CONJUNCT')	{
+		$outFileExtension = 'conjunct';
 	}
 	else
 	{
