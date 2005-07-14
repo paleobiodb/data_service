@@ -1408,6 +1408,10 @@ sub doQuery {
 	#
 	# Loop through the result set
     #
+	# added this because the occurrences must be ordered by collection no or the CONJUNCT output will split up the collections JA 14.7.05
+	if ( $q->param('output_data') eq "occurrences" )	{
+		$sql .= " ORDER BY occurrences.collection_no";
+	}
 	$sql =~ s/\s+/ /g;
 	$self->dbg("<b>Occurrences query:</b><br>\n$sql<BR>");
 
