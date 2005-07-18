@@ -121,8 +121,14 @@ sub setArrays	{
 	$OUTPUT_DIR = $PUBLIC_DIR;
 	# customize the subdirectory holding the output files
 	# modified to retrieve authorizer automatically JA 4.10.02
-	if ( $s->get('enterer') ne "Guest")	{
-		my $temp = $s->get("authorizer");
+	# modified to use yourname JA 17.7.05
+	if ( $s->get('enterer') ne "Guest" || $q->param('yourname') ne "" )	{
+		my $temp;
+		if ( $q->param('yourname') ne "" )	{
+			$temp = $q->param('yourname');
+		} else	{
+			$temp = $s->get("authorizer");
+		}
 		$temp =~ s/ //g;
 		$temp =~ s/\.//g;
 		$temp =~ tr/[A-Z]/[a-z]/;
@@ -242,9 +248,19 @@ sub assignGenera	{
 	my $authorizer = $s->get('authorizer');
 	my ($authinit,$authlast) = split / /,$authorizer;
 	my @temp = split //,$authinit;
-	if ( ! $temp[0] )	{
-		$temp[0] = "unknown";
+	if ( ! $temp[0] || $q->param('yourname') ne "" )	{
+		# first try to use yourname JA 17.7.05
+		if ( $q->param('yourname') ne "" )	{
+			$temp[0] = $q->param('yourname');
+			$temp[0] =~ s/ //g;
+			$temp[0] =~ s/\.//g;
+			$temp[0] =~ tr/[A-Z]/[a-z]/;
+			$authlast = "";
+		} else	{
+			$temp[0] = "unknown";
+		}
 	}
+
 	my $occsfilecsv = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.csv";
 	my $occsfiletab = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.tab";
     if ((-e $occsfiletab && -e $occsfilecsv && ((-M $occsfiletab) < (-M $occsfilecsv))) ||
