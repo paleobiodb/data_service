@@ -652,6 +652,14 @@ sub assignGenera	{
 		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/firstlast.txt<BR>$!" );
 	}
 	for $i (reverse 1..$chrons)	{
+		print FOOTE "$chname[$i]";
+		if ($i > 1)	{
+			print FOOTE "\t";
+		}
+	}
+	print FOOTE "\n";
+	for $i (reverse 1..$chrons)	{
+		print FOOTE "$chname[$i]\t";
 		for $j (reverse 1..$chrons)	{
 			if ($foote[$i][$j] eq "")	{
 				$foote[$i][$j] = 0;
@@ -663,6 +671,7 @@ sub assignGenera	{
 		}
 		print FOOTE "\n";
 	}
+	close FOOTE;
 
 	# compute Jolly-Seber estimator
 	# based on Nichols and Pollock 1983, eqns. 2 and 3, which reduce to
