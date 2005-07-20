@@ -285,9 +285,19 @@ sub reportBuildDataTables {
         my @term2Keys = ();
         if (%t1TranslationTable) {
             foreach (@t1Fields) {
-                if ($t1TranslationTable{$row->{$_}}) {
-                    push @term1Keys, $t1TranslationTable{$row->{$_}};
-                } 
+                if ($_ eq 'min_interval_no') {
+                    next;
+                } elsif ($_ eq 'max_interval_no') {
+                    if ($t1TranslationTable{$row->{'max_interval_no'}} && 
+                       ($t1TranslationTable{$row->{'max_interval_no'}} eq $t1TranslationTable{$row->{'min_interval_no'}} ||
+                        $row->{'min_interval_no'} == 0)) {
+                            push @term1Keys, $t1TranslationTable{$row->{'max_interval_no'}};
+                    } 
+                } else {
+                    if ($t1TranslationTable{$row->{$_}}) {
+                        push @term1Keys, $t1TranslationTable{$row->{$_}};
+                    } 
+                }
             }
         } else {
             foreach (@t1Fields) {
@@ -299,9 +309,19 @@ sub reportBuildDataTables {
         
         if (%t2TranslationTable) {
             foreach (@t2Fields) {
-                if ($t2TranslationTable{$row->{$_}}){
-                    push @term2Keys, $t2TranslationTable{$row->{$_}}; 
-                } 
+                if ($_ eq 'min_interval_no') {
+                    next;
+                } elsif ($_ eq 'max_interval_no') {
+                    if ($t2TranslationTable{$row->{'max_interval_no'}} && 
+                       ($t2TranslationTable{$row->{'max_interval_no'}} eq $t2TranslationTable{$row->{'min_interval_no'}} ||
+                        $row->{'min_interval_no'} == 0)) {
+                            push @term2Keys, $t2TranslationTable{$row->{'max_interval_no'}};
+                    } 
+                } else {
+                    if ($t2TranslationTable{$row->{$_}}) {
+                        push @term2Keys, $t2TranslationTable{$row->{$_}};
+                    } 
+                }
             }
         } else {
             foreach (@t2Fields) {
@@ -410,7 +430,9 @@ sub reportBuildDataTables {
 
     # Provide arrays of sorted keys for the two totals with which
     # to index into the hashes
-    if ($q->param('searchfield1') eq "Harland 2: Periods (standard order)") {
+    if ($q->param('searchfield1') eq "10 m.y. bins (standard order)") {
+        @{$self->{'sortKeys1'}} = TimeLookup::getTenMYBins();
+    } elsif ($q->param('searchfield1') eq "Harland 2: Periods (standard order)") {
         @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,2);
     } elsif ($q->param('searchfield1') eq "Harland 4: Epochs (standard order)") {
         @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,4);
@@ -424,7 +446,9 @@ sub reportBuildDataTables {
     for(my $i=scalar(@{$self->{'sortKeys1'}})-1;$i>=0;$i--) {
         splice @{$self->{'sortKeys1'}},$i,1 if (!exists $self->{'totals1'}{@{$self->{'sortKeys1'}}[$i]}); 
     }    
-    if ($q->param('searchfield2') eq "Harland 2: Periods (standard order)") {
+    if ($q->param('searchfield2') eq "10 m.y. bins (standard order)") {
+        @{$self->{'sortKeys2'}} = TimeLookup::getTenMYBins();
+    } elsif ($q->param('searchfield2') eq "Harland 2: Periods (standard order)") {
         @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,2);
     } elsif ($q->param('searchfield2') eq "Harland 4: Epochs (standard order)") {
         @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,4);
@@ -560,14 +584,14 @@ sub reportQueryDB{
     # How choices in HTML map to database fields
     %sqlFields = (
         'authorizer'=>'authorizer', 'enterer'=>'enterer', 'research group'=>'research_group',
-        'country'=>'country', 'state'=>'state', 'interval name'=>'max_interval_no', 'formation'=>'formation',
+        'country'=>'country', 'state'=>'state', 'interval name'=>'max_interval_no,min_interval_no', 'formation'=>'formation',
         'paleoenvironment'=>'environment', 'scale of geographic resolution'=>'geogscale', 
         'scale of stratigraphic resolution'=>'stratscale',
         'tectonic setting'=>'tectonic_setting', 'preservation mode'=>'pres_mode', 
         'assemblage components'=>'assembl_comps', 'reason for describing collection'=>'collection_type',
         'list coverage'=>'collection_coverage', 'lithification'=>'lithification,lithification2',
         'lithology - all combinations'=>'lithology1,lithology2', 'lithology - weighted'=>'lithology1,lithology2',
-        'continent'=>'country', 'Harland 2: Periods (most common order)'=>'max_interval_no', 'Harland 4: Epochs (most common order)'=>'max_interval_no', 'Harland 6: Stages (most common order)'=>'max_interval_no', 'Harland 2: Periods (standard order)'=>'max_interval_no', 'Harland 4: Epochs (standard order)'=>'max_interval_no', 'Harland 6: Stages (standard order)'=>'max_interval_no');
+        'continent'=>'country', '10 m.y. bins (most common order)'=>'max_interval_no,min_interval_no', 'Harland 2: Periods (most common order)'=>'max_interval_no,min_interval_no', 'Harland 4: Epochs (most common order)'=>'max_interval_no,min_interval_no', 'Harland 6: Stages (most common order)'=>'max_interval_no,min_interval_no', '10 m.y. bins (standard order)'=>'max_interval_no,min_interval_no','Harland 2: Periods (standard order)'=>'max_interval_no,min_interval_no', 'Harland 4: Epochs (standard order)'=>'max_interval_no,min_interval_no', 'Harland 6: Stages (standard order)'=>'max_interval_no,min_interval_no');
     foreach my $i (1..2) {
         if ($sqlFields{$q->param("searchfield$i")}) {
             push @{$self->{'searchFields'}[$i]}, split(/,/,$sqlFields{$q->param("searchfield$i")});
@@ -721,6 +745,9 @@ sub getTranslationTable {
     if ($param eq "interval name") {
         my $intervals = $self->getIntervalNames();
         %table = %{$intervals};
+    } elsif ($param =~ /10 m\.y\. bins/) { 
+        my $binning = TimeLookup::processBinLookup($dbh,$dbt,'binning');
+        %table = %$binning;
     } elsif ($param =~ /Harland 2: Periods/) { 
 		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt,'2','intervalToScale');
 		%table = %{$intervalInScaleRef};
