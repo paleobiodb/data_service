@@ -238,15 +238,25 @@ sub checkInterval {
     my $dbt = shift || return;
     my $eml_interval = shift || "";
     my $interval_name = shift || "";
+    my $result = 0;
     if ($interval_name ne "") {
         my $sql = "SELECT count(*) AS cnt FROM intervals WHERE interval_name=".$dbt->dbh->quote($interval_name);
         if ($eml_interval ne "") {
             $sql .= " AND eml_interval=".$dbt->dbh->quote($eml_interval);
         }
         my @results = @{$dbt->getData($sql)};
-        if ($results[0]->{'cnt'} > 0) { return 1; }
+        if ($results[0]->{'cnt'} > 0) { $result = 1; }
     }
-    return 0;
+    if (!$result) {
+        my @binnames = TimeLookup::getTenMYBins();
+        for (@binnames) {
+            if ($interval_name eq $_) {
+                $result = 1; 
+                last;
+            }
+        }
+    }
+    return $result;
 }
 
 
