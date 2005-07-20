@@ -44,14 +44,53 @@ sub processLookup	{
 
 	my $return_type = shift;
     my $lookup_type = shift;
+    my $bestbothscale;
+
+
 
     # 10 M.Y. binning - i.e. Triassic 2
-    #if ($max_interval_name =~ /\w+ \d/) {
-    #    
-    #} 
+    if ($max_interval_name =~ /^(?:\w+ \d)$/ || $min_interval_name =~ /^(?:\w+ \d)$/) {
+        $bestbothscale = -1; # So Download.pm doesn't throw an error
+        if (!$min_interval_name) {
+            $min_interval_name=$max_interval_name;
+        } elsif (!$max_interval_name) {
+            $max_interval_name=$min_interval_name;
+        }
+        my @binnames = getTenMYBins(); 
+        my ($index1,$index2) = (-1,-1);
+        for($i=0;$i<scalar(@binnames);$i++) {
+            if ($max_interval_name eq $binnames[$i]) {
+                $index1 = $i;
+            }
+            if ($min_interval_name eq $binnames[$i]) {
+                $index2 = $i;
+            }
+        }
 
-    my $bestbothscale;
-    if ($max_interval_name =~ /^[0-9]+$/ || $min_interval_name =~ /^[0-9]+$/) {
+        if ($index1 < 0) {
+            print "WARNING: element $max_interval_name not found";
+        } elsif ($index2 < 0) {
+            print "WARNING: element $min_interval_name not found";
+        } else {
+            if ($index1 > $index2) {
+                ($index1,$index2) = ($index2,$index1);
+            }
+            #print "INDEX 1 is $index1 INDEX 2 is $index2\n";
+            my $binning = processBinLookup($dbh,$dbt,'binning');
+            #print "ALL intervals" . join(", ",@intervals)."<BR>";
+            my %binmap;
+            while (my ($interval_no,$binname) = each %$binning) {
+                push @{$binmap{$binname}},$interval_no;
+            }
+            
+            for ($index1 .. $index2) {
+                $binname = $binnames[$_];
+                #print "ADDING BIN NAME $binname with intervals ".scalar(@{$binmap{$binname}})."<BR>";
+                push @intervals, @{$binmap{$binname}};
+            }
+            #print "ALL intervals" . join(", ",@intervals);
+        }
+    } elsif ($max_interval_name =~ /^[0-9]+$/ || $min_interval_name =~ /^[0-9]+$/) {
         if ($max_interval_name !~ /^[0-9]+$/) {
             $max_interval_name = 9999;
         }
@@ -188,10 +227,14 @@ sub processBinLookup	{
 
 	&cleanArrays();
 
+    my (%upperbound,%lowerbound);
 	# get a lookup of the boundary ages for all intervals
-	@_ = &findBoundaries($dbh,$dbt);
-	my %upperbound = %{$_[0]};
-	my %lowerbound = %{$_[1]};
+    if ($returndata ne 'binning') {
+        @_ = &findBoundaries($dbh,$dbt);
+        %upperbound = %{$_[0]};
+        %lowerbound = %{$_[1]};
+    }
+    
 
 	# this hash array defines the binning
 	%binning = ("33" => "Cenozoic 6", # Pleistocene
@@ -339,6 +382,10 @@ sub processBinLookup	{
 			$binning{$i} = $binname;
 		}
 
+    # we don't care about boundary estimates if we just want a interval-->bin 
+    # mapping, so skip that part
+        next if ($returndata eq 'binning');
+
 	# the boundary estimates for included intervals might contradict
 	#  direct estimates for larger intervals; if so, alter the
 	#  offending estimates
@@ -393,11 +440,16 @@ sub processBinLookup	{
 		}
 
 	}
+	@tempintervals = ();
+	%yesints = ();
+    @intervals = (); # Clear it out, don't want to have leftovers screwing stuff up later
 
-	if ( $returndata ne "boundaries" )	{
-		return (\%intervalInScale,\%upperbinbound,\%lowerbinbound);
-	} else	{
+	if ( $returndata eq "binning" )	{
+        return \%binning;
+	} elsif ( $returndata eq "boundaries" )	{
 		return (\%upperbinbound,\%lowerbinbound,\%binning);
+	} else	{
+		return (\%intervalInScale,\%upperbinbound,\%lowerbinbound);
 	}
 
 }
@@ -1069,8 +1121,12 @@ sub splitInterval {
     return ($eml,$interval);
 }
 
+sub getTenMYBins() {
+    return ("Cenozoic 6", "Cenozoic 5", "Cenozoic 4", "Cenozoic 3", "Cenozoic 2", "Cenozoic 1", "Cretaceous 8", "Cretaceous 7", "Cretaceous 6", "Cretaceous 5", "Cretaceous 4", "Cretaceous 3", "Cretaceous 2", "Cretaceous 1", "Jurassic 6", "Jurassic 5", "Jurassic 4", "Jurassic 3", "Jurassic 2", "Jurassic 1", "Triassic 5", "Triassic 4", "Triassic 3", "Triassic 2", "Triassic 1", "Permian 4", "Permian 3", "Permian 2", "Permian 1", "Carboniferous 5", "Carboniferous 4", "Carboniferous 3", "Carboniferous 2", "Carboniferous 1", "Devonian 5", "Devonian 4", "Devonian 3", "Devonian 2", "Devonian 1", "Silurian 2", "Silurian 1", "Ordovician 5", "Ordovician 4", "Ordovician 3", "Ordovician 2", "Ordovician 1", "Cambrian 4", "Cambrian 3", "Cambrian 2", "Cambrian 1");
+}
+
 # Returns an array of interval names in the correct order for a given scale
-# With the newest interval first
+# With the newest interval first -- not finished yet, don't use
 # PS 02/28/3004
 sub getScaleOrder {
     my $dbt = shift;
