@@ -3,7 +3,7 @@
 // complete the authorizer field in the form.
 // must also pass it an array refernece to
 // a list of names in alphabetical order
-function doComplete(e, form_elem, names) {
+function doComplete(e, form_elem, names, skip_already_present_check) {
 	
     //return if they press delete.
     if (e.which == 8 || e.which == 127) {
@@ -16,9 +16,11 @@ function doComplete(e, form_elem, names) {
     //check to make sure that they haven't already typed in a valid
     //name..  If they have, then don't let 
     //them type in any extra characters
-    if (alreadyPresent(sub, names)) {
-        form_elem.value = sub;
-        return;
+    if (!skip_already_present_check) {
+        if (alreadyPresent(sub, names)) {
+            form_elem.value = sub;
+            return;
+        }
     }
     
     // loop through each element in the names list
