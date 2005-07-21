@@ -872,7 +872,7 @@ sub displayTenMyBins	{
 
 	print "These bin definitions are used by the <a href=\"$exec_url?action=displayCurveForm\">diversity curve generator</a>.\n\n";
 
-	@binnames = ("Cenozoic 6", "Cenozoic 5", "Cenozoic 4", "Cenozoic 3", "Cenozoic 2", "Cenozoic 1", "Cretaceous 8", "Cretaceous 7", "Cretaceous 6", "Cretaceous 5", "Cretaceous 4", "Cretaceous 3", "Cretaceous 2", "Cretaceous 1", "Jurassic 6", "Jurassic 5", "Jurassic 4", "Jurassic 3", "Jurassic 2", "Jurassic 1", "Triassic 5", "Triassic 4", "Triassic 3", "Triassic 2", "Triassic 1", "Permian 4", "Permian 3", "Permian 2", "Permian 1", "Carboniferous 5", "Carboniferous 4", "Carboniferous 3", "Carboniferous 2", "Carboniferous 1", "Devonian 5", "Devonian 4", "Devonian 3", "Devonian 2", "Devonian 1", "Silurian 2", "Silurian 1", "Ordovician 5", "Ordovician 4", "Ordovician 3", "Ordovician 2", "Ordovician 1", "Cambrian 4", "Cambrian 3", "Cambrian 2", "Cambrian 1");
+	@binnames = TimeLookup::getTenMYBins();
 
 	@_ = TimeLookup::processBinLookup($dbh,$dbt,"boundaries");
 	#%topma = %{$_[0]};
@@ -908,11 +908,14 @@ sub displayTenMyBins	{
 		printf "<td align=center valign=top>%.1f</td>\n",$basema{$bn};
 		print "<td class=tiny>";
 		my @namestoprint;
+        my @ints;
 		for my $in ( keys %binning )	{
 			if ( $binning{$in} eq $bn )	{
 				push @namestoprint , $intervalname{$in};
+                push @ints,$in;
 			}
 		}
+        print join(", ",@ints)."<br>";
 		@namestoprint = sort { $intervalalias{$a} cmp $intervalalias{$b} } @namestoprint;
 		my $printed = 0;
 		for my $nametoprint ( @namestoprint )	{
@@ -1637,8 +1640,8 @@ sub displaySearchColls {
 
 
     # Dirty but until populateHTML gets retooled is necessary cause it overwrites these inputs when rewriting the form PS
-    $html =~ s/<input name="max_interval"/<input name="max_interval" onKeyUp="doComplete(event, this, intervalNames());"/;
-    $html =~ s/<input name="min_interval"/<input name="min_interval" onKeyUp="doComplete(event, this, intervalNames());"/;
+    $html =~ s/<input name="max_interval"/<input name="max_interval" onKeyUp="doComplete(event, this, intervalNames(),1);"/;
+    $html =~ s/<input name="min_interval"/<input name="min_interval" onKeyUp="doComplete(event, this, intervalNames(),1);"/;
 
 	# Set the Enterer
 	my $enterer = $s->get("enterer");
@@ -1658,7 +1661,7 @@ sub displaySearchColls {
 
 	# Spit out the HTML
 	print stdIncludes( "std_page_top" );
-    printIntervalsJava();
+    printIntervalsJava(1);
 	print $html;
 	print stdIncludes("std_page_bottom");
 }
@@ -4022,6 +4025,7 @@ sub displayEnterCollPage {
 # for autocompletion.  They're slightly different in that checkIntervalNames is interested in
 # fully qualified names (i.e. early X) while we don't care about the early/middle/late for the intervalNames
 sub printIntervalsJava  {
+    my $include_ten_my_bins = shift;
     my $sql = "SELECT eml_interval,interval_name FROM intervals";
     my @results = @{$dbt->getData($sql)};
     
@@ -4030,7 +4034,7 @@ sub printIntervalsJava  {
         if (!$intervals_seen{$row->{'interval_name'}}) {
             $intervals .= "'$row->{interval_name}', ";
             $intervals_seen{$row->{'interval_name'}} = 1;
-        } 
+        }
     }
     $intervals =~ s/, $//;
                                                                                                                                                              
@@ -4076,6 +4080,12 @@ EOF
             #  would break the JavaScript
             if ( $row->{'interval_name'} !~ /"/ )   {
                 $check .= qq| emltime$i != "| . $row->{'eml_interval'} . $row->{'interval_name'} . qq|" &&\n|;
+            }
+        }
+        if ($include_ten_my_bins) {
+            my @binnames = TimeLookup::getTenMYBins();
+            foreach my $binname (@binnames) {
+                $check .= qq| emltime$i != "|.$binname. qq|" &&\n|;
             }
         }
         if ($i == 1) {
@@ -4236,9 +4246,10 @@ sub processEnterCollectionForm {
         if ($q->param('latdir') =~ /South/) {
                 $f_latdeg = $f_latdeg * -1;
         }
-
-        ($paleolng, $paleolat) = PBDBUtil::getPaleoCoords($dbh, $dbt,$q->param('max_interval_no'),$q->param('min_interval_no'),$f_lngdeg,
-    $f_latdeg);
+        
+        my $max_interval_no = ($q->param('max_interval_no')) ? $q->param('max_interval_no') : 0;
+        my $min_interval_no = ($q->param('min_interval_no')) ? $q->param('min_interval_no') : 0;
+        ($paleolng, $paleolat) = PBDBUtil::getPaleoCoords($dbh, $dbt,$max_interval_no,$min_interval_no,$f_lngdeg,$f_latdeg); 
         dbg("have paleocoords paleolat: $paleolat paleolng $paleolng");
         if ($paleolat ne "" && $paleolng ne "") {
             $q->param("paleolng"=>$paleolng);
@@ -5018,8 +5029,9 @@ sub processEditCollectionForm {
                 $f_latdeg = $f_latdeg * -1;
         }
 
-        ($paleolng, $paleolat) = PBDBUtil::getPaleoCoords($dbh, $dbt,$q->param('max_interval_no'),$q->param('min_interval_no'),$f_lngdeg,
-    $f_latdeg);
+        my $max_interval_no = ($q->param('max_interval_no')) ? $q->param('max_interval_no') : 0;
+        my $min_interval_no = ($q->param('min_interval_no')) ? $q->param('min_interval_no') : 0;
+        ($paleolng, $paleolat) = PBDBUtil::getPaleoCoords($dbh, $dbt,$max_interval_no,$min_interval_no,$f_lngdeg,$f_latdeg); 
         dbg("have paleocoords paleolat: $paleolat paleolng $paleolng");
         if ($paleolat ne "" && $paleolng ne "") {
             $q->param("paleolng"=>$paleolng);
@@ -5956,8 +5968,8 @@ sub displayReIDCollsAndOccsSearchForm
 	HTMLBuilder::buildEntererPulldown($dbt, \$html );
 
     # Dirty but until populateHTML gets retooled is necessary cause it overwrites these inputs when rewriting the form PS
-    $html =~ s/<input name="max_interval"/<input name="max_interval" onKeyUp="doComplete(event, this, intervalNames());"/;
-    $html =~ s/<input name="min_interval"/<input name="min_interval" onKeyUp="doComplete(event, this, intervalNames());"/;
+    $html =~ s/<input name="max_interval"/<input name="max_interval" onKeyUp="doComplete(event, this, intervalNames(),1);"/;
+    $html =~ s/<input name="min_interval"/<input name="min_interval" onKeyUp="doComplete(event, this, intervalNames(),1);"/;
 
 	# Set the Enterer & Authorizer
 	my $enterer = $s->get("enterer");
@@ -5966,7 +5978,7 @@ sub displayReIDCollsAndOccsSearchForm
 	$html =~ s/%%authorizer%%/$authorizer/;
 
 	# Spit out the HTML
-    printIntervalsJava();
+    printIntervalsJava(1);
 	print $html;
   
 	print '</form>';
