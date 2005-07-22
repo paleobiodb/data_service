@@ -23,7 +23,7 @@ use Session;
 my $DEBUG = 0;			# The debug level of the calling program
 my $sql;				# Any SQL string
 
-my $COAST_DIR = "../data";        # For maps
+my $COAST_DIR = CGI_DIR."/data";        # For maps
 my $PI = 3.14159265;
 my $C72 = cos(72 * $PI / 180);
 
@@ -74,7 +74,9 @@ sub queryDb	{
 	} elsif ( $GROUP =~ /fivepct/i )	{
 		$sql = qq|SELECT *, DATE_FORMAT(release_date, '%Y%m%d') rd_short FROM collections,refs WHERE research_group IN ('vertebrate') AND project_name IN ('5%') AND collections.reference_no=refs.reference_no|;
 	} else	{
+#		$sql = qq|SELECT *, DATE_FORMAT(release_date, '%Y%m%d') rd_short FROM collections where collection_no > 51279 and collection_no < 51287|;
 		$sql = qq|SELECT *, DATE_FORMAT(release_date, '%Y%m%d') rd_short FROM collections|;
+#		$sql = qq|SELECT *, DATE_FORMAT(release_date, '%Y%m%d') rd_short FROM collections where collection_no > 29230 and collection_no < 29237|;
 	}
 
 	$sql =~ s/\s+/ /gs;
@@ -220,18 +222,19 @@ sub getAllCoords	{
 
      		($x1,$y1) = &projectPoints($flngoff,$flatoff,int($collage + 0.5));
 
-            #print "collno ".$coll{'collection_no'}." x1 $x1 y1 $y1 flngoff $flngoff flatoff $flatoff collage $collage\n";
+            #print "collno ".$coll{'collection_no'}." x1 $x1 y1 $y1 flngoff $flngoff flatoff $flatoff collage ".int(.5+$collage)."\n";
         
 	        if ( $x1 ne "NaN" && $y1 ne "NaN" )	{
                 $sql = "UPDATE collections SET paleolng=".$dbh->quote($x1).",paleolat=".$dbh->quote($y1)
                      . ",modified=modified WHERE collection_no=".$coll{'collection_no'}." LIMIT 1";
+                print "$sql\n" if ($DEBUG);
                 my $upd_sth = $dbh->prepare($sql);
                 $upd_sth->execute() or print "couldn't execute $sql - $dbh->errstr";
             } else {
-                print "Did not execute for coll_no ".$coll{collection_no}.", no paleo coords returned\n";
+                print "Did not execute for coll_no ".$coll{collection_no}.", no paleo coords returned\n" if ($DEBUG);
             }
 		} else {
-            print "Did not execute for coll_no ".$coll{collection_no}.", no lat/lng deg \n";
+            print "Did not execute for coll_no ".$coll{collection_no}.", no lat/lng deg \n" if ($DEBUG);;
         }
 	}
 
@@ -250,7 +253,7 @@ sub projectPoints	{
 	#  north pole; use the GCD between them to get the latitude;
 	#  add the degree offset to its longitude to get the new value;
 	#  re-rotate point back into the original coordinate system
-	if ( $collage > 0 && $projected{$fx}{$fy} eq "" )	{
+	if ( $collage > 0 && $projected{"$fx $fy $collage"} eq "" )	{
 
 		my $ma = $collage;
 
@@ -319,16 +322,17 @@ sub projectPoints	{
 			$x = $x - 360;
 		}
 
+
 	# put the point back in the old projection
 		($x,$y) = rotatePoint($x,$y,$neworigx,$neworigy,"reversed");
-		$projected{$fx}{$fy} = $x . ":" . $y . ":" . $pid;
+		$projected{"$fx $fy $collage"} = $x . ":" . $y . ":" . $pid;
 		if ( $x eq "NaN" || $y eq "NaN" )	{
 			return('NaN','NaN');
 		}
 
 	}
-	if ( $fx ne "" && $fy ne "" && $projected{$fx}{$fy} ne "" )	{
-		($x,$y,$pid) = split /:/,$projected{$fx}{$fy};
+	if ( $fx ne "" && $fy ne "" && $projected{"$fx $fy $collage"} ne "" )	{
+		($x,$y,$pid) = split /:/,$projected{"$fx $fy $collage"};
 	} else {
 		($x,$y) = ($fx,$fy);
     }
