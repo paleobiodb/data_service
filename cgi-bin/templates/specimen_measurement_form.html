@@ -1,0 +1,188 @@
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+var bad_info = ""; // Global variable
+
+function checkForm() {
+    var errors = new Error();
+
+//    var isFloat = /^([0-9]+(\.[0-9]+)*|\.[0-9]+)$/;
+
+    var f = document.forms[0];
+    var specimens_measured = parseInt(f.specimens_measured.value);
+    if (specimens_measured == 1) {
+        if (f.length_median.value != '' ||
+            f.length_min.value != '' ||
+            f.length_max.value != '' ||
+            f.length_error.value != '' || 
+            f.width_median.value != '' ||
+            f.width_min.value != '' ||
+            f.width_max.value != '' ||
+            f.width_error.value != '' || 
+            f.height_median.value != '' ||
+            f.height_min.value != '' ||
+            f.height_max.value != '' ||
+            f.height_error.value != '' || 
+            f.diagonal_median.value != '' ||
+            f.diagonal_min.value != '' ||
+            f.diagonal_max.value != '' ||
+            f.diagonal_error.value != '' || 
+            f.inflation_median.value != '' ||
+            f.inflation_min.value != '' ||
+            f.inflation_max.value != '' ||
+            f.inflation_error.value != '') {
+            errors.add("If the number of specimens measured is 1, don't enter any median/min/max/error values");
+        }
+    } else if (specimens_measured > 1) {
+    } else {
+        errors.add("Specimens measured must be a number greater than or equal to 1");
+    }
+
+    if (specimens_measured >= 1) {
+        var field_count = 0;
+        if (f.length_average.value != '') {
+            field_count += 1;
+        }
+        if (f.width_average.value != '') {
+            field_count += 1;
+        }
+        if (f.height_average.value != '') {
+            field_count += 1;
+        }
+        if (f.diagonal_average.value != '') {
+            field_count += 1;
+        }
+        if (f.inflation_average.value != '') {
+            field_count += 1;
+        }
+        if (field_count < 1) {
+            errors.add("Fill in at least one of the measurement values");
+        }
+    }
+
+    if (errors.count() > 0) {
+        errors.showAlert()
+        return false;
+    }
+    
+    return true;
+}
+     
+</script>
+
+<center>
+<h2>Specimen measurement form: <span id="taxon_name"></span> (collection <span id="collection_no"></span>)</h2>
+</center>
+
+<div align="center"><table<tr><td>
+<form method="POST" action="bridge.pl" onSubmit="return checkForm();">
+
+
+<input type="hidden" name="action" value="processMeasurementForm">
+<input id="specimen_no" type="hidden" name="specimen_no">
+<input id="occurrence_no" type="hidden" name="occurrence_no">
+
+<table cellpadding=6>
+  <tr>
+    <td><b>Specimens measured</b> <input id="specimens_measured" type="text" size="5"></td>
+    <td><b>Proportion of sample measured</b> <select name="specimen_coverage"><select id="specimen_coverage"></select></tr>
+  </tr>
+  <tr>
+    <td><b>Specimen id #</b> <input id="specimen_id" type="text" size="20"></td>
+    <td><b>Side</b> 
+      <select id="specimen_side"></select>
+      <b>Part</b> <input id="specimen_part" type="text" size=10>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top" colspan=2>
+      <b>Size estimates (mm): </b>
+        <table>
+          <tr>
+            <td></td>
+            <td>value*</td>
+            <td>median</td>
+            <td>min</td>
+            <td>max</td>
+            <td>error</td>
+          </tr>
+          <tr>
+            <td>length</td>
+            <td><input id="length_average" size="7" maxlength="7"></td>
+            <td><input id="length_median" size="7" maxlength="7"></td>
+            <td><input id="length_min" size="7" maxlength="7"></td>
+            <td><input id="length_max" size="7" maxlength="7"></td>
+            <td><input id="length_error" size="7" maxlength="7"><select id="length_error_unit"></select></td>
+          </tr>
+          <tr>
+            <td>width</td>
+            <td><input id="width_average" size="7" maxlength="7"></td>
+            <td><input id="width_median" size="7" maxlength="7"></td>
+            <td><input id="width_min" size="7" maxlength="7"></td>
+            <td><input id="width_max" size="7" maxlength="7"></td>
+            <td><input id="width_error" size="7" maxlength="7"><select id="width_error_unit"></select></td>
+          </tr>
+          <tr>
+            <td>height</td>
+            <td><input id="height_average" size="7" maxlength="7"></td>
+            <td><input id="height_median" size="7" maxlength="7"></td>
+            <td><input id="height_min" size="7" maxlength="7"></td>
+            <td><input id="height_max" size="7" maxlength="7"></td>
+            <td><input id="height_error" size="7" maxlength="7"><select id="height_error_unit"></select></td>
+          </tr>
+          <tr>
+            <td>diagonal</td>
+            <td><input id="diagonal_average" size="7" maxlength="7"></td>
+            <td><input id="diagonal_median" size="7" maxlength="7"></td>
+            <td><input id="diagonal_min" size="7" maxlength="7"></td>
+            <td><input id="diagonal_max" size="7" maxlength="7"></td>
+            <td><input id="diagonal_error" size="7" maxlength="7"><select id="diagonal_error_unit"></select></td>
+          </tr>
+          <tr>
+            <td>inflation</td>
+            <td><input id="inflation_average" size="7" maxlength="7"></td>
+            <td><input id="inflation_median" size="7" maxlength="7"></td>
+            <td><input id="inflation_min" size="7" maxlength="7"></td>
+            <td><input id="inflation_max" size="7" maxlength="7"></td>
+            <td><input id="inflation_error" size="7" maxlength="7"><select id="inflation_error_unit"></select></td>
+          </tr>
+        </table>
+        <div style="width: 600;"><small>* if the "Specimens measured" field is 1, enter the size of the specimen itself; if its greater than 1, enter mean (geometric) size for all specimens in this set, as well as the median/min/max/error fields if present.  If the measurement magnification is not 1, enter the raw, uncalibrated result.</small></div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Measurement source </b>
+      <select id="measurement_source"></select>
+    </td>
+    <td>
+      <b>Measurement magnification</b> <input id="magnification" type="text" size="7" maxlength="7">
+    </td>
+  </tr>
+</table>
+
+<hr>
+
+<table>
+  <tr>
+    <td valign="top">
+      <b>Comments:</b>
+    </td> 
+    <td>
+      <textarea id="comments" cols="60" rows="4" wrap="virtual"></textarea>
+    </td>
+  </tr>
+</table>
+
+</td></tr></table></div>
+
+<table width=100%><tr><td align="center">
+  <input type=submit value="Submit">
+</td></tr></table>
+</form>
+<p>&nbsp;</p>

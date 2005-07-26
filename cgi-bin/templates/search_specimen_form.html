@@ -1,0 +1,57 @@
+<table border=0 align=center>
+  <tr>
+    <td>
+      <div align="center">
+        <form method="POST" action="bridge.pl">
+          <input name="action" type="hidden" value="submitSpecimenSearch">
+
+          <h2>Specimen search form</h2><br>
+
+          <table cellpadding=4>
+            <tr>
+              <td align="right">
+                <b>Taxon name:</b> 
+              </td>
+              <td>
+                <input name="taxon_name" value="" size="30">
+              </td>
+            </tr>
+            <tr>
+              <td align="right">
+                <b>Collection number:</b> 
+              </td>
+              <td>
+                <input name="collection_no" value="" size="10">
+              </td>
+            </tr>
+            <tr>
+              <td colspan=2 align="center">
+                <br>
+                <input type="submit" value="Search">
+              </td>
+            </tr>
+            <tr>
+              <td colspan=2>
+                <p style="text-align:left; margin: 0em 0em 0em 5%;">
+                  <span class="tiny">Don't abbreviate the name, and be careful to spell it correctly!<br>
+                  Enter higher-ranked taxa first, e.g., enter a genus before its species; enter a family before its genera.<br>
+                  Don't enter the genus name if the species originally was combined in a subgenus.<br>
+                  Example: enter "Scalites tropidophora" instead of "Pleurotomaria (Scalites) tropidophora."<br>
+                  <br>
+                  You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</span>
+                </p>
+              </td>
+            </tr>
+          </table>
+          
+        </form>
+      </div>
+    </td>
+  </tr>
+</table>
+
+
+
+
+
+
