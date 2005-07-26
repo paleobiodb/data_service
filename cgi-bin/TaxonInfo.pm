@@ -272,8 +272,9 @@ sub doNavBox {
 							  2 => "taxonomic history",
 							  3 => "synonymy",
 							  4 => "ecology/taphonomy",
-							  5 => "map",
-							  6 => "age range/collections");
+							  5 => "measurements",
+							  6 => "map",
+							  7 => "age range/collections");
 
 	# if the modules are known and the user is not a guest,
 	#  set the module preferences in the person table
@@ -399,9 +400,13 @@ sub doModules{
 	# ecology
 	elsif ( $module == 4 )	{
 		print displayEcology($dbt,$taxon_no,$genus,$species);
+    }
+    # specimen measurements
+    elsif ($module == 5) {
+		print displayMeasurements($dbt,$taxon_no,$genus,$species,$in_list);
 	}
 	# map
-	elsif($module == 5){
+	elsif($module == 6){
 		print "<center><table><tr><td align=\"middle\"><h3>Distribution</h3></td></tr>".
 			  "<tr><td align=\"middle\" valign=\"top\">";
 		# MAP USES $q->param("taxon_name") to determine what it's doing.
@@ -428,7 +433,7 @@ sub doModules{
 		}
 	}
 	# collections
-	elsif($module == 6){
+	elsif($module == 7){
 		print doCollections($exec_url, $q, $dbt, $dbh, $in_list);
 	}
 }
@@ -1459,6 +1464,7 @@ sub displayEcology	{
 	my $taxon_no = shift;
 	my $genus = shift;
 	my $species = shift;
+    my $in_list = shift;
 
 	print "<center><h3>Ecology</h3></center>\n";
 
@@ -1559,10 +1565,96 @@ sub displayEcology	{
 		}
 	}
 
-
 	return $text;
 
 }
+
+# PS 6/27/2005
+sub displayMeasurements {
+    my $dbt = shift;
+    my $taxon_no = shift;
+    my $genus = shift;
+    my $species = shift;
+    my $in_list = shift;    
+
+
+    # Specimen level data:
+    my @specimens;
+    my $specimen_count;
+    if ($taxon_no) {
+        my $t = getTaxon($dbt,'taxon_no'=>$taxon_no);
+        if ($t->{'taxon_rank'} =~ /genus|species/) {
+            # If the rank is genus or lower we want the big aggregate list of all taxa
+            @specimens = Measurement::getMeasurements($dbt,'taxon_list'=>$in_list,'get_global_specimens'=>1);
+        } else {
+            # I fthe rank is higher than genus, then that rank is too big to be meaningful.  
+            # In that case we only want the taxon itself (and its synonyms and alternate names), not the big recursively generated list
+            # i.e. If they entered Nasellaria, get Nasellaria indet., or Nasellaria sp. or whatever.
+            # get alternate spellings of focal taxon. 
+            my @syns = getJuniorSynonyms($dbt,$taxon_no); 
+            push @syns,$taxon_no;
+            my $sql = "SELECT child_spelling_no FROM opinions WHERE status IN ('recombined as','corrected as','rank changed as') AND child_no IN (".join(",",@syns).")";
+            my @results = @{$dbt->getData($sql)};
+
+            # Use the hash to get only unique taxon_nos
+            my %all_taxa;
+            @all_taxa{@syns} = ();
+            foreach my $row (@results) {
+               $all_taxa{$row->{'child_spelling_no'}} = 1 if ($row->{'child_spelling_no'});
+            }    
+            my @small_in_list = keys %all_taxa;
+            main::dbg("Passing small_in_list to getMeasurements".Dumper(\@small_in_list));
+            @specimens = Measurement::getMeasurements($dbt,'taxon_list'=>\@small_in_list,'get_global_specimens'=>1);
+        }
+    } else {
+        my $taxon_name = $genus;
+        if ($species) {
+            $taxon_name .= " ".$species;
+        }
+        @specimens = Measurement::getMeasurements($dbt,'taxon_name'=>$taxon_name,'get_global_specimens'=>1);
+    }
+
+    my $p_table = Measurement::getMeasurementTable(\@specimens);
+
+    my $str = "";
+    $str .= "<div align=\"center\"><h3>Specimen measurements</h3></div>";
+    if (@specimens) {
+        while (my($part,$m_table)=each %$p_table) {
+            my $part_str = ($part) ? "<b>Part: </b>$part<br>" : "";
+            $str .= "<table><tr><td colspan=5 style=\"padding-bottom: .75em;\">$part_str<b>Specimens measured:</b> $m_table->{specimens_measured}</td></tr>".
+                    "<tr><th></th><th>Mean</th><th>Minimum</th><th>Maximum</th><th>Median</th><th>Error</th><th></th></tr>";
+
+            foreach my $type (('length','width','height','diagonal','inflation')) {
+                if (exists ($m_table->{$type})) {
+                    $str .= "<tr><td><b>$type</b></td>";
+                    foreach my $column (('average','min','max','median','error')) {
+                        my $value = $m_table->{$type}{$column};
+                        if ($value <= 0) {
+                            $str .= "<td align=\"center\">-</td>";
+                        } else {
+                            $value = sprintf("%.4f",$value);
+                            $value =~ s/0+$//;
+                            $value =~ s/\.$//;
+                            $str .= "<td align=\"center\">$value</td>";
+                        }
+                    }
+                    if ($m_table->{$type}{'error'}) {
+                        $str .= "<td align=\"center\">($m_table{$type}{error_unit})</td>";
+                    }
+                    $str .= '</tr>';
+                }
+            }
+            $str .= "</table><br>";
+        }
+    } else {
+        $str .= "<div align=\"center\"><i>No measurement data are available</i></div>";
+    }
+
+    return $str;
+
+    return "";
+}
+
 
 # JA 11-12,14.9.03
 sub displaySynonymyList	{
