@@ -434,6 +434,7 @@ sub formatMeasurement {
             if ($data->{'magnification'}) {
                 my $num = sprintf(" %.4f",$row->{'average'}/$data->{'magnification'});
                 $num =~ s/0+$//;
+                $num =~ s/\.$//;
                 $s .= " $num x";
             } else {
                 $s .= " $row->{average} x";
