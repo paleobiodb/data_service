@@ -1,37 +1,6 @@
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
 
-// Smart handling of the period
-function intervalsClick ( ) {
-	var frm = document.forms[0];
-	var onePeriodChecked = false;
-
-	var intervalCount = frm.intervals.length;
-	for ( var i=0; i<intervalCount; i++ ) {
-		if ( frm.intervals[i].checked ) {
-			onePeriodChecked = true;
-			break;
-		}
-	}
-	if ( onePeriodChecked ) {
-		frm.interval[3].checked = true;
-	}
-}
-
-function intervalClick ( ) {
-
-	var frm = document.forms[0];
-
-	if ( ! frm.interval[3].checked ) {
-
-		// Uncheck all intervals checkboxes
-		var intervalCount = frm.intervals.length;
-		for ( var i=0; i<intervalCount; i++ ) {
-			frm.intervals[i].checked = false;
-		}
-	}
-}
-
 function globalClick ( ) {
 
 	var frm = document.forms[0];
@@ -75,70 +44,18 @@ function countryChange() {
 	}
 }
 
-function occurrencesNoneClick ( ) {
-
-	var frm = document.forms[0];
-
-	if ( frm.collections_only.checked ) {
-		frm.occurrences_authorizer.checked = false;
-		frm.occurrences_enterer.checked = false;
-		frm.occurrences_modifier.checked = false;
-		frm.occurrences_occurrence_no.checked = false;
-		frm.occurrences_species_name.checked = false;
-		frm.occurrences_subgenus_name.checked = false;
-		frm.occurrences_family_name.checked = false;
-		frm.occurrences_order_name.checked = false;
-		frm.occurrences_class_name.checked = false;
-		frm.occurrences_abund_value.checked = false;
-		frm.occurrences_abund_unit.checked = false;
-		frm.occurrences_reference_no.checked = false;
-		frm.occurrences_comments.checked = false;
-		frm.occurrences_plant_organ.checked = false;
-		frm.occurrences_plant_organ2.checked = false;
-		frm.occurrences_created.checked = false;
-		frm.occurrences_modified.checked = false;
-	}
-}
-
-function occurrencesClick ( ) {
-
-	var frm = document.forms[0];
-
-	if (	frm.occurrences_authorizer.checked ||
-			frm.occurrences_enterer.checked ||
-			frm.occurrences_modifier.checked ||
-			frm.occurrences_occurrence_no.checked ||
-			frm.occurrences_species_name.checked ||
-			frm.occurrences_subgenus_name.checked ||
-			frm.occurrences_family_name.checked ||
-			frm.occurrences_order_name.checked ||
-			frm.occurrences_class_name.checked ||
-			frm.occurrences_abund_value.checked ||
-			frm.occurrences_abund_unit.checked ||
-			frm.occurrences_reference_no.checked ||
-			frm.occurrences_comments.checked ||
-			frm.occurrences_plant_organ.checked ||
-			frm.occurrences_plant_organ2.checked ||
-			frm.occurrences_created.checked ||
-			frm.occurrences_modified.checked ) {
-		frm.collections_only.checked = false;
-	} else {
-		frm.collections_only.checked = true;
-	}
-}
-
 //pass this function a checkbox.
-function collsCheckAll(checkbox){
+function checkAll(checkbox,prefix){
 	var state = checkbox.checked;
 	var frm = document.forms[0];
-	//edited by Ryan 12/30/2003
-	for(var i=0; i<frm.elements.length; i++){
-		if(frm.elements[i].name.match("collections") &&
-			frm.elements[i].name != "collections_only"){
+	// edited by Ryan 12/30/2003
+	for(var i=0; i < frm.elements.length; i++){
+		if(frm.elements[i].name.match(prefix)) {
 			frm.elements[i].checked = state;
 		}
 	}
 }
+
 
 //  End -->
 </script>
@@ -159,27 +76,21 @@ function collsCheckAll(checkbox){
 
 <tr class="lightGrey">
   <td valign=top><font size="-1">
-    Your name (optional):
-  </font></td>
-  <td>
-    <input name="yourname" size=20>
-  </td>
-</tr>  
-
-<tr class="">
-  <td valign=top><font size="-1">
     Output data:
   </font></td>
   <td>
     <select name="output_data">
-      <option value="occurrences">occurrences</option>
+      <option value="genus occurrences">genus occurrences</option>
+      <option value="species occurrences">species occurrences</option>
       <option value="genera">genera</option>
+      <option value="species">species</option>
       <option value="collections">collections</option>
+      <option value="specimens">specimens</option>
     </select>
   </td>
 </tr>  
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Output format:</font></td>
 <td valign=top><font size=-1><select name=output_format>
 <option selected>comma-delimited text</option>
@@ -189,14 +100,14 @@ function collsCheckAll(checkbox){
 </font></td></tr>
 
 
-<tr class="">
+<tr class="lightGrey">
 <td valign="top"><font size=-1>Data authorizer:</font></td>
 <td valign="bottom">
 <select name="authorizer"></select>
 </td>
 </tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Research group or project:</font></td>
 <td valign=top><font size=-1>
 <select id="research_group">
@@ -204,7 +115,7 @@ function collsCheckAll(checkbox){
 </font></td>
 
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top nowrap><font size=-1>Use data records created 
 <select name="created_before_after">
 <option selected>before</option>
@@ -227,7 +138,7 @@ function collsCheckAll(checkbox){
 </td>
 </tr>
 
-<tr class="lightGrey">
+<tr>
 <td nowrap><font size=-1>Use occurrences published 
 <select name="published_before_after">
 <option>before</option>
@@ -239,24 +150,24 @@ function collsCheckAll(checkbox){
 </font></td>
 </tr>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Name of taxon or taxa <small><i>(genus or higher rank)</i></small>:</font></td>
 <td valign=top><font size=-1>
 <textarea name=taxon_name rows=2 cols=50></textarea></td></tr>
 
-<tr class="lightGrey">
-<td valign=top><font size=-1>If you only want lists from one time span, enter the oldest and youngest intervals<small><i>(by name or by age in Ma)</i></small>:</font></td>
+<tr>
+<td valign=top><font size=-1>If you only want lists from one time span, enter the oldest and youngest intervals <small><i>(by name or by age in Ma)</i></small>:</font></td>
 <td valign=top><font size=-1>
 <input name=max_interval_name size=25> - <input name=min_interval_name size=25>
 </font></td></font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>... or if you want to bin the data temporally, select a time scale:</font></td>
 <td valign=top><font size=-1>
 %%time scale%%
 </font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>If you selected a scale, you can select a field to be tallied:</font></td>
 <td valign=top><font size=-1>
 <select name=binned_field>
@@ -278,15 +189,16 @@ function collsCheckAll(checkbox){
 </select>
 </font></td></tr>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Lithification of primary lithology:</font></td>
-<td valign=top><font size=-1><input type=checkbox name="lithification_lithified" value="YES" checked>lithified
+<td valign=top><font size=-1>
+<input type=checkbox name="lithification_lithified" value="YES" checked>lithified
 <input type=checkbox name="lithification_poorly_lithified" value="YES" checked>poorly lithified
 <input type=checkbox name="lithification_unlithified" value="YES" checked>unlithified
 <input type=checkbox name="lithification_unknown" value="YES" checked>unknown
 </font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Select lithologies:</font></td>
 <td valign=top><font size=-1>
 <input type=checkbox name="lithology_carbonate" value="YES" checked>carbonate
@@ -295,7 +207,7 @@ function collsCheckAll(checkbox){
 <input type=checkbox name="lithology_unknown" value="YES" checked>unknown
 </font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1> ... or 
 <select name="include_exclude_lithology1">
 <option>include</option>
@@ -306,7 +218,7 @@ function collsCheckAll(checkbox){
 </font></td></tr>
 
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=middle><font size=-1>Select environments:</font></td>
 <td valign=top><font size=-1>
 <input type=checkbox name="environment_carbonate" value="YES" checked>carbonate
@@ -315,7 +227,7 @@ function collsCheckAll(checkbox){
 <input type=checkbox name="environment_unknown" value="YES" checked>unknown
 </font></td></tr>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1> ... or 
 <select name="include_exclude_environment">
 <option>include</option>
@@ -325,7 +237,7 @@ function collsCheckAll(checkbox){
 <select id="environment"></select>
 </font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=middle><font size=-1>Select continents:</font></td>
 <td valign=top><font size=-1>
 <table><tr><td class="cell">
@@ -340,7 +252,7 @@ function collsCheckAll(checkbox){
 </td></tr></table>
 </font></td>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>... or 
 <select name="include_exclude_country">
 <option>include</option>
@@ -350,35 +262,35 @@ function collsCheckAll(checkbox){
 <select id="country" onChange="countryChange()"></select>
 </font></td>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Latitudinal range:</font</td>
 <td valign=top><font size=-1>
 <input name="latmin" size="4" value="-90">&deg; to
 <input name="latmax" size="4" value="90">&deg;
 </font></td>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Longitudinal range:</font</td>
 <td valign=top><font size=-1>
 <input name="lngmin" size="4" value="-180">&deg; to
 <input name="lngmax" size="4" value="180">&deg;
 </font></td>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Paleolatitudinal range:</font</td>
 <td valign=top><font size=-1>
 <input name="paleolatmin" size="4" value="-90">&deg; to
 <input name="paleolatmax" size="4" value="90">&deg;
 </font></td>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Paleolongitudinal range:</font</td>
 <td valign=top><font size=-1>
 <input name="paleolngmin" size="4" value="-180">&deg; to
 <input name="paleolngmax" size="4" value="180">&deg;
 </font></td>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Geographic scale of collections:</font></td>
 <td valign=top><font size=-1>
 <input type=checkbox name="geogscale_hand_sample" value="YES" checked>hand sample
@@ -389,7 +301,7 @@ function collsCheckAll(checkbox){
 <input type=checkbox name="geogscale_unknown" value="YES" checked>unknown
 </font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Stratigraphic scale of collections:</font></td>
 <td valign=top><font size=-1>
 <input type=checkbox name="stratscale_bed" value="YES" checked>bed
@@ -400,7 +312,7 @@ function collsCheckAll(checkbox){
 <input type=checkbox name="stratscale_unknown" value="YES" CHECKED>unknown
 </font></td></tr>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Reason for describing collection:</font></td>
 <td valign=top><font size=-1>
 <input type=checkbox name='collection_type_archaeological' value="YES" checked> archaeological
@@ -412,7 +324,7 @@ function collsCheckAll(checkbox){
 <input type=checkbox name='collection_type_unknown' value="YES" checked> unknown
 </font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Lump collections by:</font></td>
 
 <td valign=top><font size=-1>
@@ -422,7 +334,7 @@ function collsCheckAll(checkbox){
 <input type=checkbox name='lump_by_interval' value="YES"> time interval
 </font></td></tr>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Lump occurrences of the same genus from the same collection?</font></td>
 <td valign=top><font size=-1>
 <select name=lumpgenera>
@@ -431,7 +343,7 @@ function collsCheckAll(checkbox){
 </select>
 </font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Replace genus names with subgenus names, so subgenera are treated as separate genera?</font></td>
 <td valign=top><font size=-1>
 <select name=split_subgenera>
@@ -440,7 +352,7 @@ function collsCheckAll(checkbox){
 </select>
 </font></td></tr>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Include generically indeterminate occurrences?</font></td>
 <td valign=top><font size=-1>
 <select name=indet>
@@ -449,7 +361,7 @@ function collsCheckAll(checkbox){
 </select>
 </font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Include specifically indeterminate occurrences?</font></td>
 <td valign=top><font size=-1>
 <select name=sp>
@@ -459,7 +371,7 @@ function collsCheckAll(checkbox){
 </font></td></tr>
 
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Include genus names that are qualified with "aff." or quotes?</font></td>
 <td valign=top><font size=-1>
 <select name=poor_genus_reso>
@@ -468,7 +380,7 @@ function collsCheckAll(checkbox){
 </select>
 </font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Include occurrences with informal names?</font></td>
 <td valign=top><font size=-1>
 <select name=informal>
@@ -477,7 +389,7 @@ function collsCheckAll(checkbox){
 </select>
 </font></td></tr>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Include occurrences falling outside their age ranges in Sepkoski's Compendium?</font></td>
 <td valign=top><font size=-1>
 <select name=compendium_ranges>
@@ -486,7 +398,7 @@ function collsCheckAll(checkbox){
 </select>
 </font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Include occurrences without abundance data?</font></td>
 <td valign=top><font size=-1>
 <select name=without_abundance>
@@ -495,13 +407,14 @@ function collsCheckAll(checkbox){
 </select>
 </font></td></tr>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Minimum # of specimens needed to compute mean abundance</font></td>
 <td valign=top><font size=-1>
 <input name=min_mean_abundance type="text" size="12">
 </font></td></tr>
 
 </table>
+
 
 <hr>
 <center><h3>Occurrence fields</h3></center>
@@ -511,33 +424,34 @@ Note that the collection ID and genus name fields are always output.</p>
 
 <table width="100%">
 
-<td valign=top><font size=-1>
+<tr><td valign=top><font size=-1>
 <table class="lightGrey">
-<tr><td><font size=-1><input type=checkbox name=occurrences_authorizer value="YES" onClick="occurrencesClick();">authorizer</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_enterer value="YES" onClick="occurrencesClick();">enterer</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_modifier value="YES" onClick="occurrencesClick();">modifier</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_occurrence_no value="YES" onClick="occurrencesClick();">occurrence no</font></td>
+<tr><td class="cell" nowrap><font size=-1><input type=checkbox name=toggleAllOccurrences title="Check all" onclick="checkAll(this,'occurrences_');"><B>Check all</B></font></td></tr>
+<tr><td><font size=-1><input type=checkbox name=occurrences_authorizer value="YES">authorizer</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_enterer value="YES">enterer</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_modifier value="YES">modifier</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_occurrence_no value="YES">occurrence no</font></td>
 </tr>
 
-<tr><td><font size=-1><input type=checkbox name=occurrences_reference_no value="YES" onClick="occurrencesClick();">reference no</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_class_name value="YES" onCLick="occurrencesClick();">class name</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_order_name value="YES" onCLick="occurrencesClick();">order name</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_family_name value="YES" onCLick="occurrencesClick();">family name</font></td>
+<tr><td><font size=-1><input type=checkbox name=occurrences_reference_no value="YES">reference no</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_class_name value="YES">class name</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_order_name value="YES">order name</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_family_name value="YES">family name</font></td>
 </tr>
 
-<tr><td><font size=-1><input type=checkbox name=occurrences_subgenus_name value="YES" onClick="occurrencesClick();">subgenus name</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_species_name value="YES" onClick="occurrencesClick();">species name</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_abund_value value="YES" onClick="occurrencesClick();">abund value</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_abund_unit value="YES" onClick="occurrencesClick();">abund unit</font></td>
+<tr><td><font size=-1><input type=checkbox name=occurrences_subgenus_name value="YES">subgenus name</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_species_name value="YES">species name</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_abund_value value="YES">abund value</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_abund_unit value="YES">abund unit</font></td>
 </tr>
 
-<tr><td><font size=-1><input type=checkbox name=occurrences_comments value="YES" onClick="occurrencesClick();">comments</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_plant_organ value="YES" onClick="occurrencesClick();">plant organ</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_plant_organ2 value="YES" onClick="occurrencesClick();">plant organ 2</font></td>
+<tr><td><font size=-1><input type=checkbox name=occurrences_comments value="YES">comments</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_plant_organ value="YES">plant organ</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_plant_organ2 value="YES">plant organ 2</font></td>
 </tr>
 
-<tr><td><font size=-1><input type=checkbox name=occurrences_created value="YES" onClick="occurrencesClick();">created</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_modified value="YES" onClick="occurrencesClick();">modified</font></td>
+<tr><td><font size=-1><input type=checkbox name=occurrences_created value="YES">created</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_modified value="YES">modified</font></td>
 </tr>
 
 </table>
@@ -571,7 +485,7 @@ Note that the collection ID and genus name fields are always output.</p>
 
 	<table border=0 width="100%" class="lightGrey">
 	<tr>
-	<td class="cell" nowrap><input type=checkbox name=toggleAll title="Check all" onclick="collsCheckAll(this);"><B>Check all</B></td>
+	<td class="cell" nowrap><input type=checkbox name=toggleAllCollections title="Check all" onclick="checkAll(this,'collections_');"><B>Check all</B></td>
 	<td class="cell" nowrap><input type=checkbox name=collections_authorizer value="YES">authorizer</td>
 	<td class="cell" nowrap><input type=checkbox name=collections_enterer value="YES">enterer</td>
 	<td class="cell" nowrap><input type=checkbox name=collections_modifier value="YES">modifier</td>
@@ -594,26 +508,26 @@ Note that the collection ID and genus name fields are always output.</p>
 	<tr>
 	<td class="cell" nowrap><input type=checkbox name=collections_lng value="YES">longitude in 
     <select name="collections_lng_format">
-      <option value="DMS">deg/min/sec+dir</option>
       <option value="decimal">decimal</option>
+      <option value="DMS">deg/min/sec+dir</option>
     </select>  
     </td>
 	<td class="cell" nowrap><input type=checkbox name=collections_lat value="YES">latitude in
     <select name="collections_lat_format">
-      <option value="DMS">deg/min/sec+dir</option>
       <option value="decimal">decimal</option>
+      <option value="DMS">deg/min/sec+dir</option>
     </select>  
     </td>
 	<td class="cell" nowrap><input type=checkbox name=collections_paleolng value="YES">paleolongitude in 
     <select name="collections_paleolng_format">
-      <option value="DMS">deg/min/sec+dir</option>
       <option value="decimal">decimal</option>
+      <option value="DMS">deg/min/sec+dir</option>
     </select>  
     </td>
 	<td class="cell" nowrap><input type=checkbox name=collections_paleolat value="YES">paleolatitude in
     <select name="collections_paleolat_format">
-      <option value="DMS">deg/min/sec+dir</option>
       <option value="decimal">decimal</option>
+      <option value="DMS">deg/min/sec+dir</option>
     </select>  
     </td>
 	</tr>
@@ -791,8 +705,57 @@ Note that the collection ID and genus name fields are always output.</p>
 
 	</td>
 </tr>
+</table>
+
+<hr>
+<center><h3>Specimen fields</h3></center>
+
+<table width="100%">
+
+<td valign=top><font size=-1>
+<table class="lightGrey">
+<tr><td class="cell" nowrap><font size=-1><input type=checkbox name=toggleAllSpecimens title="Check all" onclick="checkAll(this,'specimens_');"><B>Check all</B></font></td></tr>
+<tr><td><font size=-1><input type=checkbox name=specimens_authorizer value="YES">authorizer</font></td>
+<td><font size=-1><input type=checkbox name=specimens_enterer value="YES">enterer</font></td>
+<td><font size=-1><input type=checkbox name=specimens_modifier value="YES">modifier</font></td>
+<td><font size=-1><input type=checkbox name=specimens_specimen_no value="YES">specimen no</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=specimens_reference_no value="YES">reference no</font></td>
+<td><font size=-1><input type=checkbox name=specimens_specimen_id value="YES">specimen id</font></td>
+<td><font size=-1><input type=checkbox name=specimens_specimen_side value="YES">side</font></td>
+<td><font size=-1><input type=checkbox name=specimens_specimen_part value="YES">part</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=specimens_specimen_coverage value="YES">specimen coverage</font></td>
+<td><font size=-1><input type=checkbox name=specimens_measurement_source value="YES">measurement source</font></td>
+<td><font size=-1><input type=checkbox name=specimens_magnification value="YES">magnification</font></td>
+<td><font size=-1><input type=checkbox name=specimens_specimens_measured value="YES">specimens measured</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=specimens_length value="YES">length</font></td>
+<td><font size=-1><input type=checkbox name=specimens_width value="YES">width</font></td>
+<td><font size=-1><input type=checkbox name=specimens_height value="YES">height</font></td>
+<td><font size=-1><input type=checkbox name=specimens_diagonal value="YES">diagonal</font></td>
+<td><font size=-1><input type=checkbox name=specimens_inflation value="YES">inflation</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=specimens_average value="YES">average (geometric mean)</font></td>
+<td><font size=-1><input type=checkbox name=specimens_min value="YES">min</font></td>
+<td><font size=-1><input type=checkbox name=specimens_max value="YES">max</font></td>
+<td><font size=-1><input type=checkbox name=specimens_median value="YES">median</font></td>
+<td><font size=-1><input type=checkbox name=specimens_error value="YES">error</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=specimens_comments value="YES">comments</font></td>
+<td><font size=-1><input type=checkbox name=specimens_created value="YES">created</font></td>
+<td><font size=-1><input type=checkbox name=specimens_modified value="YES">modified</font></td>
+</tr>
 
 </table>
+</td></tr>
+</table>
+
 
 <hr>
 

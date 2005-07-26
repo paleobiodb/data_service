@@ -1,37 +1,6 @@
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
 
-// Smart handling of the period
-function intervalsClick ( ) {
-	var frm = document.forms[0];
-	var onePeriodChecked = false;
-
-	var intervalCount = frm.intervals.length;
-	for ( var i=0; i<intervalCount; i++ ) {
-		if ( frm.intervals[i].checked ) {
-			onePeriodChecked = true;
-			break;
-		}
-	}
-	if ( onePeriodChecked ) {
-		frm.interval[3].checked = true;
-	}
-}
-
-function intervalClick ( ) {
-
-	var frm = document.forms[0];
-
-	if ( ! frm.interval[3].checked ) {
-
-		// Uncheck all intervals checkboxes
-		var intervalCount = frm.intervals.length;
-		for ( var i=0; i<intervalCount; i++ ) {
-			frm.intervals[i].checked = false;
-		}
-	}
-}
-
 function globalClick ( ) {
 
 	var frm = document.forms[0];
@@ -75,66 +44,13 @@ function countryChange() {
 	}
 }
 
-function occurrencesNoneClick ( ) {
-
-	var frm = document.forms[0];
-
-	if ( frm.collections_only.checked ) {
-		frm.occurrences_authorizer.checked = false;
-		frm.occurrences_enterer.checked = false;
-		frm.occurrences_modifier.checked = false;
-		frm.occurrences_occurrence_no.checked = false;
-		frm.occurrences_species_name.checked = false;
-		frm.occurrences_subgenus_name.checked = false;
-		frm.occurrences_family_name.checked = false;
-		frm.occurrences_order_name.checked = false;
-		frm.occurrences_class_name.checked = false;
-		frm.occurrences_abund_value.checked = false;
-		frm.occurrences_abund_unit.checked = false;
-		frm.occurrences_reference_no.checked = false;
-		frm.occurrences_comments.checked = false;
-		frm.occurrences_plant_organ.checked = false;
-		frm.occurrences_plant_organ2.checked = false;
-		frm.occurrences_created.checked = false;
-		frm.occurrences_modified.checked = false;
-	}
-}
-
-function occurrencesClick ( ) {
-
-	var frm = document.forms[0];
-
-	if (	frm.occurrences_authorizer.checked ||
-			frm.occurrences_enterer.checked ||
-			frm.occurrences_modifier.checked ||
-			frm.occurrences_occurrence_no.checked ||
-			frm.occurrences_species_name.checked ||
-			frm.occurrences_subgenus_name.checked ||
-			frm.occurrences_family_name.checked ||
-			frm.occurrences_order_name.checked ||
-			frm.occurrences_class_name.checked ||
-			frm.occurrences_abund_value.checked ||
-			frm.occurrences_abund_unit.checked ||
-			frm.occurrences_reference_no.checked ||
-			frm.occurrences_comments.checked ||
-			frm.occurrences_plant_organ.checked ||
-			frm.occurrences_plant_organ2.checked ||
-			frm.occurrences_created.checked ||
-			frm.occurrences_modified.checked ) {
-		frm.collections_only.checked = false;
-	} else {
-		frm.collections_only.checked = true;
-	}
-}
-
 //pass this function a checkbox.
-function collsCheckAll(checkbox){
+function checkAll(checkbox,prefix){
 	var state = checkbox.checked;
 	var frm = document.forms[0];
-	//edited by Ryan 12/30/2003
-	for(var i=0; i<frm.elements.length; i++){
-		if(frm.elements[i].name.match("collections") &&
-			frm.elements[i].name != "collections_only"){
+	// edited by Ryan 12/30/2003
+	for(var i=0; i < frm.elements.length; i++){
+		if(frm.elements[i].name.match(prefix)) {
 			frm.elements[i].checked = state;
 		}
 	}
@@ -185,9 +101,12 @@ function auth ( ) {
   </font></td>
   <td>
     <select name="output_data">
-      <option value="occurrences">occurrences</option>
+      <option value="genus occurrences">genus occurrences</option>
+      <option value="species occurrences">species occurrences</option>
       <option value="genera">genera</option>
+      <option value="species">species</option>
       <option value="collections">collections</option>
+      <option value="specimens">specimens</option>
     </select>
   </td>
 </tr>  
@@ -517,6 +436,7 @@ function auth ( ) {
 
 </table>
 
+
 <hr>
 <center><h3>Occurrence fields</h3></center>
 
@@ -525,33 +445,34 @@ Note that the collection ID and genus name fields are always output.</p>
 
 <table width="100%">
 
-<td valign=top><font size=-1>
+<tr><td valign=top><font size=-1>
 <table class="lightGrey">
-<tr><td><font size=-1><input type=checkbox name=occurrences_authorizer value="YES" onClick="occurrencesClick();">authorizer</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_enterer value="YES" onClick="occurrencesClick();">enterer</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_modifier value="YES" onClick="occurrencesClick();">modifier</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_occurrence_no value="YES" onClick="occurrencesClick();">occurrence no</font></td>
+<tr><td class="cell" nowrap><font size=-1><input type=checkbox name=toggleAllOccurrences title="Check all" onclick="checkAll(this,'occurrences_');"><B>Check all</B></font></td></tr>
+<tr><td><font size=-1><input type=checkbox name=occurrences_authorizer value="YES">authorizer</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_enterer value="YES">enterer</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_modifier value="YES">modifier</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_occurrence_no value="YES">occurrence no</font></td>
 </tr>
 
-<tr><td><font size=-1><input type=checkbox name=occurrences_reference_no value="YES" onClick="occurrencesClick();">reference no</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_class_name value="YES" onCLick="occurrencesClick();">class name</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_order_name value="YES" onCLick="occurrencesClick();">order name</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_family_name value="YES" onCLick="occurrencesClick();">family name</font></td>
+<tr><td><font size=-1><input type=checkbox name=occurrences_reference_no value="YES">reference no</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_class_name value="YES">class name</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_order_name value="YES">order name</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_family_name value="YES">family name</font></td>
 </tr>
 
-<tr><td><font size=-1><input type=checkbox name=occurrences_subgenus_name value="YES" onClick="occurrencesClick();">subgenus name</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_species_name value="YES" onClick="occurrencesClick();">species name</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_abund_value value="YES" onClick="occurrencesClick();">abund value</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_abund_unit value="YES" onClick="occurrencesClick();">abund unit</font></td>
+<tr><td><font size=-1><input type=checkbox name=occurrences_subgenus_name value="YES">subgenus name</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_species_name value="YES">species name</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_abund_value value="YES">abund value</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_abund_unit value="YES">abund unit</font></td>
 </tr>
 
-<tr><td><font size=-1><input type=checkbox name=occurrences_comments value="YES" onClick="occurrencesClick();">comments</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_plant_organ value="YES" onClick="occurrencesClick();">plant organ</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_plant_organ2 value="YES" onClick="occurrencesClick();">plant organ 2</font></td>
+<tr><td><font size=-1><input type=checkbox name=occurrences_comments value="YES">comments</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_plant_organ value="YES">plant organ</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_plant_organ2 value="YES">plant organ 2</font></td>
 </tr>
 
-<tr><td><font size=-1><input type=checkbox name=occurrences_created value="YES" onClick="occurrencesClick();">created</font></td>
-<td><font size=-1><input type=checkbox name=occurrences_modified value="YES" onClick="occurrencesClick();">modified</font></td>
+<tr><td><font size=-1><input type=checkbox name=occurrences_created value="YES">created</font></td>
+<td><font size=-1><input type=checkbox name=occurrences_modified value="YES">modified</font></td>
 </tr>
 
 </table>
@@ -585,7 +506,7 @@ Note that the collection ID and genus name fields are always output.</p>
 
 	<table border=0 width="100%" class="lightGrey">
 	<tr>
-	<td class="cell" nowrap><input type=checkbox name=toggleAll title="Check all" onclick="collsCheckAll(this);"><B>Check all</B></td>
+	<td class="cell" nowrap><input type=checkbox name=toggleAllCollections title="Check all" onclick="checkAll(this,'collections_');"><B>Check all</B></td>
 	<td class="cell" nowrap><input type=checkbox name=collections_authorizer value="YES">authorizer</td>
 	<td class="cell" nowrap><input type=checkbox name=collections_enterer value="YES">enterer</td>
 	<td class="cell" nowrap><input type=checkbox name=collections_modifier value="YES">modifier</td>
@@ -608,26 +529,26 @@ Note that the collection ID and genus name fields are always output.</p>
 	<tr>
 	<td class="cell" nowrap><input type=checkbox name=collections_lng value="YES">longitude in 
     <select name="collections_lng_format">
-      <option value="DMS">deg/min/sec+dir</option>
       <option value="decimal">decimal</option>
+      <option value="DMS">deg/min/sec+dir</option>
     </select>  
     </td>
 	<td class="cell" nowrap><input type=checkbox name=collections_lat value="YES">latitude in
     <select name="collections_lat_format">
-      <option value="DMS">deg/min/sec+dir</option>
       <option value="decimal">decimal</option>
+      <option value="DMS">deg/min/sec+dir</option>
     </select>  
     </td>
 	<td class="cell" nowrap><input type=checkbox name=collections_paleolng value="YES">paleolongitude in 
     <select name="collections_paleolng_format">
-      <option value="DMS">deg/min/sec+dir</option>
       <option value="decimal">decimal</option>
+      <option value="DMS">deg/min/sec+dir</option>
     </select>  
     </td>
 	<td class="cell" nowrap><input type=checkbox name=collections_paleolat value="YES">paleolatitude in
     <select name="collections_paleolat_format">
-      <option value="DMS">deg/min/sec+dir</option>
       <option value="decimal">decimal</option>
+      <option value="DMS">deg/min/sec+dir</option>
     </select>  
     </td>
 	</tr>
@@ -805,8 +726,57 @@ Note that the collection ID and genus name fields are always output.</p>
 
 	</td>
 </tr>
+</table>
+
+<hr>
+<center><h3>Specimen fields</h3></center>
+
+<table width="100%">
+
+<td valign=top><font size=-1>
+<table class="lightGrey">
+<tr><td class="cell" nowrap><font size=-1><input type=checkbox name=toggleAllSpecimens title="Check all" onclick="checkAll(this,'specimens_');"><B>Check all</B></font></td></tr>
+<tr><td><font size=-1><input type=checkbox name=specimens_authorizer value="YES">authorizer</font></td>
+<td><font size=-1><input type=checkbox name=specimens_enterer value="YES">enterer</font></td>
+<td><font size=-1><input type=checkbox name=specimens_modifier value="YES">modifier</font></td>
+<td><font size=-1><input type=checkbox name=specimens_specimen_no value="YES">specimen no</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=specimens_reference_no value="YES">reference no</font></td>
+<td><font size=-1><input type=checkbox name=specimens_specimen_id value="YES">specimen id</font></td>
+<td><font size=-1><input type=checkbox name=specimens_specimen_side value="YES">side</font></td>
+<td><font size=-1><input type=checkbox name=specimens_specimen_part value="YES">part</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=specimens_specimen_coverage value="YES">specimen coverage</font></td>
+<td><font size=-1><input type=checkbox name=specimens_measurement_source value="YES">measurement source</font></td>
+<td><font size=-1><input type=checkbox name=specimens_magnification value="YES">magnification</font></td>
+<td><font size=-1><input type=checkbox name=specimens_specimens_measured value="YES">specimens measured</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=specimens_length value="YES">length</font></td>
+<td><font size=-1><input type=checkbox name=specimens_width value="YES">width</font></td>
+<td><font size=-1><input type=checkbox name=specimens_height value="YES">height</font></td>
+<td><font size=-1><input type=checkbox name=specimens_diagonal value="YES">diagonal</font></td>
+<td><font size=-1><input type=checkbox name=specimens_inflation value="YES">inflation</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=specimens_average value="YES">average (geometric mean)</font></td>
+<td><font size=-1><input type=checkbox name=specimens_min value="YES">min</font></td>
+<td><font size=-1><input type=checkbox name=specimens_max value="YES">max</font></td>
+<td><font size=-1><input type=checkbox name=specimens_median value="YES">median</font></td>
+<td><font size=-1><input type=checkbox name=specimens_error value="YES">error</font></td>
+</tr>
+
+<tr><td><font size=-1><input type=checkbox name=specimens_comments value="YES">comments</font></td>
+<td><font size=-1><input type=checkbox name=specimens_created value="YES">created</font></td>
+<td><font size=-1><input type=checkbox name=specimens_modified value="YES">modified</font></td>
+</tr>
 
 </table>
+</td></tr>
+</table>
+
 
 <hr>
 
