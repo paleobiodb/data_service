@@ -1382,7 +1382,7 @@ sub printResultTable {
             print FILE_H $csv->string(),"\n";
         }
     }
-    close FH;   
+    close FILE_H;   
 
     # Print it out to a HTML table
     if ($transpose) {
