@@ -37,6 +37,7 @@ use Report;
 use Text::CSV_XS;
 use POSIX qw(ceil floor);
 use Confidence;
+use Measurement;
 
 # god awful Poling modules
 #use Occurrence; - entirely deprecated, only ever called by Collection.pm
@@ -4246,10 +4247,10 @@ sub processEnterCollectionForm {
         if ($q->param('latdir') =~ /South/) {
                 $f_latdeg = $f_latdeg * -1;
         }
-        
+
         my $max_interval_no = ($q->param('max_interval_no')) ? $q->param('max_interval_no') : 0;
         my $min_interval_no = ($q->param('min_interval_no')) ? $q->param('min_interval_no') : 0;
-        ($paleolng, $paleolat) = PBDBUtil::getPaleoCoords($dbh, $dbt,$max_interval_no,$min_interval_no,$f_lngdeg,$f_latdeg); 
+        ($paleolng, $paleolat) = PBDBUtil::getPaleoCoords($dbh, $dbt,$max_interval_no,$min_interval_no,$f_lngdeg,$f_latdeg);
         dbg("have paleocoords paleolat: $paleolat paleolng $paleolng");
         if ($paleolat ne "" && $paleolng ne "") {
             $q->param("paleolng"=>$paleolng);
@@ -4789,6 +4790,41 @@ sub startProcessEcologyForm	{
     print stdIncludes("std_page_bottom");
 }
 ## END Ecology stuff
+##############
+
+##############
+## Specimen measurement stuff
+sub displaySpecimenSearchForm {
+    print stdIncludes("std_page_top");
+    print $hbo->populateHTML('search_specimen_form',[],[]);
+    print stdIncludes("std_page_bottom");
+}
+
+sub submitSpecimenSearch{
+    print stdIncludes("std_page_top");
+    Measurement::submitSpecimenSearch($dbt,$hbo,$q,$s,$exec_url);
+    print stdIncludes("std_page_bottom");
+}
+
+sub displaySpecimenList {
+    print stdIncludes("std_page_top");
+    Measurement::displaySpecimenList($dbt,$hbo,$q,$s,$exec_url);
+    print stdIncludes("std_page_bottom");
+}
+
+sub populateMeasurementForm{
+    print stdIncludes("std_page_top");
+    Measurement::populateMeasurementForm($dbh,$dbt,$hbo,$q,$s,$exec_url);
+    print stdIncludes("std_page_bottom");
+}
+
+sub processMeasurementForm {
+    print stdIncludes("std_page_top");
+    Measurement::processMeasurementForm($dbh,$dbt,$hbo,$q,$s,$exec_url);
+    print stdIncludes("std_page_bottom");
+}
+
+## END Specimen measurement stuff
 ##############
 
 
