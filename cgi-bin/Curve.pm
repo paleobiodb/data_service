@@ -1242,7 +1242,7 @@ sub printResults	{
 		if ( $q->param('print_extinction_rate_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Extinction<br>rate</b> ";
 		}
-		if ( $q->param('print_last_appearances') eq "YES" )	{
+		if ( $q->param('print_singletons_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Singletons</b> ";
 		}
 		if ( $q->param('print_chao-2_raw') eq "YES" )	{
@@ -1307,7 +1307,7 @@ sub printResults	{
 		if ( $q->param('print_extinction_rate_raw') eq "YES" )	{
 			print TABLE ",Extinction rate";
 		}
-		if ( $q->param('print_singletons') eq "YES" )	{
+		if ( $q->param('print_singletons_raw') eq "YES" )	{
 			print TABLE ",Singletons";
 		}
 		if ( $q->param('print_chao-2_raw') eq "YES" )	{
@@ -1627,7 +1627,7 @@ sub printResults	{
 			}
 			print TABLE "Bin,Bin name";
 			if ( $q->param('print_base_ss') eq "YES" )	{
-				print TABLE ",Base (Ma),";
+				print TABLE ",Base (Ma)";
 			}
 			if ( $q->param('print_midpoint_ss') eq "YES" )	{
 				print TABLE ",Midpoint (Ma)";
