@@ -1807,6 +1807,12 @@ sub doQuery {
                 push ( @occs_row, $row->{$column} );
             }
 
+            # Put the values in the correct order since by looping through this array
+            foreach my $column ( @reidHeaderCols ){
+                $column =~ s/^original\./original_/;
+                push ( @reid_row, $row->{$column} );
+            }
+
             # Push the eco/taphonomic data, if any, onto the reid rows
             # WARNING: this only works on genus or higher-order data,
             #  assuming species won't be scored separately
@@ -1814,12 +1820,6 @@ sub doQuery {
                 if ($q->param('ecology'.$_)) {
                     push @reid_row, $ecotaph{'1'.$genusNo};
                 }
-            }
-
-            # Put the values in the correct order since by looping through this array
-            foreach my $column ( @reidHeaderCols ){
-                $column =~ s/^original\./original_/;
-                push ( @reid_row, $row->{$column} );
             }
         }
 
