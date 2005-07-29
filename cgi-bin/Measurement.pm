@@ -230,11 +230,10 @@ sub populateMeasurementForm {
                     push @values, '';
                 }
             }
-	        push (@fields,'occurrence_no','reference_no','specimen_no','taxon_name','collection_no','specimens_measured');
-	        push (@values,int($q->param('occurrence_no')),$s->get('reference_no'),'-1',$taxon_name,$collection_no,1);
+	        push (@fields,'occurrence_no','reference_no','specimen_no','taxon_name','collection_no','specimens_measured','specimen_is_type');
+	        push (@values,int($q->param('occurrence_no')),$s->get('reference_no'),'-1',$taxon_name,$collection_no,1,'');
         }
     } else {
-        # This is an edit, use fields from the DB
 
         #Query the measurements table for the old data
         $sql = "SELECT * FROM measurements WHERE specimen_no=".int($q->param('specimen_no'));
@@ -262,6 +261,18 @@ sub populateMeasurementForm {
                 push @values, '';
             }
         }
+        # This is an edit, use fields from the DB
+        push @fields, 'specimen_is_type';
+        if ($row->{'is_type'} eq 'holotype') {
+            push @values, 'yes, a holotype';
+        } elsif ($row->{'is_type'} eq 'some paratypes') {
+            push @values, 'yes, some paratypes';
+        } elsif ($row->{'is_type'} eq 'paratype') {
+            push @values, 'yes, a paratype';
+        } else {
+            push @values, 'no';
+        }      
+
         # some additional fields not from the form row
 	    push (@fields, 'occurrence_no','reference_no','specimen_no','taxon_name','collection_no');
 	    push (@values, int($q->param('occurrence_no')),$row->{'reference_no'},$row->{'specimen_no'},$taxon_name,$collection_no);
@@ -294,6 +305,16 @@ sub processMeasurementForm	{
     
 	# if ecotaph no exists, update the record
     my %fields = $q->Vars();
+
+    if ($fields{'specimen_is_type'} =~ /holotype/) {
+        $fields{'is_type'} = 'holotype';
+    } elsif ($fields{'specimen_is_type'} =~ /paratypes/) {
+        $fields{'is_type'} = 'some paratypes';
+    } elsif ($fields{'specimen_is_type'} =~ /paratype/) {
+        $fields{'is_type'} = 'paratype';
+    } else {
+        $fields{'is_type'} = '';
+    }
 
 	if ( $q->param('specimen_no') > 0 )	{
         $result = $dbt->updateRecord($s,'specimens','specimen_no',$q->param('specimen_no'),\%fields);
@@ -589,7 +610,7 @@ sub getMeasurementTable {
             my @measurements_by_part = ();
             foreach my $row (@measurements) {
                 if ($row->{'specimen_part'} eq $part) {
-                    push @measurement_for_part,$row;
+                    push @measurements_for_part,$row;
                 }
             }
             if ($is_group) {
