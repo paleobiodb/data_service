@@ -1245,6 +1245,12 @@ sub printResults	{
 		if ( $q->param('print_singletons_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Singletons</b> ";
 		}
+		if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
+		}
+		if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
+		}
 		if ( $q->param('print_chao-2_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Chao-2<br>estimate</b> ";
 		}
@@ -1310,6 +1316,12 @@ sub printResults	{
 		if ( $q->param('print_singletons_raw') eq "YES" )	{
 			print TABLE ",Singletons";
 		}
+		if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
+			print TABLE ",Gap analysis completeness";
+		}
+		if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
+			print TABLE ",Gap analysis diversity";
+		}
 		if ( $q->param('print_chao-2_raw') eq "YES" )	{
 			print TABLE ",Chao-2 estimate";
 		}
@@ -1340,6 +1352,13 @@ sub printResults	{
 	
 		for $i (1..$chrons)	{
 			if ($rangethrough[$i] > 0 && $listsinchron[$i] > 0)	{
+				$gapstat = $richness[$i] - $originate[$i] - $extinct[$i] + $singletons[$i];
+				if ($gapstat > 0)	{
+				  $gapstat = $gapstat/($rangethrough[$i] - $originate[$i] - $extinct[$i] + $singletons[$i]);
+				}
+				else	{
+				  $gapstat = "NaN";
+				}
 				if ($chaom[$i] > 0)	{
 				  $chaostat = $richness[$i] + ($chaol[$i] * $chaol[$i] / (2 * $chaom[$i]));
 				}
@@ -1388,7 +1407,7 @@ sub printResults	{
 						print "<td class=tiny align=center valign=top>NaN";
 					}
 				}
-				if ( $q->param('print_last_appearances') eq "YES" )	{
+				if ( $q->param('print_last_appearances_raw') eq "YES" )	{
 					print "<td class=tiny align=center valign=top>$extinct[$i] ";
 				}
 			# Foote extinction rate
@@ -1401,6 +1420,21 @@ sub printResults	{
 				}
 				if ( $q->param('print_singletons_raw') eq "YES" )	{
 					print "<td class=tiny align=center valign=top>$singletons[$i] ";
+				}
+				if ( $gapstat > 0 )	{
+					if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.3f ",$gapstat;
+					}
+					if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$richness[$i] / $gapstat;
+					}
+				} else	{
+					if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
+						print "<td class=tiny align=center valign=top>NaN ";
+					}
+					if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
+						print "<td class=tiny align=center valign=top>NaN ";
+					}
 				}
 				if ( $q->param('print_chao-2_raw') eq "YES" )	{
 					if ($chaostat > 0 )	{
@@ -1482,6 +1516,21 @@ sub printResults	{
 				}
 				if ( $q->param('print_singletons_raw') eq "YES" )	{
 					print TABLE ",$singletons[$i]";
+				}
+				if ( $gapstat > 0 )	{
+					if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
+						printf TABLE ",%.3f",$gapstat;
+					}
+					if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
+						printf TABLE ",%.1f",$richness[$i] / $gapstat;
+					}
+				} else	{
+					if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
+						print TABLE ",NaN";
+					}
+					if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
+						print TABLE ",NaN";
+					}
 				}
 				if ( $q->param('print_chao-2_raw') eq "YES" )	{
 					if ($chaostat > 0 )	{
@@ -1608,10 +1657,10 @@ sub printResults	{
 			if ( $q->param('print_singletons_ss') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>Singletons</b> ";
 			}
-			if ( $q->param('print_gap_analysis_stat') eq "YES" )	{
+			if ( $q->param('print_gap_analysis_stat_ss') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
 			}
-			if ( $q->param('print_gap_analysis_estimate') eq "YES" )	{
+			if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
 			}
 			if ( $q->param('print_chao-2_ss') eq "YES" )	{
@@ -1708,10 +1757,10 @@ sub printResults	{
 			if ( $q->param('print_singletons_ss') eq "YES" )	{
 				print TABLE ",Singletons";
 			}
-			if ( $q->param('print_gap_analysis_stat') eq "YES" )	{
+			if ( $q->param('print_gap_analysis_stat_ss') eq "YES" )	{
 				print TABLE ",Gap analysis completeness";
 			}
-			if ( $q->param('print_gap_analysis_estimate') eq "YES" )	{
+			if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
 				print TABLE ",Gap analysis diversity";
 			}
 			if ( $q->param('print_chao-2_ss') eq "YES" )	{
@@ -1729,9 +1778,9 @@ sub printResults	{
 
 			for ($i = 1; $i <= $chrons; $i++)     {
 				if ($rangethrough[$i] > 0)  {
-					$gapstat = $richness[$i] - $originate[$i] - $extinct[$i] + $singletons[$i];
+					$gapstat = $msubsrichness[$i] - $msubsoriginate[$i] - $msubsextinct[$i] + $msubssingletons[$i];
 					if ($gapstat > 0)	{
-					  $gapstat = $gapstat/($rangethrough[$i] - $originate[$i] - $extinct[$i] + $singletons[$i]);
+					  $gapstat = $gapstat/($msubsrangethrough[$i] - $msubsoriginate[$i] - $msubsextinct[$i] + $msubssingletons[$i]);
 	#         $gapstat = $richness[$i] / $gapstat;
 					}
 					else	{
@@ -1963,21 +2012,21 @@ sub printResults	{
 						printf TABLE ",%.1f",$msubssingletons[$i];
 					}
 					if ($gapstat > 0)	{
-						if ( $q->param('print_gap_analysis_stat') eq "YES" )	{
+						if ( $q->param('print_gap_analysis_stat_ss') eq "YES" )	{
 							printf "<td class=tiny align=center valign=top>%.3f ",$gapstat;
 							printf TABLE ",%.3f",$gapstat;
 						}
-						if ( $q->param('print_gap_analysis_estimate') eq "YES" )	{
-							printf "<td class=tiny align=center valign=top>%.1f ",$richness[$i] / $gapstat;
-							printf TABLE ",%.3f",$richness[$i] / $gapstat;
+						if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$msubsrichness[$i] / $gapstat;
+							printf TABLE ",%.3f",$msubsrichness[$i] / $gapstat;
 						}
 					}
 					else	{
-						if ( $q->param('print_gap_analysis_stat') eq "YES" )	{
+						if ( $q->param('print_gap_analysis_stat_ss') eq "YES" )	{
 							print "<td class=tiny align=center valign=top>NaN ";
 							print TABLE ",NaN";
 						}
-						if ( $q->param('print_gap_analysis_estimate') eq "YES" )	{
+						if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
 							print "<td class=tiny align=center valign=top>NaN ";
 							print TABLE ",NaN";
 						}
