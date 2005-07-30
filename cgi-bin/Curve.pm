@@ -2017,8 +2017,12 @@ sub printResults	{
 							printf TABLE ",%.3f",$gapstat;
 						}
 						if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
-							printf "<td class=tiny align=center valign=top>%.1f ",$msubsrichness[$i] / $gapstat;
-							printf TABLE ",%.3f",$msubsrichness[$i] / $gapstat;
+							my $tempdiv = $msubrichness[$i];
+							if ( $q->param('diversity') =~ /two timers/  )	{
+								$tempdiv = $mnewsib[$i];
+							}
+							printf "<td class=tiny align=center valign=top>%.1f ",$tempdiv / $gapstat;
+							printf TABLE ",%.3f",$tempdiv / $gapstat;
 						}
 					}
 					else	{
@@ -2071,6 +2075,9 @@ sub printResults	{
 			print "The total number of trials was <b>".$q->param('samplingtrials')."</b>.<p>\n";
 			if ( $threetimerp )	{
 				printf "The gap proportion based on three timer analysis of the subsampled data is <b>%.3f</b>.<p>\n",$threetimerp;
+			}
+			if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" && $q->param('diversity') =~ /two timers/ )	{
+				print "The gap analysis diversity estimate for the standardized data was based on corrected SIB, not raw SIB.<p>\n";
 			}
 			print "<hr>\n";
 		}
