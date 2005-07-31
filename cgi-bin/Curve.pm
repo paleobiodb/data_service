@@ -2086,7 +2086,7 @@ sub printResults	{
 				printf "The gap proportion based on three timer analysis of the subsampled data is <b>%.3f</b>.<p>\n",$threetimerp;
 			}
 			if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" && $q->param('diversity') =~ /two timers/ )	{
-				print "The gap analysis diversity estimate for the standardized data was based on corrected SIB, not raw SIB.<p>\n";
+				print "The gap analysis for the subsampled data was used two timer counts, not raw counts, for the proportion, and corrected SIB, not raw SIB, for estimated diversity.<p>\n";
 			}
 			print "<hr>\n";
 		}
