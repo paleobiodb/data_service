@@ -932,6 +932,7 @@ sub subsample	{
 						$sumthreetimers++;
 					}
 					if ( $present[$i][$j-1] < 0 && $present[$i][$j] >= 0 && $present[$i][$j+1] < 0 )	{
+						$mparttimers[$j]++;
 						$sumparttimers++;
 					}
 					if ( $j > 1 && $j < $chrons - 1 && ( $present[$i][$j-1] < 0 || $present[$i][$j] < 0 ) && ( $present[$i][$j+1] < 0 || $present[$i][$j+2] < 0 ) )	{
@@ -1017,6 +1018,7 @@ sub subsample	{
 				$msubsrichness[$i] = $msubsrichness[$i]/$trials;
 				$mtwotimers[$i] = $mtwotimers[$i]/$trials;
 				$mthreetimers[$i] = $mthreetimers[$i]/$trials;
+				$mparttimers[$i] = $mparttimers[$i]/$trials;
 				$msubsnewbc[$i] = $msubsnewbc[$i]/$trials;
 				$msubsrangethrough[$i] = $msubsrangethrough[$i]/$trials;
 				$meanoutrichness[$i] = $meanoutrichness[$i]/$trials;
@@ -1785,6 +1787,13 @@ sub printResults	{
 					}
 					else	{
 					  $gapstat = "NaN";
+					}
+					if ( $q->param('diversity') =~ /two timers/  )	{
+						if ( $mthreetimers[$i] + $mparttimers[$i] > 0 )	{
+							$gapstat = $mthreetimers[$i] / ( $mthreetimers[$i] + $mparttimers[$i] );
+						} else	{
+					  		$gapstat = "NaN";
+						}
 					}
 					if ($msubschaom[$i] > 0)	{
 					  $msubschaostat = $msubsrichness[$i] + ($msubschaol[$i] * $msubschaol[$i] / (2 * $msubschaom[$i]));
