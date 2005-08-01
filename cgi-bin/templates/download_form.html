@@ -391,14 +391,14 @@ function auth ( ) {
 </select>
 </font></td></tr>
 
-
 <tr class="lightGrey">
-<td valign=top><font size=-1>Include genus names that are qualified with "aff." or quotes?</font></td>
+<td valign=top><font size=-1>Include genus names with the folllowing qualifiers:</font></td>
 <td valign=top><font size=-1>
-<select name=poor_genus_reso>
-<option value="NO">no, exclude them</option>
-<option selected value="YES">yes, include them</option>
-</select>
+<input type=checkbox name='genus_reso_aff.' value="YES" checked>aff.
+<input type=checkbox name='genus_reso_cf.' value="YES" checked>cf.
+<input type=checkbox name='genus_reso_ex_gr.' value="YES" checked>ex gr.
+<input type=checkbox name='genus_reso_?' value="YES" checked>?
+<input type=checkbox name='genus_reso_"' value="YES" checked>"
 </font></td></tr>
 
 <tr>
