@@ -149,7 +149,7 @@ sub retellOptions {
 
     # Collection types
     my @collection_types_group = ('archaeological','biostratigraphic','paleoecologic','taphonomic','taxonomic','general_faunal/floral','unknown');
-    $html .= $self->retellOptionsGroup('Collections included for reasons:','collection_type',\@collection_types_group);
+    $html .= $self->retellOptionsGroup('Reasons for describing included collections:','collection_type',\@collection_types_group);
 
 	# Continents or country
 	my @continents = ( );
@@ -215,7 +215,9 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
         $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
         $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", $q->param("sp") );
-        $html .= $self->retellOptionsRow ( "Include occurrences qualified by \"aff.\" or quotes?", $q->param("poor_genus_reso") );
+#       $html .= $self->retellOptionsRow ( "Include occurrences qualified by \"aff.\" or quotes?", $q->param("poor_genus_reso") );
+	my @genus_reso_types_group = ('aff.','cf.','ex_gr.','?','"');
+	$html .= $self->retellOptionsGroup('Include occurrences qualified by:','genus_reso_',\@genus_reso_types_group);
         $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
         $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
         $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
@@ -944,6 +946,34 @@ sub getCollectionTypeString{
     return $colltypes;
 }
 
+sub getGenusResoString{
+	my $self = shift;
+	my $resos = "";
+    if ( ! $q->param('genus_reso_aff.') || ! $q->param('genus_reso_cf.') || ! $q->param('genus_reso_ex_gr.') || ! $q->param('genus_reso_?') || ! $q->param('genus_reso_"') ) { 
+        if ( $q->param('genus_reso_aff.') )	{
+            $resos = "'aff.'";
+        }
+        if ( $q->param('genus_reso_cf.') )	{
+            $resos = ",'cf.'";
+        }
+        if ( $q->param('genus_reso_ex_gr.') )	{
+            $resos .= ",'ex gr.'";
+        }
+        if ( $q->param('genus_reso_?') )	{
+            $resos .= ",'?'";
+        }
+        if ( $q->param('genus_reso_"') )	{
+            $resos .= ",'\"'";
+        }
+        $resos =~ s/^,//;
+        if ( $resos )	{
+            $resos = qq| o.genus_reso IN ($resos) |;
+            $resos = " (" . $resos ."OR o.genus_reso IS NULL OR o.genus_reso='')";
+        }
+    }
+    return $resos;
+}
+
 
 # Returns three where array: The first is applicable to the both the occs
 # and reids table, the second is occs only, and the third is reids only
@@ -967,12 +997,17 @@ sub getOccurrencesWhereClause {
 
 	push @occ_where, "o.species_name!='indet.'" if $q->param('indet') eq 'NO';
 	push @occ_where, "o.species_name!='sp.'" if $q->param('sp') eq 'NO';
-	push @occ_where, "(o.genus_reso NOT IN ('aff.','\"') OR o.genus_reso IS NULL)" if $q->param('poor_genus_reso') eq 'NO';
+#	push @occ_where, "(o.genus_reso NOT IN ('aff.','\"') OR o.genus_reso IS NULL)" if $q->param('poor_genus_reso') eq 'NO';
+	my $genusResoString = $self->getGenusResoString();
+	push @occ_where, $genusResoString if $genusResoString;
 	push @occ_where, "(o.genus_reso NOT LIKE '%informal%' OR o.genus_reso IS NULL)" if $q->param('informal') eq 'NO';
 
 	push @reid_where, "re.species_name!='indet.'" if $q->param('indet') eq 'NO';
 	push @reid_where, "re.species_name!='sp.'" if $q->param('sp') eq 'NO';
-	push @reid_where, "(re.genus_reso NOT IN ('aff.','\"') OR re.genus_reso IS NULL)" if $q->param('poor_genus_reso') eq 'NO';
+#	push @reid_where, "(re.genus_reso NOT IN ('aff.','\"') OR re.genus_reso IS NULL)" if $q->param('poor_genus_reso') eq 'NO';
+	# this is kind of a hack, I admit it JA 31.7.05
+	$genusResoString =~ s/o\.genus_reso/re.genus_reso/g;
+	push @reid_where, $genusResoString if $genusResoString;
 	push @reid_where, "(re.genus_reso NOT LIKE '%informal%' OR re.genus_reso IS NULL)" if $q->param('informal') eq 'NO';
 
     return (\@all_where,\@occ_where,\@reid_where);
