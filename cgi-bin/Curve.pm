@@ -586,6 +586,9 @@ sub assignGenera	{
 			if ( $present[$i][$j-1] < 0 && $present[$i][$j] < 0 && $present[$i][$j+1] < 0 )	{
 				$threetimers[$j]++;
 			}
+			if ( $present[$i][$j-1] < 0 && $present[$i][$j] >= 0 && $present[$i][$j+1] < 0 )	{
+				$parttimers[$j]++;
+			}
 			if ( $j > 1 && $j < $chrons - 1 && ( $present[$i][$j-1] < 0 || $present[$i][$j] < 0 ) && ( $present[$i][$j+1] < 0 || $present[$i][$j+2] < 0 ) )	{
 				$localbc[$j]++;
 			}
@@ -1253,6 +1256,12 @@ sub printResults	{
 		if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
 		}
+		if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Three timer<br>sampling stat</b> ";
+		}
+		if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Three timer<br>diversity estimate</b> ";
+		}
 		if ( $q->param('print_chao-2_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Chao-2<br>estimate</b> ";
 		}
@@ -1319,10 +1328,16 @@ sub printResults	{
 			print TABLE ",Singletons";
 		}
 		if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
-			print TABLE ",Gap analysis completeness";
+			print TABLE ",Gap analysis sampling stat";
 		}
 		if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
-			print TABLE ",Gap analysis diversity";
+			print TABLE ",Gap analysis diversity estimate";
+		}
+		if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
+			print TABLE ",Three timer sampling stat";
+		}
+		if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
+			print TABLE ",Three timer diversity estimate";
 		}
 		if ( $q->param('print_chao-2_raw') eq "YES" )	{
 			print TABLE ",Chao-2 estimate";
@@ -1356,16 +1371,22 @@ sub printResults	{
 			if ($rangethrough[$i] > 0 && $listsinchron[$i] > 0)	{
 				$gapstat = $richness[$i] - $originate[$i] - $extinct[$i] + $singletons[$i];
 				if ($gapstat > 0)	{
-				  $gapstat = $gapstat/($rangethrough[$i] - $originate[$i] - $extinct[$i] + $singletons[$i]);
+					$gapstat = $gapstat / ( $rangethrough[$i] - $originate[$i] - $extinct[$i] + $singletons[$i] );
 				}
 				else	{
-				  $gapstat = "NaN";
+					$gapstat = "NaN";
+				}
+				if ($threetimers[$i] + $parttimers[$i] > 0)	{
+					$ttstat = $threetimers[$i] / ( $threetimers[$i] + $parttimers[$i] );
+				}
+				else	{
+					$ttstat = "NaN";
 				}
 				if ($chaom[$i] > 0)	{
-				  $chaostat = $richness[$i] + ($chaol[$i] * $chaol[$i] / (2 * $chaom[$i]));
+					$chaostat = $richness[$i] + ($chaol[$i] * $chaol[$i] / (2 * $chaom[$i]));
 				}
 				else	{
-				  $chaostat = "NaN";
+					$chaostat = "NaN";
 				}
 				$temp = $chname[$i];
 				$temp =~ s/ /&nbsp;/;
@@ -1435,6 +1456,21 @@ sub printResults	{
 						print "<td class=tiny align=center valign=top>NaN ";
 					}
 					if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
+						print "<td class=tiny align=center valign=top>NaN ";
+					}
+				}
+				if ( $ttstat > 0 )	{
+					if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.3f ",$ttstat;
+					}
+					if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$richness[$i] / $ttstat;
+					}
+				} else	{
+					if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
+						print "<td class=tiny align=center valign=top>NaN ";
+					}
+					if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
 						print "<td class=tiny align=center valign=top>NaN ";
 					}
 				}
@@ -1531,6 +1567,21 @@ sub printResults	{
 						print TABLE ",NaN";
 					}
 					if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
+						print TABLE ",NaN";
+					}
+				}
+				if ( $ttstat > 0 )	{
+					if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
+						printf TABLE ",%.3f",$ttstat;
+					}
+					if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
+						printf TABLE ",%.1f",$richness[$i] / $ttstat;
+					}
+				} else	{
+					if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
+						print TABLE ",NaN";
+					}
+					if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
 						print TABLE ",NaN";
 					}
 				}
@@ -1665,6 +1716,12 @@ sub printResults	{
 			if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
 			}
+			if ( $q->param('print_three_timer_stat_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Three timer<br>sampling stat</b> ";
+			}
+			if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Three timer<br>diversity estimate</b> ";
+			}
 			if ( $q->param('print_chao-2_ss') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>Chao-2<br>estimate</b> ";
 			}
@@ -1760,10 +1817,16 @@ sub printResults	{
 				print TABLE ",Singletons";
 			}
 			if ( $q->param('print_gap_analysis_stat_ss') eq "YES" )	{
-				print TABLE ",Gap analysis completeness";
+				print TABLE ",Gap analysis sampling stat";
 			}
 			if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
-				print TABLE ",Gap analysis diversity";
+				print TABLE ",Gap analysis diversity estimate";
+			}
+			if ( $q->param('print_three_timer_stat_ss') eq "YES" )	{
+				print TABLE ",Three timer sampling stat";
+			}
+			if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
+				print TABLE ",Three timer diversity estimate";
 			}
 			if ( $q->param('print_chao-2_ss') eq "YES" )	{
 				print TABLE ",Chao-2 estimate";
@@ -1782,24 +1845,22 @@ sub printResults	{
 				if ($rangethrough[$i] > 0)  {
 					$gapstat = $msubsrichness[$i] - $msubsoriginate[$i] - $msubsextinct[$i] + $msubssingletons[$i];
 					if ($gapstat > 0)	{
-					  $gapstat = $gapstat/($msubsrangethrough[$i] - $msubsoriginate[$i] - $msubsextinct[$i] + $msubssingletons[$i]);
+						$gapstat = $gapstat / ( $msubsrangethrough[$i] - $msubsoriginate[$i] - $msubsextinct[$i] + $msubssingletons[$i] );
 	#         $gapstat = $richness[$i] / $gapstat;
 					}
 					else	{
-					  $gapstat = "NaN";
+						$gapstat = "NaN";
 					}
-					if ( $q->param('diversity') =~ /two timers/  )	{
-						if ( $mthreetimers[$i] + $mparttimers[$i] > 0 )	{
-							$gapstat = $mthreetimers[$i] / ( $mthreetimers[$i] + $mparttimers[$i] );
-						} else	{
-					  		$gapstat = "NaN";
-						}
+					if ( $mthreetimers[$i] + $mparttimers[$i] > 0 )	{
+						$ttstat = $mthreetimers[$i] / ( $mthreetimers[$i] + $mparttimers[$i] );
+					} else	{
+				  		$ttstat = "NaN";
 					}
 					if ($msubschaom[$i] > 0)	{
-					  $msubschaostat = $msubsrichness[$i] + ($msubschaol[$i] * $msubschaol[$i] / (2 * $msubschaom[$i]));
+						$msubschaostat = $msubsrichness[$i] + ($msubschaol[$i] * $msubschaol[$i] / (2 * $msubschaom[$i]));
 					}
 					else	{
-					  $msubschaostat = "NaN";
+						$msubschaostat = "NaN";
 					}
 					$temp = $chname[$i];
 					$temp =~ s/ /&nbsp;/;
@@ -2026,12 +2087,8 @@ sub printResults	{
 							printf TABLE ",%.3f",$gapstat;
 						}
 						if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
-							my $tempdiv = $msubrichness[$i];
-							if ( $q->param('diversity') =~ /two timers/  )	{
-								$tempdiv = $mnewsib[$i];
-							}
-							printf "<td class=tiny align=center valign=top>%.1f ",$tempdiv / $gapstat;
-							printf TABLE ",%.3f",$tempdiv / $gapstat;
+							printf "<td class=tiny align=center valign=top>%.1f ",$msubsrichness[$i] / $gapstat;
+							printf TABLE ",%.3f",$msubsrichness[$i] / $gapstat;
 						}
 					}
 					else	{
@@ -2040,6 +2097,26 @@ sub printResults	{
 							print TABLE ",NaN";
 						}
 						if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
+							print "<td class=tiny align=center valign=top>NaN ";
+							print TABLE ",NaN";
+						}
+					}
+					if ($ttstat > 0)	{
+						if ( $q->param('print_three_timer_stat_ss') eq "YES" )	{
+							printf "<td class=tiny align=center valign=top>%.3f ",$ttstat;
+							printf TABLE ",%.3f",$ttstat;
+						}
+						if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$mnewsib[$i] / $ttstat;
+							printf TABLE ",%.3f",$mnewsib[$i] / $ttstat;
+						}
+					}
+					else	{
+						if ( $q->param('print_three_timer_stat_ss') eq "YES" )	{
+							print "<td class=tiny align=center valign=top>NaN ";
+							print TABLE ",NaN";
+						}
+						if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
 							print "<td class=tiny align=center valign=top>NaN ";
 							print TABLE ",NaN";
 						}
@@ -2085,8 +2162,8 @@ sub printResults	{
 			if ( $threetimerp )	{
 				printf "The gap proportion based on three timer analysis of the subsampled data is <b>%.3f</b>.<p>\n",$threetimerp;
 			}
-			if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" && $q->param('diversity') =~ /two timers/ )	{
-				print "The gap analysis for the subsampled data was used two timer counts, not raw counts, for the proportion, and corrected SIB, not raw SIB, for estimated diversity.<p>\n";
+			if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
+				print "Corrected SIB, not raw SIB, was used for the three timer diversity estimate.<p>\n";
 			}
 			print "<hr>\n";
 		}
