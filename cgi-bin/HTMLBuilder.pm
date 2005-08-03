@@ -115,9 +115,9 @@ sub new {
 					collection_size_unit=>['', 'specimens', 'individuals'],
 					rock_censused_unit=>['', 'cm (line intercept)', 'cm2 (area)', 'cm3 (volume)', 'g', 'kg', '# of surfaces (quadrat)'],
 					museum=>['', 'AMNH', 'BMNH', 'BPI', 'CAS', 'CIT', 'CM', 'DMNH', 'FMNH', 'GSC', 'IVPP', 'LACM', 'MACN', 'MCZ', 'MfN', 'MLP', 'MNHN', 'MNHN (La Paz)', 'NIGPAS', 'NMMNH', 'NYSM', 'OSU', 'OU', 'PIN', 'PRI', 'ROM', 'SDSM', 'SGOPV', 'SMF', 'SUI', 'TMM', 'TMP', 'UCM', 'UCMP', 'UF', 'UMMP', 'UNM', 'UNSM', 'USNM', 'UW', 'UWBM', 'YPM'],
-					genus_reso=>['', 'aff.', 'cf.', 'ex gr.', 'n. gen.', '?', '"', 'informal', 'informal aff.', 'informal cf.'],
-					subgenus_reso=>['', 'aff.', 'cf.', 'ex gr.', 'n. subgen.', '?', '"', 'informal', 'informal aff.', 'informal cf.'],
-					species_reso=>['', 'aff.', 'cf.', 'ex gr.', 'n. sp.', '?', '"', 'informal', 'informal aff.', 'informal cf.'],
+					genus_reso=>['', 'aff.', 'cf.', 'ex gr.', 'n. gen.', 'sensu lato', '?', '"', 'informal', 'informal aff.', 'informal cf.'],
+					subgenus_reso=>['', 'aff.', 'cf.', 'ex gr.', 'n. subgen.', 'sensu lato', '?', '"', 'informal', 'informal aff.', 'informal cf.'],
+					species_reso=>['', 'aff.', 'cf.', 'ex gr.', 'n. sp.', 'sensu lato', '?', '"', 'informal', 'informal aff.', 'informal cf.'],
 					abund_unit=>['', 'specimens', '%-specimens', 'individuals', '%-individuals', '%-volume', '%-area', 'grid-count', 'rank', 'category', '% of quadrats', '# of quadrats'],
 					plant_organ=>['', 'unassigned', 'leaf', 'seed/fruit', 'axis', 'plant debris', 'marine palyn', 'microspore', 'megaspore', 'flower', 'seed repro', 'non-seed repro', 'wood', 'sterile axis', 'fertile axis', 'root', 'cuticle', 'multi organs'],
 					plant_organ2=>['', 'unassigned', 'leaf', 'seed/fruit', 'axis', 'plant debris', 'marine palyn', 'microspore', 'megaspore', 'flower', 'seed repro', 'non-seed repro', 'wood', 'sterile axis', 'fertile axis', 'root', 'cuticle'],
@@ -210,8 +210,9 @@ sub new {
                     height_error_unit=>['1 s.d.','2 s.d.','95% CI'],
                     diagonal_error_unit=>['1 s.d.','2 s.d.','95% CI'],
                     inflation_error_unit=>['1 s.d.','2 s.d.','95% CI'],
-                    'specimen_coverage'=>['','all','some'],
-                    'measurement_source'=>['','text','table','picture','graph','direct measurement']
+                    specimen_is_type=>['no','yes, the holotype','yes, a paratype','yes, some paratypes'],
+                    specimen_coverage=>['','all','some'],
+                    measurement_source=>['','text','table','picture','graph','direct measurement']
 				);
 
 # This is a mess fortunately, I only have one or two of these right now.
