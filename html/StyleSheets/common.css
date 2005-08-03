@@ -326,6 +326,10 @@ table.navbox {
     margin-right: 20px;
 }
 
+.indent_left {
+    margin-left: 20px;
+}
+
 
 th.style1 {
 	text-align: left;
@@ -399,6 +403,13 @@ A:hover.tabOn, A:hover.tabOff{
 /* for a small reference display line */
 span.smallRef {
 	font-size: 0.9em;
+}
+
+.smallTextHeader {
+    font-size: 0.9em;
+}
+.smallText {
+    font-size: 0.8em;
 }
 
 /* for non-editable fields, such as in forms */
