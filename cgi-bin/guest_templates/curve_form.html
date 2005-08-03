@@ -1,3 +1,33 @@
+<script language="JavaScript" type="text/javascript">
+<!-- Begin     
+//pass this function a checkbox.
+function checkAllRaw(checkbox) {
+    var state = checkbox.checked;
+    var frm = document.forms[0];
+
+    var isRaw = /^print_((.*?)_raw|sampled|range-through|boundary-crosser|two_timer|three_timer|pie|lists|occurrences|occurrences-squared|mean_richness|median_richness)$/;
+
+    for(var i=0; i < frm.elements.length; i++){
+        if(isRaw.test(frm.elements[i].name)) {
+            frm.elements[i].checked = state;
+        }
+    }
+}  
+function checkAllSS(checkbox){
+    var state = checkbox.checked;
+    var frm = document.forms[0];
+
+    var isSS = /^print_((.*?)_ss|michaelis-menten|corrected_bc|estimated_midpoint|origination_percentage|items|mean|estimated_mesa|extinction_percentage|median|ci|raw_sib|corrected_sib)$/;
+
+    for(var i=0; i < frm.elements.length; i++){
+        if(isSS.test(frm.elements[i].name)) {
+            frm.elements[i].checked = state;
+        }
+    }
+}  
+-->
+</script>  
+
 <div class="title">Diversity curve request form</div>
 
 <p>
@@ -171,6 +201,12 @@ Intermediate numbers of items to report in subsampling curves:<br>
 </td></tr>
 
 <tr><td valign=top>
+<font size=-1><b>
+<input type="checkbox" onClick="checkAllRaw(this);"> Check all
+</b></font>
+</td></tr>   
+
+<tr><td valign=top>
 <nobr>
 <font size=-1>
 <input type="checkbox" name="print_base_raw" value="YES" checked> Base (Ma)
@@ -231,6 +267,12 @@ Intermediate numbers of items to report in subsampling curves:<br>
 </td></tr>
 
 <tr><td valign=top>
+<font size=-1><b>
+<input type="checkbox" onClick="checkAllSS(this);"> Check all
+</b></font>
+</td></tr>   
+
+<tr><td valign=top>
 <nobr>
 <font size=-1>
 <input type="checkbox" name="print_base_ss" value="YES" checked> Base (Ma)
@@ -248,7 +290,7 @@ Intermediate numbers of items to report in subsampling curves:<br>
 <input type="checkbox" name="print_three_timers_ss" value="YES"> Mean three timers
 <input type="checkbox" name="print_corrected_bc" value="YES"> Corrected BC diversity
 <input type="checkbox" name="print_estimated_midpoint" value="YES"> Estimated midpoint diversity
-<input type="checkbox" name="print_esimated_mesa" value="YES"> Estimated mesa diversity
+<input type="checkbox" name="print_estimated_mesa" value="YES"> Estimated mesa diversity
 <input type="checkbox" name="print_raw_sib" value="YES" checked> Raw SIB diversity
 <input type="checkbox" name="print_corrected_sib" value="YES" checked> Corrected SIB diversity
 </font>
