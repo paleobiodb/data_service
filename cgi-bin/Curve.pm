@@ -1630,13 +1630,6 @@ sub printResults	{
 						print TABLE ",NaN";
 					}
 				}
-				if ( $q->param('print_jolly-seber_raw') eq "YES" )	{
-					if ($jolly[$i] > 0 )	{
-						printf TABLE ",%.1f",$jolly[$i];
-					} else    {
-						print TABLE ",NaN";
-					}
-				}
 				if ( $q->param('print_lists') eq "YES" )	{
 					print TABLE ",$listsinchron[$i]";
 				}
