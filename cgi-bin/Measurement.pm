@@ -24,7 +24,7 @@ sub submitSpecimenSearch {
 
     # Grab the data from the database, filtering by either taxon_name and/or collection_no
     my $sql1 = "SELECT c.collection_no, o.occurrence_no, o.genus_name,o.species_name, count(DISTINCT specimen_no) cnt FROM occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE o.collection_no=c.collection_no ";
-    my $sql2 = "SELECT c.collection_no, o.occurrence_no, o.genus_name,o.species_name, count(DISTINCT specimen_no) cnt FROM reidentifications r, occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE r.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no ";
+    my $sql2 = "SELECT c.collection_no, o.occurrence_no, re.genus_name,re.species_name, count(DISTINCT specimen_no) cnt FROM reidentifications re, occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no ";
     my $where = "";
     my @taxa;
     if ($q->param('taxon_name')) {
@@ -39,14 +39,14 @@ sub submitSpecimenSearch {
         @taxon_nos = keys %all_taxa;
         my $taxon_nos = join(",",@taxon_nos);
         $sql1 .= " AND o.taxon_no IN ($taxon_nos)";
-        $sql2 .= " AND r.taxon_no IN ($taxon_nos)";
+        $sql2 .= " AND re.taxon_no IN ($taxon_nos)";
     } elsif ($q->param('taxon_name')) {
         my @taxon_bits = split(/\s+/,$q->param('taxon_name'));
         $sql1 .= " AND o.genus_name LIKE ".$dbh->quote($taxon_bits[0]);
-        $sql2 .= " AND r.genus_name LIKE ".$dbh->quote($taxon_bits[0]);
+        $sql2 .= " AND re.genus_name LIKE ".$dbh->quote($taxon_bits[0]);
         if (scalar(@taxon_bits) > 1) {
-            $sql1 .= "AND o.species_name LIKE ".$dbh->quote($taxon_bits[1]);
-            $sql1 .= "AND r.species_name LIKE ".$dbh->quote($taxon_bits[1]);
+            $sql1 .= " AND o.species_name LIKE ".$dbh->quote($taxon_bits[1]);
+            $sql2 .= " AND re.species_name LIKE ".$dbh->quote($taxon_bits[1]);
         }
     }
     if ($q->param('collection_no')) {
@@ -120,54 +120,93 @@ sub displaySpecimenList {
 		exit;
 	}
 
-    my $sql = "SELECT * FROM specimens WHERE occurrence_no=".int($q->param('occurrence_no'));
-    my @results = @{$dbt->getData($sql)};
-    if (scalar(@results) == 0) {
-        populateMeasurementForm($dbt->dbh,$dbt,$hbo,$q,$s,$exec_url);
-    } else {
-        $sql = "SELECT collection_no,genus_name,species_name,occurrence_no FROM occurrences WHERE occurrence_no=".int($q->param("occurrence_no"));
-        my $row = ${$dbt->getData($sql)}[0];
-        if (!$row) {
-            carp "Error is displaySpecimenList, could not find ".$q->param("occurrence_no")." in the database";
-            print "An error has occurred";
-            return;
-        }
-        my $taxon_name;
-        my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
-        if ($reid_row) {
-            $taxon_name = $reid_row->{'genus_name'}." ".$reid_row->{'species_name'};
-        } else {
-            $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
-        }   
-        
-        print "<div align=\"center\">";
-        print "<h3>Specimen list for $taxon_name (collection no $row->{collection_no}):</h3>\n";
-        print "<form method=\"POST\" action=\"bridge.pl\">\n";
-        print "<input type=hidden name=\"action\" value=\"populateMeasurementForm\">\n";
-        print "<input type=hidden name=\"occurrence_no\" value=\"".$q->param('occurrence_no')."\">";
-        print "<input type=\"hidden\" name=\"use_reference\" value=\"".$q->param('use_reference')."\">";
-
-        # now create a table of choices
-        print "<table>\n";
-        my $checked = (scalar(@results) == 1) ? "CHECKED" : "";
-        foreach my $row (@results) {
-            # Check the button if this is the first match, which forces
-            #  users who want to create new taxa to check another button
-            print qq|<tr><td><input type="radio" name="specimen_no" value="$row->{specimen_no}" $checked>|;
-            print formatMeasurement($dbt,$row)."</td>";
-        }
-
-        # always give them an option to create a new taxon as well
-        print "<tr><td><input type=\"radio\" name=\"specimen_no\" value=\"-1\">";
-        if ( scalar(@results) == 1 )    {
-            print "No, not the one above ";
-        } else  {
-            print "None of the above ";
-        }
-        print "- add a <b>new</b> measurement</i></td></tr>\n";
-        print "<tr><td align=\"center\"><br><input type=\"Submit\" name=\"Submit\" value=\"Submit\"></td></tr>";
-        print "</table></div>";
+    #my $sql = "SELECT * FROM specimens WHERE occurrence_no=".int($q->param('occurrence_no'));
+    #my @results = @{$dbt->getData($sql)};
+    my @results = getMeasurements($dbt,'occurrence_no'=>int($q->param('occurrence_no')));
+    #if (scalar(@results) == 0) {
+    #    populateMeasurementForm($dbt->dbh,$dbt,$hbo,$q,$s,$exec_url);
+    #} else {
+    $sql = "SELECT collection_no,genus_name,species_name,occurrence_no FROM occurrences WHERE occurrence_no=".int($q->param("occurrence_no"));
+    my $row = ${$dbt->getData($sql)}[0];
+    if (!$row) {
+        carp "Error is displaySpecimenList, could not find ".$q->param("occurrence_no")." in the database";
+        print "An error has occurred";
+        return;
     }
+    my $taxon_name;
+    my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
+    if ($reid_row) {
+        $taxon_name = $reid_row->{'genus_name'}." ".$reid_row->{'species_name'};
+    } else {
+        $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
+    }   
+    
+    print "<div align=\"center\">";
+    print "<h3>Specimen list for $taxon_name (collection no $row->{collection_no}):</h3>\n";
+    print "<form method=\"POST\" action=\"bridge.pl\">\n";
+    print "<input type=hidden name=\"action\" value=\"populateMeasurementForm\">\n";
+    print "<input type=hidden name=\"occurrence_no\" value=\"".$q->param('occurrence_no')."\">";
+    print "<input type=\"hidden\" name=\"use_reference\" value=\"".$q->param('use_reference')."\">";
+
+    # now create a table of choices
+    print "<table>\n";
+#        my $checked = (scalar(@results) == 1) ? "CHECKED" : "";
+
+    %specimens = ();
+    %types = ();
+    %parts = ();
+    foreach my $row (@results) {
+        $specimens{$row->{specimen_no}}{$row->{measurement_type}} = $row->{real_average};
+        $specimens{$row->{specimen_no}}{'specimens_measured'} = $row->{specimens_measured};
+        $specimens{$row->{specimen_no}}{'specimen_part'} = $row->{specimen_part};
+        $specimens{$row->{specimen_no}}{'specimen_id'} = $row->{specimen_id};
+        $types{$row->{measurement_type}}++;
+        $parts{$row->{specimen_part}}++ if ($row->{specimen_part});
+    }
+
+    $specimen_count = scalar(keys(%specimens));
+
+    if ($specimen_count > 0) {
+        print "<tr><th></th><th>specimen #</th>";
+        print "<th>part</th>" if (%parts);
+        print "<th>count</th>";
+        foreach my $type (@measurement_types) {
+            if ($types{$type}) {
+                print "<th>$type</th>";
+            }
+        }
+        print "</tr>";
+    } else {
+        print "<tr><th colspan=3 align=\"center\">No measurements for this occurrence<br><br></td></tr>";
+    }
+
+    my $checked;
+    $checked = "CHECKED" if ($specimen_count == 1);
+    foreach $specimen_no (sort {$a <=> $b} keys %specimens) {
+        my $row = $specimens{$specimen_no};
+        # Check the button if this is the first match, which forces
+        #  users who want to create new measurement to check another button
+        print qq|<tr><td><input type="radio" name="specimen_no" value="$specimen_no" $checked></td>|;
+        print qq|<td>$row->{specimen_id}</td>|;
+        print qq|<td align=\"center\">$row->{specimen_part}</td>| if (%parts);
+        print qq|<td align=\"center\">$row->{specimens_measured}</td>|;
+        foreach my $type (@measurement_types) {
+            if ($types{$type}) {
+                print "<td align=\"center\">$row->{$type}</td>";
+            }
+        }
+        print "</tr>";
+    }
+
+    # always give them an option to create a new measurement as well
+    print "<tr><td><input type=\"radio\" name=\"specimen_no\" value=\"-1\"></td>";
+    print "<td colspan=6>Add a <b>new</b> average measurement</i></td></tr>\n";
+    print "<tr><td><input type=\"radio\" name=\"specimen_no\" value=\"-2\"></td>";
+    print "<td colspan=6>Add <input type=\"text\" name=\"specimens_measured\" value=\"10\" size=3><b>new</b> individual measurements</i></td></tr>\n";
+
+    print "<tr><td align=\"center\" colspan=7><br><input type=\"Submit\" name=\"Submit\" value=\"Submit\"></td></tr>";
+    print "</table></div>";
+    #}
 }
 
 sub populateMeasurementForm {
@@ -179,7 +218,7 @@ sub populateMeasurementForm {
         carp "populateMeasurementForm called with no occurrence_no by ".$s->get('enterer_no');
 		exit;
 	}
-
+    
 	# get the taxon's name
 	my $sql = "SELECT o.collection_no, o.genus_name, o.species_name, o.occurrence_no FROM occurrences o WHERE o.occurrence_no=".int($q->param('occurrence_no'));
     my $row = ${$dbt->getData($sql)}[0];
@@ -203,37 +242,74 @@ sub populateMeasurementForm {
     #Prepare fields to be use in the form ahead
     my @values = ();
     my @fields = ();
-    
-	# query the specimen table for the old data
-	$sql = "SELECT * FROM specimens WHERE specimen_no=".int($q->param('specimen_no'));
-	$row = ${$dbt->getData($sql)}[0];
+   
 
-    if (!$row) {
+    if ($q->param('specimen_no') < 0) {
         # This is a new entry
         if ($q->param('use_reference') eq 'current' && $s->get('reference_no')) {
             $q->param('skip_ref_check'=>1);
         }
         if (!$q->param('skip_ref_check') || !$s->get('reference_no')) {
-                # Make them choose a reference first
-                my $toQueue = "action=populateMeasurementForm&skip_ref_check=1&occurrence_no=".$q->param('occurrence_no');
-                $s->enqueue( $dbh, $toQueue );
-                $q->param( "type" => "select" );
-                main::displaySearchRefs("Please choose a reference before adding specimen measurement data",1);
-                return;
+             
+            # Make them choose a reference first
+            my $toQueue = "action=populateMeasurementForm&specimen_no=".$q->param('specimen_no')."&specimens_measured=".$q->param('specimens_measured')."&skip_ref_check=1&occurrence_no=".$q->param('occurrence_no');
+            $s->enqueue( $dbh, $toQueue );
+            $q->param( "type" => "select" );
+            main::displaySearchRefs("Please choose a reference before adding specimen measurement data",1);
+            return;
         } else {
-            # Specimen count given a default value of 1 below
-            push @fields,$_ for (grep(!/specimens_measured/,@specimen_fields));
-            push @values, '' for @fields;
-            foreach my $type (@measurement_types) {
-                foreach my $f (@measurement_fields) {
-                    push @fields, $type."_".$f;
-                    push @values, '';
+            if ($q->param('specimen_no') == -1) {
+                # Specimen count given a default value of 1 below
+                push @fields,$_ for (grep(!/specimens_measured/,@specimen_fields));
+                push @values, '' for @fields;
+                foreach my $type (@measurement_types) {
+                    foreach my $f (@measurement_fields) {
+                        push @fields, $type."_".$f;
+                        push @values, '';
+                    }
                 }
+	            push (@fields,'occurrence_no','reference_no','specimen_no','taxon_name','collection_no','specimens_measured','specimen_is_type');
+	            push (@values,int($q->param('occurrence_no')),$s->get('reference_no'),'-1',$taxon_name,$collection_no,1,'');
+	            print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
+            } elsif ($q->param('specimen_no') == -2) {
+	            push (@fields,'occurrence_no','reference_no','specimen_no','taxon_name','collection_no','specimen_coverage');
+	            push (@values,int($q->param('occurrence_no')),$s->get('reference_no'),'-1',$taxon_name,$collection_no,'');
+                #@table_rows = ('specimen_id','length','width','height','diagonal','specimen_side','specimen_part','measurement_source','measurement_magnification','is_type');
+                my $table_rows = "";
+                for (1..$q->param('specimens_measured')) {
+                    $table_rows .= "<tr>";
+                    $table_rows .=  "<td><input type=\"text\" name=\"specimen_id\" size=10 class=\"smallText\"></td>";
+                    $table_rows .=  "<td><input type=\"text\" name=\"length_average\" size=7 class=\"smallText\"></td>";
+                    $table_rows .=  "<td><input type=\"text\" name=\"width_average\" size=7 class=\"smallText\"></td>";
+                    $table_rows .=  "<td><input type=\"text\" name=\"height_average\" size=7 class=\"smallText\"></td>";
+                    $table_rows .=  "<td><input type=\"text\" name=\"diagonal_average\" size=7 class=\"smallText\"></td>";
+                    $table_rows .=  "<td><select name=\"specimen_side\" class=\"smallText\">";
+                    my @specimen_side_array = @{$hbo->{'SELECT_LISTS'}{'specimen_side'}};
+                    $table_rows .=  "<option>".$_."</option>" for @specimen_side_array;
+                    $table_rows .=  "</select></td>";
+                    $table_rows .=  "<td><input type=\"text\" name=\"specimen_part\" size=10 class=\"smallText\"></td>";
+                    $table_rows .=  "<td><select name=\"measurement_source\" class=\"smallText\">";
+                    my @measurement_source_array = @{$hbo->{'SELECT_LISTS'}{'measurement_source'}};
+                    $table_rows .=  "<option>".$_."</option>" for @measurement_source_array;
+                    $table_rows .=  "</select></td>";
+                    $table_rows .=  "<td><input type=\"text\" name=\"measurement_magnification\" size=7 class=\"smallText\"></td>";
+                    $table_rows .=  "<td><select name=\"specimen_is_type\" class=\"smallText\">";
+                    my @is_type_array = @{$hbo->{'SELECT_LISTS'}{'specimen_is_type'}};
+                    $table_rows .=  "<option>".$_."</option>" for @is_type_array;
+                    $table_rows .=  "</select></td>";
+                    $table_rows .= "</tr>";
+                    $table_rows .= "<tr><td colspan=10 style=\"padding-bottom: .8em;\"><b><span class=\"smallTextHeader\">Comments</span>: </b><input type=\"text\" name=\"comments\" size=70 class=\"smallText\"></td>";
+                    $table_rows .= "<td><input type=\"hidden\" name=\"specimens_measured\" value=\"1\"></td></tr>";
+                }
+	            my $html = $hbo->populateHTML('specimen_measurement_form_individual', \@values, \@fields);
+                $html =~ s/%%table_rows%%/$table_rows/;
+                print $html;
             }
-	        push (@fields,'occurrence_no','reference_no','specimen_no','taxon_name','collection_no','specimens_measured','specimen_is_type');
-	        push (@values,int($q->param('occurrence_no')),$s->get('reference_no'),'-1',$taxon_name,$collection_no,1,'');
         }
-    } else {
+    } elsif ($q->param('specimen_no') > 0) {
+        # query the specimen table for the old data
+        $sql = "SELECT * FROM specimens WHERE specimen_no=".int($q->param('specimen_no'));
+        $row = ${$dbt->getData($sql)}[0];
 
         #Query the measurements table for the old data
         $sql = "SELECT * FROM measurements WHERE specimen_no=".int($q->param('specimen_no'));
@@ -264,7 +340,7 @@ sub populateMeasurementForm {
         # This is an edit, use fields from the DB
         push @fields, 'specimen_is_type';
         if ($row->{'is_type'} eq 'holotype') {
-            push @values, 'yes, a holotype';
+            push @values, 'yes, the holotype';
         } elsif ($row->{'is_type'} eq 'some paratypes') {
             push @values, 'yes, some paratypes';
         } elsif ($row->{'is_type'} eq 'paratype') {
@@ -276,9 +352,9 @@ sub populateMeasurementForm {
         # some additional fields not from the form row
 	    push (@fields, 'occurrence_no','reference_no','specimen_no','taxon_name','collection_no');
 	    push (@values, int($q->param('occurrence_no')),$row->{'reference_no'},$row->{'specimen_no'},$taxon_name,$collection_no);
+	    print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
     }
 
-	print $hbo->populateHTML('specimen_measurement_form', \@values, \@fields);
 }
 
 sub processMeasurementForm	{
@@ -302,132 +378,156 @@ sub processMeasurementForm	{
         carp("processMeasurementForm: no row found for occurrence_no ".$q->param('occurrence_no'));
         return;
     }
+  
+
+    my @specimen_ids = $q->param('specimen_id');
+    my @param_list = $q->param();
+
+    for(my $i=0;$i<scalar(@specimen_ids);$i++) {
+        my %fields = ();
+
+        # This is the part where we rearrange the data into a flat single dimensional
+        # hash that contains all the data from single row.  i.e. if $i = 3, the hash
+        # will contain the length,width etc from row 3, as well as the intransients like occurrence_no
+        foreach my $param (@param_list) {
+            my @vars = $q->param($param);
+            if (scalar(@vars) == 1) {
+                $fields{$param} = $vars[0];
+            } else {
+                $fields{$param} = $vars[$i];
+            }
+        }
+
+        # Make sure at least one of these fields is set
+        if (! ($fields{'length_average'} || $fields{'width_average'} || $fields{'height_average'} || $fields{'diagonal_average'}) ) {
+            next;
+        }
     
-	# if ecotaph no exists, update the record
-    my %fields = $q->Vars();
+        # if ecotaph no exists, update the record
 
-    if ($fields{'specimen_is_type'} =~ /holotype/) {
-        $fields{'is_type'} = 'holotype';
-    } elsif ($fields{'specimen_is_type'} =~ /paratypes/) {
-        $fields{'is_type'} = 'some paratypes';
-    } elsif ($fields{'specimen_is_type'} =~ /paratype/) {
-        $fields{'is_type'} = 'paratype';
-    } else {
-        $fields{'is_type'} = '';
+        if ($fields{'specimen_is_type'} =~ /holotype/) {
+            $fields{'is_type'} = 'holotype';
+        } elsif ($fields{'specimen_is_type'} =~ /paratypes/) {
+            $fields{'is_type'} = 'some paratypes';
+        } elsif ($fields{'specimen_is_type'} =~ /paratype/) {
+            $fields{'is_type'} = 'paratype';
+        } else {
+            $fields{'is_type'} = '';
+        }
+
+        if ( $fields{'specimen_no'} > 0 )	{
+            $result = $dbt->updateRecord($s,'specimens','specimen_no',$fields{'specimen_no'},\%fields);
+
+            if ($result) {
+                $sql = "SELECT * FROM measurements WHERE specimen_no=".int($fields{'specimen_no'});
+                my @measurements = @{$dbt->getData($sql)};
+
+                my %in_db= (); # Find rows from DB
+                $in_db{$_->{'measurement_type'}} = $_ for @measurements;
+
+                my %in_cgi = (); # Find rows from filled out form
+                foreach my $type (@measurement_types) {
+                    foreach my $f (grep(!/error_unit/,@measurement_fields)) {
+                        if ($fields{$type."_".$f}) {
+                            $in_cgi{$type}{$f} = $fields{$type."_".$f};
+                        } 
+                    }
+                }
+
+                foreach my $type (@measurement_types) {
+                    if ($in_db{$type} && $in_cgi{$type}) {
+                        # If the record exists both the form and db, its an update
+                        while(my($type,$row)=each %in_cgi) {
+                            main::dbg("UPDATE, TYPE $type: ".Dumper($row));
+                            foreach my $f (grep(!/error_unit/,@measurement_fields)) {
+                                next if (!$row->{$f});
+                                if ($fields{'magnification'} =~ /^[0-9.]+$/) {
+                                    $row->{'real_'.$f}=$row->{$f}/$fields{'magnification'};
+                                } else {
+                                    $row->{'real_'.$f}=$row->{$f};
+                                }
+                            }
+                            $in_cgi{$type}{'error_unit'} = $fields{$type."_error_unit"};
+    #                        $row->{'error_unit'} = $q->param($type."_error_unit");
+                            #$dbt->insertRecord($s,'measurements',$row);
+                            $dbt->updateRecord($s,'measurements','measurement_no',$in_db{$type}{'measurement_no'},$in_cgi{$type});
+                        }
+                    } elsif ($in_db{$type}) {
+                        # Else if it exists only in the database now, delete it 
+                        $sql = "DELETE FROM measurements WHERE measurement_no=".$in_db{$type}{'measurement_no'} . " LIMIT 1";
+                        main::dbg("DELETING type $type: $sql");
+                        $dbt->getData($sql);
+                    } elsif ($in_cgi{$type}) {
+                        # Else if its in the form and NOT in the DB, add it
+                        while(my($type,$row)=each %in_cgi) {
+                            main::dbg("INSERT, TYPE $type: ".Dumper($row));
+                            foreach my $f (grep(!/error_unit/,@measurement_fields)) {
+                                next if (!$row->{$f});
+                                if ($fields{'magnification'} =~ /^[0-9.]+$/) {
+                                    $row->{'real_'.$f}=$row->{$f}/$fields{'magnification'};
+                                } else {
+                                    $row->{'real_'.$f}=$row->{$f};
+                                }
+                            }
+    #                        $in_cgi{$type}{'error_unit'}=$q->param($type."_error_unit");
+                            $row->{'measurement_type'}=$type;
+                            $row->{'specimen_no'}= $fields{'specimen_no'};
+                            $row->{'error_unit'}=$fields{$type."_error_unit"};
+                            $dbt->insertRecord($s,'measurements',$row);
+                        }
+    #                    $in_cgi{$type}{'measurement_type'}=$type;
+    #                    $in_cgi{$type}{'error_unit'}=$q->param($type."_error_unit");
+    #                    $in_cgi{$type}{'specimen_no'}= $q->param('specimen_no');
+    #                    $dbt->insertRecord($s,'measurements',$in_cgi{$type});
+                    }
+                }
+
+                print "<center><h3>Specimen measurement data for $taxon_name (collection no $collection_no) has been updated</h3></center>\n";
+            } else {
+                print "Error updating database table row, please contact support";
+                carp "Error updating row in Measurement.pm: ".$result;
+            }
+        } else {
+            # Set the reference_no
+            $fields{'reference_no'} = $s->get('reference_no');
+            $fields{'taxon_no'} = undef;
+            my ($result,$specimen_no) = $dbt->insertRecord($s,'specimens',\%fields);
+
+            if ($result) {
+                # Get the measurement data. types can be "length","width",etc. fields can be "average","max","min",etc.
+                my %m_table = (); # Measurement table, only used right below
+                foreach my $type (@measurement_types) {
+                    foreach my $f (grep(!/error_unit/,@measurement_fields)) {
+                        if ($fields{$type."_".$f}) {
+                            $m_table{$type}{$f} = $fields{$type."_".$f};
+                        } 
+                    }
+                }
+
+                # Now insert a row into the measurements table for each type of measurement
+                while(my($type,$row)=each %m_table) {
+                    foreach my $f (grep(!/error_unit/,@measurement_fields)) {
+                        next if (!$row->{$f});
+                        if ($fields{'magnification'} =~ /^[0-9.]+$/) {
+                            $row->{'real_'.$f} = $row->{$f}/$fields{'magnification'}; 
+                        } else {
+                            $row->{'real_'.$f} = $row->{$f};
+                        }
+                    }
+                    main::dbg("INSERT, TYPE $type: ".Dumper($row));
+                    $row->{'measurement_type'} = $type;
+                    $row->{'specimen_no'} = $specimen_no;
+                    $row->{'error_unit'}=$fields{$type."_error_unit"};
+                    $dbt->insertRecord($s,'measurements',$row);
+                }
+
+                print "<center><h3>Specimen measurement data for $taxon_name (collection_no $collection_no) has been added</h3></center>\n";
+            } else {
+                print "Error inserting database table row, please contact support";
+                carp "Error inserting row in Measurement.pm: ".$result;
+            }
+        }
     }
-
-	if ( $q->param('specimen_no') > 0 )	{
-        $result = $dbt->updateRecord($s,'specimens','specimen_no',$q->param('specimen_no'),\%fields);
-
-        if ($result) {
-            $sql = "SELECT * FROM measurements WHERE specimen_no=".int($q->param('specimen_no'));
-            my @measurements = @{$dbt->getData($sql)};
-
-            my %in_db= (); # Find rows from DB
-            $in_db{$_->{'measurement_type'}} = $_ for @measurements;
-
-            my %in_cgi = (); # Find rows from filled out form
-            foreach my $type (@measurement_types) {
-                foreach my $f (grep(!/error_unit/,@measurement_fields)) {
-                    if ($q->param($type."_".$f)) {
-                        $in_cgi{$type}{$f} = $q->param($type."_".$f);
-                    } 
-                }
-            }
-
-            foreach my $type (@measurement_types) {
-                if ($in_db{$type} && $in_cgi{$type}) {
-                    # If the record exists both the form and db, its an update
-                    while(my($type,$row)=each %in_cgi) {
-                        main::dbg("UPDATE, TYPE $type: ".Dumper($row));
-                        foreach my $f (grep(!/error_unit/,@measurement_fields)) {
-                            next if (!$row->{$f});
-                            if ($q->param('magnification') =~ /^[0-9.]+$/) {
-                                $row->{'real_'.$f}=$row->{$f}/$q->param('magnification');
-                            } else {
-                                $row->{'real_'.$f}=$row->{$f};
-                            }
-                        }
-                        $in_cgi{$type}{'error_unit'} = $q->param($type."_error_unit");
-#                        $row->{'error_unit'} = $q->param($type."_error_unit");
-                        #$dbt->insertRecord($s,'measurements',$row);
-                        $dbt->updateRecord($s,'measurements','measurement_no',$in_db{$type}{'measurement_no'},$in_cgi{$type});
-                    }
-                } elsif ($in_db{$type}) {
-                    # Else if it exists only in the database now, delete it 
-                    $sql = "DELETE FROM measurements WHERE measurement_no=".$in_db{$type}{'measurement_no'} . " LIMIT 1";
-                    main::dbg("DELETING type $type: $sql");
-                    $dbt->getData($sql);
-                } elsif ($in_cgi{$type}) {
-                    # Else if its in the form and NOT in the DB, add it
-                    while(my($type,$row)=each %in_cgi) {
-                        main::dbg("INSERT, TYPE $type: ".Dumper($row));
-                        foreach my $f (grep(!/error_unit/,@measurement_fields)) {
-                            next if (!$row->{$f});
-                            if ($q->param('magnification') =~ /^[0-9.]+$/) {
-                                $row->{'real_'.$f}=$row->{$f}/$q->param('magnification');
-                            } else {
-                                $row->{'real_'.$f}=$row->{$f};
-                            }
-                        }
-#                        $in_cgi{$type}{'error_unit'}=$q->param($type."_error_unit");
-                        $row->{'measurement_type'}=$type;
-                        $row->{'specimen_no'}= $q->param('specimen_no');
-                        $row->{'error_unit'}=$q->param($type."_error_unit");
-                        $dbt->insertRecord($s,'measurements',$row);
-                    }
-#                    $in_cgi{$type}{'measurement_type'}=$type;
-#                    $in_cgi{$type}{'error_unit'}=$q->param($type."_error_unit");
-#                    $in_cgi{$type}{'specimen_no'}= $q->param('specimen_no');
-#                    $dbt->insertRecord($s,'measurements',$in_cgi{$type});
-                }
-            }
-
-            print "<center><h3>Specimen measurement data for $taxon_name (collection no $collection_no) has been updated</h3></center>\n";
-        } else {
-            print "Error updating database table row, please contact support";
-            carp "Error updating row in Measurement.pm: ".$result;
-        }
-	} else {
-        # Set the reference_no
-        $fields{'reference_no'} = $s->get('reference_no');
-        $fields{'taxon_no'} = undef;
-        my ($result,$specimen_no) = $dbt->insertRecord($s,'specimens',\%fields);
-
-        if ($result) {
-            # Get the measurement data. types can be "length","width",etc. fields can be "average","max","min",etc.
-            my %m_table = (); # Measurement table, only used right below
-            foreach my $type (@measurement_types) {
-                foreach my $f (grep(!/error_unit/,@measurement_fields)) {
-                    if ($q->param($type."_".$f)) {
-                        $m_table{$type}{$f} = $q->param($type."_".$f);
-                    } 
-                }
-            }
-
-            # Now insert a row into the measurements table for each type of measurement
-            while(my($type,$row)=each %m_table) {
-                foreach my $f (grep(!/error_unit/,@measurement_fields)) {
-                    next if (!$row->{$f});
-                    if ($q->param('magnification') =~ /^[0-9.]+$/) {
-                        $row->{'real_'.$f} = $row->{$f}/$q->param('magnification'); 
-                    } else {
-                        $row->{'real_'.$f} = $row->{$f};
-                    }
-                }
-                main::dbg("INSERT, TYPE $type: ".Dumper($row));
-                $row->{'measurement_type'} = $type;
-                $row->{'specimen_no'} = $specimen_no;
-                $row->{'error_unit'}=$q->param($type."_error_unit");
-                $dbt->insertRecord($s,'measurements',$row);
-            }
-
-            print "<center><h3>Specimen measurement data for $taxon_name (collection_no $collection_no) has been added</h3></center>\n";
-        } else {
-            print "Error inserting database table row, please contact support";
-            carp "Error inserting row in Measurement.pm: ".$result;
-        }
-	}
 
 	print "<div align=\"center\"><table><tr><td><ul>".
 	      "<li><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-1&occurrence_no=".$q->param('occurrence_no')."\">Add another measurement of this occurrence</a></li>".
@@ -437,35 +537,6 @@ sub processMeasurementForm	{
           "<li><a href=\"$exec_url?action=checkTaxonInfo&taxon_name=$taxon_name\">Get general info about this taxon</a></li>".
           "</ul></td></tr></table></div>";
 }
-
-sub formatMeasurement {
-    my $dbt = shift;
-    my $data = shift;
-    my $s = "";
-
-    $s .= " $data->{specimen_id} - " if ($data->{'specimen_id'});
-    if ($data->{'specimens_measured'} != 1) {
-        $s .= " $data->{specimens_measured} specimens - ";
-    }
-
-    $sql = "SELECT * FROM measurements WHERE specimen_no=$data->{specimen_no}";
-    my @results = @{$dbt->getData($sql)};
-    foreach my $row (@results) {
-        if ($row->{'average'}) {
-            if ($data->{'magnification'}) {
-                my $num = sprintf(" %.4f",$row->{'average'}/$data->{'magnification'});
-                $num =~ s/0+$//;
-                $num =~ s/\.$//;
-                $s .= " $num x";
-            } else {
-                $s .= " $row->{average} x";
-            }
-        }
-    }
-    $s =~ s/x$//;
-    $s .= " mm";
-}
-
 
 # General purpose function for getting occurrences with data.  Pass in 2 arguments:
 #   Argument 1 is $dbt object
@@ -568,6 +639,7 @@ sub getMeasurementTable {
         $types{$row->{'measurement_type'}}++;
 #        $p_table{'a_mean'}{$row->{'measurement_type'}} += $row->{'specimens_measured'} * $row->{'real_average'};
         # Note that "average" is the geometric mean - a_mean (arithmetic mean) is not used right now
+        $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'specimens_measured'} += $row->{'specimens_measured'};
         $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'average'} += $row->{'specimens_measured'} * log($row->{'real_average'});
         if ($row->{'specimens_measured'} == 1) {
             if (!exists $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'min'} || $row->{'real_average'} < $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'min'}) {
@@ -587,9 +659,9 @@ sub getMeasurementTable {
     }    
 
     while (my ($part,$m_table) = each %p_table) {
-        foreach my $type (keys %$m_table) {
+        foreach my $type (keys %types) {
             if ($m_table->{'specimens_measured'}) {
-                $m_table->{$type}{'average'} = exp($m_table->{$type}{'average'}/$m_table->{'specimens_measured'});
+                $m_table->{$type}{'average'} = exp($m_table->{$type}{'average'}/$m_table->{$type}{'specimens_measured'});
             }
         }
    
@@ -625,14 +697,15 @@ sub getMeasurementTable {
                     push @{$values_by_type{$row->{'measurement_type'}}},$row->{'real_average'};
                 }
                 while (my ($type,$values_array_ref) = each %values_by_type) {
-                    @values = sort @$values_array_ref;
+                    @values = sort {$a <=> $b} @$values_array_ref;
                     if (@values) {
                         if (scalar(@values) % 2 == 0) {
                             my $middle_index = int(scalar(@values)/2);
-                            my $median = ($values[$middle_index] + $values[$middle_index+1])/2;
+                            my $median = ($values[$middle_index] + $values[$middle_index-1])/2;
                             $m_table->{$type}{'median'} = $median;
                         } else {
-                            $m_table->{$type}{'median'} = $values[scalar(@values)/2];
+                            my $middle_index = int(scalar(@values/2));
+                            $m_table->{$type}{'median'} = $values[$middle_index];
                         }
                     }
                     if (scalar(@values) > 1) {
