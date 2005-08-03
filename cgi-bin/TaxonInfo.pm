@@ -1614,6 +1614,9 @@ sub displayMeasurements {
         @specimens = Measurement::getMeasurements($dbt,'taxon_name'=>$taxon_name,'get_global_specimens'=>1);
     }
 
+    # Returns a triple index hash with index <part><dimension type><whats measured>
+    #  Where part can be leg, valve, etc, dimension type can be length,width,height,diagonal,inflation 
+    #   and whats measured can be average, min,max,median,error
     my $p_table = Measurement::getMeasurementTable(\@specimens);
 
     my $str = "";
@@ -1639,7 +1642,7 @@ sub displayMeasurements {
                         }
                     }
                     if ($m_table->{$type}{'error'}) {
-                        $str .= "<td align=\"center\">($m_table{$type}{error_unit})</td>";
+                        $str .= "<td align=\"center\">($m_table->{$type}{error_unit})</td>";
                     }
                     $str .= '</tr>';
                 }
