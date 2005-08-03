@@ -2981,10 +2981,6 @@ sub getMaxMinNamesAndDashes	{
 
 
 
-# 1/2004, rjp: now only used to display list for editing/adding occurrences
-# The normal list display has been replaced by the method formatAsHTML() in the
-# Occurrence class.
-#
 # builds the list of occurrences shown in places such as the collections form
 # must pass it the collection_no
 # reference_no (optional or not?? - not sure).
@@ -3044,6 +3040,13 @@ sub buildTaxonomicList {
 			$grand_master_hash{abund_value}		= 	$rowref->{abund_value};
 			$grand_master_hash{reference_no}	= 	$rowref->{reference_no};
 
+            # If we have specimens
+            $sql_s = "SELECT count(*) c FROM specimens WHERE occurrence_no=$rowref->{occurrence_no}";
+            $specimens_measured = ${$dbt->getData($sql_s)}[0]->{'c'};
+            if ($specimens_measured) {
+                my $pl = ($specimens_measured > 1) ? 's' : '';
+                $rowref->{comments} .= " (<a href=\"bridge.pl?action=displaySpecimenList&occurrence_no=$rowref->{occurrence_no}\">$specimens_measured measurement$pl</a>)";
+            }
 			
 			# if the user submitted a form such as adding a new occurrence or 
 			# editing an existing occurrence, then we'll bold face any of the
