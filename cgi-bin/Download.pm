@@ -215,9 +215,8 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
         $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
         $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", $q->param("sp") );
-#       $html .= $self->retellOptionsRow ( "Include occurrences qualified by \"aff.\" or quotes?", $q->param("poor_genus_reso") );
-	my @genus_reso_types_group = ('aff.','cf.','ex_gr.','?','"');
-	$html .= $self->retellOptionsGroup('Include occurrences qualified by:','genus_reso_',\@genus_reso_types_group);
+    	my @genus_reso_types_group = ('aff.','cf.','ex_gr.','sensu lato','?','"');
+    	$html .= $self->retellOptionsGroup('Include occurrences qualified by:','genus_reso_',\@genus_reso_types_group);
         $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
         $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
         $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
@@ -959,6 +958,9 @@ sub getGenusResoString{
         if ( $q->param('genus_reso_ex_gr.') )	{
             $resos .= ",'ex gr.'";
         }
+        if ( $q->param('genus_reso_sensu_lato') )	{
+            $resos .= ",'sensu lato'";
+        }
         if ( $q->param('genus_reso_?') )	{
             $resos .= ",'?'";
         }
@@ -997,14 +999,12 @@ sub getOccurrencesWhereClause {
 
 	push @occ_where, "o.species_name!='indet.'" if $q->param('indet') eq 'NO';
 	push @occ_where, "o.species_name!='sp.'" if $q->param('sp') eq 'NO';
-#	push @occ_where, "(o.genus_reso NOT IN ('aff.','\"') OR o.genus_reso IS NULL)" if $q->param('poor_genus_reso') eq 'NO';
 	my $genusResoString = $self->getGenusResoString();
 	push @occ_where, $genusResoString if $genusResoString;
 	push @occ_where, "(o.genus_reso NOT LIKE '%informal%' OR o.genus_reso IS NULL)" if $q->param('informal') eq 'NO';
 
 	push @reid_where, "re.species_name!='indet.'" if $q->param('indet') eq 'NO';
 	push @reid_where, "re.species_name!='sp.'" if $q->param('sp') eq 'NO';
-#	push @reid_where, "(re.genus_reso NOT IN ('aff.','\"') OR re.genus_reso IS NULL)" if $q->param('poor_genus_reso') eq 'NO';
 	# this is kind of a hack, I admit it JA 31.7.05
 	$genusResoString =~ s/o\.genus_reso/re.genus_reso/g;
 	push @reid_where, $genusResoString if $genusResoString;
@@ -1367,6 +1367,10 @@ sub doQuery {
         # In the future: when we update to mysql 4.1, filter for "most recent" REID in a subquery, rather
         # than after the fact in the "exclude++" section of the code
         @left_joins1 = (@left_joins,'LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no');
+
+        # This term very important.  sql1 deal with occs with NO reid, sql2 deals with only reids
+        # This way WHERE terms can focus on only pruning the occurrences table for sql1 and only
+        # pruning on the reids table for sql2 PS 07/15/2005
         @where1 = (@where,@occ_where,"re.reid_no IS NULL");
         $sql1 = "SELECT ".join(",",@fields).
                " FROM " .join(",",@tables)." ".join (" ",@left_joins1).
