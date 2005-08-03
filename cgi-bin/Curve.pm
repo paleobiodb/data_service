@@ -647,9 +647,20 @@ sub assignGenera	{
 					}
 				}
 			}
+		# Hurlbert's PIE
+			for $j ($last..$first)	{
+				if ( abs( $present[$i][$j] ) > 0 && $occsinchron[$j] > 1 )	{
+					$pie[$j] = $pie[$j] + ( abs ( $present[$i][$j] ) / $occsinchron[$j] )**2;
+				}
+			}
 		}
 	}
 	close PADATA;
+	for $i (1..$chrons)	{
+		if ( $occsinchron[$i] > 1 )	{
+			$pie[$i] = ( 1 - $pie[$i] ) / ( $occsinchron[$i] / ( $occsinchron[$i] - 1 ) );
+		}
+	}
 	
 	if ( ! open FOOTE,">$OUTPUT_DIR/firstlast.txt" ) {
 		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/firstlast.txt<BR>$!" );
@@ -1268,6 +1279,9 @@ sub printResults	{
 		if ( $q->param('print_jolly-seber_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
 		}
+		if ( $q->param('print_pie') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Evenness of<br>occurrences (PIE)</b> ";
+		}
 		if ( $q->param('print_lists') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>$listorfm</b> ";
 		}
@@ -1344,6 +1358,9 @@ sub printResults	{
 		}
 		if ( $q->param('print_jolly-seber_raw') eq "YES" )	{
 			print TABLE ",Jolly-Seber estimate";
+		}
+		if ( $q->param('print_pie') eq "YES" )	{
+			print TABLE ",Evenness of occurrences (PIE)";
 		}
 		if ($samplingmethod != 5)	{
 			if ( $q->param('print_lists') eq "YES" )	{
@@ -1488,6 +1505,13 @@ sub printResults	{
 						print "<td class=tiny align=center valign=top>NaN ";
 					}
 				}
+				if ( $q->param('print_pie') eq "YES" )	{
+					if ($pie[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%.5f ",$pie[$i];
+					} else    {
+						print "<td class=tiny align=center valign=top>NaN ";
+					}
+				}
 				if ( $q->param('print_lists') eq "YES" )	{
 					print "<td class=tiny align=center valign=top>$listsinchron[$i] ";
 				}
@@ -1588,6 +1612,20 @@ sub printResults	{
 				if ( $q->param('print_chao-2_raw') eq "YES" )	{
 					if ($chaostat > 0 )	{
 						printf TABLE ",%.1f",$chaostat;
+					} else    {
+						print TABLE ",NaN";
+					}
+				}
+				if ( $q->param('print_jolly-seber_raw') eq "YES" )	{
+					if ($jolly[$i] > 0 )	{
+						printf TABLE ",%.1f",$jolly[$i];
+					} else    {
+						print TABLE ",NaN";
+					}
+				}
+				if ( $q->param('print_pie') eq "YES" )	{
+					if ($pie[$i] > 0 )	{
+						printf TABLE ",%.5f",$pie[$i];
 					} else    {
 						print TABLE ",NaN";
 					}
