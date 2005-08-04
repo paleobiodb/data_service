@@ -474,7 +474,7 @@ sub assignGenera	{
 					#  each ref and record which ref this
 					#  collection belongs to 9.4.05
 					if ( $collrefno[$collno] < 1 && $occrow[$field_refno] > 0 )	{
-						$collsfromref[$occrow[$field_refno]]++;
+						$collsfromref[$occrow[$field_refno]][$chid[$collno]]++;
 						$collrefno[$collno] = $occrow[$field_refno];
 					}
 
@@ -821,10 +821,10 @@ sub subsample	{
 		#  the number of collections belonging to the reference that
 		#  yielded the chosen collection 9.4.05
 		# WARNING: this only works for UW or OW (methods 2 and 3)
-					  if ( $collsfromref[$collrefno[$listid[$j]]] > 0 )	{
-					    if ( rand > 1 / $collsfromref[$collrefno[$listid[$j]]] && $q->param('weight_by_ref') eq "yes" && $samplingmethod > 1 && $samplingmethod < 4 )	{
+					  if ( $collsfromref[$collrefno[$listid[$j]]][$i] > 0 )	{
+					    if ( rand > 1 / $collsfromref[$collrefno[$listid[$j]]][$i] && $q->param('weight_by_ref') eq "yes" && $samplingmethod > 1 && $samplingmethod < 4 )	{
 					      $j = int(rand $nitems) + 1;
-					      while ( rand > 1 / $collsfromref[$collrefno[$listid[$j]]] )	{
+					      while ( rand > 1 / $collsfromref[$collrefno[$listid[$j]]][$i] )	{
 					        $j = int(rand $nitems) + 1;
 					      }
 					    }
