@@ -9,7 +9,7 @@ use Data::Dumper;
 use DBTransactionManager;
 
 # Flags and constants
-my $DEBUG=0;			# The debug level of the calling program
+my $DEBUG=1;			# The debug level of the calling program
 my $dbh;				# The database handle
 my $dbt;				# The new and improved database object
 my $q;					# Reference to the parameters
@@ -1690,16 +1690,18 @@ sub doQuery {
     print REFSFILE join (',',@refsFieldNames), "\n";
 
 # print the refs
-    $ref_sql = "SELECT * FROM refs WHERE reference_no IN (" . join (',',@refnos) . ")";
-    $self->dbg("Get ref data sql: $ref_sql"); 
-    @refrefs= @{$dbt->getData($ref_sql)};
-    for my $refref (@refrefs)	{
-        my @refvals = ();
-        for my $r (@refsFieldNames)	{
-            push @refvals , $refref->{$r};
+    if (@refnos) {
+        $ref_sql = "SELECT * FROM refs WHERE reference_no IN (" . join (',',@refnos) . ")";
+        $self->dbg("Get ref data sql: $ref_sql"); 
+        @refrefs= @{$dbt->getData($ref_sql)};
+        for my $refref (@refrefs)	{
+            my @refvals = ();
+            for my $r (@refsFieldNames)	{
+                push @refvals , $refref->{$r};
+            }
+            printf REFSFILE "%s\n",$self->formatRow(@refvals);
+            $acceptedRefs++;
         }
-        printf REFSFILE "%s\n",$self->formatRow(@refvals);
-        $acceptedRefs++;
     }
 	close REFSFILE;
 
