@@ -760,7 +760,7 @@ sub subsample	{
 			@subsrichness = ();
 			@lastsubsrichness = ();
 			@present = ();
-			@subsrefrichness = ();
+			@refsampled = ();
 		# if Jack's data are being used, declare Recent genera present
 		#  in bin 1
 			if ( $q->param('recent_genera') )	{
