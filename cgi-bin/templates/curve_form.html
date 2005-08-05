@@ -5,7 +5,7 @@ function checkAllRaw(checkbox) {
     var state = checkbox.checked;
     var frm = document.forms[0];
 
-    var isRaw = /^print_((.*?)_raw|sampled|range-through|boundary-crosser|two_timer|three_timer|pie|lists|occurrences|occurrences-squared|mean_richness|median_richness)$/;
+    var isRaw = /^print_((.*?)_raw|sampled|range-through|boundary-crosser|two_timer|three_timer|pie|refs|lists|occurrences|occurrences-squared|mean_richness|median_richness)$/;
 
     for(var i=0; i < frm.elements.length; i++){
         if(isRaw.test(frm.elements[i].name)) {
@@ -204,6 +204,17 @@ Intermediate numbers of items to report in subsampling curves:<br>
 </tr>
 
 <tr><td valign=top>
+<font size=-1>
+Maximum number of references to draw in each temporal bin:<br>
+</font>
+<i><font size=-2>The count may be exceeded for computational reasons. Works with unweighted, occurrences weighted, or occurrences-squared weighted subsampling. Important: don't combine this with the preceding or following options.
+</font></i>
+
+<td valign=top>
+<input name=ref_quota>
+</td>
+
+<tr><td valign=top>
 <font size=-1>Avoid collections coming from references that yield many collections?<br>
 </font>
 <i><font size=-2>Works only with unweighted or occurrences-weighted by-list subsampling.</font></i>
@@ -296,6 +307,7 @@ Intermediate numbers of items to report in subsampling curves:<br>
 <tr><td valign=top>
 <nobr>
 <font size=-1>
+<input type="checkbox" name="print_refs_raw" value="YES" checked> References
 <input type="checkbox" name="print_lists" value="YES" checked> Lists
 <input type="checkbox" name="print_occurrences" value="YES" checked> Occurrences
 <input type="checkbox" name="print_occurrences-squared" value="YES" checked> Occurrences-squared
@@ -325,6 +337,7 @@ Intermediate numbers of items to report in subsampling curves:<br>
 <input type="checkbox" name="print_base_ss" value="YES" checked> Base (Ma)
 <input type="checkbox" name="print_midpoint_ss" value="YES" checked> Midpoint (Ma)
 <input type="checkbox" name="print_items" value="YES" checked> Items sampled
+<input type="checkbox" name="print_refs_ss" value="YES" checked> References
 <input type="checkbox" name="print_median" value="YES"> Median diversity
 <input type="checkbox" name="print_ci" value="YES"> 1-sigma CI
 <input type="checkbox" name="print_mean" value="YES" checked> Mean diversity
