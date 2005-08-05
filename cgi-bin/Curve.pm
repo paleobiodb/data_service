@@ -542,6 +542,7 @@ sub assignGenera	{
 	for $i (1..$chrons)	{
 		my @temp = keys %{$refisinchron[$i]};
 		$refsinchron[$i] = $#temp + 1;
+		$refsread = $refsread + $refsinchron[$i];
 	}
 
 	# compute median richness of lists in each chron
@@ -1721,8 +1722,12 @@ sub printResults	{
 			}
 		}
 		print "</table><p>\n";
-	
-		print "\n<b>$listsread</b> lists and <b>$occsread</b> occurrences met the search criteria.<p>\n";
+
+		if ( $refsread == 0 )	{
+			print "\n<b>$listsread</b> lists and <b>$occsread</b> occurrences met the search criteria.<p>\n";
+		} else	{
+			print "\n<b>$refsread</b> reference and interval combinations, <b>$listsread</b> lists, and <b>$occsread</b> occurrences met the search criteria.<p>\n";
+		}
 	
 		if ($q->param('samplesize') ne "")	{
 			print "\n<hr>\n<h3>Results of subsampling analysis</h3>\n\n";
