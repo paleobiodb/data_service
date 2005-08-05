@@ -679,7 +679,7 @@ sub getMeasurementTable {
         }
     
         if ($can_compute) {
-            my @measurements_by_part = ();
+            my @measurements_for_part = ();
             foreach my $row (@measurements) {
                 if ($row->{'specimen_part'} eq $part) {
                     push @measurements_for_part,$row;
