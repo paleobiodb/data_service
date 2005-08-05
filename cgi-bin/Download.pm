@@ -1318,23 +1318,23 @@ sub doQuery {
     if ($q->param('output_data') =~ /specimens/) {
         push @fields, 's.specimen_no',
                        's.specimens_measured', 
-                       's.specimen_part',
+                       's.specimen_part';
         push @tables, 'specimens s';
 	    unshift @where,	'o.occurrence_no = s.occurrence_no';
 
 		push @fields, $self->getOutFields('specimens',TRUE);
 
-        if ($q->param('specimens_authorizer')) {
-            push @left_joins, "LEFT JOIN person p1 ON specimens.authorizer_no=p1.person_no";
+        if ($q->param('specimens_authorizer') eq 'YES') {
+            push @left_joins, "LEFT JOIN person p1 ON s.authorizer_no=p1.person_no";
             push @fields, 'p1.name specimens_authorizer';
         }
-        if ($q->param('specimens_authorizer')) {
-            push @left_joins, "LEFT JOIN person p1 ON specimens.authorizer_no=p1.person_no";
+        if ($q->param('specimens_enterer') eq 'YES') {
+            push @left_joins, "LEFT JOIN person p2 ON s.enterer_no=p2.person_no";
             push @fields, 'p2.name specimens_enterer';
         }
-        if ($q->param('specimens_authorizer')) {
-            push @left_joins, "LEFT JOIN person p1 ON specimens.authorizer_no=p1.person_no";
-            push @fields, 'p3.name speciemns_modifier';
+        if ($q->param('specimens_modifier') eq 'YES') {
+            push @left_joins, "LEFT JOIN person p3 ON s.modifier_no=p3.person_no";
+            push @fields, 'p3.name specimens_modifier';
         }
     } elsif ($q->param('include_specimen_fields')) {
         push @left_joins , "LEFT JOIN specimens s ON s.occurrence_no = o.occurrence_no";
@@ -1401,7 +1401,7 @@ sub doQuery {
             if ($taxon_nos_clause) {
                 my @specimen_fields = ();
                 for (@fields) {
-                    if ($_ =~ /^s\./) {
+                    if ($_ =~ /^s\.|specimens_enterer|specimens_authorizer|specimens_modifier/) {
                         push @specimen_fields, $_;
                     } elsif ($_ =~ /specimens_exist/) {
                         push @specimen_fields, 1;
@@ -1416,7 +1416,17 @@ sub doQuery {
                     }
                 }
                 my $sql3 = "SELECT ".join(",",@specimen_fields).
-                         " FROM specimens s, authorities a WHERE s.taxon_no=a.taxon_no AND s.$taxon_nos_clause";
+                         " FROM specimens s, authorities a ";
+                if ($q->param('specimens_authorizer') eq 'YES') {
+                    $sql3 .= " LEFT JOIN person p1 ON s.authorizer_no=p1.person_no";
+                }
+                if ($q->param('specimens_enterer') eq 'YES') {
+                    $sql3 .= " LEFT JOIN person p2 ON s.enterer_no=p2.person_no";
+                }
+                if ($q->param('specimens_modifier') eq 'YES') {
+                    $sql3 .= " LEFT JOIN person p3 ON s.modifier_no=p3.person_no";
+                }
+                $sql3 .= " WHERE s.taxon_no=a.taxon_no AND s.$taxon_nos_clause";
                 $sql .= " UNION ($sql3)";
 
             }
@@ -2030,8 +2040,8 @@ sub doQuery {
                         }
                     }
 
-                    foreach my $f (@measurementFields) {
-                        foreach my $t (@measurementTypes) {
+                    foreach my $t (@measurementTypes) {
+                        foreach my $f (@measurementFields) {
                             if ($q->param('specimens_'.$f) && $q->param('specimens_'.$t)) {
                                 if ($m_table->{$f}{$t}) {
                                     $value = sprintf("%.4f",$m_table->{$f}{$t});
