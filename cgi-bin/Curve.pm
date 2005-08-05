@@ -287,6 +287,11 @@ sub assignGenera	{
         return;
 	}
 
+	if ( $q->param('weight_by_ref') eq "yes" && $q->param('ref_quota') > 0 )	{
+		print "<h3>The data can't be analyzed because you can't set a reference quota and avoid collections from references with many collections at the same time.</h3>\n";
+		exit;
+	}
+
 	# following fields need to be pulled from the input file:
 	#  collection_no (should be mandatory)
 	#  reference_no (optional, if refs are categories instead of genera)
@@ -327,7 +332,8 @@ sub assignGenera	{
 		# only get the collection's ref no if we're weighting by
 		#  collections per ref and the sampling method is by-list
 		#  9.4.05
-		} elsif ( $fn eq "collections.reference_no" && $q->param('weight_by_ref') eq "yes" && $samplingmethod > 1 && $samplingmethod < 5 )	{
+		} elsif ( $fn eq "collections.reference_no" )	{
+# FOO NOT SURE WHY I NEEDED THIS && ( $q->param('weight_by_ref') eq "yes" || $q->param('ref_quota') > 0 ) && $samplingmethod > 1 && $samplingmethod < 5 )	{
 			$field_refno = $fieldcount;
 		} elsif ( $fn eq "collections.period" )	{
 			$field_bin = $fieldcount;
@@ -341,6 +347,7 @@ sub assignGenera	{
 		}
 		$fieldcount++;
 	}
+
 	# this first condition never should be met, just being careful here
 	if ( $field_collection_no < 0 )	{
 		print "<h3>The data can't be analyzed because the collection number field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
@@ -366,7 +373,7 @@ sub assignGenera	{
 	} elsif ( ! $field_abund_unit && $samplingmethod == 5 )	{
 		print "<h3>The data can't be analyzed because the abundance unit field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
-	} elsif ( ! $field_refno && $q->param('weight_by_ref') eq "yes" )	{
+	} elsif ( ! $field_refno && ( $q->param('weight_by_ref') eq "yes" || $q->param('ref_quota') > 0 || $q->param('print_refs_raw') eq "yes" || $q->param('print_refs_ss') eq "yes" ) )	{
 		print "<h3>The data can't be analyzed because the reference number field <i>from the collections table</i> hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	}
@@ -480,6 +487,9 @@ sub assignGenera	{
 
 					$toccsinlist[$collno] = $toccsinlist[$collno] + $nsp;
 				}
+				if ( $occrow[$field_refno] > 0 )	{
+					$refisinchron[$chid[$collno]]{$occrow[$field_refno]}++;
+				}
 			}
 		}
 	# END of input file parsing routine
@@ -514,11 +524,25 @@ sub assignGenera	{
 					$listsinchron[$chid[$collno]]++;
 					$listsbychron[$chid[$collno]][$listsinchron[$chid[$collno]]] = $collno;
 					$baseocc[$collno] = $occsinchron[$chid[$collno]] - $nsp + 1;
+					$listsfromref[$collrefno[$collno]][$chid[$collno]]++;
 				}
 				$topocc[$collno] = $occsinchron[$chid[$collno]];
 				$xx = $stone[$xx];
 			}
 		}
+
+		for my $c ( 0..$#collrefno )	{
+			if ( $collrefno[$c] > 0 )	{
+				$occsfromref[$collrefno[$c]][$chid[$c]] = $occsfromref[$collrefno[$c]][$chid[$c]] + $occsinlist[$c];
+				$occs2fromref[$collrefno[$c]][$chid[$c]] = $occs2fromref[$collrefno[$c]][$chid[$c]] + $occsinlist[$c]**2;
+			}
+		}
+
+	# find the number of references in each chron
+	for $i (1..$chrons)	{
+		my @temp = keys %{$refisinchron[$i]};
+		$refsinchron[$i] = $#temp + 1;
+	}
 
 	# compute median richness of lists in each chron
 	for $i (1..$chrons)	{
@@ -735,6 +759,7 @@ sub subsample	{
 			@subsrichness = ();
 			@lastsubsrichness = ();
 			@present = ();
+			@subsrefrichness = ();
 		# if Jack's data are being used, declare Recent genera present
 		#  in bin 1
 			if ( $q->param('recent_genera') )	{
@@ -786,6 +811,23 @@ sub subsample	{
 			#     $tosub = $tosub - ($occsinchron2[$i]/$listsinchron[$i])/2;
 					  $tosub = ($tosub/($occsinchron2[$i]/$listsinchron[$i])) - 0.5;
 					}
+					my @refincluded = ();
+					if ( $q->param('ref_quota') > 0 )	{
+						my $refsallowed = 0;
+						my $itemsinrefs = 0;
+					# need a temporary list of refs
+						my @temprefs = keys %{$refisinchron[$i]};
+						while ( ( $refsallowed < $q->param('ref_quota') || $itemsinrefs < $tosub ) && $#temprefs > - 1 )	{
+$| = 1;
+							my $x = int( rand() * ( $#temprefs + 1 ) );
+							my $tempref = $temprefs[$x];
+							$refsallowed++;
+							$refincluded[$tempref] = "YES";
+							$itemsinrefs = $itemsinrefs + $listsfromref[$tempref][$i];
+							splice @temprefs , $x , 1;
+						}
+$| = 1;
+					}
 		 # make a list of items that may be drawn
 					if (($samplingmethod != 1) && ($samplingmethod != 5))	{
 					  for $j (1..$listsinchron[$i])	{
@@ -823,13 +865,27 @@ sub subsample	{
 		# WARNING: this only works for UW or OW (methods 2 and 3)
 					  if ( $collsfromref[$collrefno[$listid[$j]]][$i] > 0 )	{
 					    if ( rand > 1 / $collsfromref[$collrefno[$listid[$j]]][$i] && $q->param('weight_by_ref') eq "yes" && $samplingmethod > 1 && $samplingmethod < 4 )	{
-					      $j = int(rand $nitems) + 1;
+					      $j = int(rand() * $nitems) + 1;
 					      while ( rand > 1 / $collsfromref[$collrefno[$listid[$j]]][$i] )	{
-					        $j = int(rand $nitems) + 1;
+					        $j = int(rand() * $nitems) + 1;
 					      }
 					    }
 					  }
-		 # modify the counter
+		# throw back collections that are not on the restricted list
+		#  if using the reference quota algorithm
+					  if ( $q->param('ref_quota') > 0 && $refincluded[$collrefno[$listid[$j]]] ne "YES" && $samplingmethod != 1 && $samplingmethod != 5 )	{
+					    while ( $refincluded[$collrefno[$listid[$j]]] ne "YES" )	{
+					      $j = int(rand $nitems) + 1;
+					    }
+					  }
+					  if ( $q->param('ref_quota') > 0 )	{
+					    $refsampled[$collrefno[$listid[$j]]][$i]++;
+					    if ( $refsampled[$collrefno[$listid[$j]]][$i] == 1 )	{
+					      $msubsrefrichness[$i]++;
+					    }
+FOO
+					  }
+		# modify the counter
 					  if (($samplingmethod < 3) || ($samplingmethod > 4))	{
 					    $tosub--;
 					    $sampled[$i]++;
@@ -1029,6 +1085,7 @@ sub subsample	{
 		for $i (1..$chrons)	{
 			if ($msubsrangethrough[$i] > 0)	{
 				$tsampled[$i] = $tsampled[$i]/$trials;
+				$msubsrefrichness[$i] = $msubsrefrichness[$i] / $trials;
 				$msubsrichness[$i] = $msubsrichness[$i]/$trials;
 				$mtwotimers[$i] = $mtwotimers[$i]/$trials;
 				$mthreetimers[$i] = $mthreetimers[$i]/$trials;
@@ -1282,6 +1339,9 @@ sub printResults	{
 		if ( $q->param('print_pie') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Evenness of<br>occurrences (PIE)</b> ";
 		}
+		if ( $q->param('print_refs_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>References</b> ";
+		}
 		if ( $q->param('print_lists') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>$listorfm</b> ";
 		}
@@ -1361,6 +1421,9 @@ sub printResults	{
 		}
 		if ( $q->param('print_pie') eq "YES" )	{
 			print TABLE ",Evenness of occurrences (PIE)";
+		}
+		if ( $q->param('print_refs_raw') eq "YES" )	{
+			print TABLE ",References";
 		}
 		if ($samplingmethod != 5)	{
 			if ( $q->param('print_lists') eq "YES" )	{
@@ -1512,6 +1575,9 @@ sub printResults	{
 						print "<td class=tiny align=center valign=top>NaN ";
 					}
 				}
+				if ( $q->param('print_refs_raw') eq "YES" )	{
+					printf "<td class=tiny align=center valign=top>%d ",$refsinchron[$i];
+				}
 				if ( $q->param('print_lists') eq "YES" )	{
 					print "<td class=tiny align=center valign=top>$listsinchron[$i] ";
 				}
@@ -1630,6 +1696,9 @@ sub printResults	{
 						print TABLE ",NaN";
 					}
 				}
+				if ( $q->param('print_refs_raw') eq "YES" )	{
+					print TABLE ",$refsinchron[$i]";
+				}
 				if ( $q->param('print_lists') eq "YES" )	{
 					print TABLE ",$listsinchron[$i]";
 				}
@@ -1673,6 +1742,9 @@ sub printResults	{
 #			}
 			if ( $q->param('print_items') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>Items<br>sampled</b> ";
+			}
+			if ( $q->param('print_refs_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>References<br>sampled</b> ";
 			}
 			if ( $q->param('print_median') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>Median ";
@@ -1779,6 +1851,9 @@ sub printResults	{
 	#		}
 			if ( $q->param('print_items') eq "YES" )	{
 				print TABLE ",Items sampled";
+			}
+			if ( $q->param('print_refs_ss') eq "YES" )	{
+				print TABLE ",References sampled";
 			}
 			if ( $q->param('print_median') eq "YES" )	{
 				print TABLE ",Median ";
@@ -1907,6 +1982,9 @@ sub printResults	{
 					if ( $q->param('print_items') eq "YES" )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$tsampled[$i];
 					}
+					if ( $q->param('print_refs_ss') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$msubsrefrichness[$i];
+					}
 					if ( $q->param('print_median') eq "YES" )	{
 						$s = int(0.5*$trials)+1;
 						print "<td class=tiny align=center valign=top>$outrichness[$i][$s] ";
@@ -2017,6 +2095,9 @@ sub printResults	{
 #					printf TABLE ",%.1f",$msubsrangethrough[$i];
 					if ( $q->param('print_items') eq "YES" )	{
 						printf TABLE ",%.1f",$tsampled[$i];
+					}
+					if ( $q->param('print_refs_ss') eq "YES" )	{
+						printf TABLE ",%.1f",$msubsrefrichness[$i];
 					}
 					if ( $q->param('print_median') eq "YES" )	{
 						print TABLE ",$outrichness[$i][$s]";
@@ -2189,6 +2270,9 @@ sub printResults	{
 			print "</table><p>\n\n";
 			print "The selected method was <b>".$q->param('samplingmethod')."</b>.<p>\n";
 			print "The number of items selected per temporal bin was <b>".$q->param('samplesize')."</b>.<p>\n";
+			if ( $q->param('ref_quota') > 0 )	{
+				print "The maximum number of references selected per temporal bin was <b>".$q->param('ref_quota')."</b>.<p>\n";
+			}
 			print "The total number of trials was <b>".$q->param('samplingtrials')."</b>.<p>\n";
 			if ( $threetimerp )	{
 				printf "The gap proportion based on three timer analysis of the subsampled data is <b>%.3f</b>.<p>\n",$threetimerp;
