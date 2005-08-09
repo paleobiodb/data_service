@@ -645,7 +645,7 @@ sub getMeasurementTable {
             if (!exists $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'min'} || $row->{'real_average'} < $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'min'}) {
                 $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'min'} = $row->{'real_average'};
             }
-            if (!exists $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'min'} || $row->{'real_average'} > $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'max'}) {
+            if (!exists $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'max'} || $row->{'real_average'} > $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'max'}) {
                 $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'max'} = $row->{'real_average'};
             }
         } else {
