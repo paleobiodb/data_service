@@ -2304,7 +2304,7 @@ sub setupOutput {
 			$authorizer = "unknown";
 		}
 	}
-	$authorizer =~ s/(\s|\.)//g;
+	$authorizer =~ s/(\s|\.|[^A-Za-z0-9])//g;
 	$occsOutFileName = $authorizer . "-occs.$outFileExtension";
 	$generaOutFileName = $authorizer . "-genera.$outFileExtension";
 	if ( $q->param("output_data") eq 'collections')	{
