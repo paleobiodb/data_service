@@ -879,7 +879,7 @@ $| = 1;
 					      $j = int(rand $nitems) + 1;
 					    }
 					  }
-					  if ( $q->param('ref_quota') > 0 )	{
+					  if ( $field_refno > 0 && $collrefno[$listid[$j]] > 0 )	{
 					    $refsampled[$collrefno[$listid[$j]]][$i]++;
 					    if ( $refsampled[$collrefno[$listid[$j]]][$i] == 1 )	{
 					      $msubsrefrichness[$i]++;
