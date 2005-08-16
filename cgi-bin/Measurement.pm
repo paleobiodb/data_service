@@ -660,7 +660,7 @@ sub getMeasurementTable {
 
     while (my ($part,$m_table) = each %p_table) {
         foreach my $type (keys %types) {
-            if ($m_table->{'specimens_measured'}) {
+            if ($m_table->{$type}{'specimens_measured'}) {
                 $m_table->{$type}{'average'} = exp($m_table->{$type}{'average'}/$m_table->{$type}{'specimens_measured'});
             }
         }
