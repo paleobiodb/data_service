@@ -14,6 +14,18 @@ function globalClick ( ) {
 		frm.Europe.checked = false;
 		frm.elements['North America'].checked = false;
 		frm.elements['South America'].checked = false;
+
+		frm.elements['paleo Australia'].checked = false;
+		frm.Avalonia.checked = false;
+		frm.Baltoscandia.checked = false;
+		frm.Kazakhstania.checked = false;
+		frm.Laurentia.checked = false;
+		frm.Mediterranean.checked = false;
+		frm.elements['North China'].checked = false;
+		frm.Precordillera.checked = false;
+		frm.Siberia.checked = false;
+		frm.elements['paleo South America'].checked = false;
+		frm.elements['South China'].checked = false;
 	}
 }
 
@@ -27,7 +39,19 @@ function continentClick ( ) {
 			frm.Australia.checked || 
 			frm.Europe.checked || 
 			frm.elements['North America'].checked || 
-			frm.elements['South America'].checked  ) {
+			frm.elements['South America'].checked ||
+
+			frm.elements['paleo Australia'].checked ||
+			frm.Avalonia.checked ||
+			frm.Baltoscandia.checked ||
+			frm.Kazakhstania.checked ||
+			frm.Laurentia.checked ||
+			frm.Mediterranean.checked ||
+			frm.elements['North China'].checked ||
+			frm.Precordillera.checked ||
+			frm.Siberia.checked ||
+			frm.elements['paleo South America'].checked ||
+			frm.elements['South China'].checked  )	{
 		frm.global.checked = false;
 	} else {
 		// At least one must be checked, or hit the global
@@ -247,17 +271,35 @@ function checkAll(checkbox,prefix){
 </font></td></tr>
 
 <tr class="lightGrey">
-<td valign=middle><font size=-1>Select continents:</font></td>
+<td valign=top><font size=-1>Select continents or paleocontinents:</font></td>
+
 <td valign=top><font size=-1>
 <table><tr><td class="cell">
-<input type=checkbox name="global" value="YES" checked onClick="globalClick();"><i>global</i><br>
-<input type=checkbox name="Africa" value="YES" onClick="continentClick();">Africa
-<input type=checkbox name="Antarctica" value="YES" onClick="continentClick();">Antarctica
-<input type=checkbox name="Asia" value="YES" onClick="continentClick();">Asia
-<input type=checkbox name="Australia" value="YES" onClick="continentClick();">Australia
-<input type=checkbox name="Europe" value="YES" onClick="continentClick();">Europe
-<input type=checkbox name="North America" value="YES" onClick="continentClick();">North America
-<input type=checkbox name="South America" value="YES" onClick="continentClick();">South America<br>
+<p><input type=checkbox name="global" value="YES" checked onClick="globalClick();"><i>global</i></p>
+
+<p>
+<nobr><input type=checkbox name="Africa" value="YES" onClick="continentClick();">Africa</nobr>
+<nobr><input type=checkbox name="Antarctica" value="YES" onClick="continentClick();">Antarctica</nobr>
+<nobr><input type=checkbox name="Asia" value="YES" onClick="continentClick();">Asia</nobr>
+<nobr><input type=checkbox name="Australia" value="YES" onClick="continentClick();">Australia</nobr>
+<nobr><input type=checkbox name="Europe" value="YES" onClick="continentClick();">Europe</nobr>
+<nobr><input type=checkbox name="North America" value="YES" onClick="continentClick();">North America</nobr>
+<nobr><input type=checkbox name="South America" value="YES" onClick="continentClick();">South America</nobr>
+</p>
+
+<p>
+<nobr><input type=checkbox name="paleo Australia" value="YES" onClick="continentClick();">Australia (paleocontinent)</nobr>
+<nobr><input type=checkbox name="Avalonia" value="YES" onClick="continentClick();">Avalonia</nobr>
+<nobr><input type=checkbox name="Baltoscandia" value="YES" onClick="continentClick();">Baltoscandia</nobr>
+<nobr><input type=checkbox name="Kazakhstania" value="YES" onClick="continentClick();">Kazakhstania</nobr>
+<nobr><input type=checkbox name="Laurentia" value="YES" onClick="continentClick();">Laurentia</nobr>
+<nobr><input type=checkbox name="Mediterranean" value="YES" onClick="continentClick();">Mediterranean</nobr>
+<nobr><input type=checkbox name="North China" value="YES" onClick="continentClick();">North China</nobr>
+<nobr><input type=checkbox name="Precordillera" value="YES" onClick="continentClick();">Precordillera</nobr>
+<nobr><input type=checkbox name="Siberia" value="YES" onClick="continentClick();">Siberia</nobr>
+<nobr><input type=checkbox name="paleo South America" value="YES" onClick="continentClick();">South America (paleocontinent)</nobr>
+<nobr><input type=checkbox name="South China" value="YES" onClick="continentClick();">South China</nobr>
+</p>
 </td></tr></table>
 </font></td>
 
@@ -302,45 +344,45 @@ function checkAll(checkbox,prefix){
 <tr class="">
 <td valign=top><font size=-1>Geographic scale of collections:</font></td>
 <td valign=top><font size=-1>
-<input type=checkbox name="geogscale_hand_sample" value="YES" checked>hand sample
-<input type=checkbox name="geogscale_small_collection" value="YES" checked>small collection
-<input type=checkbox name="geogscale_outcrop" value="YES" checked>outcrop
-<input type=checkbox name="geogscale_local_area" value="YES" checked>local area
-<input type=checkbox name="geogscale_basin" value="YES" checked>basin
-<input type=checkbox name="geogscale_unknown" value="YES" checked>unknown
+<nobr><input type=checkbox name="geogscale_hand_sample" value="YES" checked>hand sample</nobr>
+<nobr><input type=checkbox name="geogscale_small_collection" value="YES" checked>small collection</nobr>
+<nobr><input type=checkbox name="geogscale_outcrop" value="YES" checked>outcrop</nobr>
+<nobr><input type=checkbox name="geogscale_local_area" value="YES" checked>local area</nobr>
+<nobr><input type=checkbox name="geogscale_basin" value="YES" checked>basin</nobr>
+<nobr><input type=checkbox name="geogscale_unknown" value="YES" checked>unknown</nobr>
 </font></td></tr>
 
 <tr class="lightGrey">
 <td valign=top><font size=-1>Stratigraphic scale of collections:</font></td>
 <td valign=top><font size=-1>
-<input type=checkbox name="stratscale_bed" value="YES" checked>bed
-<input type=checkbox name="stratscale_group_of_beds" value="YES" checked>group of beds
-<input type=checkbox name="stratscale_member" value="YES" checked>member
-<input type=checkbox name="stratscale_formation" value="YES" checked>formation
-<input type=checkbox name="stratscale_group" value="YES" checked>group
-<input type=checkbox name="stratscale_unknown" value="YES" CHECKED>unknown
+<nobr><input type=checkbox name="stratscale_bed" value="YES" checked>bed</nobr>
+<nobr><input type=checkbox name="stratscale_group_of_beds" value="YES" checked>group of beds</nobr>
+<nobr><input type=checkbox name="stratscale_member" value="YES" checked>member</nobr>
+<nobr><input type=checkbox name="stratscale_formation" value="YES" checked>formation</nobr>
+<nobr><input type=checkbox name="stratscale_group" value="YES" checked>group</nobr>
+<nobr><input type=checkbox name="stratscale_unknown" value="YES" CHECKED>unknown</nobr>
 </font></td></tr>
 
 <tr class="">
 <td valign=top><font size=-1>Reason for describing collection:</font></td>
 <td valign=top><font size=-1>
-<input type=checkbox name='collection_type_archaeological' value="YES" checked> archaeological
-<input type=checkbox name='collection_type_biostratigraphic' value="YES" checked> biostratigraphic
-<input type=checkbox name='collection_type_paleoecologic' value="YES" checked> paleoecologic
-<input type=checkbox name='collection_type_taphonomic' value="YES" checked > taphonomic
-<input type=checkbox name='collection_type_taxonomic' value="YES" checked> taxonomic
-<input type=checkbox name='collection_type_general_faunal/floral' value="YES" checked> general faunal/floral
-<input type=checkbox name='collection_type_unknown' value="YES" checked> unknown
+<nobr><input type=checkbox name='collection_type_archaeological' value="YES" checked> archaeological</nobr>
+<nobr><input type=checkbox name='collection_type_biostratigraphic' value="YES" checked> biostratigraphic</nobr>
+<nobr><input type=checkbox name='collection_type_paleoecologic' value="YES" checked> paleoecologic</nobr>
+<nobr><input type=checkbox name='collection_type_taphonomic' value="YES" checked > taphonomic</nobr>
+<nobr><input type=checkbox name='collection_type_taxonomic' value="YES" checked> taxonomic</nobr>
+<nobr><input type=checkbox name='collection_type_general_faunal/floral' value="YES" checked> general faunal/floral</nobr>
+<nobr><input type=checkbox name='collection_type_unknown' value="YES" checked> unknown</nobr>
 </font></td></tr>
 
 <tr class="lightGrey">
 <td valign=top><font size=-1>Lump collections by:</font></td>
 
 <td valign=top><font size=-1>
-<input type=checkbox name='lump_by_coord' value="YES"> exact coordinate
-<input type=checkbox name='lump_by_mbr' value="YES"> formation and member
-<input type=checkbox name='lump_by_ref' value="YES"> reference
-<input type=checkbox name='lump_by_interval' value="YES"> time interval
+<nobr><input type=checkbox name='lump_by_coord' value="YES"> exact coordinate</nobr>
+<nobr><input type=checkbox name='lump_by_mbr' value="YES"> formation and member</nobr>
+<nobr><input type=checkbox name='lump_by_ref' value="YES"> reference</nobr>
+<nobr><input type=checkbox name='lump_by_interval' value="YES"> time interval</nobr>
 </font></td></tr>
 
 <tr class="">
