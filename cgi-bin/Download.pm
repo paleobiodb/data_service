@@ -39,6 +39,7 @@ my $csv;
 my $OUT_HTTP_DIR = "/paleodb/data";
 my $OUT_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
 my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
+my $COAST_DIR = $ENV{MAP_COAST_DIR};
 my $outFileBaseName;
 
 my $bestbothscale;
@@ -169,6 +170,21 @@ sub retellOptions {
 		if ( $#continents > -1 ) {
 			$html .= $self->retellOptionsRow ( "Continents", join (  ", ", @continents ) );
 		}
+
+		if ( $q->param("paleo Australia") ) 	{ push ( @paleocontinents, "Australia" ); }
+		if ( $q->param("Avalonia") ) 	{ push ( @paleocontinents, "Avalonia" ); }
+		if ( $q->param("Baltoscandia") ) 	{ push ( @paleocontinents, "Baltoscandia" ); }
+		if ( $q->param("Kazakhstania") ) 	{ push ( @paleocontinents, "Kazakhstania" ); }
+		if ( $q->param("Laurentia") ) 	{ push ( @paleocontinents, "Laurentia" ); }
+		if ( $q->param("Mediterranean") ) 	{ push ( @paleocontinents, "Mediterranean" ); }
+		if ( $q->param("North China") ) 	{ push ( @paleocontinents, "North China" ); }
+		if ( $q->param("Precordillera") ) 	{ push ( @paleocontinents, "Precordillera" ); }
+		if ( $q->param("Siberia") ) 	{ push ( @paleocontinents, "Siberia" ); }
+		if ( $q->param("paleo South America") ) 	{ push ( @paleocontinents, "South America" ); }
+		if ( $q->param("South China") ) 	{ push ( @paleocontinents, "South China" ); }
+		if ( $#paleocontinents > -1 ) {
+			$html .= $self->retellOptionsRow ( "Paleocontinents", join (  ", ", @paleocontinents ) );
+		}
 	}
 
 	if ( $q->param("latmin") > -90 && $q->param("latmin") < 90 )	{
@@ -216,7 +232,7 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
         $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", $q->param("sp") );
     	my @genus_reso_types_group = ('aff.','cf.','ex_gr.','sensu lato','?','"');
-    	$html .= $self->retellOptionsGroup('Include occurrences qualified by:','genus_reso_',\@genus_reso_types_group);
+    	$html .= $self->retellOptionsGroup('Include occurrences qualified by','genus_reso_',\@genus_reso_types_group);
         $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
         $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
         $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
@@ -509,6 +525,85 @@ sub getCountryString {
         }    
     }
 	return $country_sql;
+}
+
+# 15.8.05 JA
+sub getPlateString	{
+	my $self = shift;
+	my $plate_sql = "";
+	my @plates = ();
+
+	if ( $q->param('paleo Australia') eq "YES" && $q->param('Avalonia') eq "YES" && $q->param('Baltoscandia') eq "YES" && $q->param('Kazakhstania') eq "YES" && $q->param('Laurentia') eq "YES" && $q->param('Mediterranean') eq "YES" && $q->param('North China') eq "YES" && $q->param('Precordillera') eq "YES" && $q->param('Siberia') eq "YES" && $q->param('paleo South America') eq "YES" && $q->param('South China') eq "YES" )	{
+		return "";
+	}
+
+	if ( $q->param('paleo Australia') eq "YES" )	{
+		push @plates , (801);
+	}
+	if ( $q->param('Avalonia') eq "YES" )	{
+		push @plates , (315);
+	}
+	if ( $q->param('Baltoscandia') eq "YES" )	{
+		push @plates , (301);
+	}
+	if ( $q->param('Kazakhstania') eq "YES" )	{
+		push @plates , (402);
+	}
+	if ( $q->param('Laurentia') eq "YES" )	{
+		push @plates , (101);
+	}
+	if ( $q->param('Mediterranean') eq "YES" )	{
+		push @plates , (304,305,707,714);
+	}
+	if ( $q->param('North China') eq "YES" )	{
+		push @plates , (604);
+	}
+	if ( $q->param('Precordillera') eq "YES" )	{
+		push @plates , (291);
+	}
+	if ( $q->param('Siberia') eq "YES" )	{
+		push @plates , (401);
+	}
+	if ( $q->param('paleo South America') eq "YES" )	{
+		push @plates , (201);
+	}
+	if ( $q->param('South China') eq "YES" )	{
+		push @plates , (611);
+	}
+
+	for my $p ( @plates )	{
+		$platein{$p} = "Y";
+	}
+
+	if ( ! open ( PLATES, "$COAST_DIR/plateidsv2.lst" ) ) {
+		print "<font color='red'>Skipping plates.</font> Error message is $!<BR><BR>\n";
+		return;
+	}
+
+	$plate_sql = " ( ";
+	while (<PLATES>)	{
+		s/\n//;
+		my ($pllng,$pllat,$plate) = split /,/,$_;
+		if ( $platein{$plate} )	{
+			if ( $pllng < 0 )	{
+				$pllng = abs($pllng);
+				$pllngdir = "West";
+			} else	{
+				$pllngdir = "East";
+			}
+			if ( $pllat < 0 )	{
+				$pllat = abs($pllat);
+				$pllatdir = "South";
+			} else	{
+				$pllatdir = "North";
+			}
+			$plate_sql .= " OR ( lngdeg=$pllng AND lngdir='$pllngdir' AND latdeg=$pllat AND latdir='$pllatdir' ) ";
+		}
+	}
+	$plate_sql .= " ) ";
+	$plate_sql =~ s/^ \(  OR / \( /;
+
+	return $plate_sql;
 }
 
 # 12/13/2004 PS 
@@ -1066,6 +1161,7 @@ sub getCollectionsWhereClause {
 
     foreach $whereItem (
         $self->getCountryString(),
+        $self->getPlateString(),
         $self->getLatLongString(),
         $self->getPaleoLatLongString(),
         $self->getIntervalString(),
