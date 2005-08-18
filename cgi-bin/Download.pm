@@ -533,6 +533,10 @@ sub getPlateString	{
 	my $plate_sql = "";
 	my @plates = ();
 
+	if ( $q->param('paleo Australia') ne "YES" && $q->param('Avalonia') ne "YES" && $q->param('Baltoscandia') ne "YES" && $q->param('Kazakhstania') ne "YES" && $q->param('Laurentia') ne "YES" && $q->param('Mediterranean') ne "YES" && $q->param('North China') ne "YES" && $q->param('Precordillera') ne "YES" && $q->param('Siberia') ne "YES" && $q->param('paleo South America') ne "YES" && $q->param('South China') ne "YES" )	{
+		return "";
+	}
+
 	if ( $q->param('paleo Australia') eq "YES" && $q->param('Avalonia') eq "YES" && $q->param('Baltoscandia') eq "YES" && $q->param('Kazakhstania') eq "YES" && $q->param('Laurentia') eq "YES" && $q->param('Mediterranean') eq "YES" && $q->param('North China') eq "YES" && $q->param('Precordillera') eq "YES" && $q->param('Siberia') eq "YES" && $q->param('paleo South America') eq "YES" && $q->param('South China') eq "YES" )	{
 		return "";
 	}
