@@ -6,8 +6,9 @@ var bad_info = ""; // Global variable
 
 function checkFields() {
     doCheckFieldsBasicInfo();
-    doCheckFieldsStratigraphy();
     doCheckFieldsGeography();
+    doCheckFieldsStratigraphy();
+    doCheckFieldsGeology();
     doCheckFieldsTaphonomy();
     doCheckFieldsCollectingInfo();
     
@@ -57,11 +58,11 @@ function doCheckFieldsBasicInfo() {
     } // if secondary_reference_no
 
     if ( frm.collection_type.selectedIndex == 0) {
-        bad_info += "\n    - Reason for describing collection";
+        bad_info += "\n    - Reason for describing collection (required)";
     }
 
     if ( frm.collection_name.value == "") {
-        bad_info += "\n    - Collection name";
+        bad_info += "\n    - Collection name (required)";
     }
 }
 
@@ -204,6 +205,16 @@ function doCheckFieldsStratigraphy() {
     }
 }
 
+function doCheckFieldsGeology() {
+    var frm = document.forms[0];
+    var index = frm.environment.selectedIndex;
+    var hasdashes = /--/i;
+
+    if ( frm.environment.options[index].text == "" || hasdashes.test ( frm.environment.value ) == true ) {
+        bad_info += "\n    - Environment (required)";
+    }
+}
+
 function doCheckFieldsTaphonomy() {
     var frm = document.forms[0];
     var full_count = 0;
@@ -342,7 +353,7 @@ function doCheckFieldsTaphonomy() {
   <div show="session_reference_string"> <p>Current session reference <span class=tiny>(select to make primary):</span><br> <table cellspacing=0 cellpadding=0><span id="session_reference_string"></span></table></div>
 
   <p>
-    <span class="required">Author's main reason for describing collection</span>:<select id="collection_type"></select> analysis
+    <span class="required">Author's main reason for describing collection:</span><select id="collection_type"></select> analysis
   </p>
 
   <p>
@@ -530,6 +541,7 @@ function doCheckFieldsTaphonomy() {
 <div id="panel4" class="panel">
   <div align="center">
   <p>
+	<span class="required">Required fields are in red.</span> 
 	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
   </p>
 <table border=0 cellpadding=0 cellspacing=0><tr><td>
@@ -594,18 +606,20 @@ function doCheckFieldsTaphonomy() {
   Original, complete description of lithology:<br><textarea id="lithdescript" rows=4 wrap=virtual cols=100></textarea>
   </p>
   
-  <h4>Environments</h4>
+  <h4>Environment and setting</h4>
   
   <table border=0>
     <tr>
       <td>
 		  	<!--General:-->
+	<span class="required">Environment:</span>
         <select id="environment"></select>
         <br>
+	<p class="small">
         Read descriptions of 
   		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">Carbonate</A>,
   		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#SiliciMarine')">Siliciclastic</A> or
-  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Terrestrial')">Terrestial</A> environments.
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Terrestrial')">Terrestial</A> environments.</p>
         <!--BR>
   		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">Carbonate</A>:< select id="environment"></select>
         <br>
@@ -995,7 +1009,6 @@ original material is preserved!</i></p>
 <div id="panel6" class="panel">
   <div align="center">
   <p>
-    <span class="required">Required fields are in red.</span> 
 	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
   </p>
 <table border=0 cellpadding=0 cellspacing=0><tr><td>
