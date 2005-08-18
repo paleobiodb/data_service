@@ -1969,7 +1969,7 @@ sub doQuery {
             #  assuming species won't be scored separately
             for (1..6) {
                 if ($q->param('ecology'.$_)) {
-                    push @reid_row, $ecotaph{'1'.$genusNo};
+                    push @reid_row, $ecotaph{$_.$genusNo};
                 }
             }
         }
