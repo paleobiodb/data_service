@@ -1,5 +1,10 @@
 #!/usr/bin/perl -w
 
+#
+# This module is deprecated PS 08/10/2005
+# Useless module, poling crap
+#
+
 # Constants.pm
 # created by rjp, 3/22/2004
 # 

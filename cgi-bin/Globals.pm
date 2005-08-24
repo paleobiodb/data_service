@@ -1,6 +1,9 @@
 # some global functions which can be used by any other module.
 # mostly written by rjp.
 
+
+# This module is deprecated. The few bits that were used moved to PBDBUtil PS 8/16/2005
+
 package Globals;
 
 use strict;
