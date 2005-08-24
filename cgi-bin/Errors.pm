@@ -5,10 +5,8 @@
 
 
 package Errors;
-
 use strict;
-use Globals;
-
+use PBDBUtil;
 
 use fields qw(	
 				count
@@ -59,7 +57,7 @@ sub setDisplayEndingMessage {
 sub errorMessage {
 	my Errors $self = shift;
 	
-	my $count = Globals::numberToName($self->{count});
+	my $count = PBDBUtil::numberToName($self->{count});
 	
 	if ($self->{count} == 1) {
 		$count = "error";

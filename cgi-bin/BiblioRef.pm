@@ -2,7 +2,6 @@ package BiblioRef;
 
 use DataRow;
 use AuthorNames;
-use Globals;
 
 sub new
 {

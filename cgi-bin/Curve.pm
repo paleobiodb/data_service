@@ -62,7 +62,6 @@
 
 package Curve;
 
-use Globals;
 use TimeLookup;
 
 #require Text::CSV_XS;
