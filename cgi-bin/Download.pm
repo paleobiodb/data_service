@@ -4,18 +4,18 @@ package Download;
 use PBDBUtil;
 use Classification;
 use TimeLookup;
-use Globals;
 use Data::Dumper;
 use DBTransactionManager;
 
 # Flags and constants
-my $DEBUG=1;			# The debug level of the calling program
+my $DEBUG=0;			# The debug level of the calling program
 my $dbh;				# The database handle
 my $dbt;				# The new and improved database object
 my $q;					# Reference to the parameters
 my $s;					# Reference to the session data
 my $sql;				# Any SQL string
 my $rs;					# Generic recordset
+my $hbo;                # HTMLBuilder object
 my @errors;           # Possible errors in user input
 $|=1;
 
@@ -23,7 +23,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch 10mybin max_interval_no min_interval_no emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch stage 10mybin max_interval_no min_interval_no emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
 my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name reference_no comments created modified modified_temp plant_organ);
 my @specimenFieldNames = qw(authorizer enterer modifier specimen_no reference_no specimens_measured specimen_id specimen_side specimen_part specimen_coverage measurement_source magnification specimen_count comments created modified);
@@ -32,8 +32,7 @@ my @measurementFields =  qw(length width height diagonal inflation);
 my @refsFieldNames = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage created modified publication_type comments project_name project_ref_no);
 my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
 my @mesoCenozoic = qw(triassic jurassic cretaceous tertiary);
-
-my %ecotaph = ();
+my @ecoFields = (); # Note: generated at runtime in setupOutput
 
 my $csv;
 my $OUT_HTTP_DIR = "/paleodb/data";
@@ -73,10 +72,6 @@ sub buildDownload {
 
 	if ( $q->param('time_scale') )	{
 		$self->getTimeLookup ( );
-	}
-    
-	if ( $q->param('ecology1') )	{
-		$self->getEcology ( );
 	}
     
 	if ( $q->param('compendium_ranges') eq 'NO' )	{
@@ -153,7 +148,7 @@ sub retellOptions {
     $html .= $self->retellOptionsGroup('Reasons for describing included collections:','collection_type',\@collection_types_group);
 
 	# Continents or country
-	my @continents = ( );
+	my (@continents,@paleocontinents);
 	# If a country was selected, ignore the continents JA 6.7.02
 	if ( $q->param("country") )	{
 		$html .= $self->retellOptionsRow ( "Country", $q->param("include_exclude_country") . " " . $q->param("country") );
@@ -239,7 +234,7 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Minimum # of specimens to compute mean abundance", $q->param("min_mean_abundance") ) if ($q->param("min_mean_abundance"));
 
         if ($q->param('output_data') =~ /occurrences|specimens/) {
-            my $occFields = ();
+            my @occFields = ();
             push (@occFields, 'class_name') if ($q->param("occurrences_class_name") eq "YES");
             push (@occFields, 'order_name') if ($q->param("occurrences_order_name") eq "YES");
             push (@occFields, 'family_name') if ($q->param("occurrences_family_name") eq "YES");
@@ -352,7 +347,7 @@ sub getOutFields {
 	if($tableName eq "collections") {
         if ($isSQL) {
             # These fieldnames are created virtually, not from the DB
-	        @fieldNames = grep {!/^(paleo(lat|lng)(deg|dec|min|sec|dir)|epoch|period|10mybin)$/} @collectionsFieldNames;
+	        @fieldNames = grep {!/^(paleo(lat|lng)(deg|dec|min|sec|dir)|epoch|stage|period|10mybin)$/} @collectionsFieldNames;
         } else {
 	        @fieldNames = @collectionsFieldNames;
         }
@@ -421,9 +416,9 @@ sub getOutFields {
             'lump_by_mbr'=>['formation','member'],
             'lump_by_ref'=>['reference_no']);
 
-        foreach $key (keys %impliedFields) {
+        foreach my $key (keys %impliedFields) {
             if ($q->param($key) eq "YES") {
-                foreach $field (@{$impliedFields{$key}}) {
+                foreach my $field (@{$impliedFields{$key}}) {
                     if (!exists $fieldExists{$field}) {
                         push @outFields, "c.$field";
                         $fieldExists{$field} = 1;
@@ -483,7 +478,7 @@ sub getCountryString {
 
     #Country or Countries
     if ($q->param('country')) {
-        $country_term = $dbh->quote($q->param('country'));
+        my $country_term = $dbh->quote($q->param('country'));
         if ($q->param('include_exclude_country') eq "exclude") {
             $country_sql = qq| c.country NOT LIKE $country_term |;
         } else {
@@ -1163,7 +1158,7 @@ sub getCollectionsWhereClause {
         push @where,$created_string;
 	}
 
-    foreach $whereItem (
+    foreach my $whereItem (
         $self->getCountryString(),
         $self->getPlateString(),
         $self->getLatLongString(),
@@ -1207,86 +1202,57 @@ sub getTimeLookup	{
 }
 
 # create a hash table relating taxon names to eco/taphonomic categories
+# PS 08/24/2005 - rewritten, combined with getAncestralEcology (no reason to separate them). Doesn't
+#  fetch the whole ecotaph table, correctly gets ecologies of suborders, genera, etc now.
 # JA 12.8.03
 # JA 4.4.04: note that keying of ecotaph is here by name and not number
 sub getEcology	{
 	my $self = shift;
+    my $taxon_nos = shift;
+    my $master_class = shift;
 
-	my $sql = "SELECT ecotaph.taxon_no,taxon_name," . $q->param('ecology1');
-	$etfields = 1;
-	if ( $q->param('ecology2') )	{
-		$sql .= "," . $q->param('ecology2');
-		$etfields = 2;
-	}
-	if ( $q->param('ecology3') )	{
-		$sql .= "," . $q->param('ecology3');
-		$etfields = 3;
-	}
-	if ( $q->param('ecology4') )	{
-		$sql .= "," . $q->param('ecology4');
-		$etfields = 4;
-	}
-	if ( $q->param('ecology5') )	{
-		$sql .= "," . $q->param('ecology5');
-		$etfields = 5;
-	}
-	if ( $q->param('ecology6') )	{
-		$sql .= "," . $q->param('ecology6');
-		$etfields = 6;
-	}
-	$sql .= " FROM ecotaph LEFT JOIN authorities ON ecotaph.taxon_no = authorities.taxon_no";
-	my @ecos = @{$dbt->getData($sql)};
-	my $i;
+    # This first section gets ecology data for all taxa and parent taxa
+    my %all_taxon_nos = (-1); # so we don't crash if there are no taxon nos
+    for my $taxon_no ( @$taxon_nos ) {
+        if ($taxon_no) {
+            $all_taxon_nos{$taxon_no} = 1;
+            foreach my $parent (@{$master_class->{$taxon_no}}) {
+                $all_taxon_nos{$parent->{'taxon_no'}} = 1;
+            }
+        }
+    }  
 
-	for $i (0..$#ecos)	{
-		$ecotaph{'1'.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology1')};
-	}
-	if ( $q->param('ecology2') )	{
-		for $i (0..$#ecos)	{
-			$ecotaph{'2'.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology2')};
-		}
-	}
-	if ( $q->param('ecology3') )	{
-		for $i (0..$#ecos)	{
-			$ecotaph{'3'.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology3')};
-		}
-	}
-	if ( $q->param('ecology4') )	{
-		for $i (0..$#ecos)	{
-			$ecotaph{'4'.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology4')};
-		}
-	}
-	if ( $q->param('ecology5') )	{
-		for $i (0..$#ecos)	{
-			$ecotaph{'5'.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology5')};
-		}
-	}
-	if ( $q->param('ecology6') )	{
-		for $i (0..$#ecos)	{
-			$ecotaph{'6'.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$q->param('ecology6')};
-		}
-	}
+	my $sql = "SELECT taxon_no,".join(",",@ecoFields)." FROM ecotaph WHERE taxon_no IN (".join(", ",keys %all_taxon_nos).")";
+    $self->dbg("Ecology sql: $sql");
+	my @results = @{$dbt->getData($sql)};
+    my %all_ecologies;
+    foreach my $row (@results) {
+        $all_ecologies{$row->{'taxon_no'}} = $row;
+    }  
+
+    # Now we want to crawl upwards in the higherarchy of each taxon, using the first category value
+    # we find then stopping. Example: if the taxon has a value for diet1, use that. If it doesn't, and family
+    # and order have values, use the family (lower rank'd) value
+    my %ecotaph;
+    for my $taxon_no (@$taxon_nos) {
+        for $field (@ecoFields) {
+            if ($all_ecologies{$taxon_no}{$field}) {
+                # First try the taxon itself
+                $ecotaph{$field.$taxon_no} = $all_ecologies{$taxon_no}{$field};
+            } else {
+                # Otherwise try to inherit someting from any parent, with preference to lower ranks
+                foreach my $parent (@{$master_class->{$taxon_no}}) {
+                    if ( !$ecotaph{$field.$taxon_no} && $all_ecologies{$parent->{'taxon_no'}}{$field}) {
+                        $ecotaph{$field.$taxon_no} = $all_ecologies{$parent->{'taxon_no'}}{$field};
+                    }
+                }
+            }
+        }
+    }       
+
+    return \%ecotaph;    
 }
 
-# JA 28.2.04
-# this is a little confusing; the ancestor ecotaph values are keyed by name,
-#  whereas the genus values are now keyed by number - made necessary by fact
-#  that occurrences are linked to taxon numbers and not names to avoid problems
-#  with homonymy
-sub getAncestralEcology	{
-
-	my $etfield = shift;
-	my $genus = shift;
-	my $ancestor_hash = shift;
-
-	my @parents = split ',',$ancestor_hash;
-	for $p ( @parents )	{
-		if ( $ecotaph{$etfield.$p} && ! $ecotaph{$etfield.$genus} )	{
-			$ecotaph{$etfield.$genus} = $ecotaph{$etfield.$p};
-			last;
-		}
-	}
-}
 
 sub getCompendiumAgeRanges	{
 	my $self = shift;
@@ -1328,6 +1294,14 @@ sub doQuery {
 		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '4');
 		%myepoch = %{$intervalInScaleRef};
 	}
+
+	# get the stage names for the collections PS 08/19/2005
+	# based on scale 6 = Harland epochs
+	if ( $q->param('collections_stage') )	{
+		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '6');
+		%mystage = %{$intervalInScaleRef};
+	}
+
 	# get the PBDB 10 m.y. bin names for the collections JA 3.3.04
 	# WARNING: the locage_max field is just being used as a dummy
 	if ( $q->param('collections_10mybin') || $q->param('compendium_ranges') eq 'NO' )	{
@@ -1477,7 +1451,7 @@ sub doQuery {
                " WHERE ".join(" AND ",@where1);
         $sql1 .= " GROUP BY ".join(",",@groupby) if (@groupby);
 
-        @where2 = ('re.occurrence_no=o.occurrence_no',@where,@reid_where);
+        @where2 = ("re.occurrence_no=o.occurrence_no AND re.most_recent='YES'",@where,@reid_where);
         @tables2 = (@tables,'reidentifications re'); 
         $sql2 = "SELECT ".join(",",@fields).
                " FROM " .join(",",@tables2)." ".join (" ",@left_joins).
@@ -1532,9 +1506,6 @@ sub doQuery {
             }
         }
     } else {
-        if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
-            push @left_joins, 'LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no';
-        }
         $sql = "SELECT ".join(",",@fields).
                " FROM " .join(",",@tables)." ".join (" ",@left_joins).
                " WHERE ".join(" AND ",@where);
@@ -1655,18 +1626,9 @@ sub doQuery {
         # until then PS 07/25/2005
         if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
             if ($row->{'reid_no'}) {
-                my $sql = "SELECT re.reid_no FROM reidentifications re LEFT JOIN refs r ON re.reference_no=r.reference_no WHERE re.occurrence_no=$row->{occurrence_no} ORDER BY r.pubyr DESC,re.reid_no DESC LIMIT 1";
-                my $latest_reid = ${$dbt->getData($sql)}[0]->{reid_no};
-                if ($latest_reid != $row->{'reid_no'}) {
-                    $self->dbg("EXCLUDING REID $row->{reid_no} LATEST IS $latest_reid FOR OCCURRENCE $row->{occurrence_no}");
-                    $exclude++;
-                #} elsif (!$taxon_nos{$row->{'reid_taxon_no'}}) {
-                #    $exclude++;
-                } else {
-                    foreach $field (@reidentificationsFieldNames,'taxon_no') {
-                        $row->{'original_'.$field}=$row->{'occ_'.$field};
-                        $row->{'occ_'.$field}=$row->{'reid_'.$field};
-                    }
+                foreach my $field (@reidentificationsFieldNames,'taxon_no') {
+                    $row->{'original_'.$field}=$row->{'occ_'.$field};
+                    $row->{'occ_'.$field}=$row->{'reid_'.$field};
                 }
             }
 		    # raise subgenera to genus level JA 18.8.04
@@ -1815,45 +1777,17 @@ sub doQuery {
     }
 	close REFSFILE;
 
-	# get the higher order names associated with each genus name,
-	#   then set the ecotaph values by running up the hierarchy
-	# JA 28.2.04
-	# only do this is ecotaph data were requested
-	# WARNING: only the common ranks are retrieved
-	# JA 4.4.04: adapted this to use taxon numbers instead of names
-	if ( $q->param('ecology1') )	{
-
-		# finally, get the higher order names
-		my @genera = keys %totaloccsbyno;
-		my $levels = "family,order,class,phylum";
-		my %ancestor_hash=%{Classification::get_classification_hash($dbt,$levels,\@genera)};
-		for $etfield ( 1..$etfields )	{
-			for my $g ( @genera )	{
-				&getAncestralEcology($etfield,$g,$ancestor_hash{$g});
-			}
-		}
-	}
-
 
     # Get a list of parents for classification purposes
 	my @genera_nos = keys %totaloccsbyno;
 
 	my %master_class;
-    if ($q->param("output_data") =~ /occurrences|specimens/) {
-        my $levels = "";
-        if($q->param("occurrences_class_name") eq "YES"){
-            $levels .= ",class";
-        }
-        if($q->param("occurrences_order_name") eq "YES"){
-            $levels .= ",order";
-        }
-        if($q->param("occurrences_family_name") eq "YES"){
-            $levels .= ",family";
-        }
-        $levels =~ s/^,//;
-        if ($levels) {
-    	    %master_class=%{Classification::get_classification_hash($dbt,$levels,\@genera_nos)};
-        }
+    if (@ecoFields || 
+        ($q->param("output_data") =~ /occurrences|specimens/ && 
+        ($q->param("occurrences_class_name") eq "YES" || 
+         $q->param("occurrences_order_name") eq "YES" || 
+         $q->param("occurrences_family_name") eq "YES"))){
+    	%master_class=%{Classification::get_classification_hash($dbt,'all',\@genera_nos,'array')};
     }    
 
     # Sort by
@@ -1861,6 +1795,16 @@ sub doQuery {
         @dataRows = sort { $a->{'occ_genus_name'} cmp $b->{'occ_genus_name'} ||
                            $a->{'occ_species_name'} cmp $b->{'occ_species_name'}} @dataRows;
     }
+
+	# get the higher order names associated with each genus name,
+	#   then set the ecotaph values by running up the hierarchy
+	# JA 28.2.04: only do this is ecotaph data were requested
+	# JA 4.4.04: adapted this to use taxon numbers instead of names
+    # PS 08/20/2005 - get for all higher ranks, not just common ones
+    my %ecotaph;
+	if (@ecoFields) {
+	    %ecotaph = %{$self->getEcology(\@genera_nos,\%master_class)};
+	}
 
 
 	# main pass through the results set
@@ -1892,12 +1836,13 @@ sub doQuery {
 			if ( $q->param('binned_field') )	{
 				# special processing for ecology data
 				if ( $q->param('binned_field') eq "ecology" )	{
-					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph{'1'.$genusNo}}++;
-					$occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$ecotaph{'1'.$genusNo}.$genusNo}++;
-					if ( $occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$ecotaph{'1'.$genusNo}.$genusNo} == 1 )	{
-						$taxabybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph{'1'.$genusNo}}++;
+                    my $useField = $ecoFields[0];
+					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph{$useField.$genusNo}}++;
+					$occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$ecotaph{$useField.$genusNo}.$genusNo}++;
+					if ( $occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$ecotaph{$useField.$genusNo}.$genusNo} == 1 )	{
+						$taxabybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph{$useField.$genusNo}}++;
 					}
-					$occsbycategory{$ecotaph{'1'.$genusNo}}++;
+					$occsbycategory{$ecotaph{$useField.$genusNo}}++;
 				} else	{
 				# default processing
 					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}++;
@@ -1967,10 +1912,8 @@ sub doQuery {
             # Push the eco/taphonomic data, if any, onto the reid rows
             # WARNING: this only works on genus or higher-order data,
             #  assuming species won't be scored separately
-            for (1..6) {
-                if ($q->param('ecology'.$_)) {
-                    push @reid_row, $ecotaph{$_.$genusNo};
-                }
+            foreach my $field (@ecoFields) {
+                push @reid_row, $ecotaph{$field.$genusNo};
             }
         }
 
@@ -2074,6 +2017,9 @@ sub doQuery {
             if ($q->param("collections_epoch") eq "YES") {
                 $row->{'epoch'} = $myepoch{$row->{'collection_no'}};
             }
+            if ($q->param("collections_stage") eq "YES") {
+                $row->{'stage'} = $mystage{$row->{'collection_no'}};
+            }
             if ($q->param("collections_10mybin") eq "YES") {
                 # WARNING: similar trick here in which useless legacy
                 #  field locage_max is used as a placeholder for the
@@ -2174,8 +2120,21 @@ sub doQuery {
                 $q->param("occurrences_order_name") eq "YES" ||
                 $q->param("occurrences_family_name") eq "YES") {
                 # -1 at the end is essential so trailing whitespace shows up in the array
-                my @parents = split(/,/,$master_class{$row->{'occ_taxon_no'}},-1);
-                push @final_row, @parents;
+                my @parents = @{$master_class{$row->{'occ_taxon_no'}}};
+                my ($class, $order, $family) = ("","","");
+                foreach my $parent (@parents) {
+                    if ($parent->{'taxon_rank'} eq 'family') {
+                        $family = $parent->{'taxon_name'}; 
+                    } elsif ($parent->{'taxon_rank'} eq 'order') {
+                        $order = $parent->{'taxon_name'};
+                    } elsif ($parent->{'taxon_rank'} eq 'class') {
+                        $class = $parent->{'taxon_name'};
+                        last;
+                    }
+                }
+                push @final_row, $class  if ($q->param("occurrences_class_name") eq "YES");
+                push @final_row, $order  if ($q->param("occurrences_order_name") eq "YES");
+                push @final_row, $family if ($q->param("occurrences_family_name") eq "YES");
             }
             push(@final_row,$genus_reso,$genusName,$row->{'original_genus_reso'},$row->{'original_genus_name'},@occs_row,@reid_row,@coll_row);
 		}
@@ -2190,7 +2149,41 @@ sub doQuery {
 				} else	{
 					print OUTFILE "Collection_$collection_no\n";
 				}
+
+                my @comments = ();
+                foreach my $column ( ('collection_no',@collectionHeaderCols) ){
+                    my $column_name = $column;
+                    $column_name =~ s/collections\.//;
+                    if ($row->{$column}) {
+                        push @comments,"$column: $row->{$column}"; 
+                    }
+                }
+                if (@comments) {
+                    print OUTFILE "[".join("\n",@comments)."]\n";
+                }
+        
+                my $level;
+                my $level_value;
+                if ($row->{'regionalsection'} && $row->{'regionalbed'} =~ /^[0-9]+(\.[0-9]+)*$/) {
+                    $level = $row->{'regionalsection'};
+                    $level_value = $row->{'regionalbed'};
+                    if ($row->{'regionalorder'} eq 'top to bottom') {
+                        $level_value *= -1;
+                    }
+                }
+                if ($row->{'localsection'} && $row->{'localbed'} =~ /^[0-9]+(\.[0-9]+)*$/) {
+                    $level = $row->{'localsection'};
+                    $level_value = $row->{'localbed'};
+                    if ($row->{'localorder'} eq 'top to bottom') {
+                        $level_value *= -1;
+                    }
+                }
+                if ($level) {
+                    $level =~ s/ /_/g;
+                    print OUTFILE "level: _${level}_ $level_value\n";
+                }
 			}
+            
 			if ( $row->{occ_genus_reso} && $row->{occ_genus_reso} !~ /informal/ && $row->{occ_genus_reso} !~ /"/ )	{
 				printf OUTFILE "%s ",$row->{occ_genus_reso};
 			}
@@ -2515,7 +2508,7 @@ sub setupOutput {
     }
     # There is no separate reidentifications checkboxes on the form
     # So they get included if the corresponding occurrences checkbox is set
-    foreach $field (@reidentificationsFieldNames) {
+    foreach my $field (@reidentificationsFieldNames) {
         if ($q->param('occurrences_'.$field)) {
             $q->param("reidentifications_$field"=>'YES');
         }
@@ -2572,6 +2565,15 @@ sub setupOutput {
         }
     } 
 
+    # Generate these fields on the fly
+    @ecoFields = ();
+    for(1..6) {
+        if ($q->param("ecology$_")) {
+            push @ecoFields, $q->param("ecology$_");
+        }
+    }
+    
+
     # Now if there are any errors, die
     if (@errors) {
         PBDBUtil::printErrors(@errors);
@@ -2602,7 +2604,7 @@ sub getTaxonString {
 
     my @sql_bits;
     my %taxon_nos_unique = ();
-    foreach $taxon (@taxa) {
+    foreach my $taxon (@taxa) {
         @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon);
         $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
         if (scalar(@taxon_nos) == 0) {
