@@ -274,7 +274,7 @@ sub populateMeasurementForm {
             } elsif ($q->param('specimen_no') == -2) {
 	            push (@fields,'occurrence_no','reference_no','specimen_no','taxon_name','collection_no','specimen_coverage');
 	            push (@values,int($q->param('occurrence_no')),$s->get('reference_no'),'-1',$taxon_name,$collection_no,'');
-                #@table_rows = ('specimen_id','length','width','height','diagonal','specimen_side','specimen_part','measurement_source','measurement_magnification','is_type');
+                #@table_rows = ('specimen_id','length','width','height','diagonal','specimen_side','specimen_part','measurement_source','magnification','is_type');
                 my $table_rows = "";
                 for (1..$q->param('specimens_measured')) {
                     $table_rows .= "<tr>";
@@ -292,7 +292,7 @@ sub populateMeasurementForm {
                     my @measurement_source_array = @{$hbo->{'SELECT_LISTS'}{'measurement_source'}};
                     $table_rows .=  "<option>".$_."</option>" for @measurement_source_array;
                     $table_rows .=  "</select></td>";
-                    $table_rows .=  "<td><input type=\"text\" name=\"measurement_magnification\" size=7 class=\"smallText\"></td>";
+                    $table_rows .=  "<td><input type=\"text\" name=\"magnification\" size=7 class=\"smallText\"></td>";
                     $table_rows .=  "<td><select name=\"specimen_is_type\" class=\"smallText\">";
                     my @is_type_array = @{$hbo->{'SELECT_LISTS'}{'specimen_is_type'}};
                     $table_rows .=  "<option>".$_."</option>" for @is_type_array;
@@ -437,21 +437,25 @@ sub processMeasurementForm	{
                 foreach my $type (@measurement_types) {
                     if ($in_db{$type} && $in_cgi{$type}) {
                         # If the record exists both the form and db, its an update
-                        while(my($type,$row)=each %in_cgi) {
-                            main::dbg("UPDATE, TYPE $type: ".Dumper($row));
-                            foreach my $f (grep(!/error_unit/,@measurement_fields)) {
-                                next if (!$row->{$f});
-                                if ($fields{'magnification'} =~ /^[0-9.]+$/) {
-                                    $row->{'real_'.$f}=$row->{$f}/$fields{'magnification'};
-                                } else {
-                                    $row->{'real_'.$f}=$row->{$f};
-                                }
+                        foreach my $f (grep(!/error_unit/,@measurement_fields)) {
+                            if (!$in_cgi{$type}{$f}) {
+                                $in_cgi{$type}{$f} = "";
                             }
-                            $in_cgi{$type}{'error_unit'} = $fields{$type."_error_unit"};
-    #                        $row->{'error_unit'} = $q->param($type."_error_unit");
-                            #$dbt->insertRecord($s,'measurements',$row);
-                            $dbt->updateRecord($s,'measurements','measurement_no',$in_db{$type}{'measurement_no'},$in_cgi{$type});
+                            if ($fields{'magnification'} =~ /^[0-9.]+$/) {
+                                if ($in_cgi{$type}{$f}) {
+                                    $in_cgi{$type}{'real_'.$f}=$in_cgi{$type}{$f}/$fields{'magnification'};
+                                } else {
+                                    $in_cgi{$type}{'real_'.$f}="";
+                                }
+                            } else {
+                                $in_cgi{$type}{'real_'.$f}=$in_cgi{$type}{$f};
+                            }
                         }
+                        $in_cgi{$type}{'error_unit'} = $fields{$type."_error_unit"};
+                        main::dbg("UPDATE, TYPE $type: ".Dumper($in_cgi{$type}));
+#                        $row->{'error_unit'} = $q->param($type."_error_unit");
+                        #$dbt->insertRecord($s,'measurements',$row);
+                        $dbt->updateRecord($s,'measurements','measurement_no',$in_db{$type}{'measurement_no'},$in_cgi{$type});
                     } elsif ($in_db{$type}) {
                         # Else if it exists only in the database now, delete it 
                         $sql = "DELETE FROM measurements WHERE measurement_no=".$in_db{$type}{'measurement_no'} . " LIMIT 1";
@@ -459,22 +463,19 @@ sub processMeasurementForm	{
                         $dbt->getData($sql);
                     } elsif ($in_cgi{$type}) {
                         # Else if its in the form and NOT in the DB, add it
-                        while(my($type,$row)=each %in_cgi) {
-                            main::dbg("INSERT, TYPE $type: ".Dumper($row));
-                            foreach my $f (grep(!/error_unit/,@measurement_fields)) {
-                                next if (!$row->{$f});
-                                if ($fields{'magnification'} =~ /^[0-9.]+$/) {
-                                    $row->{'real_'.$f}=$row->{$f}/$fields{'magnification'};
-                                } else {
-                                    $row->{'real_'.$f}=$row->{$f};
-                                }
+                        main::dbg("INSERT, TYPE $type: ".Dumper($row));
+                        foreach my $f (grep(!/error_unit/,@measurement_fields)) {
+                            if ($fields{'magnification'} =~ /^[0-9.]+$/) {
+                                $in_cgi{$type}{'real_'.$f}=$row->{$f}/$fields{'magnification'};
+                            } else {
+                                $in_cgi{$type}{'real_'.$f}=$row->{$f};
                             }
-    #                        $in_cgi{$type}{'error_unit'}=$q->param($type."_error_unit");
-                            $row->{'measurement_type'}=$type;
-                            $row->{'specimen_no'}= $fields{'specimen_no'};
-                            $row->{'error_unit'}=$fields{$type."_error_unit"};
-                            $dbt->insertRecord($s,'measurements',$row);
                         }
+#                        $in_cgi{$type}{'error_unit'}=$q->param($type."_error_unit");
+                        $in_cgi{$type}{'measurement_type'}=$type;
+                        $in_cgi{$type}{'specimen_no'}= $fields{'specimen_no'};
+                        $in_cgi{$type}{'error_unit'}=$fields{$type."_error_unit"};
+                        $dbt->insertRecord($s,'measurements',$in_cgi{$type});
     #                    $in_cgi{$type}{'measurement_type'}=$type;
     #                    $in_cgi{$type}{'error_unit'}=$q->param($type."_error_unit");
     #                    $in_cgi{$type}{'specimen_no'}= $q->param('specimen_no');
