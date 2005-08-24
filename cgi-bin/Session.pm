@@ -4,8 +4,6 @@ use CookieFactory;
 use Class::Date qw(date localdate gmdate now);
 
 use Debug;
-use Globals;
-use Constants;
 use DBTransactionManager;
 use Data::Dumper;
 use CGI::Carp;
@@ -414,8 +412,8 @@ sub get {
 sub isSuperUser {
 	my $self = shift;
 
-	if ( ($self->{authorizer} eq Globals::god()) && 
-	($self->{enterer} eq Globals::god())) {
+	if ( ($self->{authorizer} eq "J. Alroy") && 
+	($self->{enterer} eq "J. Alroy")) {
 		return 1;	
 	}
 	
