@@ -7,7 +7,6 @@ use DBI;
 use FileHandle;
 use HTMLBuilder;
 use Class::Date qw(date localdate gmdate now);
-use Globals;
 
 use DBConnection;
 
