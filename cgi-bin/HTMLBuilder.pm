@@ -1,8 +1,6 @@
 package HTMLBuilder;
 use strict;
 
-use Constants;
-
 use SelectList;
 use TextField;
 use Checkbox;
@@ -438,7 +436,7 @@ sub rankPopupMenu {
 			$selected = '';
 		}
 
-		$html .= "<OPTION $selected>$rank</OPTION>" unless Globals::isIn(\@toExclude, $rank);
+		$html .= "<OPTION $selected>$rank</OPTION>" unless PBDBUtil::isIn(\@toExclude, $rank);
 		
 	}
 	
@@ -545,9 +543,9 @@ sub newPopulateHTML {
 
 			if (($rank eq 'subspecies') || ($rank eq 'species')) {  
 				# then we don't want to exclude it.
-				@toExclude = @{Globals::deleteElementFromArray(\@toExclude, $rank)};
+				@toExclude = @{PBDBUtil::deleteElementFromArray(\@toExclude, $rank)};
 			} else {
-				@toExclude = (SUBSPECIES, SPECIES);
+				@toExclude = ('subspecies', 'species');
 			}
 			
 			Debug::dbPrint("toExclude = @toExclude");
