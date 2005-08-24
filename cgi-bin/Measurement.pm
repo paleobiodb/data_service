@@ -466,9 +466,9 @@ sub processMeasurementForm	{
                         main::dbg("INSERT, TYPE $type: ".Dumper($row));
                         foreach my $f (grep(!/error_unit/,@measurement_fields)) {
                             if ($fields{'magnification'} =~ /^[0-9.]+$/) {
-                                $in_cgi{$type}{'real_'.$f}=$row->{$f}/$fields{'magnification'};
+                                $in_cgi{$type}{'real_'.$f}=$in_cgi{$type}{$f}/$fields{'magnification'};
                             } else {
-                                $in_cgi{$type}{'real_'.$f}=$row->{$f};
+                                $in_cgi{$type}{'real_'.$f}=$in_cgi{$type}{$f};
                             }
                         }
 #                        $in_cgi{$type}{'error_unit'}=$q->param($type."_error_unit");
