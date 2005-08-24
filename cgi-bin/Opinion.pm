@@ -11,14 +11,11 @@
 package Opinion;
 
 use strict;
-use Constants;
 
 use DBI;
-use DBConnection;
 use DBTransactionManager;
 use PBDBUtil;
 use Class::Date qw(date localdate gmdate now);
-use Globals;
 use Session;
 use Classification;
 use CGI::Carp;
