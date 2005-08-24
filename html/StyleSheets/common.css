@@ -219,66 +219,69 @@ DIV.errorMessage {
 /*	the color for the dark row in a list which has alternating 
 	light and dark rows. */
 .darkList {
-	background-color:E0E0E0;
+	background-color:#E0E0E0;
 }
 
 /*	color of light row in list, not used everywhere. */
 .lightList {
-	background-color:FFFFFF;
+	background-color:#FFFFFF;
 }
 
 /* relate to report formatting */
 .dataTable {
     border: 0px; 
 }
-.dataTableCell, .dataTableCellTotal {
+.dataTableCell, .dataTableCellTotal, .dataTableCellLeft {
     border-left: 0px;
     border-top: 0px;
-    border-right: 1px #C0C0C0 solid;
-    border-bottom: 1px #C0C0C0 solid;
+    border-right: 1px #D0D0D0 solid;
+    border-bottom: 1px #D0D0D0 solid;
 }
-.dataTableColumn, .dataTableColumnTotal {
+.dataTableCellLeft { border-left:  1px #D0D0D0 solid;}
+
+.dataTableColumn, .dataTableColumnTotal, .dataTableColumnLeft {
     text-align: center;
-    //white-space: nowrap;
+    /*white-space: nowrap;*/
     background-color:#EEEEEE;
     border-top: 0px;
-    border-bottom: 1px #707070 solid;
+    border-bottom: 1px #808080 solid;
     border-left: 0px;
-    border-right: 1px #909090 solid;
-    padding: 0px 3px 0px 3px;
+    border-right: 1px #A0A0A0 solid;
+/*    padding: 0px 3px 0px 3px;*/
 }
 .dataTableColumnTotal { border-right: 0px; }
+.dataTableColumnLeft { border-left: 1px #A0A0A0 solid;}
 
 .dataTableRow, .dataTableRowTotal {
     white-space: nowrap;
     background-color:#EEEEEE;
     border-left: 0px;
-    border-right: 1px #707070 solid;
+    border-right: 1px #808080 solid;
     border-top: 0px;
-    border-bottom: 1px #909090 solid;
-    padding: 0px 3px 0px 3px;
+    border-bottom: 1px #A0A0A0 solid;
+ /*   padding: 0px 3px 0px 3px;*/
 }
 
 .dataTableULCorner {
-    background-color:#DDDDDD;
+    background-color:#E0E0E0;
     border-left: 0px;
     border-top: 0px;
-    border-right: 1px #707070 solid;
-    border-bottom: 1px #707070 solid;
+    border-right: 1px #808080 solid;
+    border-bottom: 1px #808080 solid;
 }
 
 .dataTableTopULCorner{
     border-left: 0px;
     border-top: 0px;
-    border-right: 1px #707070 solid;
+    border-right: 1px #808080 solid;
     border-bottom: 0px;
 }
 .dataTableTop {
-    background-color:#DDDDDD;
+    background-color:#E0E0E0;
     border-left: 0px;
     border-top: 0px;
-    border-right: 1px #909090 solid;
-    border-bottom: 1px #909090 solid;
+    border-right: 1px #A0A0A0 solid;
+    border-bottom: 1px #A0A0A0 solid;
 }
 
 .headerList1 {
