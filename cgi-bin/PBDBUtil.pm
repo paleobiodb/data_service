@@ -738,7 +738,6 @@ sub getChildrenRecurse {
             # Get alternate spellings
             my $sql = "SELECT DISTINCT taxon_no, taxon_name, taxon_rank FROM opinions, authorities ".
                       "WHERE opinions.child_spelling_no=authorities.taxon_no ".
-                      "AND status IN  ('rank changed as','recombined as','corrected as') ".
                       "AND child_no=$parent_row->{child_no} ".
                       "AND child_spelling_no!=$parent_row->{child_spelling_no} ".
                       "ORDER BY taxon_name"; 
@@ -780,6 +779,83 @@ sub getChildrenRecurse {
     print "\n<br>";
     }
 }
+
+# pass this a number like "5" and it will return the name ("five").
+# only works for numbers up through 19.  Above that and it will just return
+# the original number.
+#
+sub numberToName {
+    my $num = shift;
+
+    my %numtoname = (  "0" => "zero", "1" => "one", "2" => "two",
+                         "3" => "three", "4" => "four", "5" => "five",
+                         "6" => "six", "7" => "seven", "8" => "eight",
+                         "9" => "nine", "10" => "ten",
+                         "11" => "eleven", "12" => "twelve", "13" => "thirteen",
+                         "14" => "fourteen", "15" => "fifteen", "16" => "sixteen",
+                         "17" => "seventeen", "18" => "eighteen", "19" => "nineteen");
+
+    my $name;
+
+    if ($num < 20) {
+        $name = $numtoname{$num};
+    } else {
+        $name = $num;
+    }
+
+    return $name;
+}   
+
+
+
+# pass it an array ref and a scalar
+# loops through the array to see if the scalar is a member of it.
+# returns true or false value.
+sub isIn {
+    my $arrayRef = shift;
+    my $val = shift;
+
+    # if they don't exist
+    if ((!$arrayRef) || (!$val)) {
+        return 0;
+    }
+
+    foreach my $k (@$arrayRef) {
+        if ($val eq $k) {
+            return 1;
+        }
+    }
+
+
+    return 0;
+}
+    
+
+# Pass this an array ref and 
+# an element to delete.
+#
+# It will search through the array and
+# delete *any* and all occurrences of the passed
+# element if it finds them. 
+#
+# It returns a reference to a new array but *doesn't* modify the original.
+#
+# Does a string compare (eq)
+sub deleteElementFromArray {
+    my $ref = shift; 
+    my $toDelete = shift;
+    
+    my @newArray;
+    
+    foreach my $element (@$ref) {
+        if ($element ne $toDelete) {
+            push(@newArray, $element);
+        }
+    }
+    
+    return \@newArray;
+}   
+
 
 # Utilitiy, no other place to put it PS 01/26/2004
 sub printErrors{
