@@ -8,7 +8,7 @@
 #use strict;	# eventually, should have use strict set.. rjp 2/2004.
 
 use CGI;
-#use CGI::Carp qw(fatalsToBrowser);
+use CGI::Carp qw(fatalsToBrowser);
 use CGI::Carp;
 use HTMLBuilder;
 use DBConnection;
@@ -47,7 +47,6 @@ use Opinion;
 
 use Validation;
 use Debug;
-use Globals;
 
 
 #*************************************
@@ -121,8 +120,6 @@ my $hbo = HTMLBuilder->new($TEMPLATE_DIR, $dbt, $exec_url );
 my $s = Session->new($dbt);
 
 my $action = "";
-
-my @rowData;
 
 # don't let users into the contributors' area unless they're on the main site
 #  or backup server (as opposed to a mirror site) JA 3.8.04
@@ -240,7 +237,7 @@ sub processAction {
 	if ($q->param("user") eq "Guest") {
 		# Change the HTMLBuilder object so that the templates
 		# will come from the guest directory instead of the private directory.
-		$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
+		$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbt, $exec_url );
 	}
 	
 	# Validate User
@@ -263,7 +260,7 @@ sub processAction {
 
     # The right combination will allow me to conditionally set the DEBUG flag
     if ($s->get("enterer") eq "J. Sepkoski" && 
-        $s->get("authorizer") eq Globals::god() ) {
+        $s->get("authorizer") eq "J. Alroy" ) {
             $DEBUG = 1;
     }
 	
@@ -387,9 +384,10 @@ sub displayPreferencesPage {
 
 	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = &getPrefFields();
 	# Populate the form
+    my @rowData;
 	my @fieldNames = @{$setFieldNames};
 	push @fieldNames , @{$shownFormParts};
-	for $f (@fieldNames)	{
+	for my $f (@fieldNames)	{
 		if ($pref{$f} ne "")	{
 			push @rowData,$pref{$f};
 		}
@@ -417,7 +415,7 @@ sub getPreferences	{
 	my @row = $sth->fetchrow_array();
 	$sth->finish();
 	my @prefvals = split / -:- /,$row[0];
-	for $p (@prefvals)	{
+	for my $p (@prefvals)	{
 		if ($p =~ /=/)	{
 			my ($a,$b) = split /=/,$p,2;
 			$pref{$a} = $b;
@@ -480,7 +478,7 @@ sub getPrefFields	{
 			"coastlinecolor", "borderlinecolor", "usalinecolor",
 			"pointsize1", "pointshape1",
 			"dotcolor1", "dotborder1");
-	for $fn (@setFieldNames)	{
+	for my $fn (@setFieldNames)	{
 		if ($cleanSetFieldNames{$fn} eq "")	{
 			my $cleanFN = $fn;
 			$cleanFN =~ s/_/ /g;
@@ -488,7 +486,7 @@ sub getPrefFields	{
 		}
 	}
 	# options concerning display of forms, not individual fields
-	@shownFormParts = ("collection_search", "genus_and_species_only",
+	my @shownFormParts = ("collection_search", "genus_and_species_only",
 		"taphonomy", "subgenera", "abundances", "plant_organs");
 	return (\@setFieldNames,\%cleanSetFieldNames,\@shownFormParts);
 
@@ -513,8 +511,8 @@ sub setPreferences	{
  	my $sql = "UPDATE person SET preferences='";
 	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = &getPrefFields();
  # prepare the SQL to update the prefs
-	for $i (0..$#{$setFieldNames})	{
-		$f = ${$setFieldNames}[$i];
+	for my $i (0..$#{$setFieldNames})	{
+		my $f = ${$setFieldNames}[$i];
  		if ( $q->param($f))	{
 			my $val = $q->param($f);
 			$val =~ s/'/\\'/g;
@@ -531,7 +529,7 @@ sub setPreferences	{
 
 	print "<tr><td valign=\"top\" width=\"33%\">\n";
 	print "<b>Displayed sections</b><br>\n";
-	for $f (@{$shownFormParts})	{
+	for my $f (@{$shownFormParts})	{
 		my $cleanName = $f;
 		$cleanName =~ s/_/ /g;
  		if ( $q->param($f) )	{
@@ -543,8 +541,8 @@ sub setPreferences	{
 	}
 	# Are any comments stored?
 	my $commentsStored;
-	for $i (0..$#{$setFieldNames})	{
-		$f = ${$setFieldNames}[$i];
+	for my $i (0..$#{$setFieldNames})	{
+		my $f = ${$setFieldNames}[$i];
 		if ($q->param($f) && $f =~ /comm/)	{
 			$commentsStored = 1;
 		}
@@ -552,8 +550,8 @@ sub setPreferences	{
 
 	print "</td>\n<td valign=\"top\" width=\"33%\">\n";
 	print "<b>Prefilled values</b><br>\n";
-	for $i (0..$#{$setFieldNames})	{
-		$f = ${$setFieldNames}[$i];
+	for my $i (0..$#{$setFieldNames})	{
+		my $f = ${$setFieldNames}[$i];
 		if ($f =~ /^geogcomments$/)	{
 			print "</td></tr>\n<tr><td align=\"left\" colspan=3>\n";
 			if ($commentsStored)	{
@@ -612,7 +610,7 @@ sub buildTimeScalePulldown	{
 
 	# alphabetize the time scale names
 	my %tsid;
-	for $ts ( @timescalerefs )	{
+	for my $ts ( @timescalerefs )	{
 		$tsid{$ts->{scale_name}} = $ts->{scale_no};
 	}
 	my @tsnames = keys %tsid;
@@ -661,7 +659,7 @@ sub displayMenuPage	{
 		if ( $queue{action} ) {
 	
 			# Set each parameter
-			foreach my $parm ( %queue ) {
+			foreach my $parm ( keys %queue ) {
 				$q->param ( $parm => $queue{$parm} );
 			}
 	
@@ -671,10 +669,8 @@ sub displayMenuPage	{
 		}
 	}
 	
-	# rjp, 2/2004.. Where do the rowData and fieldNames come from?!?!
-	
 	print stdIncludes("std_page_top");
-	print $hbo->populateHTML('menu', \@rowData, \@fieldNames);
+	print $hbo->populateHTML('menu', [],[]);
 	print stdIncludes("std_page_bottom");
 
 
@@ -698,7 +694,7 @@ sub displayHomePage {
 		my %queue = $s->unqueue( $dbh );
 		if ( $queue{action} ) {
 			# Set each parameter
-			foreach my $parm ( %queue ) {
+			foreach my $parm ( keys %queue ) {
 				$q->param ( $parm => $queue{$parm} );
 			}
 	
@@ -713,6 +709,7 @@ sub displayHomePage {
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
    	$sth->execute();
 	my $rs = $sth->fetchrow_hashref();
+    my (@rowData,@fieldNames);
 	push ( @rowData,	$rs->{reference_total},
 						$rs->{collection_total}, 
 						$rs->{occurrence_total}, 
@@ -743,10 +740,10 @@ sub displayMapForm {
 	my @row = ( '', '', '', '', '', '100%', 'rectilinear', '0', 'Europe', 'X 1', 'medium', 'white', 'none', '30 degrees', 'gray', 'in back', 'medium', 'none', 'black', 'none', 'none', 'medium', 'circles', 'red', 'black', '', 'medium', 'squares', 'blue', 'black', '', 'medium', 'triangles', 'yellow', 'black', '', 'medium', 'diamonds', 'green', 'black' );
 	
 	# Read preferences if there are any JA 8.7.02
-	%pref = getPreferences($s->get('enterer_no'));
+	my %pref = getPreferences($s->get('enterer_no'));
 	# Get the enterer's preferences
 	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = &getPrefFields();
-	for $p (@{$setFieldNames})	{
+	for my $p (@{$setFieldNames})	{
 		if ($pref{$p} ne "")	{
 			#these prefs are for collection entry form, don't display the here
 			if ($p !~ /environment|research_group|formation|country|state|interval_name|lithology|period_max/) {
@@ -778,20 +775,10 @@ sub displayMapForm {
 
 
 sub displayMapResults {
-
-	#Debug::dbPrint("made it to displayMapResult");
-
 	print stdIncludes("std_page_top" );
 
 	my $m = Map::->new( $dbh, $q, $s, $dbt, $hbo);
-
-	if ($m) { Debug::dbPrint("made new map"); }
-
-	#$m->testing();
-	
 	my $file = $m->buildMap();
-
-	#Debug::dbPrint("built map");
 
     open(MAP, $file) or die "couldn't open $file ($!)";
     while(<MAP>){
@@ -873,16 +860,16 @@ sub displayTenMyBins	{
 
 	print "These bin definitions are used by the <a href=\"$exec_url?action=displayCurveForm\">diversity curve generator</a>.\n\n";
 
-	@binnames = TimeLookup::getTenMYBins();
+	my @binnames = TimeLookup::getTenMYBins();
 
 	@_ = TimeLookup::processBinLookup($dbh,$dbt,"boundaries");
 	#%topma = %{$_[0]};
-	%basema = %{$_[1]};
-	%binning = %{$_[2]};
+	my %basema = %{$_[1]};
+	my %binning = %{$_[2]};
 
 	my $intervalsql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
 	my @intervalrefs = @{$dbt->getData($intervalsql)};
-	my %intervalname;
+	my (%intervalname,%intervalalias);
 
 	for my $ir (@intervalrefs)	{
 		$intervalname{$ir->{interval_no}} = $ir->{interval_name};
@@ -916,7 +903,6 @@ sub displayTenMyBins	{
                 push @ints,$in;
 			}
 		}
-        print join(", ",@ints)."<br>";
 		@namestoprint = sort { $intervalalias{$a} cmp $intervalalias{$b} } @namestoprint;
 		my $printed = 0;
 		for my $nametoprint ( @namestoprint )	{
@@ -1416,7 +1402,7 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
     my $rowref = $sth->fetchrow_arrayref();
     my $md = MetadataModel->new($sth);
     my $drow = DataRow->new($rowref, $md);
-    $retVal = makeRefString($drow);
+    my $retVal = makeRefString($drow);
     print '<table>' . $retVal . '</table>';
 
     print qq|<center><p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p>\n|;
@@ -1465,8 +1451,8 @@ sub displaySelectRefForEditPage
 		my $row = 1;
 		foreach my $rowref (@rowrefs) {
 			my $drow = DataRow->new($rowref, $md);
-			my $selectable = 1 if ( $s->get('authorizer') eq $drow->getValue('authorizer') || $s->get('authorizer') eq Globals::god());
-			$retVal = makeRefString($drow, $selectable, $row, $numRows);
+			my $selectable = 1 if ( $s->get('authorizer') eq $drow->getValue('authorizer') || $s->get('authorizer') eq "J. Alroy");
+			my $retVal = makeRefString($drow, $selectable, $row, $numRows);
 			print $retVal;
 			$matches++ if $selectable;
 			$row++;
@@ -1563,7 +1549,7 @@ sub processReferenceEditForm {
 
 	print stdIncludes( "std_page_top" );
 	  
-	$refID = updateRecord('refs', 'reference_no', $q->param('reference_no'));
+	my $refID = updateRecord('refs', 'reference_no', $q->param('reference_no'));
     print "<center><h3><font color='red'>Reference record updated</font></h3></center>\n";
 		
     $sql = "SELECT * FROM refs WHERE reference_no=$refID";
@@ -1596,7 +1582,7 @@ sub displaySearchCollsForAdd	{
 	}
 
 	# use some preferences JA 20.10.04
-	%pref = getPreferences($s->get('enterer_no'));
+	my %pref = getPreferences($s->get('enterer_no'));
 
 	my $html = $hbo->populateHTML('search_collections_for_add_form' , [ '' , $pref{'latdeg'} , '' , '' , '' , $pref{'latdir'} , $pref{'lngdeg'} , '' , '' , '' , $pref{'lngdir'} ] , [ 'period_max' , 'latdeg' , 'latmin' , 'latsec' , 'latdec' , 'latdir',  'lngdeg' , 'lngmin' , 'lngsec' , 'lngdec' , 'lngdir' ] );
 
@@ -1633,7 +1619,7 @@ sub displaySearchColls {
 	# edit_occurrence	result list links go to edit occurrence page
 
 	# Show the "search collections" form
-	%pref = getPreferences($s->get('enterer_no'));
+	my %pref = getPreferences($s->get('enterer_no'));
 	my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML('search_collections_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment',$type ], \@prefkeys);
 	HTMLBuilder::buildAuthorizerPulldown($dbt, \$html );
@@ -1670,52 +1656,23 @@ sub displaySearchColls {
 
 # User submits completed collection search form
 # System displays matching collection results
-# Also called by TaxonInfo.pm in the doCollections() routine,
-# and by bridge.pl in the displayReIDForm() routine.
-#
-# $in_list is an optional parameter which is used when 
-# the script is called from TaxonInfo in the doCollections() routine.
-# It is a array of synonyms of taxa to find (ie, find collections which 
-# have occurrences of any taxa in this list).
+# Called during collections search, and by displayReIDForm() routine.
 sub displayCollResults {
-	my $in_list = shift;	# optional parameter from taxon info script
-    if ($q->param('taxon_list')) {
-        @in_list = split(/\s*,\s*/,$q->param('taxon_list'));
-        $in_list= \@in_list;
-    }
 	my $limit = $q->param('limit') || 30 ;
     my $rowOffset = $q->param('rowOffset') || 0;
 
     # limit passed to permissions module
-    my $perm_limit = $limit + $rowOffset;
+    my $perm_limit;
 
 	# effectively don't limit the number of collections put into the
 	#  initial set to examine when adding a new one
 	if ( $q->param('type') eq "add" )	{
 		$perm_limit = 1000000;
-	}
-	
-	my $method = "getReadRows";			# Default is readable rows
-	my $p = Permissions->new( $s );
-	my $type;							# from the hidden type field in the form.
+	} else {
+        $perm_limit = $limit + $rowOffset;
+    }
 
-	# Build the SQL
-	# which function to use depends on whether the user is adding a collection
-	my $sql;
-	my $mylat;
-	my $mylng;
-	if ( $q->param('type') eq "add" )	{
-		# you won't have an in list if you are adding
-		($sql,$mylat,$mylng) = &processCollectionsSearchForAdd();
-	} else	{
-		$sql = &processCollectionsSearch($in_list);
-	}
-	my $sth = $dbh->prepare( $sql );
-	
-	#Debug::dbPrint("displayCollResults SQL = $sql");
-
-	$sth->execute();  	# run the query
-
+    my $type;
 	if ( $q->param('type') ) {
 		$type = $q->param('type');			# It might have been passed (ReID)
 	} else {
@@ -1724,89 +1681,41 @@ sub displayCollResults {
 		$type = $queue{type};
 	}
 
+    my $permission_type = "read";
 	# We create different links depending on their destination, using the hidden type field.
-	if ( $type eq "add" )		{ $action = "displayCollectionDetails"; $method = "getReadRows"; }
-	elsif ( $type eq "edit" )	{ $action = "displayEditCollection"; $method = "getWriteRows"; }
-	elsif ( $type eq "view" )	{ $action = "displayCollectionDetails"; $method = "getReadRows"; }
-	# PZM 09/17/02 changed to 'getReadRows' from 'getWriteRows'
-	# because we will be displaying both readable and writeable
-	# data in 'displayOccurrenceAddEdit'
-	elsif ( $type eq "edit_occurrence" )   { $action = "displayOccurrenceAddEdit"; $method =
-"getReadRows"; }
-	elsif ( $type eq "reid" )	{ $action = "displayOccsForReID"; $method = "getReadRows"; }
+	if ( $type eq "add" )		{ $action = "displayCollectionDetails"; $permission_type = "read"; }
+	elsif ( $type eq "edit" )	{ $action = "displayEditCollection"; $permission_type = "write"; }
+	elsif ( $type eq "view" )	{ $action = "displayCollectionDetails"; $permission_type= "read"; }
+	elsif ( $type eq "edit_occurrence" )   { $action = "displayOccurrenceAddEdit"; $permission_type= "read"; }
+	elsif ( $type eq "reid" )	{ $action = "displayOccsForReID"; $permission_type= "read"; }
 	# added by JA 31.3.04
-	elsif ( $type eq "reclassify_occurrence" )	{
-		$action = "startDisplayOccurrenceReclassify";
-		$method = "getWriteRows";
-	}
-	else {
-		# type is unknown, so use defaults.
-		$action = "displayCollectionDetails";
-		$method = "getReadRows";
-	}
-
-	# Get rows okayed by permissions module
-	my (@dataRows, $ofRows);
-	$p->$method( $sth, \@dataRows, $perm_limit, \$ofRows );
-
-	# make sure collections really are within 100 km of the submitted
-	#  lat/long coordinate JA 6.4.04
-	if ( $q->param('type') eq "add" )	{
-		my @tempDataRows;
-		# have to recompute this
-		$ofRows = 0;
-		for my $dr (@dataRows)	{
-
-			# compute the coordinate
-			my $lat = $dr->{'latdeg'};
-			my $lng = $dr->{'lngdeg'};
-			if ( $dr->{'latmin'} )	{
-				$lat = $lat + ( $dr->{'latmin'} / 60 ) + ( $dr->{'latsec'} / 3600 );
-			} else	{
-				$lat = $lat . "." . $dr->{'latdec'};
-			}
-		
-			if ( $dr->{'lngmin'} )	{
-				$lng = $lng + ( $dr->{'lngmin'} / 60 ) + ( $dr->{'lngsec'} / 3600 );
-			} else	{
-				$lng = $lng . "." . $dr->{'lngdec'};
-			}
-
-			# west and south are negative
-			if ( $dr->{'latdir'} =~ /S/ )	{
-				$lat = $lat * -1;
-			}
-			if ( $dr->{'lngdir'} =~ /W/ )	{
-				$lng = $lng * -1;
-			}
-
-			# if the points are less than 100 km apart, save
-			#  the collection
-			if ( $mylat == $lat && $mylng == $lng )	{
-				push @tempDataRows, $dr;
-				$ofRows++;
-			}
-			elsif ( 111 * GCD($mylat,$lat,abs($mylng-$lng)) < 100 )	{
-				push @tempDataRows, $dr;
-				$ofRows++;
-			} else	{
-			}
-			# only display the first 200 collections to match
-			if ( $ofRows == 200 )	{
-				last;
-			}
-		}
-		@dataRows = @tempDataRows;
-	}
+	elsif ( $type eq "reclassify_occurrence" )	{ $action = "startDisplayOccurrenceReclassify"; $permission_type= "write";}
+	# type is unknown, so use defaults.
+	else { $action = "displayCollectionDetails"; $permission_type = "read"; }
 	
-    my $displayRows = @dataRows;	# get number of rows to display
-
-    # the taxon info script displays the rows differently than say, 
-    # the displayCollectionDetails method, so just return the data from the query.
-    if ($q->param("taxon_info_script") eq "yes") {
-    	return \@dataRows;
+	# Build the SQL
+	# which function to use depends on whether the user is adding a collection
+	my $sql;
+    
+    my %options = $q->Vars();
+    $options{'limit'} = $perm_limit;
+    $options{'permission_type'} = $permission_type;
+    if ($q->param("taxon_list")) {
+        my @in_list = split(/,/,$q->param('taxon_list'));
+        $options{'taxon_list'} = \@in_list if (@in_list);
     }
-	
+    my $fields = ["country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no"];  
+    my ($dataRows,$ofRows);
+	if ( $q->param('type') eq "add" )	{
+		# you won't have an in list if you are adding
+		($dataRows,$ofRows) = processCollectionsSearchForAdd();
+	} else	{
+		($dataRows,$ofRows) = processCollectionsSearch($dbt,\%options,$fields);
+	}
+
+    my @dataRows = @$dataRows;
+    my $displayRows = scalar(@dataRows);	# get number of rows to display
+
     if ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
 		# go right to the chase with ReIDs if a taxon_rank was specified
 		if ($q->param('type') eq "reid" && $q->param('taxon_rank') ne 'Higher-taxon') {
@@ -1989,7 +1898,7 @@ sub displayCollResults {
     my $q2 = new CGI; 
     my @params = $q2->param;
     my $getString = "rowOffset=".($rowOffset+$limit);
-    foreach $param_key (@params) {
+    foreach my $param_key (@params) {
         if ($param_key ne "rowOffset") {
             if ($q2->param($param_key) ne "") {
                 $getString .= "&".uri_escape($param_key)."=".uri_escape($q2->param($param_key));
@@ -2060,13 +1969,13 @@ sub processCollectionsSearchForAdd	{
 	my $lng = $q->param('lngdeg');
 	if ( $q->param('latmin') )	{
 		$lat = $lat + ( $q->param('latmin') / 60 ) + ( $q->param('latsec') / 3600 );
-	} else	{
+	} elsif ( $q->param('latdec') ) {
 		$lat = $lat . "." . $q->param('latdec');
 	}
 		
 	if ( $q->param('lngmin') )	{
 		$lng = $lng + ( $q->param('lngmin') / 60 ) + ( $q->param('lngsec') / 3600 );
-	} else	{
+	} elsif ( $q->param('lngdec') ) {
 		$lng = $lng . "." . $q->param('lngdec');
 	}
 
@@ -2077,15 +1986,17 @@ sub processCollectionsSearchForAdd	{
 	if ( $q->param('lngdir') =~ /W/ )	{
 		$lng = $lng * -1;
 	}
+    my $mylat = $lat;
+    my $mylng = $lng;
 
 	# maximum latitude is center point plus 100 km, etc.
 	# longitude is a little tricky because we have to deal with cosines
 	# it's important to use floor instead of int because they round off
 	#  negative numbers differently
-	$maxlat = floor($lat + 100 / 111);
-	$minlat = floor($lat - 100 / 111);
-	$maxlng = floor($lng + ( (100 / 111) / cos($lat * $PI / 180) ) );
-	$minlng = floor($lng - ( (100 / 111) / cos($lat * $PI / 180) ) );
+	my $maxlat = floor($lat + 100 / 111);
+	my $minlat = floor($lat - 100 / 111);
+	my $maxlng = floor($lng + ( (100 / 111) / cos($lat * $PI / 180) ) );
+	my $minlng = floor($lng - ( (100 / 111) / cos($lat * $PI / 180) ) );
 
 	# reset the limits if you go "north" of the north pole etc.
 	# note that we don't have to get complicated with resetting, say,
@@ -2112,14 +2023,14 @@ sub processCollectionsSearchForAdd	{
 	}
 
 	my $inlist;
-	for $l ($minlat..$maxlat)	{
+	for my $l ($minlat..$maxlat)	{
 		$inlist .= abs($l) . ",";
 	}
 	$inlist =~ s/,$//;
 	$sql .= "latdeg IN (" . $inlist . ") AND ";
 
 	$inlist = "";
-	for $l ($minlng..$maxlng)	{
+	for my $l ($minlng..$maxlng)	{
 		$inlist .= abs($l) . ",";
 	}
 	$inlist =~ s/,$//;
@@ -2127,566 +2038,570 @@ sub processCollectionsSearchForAdd	{
 
 	$sql .= " ORDER BY collection_no";
 
-	return ($sql,$lat,$lng);
+    main::dbg("process collections search for add: $sql");
+
+    my $sth = $dbt->dbh->prepare($sql);
+    $sth->execute();
+    my $p = Permissions->new ( $s );
+
+    # See if rows okay by permissions module
+    my @dataRows = ();
+    my $limit = 10000000;
+    my $ofRows = 0;
+    $p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
+
+
+	# make sure collections really are within 100 km of the submitted
+	#  lat/long coordinate JA 6.4.04
+    my @tempDataRows;
+    # have to recompute this
+    $ofRows = 0;
+    for my $dr (@dataRows)	{
+
+        # compute the coordinate
+        my $lat = $dr->{'latdeg'};
+        my $lng = $dr->{'lngdeg'};
+        if ( $dr->{'latmin'} )	{
+            $lat = $lat + ( $dr->{'latmin'} / 60 ) + ( $dr->{'latsec'} / 3600 );
+        } else	{
+            $lat = $lat . "." . $dr->{'latdec'};
+        }
+    
+        if ( $dr->{'lngmin'} )	{
+            $lng = $lng + ( $dr->{'lngmin'} / 60 ) + ( $dr->{'lngsec'} / 3600 );
+        } else	{
+            $lng = $lng . "." . $dr->{'lngdec'};
+        }
+
+        # west and south are negative
+        if ( $dr->{'latdir'} =~ /S/ )	{
+            $lat = $lat * -1;
+        }
+        if ( $dr->{'lngdir'} =~ /W/ )	{
+            $lng = $lng * -1;
+        }
+
+        # if the points are less than 100 km apart, save
+        #  the collection
+        if ( $mylat == $lat && $mylng == $lng )	{
+            push @tempDataRows, $dr;
+            $ofRows++;
+        }
+        elsif ( 111 * GCD($mylat,$lat,abs($mylng-$lng)) < 100 )	{
+            push @tempDataRows, $dr;
+            $ofRows++;
+        } else	{
+        }
+        # only display the first 200 collections to match
+        if ( $ofRows == 200 )	{
+            last;
+        }
+    }
+
+	return (\@tempDataRows,$ofRows);
 }
 
 
-# NOTE: this routine is used only by displayCollResults
-# pass it a list of parameters, and it will compose and return
-# an appropriate SQL query.
+# This function has been generalized to use by a number of different modules
+# as a generic way of getting back collection results, including maps, collection search, confidence, and taxon_info
+# These are simple options, corresponding to database fields, that can be passed in:
+# These are more complicated options that can be passed in:
+#   taxon_list: A list of taxon_nos to filter by (i.e. as passed by TaxonInfo)
+#   most_recent: Only use the most recent reid of an occurrence when filtering by taxon_name,taxon_no
+#   calling_script: Name of the script which called this function, only used for error message generation
+# PS 08/11/2005
 sub processCollectionsSearch {
-	my $in_list = shift;  # for taxon info script
-    my @errors;
+    my $dbt = $_[0];
+	my %options = %{$_[1]};
+    my @fields = @{$_[2]};
 	
-	#Debug::dbPrint("inlist = $in_list\n");
+    # Set up initial values
+    my (@where,@occ_where,@reid_where,@tables,@from,@left_joins,@groupby,@errors);
+    @tables = ("collections c");
 
-	# This is a list of all pulldowns in the collection search form.  
-	# These cannot use the LIKE wildcard, i.e. they must be
-	# exact matches regardless of the request.
-	my %pulldowns = (	"authorizer"		=> 1,
-							"enterer"			=> 1,
-							"research_group"	=> 1,
-							"period"			=> 1,
-							"lithadj"			=> 1,
-							"lithology1"		=> 1,
-							"lithadj2"			=> 1,
-							"lithology2"		=> 1,
-							"environment"		=> 1 );
+    # There fields must always be here
+	@from = ("c.authorizer","c.collection_no","c.collection_name","c.access_level","c.release_date","c.reference_no","DATE_FORMAT(release_date, '%Y%m%d') rd_short","c.research_group");
+    
+    # Now add on any requested fields
+    foreach my $field (@fields) {
+        push @from, "c.$field";
+    }
 
-	my $sql = DBTransactionManager->new($dbh);
-	$sql->setWhereSeparator("AND");
-		
-	# If a genus name is requested, query the occurrences table to get
-	# a list of useable collections
-	#
-	# WARNING: wild card searches in this case DO require exact matches
-	# at the beginning of the genus name
+    # Only necessary if we're doing a union
+    if ($options{'sortby'}) {
+        push @from, "c.$options{sortby}";
+    }
+
+	# Handle wildcards
+	my $comparator = "=";
+	my $wildcardToken = "";
+	if ($options{'wild'} eq 'Y') {
+ 	 	$comparator = " LIKE ";
+  		$wildcardToken = "%";
+	}
+
+	# First try the authorites table, else we just hit up the occurrences+reids table
+    # Reworked so you can optionally only use the mostRecentReid in determining if an occurrence
+    # matches a taxon_name PS 08/11/2005
 	# Also searches reIDs table JA 16.8.02
 	# Handles species name searches JA 19-20.8.02
+    if ($options{'taxon_list'}) { 
+        # taxon_list will generally be a list of numbers, but may be both is passed
+        # in from Confidence.pm
+        my ($taxon_sql,$occ_genus_sql,$reid_genus_sql,$occ_taxon_sql,$reid_taxon_sql,$both);
+        foreach my $taxon_no_or_name (@{$options{'taxon_list'}}) {
+            if ($taxon_no_or_name =~ /^\d+$/) {
+                $taxon_sql .= $taxon_no_or_name . ", ";
+            } else {
+                my ($genus,$species) = split(/ /,$taxon_no_or_name);
+                if ($genus) {
+                    $occ_genus_sql .= " (o.genus_name LIKE ".$dbh->quote($genus);
+                    $reid_genus_sql .= " (re.genus_name LIKE ".$dbh->quote($genus);
+                    if ($species) {
+                        $occ_genus_sql .= " AND o.species_name LIKE ".$dbh->quote($species);
+                        $reid_genus_sql .= " AND re.species_name LIKE ".$dbh->quote($species);
+                    }
+                    $occ_genus_sql .= ")";
+                    $reid_genus_sql .= ")";
+                }
+            }
+        }
+        $taxon_sql =~ s/, $//;
+        if ($taxon_sql) {
+            $occ_taxon_sql = "o.taxon_no IN ($taxon_sql)";
+            $reid_taxon_sql = "re.taxon_no IN ($taxon_sql)";
+        }
+        if ($taxon_sql && $occ_genus_sql) {
+            $both = " OR ";
+        } else {
+            $both = "";
+        }
+        
+        push @where, "o.collection_no=c.collection_no";
+        push @tables, "occurrences o";
+        push @occ_where,"($occ_taxon_sql $both $occ_genus_sql)";
+        push @reid_where," ($reid_taxon_sql $both $reid_genus_sql)";
 
-	my $taxon_name = $q->param('taxon_name');
+    } elsif ($options{'taxon_name'}) {
+        # Parse these values regardless
+        my ($genus,$subgenus,$species);
 
-	if ($taxon_name || @$in_list) {
-		# Fix up the genus name and set the species name if there is a space 
-		my $genus;
-		my $sub_genus;
-		my $species;
-		
-		if ($taxon_name =~ / /){
-			# Look for a subgenus in parentheses
-			if ($taxon_name =~ /\([A-Z][a-z]+\)/ && 
-				($q->param('taxon_rank') ne 'species')) {
-
-				$taxon_name =~ /([A-Z][a-z]+)\s\(([A-Z][a-z]+)\)\s?([a-z]*)/;
-				($genus, $sub_genus, $species) = ($1, $2, $3);
-				
-				# These param reassignments maybe useful to displayOccsForReID
-				$q->param('species_name' => $species);
-				$q->param('g_name' => $genus);
-			} else {
-				($genus,$species) = split / /,$q->param('taxon_name');
-				$q->param('species_name' => $species);
-				$q->param('g_name' => $genus);
-			}
-		} elsif ( $q->param('taxon_rank') eq "species" ) {
-			$species = $q->param('taxon_name');
-			$q->param('species_name' => $species);
-		} else { 
-			# this is for genus only...
-			$genus = $q->param('taxon_name');
+        # Fix up the genus name and set the species name if there is a space 
+        my @taxon_bits = split(/\s+/,$options{'taxon_name'});
+        if (scalar(@taxon_bits) == 3) {
+            ($genus,$subgenus,$species) = @taxon_bits;
+            $subgenus =~ s/[\(\)]//g;
+        } elsif (scalar(@taxon_bits) == 2) {
+            ($genus,$species) = @taxon_bits;
+        } elsif (scalar(@taxon_bits) == 1) {
+            ($genus) = @taxon_bits
         }
 
-		my @tables = ("occurrences", "reidentifications");
-		$sql->setSelectExpr("collection_no, count(*)");
-		for my $tableName (@tables) {
-			$sql->setFromExpr($tableName);
-			$sql->clearWhereItems();
-			
-			if ( $q->param("wild") =~ /Y/ ) {
-				$relationString = " LIKE '";
-				$wildCard = "%'";
-			} else	{
-				$relationString = "='";
-				$wildCard = "'";
-			}
-		
-            if (@$in_list) {
-                # In list may be a text genus+species name, a taxon number, or both (if passed from Confidence.pm)
-                my ($taxon_nos_string,$genus_species_sql);
-                foreach $taxon_no_or_name (@$in_list) {
-                    if ($taxon_no_or_name =~ /^\d+$/) {
-                        $taxon_nos_string .= $taxon_no_or_name . ",";
-                    } else {
-                        my ($genus,$species) = split(/ /,$taxon_no_or_name);
-                        if ($genus) {
-                            $genus_species_sql .= " OR (genus_name=".$dbh->quote($genus);
-                            if ($species) {
-                                $genus_species_sql .= " AND species_name=".$dbh->quote($species);
-                            }
-                            $genus_species_sql .= ")";
-                        }
-                    }
-                }
-                $taxon_nos_string =~ s/,$//;
-                if (!$taxon_nos_string) {$taxon_nos_string = '-1';}
+        # Set for displayOccsForReID
+        $q->param('species_name' => $species) if ($species);
+        $q->param('g_name' => $genus) if ($genus);
 
-				$sql->addWhereItem("(taxon_no IN ($taxon_nos_string) $genus_species_sql)");
-            } elsif ( $genus || $species )	{
-				if ($q->param("taxon_rank") eq "Higher taxon" ||
-					$q->param("taxon_rank") eq "Higher-taxon"){
-                    $taxon_nos_string = '-1';
-                    dbg("RE-RUNNING TAXONOMIC SEARCH in bridge<br>");
-                    # JA: Muhl switched to recurse call, I'm switching back
-                    #  because I'm not maintaining recurse
-                    @taxon_nos = TaxonInfo::getTaxonNos($dbt,$q->param('taxon_name'));
-                    if (scalar(@taxon_nos)  > 1) {
-                        # taxon is a homonym... make sure we get all versions of the homonym
-                        my %taxon_nos_unique = ();
-                        foreach $taxon_no (@taxon_nos) {
-                            my @all_taxon_nos = PBDBUtil::taxonomic_search($dbt,$taxon_no);
-                            # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
-                            @taxon_nos_unique{@all_taxon_nos} = ();
-                        }
-                        $taxon_nos_string = join(", ", keys %taxon_nos_unique);
-                    } elsif (scalar(@taxon_nos) == 1) {
-                        $taxon_nos_string = PBDBUtil::taxonomic_search($dbt,$taxon_nos[0]);
-                    }
+        my $taxon_sql = "SELECT taxon_no FROM authorities WHERE taxon_name LIKE ".$dbh->quote($options{'taxon_name'});
+        my @taxon_nos = map {$_->{taxon_no}} @{$dbt->getData($taxon_sql)}; 
+
+        # taxon is a homonym... make sure we get all versions of the homonym
+        if (@taxon_nos) {
+            # 1 or more authorities exists in the authorities table, parse them
+            my %taxon_nos_unique = ();
+            foreach my $taxon_no (@taxon_nos) {
+                my @all_taxon_nos = PBDBUtil::taxonomic_search($dbt,$taxon_no);
+                # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
+                @taxon_nos_unique{@all_taxon_nos} = ();
+            }
+            my $taxon_nos_string = join(", ", keys %taxon_nos_unique);
+            if (!$taxon_nos_string) {
+                $taxon_nos_string = '-1';
+                push @errors, "Could not find any collections matching taxononomic name entered.";
+            }
                                                 
-					$sql->addWhereItem("taxon_no IN ($taxon_nos_string)");
-				} else {
-                    if ($genus) {
-					    $sql->addWhereItem("genus_name".$relationString.$genus.$wildCard);
-                    }
-			
-                    if ( $sub_genus ) {
-                        $sql->addWhereItem("subgenus_name" . $relationString.$sub_genus.$wildCard);
-                    }
-                    
-                    if ( $species )	{
-                        $sql->addWhereItem("species_name" . $relationString.$species.$wildCard);
-                    }
-				}
-			}
+            push @occ_where, "o.taxon_no IN ($taxon_nos_string)";
+            push @reid_where, "re.taxon_no IN ($taxon_nos_string)";
+        } else {
+            # It doesn't exist in the authorities table, so now hit the occurrences table directly 
+            if ( $genus)	{
+                push @occ_where, "o.genus_name LIKE ".$dbh->quote($genus.$wildcardToken);
+                push @reid_where, "re.genus_name LIKE ".$dbh->quote($genus.$wildcardToken);
+            }
+            if ( $subgenus)	{
+                push @occ_where, "o.subgenus_name LIKE ".$dbh->quote($subgenus.$wildcardToken);
+                push @reid_where, "re.subgenus_name LIKE ".$dbh->quote($subgenus.$wildcardToken);
+            }
+            if ( $species )	{
+                push @occ_where, "o.species_name LIKE ".$dbh->quote($species.$wildcardToken);
+                push @reid_where, "re.species_name LIKE ".$dbh->quote($species.$wildcardToken);
+            }
+        }
+        push @where, "o.collection_no=c.collection_no";
+        push @tables, "occurrences o";
+	}
 
-			$sql->setGroupByExpr("collection_no");
-			
-			dbg ( "occ. sql to filter by taxon: ".$sql->SQLExpr()."<br>" );
-			#Debug::dbPrint("proccessCollectionsSearch SQL =" . $sql->SQLExpr());
-			
-			$sth = $dbh->prepare($sql->SQLExpr());
-			$sth->execute();
-			
-			my @result = @{$sth->fetchall_arrayref()};
-			for $r (0..$#result)	{
-				push @okcolls, @{$result[$r]}[0] ;
-			}
-			if ($#okcolls == -1)	{
-				push @okcolls , -1;
-			}
-			$sth->finish();
-		}
-	} # end of if genus block.
-
-	
-	
-	# if time intervals were requested, get an in-list
-	my @timeinlist;
-	my $listsintime;
-	if ( $q->param('max_interval') || $q->param('min_interval'))	{
+    # Handle time terms
+	if ( $options{'max_interval'} || $options{'min_interval'}) {
         #These seeminly pointless four lines are necessary if this script is called from Download or whatever.
         # if the $q->param($var) is not set (undef), the parameters array passed into processLookup doesn't get
-        # set properly, so make sure they can't be undef
-        my $eml_max = ($q->param('eml_max_interval') || '');
-        my $max = ($q->param('max_interval') || '');
-        my $eml_min = ($q->param('eml_min_interval') || '');
-        my $min = ($q->param('min_interval') || '');
+        # set properly, so make sure they can't be undef PS 04/10/2005
+        my $eml_max = ($options{'eml_max_interval'} || '');
+        my $max = ($options{'max_interval'} || '');
+        my $eml_min = ($options{'eml_min_interval'} || '');
+        my $min = ($options{'min_interval'} || '');
         if ($max =~ /[a-zA-Z]/ && !Validation::checkInterval($dbt,$eml_max,$max)) {
             push @errors, "There is no record of $eml_max $max in the database";
         }
         if ($min =~ /[a-z][A-Z]/ && !Validation::checkInterval($dbt,$eml_min,$min)) {
             push @errors, "There is no record of $eml_min $min in the database";
         }
- 		my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, $eml_max,$max,$eml_min,$min);
- 		@timeinlist = @{$inlistref};
-		$timesearch = "Y";
-		$q->param(eml_max_interval => '');
-		$q->param(max_interval => '');
-		$q->param(eml_min_interval => '');
-		$q->param(min_interval => '');
+ 		my ($intervals,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, $eml_max,$max,$eml_min,$min,'intervals');
+        my $val = join(",",@$intervals);
+        if (!$val) {
+            $val = "-1";
+		    push @errors, "Please enter a valid time term or broader time range";
+        }
+        push @where, "c.max_interval_no IN ($val) AND c.min_interval_no IN (0,$val)";
 	}
-
-    # No more errors possible at this point, print them if we have them
-    if (@errors) {
-        print main::stdIncludes("std_page_top");
-        PBDBUtil::printErrors(@errors);
-        print main::stdIncludes("std_page_bottom");
-        exit;
-    }
                                         
-
-	# Get the database metadata
-	my $sqlLiteral = "SELECT * FROM collections WHERE collection_no=0";
-	my $sth = $dbh->prepare( $sqlLiteral ) || die ( "$sqlLiteral<hr>$!" );
-	$sth->execute();
-
-	# Get a list of field names from the database
-	my @fieldNames = @{$sth->{NAME}};
-	# Get a list of field types (number = 1, otherwise = 0)
-	my @fieldTypes = @{$sth->{mysql_is_num}};
-	# Get the number of fields
-	my $numFields = $sth->{NUM_OF_FIELDS};
-	$sth->finish();
-	
-	#Debug::dbPrint("fieldNames = @fieldNames\n\nfieldTypes = @fieldTypes\n\nnumFields = $numFields");
-    
-	# Handle wildcards
-	my $comparator = "=";
-	my $wildcardToken = "";
-	if ( $q->param("wild") eq 'Y') {
- 	 	$comparator = " LIKE ";
-  		$wildcardToken = "%";
-	}
-
-	my @terms;
-	# Handle modified date
-	if ( $q->param('modified_since'))	{
-	  push(@terms, "modified>" . $q->param('modified_since'));
-	  $q->param('modified_since' => '');
-	}
-	
-	# Handle collection name (must also search collection_aka field) JA 7.3.02
-	if ( $q->param('collection_names')) {
-		my $collectionName = $dbh->quote($wildcardToken . $q->param('collection_names') . $wildcardToken);
-		push(@terms, "(collection_name$comparator" . $collectionName . " OR collection_aka$comparator" . $collectionName . ")");
-		$q->param('collection_names' => '');
-	}
-	
 	# Handle half/quarter degrees for long/lat respectively passed by Map.pm PS 11/23/2004
-    if ( $q->param("coordres") eq "half") {
-		if ($q->param("latdec_range") eq "00") {
-			push @terms, "((latmin >= 0 AND latmin <15) OR " 
+    if ( $options{"coordres"} eq "half") {
+		if ($options{"latdec_range"} eq "00") {
+			push @where, "((latmin >= 0 AND latmin <15) OR " 
  						. "(latdec regexp '^(0|1|2\$|(2(0|1|2|3|4)))') OR "
                         . "(latmin IS NULL AND latdec IS NULL))";
-		} elsif($q->param("latdec_range") eq "25") {
-			push @terms, "((latmin >= 15 AND latmin <30) OR "
+		} elsif($options{"latdec_range"} eq "25") {
+			push @where, "((latmin >= 15 AND latmin <30) OR "
  						. "(latdec regexp '^(4|3|(2(5|6|7|8|9)))'))";
-		} elsif($q->param("latdec_range") eq "50") {
-			push @terms, "((latmin >= 30 AND latmin <45) OR "
+		} elsif($options{"latdec_range"} eq "50") {
+			push @where, "((latmin >= 30 AND latmin <45) OR "
  						. "(latdec regexp '^(5|6|7\$|(7(0|1|2|3|4)))'))";
-		} elsif ($q->param('latdec_range') eq "75") {
-			push @terms, "(latmin >= 45 OR (latdec regexp '^(9|8|(7(5|6|7|8|9)))'))";
+		} elsif ($options{'latdec_range'} eq "75") {
+			push @where, "(latmin >= 45 OR (latdec regexp '^(9|8|(7(5|6|7|8|9)))'))";
 		}
 
-		if ( $q->param('lngdec_range') eq "50" )	{
-			push @terms, "(lngmin>=30 OR (lngdec regexp '^(5|6|7|8|9)'))";
-		} elsif ($q->param('lngdec_range') eq "00") {
-			push @terms, "(lngmin<30 OR (lngdec regexp '^(0|1|2|3|4)') OR (lngmin IS NULL AND lngdec
+		if ( $options{'lngdec_range'} eq "50" )	{
+			push @where, "(lngmin>=30 OR (lngdec regexp '^(5|6|7|8|9)'))";
+		} elsif ($options{'lngdec_range'} eq "00") {
+			push @where, "(lngmin<30 OR (lngdec regexp '^(0|1|2|3|4)') OR (lngmin IS NULL AND lngdec
 IS NULL))";
 		}
     # assume coordinate resolution is 'full', which means full/half degress for long/lat
     # respectively 
 	} else {
-		if ( $q->param('latdec_range') eq "50" )	{
-			push @terms, "(latmin>=30 OR (latdec regexp '^(5|6|7|8|9)'))";
-		} elsif ($q->param('latdec_range') eq "00") {
-			push @terms, "(latmin<30 OR (latdec regexp '^(0|1|2|3|4)') OR (latmin IS NULL AND latdec
+		if ( $options{'latdec_range'} eq "50" )	{
+			push @where, "(latmin>=30 OR (latdec regexp '^(5|6|7|8|9)'))";
+		} elsif ($options{'latdec_range'} eq "00") {
+			push @where, "(latmin<30 OR (latdec regexp '^(0|1|2|3|4)') OR (latmin IS NULL AND latdec
 IS NULL))";
 		}
 	}
 
-
-	# Handle period
-	if ( $q->param('period')) {
-		my $periodName = $dbh->quote($wildcardToken . $q->param('period') . $wildcardToken);
-		push(@terms, "(period_min$comparator" . $periodName . " OR period_max$comparator" . $periodName . ")");
-		$q->param('period' => '');
+    # Handle period
+	if ( $options{'period'}) {
+		my $periodName = $dbh->quote($wildcardToken . $options{'period'} . $wildcardToken);
+		push @where, "(period_min LIKE " . $periodName . " OR period_max LIKE " . $periodName . ")";
 	}
 	
 	# Handle intage
-	if ( $q->param('intage')) {
-		my $intageName = $dbh->quote($wildcardToken . $q->param('intage') . $wildcardToken);
-		push(@terms, "(intage_min$comparator" . $intageName . " OR intage_max$comparator" . $intageName . ")");
-		$q->param('intage' => '');
+	if ( $options{'intage'}) {
+		my $intageName = $dbh->quote($wildcardToken . $options{'intage'} . $wildcardToken);
+		push @where, "(intage_min LIKE " . $intageName . " OR intage_max LIKE " . $intageName . ")";
 	}
 	
 	# Handle locage
-	if ( $q->param('locage')) {
-		my $locageName = $dbh->quote($wildcardToken . $q->param('locage') . $wildcardToken);
-		push(@terms, "(locage_min$comparator" . $locageName . " OR locage_max$comparator" . $locageName . ")");
-		$q->param('locage' => '');
+	if ( $options{'locage'}) {
+		my $locageName = $dbh->quote($wildcardToken . $options{'locage'} . $wildcardToken);
+		push @where, "(locage_min LIKE " . $locageName . " OR locage_max LIKE " . $locageName . ")";
 	}
 	
 	# Handle epoch
-	if ( $q->param('epoch')) {
-		my $epochName = $dbh->quote($wildcardToken . $q->param('epoch') . $wildcardToken);
-		push(@terms, "(epoch_min$comparator" . $epochName . " OR epoch_max$comparator" . $epochName . ")");
-		$q->param('epoch' => '');
-	}
-	
-	# Handle lithology and lithology adjectives
-	if ( $q->param('lithadj'))	{
-        push(@terms, qq|FIND_IN_SET(|.$dbh->quote($q->param('lithadj')).qq|,lithadj)|);
-		$q->param('lithadj' => '');
-	}
-		
-	if ( $q->param('lithadj2'))	{
-        push(@terms, qq|FIND_IN_SET(|.$dbh->quote($q->param('lithadj2')).qq|,lithadj2)|);
-		$q->param('lithadj2' => '');
+	if ( $options{'epoch'}) {
+		my $epochName = $dbh->quote($wildcardToken . $options{'epoch'} . $wildcardToken);
+		push @where, "(epoch_min LIKE " . $epochName . " OR epoch_max LIKE " . $epochName . ")";
 	}
 
+	# Handle modified date
+	if ($options{'modified_since'} || $options{'year'})	{
+        my ($yyyy,$mm,$dd);
+        if ($options{'modified_since'}) {
+            my $nowDate = now();
+            if ( "yesterday" eq $options{'modified_since'}) {
+                $nowDate = $nowDate-'1D';
+            } elsif ( "two days ago" eq $options{'modified_since'}) {
+                $nowDate = $nowDate-'2D';
+            } elsif ( "three days ago" eq $options{'modified_since'}) {
+                $nowDate = $nowDate-'3D';
+            } elsif ( "last week" eq $options{'modified_since'}) {
+                $nowDate = $nowDate-'7D';
+            } elsif ( "two weeks ago" eq $options{'modified_since'}) {
+                $nowDate = $nowDate-'14D';
+            } elsif ( "three weeks ago" eq $options{'modified_since'}) {
+                $nowDate = $nowDate-'21D';
+            } elsif ( "last month" eq $options{'modified_since'}) {
+                $nowDate = $nowDate-'1M';
+            }
+            my ($date,$time) = split / /,$nowDate;
+            ($yyyy,$mm,$dd) = split /-/,$date,3;
+        } elsif ($options{'year'}) {
+            $yyyy = $options{'year'};
+            $mm = $options{'month'};
+            $dd = $options{'date'};
+        }  
+
+        my $val = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
+        if ( $options{'beforeafter'} eq "created after" )  {
+            push @where, "created > $val";
+        } elsif ( $q->param("beforeafter") eq "created before" )    {
+            push @where, "created < $val";
+        } elsif ( $q->param("beforeafter") eq "modified after" )    {
+            push @where, "modified > $val";
+        } elsif ( $q->param("beforeafter") eq "modified before" )   {
+            push @where, "modified < $val";
+        } 
+	}
+	
+	# Handle collection name (must also search collection_aka field) JA 7.3.02
+	if ( $options{'collection_names'} ) {
+		my $val = $dbh->quote($wildcardToken . $options{'collection_names'} . $wildcardToken);
+		push(@where, "(collection_name LIKE $val OR collection_aka LIKE $val)");
+	}
+	
     # Handle localbed, regionalbed
-    if ($q->param('regionalbed') && $q->param('regionalbed') =~ /^[0-9.]+$/) {
-        my $min = int($q->param('regionalbed'));
+    if ($options{'regionalbed'} && $options{'regionalbed'} =~ /^[0-9.]+$/) {
+        my $min = int($options{'regionalbed'});
         my $max = $min + 1;
-        push(@terms,qq|regionalbed >= $min and regionalbed <= $max|);
-        $q->param('regionalbed'=>'');
+        push @where,"regionalbed >= $min","regionalbed <= $max";
     }
-    if ($q->param('localbed') && $q->param('localbed') =~ /^[0-9.]+$/) {
-        my $min = int($q->param('localbed'));
+    if ($options{'localbed'} && $options{'localbed'} =~ /^[0-9.]+$/) {
+        my $min = int($options{'localbed'});
         my $max = $min + 1;
-        push(@terms,qq|localbed >= $min and localbed <= $max|);
-        $q->param('localbed'=>'');
+        push @where ,"localbed >= $min","localbed <= $max";
     }
 
     # Maybe special environment terms
-    if ( $q->param('environment')) {
+    if ( $options{'environment'}) {
         my $environment;
-        if ($q->param('environment') =~ /General/) {
+        if ($options{'environment'} =~ /General/) {
             $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_general'}});
-        } elsif ($q->param('environment') =~ /Terrestrial/) {
+        } elsif ($options{'environment'} =~ /Terrestrial/) {
             $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_terrestrial'}});
-        } elsif ($q->param('environment') =~ /Siliciclastic/) {
+        } elsif ($options{'environment'} =~ /Siliciclastic/) {
             $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_siliciclastic'}});
-        } elsif ($q->param('environment') =~ /Carbonate/) {
+        } elsif ($options{'environment'} =~ /Carbonate/) {
             $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_carbonate'}});
         } else {
-            $environment = $dbh->quote($q->param('environment'));
+            $environment = $dbh->quote($options{'environment'});
         }
         if ($environment) {
-            push(@terms, qq| collections.environment IN ($environment)|);
+            push @where, "c.environment IN ($environment)";
         }
-        $q->param('environment'=>'');
     }
 		
 	# research_group is now a set -- tone 7 jun 2002
-	my $resgrp = $q->param('research_group');
-	if($resgrp && $resgrp =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
-		my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
-		if($resprojstr ne ""){
-			push(@terms, "(collections.reference_no IN ($resprojstr) OR "
-		                . " secondary_refs.reference_no IN ($resprojstr))");
-		}   
-        $joinSecondaryRefs = 1;
-	} elsif($resgrp){
-		push ( @terms, "FIND_IN_SET(".$dbh->quote($q->param("research_group")).", collections.research_group)" );
+	if($options{'research_group'}) {
+        if ($options{'research_group'} =~ /^(?:decapod|ETE|5%|1%|PACED|PGAP)$/){
+            my $refs = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
+            $refs = '-1' if (!$refs); # A total miss
+            push @where, "(c.reference_no IN ($refs) OR sr.reference_no IN ($refs))";
+        } else {
+		    push @where, "FIND_IN_SET(".$dbh->quote($options{"research_group"}).", c.research_group)";
+        }
 	}
-			
-	# Remove it from further consideration
-	$q->param("research_group" => "");
-
-    # Do a left join on secondary refs so we can match those guys as well
-    # Set joinSecondaryRefs to 1 so we know how to set up the FROM and SELECT
-    # parts of the query later in the function.
-    # PS 11/29/2004
-	if ($q->param("reference_no")) {
-        $joinSecondaryRefs = 1;
-		push @terms, " (collections.reference_no=".$dbh->quote($q->param("reference_no"))." OR "
-                     ." secondary_refs.reference_no=".$dbh->quote($q->param("reference_no")).") ";
+    
+	if (int($options{'reference_no'})) {
+		push @where, " (c.reference_no=".int($options{'reference_no'})." OR sr.reference_no=".int($options{'reference_no'}).") ";
     }
-	# Remove it from further consideration
-    $q->param("reference_no" => "");
-	
-	# Compose the WHERE clause
-	# loop through all of the possible fields checking if each one has a value in it
-	my $fieldCount = -1;
-	my $val;
-	foreach my $fieldName ( @fieldNames ) {
-		$fieldCount++;
-		
-		#Debug::dbPrint("field $fieldName");
-		
-		if (defined $q->param($fieldName) && $q->param($fieldName) ne '')  {
-            if ($q->param($fieldName) eq "NOT_NULL_OR_EMPTY") {
-                push(@terms, "(collections.$fieldName IS NOT NULL AND collections.$fieldName!='')");
-            } elsif ($q->param($fieldName) eq "NULL_OR_EMPTY") {
-                push(@terms, "(collections.$fieldName IS NULL OR collections.$fieldName='')");
-			} elsif ( $pulldowns{$fieldName} ) {
-				# It is in a pulldown... no wildcards
-                my $val = $dbh->quote($q->param($fieldName));
-				push(@terms, "collections.$fieldName = $val");
-			} else {
-                my $val = ($fieldTypes[$fieldCount] == 0) # == 1 if number, 0 otherwise
-                        ? $dbh->quote($wildcardToken.$q->param($fieldName).$wildcardToken)
-                        : $dbh->quote($q->param($fieldName));
-				push(@terms, "collections.$fieldName $comparator $val");
-			}
-		}
-	}
-	
+
+    # Do a left join on secondary refs if we have to
+    # PS 11/29/2004
+    if ($options{'research_group'} || int($options{'reference_no'})) {
+        push @left_joins, "LEFT JOIN secondary_refs sr ON sr.reference_no=c.reference_no";
+    }
+
+        
 	# note, we have one field in the collection search form which is unique because it can
 	# either be geological_group, formation, or member.  Therefore, it has a special name, 
 	# group_formation_member, and we'll have to deal with it separately.
 	# added by rjp on 1/13/2004
 	if ($q->param("group_formation_member")) {
         my $val = $dbh->quote($wildcardToken.$q->param("group_formation_member").$wildcardToken);
-		push(@terms, "(collections.geological_group $comparator $val
-						OR collections.formation $comparator $val
-						OR collections.member $comparator $val)");
+		push(@where, "(c.geological_group LIKE $val OR c.formation LIKE $val OR c.member LIKE $val)");
 	}
 
     # This field is only passed by section search form PS 12/01/2004
     if (defined $q->param("section_name") && $q->param("section_name") eq '') {
-        push(@terms, "((collections.regionalsection IS NOT NULL AND collections.regionalsection != '' AND collections.regionalbed REGEXP '^[0-9.]+\$') OR (collections.localsection IS NOT NULL AND collections.localsection != '' AND collections.localbed REGEXP '^[0-9.]+\$'))");
+        push @where, "((c.regionalsection IS NOT NULL AND c.regionalsection != '' AND c.regionalbed REGEXP '^[0-9.]+\$') OR (c.localsection IS NOT NULL AND c.localsection != '' AND c.localbed REGEXP '^[0-9.]+\$'))";
     } elsif ($q->param("section_name")) {
         my $val = $dbh->quote($wildcardToken.$q->param("section_name").$wildcardToken);
-        push(@terms, "((collections.regionalsection $comparator $val AND collections.regionalbed REGEXP '^[0-9.]+\$') OR (collections.localsection $comparator $val AND collections.localbed REGEXP '^[0-9.]+\$'))"); 
+        push @where, "((c.regionalsection  LIKE  $val AND c.regionalbed REGEXP '^[0-9.]+\$') OR (c.localsection  LIKE  $val AND c.localbed REGEXP '^[0-9.]+\$'))"; 
     }                
 
     # This field is only passed by links created in the Strata module PS 12/01/2004
-	if ($q->param("lithologies")) {
-        my $val = $dbh->quote($wildcardToken.$q->param("lithologies").$wildcardToken);
-		push(@terms, "(collections.lithology1 $comparator $val
-					   OR collections.lithology2 $comparator $val)"); 
+	if ($options{"lithologies"}) {
+        my $val = $dbh->quote($options{"lithologies"});
+		push @where, "(c.lithology1=$val OR c.lithology2=$val)"; 
 	}
 
-	
-	#Debug::dbPrint("terms = @terms");
-	
+
+    # get the column info from the table
+    my $sth = $dbh->column_info(undef,'pbdb','collections','%');
+    
+	# Compose the WHERE clause
+	# loop through all of the possible fields checking if each one has a value in it
+    while (my $row = $sth->fetchrow_hashref()) {
+        my $field = $row->{'COLUMN_NAME'};
+        my $type = $row->{'TYPE_NAME'};
+        my $is_nullable = ($row->{'IS_NULLABLE'} eq 'YES') ? 1 : 0;
+        my $is_primary =  $row->{'mysql_is_pri_key'};
+            
+        # These are special cases handled above in code, so skip them
+        next if ($field =~ /^(?:environment|localbed|regionalbed|research_group|reference_no|max_interval_no|min_interval_no)$/);
+
+		if (exists $options{$field} && $options{$field} ne '') {
+            my $value = $options{$field};
+            if ($value eq "NOT_NULL_OR_EMPTY") {
+                push @where, "(c.$field IS NOT NULL AND c.$field !='')";
+            } elsif ($value eq "NULL_OR_EMPTY") {
+                push @where, "(c.$field IS NULL OR c.$field ='')";
+			} elsif ( $type =~ /ENUM/i) {
+				# It is in a pulldown... no wildcards
+				push @where, "c.$field=".$dbh->quote($value);
+			} elsif ( $type =~ /SET/i) {
+                # Its a set, use the special set syntax
+		        push @where, "FIND_IN_SET(".$dbh->quote($value).", c.$field)";
+			} elsif ( $type =~ /INT/i) {
+                # Don't need to quote ints, however cast them to int a security measure
+                push @where, "c.$field=".int($value);
+			} else {
+                # Assuming character, datetime, etc. 
+				push @where, "c.$field $comparator ".$dbh->quote($wildcardToken.$value.$wildcardToken);
+			}
+		}
+	}
+
+
+    # Commented out PS 08/16 - don't see when this would ever get executed
 	# if first search failed and wild cards were used, try again
 	#  stripping first wildcard JA 22.2.02
-	if ( !@terms && $wildcardToken ne "")	{
-		foreach $fieldName (@fieldNames) {
-				
-			$fieldCount++;
-			if ( my $val = $q->param($fieldName)) {
-				$val =~ s/"//g;
-				$val = qq|"$val$wildcardToken"| if $fieldTypes[$fieldCount] == 0;
-				push(@terms, "collections.$fieldName$comparator$val");
-			}
-		}
+	#if ( !@terms && $wildcardToken ne "")	{
+	#	foreach $fieldName (@fieldNames) {
+	#			
+	#		$fieldCount++;
+	#		if ( my $val = $q->param($fieldName)) {
+	#			$val =~ s/"//g;
+	#			$val = qq|"$val$wildcardToken"| if $fieldTypes[$fieldCount] == 0;
+	#			push(@terms, "collections.$fieldName$comparator$val");
+	#		}
+	#	}
+	#}
+
+    # Print out an errors that may have happened.
+    # htmlError print header/footer and quits as well
+
+    if (!scalar(@where)) {
+        push @errors, "No search terms were entered";
+    }
+    
+	if (@errors) {
+        my $plural = (scalar(@errors) > 1) ? "s" : "";
+        my $message = "<br><div align=center><table width=600 border=0>" .
+              "<tr><td class=darkList><font size='+1'><b> Error$plural</b></font></td></tr>" .
+              "<tr><td>";
+        $message .= "<li class='medium'>$_</li>" for (@errors);
+        $message .= "</td></tr></table>";
+        if ( $options{"calling_script"} eq "Map" )	{
+            $message .= "<a href=\"bridge.pl?action=displayMapForm\"><b>Try again</b></a>";
+        } elsif ( $options{"calling_script"} eq "Confidence" )	{
+            $message .= "<a href=\"bridge.pl?action=displaySearchSectionForm\"><b>Try again</b></a>";
+        } elsif ( $options{"type"} eq "add" )	{
+            $message .= "<a href=\"bridge.pl?action=displaySearchCollsForAdd&type=add\"><b>Try again</b></a>";
+        } else	{
+            $message .= "<a href=\"bridge.pl?action=displaySearchColls&type=$options{$type}\"><b>Try again</b></a>";
+        }
+        $message .= "</div><br>";
+        if ($options{'calling_script'} !~ /Map|Confidence|TaxonInfo/) {
+            print stdIncludes( "std_page_top" ) 
+        }
+        if ($options{'calling_script'} !~ /TaxonInfo/) {
+            print $message;
+            print stdIncludes("std_page_bottom");     
+        } else {
+            return ([],0);
+        }
+        exit 1;
 	}
 
-	if ( ! @terms && ! @timeinlist && ! @okcolls) {
-		if ( $q->param("taxon_name") ) {
-			push @terms,"collections.collection_no is not NULL";
-		} else {
-			my $message =	"<center>\n";
-			if ( ! $timesearch )	{
-				$message .= "<h4>Please specify at 
-					least one search term</h4>\n";
-			} else	{
-				$message .= "<h4>Please enter a 
-					valid time term or broader time range</h4>\n";
-			}
-			
-			$message .= "<p>";
-			if ( $q->param("type") eq "add" )	{
-				$message .= "<a href='?action=displaySearchCollsForAdd&type=";
-			} else	{
-				$message .= "<a href='?action=displaySearchColls&type=";
-			}
-			$message .= $q->param("type") . "'><b>Try again</b></a>
-				</p>
-				</center>";
-			htmlError( $message );
-		}
-	}
-		
-	# Compose the columns list
-	my @columnList = (	        "authorizer",
-								"collection_name",
-								"access_level",
-								"research_group",
-								"release_date",
-								"country", "state", 
-                                "localsection", "regionalsection", "localbed", "localbedunit", "regionalbed", "regionalbedunit",
-								"period_max", 
-								"period_min", "epoch_max", 
-								"epoch_min", "intage_max", 
-								"intage_min", "locage_max", 
-								"locage_min", "max_interval_no", 
-								"min_interval_no");
-		
-	# Handle extra columns
-	push(@columnList, $q->param('column1')) if $q->param('column1');
-	push(@columnList, $q->param('column2')) if $q->param('column2');
-		
+
+    # Cover all our bases
+    if (scalar(@left_joins) || scalar(@tables) > 1 || $options{'taxon_list'} || $options{'taxon_name'}) {
+        push @groupby,"c.collection_no";
+    }
+
+    if ($options{'taxon_list'} || $options{'taxon_name'}) {
+        # Reworked PS  08/15/2005
+        # Instead of doing a left join on the reids table, we achieve the close to the same effect
+        # with a union of the (collections,occurrences left join reids where reid_no IS NULL) UNION (collections,occurrences,reids).
+        # but for the first SQL in the union, we use o.taxon_no, while in the second we use re.taxon_no
+        # This has the advantage in that it can use indexes in each case, thus is super fast (rather than taking ~5-8s for a full table scan)
+        # Just doing a simple left join does the full table scan because an OR is needed (o.taxon_no IN () OR re.taxon_no IN ())
+        # and because you can't use indexes for tables that have been LEFT JOINED as well
+        # By hitting the occ/reids tables separately, it also has the advantage in that it excludes occurrences that
+        # have been reid'd into something that no longer is the taxon name and thus shouldn't show up.
+        my @left_joins1 = (@left_joins,'LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no');
+
+        my @where1 = (@where,@occ_where);
+        if ($options{'most_recent'}) {
+            # This term very important.  sql1 deal with occs with NO reid, sql2 deals with only reids
+            # So if an occ is reid'd, we only one to count the most recent reid -- thus we discount the original
+            # off in the search.
+            push @where1,"re.reid_no IS NULL";
+        } 
+        my $sql1 = "SELECT ".join(",",@from).
+               " FROM " .join(",",@tables)." ".join (" ",@left_joins1).
+               " WHERE ".join(" AND ",@where1);
+        $sql1 .= " GROUP BY ".join(",",@groupby) if (@groupby);
+
+        my @where2 = ('re.occurrence_no=o.occurrence_no',@where,@reid_where);
+        if ($options{'most_recent'}) {
+            push @where2, "re.most_recent='YES'";
+        }
+        my @tables2 = (@tables,'reidentifications re');
+        my $sql2 = "SELECT ".join(",",@from).
+               " FROM " .join(",",@tables2)." ".join (" ",@left_joins).
+               " WHERE ".join(" AND ",@where2);
+        $sql2 .= " GROUP BY ".join(",",@groupby) if (@groupby);
+        $sql = "($sql1) UNION ($sql2)";   
+    } else {
+        $sql = "SELECT ".join(",",@from).
+               " FROM " .join(",",@tables)." ".join (" ",@left_joins).
+               " WHERE ".join(" AND ",@where);
+        $sql .= " GROUP BY ".join(",",@groupby) if (@groupby);  
+    }
 	# Handle sort order
-	my $sortString = "";
-	$sortString = $q->param('sortby') if ($q->param('sortby') && $q->param('sortby') ne 'section_name');
-	$sortString .= " DESC" if $sortString && $q->param('sortorder') eq 'desc';
-
-	# Handle limit - don't set this cause of Permissions module
-    my $limitString = "";
-
-	# form the SQL query from the newterms list.
-	$sql->clear();
-	$sql->setWhereSeparator("AND");
-    if ($joinSecondaryRefs) {
-        $sql->setFromExpr("collections LEFT JOIN secondary_refs " 
-                       . "ON collections.collection_no = secondary_refs.collection_no");
-	    $selectExpr = "DISTINCT collections.collection_no, DATE_FORMAT(release_date, '%Y%m%d') rd_short, collections.reference_no";
-    } else {
-	    $sql->setFromExpr("collections");
-        $selectExpr = "collection_no, DATE_FORMAT(release_date, '%Y%m%d') rd_short, reference_no";
-    } 
-    foreach $column (@columnList) {
-        $selectExpr .= ", collections.$column";
+    if ($options{'sortby'}) {
+        my $sortBy = $options{'sortby'};
+        $sortBy =~ s/[^a-zA-Z0-9_]//g;
+	    $sortBy .= " DESC" if ($options{'sortorder'} =~ /desc/i);
+        $sql .= " ORDER BY $sortBy";
     }
-    if ($q->param('sortby') eq 'section_name') { # virtual column for sorting purposes
-        $selectExpr .= ", IF(collections.regionalsection != '' AND collections.regionalsection IS NOT NULL,collections.regionalsection,collections.localsection) AS section_name";
+    dbg("Collections sql: $sql");
+
+    $sth = $dbt->dbh->prepare($sql);
+    $sth->execute();
+    my $p = Permissions->new ($s); 
+
+    # See if rows okay by permissions module
+    my @dataRows = ();
+    my $limit = (int($options{'limit'})) ? int($options{'limit'}) : 10000000;
+    my $ofRows = 0;
+    if ($options{'permission_type'} eq 'write') {
+        $p->getWriteRows ( $sth, \@dataRows, $limit, \$ofRows );        
+    } else { # We assume we want 'read' permissions
+        $p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );        
     }
-    $sql->setSelectExpr($selectExpr);
-	foreach my $t (@terms) {
-		$sql->addWhereItem($t);
-	}
-	
-	#Debug::dbPrint("whereItems = " . $sql->whereItems());
 
-	# modified to handle time lookup in-list JA 17.7.03
-	# previous fix assumed OR logic, modified to use AND logic
-	#  JA 5.12.03
-	####***** rjp 1/14/04 - what the heck does this do?  
-	#### I think there are some bugs in this logic related
-	#### to searching for a genus with a min/max time period..
-	if ( $q->param('taxon_name') || @$in_list) {
-		if ( @timeinlist )	{
-			my %collintimeinlist = ();
-			for my $t ( @timeinlist )	{
-				$collintimeinlist{$t} = "Y";
-			}
-			my @newokcolls = ();
-			for my $o ( @okcolls )	{
-				if ( $collintimeinlist{$o} eq "Y" )	{
-					push @newokcolls, $o;
-				}
-			}
-			@okcolls = @newokcolls;
-			if ( ! @okcolls )	{
-				push @okcolls, 0;
-			}
-		}
-		#if (@terms)	{
-			$sql->addWhereItem("collections.collection_no IN ( " . join ( ", ", @okcolls ) . " )");
-		#} 
-	} elsif ( @timeinlist )	{
-		#if (@terms) {
-			$sql->addWhereItem("collections.collection_no IN ( " . join(", ", @timeinlist) . " )");
-		#}
-	}
-
-	# Sort and limit
-	$sql->setOrderByExpr($sortString);
-	$sql->setLimitExpr($limitString);
-
-    my $sql_expr;
-    if ($q->param('sortby') eq 'section_name') {
-	    $sql_expr = "(".$sql->SQLExpr().") ORDER BY section_name, localsection";
-    } else {
-	    $sql_expr = $sql->SQLExpr();
-    }    
-	dbg( $sql_expr."<HR>" );
-    return $sql_expr;   
+    return (\@dataRows,$ofRows);
 } # end sub processCollectionsSearch
 
 
@@ -2734,7 +2649,6 @@ sub displayCollectionDetails {
 		$fieldCount++;
 	}
 
-	
     # Get the reference
     $sql = "SELECT * FROM refs WHERE reference_no=$refNo";
 	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -2744,6 +2658,7 @@ sub displayCollectionDetails {
     my $md = MetadataModel->new($sth);
     my $drow = DataRow->new($refRowRef, $md);
     my $bibRef = BiblioRef->new($drow);
+
 
     my $refFieldNamesRef = $sth->{NAME};
     $sth->finish();
@@ -2778,7 +2693,7 @@ sub displayCollectionDetails {
 
     # have the regional section link to a local section search
     my ($regionalsection_idx, $regionalsection_link);
-    for($index=0;$index < $#fieldNames;$index++) {
+    for(my $index=0;$index < $#fieldNames;$index++) {
         $regionalsection_idx = $index if ($fieldNames[$index] eq "regionalsection");
     }
     if ($row[$regionalsection_idx]) {
@@ -2789,7 +2704,7 @@ sub displayCollectionDetails {
     
     # have the local section link to a local section search
     my ($localsection_idx, $localsection_link);
-    for($index=0;$index < $#fieldNames;$index++) {
+    for(my $index=0;$index < $#fieldNames;$index++) {
         $localsection_idx = $index if ($fieldNames[$index] eq "localsection");
     }
     if ($row[$localsection_idx]) {
@@ -2801,7 +2716,7 @@ sub displayCollectionDetails {
 
     # have the geological group/formation/members hyperlink to strata search
     my ($group_idx, $formation_idx, $member_idx, $group_link, $formation_link, $member_link);
-    for($index=0;$index < $#fieldNames;$index++) {
+    for(my $index=0;$index < $#fieldNames;$index++) {
         $group_idx = $index if ($fieldNames[$index] eq "geological_group");
         $formation_idx = $index if ($fieldNames[$index] eq "formation");
         $member_idx = $index if ($fieldNames[$index] eq "member");
@@ -2830,7 +2745,7 @@ sub displayCollectionDetails {
 		
     # If the viewer is the authorizer (or it's me), display the record with edit buttons
 	print '<p><div align="center"><table><tr>';
-    if ($q->param('user') ne 'Guest' && (($authorizer eq $sesAuthorizer) || ($sesAuthorizer eq Globals::god()))) {
+    if ($q->param('user') ne 'Guest' && (($authorizer eq $sesAuthorizer) || ($sesAuthorizer eq "J. Alroy"))) {
 		print '<td>'.$hbo->populateHTML('collection_display_buttons', \@row, \@fieldNames).'</td>';
     }
     if ($q->param('user') ne 'Guest' && $s->get('enterer') =~ /[a-zA-Z]+/) {
@@ -2861,7 +2776,7 @@ sub displayCollectionDetails {
 
 	print "<td>".$hbo->populateHTML('ecology_display_buttons', \@row, \@fieldNames)."</td>";
 
-	if($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq Globals::god())	{
+	if($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq "J. Alroy")	{
 		print "<td>".$hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames)."</td>";;
 	}
 	if($taxa_list ne "" && $q->param("user") ne "Guest"){
@@ -2886,7 +2801,8 @@ sub getMaxMinNamesAndDashes	{
 
 	# get the interval names by querying the intervals table JA 11.7.03
 	# also get the E/M/Ls JA 17.7.03
-	my $fieldCount = "";
+	my ($max_interval_no,$min_interval_no,$fieldCount);
+    $fieldCount = "";
 	for my $tmpVal (@fieldNames) {
 		if ( $tmpVal eq 'max_interval_no') {
 			$max_interval_no = $row[$fieldCount];
@@ -3041,8 +2957,8 @@ sub buildTaxonomicList {
 			$grand_master_hash{reference_no}	= 	$rowref->{reference_no};
 
             # If we have specimens
-            $sql_s = "SELECT count(*) c FROM specimens WHERE occurrence_no=$rowref->{occurrence_no}";
-            $specimens_measured = ${$dbt->getData($sql_s)}[0]->{'c'};
+            my $sql_s = "SELECT count(*) c FROM specimens WHERE occurrence_no=$rowref->{occurrence_no}";
+            my $specimens_measured = ${$dbt->getData($sql_s)}[0]->{'c'};
             if ($specimens_measured) {
                 my $pl = ($specimens_measured > 1) ? 's' : '';
                 $rowref->{comments} .= " (<a href=\"bridge.pl?action=displaySpecimenList&occurrence_no=$rowref->{occurrence_no}\">$specimens_measured measurement$pl</a>)";
@@ -3334,7 +3250,7 @@ sub buildTaxonomicList {
 			}
 			# Somewhere in the middle
 			else{
-				for($index = 0; $index < @sorted-1; $index++){
+				for(my $index = 0; $index < @sorted-1; $index++){
 					if($single->{occurrence_no} > 
 									$sorted[$index]->{occurrence_no}){ 
 						# if we find a variance of 1, bingo!
@@ -3546,6 +3462,7 @@ sub rarefyAbundances	{
 	my @ids;
 	my $abundsum;
 	my $abundmax;
+    my $ntaxa;
 	while ( my @abundrow = @{$sth->fetchrow_arrayref()} )	{
 		push @abund , $abundrow[0];
 		$abundsum = $abundsum + $abundrow[0];
@@ -3698,162 +3615,177 @@ sub rarefyAbundances	{
 # Download.pm uses some similar calculations but I see no easy way to
 #  use a common function
 sub displayCollectionEcology	{
-
+    $|=1;
 	print stdIncludes("std_page_top");
 
-	$sql = "SELECT genus_name,species_name,taxon_no FROM occurrences WHERE collection_no=";
-	$sql .= $q->param(collection_no);
-	my @occrefs = @{$dbt->getData($sql)};
-	my @taxonnos;
-	for my $or ( @occrefs )	{
-		push @taxonnos , $or->{taxon_no};
-	}
+    # We only look at these three categories for now
+	my @categories = ("life_habit", "diet1", "diet2");
 
-	@categories = ("life_habit", "diet1", "diet2");
+    # Get all occurrences for the collection using the most currently reid'd name
+    my $collection_no = int($q->param('collection_no'));
+    my $collection_name = $q->param('collection_name');
 
-	# WARNING: this could be inefficient because we are simply getting
-	#  the data for ALL the taxa in the table
-# DO WE NEED taxon_name? need join?
-# this is fucked up because get_class is returning names only
-# get_class can return nos now, this code still needs to be re-examined tho PS
-	my %ecology;
-	my %basis;
-	for $category ( @categories )	{
-		my $sql = "SELECT ecotaph.taxon_no,taxon_name," . $category;
-		$sql .= " FROM ecotaph LEFT JOIN authorities ON ecotaph.taxon_no = authorities.taxon_no";
-		my @ecos = @{$dbt->getData($sql)};
+    print "<div align=center><h3>$collection_name (PBDB collection number $collection_no)</h3></div>";
 
-		for my $i (0..$#ecos)	{
-# no or name??
-			$ecology{$category.$ecos[$i]->{taxon_name}} = $ecos[$i]->{$category};
-		}
+	my $sql = "(SELECT o.genus_name,o.species_name,o.taxon_no FROM occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE o.collection_no=$collection_no AND re.reid_no IS NULL)".
+           " UNION ".
+	       "(SELECT re.genus_name,re.species_name,o.taxon_no FROM occurrences o,reidentifications re WHERE o.occurrence_no=re.occurrence_no AND o.collection_no=$collection_no AND re.most_recent='YES')";
+    
+	my @occurrences = @{$dbt->getData($sql)};
 
-		my $levels = "family,order,class,phylum";
-		my %ancestor_hash=%{Classification::get_classification_hash($dbt,$levels,\@taxonnos)};
+    # First get a list of all the parent taxon nos
+	my @taxon_nos = map {$_->{'taxon_no'}} @occurrences;
+	my $parents = Classification::get_classification_hash($dbt,'all',\@taxon_nos,'array');
 
-		my @ranks = split ',',$levels;
-		for my $tn ( @taxonnos )	{
-			my @parents = split ',',$ancestor_hash{$tn};
-			for my $p ( 0..$#parents )	{
-				if ( $ecology{$category.$parents[$p]} && ! $ecology{$category.$tn} )	{
-					$ecology{$category.$tn} = $ecology{$category.$parents[$p]};
-					$basis{$category.$tn} = $ranks[$p];
-					$incat{$category}++;
-					last;
-				}
-			}
-		}
-	}
+    # This first section gets ecology data for all taxa and parent taxa
+    my %all_taxon_nos = ();
+    for my $taxon_no ( @taxon_nos )	{
+        if ($taxon_no) {
+            $all_taxon_nos{$taxon_no} = 1;
+            foreach my $parent (@{$parents->{$taxon_no}}) {
+                $all_taxon_nos{$parent->{'taxon_no'}} = 1;
+            }
+        }
+    }
+	my %all_ecologies;
+    $sql = "SELECT e.taxon_no,a.taxon_rank,".join(",",@categories)." FROM ecotaph e,authorities a WHERE e.taxon_no=a.taxon_no AND a.taxon_no IN (".join(",",keys(%all_taxon_nos)).")";
+    my @eco_data = @{$dbt->getData($sql)};
 
-	for $category ( @categories )	{
-		$sumincat = $sumincat + $incat{$category};
-	}
-
-	if ( ! $sumincat )	{
+	if (!@eco_data) {
 		print "<center><h3>Sorry, there are no ecological data for any of the taxa</h3></center>\n\n";
-		print "<center><p><b><a href=\"$exec_url?action=displayCollectionDetails&collection_no=" . $q->param(collection_no) . "\">Return to the collection record</a></b></p></center>\n\n";
+		print "<center><p><b><a href=\"$exec_url?action=displayCollectionDetails&collection_no=" . $q->param('collection_no') . "\">Return to the collection record</a></b></p></center>\n\n";
 		print stdIncludes("std_page_bottom");
 		return;
-	}
+	} else {
+        foreach my $row (@eco_data) {
+            $all_ecologies{$row->{'taxon_no'}} = $row;
+        }
+    }
+   
+    # Now we want to crawl upwards in the higherarchy of each taxon, using the first category value
+    # we find then stopping. Example: if the taxon has a value for diet1, use that. If it doesn't, and family
+    # and order have values, use the family (lower rank'd) value
+    my %ecology;
+	my %basis;
+    for my $taxon_no (@taxon_nos)	{
+	    for $category (@categories) {
+            if ($all_ecologies{$taxon_no}{$category}) {
+                # First try the taxon itself
+                $ecology{$taxon_no}{$category} = $all_ecologies{$taxon_no}{$category};
+                $basis{$taxon_no}{$category} = $all_ecologies{$taxon_no}{'taxon_rank'};
+            } else {
+                # Otherwise try to inherit someting from any parent, with preference to lower ranks
+                foreach my $parent (@{$parents->{$taxon_no}}) {
+                    if ( !$ecology{$taxon_no}{$category} && $all_ecologies{$parent->{'taxon_no'}}{$category}) {
+                        $ecology{$taxon_no}{$category} = $all_ecologies{$parent->{'taxon_no'}}{$category};
+                        $basis{$taxon_no}{$category} = $all_ecologies{$parent->{'taxon_no'}}{'taxon_rank'};
+                    }
+                }
+            }
+        }
+    }
 
 	# count up species in each category and combined categories
-$|=1;
-	for my $or ( @occrefs )	{
-		$colsum{$ecology{life_habit.$or->{taxon_no}}}++;
-		if ( $ecology{diet2.$or->{taxon_no}} )	{
-			$rowsum{$ecology{diet1.$or->{taxon_no}}."/".$ecology{diet2.$or->{taxon_no}}}++;
-			$cellsum{$ecology{life_habit.$or->{taxon_no}}}{$ecology{diet1.$or->{taxon_no}}."/".$ecology{diet2.$or->{taxon_no}}}++;
-		} else	{
-			$rowsum{$ecology{diet1.$or->{taxon_no}}}++;
-			$cellsum{$ecology{life_habit.$or->{taxon_no}}}{$ecology{diet1.$or->{taxon_no}}}++;
-		}
+	for my $row (@occurrences)	{
+		if ( $ecology{$row->{'taxon_no'}}{'life_habit'}) {
+            $col_key = $ecology{$row->{'taxon_no'}}{'life_habit'};
+        } else {
+            $col_key = "?";
+        }
+        
+		if ( $ecology{$row->{'taxon_no'}}{'diet2'})	{
+            $row_key = $ecology{$row->{'taxon_no'}}{'diet1'}.'/'.$ecology{$row->{'taxon_no'}}{'diet2'};
+		} elsif ( $ecology{$row->{'taxon_no'}}{'diet1'})	{
+            $row_key = $ecology{$row->{'taxon_no'}}{'diet1'};
+        } else {
+            $row_key = "?";
+        }
+
+        $cellsum{$col_key}{$row_key}++;
+		$colsum{$col_key}++;
+        $rowsum{$row_key}++;
 	}
 
-	print "<center><h3>Assignments of taxa to categories</h3></center>\n";
-	my $format1 = "<table width=100% height=100% cellpadding=4 cellspacing=0 bgcolor=999999><tr><td bgcolor=FFFFFF>";
-	my $format2 = "</td></tr></table>";
-	print "<table cellpadding=1 cellspacing=0 bgcolor=#EEEEEE align=center>\n";
-	print "<tr><th>",$format1,"<b>Taxon</b>$format2</th>\n";
-	for $category ( @categories )	{
+	print "<div align=\"center\"><h3>Assignments of taxa to categories</h3>";
+	print "<table cellspacing=0 border=0 cellpadding=4 class=dataTable>";
+
+    # Header generation
+	print "<tr><th class=dataTableColumnLeft>Taxon</th>";
+	for my $category (@categories) {
 		my $temp = $category;
-		my @letts = split //,$temp;
-		$letts[0] =~ tr/[a-z]/[A-Z]/;
-		$temp = join "",@letts;
+        $temp =~ s/([a-z])/\u$1/;
 		$temp =~ s/_/ /g;
 		$temp =~ s/1/ 1/;
 		$temp =~ s/2/ 2/;
-		print "<th>$format1<b>$temp</b>$format2</th><th>$format1<b>Basis</b>$format2</th>\n";
+		print "<th class=dataTableColumn>$temp</th><th class=dataTableColumn>Basis</th>";
 	}
 	print "</tr>\n";
-	for my $or ( @occrefs )	{
-		print "<tr><td>$format1";
-		if ( $or->{species_name} ne "indet." )	{
-			print "<i>";
-		}
-		print "$or->{genus_name} $or->{species_name}";
-		if ( $or->{species_name} ne "indet." )	{
-			print "</i>";
-		}
-		print "$format2</td>\n";
-		for $category ( @categories )	{
-			if ( $ecology{$category.$or->{taxon_no}} )	{
-				print "<td>$format1$ecology{$category.$or->{taxon_no}}$format2</td>\n";
-				print "<td>$format1<i>$basis{$category.$or->{taxon_no}}</i>$format2</td>\n";
-			} else	{
-				print "<td>$format1 ? $format2</td>\n";
-				print "<td>$format1 ? $format2</td>\n";
-			}
-		}
-		print "</tr>\n";
-	}
-	print "</table>\n\n";
 
-	print "<p>\n\n";
-
-	print "<center><h3>Counts within categories</h3></center>\n";
-	print "<table cellpadding=1 cellspacing=0 bgcolor=#EEEEEE align=center>\n";
-	print "<tr><td>$format1<font color=FFFFFF>.</font>$format2</td>";
-	for my $habit ( sort keys %colsum )	{
-		if ( $habit )	{
-			print "<th><b>",$format1,$habit,$format2,"</b></th>\n";
-		} else	{
-			print "<th><b>",$format1,"?",$format2,"</b></th>\n";
-		}
-	}
-	print "<th>",$format1,"<b>Total</b>",$format2,"</th>\n";
-	print "</tr>\n";
-	for my $diet ( sort keys %rowsum )	{
+    # Table body
+	for my $row (@occurrences) {
 		print "<tr>";
-		if ( $diet )	{
-			print "<td>",$format1,$diet,$format2,"</td>\n";
-		} else	{
-			print "<td>",$format1,"?",$format2,"</td>\n";
-		}
-		for my $habit ( sort keys %colsum )	{
-			print "<td>";
-			if ( $cellsum{$habit}{$diet} )	{
-				print "$format1";
-				printf "%d",$cellsum{$habit}{$diet};
-				print "$format2";
+        if (($row->{'taxon_rank'} && $row->{'taxon_rank'} !~ /species/) ||
+            ($row->{'species_name'} =~ /indet/)) {
+            print "<td class=dataTableCellLeft>$row->{genus_name} $row->{species_name}</td>";
+        } else {
+            print "<td class=dataTableCellLeft><i>$row->{genus_name} $row->{species_name}</i></td>";
+        }
+		for my $category (@categories)	{
+			if ($ecology{$row->{'taxon_no'}}{$category}) {
+				print "<td class=dataTableCell>$ecology{$row->{taxon_no}}{$category}</td>";
+				print "<td class=dataTableCell><i>$basis{$row->{taxon_no}}{$category}</i></td>";
+			} else	{
+				print "<td class=dataTableCell>?</td>";
+				print "<td class=dataTableCell>?</td>";
 			}
-			print "</td>\n";
-		#	printf "%d",$cellsum{$habit}{$diet};
 		}
 		print "</tr>\n";
 	}
-	print "<tr><td>",$format1,"<b>Total</b>",$format2,"</td>\n";
-	for my $diet ( sort keys %colsum )	{
-		print "<td>";
-		if ( $colsum{$habit} )	{
-			print "<b>",$format1,$colsum{$habit},$format2,"</b>\n";
-		}
-		print "</td>\n";
-	}
-	print "<td><b>",$format1,$#occrefs + 1,$format2,"</b></td></tr>\n";
-	print "</table>\n\n";
+	print "</table>";
+    print "</div>";
 
-	print "<center><p><b><a href=\"$exec_url?action=displayCollectionDetails&collection_no=" . $q->param(collection_no) . "\">Return to the collection record</a></b> - ";
-	print "<b><a href=\"$exec_url?action=displaySearchColls&type=view\">Search for other collections</a></b></p></center>\n\n";
+    # Summary information
+	print "<p>";
+	print "<div align=\"center\"><h3>Counts within categories</h3>";
+	print "<table border=0 cellspacing=0 cellpadding=4 class=dataTable>";
+    print "<tr><td class=dataTableTopULCorner>&nbsp;</td><th class=dataTableTop colspan=".scalar(keys %colsum).">Life Habit</th></tr>";
+    print "<tr><th class=dataTableULCorner>Diet</th>";
+	for my $habit (sort keys %colsum) {
+        print "<td class=dataTableRow align=center>$habit</td>";
+	}
+	print "<td class=dataTableRow><b>Total<b></tr>";
+
+	for my $diet (sort keys %rowsum) {
+		print "<tr>";
+		print "<td class=dataTableRow>$diet</td>";
+		for my $habit ( sort keys %colsum ) {
+			print "<td class=dataTableCell align=right>";
+			if ( $cellsum{$habit}{$diet} ) {
+				printf("%d",$cellsum{$habit}{$diet});
+			} else {
+                print "&nbsp;";
+            }
+			print "</td>";
+		}
+        print "<td class=dataTableCell align=right><b>$rowsum{$diet}</b></td>";
+		print "</tr>\n";
+	}
+	print "<tr><td class=dataTableColumn><b>Total</b></td>";
+	for my $habit (sort keys %colsum) {
+		print "<td class=dataTableCell align=right>";
+		if ($colsum{$habit}) {
+			print "<b>$colsum{$habit}</b>";
+		} else {
+            print "&nbsp;";
+        }
+		print "</td>";
+	}
+	print "<td class=dataTableCell align=right><b>".scalar(@occurrences)."</b></td></tr>\n";
+	print "</table>\n";
+    print "</div>";
+
+	print "<div align=\"center\"><p><b><a href=\"$exec_url?action=displayCollectionDetails&collection_no=".$q->param('collection_no')."\">Return to the collection record</a></b> - ";
+	print "<b><a href=\"$exec_url?action=displaySearchColls&type=view\">Search for other collections</a></b></p></div>\n\n";
 	print stdIncludes("std_page_bottom");
 
 }
@@ -3942,7 +3874,7 @@ sub displayEnterCollPage {
 
         # Get the field names
         $sql = "SELECT * FROM collections WHERE collection_no=0";
-        dbg( "$sql<HR>" );
+        dbg( "$sql" );
         my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
         $sth->execute();
         @fieldNames = @{$sth->{NAME}};
@@ -3972,7 +3904,7 @@ sub displayEnterCollPage {
         %pref = getPreferences($s->get('enterer_no'));
         # Get the enterer's preferences JA 25.6.02
         my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = getPrefFields();
-        for $p (@{$setFieldNames})	{
+        for my $p (@{$setFieldNames})	{
             if ($pref{$p} ne "")	{
                 unshift @htmlValues,$pref{$p};
                 unshift @htmlFields,$p;
@@ -4076,7 +4008,7 @@ function checkIntervalNames(require_field) {
         }
     } 
 EOF
-    for $i (1..2) {
+    for my $i (1..2) {
         my $check = "    if(";
         for my $row ( @results) {
             # this is kind of ugly: we're just not going to let users
@@ -4417,7 +4349,6 @@ sub startReidentifyOccurrences {
 #
 # Edited by rjp 1/22/2004, 2/18/2004, 3/2004
 # Edited by PS 01/24/2004, accept reference_no instead of taxon_name optionally
-# Edited by PS 04/27/2004, moved here from bridge.pl, now handles only authority stuff, see process
 #
 sub submitTaxonSearch {
     print stdIncludes("std_page_top");
@@ -4741,8 +4672,8 @@ sub processEditScale	{
 ##############
 ## Images stuff
 sub startImage{
-    $goal='image';
-    $page_title ='Please enter the full name of the taxon you want to add an image for';
+    my $goal='image';
+    my $page_title ='Please enter the full name of the taxon you want to add an image for';
 
     print stdIncludes("std_page_top");
     print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
@@ -4767,16 +4698,16 @@ sub processLoadImage{
 ##############
 ## Ecology stuff
 sub startStartEcologyTaphonomySearch{
-    $goal='ecotaph';
-    $page_title ='Please enter the full name of the taxon you want to describe';
+    my $goal='ecotaph';
+    my $page_title ='Please enter the full name of the taxon you want to describe';
 
     print stdIncludes("std_page_top");
     print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
     print stdIncludes("std_page_bottom");
 }
 sub startStartEcologyVertebrateSearch{
-    $goal='ecovert';
-    $page_title ='Please enter the full name of the taxon you want to describe';
+    my $goal='ecovert';
+    my $page_title ='Please enter the full name of the taxon you want to describe';
 
     print stdIncludes("std_page_top");
     print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
@@ -5175,122 +5106,6 @@ sub getCurrRefDisplayStringForColl{
     my $refRowString = $hbo->populateHTML('reference_display_row', \@refRow, \@refFieldNames);
 
     return $refRowString;
-}
-
-
-# deprecated in favor of processEditOccurrences
-sub processNewOccurrences
-{
-	my $recID;
-
-	print stdIncludes( "std_page_top" );
-
-	# Get the database metadata
-	$sql = "SELECT * FROM occurrences WHERE occurrence_no=0";
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-	# Get a list of field names
-	my @fieldNames = @{$sth->{NAME}};
-	# Get a list of field types
-	my @fieldTypes = @{$sth->{mysql_is_num}};
-	# Get the number of fields
-	my $numFields = $sth->{NUM_OF_FIELDS};
-	# Get the null constraints
-	my @nullables = @{$sth->{NULLABLE}};
-	# Get the types
-	my @types = @{$sth->{mysql_type_name}};
-	# Get the primary key data
-	my @priKeys = @{$sth->{mysql_is_pri_key}};
-	#print join(',', @types);
-	$sth->finish();
-
-	my @requiredFields = ("authorizer", "enterer", "collection_no",
-							"genus_name", "species_name", "reference_no");
-	for $i (0..$numFields)	{
-		for $j (0..$#requiredFields)	{
-			if ($fieldNames[$i] eq $requiredFields[$j])	{
-				$isRequired[$i] = "Y";
-				last;
-			}
-		}
-	}
-	
-	# Iterate over the rows, and commit each one
-	my @successfulRows;
-	my @rowTokens = $q->param('row_token');
-	my $numRows = @rowTokens;
-
-	ROW:
-	# Loop over each row
-	for(my $i=0;$i<$numRows;$i++)
-	{
-		my @fieldList;
-		my @row;
-			
-		push(@fieldList, 'created');
-		push(@row, '"' . now() . '"');
-
-		# Loop over each field in the row
-		for(my $j=0;$j<$numFields;$j++)
-		{
-			my $fieldName = $fieldNames[$j];
-
-			# Here's an indirect way to get the value
-			my @tmpVals = $q->param($fieldName);
-			my $curVal = $tmpVals[$i];
-			
-			# Skip rows that don't have a required data item
-			unless ( ! $isRequired[$j] || ($types[$j] eq 'timestamp') || $priKeys[$j] || $curVal ) {
-#			unless($nullables[$j] || ($types[$j] eq 'timestamp') || $priKeys[$j] || $curVal) {
-				next ROW;
-			}
-
-			if ( $curVal ) {
-				$curVal = $dbh->quote($curVal) if $fieldTypes[$fieldCount] == 0;
-
- 				push(@row, $curVal);
-				push(@fieldList, $fieldName);
-			}
-			elsif ( defined $q->param($fieldName))
-			{
-				push(@row, '');
-				push(@fieldList, $fieldName);
-			}
-		}
-
-#			$sql = "INSERT INTO occurrences (" . join(',', @fieldList) . ") VALUES (" . join(', ', @row) . ")" || die $!;
-#			$sql =~ s/\s+/ /gms;
-#print "$sql\n"; exit(0);
-
-		# Check for duplicates
-		$return = checkDuplicates( "occurrence_no", \$recID, "occurrences", \@fieldList, \@row );
-		if ( ! $return ) { return $return; }
-
-		if ( $return != $DUPLICATE ) {
-			$sql = "INSERT INTO occurrences (" . join(',', @fieldList) . ") VALUES (" . join(', ', @row) . ")" || die $!;
-			$sql =~ s/\s+/ /gms;
-			dbg( "$sql<HR>" );
-			$dbh->do( $sql ) || die ( "$sql<HR>$!" );
-			$recID = $dbh->{'mysql_insertid'};
-		}
-
-		$sql = "SELECT * FROM occurrences WHERE occurrence_no=$recID";
-		dbg( "$sql<HR>" );
-		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute();
-		my @retrievedRow = $sth->fetchrow_array();
-		$sth->finish();
-		my $rowString = "<tr><td>" . join("</td><td>", @retrievedRow) . "</td></tr>";
-		push(@successfulRows, $rowString);
-	}
-		
-	print "<table>";
-	foreach $successfulRow (@successfulRows) {
-  		print $successfulRow;
-    }
-    print "</table>";
-		
-	print stdIncludes("std_page_bottom");
 }
 
 
@@ -6025,23 +5840,8 @@ sub displayReIDCollsAndOccsSearchForm
 }
 
 sub displayReIDForm {
-
-    # If this is a genus/species search, go right to the reid form.
-	#if($q->param("taxon_rank") ne ''){
-		$q->param("type" => "reid");
-	    displayCollResults();
-	#}
-	# Not sure why this is here, which of course means I'm not sure why this
-	# entire method exists...  11/26/02 PM
-    #else{ #( $q->param('genus_name') ne '') {
-	#	&displayOccsForReID();
-	#}
-    #} else {
-#
-#    	# Must be a collection search
-#		$q->param("type" => "reid");
-#	    displayCollResults();
-#    }
+	$q->param("type" => "reid");
+	displayCollResults();
 }
 
 sub displayOccsForReID
@@ -6088,41 +5888,27 @@ sub displayOccsForReID
 	}
 
 	# Build the SQL
-	$where = DBTransactionManager->new($dbh);
-	$where->setWhereSeparator("AND");
-	
+    my @where = ();
 	if($genus_name ne '' or $species_name ne ''){
 		$printCollectionDetails = 1;
 
-		$where->setSelectExpr("*");
-		$where->setFromExpr("occurrences");
-		#$sql = "SELECT * FROM occurrences ";
-			
-		$where->addWhereItem("genus_name='$genus_name'") if ( $genus_name );
-		$where->addWhereItem("species_name='$species_name'") if ( $species_name );
+        push @where, "genus_name=".$dbh->quote($genus_name) if ($genus_name);
+        push @where, "species_name=".$dbh->quote($species_name) if ($species_name);
 		
 		if (@colls > 0) {
-			$where->addWhereItem("collection_no IN(".join(',',@colls).")");
+			push @where, "collection_no IN(".join(',',@colls).")";
 		} elsif ($collection_no > 0) {
-			$where->addWhereItem("collection_no=$collection_no");
+			push @where, "collection_no=$collection_no";
 		}
 	} elsif ($collection_no) {
-		#$sql = "SELECT * FROM occurrences ";
-		$where->setSelectExpr("*");
-		$where->setFromExpr("occurrences");
-		$where->addWhereItem("collection_no=$collection_no");
+		push @where, "collection_no=$collection_no";
 	}
 
-	$where->addWhereItem("occurrence_no > $lastOccNum");
+	push @where, "occurrence_no > $lastOccNum";
 
 	# some occs are out of primary key order, so order them JA 26.6.04
-	$where->setOrderByExpr("occurrence_no");
-	
-	$where->setLimitExpr("11");
-
-	# Tack it all together
-	#$sql .= " WHERE " . $where->whereClause();
-	$sql = $where->SQLExpr();
+    $sql = "SELECT * FROM occurrences WHERE ".join(" AND ",@where).
+           " ORDER BY occurrence_no LIMIT 11";
 
 	dbg("$sql<br>");
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
@@ -6130,7 +5916,7 @@ sub displayOccsForReID
 
 	# Get the current reference data
 	$sql = "SELECT * FROM refs WHERE reference_no=".$s->get("reference_no");
-	dbg("$sql<br>");
+	dbg("$sql");
 	my $sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth2->execute();
 	my $array_ref_of_hash_refs = $sth->fetchall_arrayref({});
@@ -6305,8 +6091,8 @@ sub processNewReIDs {
 
 	my @requiredFields = ("authorizer", "enterer", "occurrence_no",
 				"collection_no", "genus_name", "species_name", "reference_no");
-	for $i (0..$numFields)	{
-		for $j (0..$#requiredFields)	{
+	for my $i (0..$numFields)	{
+		for my $j (0..$#requiredFields)	{
 			if ($fieldNames[$i] eq $requiredFields[$j])	{
 				$isRequired[$i] = "Y";
 				last;
@@ -6382,7 +6168,7 @@ sub processNewReIDs {
 					my $val = $curVal;
 					$val =~ s/\Q'/''/g;
 					# $val =~ s/\Q"/""/g;  # tone -- commented out
-					$val = "'$val'" if $fieldTypes[$fieldCount] == 0;
+					$val = "'$val'" if $fieldTypes[$j] == 0;
 					
 					push(@row, $val);
 					push(@fieldList, $fieldName);
@@ -6447,6 +6233,19 @@ sub processNewReIDs {
 				unless(PBDBUtil::isRefPrimaryOrSecondary($dbh, $collection_no, $reference_no))	{
 					PBDBUtil::setSecondaryRef($dbh,$collection_no, $reference_no);
 				}
+
+                my $occurrence_no = 0;
+                for($i=0;$i<scalar(@fieldList);$i++) {
+                    if ($fieldList[$i] eq 'occurrence_no') {
+                        $occurrence_no=$row[$i];
+                        last;
+                    }
+                }
+                # This marks the most recent reid for an occurrence as 'most_recent' in the database
+                # so that scripts can properly get only most recent reids when they need them.
+                if ($occurrence_no) {
+                    setMostRecentReID($dbt,$occurrence_no);
+                }
 			}
 
 			$sql = "SELECT occurrence_no,genus_reso,genus_name,species_reso,species_name,comments,collection_no FROM reidentifications WHERE reid_no=$recID";
@@ -6498,56 +6297,44 @@ sub processNewReIDs {
 	print stdIncludes("std_page_bottom");
 }
 
-sub displaySearchDLGenusNamesForm
-{
-	print stdIncludes( "std_page_top" );
-	print $hbo->populateHTML('search_genus_names');
-	print stdIncludes("std_page_bottom");
-}
-
-sub displayGenusNamesDLResults
-{
-	my $class_name = $q->param('class_name');
-	$sql = "SELECT genus_name FROM jab_class_genus_index WHERE class_name='$class_name'";
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-	my @rows = @{$sth->fetchall_arrayref()};
-	
-	print stdIncludes( "std_page_top" );
-	
-	my $numRows = @rows;
-	if ( $numRows > 0)
-	{
-		my $fileName = $s->get('authorizer');
-		$fileName .= '_' . $class_name;
-		$fileName =~ s/\.//g;
-		$fileName =~ s/\s+/_/g;
-		
-		open(OUTFILE, ">/home/httpd/html/dl/$fileName.csv") || die $!;
-		
-		foreach my $rowref (@rows)
-		{
-			my @row = @{$rowref};
-			print OUTFILE $row[0] . "\n";
-		}
-		
-		close OUTFILE;
-		
-		print qq|<h3>$numRows genus names in the Class $class_name were found</h3>Please download your file: <a href="/dl/$fileName.csv">$fileName.csv</a>\n|;
- 	}
-	else
-	{
-		print "<h1>No genus names for class $class_name</h1>";
-	}
-	
-	print stdIncludes("std_page_bottom");
-}
-
 sub displayProjectStatusPage
 {
 	  print stdIncludes( "std_page_top" );
 	  print $hbo->populateHTML('project_status_page');
 	  print stdIncludes("std_page_bottom");
+}
+
+# Marks the most_recent field in the reidentifications table to YES for the most recent reid for
+# an occurrence, and marks all not-most-recent to NO.  Needed for collections search for Map and such
+# PS 8/15/2005
+sub setMostRecentReID {
+    my $dbt = shift;
+    my $dbh = $dbt->dbh;
+    my $occurrence_no = shift;
+
+    my $sql = "SELECT re.* FROM reidentifications re, refs r WHERE r.reference_no=re.reference_no AND re.occurrence_no=".$occurrence_no." ORDER BY r.pubyr DESC, re.reid_no DESC";
+    my @results = @{$dbt->getData($sql)};
+    if (@results) {
+        $sql = "UPDATE reidentifications SET modified=modified, most_recent='YES' WHERE reid_no=".$results[0]->{'reid_no'};
+        my $result = $dbh->do($sql);
+        dbg("set most recent: $sql");
+        if (!$result) {
+            carp "Error setting most recent reid to YES for reid_no=$results[0]->{reid_no}";
+        }
+            
+        my @older_reids;
+        for(my $i=1;$i<scalar(@results);$i++) {
+            push @older_reids, $results[$i]->{'reid_no'};
+        }
+        if (@older_reids) {
+            $sql = "UPDATE reidentifications SET modified=modified, most_recent='NO' WHERE reid_no IN (".join(",",@older_reids).")";
+            $result = $dbh->do($sql);
+            dbg("set not most recent: $sql");
+            if (!$result) {
+                carp "Error setting most recent reid to NO for reid_no IN (".join(",",@older_reids).")"; 
+            }
+        }
+    }
 }
 
 sub updateRecord {
@@ -6841,7 +6628,7 @@ sub checkNearMatch {
 	while (my $rowRef = $sth->fetchrow_hashref())	{
 		my %row = %{$rowRef};
 		my $fieldMatches;
-		for ( $i=0; $i<$#{$fields}; $i++ ) {
+		for ( my $i=0; $i<$#{$fields}; $i++ ) {
 			# Strip single quotes, which won't be in the database
 			my $v = $$vals[$i];
 			$v =~ s/'//g;
@@ -6864,7 +6651,8 @@ sub checkNearMatch {
 
 	if (@complaints)	{
 		# Print out the possible matches
-		Globals::printWarning("Your new record may duplicate one of the following old ones.");
+		my $warning = "Your new record may duplicate one of the following old ones.";
+        print "<CENTER><H3><FONT COLOR='red'>Warning:</FONT> $warning</H3></CENTER>\n";                                                                         
 		print "<table><tr><td>\n";
 		# Figure out what fields to show
 		my @display;
@@ -6899,7 +6687,7 @@ sub checkNearMatch {
 				}
 			}
 			my @rowData;
-			for $d (@display)	{
+			for my $d (@display)	{
 				push @rowData,$row{$d};
 			}
 			if ($tableName eq "refs")	{
@@ -7028,7 +6816,7 @@ sub checkDuplicates {
 	my $vals = shift;
 
 	$sql = "";
-	for ( $i=0; $i<$#{$fields}; $i++ ) {
+	for (my $i=0; $i<$#{$fields}; $i++ ) {
 		# The primary key isn't known until after the insert.
 		# The created date would be different by a few seconds.
 		# Also the release_date
@@ -7340,22 +7128,6 @@ sub htmlError {
 	exit 1;
 }
 
-# **********
-# deprecated.  please use the DBTransactionManager class instead for this.
-# rjp, 1/2004. 
-sub buildWhere {
-	my $where = shift;
-	my $clause = shift;
-
-	if ( $where ) {
-		$where .= " AND $clause ";
-	} else {
-		$where = " WHERE $clause ";
-	}
-	return $where;
-}
-
-
 # Build the reference ( at the bottom of the page )
 sub buildReference {
 	my $reference_no = shift;
@@ -7364,7 +7136,7 @@ sub buildReference {
 
 	if ( $reference_no ) {
 		$sql = "SELECT * FROM refs where reference_no = $reference_no";
-		dbg ( "$sql<HR>" );
+		#dbg ( "$sql" );
 		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute();
 		if ( $sth->rows ) {
@@ -7457,13 +7229,13 @@ sub showOptionsForm {
 
 sub calculateTaxaInterval {
 	print stdIncludes("std_page_top");
-	Confidence::calculateTaxaInterval($q, $s, $dbt, $splist);
+	Confidence::calculateTaxaInterval($q, $s, $dbt);
 	print stdIncludes("std_page_bottom");
 }
 
 sub calculateStratInterval {
 	print stdIncludes("std_page_top");
-	Confidence::calculateStratInterval($q, $s, $dbt, $splist);
+	Confidence::calculateStratInterval($q, $s, $dbt);
 	print stdIncludes("std_page_bottom");
 }
 
@@ -7471,7 +7243,7 @@ sub calculateStratInterval {
 # PS 10/25/2004
 sub displayTaxonomicNamesAndOpinions {
     print stdIncludes( "std_page_top" );
-    $ref = Reference->new($dbt,$q->param('reference_no'));
+    my $ref = Reference->new($dbt,$q->param('reference_no'));
     if ($ref) {
         my $html = $ref->formatAsHTML();
         $html =~ s/<b>\d+<\/b>//g; #Remove the reference_no
