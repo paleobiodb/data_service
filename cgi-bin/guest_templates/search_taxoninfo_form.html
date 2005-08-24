@@ -1,43 +1,4 @@
-<script language="JavaScript" type="text/javascript">
-<!-- Begin
-function checkForm() {
-	var frm = document.forms[0];
-	var errors = new Error();
-
-	var taxon = frm.taxon_name.value;
-	
-    var isSpecies = /^[A-Z][a-z]+[ ][a-z]+\n?$/;
-    var isSubspecies = /^[A-Z][a-z]+[ ][a-z]+[ ][a-z]+\n?$/;
-    var isHigher = /^[A-Z][a-z]+\n?$/;
-    var isSpeciesOnly = /^[a-z]+\n?$/;
-
-    var isValid;
-    if (isSubspecies.test(taxon) ||
-        isSpecies.test(taxon) ||
-        ishigher.test(taxon) || 
-        isSpeciesOnly.test(taxon)) {
-        isValid = 1;
-    } else {
-        isValid = 0;
-    }
-
-    if (!isValid) {
-		errors.add("Ill-formed taxon.  Check capitalization and spacing.");
-	}
-	
-	if (errors.count() > 0) {
-		errors.showAlert()
-		return false;
-	}
-	
-	return true;
-}
-
-// End -->
-</script>
-
-
-<form method="POST" action="bridge.pl" onSubmit="return checkForm();">
+<form method="POST" action="bridge.pl">
 <input name="action" type="hidden" value="checkTaxonInfo">
 <div align="center">
 
@@ -63,9 +24,8 @@ function checkForm() {
   <tr>
 </table>
         <div class="tiny" style="width: 600; text-align:left;"> 
-        Capitalize genus or higher ranked taxa.<br>
         Don't enter the genus name if the species originally was combined in a subgenus.  Example: enter "Scalites tropidophora" instead of "Pleurotomaria (Scalites) tropidophora."<br>
-        Bare species may be entered, and must be entirely lowercase. i.e. 'hondurensis'<br>
+        To find bare species, you may use the wildcard %. Example: "% validus" would match Belodon validus, Troodon validus, etc.
        </div> 
 </div>
 </form>
