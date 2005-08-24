@@ -6,7 +6,6 @@ use GD;
 use Class::Date qw(date localdate gmdate now);
 use Image::Magick;
 use TimeLookup;
-use Globals;
 
 # Flags and constants
 my $DEBUG = 0;			# The debug level of the calling program
@@ -101,6 +100,14 @@ sub buildMap {
 	}
 
     $img_link = $self->mapSetupImage();
+
+    # Returns a reference to array returned from permissions
+    my %options = $q->Vars();
+    $options{'most_recent'} = 1;
+    $options{'permission_type'} = 'read';
+    $options{'calling_script'} = 'Map';
+    my $fields = ['latdeg','latdec','latmin','latsec','latdir','lngdeg','lngdec','lngmin','lngsec','lngdir'];
+    
     for my $ptset (1..4) {
         $dotsizeterm = $q->param("pointsize$ptset");
         $dotshape = $q->param("pointshape$ptset");
@@ -138,12 +145,28 @@ sub buildMap {
             $extraFieldValue = $q->param('mapsearchterm'.$ptset);
 
             if ($extraField && $extraFieldValue) {
-                $q->param($extraField => $extraFieldValue);
-                my $dataRowsRef = $self->mapQueryDb();
+                $options{$extraField} = $extraFieldValue;
+                # This makes is to both lithology1 and lithology2 get searched
+                if ($options{'lithology1'}) {
+                    $options{'lithologies'} = $options{'lithology1'};
+                    delete $options{'lithology1'};
+                }
+                if ($options{'interval_name'}) {
+                    ($options{'eml_max_interval'},$options{'max_interval'}) = TimeLookup::splitInterval($dbt,$options{'interval_name'});
+                }
+                my ($dataRowsRef,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);  
                 $self->mapDrawPoints($dataRowsRef);
             }
         } elsif ($ptset == 1) {
-            my $dataRowsRef = $self->mapQueryDb();
+            # This makes is to both lithology1 and lithology2 get searched
+            if ($options{'lithology1'}) {
+                $options{'lithologies'} = $options{'lithology1'};
+                delete $options{'lithology1'};
+            }
+            if ($options{'interval_name'}) {
+                ($options{'eml_max_interval'},$options{'max_interval'}) = TimeLookup::splitInterval($dbt,$options{'interval_name'});
+            }
+            my ($dataRowsRef,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);  
             $self->mapDrawPoints($dataRowsRef);
         }
            
@@ -189,8 +212,7 @@ sub mapCheckForm {
 
         # Generate warning for taxon with homonyms
         if ($taxon_name) {
-            if($q->param('taxon_rank') eq "Higher taxon" ||
-               $q->param('taxon_rank') eq "Higher-taxon"){
+            if($q->param('taxon_rank') ne "species") {
                 my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon_name);
                 if (scalar(@taxon_nos)  > 1) {
                     push @errors, "The taxon name '$taxon_name' is ambiguous and belongs to multiple taxonomic hierarchies. Right the map script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
@@ -259,7 +281,16 @@ sub buildMapOnly {
 	}
 
     # Returns a reference to array returned from permissions
-	return $self->mapQueryDb($in_list);
+    my %options = $q->Vars();
+    if ($in_list) {
+        $options{'taxon_list'} = $in_list;
+    }
+    $options{'most_recent'} = 1;
+    $options{'permission_type'} = 'read';
+    $options{'calling_script'} = 'Map';
+    my $fields = ['latdeg','latdec','latmin','latsec','latdir','lngdeg','lngdec','lngmin','lngsec','lngdir'];
+    my ($dataRowsRef,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);  
+    return $dataRowsRef;
 }
 
 # This function prints footer for the image, makes clickable background tiles,
@@ -447,274 +478,6 @@ sub mapFinishImage {
     print MAPOUT "</table>\n";
 
     close MAPOUT;
-}
-
-
-
-
-sub mapQueryDb	{
-	my $self = shift;
-	my $in_list = (shift or "");
-
-	# if a research project (not a group) is requested, get a list of
-    #  references included in that project JA 3.10.02
-    my $reflist;
-    if ( $q->param('research_group') =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/ )	{
-        $sql = "SELECT reference_no FROM refs WHERE project_name LIKE '%";
-        $sql .= $q->param('research_group') . "%'";
-
-        $sth = $dbh->prepare($sql);
-        $sth->execute();
-        @refrefs = @{$sth->fetchall_arrayref()};
-        $sth->finish();
-
-        for $refref (@refrefs)  {
-            $reflist .= "," . ${$refref}[0];
-        }
-        $reflist =~ s/^,//;
-    }
-
-    # query the occurrences table to get a list of useable collections
-    # Also handles species name searches JA 19-20.8.02
-    my $genus;
-    my $species;
-    my $whereClause;
-    if (@$in_list) {
-        # In list may be a text genus+species name, a taxon number, or both (if passed from Confidence.pm)
-        my ($taxon_nos_string,$genus_species_sql);
-        foreach $taxon_no_or_name (@$in_list) {
-            if ($taxon_no_or_name =~ /^\d+$/) {
-                $taxon_nos_string .= $taxon_no_or_name . ",";
-            } else {
-                my ($genus,$species) = split(/ /,$taxon_no_or_name);
-                if ($genus) {
-                    for $table (('reidentifications','occurrences')) {
-                        $genus_species_sql .= " OR ($table.genus_name=".$dbh->quote($genus);
-                        if ($species) {
-                            $genus_species_sql .= " AND $table.species_name=".$dbh->quote($species);
-                        }
-                        $genus_species_sql .= ")";
-                    }
-                }
-            }
-        }
-        $taxon_nos_string =~ s/,$//;
-        $whereClause .= " (";
-        if (!$taxon_nos_string) {
-            $genus_species_sql =~ s/^ OR//;
-            $whereClause .= $genus_species_sql;
-        } else {
-            $whereClause .= "occurrences.taxon_no IN ($taxon_nos_string) OR reidentifications.taxon_no IN ($taxon_nos_string) $genus_species_sql";
-        }
-        $whereClause .= ") ";
-    } elsif($q->param('taxon_name')){
-        # PM 09/13/02 added the '\s+' pattern for space matching.
-        if($q->param('taxon_name') =~ /\w+\s+\w+/){
-            ($genus,$species) = split /\s+/,$q->param('taxon_name');
-        } elsif($q->param('taxon_rank') eq "species"){
-            $species = $q->param('taxon_name');
-        } else{
-            $genus = $q->param('taxon_name');
-        }
-
-        if($q->param('taxon_rank') eq "Higher taxon" ||
-           $q->param('taxon_rank') eq "Higher-taxon"){
-            $self->dbg("taxon_name q param:".$q->param('taxon_name')."<br>");
-
-            my $genus_names_string; 
-            my $taxon_nos_string;
-
-            @taxon_nos = TaxonInfo::getTaxonNos($dbt, $q->param('taxon_name'));
-            $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
-            if (scalar(@taxon_nos) == 0) {
-                $genus_names_string .= $dbh->quote($q->param('taxon_name'));
-            } elsif (scalar(@taxon_nos) == 1) {
-                $taxon_nos_string = PBDBUtil::taxonomic_search($dbt,$taxon_nos[0]);
-            } else { #result > 1
-                push @warnings, "The taxon name '$taxon' was not included because it is ambiguous and belongs to multiple taxonomic hierarchies. Right the download script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
-            }
-
-            if ($taxon_nos_string) {
-                $whereClause .= " (occurrences.taxon_no IN (".$taxon_nos_string.") OR reidentifications.taxon_no IN (".$taxon_nos_string."))";
-            } elsif ($genus_names_string) {
-                $whereClause .= " (occurrences.genus_name IN (".$genus_names_string.") OR reidentifications.genus_name IN (".$genus_names_string."))";
-            }
-        } else{
-            if($genus){
-                $whereClause .= "(occurrences.genus_name=" . $dbh->quote($genus) . " OR reidentifications.genus_name=" . $dbh->quote($genus) . ")" ;
-                if($species){
-                    $whereClause .= " AND ";
-                }
-            }
-            if($species){
-                $whereClause .= "(occurrences.species_name=" . $dbh->quote($species) . " OR reidentifications.species_name=" . $dbh->quote($genus) . ")";
-            }
-        }
-    }
-   
-    # SQL from genus honing sections above
-    if ($whereClause) {
-        my $sql = qq|SELECT occurrences.collection_no FROM occurrences LEFT JOIN reidentifications ON occurrences.occurrence_no = reidentifications.occurrence_no WHERE $whereClause|;
-        $self->dbg("mapQueryDb sql: $sql<br>");
-        my $sth = $dbh->prepare($sql);
-        $sth->execute();
-
-        while (my $occ = $sth->fetchrow_hashref())	{
-            if ($occ->{'collection_no'} ne ""){
-                $collok{$occ->{'collection_no'}} = "Y";
-            }
-        }
-        $sth->finish();
-    }
-
-    # figure out what collection table values are being matched 
-    # in what fields
-    @allfields = (	'research_group',
-            'enterer',
-            'authorizer',
-            'country',
-            'state',
-            'interval_name',
-            'formation', 
-            'lithology1', 
-            'environment',
-            'modified_since');
-
-    # Handle days/weeks/months ago requests JA 25.6.02
-    if ($q->param('modified_since'))	{
-        #local $Class::Date::DATE_FORMAT="%Y%m%d%H%M%S";
-        $nowDate = now();
-        if ( "yesterday" eq $q->param('modified_since') )	{
-            $nowDate = $nowDate-'1D';
-        } elsif ( "two days ago" eq $q->param('modified_since') )	{
-            $nowDate = $nowDate-'2D';
-        } elsif ( "three days ago" eq $q->param('modified_since') )	{
-            $nowDate = $nowDate-'3D';
-        } elsif ( "last week" eq $q->param('modified_since') )	{
-            $nowDate = $nowDate-'7D';
-        } elsif ( "two weeks ago" eq $q->param('modified_since') )	{
-            $nowDate = $nowDate-'14D';
-        } elsif ( "three weeks ago" eq $q->param('modified_since') )	{
-            $nowDate = $nowDate-'21D';
-        } elsif ( "last month" eq $q->param('modified_since') )	{
-            $nowDate = $nowDate-'1M';
-        }
-        my ($a,$b,$c);
-        ($a,$b) = split / /,$nowDate;
-        ($a,$b,$c) = split /-/,$a,3;
-        $q->param('year' => $a);
-        $q->param('month' => $b);
-        $q->param('date' => $c);
-    }
-    if ($q->param('year'))	{
-        $q->param('modified_since' => $q->param('year')." ".$q->param('month')." ".$q->param('date'));
-    }
-
-	for my $field ( @allfields ) {
-		if ( $q->param($field) && $q->param( $field ) ne "all")	{
-			$filledfields{$field} = $q->param ( $field );
-		}
-	}
-
-	# Start the SQL 
-	$sql = qq|SELECT *, DATE_FORMAT(release_date, '%Y%m%d') rd_short  FROM collections |;
-
-	# PM 09/10/02. Specify a default WHERE clause of the collection
-	# numbers returned above. This drastically reduces database load for
-	# the map drawing section of the taxon information script.
-	my $collection_no_list = join(", ",keys(%collok));
-	my $where = "";
-	# %collok is only populated if $q->param("taxon_name") was provided
-    if ($q->param('taxon_name') || @$in_list) {
-        if($collection_no_list ne ""){
-            $where = "WHERE collection_no IN($collection_no_list) ";
-        } else {
-            # we want nothing, so we don't fetch the whole table if the genus name doesn't exist
-            $where = "WHERE collection_no IN (-1) ";
-        }
-    }
-
-	for $t (keys %filledfields)	{
-		if ( $filledfields{$t} )	{
-			# handle stage
-			if ($t eq "interval_name")	{
-                # no checking at this point, assumed already handled in MapCheckForm
-                my ($eml,$name) = TimeLookup::splitInterval($dbt,$filledfields{$t});
-                my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh,$dbt,$eml,$name,'','','intervals');
-                @intervals = @{$inlistref};
-                if (@intervals) {
-                    my $whereTerm = " max_interval_no IN (".join(',',@intervals).")".
-                                    " AND ( min_interval_no IN (".join(',',@intervals).")".
-                                    "  OR min_interval_no < 1 )";
-				    $where = &::buildWhere ( $where, $whereTerm);
-                }
-			}
-			# handle lithology
-			elsif ($t eq "lithology1")	{
-				$where = &::buildWhere ( $where, qq| (lithology1='$filledfields{$t}' OR lithology2='$filledfields{$t}')| );
-			}
-            # handle environment
-            elsif ($t eq 'environment') {
-                my $environment;
-                
-                if ($filledfields{$t} =~ /General/) {
-                    $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_general'}});
-                } elsif ($filledfields{$t} =~ /Terrestrial/) {
-                    $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_terrestrial'}});
-                } elsif ($filledfields{$t} =~ /Siliciclastic/) {
-                    $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_siliciclastic'}});
-                } elsif ($filledfields{$t} =~ /Carbonate/) {
-                    $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_carbonate'}});
-                } else {
-                    $environment = $dbh->quote($filledfields{$t});
-                }
-                if ($environment) {
-                    $where = &::buildWhere($where, qq| environment IN ($environment)|);;
-                }
-            }
-			# handle modified date
-			elsif ($t eq "modified_since")	{
-				my ($yy,$mm,$dd) = split / /,$filledfields{$t},3;
-                $filledfields{$t} = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yy,$mm,$dd));
-				if ( $q->param("beforeafter") eq "created after" )	{
-					$where = &::buildWhere ( $where, qq| created>$filledfields{$t}| );
-				} elsif ( $q->param("beforeafter") eq "created before" )	{
-					$where = &::buildWhere ( $where, qq| created<$filledfields{$t}| );
-				} elsif ( $q->param("beforeafter") eq "modified after" )	{
-					$where = &::buildWhere ( $where, qq| modified>$filledfields{$t}| );
-				} elsif ( $q->param("beforeafter") eq "modified before" )	{
-					$where = &::buildWhere ( $where, qq| modified<$filledfields{$t}| );
-				}
-			# following written by JA 3.10.02
-			} elsif ( $t eq "research_group" && $q->param('research_group') =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/ )	{
-				$where .= " AND reference_no IN (" . $reflist . ")";
-			} elsif ( $t eq "research_group" ) {
-				# research_group is now a set -- tone 7 jun 2002
-				$where .= " AND FIND_IN_SET(".$dbh->quote($q->param("research_group")).", research_group)";
-			} else {
-				$where = &::buildWhere ( $where, "$t=".$dbh->quote($filledfields{$t}) );
-			}
-		}
-	}
-
- 	if ( $where ) { $sql .= "$where "; }
-	$sql =~ s/FROM collections  AND /FROM collections WHERE /;
-	$sql =~ s/\s+/ /gs;
-	$self->dbg ( "Final sql: $sql<br>" );
-	# NOTE: Results attached to this statement handle are used in mapDrawPoints
-	$sth = $dbh->prepare($sql);
-	$sth->execute();
-
-    # Pass collections thru permissions
-    my $p = Permissions->new($s);
-	my $limit = 1000000;
-	my $ofRows = 0;
-    my @dataRows = ();
-
-    $p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
-    $self->dbg ( "Returned $ofRows rows okayed by permissions module" );
-
-    return \@dataRows;	
 }
 
 
@@ -1406,10 +1169,8 @@ sub mapDrawPoints{
     my $matches = 0;
 	foreach $collRef ( @{$dataRowsRef} ) {
  		%coll = %{$collRef};
- 		if ( ( $coll{'latdeg'} > 0 || $coll{'latmin'} > 0 || $coll{'latdec'} > 0 ) &&
-         ( $coll{'lngdeg'} > 0 || $coll{'lngmin'} > 0 || $coll{'lngdec'} > 0 ) &&
-			( $collok{$coll{'collection_no'}} eq "Y" ||
-			! $q->param('taxon_name') )) {
+ 		if (( $coll{'latdeg'} > 0 || $coll{'latmin'} > 0 || $coll{'latdec'} > 0 ) &&
+            ( $coll{'lngdeg'} > 0 || $coll{'lngmin'} > 0 || $coll{'lngdec'} > 0 )) {
             # When magnification is high, want to use minutes 
             # in addition to degrees, so the resolution is a bit higher
             if ($scale > 6)  {
