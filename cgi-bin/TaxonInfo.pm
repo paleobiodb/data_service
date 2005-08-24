@@ -2,7 +2,6 @@ package TaxonInfo;
 
 use PBDBUtil;
 use Classification;
-use Globals;
 use Debug;
 use HTMLBuilder;
 use DBTransactionManager;
@@ -60,13 +59,8 @@ sub checkTaxonInfo {
                " IF (a.ref_is_authority='YES',r.author2init,a.author2init) author2init,".
                " IF (a.ref_is_authority='YES',r.author2last,a.author2last) author2last,".
                " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors".
-               " FROM authorities a LEFT JOIN refs r ON a.reference_no=r.reference_no";
-        if ($q->param('taxon_name') =~ /^[a-z]+$/) {
-            # We treat species as special case and do an open ended search
-            $sql .= " WHERE taxon_name LIKE ".$dbh->quote("% ".$q->param('taxon_name'));
-        } elsif ($q->param('taxon_name')) {
-            $sql .= " WHERE taxon_name LIKE ".$dbh->quote($q->param('taxon_name'));
-        }
+               " FROM authorities a LEFT JOIN refs r ON a.reference_no=r.reference_no".
+               " WHERE taxon_name LIKE ".$dbh->quote($q->param('taxon_name'));
         
         # Handle pubyr and author fields
         my $having_sql = '';
@@ -89,12 +83,31 @@ sub checkTaxonInfo {
             if ($species) {
                 $where .= " AND species_name LIKE ".$dbh->quote($species);
             }
-            $sql1 = "SELECT count(*) c FROM occurrences $where";
-            $sql2 = "SELECT count(*) c FROM reidentifications $where";
-            my $count = ${$dbt->getData($sql1)}[0]->{'c'};
-            $count += ${$dbt->getData($sql2)}[0]->{'c'};
-            if ($count > 0) {
-                my $taxon_name = $genus;
+            $sql = "(SELECT genus_name FROM occurrences $where GROUP BY genus_name)".
+                   " UNION ".
+                   "(SELECT genus_name FROM reidentifications $where GROUP BY genus_name)";
+            my @genera = @{$dbt->getData($sql)};
+            if (scalar(@genera) > 1) {
+                # now create a table of choices and display that to the user
+                print "<div align=\"center\"><h2>Please select a taxon</h2><br>";
+
+                print qq|<form method="POST" action="bridge.pl">|;
+                print qq|<input type="hidden" name="action" value="checkTaxonInfo">|;
+                
+                print "<table>\n";
+                print "<tr>";
+                for(my $i=0; $i<scalar(@genera); $i++) {
+                    my $checked = ($i == 0) ? "CHECKED" : "";
+                    my $taxon_name = "$genera[$i]->{genus_name} $species";
+                    print qq|<td><input type="radio" name="taxon_name" value="$taxon_name" $checked>$taxon_name</td>|;
+                    print "</tr><tr>";
+                }
+                print "</tr>";
+                print "<tr><td align=\"middle\" colspan=3><br>";
+                print "<input type=\"submit\" value=\"Get taxon info\">";
+                print "</td></tr></table></form></div>";
+            } elsif (scalar(@genera) == 1) {
+                my $taxon_name = $genera[0]->{'genus_name'};
                 if ($species) {
                     $taxon_name .= " $species";
                 }    
@@ -152,25 +165,37 @@ sub displayTaxonInfoResults {
 
 	# Verify taxon: If what was entered is a synonym for something else, use the
     # synonym. Else use the taxon
-    my $taxon_name;
+    my ($taxon_name,$taxon_rank);
     if ($taxon_no) {
         my $orig_taxon_no = getOriginalCombination($dbt,$taxon_no);
         $taxon_no = getSeniorSynonym($dbt,$orig_taxon_no);
         # This actually gets the most correct name
         my $correct_row = getMostRecentParentOpinion($dbt,$taxon_no,1);
-        $taxon_name = $correct_row->{'child_name'};
+        if ($correct_row) {
+            $taxon_name = $correct_row->{'child_name'};
+            $taxon_rank = $correct_row->{'child_rank'};
+        } else {
+            my $t = getTaxon($dbt,'taxon_no'=>$orig_no);
+            $child_spelling_no = $t->{'taxon_no'};
+            $taxon_name = $t->{'taxon_name'};
+            $taxon_rank = $t->{'taxon_rank'};
+        }  
     } else {
         $taxon_name = $q->param('taxon_name');
     }
 
 	# Get the sql IN list for a Higher taxon:
-	my $in_list = "";
-
+	my $in_list;
 	if($taxon_no) {
     	# JA: replaced recurse call with taxonomic_search call 7.5.04 because
     	#  I am not maintaining recurse
-        @in_list=PBDBUtil::taxonomic_search($dbt,$taxon_no);
-        $in_list=\@in_list;
+        if ($taxon_rank =~ /class|phylum|kingdom/) {
+            # Don't do this for class or higher, too many results can be returned PS 08/22/2005
+            $in_list = [-1];
+        } else {
+            @in_list=PBDBUtil::taxonomic_search($dbt,$taxon_no);
+            $in_list=\@in_list;
+        }
 	} else {
         # We just got to search the occ/reid tables directly
 		$in_list = [$taxon_name];
@@ -479,8 +504,18 @@ sub calculateCollectionBounds {
 		if ($lonDeg < $lonMin) { $lonMin = $lonDeg; }
 	}
 
-	$latCenter = (($latMax - $latMin)/2) + $latMin;
-	$lonCenter = (($lonMax - $lonMin)/2) + $lonMin;
+    # If its spread out over more than 75% of the earth, than just zoom out fully and center the map
+    if (abs($lonMax - $lonMin) >= 270) {
+	    $latCenter = 0;
+	    $lonCenter = 0;
+        $lonMin= -180;
+        $lonMax = 180;
+        $latMin = -90;
+        $latMax = 90;
+    } else {
+	    $latCenter = (($latMax - $latMin)/2) + $latMin;
+	    $lonCenter = (($lonMax - $lonMin)/2) + $lonMin;
+    }
 
 	#print "latCenter = $latCenter<BR>";
 	#print "lonCenter = $lonCenter<BR>";
@@ -613,14 +648,11 @@ sub doCollections{
     my $age_range_format = shift;  
 	my $output = "";
 
-	$q->param(-name=>"limit",-value=>1000000);
-	$q->param(-name=>"taxon_info_script",-value=>"yes");
-
 	# get a lookup of the boundary ages for all intervals JA 25.6.04
 	# the boundary age hashes are keyed by interval nos
-        @_ = TimeLookup::findBoundaries($dbh,$dbt);
-        my %upperbound = %{$_[0]};
-        my %lowerbound = %{$_[1]};
+    @_ = TimeLookup::findBoundaries($dbh,$dbt);
+    my %upperbound = %{$_[0]};
+    my %lowerbound = %{$_[1]};
 
 	# get all the interval names because we need them to print the
 	#  total age range below
@@ -634,9 +666,15 @@ sub doCollections{
 		}
 	}
 
-	# Get all the data from the database, bypassing most of the normal behavior
-	# of displayCollResults
-	@data = @{main::displayCollResults($in_list)};	
+    # Pull the colls from the DB;
+    my %options = ();
+    $options{'permission_type'} = 'read';
+    $options{'most_recent'} = 1;
+    $options{'calling_script'} = "TaxonInfo";
+    $options{'taxon_list'} = $in_list if (@$in_list);
+    my $fields = ["country", "state", "max_interval_no", "min_interval_no"];  
+    my ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
+    my @data = @$dataRows;
 
 	# figure out which intervals are too vague to use to set limits on
 	#  the joint upper and lower boundaries
@@ -759,6 +797,10 @@ sub doCollections{
 
 		# print the first and last appearance (i.e., the age range)
 		#  JA 25.6.04
+        if ($youngestuppername eq 'Holocene') {
+            # Bandaid fix for now PS 08/19/2005
+            $youngestupperbound = 0; 
+        }
 		if ($age_range_format eq "for_strata_module") {
 			$output .= "<p><b>Age range:</b> ";
 			$output .= $oldestlowername;
@@ -817,33 +859,12 @@ sub displayTaxonClassification{
 	my $species = (shift or "");
 	my $orig_no = (shift or ""); #Pass in original combination no
 
+    my $output; # the html actually returned by the function
 
-    # Theres one case where we might want to do upward classification when theres no taxon_no:
-    #  The Genus+species isn't in authorities, but the genus is
-    my $genus_no = 0;
-    if ($genus && $species && !$orig_no) {
-        my @results = getTaxonNos($dbt,$genus);
-        if (@results == 1) {
-            $orig_no=$results[0];
-            $genus_no=$results[0]; 
-            $append_species=1;
-        }
-    }
-
-    #
-    # Do the classification
-    #
-    my ($taxon_no,$taxon_rank,$taxon_name,$child_spelling_no);
-    my @table_rows = ();
+    my ($child_spelling_no,$taxon_no,$taxon_name,$taxon_rank,$genus_no);
     if ($orig_no) {
-        # format of table_rows: taxon_rank,taxon_name,taxon_no(original combination),taxon_no(recombination, if recombined)
-        # This will happen if the genus has a taxon_no but not the species
-        if ($append_species) {
-            push @table_rows, ['species',"$genus $species",0,0];
-        }
-
-        # First, find the rank, name, of the focal taxon
         my $correct_row = getMostRecentParentOpinion($dbt,$orig_no,1);
+        # First, find the rank, name, of the focal taxon
         if ($correct_row) {
             $child_spelling_no = $correct_row->{'child_spelling_no'};    
             $taxon_name = $correct_row->{'child_name'};    
@@ -854,59 +875,89 @@ sub displayTaxonClassification{
             $taxon_name = $t->{'taxon_name'};    
             $taxon_rank = $t->{'taxon_rank'};    
         }
-#        $is_recomb = ($orig_no != $child_spelling_no) ? 1:0;
+        if (!$genus) {
+            ($genus,$species) = split(/ /,$taxon_name);
+        }
+    } elsif ($genus && $species) {
+        # Theres one case where we might want to do upward classification when theres no taxon_no:
+        #  The Genus+species isn't in authorities, but the genus is
+        my @results = getTaxon($dbt,'taxon_name'=>$genus);
+        if (@results == 1) {
+            $child_spelling_no = $results[0]->{'taxon_no'};
+            $taxon_name = $results[0]->{'taxon_name'};    
+            $taxon_rank = $results[0]->{'taxon_rank'};    
+            $genus_no=$results[0]->{'taxon_no'}; 
+            $append_species=1;
+        }
+    }
 
-        push @table_rows, [$taxon_rank,$taxon_name,$orig_no,$child_spelling_no];
+    #
+    # Do the classification
+    #
+    #my ($taxon_no,$taxon_rank,$taxon_name,$child_spelling_no);
+    my @table_rows = ();
+    if ($orig_no || $genus_no) {
+        # format of table_rows: taxon_rank,taxon_name,taxon_no(original combination),taxon_no(recombination, if recombined)
+        # This will happen if the genus has a taxon_no but not the species
+        if ($append_species) {
+            push @table_rows, ['species',"$genus $species",0,0];
+        }
+
+        # Is the classification based on the taxon itself, or is a species thats classified using the genus?
+        my $classify_no = ($orig_no) ? $orig_no : $genus_no;
+        push @table_rows, [$taxon_rank,$taxon_name,$classify_no,$child_spelling_no];
 
         # Now find the rank,name, and publication of all its parents
-        my $parent_hash = Classification::get_classification_hash($dbt,'all',[$orig_no],'array');
-        my $parent_array = $parent_hash->{$orig_no}; 
-        foreach $row (@$parent_array) {
-            push (@table_rows,[$row->{'taxon_rank'},$row->{'taxon_name'},$row->{'taxon_no'},$row->{'taxon_spelling_no'}]);
-            last if ($row->{'taxon_rank'} eq 'kingdom');
+        my $parent_hash = Classification::get_classification_hash($dbt,'all',[$classify_no],'array');
+        my $parent_array = $parent_hash->{$classify_no}; 
+        if (@$parent_array) {
+            foreach $row (@$parent_array) {
+                push (@table_rows,[$row->{'taxon_rank'},$row->{'taxon_name'},$row->{'taxon_no'},$row->{'taxon_spelling_no'}]);
+                last if ($row->{'taxon_rank'} eq 'kingdom');
+            }
+
+            #
+            # Print out the table in the reverse order that we initially made it
+            #
+            $output .= "<table><tr valign=top><th>Rank</th><th>Name</th><th>Author</th></tr>";
+            my $class = '';
+            for($i = scalar(@table_rows)-1;$i>=0;$i--) {
+                $class = $class eq '' ? 'class="darkList"' : '';
+                $output .= "<tr $class>";
+                my($taxon_rank,$taxon_name,$taxon_no,$child_spelling_no) = @{$table_rows[$i]};
+                if ($taxon_rank =~ /species/) {
+                    @taxon_name = split(/\s+/,$taxon_name);
+                    $taxon_name = $taxon_name[-1];
+                }
+                my %auth_yr;
+                if ($taxon_no) {
+                    %auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$taxon_no)}
+                }
+                my $pub_info = $auth_yr{author1last}.' '.$auth_yr{pubyr};
+                if ($child_spelling_no != $taxon_no) {
+                    $pub_info = "(".$pub_info.")" if $pub_info !~ /^\s*$/;
+                } 
+                if ($taxon_no) {
+                    #if ($species !~ /^sp(\.)*$|^indet(\.)*$/) 
+                    $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_no=$taxon_no">$taxon_name</a>|;
+                } else {
+                    my $show_rank = ($taxon_rank eq 'species') ? 'Genus and species' : 
+                                    ($taxon_rank eq 'genus')   ? 'Genus' : 
+                                                                 'Higher taxon'; 
+                    $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$table_rows[$i][1]&taxon_rank=$show_rank">$taxon_name</a>|;
+                }
+                $output .= qq|<td align="middle">$taxon_rank</td>|.
+                           qq|<td align="middle">$link</td>|.
+                           qq|<td align="middle" style="white-space: nowrap">$pub_info</td>|; 
+                $output .= '</tr>';
+            }
+            $output .= "</table>";
+        } else {
+            $output .= "<i>No classification data are available</i>";
         }
     } else {
-        # This block is if no taxon no is found - go off the occurrences table
-        push @table_rows,['species',"$genus $species",0,0] if $species;
-        push @table_rows,['genus',$genus,$genus_no,0];
+        $output .= "<i>No classification data are available</i>";
     }
-
-    #
-    # Print out the table in the reverse order that we initially made it
-    #
-    my $output = "<table><tr valign=top><th>Rank</th><th>Name</th><th>Author</th></tr>";
-    my $class = '';
-    for($i = scalar(@table_rows)-1;$i>=0;$i--) {
-        $class = $class eq '' ? 'class="darkList"' : '';
-        $output .= "<tr $class>";
-        my($taxon_rank,$taxon_name,$taxon_no,$child_spelling_no) = @{$table_rows[$i]};
-        if ($taxon_rank =~ /species/) {
-            @taxon_name = split(/\s+/,$taxon_name);
-            $taxon_name = $taxon_name[-1];
-        }
-        my %auth_yr;
-        if ($taxon_no) {
-            %auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$taxon_no)}
-        }
-        my $pub_info = $auth_yr{author1last}.' '.$auth_yr{pubyr};
-        if ($child_spelling_no != $taxon_no) {
-            $pub_info = "(".$pub_info.")" if $pub_info !~ /^\s*$/;
-        } 
-        if ($taxon_no) {
-            #if ($species !~ /^sp(\.)*$|^indet(\.)*$/) {
-            $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_no=$taxon_no">$taxon_name</a>|;
-        } else {
-            my $show_rank = ($taxon_rank eq 'species') ? 'Genus and species' : 
-                            ($taxon_rank eq 'genus')   ? 'Genus' : 
-                                                         'Higher taxon'; 
-            $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$table_rows[$i][1]&taxon_rank=$show_rank">$taxon_name</a>|;
-        }
-        $output .= qq|<td align="middle">$taxon_rank</td>|.
-                   qq|<td align="middle">$link</td>|.
-                   qq|<td align="middle" style="white-space: nowrap">$pub_info</td>|; 
-        $output .= '</tr>';
-    }
-    $output .= "</table>";
 
     #
     # Begin getting sister/child taxa
@@ -961,23 +1012,30 @@ sub displayTaxonClassification{
         }
     }
     # This generates links if all we have is occurrences records
-    if ($genus && !$orig_no) {
+    my @genus_nos = getTaxonNos($dbt,$genus,'genus');
+    my (@possible_sister_taxa_links,@possible_child_taxa_links);
+    if ($genus && scalar(@genus_nos) <= 1) {
         my ($sql,$whereClause,@results);
-        $whereClause = "genus_name like ".$dbh->quote($genus);
-        $sql  = "(SELECT genus_name,species_name FROM occurrences WHERE $whereClause)";
+        my $genus_sql = $dbh->quote($genus);
+        my ($occ_genus_no_sql,$reid_genus_no_sql);
+        $occ_genus_no_sql = " OR o.taxon_no=$genus_nos[0]" if (@genus_nos);
+        $reid_genus_no_sql = " OR re.taxon_no=$genus_nos[0]" if (@genus_nos);
+        $sql  = "(SELECT o.genus_name,o.species_name FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE re.reid_no IS NULL AND o.genus_name like $genus_sql AND (o.taxon_no=0 OR o.taxon_no IS NULL $occ_genus_no_sql))";
         $sql .= " UNION ";
-        $sql .= "(SELECT genus_name,species_name FROM reidentifications WHERE $whereClause)"; 
+        $sql .= "(SELECT re.genus_name,re.species_name FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND re.most_recent=1 AND re.genus_name like $genus_sql AND (re.taxon_no=0 OR re.taxon_no IS NULL $reid_genus_no_sql))"; 
         $sql .= "ORDER BY genus_name,species_name";
+        main::dbg("Get from occ table: $sql");
         @results = @{$dbt->getData($sql)};
         foreach $row (@results) {
+            next if ($row->{'species_name'} =~ /^sp(p)*\.|^indet\.|s\.\s*l\./);
             if ($species) {
                 if ($species ne $row->{'species_name'}) {
                     my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$row->{genus_name} $row->{species_name}">$row->{genus_name} $row->{species_name}</a>|;
-                    push @sister_taxa_links, $link;
+                    push @possible_sister_taxa_links, $link;
                 }
             } else {
                 my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$row->{genus_name} $row->{species_name}">$row->{genus_name} $row->{species_name}</a>|;
-                push @child_taxa_links, $link;
+                push @possible_child_taxa_links, $link;
             }
         }
     }
@@ -989,9 +1047,21 @@ sub displayTaxonClassification{
         $output .= "</p>";
     }
 
+    if (@possible_child_taxa_links) {
+        $output .= "<p><i>This genus may include these species, but they have not been formally classified into it:</i><br>"; 
+        $output .= join(", ",@possible_child_taxa_links);
+        $output .= "</p>";
+    }
+
     if (@sister_taxa_links) {
         $output .= "<p><i>Sister taxa include:</i><br>"; 
         $output .= join(", ",@sister_taxa_links);
+        $output .= "</p>";
+    }
+    
+    if (@possible_sister_taxa_links) {
+        $output .= "<p><i>These species have not been formally classified into the genus:</i><br>"; 
+        $output .= join(", ",@possible_sister_taxa_links);
         $output .= "</p>";
     }
 	return $output;
@@ -1949,7 +2019,7 @@ sub getJuniorSynonyms {
         } else {
             last;
         }
-        my $sql = "SELECT child_no FROM opinions WHERE parent_no=$taxon_no";
+        my $sql = "SELECT DISTINCT child_no FROM opinions WHERE parent_no=$taxon_no";
         my @results = @{$dbt->getData($sql)};
         foreach $row (@results) {
             $parent = getMostRecentParentOpinion($dbt,$row->{'child_no'});
