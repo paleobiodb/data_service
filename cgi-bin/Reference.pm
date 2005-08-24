@@ -8,7 +8,6 @@ package Reference;
 
 use strict;
 use DBI;
-use DBConnection;
 use DBTransactionManager;
 use CGI::Carp;
 use Data::Dumper;

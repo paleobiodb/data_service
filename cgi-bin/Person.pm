@@ -7,7 +7,6 @@ package Person;
 
 use strict;
 use DBI;
-use DBConnection;
 use DBTransactionManager;
 
 
