@@ -105,12 +105,11 @@ function checkForm ( ) {
 	<input id="type" type=hidden name="type" value="%%type%%">
 	<input id="use_primary" type=hidden name="use_primary" value="%%use_primary%%">
 
-
-<center><p><font size=-1><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character.</i></font></p></center>
+    <div align="center"><div style="width: 640px"><font size="-1"><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character or "%" for an open ended match.</i></font></div></div>
 
 		<hr>
 
-	<table width=100%><tr><td align=center>
+	<table width="100%"><tr><td align=center>
     <table border=0 cellpadding=2 cellspacing=2>
 	<tr><td colspan=4 align=center><b>Search values</b></td></tr>
 	<tr>
@@ -119,8 +118,8 @@ function checkForm ( ) {
 	  <td>Reference number: <br><input name=reference_no size=30><br></td>
 	</tr>
 	<tr>
-	  <td>Authorizer: <br><select name="authorizer"></select>&nbsp;<a href="javascript: auth( );">Me</a></td>
-	  <td>Enterer: <br><select name="enterer"></select>&nbsp;<a href="javascript: me( );">Me</a></td>
+	  <td>Authorizer: <br><select name="authorizer"></select>&nbsp;<a href="#" onClick="javascript: auth( );">Me</a></td>
+	  <td>Enterer: <br><select name="enterer"></select>&nbsp;<a href="#" onClick="javascript: me( );">Me</a></td>
 	  <td>Research group or project: <br>
 <select id="research_group">
 </select>
@@ -128,9 +127,8 @@ function checkForm ( ) {
 	</tr>
 	<tr>
 	  <td>
-	<nobr><select name="taxon_rank"><option>Higher-taxon<option>Genus<option>Genus and species<option>species</select>
-	name:</nobr>
-	<br><input name=taxon_name size=30><br></td>
+	<span style="whitespace: nowrap">Taxon name: </span><br>
+	<input name=taxon_name size=30><br></td>
 	</tr>
 	<tr>
 	  <td>Country: <br><input name=country size=30><br></td>
@@ -147,7 +145,7 @@ function checkForm ( ) {
 	  <td>Member: <br><input name=member size=30><br></td>
 	  -->
 	  
-	  <td>Group, formation, or member:<BR><input name="group_formation_member" size=30></select><BR></td>
+	  <td>Group, formation, or member:<BR><input name="group_formation_member" size=30><br /></td>
 	  <td>Paleoenvironment: <br><select id="environment"></select><br></td>
 
 	</tr>
@@ -167,7 +165,7 @@ function checkForm ( ) {
 	<hr>
 
 
-	<table width=100%><tr><td align=center>
+	<table width="100%"><tr><td align=center>
 	<table border=0 cellpadding=2 cellspacing=2>
 	<tr>
 		<td colspan="4" align=center><b>Search and display options</b></td>

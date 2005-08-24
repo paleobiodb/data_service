@@ -65,7 +65,7 @@ function checkForm ( ) {
 	if ( frm.section_name.value == ""
         && frm.county.value == ""
         && frm.reference_no.value == ""
-		&& frm.genus_name.value == ""
+		&& frm.taxon_name.value == ""
 		&& frm.country.value == ""
 		&& frm.state.value == ""
 		&& frm.max_interval.value == ""
@@ -96,7 +96,7 @@ function checkForm ( ) {
     <form method=post action="bridge.pl" onSubmit="return checkForm();">
 	<input id="action" type=hidden name="action" value="displaySearchSectionResults">
 
-    <center><p><font size=-1><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character.</i></font></p></center>
+    <center><p><font size=-1><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character or "%" for an open ended match. Example: "% validus" for Taxon name to match species ending in "validus"</i></font></p></center>
 
 		<hr>
 
@@ -116,10 +116,8 @@ function checkForm ( ) {
 </td>
 	</tr>
 	<tr>
-	  <td>
-	<nobr><select name="taxon_rank"><option>Higher-taxon<option>Genus<option>Genus and species<option>species</select>
-	name:</nobr>
-	<br><input name=genus_name size=30><br></td>
+	  <td><span style="white-space: nowrap;">Taxon name: </span><br>
+	<input name=taxon_name size=30><br></td>
 	</tr>
 	<tr>
 	  <td>Country: <br><input name=country size=30><br></td>

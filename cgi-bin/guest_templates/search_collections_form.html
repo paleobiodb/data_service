@@ -54,10 +54,10 @@ function checkForm ( ) {
 	<input id="user" type=hidden name="user" value="Guest">
 	<input id="type" type=hidden name="type" value="%%type%%">
 
-<center><small><p><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character.</i></p></small></center>
+    <div align="center"><div style="width: 640px"><font size="-1"><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character or "%" for an open ended match.</i></font></div></div>
 		<hr>
 
-	<table width=100%><tr><td align=center>
+	<table width="100%"><tr><td align=center>
     <table border=0 cellpadding=2 cellspacing=2>
 	<tr><td colspan=4 align=center><b>Search values</b></td></tr>
 	<tr>
@@ -65,8 +65,7 @@ function checkForm ( ) {
 	  <td>Collection number: <br><input name=collection_no size=30><br></td>
 	</tr>
 	<tr>
-	<td><nobr><select name="taxon_rank"><option>Higher-taxon<option>Genus<option>Genus and species<option>species</select>
-name:</nobr><BR>
+	<td>      <span style="white-space: nowrap;">Taxon name: </span><br>
 <input name=taxon_name size=30><br></td>
 
 	  <td>Research group: <br>
@@ -90,8 +89,8 @@ name:</nobr><BR>
 -->
 	</tr>
 	<tr>
-	  <td>Oldest time interval (or age in Ma): <br><nobr><select id="eml_max_interval"></select><input name=max_interval size=14></nobr><br></td>
-	  <td>Youngest time interval/Ma: <br><nobr><select id="eml_min_interval"></select><input name=min_interval size=14></nobr><br></td>
+	  <td>Oldest time interval (or age in Ma): <br><span style="white-space: nowrap;"><select id="eml_max_interval"></select><input name=max_interval size=14></span></td>
+	  <td>Youngest time interval/Ma: <br><span style="white-space: nowrap;"><select id="eml_min_interval"></select><input name=min_interval size=14></span></td>
 
 <!-- LEGACY
 	  <td>Epoch: <br><input name=epoch size=30><br></td>
@@ -100,7 +99,7 @@ name:</nobr><BR>
 -->
 	</tr>
 	<tr>
-	  <td>Group, formation, or member:<BR><input name="group_formation_member" size=30></select><BR></td>
+	  <td>Group, formation, or member:<BR><input name="group_formation_member" size=30><br></td>
       <td>Paleoenvironment: <br><select id="environment"></select><br></td>
     </tr>
     <tr>
@@ -117,7 +116,7 @@ name:</nobr><BR>
 	<hr>
 
 
-	<table width=100%><tr><td align=center>
+	<table width="100%"><tr><td align=center>
 	<table border=0 cellpadding=2 cellspacing=2>
 	<tr>
 		<td colspan="4" align=center><b>Search and display options</b></td>

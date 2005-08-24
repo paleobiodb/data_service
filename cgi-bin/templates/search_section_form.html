@@ -65,7 +65,7 @@ function checkForm ( ) {
 	if ( frm.section_name.value == ""
         && frm.county.value == ""
         && frm.reference_no.value == ""
-		&& frm.genus_name.value == ""
+		&& frm.taxon_name.value == ""
 		&& frm.country.value == ""
 		&& frm.state.value == ""
 		&& frm.max_interval.value == ""
@@ -117,9 +117,8 @@ function checkForm ( ) {
 	</tr>
 	<tr>
 	  <td>
-	<nobr><select name="taxon_rank"><option>Higher-taxon<option>Genus<option>Genus and species<option>species</select>
-	name:</nobr>
-	<br><input name=genus_name size=30><br></td>
+      <span style="white-space: nowrap;">Taxon name: </span>
+	<br><input name=taxon_name size=30><br></td>
 	</tr>
 	<tr>
 	  <td>Country: <br><input name=country size=30><br></td>
