@@ -1,47 +1,6 @@
-## 3/30/2004 - merged functionality of SQLBuilder and DBTransactionManager
-## Methods at the top of this class were written by rjp, methods at the bottom
-## by the original author of DBTransactionManager.
-
-
-# Represents an SQL select statement.  May be expanded in the future or replaced with a CPAN module...
-# Note, although this only supports SELECT statements by setting direct SQL.  To insert, call
-# the insertNewRecord() method.
-#
-#
-# Each section of the SQL statement can either be built up one component at a time, or set all at once.
-# (**note, building up is only supported for the WHERE expression for now, but eventually for others)
-#
-# To set it all at once, use the appropriate setXXXExpr() method.
-# Setting an expression directly will override any expression which has been built up from components.
-#
-# To build the where expression from components, set the separator using setWhereSeparator(),
-# and then use addWhereItem() to add each component.  
-#
-# You can also access any expression directly by using the method of its name, for example, whereExpr(),
-# or you can access the entire SQL statement by using the SQLExpr() method.
-#
-# Note, expressions are *NOT* returned with the leading WHERE, SELECT, HAVING, etc. keywords *unless*
-# you request the entire SQL statement at once.
-#
-# To execute an SQL expression:
-# -----------------------------
-# 
-# 1.  If you'll be retrieving one row at a time, then you must call
-#     the executeSQL() method before retrieving any rows, and you must
-#	  call the finishSQL() method when you're done. Note, fetching one row
-#	  at a time is slow.
-#
-# 2.  If you'll be retrieving all rows at once, then you can just directly
-# 	  call the retrieval method without calling execute or finish.
-#
-# To execute an SQL expression using Permissions checking, make sure to pass the current
-# Session object when creating the DBTransactionManager object, ie, pass it in new().
-# Then use the appropriate permission sensitive methods to fetch the results.  You must
-# also include the collection_no as the *FIRST* item in the SELECT statement if you're
-# fetching them as an array.  If it's as a hash, then it doesn't matter where it is.
-#
-#
-
+## 8/20/2005 - got rid of "SQLBuilder" functionality, its not necessary anymore
+##  this module is just a straight utility module for DBI
+## 3/30/2004 - merged functionality of SQLBuilder and DBTransactionManager rjp
 
 package DBTransactionManager;
 
@@ -62,311 +21,32 @@ use fields qw(
 				_id
 				_err
 								
-				SQLExpr
-				selectExpr
-				fromExpr
-				whereExpr
-				groupByExpr
-				havingExpr
-				orderByExpr
-				limitExpr
-				
-				whereSeparator
-				whereItems
-				
 				tableNames);  # list of allowable data fields.
 
 # dbh				:	handle to the database
 # GLOBALVARS			:	optional GLOBAL hash, see top of bridge.pl for more info.
 # perm				:	Permissions object
-# SQLExpr			:	the entire SQL expression *if* the user set it explicitly
 
 # tableNames		:	array ref of all table names in the database, not set by default.
 #
 # _id, _err 		: 	from the old DBTransactionManager
 #
-							
-# If using permissions, or performing updates or inserts, then
-# you must pass the GLOBALVARS hashref to it
-# when calling new().  If not using permissions, update, or inserts
-# then this is optional. 
+
+# Just pass it a dbh object
 sub new {
 	my $class = shift;
 	my DBTransactionManager $self = fields::new($class);
     my $dbh = shift;
-    $self->{'dbh'} = $dbh;
-	
-	# set up some default values
-	$self->clear();	
-	
-	# connect to the database
-	# note, not sure if it's a good idea to do this every time.. might slow things down.
-	$self->dbConnect();
-	
-	return $self;
-}
-
-
-# clears everything
-sub clear {
-	my DBTransactionManager $self = shift;
-	
-	$self->{SQLExpr} = '';
-	$self->{selectExpr} = '';
-	$self->{fromExpr} = '';
-	$self->{groupByExpr} = '';
-	$self->{havingExpr} = '';
-	$self->{orderByExpr} = '';
-	$self->{limitExpr} = '';
-	$self->{whereSeparator} = 'and';
-	$self->{whereItems} = ();
-	
-	$self->finishSQL();  # finish the SQL query if there was one.
-}
-
-# directly set the entire SQL expression
-# note, doing this will *override* any of the other
-# set/get methods.. 
-sub setSQLExpr {
-	my DBTransactionManager $self = shift;
-	if (my $input = shift) {
-		$self->{SQLExpr} = $input;
-	}	
-}
-
-# set directly
-sub setSelectExpr {
-	my DBTransactionManager $self = shift;
-	if (my $input = shift) {
-		$self->{selectExpr} = $input;
-	}
-}
-
-sub selectExpr {
-	my DBTransactionManager $self = shift;
-	if ($self->{selectExpr}) {
-		# if they set it explicitly, then just return it.
-		return $self->{selectExpr};	
-	}
-	
-	return "";
-}
-
-
-# set directly
-sub setFromExpr {
-	my DBTransactionManager $self = shift;
-	if (my $input = shift) {
-		$self->{fromExpr} = $input;
-	}
-}
-
-sub fromExpr {
-	my DBTransactionManager $self = shift;
-	if ($self->{fromExpr}) {
-		# if they set it explicitly, then just return it.
-		return $self->{fromExpr};	
-	}
-	
-	return "";
-}
-
-
-## WHERE ##
-
-# set directly
-sub setWhereExpr {
-	my DBTransactionManager $self = shift;
-	if (my $input = shift) {
-		$self->{whereExpr} = $input;
-	}
-}
-
-# returns the separator
-sub whereSeparator() {
-	my DBTransactionManager $self = shift;
-	return $self->{whereSeparator};	
-}
-
-# set which separator to use
-sub setWhereSeparator($) {
-	my DBTransactionManager $self = shift;
-	my $newSep = shift;
-	
-	if (($newSep =~ /and/i) || ($newSep =~ /or/i )) {	
-		$self->{whereSeparator} = $newSep;
-	} else {  print "illegal separator"; }
-}
-
-
-# adds an item to the where clause.
-# does not allow addition of empty items
-sub addWhereItem($) {
-	my DBTransactionManager $self = shift;
-	my $item = shift;
-
-	if (($item) && ($item ne " ")) {
-		push(@{$self->{whereItems}}, $item);
-	}
-}
-
-# clears the list of where items
-sub clearWhereItems {
-	my DBTransactionManager $self = shift;
-	$self->{whereItems} = ();
-}
-
-# returns a list of all the items.
-sub whereItems {
-	my DBTransactionManager $self = shift;
-	if ($self->{whereItems}) {
-		return @{$self->{whereItems}};
-	} else  {
-		return ();
-	}
-}
-
-
-# forms the where expression with the user defined 
-# separator (and, or, etc..) and returns it.
-# Note, if the user has explicitly set the whereExpr with the setWhereExpr() method,
-# then this value will OVERRIDE anything set by using addWhereItem().
-sub whereExpr {
-	my DBTransactionManager $self = shift;
-
-	if ($self->{whereExpr}) {
-		# if they set it explicitly, then just return it.
-		return $self->{whereExpr};	
-	}
-	
-	# if we get to here, then they *didn't* set it explicitly, so we have to build it.
-	my @itemsList = $self->whereItems();
-		
-	my $expr = join(" " . $self->whereSeparator() . " ", @itemsList);	
-	
-	return $expr;
-}
-
-# set directly
-sub setGroupByExpr {
-	my DBTransactionManager $self = shift;
-	if (my $input = shift) {
-		$self->{groupByExpr} = $input;
-	}
-}
-
-sub groupByExpr {
-	my DBTransactionManager $self = shift;
-	if ($self->{groupByExpr}) {
-		# if they set it explicitly, then just return it.
-		return $self->{groupByExpr};
-	}
-	
-	return "";
-}
-
-# set directly
-sub setHavingExpr {
-	my DBTransactionManager $self = shift;
-	if (my $input = shift) {
-		$self->{havingExpr} = $input;
-	}
-}
-
-sub havingExpr {
-	my DBTransactionManager $self = shift;
-	if ($self->{havingExpr}) {
-		# if they set it explicitly, then just return it.
-		return $self->{havingExpr};	
-	}
-	
-	return "";	
-}
-
-# set directly
-sub setOrderByExpr {
-	my DBTransactionManager $self = shift;
-	if (my $input = shift) {
-		$self->{orderByExpr} = $input;
-	}
-}
-
-sub orderByExpr {
-	my DBTransactionManager $self = shift;
-	if ($self->{orderByExpr}) {
-		# if they set it explicitly, then just return it.
-		return $self->{orderByExpr};	
-	}
-	
-	return "";
-}
-
-# set directly
-sub setLimitExpr {
-	my DBTransactionManager $self = shift;
-	if (my $input = shift) {
-		$self->{limitExpr} = $input;
-	}
-}
-
-sub limitExpr {
-	my DBTransactionManager $self = shift;
-	if ($self->{limitExpr}) {
-		# if they set it explicitly, then just return it.
-		return $self->{limitExpr};	
-	}
-	
-	return "";	
-}
-
-
-# return the *entire* SQL statement.  Note, this won't work if something crucial such as
-# selectExpr is left blank.  Well, it will work, but the result won't be a well formed query.
-sub SQLExpr {
-	my DBTransactionManager $self = shift;
-	
-	my $expr = "";
-	if ($self->{SQLExpr}) {
-		# then the user set the SQL expression directly (not recommended)
-		return ($self->{SQLExpr});
-	}
-	
-	# otherwise, if the user didn't set the expresion explicitly,
-	# then form it from the components.
-
-	$expr .= " SELECT " .	$self->selectExpr()		if $self->selectExpr();
-	$expr .= " FROM "  .	$self->fromExpr()		if $self->fromExpr();
-	$expr .= " WHERE " .	$self->whereExpr()		if $self->whereExpr();
-	$expr .= " GROUP BY " .	$self->groupByExpr()	if $self->groupByExpr();
-	$expr .= " HAVING " .	$self->havingExpr()		if $self->havingExpr();
-	$expr .= " ORDER BY " .	$self->orderByExpr()	if $self->orderByExpr();
-	$expr .= " LIMIT " .	$self->limitExpr()		if $self->limitExpr();
-	
-	return $expr;
-}
-
-
-
-##################################################################################
-# Portions which actually talk to the MySQL database
-##################################################################################
-
-
-# for internal use only!
-# connects to MySQL database if needed (ie, if we weren't already connected)
-# returns handle to the database
-sub dbConnect {
-	my DBTransactionManager $self = shift;
-	
-	my $dbh = $self->{dbh};
-	
+    
 	if (! $dbh) {
 		# connect if needed
 		$dbh = DBConnection::connect();
-		$self->{dbh} = $dbh;
-	}
+		$self->{'dbh'} = $dbh;
+    } else {
+        $self->{'dbh'} = $dbh;
+    }
 	
-	return $dbh;	
+	return $self;
 }
 
 
@@ -376,64 +56,15 @@ sub dbConnect {
 # note, this may be empty if you have not prepared anything yet.
 sub sth {
 	my DBTransactionManager $self = shift;
-	return $self->{sth};
+	return $self->{'sth'};
 }
 
 # returns the DBI Database Handle
 # for those cases when it's simpler to directly use the database handle
 sub dbh {
 	my DBTransactionManager $self = shift;
-	
-	return $self->dbConnect();
+	return $self->{'dbh'};
 }
-
-# executes the SQL
-# can use this with or without permissions
-#
-# only used for method which fetch one row at a time.
-# methods which fetch all rows don't need this.
-sub executeSQL {
-	my DBTransactionManager $self = shift;
-
-	my $dbh = $self->{dbh};
-	my ($sql, $sth);
-
-	# if the user had already run a query, then $sth will
-	# exist, so we should call finish() on it to clean up.
-	$sth = $self->{sth};
-	if ($sth) { $sth->finish(); }
-
-	$sql = $self->SQLExpr();
-			
-	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-	
-	# save the sth for later use in fetching rows.
-	$self->{sth} = $sth;
-}
-
-# Clean up after finishing with a query.
-# should be called when the user is done accessing result sets from a query.
-#
-# Only necessary for methods which fetch one result row at a time.
-# Method which fetch them all at once don't need to worry about this.
-sub finishSQL {
-	my DBTransactionManager $self = shift;
-
-	my $sth = $self->{sth};
-	if ($sth) {
-		$sth->finish;
-		$self->{sth} = undef;
-	}
-}
-
-
-
-
-#####################################################################
-# Inserts, updates, etc.
-#####################################################################
-
 
 # for internal use only
 # Pass it a table name, and it returns a reference to an array of array refs, one per col.
@@ -446,7 +77,6 @@ sub getTableDesc {
 	my $ref = ($self->{dbh})->selectall_arrayref($sql);
 	return $ref;
 }
-
 
 # allowable for external use.
 #
@@ -504,9 +134,6 @@ sub isValidTableName {
 	
 	return $success;
 }
-
-
-
 
 
 # rjp, 2/2004.
@@ -663,8 +290,8 @@ sub updateRecord {
     # People doing updates can only update previously empty fields, unless they own the record
     my $updateEmptyOnly = ($s->isSuperUser() || 
                            (exists $table_row->{'authorizer_no'} && $s->get('authorizer_no') == $table_row->{'authorizer_no'}) ||
-                           (exists $table_row->{'authorizer'} && $s->get('authorizer') == $table_row->{'authorizer'})) ? 0 : 1;
-
+                           (exists $table_row->{'authorizer'} && $s->get('authorizer') == $table_row->{'authorizer'}) || 
+                           (!exists $table_row->{'authorizer'} && !exists $table_row->{'authorizer_no'}) ) ? 0 : 1;
 
     # get the column info from the table
     my $sth = $dbh->column_info(undef,'pbdb',$tableName,'%');
@@ -684,7 +311,7 @@ sub updateRecord {
         } elsif ($field eq 'modifier') {
             push @updateTerms, "modifier=".$dbh->quote($s->get('enterer'));
         } else {
-            my $fieldIsEmpty = ($table_row->{$field} == 0 || $table_row->{$field} eq '' || !defined $table_row->{$field});
+            my $fieldIsEmpty = ($table_row->{$field} == 0 || $table_row->{$field} eq '' || !defined $table_row->{$field}) ? 1 : 0;
             if (exists($data->{$field})) {
                 if (($updateEmptyOnly && $fieldIsEmpty) || !$updateEmptyOnly) {
                     # Multi-valued keys (i.e. checkboxes with the same name) passed from the CGI ($q) object have their values
@@ -723,23 +350,16 @@ sub updateRecord {
 
 
 ###
-## The following methods are from the old DBTransactionManager class which was
-## merged with the SQLBuilder class on 3/30/2004.
+## The following methods are from the old DBTransactionManager class 
 ###
 
-
-
-## get_data
-# from the old DBTransactionManager class...
-#
+## getData
 #	description:	Handles basic SQL syntax checking, 
-#					it executes the statement, and it
-#					returns data that successfully makes it past the 
-#					Permissions module.
+#					it executes the statement, and returns arrayref of hashrefs
 #
 #	parameters:		$sql			The SQL statement to be executed
 #					$type			"read", "write", "both", "neither"
-#					$attr_hash-ref	reference to a hash whose keys are set by
+#					$attr_hash_ref	reference to a hash whose keys are set by
 #					the user according to which attributes are desired for this
 #					table, e.g. "NAME" (required!), "mysql_is_num", "NULLABLE",
 #					etc. Upon calling this method, the values will be set as
