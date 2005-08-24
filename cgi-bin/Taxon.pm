@@ -18,10 +18,7 @@ package Taxon;
 
 use strict;
 
-use Constants;
-
 use DBI;
-use DBConnection;
 use DBTransactionManager;
 use Errors;
 use Data::Dumper;
@@ -384,6 +381,10 @@ sub displayAuthorityForm {
 		}
 	}
 
+    # Build extant popup
+    my @extant_values = ('','YES','NO');
+    $fields{'extant_popup'} = $hbo->buildSelect('extant',\@extant_values,\@extant_values,$fields{'extant'});
+    
 	# if the authorizer of this record doesn't match the current
 	# authorizer, and if this is an edit (not a first entry),
 	# then only let them edit empty fields.  However, if they're superuser
