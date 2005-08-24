@@ -8,7 +8,7 @@ use URI::Escape;
 use Data::Dumper; 
 use GD;
 
-$IMAGE_DIR = $ENV{'BRIDGE_HTML_DIR'} . "/public/confidence";
+my $IMAGE_DIR = $ENV{'BRIDGE_HTML_DIR'}."/public/confidence";
 
 my $AILEFT = 100;
 my $AITOP = 450;   
@@ -96,24 +96,17 @@ sub displaySearchSectionResults{
     $limit = $limit*2; # two columns
     my $rowOffset = $q->param('rowOffset') || 0;
 
-    # limit passed to permissions module
-    my $perm_limit = 100000;
-
-    my $ofRows = 0;
-    my $method = "getReadRows";         # Default is readable rows
-    my $p = Permissions->new( $s );
-
     # Build the SQL
-    # which function to use depends on whether the user is adding a collection
-    $q->param('sortby'=>'section_name');
-    #if ($q->param('localsection') eq '') { $q->param('localsection'=>'NOT_NULL_OR_EMPTY'); }
-    my $sql = main::processCollectionsSearch();
-    my $sth = $dbt->dbh->prepare($sql);
-    $sth->execute();    # run the query
 
-    # Get rows okayed by permissions module
-    my @dataRows;
-    $p->getReadRows( $sth, \@dataRows, $perm_limit, \$ofRows );
+    my $fields = ['max_interval_no','min_interval_no','state','country','localbed','localsection','localbedunit','regionalbed','regionalsection','regionalbedunit'];
+    my %options = $q->Vars();
+    $options{'permission_type'} = 'read';
+    $options{'limit'} = 10000000;
+    $options{'most_recent'} = 1;
+    $options{'calling_script'} = 'Confidence';
+    ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
+    @dataRows = sort {$a->{regionalsection} cmp $b->{regionalsection} ||
+                      $a->{localsection} cmp $b->{localsection}} @$dataRows;
 
     # get the enterer's preferences (needed to determine the number
     # of displayed blanks) JA 1.8.02
@@ -373,24 +366,42 @@ sub buildList    {
     while(($taxon_name,$no_or_name)=each(%splist_base)) {
         my $found = 0;
         if ($no_or_name =~ /^\d+$/) {
-            my @children = PBDBUtil::taxonomic_search($dbt,$no_or_name);
+#            my @children = PBDBUtil::taxonomic_search($dbt,$no_or_name);
             # Found the taxon in the authorities table, get its children
-#            my @children = PBDBUtil::getChildren($dbt,$taxon_no);
+            my $children = PBDBUtil::getChildren($dbt,$no_or_name,30);
 
-            # Get alternate spellings
-#            my $sql = "SELECT DISTINCT taxon_no, taxon_name, taxon_rank FROM opinions, authorities ".
-#                      "WHERE opinions.child_spelling_no=authorities.taxon_no ".
-#                      "AND status IN  ('rank changed as','recombined as','corrected as') ".
-#                      "AND child_no=$taxon_no ".
-#                      "AND child_spelling_no!=$taxon_no".
-#                      "ORDER BY taxon_name";
-#            my $spellings= $dbt->getData($sql);
+            # The getChildren function returns recombinations/synonyms for children, but not for the
+            # taxon itself, so we manually add it onto the array ourselves here. messy.
+            my $sql = "SELECT DISTINCT child_spelling_no FROM opinions ".
+                      " WHERE child_no=$no_or_name".
+                      " AND child_spelling_no!=$no_or_name";
+            my $spellings= $dbt->getData($sql);
+            my $thistaxon;
+            $thistaxon->{taxon_no} = $no_or_name; 
+            push @{$thistaxon->{spellings}}, {'taxon_no'=>$_->{child_spelling_no}} for (@$spellings);
+            my $orig_taxon_no = TaxonInfo::getOriginalCombination($dbt,$no_or_name);
+            my $senior_taxon_no = TaxonInfo::getSeniorSynonym($dbt,$orig_taxon_no);
+            my $correct_name = TaxonInfo::getMostRecentParentOpinion($dbt,$orig_taxon_no,1);
+            $thistaxon->{taxon_name} = $correct_name->{child_name};
+            my @synonyms = TaxonInfo::getJuniorSynonyms($dbt,$senior_taxon_no);
+            push @{$thistaxon->{synonyms}}, {'taxon_no'=>$_} for (@synonyms);
+            unshift @$children, $thistaxon;
+            
 
-            foreach $taxon_no (@children) {
+            foreach $child (@$children) {
                 # Make sure its in the occurrences table first
-                $sql = "SELECT taxon_name,genus_name,species_name FROM occurrences ".
-                       " LEFT JOIN authorities ON occurrences.taxon_no=authorities.taxon_no ".
-                       " WHERE occurrences.taxon_no IN ($taxon_no) LIMIT 1";
+                @taxon_nos = ($child->{taxon_no});
+                push @taxon_nos, $_->{taxon_no} for (@{$child->{spellings}});
+                push @taxon_nos, $_->{taxon_no} for (@{$child->{synonyms}});
+                
+                $sql = "(SELECT o.genus_name,o.species_name FROM occurrences o ".
+                       " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no".
+                       " WHERE o.taxon_no IN (".join(",",@taxon_nos).") AND re.reid_no IS NULL)".
+                       " UNION ".
+                       "(SELECT re.genus_name,re.species_name FROM occurrences o, reidentifications re ".
+                       " WHERE o.occurrence_no=re.occurrence_no".
+                       " AND re.taxon_no IN (".join(",",@taxon_nos)."))".
+                       " LIMIT 1";
                 @results = @{$dbt->getData($sql)};
                 if (scalar(@results) > 0) {
                     $found = 1;
@@ -400,23 +411,37 @@ sub buildList    {
                         #my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$taxon_no);
                         #$splist{$taxon->{'taxon_name'}} = $taxon_no;
                         #} else {
-                        $splist{$results[0]->{'genus_name'}.' '.$results[0]->{'species_name'}} = $taxon_no;
+                        if ($child->{taxon_name} =~ / /) {
+                            $splist{$child->{taxon_name}} .= ",".join(",",@taxon_nos);
+                        } else {
+                            $splist{$results[0]->{genus_name}." ".$results[0]->{species_name}} = ",".join(",",@taxon_nos);
+                        }
                         #}
                     # or clumped together under the same checkbox by having a comma separated list associated with that higher name
                     } else {
-                        $splist{$taxon_name} .= ",".$taxon_no;
+                        $splist{$taxon_name} .= ",".join(",",@taxon_nos);
                     }
                 } 
             }
-            if (exists $splist{$taxon_name}) {
-                $splist{$taxon_name} =~ s/^,//;
-            }
         } else {
-            $sql = "SELECT collection_no FROM occurrences WHERE genus_name=".$dbh->quote($no_or_name);
+            my $genus = $dbh->quote($taxon_name);
+            $sql = "(SELECT o.genus_name,o.species_name FROM occurrences o ".
+                   " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no".
+                   " WHERE o.genus_name=$genus AND re.reid_no IS NULL)".
+                   " UNION ".
+                   "(SELECT re.genus_name,re.species_name FROM occurrences o, reidentifications re ".
+                   " WHERE o.occurrence_no=re.occurrence_no".
+                   " AND re.genus_name=$genus)";
             main::dbg("genus sql: $sql");
-            $found = scalar(@{$dbt->getData($sql)});
-            if ($found) {
-                $splist{$q->param('input')} = $q->param('input');
+            my @results = @{$dbt->getData($sql)};
+            if (@results) {
+                if ($q->param('split_taxon') eq 'yes') {
+                    foreach my $row (@results) {
+                        $splist{"$row->{genus_name} $row->{species_name}"} = "$row->{genus_name} $row->{species_name}";
+                    }
+                } else {
+                    $splist{$taxon_name} = $taxon_name;
+                }
             }
         }    
 
@@ -427,6 +452,9 @@ sub buildList    {
         #          "</th></tr></table></CENTER><BR><BR>";
         #} 
     } 
+    foreach (values %splist) {
+        s/^,// 
+    }
 
     # Now print out the list generated above so the user can select potential species to exclude
     # if they selected 'analyze taxa separately'. Otherwise skip to the options form
@@ -475,12 +503,24 @@ sub displayStratTaxa{
     my %splist;
     my $section_name = $q->param("input");
     my $section_type = ($q->param("input_type") eq 'regional') ? 'regional' : 'local';
-    my $sql = "SELECT occurrence_no, occurrences.taxon_no, genus_name, species_name, taxon_name, taxon_rank".
-              " FROM collections, occurrences ".
-              " LEFT JOIN authorities ON occurrences.taxon_no=authorities.taxon_no".
-              " WHERE occurrences.collection_no=collections.collection_no ".
-              " AND ${section_type}section = " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^[0-9.]+\$'".
-              " GROUP BY taxon_no,genus_name,species_name ";
+
+    # This will get all the genera in a particular regional/localsection, automatically
+    # getting the most recent reids of a an occurrence as well.
+    my $sql = "(SELECT o.occurrence_no, o.taxon_no, o.genus_name, o.species_name".
+              " FROM collections c, occurrences o".
+              " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no".
+              " WHERE o.collection_no=c.collection_no ".
+              " AND re.reid_no IS NULL".
+              " AND ${section_type}section LIKE " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^[0-9.]+\$'".
+              " GROUP BY o.taxon_no,o.genus_name,o.species_name)".
+              " UNION ".
+              "(SELECT o.occurrence_no, re.taxon_no, re.genus_name, re.species_name".
+              " FROM collections c, occurrences o, reidentifications re ".
+              " WHERE o.collection_no=c.collection_no ".
+              " AND o.occurrence_no=re.occurrence_no".
+              " AND re.most_recent='YES'".
+              " AND ${section_type}section LIKE " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^[0-9.]+\$'".
+              " GROUP BY re.taxon_no,re.genus_name,re.species_name)";
     main::dbg($sql);
     my @strat_taxa_list= @{$dbt->getData($sql)};
     my %taxonList;
@@ -489,10 +529,25 @@ sub displayStratTaxa{
     # taxon_no, use the genus+species name
     foreach my $row (@strat_taxa_list) {
         if ($row->{'taxon_no'}) {
+            my $orig_taxon_no = TaxonInfo::getOriginalCombination($dbt,$row->{'taxon_no'});
+            $taxon_no = TaxonInfo::getSeniorSynonym($dbt,$orig_taxon_no);
+            # This actually gets the most correct name
+            my $correct_row = TaxonInfo::getMostRecentParentOpinion($dbt,$taxon_no,1); 
+            $name = $row->{'genus_name'} . ' ' . $row->{'species_name'};
+#use Data::Dumper; print Dumper($correct_row)."<BR>";
+            if ($correct_row->{child_name} =~ / / && $correct_row->{child_name} ne $name) {
+#                print "USING corrected name $correct_row->{child_name} for $name<BR>";
+                $name = $correct_row->{'child_name'};
+            } elsif ($row->{'species_name'} =~ /sp\.|indet\./) {
+                $name = $correct_row->{'child_name'} . " " . $row->{'species_name'};
+            }
+
+            
             if ($q->param('taxon_resolution') eq 'genus') {
-                $splist{$row->{'genus_name'}} .= $row->{'taxon_no'}.",";
+                ($genus) = split(/\s+/,$name);
+                $splist{$genus} .= $row->{'taxon_no'}.",";
             } else { #species resolution
-                $splist{$row->{'genus_name'}.' '.$row->{'species_name'}} .= $row->{'taxon_no'}.",";
+                $splist{$name} .= $row->{'taxon_no'}.",";
             }
         } else {
             if ($q->param('taxon_resolution') eq 'genus') {
@@ -707,9 +762,9 @@ sub calculateTaxaInterval {
 #        }
 
     # Get all the necessary stuff to create a scale
-    my $sql = "SELECT correlations.interval_no, interval_name, eml_interval,next_interval_no, lower_boundary FROM correlations,intervals ".
-              " WHERE correlations.interval_no=intervals.interval_no" 
-              . " AND scale_no = " . $scale;
+    my $sql = "SELECT c.interval_no, interval_name, eml_interval,next_interval_no, lower_boundary FROM correlations c,intervals i".
+              " WHERE c.interval_no=i.interval_no" 
+              . " AND c.scale_no = " . $scale;
     my @results = @{$dbt->getData($sql)};
     my $last_lower_boundary=0;
     foreach my $row (@results) {
@@ -762,19 +817,40 @@ sub calculateTaxaInterval {
         my @taxon_list = split(",",$taxon_list);
         # We have a list of one of more numbers and we know $taxon_name exists in the authorities table
         if ($taxon_list[0] =~ /^\d+$/) {
-            $sql = "SELECT collection_no FROM occurrences WHERE taxon_no IN (".join(",",map {$dbh->quote($_)} @taxon_list).")";
+            my $taxon_sql = join(",",map {$dbh->quote($_)} @taxon_list);
+            $sql = "(SELECT o.collection_no FROM occurrences o ".
+                   " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no".
+                   " WHERE o.taxon_no IN ($taxon_sql) AND re.reid_no IS NULL)".
+                   " UNION ".  
+                   "(SELECT o.collection_no FROM occurrences o, reidentifications re".
+                   " WHERE o.occurrence_no=re.occurrence_no AND re.most_recent='YES'".
+                   " AND re.taxon_no IN ($taxon_sql))";
             my $taxon_name_link = $taxon_name;
             $taxon_name_link =~ s/\s*(indet(\.)*|sp\.)//;
             $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name_link";
         } else {
         # No taxon_no for it, match against occurrences table
             my @taxon = split(/\s+/,$taxon_list[0]);
-            if (scalar(@taxon) == 2)        {
-                $sql = "SELECT collection_no FROM occurrences WHERE genus_name=" . $dbh->quote($taxon[0]);
-                $sql .= " AND species_name=" . $dbh->quote($taxon[1]);
+            if (scalar(@taxon) == 2) {
+                my $genus = $dbh->quote($taxon[0]);
+                my $species = $dbh->quote($taxon[1]);
+                $sql = "(SELECT o.collection_no FROM occurrences o ".
+                       " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no".
+                       " WHERE o.genus_name=$genus AND o.species_name=$species AND re.reid_no IS NULL)".
+                       " UNION ".  
+                       "(SELECT o.collection_no FROM occurrences o, reidentifications re".
+                       " WHERE o.occurrence_no=re.occurrence_no AND re.most_recent='YES'".
+                       " AND re.genus_name=$genus AND re.species_name=$species)";
                 $taxon_rank = 'Genus and species';
             } elsif (scalar(@taxon) ==1) {
-                $sql = "SELECT collection_no FROM occurrences WHERE genus_name=" . $dbh->quote($taxon[0]);
+                my $genus = $dbh->quote($taxon[0]);
+                $sql = "(SELECT o.collection_no FROM occurrences o ".
+                       " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no".
+                       " WHERE o.genus_name=$genus AND AND re.reid_no IS NULL)".
+                       " UNION ".  
+                       "(SELECT o.collection_no FROM occurrences o, reidentifications re".
+                       " WHERE o.occurrence_no=re.occurrence_no AND re.most_recent='YES'".
+                       " AND re.genus_name=$genus)";
             } 
             $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name";
         }
@@ -1433,67 +1509,60 @@ sub calculateStratInterval	{
     my $conftype = $q->param("conftype");
     my $stratres = $q->param("stratres");
 
-    my ($taxon_nos_string,$genus_species_sql);
     for(my $i=0;$q->param("speciesname$i");$i++) {
+        my $taxon_name = $q->param("keepspecies$i");
         my @taxon_nos = split(",",$q->param("speciesname$i"));
-        foreach $taxon_no_or_name (@taxon_nos) {
-            if ($taxon_no_or_name =~ /^\d+$/) {
-                $taxon_nos_string .= $taxon_no_or_name . ",";
-            } else {
-                my ($genus,$species) = split(/ /,$taxon_no_or_name);
-                if ($genus) {
-                    $genus_species_sql .= " OR (occurrences.genus_name=".$dbh->quote($genus);
-                    if ($species) {
-                        $genus_species_sql .= "AND occurrences.species_name=".$dbh->quote($species);
-                    }
-                    $genus_species_sql .= ")";
+        if ($taxon_nos[0] =~ /^\d+$/) {
+            $taxon_sql = $q->param("speciesname$i"); 
+            $occ_sql = "o.taxon_no IN ($taxon_sql)";
+            $reid_sql = "re.taxon_no IN ($taxon_sql)";
+        } else {
+            my ($genus,$species) = split(/ /,$taxon_nos[0]);
+            if ($genus) {
+                $occ_sql .= " o.genus_name=".$dbh->quote($genus);
+                $reid_sql .= " o.genus_name=".$dbh->quote($genus);
+                if ($species) {
+                    $occ_sql .= "AND o.species_name=".$dbh->quote($species);
+                    $reid_sql .= "AND o.species_name=".$dbh->quote($species);
                 }
             }
         }
-    }
-    $taxon_nos_string =~ s/,$//;
-    $genus_species_sql =~ s/^ OR//;
 
-    my $sql = "SELECT ${section_type}bed, ${section_type}order, occurrences.collection_no, genus_name, species_name, taxon_name, taxon_rank FROM collections, occurrences". 
-              " LEFT JOIN authorities ON occurrences.taxon_no=authorities.taxon_no".
-              " WHERE collections.collection_no=occurrences.collection_no".
-              " AND ${section_type}section=".$dbh->quote($section_name).
-              " AND ${section_type}bed REGEXP '^[0-9.]+\$'";
-    if ($taxon_nos_string && $genus_species_sql) {
-        # Doing this as a union is much faster since it uses the indexes properly.  Otherwise doesn't know which index to use
-        $sql = "($sql AND occurrences.taxon_no IN ($taxon_nos_string)) UNION ($sql AND ($genus_species_sql))";
-    } elsif ($taxon_nos_string) {
-        $sql = "$sql AND occurrences.taxon_no IN ($taxon_nos_string)";
-    } elsif ($genus_species_sql) {
-        $sql = "$sql AND ($genus_species_sql)";
-    } else {
-        return;
-    }
-    main::dbg("sql to get beds from species list: $sql");
-    my @beds_and_colls = @{$dbt->getData($sql)};
-    foreach my $row (@beds_and_colls) {
-        my $genus_species;
-        if ($q->param('taxon_resolution') eq 'genus') {
-            $genus_species = $row->{'genus_name'};
-        } else {
-            $genus_species = join ' ',$row->{'genus_name'},$row->{'species_name'};
-        }
-        $sectionbed{$row->{'collection_no'}}=$row->{$section_type.'bed'};
-        push @{$mainHash{$genus_species}}, $row->{$section_type.'bed'};
-        if ($row->{'taxon_name'}) {
-            $taxon_rank='Higher taxon';
-            $taxon_rank='species' if ($row->{'taxon_rank'} eq 'species');
-            $taxon_rank='Genus' if ($row->{'taxon_rank'} eq 'genus');
+        my $sql = "(SELECT ${section_type}bed, ${section_type}order, o.collection_no, o.genus_name, o.species_name, o.taxon_no FROM collections c, occurrences o". 
+                  " LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no ".
+                  " WHERE c.collection_no=o.collection_no".
+                  " AND $occ_sql".
+                  " AND re.reid_no IS NULL".
+                  " AND ${section_type}section=".$dbh->quote($section_name).
+                  " AND ${section_type}bed REGEXP '^[0-9.]+\$')".
+                  " UNION ".
+                  "(SELECT ${section_type}bed, ${section_type}order, o.collection_no, o.genus_name, o.species_name, re.taxon_no FROM collections c, occurrences o, reidentifications re". 
+                  " WHERE c.collection_no=o.collection_no".
+                  " AND re.occurrence_no=o.occurrence_no".
+                  " AND re.most_recent = 'YES'".
+                  " AND $reid_sql".
+                  " AND ${section_type}section=".$dbh->quote($section_name).
+                  " AND ${section_type}bed REGEXP '^[0-9.]+\$')";
 
-            $links{$genus_species} = "bridge.pl?action=checkTaxonInfo&taxon_name=$row->{taxon_name}&taxon_rank=$taxon_rank";
-        } else {
-            if ($q->param('taxon_resolution') eq 'genus' ||
-                !$row->{'species_name'}) {
-                $taxon_rank = 'Genus';
+        main::dbg("sql to get beds from species list: $sql");
+        my @beds_and_colls = @{$dbt->getData($sql)};
+        foreach my $row (@beds_and_colls) {
+            $sectionbed{$row->{'collection_no'}}=$row->{$section_type.'bed'};
+            push @{$mainHash{$taxon_name}}, $row->{$section_type.'bed'};
+            if ($row->{'taxon_no'}) {
+                if ($q->param('taxon_resolution') eq 'genus') {
+                    $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name&taxon_rank='Genus'";
+                } else {
+                    $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_no=$row->{taxon_no}";
+                }
             } else {
-                $taxon_rank = 'Genus and species';
+                if ($q->param('taxon_resolution') eq 'genus') {
+                    $taxon_rank = 'Genus';
+                } else {
+                    $taxon_rank = 'Genus and species';
+                }
+                $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name&taxon_rank=$taxon_rank";
             }
-            $links{$genus_species} = "bridge.pl?action=checkTaxonInfo&taxon_name=$row->{taxon_name}&taxon_rank=$taxon_rank";
         }
     }
 
@@ -1653,13 +1722,15 @@ sub calculateStratInterval	{
                     $gd->arc($marker+3,int($fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit)),5,5,0,360,$gdGlyphColor);
                     aiArc($marker+3,int($fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit)),5,5,0,360,$aiGlyphColor);
                 } elsif ($q->param('glyph_type') eq 'squares') {
-                    $gd->filledRectangle($marker+1,$fig_length-20-(($bed-$lower_lim)*5),$marker+4,$fig_length-20-(($bed-1-$lower_lim)*5),$gdGlyphColor);
-                    aiFilledRectangle($marker,$fig_length-20-(($bed-$lower_lim)*$horizon_unit),$marker+5,$fig_length-20-(($bed-1-$lower_lim)*$horizon_unit),$aiGlyphColor);
+                    $ymid = $fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit);
+                    $gd->filledRectangle($marker+1,$ymid-2,$marker+5,$ymid+3,$gdGlyphColor);
+                    aiFilledRectangle($marker,$ymid-2,$marker+5,$ymid+3,$aiGlyphColor);
                 } elsif ($q->param('glyph_type') eq 'hollow squares') {
-                    $gd->rectangle($marker+1,$fig_length-20-(($bed-$lower_lim)*5),$marker+4,$fig_length-20-(($bed-1-$lower_lim)*5),$gdGlyphColor);
-                    aiRectangle($marker,$fig_length-20-(($bed-$lower_lim)*$horizon_unit),$marker+5,$fig_length-20-(($bed-1-$lower_lim)*$horizon_unit),$aiGlyphColor);
+                    $ymid = $fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit);
+                    $gd->rectangle($marker+1,$ymid-2,$marker+5,$ymid+3,$gdGlyphColor);
+                    aiRectangle($marker,$ymid-2,$marker+5,$ymid+3,$aiGlyphColor);
                 } else {
-                    $gd->filledRectangle($marker+1,$fig_length-20-(($bed-$lower_lim)*$horizon_unit),$marker+4,$fig_length-20-(($bed-1-$lower_lim)*$horizon_unit),$gdGlyphColor);
+                    $gd->filledRectangle($marker+1,$fig_length-20-(($bed-$lower_lim)*$horizon_unit),$marker+5,$fig_length-20-(($bed-1-$lower_lim)*$horizon_unit),$gdGlyphColor);
                     aiFilledRectangle($marker,$fig_length-20-(($bed-$lower_lim)*$horizon_unit),$marker+5,$fig_length-20-(($bed-1-$lower_lim)*$horizon_unit),$aiGlyphColor);
                 }  
 
