@@ -3416,8 +3416,8 @@ sub getReidHTMLTableByOccNum {
             $classification{$taxon->{'taxon_rank'}} = $taxon;
         }
         # If its a higher order name and indet, like "Omomyidae indet." get the higher order name as well
-        if ($rowref->{'taxon_no'}) {
-            my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$rowref->{'taxon_no'});
+        if ($row[9]) {
+            my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$row[9]);
             if ($taxon->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
                 $classification{$taxon->{'taxon_rank'}} = $taxon;
             }
