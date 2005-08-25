@@ -1356,6 +1356,7 @@ sub doQuery {
                        'o.reference_no occ_reference_no', 
                        'o.genus_reso occ_genus_reso', 
                        'o.genus_name occ_genus_name',
+                       'o.species_name occ_species_name',
 				       'o.taxon_no occ_taxon_no',
 				       'o.abund_value occ_abund_value',
 				       'o.abund_unit occ_abund_unit',
@@ -1363,6 +1364,7 @@ sub doQuery {
 				       're.reference_no reid_reference_no',
 				       're.genus_reso reid_genus_reso',
 				       're.genus_name reid_genus_name',
+				       're.species_name reid_species_name',
 				       're.taxon_no reid_taxon_no';
             my ($whereref,$occswhereref,$reidswhereref) = $self->getOccurrencesWhereClause;
             push @where, @$whereref;
@@ -2119,7 +2121,6 @@ sub doQuery {
             if ($q->param("occurrences_class_name") eq "YES" || 
                 $q->param("occurrences_order_name") eq "YES" ||
                 $q->param("occurrences_family_name") eq "YES") {
-                # -1 at the end is essential so trailing whitespace shows up in the array
                 my @parents = @{$master_class{$row->{'occ_taxon_no'}}};
                 my ($class, $order, $family) = ("","","");
                 foreach my $parent (@parents) {
@@ -2132,6 +2133,18 @@ sub doQuery {
                         last;
                     }
                 }
+                # Get higher order names for indets as well
+                if ($row->{'occ_species_name'} =~ /indet/ && $row->{'occ_taxon_no'}) {
+                    my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$row->{'occ_taxon_no'});
+                    if ($taxon->{'taxon_rank'} eq 'family') {
+                        $family = $taxon->{'taxon_name'}; 
+                    } elsif ($taxon->{'taxon_rank'} eq 'order') {
+                        $order = $taxon->{'taxon_name'};
+                    } elsif ($taxon->{'taxon_rank'} eq 'class') {
+                        $class = $taxon->{'taxon_name'};
+                    }
+                }
+                
                 push @final_row, $class  if ($q->param("occurrences_class_name") eq "YES");
                 push @final_row, $order  if ($q->param("occurrences_order_name") eq "YES");
                 push @final_row, $family if ($q->param("occurrences_family_name") eq "YES");
