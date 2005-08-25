@@ -3052,43 +3052,55 @@ sub buildTaxonomicList {
 	#  renegade and wrote the entirely redundant HTMLFormattedTaxonomicList;
 	#  the correct way to do it was to pass in $rowref->{occurrence_no} and
 	#  isReidNo = 0 instead of $mostRecentReID and isReidNo = 1
-				
-				$output .= getReidHTMLTableByOccNum($rowref->{occurrence_no}, 0, \@class_values);
+		
+                %classification = ();
+				$output .= getReidHTMLTableByOccNum($rowref->{occurrence_no}, 0, \%classification);
 				
 				#Debug::dbPrint("mostRecentReID = $mostRecentReID");
 
-				$grand_master_hash{class_no} = ($class_values[0] or 1000000);
-				$grand_master_hash{order_no} = ($class_values[1] or 1000000);
-				$grand_master_hash{family_no} = ($class_values[2] or 1000000);
+				$grand_master_hash{'class_no'} = ($classification{'class'}{'taxon_no'} or 1000000);
+				$grand_master_hash{'order_no'} = ($classification{'order'}{'taxon_no'} or 1000000);
+				$grand_master_hash{'family_no'} = ($classification{'family'}{'taxon_no'} or 1000000);
 			}
 		# otherwise this occurrence has never been reidentified
 			else {
 				
 		# get the classification (by PM): changed 2.4.04 by JA to
 		#  use the occurrence number instead of the taxon name
-				$classification = Classification::get_classification_hash($dbt,'class,order,family',[$rowref->{taxon_no}]);
+				$class_hash = Classification::get_classification_hash($dbt,'class,order,family',[$rowref->{'taxon_no'}],'array');
                 # Index 0 is class, 1 is order, 2 is family. add -1 to split to keep empty trailing fields
-                @class_values = split(/,/,$classification->{$rowref->{taxon_no}},-1);
-
+                @class_array = @{$class_hash->{$rowref->{'taxon_no'}}};
+                %classification = ();
+                foreach my $taxon (@class_array) {
+                    $classification{$taxon->{'taxon_rank'}} = $taxon;
+                }
+                # If its a higher order name and indet, like "Omomyidae indet." get the higher order name as well
+                if ($rowref->{'taxon_no'}) {
+                    my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$rowref->{'taxon_no'});
+                    if ($taxon->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
+                        $classification{$taxon->{'taxon_rank'}} = $taxon;
+                    }
+                }
+                
 				# for sorting, later
-				$grand_master_hash{class_no} = ($class_values[0] or 1000000);
-				$grand_master_hash{order_no} = ($class_values[1] or 1000000);
-				$grand_master_hash{family_no} = ($class_values[2] or 1000000);
+				$grand_master_hash{'class_no'} = ($classification{'class'}{'taxon_no'} or 1000000);
+				$grand_master_hash{'order_no'} = ($classification{'order'}{'taxon_no'} or 1000000);
+				$grand_master_hash{'family_no'} = ($classification{'family'}{'taxon_no'} or 1000000);
 
-				if ($class_values[0] || $class_values[1] || $class_values[2]) {
+				if (%classification) {
 					push(@occrow, "bogus");
 					push(@occFieldNames, 'higher_taxa');
-					push(@occrow, $class_values[0]);
+					push(@occrow, $classification{'class'}{'taxon_name'});
 					push(@occFieldNames, 'class');
-					push(@occrow, $class_values[1]);
+					push(@occrow, $classification{'order'}{'taxon_name'});
 					push(@occFieldNames, 'order');
-					push(@occrow, $class_values[2]);
+					push(@occrow, $classification{'family'}{'taxon_name'});
 					push(@occFieldNames, 'family');
 				}
 
 				$output = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
 
-				if ($class_values[0] || $class_values[1] || $class_values[2]) {
+				if (%classification) {
 					pop(@occrow);
 					pop(@occrow);
 					pop(@occrow);
@@ -3395,26 +3407,35 @@ sub getReidHTMLTableByOccNum {
 		# format the reference (PM)
 		# JA: -3 means fourth to last element in the array
 		$row[-3] = buildReference($row[-3],"list");
-		# JA: originally PM created a genus + species combo and
-		#  passed it to PBDBUtil, but now the function operates on
-		#  taxon ID numbers, so that's now sent instead
-		# 3rd arg becomes the 1st since the other 2 were shifted off already.
-		$classification = Classification::get_classification_hash($dbt,'class,order,family',[$row[9]]);
-        # index 0 is class, 1 is order, 2 is family. add -1 to split to keep empty fields
-        @class_values = split(/,/,$classification->{$row[9]},-1);
-        @{$_[0]} = @class_values;
+
+        my $class_hash = Classification::get_classification_hash($dbt,'class,order,family',[$row[9]],'array');
+        # Index 0 is class, 1 is order, 2 is family. add -1 to split to keep empty trailing fields
+        my @class_array = @{$class_hash->{$row[9]}};
+        my %classification = ();
+        foreach my $taxon (@class_array) {
+            $classification{$taxon->{'taxon_rank'}} = $taxon;
+        }
+        # If its a higher order name and indet, like "Omomyidae indet." get the higher order name as well
+        if ($rowref->{'taxon_no'}) {
+            my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$rowref->{'taxon_no'});
+            if ($taxon->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
+                $classification{$taxon->{'taxon_rank'}} = $taxon;
+            }
+        }
+        
+        %{$_[0]} = %classification;
 
 		# JA 2.4.04: changed this so it only works on the most
 		#  recently published reID
 		if ( $rowRef == $rows[$#rows] )	{
-		if($class_values[2] || $class_values[1] || $class_values[0]){
+		if(%classification) {
 			push(@row, "bogus");
 			push(@fieldNames, 'higher_taxa');
-			push(@row, $class_values[0]);
+			push(@row, $classification{'class'}{'taxon_name'});
 			push(@fieldNames, 'class');
-			push(@row, $class_values[1]);
+			push(@row, $classification{'order'}{'taxon_name'});
 			push(@fieldNames, 'order');
-			push(@row, $class_values[2]);
+			push(@row, $classification{'family'}{'taxon_name'});
 			push(@fieldNames, 'family');
 		}
 		}
@@ -3427,7 +3448,7 @@ sub getReidHTMLTableByOccNum {
 		$retVal .= $hbo->populateHTML("reid_taxa_display_row", \@row,\@fieldNames);
 
 		if ( $rowRef == $rows[$#rows] )	{
-		if($class_values[2] || $class_values[1] || $class_values[0]){
+		if(%classification) {
 			pop(@row);
 			pop(@row);
 			pop(@row);
