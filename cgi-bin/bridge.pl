@@ -275,6 +275,7 @@ sub processAction {
 	# the displayLogin routine because it turns off the cache control for some reason...(rjp)
 	unless ($action eq 'displayLogin' or $old_action eq 'processLogin') {
         print $q->header(-type => "text/html", 
+                         -Cache_Control=>'no-cache',
                          -expires =>"now" );
 	}
 	
