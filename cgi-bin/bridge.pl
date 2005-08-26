@@ -274,7 +274,8 @@ sub processAction {
 	# print out the HTML headers..  We have to do this differently for
 	# the displayLogin routine because it turns off the cache control for some reason...(rjp)
 	unless ($action eq 'displayLogin' or $old_action eq 'processLogin') {
-		print $q->header('text/html');
+        print $q->header(-type => "text/html", 
+                         -expires =>"now" );
 	}
 	
 	
