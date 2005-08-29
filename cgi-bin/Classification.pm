@@ -109,7 +109,7 @@ sub get_classification_hash{
         # Loop at least once, but as long as it takes to get full classification
         for(my $i=0;$child_no && !$found_parent;$i++) {
             #hasn't been necessary yet, but just in case
-            if ($i >= 30) { $msg = "Infinite loop for $child_no in get_classification_hash";carp $msg; last;} 
+            if ($i >= 100) { $msg = "Infinite loop for $child_no in get_classification_hash";carp $msg; last;} 
 
             # bail if we have a loop
             $visits{$child_no}++;
