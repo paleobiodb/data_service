@@ -177,7 +177,7 @@ sub displaySpecimenList {
         }
         print "</tr>";
     } else {
-        print "<tr><th colspan=3 align=\"center\">No measurements for this occurrence<br><br></td></tr>";
+        print "<tr><th colspan=7 align=\"center\">There are no measurements for this occurrence<br><br></td></tr>";
     }
 
     my $checked;
@@ -297,7 +297,7 @@ sub populateMeasurementForm {
                     my @is_type_array = @{$hbo->{'SELECT_LISTS'}{'specimen_is_type'}};
                     $table_rows .=  "<option>".$_."</option>" for @is_type_array;
                     $table_rows .=  "</select></td>";
-                    $table_rows .= "</tr>";
+                    $table_rows .= "</tr>\n";
                     $table_rows .= "<tr><td colspan=10 style=\"padding-bottom: .8em;\"><b><span class=\"smallTextHeader\">Comments</span>: </b><input type=\"text\" name=\"comments\" size=70 class=\"smallText\"></td>";
                     $table_rows .= "<td><input type=\"hidden\" name=\"specimens_measured\" value=\"1\"></td></tr>";
                 }
