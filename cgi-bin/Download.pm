@@ -1201,59 +1201,6 @@ sub getTimeLookup	{
 	}
 }
 
-# create a hash table relating taxon names to eco/taphonomic categories
-# PS 08/24/2005 - rewritten, combined with getAncestralEcology (no reason to separate them). Doesn't
-#  fetch the whole ecotaph table, correctly gets ecologies of suborders, genera, etc now.
-# JA 12.8.03
-# JA 4.4.04: note that keying of ecotaph is here by name and not number
-sub getEcology	{
-	my $self = shift;
-    my $taxon_nos = shift;
-    my $master_class = shift;
-
-    # This first section gets ecology data for all taxa and parent taxa
-    my %all_taxon_nos = (-1); # so we don't crash if there are no taxon nos
-    for my $taxon_no ( @$taxon_nos ) {
-        if ($taxon_no) {
-            $all_taxon_nos{$taxon_no} = 1;
-            foreach my $parent (@{$master_class->{$taxon_no}}) {
-                $all_taxon_nos{$parent->{'taxon_no'}} = 1;
-            }
-        }
-    }  
-
-	my $sql = "SELECT taxon_no,".join(",",@ecoFields)." FROM ecotaph WHERE taxon_no IN (".join(", ",keys %all_taxon_nos).")";
-    $self->dbg("Ecology sql: $sql");
-	my @results = @{$dbt->getData($sql)};
-    my %all_ecologies;
-    foreach my $row (@results) {
-        $all_ecologies{$row->{'taxon_no'}} = $row;
-    }  
-
-    # Now we want to crawl upwards in the higherarchy of each taxon, using the first category value
-    # we find then stopping. Example: if the taxon has a value for diet1, use that. If it doesn't, and family
-    # and order have values, use the family (lower rank'd) value
-    my %ecotaph;
-    for my $taxon_no (@$taxon_nos) {
-        for $field (@ecoFields) {
-            if ($all_ecologies{$taxon_no}{$field}) {
-                # First try the taxon itself
-                $ecotaph{$field.$taxon_no} = $all_ecologies{$taxon_no}{$field};
-            } else {
-                # Otherwise try to inherit someting from any parent, with preference to lower ranks
-                foreach my $parent (@{$master_class->{$taxon_no}}) {
-                    if ( !$ecotaph{$field.$taxon_no} && $all_ecologies{$parent->{'taxon_no'}}{$field}) {
-                        $ecotaph{$field.$taxon_no} = $all_ecologies{$parent->{'taxon_no'}}{$field};
-                    }
-                }
-            }
-        }
-    }       
-
-    return \%ecotaph;    
-}
-
-
 sub getCompendiumAgeRanges	{
 	my $self = shift;
 
@@ -1805,7 +1752,7 @@ sub doQuery {
     # PS 08/20/2005 - get for all higher ranks, not just common ones
     my %ecotaph;
 	if (@ecoFields) {
-	    %ecotaph = %{$self->getEcology(\@genera_nos,\%master_class)};
+	    %ecotaph = %{Ecology::getEcology($dbt,\%master_class,\@ecoFields)};
 	}
 
 
@@ -1821,13 +1768,14 @@ sub doQuery {
 
 		# count up occurrences per time interval bin
 		if ( $q->param('time_scale') )	{
+            my $interval = $intervallookup{$row->{collection_no}};
 			# only use occurrences from collections that map
 			#  into exactly one bin
-			if ( $intervallookup{$row->{collection_no}} )	{
-				$occsbybin{$intervallookup{$row->{collection_no}}}++;
-				$occsbybintaxon{$intervallookup{$row->{collection_no}}}{$genusNo}++;
-				if ( $occsbybintaxon{$intervallookup{$row->{collection_no}}}{$genusNo} == 1 )	{
-					$taxabybin{$intervallookup{$row->{collection_no}}}++;
+			if ($interval) {
+				$occsbybin{$interval}++;
+				$occsbybintaxon{$interval}{$genusNo}++;
+				if ( $occsbybintaxon{$interval}{$genusNo} == 1 )	{
+					$taxabybin{$interval}++;
 				}
 			}
 			# now things get nasty: if a field was selected to
@@ -1836,24 +1784,20 @@ sub doQuery {
 			# WARNING: algorithm assumes that only enum fields are
 			#  ever selected for processing
 			if ( $q->param('binned_field') )	{
-				# special processing for ecology data
+                my $rowvalue;
 				if ( $q->param('binned_field') eq "ecology" )	{
-                    my $useField = $ecoFields[0];
-					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph{$useField.$genusNo}}++;
-					$occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$ecotaph{$useField.$genusNo}.$genusNo}++;
-					if ( $occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$ecotaph{$useField.$genusNo}.$genusNo} == 1 )	{
-						$taxabybinandcategory{$intervallookup{$row->{collection_no}}}{$ecotaph{$useField.$genusNo}}++;
-					}
-					$occsbycategory{$ecotaph{$useField.$genusNo}}++;
-				} else	{
-				# default processing
-					$occsbybinandcategory{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}++;
-					$occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}.$genusNo}++;
-					if ( $occsbybincattaxon{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}.$genusNo} == 1 )	{
-						$taxabybinandcategory{$intervallookup{$row->{collection_no}}}{$row->{$q->param('binned_field')}}++;
-					}
-					$occsbycategory{$row->{$q->param('binned_field')}}++;
-				}
+				    # special processing for ecology data
+                    $rowvalue= $ecotaph{$genusNo}{$ecoFields[0]};
+                } else {
+				    # default processing
+                    $rowvalue = $row->{$q->param('binned_field')};
+                }
+                $occsbybinandcategory{$interval}{$rowvalue}++;
+                $occsbybincattaxon{$interval}{$rowvalue.$genusNo}++;
+                if ( $occsbybincattaxon{$interval}{$rowvalue.$genusNo} == 1 )	{
+                    $taxabybinandcategory{$interval}{$rowvalue}++;
+                }
+                $occsbycategory{$rowvalue}++;
 			}
 		}
 
@@ -1915,7 +1859,7 @@ sub doQuery {
             # WARNING: this only works on genus or higher-order data,
             #  assuming species won't be scored separately
             foreach my $field (@ecoFields) {
-                push @reid_row, $ecotaph{$field.$genusNo};
+                push @reid_row, $ecotaph{$genusNo}{$field};
             }
         }
 

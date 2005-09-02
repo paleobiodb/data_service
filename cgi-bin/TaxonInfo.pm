@@ -1543,55 +1543,20 @@ sub displayEcology	{
 		return;
 	}
 
-	my $taxon_name;
-	if ( $species )	{
-		$taxon_name = $genus . " " . $species;
-	} else	{
-		$taxon_name = $genus;
-	}
-
 	# get the field names from the ecotaph table
     my @ecotaphFields = $dbt->tableColumns('ecotaph');
+    # also get values for ancestors
+    my $class_hash = Classification::get_classification_hash($dbt,'all',[$taxon_no],'array');
+    my $eco_hash = Ecology::getEcology($dbt,$class_hash,\@ecotaphFields);
+    my $ecotaphVals = $eco_hash->{$taxon_no};
+    my @references = @{$ecotaphVals->{'references'}};     
 
-    # save a list of references
-    @references = ();
-
-	# grab all the data for this taxon from the ecotaph table
-	$sql = "SELECT * FROM ecotaph WHERE taxon_no=" . $taxon_no;
-	$ecotaphVals = ${$dbt->getData($sql)}[0];
-    push @references,$ecotaphVals->{'reference_no'} if ($ecotaphVals->{'reference_no'});
-    
-	# also get values for ancestors
-	my $parents = Classification::get_classification_hash($dbt,'all',[$taxon_no],'array');
-    for my $parent (@{$parents->{$taxon_no}}) {
-        $sql = "SELECT * FROM ecotaph WHERE taxon_no=$parent->{taxon_no}";
-        
-        my $row = ${$dbt->getData($sql)}[0];
-        if ( $row)	{
-            for my $field (@ecotaphFields){
-                if ( $row->{$field} && ! $ecotaphVals->{$field} && $field !~ /^(?:created|modified|_no$)/) {
-                    $ecotaphVals->{$field} = $row->{$field};
-                }
-            }
-            if ($row->{'reference_no'}) {
-                my $seenref = 0;
-                foreach my $reference_no (@references) {
-                    if ($row->{'reference_no'} == $reference_no) {
-                        $seenref = 1;
-                    }
-                }
-                if (!$seenref) {
-                    push @references,$row->{'reference_no'};
-                }
-            }
-        }
-    }
 
 	if ( ! $ecotaphVals )	{
 		print "<i>No ecological data are available</i>";
 		return;
 	} else	{
-		print "<table cellspacing=5>";
+		print "<table cellspacing=5 width=600>";
         print "<tr><td colspan=2>";
         if (scalar(@references) == 1) {
             print "<b>Reference:</b> ";
@@ -1621,11 +1586,12 @@ sub displayEcology	{
 				$cols++;
 				my $v = $ecotaphVals->{$name};
 				$v =~ s/,/, /g;
-				print "<td valign=\"top\"><table><tr><td align=\"left\" valign=\"top\"><b>$n:</b></td><td align=\"right\" valign=\"top\">$v</td></tr></table></td> \n";
-			}
-			if ( $cols == 2 || $nextname =~ /^created$/ || $nextname =~ /^size_value$/ || $nextname =~ /1$/ )	{
-				print "</tr>\n<tr>\n";
-				$cols = 0;
+                my $colspan = ($name =~ /comments/) ? "colspan=2" : "";
+				print "<td $colspan valign=\"top\"><table><tr><td align=\"left\" valign=\"top\"><b>$n:</b></td><td valign=\"top\">$v</td></tr></table></td> \n";
+                if ( $cols == 2 || $nextname =~ /^comments$/ || $nextname =~ /^created$/ || $nextname =~ /^size_value$/ || $nextname =~ /1$/ )	{
+                    print "</tr>\n<tr>\n";
+                    $cols = 0;
+                }
 			}
 		}
 		if ( $cols > 0 )	{

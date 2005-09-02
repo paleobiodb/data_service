@@ -197,9 +197,6 @@ sub processAction {
 			}
 		} else { # no cookie
 			# failed login:  (bad password, etc.)
-
-			#Debug::dbPrint("failed login");
-
 			my $errorMessage;
 
 			if (!$authorizer) {
@@ -228,7 +225,6 @@ sub processAction {
 			return;
 		}
 		
-		#Debug::dbPrint("successfull login");
 		# if we make it to here, then we can continue...
 	}
 
@@ -683,9 +679,6 @@ sub displayMenuPage	{
 
 # well, displays the home page
 sub displayHomePage {
-
-	#Debug::dbPrint("made it to displayHomePage");
-
 	# Clear Queue?  This is highest priority
 	if ( $q->param("clear") ) {
 		$s->clearQueue( $dbh ); 
@@ -1039,8 +1032,6 @@ sub describeRefResults	{
 	my $numRows = shift;
 	my $overlimit = shift;
 	
-	Debug::dbPrint("numRows = $numRows, overlimit = $overlimit");
-
 	print "<center><h3>Your search $refsearchstring produced ";
 	if ($numRows > 30 || $numRows < $overlimit)	{
 		if ($overlimit > 0)	{
@@ -1244,8 +1235,6 @@ sub displayRefResultsForAdd {
 
 	my @rows = @{$sth->fetchall_arrayref()};
 	my $numRows = @rows;
-  
-  	Debug::dbPrint("displayRefResultsForAdd, numRows = " . $numRows);
   
 	if ( ! $numRows ) {
 		# No matches?  Great!  Get them where the were going.
@@ -1535,8 +1524,6 @@ sub displayRefEdit
         $row[1] = $s->get('enterer');
     }
 	
-	#Debug::dbPrint("row = @row");
-
 	print qq|<form method="POST" action="$exec_url" onSubmit='return checkForm();'>\n|;
 	print qq|<input type=hidden name="action" value="processReferenceEditForm"\n|;
 	print $hbo->populateHTML('enter_ref_form', \@row, \@fieldNames);
@@ -2519,7 +2506,7 @@ IS NULL))";
         } elsif ( $options{"type"} eq "add" )	{
             $message .= "<a href=\"bridge.pl?action=displaySearchCollsForAdd&type=add\"><b>Try again</b></a>";
         } else	{
-            $message .= "<a href=\"bridge.pl?action=displaySearchColls&type=$options{$type}\"><b>Try again</b></a>";
+            $message .= "<a href=\"bridge.pl?action=displaySearchColls&type=$options{type}\"><b>Try again</b></a>";
         }
         $message .= "</div><br>";
         if ($options{'calling_script'} !~ /Map|Confidence|TaxonInfo/) {
@@ -3058,8 +3045,6 @@ sub buildTaxonomicList {
                 %classification = ();
 				$output .= getReidHTMLTableByOccNum($rowref->{occurrence_no}, 0, \%classification);
 				
-				#Debug::dbPrint("mostRecentReID = $mostRecentReID");
-
 				$grand_master_hash{'class_no'} = ($classification{'class'}{'taxon_no'} or 1000000);
 				$grand_master_hash{'order_no'} = ($classification{'order'}{'taxon_no'} or 1000000);
 				$grand_master_hash{'family_no'} = ($classification{'family'}{'taxon_no'} or 1000000);
@@ -3638,7 +3623,6 @@ sub rarefyAbundances	{
 # Download.pm uses some similar calculations but I see no easy way to
 #  use a common function
 sub displayCollectionEcology	{
-    $|=1;
 	print stdIncludes("std_page_top");
 
     # We only look at these three categories for now
@@ -3659,67 +3643,27 @@ sub displayCollectionEcology	{
     # First get a list of all the parent taxon nos
 	my @taxon_nos = map {$_->{'taxon_no'}} @occurrences;
 	my $parents = Classification::get_classification_hash($dbt,'all',\@taxon_nos,'array');
+    my $ecology = Ecology::getEcology($dbt,$parents,\@categories,'get_basis');
 
-    # This first section gets ecology data for all taxa and parent taxa
-    my %all_taxon_nos = ();
-    for my $taxon_no ( @taxon_nos )	{
-        if ($taxon_no) {
-            $all_taxon_nos{$taxon_no} = 1;
-            foreach my $parent (@{$parents->{$taxon_no}}) {
-                $all_taxon_nos{$parent->{'taxon_no'}} = 1;
-            }
-        }
-    }
-	my %all_ecologies;
-    $sql = "SELECT e.taxon_no,a.taxon_rank,".join(",",@categories)." FROM ecotaph e,authorities a WHERE e.taxon_no=a.taxon_no AND a.taxon_no IN (".join(",",keys(%all_taxon_nos)).")";
-    my @eco_data = @{$dbt->getData($sql)};
-
-	if (!@eco_data) {
+	if (!%$ecology) {
 		print "<center><h3>Sorry, there are no ecological data for any of the taxa</h3></center>\n\n";
 		print "<center><p><b><a href=\"$exec_url?action=displayCollectionDetails&collection_no=" . $q->param('collection_no') . "\">Return to the collection record</a></b></p></center>\n\n";
 		print stdIncludes("std_page_bottom");
 		return;
-	} else {
-        foreach my $row (@eco_data) {
-            $all_ecologies{$row->{'taxon_no'}} = $row;
-        }
-    }
+	} 
    
-    # Now we want to crawl upwards in the higherarchy of each taxon, using the first category value
-    # we find then stopping. Example: if the taxon has a value for diet1, use that. If it doesn't, and family
-    # and order have values, use the family (lower rank'd) value
-    my %ecology;
-	my %basis;
-    for my $taxon_no (@taxon_nos)	{
-	    for $category (@categories) {
-            if ($all_ecologies{$taxon_no}{$category}) {
-                # First try the taxon itself
-                $ecology{$taxon_no}{$category} = $all_ecologies{$taxon_no}{$category};
-                $basis{$taxon_no}{$category} = $all_ecologies{$taxon_no}{'taxon_rank'};
-            } else {
-                # Otherwise try to inherit someting from any parent, with preference to lower ranks
-                foreach my $parent (@{$parents->{$taxon_no}}) {
-                    if ( !$ecology{$taxon_no}{$category} && $all_ecologies{$parent->{'taxon_no'}}{$category}) {
-                        $ecology{$taxon_no}{$category} = $all_ecologies{$parent->{'taxon_no'}}{$category};
-                        $basis{$taxon_no}{$category} = $all_ecologies{$parent->{'taxon_no'}}{'taxon_rank'};
-                    }
-                }
-            }
-        }
-    }
-
 	# count up species in each category and combined categories
 	for my $row (@occurrences)	{
-		if ( $ecology{$row->{'taxon_no'}}{'life_habit'}) {
-            $col_key = $ecology{$row->{'taxon_no'}}{'life_habit'};
+		if ( $ecology->{$row->{'taxon_no'}}{'life_habit'}) {
+            $col_key = $ecology->{$row->{'taxon_no'}}{'life_habit'};
         } else {
             $col_key = "?";
         }
         
-		if ( $ecology{$row->{'taxon_no'}}{'diet2'})	{
-            $row_key = $ecology{$row->{'taxon_no'}}{'diet1'}.'/'.$ecology{$row->{'taxon_no'}}{'diet2'};
-		} elsif ( $ecology{$row->{'taxon_no'}}{'diet1'})	{
-            $row_key = $ecology{$row->{'taxon_no'}}{'diet1'};
+		if ( $ecology->{$row->{'taxon_no'}}{'diet2'})	{
+            $row_key = $ecology->{$row->{'taxon_no'}}{'diet1'}.'/'.$ecology->{$row->{'taxon_no'}}{'diet2'};
+		} elsif ( $ecology->{$row->{'taxon_no'}}{'diet1'})	{
+            $row_key = $ecology->{$row->{'taxon_no'}}{'diet1'};
         } else {
             $row_key = "?";
         }
@@ -3754,9 +3698,11 @@ sub displayCollectionEcology	{
             print "<td class=dataTableCellLeft><i>$row->{genus_name} $row->{species_name}</i></td>";
         }
 		for my $category (@categories)	{
-			if ($ecology{$row->{'taxon_no'}}{$category}) {
-				print "<td class=dataTableCell>$ecology{$row->{taxon_no}}{$category}</td>";
-				print "<td class=dataTableCell><i>$basis{$row->{taxon_no}}{$category}</i></td>";
+			if ($ecology->{$row->{'taxon_no'}}{$category}) {
+				print "<td class=dataTableCell>$ecology->{$row->{taxon_no}}{$category}</td>";
+                # Basis is the rank of the taxon where this data came from. i.e. family/class/etc.
+                # See Ecology::getEcology for further explanation
+				print "<td class=dataTableCell><i>".$ecology->{$row->{'taxon_no'}}{$category.'basis'}."</i></td>";
 			} else	{
 				print "<td class=dataTableCell>?</td>";
 				print "<td class=dataTableCell>?</td>";
@@ -6728,7 +6674,6 @@ sub checkNearMatch {
 				print $hbo->populateHTML('reference_display_row', \@rowData, \@display);
 			}
 			elsif($tableName eq "opinions"){
-				Debug::dbPrint("in bridge test5, taxon_no = '" . $row{parent_no} . "'");
 				my $sql="SELECT taxon_name FROM authorities WHERE taxon_no=".
 						$row{parent_no};
 				my @results = @{$dbt->getData($sql)};
@@ -7107,12 +7052,8 @@ sub RefQuery {
 		$sth->execute();
 		my @rows = @{$sth->fetchall_arrayref()};
 		
-		Debug::dbPrint("refQuery 1, rows = " . length(@rows));
-		
 		# If too many refs were found, set a limit
 		if (@rows > 30)	{
-			Debug::dbPrint("refQuery 2, rows = " . length(@rows));
-			
 			$overlimit = @rows;
 			$q->param('refsSeen' => 30 + $q->param('refsSeen') );
 
