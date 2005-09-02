@@ -3949,8 +3949,13 @@ sub displayEnterCollPage {
     # Remove these from being displayed
     unshift(@htmlFields,'secondary_reference_string','session_reference_string');
     unshift(@htmlValues,'','');
-    
-	print stdIncludes( "std_page_top" );
+   
+# this is hack to disable the usual 100% height table that wraps around
+#  the entire page JA 1.9.05
+	my $std_page_top = stdIncludes("std_page_top");
+	$std_page_top =~ s/ height="100%"//;
+	print $std_page_top;
+	print "</td></tr></table>\n\n";
 
 	print printIntervalsJava();
 
@@ -4827,7 +4832,13 @@ sub displayEditCollection {
 	}
 
 	my $session_ref = $s->get('reference_no');
-	print stdIncludes("std_page_top");
+
+# this is hack to disable the usual 100% height table that wraps around
+#  the entire page JA 1.9.05
+	my $std_page_top = stdIncludes("std_page_top");
+	$std_page_top =~ s/ height="100%"//;
+	print $std_page_top;
+	print "</td></tr></table>\n\n";
 
 	# Get the reference for this collection
 	my $curColNum = 0;
