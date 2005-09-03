@@ -1707,7 +1707,7 @@ sub displayCollResults {
 
     if ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
 		# go right to the chase with ReIDs if a taxon_rank was specified
-		if ($q->param('type') eq "reid" && $q->param('taxon_rank') ne 'Higher-taxon') {
+		if ($q->param('type') eq "reid" && $q->param('taxon_name')) {
 			# get all collection #'s and call displayOccsForReID
 			my @reidColls;
 			foreach my $res (@dataRows) {
