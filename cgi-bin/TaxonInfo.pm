@@ -1329,8 +1329,7 @@ sub getOriginalCombination{
 	# You know you're an original combination when you have no children
 	# that have recombined or corrected as relations to you.
 	my $sql = "SELECT DISTINCT(child_no), status FROM opinions".
-			  " WHERE opinions.child_spelling_no=$taxon_no".
-              " AND (status='recombined as' OR status='corrected as' OR status='rank changed as')";
+			  " WHERE child_spelling_no=$taxon_no";
 	my @results = @{$dbt->getData($sql)};
 
     if (@results) {
