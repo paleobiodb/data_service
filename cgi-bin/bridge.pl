@@ -5436,6 +5436,7 @@ sub processEditOccurrences {
 			delete($results{modified});
 			delete($results{modified_temp});
 			delete($results{reid_no});
+            delete($results{most_recent});
 			
 			my $something_changed = 0;
 			my @update_strings = ();
