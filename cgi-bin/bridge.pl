@@ -2405,7 +2405,7 @@ IS NULL))";
     # Do a left join on secondary refs if we have to
     # PS 11/29/2004
     if ($options{'research_group'} || int($options{'reference_no'})) {
-        push @left_joins, "LEFT JOIN secondary_refs sr ON sr.reference_no=c.reference_no";
+        push @left_joins, "LEFT JOIN secondary_refs sr ON sr.collection_no=c.collection_no";
     }
 
         
