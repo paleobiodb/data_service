@@ -5575,6 +5575,7 @@ sub processEditOccurrences {
 			delete($results{created});
 			delete($results{modified});
 			delete($results{occurrence_no});
+            delete($results{upload});
 			
 			my $something_changed = 0;
 			my @update_strings = ();
