@@ -368,7 +368,9 @@ sub getOutFields {
             # Rename field to avoid conflicts with fieldnames in collections/occ table
 			if($tableName eq 'reidentifications'){
                 if ($isSQL) {
-				    push(@outFields, "re.$fieldName as reid_$fieldName");
+                    if ($fieldName !~ /authorizer|enterer|modifier/) {
+				        push(@outFields, "re.$fieldName as reid_$fieldName");
+                    }
                 } else {
                     push(@outFields, "original.$fieldName");
                 }
@@ -376,7 +378,9 @@ sub getOutFields {
             # Rename field to avoid conflicts with fieldnames in collections table
 			elsif ($tableName eq 'occurrences') {
                 if ($isSQL) {
-				    push(@outFields, "o.$fieldName as occ_$fieldName");
+                    if ($fieldName !~ /authorizer|enterer|modifier/) {
+				        push(@outFields, "o.$fieldName as occ_$fieldName");
+                    }
                 } else {
 				    push(@outFields, "occurrences.$fieldName");
                 }
@@ -390,7 +394,9 @@ sub getOutFields {
                 }
 			} else { 
                 if ($isSQL) {
-                    push(@outFields,"c.$fieldName");
+                    if ($fieldName !~ /authorizer|enterer|modifier/) {
+                        push(@outFields,"c.$fieldName");
+                    }
                 } else {
                     push(@outFields,"collections.$fieldName");
                 }
@@ -448,26 +454,6 @@ sub getOutFields {
         }
     }    
 	return @outFields;
-}
-
-# Returns research group
-sub getResGrpString {
-	my $self = shift;
-	my $result = "";
-
-	my $resgrp = $q->param('research_group');
-
-	if($resgrp && $resgrp =~ /(^decapod$)|(^EJECT$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
-		my $resprojstr = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
-		if($resprojstr ne ""){
-			$result = " c.reference_no IN (" . $resprojstr . ")";
-		}
-	}
-	elsif($resgrp){
-		$result = " FIND_IN_SET( '$resgrp', c.research_group ) ";
-	}
-
-	return $result;
 }
 
 # 6.7.02 JA
@@ -1086,8 +1072,12 @@ sub getOccurrencesWhereClause {
 		}
 		push @all_where,"r.pubyr".$pubyrrelation.$q->param('pubyr');
 	}
-	
-	push @all_where, "o.authorizer=".$dbh->quote($q->param('authorizer')) if ($q->param('authorizer'));
+
+    
+    my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('authorizer_reversed'));
+    my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
+
+	push @all_where, "o.authorizer_no=".$authorizer_no if ($authorizer_no);
 
     push @all_where, "o.abund_value NOT LIKE \"\" AND o.abund_value IS NOT NULL" if $q->param("without_abundance") eq 'NO';
 
@@ -1112,10 +1102,12 @@ sub getCollectionsWhereClause {
     my @where = ();
 	
 	# This is handled by getOccurrencesWhereClause if we're getting occs data.
-	if($q->param('authorizer') && $q->param('output_data') eq 'collections'){
-		push @where, "c.authorizer=".$dbh->quote($q->param('authorizer'));
+	if($q->param('output_data') eq 'collections'){
+        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('authorizer_reversed'));
+        my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
+		push @where, "c.authorizer_no=".$authorizer_no if ($authorizer_no);
 	}
-    my $resGrpString = $self->getResGrpString();
+    my $resGrpString = PBDBUtil::getResearchGroupSQL($dbt,$q->param('research_group'));
     push @where, $resGrpString if ($resGrpString);
 	
 	# should we filter the data based on collection creation date?
@@ -1218,7 +1210,7 @@ sub getCompendiumAgeRanges	{
 # from the refs table for any as-yet-unqueried ref, and writes out the data.
 sub doQuery {
 	my $self = shift;
-	my $p = Permissions->new ( $s );
+	my $p = Permissions->new ($s,$dbt);
 	my @collectionHeaderCols = ( );
 	my @occurrenceHeaderCols = ( );
 	my @reidHeaderCols = ( );
@@ -1268,7 +1260,7 @@ sub doQuery {
 
     my (@fields,@where,@occ_where,@reid_where,@taxon_where,@tables,@from,@groupby);
 
-    @fields = ('c.authorizer','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short");
+    @fields = ('c.authorizer_no','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short");
     @tables = ('collections c');
     @where = $self->getCollectionsWhereClause();
 
@@ -1289,6 +1281,18 @@ sub doQuery {
 	# Getting only collection data
     if ($q->param('output_data') =~ /specimens|occurrences|collections/) {
         push @fields, $self->getOutFields('collections',TRUE);
+        if ($q->param('collections_authorizer') eq 'YES') {
+            push @left_joins, "LEFT JOIN person pc1 ON c.authorizer_no=pc1.person_no";
+            push @fields, 'pc1.name authorizer';
+        }
+        if ($q->param('collections_enterer') eq 'YES') {
+            push @left_joins, "LEFT JOIN person pc2 ON c.enterer_no=pc2.person_no";
+            push @fields, 'pc2.name enterer';
+        }
+        if ($q->param('collections_modifier') eq 'YES') {
+            push @left_joins, "LEFT JOIN person pc3 ON c.modifier_no=pc3.person_no";
+            push @fields, 'pc3.name modifier';
+        }
     }
 
     # We'll want to join with the reid ids if we're hitting the occurrences table,
@@ -1313,12 +1317,30 @@ sub doQuery {
 				       're.genus_name reid_genus_name',
 				       're.species_name reid_species_name',
 				       're.taxon_no reid_taxon_no';
-            my ($whereref,$occswhereref,$reidswhereref) = $self->getOccurrencesWhereClause;
+            my ($whereref,$occswhereref,$reidswhereref) = $self->getOccurrencesWhereClause();
             push @where, @$whereref;
             push @occ_where, @$occswhereref;
             push @reid_where, @$reidswhereref;
 		    push @fields, $self->getOutFields('occurrences',TRUE);
             push @fields, $self->getOutFields('reidentifications',TRUE);
+            if ($q->param('occurrences_authorizer') eq 'YES') {
+                push @left_joins, "LEFT JOIN person po1 ON o.authorizer_no=po1.person_no";
+                push @fields, 'po1.name occ_authorizer';
+                push @left_joins, "LEFT JOIN person pre1 ON re.authorizer_no=pre1.person_no";
+                push @fields, 'pre1.name reid_authorizer';
+            }
+            if ($q->param('occurrences_enterer') eq 'YES') {
+                push @left_joins, "LEFT JOIN person po2 ON o.enterer_no=po2.person_no";
+                push @fields, 'po2.name occ_enterer';
+                push @left_joins, "LEFT JOIN person pre2 ON re.enterer_no=pre2.person_no";
+                push @fields, 'pre2.name reid_enterer';
+            }
+            if ($q->param('occurrences_modifier') eq 'YES') {
+                push @left_joins, "LEFT JOIN person po3 ON o.modifier_no=po3.person_no";
+                push @fields, 'po3.name occ_modifier';
+                push @left_joins, "LEFT JOIN person pre3 ON re.modifier_no=pre3.person_no";
+                push @fields, 'pre3.name reid_modifier';
+            }
         } 
 
         if ($q->param('taxon_name')) {
@@ -1348,20 +1370,25 @@ sub doQuery {
 		push @fields, $self->getOutFields('specimens',TRUE);
 
         if ($q->param('specimens_authorizer') eq 'YES') {
-            push @left_joins, "LEFT JOIN person p1 ON s.authorizer_no=p1.person_no";
-            push @fields, 'p1.name specimens_authorizer';
+            push @left_joins, "LEFT JOIN person ps1 ON s.authorizer_no=ps1.person_no";
+            push @fields, 'ps1.name specimens_authorizer';
         }
         if ($q->param('specimens_enterer') eq 'YES') {
-            push @left_joins, "LEFT JOIN person p2 ON s.enterer_no=p2.person_no";
-            push @fields, 'p2.name specimens_enterer';
+            push @left_joins, "LEFT JOIN person ps2 ON s.enterer_no=ps2.person_no";
+            push @fields, 'ps2.name specimens_enterer';
         }
         if ($q->param('specimens_modifier') eq 'YES') {
-            push @left_joins, "LEFT JOIN person p3 ON s.modifier_no=p3.person_no";
-            push @fields, 'p3.name specimens_modifier';
+            push @left_joins, "LEFT JOIN person ps3 ON s.modifier_no=ps3.person_no";
+            push @fields, 'ps3.name specimens_modifier';
         }
     } elsif ($q->param('include_specimen_fields')) {
         push @left_joins , "LEFT JOIN specimens s ON s.occurrence_no = o.occurrence_no";
         push @fields,"(COUNT(DISTINCT s.specimen_no) > 0) specimens_exist";
+    }
+	
+    # Handle matching against secondary refs
+    if($q->param('research_group') =~ /^(?:decapod|ETE|5%|1%|PACED|PGAP)$/){
+        push @left_joins, "LEFT JOIN secondary_refs sr ON sr.collection_no=c.collection_no";
     }
 
     # Handle GROUP BY
@@ -1375,6 +1402,7 @@ sub doQuery {
     }
 
 
+    
     # Assemble the final SQL
     if ($join_reids) {
         # Reworked PS  07/15/2005
@@ -1389,7 +1417,7 @@ sub doQuery {
         #
         # In the future: when we update to mysql 4.1, filter for "most recent" REID in a subquery, rather
         # than after the fact in the "exclude++" section of the code
-        @left_joins1 = (@left_joins,'LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no');
+        @left_joins1 = ('LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no',@left_joins);
 
         # This term very important.  sql1 deal with occs with NO reid, sql2 deals with only reids
         # This way WHERE terms can focus on only pruning the occurrences table for sql1 and only
@@ -1712,7 +1740,12 @@ sub doQuery {
 
 # print the refs
     if (@refnos) {
-        $ref_sql = "SELECT * FROM refs WHERE reference_no IN (" . join (',',@refnos) . ")";
+        $refFieldsSQL = join(",",map{"r.".$_} grep{!/^(?:authorizer|enterer|modifier)$/} @refsFieldNames);
+        $ref_sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, $refFieldsSQL FROM refs r ".
+                   " LEFT JOIN person p1 ON p1.person_no=r.authorizer_no" .
+                   " LEFT JOIN person p2 ON p2.person_no=r.enterer_no" .
+                   " LEFT JOIN person p3 ON p3.person_no=r.modifier_no" .
+                   " WHERE reference_no IN (" . join (', ',@refnos) . ")";
         $self->dbg("Get ref data sql: $ref_sql"); 
         @refrefs= @{$dbt->getData($ref_sql)};
         for my $refref (@refrefs)	{
