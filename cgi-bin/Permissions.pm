@@ -4,53 +4,40 @@
 #
 # Relies on the access_level and release_date fields of the collection table.
 #
-# The useHasReadPermissionsForCollectionNumber() method is now cached for performance.
-# There are three caches, one for read, write, and read/write permissions.  They just use the
-# collection_no as a key and store a boolean integer value denoting if the user has permission or not.
-# This cache is only peristent as long as the object is in existance, so it should be perfectly safe.
-#
-# updated by rjp, 1/2004.
 
 package Permissions;
-
 use strict;
+use CGI::Carp;
+use Person;
 
-use Debug;
-
-use fields qw(s date);
-
-# cache			:	reference to a cache hash of collection numbers and permissions.
-# date			:	stored for speed.. This object will never be alive more than a few seconds, so it's okay.
-# session		:	the session object passed in with new()
-			
+#session and date objcts
+use fields qw(s dbt);
 
 # Flags and constants
-# These are class variables.
-my $DEBUG = 0;		# DEBUG flag
+my $DEBUG = 0;
 
 # **Note: Must pass the session variable when creating this object.
 sub new {
 	my $class = shift;
 	my Permissions $self = fields::new($class);
 
-	my $s = shift;		# session object
+	my $s = shift;		# Session object
+    my $dbt = shift;    # DBTransactionManager object
+
 	$self->{'s'} = $s;
+    $self->{'dbt'} = $dbt;
 	
-	if (!$s) {
-		carp ("Permissions must be created with valid Session object!");
+	unless (UNIVERSAL::isa($s,'Session')) {
+		carp ("Permissions must be created with valid Session object");
+		return undef;
+	}
+	unless (UNIVERSAL::isa($dbt,'DBTransactionManager')) {
+		carp ("Permissions must be created with valid DBTransactionManager object");
 		return undef;
 	}
 	
-	# store the date for speed.
-	# this is okay to do since the object won't be alive for more than a few seconds at a time.
-	$self->{date} = $self->getDate();
-	
 	return $self;
 }
-
-
-
-
 
 # rjp note: pass it the $sth, a reference to an array of data rows, 
 # a limit number, and a reference to a scalar for the number of rows.
@@ -69,9 +56,12 @@ sub getReadRows {
 	# Get today's date in the lexical comparison format
 	my $now = $self->getDate ( );
 
+    # Get a list of authorizers who have allowed you to edit their rows as if you own them
+    my %is_modifier_for = %{$self->getModifierList()};
+
 	# Ensure they had rd_date in the result set
 	my %requiredResults = ( );
-	my @requiredFields = ("access_level", "rd_short", "research_group");
+	my @requiredFields = ("authorizer_no","access_level","rd_short","research_group");
 	# NAME returns a reference to an array of field (column) names.
 	my @fields = @{$sth->{NAME}};
 	# Compare the database column names to the required fields
@@ -80,7 +70,7 @@ sub getReadRows {
 			if ( $field eq $required ) { $requiredResults{$field} = 1; }
 		}
 	}
-	
+
 	my $required;
 	
 	foreach $required ( @requiredFields ) {
@@ -98,9 +88,12 @@ sub getReadRows {
 		if ( $s->get("superuser") == 1 ) {
 			# Superuser is omniscient
 			$okToRead = "superuser";
-		} elsif ( $s->get("authorizer") eq $row->{authorizer} ) { 
+		} elsif ( $s->get("authorizer_no") == $row->{'authorizer_no'} ) {
 			# If it is your row, you can see it regardless of access_level
 			$okToRead = "authorizer";
+		} elsif ( $is_modifier_for{$row->{'authorizer_no'}}) { 
+            # Also if this person has given you permission to edit his data, we can always access it
+			$okToRead = "modifier";
 		} elsif ( $row->{rd_short} > $now ) {
 			# Future... must do checks
 			# Access level overrides the release date
@@ -112,7 +105,7 @@ sub getReadRows {
 	
 				# DB member?
 				if ( $row->{access_level} =~ /database members/i ) {
-					if ( $s->get("authorizer") !~ /guest/i && $s->get("authorizer") ne "" ) { 
+					if ($s->get("authorizer_no")) {
 						$okToRead = "db member"; 
 					} else {
 						$failedReason = "not db member";
@@ -134,8 +127,10 @@ sub getReadRows {
 
 				# Authorizer?
 				if ( $row->{access_level} eq "authorizer only" ) {
-					if ( $s->get("authorizer") eq $row->{authorizer} ) { 
+					if ( $s->get("authorizer_no") == $row->{'authorizer_no'}) {
 						$okToRead = "authorizer"; 
+                    } elsif ($is_modifier_for{$row->{'authorizer_no'}}) { 
+						$okToRead = "modifier"; 
 					} else {
 						$failedReason = "not authorizer";
 					}
@@ -161,8 +156,8 @@ sub getReadRows {
 	 					"</font>".
 	 					" al: ".$row->{access_level}.
 	 					" rg: ".$row->{research_group}.
-	 					" you: ".$s->get("enterer").
-	 					" aut: ".$s->get("authorizer").  
+	 					" you: ".$s->get("enterer_no").
+	 					" aut: ".$s->get("authorizer_no").  
 	 					" pb: ".$s->get("paleobotany").
 	 					$failedReason );
 		}
@@ -179,7 +174,9 @@ sub getWriteRows {
 	
 	my $s = $self->{'s'};
 
-	while ( my $row = $sth->fetchrow_hashref ( ) ) {
+    my %is_modifier_for = %{$self->getModifierList()};
+
+	while ( my $row = $sth->fetchrow_hashref() ) {
 
 		my $okToWrite = "";				# Clear
 		my $failedReason = "";			# Clear
@@ -187,9 +184,12 @@ sub getWriteRows {
 		if ( $s->get("superuser") ) {
 			# Superuser is omnicient
 			$okToWrite = "superuser";
-		} elsif ( $s->get("authorizer") eq $row->{authorizer} ) { 
+		} elsif ( $s->get("authorizer_no") eq $row->{'authorizer_no'} ) {
 			# If it is your row, you can see it regardless of access_level
 			$okToWrite = "you own it"; 
+        } elsif ($is_modifier_for{$row->{'authorizer_no'}}) { 
+			# if the person has given you modifier priviledges, also could
+			$okToWrite = "you have modification privileges"; 
 		} else {
 			$failedReason = "not your row";
 		}
@@ -206,11 +206,8 @@ sub getWriteRows {
 	 			&dbg ("<font color='red'>".
 	 					"Not ok[".$row->{collection_no}."]: ".
 	 					"</font>".
-	 					" al: ".$row->{access_level}.
-	 					" rg: ".$row->{research_group}.
 	 					" you: ".$s->get("enterer").
 	 					" aut: ".$s->get("authorizer").  
-	 					" pb: ".$s->get("paleobotany").
 	 					$failedReason );
 		}
 	}
@@ -238,6 +235,8 @@ sub getReadWriteRowsForEdit{
 	# for returning data
 	my @results = ();
 
+    my %is_modifier_for = %{$self->getModifierList()};
+
 	while ( my $row = $sth->fetchrow_hashref() ) {
 
 		my $okToWrite = "";	# Clear
@@ -246,9 +245,12 @@ sub getReadWriteRowsForEdit{
 		if ( $s->get("superuser") ) {
 			# Superuser is omnicient
 			$okToWrite = "superuser";
-		} elsif ( $s->get("authorizer") eq $row->{authorizer} ) { 
+		} elsif ( $s->get("authorizer_no") eq $row->{authorizer_no} ) { 
 			# Your row: you can see it regardless of access_level
 			$okToWrite = "you own it"; 
+        } elsif ($is_modifier_for{$row->{'authorizer_no'}}) { 
+			# if the person has given you modifier priviledges, also could
+			$okToWrite = "you have modification privileges"; 
 		} else {
 			$failedReason = "not your row";
 		}
@@ -268,11 +270,8 @@ sub getReadWriteRowsForEdit{
 	 		dbg("<font color='red'>".
 	 			"Not ok[".$row->{collection_no}."]: ".
 	 			"</font>".
-	 			" ac_lev: ".$row->{access_level}.
-	 			" res_grp: ".$row->{research_group}.
-	 			" entr: ".$s->get("enterer").
-	 			" aut: ".$s->get("authorizer").  
-	 			" paleobot: ".$s->get("paleobotany").
+	 			" entr: ".$s->get("enterer_no").
+	 			" aut: ".$s->get("authorizer_no").  
 	 			$failedReason );
 		}
 	}
@@ -282,26 +281,161 @@ sub getReadWriteRowsForEdit{
 # Returns the day, month, and year
 sub getDate {
 	my $self = shift;
-
-	(	my $sec,
-		my $min,
-		my $hour,
-		my $mday,
-		my $mon,
-		my $year,
-		my $wday,
-		my $yday,
-		my $isdst) = localtime(time);
-
+	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 	return sprintf ( "%4d%02d%02d",  $year+1900, $mon+1, $mday );
 }
 
+# This returns a hashref where the keys are all the people who have let
+# the authorizer edit their data. PS 08/30/2005
+sub getModifierList {
+    my $self = shift;
+    my $s = $self->{'s'};
+    my $dbt = $self->{'dbt'};
+
+    my $sql = "SELECT authorizer_no FROM permissions WHERE modifier_no=".int($s->get('authorizer_no'));
+    my @results = @{$dbt->getData($sql)};
+    my %is_modifier_for = ();
+    foreach my $row (@results) {
+        $is_modifier_for{$row->{'authorizer_no'}} = 1;
+    }
+    return \%is_modifier_for;
+}
+
+# PS 08/30/2005
+# The "Buddy" list - provide a list of people who have permission to edit the authorizor's collections/occurrences/etc
+# And give options to add and delete from the list
+sub displayPermissionListForm {
+    my ($dbt,$q,$s,$hbo) = @_;
+
+    # First make sure they're logged in
+    my $authorizer_no = int($s->get('authorizer_no'));
+    if (!$authorizer_no) {
+        main::htmlError("ERROR: you must be logged in to view this page");
+        exit;
+    }
+
+
+    print main::stdIncludes( "std_page_top" );
+    # First provide a form to add new authoriziers to the list
+
+    my @authorizers = @{Person::listOfAuthorizers($dbt,1)};
+    my $authList = join(",", map {'"'.$_->{'reversed_name'}.'"'} @authorizers);
+
+
+    my $working_group_values = ['','decapod','marine_invertebrate','micropaleontology','PACED','paleobotany','taphonomy','vertebrate'];
+    my $working_group_names =  ['','decapod','marine invertebrate','micropaleontology','PACED','paleobotany','taphonomy','vertebrate'];
+    my $working_group_select = $hbo->buildSelect('working_group',$working_group_names,$working_group_values);
+
+    print qq|<div align="center">|;
+    print qq|<h3>Editing permission list</h3>|;
+    print qq|<form method="POST" action="bridge.pl">|;
+    print qq|<input type="hidden" name="action" value="submitPermissionList">|;
+    print qq|<input type="hidden" name="submit_type" value="add">|;
+    print qq|<table cellpadding=0 cellspacing=3>|;
+    print qq|<tr><td>Add an authorizer to the list: </td><td><input type="text" name="authorizer_reversed" onKeyUp="doComplete(event,this,authorizerNames())"><input type="submit" name="submit_authorizer" value="Go"></td></tr>|;
+    print qq|<tr><td> ... <i> or </i> add all authorizers from a working group: </td><td>$working_group_select<input type="submit" name="submit_working_group" value="Go"></td></tr>|;
+    print qq|</table>|;
+    print qq|</form>|;
+
+
+    # Now get a list of people who have permission to edit my data and display it
+    my $sql = "SELECT p.reversed_name modifier_name, pm.modifier_no FROM person p, permissions pm WHERE p.person_no=pm.modifier_no AND pm.authorizer_no=$authorizer_no ORDER BY p.reversed_name";
+    my @results = @{$dbt->getData($sql)};
+
+    # javascript for autocompletion
+    my $javaScript = qq|<SCRIPT language="JavaScript" type="text/javascript">
+                        function authorizerNames() {
+                            var names = new Array($authList);
+                            return names;
+                        } 
+                        </SCRIPT>|;
+    print $javaScript;    
+    # Now list authorizers already on the editing permissions list and give a chance to delete them
+    print qq|<form method="POST" action="bridge.pl">|;
+    print qq|<input type="hidden" name="action" value="submitPermissionList">|;
+    print qq|<input type="hidden" name="submit_type" value="delete">|;
+    print qq|<table cellpadding=0 cellspacing=2>|;
+    print qq|<tr><td colspan=2 align="center">The following people may edit my data:</td></tr>|;
+    print qq|<tr><td colspan=2 align="center">&nbsp;</td></tr>|;
+    if (@results) {
+        my $midpoint = int((scalar(@results) + 1)/2); # have two columns
+        for(my $i=0;$i<$midpoint;$i++) {
+            my $row1 = $results[$i];
+            my $row2 = $results[$i+$midpoint];
+            print qq|<tr><td><input type="checkbox" name="modifier_no" value="$row1->{modifier_no}"> $row1->{modifier_name}</td>|;
+            if ($row2) {
+                print qq|<td><input type="checkbox" name="modifier_no" value="$row2->{modifier_no}"> $row2->{modifier_name}</td>|;
+            }
+            print qq|</tr>|;
+        }
+        print qq|<tr><td colspan=2 align="center">&nbsp;</td></tr>|;
+        print qq|<tr><td colspan=2 align="center"><input type="submit" name="submit" value="Delete checked"> &nbsp;&nbsp;</td></tr>|;
+    } else {
+        print "<tr><td><i>No one else may currently edit my data</i></td></tr>";
+    }
+    print qq|</table></form>|;
+    print qq|</div>|;
+    print main::stdIncludes("std_page_bottom");
+
+}   
+
+# This handles form submission from displayPermissionListForm
+# Basically only two types of operations: add and delete
+# Both should be pretty straightforward
+sub submitPermissionList {
+    my ($dbt,$q,$s,$hbo) = @_;
+    my $dbh = $dbt->dbh;
+    # First make sure they're logged in
+    my $authorizer_no = int($s->get('authorizer_no'));
+    if (!$authorizer_no) {
+        main::htmlError("ERROR: you must be logged");
+        exit;
+    }
+
+    if ($q->param('submit_type') eq 'add') {
+        if ($q->param('submit_authorizer')) {
+            my $sql = "SELECT person_no FROM person WHERE reversed_name LIKE ".$dbh->quote($q->param('authorizer_reversed'));
+            my $row = ${$dbt->getData($sql)}[0];
+            if ($row) {
+                if ($row->{'person_no'} != $authorizer_no) {
+                    # Note: the IGNORE just causes mysql to not throw an error when inserting a dupe
+                    $sql = "INSERT IGNORE INTO permissions (authorizer_no,modifier_no) VALUES ($authorizer_no,$row->{person_no})";
+                    dbg("Inserting into permission list: ".$sql);
+                    $dbh->do($sql);
+                }
+            }
+        } elsif ($q->param('submit_working_group') && $q->param('working_group')) {
+            my $working_group = $q->param('working_group');
+            $working_group =~ s/[^a-zA-Z_]//g;
+            my $sql = "SELECT person_no FROM person WHERE $working_group=1";
+            my @persons = @{$dbt->getData($sql)};
+            foreach my $row (@persons) {
+                if ($row->{'person_no'} != $authorizer_no) {
+                    # Note: the IGNORE just causes mysql to not throw an error when inserting a dupe
+                    $sql = "INSERT IGNORE INTO permissions (authorizer_no,modifier_no) VALUES ($authorizer_no,$row->{person_no})";
+                    dbg("Inserting into permission list: ".$sql);
+                    $dbh->do($sql);
+                }
+            }
+        }
+    } elsif ($q->param('submit_type') eq 'delete') {
+        my @modifiers = $q->param('modifier_no');
+        foreach my $modifier_no (@modifiers) {
+            my $sql = "DELETE FROM permissions WHERE authorizer_no=$authorizer_no AND modifier_no=$modifier_no";
+            dbg("Deleting from permission list: ".$sql);
+            $dbh->do($sql);
+        }
+
+    }
+
+    displayPermissionListForm($dbt,$q,$s,$hbo);
+}   
+
+
 sub dbg {
 	my $message = shift;
-
 	if ( $DEBUG && $message ) { print "<font color='green'>$message</font><BR>\n"; }
-
-	return $DEBUG;					# Either way, return the current DEBUG value
+	return $DEBUG;
 }
 
 # This only shown for internal errors
