@@ -1,7 +1,5 @@
 package Reclassify;
 
-$DEBUG = 0;
-
 # written by JA 31.3, 1.4.04
 # in memory of our dearly departed Ryan Poling
 
@@ -16,9 +14,9 @@ sub startReclassifyOccurrences	{
 
 
 	# have to be logged in
-	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
+	if (!$s->isDBMember()) {
 		$s->enqueue( $dbh, "action=startStartReclassifyOccurrences" );
-		displayLoginPage( "Please log in first." );
+		main::displayLoginPage( "Please log in first." );
 		exit;
 	}
 	# if they have the collection number, they'll immediately go to the
@@ -46,35 +44,42 @@ sub displayOccurrenceReclassify	{
 	my $s = shift;
 	my $dbh = shift;
 	my $dbt = shift;
-
-	# needed by Classification
-	$levels = "class,order,family";
+    my $collections_ref = shift;
+    my @collections = @$collections_ref;
 
 	print main::stdIncludes("std_page_top");
 
-	my $sql = "SELECT collection_name FROM collections WHERE collection_no=" . $q->param('collection_no');
-	my $coll_name = ${$dbt->getData($sql)}[0]->{collection_name};
-	print "<center><h3>Classification of taxa in collection ",$q->param('collection_no')," ($coll_name)</h3>";
+    my @occrefs;
+    if (@collections) {
+	    print "<center><h3>Classification of ".$q->param('taxon_name')."</h3>";
+        my ($genus,$species) = split(/\s+/,$q->param('taxon_name'));
+        my $sql = "(SELECT 0 reid_no, o.occurrence_no,o.taxon_no, o.genus_reso, o.genus_name, o.species_reso, o.species_name, c.collection_no, c.collection_name, c.country, c.state, c.max_interval_no, c.min_interval_no FROM occurrences o, collections c WHERE o.collection_no=c.collection_no AND c.collection_no IN (".join(", ",@collections).") AND o.genus_name LIKE ".$dbh->quote($genus);
+        if ($species) {
+            $sql .= " AND o.species_name LIKE ".$dbh->quote($species);
+        }
+        $sql .= ")";
+        $sql .= " UNION ";
+        $sql .= "( SELECT re.reid_no, re.occurrence_no,re.taxon_no, re.genus_reso, re.genus_name, re.species_reso, re.species_name, c.collection_no, c.collection_name, c.country, c.state, c.max_interval_no, c.min_interval_no FROM reidentifications re, occurrences o, collections c WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no AND c.collection_no IN (".join(", ",@collections).") AND re.genus_name LIKE ".$dbh->quote($genus);
+        if ($species) {
+            $sql .= " AND re.species_name LIKE ".$dbh->quote($species);
+        }
+        $sql .= ") ORDER BY occurrence_no ASC, reid_no ASC";
+        main::dbg("Reclassify sql:".$sql);
+        @occrefs = @{$dbt->getData($sql)};
+    } else {
+	    my $sql = "SELECT collection_name FROM collections WHERE collection_no=" . $q->param('collection_no');
+	    my $coll_name = ${$dbt->getData($sql)}[0]->{collection_name};
+	    print "<center><h3>Classification of taxa in collection ",$q->param('collection_no')," ($coll_name)</h3>";
 
-	# get all the occurrences
-	$sql = "SELECT occurrence_no,taxon_no,genus_reso,genus_name,species_reso,species_name FROM occurrences WHERE collection_no=" . $q->param('collection_no');
-	my @occrefs = @{$dbt->getData($sql)};
-
-	# get all the reidentifications
-	$sql = "SELECT reid_no,occurrence_no,taxon_no,genus_reso,genus_name,species_reso,species_name FROM reidentifications WHERE collection_no=" . $q->param('collection_no');
-	my @reidrefs = @{$dbt->getData($sql)};
-
-	# make a composite list of the occs and reIDs
-	my $tempoccrefs;
-	for my $o ( @occrefs )	{
-		push @tempoccrefs , $o;
-		for my $r ( @reidrefs )	{
-			if ( $r->{occurrence_no} eq $o->{occurrence_no} )	{
-				push @tempoccrefs , $r;
-			}
-		}
-	}
-	@occrefs = @tempoccrefs;
+        # get all the occurrences
+        my $collection_no = int($q->param('collection_no'));
+        $sql = "(SELECT 0 reid_no,occurrence_no,taxon_no,genus_reso,genus_name,species_reso,species_name FROM occurrences WHERE collection_no=$collection_no)".
+               " UNION ".
+               "(SELECT reid_no,occurrence_no,taxon_no,genus_reso,genus_name,species_reso,species_name FROM reidentifications WHERE collection_no=$collection_no)".
+               " ORDER BY occurrence_no ASC,reid_no ASC";
+        main::dbg("Reclassify sql:".$sql);
+        @occrefs = @{$dbt->getData($sql)};
+    }
 
 	# tick through the occurrences
 	# NOTE: the list will be in data entry order, nothing fancy here
@@ -82,16 +87,18 @@ sub displayOccurrenceReclassify	{
 		print "<hr>\n";
 		print "<form method=\"post\">\n";
 		print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"startProcessReclassifyForm\">\n";
-		print "<input type=\"hidden\" name=\"collection_no\" value=\"";
-		print $q->param('collection_no');
-		print "\">\n";
+        if (@collections) {
+            print "<input type=\"hidden\" name=\"taxon_name\" value=\"".$q->param('taxon_name')."\">";
+        } else {
+            print "<input type=\"hidden\" name=\"collection_no\" value=\"".$q->param('collection_no')."\">";
+        }
 		print "<table border=0 cellpadding=0 cellspacing=0>\n";
 	}
 	my $rowcolor = 0;
 	for my $o ( @occrefs )	{
 		# if the name is informal, add it to the list of
 		#  unclassifiable names
-		if ( $occref->{genus_reso} =~ /informal/ )	{
+		if ( $o->{genus_reso} =~ /informal/ )	{
 			push @badoccrefs , $o;
 		}
 		# otherwise print it
@@ -110,7 +117,7 @@ sub displayOccurrenceReclassify	{
 			#  the species isn't
 			$usedGenus = "";
 			if ( ! @taxnorefs && $taxon_name =~ / / )	{
-				($taxon_name,$foo) = split / /,$taxon_name;
+				($taxon_name) = split / /,$taxon_name;
 				$sql = "SELECT taxon_no,ref_is_authority,authorities.author1last as aa1,authorities.author2last as aa2,authorities.otherauthors as aoa,authorities.pubyr as ayr,refs.author1last as ra1,refs.author2last as ra2,refs.otherauthors as roa,refs.pubyr as ryr FROM authorities,refs WHERE refs.reference_no=authorities.reference_no AND taxon_name='$taxon_name'";
 				@taxnorefs = @{$dbt->getData($sql)};
 				$usedGenus = "YES";
@@ -123,7 +130,31 @@ sub displayOccurrenceReclassify	{
 				} else	{
 					print "<tr class='darkList'>";
 				}
-				print "<td>&nbsp;&nbsp;\n";
+
+                my $collection_string = "";
+                if ($o->{'collection_no'}) {
+                    my $tsql = "SELECT interval_name FROM intervals WHERE interval_no=" . $o->{max_interval_no};
+                    my $maxintname = @{$dbt->getData($tsql)}[0];
+                    $collection_string = "<b>".$o->{'collection_name'}."</b> ";
+                    $collection_string .= "<span class=\"tiny\">"; 
+                    $collection_string .= $maxintname->{interval_name};
+                    if ( $o->{min_interval_no} > 0 )  {
+                        $tsql = "SELECT interval_name FROM intervals WHERE interval_no=" . $o->{min_interval_no};
+                        my $minintname = @{$dbt->getData($tsql)}[0];
+                        $collection_string .= "/" . $minintname->{interval_name};
+                    }
+
+                    $collection_string .= " - ";
+                    if ( $o->{"state"} )  {
+                        $collection_string .= $o->{"state"};
+                    } else  {
+                        $collection_string .= $o->{"country"};
+                    }
+                    $collection_string .= "</span>";
+
+                    print "<td style=\"padding-right: 1.5em; padding-left: 1.5em;\"><a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$o->{collection_no}\">$o->{collection_no}</td><td>$collection_string</a></td>";
+                }
+				print "<td nowrap>&nbsp;&nbsp;\n";
 
 				# here's the name
 				my $formatted = "";
@@ -136,10 +167,11 @@ sub displayOccurrenceReclassify	{
 				}
 
 				# need a hidden recording the old taxon number
+                $collection_string .= ": " if ($collection_string);
 				if ( ! $o->{reid_no} )	{
-					print "<input type='hidden' name='old_taxon_no' value='" , $o->{taxon_no}, "+" , $formatted , "'>\n";
+					print "<input type='hidden' name='old_taxon_no' value='" , $o->{taxon_no}, "+" , $collection_string, $formatted , "'>\n";
 				} else	{
-					print "<input type='hidden' name='old_reid_taxon_no' value='" , $o->{taxon_no}, "+" , $formatted , "'>\n";
+					print "<input type='hidden' name='old_reid_taxon_no' value='" , $o->{taxon_no}, "+" , $collection_string, $formatted , "'>\n";
 				}
 
 				# need a hidden recording the occurrence number
@@ -193,9 +225,8 @@ sub displayOccurrenceReclassify	{
 						$authority .= " " . $t->{ayr};
 					}
 
-					# get the family, order, and class
-					$temp[0] = $t->{taxon_no};
-                    # index[0] = class, index[1] = order, index[2] = family 
+                	# needed by Classification
+                	$levels = "class,order,family";
                     my %master_class=%{Classification::get_classification_hash($dbt, $levels, [ $t->{taxon_no} ] )};
 
 					my @parents = split(/,/,$master_class{$t->{taxon_no}},-1);
@@ -292,9 +323,13 @@ sub processReclassifyForm	{
 
 	print "<center>\n\n";
 
-	my $sql = "SELECT collection_name FROM collections WHERE collection_no=" . $q->param('collection_no');
-	my $coll_name = ${$dbt->getData($sql)}[0]->{collection_name};
-	print "<h3>Taxa reclassified in collection " , $q->param('collection_no') ," (" , $coll_name , ")</h3>\n\n";
+    if ($q->param('collection_no')) {
+        my $sql = "SELECT collection_name FROM collections WHERE collection_no=" . $q->param('collection_no');
+        my $coll_name = ${$dbt->getData($sql)}[0]->{collection_name};
+        print "<h3>Taxa reclassified in collection " , $q->param('collection_no') ," (" , $coll_name , ")</h3>\n\n";
+    } else {
+        print "<h3>Taxa reclassified for " , $q->param('taxon_name') ,"</h3>\n\n";
+    }
 
 	# get lists of old and new taxon numbers
 	# WARNING: taxon names are stashed in old numbers and authority info
@@ -316,9 +351,9 @@ sub processReclassifyForm	{
 		if ( $old_taxa[$i] != $new_taxa[$i] )	{
 
 		# update the occurrences table
-			$sql = "UPDATE occurrences SET taxon_no=";
-			$sql .= $new_taxon_no . ", modifier=";
-			$sql .= $dbh->quote($s->get('enterer'));
+			$sql = "UPDATE occurrences SET taxon_no=".$new_taxon_no.
+                   ", modifier=".$dbh->quote($s->get('enterer')).
+			       ", modifier_no=".$s->get('enterer_no');
 			if ( $old_taxon_no > 0 )	{
 				$sql .= " WHERE taxon_no=" . $old_taxon_no;
 			} else	{
@@ -348,9 +383,9 @@ sub processReclassifyForm	{
 		if ( $old_reid_taxa[$i] != $new_reid_taxa[$i] )	{
 
 		# update the reidentifications table
-			$sql = "UPDATE reidentifications SET taxon_no=";
-			$sql .= $new_taxon_no . ", modifier='";
-			$sql .= $s->get('enterer');
+			$sql = "UPDATE reidentifications SET taxon_no=".$new_taxon_no.
+                   ", modifier=".$dbh->quote($s->get('enterer')).
+			       ", modifier_no=".$s->get('enterer_no');
 			if ( $old_taxon_no > 0 )	{
 				$sql .= "' WHERE taxon_no=" . $old_taxon_no;
 			} else	{
