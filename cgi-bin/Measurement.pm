@@ -23,8 +23,8 @@ sub submitSpecimenSearch {
     }
 
     # Grab the data from the database, filtering by either taxon_name and/or collection_no
-    my $sql1 = "SELECT c.collection_no, o.occurrence_no, o.genus_name,o.species_name, count(DISTINCT specimen_no) cnt FROM occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE o.collection_no=c.collection_no ";
-    my $sql2 = "SELECT c.collection_no, o.occurrence_no, re.genus_name,re.species_name, count(DISTINCT specimen_no) cnt FROM reidentifications re, occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no ";
+    my $sql1 = "SELECT c.collection_no, c.collection_name,o.occurrence_no, o.genus_name,o.species_name, count(DISTINCT specimen_no) cnt FROM occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE o.collection_no=c.collection_no ";
+    my $sql2 = "SELECT c.collection_no, c.collection_name,o.occurrence_no, re.genus_name,re.species_name, count(DISTINCT specimen_no) cnt FROM reidentifications re, occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no ";
     my $where = "";
     my @taxa;
     if ($q->param('taxon_name')) {
