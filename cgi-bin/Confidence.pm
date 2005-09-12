@@ -71,14 +71,13 @@ sub displaySearchSectionForm{
     my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML('search_section_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment'], \@prefkeys);
 
-    HTMLBuilder::buildAuthorizerPulldown($dbt, \$html );
-    HTMLBuilder::buildEntererPulldown($dbt, \$html );
-                                                                                                                                                             
     # Set the Enterer
-    my $enterer = $s->get("enterer");
-    $html =~ s/%%enterer%%/$enterer/;
-    my $authorizer = $s->get("authorizer");
-    $html =~ s/%%authorizer%%/$authorizer/;
+    my $javaScript = &main::makeAuthEntJavaScript();
+    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;   
+    my $enterer_reversed = $s->get("enterer_reversed");
+    $html =~ s/%%enterer_reversed%%/$enterer_reversed/;
+    my $authorizer_reversed = $s->get("authorizer_reversed");
+    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
 
     # Spit out the HTML
     print $html;
