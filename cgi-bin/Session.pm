@@ -245,6 +245,14 @@ sub validateUser {
 				foreach my $field ( keys %{$rs} ) {
 					$self->{$field} = $rs->{$field};
 				}
+                # These are used in lots of places (anywhere with a 'Me' button), convenient to create here
+                my $authorizer_reversed = $rs->{'authorizer'};
+                $authorizer_reversed =~ s/^\s*([^\s]+)\s*([^\s]+)\s*$/$2, $1/;
+                my $enterer_reversed = $rs->{'enterer'};
+                $enterer_reversed =~ s/^\s*([^\s]+)\s*([^\s]+)\s*$/$2, $1/;
+                $self->{'authorizer_reversed'} = $authorizer_reversed;
+                $self->{'enterer_reversed'} = $enterer_reversed;    
+
 				# now update the session_data record to the current time
 				$sql = "UPDATE session_data set record_date=NULL ".
 					   "WHERE session_id='$session_id'";
@@ -421,32 +429,15 @@ sub isSuperUser {
 }
 
 
-# Tells if we are guest or not
-sub guest {
+# Tells if we are are logged in and a valid database member
+sub isDBMember {
 	my $self = shift;
 
-	return ( $self->{authorizer} eq "Guest" );
+	my $isDBMember = ($self->{'authorizer'} !~ /^guest$/i &&
+            $self->{'enterer'} !~ /^guest$/i &&
+            $self->{'authorizer_no'} =~ /^\d+$/ && 
+            $self->{'enterer_no'} =~ /^\d+$/);
+    return $isDBMember;
 }
-
-# returns a string of all keys and values set in this
-# session.  intended for debugging purposes
-#
-# rjp, 2/2004
-sub allKeysAndValues() {
-	my $self = shift;
-	
-	my %hash = %$self;
-	
-	my @keys = keys(%hash);
-		
-	my $result;
-	foreach my $k (@keys) {
-		@list = $hash{$k}; 
-		$result .= "$k = " . "'" . join(", ", @list) . "'\n";	
-	}
-	
-	return $result;
-}
-
 
 1;
