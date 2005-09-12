@@ -25,41 +25,35 @@ sub debug{
     return $DEBUG;
 }
 
-## getResearchProjectRefsStr($dbh, $q)
-# 	Description:	returns a list of reference_no's from the refs table which
-#					belong to a particular research project (not group).
-#
-#	Parameters:	$dbh - data base handle
-#				$q	 - query object
-#
-#	Returns:	comma separated list of reference numbers, or empty string.
+## getResearchGroupSQL($dbt, $research_group)
+# 	Description:    Returns an SQL snippet to filter all collections corresponding to a project or research group
+#                   Assumes that the secondary_refs table has been left joined against the collections table
+#	Parameters:	$dbt - DBTransactionManager object
+#				$research_group - can be a research_group, project_name, or both
+#	Returns:	SQL snippet, to be appended with AND
 ##
-sub getResearchProjectRefsStr{
-	my $dbh = shift;
-	my $q   = shift;
+sub getResearchGroupSQL {
+	my $dbt = shift;
+	my $research_group = shift;
 
-    my $reflist = "";
+    my @terms = ();
+    if($research_group =~ /^(?:decapod|ETE|5%|1%|PACED|PGAP)$/){
+        my $sql = "SELECT reference_no FROM refs WHERE FIND_IN_SET(".$dbt->dbh->quote($research_group).",project_name)";
+        my @results = @{$dbt->getData($sql)};
+        my $refs = join(", ",map {$_->{'reference_no'}} @results);
+        $refs = '-1' if (!$refs );
+        push @terms, "c.reference_no IN ($refs)";
+        push @terms, "sr.reference_no IN ($refs)";
+    } 
+    if($research_group =~ /^(?:decapod|ETE|marine invertebrate|micropaleontology|PACED|paleobotany|paleoentomology|taphonomy|vertebrate)$/) {
+        push @terms, "FIND_IN_SET( ".$dbt->dbh->quote($research_group).", c.research_group ) ";
+    } 
 
-    if ( $q->param('research_group') =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/ ) {
-        $sql = "SELECT reference_no FROM refs WHERE project_name LIKE '%";
-        $sql .= $q->param('research_group') . "%'";
-
-        my $sth = $dbh->prepare($sql);
-        $sth->execute();
-        my @refrefs = @{$sth->fetchall_arrayref()};
-        $sth->finish();
-
-        for $refref (@refrefs)  {
-            $reflist .= "," . ${$refref}[0];
-        }
-        if ($reflist) {
-            $reflist =~ s/^,//;
-        } else {
-            # in case of an empty list
-            $reflist = "0";
-        }    
+    my $sql_terms;
+    if (@terms) {
+        $sql_terms = "(".join(" OR ",@terms).")";  
     }
-	return $reflist;
+    return $sql_terms;
 }
 
 ## getSecondaryRefsString($dbh, $collection_no, $selectable, $deletable)
@@ -524,37 +518,18 @@ sub getMostRecentReIDforOcc{
 	my $dbt = shift;
 	my $occ = shift;
 	my $returnTheRef = shift;
-	
-	my $sql = "SELECT genus_name, species_name, collection_no, reid_no,pubyr, ".
-			  "reidentifications.created ".
-			  "FROM reidentifications, refs WHERE occurrence_no=$occ ".
-			  "AND reidentifications.reference_no = refs.reference_no";
+
+    my $sql = "SELECT re.genus_name, re.species_name, re.collection_no, re.reid_no, r.pubyr, re.created FROM reidentifications re, refs r WHERE r.reference_no=re.reference_no AND re.occurrence_no=".int($occ)." ORDER BY r.pubyr DESC, re.reid_no DESC LIMIT 1";  
+
 	my @results = @{$dbt->getData($sql)};
 
 	if(scalar @results < 1){
 		return "";
-	}
-	elsif(scalar @results == 1){
-		if($returnTheRef){
+	} else {
+		if($returnTheRef) {
 			return $results[0];
-		}
-		else{
-			return $results[0]->{reid_no};
-		}
-	}
-	# find the most recent pubyr:
-	else{
-		my $most_recent = 0;
-		for(my $index=0; $index<@results; $index++){
-			if($results[$index]->{pubyr} > $most_recent){
-				$most_recent = $index; 
-			}
-		}	
-		if($returnTheRef){
-			return $results[$most_recent];
-		}
-		else{
-			return $results[$most_recent]->{reid_no};
+		} else {
+			return $results[0]->{'reid_no'};
 		}
 	}
 }
