@@ -65,32 +65,16 @@ sub displayStrataSearch{
 	my $q = shift;
     my $s = shift;
 
-    $sql = "SELECT collection_no,access_level,DATE_FORMAT(release_date, '%Y%m%d') rd_short,research_group," 
-         . "geological_group,formation,member,lithology1,lithology2,environment FROM collections "
-         . "WHERE (member=".$dbh->quote($q->param('search_term'))
-              . " OR geological_group=".$dbh->quote($q->param('search_term'))
-              . " OR formation=".$dbh->quote($q->param('search_term')).")";
-    if ($q->param("group")) { 
-        $sql .= " AND geological_group=".$dbh->quote($q->param('group'));
-    }
-    if ($q->param("formation")) { 
-        $sql .= " AND formation=".$dbh->quote($q->param('formation')); 
-    }    
 
-    main::dbg("sql: $sql<br>");
-
-    # Get rows okayed by permissions module
-    my $sth = $dbh->prepare($sql);
-    $sth->execute();
-    my $p = Permissions->new( $s );
-    my $limit = 100000;
-    my (@dataRows, $ofRows);
-    $p->getReadRows( $sth, \@dataRows, $limit, \$ofRows );
-    
-    main::dbg("rows returned by permissions module: $ofRows<br>");
+    # Gets teh datas
+    my %options = $q->Vars();
+    $options{'permission_type'} = 'read';                                                                                                                   
+    $options{'calling_script'} = 'Strata';
+    my @fields = ('geological_group','formation','member','lithology1','lithology2','environment');
+    my ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,\@fields);
 
     # Do conflict checking beforehand, see function definition for explanation
-    my $conflict_found = checkConflict(\@dataRows,$q);
+    my $conflict_found = checkConflict($dataRows,$q);
 
     # Will help narrow parameters, see if the conflict is resolved
     #   we do this instead of just narrowing it down
@@ -119,9 +103,9 @@ sub displayStrataSearch{
     # check again, see if conflict resolved.
     # this wouldn't happen if we were linked from the collSearch, as a hint
     # is always passed, but just if it does, let user supply missing options
-    $conflict_found = checkConflict(\@dataRows,$q);
+    $conflict_found = checkConflict($dataRows,$q);
     if ($conflict_found) {
-        displayStrataChoice($q, $conflict_found, \@dataRows);
+        displayStrataChoice($q, $conflict_found, $dataRows);
         return;    
     }
 
@@ -131,7 +115,7 @@ sub displayStrataSearch{
     $is_group = 0; $is_formation = 0; $is_member = 0; %lith_count = (); %environment_count = ();
     $row_count = 0; %c_formations = (); %c_members = ();
 
-    foreach my $row (@dataRows) {
+    foreach my $row (@$dataRows) {
         if ($q->param('formation')) {
             next unless (lc($q->param('formation')) eq lc($row->{'formation'}));
         }    
@@ -140,15 +124,15 @@ sub displayStrataSearch{
         }    
         $row_count++;
         # group hierarchy data, c_ denote "children of this formation or group"
-        if (lc($q->param('search_term')) eq lc($row->{'geological_group'})) {
+        if (lc($q->param('group_formation_member')) eq lc($row->{'geological_group'})) {
             $is_group = 1;
             $c_formations{$row->{'formation'}} += 1;
         }
-        if (lc($q->param('search_term')) eq lc($row->{'formation'})) {
+        if (lc($q->param('group_formation_member')) eq lc($row->{'formation'})) {
             $is_formation = 1; 
             $c_members{$row->{'member'}} += 1;
         }
-        if (lc($q->param('search_term')) eq lc($row->{'member'})) {
+        if (lc($q->param('group_formation_member')) eq lc($row->{'member'})) {
             $is_member = 1;
         }
 
@@ -182,23 +166,23 @@ sub displayStrataSearch{
                 : ($row_count == 1) ? "1 collection total"
                                  : "$row_count collections total";
     print qq|<div align="center"><h2>|;
-    print $q->escapeHTML(ucfirst($q->param('search_term'))) . " " . $in_strata_type;
+    print $q->escapeHTML(ucfirst($q->param('group_formation_member'))) . " " . $in_strata_type;
     print qq|</h2>($collTxt)</div></br>|;
 
     # Display formations in groups, members in formations
     my ($cnt,$plural,$coll_link,$html);
     if ($is_group) {
-        $html = "<p><b>Formations in the ". ucfirst($q->param('search_term'))." Group:</b> ";
+        $html = "<p><b>Formations in the ". ucfirst($q->param('group_formation_member'))." Group:</b> ";
         foreach $formation (sort(keys(%c_formations))) {
             $cnt = $c_formations{$formation};
             $coll_link = "";
             if ($formation) {
                 $coll_link =  qq|<a href="$exec_url?action=displayCollResults&geological_group=|
-                         . uri_escape($q->param('search_term'))
+                         . uri_escape($q->param('group_formation_member'))
                          . qq|&formation=|.uri_escape($formation).qq|">$formation</a>|;
             } else {
                 $coll_link =  qq|<a href="$exec_url?action=displayCollResults&geological_group=|
-                         . uri_escape($q->param('search_term'))
+                         . uri_escape($q->param('group_formation_member'))
                          . qq|&formation=NULL_OR_EMPTY">unknown</a>|;
             }
             $html .=  "$coll_link ($c_formations{$formation}), ";
@@ -209,18 +193,18 @@ sub displayStrataSearch{
     }
 
     if ($is_formation) {
-        $html = "<p><b>Members in the ".ucfirst($q->param('search_term'))." Formation:</b> ";
+        $html = "<p><b>Members in the ".ucfirst($q->param('group_formation_member'))." Formation:</b> ";
         foreach $member (sort(keys(%c_members))) {
             $cnt = $c_members{$member};
             $coll_link = "";
             if ($member) {
                 $coll_link =  qq|<a href="$exec_url?action=displayCollResults&formation=|
-                           . uri_escape($q->param('search_term'));
+                           . uri_escape($q->param('group_formation_member'));
                 $coll_link .= "&geological_group=".uri_escape($q->param('geological_group')) if $q->param('geological_group');
                 $coll_link .= qq|&member=|.uri_escape($member).qq|">$member</a>|;
             } else {
                 $coll_link =  qq|<a href="$exec_url?action=displayCollResults&formation=|
-                           . uri_escape($q->param('search_term'));
+                           . uri_escape($q->param('group_formation_member'));
                 $coll_link .= "&geological_group=".uri_escape($q->param('geological_group')) if $q->param('geological_group');
                 $coll_link .= qq|&member=NULL_OR_EMPTY">unknown</a>|;
             } 
@@ -239,7 +223,7 @@ sub displayStrataSearch{
             if ($lith_count{$lithology}) {
                 $cnt = $lith_count->{$lithology};
                 $coll_link = qq|<a href="$exec_url?action=displayCollResults| 
-                            . "&group_formation_member=".uri_escape($q->param('search_term'));
+                            . "&group_formation_member=".uri_escape($q->param('group_formation_member'));
                 $coll_link .= "&formation=".uri_escape($q->param('formation')) if $q->param('formation');
                 $coll_link .= "&geological_group=".uri_escape($q->param('geological_group')) if $q->param('geological_group');
                 $coll_link .= qq|&lithologies=|.uri_escape($lithology).qq|">$lithology</a>|;
@@ -261,7 +245,7 @@ sub displayStrataSearch{
         foreach $environment (@env_list) {
             if ($environment_count{$environment}) {
                 $coll_link = qq|<a href="$exec_url?action=displayCollResults| 
-                              . "&group_formation_member=".uri_escape($q->param('search_term'));
+                              . "&group_formation_member=".uri_escape($q->param('group_formation_member'));
                 $coll_link .= "&formation=".uri_escape($q->param('formation')) if $q->param('formation');
                 $coll_link .= "&geological_group=".uri_escape($q->param('grup')) if $q->param('geological_group');
                 $coll_link .= qq|&environment=|.uri_escape($environment).qq|">$environment</a>|;
@@ -277,7 +261,6 @@ sub displayStrataSearch{
 
     # Display age range/Show what collections are in it 
     # Set this q parameter so processCollectionsSearch (called from doCollections) builds correct SQL query
-    $q->param("group_formation_member"=>$q->param('search_term'));
     print TaxonInfo::doCollections($q->url(), $q, $dbt, $dbh, '',"for_strata_module");
 
     print "<p>&nbsp;</p>";
@@ -310,10 +293,10 @@ sub checkConflict {
         # the p_* arrays denote parents, the gp_* array lists/counts grandparents and are used for
         #   checking for conflicts.  i.e. a member that belongs to two different formations
         #   so if theres no conflicts the p_* and g_* should have only 1 non-null element in them
-        if (lc($q->param('search_term')) eq lc($row->{'formation'})) {
+        if (lc($q->param('group_formation_member')) eq lc($row->{'formation'})) {
             $p_groups{$row->{'geological_group'}} += 1;
         }
-        if (lc($q->param('search_term')) eq lc($row->{'member'})) {
+        if (lc($q->param('group_formation_member')) eq lc($row->{'member'})) {
             $p_formations{$row->{'formation'}} += 1;
             $gp_groups{$row->{'formation'}}{$row->{'geological_group'}} += 1;
         }
@@ -339,7 +322,7 @@ sub checkConflict {
 
 
 # In the case of an unresolvable conflict, display a choice to the user
-sub displayStrataChoice() {
+sub displayStrataChoice {
     my $q = shift; 
     my $conflict_reason = shift;
     my $dataRows = shift;
@@ -348,10 +331,10 @@ sub displayStrataChoice() {
     %group_links = ();
 
     foreach $row (@{$dataRows}) {
-        if (lc($q->param('search_term')) eq lc($row->{'formation'})) {
+        if (lc($q->param('group_formation_member')) eq lc($row->{'formation'})) {
             $group_links{$row->{'geological_group'}} += 1 if ($row->{'geological_group'});
         }    
-        if (lc($q->param('search_term')) eq lc($row->{'member'})) {
+        if (lc($q->param('group_formation_member')) eq lc($row->{'member'})) {
             $formation_links{$row->{'formation'}} += 1 if ($row->{'formation'});
         }
     }    
@@ -361,36 +344,36 @@ sub displayStrataChoice() {
     print "<center>";
     my $count = 0;
     if ($conflict_reason eq "different groups") {
-        print "The ".$q->param('search_term')." formation belongs to multiple groups.  Please select the one you want: <p>";
+        print "The ".$q->param('group_formation_member')." formation belongs to multiple groups.  Please select the one you want: <p>";
         foreach $grp (keys %group_links) {
             print " - " if ($count++) != 0;
             print "<b><a href=\"$exec_url?action=displayStrataSearch"
                 . "&geological_group=".uri_escape($grp)
-                . "&search_term=".uri_escape($q->param('search_term'))."\">$grp</a></b>";
+                . "&group_formation_member=".uri_escape($q->param('group_formation_member'))."\">$grp</a></b>";
         }          
         print "</p>";
     } elsif ($conflict_reason eq "different formations") {
-        print "The ".$q->param('search_term')." member belongs to multiple formations.  Please select the one you want: <p>";
+        print "The ".$q->param('group_formation_member')." member belongs to multiple formations.  Please select the one you want: <p>";
         foreach $fm (keys %formation_links) {
             print " - " if ($count++) != 0;
             print "<b><a href=\"$exec_url?action=displayStrataSearch"
                 . "&formation=".uri_escape($fm)
-                . "&search_term=".uri_escape($q->param('search_term'))."\">$fm</a></b> ";
+                . "&group_formation_member=".uri_escape($q->param('group_formation_member'))."\">$fm</a></b> ";
         }          
         print "</p>";
     } elsif ($conflict_reason eq "different lines") {
-        print "The term ".$q->param('search_term')." is ambiguous and belongs to multiple formations or groups.  Please select the one you want: <p>";
+        print "The term ".$q->param('group_formation_member')." is ambiguous and belongs to multiple formations or groups.  Please select the one you want: <p>";
         foreach $fm (keys %formation_links) {
             print " - " if ($count++) != 0;
             print "<b><a href=\"$exec_url?action=displayStrataSearch"
                 . "&formation=".uri_escape($fm)
-                . "&search_term=".uri_escape($q->param('search_term'))."\">$fm (formation)</a></b> ";
+                . "&group_formation_member=".uri_escape($q->param('group_formation_member'))."\">$fm (formation)</a></b> ";
         }          
         foreach $grp (keys %group_links) {
             print " - " if ($count++) != 0;
             print "<b><a href=\"$exec_url?action=displayStrataSearch"
                 . "&geological_group=".uri_escape($grp)
-                . "&search_term=".uri_escape($q->param('search_term'))."\">$grp (group)</a></b><br> ";
+                . "&group_formation_member=".uri_escape($q->param('group_formation_member'))."\">$grp (group)</a></b><br> ";
         }          
         print "</p>";
     }
