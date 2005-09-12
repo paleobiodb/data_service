@@ -312,102 +312,6 @@ sub buildSelect {
 	return $html;
 }
 
-
-
-
-
-# Pass it:
-# - reference to html string (of a template for example)
-# - name to select by default (optional)
-# - boolean value - should we only select active names from the DB?
-#
-# Returns nothing, simply search/replaces the html passed.
-# used to be in bridge.pl.
-#
-# class method
-sub buildAuthorizerPulldown {
-	my ($dbt, $html, $authorizer, $active) = @_;
-	my $menu = authorizerPopupMenu($dbt, $authorizer, $active);
-
-	$$html =~ s/<select name="authorizer">/$&\n$menu/;
-}
-
-
-# Pass it:
-# - reference to html string (of a template for example)
-# - name to select by default (optional)
-# - boolean value - should we only select active names from the DB?
-#
-# Returns nothing, simply search/replaces the html passed.
-# used to be in bridge.pl.
-#
-# class method
-sub buildEntererPulldown {
-	my ($dbt,$html, $enterer, $active) = @_;
-	my $menu = entererPopupMenu($dbt,$enterer, $active);
-	$$html =~ s/<select name="enterer">/$&\n$menu/;
-}
-
-
-
-# Pass it a string to select (or empty string if none)
-# and a boolean.  If the boolean is true, then we'll only
-# find active enterers, otherwise, find all enterers.
-#
-# Returns an HTML formatted string of <OPTION> tags for 
-# use in a popup menu.
-#
-# rjp, 3/2004
-#
-# class method
-sub entererPopupMenu {
-    my $dbt = shift;
-	my $toSelect = shift;		# Default value
-	my $active = shift;
-
-	my $list = Person::listOfEnterers($dbt,$active);
-	
-	my $select = "<OPTION value=\"\">Select enterer...</OPTION>\n";
-	
-	my $selected = '';
-	foreach my $a (@$list) {
-		if ($a->{'name'} eq $toSelect) { $selected = 'selected'; } 
-		else { $selected = ''; };
-		
-		$select .= "<OPTION value=\"" . $a->{'name'} . "\" $selected>". $a->{'reversed_name'} . "</OPTION>\n";
-	}
-	
-	return $select;
-}
-
-
-# same as entererPopup, but for authorizers
-# 
-# rjp, 3/2004
-#
-# class method
-sub authorizerPopupMenu {
-    my $dbt = shift;
-	my $toSelect = shift;		# Default value
-	my $active = shift;
-
-	my $list = Person::listOfAuthorizers($dbt,$active);
-	
-	my $select = "<OPTION value=\"\">Select authorizer...</OPTION>\n";
-	
-	my $selected = '';
-	foreach my $a (@$list) {
-		if ($a->{'name'} eq $toSelect) { $selected = 'selected'; } 
-		else { $selected = ''; };
-		
-		$select .= "<OPTION value=\"" . $a->{'name'} . "\" $selected>". $a->{'reversed_name'} . "</OPTION>\n";
-	}
-	
-	return $select;
-}
-
-
-
 # Creates a popup menu of taxon ranks (a select).
 #
 # Pass it a rank to select as the first argument,
@@ -864,7 +768,6 @@ sub populateHTML {
   						$sl->setMainTagStuff($1);
 					}
 				}
-# Set other main tag attributes if any (like class=)
                 if($selList =~ /<select\s+id="$fieldName"(.*?)>/)
                 {
                     if($1){
@@ -890,8 +793,8 @@ sub populateHTML {
         my $sl = new SelectList;
         # Set the name
         $sl->setName($fieldName);
-	# Set other stuff
-	$sl->setMainTagStuff($otherstuff) if($otherstuff);
+    	# Set other stuff
+	    $sl->setMainTagStuff($otherstuff) if($otherstuff);
         # If an array having this field name exists, use it
         if(defined $SELECT_LISTS{$fieldName})
         {
@@ -1017,9 +920,15 @@ sub populateHTML {
 			$tf->setText($val);
 			$tf->setName($fieldName);
 
-			if( $stuff =~ /size="?(\d+)"?/im) 		{ $tf->setSize($1); }
-			if( $stuff =~ /maxlength="?(\d+)"?/im) { $tf->setMaxLength($1); }
-			if( $stuff =~ /disabled/im )			{ $tf->setDisabled(); }
+			if( $stuff =~ /size="?(\d+)"?/im)       { $tf->setSize($1); }
+			if( $stuff =~ /maxlength="?(\d+)"?/im)  { $tf->setMaxLength($1); }
+			if( $stuff =~ /disabled/im )            { $tf->setDisabled(); }
+
+            my $otherstuff = $stuff;
+            $otherstuff =~ s/(value|size|maxlength|type|id|name)="(.*?)"(\s|>)//igm;
+            $otherstuff =~ s/(value|size|maxlength|type|id|name)=(.*?)(\s|>)//igm;
+            $otherstuff =~ s/disabled//im;   
+            if ($otherstuff =~ /\s+(.*?)>/)  { $tf->setMainTagStuff($1)};
 
 			my $htmlString = $tf->toHTML();
 			$htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
