@@ -19,7 +19,7 @@ sub listOfAuthorizers {
     my $dbt = shift;
 	my $activeOnly = shift;
 	
-	my $sql = "SELECT name, reversed_name FROM person WHERE is_authorizer=1";
+	my $sql = "SELECT name, reversed_name, person_no FROM person WHERE is_authorizer=1";
 	if ($activeOnly) { $sql .= " AND active = 1 "; }
 	$sql .= " ORDER BY reversed_name";
 
@@ -36,7 +36,7 @@ sub listOfEnterers {
     my $dbt = shift;
 	my $activeOnly = shift;
 	
-	my $sql = "SELECT name, reversed_name FROM person ";
+	my $sql = "SELECT name, reversed_name, person_no FROM person ";
 	if ($activeOnly) { $sql .= " WHERE active = 1 "; }
 	$sql .= " ORDER BY reversed_name";
 
