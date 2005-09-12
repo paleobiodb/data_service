@@ -14,21 +14,12 @@ use CGI;
 
 use fields qw(	
 				dbh
-				sth
-				perm
-				GLOBALVARS
-				
 				_id
 				_err
 								
 				tableNames);  # list of allowable data fields.
 
 # dbh				:	handle to the database
-# GLOBALVARS			:	optional GLOBAL hash, see top of bridge.pl for more info.
-# perm				:	Permissions object
-
-# tableNames		:	array ref of all table names in the database, not set by default.
-#
 # _id, _err 		: 	from the old DBTransactionManager
 #
 
@@ -49,15 +40,6 @@ sub new {
 	return $self;
 }
 
-
-# returns the DBI Statement Handle
-# for those cases when it's simpler to directly use the statement handle
-#
-# note, this may be empty if you have not prepared anything yet.
-sub sth {
-	my DBTransactionManager $self = shift;
-	return $self->{'sth'};
-}
 
 # returns the DBI Database Handle
 # for those cases when it's simpler to directly use the database handle
@@ -160,8 +142,8 @@ sub insertRecord {
 	my $dbh = $self->{'dbh'};
 	
 	# make sure they're allowed to insert data!
-	if (!$s || $s->guest() || $s->get('enterer') eq '') {
-		croak("invalid session or enterer in DBTransactionManager::insertNewRecord");
+	if (!$s || !$s->isDBMember()) { 
+		croak("invalid session or enterer in DBTransactionManager::insertRecord");
 		return;
 	}
 	
@@ -258,7 +240,7 @@ sub updateRecord {
     my $dbh = $self->dbh;
 	
 	# make sure they're allowed to update data!
-	if (!$s || $s->guest() || $s->get('enterer') eq '' || $s->get('enterer_no') !~ /^\d+$/)	{
+	if (!$s || !$s->isDBMember()) {
 		croak("Invalid session or enterer in updateRecord");
 		return 0;
 	}
