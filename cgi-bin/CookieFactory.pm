@@ -50,7 +50,7 @@ sub buildSessionId
 	my $value = shift;
 	my $cookie;
 
-	$cookie = $self->buildCookie ( "session_id", $value, "+2d" );
+	$cookie = $self->buildCookie ( "session_id", $value, "+1y" );
 
 	return $cookie;
 }
