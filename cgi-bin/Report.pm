@@ -573,7 +573,8 @@ sub reportBuildDataTables {
 sub reportQueryDB{
 	my $self = shift;
     my @whereTerms = ();
-    my $fromSQL = 'collections';
+    my $fromSQL = 'collections c';
+    my $leftJoinSQL = '';
 
     # Build terms/conditionals for collections
 
@@ -583,7 +584,7 @@ sub reportQueryDB{
     
     # How choices in HTML map to database fields
     %sqlFields = (
-        'authorizer'=>'authorizer', 'enterer'=>'enterer', 'research group'=>'research_group',
+        'authorizer'=>'authorizer_no', 'enterer'=>'enterer_no', 'research group'=>'research_group',
         'country'=>'country', 'state'=>'state', 'interval name'=>'max_interval_no,min_interval_no', 'formation'=>'formation',
         'paleoenvironment'=>'environment', 'scale of geographic resolution'=>'geogscale', 
         'scale of stratigraphic resolution'=>'stratscale',
@@ -598,23 +599,18 @@ sub reportQueryDB{
         }    
     }
 
-    # Research group conditional
-    my $research_group = $q->param('research_group');
-    if($research_group && $research_group =~ /(^decapod$)|(^ETE$)|(^5%$)|(^1%$)|(^PACED$)|(^PGAP$)/){
-        my $project_str = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
-        if($project_str ne ""){
-            push @whereTerms, "collections.reference_no IN (" . $project_str. ")";
-        }
-    } elsif($research_group) {
-        push @whereTerms, "FIND_IN_SET('$research_group', collections.research_group)";
-    }
+    my $research_group_sql = PBDBUtil::getResearchGroupSQL($dbt,$q->param('research_group'));
+    push @whereTerms, $research_group_sql if ($research_group_sql);
+    if($q->param('research_group') =~ /^(?:decapod|ETE|5%|1%|PACED|PGAP)$/) {
+        $leftJoinSQL .= " LEFT JOIN secondary_refs sr ON sr.collection_no=c.collection_no";
+    }                               
 
     # Permissions conditionals, since we can't use Permissions Module
     # ((release date < NOW and is public) OR is authorizer OR research_group in mygroups)
     # push @whereTerms, "(access_level='the public' AND NOW() > release_date) OR authorizer=".$dbh->quote($s->get('authorizer'));
     # No permissions conditionals, since this is non-specific data.
  
-    my $createTable = ($q->param('output') eq 'collections') ? "collections" : "occurrences";
+    my $createTable = ($q->param('output') eq 'collections') ? "c" : "o";
     if($q->param("year_begin")){
         my $creationDate = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$q->param('year_begin'),$q->param('month_begin'),$q->param('day_begin')));
 		push @whereTerms,"$createTable.created >= $creationDate";
@@ -624,29 +620,29 @@ sub reportQueryDB{
 		push @whereTerms,"$createTable.created <= $creationDate";
     }    
 
-    # Add in conditionals specific to occurrences
-	#if ($q->param('output') ne "collections")	{
-        # We need to grab occurrence data as well
         
+    # Construct the final SQL query and execute
+    my ($selectSQL, $groupSQL);
+    foreach (@{$self->{'searchFields'}[1]}, @{$self->{'searchFields'}[2]}) {
+        $groupSQL .= ",c.".$_;
+    }
+    $groupSQL =~ s/^,//;
 	if (($q->param('output') eq "collections" && ($q->param('Sepkoski') eq "Yes" || $q->param('taxon_name'))) || 
         ($q->param('output') eq "occurrences") ||
         ($q->param('output') eq "average occurrences")) {
 
-        if ($q->param('output') eq 'collections') {
-            # this shouldn't be necessary, if you think about it, since we're matching where terms on occurrences anyways.
-            $fromSQL .= " LEFT JOIN occurrences ON occurrences.collection_no = collections.collection_no";
-            $fromSQL .= " LEFT JOIN reidentifications ON reidentifications.occurrence_no = occurrences.occurrence_no";
-        } else {    
-            # if we're counting occurrences, we're not counting empty collections as well
-            $fromSQL .= ", occurrences ";
-            $fromSQL .= " LEFT JOIN reidentifications ON reidentifications.occurrence_no = occurrences.occurrence_no";
-            push @whereTerms,"occurrences.collection_no = collections.collection_no";
-        }
+        $selectSQL = 'COUNT(DISTINCT o.occurrence_no) AS occurrences_cnt, COUNT(DISTINCT c.collection_no) AS collections_cnt';
+        $selectSQL .= ",".$groupSQL;
+
+        $fromSQL .= ", occurrences o ";
+        $fromSQL .= " LEFT JOIN reidentifications re ON re.occurrence_no = o.occurrence_no";
+        push @whereTerms,"o.collection_no = c.collection_no";
+
         # get a list of Sepkoski's genera, if needed JA 28.2.03
         if ( $q->param('Sepkoski') eq "Yes" )	{
             $sepkoskiGenera = $self->getSepkoskiGenera();
             if ( $sepkoskiGenera) {
-                push @whereTerms,"(occurrences.taxon_no IN ($sepkoskiGenera) OR reidentifications.taxon_no IN ($sepkoskiGenera))";
+                push @whereTerms,"((re.reid_no IS NULL AND o.taxon_no IN ($sepkoskiGenera)) OR (re.most_recent='YES' AND re.taxon_no IN ($sepkoskiGenera)))";
             }
         }
 
@@ -677,31 +673,22 @@ sub reportQueryDB{
          
             my $sql;
             if ($taxon_nos_string) {
-                $sql .= " OR occurrences.taxon_no IN (".$taxon_nos_string.") OR reidentifications.taxon_no IN (".$taxon_nos_string.")";
+                $sql .= " OR ((re.reid_no IS NULL AND o.taxon_no IN ($taxon_nos_string)) OR (re.most_recent='YES' AND re.taxon_no IN ($taxon_nos_string)))";
             }
             if ($genus_names_string) {
-                $sql .= " OR occurrences.genus_name IN (".$genus_names_string.") OR reidentifications.genus_name IN (".$genus_names_string.")";
+                $sql .= " OR ((re.reid_no IS NULL AND o.genus_name IN ($genus_names_string)) OR (re.most_recent='YES' AND re.genus_name IN ($genus_names_string)))";
             }
             $sql =~ s/^ OR //g;
 
             if ($sql) { push @whereTerms, "(".$sql.")"; }
         }
-    }
-
-    # Construct the final SQL query and execute
-    my ($selectSQL, $groupSQL);
-    if ($fromSQL =~ /occurrences/) {
-        $selectSQL = 'COUNT(*) AS occurrences_cnt, COUNT(DISTINCT collections.collection_no) AS collections_cnt';
     } else {
-        $selectSQL = 'COUNT(*) AS collections_cnt';
+        $selectSQL = 'COUNT(DISTINCT c.collection_no) AS collections_cnt';
+        $selectSQL .= ",".$groupSQL;
     }
-    foreach (@{$self->{'searchFields'}[1]}, @{$self->{'searchFields'}[2]}) {
-        $groupSQL .= ",collections.".$_;
-    }
-    $selectSQL .= $groupSQL;
-    $groupSQL =~ s/^,//;
 
-    $sql = "SELECT ".$selectSQL." FROM ".$fromSQL;
+
+    $sql = "SELECT ".$selectSQL." FROM ".$fromSQL." ".$leftJoinSQL;
     if (@whereTerms) {
         $sql .= " WHERE ".join(' AND ',@whereTerms);
     }
@@ -741,7 +728,7 @@ sub getSepkoskiGenera {
 sub getTranslationTable {
     my $self = shift;
     my $param = shift;
-    %table = ();
+    my %table = ();
     if ($param eq "interval name") {
         my $intervals = $self->getIntervalNames();
         %table = %{$intervals};
@@ -760,7 +747,19 @@ sub getTranslationTable {
     } elsif ($param eq "continent") {
         my $regions = $self->getRegions();
         %table = %{$regions};
-	}
+	} elsif ($param eq "enterer") {
+        my $sql = "SELECT person_no,name FROM person";
+        my @results = @{$dbt->getData($sql)};
+        foreach my $row (@results) {
+            $table{$row->{'person_no'}} = $row->{'name'};
+        }
+	} elsif ($param eq "authorizer") {
+        my $sql = "SELECT person_no,name FROM person";
+        my @results = @{$dbt->getData($sql)};
+        foreach my $row (@results) {
+            $table{$row->{'person_no'}} = $row->{'name'};
+        }
+    }
     $self->dbg("get translation table called with param $param. table:");
     $self->dbg("<pre>".Dumper(\%table)."</pre>") if (scalar keys %table);
 
