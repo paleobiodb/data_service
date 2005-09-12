@@ -736,14 +736,12 @@ sub findRecentGenera	{
 	my $self = shift;
 
 	# draw all comments pertaining to Jack's genera
-	my $asql = "SELECT comments,taxon_name FROM authorities WHERE authorizer_no=48 AND taxon_rank='genus'";
+	my $asql = "SELECT taxon_name FROM authorities WHERE extant='YES'";
 	my @arefs = @{$dbt->getData($asql)};
 
 	# isRecent must be global!
 	for my $aref ( @arefs )	{
-		if ( $aref->{comments} =~ / R / || $aref->{comments} =~ / R$/)	{
-			$isRecent{$aref->{taxon_name}}++;
-		}
+		$isRecent{$aref->{taxon_name}}++;
 	}
 	return;
 
