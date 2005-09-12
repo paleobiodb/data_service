@@ -116,7 +116,7 @@ sub checkTaxonInfo {
             } else {
                 # If nothing, print out an error message
                 searchForm($hbo, $q, 1); # param for not printing header with form
-                if($s->get("enterer") ne "Guest" && $s->get("enterer") ne ""){
+                if($s->isDBMember()) {
                     print "<center><p><a href=\"bridge.pl?action=submitTaxonSearch?goal=authority&taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
                 }
             }
@@ -255,7 +255,7 @@ sub displayTaxonInfoResults {
     my $entered_name = $q->param('entered_name') || $q->param('taxon_name');
     my $entered_no   = $q->param('entered_no') || $q->param('taxon_no');
 	print "<div style=\"font-family : Arial, Verdana, Helvetica; font-size : 14px;\">";
-	if($s->get("enterer") ne "Guest" && $s->get("enterer") ne ""){
+	if($s->isDBMember()) {
 		# Entered Taxon
         if ($entered_no) {
 		    print "<center><a href=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=$entered_no\">";
@@ -306,7 +306,7 @@ sub doNavBox {
 	# if the modules are not known try to pull them from the person table
 	# of course, we don't have to reset the preferences in that case
 	# JA 21.10.04
-	if ( $s->get("enterer") ne "Guest" && $s->get("enterer_no") =~ /^\d+$/)	{
+	if ( $s->isDBMember()) {
 		if ( @modules_to_display )	{
 			my $pref = join ' ', @modules_to_display;
 			my $prefsql = "UPDATE person SET taxon_info_modules='$pref',last_action=last_action WHERE person_no='" . $s->get("enterer_no") . "'";
@@ -672,6 +672,8 @@ sub doCollections{
     $options{'most_recent'} = 1;
     $options{'calling_script'} = "TaxonInfo";
     $options{'taxon_list'} = $in_list if (@$in_list);
+    # This field passed from strata module
+    $options{'group_formation_member'} = $q->param('group_formation_member') if (defined($q->param('group_formation_member')));
     my $fields = ["country", "state", "max_interval_no", "min_interval_no"];  
     my ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
     my @data = @$dataRows;
@@ -1043,25 +1045,36 @@ sub displayTaxonClassification{
     # Print em out
     if (@child_taxa_links) {
         $output .= "<p><i>This taxon includes:</i><br>"; 
+        $output .= "<small>" if (scalar(@child_taxa_links)>10);
         $output .= join(", ",@child_taxa_links);
+        $output .= "</small>" if (scalar(@child_taxa_links)>10);
         $output .= "</p>";
     }
 
     if (@possible_child_taxa_links) {
         $output .= "<p><i>This genus may include these species, but they have not been formally classified into it:</i><br>"; 
+        $output .= "<small>" if (scalar(@possible_child_taxa_links)>10);
         $output .= join(", ",@possible_child_taxa_links);
+        $output .= "</small>" if (scalar(@possible_child_taxa_links)>10);
         $output .= "</p>";
     }
 
     if (@sister_taxa_links) {
-        $output .= "<p><i>Sister taxa include:</i><br>"; 
+        my $rank = ($focal_taxon_rank eq 'species') ? 'species' :
+                   ($focal_taxon_rank eq 'genus') ? 'genera' :
+                                                    'taxa';
+        $output .= "<p><i>Sister $rank include:</i><br>"; 
+        $output .= "<small>" if (scalar(@sister_taxa_links)>10);
         $output .= join(", ",@sister_taxa_links);
+        $output .= "</small>" if (scalar(@sister_taxa_links)>10);
         $output .= "</p>";
     }
     
     if (@possible_sister_taxa_links) {
         $output .= "<p><i>These species have not been formally classified into the genus:</i><br>"; 
+        $output .= "<small>" if (scalar(@possible_sister_taxa_links)>10);
         $output .= join(", ",@possible_sister_taxa_links);
+        $output .= "</small>" if (scalar(@possible_sister_taxa_links)>10);
         $output .= "</p>";
     }
 	return $output;
