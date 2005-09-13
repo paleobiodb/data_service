@@ -7,6 +7,7 @@ package DBTransactionManager;
 use strict;
 use DBConnection;
 use Class::Date qw(date localdate gmdate now);
+use Permissions;
 use Data::Dumper;
 use CGI::Carp;
 use CGI;
@@ -269,11 +270,19 @@ sub updateRecord {
         return 0;
     }
 
+    # A list of people who have permitted the current authorizer to edit their records
+    my $p = Permissions->new($s,$self);
+    my %is_modifier_for = %{$p->getModifierList()};
+
     # People doing updates can only update previously empty fields, unless they own the record
-    my $updateEmptyOnly = ($s->isSuperUser() || 
-                           (exists $table_row->{'authorizer_no'} && $s->get('authorizer_no') == $table_row->{'authorizer_no'}) ||
-                           (exists $table_row->{'authorizer'} && $s->get('authorizer') == $table_row->{'authorizer'}) || 
-                           (!exists $table_row->{'authorizer'} && !exists $table_row->{'authorizer_no'}) ) ? 0 : 1;
+    my $updateEmptyOnly = 1;
+    # Following people may edit the record: super_user, authorizer, or someone whos listed authorizer as a buddy
+    # Or anyone, if the table has no authorizer (i.e. measurements table);
+    $updateEmptyOnly = 0 if ($s->isSuperUser());
+    $updateEmptyOnly = 0 if (exists $table_row->{'authorizer_no'} && $s->get('authorizer_no') == $table_row->{'authorizer_no'});
+    $updateEmptyOnly = 0 if (exists $table_row->{'authorizer_no'} && $is_modifier_for{$table_row->{'authorizer_no'}});
+    $updateEmptyOnly = 0 if (!exists $table_row->{'authorizer_no'});
+    $updateEmptyOnly = 0 if ($tableName =~ /authorities/);
 
     # get the column info from the table
     my $sth = $dbh->column_info(undef,'pbdb',$tableName,'%');
