@@ -180,8 +180,8 @@ sub processAction {
 			my $cf = CookieFactory->new();
             # The following two cookies are for setting the select lists
             # on the login page.
-            my $cookieEnterer = $cf->buildCookie("enterer", $q->param("enterer"));
-            my $cookieAuthorizer = $cf->buildCookie("authorizer", $q->param("authorizer"));
+            my $cookieEnterer = $cf->buildCookie("enterer_reversed", $q->param("enterer_reversed"));
+            my $cookieAuthorizer = $cf->buildCookie("authorizer_reversed", $q->param("authorizer_reversed"));
             
             print $q->header(-type => "text/html", 
                              -cookie => [$cookie, $cookieEnterer, $cookieAuthorizer],
@@ -262,7 +262,7 @@ sub processAction {
 	
 	
 	# Record the date of the action in the person table JA 27/30.6.02
-	if ($s->get("enterer_no") =~ /^\d+$/) {
+	if ($s->isDBMember()) {
 		my $sql = "UPDATE person SET last_action=NOW() WHERE person_no=".$s->get('enterer_no');
 		$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 	}
@@ -310,13 +310,13 @@ sub displayLoginPage {
 	
 	print $q->header( -type => "text/html", -Cache_Control=>'no-cache');
 	
-	my $authorizer = $q->cookie("authorizer");
-	my $enterer = $q->cookie("enterer");
+	my $authorizer = $q->param("authorizer_reversed") ? $q->param("authorizer_reversed") : $q->cookie("authorizer_reversed");
+	my $enterer = $q->param("enterer_reversed") ? $q->param("enterer_reversed") : $q->cookie("enterer_reversed");
 	my $destination = $q->param("destination");
 
 	my $javaScript = &makeAuthEntJavaScript();
 
-	my $html = $hbo->populateHTML('login_box', [ ] , [ ] );
+	my $html = $hbo->populateHTML('login_box', [$authorizer,$enterer] , ['authorizer_reversed','enterer_reversed' ] );
 	$html =~ s/%%message%%/$message/;
 	$html =~ s/%%destination%%/$destination/;
 	$html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
@@ -492,6 +492,10 @@ sub getPrefFields	{
 
 # Set new preferences JA 25.6.02
 sub setPreferences	{
+    if (!$s->isDBMember()) {
+        displayLoginPage( "Please log in first." );
+        exit;
+    }
 
     print stdIncludes( "std_page_top" );
 	print "<table width='100%'><tr><td colspan='2' align='center'><h3>Your current preferences</h3></td><tr><td align='center'>\n";
@@ -588,15 +592,6 @@ sub setPreferences	{
 	exit;
 
 }
-
-
-
-# sub buildEntererPulldown
-# moved to HTMLbuilder by rjp, 3/29/2004
-
-
-# sub buildAuthorizerPulldown 
-# moved to HTMLBuilder, 3/29/2004 by rjp.
 
 # JA 29.2.04
 sub buildTimeScalePulldown	{
@@ -752,13 +747,14 @@ sub displayMapForm {
 	my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML('map_form', \@row, \@fieldNames, \@prefkeys);
 
-	HTMLBuilder::buildAuthorizerPulldown($dbt, \$html );
-	HTMLBuilder::buildEntererPulldown($dbt, \$html );
 
-	my $authorizer = $s->get("authorizer");
-	$html =~ s/%%authorizer%%/$authorizer/;
-	my $enterer = $s->get("enterer");
-	$html =~ s/%%enterer%%/$enterer/;
+    my $javaScript = &makeAuthEntJavaScript();
+    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
+
+	my $authorizer_reversed = $s->get("authorizer_reversed");
+	$html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
+	my $enterer_reversed = $s->get("enterer_reversed");
+	$html =~ s/%%enterer_reversed%%/$enterer_reversed/;
 
 	# Spit out the HTML
 	print stdIncludes("std_page_top" );
@@ -788,10 +784,14 @@ sub displayMapResults {
 
 sub displayDownloadForm {
 	print stdIncludes( "std_page_top" );
-	my $auth = $s->get('authorizer');
-	my $html = $hbo->populateHTML( 'download_form', [ '', '', $auth, '', '', '', '','','','','' ], [ 'research_group', 'country','%%authorizer%%','environment','lithology1','ecology1','ecology2','ecology3','ecology4','ecology5','ecology6' ] );
-	HTMLBuilder::buildAuthorizerPulldown($dbt, \$html );
-	$html =~ s/<OPTION value=''>Select authorizer\.\.\./<option value='All'>All/m;
+	my $html = $hbo->populateHTML( 'download_form', [ '', '', '', '', '', '','','','','' ], [ 'research_group', 'country','environment','lithology1','ecology1','ecology2','ecology3','ecology4','ecology5','ecology6' ] );
+    my $javaScript = &makeAuthEntJavaScript();
+    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
+    my $authorizer_reversed = $s->get("authorizer_reversed");
+    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
+    my $enterer_reversed = $s->get("enterer_reversed");
+    $html =~ s/%%enterer_reversed%%/$enterer_reversed/;  
+    
 	buildTimeScalePulldown ( \$html );
 	print $html;
 
@@ -950,8 +950,6 @@ sub stdIncludes {
 		if ( $s->get("enterer") ne "" ) { $enterer = $s->get("enterer"); last; }
 		# Just logged in
 		if ( $q->param("enterer") ne "" ) { $enterer = $q->param("enterer"); last; }
-		# Not logged in
-		if ( $q->cookie("enterer") ne "" ) { $enterer = $q->cookie("enterer"); last; }
 		# Don't know
 		$enterer = "none";
 	}
@@ -1019,6 +1017,10 @@ sub displaySearchRefs {
 	#  quotes would be turned into &quot; tags
 	my $javaScript = &makeAuthEntJavaScript();
 	$html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
+    my $authorizer_reversed = $s->get("authorizer_reversed");
+    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
+    my $enterer_reversed = $s->get("enterer_reversed");
+    $html =~ s/%%enterer_reversed%%/$enterer_reversed/;  
 
 	print $html;
 
@@ -1115,10 +1117,8 @@ sub displayRefResults {
 
 		# Set the reference_no
 		unless($q->param('use_primary') || $q->param('no_set')){
-			$s->setReferenceNo( $dbh, ${$rows[0]}[3] );		# Why isn't the primary key the first column?
+			$s->setReferenceNo( $dbh, ${$rows[0]}[3] );
 		}
-		# print "reference_no is ".${@rows[0]}[3]."<BR>\n";
-
 
 		# QUEUE
 		my %queue = $s->unqueue( $dbh );
@@ -1151,12 +1151,12 @@ sub displayRefResults {
 			print "<table border=0 cellpadding=0 cellspacing=0>";
 			# Now the pubyr:
 			# This spacing is to match up with the collections, below
-			if(@{$rows[0]}[19]){
-				print "<tr><td>Publication type:&nbsp;<i>".${$rows[0]}[19]."</i></font></td></tr>";
+			if(@{$rows[0]}[16]){
+				print "<tr><td>Publication type:&nbsp;<i>".${$rows[0]}[16]."</i></font></td></tr>";
 			}
 			# Now the comments:
-			if(@{$rows[0]}[20]){
-				print "<tr><td>Comments:&nbsp;<i>".${$rows[0]}[20]."</i></font></td></tr>";
+			if(@{$rows[0]}[17]){
+				print "<tr><td>Comments:&nbsp;<i>".${$rows[0]}[17]."</i></font></td></tr>";
 			}
 			# getCollsWithRef creates a new <tr> for the collections.
 			my $refColls = getCollsWithRef(${$rows[0]}[3], 0, 0);
@@ -1192,7 +1192,7 @@ sub displayRefResults {
 		    my $drow = DataRow->new($rowref, $md);
 			if ( $row + 30 > $q->param('refsSeen') )	{
 				# Don't show radio buttons if Guest
-		   		print &makeRefString( $drow, ( ! $s->guest( ) ), $row, $numRows );
+		   		print &makeRefString( $drow, $s->isDBMember() , $row, $numRows );
 
                 if ( $row % 2 != 0 ) {
                     print "<tr class=\"darkList\">";
@@ -1206,7 +1206,7 @@ sub displayRefResults {
 
 		$sth->finish();
 
-		if(!$s->guest()){
+		if($s->isDBMember()){
 			print qq|<input type=submit value="Select reference"></form>\n|;
 		}
 
@@ -1219,7 +1219,7 @@ sub displayRefResults {
 	}
 
 	print qq|<a href="$exec_url?action=displaySearchRefs&type=select"><b>Do another search</b></a>\n|;
-	if(!$s->guest()){
+	if($s->isDBMember()){
 		print qq| - <a href="$exec_url?action=displayRefAdd"><b>Enter a new reference</b></a>\n|; 
 	}
 	print "</p></center><br>\n";
@@ -1308,19 +1308,12 @@ sub selectReference {
 
 sub displayRefAdd {
 	my @fieldNames = (	"publication_type", 
-						"authorizer",
-						"enterer",
 						"%%new_message%%" );
 	my @row = ( "", 
-				$s->get('authorizer'), 
-				$s->get('enterer'), 
 				"<p>If the reference is <b>new</b>, please fill out the following form.</p>" );
 
 	print stdIncludes( "std_page_top" );
 	print $hbo->populateHTML('js_reference_checkform');
-
-	print qq|<FORM method="POST" action="$exec_url" onSubmit='return checkForm();'>\n|;
-	print qq|<input type=hidden name="action" value="processNewRef">\n|;
 
 	# Pre-populate the form with the search terms:
 	my %query_hash = ("name" => "author1last",
@@ -1334,8 +1327,8 @@ sub displayRefAdd {
 			push(@fieldNames, $query_hash{$s_param});
 		}
 	}
-    push @row, 'English';
-    push @fieldNames, 'language';
+    push (@row, 'English','processNewRef');
+    push (@fieldNames, 'language','action');
 	print $hbo->populateHTML("enter_ref_form", \@row, \@fieldNames);
 	print stdIncludes("std_page_bottom");
 }
@@ -1385,7 +1378,8 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
 	# Set the reference_no
 	$s->setReferenceNo( $dbh, $reference_no );
 
-    $sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
+    $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$reference_no;  
+    
     dbg( "$sql<HR>" );
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
     $sth->execute();
@@ -1442,10 +1436,10 @@ sub displaySelectRefForEditPage
 		my $row = 1;
 		foreach my $rowref (@rowrefs) {
 			my $drow = DataRow->new($rowref, $md);
-			my $selectable = 1 if ( $s->get('authorizer') eq $drow->getValue('authorizer') || $s->get('authorizer') eq "J. Alroy");
-			my $retVal = makeRefString($drow, $selectable, $row, $numRows);
+			my $retVal = makeRefString($drow, 1, $row, $numRows);
 			print $retVal;
-			$matches++ if $selectable;
+			#$matches++ if $selectable;
+			$matches++;
 			$row++;
 		}
 		print "</table>";
@@ -1483,7 +1477,7 @@ sub editCurrentRef {
 sub displayRefEdit
 {
 	# Have to be logged in
-	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
+	if (!$s->isDBMember()) {
 		$s->enqueue( $dbh, "action=displayRefEdit" );
 		displayLoginPage( "Please log in first." );
 		exit;
@@ -1501,9 +1495,7 @@ sub displayRefEdit
 	print stdIncludes( "std_page_top" );
 	print $hbo->populateHTML('js_reference_checkform');
 
-	$sql =	"SELECT * ".
-			"  FROM refs ".
-			" WHERE reference_no=$reference_no";
+	$sql =	"SELECT * FROM refs WHERE reference_no=$reference_no";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 
@@ -1512,20 +1504,9 @@ sub displayRefEdit
 	$sth->finish();
 
 	# Tack on a few extras
-	push (@fieldNames, '%%new_message%%');
-	push (@row, '');
-	#push ( @fieldNames, 'authorizer', 'enterer', '%%new_message%%' );
-	#push ( @row, $s->get('authorizer'), $s->get('enterer'), '');
+	push (@fieldNames, 'action','%%new_message%%');
+	push (@row, 'processReferenceEditForm','');
 
-    if($row[0] eq ""){
-        $row[0] = $s->get('authorizer');
-    }
-    if($row[1] eq ""){
-        $row[1] = $s->get('enterer');
-    }
-	
-	print qq|<form method="POST" action="$exec_url" onSubmit='return checkForm();'>\n|;
-	print qq|<input type=hidden name="action" value="processReferenceEditForm"\n|;
 	print $hbo->populateHTML('enter_ref_form', \@row, \@fieldNames);
 
 	print stdIncludes("std_page_bottom");
@@ -1541,7 +1522,8 @@ sub processReferenceEditForm {
 	my $refID = updateRecord('refs', 'reference_no', $q->param('reference_no'));
     print "<center><h3><font color='red'>Reference record updated</font></h3></center>\n";
 		
-    $sql = "SELECT * FROM refs WHERE reference_no=$refID";
+    $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$refID;
+
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
     $sth->execute();
     my $rowref = $sth->fetchrow_arrayref();
@@ -1611,19 +1593,14 @@ sub displaySearchColls {
 	my %pref = getPreferences($s->get('enterer_no'));
 	my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML('search_collections_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment',$type ], \@prefkeys);
-	HTMLBuilder::buildAuthorizerPulldown($dbt, \$html );
-	HTMLBuilder::buildEntererPulldown($dbt, \$html );
 
+    my $javaScript = &makeAuthEntJavaScript();
+    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
+    my $authorizer_reversed = $s->get("authorizer_reversed");
+    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
+    my $enterer_reversed = $s->get("enterer_reversed");
+    $html =~ s/%%enterer_reversed%%/$enterer_reversed/;  
 
-    # Dirty but until populateHTML gets retooled is necessary cause it overwrites these inputs when rewriting the form PS
-    $html =~ s/<input name="max_interval"/<input name="max_interval" onKeyUp="doComplete(event, this, intervalNames(),1);"/;
-    $html =~ s/<input name="min_interval"/<input name="min_interval" onKeyUp="doComplete(event, this, intervalNames(),1);"/;
-
-	# Set the Enterer
-	my $enterer = $s->get("enterer");
-	$html =~ s/%%enterer%%/$enterer/;
-	my $authorizer = $s->get("authorizer");
-	$html =~ s/%%authorizer%%/$authorizer/;
 	# propagate this through the next server hit.
 	if($q->param('use_primary')){
 		$html =~ s/%%use_primary%%/yes/;
@@ -1658,7 +1635,13 @@ sub displayCollResults {
 	if ( $q->param('type') eq "add" )	{
 		$perm_limit = 1000000;
 	} else {
-        $perm_limit = $limit + $rowOffset;
+		if ($q->param('taxon_name') && ($q->param('type') eq "reid" ||
+                                        $q->param('type') eq "reclassify_occurrence")) {
+            # We're passing the collection_nos directly to the functions, so pass all of them                                            
+            $perm_limit = 1000000000;
+        } else {
+            $perm_limit = $limit + $rowOffset;
+        }
     }
 
     my $type;
@@ -1681,19 +1664,24 @@ sub displayCollResults {
 	elsif ( $type eq "reclassify_occurrence" )	{ $action = "startDisplayOccurrenceReclassify"; $permission_type= "write";}
 	# type is unknown, so use defaults.
 	else { $action = "displayCollectionDetails"; $permission_type = "read"; }
+
 	
 	# Build the SQL
 	# which function to use depends on whether the user is adding a collection
 	my $sql;
     
     my %options = $q->Vars();
+    if ($type eq "reclassify_occurrence") {
+        # Want to not get taxon_nos when reclassifying. Otherwise, if the taxon_no is set to zero, how will you find it?
+        $options{'no_authority_lookup'} = 1;
+    }
     $options{'limit'} = $perm_limit;
     $options{'permission_type'} = $permission_type;
     if ($q->param("taxon_list")) {
         my @in_list = split(/,/,$q->param('taxon_list'));
         $options{'taxon_list'} = \@in_list if (@in_list);
     }
-    my $fields = ["country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no"];  
+    my $fields = ["authorizer","country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no"];  
     my ($dataRows,$ofRows);
 	if ( $q->param('type') eq "add" )	{
 		# you won't have an in list if you are adding
@@ -1707,13 +1695,18 @@ sub displayCollResults {
 
     if ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
 		# go right to the chase with ReIDs if a taxon_rank was specified
-		if ($q->param('type') eq "reid" && $q->param('taxon_name')) {
+		if ($q->param('taxon_name') && ($q->param('type') eq "reid" ||
+                                        $q->param('type') eq "reclassify_occurrence")) {
 			# get all collection #'s and call displayOccsForReID
-			my @reidColls;
-			foreach my $res (@dataRows) {
-				push(@reidColls, $res->{collection_no});
+			my @colls;
+			foreach my $row (@dataRows) {
+				push(@colls , $row->{collection_no});
 			}
-			displayOccsForReID(\@reidColls);
+            if ($q->param('type') eq 'reid') {
+			    displayOccsForReID(\@colls);
+            } else {
+			    Reclassify::displayOccurrenceReclassify($q,$s,$dbh,$dbt,\@colls);
+            }
 			exit;
 		}
 		
@@ -1769,7 +1762,8 @@ sub displayCollResults {
         for(my $count=$rowOffset;$count<scalar(@dataRows);$count++) {
             my $dataRow = $dataRows[$count];
 			# Get the reference_no of the row
-	        $sql = "SELECT * FROM refs WHERE reference_no=" . $dataRow->{"reference_no"};
+            $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$dataRow->{"reference_no"};
+
 			my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	        $sth->execute();
 
@@ -1849,7 +1843,7 @@ sub displayCollResults {
 					<td valign=top>$authorizerName</td>
 					<td valign=top><b>" . $dataRow->{"collection_name"} . $timeplace . "</td>
 					<td align=right valign=top>$referenceNo</td>
-					<td valign=top>$reference</td>
+					<td valign=top nowrap>$reference</td>
 					</tr>
 					";
   		}
@@ -1944,13 +1938,13 @@ sub displayCollResults {
 #  a coordinate (required when the user wants to add a collection)
 sub processCollectionsSearchForAdd	{
 
-	my $sql = "SELECT collection_no, authorizer, collection_name, access_level, research_group, release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, country, state, latdeg, latmin, latsec, latdec, latdir, lngdeg, lngmin, lngsec, lngdec, lngdir, max_interval_no, min_interval_no, reference_no FROM collections WHERE ";
+	my $sql = "SELECT c.collection_no, c.authorizer_no, p1.name authorizer, c.collection_name, c.access_level, c.research_group, c.release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, c.country, c.state, c.latdeg, c.latmin, c.latsec, c.latdec, c.latdir, c.lngdeg, c.lngmin, c.lngsec, c.lngdec, c.lngdir, c.max_interval_no, c.min_interval_no, c.reference_no FROM collections c LEFT JOIN person p1 ON p1.person_no = c.authorizer_no WHERE ";
 
 	# get a list of interval numbers that fall in the geological period
 	my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh,$dbt,'',$q->param('period_max'),'','','intervals');
 	@intervals = @{$inlistref};
 
-	$sql .= "max_interval_no IN (" . join(',', @intervals) . ") AND ";
+	$sql .= "c.max_interval_no IN (" . join(',', @intervals) . ") AND ";
 
 	# convert the coordinates to decimal values
 
@@ -2001,14 +1995,14 @@ sub processCollectionsSearchForAdd	{
 	} elsif ( $minlat <= -90 )	{
 		$minlat = -89;
 	} elsif ( ( $maxlat > 0 && $minlat > 0 ) || ( $maxlat < 0 && $minlat < 0 ) )	{
-		$sql .= "latdir='" . $q->param('latdir') . "' AND ";
+		$sql .= "c.latdir='" . $q->param('latdir') . "' AND ";
 	}
 	if ( $maxlng >= 180 )	{
 		$maxlng = 179;
 	} elsif ( $minlng <= -180 )	{
 		$minlng = -179;
 	} elsif ( ( $maxlng > 0 && $minlng > 0 ) || ( $maxlng < 0 && $minlng < 0 ) )	{
-		$sql .= "lngdir='" . $q->param('lngdir') . "' AND ";
+		$sql .= "c.lngdir='" . $q->param('lngdir') . "' AND ";
 	}
 
 	my $inlist;
@@ -2016,22 +2010,22 @@ sub processCollectionsSearchForAdd	{
 		$inlist .= abs($l) . ",";
 	}
 	$inlist =~ s/,$//;
-	$sql .= "latdeg IN (" . $inlist . ") AND ";
+	$sql .= "c.latdeg IN (" . $inlist . ") AND ";
 
 	$inlist = "";
 	for my $l ($minlng..$maxlng)	{
 		$inlist .= abs($l) . ",";
 	}
 	$inlist =~ s/,$//;
-	$sql .= "lngdeg IN (" . $inlist . ")";
+	$sql .= "c.lngdeg IN (" . $inlist . ")";
 
-	$sql .= " ORDER BY collection_no";
+	$sql .= " ORDER BY c.collection_no";
 
     main::dbg("process collections search for add: $sql");
 
     my $sth = $dbt->dbh->prepare($sql);
     $sth->execute();
-    my $p = Permissions->new ( $s );
+    my $p = Permissions->new ($s,$dbt);
 
     # See if rows okay by permissions module
     my @dataRows = ();
@@ -2098,6 +2092,7 @@ sub processCollectionsSearchForAdd	{
 #   taxon_list: A list of taxon_nos to filter by (i.e. as passed by TaxonInfo)
 #   most_recent: Only use the most recent reid of an occurrence when filtering by taxon_name,taxon_no
 #   calling_script: Name of the script which called this function, only used for error message generation
+#   no_authority_lookup: Don't hit the authorities table when lookup up a taxon name , only the occurrences/reids tables
 # PS 08/11/2005
 sub processCollectionsSearch {
     my $dbt = $_[0];
@@ -2109,11 +2104,22 @@ sub processCollectionsSearch {
     @tables = ("collections c");
 
     # There fields must always be here
-	@from = ("c.authorizer","c.collection_no","c.collection_name","c.access_level","c.release_date","c.reference_no","DATE_FORMAT(release_date, '%Y%m%d') rd_short","c.research_group");
+	@from = ("c.authorizer_no","c.collection_no","c.collection_name","c.access_level","c.release_date","c.reference_no","DATE_FORMAT(release_date, '%Y%m%d') rd_short","c.research_group");
     
     # Now add on any requested fields
     foreach my $field (@fields) {
-        push @from, "c.$field";
+        if ($field eq 'authorizer') {
+            push @from, "p1.name authorizer"; 
+            push @left_joins, "LEFT JOIN person p1 ON p1.person_no = c.authorizer_no";
+        } elsif ($field eq 'enterer') {
+            push @from, "p2.name enterer"; 
+            push @left_joins, "LEFT JOIN person p2 ON p2.person_no = c.enterer_no";
+        } elsif ($field eq 'modifier') {
+            push @from, "p3.name modifier"; 
+            push @left_joins, "LEFT JOIN person p3 ON p3.person_no = c.modifier_no";
+        } else {
+            push @from, "c.$field";
+        }
     }
 
     # Only necessary if we're doing a union
@@ -2183,24 +2189,41 @@ sub processCollectionsSearch {
         } elsif (scalar(@taxon_bits) == 2) {
             ($genus,$species) = @taxon_bits;
         } elsif (scalar(@taxon_bits) == 1) {
-            ($genus) = @taxon_bits
+            ($genus) = @taxon_bits;
         }
 
         # Set for displayOccsForReID
         $q->param('species_name' => $species) if ($species);
         $q->param('g_name' => $genus) if ($genus);
 
-        my $taxon_sql = "SELECT taxon_no FROM authorities WHERE taxon_name LIKE ".$dbh->quote($options{'taxon_name'});
-        my @taxon_nos = map {$_->{taxon_no}} @{$dbt->getData($taxon_sql)}; 
+        my @taxon_nos;
+        if (! $options{'no_authority_lookup'}) {
+            my $taxon_sql = "SELECT taxon_no FROM authorities WHERE taxon_name LIKE ".$dbh->quote($options{'taxon_name'});
+            @taxon_nos = map {$_->{taxon_no}} @{$dbt->getData($taxon_sql)}; 
+        }
 
         # taxon is a homonym... make sure we get all versions of the homonym
         if (@taxon_nos) {
             # 1 or more authorities exists in the authorities table, parse them
             my %taxon_nos_unique = ();
             foreach my $taxon_no (@taxon_nos) {
-                my @all_taxon_nos = PBDBUtil::taxonomic_search($dbt,$taxon_no);
-                # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
-                @taxon_nos_unique{@all_taxon_nos} = ();
+                if ($options{'no_taxonomy_recurse'}) {
+                    # In this case, just get alternative spellings, not the full tree of children
+                    my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no=$taxon_no";
+                    my @results = @{$dbt->getData($sql)};
+                    foreach my $row (@results) {
+                        $taxon_nos_unique{$row->{'child_spelling_no'}} = 1;
+                    }
+                    my $sql = "SELECT DISTINCT child_no FROM opinions WHERE child_spelling_no=$taxon_no";
+                    my @results = @{$dbt->getData($sql)};
+                    foreach my $row (@results) {
+                        $taxon_nos_unique{$row->{'child_no'}} = 1;
+                    }
+                } else {
+                    my @all_taxon_nos = PBDBUtil::taxonomic_search($dbt,$taxon_no);
+                    # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
+                    @taxon_nos_unique{@all_taxon_nos} = ();
+                }
             }
             my $taxon_nos_string = join(", ", keys %taxon_nos_unique);
             if (!$taxon_nos_string) {
@@ -2287,28 +2310,48 @@ IS NULL))";
 	}
 
     # Handle period
-	if ( $options{'period'}) {
+	if ($options{'period'}) {
 		my $periodName = $dbh->quote($wildcardToken . $options{'period'} . $wildcardToken);
 		push @where, "(period_min LIKE " . $periodName . " OR period_max LIKE " . $periodName . ")";
 	}
 	
 	# Handle intage
-	if ( $options{'intage'}) {
+	if ($options{'intage'}) {
 		my $intageName = $dbh->quote($wildcardToken . $options{'intage'} . $wildcardToken);
 		push @where, "(intage_min LIKE " . $intageName . " OR intage_max LIKE " . $intageName . ")";
 	}
 	
 	# Handle locage
-	if ( $options{'locage'}) {
+	if ($options{'locage'}) {
 		my $locageName = $dbh->quote($wildcardToken . $options{'locage'} . $wildcardToken);
 		push @where, "(locage_min LIKE " . $locageName . " OR locage_max LIKE " . $locageName . ")";
 	}
 	
 	# Handle epoch
-	if ( $options{'epoch'}) {
+	if ($options{'epoch'}) {
 		my $epochName = $dbh->quote($wildcardToken . $options{'epoch'} . $wildcardToken);
 		push @where, "(epoch_min LIKE " . $epochName . " OR epoch_max LIKE " . $epochName . ")";
 	}
+
+    # Handle authorizer/enterer/modifier
+    if ($options{'authorizer_reversed'}) {
+        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($options{'authorizer_reversed'});
+        $options{'authorizer_no'} = ${$dbt->getData($sql)}[0]->{'person_no'};
+        push @errors, "$options{authorizer_reversed} is not a valid authorizer. Format like 'Sepkoski, J.'" if (!$options{'authorizer_no'});
+    }
+
+    if ($options{'enterer_reversed'}) {
+        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($options{'enterer_reversed'});
+        $options{'enterer_no'} = ${$dbt->getData($sql)}[0]->{'person_no'};
+        push @errors, "$options{enterer_reversed} is not a valid enterer. Format like 'Sepkoski, J.'" if (!$options{'enterer_no'});
+        
+    }
+
+    if ($options{'modifier_reversed'}) {
+        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($options{'modifier_reversed'});
+        $options{'modifier_no'} = ${$dbt->getData($sql)}[0]->{'person_no'};
+        push @errors, "$options{modifier_reversed} is not a valid modifier. Format like 'Sepkoski, J.'" if (!$options{'modifier_no'});
+    }
 
 	# Handle modified date
 	if ($options{'modified_since'} || $options{'year'})	{
@@ -2389,13 +2432,8 @@ IS NULL))";
 		
 	# research_group is now a set -- tone 7 jun 2002
 	if($options{'research_group'}) {
-        if ($options{'research_group'} =~ /^(?:decapod|ETE|5%|1%|PACED|PGAP)$/){
-            my $refs = PBDBUtil::getResearchProjectRefsStr($dbh,$q);
-            $refs = '-1' if (!$refs); # A total miss
-            push @where, "(c.reference_no IN ($refs) OR sr.reference_no IN ($refs))";
-        } else {
-		    push @where, "FIND_IN_SET(".$dbh->quote($options{"research_group"}).", c.research_group)";
-        }
+        my $research_group_sql = PBDBUtil::getResearchGroupSQL($dbt,$options{'research_group'});
+        push @where, $research_group_sql if ($research_group_sql);
 	}
     
 	if (int($options{'reference_no'})) {
@@ -2404,7 +2442,7 @@ IS NULL))";
 
     # Do a left join on secondary refs if we have to
     # PS 11/29/2004
-    if ($options{'research_group'} || int($options{'reference_no'})) {
+    if ($options{'research_group'} =~ /^(?:decapod|ETE|5%|1%|PACED|PGAP)$/ || int($options{'reference_no'})) {
         push @left_joins, "LEFT JOIN secondary_refs sr ON sr.collection_no=c.collection_no";
     }
 
@@ -2413,16 +2451,16 @@ IS NULL))";
 	# either be geological_group, formation, or member.  Therefore, it has a special name, 
 	# group_formation_member, and we'll have to deal with it separately.
 	# added by rjp on 1/13/2004
-	if ($q->param("group_formation_member")) {
-        my $val = $dbh->quote($wildcardToken.$q->param("group_formation_member").$wildcardToken);
+	if ($options{"group_formation_member"}) {
+        my $val = $dbh->quote($wildcardToken.$options{"group_formation_member"}.$wildcardToken);
 		push(@where, "(c.geological_group LIKE $val OR c.formation LIKE $val OR c.member LIKE $val)");
 	}
 
     # This field is only passed by section search form PS 12/01/2004
-    if (defined $q->param("section_name") && $q->param("section_name") eq '') {
+    if (exists $options{"section_name"} && $options{"section_name"} eq '') {
         push @where, "((c.regionalsection IS NOT NULL AND c.regionalsection != '' AND c.regionalbed REGEXP '^[0-9.]+\$') OR (c.localsection IS NOT NULL AND c.localsection != '' AND c.localbed REGEXP '^[0-9.]+\$'))";
-    } elsif ($q->param("section_name")) {
-        my $val = $dbh->quote($wildcardToken.$q->param("section_name").$wildcardToken);
+    } elsif ($options{"section_name"}) {
+        my $val = $dbh->quote($wildcardToken.$options{"section_name"}.$wildcardToken);
         push @where, "((c.regionalsection  LIKE  $val AND c.regionalbed REGEXP '^[0-9.]+\$') OR (c.localsection  LIKE  $val AND c.localbed REGEXP '^[0-9.]+\$'))"; 
     }                
 
@@ -2578,7 +2616,7 @@ IS NULL))";
 
     $sth = $dbt->dbh->prepare($sql);
     $sth->execute();
-    my $p = Permissions->new ($s); 
+    my $p = Permissions->new ($s,$dbt); 
 
     # See if rows okay by permissions module
     my @dataRows = ();
@@ -2601,7 +2639,8 @@ IS NULL))";
 sub displayCollectionDetails {
 	my $collection_no = $q->param('collection_no');
 	
-	$sql = "SELECT * FROM collections WHERE collection_no=" . $collection_no;
+	$sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, c.* FROM collections c LEFT JOIN person p1 ON p1.person_no=c.authorizer_no LEFT JOIN person p2 ON p2.person_no=c.enterer_no LEFT JOIN person p3 ON p3.person_no=c.modifier_no WHERE collection_no=" . $collection_no;
+    dbg("Main SQL: $sql");
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 		
@@ -2620,13 +2659,11 @@ sub displayCollectionDetails {
   
 	# Get the name of the authorizer
 	my $fieldCount = 0;
-	my ($authorizer, $refNo, $sesAuthorizer);
+	my ($authorizer_no, $refNo);
 	
-	$sesAuthorizer = $s->get('authorizer');
- 	
     foreach my $tmpVal (@fieldNames) {
-		if ( $tmpVal eq 'authorizer') {
-			$authorizer = $row[$fieldCount];
+		if ( $tmpVal eq 'authorizer_no') {
+			$authorizer_no = $row[$fieldCount];
 		} elsif ( $tmpVal eq 'reference_no') {
 			$refNo = $row[$fieldCount];
 		} elsif ( $tmpVal eq 'collection_subset' && $row[$fieldCount] ne "") {
@@ -2634,12 +2671,11 @@ sub displayCollectionDetails {
 			my $linkFront = "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$collno\">";
 			$row[$fieldCount] = $linkFront . $collno . "</a> ";
 		}
-		last if $authorizer && $refNo;
 		$fieldCount++;
 	}
 
     # Get the reference
-    $sql = "SELECT * FROM refs WHERE reference_no=$refNo";
+    $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$refNo;
 	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
     $sth->execute();
     my $refRowRef = $sth->fetchrow_arrayref();
@@ -2647,9 +2683,6 @@ sub displayCollectionDetails {
     my $md = MetadataModel->new($sth);
     my $drow = DataRow->new($refRowRef, $md);
     my $bibRef = BiblioRef->new($drow);
-
-
-    my $refFieldNamesRef = $sth->{NAME};
     $sth->finish();
     my $refString = $bibRef->toString();
     push(@row, $refString);
@@ -2712,17 +2745,17 @@ sub displayCollectionDetails {
     }
     if ($row[$group_idx]) {
         $group_link = "<a href=\"$exec_url?action=displayStrataSearch"
-                         . "&search_term=".uri_escape($row[$group_idx])."\">$row[$group_idx]</a>";
+                         . "&group_formation_member=".uri_escape($row[$group_idx])."\">$row[$group_idx]</a>";
     }
     if ($row[$formation_idx]) {   
         $formation_link = "<a href=\"$exec_url?action=displayStrataSearch"
                              . "&group_hint=".uri_escape($row[$group_idx])
-                             . "&search_term=".uri_escape($row[$formation_idx])."\">$row[$formation_idx]</a>";
+                             . "&group_formation_member=".uri_escape($row[$formation_idx])."\">$row[$formation_idx]</a>";
     }
     if ($row[$member_idx]) {
         $member_link = "<a href=\"$exec_url?action=displayStrataSearch"
                           . "&formation_hint=".uri_escape($row[$formation_idx])
-                          . "&search_term=".uri_escape($row[$member_idx])."\">$row[$member_idx]</a>";
+                          . "&group_formation_member=".uri_escape($row[$member_idx])."\">$row[$member_idx]</a>";
     }
     $row[$group_idx] = $group_link if ($group_link);
     $row[$formation_idx] = $formation_link if ($formation_link);
@@ -2734,10 +2767,10 @@ sub displayCollectionDetails {
 		
     # If the viewer is the authorizer (or it's me), display the record with edit buttons
 	print '<p><div align="center"><table><tr>';
-    if ($q->param('user') ne 'Guest' && (($authorizer eq $sesAuthorizer) || ($sesAuthorizer eq "J. Alroy"))) {
+    if ($s->isDBMember() && (($authorizer_no eq $s->get('authorizer_no')) || ($s->get('authorizer') eq "J. Alroy"))) {
 		print '<td>'.$hbo->populateHTML('collection_display_buttons', \@row, \@fieldNames).'</td>';
     }
-    if ($q->param('user') ne 'Guest' && $s->get('enterer') =~ /[a-zA-Z]+/) {
+    if ($s->isDBMember()) {
 	    print '<td>'.$hbo->populateHTML('collection_display_buttons2', [$q->param('collection_no')],['prefill_collection_no']).'</td>';
     }
 	print '</tr></table></div></p>';
@@ -2765,10 +2798,10 @@ sub displayCollectionDetails {
 
 	print "<td>".$hbo->populateHTML('ecology_display_buttons', \@row, \@fieldNames)."</td>";
 
-	if($authorizer eq $s->get('authorizer') || $s->get('authorizer') eq "J. Alroy")	{
+	if($authorizer_no eq $s->get('authorizer_no') || $s->get('authorizer') eq "J. Alroy")	{
 		print "<td>".$hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames)."</td>";;
 	}
-	if($taxa_list ne "" && $q->param("user") ne "Guest"){
+	if($taxa_list ne "" && $s->isDBMember()) {
 		print "<td>".$hbo->populateHTML('reid_display_buttons', \@row, \@fieldNames)."</td>";
 	}
 	print "</tr></table></div></p>";
@@ -3763,7 +3796,7 @@ sub displayCollectionEcology	{
 sub displayEnterCollPage {
 
 	# Have to be logged in
-	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
+	if (!$s->isDBMember()) {
 		$s->enqueue( $dbh, "action=displayEnterCollPage" );
 		displayLoginPage( "Please log in first." );
 		exit;
@@ -3780,7 +3813,7 @@ sub displayEnterCollPage {
         $row = $sth->fetchrow_hashref();
         if ($row) {
             foreach $field (@fieldNames) {
-                if ($field !~ /^(authorizer|enterer|modifier|created|modified|collection_no)/) {
+                if ($field !~ /^(authorizer|enterer|modifier|authorizer_no|enterer_no|modifier_no|created|modified|collection_no)/) {
                     push @htmlFields,$field;
                     push @htmlValues,$row->{$field};
                 }
@@ -3792,7 +3825,8 @@ sub displayEnterCollPage {
 
             $reference_no = $row->{'reference_no'};
             # Get the reference data
-            $sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
+            $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$reference_no;
+
             $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
             $sth->execute();
 
@@ -3805,12 +3839,8 @@ sub displayEnterCollPage {
 
             $refRowString = "<table>" . $bibRef->toString() . '</table>';
 
-            unshift(@htmlFields, 'authorizer',
-                'enterer',
-                'ref_string');
-            unshift(@htmlValues, $s->get('authorizer'),
-                $s->get('enterer'),
-                $refRowString);
+            unshift(@htmlFields, 'ref_string');
+            unshift(@htmlValues, $refRowString);
 
 	        %pref = getPreferences($s->get('enterer_no'));
                   
@@ -3828,7 +3858,7 @@ sub displayEnterCollPage {
         }	
 
         # Get the reference data
-        $sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
+        $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$reference_no;
         $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
         $sth->execute();
 
@@ -3921,9 +3951,6 @@ sub displayEnterCollPage {
     my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML("collection_form", \@htmlValues, \@htmlFields, \@prefkeys);
 
-    # Dirty but until populateHTML gets retooled is necessary cause it overwrites these inputs when rewriting the form PS
-    $html =~ s/<input name="max_interval"/<input name="max_interval" onKeyUp="doComplete(event, this, intervalNames());"/;
-    $html =~ s/<input name="min_interval"/<input name="min_interval" onKeyUp="doComplete(event, this, intervalNames());"/;
     print $html;
 
 }
@@ -4099,8 +4126,6 @@ sub processEnterCollectionForm {
 
 	# figure out the release date, enterer, and authorizer
 	setReleaseDate();
-	$q->param(enterer=>$s->get("enterer"));
-	$q->param(authorizer=>$s->get("authorizer"));
 
 	# change interval names into numbers by querying the intervals table
 	# JA 11-12.7.03
@@ -4197,7 +4222,7 @@ sub processEnterCollectionForm {
 			my $reference_no = $row[$refColNum];
 			$s->setReferenceNo($dbh, $reference_no);
 
-			$sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
+            $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$reference_no;
 			$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 			$sth->execute();
 			@refRow = $sth->fetchrow_array();
@@ -4243,7 +4268,7 @@ sub startEditCollection {
 	# 2. Need to get a collection
 
 	# Have to be logged in
-	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
+	if (!$s->isDBMember()) {
 		$s->enqueue( $dbh, "action=startEditCollection" );
 		displayLoginPage( "Please log in first." );
 		exit;
@@ -4270,7 +4295,7 @@ sub startAddCollection {
 	# 2. Need to get a collection
 	
 	# Have to be logged in
-	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
+	if (!$s->isDBMember()) {
 		$s->enqueue( $dbh, "action=startAddCollection" );
 		displayLoginPage( "Please log in first." );
 		exit;
@@ -4288,7 +4313,7 @@ sub startAddEditOccurrences {
 	# 2. Need to get a collection
 	
 	# Have to be logged in
-	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
+	if (!$s->isDBMember()) {
 		$s->enqueue( $dbh, "action=startAddEditOccurrences" );
 		displayLoginPage( "Please log in first." );
 		exit;
@@ -4582,6 +4607,16 @@ sub submitTypeTaxonSelect {
 ##############
 
 ##############
+## Editing list stuff
+sub displayPermissionListForm {
+    Permissions::displayPermissionListForm($dbt,$q,$s,$hbo);
+}
+
+sub submitPermissionList {
+    Permissions::submitPermissionList($dbt,$q,$s,$hbo);
+} 
+
+##############
 ## Reclassify stuff
 
 sub startStartReclassifyOccurrences	{
@@ -4758,14 +4793,14 @@ sub startProcessPrintHierarchy	{
 
 sub displayEditCollection {
 	# Have to be logged in
-	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
+	if (!$s->isDBMember()) {
 		$s->enqueue( $dbh, "action=displayEditCollection" );
 		displayLoginPage( "Please log in first." );
 		exit;
 	}
 	
 	my $collection_no = $q->param('collection_no');
-	$sql = "SELECT * FROM collections WHERE collection_no=" . $collection_no;
+	$sql = "SELECT c.reference_no,c.* FROM collections c WHERE c.collection_no=" . $collection_no;
 	dbg( "$sql<HR>" );
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
@@ -4774,7 +4809,7 @@ sub displayEditCollection {
 	$sth->finish();
 
 	if($q->param('use_primary')){
-		$s->put('reference_no', $row[5]);
+		$s->put('reference_no', $row[0]);
 	}
 
 	my $session_ref = $s->get('reference_no');
@@ -4853,7 +4888,8 @@ sub displayEditCollection {
     push(@row, '<input type=submit name="update_button" value="Update collection and exit">');
     push(@fieldNames, 'page_submit_button');
                                                                                                                                                              
-    push(@row, stdIncludes("std_page_bottom"));
+    #push(@row, stdIncludes("std_page_bottom"));
+    push(@row, stdIncludes('std_page_bottom'));
     push(@fieldNames, 'page_footer');
 
     # Output the main part of the page
@@ -4862,9 +4898,6 @@ sub displayEditCollection {
 
     my $html = $hbo->populateHTML("collection_form", \@row, \@fieldNames, \@prefkeys);
 
-    # Dirty but until populateHTML gets retooled is necessary cause it overwrites these inputs when rewriting the form PS
-    $html =~ s/<input name="max_interval"/<input name="max_interval" onKeyUp="doComplete(event, this, intervalNames());"/;
-    $html =~ s/<input name="min_interval"/<input name="min_interval" onKeyUp="doComplete(event, this, intervalNames());"/;
     print $html;
 }
 
@@ -5077,7 +5110,8 @@ sub getCurrRefDisplayStringForColl{
     my $collection_no = shift;
     my $reference_no = shift;
 
-    my $sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
+    my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=$reference_no";
+    
     my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
     $sth->execute();
     my @refRow = $sth->fetchrow_array();
@@ -5109,7 +5143,7 @@ sub displayOccurrenceAddEdit {
 	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 
-	my $p = Permissions->new($s);
+	my $p = Permissions->new($s,$dbt);
 	my @all_data = $p->getReadWriteRowsForEdit($sth);
 
 	# first check to see if there are too many rows to display, in which
@@ -5191,8 +5225,6 @@ sub displayOccurrenceAddEdit {
     my $gray_counter = 0;
     foreach my $all_data_index ($firstrow..$lastrow){
 	my $hash_ref = $all_data[$all_data_index];
-        $hash_ref->{'authorizer'} = $s->get('authorizer');
-        $hash_ref->{'enterer'} = $s->get('enterer');
 		# This essentially empty reid_no is necessary as 'padding' so that
 		# any actual reid number (see while loop below) will line up with 
 		# its row in the form, and ALL rows (reids or not) will be processed
@@ -5223,8 +5255,6 @@ sub displayOccurrenceAddEdit {
 		$sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth2->execute();
         while(my $hr = $sth2->fetchrow_hashref()) {
-            $hr->{'authorizer'} = $s->get('authorizer');
-            $hr->{'enterer'} = $s->get('enterer');
             my @re_row = values %$hr;
             my @re_names = keys %$hr;
 #			print "<tr><td></td><td colspan=3 class=tiny><i>reidentified as</i></td></tr>\n";
@@ -5262,8 +5292,6 @@ sub displayOccurrenceAddEdit {
 	# Set collection_no, authorizer, enterer, and other hidden goodies
 	my @fieldNames = (	'collection_no', 
 						'reference_no', 
-						'authorizer', 
-						'enterer',
 						'genus_reso',
 						'subgenus_reso',
 						'species_reso',
@@ -5271,8 +5299,6 @@ sub displayOccurrenceAddEdit {
 						'plant_organ2');
 	my @row = ( $collection_no, 
 				$s->get("reference_no"),
-				$s->get("authorizer"), 
-				$s->get("enterer"),
 				'', '', '', '', '');
 
 	# Read the users' preferences related to occurrence entry/editing
@@ -5304,6 +5330,11 @@ sub displayOccurrenceAddEdit {
 }
 
 sub processEditOccurrences {
+    if (!$s->isDBMember()) {
+        displayLoginPage( "Please log in first." );
+        exit;
+    }
+                                
 	# Get the names of all the fields coming in from the form.
 	my @param_names = $q->param();
 	# list of the number of rows to possibly update.
@@ -5335,7 +5366,7 @@ sub processEditOccurrences {
 	}
 
 	# list of required fields
-	my @required_fields = ("authorizer", "enterer", "collection_no", "genus_name", "species_name", "reference_no");
+	my @required_fields = ("collection_no", "genus_name", "species_name", "reference_no");
 	# hashes of which fields per table are integral (vs. text) type
 	# and which may contain NULL values.
 	%reidIntFields = ();
@@ -5429,6 +5460,9 @@ sub processEditOccurrences {
 			# NOTE: for some reason Muhl originally excluded
 			#  authorizer and enterer, causing corruption of data;
 			#  fixed this 3.4.04 JA
+			delete($results{authorizer_no});
+			delete($results{enterer_no});
+			delete($results{modifier_no});
 			delete($results{authorizer});
 			delete($results{enterer});
 			delete($results{modifier});
@@ -5488,9 +5522,12 @@ sub processEditOccurrences {
 				next ROW;
 			}
 
+
 			# 'modifier' is set to enterer:
 			my $modifier = $dbh->quote($s->get('enterer'));
 			push(@update_strings,"modifier=$modifier");
+			my $modifier_no = $s->get('enterer_no');
+			push(@update_strings,"modifier_no=$modifier_no");
 
 			# ugly hack: make sure taxon_no doesn't change unless
 			#  genus_name or species_name did JA 1.4.04
@@ -5520,6 +5557,13 @@ sub processEditOccurrences {
 
 			# Prepare, execute
 			$dbh->do($sql) || die ("$sql<hr>$!");	
+
+            # Reset which reid is marked as the most recent is the reference changes
+            for my $i ( 0..$#update_strings )	{
+				if ($update_strings[$i] =~ /reference_no/ && $results{'occurrence_no'}) {
+                    setMostRecentReID($dbt,$results{'occurrence_no'});
+                }
+            }
 
 			# If @update_strings contains 'reference_no',
 			# check if new ref is primary or secondary for the
@@ -5572,6 +5616,9 @@ sub processEditOccurrences {
 			delete($results{authorizer});
 			delete($results{enterer});
 			delete($results{modifier});
+			delete($results{authorizer_no});
+			delete($results{enterer_no});
+			delete($results{modifier_no});
 			delete($results{created});
 			delete($results{modified});
 			delete($results{occurrence_no});
@@ -5630,6 +5677,9 @@ sub processEditOccurrences {
 			# 'modifier' is set to enterer:
 			my $modifier = $dbh->quote($s->get('enterer'));
 			push(@update_strings,"modifier=$modifier");
+			my $modifier_no = $s->get('enterer_no');
+			push(@update_strings,"modifier_no=$modifier_no");
+
 
 			# ugly hack: make sure taxon_no doesn't change unless
 			#  genus_name or species_name did JA 1.4.04
@@ -5704,8 +5754,7 @@ sub processEditOccurrences {
 
 			# stuff names / values in the above arrays for checkDuplicates()
 			foreach my $val (keys %all_params){
-				next if $val eq 'row_token';
-				next if $val eq 'action';
+				next if $val =~ /^(?:row_token|action|authorizer|enterer|authorizer_no|enterer_no)$/;
 				if(${$all_params{$val}}[$index]){
 					push(@insert_names, $val);
 					if($occsIntFields{$val} == 1){
@@ -5718,7 +5767,8 @@ sub processEditOccurrences {
 			}
 			push(@insert_names, 'created');
 			push(@insert_values, "'".now()."'");
-
+			push(@insert_names, 'authorizer','enterer','authorizer_no', 'enterer_no');
+    		push(@insert_values, $dbh->quote($s->get('authorizer')), $dbh->quote($s->get('enterer')),$s->get('authorizer_no'),$s->get('enterer_no'));
 			# Check for duplicates
 			$return = checkDuplicates("occurrence_no", \${$all_params{occurrence_no}}[$index], "occurrences", \@insert_names, \@insert_values );
 			if(!$return){return $return;}
@@ -5778,7 +5828,7 @@ sub displayReIDCollsAndOccsSearchForm
 {
 
 	# Have to be logged in
-	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
+	if (!$s->isDBMember()) {
 		$s->enqueue( $dbh, "action=displayReIDCollsAndOccsSearchForm" );
 		displayLoginPage( "Please log in first." );
 		exit;
@@ -5800,18 +5850,14 @@ sub displayReIDCollsAndOccsSearchForm
 	my @prefkeys = keys %pref;
 	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no,'',$q->param('type'),'','','',''], ['authorizer', 'enterer', 'action', 'reid_reference_no', 'lithadj', 'lithology1','type','lithadj2', 'lithology2','environment','eml_min_interval','eml_max_interval'], \@prefkeys);
 
-	HTMLBuilder::buildAuthorizerPulldown($dbt, \$html );
-	HTMLBuilder::buildEntererPulldown($dbt, \$html );
-
-    # Dirty but until populateHTML gets retooled is necessary cause it overwrites these inputs when rewriting the form PS
-    $html =~ s/<input name="max_interval"/<input name="max_interval" onKeyUp="doComplete(event, this, intervalNames(),1);"/;
-    $html =~ s/<input name="min_interval"/<input name="min_interval" onKeyUp="doComplete(event, this, intervalNames(),1);"/;
+    my $javaScript = &makeAuthEntJavaScript();
+    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
 
 	# Set the Enterer & Authorizer
-	my $enterer = $s->get("enterer");
-	$html =~ s/%%enterer%%/$enterer/;
-	my $authorizer = $s->get("authorizer");
-	$html =~ s/%%authorizer%%/$authorizer/;
+	my $enterer_reversed = $s->get("enterer_reversed");
+	$html =~ s/%%enterer_reversed%%/$enterer_reversed/;
+	my $authorizer_reversed = $s->get("authorizer_reversed");
+	$html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
 
 	# Spit out the HTML
     printIntervalsJava(1);
@@ -5897,7 +5943,7 @@ sub displayOccsForReID
 	$sth->execute();
 
 	# Get the current reference data
-	$sql = "SELECT * FROM refs WHERE reference_no=".$s->get("reference_no");
+    $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$s->get('reference_no');
 	dbg("$sql");
 	my $sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth2->execute();
@@ -5957,7 +6003,7 @@ sub displayOccsForReID
 		$sth2->finish();
 
 		# Print the reference details
-		$sql = "SELECT * FROM refs WHERE reference_no=" . $row{'reference_no'};
+        $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$row{'reference_no'};
 		$sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth2->execute();
 		my $md = MetadataModel->new($sth2);
@@ -5987,7 +6033,7 @@ sub displayOccsForReID
 		# Print the collections details
 		if ( $printCollectionDetails) {
 
-			$sql = "SELECT * FROM collections WHERE collection_no=" . $row{'collection_no'};
+			$sql = "SELECT collection_name,state,country,formation,period_max FROM collections WHERE collection_no=" . $row{'collection_no'};
 			$sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	    	$sth2->execute();
 	    	my %collRow = %{$sth2->fetchrow_hashref()};
@@ -6048,7 +6094,10 @@ sub displayOccsForReID
 #       reidentification form.  Occurrences which were reidentified
 #       in the previous step may not be reidentified in this step
 sub processNewReIDs {
-	my $redID;
+    if (!$s->isDBMember()) {
+        displayLoginPage( "Please log in first." );
+        exit;
+    }
 
 	print stdIncludes( "std_page_top" );
     
@@ -6071,8 +6120,7 @@ sub processNewReIDs {
 	#print join(',', @types);
 	$sth->finish();
 
-	my @requiredFields = ("authorizer", "enterer", "occurrence_no",
-				"collection_no", "genus_name", "species_name", "reference_no");
+	my @requiredFields = ("occurrence_no", "collection_no", "genus_name", "species_name", "reference_no");
 	for my $i (0..$numFields)	{
 		for my $j (0..$#requiredFields)	{
 			if ($fieldNames[$i] eq $requiredFields[$j])	{
@@ -6148,9 +6196,7 @@ sub processNewReIDs {
  
 				if ( $curVal) {
 					my $val = $curVal;
-					$val =~ s/\Q'/''/g;
-					# $val =~ s/\Q"/""/g;  # tone -- commented out
-					$val = "'$val'" if $fieldTypes[$j] == 0;
+					$val = $dbh->quote($val) if $fieldTypes[$j] == 0;
 					
 					push(@row, $val);
 					push(@fieldList, $fieldName);
@@ -6192,14 +6238,9 @@ sub processNewReIDs {
 			push(@fieldList, 'taxon_no');
 			push(@row, $taxon_no);
  
-			push(@fieldList, 'modifier');
-			push(@row, $dbh->quote($s->get('enterer')));
-#			push(@fieldList, 'authorizer', 'enterer', 'modifier');;
-#			push(@row, $dbh->quote($s->get('authorizer')), $dbh->quote($s->get('enterer')), $dbh->quote($s->get('enterer')));
+			push(@fieldList, 'authorizer','enterer','authorizer_no', 'enterer_no','reference_no');
+    		push(@row, $dbh->quote($s->get('authorizer')), $dbh->quote($s->get('enterer')),$s->get('authorizer_no'),$s->get('enterer_no'),$s->get('reference_no'));
 
-			push ( @fieldList, 'reference_no');
-			push ( @row, $s->get('reference_no'));
- 
 			# Check for duplicates
 			$return = checkDuplicates( "reid_no", \$recID, "reidentifications", \@fieldList, \@row );
 			if ( ! $return ) { return $return; }
@@ -6326,7 +6367,7 @@ sub updateRecord {
 	#  going to the public page and therefore logging out, but then hitting
 	#  the back button and getting back to the submit form
 	# Have to be logged in
-	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
+	if (!$s->isDBMember()) {
 		displayLoginPage( "Please log in first." );
 		exit;
 	}
@@ -6405,7 +6446,6 @@ sub updateRecord {
 	# blank.  This should stop it.
 	if ( $updateString !~ /modifier/ ) { htmlError( "modifier not specified" ); }
 
-#if ( $s->get("authorizer") eq "M. Uhen" ) { print "$updateString<br>\n"; } 
 	$dbh->do( $updateString ) || die ( "$updateString<HR>$!" );
   
 	return $id;
@@ -6423,8 +6463,7 @@ sub insertRecord {
 	#  going to the public page and therefore logging out, but then hitting
 	#  the back button and getting back to the submit form
 	# Have to be logged in
-	if ($s->get('enterer') eq "Guest" || $s->get('enterer') eq "")	{
-		$s->enqueue( $dbh, "action=insertRecord" );
+	if (!$s->isDBMember()) {
 		displayLoginPage( "Please log in first." );
 		exit;
 	}
@@ -6614,8 +6653,8 @@ sub checkNearMatch {
 			# Strip single quotes, which won't be in the database
 			my $v = $$vals[$i];
 			$v =~ s/'//g;
-			if ( $$fields[$i] ne "authorizer" &&
-           		 $$fields[$i] ne "enterer" && $$fields[$i] ne "modifier" &&
+			if ( $$fields[$i] !~ /^authorizer/ &&
+           		 $$fields[$i] !~ /^enterer/ && $$fields[$i] !~ /^modifier/ &&
 				 $$fields[$i] ne "created" &&
            		 $$fields[$i] ne "modified" && $$fields[$i] ne "release_date" &&
 				 $$fields[$i] ne "comments" ) {
@@ -6803,9 +6842,7 @@ sub checkDuplicates {
 		# Also the release_date
 		# Also the "modified" date! Added by JA 12.6.02
 		# Also "comments" (relevant to occs and reids) JA 28.6.02
-		if ( $$fields[$i] ne $idName && $$fields[$i] ne "created" &&
-             $$fields[$i] ne "modified" && $$fields[$i] ne "release_date" &&
-			 $$fields[$i] ne "comments" ) {
+		if ( $$fields[$i] !~ /^(:?$idName|created|modified|release_date|comments|authorizer|enterer|modifier|authorizer_no|enterer_no|modifier_no)$/ ) {
 			# Tack on the field and value; take care of NULLs.
 			if ( $$vals[$i] eq "NULL" ) {
 				$sql .= $$fields[$i]." IS NULL";
@@ -6909,14 +6946,14 @@ sub getCollsWithRef	{
 	# primary ref in first SELECT, secondary refs in second SELECT
     # the '1 is primary' and '0 is_primary' is a cool trick - alias the value 1 or 0 to column is_primary
     # any primary referneces will have a  virtual column called "is_primary" set to 1, and secondaries will not have it.  PS 04/29/2005
-    $sql = "(SELECT collection_no,authorizer,collection_name,access_level,research_group,release_date,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections where reference_No=$tempRefNo)";
+    $sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections where reference_no=$tempRefNo)";
     $sql .= " UNION ";
-    $sql .= "(SELECT c.collection_no, c.authorizer, c.collection_name, c.access_level, c.research_group, release_date, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$tempRefNo) ORDER BY collection_no";
+    $sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$tempRefNo) ORDER BY collection_no";
 
     $sth = $dbh->prepare($sql);
     $sth->execute();
 
-	my $p = Permissions->new( $s );
+	my $p = Permissions->new($s,$dbt);
     $results = [];
 	if($sth->rows) {
 	    my $limit = 999;
@@ -6954,11 +6991,16 @@ sub RefQuery {
 	my $q = shift;
     
     $csv = Text::CSV_XS->new();
-	
+
+
 	# Use current reference button?
 	if ($q->param('use_current')) {
 		# if so, grab the current reference info.
-		my $sql = "SELECT * FROM refs WHERE reference_no = ?";
+		my $sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.comments,r.language,r.created,r.modified FROM refs r".
+                  " LEFT JOIN person p1 ON p1.person_no=r.authorizer_no ".
+                  " LEFT JOIN person p2 ON p2.person_no=r.enterer_no".
+                  " LEFT JOIN person p3 ON p3.person_no=r.modifier_no".
+                  " WHERE reference_no = ?";
 		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute($s->get('reference_no'));
 		$md = MetadataModel->new($sth);
@@ -6986,57 +7028,50 @@ sub RefQuery {
 	if ( $refsearchstring ) { $refsearchstring = "for '$refsearchstring' "; }
 
 	if ( $refsearchstring ne "" || $q->param('authorizer_reversed') || $q->param('enterer_reversed') || $q->param('project_name') ) {
-
-		# here's where the restoration starts
-		# note that WHERE clause is mandatory
-		my $sql = "SELECT * FROM refs WHERE ";
+        my $tables = "refs r, person p1, person p2".
+                     " LEFT JOIN person p3 ON p3.person_no=r.modifier_no";
+        # This exact order is very important due to work around with inflexible earlier code
+        my $from = "p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.comments,r.language,r.created,r.modified";
+        my @where = ("r.authorizer_no=p1.person_no","r.enterer_no=p2.person_no");
 
 		if ($name) {
-			# have to escape single quotes
-			$name =~ s/'/\\'/g;
-			$sql .= " ( author1last LIKE '\%$name\%' OR ".
-				"   author2last LIKE '\%$name\%' OR ".
-				"   otherauthors LIKE '\%$name\%' ) ";
+			push @where,"(r.author1last LIKE ".$dbh->quote('%'.$name.'%').
+                        " OR r.author1last LIKE ".$dbh->quote('%'.$name.'%').
+                        " OR r.otherauthors LIKE ".$dbh->quote('%'.$name.'%').')';
 		}
-		
-		#append each relevant clause onto the where clause
-		# escape single quotes where relevant
-		$sql .= "AND pubyr = '$pubyr' " if ($pubyr);
-		$reftitle =~ s/'/\\'/g if ($reftitle);
-		$sql .= "AND (reftitle LIKE '\%$reftitle\%' OR reftitle LIKE '$reftitle%') " if ($reftitle);
-		$pubtitle =~ s/'/\\'/g if ($pubtitle);
-		$sql .= "AND ( pubtitle LIKE '\%$pubtitle\%') " if ($pubtitle);
-		$sql .= "AND reference_no = $refno " if ($refno);
-		# added section for handling authorizer name and lines
-		#  for swapping last name and initial JA 13.4.04
-		if ( $q->param('authorizer_reversed') )	{
-			my $authorizer = Person::reverseName($q->param('authorizer_reversed'));
-			$sql .= "AND authorizer=".$dbh->quote($authorizer);
+        push @where, "r.pubyr LIKE ".$dbh->quote($pubyr) if ($pubyr);
+        push @where, "r.reftitle LIKE ".$dbh->quote('%'.$reftitle.'%') if ($reftitle);
+        push @where, "r.pubtitle LIKE ".$dbh->quote('%'.$pubtitle.'%') if ($pubtitle);
+        push @where, "r.reference_no=".int($refno) if ($refno);
+        push @where, "FIND_IN_SET(".$dbh->quote($q->param('project_name')).",r.project_name)" if ($q->param('project_name'));
+        
+		if ( $q->param('authorizer_reversed')) {
+            push @where, "p1.reversed_name LIKE ".$dbh->quote($q->param('authorizer_reversed')) if ($q->param('authorizer_reversed'));
 		}
-		if ( $q->param('enterer_reversed') )	{
-			my $enterer = Person::reverseName($q->param('enterer_reversed'));
-			$sql .= "AND enterer=".$dbh->quote($enterer);
+		if ( $q->param('enterer_reversed')) {
+            push @where, "p2.reversed_name LIKE ".$dbh->quote($q->param('enterer_reversed')) if ($q->param('enterer_reversed'));
 		}
-		$sql .= "AND project_name='".$q->param('project_name')."' " if ($q->param('project_name'));
-		
-		my $orderBy = "ORDER BY ";
+	
+        my $sql = "SELECT $from FROM $tables WHERE ".join(" AND ",@where);
+    
+		my $orderBy = " ORDER BY ";
 		my $refsortby = $q->param('refsortby');
 
 		# order by clause is mandatory
 		if ($refsortby eq 'year') {
-			$orderBy .= "pubyr, ";
+			$orderBy .= "r.pubyr, ";
 		} elsif ($refsortby eq 'publication') {
-			$orderBy .= "pubtitle, ";
+			$orderBy .= "r.pubtitle, ";
 		} elsif ($refsortby eq 'authorizer') {
-			$orderBy .= "authorizer, ";
+			$orderBy .= "p1.reversed_name, ";
 		} elsif ($refsortby eq 'enterer') {
-			$orderBy .= "enterer, ";
+			$orderBy .= "p2.reversed_name, ";
 		} elsif ($refsortby eq 'entry date') {
-			$orderBy .= "reference_no, ";
+			$orderBy .= "r.reference_no, ";
 		}
 		
 		if ($refsortby)	{
-			$orderBy .= "author1last, author1init, author2last, pubyr";
+			$orderBy .= "r.author1last, r.author1init, r.author2last, r.pubyr";
 		}
 
 		# only append the ORDER clause if something is in it,
@@ -7046,9 +7081,8 @@ sub RefQuery {
 			$sql .= $orderBy;
 		}
 
-		# clean up the SQL
-		$sql =~ s/WHERE AND/WHERE /;
-		
+        dbg("RefQuery SQL".$sql);
+
 		# Execute the ref query
 		$sth = $dbh->prepare( $sql ) || die ( "$sqlString<hr>$!" );
 		$sth->execute();
@@ -7058,20 +7092,22 @@ sub RefQuery {
 		if (@rows > 30)	{
 			$overlimit = @rows;
 			$q->param('refsSeen' => 30 + $q->param('refsSeen') );
-
 			$sql = $sql . " LIMIT " .$q->param('refsSeen');
 		}
-		
+	
 		
 		# Dump the refs to a flat file JA 1.7.02
 		my $authname = $s->get('authorizer');
 		$authname =~ s/\. //;
 		open REFOUTPUT,">$HTML_DIR/$OUTPUT_DIR/$authname.refs";
-		
+
+		my @refFields = @{$sth->{NAME}};
+        if ($csv->combine(@refFields)) {
+            print REFOUTPUT $csv->string(),"\n";
+        }
 		for my $rowRef (@rows)	{
-			my @row = @{$rowRef};
-			if ($csv->combine(@row))	{
-				print REFOUTPUT $csv->string,"\n";
+			if ($csv->combine(@$rowRef))	{
+				print REFOUTPUT $csv->string(),"\n";
 			}
 		}
 		close REFOUTPUT;
@@ -7079,8 +7115,8 @@ sub RefQuery {
 		# Rerun the query
 		$sth = $dbh->prepare( $sql ) || die ( "$sqlString<hr>$!" );
 		$sth->execute();
-		$md = MetadataModel->new($sth);
 		@fieldNames = @{$sth->{NAME}};
+		$md = MetadataModel->new($sth);
 	} else {
 		print stdIncludes("std_page_top");
 		print "<center><h4>Sorry! You can't do a search without filling in at least one field</h4>\n";
@@ -7112,7 +7148,7 @@ sub buildReference {
 	my $reference = "";
 
 	if ( $reference_no ) {
-		$sql = "SELECT * FROM refs where reference_no = $reference_no";
+		$sql = "SELECT reference_no,author1init,author1last,author2init,author2last,otherauthors,pubyr FROM refs where reference_no = $reference_no";
 		#dbg ( "$sql" );
 		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute();
