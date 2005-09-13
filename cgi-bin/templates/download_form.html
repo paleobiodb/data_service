@@ -1,3 +1,4 @@
+%%NOESCAPE_enterer_authorizer_lists%%                                                                                                                       
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
 
@@ -80,28 +81,6 @@ function checkAll(checkbox,prefix){
 	}
 }
 
-
-// Zips pulldown to the current user
-function auth ( ) {
-    // Loop over all forms on the page
-    for ( var i=0; i < document.forms.length; i++ ) {
-        // If we have an authorizer pulldown
-        if ( document.forms[i].authorizer ) {
-
-            var options = document.forms[i].authorizer.options;
-
-            // Loop over each option to find our person
-            for ( var loop=0; loop < options.length; loop++) {
-                if ( options[loop].value == "%%authorizer%%" ) {
-                    options.selectedIndex = loop;
-                    break;
-                }
-            }
-            break;
-        }
-    }
-}
-
 //  End -->
 </script>
 
@@ -148,8 +127,8 @@ function auth ( ) {
 <tr class="lightGrey">
 <td valign="top"><font size=-1>Data authorizer:</font></td>
 <td valign="bottom">
-<select name="authorizer"></select>
-<a href="javascript: auth();">Me</a></td>
+<input name="authorizer_reversed" size=22 onKeyUp="doComplete(event, this, authorizerNames());">
+<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_reversed%%'">Me</a></td>
 </tr>
 
 <tr>
@@ -747,7 +726,7 @@ Note that the collection ID and genus name fields are always output.</p>
 	<tr>
 	<td class="cell" nowrap><input type=checkbox name=collections_collection_type value="YES">collection purpose</td>
 	<td class="cell" nowrap><input type=checkbox name=collections_collection_coverage value="YES">collection coverage</td>
-	<td class="cell" nowrap><input type=checkbox name=collections_collection_attributes value="YES">collection attributes</td>
+	<td class="cell" nowrap>&nbsp;</td>
 	<td class="cell" nowrap>&nbsp;</td>
 	</tr>
 
