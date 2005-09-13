@@ -46,6 +46,13 @@ sub setDisabled
   $self->{_disabled} = 1;
 }
 
+sub setMainTagStuff
+{
+  my $self = shift;
+  my $stuff = shift;
+  $self->{_stuff} = $stuff;
+}
+
 sub toHTML
 {
   my $self = shift;
@@ -55,6 +62,7 @@ sub toHTML
   $self->{htmlString} .= qq| size="$self->{_size}"| if defined $self->{_size};
   $self->{htmlString} .= qq| maxlength="$self->{_maxLength}"| if defined $self->{_maxLength};
   $self->{htmlString} .= qq| disabled| if defined $self->{_disabled};
+  $self->{htmlString} .= qq| $self->{_stuff}| if defined $self->{_stuff};
   $self->{htmlString} .= '>';
   
   return $self->{htmlString};
