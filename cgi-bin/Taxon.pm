@@ -172,10 +172,6 @@ sub displayAuthorityForm {
 	my %fields;  # a hash of fields and values that
 				 # we'll pass to HTMLBuilder to pop. the form.
 				 
-	# Fields we'll pass to HTMLBuilder that the user can't edit.
-	# (basically, any field which is not empty or 0 in the database,
-	# if the authorizer is not the original authorizer of the record).
-	my @nonEditables; 	
 	
 	if ((!$dbt) || (!$hbo) || (! $s) || (! $q)) {
         carp "displayAuthorityform had invalid arguments passed to it";
@@ -385,59 +381,16 @@ sub displayAuthorityForm {
     my @extant_values = ('','YES','NO');
     $fields{'extant_popup'} = $hbo->buildSelect('extant',\@extant_values,\@extant_values,$fields{'extant'});
     
-	# if the authorizer of this record doesn't match the current
-	# authorizer, and if this is an edit (not a first entry),
-	# then only let them edit empty fields.  However, if they're superuser
-	# (alroy, alroy), then let them edit anything.
-	#
-	# otherwise, they can edit any field.
-	my $sesAuth = $s->get('authorizer_no');
-	
-	if ($s->isSuperUser()) {
-		$fields{'message'} = "<p align=center><i>You are the superuser, so you can edit any field in this record!</i></p>";
-	} elsif (!$isNewEntry && $sesAuth != $t->get('authorizer_no') && $t->get('authorizer_no') != 0) {
-		# grab the authorizer name for this record.
-		my $authName = Person::getPersonName($dbt,$fields{authorizer_no});
-	
-		$fields{'message'} = "<p align=center><i>This record was created by a different authorizer ($authName) so you can only edit empty fields.</i></p>";
-		
-		# we should always make the ref_is_authority radio buttons disabled
-		# because only the original authorizer can edit these.
-		
-		push (@nonEditables, 'ref_is_authority');
-		
-		# depending on the status of the ref_is_authority radio, we should
-		# make the other reference fields non-editable.
-		if ($fields{'ref_is_authority'} eq 'YES') {
-			push (@nonEditables, ('author1init', 'author1last', 'author2init', 'author2last', 'otherauthors', 'pubyr', '2nd_pages', '2nd_figures'));
-		} else {
-			push (@nonEditables, ('pages', 'figures'));		
-		}
-		
-				
-		# find all fields in the database record which are not empty and add them to the list.
-		foreach my $f ($t->get()) {
-			if ($t->get($f)) {
-				push(@nonEditables, $f);
-			}
-		}
-		
-		# we'll also have to add a few fields separately since they don't exist in the database,
-		# but only in our form.
-		
-		if ($fields{'2nd_pages'}) { push(@nonEditables, '2nd_pages'); }
-		if ($fields{'2nd_figures'}) { push(@nonEditables, '2nd_figures'); }
-		if ($fields{'type_specimen'}) { push(@nonEditables, 'type_specimen'); }
-		
-		push(@nonEditables, 'taxon_name');
-	}
-	
-	
+	# Fields we'll pass to HTMLBuilder that the user can't edit.
+	my @nonEditables; 	
+
 	## Make the taxon_name non editable if this is a new entry to simplify things
 	## New addition, 3/22/2004
 	if ($isNewEntry) {
 		push(@nonEditables, 'taxon_name');
 	}
+
+    # All other fields are editable, no write protection for authorities table PS 09/12/2005
 
     # add in the error message
     if ($error_message) {
@@ -631,49 +584,12 @@ sub submitAuthorityForm {
 		}
 	}
 	
-	# Now loop through all fields submitted from the form.
-	# If a field is not empty, then see if we're allowed to edit it in the database.
-	# If we can edit it, then make sure the name is correct (since a few fields like
-	# 2nd_pages, etc. don't match the database field names) and add it to the 
-	# %fieldsToEnter hash.
-	
-	
-	#Debug::dbPrint("dbFields = ");
-	#Debug::printHash(\%dbFields);
-	
-	# this $editAny variable is true if they can edit any field,
-	# false if they can't.
-	my $editAny = ($isNewEntry || $s->isSuperUser() || $s->get('authorizer_no') == $t->get('authorizer_no')) ? 1 : 0;
 	foreach my $formField ($q->param()) {
-		#if (! $q->param($formField)) {
-		#	next;  # don't worry about empty fields.	
-		#}
-		
-		my $okayToEdit = $editAny;
-		if (! $okayToEdit) {
-			# then we should do some more checks, because maybe they are allowed
-			# to edit it aferall..  If the field they want to edit is empty in the
-			# database, then they can edit it.
-			
-			if (! $t->get($formField)) {
-				# If the field in the database is empty, then it's okay
-				# to edit it.
-				$okayToEdit = 1;
-			}
-		}
-		
-		if ($okayToEdit) {
-			
-			# if the value isn't already in our fields to enter
-			if (! $fieldsToEnter{$formField}) {
-				$fieldsToEnter{$formField} = $q->param($formField);
-			}
-		}
-		
-		#Debug::dbPrint("okayToEdit = $okayToEdit, $formField = " . $q->param($formField));
-		
-	} # end foreach formField.
-
+        # if the value isn't already in our fields to enter
+        if (! $fieldsToEnter{$formField}) {
+            $fieldsToEnter{$formField} = $q->param($formField);
+        }
+	}
 
 	my $taxonRank = $q->param('taxon_rank'); 	# rank in popup menu
 
@@ -781,8 +697,18 @@ sub submitAuthorityForm {
 		#  occurrences table and set the taxon numbers appropriately
 
 		# start with a test for uniqueness
-		my $sql = "SELECT count(*) AS c FROM authorities WHERE taxon_name='" . $fieldsToEnter{taxon_name} . "'";
-		if ( ${$dbt->getData($sql)}[0]->{'c'} == 1 )	{
+		my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='" . $fieldsToEnter{taxon_name} . "'";
+        my @taxon_nos = @{$dbt->getData($sql)};
+        my @taxon_nos = map {$_->{'taxon_no'}} @taxon_nos;
+
+		if (scalar(@taxon_nos) >= 1) {
+            # Deal with homonym issue
+            my $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
+            my $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
+            $dbt->getData($sql1);
+            $dbt->getData($sql2);
+            push @warnings, "Since $fieldsToEnter{taxon_name} is a homonym, occurrences of it are no longer classified.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$fieldsToEnter{taxon_name}\">Reclassify occurrences</a>\" and manually classify <b>all</b> occurrences of this taxon.";
+		} elsif (scalar(@taxon_nos) == 1) {
 
 			# start composing update sql
 			# NOTE: in theory, taxon no for matching records always
@@ -874,7 +800,7 @@ sub submitAuthorityForm {
 # Behavior is:
 #  Find out how many possible higher taxa this taxon can be a type for:
 #    if its 0: this is bad, it should always be 1 unless the entering of the opinion was botched
-#    if its 1: do the insertion or deletion on the spot, if permissions allow it
+#    if its 1: do the insertion or deletion on the spot
 #    if its >1: print out a new form displaying a list of all parents for the user to check
 #  possible higher taxa must be linked by opinions from the same ref as this opinion
 sub displayTypeTaxonSelectForm {
@@ -909,17 +835,10 @@ sub displayTypeTaxonSelectForm {
             print "<h2>For which taxa is $type_taxon_name a type $type_taxon_rank?</h2>";
             foreach my $row (reverse @parents) {
                 my $checked = ($row->{'type_taxon_no'} == $type_taxon_no) ? 'CHECKED' : '';
-                my $disabled = ($s->get('authorizer_no') != $row->{'authorizer_no'} && $row->{'type_taxon_no'}) ? 'DISABLED READONLY' : '';
-                print "<input type=\"checkbox\" name=\"taxon_no\" value=\"$row->{taxon_no}\" $disabled $checked> ";
+                print "<input type=\"checkbox\" name=\"taxon_no\" value=\"$row->{taxon_no}\" $checked> ";
                 print "$row->{taxon_name} ($row->{taxon_rank})";
                 if ($row->{'type_taxon_no'} && $row->{'type_taxon_no'} != $type_taxon_no) {
                     print " - <small>type taxon currently $row->{type_taxon_name} ($row->{type_taxon_rank})</small>";
-                }
-                if ($disabled) {
-                    print " - <small>authority record belongs to ".Person::getPersonName($dbt,$row->{'authorizer_no'})."</small>";
-                    if ($checked) {
-                        print "<input type=\"hidden\" name=\"taxon_no\" value=\"$row->{taxon_no}\">";
-                    }
                 }
                 print '<br>';
             }
@@ -934,7 +853,7 @@ sub displayTypeTaxonSelectForm {
                 $return = $dbt->updateRecord($s,'authorities','taxon_no',$parents[0]->{'taxon_no'},{'type_taxon_no'=>$type_taxon_no});
             }
             if ($return == -1) {
-                push @warnings,"Can't set this as the type taxon for authority $parents[0]->{taxon_name}, its owned by a difference authorizer: ".Person::getPersonName($dbt,$parents[0]->{'authorizer_no'}).". Its type taxon is already set to: $parents[0]->{type_taxon_name} ($parents[0]->{type_taxon_rank})";
+                push @warnings,"Can't set this as the type taxon for authority $parents[0]->{taxon_name}";
             }
         } else {
             carp "Something is wrong in the opinions script, got no parents for current taxon after adding an opinion.  (in section dealing with type taxon)\n";
