@@ -1,53 +1,4 @@
-<script language="JavaScript" type="text/javascript">
-<!-- Begin
-
-// Zips pulldown to the current user
-function me ( ) {
-
-	// Loop over all forms on the page
-	for ( var i=0; i < document.forms.length; i++ ) {
-		// If we have an enterer pulldown
-		if ( document.forms[i].enterer ) {
-
-			var options = document.forms[i].enterer.options;
-
-			// Loop over each option to find our person
-			for ( var loop=0; loop < options.length; loop++) {
-				if ( options[loop].value == "%%enterer%%" ) {
-					options.selectedIndex = loop;
-					break;
-				} // fi
-			} // rof
-			break;
-		} //fi
-	} // rof
-}
-
-// Zips pulldown to the current authorizer
-function auth ( ) {
-
-	// Loop over all forms on the page
-	for ( var i=0; i < document.forms.length; i++ ) {
-		// If we have an authorizer pulldown
-		if ( document.forms[i].authorizer ) {
-
-			var options = document.forms[i].authorizer.options;
-
-			// Loop over each option to find our person
-			for ( var loop=0; loop < options.length; loop++) {
-				if ( options[loop].value == "%%authorizer%%" ) {
-					options.selectedIndex = loop;
-					break;
-				} // fi
-			} // rof
-			break;
-		} //fi
-	} // rof
-}
-//  End -->
-</script>
-
-
+%%NOESCAPE_enterer_authorizer_lists%%
 <DIV class="title">Map request form</DIV>
 
 <form method=post action="$exec_url" onSubmit="return checkForm();">
@@ -68,14 +19,15 @@ function auth ( ) {
 <select id="research_group">
 </select>
 
+
 <tr>
 	<td valign=top>Authorizer:</td>
-	<td valign=top><select name="authorizer"></select> &nbsp;<a href="javascript: auth( );">Me</a></td>
+	<td valign=top><input name="authorizer_reversed" size=22 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_reversed%%'">Me</a></td>
 </tr>
 
 <tr>
 	<td valign=top>Enterer:</td>
-	<td valign=top><select name="enterer"></select> &nbsp;<a href="javascript: me( );">Me</a></td>
+	<td valign=top><input name="enterer_reversed" size=22 onKeyUp="doComplete(event, this, entererNames());">&nbsp;<a href="#" onClick="document.forms[0].enterer_reversed.value='%%enterer_reversed%%'">Me</a></td>
 </tr>
 
 <tr><td valign=top>
