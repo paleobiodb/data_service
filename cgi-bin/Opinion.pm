@@ -20,6 +20,7 @@ use Session;
 use Classification;
 use CGI::Carp;
 use Data::Dumper;
+use Permissions;
 
 # list of allowable data fields.
 use fields qw(opinion_no reference_no dbt DBrow);  
@@ -464,10 +465,14 @@ sub displayOpinionForm {
 	#
 	# otherwise, they can edit any field.
 	my $sesAuth = $s->get('authorizer_no');
-	
+
+    # A list of people who have permitted the current authorizer to edit their records
+    my $p = Permissions->new($s,$dbt);
+    my %is_modifier_for = %{$p->getModifierList()};  
+
 	if ($s->isSuperUser()) {
 		$fields{'message'} = "<p align=center><i>You are the superuser, so you can edit any field in this record!</i></p>";
-	} elsif ((! $isNewEntry) && ($sesAuth != $o->get('authorizer_no')) && ($o->get('authorizer_no') != 0)) {
+	} elsif ((! $isNewEntry) && (!$is_modifier_for{$o->get('authorizer_no')}) && ($sesAuth != $o->get('authorizer_no')) && ($o->get('authorizer_no') != 0)) {
 	
 		# grab the authorizer name for this record.
 		my $authName = $fields{'authorizer_name'};
@@ -527,7 +532,7 @@ sub displayOpinionForm {
     my $selected = ($fields{'taxon_status'} eq 'belongs to') ? "CHECKED" : "";
     my $colspan = ($parent_pulldown && $selected) ? "": "colspan=2";
     $belongs_to_row .= qq|<tr><td valign="top"><input type="radio" name="taxon_status" value="belongs to" $selected></td>\n|;
-    $belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid $childRank</b>, classified as belonging to $higher_rank |;
+    $belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid or reranked $childRank</b>, classified as belonging to $higher_rank |;
 
     if ($parent_pulldown && $selected) {
         $belongs_to_row .= "<td width='100%'>$parent_pulldown</td>";
@@ -590,11 +595,12 @@ sub displayOpinionForm {
     } elsif ($childRank eq 'species') {
         $all_ranks = ' (genus and species)';
     } 
+    my $spelling_note .= "<small>Note that the name may be different than listed above due to a correction, recombination, or rank change.</small>";
     $spelling_row .= "<tr><td colspan=2>Please enter the full name of the taxon as used in the reference${all_ranks}:</td></tr>";
     if ($spelling_pulldown) {
-        $spelling_row .= "<tr><td nowrap width=\"100%\">$spelling_pulldown</td></tr>";
+        $spelling_row .= "<tr><td nowrap width=\"100%\">$spelling_pulldown<br>$spelling_note</td></tr>";
     } else {
-        $spelling_row .= qq|<tr><td nowrap width="100%"><input id="child_spelling_name" name="child_spelling_name" size=30 value="$childSpellingName"></td></tr>|;
+        $spelling_row .= qq|<tr><td nowrap width="100%"><input id="child_spelling_name" name="child_spelling_name" size=30 value="$childSpellingName"><br>$spelling_note</td></tr>|;
     }   
 
 #    my @select_values = ('belongs to','corrected as','recombined as','rank changed as','lapsus calami for');
