@@ -277,8 +277,6 @@ function doCheckFieldsTaphonomy() {
   <form name="form" action="$exec_url" method="post" onSubmit="return checkFields();">
   <span id="page_target"></span>
   <input id="reference_no" type="hidden">
-  <input id="authorizer" type="hidden">
-  <input id="enterer" type=hidden>
   <input id="collection_no" type="hidden">
 
 <div id="panel1" class="panel">
@@ -498,10 +496,10 @@ function doCheckFieldsTaphonomy() {
 
      <tr>
       <td><span class="required">Maximum (oldest) time interval:</span><br><select id="eml_max_interval"></select>
-                          <input id="max_interval" maxlength=255>
+                          <input id="max_interval" maxlength=255 onKeyUp="doComplete(event, this, intervalNames(),0);">
       </td>
       <td>Minimum (youngest) time interval:<br><select id="eml_min_interval"></select>
-                        <input id="min_interval" maxlength=255>
+                        <input id="min_interval" maxlength=255 onKeyUp="doComplete(event, this, intervalNames(),0);">
       </td>
     </tr>
   </table>

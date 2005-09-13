@@ -1,4 +1,4 @@
-<STYLE type="text/css">
+<style type="text/css">
 .test {
     background-color: #E6E6E6;
 
@@ -7,16 +7,16 @@
     border-color: #C8C8C8;
     padding: 1em 1em 0.5em 1em;
 }
-</STYLE>
+</style>
 
 <!-- this will be populated by the CGI script with functions to 
 grab a list of enterers and authorizers from the database -->
 %%NOESCAPE_enterer_authorizer_lists%%
 
-<CENTER>
+<center>
 
 
-<SCRIPT>checkBrowserVersion();</SCRIPT>
+<script>checkBrowserVersion();</script>
 
 <!-- On optional message, for example, if they enter the wrong user name or password. -->
 %%message%%
@@ -28,33 +28,33 @@ grab a list of enterers and authorizers from the database -->
 <input type=hidden name="action" value="processLogin">
 <input type=hidden name="destination" value="%%destination%%">
 
-<TABLE BORDER=0 cellpadding=4 class="test">
-<TR>
-<TD align=right>Authorizer:</TD>
-<TD><input name="authorizer_reversed" size=18 onKeyUp="doComplete(event, this, authorizerNames());"></TD>
-</TR>
+<table border=0 cellpadding=4 class="test">
+<tr>
+<td align=right>Authorizer:</td>
+<td><input id="authorizer_reversed" name="authorizer_reversed" size=18 onKeyUp="doComplete(event, this, authorizerNames());"></td>
+</tr>
 
-<TR>
-<TD align=right>Enterer:</TD>
-<TD><input  name="enterer_reversed" size=18 onKeyUp="doComplete(event, this, entererNames());"></TD>
-</TR>
+<tr>
+<td align=right>Enterer:</td>
+<td><input id="enterer_reversed" name="enterer_reversed" size=18 onKeyUp="doComplete(event, this, entererNames());"></td>
+</tr>
 
-<TR>
-<TD align=right>Password:</TD>
-<TD><input id="password" name="password" type="password" size=18></TD>
-</TR>
+<tr>
+<td align=right>Password:</td>
+<td><input id="password" name="password" type="password" size=18></td>
+</tr>
 
-<TR>
-<TD colspan=2 align=center>
-<INPUT TYPE="submit" value="Login">
-</TD>
-</TR>
-</TABLE>
-</FORM>
+<tr>
+<td colspan=2 align=center>
+<input TYPE="submit" value="Login">
+</td>
+</tr>
+</table>
+</form>
 
-<p>If not, please <A HREF="/cgi-bin/bridge.pl?user=Guest&action=displayHomePage">return to the public area</A></p>
+<p>If not, please <a href="/cgi-bin/bridge.pl?user=Guest&action=displayHomePage">return to the public area</a></p>
 
-</CENTER>
+</center>
 
-</BODY>
-</HTML>
+</body>
+</html>
