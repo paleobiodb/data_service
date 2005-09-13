@@ -1,60 +1,6 @@
+%%NOESCAPE_enterer_authorizer_lists%%
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
-
-    // This is a handy little function for seeing what properties an object has
-    function showProperties ( obj ) {
-        var result = "";
-
-        for ( var i in obj ) {
-            result += "o." + i + " = " + obj[i] + "<BR>\n";
-        }
-        document.write ( result );
-    }
-
-
-// Zips pulldown to the current user
-function me ( ) {
-
-	// Loop over all forms on the page
-	for ( var i=0; i < document.forms.length; i++ ) {
-		// If we have an enterer pulldown
-		if ( document.forms[i].enterer ) {
-
-			var options = document.forms[i].enterer.options;
-
-			// Loop over each option to find our person
-			for ( var loop=0; loop < options.length; loop++) {
-				if ( options[loop].value == "%%enterer%%" ) {
-					options.selectedIndex = loop;
-					break;
-				} // fi
-			} // rof
-			break;
-		} //fi
-	} // rof
-}
-
-// Zips pulldown to the current authorizer
-function auth ( ) {
-
-	// Loop over all forms on the page
-	for ( var i=0; i < document.forms.length; i++ ) {
-		// If we have an authorizer pulldown
-		if ( document.forms[i].authorizer ) {
-
-			var options = document.forms[i].authorizer.options;
-
-			// Loop over each option to find our person
-			for ( var loop=0; loop < options.length; loop++) {
-				if ( options[loop].value == "%%authorizer%%" ) {
-					options.selectedIndex = loop;
-					break;
-				} // fi
-			} // rof
-			break;
-		} //fi
-	} // rof
-}
 
 // Checks the form data
 function checkForm ( ) {
@@ -77,8 +23,8 @@ function checkForm ( ) {
 		&& frm.max_interval.value == ""
 		&& frm.min_interval.value == ""
 		&& frm.group_formation_member.value == ""
-		&& frm.authorizer.selectedIndex == 0
-		&& frm.enterer.selectedIndex == 0
+		&& frm.authorizer_reversed.value == ""
+		&& frm.enterer_reversed.value == ""
 		&& frm.research_group.selectedIndex == 0 
 		&& frm.lithology1.selectedIndex == 0
 		&& frm.environment.selectedIndex == 0 ) {
@@ -118,8 +64,8 @@ function checkForm ( ) {
 	  <td>Reference number: <br><input name=reference_no size=30><br></td>
 	</tr>
 	<tr>
-	  <td>Authorizer: <br><select name="authorizer"></select>&nbsp;<a href="#" onClick="javascript: auth( );">Me</a></td>
-	  <td>Enterer: <br><select name="enterer"></select>&nbsp;<a href="#" onClick="javascript: me( );">Me</a></td>
+	  <td>Authorizer: <br><input name="authorizer_reversed" size=27 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_reversed%%'">Me</a></td>
+	  <td>Enterer: <br><input name="enterer_reversed" size=27 onKeyUp="doComplete(event, this, entererNames());">&nbsp;<a href="#" onClick="document.forms[0].enterer_reversed.value='%%enterer_reversed%%'">Me</a></td>
 	  <td>Research group or project: <br>
 <select id="research_group">
 </select>
@@ -136,8 +82,8 @@ function checkForm ( ) {
 	  <td>County/parish: <br><input name=county size=30><br></td>
 	</tr>
 	<tr>
-	  <td>Oldest time interval (or age in Ma): <br><select id="eml_max_interval"></select><input name="max_interval" size=15><br></td>
-	  <td>Youngest time interval/Ma: <br><select id="eml_min_interval"></select><input name="min_interval" size=15><br></td>
+	  <td>Oldest time interval (or age in Ma): <br><select id="eml_max_interval"></select><input name="max_interval" size=15 onKeyUp="doComplete(event, this, intervalNames(),1);"><br></td>
+	  <td>Youngest time interval/Ma: <br><select id="eml_min_interval"></select><input name="min_interval" size=15 onKeyUp="doComplete(event, this, intervalNames(),1);"><br></td>
 	</tr>
 	<tr>
 	  
@@ -183,7 +129,7 @@ function checkForm ( ) {
 	<td>Column 3:</td>
 		<td><select name="column1">
 <option>
-<option>authorizer
+<option>authorizer_no
 <option>enterer
 <option>modifier
 <option>collection_no
@@ -295,9 +241,9 @@ function checkForm ( ) {
 		<td>Column 4:</td>
 		<td><select name="column2">
 <option>
-<option>authorizer
-<option>enterer
-<option>modifier
+<option>authorizer_no
+<option>enterer_no
+<option>modifier_no
 <option>collection_no
 <option>collection_subset
 <option>reference_no
@@ -406,9 +352,9 @@ function checkForm ( ) {
 	 	<td>Sort column:</td>
 		<td><select name="sortby">
 <option>
-<option>authorizer
-<option>enterer
-<option>modifier
+<option>authorizer_no
+<option>enterer_no
+<option>modifier_no
 <option selected>collection_no
 <option>collection_subset
 <option>reference_no
