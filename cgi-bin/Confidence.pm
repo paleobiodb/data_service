@@ -557,6 +557,10 @@ sub displayStratTaxa{
         }
     }
 
+    foreach (values %splist) {
+        s/,$//;
+    } 
+
     if ($q->param('show_taxon_list') eq 'NO') {
         optionsForm($q, $s, $dbt, \%splist);
     } else {
@@ -1511,19 +1515,18 @@ sub calculateStratInterval	{
     for(my $i=0;$q->param("speciesname$i");$i++) {
         my $taxon_name = $q->param("keepspecies$i");
         my @taxon_nos = split(",",$q->param("speciesname$i"));
+        my ($occ_sql,$reid_sql);
         if ($taxon_nos[0] =~ /^\d+$/) {
             $taxon_sql = $q->param("speciesname$i"); 
             $occ_sql = "o.taxon_no IN ($taxon_sql)";
             $reid_sql = "re.taxon_no IN ($taxon_sql)";
         } else {
             my ($genus,$species) = split(/ /,$taxon_nos[0]);
-            if ($genus) {
-                $occ_sql .= " o.genus_name=".$dbh->quote($genus);
-                $reid_sql .= " o.genus_name=".$dbh->quote($genus);
-                if ($species) {
-                    $occ_sql .= "AND o.species_name=".$dbh->quote($species);
-                    $reid_sql .= "AND o.species_name=".$dbh->quote($species);
-                }
+            $occ_sql = " o.genus_name=".$dbh->quote($genus);
+            $reid_sql = " re.genus_name=".$dbh->quote($genus);
+            if ($species) {
+                $occ_sql .= "AND o.species_name=".$dbh->quote($species);
+                $reid_sql .= "AND re.species_name=".$dbh->quote($species);
             }
         }
 
