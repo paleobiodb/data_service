@@ -417,6 +417,7 @@ sub displayAuthorityForm {
 # rjp, 3/2004.
 sub submitAuthorityForm {
     my $dbt = shift;
+    my $dbh = $dbt->dbh;
 	my $hbo = shift;
 	my $s = shift;		# the cgi parameters
 	my $q = shift;		# session
@@ -692,16 +693,25 @@ sub submitAuthorityForm {
             $dbt->insertRecord($s,'opinions',\%opinionHash);
 		}
 
-		# JA 2.4.04
-		# if the taxon name is unique, find matches to it in the
-		#  occurrences table and set the taxon numbers appropriately
+	} else {
+		# if it's an old entry, then we'll update.
+		# Delete some fields that should never be updated...
+		delete $fieldsToEnter{reference_no};
+		$resultTaxonNumber = $t->get('taxon_no');
 
+		$status = $dbt->updateRecord($s,'authorities', 'taxon_no',$resultTaxonNumber, \%fieldsToEnter);
+	}
+
+    # JA 2.4.04
+    # if the taxon name is unique, find matches to it in the
+    #  occurrences table and set the taxon numbers appropriately
+    if ($status && ($isNewEntry || ($t->get('taxon_name') ne $fieldsToEnter{'taxon_name'}))) {
 		# start with a test for uniqueness
-		my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='" . $fieldsToEnter{taxon_name} . "'";
+		my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name=".$dbh->quote($fieldsToEnter{taxon_name});
         my @taxon_nos = @{$dbt->getData($sql)};
-        my @taxon_nos = map {$_->{'taxon_no'}} @taxon_nos;
+        @taxon_nos = map {$_->{'taxon_no'}} @taxon_nos;
 
-		if (scalar(@taxon_nos) >= 1) {
+		if (scalar(@taxon_nos) > 1) {
             # Deal with homonym issue
             my $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
             my $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
@@ -709,7 +719,6 @@ sub submitAuthorityForm {
             $dbt->getData($sql2);
             push @warnings, "Since $fieldsToEnter{taxon_name} is a homonym, occurrences of it are no longer classified.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$fieldsToEnter{taxon_name}\">Reclassify occurrences</a>\" and manually classify <b>all</b> occurrences of this taxon.";
 		} elsif (scalar(@taxon_nos) == 1) {
-
 			# start composing update sql
 			# NOTE: in theory, taxon no for matching records always
 			#  should be zero, unless the new name is a species and
@@ -717,37 +726,23 @@ sub submitAuthorityForm {
 			#  genus, in which case we assume users will want the
 			#  new number for the species instead; that's why there
 			#  is no test to make sure the taxon no is empty
-			$sql = "UPDATE occurrences SET modified=modified,taxon_no=" . $resultTaxonNumber . " WHERE ";
+			my $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=" . $resultTaxonNumber . " WHERE ";
+			my $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=" . $resultTaxonNumber . " WHERE ";
 
-			# if the name has a space then match on both the
-			#  genus and species name fields
-			if ( $fieldsToEnter{taxon_name} =~ / / )	{
-				my ($a,$b) = split / /,$fieldsToEnter{taxon_name};
-				$sql .= " genus_name='" . $a ."' AND species_name='" . $b . "'";
-			}
-			# otherwise match only on the genus name field
-			else 	{
-				$sql .= " genus_name='" . $fieldsToEnter{taxon_name} . "'";
-			}
-
-			# update the occurrences table
-			$dbt->getData($sql);
-            main::dbg("sql to update occs: $sql");
-
-			# and then the reidentifications table
-			$sql =~ s/UPDATE occurrences /UPDATE reidentifications /;
-			$dbt->getData($sql);
-            main::dbg("sql to update reids: $sql");
+			my ($genus,$species) = split / /,$fieldsToEnter{taxon_name};
+			$sql1 .= " genus_name=".$dbh->quote($genus);
+			$sql2 .= " genus_name=".$dbh->quote($genus);
+            if ($species) {
+                $sql1 .= " AND species_name=".$dbh->quote($species);
+                $sql2 .= " AND species_name=".$dbh->quote($species);
+            }
+			# update the occurrences and reidentifications tables
+			$dbt->getData($sql1);
+			$dbt->getData($sql2);
+            main::dbg("sql to update occs: $sql1");
+            main::dbg("sql to update reids: $sql2");
 		}
-	} else {
-		# if it's an old entry, then we'll update.
-		
-		# Delete some fields that should never be updated...
-		delete $fieldsToEnter{reference_no};
-		$resultTaxonNumber = $t->get('taxon_no');
-		
-		$status = $dbt->updateRecord($s,'authorities', 'taxon_no',$resultTaxonNumber, \%fieldsToEnter);
-	}
+    }
 	
     # displays info about the authority record the user just entered...
 	my $enterupdate;
@@ -760,14 +755,15 @@ sub submitAuthorityForm {
 	if (!$status) {
 		print "<DIV class=\"warning\">Error inserting/updating authority record.  Please start over and try again.</DIV>";	
 	} else {
-		
+	
+        my $end_message;
         if (@warnings) {
-		    print "<DIV class=\"warning\">";
-            print "Warnings inserting/updating authority record:<BR>"; 
-            print "<LI>$_</LI>" for (@warnings);
-            print "</DIV>";
+		    $end_message .= "<DIV class=\"warning\">";
+            $end_message .= "Warnings inserting/updating authority record:<BR>"; 
+            $end_message .= "<LI>$_</LI>" for (@warnings);
+            $end_message .= "</DIV>";
         }
-        my $end_message = "<H3>" . $fieldsToEnter{'taxon_name'} . " " .Reference::formatShortRef(\%fieldsToEnter). " has been $enterupdate the database</H3>";
+        $end_message .= "<H3>" . $fieldsToEnter{'taxon_name'} . " " .Reference::formatShortRef(\%fieldsToEnter). " has been $enterupdate the database</H3>";
 
         my $origResultTaxonNumber = TaxonInfo::getOriginalCombination($dbt,$resultTaxonNumber);
         $end_message .= qq|
