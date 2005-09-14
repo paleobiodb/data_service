@@ -282,7 +282,7 @@ sub assignGenera	{
 
 
 	if ( ! open OCCS,"<$occsfile" )	{
-		print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with epoch or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
         return;
 	}
 
@@ -340,6 +340,9 @@ sub assignGenera	{
 		} elsif ( $fn eq "collections.epoch" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "epoch";
+		} elsif ( $fn eq "collections.stage" )	{
+			$field_bin = $fieldcount;
+			$bin_type = "stage";
 		} elsif ( $fn eq "collections.10mybin" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "10my";
@@ -383,12 +386,17 @@ sub assignGenera	{
 	# also get the bin boundaries in Ma
 	my @binnames;
 	if ( $bin_type eq "period" )	{
-        @binnames=("Quaternary","Tertiary","Cretaceous","Jurassic","Triassic","Permian","Carboniferous","Devonian","Silurian","Ordovician","Cambrian","Vendian","Sturtian"); 
+        @binnames = TimeLookup::getScaleOrder($dbt,2);
 		@_ = TimeLookup::findBoundaries($dbh,$dbt);
 		%topma = %{$_[2]};
 		%basema = %{$_[3]};
 	} elsif ( $bin_type eq "epoch" )	{
-		@binnames = ("Holocene","Pleistocene","Pliocene","Miocene","Oligocene","Eocene","Paleocene","Late/Upper Cretaceous","Early/Lower Cretaceous","Late/Upper Jurassic","Middle Jurassic","Early/Lower Jurassic","Late/Upper Triassic","Middle Triassic","Early/Lower Triassic","Zechstein","Rotliegendes","Gzelian","Kasimovian","Moscovian","Bashkirian","Serpukhovian","Visean","Tournaisian","Late/Upper Devonian","Middle Devonian","Early/Lower Devonian","Pridoli","Ludlow","Wenlock","Llandovery","Ashgill","Caradoc","Llandeilo","Llanvirn","Arenig","Tremadoc","Merioneth","St Davids","Caerfai","Ediacara","Varanger");
+        @binnames = TimeLookup::getScaleOrder($dbt,4);
+		@_ = TimeLookup::findBoundaries($dbh,$dbt);
+		%topma = %{$_[2]};
+		%basema = %{$_[3]};
+	} elsif ( $bin_type eq "stage" )	{
+        @binnames = TimeLookup::getScaleOrder($dbt,6);
 		@_ = TimeLookup::findBoundaries($dbh,$dbt);
 		%topma = %{$_[2]};
 		%basema = %{$_[3]};
