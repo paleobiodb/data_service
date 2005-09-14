@@ -647,6 +647,8 @@ sub submitOpinionForm {
 		'subphylum' => 18, 'phylum' => 19, 'superphylum' => 20,
 		'subkingdom' => 21, 'kingdom' => 22, 'superkingdom' => 23,
 		'unranked clade' => 24, 'informal' => 25 );
+  
+    my @warnings = ();
 
 	if ((!$dbt) || (!$hbo) || (!$s) || (!$q)) {
 		croak("Opinion::submitOpinionForm had invalid arguments passed to it");
@@ -1119,7 +1121,49 @@ sub submitOpinionForm {
 
         my ($return_code, $taxon_no) = $dbt->insertRecord($s,'authorities', \%record);
         main::dbg("create new authority record, got return code $return_code");
+        if (!$return_code) {
+            die("Unable to create new authority record for $record{taxon_name}. Please contact support");
+        }
         $fields{'child_spelling_no'} = $taxon_no;
+
+        # if the taxon name is unique, find matches to it in the
+        #  occurrences table and set the taxon numbers appropriately
+        # start with a test for uniqueness
+        $sql = "SELECT taxon_no FROM authorities WHERE taxon_name=".$dbh->quote($record{'taxon_name'});
+        my @taxon_nos = @{$dbt->getData($sql)};
+        @taxon_nos = map {$_->{'taxon_no'}} @taxon_nos;
+
+        if (scalar(@taxon_nos) > 1) {
+            # Deal with homonym issue
+            my $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
+            my $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
+            $dbt->getData($sql1);
+            $dbt->getData($sql2);
+            push @warnings, "Since $record{taxon_name} is a homonym, occurrences of it are no longer classified.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$record{taxon_name}\">Reclassify occurrences</a>\" and manually classify <b>all</b> occurrences of this taxon.";
+        } elsif (scalar(@taxon_nos) == 1) {
+            # start composing update sql
+            # NOTE: in theory, taxon no for matching records always
+            #  should be zero, unless the new name is a species and
+            #  some matching records were set on the basis of their
+            #  genus, in which case we assume users will want the
+            #  new number for the species instead; that's why there
+            #  is no test to make sure the taxon no is empty
+            my $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=".$taxon_no." WHERE ";
+            my $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=".$taxon_no. " WHERE ";
+
+            my ($genus,$species) = split / /,$record{'taxon_name'};
+            $sql1 .= " genus_name=".$dbh->quote($genus);
+            $sql2 .= " genus_name=".$dbh->quote($genus);
+            if ($species) {
+                $sql1 .= " AND species_name=".$dbh->quote($species);
+                $sql2 .= " AND species_name=".$dbh->quote($species);
+            }
+            # update the occurrences and reidentifications tables
+            $dbt->getData($sql1);
+            $dbt->getData($sql2);
+            main::dbg("sql to update occs: $sql1");
+            main::dbg("sql to update reids: $sql2");
+        }
 	}
 
 	my $resultOpinionNumber;
@@ -1174,7 +1218,15 @@ sub submitOpinionForm {
 
 	my $enterupdate = ($isNewEntry) ? 'entered into' : 'updated in';
 
-    my $end_message = qq|
+    my $end_message = "";
+    if (@warnings) {
+        $end_message .= "<DIV class=\"warning\">";
+        $end_message .= "Warnings inserting/updating opinion:<BR>";
+        $end_message .= "<LI>$_</LI>" for (@warnings);
+        $end_message .= "</DIV>";
+    }  
+
+    $end_message .= qq|
 <div align="center">
 <h3> The opinion $opinionHTML has been $enterupdate the database</h3>
 <p>
