@@ -889,7 +889,6 @@ $| = 1;
 					    if ( $refsampled[$collrefno[$listid[$j]]][$i] == 1 )	{
 					      $msubsrefrichness[$i]++;
 					    }
-FOO
 					  }
 		# modify the counter
 					  if (($samplingmethod < 3) || ($samplingmethod > 4))	{
