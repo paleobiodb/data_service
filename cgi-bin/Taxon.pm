@@ -776,18 +776,18 @@ sub submitAuthorityForm {
         $end_message .= qq|
     <div align="center">
     <table cellpadding=10><tr><td>
-      <li><p><b><a href="bridge.pl?action=displayAuthorityForm&taxon_no=$resultTaxonNumber">Edit $fieldsToEnter{taxon_name}</a></b></p></li>
-      <li><p><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$resultTaxonNumber">Get general information about $fieldsToEnter{taxon_name}</a></b></p></li>   
-      <li><p><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></b></p></li>
-      <li><p><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=current">Add/edit another taxon</a></b></p></li>
-      <li><p><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm">Add/edit another taxon from another reference</a></b></p></li>
+      <br><li><b><a href="bridge.pl?action=displayAuthorityForm&taxon_no=$resultTaxonNumber">Edit $fieldsToEnter{taxon_name}</a></b></li>
+      <br><li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$resultTaxonNumber">Get general information about $fieldsToEnter{taxon_name}</a></b></li>   
+      <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></b></li>
+      <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=current">Add/edit another taxon</a></b></li>
+      <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm">Add/edit another taxon from another reference</a></b></li>
     </td>
     <td valign=top>
-      <li><p><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber">Add an opinion about $fieldsToEnter{taxon_name}</a></b></p></li>
-      <li><p><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fieldsToEnter{taxon_name}</a></b></p></li>
-      <li><p><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></p></li>
-      <li><p><b><a href="bridge.pl?action=displayOpinionTaxonSearchForm&use_reference=current">Add/edit opinion about another taxon</a></b></p></li>
-      <li><p><b><a href="bridge.pl?action=displayOpinionTaxonSearchForm">Add/edit opinion about another taxon from another reference</a></b></p></li>
+      <br><li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber">Add an opinion about $fieldsToEnter{taxon_name}</a></b></li>
+      <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fieldsToEnter{taxon_name}</a></b></li>
+      <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li>
+      <br><li><b><a href="bridge.pl?action=displayOpinionTaxonSearchForm&use_reference=current">Add/edit opinion about another taxon</a></b></li>
+      <br><li><b><a href="bridge.pl?action=displayOpinionTaxonSearchForm">Add/edit opinion about another taxon from another reference</a></b></li>
     </td></tr></table>
     </div>|;
 
