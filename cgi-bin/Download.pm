@@ -23,7 +23,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch stage 10mybin max_interval_no min_interval_no emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch stage 10mybin max_interval_no min_interval_no ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage collection_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
 my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name reference_no comments created modified modified_temp plant_organ);
 my @specimenFieldNames = qw(authorizer enterer modifier specimen_no reference_no specimens_measured specimen_id specimen_side specimen_part specimen_coverage measurement_source magnification specimen_count comments created modified);
@@ -347,7 +347,7 @@ sub getOutFields {
 	if($tableName eq "collections") {
         if ($isSQL) {
             # These fieldnames are created virtually, not from the DB
-	        @fieldNames = grep {!/^(paleo(lat|lng)(deg|dec|min|sec|dir)|epoch|stage|period|10mybin)$/} @collectionsFieldNames;
+	        @fieldNames = grep {!/^(paleo(lat|lng)(deg|dec|min|sec|dir)|ma_max|ma_min|ma_mid|epoch|stage|period|10mybin)$/} @collectionsFieldNames;
         } else {
 	        @fieldNames = @collectionsFieldNames;
         }
@@ -1241,6 +1241,15 @@ sub doQuery {
 		%mystage = %{$intervalInScaleRef};
 	}
 
+    if ($q->param('collections_ma_max') ||
+        $q->param('collections_ma_min') ||
+        $q->param('collections_ma_mid')) {
+        my @bounds = TimeLookup::findBoundaries($dbh,$dbt);
+        %upper_bound = %{$bounds[2]};
+        %lower_bound = %{$bounds[3]}; 
+    }
+
+
 	# get the PBDB 10 m.y. bin names for the collections JA 3.3.04
 	# WARNING: the locage_max field is just being used as a dummy
 	if ( $q->param('collections_10mybin') || $q->param('compendium_ranges') eq 'NO' )	{
@@ -2004,6 +2013,26 @@ sub doQuery {
                 #  field locage_max is used as a placeholder for the
                 #  bin name
                 $row->{'10mybin'} = $mybin{$row->{'collection_no'}};
+            }
+            if ($q->param('collections_ma_max') eq "YES") {
+                $row->{'ma_max'} = $lower_bound{$row->{'max_interval_no'}};
+            }
+            if ($q->param('collections_ma_min') eq "YES") {
+                if ($row->{'min_interval_no'}) {
+                    $row->{'ma_min'} = $upper_bound{$row->{'min_interval_no'}};
+                } else {
+                    $row->{'ma_min'} = $upper_bound{$row->{'max_interval_no'}};
+                }
+            }
+            if ($q->param('collections_ma_mid') eq "YES") {
+                my ($max,$min);
+                $max = $lower_bound{$row->{'max_interval_no'}};
+                if ($row->{'min_interval_no'}) {
+                    $min = $upper_bound{$row->{'min_interval_no'}};
+                } else {
+                    $min = $upper_bound{$row->{'max_interval_no'}};
+                }
+                $row->{'ma_mid'} = ($max+$min)/2;
             }
 
             # Put the values in the correct order since by looping through this array
