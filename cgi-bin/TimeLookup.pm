@@ -628,6 +628,9 @@ sub findBoundaries	{
         }
     }
 
+    # Holocene hack PS 9/14/2005
+    $upperbound{32} = 0;
+
 	# make a hash table where keys are interval names
 	# needed by Download.pm
 	$sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
