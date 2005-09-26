@@ -103,7 +103,7 @@ sub checkTaxonInfo {
                     print "</tr><tr>";
                 }
                 print "</tr>";
-                print "<tr><td align=\"middle\" colspan=3><br>";
+                print "<tr><td align=\"center\" colspan=3><br>";
                 print "<input type=\"submit\" value=\"Get taxon info\">";
                 print "</td></tr></table></form></div>";
             } elsif (scalar(@genera) == 1) {
@@ -139,7 +139,7 @@ sub checkTaxonInfo {
                 print "</tr><tr>";
             }
             print "</tr>";
-            print "<tr><td align=\"middle\" colspan=3><br>";
+            print "<tr><td align=\"center\" colspan=3><br>";
             print "<input type=\"submit\" value=\"Get taxon info\">";
             print "</td></tr></table></form></div>";
 
@@ -279,7 +279,7 @@ sub displayTaxonInfoResults {
 	print "<a href=\"/cgi-bin/bridge.pl?action=beginTaxonInfo\">".
 		  "<b>Get info on another taxon</b></a></center></div>\n";
 
-	print "</form><p>";
+	print "<p>";
 }
 
 sub doNavBox {
@@ -335,7 +335,7 @@ sub doNavBox {
 
 	# First module has the checkboxes on the side.
 	print "<table class=\"navtable\" cellspacing=0 cellpadding=0>".
-          "<tr><td valign=\"top\" align=\"center\"><b><div class=\"large\">Display</div></b></td></tr>";
+          "<tr><td valign=\"top\" align=\"center\"><div class=\"large\"><b>Display</b></div></td></tr>";
 	
 	foreach my $key (sort keys %module_num_to_name){
 	    print "<tr><td align=left valign=top nowrap>";
@@ -368,12 +368,13 @@ sub doNavBox {
 		print ">";
 		my $thumb_path = $thumb->{path_to_image};
 		$thumb_path =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
-		print "<img align=middle src=\"$thumb_path\" border=1 vspace=3>";
+		print "<img align=\"center\" src=\"$thumb_path\" border=1 vspace=3>";
         print "</td></tr>";
 	}
 
     print "<tr><td align=\"center\"><br><input type=submit value=\"update\"></td></tr>";
     print "</table>";
+    print "</form>";
 
     return (\@modules_to_display,\@thumbs);
 } 
@@ -398,8 +399,8 @@ sub doModules{
 	# classification
 	if($module == 1){
 		print "<table>".
-			  "<tr><td align=\"middle\"><h3>Classification</h3></td></tr>".
-			  "<tr><td valign=\"top\" align=\"middle\">";
+			  "<tr><td align=\"center\"><h3>Classification</h3></td></tr>".
+			  "<tr><td valign=\"top\" align=\"center\">";
 
 		print displayTaxonClassification($dbt, $genus, $species, $taxon_no);
 		print "</td></tr></table>";
@@ -408,8 +409,8 @@ sub doModules{
 	# sister and child taxa
 	elsif($module == 2){
 		print "<table>".
-			  "<tr><td align=\"middle\"><h3>Related taxa</h3></td></tr>".
-			  "<tr><td valign=\"top\" align=\"middle\">";
+			  "<tr><td align=\"center\"><h3>Related taxa</h3></td></tr>".
+			  "<tr><td valign=\"top\" align=\"center\">";
 
 		print displayRelatedTaxa($dbt, $genus, $species, $taxon_no);
 		print "</td></tr></table>";
@@ -421,8 +422,8 @@ sub doModules{
     		print displayTaxonSynonymy($dbt, $genus, $species, $taxon_no);
         } else {
             print "<table>".
-                  "<tr><td align=\"middle\"><h3>Taxonomic history</h3></td></tr>".
-                  "<tr><td valign=\"top\" align=\"middle\">".
+                  "<tr><td align=\"center\"><h3>Taxonomic history</h3></td></tr>".
+                  "<tr><td valign=\"top\" align=\"center\">".
                   "<i>No taxonomic history data are available</i>".
                   "</td></tr></table>\n";
         }
@@ -432,8 +433,8 @@ sub doModules{
     		print displaySynonymyList($dbt, $q, $genus, $species, $taxon_no);
         } else {
             print "<table width=\"100%\">".
-                  "<tr><td align=\"middle\"><h3>Synonymy</h3></td></tr>".
-                  "<tr><td valign=\"top\" align=\"middle\">".
+                  "<tr><td align=\"center\"><h3>Synonymy</h3></td></tr>".
+                  "<tr><td valign=\"top\" align=\"center\">".
                   "<i>No synonymy data are available</i>".
                   "</td></tr></table>\n";
         }
@@ -448,8 +449,8 @@ sub doModules{
 	}
 	# map
 	elsif($module == 7){
-		print "<center><table><tr><td align=\"middle\"><h3>Distribution</h3></td></tr>".
-			  "<tr><td align=\"middle\" valign=\"top\">";
+		print "<center><table><tr><td align=\"center\"><h3>Distribution</h3></td></tr>".
+			  "<tr><td align=\"center\" valign=\"top\">";
 		# MAP USES $q->param("taxon_name") to determine what it's doing.
 		my $map_html_path = doMap($dbh, $dbt, $q, $s, $in_list);
 		if ( $map_html_path )	{
@@ -739,7 +740,7 @@ sub doCollections{
         if ( $interval2 && $row->{'max_interval_no'} != $row->{'min_interval_no'}) {
             $res .= " - " . $interval2;
         }
-        $res .= "</span></td><td align=\"middle\" valign=\"top\"><span class=\"tiny\">";
+        $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"tiny\">";
 
         $row->{"country"} =~ s/ /&nbsp;/;
         $res .= $row->{"country"};
@@ -830,14 +831,14 @@ sub doCollections{
 	 			$output .= " to " . $youngestuppername;
 			}
 			$output .= " <i>or</i> " . $oldestlowerbound . " to " . $youngestupperbound . " Ma";
-			$output .= "<center><p>\n<hr>\n";
+			$output .= "</center><p>\n<hr>\n";
 		}
 
 		$output .= "<center><h3>Collections</h3></center>\n";
 
 		$output .= "<table width=\"100%\"><tr>";
-		$output .= "<th align=\"middle\">Time interval</th>";
-		$output .= "<th align=\"middle\">Country or state</th>";
+		$output .= "<th align=\"center\">Time interval</th>";
+		$output .= "<th align=\"center\">Country or state</th>";
 		$output .= "<th align=\"left\">PBDB collection number</th></tr>";
 		my $row_color = 0;
 		foreach my $key (@sorted){
@@ -847,8 +848,8 @@ sub doCollections{
 			else{
 				$output .= "<tr>";
 			}
-			$output .= "<td align=\"middle\" valign=\"top\">".
-				  "<span class=tiny>$key</span></td><td align=\"left\">";
+			$output .= "<td align=\"center\" valign=\"top\">$key</td>".
+                       " <td align=\"left\">";
 			foreach  my $collection_no (@{$time_place_coll{$key}}){
 				$output .= "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a> ";
 			}
@@ -960,9 +961,9 @@ sub displayTaxonClassification{
                                                                  'Higher taxon'; 
                     $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$table_rows[$i][1]&taxon_rank=$show_rank">$taxon_name</a>|;
                 }
-                $output .= qq|<td align="middle">$taxon_rank</td>|.
-                           qq|<td align="middle">$link</td>|.
-                           qq|<td align="middle" style="white-space: nowrap">$pub_info</td>|; 
+                $output .= qq|<td align="center">$taxon_rank</td>|.
+                           qq|<td align="center">$link</td>|.
+                           qq|<td align="center" style="white-space: nowrap">$pub_info</td>|; 
                 $output .= '</tr>';
             }
             $output .= "</table>";
@@ -1424,13 +1425,17 @@ sub getMostRecentParentOpinion {
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
     my $sql = "(SELECT ${child_fields}o.child_no, o.child_spelling_no, o.status, o.parent_no, o.parent_spelling_no,"
             . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr,"
-            . " (CASE r.taxonomic_reliability WHEN 'authoritative' THEN 0 WHEN 'standard' THEN 1 WHEN 'second hand' THEN 2 WHEN 'compendium' THEN 3 ELSE 3 END) reliability_index " 
+            . " (IF(r.reference_no = 6930,0," # is compendium, then 0 (lowest priority)
+            .   "IF(r.taxonomic_reliability = 'second hand',1," # else if second hand, next lowest
+            .   "IF(r.taxonomic_reliability = 'standard',2," # elsif standard, normal priority
+            .   "IF(r.taxonomic_reliability = 'authoritative',3,"
+            .   "0))))) reliability_index " # else low priority (compnedium level, should never happen)
             . " FROM opinions o" 
             . $child_join
             . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
             . " WHERE o.child_no=$child_no" 
             . $reference_clause
-            . ") ORDER BY reliability_index ASC, pubyr DESC LIMIT 1";
+            . ") ORDER BY reliability_index DESC, pubyr DESC LIMIT 1";
 
     my @rows = @{$dbt->getData($sql)};
     if (scalar(@rows)) {
