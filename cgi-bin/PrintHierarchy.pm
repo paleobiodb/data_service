@@ -30,12 +30,12 @@ sub processPrintHierarchy	{
 	my $OUT_HTTP_DIR = "/paleodb/data";
 	my $OUT_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
 
-	%shortranks = ("species" => "", "subgenus" => "Subg.", "genus" => "G.",
-			"tribe" => "Tr.", "subfamily" => "Subfm", "family" => "Fm.",
-			"superfamily" => "Superfm." ,
-			"infraorder" => "Infraor.", "suborder" => "Subor.",
-			"order" => "Or.", "superorder" => "Superor.",
-			"infraclass" => "Infracl.",  "subclass" => "Subcl.", "class" => "Cl.",
+	%shortranks = ("subspecies"=>"","species" => "", 
+            "subgenus" => "Subg.", "genus" => "G.",
+			"subtribe"=> "Subtr.", "tribe" => "Tr.", 
+            "subfamily" => "Subfm", "family" => "Fm.","superfamily" => "Superfm." ,
+			"infraorder" => "Infraor.", "suborder" => "Subor.", "order" => "Or.", "superorder" => "Superor.",
+			"infraclass" => "Infracl.", "subclass" => "Subcl.", "class" => "Cl.", "superclass" => "Supercl.",
 			"subphylum" => "Subph.", "phylum" => "Ph.");
 
 	print main::stdIncludes( "std_page_top" );
