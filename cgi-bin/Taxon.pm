@@ -357,7 +357,8 @@ sub displayAuthorityForm {
 				$select .= $taxon->get('taxon_name') . " " . $taxon->authors();
 		        # tack on the closest higher order name
 				my %master_class=%{Classification::get_classification_hash($dbt,"parent",[$row->{'taxon_no'}])};
-				$select .= "[".$master_class{$row->{'taxon_no'}}."]" if ($master_class{$row->{'taxon_no'}});
+                my $higher_class = ($master_class{$row->{'taxon_no'}}) ? $master_class{$row->{'taxon_no'}} : "unclassified";
+				$select .= "[$higher_class]";
 				$select .= "</option>\n";
 
 			}
@@ -736,6 +737,12 @@ sub submitAuthorityForm {
                 $sql1 .= " AND species_name=".$dbh->quote($species);
                 $sql2 .= " AND species_name=".$dbh->quote($species);
             }
+            # We don't want to accidentally overwrite the species taxon_no with the genus taxon_no
+            # if we have an edit;
+            if (!$isNewEntry && !$species) {
+                $sql1 .= " AND taxon_no=0";
+                $sql2 .= " AND taxon_no=0";
+            }
 			# update the occurrences and reidentifications tables
 			$dbt->getData($sql1);
 			$dbt->getData($sql2);
@@ -806,7 +813,7 @@ sub displayTypeTaxonSelectForm {
 
     my @warnings = ();
     my @parents = getTypeTaxonList($dbt,$type_taxon_no,$reference_no);
-
+    
     # The end message is the normal links + "This record has been updated in the DB" message.  save that message
     # for later if we're going to display another form.  If we're not, then show it
     my $show_end_message = 1;
@@ -852,7 +859,7 @@ sub displayTypeTaxonSelectForm {
                 push @warnings,"Can't set this as the type taxon for authority $parents[0]->{taxon_name}";
             }
         } else {
-            carp "Something is wrong in the opinions script, got no parents for current taxon after adding an opinion.  (in section dealing with type taxon)\n";
+            carp "Something is wrong in the opinions script, got no parents for current taxon after adding an opinion.  (in section dealing with type taxon). Vars: tt_no $type_taxon_no ref $reference_no tt_name $type_taxon_name tt_rank $type_taxon_rank"; 
         }
     } else {
         # This is not a type taxon.  Find all parents from the same reference, and set the
@@ -1013,7 +1020,9 @@ sub formatAuthorityLine	{
 
 	if ( $parents{$taxon->{'taxon_no'}})	{
 		$authLine .= " [".$parents{$taxon->{'taxon_no'}}."]";
-	}
+	} else {
+		$authLine .= " [unclassified]";
+    }
 
 	return $authLine;
 }
