@@ -252,22 +252,27 @@ sub displayTaxonInfoResults {
 		}
 	}
 
-    my $entered_name = $q->param('entered_name') || $q->param('taxon_name');
+    my $entered_name = $q->param('entered_name') || $q->param('taxon_name') || $taxon_name;
     my $entered_no   = $q->param('entered_no') || $q->param('taxon_no');
 	print "<div style=\"font-family : Arial, Verdana, Helvetica; font-size : 14px;\">";
 	if($s->isDBMember()) {
 		# Entered Taxon
         if ($entered_no) {
 		    print "<center><a href=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=$entered_no\">";
+		    print "<b>Edit taxonomic data for $entered_name</b></a> - ";
         } else {
 		    print "<center><a href=\"/cgi-bin/bridge.pl?action=submitTaxonSearch&goal=authority&taxon_no=-1&taxon_name=$entered_name\">";
+		    print "<b>Enter taxonomic data for $entered_name</b></a> - ";
         }
-		print "<b>Edit taxonomic data for $entered_name</b></a> - ";
+
+        if ($entered_no) {
+		    print "<a href=\"/cgi-bin/bridge.pl?action=displayOpinionChoiceForm&taxon_no=$entered_no\"><b>Edit taxonomic opinions about $entered_name</b></a> - ";
+            print "<a href=\"bridge.pl?action=startPopulateEcologyForm&taxon_no=$taxon_no\"><b>Add/edit ecological/taphonomic data</b></a> - ";
+        }
 		
 		print "<a href=\"/cgi-bin/bridge.pl?action=startImage\">".
 			  "<b>Enter an image</b></a> - \n";
-	}
-	else{
+	} else {
 		print "<center>";
 	}
 
@@ -294,12 +299,13 @@ sub doNavBox {
 	# Now, the checkboxes and submit button, 
 	my @modules_to_display = $q->param('modules');
 	my %module_num_to_name = (1 => "classification",
-							  2 => "taxonomic history",
-							  3 => "synonymy",
-							  4 => "ecology/taphonomy",
-							  5 => "measurements",
-							  6 => "map",
-							  7 => "age range/collections");
+							  2 => "related taxa",
+							  3 => "taxonomic history",
+							  4 => "synonymy",
+							  5 => "ecology/taphonomy",
+							  6 => "measurements",
+							  7 => "map",
+							  8 => "age range/collections");
 
 	# if the modules are known and the user is not a guest,
 	#  set the module preferences in the person table
@@ -321,7 +327,7 @@ sub doNavBox {
 
 	# if that didn't work, set the default
 	if ( ! @modules_to_display )	{
-		@modules_to_display = (1,2,3);
+		@modules_to_display = (1,2,3,4);
 	}
 	
 	# Put in order
@@ -387,7 +393,7 @@ sub doModules{
 	
 	# If $q->param("taxon_name") has a space, it's a "Genus species" combo,
 	# otherwise it's a "Higher taxon."
-	($genus, $species) = split /\s+/, $q->param("taxon_name");
+	#($genus, $species) = split /\s+/, $q->param("taxon_name");
 
 	# classification
 	if($module == 1){
@@ -399,8 +405,18 @@ sub doModules{
 		print "</td></tr></table>";
 
 	}
-	# synonymy
+	# sister and child taxa
 	elsif($module == 2){
+		print "<table>".
+			  "<tr><td align=\"middle\"><h3>Related taxa</h3></td></tr>".
+			  "<tr><td valign=\"top\" align=\"middle\">";
+
+		print displayRelatedTaxa($dbt, $genus, $species, $taxon_no);
+		print "</td></tr></table>";
+
+	}
+	# synonymy
+	elsif($module == 3){
         if ($taxon_no) {
     		print displayTaxonSynonymy($dbt, $genus, $species, $taxon_no);
         } else {
@@ -411,7 +427,7 @@ sub doModules{
                   "</td></tr></table>\n";
         }
 	}
-	elsif ( $module == 3 )	{
+	elsif ( $module == 4 )	{
         if ($taxon_no) {
     		print displaySynonymyList($dbt, $q, $genus, $species, $taxon_no);
         } else {
@@ -423,15 +439,15 @@ sub doModules{
         }
 	}
 	# ecology
-	elsif ( $module == 4 )	{
+	elsif ( $module == 5 )	{
 		print displayEcology($dbt,$taxon_no,$genus,$species);
     }
     # specimen measurements
-    elsif ($module == 5) {
+    elsif ($module == 6) {
 		print displayMeasurements($dbt,$taxon_no,$genus,$species,$in_list);
 	}
 	# map
-	elsif($module == 6){
+	elsif($module == 7){
 		print "<center><table><tr><td align=\"middle\"><h3>Distribution</h3></td></tr>".
 			  "<tr><td align=\"middle\" valign=\"top\">";
 		# MAP USES $q->param("taxon_name") to determine what it's doing.
@@ -458,7 +474,7 @@ sub doModules{
 		}
 	}
 	# collections
-	elsif($module == 7){
+	elsif($module == 8){
 		print doCollections($exec_url, $q, $dbt, $dbh, $in_list);
 	}
 }
@@ -799,10 +815,6 @@ sub doCollections{
 
 		# print the first and last appearance (i.e., the age range)
 		#  JA 25.6.04
-        if ($youngestuppername eq 'Holocene') {
-            # Bandaid fix for now PS 08/19/2005
-            $youngestupperbound = 0; 
-        }
 		if ($age_range_format eq "for_strata_module") {
 			$output .= "<p><b>Age range:</b> ";
 			$output .= $oldestlowername;
@@ -961,14 +973,42 @@ sub displayTaxonClassification{
         $output .= "<i>No classification data are available</i>";
     }
 
+    return $output;
+}
+
+# Separated out from classification section PS 09/22/2005
+sub displayRelatedTaxa {
+	my $dbt = shift;
+    my $dbh = $dbt->dbh;
+	my $genus = (shift or "");
+	my $species = (shift or "");
+	my $orig_no = (shift or ""); #Pass in original combination no
+
     #
     # Begin getting sister/child taxa
     # PS 01/20/2004 - rewrite: Use getChildren function
     # First get the children
     #
-    $focal_taxon_rank = $table_rows[0][0];
-    $focal_taxon_no   = $table_rows[0][2];
-    $parent_taxon_no  = $table_rows[1][2];
+    my $focal_taxon_no   = $orig_no;
+    my ($focal_taxon_rank,$parent_taxon_no);
+    if ($orig_no) {
+        my $taxon = getTaxon($dbt,'taxon_no'=>$orig_no);
+        $focal_taxon_rank = $taxon->{'taxon_rank'};
+    } elsif ($genus && $species) {
+        $focal_taxon_rank = 'species';
+    }
+
+    if ($orig_no) {
+        my $class_hash = Classification::get_classification_hash($dbt,'parent',[$orig_no],'numbers');
+        if ($class_hash->{$orig_no}) {
+            $parent_taxon_no = $class_hash->{$orig_no};
+        }
+    } else {
+        my @genus_nos = getTaxonNos($dbt,$genus,'genus');
+        if ($genus && scalar(@genus_nos) <= 1) {
+            $parent_taxon_no=$genus_nos[0];
+        }
+    }
 
     my $taxon_records = [];
     my @child_taxa_links;
@@ -985,7 +1025,7 @@ sub displayTaxonClassification{
             $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
             $link .= "</a>";
             if ($type_taxon_no && $type_taxon_no == $record->{'taxon_no'}) {
-                $link .= " <small>(is type $record->{taxon_rank})</small>";
+                $link .= " <small>(type $record->{taxon_rank})</small>";
             }
             push @child_taxa_links, $link;
         }
@@ -1363,6 +1403,8 @@ sub getMostRecentParentOpinion {
     return if (!$child_no);
     return if ($reference_no eq '0');
 
+    # The child_name is the correct spelling of the child passed in, not the name of the parent, which 
+    # is sort of a bad abstraction on my part PS 09/14/2005. Use this to get the corrected name of a taxon
     my $child_fields = '';
     my $child_join = '';
     if ($include_child_taxon_info) {
@@ -1377,167 +1419,23 @@ sub getMostRecentParentOpinion {
 
     # This will return the most recent parent opinions. its a bit tricky cause: 
     # we're sorting by aliased fields. So surround the query in parens () to do this:
-    # compendium types come last: sort asc. so the boolean is_compendium will 
-    #  cause compendium entries to come up last in the list
-    # and want to use opinions pubyr if it exists, else ref pubyr as second choice
-    #  surround the select in () so aliased fields can be used in order by.
-    # The taxon_name is the correct spelling of the child passed in, not the name of the parent, which is weird
+    # All values of the enum taxonomic_reliability get recast as integers for easy sorting
+    # Lowest should appear at top of list (authoritative) and highest at bottom (compendium) so sort ASC
+    # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
     my $sql = "(SELECT ${child_fields}o.child_no, o.child_spelling_no, o.status, o.parent_no, o.parent_spelling_no,"
             . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr,"
-            . " (r.publication_type IS NOT NULL AND r.publication_type='compendium' AND (o.pubyr IS NULL OR o.pubyr = '' OR o.pubyr = '0000')) AS is_compendium" 
+            . " (CASE r.taxonomic_reliability WHEN 'authoritative' THEN 0 WHEN 'standard' THEN 1 WHEN 'second hand' THEN 2 WHEN 'compendium' THEN 3 ELSE 3 END) reliability_index " 
             . " FROM opinions o" 
             . $child_join
             . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
             . " WHERE o.child_no=$child_no" 
             . $reference_clause
-            . ") ORDER BY is_compendium ASC, pubyr DESC LIMIT 1";
+            . ") ORDER BY reliability_index ASC, pubyr DESC LIMIT 1";
 
     my @rows = @{$dbt->getData($sql)};
     if (scalar(@rows)) {
         return $rows[0];
     }
-}
-
-# Deprecrated, use getMostRecentParentOpinion, which does pretty much the same
-# thing but slightly more stuff in the function and in sql so its simpler to use and a bit more efficient and works with the new table structure
-sub selectMostRecentParentOpinion{
-	my $dbt = shift;
-    my $array_ref = shift;
-    my $return_index = (shift or 0); # return index in array (or parent_no)
-    my @array_of_hash_refs = @{$array_ref};
-	
-	if(scalar @array_of_hash_refs == 1){
-		if($return_index == 1){
-			return 0;
-		}
-		else{
-			return $array_of_hash_refs[0]->{parent_no};
-		}
-	}
-	elsif(scalar @array_of_hash_refs > 1){
-		PBDBUtil::debug(2,"FOUND MORE THAN ONE PARENT");
-		# find the most recent opinion
-		# Algorithm: For each opinion (parent), if opinions.pubyr exists, 
-		# use it.  If not, get the pubyr from the reference and use it.
-		# Finally, compare across parents to find the most recent year.
-
-		# Store only the greatest value in $years
-		my $years = 0;
-		my $index_winner = -1;
-		for(my $index = 0; $index < @array_of_hash_refs; $index++){
-			# pubyr is recorded directly in the opinion record,
-			#  so use it
-			if ( $array_of_hash_refs[$index]->{pubyr} )	{
-				if ( $array_of_hash_refs[$index]->{pubyr} > $years)	{
-					$years = $array_of_hash_refs[$index]->{pubyr};
-					$index_winner = $index;
-				}
-			}
-			else{
-				# get the year from the refs table
-				# JA: also get the publication type because
-				#  everything else is preferred to compendia
-				my $sql = "SELECT pubyr,publication_type AS pt FROM refs WHERE reference_no=".
-						  $array_of_hash_refs[$index]->{reference_no};
-				my @ref_ref = @{$dbt->getData($sql)};
-		# this is kind of ugly: use pubyr if it's the first one
-		#  encountered, or if the winner's pub type is compendium and
-		#  the current ref's is not, or if both are type compendium and
-		#  the current ref is more recent, or if neither are type
-		#  compendium and the current ref is more recent
-				if($ref_ref[0]->{pubyr} &&
-					( ! $years ||
-					( $ref_ref[0]->{pt} ne "compendium" &&
-					  $winner_pt eq "compendium" ) ||
-					( $ref_ref[0]->{pubyr} > $years &&
-					  $ref_ref[0]->{pt} eq "compendium" &&
-					  $winner_pt eq "compendium" ) ||
-					( $ref_ref[0]->{pubyr} > $years &&
-					  $ref_ref[0]->{pt} ne "compendium" &&
-					  $winner_pt ne "compendium" ) ) )	{
-					$years = $ref_ref[0]->{pubyr};
-					$index_winner = $index;
-					$winner_pt = $ref_ref[0]->{pt};
-				}
-			}	
-		}
-		if($return_index == 1){
-			return $index_winner;
-		}
-		else{
-			return $array_of_hash_refs[$index_winner]->{parent_no};
-		}
-	}
-	# nothing was passed to us in the first place, return the favor.
-	else{
-		return undef;
-	}
-}
-
-## Deal with homonyms - DEPRECATED
-sub deal_with_homonyms{
-	my $dbt = shift;
-	my $array_ref = shift;
-	my @array_of_hash_refs = @{$array_ref};
-
-	if(scalar @array_of_hash_refs == 1){
-		return $array_ref;
-	}
-	else{
-		# for each child, find its parent
-		foreach my $ref (@array_of_hash_refs){
-			# first, use the pubyr/author for clarification:
-			if($ref->{pubyr} && $ref->{author1last}){
-				$ref->{clarification_info} = $ref->{author1last}." ".$ref->{pubyr}." ";
-			}
-			elsif($ref->{ref_is_authority} && $ref->{reference_no}){
-				my $sql = "SELECT pubyr, author1last FROM refs ".
-						  "WHERE reference_no=".$ref->{reference_no};
-				my @auth_ref = @{$dbt->getData($sql)};
-				$ref->{clarification_info} = $auth_ref[0]->{author1last}." ".$auth_ref[0]->{pubyr}." ";
-			}
-			my $sql = "SELECT parent_no, status, pubyr, reference_no ".
-					  "FROM opinions WHERE child_no=".$ref->{taxon_no}.
-					  " AND status='belongs to'";	
-			my @ref_ref = @{$dbt->getData($sql)};
-			# if it has no parent, find the child that's either 
-			# "corrected as", "recombined as", "rank changed as", or "replaced by" and use 
-			# that as the focal taxon.
-			if(scalar @ref_ref < 1){
-				$sql = "SELECT child_no FROM opinions WHERE parent_no=".
-					   $ref->{taxon_no}." AND status IN ('recombined as',".
-					   "'replaced by','corrected as','rank changed as')";
-				@ref_ref = @{$dbt->getData($sql)};
-				if(scalar @ref_ref < 1){
-					# Dead end: clarification_info?
-					return $array_ref;	
-				}
-				# try above again:
-				$sql = "SELECT parent_no, status, pubyr, reference_no ".
-					   "FROM opinions WHERE child_no=".$ref_ref[0]->{child_no};	
-				@ref_ref = @{$dbt->getData($sql)};
-			}
-			# get the most recent parent
-			#	if it's not "belongs to", get most recent grandparent, etc.
-			#	until we get a "belongs to."
-			my $index = selectMostRecentParentOpinion($dbt, \@ref_ref, 1);
-			while($ref_ref[$index]->{status} ne "belongs to"){
-				my $child_no = $ref_ref[$index]->{parent_no};
-				# HIT UP THE NEXT GENERATION OF PARENTS:
-				#	-start over with the first select in this method.
-				$sql = "SELECT parent_no, status, pubyr, reference_no ".
-					   "FROM opinions WHERE child_no=$child_no";	
-				@ref_ref = @{$dbt->getData($sql)};
-				$index = selectMostRecentParentOpinion($dbt, \@ref_ref, 1);
-			}
-			# Then, add another key to the hash for "clarification_info"
-			$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=".
-				   $ref_ref[$index]->{parent_no};
-			@ref_ref = @{$dbt->getData($sql)};
-			$ref->{clarification_info} .= "(".$ref_ref[0]->{taxon_name}.")";
-		}
-	}
-	return \@array_of_hash_refs;
 }
 
 # JA 1.8.03
@@ -1561,6 +1459,19 @@ sub displayEcology	{
     my $class_hash = Classification::get_classification_hash($dbt,'all',[$taxon_no],'array');
     my $eco_hash = Ecology::getEcology($dbt,$class_hash,\@ecotaphFields);
     my $ecotaphVals = $eco_hash->{$taxon_no};
+
+    # Convert units for display
+    foreach ('minimum_body_mass','maximum_body_mass','body_mass_estimate') {
+        if ($ecotaphVals->{$_}) {
+            if ($ecotaphVals->{$_} < 1) {
+                $ecotaphVals->{$_} = Ecology::kgToGrams($ecotaphVals->{$_});
+                $ecotaphVals->{$_} .= ' g';
+            } else {
+                $ecotaphVals->{$_} .= ' kg';
+            }
+        }
+    } 
+    
     my @references = @{$ecotaphVals->{'references'}};     
 
 
@@ -1595,15 +1506,15 @@ sub displayEcology	{
 			$n =~ s/1$/&nbsp;1/g;
 			$n =~ s/2$/&nbsp;2/g;
 			if ( $ecotaphVals->{$name} && $name !~ /_no$/ )	{
-				$cols++;
 				my $v = $ecotaphVals->{$name};
 				$v =~ s/,/, /g;
-                my $colspan = ($name =~ /comments/) ? "colspan=2" : "";
-				print "<td $colspan valign=\"top\"><table><tr><td align=\"left\" valign=\"top\"><b>$n:</b></td><td valign=\"top\">$v</td></tr></table></td> \n";
-                if ( $cols == 2 || $nextname =~ /^comments$/ || $nextname =~ /^created$/ || $nextname =~ /^size_value$/ || $nextname =~ /1$/ )	{
+                if ( $cols == 2 || $name =~ /^comments$/ || $name =~ /^created$/ || $name =~ /^size_value$/ || $name =~ /1$/ )	{
                     print "</tr>\n<tr>\n";
                     $cols = 0;
                 }
+				$cols++;
+                my $colspan = ($name =~ /comments/) ? "colspan=2" : "";
+				print "<td $colspan valign=\"top\"><table><tr><td align=\"left\" valign=\"top\"><b>$n:</b></td><td valign=\"top\">$v</td></tr></table></td> \n";
 			}
 		}
 		if ( $cols > 0 )	{
