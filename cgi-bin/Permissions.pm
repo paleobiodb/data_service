@@ -136,7 +136,7 @@ sub getReadRows {
 					}
 					last;
 				}
-			} # :SSECCA
+			}
 		} else {
 			# Past... everything public
 			$okToRead = "past record";
@@ -164,6 +164,8 @@ sub getReadRows {
 	}
 }
 
+# This function is deprecated PS 09/26/2006 - People can view stuff they can't
+# write to, but an error message will pop up if they can't edit it
 # Produces an array of rows that this person has permissions to WRITE
 sub getWriteRows {
 	my $self = shift;
