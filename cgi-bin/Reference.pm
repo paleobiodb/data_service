@@ -113,7 +113,6 @@ sub formatShortRef  {
     my %options = @_;
     my $shortRef = "";
 
-
     $shortRef .= $refData->{'author1init'} . " " . $refData->{'author1last'};
     if ( $refData->{'otherauthors'} ) {
         $shortRef .= " et al.";
@@ -139,7 +138,7 @@ sub formatShortRef  {
     }
     if ($options{'link_id'}) {
         if ($refData->{'reference_no'}) {
-            $shortRef = qq|<a href="bridge.pl?action=displayRefResults&no_set=1&reference_no=$refData->{reference_no}">$shortRef</a>|;
+            $shortRef = qq|<a href="bridge.pl?action=displayRefResults&type=view&reference_no=$refData->{reference_no}">$shortRef</a>|;
         }
     }
 
