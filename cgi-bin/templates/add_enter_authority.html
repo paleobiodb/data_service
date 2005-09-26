@@ -97,8 +97,8 @@ It was first named in the data record's primary reference, which is:
 
 <H2>How was %%taxon_name%% named?</H2>
 
-<TABLE>
-<TR><td align=right><b>Original rank:</b></td>
+<table>
+<tr><td align=right><b>Original rank:</b></td>
 <td>
 <!-- Note: any field named "taxon_rank" will be replaced as
 usual.  However, any field called "taxon_rank_popup" will be replaced with
@@ -109,13 +109,9 @@ a popup menu of taxon ranks with the current "taxon_rank" selected. -->
 
 &nbsp; &nbsp;
 %%parent_taxon_popup%%
-
-&nbsp;&nbsp;
-<b>Is this an extant (living) taxon?</b> %%extant_popup%%
-
 </td>
+</tr>
 
-</TR>
 
 %%START_OPTIONAL_type_taxon%%
 <!-- Note: this should only appear if the rank is species -->
@@ -131,7 +127,12 @@ a popup menu of taxon ranks with the current "taxon_rank" selected. -->
 </TR>
 %%END_OPTIONAL_type_specimen%%
 
-<TR><td align=right><b>Comments:</b></td>
+<tr><td colspan=2>
+<b>Is this an extant (living) taxon?</b> %%extant_popup%%
+</td></tr>
+
+
+<TR><td align=right valign=top><b>Comments:</b></td>
 <td colspan=5><textarea id="comments" name="comments" rows=2 cols=70>%%comments%%</textarea></td>
 </TR>
 </TABLE>
