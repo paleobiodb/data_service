@@ -381,7 +381,8 @@ sub displayOpinionForm {
             my $selected = ($fields{'child_spelling_no'} == $child_spelling_no) ? "CHECKED" : "";
             my $pub_info = "$auth{author1last} $auth{pubyr}";
             $pub_info = ", ".$pub_info if ($pub_info !~ /^\s*$/);
-			$spelling_pulldown .= qq|<input type="radio" name="child_spelling_no" $selected value='$child_spelling_no'> ${childSpellingName}$pub_info [$classification{$child_spelling_no}]<br>\n|;
+            my $higher_class = ($classification{$child_spelling_no}) ? $classification{$child_spelling_no} : "unclassified";
+			$spelling_pulldown .= qq|<input type="radio" name="child_spelling_no" $selected value='$child_spelling_no'> ${childSpellingName}$pub_info [$higher_class]<br>\n|;
         }
 	}
 
@@ -532,7 +533,11 @@ sub displayOpinionForm {
     my $selected = ($fields{'taxon_status'} eq 'belongs to') ? "CHECKED" : "";
     my $colspan = ($parent_pulldown && $selected) ? "": "colspan=2";
     $belongs_to_row .= qq|<tr><td valign="top"><input type="radio" name="taxon_status" value="belongs to" $selected></td>\n|;
-    $belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid or reranked $childRank</b>, classified as belonging to $higher_rank |;
+    if ($childRank =~ /species/) {
+        $belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid $childRank</b>, classified as belonging to $higher_rank |;
+    } else {
+        $belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid or reranked $childRank</b>, classified as belonging to $higher_rank |;
+    }
 
     if ($parent_pulldown && $selected) {
         $belongs_to_row .= "<td width='100%'>$parent_pulldown</td>";
