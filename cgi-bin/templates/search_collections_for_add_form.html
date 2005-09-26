@@ -41,37 +41,47 @@ function checkForm ( ) {
 
 <center>
 
-<p><span class="required">Period:</span>&nbsp;<select id="period_max"></select></p>
 
-  <table>
-    <tr>
-      <td></td>
-      <td><span class="required">Degrees</span></td>
-      <td>Minutes</td>
-      <td>Seconds</td>
-      <td>Decimal value*</td>
-      <td><span class="required">Direction</span></td>
-    </tr>
-    <tr>
-      <td>Latitude</td>
-      <td><input id="latdeg" size=5 maxlength=3></td>
-      <td><input id="latmin" size=3 maxlength=2></td>
-      <td><input id="latsec" size=3 maxlength=2></td>
-      <td><input id="latdec" size=5 maxlength=8></td>
-      <td><select id="latdir"></select>
-    </tr>
-    <tr>
-      <td>Longitude</td>
-      <td><input id="lngdeg" size=5 maxlength=3></td>
-      <td><input id="lngmin" size=3 maxlength=2></td>
-      <td><input id="lngsec" size=3 maxlength=2></td>
-      <td><input id="lngdec" size=5 maxlength=8></td>
-      <td><select id="lngdir"></select></td>
-    </tr>
-  </table>
+<table>
+  <tr>
+    <td colspan=6 align=center>
+      <span class="required">Period:</span> <select id="period_max"></select>
+    </td>
+  </tr>
+  <tr>
+    <td></td>
+    <td><span class="required">Degrees</span></td>
+    <td>Minutes</td>
+    <td>Seconds</td>
+    <td>Decimal value*</td>
+    <td><span class="required">Direction</span></td>
+  </tr>
+  <tr>
+    <td>Latitude</td>
+    <td><input id="latdeg" size=5 maxlength=3></td>
+    <td><input id="latmin" size=3 maxlength=2></td>
+    <td><input id="latsec" size=3 maxlength=2></td>
+    <td><input id="latdec" size=5 maxlength=8></td>
+    <td><select id="latdir"></select>
+  </tr>
+  <tr>
+    <td>Longitude</td>
+    <td><input id="lngdeg" size=5 maxlength=3></td>
+    <td><input id="lngmin" size=3 maxlength=2></td>
+    <td><input id="lngsec" size=3 maxlength=2></td>
+    <td><input id="lngdec" size=5 maxlength=8></td>
+    <td><select id="lngdir"></select></td>
+  </tr>
+  <tr><td>&nbsp;</td></tr>
+  <tr>
+    <td colspan=6>
+      Sort by: <select name="sortby"><option value="collection_no">collection number</option><option value="distance">distance from coordinates</option></select></p>
+    </td>
+  </tr>
+</table>
 
-  <p class="small"><i>*Enter either minutes-seconds or decimal value, but not both. See the
-  <A HREF="javascript:tipsPopup('/public/tips/tips.html#Coordinates')">tip sheet</A>
+<p class="small"><i>*Enter either minutes-seconds or decimal value, but not both. See the
+<a href="javascript:tipsPopup('/public/tips/tips.html#Coordinates')">tip sheet</A>
 
 <hr>
 
