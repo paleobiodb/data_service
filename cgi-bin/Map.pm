@@ -42,7 +42,7 @@ sub acos {
     my $a;
     if ($_[0] > 1 || $_[0] < -1) {
         $a = 1;
-        carp "Map.pm warning, bad args passed to acos: $_[0] x $x y $y";
+#        carp "Map.pm warning, bad args passed to acos: $_[0] x $x y $y";
     } else {
         $a = $_[0];
     }
