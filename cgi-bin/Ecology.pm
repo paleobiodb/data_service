@@ -1,8 +1,10 @@
 package Ecology;
 
+use PBDBUtil;
+
 # written by JA 27-31.7,1.8.03
 
-my @fields = ('composition1', 'composition2', 'entire_body', 'body_part', 'adult_length', 'adult_width', 'adult_height', 'adult_area', 'adult_volume', 'thickness', 'architecture', 'form', 'reinforcement', 'folds', 'ribbing', 'spines', 'internal_reinforcement', 'polymorph', 'ontogeny', 'grouping', 'clonal', 'taxon_environment', 'locomotion', 'attached', 'epibiont', 'life_habit', 'depth_habitat', 'diet1', 'diet2', 'reproduction', 'asexual', 'brooding', 'dispersal1', 'dispersal2', 'comments','minimum_body_mass','maximum_body_mass');
+my @fields = ('composition1', 'composition2', 'entire_body', 'body_part', 'adult_length', 'adult_width', 'adult_height', 'adult_area', 'adult_volume', 'thickness', 'architecture', 'form', 'reinforcement', 'folds', 'ribbing', 'spines', 'internal_reinforcement', 'polymorph', 'ontogeny', 'grouping', 'clonal', 'taxon_environment', 'locomotion', 'attached', 'epibiont', 'life_habit', 'depth_habitat', 'diet1', 'diet2', 'reproduction', 'asexual', 'brooding', 'dispersal1', 'dispersal2', 'comments','minimum_body_mass','minimum_body_mass_unit','maximum_body_mass','maximum_body_mass_unit','body_mass_comment','body_mass_estimate','body_mass_estimate_unit','body_mass_source','body_mass_type');
 
 sub populateEcologyForm	{
 	my $dbh = shift;
@@ -39,11 +41,35 @@ sub populateEcologyForm	{
                 return;
         } else {
             push @values, '' for @fields;
+            for (my $i = 0;$i<scalar(@fields);$i++) { # default to kg for units
+                if ($fields[$i] =~ /_unit$/) {
+                    $values[$i] = 'kg';
+                }
+            }
 	        push (@fields,'taxon_no','taxon_name','reference_no','ecotaph_no');
 	        push (@values,$taxon_no ,$taxon_name ,$s->get('reference_no'),'-1');
         }
     } else {
         # This is an edit, use fields from the DB
+        if ($ecotaph->{'minimum_body_mass'} && $ecotaph->{'minimum_body_mass'} < 1) {
+            $ecotaph->{'minimum_body_mass'} = kgToGrams($ecotaph->{'minimum_body_mass'});
+            $ecotaph->{'minimum_body_mass_unit'} = 'g';
+        } else {
+            $ecotaph->{'minimum_body_mass_unit'} = 'kg';
+        }
+        if ($ecotaph->{'maximum_body_mass'} && $ecotaph->{'maximum_body_mass'} < 1) {
+            $ecotaph->{'maximum_body_mass'} = kgToGrams($ecotaph->{'maximum_body_mass'});
+            $ecotaph->{'maximum_body_mass_unit'} = 'g';
+        } else {
+            $ecotaph->{'maximum_body_mass_unit'} = 'kg';
+        }
+        if ($ecotaph->{'body_mass_estimate'} && $ecotaph->{'body_mass_estimate'} < 1) {
+            $ecotaph->{'body_mass_estimate'} = kgToGrams($ecotaph->{'body_mass_estimate'});
+            $ecotaph->{'body_mass_estimate_unit'} = 'g';
+        } else {
+            $ecotaph->{'body_mass_estimate_unit'} = 'kg';
+        }
+        
 	    for my $field ( @fields )	{
 			if ( $ecotaph->{$field} )	{
 	    	    push @values, $ecotaph->{$field};
@@ -109,6 +135,18 @@ sub processEcologyForm	{
 
 	# if ecotaph no exists, update the record
     my %fields = $q->Vars();
+
+    # This is an edit, use fields from the DB
+    if ($fields{'minimum_body_mass'} && $fields{'minimum_body_mass_unit'} eq 'g') {
+        $fields{'minimum_body_mass'} = gramsToKg($fields{'minimum_body_mass'});
+    } 
+    if ($fields{'maximum_body_mass'} && $fields{'maximum_body_mass_unit'} eq 'g') {
+        $fields{'maximum_body_mass'} = gramsToKg($fields{'maximum_body_mass'});
+    } 
+    if ($fields{'body_mass_estimate'} && $fields{'body_mass_estimate_unit'} eq 'g') {
+        $fields{'body_mass_estimate'} = gramsToKg($fields{'body_mass_estimate'});
+    } 
+
     if ($q->param('goal') eq 'ecovert') {
         # Translate the special fields back to their names in the DB
         $fields{'reproduction'} = $fields{'ecovert_reproduction'};
@@ -135,12 +173,14 @@ sub processEcologyForm	{
 
 # PS 08/31/2005
 # This will return ecology data for a taxon
-# This process is a bit tricky because ecology data can be inherited from parents.  
+# This process is a bit tricky because most ecology data can be inherited from parents.  Body size data is actually
+#  inherited from the chlidren and can either be a point estimate (single value) or a range of values.  Multiple
+#  point estimates can turn into a range.
 # The second parameter must thus be a classification hash as returned by get_classification_hash with a type of 'array'
 # The third parameter must be the fields you want returned. 
 # The fourth parameter is essentially a boolean - ($get_basis) - which determines if you also want to return
 #  what taxonomic rank the  ecology data is based off (i.e. class,order,family). Access this data as another hash field
-#  with the string basis appended (see example below)
+#  with the string "basis" appended (see example below)
 # 
 # It'll return a hash where the keys are taxon_nos and the value is a hash of ecology data
 # example: $class_hash = Classification::get_classification_hash($dbt,'all',[$taxon_no],'array');
@@ -156,15 +196,13 @@ sub getEcology {
     my $user_fields = shift;
     my $get_basis = shift;
     
-    my @fields = @$user_fields;
-
     my @taxon_nos = keys(%$classification_hash);
     # This first section gets ecology data for all taxa and parent taxa
     # Dealing with recombinatins/corrections is tricky.  Strategy I use is this: 
     # Store an array of alternative taxon_nos to a taxon in %alt_taxon_nos hash
     # Iterate through this array when getting eco_data for the taxon_no as well. 
     # Synonyms hopefully dealth with as well
-    my %all_taxon_nos = (-1); # so we don't crash if there are no taxon nos. 
+    my %all_taxon_nos = (-1=>1); # so we don't crash if there are no taxon nos. 
     my %alt_taxon_nos;
     for my $taxon_no ( @taxon_nos ) {
         if ($taxon_no) {
@@ -176,23 +214,23 @@ sub getEcology {
                 }
             }
         }
-    }  
+    }
 
     # Get a list of alternative names of existing taxa as well
-    my $sql = "SELECT child_no,child_spelling_no FROM opinions WHERE child_no != child_spelling_no AND child_no IN (".join(", ",keys %all_taxon_nos).")";
+    my $sql = "SELECT DISTINCT child_no,child_spelling_no FROM opinions WHERE child_no != child_spelling_no AND child_no IN (".join(", ",keys %all_taxon_nos).")";
     my @results = @{$dbt->getData($sql)};
     foreach my $row (@results) {
         push @{$alt_taxon_nos{$row->{'child_no'}}},$row->{'child_spelling_no'};
         $all_taxon_nos{$row->{'child_spelling_no'}} = 1;
     }
-    $sql = "SELECT child_no,child_spelling_no FROM opinions WHERE child_no != child_spelling_no AND child_spelling_no IN (".join(", ",keys %all_taxon_nos).")";
+    $sql = "SELECT DISTINCT child_no,child_spelling_no FROM opinions WHERE child_no != child_spelling_no AND child_spelling_no IN (".join(", ",keys %all_taxon_nos).")";
     @results = @{$dbt->getData($sql)};
     foreach my $row (@results) {
         push @{$alt_taxon_nos{$row->{'child_spelling_no'}}},$row->{'child_no'};
         $all_taxon_nos{$row->{'child_no'}} = 1;
     }
 
-    $sql = "SELECT taxon_no,reference_no,".join(", ",@fields)." FROM ecotaph WHERE taxon_no IN (".join(", ",keys %all_taxon_nos).")";
+    $sql = "SELECT taxon_no,reference_no,".join(", ",@$user_fields)." FROM ecotaph WHERE taxon_no IN (".join(", ",keys %all_taxon_nos).")";
     main::dbg("Ecology sql: $sql");
     @results = @{$dbt->getData($sql)};
     my %all_ecologies;
@@ -209,6 +247,51 @@ sub getEcology {
                 $ranks{$row->{'taxon_no'}} = $row->{'taxon_rank'};
             }
         }  
+    }
+
+    my @fields = ();
+
+    # Recurse fields are fields whose properties are inheritied from children, not just parents
+    my $get_body_mass = 0;
+    foreach my $field (@$user_fields) {
+        if ($field =~ /maximum_body_mass|minimum_body_mass|body_mass_estimate/) {
+            $get_body_mass = 1;
+        } else {
+            push @fields, $field;
+        }
+    }
+    
+    my %child_taxa;
+    if ($get_body_mass) {
+        my %all_child_taxon_nos = (-1=>1);
+        foreach my $taxon_no (@taxon_nos) {
+            if ($ranks{$taxon_no} =~ /species/) {
+                # Optimization: if its species, don't call function, just get the species itself and its alternate spellings
+                $child_taxa{$taxon_no} = [$taxon_no,@{$alt_taxon_nos{$taxon_no}}];
+            } else {
+                my @child_taxon_nos = PBDBUtil::taxonomic_search($dbt,$taxon_no);
+                $child_taxa{$taxon_no} = \@child_taxon_nos;
+            }
+            $all_child_taxon_nos{$_} = 1 foreach @{$child_taxa{$taxon_no}}; 
+        }
+    
+        $sql = "SELECT taxon_no,reference_no,minimum_body_mass,maximum_body_mass,body_mass_estimate FROM ecotaph WHERE taxon_no IN (".join(", ",keys %all_child_taxon_nos).")";
+        main::dbg("Ecology recurse sql: $sql");
+        @results = @{$dbt->getData($sql)};
+        foreach my $row (@results) {
+            # do it this way instead of assigning the whole row so as not to obliterate previous entries
+            $all_ecologies{$row->{'taxon_no'}}{'minimum_body_mass'}  = $row->{'minimum_body_mass'};
+            $all_ecologies{$row->{'taxon_no'}}{'maximum_body_mass'}  = $row->{'maximum_body_mass'};
+            $all_ecologies{$row->{'taxon_no'}}{'body_mass_estimate'} = $row->{'body_mass_estimate'};
+            $all_ecologies{$row->{'taxon_no'}}{'reference_no'} = $row->{'reference_no'};
+        }
+        if ($get_basis) {
+            $sql = "SELECT taxon_no,taxon_rank FROM authorities WHERE taxon_no IN (".join(",",keys %all_child_taxon_nos).")";
+            my @results = @{$dbt->getData($sql)};
+            foreach my $row (@results) {
+                $ranks{$row->{'taxon_no'}} = $row->{'taxon_rank'};
+            }
+        }
     }
 
     # Now we want to crawl upwards in the higherarchy of each taxon, using the first category value
@@ -258,6 +341,53 @@ sub getEcology {
                                 $all_ecologies{$use_taxon_no}{'adult_area'} ||
                                 $all_ecologies{$use_taxon_no}{'adult_volume'});
         }
+
+        # Now get minimum and maximum body mass. Algorithm is:
+        # For a given taxon, iterate though all its children.  Out of itself and all its children, use the 
+        # minimum and maximum values values for min and max body mass respectively. body_mass_estimate
+        # can also count as a minimum or maximum value
+        if ($get_body_mass){
+            foreach my $use_taxon_no (@{$child_taxa{$taxon_no}}) {
+                my @values = ($all_ecologies{$use_taxon_no}{'minimum_body_mass'},
+                              $all_ecologies{$use_taxon_no}{'maximum_body_mass'},
+                              $all_ecologies{$use_taxon_no}{'body_mass_estimate'});
+                foreach my $v (@values) {
+                    if ($v && 
+                          (!exists $ecotaph{$taxon_no}{'minimum_body_mass'} ||
+                           $v < $ecotaph{$taxon_no}{'minimum_body_mass'})) {
+                        $ecotaph{$taxon_no}{'minimum_body_mass'} = $v;
+                        my $reference_no = $all_ecologies{$use_taxon_no}{'reference_no'};
+                        $refs_for_taxon{$reference_no} = 1;
+                        $ecotaph{$taxon_no}{'minimum_body_mass'.'basis'} = $ranks{$use_taxon_no} if ($get_basis);
+                    }
+                    if ($v && 
+                           (!exists $ecotaph{$taxon_no}{'maximum_body_mass'} ||
+                           $v > $ecotaph{$taxon_no}{'maximum_body_mass'})) {
+                        $ecotaph{$taxon_no}{'maximum_body_mass'} = $v;
+                        my $reference_no = $all_ecologies{$use_taxon_no}{'reference_no'};
+                        $refs_for_taxon{$reference_no} = 1;
+                        $ecotaph{$taxon_no}{'maximum_body_mass'.'basis'} = $ranks{$use_taxon_no} if ($get_basis);
+                    }
+                    # Note the distinction between exists and empty string ""
+                    #  if it doesn't exist, we have no value for it yet, so we're safe to use one
+                    #  if it does exist, then replace any value that might be there with a blank string 
+                    #       because since we have multiple values, we're now going to use a min -- max range instead
+                    # Note that we can have both a range and point estimate if both the min and max equal the point estimate
+                    # but as soon as the min and max aren't equal, the point estimate goes away
+                    if ($v && ! $ecotaph{$taxon_no}{'body_mass_estimate'}) {
+                        $ecotaph{$taxon_no}{'body_mass_estimate'} = $v;
+                    } 
+                }
+            }
+
+            if (exists $ecotaph{$taxon_no}) {
+                # if we have a range, then no body mass estimate
+                if ($ecotaph{$taxon_no}{'minimum_body_mass'} != $ecotaph{$taxon_no}{'maximum_body_mass'}) {
+                    $ecotaph{$taxon_no}{'body_mass_estimate'} = '';
+                }
+            }
+        }
+        
         # Get all the references that were used in getting this ecology data
         if (exists $ecotaph{$taxon_no}) {
             my @refs = keys %refs_for_taxon;
@@ -266,6 +396,51 @@ sub getEcology {
     }
 
     return \%ecotaph;
-}                      
+}
+
+
+# Converts an floating point number (in grams) into a text string (in kilograms)
+# that preserves the precision of the number, for insertion into the database
+# I.e 42.30 grams would become .04230 grams.  Note the 0 at the end, which preseres the precision
+sub gramsToKg {
+    my $text = shift;
+    my $decimal_offset = index($text,'.');
+    if ($decimal_offset >= 0) {
+        $text =~ s/\.//g;
+        my $float;
+        if ($decimal_offset <= 3) {
+            $float = "0.";
+            for (1..(3-$decimal_offset)) {
+                $float .= "0";
+            }
+            $float .= $text;
+        } else {
+            $float = substr($text,0,$decimal_offset-3).".".substr($text,$decimal_offset-3);
+        }
+        return $float;
+    } else {
+        return ($text/1000);
+    }
+}
+
+# The opposite of the above function, get back the human readable version that was originally entered
+sub kgToGrams{
+    my $text = shift;
+    my $decimal_offset = index($text,'.');
+    if ($decimal_offset >= 0) {
+        my $float;
+        if ((length($text)-$decimal_offset) > 4) {
+            $text =~ s/\.//g;
+            $float = substr($text,0,$decimal_offset+3).".".substr($text,$decimal_offset+3);
+            $float =~ s/^[0]+//g;
+            $float = "0".$float if ($float =~ /^\./);
+        } else {
+            $float = ($text*1000);
+        }
+        return $float;
+    } else {
+        return ($text*1000);
+    }
+} 
 
 1;
