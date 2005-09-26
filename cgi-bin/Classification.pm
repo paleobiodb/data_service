@@ -97,6 +97,8 @@ sub get_classification_hash{
         #    $DEBUG = 1;
         #}
 
+        # Bug fix: prevent a senior synonym from being considered a parent
+        $child_no = TaxonInfo::getSeniorSynonym($dbt,$child_no);
         # prime the pump 
         my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no,0,0,$restrict_to_reference_no);
         if ($DEBUG) { print "Start:".Dumper($parent_row)."<br>"; }
@@ -203,7 +205,6 @@ sub get_classification_hash{
     #print "</center><pre>link cache\n".Dumper(\%link_cache);
     #print "\n\nlink head\n".Dumper(\%link_head).'</pre><center>';
 
-
     # flatten the linked list before passing it back, either into:
     #  return_type is numbers : comma separated taxon_nos, in order
     #  return_type is names   : comma separated taxon_names, in order
@@ -260,6 +261,7 @@ sub get_classification_hash{
         }
         $link_head{$hash_key} = $list_ordered;
     }
+
 
     return \%link_head;
 }
