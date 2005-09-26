@@ -344,12 +344,12 @@ sub processViewTimeScale	{
 		my $interval = $names[0]->{interval_name};
 
 		$sql2 = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $time->{max_interval_no};
-		my @names = @{$dbt->getData($sql2)};
+		@names = @{$dbt->getData($sql2)};
 		my $eml_max_interval = $names[0]->{eml_interval};
 		my $max_interval = $names[0]->{interval_name};
 
 		$sql2 = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $time->{min_interval_no};
-		my @names = @{$dbt->getData($sql2)};
+		@names = @{$dbt->getData($sql2)};
 		my $eml_min_interval = $names[0]->{eml_interval};
 		my $min_interval = $names[0]->{interval_name};
 
@@ -423,7 +423,7 @@ sub processEditScaleForm	{
 
 	$sql = "SELECT person_no FROM person WHERE name='";
 	$sql .= $session->get('enterer') . "'";
-	my @nos = @{$dbt->getData($sql)};
+	@nos = @{$dbt->getData($sql)};
 	my $enterer_no = $nos[0]->{person_no};
 
 	my $scale_no;
