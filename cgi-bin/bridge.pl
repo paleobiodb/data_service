@@ -69,18 +69,14 @@ my $DEBUG = 0;		# Shows debug information regarding the page if set to 1
 # a constant value returned by a mysql insert record indicating a duplicate row already exists
 my $DUPLICATE = 2;	
 
-
 my $sql="";					# Any SQL string
-my $return="";				# Generic return value
-my $rs;						# Generic recordset
-my $md; 					# metadata model
 
 # Paths from the Apache environment variables (in the httpd.conf file).
-my $HOST_URL = $ENV{BRIDGE_HOST_URL};
+my $HOST_URL = $ENV{'BRIDGE_HOST_URL'};
 my $BRIDGE_HOME = $HOST_URL . "/cgi-bin/bridge.pl";
 my $TEMPLATE_DIR = "./templates";
 my $GUEST_TEMPLATE_DIR = "./guest_templates";
-my $HTML_DIR = $ENV{BRIDGE_HTML_DIR};
+my $HTML_DIR = $ENV{'BRIDGE_HTML_DIR'};
 my $OUTPUT_DIR = "public/data";
 
 
@@ -93,8 +89,6 @@ sub GCD { ( 180 / $PI ) * acos( ( sin($_[0]*$PI/180) * sin($_[1]*$PI/180) ) + ( 
 
 # Create the CGI, Session, and some other objects.
 my $q = CGI->new();
-
-
 
 # Get the URL pointing to bridge
 # WARNING (JA 13.6.02): must do this before making the HTMLBuilder object!
@@ -922,7 +916,7 @@ sub displayPage {
 		# Try the parameters
 		$page = $q->param("page"); 
 		if ( ! $page ) {
-			htmlError( "$0.displayPage(): Unknown page..." );
+			htmlError( "displayPage(): Unknown page..." );
 		}
 	}
 
@@ -930,7 +924,7 @@ sub displayPage {
 	if ( $page !~ /\.eps$/ && $page !~ /\.gif$/ )	{
 		print stdIncludes( "std_page_top" );
 	}
-	print $hbo->populateHTML( $page );
+	print $hbo->populateHTML($page,[],[]);
 	if ( $page !~ /\.eps$/ && $page !~ /\.gif$/ )	{
 		print stdIncludes("std_page_bottom");
 	}
@@ -1033,6 +1027,7 @@ sub displaySearchRefs {
 sub describeRefResults	{
 	my $numRows = shift;
 	my $overlimit = shift;
+    my $refsearchstring = shift;
 	
 	print "<center><h3>Your search $refsearchstring produced ";
 	if ($numRows > 30 || $numRows < $overlimit)	{
@@ -1092,7 +1087,7 @@ sub printGetRefsButton	{
 
 # This shows the actual references.
 sub displayRefResults {
-	my $overlimit;
+    my ($sth,$overlimit,$refsearchstring,$md);
 	my @rows;
 	my $numRows;
 
@@ -1100,9 +1095,8 @@ sub displayRefResults {
 	# the top or bottom of the page.  Basically, don't bother doing a complicated 
 	# query if we don't have to.
 	unless($q->param('use_primary')) {
-		# this calls the subroutine RefQuery which fills a *global* variable
-		# called $sth with the query results
-		$overlimit = RefQuery($q);
+		($sth, $overlimit,$refsearchstring) = RefQuery($q);
+	    $md = MetadataModel->new($sth);
 		
 		@rows = @{$sth->fetchall_arrayref()};
 		$numRows = @rows;
@@ -1116,7 +1110,7 @@ sub displayRefResults {
 		# Do the action, don't show results...
 
 		# Set the reference_no
-		unless($q->param('use_primary') || $q->param('no_set')){
+		unless($q->param('use_primary') || $q->param('type') eq 'view'){
 			$s->setReferenceNo( $dbh, ${$rows[0]}[3] );
 		}
 
@@ -1176,7 +1170,7 @@ sub displayRefResults {
 	print stdIncludes( "std_page_top" );
 
 	if ( $numRows ) {
-		describeRefResults($numRows,$overlimit);
+		describeRefResults($numRows,$overlimit,$refsearchstring);
 
 		print qq|<FORM method="POST" action="$exec_url"'>\n|;
 
@@ -1231,7 +1225,7 @@ sub displayRefResults {
 
 sub displayRefResultsForAdd {
 
-	my $overlimit = RefQuery($q);
+	my ($sth, $overlimit,$refsearchstring) = RefQuery($q);
 
 	my @rows = @{$sth->fetchall_arrayref()};
 	my $numRows = @rows;
@@ -1244,7 +1238,7 @@ sub displayRefResultsForAdd {
 
 	print stdIncludes( "std_page_top" );
 
-	describeRefResults($numRows,$overlimit);
+	describeRefResults($numRows,$overlimit,$refsearchstring);
 
 	print qq|<FORM method="POST" action="$exec_url"'>\n|;
 
@@ -1327,8 +1321,8 @@ sub displayRefAdd {
 			push(@fieldNames, $query_hash{$s_param});
 		}
 	}
-    push (@row, 'English','processNewRef');
-    push (@fieldNames, 'language','action');
+    push (@row, 'standard','English','processNewRef');
+    push (@fieldNames, 'taxonomic_reliability','language','action');
 	print $hbo->populateHTML("enter_ref_form", \@row, \@fieldNames);
 	print stdIncludes("std_page_bottom");
 }
@@ -1401,7 +1395,8 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
 sub displaySelectRefForEditPage
 {
 
-	my $overlimit = RefQuery($q);
+	my ($sth, $overlimit,$refsearchstring) = RefQuery($q);
+	my $md = MetadataModel->new($sth);
 	
 	my @rowrefs = @{$sth->fetchall_arrayref()};
 	my $numRows = @rowrefs;
@@ -1426,7 +1421,7 @@ sub displaySelectRefForEditPage
 
 	if ( $numRows > 0) {
 
-		describeRefResults($numRows,$overlimit);
+		describeRefResults($numRows,$overlimit,$refsearchstring);
 
 		print qq|<form method="POST" action="$exec_url">\n|;
 		print qq|<input type=hidden name="action" value="displayRefEdit">\n|;
@@ -1633,7 +1628,8 @@ sub displayCollResults {
 	# effectively don't limit the number of collections put into the
 	#  initial set to examine when adding a new one
 	if ( $q->param('type') eq "add" )	{
-		$perm_limit = 1000000;
+#		$perm_limit = 1000000;
+        $perm_limit = $limit + $rowOffset;
 	} else {
 		if ($q->param('taxon_name') && ($q->param('type') eq "reid" ||
                                         $q->param('type') eq "reclassify_occurrence")) {
@@ -1670,23 +1666,23 @@ sub displayCollResults {
 	# which function to use depends on whether the user is adding a collection
 	my $sql;
     
-    my %options = $q->Vars();
-    if ($type eq "reclassify_occurrence") {
-        # Want to not get taxon_nos when reclassifying. Otherwise, if the taxon_no is set to zero, how will you find it?
-        $options{'no_authority_lookup'} = 1;
-    }
-    $options{'limit'} = $perm_limit;
-    $options{'permission_type'} = $permission_type;
-    if ($q->param("taxon_list")) {
-        my @in_list = split(/,/,$q->param('taxon_list'));
-        $options{'taxon_list'} = \@in_list if (@in_list);
-    }
-    my $fields = ["authorizer","country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no"];  
     my ($dataRows,$ofRows);
 	if ( $q->param('type') eq "add" )	{
 		# you won't have an in list if you are adding
 		($dataRows,$ofRows) = processCollectionsSearchForAdd();
 	} else	{
+        my $fields = ["authorizer","country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no"];  
+        my %options = $q->Vars();
+        if ($type eq "reclassify_occurrence") {
+            # Want to not get taxon_nos when reclassifying. Otherwise, if the taxon_no is set to zero, how will you find it?
+            $options{'no_authority_lookup'} = 1;
+        }
+        $options{'limit'} = $perm_limit;
+        $options{'permission_type'} = $permission_type;
+        if ($q->param("taxon_list")) {
+            my @in_list = split(/,/,$q->param('taxon_list'));
+            $options{'taxon_list'} = \@in_list if (@in_list);
+        }
 		($dataRows,$ofRows) = processCollectionsSearch($dbt,\%options,$fields);
 	}
 
@@ -1710,30 +1706,22 @@ sub displayCollResults {
 			exit;
 		}
 		
-		# get the enterer's preferences (needed to determine the number
-		# of displayed blanks) JA 1.8.02
-		%pref = getPreferences($s->get('enterer_no'));
-
 		print stdIncludes( "std_page_top" );
-
         # Display header link that says which collections we're currently viewing
 
-
         print "<center>";
-        if ($ofRows > 1)
-        {
-            my $printRows;
+        if ($ofRows > 1) {
             print "<h3>Your search produced $ofRows matches</h3>\n";
             if ($ofRows > $limit) {
                 print "<h4>Here are";
                 if ($rowOffset > 0) {
                     print " rows ".($rowOffset+1)." to ";
-                    $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
+                    my $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
                     print $printRows;
                     print "</h4>\n";
                 } else {
                     print " the first ";
-                    $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
+                    my $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
                     print $printRows;
                     print " rows</h4>\n";
                 }
@@ -1749,43 +1737,25 @@ sub displayCollResults {
 	  	print "<table width='100%' border=0 cellpadding=4 cellspacing=0>\n";
  
 		# print columns header
-		print "
-		<tr>
-		<th>Collection</th>
-		<th align=left>Authorizer</th>
-		<th align=left nowrap>Collection name</th>
-		<th align=left colspan=2>Reference</th>
-		</tr>
-		";
+		print "<tr>";
+		print "<th>Collection</th>";
+		print "<th align=left>Authorizer</th>";
+        print "<th align=left>Distance</th>" if ($type eq 'add');
+		print "<th align=left nowrap>Collection name</th>";
+		print "<th align=left>Reference</th>";
+		print "</tr>";
 
 		# Loop through each data row of the result set
-        for(my $count=$rowOffset;$count<scalar(@dataRows);$count++) {
+        for(my $count=$rowOffset;$count<scalar(@dataRows) && $count < $rowOffset+$limit;$count++) {
             my $dataRow = $dataRows[$count];
 			# Get the reference_no of the row
-            $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$dataRow->{"reference_no"};
-
-			my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	        $sth->execute();
-
-	        my $refrowref = $sth->fetchrow_arrayref();
-	        my $refmd = MetadataModel->new($sth);
-	        my $refDataRow = DataRow->new($refrowref, $refmd);
-	        my $an = AuthorNames->new($refDataRow);
-
+            $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=".$dataRow->{'reference_no'};
+            my $ref = ${$dbt->getData($sql)}[0];
 			# Build the reference string
-
-	        my $referenceNo = "<b>".$dataRow->{"reference_no"}."</b>&nbsp;&nbsp;";
-	        my $reference = $an->getAuthor1Last();
-			if ( $an->getOtherAuthors() )	{
-				$reference .= " et al.";
-			} else	{
-	        	$reference .= " & " . $an->getAuthor2Last() if $an->getAuthor2Last();
-			}
-	        $reference .= " (" . $refDataRow->getValue("pubyr") . ")";
+            my $reference = Reference::formatShortRef($ref,'alt_pubyr'=>1, 'link_id'=>1);
 
 			# Build a short descriptor of the collection's time place
 			# first part JA 7.8.03
-
 			my $timeplace;
 
 			my $tsql = "SELECT interval_name FROM intervals WHERE interval_no=" . $dataRow->{max_interval_no};
@@ -1807,14 +1777,6 @@ sub displayCollResults {
 			}
 			$timeplace = "</b> <span class=tiny>" . $timeplace . "</span>";
 
-			# Shorthand
-		  	my $collection_no = $dataRow->{"collection_no"};
-		  	my $authorizerName = $dataRow->{"authorizer"};
-			$authorizerName =~ s/ /&nbsp;/g;
-
-			#dbg ( join( "][", keys ( %{$dataRow} ) ) );
-			#dbg ( join( "][", values ( %{$dataRow} ) ) );
-
 			# should it be a dark row, or a light row?  Alternate them...
  			if ( $count % 2 == 0 ) {
 				print "<tr class=\"darkList\">";
@@ -1822,8 +1784,7 @@ sub displayCollResults {
 				print "<tr>";
 			}
 			
-		  	print "<td align=center valign=top>
-			<a href='$exec_url?action=$action&collection_no=$collection_no";
+		  	print "<td align=center valign=top><a href=\"$exec_url?action=$action&collection_no=$dataRow->{collection_no}";
 			
 			# for collection edit:
 			if($q->param('use_primary')){
@@ -1838,23 +1799,22 @@ sub displayCollResults {
 			if($q->param('species_name')){
 				print "&species_name=".$q->param('species_name');
 			}
-			
-			print	"&blanks='".$pref{'blanks'}."'>$collection_no</a></td>
-					<td valign=top>$authorizerName</td>
-					<td valign=top><b>" . $dataRow->{"collection_name"} . $timeplace . "</td>
-					<td align=right valign=top>$referenceNo</td>
-					<td valign=top nowrap>$reference</td>
-					</tr>
-					";
+
+            my $collection_names = $dataRow->{'collection_name'};
+            if ($dataRow->{'collection_aka'}) {
+                $collection_names .= " <span class=\"tiny\">(aka $dataRow->{collection_aka})</span>";
+            }
+			print "\">$dataRow->{collection_no}</a></td>";
+            print "<td valign=top nowrap>$dataRow->{authorizer}</td>";
+            print "<td valign=top align=center>".int($dataRow->{distance})." km </td>" if ($type eq 'add');
+            print "<td valign=top><b>${collection_names}$timeplace</td>";
+            print "<td valign=top nowrap>$reference</td>";
+            print "</tr>";
   		}
 
         print "</table>\n";
-    }
-    elsif ( $displayRows == 1 ) { # if only one row to display...
-        my $dataRow = $dataRows[0];
-        my $collection_no = $dataRow->{'collection_no'};
-		$q->param(collection_no=>"$collection_no");
-		$q->param('use_primary' => $q->param('use_primary')) if($q->param('use_primary'));
+    } elsif ( $displayRows == 1 ) { # if only one row to display...
+		$q->param(collection_no=>$dataRows[0]->{'collection_no'});
 		# Do the action directly if there is only one row
 		&$action;
 		exit;
@@ -1938,7 +1898,7 @@ sub displayCollResults {
 #  a coordinate (required when the user wants to add a collection)
 sub processCollectionsSearchForAdd	{
 
-	my $sql = "SELECT c.collection_no, c.authorizer_no, p1.name authorizer, c.collection_name, c.access_level, c.research_group, c.release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, c.country, c.state, c.latdeg, c.latmin, c.latsec, c.latdec, c.latdir, c.lngdeg, c.lngmin, c.lngsec, c.lngdec, c.lngdir, c.max_interval_no, c.min_interval_no, c.reference_no FROM collections c LEFT JOIN person p1 ON p1.person_no = c.authorizer_no WHERE ";
+	my $sql = "SELECT c.collection_no, c.collection_aka, c.authorizer_no, p1.name authorizer, c.collection_name, c.access_level, c.research_group, c.release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, c.country, c.state, c.latdeg, c.latmin, c.latsec, c.latdec, c.latdir, c.lngdeg, c.lngmin, c.lngsec, c.lngdec, c.lngdir, c.max_interval_no, c.min_interval_no, c.reference_no FROM collections c LEFT JOIN person p1 ON p1.person_no = c.authorizer_no WHERE ";
 
 	# get a list of interval numbers that fall in the geological period
 	my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh,$dbt,'',$q->param('period_max'),'','','intervals');
@@ -2038,9 +1998,7 @@ sub processCollectionsSearchForAdd	{
 	#  lat/long coordinate JA 6.4.04
     my @tempDataRows;
     # have to recompute this
-    $ofRows = 0;
     for my $dr (@dataRows)	{
-
         # compute the coordinate
         my $lat = $dr->{'latdeg'};
         my $lng = $dr->{'lngdeg'};
@@ -2066,22 +2024,24 @@ sub processCollectionsSearchForAdd	{
 
         # if the points are less than 100 km apart, save
         #  the collection
-        if ( $mylat == $lat && $mylng == $lng )	{
+        #if ( $mylat == $lat && $mylng == $lng )	{
+        #    push @tempDataRows, $dr;
+        #    $ofRows++;
+        #}
+        my $distance = 111 * GCD($mylat,$lat,abs($mylng-$lng));
+        if ( $distance < 100 )	{
+            $dr->{'distance'} = $distance;
             push @tempDataRows, $dr;
-            $ofRows++;
-        }
-        elsif ( 111 * GCD($mylat,$lat,abs($mylng-$lng)) < 100 )	{
-            push @tempDataRows, $dr;
-            $ofRows++;
-        } else	{
-        }
-        # only display the first 200 collections to match
-        if ( $ofRows == 200 )	{
-            last;
-        }
+        } 
     }
 
-	return (\@tempDataRows,$ofRows);
+    if ($q->param('sortby') eq 'distance') {
+        @tempDataRows = sort {$a->{'distance'} <=> $b->{'distance'} 
+                                                ||
+                              $a->{'collection_no'} <=> $b->{'collection_no'}} @tempDataRows;
+    }
+
+	return (\@tempDataRows,scalar(@tempDataRows));
 }
 
 
@@ -2214,8 +2174,8 @@ sub processCollectionsSearch {
                     foreach my $row (@results) {
                         $taxon_nos_unique{$row->{'child_spelling_no'}} = 1;
                     }
-                    my $sql = "SELECT DISTINCT child_no FROM opinions WHERE child_spelling_no=$taxon_no";
-                    my @results = @{$dbt->getData($sql)};
+                    $sql = "SELECT DISTINCT child_no FROM opinions WHERE child_spelling_no=$taxon_no";
+                    @results = @{$dbt->getData($sql)};
                     foreach my $row (@results) {
                         $taxon_nos_unique{$row->{'child_no'}} = 1;
                     }
@@ -2622,11 +2582,7 @@ IS NULL))";
     my @dataRows = ();
     my $limit = (int($options{'limit'})) ? int($options{'limit'}) : 10000000;
     my $ofRows = 0;
-    if ($options{'permission_type'} eq 'write') {
-        $p->getWriteRows ( $sth, \@dataRows, $limit, \$ofRows );        
-    } else { # We assume we want 'read' permissions
-        $p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );        
-    }
+    $p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );        
 
     return (\@dataRows,$ofRows);
 } # end sub processCollectionsSearch
@@ -3038,9 +2994,7 @@ sub buildTaxonomicList {
 
 			my $formatted_reference = '';
 
-			# if the reference_no for this occurrence isn't equal to the one
-			# passed in to this function, then build a reference link for it.
-			# otherwise, leave it blank (?)
+			# if the occurrence's reference differs from the collection's, print it
 			my $newrefno = $rowref->{'reference_no'};
 			if ($newrefno != $collection_refno)	{
 				$rowref->{reference_no} = buildReference($newrefno,"list");
@@ -3179,10 +3133,6 @@ sub buildTaxonomicList {
 			$abund_values++ if($row->{abund_value});
 			$comments++ if($row->{comments});
 		}
-
-			
-			
-			
 			
 		$sql = "SELECT collection_name FROM collections ".
 			   "WHERE collection_no=$collection_no";
@@ -3249,87 +3199,88 @@ sub buildTaxonomicList {
 						   $a->{order_no} <=> $b->{order_no} ||
 						   $a->{family_no} <=> $b->{family_no} ||
 						   $a->{occurrence_no} <=> $b->{occurrence_no}} @grand_master_list;
-	# Don't do any more sorting if all occs had NO other classification info.
-	unless($class_nos == 0 && $order_nos == 0 && $family_nos == 0 ){
-		# Now sort the ones that had no class or order or family by occ_no.
-		my @occs_to_sort = ();
-		while($sorted[-1]->{class_no} == 1000000 &&
-			  $sorted[-1]->{order_no} == 1000000 &&
-			  $sorted[-1]->{family_no} == 1000000){
-			push(@occs_to_sort, pop @sorted);
-		}
 
-		# Put occs in order, AFTER the sorted occ with the closest smaller
-		# number.  First check if our occ number is one greater than any 
-		# existing sorted occ number.  If so, place after it.  If not, find
-		# the distance between it and all other occs less than it and then
-		# place it after the one with the smallest distance.
-		while(my $single = pop @occs_to_sort){
-			my $slot_found = 0;
-			my @variances = ();
-			# First, look for the "easy out" at the endpoints.
-			# Beginning?
-		# HMM, if $single is less than $sorted[0] we don't want to put
-		# it at the front unless it's less than ALL $sorted[$x].
-			#if($single->{occurrence_no} < $sorted[0]->{occurrence_no} && 
-			#	$sorted[0]->{occurrence_no} - $single->{occurrence_no} == 1){
-			#	unshift @sorted, $single;
-			#}
-			# Can I just stick it at the end?
-			if($single->{occurrence_no} > $sorted[-1]->{occurrence_no} &&
-				$single->{occurrence_no} - $sorted[-1]->{occurrence_no} == 1){
-				push @sorted, $single;
-			}
-			# Somewhere in the middle
-			else{
-				for(my $index = 0; $index < @sorted-1; $index++){
-					if($single->{occurrence_no} > 
-									$sorted[$index]->{occurrence_no}){ 
-						# if we find a variance of 1, bingo!
-						if($single->{occurrence_no} -
-								$sorted[$index]->{occurrence_no} == 1){
-							splice @sorted, $index+1, 0, $single;
-							$slot_found=1;
-							last;
-						}
-						else{
-							# store the (positive) variance
-							push(@variances, $single->{occurrence_no}-$sorted[$index]->{occurrence_no});
-						}
-					}
-					else{ # negative variance
-						push(@variances, 1000000);
-					}
-				}
-				# if we didn't find a variance of 1, place after smallest
-				# variance.
-				if(!$slot_found){
-					# end variance:
-					if($sorted[-1]->{occurrence_no}-$single->{occurrence_no}>0){
-						push(@variances,$sorted[-1]->{occurrence_no}-$single->{occurrence_no});
-					}
-					else{ # negative variance
-						push(@variances, 1000000);
-					}
-					# insert where the variance is the least
-					my $smallest = 1000000;
-					my $smallest_index = 0;
-					for(my $counter=0; $counter<@variances; $counter++){
-						if($variances[$counter] < $smallest){
-							$smallest = $variances[$counter];
-							$smallest_index = $counter;
-						}
-					}
-					# NOTE: besides inserting according to the position
-					# found above, this will insert an occ less than all other
-					# occ numbers at the very front of the list (the condition
-					# in the loop above will never be met, so $smallest_index
-					# will remain zero.
-					splice @sorted, $smallest_index+1, 0, $single;
-				}
-			}
-		}
-	}
+        # Don't do any more sorting if all occs had NO other classification info.
+        unless($class_nos == 0 && $order_nos == 0 && $family_nos == 0 ){
+            # Now sort the ones that had no class or order or family by occ_no.
+            my @occs_to_sort = ();
+            while($sorted[-1]->{class_no} == 1000000 &&
+                  $sorted[-1]->{order_no} == 1000000 &&
+                  $sorted[-1]->{family_no} == 1000000){
+                push(@occs_to_sort, pop @sorted);
+            }
+
+            # Put occs in order, AFTER the sorted occ with the closest smaller
+            # number.  First check if our occ number is one greater than any 
+            # existing sorted occ number.  If so, place after it.  If not, find
+            # the distance between it and all other occs less than it and then
+            # place it after the one with the smallest distance.
+            while(my $single = pop @occs_to_sort){
+                my $slot_found = 0;
+                my @variances = ();
+                # First, look for the "easy out" at the endpoints.
+                # Beginning?
+            # HMM, if $single is less than $sorted[0] we don't want to put
+            # it at the front unless it's less than ALL $sorted[$x].
+                #if($single->{occurrence_no} < $sorted[0]->{occurrence_no} && 
+                #	$sorted[0]->{occurrence_no} - $single->{occurrence_no} == 1){
+                #	unshift @sorted, $single;
+                #}
+                # Can I just stick it at the end?
+                if($single->{occurrence_no} > $sorted[-1]->{occurrence_no} &&
+                    $single->{occurrence_no} - $sorted[-1]->{occurrence_no} == 1){
+                    push @sorted, $single;
+                }
+                # Somewhere in the middle
+                else{
+                    for(my $index = 0; $index < @sorted-1; $index++){
+                        if($single->{occurrence_no} > 
+                                        $sorted[$index]->{occurrence_no}){ 
+                            # if we find a variance of 1, bingo!
+                            if($single->{occurrence_no} -
+                                    $sorted[$index]->{occurrence_no} == 1){
+                                splice @sorted, $index+1, 0, $single;
+                                $slot_found=1;
+                                last;
+                            }
+                            else{
+                                # store the (positive) variance
+                                push(@variances, $single->{occurrence_no}-$sorted[$index]->{occurrence_no});
+                            }
+                        }
+                        else{ # negative variance
+                            push(@variances, 1000000);
+                        }
+                    }
+                    # if we didn't find a variance of 1, place after smallest
+                    # variance.
+                    if(!$slot_found){
+                        # end variance:
+                        if($sorted[-1]->{occurrence_no}-$single->{occurrence_no}>0){
+                            push(@variances,$sorted[-1]->{occurrence_no}-$single->{occurrence_no});
+                        }
+                        else{ # negative variance
+                            push(@variances, 1000000);
+                        }
+                        # insert where the variance is the least
+                        my $smallest = 1000000;
+                        my $smallest_index = 0;
+                        for(my $counter=0; $counter<@variances; $counter++){
+                            if($variances[$counter] < $smallest){
+                                $smallest = $variances[$counter];
+                                $smallest_index = $counter;
+                            }
+                        }
+                        # NOTE: besides inserting according to the position
+                        # found above, this will insert an occ less than all other
+                        # occ numbers at the very front of the list (the condition
+                        # in the loop above will never be met, so $smallest_index
+                        # will remain zero.
+                        splice @sorted, $smallest_index+1, 0, $single;
+                    }
+                }
+            }
+        }
 
 		my $sorted_html = '';
 		for(my $index = 0; $index < @sorted; $index++){
@@ -3384,7 +3335,7 @@ sub getReidHTMLTableByOccNum {
 	$sth->execute();
   
 	my @fieldNames = @{$sth->{NAME}};
-	@rows = @{$sth->fetchall_arrayref()};
+	my @rows = @{$sth->fetchall_arrayref()};
 
 	# JA 2.4.04: if there are multiple results, sort them by the
 	#  reference's publication year (column 8)
@@ -3468,16 +3419,16 @@ sub getReidHTMLTableByOccNum {
 		$retVal .= $hbo->populateHTML("reid_taxa_display_row", \@row,\@fieldNames);
 
 		if ( $rowRef == $rows[$#rows] )	{
-		if(%classification) {
-			pop(@row);
-			pop(@row);
-			pop(@row);
-			pop(@row);
-			pop(@fieldNames);
-			pop(@fieldNames);
-			pop(@fieldNames);
-			pop(@fieldNames);
-		}
+            if(%classification) {
+                pop(@row);
+                pop(@row);
+                pop(@row);
+                pop(@row);
+                pop(@fieldNames);
+                pop(@fieldNames);
+                pop(@fieldNames);
+                pop(@fieldNames);
+            }
 		}
 		if ( $authority )	{
 			pop(@row);
@@ -3504,6 +3455,7 @@ sub rarefyAbundances	{
 	my $abundsum;
 	my $abundmax;
     my $ntaxa;
+    my @abund;
 	while ( my @abundrow = @{$sth->fetchrow_arrayref()} )	{
 		push @abund , $abundrow[0];
 		$abundsum = $abundsum + $abundrow[0];
@@ -3600,6 +3552,7 @@ sub rarefyAbundances	{
 
 	# rarefy the abundances
 	my $maxtrials = 200;
+    my @sampledTaxa;
 	for my $trial (1..$maxtrials)	{
 		my @tempids = @ids;
 		my @seen = ();
@@ -3658,8 +3611,21 @@ sub rarefyAbundances	{
 sub displayCollectionEcology	{
 	print stdIncludes("std_page_top");
 
-    # We only look at these three categories for now
-	my @categories = ("life_habit", "diet1", "diet2");
+    my @ranks = @{$hbo->{'SELECT_LISTS'}{'taxon_rank'}};
+    my %rankToKey = ();
+    foreach my $rank (@ranks) {
+        my $rank_abbrev = $rank;
+        $rank_abbrev =~ s/species/s/;
+        $rank_abbrev =~ s/genus/g/;
+        $rank_abbrev =~ s/tribe/t/;
+        $rank_abbrev =~ s/family/f/;
+        $rank_abbrev =~ s/order/o/;
+        $rank_abbrev =~ s/class/c/;
+        $rank_abbrev =~ s/phlyum/p/;
+        $rank_abbrev =~ s/kingdom/f/;
+        $rank_abbrev =~ s/unranked clade/uc/;
+        $rankToKey{$rank} = $rank_abbrev;
+    }
 
     # Get all occurrences for the collection using the most currently reid'd name
     my $collection_no = int($q->param('collection_no'));
@@ -3676,6 +3642,8 @@ sub displayCollectionEcology	{
     # First get a list of all the parent taxon nos
 	my @taxon_nos = map {$_->{'taxon_no'}} @occurrences;
 	my $parents = Classification::get_classification_hash($dbt,'all',\@taxon_nos,'array');
+    # We only look at these categories for now
+	my @categories = ("life_habit", "diet1", "diet2","minimum_body_mass","maximum_body_mass","body_mass_estimate");
     my $ecology = Ecology::getEcology($dbt,$parents,\@categories,'get_basis');
 
 	if (!%$ecology) {
@@ -3684,9 +3652,25 @@ sub displayCollectionEcology	{
 		print stdIncludes("std_page_bottom");
 		return;
 	} 
+
+    # Convert units for display
+    foreach my $taxon_no (keys %$ecology) {
+        foreach ('minimum_body_mass','maximum_body_mass','body_mass_estimate') {
+            if ($ecology->{$taxon_no}{$_}) {
+                if ($ecology->{$taxon_no}{$_} < 1) {
+                    $ecology->{$taxon_no}{$_} = Ecology::kgToGrams($ecology->{$taxon_no}{$_});
+                    $ecology->{$taxon_no}{$_} .= ' g';
+                } else {
+                    $ecology->{$taxon_no}{$_} .= ' kg';
+                }
+            }
+        } 
+    }
    
 	# count up species in each category and combined categories
+    my (%cellsum,%colsum,%rowsum);
 	for my $row (@occurrences)	{
+        my ($col_key,$row_key);
 		if ( $ecology->{$row->{'taxon_no'}}{'life_habit'}) {
             $col_key = $ecology->{$row->{'taxon_no'}}{'life_habit'};
         } else {
@@ -3711,17 +3695,13 @@ sub displayCollectionEcology	{
 
     # Header generation
 	print "<tr><th class=dataTableColumnLeft>Taxon</th>";
-	for my $category (@categories) {
-		my $temp = $category;
-        $temp =~ s/([a-z])/\u$1/;
-		$temp =~ s/_/ /g;
-		$temp =~ s/1/ 1/;
-		$temp =~ s/2/ 2/;
-		print "<th class=dataTableColumn>$temp</th><th class=dataTableColumn>Basis</th>";
-	}
+	print "<th class=dataTableColumn>Diet</th>";
+	print "<th class=dataTableColumn>Life habit</th>";
+	print "<th class=dataTableColumn>Body mass</th>";
 	print "</tr>\n";
 
     # Table body
+    my %all_rank_keys = ();
 	for my $row (@occurrences) {
 		print "<tr>";
         if (($row->{'taxon_rank'} && $row->{'taxon_rank'} !~ /species/) ||
@@ -3730,19 +3710,67 @@ sub displayCollectionEcology	{
         } else {
             print "<td class=dataTableCellLeft><i>$row->{genus_name} $row->{species_name}</i></td>";
         }
-		for my $category (@categories)	{
-			if ($ecology->{$row->{'taxon_no'}}{$category}) {
-				print "<td class=dataTableCell>$ecology->{$row->{taxon_no}}{$category}</td>";
-                # Basis is the rank of the taxon where this data came from. i.e. family/class/etc.
-                # See Ecology::getEcology for further explanation
-				print "<td class=dataTableCell><i>".$ecology->{$row->{'taxon_no'}}{$category.'basis'}."</i></td>";
-			} else	{
-				print "<td class=dataTableCell>?</td>";
-				print "<td class=dataTableCell>?</td>";
-			}
-		}
+
+        # Basis is the rank of the taxon where this data came from. i.e. family/class/etc.
+        # See Ecology::getEcology for further explanation
+        my ($value,$basis);
+
+        # Handle diet first
+        if ($ecology->{$row->{'taxon_no'}}{'diet2'}) {
+            $value = $ecology->{$row->{'taxon_no'}}{'diet1'}."/".$ecology->{$row->{'taxon_no'}}{'diet2'};
+            $basis = $ecology->{$row->{'taxon_no'}}{'diet1'.'basis'}
+        } elsif ($ecology->{$row->{'taxon_no'}}{'diet1'}) {
+            $value = $ecology->{$row->{'taxon_no'}}{'diet1'};
+            $basis = $ecology->{$row->{'taxon_no'}}{'diet1'.'basis'}
+        } else {
+            ($value,$basis) = ("?","");
+        }
+        $all_rank_keys{$basis} = 1;
+        print "<td class=dataTableCell>$value<span class='superscript'>$rankToKey{$basis}</span></td>";
+
+        # Then life habit
+        if ($ecology->{$row->{'taxon_no'}}{'life_habit'}) {
+            $value = $ecology->{$row->{'taxon_no'}}{'life_habit'};
+            $basis = $ecology->{$row->{'taxon_no'}}{'life_habit'.'basis'}
+        } else {
+            ($value,$basis) = ("?","");
+        }
+        $all_rank_keys{$basis} = 1;
+        print "<td class=dataTableCell>$value<span class='superscript'>$rankToKey{$basis}</span></td>";
+
+        # Now body mass
+        if ($ecology->{$row->{'taxon_no'}}{'body_mass_estimate'}) {
+            $value1 = $ecology->{$row->{'taxon_no'}}{'body_mass_estimate'};
+            $basis1 = $ecology->{$row->{'taxon_no'}}{'body_mass_estimate'.'basis'};
+            $value2 = "";
+            $basis2 = "";
+        } elsif ($ecology->{$row->{'taxon_no'}}{'minimum_body_mass'}) {
+            $value1 = $ecology->{$row->{'taxon_no'}}{'minimum_body_mass'};
+            $basis1 = $ecology->{$row->{'taxon_no'}}{'minimum_body_mass'.'basis'};
+            $value2 = $ecology->{$row->{'taxon_no'}}{'maximum_body_mass'};
+            $basis2 = $ecology->{$row->{'taxon_no'}}{'maximum_body_mass'.'basis'};
+        } else {
+            ($value1,$basis1,$value2,$basis2) = ("?","","","");
+        }
+        $all_rank_keys{$basis1} = 1;
+        $all_rank_keys{$basis2} = 1; 
+        print "<td class=dataTableCell>$value1<span class='superscript'>$rankToKey{$basis1}</span>";
+        print " - $value2<span class='superscript'>$rankToKey{$basis2}</span>" if ($value2);
+        print "</td>";
+
 		print "</tr>\n";
 	}
+    # now print out keys for superscripts above
+    print "<tr><td colspan=4>";
+    my $html = "";
+    foreach my $rank (@ranks) {
+        if ($all_rank_keys{$rank}) {
+            $html .= ", $rankToKey{$rank} = $rank";
+        }
+    }
+    $html =~ s/^, //;
+    print $html;
+    print "</td></tr>";
 	print "</table>";
     print "</div>";
 
@@ -3803,16 +3831,16 @@ sub displayEnterCollPage {
 	}
 	# Need to build the research_group checkboxes
 
-    my (@fieldNames,@htmlFields,@htmlValues);
+    my (@htmlFields,@htmlValues,%pref);
     if ($q->param('prefill_collection_no') =~ /^\d+$/) {
         dbg("Prefilling form with ".$q->param('prefill_collection_no'));
         $sql = "SELECT * FROM collections WHERE collection_no=" . $q->param('prefill_collection_no');
         my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
         $sth->execute();
-        @fieldNames = @{$sth->{NAME}};
-        $row = $sth->fetchrow_hashref();
+        my @fieldNames = @{$sth->{NAME}};
+        my $row = $sth->fetchrow_hashref();
         if ($row) {
-            foreach $field (@fieldNames) {
+            foreach my $field (@fieldNames) {
                 if ($field !~ /^(authorizer|enterer|modifier|authorizer_no|enterer_no|modifier_no|created|modified|collection_no)/) {
                     push @htmlFields,$field;
                     push @htmlValues,$row->{$field};
@@ -3834,7 +3862,6 @@ sub displayEnterCollPage {
             $refRowRef = $sth->fetchrow_arrayref();
             my $drow = DataRow->new($refRowRef, $md);
             my $bibRef = BiblioRef->new($drow);
-            @refFieldNames = @{$sth->{NAME}};
             $sth->finish();
 
             $refRowString = "<table>" . $bibRef->toString() . '</table>';
@@ -3866,7 +3893,6 @@ sub displayEnterCollPage {
         $refRowRef = $sth->fetchrow_arrayref();
         my $drow = DataRow->new($refRowRef, $md);
         my $bibRef = BiblioRef->new($drow);
-        @refFieldNames = @{$sth->{NAME}};
         $sth->finish();
 
         $refRowString = "<table>" . $bibRef->toString() . '</table>';
@@ -3876,7 +3902,7 @@ sub displayEnterCollPage {
         dbg( "$sql" );
         my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
         $sth->execute();
-        @fieldNames = @{$sth->{NAME}};
+        my @fieldNames = @{$sth->{NAME}};
         $sth->finish();
         # Tack a few extra fields
         push @htmlValues, '' for @fieldNames;
@@ -3931,6 +3957,7 @@ sub displayEnterCollPage {
 	my $std_page_top = stdIncludes("std_page_top");
 	$std_page_top =~ s/ height="100%"//;
 	print $std_page_top;
+	print "</td></tr></table>\n\n";
 	print "</td></tr></table>\n\n";
 
 	print printIntervalsJava();
@@ -4115,7 +4142,7 @@ sub setReleaseDate	{
 #  * System commits data to database and thanks the nice user
 #    (or displays an error message if something goes terribly wrong)
 sub processEnterCollectionForm {
-		print stdIncludes( "std_page_top" );
+    print stdIncludes( "std_page_top" );
 
 	unless($q->param('max_interval'))	{
 		print "<center><h3>The time interval field is required!</h3>\n<p>Please go back and specify the time interval for this collection</p></center>";
@@ -4194,7 +4221,7 @@ sub processEnterCollectionForm {
    
  
 	my $recID;
-	$return = insertRecord( 'collections', 'collection_no', \$recID, '99', 'period_max' );
+	my $return = insertRecord( 'collections', 'collection_no', \$recID, '99', 'period_max' );
 	if ( ! $return ) { return $return; }
 
 	print "<center><h3><font color='red'>Collection record ";
@@ -4222,11 +4249,11 @@ sub processEnterCollectionForm {
 			my $reference_no = $row[$refColNum];
 			$s->setReferenceNo($dbh, $reference_no);
 
-            $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$reference_no;
+            $sql = "SELECT r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type FROM refs r WHERE r.reference_no=".$reference_no;
 			$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 			$sth->execute();
 			@refRow = $sth->fetchrow_array();
-			@refFieldNames = @{$sth->{NAME}};
+			my @refFieldNames = @{$sth->{NAME}};
 			$sth->finish();
 			$refRowString = $hbo->populateHTML('reference_display_row', \@refRow, \@refFieldNames);
 			
@@ -4798,6 +4825,8 @@ sub displayEditCollection {
 		displayLoginPage( "Please log in first." );
 		exit;
 	}
+
+
 	
 	my $collection_no = $q->param('collection_no');
 	$sql = "SELECT c.reference_no,c.* FROM collections c WHERE c.collection_no=" . $collection_no;
@@ -4807,6 +4836,24 @@ sub displayEditCollection {
 	my @fieldNames = @{$sth->{NAME}};
 	my @row = $sth->fetchrow_array();
 	$sth->finish();
+
+    # Check to make sure that we have write permission
+    my $authorizer_no;
+    for(my $i=0;$i<scalar(@fieldNames);$i++) {
+        if ($fieldNames[$i] eq 'authorizer_no') {
+            $authorizer_no=$row[$i]; last;
+        }
+    }
+
+    my $p = Permissions->new($s,$dbt);
+    my %is_modifier_for = %{$p->getModifierList()};
+    unless ($s->get("superuser") ||
+            ($s->get('authorizer_no') && $s->get("authorizer_no") == $authorizer_no) ||
+            $is_modifier_for{$authorizer_no}) {
+        my $authorizer = Person::getPersonName($dbt,$authorizer_no);
+        htmlError("You may not edit this record because it is owned by a different authorizer ($authorizer)");
+        exit;
+    }
 
 	if($q->param('use_primary')){
 		$s->put('reference_no', $row[0]);
@@ -4820,6 +4867,7 @@ sub displayEditCollection {
 	$std_page_top =~ s/ height="100%"//;
 	print $std_page_top;
 	print "</td></tr></table>\n\n";
+	print "</td></tr></table>\n\n";
 
 	# Get the reference for this collection
 	my $curColNum = 0;
@@ -4832,8 +4880,7 @@ sub displayEditCollection {
 		$curColNum++;
 	}
 	# Current primary ref
-	my $refRowString = getCurrRefDisplayStringForColl($dbh, $collection_no, 
-												  $reference_no);
+	my $refRowString = getCurrRefDisplayStringForColl($dbh, $collection_no, $reference_no);
 	push(@row, $refRowString);
 	push(@fieldNames, 'ref_string');
 
@@ -4858,7 +4905,7 @@ sub displayEditCollection {
 						 #"</td></tr><tr><td valign=top>".
 						 "<input type=radio name=secondary_reference_no value=".
 						 $session_ref."></td><td></td>";
-		$sr = getCurrRefDisplayStringForColl($dbh, $collection_no,$session_ref);
+		my $sr = getCurrRefDisplayStringForColl($dbh, $collection_no,$session_ref);
 		# put the radio on the same line as the ref
 		$sr =~ s/<tr>//;
 		$refRowString .= $sr."</table></td></tr></table>";
@@ -4893,7 +4940,7 @@ sub displayEditCollection {
     push(@fieldNames, 'page_footer');
 
     # Output the main part of the page
-    %pref = getPreferences($s->get('enterer_no'));
+    my %pref = getPreferences($s->get('enterer_no'));
     my @prefkeys = keys %pref;
 
     my $html = $hbo->populateHTML("collection_form", \@row, \@fieldNames, \@prefkeys);
@@ -5110,7 +5157,7 @@ sub getCurrRefDisplayStringForColl{
     my $collection_no = shift;
     my $reference_no = shift;
 
-    my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=$reference_no";
+    my $sql = "SELECT r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type FROM refs r WHERE r.reference_no=$reference_no";
     
     my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
     $sth->execute();
@@ -5129,8 +5176,8 @@ sub displayOccurrenceAddEdit {
 	if ( ! $collection_no ) { htmlError( "No collection_no specified" ); }
 
 	# Grab the collection name for display purposes JA 1.10.02
-	$sql = "SELECT collection_name FROM collections WHERE collection_no=$collection_no";
-	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+	my $sql = "SELECT collection_name FROM collections WHERE collection_no=$collection_no";
+	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 	my $collection_name = ${$sth->fetchrow_arrayref()}[0];
 	$sth->finish();
@@ -5156,6 +5203,7 @@ sub displayOccurrenceAddEdit {
 		print "<center>\n";
 		print "<table><tr><td>\n";
 		print "<ul>\n";
+        my ($startofblock,$endofblock);
 		for my $rowset ( 1..100 )	{
 			$endofblock = $rowset * 50;
 			$startofblock = $endofblock - 49;
@@ -5252,7 +5300,7 @@ sub displayOccurrenceAddEdit {
 		print $occHTML;
 
         $sql = "SELECT * FROM reidentifications WHERE occurrence_no=" .  $hash_ref->{'occurrence_no'};
-		$sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+		my $sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth2->execute();
         while(my $hr = $sth2->fetchrow_hashref()) {
             my @re_row = values %$hr;
@@ -5316,7 +5364,7 @@ sub displayOccurrenceAddEdit {
 	unshift @row, $pref{'species_name'};
 	unshift @fieldNames, "species_name";
 
-	for ( $i = 0; $i<$blanks ; $i++) {
+	for ( my $i = 0; $i<$blanks ; $i++) {
 		print qq|<input type=hidden name="row_token" value="row_token">\n|;
 		print $hbo->populateHTML("occurrence_entry_row", \@row, \@fieldNames, \@prefkeys);
 	}
@@ -5770,7 +5818,7 @@ sub processEditOccurrences {
 			push(@insert_names, 'authorizer','enterer','authorizer_no', 'enterer_no');
     		push(@insert_values, $dbh->quote($s->get('authorizer')), $dbh->quote($s->get('enterer')),$s->get('authorizer_no'),$s->get('enterer_no'));
 			# Check for duplicates
-			$return = checkDuplicates("occurrence_no", \${$all_params{occurrence_no}}[$index], "occurrences", \@insert_names, \@insert_values );
+			my $return = checkDuplicates("occurrence_no", \${$all_params{occurrence_no}}[$index], "occurrences", \@insert_names, \@insert_values );
 			if(!$return){return $return;}
 			if($return != $DUPLICATE){
 				$sql = "INSERT INTO occurrences (".
@@ -5959,6 +6007,8 @@ sub displayOccsForReID
 	my $refString = $bibRef->toString();
 
 	my $rowCount = 0;
+	my %pref = getPreferences($s->get('enterer_no'));
+	my @prefkeys = keys %pref;
 	foreach my $rowRef (@array_of_hash_refs)
 	{
 		# If we have 11 rows, skip the last one; and we need a next button
@@ -5967,8 +6017,6 @@ sub displayOccsForReID
 
 		my @prefkeys;
 		if ($rowCount == 1)	{
-			%pref = getPreferences($s->get('enterer_no'));
-			@prefkeys = keys %pref;
 			print $hbo->populateHTML('reid_header_row', [ $refString ], [ 'ref_string' ], \@prefkeys);
 		}
 
@@ -6242,7 +6290,7 @@ sub processNewReIDs {
     		push(@row, $dbh->quote($s->get('authorizer')), $dbh->quote($s->get('enterer')),$s->get('authorizer_no'),$s->get('enterer_no'),$s->get('reference_no'));
 
 			# Check for duplicates
-			$return = checkDuplicates( "reid_no", \$recID, "reidentifications", \@fieldList, \@row );
+			my $return = checkDuplicates( "reid_no", \$recID, "reidentifications", \@fieldList, \@row );
 			if ( ! $return ) { return $return; }
 
 
@@ -6512,8 +6560,6 @@ sub insertRecord {
         $q->param('enterer_no'    => $s->get('enterer_no'));
 		$q->param('authorizer'    => $s->get('authorizer'));		# This is an absolute
         $q->param('authorizer_no' => $s->get('authorizer_no'));
-		$q->param('modifier'      => $s->get('enterer')) unless $q->param('modifier');
-		$q->param('modifier_no'   => $s->get('enterer_no')) unless $q->param('modifier_no');
 		# Set the pubtitle to the pull-down pubtitle unless it's set in the form
 		$q->param(pubtitle => $q->param('pubtitle_pulldown')) unless $q->param("pubtitle");
 
@@ -6564,7 +6610,7 @@ sub insertRecord {
 		dbg("insert VALS: @vals<br>");
 
 		# Check for a duplicate and bomb if one is found
-		$return = checkDuplicates( $idName, $primary_key, $tableName, \@fields, \@vals );
+		my $return = checkDuplicates( $idName, $primary_key, $tableName, \@fields, \@vals );
 		if ( ! $return || $return == $DUPLICATE ) { return $return; }
 
 		# Check for near matches
@@ -6990,8 +7036,8 @@ sub getCollsWithRef	{
 sub RefQuery {
 	my $q = shift;
     
-    $csv = Text::CSV_XS->new();
-
+    my $csv = Text::CSV_XS->new();
+    my $sth;
 
 	# Use current reference button?
 	if ($q->param('use_current')) {
@@ -7003,9 +7049,7 @@ sub RefQuery {
                   " WHERE reference_no = ?";
 		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute($s->get('reference_no'));
-		$md = MetadataModel->new($sth);
-		@fieldNames = @{$sth->{NAME}};
-		return;
+		return $sth;
 	}
 
 	# do these really need to be globals?  rjp 12/29/03
@@ -7017,7 +7061,7 @@ sub RefQuery {
 	my $refno = $q->param('reference_no');
 
 	# build a string that will tell the user what they asked for
-	$refsearchstring = qq|$name| if $name;
+	my $refsearchstring = qq|$name| if $name;
 	$refsearchstring .= qq| $pubyr| if $pubyr;
 	$refsearchstring .= qq| $reftitle| if $reftitle;
 	$refsearchstring .= qq| $pubtitle| if $pubtitle;
@@ -7084,8 +7128,9 @@ sub RefQuery {
         dbg("RefQuery SQL".$sql);
 
 		# Execute the ref query
-		$sth = $dbh->prepare( $sql ) || die ( "$sqlString<hr>$!" );
+		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute();
+		my @refFields = @{$sth->{NAME}};
 		my @rows = @{$sth->fetchall_arrayref()};
 		
 		# If too many refs were found, set a limit
@@ -7101,7 +7146,6 @@ sub RefQuery {
 		$authname =~ s/\. //;
 		open REFOUTPUT,">$HTML_DIR/$OUTPUT_DIR/$authname.refs";
 
-		my @refFields = @{$sth->{NAME}};
         if ($csv->combine(@refFields)) {
             print REFOUTPUT $csv->string(),"\n";
         }
@@ -7113,10 +7157,8 @@ sub RefQuery {
 		close REFOUTPUT;
 		
 		# Rerun the query
-		$sth = $dbh->prepare( $sql ) || die ( "$sqlString<hr>$!" );
+		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute();
-		@fieldNames = @{$sth->{NAME}};
-		$md = MetadataModel->new($sth);
 	} else {
 		print stdIncludes("std_page_top");
 		print "<center><h4>Sorry! You can't do a search without filling in at least one field</h4>\n";
@@ -7125,9 +7167,8 @@ sub RefQuery {
 		exit(0);
 	}
 	
-	return $overlimit;
+	return ($sth, $overlimit,$refsearchstring);
 }
-
 
 
 # This only shown for internal errors
@@ -7153,7 +7194,7 @@ sub buildReference {
 		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		$sth->execute();
 		if ( $sth->rows ) {
-			$rs = $sth->fetchrow_hashref ( );
+			my $rs = $sth->fetchrow_hashref ( );
 
 			# First author always shown
 			if ($outputtype eq "bottom")	{
