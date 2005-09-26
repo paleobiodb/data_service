@@ -168,6 +168,7 @@ sub displayOccurrenceReclassify	{
 
 				# need a hidden recording the old taxon number
                 $collection_string .= ": " if ($collection_string);
+                $collection_string =~ s/'//g;
 				if ( ! $o->{reid_no} )	{
 					print "<input type='hidden' name='old_taxon_no' value='" , $o->{taxon_no}, "+" , $collection_string, $formatted , "'>\n";
 				} else	{
