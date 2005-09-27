@@ -1063,9 +1063,9 @@ sub displayRelatedTaxa {
         my ($occ_genus_no_sql,$reid_genus_no_sql);
         $occ_genus_no_sql = " OR o.taxon_no=$genus_nos[0]" if (@genus_nos);
         $reid_genus_no_sql = " OR re.taxon_no=$genus_nos[0]" if (@genus_nos);
-        $sql  = "(SELECT o.genus_name,o.species_name FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE re.reid_no IS NULL AND o.genus_name like $genus_sql AND (o.taxon_no=0 OR o.taxon_no IS NULL $occ_genus_no_sql))";
+        $sql  = "(SELECT o.genus_name,o.species_name FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE re.reid_no IS NULL AND o.genus_name like $genus_sql AND o.genus_reso NOT LIKE '%informal%' and o.species_reso NOT LIKE '%informal%' AND (o.taxon_no=0 OR o.taxon_no IS NULL $occ_genus_no_sql))";
         $sql .= " UNION ";
-        $sql .= "(SELECT re.genus_name,re.species_name FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND re.most_recent=1 AND re.genus_name like $genus_sql AND (re.taxon_no=0 OR re.taxon_no IS NULL $reid_genus_no_sql))"; 
+        $sql .= "(SELECT re.genus_name,re.species_name FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND re.most_recent=1 AND re.genus_name like $genus_sql AND re.genus_reso NOT LIKE '%informal%' and re.species_reso NOT LIKE '%informal%' AND (re.taxon_no=0 OR re.taxon_no IS NULL $reid_genus_no_sql))"; 
         $sql .= "ORDER BY genus_name,species_name";
         main::dbg("Get from occ table: $sql");
         @results = @{$dbt->getData($sql)};
@@ -1462,7 +1462,7 @@ sub displayEcology	{
     my @ecotaphFields = $dbt->tableColumns('ecotaph');
     # also get values for ancestors
     my $class_hash = Classification::get_classification_hash($dbt,'all',[$taxon_no],'array');
-    my $eco_hash = Ecology::getEcology($dbt,$class_hash,\@ecotaphFields);
+    my $eco_hash = Ecology::getEcology($dbt,$class_hash,\@ecotaphFields,'get_basis');
     my $ecotaphVals = $eco_hash->{$taxon_no};
 
     # Convert units for display
@@ -1484,7 +1484,24 @@ sub displayEcology	{
 		print "<i>No ecological data are available</i>";
 		return;
 	} else	{
-		print "<table cellspacing=5 width=600>";
+        my @ranks = ('subspecies', 'species', 'subgenus', 'genus', 'subtribe', 'tribe', 'subfamily', 'family', 'superfamily', 'infraorder', 'suborder', 'order', 'superorder', 'infraclass', 'subclass', 'class', 'superclass', 'subphylum', 'phylum', 'superphylum', 'subkingdom', 'kingdom', 'superkingdom', 'unranked clade');
+        my %rankToKey = ();
+        foreach my $rank (@ranks) {
+            my $rank_abbrev = $rank;
+            $rank_abbrev =~ s/species/s/;
+            $rank_abbrev =~ s/genus/g/;
+            $rank_abbrev =~ s/tribe/t/;
+            $rank_abbrev =~ s/family/f/;
+            $rank_abbrev =~ s/order/o/;
+            $rank_abbrev =~ s/class/c/;
+            $rank_abbrev =~ s/phylum/p/;
+            $rank_abbrev =~ s/kingdom/f/;
+            $rank_abbrev =~ s/unranked clade/uc/;
+            $rankToKey{$rank} = $rank_abbrev;
+        }   
+        my %all_ranks = ();
+
+		print "<table cellspacing=4 width=600>";
         print "<tr><td colspan=2>";
         if (scalar(@references) == 1) {
             print "<b>Reference:</b> ";
@@ -1512,6 +1529,8 @@ sub displayEcology	{
 			$n =~ s/2$/&nbsp;2/g;
 			if ( $ecotaphVals->{$name} && $name !~ /_no$/ )	{
 				my $v = $ecotaphVals->{$name};
+                my $rank = $ecotaphVals->{$name."basis"};
+                $all_ranks{$rank} = 1; 
 				$v =~ s/,/, /g;
                 if ( $cols == 2 || $name =~ /^comments$/ || $name =~ /^created$/ || $name =~ /^size_value$/ || $name =~ /1$/ )	{
                     print "</tr>\n<tr>\n";
@@ -1519,14 +1538,26 @@ sub displayEcology	{
                 }
 				$cols++;
                 my $colspan = ($name =~ /comments/) ? "colspan=2" : "";
-				print "<td $colspan valign=\"top\"><table><tr><td align=\"left\" valign=\"top\"><b>$n:</b></td><td valign=\"top\">$v</td></tr></table></td> \n";
+                my $rank_note = "<span class=\"superscript\">$rankToKey{$rank}</span>";
+                if ($name =~ /created|modified/) {
+                    $rank_note = "";
+                }
+				print "<td $colspan valign=\"top\"><table cellpadding=0 cellspacing=0 border=0><tr><td align=\"left\" valign=\"top\"><b>$n:</b>&nbsp;</td><td valign=\"top\">${v}${rank_note}</td></tr></table></td> \n";
 			}
 		}
-		if ( $cols > 0 )	{
-			print "</tr></table>\n";
-		} else	{
-			print "</table>\n";
-		}
+        print "</tr>" if ( $cols > 0 );
+        # now print out keys for superscripts above
+        print "<tr><td colspan=2>";
+        my $html = "<b>Source:</b> ";
+        foreach my $rank (@ranks) {
+            if ($all_ranks{$rank}) {
+                $html .= "$rankToKey{$rank} = $rank, ";
+            }
+        }
+        $html =~ s/, $//;
+        print $html;
+        print "</td></tr>"; 
+		print "</table>\n";
 	}
 
 	return $text;
