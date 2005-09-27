@@ -30,7 +30,7 @@ function checkForm ( ) {
 
 <center><h2>Collection search form</h2>
 <p>Choose a period, fill in the coordinates of your collection, and press "Search collections."</p>
-<p>The search will return collections within 100 km of the coordinate.</p>
+<p>The search will return collections within 100 km of the coordinates.</p>
 </center>
 
 <form method=post action="bridge.pl" onSubmit="return checkForm();">
@@ -75,7 +75,7 @@ function checkForm ( ) {
   <tr><td>&nbsp;</td></tr>
   <tr>
     <td colspan=6>
-      Sort by: <select name="sortby"><option value="collection_no">collection number</option><option value="distance">distance from coordinates</option></select></p>
+      Sort by: <select name="sortby"><option value="collection_name">collection name</option><option value="distance">distance from coordinates</option><option value="collection_no">collection number</option></select></p>
     </td>
   </tr>
 </table>
