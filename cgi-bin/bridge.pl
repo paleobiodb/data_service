@@ -1671,7 +1671,7 @@ sub displayCollResults {
 		# you won't have an in list if you are adding
 		($dataRows,$ofRows) = processCollectionsSearchForAdd();
 	} else	{
-        my $fields = ["authorizer","country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no"];  
+        my $fields = ["authorizer","country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no","collection_aka"];  
         my %options = $q->Vars();
         if ($type eq "reclassify_occurrence") {
             # Want to not get taxon_nos when reclassifying. Otherwise, if the taxon_no is set to zero, how will you find it?
@@ -1740,10 +1740,17 @@ sub displayCollResults {
 		print "<tr>";
 		print "<th>Collection</th>";
 		print "<th align=left>Authorizer</th>";
-        print "<th align=left>Distance</th>" if ($type eq 'add');
 		print "<th align=left nowrap>Collection name</th>";
 		print "<th align=left>Reference</th>";
+        print "<th align=left>Distance</th>" if ($type eq 'add');
 		print "</tr>";
+ 
+        # Make non-editable links not highlighted  
+        my ($p,%is_modifier_for); 
+        if ($type eq 'edit') { 
+            $p = Permissions->new($s,$dbt);
+            %is_modifier_for = %{$p->getModifierList()};
+        }
 
 		# Loop through each data row of the result set
         for(my $count=$rowOffset;$count<scalar(@dataRows) && $count < $rowOffset+$limit;$count++) {
@@ -1783,32 +1790,40 @@ sub displayCollResults {
  			} else {
 				print "<tr>";
 			}
+	
+            if ($type ne 'edit' || 
+                $type eq 'edit' && ($s->get("superuser") ||
+                                   ($s->get('authorizer_no') && $s->get("authorizer_no") == $dataRow->{'authorizer_no'}) ||
+                                    $is_modifier_for{$dataRow->{'authorizer_no'}})) {
+		  	    print "<td align=center valign=top><a href=\"$exec_url?action=$action&collection_no=$dataRow->{collection_no}";
+                # for collection edit:
+                if($q->param('use_primary')){
+                    print "&use_primary=yes";
+                }
+                
+                # These may be useful to displayOccsForReID
+                if($q->param('genus_name')){
+                    print "&genus_name=".$q->param('genus_name');
+                }
+                
+                if($q->param('species_name')){
+                    print "&species_name=".$q->param('species_name');
+                }
+                print "\">$dataRow->{collection_no}</a></td>";
+            } else {	
+                # Don't link it if if we're in edit mode and we don't have permission
+                print "<td align=center valign=top>$dataRow->{collection_no}</td>";
+            }
 			
-		  	print "<td align=center valign=top><a href=\"$exec_url?action=$action&collection_no=$dataRow->{collection_no}";
-			
-			# for collection edit:
-			if($q->param('use_primary')){
-				print "&use_primary=yes";
-			}
-			
-			# These may be useful to displayOccsForReID
-			if($q->param('genus_name')){
-				print "&genus_name=".$q->param('genus_name');
-			}
-			
-			if($q->param('species_name')){
-				print "&species_name=".$q->param('species_name');
-			}
 
             my $collection_names = $dataRow->{'collection_name'};
             if ($dataRow->{'collection_aka'}) {
                 $collection_names .= " <span class=\"tiny\">(aka $dataRow->{collection_aka})</span>";
             }
-			print "\">$dataRow->{collection_no}</a></td>";
             print "<td valign=top nowrap>$dataRow->{authorizer}</td>";
-            print "<td valign=top align=center>".int($dataRow->{distance})." km </td>" if ($type eq 'add');
             print "<td valign=top><b>${collection_names}$timeplace</td>";
             print "<td valign=top nowrap>$reference</td>";
+            print "<td valign=top align=center>".int($dataRow->{distance})." km </td>" if ($type eq 'add');
             print "</tr>";
   		}
 
@@ -1979,7 +1994,11 @@ sub processCollectionsSearchForAdd	{
 	$inlist =~ s/,$//;
 	$sql .= "c.lngdeg IN (" . $inlist . ")";
 
-	$sql .= " ORDER BY c.collection_no";
+    if ($q->param('sortby') eq 'collection_no') {
+	    $sql .= " ORDER BY c.collection_no";
+    } elsif ($q->param('sortby') eq 'collection_name') {
+	    $sql .= " ORDER BY c.collection_name";
+    }
 
     main::dbg("process collections search for add: $sql");
 
@@ -3621,7 +3640,7 @@ sub displayCollectionEcology	{
         $rank_abbrev =~ s/family/f/;
         $rank_abbrev =~ s/order/o/;
         $rank_abbrev =~ s/class/c/;
-        $rank_abbrev =~ s/phlyum/p/;
+        $rank_abbrev =~ s/phylum/p/;
         $rank_abbrev =~ s/kingdom/f/;
         $rank_abbrev =~ s/unranked clade/uc/;
         $rankToKey{$rank} = $rank_abbrev;
@@ -3762,13 +3781,13 @@ sub displayCollectionEcology	{
 	}
     # now print out keys for superscripts above
     print "<tr><td colspan=4>";
-    my $html = "";
+    my $html = "Source: ";
     foreach my $rank (@ranks) {
         if ($all_rank_keys{$rank}) {
-            $html .= ", $rankToKey{$rank} = $rank";
+            $html .= "$rankToKey{$rank} = $rank, ";
         }
     }
-    $html =~ s/^, //;
+    $html =~ s/, $//;
     print $html;
     print "</td></tr>";
 	print "</table>";
