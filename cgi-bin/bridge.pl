@@ -1322,7 +1322,7 @@ sub displayRefAdd {
 		}
 	}
     push (@row, 'standard','English','processNewRef');
-    push (@fieldNames, 'taxonomic_reliability','language','action');
+    push (@fieldNames, 'classification_quality','language','action');
 	print $hbo->populateHTML("enter_ref_form", \@row, \@fieldNames);
 	print stdIncludes("std_page_bottom");
 }

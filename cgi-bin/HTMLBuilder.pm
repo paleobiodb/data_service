@@ -43,7 +43,7 @@ sub new {
 					species_name=>['', 'indet.', 'sp.'],
 					project_name=>['', 'decapod', 'ETE', '5%', '1%', 'PACED', 'PGAP'],
 					publication_type=>['', 'journal article', 'book/book chapter', 'serial monograph', 'Ph.D. thesis', 'M.S. thesis', 'abstract', 'guidebook','news article', 'unpublished'],
-					taxonomic_reliability=>['authoritative', 'standard', 'second hand'],
+					classification_quality=>['authoritative', 'standard', 'second hand'],
 					release_date=>['immediate','three months','six months','one year','two years','three years','four years','five years'],
 					access_level=>['the public','database members', 'group members', 'authorizer only'],
 					latdir=>['North','South'],

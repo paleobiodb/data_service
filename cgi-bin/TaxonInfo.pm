@@ -1420,15 +1420,15 @@ sub getMostRecentParentOpinion {
 
     # This will return the most recent parent opinions. its a bit tricky cause: 
     # we're sorting by aliased fields. So surround the query in parens () to do this:
-    # All values of the enum taxonomic_reliability get recast as integers for easy sorting
+    # All values of the enum classification_quality get recast as integers for easy sorting
     # Lowest should appear at top of list (authoritative) and highest at bottom (compendium) so sort ASC
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
     my $sql = "(SELECT ${child_fields}o.child_no, o.child_spelling_no, o.status, o.parent_no, o.parent_spelling_no,"
             . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr,"
             . " (IF(r.reference_no = 6930,0," # is compendium, then 0 (lowest priority)
-            .   "IF(r.taxonomic_reliability = 'second hand',1," # else if second hand, next lowest
-            .   "IF(r.taxonomic_reliability = 'standard',2," # elsif standard, normal priority
-            .   "IF(r.taxonomic_reliability = 'authoritative',3,"
+            .   "IF(r.classification_quality = 'second hand',1," # else if second hand, next lowest
+            .   "IF(r.classification_quality = 'standard',2," # elsif standard, normal priority
+            .   "IF(r.classification_quality = 'authoritative',3,"
             .   "0))))) reliability_index " # else low priority (compnedium level, should never happen)
             . " FROM opinions o" 
             . $child_join
