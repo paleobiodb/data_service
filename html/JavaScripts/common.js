@@ -2,6 +2,15 @@
 //note, these are for use on BOTH the PUBLIC and PRIVATE page.
 //created by rjp, 1/2004.
 
+// This is a handy little function for seeing what properties an object has
+function showProperties ( obj ) {
+    var result = "";
+
+    for ( var i in obj ) {
+        result += "o." + i + " = " + obj[i] + "<BR>\n";
+    }
+    document.write ( result );
+}  
 
 function checkBrowserVersion() {
 	var match = /Microsoft/i;
