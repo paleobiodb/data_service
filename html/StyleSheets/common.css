@@ -415,6 +415,11 @@ span.smallRef {
     font-size: 0.8em;
 }
 
+.superscript {
+    font-size: 0.75em;
+    vertical-align: super;
+}
+
 /* for non-editable fields, such as in forms */
 span.nonEditable {
 	
