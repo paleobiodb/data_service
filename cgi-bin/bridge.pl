@@ -117,7 +117,7 @@ my $action = "";
 
 # don't let users into the contributors' area unless they're on the main site
 #  or backup server (as opposed to a mirror site) JA 3.8.04
-if ( $HOST_URL !~ /paleobackup.nceas.ucsb.edu/ && $HOST_URL !~ /paleodb.org/ )	{
+if ( $HOST_URL !~ /paleobackup\.nceas\.ucsb\.edu/ && $HOST_URL !~ /paleodb\.org/ )	{
 	 $q->param("user" => "Guest");
 }
 
@@ -1572,7 +1572,7 @@ sub displaySearchColls {
 
 	# Have to have a reference #, unless we are just searching
 	my $reference_no = $s->get("reference_no");
-	if ( ! $reference_no && $type ne "view" && !$q->param('use_primary') ) {
+	if ( ! $reference_no && $type ne "view" && $type ne "reclassify_occurrence" && !$q->param('use_primary') ) {
 		# Come back here... requeue our option
 		$s->enqueue( $dbh, "action=displaySearchColls&type=$type" );
 		displaySearchRefs( "Please choose a reference first" );
