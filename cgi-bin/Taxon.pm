@@ -24,6 +24,7 @@ use Errors;
 use Data::Dumper;
 use CGI::Carp;
 use URI::Escape;
+use Mail::Mailer;
 
 use Reference;
 
@@ -650,7 +651,7 @@ sub submitAuthorityForm {
             }
             my $plural = ($taxonExists == 1) ? "" : "s";
             $q->param('confirmed_taxon_name'=>$q->param('taxon_name'));
-			$errors->add("The taxon already appears $taxonExists time$plural in the database: ".join(", ",@pub_info).". If you really want to submit this record, hit submit again.");
+			$errors->add("This taxonomic name already appears $taxonExists time$plural in the database: ".join(", ",@pub_info).". If you really want to submit this record, hit submit again.");
 		}
 	}
 	
@@ -713,9 +714,54 @@ sub submitAuthorityForm {
         @taxon_nos = map {$_->{'taxon_no'}} @taxon_nos;
 
 		if (scalar(@taxon_nos) > 1) {
+            my $sql1 = "SELECT p.name, p.email, count(*) cnt FROM occurrences o,person p WHERE o.authorizer_no=p.person_no AND o.taxon_no IN (".join(",",@taxon_nos).") group by p.person_no";
+            my $sql2 = "SELECT p.name, p.email, count(*) cnt FROM reidentifications re,person p WHERE re.authorizer_no=p.person_no AND re.taxon_no IN (".join(",",@taxon_nos).") group by p.person_no";
+            my @results = @{$dbt->getData($sql1)};
+            push @results,@{$dbt->getData($sql2)};
+            my %emails = ();
+            my %counts = ();
+            foreach my $row (@results) {
+                $emails{$row->{'name'}} = $row->{'email'};
+                $counts{$row->{'name'}} += $row->{'cnt'};
+            }
+
+            my $link = "bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$fieldsToEnter{taxon_name}";
+            while (my ($name,$email) = each %emails) {
+                my %headers = ('Subject'=> 'Please reclassify your occurrences','From'=>'alroy');
+                if ($ENV{'BRIDGE_HOST_URL'} =~ /paleodb\.org/) {
+                    if ($email) {
+                        $headers{'To'} = $email; 
+                    } else {
+                        # This will happen if email is blank, such as with Sepkoski
+                        $headers{'To'} = 'alroy@nceas.ucsb.edu';
+                    }
+                } else {
+                    # DEBUGGING EMAIL ADDRESS
+                    $headers{'To'} = 'schroeter@nceas.ucsb.edu';
+                }
+                my $taxon_count = scalar(@taxon_nos);
+                my $occ_count = $counts{$name};
+                my $body = <<END_OF_MESSAGE;
+Dear $name:
+
+This is an automated message from the Paleobiology Database. Please don't reply to this message directly, but rather send replies to John Alroy (alroy\@nceas.ucsb.edu).
+
+This message has been sent to you because the taxonomic name $fieldsToEnter{taxon_name} has just been entered into the database, and other taxa with the same name already have been entered. So, we have more than one version. This taxonomic name is tied to $occ_count occurrences and reidentifications you own. We can't be sure which version of the name these records should be tied to, so the records must be manually reclassified to choose between them. 
+
+To fix your records, Please click this link while logged in:
+http://paleodb.org/cgi-bin/$link
+
+Or log in, go to the main menu, click "Reclassify occurrences" and enter $fieldsToEnter{taxon_name} into the taxon name field.
+END_OF_MESSAGE
+                my $mailer = new Mail::Mailer;
+                $mailer->open(\%headers);
+                print $mailer $body; 
+                $mailer->close;
+            }
+            
             # Deal with homonym issue
-            my $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
-            my $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
+            $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
+            $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
             $dbt->getData($sql1);
             $dbt->getData($sql2);
             push @warnings, "Since $fieldsToEnter{taxon_name} is a homonym, occurrences of it are no longer classified.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$fieldsToEnter{taxon_name}\">Reclassify occurrences</a>\" and manually classify <b>all</b> occurrences of this taxon.";
