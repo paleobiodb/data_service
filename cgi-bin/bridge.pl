@@ -1166,7 +1166,7 @@ sub displayRefResults {
 		return;		# Out of here!
 	}
 
-	
+
 	print stdIncludes( "std_page_top" );
 
 	if ( $numRows ) {
@@ -1226,6 +1226,7 @@ sub displayRefResults {
 sub displayRefResultsForAdd {
 
 	my ($sth, $overlimit,$refsearchstring) = RefQuery($q);
+	my $md = MetadataModel->new($sth);
 
 	my @rows = @{$sth->fetchall_arrayref()};
 	my $numRows = @rows;
@@ -1256,7 +1257,6 @@ sub displayRefResultsForAdd {
 	# Print the references found
 	print "<table border=0 cellpadding=5 cellspacing=0>\n";
 	my $row = 1;
-	my $md = MetadataModel->new($sth);
 	foreach my $rowref ( @rows ) {
 
 	    my $drow = DataRow->new($rowref, $md);
