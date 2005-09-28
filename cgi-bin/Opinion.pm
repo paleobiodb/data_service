@@ -381,7 +381,13 @@ sub displayOpinionForm {
             my $selected = ($fields{'child_spelling_no'} == $child_spelling_no) ? "CHECKED" : "";
             my $pub_info = "$auth{author1last} $auth{pubyr}";
             $pub_info = ", ".$pub_info if ($pub_info !~ /^\s*$/);
-            my $higher_class = ($classification{$child_spelling_no}) ? $classification{$child_spelling_no} : "unclassified";
+            my $higher_class;
+            if ($classification{$child_spelling_no}) {
+                $higher_class = $classification{$child_spelling_no};
+            } else {
+                my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$child_spelling_no);
+                $higher_class = "unclassified $taxon->{taxon_rank}";
+            } 
 			$spelling_pulldown .= qq|<input type="radio" name="child_spelling_no" $selected value='$child_spelling_no'> ${childSpellingName}$pub_info [$higher_class]<br>\n|;
         }
 	}
@@ -430,7 +436,14 @@ sub displayOpinionForm {
             my $selected = ($fields{'parent_spelling_no'} == $parent_no) ? "CHECKED" : "";
             my $pub_info = "$auth{author1last} $auth{pubyr}";
             $pub_info = ", ".$pub_info if ($pub_info !~ /^\s*$/);
-			$parent_pulldown .= qq|<input type="radio" name="parent_spelling_no" $selected value='$parent_no'> ${parentName}$pub_info [$classification{$parent_no}]<br>\n|;
+            my $higher_class;
+            if ($classification{$parent_no}) {
+                $higher_class = $classification{$parent_no};
+            } else {
+                my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$parent_no);
+                $higher_class = "unclassified $taxon->{taxon_rank}";
+            }
+			$parent_pulldown .= qq|<input type="radio" name="parent_spelling_no" $selected value='$parent_no'> ${parentName}$pub_info [$higher_class]<br>\n|;
         }
 	}
 
@@ -959,14 +972,14 @@ sub submitOpinionForm {
 	    if ($q->param('taxon_status') eq 'belongs to') {
 		    # for belongs to, the parent rank should always be higher than the child rank.
 		    # unless either taxon is an unranked clade (JA)
-		    if ($rankToNum{$parentRank} <= $rankToNum{$childRank} && 
+		    if ($rankToNum{$parentRank} <= $rankToNum{$childSpellingRank} && 
                 $parentRank ne "unranked clade" && 
-                $childRank ne "unranked clade") {
+                $childSpellingRank ne "unranked clade") {
 		    	$errors->add("The rank of the higher taxon '$parentName' ($parentRank) must be higher than the rank of '$childName' ($childRank)");	
 		    }
         } elsif ($q->param('taxon_status') eq 'invalid1') {
     		# the parent rank should be the same as the child rank...
-	    	if ( $parentRank ne $childRank) {
+	    	if ( $parentRank ne $childSpellingRank) {
 		    	$errors->add("The rank of a taxon and the rank of its synonym, homonym, or replacement name must be the same");
             }    
 		} 
@@ -1026,8 +1039,10 @@ sub submitOpinionForm {
     }
 
     # Misc error checking 
-    if ($parentName eq $childName || $parentName eq $childSpellingName || $fields{'child_no'} == $fields{'parent_no'}) {
+    if (($parentName eq $childName || $parentName eq $childSpellingName) && $childSpellingRank !~ /subgenus/) {
         $errors->add("The taxon you are entering and the one it belongs to can't have the same name");	
+    } elsif ($fields{'child_no'} == $fields{'parent_no'}) {
+        $errors->add("The taxon you are entering and the one it belongs to can't be the same");	
     }
 
 	
@@ -1206,7 +1221,21 @@ sub submitOpinionForm {
                     carp "Failed to move opinions to point to original comb ($fields{child_no} that pointed to recomb name ($fields{parent_no}) for opinion no $code";
                 }
             }
-            
+            # Lastly, reset the status of opinions to be 'corrected as','recombined as', or 'rank changed as' as necessary
+            # of other migrated opinions
+            my $sql = "SELECT * FROM opinions WHERE status LIKE 'belongs to' AND child_no != child_spelling_no AND child_no=$fields{child_no}";
+            my @results = @{$dbt->getData($sql)};
+            foreach my $row (@results) {
+                my $taxon = {};
+                $taxon->{'child_no'} = $row->{'child_no'};
+                $taxon->{'child_spelling_no'} = $row->{'child_spelling_no'};
+                my $spelling_status = getSpellingStatus($dbt,$taxon);
+                if ($spelling_status =~ /rank|recombined|corrected/) {
+                    $sql = "UPDATE opinions SET modified=modified,status='$spelling_status' WHERE opinion_no=$row->{opinion_no} LIMIT 1";
+                    main::dbg("Also changing opinion # $row->{opinion_no} from 'belongs to' to $spelling_status with sql $sql");
+                    $dbh->do($sql);
+                }
+            }
 		}	
 	} else {
 		# if it's an old entry, then we'll update.
