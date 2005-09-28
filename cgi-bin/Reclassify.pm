@@ -53,13 +53,13 @@ sub displayOccurrenceReclassify	{
     if (@collections) {
 	    print "<center><h3>Classification of ".$q->param('taxon_name')."</h3>";
         my ($genus,$species) = split(/\s+/,$q->param('taxon_name'));
-        my $sql = "(SELECT 0 reid_no, o.occurrence_no,o.taxon_no, o.genus_reso, o.genus_name, o.species_reso, o.species_name, c.collection_no, c.collection_name, c.country, c.state, c.max_interval_no, c.min_interval_no FROM occurrences o, collections c WHERE o.collection_no=c.collection_no AND c.collection_no IN (".join(", ",@collections).") AND o.genus_name LIKE ".$dbh->quote($genus);
+        my $sql = "(SELECT 0 reid_no, o.authorizer_no, o.occurrence_no,o.taxon_no, o.genus_reso, o.genus_name, o.species_reso, o.species_name, c.collection_no, c.collection_name, c.country, c.state, c.max_interval_no, c.min_interval_no FROM occurrences o, collections c WHERE o.collection_no=c.collection_no AND c.collection_no IN (".join(", ",@collections).") AND o.genus_name LIKE ".$dbh->quote($genus);
         if ($species) {
             $sql .= " AND o.species_name LIKE ".$dbh->quote($species);
         }
         $sql .= ")";
         $sql .= " UNION ";
-        $sql .= "( SELECT re.reid_no, re.occurrence_no,re.taxon_no, re.genus_reso, re.genus_name, re.species_reso, re.species_name, c.collection_no, c.collection_name, c.country, c.state, c.max_interval_no, c.min_interval_no FROM reidentifications re, occurrences o, collections c WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no AND c.collection_no IN (".join(", ",@collections).") AND re.genus_name LIKE ".$dbh->quote($genus);
+        $sql .= "( SELECT re.reid_no, re.authorizer_no,re.occurrence_no,re.taxon_no, re.genus_reso, re.genus_name, re.species_reso, re.species_name, c.collection_no, c.collection_name, c.country, c.state, c.max_interval_no, c.min_interval_no FROM reidentifications re, occurrences o, collections c WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no AND c.collection_no IN (".join(", ",@collections).") AND re.genus_name LIKE ".$dbh->quote($genus);
         if ($species) {
             $sql .= " AND re.species_name LIKE ".$dbh->quote($species);
         }
@@ -73,9 +73,9 @@ sub displayOccurrenceReclassify	{
 
         # get all the occurrences
         my $collection_no = int($q->param('collection_no'));
-        $sql = "(SELECT 0 reid_no,occurrence_no,taxon_no,genus_reso,genus_name,species_reso,species_name FROM occurrences WHERE collection_no=$collection_no)".
+        $sql = "(SELECT 0 reid_no,authorizer_no, occurrence_no,taxon_no,genus_reso,genus_name,species_reso,species_name FROM occurrences WHERE collection_no=$collection_no)".
                " UNION ".
-               "(SELECT reid_no,occurrence_no,taxon_no,genus_reso,genus_name,species_reso,species_name FROM reidentifications WHERE collection_no=$collection_no)".
+               "(SELECT reid_no,authorizer_no, occurrence_no,taxon_no,genus_reso,genus_name,species_reso,species_name FROM reidentifications WHERE collection_no=$collection_no)".
                " ORDER BY occurrence_no ASC,reid_no ASC";
         main::dbg("Reclassify sql:".$sql);
         @occrefs = @{$dbt->getData($sql)};
@@ -94,8 +94,19 @@ sub displayOccurrenceReclassify	{
         }
 		print "<table border=0 cellpadding=0 cellspacing=0>\n";
 	}
+
+    # Make non-editable links not changeable
+    my $p = Permissions->new($s,$dbt);
+    my %is_modifier_for = %{$p->getModifierList()};
+
 	my $rowcolor = 0;
+    my $nonEditableCount = 0;
 	for my $o ( @occrefs )	{
+        my $editable = ($s->get("superuser") || $is_modifier_for{$o->{'authorizer_no'}} || $o->{'authorizer_no'} == $s->get('authorizer_no')) ? 1 : 0;
+        my $disabled = ($editable) ?  '' : 'DISABLED';
+        my $authorizer = ($editable) ? '' : '(<b>Authorizer:</b> '.Person::getPersonName($dbt,$o->{'authorizer_no'}).')';
+        $nonEditableCount++ if (!$editable);
+
 		# if the name is informal, add it to the list of
 		#  unclassifiable names
 		if ( $o->{genus_reso} =~ /informal/ )	{
@@ -150,6 +161,7 @@ sub displayOccurrenceReclassify	{
                     } else  {
                         $collection_string .= $o->{"country"};
                     }
+                    $collection_string .= " $authorizer";
                     $collection_string .= "</span>";
 
                     print "<td style=\"padding-right: 1.5em; padding-left: 1.5em;\"><a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$o->{collection_no}\">$o->{collection_no}</td><td>$collection_string</a></td>";
@@ -169,18 +181,19 @@ sub displayOccurrenceReclassify	{
 				# need a hidden recording the old taxon number
                 $collection_string .= ": " if ($collection_string);
                 $collection_string =~ s/'//g;
+                 
 				if ( ! $o->{reid_no} )	{
-					print "<input type='hidden' name='old_taxon_no' value='" , $o->{taxon_no}, "+" , $collection_string, $formatted , "'>\n";
+					print "<input type='hidden' $disabled name='old_taxon_no' value='" , $o->{taxon_no}, "+" , $collection_string, $formatted , "'>\n";
 				} else	{
-					print "<input type='hidden' name='old_reid_taxon_no' value='" , $o->{taxon_no}, "+" , $collection_string, $formatted , "'>\n";
+					print "<input type='hidden' $disabled name='old_reid_taxon_no' value='" , $o->{taxon_no}, "+" , $collection_string, $formatted , "'>\n";
 				}
 
 				# need a hidden recording the occurrence number
 				#  or reID number as appropriate
 				if ( ! $o->{reid_no} )	{
-					print "<input type='hidden' name='occurrence_no' value='" , $o->{occurrence_no}, "'>\n";
+					print "<input type='hidden' $disabled name='occurrence_no' value='" , $o->{occurrence_no}, "'>\n";
 				} else	{
-					print "<input type='hidden' name='reid_no' value='" , $o->{reid_no}, "'>\n";
+					print "<input type='hidden' $disabled name='reid_no' value='" , $o->{reid_no}, "'>\n";
 					print "&nbsp;&nbsp;<span class='small'><b>reID =</b></span>&nbsp;";
 				}
 
@@ -191,9 +204,9 @@ sub displayOccurrenceReclassify	{
 				# the name depends on whether this is
 				#  an occurrence or reID
 				if ( ! $o->{reid_no} )	{
-					print "<td>&nbsp;&nbsp;\n<select name='taxon_no'>\n";
+					print "<td>&nbsp;&nbsp;\n<select $disabled name='taxon_no'>\n";
 				} else	{
-					print "<td>&nbsp;&nbsp;\n<select name='reid_taxon_no'>\n";
+					print "<td>&nbsp;&nbsp;\n<select $disabled name='reid_taxon_no'>\n";
 				}
 				# populate the select list of authorities
 				for my $t ( @taxnorefs )	{
@@ -275,6 +288,9 @@ sub displayOccurrenceReclassify	{
 	if ( $genusOnly )	{
 		print "<p><i>\"genus\" means that only the genus could be classified</i></p>\n";
 	}
+    if ( $nonEditableCount) {
+        print "<p><i>Some occurrences can't be reclassified because they have a different authorizer</i></p>\n";
+    }
 
 	# print the informal and otherwise unclassifiable names
 	if ( @badoccrefs )	{
