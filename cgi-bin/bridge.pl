@@ -6907,7 +6907,7 @@ sub checkDuplicates {
 		# Also the release_date
 		# Also the "modified" date! Added by JA 12.6.02
 		# Also "comments" (relevant to occs and reids) JA 28.6.02
-		if ( $$fields[$i] !~ /^(:?$idName|created|modified|release_date|comments|authorizer|enterer|modifier|authorizer_no|enterer_no|modifier_no)$/ ) {
+		if ( $$fields[$i] !~ /^(:?$idName|taxon_no|upload|most_recent|created|modified|release_date|comments|authorizer|enterer|modifier|authorizer_no|enterer_no|modifier_no)$/ ) {
 			# Tack on the field and value; take care of NULLs.
 			if ( $$vals[$i] eq "NULL" ) {
 				$sql .= $$fields[$i]." IS NULL";
