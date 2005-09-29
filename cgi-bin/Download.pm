@@ -6,6 +6,7 @@ use Classification;
 use TimeLookup;
 use Data::Dumper;
 use DBTransactionManager;
+use CGI::Carp;
 
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
@@ -1584,7 +1585,20 @@ sub doQuery {
 	$self->dbg("<b>Occurrences query:</b><br>\n$sql<BR>");
 
 	my $sth = $dbh->prepare($sql); #|| die $self->dbg("Prepare query failed ($!)<br>");
-	my $rv = $sth->execute(); # || die $self->dbg("Execute query failed ($!)<br>");
+
+    eval { $sth->execute() };
+    if ($sth->errstr) {
+        my $cgi = new CGI;
+        my $errstr = "SQL error: sql($sql)"
+                   . " STH err (".$sth->errstr.")";
+        my $getpoststr; 
+        my %params = $cgi->Vars; 
+        while(my ($k,$v)=each(%params)) { $getpoststr .= "&$k=$v" if ($v ne ''); }
+        $getpoststr =~ s/\n//;
+        $errstr .= " GET,POST ($getpoststr)";
+        croak $errstr;
+    } 
+
 	$self->dbg($sth->rows()." rows returned.<br>");
 
 	# See if rows okay by permissions module
