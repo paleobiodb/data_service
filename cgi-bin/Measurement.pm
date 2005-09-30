@@ -24,7 +24,7 @@ sub submitSpecimenSearch {
 
     # Grab the data from the database, filtering by either taxon_name and/or collection_no
     my $sql1 = "SELECT c.collection_no, c.collection_name,o.occurrence_no, o.genus_name,o.species_name, count(DISTINCT specimen_no) cnt FROM occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE o.collection_no=c.collection_no ";
-    my $sql2 = "SELECT c.collection_no, c.collection_name,o.occurrence_no, re.genus_name,re.species_name, count(DISTINCT specimen_no) cnt FROM reidentifications re, occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no ";
+    my $sql2 = "SELECT c.collection_no, c.collection_name,o.occurrence_no, o.genus_name,o.species_name, count(DISTINCT specimen_no) cnt FROM reidentifications re, occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no ";
     my $where = "";
     my @taxa;
     if ($q->param('taxon_name')) {
@@ -87,7 +87,7 @@ sub submitSpecimenSearch {
             } else {
                 print "<tr $class><td></td>";
             }
-            my $specimens = ($row->{cnt} >= 1) ? $row->{'cnt'} : 'none';
+            my $specimens = ($row->{'cnt'} >= 1) ? $row->{'cnt'} : 'none';
             my $taxon_name;
             my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
             if ($reid_row) {
@@ -142,7 +142,7 @@ sub displaySpecimenList {
     }   
     
     print "<div align=\"center\">";
-    print "<h3>Specimen list for $taxon_name (collection no $row->{collection_no}):</h3>\n";
+    print "<h3>Specimen list for $taxon_name (collection $row->{collection_no}):</h3>\n";
     print "<form method=\"POST\" action=\"bridge.pl\">\n";
     print "<input type=hidden name=\"action\" value=\"populateMeasurementForm\">\n";
     print "<input type=hidden name=\"occurrence_no\" value=\"".$q->param('occurrence_no')."\">";
@@ -367,10 +367,17 @@ sub processMeasurementForm	{
 		return;
 	}
 	# get the taxon's name
-	my $sql = "SELECT o.collection_no, o.genus_name, o.species_name FROM occurrences o WHERE occurrence_no=".int($q->param('occurrence_no'));
+	my $sql = "SELECT o.collection_no, o.occurrence_no, o.genus_name, o.species_name FROM occurrences o WHERE occurrence_no=".int($q->param('occurrence_no'));
     my $row = ${$dbt->getData($sql)}[0];
 
-    my $taxon_name = "$row->{genus_name} $row->{species_name}";
+    my $taxon_name;
+    my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
+    if ($reid_row) {
+        $taxon_name = $reid_row->{'genus_name'}." ".$reid_row->{'species_name'};
+    } else {
+        $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
+    }
+      
     my $collection_no = $row->{'collection_no'};
 
     if (!$row || !$taxon_name || !$collection_no) {
@@ -383,6 +390,7 @@ sub processMeasurementForm	{
     my @specimen_ids = $q->param('specimen_id');
     my @param_list = $q->param();
 
+    my $inserted_row_count = 0;
     for(my $i=0;$i<scalar(@specimen_ids);$i++) {
         my %fields = ();
 
@@ -483,7 +491,7 @@ sub processMeasurementForm	{
                     }
                 }
 
-                print "<center><h3>Specimen measurement data for $taxon_name (collection no $collection_no) has been updated</h3></center>\n";
+                print "<center><h3>Specimen measurement data for $taxon_name (collection $collection_no) has been updated</h3></center>\n";
             } else {
                 print "Error updating database table row, please contact support";
                 carp "Error updating row in Measurement.pm: ".$result;
@@ -522,7 +530,7 @@ sub processMeasurementForm	{
                     $dbt->insertRecord($s,'measurements',$row);
                 }
 
-                print "<center><h3>Specimen measurement data for $taxon_name (collection_no $collection_no) has been added</h3></center>\n";
+                $inserted_row_count++;
             } else {
                 print "Error inserting database table row, please contact support";
                 carp "Error inserting row in Measurement.pm: ".$result;
@@ -530,12 +538,17 @@ sub processMeasurementForm	{
         }
     }
 
+    if ($inserted_row_count) {
+        print "<center><h3>Specimen measurement data for $taxon_name (collection_no $collection_no) has been added</h3></center>\n";
+    }
+
 	print "<div align=\"center\"><table><tr><td><ul>".
-	      "<li><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-1&occurrence_no=".$q->param('occurrence_no')."\">Add another measurement of this occurrence</a></li>".
-	      "<li><a href=\"$exec_url?action=displaySpecimenList&occurrence_no=".$q->param('occurrence_no')."\">Edit another measurement of this occurrence</a></li>".
-	      "<li><a href=\"$exec_url?action=submitSpecimenSearch&use_reference=current&collection_no=$collection_no\">Add a measurement of another occurrence in this collection</a></li>".
-	      "<li><a href=\"$exec_url?action=submitSpecimenSearch&use_reference=current&taxon_name=$taxon_name\">Add a measurement of $taxon_name in another collection</a></li>".
-          "<li><a href=\"$exec_url?action=checkTaxonInfo&taxon_name=$taxon_name\">Get general info about this taxon</a></li>".
+	      "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-1&occurrence_no=".$q->param('occurrence_no')."\">Add another average or individual measurement of this occurrence</a></b></li>".
+	      "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-2&specimens_measured=10&occurrence_no=".$q->param('occurrence_no')."\">Add up to 10 new individual measurements of this occurrences</a></b></li>".
+	      "<br><li><b><a href=\"$exec_url?action=displaySpecimenList&occurrence_no=".$q->param('occurrence_no')."\">Edit another measurement of this occurrence</a></b></li>".
+	      "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&use_reference=current&collection_no=$collection_no\">Add a measurement of another occurrence in this collection</a></b></li>".
+	      "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&use_reference=current&taxon_name=$taxon_name\">Add a measurement of $taxon_name in another collection</a></b></li>".
+          "<br><li><b><a href=\"$exec_url?action=checkTaxonInfo&taxon_name=$taxon_name\">Get general info about this taxon</a></b></li>".
           "</ul></td></tr></table></div>";
 }
 
