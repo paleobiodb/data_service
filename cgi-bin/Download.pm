@@ -222,7 +222,7 @@ sub retellOptions {
 	$html .= $self->retellOptionsRow ( "Lump by published reference?", $q->param("lump_by_ref") );
 	$html .= $self->retellOptionsRow ( "Lump by time interval?", $q->param("lump_by_interval") );
 
-    if ($q->param('output_data') ne 'collections') {
+    if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
         $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
         $html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
         $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
@@ -234,11 +234,13 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
         $html .= $self->retellOptionsRow ( "Minimum # of specimens to compute mean abundance", $q->param("min_mean_abundance") ) if ($q->param("min_mean_abundance"));
 
-        if ($q->param('output_data') =~ /occurrences|specimens/) {
-            my @occFields = ();
+        my @occFields = ();
+        if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
             push (@occFields, 'class_name') if ($q->param("occurrences_class_name") eq "YES");
             push (@occFields, 'order_name') if ($q->param("occurrences_order_name") eq "YES");
             push (@occFields, 'family_name') if ($q->param("occurrences_family_name") eq "YES");
+        }
+        if ($q->param('output_data') =~ /occurrences|specimens/) {
             push (@occFields, 'genus_reso','genus_name');
             foreach my $field ( @occurrencesFieldNames ) {
                 if( $q->param ( "occurrences_".$field ) ){ 
@@ -251,15 +253,26 @@ sub retellOptions {
                     push ( @occFields, "reidentifications_".$field ); 
                 }
             }
+        } elsif ($q->param('output_data') eq 'genera') {
+            push @occFields, 'genus_name';
+        } elsif ($q->param('output_data') eq 'species') {
+            push @occFields, 'genus_name';
+            push @occFields, 'subgenus_name' if ($q->param('occurences_subgenus_name'));
+            push @occFields, 'species_name';
+        }
+
+        if (@occFields) {
             $html .= $self->retellOptionsRow ( "Occurrence output fields", join ( "<BR>", @occFields) );
         }
+        
+        # Ecology fields
+        if (@ecoFields) {
+            $html .= $self->retellOptionsRow ( "Ecology output fields", join ( "<BR>", @ecoFields) );
+        }
+        
     } 
 
-    if ($q->param('output_data') eq 'genera') {
-	    $html .= $self->retellOptionsRow ( "Collection output fields", "genus_name");
-    } elsif ($q->param('output_data') eq 'species') {
-	    $html .= $self->retellOptionsRow ( "Collection output fields", "genus_name<BR>species_name");
-    } else {
+    if ($q->param('output_data') =~ /occurrences|collections|specimens/) {
         # collection table fields
         my @collFields = ( "collection_no");
         foreach my $field ( @collectionsFieldNames ) {
@@ -1511,34 +1524,47 @@ sub doQuery {
     $sepChar = ","  if ($q->param('output_format') eq 'comma-delimited text');
     $sepChar = "\t" if ($q->param('output_format') eq 'tab-delimited text');
 
+    if($q->param('output_data') =~ /occurrences|species|genera|specimens/) {
+        push @header,'class_name' if ($q->param("occurrences_class_name") eq "YES");
+        push @header,'order_name' if ($q->param("occurrences_order_name") eq "YES");
+        push @header,'family_name' if ($q->param("occurrences_family_name") eq "YES");
+    }
+
     if( $q->param('output_data') eq 'genera') {
-        @header = ('genus_name');
+        push @header, 'genus_name';
+        # Ecology row
+        push @header,@ecoFields;
     } elsif ($q->param('output_data') eq 'species') {
-        @header = ('genus_name','species_name');
-    } else {
-        @header = ('collection_no');
-	    if($q->param('output_data') =~ /occurrences|specimens/) {
+        push @header, 'genus_name';
+        push @header,'subgenus_name' if ($q->param("occurrences_subgenus_name") eq "YES");
+        push @header, 'species_name';
 
-            push @header,'class_name' if ($q->param("occurrences_class_name") eq "YES");
-            push @header,'order_name' if ($q->param("occurrences_order_name") eq "YES");
-            push @header,'family_name' if ($q->param("occurrences_family_name") eq "YES");
-            push @header,'genus_reso','genus_name','original.genus_reso','original.genus_name';
+        # Ecology row
+        push @header,@ecoFields;
+    } elsif($q->param('output_data') =~ /occurrences|specimens/) {
+        unshift @header, 'collection_no';
+        push @header,'genus_reso','genus_name','original.genus_reso','original.genus_name';
 
-            # Occurrence header, need this (for later...)
-            @occurrenceHeaderCols = $self->getOutFields('occurrences');	# Need this (for later...)
-            push @header,@occurrenceHeaderCols;
+        # Occurrence header, need this for later...
+        @occurrenceHeaderCols = $self->getOutFields('occurrences');
+        push @header,@occurrenceHeaderCols;
             
-            # ReID header, need this (for later...)
-            @reidHeaderCols = $self->getOutFields('reidentifications');	
-            push @header,@reidHeaderCols;
+        # ReID header, need this for later...
+        @reidHeaderCols = $self->getOutFields('reidentifications');	
+        push @header,@reidHeaderCols;
 
-            foreach (1..6) {
-                push @header,$q->param('ecology'.$_) if ($q->param('ecology'.$_))
-            }
-        }
+        # Ecology row
+        push @header,@ecoFields;
+        
+        # Collection header
+        @collectionHeaderCols = $self->getOutFields('collections');
+        push @header, @collectionHeaderCols;
+        
+    } else {
+        unshift @header, 'collection_no';
 
         # Collection header
-        @collectionHeaderCols = $self->getOutFields('collections');	# Need this (for later...)
+        @collectionHeaderCols = $self->getOutFields('collections');
         push @header, @collectionHeaderCols;
     }
 
@@ -1620,10 +1646,7 @@ sub doQuery {
 	foreach my $row ( @dataRows ){
 		my $exclude = 0;
         my $lump = 0;
-        # Eventually we need to do this in SQL with a subquery (when we're upgrade to mysql 4.1+).  Its not 100% accurate right now
-        # cause we can't do this filtering out of the not-newest REID once stuff has been grouped at the genus
-        # or collection level. So maybe some slight discrepancies for those fews occs with more than 1 reid
-        # until then PS 07/25/2005
+
         if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
             if ($row->{'reid_no'}) {
                 foreach my $field (@reidentificationsFieldNames,'taxon_no') {
@@ -1788,7 +1811,7 @@ sub doQuery {
 
 	my %master_class;
     if (@ecoFields || 
-        ($q->param("output_data") =~ /occurrences|specimens/ && 
+        ($q->param("output_data") =~ /occurrences|specimens|genera|species/ && 
         ($q->param("occurrences_class_name") eq "YES" || 
          $q->param("occurrences_order_name") eq "YES" || 
          $q->param("occurrences_family_name") eq "YES"))){
@@ -1894,6 +1917,7 @@ sub doQuery {
 		my @coll_row = ();
 		my @occs_row = ();
 		my @reid_row = ();
+        my @eco_row  = ();
 
         #
         # Set up occurrence and reid fields
@@ -1910,12 +1934,18 @@ sub doQuery {
                 $column =~ s/^original\./original_/;
                 push ( @reid_row, $row->{$column} );
             }
+        }
 
+        if ($q->param("output_data") =~ /occurrences|specimens|genera|species/) {
             # Push the eco/taphonomic data, if any, onto the reid rows
             # WARNING: this only works on genus or higher-order data,
             #  assuming species won't be scored separately
             foreach my $field (@ecoFields) {
-                push @reid_row, $ecotaph{$genusNo}{$field};
+                if ($ecotaph{$genusNo}{$field}) {
+                    push @eco_row, $ecotaph{$genusNo}{$field};
+                } else {
+                    push @eco_row, '';
+                }
             }
         }
 
@@ -1924,7 +1954,7 @@ sub doQuery {
         # Set up collections fields
         #
 
-        if ($q->param("output_data") !~ /^(?:genera|species)$/) {
+        if ($q->param("output_data") =~ /collections|specimens|occurrences/) {
             # Get coordinates into the correct format (decimal or deg/min/sec/dir), performing
             # conversions as necessary
             if ($q->param('collections_lng') eq "YES") {
@@ -2128,16 +2158,8 @@ sub doQuery {
             } 
         }
 
-
         my @final_row = ();
-		if( $q->param('output_data') eq 'collections'){
-            @final_row = ($collection_no,@occs_row,@coll_row);
-		} elsif ( $q->param('output_data') eq 'genera')	{
-            @final_row = ($genusName);
-        } elsif ( $q->param('output_data') eq 'species') {
-            @final_row = ($genusName,$row->{'occ_species_name'});
-		} else{
-            @final_row = ($collection_no);
+        if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
             if ($q->param("occurrences_class_name") eq "YES" || 
                 $q->param("occurrences_order_name") eq "YES" ||
                 $q->param("occurrences_family_name") eq "YES") {
@@ -2169,7 +2191,20 @@ sub doQuery {
                 push @final_row, $order  if ($q->param("occurrences_order_name") eq "YES");
                 push @final_row, $family if ($q->param("occurrences_family_name") eq "YES");
             }
-            push(@final_row,$genus_reso,$genusName,$row->{'original_genus_reso'},$row->{'original_genus_name'},@occs_row,@reid_row,@coll_row);
+        }
+		if( $q->param('output_data') eq 'collections'){
+            unshift @final_row,$collection_no;
+            push @final_row,@coll_row;
+		} elsif ( $q->param('output_data') eq 'genera')	{
+            push @final_row, ($genusName,@eco_row);
+        } elsif ( $q->param('output_data') eq 'species') {
+            push @final_row, $genusName;
+            push @final_row, $row->{'occ_subgenus_name'} if ($q->param("occurrences_subgenus_name") eq "YES");
+            push @final_row, $row->{'occ_species_name'};
+            push @final_row, @eco_row;
+		} else { # occurrences/specimens
+            unshift @final_row, $collection_no;
+            push(@final_row,$genus_reso,$genusName,$row->{'original_genus_reso'},$row->{'original_genus_name'},@occs_row,@reid_row,@eco_row,@coll_row);
 		}
 		if ( $q->param('output_format') eq "CONJUNCT" )	{
 			if ( $lastcoll != $collection_no )	{
@@ -2600,9 +2635,11 @@ sub setupOutput {
 
     # Generate these fields on the fly
     @ecoFields = ();
-    for(1..6) {
-        if ($q->param("ecology$_")) {
-            push @ecoFields, $q->param("ecology$_");
+    if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
+        for(1..6) {
+            if ($q->param("ecology$_")) {
+                push @ecoFields, $q->param("ecology$_");
+            }
         }
     }
     
