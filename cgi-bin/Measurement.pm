@@ -572,14 +572,16 @@ sub getMeasurements {
     my %options = @_;
 
 
-    my ($sql1,$sql2,$where) = ("","","");
+    my ($sql1,$sql2,$sql3,$where) = ("","","");
 
-    $sql1 = "SELECT s.*,m.*,o.taxon_no FROM specimens s, occurrences o, measurements m WHERE s.occurrence_no=o.occurrence_no AND s.specimen_no=m.specimen_no";
-    $sql2 = "SELECT s.*,m.*,a.taxon_no FROM specimens s, authorities a, measurements m WHERE a.taxon_no=s.taxon_no AND s.specimen_no=m.specimen_no";
+    $sql1 = "SELECT s.*,m.*,o.taxon_no FROM specimens s, occurrences o, measurements m LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE s.occurrence_no=o.occurrence_no AND s.specimen_no=m.specimen_no AND re.reid_no IS NULL";
+    $sql2 = "SELECT s.*,m.*,re.taxon_no FROM specimens s, occurrences o, measurements m, reidentifications re WHERE s.occurrence_no=o.occurrence_no AND s.specimen_no=m.specimen_no AND re.occurrence_no=o.occurrence_no AND re.most_recent='YES'";
+    $sql3 = "SELECT s.*,m.*,a.taxon_no FROM specimens s, authorities a, measurements m WHERE a.taxon_no=s.taxon_no AND s.specimen_no=m.specimen_no";
     if ($options{'taxon_list'}) {
         my $taxon_nos = join(",",@{$options{'taxon_list'}});
         $sql1 .= " AND o.taxon_no IN ($taxon_nos)";
-        $sql2 .= " AND a.taxon_no IN ($taxon_nos)";
+        $sql2 .= " AND re.taxon_no IN ($taxon_nos)";
+        $sql3 .= " AND a.taxon_no IN ($taxon_nos)";
     } elsif ($options{'taxon_name'} || $options{'taxon_no'}) {
         my @taxa;
         if ($options{'taxon_name'}) {
@@ -596,23 +598,26 @@ sub getMeasurements {
             @taxon_nos = keys %all_taxa;
             my $taxon_nos = join(",",@taxon_nos);
             $sql1 .= " AND o.taxon_no IN ($taxon_nos)";
-            $sql2 .= " AND a.taxon_no IN ($taxon_nos)";
+            $sql2 .= " AND re.taxon_no IN ($taxon_nos)";
+            $sql3 .= " AND a.taxon_no IN ($taxon_nos)";
         } elsif ($options{'taxon_name'}) {
             my @taxon_bits = split(/\s+/,$options{'taxon_name'});
             $sql1 .= " AND o.genus_name LIKE ".$dbh->quote($taxon_bits[0]);
+            $sql2 .= " AND re.genus_name LIKE ".$dbh->quote($taxon_bits[0]);
             if (scalar(@taxon_bits) > 1) {
                 $sql1 .= "AND o.species_name LIKE ".$dbh->quote($taxon_bits[1]);
+                $sql2 .= "AND re.species_name LIKE ".$dbh->quote($taxon_bits[1]);
             }
         }
-    } 
-    if ($options{'collection_no'}) {
+    } elsif ($options{'collection_no'}) {
         $sql1 .= " AND o.collection_no=".int($options{'collection_no'});
-    }
-    if ($options{'occurrence_no'}) {
+    } elsif ($options{'occurrence_no'}) {
         $sql1 .= " AND o.occurrence_no =".int($options{'occurrence_no'});
     }
 
-    if ($options{'get_global_specimens'} && $sql2 =~ /taxon_no IN/) {
+    if ($options{'get_global_specimens'} && $sql3 =~ /taxon_no IN/) {
+        $sql = "($sql1) UNION ($sql2) UNION ($sql2)";
+    } elsif ($sql2 =~ /taxon_no IN/) {
         $sql = "($sql1) UNION ($sql2)";
     } else {
         $sql = $sql1;
