@@ -98,7 +98,7 @@ sub get_classification_hash{
         #}
 
         # Bug fix: prevent a senior synonym from being considered a parent
-        $child_no = TaxonInfo::getSeniorSynonym($dbt,$child_no);
+        $child_no = TaxonInfo::getSeniorSynonym($dbt,$child_no,$restrict_to_reference_no);
         # prime the pump 
         my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no,0,0,$restrict_to_reference_no);
         if ($DEBUG) { print "Start:".Dumper($parent_row)."<br>"; }

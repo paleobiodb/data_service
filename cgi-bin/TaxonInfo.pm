@@ -1917,10 +1917,11 @@ sub getTaxon {
 sub getSeniorSynonym {
     my $dbt = shift;
     my $taxon_no = shift;
+    my $restrict_to_reference_no = shift;
 
     # Limit this to 10 iterations, in case we a have some weird loop
     for($i=0;$i<10;$i++) {
-        $parent = getMostRecentParentOpinion($dbt,$taxon_no);
+        $parent = getMostRecentParentOpinion($dbt,$taxon_no,0,0,$restrict_to_reference_no);
         if ($parent->{'status'} =~ /synonym|replaced|homonym/) {
             $taxon_no = $parent->{'parent_no'};
         } else {
@@ -1957,6 +1958,23 @@ sub getJuniorSynonyms {
     return @synonyms;
 }
 
+# Get all synonyms/recombinations and corrections a taxon_no could be
+sub getAllTaxonomicNames {
+    my $dbt = shift;
+    my $taxon_no = shift;
+    my %all = ($taxon_no=>1);
+    if ($taxon_no) {
+        $taxon_no = getSeniorSynonym($dbt,$taxon_no); 
+        my @js = getJuniorSynonyms($dbt,$taxon_no); 
+        @all{@js} = ();
+        my $sql1 = "SELECT DISTINCT child_no taxon_no FROM opinions WHERE child_spelling_no IN (".join(",",keys %all).")";
+        my $sql2 = "SELECT DISTINCT child_spelling_no taxon_no FROM opinions WHERE child_no IN (".join(",",keys %all).")";
+        my @results = @{$dbt->getData($sql1)};
+        push @results,@{$dbt->getData($sql2)};
+        $all{$_->{'taxon_no'}} = 1 for @results;
+    }
+    return keys %all;
+}
 
 
 1;
