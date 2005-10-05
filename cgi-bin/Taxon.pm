@@ -905,7 +905,9 @@ sub displayTypeTaxonSelectForm {
                 push @warnings,"Can't set this as the type taxon for authority $parents[0]->{taxon_name}";
             }
         } else {
-            push @warnings, "Can't set this as the type taxon because no valid higher taxa were found. If this is a problem, email the admin (pbdbadmin\@nceas.ucsb.edu).";
+            my $sqlr = "SELECT author1init,author1last,author2init,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$reference_no";
+            my $formatted_ref = Reference::formatShortRef(${$dbt->getData($sqlr)}[0]);
+            push @warnings, "Can't set this as the type taxon because no valid higher taxa were found.  There must be opinions linking this taxon to its higher taxa from the same reference ($formatted_ref). If this is a problem, email the admin (pbdbadmin\@nceas.ucsb.edu).";
             carp "Maybe something is wrong in the opinions script, got no parents for current taxon after adding an opinion.  (in section dealing with type taxon). Vars: tt_no $type_taxon_no ref $reference_no tt_name $type_taxon_name tt_rank $type_taxon_rank"; 
         }
     } else {
