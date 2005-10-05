@@ -1292,7 +1292,7 @@ sub doQuery {
     # that data, since we can't know if its valid. anything that filters collections should
     # cause us to throw out this data pretty much, except record created date (hence the grep)
     # this may be a bit incomplete, gl trying to keep this logic up to date PS 07/18/2005
-    if (scalar(grep(/created/,@where)) ||
+    if (scalar(grep(!/created/,@where)) ||
         $q->param('without_abundance') eq 'NO' ||
         $q->param('pubyr')) {
         $q->param('get_global_specimens'=>0);
@@ -1642,7 +1642,7 @@ sub doQuery {
 	my %lumpseen;
 	my %occseen;
     my %genusseen;
-    my %specimens_exist;
+    my %specimens_occ_list;
 	foreach my $row ( @dataRows ){
 		my $exclude = 0;
         my $lump = 0;
@@ -1734,7 +1734,7 @@ sub doQuery {
                     } else {
                         $genus_string = $row->{'occ_genus_name'};
                     }
-                    $specimens_exist{$genus_string} = 1;
+                    push @{$specimens_occ_list{$genus_string}}, $row->{'occurrence_no'};
                 }
             }
             $REFS_USED{$row->{'reference_no'}}++;
@@ -2095,13 +2095,24 @@ sub doQuery {
                 @measurements = Measurement::getMeasurements($dbt,'occurrence_no'=>$row->{'occurrence_no'});
             } elsif ($q->param('output_data') eq 'genera') {
                 my $genus_string = "$row->{occ_genus_name}";
-                if ($specimens_exist{$genus_string}) {
-                    @measurements = Measurement::getMeasurements($dbt,'taxon_name'=>$genus_string,'get_global_specimens'=>$q->param('get_global_specimens'));
+                if (@{$specimens_occ_list{$genus_string}}) {
+                    if ($q->param('get_global_specimens')) {
+                        # Note: will run into homonym issues till we figure out how to pass taxon_no
+                        @measurements = Measurement::getMeasurements($dbt,'taxon_name'=>$genus_string,'get_global_specimens'=>$q->param('get_global_specimens'));
+                    } else {
+                        @measurements = Measurement::getMeasurements($dbt,'occurrence_list'=>$specimens_occ_list{$genus_string});
+                    }
                 }
             } elsif ($q->param('output_data') eq 'species') {
                 my $genus_string = "$row->{occ_genus_name} $row->{occ_species_name}";
-                if ($specimens_exist{$genus_string}) {
-                    @measurements = Measurement::getMeasurements($dbt,'taxon_name'=>$genus_string,'get_global_specimens'=>$q->param('get_global_specimens'));
+                if (@{$specimens_occ_list{$genus_string}}) {
+                    if ($q->param('get_global_specimens')) {
+                        # Note: will run into homonym issues till we figure out how to pass taxon_no
+                        @measurements = Measurement::getMeasurements($dbt,'taxon_name'=>$genus_string,'get_global_specimens'=>$q->param('get_global_specimens'));
+                    } else {
+                        #print "OCC_LIST for $genus_string: ".join(", ",@{$specimens_occ_list{$genus_string}})."<BR>";
+                        @measurements = Measurement::getMeasurements($dbt,'occurrence_list'=>$specimens_occ_list{$genus_string});
+                    }
                 }
             } elsif ($q->param('output_data') eq 'specimens') {
                 $sql = "SELECT m.* FROM measurements m WHERE m.specimen_no =".$row->{'specimen_no'};
