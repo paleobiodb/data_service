@@ -103,7 +103,6 @@ sub buildMap {
 
     # Returns a reference to array returned from permissions
     my %options = $q->Vars();
-    $options{'most_recent'} = 1;
     $options{'permission_type'} = 'read';
     $options{'calling_script'} = 'Map';
     my $fields = ['latdeg','latdec','latmin','latsec','latdir','lngdeg','lngdec','lngmin','lngsec','lngdir'];
@@ -285,7 +284,6 @@ sub buildMapOnly {
     if ($in_list) {
         $options{'taxon_list'} = $in_list;
     }
-    $options{'most_recent'} = 1;
     $options{'permission_type'} = 'read';
     $options{'calling_script'} = 'Map';
     my $fields = ['latdeg','latdec','latmin','latsec','latdir','lngdeg','lngdec','lngmin','lngsec','lngdir'];
