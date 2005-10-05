@@ -1678,6 +1678,10 @@ sub displayCollResults {
             $options{'no_authority_lookup'} = 1;
         }
         $options{'limit'} = $perm_limit;
+        # Do a looser match against old ids as well
+        $options{'include_old_ids'} = 1;
+        # Even if we have a match in the authorities table, still match against the bare occurrences/reids  table
+        $options{'include_occurrences'} = 1;
         $options{'permission_type'} = $permission_type;
         if ($q->param("taxon_list")) {
             my @in_list = split(/,/,$q->param('taxon_list'));
@@ -1775,14 +1779,12 @@ sub displayCollResults {
 			}
 
 			# rest of timeplace construction JA 20.8.02
-
-			$timeplace .= " - ";
+			$timeplace .= "</b> - ";
 			if ( $dataRow->{"state"} )	{
 				$timeplace .= $dataRow->{"state"};
 			} else	{
 				$timeplace .= $dataRow->{"country"};
 			}
-			$timeplace = "</b> <span class=tiny>" . $timeplace . "</span>";
 
 			# should it be a dark row, or a light row?  Alternate them...
  			if ( $count % 2 == 0 ) {
@@ -1818,10 +1820,13 @@ sub displayCollResults {
 
             my $collection_names = $dataRow->{'collection_name'};
             if ($dataRow->{'collection_aka'}) {
-                $collection_names .= " <span class=\"tiny\">(aka $dataRow->{collection_aka})</span>";
+                $collection_names .= " (aka $dataRow->{collection_aka})";
+            }
+            if ($dataRow->{'old_id'}) {
+                $timeplace .= " - old id";
             }
             print "<td valign=top nowrap>$dataRow->{authorizer}</td>";
-            print "<td valign=top><b>${collection_names}$timeplace</td>";
+            print "<td valign=top><b>${collection_names}</b> <span class=\"tiny\">${timeplace}</span></td>";
             print "<td valign=top nowrap>$reference</td>";
             print "<td valign=top align=center>".int($dataRow->{distance})." km </td>" if ($type eq 'add');
             print "</tr>";
@@ -2069,9 +2074,12 @@ sub processCollectionsSearchForAdd	{
 # These are simple options, corresponding to database fields, that can be passed in:
 # These are more complicated options that can be passed in:
 #   taxon_list: A list of taxon_nos to filter by (i.e. as passed by TaxonInfo)
-#   most_recent: Only use the most recent reid of an occurrence when filtering by taxon_name,taxon_no
-#   calling_script: Name of the script which called this function, only used for error message generation
+#   include_old_ids: default behavior is to only match a taxon_name/list against the most recent reid. if this flag
+#       is set to 1, then also match taxon_name against origianal id and old ids
+#   include_occurrences: normally if we have an authority match, only match based off that. if this flag is set,
+#       we'll also just do a straight text match of the occurrences table
 #   no_authority_lookup: Don't hit the authorities table when lookup up a taxon name , only the occurrences/reids tables
+#   calling_script: Name of the script which called this function, only used for error message generation
 # PS 08/11/2005
 sub processCollectionsSearch {
     my $dbt = $_[0];
@@ -2114,122 +2122,117 @@ sub processCollectionsSearch {
   		$wildcardToken = "%";
 	}
 
-	# First try the authorites table, else we just hit up the occurrences+reids table
-    # Reworked so you can optionally only use the mostRecentReid in determining if an occurrence
-    # matches a taxon_name PS 08/11/2005
-	# Also searches reIDs table JA 16.8.02
-	# Handles species name searches JA 19-20.8.02
-    if ($options{'taxon_list'}) { 
-        # taxon_list will generally be a list of numbers, but may be both is passed
-        # in from Confidence.pm
-        my ($taxon_sql,$occ_genus_sql,$reid_genus_sql,$occ_taxon_sql,$reid_taxon_sql,$both);
-        foreach my $taxon_no_or_name (@{$options{'taxon_list'}}) {
-            if ($taxon_no_or_name =~ /^\d+$/) {
-                $taxon_sql .= $taxon_no_or_name . ", ";
-            } else {
-                my ($genus,$species) = split(/ /,$taxon_no_or_name);
-                if ($genus) {
-                    $occ_genus_sql .= " (o.genus_name LIKE ".$dbh->quote($genus);
-                    $reid_genus_sql .= " (re.genus_name LIKE ".$dbh->quote($genus);
-                    if ($species) {
-                        $occ_genus_sql .= " AND o.species_name LIKE ".$dbh->quote($species);
-                        $reid_genus_sql .= " AND re.species_name LIKE ".$dbh->quote($species);
-                    }
-                    $occ_genus_sql .= ")";
-                    $reid_genus_sql .= ")";
-                }
-            }
-        }
-        $taxon_sql =~ s/, $//;
-        if ($taxon_sql) {
-            $occ_taxon_sql = "o.taxon_no IN ($taxon_sql)";
-            $reid_taxon_sql = "re.taxon_no IN ($taxon_sql)";
-        }
-        if ($taxon_sql && $occ_genus_sql) {
-            $both = " OR ";
+    # Reworked PS  08/15/2005
+    # Instead of just doing a left join on the reids table, we achieve the close to the same effect
+    # with a union of the (occurrences left join reids) UNION (occurrences,reids).
+    # but for the first SQL in the union, we use o.taxon_no, while in the second we use re.taxon_no
+    # This has the advantage in that it can use indexes in each case, thus is super fast (rather than taking ~5-8s for a full table scan)
+    # Just doing a simple left join does the full table scan because an OR is needed (o.taxon_no IN () OR re.taxon_no IN ())
+    # and because you can't use indexes for tables that have been LEFT JOINED as well
+    # By hitting the occ/reids tables separately, it also has the advantage in that we can add filters so that we can only
+    # get the most recent reid.
+    # We hit the tables separately instead of doing a join and group by so we can populate the old_id virtual field, which signifies
+    # that a collection only containts old identifications, not new ones
+    my %old_ids;
+    if ($options{'taxon_list'} || $options{'taxon_name'}) {
+        my %collections = (-1=>1); #default value, in case we don't find anything else, sql doesn't error out
+        my ($sql1,$sql2,@results);
+        if ($options{'include_old_ids'}) {
+            $sql1 = "SELECT DISTINCT o.collection_no, o.taxon_no, (re.reid_no IS NOT NULL) is_old_id FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE ";
+            $sql2 = "SELECT DISTINCT o.collection_no, re.taxon_no, (re.most_recent != 'YES') is_old_id  FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND ";
         } else {
-            $both = "";
+            $sql1 = "SELECT DISTINCT o.collection_no FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE re.reid_no IS NULL AND ";
+            $sql2 = "SELECT DISTINCT o.collection_no FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND re.most_recent='YES' AND ";
         }
-        
-        push @where, "o.collection_no=c.collection_no";
-        push @tables, "occurrences o";
-        push @occ_where,"($occ_taxon_sql $both $occ_genus_sql)";
-        push @reid_where," ($reid_taxon_sql $both $reid_genus_sql)";
+        # taxon_list an array reference to a list of taxon_no's
+        my %all_taxon_nos;
+        if ($options{'taxon_list'}) {
+            my $taxon_nos = join(",",@{$options{'taxon_list'}});
+            $taxon_nos = "-1" if (!$taxon_nos);
+            $sql1 .= "o.taxon_no IN ($taxon_nos)";
+            $sql2 .= "re.taxon_no IN ($taxon_nos)";
+            @results = @{$dbt->getData($sql1)}; 
+            push @results, @{$dbt->getData($sql2)}; 
+        } elsif ($options{'taxon_name'}) {
+            # Parse these values regardless
+            my ($genus,$subgenus,$species);
 
-    } elsif ($options{'taxon_name'}) {
-        # Parse these values regardless
-        my ($genus,$subgenus,$species);
+            # Fix up the genus name and set the species name if there is a space 
+            my @taxon_bits = split(/\s+/,$options{'taxon_name'});
+            if (scalar(@taxon_bits) == 3) {
+                ($genus,$subgenus,$species) = @taxon_bits;
+                $subgenus =~ s/[\(\)]//g;
+            } elsif (scalar(@taxon_bits) == 2) {
+                ($genus,$species) = @taxon_bits;
+            } elsif (scalar(@taxon_bits) == 1) {
+                ($genus) = @taxon_bits;
+            }
 
-        # Fix up the genus name and set the species name if there is a space 
-        my @taxon_bits = split(/\s+/,$options{'taxon_name'});
-        if (scalar(@taxon_bits) == 3) {
-            ($genus,$subgenus,$species) = @taxon_bits;
-            $subgenus =~ s/[\(\)]//g;
-        } elsif (scalar(@taxon_bits) == 2) {
-            ($genus,$species) = @taxon_bits;
-        } elsif (scalar(@taxon_bits) == 1) {
-            ($genus) = @taxon_bits;
-        }
+            # Set for displayOccsForReID
+            $q->param('species_name' => $species) if ($species);
+            $q->param('g_name' => $genus) if ($genus);
 
-        # Set for displayOccsForReID
-        $q->param('species_name' => $species) if ($species);
-        $q->param('g_name' => $genus) if ($genus);
+            my @taxon_nos;
+            if (! $options{'no_authority_lookup'}) {
+                my $taxon_sql = "SELECT taxon_no FROM authorities WHERE taxon_name LIKE ".$dbh->quote($options{'taxon_name'});
+                @taxon_nos = map {$_->{taxon_no}} @{$dbt->getData($taxon_sql)}; 
+            }
 
-        my @taxon_nos;
-        if (! $options{'no_authority_lookup'}) {
-            my $taxon_sql = "SELECT taxon_no FROM authorities WHERE taxon_name LIKE ".$dbh->quote($options{'taxon_name'});
-            @taxon_nos = map {$_->{taxon_no}} @{$dbt->getData($taxon_sql)}; 
-        }
-
-        # taxon is a homonym... make sure we get all versions of the homonym
-        if (@taxon_nos) {
-            # 1 or more authorities exists in the authorities table, parse them
-            my %taxon_nos_unique = ();
-            foreach my $taxon_no (@taxon_nos) {
-                if ($options{'no_taxonomy_recurse'}) {
-                    # In this case, just get alternative spellings, not the full tree of children
-                    my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no=$taxon_no";
-                    my @results = @{$dbt->getData($sql)};
-                    foreach my $row (@results) {
-                        $taxon_nos_unique{$row->{'child_spelling_no'}} = 1;
-                    }
-                    $sql = "SELECT DISTINCT child_no FROM opinions WHERE child_spelling_no=$taxon_no";
-                    @results = @{$dbt->getData($sql)};
-                    foreach my $row (@results) {
-                        $taxon_nos_unique{$row->{'child_no'}} = 1;
-                    }
-                } else {
-                    my @all_taxon_nos = PBDBUtil::taxonomic_search($dbt,$taxon_no);
+            if (@taxon_nos) {
+                # if taxon is a homonym... make sure we get all versions of the homonym
+                foreach my $taxon_no (@taxon_nos) {
+                    my @t = PBDBUtil::taxonomic_search($dbt,$taxon_no);
                     # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
-                    @taxon_nos_unique{@all_taxon_nos} = ();
+                    @all_taxon_nos{@t} = ();
                 }
+                my $taxon_nos_string = join(", ", keys %all_taxon_nos);
+                if (!$taxon_nos_string) {
+                    $taxon_nos_string = '-1';
+                    push @errors, "Could not find any collections matching taxononomic name entered.";
+                }
+                                                    
+                my $sql1a = $sql1."o.taxon_no IN ($taxon_nos_string)";
+                my $sql2a = $sql2."re.taxon_no IN ($taxon_nos_string)";
+                push @results, @{$dbt->getData($sql1a)}; 
+                push @results, @{$dbt->getData($sql2a)}; 
             }
-            my $taxon_nos_string = join(", ", keys %taxon_nos_unique);
-            if (!$taxon_nos_string) {
-                $taxon_nos_string = '-1';
-                push @errors, "Could not find any collections matching taxononomic name entered.";
-            }
-                                                
-            push @occ_where, "o.taxon_no IN ($taxon_nos_string)";
-            push @reid_where, "re.taxon_no IN ($taxon_nos_string)";
-        } else {
-            # It doesn't exist in the authorities table, so now hit the occurrences table directly 
-            if ( $genus)	{
-                push @occ_where, "o.genus_name LIKE ".$dbh->quote($genus.$wildcardToken);
-                push @reid_where, "re.genus_name LIKE ".$dbh->quote($genus.$wildcardToken);
-            }
-            if ( $subgenus)	{
-                push @occ_where, "o.subgenus_name LIKE ".$dbh->quote($subgenus.$wildcardToken);
-                push @reid_where, "re.subgenus_name LIKE ".$dbh->quote($subgenus.$wildcardToken);
-            }
-            if ( $species )	{
-                push @occ_where, "o.species_name LIKE ".$dbh->quote($species.$wildcardToken);
-                push @reid_where, "re.species_name LIKE ".$dbh->quote($species.$wildcardToken);
+            
+            if (!@taxon_nos || $options{'include_occurrences'}) {
+                # It doesn't exist in the authorities table, so now hit the occurrences table directly 
+                my $sql1b = $sql1;
+                my $sql2b = $sql2;
+                if ( $genus)	{
+                    $sql1b .= "o.genus_name LIKE ".$dbh->quote($genus.$wildcardToken);
+                    $sql2b .= "re.genus_name LIKE ".$dbh->quote($genus.$wildcardToken);
+                }
+                if ( $subgenus)	{
+                    $sql1b .= "o.subgenus_name LIKE ".$dbh->quote($subgenus.$wildcardToken);
+                    $sql2b .= "re.subgenus_name LIKE ".$dbh->quote($subgenus.$wildcardToken);
+                }
+                if ( $species )	{
+                    $sql1b .= "o.species_name LIKE ".$dbh->quote($species.$wildcardToken);
+                    $sql2b .= "re.species_name LIKE ".$dbh->quote($species.$wildcardToken);
+                }
+                push @results, @{$dbt->getData($sql1b)}; 
+                push @results, @{$dbt->getData($sql2b)}; 
             }
         }
-        push @where, "o.collection_no=c.collection_no";
-        push @tables, "occurrences o";
-	}
+
+        # A bit of tricky logic - if something is matched but it isn't in the list of valid taxa (all_taxon_nos), then
+        # we assume its a nomen dubium, so its considered an old id
+        foreach my $row (@results) {
+            $collections{$row->{'collection_no'}} = 1;
+            if ($options{'include_old_ids'}) {
+                if (($row->{'is_old_id'} || ($options{'taxon_name'} && %all_taxon_nos && ! exists $all_taxon_nos{$row->{'taxon_no'}})) && 
+                    $old_ids{$row->{'collection_no'}} ne 'N') {
+                    $old_ids{$row->{'collection_no'}} = 'Y';
+                } else {
+                    $old_ids{$row->{'collection_no'}} = 'N';
+                }
+            }
+        }
+        push @where, " c.collection_no IN (".join(", ",keys(%collections)).")";
+    }
 
     # Handle time terms
 	if ( $options{'max_interval'} || $options{'min_interval'}) {
@@ -2486,25 +2489,8 @@ IS NULL))";
 		}
 	}
 
-
-    # Commented out PS 08/16 - don't see when this would ever get executed
-	# if first search failed and wild cards were used, try again
-	#  stripping first wildcard JA 22.2.02
-	#if ( !@terms && $wildcardToken ne "")	{
-	#	foreach $fieldName (@fieldNames) {
-	#			
-	#		$fieldCount++;
-	#		if ( my $val = $q->param($fieldName)) {
-	#			$val =~ s/"//g;
-	#			$val = qq|"$val$wildcardToken"| if $fieldTypes[$fieldCount] == 0;
-	#			push(@terms, "collections.$fieldName$comparator$val");
-	#		}
-	#	}
-	#}
-
     # Print out an errors that may have happened.
     # htmlError print header/footer and quits as well
-
     if (!scalar(@where)) {
         push @errors, "No search terms were entered";
     }
@@ -2544,46 +2530,11 @@ IS NULL))";
         push @groupby,"c.collection_no";
     }
 
-    if ($options{'taxon_list'} || $options{'taxon_name'}) {
-        # Reworked PS  08/15/2005
-        # Instead of doing a left join on the reids table, we achieve the close to the same effect
-        # with a union of the (collections,occurrences left join reids where reid_no IS NULL) UNION (collections,occurrences,reids).
-        # but for the first SQL in the union, we use o.taxon_no, while in the second we use re.taxon_no
-        # This has the advantage in that it can use indexes in each case, thus is super fast (rather than taking ~5-8s for a full table scan)
-        # Just doing a simple left join does the full table scan because an OR is needed (o.taxon_no IN () OR re.taxon_no IN ())
-        # and because you can't use indexes for tables that have been LEFT JOINED as well
-        # By hitting the occ/reids tables separately, it also has the advantage in that it excludes occurrences that
-        # have been reid'd into something that no longer is the taxon name and thus shouldn't show up.
-        my @left_joins1 = (@left_joins,'LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no');
+    $sql = "SELECT ".join(",",@from).
+           " FROM " .join(",",@tables)." ".join (" ",@left_joins).
+           " WHERE ".join(" AND ",@where);
+    $sql .= " GROUP BY ".join(",",@groupby) if (@groupby);  
 
-        my @where1 = (@where,@occ_where);
-        if ($options{'most_recent'}) {
-            # This term very important.  sql1 deal with occs with NO reid, sql2 deals with only reids
-            # So if an occ is reid'd, we only one to count the most recent reid -- thus we discount the original
-            # off in the search.
-            push @where1,"re.reid_no IS NULL";
-        } 
-        my $sql1 = "SELECT ".join(",",@from).
-               " FROM " .join(",",@tables)." ".join (" ",@left_joins1).
-               " WHERE ".join(" AND ",@where1);
-        $sql1 .= " GROUP BY ".join(",",@groupby) if (@groupby);
-
-        my @where2 = ('re.occurrence_no=o.occurrence_no',@where,@reid_where);
-        if ($options{'most_recent'}) {
-            push @where2, "re.most_recent='YES'";
-        }
-        my @tables2 = (@tables,'reidentifications re');
-        my $sql2 = "SELECT ".join(",",@from).
-               " FROM " .join(",",@tables2)." ".join (" ",@left_joins).
-               " WHERE ".join(" AND ",@where2);
-        $sql2 .= " GROUP BY ".join(",",@groupby) if (@groupby);
-        $sql = "($sql1) UNION ($sql2)";   
-    } else {
-        $sql = "SELECT ".join(",",@from).
-               " FROM " .join(",",@tables)." ".join (" ",@left_joins).
-               " WHERE ".join(" AND ",@where);
-        $sql .= " GROUP BY ".join(",",@groupby) if (@groupby);  
-    }
 	# Handle sort order
     if ($options{'sortby'}) {
         my $sortBy = $options{'sortby'};
@@ -2603,6 +2554,13 @@ IS NULL))";
     my $ofRows = 0;
     $p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );        
 
+    if ($options{'include_old_ids'}) {
+        foreach my $row (@dataRows) {
+            if ($old_ids{$row->{'collection_no'}} eq 'Y') {
+                $row->{'old_id'} = 1;
+            }
+        }
+    }
     return (\@dataRows,$ofRows);
 } # end sub processCollectionsSearch
 
