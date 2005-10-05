@@ -1484,7 +1484,9 @@ sub doQuery {
                     } elsif ($_ =~ /occ_genus_name/) {
                         push @specimen_fields, 'substring_index(taxon_name," ",1) occ_genus_name';
                     } elsif ($_ =~ /occ_species_name/) {
-                        push @specimen_fields, 'trim(trim(leading substring_index(taxon_name," ",1) from taxon_name)) occ_species_name';
+                        # If taxon name containts a space, species name is whatever follow that space
+                        # If no space, species name is sp. if rank is a genus, indet if its higher order
+                        push @specimen_fields, 'IF(taxon_name REGEXP " ",trim(trim(leading substring_index(taxon_name," ",1) from taxon_name)),IF(taxon_rank REGEXP "genus","sp.","indet.")) occ_species_name';
                     } else {
                         push @specimen_fields, 'NULL';
                     }

@@ -180,7 +180,14 @@ sub displaySpecimenList {
         @results = @{$dbt->getData($sql)};
 
         my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>int($q->param('taxon_no')));
-        $taxon_name = $taxon->{'taxon_name'};
+        if ($taxon->{'taxon_rank'} =~ /species/) {
+            $taxon_name = $taxon->{'taxon_name'};
+        } elsif ($taxon->{'taxon_rank'} =~ /genus/) {
+            $taxon_name = $taxon->{'taxon_name'}." sp.";
+        } else {
+            $taxon_name = $taxon->{'taxon_name'}." indet.";
+        } 
+
     }
     
     print "<div align=\"center\">";
@@ -291,7 +298,13 @@ sub populateMeasurementForm {
         }
     } else {
         my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>int($q->param('taxon_no')));
-        $taxon_name = $taxon->{'taxon_name'}; 
+        if ($taxon->{'taxon_rank'} =~ /species/) {
+            $taxon_name = $taxon->{'taxon_name'};
+        } elsif ($taxon->{'taxon_rank'} =~ /genus/) {
+            $taxon_name = $taxon->{'taxon_name'}." sp.";
+        } else {
+            $taxon_name = $taxon->{'taxon_name'}." indet.";
+        } 
     }
 
     #Prepare fields to be use in the form ahead
@@ -448,7 +461,13 @@ sub processMeasurementForm	{
         }
     } else {
         my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>int($q->param('taxon_no')));
-        $taxon_name = $taxon->{'taxon_name'};
+        if ($taxon->{'taxon_rank'} =~ /species/) {
+            $taxon_name = $taxon->{'taxon_name'};
+        } elsif ($taxon->{'taxon_rank'} =~ /genus/) {
+            $taxon_name = $taxon->{'taxon_name'}." sp.";
+        } else {
+            $taxon_name = $taxon->{'taxon_name'}." indet.";
+        } 
     } 
 
 
