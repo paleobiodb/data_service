@@ -686,7 +686,6 @@ sub doCollections{
     # Pull the colls from the DB;
     my %options = ();
     $options{'permission_type'} = 'read';
-    $options{'most_recent'} = 1;
     $options{'calling_script'} = "TaxonInfo";
     $options{'taxon_list'} = $in_list if (@$in_list);
     # This field passed from strata module
@@ -1065,7 +1064,7 @@ sub displayRelatedTaxa {
         $reid_genus_no_sql = " OR re.taxon_no=$genus_nos[0]" if (@genus_nos);
         $sql  = "(SELECT o.genus_name,o.species_name FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE re.reid_no IS NULL AND o.genus_name like $genus_sql AND o.genus_reso NOT LIKE '%informal%' and o.species_reso NOT LIKE '%informal%' AND (o.taxon_no=0 OR o.taxon_no IS NULL $occ_genus_no_sql))";
         $sql .= " UNION ";
-        $sql .= "(SELECT re.genus_name,re.species_name FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND re.most_recent=1 AND re.genus_name like $genus_sql AND re.genus_reso NOT LIKE '%informal%' and re.species_reso NOT LIKE '%informal%' AND (re.taxon_no=0 OR re.taxon_no IS NULL $reid_genus_no_sql))"; 
+        $sql .= "(SELECT re.genus_name,re.species_name FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND re.most_recent='YES' AND re.genus_name like $genus_sql AND re.genus_reso NOT LIKE '%informal%' and re.species_reso NOT LIKE '%informal%' AND (re.taxon_no=0 OR re.taxon_no IS NULL $reid_genus_no_sql))"; 
         $sql .= "ORDER BY genus_name,species_name";
         main::dbg("Get from occ table: $sql");
         @results = @{$dbt->getData($sql)};
@@ -1465,25 +1464,26 @@ sub displayEcology	{
     my $eco_hash = Ecology::getEcology($dbt,$class_hash,\@ecotaphFields,'get_basis');
     my $ecotaphVals = $eco_hash->{$taxon_no};
 
-    # Convert units for display
-    foreach ('minimum_body_mass','maximum_body_mass','body_mass_estimate') {
-        if ($ecotaphVals->{$_}) {
-            if ($ecotaphVals->{$_} < 1) {
-                $ecotaphVals->{$_} = Ecology::kgToGrams($ecotaphVals->{$_});
-                $ecotaphVals->{$_} .= ' g';
-            } else {
-                $ecotaphVals->{$_} .= ' kg';
-            }
-        }
-    } 
-    
-    my @references = @{$ecotaphVals->{'references'}};     
 
 
 	if ( ! $ecotaphVals )	{
 		print "<i>No ecological data are available</i>";
 		return;
 	} else	{
+        # Convert units for display
+        foreach ('minimum_body_mass','maximum_body_mass','body_mass_estimate') {
+            if ($ecotaphVals->{$_}) {
+                if ($ecotaphVals->{$_} < 1) {
+                    $ecotaphVals->{$_} = Ecology::kgToGrams($ecotaphVals->{$_});
+                    $ecotaphVals->{$_} .= ' g';
+                } else {
+                    $ecotaphVals->{$_} .= ' kg';
+                }
+            }
+        } 
+        
+        my @references = @{$ecotaphVals->{'references'}};     
+
         my @ranks = ('subspecies', 'species', 'subgenus', 'genus', 'subtribe', 'tribe', 'subfamily', 'family', 'superfamily', 'infraorder', 'suborder', 'order', 'superorder', 'infraclass', 'subclass', 'class', 'superclass', 'subphylum', 'phylum', 'superphylum', 'subkingdom', 'kingdom', 'superkingdom', 'unranked clade');
         my %rankToKey = ();
         foreach my $rank (@ranks) {
