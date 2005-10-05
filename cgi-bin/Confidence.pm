@@ -101,7 +101,6 @@ sub displaySearchSectionResults{
     my %options = $q->Vars();
     $options{'permission_type'} = 'read';
     $options{'limit'} = 10000000;
-    $options{'most_recent'} = 1;
     $options{'calling_script'} = 'Confidence';
     ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
     @dataRows = sort {$a->{regionalsection} cmp $b->{regionalsection} ||
