@@ -23,21 +23,28 @@ sub submitSpecimenSearch {
     }
 
     # Grab the data from the database, filtering by either taxon_name and/or collection_no
-    my $sql1 = "SELECT c.collection_no, c.collection_name,o.occurrence_no, o.genus_name,o.species_name, count(DISTINCT specimen_no) cnt FROM occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE o.collection_no=c.collection_no ";
-    my $sql2 = "SELECT c.collection_no, c.collection_name,o.occurrence_no, o.genus_name,o.species_name, count(DISTINCT specimen_no) cnt FROM reidentifications re, occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no ";
+    my $sql1 = "SELECT c.collection_no, c.collection_name,o.occurrence_no,o.genus_name,o.species_name, count(DISTINCT specimen_no) cnt FROM occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE o.collection_no=c.collection_no ";
+    my $sql2 = "SELECT c.collection_no, c.collection_name,o.occurrence_no,o.genus_name,o.species_name, count(DISTINCT specimen_no) cnt FROM reidentifications re, occurrences o, collections c LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no ";
     my $where = "";
     my @taxa;
     if ($q->param('taxon_name')) {
         @taxa = TaxonInfo::getTaxon($dbt,'taxon_name'=>$q->param('taxon_name'));
     } 
+    my $taxon_nos;        
     if (@taxa) {
         my (@taxon_nos,%all_taxa);
         foreach (@taxa) {
-            @taxon_nos = PBDBUtil::taxonomic_search($dbt,$_->{'taxon_no'});
-            @all_taxa{@taxon_nos} = ();
+            if ($_->{'taxon_rank'} =~ /species|genus/) {
+                @taxon_nos = PBDBUtil::taxonomic_search($dbt,$_->{'taxon_no'});
+                @all_taxa{@taxon_nos} = ();
+            } else {
+                @taxon_nos = TaxonInfo::getAllTaxonomicNames($dbt,$_->{'taxon_no'});
+                @all_taxa{@taxon_nos} = ();
+                @all_taxa{$_->{'taxon_no'}} = 1; 
+            }
         }
         @taxon_nos = keys %all_taxa;
-        my $taxon_nos = join(",",@taxon_nos);
+        $taxon_nos = join(",",@taxon_nos);
         $sql1 .= " AND o.taxon_no IN ($taxon_nos)";
         $sql2 .= " AND re.taxon_no IN ($taxon_nos)";
     } elsif ($q->param('taxon_name')) {
@@ -61,11 +68,21 @@ sub submitSpecimenSearch {
 
     my @results = @{$dbt->getData($sql)};
 
-    if (scalar(@results) == 0) {
+    # if we only have a taxon_name, get taxa not tied to any occurrence as well
+    my @results_taxa_only;
+    if ($taxon_nos && !$q->param('collection_no')) {
+        my $sql = "SELECT a.taxon_no,a.taxon_rank,a.taxon_name, count(DISTINCT specimen_no) cnt FROM authorities a LEFT JOIN specimens s ON s.taxon_no=a.taxon_no WHERE a.taxon_no IN ($taxon_nos) GROUP BY a.taxon_no ORDER by a.taxon_name";
+        main::dbg("SQL for authorities only is $sql");
+        @results_taxa_only = @{$dbt->getData($sql)};
+    }
+
+    if (scalar(@results) == 0 && $q->param('collection_no')) {
         print "<div align=\"center\"><h3>Could not find any occurrences matching the criteria entered<h3></div>";
-    } elsif (scalar(@results) == 1) {
+    } elsif (scalar(@results) == 1 && $q->param('collection_no')) {
         $q->param('occurrence_no'=>$results[0]->{'occurrence_no'});
         displaySpecimenList($dbt,$hbo,$q,$s,$exec_url);
+    } elsif (scalar(@results) == 0 && scalar(@results_taxa_only) == 0) {
+        print "<div align=\"center\"><h3>Could not find any occurrences or taxa matching the criteria entered<h3></div>";
     } else {
         print "<form method=\"POST\" action=\"bridge.pl\">";
         print "<input type=\"hidden\" name=\"action\" value=\"displaySpecimenList\">";
@@ -98,9 +115,25 @@ sub submitSpecimenSearch {
             #print "<td><input type=\"radio\" name=\"occurrence_no\" value=\"$row->{occurrence_no}\"> $row->{genus_name} $row->{species_name}</td><td>$measurements</td></tr>";
             print "<td><a href=\"bridge.pl?action=displaySpecimenList&use_reference=".$q->param('use_reference')."&occurrence_no=$row->{occurrence_no}\">$taxon_name</a></td><td>$specimens</td></tr>";
         }
+        foreach my $row (@results_taxa_only) {
+            $class = ($class eq '') ? $class='class="darkList"' : '';
+            print "<tr $class><td>(unknown collection)</td>";
+            my $specimens = ($row->{'cnt'} >= 1) ? $row->{'cnt'} : 'none';
+            my $taxon_name;
+            if ($row->{'taxon_rank'} =~ /species/) {
+                $taxon_name = $row->{'taxon_name'};
+            } elsif ($row->{'taxon_rank'} =~ /genus/) {
+                $taxon_name = $row->{'taxon_name'}." sp.";
+            } else {
+                $taxon_name = $row->{'taxon_name'}." indet.";
+            }
+            print "<td><a href=\"bridge.pl?action=displaySpecimenList&use_reference=".$q->param('use_reference')."&taxon_no=$row->{taxon_no}\">$taxon_name</a></td><td>$specimens</td></tr>";
+
+        }
         print "</table>";
         print "</div>";
         print "</form>";
+        print "<br>";
     }
 
 }
@@ -114,38 +147,51 @@ sub displaySpecimenList {
     my ($dbt,$hbo,$q,$s,$exec_url) = @_;
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
-	if ( ! $q->param('occurrence_no')) {
-		print "<center><h3>Sorry, occurrence number is unknown</h3></center>\n";
-        carp "populateMeasurementForm called with no occurrence_no by ".$s->get('enterer_no');
+	if ( ! $q->param('occurrence_no') && ! $q->param('taxon_no')) {
+		print "<center><h3>Sorry, an error has occurred, need an occurrence or taxon to tie this to, email support for help</h3></center>\n";
+        carp "populateMeasurementForm called with no occurrence_no/taxon_no by ".$s->get('enterer_no');
 		exit;
 	}
 
     #my $sql = "SELECT * FROM specimens WHERE occurrence_no=".int($q->param('occurrence_no'));
     #my @results = @{$dbt->getData($sql)};
-    my @results = getMeasurements($dbt,'occurrence_no'=>int($q->param('occurrence_no')));
-    #if (scalar(@results) == 0) {
-    #    populateMeasurementForm($dbt->dbh,$dbt,$hbo,$q,$s,$exec_url);
-    #} else {
-    $sql = "SELECT collection_no,genus_name,species_name,occurrence_no FROM occurrences WHERE occurrence_no=".int($q->param("occurrence_no"));
-    my $row = ${$dbt->getData($sql)}[0];
-    if (!$row) {
-        carp "Error is displaySpecimenList, could not find ".$q->param("occurrence_no")." in the database";
-        print "An error has occurred";
-        return;
-    }
+    my @results;
     my $taxon_name;
-    my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
-    if ($reid_row) {
-        $taxon_name = $reid_row->{'genus_name'}." ".$reid_row->{'species_name'};
+    my $collection;
+    if ($q->param('occurrence_no')) {
+        @results = getMeasurements($dbt,'occurrence_no'=>int($q->param('occurrence_no')));
+        $sql = "SELECT collection_no,genus_name,species_name,occurrence_no FROM occurrences WHERE occurrence_no=".int($q->param("occurrence_no"));
+        my $row = ${$dbt->getData($sql)}[0];
+        if (!$row) {
+            carp "Error is displaySpecimenList, could not find ".$q->param("occurrence_no")." in the database";
+            print "An error has occurred, could not find occurrence in database";
+            return;
+        }
+        $collection = "(collection $row->{collection_no})";
+        my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
+        if ($reid_row) {
+            $taxon_name = $reid_row->{'genus_name'}." ".$reid_row->{'species_name'};
+        } else {
+            $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
+        }
     } else {
-        $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
-    }   
+        my $sql = "SELECT s.*,m.*,s.taxon_no FROM specimens s, measurements m WHERE s.specimen_no=m.specimen_no AND s.taxon_no=".int($q->param('taxon_no')); 
+        main::dbg("sql is $sql");
+        @results = @{$dbt->getData($sql)};
+
+        my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>int($q->param('taxon_no')));
+        $taxon_name = $taxon->{'taxon_name'};
+    }
     
     print "<div align=\"center\">";
-    print "<h3>Specimen list for $taxon_name (collection $row->{collection_no}):</h3>\n";
+    print "<h3>Specimen list for $taxon_name $collection</h3>\n";
     print "<form method=\"POST\" action=\"bridge.pl\">\n";
     print "<input type=hidden name=\"action\" value=\"populateMeasurementForm\">\n";
-    print "<input type=hidden name=\"occurrence_no\" value=\"".$q->param('occurrence_no')."\">";
+    if ($q->param('occurrence_no')) {
+        print "<input type=hidden name=\"occurrence_no\" value=\"".$q->param('occurrence_no')."\">";
+    } else {
+        print "<input type=hidden name=\"taxon_no\" value=\"".$q->param('taxon_no')."\">";
+    }
     print "<input type=\"hidden\" name=\"use_reference\" value=\"".$q->param('use_reference')."\">";
 
     # now create a table of choices
@@ -177,7 +223,11 @@ sub displaySpecimenList {
         }
         print "</tr>";
     } else {
-        print "<tr><th colspan=7 align=\"center\">There are no measurements for this occurrence<br><br></td></tr>";
+        if ($q->param('occurrence_no')) {
+            print "<tr><th colspan=7 align=\"center\">There are no measurements for this occurrence<br><br></td></tr>";
+        } else {
+            print "<tr><th colspan=7 align=\"center\">There are no measurements for $taxon_name<br><br></td></tr>";
+        }
     }
 
     my $checked;
@@ -213,37 +263,41 @@ sub populateMeasurementForm {
     my ($dbh,$dbt,$hbo,$q,$s,$exec_url) = @_;
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
-	if ( ! $q->param('occurrence_no')) {
-		print "<center><h3>An error has occurred.  Occurrence is not given.</h3></center>\n";
-        carp "populateMeasurementForm called with no occurrence_no by ".$s->get('enterer_no');
-		exit;
-	}
+    if ( ! $q->param('occurrence_no') && ! $q->param('taxon_no')) {
+        print "<center><h3>Sorry, an error has occurred, need an occurrence or taxon to tie this to, email support for help</h3></center>\n";
+        carp "populateMeasurementForm called with no occurrence_no/taxon_no by ".$s->get('enterer_no');
+        exit;
+    }   
     
 	# get the taxon's name
-	my $sql = "SELECT o.collection_no, o.genus_name, o.species_name, o.occurrence_no FROM occurrences o WHERE o.occurrence_no=".int($q->param('occurrence_no'));
-    my $row = ${$dbt->getData($sql)}[0];
+    my ($taxon_name,$collection);
+    if ($q->param('occurrence_no')) {
+        my $sql = "SELECT o.collection_no, o.genus_name, o.species_name, o.occurrence_no FROM occurrences o WHERE o.occurrence_no=".int($q->param('occurrence_no'));
+        my $row = ${$dbt->getData($sql)}[0];
 
-    my $taxon_name;
-    my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
-    if ($reid_row) {
-        $taxon_name = $reid_row->{'genus_name'}." ".$reid_row->{'species_name'};
+        my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
+        if ($reid_row) {
+            $taxon_name = $reid_row->{'genus_name'}." ".$reid_row->{'species_name'};
+        } else {
+            $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
+        }  
+
+        $collection = "(collection $row->{'collection_no'})";
+
+        if (!$row || !$taxon_name || !$collection) {
+            print "<center><h3>An error has occurred. Could not find occurrence in database.</h3></center>\n";
+            carp("processMeasurementForm: no row found for occurrence_no ".$q->param('occurrence_no'));
+            return;
+        }
     } else {
-        $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
-    }  
-
-    my $collection_no = $row->{'collection_no'};
-
-    if (!$row || !$taxon_name || !$collection_no) {
-		print "<center><h3>An error has occurred. Could not find occurrence in database.</h3></center>\n";
-        carp("processMeasurementForm: no row found for occurrence_no ".$q->param('occurrence_no'));
-        return;
+        my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>int($q->param('taxon_no')));
+        $taxon_name = $taxon->{'taxon_name'}; 
     }
 
     #Prepare fields to be use in the form ahead
     my @values = ();
     my @fields = ();
    
-
     if ($q->param('specimen_no') < 0) {
         # This is a new entry
         if ($q->param('use_reference') eq 'current' && $s->get('reference_no')) {
@@ -252,7 +306,12 @@ sub populateMeasurementForm {
         if (!$q->param('skip_ref_check') || !$s->get('reference_no')) {
              
             # Make them choose a reference first
-            my $toQueue = "action=populateMeasurementForm&specimen_no=".$q->param('specimen_no')."&specimens_measured=".$q->param('specimens_measured')."&skip_ref_check=1&occurrence_no=".$q->param('occurrence_no');
+            my $toQueue = "action=populateMeasurementForm&specimen_no=".$q->param('specimen_no')."&specimens_measured=".$q->param('specimens_measured')."&skip_ref_check=1";
+            if ($q->param('occurrence_no')) {
+                $toQueue .= "&occurrence_no=".$q->param('occurrence_no');
+            } else {
+                $toQueue .= "&taxon_no=".$q->param('taxon_no');
+            }
             $s->enqueue( $dbh, $toQueue );
             $q->param( "type" => "select" );
             main::displaySearchRefs("Please choose a reference before adding specimen measurement data",1);
@@ -268,12 +327,12 @@ sub populateMeasurementForm {
                         push @values, '';
                     }
                 }
-	            push (@fields,'occurrence_no','reference_no','specimen_no','taxon_name','collection_no','specimens_measured','specimen_is_type');
-	            push (@values,int($q->param('occurrence_no')),$s->get('reference_no'),'-1',$taxon_name,$collection_no,1,'');
+	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimens_measured','specimen_is_type');
+	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,1,'');
 	            print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
             } elsif ($q->param('specimen_no') == -2) {
-	            push (@fields,'occurrence_no','reference_no','specimen_no','taxon_name','collection_no','specimen_coverage');
-	            push (@values,int($q->param('occurrence_no')),$s->get('reference_no'),'-1',$taxon_name,$collection_no,'');
+	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimen_coverage');
+	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,'');
                 #@table_rows = ('specimen_id','length','width','height','diagonal','specimen_side','specimen_part','measurement_source','magnification','is_type');
                 my $table_rows = "";
                 for (1..$q->param('specimens_measured')) {
@@ -350,8 +409,8 @@ sub populateMeasurementForm {
         }      
 
         # some additional fields not from the form row
-	    push (@fields, 'occurrence_no','reference_no','specimen_no','taxon_name','collection_no');
-	    push (@values, int($q->param('occurrence_no')),$row->{'reference_no'},$row->{'specimen_no'},$taxon_name,$collection_no);
+	    push (@fields, 'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection_no');
+	    push (@values, int($q->param('occurrence_no')),int($q->param('taxon_no')),$row->{'reference_no'},$row->{'specimen_no'},$taxon_name,$collection_no);
 	    print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
     }
 
@@ -360,32 +419,38 @@ sub populateMeasurementForm {
 sub processMeasurementForm	{
     my ($dbh,$dbt,$hbo,$q,$s,$exec_url) = @_;
 
-	# can't proceed without a taxon no
-	if (!$q->param('occurrence_no'))	{
-		print "<center><h3>Sorry, the specimen measurement table can't be updated because the occurrence is unknown</h3></center>\n";
-        carp "populateMeasurementForm called with no occurrence_no by ".$s->get('enterer_no');
-		return;
-	}
-	# get the taxon's name
-	my $sql = "SELECT o.collection_no, o.occurrence_no, o.genus_name, o.species_name FROM occurrences o WHERE occurrence_no=".int($q->param('occurrence_no'));
-    my $row = ${$dbt->getData($sql)}[0];
+    # We need a taxon_no passed in, cause taxon_name is ambiguous
+    if ( ! $q->param('occurrence_no') && ! $q->param('taxon_no')) {
+        print "<center><h3>Sorry, an error has occurred, need an occurrence or taxon to tie this to, email support for help</h3></center>\n";
+        carp "populateMeasurementForm called with no occurrence_no/taxon_no by ".$s->get('enterer_no');
+        exit;
+    }
 
-    my $taxon_name;
-    my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
-    if ($reid_row) {
-        $taxon_name = $reid_row->{'genus_name'}." ".$reid_row->{'species_name'};
+    # get the taxon's name
+    my ($taxon_name,$collection);
+    if ($q->param('occurrence_no')) {
+        my $sql = "SELECT o.collection_no, o.genus_name, o.species_name, o.occurrence_no FROM occurrences o WHERE o.occurrence_no=".int($q->param('occurrence_no'));
+        my $row = ${$dbt->getData($sql)}[0];
+
+        my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
+        if ($reid_row) {
+            $taxon_name = $reid_row->{'genus_name'}." ".$reid_row->{'species_name'};
+        } else {
+            $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
+        }
+
+        $collection = "(collection $row->{'collection_no'})";
+
+        if (!$row || !$taxon_name || !$collection) {
+            print "<center><h3>An error has occurred. Could not find occurrence in database.</h3></center>\n";
+            carp("processMeasurementForm: no row found for occurrence_no ".$q->param('occurrence_no'));
+            return;
+        }
     } else {
-        $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
-    }
-      
-    my $collection_no = $row->{'collection_no'};
+        my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>int($q->param('taxon_no')));
+        $taxon_name = $taxon->{'taxon_name'};
+    } 
 
-    if (!$row || !$taxon_name || !$collection_no) {
-		print "<center><h3>Sorry, the specimen measurement table can't be updated because the occurrence is unknown</h3></center>\n";
-        carp("processMeasurementForm: no row found for occurrence_no ".$q->param('occurrence_no'));
-        return;
-    }
-  
 
     my @specimen_ids = $q->param('specimen_id');
     my @param_list = $q->param();
@@ -424,6 +489,8 @@ sub processMeasurementForm	{
         }
 
         if ( $fields{'specimen_no'} > 0 )	{
+            delete $fields{'taxon_no'}; # keys, never update thse
+            delete $fields{'occurrence_no'}; # keys, never update thse
             $result = $dbt->updateRecord($s,'specimens','specimen_no',$fields{'specimen_no'},\%fields);
 
             if ($result) {
@@ -491,7 +558,7 @@ sub processMeasurementForm	{
                     }
                 }
 
-                print "<center><h3>Specimen measurement data for $taxon_name (collection $collection_no) has been updated</h3></center>\n";
+                print "<center><h3>Specimen measurement data for $taxon_name $collection has been updated</h3></center>\n";
             } else {
                 print "Error updating database table row, please contact support";
                 carp "Error updating row in Measurement.pm: ".$result;
@@ -499,7 +566,12 @@ sub processMeasurementForm	{
         } else {
             # Set the reference_no
             $fields{'reference_no'} = $s->get('reference_no');
-            $fields{'taxon_no'} = undef;
+            # Make sure one of these gets set to NULL
+            if ($q->param('occurrence_no')) {
+                $fields{'taxon_no'} = undef;
+            } else {
+                $fields{'occurrence_no'} = undef;
+            }
             my ($result,$specimen_no) = $dbt->insertRecord($s,'specimens',\%fields);
 
             if ($result) {
@@ -539,15 +611,22 @@ sub processMeasurementForm	{
     }
 
     if ($inserted_row_count) {
-        print "<center><h3>Specimen measurement data for $taxon_name (collection_no $collection_no) has been added</h3></center>\n";
+        print "<center><h3>Specimen measurement data for $taxon_name $collection has been added</h3></center>\n";
     }
 
-	print "<div align=\"center\"><table><tr><td><ul>".
-	      "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-1&occurrence_no=".$q->param('occurrence_no')."\">Add another average or individual measurement of this occurrence</a></b></li>".
-	      "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-2&specimens_measured=10&occurrence_no=".$q->param('occurrence_no')."\">Add up to 10 new individual measurements of this occurrences</a></b></li>".
-	      "<br><li><b><a href=\"$exec_url?action=displaySpecimenList&occurrence_no=".$q->param('occurrence_no')."\">Edit another measurement of this occurrence</a></b></li>".
-	      "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&use_reference=current&collection_no=$collection_no\">Add a measurement of another occurrence in this collection</a></b></li>".
-	      "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&use_reference=current&taxon_name=$taxon_name\">Add a measurement of $taxon_name in another collection</a></b></li>".
+    if ($q->param('occurrence_no')) {
+	    print "<div align=\"center\"><table><tr><td><ul>".
+	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-1&occurrence_no=".$q->param('occurrence_no')."\">Add another average or individual measurement of this occurrence</a></b></li>".
+	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-2&specimens_measured=10&occurrence_no=".$q->param('occurrence_no')."\">Add up to 10 new individual measurements of this occurrence</a></b></li>".
+	          "<br><li><b><a href=\"$exec_url?action=displaySpecimenList&occurrence_no=".$q->param('occurrence_no')."\">Edit another measurement of this occurrence</a></b></li>".
+    	      "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&use_reference=current&collection_no=$collection_no\">Add a measurement of another occurrence in this collection</a></b></li>";
+    } else {
+	    print "<div align=\"center\"><table><tr><td><ul>".
+	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-1&taxon_no=".$q->param('taxon_no')."\">Add another average or individual measurement of $taxon_name</a></b></li>".
+	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-2&specimens_measured=10&taxon_no=".$q->param('taxon_no')."\">Add up to 10 new individual measurements of $taxon_name</a></b></li>".
+	          "<br><li><b><a href=\"$exec_url?action=displaySpecimenList&taxon_no=".$q->param('taxon_no')."\">Edit another measurement of $taxon_name</a></b></li>";
+    }
+    print "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&use_reference=current&taxon_name=$taxon_name\">Add a measurement of $taxon_name in another collection</a></b></li>".
           "<br><li><b><a href=\"$exec_url?action=checkTaxonInfo&taxon_name=$taxon_name\">Get general info about this taxon</a></b></li>".
           "</ul></td></tr></table></div>";
 }
@@ -611,6 +690,8 @@ sub getMeasurements {
         }
     } elsif ($options{'collection_no'}) {
         $sql1 .= " AND o.collection_no=".int($options{'collection_no'});
+    } elsif (@{$options{'occurrence_list'}}) {
+        $sql1 .= " AND o.occurrence_no IN (".join(",",@{$options{'occurrence_list'}}).")";
     } elsif ($options{'occurrence_no'}) {
         $sql1 .= " AND o.occurrence_no =".int($options{'occurrence_no'});
     }
