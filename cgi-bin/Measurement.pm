@@ -117,7 +117,7 @@ sub submitSpecimenSearch {
         }
         foreach my $row (@results_taxa_only) {
             $class = ($class eq '') ? $class='class="darkList"' : '';
-            print "<tr $class><td>(unknown collection)</td>";
+            print "<tr $class><td>unknown collection</td>";
             my $specimens = ($row->{'cnt'} >= 1) ? $row->{'cnt'} : 'none';
             my $taxon_name;
             if ($row->{'taxon_rank'} =~ /species/) {
