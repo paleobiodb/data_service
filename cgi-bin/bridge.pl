@@ -2206,12 +2206,12 @@ sub processCollectionsSearch {
                     $sql2b .= "re.genus_name LIKE ".$dbh->quote($genus.$wildcardToken);
                 }
                 if ( $subgenus)	{
-                    $sql1b .= "o.subgenus_name LIKE ".$dbh->quote($subgenus.$wildcardToken);
-                    $sql2b .= "re.subgenus_name LIKE ".$dbh->quote($subgenus.$wildcardToken);
+                    $sql1b .= " AND o.subgenus_name LIKE ".$dbh->quote($subgenus.$wildcardToken);
+                    $sql2b .= " AND re.subgenus_name LIKE ".$dbh->quote($subgenus.$wildcardToken);
                 }
                 if ( $species )	{
-                    $sql1b .= "o.species_name LIKE ".$dbh->quote($species.$wildcardToken);
-                    $sql2b .= "re.species_name LIKE ".$dbh->quote($species.$wildcardToken);
+                    $sql1b .= " AND o.species_name LIKE ".$dbh->quote($species.$wildcardToken);
+                    $sql2b .= " AND re.species_name LIKE ".$dbh->quote($species.$wildcardToken);
                 }
                 push @results, @{$dbt->getData($sql1b)}; 
                 push @results, @{$dbt->getData($sql2b)}; 
