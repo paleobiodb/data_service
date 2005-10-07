@@ -14,9 +14,9 @@ use lib CGI_DIR;
 
 use Class::Date qw(date localdate gmdate now);
 use TimeLookup;
-use Globals;
 use DBI;
 use DBTransactionManager;
+use DBConnection;
 use Session;
 
 # Flags and constants
@@ -29,19 +29,7 @@ my $C72 = cos(72 * $PI / 180);
 
 my $GROUP = ""; # marine, vertebrate, paleobotany, micropaleo, fivepct
 
-my $driver = "mysql";
-my $db = "pbdb";
-my $host = "localhost";
-my $user = 'pbdbuser';
-
-open PASSWD,"</Users/paleodbpasswd/passwd";
-$password = <PASSWD>;
-$password =~ s/\n//;
-close PASSWD;
-
-my $dbh = DBI->connect("DBI:$driver:database=$db;host=$host",
-                      $user, $password, {RaiseError => 1});
-
+my $dbh = DBConnection::connect();
 my $s = Session->new();
 my $dbt = DBTransactionManager->new($dbh, $s);
 
