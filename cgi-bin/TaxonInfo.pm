@@ -196,9 +196,6 @@ sub displayTaxonInfoResults {
             @in_list=PBDBUtil::taxonomic_search($dbt,$taxon_no);
             $in_list=\@in_list;
         }
-	} else {
-        # We just got to search the occ/reid tables directly
-		$in_list = [$taxon_name];
 	} 
 
     ($genus,$species) = split(/ /,$taxon_name);
@@ -688,6 +685,7 @@ sub doCollections{
     $options{'permission_type'} = 'read';
     $options{'calling_script'} = "TaxonInfo";
     $options{'taxon_list'} = $in_list if (@$in_list);
+    $options{'taxon_name'} = $q->param('taxon_name');
     # This field passed from strata module
     $options{'group_formation_member'} = $q->param('group_formation_member') if (defined($q->param('group_formation_member')));
     my $fields = ["country", "state", "max_interval_no", "min_interval_no"];  
