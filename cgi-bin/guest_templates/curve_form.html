@@ -93,10 +93,53 @@ Subsampling method:<br>
 <select name=samplingmethod>
 <option selected></option>
 <option>classical rarefaction</option>
-<option>by-list subsampling (unweighted)</option>
-<option>by-list subsampling (occurrences weighted)</option>
-<option>by-list subsampling (occurrences-squared weighted)</option>
-<option>by-specimen subsampling</option>
+<option>by list (unweighted)</option>
+<option>by list (occurrences weighted)</option>
+<option>by list (occurrences-exponentiated weighted)</option>
+<option>by specimen</option>
+</select>
+</font>
+</td>
+
+<tr><td valign=top>
+<font size=-1>Weighting exponent:</font><br>
+<i><font color="FF0000" size=-2>Required</font> <font size=-2>if you want to do occurrences-exponentiated subsampling. <font size=-2>Set this to 2.0 if you want occurrences-squared weighting. 0.0 = unweighted subsampling; 1.0 = occurrences-weighted subsampling.</font></i>
+</td>
+
+<td valign=top>
+<font size=-1>
+<select name=exponent>
+<option>0.0
+<option>0.1
+<option>0.2
+<option>0.3
+<option>0.4
+<option>0.5
+<option>0.6
+<option>0.7
+<option>0.8
+<option>0.9
+<option>1.0
+<option>1.1
+<option>1.2
+<option>1.3
+<option>1.4
+<option>1.5
+<option>1.6
+<option>1.7
+<option>1.8
+<option>1.9
+<option selected>2.0
+<option>2.1
+<option>2.2
+<option>2.3
+<option>2.4
+<option>2.5
+<option>2.6
+<option>2.7
+<option>2.8
+<option>2.9
+<option>3.0
 </select>
 </font>
 </td>
@@ -251,7 +294,7 @@ Intermediate numbers of items to report in subsampling curves:<br>
 <input type="checkbox" name="print_pie" value="YES"> Evenness of occurrences (PIE)
 <input type="checkbox" name="print_lists" value="YES" checked> Lists
 <input type="checkbox" name="print_occurrences" value="YES" checked> Occurrences
-<input type="checkbox" name="print_occurrences-squared" value="YES" checked> Occurrences-squared
+<input type="checkbox" name="print_occurrences-exponentiated" value="YES" checked> Occurrences-squared or exponentiated
 <input type="checkbox" name="print_mean_richness" value="YES"> Mean richness
 <input type="checkbox" name="print_median_richness" value="YES"> Median richness
 </font>
