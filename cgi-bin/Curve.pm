@@ -140,18 +140,20 @@ sub setArrays	{
 	if ($q->param('samplingmethod') eq "classical rarefaction")	{
 		$samplingmethod = 1;
 	}
-	elsif ($q->param('samplingmethod') eq "by-list subsampling (unweighted)")	{
+	elsif ($q->param('samplingmethod') eq "by list (unweighted)")	{
 		$samplingmethod = 2;
 	}
-	elsif ($q->param('samplingmethod') eq "by-list subsampling (occurrences weighted)")	{
+	elsif ($q->param('samplingmethod') eq "by list (occurrences weighted)")	{
 		$samplingmethod = 3;
 	}
-	elsif ($q->param('samplingmethod') eq "by-list subsampling (occurrences-squared weighted)")	{
+# replaced occurrences-squared with occurrences-exponentiated 27.10.05
+	elsif ($q->param('samplingmethod') eq "by list (occurrences-exponentiated weighted)")	{
 		$samplingmethod = 4;
 	}
-	elsif ($q->param('samplingmethod') eq "by-specimen subsampling")	{
+	elsif ($q->param('samplingmethod') eq "by specimen")	{
 		$samplingmethod = 5;
 	}
+	$exponent = $q->param('exponent');
 
 }
 
@@ -541,7 +543,6 @@ sub assignGenera	{
 		for my $c ( 0..$#collrefno )	{
 			if ( $collrefno[$c] > 0 )	{
 				$occsfromref[$collrefno[$c]][$chid[$c]] = $occsfromref[$collrefno[$c]][$chid[$c]] + $occsinlist[$c];
-				$occs2fromref[$collrefno[$c]][$chid[$c]] = $occs2fromref[$collrefno[$c]][$chid[$c]] + $occsinlist[$c]**2;
 			}
 		}
 
@@ -578,9 +579,10 @@ sub assignGenera	{
 		}
 	}
 	for $i (1..$#occsinlist+1)	{
+	# don't blow out the quota if you have a long list and the method is 4
 		if (($samplingmethod != 4) ||
-				($occsinlist[$i]**2 <= $q->param('samplesize')))	{
-			$occsinchron2[$chid[$i]] = $occsinchron2[$chid[$i]] + $occsinlist[$i]**2;
+				($occsinlist[$i]**$exponent <= $q->param('samplesize')))	{
+			$occsinchron2[$chid[$i]] = $occsinchron2[$chid[$i]] + $occsinlist[$i]**$exponent;
 		}
 	}
 
@@ -846,7 +848,7 @@ $| = 1;
 					    for $j (1..$listsinchron[$i])	{
 					      $xx = $occsinlist[$listid[$j]];
 					      if ($samplingmethod == 4)	{
-					        $xx = $xx**2;
+					        $xx = $xx**$exponent;
 					      }
 					      if ($xx > $q->param('samplesize'))	{
 					        $listid[$j] = $listid[$nitems];
@@ -909,11 +911,12 @@ $| = 1;
 					    }
 					    $sampled[$i] = $sampled[$i] + $xx;
 					  }
+					# method 4
 					  else	{
 					    $xx = $topocc[$listid[$j]] - $baseocc[$listid[$j]] + 1;
 					 #  $tosub = $tosub - ($xx**2);
 					    $tosub--;
-					    $sampled[$i] = $sampled[$i] + $xx**2;
+					    $sampled[$i] = $sampled[$i] + $xx**$exponent;
 					  }
 	
 		 # declare the genus (or all genera in a list) present in this chron
@@ -1354,8 +1357,8 @@ sub printResults	{
 			if ( $q->param('print_occurrences') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>Occurrences</b> ";
 			}
-			if ( $q->param('print_occurrences-squared') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Occurrences<br>-squared</b> ";
+			if ( $q->param('print_occurrences-exponentiated') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Occurrences<br><nobr>-exponentiated</nobr></b> ";
 			}
 		}
 		else	{
@@ -1437,8 +1440,8 @@ sub printResults	{
 			if ( $q->param('print_occurrences') eq "YES" )	{
 				print TABLE ",Occurrences";
 			}
-			if ( $q->param('print_occurrences-squared') eq "YES" )	{
-				print TABLE ",Occurrences-squared";
+			if ( $q->param('print_occurrences-exponentiated') eq "YES" )	{
+				print TABLE ",Occurrences-exponentiated";
 			}
 		}
 		else	{
@@ -1589,9 +1592,9 @@ sub printResults	{
 				if ( $q->param('print_occurrences') eq "YES" )	{
 					print "<td class=tiny align=center valign=top>$occsinchron[$i] ";
 				}
-				if ( $q->param('print_occurrences-squared') eq "YES" )	{
+				if ( $q->param('print_occurrences-exponentiated') eq "YES" )	{
 					if ($samplingmethod != 5)	{
-						print "<td class=tiny align=center valign=top>$occsinchron2[$i] ";
+						printf "<td class=tiny align=center valign=top>%.1f ",$occsinchron2[$i];
 					}
 				}
 				if ( $q->param('print_mean_richness') eq "YES" )	{
@@ -1710,9 +1713,9 @@ sub printResults	{
 				if ( $q->param('print_occurrences') eq "YES" )	{
 					print TABLE ",$occsinchron[$i]";
 				}
-				if ( $q->param('print_occurrences-squared') eq "YES" )	{
+				if ( $q->param('print_occurrences-exponentiated') eq "YES" )	{
 					if ($samplingmethod != 5)	{
-						print TABLE ",$occsinchron2[$i]";
+						printf TABLE ",%.1f",$occsinchron2[$i];
 					}
 				}
 				if ( $q->param('print_mean_richness') eq "YES" )	{
