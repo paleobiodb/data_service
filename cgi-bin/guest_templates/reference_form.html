@@ -1,70 +1,219 @@
-<input type=hidden name="action" value="processNewRef">
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<title id="title">Paleobiology Database</title>
+<meta http-equiv="content-type" content="text/html; charset=iso-8859-1" />
+
+<link REL="stylesheet" TYPE="text/css" HREF="/StyleSheets/common.css" />
+<link REL="icon" HREF="/public/favicon.ico" type="image/x-icon" />
+<link REL="shortcut icon" HREF="/public/favicon.ico" type="image/x-icon" />
+
+<!--javascript containing common functions-->
+<script src="/JavaScripts/login.js" language="JavaScript" type="text/javascript"></script>
+<script src="/JavaScripts/common.js" language="JavaScript" type="text/javascript"></script>
+
+</head>
+
+<body>
+
+    <script language="JavaScript" type="text/javascript">
+    <!-- Begin
+
+	// This is a handy little function for seeing what properties an object has
+	function showProperties ( obj ) {
+		var result = "";
+
+		for ( var i in obj ) {
+			result += "o." + i + " = " + obj[i] + "<BR>\n";
+		}
+		document.write ( result );
+	}
+
+    function checkForm() {
+		var year = /^[1-2][0-9]{3}$/;
+		var capital = /[A-Z]/;
+		var frm = document.forms[0];
+		var errors = "";
+
+		// First Author Initials
+		// pattern for multiple spaces match
+		var last_name_institution = /^\S+\s+\S+\s+\S+/;
+		if ( frm.author1init.value == "" ) {
+			if(frm.author1last.value.match(last_name_institution)){
+				// OK to have a blank first name if the last name is
+				// and institution.
+			}
+			else{
+				errors += "First author initials may not be blank.\n"; 
+			}
+		} else {
+			// Check for a capital letter
+			if ( capital.test ( frm.author1init.value ) == false ) {
+				errors += "First author initials should have a capital letter.\n"; 
+			}
+		}
+
+		// First Author Last
+		if ( frm.author1last.value == "" ) {
+			errors += "First author last name may not be blank.\n"; 
+		} else {
+			// Check for a capital letter
+			if ( capital.test ( frm.author1last.value ) == false ) {
+				errors += "First author last name should have a capital letter.\n"; 
+			}
+		}
+
+		// Second Author Initials
+		if ( frm.author2init.value != "" ) {
+			// Check for a capital letter
+			if ( capital.test ( frm.author2init.value ) == false ) {
+				errors += "Second author initials should have a capital letter.\n"; 
+			}
+		}
+
+		// Second Author Last
+		if ( frm.author2last.value != "" ) {
+			// Check for a capital letter
+			if ( capital.test ( frm.author2last.value ) == false ) {
+				errors += "Second author last name should have a capital letter.\n"; 
+			}
+		}
+
+		// OtherAuthors
+		var contents = frm.otherauthors.value;
+        var pattern = /^[A-Z][a-z\']+/;
+        var result = contents.match(pattern);
+        if(result != null){
+            errors += "Names of additional authors must be initials first, " +
+                  	  "then lastname;  NOT last name first.\n"+
+                  	  "EXAMPLE: P. McCartney, J. P. Jones, J. Hendrix\n";
+        }
+
+
+		// Publication Year
+		if ( frm.pubyr.value == "" ) {
+			errors += "The publication year may not be blank.\n"; 
+		} else {
+			if ( year.test( frm.pubyr.value ) == false ) {
+				errors += "The publication year is invalid.\n"; 
+			}
+		}
+
+
+		// Language
+		var index = frm.language.selectedIndex;
+		if ( index == 0 ) {
+			errors += "The publication language must be selected.\n"; 
+		} 
+
+		// Publication Type
+		var index = frm.publication_type.selectedIndex;
+		if ( index == 0 ) {
+			errors += "The publication type must be selected.\n"; 
+		} else {
+			if ( frm.publication_type.options[frm.publication_type.selectedIndex].text == "book/book chapter" ) {
+				if ( frm.pubtitle.value == "" ) {
+					errors += "If you select \"book/book chapter\", you are required to fill in its name.\n"; 
+				}
+			}
+		}
+
+		// Report errors
+		if ( errors != "" ) {
+			errors = "   Errors detected!!   \n" + 
+					 "---------------------------------------\n\n" +
+					 errors + "\n" +
+					 "---------------------------------------\n\n" +
+					 "See the tip sheet for instructions.";
+			alert ( errors );
+			return false;
+		} 
+		return true;
+    }
+
+
+    //  End -->
+    </script>
+
 <div class="title">Reference entry form</div>
-
-<p>If the reference is <b>new</b>, please fill out the following form.</p>
-
-<p>Use this format:<br><font size=-1><i><b>INITALS:</b> J. Q.<b> LAST NAME:</b> Doe <b>SECOND AUTHOR INITIALS:</b> H. H. <b>SECOND AUTHOR LAST NAME:</b> Karl, Jr. <b>OTHERAUTHORS:</b> W. O. First, I. O. Second, Y. N. O. Third <b> YEAR:</b> 1984 <b>TITLE:</b> A new species of ammonite from the North Horn Formation of Utah <b>SERIAL:</b> Bulletin of the Southern California Academy of Sciences <b>VOLUME:</b> 34 <b>NUMBER:</b> 2 <b>FIRST PAGE:</b> 113 <b>LAST PAGE:</b> 118</i></p></font>
-<p>Required fields are in <span class="required">red</span>. Consult the <a href="javascript:tipsPopup('/public/tips/ref_tips.html')">tip sheet</a> for help.</p>
-
 
 <DIV>
 <center>
 <table class="niceBorder" cellpadding=4><tr><td>
-<input id="reference_no" type=hidden name="reference_no">
-<input type="hidden" name="authorizer" value="J. Alroy">
-<input type="hidden" name="enterer" value="J. Alroy">
+<input type="hidden" name="reference_no" value="14351">
 <table>
   <tr>
+    <p>Required fields are in <span class="required">red</span>. Consult the <a href="javascript:tipsPopup('/public/tips/ref_tips.html')">tip sheet</a> for help.</p>
+    <p class="tiny">Use this format:<br><i><b>Initials:</b> J. Q.<b> Last name:</b> Smith <b>Second author initials:</b> H. H. <b>Second author last name:</b> Brown, Jr. <b>Other authors:</b> W. O. White, I. O. Green, Y. N. O. Black<b> Year:</b> 1984 <b>Title:</b> A new species of ammonite from the North Horn Formation of Utah <b>Serial:</b> Bulletin of the Southern California Academy of Sciences <b>Volume:</b> 34 <b>Number:</b> 2 <b>First page:</b> 113 <b>Last page:</b> 118</i></p>
+  </tr>
+
+  <tr>
     <td><span class="required">First author:</span></td>
-    <td><span class="required">initials</span><input id="author1init" name=author1init size=8 value="" maxlength=10></td>
-    <td><span class="required">last name</span><input id="author1last" name=author1last size=20 value=""  maxlength=255></td>
+    <td><span class="required">initials</span><input name="author1init" value="W. J." size="8" maxlength="10"></td>
+    <td><span class="required">last name</span><input name="author1last" value="Holland" size="20" maxlength="255"></td>
   </tr>
   <tr>
-    <td>Second author: <td>initials <input id="author2init" name=author2init size=8 value="" maxlength=10></td>
-    <td>last name <input id="author2last" name=author2last size=20 value="" maxlength=255></td>
+    <td>Second author: <td>initials <input name="author2init" value="" size="8" maxlength="10"></td>
+    <td>last name <input name="author2last" value="" size="20" maxlength="255"></td>
   </tr>
 </table>
-Initials and names of additional authors (separate the names with commas):<br><textarea id="otherauthors" name=otherauthors rows=3 cols=80 wrap=virtual></textarea><p>
+Initials and names of additional authors (separate the names with commas):<br><textarea name="otherauthors" cols="80" rows="3" wrap="virtual"></textarea><p>
 <TABLE border=0>
   <tr>
     <td><span class="required">Publication year:</span> </td>
     <td>
 	
-	<input id="pubyr" name=pubyr size=5 value="" maxlength=4><br> 
+	<input name="pubyr" value="1916" size="5" maxlength="4"><br> 
 	
 	
 	</td>
     <td align=right>Project code:
-    <input id="project_name" name="project_name" type=checkbox value="decapod">decapod
-	<input id="project_name" name="project_name" type=checkbox value="ETE">ETE
-	<input id="project_name" name="project_name" type=checkbox value="5%">5%
-	<input id="project_name" name="project_name" type=checkbox value="1%">1%<br>
-	<input id="project_name" name="project_name" type=checkbox value="PACED">PACED
-	<input id="project_name" name="project_name" type=checkbox value="PGAP">PGAP
+    <input type=hidden name="project_name" value=""><input type="checkbox" name="project_name" value="decapod">decapod
+	<input type="checkbox" name="project_name" value="ETE" checked>ETE
+	<input type="checkbox" name="project_name" value="5%">5%
+	<input type="checkbox" name="project_name" value="1%">1%<br>
+	<input type="checkbox" name="project_name" value="PACED">PACED
+	<input type="checkbox" name="project_name" value="PGAP">PGAP
 	</td> <tr>
     <td><span class="required">Publication type:</span></td>
-    <td><select name="publication_type"><option><option>journal article<option>book/book chapter<option>serial monograph<option>compendium<option>Ph.D. thesis<option>M.S. thesis<option>abstract<option>guidebook<option>news article<option>unpublished</select> </td>
-    <td>Project ref number: <input id="project_ref_no" name=project_ref_no size=5> </td>
+    <td><select name="publication_type"><option></option><option selected>journal article</option><option>book/book chapter</option><option>serial monograph</option><option>Ph.D. thesis</option><option>M.S. thesis</option><option>abstract</option><option>guidebook</option><option>news article</option><option>unpublished</option></select> </td>
+    <td>Project ref number: <input name="project_ref_no" value="" size="5"> </td>
   </tr>
-</TABLE>
+  
+  <tr>
+    <td><span class="required">Classification quality:</span></td>
+    <td>
+      <select name="classification_quality"><option>authoritative</option><option selected>standard</option><option>second hand</option></select>
+    </td>
+    <td><small>
+        An authoritative classification is based on first hand knowledge of the entire group
+    </small></td>
+  </tr>
+  <tr>
+    <td><span class="required">Language:</span></td>
+    <td>
+      <select name="language"><option></option><option>Chinese</option><option selected>English</option><option>French</option><option>German</option><option>Italian</option><option>Japanese</option><option>Portugese</option><option>Russian</option><option>Spanish</option><option>other</option></select>
+    </td>
+  </tr>
+</table>
 <table>
   <tr>
-		<td valign=top><span class="required">Title:</span><br><textarea name="reftitle" cols="80" rows="4" wrap="virtual"></textarea><br></td>
+		<td valign=top><span class="required">Title:</span><br><textarea name="reftitle" cols="80" rows="4" wrap="virtual">A new species of Apatosaurus</textarea><br></td>
   <tr>
-		<td valign=top>Select the serial's name:<br><select id="pubtitle_pulldown" name="pubtitle_pulldown"><option><option>Acta Palaeontologica Polonica<option>Alcheringa<option>Ameghiniana<option>American Journal of Botany<option>American Journal of Physical Anthropology<option>American Journal of Science<option>American Museum Novitates<option>Annals of Carnegie Museum<option>Annals of the Missouri Botanical Garden<option>Botanical Journal of the Linnean Society<option>Breviora<option>Bulletin of the American Museum of Natural History<option>Bulletin of the Museum of Comparative Zoology<option>Canadian Journal of Earth Sciences<option>Cretaceous Research<option>Geobios<option>Geological Society America Bulletin<option>Geological Society of America Special Paper<option>Geology<option>International Journal of Plant Sciences<option>Journal of Geology<option>Journal of Human Evolution<option>Journal of Mammalogy<option>Journal of Paleontology<option>Journal of Vertebrate Paleontology<option>Lethaia<option>Nature<option>The Palaeobotanist<option>Palaeogeography, Palaeoclimatology, Palaeoecology<option>Palaeontographica Abteilung A<option>Palaeontographica Abteilung B<option>Palaeontologische Zeitschrift<option>Palaeontology<option>Palaios<option>PaleoBios<option>Paleontological Journal<option>Paludicola<option>Plant Systematics and Evolution<option>Postilla<option>Proceedings of the National Academy of Sciences<option>Quaternary Research<option>Review of Palaeobotany and Palynology<option>Science<option>South African Journal of Science<option>Tertiary Research<option>Transactions of the Royal Society of Edinburgh<option>United States Geological Survey Bulletin<option>United States Geological Survey Professional Paper<option>University of California Publications in Geological Sciences<option>Vertebrata PalAsiatica</select><br>... or enter the full name of the serial or book here:<br><textarea id="pubtitle" name="pubtitle" rows="3" cols="80" wrap="virtual"></textarea><br></td>
+		<td valign=top>Select the serial's name:<br><select id="pubtitle_pulldown" name="pubtitle_pulldown"><option><option>Acta Palaeontologica Polonica<option>Alcheringa<option>Ameghiniana<option>American Journal of Botany<option>American Journal of Physical Anthropology<option>American Journal of Science<option>American Museum Novitates<option>Annals of Carnegie Museum<option>Annals of the Missouri Botanical Garden<option>Botanical Journal of the Linnean Society<option>Breviora<option>Bulletin of the American Museum of Natural History<option>Bulletin of the Museum of Comparative Zoology<option>Canadian Journal of Earth Sciences<option>Cretaceous Research<option>Geobios<option>Geological Society America Bulletin<option>Geological Society of America Special Paper<option>Geology<option>International Journal of Plant Sciences<option>Journal of Geology<option>Journal of Human Evolution<option>Journal of Mammalogy<option>Journal of Paleontology<option>Journal of Vertebrate Paleontology<option>Lethaia<option>Nature<option>The Palaeobotanist<option>Palaeogeography, Palaeoclimatology, Palaeoecology<option>Palaeontographica Abteilung A<option>Palaeontographica Abteilung B<option>Palaeontologische Zeitschrift<option>Palaeontology<option>Palaios<option>PaleoBios<option>Paleontological Journal<option>Paludicola<option>Plant Systematics and Evolution<option>Postilla<option>Proceedings of the National Academy of Sciences<option>Quaternary Research<option>Review of Palaeobotany and Palynology<option>Science<option>South African Journal of Science<option>Tertiary Research<option>Transactions of the Royal Society of Edinburgh<option>United States Geological Survey Bulletin<option>United States Geological Survey Professional Paper<option>University of California Publications in Geological Sciences<option>Vertebrata PalAsiatica</select><br>... or enter the full name of the serial or book here:<br><textarea name="pubtitle" cols="80" rows="3" wrap="virtual">Annals of Carnegie Museum</textarea><br></td>
 	</tr>
 </table>
 <table>
   <tr>
-    <td>Volume: <input id="pubvol" name=pubvol size=5 value="" maxlength=10></td>
-    <td>Number: <input id="pubno" name=pubno size=4 value="" maxlength=10></td>
-    <td>Page numbers: <input id="firstpage" name=firstpage size=5 value="" maxlength=10></td>
-    <td>- <input id="lastpage" name=lastpage size=5 value="" maxlength=10></td>
+    <td>Volume: <input name="pubvol" value="10" size="5" maxlength="10"></td>
+    <td>Number: <input name="pubno" value="1-2" size="4" maxlength="10"></td>
+    <td>Page numbers: <input name="firstpage" value="143" size="5" maxlength="10"></td>
+    <td>- <input name="lastpage" value="145" size="5" maxlength="10"></td>
   </tr>
 </table>
 <table>
   <tr>
-    <td valign=top>Comments:<br><textarea id="comments" name="comments" rows="4" cols="80" wrap="virtual"></textarea></td>
+    <td valign=top>Comments:<br><textarea name="comments" cols="80" rows="4" wrap="virtual"></textarea></td>
   </tr>
 </table>
 </table>
@@ -76,5 +225,10 @@ Initials and names of additional authors (separate the names with commas):<br><t
 <input type=submit value="Submit">
 </center>
 <BR>
-</form>
+
+
+</td></tr></table>
+ 
+</body>
+</html>
 
