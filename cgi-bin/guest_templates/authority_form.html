@@ -1,0 +1,164 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<title id="title">Paleobiology Database</title>
+<meta http-equiv="content-type" content="text/html; charset=iso-8859-1" />
+
+<link REL="stylesheet" TYPE="text/css" HREF="/StyleSheets/common.css" />
+<link REL="icon" HREF="/public/favicon.ico" type="image/x-icon" />
+<link REL="shortcut icon" HREF="/public/favicon.ico" type="image/x-icon" />
+
+<!--javascript containing common functions-->
+<script src="/JavaScripts/login.js" language="JavaScript" type="text/javascript"></script>
+<script src="/JavaScripts/common.js" language="JavaScript" type="text/javascript"></script>
+
+</head>
+
+<body>
+
+<STYLE type="text/css">
+    H2 { text-align: center; }
+</STYLE>
+
+
+
+
+
+<H2>Add/edit authority data for Apatosaurus</H2>
+
+
+<DIV class="mainSection">
+
+
+<H2>Who named <input type="text" name="taxon_name" id="taxon_name" size="30" value="Apatosaurus">&nbsp;?</H2>
+
+<CENTER>
+<SPAN class="tiny">
+See the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Authority')">tip sheet</a>.
+If the name is misspelled, <a href="$exec_url?action=displayAuthoritiesTaxonSearchForm">try another search</a>.
+</SPAN>
+</CENTER>
+
+<BR>
+
+<DIV class="emphasized" align=left>
+<input id="ref_is_authority" name="ref_is_authority" type="radio" value="YES" >
+It was first named in the data record's primary reference, which is:
+</div>
+<BR>
+
+<CENTER>
+<SPAN id="ref_string"><SPAN class="smallRef"><b>4783</b> R. L. Carroll 1988. Vertebrate Paleontology and Evolution <i>W.H. Freeman and Company</i></SPAN></span>
+<p>
+<b>Pages*:</b> <input id="pages" name="pages" size=12 value="">
+<b>Figures*:</b> <input id="figures" name="figures" size=12 value="">
+</p>
+</CENTER>
+
+<DIV class="emphasized" align=left>
+<input id="ref_is_authority" name="ref_is_authority" type="radio" value="NO" checked>
+
+... <i>or</i> it was named in an earlier publication, which is:</DIV>
+<BR>
+
+<CENTER>
+<TABLE>
+
+<TR>
+<td></td><td class=tiny>initials</td><td class=tiny>last name</td>
+<td></td><td class=tiny>initials</td><td class=tiny>last name</td>
+</TR>
+
+<TR><td align=right><b>First author:</b></td>
+<td><input id="author1init" name="author1init" size=6 value="O. C."></td>
+<td><input id="author1last" name="author1last" size=20 value="Marsh"></td>
+<td align=right><b>Second author:</b></td>
+<td><input id="author2init" name="author2init" size=6 value=""></td>
+<td><input id="author2last" name="author2last" size=20 value=""></td>
+</TR>
+
+<TR><td valign=top align=right><b>Other authors:</b></td>
+<td colspan=5><textarea id="otherauthors" name="otherauthors" rows=3 cols=70></textarea></td>
+</TR>
+
+<TR><td align=right><b>Year:</b></td>
+<td colspan=1><input id="pubyr" name="pubyr" size=6 value="1877"></td>
+<td colspan=4><b>Pages*:</b> <input id="2nd_pages" name="2nd_pages" size=12 value="514-515">
+<b>Figures*:</b> <input id="2nd_figures" name="2nd_figures" size=12 value=""></td>
+</TR>
+</table>
+</CENTER>
+
+<CENTER>
+<p><span class="tiny">* Enter numbers of pages and figures that describe and show the type specimen(s).</span></p>
+</CENTER>
+
+</DIV>
+
+<DIV class="mainSection">
+
+<H2>How was Apatosaurus named?</H2>
+
+<table>
+<tr><td align=right><b>Original rank:</b></td>
+<td>
+<!-- Note: any field named "taxon_rank" will be replaced as
+usual.  However, any field called "taxon_rank_popup" will be replaced with
+a popup menu of taxon ranks with the current "taxon_rank" selected. -->
+<select id="taxon_rank" name="taxon_rank">
+<OPTION >subgenus</OPTION><OPTION selected>genus</OPTION><OPTION >subtribe</OPTION><OPTION >tribe</OPTION><OPTION >subfamily</OPTION><OPTION >family</OPTION><OPTION >superfamily</OPTION><OPTION >infraorder</OPTION><OPTION >suborder</OPTION><OPTION >order</OPTION><OPTION >superorder</OPTION><OPTION >infraclass</OPTION><OPTION >subclass</OPTION><OPTION >class</OPTION><OPTION >superclass</OPTION><OPTION >subphylum</OPTION><OPTION >phylum</OPTION><OPTION >superphylum</OPTION><OPTION >subkingdom</OPTION><OPTION >kingdom</OPTION><OPTION >superkingdom</OPTION><OPTION >unranked clade</OPTION>
+</select>
+
+&nbsp; &nbsp;
+
+</td>
+</tr>
+
+
+
+
+
+
+<tr><td colspan=2>
+<b>Is this an extant (living) taxon?</b> <select name="extant" id="extant">
+<option value="" ></option>
+<option value="YES" >YES</option>
+<option value="NO" SELECTED>NO</option>
+</select>
+
+</td></tr>
+
+
+<TR><td align=right valign=top><b>Comments:</b></td>
+<td colspan=5><textarea id="comments" name="comments" rows=2 cols=70></textarea></td>
+</TR>
+</TABLE>
+
+</center>
+
+</DIV>
+
+
+
+<CENTER>
+
+<TABLE BORDER=0 cellpadding=10>
+<TR>
+<TD> <B>Authorizer:</B> M. Carrano</TD>
+<TD> <B>Enterer:</B> M. Carrano</TD>
+<TD> <B>Modifier:</B> M. Carrano</TD>
+</TR>
+</TABLE>
+
+
+
+<INPUT type="submit" value="Submit">
+</CENTER>
+
+<BR>
+
+</td></tr></table>
+ 
+</body>
+</html>
+
