@@ -24,6 +24,7 @@ my $DEBUG = 0;
 # concurrently when this is running might be left out)
 sub rebuildCache {
     my $dbt = shift;
+    my $list_only = shift;
     my $dbh = $dbt->dbh;
     my $result;
 
@@ -45,39 +46,42 @@ sub rebuildCache {
     my $time_row = $sth->fetchrow_hashref();
     my $time = $time_row->{'t'};
 
-    # We're going to create a brand new table from scratch, then swap it
-    # to be the normal table once its complete
-    $result = $dbh->do("DROP TABLE IF EXISTS taxa_tree_cache_new");
-    $result = $dbh->do("CREATE TABLE taxa_tree_cache_new (taxon_no int(10) unsigned NOT NULL default '0',lft int(10) unsigned NOT NULL default '0',rgt int(10) unsigned NOT NULL default '0', spelling_no int(10) unsigned NOT NULL default '0', synonym_no int(10) unsigned NOT NULL default '0', PRIMARY KEY  (taxon_no), KEY lft (lft), KEY rgt (rgt), KEY synonym_no (synonym_no)) TYPE=MyISAM");
+    disableBinLog($dbt);
 
-    # Keep track of which nodes we've processed
-    my $next_lft = 1;
-    my %processed;
+    if (!$list_only)  {
+        # We're going to create a brand new table from scratch, then swap it
+        # to be the normal table once its complete
+        $result = $dbh->do("DROP TABLE IF EXISTS taxa_tree_cache_new");
+        $result = $dbh->do("CREATE TABLE taxa_tree_cache_new (taxon_no int(10) unsigned NOT NULL default '0',lft int(10) unsigned NOT NULL default '0',rgt int(10) unsigned NOT NULL default '0', spelling_no int(10) unsigned NOT NULL default '0', synonym_no int(10) unsigned NOT NULL default '0', PRIMARY KEY  (taxon_no), KEY lft (lft), KEY rgt (rgt), KEY synonym_no (synonym_no)) TYPE=MyISAM");
 
-    foreach my $row (@rows) {
-        if (!$processed{$row->{'taxon_no'}}) {
-            my $ancestor_no = TaxonInfo::getOriginalCombination($dbt,$row->{'taxon_no'});
-            # Get the topmost ancestor     
-            for(my $i=0;$i<100;$i++) { # max out at 100;
-                my $opinion = TaxonInfo::getMostRecentParentOpinion($dbt,$ancestor_no);
-                if ($opinion && $opinion->{'parent_no'}) {
-                    $ancestor_no=$opinion->{'parent_no'};
-                } else {
-                    last;
+        # Keep track of which nodes we've processed
+        my $next_lft = 1;
+        my %processed;
+
+        foreach my $row (@rows) {
+            if (!$processed{$row->{'taxon_no'}}) {
+                my $ancestor_no = TaxonInfo::getOriginalCombination($dbt,$row->{'taxon_no'});
+                # Get the topmost ancestor     
+                for(my $i=0;$i<100;$i++) { # max out at 100;
+                    my $opinion = TaxonInfo::getMostRecentParentOpinion($dbt,$ancestor_no);
+                    if ($opinion && $opinion->{'parent_no'}) {
+                        $ancestor_no=$opinion->{'parent_no'};
+                    } else {
+                        last;
+                    }
                 }
+                print "found ancestor $ancestor_no for $row->{taxon_no}<BR>\n" if ($DEBUG);
+
+                # Now insert that topmost ancestor, which will recursively insert all its children as well
+                # marking them as processed to boot, so we won't readd them later
+                $next_lft = rebuildAddChild($dbt,$ancestor_no,$next_lft,\%processed);
+                $next_lft++;
             }
-            print "found ancestor $ancestor_no for $row->{taxon_no}<BR>\n" if ($DEBUG);
-
-            # Now insert that topmost ancestor, which will recursively insert all its children as well
-            # marking them as processed to boot, so we won't readd them later
-            $next_lft = rebuildAddChild($dbt,$ancestor_no,$next_lft,\%processed);
-            $next_lft++;
         }
+        $result = $dbh->do("RENAME TABLE taxa_tree_cache TO taxa_tree_cache_old, taxa_tree_cache_new TO taxa_tree_cache");
+        $result = $dbh->do("DROP TABLE taxa_tree_cache_old");
+        undef %processed;
     }
-    $result = $dbh->do("RENAME TABLE taxa_tree_cache TO taxa_tree_cache_old, taxa_tree_cache_new TO taxa_tree_cache");
-    $result = $dbh->do("DROP TABLE taxa_tree_cache_old");
-    undef %processed;
-
     # Now build the taxa_list_cache - just edit it in place
     #$result = $dbh->do("CREATE TABLE taxa_list_cache (parent_no int(10) unsigned NOT NULL default '0',child_no int(10) unsigned NOT NULL default '0', PRIMARY KEY  (child_no,parent_no), KEY parent_no (parent_no)) TYPE=MyISAM");
     my %link_cache = ();
@@ -179,6 +183,7 @@ sub rebuildCache {
     foreach my $row (@results) {
         updateCache($dbt,$row->{'child_no'});
     }
+
 }
 
 
@@ -294,12 +299,14 @@ sub addName {
     my $row = $sth->fetchrow_arrayref();
     my $lft = $row->[0] + 1; 
     my $rgt = $row->[0] + 2; 
-   
+  
+    disableBinLog($dbt);
     $sql = "INSERT IGNORE INTO taxa_tree_cache (taxon_no,lft,rgt,spelling_no,synonym_no) VALUES ($taxon_no,$lft,$rgt,$taxon_no,$taxon_no)";
     print "Adding name: $taxon_no: $sql<BR>\n" if ($DEBUG);
     $dbh->do($sql); 
     $sql = "SELECT * FROM taxa_tree_cache WHERE taxon_no=$taxon_no";
     $row = ${$dbt->getData($sql)}[0];
+    
     return $row;
 }
 
@@ -319,11 +326,28 @@ sub updateCache {
     return if (!$child_no);
 
     my $sql;
-    my @updateListCache;
+    my $updateList = 0;
 
-    # don't forget this - emulate transactions
-    $dbh->do("LOCK TABLES taxa_tree_cache READ"); 
-    $dbh->do("LOCK TABLES taxa_tree_cache WRITE, opinions AS o WRITE, refs AS r WRITE"); 
+    # This table doesn't have any rows in it - it acts as a mutex so writes to the taxa_tree_cache table
+    # will be serialized, which is important to prevent corruption.  Note reads can still happen
+    # concurrently with the writes, but any additional writes beyond the first will block on this mutex
+    # Don't respect mutexes more than a 2 minutes old, this script shouldn't execute for more than about 15 seconds
+    disableBinLog($dbt);
+    while(1) {
+        $dbh->do("LOCK TABLES tc_mutex WRITE");
+        my @results = @{$dbt->getData("SELECT * FROM tc_mutex WHERE created > DATE_ADD(NOW(), INTERVAL -2 MINUTE)")};
+        if (@results) {
+            print "$$: Failed to get lock, trying again in 5 seconds\n" if ($DEBUG);
+            $dbh->do("UNLOCK TABLES");
+            sleep(5);
+        } else {
+            print "$$: Got lock\n" if ($DEBUG);
+            $dbh->do("DELETE FROM tc_mutex");
+            $dbh->do("INSERT INTO tc_mutex (mutex_id,created) VALUES ($$,NOW())");
+            $dbh->do("UNLOCK TABLES");
+            last;
+        }
+    }
 
     # New most recent opinion
     $sql = "SELECT taxon_no,lft,rgt,spelling_no,synonym_no FROM taxa_tree_cache WHERE taxon_no=$child_no";
@@ -347,38 +371,43 @@ sub updateCache {
         
         # If a spelling no hasn't been combined yet, combine it now
         if ($spelling_row->{'lft'} != $cache_row->{'lft'}) {
-            # Now after they're combined, make sure the spelling_no and synonym_nos get updated as well
-            $sql = "UPDATE taxa_tree_cache SET lft=$cache_row->{lft}, rgt=$cache_row->{rgt} WHERE lft=$spelling_row->{lft}";
-            print "Combining spelling $spelling_no with $child_no: $sql<BR>\n" if ($DEBUG);
-            $dbh->do($sql);
+            # if the alternate spelling had children (not too likely), get a list of them
 
-            my ($upd_lft,$upd_rgt) = ($cache_row->{'lft'},$cache_row->{'rgt'});
-            push @upd_rows,[$upd_lft,$upd_rgt];
-
-            # if the alternate spelling had children (not too likely), move them now as well
             if (($spelling_row->{'rgt'} - $spelling_row->{'lft'}) > 2) {
-                my $old_children_lft = $spelling_row->{'lft'} + 1;
-                my $old_children_rgt = $spelling_row->{'rgt'} - 1;
-                my ($upd_lft,$upd_rgt) = moveChildren($dbt,$old_children_lft,$old_children_rgt,$child_no);
-                push @upd_rows,[$upd_lft,$upd_rgt];
+                my $tree = getChildren($dbt,$spelling_no,'tree');
+                my @children = @{$tree->{'children'}};
+                foreach my $child (@children) {
+                    moveChildren($dbt,$child->{'taxon_no'},$child_no);
+                    #push @upd_rows,$child->{'taxon_no'};
+                }
             } 
-            # Reset synonym nos of moved children, this will probably never come up
-            $sql = "UPDATE taxa_tree_cache SET synonym_no=$cache_row->{synonym_no} WHERE lft=$cache_row->{lft} OR (lft >= $cache_row->{lft} AND rgt <= $cache_row->{rgt} AND synonym_no=$spelling_row->{synonym_no})"; 
+    
+            # Refresh he cache row from the db since it may have been changed above
+            $sql = "SELECT taxon_no,lft,rgt,spelling_no,synonym_no FROM taxa_tree_cache WHERE taxon_no=$child_no";
+            $cache_row = ${$dbt->getData($sql)}[0];
+           
+            # Combine the spellings
+            # The weird join condition is because the lft and rgt values might have been modified above, 
+            # And if you do it this way that doens't matter since it will use the current DB lft and rgt values
+            $sql = "UPDATE taxa_tree_cache t1, taxa_tree_cache t2 SET t1.lft=$cache_row->{lft},t1.rgt=$cache_row->{rgt} WHERE t1.lft=t2.lft and t2.taxon_no=$spelling_row->{taxon_no}";
+            print "Combining spelling $spelling_no with $child_no: $sql\n" if ($DEBUG);
             $dbh->do($sql);
+            $updateList = 1;
+
+            # Now after they're combined, make sure the spelling_no and synonym_nos get updated as well
+            # For moved children
+            $sql = "UPDATE taxa_tree_cache SET synonym_no=$cache_row->{synonym_no} WHERE lft=$cache_row->{lft} OR (lft >= $cache_row->{lft} AND rgt <= $cache_row->{rgt} AND synonym_no=$spelling_row->{synonym_no})"; 
+            
         }
     }
 
     # New most recent opinion
     my $mrpo = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no);
     my $spelling_no = ($mrpo) ? $mrpo->{'child_spelling_no'} : $child_no;
-
-    # Refresh he cache row from the db since it may have been chagned above
-    $sql = "SELECT taxon_no,lft,rgt,spelling_no,synonym_no FROM taxa_tree_cache WHERE taxon_no=$child_no";
-    $cache_row = ${$dbt->getData($sql)}[0];
        
     # Change the most current spelling_no
     $sql = "UPDATE taxa_tree_cache SET spelling_no=$spelling_no WHERE lft=$cache_row->{lft}"; 
-    print "Updating spelling with $spelling_no: $sql<BR>\n" if ($DEBUG);
+    print "Updating spelling with $spelling_no: $sql\n" if ($DEBUG);
     $dbh->do($sql);
 
     # Change it so the senior synonym no points to the senior synonym's most correct name
@@ -389,28 +418,20 @@ sub updateCache {
         $senior_synonym_no = $correct_row->{'child_spelling_no'};
     }
     $sql = "UPDATE taxa_tree_cache SET synonym_no=$senior_synonym_no WHERE lft=$cache_row->{lft} OR (lft >= $cache_row->{lft} AND rgt <= $cache_row->{rgt} AND synonym_no=$cache_row->{synonym_no})"; 
-    print "Updating synonym with $senior_synonym_no: $sql<BR>\n" if ($DEBUG);
+    print "Updating synonym with $senior_synonym_no: $sql\n" if ($DEBUG);
     $dbh->do($sql);
 
-    $dbh->do("UNLOCK TABLES");
     # (may take some time) and b/c there may be setting of spelling/no synonym_no after the first
     # section of code that needs to take place before this function should be called
-    if (@upd_rows) {
-        foreach my $lft_rgt (@upd_rows) {
-            updateListCache($dbt,$lft_rgt->[0],$lft_rgt->[1],$senior_synonym_no);
-        }
-    }
-
-    # don't forget this - emulate transactions till we actually have them
-    $dbh->do("LOCK TABLES taxa_tree_cache READ"); 
-    $dbh->do("LOCK TABLES taxa_tree_cache WRITE, opinions AS o WRITE, refs AS r WRITE"); 
+    #foreach my $taxon_no (@upd_rows) {
+    #    updateListCache($dbt,$taxon_no);
+    #}
 
     # Second section: Now we check if the parents have been chagned by a recent opinion, and only update
     # it if that is the case
     $sql = "SELECT spelling_no parent_no FROM taxa_tree_cache WHERE lft < $cache_row->{lft} AND rgt > $cache_row->{rgt} ORDER BY lft DESC LIMIT 1";
     # BUG: may be multiple parents, compare most recent spelling:
     my $row = ${$dbt->getData($sql)}[0];
-    my ($upd_lft,$upd_rgt) = ("","");
     my $new_parent_no = ($mrpo && $mrpo->{'parent_no'}) ? $mrpo->{'parent_no'} : 0;
     if ($new_parent_no) {
         # Compare most recent spellings of the names, for consistency
@@ -420,21 +441,29 @@ sub updateCache {
         }
     }
     my $old_parent_no = ($row && $row->{'parent_no'}) ? $row->{'parent_no'} : 0;
+
     if ($new_parent_no != $old_parent_no) {
-        print "Parents have been changed: new parent $new_parent_no: $sql<BR>\n" if ($DEBUG);
+        print "Parents have been changed: new parent $new_parent_no: $sql\n" if ($DEBUG);
         
         if ($cache_row) {
-            ($upd_lft,$upd_rgt) = moveChildren($dbt,$cache_row->{'lft'},$cache_row->{'rgt'},$new_parent_no);
+            moveChildren($dbt,$cache_row->{'taxon_no'},$new_parent_no);
         } else {
             carp "Missing child_no from taxa_tree_cache: child_no: $child_no";
         }
+        #updateListCache($dbt,$cache_row->{'taxon_no'});
+        $updateList = 1;
+    } else {
+        print "Parents are the same: new parent $new_parent_no old parent $old_parent_no\n" if ($DEBUG);
     }
-    $dbh->do("UNLOCK TABLES");
-    if ($upd_lft) {
-        updateListCache($dbt,$upd_lft,$upd_rgt,$senior_synonym_no);
+    if ($updateList) {
+        updateListCache($dbt,$cache_row->{'taxon_no'});
     }
 
+    # Unlock tables
+    $dbh->do("DELETE FROM tc_mutex");
+    print "$$: Released lock\n" if ($DEBUG);
 }
+
 
 # This is a utility function that moves a block of children in the taxa_tree_cache from
 # their old parent to their new parent.  We specify the lft and rgt values of the 
@@ -446,10 +475,11 @@ sub updateCache {
 #     so all their values get adjusted to be in the new spot
 #   * Remove the old "vacuum" where the children used to be
 sub moveChildren {
-    my ($dbt,$lft,$rgt,$parent_no) = @_;
+    my ($dbt,$child_no,$parent_no) = @_;
     my $dbh = $dbt->dbh;
     my $sql;
     my $p_row;
+    my $c_row;
     if ($parent_no) {
         $sql = "SELECT lft,rgt,spelling_no FROM taxa_tree_cache WHERE taxon_no=$parent_no";
         $p_row = ${$dbt->getData($sql)}[0];
@@ -458,8 +488,35 @@ sub moveChildren {
         }
     }
 
+    $sql = "SELECT lft,rgt,spelling_no FROM taxa_tree_cache WHERE taxon_no=$child_no";
+    $c_row = ${$dbt->getData($sql)}[0];
+    if (!$c_row) {
+        return;
+    }
+    my $lft = $c_row->{'lft'};
+    my $rgt = $c_row->{'rgt'};
+
+    # if PARENT && PARENT.RGT BTWN LFT AND RGT
+    # If a loop occurs (the insertion point where we're going to move the child is IN the child itself
+    # then we have some special logic: Move to the end so it has no parents, then move the child to 
+    # the parent, so we avoid loops
+    if ($parent_no && $p_row->{'rgt'} > $c_row->{'lft'} && $p_row->{'rgt'} < $c_row->{'rgt'}) {
+        print "Loop found, moving parent $parent_no to 0\n" if ($DEBUG);
+        moveChildren($dbt,$parent_no,0);
+        $sql = "SELECT lft,rgt,spelling_no FROM taxa_tree_cache WHERE taxon_no=$parent_no";
+        $p_row = ${$dbt->getData($sql)}[0];
+        if (!$p_row) { return; }
+        $sql = "SELECT lft,rgt,spelling_no FROM taxa_tree_cache WHERE taxon_no=$child_no";
+        $c_row = ${$dbt->getData($sql)}[0];
+        if (!$c_row) { return; }
+        
+        $lft = $c_row->{'lft'};
+        $rgt = $c_row->{'rgt'};
+        print "End dealing w/loop\n" if ($DEBUG);
+    }
+
     my $child_tree_size = 1+$rgt-$lft;
-    print "moveChildren called: lft $lft rgt $rgt parent $parent_no<BR>" if ($DEBUG);
+    print "moveChildren called: child_no $child_no lft $lft rgt $rgt parent $parent_no\n" if ($DEBUG);
 
     # Find out where we're going to insert the new child. Just add it as the last child of the parent,
     # or put it at the very end if there is no parent
@@ -468,41 +525,34 @@ sub moveChildren {
         $insert_point = $p_row->{'rgt'};
 
         # Now add a space at the location of the new nodes will be and
-        # These have to be separate queries
-        $sql = "UPDATE taxa_tree_cache SET rgt=rgt+$child_tree_size WHERE rgt >= $insert_point";
-        print "moveChildren: create new spot at $p_row->{rgt}, sql1 ($sql)<BR>\n" if ($DEBUG);
-        $dbh->do($sql);
-        $sql = "UPDATE taxa_tree_cache SET lft=lft+$child_tree_size WHERE lft >= $insert_point";
-        print "moveChildren: create new spot at $p_row->{rgt}, sql2 ($sql)<BR>\n" if ($DEBUG);
+        $sql = "UPDATE taxa_tree_cache SET lft=IF(lft >= $insert_point,lft+$child_tree_size,lft),rgt=IF(rgt >= $insert_point,rgt+$child_tree_size,rgt)";
+        print "moveChildren: create new spot at $p_row->{rgt}, sql ($sql)\n" if ($DEBUG);
         $dbh->do($sql);
     } else {
-        $sql = "SELECT max(rgt) m FROM taxa_tree_cache";
+        $sql = "SELECT max(rgt) m FROM taxa_tree_cache tc_w";
         my $sth = $dbh->prepare($sql);
         $sth->execute();
         my $row = $sth->fetchrow_arrayref();
         $insert_point = $row->[0] + 1;
-        print "moveChildren: create spot at end, blank parent, $insert_point<BR>\n" if ($DEBUG);
+        print "moveChildren: create spot at end, blank parent, $insert_point\n" if ($DEBUG);
     }
 
     # The child's lft and rgt values may be been just been adjusted by the update ran above, so
     # adjust accordingly
-    my $child_rgt = ($insert_point < $lft) ? $rgt + $child_tree_size : $rgt;
-    my $child_lft  = ($insert_point < $lft) ? $lft + $child_tree_size : $lft;
+    my $child_rgt = ($insert_point <= $rgt) ? $rgt + $child_tree_size : $rgt;
+    my $child_lft  = ($insert_point <= $lft) ? $lft + $child_tree_size : $lft;
     # Adjust their lft and rgt values accordingly by adding/subtracting the difference between where the
     # children and are where we're moving them
     my $diff = abs($insert_point - $child_lft);
     my $sign = ($insert_point < $child_lft) ? "-" : "+";
     $sql = "UPDATE taxa_tree_cache SET lft=lft $sign $diff, rgt=rgt $sign $diff WHERE lft >= $child_lft AND rgt <= $child_rgt";
-    print "moveChildren: move to new spot: $sql<BR>\n" if ($DEBUG);
+    print "moveChildren: move to new spot: $sql\n" if ($DEBUG);
     $dbh->do($sql);
 
     # Now shift everything down into the old space thats now vacant
     # These have to be separate queries
-    $sql = "UPDATE taxa_tree_cache SET lft=lft-$child_tree_size WHERE lft > $child_lft";
-    print "moveChildren: remove old spot1: $sql<BR>\n" if ($DEBUG);
-    $dbh->do($sql);
-    $sql = "UPDATE taxa_tree_cache SET rgt=rgt-$child_tree_size WHERE rgt > $child_lft";
-    print "moveChildren: remove old spot2: $sql<BR>\n" if ($DEBUG);
+    $sql = "UPDATE taxa_tree_cache SET lft=IF(lft > $child_lft,lft-$child_tree_size,lft),rgt=IF(rgt > $child_lft,rgt-$child_tree_size,rgt)"; 
+    print "moveChildren: remove old spot: $sql\n" if ($DEBUG);
     $dbh->do($sql);
 
     # Think about this some more
@@ -518,37 +568,79 @@ sub moveChildren {
 # The senior synonym_no is the senior synonym of the top level children passed
 # in - we don't want to mark a senior synonym as a "parent" so we filter those out
 sub updateListCache {
-    my ($dbt,$lft,$rgt,$senior_synonym_no) = @_; 
+    my ($dbt,$taxon_no) = @_; 
     my $dbh = $dbt->dbh;
 
-    print "updateListCache called lft $lft rgt $rgt<BR>\n" if ($DEBUG);
+    # Get the row from the db
+    my $sql = "SELECT taxon_no,lft,rgt,spelling_no,synonym_no FROM taxa_tree_cache WHERE taxon_no=$taxon_no";
+    my $cache_row = ${$dbt->getData($sql)}[0];
+    my $senior_synonym_no = $cache_row->{'synonym_no'};
+                                                         
+    print "updateListCache called taxon_no $taxon_no lft $cache_row->{lft} rgt $cache_row->{rgt}\n" if ($DEBUG);
 
-    # Update the other cache
-    my $sql = "SELECT taxon_no FROM taxa_tree_cache WHERE lft < $lft AND rgt > $rgt AND synonym_no=taxon_no AND synonym_no != $senior_synonym_no";
+    # First we want to update any childrne that used the old spelling/junior synonym of
+    # the taxon if the spelling/senior synonym has changed.  Replace all these old spellings
+    # with the newest one
+    $sql = "SELECT * FROM taxa_tree_cache WHERE lft=$cache_row->{lft}";
+    my @results = @{$dbt->getData($sql)};
+    my %all_spellings = ();
+    foreach my $row (@results) {
+        $all_spellings{$row->{'taxon_no'}} = 1;
+    }
+    delete $all_spellings{$senior_synonym_no};
+
+    if (%all_spellings) {
+        $sql = "SELECT * FROM taxa_list_cache WHERE parent_no IN (".join(",",keys(%all_spellings)).")";
+        @results = @{$dbt->getData($sql)};
+        if (@results) {
+            while (@results) {
+                my @subr = splice(@results,0,5000);
+                $sql = "INSERT IGNORE INTO taxa_list_cache (parent_no,child_no) VALUES ";
+                foreach my $row (@subr) {
+                    $sql .= "($senior_synonym_no,$row->{child_no}),";
+                }
+                $sql =~ s/,$//;
+                print "updateListCache changing spellings sql,insert: ".$sql."\n" if ($DEBUG == 2);
+                $dbh->do($sql);
+            }
+            $sql = "DELETE FROM taxa_list_cache WHERE parent_no IN (".join(",",keys(%all_spellings)).")";
+            print "updateListCache changing spellings sql,delete: ".$sql."\n" if ($DEBUG == 2);
+            $dbh->do($sql);
+        }
+    }
+
+    # Now update all the children of the taxa to have the same parents as the current
+    # taxon, in case the classification has changed in some way
+    $sql = "SELECT taxon_no FROM taxa_tree_cache WHERE lft < $cache_row->{lft} AND rgt > $cache_row->{rgt} AND synonym_no=taxon_no AND synonym_no != $senior_synonym_no";
     my @parents = map {$_->{'taxon_no'}} @{$dbt->getData($sql)};
 
-    $sql = "SELECT taxon_no FROM taxa_tree_cache WHERE lft >= $lft AND rgt <= $rgt"; 
+    $sql = "SELECT taxon_no FROM taxa_tree_cache WHERE lft >= $cache_row->{lft} AND rgt <= $cache_row->{rgt}"; 
     my @children = map {$_->{'taxon_no'}} @{$dbt->getData($sql)};
 
-    print "updateListCache children(".join(", ",@children).") parents(".join(", ",@parents).")<BR>\n" if ($DEBUG);
+    print "updateListCache children(".join(", ",@children).") parents(".join(", ",@parents).")\n" if ($DEBUG == 2);
 
     if (@children) {
         if (@parents) {
-            $sql = "INSERT IGNORE INTO taxa_list_cache (parent_no,child_no) VALUES ";
+            my @results = ();
             foreach my $parent_no (@parents) {
                 foreach my $child_no (@children) {
-                    $sql .= "($parent_no,$child_no),";
+                    push @results, "($parent_no,$child_no)";
                 }
             }
-            $sql =~ s/,$//;
-            print "updateListCache insert sql: ".$sql."<BR>\n" if ($DEBUG);
-            $dbh->do($sql);
+            # Break it up so we don't run into any query size limit 
+            # (which should be very large (16 MB) by default, but play it safe)
+            while (@results) {
+                my @subr = splice(@results,0,5000);
+                $sql = "INSERT IGNORE INTO taxa_list_cache (parent_no,child_no) VALUES ".join(",",@subr);
+                print "updateListCache insert sql: ".$sql."\n" if ($DEBUG == 2);
+                $dbh->do($sql);
+            }
         }
 
         # Since we're updating the trees for a big pile of children potentially, some children can be parents of 
-        # other children. Don't delete those links, just delete higher ordered ones
+        # other children. Don't delete those links, just delete higher ordered ones. Breaking this up shouldn't be necessary, or possible
         $sql = "DELETE FROM taxa_list_cache WHERE child_no IN (".join(",",@children).") AND parent_no NOT IN (".join(",",@children,@parents).")";
-        print "updateListCache: delete sql: ".$sql."<BR>\n" if ($DEBUG);
+        print "updateListCache: delete sql: ".$sql."\n" if ($DEBUG == 2);
         $dbh->do($sql);
     } 
 }
@@ -575,7 +667,14 @@ sub getChildren {
         # Ordering is very important. 
         # The ORDER BY tc2.lft makes sure results are returned in hieracharical order, so we can build the tree in one pass below
         # The (tc2.taxon_no != tc2.spelling_no) term ensures the most recent name always comes first (this simplfies later algorithm)
-        my $sql = "SELECT tc2.taxon_no, a1.taxon_rank, a1.taxon_name, tc2.spelling_no, tc2.lft, tc2.rgt, tc2.synonym_no FROM taxa_tree_cache tc1, taxa_tree_cache tc2, authorities a1 WHERE tc1.taxon_no=$taxon_no AND a1.taxon_no=tc2.taxon_no AND tc2.lft >= tc1.lft and tc2.rgt <= tc1.rgt ORDER BY tc2.lft, (tc2.taxon_no != tc2.spelling_no)";
+        # use between and both values so we'll use a key for a smaller tree;
+        my $sql = "SELECT tc2.taxon_no, a1.taxon_rank, a1.taxon_name, tc2.spelling_no, tc2.lft, tc2.rgt, tc2.synonym_no "
+                . " FROM taxa_tree_cache tc1, taxa_tree_cache tc2, authorities a1"
+                . " WHERE a1.taxon_no=tc2.taxon_no"
+                . " AND (tc2.lft BETWEEN tc1.lft AND tc1.rgt)"
+                . " AND (tc2.rgt BETWEEN tc1.lft AND tc1.rgt)"
+                . " AND tc1.taxon_no=$taxon_no"
+                . " ORDER BY tc2.lft, (tc2.taxon_no != tc2.spelling_no)";
         my @results = @{$dbt->getData($sql)};
 
         my $root = shift @results;
@@ -622,7 +721,10 @@ sub getChildren {
         }
         return $root;
     } else {
-        my $sql = "SELECT tc2.taxon_no FROM taxa_tree_cache tc1, taxa_tree_cache tc2 WHERE tc1.taxon_no=$taxon_no AND tc2.lft >= tc1.lft and tc2.rgt <= tc1.rgt";
+        # use between and both values so we'll use a key for a smaller tree;
+        my $sql = "SELECT tc2.taxon_no FROM taxa_tree_cache tc1, taxa_tree_cache tc2 WHERE tc1.taxon_no=$taxon_no "
+                . "AND (tc2.lft BETWEEN tc1.lft AND tc1.rgt) "
+                . "AND (tc2.rgt BETWEEN tc1.lft AND tc1.rgt)";  
         #my $sql = "SELECT l.child_no FROM taxa_list_cache l WHERE l.parent_no=$taxon_no";
         my @taxon_nos = map {$_->{'taxon_no'}} @{$dbt->getData($sql)};
         return @taxon_nos;
@@ -660,6 +762,23 @@ sub getParent {
 
     my $sql = "SELECT a.taxon_no,a.taxon_name,a.taxon_rank FROM taxa_list_cache l, taxa_tree_cache t, authorities a WHERE t.taxon_no=l.parent_no AND a.taxon_no=l.parent_no AND l.child_no=$taxon_no ORDER BY t.lft DESC LIMIT 1";
     return ${$dbt->getData($sql)}[0];
+}
+
+
+# pbdbuser must have SUPER privilege - don't bother logging all these transactions,
+# since they're derived from the opinions table anyways. This is for the connection only so if
+# we every swtich to mod_perl, will have to enableBinLog at the end also
+sub disableBinLog {
+    my $dbt = shift;
+    my $return = $dbt->dbh->do("SET SQL_LOG_BIN=0");
+    return $return;
+}
+
+# Only necessary if we every switch to mod_perl
+sub enableBinLog {
+    my $dbt = shift;
+    my $return = $dbt->dbh->do("SET SQL_LOG_BIN=1");
+    return $return;
 }
 
 1;
