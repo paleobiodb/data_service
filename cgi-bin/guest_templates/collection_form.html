@@ -1,51 +1,1905 @@
-  <div class="title">Collection entry form</div>
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<title id="title">Paleobiology Database</title>
+<meta http-equiv="content-type" content="text/html; charset=iso-8859-1" />
+
+<link REL="stylesheet" TYPE="text/css" HREF="/StyleSheets/common.css" />
+<link REL="icon" HREF="/public/favicon.ico" type="image/x-icon" />
+<link REL="shortcut icon" HREF="/public/favicon.ico" type="image/x-icon" />
+
+<!--javascript containing common functions-->
+<script src="/JavaScripts/login.js" language="JavaScript" type="text/javascript"></script>
+<script src="/JavaScripts/common.js" language="JavaScript" type="text/javascript"></script>
+
+</head>
+
+<body>
+
+</td></tr></table>
+
+</td></tr></table>
+
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+function intervalNames() {
+    var intervals = new Array('Cenozoic', 'Mesozoic', 'Paleozoic', 'Sinian', 'Riphean', 'Animikean', 'Huronian', 'Randian', 'Swazian', 'Isuan', 'Hadean', 'Quaternary', 'Tertiary', 'Cretaceous', 'Jurassic', 'Triassic', 'Permian', 'Carboniferous', 'Devonian', 'Silurian', 'Ordovician', 'Cambrian', 'Vendian', 'Sturtian', 'Neogene', 'Paleogene', 'Pennsylvanian', 'Mississippian', 'Holocene', 'Pleistocene', 'Pliocene', 'Miocene', 'Oligocene', 'Eocene', 'Paleocene', 'Zechstein', 'Rotliegendes', 'Gzelian', 'Kasimovian', 'Moscovian', 'Bashkirian', 'Serpukhovian', 'Visean', 'Tournaisian', 'Pridoli', 'Ludlow', 'Wenlock', 'Llandovery', 'Ashgill', 'Caradoc', 'Llandeilo', 'Llanvirn', 'Arenig', 'Tremadoc', 'Merioneth', 'St Davids', 'Caerfai', 'Ediacara', 'Varanger', 'Karatau', 'Yurmatin', 'Burzyan', 'Imbrian', 'Nectarian', 'Basin Groups 1-9', 'Cryptic', 'Senonian', 'Gallic', 'Neocomian', 'Piacenzian', 'Zanclian', 'Messinian', 'Tortonian', 'Serravallian', 'Langhian', 'Burdigalian', 'Aquitanian', 'Chattian', 'Rupelian', 'Priabonian', 'Bartonian', 'Lutetian', 'Ypresian', 'Thanetian', 'Danian', 'Maastrichtian', 'Campanian', 'Santonian', 'Coniacian', 'Turonian', 'Cenomanian', 'Albian', 'Aptian', 'Barremian', 'Hauterivian', 'Valanginian', 'Berriasian', 'Tithonian', 'Kimmeridgian', 'Oxfordian', 'Callovian', 'Bathonian', 'Bajocian', 'Aalenian', 'Toarcian', 'Pliensbachian', 'Sinemurian', 'Hettangian', 'Rhaetian', 'Norian', 'Carnian', 'Ladinian', 'Anisian', 'Spathian', 'Nammalian', 'Griesbachian', 'Changxingian', 'Longtanian', 'Capitanian', 'Wordian', 'Ufimian', 'Kungurian', 'Artinskian', 'Sakmarian', 'Asselian', 'Noginskian', 'Klazminskian', 'Dorogomilovskian', 'Chamovnicheskian', 'Krevyakinskian', 'Myachkovskian', 'Podolskian', 'Kashirskian', 'Vereiskian', 'Melekesskian', 'Cheremshanskian', 'Yeadonian', 'Marsdenian', 'Kinderscoutian', 'Alportian', 'Chokierian', 'Arnsbergian', 'Pendleian', 'Brigantian', 'Asbian', 'Holkerian', 'Arundian', 'Chadian', 'Ivorian', 'Hastarian', 'Famennian', 'Frasnian', 'Givetian', 'Eifelian', 'Emsian', 'Pragian', 'Lochkovian', 'Ludfordian', 'Gorstian', 'Gleedonian', 'Whitwellian', 'Sheinwoodian', 'Telychian', 'Aeronian', 'Rhuddanian', 'Hirnantian', 'Rawtheyan', 'Cautleyan', 'Pusgillian', 'Onnian', 'Actonian', 'Marshbrookian', 'Longvillian', 'Soudleyan', 'Harnagian', 'Costonian', 'Dolgellian', 'Maentwrogian', 'Menevian', 'Solvan', 'Lenian', 'Atdabanian', 'Tommotian', 'Poundian', 'Wonokan', 'Mortensnes', 'Smalfjord', 'Blancan', 'Hemphillian', 'Clarendonian', 'Barstovian', 'Hemingfordian', 'Arikareean', 'Whitneyan', 'Orellan', 'Chadronian', 'Duchesnean', 'Uintan', 'Bridgerian', 'Wasatchian', 'Clarkforkian', 'Tiffanian', 'Torrejonian', 'Dragonian', 'Puercan', 'Rancholabrean', 'Irvingtonian', 'Sheridanian', 'Cudahyan', 'Sappan', '"Senecan"', 'Rexroadian', 'Twinbuttean', 'Blacksforkian', 'Gardnerbuttian', 'Lostcabinian', 'Lysitean', 'Graybullian', 'Sandcouleean', 'Cf3', 'Cf2', 'Cf1', 'Ti6', 'Ti5', 'Ti4', 'Ti3', 'Ti2', 'Ti1', 'To3', 'To2', 'To1', 'Pu3', 'Pu2', 'Pu1', 'Harrisonian', 'Monroecreekian', 'Geringian', 'Villanyian', 'Ruscinian', 'Turolian', 'Vallesian', 'Astaracian', 'Orleanian', 'Agenian', 'MN 17', 'MN 16', 'MN 15', 'MN 14', 'MN 13', 'MN 12', 'MN 11', 'MN 10', 'MN 9', 'MN 7 + 8', 'MN 6', 'MN 5', 'MN 4', 'MN 3', 'MN 2', 'MN 1', 'Dolgelly', 'Ffestiniog', 'Maentwrog', 'Clogau', 'Gamlan', 'Barmouth', 'Hafotty', 'Rhinog', 'Llanbedr', 'Dolwen', 'Trempealeauan', 'Franconian', 'Dresbachian', 'Albertian', 'Waucoban', 'Kosov', 'Kraluv Dvur', 'Bohdalec', 'Zahorany', 'Vinice', 'Letna', 'Liben', 'Dobrotiva', 'Sarka', 'Klabava', 'Porkuni', 'Pirgu', 'Vormsi', 'Nabala', 'Rakvere', 'Oandu', 'Keila', 'Johvi', 'Idavere', 'Kukruse', 'Uhaku', 'Lasnamagi', 'Aseri', 'Kunda', 'Volkhov', 'Latorp', 'Olentian', 'Gamach', 'Richmond', 'Maysville', 'Edenian', 'Sherman', 'Kirkfield', 'Rockland', 'Black River', 'Chazy', 'Whiterock', 'Cassinian', 'Jefferson', 'Deming', 'Gasconadian', 'Red Downtonian', 'Temeside Shales', 'Downton Castle', 'Whitcliffe', 'Leintwardine', 'Bringewood', 'Elton', 'Wenlock (England)', 'Tickwood', 'Coalbrookdale', 'Buildwas', 'Woolhope', 'Wych', 'Cowleigh Park', 'Pridolischichten', 'Kopaninaschichten', 'Litenschichten', 'Sundre', 'Hamra', 'Burgsvik', 'Eke', 'Hemse', 'Mulde', 'Slite', 'Hogklint', 'Upper Visby', 'Lower Visby', 'Cayugan', 'Lockportian', 'Tonawandan', 'Ontarian', 'Alexandrian', 'Pilton', 'Baggy', 'Upcott', 'Pickwell Down', 'Morte', 'Ilfracombe', 'Hangman', 'Lynton', 'Brecon', 'Ditton', 'Downton', 'Famennien', 'Frasnien', 'Givetien', 'Couvinien', 'Coblencien', 'Gedinnine', 'Wocklum', 'Dasberg', 'Hemberg', 'Nehden', 'Adorf', 'Givet', 'Eifel', 'Ems', 'Siegen', 'Gedinne', 'Srbsko', 'Chotec', 'Daleje', 'Zlichovian', 'Pragian (Czechoslovakia)', 'Lochkovian (Czechoslovakia)', 'Conewango', 'Conneaut', 'Canadaway', 'West Falls', 'Sonyea', 'Genesee', 'Taghanic', 'Tioughnioga', 'Cazenovia', 'Southwood', 'Sawkill', 'Deer Park', 'Helderberg', 'Stephanian', 'Westphalian', 'Namurian', 'Stephanian C', 'Stephanian B', 'Stephanian A', 'Cantabrian', 'Westphalian D', 'Westphalian C', 'Westphalian B', 'Westphalian A', 'Virgilian', 'Missourian', 'Desmoinesian', 'Atokan', 'Morrowan', 'Chesterian', 'Meramecian', 'Osagean', 'Kinderhookian', 'Buntsandstein', 'Ohre', 'Aller', 'Leine', 'Stassfurt Evaporites', 'Hauptdolomitstinkschiefer', 'Werra', 'Zechsteinkalk', 'Kupferschiefer', 'Weissliegendes', 'Dewey Lake', 'Rustler', 'Salado', 'Castile', 'Capitan', 'Word', 'Leonard', 'Wolfcamp', 'Epizigzagiceras', 'Rotundum', 'Oblatum', 'Kirschneri', 'Crassicostatus', 'Widebayense', 'Howelli', 'Scissum', 'Westermanni', 'Yakounensis', 'Hillebrandti', 'Crassicosta', 'Planulata', 'Kanense', 'Carlottense', 'Kunae', 'Freboldi', 'Whiteavesi', 'Imlayi', 'Tetraspidoceras', 'Plesechioceras harbledownense', 'Asteroceras varians', 'Arnioceras arnouldi', 'Coroniceras', 'Canadensis', 'Pseudaetomoceras', 'Franziceras', 'Euphyllites', 'Psiloceras', 'Parkinsoni', 'Garantiana', 'Subfurcatum', 'Humphresianum', 'Sauzei', 'Laeviuscula', 'Discites', 'Concavum', 'Murchisonae', 'Opalinum', 'Levesquei', 'Thouarsense', 'Variabilis', 'Bifrons', 'Falciferum', 'Tenuicostatum', 'Spinatum', 'Margaritatus', 'Davoei', 'Ibex', 'Jamesoni', 'Raricostatum', 'Oxynotum', 'Obtusum', 'Turneri', 'Semicostatum', 'Bucklandi', 'Angulata', 'Liasicus', 'Planorbis', 'Trentonian', 'Porterfieldian', 'Darriwilian', 'Wildernessian', 'Ashbyan', 'Tremadocian', 'Cincinnatian', 'Mohawkian', 'Whiterockian', 'Ibexian', 'Gamachian', 'Richmondian', 'Maysvillian', 'Chatfieldian', 'Turinian', 'Rangerian', 'Blackhillsian', 'Tulean', 'Stairsian', 'Skullrockian', 'Harju', 'Viru', 'Oeland', 'Streffordian', 'Cheneyan', 'Burrellian', 'Aurelucian', 'Llandeilian', 'Abereiddian', 'Fennian', 'Whitlandian', 'Moridunian', 'Migneintian', 'Cressagian', 'Woolstonian', 'Volfreyan', 'Dobrotivian', 'Oretanian', 'Kosovian', 'Kralodvorian', 'Berounian', 'Llanvirnian', 'Arenigian', 'Bolindian', 'Eastonian', 'Gisbornian', 'Yapeenian', 'Castlemainian', 'Chewtonian', 'Bendigonian', 'Lancefieldian', 'Warendian', 'Qiantianjiang', 'Aijiashan', 'Yangtzi', 'Yichang', 'Wufeng', 'Xiaoxita', 'Guniu', 'Dawan', 'Daobaowan', 'Lianghekou', 'Shikou', 'Hanjiang', 'Hulo', 'Ningguo', 'Hunjiang', 'Chientangkiangian', 'Neichiashanian', 'Zhejiangian', 'Yushanian', 'Ichangian', 'Valhallan', 'Haljala', 'Varangu', 'Pakerort', 'Aluoja', 'Valaste', 'Hunderum', 'Langevoja', 'Vaana', 'Saka', 'Billingen', 'Hunneberg', 'Franklinian', 'Ashgillian', 'Caradocian', 'Volkhovian', 'Latorpian', 'Kirkfieldian', 'Rocklandian', 'Canadian', 'Shermanian', 'Blackriveran', 'Chazyan', 'Marmor', 'Jeffersonian', 'Demingian', 'Olenekian', 'Induan', 'Sevatian', 'Alaunian', 'Lacian', 'Tuvalian', 'Julian', 'Longobardian', 'Fassanian', 'Illyrian', 'Pelsonian', 'Bithynian', 'Aegean', 'Smithian', 'Dienerian', 'Changhsingian', 'Wuchiapingian', 'Roadian', 'Lujanian', 'Ensenadan', 'Uquian', 'Chapadmalalan', 'Montehermosan', 'Huayquerian', 'Chasicoan', 'Mayoan', 'Laventan', 'Colloncuran', 'Friasian', 'Santacrucian', 'Colhuehuapian', 'Deseadan', 'Tinguirirican', 'Divisaderan', 'Mustersan', 'Casamayoran', 'Riochican', 'Itaboraian', 'Peligran', 'Tiupampan', 'Calabrian', 'Gelasian', 'Zanclean', 'Selandian', 'Lancian', 'Edmontonian', 'Judithian', 'Aquilan', 'Manykaian');
+    return intervals;
+}
+
+function checkIntervalNames(require_field) {
+    var frm = document.forms[0];
+    var badname1 = "";
+    var badname2 = "";
+    var alertmessage = "";
+    var eml1 = frm.eml_max_interval.options[frm.eml_max_interval.selectedIndex].value;
+    var time1 = frm.max_interval.value;
+    var eml2 = frm.eml_min_interval.options[frm.eml_min_interval.selectedIndex].value;
+    var time2 = frm.min_interval.value;
+    var emltime1 = eml1 + time1;
+    var emltime2 = eml2 + time2;
+    
+    var isInt = /^[0-9.]+$/;
+    if ( time1 == "" || isInt.test(time1))   {
+        if (require_field) {
+            var noname ="WARNING!\n" +
+                    "The maximum interval field is required.\n" +
+                    "Please fill it in and submit the form again.\n" +
+                    "Hint: epoch names are better than nothing.\n";
+            alert(noname);
+            return false;
+        } else {
+            return true;
+        }
+    } 
+    if( emltime1 != "Cenozoic" &&
+ emltime1 != "Mesozoic" &&
+ emltime1 != "Paleozoic" &&
+ emltime1 != "Sinian" &&
+ emltime1 != "Riphean" &&
+ emltime1 != "Animikean" &&
+ emltime1 != "Huronian" &&
+ emltime1 != "Randian" &&
+ emltime1 != "Swazian" &&
+ emltime1 != "Isuan" &&
+ emltime1 != "Hadean" &&
+ emltime1 != "Quaternary" &&
+ emltime1 != "Tertiary" &&
+ emltime1 != "Cretaceous" &&
+ emltime1 != "Jurassic" &&
+ emltime1 != "Triassic" &&
+ emltime1 != "Permian" &&
+ emltime1 != "Carboniferous" &&
+ emltime1 != "Devonian" &&
+ emltime1 != "Silurian" &&
+ emltime1 != "Ordovician" &&
+ emltime1 != "Cambrian" &&
+ emltime1 != "Vendian" &&
+ emltime1 != "Sturtian" &&
+ emltime1 != "Neogene" &&
+ emltime1 != "Paleogene" &&
+ emltime1 != "Pennsylvanian" &&
+ emltime1 != "Mississippian" &&
+ emltime1 != "Late/UpperOrdovician" &&
+ emltime1 != "MiddleOrdovician" &&
+ emltime1 != "Early/LowerOrdovician" &&
+ emltime1 != "Holocene" &&
+ emltime1 != "Pleistocene" &&
+ emltime1 != "Pliocene" &&
+ emltime1 != "Miocene" &&
+ emltime1 != "Oligocene" &&
+ emltime1 != "Eocene" &&
+ emltime1 != "Paleocene" &&
+ emltime1 != "Late/UpperCretaceous" &&
+ emltime1 != "Early/LowerCretaceous" &&
+ emltime1 != "Late/UpperJurassic" &&
+ emltime1 != "MiddleJurassic" &&
+ emltime1 != "Early/LowerJurassic" &&
+ emltime1 != "Late/UpperTriassic" &&
+ emltime1 != "MiddleTriassic" &&
+ emltime1 != "Early/LowerTriassic" &&
+ emltime1 != "Zechstein" &&
+ emltime1 != "Rotliegendes" &&
+ emltime1 != "Gzelian" &&
+ emltime1 != "Kasimovian" &&
+ emltime1 != "Moscovian" &&
+ emltime1 != "Bashkirian" &&
+ emltime1 != "Serpukhovian" &&
+ emltime1 != "Visean" &&
+ emltime1 != "Tournaisian" &&
+ emltime1 != "Late/UpperDevonian" &&
+ emltime1 != "MiddleDevonian" &&
+ emltime1 != "Early/LowerDevonian" &&
+ emltime1 != "Pridoli" &&
+ emltime1 != "Ludlow" &&
+ emltime1 != "Wenlock" &&
+ emltime1 != "Llandovery" &&
+ emltime1 != "Ashgill" &&
+ emltime1 != "Caradoc" &&
+ emltime1 != "Llandeilo" &&
+ emltime1 != "Llanvirn" &&
+ emltime1 != "Arenig" &&
+ emltime1 != "Tremadoc" &&
+ emltime1 != "Merioneth" &&
+ emltime1 != "St Davids" &&
+ emltime1 != "Caerfai" &&
+ emltime1 != "Ediacara" &&
+ emltime1 != "Varanger" &&
+ emltime1 != "Karatau" &&
+ emltime1 != "Yurmatin" &&
+ emltime1 != "Burzyan" &&
+ emltime1 != "Early/LowerImbrian" &&
+ emltime1 != "Nectarian" &&
+ emltime1 != "Basin Groups 1-9" &&
+ emltime1 != "Cryptic" &&
+ emltime1 != "Late/UpperPliocene" &&
+ emltime1 != "Early/LowerPliocene" &&
+ emltime1 != "Late/UpperMiocene" &&
+ emltime1 != "MiddleMiocene" &&
+ emltime1 != "Early/LowerMiocene" &&
+ emltime1 != "Late/UpperOligocene" &&
+ emltime1 != "Early/LowerOligocene" &&
+ emltime1 != "Late/UpperEocene" &&
+ emltime1 != "MiddleEocene" &&
+ emltime1 != "Early/LowerEocene" &&
+ emltime1 != "Late/UpperPaleocene" &&
+ emltime1 != "Early/LowerPaleocene" &&
+ emltime1 != "Senonian" &&
+ emltime1 != "Gallic" &&
+ emltime1 != "Neocomian" &&
+ emltime1 != "Piacenzian" &&
+ emltime1 != "Zanclian" &&
+ emltime1 != "Messinian" &&
+ emltime1 != "Tortonian" &&
+ emltime1 != "Serravallian" &&
+ emltime1 != "Langhian" &&
+ emltime1 != "Burdigalian" &&
+ emltime1 != "Aquitanian" &&
+ emltime1 != "Chattian" &&
+ emltime1 != "Rupelian" &&
+ emltime1 != "Priabonian" &&
+ emltime1 != "Bartonian" &&
+ emltime1 != "Lutetian" &&
+ emltime1 != "Ypresian" &&
+ emltime1 != "Thanetian" &&
+ emltime1 != "Danian" &&
+ emltime1 != "Maastrichtian" &&
+ emltime1 != "Campanian" &&
+ emltime1 != "Santonian" &&
+ emltime1 != "Coniacian" &&
+ emltime1 != "Turonian" &&
+ emltime1 != "Cenomanian" &&
+ emltime1 != "Albian" &&
+ emltime1 != "Aptian" &&
+ emltime1 != "Barremian" &&
+ emltime1 != "Hauterivian" &&
+ emltime1 != "Valanginian" &&
+ emltime1 != "Berriasian" &&
+ emltime1 != "Tithonian" &&
+ emltime1 != "Kimmeridgian" &&
+ emltime1 != "Oxfordian" &&
+ emltime1 != "Callovian" &&
+ emltime1 != "Bathonian" &&
+ emltime1 != "Bajocian" &&
+ emltime1 != "Aalenian" &&
+ emltime1 != "Toarcian" &&
+ emltime1 != "Pliensbachian" &&
+ emltime1 != "Sinemurian" &&
+ emltime1 != "Hettangian" &&
+ emltime1 != "Rhaetian" &&
+ emltime1 != "Norian" &&
+ emltime1 != "Carnian" &&
+ emltime1 != "Ladinian" &&
+ emltime1 != "Anisian" &&
+ emltime1 != "Spathian" &&
+ emltime1 != "Nammalian" &&
+ emltime1 != "Griesbachian" &&
+ emltime1 != "Changxingian" &&
+ emltime1 != "Longtanian" &&
+ emltime1 != "Capitanian" &&
+ emltime1 != "Wordian" &&
+ emltime1 != "Ufimian" &&
+ emltime1 != "Kungurian" &&
+ emltime1 != "Artinskian" &&
+ emltime1 != "Sakmarian" &&
+ emltime1 != "Asselian" &&
+ emltime1 != "Noginskian" &&
+ emltime1 != "Klazminskian" &&
+ emltime1 != "Dorogomilovskian" &&
+ emltime1 != "Chamovnicheskian" &&
+ emltime1 != "Krevyakinskian" &&
+ emltime1 != "Myachkovskian" &&
+ emltime1 != "Podolskian" &&
+ emltime1 != "Kashirskian" &&
+ emltime1 != "Vereiskian" &&
+ emltime1 != "Melekesskian" &&
+ emltime1 != "Cheremshanskian" &&
+ emltime1 != "Yeadonian" &&
+ emltime1 != "Marsdenian" &&
+ emltime1 != "Kinderscoutian" &&
+ emltime1 != "Alportian" &&
+ emltime1 != "Chokierian" &&
+ emltime1 != "Arnsbergian" &&
+ emltime1 != "Pendleian" &&
+ emltime1 != "Brigantian" &&
+ emltime1 != "Asbian" &&
+ emltime1 != "Holkerian" &&
+ emltime1 != "Arundian" &&
+ emltime1 != "Chadian" &&
+ emltime1 != "Ivorian" &&
+ emltime1 != "Hastarian" &&
+ emltime1 != "Famennian" &&
+ emltime1 != "Frasnian" &&
+ emltime1 != "Givetian" &&
+ emltime1 != "Eifelian" &&
+ emltime1 != "Emsian" &&
+ emltime1 != "Pragian" &&
+ emltime1 != "Lochkovian" &&
+ emltime1 != "Ludfordian" &&
+ emltime1 != "Gorstian" &&
+ emltime1 != "Gleedonian" &&
+ emltime1 != "Whitwellian" &&
+ emltime1 != "Sheinwoodian" &&
+ emltime1 != "Telychian" &&
+ emltime1 != "Aeronian" &&
+ emltime1 != "Rhuddanian" &&
+ emltime1 != "Hirnantian" &&
+ emltime1 != "Rawtheyan" &&
+ emltime1 != "Cautleyan" &&
+ emltime1 != "Pusgillian" &&
+ emltime1 != "Onnian" &&
+ emltime1 != "Actonian" &&
+ emltime1 != "Marshbrookian" &&
+ emltime1 != "Longvillian" &&
+ emltime1 != "Soudleyan" &&
+ emltime1 != "Harnagian" &&
+ emltime1 != "Costonian" &&
+ emltime1 != "Late/UpperLlandeilo" &&
+ emltime1 != "MiddleLlandeilo" &&
+ emltime1 != "Early/LowerLlandeilo" &&
+ emltime1 != "Late/UpperLlanvirn" &&
+ emltime1 != "Early/LowerLlanvirn" &&
+ emltime1 != "Dolgellian" &&
+ emltime1 != "Maentwrogian" &&
+ emltime1 != "Menevian" &&
+ emltime1 != "Solvan" &&
+ emltime1 != "Lenian" &&
+ emltime1 != "Atdabanian" &&
+ emltime1 != "Tommotian" &&
+ emltime1 != "Poundian" &&
+ emltime1 != "Wonokan" &&
+ emltime1 != "Mortensnes" &&
+ emltime1 != "Smalfjord" &&
+ emltime1 != "Blancan" &&
+ emltime1 != "Hemphillian" &&
+ emltime1 != "Clarendonian" &&
+ emltime1 != "Barstovian" &&
+ emltime1 != "Hemingfordian" &&
+ emltime1 != "Arikareean" &&
+ emltime1 != "Whitneyan" &&
+ emltime1 != "Orellan" &&
+ emltime1 != "Chadronian" &&
+ emltime1 != "Duchesnean" &&
+ emltime1 != "Uintan" &&
+ emltime1 != "Bridgerian" &&
+ emltime1 != "Wasatchian" &&
+ emltime1 != "Clarkforkian" &&
+ emltime1 != "Tiffanian" &&
+ emltime1 != "Torrejonian" &&
+ emltime1 != "Dragonian" &&
+ emltime1 != "Puercan" &&
+ emltime1 != "Rancholabrean" &&
+ emltime1 != "Irvingtonian" &&
+ emltime1 != "Sheridanian" &&
+ emltime1 != "Cudahyan" &&
+ emltime1 != "Sappan" &&
+ emltime1 != "Rexroadian" &&
+ emltime1 != "Late/UpperHemphillian" &&
+ emltime1 != "late EarlyHemphillian" &&
+ emltime1 != "early EarlyHemphillian" &&
+ emltime1 != "Late/UpperClarendonian" &&
+ emltime1 != "Early/LowerClarendonian" &&
+ emltime1 != "late LateBarstovian" &&
+ emltime1 != "early LateBarstovian" &&
+ emltime1 != "Early/LowerBarstovian" &&
+ emltime1 != "Late/UpperHemingfordian" &&
+ emltime1 != "Early/LowerHemingfordian" &&
+ emltime1 != "late LateArikareean" &&
+ emltime1 != "early LateArikareean" &&
+ emltime1 != "late EarlyArikareean" &&
+ emltime1 != "early EarlyArikareean" &&
+ emltime1 != "Late/UpperChadronian" &&
+ emltime1 != "MiddleChadronian" &&
+ emltime1 != "Early/LowerChadronian" &&
+ emltime1 != "Late/UpperUintan" &&
+ emltime1 != "Early/LowerUintan" &&
+ emltime1 != "Twinbuttean" &&
+ emltime1 != "Blacksforkian" &&
+ emltime1 != "Gardnerbuttian" &&
+ emltime1 != "Lostcabinian" &&
+ emltime1 != "Lysitean" &&
+ emltime1 != "Graybullian" &&
+ emltime1 != "Sandcouleean" &&
+ emltime1 != "Cf3" &&
+ emltime1 != "Cf2" &&
+ emltime1 != "Cf1" &&
+ emltime1 != "Ti6" &&
+ emltime1 != "Ti5" &&
+ emltime1 != "Ti4" &&
+ emltime1 != "Ti3" &&
+ emltime1 != "Ti2" &&
+ emltime1 != "Ti1" &&
+ emltime1 != "To3" &&
+ emltime1 != "To2" &&
+ emltime1 != "To1" &&
+ emltime1 != "Pu3" &&
+ emltime1 != "Pu2" &&
+ emltime1 != "Pu1" &&
+ emltime1 != "Harrisonian" &&
+ emltime1 != "Monroecreekian" &&
+ emltime1 != "Geringian" &&
+ emltime1 != "Villanyian" &&
+ emltime1 != "Ruscinian" &&
+ emltime1 != "Turolian" &&
+ emltime1 != "Vallesian" &&
+ emltime1 != "Astaracian" &&
+ emltime1 != "Orleanian" &&
+ emltime1 != "Agenian" &&
+ emltime1 != "MN 17" &&
+ emltime1 != "MN 16" &&
+ emltime1 != "MN 15" &&
+ emltime1 != "MN 14" &&
+ emltime1 != "MN 13" &&
+ emltime1 != "MN 12" &&
+ emltime1 != "MN 11" &&
+ emltime1 != "MN 10" &&
+ emltime1 != "MN 9" &&
+ emltime1 != "MN 7 + 8" &&
+ emltime1 != "MN 6" &&
+ emltime1 != "MN 5" &&
+ emltime1 != "MN 4" &&
+ emltime1 != "MN 3" &&
+ emltime1 != "MN 2" &&
+ emltime1 != "MN 1" &&
+ emltime1 != "Dolgelly" &&
+ emltime1 != "Ffestiniog" &&
+ emltime1 != "Maentwrog" &&
+ emltime1 != "Clogau" &&
+ emltime1 != "Gamlan" &&
+ emltime1 != "Barmouth" &&
+ emltime1 != "Hafotty" &&
+ emltime1 != "Rhinog" &&
+ emltime1 != "Llanbedr" &&
+ emltime1 != "Dolwen" &&
+ emltime1 != "Trempealeauan" &&
+ emltime1 != "Franconian" &&
+ emltime1 != "Dresbachian" &&
+ emltime1 != "Albertian" &&
+ emltime1 != "Waucoban" &&
+ emltime1 != "Kosov" &&
+ emltime1 != "Kraluv Dvur" &&
+ emltime1 != "Bohdalec" &&
+ emltime1 != "Zahorany" &&
+ emltime1 != "Vinice" &&
+ emltime1 != "Letna" &&
+ emltime1 != "Liben" &&
+ emltime1 != "Dobrotiva" &&
+ emltime1 != "Sarka" &&
+ emltime1 != "Klabava" &&
+ emltime1 != "Porkuni" &&
+ emltime1 != "Pirgu" &&
+ emltime1 != "Vormsi" &&
+ emltime1 != "Nabala" &&
+ emltime1 != "Rakvere" &&
+ emltime1 != "Oandu" &&
+ emltime1 != "Keila" &&
+ emltime1 != "Johvi" &&
+ emltime1 != "Idavere" &&
+ emltime1 != "Kukruse" &&
+ emltime1 != "Uhaku" &&
+ emltime1 != "Lasnamagi" &&
+ emltime1 != "Aseri" &&
+ emltime1 != "Kunda" &&
+ emltime1 != "Volkhov" &&
+ emltime1 != "Latorp" &&
+ emltime1 != "Olentian" &&
+ emltime1 != "Gamach" &&
+ emltime1 != "Richmond" &&
+ emltime1 != "Maysville" &&
+ emltime1 != "Edenian" &&
+ emltime1 != "Sherman" &&
+ emltime1 != "Kirkfield" &&
+ emltime1 != "Rockland" &&
+ emltime1 != "Black River" &&
+ emltime1 != "Chazy" &&
+ emltime1 != "Whiterock" &&
+ emltime1 != "Cassinian" &&
+ emltime1 != "Jefferson" &&
+ emltime1 != "Deming" &&
+ emltime1 != "Gasconadian" &&
+ emltime1 != "Red Downtonian" &&
+ emltime1 != "Temeside Shales" &&
+ emltime1 != "Downton Castle" &&
+ emltime1 != "Whitcliffe" &&
+ emltime1 != "Leintwardine" &&
+ emltime1 != "Bringewood" &&
+ emltime1 != "Elton" &&
+ emltime1 != "Wenlock (England)" &&
+ emltime1 != "Tickwood" &&
+ emltime1 != "Coalbrookdale" &&
+ emltime1 != "Buildwas" &&
+ emltime1 != "Woolhope" &&
+ emltime1 != "Wych" &&
+ emltime1 != "Cowleigh Park" &&
+ emltime1 != "Pridolischichten" &&
+ emltime1 != "Kopaninaschichten" &&
+ emltime1 != "Litenschichten" &&
+ emltime1 != "Sundre" &&
+ emltime1 != "Hamra" &&
+ emltime1 != "Burgsvik" &&
+ emltime1 != "Eke" &&
+ emltime1 != "Hemse" &&
+ emltime1 != "Mulde" &&
+ emltime1 != "Slite" &&
+ emltime1 != "Hogklint" &&
+ emltime1 != "Upper Visby" &&
+ emltime1 != "Lower Visby" &&
+ emltime1 != "Cayugan" &&
+ emltime1 != "Lockportian" &&
+ emltime1 != "Tonawandan" &&
+ emltime1 != "Ontarian" &&
+ emltime1 != "Alexandrian" &&
+ emltime1 != "Pilton" &&
+ emltime1 != "Baggy" &&
+ emltime1 != "Upcott" &&
+ emltime1 != "Pickwell Down" &&
+ emltime1 != "Morte" &&
+ emltime1 != "Ilfracombe" &&
+ emltime1 != "Hangman" &&
+ emltime1 != "Lynton" &&
+ emltime1 != "Brecon" &&
+ emltime1 != "Ditton" &&
+ emltime1 != "Downton" &&
+ emltime1 != "Famennien" &&
+ emltime1 != "Frasnien" &&
+ emltime1 != "Givetien" &&
+ emltime1 != "Couvinien" &&
+ emltime1 != "Coblencien" &&
+ emltime1 != "Gedinnine" &&
+ emltime1 != "Wocklum" &&
+ emltime1 != "Dasberg" &&
+ emltime1 != "Hemberg" &&
+ emltime1 != "Nehden" &&
+ emltime1 != "Adorf" &&
+ emltime1 != "Givet" &&
+ emltime1 != "Eifel" &&
+ emltime1 != "Ems" &&
+ emltime1 != "Siegen" &&
+ emltime1 != "Gedinne" &&
+ emltime1 != "Srbsko" &&
+ emltime1 != "Chotec" &&
+ emltime1 != "Daleje" &&
+ emltime1 != "Zlichovian" &&
+ emltime1 != "Pragian (Czechoslovakia)" &&
+ emltime1 != "Lochkovian (Czechoslovakia)" &&
+ emltime1 != "Conewango" &&
+ emltime1 != "Conneaut" &&
+ emltime1 != "Canadaway" &&
+ emltime1 != "West Falls" &&
+ emltime1 != "Sonyea" &&
+ emltime1 != "Genesee" &&
+ emltime1 != "Taghanic" &&
+ emltime1 != "Tioughnioga" &&
+ emltime1 != "Cazenovia" &&
+ emltime1 != "Southwood" &&
+ emltime1 != "Sawkill" &&
+ emltime1 != "Deer Park" &&
+ emltime1 != "Helderberg" &&
+ emltime1 != "Stephanian" &&
+ emltime1 != "Westphalian" &&
+ emltime1 != "Namurian" &&
+ emltime1 != "Stephanian C" &&
+ emltime1 != "Stephanian B" &&
+ emltime1 != "Stephanian A" &&
+ emltime1 != "Cantabrian" &&
+ emltime1 != "Westphalian D" &&
+ emltime1 != "Westphalian C" &&
+ emltime1 != "Westphalian B" &&
+ emltime1 != "Westphalian A" &&
+ emltime1 != "Virgilian" &&
+ emltime1 != "Missourian" &&
+ emltime1 != "Desmoinesian" &&
+ emltime1 != "Atokan" &&
+ emltime1 != "Morrowan" &&
+ emltime1 != "Chesterian" &&
+ emltime1 != "Meramecian" &&
+ emltime1 != "Osagean" &&
+ emltime1 != "Kinderhookian" &&
+ emltime1 != "Buntsandstein" &&
+ emltime1 != "Ohre" &&
+ emltime1 != "Aller" &&
+ emltime1 != "Leine" &&
+ emltime1 != "Stassfurt Evaporites" &&
+ emltime1 != "Hauptdolomitstinkschiefer" &&
+ emltime1 != "Werra" &&
+ emltime1 != "Zechsteinkalk" &&
+ emltime1 != "Kupferschiefer" &&
+ emltime1 != "Weissliegendes" &&
+ emltime1 != "Dewey Lake" &&
+ emltime1 != "Rustler" &&
+ emltime1 != "Salado" &&
+ emltime1 != "Castile" &&
+ emltime1 != "Capitan" &&
+ emltime1 != "Word" &&
+ emltime1 != "Leonard" &&
+ emltime1 != "Wolfcamp" &&
+ emltime1 != "Late/UpperCallovian" &&
+ emltime1 != "MiddleCallovian" &&
+ emltime1 != "Early/LowerCallovian" &&
+ emltime1 != "Late/UpperBajocian" &&
+ emltime1 != "Early/LowerBajocian" &&
+ emltime1 != "Late/UpperToarcian" &&
+ emltime1 != "MiddleToarcian" &&
+ emltime1 != "Early/LowerToarcian" &&
+ emltime1 != "Late/UpperPliensbachian" &&
+ emltime1 != "Early/LowerPliensbachian" &&
+ emltime1 != "Late/UpperSinemurian" &&
+ emltime1 != "Early/LowerSinemurian" &&
+ emltime1 != "Epizigzagiceras" &&
+ emltime1 != "Rotundum" &&
+ emltime1 != "Oblatum" &&
+ emltime1 != "Kirschneri" &&
+ emltime1 != "Crassicostatus" &&
+ emltime1 != "Widebayense" &&
+ emltime1 != "Howelli" &&
+ emltime1 != "Scissum" &&
+ emltime1 != "Westermanni" &&
+ emltime1 != "Yakounensis" &&
+ emltime1 != "Hillebrandti" &&
+ emltime1 != "Crassicosta" &&
+ emltime1 != "Planulata" &&
+ emltime1 != "Kanense" &&
+ emltime1 != "Carlottense" &&
+ emltime1 != "Kunae" &&
+ emltime1 != "Freboldi" &&
+ emltime1 != "Whiteavesi" &&
+ emltime1 != "Imlayi" &&
+ emltime1 != "Tetraspidoceras" &&
+ emltime1 != "Plesechioceras harbledownense" &&
+ emltime1 != "Asteroceras varians" &&
+ emltime1 != "Arnioceras arnouldi" &&
+ emltime1 != "Coroniceras" &&
+ emltime1 != "Canadensis" &&
+ emltime1 != "Pseudaetomoceras" &&
+ emltime1 != "Franziceras" &&
+ emltime1 != "Euphyllites" &&
+ emltime1 != "Psiloceras" &&
+ emltime1 != "Parkinsoni" &&
+ emltime1 != "Garantiana" &&
+ emltime1 != "Subfurcatum" &&
+ emltime1 != "Humphresianum" &&
+ emltime1 != "Sauzei" &&
+ emltime1 != "Laeviuscula" &&
+ emltime1 != "Discites" &&
+ emltime1 != "Concavum" &&
+ emltime1 != "Murchisonae" &&
+ emltime1 != "Opalinum" &&
+ emltime1 != "Levesquei" &&
+ emltime1 != "Thouarsense" &&
+ emltime1 != "Variabilis" &&
+ emltime1 != "Bifrons" &&
+ emltime1 != "Falciferum" &&
+ emltime1 != "Tenuicostatum" &&
+ emltime1 != "Spinatum" &&
+ emltime1 != "Margaritatus" &&
+ emltime1 != "Davoei" &&
+ emltime1 != "Ibex" &&
+ emltime1 != "Jamesoni" &&
+ emltime1 != "Raricostatum" &&
+ emltime1 != "Oxynotum" &&
+ emltime1 != "Obtusum" &&
+ emltime1 != "Turneri" &&
+ emltime1 != "Semicostatum" &&
+ emltime1 != "Bucklandi" &&
+ emltime1 != "Angulata" &&
+ emltime1 != "Liasicus" &&
+ emltime1 != "Planorbis" &&
+ emltime1 != "Trentonian" &&
+ emltime1 != "Porterfieldian" &&
+ emltime1 != "Darriwilian" &&
+ emltime1 != "Wildernessian" &&
+ emltime1 != "Ashbyan" &&
+ emltime1 != "Tremadocian" &&
+ emltime1 != "Cincinnatian" &&
+ emltime1 != "Mohawkian" &&
+ emltime1 != "Whiterockian" &&
+ emltime1 != "Ibexian" &&
+ emltime1 != "Gamachian" &&
+ emltime1 != "Richmondian" &&
+ emltime1 != "Maysvillian" &&
+ emltime1 != "Chatfieldian" &&
+ emltime1 != "Turinian" &&
+ emltime1 != "Rangerian" &&
+ emltime1 != "Blackhillsian" &&
+ emltime1 != "Tulean" &&
+ emltime1 != "Stairsian" &&
+ emltime1 != "Skullrockian" &&
+ emltime1 != "Harju" &&
+ emltime1 != "Viru" &&
+ emltime1 != "Oeland" &&
+ emltime1 != "Streffordian" &&
+ emltime1 != "Cheneyan" &&
+ emltime1 != "Burrellian" &&
+ emltime1 != "Aurelucian" &&
+ emltime1 != "Llandeilian" &&
+ emltime1 != "Abereiddian" &&
+ emltime1 != "Fennian" &&
+ emltime1 != "Whitlandian" &&
+ emltime1 != "Moridunian" &&
+ emltime1 != "Migneintian" &&
+ emltime1 != "Cressagian" &&
+ emltime1 != "Woolstonian" &&
+ emltime1 != "Volfreyan" &&
+ emltime1 != "Dobrotivian" &&
+ emltime1 != "Oretanian" &&
+ emltime1 != "Kosovian" &&
+ emltime1 != "Kralodvorian" &&
+ emltime1 != "Berounian" &&
+ emltime1 != "Llanvirnian" &&
+ emltime1 != "Arenigian" &&
+ emltime1 != "Bolindian" &&
+ emltime1 != "Eastonian" &&
+ emltime1 != "Gisbornian" &&
+ emltime1 != "Yapeenian" &&
+ emltime1 != "Castlemainian" &&
+ emltime1 != "Chewtonian" &&
+ emltime1 != "Bendigonian" &&
+ emltime1 != "Lancefieldian" &&
+ emltime1 != "Warendian" &&
+ emltime1 != "Qiantianjiang" &&
+ emltime1 != "Aijiashan" &&
+ emltime1 != "Yangtzi" &&
+ emltime1 != "Yichang" &&
+ emltime1 != "Wufeng" &&
+ emltime1 != "Xiaoxita" &&
+ emltime1 != "Guniu" &&
+ emltime1 != "Dawan" &&
+ emltime1 != "Daobaowan" &&
+ emltime1 != "Lianghekou" &&
+ emltime1 != "Shikou" &&
+ emltime1 != "Hanjiang" &&
+ emltime1 != "Hulo" &&
+ emltime1 != "Ningguo" &&
+ emltime1 != "Hunjiang" &&
+ emltime1 != "Chientangkiangian" &&
+ emltime1 != "Neichiashanian" &&
+ emltime1 != "Zhejiangian" &&
+ emltime1 != "Yushanian" &&
+ emltime1 != "Ichangian" &&
+ emltime1 != "Valhallan" &&
+ emltime1 != "Haljala" &&
+ emltime1 != "Varangu" &&
+ emltime1 != "Pakerort" &&
+ emltime1 != "Aluoja" &&
+ emltime1 != "Valaste" &&
+ emltime1 != "Hunderum" &&
+ emltime1 != "Langevoja" &&
+ emltime1 != "Vaana" &&
+ emltime1 != "Saka" &&
+ emltime1 != "Billingen" &&
+ emltime1 != "Hunneberg" &&
+ emltime1 != "Franklinian" &&
+ emltime1 != "Ashgillian" &&
+ emltime1 != "Caradocian" &&
+ emltime1 != "Volkhovian" &&
+ emltime1 != "Latorpian" &&
+ emltime1 != "Kirkfieldian" &&
+ emltime1 != "Rocklandian" &&
+ emltime1 != "Canadian" &&
+ emltime1 != "Shermanian" &&
+ emltime1 != "Blackriveran" &&
+ emltime1 != "Chazyan" &&
+ emltime1 != "Marmor" &&
+ emltime1 != "Jeffersonian" &&
+ emltime1 != "Demingian" &&
+ emltime1 != "Olenekian" &&
+ emltime1 != "Induan" &&
+ emltime1 != "Late/UpperMaastrichtian" &&
+ emltime1 != "Early/LowerMaastrichtian" &&
+ emltime1 != "Late/UpperCampanian" &&
+ emltime1 != "MiddleCampanian" &&
+ emltime1 != "Early/LowerCampanian" &&
+ emltime1 != "Late/UpperSantonian" &&
+ emltime1 != "MiddleSantonian" &&
+ emltime1 != "Early/LowerSantonian" &&
+ emltime1 != "Late/UpperConiacian" &&
+ emltime1 != "MiddleConiacian" &&
+ emltime1 != "Early/LowerConiacian" &&
+ emltime1 != "Late/UpperTuronian" &&
+ emltime1 != "MiddleTuronian" &&
+ emltime1 != "Early/LowerTuronian" &&
+ emltime1 != "Late/UpperCenomanian" &&
+ emltime1 != "MiddleCenomanian" &&
+ emltime1 != "Early/LowerCenomanian" &&
+ emltime1 != "Late/UpperAlbian" &&
+ emltime1 != "MiddleAlbian" &&
+ emltime1 != "Early/LowerAlbian" &&
+ emltime1 != "Late/UpperAptian" &&
+ emltime1 != "Early/LowerAptian" &&
+ emltime1 != "Late/UpperBarremian" &&
+ emltime1 != "Early/LowerBarremian" &&
+ emltime1 != "Late/UpperHauterivian" &&
+ emltime1 != "Early/LowerHauterivian" &&
+ emltime1 != "Late/UpperValanginian" &&
+ emltime1 != "Early/LowerValanginian" &&
+ emltime1 != "Late/UpperBerriasian" &&
+ emltime1 != "MiddleBerriasian" &&
+ emltime1 != "Early/LowerBerriasian" &&
+ emltime1 != "Late/UpperTithonian" &&
+ emltime1 != "MiddleTithonian" &&
+ emltime1 != "Early/LowerTithonian" &&
+ emltime1 != "Late/UpperKimmeridgian" &&
+ emltime1 != "Early/LowerKimmeridgian" &&
+ emltime1 != "Late/UpperOxfordian" &&
+ emltime1 != "MiddleOxfordian" &&
+ emltime1 != "Early/LowerOxfordian" &&
+ emltime1 != "Late/UpperBathonian" &&
+ emltime1 != "MiddleBathonian" &&
+ emltime1 != "Early/LowerBathonian" &&
+ emltime1 != "Late/UpperAalenian" &&
+ emltime1 != "MiddleAalenian" &&
+ emltime1 != "Early/LowerAalenian" &&
+ emltime1 != "Late/UpperHettangian" &&
+ emltime1 != "MiddleHettangian" &&
+ emltime1 != "Early/LowerHettangian" &&
+ emltime1 != "Sevatian" &&
+ emltime1 != "Alaunian" &&
+ emltime1 != "Lacian" &&
+ emltime1 != "Tuvalian" &&
+ emltime1 != "Julian" &&
+ emltime1 != "Longobardian" &&
+ emltime1 != "Fassanian" &&
+ emltime1 != "Illyrian" &&
+ emltime1 != "Pelsonian" &&
+ emltime1 != "Bithynian" &&
+ emltime1 != "Aegean" &&
+ emltime1 != "Smithian" &&
+ emltime1 != "Dienerian" &&
+ emltime1 != "Changhsingian" &&
+ emltime1 != "Wuchiapingian" &&
+ emltime1 != "Roadian" &&
+ emltime1 != "Lujanian" &&
+ emltime1 != "Ensenadan" &&
+ emltime1 != "Uquian" &&
+ emltime1 != "Chapadmalalan" &&
+ emltime1 != "Montehermosan" &&
+ emltime1 != "Huayquerian" &&
+ emltime1 != "Chasicoan" &&
+ emltime1 != "Mayoan" &&
+ emltime1 != "Laventan" &&
+ emltime1 != "Colloncuran" &&
+ emltime1 != "Friasian" &&
+ emltime1 != "Santacrucian" &&
+ emltime1 != "Colhuehuapian" &&
+ emltime1 != "Deseadan" &&
+ emltime1 != "Tinguirirican" &&
+ emltime1 != "Divisaderan" &&
+ emltime1 != "Mustersan" &&
+ emltime1 != "Casamayoran" &&
+ emltime1 != "Riochican" &&
+ emltime1 != "Itaboraian" &&
+ emltime1 != "Peligran" &&
+ emltime1 != "Tiupampan" &&
+ emltime1 != "Calabrian" &&
+ emltime1 != "Gelasian" &&
+ emltime1 != "Zanclean" &&
+ emltime1 != "Selandian" &&
+ emltime1 != "Lancian" &&
+ emltime1 != "Edmontonian" &&
+ emltime1 != "Judithian" &&
+ emltime1 != "Aquilan" &&
+ emltime1 != "Manykaian" ) {
+        badname1 += "YES";
+    }
+    if( emltime2 != "Cenozoic" &&
+ emltime2 != "Mesozoic" &&
+ emltime2 != "Paleozoic" &&
+ emltime2 != "Sinian" &&
+ emltime2 != "Riphean" &&
+ emltime2 != "Animikean" &&
+ emltime2 != "Huronian" &&
+ emltime2 != "Randian" &&
+ emltime2 != "Swazian" &&
+ emltime2 != "Isuan" &&
+ emltime2 != "Hadean" &&
+ emltime2 != "Quaternary" &&
+ emltime2 != "Tertiary" &&
+ emltime2 != "Cretaceous" &&
+ emltime2 != "Jurassic" &&
+ emltime2 != "Triassic" &&
+ emltime2 != "Permian" &&
+ emltime2 != "Carboniferous" &&
+ emltime2 != "Devonian" &&
+ emltime2 != "Silurian" &&
+ emltime2 != "Ordovician" &&
+ emltime2 != "Cambrian" &&
+ emltime2 != "Vendian" &&
+ emltime2 != "Sturtian" &&
+ emltime2 != "Neogene" &&
+ emltime2 != "Paleogene" &&
+ emltime2 != "Pennsylvanian" &&
+ emltime2 != "Mississippian" &&
+ emltime2 != "Late/UpperOrdovician" &&
+ emltime2 != "MiddleOrdovician" &&
+ emltime2 != "Early/LowerOrdovician" &&
+ emltime2 != "Holocene" &&
+ emltime2 != "Pleistocene" &&
+ emltime2 != "Pliocene" &&
+ emltime2 != "Miocene" &&
+ emltime2 != "Oligocene" &&
+ emltime2 != "Eocene" &&
+ emltime2 != "Paleocene" &&
+ emltime2 != "Late/UpperCretaceous" &&
+ emltime2 != "Early/LowerCretaceous" &&
+ emltime2 != "Late/UpperJurassic" &&
+ emltime2 != "MiddleJurassic" &&
+ emltime2 != "Early/LowerJurassic" &&
+ emltime2 != "Late/UpperTriassic" &&
+ emltime2 != "MiddleTriassic" &&
+ emltime2 != "Early/LowerTriassic" &&
+ emltime2 != "Zechstein" &&
+ emltime2 != "Rotliegendes" &&
+ emltime2 != "Gzelian" &&
+ emltime2 != "Kasimovian" &&
+ emltime2 != "Moscovian" &&
+ emltime2 != "Bashkirian" &&
+ emltime2 != "Serpukhovian" &&
+ emltime2 != "Visean" &&
+ emltime2 != "Tournaisian" &&
+ emltime2 != "Late/UpperDevonian" &&
+ emltime2 != "MiddleDevonian" &&
+ emltime2 != "Early/LowerDevonian" &&
+ emltime2 != "Pridoli" &&
+ emltime2 != "Ludlow" &&
+ emltime2 != "Wenlock" &&
+ emltime2 != "Llandovery" &&
+ emltime2 != "Ashgill" &&
+ emltime2 != "Caradoc" &&
+ emltime2 != "Llandeilo" &&
+ emltime2 != "Llanvirn" &&
+ emltime2 != "Arenig" &&
+ emltime2 != "Tremadoc" &&
+ emltime2 != "Merioneth" &&
+ emltime2 != "St Davids" &&
+ emltime2 != "Caerfai" &&
+ emltime2 != "Ediacara" &&
+ emltime2 != "Varanger" &&
+ emltime2 != "Karatau" &&
+ emltime2 != "Yurmatin" &&
+ emltime2 != "Burzyan" &&
+ emltime2 != "Early/LowerImbrian" &&
+ emltime2 != "Nectarian" &&
+ emltime2 != "Basin Groups 1-9" &&
+ emltime2 != "Cryptic" &&
+ emltime2 != "Late/UpperPliocene" &&
+ emltime2 != "Early/LowerPliocene" &&
+ emltime2 != "Late/UpperMiocene" &&
+ emltime2 != "MiddleMiocene" &&
+ emltime2 != "Early/LowerMiocene" &&
+ emltime2 != "Late/UpperOligocene" &&
+ emltime2 != "Early/LowerOligocene" &&
+ emltime2 != "Late/UpperEocene" &&
+ emltime2 != "MiddleEocene" &&
+ emltime2 != "Early/LowerEocene" &&
+ emltime2 != "Late/UpperPaleocene" &&
+ emltime2 != "Early/LowerPaleocene" &&
+ emltime2 != "Senonian" &&
+ emltime2 != "Gallic" &&
+ emltime2 != "Neocomian" &&
+ emltime2 != "Piacenzian" &&
+ emltime2 != "Zanclian" &&
+ emltime2 != "Messinian" &&
+ emltime2 != "Tortonian" &&
+ emltime2 != "Serravallian" &&
+ emltime2 != "Langhian" &&
+ emltime2 != "Burdigalian" &&
+ emltime2 != "Aquitanian" &&
+ emltime2 != "Chattian" &&
+ emltime2 != "Rupelian" &&
+ emltime2 != "Priabonian" &&
+ emltime2 != "Bartonian" &&
+ emltime2 != "Lutetian" &&
+ emltime2 != "Ypresian" &&
+ emltime2 != "Thanetian" &&
+ emltime2 != "Danian" &&
+ emltime2 != "Maastrichtian" &&
+ emltime2 != "Campanian" &&
+ emltime2 != "Santonian" &&
+ emltime2 != "Coniacian" &&
+ emltime2 != "Turonian" &&
+ emltime2 != "Cenomanian" &&
+ emltime2 != "Albian" &&
+ emltime2 != "Aptian" &&
+ emltime2 != "Barremian" &&
+ emltime2 != "Hauterivian" &&
+ emltime2 != "Valanginian" &&
+ emltime2 != "Berriasian" &&
+ emltime2 != "Tithonian" &&
+ emltime2 != "Kimmeridgian" &&
+ emltime2 != "Oxfordian" &&
+ emltime2 != "Callovian" &&
+ emltime2 != "Bathonian" &&
+ emltime2 != "Bajocian" &&
+ emltime2 != "Aalenian" &&
+ emltime2 != "Toarcian" &&
+ emltime2 != "Pliensbachian" &&
+ emltime2 != "Sinemurian" &&
+ emltime2 != "Hettangian" &&
+ emltime2 != "Rhaetian" &&
+ emltime2 != "Norian" &&
+ emltime2 != "Carnian" &&
+ emltime2 != "Ladinian" &&
+ emltime2 != "Anisian" &&
+ emltime2 != "Spathian" &&
+ emltime2 != "Nammalian" &&
+ emltime2 != "Griesbachian" &&
+ emltime2 != "Changxingian" &&
+ emltime2 != "Longtanian" &&
+ emltime2 != "Capitanian" &&
+ emltime2 != "Wordian" &&
+ emltime2 != "Ufimian" &&
+ emltime2 != "Kungurian" &&
+ emltime2 != "Artinskian" &&
+ emltime2 != "Sakmarian" &&
+ emltime2 != "Asselian" &&
+ emltime2 != "Noginskian" &&
+ emltime2 != "Klazminskian" &&
+ emltime2 != "Dorogomilovskian" &&
+ emltime2 != "Chamovnicheskian" &&
+ emltime2 != "Krevyakinskian" &&
+ emltime2 != "Myachkovskian" &&
+ emltime2 != "Podolskian" &&
+ emltime2 != "Kashirskian" &&
+ emltime2 != "Vereiskian" &&
+ emltime2 != "Melekesskian" &&
+ emltime2 != "Cheremshanskian" &&
+ emltime2 != "Yeadonian" &&
+ emltime2 != "Marsdenian" &&
+ emltime2 != "Kinderscoutian" &&
+ emltime2 != "Alportian" &&
+ emltime2 != "Chokierian" &&
+ emltime2 != "Arnsbergian" &&
+ emltime2 != "Pendleian" &&
+ emltime2 != "Brigantian" &&
+ emltime2 != "Asbian" &&
+ emltime2 != "Holkerian" &&
+ emltime2 != "Arundian" &&
+ emltime2 != "Chadian" &&
+ emltime2 != "Ivorian" &&
+ emltime2 != "Hastarian" &&
+ emltime2 != "Famennian" &&
+ emltime2 != "Frasnian" &&
+ emltime2 != "Givetian" &&
+ emltime2 != "Eifelian" &&
+ emltime2 != "Emsian" &&
+ emltime2 != "Pragian" &&
+ emltime2 != "Lochkovian" &&
+ emltime2 != "Ludfordian" &&
+ emltime2 != "Gorstian" &&
+ emltime2 != "Gleedonian" &&
+ emltime2 != "Whitwellian" &&
+ emltime2 != "Sheinwoodian" &&
+ emltime2 != "Telychian" &&
+ emltime2 != "Aeronian" &&
+ emltime2 != "Rhuddanian" &&
+ emltime2 != "Hirnantian" &&
+ emltime2 != "Rawtheyan" &&
+ emltime2 != "Cautleyan" &&
+ emltime2 != "Pusgillian" &&
+ emltime2 != "Onnian" &&
+ emltime2 != "Actonian" &&
+ emltime2 != "Marshbrookian" &&
+ emltime2 != "Longvillian" &&
+ emltime2 != "Soudleyan" &&
+ emltime2 != "Harnagian" &&
+ emltime2 != "Costonian" &&
+ emltime2 != "Late/UpperLlandeilo" &&
+ emltime2 != "MiddleLlandeilo" &&
+ emltime2 != "Early/LowerLlandeilo" &&
+ emltime2 != "Late/UpperLlanvirn" &&
+ emltime2 != "Early/LowerLlanvirn" &&
+ emltime2 != "Dolgellian" &&
+ emltime2 != "Maentwrogian" &&
+ emltime2 != "Menevian" &&
+ emltime2 != "Solvan" &&
+ emltime2 != "Lenian" &&
+ emltime2 != "Atdabanian" &&
+ emltime2 != "Tommotian" &&
+ emltime2 != "Poundian" &&
+ emltime2 != "Wonokan" &&
+ emltime2 != "Mortensnes" &&
+ emltime2 != "Smalfjord" &&
+ emltime2 != "Blancan" &&
+ emltime2 != "Hemphillian" &&
+ emltime2 != "Clarendonian" &&
+ emltime2 != "Barstovian" &&
+ emltime2 != "Hemingfordian" &&
+ emltime2 != "Arikareean" &&
+ emltime2 != "Whitneyan" &&
+ emltime2 != "Orellan" &&
+ emltime2 != "Chadronian" &&
+ emltime2 != "Duchesnean" &&
+ emltime2 != "Uintan" &&
+ emltime2 != "Bridgerian" &&
+ emltime2 != "Wasatchian" &&
+ emltime2 != "Clarkforkian" &&
+ emltime2 != "Tiffanian" &&
+ emltime2 != "Torrejonian" &&
+ emltime2 != "Dragonian" &&
+ emltime2 != "Puercan" &&
+ emltime2 != "Rancholabrean" &&
+ emltime2 != "Irvingtonian" &&
+ emltime2 != "Sheridanian" &&
+ emltime2 != "Cudahyan" &&
+ emltime2 != "Sappan" &&
+ emltime2 != "Rexroadian" &&
+ emltime2 != "Late/UpperHemphillian" &&
+ emltime2 != "late EarlyHemphillian" &&
+ emltime2 != "early EarlyHemphillian" &&
+ emltime2 != "Late/UpperClarendonian" &&
+ emltime2 != "Early/LowerClarendonian" &&
+ emltime2 != "late LateBarstovian" &&
+ emltime2 != "early LateBarstovian" &&
+ emltime2 != "Early/LowerBarstovian" &&
+ emltime2 != "Late/UpperHemingfordian" &&
+ emltime2 != "Early/LowerHemingfordian" &&
+ emltime2 != "late LateArikareean" &&
+ emltime2 != "early LateArikareean" &&
+ emltime2 != "late EarlyArikareean" &&
+ emltime2 != "early EarlyArikareean" &&
+ emltime2 != "Late/UpperChadronian" &&
+ emltime2 != "MiddleChadronian" &&
+ emltime2 != "Early/LowerChadronian" &&
+ emltime2 != "Late/UpperUintan" &&
+ emltime2 != "Early/LowerUintan" &&
+ emltime2 != "Twinbuttean" &&
+ emltime2 != "Blacksforkian" &&
+ emltime2 != "Gardnerbuttian" &&
+ emltime2 != "Lostcabinian" &&
+ emltime2 != "Lysitean" &&
+ emltime2 != "Graybullian" &&
+ emltime2 != "Sandcouleean" &&
+ emltime2 != "Cf3" &&
+ emltime2 != "Cf2" &&
+ emltime2 != "Cf1" &&
+ emltime2 != "Ti6" &&
+ emltime2 != "Ti5" &&
+ emltime2 != "Ti4" &&
+ emltime2 != "Ti3" &&
+ emltime2 != "Ti2" &&
+ emltime2 != "Ti1" &&
+ emltime2 != "To3" &&
+ emltime2 != "To2" &&
+ emltime2 != "To1" &&
+ emltime2 != "Pu3" &&
+ emltime2 != "Pu2" &&
+ emltime2 != "Pu1" &&
+ emltime2 != "Harrisonian" &&
+ emltime2 != "Monroecreekian" &&
+ emltime2 != "Geringian" &&
+ emltime2 != "Villanyian" &&
+ emltime2 != "Ruscinian" &&
+ emltime2 != "Turolian" &&
+ emltime2 != "Vallesian" &&
+ emltime2 != "Astaracian" &&
+ emltime2 != "Orleanian" &&
+ emltime2 != "Agenian" &&
+ emltime2 != "MN 17" &&
+ emltime2 != "MN 16" &&
+ emltime2 != "MN 15" &&
+ emltime2 != "MN 14" &&
+ emltime2 != "MN 13" &&
+ emltime2 != "MN 12" &&
+ emltime2 != "MN 11" &&
+ emltime2 != "MN 10" &&
+ emltime2 != "MN 9" &&
+ emltime2 != "MN 7 + 8" &&
+ emltime2 != "MN 6" &&
+ emltime2 != "MN 5" &&
+ emltime2 != "MN 4" &&
+ emltime2 != "MN 3" &&
+ emltime2 != "MN 2" &&
+ emltime2 != "MN 1" &&
+ emltime2 != "Dolgelly" &&
+ emltime2 != "Ffestiniog" &&
+ emltime2 != "Maentwrog" &&
+ emltime2 != "Clogau" &&
+ emltime2 != "Gamlan" &&
+ emltime2 != "Barmouth" &&
+ emltime2 != "Hafotty" &&
+ emltime2 != "Rhinog" &&
+ emltime2 != "Llanbedr" &&
+ emltime2 != "Dolwen" &&
+ emltime2 != "Trempealeauan" &&
+ emltime2 != "Franconian" &&
+ emltime2 != "Dresbachian" &&
+ emltime2 != "Albertian" &&
+ emltime2 != "Waucoban" &&
+ emltime2 != "Kosov" &&
+ emltime2 != "Kraluv Dvur" &&
+ emltime2 != "Bohdalec" &&
+ emltime2 != "Zahorany" &&
+ emltime2 != "Vinice" &&
+ emltime2 != "Letna" &&
+ emltime2 != "Liben" &&
+ emltime2 != "Dobrotiva" &&
+ emltime2 != "Sarka" &&
+ emltime2 != "Klabava" &&
+ emltime2 != "Porkuni" &&
+ emltime2 != "Pirgu" &&
+ emltime2 != "Vormsi" &&
+ emltime2 != "Nabala" &&
+ emltime2 != "Rakvere" &&
+ emltime2 != "Oandu" &&
+ emltime2 != "Keila" &&
+ emltime2 != "Johvi" &&
+ emltime2 != "Idavere" &&
+ emltime2 != "Kukruse" &&
+ emltime2 != "Uhaku" &&
+ emltime2 != "Lasnamagi" &&
+ emltime2 != "Aseri" &&
+ emltime2 != "Kunda" &&
+ emltime2 != "Volkhov" &&
+ emltime2 != "Latorp" &&
+ emltime2 != "Olentian" &&
+ emltime2 != "Gamach" &&
+ emltime2 != "Richmond" &&
+ emltime2 != "Maysville" &&
+ emltime2 != "Edenian" &&
+ emltime2 != "Sherman" &&
+ emltime2 != "Kirkfield" &&
+ emltime2 != "Rockland" &&
+ emltime2 != "Black River" &&
+ emltime2 != "Chazy" &&
+ emltime2 != "Whiterock" &&
+ emltime2 != "Cassinian" &&
+ emltime2 != "Jefferson" &&
+ emltime2 != "Deming" &&
+ emltime2 != "Gasconadian" &&
+ emltime2 != "Red Downtonian" &&
+ emltime2 != "Temeside Shales" &&
+ emltime2 != "Downton Castle" &&
+ emltime2 != "Whitcliffe" &&
+ emltime2 != "Leintwardine" &&
+ emltime2 != "Bringewood" &&
+ emltime2 != "Elton" &&
+ emltime2 != "Wenlock (England)" &&
+ emltime2 != "Tickwood" &&
+ emltime2 != "Coalbrookdale" &&
+ emltime2 != "Buildwas" &&
+ emltime2 != "Woolhope" &&
+ emltime2 != "Wych" &&
+ emltime2 != "Cowleigh Park" &&
+ emltime2 != "Pridolischichten" &&
+ emltime2 != "Kopaninaschichten" &&
+ emltime2 != "Litenschichten" &&
+ emltime2 != "Sundre" &&
+ emltime2 != "Hamra" &&
+ emltime2 != "Burgsvik" &&
+ emltime2 != "Eke" &&
+ emltime2 != "Hemse" &&
+ emltime2 != "Mulde" &&
+ emltime2 != "Slite" &&
+ emltime2 != "Hogklint" &&
+ emltime2 != "Upper Visby" &&
+ emltime2 != "Lower Visby" &&
+ emltime2 != "Cayugan" &&
+ emltime2 != "Lockportian" &&
+ emltime2 != "Tonawandan" &&
+ emltime2 != "Ontarian" &&
+ emltime2 != "Alexandrian" &&
+ emltime2 != "Pilton" &&
+ emltime2 != "Baggy" &&
+ emltime2 != "Upcott" &&
+ emltime2 != "Pickwell Down" &&
+ emltime2 != "Morte" &&
+ emltime2 != "Ilfracombe" &&
+ emltime2 != "Hangman" &&
+ emltime2 != "Lynton" &&
+ emltime2 != "Brecon" &&
+ emltime2 != "Ditton" &&
+ emltime2 != "Downton" &&
+ emltime2 != "Famennien" &&
+ emltime2 != "Frasnien" &&
+ emltime2 != "Givetien" &&
+ emltime2 != "Couvinien" &&
+ emltime2 != "Coblencien" &&
+ emltime2 != "Gedinnine" &&
+ emltime2 != "Wocklum" &&
+ emltime2 != "Dasberg" &&
+ emltime2 != "Hemberg" &&
+ emltime2 != "Nehden" &&
+ emltime2 != "Adorf" &&
+ emltime2 != "Givet" &&
+ emltime2 != "Eifel" &&
+ emltime2 != "Ems" &&
+ emltime2 != "Siegen" &&
+ emltime2 != "Gedinne" &&
+ emltime2 != "Srbsko" &&
+ emltime2 != "Chotec" &&
+ emltime2 != "Daleje" &&
+ emltime2 != "Zlichovian" &&
+ emltime2 != "Pragian (Czechoslovakia)" &&
+ emltime2 != "Lochkovian (Czechoslovakia)" &&
+ emltime2 != "Conewango" &&
+ emltime2 != "Conneaut" &&
+ emltime2 != "Canadaway" &&
+ emltime2 != "West Falls" &&
+ emltime2 != "Sonyea" &&
+ emltime2 != "Genesee" &&
+ emltime2 != "Taghanic" &&
+ emltime2 != "Tioughnioga" &&
+ emltime2 != "Cazenovia" &&
+ emltime2 != "Southwood" &&
+ emltime2 != "Sawkill" &&
+ emltime2 != "Deer Park" &&
+ emltime2 != "Helderberg" &&
+ emltime2 != "Stephanian" &&
+ emltime2 != "Westphalian" &&
+ emltime2 != "Namurian" &&
+ emltime2 != "Stephanian C" &&
+ emltime2 != "Stephanian B" &&
+ emltime2 != "Stephanian A" &&
+ emltime2 != "Cantabrian" &&
+ emltime2 != "Westphalian D" &&
+ emltime2 != "Westphalian C" &&
+ emltime2 != "Westphalian B" &&
+ emltime2 != "Westphalian A" &&
+ emltime2 != "Virgilian" &&
+ emltime2 != "Missourian" &&
+ emltime2 != "Desmoinesian" &&
+ emltime2 != "Atokan" &&
+ emltime2 != "Morrowan" &&
+ emltime2 != "Chesterian" &&
+ emltime2 != "Meramecian" &&
+ emltime2 != "Osagean" &&
+ emltime2 != "Kinderhookian" &&
+ emltime2 != "Buntsandstein" &&
+ emltime2 != "Ohre" &&
+ emltime2 != "Aller" &&
+ emltime2 != "Leine" &&
+ emltime2 != "Stassfurt Evaporites" &&
+ emltime2 != "Hauptdolomitstinkschiefer" &&
+ emltime2 != "Werra" &&
+ emltime2 != "Zechsteinkalk" &&
+ emltime2 != "Kupferschiefer" &&
+ emltime2 != "Weissliegendes" &&
+ emltime2 != "Dewey Lake" &&
+ emltime2 != "Rustler" &&
+ emltime2 != "Salado" &&
+ emltime2 != "Castile" &&
+ emltime2 != "Capitan" &&
+ emltime2 != "Word" &&
+ emltime2 != "Leonard" &&
+ emltime2 != "Wolfcamp" &&
+ emltime2 != "Late/UpperCallovian" &&
+ emltime2 != "MiddleCallovian" &&
+ emltime2 != "Early/LowerCallovian" &&
+ emltime2 != "Late/UpperBajocian" &&
+ emltime2 != "Early/LowerBajocian" &&
+ emltime2 != "Late/UpperToarcian" &&
+ emltime2 != "MiddleToarcian" &&
+ emltime2 != "Early/LowerToarcian" &&
+ emltime2 != "Late/UpperPliensbachian" &&
+ emltime2 != "Early/LowerPliensbachian" &&
+ emltime2 != "Late/UpperSinemurian" &&
+ emltime2 != "Early/LowerSinemurian" &&
+ emltime2 != "Epizigzagiceras" &&
+ emltime2 != "Rotundum" &&
+ emltime2 != "Oblatum" &&
+ emltime2 != "Kirschneri" &&
+ emltime2 != "Crassicostatus" &&
+ emltime2 != "Widebayense" &&
+ emltime2 != "Howelli" &&
+ emltime2 != "Scissum" &&
+ emltime2 != "Westermanni" &&
+ emltime2 != "Yakounensis" &&
+ emltime2 != "Hillebrandti" &&
+ emltime2 != "Crassicosta" &&
+ emltime2 != "Planulata" &&
+ emltime2 != "Kanense" &&
+ emltime2 != "Carlottense" &&
+ emltime2 != "Kunae" &&
+ emltime2 != "Freboldi" &&
+ emltime2 != "Whiteavesi" &&
+ emltime2 != "Imlayi" &&
+ emltime2 != "Tetraspidoceras" &&
+ emltime2 != "Plesechioceras harbledownense" &&
+ emltime2 != "Asteroceras varians" &&
+ emltime2 != "Arnioceras arnouldi" &&
+ emltime2 != "Coroniceras" &&
+ emltime2 != "Canadensis" &&
+ emltime2 != "Pseudaetomoceras" &&
+ emltime2 != "Franziceras" &&
+ emltime2 != "Euphyllites" &&
+ emltime2 != "Psiloceras" &&
+ emltime2 != "Parkinsoni" &&
+ emltime2 != "Garantiana" &&
+ emltime2 != "Subfurcatum" &&
+ emltime2 != "Humphresianum" &&
+ emltime2 != "Sauzei" &&
+ emltime2 != "Laeviuscula" &&
+ emltime2 != "Discites" &&
+ emltime2 != "Concavum" &&
+ emltime2 != "Murchisonae" &&
+ emltime2 != "Opalinum" &&
+ emltime2 != "Levesquei" &&
+ emltime2 != "Thouarsense" &&
+ emltime2 != "Variabilis" &&
+ emltime2 != "Bifrons" &&
+ emltime2 != "Falciferum" &&
+ emltime2 != "Tenuicostatum" &&
+ emltime2 != "Spinatum" &&
+ emltime2 != "Margaritatus" &&
+ emltime2 != "Davoei" &&
+ emltime2 != "Ibex" &&
+ emltime2 != "Jamesoni" &&
+ emltime2 != "Raricostatum" &&
+ emltime2 != "Oxynotum" &&
+ emltime2 != "Obtusum" &&
+ emltime2 != "Turneri" &&
+ emltime2 != "Semicostatum" &&
+ emltime2 != "Bucklandi" &&
+ emltime2 != "Angulata" &&
+ emltime2 != "Liasicus" &&
+ emltime2 != "Planorbis" &&
+ emltime2 != "Trentonian" &&
+ emltime2 != "Porterfieldian" &&
+ emltime2 != "Darriwilian" &&
+ emltime2 != "Wildernessian" &&
+ emltime2 != "Ashbyan" &&
+ emltime2 != "Tremadocian" &&
+ emltime2 != "Cincinnatian" &&
+ emltime2 != "Mohawkian" &&
+ emltime2 != "Whiterockian" &&
+ emltime2 != "Ibexian" &&
+ emltime2 != "Gamachian" &&
+ emltime2 != "Richmondian" &&
+ emltime2 != "Maysvillian" &&
+ emltime2 != "Chatfieldian" &&
+ emltime2 != "Turinian" &&
+ emltime2 != "Rangerian" &&
+ emltime2 != "Blackhillsian" &&
+ emltime2 != "Tulean" &&
+ emltime2 != "Stairsian" &&
+ emltime2 != "Skullrockian" &&
+ emltime2 != "Harju" &&
+ emltime2 != "Viru" &&
+ emltime2 != "Oeland" &&
+ emltime2 != "Streffordian" &&
+ emltime2 != "Cheneyan" &&
+ emltime2 != "Burrellian" &&
+ emltime2 != "Aurelucian" &&
+ emltime2 != "Llandeilian" &&
+ emltime2 != "Abereiddian" &&
+ emltime2 != "Fennian" &&
+ emltime2 != "Whitlandian" &&
+ emltime2 != "Moridunian" &&
+ emltime2 != "Migneintian" &&
+ emltime2 != "Cressagian" &&
+ emltime2 != "Woolstonian" &&
+ emltime2 != "Volfreyan" &&
+ emltime2 != "Dobrotivian" &&
+ emltime2 != "Oretanian" &&
+ emltime2 != "Kosovian" &&
+ emltime2 != "Kralodvorian" &&
+ emltime2 != "Berounian" &&
+ emltime2 != "Llanvirnian" &&
+ emltime2 != "Arenigian" &&
+ emltime2 != "Bolindian" &&
+ emltime2 != "Eastonian" &&
+ emltime2 != "Gisbornian" &&
+ emltime2 != "Yapeenian" &&
+ emltime2 != "Castlemainian" &&
+ emltime2 != "Chewtonian" &&
+ emltime2 != "Bendigonian" &&
+ emltime2 != "Lancefieldian" &&
+ emltime2 != "Warendian" &&
+ emltime2 != "Qiantianjiang" &&
+ emltime2 != "Aijiashan" &&
+ emltime2 != "Yangtzi" &&
+ emltime2 != "Yichang" &&
+ emltime2 != "Wufeng" &&
+ emltime2 != "Xiaoxita" &&
+ emltime2 != "Guniu" &&
+ emltime2 != "Dawan" &&
+ emltime2 != "Daobaowan" &&
+ emltime2 != "Lianghekou" &&
+ emltime2 != "Shikou" &&
+ emltime2 != "Hanjiang" &&
+ emltime2 != "Hulo" &&
+ emltime2 != "Ningguo" &&
+ emltime2 != "Hunjiang" &&
+ emltime2 != "Chientangkiangian" &&
+ emltime2 != "Neichiashanian" &&
+ emltime2 != "Zhejiangian" &&
+ emltime2 != "Yushanian" &&
+ emltime2 != "Ichangian" &&
+ emltime2 != "Valhallan" &&
+ emltime2 != "Haljala" &&
+ emltime2 != "Varangu" &&
+ emltime2 != "Pakerort" &&
+ emltime2 != "Aluoja" &&
+ emltime2 != "Valaste" &&
+ emltime2 != "Hunderum" &&
+ emltime2 != "Langevoja" &&
+ emltime2 != "Vaana" &&
+ emltime2 != "Saka" &&
+ emltime2 != "Billingen" &&
+ emltime2 != "Hunneberg" &&
+ emltime2 != "Franklinian" &&
+ emltime2 != "Ashgillian" &&
+ emltime2 != "Caradocian" &&
+ emltime2 != "Volkhovian" &&
+ emltime2 != "Latorpian" &&
+ emltime2 != "Kirkfieldian" &&
+ emltime2 != "Rocklandian" &&
+ emltime2 != "Canadian" &&
+ emltime2 != "Shermanian" &&
+ emltime2 != "Blackriveran" &&
+ emltime2 != "Chazyan" &&
+ emltime2 != "Marmor" &&
+ emltime2 != "Jeffersonian" &&
+ emltime2 != "Demingian" &&
+ emltime2 != "Olenekian" &&
+ emltime2 != "Induan" &&
+ emltime2 != "Late/UpperMaastrichtian" &&
+ emltime2 != "Early/LowerMaastrichtian" &&
+ emltime2 != "Late/UpperCampanian" &&
+ emltime2 != "MiddleCampanian" &&
+ emltime2 != "Early/LowerCampanian" &&
+ emltime2 != "Late/UpperSantonian" &&
+ emltime2 != "MiddleSantonian" &&
+ emltime2 != "Early/LowerSantonian" &&
+ emltime2 != "Late/UpperConiacian" &&
+ emltime2 != "MiddleConiacian" &&
+ emltime2 != "Early/LowerConiacian" &&
+ emltime2 != "Late/UpperTuronian" &&
+ emltime2 != "MiddleTuronian" &&
+ emltime2 != "Early/LowerTuronian" &&
+ emltime2 != "Late/UpperCenomanian" &&
+ emltime2 != "MiddleCenomanian" &&
+ emltime2 != "Early/LowerCenomanian" &&
+ emltime2 != "Late/UpperAlbian" &&
+ emltime2 != "MiddleAlbian" &&
+ emltime2 != "Early/LowerAlbian" &&
+ emltime2 != "Late/UpperAptian" &&
+ emltime2 != "Early/LowerAptian" &&
+ emltime2 != "Late/UpperBarremian" &&
+ emltime2 != "Early/LowerBarremian" &&
+ emltime2 != "Late/UpperHauterivian" &&
+ emltime2 != "Early/LowerHauterivian" &&
+ emltime2 != "Late/UpperValanginian" &&
+ emltime2 != "Early/LowerValanginian" &&
+ emltime2 != "Late/UpperBerriasian" &&
+ emltime2 != "MiddleBerriasian" &&
+ emltime2 != "Early/LowerBerriasian" &&
+ emltime2 != "Late/UpperTithonian" &&
+ emltime2 != "MiddleTithonian" &&
+ emltime2 != "Early/LowerTithonian" &&
+ emltime2 != "Late/UpperKimmeridgian" &&
+ emltime2 != "Early/LowerKimmeridgian" &&
+ emltime2 != "Late/UpperOxfordian" &&
+ emltime2 != "MiddleOxfordian" &&
+ emltime2 != "Early/LowerOxfordian" &&
+ emltime2 != "Late/UpperBathonian" &&
+ emltime2 != "MiddleBathonian" &&
+ emltime2 != "Early/LowerBathonian" &&
+ emltime2 != "Late/UpperAalenian" &&
+ emltime2 != "MiddleAalenian" &&
+ emltime2 != "Early/LowerAalenian" &&
+ emltime2 != "Late/UpperHettangian" &&
+ emltime2 != "MiddleHettangian" &&
+ emltime2 != "Early/LowerHettangian" &&
+ emltime2 != "Sevatian" &&
+ emltime2 != "Alaunian" &&
+ emltime2 != "Lacian" &&
+ emltime2 != "Tuvalian" &&
+ emltime2 != "Julian" &&
+ emltime2 != "Longobardian" &&
+ emltime2 != "Fassanian" &&
+ emltime2 != "Illyrian" &&
+ emltime2 != "Pelsonian" &&
+ emltime2 != "Bithynian" &&
+ emltime2 != "Aegean" &&
+ emltime2 != "Smithian" &&
+ emltime2 != "Dienerian" &&
+ emltime2 != "Changhsingian" &&
+ emltime2 != "Wuchiapingian" &&
+ emltime2 != "Roadian" &&
+ emltime2 != "Lujanian" &&
+ emltime2 != "Ensenadan" &&
+ emltime2 != "Uquian" &&
+ emltime2 != "Chapadmalalan" &&
+ emltime2 != "Montehermosan" &&
+ emltime2 != "Huayquerian" &&
+ emltime2 != "Chasicoan" &&
+ emltime2 != "Mayoan" &&
+ emltime2 != "Laventan" &&
+ emltime2 != "Colloncuran" &&
+ emltime2 != "Friasian" &&
+ emltime2 != "Santacrucian" &&
+ emltime2 != "Colhuehuapian" &&
+ emltime2 != "Deseadan" &&
+ emltime2 != "Tinguirirican" &&
+ emltime2 != "Divisaderan" &&
+ emltime2 != "Mustersan" &&
+ emltime2 != "Casamayoran" &&
+ emltime2 != "Riochican" &&
+ emltime2 != "Itaboraian" &&
+ emltime2 != "Peligran" &&
+ emltime2 != "Tiupampan" &&
+ emltime2 != "Calabrian" &&
+ emltime2 != "Gelasian" &&
+ emltime2 != "Zanclean" &&
+ emltime2 != "Selandian" &&
+ emltime2 != "Lancian" &&
+ emltime2 != "Edmontonian" &&
+ emltime2 != "Judithian" &&
+ emltime2 != "Aquilan" &&
+ emltime2 != "Manykaian" &&
+time2 != "") {
+        badname2 += "YES";
+    }
+                                                                                                                                                             
+    if ( badname1 != "" || badname2 != "" ) {
+        alertmessage = "WARNING!\n";
+    }
+                                                                                                                                                             
+    if ( badname1 != "" && badname2 != "" ) {
+        alertmessage += eml1 + " " + time1 +
+                        " and " + eml2 + " " + time2 +
+                        " aren't official time terms.\n";
+        alertmessage += "Please correct them and submit the form again.\n";
+    } else if ( badname1 != "" ) {
+        alertmessage += eml1 + " " + time1;
+        alertmessage += " isn't an official time term.\n" +
+                        "Please correct it and submit the form again.\n";
+    } else if ( badname2 != "" ) {
+        alertmessage += eml2 + " " + time2;
+        alertmessage += " isn't an official time term.\n" +
+                        "Please correct it and submit the form again.\n";
+    }
+    if ( alertmessage != "" ) {
+        alertmessage += "Hint: try epoch names instead.";
+        alert(alertmessage);
+        return false;
+    }
+    return true;
+}
+// END -->
+</script>
+<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+var bad_info = ""; // Global variable
+
+function checkFields() {
+    doCheckFieldsBasicInfo();
+    doCheckFieldsGeography();
+    doCheckFieldsStratigraphy();
+    doCheckFieldsGeology();
+    doCheckFieldsTaphonomy();
+    doCheckFieldsCollectingInfo();
+    
+    var returnVal = checkIntervalNames(1);
+    if (!returnVal) {
+        return false;
+    }
+
+    if ( bad_info != "" ) { 
+        bad_info = "WARNING!\n" +
+                      "The following fields have incorrect values:\n" +
+                      bad_info + "\n_____________________________" +
+                      "\nPlease correct them and submit the form again.";
+        alert(bad_info);
+        bad_info = "";
+        return false; 
+    }    
+    return true;
+}
+
+function doCheckFieldsBasicInfo() {
+    var frm = document.forms[0];
+
+    // Deleting the primary reference is not allowed.
+    // Note that the length of the radio group (or checkbox group) equals 
+    // the number of radio buttons regardless of their checked status.
+    // Note the the length of each may be different since there's not
+    // necessarily a one to one correspondence.
+    if(frm.secondary_reference_no && frm.delete_ref){
+        var i;
+        var radio_vals = new Array();
+        for(i=0; i<frm.secondary_reference_no.length; i++){
+            radio_vals[i] = parseInt(frm.secondary_reference_no[i].value);
+        }
+        var checked_vals = new Array();
+        for(i=0; i<frm.delete_ref.length; i++){
+            checked_vals[i] = parseInt(frm.delete_ref[i].value);
+        }
+        var j;
+        for(i=0; i<radio_vals.length; i++){
+            for(j=0; j<checked_vals.length; j++){
+                if(radio_vals[i] == checked_vals[j] && frm.secondary_reference_no[i].checked && frm.delete_ref[j].checked){
+                    bad_info += "\n    -Primary reference cannot be deleted";
+                }
+            }
+        }
+    } // if secondary_reference_no
+
+    if ( frm.collection_type.selectedIndex == 0) {
+        bad_info += "\n    - Reason for describing collection (required)";
+    }
+
+    if ( frm.collection_name.value == "") {
+        bad_info += "\n    - Collection name (required)";
+    }
+}
+
+function doCheckFieldsCollectingInfo() {
+    var frm = document.forms[0];
+
+    if ( frm.collection_size.value != "" ) {
+        var	numeric = /^[0-9]*$/;
+        if ( numeric.test ( frm.collection_size.value ) == false ) {
+            bad_info += "\n    - Collection size must be numeric";
+        }
+    }
+}
+
+function doCheckFieldsGeography() {
+    var frm = document.forms[0];
+
+    if ( frm.country.selectedIndex == 0 ) {
+        bad_info += "\n    - Country (required)";
+    }
+    if ( frm.state.value == "" ) {
+        // This is a squirrely way to do this, but otherwise some browsers fail
+        var index = frm.country.selectedIndex;
+        if ( index != 0 ) {
+            if ( frm.country.options[index].text == "United States") {
+                bad_info += "\n    - U.S. state (required)";
+            }
+        }
+    }
+    var integerReq = /^[0-9]+$/;
+    var integerOpt = /^[0-9]*$/;
+    if ( integerReq.test (frm.latdeg.value) == false ) {
+        bad_info += "\n    - Latitude must be an integer";
+    }
+    if ( parseInt(frm.latdeg.value) > 90 )	{
+        bad_info += "\n    - Latitude must be less than 90";
+    }
+    if ( integerReq.test (frm.lngdeg.value) == false ) {
+        bad_info += "\n    - Longitude must be an integer";
+    }
+    if ( parseInt(frm.lngdeg.value) > 180 )	{
+        bad_info += "\n    - Longitude must be less than 180";
+    }
+    if ( integerOpt.test (frm.latmin.value) == false ) {
+        bad_info += "\n    - Latitude minutes must be integer";
+    } 
+    if ( frm.latmin.value != "" && parseInt(frm.latmin.value) >= 60)	{
+        bad_info += "\n    - Longitude minutes must be less than 60";
+    }
+    if ( integerOpt.test (frm.lngmin.value) == false ) {
+        bad_info += "\n    - Longitude minutes must be less than 60";
+    }
+    if ( frm.lngmin.value != "" && parseInt(frm.lngmin.value) >= 60)	{
+        bad_info += "\n    - Longitude minutes must be less 60";
+    }
+
+    // added decimal vs. minutes checks JA 18.5.04
+    if ( frm.latdec.value != "" && frm.latmin.value != "" ) {
+        bad_info += "\n    - Latitude: can't enter both decimal and minutes/seconds values";
+    }
+    if ( frm.lngdec.value != "" && frm.lngmin.value != "" ) {
+        bad_info += "\n    - Longitude: can't enter both decimal and minutes/seconds values";
+    }
+
+    var index = frm.country.selectedIndex;
+    var indexLat = frm.latdir.selectedIndex;
+    var indexLng = frm.lngdir.selectedIndex;
+    if ( index != 0 ) {
+        if ( ( frm.country.options[index].text == "United States" ||
+               frm.country.options[index].text == "Canada" ||
+               frm.country.options[index].text == "Mexico" ) &&
+             ( frm.latdir.options[indexLat].text != "North" ||
+               frm.lngdir.options[indexLng].text != "West" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+        else if ( ( frm.country.options[index].text == "Germany" ||
+              frm.country.options[index].text == "China" ||
+              frm.country.options[index].text == "Egypt" ||
+              frm.country.options[index].text == "Ethiopia" ||
+              frm.country.options[index].text == "Japan" ||
+              frm.country.options[index].text == "Russian Federation" ||
+              frm.country.options[index].text == "India" ) &&
+             ( frm.latdir.options[indexLat].text != "North" ||
+               frm.lngdir.options[indexLng].text != "East" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+        else if ( ( frm.country.options[index].text == "Australia" ||
+              frm.country.options[index].text == "Tanzania, United Republic of" ||
+              frm.country.options[index].text == "South Africa" ) &&
+             ( frm.latdir.options[indexLat].text != "South" ||
+               frm.lngdir.options[indexLng].text != "East" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+        else if ( ( frm.country.options[index].text == "Argentina" ||
+              frm.country.options[index].text == "Chile" ) &&
+             ( frm.latdir.options[indexLat].text != "South" ||
+               frm.lngdir.options[indexLng].text != "West" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+        else if ( ( frm.country.options[index].text == "Algeria" ||
+              frm.country.options[index].text == "France" ||
+              frm.country.options[index].text == "Spain" ||
+              frm.country.options[index].text == "United Kingdom" ) &&
+             ( parseInt(frm.lngdeg.value) > 15 ||
+               frm.latdir.options[indexLat].text != "North" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+        // PM 09/19/02 Changed the "West" check to longitude from latitude
+        else if ( frm.country.options[index].text == "Brazil" &&
+             ( parseInt(frm.latdeg.value) > 35 ||
+               frm.lngdir.options[indexLng].text != "West" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+        else if ( ( frm.country.options[index].text == "Kenya" ||
+              frm.country.options[index].text == "Uganda" ||
+              frm.country.options[index].text == "Indonesia" ) &&
+             ( parseInt(frm.latdeg.value) > 15 ||
+               frm.lngdir.options[indexLng].text != "East" ) ) {
+            bad_info += "\n    - Lat/long (mismatch country)";
+        }
+    }
+
+
+}
+                                                                                                                                     
+function doCheckFieldsStratigraphy() {
+    var frm = document.forms[0];
+
+    var hasgroup = /group/i;
+    if ( hasgroup.test ( frm.geological_group.value ) == true )      {
+        bad_info += "\n  - A group name can't include the word \"group\"";
+    }
+    var hasformation = /formation/i;
+    if ( hasformation.test ( frm.formation.value ) == true )      {
+        bad_info += "\n  - A formation name can't include the word \"formation\"";
+    }
+    var hasmember = /member/i;
+    if ( hasmember.test ( frm.member.value ) == true )      {
+        bad_info += "\n  - A member name can't include the word \"member\"";
+    }
+}
+
+function doCheckFieldsGeology() {
+    var frm = document.forms[0];
+    var index = frm.environment.selectedIndex;
+    var hasdashes = /--/i;
+
+    if ( frm.environment.options[index].text == "" || hasdashes.test ( frm.environment.value ) == true ) {
+        bad_info += "\n    - Environment (required)";
+    }
+}
+
+function doCheckFieldsTaphonomy() {
+    var frm = document.forms[0];
+    var full_count = 0;
+
+    if (frm.art_whole_bodies.options[frm.art_whole_bodies.selectedIndex].text == "all") { 
+        full_count  += 1;
+    }    
+    if (frm.disart_assoc_maj_elems.options[frm.disart_assoc_maj_elems.selectedIndex].text == "all") {
+        full_count  += 1;
+    }
+    if (frm.disassoc_maj_elems.options[frm.disassoc_maj_elems.selectedIndex].text == "all") {
+        full_count  += 1;
+    }
+    if (frm.disassoc_minor_elems.options[frm.disassoc_minor_elems.selectedIndex].text == "all") {
+        full_count  += 1;
+    } 
+    if (full_count > 1) {
+        bad_info += "\n  - Only one pulldown in the \"Articulation/element representation\" section be set to \"all\"";
+    }
+    
+    
+}
+
+// End -->
+</script>
+
+<div class="title_small_overhead">
+Collection no 37809
+</div>
+
+   <div align=center>
+   <table cellpadding=0 cellspacing=0 border=0 width=600><tr>
+   <td id="tab1" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(1);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(1)">Basic Info</td>
+   <td id="tab2" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(2);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(2)">Geography</td>
+   <td id="tab3" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(3);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(3)">Stratigraphy</td>
+   <td id="tab4" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(4);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(4)">Geology</td>
+   <td id="tab5" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(5);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(5)">Taphonomy</td>
+   <td id="tab6" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(6);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(6)">Collecting Info</td>
+   </tr></table>
+   </div>
+
+<div id="panel1" class="panel">
+  <div align="center">
+
   <p>
     <span class="required">Required fields are in red.</span> 
-	Consult the <A HREF="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</A> 
-	for help,  and don't forget to <a href="$exec_url?action=displayPreferencesPage&destination=displayEnterCollPage">set your preferences</a>!
+	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
   </p>
   
-  <input type=hidden name="action" value="processEnterCollectionForm">
-  <input type="hidden" name="reference_no" value="4215">
-  <input type="hidden" name="authorizer" value="J. Alroy">
-  <input type="hidden" name="enterer" value="J. Alroy">
+  <table border=0 cellpadding=0 cellspacing=0><tr><td>
 
-  <P>
-	<font size="+1"><b>BASIC INFORMATION</b></font>
-    <font size="1"><A HREF="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</A></font>
-  </p>
-  
-  <table border=0>
+  <table border=0 width=620>
     <tr>
       <td valign="top" colspan="2"><b>Research group(s):</b></td>
       <td colspan="2">
-		<input type=hidden name="research_group" value=""><input type="checkbox" name="research_group" value="ETE"> ETE
-        <input type="checkbox" name="research_group" value="decapod">decapod
+        <input type=hidden name="research_group" value=""><input type="checkbox" name="research_group" value="decapod"> decapod
+		<input type="checkbox" name="research_group" value="ETE"> ETE
 		<input type="checkbox" name="research_group" value="marine invertebrate"> marine invertebrate
+		<input type="checkbox" name="research_group" value="micropaleontology"> micropaleontology
 		<input type="checkbox" name="research_group" value="PACED"> PACED
-		<input type="checkbox" name="research_group" value="paleobotany"> paleobotany
+		<input type="checkbox" name="research_group" value="paleobotany" checked> paleobotany
 		<input type="checkbox" name="research_group" value="paleoentomology"> paleoentomology
 		<input type="checkbox" name="research_group" value="taphonomy"> taphonomy
-		<input type="checkbox" name="research_group" value="vertebrate"> vertebrate
+		<input type="checkbox" name="research_group" value="vertebrate" checked> vertebrate
       </td>
     </tr>
   </table>
+  
   <table border=0>
     <tr>
       <td><span class="required">Access level:</span></td>
-      <td><select name="access_level"><option>the public<option>database members<option>group members<option>authorizer only</select></td>
+      <td><select name="access_level"><option selected>the public</option><option>database members</option><option>group members</option><option>authorizer only</option></select></td>
+      <td> </td>
       <td><span class="required">Release date:</span></td>
-      <td><select name="release_date"><option>immediate<option>three months<option>six months<option>one year<option>two years<option>three years<option>four years<option>five years</select></td>
+      <td><select name="release_date"><option>immediate</option><option>three months</option><option>six months</option><option>one year</option><option>two years</option><option>three years</option><option>four years</option><option>five years</option></select></td>
     </tr>
   </table>
   
   <table>
     <tr>
-      <td><span class="required">Collection name</span> (truncated at 80 
+      <td>
+        <span class="required">Collection name</span> (truncated at 80 
         characters):
       </td>
       <td>
-        <input name="collection_name" value="" size="50" maxlength="80">
+        <input name="collection_name" value="Icaronycteris Type Locality" size="50" maxlength="80">
       </td>
     </tr>
     <tr>
@@ -53,7 +1907,7 @@
         Also known as:
       </td>
       <td>
-        <textarea name="collection_aka" cols="50" rows="2" wrap="virtual"></textarea>
+        <textarea name="collection_aka" cols="50" rows="2" wrap="virtual">Fossil Lake; Green River</textarea>
       </td>
     </tr>
     <tr>
@@ -66,37 +1920,64 @@
     </tr>
   </table>
 
-  <p>
-  Primary reference:<br>
-  <table><tr>
-	<td></td>
-	<td width="5%" valign=top><b>4215</b></td>
-	<td></td>
-	<td>
-Y. Alm&eacute;ras and S. Elmi. 1998. Les brachiopodes jurassiques moyens de la bordure vivaro-c&eacute;venole (Bassin du Sud-Est, France). <i>Strata</i> <b>2</b><b>(29)</b>:1-145<font size="small"> [F. Fursich/F. Fursich/F. Fursich]</font>
-</td>
+  <p>Current primary reference:<br>
+  <table cellspacing=0 cellpadding=8>
+<!--Start of reference_display_row.html -->
+<tr>
+  <th valign=top align=left>
+    <b>10080</b>
+  </th>
+  <td valign=top>&nbsp;
+    G. L.
+    Jepsen<span id="author2init"></span><span id="author2last"></span><span id="otherauthors"></span>.
+    1966.
+    Early Eocene bat from Wyoming<span show="reftitle">.</span>
+    <i>Science</i>
+    <b>154<span id="pubno"></span></b><span show="firstpage">:1333<span show="lastpage">-</span>1339
+  </td>
 </tr>
+<!--End of reference_display_row.html -->
 </table>
   </p>
+  
+  
 
   <p>
-    <span class="required">Author's main reason for describing collection</span>:<select name="collection_type"><option><option>archaeological<option>biostratigraphic<option>paleoecologic<option>taphonomic<option>taxonomic<option>general faunal/floral</select> analysis
+    <span class="required">Author's main reason for describing collection:</span><select name="collection_type"><option></option><option>archaeological</option><option>biostratigraphic</option><option>paleoecologic</option><option>taphonomic</option><option selected>taxonomic</option><option>general faunal/floral</option></select> analysis
   </p>
 
-  <P>
-	<font size="+1"><b>GEOGRAPHIC INFORMATION</b></font>
-    <font size="1"><A HREF="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</A></font>
+  <p>
+     <div align="center"><input type=submit name="update_button" value="Update collection and exit"></div>
   </p>
+  <br>
+  </td></tr></table>
+ 
+</body>
+</html>
+
+  </td></tr></table></div>
+</div>
+
+
+<div id="panel2" class="panel">
+  <div align="center">
+  <p>
+    <span class="required">Required fields are in red.</span> 
+	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
+  </p>
+
+  <table border=0 cellpadding=0 cellspacing=0><tr><td>
 
   <table border=0>
     <tr>
-      <td><span class="required">Country*</span>: <br><select name="country"><option><option>United States<option>United Kingdom<option>China<option>Canada<option>France<option>Australia<option>Russian Federation<option>Afghanistan<option>Albania<option>Algeria<option>American Samoa<option>Andorra<option>Angola<option>Anguilla<option>Antarctica<option>Antigua and Barbuda<option>Argentina<option>Armenia<option>Aruba<option>Australia<option>Austria<option>Azerbaijan<option>Bahamas<option>Bahrain<option>Bangladesh<option>Barbados<option>Belarus<option>Belgium<option>Belize<option>Benin<option>Bermuda<option>Bhutan<option>Bolivia<option>Bosnia and Herzegovina<option>Botswana<option>Bouvet Island<option>Brazil<option>British Indian Ocean Territory<option>Brunei Darussalam<option>Bulgaria<option>Burkina Faso<option>Burundi<option>Cambodia<option>Cameroon<option>Canada<option>Cape Verde<option>Cayman Islands<option>Central African Republic<option>Chad<option>Chile<option>China<option>Christmas Island<option>Cocos (Keeling) Islands<option>Colombia<option>Comoros<option>Congo<option>Congo, The Democratic Republic of the<option>Cook Islands<option>Costa Rica<option>Cote D'Ivoire<option>Croatia<option>Cuba<option>Cyprus<option>Czech Republic<option>Denmark<option>Djibouti<option>Dominica<option>Dominican Republic<option>East Timor<option>Ecuador<option>Egypt<option>El Salvador<option>Equatorial Guinea<option>Eritrea<option>Estonia<option>Ethiopia<option>Falkland Islands (Malvinas)<option>Faroe Islands<option>Fiji<option>Finland<option>France<option>France, Metropolitan<option>French Guiana<option>French Polynesia<option>French Southern Territories<option>Gabon<option>Gambia<option>Georgia<option>Germany<option>Ghana<option>Gibraltar<option>Greece<option>Greenland<option>Grenada<option>Guadeloupe<option>Guam<option>Guatemala<option>Guinea<option>Guinea-Bissau<option>Guyana<option>Haiti<option>Heard Island and McDonald Islands<option>Holy See (Vatican City State)<option>Honduras<option>Hong Kong<option>Hungary<option>Iceland<option>India<option>Indonesia<option>Iran, Islamic Republic of<option>Iraq<option>Ireland<option>Israel<option>Italy<option>Jamaica<option>Japan<option>Jordan<option>Kazakstan<option>Kenya<option>Kiribati<option>Korea, Democratic People's Republic of<option>Korea, Republic of<option>Kuwait<option>Kyrgyzstan<option>Lao People's Democratic Republic<option>Latvia<option>Lebanon<option>Lesotho<option>Liberia<option>Libyan Arab Jamahiriya<option>Liechtenstein<option>Lithuania<option>Luxembourg<option>Macau<option>Macedonia, the Former Yugoslav Republic of<option>Madagascar<option>Malawi<option>Malaysia<option>Maldives<option>Mali<option>Malta<option>Marshall Islands<option>Martinique<option>Mauritania<option>Mauritius<option>Mayotte<option>Mexico<option>Micronesia, Federated States of<option>Moldova, Republic of<option>Monaco<option>Mongolia<option>Montserrat<option>Morocco<option>Mozambique<option>Myanmar<option>Namibia<option>Nauru<option>Nepal<option>Netherlands<option>Netherlands Antilles<option>New Caledonia<option>New Zealand<option>Nicaragua<option>Niger<option>Nigeria<option>Niue<option>Norfolk Island<option>Northern Mariana Islands<option>Norway<option>Oman<option>Pakistan<option>Palau<option>Palestinian Territory, Occupied<option>Panama<option>Papua New Guinea<option>Paraguay<option>Peru<option>Philippines<option>Pitcairn<option>Poland<option>Portugal<option>Puerto Rico<option>Qatar<option>Reunion<option>Romania<option>Russian Federation<option>Rwanda<option>Saint Helena<option>Saint Kitts and Nevis<option>Saint Lucia<option>Saint Pierre and Miquelon<option>Saint Vincent and the Grenadines<option>Samoa<option>San Marino<option>Sao Tome and Principe<option>Saudi Arabia<option>Senegal<option>Seychelles<option>Sierra Leone<option>Singapore<option>Slovakia<option>Slovenia<option>Solomon Islands<option>Somalia<option>South Africa<option>South Georgia and the South Sandwich Islands<option>Spain<option>Sri Lanka<option>Sudan<option>Suriname<option>Svalbard and Jan Mayen<option>Swaziland<option>Sweden<option>Switzerland<option>Syrian Arab Republic<option>Taiwan, Province of China<option>Tajikistan<option>Tanzania, United Republic of<option>Thailand<option>Togo<option>Tokelau<option>Tonga<option>Trinidad and Tobago<option>Tunisia<option>Turkey<option>Turkmenistan<option>Turks and Caicos Islands<option>Tuvalu<option>Uganda<option>Ukraine<option>United Arab Emirates<option>United Kingdom<option>United States<option>United States Minor Outlying Islands<option>Uruguay<option>Uzbekistan<option>Vanuatu<option>Venezuela<option>Vietnam<option>Virgin Islands, British<option>Virgin Islands, U.S.<option>Wallis and Futuna<option>Western Sahara<option>Yemen<option>Yugoslavia<option>Zaire<option>Zambia<option>Zimbabwe</select>
+      <td>
+        <span class="required">Country*</span>: <br><select name="country"><option></option><option selected>United States</option><option>United Kingdom</option><option>China</option><option>Canada</option><option>France</option><option>Australia</option><option>Russian Federation</option><option>Afghanistan</option><option>Albania</option><option>Algeria</option><option>American Samoa</option><option>Andorra</option><option>Angola</option><option>Anguilla</option><option>Antarctica</option><option>Antigua and Barbuda</option><option>Argentina</option><option>Armenia</option><option>Aruba</option><option>Australia</option><option>Austria</option><option>Azerbaijan</option><option>Bahamas</option><option>Bahrain</option><option>Bangladesh</option><option>Barbados</option><option>Belarus</option><option>Belgium</option><option>Belize</option><option>Benin</option><option>Bermuda</option><option>Bhutan</option><option>Bolivia</option><option>Bosnia and Herzegovina</option><option>Botswana</option><option>Bouvet Island</option><option>Brazil</option><option>British Indian Ocean Territory</option><option>Brunei Darussalam</option><option>Bulgaria</option><option>Burkina Faso</option><option>Burundi</option><option>Cambodia</option><option>Cameroon</option><option>Canada</option><option>Cape Verde</option><option>Cayman Islands</option><option>Central African Republic</option><option>Chad</option><option>Chile</option><option>China</option><option>Christmas Island</option><option>Cocos (Keeling) Islands</option><option>Colombia</option><option>Comoros</option><option>Congo</option><option>Congo, The Democratic Republic of the</option><option>Cook Islands</option><option>Costa Rica</option><option>Cote D'Ivoire</option><option>Croatia</option><option>Cuba</option><option>Cyprus</option><option>Czech Republic</option><option>Denmark</option><option>Djibouti</option><option>Dominica</option><option>Dominican Republic</option><option>East Timor</option><option>Ecuador</option><option>Egypt</option><option>El Salvador</option><option>Equatorial Guinea</option><option>Eritrea</option><option>Estonia</option><option>Ethiopia</option><option>Falkland Islands (Malvinas)</option><option>Faroe Islands</option><option>Fiji</option><option>Finland</option><option>France</option><option>France, Metropolitan</option><option>French Guiana</option><option>French Polynesia</option><option>French Southern Territories</option><option>Gabon</option><option>Gambia</option><option>Georgia</option><option>Germany</option><option>Ghana</option><option>Gibraltar</option><option>Greece</option><option>Greenland</option><option>Grenada</option><option>Guadeloupe</option><option>Guam</option><option>Guatemala</option><option>Guinea</option><option>Guinea-Bissau</option><option>Guyana</option><option>Haiti</option><option>Heard Island and McDonald Islands</option><option>Holy See (Vatican City State)</option><option>Honduras</option><option>Hong Kong</option><option>Hungary</option><option>Iceland</option><option>India</option><option>Indonesia</option><option>Iran, Islamic Republic of</option><option>Iraq</option><option>Ireland</option><option>Israel</option><option>Italy</option><option>Jamaica</option><option>Japan</option><option>Jordan</option><option>Kazakstan</option><option>Kenya</option><option>Kiribati</option><option>Korea, Democratic People's Republic of</option><option>Korea, Republic of</option><option>Kuwait</option><option>Kyrgyzstan</option><option>Lao People's Democratic Republic</option><option>Latvia</option><option>Lebanon</option><option>Lesotho</option><option>Liberia</option><option>Libyan Arab Jamahiriya</option><option>Liechtenstein</option><option>Lithuania</option><option>Luxembourg</option><option>Macau</option><option>Macedonia, the Former Yugoslav Republic of</option><option>Madagascar</option><option>Malawi</option><option>Malaysia</option><option>Maldives</option><option>Mali</option><option>Malta</option><option>Marshall Islands</option><option>Martinique</option><option>Mauritania</option><option>Mauritius</option><option>Mayotte</option><option>Mexico</option><option>Micronesia, Federated States of</option><option>Moldova, Republic of</option><option>Monaco</option><option>Mongolia</option><option>Montserrat</option><option>Morocco</option><option>Mozambique</option><option>Myanmar</option><option>Namibia</option><option>Nauru</option><option>Nepal</option><option>Netherlands</option><option>Netherlands Antilles</option><option>New Caledonia</option><option>New Zealand</option><option>Nicaragua</option><option>Niger</option><option>Nigeria</option><option>Niue</option><option>Norfolk Island</option><option>Northern Mariana Islands</option><option>Norway</option><option>Oman</option><option>Pakistan</option><option>Palau</option><option>Palestinian Territory, Occupied</option><option>Panama</option><option>Papua New Guinea</option><option>Paraguay</option><option>Peru</option><option>Philippines</option><option>Pitcairn</option><option>Poland</option><option>Portugal</option><option>Puerto Rico</option><option>Qatar</option><option>Reunion</option><option>Romania</option><option>Russian Federation</option><option>Rwanda</option><option>Saint Helena</option><option>Saint Kitts and Nevis</option><option>Saint Lucia</option><option>Saint Pierre and Miquelon</option><option>Saint Vincent and the Grenadines</option><option>Samoa</option><option>San Marino</option><option>Sao Tome and Principe</option><option>Saudi Arabia</option><option>Senegal</option><option>Seychelles</option><option>Sierra Leone</option><option>Singapore</option><option>Slovakia</option><option>Slovenia</option><option>Solomon Islands</option><option>Somalia</option><option>South Africa</option><option>South Georgia and the South Sandwich Islands</option><option>Spain</option><option>Sri Lanka</option><option>Sudan</option><option>Suriname</option><option>Svalbard and Jan Mayen</option><option>Swaziland</option><option>Sweden</option><option>Switzerland</option><option>Syrian Arab Republic</option><option>Taiwan, Province of China</option><option>Tajikistan</option><option>Tanzania, United Republic of</option><option>Thailand</option><option>Togo</option><option>Tokelau</option><option>Tonga</option><option>Trinidad and Tobago</option><option>Tunisia</option><option>Turkey</option><option>Turkmenistan</option><option>Turks and Caicos Islands</option><option>Tuvalu</option><option>Uganda</option><option>Ukraine</option><option>United Arab Emirates</option><option>United Kingdom</option><option selected>United States</option><option>United States Minor Outlying Islands</option><option>Uruguay</option><option>Uzbekistan</option><option>Vanuatu</option><option>Venezuela</option><option>Vietnam</option><option>Virgin Islands, British</option><option>Virgin Islands, U.S.</option><option>Wallis and Futuna</option><option>Western Sahara</option><option>Yemen</option><option>Yugoslavia</option><option>Zaire</option><option>Zambia</option><option>Zimbabwe</option></select>
       </td>
       <td>
-        <span class="required">State*</span>/province: <br><input name="state" value="" maxlength="255">
+        <span class="required">State*</span>/province: <br><input name="state" value="Wyoming" maxlength="255">
       </td>
       <td>
-        County/parish/etc.: <br><input name="county" value="" maxlength="255">
+        County/parish/etc.: <br><input name="county" value="Lincoln" maxlength="255">
       </td>
     </tr>
   </table>
@@ -116,19 +1997,19 @@ Y. Alm&eacute;ras and S. Elmi. 1998. Les brachiopodes jurassiques moyens de la b
     </tr>
     <tr>
       <td>Latitude</td>
-      <td><input name="latdeg" value="44" size="5" maxlength="3"></td>
+      <td><input name="latdeg" value="41" size="5" maxlength="3"></td>
       <td><input name="latmin" value="" size="3" maxlength="2"></td>
       <td><input name="latsec" value="" size="3" maxlength="2"></td>
       <td><input name="latdec" value="" size="5" maxlength="8"></td>
-      <td><select name="latdir"><option selected>North<option>South</select>
+      <td><select name="latdir"><option selected>North</option><option>South</option></select>
     </tr>
     <tr>
       <td>Longitude</td>
-      <td><input name="lngdeg" value="99" size="5" maxlength="3"></td>
+      <td><input name="lngdeg" value="110" size="5" maxlength="3"></td>
       <td><input name="lngmin" value="" size="3" maxlength="2"></td>
       <td><input name="lngsec" value="" size="3" maxlength="2"></td>
       <td><input name="lngdec" value="" size="5" maxlength="8"></td>
-      <td><select name="lngdir"><option selected>West<option>East</select></td>
+      <td><select name="lngdir"><option selected>West</option><option>East</option></select></td>
     </tr>
   </table>
 
@@ -136,16 +2017,16 @@ Y. Alm&eacute;ras and S. Elmi. 1998. Les brachiopodes jurassiques moyens de la b
   <A HREF="javascript:tipsPopup('/public/tips/tips.html#Coordinates')">tip sheet</A>
   for web sites that provide coordinate data.</i></p>
   <p>
-  Basis of coordinate: <select name="latlng_basis"><option><option>stated in text<option>based on nearby landmark<option>based on political unit<option>estimated from map<option>unpublished field data</select>
-  GPS datum: <select name="gps_datum"><option><option>NAD27 CONUS<option>NAD83<option>WGS72<option>WGS84</select>
+  Basis of coordinate: <select name="latlng_basis"><option></option><option selected>stated in text</option><option>based on nearby landmark</option><option>based on political unit</option><option>estimated from map</option><option>unpublished field data</option></select>
+  GPS datum: <select name="gps_datum"><option></option><option>NAD27 CONUS</option><option>NAD83</option><option>WGS72</option><option>WGS84</option></select>
   <p>
-  Altitude:<input name="altitude_value" value="" size="10" maxlength="11">
-  <select name="altitude_unit"><option><option>meters<option>feet</select>
+  Altitude:<input name="altitude_value" value="2200" size="10" maxlength="11">
+  <select name="altitude_unit"><option></option><option selected>meters</option><option>feet</option></select>
   
   <table>
     <tr>
       <td>
-        Scale of geographic resolution: <select name="geogscale"><option><option>hand sample<option>small collection<option>outcrop<option>local area<option>basin</select>
+        Scale of geographic resolution: <select name="geogscale"><option></option><option>hand sample</option><option selected>small collection</option><option>outcrop</option><option>local area</option><option>basin</option></select>
       </td>
     </tr>
   </table>
@@ -154,61 +2035,91 @@ Y. Alm&eacute;ras and S. Elmi. 1998. Les brachiopodes jurassiques moyens de la b
   Location details (quadrangle, township and range, etc.):
   <br>
   <textarea name="geogcomments" cols="100" rows="4" wrap="virtual"></textarea>
-  
-  <P>
-	<font size="+1"><b>STRATIGRAPHIC INFORMATION</b></font>
-    <font size="1"><A HREF="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</A> /
-<a href="javascript:tipsPopup('$exec_url?action=startScale')">time scales</a></font>
+
+  <p>
+     <div align="center"><input type=submit name="update_button" value="Update collection and exit"></div>
   </p>
+  <br>
+  </td></tr></table>
+<!-- Begin std_page_bottom.html -->
+</td></tr>
+<tr><td align="center" valign="bottom">
+      <table border=0 width=640 bgcolor="#0077FF" align=center>
+        <tr>
+          <td width=160 align=center nowrap>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=displayMenuPage&amp;clear=clearQueue" class="menu">Main menu</a>
+          </td>
+          <td width=160 align=center>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=logout" class="menu">Current enterer:<BR>J. Alroy</a>
+          </td>
+          <td width=160 align=center>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=displaySearchRefs&amp;type=select" class="menu">Current reference:<BR>10080 (Jepsen 1966)</a>
+          </td>
+          <td width=160 align=center nowrap>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?user=Contributor&amp;action=displayHomePage" class="menu">Contributors' home page</a>
+          </td>
+        </tr>
+      </table>
+ </td></tr></table>
  
+</body>
+</html>
+
  
+    </td></tr></table></div>
+</div>
+<div id="panel3" class="panel">
+  <div align="center">
+  <p>
+    <span class="required">Required fields are in red.</span> 
+	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
+  </p>
+  <table border=0 cellpadding=0 cellspacing=0><tr><td>
   <table border=0>
-<!--
     <tr>
-      <td><span class="required">Period (oldest):</span><br>
-		    <span id="emlperiod_max"></span>
-			  <span id="period_max"></span>
+      <td>
+      <i></i>
       </td>
-      <td>Period (youngest):<br>
-		  	<span id="emlperiod_min"></span>
-			  <span id="period_min"></span>
+      <td>
+      <i></i>
       </td>
     </tr>
     <tr>
-      <td>Epoch/series (oldest):<br><select name="emlepoch_max"><option><option>Late/Upper<option>Middle - Late/Upper<option>Middle<option>Early/Lower - Middle<option>Early/Lower</select>
-			  <input name="epoch_max" value="" maxlength="255">
+      <td>
+      <i></i>
       </td>
-      <td>Epoch/series (youngest):<br><select name="emlepoch_min"><option><option>Late/Upper<option>Middle - Late/Upper<option>Middle<option>Early/Lower - Middle<option>Early/Lower</select>
-		    <input name="epoch_min" value="" maxlength="255">
-      </td>
-    </tr>
-    <tr>
-      <td>International age/stage (oldest):<br><select name="emlintage_max"><option><option>Late/Upper<option>Middle - Late/Upper<option>Middle<option>Early/Lower - Middle<option>Early/Lower</select>
-        <input name="intage_max" value="" maxlength="255">
-      </td>
-      <td>International age/stage (youngest):<br><select name="emlintage_min"><option><option>Late/Upper<option>Middle - Late/Upper<option>Middle<option>Early/Lower - Middle<option>Early/Lower</select>
-        <input name="intage_min" value="" maxlength="255">
+      <td>
+      <i></i>
       </td>
     </tr>
     <tr>
-      <td>Local age/stage (oldest):<br><select name="emllocage_max"><option><option>Late/Upper<option>Middle - Late/Upper<option>Middle<option>Early/Lower - Middle<option>Early/Lower</select>
-			  <input name="locage_max" value="" maxlength="255">
+      <td>
+      <i></i>
       </td>
-      <td>Local age/stage (youngest):<br><select name="emllocage_min"><option><option>Late/Upper<option>Middle - Late/Upper<option>Middle<option>Early/Lower - Middle<option>Early/Lower</select>
-		  	<input name="locage_min" value="" maxlength="255">
+      <td>
+      <i></i>
       </td>
     </tr>
     <tr>
-      <td width="50%">Zone:<br><input name="zone" value="" maxlength="255">
+      <td>
+      <i></i>
+      </td>
+      <td>
+      <i></i>
       </td>
     </tr>
--->
     <tr>
-      <td><span class="required">Maximum (oldest) time interval:</span><br><select name="eml_max_interval"><option><option>Late/Upper<option>late Late<option>middle Late<option>early Late<option>Middle<option>late Middle<option>middle Middle<option>early Middle<option>Early/Lower<option>late Early<option>middle Early<option>early Early</select>
-			  <input name="max_interval" value="" maxlength="255">
+      <td width="50%">
+      <i></i>
       </td>
-      <td>Minimum (youngest) time interval:<br><select name="eml_min_interval"><option><option>Late/Upper<option>late Late<option>middle Late<option>early Late<option>Middle<option>late Middle<option>middle Middle<option>early Middle<option>Early/Lower<option>late Early<option>middle Early<option>early Early</select>
-		  	<input name="min_interval" value="" maxlength="255">
+    </tr>
+
+     <tr>
+      <td><span class="required">Maximum (oldest) time interval:</span><br><select name="eml_max_interval"><option></option><option>Late/Upper</option><option>late Late</option><option>middle Late</option><option>early Late</option><option>Middle</option><option>late Middle</option><option>middle Middle</option><option>early Middle</option><option>Early/Lower</option><option>late Early</option><option>middle Early</option><option>early Early</option></select>
+                          <input name="max_interval" value="Wasatchian" maxlength="255" onKeyUp="doComplete(event, this, intervalNames(),0);">
+      </td>
+      <td>Minimum (youngest) time interval:<br><select name="eml_min_interval"><option></option><option>Late/Upper</option><option>late Late</option><option>middle Late</option><option>early Late</option><option>Middle</option><option>late Middle</option><option>middle Middle</option><option>early Middle</option><option>Early/Lower</option><option>late Early</option><option>middle Early</option><option>early Early</option></select>
+                        <input name="min_interval" value="" maxlength="255" onKeyUp="doComplete(event, this, intervalNames(),0);">
       </td>
     </tr>
   </table>
@@ -216,37 +2127,73 @@ Y. Alm&eacute;ras and S. Elmi. 1998. Les brachiopodes jurassiques moyens de la b
   <table border=0>
     <tr>
       <td>Group:<br><input name="geological_group" value="" maxlength="255"></td>
-      <td>Formation:<br><input name="formation" value="" maxlength="255"></td>
+      <td>Formation:<br><input name="formation" value="Green River" maxlength="255"></td>
       <td>Member:<br><input name="member" value="" maxlength="255"></td>
     </tr>
     <tr>
       <td>Local section name:<br><input name="localsection" value="" maxlength="255"></td>
-      <td>Bed/horizon:<br><input name="localbed" value="" maxlength="255"></td>
-      <td>Numbered from:<br><select name="localorder"><option><option>bottom to top<option>top to bottom<option>no particular order</select></td>
+      <td valign="bottom">Bed/horizon:<br><input name="localbed" value="" maxlength="255">
+      <select name="localbedunit"><option></option><option>m</option><option>cm</option><option>ft</option></select></td>
+      <td>Numbered from:<br><select name="localorder"><option></option><option>bottom to top</option><option>top to bottom</option><option>no particular order</option></select></td>
     </tr>
     <tr>
       <td>Basinal/regional section name:<br><input name="regionalsection" value="" maxlength="255"></td>
-      <td>Bed/horizon:<br><input name="regionalbed" value="" maxlength="255"></td>
-      <td>Numbered from:<br><select name="regionalorder"><option><option>bottom to top<option>top to bottom<option>no particular order</select></td>
+      <td valign="bottom">Bed/horizon:<br><input name="regionalbed" value="" maxlength="255">
+      <select name="regionalbedunit"><option></option><option>m</option><option>cm</option><option>ft</option></select></td>
+      <td>Numbered from:<br><select name="regionalorder"><option></option><option>bottom to top</option><option>top to bottom</option><option>no particular order</option></select></td>
   	</tr>
   </table>
   
   <p>
-    Scale of stratigraphic resolution:<select name="stratscale"><option><option>bed<option>group of beds<option>member<option>formation<option>group</select>
+    Scale of stratigraphic resolution:<select name="stratscale"><option></option><option selected>bed</option><option>group of beds</option><option>member</option><option>formation</option><option>group</option></select>
   </p>
   <p>
-    Comments about stratigraphy:<br><textarea name="stratcomments" cols="100" rows="4" wrap="virtual"></textarea>
-  </p>
-  
-  <P>
-	<font size="+1"><b>OTHER GEOLOGICAL INFORMATION</b></font>
-    <font size="1"><A HREF="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</A></font>
+    Comments about stratigraphy:<br><textarea name="stratcomments" cols="100" rows="4" wrap="virtual">&quot;about 21 m above Wasatchian Knight Formation&quot;; &quot;of Lysite age&quot;</textarea>
   </p>
 
   <p>
+     <div align="center"><input type=submit name="update_button" value="Update collection and exit"></div>
+  </p>
+  <br>
+  </td></tr></table>
+<!-- Begin std_page_bottom.html -->
+</td></tr>
+<tr><td align="center" valign="bottom">
+      <table border=0 width=640 bgcolor="#0077FF" align=center>
+        <tr>
+          <td width=160 align=center nowrap>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=displayMenuPage&amp;clear=clearQueue" class="menu">Main menu</a>
+          </td>
+          <td width=160 align=center>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=logout" class="menu">Current enterer:<BR>J. Alroy</a>
+          </td>
+          <td width=160 align=center>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=displaySearchRefs&amp;type=select" class="menu">Current reference:<BR>10080 (Jepsen 1966)</a>
+          </td>
+          <td width=160 align=center nowrap>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?user=Contributor&amp;action=displayHomePage" class="menu">Contributors' home page</a>
+          </td>
+        </tr>
+      </table>
+ </td></tr></table>
+ 
+</body>
+</html>
+
+  
+  </td></tr></table></div>   
+</div>
+<div id="panel4" class="panel">
+  <div align="center">
+  <p>
+	<span class="required">Required fields are in red.</span> 
+	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
+  </p>
+<table border=0 cellpadding=0 cellspacing=0><tr><td>
+  <p>
   <h4>Primary lithology</h4>
-  <select name="lithification"><option><option>unlithified<option>poorly lithified<option>lithified<option>metamorphosed</select>
-    <select name="lithology1"><option><option>&quot;siliciclastic&quot;<option>claystone<option>mudstone<option>&quot;shale&quot;<option>siltstone<option>sandstone<option>conglomerate<option><option>&quot;mixed carbonate-siliciclastic&quot;<option>marl<option><option>lime mudstone<option>wackestone<option>packstone<option>grainstone<option>&quot;reef rocks&quot;<option>floatstone<option>rudstone<option>bafflestone<option>bindstone<option>framestone<option>&quot;limestone&quot;<option>dolomite<option>&quot;carbonate&quot;<option><option>coal<option>peat<option>lignite<option>subbituminous coal<option>bituminous coal<option>anthracite<option>coal ball<option>tar<option><option>amber<option>chert<option>evaporite<option>phosphorite<option>ironstone<option>siderite<option><option>phyllite<option>slate<option>schist<option>quartzite<option><option>&quot;volcaniclastic&quot;<option>ash<option>tuff</select>
+  <select name="lithification"><option></option><option>unlithified</option><option>poorly lithified</option><option>lithified</option><option>metamorphosed</option></select>
+    <select name="lithology1"><option></option><option>&quot;siliciclastic&quot;</option><option>claystone</option><option>mudstone</option><option>&quot;shale&quot;</option><option>siltstone</option><option>sandstone</option><option>conglomerate</option><option></option><option>&quot;mixed carbonate-siliciclastic&quot;</option><option selected>marl</option><option></option><option>lime mudstone</option><option>wackestone</option><option>packstone</option><option>grainstone</option><option>&quot;reef rocks&quot;</option><option>floatstone</option><option>rudstone</option><option>bafflestone</option><option>bindstone</option><option>framestone</option><option>&quot;limestone&quot;</option><option>dolomite</option><option>&quot;carbonate&quot;</option><option></option><option>coal</option><option>peat</option><option>lignite</option><option>subbituminous coal</option><option>bituminous coal</option><option>anthracite</option><option>coal ball</option><option>tar</option><option></option><option>amber</option><option>chert</option><option>evaporite</option><option>phosphorite</option><option>ironstone</option><option>siderite</option><option></option><option>phyllite</option><option>slate</option><option>schist</option><option>quartzite</option><option></option><option>&quot;volcaniclastic&quot;</option><option>ash</option><option>tuff</option></select>
   <br>
   <i><p class="small">See the 
   <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">tip sheet</A>
@@ -260,21 +2207,21 @@ Y. Alm&eacute;ras and S. Elmi. 1998. Les brachiopodes jurassiques moyens de la b
   <table border=0>
     <tr>
       <td width="650">
-        <select name="lithadj"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
+        <select name="lithadj"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option selected>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
+        <select name="lithadj"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option selected>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
+        <select name="lithadj"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option selected>yellow</option></select>
+        <select name="lithadj"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
+        <select name="lithadj"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
+        <select name="lithadj"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
+        <select name="lithadj"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
+        <select name="lithadj"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
       </td>
     </tr>
   </table>
 
   <H4>Secondary lithology</H4>
-  <select name="lithification2"><option><option>unlithified<option>poorly lithified<option>lithified<option>metamorphosed</select>
-	<select name="lithology2"><option><option>&quot;siliciclastic&quot;<option>claystone<option>mudstone<option>&quot;shale&quot;<option>siltstone<option>sandstone<option>conglomerate<option><option>&quot;mixed carbonate-siliciclastic&quot;<option>marl<option><option>lime mudstone<option>wackestone<option>packstone<option>grainstone<option>&quot;reef rocks&quot;<option>floatstone<option>rudstone<option>bafflestone<option>bindstone<option>framestone<option>&quot;limestone&quot;<option>dolomite<option>&quot;carbonate&quot;<option><option>coal<option>peat<option>lignite<option>subbituminous coal<option>bituminous coal<option>anthracite<option>coal ball<option>tar<option><option>amber<option>chert<option>evaporite<option>phosphorite<option>ironstone<option>siderite<option><option>phyllite<option>slate<option>schist<option>quartzite<option><option>&quot;volcaniclastic&quot;<option>ash<option>tuff</select>
+  <select name="lithification2"><option></option><option>unlithified</option><option>poorly lithified</option><option>lithified</option><option>metamorphosed</option></select>
+	<select name="lithology2"><option></option><option>&quot;siliciclastic&quot;</option><option>claystone</option><option>mudstone</option><option>&quot;shale&quot;</option><option>siltstone</option><option>sandstone</option><option>conglomerate</option><option></option><option>&quot;mixed carbonate-siliciclastic&quot;</option><option>marl</option><option></option><option>lime mudstone</option><option>wackestone</option><option>packstone</option><option>grainstone</option><option>&quot;reef rocks&quot;</option><option>floatstone</option><option>rudstone</option><option>bafflestone</option><option>bindstone</option><option>framestone</option><option>&quot;limestone&quot;</option><option>dolomite</option><option>&quot;carbonate&quot;</option><option></option><option>coal</option><option>peat</option><option>lignite</option><option>subbituminous coal</option><option>bituminous coal</option><option>anthracite</option><option>coal ball</option><option>tar</option><option></option><option>amber</option><option>chert</option><option>evaporite</option><option>phosphorite</option><option>ironstone</option><option>siderite</option><option></option><option>phyllite</option><option>slate</option><option>schist</option><option>quartzite</option><option></option><option>&quot;volcaniclastic&quot;</option><option>ash</option><option>tuff</option></select>
   <br>
   <i><p class="small">See the 
   <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">tip sheet</A>
@@ -288,48 +2235,50 @@ Y. Alm&eacute;ras and S. Elmi. 1998. Les brachiopodes jurassiques moyens de la b
   <table border=0>
     <tr>
       <td width="650">
-        <select name="lithadj2"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj2"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj2"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj2"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj2"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj2"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj2"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
-        <select name="lithadj2"><option><option>lenticular<option>tabular<option>desiccation cracks<option>current ripples<option>dunes<option>hummocky CS<option>wave ripples<option>&quot;cross stratification&quot;<option>planar lamination<option>tool marks<option>flute casts<option>deformed bedding<option>grading<option>burrows<option>bioturbation<option>pedogenic<option><option>condensed<option>firmground<option>hardground<option>lag<option><option>argillaceous<option>micaceous<option>silty<option>sandy<option>conglomeratic<option>pebbly<option><option>very fine<option>fine<option>medium<option>coarse<option>very coarse<option><option>calcareous<option>carbonaceous<option>cherty/siliceous<option>concretionary<option>diatomaceous<option>dolomitic<option>ferruginous<option>glauconitic<option>gypsiferous<option>hematitic<option>pyritic<option>phosphatic<option>sideritic<option>stromatolitic<option>tuffaceous<option>volcaniclastic<option><option>flat-pebble<option>intraclastic<option>oncoidal<option>ooidal<option>peloidal<option>shelly/skeletal<option><option>black<option>blue<option>brown<option>gray<option>green<option>red<option>red or brown<option>white<option>yellow</select>
+        <select name="lithadj2"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
+        <select name="lithadj2"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
+        <select name="lithadj2"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
+        <select name="lithadj2"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
+        <select name="lithadj2"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
+        <select name="lithadj2"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
+        <select name="lithadj2"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
+        <select name="lithadj2"><option></option><option>lenticular</option><option>tabular</option><option>desiccation cracks</option><option>current ripples</option><option>dunes</option><option>hummocky CS</option><option>wave ripples</option><option>&quot;cross stratification&quot;</option><option>planar lamination</option><option>tool marks</option><option>flute casts</option><option>deformed bedding</option><option>grading</option><option>burrows</option><option>bioturbation</option><option>pedogenic</option><option></option><option>condensed</option><option>firmground</option><option>hardground</option><option>lag</option><option></option><option>argillaceous</option><option>micaceous</option><option>silty</option><option>sandy</option><option>conglomeratic</option><option>pebbly</option><option></option><option>very fine</option><option>fine</option><option>medium</option><option>coarse</option><option>very coarse</option><option></option><option>bentonitic</option><option>calcareous</option><option>carbonaceous</option><option>cherty/siliceous</option><option>concretionary</option><option>diatomaceous</option><option>dolomitic</option><option>ferruginous</option><option>glauconitic</option><option>gypsiferous</option><option>hematitic</option><option>pyritic</option><option>phosphatic</option><option>sideritic</option><option>stromatolitic</option><option>tuffaceous</option><option>volcaniclastic</option><option></option><option>flat-pebble</option><option>intraclastic</option><option>oncoidal</option><option>ooidal</option><option>peloidal</option><option>shelly/skeletal</option><option></option><option>black</option><option>blue</option><option>brown</option><option>gray</option><option>green</option><option>red</option><option>red or brown</option><option>white</option><option>yellow</option></select>
       </td>
     </tr>
   </table>
   
   <p>
-  Original, complete description of lithology:<br><textarea name="lithdescript" cols="100" rows="4" wrap="virtual"></textarea>
+  Original, complete description of lithology:<br><textarea name="lithdescript" cols="100" rows="4" wrap="virtual">&quot;marlstone... pairs of layers... fine-grained clastic material, one being a thin dark-brown layer; the other, thicker, more granular, and light-buff in color&quot;</textarea>
   </p>
   
-  <h4>Environments</h4>
+  <h4>Environment and setting</h4>
   
   <table border=0>
     <tr>
       <td>
 		  	<!--General:-->
-        <select name="environment"><option><option>--General--<option><option>marine indet.<option>terrestrial indet.<option><option>--Carbonate--<option><option>carbonate indet.<option>peritidal<option>shallow subtidal indet.<option>open shallow subtidal<option>lagoonal/restricted shallow subtidal<option>sand shoal<option>reef, buildup or bioherm<option>deep subtidal ramp<option>deep subtidal shelf<option>deep subtidal indet.<option>offshore ramp<option>offshore shelf<option>offshore indet.<option>slope<option>basinal (carbonate)<option>basinal (siliceous)<option><option>--Siliciclastic--<option><option>marginal marine indet.<option>paralic indet.<option>estuarine/bay<option>lagoonal<option><option>coastal indet.<option>foreshore<option>shoreface<option>transition zone/lower shoreface<option>offshore<option><option>deltaic indet.<option>delta plain<option>interdistributary bay<option>delta front<option>prodelta<option><option>deep-water indet.<option>submarine fan<option>basinal (siliciclastic)<option><option>--Terrestrial--<option>fluvial-lacustrine indet.<option><option>fluvial indet.<option>&quot;channel&quot;<option>channel lag<option>coarse channel fill<option>fine channel fill<option>&quot;floodplain&quot;<option>wet floodplain<option>dry floodplain<option>levee<option>crevasse splay<option><option>lacustrine indet.<option>lacustrine - large<option>lacustrine - small<option>pond<option>crater lake<option><option>karst indet.<option>fissure fill<option>cave<option>sinkhole<option><option>eolian indet.<option>dune<option>interdune<option>loess<option><option>fluvial-deltaic indet.<option>deltaic indet.<option>delta plain<option>interdistributary bay<option><option>alluvial fan<option>estuary<option>glacial<option>mire/swamp<option>spring<option>tar</select>
+	<span class="required">Environment:</span>
+        <select name="environment"><option></option><option>--General--</option><option></option><option>marine indet.</option><option>terrestrial indet.</option><option></option><option>--Carbonate--</option><option></option><option>carbonate indet.</option><option>peritidal</option><option>shallow subtidal indet.</option><option>open shallow subtidal</option><option>lagoonal/restricted shallow subtidal</option><option>sand shoal</option><option>reef, buildup or bioherm</option><option>deep subtidal ramp</option><option>deep subtidal shelf</option><option>deep subtidal indet.</option><option>offshore ramp</option><option>offshore shelf</option><option>offshore indet.</option><option>slope</option><option>basinal (carbonate)</option><option>basinal (siliceous)</option><option></option><option>--Siliciclastic--</option><option></option><option>marginal marine indet.</option><option>paralic indet.</option><option>estuarine/bay</option><option>lagoonal</option><option></option><option>coastal indet.</option><option>foreshore</option><option>shoreface</option><option>transition zone/lower shoreface</option><option>offshore</option><option></option><option>deltaic indet.</option><option>delta plain</option><option>interdistributary bay</option><option>delta front</option><option>prodelta</option><option></option><option>deep-water indet.</option><option>submarine fan</option><option>basinal (siliciclastic)</option><option></option><option>--Terrestrial--</option><option>fluvial-lacustrine indet.</option><option></option><option>fluvial indet.</option><option>&quot;channel&quot;</option><option>channel lag</option><option>coarse channel fill</option><option>fine channel fill</option><option>&quot;floodplain&quot;</option><option>wet floodplain</option><option>dry floodplain</option><option>levee</option><option>crevasse splay</option><option></option><option>lacustrine indet.</option><option>lacustrine - large</option><option selected>lacustrine - small</option><option>pond</option><option>crater lake</option><option></option><option>karst indet.</option><option>fissure fill</option><option>cave</option><option>sinkhole</option><option></option><option>eolian indet.</option><option>dune</option><option>interdune</option><option>loess</option><option></option><option>fluvial-deltaic indet.</option><option>deltaic indet.</option><option>delta plain</option><option>interdistributary bay</option><option></option><option>alluvial fan</option><option>estuary</option><option>glacial</option><option>mire/swamp</option><option>spring</option><option>tar</option></select>
         <br>
-        Read descriptions of
-                <A HREF="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">Carbonate</A>,
-                <A HREF="javascript:tipsPopup('/public/tips/environtips.html#SiliciMarine')">Siliciclastic</A> or
-                <A HREF="javascript:tipsPopup('/public/tips/environtips.html#Terrestrial')">Terrestial</A> environments.
+	<p class="small">
+        Read descriptions of 
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">Carbonate</A>,
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#SiliciMarine')">Siliciclastic</A> or
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Terrestrial')">Terrestial</A> environments.</p>
         <!--BR>
-                <A HREF="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">Carbonate</A>:< select id="environment"></select>
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">Carbonate</A>:< select id="environment"></select>
         <br>
-                <A HREF="javascript:tipsPopup('/public/tips/environtips.html#SiliciMarine')">Siliciclastic</A>:< select id="environment"></select>
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#SiliciMarine')">Siliciclastic</A>:< select id="environment"></select>
         <br>
-                <A HREF="javascript:tipsPopup('/public/tips/environtips.html#Terrestrial')">Terrestial</A>:< select id="environment"></select-->
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Terrestrial')">Terrestial</A>:< select id="environment"></select-->
         <br><br>
 
       </td>
       <td valign=top>
- 			<A HREF="javascript:tipsPopup('/public/tips/environtips.html#TectonicSetting')">Tectonic setting</a>:
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#TectonicSetting')">Tectonic setting</a>:
         <br>
-        <select name="tectonic_setting"><option><option>rift<option><option>passive margin<option><option>back-arc basin<option>cratonic basin<option>deep ocean basin<option>forearc basin<option>foreland basin<option>intermontane basin<option>intramontane basin<option>piggyback basin<option>pull-apart basin<option><option>volcanic basin<option>impact basin<option><option>non-subsiding area</select>
-        <br>Sequence stratigraphy: <select name="seq_strat"><option><option>transgressive<option>regressive<option><option>transgressive systems tract<option>highstand systems tract<option>lowstand systems tract<option><option>parasequence boundary<option>transgressive surface<option>maximum flooding surface<option>sequence boundary</select>
+        <select name="tectonic_setting"><option></option><option>rift</option><option></option><option>passive margin</option><option></option><option>back-arc basin</option><option>cratonic basin</option><option>deep ocean basin</option><option>forearc basin</option><option>foreland basin</option><option>intermontane basin</option><option>intramontane basin</option><option>piggyback basin</option><option>pull-apart basin</option><option></option><option>volcanic basin</option><option>impact basin</option><option></option><option>non-subsiding area</option></select>
+        <br>Sequence stratigraphy: <select name="seq_strat"><option></option><option>transgressive</option><option>regressive</option><option></option><option>transgressive systems tract</option><option>highstand systems tract</option><option>lowstand systems tract</option><option></option><option>parasequence boundary</option><option>transgressive surface</option><option>maximum flooding surface</option><option>sequence boundary</option></select>
       </td>
     </tr>
   </table>
@@ -337,14 +2286,47 @@ Y. Alm&eacute;ras and S. Elmi. 1998. Les brachiopodes jurassiques moyens de la b
   <p>
     Comments on geology:
     <br>
-    <textarea name="geology_comments" cols="100" rows="4" wrap="virtual"></textarea>
+    <textarea name="geology_comments" cols="100" rows="4" wrap="virtual">&quot;relatively small Fossil Lake&quot;</textarea>
   </p>
-
-  <P>
-	<font size="+1"><b>TAPHONOMY</b></font>
-    <font size="1"><A HREF="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</A></font>
+  
+  <p>
+     <div align="center"><input type=submit name="update_button" value="Update collection and exit"></div>
   </p>
+  <br>
+  </td></tr></table>
+<!-- Begin std_page_bottom.html -->
+</td></tr>
+<tr><td align="center" valign="bottom">
+      <table border=0 width=640 bgcolor="#0077FF" align=center>
+        <tr>
+          <td width=160 align=center nowrap>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=displayMenuPage&amp;clear=clearQueue" class="menu">Main menu</a>
+          </td>
+          <td width=160 align=center>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=logout" class="menu">Current enterer:<BR>J. Alroy</a>
+          </td>
+          <td width=160 align=center>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=displaySearchRefs&amp;type=select" class="menu">Current reference:<BR>10080 (Jepsen 1966)</a>
+          </td>
+          <td width=160 align=center nowrap>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?user=Contributor&amp;action=displayHomePage" class="menu">Contributors' home page</a>
+          </td>
+        </tr>
+      </table>
+ </td></tr></table>
+ 
+</body>
+</html>
 
+
+  </td></tr></table></div>  
+</div>
+<div id="panel5" class="panel">
+  <div align="center">
+  <p>
+	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
+  </p>
+<table border=0 cellpadding=0 cellspacing=0><tr><td>
   <p>
     <i>Describe the entire collection, not just a few specimens. Check all values 
     that apply.</i>
@@ -518,21 +2500,21 @@ original material is preserved!</i></p>
   </table>
   <p>
  
-<!-- OPTIONAL taphonomy -->
+<!-- OPTIONAL taphonomy --> 
   <table width=100%>
   <tr>
     <td valign=top width=50%>
-      <u>Lagerstätten type</u> <select name="lagerstatten"><option><option>conservation<option>concentrate</select>
+      <u>Lagerstätten type</u> <select name="lagerstatten"><option></option><option>conservation</option><option>concentrate</option></select>
     </td>
     <td valign=top>
-      <u>Degree of concentration</u> <select name="concentration"><option><option>dispersed<option><option>concentrated<option>-single event<option>-multiple events<option>-seasonal<option>-lag<option>-hiatal<option>-bonebed</select>
+      <u>Degree of concentration</u> <select name="concentration"><option></option><option>dispersed</option><option></option><option>concentrated</option><option>-single event</option><option>-multiple events</option><option>-seasonal</option><option>-lag</option><option>-hiatal</option><option>-bonebed</option></select>
     </td>
   </tr>
   </table>
   <p>
 <!-- END taphonomy -->
 
-		<A HREF="javascript:tipsPopup('/public/tips/tips.html#AssemblageComponents')">Assemblage components</A>:
+	  <A HREF="javascript:tipsPopup('/public/tips/tips.html#AssemblageComponents')">Assemblage components</A>:
       <p>
       <input type=hidden name="assembl_comps" value=""><input type="checkbox" name="assembl_comps" value="macrofossils" checked> macrofossils
       <input type="checkbox" name="assembl_comps" value="mesofossils"> mesofossils
@@ -540,22 +2522,21 @@ original material is preserved!</i></p>
   <p>
 
 <!-- OPTIONAL taphonomy -->
-      <u>Spatial orientation</u> <select name="orientation"><option><option>life position<option>random<option>preferred</select>
+      <u>Spatial orientation</u> <select name="orientation"><option></option><option>life position</option><option>random</option><option>preferred</option></select>
   <p>
-
+<!-- END taphonomy -->
+ 
   <table>
   <tr>
     <td>
-      Preservation of anatomical detail <select id="preservation_quality"></select>
+      <u>Preservation of anatomical detail</u> <select name="preservation_quality"><option></option><option selected>excellent</option><option>good</option><option>medium</option><option>poor</option><option>variable</option></select>
     </td>
     <td>
-      Abundance in sediment <select id="abund_in_sediment"></select>
+      <u>Abundance in sediment</u> <select name="abund_in_sediment"><option></option><option>abundant</option><option>common</option><option>few</option><option>rare</option></select>
     </td>
   </tr>
   </table>
-
   <p>
-<!-- END taphonomy -->
 
     <u>Articulation/element representation</u>:
   </p>
@@ -563,18 +2544,18 @@ original material is preserved!</i></p>
   <table>
   <tr>
     <td>
-      articulated whole bodies <select name="art_whole_bodies"><option><option>none<option>some<option>many<option>all</select> 
+      articulated whole bodies <select name="art_whole_bodies"><option></option><option>none</option><option selected>some</option><option>many</option><option>all</option></select> 
     </td>
     <td>
-      associated major elements <select name="disart_assoc_maj_elems"><option><option>none<option>some<option>many<option>all</select>
+      associated major elements <select name="disart_assoc_maj_elems"><option></option><option selected>none</option><option>some</option><option>many</option><option>all</option></select>
     </td>
   </tr>
   <tr>
     <td>
-      disassociated major elements <select name="disassoc_maj_elems"><option><option>none<option>some<option>many<option>all</select>
+      disassociated major elements <select name="disassoc_maj_elems"><option></option><option selected>none</option><option>some</option><option>many</option><option>all</option></select>
     </td>
     <td>
-      disassociated minor elements <select name="disassoc_minor_elems"><option><option>none<option>some<option>many<option>all</select>
+      disassociated minor elements <select name="disassoc_minor_elems"><option></option><option>none</option><option selected>some</option><option>many</option><option>all</option></select>
     </td>
   </tr>
   </table>
@@ -584,10 +2565,10 @@ original material is preserved!</i></p>
   <table width=100%>
   <tr>
     <td width=50%>
-      <u>Size sorting</u> <select name="sorting"><option><option>very poor<option>poor<option>medium<option>well<option>very well</select>
+      <u>Size sorting</u> <select name="sorting"><option></option><option>very poor</option><option>poor</option><option>medium</option><option>well</option><option>very well</option></select>
     </td>
     <td>
-      <u>Fragmentation</u> <select name="fragmentation"><option><option>none<option>occasional<option>frequent<option>extreme</select>
+      <u>Fragmentation</u> <select name="fragmentation"><option></option><option>none</option><option>occasional</option><option>frequent</option><option>extreme</option></select>
     </td>
   </tr>
   </table>
@@ -596,10 +2577,10 @@ original material is preserved!</i></p>
   <table width=100%>
   <tr>
     <td width=50%>
-      <u>Bioerosion</u> <select name="bioerosion"><option><option>none<option>occasional<option>frequent<option>extreme</select>
+      <u>Bioerosion</u> <select name="bioerosion"><option></option><option>none</option><option>occasional</option><option>frequent</option><option>extreme</option></select>
     </td>
     <td>
-      <u>Encrustation</u> <select name="encrustation"><option><option>none<option>occasional<option>frequent<option>extreme</select>
+      <u>Encrustation</u> <select name="encrustation"><option></option><option>none</option><option>occasional</option><option>frequent</option><option>extreme</option></select>
     </td>
   </tr>
   </table>
@@ -677,26 +2658,55 @@ original material is preserved!</i></p>
   <table width=100%>
   <tr>
     <td width=50%>
-    <u>Temporal resolution</u> <select name="temporal_resolution"><option><option>snapshot<option>time-averaged<option>condensed</select>
+    <u>Temporal resolution</u> <select name="temporal_resolution"><option></option><option selected>snapshot</option><option>time-averaged</option><option>condensed</option></select>
     </td>
     <td width=50%>
-    <u>Spatial resolution</u> <select name="spatial_resolution"><option><option>autochthonous<option>parautochthonous<option>allochthonous</select>
+    <u>Spatial resolution</u> <select name="spatial_resolution"><option></option><option>autochthonous</option><option>parautochthonous</option><option>allochthonous</option></select>
     </td>
   </tr>
   </table>
   <p>
-
     <u>Comments on taphonomy</u>:
     <br>
-    <textarea name="taphonomy_comments" cols="100" rows="4" wrap="virtual"></textarea>
+    <textarea name="taphonomy_comments" cols="100" rows="4" wrap="virtual">skeleton, fish scale, flower</textarea>
+  </p>
+  <p>
+     <div align="center"><input type=submit name="update_button" value="Update collection and exit"></div>
   </p>
   <br>
+  </td></tr></table>
+<!-- Begin std_page_bottom.html -->
+</td></tr>
+<tr><td align="center" valign="bottom">
+      <table border=0 width=640 bgcolor="#0077FF" align=center>
+        <tr>
+          <td width=160 align=center nowrap>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=displayMenuPage&amp;clear=clearQueue" class="menu">Main menu</a>
+          </td>
+          <td width=160 align=center>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=logout" class="menu">Current enterer:<BR>J. Alroy</a>
+          </td>
+          <td width=160 align=center>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=displaySearchRefs&amp;type=select" class="menu">Current reference:<BR>10080 (Jepsen 1966)</a>
+          </td>
+          <td width=160 align=center nowrap>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?user=Contributor&amp;action=displayHomePage" class="menu">Contributors' home page</a>
+          </td>
+        </tr>
+      </table>
+ </td></tr></table>
+ 
+</body>
+</html>
 
-  <P>
-	<font size="+1"><b>COLLECTING INFORMATION</b></font>
-    <font size="1"><A HREF="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</A></font>
+  </td></tr></table></div>
+</div>
+<div id="panel6" class="panel">
+  <div align="center">
+  <p>
+	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
   </p>
-
+<table border=0 cellpadding=0 cellspacing=0><tr><td>
   <p>
     <i><p class="small">Check all values that apply in each of the following 
     sections!</i></p>
@@ -715,7 +2725,7 @@ original material is preserved!</i></p>
       <input type="checkbox" name="collection_coverage" value="all microfossils"> all microfossils
     </td>
     <td valign=top>
-      <input type="checkbox" name="collection_coverage" value="some genera"> some genera
+      <input type="checkbox" name="collection_coverage" value="some genera" checked> some genera
     </td>
   </tr>
   <tr>
@@ -781,7 +2791,7 @@ original material is preserved!</i></p>
       <input type="checkbox" name="coll_meth" value="core"> core
     </td>
     <td>
-      <input type="checkbox" name="coll_meth" value="selective quarrying"> 
+      <input type="checkbox" name="coll_meth" value="selective quarrying" checked> 
       selective quarrying 
     </td>
     <td>
@@ -817,8 +2827,24 @@ original material is preserved!</i></p>
       <input type="checkbox" name="coll_meth" value="mechanical"> mechanical
     </td>
     <td>
-      <input type="checkbox" name="coll_meth" value="peel or thin section"> 
-      peel or thin section
+      <input type="checkbox" name="coll_meth" value="peel or thin section"> peel or thin section
+    </td>
+    <td>
+      <input type="checkbox" name="coll_meth" value="smear slide"> smear slide
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <input type="checkbox" name="coll_meth" value="acetic"> acetic
+    </td>
+    <td>
+      <input type="checkbox" name="coll_meth" value="hydrochloric"> hydrochloric
+    </td>
+    <td>
+      <input type="checkbox" name="coll_meth" value="hydroflouric"> hydroflouric
+    </td>
+    <td>
+      <input type="checkbox" name="coll_meth" value="peroxide"> peroxide
     </td>
   </tr>
   <tr>
@@ -838,11 +2864,11 @@ original material is preserved!</i></p>
   <table>
   <tr>
     <td>
-      <u>Collection size</u>:<input name="collection_size" value="" size="8" maxlength="8"><select name="collection_size_unit"><option><option>specimens<option>individuals</select>
+      <u>Collection size</u>:<input name="collection_size" value="" size="8" maxlength="8"><select name="collection_size_unit"><option></option><option>specimens</option><option>individuals</option></select>
     </td>
     <td>
       <u>Amount of rock censused</u>:<input name="rock_censused" value="" size="8" maxlength="8">
-		  <select name="rock_censused_unit"><option><option>cm (line intercept)<option>cm2 (area)<option>cm3 (volume)<option>kg<option># of surfaces (quadrat)</select>
+		  <select name="rock_censused_unit"><option></option><option>cm (line intercept)</option><option>cm2 (area)</option><option>cm3 (volume)</option><option>g</option><option>kg</option><option># of surfaces (quadrat)</option></select>
     </td>
   </tr>
   </table>
@@ -850,23 +2876,51 @@ original material is preserved!</i></p>
   <i><p class="small">Give a total only if counts are not given for individual taxa.</p></i>
   <p>
     <u>Museum repositories</u>:
-      <select name="museum"><option><option>AMNH<option>BMNH<option>BPI<option>CAS<option>CIT<option>CM<option>DMNH<option>FMNH<option>GSC<option>IVPP<option>LACM<option>MACN<option>MCZ<option>MfN<option>MLP<option>MNHN<option>MNHN (La Paz)<option>NIGPAS<option>NMMNH<option>NYSM<option>OSU<option>OU<option>PIN<option>PRI<option>ROM<option>SDSM<option>SGOPV<option>SMF<option>TMM<option>TMP<option>UCM<option>UCMP<option>UF<option>UMMP<option>UNSM<option>USNM<option>UW<option>UWBM<option>YPM</select>
-      <select name="museum"><option><option>AMNH<option>BMNH<option>BPI<option>CAS<option>CIT<option>CM<option>DMNH<option>FMNH<option>GSC<option>IVPP<option>LACM<option>MACN<option>MCZ<option>MfN<option>MLP<option>MNHN<option>MNHN (La Paz)<option>NIGPAS<option>NMMNH<option>NYSM<option>OSU<option>OU<option>PIN<option>PRI<option>ROM<option>SDSM<option>SGOPV<option>SMF<option>TMM<option>TMP<option>UCM<option>UCMP<option>UF<option>UMMP<option>UNSM<option>USNM<option>UW<option>UWBM<option>YPM</select>
-      <select name="museum"><option><option>AMNH<option>BMNH<option>BPI<option>CAS<option>CIT<option>CM<option>DMNH<option>FMNH<option>GSC<option>IVPP<option>LACM<option>MACN<option>MCZ<option>MfN<option>MLP<option>MNHN<option>MNHN (La Paz)<option>NIGPAS<option>NMMNH<option>NYSM<option>OSU<option>OU<option>PIN<option>PRI<option>ROM<option>SDSM<option>SGOPV<option>SMF<option>TMM<option>TMP<option>UCM<option>UCMP<option>UF<option>UMMP<option>UNSM<option>USNM<option>UW<option>UWBM<option>YPM</select>
-      <select name="museum"><option><option>AMNH<option>BMNH<option>BPI<option>CAS<option>CIT<option>CM<option>DMNH<option>FMNH<option>GSC<option>IVPP<option>LACM<option>MACN<option>MCZ<option>MfN<option>MLP<option>MNHN<option>MNHN (La Paz)<option>NIGPAS<option>NMMNH<option>NYSM<option>OSU<option>OU<option>PIN<option>PRI<option>ROM<option>SDSM<option>SGOPV<option>SMF<option>TMM<option>TMP<option>UCM<option>UCMP<option>UF<option>UMMP<option>UNSM<option>USNM<option>UW<option>UWBM<option>YPM</select>
+      <select name="museum"><option></option><option>AMNH</option><option>BMNH</option><option>BPI</option><option>BRU</option><option>CAS</option><option>CIT</option><option>CM</option><option>DMNH</option><option>FMNH</option><option>GSC</option><option>IUPR</option><option>IVPP</option><option>LACM</option><option>MACN</option><option>MCZ</option><option>MfN</option><option>MLP</option><option>MNHN</option><option>MNHN (La Paz)</option><option>NIGPAS</option><option>NMMNH</option><option>NYSM</option><option>OSU</option><option>OU</option><option>PIN</option><option>PRI</option><option>ROM</option><option>SDSM</option><option>SGOPV</option><option>SMF</option><option>SUI</option><option>TMM</option><option>TMP</option><option>UCM</option><option>UCMP</option><option>UF</option><option>UMMP</option><option>UNM</option><option>UNSM</option><option>USNM</option><option>UW</option><option>UWBM</option><option>YPM</option></select>
+      <select name="museum"><option></option><option>AMNH</option><option>BMNH</option><option>BPI</option><option>BRU</option><option>CAS</option><option>CIT</option><option>CM</option><option>DMNH</option><option>FMNH</option><option>GSC</option><option>IUPR</option><option>IVPP</option><option>LACM</option><option>MACN</option><option>MCZ</option><option>MfN</option><option>MLP</option><option>MNHN</option><option>MNHN (La Paz)</option><option>NIGPAS</option><option>NMMNH</option><option>NYSM</option><option>OSU</option><option>OU</option><option>PIN</option><option>PRI</option><option>ROM</option><option>SDSM</option><option>SGOPV</option><option>SMF</option><option>SUI</option><option>TMM</option><option>TMP</option><option>UCM</option><option>UCMP</option><option>UF</option><option>UMMP</option><option>UNM</option><option>UNSM</option><option>USNM</option><option>UW</option><option>UWBM</option><option>YPM</option></select>
+      <select name="museum"><option></option><option>AMNH</option><option>BMNH</option><option>BPI</option><option>BRU</option><option>CAS</option><option>CIT</option><option>CM</option><option>DMNH</option><option>FMNH</option><option>GSC</option><option>IUPR</option><option>IVPP</option><option>LACM</option><option>MACN</option><option>MCZ</option><option>MfN</option><option>MLP</option><option>MNHN</option><option>MNHN (La Paz)</option><option>NIGPAS</option><option>NMMNH</option><option>NYSM</option><option>OSU</option><option>OU</option><option>PIN</option><option>PRI</option><option>ROM</option><option>SDSM</option><option>SGOPV</option><option>SMF</option><option>SUI</option><option>TMM</option><option>TMP</option><option>UCM</option><option>UCMP</option><option>UF</option><option>UMMP</option><option>UNM</option><option>UNSM</option><option>USNM</option><option>UW</option><option>UWBM</option><option>YPM</option></select>
+      <select name="museum"><option></option><option>AMNH</option><option>BMNH</option><option>BPI</option><option>BRU</option><option>CAS</option><option>CIT</option><option>CM</option><option>DMNH</option><option>FMNH</option><option>GSC</option><option>IUPR</option><option>IVPP</option><option>LACM</option><option>MACN</option><option>MCZ</option><option>MfN</option><option>MLP</option><option>MNHN</option><option>MNHN (La Paz)</option><option>NIGPAS</option><option>NMMNH</option><option>NYSM</option><option>OSU</option><option>OU</option><option>PIN</option><option>PRI</option><option>ROM</option><option>SDSM</option><option>SGOPV</option><option>SMF</option><option>SUI</option><option>TMM</option><option>TMP</option><option>UCM</option><option>UCMP</option><option>UF</option><option>UMMP</option><option>UNM</option><option>UNSM</option><option>USNM</option><option>UW</option><option>UWBM</option><option>YPM</option></select>
   </p>
   <p>
-    <u>Comments about collection</u>:<br><textarea name="collection_comments" cols="100" rows="4" wrap="virtual"></textarea>
+    <u>Comments about collection</u>:<br><textarea name="collection_comments" cols="100" rows="4" wrap="virtual">nearby fish occurrences presumably are omitted</textarea>
   </p>
   <p>
     <u>Comments on the taxonomic list</u>:<br><textarea name="taxonomy_comments" cols="100" rows="4" wrap="virtual"></textarea>
   </p>
 
-  <center>
-  <input type=submit value="Enter new collection">
-  </center>
-  </form>
+  <p>
+     <div align="center"><input type=submit name="update_button" value="Update collection and exit"></div>
+  </p>
+  <br>
+  </td></tr></table>
+<!-- Begin std_page_bottom.html -->
+</td></tr>
+<tr><td align="center" valign="bottom">
+      <table border=0 width=640 bgcolor="#0077FF" align=center>
+        <tr>
+          <td width=160 align=center nowrap>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=displayMenuPage&amp;clear=clearQueue" class="menu">Main menu</a>
+          </td>
+          <td width=160 align=center>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=logout" class="menu">Current enterer:<BR>J. Alroy</a>
+          </td>
+          <td width=160 align=center>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?action=displaySearchRefs&amp;type=select" class="menu">Current reference:<BR>10080 (Jepsen 1966)</a>
+          </td>
+          <td width=160 align=center nowrap>
+            <a href="http://paleodb.org/cgi-bin/bridge.pl?user=Contributor&amp;action=displayHomePage" class="menu">Contributors' home page</a>
+          </td>
+        </tr>
+      </table>
+ </td></tr></table>
+ 
+</body>
+</html>
 
-</table>
+  </td></tr></table></div>
 </div>
+  
+<script language="JavaScript">
+    showPanel(1);
+</script>
 
