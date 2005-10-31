@@ -65,13 +65,16 @@ my $dbt = DBTransactionManager->new($dbh, $s);
 @zero = ();
 @many = ();
 
-$sql = "SELECT *,DATE_FORMAT(created,'%Y%m') ym FROM authorities WHERE taxon_rank IN('subspecies','species') AND taxon_name NOT LIKE 'ERROR' AND taxon_name NOT LIKE 'DUPLICATE'";
+$sql = "SELECT *,DATE_FORMAT(created,'%Y%m') ym,UNIX_TIMESTAMP(created) ut FROM authorities WHERE taxon_rank IN('subspecies','species') AND taxon_name NOT LIKE 'ERROR' AND taxon_name NOT LIKE 'DUPLICATE'";
 
 %by_auth = ();
 %by_mon = ();
 
+%skipped = ();
+
 @rs = @{$dbt->getData($sql)};
 foreach my $taxon (@rs) {
+
     @bits = split(/\s+/,$taxon->{'taxon_name'});
     pop @bits;
     $higher_name = join(" ",@bits);
@@ -94,6 +97,7 @@ foreach my $taxon (@rs) {
     }
 
     if (!$found) {
+
         if ($taxon->{comments} =~ /kosnik taxon/) {
             print "Kosnik taxon\n";
         }
@@ -101,12 +105,28 @@ foreach my $taxon (@rs) {
         if ($taxon->{ym} =~ /2005/) {
             print Dumper($taxon);
         }
-        print "Could not find $taxon->{taxon_no} $taxon->{taxon_name} belongs to $higher_name\n";
+        print "\nCould not find $taxon->{taxon_no} $taxon->{taxon_name} belongs to $higher_name -- ref is authority = '$taxon->{ref_is_authority}' -- ref is $taxon->{reference_no} ";
+        $ref1 = Reference->new($dbt,$taxon->{reference_no});
+        if ($ref1) {
+            print $ref1->authors();
+        } 
+        print "\n";
         if (@rs2) {
             foreach $row (@rs2) {
                 print "    Found this opinion: $row->{child_no} ($row->{child_spelling_no}) $row->{status} $row->{parent_no} $row->{parent_name} ($row->{parent_spelling_no})\n";
             }
         } else {
+
+            $sqlt = "SELECT * FROM opinions WHERE enterer_no=$taxon->{enterer_no} AND (UNIX_TIMESTAMP(created) < ".($taxon->{ut}+3)." AND UNIX_TIMESTAMP(created) > ".($taxon->{ut}-3).") LIMIT 3";
+            @rst = @{$dbt->getData($sqlt)};
+            if (@rst) {
+                print "SKIPPING $taxon->{taxon_no}: found opinions created by $taxon->{enterer_no} within same 3 seconds:\n";
+                $skipped{$taxon->{taxon_no}} = 1;
+                foreach $row (@rst) {
+                    print "    Found this opinion: $row->{child_no} ($row->{child_spelling_no}) $row->{status} $row->{parent_no} ($row->{parent_spelling_no})\n";
+                }
+                next;
+            }
             $by_auth{$taxon->{authorizer_no}}++;
             $by_ent{$taxon->{enterer_no}}++;
             $by_mon{$taxon->{ym}}++;
@@ -119,6 +139,9 @@ foreach my $taxon (@rs) {
             }
             @parents = TaxonInfo::getTaxon($dbt,'taxon_name'=>$higher_name); 
             $tt = 0;
+            if ($taxon->{authorizer_no} == 4) {
+                #print "Alroy $taxon->{taxon_name} missing bt to $higher_name\n";
+            }
             for $p (@parents) {
                 if ($p->{'type_taxon_no'} && $p->{'type_taxon_no'} == $taxon->{'taxon_no'}){
                     $tt = $p->{'taxon_no'};
@@ -151,7 +174,7 @@ foreach my $taxon (@rs) {
                             if ($parents[0]->{ref_is_authority} =~ /YES/) {
                                 print "Found parent from same ref with ref_is_authority YES\n"; 
                                 $sql = "UPDATE authorities SET ref_is_authority='YES' WHERE taxon_no=$taxon->{taxon_no}";
-                                print $sql."\n";
+                                #print $sql."\n";
                                 #$dbh->do($sql) if ($doUpdates); # lay off for now
                                 $sql = "INSERT INTO opinions (authorizer_no,enterer_no,reference_no,child_no,child_spelling_no,status,parent_no,parent_spelling_no,created,ref_has_opinion,author1init,author1last,author2init,author2last,otherauthors,pubyr,pages,figures) VALUES ($taxon->{authorizer_no},$taxon->{enterer_no},$taxon->{reference_no},$taxon->{taxon_no},$taxon->{taxon_no},'belongs to',$parent_no,$parent_no,NOW(),'YES','','','','','','','$taxon->{pages}','$taxon->{figures}')";
                                 print $sql."\n";
@@ -176,6 +199,7 @@ foreach my $taxon (@rs) {
                     $sql = "INSERT INTO opinions (authorizer_no,enterer_no,reference_no,child_no,child_spelling_no,status,parent_no,parent_spelling_no,created,ref_has_opinion,author1init,author1last,author2init,author2last,otherauthors,pubyr,pages,figures) VALUES ($taxon->{authorizer_no},$taxon->{enterer_no},$taxon->{reference_no},$taxon->{taxon_no},$taxon->{taxon_no},'belongs to',$parent_no,$parent_no,NOW(),'$taxon->{ref_is_authority}',".$dbh->quote($taxon->{author1init}).",".$dbh->quote($taxon->{author1last}).",".$dbh->quote($taxon->{author2init}).",".$dbh->quote($taxon->{author2last}).",".$dbh->quote($taxon->{otherauthors}).",'$taxon->{pubyr}','$taxon->{pages}','$taxon->{figures}')";
                     print $sql."\n";
                     $dbh->do($sql) if ($doUpdates);
+                    next;
                 } else {
                     if (!$taxon->{'reference_no'}) {
                         print "ERROR, no reference_no\n";
@@ -184,6 +208,7 @@ foreach my $taxon (@rs) {
                     $sql = "INSERT INTO opinions (authorizer_no,enterer_no,reference_no,child_no,child_spelling_no,status,parent_no,parent_spelling_no,created,ref_has_opinion,author1init,author1last,author2init,author2last,otherauthors,pubyr,pages,figures) VALUES ($taxon->{authorizer_no},$taxon->{enterer_no},$taxon->{reference_no},$taxon->{taxon_no},$taxon->{taxon_no},'belongs to',$parent_no,$parent_no,NOW(),'YES','','','','','','','$taxon->{pages}','$taxon->{figures}')";
                     print $sql."\n";
                     $dbh->do($sql) if ($doUpdates);
+                    next;
                 }
             } elsif (scalar(@parents) == 0) {
                 print "    ERROR, could not find $higher_name in DB\n";
@@ -198,4 +223,6 @@ print "BY AUTH:\n".Dumper(\%by_auth)."\n";
 print "BY ENT:\n".Dumper(\%by_ent)."\n";
 print "BY MONTH:\n";
 print "$_ => $by_mon{$_}\n" for (@srt);
-   
+
+print "";
+print Dumper(\%skipped);
