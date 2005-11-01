@@ -6,6 +6,7 @@ use DBTransactionManager;
 use Debug;
 use URI::Escape;
 use Data::Dumper; 
+use TaxaCache;
 use GD;
 
 my $IMAGE_DIR = $ENV{'BRIDGE_HTML_DIR'}."/public/confidence";
@@ -39,12 +40,12 @@ sub displayHomonymForm {
         my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$homonym_name);
 
         # Find the parent taxon and use that to clarify the choice
-        my %parents = %{Classification::get_classification_hash($dbt,'parent',\@taxon_nos,'names')};
 
         print '<TABLE BORDER=0 CELLSPACING=3 CELLPADDING=3>'."\n";
         print "<TR>";
         foreach $taxon_no (@taxon_nos) {
-            print "<TD><INPUT TYPE='radio' CHECKED NAME='speciesname$i' VALUE='$taxon_no'>$homonym_name [$parents{$taxon_no}]</TD>";
+            my $parent = TaxaCache::getParent($dbt,$taxon_no);
+            print "<TD><INPUT TYPE='radio' CHECKED NAME='speciesname$i' VALUE='$taxon_no'>$homonym_name [$parent->{taxon_name}]</TD>";
         }
         print "<INPUT TYPE='hidden' NAME='keepspecies$i' VALUE='$homonym_name'>\n";
         print "</TR>";
@@ -360,11 +361,9 @@ sub buildList    {
     # Use taxonomic search to build up a list of taxon_nos that are 
     # children of the potentially higher order taxonomic names entered in by the user
     # splist_base is the list of higher order names that haven't been
-    # passed thru taxonomic_search
     while(($taxon_name,$no_or_name)=each(%splist_base)) {
         my $found = 0;
         if ($no_or_name =~ /^\d+$/) {
-#            my @children = PBDBUtil::taxonomic_search($dbt,$no_or_name);
             # Found the taxon in the authorities table, get its children
             my $children = PBDBUtil::getChildren($dbt,$no_or_name,30);
 
@@ -397,7 +396,7 @@ sub buildList    {
                        " WHERE o.taxon_no IN (".join(",",@taxon_nos).") AND re.reid_no IS NULL)".
                        " UNION ".
                        "(SELECT re.genus_name,re.species_name FROM occurrences o, reidentifications re ".
-                       " WHERE o.occurrence_no=re.occurrence_no".
+                       " WHERE o.occurrence_no=re.occurrence_no AND re.most_recent='YES' ".
                        " AND re.taxon_no IN (".join(",",@taxon_nos)."))".
                        " LIMIT 1";
                 @results = @{$dbt->getData($sql)};
@@ -428,7 +427,7 @@ sub buildList    {
                    " WHERE o.genus_name=$genus AND re.reid_no IS NULL)".
                    " UNION ".
                    "(SELECT re.genus_name,re.species_name FROM occurrences o, reidentifications re ".
-                   " WHERE o.occurrence_no=re.occurrence_no".
+                   " WHERE o.occurrence_no=re.occurrence_no AND re.most_recent='YES' ".
                    " AND re.genus_name=$genus)";
             main::dbg("genus sql: $sql");
             my @results = @{$dbt->getData($sql)};
