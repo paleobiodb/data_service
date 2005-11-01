@@ -161,7 +161,7 @@ sub get_classification_hash{
                 # Thus the child synonyms get their node values replace by the parent, with the old child data being
                 # saved into a "synonyms" field (an array of nodes)
                 if ($DEBUG) { print "Traverse $parent_no:".Dumper($link)."<br>";}
-                if ($status =~ /^(?:repl|subj|obje)/o) {
+                if ($status =~ /^(?:repl|subj|obje|hom)/o) {
                     if ($DEBUG) { print "Synonym node<br>";}
                     my %node = (
                         'taxon_no'=>$child_no,
