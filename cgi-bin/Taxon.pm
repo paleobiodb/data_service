@@ -25,6 +25,7 @@ use Data::Dumper;
 use CGI::Carp;
 use URI::Escape;
 use Mail::Mailer;
+use TaxaCache;
 
 use Reference;
 
@@ -357,9 +358,9 @@ sub displayAuthorityForm {
 				$select .= "<option value=\"$row->{taxon_no}\" $chosen>";
 				$select .= $taxon->get('taxon_name') . " " . $taxon->authors();
 		        # tack on the closest higher order name
-				my %master_class=%{Classification::get_classification_hash($dbt,"parent",[$row->{'taxon_no'}])};
-                my $higher_class = ($master_class{$row->{'taxon_no'}}) ? $master_class{$row->{'taxon_no'}} : "unclassified";
-				$select .= "[$higher_class]";
+				my $parent = TaxaCache::getParent($dbt,$row->{'taxon_no'});
+                my $higher_class = ($parent) ? $parent->{'taxon_name'} : "unclassified";
+				$select .= " [$higher_class]";
 				$select .= "</option>\n";
 
 			}
@@ -670,6 +671,7 @@ sub submitAuthorityForm {
 	
 	if ($isNewEntry) {
 		($status, $resultTaxonNumber) = $dbt->insertRecord($s,'authorities', \%fieldsToEnter);
+        TaxaCache::addName($dbt,$resultTaxonNumber);
 		
 		# if the $parentTaxon object exists, then that means that we
 		# need to insert an opinion record which says that our taxon
@@ -693,6 +695,39 @@ sub submitAuthorityForm {
             $opinionHash{$_} = $fieldsToEnter{$_} for @fields;
 		
             $dbt->insertRecord($s,'opinions',\%opinionHash);
+            #TaxaCache::updateCache($dbt,$resultTaxonNumber);
+            #TaxaCache::markForUpdate($dbt,$resultTaxonNumber);
+            my $pid = fork();
+            if (!defined($pid)) {
+                carp "ERROR, could not fork";
+            }
+
+            if ($pid) {
+                # Child fork
+                # Don't exit here, have child go on to print message
+            } else {
+                #my $session_id = POSIX::setsid();
+
+                # Make new dbh and dbt objects - for some reason one connection
+                # gets closed whent the other fork exits, so split them here
+                my $dbh2 = DBConnection::connect();
+                my $dbt2 = DBTransactionManager->new($dbh2);  
+
+                # This is the parent fork.  Have the parent fork
+                # Do the useful work, the child fork will be terminated
+                # when the parent is so don't have it do anything long running
+                # (just terminate). The defined thing is in case the work didn't work
+
+                # Close references to stdin and stdout so Apache
+                # can close the HTTP socket conneciton
+                if (defined $pid) {
+                    open STDIN, "</dev/null";
+                    open STDOUT, ">/dev/null";
+                    #open STDOUT, ">>SOMEFILE";
+                }
+                TaxaCache::updateCache($dbt2,$resultTaxonNumber);
+                exit;
+            }         
 		}
 
 	} else {
@@ -1063,12 +1098,10 @@ sub formatAuthorityLine	{
 
 	# Print name of higher taxon JA 10.4.03
 	# Get the status and parent of the most recent opinion
-	# shortened by calling selectMostRecentParentOpinion 5.4.04
-    # shortened by calling getMostRecentParentOpinion 4/20/2005 PSmore using classification function
-    my %parents = %{Classification::get_classification_hash($dbt,'parent',[$taxon->{'taxon_no'}],'names')};
+    my $parent = TaxaCache::getParent($dbt,$taxon->{'taxon_no'});
 
-	if ( $parents{$taxon->{'taxon_no'}})	{
-		$authLine .= " [".$parents{$taxon->{'taxon_no'}}."]";
+	if ($parent) {
+		$authLine .= " [$parent->{taxon_name}]";
 	} else {
 		$authLine .= " [unclassified]";
     }
