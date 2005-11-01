@@ -433,6 +433,7 @@ sub newTaxonNames{
 
 # Pass in a taxon_no and this function returns all taxa that are  a part of that taxon_no, recursively
 # This function isn't meant to be called itself but is a recursive utility function for taxonomic_search
+# deprecated, see taxonomic_search
 sub new_search_recurse {
     # Start with a taxon_name:
     my $dbt = shift;
@@ -476,6 +477,7 @@ sub new_search_recurse {
 
 ##
 # Recursively find all taxon_nos or genus names belonging to a taxon
+# deprecated PS 10/10/2005 - use TaxaCache::getChildren instead
 ##
 sub taxonomic_search{
 	my $dbt = shift;
