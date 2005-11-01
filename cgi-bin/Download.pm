@@ -6,6 +6,7 @@ use Classification;
 use TimeLookup;
 use Data::Dumper;
 use DBTransactionManager;
+use TaxaCache;
 use CGI::Carp;
 
 # Flags and constants
@@ -1817,7 +1818,7 @@ sub doQuery {
         ($q->param("occurrences_class_name") eq "YES" || 
          $q->param("occurrences_order_name") eq "YES" || 
          $q->param("occurrences_family_name") eq "YES"))){
-    	%master_class=%{Classification::get_classification_hash($dbt,'all',\@genera_nos,'array')};
+    	%master_class=%{TaxaCache::getParents($dbt,\@genera_nos,'array_full')};
     }    
 
     # Sort by
@@ -2673,8 +2674,6 @@ sub formatRow {
 	}
 }
 
-# JA: Paul replaced taxonomic_search call with recurse call because it's faster,
-#  but I'm reverting because I'm not maintaining recurse
 # renamed from getGenusNames to getTaxonString to reflect changes in how this works PS 01/06/2004
 sub getTaxonString {
 	my $self = shift;
@@ -2693,7 +2692,7 @@ sub getTaxonString {
         if (scalar(@taxon_nos) == 0) {
             push @sql_bits, "genus_name like ".$dbh->quote($taxon);
         } elsif (scalar(@taxon_nos) == 1) {
-            my @all_taxon_nos = PBDBUtil::taxonomic_search($dbt,$taxon_nos[0]);
+            my @all_taxon_nos = TaxaCache::getChildren($dbt,$taxon_nos[0]);
             # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
             @taxon_nos_unique{@all_taxon_nos} = ();
         } else { #result > 1
