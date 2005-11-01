@@ -21,6 +21,7 @@ use Classification;
 use CGI::Carp;
 use Data::Dumper;
 use Permissions;
+use TaxaCache;
 
 # list of allowable data fields.
 use fields qw(opinion_no reference_no dbt DBrow);  
@@ -365,6 +366,7 @@ sub displayOpinionForm {
     # among the different homonyms
     if ($childSpellingName eq $childName) {
         @child_spelling_nos = ($fields{'child_no'});
+        $fields{'child_spelling_no'} = $fields{'child_no'};
     }
     
     $fields{'child_name'} = $childName;
@@ -375,15 +377,15 @@ sub displayOpinionForm {
 	my $spelling_pulldown;
 	if ( scalar(@child_spelling_nos) > 1) {
         $spelling_pulldown .= qq|<input type="radio" name="child_spelling_no" value=""> \nOther: <input type="text" name="child_spelling_name" value=""><br>\n|;
-	    my %classification=%{Classification::get_classification_hash($dbt,"parent",\@child_spelling_nos)};
         foreach my $child_spelling_no (@child_spelling_nos) {
+	        my $parent = TaxaCache::getParent($dbt,$child_spelling_no);
 			my %auth = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$child_spelling_no)};
             my $selected = ($fields{'child_spelling_no'} == $child_spelling_no) ? "CHECKED" : "";
             my $pub_info = "$auth{author1last} $auth{pubyr}";
             $pub_info = ", ".$pub_info if ($pub_info !~ /^\s*$/);
             my $higher_class;
-            if ($classification{$child_spelling_no}) {
-                $higher_class = $classification{$child_spelling_no};
+            if ($parent) {
+                $higher_class = $parent->{'taxon_name'};
             } else {
                 my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$child_spelling_no);
                 $higher_class = "unclassified $taxon->{taxon_rank}";
@@ -430,15 +432,15 @@ sub displayOpinionForm {
 	my $parent_pulldown;
 	if ( scalar(@parent_nos) > 1) {
         $parent_pulldown .= qq|<input type="radio" name="parent_spelling_no" value=""> \nOther: <input type="text" name="belongs_to_parent" value=""><br>\n|;
-	    my %classification=%{Classification::get_classification_hash($dbt,"parent",\@parent_nos)};
         foreach my $parent_no (@parent_nos) {
+	        my $parent = TaxaCache::getParent($dbt,$parent_no);
 			my %auth = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$parent_no)};
             my $selected = ($fields{'parent_spelling_no'} == $parent_no) ? "CHECKED" : "";
             my $pub_info = "$auth{author1last} $auth{pubyr}";
             $pub_info = ", ".$pub_info if ($pub_info !~ /^\s*$/);
             my $higher_class;
-            if ($classification{$parent_no}) {
-                $higher_class = $classification{$parent_no};
+            if ($parent) {
+                $higher_class = $parent->{'taxon_name'}
             } else {
                 my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$parent_no);
                 $higher_class = "unclassified $taxon->{taxon_rank}";
@@ -556,7 +558,7 @@ sub displayOpinionForm {
         $belongs_to_row .= "<td width='100%'>$parent_pulldown</td>";
     } else	{
         my $parentTaxon = ($selected || ($isNewEntry && $childRank =~ /species/)) ? $parentName : "";
-        $belongs_to_row .= qq|<input name="belongs_to_parent" size="50" value="$parentTaxon">|;
+        $belongs_to_row .= qq|<input name="belongs_to_parent" size="30" value="$parentTaxon">|;
     }
     $belongs_to_row .= "</td></tr>";
     if (!$reSubmission && !$isNewEntry) {
@@ -1140,6 +1142,7 @@ sub submitOpinionForm {
 		}
 
         my ($return_code, $taxon_no) = $dbt->insertRecord($s,'authorities', \%record);
+        TaxaCache::addName($dbt,$taxon_no);
         main::dbg("create new authority record, got return code $return_code");
         if (!$return_code) {
             die("Unable to create new authority record for $record{taxon_name}. Please contact support");
@@ -1200,7 +1203,7 @@ sub submitOpinionForm {
 		}
 		
 		($code, $resultOpinionNumber) = $dbt->insertRecord($s,'opinions', \%fields);
-		
+
 		if ($code && ($fields{'spelling_status'} =~ /recombined as|corrected as|rank changed as/)) { 
 		    # At this point, *if* the status of the new opinion was 'recombined as',
 		    # migrated opinions to the original combination.
@@ -1237,6 +1240,8 @@ sub submitOpinionForm {
                 }
             }
 		}	
+        #TaxaCache::updateCache($dbt,$fields{'child_no'});
+        #TaxaCache::markForUpdate($dbt,$fields{'child_no'});
 	} else {
 		# if it's an old entry, then we'll update.
 		# Delete some fields that should never be updated...
@@ -1244,7 +1249,43 @@ sub submitOpinionForm {
 		
 		$resultOpinionNumber = $o->get('opinion_no');
 		$dbt->updateRecord($s,'opinions', 'opinion_no',$resultOpinionNumber, \%fields);
+        #TaxaCache::updateCache($dbt,$fields{'child_no'});
+        #TaxaCache::markForUpdate($dbt,$fields{'child_no'});
+
 	}
+    my $pid = fork();
+    if (!defined($pid)) {
+        carp "ERROR, could not fork";
+    }
+
+    if ($pid) {
+        # Child fork
+        # Don't exit here, have child go on to print message
+    } else {
+        #my $session_id = POSIX::setsid();
+
+        # Make new dbh and dbt objects - for some reason one connection
+        # gets closed whent the other fork exits, so split them here
+        my $dbh2 = DBConnection::connect();
+        my $dbt2 = DBTransactionManager->new($dbh2); 
+
+        # This is the parent fork.  Have the parent fork
+        # Do the useful work, the child fork will be terminated
+        # when the parent is so don't have it do anything long running
+        # (just terminate). The defined thing is in case the work didn't work
+
+        # Close references to stdin and stdout so Apache
+        # can close the HTTP socket conneciton
+        if (defined $pid) {
+            open STDIN, "</dev/null";
+            open STDOUT, ">/dev/null";
+            #open STDOUT, ">>SOMEFILE";
+        }
+        TaxaCache::updateCache($dbt2,$fields{'child_no'});
+        exit;
+    }         
+
+
 	
     $o = Opinion->new($dbt,$resultOpinionNumber); 
     my $opinionHTML = $o->formatAsHTML();
