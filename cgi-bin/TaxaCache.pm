@@ -578,70 +578,59 @@ sub updateListCache {
                                                          
     print "updateListCache called taxon_no $taxon_no lft $cache_row->{lft} rgt $cache_row->{rgt}\n" if ($DEBUG);
 
-    # First we want to update any childrne that used the old spelling/junior synonym of
-    # the taxon if the spelling/senior synonym has changed.  Replace all these old spellings
-    # with the newest one
-    $sql = "SELECT * FROM taxa_tree_cache WHERE lft=$cache_row->{lft}";
-    my @results = @{$dbt->getData($sql)};
-    my %all_spellings = ();
-    foreach my $row (@results) {
-        $all_spellings{$row->{'taxon_no'}} = 1;
-    }
-    delete $all_spellings{$senior_synonym_no};
 
-    if (%all_spellings) {
-        $sql = "SELECT * FROM taxa_list_cache WHERE parent_no IN (".join(",",keys(%all_spellings)).")";
-        @results = @{$dbt->getData($sql)};
-        if (@results) {
-            while (@results) {
-                my @subr = splice(@results,0,5000);
-                $sql = "INSERT IGNORE INTO taxa_list_cache (parent_no,child_no) VALUES ";
-                foreach my $row (@subr) {
-                    $sql .= "($senior_synonym_no,$row->{child_no}),";
-                }
-                $sql =~ s/,$//;
-                print "updateListCache changing spellings sql,insert: ".$sql."\n" if ($DEBUG == 2);
-                $dbh->do($sql);
-            }
-            $sql = "DELETE FROM taxa_list_cache WHERE parent_no IN (".join(",",keys(%all_spellings)).")";
-            print "updateListCache changing spellings sql,delete: ".$sql."\n" if ($DEBUG == 2);
-            $dbh->do($sql);
-        }
-    }
-
-    # Now update all the children of the taxa to have the same parents as the current
+    # Update all the children of the taxa to have the same parents as the current
     # taxon, in case the classification has changed in some way
     $sql = "SELECT taxon_no FROM taxa_tree_cache WHERE lft < $cache_row->{lft} AND rgt > $cache_row->{rgt} AND synonym_no=taxon_no AND synonym_no != $senior_synonym_no";
     my @parents = map {$_->{'taxon_no'}} @{$dbt->getData($sql)};
 
-    $sql = "SELECT taxon_no FROM taxa_tree_cache WHERE lft >= $cache_row->{lft} AND rgt <= $cache_row->{rgt}"; 
+    $sql = "SELECT taxon_no FROM taxa_tree_cache WHERE synonym_no != $cache_row->{synonym_no} AND (lft > $cache_row->{lft} AND lft < $cache_row->{rgt}) AND (rgt > $cache_row->{lft} AND rgt < $cache_row->{rgt})";
     my @children = map {$_->{'taxon_no'}} @{$dbt->getData($sql)};
+    
+    $sql = "(SELECT taxon_no FROM taxa_tree_cache WHERE synonym_no=$cache_row->{synonym_no}) UNION (SELECT taxon_no FROM taxa_tree_cache WHERE lft=$cache_row->{lft})";
+    my @me = map {$_->{'taxon_no'}} @{$dbt->getData($sql)};
 
     print "updateListCache children(".join(", ",@children).") parents(".join(", ",@parents).")\n" if ($DEBUG == 2);
 
-    if (@children) {
-        if (@parents) {
-            my @results = ();
+    if (@children || @me) {
+        my @results = ();
+        # Taxon might have been reclassified, so change it up for self and 
+        # all its children
+        foreach my $child_no (@children,@me) {
             foreach my $parent_no (@parents) {
-                foreach my $child_no (@children) {
-                    push @results, "($parent_no,$child_no)";
-                }
+                push @results, "($parent_no,$child_no)";
             }
-            # Break it up so we don't run into any query size limit 
-            # (which should be very large (16 MB) by default, but play it safe)
-            while (@results) {
-                my @subr = splice(@results,0,5000);
-                $sql = "INSERT IGNORE INTO taxa_list_cache (parent_no,child_no) VALUES ".join(",",@subr);
-                print "updateListCache insert sql: ".$sql."\n" if ($DEBUG == 2);
-                $dbh->do($sql);
-            }
+        }
+        # Update children with MY senior synonym no in case the current axon
+        # has just been synonymized/corrected
+        foreach my $child_no (@children) {
+            push @results, "($senior_synonym_no,$child_no)";
+        }
+
+        # Break it up so we don't run into any query size limit 
+        # (which should be very large (16 MB) by default, but play it safe)
+        while (@results) {
+            my @subr = splice(@results,0,5000);
+            $sql = "INSERT IGNORE INTO taxa_list_cache (parent_no,child_no) VALUES ".join(",",@subr);
+            print "updateListCache insert sql: ".$sql."\n" if ($DEBUG == 2);
+            $dbh->do($sql);
         }
 
         # Since we're updating the trees for a big pile of children potentially, some children can be parents of 
         # other children. Don't delete those links, just delete higher ordered ones. Breaking this up shouldn't be necessary, or possible
-        $sql = "DELETE FROM taxa_list_cache WHERE child_no IN (".join(",",@children).") AND parent_no NOT IN (".join(",",@children,@parents).")";
-        print "updateListCache: delete sql: ".$sql."\n" if ($DEBUG == 2);
-        $dbh->do($sql);
+        if (@children) {
+            $sql = "DELETE FROM taxa_list_cache WHERE child_no IN (".join(",",@children).") AND parent_no NOT IN (".join(",",$senior_synonym_no,@children,@parents).")";
+            print "updateListCache: delete1 sql: ".$sql."\n" if ($DEBUG == 2);
+            $dbh->do($sql);
+        }
+        if (@me) {
+            $sql = "DELETE FROM taxa_list_cache WHERE child_no IN (".join(",",@me).")";
+            if (@parents) { 
+                $sql .= " AND parent_no NOT IN (".join(",",@parents).")";
+            }
+            print "updateListCache: delete2 sql: ".$sql."\n" if ($DEBUG == 2);
+            $dbh->do($sql);
+        }
     } 
 }
 
