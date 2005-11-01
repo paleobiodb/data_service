@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-use "../cgi-bin";
+use lib "../cgi-bin";
 use DBConnection;
 use DBTransactionManager;
 use TaxaCache;
