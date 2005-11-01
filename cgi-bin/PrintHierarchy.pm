@@ -58,13 +58,29 @@ sub processPrintHierarchy	{
 	print $q->param('taxon_name') . "</h3></center>";
 
 	$MAX = $q->param('maximum_levels');
-    my ($taxon_records) = PBDBUtil::getChildren($dbt,$ref->{'taxon_no'},$MAX);
+
+    my $tree = TaxaCache::getChildren($dbt,$ref->{'taxon_no'},'tree',$MAX);
+    $tree->{'depth'} = 0;
+    my @nodes_to_print = ();
+    my @node_stack = ($tree);
+    while (@node_stack) {
+        my $node = shift @node_stack;
+        push @nodes_to_print, $node;
+        if ($node->{'depth'} < $MAX) {
+            foreach my $child (@{$node->{'children'}}) {
+                $child->{'depth'} = $node->{'depth'} + 1;
+            }
+            unshift @node_stack,@{$node->{'children'}};
+        }
+    } 
+
+    #my ($taxon_records) = PBDBUtil::getChildren($dbt,$ref->{'taxon_no'},$MAX);
 
     # prepend the query stuff to the array so it gets printed out as well
-    unshift @{$taxon_records}, {'taxon_no'=>$ref->{'taxon_no'},
-                            'taxon_name'=>$q->param('taxon_name'),
-                            'taxon_rank'=>$ref->{'taxon_rank'},
-                            'depth'=>0};
+    #unshift @{$taxon_records}, {'taxon_no'=>$ref->{'taxon_no'},
+    #                        'taxon_name'=>$q->param('taxon_name'),
+    #                        'taxon_rank'=>$ref->{'taxon_rank'},
+    #                        'depth'=>0};
 
     # now print out the data
 	open OUT, ">$OUT_FILE_DIR/classification.csv";
@@ -74,7 +90,7 @@ sub processPrintHierarchy	{
            print "<td style=\"width:20;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>"; 
     }
     print "</tr>";
-	foreach $record ( @{$taxon_records})	{
+	foreach $record (@nodes_to_print)	{
 		print "<tr>";
 		for ($i=0;$i<$record->{'depth'};$i++) {
 			print "<td></td>";

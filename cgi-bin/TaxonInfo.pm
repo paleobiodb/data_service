@@ -117,7 +117,7 @@ sub checkTaxonInfo {
                 # If nothing, print out an error message
                 searchForm($hbo, $q, 1); # param for not printing header with form
                 if($s->isDBMember()) {
-                    print "<center><p><a href=\"bridge.pl?action=submitTaxonSearch?goal=authority&taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
+                    print "<center><p><a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
                 }
             }
         } elsif(scalar @results == 1){
@@ -187,13 +187,11 @@ sub displayTaxonInfoResults {
 	# Get the sql IN list for a Higher taxon:
 	my $in_list;
 	if($taxon_no) {
-    	# JA: replaced recurse call with taxonomic_search call 7.5.04 because
-    	#  I am not maintaining recurse
         if ($taxon_rank =~ /class|phylum|kingdom/) {
             # Don't do this for class or higher, too many results can be returned PS 08/22/2005
             $in_list = [-1];
         } else {
-            @in_list=PBDBUtil::taxonomic_search($dbt,$taxon_no);
+            @in_list=TaxaCache::getChildren($dbt,$taxon_no);
             $in_list=\@in_list;
         }
 	} 
@@ -920,11 +918,12 @@ sub displayTaxonClassification{
         push @table_rows, [$taxon_rank,$taxon_name,$classify_no,$child_spelling_no];
 
         # Now find the rank,name, and publication of all its parents
-        my $parent_hash = Classification::get_classification_hash($dbt,'all',[$classify_no],'array');
-        my $parent_array = $parent_hash->{$classify_no}; 
-        if (@$parent_array) {
-            foreach $row (@$parent_array) {
-                push (@table_rows,[$row->{'taxon_rank'},$row->{'taxon_name'},$row->{'taxon_no'},$row->{'taxon_spelling_no'}]);
+        my $parent_hash = TaxaCache::getParents($dbt,[$classify_no],'array_full');
+        my @parent_array = @{$parent_hash->{$classify_no}}; 
+        if (@parent_array) {
+            foreach $row (@parent_array) {
+                my $orig_no = getOriginalCombination($dbt,$row->{'taxon_no'});
+                push (@table_rows,[$row->{'taxon_rank'},$row->{'taxon_name'},$orig_no,$row->{'taxon_no'}]);
                 last if ($row->{'taxon_rank'} eq 'kingdom');
             }
 
@@ -997,9 +996,9 @@ sub displayRelatedTaxa {
     }
 
     if ($orig_no) {
-        my $class_hash = Classification::get_classification_hash($dbt,'parent',[$orig_no],'numbers');
-        if ($class_hash->{$orig_no}) {
-            $parent_taxon_no = $class_hash->{$orig_no};
+        my $parent = TaxaCache::getParent($dbt,$orig_no);
+        if ($parent) {
+            $parent_taxon_no = $parent->{'taxon_no'};
         }
     } else {
         my @genus_nos = getTaxonNos($dbt,$genus,'genus');
@@ -1011,7 +1010,9 @@ sub displayRelatedTaxa {
     my $taxon_records = [];
     my @child_taxa_links;
     # This section generates links for children if we have a taxon_no (in authorities table)
-    $taxon_records = PBDBUtil::getChildren($dbt,$focal_taxon_no,1,'sort_alphabetical') if ($focal_taxon_no);
+    my $tree = TaxaCache::getChildren($dbt,$focal_taxon_no,'tree',1) if ($focal_taxon_no);
+    my $taxon_no=$tree->{'taxon_no'};
+    $taxon_records = $tree->{'children'};
     if (@{$taxon_records}) {
         my $sql = "SELECT type_taxon_no FROM authorities WHERE taxon_no=$focal_taxon_no";
         my $type_taxon_no = ${$dbt->getData($sql)}[0]->{'type_taxon_no'};
@@ -1034,10 +1035,11 @@ sub displayRelatedTaxa {
     $taxon_records = [];
     my @sister_taxa_links;
     # This section generates links for sister if we have a taxon_no (in authorities table)
-    $taxon_records = PBDBUtil::getChildren($dbt,$parent_taxon_no,1,1) if ($parent_taxon_no);
+    $tree = TaxaCache::getChildren($dbt,$parent_taxon_no,'tree',1) if ($parent_taxon_no);
+    $taxon_records = $tree->{'children'};
     if (@{$taxon_records}) {
         foreach $record (@{$taxon_records}) {
-            next if ($record->{'taxon_no'} == $orig_no);
+            next if ($record->{'taxon_no'} == $taxon_no);
             if ($focal_taxon_rank ne $record->{'taxon_rank'}) {
                 PBDBUtil::debug(1,"rank mismatch $focal_taxon_rank -- $record->{taxon_rank} for sister $record->{taxon_name}");
             } else {
@@ -1114,6 +1116,10 @@ sub displayRelatedTaxa {
         $output .= join(", ",@possible_sister_taxa_links);
         $output .= "</small>" if (scalar(@possible_sister_taxa_links)>10);
         $output .= "</p>";
+    }
+
+    if (!$output) {
+        $output = "<i> No related taxa found </i>";
     }
 	return $output;
 }
@@ -1377,10 +1383,7 @@ sub getSynonymyParagraph{
 sub getOriginalCombination{
 	my $dbt = shift;
 	my $taxon_no = shift;
-	# You know you're an original combination when you have no children
-	# that have recombined or corrected as relations to you.
-	my $sql = "SELECT DISTINCT(child_no), status FROM opinions".
-			  " WHERE child_spelling_no=$taxon_no";
+	my $sql = "SELECT DISTINCT(o.child_no), o.status FROM opinions o WHERE o.child_spelling_no=$taxon_no";
 	my @results = @{$dbt->getData($sql)};
 
     if (@results) {
@@ -1420,7 +1423,7 @@ sub getMostRecentParentOpinion {
     # All values of the enum classification_quality get recast as integers for easy sorting
     # Lowest should appear at top of list (authoritative) and highest at bottom (compendium) so sort ASC
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
-    my $sql = "(SELECT ${child_fields}o.child_no, o.child_spelling_no, o.status, o.parent_no, o.parent_spelling_no,"
+    my $sql = "(SELECT ${child_fields}o.child_no, o.child_spelling_no, o.status, o.parent_no, o.parent_spelling_no, o.opinion_no, "
             . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr,"
             . " (IF(r.reference_no = 6930,0," # is compendium, then 0 (lowest priority)
             .   "IF(r.classification_quality = 'second hand',1," # else if second hand, next lowest
@@ -1432,7 +1435,7 @@ sub getMostRecentParentOpinion {
             . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
             . " WHERE o.child_no=$child_no" 
             . $reference_clause
-            . ") ORDER BY reliability_index DESC, pubyr DESC LIMIT 1";
+            . ") ORDER BY reliability_index DESC, pubyr DESC, opinion_no DESC LIMIT 1";
 
     my @rows = @{$dbt->getData($sql)};
     if (scalar(@rows)) {
@@ -1458,7 +1461,7 @@ sub displayEcology	{
 	# get the field names from the ecotaph table
     my @ecotaphFields = $dbt->tableColumns('ecotaph');
     # also get values for ancestors
-    my $class_hash = Classification::get_classification_hash($dbt,'all',[$taxon_no],'array');
+    my $class_hash = TaxaCache::getParents($dbt,[$taxon_no],'array');
     my $eco_hash = Ecology::getEcology($dbt,$class_hash,\@ecotaphFields,'get_basis');
     my $ecotaphVals = $eco_hash->{$taxon_no};
 
@@ -1917,15 +1920,29 @@ sub getSeniorSynonym {
     my $taxon_no = shift;
     my $restrict_to_reference_no = shift;
 
+    my %seen = ();
     # Limit this to 10 iterations, in case we a have some weird loop
     for($i=0;$i<10;$i++) {
         $parent = getMostRecentParentOpinion($dbt,$taxon_no,0,0,$restrict_to_reference_no);
-        if ($parent->{'status'} =~ /synonym|replaced|homonym/) {
-            $taxon_no = $parent->{'parent_no'};
+        if ($seen{$parent->{'child_no'}}) {
+            # If we have a loop, disambiguate using last entered
+            my @rows = sort {$b->{'opinion_no'} <=> $a->{'opinion_no'}} values %seen;
+            #my @rows = sort {$b->{'reliability_index'} <=> $a->{'reliability_index'} || 
+            #                 $b->{'pubyr'} <=> $a->{'pubyr'} || 
+            #                 $b->{'opinion_no'} <=> $a->{'opinion_no'}} values %seen;
+            $taxon_no = $rows[0]->{'parent_no'};
+            last;
         } else {
-            return $taxon_no;
+            $seen{$parent->{'child_no'}} = $parent;
+            if ($parent->{'status'} =~ /synonym|replaced|homonym/) {
+                $taxon_no = $parent->{'parent_no'};
+            } else {
+                last;
+            }
         }
     }
+
+    return $taxon_no;
 }
 
 # They may potentialy be chained, so keep going till we're done. Use a queue isntead of recursion to simplify things slightly

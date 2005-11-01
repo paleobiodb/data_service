@@ -1,6 +1,7 @@
 package Measurement;
 use Data::Dumper;
 use CGI::Carp;
+use TaxaCache;
 
 # written by PS 6/22/2005 - 6/24/2005
 # Handle display and processing of form to enter measurements for specimens
@@ -35,7 +36,7 @@ sub submitSpecimenSearch {
         my (@taxon_nos,%all_taxa);
         foreach (@taxa) {
             if ($_->{'taxon_rank'} =~ /species|genus/) {
-                @taxon_nos = PBDBUtil::taxonomic_search($dbt,$_->{'taxon_no'});
+                @taxon_nos = TaxaCache::getChildren($dbt,$_->{'taxon_no'});
                 @all_taxa{@taxon_nos} = ();
             } else {
                 @taxon_nos = TaxonInfo::getAllTaxonomicNames($dbt,$_->{'taxon_no'});
@@ -655,9 +656,9 @@ sub processMeasurementForm	{
 #   Argument 2 is hash array of options
 #   i.e. getSpecimens($dbt,'collection_no'=>1111,'taxon_name'=>'Calippus')
 #   Possible values for options:
-#      taxon_no: a taxon_no.  Will performa  taxonomic_search on this no
+#      taxon_no: a taxon_no.  Will call getChildren on this no
 #      taxon_name: Will find all taxon_nos this corresponds to, and combine the 
-#          taxonomic_searchs for all of them.  If a taxon_no is not found, then
+#          getChildren calls for all of them.  If a taxon_no is not found, then
 #          search against the occurrences/reids table
 #      taxon_list: an array ref of taxon_nos, like $in_list in TaxonInfo
 #      collection_no: a collection_no
@@ -690,7 +691,7 @@ sub getMeasurements {
         if (@taxa) {
             my (@taxon_nos,%all_taxa);
             foreach (@taxa) {
-                @taxon_nos = PBDBUtil::taxonomic_search($dbt,$_->{'taxon_no'});
+                @taxon_nos = TaxaCache::getChildren($dbt,$_->{'taxon_no'});
                 @all_taxa{@taxon_nos} = ();
             }
             @taxon_nos = keys %all_taxa;

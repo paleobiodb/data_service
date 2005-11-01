@@ -647,8 +647,6 @@ sub reportQueryDB{
         }
 
         # handle taxon names
-		# JA: replaced recurse call with taxonomic_search call 7.5.04
-		#  because I am not maintaining recurse
         # Changed PBDBUtil funct to optionally use taxon_nos and used those
         my $genus_names_string;
 		if($q->param('taxon_name')){
@@ -661,7 +659,7 @@ sub reportQueryDB{
                 if (scalar(@taxon_nos) == 0) {
                     $genus_names_string .= ", ".$dbh->quote($taxon);
                 } elsif (scalar(@taxon_nos) == 1) {
-                    my @all_taxon_nos = PBDBUtil::taxonomic_search($dbt,$taxon_nos[0]);
+                    my @all_taxon_nos = TaxaCache::getChildren($dbt,$taxon_nos[0]);
                     # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
                     @taxon_nos_unique{@all_taxon_nos} = ();
                 } else { #result > 1

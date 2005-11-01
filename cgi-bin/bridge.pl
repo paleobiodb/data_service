@@ -38,6 +38,7 @@ use Text::CSV_XS;
 use POSIX qw(ceil floor);
 use Confidence;
 use Measurement;
+use TaxaCache;
 
 # god awful Poling modules
 #use Occurrence; - entirely deprecated, only ever called by Collection.pm
@@ -2181,7 +2182,7 @@ sub processCollectionsSearch {
             if (@taxon_nos) {
                 # if taxon is a homonym... make sure we get all versions of the homonym
                 foreach my $taxon_no (@taxon_nos) {
-                    my @t = PBDBUtil::taxonomic_search($dbt,$taxon_no);
+                    my @t = TaxaCache::getChildren($dbt,$taxon_no);
                     # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
                     @all_taxon_nos{@t} = ();
                 }
@@ -3018,8 +3019,7 @@ sub buildTaxonomicList {
 				
 		# get the classification (by PM): changed 2.4.04 by JA to
 		#  use the occurrence number instead of the taxon name
-				$class_hash = Classification::get_classification_hash($dbt,'class,order,family',[$rowref->{'taxon_no'}],'array');
-                # Index 0 is class, 1 is order, 2 is family. add -1 to split to keep empty trailing fields
+				$class_hash = TaxaCache::getParents($dbt,[$rowref->{'taxon_no'}],'array_full');
                 @class_array = @{$class_hash->{$rowref->{'taxon_no'}}};
                 %classification = ();
                 foreach my $taxon (@class_array) {
@@ -3356,7 +3356,7 @@ sub getReidHTMLTableByOccNum {
 		# JA: -3 means fourth to last element in the array
 		$row[-3] = buildReference($row[-3],"list");
 
-        my $class_hash = Classification::get_classification_hash($dbt,'class,order,family',[$row[9]],'array');
+        my $class_hash = TaxaCache::getParents($dbt,[$row[9]],'array_full');
         # Index 0 is class, 1 is order, 2 is family. add -1 to split to keep empty trailing fields
         my @class_array = @{$class_hash->{$row[9]}};
         my %classification = ();
@@ -3618,7 +3618,7 @@ sub displayCollectionEcology	{
 
     # First get a list of all the parent taxon nos
 	my @taxon_nos = map {$_->{'taxon_no'}} @occurrences;
-	my $parents = Classification::get_classification_hash($dbt,'all',\@taxon_nos,'array');
+	my $parents = TaxaCache::getParents($dbt,\@taxon_nos,'array');
     # We only look at these categories for now
 	my @categories = ("life_habit", "diet1", "diet2","minimum_body_mass","maximum_body_mass","body_mass_estimate");
     my $ecology = Ecology::getEcology($dbt,$parents,\@categories,'get_basis');

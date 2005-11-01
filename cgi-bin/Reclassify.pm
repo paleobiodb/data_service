@@ -240,18 +240,19 @@ sub displayOccurrenceReclassify	{
 					}
 
                 	# needed by Classification
-                	$levels = "class,order,family";
-                    my %master_class=%{Classification::get_classification_hash($dbt, $levels, [ $t->{taxon_no} ] )};
+                    my %master_class=%{TaxaCache::getParents($dbt, [$t->{'taxon_no'}],'array_full')};
 
-					my @parents = split(/,/,$master_class{$t->{taxon_no}},-1);
-					if ( @parents )	{
+					my @parents = @{$master_class{$t->{'taxon_no'}}};
+                    if (@parents) {
 						$authority .= " (";
-						if ( $parents[2] ) { $authority .= $parents[2] . ", "; }
-						if ( $parents[1] ) { $authority .= $parents[1] . ", "; }
-						if ( $parents[0] ) { $authority .= $parents[0]; }
-						$authority =~ s/, $//;
-						$authority .= ")";
-					}
+                        foreach (@parents) {
+                            if ($_->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
+                                $authority .= $_->{'taxon_name'}.", ";
+                            }
+                        }
+                        $authority =~ s/, $//;
+                        $authority .= ")";
+                    }
 					if ( $authority !~ /[A-Za-z]/ )	{
 						$authority = "taxon number " . $t->{taxon_no};
 					}

@@ -1,6 +1,6 @@
 package Ecology;
 
-use PBDBUtil;
+use TaxaCache;
 
 # written by JA 27-31.7,1.8.03
 
@@ -176,14 +176,14 @@ sub processEcologyForm	{
 # This process is a bit tricky because most ecology data can be inherited from parents.  Body size data is actually
 #  inherited from the chlidren and can either be a point estimate (single value) or a range of values.  Multiple
 #  point estimates can turn into a range.
-# The second parameter must thus be a classification hash as returned by get_classification_hash with a type of 'array'
+# The second parameter must thus be a classification hash as returned by get_classificaton_hash or TaxaCache::getParents with a type of 'array'
 # The third parameter must be the fields you want returned. 
 # The fourth parameter is essentially a boolean - ($get_basis) - which determines if you also want to return
 #  what taxonomic rank the  ecology data is based off (i.e. class,order,family). Access this data as another hash field
 #  with the string "basis" appended (see example below)
 # 
 # It'll return a hash where the keys are taxon_nos and the value is a hash of ecology data
-# example: $class_hash = Classification::get_classification_hash($dbt,'all',[$taxon_no],'array');
+# example: $class_hash = TaxaCache::getParents($dbt,[$taxon_no],'array');
 #          @ecotaph_fields = $dbt->tableColumns('ecotaph');
 #          $eco_hash = Ecology::getEcology($dbt,$eco_hash,\@ecotaph_fields,1);
 #          $life_habit_for_taxon_no = $eco_hash->{$taxon_no}{'life_habit'};
@@ -201,34 +201,42 @@ sub getEcology {
     # Dealing with recombinatins/corrections is tricky.  Strategy I use is this: 
     # Store an array of alternative taxon_nos to a taxon in %alt_taxon_nos hash
     # Iterate through this array when getting eco_data for the taxon_no as well. 
-    # Synonyms hopefully dealth with as well
+    # Synonyms hopefully dealt with as well
     my %all_taxon_nos = (-1=>1); # so we don't crash if there are no taxon nos. 
     my %alt_taxon_nos;
     for my $taxon_no ( @taxon_nos ) {
         if ($taxon_no) {
             $all_taxon_nos{$taxon_no} = 1;
-            foreach my $parent (@{$classification_hash->{$taxon_no}}) {
-                $all_taxon_nos{$parent->{'taxon_no'}} = 1;
-                foreach my $synonym (@{$parent->{'synonyms'}}) {
-                    $all_taxon_nos{$synonym->{'taxon_no'}} = 1;
-                }
+            foreach my $parent_no (@{$classification_hash->{$taxon_no}}) {
+                $all_taxon_nos{$parent_no} = 1;
+                #foreach my $synonym (@{$parent->{'synonyms'}}) {
+                #    $all_taxon_nos{$synonym->{'taxon_no'}} = 1;
+                #}
             }
         }
     }
 
     # Get a list of alternative names of existing taxa as well
-    my $sql = "SELECT DISTINCT child_no,child_spelling_no FROM opinions WHERE child_no != child_spelling_no AND child_no IN (".join(", ",keys %all_taxon_nos).")";
+    my $sql = "SELECT taxon_no,synonym_no FROM taxa_tree_cache WHERE taxon_no != synonym_no AND synonym_no IN (".join(",",keys %all_taxon_nos).")";
     my @results = @{$dbt->getData($sql)};
     foreach my $row (@results) {
-        push @{$alt_taxon_nos{$row->{'child_no'}}},$row->{'child_spelling_no'};
-        $all_taxon_nos{$row->{'child_spelling_no'}} = 1;
+        # Synonym_no in this case means senior synonym_no. taxon_no is junior synonym or recombination to add
+        push @{$alt_taxon_nos{$row->{'synonym_no'}}},$row->{'taxon_no'};
+        $all_taxon_nos{$row->{'taxon_no'}} = 1;
     }
-    $sql = "SELECT DISTINCT child_no,child_spelling_no FROM opinions WHERE child_no != child_spelling_no AND child_spelling_no IN (".join(", ",keys %all_taxon_nos).")";
-    @results = @{$dbt->getData($sql)};
-    foreach my $row (@results) {
-        push @{$alt_taxon_nos{$row->{'child_spelling_no'}}},$row->{'child_no'};
-        $all_taxon_nos{$row->{'child_no'}} = 1;
-    }
+    
+#    my $sql = "SELECT DISTINCT child_no,child_spelling_no FROM opinions WHERE child_no != child_spelling_no AND child_no IN (".join(", ",keys %all_taxon_nos).")";
+#    my @results = @{$dbt->getData($sql)};
+#    foreach my $row (@results) {
+#        push @{$alt_taxon_nos{$row->{'child_no'}}},$row->{'child_spelling_no'};
+#        $all_taxon_nos{$row->{'child_spelling_no'}} = 1;
+#    }
+#    $sql = "SELECT DISTINCT child_no,child_spelling_no FROM opinions WHERE child_no != child_spelling_no AND child_spelling_no IN (".join(", ",keys %all_taxon_nos).")";
+#    @results = @{$dbt->getData($sql)};
+#    foreach my $row (@results) {
+#        push @{$alt_taxon_nos{$row->{'child_spelling_no'}}},$row->{'child_no'};
+#        $all_taxon_nos{$row->{'child_no'}} = 1;
+#    }
 
     $sql = "SELECT taxon_no,reference_no,".join(", ",@$user_fields)." FROM ecotaph WHERE taxon_no IN (".join(", ",keys %all_taxon_nos).")";
     main::dbg("Ecology sql: $sql");
@@ -269,7 +277,7 @@ sub getEcology {
                 # Optimization: if its species, don't call function, just get the species itself and its alternate spellings
                 $child_taxa{$taxon_no} = [$taxon_no,@{$alt_taxon_nos{$taxon_no}}];
             } else {
-                my @child_taxon_nos = PBDBUtil::taxonomic_search($dbt,$taxon_no);
+                my @child_taxon_nos = TaxaCache::getChildren($dbt,$taxon_no);
                 $child_taxa{$taxon_no} = \@child_taxon_nos;
             }
             $all_child_taxon_nos{$_} = 1 foreach @{$child_taxa{$taxon_no}}; 
@@ -304,14 +312,14 @@ sub getEcology {
         # Create a sort of execution plan: start off with recombinations of the taxon, then the taxon itself, then each
         # of its parent, starting with the lowest ranked parent first
         my @exec_order = ();
-        push @exec_order, @{$alt_taxon_nos{$taxon_no}}; #recombinations first
-        push @exec_order, $taxon_no; #then the taxon
-        foreach my $parent (@{$classification_hash->{$taxon_no}}) {
-            push @exec_order, @{$alt_taxon_nos{$parent->{'taxon_no'}}}; # then parent recombinations
-            push @exec_order, $parent->{'taxon_no'}; #then the parent
-            foreach my $synonym (reverse @{$parent->{'synonyms'}}) {
-                push @exec_order, $synonym->{'taxon_no'}; # then junior synonyms last
-            }
+        push @exec_order, $taxon_no; #taxon/most current combination first
+        push @exec_order, @{$alt_taxon_nos{$taxon_no}}; #then syns/recombs
+        foreach my $parent_no (@{$classification_hash->{$taxon_no}}) {
+            push @exec_order, $parent_no; #ditto as above
+            push @exec_order, @{$alt_taxon_nos{$parent_no}}; 
+            #foreach my $synonym (reverse @{$parent->{'synonyms'}}) {
+            #    push @exec_order, $synonym->{'taxon_no'}; # then junior synonyms last
+            #}
         }
         
         my ($seen_diet,$seen_composition,$seen_adult) = (0,0,0);
