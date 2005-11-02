@@ -212,10 +212,6 @@ sub displayOccurrenceReclassify	{
 				for my $t ( @taxnorefs )	{
 					# have to format the authority data
 					my $authority = "";
-					if ( $usedGenus )	{
-						$authority = "genus: ";
-						$genusOnly++;
-					}
 					# first try getting ref data from the
 					#  the reference for the record
 					if ( $t->{ref_is_authority} eq "YES" )	{ 
@@ -245,12 +241,17 @@ sub displayOccurrenceReclassify	{
 					my @parents = @{$master_class{$t->{'taxon_no'}}};
                     if (@parents) {
 						$authority .= " (";
+                        my $foundParent = 0;
                         foreach (@parents) {
                             if ($_->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
+                                $foundParent = 1;
                                 $authority .= $_->{'taxon_name'}.", ";
                             }
                         }
                         $authority =~ s/, $//;
+                        if (!$foundParent) {
+                            $authority .= $parents[0]->{'taxon_name'};
+                        }
                         $authority .= ")";
                     }
 					if ( $authority !~ /[A-Za-z]/ )	{
@@ -259,6 +260,11 @@ sub displayOccurrenceReclassify	{
 					# clean up in case there's a
 					#  classification but no author
 					$authority =~ s/^ //;
+
+					if ( $usedGenus )	{
+						$authority = "genus: ".$authority;
+						$genusOnly++;
+					}
 
 					print "<option value='" , $t->{taxon_no} , "+" , $authority , "'";
 					if ( $t->{taxon_no} eq $o->{taxon_no} )	{
