@@ -83,7 +83,15 @@ my $OUTPUT_DIR = "public/data";
 
 # some generally useful trig stuff needed by processCollectionsSearchForAdd
 my $PI = 3.14159265;
-sub acos { atan2( sqrt(1 - $_[0] * $_[0]), $_[0] ) }
+sub acos {
+    my $a;
+    if ($_[0] > 1 || $_[0] < -1) {
+        $a = 1;
+    } else {
+        $a = $_[0];
+    }
+    atan2( sqrt(1 - $a * $a), $a )
+}  
 # returns great circle distance given two latitudes and a longitudinal offset
 sub GCD { ( 180 / $PI ) * acos( ( sin($_[0]*$PI/180) * sin($_[1]*$PI/180) ) + ( cos($_[0]*$PI/180) * cos($_[1]*$PI/180) * cos($_[2]*$PI/180) ) ) }
 
