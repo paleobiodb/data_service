@@ -349,7 +349,6 @@ sub buildList    {
     my $splist_base=shift;
     my %splist_base=%$splist_base;
     my %splist;
-    my @notfound;
 
     # Set from homonym form
     if (!%splist_base) {
@@ -954,6 +953,12 @@ sub calculateTaxaInterval {
 #    print "anotherHash ".Dumper(\%anotherHash)."<br>";
             $rusty++;
         }
+    }
+
+    if (scalar(@not_in_scale) == scalar(keys(%splist))) {
+        print "<p></p><div class=\"warning\">Warning: Could not map any of the taxa to the timescale requested. <br></div>";
+        optionsForm($q, $s, $dbt, \%splist, 'small');
+        return;
     }
     
 
