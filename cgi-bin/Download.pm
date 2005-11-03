@@ -226,6 +226,7 @@ sub retellOptions {
     if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
         $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
         $html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
+        $html .= $self->retellOptionsRow ( "Replace names with senior synonyms?", $q->param("replace_with_ss") );
         $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
         $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", $q->param("sp") );
     	my @genus_reso_types_group = ('aff.','cf.','ex_gr.','sensu lato','?','"');
@@ -1406,8 +1407,13 @@ sub doQuery {
             push @fields, 'ps3.name specimens_modifier';
         }
     } elsif ($q->param('include_specimen_fields')) {
-        push @left_joins , "LEFT JOIN specimens s ON s.occurrence_no = o.occurrence_no";
-        push @fields,"(COUNT(DISTINCT s.specimen_no) > 0) specimens_exist";
+        if ($q->param('output_data') =~ /collections/ && !$join_reids) {
+            push @left_joins , "LEFT JOIN occurrences o ON o.collection_no=c.collection_no LEFT JOIN specimens s ON s.occurrence_no = o.occurrence_no";
+            push @fields,"(COUNT(DISTINCT s.specimen_no) > 0) specimens_exist";
+        } else {
+            push @left_joins , "LEFT JOIN specimens s ON s.occurrence_no = o.occurrence_no";
+            push @fields,"(COUNT(DISTINCT s.specimen_no) > 0) specimens_exist";
+        }
     }
 	
     # Handle matching against secondary refs
@@ -1421,7 +1427,7 @@ sub doQuery {
     # nor can we filter out old reids and rows that don't pass permissions.
 	if ( $q->param('output_data') =~ /genera|species|occurrences/ )	{
         push @groupby, 'o.occurrence_no,re.reid_no';
-    } elsif ($q->param('output_data') eq 'collections' && $join_reids) { # = collections
+    } elsif ($q->param('output_data') eq 'collections' && ($join_reids || $q->param('include_specimen_fields'))) { # = collections
        push @groupby, 'c.collection_no';
     }
 
@@ -1639,7 +1645,42 @@ sub doQuery {
 	$sth->finish();
 	$self->dbg("Rows that passed Permissions: number of rows $ofRows, length of dataRows array: ".@dataRows."<br>");
 
-	# first do a quick hit to get some by-taxon and by-collection stats
+
+    # ss = senior_synonym
+    my %ss_taxon_nos = ();
+    my %ss_taxon_names = ();
+    if ($q->param("replace_with_ss") eq 'YES' && $q->param('output_data') =~ /occurrences|specimens|genera|species/) {
+        my %all_taxa = ();
+        foreach my $row (@dataRows) {
+            if ($row->{'reid_taxon_no'}) {
+                $all_taxa{$row->{'reid_taxon_no'}} = 1; 
+            } elsif ($row->{'occ_taxon_no'}) {
+                $all_taxa{$row->{'occ_taxon_no'}} = 1;
+            }
+        }
+        my @taxon_nos = keys %all_taxa;
+
+        if (@taxon_nos) {
+            # Get senior synonyms for taxon used in this download
+            # Note the t.taxon_no != t.synonym_no clause - this is here
+            # so that the array only gets filled with replacement names,
+            # not cluttered up with taxa who don't have a senior synonym
+            my $sql = "SELECT t.taxon_no,t.synonym_no,a.taxon_name ".
+                      "FROM taxa_tree_cache t, authorities a ".
+                      "WHERE t.synonym_no=a.taxon_no ".
+                      "AND t.taxon_no != t.synonym_no ".
+                      "AND t.taxon_no IN (".join(",",@taxon_nos).")";
+            my @results = @{$dbt->getData($sql)};
+            foreach my $row (@results) {
+               $ss_taxon_nos{$row->{'taxon_no'}} = $row->{'synonym_no'};
+               # Split it into bits here and store that, optimazation
+               my @name_bits = Taxon::splitTaxon($row->{'taxon_name'});
+               $ss_taxon_names{$row->{'taxon_no'}} = \@name_bits;
+            }
+        }
+    }
+
+	# next do a quick hit to get some by-taxon and by-collection stats
 	#  ... and so on
     # also records genera names, useful for later loop
 	my %lumpseen;
@@ -1649,12 +1690,32 @@ sub doQuery {
 	foreach my $row ( @dataRows ){
 		my $exclude = 0;
         my $lump = 0;
-
+            
         if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
             if ($row->{'reid_no'}) {
                 foreach my $field (@reidentificationsFieldNames,'taxon_no') {
                     $row->{'original_'.$field}=$row->{'occ_'.$field};
                     $row->{'occ_'.$field}=$row->{'reid_'.$field};
+                }
+            }
+            # Replace with senior_synonym_no PS 11/1/2005
+            if ( $q->param('replace_with_ss') eq 'YES' ) {
+                if ($ss_taxon_nos{$row->{'occ_taxon_no'}}) {
+                    my ($genus,$subgenus,$species,$subspecies) = @{$ss_taxon_names{$row->{'occ_taxon_no'}}};
+                    #print "$row->{occurrence_no}, SENIOR SYN FOR $row->{occ_genus_name}/$row->{occ_subgenus_name}/$row->{occ_species_name}/$row->{occ_subspecies_name} IS $genus/$subgenus/$species/$subspecies<BR>";
+
+                    $row->{'original_occ_taxon_no'} = $row->{'occ_taxon_no'};
+                    $row->{'occ_taxon_no'} = $ss_taxon_nos{$row->{'occ_taxon_no'}};
+                    $row->{'original_genus_name'} = $row->{'occ_genus_name'};
+                    $row->{'occ_genus_name'} = $genus;
+                    $row->{'original_subgenus_name'} = $row->{'occ_subgenus_name'};
+                    $row->{'original_species_name'} = $row->{'occ_species_name'};
+                    $row->{'original_subspecies_name'} = $row->{'occ_subspecies_name'};
+                    if ($species) {
+                        $row->{'occ_subgenus_name'} = $subgenus;
+                        $row->{'occ_species_name'} = $species;
+                        $row->{'occ_subspecies_name'} = $subspecies;
+                    }
                 }
             }
 		    # raise subgenera to genus level JA 18.8.04
@@ -1819,7 +1880,7 @@ sub doQuery {
          $q->param("occurrences_order_name") eq "YES" || 
          $q->param("occurrences_family_name") eq "YES"))){
     	%master_class=%{TaxaCache::getParents($dbt,\@genera_nos,'array_full')};
-    }    
+    }
 
     # Sort by
     if ($q->param('output_data') =~ /^(?:genera|specimens|species)$/) {
@@ -2297,6 +2358,8 @@ sub doQuery {
 		}
 		$acceptedCount++;
 	}
+
+
 	if ( $q->param('output_format') eq "CONJUNCT" )	{
 		print OUTFILE ".\n\n";
 	}

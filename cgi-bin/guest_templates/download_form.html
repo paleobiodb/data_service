@@ -385,7 +385,7 @@ function checkAll(checkbox,prefix){
 <nobr><input type=checkbox name='lump_by_interval' value="YES"> time interval</nobr>
 </font></td></tr>
 
-<tr class="">
+<tr>
 <td valign=top><font size=-1>Lump occurrences of the same genus from the same collection?</font></td>
 <td valign=top><font size=-1>
 <select name=lumpgenera>
@@ -403,7 +403,17 @@ function checkAll(checkbox,prefix){
 </select>
 </font></td></tr>
 
-<tr class="">
+<tr>
+<td valign=top><font size=-1>Replace names with senior synonyms?</font></td>
+<td valign=top><font size=-1>
+<select name=replace_with_ss>
+<option selected value="YES">yes, use the senior synonym
+<option value="NO">no, use the original name
+</select>
+</font></td></tr>  
+
+
+<tr class="lightGrey">
 <td valign=top><font size=-1>Include generically indeterminate occurrences?</font></td>
 <td valign=top><font size=-1>
 <select name=indet>
@@ -412,7 +422,7 @@ function checkAll(checkbox,prefix){
 </select>
 </font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Include specifically indeterminate occurrences?</font></td>
 <td valign=top><font size=-1>
 <select name=sp>
@@ -421,7 +431,7 @@ function checkAll(checkbox,prefix){
 </select>
 </font></td></tr>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Include genus names with the following qualifiers:</font></td>
 <td valign=top><font size=-1>
 <input type=checkbox name='genus_reso_aff.' value="YES" checked>aff.
@@ -432,7 +442,7 @@ function checkAll(checkbox,prefix){
 <input type=checkbox name='genus_reso_"' value="YES" checked>"
 </font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Include occurrences with informal names?</font></td>
 <td valign=top><font size=-1>
 <select name=informal>
@@ -441,7 +451,7 @@ function checkAll(checkbox,prefix){
 </select>
 </font></td></tr>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Include occurrences falling outside their age ranges in Sepkoski's Compendium?</font></td>
 <td valign=top><font size=-1>
 <select name=compendium_ranges>
@@ -450,7 +460,7 @@ function checkAll(checkbox,prefix){
 </select>
 </font></td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top><font size=-1>Include occurrences without abundance data?</font></td>
 <td valign=top><font size=-1>
 <select name=without_abundance>
@@ -459,7 +469,7 @@ function checkAll(checkbox,prefix){
 </select>
 </font></td></tr>
 
-<tr class="">
+<tr class="lightGrey">
 <td valign=top><font size=-1>Minimum # of specimens needed to compute mean abundance</font></td>
 <td valign=top><font size=-1>
 <input name=min_mean_abundance type="text" size="12">

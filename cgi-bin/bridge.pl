@@ -3001,7 +3001,7 @@ sub buildTaxonomicList {
 			}
 	
 			# get the most recent reidentification of this occurrence.  
-			my $mostRecentReID = PBDBUtil::getMostRecentReIDforOcc($dbt,$rowref->{occurrence_no});
+			my $mostRecentReID = PBDBUtil::getMostRecentReIDforOcc($dbt,$rowref->{occurrence_no},1);
 			
 			# if the occurrence has been reidentified at least once, then 
 			# display the original and reidentifications.
@@ -3070,6 +3070,53 @@ sub buildTaxonomicList {
 					pop(@occFieldNames);
 				}
 			}
+    
+            my $taxon_no;
+            if ($mostRecentReID) {
+                $taxon_no = $mostRecentReID->{'taxon_no'};    
+            } else {
+                $taxon_no = $rowref->{'taxon_no'};
+            }
+            if ($taxon_no) {
+                my $ss_taxon_no = TaxonInfo::getSeniorSynonym($dbt,$taxon_no);
+                my $is_synonym = ($ss_taxon_no != $taxon_no) ? 1 : 0;
+                my $is_spelling = 0;
+                my $spelling_reason = "";
+
+                $correct_row = TaxonInfo::getMostRecentParentOpinion($dbt,$ss_taxon_no,1);
+                my $taxon_name;
+                my $taxon_rank;
+                if ($correct_row) {
+                    $taxon_name = $correct_row->{'child_name'};
+                    $taxon_rank = $correct_row->{'child_rank'};
+                    if ($correct_row->{'child_spelling_no'} != $correct_row->{'child_no'}) {
+                        $is_spelling = 1;
+                        $spelling_reason = $correct_row->{'status'};
+                    }
+                } else {
+                    my $taxon = TaxonInfo::getTaxon($dbt,$ss_taxon_no);
+                    $taxon_name = $taxon->{'taxon_name'};
+                    $taxon_rank = $taxon->{'taxon_rank'};
+                }
+                if ($is_synonym || $is_spelling) {
+                    $output .= "<tr>";
+                    $output .= "<td></td><td></td><td></td>"; #class,order,family - blanks
+                    my $show_name; 
+                    if ($taxon_rank =~ /species|genus/) {
+                        $show_name = "<em>$taxon_name</em>";
+                    } else {
+                        $show_name = $taxon_name;
+                    }
+                    if ($is_synonym) {
+                        $output .= "<td><span class=\"small\">&nbsp;&nbsp;&nbsp;&nbsp synonym of <a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$ss_taxon_no\">$show_name</a></span></td>"; 
+                    } else {
+                        $output .= "<td><span class=\"small\">&nbsp;&nbsp;&nbsp;&nbsp $spelling_reason <a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$ss_taxon_no\">$show_name</a></span></td>"; 
+                    }
+                    $output .= "<td></td>"; #reference
+                    $output .= "<td></td><td></td>"; #abund,comments
+                    $output .= "</tr>";
+                }
+            }
 
 			# If genus is informal, don't link.
 			$output =~ s/(<i>|<\/i>)//g;
@@ -3099,8 +3146,8 @@ sub buildTaxonomicList {
 			# Clean up abundance values (somewhat messy, but works, and better
 			#   here than in populateHTML) JA 10.6.02
 			$output =~ s/(>1 specimen)s|(>1 individual)s/$1$2/g;
-			
-            $grand_master_hash{html} = $output;
+	
+            $grand_master_hash{'html'} = $output;
 			push(@grand_master_list, \%grand_master_hash);
 		}
 
