@@ -1109,6 +1109,17 @@ sub formatAuthorityLine	{
 	return $authLine;
 }
 
+sub splitTaxon {
+    my $name = shift;
+    my ($genus,$subgenus,$species,$subspecies);
+  
+    if ($name =~ /^(\w+)(?:\s+\((\w+)\))*\s*(\w+)*\s*(\w+)*/o) {
+        ($genus,$subgenus,$species,$subspecies) = ($1,$2,$3,$4);
+    }
+    
+    return ($genus,$subgenus,$species,$subspecies);
+}
+
 # end of Taxon.pm
 
 1;
