@@ -284,7 +284,7 @@ sub assignGenera	{
 
 
 	if ( ! open OCCS,"<$occsfile" )	{
-		print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage, or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
         return;
 	}
 
@@ -336,16 +336,16 @@ sub assignGenera	{
 		} elsif ( $fn eq "collections.reference_no" )	{
 # FOO NOT SURE WHY I NEEDED THIS && ( $q->param('weight_by_ref') eq "yes" || $q->param('ref_quota') > 0 ) && $samplingmethod > 1 && $samplingmethod < 5 )	{
 			$field_refno = $fieldcount;
-		} elsif ( $fn eq "collections.period" )	{
+		} elsif ( $fn eq "collections.period" && $q->param('time_scale') eq "periods" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "period";
-		} elsif ( $fn eq "collections.epoch" )	{
+		} elsif ( $fn eq "collections.epoch" && $q->param('time_scale') eq "epochs" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "epoch";
-		} elsif ( $fn eq "collections.stage" )	{
+		} elsif ( $fn eq "collections.stage" && $q->param('time_scale') eq "stages" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "stage";
-		} elsif ( $fn eq "collections.10mybin" )	{
+		} elsif ( $fn eq "collections.10mybin" && $q->param('time_scale') eq "10 m.y. bins" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "10my";
 		}
@@ -358,7 +358,9 @@ sub assignGenera	{
 		exit;
 	# this one is crucial and might be missing
 	} elsif ( ! $field_bin )	{
-		print "<h3>The data can't be analyzed because the period, epoch, or 10 m.y. bin field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		my $time_scale_field = $q->param('time_scale');
+		$time_scale_field =~ s/s$//;
+		print "<h3>The data can't be analyzed because the $time_scale_field field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	# this one also always should be present anyway, unless the user
 	#  screwed up and didn't download the ref numbers despite wanting
