@@ -12,7 +12,7 @@ body {
 }
 
 /* how should the regular links look? */
-A:link	{ color : #0033FF; text-decoration:none; }
+A:link	{ color : #4090FF; text-decoration:none; }
 A:visited	{ color : #6E00FF; text-decoration:none; }
 A:active	{ color : #00AAFF; text-decoration:none; }
 A:hover	{ color : #C80078; text-decoration:none; }
@@ -58,19 +58,30 @@ H1, H2, H3, H4 {
 	/*margin: 0.1em 1em 0.5em 1em;*/
 }
 
-UL {
-/*    list-style-position: inside;*/
-}
+/* UL {
+    list-style-position: inside;
+} */
 
 LI { font-size: 13px; }
 .tiny {  font-size : 10px; text-decoration:none; }
 .small {  font-size : 12px; text-decoration:none; }
 .medium {  font-size : 14px; text-decoration:none; }
 .large {  font-size : 16px; text-decoration:none; }
+.cell {  font-size : 12px; text-decoration:none; }
+.blue {  font-size : 12px; color : #4090FF; text-decoration:none; }
+FOO
 
+.smaller {
+	font-size: 90%;
+}
+   
+.test {
+	width:0px;	
+}
+   
 /* the menu at the top and bottom of each page. */
 .menu {
-	color: white;	
+	color: white;
 }
 
 /* puts a nice border around tables */
@@ -123,11 +134,14 @@ div.emphasized {
 
 /*	used for titles at top of forms, ie, "Collection Search Form" */
 .title,.title_small_overhead {
-	padding-top: 0.0em;
-	padding-bottom: 0.4em;
+	padding-top: 0.8em;
+	padding-bottom: 0.8em;
 	font-weight: bold;
 	font-size: 1.6em;
 	text-align: center;
+}
+.title_small_overhead {
+	padding-top: 0.0em;
 }
 
 /*	most titles have a smaller details section after them,
@@ -152,15 +166,15 @@ div.emphasized {
 
 /* generic warning message */
 .warning {
-	border-color: lightgrey;
-	border-width: 2;
+	border-color: #909090;
+	border-width: 2px;
 	border-style: solid;
 	
 	padding: 0.5em 0.5em 0.5em 0.5em;
 
     font-weight: bold;	
 	color: red;
-	background-color: lightyellow;
+	background-color: #FFFF80;
 
 	width:auto;
 	margin: 1em 5em 1em 5em;
@@ -177,8 +191,8 @@ DIV.errorTitle {
 }
 
 DIV.errorMessage {
-	border-color: darkgrey;
-	border-width: 2;
+	border-color: #404040;
+	border-width: 2px;
 	border-style: solid;
 	
 	padding: 0.5em 0.5em 0.5em 0.5em;
@@ -201,7 +215,7 @@ DIV.errorMessage {
 
 /* Used on download form */
 .lightGrey {
-	background-color:EEEEEE;
+	background-color:#EEEEEE;
 }
 
 /*	the color for the dark row in a list which has alternating 
@@ -280,12 +294,12 @@ DIV.errorMessage {
 
 div.navbox {
 	border-style: solid;
-	border-width: 1;
-	border-color: lightgrey;
+	border-width: 1px;
+	border-color: #909090;
 	
 	text-align: center;
 	
-	background-color: 0077FF;
+	background-color: #88C0FF;
 
 	width: 100%;
 	margin: 10px 20px 20px 20px;
@@ -293,22 +307,22 @@ div.navbox {
 
 table.navbox {
 	border-style: solid;
-	border-width: 1;
-	border-color: lightgrey;
+	border-width: 1px;
+	border-color: #909090;
 	
-	background-color: 0077FF;
+	background-color: #88C0FF;
 	margin-bottom: 20px;
 }
 
 .navtable {
 	background-color: #E0E0E0;
     border-style: solid;
-    border-width: 1;
+    border-width: 1px;
     border-color: black;
-    padding-left: 5;
-    padding-right: 5;
-    padding-top: 10;
-    padding-bottom: 10;
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-top: 10px;
+    padding-bottom: 10px;
 }
 
 .float_box {
@@ -317,17 +331,39 @@ table.navbox {
     margin-right: 20px;
 }
 
+.indent_left {
+    margin-left: 20px;
+}
+
+
+th.style1 {
+	text-align: left;
+	font-weight: normal;
+	text-decoration: underline;
+}
+
+/* for occurrence lists */
+td.indet {
+	font-style: normal;
+}
+
+td.nonindet {
+	font-style: italic;
+}
+
 .tabOn, .tabOff, .tabHoverOn, .tabHoverOff {
+    /*background-color: #EEEEEE;*/
 	color : white; 
     background-color: #909090;
     font-weight: bold;
+    /*border: 1px solid #0044CC;*/
     border: 1px solid #D9D9D9;
     position: inline;
-    top: 10;
-    width: 140;
+    top: 10px;
+    width: 140px;
     text-align: center;
     z-index: 2;
-    padding: 3;
+    padding: 3px;
     cursor: pointer;
     cursor: hand;
 }
@@ -348,11 +384,17 @@ table.navbox {
 
 .panel{
     position: absolute;
-    left: 10;
+    /*top: 32;*/
+    left: 10px;
     width: 95%;
     z-index: 1;
+    /*height: 85%;*/
     visibility: hidden;
-    padding: 10;
+    /*font: 12pt Verdana,sans-serif;*/
+    /*color: navy;*/
+    /*border: thin solid navy;*/
+    padding: 10px;
+    /*overflow: auto;*/
 }
 
 A:link.tabOn, A:visited.tabOn, A:active.tabOn, A:link.tabOff, A:visited.tabOff, A:active.tabOff { 
@@ -363,27 +405,16 @@ A:hover.tabOn, A:hover.tabOff{
 	color : black;  text-decoration:none; 
 }       
 
-
-/* for non-editable fields, such as in forms */
-span.nonEditable {
-	
-	background-color: white;
-	color: #323232;
-	
-	border-color: darkgrey;
-	border-width: 1px 1px 1px 1px;
-	border-style: solid;
-	
-	padding: 0.1em 0.2em 0.1em 0.2em;
-	
-	text-decoration: none;
+/* for a small reference display line */
+span.smallRef {
+	font-size: 0.9em;
 }
 
-.smallText {
+.smallTextHeader {
     font-size: 0.9em;
 }
-.tinyText {
-    font-size: 0.75em;
+.smallText {
+    font-size: 0.8em;
 }
 
 .superscript {
@@ -391,26 +422,17 @@ span.nonEditable {
     vertical-align: super;
 }
 
-.options_box {
-    border: 1px solid black;
-    /*background-color: #EEEEEE;*/
-    background-image: url(/public/PDbg.gif);
-    margin-top: 20px;
-    padding-top: .0em;
-    padding-left: .3em;
-    padding-right: .3em;
-    padding-bottom: .3em;
+/* for non-editable fields, such as in forms */
+span.nonEditable {
+	
+	background-color: white;
+	color: #323232;
+	
+	border-color: #404040;
+	border-width: 1px 1px 1px 1px;
+	border-style: solid;
+	
+	padding: 0.1em 0.2em 0.1em 0.2em;
+	
+	text-decoration: none;
 }
-
-.options_box_header{
-    position: relative;
-    top:-.6em;
-    left:2em;
-    padding-left: 1em;
-    padding-right: 1em;
-    /*border: 1px solid black;*/
-    background-image: url(/public/PDbg.gif);
-    white-space: nowrap;
-} 
-
-
