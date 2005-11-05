@@ -14,6 +14,7 @@
 use constant BASE => '/Volumes/pbdb_RAID/httpdocs';
 use constant CGI_DIR => '/Volumes/pbdb_RAID/httpdocs/cgi-bin';
 $IMGDIR = BASE.'/html/public/images';
+$BANNERIMGDIR = BASE.'/html/public/bannerimages';
 
 #if (scalar(@ARGV)) {
 #    $BASE = $ARGV[0];
@@ -106,6 +107,14 @@ chomp($filename);
 if ($DEBUG) { print "filename: $filename \n"; }
 
 `cp -f $filename $IMGDIR/fossil.jpg`;
+
+# rotate the banner iamge JA 5.11.05
+
+@images = `ls $BANNERIMGDIR/*.jpg`;
+$img_idx = int(rand($#images));
+$filename = $images[$img_idx];
+chomp($filename);
+`cp -f $filename $BANNERIMGDIR/fossil.jpg`;
 
 
 
