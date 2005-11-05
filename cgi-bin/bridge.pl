@@ -786,7 +786,19 @@ sub displayMapResults {
 
 
 sub displayDownloadForm {
-	print stdIncludes( "std_page_top" );
+    # this is hack to disable the usual 100% height table that wraps around
+    #  the entire page JA 1.9.05
+    if ($s->isDBMember() && $q->param('user') !~ /guest/i) {
+        my $std_page_top = stdIncludes("std_page_top");
+        $std_page_top =~ s/ height="100%"//;
+        print $std_page_top;
+        print "</td></tr></table>\n\n";
+        print "</td></tr></table>\n\n";  
+    } else {
+        my $std_page_top = stdIncludes("std_page_top");
+        print $std_page_top;
+    }
+
 	my $html = $hbo->populateHTML( 'download_form', [ '', '', '', '', '', '','','','','' ], [ 'research_group', 'country','environment','lithology1','ecology1','ecology2','ecology3','ecology4','ecology5','ecology6' ] );
     my $javaScript = &makeAuthEntJavaScript();
     $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
@@ -798,7 +810,6 @@ sub displayDownloadForm {
 	buildTimeScalePulldown ( \$html );
 	print $html;
 
-	print stdIncludes("std_page_bottom");
 }
 
 sub displayDownloadResults {
