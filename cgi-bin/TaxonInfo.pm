@@ -1478,7 +1478,7 @@ sub displayEcology	{
 	# get the field names from the ecotaph table
     my @ecotaphFields = $dbt->tableColumns('ecotaph');
     # also get values for ancestors
-    my $class_hash = TaxaCache::getParents($dbt,[$taxon_no],'array');
+    my $class_hash = TaxaCache::getParents($dbt,[$taxon_no],'array_full');
     my $eco_hash = Ecology::getEcology($dbt,$class_hash,\@ecotaphFields,'get_basis');
     my $ecotaphVals = $eco_hash->{$taxon_no};
 
