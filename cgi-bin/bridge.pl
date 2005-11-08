@@ -3684,7 +3684,7 @@ sub displayCollectionEcology	{
 
     # First get a list of all the parent taxon nos
 	my @taxon_nos = map {$_->{'taxon_no'}} @occurrences;
-	my $parents = TaxaCache::getParents($dbt,\@taxon_nos,'array');
+	my $parents = TaxaCache::getParents($dbt,\@taxon_nos,'array_full');
     # We only look at these categories for now
 	my @categories = ("life_habit", "diet1", "diet2","minimum_body_mass","maximum_body_mass","body_mass_estimate");
     my $ecology = Ecology::getEcology($dbt,$parents,\@categories,'get_basis');
