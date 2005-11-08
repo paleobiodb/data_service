@@ -69,16 +69,7 @@ LI { font-size: 13px; }
 .large {  font-size : 16px; text-decoration:none; }
 .cell {  font-size : 12px; text-decoration:none; }
 .blue {  font-size : 12px; color : #4090FF; text-decoration:none; }
-FOO
 
-.smaller {
-	font-size: 90%;
-}
-   
-.test {
-	width:0px;	
-}
-   
 /* the menu at the top and bottom of each page. */
 .menu {
 	color: white;
@@ -134,14 +125,11 @@ div.emphasized {
 
 /*	used for titles at top of forms, ie, "Collection Search Form" */
 .title,.title_small_overhead {
-	padding-top: 0.8em;
-	padding-bottom: 0.8em;
+	padding-top: 0.2em;
+	padding-bottom: 0.6em;
 	font-weight: bold;
 	font-size: 1.6em;
 	text-align: center;
-}
-.title_small_overhead {
-	padding-top: 0.0em;
 }
 
 /*	most titles have a smaller details section after them,
@@ -331,26 +319,6 @@ table.navbox {
     margin-right: 20px;
 }
 
-.indent_left {
-    margin-left: 20px;
-}
-
-
-th.style1 {
-	text-align: left;
-	font-weight: normal;
-	text-decoration: underline;
-}
-
-/* for occurrence lists */
-td.indet {
-	font-style: normal;
-}
-
-td.nonindet {
-	font-style: italic;
-}
-
 .tabOn, .tabOff, .tabHoverOn, .tabHoverOff {
     /*background-color: #EEEEEE;*/
 	color : white; 
@@ -384,17 +352,11 @@ td.nonindet {
 
 .panel{
     position: absolute;
-    /*top: 32;*/
     left: 10px;
     width: 95%;
     z-index: 1;
-    /*height: 85%;*/
     visibility: hidden;
-    /*font: 12pt Verdana,sans-serif;*/
-    /*color: navy;*/
-    /*border: thin solid navy;*/
     padding: 10px;
-    /*overflow: auto;*/
 }
 
 A:link.tabOn, A:visited.tabOn, A:active.tabOn, A:link.tabOff, A:visited.tabOff, A:active.tabOff { 
@@ -405,16 +367,14 @@ A:hover.tabOn, A:hover.tabOff{
 	color : black;  text-decoration:none; 
 }       
 
-/* for a small reference display line */
-span.smallRef {
-	font-size: 0.9em;
-}
-
 .smallTextHeader {
     font-size: 0.9em;
 }
 .smallText {
     font-size: 0.8em;
+}
+.tinyText {     
+    font-size: 0.75em;     
 }
 
 .superscript {
@@ -436,3 +396,26 @@ span.nonEditable {
 	
 	text-decoration: none;
 }
+
+.options_box {      
+    border: 1px solid black;    
+    /*background-color: #EEEEEE;*/      
+    background-image: url(/public/PDbg.gif);    
+    margin-top: 20px;   
+    padding-top: .0em;      
+    padding-left: .3em;     
+    padding-right: .3em;    
+    padding-bottom: .3em;   
+}   
+     
+.options_box_header{    
+    position: relative;     
+    top:-.6em;      
+    left:2em;   
+    padding-left: 1em;      
+    padding-right: 1em;     
+    /*border: 1px solid black;*/    
+    background-image: url(/public/PDbg.gif);    
+    white-space: nowrap;    
+}
+
