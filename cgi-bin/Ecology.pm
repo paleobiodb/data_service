@@ -207,8 +207,8 @@ sub getEcology {
     for my $taxon_no ( @taxon_nos ) {
         if ($taxon_no) {
             $all_taxon_nos{$taxon_no} = 1;
-            foreach my $parent_no (@{$classification_hash->{$taxon_no}}) {
-                $all_taxon_nos{$parent_no} = 1;
+            foreach my $parent (@{$classification_hash->{$taxon_no}}) {
+                $all_taxon_nos{$parent->{'taxon_no'}} = 1;
                 #foreach my $synonym (@{$parent->{'synonyms'}}) {
                 #    $all_taxon_nos{$synonym->{'taxon_no'}} = 1;
                 #}
@@ -314,9 +314,9 @@ sub getEcology {
         my @exec_order = ();
         push @exec_order, $taxon_no; #taxon/most current combination first
         push @exec_order, @{$alt_taxon_nos{$taxon_no}}; #then syns/recombs
-        foreach my $parent_no (@{$classification_hash->{$taxon_no}}) {
-            push @exec_order, $parent_no; #ditto as above
-            push @exec_order, @{$alt_taxon_nos{$parent_no}}; 
+        foreach my $parent (@{$classification_hash->{$taxon_no}}) {
+            push @exec_order, $parent->{'taxon_no'}; #ditto as above
+            push @exec_order, @{$alt_taxon_nos{$parent->{'taxon_no'}}}; 
             #foreach my $synonym (reverse @{$parent->{'synonyms'}}) {
             #    push @exec_order, $synonym->{'taxon_no'}; # then junior synonyms last
             #}
