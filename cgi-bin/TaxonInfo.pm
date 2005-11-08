@@ -198,18 +198,23 @@ sub displayTaxonInfoResults {
 
     ($genus,$species) = split(/ /,$taxon_name);
 
+    my @diagnoses;
+    if ($taxon_no) {
+        @diagnoses = getDiagnoses($dbt,$taxon_no);
+    }
+    my $are_diagnoses = (scalar(@diagnoses)) ? 1 : 0;
 
     print "<div class=\"float_box\">";
     print "<p>&nbsp;</p>";
-    ($modules_to_display,$thumbs) = doNavBox($dbt,$q,$s,$in_list);
+    ($modules_to_display,$thumbs) = doNavBox($dbt,$q,$s,$in_list,$are_diagnoses);
     print "</div>";
 	print "<div align=\"center\"><h2>$taxon_name</h2></div>";
 	# Go through the list
 	foreach my $module (@$modules_to_display){
         print "<div align=\"center\">";
-		doModules($dbt,$dbh,$q,$s,$exec_url,$module,$genus,$species,$in_list,$taxon_no);
+		doModules($dbt,$dbh,$q,$s,$exec_url,$module,$genus,$species,$in_list,$taxon_no,\@diagnoses);
         print "</div>";
-		print "<hr>"; 
+		print "<hr>" unless ($module == 5 && !$are_diagnoses); 
 	}
 	# images are last
 	my @selected_images = $q->param('image_thumbs');
@@ -282,6 +287,7 @@ sub doNavBox {
     my $q = shift;
     my $s = shift;
     my $in_list = shift;
+    my $are_diagnoses = shift;
 
     my $entered_name = $q->param('entered_name') || $q->param('taxon_name');
     my $entered_no = $q->param('taxon_no');
@@ -297,10 +303,11 @@ sub doNavBox {
 							  2 => "related taxa",
 							  3 => "taxonomic history",
 							  4 => "synonymy",
-							  5 => "ecology/taphonomy",
-							  6 => "measurements",
-							  7 => "map",
-							  8 => "age range/collections");
+							  5 => "diagnosis",
+							  6 => "ecology/taphonomy",
+							  7 => "measurements",
+							  8 => "map",
+							  9 => "age range/collections");
 
 	# if the modules are known and the user is not a guest,
 	#  set the module preferences in the person table
@@ -333,6 +340,14 @@ sub doNavBox {
           "<tr><td valign=\"top\" align=\"center\"><div class=\"large\"><b>Display</b></div></td></tr>";
 	
 	foreach my $key (sort keys %module_num_to_name){
+        # Only display the diagnosis checkbox if any actually exist
+        if ($key == 5) {
+            if (!$are_diagnoses) {
+                print "<input type=\"hidden\" name=modules value=$key>";
+                next;
+            }
+            # If there are diagnoses, then we just print the checkbox like normal
+        } 
 	    print "<tr><td align=left valign=top nowrap>";
 		print "<input type=checkbox name=modules value=$key";
 		foreach my $checked (@modules_to_display){
@@ -385,6 +400,7 @@ sub doModules{
 	my $species = shift;
 	my $in_list = shift;
 	my $taxon_no = shift;
+    my $diagnoses = shift;
 
 	
 	# If $q->param("taxon_name") has a space, it's a "Genus species" combo,
@@ -423,7 +439,7 @@ sub doModules{
                   "</td></tr></table>\n";
         }
 	}
-	elsif ( $module == 4 )	{
+	elsif ($module == 4)	{
         if ($taxon_no) {
     		print displaySynonymyList($dbt, $q, $genus, $species, $taxon_no);
         } else {
@@ -434,16 +450,17 @@ sub doModules{
                   "</td></tr></table>\n";
         }
 	}
-	# ecology
-	elsif ( $module == 5 )	{
+    elsif ($module == 5) {
+        print displayDiagnoses($diagnoses) if (@$diagnoses);
+    }
+	elsif ($module == 6)	{
 		print displayEcology($dbt,$taxon_no,$genus,$species);
     }
-    # specimen measurements
-    elsif ($module == 6) {
+    elsif ($module == 7) {
 		print displayMeasurements($dbt,$taxon_no,$genus,$species,$in_list);
 	}
 	# map
-	elsif($module == 7){
+	elsif($module == 8){
 		print "<center><table><tr><td align=\"center\"><h3>Distribution</h3></td></tr>".
 			  "<tr><td align=\"center\" valign=\"top\">";
 		# MAP USES $q->param("taxon_name") to determine what it's doing.
@@ -470,7 +487,7 @@ sub doModules{
 		}
 	}
 	# collections
-	elsif($module == 8){
+	elsif($module == 9){
 		print doCollections($exec_url, $q, $dbt, $dbh, $in_list);
 	}
 }
@@ -1654,6 +1671,32 @@ sub displayMeasurements {
     return "";
 }
 
+sub displayDiagnoses {
+    my $diagnoses = shift;
+    my @diagnoses = @{$diagnoses};
+
+    my $str = "<div align=\"center\"><h3>Diagnosis</h3></div>";
+    if (@diagnoses) {
+        $str .= "<table cellspacing=5>\n";
+        $str .= "<tr><td><b>Reference</b></td><td><b>Diagnosis</b></td></tr>\n";
+        foreach my $row (@diagnoses) {
+            $str .= "<tr><td valign=top><span style=\"white-space: nowrap\">$row->{reference}</span>";
+            if ($row->{'is_synonym'}) {
+                if ($row->{'taxon_rank'} =~ /species|genus/) {
+                    $str .= " (<i>$row->{taxon_name}</i>)";
+                } else {
+                    $str .= " ($row->{taxon_name})";
+                }
+            } 
+            $str .= "</td><td>$row->{diagnosis}<td></tr>";
+        }
+        $str .= "</table>\n";
+    } else {
+        $str .= "<div align=\"center\"><i>No diagnosis data are available</i></div>";
+    }
+    return $str;
+}
+
 
 # JA 11-12,14.9.03
 sub displaySynonymyList	{
@@ -1989,6 +2032,76 @@ sub getAllTaxonomicNames {
         $all{$_->{'taxon_no'}} = 1 for @results;
     }
     return keys %all;
+}
+
+# This will return all diagnoses for a particular taxon, for all its spellings, and
+# for all its junior synonyms. The diagnoses are passed back as a sorted array of hashrefs ordered by
+# pubyr of the opinion.  Each hashref has the following keys:
+#  taxon_no: spelling_no for the opinion for which the diagnosis exists
+#  reference: formated reference for the diagnosis
+#  diagnosis: text of the diagnosis field
+#  is_synonym: boolean denoting whether this is a 
+#  taxon_name: spelling_name for the opinion fo rwhich the diagnosis exists
+# Example usage:
+#   $taxon = getTaxon($dbt,'Calippus');
+#   @diagnoses = getDiagnoses($dbt,$taxon->{taxon_no});
+#   foreach $d (@diagnoses) {
+#       print "$d->{reference}: $d->{diagnosis}";
+#   }
+sub getDiagnoses {
+    my $dbt = shift;
+    my $taxon_no = shift;
+    $taxon_no = int($taxon_no);
+
+    my @diagnoses = ();
+    my %is_synonym = ();
+    if ($taxon_no) {
+        # Tricky part is the is_synonym, which will be set to a boolean if the taxon_no passed back is a 
+        # synonym (either junior or senior, doesn't make that distiction) or not.  The spelling_no is the
+        # most recently uses spelling for the current taxon, so this will be a constant for all the different
+        # spellings of the current synonym, and different for all its synonyms
+        my $sql = "SELECT t2.taxon_no,IF(t2.spelling_no = t1.spelling_no,0,1) is_synonym FROM taxa_tree_cache t1, taxa_tree_cache t2 WHERE t1.taxon_no=$taxon_no and t1.synonym_no=t2.synonym_no";
+        my @results = @{$dbt->getData($sql)};
+        my @children;
+        foreach my $row (@results) {
+            push @children, $row->{'taxon_no'};
+            $is_synonym{$row->{'taxon_no'}} = $row->{'is_synonym'};
+        }
+        if (@children) {
+            # Uses the taxa_tree_cache to get opinions for all various spellings, including synonyms
+            $sql = "SELECT o.opinion_no,o.child_no, o.child_spelling_no, a.taxon_name, a.taxon_rank, o.diagnosis, o.ref_has_opinion,o.author1init,o.author1last,o.author2init,o.author2last,o.otherauthors,o.pubyr,o.reference_no FROM opinions o, authorities a WHERE o.child_spelling_no=a.taxon_no AND o.child_no IN (".join(",",@children).") AND o.diagnosis IS NOT NULL AND o.diagnosis != ''";
+            my @results = @{$dbt->getData($sql)};
+            foreach my $row (@results) {
+                my $reference = "";
+                my $pubyr = "";
+                if ($row->{'ref_has_opinion'}) {
+                    if ($row->{'reference_no'}) {
+                        $sql = "SELECT author1init,author1last,author2init,author2last,otherauthors,pubyr,reference_no FROM refs WHERE reference_no=$row->{reference_no}";
+                        my $refData = ${$dbt->getData($sql)}[0];
+                        $reference = Reference::formatShortRef($refData);
+                        $pubyr = $refData->{'pubyr'};
+                    }
+                } else {
+                    $reference = Reference::formatShortRef($row);
+                    $pubyr = $row->{'pubyr'};
+                }
+                my %diagnosis = (
+                    'taxon_no'  =>$row->{'child_spelling_no'},
+                    'taxon_name'=>$row->{'taxon_name'},
+                    'taxon_rank'=>$row->{'taxon_rank'},
+                    'reference' =>$reference,
+                    'pubyr'     =>$pubyr,
+                    'opinion_no'=>$row->{'opinion_no'},
+                    'diagnosis' =>$row->{'diagnosis'},
+                    'is_synonym'=>$is_synonym{$row->{'child_no'}}
+                );
+                push @diagnoses, \%diagnosis;
+            }
+        }
+    }
+    @diagnoses = sort {if ($a->{'pubyr'} && $b->{'pubyr'}) {$a->{'pubyr'} <=> $b->{'pubyr'}}
+                       else {$a->{'opinion_no'} <=> $b->{'opinion_no'}}} @diagnoses;
+    return @diagnoses;
 }
 
 
