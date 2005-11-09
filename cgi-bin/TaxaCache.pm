@@ -4,6 +4,20 @@
 # taxa_tree_cache holds a modified preorder traversal tree, and the taxa_list_cache holds a 
 # adjacency list.  The modified preorder traversal tree is used to trees of children of a taxon
 # in constant time, while the adjacency list is used to get parents of a taxon in constant time
+# Google these terms for a detailed explanation.
+#
+# The taxa_list_cache table is very simple and has only two fields: parent_no and child_no. These
+# are exactly what they sound like, denoting that a certain child_no is a descent in the taxonomic
+# hierarchy of the parent_no.  There has to be one pair for each possible combination (which is a lot)
+#
+# The taxa_tree_cache has 5 fields: taxon_no (primary_key), lft (left value), rgt (right value), 
+# spelling_no (the taxon_no for the most recent spelling of the taxon_no - if there are two or three
+# different spellings for a taxon, all of them will have the same spelling_no. All taxa with the
+# same lft value should have the same spelling_no, and the taxon_no will equal the spelling_no for
+# the most recently used names), and synonym_no (the taxon_no for the most recent spelling of the 
+# most senior synonym - this will always be equal to spelling_no except for junior synonyms). The
+# spelling_no and synonym_no fields exist for optimation purposes - its now very easy to filter
+# out old spellings and junior synonyms.
 #
 # PS 09/22/2005
 #
@@ -752,7 +766,6 @@ sub getParent {
     my $sql = "SELECT a.taxon_no,a.taxon_name,a.taxon_rank FROM taxa_list_cache l, taxa_tree_cache t, authorities a WHERE t.taxon_no=l.parent_no AND a.taxon_no=l.parent_no AND l.child_no=$taxon_no ORDER BY t.lft DESC LIMIT 1";
     return ${$dbt->getData($sql)}[0];
 }
-
 
 # pbdbuser must have SUPER privilege - don't bother logging all these transactions,
 # since they're derived from the opinions table anyways. This is for the connection only so if
