@@ -4410,10 +4410,26 @@ sub startReidentifyOccurrences {
 	displaySearchRefs();
 }
 
+# PS 11/7/2005
+#
+# Generic opinions earch handling form.
+# Flow of this is a little complicated
+#
+sub submitOpinionSearch {
+    print stdIncludes("std_page_top");
+    if ($q->param('taxon_name')) {
+        $q->param('goal'=>'opinion');
+        processTaxonSearch($dbh,$dbt,$hbo,$q,$s,$exec_url);
+    } else {
+        $q->param('goal'=>'opinion');
+        Opinion::displayOpinionChoiceForm($dbt,$s,$q);
+    }
+    print stdIncludes("std_page_bottom");
+}
 
 # JA 17.8.02
 #
-# Generic authority handling form, used as a front end for:
+# Generic authority search handling form, used as a front end for:
 #  add/edit authority, add/edit opinion, add image, add ecology data, search by ref no
 #
 # Edited by rjp 1/22/2004, 2/18/2004, 3/2004
@@ -4435,9 +4451,7 @@ sub processTaxonSearch {
              ((Validation::taxonRank($q->param('taxon_name')) eq 'invalid')) ) {
             $errors->add("Ill-formed taxon.  Check capitalization and spacing.");
         }
-    } elsif (!$q->param('reference_no')) {
-        $errors->add("No taxon name or reference passed.");
-    }
+    } 
     
 	if ($errors->count()) {
 		print $errors->errorMessage();
@@ -4447,8 +4461,68 @@ sub processTaxonSearch {
     my (@results);
     if ($q->param('taxon_name')) {
         @results = TaxonInfo::getTaxon($dbt,'taxon_name'=>$q->param('taxon_name'),'get_reference'=>1);
-    } elsif ($q->param('reference_no')) {
-        @results = TaxonInfo::getTaxon($dbt,'reference_no'=>$q->param('reference_no'),'get_reference'=>1);
+    } else {
+#        @results = TaxonInfo::getTaxon($dbt,'reference_no'=>$q->param('reference_no'),'get_reference'=>1);
+        my @where = ();
+        my @errors = ();
+        my $join_refs = "";
+        if ($q->param("reference_no")) {
+            push @where, "a.reference_no=".int($q->param("reference_no"));
+        }
+        if ($q->param("authorizer_reversed")) {
+            my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('authorizer_reversed'));
+            my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
+            if (!$authorizer_no) {
+                push @errors, $q->param('authorizer_reversed')." is not a valid authorizer. Format like 'Sepkoski, J.'" if (!$authorizer_no);
+            } else {
+                push @where, "a.authorizer_no=".$authorizer_no;
+            }
+        }
+        if ($q->param('created_year')) {
+            my ($yyyy,$mm,$dd) = ($q->param('created_year'),$q->param('created_month'),$q->param('created_day'));
+            my $date = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
+            my $sign = ($q->param('created_before_after') eq 'before') ? '<=' : '>=';
+            push @where,"a.created $sign $date";
+        }
+        if ($q->param('pubyr')) {
+            my $pubyr = $dbh->quote($q->param('pubyr'));
+            push @where,"((a.ref_is_authority NOT LIKE 'YES' AND a.pubyr LIKE $pubyr) OR (a.ref_is_authority LIKE 'YES' AND r.pubyr LIKE $pubyr))";
+        }
+        if ($q->param('author')) {
+            my $author = $dbh->quote($q->param('author'));
+            my $authorWild = $dbh->quote('%'.$q->param('author').'%');
+            push @where,"((a.ref_is_authority NOT LIKE 'YES' AND (a.author1last LIKE $author OR a.author2last LIKE $author OR a.otherauthors LIKE $authorWild)) OR".
+                        "(a.ref_is_authority LIKE 'YES' AND (r.author1last LIKE $author OR r.author2last LIKE $author OR r.otherauthors LIKE $authorWild)))";
+        }
+
+        if (@where && !@errors) {
+            my $sql = "SELECT a.taxon_no,a.taxon_rank,a.taxon_name,a.pages,a.figures,a.comments, ".
+                   " IF (a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,".
+                   " IF (a.ref_is_authority='YES',r.author1init,a.author1init) author1init,".
+                   " IF (a.ref_is_authority='YES',r.author1last,a.author1last) author1last,".
+                   " IF (a.ref_is_authority='YES',r.author2init,a.author2init) author2init,".
+                   " IF (a.ref_is_authority='YES',r.author2last,a.author2last) author2last,".
+                   " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors".
+                   " FROM authorities a LEFT JOIN refs r ON a.reference_no=r.reference_no".
+                   " WHERE ".join(" AND ",@where).
+                   " ORDER BY a.taxon_name ASC";
+            @results = @{$dbt->getData($sql)};
+        } else {
+            if (@errors) {
+                my $plural = (scalar(@errors) > 1) ? "s" : "";
+                my $message = "<br><div align=center><table width=600 border=0>" .
+                      "<tr><td class=darkList><font size='+1'><b> Error$plural</b></font></td></tr>" .
+                      "<tr><td>";
+                $message .= "<li class='medium'>$_</li>" for (@errors);
+                $message .= "</td></tr></table>";
+                $message .= "</div><br>";
+                print $message;
+                return;
+            } else {
+                print "<div align=\"center\">No terms were entered.</div>";
+                return;
+            }
+        } 
     }
         
     # If there were no matches, present the new taxon entry form immediately
@@ -4466,10 +4540,14 @@ sub processTaxonSearch {
                     main::displaySearchRefs("Please choose a reference before adding a new taxon",1);
                 }
             } else {
-                print "<div align=\"center\"><h3>No taxonomic names found for this reference</h3></div>";
+                print "<div align=\"center\"><h3>No taxonomic names found</h3></div>";
             }
         } else {
-            print "<div class=\"warning\">The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> authority record for this taxon first.</DIV>";
+            if ($q->param('taxon_name')) {
+                print "<div class=\"warning\">The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> authority record for this taxon first.</DIV>";
+            } else {
+                print "<div class=\"warning\">No taxonomic names were found matching the search criteria.</div>";
+            }
             return;
         }
     # One match - good enough for most of these forms
@@ -4571,11 +4649,17 @@ sub processTaxonSearch {
 
 # Called when the user clicks on the "Add/edit taxonomic name" or 
 sub displayAuthorityTaxonSearchForm {
-    my $page_title = 'Please enter the full name of the taxon you want to add or revise';
-    my $goal= 'authority';
-
     print stdIncludes("std_page_top");
-    print $hbo->populateHTML('search_taxon_form',[$page_title,$goal,$q->param("use_reference")],['page_title','goal','use_reference']);
+    my $html = $hbo->populateHTML('search_authority_form',[$q->param("use_reference")],['use_reference']);
+
+    my $javaScript = &makeAuthEntJavaScript();
+    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
+
+    my $authorizer_reversed = $s->get("authorizer_reversed");
+    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
+    
+    print $html;
+
     print stdIncludes("std_page_bottom");
 }
 
@@ -4614,12 +4698,17 @@ sub submitAuthorityForm {
 
 # "Add/edit taxonomic opinion" link on the menu page. 
 # Step 1 in our opinion editing process
-sub displayOpinionTaxonSearchForm {
-    my $page_title = 'Please enter the full name of the taxon you to add or edit an opinion for';
-    my $goal = 'opinion';
-
+sub displayOpinionSearchForm {
     print stdIncludes("std_page_top");
-    print $hbo->populateHTML('search_taxon_form', [$page_title,$goal,$q->param('use_reference')], ['page_title','goal','use_reference']);
+    $html = $hbo->populateHTML('search_opinion_form', [$q->param('use_reference')], ['use_reference']);
+
+    my $javaScript = &makeAuthEntJavaScript();
+    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
+
+    my $authorizer_reversed = $s->get("authorizer_reversed");
+    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
+
+    print $html; 
     print stdIncludes("std_page_bottom");
 }
 

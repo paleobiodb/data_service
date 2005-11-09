@@ -1317,8 +1317,8 @@ sub submitOpinionForm {
   <br><li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}">Edit other opinions about $childSpellingName</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit opinions from the same reference</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayOpinionTaxonSearchForm&use_reference=current">Add/edit opinion about another taxon</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayOpinionTaxonSearchForm">Add/edit opinion about another taxon from another reference</a></b></li>
+  <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=current">Add/edit opinion about another taxon</a></b></li>
+  <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm">Add/edit opinion about another taxon from another reference</a></b></li>
 </td></tr></table>
 </p>
 </div>|;
@@ -1372,36 +1372,83 @@ sub displayOpinionChoiceForm{
 #        print qq|<tr><td align="center" colspan=2><p><input type=submit value="Submit"></p><br></td></tr>|;
         print qq|<p><input type="submit" value="Submit"></p><br>|;
         print "</div>";
-    } elsif ($q->param("reference_no")) {
-        my $sql = "SELECT o.opinion_no FROM opinions o ".
-                  " LEFT JOIN authorities a ON a.taxon_no=o.child_no".
-                  " WHERE o.reference_no=".int($q->param("reference_no")).
-                  " ORDER BY a.taxon_name ASC";
-        my @results = @{$dbt->getData($sql)};
-        if (scalar(@results) == 0) {
-            print "<div align=\"center\"<h3>No opinions found for this reference</h3></div><br><br>";
-            return;
-        }
-        print "<div align=\"center\">";
-        print "<h3>Select an opinion to edit:</h3>";
-
-        print qq|<form method="POST" action="bridge.pl">
-                 <input type="hidden" name="action" value="displayOpinionForm">\n|;
-        print "<table border=0>";
-        foreach my $row (@results) {
-            my $o = Opinion->new($dbt, $row->{'opinion_no'});
-            print "<tr>".
-                  qq|<td><input type="radio" name="opinion_no" value="$row->{opinion_no}"></td>|.
-                  "<td>".$o->formatAsHTML()."</td>".
-                  "</tr>\n";
-        }
-        print "</table>";
-#        print qq|<tr><td align="center" colspan=2><p><input type=submit value="Edit"></p><br></td></tr>|;
-        print qq|<p><input type=submit value="Edit"></p><br>|;
-        print "</div>";
     } else {
-        print "<div align=\"center\">No terms were entered.</div>";
-    }
+        my @where = ();
+        my @errors = ();
+        my $join_refs = "";
+        if ($q->param("reference_no")) {
+            push @where, "o.reference_no=".int($q->param("reference_no"));
+        }
+        if ($q->param("authorizer_reversed")) {
+            my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('authorizer_reversed'));
+            my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
+            if (!$authorizer_no) {
+                push @errors, $q->param('authorizer_reversed')." is not a valid authorizer. Format like 'Sepkoski, J.'" if (!$authorizer_no); 
+            } else {
+                push @where, "o.authorizer_no=".$authorizer_no; 
+            }
+        }
+        if ($q->param('created_year')) {
+            my ($yyyy,$mm,$dd) = ($q->param('created_year'),$q->param('created_month'),$q->param('created_day'));
+            my $date = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
+            my $sign = ($q->param('created_before_after') eq 'before') ? '<=' : '>=';
+            push @where,"o.created $sign $date";
+        }
+        if ($q->param('pubyr')) {
+            my $pubyr = $dbh->quote($q->param('pubyr'));
+            push @where,"((o.ref_has_opinion NOT LIKE 'YES' AND o.pubyr LIKE $pubyr) OR (o.ref_has_opinion LIKE 'YES' AND r.pubyr LIKE $pubyr))";
+            $join_refs = " LEFT JOIN refs r ON r.reference_no=o.reference_no";
+        }
+        if ($q->param('author')) {
+            my $author = $dbh->quote($q->param('author'));
+            my $authorWild = $dbh->quote('%'.$q->param('author').'%');
+            push @where,"((o.ref_has_opinion NOT LIKE 'YES' AND (o.author1last LIKE $author OR o.author2last LIKE $author OR o.otherauthors LIKE $authorWild)) OR".
+                        "(o.ref_has_opinion LIKE 'YES' AND (r.author1last LIKE $author OR r.author2last LIKE $author OR r.otherauthors LIKE $authorWild)))";
+            $join_refs = " LEFT JOIN refs r ON r.reference_no=o.reference_no";
+        }
+
+        if (@where && !@errors) {
+            my $sql = "SELECT o.opinion_no FROM opinions o ".
+                      " LEFT JOIN authorities a ON a.taxon_no=o.child_no".
+                      $join_refs.
+                      " WHERE ".join(" AND ",@where).
+                      " ORDER BY a.taxon_name ASC";
+            my @results = @{$dbt->getData($sql)};
+            if (scalar(@results) == 0) {
+                print "<div align=\"center\"<h3>No opinions found</h3></div><br><br>";
+                return;
+            }
+            print "<div align=\"center\">";
+            print "<h3>Select an opinion to edit:</h3>";
+
+            print qq|<form method="POST" action="bridge.pl">
+                     <input type="hidden" name="action" value="displayOpinionForm">\n|;
+            print "<table border=0>";
+            foreach my $row (@results) {
+                my $o = Opinion->new($dbt, $row->{'opinion_no'});
+                print "<tr>".
+                      qq|<td><input type="radio" name="opinion_no" value="$row->{opinion_no}"></td>|.
+                      "<td>".$o->formatAsHTML()."</td>".
+                      "</tr>\n";
+            }
+            print "</table>";
+            print qq|<p><input type=submit value="Edit"></p><br>|;
+            print "</div>";
+        } else {
+            if (@errors) {
+                my $plural = (scalar(@errors) > 1) ? "s" : "";
+                my $message = "<br><div align=center><table width=600 border=0>" .
+                      "<tr><td class=darkList><font size='+1'><b> Error$plural</b></font></td></tr>" .
+                      "<tr><td>";
+                $message .= "<li class='medium'>$_</li>" for (@errors);
+                $message .= "</td></tr></table>";
+                $message .= "</div><br>"; 
+                print $message;
+            } else {
+                print "<div align=\"center\">No terms were entered.</div>";
+            }
+        }
+    } 
     
     if ($q->param("taxon_no")) {
         print qq|<tr><td align="left" colspan=2><p><span class="tiny">An "opinion" is when an author classifies or synonymizes a taxon.<br>\nSelect an old opinion if it was entered incorrectly or incompletely.<br>\nCreate a new one if the author whose opinion you are looking at right now is not in the above list.</p>\n|;
