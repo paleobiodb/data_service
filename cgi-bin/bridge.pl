@@ -1534,17 +1534,80 @@ sub processReferenceEditForm {
 
 	print stdIncludes( "std_page_top" );
 	  
+    my @child_nos = ();
+    # If classification quality is changed on an edit, the classifications that refer to that ref
+    # may also change, so we may have to update the taxa cache in that case
+    if (int($q->param('reference_no'))) {
+        my $sql = "SELECT classification_quality FROM refs WHERE reference_no=".int($q->param('reference_no'));
+        my @results = @{$dbt->getData($sql)};
+        if (@results) {
+            if ($results[0]->{'classification_quality'} ne $q->param('classification_quality')) {
+                $sql = "SELECT DISTINCT child_no FROM opinions WHERE reference_no=".int($q->param('reference_no'));
+                @results = @{$dbt->getData($sql)};
+                foreach my $row (@results) {
+                    push @child_nos, $row->{'child_no'};
+                }
+            }
+        }
+    }
+
+
+    if (@child_nos) {
+        my $pid = fork();
+        if (!defined($pid)) {
+            carp "ERROR, could not fork";
+        }
+
+        if ($pid) { 
+            # Child fork
+            # Don't exit here, have child go on to print message
+            # Make new dbh and dbt objects - for some reason one connection
+            # gets closed whent the other fork exits, so split them here
+            $dbh = DBConnection::connect();
+            $dbt = DBTransactionManager->new($dbh);
+        } else {
+            #my $session_id = POSIX::setsid();
+
+            # Make new dbh and dbt objects - for some reason one connection
+            # gets closed whent the other fork exits, so split them here
+            my $dbh2 = DBConnection::connect();
+            my $dbt2 = DBTransactionManager->new($dbh2);
+        
+            # This is the parent fork.  Have the parent fork
+            # Do the useful work, the child fork will be terminated
+            # when the parent is so don't have it do anything long running
+            # (just terminate). The defined thing is in case the work didn't work
+        
+            # Close references to stdin and stdout so Apache
+            # can close the HTTP socket conneciton
+            if (defined $pid) {
+                open STDIN, "</dev/null";
+                open STDOUT, ">/dev/null";
+                #open STDOUT, ">>SOMEFILE";
+            }
+
+            foreach my $child_no (@child_nos) {
+                TaxaCache::updateCache($dbt2,$child_no);
+            }
+
+            exit;
+        }  
+    }
+
 	my $refID = updateRecord('refs', 'reference_no', $q->param('reference_no'));
-    print "<center><h3><font color='red'>Reference record updated</font></h3></center>\n";
 		
     $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$refID;
-
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
     $sth->execute();
     my $rowref = $sth->fetchrow_arrayref();
     my $md = MetadataModel->new($sth);
     my $drow = DataRow->new($rowref, $md);
-    print '<table>' . makeRefString($drow) . '</table>';
+    my $refString = makeRefString($drow);
+
+
+
+    print "<center><h3><font color='red'>Reference record updated</font></h3></center>\n";
+    print '<table>' . $refString . '</table>';
 	# my $bibRef = BiblioRef->new($drow);
 	# print '<table>' . $bibRef->toString() . '</table>';
 		
