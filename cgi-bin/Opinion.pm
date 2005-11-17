@@ -13,6 +13,7 @@ package Opinion;
 use strict;
 
 use DBI;
+use DBConnection;
 use DBTransactionManager;
 use PBDBUtil;
 use Class::Date qw(date localdate gmdate now);
@@ -1261,6 +1262,11 @@ sub submitOpinionForm {
     if ($pid) {
         # Child fork
         # Don't exit here, have child go on to print message
+
+        # Make new dbh and dbt objects - for some reason one connection
+        # gets closed whent the other fork exits, so split them here
+        $dbh = DBConnection::connect();
+        $dbt = DBTransactionManager->new($dbh);  
     } else {
         #my $session_id = POSIX::setsid();
 
