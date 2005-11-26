@@ -98,7 +98,7 @@ if ($DEBUG) { print "images: @images \n"; }
 # only do the jpegs for now, because who knows what will happen
 # if you change the file extension to .gif on a jpeg.
 
-$img_idx = int(rand($#images));
+$img_idx = int(rand($#images + 1));
 if ($DEBUG) { print "index: $img_idx \n"; }
 
 $filename = $images[$img_idx];
@@ -108,10 +108,10 @@ if ($DEBUG) { print "filename: $filename \n"; }
 
 `cp -f $filename $IMGDIR/fossil.jpg`;
 
-# rotate the banner iamge JA 5.11.05
+# rotate the banner image JA 5.11.05
 
 @images = `ls $BANNERIMGDIR/*.jpg`;
-$img_idx = int(rand($#images));
+$img_idx = int(rand($#images + 1));
 $filename = $images[$img_idx];
 chomp($filename);
 `cp -f $filename $BANNERIMGDIR/fossil.jpg`;
