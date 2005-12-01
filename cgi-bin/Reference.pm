@@ -90,15 +90,13 @@ sub formatAsHTML {
 		return "no reference";	
 	}
 	
-	my $html = "<span class=\"smallText\"><b>" . $self->{'reference_no'} . "</b> ";
-	$html .= $self->authors() . ". ";
+	my $html = $self->authors() . ". ";
 	if ($self->{reftitle})	{ $html .= $self->{reftitle}; }
 	if ($self->{pubtitle})	{ $html .= " <i>" . $self->{pubtitle} . "</i>"; }
 	if ($self->{pubvol}) 	{ $html .= " <b>" . $self->{pubvol} . "</b>"; }
 	if ($self->{pubno})		{ $html .= "<b>(" . $self->{pubno} . ")</b>"; }
 
 	if ($self->pages())		{ $html .= ":" . $self->pages(); }
-	$html .= "</span>";
 	
 	return $html;
 }
