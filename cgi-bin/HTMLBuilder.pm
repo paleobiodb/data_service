@@ -460,14 +460,6 @@ sub newPopulateHTML {
 			
 			$fields{taxon_rank_popup} = $self->rankPopupMenu($rank, \@toExclude);
 		}
-		
-		if ($key eq 'reference_no') {
-			# if it's name is reference_no, then we'll look for any fields
-			# in the template called "formatted_reference" and fill them with
-			# a nicely formatted reference entry based on the reference_no.
-			my $ref = Reference->new($dbt,$fields{'reference_no'});
-			$fields{formatted_reference} = $ref->formatAsHTML() if ($ref);
-		}	
 	}
 	
 	# now do the main loop through the keys which will search and replace values
