@@ -301,7 +301,10 @@ sub displayOpinionForm {
         } else {
             %fields = %{$o->getRow()};
 
-            if ($fields{'ref_has_opinion'} !~ /YES/i) {
+            if ($fields{'ref_has_opinion'} =~ /YES/i) {
+                $fields{'ref_has_opinion'} = 'PRIMARY';
+            } else {
+                $fields{'ref_has_opinion'} = 'NO';
                 $fields{'2nd_pages'} = $fields{'pages'};
                 $fields{'2nd_figures'} = $fields{'figures'};
                 $fields{'pages'} = '';
@@ -455,7 +458,7 @@ sub displayOpinionForm {
 
     if (!$isNewEntry) {
         if ($o->get('authorizer_no')) {
-            $fields{'authorizer_name'} = " <B>Authorizer:</B> " . Person::getPersonName($dbt,$o->get('authorizer_no')); 
+            $fields{'authorizer_name'} = "<B>Authorizer:</B> " . Person::getPersonName($dbt,$o->get('authorizer_no')); 
         }   
         if ($o->get('enterer_no')) { 
             $fields{'enterer_name'} = " <B>Enterer:</B> " . Person::getPersonName($dbt,$o->get('enterer_no')); 
@@ -466,14 +469,34 @@ sub displayOpinionForm {
     }
 
     # Handle radio button
-    if ($fields{'ref_has_opinion'} eq 'YES') {
-		$fields{'ref_has_opinion_checked'} = 'checked';
-		$fields{'ref_has_opinion_notchecked'} = '';
+    if ($fields{'ref_has_opinion'} eq 'PRIMARY') {
+		$fields{'ref_has_opinion_primary'} = 'checked';
+		$fields{'ref_has_opinion_current'} = '';
+		$fields{'ref_has_opinion_no'} = '';
+    } elsif ($fields{'ref_has_opinion'} eq 'CURRENT') {
+		$fields{'ref_has_opinion_primary'} = '';
+		$fields{'ref_has_opinion_current'} = 'checked';
+		$fields{'ref_has_opinion_no'} = '';
     } elsif (exists $fields{'ref_has_opinion'}) {
-		$fields{'ref_has_opinion_checked'} = '';
-		$fields{'ref_has_opinion_notchecked'} = 'checked';
+		$fields{'ref_has_opinion_primary'} = '';
+		$fields{'ref_has_opinion_current'} = '';
+		$fields{'ref_has_opinion_no'} = 'checked';
 	}
 
+    if ($fields{'reference_no'}) {
+        my $ref = Reference->new($dbt,$fields{'reference_no'}); 
+        $fields{formatted_primary_reference} = $ref->formatAsHTML() if ($ref);
+    }
+
+    if ($s->get('reference_no') && $s->get('reference_no') != $fields{'reference_no'}) {
+        if ($s->get('reference_no')) {
+            my $ref = Reference->new($dbt,$s->get('reference_no'));
+            $fields{formatted_current_reference} = $ref->formatAsHTML() if ($ref);
+        }
+        $fields{'OPTIONAL_current_reference'} = 1;
+    } else {
+        $fields{'OPTIONAL_current_reference'} = 0;
+    }
 	
 	# if the authorizer of this record doesn't match the current
 	# authorizer, and if this is an edit (not a first entry),
@@ -502,10 +525,10 @@ sub displayOpinionForm {
 		
 		# depending on the status of the ref_has_opinion radio, we should
 		# make the other reference fields non-editable.
-		if ($fields{'ref_has_opinion'} eq 'YES') {
+		if ($fields{'ref_has_opinion'} =~ /YES|PRIMARY|CURRENT/) {
 			push (@nonEditables, ('author1init', 'author1last', 'author2init', 'author2last', 'otherauthors', 'pubyr', '2nd_pages', '2nd_figures'));
 		} else {
-			push (@nonEditables, ('pages', 'figures'));		
+			push (@nonEditables, ('pages', 'figures'));
 		}
 		
 		
@@ -524,9 +547,11 @@ sub displayOpinionForm {
 		
 		# we'll also have to add a few fields separately since they don't exist in the database,
 		# but only in our form.
-		if ($fields{'2nd_pages'}) { push(@nonEditables, '2nd_pages'); }
-		if ($fields{'2nd_figures'}) { push(@nonEditables, '2nd_figures'); }
-		
+        foreach my $field ('2nd_pages','2nd_figures') {
+            if ($fields{$field}) {
+                push @nonEditables, $field;
+            }
+        }
 	}
 
 
@@ -723,7 +748,8 @@ sub submitOpinionForm {
 	## Deal with the reference section at the top of the form.  This
 	## is almost identical to the way we deal with it in the authority form
 	## so this functionality should probably be merged at some point.
-	if (($q->param('ref_has_opinion') ne 'YES') && 
+	if (($q->param('ref_has_opinion') ne 'PRIMARY') && 
+	    ($q->param('ref_has_opinion') ne 'CURRENT') && 
 		($q->param('ref_has_opinion') ne 'NO')) {
 		$errors->add("You must choose one of the reference radio buttons");
 	}
@@ -752,7 +778,7 @@ sub submitOpinionForm {
             }
         }
 
-		# merge the pages and 2nd_pages, figures and 2nd_figures fields
+		# merge the pages and primary_pages, figures and current_figures fields
 		# together since they are one field in the database.
 		$fields{'pages'} = $q->param('2nd_pages');
 		$fields{'figures'} = $q->param('2nd_figures');
@@ -783,6 +809,13 @@ sub submitOpinionForm {
 			$errors->add("Don't enter other author names if you haven't entered a second author");
 		}
 
+        my $lookup_reference = "";
+        if ($q->param('ref_has_opinion') eq 'CURRENT') {
+            $lookup_reference = $s->get('reference_no');
+        } else {
+            $lookup_reference = $fields{'reference_no'};
+        }  
+
 		if ($q->param('pubyr')) {
 			my $pubyr = $q->param('pubyr');
 			
@@ -792,7 +825,7 @@ sub submitOpinionForm {
 			
 			# make sure that the pubyr they entered (if they entered one)
 			# isn't more recent than the pubyr of the reference.  
-			my $ref = Reference->new($dbt,$q->param('reference_no'));
+			my $ref = Reference->new($dbt,$lookup_reference);
 			if ($ref && $pubyr > $ref->get('pubyr')) {
 				$errors->add("The publication year ($pubyr) can't be more recent than that of the primary reference (" . $ref->get('pubyr') . ")");
 			}
@@ -800,31 +833,35 @@ sub submitOpinionForm {
             $errors->add("A publication year is required");
         }
 	} else {
+        my $lookup_reference = "";
+        if ($q->param('ref_has_opinion') eq 'CURRENT') {
+            $lookup_reference = $s->get('reference_no');
+        } else {
+            $lookup_reference = $fields{'reference_no'};
+        }
 		# if they chose ref_has_opinion, then we also need to make sure that there
 		# are no other opinions about the current taxon (child_no) which use 
 		# this as the reference.  
-        if ($isNewEntry) {
-		    my $sql = "SELECT count(*) c FROM opinions WHERE ref_has_opinion='YES'".
-                      " AND child_no=".$dbh->quote($fields{'child_no'}).
-                      " AND reference_no=".$dbh->quote($fields{'reference_no'});
-            my $row = ${$dbt->getData($sql)}[0];
-            if ($row->{'c'} > 0) {
-                $errors->add("The author's opinion on ".$childName." already has been entered - an author can only have one opinion on a name");
-            }
+        my $sql = "SELECT count(*) c FROM opinions WHERE ref_has_opinion='YES'".
+                  " AND child_no=".$dbh->quote($fields{'child_no'}).
+                  " AND reference_no=".$dbh->quote($lookup_reference);
+        if (! $isNewEntry) {
+            $sql .= " AND opinion_no != ".$o->{'opinion_no'};
         }
-
-		# ref_has_opinion is YES
+        my $row = ${$dbt->getData($sql)}[0];
+        if ($row->{'c'} > 0) {
+            $errors->add("The author's opinion on ".$childName." already has been entered - an author can only have one opinion on a name");
+        }
+		# ref_has_opinion is PRIMARY or CURRENT
 		# so make sure the other publication info is empty.
 		
 		if ($q->param('author1init') || $q->param('author1last') || $q->param('author2init') || $q->param('author2last') || $q->param('otherauthors') || $q->param('pubyr') || $q->param('2nd_pages') || $q->param('2nd_figures')) {
-			$errors->add("Don't enter any other publication information if you chose the 'first named in primary reference' radio button");	
+			$errors->add("Don't enter any other publication information if you chose the 'primary reference argues ...' or 'current reference argues ...' radio button");	
 		}
-	}
-	
-	{
+        
 		# also make sure that the pubyr of this opinion isn't older than
 		# the pubyr of the authority record the opinion is about
-		my $ref = Reference->new($dbt, $q->param('reference_no'));
+		my $ref = Reference->new($dbt, $lookup_reference);
 		if ( $ref && $childTaxon->pubyr() > $ref->get('pubyr') ) {
 			$errors->add("The publication year (".$ref->get('pubyr').") for this opinion can't be earlier than the year the taxon was named (".$childTaxon->pubyr().")");	
         }
@@ -1076,7 +1113,9 @@ sub submitOpinionForm {
 	
 	# correct the ref_has_opinion field.  In the HTML form, it can be "YES" or "NO"
 	# but in the database, it should be "YES" or "" (empty).
-	if ($fields{'ref_has_opinion'} eq 'NO') {
+	if ($q->param('ref_has_opinion') =~ /PRIMARY|CURRENT/) {
+		$fields{'ref_has_opinion'} = 'YES';
+	} elsif ($q->param('ref_has_opinion') eq 'NO') {
 		$fields{'ref_has_opinion'} = '';
 	}
 	
@@ -1094,6 +1133,10 @@ sub submitOpinionForm {
 		return;
 	}
 	
+    # Replace the reference with the current reference if need be
+    if ($q->param('ref_has_opinion') =~ /CURRENT/ && $s->get('reference_no')) {
+        $fields{'reference_no'} = $s->get('reference_no');
+    }
 	
 	# now we'll actually insert or update into the database.
 
@@ -1245,8 +1288,10 @@ sub submitOpinionForm {
         #TaxaCache::markForUpdate($dbt,$fields{'child_no'});
 	} else {
 		# if it's an old entry, then we'll update.
-		# Delete some fields that should never be updated...
-		delete $fields{reference_no};
+        unless ($q->param('ref_has_opinion') =~ /CURRENT/) {
+            # Delete this field so its never updated unless we're swithing to current ref
+            delete $fields{'reference_no'};
+        }
 		
 		$resultOpinionNumber = $o->get('opinion_no');
 		$dbt->updateRecord($s,'opinions', 'opinion_no',$resultOpinionNumber, \%fields);

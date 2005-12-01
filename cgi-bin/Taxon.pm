@@ -201,6 +201,17 @@ sub displayAuthorityForm {
         %fields = %{$q->Vars()};
 	} elsif (!$isNewEntry) {
         %fields = %{$t->getRow()};
+
+        if ($fields{'ref_is_authority'} =~ /YES/i) {
+            $fields{'ref_is_authority'} = 'PRIMARY';
+        } else {
+            $fields{'ref_is_authority'} = 'NO';
+            $fields{'2nd_pages'} = $fields{'pages'};
+            $fields{'2nd_figures'} = $fields{'figures'};
+            $fields{'pages'} = '';
+            $fields{'figures'} = '';
+        }  
+
     } else { # brand new, first submission
 	    $fields{'taxon_name'} = $q->param('taxon_name');
 		$fields{'reference_no'} = $s->get('reference_no');
@@ -218,11 +229,47 @@ sub displayAuthorityForm {
             $fields{'modifier_name'} = " <B>Modifier:</B> ".Person::getPersonName($dbt,$fields{'modifier_no'}); 
         }
 	}
+
+    # Handle radio button
+    if ($fields{'ref_is_authority'} eq 'PRIMARY') {
+        $fields{'ref_is_authority_primary'} = 'checked';
+        $fields{'ref_is_authority_current'} = '';
+        $fields{'ref_is_authority_no'} = '';
+    } elsif ($fields{'ref_is_authority'} eq 'CURRENT') {
+        $fields{'ref_is_authority_primary'} = '';
+        $fields{'ref_is_authority_current'} = 'checked';
+        $fields{'ref_is_authority_no'} = '';
+    } elsif (exists $fields{'ref_is_authority'}) {
+        $fields{'ref_is_authority_primary'} = '';
+        $fields{'ref_is_authority_current'} = '';
+        $fields{'ref_is_authority_no'} = 'checked';
+    }    
+
+   if ($fields{'reference_no'}) {
+        my $ref = Reference->new($dbt,$fields{'reference_no'});
+        $fields{formatted_primary_reference} = $ref->formatAsHTML() if ($ref);
+    }
+
+    if ($s->get('reference_no') && $s->get('reference_no') != $fields{'reference_no'}) {
+        if ($s->get('reference_no')) {
+            my $ref = Reference->new($dbt,$s->get('reference_no'));
+            $fields{formatted_current_reference} = $ref->formatAsHTML() if ($ref);
+        }
+        $fields{'OPTIONAL_current_reference'} = 1;
+    } else {
+        $fields{'OPTIONAL_current_reference'} = 0;
+    } 
 	
 
 	# If this taxon is a type taxon for something higher, mark the check box as checked
     if (!$isNewEntry && !$reSubmission && $fields{'taxon_rank'} =~ /species/) {
-        my @taxa = getTypeTaxonList($dbt,$fields{'taxon_no'},$fields{'reference_no'});
+        my $lookup_reference = "";
+        if ($q->param('ref_is_authority') eq 'CURRENT') {
+            $lookup_reference = $s->get('reference_no');
+        } else {
+            $lookup_reference = $fields{'reference_no'};
+        } 
+        my @taxa = getTypeTaxonList($dbt,$fields{'taxon_no'},$lookup_reference);
         $fields{'type_taxon'} = 0;
         foreach my $row (@taxa) {
             if ($row->{'type_taxon_no'} == $fields{'taxon_no'}) {
@@ -231,39 +278,6 @@ sub displayAuthorityForm {
         }  
     }
     $fields{'type_taxon_checked'} = ($fields{'type_taxon'}) ? 'CHECKED' : '';
-	
-	# populate the correct pages/figures fields depending
-	# on the ref_is_authority value.
-	#print "ref_is_authority = " . $fields{'ref_is_authority'};
-	if ($fields{'ref_is_authority'} eq 'YES') {
-		# reference_no is the authority
-		$fields{'ref_is_authority_checked'} = 'checked';
-		$fields{'ref_is_authority_notchecked'} = '';
-	
-	} else {
-		# reference_no is not the authority
-		
-		if ((!$isNewEntry) || $reSubmission) {
-			# we only want to check a reference radio button
-			# if they're editing an old record.  This will force them to choose
-			# one for a new record.  However, if it's the second time
-			# through, then it's okay to check one since they already did.
-			$fields{'ref_is_authority_checked'} = '';
-			$fields{'ref_is_authority_notchecked'} = 'checked';
-			
-			$fields{'ref_is_authority'} = 'NO';
-		}
-		
-		if (!$reSubmission) {
-			$fields{'2nd_pages'} = $fields{'pages'};
-			$fields{'2nd_figures'} = $fields{'figures'};
-			$fields{'pages'} = '';
-			$fields{'figures'} = '';
-		}
-	}
-	
-		
-	
 	
 	# Now we need to deal with the taxon rank popup menu.
 	# If we've already displayed the form and the user is now making changes
@@ -449,27 +463,25 @@ sub submitAuthorityForm {
 
 	
 	# build up a hash of fields/values to enter into the database
-	my %fieldsToEnter;
+	my %fields;
 	
 	if ($isNewEntry) {
-		$fieldsToEnter{'reference_no'} = $s->get('reference_no');
-		if (! $fieldsToEnter{'reference_no'} ) {
+		$fields{'reference_no'} = $s->get('reference_no');
+		if (! $fields{'reference_no'} ) {
 			$errors->add("You must set your current reference before submitting a new authority");	
 		}
-        $fieldsToEnter{'type_taxon'} = ($q->param('type_taxon')) ? 1 : 0;
+        $fields{'type_taxon'} = ($q->param('type_taxon')) ? 1 : 0;
 	} 
 	
-	if (($q->param('ref_is_authority') ne 'YES') && 
+	if (($q->param('ref_is_authority') ne 'PRIMARY') && 
+	    ($q->param('ref_is_authority') ne 'CURRENT') && 
 		($q->param('ref_is_authority') ne 'NO')) {
 		$errors->add("You must choose one of the reference radio buttons");
-	}
-	
-	
-	# merge the pages and 2nd_pages, figures and 2nd_figures fields together
-	# since they are one field in the database.
-	if ($q->param('ref_is_authority') eq 'NO') {
-		$fieldsToEnter{'pages'} = $q->param('2nd_pages');
-		$fieldsToEnter{'figures'} = $q->param('2nd_figures');
+	} elsif ($q->param('ref_is_authority') eq 'NO') {
+        # merge the pages and 2nd_pages, figures and 2nd_figures fields together
+        # since they are one field in the database.
+		$fields{'pages'} = $q->param('2nd_pages');
+		$fields{'figures'} = $q->param('2nd_figures');
 
 	# commented out 10.5.04 by JA because we often need to add (say) genera
 	#  without any data when we create and classify species for which we
@@ -499,6 +511,13 @@ sub submitAuthorityForm {
         if ($q->param('otherauthors') && !$q->param('author2last') ) {
             $errors->add("Don't enter other author names if you haven't entered a second author");
         }	
+       
+        my $lookup_reference = "";
+        if ($q->param('ref_is_authority') eq 'CURRENT') {
+            $lookup_reference = $s->get('reference_no');
+        } else {
+            $lookup_reference = $fields{'reference_no'};
+        }  
 			
 		if ($q->param('pubyr')) {
             my $pubyr = $q->param('pubyr');
@@ -509,7 +528,7 @@ sub submitAuthorityForm {
 			
 			# make sure that the pubyr they entered (if they entered one)
 			# isn't more recent than the pubyr of the reference.  
-			my $ref = Reference->new($dbt,$q->param('reference_no'));
+			my $ref = Reference->new($dbt,$lookup_reference);
 			if ($ref && $pubyr > $ref->get('pubyr')) {
 				$errors->add("The publication year ($pubyr) can't be more 
 				recent than that of the primary reference (" . $ref->get('pubyr') . ")");
@@ -591,21 +610,23 @@ sub submitAuthorityForm {
 	
 	foreach my $formField ($q->param()) {
         # if the value isn't already in our fields to enter
-        if (! $fieldsToEnter{$formField}) {
-            $fieldsToEnter{$formField} = $q->param($formField);
+        if (! $fields{$formField}) {
+            $fields{$formField} = $q->param($formField);
         }
 	}
 
 	my $taxonRank = $q->param('taxon_rank'); 	# rank in popup menu
 
-	$fieldsToEnter{taxon_name} = $q->param('taxon_name');
+	$fields{taxon_name} = $q->param('taxon_name');
 	
 	# correct the ref_is_authority field.  In the HTML form, it can be "YES" or "NO"
 	# but in the database, it should be "YES" or "" (empty).
-	if ($fieldsToEnter{ref_is_authority} eq 'NO') {
-		$fieldsToEnter{ref_is_authority} = '';
-	}
-	
+    if ($q->param('ref_is_authority') =~ /PRIMARY|CURRENT/) {
+        $fields{'ref_is_authority'} = 'YES';
+    } elsif ($q->param('ref_is_authority') eq 'NO') {
+        $fields{'ref_is_authority'} = '';
+    }
+       
 	# If the rank was species or subspecies, then we also need to insert
 	# an opinion record automatically which has the state of "belongs to"
 	# For example, if the child taxon is "Equus blah" then we need to 
@@ -630,7 +651,7 @@ sub submitAuthorityForm {
 	## end of hack
 	####
 	
-	# at this point, we should have a nice hash array (%fieldsToEnter) of
+	# at this point, we should have a nice hash array (%fields) of
 	# fields and values to enter into the authorities table.
 	
 	
@@ -642,7 +663,7 @@ sub submitAuthorityForm {
 	# This only applies to new entries, and to edits where they changed the taxon_name
 	# field to be the name of a different taxon which already exists.
 	if ($q->param('confirmed_taxon_name') ne $q->param('taxon_name')) {
-        my @taxon = TaxonInfo::getTaxon($dbt,'taxon_name'=>$fieldsToEnter{'taxon_name'},'get_reference'=>1);
+        my @taxon = TaxonInfo::getTaxon($dbt,'taxon_name'=>$fields{'taxon_name'},'get_reference'=>1);
         my $taxonExists = scalar(@taxon);
         
 		if (($isNewEntry && $taxonExists) ||
@@ -663,15 +684,19 @@ sub submitAuthorityForm {
 		displayAuthorityForm($dbt,$hbo, $s, $q, $message);
 		return;
 	}
-	
+
+    # Replace the reference with the current reference if need be
+    if ($q->param('ref_is_authority') =~ /CURRENT/ && $s->get('reference_no')) {
+        $fields{'reference_no'} = $s->get('reference_no');
+    }  
 	
 	# now we'll actually insert or update into the database.
 	my $resultTaxonNumber;
-    my $resultReferenceNumber = $fieldsToEnter{'reference_no'};
+    my $resultReferenceNumber = $fields{'reference_no'};
     my $status;
 	
 	if ($isNewEntry) {
-		($status, $resultTaxonNumber) = $dbt->insertRecord($s,'authorities', \%fieldsToEnter);
+		($status, $resultTaxonNumber) = $dbt->insertRecord($s,'authorities', \%fields);
         TaxaCache::addName($dbt,$resultTaxonNumber);
 		
 		# if the $parentTaxon object exists, then that means that we
@@ -690,10 +715,10 @@ sub submitAuthorityForm {
                 'child_spelling_no'=>$resultTaxonNumber,
                 'parent_no'=>$orig_parent_no,
                 'parent_spelling_no'=>$parentTaxon->get('taxon_no'),
-                'ref_has_opinion'=>$fieldsToEnter{'ref_is_authority'}
+                'ref_has_opinion'=>$fields{'ref_is_authority'}
             );
             my @fields = ('reference_no','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures');
-            $opinionHash{$_} = $fieldsToEnter{$_} for @fields;
+            $opinionHash{$_} = $fields{$_} for @fields;
 		
             $dbt->insertRecord($s,'opinions',\%opinionHash);
             #TaxaCache::updateCache($dbt,$resultTaxonNumber);
@@ -737,19 +762,16 @@ sub submitAuthorityForm {
 
 	} else {
 		# if it's an old entry, then we'll update.
-		# Delete some fields that should never be updated...
-		delete $fieldsToEnter{reference_no};
 		$resultTaxonNumber = $t->get('taxon_no');
-
-		$status = $dbt->updateRecord($s,'authorities', 'taxon_no',$resultTaxonNumber, \%fieldsToEnter);
+		$status = $dbt->updateRecord($s,'authorities', 'taxon_no',$resultTaxonNumber, \%fields);
 	}
 
     # JA 2.4.04
     # if the taxon name is unique, find matches to it in the
     #  occurrences table and set the taxon numbers appropriately
-    if ($status && ($isNewEntry || ($t->get('taxon_name') ne $fieldsToEnter{'taxon_name'}))) {
+    if ($status && ($isNewEntry || ($t->get('taxon_name') ne $fields{'taxon_name'}))) {
 		# start with a test for uniqueness
-		my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name=".$dbh->quote($fieldsToEnter{taxon_name});
+		my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name=".$dbh->quote($fields{taxon_name});
         my @taxon_nos = @{$dbt->getData($sql)};
         @taxon_nos = map {$_->{'taxon_no'}} @taxon_nos;
 
@@ -765,7 +787,7 @@ sub submitAuthorityForm {
                 $counts{$row->{'name'}} += $row->{'cnt'};
             }
 
-            my $link = "bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$fieldsToEnter{taxon_name}";
+            my $link = "bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$fields{taxon_name}";
             while (my ($name,$email) = each %emails) {
                 my %headers = ('Subject'=> 'Please reclassify your occurrences','From'=>'alroy');
                 if ($ENV{'BRIDGE_HOST_URL'} =~ /paleodb\.org/) {
@@ -786,12 +808,12 @@ Dear $name:
 
 This is an automated message from the Paleobiology Database. Please don't reply to this message directly, but rather send replies to John Alroy (alroy\@nceas.ucsb.edu).
 
-This message has been sent to you because the taxonomic name $fieldsToEnter{taxon_name} has just been entered into the database, and other taxa with the same name already have been entered. So, we have more than one version. This taxonomic name is tied to $occ_count occurrences and reidentifications you own. We can't be sure which version of the name these records should be tied to, so the records must be manually reclassified to choose between them. 
+This message has been sent to you because the taxonomic name $fields{taxon_name} has just been entered into the database, and other taxa with the same name already have been entered. So, we have more than one version. This taxonomic name is tied to $occ_count occurrences and reidentifications you own. We can't be sure which version of the name these records should be tied to, so the records must be manually reclassified to choose between them. 
 
 To fix your records, Please click this link while logged in:
 http://paleodb.org/cgi-bin/$link
 
-Or log in, go to the main menu, click "Reclassify occurrences" and enter $fieldsToEnter{taxon_name} into the taxon name field.
+Or log in, go to the main menu, click "Reclassify occurrences" and enter $fields{taxon_name} into the taxon name field.
 END_OF_MESSAGE
                 my $mailer = new Mail::Mailer;
                 $mailer->open(\%headers);
@@ -804,7 +826,7 @@ END_OF_MESSAGE
             $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
             $dbt->getData($sql1);
             $dbt->getData($sql2);
-            push @warnings, "Since $fieldsToEnter{taxon_name} is a homonym, occurrences of it are no longer classified.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$fieldsToEnter{taxon_name}\">Reclassify occurrences</a>\" and manually classify <b>all</b> occurrences of this taxon.";
+            push @warnings, "Since $fields{taxon_name} is a homonym, occurrences of it are no longer classified.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$fields{taxon_name}\">Reclassify occurrences</a>\" and manually classify <b>all</b> occurrences of this taxon.";
 		} elsif (scalar(@taxon_nos) == 1) {
 			# start composing update sql
 			# NOTE: in theory, taxon no for matching records always
@@ -816,7 +838,7 @@ END_OF_MESSAGE
 			my $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=" . $resultTaxonNumber . " WHERE ";
 			my $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=" . $resultTaxonNumber . " WHERE ";
 
-			my ($genus,$species) = split / /,$fieldsToEnter{taxon_name};
+			my ($genus,$species) = split / /,$fields{taxon_name};
 			$sql1 .= " genus_name=".$dbh->quote($genus);
 			$sql2 .= " genus_name=".$dbh->quote($genus);
             if ($species) {
@@ -856,28 +878,28 @@ END_OF_MESSAGE
             $end_message .= "<LI>$_</LI>" for (@warnings);
             $end_message .= "</DIV>";
         }
-        $end_message .= "<H3>" . $fieldsToEnter{'taxon_name'} . " " .Reference::formatShortRef(\%fieldsToEnter). " has been $enterupdate the database</H3>";
+        $end_message .= "<H3>" . $fields{'taxon_name'} . " " .Reference::formatShortRef(\%fields). " has been $enterupdate the database</H3>";
 
         my $origResultTaxonNumber = TaxonInfo::getOriginalCombination($dbt,$resultTaxonNumber);
         $end_message .= qq|
     <div align="center">
     <table cellpadding=10><tr><td>
-      <br><li><b><a href="bridge.pl?action=displayAuthorityForm&taxon_no=$resultTaxonNumber">Edit $fieldsToEnter{taxon_name}</a></b></li>
-      <br><li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$resultTaxonNumber">Get general information about $fieldsToEnter{taxon_name}</a></b></li>   
+      <br><li><b><a href="bridge.pl?action=displayAuthorityForm&taxon_no=$resultTaxonNumber">Edit $fields{taxon_name}</a></b></li>
+      <br><li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$resultTaxonNumber">Get general information about $fields{taxon_name}</a></b></li>   
       <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=current">Add/edit another taxon</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm">Add/edit another taxon from another reference</a></b></li>
     </td>
     <td valign=top>
-      <br><li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber">Add an opinion about $fieldsToEnter{taxon_name}</a></b></li>
-      <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fieldsToEnter{taxon_name}</a></b></li>
+      <br><li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber">Add an opinion about $fields{taxon_name}</a></b></li>
+      <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=current">Add/edit opinion about another taxon</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm">Add/edit opinion about another taxon from another reference</a></b></li>
     </td></tr></table>
     </div>|;
 
-        displayTypeTaxonSelectForm($dbt,$s,$fieldsToEnter{'type_taxon'},$resultTaxonNumber,$fieldsToEnter{'taxon_name'},$fieldsToEnter{'taxon_rank'},$resultReferenceNumber,$end_message);
+        displayTypeTaxonSelectForm($dbt,$s,$fields{'type_taxon'},$resultTaxonNumber,$fields{'taxon_name'},$fields{'taxon_rank'},$resultReferenceNumber,$end_message);
 	}
 	
 	print "<BR>";

@@ -167,12 +167,19 @@ supposed to edit them -->
 <div align="center"><h2>Whose opinion on %%child_name%% are you entering?</h2></div>
 
 <div class="emphasized" align=left>
-<input id="ref_has_opinion" name="ref_has_opinion" type="radio" value="YES" %%ref_has_opinion_checked%%>
-The current reference argues for this opinion:
+<input id="ref_has_opinion" name="ref_has_opinion" type="radio" value="PRIMARY" %%ref_has_opinion_primary%%>
+The primary reference argues for this opinion:
+<div align="center" class="small">%%formatted_primary_reference%%</div>
+%%START_OPTIONAL_current_reference%%
+<br>
+<input id="ref_has_opinion" name="ref_has_opinion" type="radio" value="CURRENT" %%ref_has_opinion_current%%>
+ ... <i>or</i> the current reference argues for this opinion:
+<br><div align="center" class="small">%%formatted_current_reference%%</div>
+%%END_OPTIONAL_current_reference%%
 </div>
+
 <br>
 <center>
-<span id="ref_string">%%formatted_reference%%</span>
 <p>
 <b>Pages*:</b> <input id="pages" name="pages" size=12 value="%%pages%%">
 <b>Figures*:</b> <input id="figures" name="figures" size=12 value="%%figures%%">
@@ -181,9 +188,8 @@ The current reference argues for this opinion:
 
 
 <div class="emphasized" align=left>
-<input id="ref_has_opinion" name="ref_has_opinion" type="radio" value="NO" %%ref_has_opinion_notchecked%%>
-
-... <i>or</i> the opinion is repeated from an earlier authority, which is:</DIV>
+<input id="ref_has_opinion" name="ref_has_opinion" type="radio" value="NO" %%ref_has_opinion_no%%>
+ ... <i>or</i> the opinion is repeated from an earlier authority, which is:</DIV>
 <BR>
 
 <CENTER>

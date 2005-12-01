@@ -39,22 +39,27 @@ If the name is misspelled, <a href="$exec_url?action=displayAuthoritiesTaxonSear
 
 <BR>
 
-<DIV class="emphasized" align=left>
-<input id="ref_is_authority" name="ref_is_authority" type="radio" value="YES" %%ref_is_authority_checked%%>
+<div class="emphasized" align=left>
+<input id="ref_is_authority" name="ref_is_authority" type="radio" value="PRIMARY" %%ref_is_authority_primary%%>
 It was first named in the data record's primary reference, which is:
-</div>
-<BR>
+<div align="center" class="small">%%formatted_primary_reference%%</div>
+%%START_OPTIONAL_current_reference%%
+<br>
+<input id="ref_is_authority" name="ref_is_authority" type="radio" value="CURRENT" %%ref_is_authority_current%%>
+ ... <i>or</i> it was first named in the current reference, which is: 
+<br><div align="center" class="small">%%formatted_current_reference%%</div>
+%%END_OPTIONAL_current_reference%%
+</div>  
 
-<CENTER>
-<SPAN id="ref_string">%%formatted_reference%%</span>
+<center>
 <p>
 <b>Pages*:</b> <input id="pages" name="pages" size=12 value="%%pages%%">
 <b>Figures*:</b> <input id="figures" name="figures" size=12 value="%%figures%%">
 </p>
-</CENTER>
+</center>
 
-<DIV class="emphasized" align=left>
-<input id="ref_is_authority" name="ref_is_authority" type="radio" value="NO" %%ref_is_authority_notchecked%%>
+<div class="emphasized" align=left>
+<input id="ref_is_authority" name="ref_is_authority" type="radio" value="NO" %%ref_is_authority_no%%>
 
 ... <i>or</i> it was named in an earlier publication, which is:</DIV>
 <BR>
