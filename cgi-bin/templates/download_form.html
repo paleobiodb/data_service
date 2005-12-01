@@ -520,6 +520,44 @@ function checkAll(checkbox,the_class){
 <td valign=top class="smallText"><input name=min_mean_abundance type="text" size="12"></td></tr>
 
 </table>
+
+<div class="options_box">
+<span class="options_box_header">Include plants with the following organs</span><br>
+<table width=100%>
+  <tr>
+    <td class="tinyText" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'po_basic');"><B>Check all</B></td>
+  </tr>
+  <tr>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_unassigned value="YES">unassigned</td>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_leaf value="YES">leaf</td>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_seed/fruit" value="YES">seed/fruit</td>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_axis value="YES">axis</td>
+  </tr>
+  <tr>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_plant debris" value="YES">plant debris</td>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_marine palyn" value="YES">marine palyn</td>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_microspore value="YES">microspore</td>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_megaspore value="YES">megaspore</td>
+  </tr>
+  <tr>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_flower value="YES">flower</td>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_seed repro" value="YES">seed repro</td>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_non-seed repro" value="YES">non-seed repro</td>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_wood value="YES">wood</td>
+  </tr>
+  <tr>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_sterile axis" value="YES">sterile axis</td>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_fertile axis" value="YES">fertile axis</td>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_root value="YES">root</td>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_cuticle value="YES">cuticle</td>
+  </tr>
+  <tr>
+  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_multi organs" value="YES">multi organs</td>
+  </tr>
+</table>
+</div>
+
+
 <p align=center>
 <input type=submit value="Create data set">
 </p>
