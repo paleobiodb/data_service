@@ -39,6 +39,7 @@ use POSIX qw(ceil floor);
 use Confidence;
 use Measurement;
 use TaxaCache;
+use DownloadTaxonomy;
 
 # god awful Poling modules
 #use Occurrence; - entirely deprecated, only ever called by Collection.pm
@@ -79,7 +80,7 @@ my $TEMPLATE_DIR = "./templates";
 my $GUEST_TEMPLATE_DIR = "./guest_templates";
 my $HTML_DIR = $ENV{'BRIDGE_HTML_DIR'};
 my $OUTPUT_DIR = "public/data";
-
+my $DATAFILE_DIR = $ENV{'DOWNLOAD_DATAFILE_DIR'};
 
 # some generally useful trig stuff needed by processCollectionsSearchForAdd
 my $PI = 3.14159265;
@@ -821,6 +822,30 @@ sub displayDownloadResults {
 
 	print stdIncludes("std_page_bottom");
 }
+
+sub displayDownloadTaxonomyForm {
+    print stdIncludes("std_page_top");
+    
+    my $html = $hbo->populateHTML( 'download_taxonomy_form', [], []);
+    my $javaScript = &makeAuthEntJavaScript();
+    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
+    my $authorizer_reversed = ($s->get("authorizer_reversed") || "");
+    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/g;
+        
+    print $html;
+    print stdIncludes("std_page_bottom");
+}       
+    
+sub displayDownloadTaxonomyResults {
+    print stdIncludes( "std_page_top" );
+    if ($q->param('output_data') eq 'itis') {
+        DownloadTaxonomy::displayITISDownload($dbt,$q,$s);
+    } else { 
+        DownloadTaxonomy::displayPBDBDownload($dbt,$q,$s);
+    }
+                                              
+    print stdIncludes("std_page_bottom");
+}  
 
 sub displayReportForm {
 
@@ -2535,6 +2560,32 @@ IS NULL))";
 		push @where, "(c.lithology1=$val OR c.lithology2=$val)"; 
 	}
 
+    # This can be country or continent. If its country just treat it like normal, else
+    # do a lookup of all the countries in the continent
+    if ($options{"country"}) {
+        if ($options{"country"} =~ /^(North America|South America|Europe|Africar|Antarctica|Asia|Australia)$/) {
+            if ( ! open ( REGIONS, "$DATAFILE_DIR/PBDB.regions" ) ) {
+                print "<font color='red'>Skipping regions.</font> Error message is $!<BR><BR>\n";
+                return;
+            }
+
+            while (<REGIONS>)
+            {
+                chomp();
+                my ($region, $countries) = split(/:/, $_, 2);
+                $countries =~ s/'/\\'/g;
+                $REGIONS{$region} = $countries;
+            }
+            my @countries = split(/\t/,$REGIONS{$options{'country'}});
+            foreach my $country (@countries) {
+                $country = "'".$country."'";
+            }
+            $in_str = join(",", @countries);
+            push @where, "c.country IN ($in_str)";
+        } else {
+            push @where, "c.country LIKE ".$dbh->quote($wildcardToken.$q->param('country').$wildcardToken);
+        }
+    }
 
     # get the column info from the table
     my $sth = $dbh->column_info(undef,'pbdb','collections','%');
@@ -2548,7 +2599,7 @@ IS NULL))";
         my $is_primary =  $row->{'mysql_is_pri_key'};
             
         # These are special cases handled above in code, so skip them
-        next if ($field =~ /^(?:environment|localbed|regionalbed|research_group|reference_no|max_interval_no|min_interval_no)$/);
+        next if ($field =~ /^(?:environment|localbed|regionalbed|research_group|reference_no|max_interval_no|min_interval_no|country)$/);
 
 		if (exists $options{$field} && $options{$field} ne '') {
             my $value = $options{$field};
@@ -7495,7 +7546,6 @@ sub displayTaxonomicNamesAndOpinions {
     my $ref = Reference->new($dbt,$q->param('reference_no'));
     if ($ref) {
         my $html = $ref->formatAsHTML();
-        $html =~ s/<b>\d+<\/b>//g; #Remove the reference_no
         print "<center><h3>Showing taxonomic names and opinions from reference: ".$html."</h3></center><br>";
 
         $q->param('goal'=>'authority');
