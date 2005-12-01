@@ -31,6 +31,7 @@ my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no genus_r
 my @specimenFieldNames = qw(authorizer enterer modifier specimen_no reference_no specimens_measured specimen_id specimen_side specimen_part specimen_coverage measurement_source magnification specimen_count comments created modified);
 my @measurementTypes = qw(average min max median error error_unit);
 my @measurementFields =  qw(length width height diagonal inflation);
+my @plantOrganFieldNames = ('unassigned','leaf','seed/fruit','axis','plant debris','marine palyn','microspore','megaspore','flower','seed repro','non-seed repro','wood','sterile axis','fertile axis','root','cuticle','multi organs');
 my @refsFieldNames = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage created modified publication_type comments project_name project_ref_no);
 my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
 my @mesoCenozoic = qw(triassic jurassic cretaceous tertiary);
@@ -96,7 +97,7 @@ sub retellOptions {
 	</tr>";
 
 	# authorizer added 30.6.04 JA (left out by mistake?) 
-	$html .= $self->retellOptionsRow ( "Authorizer", $q->param("authorizer") );
+	$html .= $self->retellOptionsRow ( "Authorizer", $q->param("authorizer_reversed") );
 	$html .= $self->retellOptionsRow ( "Output data type", $q->param("output_data") );
 	$html .= $self->retellOptionsRow ( "Output data format", $q->param("output_format") );
 	$html .= $self->retellOptionsRow ( "Research group or project", $q->param("research_group") );
@@ -235,6 +236,16 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
         $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
         $html .= $self->retellOptionsRow ( "Minimum # of specimens to compute mean abundance", $q->param("min_mean_abundance") ) if ($q->param("min_mean_abundance"));
+
+        my $plantOrganFieldCount = 0;
+        foreach my $plantOrganField (@plantOrganFieldNames) {
+            if ($q->param("plant_organ_".$plantOrganField)) {
+                $plantOrganFieldCount++;
+            }
+        }
+        if ($plantOrganFieldCount != 0 && $plantOrganFieldCount != scalar(@plantOrganFieldNames)) {
+            $html .= $self->retellOptionsGroup('Include plant organs','plant_organ_',\@plantOrganFieldNames);
+        }
 
         my @occFields = ();
         if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
@@ -1089,6 +1100,19 @@ sub getOccurrencesWhereClause {
 		push @all_where,"r.pubyr".$pubyrrelation.$q->param('pubyr');
 	}
 
+    my $plantOrganFieldCount = 0;
+    my @includedPlantOrgans = ();
+    foreach my $plantOrganField (@plantOrganFieldNames) {
+        if ($q->param("plant_organ_".$plantOrganField)) {
+            $plantOrganFieldCount++;
+            push @includedPlantOrgans, $dbh->quote($plantOrganField);
+        }
+    }
+    if ($plantOrganFieldCount != 0 && $plantOrganFieldCount != scalar(@plantOrganFieldNames)) {
+        my $plant_organs = join(",", @includedPlantOrgans);
+        push @occ_where, "(o.plant_organ IN ($plant_organs) OR o.plant_organ2 IN ($plant_organs))";
+    }  
+
     
     my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('authorizer_reversed'));
     my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
@@ -1863,7 +1887,9 @@ sub doQuery {
             for my $r (@refsFieldNames)	{
                 push @refvals , $refref->{$r};
             }
-            printf REFSFILE "%s\n",$self->formatRow(@refvals);
+            my $refLine = $self->formatRow(@refvals);
+            $refLine =~ s/\r|\n/ /g;
+            printf REFSFILE "%s\n",$refLine;
             $acceptedRefs++;
         }
     }
@@ -2347,12 +2373,12 @@ sub doQuery {
                     # get rid of carriage returns 24.5.04 JA
                     # failing to do this is lethal and I'm not sure why no-one
                     #  alerted me to this bug previously
-                    $curLine =~ s/\n/ /g;
+                    $curLine =~ s/\r|\n/ /g;
 			        print OUTFILE "$curLine\n";
                 }
             } else {
                 $curLine = $self->formatRow(@final_row,@dummy_measurement_row);
-                $curLine =~ s/\n/ /g;
+                $curLine =~ s/\r|\n/ /g;
                 print OUTFILE "$curLine\n";
             }
 		}
