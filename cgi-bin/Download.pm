@@ -1004,7 +1004,7 @@ sub getStratscaleString{
         $stratscales =~ s/^,//;
         if ( $stratscales )	{
             $stratscales = qq| c.stratscale IN ($stratscales) |;
-            if ($q->param('stratigraphic_scale_unknown')) {
+            if ($q->param('stratscale_unknown')) {
                 $stratscales = " (".$stratscales."OR c.stratscale IS NULL)";
             }
         }
