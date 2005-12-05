@@ -388,19 +388,20 @@ sub assignGenera	{
 	# we do this in a messy way, i.e., using preset arrays; if the
 	#  10 m.y. bin scheme ever changes, this will need to be updated
 	# also get the bin boundaries in Ma
+	# switched from Harland to Gradstein scales JA 5.12.05
 	my @binnames;
 	if ( $bin_type eq "period" )	{
-        @binnames = TimeLookup::getScaleOrder($dbt,2);
+        @binnames = TimeLookup::getScaleOrder($dbt,69);
 		@_ = TimeLookup::findBoundaries($dbh,$dbt);
 		%topma = %{$_[2]};
 		%basema = %{$_[3]};
 	} elsif ( $bin_type eq "epoch" )	{
-        @binnames = TimeLookup::getScaleOrder($dbt,4);
+        @binnames = TimeLookup::getScaleOrder($dbt,71);
 		@_ = TimeLookup::findBoundaries($dbh,$dbt);
 		%topma = %{$_[2]};
 		%basema = %{$_[3]};
 	} elsif ( $bin_type eq "stage" )	{
-        @binnames = TimeLookup::getScaleOrder($dbt,6);
+        @binnames = TimeLookup::getScaleOrder($dbt,73);
 		@_ = TimeLookup::findBoundaries($dbh,$dbt);
 		%topma = %{$_[2]};
 		%basema = %{$_[3]};

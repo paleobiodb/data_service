@@ -1261,23 +1261,26 @@ sub doQuery {
 
 
 	# get the period names for the collections JA 22.2.04
-	# based on scale 2 = Harland periods
+	# updated to use Gradstein instead of Harland JA 5.12.05
+	# based on scale 69 = Gradstein periods
 	if ( $q->param('collections_period') )	{
-		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '2');
+		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '69');
 		%myperiod = %{$intervalInScaleRef};
 	}
 
 	# get the epoch names for the collections JA 22.2.04
-	# based on scale 4 = Harland epochs
+	# updated to use Gradstein instead of Harland JA 5.12.05
+	# based on scale 71 = Gradstein epochs
 	if ( $q->param('collections_epoch') )	{
-		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '4');
+		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '71');
 		%myepoch = %{$intervalInScaleRef};
 	}
 
 	# get the stage names for the collections PS 08/19/2005
-	# based on scale 6 = Harland epochs
+	# updated to use Gradstein instead of Harland JA 5.12.05
+	# based on scale 73 = Gradstein epochs
 	if ( $q->param('collections_stage') )	{
-		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '6');
+		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '73');
 		%mystage = %{$intervalInScaleRef};
 	}
 
