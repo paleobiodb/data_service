@@ -613,17 +613,18 @@ sub buildTimeScalePulldown	{
 	my @tsnames = keys %tsid;
 	@tsnames = sort @tsnames;
 
-	# move the Harland global scales to the start of the list
-	my @harlandnames;
+	# move the Gradstein global scales to the start of the list
+	# switched this from Harland to Gradstein JA 5.12.05
+	my @gradsteinnames;
 	my @temptsnames;
 	for my $ts ( @tsnames )	{
-		if ( $ts =~ /Harland .:/ )	{
-			push @harlandnames, $ts;
+		if ( $ts =~ /Gradstein .:/ )	{
+			push @gradsteinnames, $ts;
 		} else	{
 			push @temptsnames, $ts;
 		}
 	}
-	@tsnames = @harlandnames;
+	@tsnames = @gradsteinnames;
 	push @tsnames, @temptsnames;
 
 	# build the select list
@@ -636,8 +637,8 @@ sub buildTimeScalePulldown	{
 	$timescale .= "</select>\n";
 
 
-	# add a blank after the Harland periods
-	$timescale =~ s/<option value="6">Harland 6: Stages/<option value="6">Harland 6: Stages\n<option>\n/;
+	# add a blank after the Gradstein stages
+	$timescale =~ s/<option value="73">Gradstein 7: Stages/<option value="73">Gradstein 7: Stages\n<option>\n/;
 
 	# put the select list into the web page
 	$$html =~ s/%%time scale%%/$timescale/;
