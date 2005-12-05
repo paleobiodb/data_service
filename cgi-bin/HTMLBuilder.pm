@@ -167,7 +167,7 @@ sub new {
 					eml_min_interval=>['', 'Late/Upper', 'late Late', 'middle Late', 'early Late', 'Middle', 'late Middle', 'middle Middle', 'early Middle', 'Early/Lower', 'late Early', 'middle Early', 'early Early'],
 					continent=>['global', 'Africa', 'Antarctica', 'Asia', 'Australia', 'Europe', 'New Zealand', 'North America', 'South America'],
 					basis=>['archaeological', 'geomagnetic', 'paleontological'],
-					scale_rank=>['period/system', 'subperiod/system', 'epoch/series', 'subepoch/series', 'age/stage', 'subage/stage', 'chron/zone'],
+					scale_rank=>['eon/eonothem', 'era/erathem', 'period/system', 'subperiod/system', 'epoch/series', 'subepoch/series', 'age/stage', 'subage/stage', 'chron/zone'],
 					mapsize=>[ '50%', '75%', '100%', '125%', '150%' ],
 					projection=>[ 'Eckert', 'Mollweide', 'orthographic', 'rectilinear' ],
 					mapfocus=>['standard (0,0)', 'Africa (10,20)', 'Antarctica (-90,0)', 'Arctic (90,0)', 'Asia (20,100)', 'Australia (-28,135)', 'Europe (50,10)', 'North America (35,-100)', 'Pacific (0,150)', 'South America (-10,-50)'],
