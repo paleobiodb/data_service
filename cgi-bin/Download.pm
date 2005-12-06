@@ -100,7 +100,11 @@ sub retellOptions {
 	$html .= $self->retellOptionsRow ( "Authorizer", $q->param("authorizer_reversed") );
 	$html .= $self->retellOptionsRow ( "Output data type", $q->param("output_data") );
 	$html .= $self->retellOptionsRow ( "Output data format", $q->param("output_format") );
-	$html .= $self->retellOptionsRow ( "Research group or project", $q->param("research_group") );
+    if ($q->param("research_group_restricted_to")) {
+	    $html .= $self->retellOptionsRow ( "Research group or project", "restricted to ".$q->param("research_group"));
+    } else {
+	    $html .= $self->retellOptionsRow ( "Research group or project", "includes ".$q->param("research_group"));
+    }
     
 	# added by rjp on 12/30/2003
 	if ($q->param('year')) {
@@ -1147,7 +1151,8 @@ sub getCollectionsWhereClause {
         my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
 		push @where, "c.authorizer_no=".$authorizer_no if ($authorizer_no);
 	}
-    my $resGrpString = PBDBUtil::getResearchGroupSQL($dbt,$q->param('research_group'));
+    my $resGrpRestrictedTo = ($q->param('research_group_restricted_to')) ? '1' : '0';
+    my $resGrpString = PBDBUtil::getResearchGroupSQL($dbt,$q->param('research_group'),$resGrpRestrictedTo);
     push @where, $resGrpString if ($resGrpString);
 	
 	# should we filter the data based on collection creation date?
@@ -1454,7 +1459,7 @@ sub doQuery {
     # nor can we filter out old reids and rows that don't pass permissions.
 	if ( $q->param('output_data') =~ /genera|species|occurrences/ )	{
         push @groupby, 'o.occurrence_no,re.reid_no';
-    } elsif ($q->param('output_data') eq 'collections' && ($join_reids || $q->param('include_specimen_fields'))) { # = collections
+    } elsif ($q->param('output_data') eq 'collections' && ($q->param('research_group') || $join_reids || $q->param('include_specimen_fields'))) { # = collections
        push @groupby, 'c.collection_no';
     }
 

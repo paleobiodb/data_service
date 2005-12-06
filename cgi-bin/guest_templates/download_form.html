@@ -171,7 +171,12 @@ function checkAll(checkbox,the_class){
 </tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Research group or project:</td>
+<td valign=top class="smallText">Research group or project
+    <select name="research_group_restricted_to">
+        <option value="0">includes</option>
+        <option value="1">is restricted to</option>
+    </select>:
+</td>  
 <td valign=top class="smallText">
 <select id="research_group">
 </select>

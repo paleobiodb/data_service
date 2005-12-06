@@ -30,23 +30,44 @@ sub debug{
 #                   Assumes that the secondary_refs table has been left joined against the collections table
 #	Parameters:	$dbt - DBTransactionManager object
 #				$research_group - can be a research_group, project_name, or both
+#               $restricted_to - boolean (default 0) - if st to 1 and input is a research group,
+#                   restrict so it includes collections that belong to that research group and it alone
+#                   not collections that might belong to it and others
 #	Returns:	SQL snippet, to be appended with AND
 ##
 sub getResearchGroupSQL {
 	my $dbt = shift;
 	my $research_group = shift;
+    my $restricted_to = shift;
 
     my @terms = ();
     if($research_group =~ /^(?:decapod|ETE|5%|1%|PACED|PGAP)$/){
-        my $sql = "SELECT reference_no FROM refs WHERE FIND_IN_SET(".$dbt->dbh->quote($research_group).",project_name)";
+        my $sql = "SELECT reference_no FROM refs WHERE ";
+        if ($restricted_to) {
+            $sql .= " FIND_IN_SET(".$dbt->dbh->quote($research_group).",project_name)";
+        } else {
+            $sql .= " project_name=".$dbt->dbh->quote($research_group);
+        }
         my @results = @{$dbt->getData($sql)};
         my $refs = join(", ",map {$_->{'reference_no'}} @results);
         $refs = '-1' if (!$refs );
-        push @terms, "c.reference_no IN ($refs)";
-        push @terms, "sr.reference_no IN ($refs)";
+        if ($restricted_to) {
+            # In the restricted to case the collections research group is only looked
+            # at for these overlapping cases
+            if ($research_group !~ /^(?:decapod|ETE|PACED)$/) {
+                push @terms, "c.reference_no IN ($refs)";
+            }
+        } else {
+            push @terms, "c.reference_no IN ($refs)";
+            push @terms, "sr.reference_no IN ($refs)";
+        }
     } 
     if($research_group =~ /^(?:decapod|ETE|marine invertebrate|micropaleontology|PACED|paleobotany|paleoentomology|taphonomy|vertebrate)$/) {
-        push @terms, "FIND_IN_SET( ".$dbt->dbh->quote($research_group).", c.research_group ) ";
+        if ($restricted_to) {
+            push @terms, "c.research_group=".$dbt->dbh->quote($research_group);
+        } else {
+            push @terms, "FIND_IN_SET( ".$dbt->dbh->quote($research_group).", c.research_group ) ";
+        }
     } 
 
     my $sql_terms;
