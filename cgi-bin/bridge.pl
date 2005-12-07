@@ -7327,7 +7327,7 @@ sub RefQuery {
 
 		if ($name) {
 			push @where,"(r.author1last LIKE ".$dbh->quote('%'.$name.'%').
-                        " OR r.author1last LIKE ".$dbh->quote('%'.$name.'%').
+                        " OR r.author2last LIKE ".$dbh->quote('%'.$name.'%').
                         " OR r.otherauthors LIKE ".$dbh->quote('%'.$name.'%').')';
 		}
         push @where, "r.pubyr LIKE ".$dbh->quote($pubyr) if ($pubyr);
