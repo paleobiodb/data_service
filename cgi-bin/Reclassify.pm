@@ -411,9 +411,9 @@ sub processReclassifyForm	{
                    ", modifier=".$dbh->quote($s->get('enterer')).
 			       ", modifier_no=".$s->get('enterer_no');
 			if ( $old_taxon_no > 0 )	{
-				$sql .= "' WHERE taxon_no=" . $old_taxon_no;
+				$sql .= " WHERE taxon_no=" . $old_taxon_no;
 			} else	{
-				$sql .= "' WHERE taxon_no=0";
+				$sql .= " WHERE taxon_no=0";
 			}
 			$sql .= " AND reid_no=" . $reids[$i];
 			$dbt->getData($sql);
