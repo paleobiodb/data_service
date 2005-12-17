@@ -468,7 +468,11 @@ sub processEditScaleForm	{
 
 	}
 
+	my %fieldused;
 	for $i ( 0..$#interval_names )	{
+
+		# not sure if this syntax is correct, but nothing more
+		#  complicated seems to work
 
 		# try to figure out the interval no of the max and min
 		#  interval names that were entered
@@ -568,32 +572,71 @@ sub processEditScaleForm	{
 
 			# now that the interval exists, put its number wherever
 			#  it belongs in the collections table
-				my @fields = ('period_max','epoch_max','intage_max','locage_max','period_min','epoch_min','intage_min','locage_min');
-				my @matches = ();
-				for my $f ( @fields )	{
-			# if there interval has no EML, use its number
-			#  regardless of whether the collection has one
-			# WARNING: this rule assumes that periods will be
-			#  entered before subperiods, etc.
-					if ( $eml_intervals[$i] eq "" )	{
-						$sql = "SELECT collection_no FROM collections WHERE " . $f . "='" . $interval_names[$i] . "'";
-#						$sql = "SELECT collection_no FROM collections WHERE " . $f . "='" . $interval_names[$i] . "' AND (eml" . $f . " IS NULL OR eml" . $f . "='')";
+			# this is pretty complicated and the code here is
+			#  basically new JA 11-12,15-16.12.05
+				my @fields = ('period','period eml','epoch','epoch eml','intage','intage eml','locage','locage eml');
+				for my $minmax ( 'max','min' )	{
+			# figure out which field was used to populate max or
+			#  min interval_no for all the collections
+			# only do this the first time a new time interval name
+			#  is encountered
+					if ( ! %{$fieldused{$minmax}} )	{
+						my $sql;
+						if ( $minmax eq "max" )	{
+							$sql = "SELECT collection_no,eml_interval,interval_name,emlperiod_max,period_max,emlepoch_max,epoch_max,emlintage_max,intage_max,emllocage_max,locage_max FROM collections,intervals WHERE max_interval_no=interval_no";
+						} else	{
+							$sql = "SELECT collection_no,eml_interval,interval_name,emlperiod_min,period_min,emlepoch_min,epoch_min,emlintage_min,intage_min,emllocage_min,locage_min FROM collections,intervals WHERE min_interval_no=interval_no";
+						}
+						my @collnos = @{$dbt->getData($sql)};
+						for my $fieldno ( 0..$#fields )	{
+							my ($f,$e) = split / /, $fields[$fieldno];
+							$emlfield_minmax = "eml" . $f . "_" . $minmax;
+							$field_minmax = $f . "_" . $minmax;
+							for $coll ( @collnos )	{
+								if ( $e eq "eml" && $coll->{eml_interval} =~ /[A-Za-z]/ && $coll->{eml_interval} eq $coll->{$emlfield_minmax} && lc($coll->{interval_name}) eq lc($coll->{$field_minmax}) )	{
+									$fieldused{$minmax}{$coll->{collection_no}} = $fieldno + 1;
+								} elsif ( $e ne "eml" && $coll->{eml_interval} !~ /[A-Za-z]/ && lc($coll->{interval_name}) eq lc($coll->{$field_minmax}) )	{
+									$fieldused{$minmax}{$coll->{collection_no}} = $fieldno + 1;
+								}
+							}
+						}
 					}
+					my @matches = ();
+					for my $fieldno ( 0..$#fields )	{
+						my ($f,$e) = split / /, $fields[$fieldno];
+						if ( ( $eml_intervals[$i] eq "" && $e eq "" ) || ( $eml_intervals[$i] ne "" && $e ne "" ) )	{
+			# figure out which collections might use the new
+			#  interval name because it appears in one of the
+			#  legacy time term fields
+							my $sql;
+			# if the interval has no EML, the collection may or
+			#  may not
+							if ( $eml_intervals[$i] eq "" )	{
+								$sql = "SELECT collection_no FROM collections WHERE " . $f . "_" . $minmax . "='" . $interval_names[$i] . "'";
+							}
 			# if the interval has an EML, the collection also has to
-					else	{
-						$sql = "SELECT collection_no FROM collections WHERE eml" . $f . "='" . $eml_intervals[$i] . "' AND " . $f . "='" . $interval_names[$i] . "'";
+							else	{
+								$sql = "SELECT collection_no FROM collections WHERE eml" . $f . "_" . $minmax . "='" . $eml_intervals[$i] . "' AND " . $f . "_" . $minmax . "='" . $interval_names[$i] . "'";
+							}
+							my @collnos = @{$dbt->getData($sql)};
+			# find the collections that currently have interval
+			#  numbers tied to more general time terms than the
+			#  one that has just been entered
+							for $coll ( @collnos )	{
+								if ( $fieldused{$minmax}{$coll->{collection_no}} < $fieldno + 1 && $fieldused{$minmax}{$coll->{collection_no}} > 0 )	{
+									push @matches,$coll->{collection_no};
+								}
+							}
+						}
 					}
-					my @collnos = @{$dbt->getData($sql)};
-					for $coll ( @collnos )	{
-						push @matches,$coll->{collection_no};
-					}
+
+			# fix the interval numbers of the matching collections
 					if ( $#matches > -1 )	{
-						if ( $f eq "locage_max" )	{
-							$sql = "UPDATE collections SET modified=modified,max_interval_no='" . $interval_no . "' WHERE collection_no IN ( " . join(",",@matches) . " )";
+						if ( $minmax eq "max" )	{
+							my $sql = "UPDATE collections SET modified=modified,max_interval_no='" . $interval_no . "' WHERE collection_no IN ( " . join(",",@matches) . " )";
 							$dbt->getData($sql);
-							@matches = ();
-						} elsif ( $f eq "locage_min" )	{
-							$sql = "UPDATE collections SET modified=modified,min_interval_no='" . $interval_no . "' WHERE collection_no IN ( " . join(",",@matches) . " )";
+						} elsif ( $minmax eq "min" )	{
+							my $sql = "UPDATE collections SET modified=modified,min_interval_no='" . $interval_no . "' WHERE collection_no IN ( " . join(",",@matches) . " )";
 							$dbt->getData($sql);
 						}
 					}
