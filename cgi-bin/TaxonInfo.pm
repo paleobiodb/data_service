@@ -1137,6 +1137,8 @@ sub displayRelatedTaxa {
 
     if (!$output) {
         $output = "<i> No related taxa found </i>";
+    } else {
+        $output .= "<p><b><a href=\"bridge.pl?action=displayDownloadTaxonomyResults&taxon_no=$orig_no\">Download authority and opinion data</a></b> - <b><a href=\"bridge.pl?action=startProcessPrintHierarchy&maximum_levels=99&taxon_no=$orig_no\">View classification of included taxa</a></br></p>";
     }
 	return $output;
 }
@@ -1161,7 +1163,7 @@ sub displayTaxonSynonymy{
 		return ($output .= "<i>No taxonomic history is available for $genus $species.</i><br>");
 	}
 
-	$output .= "<ul>";
+	$output .= "<ul style=\"list-style-position: inside;\">";
 	my $original_combination_no = getOriginalCombination($dbt, $taxon_no);
 	
 	# Select all parents of the original combination whose status' are
