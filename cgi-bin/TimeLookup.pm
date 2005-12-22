@@ -1196,6 +1196,7 @@ sub getScaleOrder {
             }
             $sql = "SELECT eml_interval, interval_name, correlations.interval_no FROM correlations, intervals".
                    " WHERE correlations.interval_no=intervals.interval_no".
+                   " AND scale_no=".$dbt->dbh->quote($scale_no). 
                    " AND next_interval_no=$row->{interval_no}";
             @results = @{$dbt->getData($sql)};
         }
