@@ -1,3 +1,5 @@
+%%NOESCAPE_enterer_authorizer_lists%%
+
 <script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>                                                                   
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
@@ -166,7 +168,7 @@ function checkAll(checkbox,the_class){
 <tr>
 <td valign=top class="smallText">Data authorizer:</td>
 <td valign="bottom">
-<input name="authorizer_reversed" size=22>
+<input name="authorizer_reversed" size=22 onKeyUp="doComplete(event, this, authorizerNames());">
 </td>
 </tr>
 
@@ -534,6 +536,7 @@ function checkAll(checkbox,the_class){
 <tr>
 <td valign=top class="smallText">Minimum # of specimens needed to compute mean abundance</td>
 <td valign=top class="smallText"><input name=min_mean_abundance type="text" size="12"></td></tr>
+</table>
 
 <div class="options_box">
 <span class="options_box_header">Include plants with the following organs</span><br>
@@ -571,7 +574,6 @@ function checkAll(checkbox,the_class){
 </table>
 </div>
 
-</table>
 <p align=center>
 <input type=submit value="Create data set">
 </p>
