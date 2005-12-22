@@ -83,6 +83,9 @@ function doCheckFieldsGeography() {
     if ( frm.country.selectedIndex == 0 ) {
         bad_info += "\n    - Country (required)";
     }
+    var stateEntered = /.* state.*/i;
+    var provinceEntered = /.* province.*/i;
+    var stateAbbreviation = /[A-Z][A-Z]/;
     if ( frm.state.value == "" ) {
         // This is a squirrely way to do this, but otherwise some browsers fail
         var index = frm.country.selectedIndex;
@@ -91,6 +94,15 @@ function doCheckFieldsGeography() {
                 bad_info += "\n    - U.S. state (required)";
             }
         }
+    }
+    else if ( stateEntered.test (frm.state.value) == true )	{
+        bad_info += "\n    - \"State\" cannot appear in the state field";
+    }
+    else if ( provinceEntered.test (frm.state.value) == true )	{
+        bad_info += "\n    - \"Province\" cannot appear in the state field";
+    }
+    if ( stateAbbreviation.test (frm.state.value) == true )	{
+        bad_info += "\n    - The full name of the state must be entered";
     }
     var integerReq = /^[0-9]+$/;
     var integerOpt = /^[0-9]*$/;
