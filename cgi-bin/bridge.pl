@@ -2924,7 +2924,7 @@ sub displayCollectionDetails {
     print $hbo->populateHTML('collection_display_fields', \@row, \@fieldNames);
 		
     # If the viewer is the authorizer (or it's me), display the record with edit buttons
-    if ($s->isDBMember()) {
+    if ($s->isDBMember() && $q->param('user') !~ /guest/i) {
 	    print '<p><div align="center"><table><tr>';
         my $p = Permissions->new($s,$dbt);
         my %is_modifier_for = %{$p->getModifierList()};
