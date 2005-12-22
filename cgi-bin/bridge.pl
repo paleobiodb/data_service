@@ -785,6 +785,96 @@ sub displayMapResults {
 	print stdIncludes("std_page_bottom");
 }
 
+# This crappy code based off of TaxonInfo::doMap. Hence the calls there.  This
+# needs to be done so its all abstracted correctly in the Map module and called
+# on Map object creation, maybe later PS 12/14/2005
+sub displayMapOfCollection {
+#    $q->param(-name=>"taxon_info_script",-value=>"yes");
+    my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape1', 'dotcolor1', 'dotborder1');
+    my %user_prefs = main::getPreferences($s->get('enterer_no'));
+    foreach my $pref (@map_params){
+        if($user_prefs{$pref}){
+            $q->param($pref => $user_prefs{$pref});
+        }
+    }
+    # Not covered by prefs:
+    if(!$q->param('pointshape1')){
+        $q->param('pointshape1' => 'circles');
+    }
+    if(!$q->param('dotcolor1')){
+        $q->param('dotcolor1' => 'red');
+    }
+    if(!$q->param('coastlinecolor')){
+        $q->param('coastlinecolor' => 'black');
+    }
+    if(!$q->param('mapresolution')){
+        $q->param('mapresolution'=>'medium');
+    }
+    if(!$q->param('usalinecolor')){
+        $q->param('usalinecolor'=>'gray');
+    }
+    if(!$q->param('borderlinecolor')){
+        $q->param('borderlinecolor'=>'gray');
+    }
+    if(!$q->param('pointsize1')){
+        $q->param('pointsize1'=>'medium');
+    }
+    if(!$q->param('projection') or $q->param('projection') eq ""){
+        $q->param('projection'=>'rectilinear');
+    }
+
+    $q->param('mapscale'=>'X 5');
+    $q->param('mapsize'=>'100%');
+
+    my $m = Map->new( $dbh, $q, $s, $dbt );
+
+	print stdIncludes("std_page_top");
+
+    my $dataRowsRef = $m->buildMapOnly();
+    my $coll = $dataRowsRef->[0];
+    my ($lat,$lng) = ($coll->{'latdeg'},$coll->{'lngdeg'});
+    if ($coll->{'latdir'} eq "South") {
+        $lat = -1 * $lat;
+    }
+
+    if ($coll->{'lngdir'} eq "West") {
+        $lng = -1 * $lng;
+    }
+
+    $q->param('maplat' => $lat);
+    $q->param('maplng' => $lng);
+    $m->setQAndUpdateScale($q);
+
+    my $map_html_path = $m->drawMapOnly($dataRowsRef);
+
+    print "<center><table><tr><td align=\"center\"><h3>Collection no $coll->{collection_no}</h3></td></tr>".
+          "<tr><td align=\"center\" valign=\"top\">";
+    # MAP USES $q->param("taxon_name") to determine what it's doing.
+    if ( $map_html_path )   {
+        if($map_html_path =~ /^\/public/){
+            # reconstruct the full path the image.
+            $map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
+        }
+        open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
+        while(<MAP>){
+            print;
+        }
+        close MAP;
+    } else {
+        print "<i>No distribution data are available</i>";
+    }
+    print "</td></tr></table></center>";
+    # trim the path down beyond apache's root so we don't have a full
+    # server path in our html.
+    if ( $map_html_path )   {
+        $map_html_path =~ s/.*?(\/public.*)/$1/;
+        print "<input type=hidden name=\"map_num\" value=\"$map_html_path\">";
+    }  
+
+    
+	print stdIncludes("std_page_bottom");
+}
+
 
 
 sub displayDownloadForm {
@@ -2834,14 +2924,16 @@ sub displayCollectionDetails {
     print $hbo->populateHTML('collection_display_fields', \@row, \@fieldNames);
 		
     # If the viewer is the authorizer (or it's me), display the record with edit buttons
-	print '<p><div align="center"><table><tr>';
-    if ($s->isDBMember() && (($authorizer_no eq $s->get('authorizer_no')) || ($s->get('authorizer') eq "J. Alroy"))) {
-		print '<td>'.$hbo->populateHTML('collection_display_buttons', \@row, \@fieldNames).'</td>';
-    }
     if ($s->isDBMember()) {
+	    print '<p><div align="center"><table><tr>';
+        my $p = Permissions->new($s,$dbt);
+        my %is_modifier_for = %{$p->getModifierList()};
+        if (($authorizer_no eq $s->get('authorizer_no')) || $is_modifier_for{$authorizer_no} || ($s->get('authorizer') eq "J. Alroy")) {
+		    print '<td>'.$hbo->populateHTML('collection_display_buttons', \@row, \@fieldNames).'</td>';
+        }
 	    print '<td>'.$hbo->populateHTML('collection_display_buttons2', [$q->param('collection_no')],['prefill_collection_no']).'</td>';
+	    print '</tr></table></div></p>';
     }
-	print '</tr></table></div></p>';
 	
 	print "<HR>\n";
 	
