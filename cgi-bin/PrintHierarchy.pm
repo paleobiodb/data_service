@@ -41,8 +41,14 @@ sub processPrintHierarchy	{
 	print main::stdIncludes( "std_page_top" );
 
 # get focal taxon name from query parameters, then figure out taxon number
-	$sql = "SELECT taxon_no,taxon_rank FROM authorities WHERE taxon_name='" . $q->param('taxon_name') . "'";
-	$ref = @{$dbt->getData($sql)}[0];
+    my $ref;
+    if ($q->param('taxon_no')) {
+    	$sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_no='" . $q->param('taxon_no') . "'";
+	    $ref = @{$dbt->getData($sql)}[0];
+    } elsif ($q->param('taxon_name')) {
+    	$sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_name='" . $q->param('taxon_name') . "'";
+	    $ref = @{$dbt->getData($sql)}[0];
+    }
 
 	if ( ! $ref )	{
 		print "<center><h3>Taxon not found</h3>\n";
@@ -55,9 +61,10 @@ sub processPrintHierarchy	{
 	if ( $ref->{taxon_rank} ne "genus" )	{
 		print "the ";
 	}
-	print $q->param('taxon_name') . "</h3></center>";
+	print $ref->{'taxon_name'} . "</h3></center>";
 
 	$MAX = $q->param('maximum_levels');
+    $MAX_SEEN = 0;
 
     my $tree = TaxaCache::getChildren($dbt,$ref->{'taxon_no'},'tree',$MAX);
     $tree->{'depth'} = 0;
@@ -69,6 +76,9 @@ sub processPrintHierarchy	{
         if ($node->{'depth'} < $MAX) {
             foreach my $child (@{$node->{'children'}}) {
                 $child->{'depth'} = $node->{'depth'} + 1;
+                if ($child->{'depth'} > $MAX_SEEN) {
+                    $MAX_SEEN = $child->{'depth'};
+                }
             }
             unshift @node_stack,@{$node->{'children'}};
         }
@@ -86,7 +96,7 @@ sub processPrintHierarchy	{
 	open OUT, ">$OUT_FILE_DIR/classification.csv";
 	print "<center><table>\n";
     print "<tr>";
-    for ($i=0;$i<=$MAX;$i++) {
+    for ($i=0;$i<=$MAX && $i <= $MAX_SEEN;$i++) {
            print "<td style=\"width:20;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>"; 
     }
     print "</tr>";
@@ -122,9 +132,10 @@ sub processPrintHierarchy	{
 
 	chmod 0664, "$OUT_FILE_DIR/classification.csv";
 
-	print "<hr><center><p>Data for <b>$nrecords taxa</b> were printed to the file <b><a href='$OUT_HTTP_DIR/classification.csv'>classification.csv</a></b></p></center>";
+	print "<hr><p><b><a href=\"$OUT_HTTP_DIR/classification.csv\">Download</a></b> this list of taxonomic names</p>";
+	print "<p><b><a href=\"bridge.pl?action=displayDownloadTaxonomyResults&taxon_no=".$ref->{"taxon_no"}."\">Download</a></b> authority and opinion data for these taxa</p>";
 
-	print "<center><p>You may <b><a href=\"$exec_url?action=startStartPrintHierarchy\">classify another taxon</a></b></p></center>\n";
+	print "<p>You may <b><a href=\"$exec_url?action=startStartPrintHierarchy\">classify another taxon</a></b></p>";
 	print main::stdIncludes( "std_page_bottom" );
 
 	return;
