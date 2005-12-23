@@ -26,8 +26,8 @@ $|=1;
 # to the query params to determine the file header line and then the data to
 # be written out. 
 my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch stage 10mybin max_interval_no min_interval_no ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
-my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
-my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name reference_no comments created modified modified_temp plant_organ);
+my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
+my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no reference_no comments created modified modified_temp plant_organ);
 my @specimenFieldNames = qw(authorizer enterer modifier specimen_no reference_no specimens_measured specimen_id specimen_side specimen_part specimen_coverage measurement_source magnification specimen_count comments created modified);
 my @measurementTypes = qw(average min max median error error_unit);
 my @measurementFields =  qw(length width height diagonal inflation);
@@ -1725,7 +1725,7 @@ sub doQuery {
             
         if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
             if ($row->{'reid_no'}) {
-                foreach my $field (@reidentificationsFieldNames,'taxon_no') {
+                foreach my $field (@reidentificationsFieldNames) {
                     $row->{'original_'.$field}=$row->{'occ_'.$field};
                     $row->{'occ_'.$field}=$row->{'reid_'.$field};
                 }
@@ -1736,7 +1736,7 @@ sub doQuery {
                     my ($genus,$subgenus,$species,$subspecies) = @{$ss_taxon_names{$row->{'occ_taxon_no'}}};
                     #print "$row->{occurrence_no}, SENIOR SYN FOR $row->{occ_genus_name}/$row->{occ_subgenus_name}/$row->{occ_species_name}/$row->{occ_subspecies_name} IS $genus/$subgenus/$species/$subspecies<BR>";
 
-                    $row->{'original_occ_taxon_no'} = $row->{'occ_taxon_no'};
+                    $row->{'original_taxon_no'} = $row->{'occ_taxon_no'};
                     $row->{'occ_taxon_no'} = $ss_taxon_nos{$row->{'occ_taxon_no'}};
                     $row->{'original_genus_name'} = $row->{'occ_genus_name'};
                     $row->{'occ_genus_name'} = $genus;

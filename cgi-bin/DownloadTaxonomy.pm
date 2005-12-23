@@ -435,7 +435,7 @@ sub displayPBDBDownload {
 
     open FH_IT, ">$filesystem_dir/invalid_taxa.csv"
         or die "Could not open invalid_taxa.csv ($!)";
-    @header = ("authorizer","enterer","modifier","reference_no","taxon_name","invalid_reason","taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","parent_name","extant","type_taxon","comments","created","modified");
+    @header = ("authorizer","enterer","modifier","taxon_no","reference_no","taxon_name","invalid_reason","taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","parent_name","extant","type_taxon","comments","created","modified");
     $csv->combine(@header);
     print FH_IT $csv->string()."\n";
     foreach my $t (@names) {
