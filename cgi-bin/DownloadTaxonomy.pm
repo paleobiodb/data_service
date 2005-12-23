@@ -622,7 +622,7 @@ sub getTaxonomicNames {
                 if ($row->{'spelling_no'} != $row->{'senior_synonym_no'}) {
                     my $orig_no = TaxonInfo::getOriginalCombination($dbt,$row->{'taxon_no'});
                     my $parent = TaxonInfo::getMostRecentParentOpinion($dbt,$orig_no);
-                    if ($parent->{'parent_no'}) {
+                    if ($parent && $parent->{'parent_no'}) {
                         my $sql = "SELECT taxon_name FROM authorities where taxon_no=$parent->{parent_no}";
                         my @s = @{$dbt->getData($sql)};
                         $row->{'invalid_reason'} = "$parent->{status} $s[0]->{taxon_name}";
