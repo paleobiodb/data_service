@@ -413,7 +413,7 @@ sub displayPBDBDownload {
 
     open FH_VT, ">$filesystem_dir/valid_taxa.csv"
         or die "Could not open valid_taxa.csv ($!)";
-    my @header = ("authorizer","enterer","modifier","taxon_no","reference_no","taxon_name","taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","parent_name","extant","type_taxon","type_specimen","comments","created","modified");
+    my @header = ("authorizer","enterer","modifier","taxon_no","reference_no","taxon_name","taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","type_taxon","type_specimen","comments","created","modified");
     $csv->combine(@header);
     print FH_VT $csv->string()."\n";
     foreach my $t (@names) {
@@ -435,7 +435,7 @@ sub displayPBDBDownload {
 
     open FH_IT, ">$filesystem_dir/invalid_taxa.csv"
         or die "Could not open invalid_taxa.csv ($!)";
-    @header = ("authorizer","enterer","modifier","taxon_no","reference_no","taxon_name","invalid_reason","taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","parent_name","extant","type_taxon","comments","created","modified");
+    @header = ("authorizer","enterer","modifier","taxon_no","reference_no","taxon_name","invalid_reason","taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","type_taxon","comments","created","modified");
     $csv->combine(@header);
     print FH_IT $csv->string()."\n";
     foreach my $t (@names) {
@@ -461,7 +461,7 @@ sub displayPBDBDownload {
     my @opinions = @$opinions;
     open FH_OP, ">$filesystem_dir/opinions.csv"
         or die "Could not open opinions.csv ($!)";
-    @header = ("authorizer","enterer","modifier","child_name","child_spelling_name","status","parent_name","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","classification_quality","created","modified");
+    @header = ("authorizer","enterer","modifier","opinion_no","reference_no","child_name","child_spelling_name","status","parent_name","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","created","modified");
     $csv->combine(@header);
     print FH_OP $csv->string()."\n";
     foreach my $o (@opinions) {
