@@ -110,9 +110,9 @@ sub displaySearchSectionResults{
     # get the enterer's preferences (needed to determine the number
     # of displayed blanks) JA 1.8.02
 
-    local @period_order = TimeLookup::getScaleOrder($dbt,'2');
+    local @period_order = TimeLookup::getScaleOrder($dbt,'69');
     # Convert max_interval_no to a period like 'Quaternary'
-    my %int2period = %{TimeLookup::processScaleLookup($dbh,$dbt,'2','intervalToScale')};
+    my %int2period = %{TimeLookup::processScaleLookup($dbh,$dbt,'69','intervalToScale')};
 
     local $lastsection = '';
     local $lastregion  = '';
@@ -625,7 +625,7 @@ sub optionsForm    {
             push @keys,"$row->{scale_name} [$author_string]";
             push @values,$row->{'scale_no'};
         }
-        my $scale_selected = ($q->param('scale') || 6); 
+        my $scale_selected = ($q->param('scale') || 73); 
         $scale_select = HTMLBuilder::buildSelect('scale',\@keys,\@values,$scale_selected);
     }
 

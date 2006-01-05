@@ -432,12 +432,12 @@ sub reportBuildDataTables {
     # to index into the hashes
     if ($q->param('searchfield1') eq "10 m.y. bins (standard order)") {
         @{$self->{'sortKeys1'}} = TimeLookup::getTenMYBins();
-    } elsif ($q->param('searchfield1') eq "Harland 2: Periods (standard order)") {
-        @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,2);
-    } elsif ($q->param('searchfield1') eq "Harland 4: Epochs (standard order)") {
-        @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,4);
-    } elsif ($q->param('searchfield1') eq "Harland 6: Stages (standard order)") {
-        @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,6);
+    } elsif ($q->param('searchfield1') eq "Gradstein 3: Periods (standard order)") {
+        @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,69);
+    } elsif ($q->param('searchfield1') eq "Gradstein 5: Epochs (standard order)") {
+        @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,71);
+    } elsif ($q->param('searchfield1') eq "Gradstein 7: Stages (standard order)") {
+        @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,73);
     } else {
         @{$self->{'sortKeys1'}} = sort {$self->{'totals1'}{$b} <=> $self->{'totals1'}{$a}} keys %{$self->{'totals1'}};
     }    
@@ -448,12 +448,12 @@ sub reportBuildDataTables {
     }    
     if ($q->param('searchfield2') eq "10 m.y. bins (standard order)") {
         @{$self->{'sortKeys2'}} = TimeLookup::getTenMYBins();
-    } elsif ($q->param('searchfield2') eq "Harland 2: Periods (standard order)") {
-        @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,2);
-    } elsif ($q->param('searchfield2') eq "Harland 4: Epochs (standard order)") {
-        @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,4);
-    } elsif ($q->param('searchfield2') eq "Harland 6: Stages (standard order)") {
-        @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,6);
+    } elsif ($q->param('searchfield2') eq "Gradstein 3: Periods (standard order)") {
+        @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,69);
+    } elsif ($q->param('searchfield2') eq "Gradstein 5: Epochs (standard order)") {
+        @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,71);
+    } elsif ($q->param('searchfield2') eq "Gradstein 7: Stages (standard order)") {
+        @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,73);
     } else {
         @{$self->{'sortKeys2'}} = sort {$self->{'totals2'}{$b} <=> $self->{'totals2'}{$a}} keys %{$self->{'totals2'}};
     }    
@@ -592,7 +592,7 @@ sub reportQueryDB{
         'assemblage components'=>'assembl_comps', 'reason for describing collection'=>'collection_type',
         'list coverage'=>'collection_coverage', 'lithification'=>'lithification,lithification2',
         'lithology - all combinations'=>'lithology1,lithology2', 'lithology - weighted'=>'lithology1,lithology2',
-        'continent'=>'country', '10 m.y. bins (most common order)'=>'max_interval_no,min_interval_no', 'Harland 2: Periods (most common order)'=>'max_interval_no,min_interval_no', 'Harland 4: Epochs (most common order)'=>'max_interval_no,min_interval_no', 'Harland 6: Stages (most common order)'=>'max_interval_no,min_interval_no', '10 m.y. bins (standard order)'=>'max_interval_no,min_interval_no','Harland 2: Periods (standard order)'=>'max_interval_no,min_interval_no', 'Harland 4: Epochs (standard order)'=>'max_interval_no,min_interval_no', 'Harland 6: Stages (standard order)'=>'max_interval_no,min_interval_no');
+        'continent'=>'country', '10 m.y. bins (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 3: Periods (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 5: Epochs (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 7: Stages (most common order)'=>'max_interval_no,min_interval_no', '10 m.y. bins (standard order)'=>'max_interval_no,min_interval_no','Gradstein 3: Periods (standard order)'=>'max_interval_no,min_interval_no', 'Gradstein 5: Epochs (standard order)'=>'max_interval_no,min_interval_no', 'Gradstein 7: Stages (standard order)'=>'max_interval_no,min_interval_no');
     foreach my $i (1..2) {
         if ($sqlFields{$q->param("searchfield$i")}) {
             push @{$self->{'searchFields'}[$i]}, split(/,/,$sqlFields{$q->param("searchfield$i")});
@@ -733,14 +733,14 @@ sub getTranslationTable {
     } elsif ($param =~ /10 m\.y\. bins/) { 
         my $binning = TimeLookup::processBinLookup($dbh,$dbt,'binning');
         %table = %$binning;
-    } elsif ($param =~ /Harland 2: Periods/) { 
-		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt,'2','intervalToScale');
+    } elsif ($param =~ /Gradstein 3: Periods/) { 
+		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt,'69','intervalToScale');
 		%table = %{$intervalInScaleRef};
-    } elsif ($param =~ /Harland 4: Epochs/) { 
-		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt,'4','intervalToScale');
+    } elsif ($param =~ /Gradstein 5: Epochs/) { 
+		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt,'71','intervalToScale');
 		%table = %{$intervalInScaleRef};
-    } elsif ($param =~ /Harland 6: Stages/) { 
-		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt,'6','intervalToScale');
+    } elsif ($param =~ /Gradstein 7: Stages/) { 
+		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt,'73','intervalToScale');
 		%table = %{$intervalInScaleRef};
     } elsif ($param eq "continent") {
         my $regions = $self->getRegions();
