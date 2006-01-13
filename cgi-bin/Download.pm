@@ -44,7 +44,7 @@ my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
 my $COAST_DIR = $ENV{MAP_COAST_DIR};
 my $outFileBaseName;
 
-my $bestbothscale;
+my (@timescale_errors,@timescale_warnings);
 
 sub new {
 	my $class = shift;
@@ -715,8 +715,6 @@ sub getIntervalString	{
     my $eml_max  = ($q->param("max_eml_interval") || "");  
     my $eml_min  = ($q->param("min_eml_interval") || "");  
 
-	my $collref;
-
 	# return immediately if the user already selected a full time scale
 	#  to bin the data
 	if ( $q->param('time_scale') )	{
@@ -724,7 +722,9 @@ sub getIntervalString	{
 	}
 
 	if ( $max )	{
-		($collref,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, $eml_max, $max, $eml_min, $min);
+		my ($collref,$errors,$warnings) = TimeLookup::processLookup($dbh, $dbt, $eml_max, $max, $eml_min, $min);
+        @timescale_errors = @$errors;
+        @timescale_warnings = @$warnings;
 		my @colls = @{$collref};
 		if ( @colls )	{
 		    return " ( c.collection_no IN ( " . join (',',@colls) . " ) )";
@@ -2505,6 +2505,17 @@ sub doQuery {
 		close SCALEFILE;
 	}
 
+
+    # Display header link that says which collections we're currently viewing
+    if (@timescale_warnings) {
+        my $plural = (scalar(@timescale_warnings) > 1) ? "s" : "";
+        print "<br><div align=center><table width=600 border=0>" .
+              "<tr><td class=darkList><font size='+1'><b> Warning$plural</b></font></td></tr>" .
+              "<tr><td>";
+        print "<li class='medium'>$_</li>" for (@timescale_warnings);
+        print "</td></tr></table></div><br>";
+    } 
+
 	# Tell what happened
 	if ( ! $acceptedCount ) { $acceptedCount = 0; }
 	if ( ! $acceptedRefs ) { $acceptedRefs = 0; }
@@ -2523,9 +2534,9 @@ sub doQuery {
 		print "
 <tr><td>$acceptedIntervals time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleOutFileName\">$scaleOutFileName</a></td></tr>\n";
 	}
-	if ( $q->param("max_interval_name") && ! $bestbothscale )	{
-		print "<tr><td><b>WARNING</b>: the two intervals are not in the same time scale, so intervals in between them could not be determined.</td></tr>\n";
-	}
+	#if ( $q->param("max_interval_name") && ! $bestbothscale )	{
+	#	print "<tr><td><b>WARNING</b>: the two intervals are not in the same time scale, so intervals in between them could not be determined.</td></tr>\n";
+	#}
 print "</table>
 <p align='center'><b><a href='?action=displayDownloadForm'>Do&nbsp;another&nbsp;download</a> -
 <a href='?action=displayCurveForm'>Generate&nbsp;diversity&nbsp;curves</a></b>
