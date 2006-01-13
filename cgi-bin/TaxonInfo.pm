@@ -44,6 +44,11 @@ sub checkTaxonInfo {
 	my $s = shift;
 	my $dbt = shift;
     my $hbo = shift;
+
+    if (!$q->param("taxon_no") && !$q->param("taxon_name") && !$q->param("author") && !$q->param("pubyr")) {
+        searchForm($hbo, $q, 1); # param for not printing header with form
+        return;
+    }
 	
     if ($q->param('taxon_no')) {
         # If we have is a taxon_no, use that:
@@ -59,8 +64,11 @@ sub checkTaxonInfo {
                " IF (a.ref_is_authority='YES',r.author2init,a.author2init) author2init,".
                " IF (a.ref_is_authority='YES',r.author2last,a.author2last) author2last,".
                " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors".
-               " FROM authorities a LEFT JOIN refs r ON a.reference_no=r.reference_no".
-               " WHERE taxon_name LIKE ".$dbh->quote($q->param('taxon_name'));
+               " FROM authorities a LEFT JOIN refs r ON a.reference_no=r.reference_no WHERE 1=1";
+
+        if ($q->param("taxon_name")) {
+            $sql .= " AND taxon_name LIKE ".$dbh->quote($q->param('taxon_name'));
+        }
         
         # Handle pubyr and author fields
         my $having_sql = '';
