@@ -53,4 +53,5 @@ function setState(tabNum) {
                                                                                                                                                      
 function hover(tab) {
     //tab.style.backgroundColor = 'ddddff';
+    return true;
 }
