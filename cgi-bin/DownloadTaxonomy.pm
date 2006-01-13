@@ -413,7 +413,7 @@ sub displayPBDBDownload {
 
     open FH_VT, ">$filesystem_dir/valid_taxa.csv"
         or die "Could not open valid_taxa.csv ($!)";
-    my @header = ("authorizer","enterer","modifier","taxon_no","reference_no","taxon_name","taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","type_taxon","type_specimen","comments","created","modified");
+    my @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","taxon_rank","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","type_taxon","type_specimen","comments","created","modified");
     $csv->combine(@header);
     print FH_VT $csv->string()."\n";
     foreach my $t (@names) {
@@ -435,7 +435,7 @@ sub displayPBDBDownload {
 
     open FH_IT, ">$filesystem_dir/invalid_taxa.csv"
         or die "Could not open invalid_taxa.csv ($!)";
-    @header = ("authorizer","enterer","modifier","taxon_no","reference_no","taxon_name","invalid_reason","taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","type_taxon","comments","created","modified");
+    @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","taxon_rank","invalid_reason","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","type_taxon","comments","created","modified");
     $csv->combine(@header);
     print FH_IT $csv->string()."\n";
     foreach my $t (@names) {
@@ -461,7 +461,7 @@ sub displayPBDBDownload {
     my @opinions = @$opinions;
     open FH_OP, ">$filesystem_dir/opinions.csv"
         or die "Could not open opinions.csv ($!)";
-    @header = ("authorizer","enterer","modifier","opinion_no","reference_no","child_name","child_spelling_name","status","parent_name","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","created","modified");
+    @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","created","modified");
     $csv->combine(@header);
     print FH_OP $csv->string()."\n";
     foreach my $o (@opinions) {
@@ -598,10 +598,11 @@ sub getTaxonomicNames {
 
         my ($valid_count,$invalid_count) = (0,0);
         my %parent_name_cache = ();
-        my %parent_no_cache = ();
+        my %taxa_cache = ();
         foreach my $row (@results) {
+            $taxa_cache{$row->{'taxon_no'}} = $row;
             if ($parent_name_cache{$row->{'senior_synonym_no'}}) {
-                $row->{'parent_name'} = $parent_name_cache{$row->{'senior_synonym_no'}};
+                $row->{'parent_name'} = $parent_name_cache{$row->{'senior_synonym_no'}}{'taxon_name'};
             }
             my $orig_no = TaxonInfo::getOriginalCombination($dbt,$row->{'senior_synonym_no'});
             my $parent = TaxonInfo::getMostRecentParentOpinion($dbt,$orig_no);
@@ -610,8 +611,38 @@ sub getTaxonomicNames {
                 my @r = @{$dbt->getData($sql)};
                 $row->{'parent_name'} = $r[0]->{'taxon_name'};
                 $row->{'parent_no'} = $r[0]->{'taxon_no'};
-                $parent_name_cache{$row->{'senior_synonym_no'}} = $r[0]->{'taxon_name'};
-                $parent_no_cache{$row->{'senior_synonym_no'}} = $r[0]->{'taxon_no'};
+                $parent_name_cache{$row->{'senior_synonym_no'}} = $r[0];
+            }
+
+            # If this is a recombination, then use the old combinations reference information
+            my $orig_row = {};
+            if ($taxa_cache{$orig_no}) {
+                $orig_row = $taxa_cache{$orig_no};
+            } elsif ($orig_no) {
+                my $sql = "SELECT a.taxon_no,a.reference_no,a.taxon_rank,a.taxon_name,"
+                        . " IF (a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,"
+                        . " IF (a.ref_is_authority='YES',r.author1init,a.author1init) author1init,"
+                        . " IF (a.ref_is_authority='YES',r.author1last,a.author1last) author1last,"
+                        . " IF (a.ref_is_authority='YES',r.author2init,a.author2init) author2init,"
+                        . " IF (a.ref_is_authority='YES',r.author2last,a.author2last) author2last,"
+                        . " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors"
+                        . " FROM authorities a LEFT JOIN refs r ON a.reference_no=r.reference_no"
+                        . " WHERE a.taxon_no=$orig_no";
+                my @r = @{$dbt->getData($sql)};
+                $orig_row = $r[0];
+                $taxa_cache{$orig_row->{'taxon_no'}} = $orig_row;
+            }
+            $row->{'original_taxon_name'} = $orig_row->{'taxon_name'};
+            $row->{'original_taxon_no'} = $orig_row->{'taxon_no'};
+            $row->{'original_taxon_rank'} = $orig_row->{'taxon_rank'};
+            if ($orig_no != $row->{'taxon_no'}) {
+                $row->{'author1init'} = $orig_row->{'author1init'};
+                $row->{'author1last'} = $orig_row->{'author1last'};
+                $row->{'author2init'} = $orig_row->{'author2init'};
+                $row->{'author2last'} = $orig_row->{'author2last'};
+                $row->{'otherauthors'} = $orig_row->{'otherauthors'};
+                $row->{'pubyr'} = $orig_row->{'pubyr'};
+                $row->{'reference_no'} = $orig_row->{'reference_no'};
             }
            
             if ($parent && $parent->{'status'} =~ /nomen/) {
