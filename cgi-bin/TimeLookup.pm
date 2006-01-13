@@ -45,12 +45,13 @@ sub processLookup	{
 	my $return_type = shift;
     my $lookup_type = shift;
     my $bestbothscale;
+    my @errors = ();
+    my @warnings = ();
 
 
 
     # 10 M.Y. binning - i.e. Triassic 2
     if ($max_interval_name =~ /^(?:\w+ \d)$/ || $min_interval_name =~ /^(?:\w+ \d)$/) {
-        $bestbothscale = -1; # So Download.pm doesn't throw an error
         if (!$min_interval_name) {
             $min_interval_name=$max_interval_name;
         } elsif (!$max_interval_name) {
@@ -68,9 +69,11 @@ sub processLookup	{
         }
 
         if ($index1 < 0) {
-            print "WARNING: element $max_interval_name not found";
+            push @errors, "Term $max_interval_name not valid or not in the database";
+            return ([],@errors);
         } elsif ($index2 < 0) {
-            print "WARNING: element $min_interval_name not found";
+            push @errors, "Term $min_interval_name not valid or not in the database.";
+            return ([],@errors);
         } else {
             if ($index1 > $index2) {
                 ($index1,$index2) = ($index2,$index1);
@@ -122,8 +125,27 @@ sub processLookup	{
         $min_interval_no = getIntervalNo($dbt,$eml_min_interval,$min_interval_name);
    
         # if numbers weren't found for either interval, bomb out!
-        if (!$max_interval_no || !$min_interval_no) {
-	    	return;
+        if (!$max_interval_no) {
+            push @errors, "The term \"$max_interval_name\" not valid or not in the database";
+        }
+        if (!$min_interval_no) {
+            push @errors, "The term \"$min_interval_name\" not valid or not in the database";
+        }
+        if (@errors) {
+            return ([],@errors);
+        }
+        
+    	&findBestScales();
+	    &findImmediateCorrelates();
+
+        # Make sure these are called before yesints modified, as they clear it out 
+        if (checkIntervalIsObsolete($min_interval_no)) {
+            push @warnings, "The term \"$min_interval_name\" may no longer be valid; please use a newer, equivalent term";
+        }
+        if ($min_interval_no != $max_interval_no) {
+            if (checkIntervalIsObsolete($max_interval_no)) {
+                push @warnings, "The term \"$max_interval_name\" may no longer be valid; please use a newer, equivalent term";
+            }
         }
 
         # push the numbers onto the master list
@@ -132,21 +154,57 @@ sub processLookup	{
     	push @intervals, $min_interval_no if ($max_interval_no != $min_interval_no);
         $yesints{$min_interval_no} = 'Y';
 
-        main::dbg("Lookup type 0\n");
-    	&findBestScales();
 	    &getIntervalRangeByNo($max_interval_no,$min_interval_no);
-	    &findImmediateCorrelates();
         &mapIntervalsUpward();
 	    &mapIntervals();
         $bestbothscale = findBestBothScale($max_interval_no,$min_interval_no);
+        if (!$bestbothscale) {
+            push @warnings, "The terms \"$max_interval_name\" and \"$min_interval_name\" are not in the same time scale, so intervals in between them could not be determined; please use terms in the same scale";
+        }
 #        print Dumper(@intervals);
     }
 	if ( $return_type eq "intervals" )	{
-		return \@intervals;
+		return (\@intervals,\@errors,\@warnings);
 	}
 	my $colls = getCollectionList();
-    return ($colls,$bestbothscale);
+    return ($colls,\@errors,\@warnings);
 
+}
+
+sub checkIntervalIsObsolete {
+    my $interval_no = shift;
+
+    my $sql = "SELECT s.scale_rank FROM correlations c, scales s, refs r WHERE c.scale_no=s.scale_no AND s.reference_no=r.reference_no AND c.interval_no=$interval_no ORDER by r.pubyr DESC LIMIT 1";
+    my $rank = ${$dbt->getData($sql)}[0]->{'scale_rank'};
+    # Skip these, weird cases we can't handle yet
+    if ($rank =~ /stage|chron/) {
+        return 0;
+    }
+
+    @intervals = ();
+    @tempintervals = ();
+    $yesints{$interval_no} = 'Y';
+
+    &mapIntervals();
+    $sql = "SELECT DISTINCT interval_no FROM correlations WHERE max_interval_no=$interval_no OR min_interval_no=$interval_no";
+    #print $sql;
+    @results = @{$dbt->getData($sql)};
+    my $moved_count = 0;
+    foreach my $row (@results) {
+        if (!$yesints{$row->{'interval_no'}} && $bestscaleyr{$row->{'interval_no'}} > $bestscaleyr{$interval_no}) {
+                #print "Could not find $row->{interval_no}<BR>";
+                $moved_count++;
+        }
+    }
+
+    @intervals = ();
+    @tempintervals = ();
+    %yesints = ();
+    if (scalar(@results) && $moved_count == scalar(@results)) {
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 sub processScaleLookup	{
