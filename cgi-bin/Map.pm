@@ -106,6 +106,7 @@ sub buildMap {
     $options{'permission_type'} = 'read';
     $options{'calling_script'} = 'Map';
     my $fields = ['latdeg','latdec','latmin','latsec','latdir','lngdeg','lngdec','lngmin','lngsec','lngdir'];
+    my @warnings;
     
     for my $ptset (1..4) {
         $dotsizeterm = $q->param("pointsize$ptset");
@@ -165,12 +166,22 @@ sub buildMap {
             if ($options{'interval_name'}) {
                 ($options{'eml_max_interval'},$options{'max_interval'}) = TimeLookup::splitInterval($dbt,$options{'interval_name'});
             }
-            my ($dataRowsRef,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);  
+            my ($dataRowsRef,$ofRows,$warnings) = main::processCollectionsSearch($dbt,\%options,$fields);  
+            push @warnings, @$warnings; 
             $self->mapDrawPoints($dataRowsRef);
         }
            
     }
+    if (@warnings) {
+        my $plural = (scalar(@warnings) > 1) ? "s" : "";
+        print "<br><div align=center><table width=600 border=0>" .
+              "<tr><td class=darkList><font size='+1'><b> Warning$plural</b></font></td></tr>" .
+              "<tr><td>";
+        print "<li class='medium'>$_</li>" for (@warnings);
+        print "</td></tr></table></div><br>";
+    } 
     $self->mapFinishImage();
+    
 
     return $img_link;
 }
