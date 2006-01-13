@@ -264,7 +264,7 @@ sub processAction {
             $DEBUG = 1;
     }
 	
-	
+    
 	# Record the date of the action in the person table JA 27/30.6.02
 	if ($s->isDBMember()) {
 		my $sql = "UPDATE person SET last_action=NOW() WHERE person_no=".$s->get('enterer_no');
@@ -771,6 +771,7 @@ sub displayMapForm {
 
 
 sub displayMapResults {
+    logRequest($s,$q);
 	print stdIncludes("std_page_top" );
 
 	my $m = Map::->new( $dbh, $q, $s, $dbt, $hbo);
@@ -789,6 +790,7 @@ sub displayMapResults {
 # needs to be done so its all abstracted correctly in the Map module and called
 # on Map object creation, maybe later PS 12/14/2005
 sub displayMapOfCollection {
+    logRequest($s,$q);
 #    $q->param(-name=>"taxon_info_script",-value=>"yes");
     my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape1', 'dotcolor1', 'dotborder1');
     my %user_prefs = main::getPreferences($s->get('enterer_no'));
@@ -905,6 +907,7 @@ sub displayDownloadForm {
 }
 
 sub displayDownloadResults {
+    logRequest($s,$q);
 
 	print stdIncludes( "std_page_top" );
 
@@ -928,6 +931,7 @@ sub displayDownloadTaxonomyForm {
 }       
     
 sub displayDownloadTaxonomyResults {
+    logRequest($s,$q);
     print stdIncludes( "std_page_top" );
     if ($q->param('output_data') eq 'itis') {
         DownloadTaxonomy::displayITISDownload($dbt,$q,$s);
@@ -948,6 +952,7 @@ sub displayReportForm {
 }
 
 sub displayReportResults {
+    logRequest($s,$q);
 
 	print stdIncludes( "std_page_top" );
 
@@ -967,6 +972,7 @@ sub displayCurveForm {
 }
 
 sub displayCurveResults {
+    logRequest($s,$q);
 
 	print stdIncludes( "std_page_top" );
 
@@ -1223,6 +1229,7 @@ sub printGetRefsButton	{
 
 # This shows the actual references.
 sub displayRefResults {
+    logRequest($s,$q);
     my ($sth,$overlimit,$refsearchstring,$md);
 	my @rows;
 	my $numRows;
@@ -1818,6 +1825,7 @@ sub displaySearchColls {
 # System displays matching collection results
 # Called during collections search, and by displayReIDForm() routine.
 sub displayCollResults {
+    logRequest($s,$q);
 	my $limit = $q->param('limit') || 30 ;
     my $rowOffset = $q->param('rowOffset') || 0;
 
@@ -1865,7 +1873,7 @@ sub displayCollResults {
 	# which function to use depends on whether the user is adding a collection
 	my $sql;
     
-    my ($dataRows,$ofRows);
+    my ($dataRows,$ofRows,$warnings);
 	if ( $q->param('type') eq "add" )	{
 		# you won't have an in list if you are adding
 		($dataRows,$ofRows) = processCollectionsSearchForAdd();
@@ -1886,7 +1894,7 @@ sub displayCollResults {
             my @in_list = split(/,/,$q->param('taxon_list'));
             $options{'taxon_list'} = \@in_list if (@in_list);
         }
-		($dataRows,$ofRows) = processCollectionsSearch($dbt,\%options,$fields);
+		($dataRows,$ofRows,$warnings) = processCollectionsSearch($dbt,\%options,$fields);
 	}
 
     my @dataRows = @$dataRows;
@@ -1911,6 +1919,14 @@ sub displayCollResults {
 		
 		print stdIncludes( "std_page_top" );
         # Display header link that says which collections we're currently viewing
+        if (@$warnings) {
+            my $plural = (scalar(@$warnings) > 1) ? "s" : "";
+            print "<br><div align=center><table width=600 border=0>" .
+                  "<tr><td class=darkList><font size='+1'><b> Warning$plural</b></font></td></tr>" .
+                  "<tr><td>";
+            print "<li class='medium'>$_</li>" for (@$warnings);
+            print "</td></tr></table></div><br>";    
+        }
 
         print "<center>";
         if ($ofRows > 1) {
@@ -2120,7 +2136,7 @@ sub processCollectionsSearchForAdd	{
 	my $sql = "SELECT c.collection_no, c.collection_aka, c.authorizer_no, p1.name authorizer, c.collection_name, c.access_level, c.research_group, c.release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, c.country, c.state, c.latdeg, c.latmin, c.latsec, c.latdec, c.latdir, c.lngdeg, c.lngmin, c.lngsec, c.lngdec, c.lngdir, c.max_interval_no, c.min_interval_no, c.reference_no FROM collections c LEFT JOIN person p1 ON p1.person_no = c.authorizer_no WHERE ";
 
 	# get a list of interval numbers that fall in the geological period
-	my ($inlistref,$bestbothscale) = TimeLookup::processLookup($dbh,$dbt,'',$q->param('period_max'),'','','intervals');
+	my ($inlistref) = TimeLookup::processLookup($dbh,$dbt,'',$q->param('period_max'),'','','intervals');
 	@intervals = @{$inlistref};
 
 	$sql .= "c.max_interval_no IN (" . join(',', @intervals) . ") AND ";
@@ -2286,7 +2302,7 @@ sub processCollectionsSearch {
     my @fields = @{$_[2]};
 	
     # Set up initial values
-    my (@where,@occ_where,@reid_where,@tables,@from,@left_joins,@groupby,@errors);
+    my (@where,@occ_where,@reid_where,@tables,@from,@left_joins,@groupby,@errors,@warnings);
     @tables = ("collections c");
 
     # There fields must always be here
@@ -2448,7 +2464,9 @@ sub processCollectionsSearch {
         if ($min =~ /[a-z][A-Z]/ && !Validation::checkInterval($dbt,$eml_min,$min)) {
             push @errors, "There is no record of $eml_min $min in the database";
         }
- 		my ($intervals,$bestbothscale) = TimeLookup::processLookup($dbh, $dbt, $eml_max,$max,$eml_min,$min,'intervals');
+ 		my ($intervals,$errors,$warnings) = TimeLookup::processLookup($dbh, $dbt, $eml_max,$max,$eml_min,$min,'intervals');
+        push @errors, @$errors;
+        push @warnings, @$warnings;
         my $val = join(",",@$intervals);
         if (!$val) {
             $val = "-1";
@@ -2749,7 +2767,6 @@ IS NULL))";
         exit 1;
 	}
 
-
     # Cover all our bases
     if (scalar(@left_joins) || scalar(@tables) > 1 || $options{'taxon_list'} || $options{'taxon_name'}) {
         push @groupby,"c.collection_no";
@@ -2786,7 +2803,7 @@ IS NULL))";
             }
         }
     }
-    return (\@dataRows,$ofRows);
+    return (\@dataRows,$ofRows,\@warnings);
 } # end sub processCollectionsSearch
 
 
@@ -2795,6 +2812,7 @@ IS NULL))";
 #  * User selects a collection from the displayed list
 #  * System displays selected collection
 sub displayCollectionDetails {
+    logRequest($s,$q);
 	my $collection_no = $q->param('collection_no');
 	
 	$sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, c.* FROM collections c LEFT JOIN person p1 ON p1.person_no=c.authorizer_no LEFT JOIN person p2 ON p2.person_no=c.enterer_no LEFT JOIN person p3 ON p3.person_no=c.modifier_no WHERE collection_no=" . $collection_no;
@@ -3692,6 +3710,7 @@ sub getReidHTMLTableByOccNum {
 
 # JA 21.2.03
 sub rarefyAbundances	{
+    logRequest($s,$q);
 
 	print stdIncludes("std_page_top");
 
@@ -3859,6 +3878,7 @@ sub rarefyAbundances	{
 # Download.pm uses some similar calculations but I see no easy way to
 #  use a common function
 sub displayCollectionEcology	{
+    logRequest($s,$q);
 	print stdIncludes("std_page_top");
 
     my @ranks = @{$hbo->{'SELECT_LISTS'}{'taxon_rank'}};
@@ -5009,6 +5029,7 @@ sub beginTaxonInfo{
 }
 
 sub checkTaxonInfo{
+    logRequest($s,$q);
     print main::stdIncludes( "std_page_top" );
 	TaxonInfo::checkTaxonInfo($q, $dbh, $s, $dbt, $hbo);
     print main::stdIncludes("std_page_bottom");
@@ -5035,6 +5056,7 @@ sub processShowForm	{
 	Scales::processShowEditForm($dbh, $dbt, $hbo, $q, $s, $exec_url);
 }
 sub processViewScale	{
+    logRequest($s,$q);
 	Scales::processViewTimeScale($dbt, $hbo, $q, $s, $exec_url);
 }
 sub processEditScale	{
@@ -5141,6 +5163,7 @@ sub processMeasurementForm {
 ##############
 ## Strata stuff
 sub displayStrataSearch {
+    logRequest($s,$q);
     Strata::displayStrataSearch($dbh,$dbt,$hbo,$q,$s);
 }
 ## END Strata stuff
@@ -5152,6 +5175,7 @@ sub startStartPrintHierarchy	{
 	PrintHierarchy::startPrintHierarchy($dbh, $hbo);
 }
 sub startProcessPrintHierarchy	{
+    logRequest($s,$q);
 	PrintHierarchy::processPrintHierarchy($dbh, $q, $dbt, $exec_url);
 }
 ## END PrintHierarchy stuff
@@ -7579,6 +7603,7 @@ sub buildReference {
 # ------------------------ #
 
 sub displaySearchSectionResults{
+    logRequest($s,$q);
     print stdIncludes("std_page_top");
     Confidence::displaySearchSectionResults($q, $s, $dbt,$hbo);
     print stdIncludes("std_page_bottom");
@@ -7597,6 +7622,7 @@ sub displayTaxaIntervalsForm{
 }
 
 sub displayTaxaIntervalsResults{
+    logRequest($s,$q);
     print stdIncludes("std_page_top");
     Confidence::displayTaxaIntervalsResults($q, $s, $dbt,$hbo);
     print stdIncludes("std_page_bottom");
@@ -7621,12 +7647,14 @@ sub showOptionsForm {
 }
 
 sub calculateTaxaInterval {
+    logRequest($s,$q);
 	print stdIncludes("std_page_top");
 	Confidence::calculateTaxaInterval($q, $s, $dbt);
 	print stdIncludes("std_page_bottom");
 }
 
 sub calculateStratInterval {
+    logRequest($s,$q);
 	print stdIncludes("std_page_top");
 	Confidence::calculateStratInterval($q, $s, $dbt);
 	print stdIncludes("std_page_bottom");
@@ -7688,4 +7716,49 @@ sub checkFraud{
     }
     return 0;
 }
+
+sub logRequest {
+    my ($s,$q) = @_;
+    
+    if ( $HOST_URL !~ /paleobackup\.nceas\.ucsb\.edu/ && $HOST_URL !~ /paleodb\.org/ )  {
+        return;
+    }
+    my $status = open LOG, ">>/var/log/httpd/request_log";
+    if (!$status) {
+        carp "Could not open request_log";
+    } else {
+        my $date = now();
+
+        my $ip = $ENV{'REMOTE_ADDR'};
+
+        my $user = $s->get('enterer');
+        if (!$user) { $user = 'Guest'; }
+
+        my $postdata = "";
+        my @fields = $q->param();
+        foreach my $field (@fields) {
+            my @values = $q->param($field);
+            foreach my $value (@values) {
+                if ($value !~ /^$/) {
+                    # Escape these to make it easier to parse later
+                    $value =~ s/&/\\A/g;
+                    $value =~ s/\\/\\\\/g;
+                    $postdata .= "$field=$value&";
+                }
+            }
+        } 
+        $postdata =~ s/&$//;
+        $postdata =~ s/[\n\r\t]/ /g;
+
+        # make the file "hot" to ensure that the buffer is flushed properly.
+        # see http://perl.plover.com/FAQs/Buffering.html for more info on this.
+        my $ofh = select LOG;
+        $| = 1;
+        select $ofh;
+
+        $line = "$ip\t$date\t$user\t$postdata\n";
+        print LOG $line;
+    }
+}
+
 
