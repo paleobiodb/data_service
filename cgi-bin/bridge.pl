@@ -7399,7 +7399,7 @@ sub getCollsWithRef	{
 sub RefQuery {
 	my $q = shift;
     
-    my $csv = Text::CSV_XS->new();
+    my $csv = Text::CSV_XS->new({'binary'=>1});
     my $sth;
 
 	# Use current reference button?
