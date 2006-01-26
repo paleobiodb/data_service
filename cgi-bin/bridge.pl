@@ -7761,4 +7761,54 @@ sub logRequest {
     }
 }
 
+# These next functin simply provide simple links to all of our taxon/collection pages
+# so they can be indexed by search engines
+sub listCollections {
+	print stdIncludes ("std_page_top");
+    my $sql = "SELECT MAX(collection_no) max_id FROM collections";
+    my $page = int($q->param("page"));
+
+    my $max_id = ${$dbt->getData($sql)}[0]->{'max_id'};
+   
+    for(my $i=0;$i*200 < $max_id;$i++) {
+        if ($page == $i) {
+            print "$i ";
+        } else {
+            print "<a href=\"bridge.pl?action=listCollections&page=$i\">$i</a> ";
+        }
+    }
+    print "<BR><BR>";
+    my $start = $page*200;
+    for (my $i=$start; $i<$start+200 && $i <= $max_id;$i++) {
+        print "<a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$i\">$i</a> ";
+    }
+
+	print stdIncludes ("std_page_bottom");
+}
+
+sub listTaxa {
+	print stdIncludes ("std_page_top");
+    
+    my $sql = "SELECT MAX(taxon_no) max_id FROM authorities";
+    my $page = int($q->param("page"));
+
+    my $max_id = ${$dbt->getData($sql)}[0]->{'max_id'};
+   
+    for(my $i=0;$i*200 < $max_id;$i++) {
+        if ($page == $i) {
+            print "$i ";
+        } else {
+            print "<a href=\"bridge.pl?action=listCollections&page=$i\">$i</a> ";
+        }
+    }
+    print "<BR><BR>";
+    my $start = $page*200;
+    for (my $i=$start; $i<$start+200 && $i <= $max_id;$i++) {
+        print "<a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$i\">$i</a> ";
+    }
+
+	print stdIncludes ("std_page_bottom");
+}
+
+
 
