@@ -25,7 +25,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch stage 10mybin max_interval_no min_interval_no ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch subepoch stage 10mybin max_interval_no min_interval_no ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
 my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no reference_no comments created modified modified_temp plant_organ);
 my @specimenFieldNames = qw(authorizer enterer modifier specimen_no reference_no specimens_measured specimen_id specimen_side specimen_part specimen_coverage measurement_source magnification specimen_count comments created modified);
@@ -378,7 +378,7 @@ sub getOutFields {
 	if($tableName eq "collections") {
         if ($isSQL) {
             # These fieldnames are created virtually, not from the DB
-	        @fieldNames = grep {!/^(paleo(lat|lng)(deg|dec|min|sec|dir)|ma_max|ma_min|ma_mid|epoch|stage|period|10mybin)$/} @collectionsFieldNames;
+	        @fieldNames = grep {!/^(paleo(lat|lng)(deg|dec|min|sec|dir)|ma_max|ma_min|ma_mid|epoch|subepoch|stage|period|10mybin)$/} @collectionsFieldNames;
         } else {
 	        @fieldNames = @collectionsFieldNames;
         }
@@ -1281,9 +1281,17 @@ sub doQuery {
 		%myepoch = %{$intervalInScaleRef};
 	}
 
+	# get the Gradstein Cenozoic subepoch names for the collections
+	#  JA 26.1.06
+	# based on scale 72 = Gradstein Cenozoic subepochs
+	if ( $q->param('collections_subepoch') )	{
+		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '72');
+		%mysubepoch = %{$intervalInScaleRef};
+	}
+
 	# get the stage names for the collections PS 08/19/2005
 	# updated to use Gradstein instead of Harland JA 5.12.05
-	# based on scale 73 = Gradstein epochs
+	# based on scale 73 = Gradstein stages
 	if ( $q->param('collections_stage') )	{
 		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '73');
 		%mystage = %{$intervalInScaleRef};
@@ -2146,6 +2154,9 @@ sub doQuery {
             }
             if ($q->param("collections_epoch") eq "YES") {
                 $row->{'epoch'} = $myepoch{$row->{'collection_no'}};
+            }
+            if ($q->param("collections_subepoch") eq "YES") {
+                $row->{'subepoch'} = $mysubepoch{$row->{'collection_no'}};
             }
             if ($q->param("collections_stage") eq "YES") {
                 $row->{'stage'} = $mystage{$row->{'collection_no'}};

@@ -284,7 +284,7 @@ sub assignGenera	{
 
 
 	if ( ! open OCCS,"<$occsfile" )	{
-		print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage, or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, Cenozoic subepoch, stage, or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
         return;
 	}
 
@@ -342,6 +342,9 @@ sub assignGenera	{
 		} elsif ( $fn eq "collections.epoch" && $q->param('time_scale') eq "epochs" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "epoch";
+		} elsif ( $fn eq "collections.subepoch" && $q->param('time_scale') eq "Cenozoic subepochs" )	{
+			$field_bin = $fieldcount;
+			$bin_type = "subepoch";
 		} elsif ( $fn eq "collections.stage" && $q->param('time_scale') eq "stages" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "stage";
@@ -397,6 +400,11 @@ sub assignGenera	{
 		%basema = %{$_[3]};
 	} elsif ( $bin_type eq "epoch" )	{
         @binnames = TimeLookup::getScaleOrder($dbt,71);
+		@_ = TimeLookup::findBoundaries($dbh,$dbt);
+		%topma = %{$_[2]};
+		%basema = %{$_[3]};
+	} elsif ( $bin_type eq "subepoch" )	{
+        @binnames = TimeLookup::getScaleOrder($dbt,72);
 		@_ = TimeLookup::findBoundaries($dbh,$dbt);
 		%topma = %{$_[2]};
 		%basema = %{$_[3]};
