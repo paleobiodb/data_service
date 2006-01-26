@@ -125,7 +125,7 @@ function checkAll(checkbox,the_class){
 
 <center><h3>Basic options</h3></center>
 
-<p>This form allows you to download a file that includes selected taxonomic names, occurrences, collections, or specimens. Page through the six tabs below and select the options you want before hitting "Create data set".  To compute a diversity curve, you need to check off either "epoch" or "10 m.y. bin" in the "Collection fields" part of the form.</p>
+<p>This form allows you to download a file that includes selected taxonomic names, occurrences, collections, or specimens. Page through the six tabs below and select the options you want before hitting "Create data set".  To compute a diversity curve, you need to check off either "period," "epoch," "Cenozoic subepoch," or "10 m.y. bin" in the "Collection fields" part of the form.</p>
 
 <table width="100%" cellpadding="3" cellspacing="0">
 <tr class="lightGrey">
@@ -665,14 +665,14 @@ function checkAll(checkbox,the_class){
   <tr>
   <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_period value="YES">period</td>
   <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_epoch value="YES">epoch</td>
+  <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_subepoch value="YES">Cenozoic subepoch</td>
   <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_stage value="YES">stage</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_10mybin value="YES" CHECKED>10 m.y. bin</td>
   </tr>
 
   <tr>
+  <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_10mybin value="YES" CHECKED>10 m.y. bin</td>
   <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_max_interval_no value="YES">maximum interval</td>
   <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_min_interval_no value="YES">minimum interval</td>
-  <td class="tinyText" nowrap>&nbsp;</td>
   <td class="tinyText" nowrap>&nbsp;</td>
   </tr>
   
