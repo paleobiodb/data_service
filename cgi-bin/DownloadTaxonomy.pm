@@ -547,8 +547,11 @@ sub getTaxonomicNames {
     }
 
     if ($options{'taxon_pubyr'}) {
-        my $pubyr = $dbh->quote($options{'taxon_pubyr'});
-        push @where, "IF(a.ref_is_authority='YES',r.pubyr LIKE $pubyr,a.pubyr LIKE $pubyr)";
+        my $sign = ($options{'taxon_pubyr_before_after'} eq 'before') ? '<=' 
+                 : ($options{'taxon_pubyr_before_after'} eq 'exactly') ? '=' 
+                                                                       : '>=';
+        my $pubyr = int($options{'taxon_pubyr'});
+        push @where, "IF(a.ref_is_authority='YES',r.pubyr $sign $pubyr AND r.pubyr REGEXP '[0-9]+',a.pubyr $sign $pubyr AND a.pubyr REGEXP '[0-9]+')";
     }
 
     if ($options{'taxon_author'}) {
@@ -738,8 +741,11 @@ sub getTaxonomicOpinions {
     }
 
     if ($options{'opinion_pubyr'}) {
-        my $pubyr = $dbh->quote($options{'opinion_pubyr'});
-        push @where, "IF(o.ref_has_opinion='YES',r.pubyr LIKE $pubyr,o.pubyr LIKE $pubyr)";
+        my $sign = ($options{'opinion_pubyr_before_after'} eq 'before') ? '<=' 
+                 : ($options{'opinion_pubyr_before_after'} eq 'exactly') ? '=' 
+                                                                       : '>=';
+        my $pubyr = int($options{'opinion_pubyr'});
+        push @where, "IF(o.ref_has_opinion='YES',r.pubyr $sign $pubyr AND r.pubyr REGEXP '[0-9]+',o.pubyr $sign $pubyr AND o.pubyr REGEXP '[0-9]+')";
     }
 
     if ($options{'opinion_author'}) {

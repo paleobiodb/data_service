@@ -40,14 +40,21 @@
     <table width="100%" border=0 cellpadding=3 cellspacing=0>
       <tr>
         <td>Data authorizer:</td>
-        <td><input name="taxon_authorizer_reversed" size=14 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[0].taxon_authorizer_reversed.value='%%authorizer_reversed%%'">Me</a></td>
+        <td><input name="taxon_authorizer_reversed" size=14 onKeyUp="doComplete(event, this, authorizerNames());"></a></td>
       </tr>
       <tr class="lightGrey">
         <td>Author:</td>
         <td><input name="taxon_author" size=14><br></td>
       </tr>
       <tr>
-        <td>Publication year:</td>
+        <td style="white-space: nowrap;">
+        Publication year
+          <select name="taxon_pubyr_before_after">
+            <option>before</option>
+            <option selected>after</option>
+            <option>exactly</option>
+          </select>:
+        </td>
         <td><input name="taxon_pubyr" size=4><br></td>
       </tr>
       <tr class="lightGrey">
@@ -55,14 +62,14 @@
         <td><input name="taxon_reference_no" size=10><br></td>
       </tr>
       <tr>
-        <td>
+        <td style="white-space: nowrap;">
           Record created
           <select name="taxon_created_before_after">
             <option>before</option>
             <option selected>after</option>
           </select>:
         </td>
-        <td>
+        <td style="white-space: nowrap;">
           <select name="taxon_created_day">
             <option selected></option>
             <script language="JavaScript" type="text/javascript">fillDays();</script>
@@ -85,14 +92,21 @@
     <table width="100%" border=0 cellpadding=3 cellspacing=0>
       <tr>
         <td>Data authorizer:</td>
-        <td><input name="opinion_authorizer_reversed" size=14 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[0].opinion_authorizer_reversed.value='%%authorizer_reversed%%'">Me</a></td>
+        <td><input name="opinion_authorizer_reversed" size=14 onKeyUp="doComplete(event, this, authorizerNames());"></a></td>
       </tr>
       <tr class="lightGrey">
         <td>Author:</td>
         <td><input name="opinion_author" size=14><br></td>
       </tr>
       <tr>
-        <td>Publication year:</td>
+        <td style="white-space: nowrap;">
+          Publication year
+          <select name="opinion_pubyr_before_after">
+            <option>before</option>
+            <option selected>after</option>
+            <option>exactly</option>
+          </select>:
+        </td>
         <td><input name="opinion_pubyr" size=4><br></td>
       </tr>
       <tr class="lightGrey">
@@ -100,14 +114,14 @@
         <td><input name="opinion_reference_no" size=10><br></td>
       </tr>
       <tr>
-        <td>
+        <td style="white-space: nowrap;">
           Record created
           <select name="opinion_created_before_after">
             <option>before</option>
             <option selected>after</option>
           </select>:
         </td>
-        <td>
+        <td style="white-space: nowrap;">
           <select name="opinion_created_day">
             <option selected></option>
             <script language="JavaScript" type="text/javascript">fillDays();</script>
