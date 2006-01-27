@@ -44,7 +44,7 @@ my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
 my $COAST_DIR = $ENV{MAP_COAST_DIR};
 my $outFileBaseName;
 
-my (@timescale_errors,@timescale_warnings);
+my (@form_errors,@form_warnings);
 
 sub new {
 	my $class = shift;
@@ -100,10 +100,12 @@ sub retellOptions {
 	$html .= $self->retellOptionsRow ( "Authorizer", $q->param("authorizer_reversed") );
 	$html .= $self->retellOptionsRow ( "Output data type", $q->param("output_data") );
 	$html .= $self->retellOptionsRow ( "Output data format", $q->param("output_format") );
-    if ($q->param("research_group_restricted_to")) {
-	    $html .= $self->retellOptionsRow ( "Research group or project", "restricted to ".$q->param("research_group"));
-    } else {
-	    $html .= $self->retellOptionsRow ( "Research group or project", "includes ".$q->param("research_group"));
+    if ($q->param('research_group')) {
+        if ($q->param("research_group_restricted_to")) {
+            $html .= $self->retellOptionsRow ( "Research group or project", "restricted to ".$q->param("research_group"));
+        } else {
+            $html .= $self->retellOptionsRow ( "Research group or project", "includes ".$q->param("research_group"));
+        }
     }
     
 	# added by rjp on 12/30/2003
@@ -189,31 +191,55 @@ sub retellOptions {
 		}
 	}
 
-	if ( $q->param("latmin") > -90 && $q->param("latmin") < 90 )	{
-		$html .= $self->retellOptionsRow ( "Minimum latitude", $q->param("latmin") . "&deg;" );
-	}
-	if ( $q->param("latmax") > -90 && $q->param("latmax") < 90 )	{
-		$html .= $self->retellOptionsRow ( "Maximum latitude", $q->param("latmax") . "&deg;" );
-	}
-	if ( $q->param("lngmin") > -180 && $q->param("lngmin") < 180 )	{
-		$html .= $self->retellOptionsRow ( "Minimum longitude", $q->param("lngmin") . "&deg;" );
-	}
-	if ( $q->param("lngmax") > -180 && $q->param("lngmax") < 180 )	{
-		$html .= $self->retellOptionsRow ( "Maximum longitude", $q->param("lngmax") . "&deg;" );
-	}
+    # all the boundaries must be given
+    my @ranges = ([$q->param('latmin1'),$q->param('latmax1'),-90,90],
+               [$q->param('lngmin1'),$q->param('lngmax1'),-180,180],
+               [$q->param('latmin2'),$q->param('latmax2'),-90,90],
+               [$q->param('lngmin2'),$q->param('lngmax2'),-180,180],
+               [$q->param('paleolatmin1'),$q->param('paleolatmax1'),-90,90],
+               [$q->param('paleolngmin1'),$q->param('paleolngmax1'),-180,180],
+               [$q->param('paleolatmin2'),$q->param('paleolatmax2'),-90,90],
+               [$q->param('paleolngmin2'),$q->param('paleolngmax2'),-180,180]);
+    my @range_descriptions;
 
-	if ( $q->param("paleolatmin") > -90 && $q->param("paleolatmin") < 90 )	{
-		$html .= $self->retellOptionsRow ( "Minimum paleolatitude", $q->param("paleolatmin") . "&deg;" );
-	}
-	if ( $q->param("paleolatmax") > -90 && $q->param("paleolatmax") < 90 )	{
-		$html .= $self->retellOptionsRow ( "Maximum paleolatitude", $q->param("paleolatmax") . "&deg;" );
-	}
-	if ( $q->param("paleolngmin") > -180 && $q->param("paleolngmin") < 180 )	{
-		$html .= $self->retellOptionsRow ( "Minimum paleolongitude", $q->param("paleolngmin") . "&deg;" );
-	}
-	if ( $q->param("paleolngmax") > -180 && $q->param("paleolngmax") < 180 )	{
-		$html .= $self->retellOptionsRow ( "Maximum paleolongitude", $q->param("paleolngmax") . "&deg;" );
-	}
+    # Create text descriptions of what the user has entered for the diff. ranges above
+    for(my $i=0;$i<@ranges;$i++) {
+        my ($min,$max,$lower,$upper) = @{$ranges[$i]};
+        my $description = "";
+
+        # If either the min or max value has been changed from an upper bound
+        # (i.e. its been modified by the user) than we want to print a description
+        # message
+        if (($min > $lower && $min < $upper) ||
+            ($max > $lower && $max < $upper)) {
+
+            # Case 1: they've both been changed, print a range
+            # Case 2: one has been change, its the minimum value.  max is unchanged
+            # Case 3: (else): one has been changed, its the maximum value. min is unchanged
+            if ($min > $lower && $max < $upper) {
+                $description .= "$min&deg; to $max&deg;";
+            } elsif ($min > $lower) {
+                $description .= "greater than $min&deg; "
+            } else {
+                $description .= "less than $max&deg; "
+            }
+        }
+
+        # Now store this text description, which will be a empty string if the user
+        # didn't edit this range, else will be a text string describing the changes
+        $range_descriptions[$i]=$description;
+    }
+  
+    # Print out the text generated above
+    $html .= $self->retellOptionsRow("Latitudinal range", $range_descriptions[0]); 
+    $html .= $self->retellOptionsRow("Longitudinal range", $range_descriptions[1]); 
+    $html .= $self->retellOptionsRow("Additional latitudinal range", $range_descriptions[2]); 
+    $html .= $self->retellOptionsRow("Additional longitudinal range", $range_descriptions[3]); 
+    $html .= $self->retellOptionsRow("Paleolatitudinal range", $range_descriptions[4]); 
+    $html .= $self->retellOptionsRow("Paleolongitudinal range", $range_descriptions[5]); 
+    $html .= $self->retellOptionsRow("Additional paleolatitudinal range", $range_descriptions[6]); 
+    $html .= $self->retellOptionsRow("Additional paleolongitudinal range", $range_descriptions[7]); 
+    
 	
 	$html .= $self->retellOptionsRow ( "Lump lists of same county & formation?", $q->param("lumplist") );
 
@@ -629,29 +655,41 @@ sub getPaleoLatLongString	{
     my $coord_sql = "";
 
 	# all the boundaries must be given
-	if ( $q->param('paleolatmin') eq "" || $q->param('paleolatmax') eq "" || 
-	     $q->param('paleolngmin') eq "" || $q->param('paleolngmax') eq "") {
-		return "";
-	}
-	# at least one of the boundaries must be non-trivial
-	if ( $q->param('paleolatmin') <= -90 && $q->param('paleolatmax') >= 90 && 
-	     $q->param('paleolngmin') <= -180 && $q->param('paleolngmax') >= 180) {
-		return "";
-	}
+    foreach my $i (1..2) {
+        my $latmin = $q->param('paleolatmin'.$i);
+        my $latmax = $q->param('paleolatmax'.$i);
+        my $lngmin = $q->param('paleolngmin'.$i);
+        my $lngmax = $q->param('paleolngmax'.$i);
 
-    if ($q->param('paleolatmin') > -90 ) {
-        $coord_sql .= " AND paleolat >= ".$dbh->quote($q->param('paleolatmin'));
+        # all the boundaries must be given
+        if ( $latmin !~ /^-?\d+$/ || $latmax !~ /^-?\d+$/ || $lngmin !~ /^-?\d+$/ || $lngmax !~ /^-?\d+$/)	{
+            push @form_errors,"Paleolatitude and paleolongitude must be positive or negative integer values";
+            next;
+        }
+        # at least one of the boundaries must be non-trivial
+        if ( $latmin <= -90 && $latmax >= 90 && $lngmin <= -180 && $lngmax >= 180 )	{
+            next;
+        }
+
+        my @clauses = ();
+        if ($latmin > -90) {
+            push @clauses,"paleolat >= $latmin";
+        }
+        if ($latmax < 90 ) {
+            push @clauses, "paleolat <= $latmax";
+        }
+        if ($lngmin > -180 ) {
+            push @clauses, "paleolng >= $lngmin";
+        }
+        if ($lngmax < 180 ) {
+            push @clauses, "paleolng <= $lngmax";
+        }
+        $coord_sql .= " OR (".join(" AND ",@clauses).")";
     }
-    if ($q->param('paleolatmax') < 90 ) {
-        $coord_sql .= " AND paleolat <= ".$dbh->quote($q->param('paleolatmax'));
+    $coord_sql =~ s/^ OR//;
+    if ($coord_sql) {
+        $coord_sql = '('.$coord_sql.')';
     }
-    if ($q->param('paleolngmin') > -180 ) {
-        $coord_sql .= " AND paleolng >= ".$dbh->quote($q->param('paleolngmin'));
-    }
-    if ($q->param('paleolngmax') < 180 ) {
-        $coord_sql .= " AND paleolng <= ".$dbh->quote($q->param('paleolngmax'));
-    }
-    $coord_sql =~ s/ AND //;
     return $coord_sql;
 }
 
@@ -659,51 +697,58 @@ sub getPaleoLatLongString	{
 sub getLatLongString	{
 	my $self = shift;
 
-	my $latmin = $q->param('latmin');
-	my $latmax = $q->param('latmax');
-	my $lngmin = $q->param('lngmin');
-	my $lngmax = $q->param('lngmax');
-	my $abslatmin = abs($latmin);
-	my $abslatmax = abs($latmax);
-	my $abslngmin = abs($lngmin);
-	my $abslngmax = abs($lngmax);
+    my $latlongclause = "";
+    foreach my $i (1..2) {
+        my $latmin = $q->param('latmin'.$i);
+        my $latmax = $q->param('latmax'.$i);
+        my $lngmin = $q->param('lngmin'.$i);
+        my $lngmax = $q->param('lngmax'.$i);
+        my $abslatmin = abs($latmin);
+        my $abslatmax = abs($latmax);
+        my $abslngmin = abs($lngmin);
+        my $abslngmax = abs($lngmax);
 
-	# all the boundaries must be given
-	if ( $latmin eq "" || $latmax eq "" || $lngmin eq "" || $lngmax eq "" )	{
-		return "";
-	}
-	# at least one of the boundaries must be non-trivial
-	if ( $latmin <= -90 && $latmax >= 90 && $lngmin <= -180 && $lngmax >= 180 )	{
-		return "";
-	}
+        # all the boundaries must be given
+        if ( $latmin !~ /^-?\d+$/ || $latmax !~ /^-?\d+$/ || $lngmin !~ /^-?\d+$/ || $lngmax !~ /^-?\d+$/)	{
+            push @form_errors,"Latitude and longitude must be positive or negative integer values";
+            next;
+        }
+        # at least one of the boundaries must be non-trivial
+        if ( $latmin <= -90 && $latmax >= 90 && $lngmin <= -180 && $lngmax >= 180 )	{
+            next;
+        }
 
-	my $latlongclause = " ( ";
+        $latlongclause .= " OR (";
+        if ( $latmin >= 0 )	{
+            $latlongclause .= "latdeg>=$abslatmin AND latdir='North'";
+        } else	{
+            $latlongclause .= "((latdeg<$abslatmin AND latdir='South') OR latdir='North')";
+        }
+        $latlongclause .= " AND ";
+        if ( $latmax >= 0 )	{
+            $latlongclause .= "((latdeg<$abslatmax AND latdir='North') OR latdir='South')";
+        } else	{
+            $latlongclause .= "latdeg>=$abslatmax AND latdir='South'";
+        }
+        $latlongclause .= " AND ";
+        if ( $lngmin >= 0 )	{
+            $latlongclause .= "lngdeg>=$abslngmin AND lngdir='East'";
+        } else	{
+            $latlongclause .= "((lngdeg<$abslngmin AND lngdir='West') OR lngdir='East')";
+        }
+        $latlongclause .= " AND ";
+        if ( $lngmax >= 0 )	{
+            $latlongclause .= "((lngdeg<$abslngmax AND lngdir='East') OR lngdir='West')";
+        } else	{
+            $latlongclause .= "lngdeg>=$abslngmax AND lngdir='West'";
+        }
+        $latlongclause .= ")";
+    }
+    $latlongclause =~ s/^ OR//;
+    if ($latlongclause) {
+        $latlongclause = '('.$latlongclause.')';
+    }
 
-	if ( $latmin >= 0 )	{
-		$latlongclause .= " ( latdeg>=$abslatmin && latdir='North' ) ";
-	} else	{
-		$latlongclause .= " ( ( latdeg<$abslatmin && latdir='South' ) OR latdir='North' ) ";
-	}
-	$latlongclause .= "AND";
-	if ( $latmax >= 0 )	{
-		$latlongclause .= " ( ( latdeg<$abslatmax && latdir='North' ) OR latdir='South' ) ";
-	} else	{
-		$latlongclause .= " ( latdeg>=$abslatmax && latdir='South' ) ";
-	}
-	$latlongclause .= "AND";
-	if ( $lngmin >= 0 )	{
-		$latlongclause .= " ( lngdeg>=$abslngmin AND lngdir='East' ) ";
-	} else	{
-		$latlongclause .= " ( ( lngdeg<$abslngmin AND lngdir='West' ) OR lngdir='East' ) ";
-	}
-	$latlongclause .= "AND";
-	if ( $lngmax >= 0 )	{
-		$latlongclause .= " ( ( lngdeg<$abslngmax AND lngdir='East' ) OR lngdir='West' ) ";
-	} else	{
-		$latlongclause .= " ( lngdeg>=$abslngmax AND lngdir='West' ) ";
-	}
-
-	$latlongclause .= " ) ";
 
 	return $latlongclause;
 }
@@ -723,8 +768,8 @@ sub getIntervalString	{
 
 	if ( $max )	{
 		my ($collref,$errors,$warnings) = TimeLookup::processLookup($dbh, $dbt, $eml_max, $max, $eml_min, $min);
-        @timescale_errors = @$errors;
-        @timescale_warnings = @$warnings;
+        @form_errors = @$errors;
+        @form_warnings = @$warnings;
 		my @colls = @{$collref};
 		if ( @colls )	{
 		    return " ( c.collection_no IN ( " . join (',',@colls) . " ) )";
@@ -1654,6 +1699,16 @@ sub doQuery {
 	}
 	$self->dbg ( "Output header: $headerline" );
     
+
+    if (@form_errors) {
+        my $plural = (scalar(@form_errors) > 1) ? "s" : "";
+        print "<br><div align=center><table width=600 border=0>" .
+              "<tr><td class=darkList><font size='+1'><b> Error$plural</b></font></td></tr>" .
+              "<tr><td>";
+        print "<li class='medium'>$_</li>" for (@form_errors);
+        print "</td></tr></table></div><br>";
+        return;
+    } 
 	#
 	# Loop through the result set
     #
@@ -2517,13 +2572,12 @@ sub doQuery {
 	}
 
 
-    # Display header link that says which collections we're currently viewing
-    if (@timescale_warnings) {
-        my $plural = (scalar(@timescale_warnings) > 1) ? "s" : "";
+    if (@form_warnings) {
+        my $plural = (scalar(@form_warnings) > 1) ? "s" : "";
         print "<br><div align=center><table width=600 border=0>" .
               "<tr><td class=darkList><font size='+1'><b> Warning$plural</b></font></td></tr>" .
               "<tr><td>";
-        print "<li class='medium'>$_</li>" for (@timescale_warnings);
+        print "<li class='medium'>$_</li>" for (@form_warnings);
         print "</td></tr></table></div><br>";
     } 
 
@@ -2721,7 +2775,7 @@ sub setupOutput {
             my ($eml, $name) = TimeLookup::splitInterval($dbt,$q->param('max_interval_name'));
             my $ret = Validation::checkInterval($dbt,$eml,$name);
             if (!$ret) {
-                push @errors, "There is no record of ".$q->param('max_interval_name')." in the database";
+                push @form_errors, "There is no record of ".$q->param('max_interval_name')." in the database";
                 $q->param('max_interval_name'=>'');
                 $q->param('max_eml_interval'=>'');
             } else {
@@ -2735,7 +2789,7 @@ sub setupOutput {
             my ($eml, $name) = TimeLookup::splitInterval($dbt,$q->param('min_interval_name'));
             my $ret = Validation::checkInterval($dbt,$eml,$name);
             if (! $ret) {
-                push @errors, "There is no record of ".$q->param('min_interval_name')." in the database";
+                push @form_errors, "There is no record of ".$q->param('min_interval_name')." in the database";
                 $q->param('min_interval_name'=>'');
                 $q->param('min_eml_interval'=>'');
             } else {
@@ -2762,7 +2816,7 @@ sub setupOutput {
     foreach my $taxon (@taxa) {
         my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon);
         if (scalar(@taxon_nos)  > 1) {
-            push @errors, "The taxon name '$taxon' is ambiguous and belongs to multiple taxonomic hierarchies. Right the download script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
+            push @form_errors, "The taxon name '$taxon' is ambiguous and belongs to multiple taxonomic hierarchies. Right the download script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
         }
     } 
 
@@ -2775,14 +2829,6 @@ sub setupOutput {
             }
         }
     }
-    
-
-    # Now if there are any errors, die
-    if (@errors) {
-        PBDBUtil::printErrors(@errors);
-        print main::stdIncludes("std_page_bottom");
-        exit;     
-    }    
 }
 
 sub formatRow {
