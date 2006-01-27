@@ -262,8 +262,17 @@ sub assignGenera	{
 		}
 	}
 
-	my $occsfilecsv = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.csv";
-	my $occsfiletab = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.tab";
+    my ($occsfilecsv,$occsfiletab);
+    if ($q->param("time_scale") =~ /neptune pacman/i) {
+        $occsfilecsv = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-pacman.csv";
+        $occsfiletab = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-pacman.tab";
+    } elsif ($q->param("time_scale") =~ /neptune/i) {
+        $occsfilecsv = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-neptune.csv";
+        $occsfiletab = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-neptune.tab";
+    } else {
+        $occsfilecsv = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.csv";
+        $occsfiletab = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.tab";
+    }
     if ((-e $occsfiletab && -e $occsfilecsv && ((-M $occsfiletab) < (-M $occsfilecsv))) ||
         (-e $occsfiletab && !-e $occsfilecsv)){
         $self->dbg("using tab $occsfiletab");
@@ -284,7 +293,11 @@ sub assignGenera	{
 
 
 	if ( ! open OCCS,"<$occsfile" )	{
-		print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, Cenozoic subepoch, stage, or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+        if ($q->param("time_scale") =~ /neptune/i) {
+		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of samples sample age data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadNeptuneForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+        } else {
+		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage, or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+        }
         return;
 	}
 
@@ -304,6 +317,7 @@ sub assignGenera	{
     $status = $csv->parse($_);
     if (!$status) { print "Warning, error parsing CSV line $count"; }
     my @fieldnames = $csv->fields();
+    @OCCDATA = <OCCS>;
 	#s/\n//;
 	#my @fieldnames;
 	## tab-delimited file
@@ -320,12 +334,17 @@ sub assignGenera	{
 	for my $fn (@fieldnames)	{
 		if ( $fn eq "collection_no" )	{
 			$field_collection_no = $fieldcount;
+        } elsif ( $fn eq "sample_id" ) {
+            $field_collection_no = $fieldcount;
 		} elsif ( $fn eq "occurrences.reference_no" && $q->param('count_refs') eq "yes" )	{
 			$field_genus_name = $fieldcount;
 		} elsif ( $fn eq "genus_name" && $q->param('count_refs') ne "yes" )	{
 			$field_genus_name = $fieldcount;
 		} elsif ( $fn eq "occurrences.species_name" )	{
 			$field_species_name = $fieldcount;
+        } elsif ( $fn eq "resolved_fossil_name" )   {
+            $field_genus_name = $fieldcount;
+            $field_species_name = $fieldcount;
 		} elsif ( $fn eq "occurrences.abund_unit" )	{
 			$field_abund_unit = $fieldcount;
 		} elsif ( $fn eq "occurrences.abund_value" )	{
@@ -351,41 +370,68 @@ sub assignGenera	{
 		} elsif ( $fn eq "collections.10mybin" && $q->param('time_scale') eq "10 m.y. bins" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "10my";
-		}
+		} elsif ( $fn eq "sample_age_ma" && $q->param('time_scale') =~ /neptune pacman/i) {
+            $field_bin = $fieldcount;
+            $bin_type = "neptune_pacman";
+		} elsif ( $fn eq "sample_age_ma" && $q->param('time_scale') =~ /neptune/i) {
+            $field_bin = $fieldcount;
+            $bin_type = "neptune";
+        }
 		$fieldcount++;
 	}
 
 	# this first condition never should be met, just being careful here
-	if ( $field_collection_no < 0 )	{
-		print "<h3>The data can't be analyzed because the collection number field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+    my $downloadForm = "displayDownloadForm";
+    if ($q->param('time_scale') =~ /neptune/i) {
+        $downloadForm = "displayDownloadNeptuneForm";
+    }
+	if ( $field_collection_no < 0)	{
+        my $collection_field = "collection number";
+        if ($q->param('time_scale') =~ /neptune/i) {
+            $collection_field = "sample id";
+        } 
+		print "<h3>The data can't be analyzed because the $collection_field field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	# this one is crucial and might be missing
 	} elsif ( ! $field_bin )	{
 		my $time_scale_field = $q->param('time_scale');
 		$time_scale_field =~ s/s$//;
-		print "<h3>The data can't be analyzed because the $time_scale_field field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+        if ($time_scale_field =~ /neptune/i) {
+            $time_scale_field = "sample_age_ma";
+        }
+		print "<h3>The data can't be analyzed because the $time_scale_field field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	# this one also always should be present anyway, unless the user
 	#  screwed up and didn't download the ref numbers despite wanting
 	#  refs counted instead of genera
 	} elsif ( ! $field_genus_name )	{
 		if ( $q->param('count_refs') ne "yes" )	{
-			print "<h3>The data can't be analyzed because the genus name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+			print "<h3>The data can't be analyzed because the genus name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		} else	{
-			print "<h3>The data can't be analyzed because the reference number field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+			print "<h3>The data can't be analyzed because the reference number field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		}
 		exit;
 	# these two might be missing
+    } elsif ( $q->param("taxon_rank") eq 'species' && $field_species_name && $q->param('count_refs') ne "yes") {
+		print "<h3>The data can't be analyzed because the species name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 	} elsif ( ! $field_abund_value && $samplingmethod == 5 )	{
-		print "<h3>The data can't be analyzed because the abundance value field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because the abundance value field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	} elsif ( ! $field_abund_unit && $samplingmethod == 5 )	{
-		print "<h3>The data can't be analyzed because the abundance unit field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because the abundance unit field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	} elsif ( ! $field_refno && ( $q->param('weight_by_ref') eq "yes" || $q->param('ref_quota') > 0 || $q->param('print_refs_raw') eq "yes" || $q->param('print_refs_ss') eq "yes" ) )	{
-		print "<h3>The data can't be analyzed because the reference number field <i>from the collections table</i> hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because the reference number field <i>from the collections table</i> hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
-	}
+	} elsif ( $q->param("time_scale") =~ /neptune/i ) {
+        if ($q->param("neptune_bin_size") !~ /^(\d+(\.\d+)?|\.\d+)$/) {
+            print "<h3>Please enter a positive decimal number for the bin size to use if you are analyzing data from the Neptune database</h3>";
+            exit;
+        } elsif ($q->param("neptune_bin_size") < .1 || $q->param("neptune_bin_size") > 100) {
+            print "<h3>Bin size must be between .1 and 100</h3>";
+            exit;
+        }
+    }
 
 	# figure out the ID numbers of the bins from youngest to oldest
 	# we do this in a messy way, i.e., using preset arrays; if the
@@ -418,7 +464,19 @@ sub assignGenera	{
 		@_ = TimeLookup::processBinLookup($dbh,$dbt,"boundaries");
 		%topma = %{$_[0]};
 		%basema = %{$_[1]};
-	}
+	} elsif ( $bin_type =~ /neptune/ ) {
+        # Neptune data ranges from -3 to 150 mA right now, use those at defaults
+        $neptune_range_min = 0;
+        $neptune_bin_count = int(180/$q->param('neptune_bin_size'));
+        $neptune_range_max = $q->param('neptune_bin_size')*$neptune_bin_count;
+        #foreach (@OCCDATA) {
+        #    
+        #}
+        @binnames = ();
+        for(my $i=$neptune_range_min;$i<$neptune_range_max;$i+=$q->param('neptune_bin_size')) {
+            push @binnames,"$i - ".($i+$q->param('neptune_bin_size'));
+        }
+    }
 	# assign chron numbers to named bins
 	# note: $chrons and $chname are key variables used later
 	for my $bn (@binnames)	{
@@ -427,8 +485,19 @@ sub assignGenera	{
 		$chname[$chrons] = $bn;
 	}
 
+    # HARDCODED for NOW, change this later PS 1/10/2005
+    if ( $bin_type =~ /neptune/i) {
+        $q->param("taxon_rank"=>"species");
+    } else {
+        $q->param("taxon_rank"=>"genus");
+    }
+
     my $count=0;
-		while (<OCCS>)	{
+    # The sample id variables maps neptune sample ids (text strings) to integers so that the curve script may
+    # process them correctly
+    #my %sampleid = ();
+    #my $sampleid_count = 0;
+        foreach (@OCCDATA) {
 			#s/\n//;
             $status = $csv->parse($_);
             my @occrow = $csv->fields();
@@ -440,14 +509,54 @@ sub assignGenera	{
 			#}
 			# comma-delimited file
 			#else	{
-		#		@occrow = split /,/,$_;
+		    #		@occrow = split /,/,$_;
 			#}
 
-		# set the bin ID number (chid) for the collection
-		# time interval name has some annoying quotes
-			$occrow[$field_bin] =~ s/"//g;
-			$chid[$occrow[$field_collection_no]] = $binnumber{$occrow[$field_bin]};
+    		# set the bin ID number (chid) for the collection
+	    	# time interval name has some annoying quotes
+            if ($bin_type =~ /neptune/i) {
+                # The curve script assumes that collection_no will be an integer while
+                # the Neptune database uses non integer collection numbers.  So we map
+                # the non-integer collection_nos to integers and keep track of the mapping
+                # with a hash array called %sampleid PS 1/10/2005
+                #my $sampleid = $occrow[$field_collection_no];
+                #if ($sampleids{$sampleid}) {
+                #    my $collection_no = $sampleids{$sampleid};
+                #    $occrow[$field_collection_no] = $collection_no;
+                #} else {
+                #    $sampleid_count++;
+                #    $sampleids{$sampleid} = $sampleid_count;
+                #    $occrow[$field_collection_no] = $sampleid_count;
+                #}
+                my $bottom_binname = int($occrow[$field_bin]/$q->param('neptune_bin_size'))*$q->param('neptune_bin_size');
+                my $binname = $bottom_binname." - ".($bottom_binname+$q->param('neptune_bin_size'));
 
+                $chid[$occrow[$field_collection_no]] = $binnumber{$binname};
+            } else {
+                $occrow[$field_bin] =~ s/"//g;
+                $chid[$occrow[$field_collection_no]] = $binnumber{$occrow[$field_bin]};
+            }
+
+            # Handle analysis by genus/species.  For simplicity sake we just
+            # subsitute the full species name into the genus name field so the rest
+            # of the script doesn't need to be changed below. Bit of a hack, PS 1/10/2005
+            if ($q->param("taxon_rank") eq "genus") {
+                if ($bin_type =~ /neptune/i) {
+                    my $taxon_name = $occrow[$field_genus_name];
+                    my ($genus_name) = split(/ /,$taxon_name);
+                    $occrow[$field_genus_name] = $genus_name;
+                } 
+                # else, nothing needs to be done for PBDB data
+            } else { #species
+                if ($bin_type =~ /neptune/i) {
+                    # do this since we may have subspecies
+                    my $taxon_name = $occrow[$field_genus_name];
+                    my ($genus_name,$species_name) = split(/ /,$taxon_name);
+                    $occrow[$field_genus_name] = $genus_name." ".$species_name;
+                } else {
+                    $occrow[$field_genus_name].= " ".$occrow[$field_species_name]; 
+                }
+            }
 	
 		# get rid of records with no specimen/individual counts for method 5
 			if ($samplingmethod == 5)   {
@@ -602,9 +711,30 @@ sub assignGenera	{
 		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/presences.txt<BR>$!" );
 	}
 
+    # For neptune data, we make bin names for all bins up to 200 ma year ago, now we
+    # trim those bins down after the fact by setting chrons to be the last bin with
+    # occurrences in it
+    if ($bin_type =~ /neptune/i) {
+        #foreach($i = 0; $i < $chrons;$i++) {
+        #    print "$i : listsinchron $listsinchron[$i]<BR>";
+        #}
+        my $i = 0;
+        foreach($i=$chrons;$i > 0;$i--) {
+            if ($listsinchron[$i]) {
+                last;
+            }
+        }
+        $chrons = $i;
+        #print "last $i";
+    }
+
 	# compute sampled diversity, range through diversity, originations,
 	#  extinctions, singletons and doubletons (Chao l and m)
-	print PADATA "genus\ttotal occs";
+    if ($q->param("taxon_rank") eq "genus") {
+	    print PADATA "genus\ttotal occs";
+    } else {
+	    print PADATA "species\ttotal occs";
+    }
 	for $i (reverse 1..$chrons)	{
 		print PADATA "\t$chname[$i]";
 	}
@@ -1289,6 +1419,9 @@ sub printResults	{
 		$listorfm = "Lists"; # I'm not sure why this is a variable
 					# but what the heck
 		$generaorrefs = "genera";
+        if ( $q->param('taxon_rank') eq 'species') {
+            $generaorrefs = "species";
+        }
 		if ( $q->param('count_refs') eq "yes" )	{
 			$generaorrefs = "references";
 		}
@@ -2319,11 +2452,15 @@ sub printResults	{
 	
 		print "<li>A first-by-last occurrence count matrix (<a href=\"http://$CURVE_HOST$PRINTED_DIR/firstlast.txt\">firstlast.txt</a>)<p>\n";
 	
-		print "<li>A list of each genus, the number of collections including it,  and the ID number of the intervals in which it was found (<a href=\"http://$CURVE_HOST$PRINTED_DIR/presences.txt\">presences.txt</a>)<p>\n";
+		print "<li>A list of each ".$q->param('taxon_rank').", the number of collections including it,  and the ID number of the intervals in which it was found (<a href=\"http://$CURVE_HOST$PRINTED_DIR/presences.txt\">presences.txt</a>)<p>\n";
 
 		print "</ul><p>\n";
 
-		print "\nYou may wish to <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">download another data set</a></b> before you run another analysis.<p>\n";
+        my $downloadForm = "displayDownloadForm";
+        if ($q->param('time_scale') =~ /neptune/i) {
+            $downloadForm = "displayDownloadNeptuneForm";
+        }  
+		print "\nYou may wish to <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">download another data set</a></b> before you run another analysis.<p>\n";
 	
 	}
 	else	{

@@ -40,6 +40,7 @@ use Confidence;
 use Measurement;
 use TaxaCache;
 use DownloadTaxonomy;
+use Neptune;
 
 # god awful Poling modules
 #use Occurrence; - entirely deprecated, only ever called by Collection.pm
@@ -917,6 +918,18 @@ sub displayDownloadResults {
 	print stdIncludes("std_page_bottom");
 }
 
+sub displayDownloadNeptuneForm {
+    print stdIncludes("std_page_top");
+    print $hbo->populateHTML( 'download_neptune_form', [], []);
+    print stdIncludes("std_page_bottom");
+}       
+    
+sub displayDownloadNeptuneResults {
+    print stdIncludes( "std_page_top" );
+    Neptune::displayNeptuneDownloadResults($q,$s,$hbo);
+    print stdIncludes("std_page_bottom");
+}  
+
 sub displayDownloadTaxonomyForm {
     print stdIncludes("std_page_top");
     
@@ -966,7 +979,16 @@ sub displayCurveForm {
 
 	print stdIncludes( "std_page_top" );
 
-	print $hbo->populateHTML( 'curve_form', [ '', '', '', '' ] , [ 'research_group', 'collection_type', 'lithology1', 'lithology2' ] );
+	my $html = $hbo->populateHTML( 'curve_form', [ '', '', '', '' ] , [ 'research_group', 'collection_type', 'lithology1', 'lithology2' ] );
+    if ($q->param("input_data") eq 'neptune') {
+        $html =~ s/<option selected>10 m\.y\./<option>10 m\.y\./;
+        $html =~ s/<option>Neptune PACMAN/<option selected>Neptune PACMAN/;
+    }
+    if ($q->param("yourname") && !$s->isDBMember()) {
+        my $yourname = $q->param("yourname");
+        $html =~ s/<input name=yourname/<input name=yourname value="$yourname"/;
+    }
+    print $html;
 
 	print stdIncludes("std_page_bottom");
 }
