@@ -25,9 +25,11 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch subepoch stage 10mybin max_interval_no min_interval_no ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localorder regionalsection regionalbed regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
-my @occurrencesFieldNames = qw(authorizer enterer modifier occurrence_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
-my @reidentificationsFieldNames = qw(authorizer enterer modifier reid_no genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no reference_no comments created modified modified_temp plant_organ);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch subepoch stage 10mybin max_interval_no min_interval_no ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
+my @occFieldNames = qw(authorizer enterer modifier occurrence_no abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
+my @occTaxonFieldNames = qw(class_name order_name family_name genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no);
+my @reidFieldNames = qw(authorizer enterer modifier reid_no reference_no comments created modified modified_temp plant_organ);
+my @reidTaxonFieldNames = qw(genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no);
 my @specimenFieldNames = qw(authorizer enterer modifier specimen_no reference_no specimens_measured specimen_id specimen_side specimen_part specimen_coverage measurement_source magnification specimen_count comments created modified);
 my @measurementTypes = qw(average min max median error error_unit);
 my @measurementFields =  qw(length width height diagonal inflation);
@@ -278,29 +280,36 @@ sub retellOptions {
         }
 
         my @occFields = ();
-        if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
-            push (@occFields, 'class_name') if ($q->param("occurrences_class_name") eq "YES");
-            push (@occFields, 'order_name') if ($q->param("occurrences_order_name") eq "YES");
-            push (@occFields, 'family_name') if ($q->param("occurrences_family_name") eq "YES");
-        }
         if ($q->param('output_data') =~ /occurrences|specimens/) {
-            push (@occFields, 'genus_reso','genus_name');
-            foreach my $field ( @occurrencesFieldNames ) {
+            foreach my $field ( @occTaxonFieldNames) {
                 if( $q->param ( "occurrences_".$field ) ){ 
+                    if ($field =~ /family_name|order_name|class_name/) {
+                        push ( @occFields, $field ); 
+                    } else {
+                        push ( @occFields, "occurrences_".$field ); 
+                    }
+                }
+            }
+            foreach my $field ( @reidTaxonFieldNames ) {
+                if( $q->param ( "occurrences_".$field) ){ 
+                    push ( @occFields, "original_".$field ); 
+                }
+            }
+            foreach my $field ( @occFieldNames ) {
+                if( $q->param ( "occurrences_".$field) ){ 
                     push ( @occFields, "occurrences_".$field ); 
                 }
             }
-            push(@occFields,"reidentifications_genus_name" );
-            foreach my $field ( @reidentificationsFieldNames ) {
+            foreach my $field ( @reidFieldNames ) {
                 if( $q->param ( "occurrences_".$field) ){ 
-                    push ( @occFields, "reidentifications_".$field ); 
+                    push ( @occFields, "original_".$field ); 
                 }
             }
         } elsif ($q->param('output_data') eq 'genera') {
             push @occFields, 'genus_name';
         } elsif ($q->param('output_data') eq 'species') {
             push @occFields, 'genus_name';
-            push @occFields, 'subgenus_name' if ($q->param('occurences_subgenus_name'));
+            push @occFields, 'subgenus_name' if ($q->param('occurrences_subgenus_name'));
             push @occFields, 'species_name';
         }
 
@@ -399,68 +408,64 @@ sub getOutFields {
 	my $tableName = shift;
     my $isSQL = shift;
 	
-	my @fieldNames;
-	
+	my @outFields = ();
 	if($tableName eq "collections") {
         if ($isSQL) {
             # These fieldnames are created virtually, not from the DB
-	        @fieldNames = grep {!/^(paleo(lat|lng)(deg|dec|min|sec|dir)|ma_max|ma_min|ma_mid|epoch|subepoch|stage|period|10mybin)$/} @collectionsFieldNames;
+	        my @fieldNames = grep {!/^(authorizer|enterer|modifier|paleo(lat|lng)(deg|dec|min|sec|dir)|ma_max|ma_min|ma_mid|epoch|subepoch|stage|period|10mybin)$/} @collectionsFieldNames;
+            foreach (@fieldNames) {
+                push(@outFields,"c.$_") if ($q->param("collections_".$_) eq 'YES');
+            }
         } else {
-	        @fieldNames = @collectionsFieldNames;
+	        my @fieldNames = @collectionsFieldNames;
+            foreach (@fieldNames) {
+                push(@outFields,"collections.$_") if ($q->param("collections_".$_) eq 'YES');
+            }
         }
 	} elsif($tableName eq "occurrences") {
-        @fieldNames = @occurrencesFieldNames;
-	} elsif($tableName eq "reidentifications") {
-        @fieldNames = @reidentificationsFieldNames;
+        if ($isSQL) {
+	        my @fieldNames = grep {!/^(authorizer|enterer|modifier|family_name|order_name|class_name)$/} (@occFieldNames,@occTaxonFieldNames);
+            foreach (@fieldNames) {
+                push(@outFields, "o.$_ AS occ_$_") if ($q->param("occurrences_".$_) eq 'YES');
+            }
+
+	        @fieldNames = grep {!/^(authorizer|enterer|modifier|family_name|order_name|class_name)$/} (@reidFieldNames,@reidTaxonFieldNames);
+            foreach (@fieldNames) {
+                push(@outFields, "re.$_ AS reid_$_") if ($q->param("occurrences_".$_) eq 'YES');
+            }
+        } else {
+            foreach (@occTaxonFieldNames) {
+                if ($_ =~ /family_name|order_name|class_name/) {
+                    push(@outFields, "$_") if ($q->param("occurrences_".$_) eq 'YES');
+                } else {
+                    push(@outFields, "occurrences.$_") if ($q->param("occurrences_".$_) eq 'YES');
+                }
+            }
+            foreach (@reidTaxonFieldNames) {
+                push(@outFields, "original.$_") if ($q->param("occurrences_".$_) eq 'YES');
+            }
+            foreach (@occFieldNames) {
+                push(@outFields, "occurrences.$_") if ($q->param("occurrences_".$_) eq 'YES');
+            }
+            foreach (@reidFieldNames) {
+                push(@outFields, "original.$_") if ($q->param("occurrences_".$_) eq 'YES');
+            }
+        }
 	} elsif($tableName eq "specimens") {
-        @fieldNames = @specimenFieldNames;
+        if ($isSQL) {
+	        my @fieldNames = grep {!/^(authorizer|enterer|modifier)$/} @specimenFieldNames;
+            foreach (@fieldNames) {
+                push(@outFields, "s.$_ specimens_$_") if ($q->param('specimens_'.$_));
+            }
+        } else {
+            foreach (@specimenFieldNames) {
+                push(@outFields, "specimens.$_") if ($q->param('specimens_'.$_));
+            }
+        }
     } else {
 		$self->dbg("getOutFields(): Unknown table [$tableName]");
 	}
 	
-	my @outFields = ( );
-	foreach my $fieldName ( @fieldNames ) {
-		# use brackets below because the underscore is a valid char
-		if ( $q->param("${tableName}_${fieldName}") eq "YES") {
-            # Rename field to avoid conflicts with fieldnames in collections/occ table
-			if($tableName eq 'reidentifications'){
-                if ($isSQL) {
-                    if ($fieldName !~ /authorizer|enterer|modifier/) {
-				        push(@outFields, "re.$fieldName as reid_$fieldName");
-                    }
-                } else {
-                    push(@outFields, "original.$fieldName");
-                }
-			}
-            # Rename field to avoid conflicts with fieldnames in collections table
-			elsif ($tableName eq 'occurrences') {
-                if ($isSQL) {
-                    if ($fieldName !~ /authorizer|enterer|modifier/) {
-				        push(@outFields, "o.$fieldName as occ_$fieldName");
-                    }
-                } else {
-				    push(@outFields, "occurrences.$fieldName");
-                }
-			} elsif ($tableName eq 'specimens') {
-                if ($isSQL) {
-                    if ($fieldName !~ /authorizer|enterer|modifier/) {
-				        push(@outFields, "s.$fieldName specimens_$fieldName");
-                    }
-                } else {
-				    push(@outFields, "specimens.$fieldName");
-                }
-			} else { 
-                if ($isSQL) {
-                    if ($fieldName !~ /authorizer|enterer|modifier/) {
-                        push(@outFields,"c.$fieldName");
-                    }
-                } else {
-                    push(@outFields,"collections.$fieldName");
-                }
-            }
-		}
-	}
-
     # Need these fields to perform various computations
     # So make sure they included in the SQL query, but not necessarily  included
     # into a CSV header.
@@ -496,20 +501,11 @@ sub getOutFields {
 		# subgenus name must be downloaded if subgenera are to be
 		#  treated as genera
 		# an amusing hack, if I do say so myself JA 18.8.04
-		if ( $q->param('split_subgenera') eq 'YES' && !exists $fieldExists{'subgenus_name'} )	{
-            push @outFields, "o.subgenus_name as occ_subgenus_name";
+		if ( $q->param('split_subgenera') eq 'YES' && $q->param("occurrences_subgenus_name") !~ /YES/i) {
+            push @outFields, "o.subgenus_name AS occ_subgenus_name";
+            push @outFields, "re.subgenus_name AS reid_subgenus_name";
 		}
-        if (!exists $fieldExists{'reference_no'}) {
-            push @outFields, "o.reference_no as occ_reference_no";
-        }
-    } elsif ($isSQL && $tableName eq "reidentifications") {    
-		if ( $q->param('split_subgenera') eq 'YES' && !exists $fieldExists{'subgenus_name'} )	{
-            push @outFields, "re.subgenus_name as reid_subgenus_name";
-		}
-        if (!exists $fieldExists{'reference_no'}) {
-            push @outFields, "re.reference_no as reid_reference_no";
-        }
-    }    
+    } 
 	return @outFields;
 }
 
@@ -1303,7 +1299,6 @@ sub doQuery {
 	my $p = Permissions->new ($s,$dbt);
 	my @collectionHeaderCols = ( );
 	my @occurrenceHeaderCols = ( );
-	my @reidHeaderCols = ( );
 	my $outFieldsString = '';
 	my %COLLS_DONE;
 	my %REFS_DONE;
@@ -1432,7 +1427,6 @@ sub doQuery {
             push @occ_where, @$occswhereref;
             push @reid_where, @$reidswhereref;
 		    push @fields, $self->getOutFields('occurrences',TRUE);
-            push @fields, $self->getOutFields('reidentifications',TRUE);
             if ($q->param('occurrences_authorizer') eq 'YES') {
                 push @left_joins, "LEFT JOIN person po1 ON o.authorizer_no=po1.person_no";
                 push @fields, 'po1.name occ_authorizer';
@@ -1586,13 +1580,13 @@ sub doQuery {
                 my $sql3 = "SELECT ".join(",",@specimen_fields).
                          " FROM specimens s, authorities a ";
                 if ($q->param('specimens_authorizer') eq 'YES') {
-                    $sql3 .= " LEFT JOIN person p1 ON s.authorizer_no=p1.person_no";
+                    $sql3 .= " LEFT JOIN person ps1 ON s.authorizer_no=ps1.person_no";
                 }
                 if ($q->param('specimens_enterer') eq 'YES') {
-                    $sql3 .= " LEFT JOIN person p2 ON s.enterer_no=p2.person_no";
+                    $sql3 .= " LEFT JOIN person ps2 ON s.enterer_no=ps2.person_no";
                 }
                 if ($q->param('specimens_modifier') eq 'YES') {
-                    $sql3 .= " LEFT JOIN person p3 ON s.modifier_no=p3.person_no";
+                    $sql3 .= " LEFT JOIN person ps3 ON s.modifier_no=ps3.person_no";
                 }
                 $sql3 .= " WHERE s.taxon_no=a.taxon_no AND s.$taxon_nos_clause";
                 $sql .= " UNION ($sql3)";
@@ -1618,35 +1612,30 @@ sub doQuery {
     $sepChar = ","  if ($q->param('output_format') eq 'comma-delimited text');
     $sepChar = "\t" if ($q->param('output_format') eq 'tab-delimited text');
 
-    if($q->param('output_data') =~ /occurrences|species|genera|specimens/) {
-        push @header,'class_name' if ($q->param("occurrences_class_name") eq "YES");
-        push @header,'order_name' if ($q->param("occurrences_order_name") eq "YES");
-        push @header,'family_name' if ($q->param("occurrences_family_name") eq "YES");
-    }
-
     if( $q->param('output_data') eq 'genera') {
+        push @header, 'class_name' if ($q->param("occurrences_class_name") eq 'YES');
+        push @header, 'order_name' if ($q->param("occurrences_order_name") eq 'YES');
+        push @header, 'family_name' if ($q->param("occurrences_family_name") eq 'YES');
         push @header, 'genus_name';
         # Ecology row
         push @header,@ecoFields;
     } elsif ($q->param('output_data') eq 'species') {
+        push @header, 'class_name' if ($q->param("occurrences_class_name") eq 'YES');
+        push @header, 'order_name' if ($q->param("occurrences_order_name") eq 'YES');
+        push @header, 'family_name' if ($q->param("occurrences_family_name") eq 'YES');
         push @header, 'genus_name';
-        push @header,'subgenus_name' if ($q->param("occurrences_subgenus_name") eq "YES");
+        push @header, 'subgenus_name' if ($q->param("occurrences_subgenus_name") eq "YES");
         push @header, 'species_name';
 
         # Ecology row
         push @header,@ecoFields;
     } elsif($q->param('output_data') =~ /occurrences|specimens/) {
         unshift @header, 'collection_no';
-        push @header,'genus_reso','genus_name','original.genus_reso','original.genus_name';
 
-        # Occurrence header, need this for later...
+        # Occurrence/reid header, need this for later...
         @occurrenceHeaderCols = $self->getOutFields('occurrences');
         push @header,@occurrenceHeaderCols;
             
-        # ReID header, need this for later...
-        @reidHeaderCols = $self->getOutFields('reidentifications');	
-        push @header,@reidHeaderCols;
-
         # Ecology row
         push @header,@ecoFields;
         
@@ -1788,7 +1777,7 @@ sub doQuery {
             
         if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
             if ($row->{'reid_no'}) {
-                foreach my $field (@reidentificationsFieldNames) {
+                foreach my $field (@reidFieldNames,@reidTaxonFieldNames) {
                     $row->{'original_'.$field}=$row->{'occ_'.$field};
                     $row->{'occ_'.$field}=$row->{'reid_'.$field};
                 }
@@ -2058,26 +2047,40 @@ sub doQuery {
             }
 		}
 
+        if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
+            if ($q->param("occurrences_class_name") eq "YES" || 
+                $q->param("occurrences_order_name") eq "YES" ||
+                $q->param("occurrences_family_name") eq "YES") {
+                my @parents = @{$master_class{$row->{'occ_taxon_no'}}};
+                my ($class, $order, $family) = ("","","");
+                foreach my $parent (@parents) {
+                    if ($parent->{'taxon_rank'} eq 'family') {
+                        $row->{'family_name'} = $parent->{'taxon_name'};
+                    } elsif ($parent->{'taxon_rank'} eq 'order') {
+                        $row->{'order_name'} = $parent->{'taxon_name'};
+                    } elsif ($parent->{'taxon_rank'} eq 'class') {
+                        $row->{'class_name'} = $parent->{'taxon_name'};
+                        last;
+                    }
+                }
+                # Get higher order names for indets as well
+                if ($row->{'occ_species_name'} =~ /indet/ && $row->{'occ_taxon_no'}) {
+                    my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$row->{'occ_taxon_no'});
+                    if ($taxon->{'taxon_rank'} eq 'family') {
+                        $row->{'family_name'} = $taxon->{'taxon_name'};
+                    } elsif ($taxon->{'taxon_rank'} eq 'order') {
+                        $row->{'order_name'} = $taxon->{'taxon_name'};
+                    } elsif ($taxon->{'taxon_rank'} eq 'class') {
+                        $row->{'class_name'} = $taxon->{'taxon_name'};
+                    }
+                }
+            }
+        }
+
 		#$self->dbg("reference_no: $reference_no<br>genus_reso: $genus_reso<br>genusName: $genusName<br>collection_no: $collection_no<br>");
 
-        # Deprecated - we do a group by in the SQL if necessary- I don't think this code does anything and I don't
-        # know when was the last time it did - PS 07/13/2004
-		# Only print one occurrence per collection if "collections only"
-		# was checked; do this by fooling the system into lumping all
-		# occurrences in a collection
-		#my $tempGenus = $genusName;
-		#if( $q->param('output_data') eq 'collections'){
-		#	$tempGenus = '';
-		#	if($COLLS_DONE{"$collection_no.$tempGenus"} == 1){
-		#		next;
-		#	}
-			# else
-		#	$COLLS_DONE{"$collection_no.$tempGenus"} = 1;
-		#}
-		
 		my @coll_row = ();
 		my @occs_row = ();
-		my @reid_row = ();
         my @eco_row  = ();
 
         #
@@ -2087,13 +2090,8 @@ sub doQuery {
             # Put the values in the correct order since by looping through this array
             foreach my $column ( @occurrenceHeaderCols ){
                 $column =~ s/^occurrences\./occ_/;
-                push ( @occs_row, $row->{$column} );
-            }
-
-            # Put the values in the correct order since by looping through this array
-            foreach my $column ( @reidHeaderCols ){
                 $column =~ s/^original\./original_/;
-                push ( @reid_row, $row->{$column} );
+                push ( @occs_row, $row->{$column} );
             }
         }
 
@@ -2334,52 +2332,25 @@ sub doQuery {
         }
 
         my @final_row = ();
-        if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
-            if ($q->param("occurrences_class_name") eq "YES" || 
-                $q->param("occurrences_order_name") eq "YES" ||
-                $q->param("occurrences_family_name") eq "YES") {
-                my @parents = @{$master_class{$row->{'occ_taxon_no'}}};
-                my ($class, $order, $family) = ("","","");
-                foreach my $parent (@parents) {
-                    if ($parent->{'taxon_rank'} eq 'family') {
-                        $family = $parent->{'taxon_name'}; 
-                    } elsif ($parent->{'taxon_rank'} eq 'order') {
-                        $order = $parent->{'taxon_name'};
-                    } elsif ($parent->{'taxon_rank'} eq 'class') {
-                        $class = $parent->{'taxon_name'};
-                        last;
-                    }
-                }
-                # Get higher order names for indets as well
-                if ($row->{'occ_species_name'} =~ /indet/ && $row->{'occ_taxon_no'}) {
-                    my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$row->{'occ_taxon_no'});
-                    if ($taxon->{'taxon_rank'} eq 'family') {
-                        $family = $taxon->{'taxon_name'}; 
-                    } elsif ($taxon->{'taxon_rank'} eq 'order') {
-                        $order = $taxon->{'taxon_name'};
-                    } elsif ($taxon->{'taxon_rank'} eq 'class') {
-                        $class = $taxon->{'taxon_name'};
-                    }
-                }
-                
-                push @final_row, $class  if ($q->param("occurrences_class_name") eq "YES");
-                push @final_row, $order  if ($q->param("occurrences_order_name") eq "YES");
-                push @final_row, $family if ($q->param("occurrences_family_name") eq "YES");
-            }
-        }
 		if( $q->param('output_data') eq 'collections'){
             unshift @final_row,$collection_no;
             push @final_row,@coll_row;
 		} elsif ( $q->param('output_data') eq 'genera')	{
+            push @final_row, $row->{'class_name'} if ($q->param("occurrences_class_name") eq 'YES');
+            push @final_row, $row->{'order_name'} if ($q->param("occurrences_order_name") eq 'YES');
+            push @final_row, $row->{'family_name'} if ($q->param("occurrences_family_name") eq 'YES');
             push @final_row, ($genusName,@eco_row);
         } elsif ( $q->param('output_data') eq 'species') {
+            push @final_row, $row->{'class_name'} if ($q->param("occurrences_class_name") eq 'YES');
+            push @final_row, $row->{'order_name'} if ($q->param("occurrences_order_name") eq 'YES');
+            push @final_row, $row->{'family_name'} if ($q->param("occurrences_family_name") eq 'YES');
             push @final_row, $genusName;
             push @final_row, $row->{'occ_subgenus_name'} if ($q->param("occurrences_subgenus_name") eq "YES");
             push @final_row, $row->{'occ_species_name'};
             push @final_row, @eco_row;
 		} else { # occurrences/specimens
             unshift @final_row, $collection_no;
-            push(@final_row,$genus_reso,$genusName,$row->{'original_genus_reso'},$row->{'original_genus_name'},@occs_row,@reid_row,@eco_row,@coll_row);
+            push(@final_row,@occs_row,@eco_row,@coll_row);
 		}
 		if ( $q->param('output_format') eq "CONJUNCT" )	{
 			if ( $lastcoll != $collection_no )	{
@@ -2636,6 +2607,15 @@ sub setupOutput {
 		print "Unknown output type: $outputType\n";
 		return;
 	}
+
+    if ($outputType eq 'CONJUNCT') {
+        $q->param("collections_regionalbed"=>"YES");
+        $q->param("collections_regionalsection"=>"YES");
+        $q->param("collections_regionalbedunit"=>"YES");
+        $q->param("collections_localbed"=>"YES");
+        $q->param("collections_localsection"=>"YES");
+        $q->param("collections_localbedunit"=>"YES");
+    }
 	
 	$csv = Text::CSV_XS->new({
 			'quote_char'  => '"',
@@ -2747,27 +2727,67 @@ sub setupOutput {
             $q->param('collections_paleolngdir'=>'YES');
         }
     }
+    if ($q->param("collections_regionalbed")) {
+        $q->param("collections_regionalbedunit"=>"YES");
+    }
+    if ($q->param("collections_localbed")) {
+        $q->param("collections_localbedunit"=>"YES");
+    }
+	
+	$csv = Text::CSV_XS->new({
+			'quote_char'  => '"',
+			'escape_char' => '"',
+			'sep_char'    => $sepChar,
+			'binary'      => 1
+	});
+	
+	my $authorizer = $s->get("authorizer");
+	if ( ! $authorizer )	{
+		if ( $q->param("yourname") )	{
+			$authorizer = $q->param("yourname");
+		} else	{
+			$authorizer = "unknown";
+		}
+	}
+	$authorizer =~ s/(\s|\.|[^A-Za-z0-9])//g;
+	$occsOutFileName = $authorizer . "-occs.$outFileExtension";
+	$generaOutFileName = $authorizer . "-genera.$outFileExtension";
+	if ( $q->param("output_data") eq 'collections')	{
+		$occsOutFileName = $authorizer . "-cols.$outFileExtension";
+	} elsif ($q->param("output_data") eq 'specimens') {
+        $occsOutFileName = $authorizer . "-specimens.".$outFileExtension;
+	} 
+	$refsOutFileName = $authorizer . "-refs.$outFileExtension";
+	if ( $q->param('time_scale') )	{
+		$scaleOutFileName = $authorizer . "-scale.$outFileExtension";
+	}
+
+	if ( ! open(OUTFILE, ">$OUT_FILE_DIR/$occsOutFileName") ) {
+	die ( "Could not open output file: $OUT_FILE_DIR/$occsOutFileName ($!) <BR>\n" );
+	}
+	if ( ! open(REFSFILE, ">$OUT_FILE_DIR/$refsOutFileName") ) {
+	die ( "Could not open output file: $!<BR>\n" );
+	}
+
+	chmod 0664, "$OUT_FILE_DIR/$occsOutFileName";
+	chmod 0664, "$OUT_FILE_DIR/$refsOutFileName";
+
     # Need to get the species_name field as well
     if ($q->param('output_data') =~ /species/) {
         $q->param('occurrences_species_name'=>'YES');
     }
 
+
     # Get these related fields as well
     if ($q->param('occurrences_subgenus_name')) {
         $q->param('occurrences_subgenus_reso'=>'YES');
-        $q->param('reidentifications_subgenus_reso'=>'YES');
     }
     if ($q->param('occurrences_species_name')) {
         $q->param('occurrences_species_reso'=>'YES');
-        $q->param('reidentifications_species_reso'=>'YES');
     }
-    # There is no separate reidentifications checkboxes on the form
-    # So they get included if the corresponding occurrences checkbox is set
-    foreach my $field (@reidentificationsFieldNames) {
-        if ($q->param('occurrences_'.$field)) {
-            $q->param("reidentifications_$field"=>'YES');
-        }
-    }
+
+    $q->param("occurrences_genus_name"=>'YES'); # Required fields
+    $q->param("occurrences_genus_reso"=>'YES');
 
     # Get EML values, check interval names
     if ($q->param('max_interval_name')) {
@@ -2810,6 +2830,7 @@ sub setupOutput {
     if ($q->param('specimens_error')) {
         $q->param('specimens_error_unit'=>'YES');
     }
+
 
     # Generate warning for taxon with homonyms
     my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
