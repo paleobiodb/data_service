@@ -157,7 +157,7 @@ sub processLookup	{
 	    &getIntervalRangeByNo($max_interval_no,$min_interval_no);
         &mapIntervalsUpward();
 	    &mapIntervals();
-        $bestbothscale = findBestBothScale($max_interval_no,$min_interval_no);
+        $bestbothscale = findBestBothScale($dbt,$max_interval_no,$min_interval_no);
         if (!$bestbothscale) {
             push @warnings, "The terms \"$max_interval_name\" and \"$min_interval_name\" are not in the same time scale, so intervals in between them could not be determined; please use terms in the same scale";
         }
@@ -784,7 +784,8 @@ sub getIntervalRangeByBoundary {
 
 # This function will find all intervals that an interval maps into
 sub getMaxIntervals {
-    my $dbt = shift;
+    $dbt = shift;
+    $dbh = $dbt->dbh;
     my $interval_no = shift;
     if (!%immediatemax) {
         &findImmediateCorrelates();
@@ -814,7 +815,7 @@ sub getIntervalRangeByNo {
     my ($orig_max_interval_no, $orig_min_interval_no) = @_;
 
     # Search for scales the intervals both belong to, and use those if they exist
-    my $bestbothscale = findBestBothScale($orig_max_interval_no,$orig_min_interval_no);
+    my $bestbothscale = findBestBothScale($dbt,$orig_max_interval_no,$orig_min_interval_no);
     my ($commonscale, $straggler_no, $max_interval_no, $min_interval_no);
     # If they don't belong to a common scale, then maybe one of the intervals belongs to
     # a scale thats common with the other interval
@@ -823,7 +824,7 @@ sub getIntervalRangeByNo {
         @min_parents = getMaxIntervals($dbt,$orig_min_interval_no);
         foreach $max_parent (@max_parents) {
             last if ($commonscale); 
-            $commonscale = findBestBothScale($max_parent,$orig_min_interval_no);
+            $commonscale = findBestBothScale($dbt,$max_parent,$orig_min_interval_no);
             if ($commonscale) {
                 main::dbg("Found a common scale $commonscale between $orig_min_interval_no and parent $max_parent of $orig_max_interval_no");
                 $max_interval_no=$max_parent;
@@ -834,7 +835,7 @@ sub getIntervalRangeByNo {
         }
         foreach $min_parent (@min_parents) {
             last if ($commonscale); 
-            $commonscale = findBestBothScale($orig_max_interval_no,$min_parent);
+            $commonscale = findBestBothScale($dbt,$orig_max_interval_no,$min_parent);
             if ($commonscale) {
                 main::dbg("Found a common scale $commonscale between $orig_max_interval_no and parent $min_parent of $orig_min_interval_no");
                 $max_interval_no=$orig_max_interval_no;
@@ -964,6 +965,10 @@ sub findImmediateCorrelates	{
 	@results = @{$dbt->getData($sql)};
 	$ninterval = $#results + 1;
 
+    if (!%bestscale) {
+        findBestScales();
+    }
+
 # get lookup hashes of the max and min interval nos for each interval no
 	for my $i ( 1..$ninterval )	{
 		if ( $bestscale{$i} > 0 )	{
@@ -977,6 +982,7 @@ sub findImmediateCorrelates	{
 }
 
 sub findBestBothScale{
+    my $dbt = shift;
     my $max_interval_no = shift;
     my $min_interval_no = shift;
     # find the scale no for the max interval
@@ -1261,6 +1267,16 @@ sub getScaleOrder {
     }
         
     return @scale_list;
+}
+
+sub getMaxMinArrays {
+    $dbh = shift;
+    $dbt = shift;
+    if (!%immediatemax) {
+        &findImmediateCorrelates();
+    }
+
+    return (\%immediatemax,\%immediatemin);
 }
 
 1;

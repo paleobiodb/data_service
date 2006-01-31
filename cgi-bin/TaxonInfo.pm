@@ -691,6 +691,10 @@ sub doCollections{
     my %upperbound = %{$_[0]};
     my %lowerbound = %{$_[1]};
 
+    @_ = TimeLookup::getMaxMinArrays($dbh,$dbt);
+    my %immediatemax = %{$_[0]};
+    my %immediatemin = %{$_[1]};
+
 	# get all the interval names because we need them to print the
 	#  total age range below
 	my $isql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
@@ -721,30 +725,116 @@ sub doCollections{
 	#  this one JA 26.1.05
 	my %seeninterval;
 	my %toovague;
+    my %toovaguecandidate;
+    my %nottoovague;
 	for my $row ( @data )	{
-		if ( ! $seeninterval{$row->{'max_interval_no'}." ".$row->{'min_interval_no'}} )	{
-			$max1 = $lowerbound{$row->{'max_interval_no'}};
-			$min1 = $upperbound{$row->{'min_interval_no'}};
+        # First cast max/min into these variables.
+        my $max = $row->{'max_interval_no'};
+        my $min = $row->{'min_interval_no'};
+        # Fix for bad data, use the more specific interval only
+        if ($immediatemax{$max} == $min) {
+            $min = $max;
+        }
+        if ($immediatemax{$min} == $max) {
+            $max = $min;
+        }
+        # If min is blank, set it to be the same as max (always) so we have a canonical representation
+        if (!$min) {
+            $min = $max;
+        }
+        
+		if ( !$seeninterval{$max." ".$min} ) {
+			$max1 = $lowerbound{$max};
+			$min1 = $upperbound{$min};
 			if ( $min1 == 0 )	{
-				$min1 = $upperbound{$row->{'max_interval_no'}};
+				$min1 = $upperbound{$max};
 			}
+            # If a smaller interval is completely contained within a larger interval,
+            # throw away the larger interval as its too broad and inferior to the more specific interval
 			for $intervalkey ( keys %seeninterval )	{
-				my ($maxno,$minno) = split / /,$intervalkey;
-				$max2 = $lowerbound{$maxno};
-				$min2 = $upperbound{$minno};
+				my ($seen_max,$seen_min) = split / /,$intervalkey;
+				$max2 = $lowerbound{$seen_max};
+				$min2 = $upperbound{$seen_min};
 				if ( $min2 == 0 )	{
-					$min2 = $upperbound{$maxno};
+					$min2 = $upperbound{$seen_max};
 				}
-				if ( $max1 < $max2 && $max1 > 0 && $min1 > $min2 && $min2 > 0 )	{
+                # This first if statemet is meant to simplify this problem.  This should ensure
+                # That one of the min/max ranges is only 1 interval - doing it across multiple
+                # intervals would be too complex right now.  This first if statement will trigger
+                # on "incomplete" data records where a interval will have the same upper/lower bound
+                # as either a neighboring interval or a parent interval since the exact bounds
+                # for that interval aren't known so it inherits from a neighbor or parent since
+                # thats the best we can do.  If it inherits its bounds from a parent, mark the
+                # parent as being a candidate for being thrown out.  More on candidates below.
+                if ($max1 == $max2 && $min1 == $min2) {
+                    main::dbg("CHECK VAGUE-3-4 - SEEN $seen_max/$seen_min (maps to $immediatemax{$seen_max}/$immediatemin{$seen_min}) vs $max/$min (maps to ($immediatemax{$max}/$immediatemax{$min})");
+                    my %ints = ($min=>1,$max=>1);
+                    my %seen_ints = ($seen_min=>1,$seen_max=>1);
+                    if ($ints{$immediatemax{$seen_max}} && ($ints{$immediatemin{$seen_min}} || !$immediatemin{$seen_min})) {
+                        main::dbg("TOO VAGUE3 - $max/$min ($seen_max/$seen_min maps into it)");
+                        $toovaguecandidate{$max." ".$min}{$seen_max}++;
+                        $toovaguecandidate{$max." ".$min}{$seen_min}++;
+                    } 
+                    elsif ($seen_ints{$immediatemax{$max}} && ($seen_ints{$immediatemin{$min}} || !$immediatemin{$min})) {
+                        main::dbg("TOO VAGUE4 - $seen_max/$seen_min ($max/$min maps into it)");
+					    $toovaguecandidate{$intervalkey}{$max}++;
+					    $toovaguecandidate{$intervalkey}{$min}++;
+                    }
+                }
+				elsif ( $max1 <= $max2 && $max1 > 0 && $min1 >= $min2 && $min2 > 0 )	{
+                    main::dbg("TOO VAGUE1 - $intervalkey: $max1 <= $max2 and $min1 >= $min2");
 					$toovague{$intervalkey}++;
 				}
-				elsif ( $max1 > $max2 && $max2 > 0 && $min1 < $min2 && $min1 > 0 )	{
-					$toovague{$row->{'max_interval_no'}." ".$row->{'min_interval_no'}}++;
-				}
+				elsif ( $max1 >= $max2 && $max2 > 0 && $min1 <= $min2 && $min1 > 0 )	{
+                    main::dbg("TOO VAGUE2 - $max $min: $max1 >= $max2 and $min1 <= $min2");
+					$toovague{$max." ".$min}++;
+				} 
 			}
-			$seeninterval{$row->{'max_interval_no'}." ".$row->{'min_interval_no'}}++;
+			$seeninterval{$max." ".$min}++;
 		}
 	}
+    # Handle the candidates generated above.  Only throw out a parent (higher) interval
+    # if all the children that map into it are in the sam scale.  I.E. if intervals for 
+    # Cenomanian are Lower Cenomanian and Middle Cenonamian thrown out Cenonamian.  If intervals
+    # aren't in the same scale, its ambiguous and can't throw it out.  See Lance formation:
+    # It as the Interval "Maastrichtian" which has both "Lancian" and "Upper Maastrichtian"
+    # map into it, which are different subscales, so we must keep it and mark that
+    # we wan't to print it out below by placing it in the "nottoovague" hash.
+    while(my ($intervalKey,$childKeys) = each %toovaguecandidate) { 
+        my @allChildKeys = keys %$childKeys;
+        my %scale_count;
+        my $total_keys = 0;
+        main::dbg(join(",",@allChildKeys)." maps into $intervalKey");
+        foreach my $key (@allChildKeys) {
+            if ($key) {
+                $total_keys++;
+                $sql = "SELECT scale_no FROM correlations WHERE interval_no=$key";
+                my @results = @{$dbt->getData($sql)};
+                foreach my $row (@results) {
+                    $scale_count{$row->{'scale_no'}}++;
+                }
+            }
+        }
+        my $found_scale = 0;
+        while(my ($scale_no,$count) = each %scale_count) {
+            if ($count == $total_keys) {
+                main::dbg("Found scale $scale_no that contains all the subintervals");
+                $found_scale = 1;
+                last;
+            }
+        }
+        if ($found_scale) {
+            main::dbg("TOO VAGUE $intervalKey");
+            $toovague{$intervalKey}++;
+        } else {
+            main::dbg("NOT TOO VAGUE $intervalKey - ");
+            my ($max,$min) = split(/ /,$intervalKey);
+            if ($max == $min) {
+                $nottoovague{$max}++;
+                main::dbg("OK");
+            }
+        }
+    }
 
 	# Process the data:  group all the collection numbers with the same
 	# time-place string together as a hash.
@@ -753,12 +843,16 @@ sub doCollections{
 	my $oldestlowername;
 	my $youngestupperbound = 9999;
 	my $youngestuppername;
+    %seeninterval = ();
 	foreach my $row (@data){
-        my $interval1 = $interval_name{$row->{'max_interval_no'}};
-        my $interval2 = $interval_name{$row->{'min_interval_no'}};
-        my $res = "<span class=\"tiny\">$interval1";
-        if ( $interval2 && $row->{'max_interval_no'} != $row->{'min_interval_no'}) {
-            $res .= " - " . $interval2;
+        my $max = $row->{'max_interval_no'};
+        my $min = $row->{'min_interval_no'};
+        if (!$min) {
+            $min = $max;
+        }
+        my $res = "<span class=\"tiny\">$interval_name{$max}";
+        if ( $max != $min ) {
+            $res .= " - " . $interval_name{$min};
         }
         $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"tiny\">";
 
@@ -776,31 +870,94 @@ sub doCollections{
 	    else{
 			$time_place_coll{$res} = [$row->{"collection_no"}];
 			push(@order,$res);
+            if ($immediatemax{$min} == $max) {
+                $max = $min;
+            }
+            if ($immediatemax{$max} == $min) {
+                $min = $max;
+            }
             # create a hash array where the keys are the time-place strings
             #  and each value is a number recording the min and max
             #  boundary estimates for the temporal bins JA 25.6.04
             # this is kind of tricky because we want bigger bins to come
             #  before the bins they include, so the second part of the
             #  number recording the upper boundary has to be reversed
-            my $upper = $upperbound{$row->{'max_interval_no'}};
-            $max_interval_name{$res} = $interval_name{$row->{'max_interval_no'}};
+            my $upper = $upperbound{$max};
+            $max_interval_name{$res} = $interval_name{$max};
             $min_interval_name{$res} = $max_interval_name{$res};
-            if ( $row->{'max_interval_no'} != $row->{'min_interval_no'} &&
-                $row->{'min_interval_no'} > 0 )	{
-                $upper = $upperbound{$row->{'min_interval_no'}};
-                $min_interval_name{$res} = $interval_name{$row->{'min_interval_no'}};
+            if ( $max != $min ) {
+                $upper = $upperbound{$min};
+                $min_interval_name{$res} = $interval_name{$min};
             }
             # also store the overall lower and upper bounds for
             #  printing below JA 26.1.05
             # don't do this if the interval is too vague (see above)
-            if ( ! $toovague{$row->{'max_interval_no'}." ".$row->{'min_interval_no'}} )	{
-                if ( $lowerbound{$row->{'max_interval_no'}} > $oldestlowerbound )	{
-                    $oldestlowerbound = $lowerbound{$row->{'max_interval_no'}};
+            if ( ! $toovague{$max." ".$min} && ! $seeninterval{$max." ".$min})	{
+                $seeninterval{$max." ".$min}++;
+                main::dbg("MAX MIN CALC $max $min");
+                if ( $lowerbound{$max} > $oldestlowerbound )	{
+                    $oldestlowerbound = $lowerbound{$max};
                     $oldestlowername = $max_interval_name{$res};
+                    $oldestinterval = $max;
+                } elsif ($lowerbound{$max} == $oldestlowerbound) {
+                    # Sometimes neighboring intervals will have the same lower/upper boudn
+                    # if we have incomplete information about their boundaries.  I.E. Lower Cenomanian,
+                    # Middle Cenonanian, Cenomanian all have the same boundaries since Lower/Middle inherit
+                    # from their parent. In that case choose the earlier one in the scale  
+                    # Get common scale
+                    main::dbg("LOWER $lowerbound{$max} ($max) = OLDEST $oldestlowerbound ($oldestinterval)");
+                    my $bestscale = TimeLookup::findBestBothScale($dbt,$max,$oldestinterval);
+                    main::dbg(" BEST SCALE $bestscale");
+
+                    # If common scale
+                    if ($bestscale) {
+                        # Return an _ordered_ list of interval_nos in the scale
+                        @scale = TimeLookup::getScaleOrder($dbt,$bestscale,'number');
+                        %order = ();
+                        $count=1;
+                        foreach my $interval_no (@scale) {
+                            $order{$interval_no} = $count;
+                            $count++;
+                        }
+                        main::dbg("ORDER LOWER $order{$max} OLDEST $order{$oldestinterval}");
+                        if (%order && $order{$max} > $order{$oldestinterval}) {
+                            $oldestinterval = $max;
+                            $oldestlowername = $max_interval_name{$res};
+                        }
+                    } elsif ($nottoovague{$max}) {
+                        $oldestinterval = $max;
+                        $oldestlowername = $max_interval_name{$res};
+                    }
                 }
                 if ( $upper < $youngestupperbound )	{
                     $youngestupperbound = $upper;
                     $youngestuppername = $min_interval_name{$res};
+                    $youngestinterval = $min;
+                } elsif ($upper == $youngestupperbound && $min != $youngestinterval) {
+                    # See comments above
+                    # Get common scale
+                    main::dbg("UPPER $upper ($min) = YOUNG $youngestupperbound ($youngestinterval)");
+                    my $bestscale = TimeLookup::findBestBothScale($dbt,$min,$youngestinterval);
+                    main::dbg(" BEST SCALE $bestscale");
+
+                    # If common scale
+                    if ($bestscale) {
+                        @scale = TimeLookup::getScaleOrder($dbt,$bestscale,'number');
+                        %order = ();
+                        $count=1;
+                        foreach my $interval_no (@scale) {
+                            $order{$interval_no} = $count;
+                            $count++;
+                        }
+                        main::dbg("ORDER UPPER $order{$min} YOUNG $order{$youngestinterval}");
+                        if (%order && $order{$min} < $order{$youngestinterval}) {
+                            $youngestinterval = $min;
+                            $youngestuppername = $min_interval_name{$res};
+                        }
+                    } elsif ($nottoovague{$max}) {
+                        $youngestinterval = $min;
+                        $youngestuppername = $min_interval_name{$res};
+                    }
                 }
             }
             # WARNING: we're assuming upper boundary ages will never be
@@ -814,7 +971,7 @@ sub doCollections{
             } elsif ( $upper < 100 )	{
                 $upper = "0" . $upper;
             }
-            $bounds_coll{$res} = int($lowerbound{$row->{'max_interval_no'}}) . $upper;
+            $bounds_coll{$res} = int($lowerbound{$max}) . $upper;
 	    }
 	}
 
