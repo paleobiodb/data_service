@@ -25,7 +25,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch subepoch stage 10mybin max_interval_no min_interval_no ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_no collection_subset reference_no collection_name collection_aka country state county tectonic_plate_id latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch subepoch stage 10mybin max_interval_no min_interval_no ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
 my @occFieldNames = qw(authorizer enterer modifier occurrence_no abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @occTaxonFieldNames = qw(class_name order_name family_name genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no);
 my @reidFieldNames = qw(authorizer enterer modifier reid_no reference_no comments created modified modified_temp plant_organ);
@@ -412,7 +412,7 @@ sub getOutFields {
 	if($tableName eq "collections") {
         if ($isSQL) {
             # These fieldnames are created virtually, not from the DB
-	        my @fieldNames = grep {!/^(authorizer|enterer|modifier|paleo(lat|lng)(deg|dec|min|sec|dir)|ma_max|ma_min|ma_mid|epoch|subepoch|stage|period|10mybin)$/} @collectionsFieldNames;
+	        my @fieldNames = grep {!/^(tectonic_plate_id|authorizer|enterer|modifier|paleo(lat|lng)(deg|dec|min|sec|dir)|ma_max|ma_min|ma_mid|epoch|subepoch|stage|period|10mybin)$/} @collectionsFieldNames;
             foreach (@fieldNames) {
                 push(@outFields,"c.$_") if ($q->param("collections_".$_) eq 'YES');
             }
@@ -474,6 +474,7 @@ sub getOutFields {
     if ($isSQL && $tableName eq "collections") {
         my %impliedFields;
         %impliedFields = (
+            'collections_tectonic_plate_id'=>['latdeg','latdir','lngdeg','lngdir'],
             'collections_paleolat'=>['paleolat'],
             'collections_paleolng'=>['paleolng'],
             'collections_lat'=>['latdeg', 'latmin', 'latsec', 'latdec', 'latdir'],
@@ -1968,6 +1969,22 @@ sub doQuery {
     	%master_class=%{TaxaCache::getParents($dbt,\@genera_nos,'array_full')};
     }
 
+    # Get the plate ids if those will be downloaded
+    my %plate_ids;
+    if ($q->param('collections_tectonic_plate_id') eq "YES") {
+        if ( ! open ( PLATES, "$COAST_DIR/plateidsv2.lst" ) ) {
+            print "<font color='red'>Skipping plates.</font> Error message is $!<BR><BR>\n";
+        } else {
+            <PLATES>;
+
+            while (my $line = <PLATES>) {
+                chomp $line;
+                my ($lng,$lat,$plate_id) = split /,/,$line;
+                $plate_ids{$lng."_".$lat}=$plate_id;
+            }
+        } 
+    }
+
     # Sort by
     if ($q->param('output_data') =~ /^(?:genera|specimens|species)$/) {
         @dataRows = sort { $a->{'occ_genus_name'} cmp $b->{'occ_genus_name'} ||
@@ -2189,6 +2206,15 @@ sub doQuery {
                         $row->{'paleolngsec'} = int(($min-int($min))*60);
                     }    
                 }
+            }
+            if ($q->param('collections_tectonic_plate_id') eq 'YES') {
+                my $plate_key = "";
+                $plate_key .= "-" if ($row->{'lngdir'} eq 'West' && $row->{'lngdeg'} != 0);
+                $plate_key .= $row->{'lngdeg'};
+                $plate_key .= "_";
+                $plate_key .= "-" if ($row->{'latdir'} eq 'South' && $row->{'latdeg'} != 0);
+                $plate_key .= $row->{'latdeg'};
+                $row->{'tectonic_plate_id'} = $plate_ids{$plate_key};
             }
             if ($q->param("collections_max_interval_no") eq "YES") {
 			    # translate interval nos into names JA 18.9.03
