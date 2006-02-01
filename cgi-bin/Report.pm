@@ -7,6 +7,7 @@ use Text::CSV_XS;
 use PBDBUtil;
 use TimeLookup;
 use Data::Dumper;
+use strict;
 
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
@@ -16,8 +17,9 @@ my $q;					# Reference to the parameters
 my $s;
 
 my $HOST_URL = $ENV{BRIDGE_HOST_URL};
-$OUTFILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
-$DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
+my $OUTFILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
+my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
+my $COAST_DIR = $ENV{MAP_COAST_DIR};
 
 sub new {
 	my $class = shift;
@@ -56,10 +58,9 @@ sub buildReport {
                                   # Second index can be either 0, 1 or 2 corresponding to no
                                   # search term, a single (like country) or double (like lithology1, lithology2) respectively 
                                 # Set in reportQueryDB
-    my $sth; # Database handle, passed across functions below
 
-    $self->reportQueryDB();
-    $self->reportBuildDataTables();
+    my $sth = $self->reportQueryDB();
+    $self->reportBuildDataTables($sth);
     $self->reportPrintOutfile();
 	$self->reportDisplayHTML();
 }
@@ -96,7 +97,7 @@ sub reportDisplayHTML {
     print "<tr>";
     print "<td class=dataTableULCorner align=center><b>$header1</b></td>";
     if ($isDoubleArray) { 
-        foreach $key2 (@{$self->{'sortKeys2'}}) {
+        foreach my $key2 (@{$self->{'sortKeys2'}}) {
             print "<td class=dataTableColumn>$key2</td>";
         }
         print "<td class=dataTableColumnTotal>$totalKeyword</td>";
@@ -108,11 +109,11 @@ sub reportDisplayHTML {
 
     # Print Table
     my $grandTotal = ($q->param('output') eq 'collections') ? $self->{'grandTotalCollections'} : $self->{'grandTotalOccurrences'};
-    foreach $key1 (@{$self->{'sortKeys1'}}) {
+    foreach my $key1 (@{$self->{'sortKeys1'}}) {
         print "<tr>";
         print "<td class=dataTableRow>$key1</td>";
         if ($isDoubleArray) { 
-            foreach $key2 (@{$self->{'sortKeys2'}}) {
+            foreach my $key2 (@{$self->{'sortKeys2'}}) {
                 print "<td class=dataTableCell align=right>".$self->{'dataTable'}{$key1}{$key2}."</td>";
             }
             print "<td class=dataTableCellTotal align=right>".$self->{'totals1'}{$key1}."</td>";
@@ -126,7 +127,7 @@ sub reportDisplayHTML {
     # Print Final Totals Line
     if ($isDoubleArray) { 
         print "<tr><td class=dataTableRowTotal>$totalKeyword</td>";
-        foreach $key2 (@{$self->{'sortKeys2'}}) {
+        foreach my $key2 (@{$self->{'sortKeys2'}}) {
             print "<td class=dataTableCellTotal align=right>".$self->{'totals2'}{$key2}."</td>";
         }
         if ($q->param('output') ne 'average occurrences') {
@@ -157,7 +158,7 @@ sub reportDisplayHTML {
     my $authorizer = $s->get("authorizer");
     if ( ! $authorizer ) { $authorizer = "unknown"; }
     $authorizer =~ s/(\s|\.)//g;
-    my $reportFileName = $authorizer . "-report.$outFileExtension";
+    my $reportFileName = $authorizer . "-report.csv";
 
 	print qq|<p>The report data have been saved as "<a href="$HOST_URL/paleodb/data/$reportFileName">$reportFileName</a>"</p>|;
     print "</center>\n";
@@ -173,18 +174,16 @@ sub reportPrintOutfile{
     #
     # Setup output
     #
-    $sepChar = ',';
-    $outFileExtension = 'csv';
-    $csv = Text::CSV_XS->new({
+    my $csv = Text::CSV_XS->new({
                     'quote_char'  => '"',
                     'escape_char' => '"',
-                    'sep_char'    => $sepChar,
+                    'sep_char'    => ",",
                     'binary'      => 1});
      
     my $authorizer = $s->get("authorizer");
     if ( ! $authorizer ) { $authorizer = "unknown"; }
     $authorizer =~ s/(\s|\.)//g;
-    my $reportFileName = $authorizer . "-report.$outFileExtension";
+    my $reportFileName = $authorizer . "-report.csv";
     open(OUTFILE, ">$OUTFILE_DIR/$reportFileName") 
         or die ( "Could not open output file: $OUTFILE_DIR/$reportFileName($!) <BR>\n" );
 
@@ -199,7 +198,7 @@ sub reportPrintOutfile{
     my $header2 = $q->param('searchfield2'); $header2 =~ s/\s+\([a-z ]+\)//i;
     if ($isDoubleArray) {
         @line = ("$header1 / $header2");
-        foreach $key2 (@{$self->{'sortKeys2'}}) {
+        foreach my $key2 (@{$self->{'sortKeys2'}}) {
             push @line, $key2;
         }
         push @line, $totalKeyword;
@@ -212,10 +211,10 @@ sub reportPrintOutfile{
 
     # Print Table
     my $grandTotal = ($q->param('output') eq 'collections') ? $self->{'grandTotalCollections'} : $self->{'grandTotalOccurrences'};
-    foreach $key1 (@{$self->{'sortKeys1'}}) {
+    foreach my $key1 (@{$self->{'sortKeys1'}}) {
         @line = ($key1);
         if ($isDoubleArray) {
-            foreach $key2 (@{$self->{'sortKeys2'}}) {
+            foreach my $key2 (@{$self->{'sortKeys2'}}) {
                 push @line, $self->{'dataTable'}{$key1}{$key2};
             }
             push @line, $self->{'totals1'}{$key1};
@@ -229,7 +228,7 @@ sub reportPrintOutfile{
     # Print Final Totals Line
     @line = ($totalKeyword);
     if ($isDoubleArray) { 
-        foreach $key2 (@{$self->{'sortKeys2'}}) {
+        foreach my $key2 (@{$self->{'sortKeys2'}}) {
             push @line, $self->{'totals2'}{$key2};
         }
     } 
@@ -253,6 +252,7 @@ sub reportPrintOutfile{
 ##
 sub reportBuildDataTables {
     my $self = shift;
+    my $sth = shift;
     my $t1FieldCnt = scalar @{$self->{'searchFields'}[1]}; #searchfield1
     my $t2FieldCnt = scalar @{$self->{'searchFields'}[2]}; #searchfield2
     my @t1Fields = @{$self->{'searchFields'}[1]};
@@ -285,9 +285,20 @@ sub reportBuildDataTables {
         my @term2Keys = ();
         if (%t1TranslationTable) {
             foreach (@t1Fields) {
-                if ($_ eq 'min_interval_no') {
+                if ($_ =~ /min_interval_no|latdeg|latdir|lngdir/) { 
+                    # Skip these  for now, we'll use them though when lngdeg and max_interval_no come around respectively for grabbing the plate id and higher order time terms 
                     next;
-                } elsif ($_ eq 'max_interval_no') {
+                } elsif ($_ eq 'lngdeg') { # This will happen when grabbing plate_id
+                    my $table_key = "";
+                    $table_key .= "-" if ($row->{'lngdir'} eq 'West' && $row->{'lngdeg'} != 0);
+                    $table_key .= $row->{'lngdeg'};
+                    $table_key .= "_";
+                    $table_key .= "-" if ($row->{'latdir'} eq 'South' && $row->{'latdeg'} != 0);
+                    $table_key .= $row->{'latdeg'};
+                    if (exists $t1TranslationTable{$table_key}) {
+                        push @term1Keys, $t1TranslationTable{$table_key};
+                    }
+                } elsif ($_ eq 'max_interval_no') { # When grabbing a higher order time term
                     if ($t1TranslationTable{$row->{'max_interval_no'}} && 
                        ($t1TranslationTable{$row->{'max_interval_no'}} eq $t1TranslationTable{$row->{'min_interval_no'}} ||
                         $row->{'min_interval_no'} == 0)) {
@@ -309,8 +320,18 @@ sub reportBuildDataTables {
         
         if (%t2TranslationTable) {
             foreach (@t2Fields) {
-                if ($_ eq 'min_interval_no') {
+                if ($_ =~ /min_interval_no|latdeg|latdir|lngdir/) {
                     next;
+                } elsif ($_ eq 'lngdeg') {
+                    my $table_key = "";
+                    $table_key .= "-" if ($row->{'lngdir'} eq 'West');
+                    $table_key .= $row->{'lngdeg'};
+                    $table_key .= "_";
+                    $table_key .= "-" if ($row->{'latdir'} eq 'South');
+                    $table_key .= $row->{'latdeg'};
+                    if (exists $t2TranslationTable{$table_key}) {
+                        push @term2Keys, $t2TranslationTable{$table_key};
+                    }
                 } elsif ($_ eq 'max_interval_no') {
                     if ($t2TranslationTable{$row->{'max_interval_no'}} && 
                        ($t2TranslationTable{$row->{'max_interval_no'}} eq $t2TranslationTable{$row->{'min_interval_no'}} ||
@@ -372,9 +393,9 @@ sub reportBuildDataTables {
         }
 
         # Add in the counts
-        foreach $key1 (@term1Keys) { 
+        foreach my $key1 (@term1Keys) { 
             if ($t2FieldCnt > 0) {
-                foreach $key2 (@term2Keys) {
+                foreach my $key2 (@term2Keys) {
                     $coll_dataTable{$key1}{$key2} += $coll_cnt;
                     $occs_dataTable{$key1}{$key2} += $occs_cnt;
                 }
@@ -385,12 +406,12 @@ sub reportBuildDataTables {
         }    
 
         # Calculate totals
-        foreach $key1 (@term1Keys) {
+        foreach my $key1 (@term1Keys) {
             $coll_totals1{$key1} += $coll_cnt;
             $occs_totals1{$key1} += $occs_cnt;
         }
         if ($t2FieldCnt > 0) {
-            foreach $key2 (@term2Keys) {
+            foreach my $key2 (@term2Keys) {
                 $coll_totals2{$key2} += $coll_cnt;
                 $occs_totals2{$key2} += $occs_cnt;
             }
@@ -410,11 +431,11 @@ sub reportBuildDataTables {
 
     # Set the totals variables.  For average occs, divide occurrence totals by collection totals
     if ($q->param('output') eq 'average occurrences') {
-        while(($key1,$val1) = each %occs_totals1) { 
+        while(my ($key1,$val1) = each %occs_totals1) { 
             $self->{'totals1'}{$key1} = sprintf("%.1f",$val1/$coll_totals1{$key1});
         }    
         if ($t2FieldCnt > 0) {
-            while(($key2,$val2) = each %occs_totals2) { 
+            while(my ($key2,$val2) = each %occs_totals2) { 
                 $self->{'totals2'}{$key2} = sprintf("%.1f",$val2/$coll_totals2{$key2});
             }
         } 
@@ -486,9 +507,9 @@ sub reportBuildDataTables {
         #upper right quandrant, the area of the table cut off by 'max_rows'
         # -1 in for header to not include the last key (=$new_key1="Remaining X rows")
         # reduce grid to a single column
-        for($i=0;$i<scalar(@{$self->{'sortKeys1'}})-1;$i++) { 
+        for(my $i=0;$i<scalar(@{$self->{'sortKeys1'}})-1;$i++) { 
             my $sort_key1 = @{$self->{'sortKeys1'}}[$i];
-            foreach $key2 (@key2_left) {
+            foreach my $key2 (@key2_left) {
                 $coll_dataTable{$sort_key1}{$new_key2} += $coll_dataTable{$sort_key1}{$key2};
                 $coll_totals2{$new_key2} += $coll_dataTable{$sort_key1}{$key2};
                 $occs_dataTable{$sort_key1}{$new_key2} += $occs_dataTable{$sort_key1}{$key2};
@@ -496,9 +517,9 @@ sub reportBuildDataTables {
             }
         }
         #lower left quadrant, cut off by 'max_cols'. reduce grid to a single row
-        for($i=0;$i<scalar(@{$self->{'sortKeys2'}})-1;$i++) { 
+        for(my $i=0;$i<scalar(@{$self->{'sortKeys2'}})-1;$i++) { 
             my $sort_key2 = @{$self->{'sortKeys2'}}[$i];
-            foreach $key1 (@key1_left) {
+            foreach my $key1 (@key1_left) {
                 $coll_dataTable{$new_key1}{$sort_key2} += $coll_dataTable{$key1}{$sort_key2};
                 $coll_totals1{$new_key1} += $coll_dataTable{$key1}{$sort_key2};
                 $occs_dataTable{$new_key1}{$sort_key2} += $occs_dataTable{$key1}{$sort_key2};
@@ -506,8 +527,8 @@ sub reportBuildDataTables {
             }
         }
         #lower right, cut off by 'max_cols' OR 'max_rows'. reduce grid to single square
-        foreach $key1 (@key1_left) {
-            foreach $key2 (@key2_left) {
+        foreach my $key1 (@key1_left) {
+            foreach my $key2 (@key2_left) {
                 $coll_dataTable{$new_key1}{$new_key2} += $coll_dataTable{$key1}{$key2};
                 $coll_totals2{$new_key2} += $coll_dataTable{$key1}{$key2};
                 $coll_totals1{$new_key1} += $coll_dataTable{$key1}{$key2};
@@ -517,7 +538,7 @@ sub reportBuildDataTables {
             }
         }    
     } else {
-        foreach $key1 (@key1_left) {
+        foreach my $key1 (@key1_left) {
             $coll_totals1{$new_key1} += $coll_dataTable{$key1};
             $coll_dataTable{$new_key1} += $coll_dataTable{$key1};
             $occs_totals1{$new_key1} += $occs_dataTable{$key1};
@@ -529,8 +550,8 @@ sub reportBuildDataTables {
     # a reference to $occ_dataTable or $coll_dataTable above, so calculate it now
     if ($q->param('output') eq 'average occurrences') {
         if ($t2FieldCnt > 0) {
-            foreach $key1 (keys %occs_dataTable ) {
-                foreach $key2 (keys %{$occs_dataTable{$key1}}) {
+            foreach my $key1 (keys %occs_dataTable ) {
+                foreach my $key2 (keys %{$occs_dataTable{$key1}}) {
                     if ($occs_dataTable{$key1}{$key2}) {
                         $self->{'dataTable'}{$key1}{$key2} = sprintf("%.1f",$occs_dataTable{$key1}{$key2} / $coll_dataTable{$key1}{$key2});
                     } 
@@ -543,7 +564,7 @@ sub reportBuildDataTables {
                 $self->{'totals2'}{$new_key2} = sprintf("%.1f",$occs_totals2{$new_key2} / $coll_totals2{$new_key2});
             }
         } else {
-            foreach $key1 (keys %occs_dataTable ) {
+            foreach my $key1 (keys %occs_dataTable ) {
                 if ($occs_dataTable{$key1}) {
                     $self->{'dataTable'}{$key1} = sprintf("%.1f",$occs_dataTable{$key1} / $coll_dataTable{$key1});
                 } 
@@ -556,8 +577,8 @@ sub reportBuildDataTables {
     
     # Bit of cleanup, fill in empty dataTable entries with '-' if they don't exist
     if ($t2FieldCnt > 0) {
-        foreach $key1 (@{$self->{'sortKeys1'}}) { 
-            foreach $key2 (@{$self->{'sortKeys2'}}) {
+        foreach my $key1 (@{$self->{'sortKeys1'}}) { 
+            foreach my $key2 (@{$self->{'sortKeys2'}}) {
                 $self->{'dataTable'}{$key1}{$key2} = '-' if (! $self->{'dataTable'}{$key1}{$key2})
             }
         }    
@@ -583,7 +604,7 @@ sub reportQueryDB{
     }        
     
     # How choices in HTML map to database fields
-    %sqlFields = (
+    my %sqlFields = (
         'authorizer'=>'authorizer_no', 'enterer'=>'enterer_no', 'research group'=>'research_group',
         'country'=>'country', 'state'=>'state', 'interval name'=>'max_interval_no,min_interval_no', 'formation'=>'formation',
         'paleoenvironment'=>'environment', 'scale of geographic resolution'=>'geogscale', 
@@ -592,7 +613,7 @@ sub reportQueryDB{
         'assemblage components'=>'assembl_comps', 'reason for describing collection'=>'collection_type',
         'list coverage'=>'collection_coverage', 'lithification'=>'lithification,lithification2',
         'lithology - all combinations'=>'lithology1,lithology2', 'lithology - weighted'=>'lithology1,lithology2',
-        'continent'=>'country', '10 m.y. bins (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 3: Periods (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 5: Epochs (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 7: Stages (most common order)'=>'max_interval_no,min_interval_no', '10 m.y. bins (standard order)'=>'max_interval_no,min_interval_no','Gradstein 3: Periods (standard order)'=>'max_interval_no,min_interval_no', 'Gradstein 5: Epochs (standard order)'=>'max_interval_no,min_interval_no', 'Gradstein 7: Stages (standard order)'=>'max_interval_no,min_interval_no');
+        'continent'=>'country', '10 m.y. bins (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 3: Periods (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 5: Epochs (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 7: Stages (most common order)'=>'max_interval_no,min_interval_no', '10 m.y. bins (standard order)'=>'max_interval_no,min_interval_no','Gradstein 3: Periods (standard order)'=>'max_interval_no,min_interval_no', 'Gradstein 5: Epochs (standard order)'=>'max_interval_no,min_interval_no', 'Gradstein 7: Stages (standard order)'=>'max_interval_no,min_interval_no','tectonic plate ID'=>'latdeg,latdir,lngdeg,lngdir');
     foreach my $i (1..2) {
         if ($sqlFields{$q->param("searchfield$i")}) {
             push @{$self->{'searchFields'}[$i]}, split(/,/,$sqlFields{$q->param("searchfield$i")});
@@ -640,7 +661,7 @@ sub reportQueryDB{
 
         # get a list of Sepkoski's genera, if needed JA 28.2.03
         if ( $q->param('Sepkoski') eq "Yes" )	{
-            $sepkoskiGenera = $self->getSepkoskiGenera();
+            my $sepkoskiGenera = $self->getSepkoskiGenera();
             if ( $sepkoskiGenera) {
                 push @whereTerms,"((re.reid_no IS NULL AND o.taxon_no IN ($sepkoskiGenera)) OR (re.most_recent='YES' AND re.taxon_no IN ($sepkoskiGenera)))";
             }
@@ -650,11 +671,11 @@ sub reportQueryDB{
         # Changed PBDBUtil funct to optionally use taxon_nos and used those
         my $genus_names_string;
 		if($q->param('taxon_name')){
-	        @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
-                                                                                                                                                         
+	        my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
+
             my %taxon_nos_unique = ();
-            foreach $taxon (@taxa) {
-                @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon);
+            foreach my $taxon (@taxa) {
+                my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon);
                 $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
                 if (scalar(@taxon_nos) == 0) {
                     $genus_names_string .= ", ".$dbh->quote($taxon);
@@ -666,7 +687,7 @@ sub reportQueryDB{
                     push @{$self->{'warnings'}}, "The taxon name '$taxon' was not included because it is ambiguous and belongs to multiple taxonomic hierarchies. Right the report script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
                 }
             }
-            $taxon_nos_string = join(", ", keys %taxon_nos_unique);
+            my $taxon_nos_string = join(", ", keys %taxon_nos_unique);
             $genus_names_string =~ s/^,//;
          
             my $sql;
@@ -686,7 +707,7 @@ sub reportQueryDB{
     }
 
 
-    $sql = "SELECT ".$selectSQL." FROM ".$fromSQL." ".$leftJoinSQL;
+    my $sql = "SELECT ".$selectSQL." FROM ".$fromSQL." ".$leftJoinSQL;
     if (@whereTerms) {
         $sql .= " WHERE ".join(' AND ',@whereTerms);
     }
@@ -694,8 +715,9 @@ sub reportQueryDB{
 
     $self->dbg("SQL:".$sql);
    
-	$sth = $dbh->prepare($sql) || die "Prepare query failed\n";
+	my $sth = $dbh->prepare($sql) || die "Prepare query failed\n";
 	$sth->execute() || die "Execute query failed\n";
+    return $sth;
 }
 
 
@@ -710,7 +732,7 @@ sub getSepkoskiGenera {
         or die "Execute query failed\n";
     @jackrefs = @{$sth->fetchall_arrayref()};
     $sth->finish();
-    for $jackref (@jackrefs)  {
+    foreach my $jackref (@jackrefs)  {
         $jacklist .= ', '.${$jackref}[0];
     }
     $jacklist =~ s/^,//;
@@ -757,6 +779,18 @@ sub getTranslationTable {
         foreach my $row (@results) {
             $table{$row->{'person_no'}} = $row->{'name'};
         }
+    } elsif ($param eq 'tectonic plate ID') {
+        if ( ! open ( PLATES, "$COAST_DIR/plateidsv2.lst" ) ) {
+            print "<font color='red'>Skipping plates.</font> Error message is $!<BR><BR>\n";
+        } else {
+            <PLATES>;
+
+            while (my $line = <PLATES>) {
+                chomp $line;
+                my ($lng,$lat,$plate_id) = split /,/,$line;
+                $table{$lng."_".$lat}=$plate_id;
+            }
+        }
     }
     $self->dbg("get translation table called with param $param. table:");
     $self->dbg("<pre>".Dumper(\%table)."</pre>") if (scalar keys %table);
@@ -772,7 +806,7 @@ sub getIntervalNames {
     # get the names of time intervals
     my $sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
     my @intnorefs = @{$dbt->getData($sql)};
-    for $intnoref ( @intnorefs )        {
+    for my $intnoref ( @intnorefs )        {
         if ( $intnoref->{eml_interval} )        {
             $interval_names{$intnoref->{interval_no}} = $intnoref->{eml_interval} . " " . $intnoref->{interval_name};
         } else  {
@@ -793,8 +827,8 @@ sub getRegions	{
 	while (<REGIONS>)	{
 		s/\n//;
 		my ($continent,$country_list) = split /:/, $_, 2;
-		@countries = split /\t/,$country_list;
-		for $country (@countries)	{
+		my @countries = split /\t/,$country_list;
+		foreach my $country (@countries)	{
 			$regions{$country} = $continent;
 		}
 	}
