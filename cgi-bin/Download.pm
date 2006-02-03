@@ -262,7 +262,7 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Replace names with senior synonyms?", $q->param("replace_with_ss") );
         $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
         $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", $q->param("sp") );
-    	my @genus_reso_types_group = ('aff.','cf.','ex_gr.','sensu lato','?','"');
+    	my @genus_reso_types_group = ('n. gen.','aff.','cf.','ex_gr.','sensu lato','?','"');
     	$html .= $self->retellOptionsGroup('Include occurrences qualified by','genus_reso_',\@genus_reso_types_group);
         $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
         $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
@@ -1101,12 +1101,18 @@ sub getCollectionTypeString{
 sub getGenusResoString{
 	my $self = shift;
 	my $resos = "";
-    if ( ! $q->param('genus_reso_aff.') || ! $q->param('genus_reso_cf.') || ! $q->param('genus_reso_ex_gr.') || ! $q->param('genus_reso_?') || ! $q->param('genus_reso_"') ) { 
+    if ( !$q->param('genus_reso_n. gen.') || ! $q->param('genus_reso_aff.') || ! $q->param('genus_reso_cf.') || ! $q->param('genus_reso_ex_gr.') || ! $q->param('genus_reso_?') || ! $q->param('genus_reso_"') ) { 
         if ( $q->param('genus_reso_aff.') )	{
-            $resos = "'aff.'";
+            $resos .= ",'aff.'";
+            if ($q->param('informal') eq 'YES') {
+                $resos .= ",'informal aff.'";
+            }
         }
         if ( $q->param('genus_reso_cf.') )	{
-            $resos = ",'cf.'";
+            $resos .= ",'cf.'";
+            if ($q->param('informal') eq 'YES') {
+                $resos .= ",'informal cf.'";
+            }
         }
         if ( $q->param('genus_reso_ex_gr.') )	{
             $resos .= ",'ex gr.'";
@@ -1119,6 +1125,9 @@ sub getGenusResoString{
         }
         if ( $q->param('genus_reso_"') )	{
             $resos .= ",'\"'";
+        }
+        if ( $q->param('genus_reso_n. gen.') ) {
+            $resos .= ",'n. gen.'";
         }
         $resos =~ s/^,//;
         if ( $resos )	{
