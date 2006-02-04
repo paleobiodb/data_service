@@ -129,7 +129,7 @@ sub displayITISDownload {
     }
     close FH_AL;
     $taxon_author_count = "No" if ($taxon_author_count == 0);
-    print "<p>$taxon_author_count taxon authors names printed to file</p>";
+    print "<p>$taxon_author_count taxon authors names were printed to file</p>";
 
     
     open FH_TU, ">$filesystem_dir/taxonomic_units.dat"
@@ -175,7 +175,7 @@ sub displayITISDownload {
     close FH_TU;
     my $taxon_count = scalar(@names); 
     $taxon_count = "No" if ($taxon_count == 0);
-    print "<p>$taxon_count taxononomic units printed to file</p>";
+    print "<p>$taxon_count taxononomic units were printed to file</p>";
 
     open FH_SL, ">$filesystem_dir/synonym_links.dat";
     my $synonym_count = 0;
@@ -195,7 +195,7 @@ sub displayITISDownload {
     }
     close FH_SL;
     $synonym_count = "No" if ($synonym_count == 0);
-    print "<p>$synonym_count synonym links printed to file</p>";
+    print "<p>$synonym_count synonym links were printed to file</p>";
     
     my @references = keys %references; 
     open FH_P, ">$filesystem_dir/publications.dat";
@@ -236,7 +236,7 @@ sub displayITISDownload {
     }     
     close FH_P;
     $ref_count = "No" if ($ref_count == 0);
-    print "<p>$ref_count publications printed to file</p>";
+    print "<p>$ref_count publications were printed to file</p>";
     
     my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,%options); 
     my @opinions = @$opinions;
@@ -260,7 +260,7 @@ sub displayITISDownload {
     if ($opinion_file_message =~ /no search criteria/) {
         print "<p>No reference links could be downloaded because no search criteria related to \"Taxonomic opinions\" were entered</p>";
     } else {
-        print "<p>$ref_link_count reference links printed to file</p>";
+        print "<p>$ref_link_count reference links were printed to file</p>";
     }
    
    
@@ -681,8 +681,8 @@ sub getTaxonomicNames {
         }
         my $it_link = $http_dir."/invalid_taxa.csv";
         my $vt_link = $http_dir."/valid_taxa.csv";
-        $message .= "<p>$valid_count valid taxa printed to <a href=\"$vt_link\">valid_taxa.csv</a></p>";
-        $message .= "<p>$invalid_count invalid taxa printed to <a href=\"$it_link\">invalid_taxa.csv</a></p>";
+        $message .= "<p>$valid_count valid taxa were printed to <a href=\"$vt_link\">valid_taxa.csv</a></p>";
+        $message .= "<p>$invalid_count invalid taxa were printed to <a href=\"$it_link\">invalid_taxa.csv</a></p>";
     } else {
         $message = "<p>No taxonomic names were downloaded because no search criteria were entered</p>";
     }
@@ -792,7 +792,7 @@ sub getTaxonomicOpinions {
         @results = @{$dbt->getData($sql)};
         my $op_link = $http_dir."/opinions.csv";
         
-        $message .= "<p>".scalar(@results)." taxonomic opinions where printed <a href=\"$op_link\">opinions.csv</a></p>";
+        $message .= "<p>".scalar(@results)." taxonomic opinions were printed to <a href=\"$op_link\">opinions.csv</a></p>";
     } else {
         $message .= "<p>No taxonomic opinions were downloaded because no search criteria were entered</p>";
     }
