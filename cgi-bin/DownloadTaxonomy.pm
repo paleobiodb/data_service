@@ -46,22 +46,22 @@ sub displayITISDownload {
         }
     }
 
-    if ($q->param('opinion_authorizer_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('opinion_authorizer_reversed'));
-        my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
-        if ($authorizer_no) {
-            $options{'opinion_authorizer_no'} = $authorizer_no;
+    if ($q->param('opinion_person_reversed')) {
+        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('opinion_person_reversed'));
+        my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
+        if ($person_no) {
+            $options{'opinion_person_no'} = $person_no;
         } else {
-            push @errors, "Could not find authorizer ".$q->param("opinion_authorizer_reversed")." in the database";
+            push @errors, "Could not find person ".$q->param("opinion_person_reversed")." in the database";
         }
     }
-    if ($q->param('taxon_authorizer_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('taxon_authorizer_reversed'));
-        my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
-        if ($authorizer_no) {
-            $options{'taxon_authorizer_no'} = $authorizer_no;
+    if ($q->param('taxon_person_reversed')) {
+        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('taxon_person_reversed'));
+        my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
+        if ($person_no) {
+            $options{'taxon_person_no'} = $person_no;
         } else {
-            push @errors, "Could not find authorizer ".$q->param("taxon_authorizer_reversed")." in the database";
+            push @errors, "Could not find person ".$q->param("taxon_person_reversed")." in the database";
         }
     }
 
@@ -368,22 +368,22 @@ sub displayPBDBDownload {
         }
     }
 
-    if ($q->param('opinion_authorizer_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('opinion_authorizer_reversed'));
-        my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
-        if ($authorizer_no) {
-            $options{'opinion_authorizer_no'} = $authorizer_no;
+    if ($q->param('opinion_person_reversed')) {
+        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('opinion_person_reversed'));
+        my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
+        if ($person_no) {
+            $options{'opinion_person_no'} = $person_no;
         } else {
-            push @errors, "Could not find authorizer ".$q->param("opinion_authorizer_reversed")." in the database";
+            push @errors, "Could not find person ".$q->param("opinion_person_reversed")." in the database";
         }
     }
-    if ($q->param('taxon_authorizer_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('taxon_authorizer_reversed'));
-        my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
-        if ($authorizer_no) {
-            $options{'taxon_authorizer_no'} = $authorizer_no;
+    if ($q->param('taxon_person_reversed')) {
+        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('taxon_person_reversed'));
+        my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
+        if ($person_no) {
+            $options{'taxon_person_no'} = $person_no;
         } else {
-            push @errors, "Could not find authorizer ".$q->param("taxon_authorizer_reversed")." in the database";
+            push @errors, "Could not find person ".$q->param("taxon_person_reversed")." in the database";
         }
     }
 
@@ -562,8 +562,17 @@ sub getTaxonomicNames {
             "a.author1last LIKE $author OR a.author2last LIKE $author OR a.otherauthors LIKE $authorWild)"; # Else, use record itself
     }
 
-    if ($options{'taxon_authorizer_no'}) {
-        push @where, 'a.authorizer_no='.int($options{'taxon_authorizer_no'});
+    if ($options{'taxon_person_no'}) {
+        if ($options{'taxon_person_type'} eq 'all') {
+            my $p = $options{'taxon_person_no'};
+            push @where, "(a.authorizer_no=$p OR a.enterer_no=$p OR a.modifier_no=$p)";
+        } elsif ($options{'taxon_person_type'} eq 'enterer') {
+            push @where, 'a.enterer_no='.int($options{'taxon_person_no'});
+        } elsif ($options{'taxon_person_type'} eq 'modifier') {
+            push @where, 'a.modifier_no='.int($options{'taxon_person_no'});
+        } else { # defaults to authorizer
+            push @where, 'a.authorizer_no='.int($options{'taxon_person_no'});
+        }
     }
 
     if ($options{'taxon_created_year'}) {
@@ -756,8 +765,17 @@ sub getTaxonomicOpinions {
             "o.author1last LIKE $author OR o.author2last LIKE $author OR o.otherauthors LIKE $authorWild)"; # Else, use record itself
     }
 
-    if ($options{'opinion_authorizer_no'}) {
-        push @where, 'o.authorizer_no='.int($options{'opinion_authorizer_no'});
+    if ($options{'opinion_person_no'}) {
+        if ($options{'opinion_person_type'} eq 'all') {
+            my $p = $options{'opinion_person_no'};
+            push @where, "(o.authorizer_no=$p OR o.enterer_no=$p OR o.modifier_no=$p)";
+        } elsif ($options{'opinion_person_type'} eq 'enterer') {
+            push @where, 'o.enterer_no='.int($options{'opinion_person_no'});
+        } elsif ($options{'opinion_person_type'} eq 'modifier') {
+            push @where, 'o.modifier_no='.int($options{'opinion_person_no'});
+        } else { # defaults to authorizer
+            push @where, 'o.authorizer_no='.int($options{'opinion_person_no'});
+        }  
     }
 
     # use between and both values so we'll use a key for a smaller tree;
