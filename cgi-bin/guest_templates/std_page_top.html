@@ -44,27 +44,80 @@
 </tr>
 
 <tr>
-  <td valign="top">
+  <td nowrap align="center">
 	<!-- Menu -->
-    <table border="0" bgcolor="#88C0FF" width="100%" cellspacing="1" class=menu>
-	  <tr class=menu>
-		<td align="center" nowrap><a href="$exec_url?user=Guest&amp;action=displayHomePage" class="menu">Home</a></td>
-		<td align="center">&bull;</td>
-		<td align="center" nowrap><a href="$exec_url?user=Guest&amp;action=displaySearchColls&amp;type=view" class="menu">Collections</a></td>
-		<td align="center">&bull;</td> 
-		<td align="center" nowrap><a href="$exec_url?user=Guest&amp;action=beginTaxonInfo" class="menu">Taxa</a></td>
-		<td align="center">&bull;</td> 
-		<td align="center" nowrap><a href="$exec_url?user=Guest&amp;action=displayMapForm" class="menu">Maps</a></td>
-		<td align="center">&bull;</td> 
-		<td align="center" nowrap><a href="$exec_url?user=Guest&amp;action=displayReportForm" class="menu">Data tables</a></td>
-		<td align="center">&bull;</td> 
-		<td align="center" nowrap><a href="$exec_url?user=Guest&amp;action=displayDownloadForm" class="menu">Download</a></td>
-		<td align="center">&bull;</td> 
-		<td align="center" nowrap><a href="$exec_url?user=Guest&amp;action=displayPage&amp;page=paleodbFAQ" class="menu">FAQ</a></td>
-		<td align="center">&bull;</td> 
-		<td align="center" nowrap><a href="$exec_url?user=Contributor&amp;action=displayHomePage" class="menu">Contributors' area</a></td>
+
+    <table border="0" bgcolor="#88C0FF" width="100%" cellpadding="0" cellspacing="0" id="dropDown">
+	  <tr>
+
+		<td align="center" nowrap width=30>&nbsp;</td>
+		<td align="center" nowrap>
+          <div class="dropDownVertSpacer">
+            <a href="$exec_url?user=Guest&amp;action=displayHomePage">Home</a>
+          </div>
+        </td>
+		<td align="center" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+        <td align="center" nowrap>
+          <div class="dropDownVertSpacer"> 
+            <a href="$exec_url?user=Guest&amp;action=displaySearchColls&amp;type=view">View</a>
+          </div>
+          <ul>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view">Fossil collection records</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=beginTaxonInfo">Fossil taxa information</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view">Published references</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=startStartPrintHierarchy">Classifications of taxa in groups</a></li>
+            <li><a href="javascript:tipsPopup('$exec_url?action=startScale')">Compilation of time scales</a></li>
+          </ul>
+        </td>
+		<td align="center" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+        <td align="center" nowrap>
+          <div class="dropDownVertSpacer"> 
+            <a href="$exec_url?user=Guest&amp;action=displaySearchColls&amp;type=view">Download</a>
+          </div>
+          <ul>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayDownloadForm">Collection, occurrence, or specimen data</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayDownloadTaxonomyForm">Taxonomic names and opinions</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayDownloadNeptuneForm">Neptune data</a></li>
+          </ul>
+        </td>
+		<td align="center" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+        <td align="center" nowrap>
+          <div class="dropDownVertSpacer"> 
+            <a href="$exec_url?user=Guest&amp;action=displaySearchColls&amp;type=view">Analyze</a>
+          </div>
+          <ul>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayMapForm">Draw maps of our fossil collections</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayReportForm">Generate data summary tables</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayCurveForm">Generate diversity curve data</a></li>
+            <li><a href="/cgi-bin/bridge.pl?action=displayTaxaIntervalsForm">Analyze taxonomic ranges</a></li>
+            <li><a href="/cgi-bin/bridge.pl?action=displaySearchSectionForm">Analyze stratigraphic sections</a></li> 
+          </ul>
+        </td>
+		<td align="center" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+        <td align="center" nowrap>
+          <div class="dropDownVertSpacer"> 
+            <a href="$exec_url?user=Guest&amp;action=displaySearchColls&amp;type=view">About</a>
+          </div>
+          <ul>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=paleodbFAQ">Frequently asked questions</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=participants">Participating researchers</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=institutions">Participating institutions</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=working_groups">Working groups</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">Project personnel</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=coverage">Summary of our spatiotemporal coverage</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=datasets">Major data sets</a></li>
+            <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=publications">Official publications</a></li>
+          </ul>
+        </td>
+		<td align="center" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+		<td align="center" nowrap>
+          <div class="dropDownVertSpacer"> 
+            <a href="$exec_url?user=Contributor&amp;action=displayHomePage">Contributor's area</a>
+          </div>
+        </td>
+        
       </tr>
-	</table>
+    </table>
   </td>
 </tr>
 
