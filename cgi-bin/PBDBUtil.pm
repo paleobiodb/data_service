@@ -117,17 +117,16 @@ sub getSecondaryRefsString{
 	# Authorname Formatting
 	use AuthorNames;
 
-	my $result_string = "<table border=0 cellpadding=8 cellspacing=0 width=\"100%\"><tr><td width=\"100%\">";
+	my $result_string = "<table border=0 cellpadding=2 cellspacing=0 width=\"100%\">";
 	# Format each row from the database as a table row.
 	my $row_color = 0;
     foreach my $ref (@results){
 		# add in a couple of single-space cells around the reference_no
 		# to match the formatting of Reference from BiblioRef.pm
 		if($row_color % 2){
-			$result_string .="<table border=0 cellpadding=0 cellspacing=0 width=\"100%\"><tr width=\"100%\">";
-		}
-		else{
-			$result_string .= "<table border=0 cellpadding=0 cellspacing=0 width=\"100%\"><tr class='darkList' width=\"100%\">";
+			$result_string .="<tr>";
+		} else{
+			$result_string .= "<tr class=\"darkList\">";
 		}
 		if($selectable){
 			$result_string .= "<td width=\"1%\" valign=top><input type=radio name=secondary_reference_no value=" . $ref->{reference_no} . "></td>\n";
@@ -142,17 +141,16 @@ sub getSecondaryRefsString{
 					);
 		my $an = AuthorNames->new(\%temp);
 
-		$result_string .= "<td valign=top width=\"7%\"><small>".
-						  "<b>$ref->{reference_no}</b></small></td>";
+		$result_string .= "<td valign=top width=\"1%\"><b>$ref->{reference_no}</b></td>";
 
 		if($ref->{project_name}){
-			$result_string .= "<td width=\"1%\" valign=top><font color=\"red\"".
-							  ">&nbsp;$ref->{project_name}&nbsp;</font></td>";
-		}
+			$result_string .= "<td width=\"1%\" valign=top><span style=\"color: red;\"".
+							  ">&nbsp;$ref->{project_name}&nbsp;</span></td>";
+		} else {
+			$result_string .= "<td width=\"1%\" valign=top></td>";
+        }
 
-		$result_string .= "<td rowspan=2 valign=top width=\"93%\">".
-						  "<small>".$an->toString().
-						  ".&nbsp;$ref->{pubyr}.&nbsp;";
+		$result_string .= "<td valign=top width=\"93%\">". $an->toString().".&nbsp;$ref->{pubyr}.&nbsp;";
 
 		if($ref->{reftitle}){
 			$result_string .= "$ref->{reftitle}.";
@@ -190,13 +188,13 @@ sub getSecondaryRefsString{
 			else{
 				$result_string .= "<tr class='darkList'>";
 			}
-			$result_string .= "<td bgcolor=red><input type=checkbox name=delete_ref value=$ref->{reference_no}></td><td><span class=tiny>remove&nbsp;</span></td></tr>\n";
+			$result_string .= "<td style=\"background-color:red;\"><input type=checkbox name=delete_ref value=$ref->{reference_no}></td><td colspan=\"3\">remove&nbsp;</td></tr>\n";
 		}
-		$result_string .= "</table>\n";
+        print "</tr>";
 		$row_color++;
     }
 	$sth->finish();
-	$result_string .= "</td></tr></table>";
+	$result_string .= "</table>";
 	return $result_string;
 }
 

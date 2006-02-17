@@ -23,7 +23,7 @@ sub startSearchScale	{
 
 	# Print the form
 	print main::stdIncludes("std_page_top");
-	print "<DIV class=\"title\">Select a time scale to view</DIV>\n<CENTER>";
+	print "<div align=\"center\"><h2>Select a time scale to view</h2>\n";
 
 	# Retrieve each scale's name from the database
 	my $sql = "SELECT authorizer_no,scale_no,scale_name,reference_no FROM scales";
@@ -156,7 +156,7 @@ sub processShowEditForm	{
 
 	# print out the time interval rows
 
-	print "<center>\n<table>\n";
+	print "<div>\n<table>\n";
 
 	print "<tr><td align=\"center\" colspan=2><b><font color=\"red\">Interval</a></b> </td><td align=\"center\" colspan=2>Maximum correlate </td><td align=\"center\" colspan=2>Minimum correlate </td><td align=\"center\" valign=\"bottom\">Lower<br>boundary </td></tr>\n";
 
@@ -224,7 +224,7 @@ sub processShowEditForm	{
 	print "<input type=\"submit\" value=\"Submit\"></form>";
 	print "</td></tr>\n";
 
-	print "</table>\n</center>\n<p>\n";
+	print "</table>\n</div>\n<p>\n";
 
 	print "</form>\n";
 
@@ -264,7 +264,7 @@ sub processViewTimeScale	{
 	print $hbo->populateHTML('view_scale_top', [ $auth_name, $enterer_name, $results[0]->{scale_name}, $results[0]->{continent}, $results[0]->{basis}, $results[0]->{scale_rank}, $results[0]->{scale_comments} ], [ 'authorizer', 'enterer', 'scale_name', 'continent', 'basis', 'scale_rank', 'scale_comments' ]);
 
 	if ( @badintervals )	{
-		print "<center><p><b><font color='red'>WARNING!</font></b> ";
+		print "<div align=\"center\"><p><b><font color='red'>WARNING!</font></b> ";
 		if ( $#badintervals == 0 )	{
 			print "The following correlative interval was not recognized: ";
 		} else	{
@@ -278,10 +278,10 @@ sub processViewTimeScale	{
 				print "</i>";
 			}
 		}
-		print "</p></center>";
+		print "</p></div>";
 	}
 
-	print "<p>\n\n<center><table cellspacing=2><tr><td bgcolor=\"black\"><table bgcolor=\"white\">\n\n";
+	print "<p>\n\n<div align=\"center\"><table cellspacing=2><tr><td bgcolor=\"black\"><table bgcolor=\"white\">\n\n";
 
 	# Get the scale's intervals
 	$sql = "SELECT * FROM correlations WHERE scale_no=" . $q->param('scale');
@@ -366,14 +366,14 @@ sub processViewTimeScale	{
 	}
 
 
-	print "</table>\n</table>\n</center>\n<p>\n";
+	print "</table>\n</table>\n</div>\n<p>\n";
 
 	if ( $stage eq "summary" )	{
-		print "<center><p><b><a href=\"$exec_url?action=processShowForm&scale=" , $q->param('scale') , "\">Edit this time scale</a></b> - ";
+		print "<div align=\"center\"><p><b><a href=\"$exec_url?action=processShowForm&scale=" , $q->param('scale') , "\">Edit this time scale</a></b> - ";
 		print "<b><a href=\"$exec_url?action=processShowForm\">Create a new time scale</a></b> - ";
-		print "<b><a href=\"$exec_url?action=startScale\">Edit another time scale</a></b></p></center>\n\n";
+		print "<b><a href=\"$exec_url?action=startScale\">Edit another time scale</a></b></p></div>\n\n";
 	} else	{
-		print "<center><p><b><a href=\"$exec_url?action=startScale\">View another time scale</a></b></p></center>\n\n";
+		print "<div align=\"center\"><p><b><a href=\"$exec_url?action=startScale\">View another time scale</a></b></p></div>\n\n";
 	}
 
 	if ( $stage ne "summary" )	{

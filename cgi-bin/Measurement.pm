@@ -351,27 +351,27 @@ sub populateMeasurementForm {
                 my $table_rows = "";
                 for (1..$q->param('specimens_measured')) {
                     $table_rows .= "<tr>";
-                    $table_rows .=  "<td><input type=\"text\" name=\"specimen_id\" size=10 class=\"tinyText\"></td>";
-                    $table_rows .=  "<td><input type=\"text\" name=\"length_average\" size=7 class=\"tinyText\"></td>";
-                    $table_rows .=  "<td><input type=\"text\" name=\"width_average\" size=7 class=\"tinyText\"></td>";
-                    $table_rows .=  "<td><input type=\"text\" name=\"height_average\" size=7 class=\"tinyText\"></td>";
-                    $table_rows .=  "<td><input type=\"text\" name=\"diagonal_average\" size=7 class=\"tinyText\"></td>";
-                    $table_rows .=  "<td><select name=\"specimen_side\" class=\"tinyText\">";
+                    $table_rows .=  "<td><input type=\"text\" name=\"specimen_id\" size=10 class=\"tiny\"></td>";
+                    $table_rows .=  "<td><input type=\"text\" name=\"length_average\" size=7 class=\"tiny\"></td>";
+                    $table_rows .=  "<td><input type=\"text\" name=\"width_average\" size=7 class=\"tiny\"></td>";
+                    $table_rows .=  "<td><input type=\"text\" name=\"height_average\" size=7 class=\"tiny\"></td>";
+                    $table_rows .=  "<td><input type=\"text\" name=\"diagonal_average\" size=7 class=\"tiny\"></td>";
+                    $table_rows .=  "<td><select name=\"specimen_side\" class=\"tiny\">";
                     my @specimen_side_array = @{$hbo->{'SELECT_LISTS'}{'specimen_side'}};
                     $table_rows .=  "<option>".$_."</option>" for @specimen_side_array;
                     $table_rows .=  "</select></td>";
-                    $table_rows .=  "<td><input type=\"text\" name=\"specimen_part\" size=10 class=\"tinyText\"></td>";
-                    $table_rows .=  "<td><select name=\"measurement_source\" class=\"tinyText\">";
+                    $table_rows .=  "<td><input type=\"text\" name=\"specimen_part\" size=10 class=\"tiny\"></td>";
+                    $table_rows .=  "<td><select name=\"measurement_source\" class=\"tiny\">";
                     my @measurement_source_array = @{$hbo->{'SELECT_LISTS'}{'measurement_source'}};
                     $table_rows .=  "<option>".$_."</option>" for @measurement_source_array;
                     $table_rows .=  "</select></td>";
-                    $table_rows .=  "<td><input type=\"text\" name=\"magnification\" size=7 class=\"tinyText\"></td>";
-                    $table_rows .=  "<td><select name=\"specimen_is_type\" class=\"tinyText\">";
+                    $table_rows .=  "<td><input type=\"text\" name=\"magnification\" size=7 class=\"tiny\"></td>";
+                    $table_rows .=  "<td><select name=\"specimen_is_type\" class=\"tiny\">";
                     my @is_type_array = @{$hbo->{'SELECT_LISTS'}{'specimen_is_type'}};
                     $table_rows .=  "<option>".$_."</option>" for @is_type_array;
                     $table_rows .=  "</select></td>";
                     $table_rows .= "</tr>\n";
-                    $table_rows .= "<tr><td colspan=10 style=\"padding-bottom: .8em;\"><b><span class=\"tinyTextHeader\">Comments</span>: </b><input type=\"text\" name=\"comments\" size=70 class=\"tinyText\"></td>";
+                    $table_rows .= "<tr><td colspan=10 style=\"padding-bottom: .8em;\"><b><span class=\"small\">Comments</span>: </b><input type=\"text\" name=\"comments\" size=70 class=\"tiny\"></td>";
                     $table_rows .= "<td><input type=\"hidden\" name=\"specimens_measured\" value=\"1\"></td></tr>";
                 }
 	            my $html = $hbo->populateHTML('specimen_measurement_form_individual', \@values, \@fields);

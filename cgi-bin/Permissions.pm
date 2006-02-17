@@ -334,8 +334,8 @@ sub displayPermissionListForm {
     print qq|<input type="hidden" name="action" value="submitPermissionList">|;
     print qq|<input type="hidden" name="submit_type" value="add">|;
     print qq|<table cellpadding=0 cellspacing=3>|;
-    print qq|<tr><td>Add an authorizer to the list: </td><td><input type="text" name="authorizer_reversed" onKeyUp="doComplete(event,this,authorizerNames())"><input type="submit" name="submit_authorizer" value="Go"></td></tr>|;
-    print qq|<tr><td> ... <i> or </i> add all authorizers from a working group: </td><td>$working_group_select<input type="submit" name="submit_working_group" value="Go"></td></tr>|;
+    print qq|<tr><td>Add an authorizer to the list: </td><td><input type="text" name="authorizer_reversed" onKeyUp="doComplete(event,this,authorizerNames())"> <input type="submit" name="submit_authorizer" value="Go"></td></tr>|;
+    print qq|<tr><td> ... <i> or </i> add all authorizers from a working group: </td><td>$working_group_select <input type="submit" name="submit_working_group" value="Go"></td></tr>|;
     print qq|</table>|;
     print qq|</form>|;
 
