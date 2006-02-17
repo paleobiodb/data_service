@@ -459,7 +459,7 @@ sub buildList    {
         displayTaxaIntervalsForm($q,$s,$dbt,$hbo);
     } else {
         if ($q->param('split_taxon') eq 'yes') {
-            print "<DIV CLASS=\"title\">Confidence interval taxon list</DIV><BR>";
+            print "<h2>Confidence interval taxon list</h2><BR>";
             print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"showOptionsForm\">";
             print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"taxon\">";
             print "<CENTER>";
@@ -561,7 +561,7 @@ sub displayStratTaxa{
     if ($q->param('show_taxon_list') eq 'NO') {
         optionsForm($q, $s, $dbt, \%splist);
     } else {
-        print "<DIV CLASS=\"title\">Stratigraphic section taxon list</DIV><BR>";
+        print "<H2>Stratigraphic section taxon list</H2><BR>";
         print "<CENTER><TABLE CELLPADDING=5 BORDER=0>";
         print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"showOptionsForm\">";
         print "<INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"".uri_escape($section_name)."\">";
@@ -662,7 +662,7 @@ sub optionsForm    {
     my $glyph_type_select = HTMLBuilder::buildSelect('glyph_type',$glyph_types,$glyph_types,$q->param('glyph_type'));
     
     if ($form_type eq 'large') {
-        print "<DIV CLASS=\"title\">Confidence interval options</DIV>";
+        print "<H2>Confidence interval options</H2>";
         print '<CENTER><TABLE CELLPADDING=5 BORDER=0>';
         
         if ($type eq 'taxon')   {    
@@ -1339,7 +1339,7 @@ sub calculateTaxaInterval {
     close IMAGEP;
     $image_map .= "</map>";
 # ---------------------------------RESULTS-PAGE----------------------------------------
-    print "<DIV CLASS=\"title\">Confidence interval results</DIV>";
+    print "<H2>Confidence interval results</H2>";
 
     print "<CENTER><A HREF=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">Help</A></CENTER>";
 
@@ -1773,7 +1773,7 @@ sub calculateStratInterval	{
     close IMAGEP;
     $image_map .= "</map>";
 # ---------------------------------RESULTS-PAGE----------------------------------------
-    print "<DIV CLASS=\"title\">Confidence interval results for the <i>$section_name</i> stratigraphic section</DIV><BR>";
+    print "<H2>Confidence interval results for the <i>$section_name</i> stratigraphic section</H2><BR>";
     #if ($fig_width > 750)  {
     #   print "<CENTER><IMG WIDTH=750 SRC=\"/public/confidence/$imagenamepng\"></CENTER><BR><BR>";
     #} else {

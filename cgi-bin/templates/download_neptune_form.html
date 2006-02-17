@@ -15,7 +15,7 @@ function checkAll(checkbox,the_class){
 </script>
 
 
-<div class="title">Neptune download request form</div>
+<div align="center"><h2>Neptune download request form</h2></div>
 
 <form method=post action="bridge.pl">
 <input id="action" type=hidden name="action" value="displayDownloadNeptuneResults">
@@ -26,8 +26,8 @@ function checkAll(checkbox,the_class){
 <table width="100%" cellpadding="3" cellspacing="0">
 <!--
 <tr>
-<td valign=top class="smallText">Output format</td>
-<td valign=top class="smallText"><select name=output_format>
+<td valign=top class="small">Output format</td>
+<td valign=top class="small"><select name=output_format>
 <option selected>comma-delimited text</option>
 <option>tab-delimited text</option>
 </select>
@@ -36,7 +36,7 @@ function checkAll(checkbox,the_class){
 
 
 <tr class="lightGrey">
-<td valign=top class="smallText" nowrap>Output format
+<td valign=top class="small" nowrap>Output format
 </td>
 <td>
 <select name="output_format">
@@ -47,10 +47,10 @@ function checkAll(checkbox,the_class){
 </tr>
 
 <tr>
-<td valign=top class="smallText">
+<td valign=top class="small">
 Fossil group(s)
 </td>
-<td valign=top class="smallText">
+<td valign=top class="small">
 <input type="checkbox" name="fossil_group" value="R">radiolaria
 <input type="checkbox" name="fossil_group" value="F">planktic foraminifera
 <input type="checkbox" name="fossil_group" value="D">diatoms
@@ -58,23 +58,23 @@ Fossil group(s)
 </td></tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Names of genera or species</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Names of genera or species</td>
+<td valign=top class="small">
 <textarea name=taxon_name rows=2 cols=30></textarea></td></tr>       
 
 
 <tr>
-<td valign=top class="smallText">
+<td valign=top class="small">
 Taxon status
 </td>
-<td valign=top class="smallText">
+<td valign=top class="small">
 <span style="white-space: nowrap;"><input type="checkbox" name="taxon_status" value="V" checked>valid</span>
 <span style="white-space: nowrap;"><input type="checkbox" name="taxon_status" value="S" checked>synonym</span>
 <span style="white-space: nowrap;"><input type="checkbox" name="taxon_status" value="D">questionable</span>
 </td></tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText" nowrap>Sample age range (Ma)
+<td valign=top class="small" nowrap>Sample age range (Ma)
 </td>
 <td>
 <input type="text" name="min_age" value="" size=4> - 
@@ -83,39 +83,39 @@ Taxon status
 </tr>
 
 <tr>
-<td valign=top class="smallText" nowrap>Minimum # of samples per taxon
+<td valign=top class="small" nowrap>Minimum # of samples per taxon
 </td>
-<td class="smallText">
+<td class="small">
 <input name="min_samples" size=6>
 </td>
 </tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText" nowrap>Top % of samples to throw out per taxon
+<td valign=top class="small" nowrap>Top % of samples to throw out per taxon
 </td>
-<td class="smallText">
+<td class="small">
 <input name="top_removal_percent" size=2 value="5">%
 </td>
 </tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText" nowrap>Bottom % of samples to throw out per taxon
+<td valign=top class="small" nowrap>Bottom % of samples to throw out per taxon
 </td>
-<td class="smallText">
+<td class="small">
 <input name="base_removal_percent" size=2 value="5">%
 </td>
 </tr>
 
 <tr>
-<td valign=top class="smallText">Latitudinal range</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Latitudinal range</td>
+<td valign=top class="small">
 <input name="latmin" size="4" value="-90">&deg; to
 <input name="latmax" size="4" value="90">&deg;
 </td>
     
 <tr>
-<td valign=top class="smallText">Longitudinal range</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Longitudinal range</td>
+<td valign=top class="small">
 <input name="lngmin" size="4" value="-180">&deg; to
 <input name="lngmax" size="4" value="180">&deg;
 </td> 
@@ -127,41 +127,41 @@ Taxon status
 <span class="options_box_header">Fields</span><br>
 <table width=100%>
   <tr>
-    <td class="tinyText" nowrap><input type=checkbox checked title="Check all" onClick="checkAll(this,'basic');"><B>Check all</B></td>
+    <td class="small" nowrap><input type=checkbox checked title="Check all" onClick="checkAll(this,'basic');"><B>Check all</B></td>
   </tr>
   <tr>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_leg value="YES">leg</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_site value="YES">site</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_hole value="YES">hole</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_hole_id value="YES">hole_id</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_ocean_code value="YES">ocean code</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_leg value="YES">leg</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_site value="YES">site</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_hole value="YES">hole</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_hole_id value="YES">hole_id</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_ocean_code value="YES">ocean code</td>
   </tr>
 
   <tr>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_longitude value="YES">longitude</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_latitude value="YES">latitude</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_paleo_longitude value="YES">paleolongitude</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_paleo_latitude value="YES">paleolatitude</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_longitude value="YES">longitude</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_latitude value="YES">latitude</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_paleo_longitude value="YES">paleolongitude</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_paleo_latitude value="YES">paleolatitude</td>
   </tr>
   
   <tr>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_sample_id value="YES">sample_id</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_sample_group_abundance value="YES">sample group abundance</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_sample_age_ma value="YES">sample age ma</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_sample_preservation value="YES">sample preservation</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_sample_depth_mbsf value="YES">sample depth mbsf</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_sample_id value="YES">sample_id</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_sample_group_abundance value="YES">sample group abundance</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_sample_age_ma value="YES">sample age ma</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_sample_preservation value="YES">sample preservation</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_sample_depth_mbsf value="YES">sample depth mbsf</td>
   </tr>
 
   <tr>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_taxon_id value="YES">taxon id</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_fossil_name value="YES">fossil name</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_taxon_status value="YES">taxon status</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_taxon_abundance value="YES">taxon abundance</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_taxon_id value="YES">taxon id</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_fossil_name value="YES">fossil name</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_taxon_status value="YES">taxon status</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_taxon_abundance value="YES">taxon abundance</td>
   </tr>
   <tr>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_resolved_taxon_id value="YES">resolved taxon id</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_resolved_fossil_name value="YES">resolved fossil name</td>
-    <td class="tinyText"><input type=checkbox checked class="basic" name=fields_resolved_taxon_status value="YES">resolved taxon status</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_resolved_taxon_id value="YES">resolved taxon id</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_resolved_fossil_name value="YES">resolved fossil name</td>
+    <td class="small"><input type=checkbox checked class="basic" name=fields_resolved_taxon_status value="YES">resolved taxon status</td>
   </tr>
 
 </table>
