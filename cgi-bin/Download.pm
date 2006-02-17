@@ -255,6 +255,9 @@ sub retellOptions {
 	$html .= $self->retellOptionsRow ( "Lump by formation and member?", $q->param("lump_by_mbr") );
 	$html .= $self->retellOptionsRow ( "Lump by published reference?", $q->param("lump_by_ref") );
 	$html .= $self->retellOptionsRow ( "Lump by time interval?", $q->param("lump_by_interval") );
+    $html .= $self->retellOptionsRow ( "Restrict to collection(s): ",$q->param("collection_no"));
+    $html .= $self->retellOptionsRow ( "Exclude collections with subset collections? ",$q->param("exclude_superset"));
+    $html .= $self->retellOptionsRow ( "Exclude collections with ".$q->param("occurrence_count_qualifier")." than",$q->param("occurrence_count")." occurrences") if ($q->param("occurrence_count") =~ /^\d+$/);
 
     if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
         $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
@@ -1246,6 +1249,13 @@ sub getCollectionsWhereClause {
         push @where,$created_string;
 	}
 
+    if ($q->param("collection_no") =~ /\d/) {
+        # Clean it up
+        my @collection_nos = split(/[^0-9]/,$q->param('collection_no'));
+        my @collection_nos = map {int($_)} @collection_nos;
+        push @where, "c.collection_no IN (".join(",",@collection_nos).")";
+    }
+
     foreach my $whereItem (
         $self->getCountryString(),
         $self->getPlateString(),
@@ -1257,7 +1267,8 @@ sub getCollectionsWhereClause {
         $self->getEnvironmentString(),
         $self->getGeogscaleString(),
         $self->getStratscaleString(),
-        $self->getCollectionTypeString()) {
+        $self->getCollectionTypeString(),
+        $self->getSubsetString()) {
         push @where,$whereItem if ($whereItem);
     }
 
@@ -1287,6 +1298,20 @@ sub getTimeLookup	{
 		%upperbinbound = %{$_[2]};
 		%lowerbinbound = %{$_[3]};
 	}
+}
+
+sub getSubsetString {
+    my $str = "";
+    # Maybe this isn't super scalable (just gets all collections that have at least one subset) but its
+    # fast enough as this is only 260 collections or so right now (PS 2/13/2005);
+    # maybe update this to a subselect if mysql ever gets upgraded
+    if ($q->param('exclude_superset') =~ /YES/i) {
+        my $sql = "select distinct collection_subset from collections where collection_subset is not null";
+        my @results = @{$dbt->getData($sql)};
+        my $collections = join(", ",map{$_->{'collection_subset'}} @results);
+        $str = "c.collection_no NOT IN ($collections)";
+    } 
+    return $str;
 }
 
 sub getCompendiumAgeRanges	{
@@ -1509,6 +1534,7 @@ sub doQuery {
     if($q->param('research_group') =~ /^(?:decapod|ETE|5%|1%|PACED|PGAP)$/){
         push @left_joins, "LEFT JOIN secondary_refs sr ON sr.collection_no=c.collection_no";
     }
+
 
     # Handle GROUP BY
     # This is important: don't grouping by genus_name for the obvious cases, 
@@ -1774,6 +1800,37 @@ sub doQuery {
         }
     }
 
+    # We have to do this now instead of before in the query cause
+    # 4.0 doesn't support subqueries and we can't the count correctly
+    # if the user downloads occurrences instead of collections. Do it before
+    # we tally refs and other stats below so those don't get screwed up as well
+    if ($q->param('occurrence_count') =~ /^\d+$/) {
+        my %COLL = ();
+        foreach my $row (@dataRows) {
+            $COLL{$row->{'collection_no'}}=1;
+        }
+        my @collnos = keys %COLL;
+        if ( @collnos ) {
+            my $qualifier = "<";
+            if ($q->param('occurrence_count_qualifier') =~ /more/i) {
+                $qualifier = ">";
+            }
+            my $sql = "SELECT c.collection_no FROM collections c LEFT JOIN occurrences o ON c.collection_no=o.collection_no WHERE c.collection_no IN (".join(", ",@collnos).") GROUP BY c.collection_no HAVING COUNT(o.occurrence_no) $qualifier ".$q->param('occurrence_count');
+            my @results = @{$dbt->getData($sql)};
+            my %exclude = ();
+            foreach my $row (@results) {
+                $exclude{$row->{'collection_no'}} = 1;
+            }
+            my @temp = ();
+            foreach my $row (@dataRows) {
+                if (!$exclude{$row->{'collection_no'}}) {
+                    push @temp, $row;
+                }
+            }
+            @dataRows = @temp;
+        }
+    }
+
 	# next do a quick hit to get some by-taxon and by-collection stats
 	#  ... and so on
     # also records genera names, useful for later loop
@@ -1784,6 +1841,7 @@ sub doQuery {
 	foreach my $row ( @dataRows ){
 		my $exclude = 0;
         my $lump = 0;
+        $colls{$row->{'collection_no'}} = 1;
             
         if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
             if ($row->{'reid_no'}) {
@@ -1922,6 +1980,7 @@ sub doQuery {
 			}
 		}
 	}
+    
 	@dataRows = @tempDataRows;
     $self->dbg("primary refs: " . (join(",",keys %REFS_USED))); 
 
