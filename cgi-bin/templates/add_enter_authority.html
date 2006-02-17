@@ -33,7 +33,7 @@ supposed to edit them -->
 <CENTER>
 <SPAN class="tiny">
 See the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Authority')">tip sheet</a>.
-If the name is misspelled, <a href="$exec_url?action=displayAuthoritiesTaxonSearchForm">try another search</a>.
+If the name is misspelled, <a href="$exec_url?action=displayAuthorityTaxonSearchForm">try another search</a>.
 </SPAN>
 </CENTER>
 
@@ -150,11 +150,15 @@ a popup menu of taxon ranks with the current "taxon_rank" selected. -->
 
 <CENTER>
 
-<TABLE BORDER=0 cellpadding=10>
+<TABLE BORDER=0 cellpadding=0>
 <TR>
-<TD>%%authorizer_name%%</TD>
-<TD>%%enterer_name%%</TD>
+<TD style="padding-right: 20px;">%%authorizer_name%%</TD>
+<TD style="padding-right: 20px;">%%enterer_name%%</TD>
 <TD>%%modifier_name%%</TD>
+</TR>
+<TR>
+<TD style="padding-right: 20px;">%%created%%</TD>
+<TD>%%modified%%</TD>
 </TR>
 </TABLE>
 
