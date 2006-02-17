@@ -792,7 +792,7 @@ sub displayMapResults {
 # on Map object creation, maybe later PS 12/14/2005
 sub displayMapOfCollection {
     logRequest($s,$q);
-#    $q->param(-name=>"taxon_info_script",-value=>"yes");
+    $q->param("simple_map"=>'YES');
     my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape1', 'dotcolor1', 'dotborder1');
     my %user_prefs = main::getPreferences($s->get('enterer_no'));
     foreach my $pref (@map_params){
@@ -831,7 +831,11 @@ sub displayMapOfCollection {
 
     my $m = Map->new( $dbh, $q, $s, $dbt );
 
-	print stdIncludes("std_page_top");
+    if ($q->param("display_header") eq 'NO') {
+        print stdIncludes("blank_page_top") 
+    } else {
+        print stdIncludes("std_page_top") 
+    }
 
     my $dataRowsRef = $m->buildMapOnly();
     my $coll = $dataRowsRef->[0];
@@ -850,8 +854,8 @@ sub displayMapOfCollection {
 
     my $map_html_path = $m->drawMapOnly($dataRowsRef);
 
-    print "<center><table><tr><td align=\"center\"><h3>Collection no $coll->{collection_no}</h3></td></tr>".
-          "<tr><td align=\"center\" valign=\"top\">";
+    print '<div align="center"><h3>PBDB collection number '.$coll->{'collection_no'}.'</h3></div>';
+    print '<div align="center">';
     # MAP USES $q->param("taxon_name") to determine what it's doing.
     if ( $map_html_path )   {
         if($map_html_path =~ /^\/public/){
@@ -866,16 +870,21 @@ sub displayMapOfCollection {
     } else {
         print "<i>No distribution data are available</i>";
     }
-    print "</td></tr></table></center>";
+    
     # trim the path down beyond apache's root so we don't have a full
     # server path in our html.
     if ( $map_html_path )   {
         $map_html_path =~ s/.*?(\/public.*)/$1/;
         print "<input type=hidden name=\"map_num\" value=\"$map_html_path\">";
     }  
+    print '</div>';
 
     
-	print stdIncludes("std_page_bottom");
+    if ($q->param("display_header") eq 'NO') {
+        print stdIncludes("blank_page_bottom") 
+    } else {
+        print stdIncludes("std_page_bottom") 
+    }
 }
 
 
@@ -2324,7 +2333,7 @@ sub processCollectionsSearch {
     my @fields = @{$_[2]};
 	
     # Set up initial values
-    my (@where,@occ_where,@reid_where,@tables,@from,@left_joins,@groupby,@errors,@warnings);
+    my (@where,@occ_where,@reid_where,@tables,@from,@left_joins,@groupby,@having,@errors,@warnings);
     @tables = ("collections c");
 
     # There fields must always be here
@@ -2371,7 +2380,7 @@ sub processCollectionsSearch {
     # We hit the tables separately instead of doing a join and group by so we can populate the old_id virtual field, which signifies
     # that a collection only containts old identifications, not new ones
     my %old_ids;
-    if ($options{'taxon_list'} || $options{'taxon_name'}) {
+    if ($options{'taxon_list'} || $options{'taxon_name'} || $options{'taxon_no'}) {
         my %collections = (-1=>1); #default value, in case we don't find anything else, sql doesn't error out
         my ($sql1,$sql2,@results);
         if ($options{'include_old_ids'}) {
@@ -2390,10 +2399,22 @@ sub processCollectionsSearch {
             $sql2 .= "re.taxon_no IN ($taxon_nos)";
             @results = @{$dbt->getData($sql1)}; 
             push @results, @{$dbt->getData($sql2)}; 
-        } elsif ($options{'taxon_name'}) {
+        } elsif ($options{'taxon_name'} || $options{'taxon_no'}) {
             # Parse these values regardless
             my ($genus,$subgenus,$species);
+            my @taxon_nos;
 
+            if ($options{'taxon_no'}) {
+                my $sql = "SELECT taxon_name FROM authorities WHERE taxon_no=".$dbh->quote($options{'taxon_no'});
+                $options{'taxon_name'} = ${$dbt->getData($sql)}[0]->{'taxon_name'};
+                @taxon_nos = (int($options{'taxon_no'}))
+            } else {
+                if (! $options{'no_authority_lookup'}) {
+                    my $taxon_sql = "SELECT taxon_no FROM authorities WHERE taxon_name LIKE ".$dbh->quote($options{'taxon_name'});
+                    @taxon_nos = map {$_->{taxon_no}} @{$dbt->getData($taxon_sql)}; 
+                }
+            }
+            
             # Fix up the genus name and set the species name if there is a space 
             my @taxon_bits = split(/\s+/,$options{'taxon_name'});
             if (scalar(@taxon_bits) == 3) {
@@ -2408,12 +2429,6 @@ sub processCollectionsSearch {
             # Set for displayOccsForReID
             $q->param('species_name' => $species) if ($species);
             $q->param('g_name' => $genus) if ($genus);
-
-            my @taxon_nos;
-            if (! $options{'no_authority_lookup'}) {
-                my $taxon_sql = "SELECT taxon_no FROM authorities WHERE taxon_name LIKE ".$dbh->quote($options{'taxon_name'});
-                @taxon_nos = map {$_->{taxon_no}} @{$dbt->getData($taxon_sql)}; 
-            }
 
             if (@taxon_nos) {
                 # if taxon is a homonym... make sure we get all versions of the homonym
@@ -2667,7 +2682,6 @@ IS NULL))";
         push @left_joins, "LEFT JOIN secondary_refs sr ON sr.collection_no=c.collection_no";
     }
 
-        
 	# note, we have one field in the collection search form which is unique because it can
 	# either be geological_group, formation, or member.  Therefore, it has a special name, 
 	# group_formation_member, and we'll have to deal with it separately.
@@ -2798,6 +2812,7 @@ IS NULL))";
            " FROM " .join(",",@tables)." ".join (" ",@left_joins).
            " WHERE ".join(" AND ",@where);
     $sql .= " GROUP BY ".join(",",@groupby) if (@groupby);  
+    $sql .= " HAVING ".join(",",@having) if (@having);  
 
 	# Handle sort order
     if ($options{'sortby'}) {
@@ -2835,60 +2850,69 @@ IS NULL))";
 #  * System displays selected collection
 sub displayCollectionDetails {
     logRequest($s,$q);
-	my $collection_no = $q->param('collection_no');
+	my $collection_no = int($q->param('collection_no'));
+    print stdIncludes( "std_page_top" );
+
+    # Handles the meat of displaying information about the colleciton
+    # Separated out so it can be reused in enter/edit collection confirmation forms
+    # PS 2/19/2006
+    displayCollectionDetailsPage($collection_no);
+	print "<hr>\n";
 	
+	my $taxa_list = buildTaxonomicList($collection_no);
+	print $taxa_list;
+
+	print '<p><div align="center"><table><tr>';
+	if ( $taxa_list =~ /Abundance/ )	{
+		print "<td>".$hbo->populateHTML('rarefy_display_buttons', [$collection_no],['collection_no'])."</td>";
+	}
+
+	print "<td>".$hbo->populateHTML('ecology_display_buttons', [$collection_no],['collection_no'])."</td>";
+
+	if($authorizer_no eq $s->get('authorizer_no') || $s->get('authorizer') eq "J. Alroy")	{
+		print "<td>".$hbo->populateHTML('occurrence_display_buttons', [$collection_no],['collection_no'])."</td>";;
+	}
+	if($taxa_list ne "" && $s->isDBMember()) {
+		print "<td>".$hbo->populateHTML('reid_display_buttons', [$collection_no],['collection_no'])."</td>";
+	}
+	print "</tr></table></div></p>";
+	print stdIncludes("std_page_bottom");
+}
+
+sub displayCollectionDetailsPage {
+    my $collection_no = shift;
+    if ($collection_no !~ /^\d+$/) {
+        print "<div class=\"errorMessage\">Invalid collection number $collection_no</div>";
+        return;
+    }
 	$sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, c.* FROM collections c LEFT JOIN person p1 ON p1.person_no=c.authorizer_no LEFT JOIN person p2 ON p2.person_no=c.enterer_no LEFT JOIN person p3 ON p3.person_no=c.modifier_no WHERE collection_no=" . $collection_no;
     dbg("Main SQL: $sql");
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
-		
-	my @fieldNames = @{$sth->{NAME}};
-	my $numFields  = $sth->{NUM_OF_FIELDS};
-	
-	my @fieldTypes = @{$sth->{mysql_type}};
-	#for($i = 0;$i < $numFields;$i++){
-	#	if ( $fieldTypes[$i] == 254)
-	#	{
-	#	  print $fieldNames[$i] . ": " . $fieldTypes[$i] . "<br>";
-	#	}
-	#}
-	my @row = $sth->fetchrow_array();
+	my $row = $sth->fetchrow_hashref();
 	$sth->finish();
   
-	# Get the name of the authorizer
-	my $fieldCount = 0;
-	my ($authorizer_no, $refNo);
-	
-    foreach my $tmpVal (@fieldNames) {
-		if ( $tmpVal eq 'authorizer_no') {
-			$authorizer_no = $row[$fieldCount];
-		} elsif ( $tmpVal eq 'reference_no') {
-			$refNo = $row[$fieldCount];
-		} elsif ( $tmpVal eq 'collection_subset' && $row[$fieldCount] ne "") {
-			my $collno = $row[$fieldCount];
-			my $linkFront = "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$collno\">";
-			$row[$fieldCount] = $linkFront . $collno . "</a> ";
-		}
-		$fieldCount++;
-	}
+    if (!$row) {
+        print "<div class=\"errorMessage\">No collection with collection number $collection_no</div>";
+        return;
+    }
 
     # Get the reference
-    $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$refNo;
-	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-    $sth->execute();
-    my $refRowRef = $sth->fetchrow_arrayref();
+    if ($row->{'reference_no'}) {
+        $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$row->{'reference_no'};
+        $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+        $sth->execute();
+        my $refRowRef = $sth->fetchrow_arrayref();
 
-    my $md = MetadataModel->new($sth);
-    my $drow = DataRow->new($refRowRef, $md);
-    my $bibRef = BiblioRef->new($drow);
-    $sth->finish();
-    my $refString = $bibRef->toString();
-    push(@row, $refString);
-    push(@fieldNames, 'reference_string');
+        my $md = MetadataModel->new($sth);
+        my $drow = DataRow->new($refRowRef, $md);
+        my $bibRef = BiblioRef->new($drow);
+        $sth->finish();
+        my $refString = $bibRef->toString();
 
-	# get the secondary_references
-	push(@row, PBDBUtil::getSecondaryRefsString($dbh,$collection_no,0,0));
-	push(@fieldNames, 'secondary_reference_string');
+        $row->{'reference_string'} = $refString;
+        $row->{'secondary_reference_string'} = PBDBUtil::getSecondaryRefsString($dbh,$collection_no,0,0);
+    }
 
 	# Get any subset collections JA 25.6.02
 	$sql = "SELECT collection_no FROM collections where collection_subset=" . $collection_no;
@@ -2896,117 +2920,132 @@ sub displayCollectionDetails {
     $sth->execute();
     my @subrowrefs = @{$sth->fetchall_arrayref()};
     $sth->finish();
-    my $subString;
-    for $subrowref (@subrowrefs)	{
-      my @subrow = @{$subrowref};
-      my $collno = $subrow[0];
-      my $linkFront = "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$collno\">";
-      $subString .= $linkFront . $collno . "</a> ";
+    my @links = ();
+    foreach my $ref (@subrowrefs)	{
+      push @links, "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$ref->[0]\">$ref->[0]</a>";
     }
-    push(@row, $subString);
-    push(@fieldNames, 'subset_string');
+    my $subString = join(", ",@links) or "";
+    $row->{'subset_string'} = $subString;
+
+	my $sql1 = "SELECT DISTINCT p1.name authorizer, p2.name enterer, p3.name modifier FROM occurrences o LEFT JOIN person p1 ON p1.person_no=o.authorizer_no LEFT JOIN person p2 ON p2.person_no=o.enterer_no LEFT JOIN person p3 ON p3.person_no=o.modifier_no WHERE o.collection_no=" . $collection_no;
+	my $sql2 = "SELECT DISTINCT p1.name authorizer, p2.name enterer, p3.name modifier FROM occurrences o LEFT JOIN person p1 ON p1.person_no=o.authorizer_no LEFT JOIN person p2 ON p2.person_no=o.enterer_no LEFT JOIN person p3 ON p3.person_no=o.modifier_no WHERE o.collection_no=" . $collection_no;
+    my @names = (@{$dbt->getData($sql1)},@{$dbt->getData($sql2)});
+    if (@names) {
+        %unique_auth = ();
+        %unique_ent = ();
+        %unique_mod = ();
+        foreach (@names) {
+            $unique_auth{$_->{'authorizer'}}++;
+            $unique_ent{$_->{'enterer'}}++;
+            $unique_mod{$_->{'modifier'}}++ if ($_->{'modifier'});
+        }
+        delete $unique_auth{$row->{'authorizer'}};
+        delete $unique_ent{$row->{'enterer'}};
+        delete $unique_mod{$row->{'modifier'}};
+        $row->{'authorizer'} .= ", $_" for (keys %unique_auth);
+        $row->{'enterer'} .= ", $_" for (keys %unique_ent);
+        $row->{'modifier'} .= ", $_" for (keys %unique_mod);
+    }
 	
 	# get the max/min interval names
-	my ($r,$f) = getMaxMinNamesAndDashes(\@row,\@fieldNames);
-	@row = @{$r};
-	@fieldNames = @{$f};
+    $row->{'interval'} = '';
+	if ( $row->{'max_interval_no'} ) {
+		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $row->{'max_interval_no'};
+        my $max_row = ${$dbt->getData($sql)}[0];
+        $row->{'interval'} .= $max_row->{'eml_interval'}." " if ($max_row->{'eml_interval'});
+        $row->{'interval'} .= $max_row->{'interval_name'};
+	} 
 
-    # have the regional section link to a local section search
-    my ($regionalsection_idx, $regionalsection_link);
-    for(my $index=0;$index < $#fieldNames;$index++) {
-        $regionalsection_idx = $index if ($fieldNames[$index] eq "regionalsection");
+	if ( $row->{'min_interval_no'}) { 
+		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $row->{'min_interval_no'};
+        my $min_row = ${$dbt->getData($sql)}[0];
+        $row->{'interval'} .= " - ";
+        $row->{'interval'} .= $min_row->{'eml_interval'}." " if ($min_row->{'eml_interval'});
+        $row->{'interval'} .= $min_row->{'interval_name'};
+
+        if (!$row->{'max_interval_no'}) {
+            $row->{'interval'} .= " <span class=small>(minimum)</span>";
+        }
+	} 
+
+	# check whether we have period/epoch/locage/intage max AND/OR min:
+    my $found_legacy = 0;
+	for my $term ("epoch","intage","locage","period"){
+        $row->{'legacy_'.$term} = '';
+        if ($row->{$term."_max"}) {
+            if ($row->{'eml'.$term.'_max'}) {
+                $row->{'legacy_'.$term} .= $row->{'eml'.$term.'_max'}." ";
+            }
+            $row->{'legacy_'.$term} .= $row->{$term."_max"};
+        }
+        if ($row->{$term."_min"}) {
+            if ($row->{$term."_max"}) {
+                $row->{'legacy_'.$term} .= " - ";
+            }
+            if ($row->{'eml'.$term.'_min'}) {
+                $row->{'legacy_'.$term} .= $row->{'eml'.$term.'_min'}." ";
+            }
+            $row->{'legacy_'.$term} .= $row->{$term."_min"};
+            if (!$row->{$term."_max"}) {
+                $row->{'legacy_'.$term} .= " <span class=small>(minimum)</span>";
+            }
+        }
+        if ($row->{'legacy_'.$term}) {
+            $found_legacy = 1;
+        }
+	}
+    if ($found_legacy) {
+        $row->{'legacy_message'} = 1;
+    } else {
+        $row->{'legacy_message'} = '';
     }
-    if ($row[$regionalsection_idx]) {
-        $regionalsection_link = "<a href=\"$exec_url?action=displayStratTaxaForm&taxon_resolution=species&skip_taxon_list=YES&input_type=regional"
-                         . "&input=".uri_escape($row[$regionalsection_idx])."\">$row[$regionalsection_idx]</a>";
+
+
+    if ($row->{'collection_subset'}) {
+        $row->{'collection_subset'} =  "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$row->{collection_subset}\">$row->{collection_subset}</a>";
     }
-    $row[$regionalsection_idx] = $regionalsection_link if ($regionalsection_link);
+
+    if ($row->{'regionalsection'}) {
+        $row->{'regionalsection'} = "<a href=\"$exec_url?action=displayStratTaxaForm&taxon_resolution=species&skip_taxon_list=YES&input_type=regional&input=".uri_escape($row->{'regionalsection'})."\">$row->{regionalsection}</a>";
+    }
+
+    if ($row->{'localsection'}) {
+        $row->{'localsection'} = "<a href=\"$exec_url?action=displayStratTaxaForm&taxon_resolution=species&skip_taxon_list=YES&input_type=local&input=".uri_escape($row->{'localsection'})."\">$row->{localsection}</a>";
+    }
     
-    # have the local section link to a local section search
-    my ($localsection_idx, $localsection_link);
-    for(my $index=0;$index < $#fieldNames;$index++) {
-        $localsection_idx = $index if ($fieldNames[$index] eq "localsection");
+    if ($row->{'geological_group'}) {
+        $row->{'geological_group'} = "<a href=\"$exec_url?action=displayStrataSearch&group_formation_member=".uri_escape($row->{'geological_group'})."\">$row->{geological_group}</a>";
     }
-    if ($row[$localsection_idx]) {
-        $localsection_link = "<a href=\"$exec_url?action=displayStratTaxaForm&taxon_resolution=species&skip_taxon_list=YES&input_type=local"
-                         . "&input=".uri_escape($row[$localsection_idx])."\">$row[$localsection_idx]</a>";
+    
+    if ($row->{'formation'}) {
+        $row->{'formation'} = "<a href=\"$exec_url?action=displayStrataSearch&group_hint=".uri_escape($row->{'geological_group'})."&group_formation_member=".uri_escape($row->{'formation'})."\">$row->{formation}</a>";
     }
-    $row[$localsection_idx] = $localsection_link if ($localsection_link);
+    
+    if ($row->{'member'}) {
+        $row->{'member'} = "<a href=\"$exec_url?action=displayStrataSearch&formation_hint=".uri_escape($row->{'formation'})."&group_formation_member=".uri_escape($row->{'member'})."\">$row->{member}</a>";
+    }
+    
+    foreach ('stratigraphy_panel','lithology_panel','taphonomy_panel','methods_panel') {
+        $row->{$_} = 1;
+    }
+    my @stratigraphy_fields = ('geological_group','formation','member','localsection','localbed','localorder','regionalsection','regionalbed');
 
-
-    # have the geological group/formation/members hyperlink to strata search
-    my ($group_idx, $formation_idx, $member_idx, $group_link, $formation_link, $member_link);
-    for(my $index=0;$index < $#fieldNames;$index++) {
-        $group_idx = $index if ($fieldNames[$index] eq "geological_group");
-        $formation_idx = $index if ($fieldNames[$index] eq "formation");
-        $member_idx = $index if ($fieldNames[$index] eq "member");
-    }
-    if ($row[$group_idx]) {
-        $group_link = "<a href=\"$exec_url?action=displayStrataSearch"
-                         . "&group_formation_member=".uri_escape($row[$group_idx])."\">$row[$group_idx]</a>";
-    }
-    if ($row[$formation_idx]) {   
-        $formation_link = "<a href=\"$exec_url?action=displayStrataSearch"
-                             . "&group_hint=".uri_escape($row[$group_idx])
-                             . "&group_formation_member=".uri_escape($row[$formation_idx])."\">$row[$formation_idx]</a>";
-    }
-    if ($row[$member_idx]) {
-        $member_link = "<a href=\"$exec_url?action=displayStrataSearch"
-                          . "&formation_hint=".uri_escape($row[$formation_idx])
-                          . "&group_formation_member=".uri_escape($row[$member_idx])."\">$row[$member_idx]</a>";
-    }
-    $row[$group_idx] = $group_link if ($group_link);
-    $row[$formation_idx] = $formation_link if ($formation_link);
-    $row[$member_idx] = $member_link if ($member_link);
-
-    print stdIncludes( "std_page_top" );
-	
-    print $hbo->populateHTML('collection_display_fields', \@row, \@fieldNames);
+    my @fields = keys %{$row};
+    my @fieldValues = values %{$row};
+    print $hbo->populateHTML('collection_display_fields', \@fieldValues,\@fields);
 		
     # If the viewer is the authorizer (or it's me), display the record with edit buttons
     if ($s->isDBMember() && $q->param('user') !~ /guest/i) {
 	    print '<p><div align="center"><table><tr>';
         my $p = Permissions->new($s,$dbt);
         my %is_modifier_for = %{$p->getModifierList()};
-        if (($authorizer_no eq $s->get('authorizer_no')) || $is_modifier_for{$authorizer_no} || ($s->get('authorizer') eq "J. Alroy")) {
-		    print '<td>'.$hbo->populateHTML('collection_display_buttons', \@row, \@fieldNames).'</td>';
+        if (($row->{'authorizer_no'}eq $s->get('authorizer_no')) || $is_modifier_for{$row->{'authorizer_no'}} || ($s->get('authorizer') eq "J. Alroy")) {
+		    print '<td>'.$hbo->populateHTML('collection_display_buttons', [$row->{'collection_no'}], ['collection_no']).'</td>';
         }
-	    print '<td>'.$hbo->populateHTML('collection_display_buttons2', [$q->param('collection_no')],['prefill_collection_no']).'</td>';
+	    print '<td>'.$hbo->populateHTML('collection_display_buttons2', [$row->{'collection_no'}],['prefill_collection_no']).'</td>';
 	    print '</tr></table></div></p>';
     }
-	
-	print "<HR>\n";
-	
-	# rjp, 1/2004.  This is the new routine which handles all reids instead
-	# of just the first and the last.  To rever to the old way, comment
-	# out the following three lines, and uncomment the fourth.
-	# JA: HTMLFormattedTaxonomicList is totally redundant and is therefore
-	#  deprecated
-	#my $collection = Collection->new(\%GLOBALVARS);
-	#$collection->setWithCollectionNumber($collection_no);
-	#my $taxa_list = $collection->HTMLFormattedTaxonomicList();
-	
-	my $taxa_list = buildTaxonomicList($collection_no, $refNo);
-	
-	
-	print $taxa_list;
 
-	print '<p><div align="center"><table><tr>';
-	if ( $taxa_list =~ /Abundance/ )	{
-		print "<td>".$hbo->populateHTML('rarefy_display_buttons', \@row, \@fieldNames)."</td>";
-	}
-
-	print "<td>".$hbo->populateHTML('ecology_display_buttons', \@row, \@fieldNames)."</td>";
-
-	if($authorizer_no eq $s->get('authorizer_no') || $s->get('authorizer') eq "J. Alroy")	{
-		print "<td>".$hbo->populateHTML('occurrence_display_buttons', \@row, \@fieldNames)."</td>";;
-	}
-	if($taxa_list ne "" && $s->isDBMember()) {
-		print "<td>".$hbo->populateHTML('reid_display_buttons', \@row, \@fieldNames)."</td>";
-	}
-	print "</tr></table></div></p>";
-
-	print stdIncludes("std_page_bottom");
 } # end sub displayCollectionDetails()
 
 
@@ -3130,11 +3169,12 @@ sub getMaxMinNamesAndDashes	{
 # snew_names	:	reference to array of new species names the user is entering
 sub buildTaxonomicList {
 	my $collection_no = shift;
-	my $collection_refno = shift;
-	
 	my $gnew_names = shift;				
 	my $subgnew_names = shift;			
 	my $snew_names = shift;	
+	
+    my $sql = "SELECT reference_no FROM collections WHERE collection_no=$collection_no";
+    my $collection_refno = ${$dbt->getData($sql)}[0]->{'reference_no'};
 	
 
 	# dereference arrays.
@@ -3383,21 +3423,21 @@ sub buildTaxonomicList {
 			}
 			# If species is informal, link only the genus.
 			elsif($output =~ /<genus>(.*)?<\/genus>(.*)?informal/s){
-				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2"><i>$1$2$3$4<\/i><\/a>/g;
+				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2"><i>$1 $2 $3 $4<\/i><\/a>/g;
 			}
             # N sp. id the only species reso that comes after the species
 			elsif($output =~ /n\. sp\.\s*<species>/s){
-				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2"><i>$1$2$3$4<\/i><\/a>/g;
+				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2"><i>$1 $2 $3 $4<\/i><\/a>/g;
 				$output =~ s/(n\. sp\.)(.*)?<\/i><\/a>/$2 $1<\/a>/g;
 			}
 			# shouldn't be any <i> tags for indet's.
 			elsif($output =~ /<species>indet/s){
-				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2"><i>$1$2$3$4<\/i><\/a>/g;
+				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2"><i>$1 $2 $3 $4<\/i><\/a>/g;
 				$output =~ s/<i>(.*)?indet(\.{0,1})<\/i><\/a>/$1indet$2<\/a>/;
 			}
 			else{
 				# match multiple rows as a single (use the 's' modifier)
-				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2+$4"><i>$1 $2$3$4<\/i><\/a>/g;
+				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2+$4"><i>$1 $2 $3 $4<\/i><\/a>/g;
 			}
 			# ---------------------------------
 
@@ -3736,9 +3776,11 @@ sub rarefyAbundances	{
 
 	print stdIncludes("std_page_top");
 
-	$sql = "SELECT abund_value FROM occurrences WHERE collection_no=";
-	$sql .= $q->param(collection_no);
-	$sql .= " AND abund_value>0";
+    my $collection_no = int($q->param('collection_no'));
+    my $sql = "SELECT collection_name FROM collections WHERE collection_no=$collection_no";
+    my $collection_name=${$dbt->getData($sql)}[0]->{'collection_name'};
+
+	$sql = "SELECT abund_value FROM occurrences WHERE collection_no=$collection_no and abund_value>0";
 	
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
@@ -3820,7 +3862,7 @@ sub rarefyAbundances	{
 		}
 	}
 
-	print "<center><h3>Diversity statistics for ", $q->param(collection_name), " (PBDB collection ", $q->param(collection_no), ")</h3></center>\n\n";
+	print "<center><h3>Diversity statistics for $collection_name (PBDB collection ", $q->param(collection_no), ")</h3></center>\n\n";
 
 	print "<center><table><tr><td align=\"left\">\n";
 	printf "<p>Total richness: <b>%d taxa</b><br>\n",$ntaxa;
@@ -3871,7 +3913,7 @@ sub rarefyAbundances	{
 		$isalevel[$sl] = "Y";
 	}
 
-	print "<hr><center><h3>Rarefaction curve for ", $q->param(collection_name), " (PBDB collection ", $q->param(collection_no), ")</h3></center>\n\n";
+	print "<hr><center><h3>Rarefaction curve for $collection_name (PBDB collection ", $q->param(collection_no), ")</h3></center>\n\n";
 
 	open OUT,">$HTML_DIR/$OUTPUT_DIR/rarefaction.csv";
 	print "<center><table>\n";
@@ -4521,59 +4563,13 @@ sub processEnterCollectionForm {
 		print "already ";
 	}
 	print "added</font></h3></center>";
- 
-    
-	$sql = "SELECT * FROM collections WHERE collection_no=$recID";
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-  	$sth->execute();
-    my @fields = @{$sth->{NAME}};
-	my @row = $sth->fetchrow_array();
-    $sth->finish();
- 
-  	# Get the reference for this collection
-	my $refColNum;
-	my $curColNum = 0;
-	foreach my $colName (@fields)
-	{
-		if ( $colName eq 'reference_no')
-		{
-			$refColNum = $curColNum;
-			my $reference_no = $row[$refColNum];
-			$s->setReferenceNo($dbh, $reference_no);
 
-            $sql = "SELECT r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type FROM refs r WHERE r.reference_no=".$reference_no;
-			$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-			$sth->execute();
-			@refRow = $sth->fetchrow_array();
-			my @refFieldNames = @{$sth->{NAME}};
-			$sth->finish();
-			$refRowString = $hbo->populateHTML('reference_display_row', \@refRow, \@refFieldNames);
-			
-			push(@row, $refRowString);
-			push(@fields, 'reference_string');
-			# We won't ever have a secondary ref yet, but we want HTMLBuilder
-			# to nuke the headline in the template, so give it an empty value.
-			push(@row, "");
-			push(@fields, 'secondary_reference_string');
+   # $recID = collection_no
+   displayCollectionDetailsPage($recID);
+   print "<div align=center>".$hbo->populateHTML('occurrence_display_buttons', [$recID],['collection_no'])."</div>";
 
-			last;
-		}
-		$curColNum++;
-	}
 
-	# get the max/min interval names
-	my ($r,$f) = getMaxMinNamesAndDashes(\@row,\@fields);
-	@row = @{$r};
-	@fields = @{$f};
- 
-    print $hbo->populateHTML('collection_display_fields', \@row, \@fields);
-	print '<p><div align="center"><table><tr>';
-    print '<td>'.$hbo->populateHTML('collection_display_buttons', \@row, \@fields).'</td>';
-	print '<td>'.$hbo->populateHTML('collection_display_buttons2', [$recID],['prefill_collection_no']).'</td>';
-    print "</tr></table></div></p>";
-	print '<div align="center">';
-    print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
-	print '</div>';
+   
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></p></b>|;
 	#print qq| <b><p><a href="$exec_url?action=displayEnterCollPage&prefill_collection_no=$recID">Add another collection with fields prefilled based on this collection</a></p></b></center>|;
  
@@ -4622,7 +4618,7 @@ sub startAddCollection {
 	$s->enqueue( $dbh, "action=displaySearchCollsForAdd&type=add" );
 
 	$q->param( "type" => "select" );
-	displaySearchRefs( ); 
+	displaySearchRefs( "Please choose a reference first" ); 
 }
 
 # This subroutine intializes the process to get to the Add/Edit Occurrences page
@@ -5110,6 +5106,25 @@ sub processLoadImage{
 	Images::processLoadImage($dbt, $q, $s);
     print stdIncludes("std_page_bottom");
 }
+
+sub displayImage {
+    if ($q->param("display_header") eq 'NO') {
+        print stdIncludes("blank_page_top") 
+    } else {
+        print stdIncludes("std_page_top") 
+    }
+    my $image_no = int($q->param('image_no'));
+    if (!$image_no) {
+        print "<div class=errorMessage>No image number specified</div>";
+    } else {
+        Images::displayImage($dbt,$image_no);
+    }
+    if ($q->param("display_header") eq 'NO') {
+        print stdIncludes("blank_page_bottom"); 
+    } else {
+        print stdIncludes("std_page_bottom"); 
+    }
+}
 ## END Image stuff
 ##############
 
@@ -5476,49 +5491,16 @@ sub processEditCollectionForm {
 
 	# Updates here 
 	my $recID = updateRecord( 'collections', 'collection_no', $q->param('collection_no') );
- 
-    print "<center><h3><font color='red'>Collection record updated</font></h3></center>\n";
+   
+    displayCollectionDetailsPage($collection_no);
 
-	# Select the updated data back out of the database.
-	$sql = "SELECT * FROM collections WHERE collection_no=$recID";
-	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-  	$sth->execute();
-	dbg( "$sql<HR>" );
-	my @fields = @{$sth->{NAME}};
-	@row = $sth->fetchrow_array();
-	$sth->finish();
-    
-	# get the max/min interval names
-	my ($r,$f) = getMaxMinNamesAndDashes(\@row,\@fields);
-	@row = @{$r};
-	@fields = @{$f};
+    print "<div align=center>";
+    print $hbo->populateHTML('occurrence_display_buttons', [$collection_no],['collection_no']);
+    print $hbo->populateHTML('reid_display_buttons', [$collection_no],['collection_no']);
+    print "</div>";
 
-	my $curColNum = 0;
-	foreach my $colName (@fields){
-		if($colName eq 'reference_no'){
-			$reference_no = $row[$curColNum];
-			last;
-		}
-		$curColNum++;
-	}
-	my $refRowString = getCurrRefDisplayStringForColl($dbh, $recID, $reference_no);
-	push(@row, $refRowString);
-	push(@fields, 'reference_string');
 
-	# get the secondary_references
-	push(@row, PBDBUtil::getSecondaryRefsString($dbh,$collection_no,0,0));
-	push(@fields, 'secondary_reference_string');
-
-    
-    print $hbo->populateHTML('collection_display_fields', \@row, \@fields);
-	print '<p><div align="center"><table><tr>';
-    print '<td>'.$hbo->populateHTML('collection_display_buttons', \@row, \@fields).'</td>';
-	print '<td>'.$hbo->populateHTML('collection_display_buttons2', [$recID],['prefill_collection_no']).'</td>';
-    print "</tr></table></div></p>";
-	print '<div align="center">';
-    print $hbo->populateHTML('occurrence_display_buttons', \@row, \@fields);
-	print '</div>';
-    
+   
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit">Edit another collection using the same reference</a></p></b></center>|;
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</a></p></b></center>|;
 	#print qq| <b><p><a href="$exec_url?action=displayEnterCollPage&prefill_collection_no=$recID">Add a collection with fields prefilled based on this collection</a></p></b></center>|;
@@ -6235,7 +6217,7 @@ sub processEditOccurrences {
 	# Show the rows for this collection to the user
 	my $collection_no = ${$all_params{collection_no}}[0];
 
-	print buildTaxonomicList( $collection_no, 0,\@gnew_names,\@subgnew_names,\@snew_names );
+	print buildTaxonomicList( $collection_no, \@gnew_names,\@subgnew_names,\@snew_names );
 
 	# Show a link to re-edit
 	print "
@@ -6400,7 +6382,6 @@ sub displayOccsForReID
 		$rowCount++;
 		last if $rowCount > 10;
 
-		my @prefkeys;
 		if ($rowCount == 1)	{
 			print $hbo->populateHTML('reid_header_row', [ $refString ], [ 'ref_string' ], \@prefkeys);
 		}
@@ -6423,7 +6404,7 @@ sub displayOccsForReID
 			print "    <td>" . $row{"plant_organ2"} . "</td>\n";
 		}
 		print "</tr>";
-		print $hbo->populateHTML('reid_entry_row', [$row{'occurrence_no'}, $row{'collection_no'}, $s->get('authorizer'), $s->get('enterer') ], ['occurrence_no', 'collection_no', 'authorizer', 'enterer'], \@prefkeys);
+		print $hbo->populateHTML('reid_entry_row', [$row{'occurrence_no'}, $row{'collection_no'}, $s->get('authorizer'), $s->get('enterer'),'','','','',''], ['occurrence_no', 'collection_no', 'authorizer', 'enterer','genus_reso','subgenus_reso','species_reso','plant_organ','plant_organ2'], \@prefkeys);
 
 		# print other reids for the same occurrence
 		$sql = "SELECT * FROM reidentifications WHERE occurrence_no=" . $row{'occurrence_no'};
