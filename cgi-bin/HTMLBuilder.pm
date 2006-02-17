@@ -703,17 +703,20 @@ sub populateHTML {
 	if ($val ne "")	{
 		# If we have a value, replace the div tags with just what's between
 		# them (which could be <span> tags).
+		$htmlTemplateString =~ s/(<optional_$fieldName>)(.*?)(<\/optional_$fieldName>)/$2/gis;
 		$htmlTemplateString =~ s/(<div show="$fieldName">)(.*?)(<\/div>)/$2/gim;
 	} else	{
 		# Otherwise, remove the div tags, and everything inbetween (like <span>
 		# tags), completely
+		$htmlTemplateString =~ s/(<optional_$fieldName>)(.*?)(<\/optional_$fieldName>)//gis;
 		$htmlTemplateString =~ s/<div show="$fieldName">.*?<\/div>//gim;
+
+        # Do spans with show
+        # Remove the <span> tags and everything inbetween if there is no
+        # corresponding value.
+        $htmlTemplateString =~ s/<span show="$fieldName">.*?<\/span>//gim;
 	}
     
-    # Do spans with show
-	# Remove the <span> tags and everything inbetween if there is no
-	# corresponding value.
-    $htmlTemplateString =~ s/<span show="$fieldName">.*?<\/span>//gim unless $val ne "";
 
     # Do span tags with id
 	# Else, replace span tags with just the value
