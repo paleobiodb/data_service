@@ -1,5 +1,8 @@
 package Images;
 
+use Reference;
+use TaxaCache;
+
 $DEBUG = 0;
 
 ###
@@ -192,6 +195,8 @@ sub processLoadImage{
 	my ($image, $x);
 	$image = Image::Magick->new;
 	$x = $image->Read(filename=>"$docroot$subdirs/$new_file");
+    my $width = $image->Get('width') || 0;
+    my $height = $image->Get('height') || 0;
 	warn "$x" if "$x";
 	$x = $image->Scale('50x50');
 	warn "$x" if "$x";
@@ -199,12 +204,13 @@ sub processLoadImage{
 	$x = $image->Write("$docroot$subdirs/$new_thumb");
 	warn "$x" if "$x";
 
-	my @values = ($authorizer, $enterer, $reference_no, $taxon_no, "'$now'", "'$subdirs/$new_file'", "'$file_name'", "'$caption'", "'$digest'");
+	my @values = ($authorizer, $enterer, $reference_no, $taxon_no, "'$now'", "'$subdirs/$new_file'", $width, $height, "'$file_name'", "'$caption'", "'$digest'");
 
 	#	insert a new record into the db
 	$sql = "INSERT INTO images (authorizer_no, enterer_no, reference_no, taxon_no, ".
-		   "created, path_to_image, original_filename, caption, file_md5_hexdigest) ".
+		   "created, path_to_image, width, height, original_filename, caption, file_md5_hexdigest) ".
 		   "VALUES (".join(',',@values).")";
+    main::dbg("Image sql: $sql");
 	if(!$dbt->getData($sql)){
 		print $dbt->getErr() ;
 		# If we had an error inserting, remove the image from the filesystem too
@@ -227,29 +233,59 @@ sub processLoadImage{
 ###
 # VIEWING
 ###
-sub processViewImages{
+sub getImageList {
 	my $dbt = shift;
-	my $q = shift;
-	my $s = shift;
-	my $in_list = shift;
+	my $taxa_list = shift;
     
-	my @results;
+	my @results = ();
 
-    foreach $taxon_no (@$in_list) {
+    foreach $taxon_no (@$taxa_list) {
         if ($taxon_no =~ /^\d+$/) {
             push @taxon_no_list,$taxon_no;
         }
     }
     if (scalar @taxon_no_list) {
-		my $sql = "SELECT authorities.taxon_no, taxon_name, image_no, images.reference_no, path_to_image, caption, ".
-			  " original_filename ".
-			  "FROM authorities, images ".
-			  "WHERE authorities.taxon_no = images.taxon_no " . 
-			  "AND images.taxon_no IN (".join(",",@taxon_no_list).")";
+		my $sql = "SELECT a.taxon_no, a.taxon_name, i.*".
+			  " FROM authorities a, images i".
+			  " WHERE a.taxon_no = i.taxon_no" . 
+			  " AND i.taxon_no IN (".join(",",@taxon_no_list).")";
 		@results = @{$dbt->getData($sql)};
     }
-	#}
 	return @results;
+}
+
+sub displayImage {
+    my ($dbt,$image_no) = @_;
+
+    my $sql = "SELECT a.taxon_no,a.taxon_name,i.* FROM images i, authorities a where i.taxon_no=a.taxon_no AND i.image_no=$image_no";
+    my $row = ${$dbt->getData($sql)}[0];
+    if (!$row) {
+        print "<div class=errorMessage>Error, no image to display</div>";
+    } else {
+        my $ss = TaxaCache::getSeniorSynonym($dbt,$row->{'taxon_no'});
+        
+        print "<div align=\"center\">";
+        print "<img src=\"".$row->{'path_to_image'}."\" border=1><br>\n";
+        print "<i>".$row->{'caption'}."</i><br>\n";
+        print "<div class=\"small\">";
+        print "<br><table border=0 cellpadding=2 cellspacing=0>";
+        print "<tr><td><b>Original name of image:</b></td><td>".$row->{'original_filename'}."</td></tr>\n";
+        if ( $ss && $row->{'taxon_no'} != $ss->{'taxon_no'} ) {
+            print "<tr><td><b>Original identification:</b></td><td><a target=\"_blank\" href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$row->{taxon_no}\">".$row->{'taxon_name'}."</a></td></tr>\n";
+            print "<tr><td><b>Current identification:</b></td><td><a target=\"_blank\" href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$ss->{taxon_no}\">".$ss->{'taxon_name'}."</a></td></tr>\n";
+        } else {
+            print "<tr><td><b>Current identification:</b></td><td><a target=\"_blank\" href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$row->{taxon_no}\">".$row->{'taxon_name'}."</a></td></tr>\n";
+        }
+        if ( $row->{reference_no} > 0 ) {
+            my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$row->{reference_no}";
+            my $ref = ${$dbt->getData($sql)}[0];
+            $ref_string = Reference::formatShortRef($ref,'link_id'=>1);  
+            $ref_string =~ s/<a /<a target="_blank" /;
+            print "<tr><td><b>Reference:</b></td><td> $ref_string</td></tr>\n";
+        }
+        print "</table>";
+        print "</div>";
+    }   
 }
 
 1;
