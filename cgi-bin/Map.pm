@@ -155,6 +155,7 @@ sub buildMap {
                     ($options{'eml_max_interval'},$options{'max_interval'}) = TimeLookup::splitInterval($dbt,$options{'interval_name'});
                 }
                 my ($dataRowsRef,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);  
+                $self->{'options'} = \%options;
                 $self->mapDrawPoints($dataRowsRef);
             }
         } elsif ($ptset == 1) {
@@ -168,6 +169,7 @@ sub buildMap {
             }
             my ($dataRowsRef,$ofRows,$warnings) = main::processCollectionsSearch($dbt,\%options,$fields);  
             push @warnings, @$warnings; 
+            $self->{'options'} = \%options;
             $self->mapDrawPoints($dataRowsRef);
         }
            
@@ -267,6 +269,8 @@ sub drawMapOnly {
     $maxdotsize = $dotsize;
     if ($dotsizeterm eq "proportional")	{ $maxdotsize = 7; }
 
+    my %options = $q->Vars();
+    $self->{'options'} = \%options;
     $self->mapDrawPoints($dataRowsRef);
     $self->mapFinishImage();
     return $img_link;
@@ -384,43 +388,44 @@ sub mapFinishImage {
     close GIF;
 
     # make clickable background rectangles for repositioning the map
+    unless($q->param("simple_map") =~ /YES/i){
+        # need a list of possible parameters
+        my @params = ('research_group', 'authorizer', 'enterer', 'modified_since', 'date', 'month', 'year', 'country', 'state', 'interval_name', 'formation', 'lithology1', 'environment', 'taxon_rank', 'taxon_name', 'pointsize1', 'dotcolor1', 'pointshape1', 'dotborder1', 'mapsearchfields2', 'mapsearchterm2', 'pointsize2', 'dotcolor2', 'pointshape2', 'dotborder2', 'mapsearchfields3', 'mapsearchterm3', 'pointsize3', 'dotcolor3', 'pointshape3', 'dotborder3', 'mapsearchfields4', 'mapsearchterm4', 'pointsize4', 'dotcolor4', 'pointshape4', 'dotborder4', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngnocolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor');
 
-    # need a list of possible parameters
-    my @params = ('research_group', 'authorizer', 'enterer', 'modified_since', 'date', 'month', 'year', 'country', 'state', 'interval_name', 'formation', 'lithology1', 'environment', 'taxon_rank', 'taxon_name', 'pointsize1', 'dotcolor1', 'pointshape1', 'dotborder1', 'mapsearchfields2', 'mapsearchterm2', 'pointsize2', 'dotcolor2', 'pointshape2', 'dotborder2', 'mapsearchfields3', 'mapsearchterm3', 'pointsize3', 'dotcolor3', 'pointshape3', 'dotborder3', 'mapsearchfields4', 'mapsearchterm4', 'pointsize4', 'dotcolor4', 'pointshape4', 'dotborder4', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngnocolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor');
-
-    my $clickstring = "$BRIDGE_HOME?action=displayMapResults";
-    # Crate a new cgi object cause the original may have been changed
-    my $q2 = new CGI;
-    for $p ( @params )	{
-        if ( $q2->param($p) )	{
-            $clickstring .= "&" . $p . "=" . $q2->param($p);
+        my $clickstring = "$BRIDGE_HOME?action=displayMapResults";
+        # Crate a new cgi object cause the original may have been changed
+        my $q2 = new CGI;
+        for $p ( @params )	{
+            if ( $q2->param($p) )	{
+                $clickstring .= "&" . $p . "=" . $q2->param($p);
+            }
         }
-    }
-    for my $i ( 1..10 )	{
-        for my $j ( 1..10 )	{
-            my $xbot = int(( $i - 1 ) / 10 * $width);
-            my $xtop = int($i / 10 * $width);
-            my $ybot = int(( $j - 1 ) / 10 * $height);
-            my $ytop = int($j / 10 * $height);
-            $newlng = int($midlng + ( ( 360 / $scale ) * ( $i - 5 ) / 10 ));
-            $newlat = int($midlat - ( ( 180 / $scale ) * ( $j - 5 ) / 10 ));
-            $latlngstring = "&maplng=" . $newlng;
-            $latlngstring .= "&maplat=" . $newlat;
-            # need this because mapscale is varied for the "Zoom"
-            #  buttons below
-            $latlngstring .= "&mapscale=" . $scale;
-            print MAPOUT "<area shape=\"rect\" coords=\"" . $xbot . "," . $ybot . "," . $xtop . "," . $ytop . "\" href=\"" , $clickstring , $latlngstring , "\">\n";
+        for my $i ( 1..10 )	{
+            for my $j ( 1..10 )	{
+                my $xbot = int(( $i - 1 ) / 10 * $width);
+                my $xtop = int($i / 10 * $width);
+                my $ybot = int(( $j - 1 ) / 10 * $height);
+                my $ytop = int($j / 10 * $height);
+                my $newlng = int($midlng + ( ( 360 / $scale ) * ( $i - 5 ) / 10 ));
+                my $newlat = int($midlat - ( ( 180 / $scale ) * ( $j - 5 ) / 10 ));
+                $latlngstring = "&maplng=" . $newlng;
+                $latlngstring .= "&maplat=" . $newlat;
+                # need this because mapscale is varied for the "Zoom"
+                #  buttons below
+                $latlngstring .= "&mapscale=" . $scale;
+                print MAPOUT "<area shape=\"rect\" coords=\"" . $xbot . "," . $ybot . "," . $xtop . "," . $ytop . "\" href=\"" , $clickstring , $latlngstring , "\">\n";
+            }
         }
     }
 
     print MAPOUT "</map>\n";
     print MAPOUT "</table>\n";
 
-    print MAPOUT "<table cellpadding=0 width=100%>\n<tr>\n";
+    print MAPOUT "<table cellpadding=0>\n<tr>\n";
     print MAPOUT "<td valign=\"middle\">\n";
     print MAPOUT "<table cellpadding=0 cellspacing=1><tr>\n<td align=\"right\" valign=\"top\" bgcolor=\"black\">\n";
     print MAPOUT "<table cellpadding=5 cellspacing=1>\n";
-    if(!$q->param("taxon_info_script")){
+    unless ($q->param("simple_map") =~ /YES/i){
         print MAPOUT "<tr><td width=110 valign=\"top\" bgcolor=\"white\" class=\"small\">";
         my $count = scalar(keys %coll_count);
         if ($count > 1)	{
@@ -448,11 +453,11 @@ sub mapFinishImage {
     print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format\n";
     print MAPOUT "</td></tr>\n";
 
-    print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
-    print MAPOUT "Click on a point to recenter the map\n";
-    print MAPOUT "</td></tr>\n";
+    unless($q->param("simple_map") =~ /YES/i){
+        print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
+        print MAPOUT "Click on a point to recenter the map\n";
+        print MAPOUT "</td></tr>\n";
 
-    unless($q->param("taxon_info_script") eq "yes"){
         $clickstring .= "&maplng=" . $midlng;
         $clickstring .= "&maplat=" . $midlat;
 
@@ -769,10 +774,6 @@ sub mapSetupImage {
               $scale > 1.5 )	{
         $hpix = 280;
         $vpix = 240;
-    }
-    # PM 09/10/02 - Draw a half-sized map for the taxon information script.
-    if($q->param("taxon_info_script") eq "yes")	{
-          $q->param('mapsize' => '75%');
     }
     $x = $q->param('mapsize');
     $x =~ s/%//;
@@ -1265,7 +1266,7 @@ sub mapDrawPoints{
     
 	$self->dbg("matches: $matches<br>");
 	# Bail if we don't have anything to draw.
-	if($matches < 1 && $q->param('taxon_info_script') eq "yes"){
+	if($matches < 1 && $q->param('simple_map') =~ /YES/i){
 		print "NO MATCHING COLLECTION DATA AVAILABLE<br>";
 		return;
 	}
@@ -1284,23 +1285,15 @@ sub mapDrawPoints{
 				    printf MAPOUT "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1-0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1-0.5+(1.5*$dotsize));
 			    }
 			    print MAPOUT "\" href=\"$BRIDGE_HOME?action=displayCollResults";
-			    for $t (keys %filledfields)	{
-				    if ($filledfields{$t} ne "")	{
-					    my $temp = $filledfields{$t};
-					    $temp =~ s/"//g;
-					    $temp =~ s/ /\+/g;
-					    print MAPOUT "&$t=$temp";
+
+                my %options = %{$self->{'options'}};
+                if (!%options) {
+                    %options = $q->Vars();
+                }
+                while(my ($field,$value) = each %options) {
+                    if ($field !~ /^permission|^calling|^point|^dot|^map|projection|^grid|^action|^line|color$/ && $value) {
+					    print MAPOUT "&$field=$value";
 				    }
-			    }
-			    if ( $q->param('interval_name') )	{
-				    print MAPOUT "&max_interval=" . $q->param('interval_name');
-			    }
-			    if ( $q->param('taxon_name') )	{
-				    # get rid of spaces in a genus-species name
-				    my $clean_name = $q->param('taxon_name');
-				    $clean_name =~ s/ /\+/g;
-				    print MAPOUT "&taxon_name=" . $clean_name;
-				    print MAPOUT "&taxon_rank=" . $q->param('taxon_rank');
 			    }
 			    ($latdeg,$latdir) = split / /,$latVal{$y1};
 			    ($lngdeg,$lngdir) = split / /,$longVal{$x1};
