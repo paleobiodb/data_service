@@ -666,12 +666,18 @@ sub getChildren {
     my $taxon_no = shift;
     my $return_type = shift;
 
+    # First get the senior synonym
+    my $ss = getSeniorSynonym($dbt,$taxon_no);
+    if ($ss) {
+        $taxon_no = $ss->{'taxon_no'};
+    }
+
     if ($return_type eq 'tree') {
         # Ordering is very important. 
         # The ORDER BY tc2.lft makes sure results are returned in hieracharical order, so we can build the tree in one pass below
         # The (tc2.taxon_no != tc2.spelling_no) term ensures the most recent name always comes first (this simplfies later algorithm)
         # use between and both values so we'll use a key for a smaller tree;
-        my $sql = "SELECT tc2.taxon_no, a1.taxon_rank, a1.taxon_name, tc2.spelling_no, tc2.lft, tc2.rgt, tc2.synonym_no "
+        my $sql = "SELECT tc2.taxon_no, a1.type_taxon_no, a1.taxon_rank, a1.taxon_name, tc2.spelling_no, tc2.lft, tc2.rgt, tc2.synonym_no "
                 . " FROM taxa_tree_cache tc1, taxa_tree_cache tc2, authorities a1"
                 . " WHERE a1.taxon_no=tc2.taxon_no"
                 . " AND (tc2.lft BETWEEN tc1.lft AND tc1.rgt)"
@@ -765,6 +771,21 @@ sub getParent {
 
     my $sql = "SELECT a.taxon_no,a.taxon_name,a.taxon_rank FROM taxa_list_cache l, taxa_tree_cache t, authorities a WHERE t.taxon_no=l.parent_no AND a.taxon_no=l.parent_no AND l.child_no=$taxon_no ORDER BY t.lft DESC LIMIT 1";
     return ${$dbt->getData($sql)}[0];
+}
+
+sub getSeniorSynonym {
+    my $dbt = shift;
+    my $taxon_no = shift;
+    my $sql = "SELECT a.taxon_no, a.taxon_name, a.taxon_rank"
+            . " FROM taxa_tree_cache t, authorities a"
+            . " WHERE t.synonym_no=a.taxon_no"
+            . " AND t.taxon_no=$taxon_no";
+
+
+    my @results = @{$dbt->getData($sql)};
+    if (@results) {
+        return $results[0];
+    }
 }
 
 # pbdbuser must have SUPER privilege - don't bother logging all these transactions,
