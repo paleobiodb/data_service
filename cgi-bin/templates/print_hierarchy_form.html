@@ -1,16 +1,19 @@
-<div class="title">Taxon classification search form</div>
+<div align="center"><h2>Taxon classification search form</h2></div>
     
 <form method=post action="/cgi-bin/bridge.pl"> 
 <input id="action" type=hidden name="action" value="startProcessPrintHierarchy">
 <center>
 <table>
   <tr>
-    <td valign=middle align=right>Taxon name: <input name="taxon_name" type="text" size=25></td>
-    <td valign=middle>Hierarchical levels:
+    <td align=right>Taxon name:</td><td><input name="taxon_name" type="text" size=25></td>
+  </tr>
+  <tr>
+    <td>Hierarchical levels:</td><td>
       <select name="maximum_levels">
+        <option selected value=100>all</option>
         <option>1</option>
         <option>2</option>
-        <option selected>3</option>
+        <option>3</option>
         <option>4</option>
         <option>5</option>
         <option>6</option>
@@ -31,7 +34,10 @@
         <option>21</option>
       </select>
     </td>  
-    <td align=left><input id="submit" name="submit" value="Show hierarchy" type="submit"></td>
+  </tr>
+  <tr><td>&nbsp;</td></tr>
+  <tr>
+    <td align=center colspan=2><input id="submit" name="submit" value="Show hierarchy" type="submit"></td>
   </tr>
 </table>
 </center>
