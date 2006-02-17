@@ -86,7 +86,7 @@ function checkAll(checkbox,the_class){
 </script>
 
 
-<div class="title">Download request form</div>
+<div align="center"><h2>Download request form</h2></div>
 
 <form method=post action="bridge.pl">
 <input id="action" type=hidden name="action" value="displayDownloadResults">
@@ -131,7 +131,7 @@ function checkAll(checkbox,the_class){
 <table width="100%" cellpadding="3" cellspacing="0">
 
 <tr class="lightGrey">
-  <td valign=top class="smallText">
+  <td valign=top class="small">
     Your name (optional):
   </td>
   <td>
@@ -140,7 +140,7 @@ function checkAll(checkbox,the_class){
 </tr>
 
 <tr>
-  <td valign=top class="smallText">
+  <td valign=top class="small">
     Output data:
   </td>
   <td>
@@ -156,8 +156,8 @@ function checkAll(checkbox,the_class){
 </tr>  
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Output format:</td>
-<td valign=top class="smallText"><select name=output_format>
+<td valign=top class="small">Output format:</td>
+<td valign=top class="small"><select name=output_format>
 <option selected>comma-delimited text</option>
 <option>tab-delimited text</option>
 <option>CONJUNCT</option>
@@ -166,27 +166,27 @@ function checkAll(checkbox,the_class){
 
 
 <tr>
-<td valign=top class="smallText">Data authorizer:</td>
+<td valign=top class="small">Data authorizer:</td>
 <td valign="bottom">
 <input name="authorizer_reversed" size=22 onKeyUp="doComplete(event, this, authorizerNames());">
 </td>
 </tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Research group or project
+<td valign=top class="small">Research group or project
     <select name="research_group_restricted_to">
         <option value="0">includes</option>
         <option value="1">is restricted to</option>
     </select>:
 </td>  
-<td valign=top class="smallText">
+<td valign=top class="small">
 <select id="research_group">
 </select>
 </td></tr>
 
 
 <tr>
-<td valign=top class="smallText" nowrap>Use data records created 
+<td valign=top class="small" nowrap>Use data records created 
 <select name="created_before_after">
 <option selected>before</option>
 <option>after</option>
@@ -209,33 +209,33 @@ function checkAll(checkbox,the_class){
 </tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText" nowrap>Use occurrences published 
+<td valign=top class="small" nowrap>Use occurrences published 
 <select name="published_before_after">
 <option>before</option>
 <option selected>after</option>
 </select>:
 </td>
-<td class="smallText">
+<td class="small">
 <input name="pubyr" size=6>
 </td>
 </tr>
 
 <tr>
-<td valign=top class="smallText">If you only want lists from one time span, enter the oldest and youngest intervals <small><i>(by name or by age in Ma)</i></small>:</td>
-<td valign=top class="smallText">
+<td valign=top class="small">If you only want lists from one time span, enter the oldest and youngest intervals <small><i>(by name or by age in Ma)</i></small>:</td>
+<td valign=top class="small">
 <input name=max_interval_name size=20> - <input name=min_interval_name size=20>
 </td></tr>
 
 <tr>
-<td valign=top class="smallText">... or if you want to get counts of occurrences and genera by temporal bin, select a time scale:</td>
-<td valign=top class="smallText">
+<td valign=top class="small">... or if you want to get counts of occurrences and genera by temporal bin, select a time scale:</td>
+<td valign=top class="small">
 %%time scale%%
 </td></tr>
 
 <tr>
-<td valign=top class="smallText">If you selected a scale, you must select a field to be tallied:<br>
+<td valign=top class="small">If you selected a scale, you must select a field to be tallied:<br>
 <small><i>If you pick "ecology," you must select ecology categories in the "Occurrence fields" section.</i></small></td>
-<td valign=top class="smallText">
+<td valign=top class="small">
 <select name=binned_field>
 <option>
 <option>ecology
@@ -256,8 +256,8 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Name of taxon or taxa <small><i>(genus or higher rank)</i></small>:</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Name of taxon or taxa <small><i>(genus or higher rank)</i></small>:</td>
+<td valign=top class="small">
 <textarea name=taxon_name rows=2 cols=40></textarea></td></tr>
 </table>
 <p align=center>
@@ -274,8 +274,8 @@ function checkAll(checkbox,the_class){
 <table width="100%" cellpadding="3" cellspacing="0">
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Lithification of primary lithology:</td>
-<td valign=top class="smallText" colspan=3>
+<td valign=top class="small">Lithification of primary lithology:</td>
+<td valign=top class="small" colspan=3>
 <input type=checkbox name="lithification_lithified" value="YES" checked>lithified
 <input type=checkbox name="lithification_poorly_lithified" value="YES" checked>poorly lithified
 <input type=checkbox name="lithification_unlithified" value="YES" checked>unlithified
@@ -283,8 +283,8 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr>
-<td valign=top class="smallText">Select lithologies:</td>
-<td valign=top class="smallText" colspan=3>
+<td valign=top class="small">Select lithologies:</td>
+<td valign=top class="small" colspan=3>
 <input type=checkbox name="lithology_carbonate" value="YES" checked>carbonate
 <input type=checkbox name="lithology_mixed" value="YES" checked>mixed
 <input type=checkbox name="lithology_siliciclastic" value="YES" checked>siliciclastic
@@ -292,19 +292,19 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr>
-<td valign=top class="smallText"> ... or 
+<td valign=top class="small" nowrap> ... or 
 <select name="include_exclude_lithology1">
 <option>include</option>
 <option>exclude</option>
 </select> a single lithology:</td>
-<td valign=top class="smallText" colspan=3>
+<td valign=top class="small" colspan=3>
 <select id="lithology1"></select>
 </td></tr>
 
 
 <tr class="lightGrey">
-<td valign=middle class="smallText">Select environments:</td>
-<td valign=top class="smallText" colspan=3>
+<td valign=middle class="small">Select environments:</td>
+<td valign=top class="small" colspan=3>
 <input type=checkbox name="environment_carbonate" value="YES" checked>carbonate
 <input type=checkbox name="environment_siliciclastic" value="YES" checked>siliciclastic
 <input type=checkbox name="environment_terrestrial" value="YES" checked>terrestrial
@@ -312,20 +312,20 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText"> ... or 
+<td valign=top class="small" nowrap> ... or 
 <select name="include_exclude_environment">
 <option>include</option>
 <option>exclude</option>
 </select>a single environment:</td>
-<td valign=top class="smallText" colspan=3>
+<td valign=top class="small" colspan=3>
 <select id="environment"></select>
 </td></tr>
 
 <tr>
-<td valign=top class="smallText">Select continents or paleocontinents:</td>
+<td valign=top class="small">Select continents or paleocontinents:</td>
 
-<td valign=top class="smallText" colspan=3>
-<table><tr><td class="tinyText">
+<td valign=top class="small" colspan=3>
+<table><tr><td class="small">
 <p><input type=checkbox name="global" value="YES" checked onClick="globalClick();"><i>global</i></p>
 
 <p>
@@ -355,70 +355,70 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr>
-<td valign=top class="smallText">... or 
+<td valign=top class="small" nowrap>... or 
 <select name="include_exclude_country">
 <option>include</option>
 <option>exclude</option>
 </select>a single country:</td>
-<td valign=top class="smallText" colspan=3>
+<td valign=top class="small" colspan=3>
 <select id="country" onChange="countryChange()"></select>
 </td>
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Latitudinal range:</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Latitudinal range:</td>
+<td valign=top class="small">
 <input name="latmin1" size="4" value="-90">&deg; to
 <input name="latmax1" size="4" value="90">&deg;
 </td>
-<td valign=top class="smallText">Additional latitudinal range:</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Additional latitudinal range:</td>
+<td valign=top class="small">
 <input name="latmin2" size="4" value="-90">&deg; to
 <input name="latmax2" size="4" value="90">&deg;
 </td>
 <tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Longitudinal range:</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Longitudinal range:</td>
+<td valign=top class="small">
 <input name="lngmin1" size="4" value="-180">&deg; to
 <input name="lngmax1" size="4" value="180">&deg;
 </td>
-<td valign=top class="smallText">Additional longitudinal range:</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Additional longitudinal range:</td>
+<td valign=top class="small">
 <input name="lngmin2" size="4" value="-180">&deg; to
 <input name="lngmax2" size="4" value="180">&deg;
 </td>
 </tr>
 
 <tr>
-<td valign=top class="smallText">Paleolatitudinal range:</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Paleolatitudinal range:</td>
+<td valign=top class="small">
 <input name="paleolatmin1" size="4" value="-90">&deg; to
 <input name="paleolatmax1" size="4" value="90">&deg;
 </td>
-<td valign=top class="smallText">Additional paleolatitudinal range:</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Additional paleolatitudinal range:</td>
+<td valign=top class="small">
 <input name="paleolatmin2" size="4" value="-90">&deg; to
 <input name="paleolatmax2" size="4" value="90">&deg;
 </td>
 </tr>
 
 <tr>
-<td valign=top class="smallText">Paleolongitudinal range:</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Paleolongitudinal range:</td>
+<td valign=top class="small">
 <input name="paleolngmin1" size="4" value="-180">&deg; to
 <input name="paleolngmax1" size="4" value="180">&deg;
 </td>
-<td valign=top class="smallText">Additional paleolongitudinal range:</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Additional paleolongitudinal range:</td>
+<td valign=top class="small">
 <input name="paleolngmin2" size="4" value="-180">&deg; to
 <input name="paleolngmax2" size="4" value="180">&deg;
 </td>
 </tr> 
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Geographic scale of collections:</td>
-<td valign=top class="smallText" colspan=3>
+<td valign=top class="small">Geographic scale of collections:</td>
+<td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name="geogscale_hand_sample" value="YES" checked>hand sample</span>
 <span style="white-space: nowrap"><input type=checkbox name="geogscale_small_collection" value="YES" checked>small collection</span>
 <span style="white-space: nowrap"><input type=checkbox name="geogscale_outcrop" value="YES" checked>outcrop</span>
@@ -428,8 +428,8 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr>
-<td valign=top class="smallText">Stratigraphic scale of collections:</td>
-<td valign=top class="smallText" colspan=3>
+<td valign=top class="small">Stratigraphic scale of collections:</td>
+<td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name="stratscale_bed" value="YES" checked>bed</span>
 <span style="white-space: nowrap"><input type=checkbox name="stratscale_group_of_beds" value="YES" checked>group of beds</span>
 <span style="white-space: nowrap"><input type=checkbox name="stratscale_member" value="YES" checked>member</span>
@@ -439,8 +439,8 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Reason for describing collection:</td>
-<td valign=top class="smallText" colspan=3>
+<td valign=top class="small">Reason for describing collection:</td>
+<td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name='collection_type_archaeological' value="YES" checked> archaeological</span>
 <span style="white-space: nowrap"><input type=checkbox name='collection_type_biostratigraphic' value="YES" checked> biostratigraphic</span>
 <span style="white-space: nowrap"><input type=checkbox name='collection_type_paleoecologic' value="YES" checked> paleoecologic</span>
@@ -451,14 +451,29 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr>
-<td valign=top class="smallText">Lump collections by:</td>
+<td valign=top class="small">Lump collections by:</td>
 
-<td valign=top class="smallText" colspan=3>
+<td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name='lump_by_coord' value="YES"> exact coordinate</span>
 <span style="white-space: nowrap"><input type=checkbox name='lump_by_mbr' value="YES"> formation and member</span>
 <span style="white-space: nowrap"><input type=checkbox name='lump_by_ref' value="YES"> reference</span>
 <span style="white-space: nowrap"><input type=checkbox name='lump_by_interval' value="YES"> time interval</span>
 </td></tr>
+
+<tr class="lightGrey">
+<td valign=top class="small">Download only the following collection number(s): </td>
+<td valign=top class="small" colspan=3><input name=collection_no type="text" size="30"></td></tr>
+
+<tr>
+<td valign=top class="small" nowrap>Exclude collections with
+  <select name="occurrence_count_qualifier"><option>less</option><option>more</option></select> than</td>
+<td valign=top class="small" colspan=3><input name=occurrence_count type="text" size="12"> occurrences</td></tr>
+
+
+<tr class="lightGrey">
+<td valign=top class="small">Exclude collections with subset collections? </td>
+<td valign=top class="small" colspan=3><select name="exclude_superset"><option>NO</option><option>YES</option></select></td></tr>
+<tr> 
 
 </table>
 <p align=center>
@@ -474,8 +489,8 @@ function checkAll(checkbox,the_class){
 
 <table width="100%" cellpadding="3" cellspacing="0">
 <tr class="lightGrey">
-<td valign=top class="smallText">Lump occurrences of the same genus from the same collection?</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Lump occurrences of the same genus from the same collection?</td>
+<td valign=top class="small">
 <select name=lumpgenera>
 <option selected value="NO">no, keep them separate</option>
 <option value="YES">yes, lump them</option>
@@ -483,8 +498,8 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr>
-<td valign=top class="smallText">Replace names with senior synonyms?</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Replace names with senior synonyms?</td>
+<td valign=top class="small">
 <select name=replace_with_ss>
 <option selected value="YES">yes, use the senior synonym
 <option value="NO">no, use the original name
@@ -492,8 +507,8 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Replace genus names with subgenus names, so subgenera are treated as separate genera?</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Replace genus names with subgenus names, so subgenera are treated as separate genera?</td>
+<td valign=top class="small">
 <select name=split_subgenera>
 <option selected value="NO">no, use the genus name
 <option value="YES">yes, use the subgenus name
@@ -501,8 +516,8 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr>
-<td valign=top class="smallText">Include generically indeterminate occurrences?</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Include generically indeterminate occurrences?</td>
+<td valign=top class="small">
 <select name=indet>
 <option selected value="NO">no, exclude them</option>
 <option value="YES">yes, include them</option>
@@ -510,8 +525,8 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Include specifically indeterminate occurrences?</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Include specifically indeterminate occurrences?</td>
+<td valign=top class="small">
 <select name=sp>
 <option value="NO">no, exclude them</option>
 <option selected value="YES">yes, include them</option>
@@ -519,20 +534,20 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr>
-<td valign=top class="smallText">Include genus names with the following qualifiers:</td>
-<td valign=top class="smallText">
-<input type=checkbox name='genus_reso_n. gen.' value="YES" checked>n. gen.
+<td valign=top class="small">Include genus names with the following qualifiers:</td>
+<td valign=top class="small">
 <input type=checkbox name='genus_reso_aff.' value="YES" checked>aff.
 <input type=checkbox name='genus_reso_cf.' value="YES" checked>cf.
 <input type=checkbox name='genus_reso_ex_gr.' value="YES" checked>ex gr.
+<input type=checkbox name='genus_reso_n. gen.' value="YES" checked>n. gen.
 <input type=checkbox name='genus_reso_sensu_lato' value="YES" checked>sensu lato
 <input type=checkbox name='genus_reso_?' value="YES" checked>?
 <input type=checkbox name='genus_reso_"' value="YES" checked>"
 </td></tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Include occurrences with informal names?</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Include occurrences with informal names?</td>
+<td valign=top class="small">
 <select name=informal>
 <option selected value="NO">no, exclude them</option>
 <option value="YES">yes, include them</option>
@@ -540,8 +555,8 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr>
-<td valign=top class="smallText">Include occurrences falling outside their age ranges in Sepkoski's Compendium?</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Include occurrences falling outside their age ranges in Sepkoski's Compendium?</td>
+<td valign=top class="small">
 <select name=compendium_ranges>
 <option value="NO">no, exclude them</option>
 <option selected value="YES">yes, include them</option>
@@ -549,8 +564,8 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr class="lightGrey">
-<td valign=top class="smallText">Include occurrences without abundance data?</td>
-<td valign=top class="smallText">
+<td valign=top class="small">Include occurrences without abundance data?</td>
+<td valign=top class="small">
 <select name=without_abundance>
 <option value="NO">no, exclude them</option>
 <option selected value="YES">yes, include them</option>
@@ -558,42 +573,42 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr>
-<td valign=top class="smallText">Minimum # of specimens needed to compute mean abundance</td>
-<td valign=top class="smallText"><input name=min_mean_abundance type="text" size="12"></td></tr>
+<td valign=top class="small">Minimum # of specimens needed to compute mean abundance</td>
+<td valign=top class="small"><input name=min_mean_abundance type="text" size="12"></td></tr>
 </table>
 
 <div class="options_box">
 <span class="options_box_header">Include plants with the following organs</span><br>
 <table width=100%>
   <tr>
-    <td class="tinyText" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'po_basic');"><B>Check all</B></td>
+    <td class="small" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'po_basic');"><B>Check all</B></td>
   </tr>
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_unassigned value="YES">unassigned</td>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_leaf value="YES">leaf</td>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_seed/fruit" value="YES">seed/fruit</td>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_axis value="YES">axis</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name=plant_organ_unassigned value="YES">unassigned</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name=plant_organ_leaf value="YES">leaf</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name="plant_organ_seed/fruit" value="YES">seed/fruit</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name=plant_organ_axis value="YES">axis</td>
   </tr>
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_plant debris" value="YES">plant debris</td>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_marine palyn" value="YES">marine palyn</td>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_microspore value="YES">microspore</td>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_megaspore value="YES">megaspore</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name="plant_organ_plant debris" value="YES">plant debris</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name="plant_organ_marine palyn" value="YES">marine palyn</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name=plant_organ_microspore value="YES">microspore</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name=plant_organ_megaspore value="YES">megaspore</td>
   </tr>
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_flower value="YES">flower</td>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_seed repro" value="YES">seed repro</td>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_non-seed repro" value="YES">non-seed repro</td>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_wood value="YES">wood</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name=plant_organ_flower value="YES">flower</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name="plant_organ_seed repro" value="YES">seed repro</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name="plant_organ_non-seed repro" value="YES">non-seed repro</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name=plant_organ_wood value="YES">wood</td>
   </tr>
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_sterile axis" value="YES">sterile axis</td>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_fertile axis" value="YES">fertile axis</td>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_root value="YES">root</td>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name=plant_organ_cuticle value="YES">cuticle</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name="plant_organ_sterile axis" value="YES">sterile axis</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name="plant_organ_fertile axis" value="YES">fertile axis</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name=plant_organ_root value="YES">root</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name=plant_organ_cuticle value="YES">cuticle</td>
   </tr>
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="po_basic" name="plant_organ_multi organs" value="YES">multi organs</td>
+  <td class="small" nowrap><input type=checkbox class="po_basic" name="plant_organ_multi organs" value="YES">multi organs</td>
   </tr>
 </table>
 </div>
@@ -612,67 +627,67 @@ function checkAll(checkbox,the_class){
 
 <div class="options_box">
 <span class="options_box_header">Basic fields</span><br>
-<table width=100%>
+<table width="100%" class="tiny">
   <tr>
-    <td class="tinyText" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_basic');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_basic');"><B>Check all</B></td>
   </tr>
   
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_basic" name=collections_authorizer value="YES">authorizer</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_basic" name=collections_enterer value="YES">enterer</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_basic" name=collections_modifier value="YES">modifier</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_basic" name=collections_research_group value="YES">research group</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_authorizer value="YES">authorizer</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_enterer value="YES">enterer</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_modifier value="YES">modifier</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_research_group value="YES">research group</td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_basic" name=collections_collection_subset value="YES">collection subset</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_basic" name=collections_reference_no value="YES">reference number</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_basic" name=collections_collection_name value="YES">collection name</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_basic" name=collections_collection_aka value="YES">collection aka</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_collection_subset value="YES">collection subset</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_reference_no value="YES">reference number</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_collection_name value="YES">collection name</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_collection_aka value="YES">collection aka</td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_basic" name=collections_created value="YES">created</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_basic" name=collections_modified value="YES">modified</td>
-  <td class="tinyText" nowrap>&nbsp;</td>
-  <td class="tinyText" nowrap>&nbsp;</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_created value="YES">created</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_modified value="YES">modified</td>
+  <td nowrap>&nbsp;</td>
+  <td nowrap>&nbsp;</td>
   </tr>
 </table>
 </div>
 
 <div class="options_box">
 <span class="options_box_header">Geography fields</span><br>
-<table width=100%>
+<table width="100%" class="tiny">
   <tr>
-    <td class="tinyText" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_geography');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_geography');"><B>Check all</B></td>
   </tr>
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_geography" name=collections_country value="YES">country</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_geography" name=collections_state value="YES">state</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_geography" name=collections_county value="YES">county</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_geography" name=collections_tectonic_plate_id value="YES">tectonic plate id</td>
+  <td nowrap><input type=checkbox class="c_geography" name=collections_country value="YES">country</td>
+  <td nowrap><input type=checkbox class="c_geography" name=collections_state value="YES">state</td>
+  <td nowrap><input type=checkbox class="c_geography" name=collections_county value="YES">county</td>
+  <td nowrap><input type=checkbox class="c_geography" name=collections_tectonic_plate_id value="YES">tectonic plate id</td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_geography" name=collections_lng value="YES">longitude in 
+  <td nowrap><input type=checkbox class="c_geography" name=collections_lng value="YES">longitude in 
   <select name="collections_lng_format">
     <option value="decimal">decimal</option>
     <option value="DMS">DMS+dir</option>
   </select>  
   </td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_geography" name=collections_lat value="YES">latitude in
+  <td nowrap><input type=checkbox class="c_geography" name=collections_lat value="YES">latitude in
   <select name="collections_lat_format">
     <option value="decimal">decimal</option>
     <option value="DMS">DMS+dir</option>
   </select>  
   </td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_geography" name=collections_paleolng value="YES">paleolongitude in 
+  <td nowrap><input type=checkbox class="c_geography" name=collections_paleolng value="YES">paleolongitude in 
   <select name="collections_paleolng_format">
     <option value="decimal">decimal</option>
     <option value="DMS">DMS+dir</option>
   </select>  
   </td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_geography" name=collections_paleolat value="YES">paleolatitude in
+  <td nowrap><input type=checkbox class="c_geography" name=collections_paleolat value="YES">paleolatitude in
   <select name="collections_paleolat_format">
     <option value="decimal">decimal</option>
     <option value="DMS">DMS+dir</option>
@@ -681,101 +696,101 @@ function checkAll(checkbox,the_class){
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_geography" name=collections_latlng_basis value="YES">lat/long basis</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_geography" name=collections_geogscale value="YES">geographic scale</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_geography" name=collections_geogcomments value="YES">geographic comments</td>
-  <td class="tinyText" nowrap>&nbsp;</td>
+  <td nowrap><input type=checkbox class="c_geography" name=collections_latlng_basis value="YES">lat/long basis</td>
+  <td nowrap><input type=checkbox class="c_geography" name=collections_geogscale value="YES">geographic scale</td>
+  <td nowrap><input type=checkbox class="c_geography" name=collections_geogcomments value="YES">geographic comments</td>
+  <td nowrap>&nbsp;</td>
   </tr>
 </table>
 </div>
 
 <div class="options_box">
 <span class="options_box_header">Time fields</span><br>
-<table width=100%>
+<table width="100%" class="tiny">
   <tr>
-    <td class="tinyText" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_time');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_time');"><B>Check all</B></td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_period value="YES">period</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_epoch value="YES">epoch</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_subepoch value="YES">Cenozoic subepoch</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_stage value="YES">stage</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_period value="YES">period</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_epoch value="YES">epoch</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_subepoch value="YES">Cenozoic subepoch</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_stage value="YES">stage</td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_10mybin value="YES" CHECKED>10 m.y. bin</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_max_interval_no value="YES">maximum interval</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_min_interval_no value="YES">minimum interval</td>
-  <td class="tinyText" nowrap>&nbsp;</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_10mybin value="YES" CHECKED>10 m.y. bin</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_max_interval_no value="YES">maximum interval</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_min_interval_no value="YES">minimum interval</td>
+  <td nowrap>&nbsp;</td>
   </tr>
   
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_ma_max value="YES">Ma maximum</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_ma_min value="YES">Ma minimum</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_time" name=collections_ma_mid value="YES">Ma midpoint</td>
-  <td class="tinyText" nowrap>&nbsp;</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_ma_max value="YES">Ma maximum</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_ma_min value="YES">Ma minimum</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_ma_mid value="YES">Ma midpoint</td>
+  <td nowrap>&nbsp;</td>
   </tr>
 </table></div>
   
 <div class="options_box">
 <span class="options_box_header">Legacy time fields</span><br>
-<table width=100%>
+<table width="100%" class="tiny">
   <tr>
-    <td class="tinyText" nowrap colspan=4><i>The following 8 fields are obsolete, but you can still download the old data</i></td>
+    <td nowrap colspan=4><i>The following 8 fields are obsolete, but you can still download the old data</i></td>
   </tr>
 
   <tr>
-    <td class="tinyText" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_legacy');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_legacy');"><B>Check all</B></td>
   </tr>
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_legacy" name=collections_epoch_max value="YES">epoch maximum</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_legacy" name=collections_epoch_min value="YES">epoch minimum</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_legacy" name=collections_period_max value="YES">period maximum</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_legacy" name=collections_period_min value="YES">period minimum</td>
+  <td nowrap><input type=checkbox class="c_legacy" name=collections_epoch_max value="YES">epoch maximum</td>
+  <td nowrap><input type=checkbox class="c_legacy" name=collections_epoch_min value="YES">epoch minimum</td>
+  <td nowrap><input type=checkbox class="c_legacy" name=collections_period_max value="YES">period maximum</td>
+  <td nowrap><input type=checkbox class="c_legacy" name=collections_period_min value="YES">period minimum</td>
   </tr>
   
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_legacy" name=collections_intage_max value="YES">international age/stage maximum</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_legacy" name=collections_intage_min value="YES">international age/stage minimum</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_legacy" name=collections_locage_max value="YES">local age/stage maximum</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_legacy" name=collections_locage_min value="YES">local age/stage minimum</td>
+  <td nowrap><input type=checkbox class="c_legacy" name=collections_intage_max value="YES">international age/stage maximum</td>
+  <td nowrap><input type=checkbox class="c_legacy" name=collections_intage_min value="YES">international age/stage minimum</td>
+  <td nowrap><input type=checkbox class="c_legacy" name=collections_locage_max value="YES">local age/stage maximum</td>
+  <td nowrap><input type=checkbox class="c_legacy" name=collections_locage_min value="YES">local age/stage minimum</td>
   </tr>
 </table>
 </div>
 
 <div class="options_box">
 <span class="options_box_header">Stratigraphy fields</span><br>
-<table width=100%>
+<table width="100%" class="tiny">
   <tr>
-    <td class="tinyText" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_stratigraphy');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_stratigraphy');"><B>Check all</B></td>
   </tr>
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_stratigraphy" name=collections_zone value="YES">zone</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_stratigraphy" name=collections_geological_group value="YES">geological group</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_stratigraphy" name=collections_formation value="YES">formation</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_stratigraphy" name=collections_member value="YES">member</td>
-  </tr>
-
-  <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_stratigraphy" name=collections_localsection value="YES">local section</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_stratigraphy" name=collections_localbed value="YES">local bed</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_stratigraphy" name=collections_localorder value="YES">local order</td>
-  <td class="tinyText" nowrap>&nbsp;</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_zone value="YES">zone</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_geological_group value="YES">geological group</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_formation value="YES">formation</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_member value="YES">member</td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_stratigraphy" name=collections_regionalsection value="YES">regional section</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_stratigraphy" name=collections_regionalbed value="YES">regional bed</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_stratigraphy" name=collections_regionalorder value="YES">regional order</td>
-  <td class="tinyText" nowrap>&nbsp;</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_localsection value="YES">local section</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_localbed value="YES">local bed</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_localorder value="YES">local order</td>
+  <td nowrap>&nbsp;</td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_stratigraphy" name=collections_stratscale value="YES">stratigraphic scale</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_stratigraphy" name=collections_stratcomments value="YES">stratigraphic comments</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_stratigraphy" name=collections_lithdescript value="YES">lithological description</td>
-  <td class="tinyText" nowrap>&nbsp;</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_regionalsection value="YES">regional section</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_regionalbed value="YES">regional bed</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_regionalorder value="YES">regional order</td>
+  <td nowrap>&nbsp;</td>
+  </tr>
+
+  <tr>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_stratscale value="YES">stratigraphic scale</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_stratcomments value="YES">stratigraphic comments</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_lithdescript value="YES">lithological description</td>
+  <td nowrap>&nbsp;</td>
   </tr>
 </table>
 </div>
@@ -783,102 +798,102 @@ function checkAll(checkbox,the_class){
 
 <div class="options_box">
 <span class="options_box_header">Lithology fields</span><br>
-<table width=100%>
+<table width="100%" class="tiny">
   <tr>
-    <td class="tinyText" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_lithology');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_lithology');"><B>Check all</B></td>
   </tr>
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_lithology" name=collections_lithadj value="YES">lithology adjective 1</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_lithology" name=collections_lithification value="YES">lithification 1</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_lithology" name=collections_lithology1 value="YES">lithology 1</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_lithology" name=collections_fossilsfrom1 value="YES">fossils from 1</td>
-  </tr>
-
-  <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_lithology" name=collections_lithadj2 value="YES">lithology adjective 2</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_lithology" name=collections_lithification2 value="YES">lithification 2</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_lithology" name=collections_lithology2 value="YES">lithology 2</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_lithology" name=collections_fossilsfrom2 value="YES">fossils from 2</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_lithadj value="YES">lithology adjective 1</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_lithification value="YES">lithification 1</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_lithology1 value="YES">lithology 1</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_fossilsfrom1 value="YES">fossils from 1</td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_lithology" name=collections_environment value="YES">environment</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_lithology" name=collections_tectonic_setting value="YES">tectonic setting</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_lithology" name=collections_geology_comments value="YES">geology comments</td>
-  <td class="tinyText" nowrap>&nbsp;</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_lithadj2 value="YES">lithology adjective 2</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_lithification2 value="YES">lithification 2</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_lithology2 value="YES">lithology 2</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_fossilsfrom2 value="YES">fossils from 2</td>
+  </tr>
+
+  <tr>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_environment value="YES">environment</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_tectonic_setting value="YES">tectonic setting</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_geology_comments value="YES">geology comments</td>
+  <td nowrap>&nbsp;</td>
   </tr>
 </table>
 </div>
   
 <div class="options_box">
 <span class="options_box_header">Taphonomy fields</span><br>
-<table width=100%>
+<table width="100%" class="tiny">
   <tr>
-    <td class="tinyText" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_taphonomy');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_taphonomy');"><B>Check all</B></td>
   </tr>
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_pres_mode value="YES">preservation</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_lagerstatten value="YES">Lagerst&auml;tten type</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_concentration value="YES">concentration</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_assembl_comps value="YES">assemblage components</td>
-  </tr>
-
-  <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_orientation value="YES">spatial orientation</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_preservation_quality value="YES">preservation quality</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_art_whole_bodies value="YES">articulated whole bodies</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_disart_assoc_maj_elems value="YES">associated major elements</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_pres_mode value="YES">preservation</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_lagerstatten value="YES">Lagerst&auml;tten type</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_concentration value="YES">concentration</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_assembl_comps value="YES">assemblage components</td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_disassoc_maj_elems value="YES">disassociated major elements</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_disassoc_minor_elems value="YES">disassociated minor elements</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_sorting value="YES">size sorting</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_fragmentation value="YES">fragmentation</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_orientation value="YES">spatial orientation</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_preservation_quality value="YES">preservation quality</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_art_whole_bodies value="YES">articulated whole bodies</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_disart_assoc_maj_elems value="YES">associated major elements</td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_bioerosion value="YES">bioerosion</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_encrustation value="YES">encrustation</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_feed_pred_traces value="YES">feeding/predation traces</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_temporal_resolution value="YES">temporal resolution</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_disassoc_maj_elems value="YES">disassociated major elements</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_disassoc_minor_elems value="YES">disassociated minor elements</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_sorting value="YES">size sorting</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_fragmentation value="YES">fragmentation</td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_spatial_resolution value="YES">spatial resolution</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_taphonomy_comments value="YES">taphonomy comments</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_taphonomy" name=collections_abund_in_sediment value="YES">abundance in sediment</td>
-  <td class="tinyText" nowrap>&nbsp;</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_bioerosion value="YES">bioerosion</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_encrustation value="YES">encrustation</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_feed_pred_traces value="YES">feeding/predation traces</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_temporal_resolution value="YES">temporal resolution</td>
+  </tr>
+
+  <tr>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_spatial_resolution value="YES">spatial resolution</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_taphonomy_comments value="YES">taphonomy comments</td>
+  <td nowrap><input type=checkbox class="c_taphonomy" name=collections_abund_in_sediment value="YES">abundance in sediment</td>
+  <td nowrap>&nbsp;</td>
   </tr>
 </table>
 </div>
 
 <div class="options_box">
 <span class="options_box_header">Collection methods fields</span><br>
-<table width=100%>
+<table width="100%" class="tiny">
   <tr>
-    <td class="tinyText" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_methods');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_methods');"><B>Check all</B></td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_methods" name=collections_collection_type value="YES">collection purpose</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_methods" name=collections_collection_coverage value="YES">collection coverage</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_methods" name=collections_coll_meth value="YES">collection methods</td>
-  <td class="tinyText" nowrap>&nbsp;</td>
+  <td nowrap><input type=checkbox class="c_methods" name=collections_collection_type value="YES">collection purpose</td>
+  <td nowrap><input type=checkbox class="c_methods" name=collections_collection_coverage value="YES">collection coverage</td>
+  <td nowrap><input type=checkbox class="c_methods" name=collections_coll_meth value="YES">collection methods</td>
+  <td nowrap>&nbsp;</td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_methods" name=collections_collection_size value="YES">collection size</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_methods" name=collections_collection_size_unit value="YES">collection size unit</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_methods" name=collections_rock_censused value="YES">rock censused</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_methods" name=collections_rock_censused_unit value="YES">rock censused unit</td>
+  <td nowrap><input type=checkbox class="c_methods" name=collections_collection_size value="YES">collection size</td>
+  <td nowrap><input type=checkbox class="c_methods" name=collections_collection_size_unit value="YES">collection size unit</td>
+  <td nowrap><input type=checkbox class="c_methods" name=collections_rock_censused value="YES">rock censused</td>
+  <td nowrap><input type=checkbox class="c_methods" name=collections_rock_censused_unit value="YES">rock censused unit</td>
   </tr>
 
   <tr>
-  <td class="tinyText" nowrap><input type=checkbox class="c_methods" name=collections_museum value="YES">museums</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_methods" name=collections_collection_comments value="YES">collection comments</td>
-  <td class="tinyText" nowrap><input type=checkbox class="c_methods" name=collections_taxonomy_comments value="YES">taxonomy comments</td>
-  <td class="tinyText" nowrap>&nbsp;</td>
+  <td nowrap><input type=checkbox class="c_methods" name=collections_museum value="YES">museums</td>
+  <td nowrap><input type=checkbox class="c_methods" name=collections_collection_comments value="YES">collection comments</td>
+  <td nowrap><input type=checkbox class="c_methods" name=collections_taxonomy_comments value="YES">taxonomy comments</td>
+  <td nowrap>&nbsp;</td>
   </tr>
   </table>
 </div>
@@ -896,48 +911,48 @@ Note that the collection ID and genus name fields are always output.</p>
 
 <div class="options_box">
 <span class="options_box_header">Basic fields</span><br>
-<table width=100%>
+<table width="100%" class="tiny">
   <tr>
-    <td class="tinyText" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'o_basic');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'o_basic');"><B>Check all</B></td>
   </tr>
   <tr>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_authorizer value="YES">authorizer</td>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_enterer value="YES">enterer</td>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_modifier value="YES">modifier</td>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_occurrence_no value="YES">occurrence no</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_authorizer value="YES">authorizer</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_enterer value="YES">enterer</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_modifier value="YES">modifier</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_occurrence_no value="YES">occurrence no</td>
   </tr>
 
   <tr>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_reference_no value="YES">reference no</td>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_created value="YES">created</td>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_modified value="YES">modified</td>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_comments value="YES">comments</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_reference_no value="YES">reference no</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_created value="YES">created</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_modified value="YES">modified</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_comments value="YES">comments</td>
   </tr>
   
   <tr>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_taxon_no value="YES">taxon no</td>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_class_name value="YES">class name</td>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_order_name value="YES">order name</td>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_family_name value="YES">family name</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_taxon_no value="YES">taxon no</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_class_name value="YES">class name</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_order_name value="YES">order name</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_family_name value="YES">family name</td>
   </tr>
 
   <tr>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_subgenus_name value="YES">subgenus name</td>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_species_name value="YES">species name</td>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_abund_value value="YES">abundance value</td>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_abund_unit value="YES">abundance unit</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_subgenus_name value="YES">subgenus name</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_species_name value="YES">species name</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_abund_value value="YES">abundance value</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_abund_unit value="YES">abundance unit</td>
   </tr>
 
   <tr>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_plant_organ value="YES">plant organ</td>
-    <td class="tinyText"><input type=checkbox class="o_basic" name=occurrences_plant_organ2 value="YES">plant organ 2</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_plant_organ value="YES">plant organ</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_plant_organ2 value="YES">plant organ 2</td>
   </tr>
 </table>
 </div>
 
 <div class="options_box">
 <span class="options_box_header">Ecology fields</span><br>
-<table width=100%>
+<table width="100%" class="tiny">
   <tr>
     <td nowrap>
       <select id="ecology1"></select>
@@ -973,65 +988,65 @@ any output type, but will be aggregate values for the occurrence, collection, or
 
 <div class="options_box">
 <span class="options_box_header">Basic fields</span><br>
-<table width=100%>
+<table width="100%" class="tiny">
   <tr>
-    <td class="tinyText" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'s_basic');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'s_basic');"><B>Check all</B></td>
   </tr>
   <tr>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_authorizer value="YES">authorizer</td>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_enterer value="YES">enterer</td>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_modifier value="YES">modifier</td>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_specimen_no value="YES">specimen no</td>
-  </tr>
-
-  <tr>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_reference_no value="YES">reference no</td>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_specimen_id value="YES">specimen id</td>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_specimen_side value="YES">side</td>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_specimen_part value="YES">part*</td>
+    <td><input type=checkbox class="s_basic" name=specimens_authorizer value="YES">authorizer</td>
+    <td><input type=checkbox class="s_basic" name=specimens_enterer value="YES">enterer</td>
+    <td><input type=checkbox class="s_basic" name=specimens_modifier value="YES">modifier</td>
+    <td><input type=checkbox class="s_basic" name=specimens_specimen_no value="YES">specimen no</td>
   </tr>
 
   <tr>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_specimen_coverage value="YES">specimen coverage</td>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_measurement_source value="YES">measurement source</td>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_magnification value="YES">magnification</td>
+    <td><input type=checkbox class="s_basic" name=specimens_reference_no value="YES">reference no</td>
+    <td><input type=checkbox class="s_basic" name=specimens_specimen_id value="YES">specimen id</td>
+    <td><input type=checkbox class="s_basic" name=specimens_specimen_side value="YES">side</td>
+    <td><input type=checkbox class="s_basic" name=specimens_specimen_part value="YES">part*</td>
   </tr>
 
   <tr>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_comments value="YES">comments</td>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_created value="YES">created</td>
-    <td class="tinyText"><input type=checkbox class="s_basic" name=specimens_modified value="YES">modified</td>
+    <td><input type=checkbox class="s_basic" name=specimens_specimen_coverage value="YES">specimen coverage</td>
+    <td><input type=checkbox class="s_basic" name=specimens_measurement_source value="YES">measurement source</td>
+    <td><input type=checkbox class="s_basic" name=specimens_magnification value="YES">magnification</td>
+  </tr>
+
+  <tr>
+    <td><input type=checkbox class="s_basic" name=specimens_comments value="YES">comments</td>
+    <td><input type=checkbox class="s_basic" name=specimens_created value="YES">created</td>
+    <td><input type=checkbox class="s_basic" name=specimens_modified value="YES">modified</td>
 </table>
 <br><small>* Note that some records may be listed multiple times in the output file, once for each part, when downloading specimens, genera, or species</small>
 </div>
 <div class="options_box">
 <span class="options_box_header">Measurement fields</span><br>
-<table width=100%>
+<table width="100%" class="tiny">
   <tr>
-    <td width="30%" class="tinyText" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'s_measurements');"><B>Check all</B></td>
+    <td width="30%" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'s_measurements');"><B>Check all</B></td>
   </tr>
 
   <tr>
-    <td class="tinyText"><input type=checkbox class="s_measurements" name=specimens_specimens_measured value="YES">specimens measured</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_specimens_measured value="YES">specimens measured</td>
     <td>&nbsp;</td>
     <td>&nbsp;</td>
     <td>&nbsp;</td>
     <td>&nbsp;</td>
   </tr>
   <tr>
-    <td class="tinyText"><input type=checkbox class="s_measurements" name=specimens_length value="YES">length</td>
-    <td class="tinyText"><input type=checkbox class="s_measurements" name=specimens_width value="YES">width</td>
-    <td class="tinyText"><input type=checkbox class="s_measurements" name=specimens_height value="YES">height</td>
-    <td class="tinyText"><input type=checkbox class="s_measurements" name=specimens_diagonal value="YES">diagonal</td>
-    <td class="tinyText"><input type=checkbox class="s_measurements" name=specimens_inflation value="YES">inflation</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_length value="YES">length</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_width value="YES">width</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_height value="YES">height</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_diagonal value="YES">diagonal</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_inflation value="YES">inflation</td>
   </tr>
 
   <tr>
-    <td class="tinyText"><input type=checkbox class="s_measurements" name=specimens_average value="YES">average (geometric mean)</td>
-    <td class="tinyText"><input type=checkbox class="s_measurements" name=specimens_min value="YES">min</td>
-    <td class="tinyText"><input type=checkbox class="s_measurements" name=specimens_max value="YES">max</td>
-    <td class="tinyText"><input type=checkbox class="s_measurements" name=specimens_median value="YES">median</td>
-    <td class="tinyText"><input type=checkbox class="s_measurements" name=specimens_error value="YES">error</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_average value="YES">average (geometric mean)</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_min value="YES">min</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_max value="YES">max</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_median value="YES">median</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_error value="YES">error</td>
   </tr>
 </table>
 </div>
