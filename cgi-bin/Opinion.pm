@@ -466,6 +466,8 @@ sub displayOpinionForm {
         if ($o->get('modifier_no')) { 
             $fields{'modifier_name'} = " <B>Modifier:</B> ".Person::getPersonName($dbt,$o->get('modifier_no'));
         }
+        $fields{'modified'} = "<B>Modified: </B>".$fields{'modified'};
+        $fields{'created'} = "<B>Created: </B>".$fields{'created'}; 
     }
 
     # Handle radio button

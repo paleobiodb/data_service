@@ -228,6 +228,8 @@ sub displayAuthorityForm {
 		if ($fields{'modifier_no'}) { 
             $fields{'modifier_name'} = " <B>Modifier:</B> ".Person::getPersonName($dbt,$fields{'modifier_no'}); 
         }
+        $fields{'modified'} = "<B>Modified: </B>".$fields{'modified'};
+        $fields{'created'} = "<B>Created: </B>".$fields{'created'};
 	}
 
     # Handle radio button
