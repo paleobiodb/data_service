@@ -2,12 +2,43 @@
 //note, these are for use on BOTH the PUBLIC and PRIVATE page.
 //created by rjp, 1/2004.
 
+
+// To be run at startup to enable the css drop downs
+// See http://www.alistapart.com/articles/dropdowns/
+// Attaches :hover function to LI class for IE 5.01+, 
+// normally IE doesn't support :hover property
+// for things over than <A> tags
+sfHover = function() {
+    if (document.getElementById("dropDown")) {
+        var sfEls1 = document.getElementById("dropDown").getElementsByTagName("TD");
+        var sfEls2 = document.getElementById("dropDown").getElementsByTagName("LI");
+        for (var i=0; i<sfEls1.length; i++) {
+            sfEls1[i].onmouseover=function() {
+                this.className+=" sfhover";
+            }
+            sfEls1[i].onmouseout=function() {
+                this.className=this.className.replace(new RegExp(" sfhover\\b"), "");
+            }
+        }
+        for (var i=0; i<sfEls2.length; i++) {
+            sfEls2[i].onmouseover=function() {
+                this.className+=" sfhover";
+            }
+            sfEls2[i].onmouseout=function() {
+                this.className=this.className.replace(new RegExp(" sfhover\\b"), "");
+            }
+        }
+    }
+}
+if (window.attachEvent) window.attachEvent("onload", sfHover);
+
+
 // This is a handy little function for seeing what properties an object has
 function showProperties ( obj ) {
     var result = "";
 
     for ( var i in obj ) {
-        result += "o." + i + " = " + obj[i] + "<BR>\n";
+        result += "obj." + i + " = " + obj[i] + "<BR>\n";
     }
     document.write ( result );
 }  
@@ -127,8 +158,17 @@ Error.prototype.appendErrors = function(newError) {
 
 
 //show a popup window with the passed URL.
-function tipsPopup (URL) {
-	window.open(URL, 'tips', 'toolbar=1,scrollbars=1,location=1,statusbar=0,menubar=0,resizable=1,width=640,height=480');
+function tipsPopup (URL,width,height) {
+    var width  = (width == null) ? 640 : width;
+    var height = (height== null) ? 480 : height;
+	window.open(URL, 'tips', 'toolbar=1,scrollbars=1,location=1,statusbar=0,menubar=0,resizable=1,width='+width+',height='+height);
+}
+
+//show a popup window with the passed URL.
+function imagePopup (URL,width,height) {
+    var width  = (width == null) ? 800 : width;
+    var height = (height== null) ? 600 : height;
+	window.open(URL, 'imageview', 'toolbar=0,scrollbars=1,location=0,statusbar=0,menubar=0,resizable=1,width='+width+',height='+height);
 }
 
 

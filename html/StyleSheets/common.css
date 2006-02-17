@@ -11,6 +11,18 @@ body {
 	font-size: 0.9em;
 }
 
+table, tbody, tr, td { 
+    font-size: 1em;
+}
+
+hr { 
+    color: #AAAAAA;
+    background-color: #AAAAAA;
+    width: 100%;
+    height: 1px;
+    border: 0;
+}
+
 /* how should the regular links look? */
 A:link	{ color : #4090FF; text-decoration:none; }
 A:visited	{ color : #6E00FF; text-decoration:none; }
@@ -52,23 +64,24 @@ A:hover.menu {
 }       
 
 
-TD, TH { font-size: 14px; }
-H1, H2, H3, H4 { 
+H1, H2, H3, H4, H5, H6 { 
 	padding: 0px 0px 0px 0px;
 	/*margin: 0.1em 1em 0.5em 1em;*/
 }
 
-/* UL {
-    list-style-position: inside;
-} */
+H1 {font-size: 2em;}
+H2 {font-size: 1.5em;}
+H3 {font-size: 1.25em;}
+H4 {font-size: 1.1em;}
+H5 {font-size: 1em;}
+H6 {font-size: .9em;}
 
-LI { font-size: 13px; }
-.tiny {  font-size : 10px; text-decoration:none; }
-.small {  font-size : 12px; text-decoration:none; }
-.medium {  font-size : 14px; text-decoration:none; }
-.large {  font-size : 16px; text-decoration:none; }
-.cell {  font-size : 12px; text-decoration:none; }
-.blue {  font-size : 12px; color : #4090FF; text-decoration:none; }
+.tiny {  font-size : .72222em; text-decoration:none; }
+.small {  font-size : .85em; text-decoration:none; }
+.medium {  font-size : 1em; text-decoration:none; }
+.large {  font-size : 1.1em; text-decoration:none; }
+.cell {  font-size : 1.1em; text-decoration:none; }
+.blue {  font-size : .85em; color : #4090FF; text-decoration:none; }
 
 /* the menu at the top and bottom of each page. */
 .menu {
@@ -142,15 +155,6 @@ div.emphasized {
 	text-align: center;
 }
 
-
-/*	similar to a title, meant to be used for large font headers within a form, for 
-	example, on the enter taxonomy form. */
-.header {
-	padding-top: 0.2em;
-	padding-bottom: 0.2em;
-	font-weight: bold;
-	font-size: 1.3em;
-}
 
 /* generic warning message */
 .warning {
@@ -306,7 +310,7 @@ table.navbox {
 	background-color: #E0E0E0;
     border-style: solid;
     border-width: 1px;
-    border-color: black;
+    border-color: #666666;
     padding-left: 5px;
     padding-right: 5px;
     padding-top: 10px;
@@ -315,6 +319,7 @@ table.navbox {
 
 .float_box {
     float: left;
+    clear: left;
     margin-left: 20px;
     margin-right: 20px;
 }
@@ -367,19 +372,9 @@ A:hover.tabOn, A:hover.tabOff{
 	color : black;  text-decoration:none; 
 }       
 
-.smallTextHeader {
-    font-size: 0.9em;
-}
-.smallText {
-    font-size: 0.8em;
-}
-.tinyText {     
-    font-size: 0.75em;     
-}
-
 .superscript {
     font-size: 0.75em;
-    vertical-align: super;
+    vertical-align: text-top;
 }
 
 /* for non-editable fields, such as in forms */
@@ -418,4 +413,122 @@ span.nonEditable {
     background-image: url(/public/PDbg.gif);    
     white-space: nowrap;    
 }
+
+.displayPanel {      
+    /*border: 1px solid lightgrey;  */  
+    /*background-color: #EEEEEE;*/      
+    background-image: url(/public/PDbg.gif);    
+    /*margin-top: 20px;   */
+    padding-top: .3em;      
+    padding-left: .3em;     
+    padding-right: .3em;    
+    padding-bottom: .3em;   
+}   
+     
+.displayPanelHeader{    
+    /*position: relative; */
+    font-size: 1em;
+    top: 1em;      
+/*    padding-left: 1em;      
+    padding-right: 1em;     */
+    /*border: 1px solid black;*/    
+    border-bottom: 1px solid lightgrey;
+    padding-bottom: .3em; 
+/*    background-image: url(/public/PDbg.gif);    */
+    white-space: nowrap;    
+}
+
+.displayPanelContent {
+/*    background-image: url(/public/PDbg.gif);    */
+}
+
+.displayPanelText tbody {
+    font-size: .9em;
+}
+
+#dropDown, #dropDown ul {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+/*    position: relative;*/
+}
+
+/* how should the links look in the menu bar at the top?  */
+#dropDown a:link {  color : white; text-decoration:none; }
+#dropDown a:visited { color : white; text-decoration:none;}   
+#dropDown a:active { color : white; text-decoration:none; }   
+#dropDown a:hover { color : black; text-decoration:none; }
+
+/*
+#dropDown a {
+    display: block;
+    width: 10em;
+}
+*/
+
+#dropDown td {
+    text-align: left;
+    color : white; 
+    text-decoration: none;
+    font-size: .95em;
+    /*float: left;*/
+    /*width: 10em;*/
+}
+
+#dropDown td.dropDownBullet {
+    width: auto;
+    padding-left:.75em;
+    padding-right:.75em;
+}
+
+#dropDown td ul {
+    text-align: left;
+    background: #88C0FF;
+/*    background: #CBC9DD;*/
+/*    background: #84B7F0;*/
+    border-top: 1px #88B2DF solid;
+    border-left: 1px #78C0D4 solid;
+    border-right: 1px #6F89B3 solid;
+    border-bottom: 1px #6F89B3 solid;
+    position: absolute;
+    padding: 0.15em;
+    /*width: 20em;*/
+/*    left: -999em;*/
+/*    top: 1em;*/
+    display: none;
+}
+#dropDown td ul a:link,#dropDown td ul a:visited, #dropDown td ul a:hover {
+    color: #EFEFEF;
+}
+#dropDown td ul li:hover, #dropDown td ul li.sfhover {
+    background: #88C0FF;
+    background: #80B3F0;
+}
+#dropDown td ul a:hover {
+    color: #FFFFFF;
+}
+
+/* This makes the div a bit bigger so the UL below it 
+   (the drop down menu) is flush with the bottom of the top menu */
+#dropDown div.dropDownVertSpacer {
+    height: 1.5em;
+}
+
+#dropDown td ul li {
+/*    border-top: 1px #909090 solid;*/
+    font-size : 0.95em;
+    white-space: nowrap;
+    text-align: left;
+    float: none;
+    clear: left;
+    width: auto;
+    padding: 0.15em;
+}
+
+#dropDown td:hover ul, #dropDown td.sfhover ul {
+/*    left: auto;*/
+/*    left: auto;*/
+    display: block;
+}
+
 
