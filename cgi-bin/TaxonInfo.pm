@@ -8,6 +8,7 @@ use DBTransactionManager;
 use Taxon;
 use TimeLookup;
 use Data::Dumper;
+use Images;
 
 use POSIX qw(ceil floor);
 
@@ -210,59 +211,131 @@ sub displayTaxonInfoResults {
     if ($taxon_no) {
         @diagnoses = getDiagnoses($dbt,$taxon_no);
     }
-    my $are_diagnoses = (scalar(@diagnoses)) ? 1 : 0;
 
+    print "<div class=\"small\">";
     print "<div class=\"float_box\">";
     print "<p>&nbsp;</p>";
-    ($modules_to_display,$thumbs) = doNavBox($dbt,$q,$s,$in_list,$are_diagnoses);
+    @modules_to_display = doNavBox($dbt,$q,$s,scalar(@diagnoses));
     print "</div>";
+
+    print "<p>&nbsp;</p><div class=\"float_box\">";
+    doThumbs($dbt,$in_list);
+    print "</div>";
+
 	print "<div align=\"center\"><h2>$taxon_name</h2></div>";
-	# Go through the list
-	foreach my $module (@$modules_to_display){
-        print "<div align=\"center\">";
-		doModules($dbt,$dbh,$q,$s,$exec_url,$module,$genus,$species,$in_list,$taxon_no,\@diagnoses);
-        print "</div>";
-		print "<hr>" unless ($module == 5 && !$are_diagnoses); 
+
+    my %modules = ();
+    $modules{$_} = 1 foreach @modules_to_display;
+
+
+    # This weird "<HR>" pervents a display bug in firefox where a css styled HR line scrolls off the right of screen
+    # because of the navigation boxes floating on the left.  The HR incorrectly inherits its width from its parent DIV
+    # instead of scaling in down to take the floating box into account!
+    my $hr = '<table style="border-bottom-width: 1px; border-bottom-color: #AAAAAA; border-bottom-style: solid;" width="100%"><tr><td>&nbsp;</td></tr></table>';
+
+	# classification
+	if($modules{1}) {
+		print '<div align="center"><h3>Classification</h3></div>';
+        #print '<div align="center" style=\"border-bottom-width: 1px; border-bottom-color: red; border-bottom-style: solid;\">';
+        print '<div align="center">';
+		print displayTaxonClassification($dbt, $genus, $species, $taxon_no);
+        print '</div>';
+        print $hr;
 	}
-	# images are last
-	my @selected_images = $q->param('image_thumbs');
-	if(@selected_images){
-		print "<center><h3>Images</h3></center>";
-		foreach my $image (@selected_images){
-			foreach my $res (@$thumbs){
-				if($image == $res->{image_no}){
-					print "<center><table><tr><td>";
-					print "<center><img src=\"".$res->{path_to_image}.
-						  "\" border=1></center><br>\n";
-					print "<i>".$res->{caption}."</i><p>\n";
-					if ( $res->{taxon_no} != $taxon_no )	{
-						print "<div class=\"small\"><b>Original identification:</b> ".$res->{taxon_name}."</div>\n";
-					}
-					print "<div class=\"small\"><b>Original name of image:</b> ".$res->{original_filename}."</div>\n";
-					if ( $res->{reference_no} > 0 )	{
-						$sql = "SELECT author1last, author2last, otherauthors, pubyr FROM refs WHERE reference_no=" . $res->{reference_no};
-						my @refresults = @{$dbt->getData($sql)};
-						my $refstring = $refresults[0]->{author1last};
-						if ( $refresults[0]->{otherauthors} )	{
-							$refstring .= " et al.";
-						} elsif ( $refresults[0]->{author2last} )	{
-							$refstring .= " and " . $refresults[0]->{author2last};
-						}
-						$refstring =~ s/and et al\./et al./;
-						print "<div class=\"small\"><b>Reference:</b> 
-<a href=$exec_url?action=displayRefResults&reference_no=".$res->{reference_no}.">".$refstring." ".$refresults[0]->{pubyr}."</a></div>\n";
-					}
-					print "</td></tr></table></center>";
-					print "<hr>";
-					last;
-				}
+    
+	# sister and child taxa
+    if($modules{2}) {
+		print '<div align="center"><h3>Related taxa</h3></div>';
+        print '<div align="center">';
+		print displayRelatedTaxa($dbt, $genus, $species, $taxon_no);
+        print '</div>';
+        print $hr;
+	}
+	# synonymy
+	if($modules{3}) {
+		print '<div align="center"><h3>Taxonomic history</h3></div>';
+        print '<div align="center">';
+        print displayTaxonSynonymy($dbt, $genus, $species, $taxon_no);
+        print '</div>';
+        print $hr;
+	}
+
+	if ($modules{4}) {
+		print '<div align="center"><h3>Synonymy</h3></div>';
+        print '<div align="center">';
+    	print displaySynonymyList($dbt, $q, $genus, $species, $taxon_no);
+        print '</div>';
+        print $hr;
+	}
+    
+    if ($modules{5} && scalar(@diagnoses)) {
+		print '<div align="center"><h3>Diagnosis</h3></div>';
+        print '<div align="center">';
+        print displayDiagnoses($diagnoses) if (@$diagnoses);
+        print '</div>';
+        print $hr;
+    }
+    if ($modules{6}) {
+		print '<div align="center"><h3>Ecology</h3></div>';
+        print '<div align="center">';
+		print displayEcology($dbt,$taxon_no,$in_list);
+        print '</div>';
+        print $hr;
+    }
+    if ($modules{7}) {
+		print '<div align="center"><h3>Specimen measurements</h3></div>';
+        print '<div align="center">';
+		print displayMeasurements($dbt,$taxon_no,$genus,$species,$in_list);
+        print '</div>';
+        print $hr;
+	}
+	# map
+    if ($modules{8}) {
+		print '<div align="center"><h3>Distribution</h3></div>';
+        print '<div align="center">';
+		# MAP USES $q->param("taxon_name") to determine what it's doing.
+		my $map_html_path = doMap($dbh, $dbt, $q, $s, $in_list);
+		if ( $map_html_path )	{
+			if($map_html_path =~ /^\/public/){
+				# reconstruct the full path the image.
+				$map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
 			}
+			open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
+			while(<MAP>){
+				print;
+			}
+			close MAP;
+		} else {
+		    print "<i>No distribution data are available</i>";
+        }
+		# trim the path down beyond apache's root so we don't have a full
+		# server path in our html.
+		if ( $map_html_path )	{
+			$map_html_path =~ s/.*?(\/public.*)/$1/;
+			print "<input type=hidden name=\"map_num\" value=\"$map_html_path\">";
 		}
+        print '</div>';
+        print $hr;
 	}
+	# collections
+    if ($modules{9}) {
+		print doCollections($exec_url, $q, $dbt, $dbh, $in_list);
+        print $hr;
+	}
+
+    
+	# Go through the list
+	#foreach my $module (@$modules_to_display){
+    #    print "<div align=\"center\">";
+	#	doModules($dbt,$dbh,$q,$s,$exec_url,$module,$genus,$species,$in_list,$taxon_no,\@diagnoses);
+    #    print "</div>";
+	#	print "<hr>" unless ($module == 5 && !$are_diagnoses); 
+	#}
+	# images are last
 
     my $entered_name = $q->param('entered_name') || $q->param('taxon_name') || $taxon_name;
     my $entered_no   = $q->param('entered_no') || $q->param('taxon_no');
-	print "<div style=\"font-family : Arial, Verdana, Helvetica; font-size : 14px;\">";
+    print "<div>";
 	if($s->isDBMember()) {
 		# Entered Taxon
         if ($entered_no) {
@@ -287,14 +360,14 @@ sub displayTaxonInfoResults {
 	print "<a href=\"/cgi-bin/bridge.pl?action=beginTaxonInfo\">".
 		  "<b>Get info on another taxon</b></a></center></div>\n";
 
-	print "<p>";
+    print "</div>"; # Ends div class="small" declared at start
+	print "<br><br>";
 }
 
 sub doNavBox {
     my $dbt = shift;
     my $q = shift;
     my $s = shift;
-    my $in_list = shift;
     my $are_diagnoses = shift;
 
     my $entered_name = $q->param('entered_name') || $q->param('taxon_name');
@@ -344,7 +417,8 @@ sub doNavBox {
 	@modules_to_display = sort {$a <=> $b} @modules_to_display;
 
 	# First module has the checkboxes on the side.
-	print "<table class=\"navtable\" cellspacing=0 cellpadding=0>".
+    print "<div class=\"navtable\">";
+	print "<table cellspacing=0 cellpadding=0>".
           "<tr><td valign=\"top\" align=\"center\"><div class=\"large\"><b>Display</b></div></td></tr>";
 	
 	foreach my $key (sort keys %module_num_to_name){
@@ -368,137 +442,55 @@ sub doNavBox {
         print "</td></tr>";
 	}
 
-	# image thumbs:
-	require Images;
-
-	my @thumbs = Images::processViewImages($dbt, $q, $s, $in_list);
-	my @selected_images = $q->param('image_thumbs');
-	foreach my $thumb (@thumbs){
-        print "<tr><td>";
-		print "<input type=checkbox name=image_thumbs value=";
-		print $thumb->{image_no};
-		foreach my $image_num (@selected_images){
-			if($image_num == $thumb->{image_no}){
-				print " checked";
-				last;
-			}
-		}
-		print ">";
-		my $thumb_path = $thumb->{path_to_image};
-		$thumb_path =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
-		print "<img align=\"center\" src=\"$thumb_path\" border=1 vspace=3>";
-        print "</td></tr>";
-	}
-
     print "<tr><td align=\"center\"><br><input type=submit value=\"update\"></td></tr>";
     print "</table>";
+    print "</div>";
     print "</form>";
 
-    return (\@modules_to_display,\@thumbs);
-} 
-
-sub doModules{
-	my $dbt = shift;
-	my $dbh = shift;
-	my $q = shift;
-	my $s = shift;
-	my $exec_url = shift;
-	my $module = shift;
-	my $genus = shift;
-	my $species = shift;
-	my $in_list = shift;
-	my $taxon_no = shift;
-    my $diagnoses = shift;
-
-	
-	# If $q->param("taxon_name") has a space, it's a "Genus species" combo,
-	# otherwise it's a "Higher taxon."
-	#($genus, $species) = split /\s+/, $q->param("taxon_name");
-
-	# classification
-	if($module == 1){
-		print "<table>".
-			  "<tr><td align=\"center\"><h3>Classification</h3></td></tr>".
-			  "<tr><td valign=\"top\" align=\"center\">";
-
-		print displayTaxonClassification($dbt, $genus, $species, $taxon_no);
-		print "</td></tr></table>";
-
-	}
-	# sister and child taxa
-	elsif($module == 2){
-		print "<table>".
-			  "<tr><td align=\"center\"><h3>Related taxa</h3></td></tr>".
-			  "<tr><td valign=\"top\" align=\"center\">";
-
-		print displayRelatedTaxa($dbt, $genus, $species, $taxon_no);
-		print "</td></tr></table>";
-
-	}
-	# synonymy
-	elsif($module == 3){
-        if ($taxon_no) {
-    		print displayTaxonSynonymy($dbt, $genus, $species, $taxon_no);
-        } else {
-            print "<table>".
-                  "<tr><td align=\"center\"><h3>Taxonomic history</h3></td></tr>".
-                  "<tr><td valign=\"top\" align=\"center\">".
-                  "<i>No taxonomic history data are available</i>".
-                  "</td></tr></table>\n";
-        }
-	}
-	elsif ($module == 4)	{
-        if ($taxon_no) {
-    		print displaySynonymyList($dbt, $q, $genus, $species, $taxon_no);
-        } else {
-            print "<table width=\"100%\">".
-                  "<tr><td align=\"center\"><h3>Synonymy</h3></td></tr>".
-                  "<tr><td valign=\"top\" align=\"center\">".
-                  "<i>No synonymy data are available</i>".
-                  "</td></tr></table>\n";
-        }
-	}
-    elsif ($module == 5) {
-        print displayDiagnoses($diagnoses) if (@$diagnoses);
-    }
-	elsif ($module == 6)	{
-		print displayEcology($dbt,$taxon_no,$genus,$species);
-    }
-    elsif ($module == 7) {
-		print displayMeasurements($dbt,$taxon_no,$genus,$species,$in_list);
-	}
-	# map
-	elsif($module == 8){
-		print "<center><table><tr><td align=\"center\"><h3>Distribution</h3></td></tr>".
-			  "<tr><td align=\"center\" valign=\"top\">";
-		# MAP USES $q->param("taxon_name") to determine what it's doing.
-		my $map_html_path = doMap($dbh, $dbt, $q, $s, $in_list);
-		if ( $map_html_path )	{
-			if($map_html_path =~ /^\/public/){
-				# reconstruct the full path the image.
-				$map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
-			}
-			open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
-			while(<MAP>){
-				print;
-			}
-			close MAP;
-		} else {
-		    print "<i>No distribution data are available</i>";
-        }
-		print "</td></tr></table></center>";
-		# trim the path down beyond apache's root so we don't have a full
-		# server path in our html.
-		if ( $map_html_path )	{
-			$map_html_path =~ s/.*?(\/public.*)/$1/;
-			print "<input type=hidden name=\"map_num\" value=\"$map_html_path\">";
-		}
-	}
-	# collections
-	elsif($module == 9){
-		print doCollections($exec_url, $q, $dbt, $dbh, $in_list);
-	}
+    return @modules_to_display;
 }
+
+
+sub doThumbs {
+    my ($dbt,$in_list) = @_;
+	my @thumbs = Images::getImageList($dbt, $in_list);
+
+    if (@thumbs) {
+        my $images_per_row = 2;
+        print "<div class=\"navtable\">";
+        print "<table cellspacing=0 cellpadding=0>".
+              "<tr><td valign=\"top\" align=\"center\" class=\"large\"><b>Images</b></td></tr>";
+        print "<tr><td><table border=0 cellspacing=8 cellpadding=0>";
+
+        for (my $i = 0;$i < scalar(@thumbs);$i+= $images_per_row) {
+            print "<tr>";
+            for( my $j = $i;$j<$i+$images_per_row;$j++) {
+                print "<td width=56>";
+                my $thumb = $thumbs[$j];
+                if ($thumb) {
+                    my $thumb_path = $thumb->{path_to_image};
+                    $thumb_path =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
+                    my $caption = $thumb->{'caption'};
+                    my $width = ($thumb->{'width'}  || 675);
+                    my $height = ($thumb->{'height'}  || 525);
+                    $width = 300 if ($width < 300);
+                    $height +=  130;
+                    $width += 50;
+                    print "<a href=\"javascript: imagePopup('bridge.pl?action=displayImage&image_no=$thumb->{image_no}&display_header=NO',$width,$height)\">";
+                    print "<img align=\"center\" src=\"$thumb_path\" border=1 vspace=3 alt=\"$caption\">";
+                    print "</a>";
+                } else {
+                    print "&nbsp;";
+                }
+                print "</td>";
+            }
+            print "</tr>";
+        }
+        print "</td></tr></table>";
+        print "</table>";
+        print "</div>";
+    }
+} 
 
 
 # PASS this a reference to the collection list array and it
@@ -580,7 +572,7 @@ sub doMap{
 		return $q->param('map_num');
 	}
 
-	$q->param(-name=>"taxon_info_script",-value=>"yes");
+	$q->param("simple_map"=>'YES');
 	my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape1', 'dotcolor1', 'dotborder1');
 	my %user_prefs = main::getPreferences($s->get('enterer_no'));
 	foreach my $pref (@map_params){
@@ -604,6 +596,7 @@ sub doMap{
 	# redunant (since we scale below).. taking it out will
 	# cause a division by zero error in Map.pm.
 	$q->param('mapscale'=>'X 1');
+    $q->param('mapsize'=>'75%');
 
 
 	$q->param('pointsize1'=>'tiny');
@@ -850,11 +843,11 @@ sub doCollections{
         if (!$min) {
             $min = $max;
         }
-        my $res = "<span class=\"tiny\">$interval_name{$max}";
+        my $res = "<span class=\"small\">$interval_name{$max}";
         if ( $max != $min ) {
             $res .= " - " . $interval_name{$min};
         }
-        $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"tiny\">";
+        $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"small\">";
 
         $row->{"country"} =~ s/ /&nbsp;/;
         $res .= $row->{"country"};
@@ -1026,11 +1019,11 @@ sub doCollections{
 				$output .= "<tr>";
 			}
 			$output .= "<td align=\"center\" valign=\"top\">$key</td>".
-                       " <td align=\"left\">";
+                       " <td align=\"left\"><span class=\"small\">";
 			foreach  my $collection_no (@{$time_place_coll{$key}}){
 				$output .= "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a> ";
 			}
-			$output .= "</td></tr>\n";
+			$output .= "</span></td></tr>\n";
 			$row_color++;
 		}
 		$output .= "</table>";
@@ -1267,17 +1260,17 @@ sub displayRelatedTaxa {
     # Print em out
     if (@child_taxa_links) {
         $output .= "<p><i>This taxon includes:</i><br>"; 
-        $output .= "<small>" if (scalar(@child_taxa_links)>10);
+#        $output .= "<small>" if (scalar(@child_taxa_links)>10);
         $output .= join(", ",@child_taxa_links);
-        $output .= "</small>" if (scalar(@child_taxa_links)>10);
+#        $output .= "</small>" if (scalar(@child_taxa_links)>10);
         $output .= "</p>";
     }
 
     if (@possible_child_taxa_links) {
         $output .= "<p><i>This genus may include these species, but they have not been formally classified into it:</i><br>"; 
-        $output .= "<small>" if (scalar(@possible_child_taxa_links)>10);
+#        $output .= "<small>" if (scalar(@possible_child_taxa_links)>10);
         $output .= join(", ",@possible_child_taxa_links);
-        $output .= "</small>" if (scalar(@possible_child_taxa_links)>10);
+#        $output .= "</small>" if (scalar(@possible_child_taxa_links)>10);
         $output .= "</p>";
     }
 
@@ -1286,30 +1279,30 @@ sub displayRelatedTaxa {
                    ($focal_taxon_rank eq 'genus') ? 'genera' :
                                                     'taxa';
         $output .= "<p><i>Sister $rank include:</i><br>"; 
-        $output .= "<small>" if (scalar(@sister_taxa_links)>10);
+#        $output .= "<small>" if (scalar(@sister_taxa_links)>10);
         $output .= join(", ",@sister_taxa_links);
-        $output .= "</small>" if (scalar(@sister_taxa_links)>10);
+#        $output .= "</small>" if (scalar(@sister_taxa_links)>10);
         $output .= "</p>";
     }
     
     if (@possible_sister_taxa_links) {
         $output .= "<p><i>These species have not been formally classified into the genus:</i><br>"; 
-        $output .= "<small>" if (scalar(@possible_sister_taxa_links)>10);
+#        $output .= "<small>" if (scalar(@possible_sister_taxa_links)>10);
         $output .= join(", ",@possible_sister_taxa_links);
-        $output .= "</small>" if (scalar(@possible_sister_taxa_links)>10);
+#        $output .= "</small>" if (scalar(@possible_sister_taxa_links)>10);
         $output .= "</p>";
     }
 
     if (!$output) {
         $output = "<i> No related taxa found </i>";
     } else {
-        $output .= "<p><b><a href=\"bridge.pl?action=displayDownloadTaxonomyResults&taxon_no=$orig_no\">Download authority and opinion data</a></b> - <b><a href=\"bridge.pl?action=startProcessPrintHierarchy&maximum_levels=99&taxon_no=$orig_no\">View classification of included taxa</a></br></p>";
+        $output .= "<p><b><a href=\"bridge.pl?action=displayDownloadTaxonomyResults&taxon_no=$orig_no\">Download authority and opinion data</a></b> - <b><a href=\"bridge.pl?action=startProcessPrintHierarchy&maximum_levels=99&taxon_no=$orig_no\">View classification of included taxa</a></b></br></p>";
     }
 	return $output;
 }
 
 # Handle the 'Taxonomic history' section
-sub displayTaxonSynonymy{
+sub displayTaxonSynonymy {
 	my $dbt = shift;
 	my $genus = (shift or "");
 	my $species = (shift or "");
@@ -1317,26 +1310,20 @@ sub displayTaxonSynonymy{
 	
 	my $output = "";  # html output...
 	
-	$output .= "<center><h3>Taxonomic history</h3></center>";
-
-	my $sql = "SELECT taxon_no, reference_no, author1last, pubyr, ".
-			  "ref_is_authority FROM authorities ".
-			  "WHERE taxon_no=$taxon_no";
-	my @results = @{$dbt->getData($sql)};
-	
 	unless($taxon_no) {
-		return ($output .= "<i>No taxonomic history is available for $genus $species.</i><br>");
+		return "<i>No taxonomic history is available for $genus $species.</i>";
 	}
 
-	$output .= "<ul style=\"list-style-position: inside;\">";
+    # Surrounding able prevents display bug in firefox
+	$output .= "<table><tr><td><ul style=\"list-style-position: inside;\">";
 	my $original_combination_no = getOriginalCombination($dbt, $taxon_no);
 	
 	# Select all parents of the original combination whose status' are
 	# either 'recombined as,' 'corrected as,' or 'rank changed as'
-	$sql = "SELECT DISTINCT(child_spelling_no), status FROM opinions ".
+	my $sql = "SELECT DISTINCT(child_spelling_no), status FROM opinions ".
 		   "WHERE child_no=$original_combination_no ".	
 		   "AND (status='recombined as' OR status='corrected as' OR status='rank changed as')";
-	@results = @{$dbt->getData($sql)};
+	my @results = @{$dbt->getData($sql)};
 
 	# Combine parent numbers from above for the next select below. If nothing
 	# was returned from above, use the original combination number.
@@ -1382,7 +1369,7 @@ sub displayTaxonSynonymy{
 		$output .= $rec;
 	}
 
-	$output .= "</ul>";
+	$output .= "</ul></td></tr></table>";
 	return $output;
 }
 
@@ -1413,7 +1400,7 @@ sub getSynonymyParagraph{
 	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
 	# - select taxon_name, author1last, pubyr, reference_no, comments from authorities
 	
-	my $sql = "SELECT taxon_name, author1last, pubyr, reference_no, comments, ".
+	my $sql = "SELECT taxon_name, author1last, author2last, otherauthors, pubyr, reference_no, comments, ".
 			  "ref_is_authority FROM authorities WHERE taxon_no=$taxon_no";
 	my @auth_rec = @{$dbt->getData($sql)};
 	
@@ -1631,16 +1618,12 @@ sub getMostRecentParentOpinion {
 sub displayEcology	{
 	my $dbt = shift;
 	my $taxon_no = shift;
-	my $genus = shift;
-	my $species = shift;
-    my $in_list = shift;
 
-	print "<center><h3>Ecology</h3></center>\n";
-
-	if ( ! $taxon_no )	{
-		print "<i>No ecological data are available</i>";
-		return;
+	unless ($taxon_no){
+		return "<i>No ecological data are available</i>";
 	}
+
+    my $output = "";
 
 	# get the field names from the ecotaph table
     my @ecotaphFields = $dbt->tableColumns('ecotaph');
@@ -1652,8 +1635,7 @@ sub displayEcology	{
 
 
 	if ( ! $ecotaphVals )	{
-		print "<i>No ecological data are available</i>";
-		return;
+		return "<i>No ecological data are available</i>";
 	} else	{
         # Convert units for display
         foreach ('minimum_body_mass','maximum_body_mass','body_mass_estimate') {
@@ -1686,21 +1668,21 @@ sub displayEcology	{
         }   
         my %all_ranks = ();
 
-		print "<table cellspacing=4 width=600>";
-        print "<tr><td colspan=2>";
+		$output .= "<table cellpadding=4 width=600>";
+        $output .= "<tr><td colspan=2>";
         if (scalar(@references) == 1) {
-            print "<b>Reference:</b> ";
+            $output .= "<b>Reference:</b> ";
         } elsif (scalar(@references) > 1) {
-            print "<b>References:</b> ";
+            $output .= "<b>References:</b> ";
         }
         for(my $i=0;$i<scalar(@references);$i++) {
             my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$references[$i]";
             my $ref = ${$dbt->getData($sql)}[0];
             $references[$i] = Reference::formatShortRef($ref,'link_id'=>1);
         }
-        print join(", ",@references);
-        print "</td></tr>";
-        print "<tr>";
+        $output .= join(", ",@references);
+        $output .= "</td></tr>";
+        $output .= "<tr>";
 		my $cols = 0;
 		for my $i (0..$#ecotaphFields)	{
 			my $name = $ecotaphFields[$i];
@@ -1718,7 +1700,7 @@ sub displayEcology	{
                 $all_ranks{$rank} = 1; 
 				$v =~ s/,/, /g;
                 if ( $cols == 2 || $name =~ /^comments$/ || $name =~ /^created$/ || $name =~ /^size_value$/ || $name =~ /1$/ )	{
-                    print "</tr>\n<tr>\n";
+                    $output .= "</tr>\n<tr>\n";
                     $cols = 0;
                 }
 				$cols++;
@@ -1727,12 +1709,12 @@ sub displayEcology	{
                 if ($name =~ /created|modified/) {
                     $rank_note = "";
                 }
-				print "<td $colspan valign=\"top\"><table cellpadding=0 cellspacing=0 border=0><tr><td align=\"left\" valign=\"top\"><b>$n:</b>&nbsp;</td><td valign=\"top\">${v}${rank_note}</td></tr></table></td> \n";
+				$output .= "<td $colspan valign=\"top\"><table cellpadding=0 cellspacing=0 border=0><tr><td align=\"left\" valign=\"top\"><b>$n:</b>&nbsp;</td><td valign=\"top\">${v}${rank_note}</td></tr></table></td> \n";
 			}
 		}
-        print "</tr>" if ( $cols > 0 );
+        $output .= "</tr>" if ( $cols > 0 );
         # now print out keys for superscripts above
-        print "<tr><td colspan=2>";
+        $output .= "<tr><td colspan=2>";
         my $html = "<b>Source:</b> ";
         foreach my $rank (@ranks) {
             if ($all_ranks{$rank}) {
@@ -1740,23 +1722,18 @@ sub displayEcology	{
             }
         }
         $html =~ s/, $//;
-        print $html;
-        print "</td></tr>"; 
-		print "</table>\n";
+        $output .= $html;
+        $output .= "</td></tr>"; 
+		$output .= "</table>\n";
 	}
 
-	return $text;
+	return $output;
 
 }
 
 # PS 6/27/2005
 sub displayMeasurements {
-    my $dbt = shift;
-    my $taxon_no = shift;
-    my $genus = shift;
-    my $species = shift;
-    my $in_list = shift;    
-
+    my ($dbt,$taxon_no,$genus,$species,$in_list) = @_;
 
     # Specimen level data:
     my @specimens;
@@ -1800,7 +1777,6 @@ sub displayMeasurements {
     my $p_table = Measurement::getMeasurementTable(\@specimens);
 
     my $str = "";
-    $str .= "<div align=\"center\"><h3>Specimen measurements</h3></div>";
     if (@specimens) {
         while (my($part,$m_table)=each %$p_table) {
             my $part_str = ($part) ? "<b>Part: </b>$part<br>" : "";
@@ -1830,19 +1806,17 @@ sub displayMeasurements {
             $str .= "</table><br>";
         }
     } else {
-        $str .= "<div align=\"center\"><i>No measurement data are available</i></div>";
+        $str .= "<i>No measurement data are available</i>";
     }
 
     return $str;
-
-    return "";
 }
 
 sub displayDiagnoses {
     my $diagnoses = shift;
     my @diagnoses = @{$diagnoses};
 
-    my $str = "<div align=\"center\"><h3>Diagnosis</h3></div>";
+    my $str = "";
     if (@diagnoses) {
         $str .= "<table cellspacing=5>\n";
         $str .= "<tr><td><b>Reference</b></td><td><b>Diagnosis</b></td></tr>\n";
@@ -1884,7 +1858,9 @@ sub displaySynonymyList	{
 		$taxon_name = $genus;
 	}
 
-	print "<center><h3>Synonymy</h3></center>";
+    unless ($taxon_no) {
+        return "<i>No synonymy data are available</i>";
+    }
 
     # Find synonyms
     @syns = getJuniorSynonyms($dbt,$taxon_no);
@@ -2041,15 +2017,14 @@ sub displaySynonymyList	{
 	@synlinekeys = sort { $synline{$a} <=> $synline{$b} } @synlinekeys;
 
 # print each line of the synonymy list
-	print "<table cellspacing=5>\n";
-	print "<tr><td><b>Year</b></td><td><b>Name and author</b></td></tr>\n";
+	$output .= "<table cellspacing=5>\n";
+	$output .= "<tr><td><b>Year</b></td><td><b>Name and author</b></td></tr>\n";
 	for $synline ( @synlinekeys )	{
-		print "<tr>$synline</td></tr>\n";
+		$output .= "<tr>$synline</td></tr>\n";
 	}
-	print "</table>\n";
+	$output .= "</table>\n";
 
-	return "";
-
+    return $output;
 }
 
 # Small utility function, added 01/06/2005
