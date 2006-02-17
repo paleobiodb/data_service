@@ -66,10 +66,15 @@ sub processPrintHierarchy	{
 	$MAX = $q->param('maximum_levels');
     $MAX_SEEN = 0;
 
-    my $tree = TaxaCache::getChildren($dbt,$ref->{'taxon_no'},'tree',$MAX);
+    my $tree = TaxaCache::getChildren($dbt,$ref->{'taxon_no'},'tree');
     $tree->{'depth'} = 0;
     my @nodes_to_print = ();
     my @node_stack = ($tree);
+    # mark higher level taxa that had all their children removed as "invalid"
+    my @check_is_disused;
+    my %not_found_type_taxon = ();
+    my %found_type_for = ();
+    my %not_found_type_for = ();
     while (@node_stack) {
         my $node = shift @node_stack;
         push @nodes_to_print, $node;
@@ -82,8 +87,54 @@ sub processPrintHierarchy	{
             }
             unshift @node_stack,@{$node->{'children'}};
         }
+        if ($node->{'taxon_rank'} !~ /species|genus/ && !scalar(@{$node->{'children'}})) {
+            push @check_is_disused,$node->{'taxon_no'};
+        }
+        
+        if ($node->{'type_taxon_no'}) {
+            my $type_taxon_no = $node->{'type_taxon_no'};
+#                $type_taxon_nos{$type_taxon_no} = $node->{'taxon_no'};
+            my $found_type = 0;
+            my @child_queue = ();
+            push @child_queue,$_ foreach (@{$node->{'children'}});
+            # Recursively search all children for the type taxon. We don't check
+            # synonyms though, expect the author to reclassify the taxa into the senior 
+            # synonym instead
+            while (@child_queue) {
+                my $child = shift @child_queue;
+                foreach (@{$child->{'children'}}) {
+                    push @child_queue,$_;
+                }
+                
+                if ($child->{'taxon_no'} == $type_taxon_no) {
+#                    print "<span style=\"color: red;\">FOUND TYPE $type_taxon_no for $node->{taxon_no},$node->{taxon_name}</span><BR>";
+                    $found_type = $child->{'taxon_no'};
+                    @child_queue = ();
+                    last;
+                }
+                foreach my $spelling (@{$child->{'spellings'}}) {
+                    if ($spelling->{'taxon_no'} == $type_taxon_no) {
+#                        print "<span style=\"color: red;\">FOUND TYPE $type_taxon_no SPELLED $child->{taxon_no},$child->{taxon_name} for $node->{taxon_no},$node->{taxon_name}</span><BR>";
+                        $found_type = $child->{'taxon_no'};
+                        @child_queue = ();
+                        last;
+                    }
+                }
+            }
+            if (!$found_type) {
+#                print "<span style=\"color: red;\"> COULD NOT FIND TYPE $type_taxon_no for $node->{taxon_no},$node->{taxon_name}</span><BR>";
+                $not_found_type_taxon{$node->{'taxon_no'}} = $type_taxon_no;
+                $not_found_type_for{$type_taxon_no} = $node->{'taxon_no'};
+            } else {
+                #$found_type_taxon{$node->{'taxon_no'}} = $type_taxon_no;
+                # Note that $found_type will not equal to $type_taxon_no if $type_taxon_no
+                # is the original combination no -- it will be the most current spelling_no for that combination
+                $found_type_for{$found_type} = $node->{'taxon_no'};
+            }
+        }
     } 
 
+    my %disused = %{TaxonInfo::disusedNames($dbt,\@check_is_disused)};
     #my ($taxon_records) = PBDBUtil::getChildren($dbt,$ref->{'taxon_no'},$MAX);
 
     # prepend the query stuff to the array so it gets printed out as well
@@ -100,20 +151,53 @@ sub processPrintHierarchy	{
            print "<td style=\"width:20;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>"; 
     }
     print "</tr>";
+    my %type_taxon_nos = ();
+    while (my ($type,$for) = each %found_type_taxon) {
+        $type_taxon_nos{$for} = $type;
+    }
 	foreach $record (@nodes_to_print)	{
 		print "<tr>";
 		for ($i=0;$i<$record->{'depth'};$i++) {
 			print "<td></td>";
 		}
 		print "<td style=\"white-space: nowrap;\" colspan=".($MAX + 1 - $record->{'depth'}).">";
-        $shortrank = $shortranks{$record->{'taxon_rank'}};
-        $title = "<b>$shortrank</b> ";
+        my $shortrank = $shortranks{$record->{'taxon_rank'}};
+        my $title = "<b>$shortrank</b> ";
+        my $taxon_name = $record->{'taxon_name'};
+
+        if ($record->{'type_taxon_no'} && $not_found_type_taxon{$record->{'taxon_no'}}) {
+            $taxon_name = '"'.$taxon_name.'"';
+        }
+        
+        my $link = "<a href=bridge.pl?action=checkTaxonInfo&taxon_no=$record->{taxon_no}>$taxon_name</a>";
         if ( $record->{'taxon_rank'} =~ /(species)|(genus)/ ) {
-            $title .= "<i>".$record->{'taxon_name'}."</i>";
+            $title .= "<i>".$link."</i>";
         } else {
-            $title .= $record->{'taxon_name'};
+            $title .= $link;
         }
         print $title;
+
+        if ($disused{$record->{'taxon_no'}}) {
+            print " <small>(disused)</small>";
+        }
+#        my $type_taxon_for = $type_taxon_nos{$record->{'taxon_no'}};
+#        if ($type_taxon_for) {
+            if ($found_type_for{$record->{'taxon_no'}}) {
+                print " <small>(type taxon)</small>";
+            } elsif ($not_found_type_for{$record->{'taxon_no'}}) {
+                my $type_taxon_for = $not_found_type_for{$record->{'taxon_no'}};
+                my $t = TaxonInfo::getTaxon($dbt,'taxon_no'=>$type_taxon_for);
+#                print "<span style=\"color: red;\">";
+#                print " - type taxon for $type_taxon_for,$t->{taxon_name}, but not classified into it";
+#                print "<span style=\"color: red;\">";
+            }
+#        }
+        if ($record->{'type_taxon_no'} && $not_found_type_taxon{$record->{'taxon_no'}}) {
+            my $t = TaxonInfo::getTaxon($dbt,'taxon_no'=>$record->{'type_taxon_no'});
+#            print "<span style=\"color: red;\">";
+#            print " - type taxon $record->{type_taxon_no},$t->{taxon_name} not classified into it";
+#            print "</span>";
+        }
 
         #if (@{$record->{'spellings'}}) {
         #    print " [";
@@ -125,7 +209,6 @@ sub processPrintHierarchy	{
 		print "</tr>\n";
         
 		print OUT $record->{'taxon_rank'}.",".$record->{'taxon_name'}."\n";
-		$nrecords++;
 	}
 	print "</table></center><p>\n";
 	close OUT;
