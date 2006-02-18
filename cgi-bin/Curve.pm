@@ -294,7 +294,7 @@ sub assignGenera	{
 
 	if ( ! open OCCS,"<$occsfile" )	{
         if ($q->param("time_scale") =~ /neptune/i) {
-		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of samples sample age data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadNeptuneForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with sample age data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadNeptuneForm\">Download the data again</a> and make sure to include this field.</h3>\n";
         } else {
 		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage, or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
         }
@@ -338,13 +338,17 @@ sub assignGenera	{
             $field_collection_no = $fieldcount;
 		} elsif ( $fn eq "occurrences.reference_no" && $q->param('count_refs') eq "yes" )	{
 			$field_genus_name = $fieldcount;
-		} elsif ( $fn eq "occurrences.genus_name" && $q->param('count_refs') ne "yes" )	{
+		} elsif ( $fn eq "genus_name" && $q->param('count_refs') ne "yes" )	{
 			$field_genus_name = $fieldcount;
 		} elsif ( $fn eq "occurrences.species_name" )	{
 			$field_species_name = $fieldcount;
-        } elsif ( $fn eq "resolved_fossil_name" )   {
-            $field_genus_name = $fieldcount;
-            $field_species_name = $fieldcount;
+		} elsif ( $fn eq "family_name" )	{
+			$field_family_name = $fieldcount;
+		} elsif ( $fn eq "order_name" )	{
+			$field_order_name = $fieldcount;
+		} elsif ( $fn eq "resolved_fossil_name" )   {
+			$field_genus_name = $fieldcount;
+			$field_species_name = $fieldcount;
 		} elsif ( $fn eq "occurrences.abund_unit" )	{
 			$field_abund_unit = $fieldcount;
 		} elsif ( $fn eq "occurrences.abund_value" )	{
@@ -404,16 +408,23 @@ sub assignGenera	{
 	# this one also always should be present anyway, unless the user
 	#  screwed up and didn't download the ref numbers despite wanting
 	#  refs counted instead of genera
-	} elsif ( ! $field_genus_name )	{
+	} elsif ( ! $field_genus_name && $q->param("taxonomic_level") ne "family" and $q->param("taxonomic_level") ne "order" )	{
 		if ( $q->param('count_refs') ne "yes" )	{
 			print "<h3>The data can't be analyzed because the genus name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		} else	{
 			print "<h3>The data can't be analyzed because the reference number field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		}
 		exit;
-	# these two might be missing
-    } elsif ( $q->param("taxon_rank") eq 'species' && $field_species_name && $q->param('count_refs') ne "yes") {
+	} elsif ( $q->param("taxonomic_level") eq "species" && ! $field_species_name && $q->param('count_refs') ne "yes") {
 		print "<h3>The data can't be analyzed because the species name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		exit;
+	} elsif ( $q->param("taxonomic_level") eq "family" && ! $field_family_name && $q->param('count_refs') ne "yes") {
+		print "<h3>The data can't be analyzed because the family name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		exit;
+	} elsif ( $q->param("taxonomic_level") eq "order" && ! $field_order_name && $q->param('count_refs') ne "yes") {
+		print "<h3>The data can't be analyzed because the order name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		exit;
+	# these two might be missing
 	} elsif ( ! $field_abund_value && $samplingmethod == 5 )	{
 		print "<h3>The data can't be analyzed because the abundance value field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
@@ -487,10 +498,11 @@ sub assignGenera	{
 
     # HARDCODED for NOW, change this later PS 1/10/2005
     if ( $bin_type =~ /neptune/i) {
-        $q->param("taxon_rank"=>"species");
-    } else {
-        $q->param("taxon_rank"=>"genus");
+        $q->param("taxonomic_level"=>"species");
     }
+	# PS had a hard coded level value of genus for standard PBDB data
+	#  here before, but it's not needed now that this is a proper query
+	#  parameter JA 18.2.06
 
     my $count=0;
     # The sample id variables maps neptune sample ids (text strings) to integers so that the curve script may
@@ -537,26 +549,33 @@ sub assignGenera	{
                 $chid[$occrow[$field_collection_no]] = $binnumber{$occrow[$field_bin]};
             }
 
-            # Handle analysis by genus/species.  For simplicity sake we just
-            # subsitute the full species name into the genus name field so the rest
-            # of the script doesn't need to be changed below. Bit of a hack, PS 1/10/2005
-            if ($q->param("taxon_rank") eq "genus") {
-                if ($bin_type =~ /neptune/i) {
-                    my $taxon_name = $occrow[$field_genus_name];
-                    my ($genus_name) = split(/ /,$taxon_name);
-                    $occrow[$field_genus_name] = $genus_name;
-                } 
+	# Handle analysis by genus/species.  For simplicity sake we just
+	# subsitute the full species name into the genus name field so the rest
+	# of the script doesn't need to be changed below. Bit of a hack, PS 1/10/2005
+	# adapted this section to handle family and order level data
+	#  JA 18.2.06 
+		if ($q->param("taxonomic_level") eq "genus") {
+			if ($bin_type =~ /neptune/i) {
+				my $taxon_name = $occrow[$field_genus_name];
+				my ($genus_name) = split(/ /,$taxon_name);
+				$occrow[$field_genus_name] = $genus_name;
+               		} 
                 # else, nothing needs to be done for PBDB data
-            } else { #species
-                if ($bin_type =~ /neptune/i) {
+		# family and order level only apply to PBDB data
+		} elsif ($q->param("taxonomic_level") eq "family") {
+			$occrow[$field_genus_name] = $occrow[$field_family_name]; 
+		} elsif ($q->param("taxonomic_level") eq "order") {
+			$occrow[$field_genus_name] = $occrow[$field_order_name]; 
+		} else { #species
+			if ($bin_type =~ /neptune/i) {
                     # do this since we may have subspecies
-                    my $taxon_name = $occrow[$field_genus_name];
-                    my ($genus_name,$species_name) = split(/ /,$taxon_name);
-                    $occrow[$field_genus_name] = $genus_name." ".$species_name;
-                } else {
-                    $occrow[$field_genus_name].= " ".$occrow[$field_species_name]; 
-                }
-            }
+				my $taxon_name = $occrow[$field_genus_name];
+				my ($genus_name,$species_name) = split(/ /,$taxon_name);
+				$occrow[$field_genus_name] = $genus_name." ".$species_name;
+			} else {
+				$occrow[$field_genus_name] .= " ".$occrow[$field_species_name]; 
+		}
+	}
 	
 		# get rid of records with no specimen/individual counts for method 5
 			if ($samplingmethod == 5)   {
@@ -730,7 +749,7 @@ sub assignGenera	{
 
 	# compute sampled diversity, range through diversity, originations,
 	#  extinctions, singletons and doubletons (Chao l and m)
-    if ($q->param("taxon_rank") eq "genus") {
+    if ($q->param("taxonomic_level") eq "genus") {
 	    print PADATA "genus\ttotal occs";
     } else {
 	    print PADATA "species\ttotal occs";
@@ -1419,9 +1438,14 @@ sub printResults	{
 		$listorfm = "Lists"; # I'm not sure why this is a variable
 					# but what the heck
 		$generaorrefs = "genera";
-        if ( $q->param('taxon_rank') eq 'species') {
-            $generaorrefs = "species";
-        }
+	if ( $q->param('taxonomic_level') eq 'species') {
+		$generaorrefs = "species";
+	} elsif ( $q->param('taxonomic_level') eq 'family') {
+		$generaorrefs = "families";
+	} elsif ( $q->param('taxonomic_level') eq 'order') {
+		$generaorrefs = "orders";
+	}
+
 		if ( $q->param('count_refs') eq "yes" )	{
 			$generaorrefs = "references";
 		}
@@ -2452,7 +2476,7 @@ sub printResults	{
 	
 		print "<li>A first-by-last occurrence count matrix (<a href=\"http://$CURVE_HOST$PRINTED_DIR/firstlast.txt\">firstlast.txt</a>)<p>\n";
 	
-		print "<li>A list of each ".$q->param('taxon_rank').", the number of collections including it,  and the ID number of the intervals in which it was found (<a href=\"http://$CURVE_HOST$PRINTED_DIR/presences.txt\">presences.txt</a>)<p>\n";
+		print "<li>A list of each ".$q->param('taxonomic_level').", the number of collections including it,  and the ID number of the intervals in which it was found (<a href=\"http://$CURVE_HOST$PRINTED_DIR/presences.txt\">presences.txt</a>)<p>\n";
 
 		print "</ul><p>\n";
 
