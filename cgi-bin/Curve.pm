@@ -338,7 +338,7 @@ sub assignGenera	{
             $field_collection_no = $fieldcount;
 		} elsif ( $fn eq "occurrences.reference_no" && $q->param('count_refs') eq "yes" )	{
 			$field_genus_name = $fieldcount;
-		} elsif ( $fn eq "genus_name" && $q->param('count_refs') ne "yes" )	{
+		} elsif ( $fn eq "occurrences.genus_name" && $q->param('count_refs') ne "yes" )	{
 			$field_genus_name = $fieldcount;
 		} elsif ( $fn eq "occurrences.species_name" )	{
 			$field_species_name = $fieldcount;
