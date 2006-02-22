@@ -388,7 +388,7 @@ sub updateCache {
             # if the alternate spelling had children (not too likely), get a list of them
 
             if (($spelling_row->{'rgt'} - $spelling_row->{'lft'}) > 2) {
-                my $tree = getChildren($dbt,$spelling_no,'tree');
+                my $tree = getChildren($dbt,$spelling_no,'tree',1);
                 my @children = @{$tree->{'children'}};
                 foreach my $child (@children) {
                     moveChildren($dbt,$child->{'taxon_no'},$child_no);
@@ -665,11 +665,16 @@ sub getChildren {
     my $dbt = shift;
     my $taxon_no = shift;
     my $return_type = shift;
+    # This option exists for updateCache above, nasty bug if this isn't set since senior synonyms
+    # children will be moved to junior synonym if we do the resolution!
+    my $dont_resolve_senior_syn = shift;
 
     # First get the senior synonym
-    my $ss = getSeniorSynonym($dbt,$taxon_no);
-    if ($ss) {
-        $taxon_no = $ss->{'taxon_no'};
+    unless ($dont_resolve_senior_syn) {
+        my $ss = getSeniorSynonym($dbt,$taxon_no);
+        if ($ss) {
+            $taxon_no = $ss->{'taxon_no'};
+        }
     }
 
     if ($return_type eq 'tree') {
