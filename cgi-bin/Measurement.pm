@@ -720,7 +720,7 @@ sub getMeasurements {
     }
 
     if ($options{'get_global_specimens'} && $sql3 =~ /taxon_no IN/) {
-        $sql = "($sql1) UNION ($sql2) UNION ($sql2)";
+        $sql = "($sql1) UNION ($sql2) UNION ($sql3)";
     } else {
         $sql = "($sql1) UNION ($sql2)";
     } #else {
