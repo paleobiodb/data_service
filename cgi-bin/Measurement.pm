@@ -710,19 +710,22 @@ sub getMeasurements {
         }
     } elsif ($options{'collection_no'}) {
         $sql1 .= " AND o.collection_no=".int($options{'collection_no'});
+        $sql2 .= " AND o.collection_no=".int($options{'collection_no'});
     } elsif (@{$options{'occurrence_list'}}) {
         $sql1 .= " AND o.occurrence_no IN (".join(",",@{$options{'occurrence_list'}}).")";
+        $sql2 .= " AND o.occurrence_no IN (".join(",",@{$options{'occurrence_list'}}).")";
     } elsif ($options{'occurrence_no'}) {
         $sql1 .= " AND o.occurrence_no =".int($options{'occurrence_no'});
+        $sql2 .= " AND o.occurrence_no =".int($options{'occurrence_no'});
     }
 
     if ($options{'get_global_specimens'} && $sql3 =~ /taxon_no IN/) {
         $sql = "($sql1) UNION ($sql2) UNION ($sql2)";
-    } elsif ($sql2 =~ /taxon_no IN/) {
-        $sql = "($sql1) UNION ($sql2)";
     } else {
-        $sql = $sql1;
-    }
+        $sql = "($sql1) UNION ($sql2)";
+    } #else {
+      #  $sql = $sql1;
+    #}
     main::dbg("SQL is $sql");
 
     my @results = @{$dbt->getData($sql)};
