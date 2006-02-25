@@ -103,7 +103,9 @@ sub reportDisplayHTML {
         print "<td class=dataTableColumnTotal>$totalKeyword</td>";
     } else {
         print "<td class=dataTableColumn>".$q->param('output')."</td>";
-        print "<td class=dataTableColumn>percent</td>";
+        if ($q->param('output') ne 'average occurrences') {
+            print "<td class=dataTableColumn>percent</td>";
+        }
     }
     print "</tr>\n";
 
@@ -119,7 +121,9 @@ sub reportDisplayHTML {
             print "<td class=dataTableCellTotal align=right>".$self->{'totals1'}{$key1}."</td>";
         } else {
             print "<td class=dataTableCell align=right>".$self->{'dataTable'}{$key1}."</td>";
-            print "<td class=dataTableCell align=right>".sprintf("%.1f",$self->{'dataTable'}{$key1}*100/$grandTotal)."</td>";
+            if ($q->param('output') ne 'average occurrences') {
+                print "<td class=dataTableCell align=right>".sprintf("%.1f",$self->{'dataTable'}{$key1}*100/$grandTotal)."</td>";
+            }
         }    
         print "</tr>\n";
     }    
@@ -205,7 +209,9 @@ sub reportPrintOutfile{
     } else {
         @line = ($header1);
         push @line, $q->param('output');
-        push @line, 'percent';
+        if ($q->param('output') ne 'average occurrences') {
+            push @line, 'percent';
+        }
     }
     print OUTFILE $csv->string()."\n" if ( $csv->combine ( @line ) );
 
@@ -220,7 +226,9 @@ sub reportPrintOutfile{
             push @line, $self->{'totals1'}{$key1};
         } else {
             push @line, $self->{'dataTable'}{$key1};
-            push @line, sprintf("%.1f",$self->{'dataTable'}{$key1}*100/$grandTotal);
+            if ($q->param('output') ne 'average occurrences') {
+                push @line, sprintf("%.1f",$self->{'dataTable'}{$key1}*100/$grandTotal);
+            }
         }     
         print OUTFILE $csv->string()."\n" if ( $csv->combine ( @line ) );
     }       
