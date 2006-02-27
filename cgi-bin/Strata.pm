@@ -89,7 +89,9 @@ sub displayStrataSearch{
         } elsif ($conflict_found eq "different formations") {
             if ($q->param("formation_hint")) {
                 $q->param("formation" => $q->param("formation_hint"));
-            }    
+            } elsif ($q->param("group_hint")) {
+                $q->param("geological_group" => $q->param("group_hint"));
+            }
         } elsif ($conflict_found eq "different lines") {
             if ($q->param("formation_hint")) {
                 $q->param("formation" => $q->param("formation_hint"));
@@ -98,32 +100,41 @@ sub displayStrataSearch{
                 $q->param("geological_group" => $q->param("group_hint"));
             }
         }
-    }    
 
-    # check again, see if conflict resolved.
-    # this wouldn't happen if we were linked from the collSearch, as a hint
-    # is always passed, but just if it does, let user supply missing options
-    $conflict_found = checkConflict($dataRows,$q);
-    if ($conflict_found) {
-        displayStrataChoice($q, $conflict_found, $dataRows);
-        return;    
-    }
+        # check again, see if conflict resolved.
+        # this wouldn't happen if we were linked from the collSearch, as a hint
+        # is always passed, but just if it does, let user supply missing options
+        $conflict_found = checkConflict($dataRows,$q);
+        if ($conflict_found) {
+            displayStrataChoice($q, $conflict_found, $dataRows);
+            return;    
+        }
+    }    
 
     # build data structures, looped through later
     my ($is_group, $is_formation, $is_member, %lith_count, %environment_count);
-    my ($row_count, %c_formations, %c_members);
+    my ($row_count, %c_formations, %c_members, %p_groups, %p_formations);
     $is_group = 0; $is_formation = 0; $is_member = 0; %lith_count = (); %environment_count = ();
     $row_count = 0; %c_formations = (); %c_members = ();
 
     foreach my $row (@$dataRows) {
         if ($q->param('formation')) {
-            next unless (lc($q->param('formation')) eq lc($row->{'formation'}));
+            if ($q->param("formation") eq "NULL_OR_EMPTY") {
+                next if ($row->{'formation'});
+            } else {
+                next unless (lc($q->param('formation')) eq lc($row->{'formation'}));
+            }
         }    
         if ($q->param('geological_group')) {
-            next unless (lc($q->param('geological_group')) eq lc($row->{'geological_group'}));
+            if ($q->param("geological_group") eq "NULL_OR_EMPTY") {
+                next if ($row->{'geological_group'});
+            } else {
+                next unless (lc($q->param('geological_group')) eq lc($row->{'geological_group'}));
+            }
         }    
         $row_count++;
         # group hierarchy data, c_ denote "children of this formation or group"
+        # P denotes we'll print links to these guys
         if (lc($q->param('group_formation_member')) eq lc($row->{'geological_group'})) {
             $is_group = 1;
             $c_formations{$row->{'formation'}} += 1;
@@ -131,9 +142,12 @@ sub displayStrataSearch{
         if (lc($q->param('group_formation_member')) eq lc($row->{'formation'})) {
             $is_formation = 1; 
             $c_members{$row->{'member'}} += 1;
+            $p_groups{$row->{'geological_group'}} = 1 if ($row->{'geological_group'});
         }
         if (lc($q->param('group_formation_member')) eq lc($row->{'member'})) {
             $is_member = 1;
+            $p_formations{$row->{'formation'}} = 1 if ($row->{'formation'});
+            $p_groups{$row->{'geological_group'}} = 1 if ($row->{'geological_group'});
         }
 
         # lithology data
@@ -166,13 +180,63 @@ sub displayStrataSearch{
                 : ($row_count == 1) ? "1 collection total"
                                  : "$row_count collections total";
     print qq|<div align="center"><h2>|;
-    print $q->escapeHTML(ucfirst($q->param('group_formation_member'))) . " " . $in_strata_type;
+    my $name = ucfirst($q->param('group_formation_member'));
+    if ($name =~ /^(lower part|upper part|lower|middle|upper|bottom|top|medium|base|basal|uppermost)(to (lower part|upper part|lower|middle|upper|bottom|top|medium|base|basal|uppermost))*$/i) {
+        if ($is_member) {
+            my @formations = keys %p_formations;
+            my $formation = $formations[0];
+            if ($formation) {
+                $name = "$name $formation";
+            } else {
+                my @groups = sort keys %p_groups;
+                my $group = $groups[0];
+                if ($group) {
+                    $name = "$name $group";
+                }
+            }
+        }  elsif ($is_formation) {
+            my @groups = sort keys %c_groups;
+            my $group = $groups[0];
+            if ($group) {
+                $name = "$name $group";
+            }
+        }
+    }
+    $name =~ s/ (formation|group|member|fm\.|gp\.|mbr\.|grp\.)$//ig;
+    print $q->escapeHTML($name)." ".$in_strata_type;
     print qq|</h2>($collTxt)</div></br>|;
 
     # Display formations in groups, members in formations
     my ($cnt,$plural,$coll_link,$html);
+    if ($is_formation || $is_member) {
+        my @groups = sort keys %p_groups;
+        if (@groups) {
+            my $html = "<p><b>Group:</b> ";
+            foreach my $g (@groups) {
+                $html .=  qq|<a href="$exec_url?action=displayStrataSearch&geological_group=|.uri_escape($g)
+                      . "&group_formation_member=".uri_escape($g)."\">$g</a>, ";
+            }
+            $html =~ s/, $//;
+            $html .= '</p>';
+            print $html;
+        }
+    }
+    if ($is_member) {
+        my @formations = sort keys %p_formations;
+        if (@formations) {
+            my $html = "<p><b>Formation:</b> ";
+            foreach my $fm (@formations) {
+                $html .=  qq|<a href="$exec_url?action=displayStrataSearch&formation=|.uri_escape($fm)
+                      . "&group_formation_member=".uri_escape($fm)."\">$fm</a>, ";
+            }
+            $html =~ s/, $//;
+            $html .= '</p>';
+            print $html;
+        }
+    }
+
     if ($is_group) {
-        $html = "<p><b>Formations in the ". ucfirst($q->param('group_formation_member'))." Group:</b> ";
+        $html = "<p><b>Formations in the $name Group:</b> ";
         foreach $formation (sort(keys(%c_formations))) {
             $cnt = $c_formations{$formation};
             $coll_link = "";
@@ -193,7 +257,7 @@ sub displayStrataSearch{
     }
 
     if ($is_formation) {
-        $html = "<p><b>Members in the ".ucfirst($q->param('group_formation_member'))." Formation:</b> ";
+        $html = "<p><b>Members in the $name Formation:</b> ";
         foreach $member (sort(keys(%c_members))) {
             $cnt = $c_members{$member};
             $coll_link = "";
@@ -213,7 +277,7 @@ sub displayStrataSearch{
         $html =~ s/, $//g;
         $html .= "</p>\n";
         print $html;
-    }    
+    } 
 
     # Display lithologies present
     my @lith_list = @{$hbo->{SELECT_LISTS}{lithology1}};
@@ -284,10 +348,18 @@ sub checkConflict {
 
     foreach my $row (@{$dataRows}) {
         if ($q->param('formation')) {
-            next unless (lc($q->param('formation')) eq lc($row->{'formation'}));
-        }    
+            if ($q->param("formation") eq "NULL_OR_EMPTY") {
+                next if ($row->{'formation'});
+            } else {
+                next unless (lc($q->param('formation')) eq lc($row->{'formation'}));
+            }
+        } 
         if ($q->param('geological_group')) {
-            next unless (lc($q->param('geological_group')) eq lc($row->{'geological_group'}));
+            if ($q->param("geological_group") eq "NULL_OR_EMPTY") {
+                next if ($row->{'geological_group'});
+            } else {
+                next unless (lc($q->param('geological_group')) eq lc($row->{'geological_group'}));
+            }
         }    
         # group hierarchy data
         # the p_* arrays denote parents, the gp_* array lists/counts grandparents and are used for
@@ -307,9 +379,11 @@ sub checkConflict {
 
     my ($p_formation_cnt, $p_group_cnt, $conflict_found);
     $p_formation_cnt = 0; $p_group_cnt = 0;
-    foreach my $fm (keys %p_formations) {
-        $p_formation_cnt += 1 if ($fm);
-    }             
+    #if (!$q->param('geological_group')) {
+        foreach my $fm (keys %p_formations) {
+            $p_formation_cnt += 1 if ($fm);
+        }
+    #}
     foreach my $grp (keys %p_groups) {
         $p_group_cnt += 1 if ($grp);
     }             
@@ -331,6 +405,12 @@ sub displayStrataChoice {
     %group_links = ();
 
     foreach $row (@{$dataRows}) {
+        if ($q->param('formation')) {
+            next unless (lc($q->param('formation')) eq lc($row->{'formation'}));
+        }    
+        if ($q->param('geological_group')) {
+            next unless (lc($q->param('geological_group')) eq lc($row->{'geological_group'}));
+        }    
         if (lc($q->param('group_formation_member')) eq lc($row->{'formation'})) {
             $group_links{$row->{'geological_group'}} += 1 if ($row->{'geological_group'});
         }    
@@ -354,7 +434,7 @@ sub displayStrataChoice {
         print "</p>";
     } elsif ($conflict_reason eq "different formations") {
         print "The ".$q->param('group_formation_member')." member belongs to multiple formations.  Please select the one you want: <p>";
-        foreach $fm (keys %formation_links) {
+        foreach $fm (sort keys %formation_links) {
             print " - " if ($count++) != 0;
             print "<b><a href=\"$exec_url?action=displayStrataSearch"
                 . "&formation=".uri_escape($fm)
@@ -363,13 +443,13 @@ sub displayStrataChoice {
         print "</p>";
     } elsif ($conflict_reason eq "different lines") {
         print "The term ".$q->param('group_formation_member')." is ambiguous and belongs to multiple formations or groups.  Please select the one you want: <p>";
-        foreach $fm (keys %formation_links) {
+        foreach $fm (sort keys %formation_links) {
             print " - " if ($count++) != 0;
             print "<b><a href=\"$exec_url?action=displayStrataSearch"
                 . "&formation=".uri_escape($fm)
                 . "&group_formation_member=".uri_escape($q->param('group_formation_member'))."\">$fm (formation)</a></b> ";
         }          
-        foreach $grp (keys %group_links) {
+        foreach $grp (sort keys %group_links) {
             print " - " if ($count++) != 0;
             print "<b><a href=\"$exec_url?action=displayStrataSearch"
                 . "&geological_group=".uri_escape($grp)
