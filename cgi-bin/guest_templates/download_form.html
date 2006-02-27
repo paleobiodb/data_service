@@ -145,8 +145,7 @@ function checkAll(checkbox,the_class){
   </td>
   <td>
     <select name="output_data">
-      <option value="genus occurrences">genus occurrences</option>
-      <option value="species occurrences">species occurrences</option>
+      <option value="occurrences">occurrences</option>
       <option value="genera">genera</option>
       <option value="species">species</option>
       <option value="collections">collections</option>
@@ -451,7 +450,7 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr>
-<td valign=top class="small">Lump collections by:</td>
+<td valign=top class="small">Lump collections by:<br><small><i>Occurrences of the same species will be lumped if species_name field is download, else is lumped by genus</i></small></td>
 
 <td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name='lump_by_coord' value="YES"> exact coordinate</span>

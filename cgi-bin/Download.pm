@@ -265,7 +265,7 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Replace names with senior synonyms?", $q->param("replace_with_ss") );
         $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param("indet") );
         $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", $q->param("sp") );
-    	my @genus_reso_types_group = ('n. gen.','aff.','cf.','ex_gr.','sensu lato','?','"');
+    	my @genus_reso_types_group = ('aff.','cf.','ex_gr.','n. gen.','sensu lato','?','"');
     	$html .= $self->retellOptionsGroup('Include occurrences qualified by','genus_reso_',\@genus_reso_types_group);
         $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
         $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
@@ -1252,7 +1252,7 @@ sub getCollectionsWhereClause {
     if ($q->param("collection_no") =~ /\d/) {
         # Clean it up
         my @collection_nos = split(/[^0-9]/,$q->param('collection_no'));
-        my @collection_nos = map {int($_)} @collection_nos;
+        @collection_nos = map {int($_)} @collection_nos;
         push @where, "c.collection_no IN (".join(",",@collection_nos).")";
     }
 
@@ -1891,7 +1891,8 @@ sub doQuery {
                 if ($q->param('lumpgenera') eq 'YES') {
                     $genus_string .= $row->{collection_no};
                 }
-                if ($q->param('output_data') =~ /species/) {
+              
+                if ($q->param('occurrences_species_name') =~ /yes/i) {
                     $genus_string .= $row->{'occ_genus_name'}.$row->{'occ_species_name'};
                 } else {
                     $genus_string .= $row->{'occ_genus_name'};
@@ -1923,7 +1924,8 @@ sub doQuery {
             }
 
             my $genus_string;
-            if ($q->param('output_data') =~ /species/) {
+
+            if ($q->param('occurrences_species_name') =~ /yes/i) {
                 $genus_string = $row->{'occ_genus_name'}.$row->{'occ_species_name'};
             } else {
                 $genus_string = $row->{'occ_genus_name'};
@@ -1940,7 +1942,7 @@ sub doQuery {
             } else	{
                 $lumpseen{$lump_string} = $row->{collection_no};
             }
-            $occseen{$row->{collection_no}.$row->{occ_genus_name}}++;
+            $occseen{$row->{collection_no}.$genus_string}++;
         }
         if ( $exclude == 0) {
             if ($q->param('output_data') eq 'genera' || $q->param('output_data') eq 'species') {
@@ -1966,7 +1968,7 @@ sub doQuery {
 			push @tempDataRows, $row;
 
     		# cumulate number of collections including each genus
-            if ($q->param('output_data') =~ /species/) {
+            if ($q->param('occurrences_species_name') =~ /yes/i) {
 			    $totaloccs{$row->{occ_genus_name}." ".$row->{occ_species_name}}++;
             } else {
 			    $totaloccs{$row->{occ_genus_name}}++;
@@ -2537,14 +2539,14 @@ sub doQuery {
 		my @abundline = ();
 		open ABUNDFILE,">$OUT_FILE_DIR/$generaOutFileName";
 		push @abundline, 'genus';
-        if ($q->param('output_data') =~ /species/) {
+        if ($q->param('occurrences_species_name') eq 'YES') {
             push @abundline, 'species';
         }
         push @abundline, 'collections','with abundances','geometric mean abundance';
 		print ABUNDFILE join($sepChar,@abundline)."\n";
 		for $g ( @genera )	{
 			@abundline = ();
-            if ($q->param('output_data') =~ /species/) {
+            if ($q->param('occurrences_species_name') eq 'YES') {
                 my ($genus,$species)=split(/ /,$g);
 			    push @abundline, $genus, $species, $totaloccs{$g}, sprintf("%d",$numberofcounts{$g});
             } else {
@@ -2740,10 +2742,10 @@ sub setupOutput {
 	}
 
 	if ( ! open(OUTFILE, ">$OUT_FILE_DIR/$occsOutFileName") ) {
-	die ( "Could not open output file: $OUT_FILE_DIR/$occsOutFileName ($!) <BR>\n" );
+	    die ( "Could not open output file: $OUT_FILE_DIR/$occsOutFileName ($!) <BR>\n" );
 	}
 	if ( ! open(REFSFILE, ">$OUT_FILE_DIR/$refsOutFileName") ) {
-	die ( "Could not open output file: $!<BR>\n" );
+	    die ( "Could not open output file: $!<BR>\n" );
 	}
 
 	chmod 0664, "$OUT_FILE_DIR/$occsOutFileName";
@@ -2834,37 +2836,6 @@ sub setupOutput {
 			'sep_char'    => $sepChar,
 			'binary'      => 1
 	});
-	
-	my $authorizer = $s->get("authorizer");
-	if ( ! $authorizer )	{
-		if ( $q->param("yourname") )	{
-			$authorizer = $q->param("yourname");
-		} else	{
-			$authorizer = "unknown";
-		}
-	}
-	$authorizer =~ s/(\s|\.|[^A-Za-z0-9])//g;
-	$occsOutFileName = $authorizer . "-occs.$outFileExtension";
-	$generaOutFileName = $authorizer . "-genera.$outFileExtension";
-	if ( $q->param("output_data") eq 'collections')	{
-		$occsOutFileName = $authorizer . "-cols.$outFileExtension";
-	} elsif ($q->param("output_data") eq 'specimens') {
-        $occsOutFileName = $authorizer . "-specimens.".$outFileExtension;
-	} 
-	$refsOutFileName = $authorizer . "-refs.$outFileExtension";
-	if ( $q->param('time_scale') )	{
-		$scaleOutFileName = $authorizer . "-scale.$outFileExtension";
-	}
-
-	if ( ! open(OUTFILE, ">$OUT_FILE_DIR/$occsOutFileName") ) {
-	die ( "Could not open output file: $OUT_FILE_DIR/$occsOutFileName ($!) <BR>\n" );
-	}
-	if ( ! open(REFSFILE, ">$OUT_FILE_DIR/$refsOutFileName") ) {
-	die ( "Could not open output file: $!<BR>\n" );
-	}
-
-	chmod 0664, "$OUT_FILE_DIR/$occsOutFileName";
-	chmod 0664, "$OUT_FILE_DIR/$refsOutFileName";
 
     # Need to get the species_name field as well
     if ($q->param('output_data') =~ /species/) {
