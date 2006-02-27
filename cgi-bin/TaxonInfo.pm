@@ -705,9 +705,12 @@ sub doCollections{
     $options{'permission_type'} = 'read';
     $options{'calling_script'} = "TaxonInfo";
     $options{'taxon_list'} = $in_list if (@$in_list);
-    $options{'taxon_name'} = $q->param('taxon_name');
-    # This field passed from strata module
-    $options{'group_formation_member'} = $q->param('group_formation_member') if (defined($q->param('group_formation_member')));
+    # These fields passed from strata module,etc
+    foreach ('group_formation_member','formation','geological_group','member','taxon_name') {
+        if (defined($q->param($_))) {
+            $options{$_} = $q->param($_);
+        }
+    }
     my $fields = ["country", "state", "max_interval_no", "min_interval_no"];  
     my ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
     my @data = @$dataRows;
@@ -2329,6 +2332,69 @@ sub disusedNames {
         }
     }
     return \%disused;
+}
+
+# This will get orphaned nomen * children for a list of a taxon_nos or a single taxon_no passed in.
+# returns a hash reference where the keys are parent_nos and the values are arrays of child taxon objects
+# The child taxon objects are just hashrefs where the hashes have the following keys:
+# taxon_no,taxon_name,taxon_rank,status.  Status is nomen dubium etc, and rest of the fields are standard.
+sub nomenChildren {
+    my $dbt = shift;
+    my $arg = shift;
+    my @taxon_nos = ();
+    if (UNIVERSAL::isa($arg,'ARRAY')) {
+        @taxon_nos = @$arg;
+    } else {
+        @taxon_nos = ($arg);
+    }
+
+    my %nomen = ();
+    if (@taxon_nos) {
+        my $sql = "SELECT DISTINCT o2.child_no,o1.parent_no FROM opinions o1, opinions o2 WHERE o1.child_no=o2.child_no AND o2.status LIKE '%nomen%' AND o1.parent_no IN (".join(",",@taxon_nos).")";
+        my @results = @{$dbt->getData($sql)};
+        foreach my $row (@results) {
+            my $mrpo = getMostRecentParentOpinion($dbt,$row->{'child_no'});
+            if ($mrpo->{'status'} =~ /nomen/) {
+                #print "child $row->{child_no} IS NOMEN<BR>";
+                # This will get the most recent parent opinion where it is not classified as a %nomen%
+                my $sql = "(SELECT o.child_no, o.child_spelling_no, o.status, o.parent_no, o.parent_spelling_no, o.opinion_no, "
+                        . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr,"
+                        . " (IF(r.reference_no = 6930,0," # is compendium, then 0 (lowest priority)
+                        .   "IF(r.classification_quality = 'second hand',1," # else if second hand, next lowest
+                        .   "IF(r.classification_quality = 'standard',2," # elsif standard, normal priority
+                        .   "IF(r.classification_quality = 'authoritative',3,"
+                        .   "0))))) reliability_index " # else low priority (compnedium level, should never happen)
+                        . " FROM opinions o"
+                        . " LEFT JOIN refs r ON r.reference_no=o.reference_no"
+                        . " WHERE o.child_no=$row->{child_no}"
+                        . " AND o.status NOT LIKE '%nomen%'"
+                        . ") ORDER BY reliability_index DESC, pubyr DESC, opinion_no DESC LIMIT 1";
+
+                my $mrpo_no_nomen = ${$dbt->getData($sql)}[0];
+                if ($mrpo_no_nomen->{'parent_no'} == $row->{'parent_no'}) {
+                    #print "child $row->{child_no} LAST PARENT IS PARENT $row->{parent_no} <BR>";
+                    my $taxon = getTaxon($dbt,'taxon_no'=>$row->{'child_no'});
+                    $taxon->{'status'} = $mrpo->{'status'};
+                    push @{$nomen{$mrpo_no_nomen->{'parent_no'}}}, $taxon;
+                } else {
+                    #print "child $row->{child_no} LAST PARENT IS NOT PARENT $row->{parent_no} BUT $mrpo_no_nomen->{parent_no}<BR>";
+                }
+            }
+        }
+    }
+    return \%nomen;
+}
+
+sub rankOrder {
+    my %rankToNum = ('subspecies' => 1, 'species' => 2, 'subgenus' => 3,
+        'genus' => 4, 'subtribe' => 5, 'tribe' => 6,
+        'subfamily' => 7, 'family' => 8, 'superfamily' => 9,
+        'infraorder' => 10, 'suborder' => 11, 'order' => 12, 'superorder' => 13, 
+        'infraclass' => 14, 'subclass' => 15, 'class' => 16, 'superclass' => 17,
+        'subphylum' => 18, 'phylum' => 19, 'superphylum' => 20,
+        'subkingdom' => 21, 'kingdom' => 22, 'superkingdom' => 23,
+        'unranked clade' => 24, 'informal' => 25 ); 
+    return %rankToNum;
 }
                                                                                                                                                                          
 

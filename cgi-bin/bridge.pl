@@ -813,10 +813,10 @@ sub displayMapOfCollection {
     if(!$q->param('mapresolution')){
         $q->param('mapresolution'=>'medium');
     }
-    if(!$q->param('usalinecolor')){
-        $q->param('usalinecolor'=>'gray');
+    if(!$q->param('usalinecolor') || $q->param('usalinecolor') eq 'none'){
+        $q->param('usalinecolor'=>'light gray');
     }
-    if(!$q->param('borderlinecolor')){
+    if(!$q->param('borderlinecolor') || $q->param('borderlinecolor') eq 'none'){
         $q->param('borderlinecolor'=>'gray');
     }
     if(!$q->param('pointsize1')){
@@ -838,7 +838,7 @@ sub displayMapOfCollection {
     }
 
     my $dataRowsRef = $m->buildMapOnly();
-    my $coll = $dataRowsRef->[0];
+    my $coll = ${$dataRowsRef}[0];
     my ($lat,$lng) = ($coll->{'latdeg'},$coll->{'lngdeg'});
     if ($coll->{'latdir'} eq "South") {
         $lat = -1 * $lat;
@@ -854,7 +854,28 @@ sub displayMapOfCollection {
 
     my $map_html_path = $m->drawMapOnly($dataRowsRef);
 
-    print '<div align="center"><h3>PBDB collection number '.$coll->{'collection_no'}.'</h3></div>';
+    if ($coll->{'collection_no'}) {
+        my $sql = "SELECT c.collection_name,c.country,c.state,concat(i1.eml_interval,' ',i1.interval_name) max_interval, concat(i2.eml_interval,' ',i2.interval_name) min_interval "
+                . " FROM collections c "
+                . " LEFT JOIN intervals i1 ON c.max_interval_no=i1.interval_no"
+                . " LEFT JOIN intervals i2 ON c.min_interval_no=i2.interval_no"
+                . " WHERE c.collection_no=$coll->{collection_no}";
+        my $row = ${$dbt->getData($sql)}[0];
+
+        # get the max/min interval names
+        my $time_place = $row->{'collection_name'}.": ";
+        if ($row->{'max_interval'} ne $row->{'min_interval'} && $row->{'min_interval'}) {
+            $time_place .= "$row->{max_interval} - $row->{min_interval}";
+        } else {
+            $time_place .= "$row->{max_interval}";
+        }
+        if ($row->{'state'}) {
+            $time_place .= ", $row->{state}";
+        } elsif ($row->{'country'}) {
+            $time_place .= ", $row->{country}";
+        }
+        print '<div align="center"><h3>'.$time_place.'</h3></div>';
+    }
     print '<div align="center">';
     # MAP USES $q->param("taxon_name") to determine what it's doing.
     if ( $map_html_path )   {
@@ -942,7 +963,7 @@ sub displayDownloadNeptuneResults {
 sub displayDownloadTaxonomyForm {
     print stdIncludes("std_page_top");
     
-    my $html = $hbo->populateHTML( 'download_taxonomy_form', [], []);
+    my $html = $hbo->populateHTML( 'download_taxonomy_form', [''], ['taxon_rank']);
     my $javaScript = &makeAuthEntJavaScript();
     $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
     my $authorizer_reversed = ($s->get("authorizer_reversed") || "");
@@ -2168,7 +2189,7 @@ sub processCollectionsSearchForAdd	{
 
 	# get a list of interval numbers that fall in the geological period
 	my ($inlistref) = TimeLookup::processLookup($dbh,$dbt,'',$q->param('period_max'),'','','intervals');
-	@intervals = @{$inlistref};
+	my @intervals = @{$inlistref};
 
 	$sql .= "c.max_interval_no IN (" . join(',', @intervals) . ") AND ";
 
@@ -2708,12 +2729,13 @@ IS NULL))";
     # This can be country or continent. If its country just treat it like normal, else
     # do a lookup of all the countries in the continent
     if ($options{"country"}) {
-        if ($options{"country"} =~ /^(North America|South America|Europe|Africar|Antarctica|Asia|Australia)$/) {
+        if ($options{"country"} =~ /^(North America|South America|Europe|Africa|Antarctica|Asia|Australia)$/) {
             if ( ! open ( REGIONS, "$DATAFILE_DIR/PBDB.regions" ) ) {
                 print "<font color='red'>Skipping regions.</font> Error message is $!<BR><BR>\n";
                 return;
             }
 
+            my %REGIONS;
             while (<REGIONS>)
             {
                 chomp();
@@ -2725,7 +2747,7 @@ IS NULL))";
             foreach my $country (@countries) {
                 $country = "'".$country."'";
             }
-            $in_str = join(",", @countries);
+            my $in_str = join(",", @countries);
             push @where, "c.country IN ($in_str)";
         } else {
             push @where, "c.country LIKE ".$dbh->quote($wildcardToken.$q->param('country').$wildcardToken);
@@ -2856,10 +2878,22 @@ sub displayCollectionDetails {
     # Handles the meat of displaying information about the colleciton
     # Separated out so it can be reused in enter/edit collection confirmation forms
     # PS 2/19/2006
-    displayCollectionDetailsPage($collection_no);
+    if ($collection_no !~ /^\d+$/) {
+        print "<div class=\"errorMessage\">Invalid collection number $collection_no</div>";
+        return;
+    }
+	my $sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, c.* FROM collections c LEFT JOIN person p1 ON p1.person_no=c.authorizer_no LEFT JOIN person p2 ON p2.person_no=c.enterer_no LEFT JOIN person p3 ON p3.person_no=c.modifier_no WHERE collection_no=" . $collection_no;
+    dbg("Main SQL: $sql");
+    my @rs = @{$dbt->getData($sql)};
+    my $coll = $rs[0];
+    if (!$coll ) {
+        print "<div class=\"errorMessage\">No collection with collection number $collection_no</div>";
+        return;
+    }
+    displayCollectionDetailsPage($coll);
 	print "<hr>\n";
 	
-	my $taxa_list = buildTaxonomicList($collection_no);
+	my $taxa_list = buildTaxonomicList($coll);
 	print $taxa_list;
 
 	print '<p><div align="center"><table><tr>';
@@ -2869,7 +2903,7 @@ sub displayCollectionDetails {
 
 	print "<td>".$hbo->populateHTML('ecology_display_buttons', [$collection_no],['collection_no'])."</td>";
 
-	if($authorizer_no eq $s->get('authorizer_no') || $s->get('authorizer') eq "J. Alroy")	{
+	if($coll->{'authorizer_no'} eq $s->get('authorizer_no') || $s->get('authorizer') eq "J. Alroy")	{
 		print "<td>".$hbo->populateHTML('occurrence_display_buttons', [$collection_no],['collection_no'])."</td>";;
 	}
 	if($taxa_list ne "" && $s->isDBMember()) {
@@ -2880,22 +2914,9 @@ sub displayCollectionDetails {
 }
 
 sub displayCollectionDetailsPage {
-    my $collection_no = shift;
-    if ($collection_no !~ /^\d+$/) {
-        print "<div class=\"errorMessage\">Invalid collection number $collection_no</div>";
-        return;
-    }
-	$sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, c.* FROM collections c LEFT JOIN person p1 ON p1.person_no=c.authorizer_no LEFT JOIN person p2 ON p2.person_no=c.enterer_no LEFT JOIN person p3 ON p3.person_no=c.modifier_no WHERE collection_no=" . $collection_no;
-    dbg("Main SQL: $sql");
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-	my $row = $sth->fetchrow_hashref();
-	$sth->finish();
-  
-    if (!$row) {
-        print "<div class=\"errorMessage\">No collection with collection number $collection_no</div>";
-        return;
-    }
+    my $row = shift;
+    my $collection_no = $row->{'collection_no'};
+    return if (!$collection_no);
 
     # Get the reference
     if ($row->{'reference_no'}) {
@@ -2924,16 +2945,16 @@ sub displayCollectionDetailsPage {
     foreach my $ref (@subrowrefs)	{
       push @links, "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$ref->[0]\">$ref->[0]</a>";
     }
-    my $subString = join(", ",@links) or "";
+    my $subString = join(", ",@links);
     $row->{'subset_string'} = $subString;
 
 	my $sql1 = "SELECT DISTINCT p1.name authorizer, p2.name enterer, p3.name modifier FROM occurrences o LEFT JOIN person p1 ON p1.person_no=o.authorizer_no LEFT JOIN person p2 ON p2.person_no=o.enterer_no LEFT JOIN person p3 ON p3.person_no=o.modifier_no WHERE o.collection_no=" . $collection_no;
 	my $sql2 = "SELECT DISTINCT p1.name authorizer, p2.name enterer, p3.name modifier FROM occurrences o LEFT JOIN person p1 ON p1.person_no=o.authorizer_no LEFT JOIN person p2 ON p2.person_no=o.enterer_no LEFT JOIN person p3 ON p3.person_no=o.modifier_no WHERE o.collection_no=" . $collection_no;
     my @names = (@{$dbt->getData($sql1)},@{$dbt->getData($sql2)});
     if (@names) {
-        %unique_auth = ();
-        %unique_ent = ();
-        %unique_mod = ();
+        my %unique_auth = ();
+        my %unique_ent = ();
+        my %unique_mod = ();
         foreach (@names) {
             $unique_auth{$_->{'authorizer'}}++;
             $unique_ent{$_->{'enterer'}}++;
@@ -2967,6 +2988,14 @@ sub displayCollectionDetailsPage {
             $row->{'interval'} .= " <span class=small>(minimum)</span>";
         }
 	} 
+    my $time_place = $row->{'collection_name'}.": ";
+    $time_place .= "$row->{interval}";
+    if ($row->{'state'}) {
+        $time_place .= ", $row->{state}";
+    } elsif ($row->{'country'}) {
+        $time_place .= ", $row->{country}";
+    }
+    $row->{'collection_name'} = $time_place;
 
 	# check whether we have period/epoch/locage/intage max AND/OR min:
     my $found_legacy = 0;
@@ -3012,18 +3041,17 @@ sub displayCollectionDetailsPage {
     if ($row->{'localsection'}) {
         $row->{'localsection'} = "<a href=\"$exec_url?action=displayStratTaxaForm&taxon_resolution=species&skip_taxon_list=YES&input_type=local&input=".uri_escape($row->{'localsection'})."\">$row->{localsection}</a>";
     }
-    
+    if ($row->{'member'}) {
+        $row->{'member'} = "<a href=\"$exec_url?action=displayStrataSearch&group_hint=".uri_escape($row->{'geological_group'})."&formation_hint=".uri_escape($row->{'formation'})."&group_formation_member=".uri_escape($row->{'member'})."\">$row->{member}</a>";
+    }
+    if ($row->{'formation'}) {
+        $row->{'formation'} = "<a href=\"$exec_url?action=displayStrataSearch&group_hint=".uri_escape($row->{'geological_group'})."&group_formation_member=".uri_escape($row->{'formation'})."\">$row->{formation}</a>";
+    }
     if ($row->{'geological_group'}) {
         $row->{'geological_group'} = "<a href=\"$exec_url?action=displayStrataSearch&group_formation_member=".uri_escape($row->{'geological_group'})."\">$row->{geological_group}</a>";
     }
     
-    if ($row->{'formation'}) {
-        $row->{'formation'} = "<a href=\"$exec_url?action=displayStrataSearch&group_hint=".uri_escape($row->{'geological_group'})."&group_formation_member=".uri_escape($row->{'formation'})."\">$row->{formation}</a>";
-    }
     
-    if ($row->{'member'}) {
-        $row->{'member'} = "<a href=\"$exec_url?action=displayStrataSearch&formation_hint=".uri_escape($row->{'formation'})."&group_formation_member=".uri_escape($row->{'member'})."\">$row->{member}</a>";
-    }
     
     foreach ('stratigraphy_panel','lithology_panel','taphonomy_panel','methods_panel') {
         $row->{$_} = 1;
@@ -3168,14 +3196,13 @@ sub getMaxMinNamesAndDashes	{
 # subgnew_names	:	reference to array of new subgenus names the user is entering
 # snew_names	:	reference to array of new species names the user is entering
 sub buildTaxonomicList {
-	my $collection_no = shift;
+	my $coll = shift;
 	my $gnew_names = shift;				
 	my $subgnew_names = shift;			
 	my $snew_names = shift;	
-	
-    my $sql = "SELECT reference_no FROM collections WHERE collection_no=$collection_no";
-    my $collection_refno = ${$dbt->getData($sql)}[0]->{'reference_no'};
-	
+
+    my $collection_no=$coll->{'collection_no'};
+    my $collection_refno = $coll->{'reference_no'};
 
 	# dereference arrays.
 	my @gnew_names = @{$gnew_names};
@@ -3381,7 +3408,7 @@ sub buildTaxonomicList {
                 my $is_spelling = 0;
                 my $spelling_reason = "";
 
-                $correct_row = TaxonInfo::getMostRecentParentOpinion($dbt,$ss_taxon_no,1);
+                my $correct_row = TaxonInfo::getMostRecentParentOpinion($dbt,$ss_taxon_no,1);
                 my $taxon_name;
                 my $taxon_rank;
                 if ($correct_row) {
@@ -4073,6 +4100,7 @@ sub displayCollectionEcology	{
         print "<td class=dataTableCell>$value<span class='superscript'>$rankToKey{$basis}</span></td>";
 
         # Now body mass
+        my ($value1,$basis1,$value2,$basis2) = ("?","","","");
         if ($ecology->{$row->{'taxon_no'}}{'body_mass_estimate'}) {
             $value1 = $ecology->{$row->{'taxon_no'}}{'body_mass_estimate'};
             $basis1 = $ecology->{$row->{'taxon_no'}}{'body_mass_estimate'.'basis'};
@@ -4083,9 +4111,7 @@ sub displayCollectionEcology	{
             $basis1 = $ecology->{$row->{'taxon_no'}}{'minimum_body_mass'.'basis'};
             $value2 = $ecology->{$row->{'taxon_no'}}{'maximum_body_mass'};
             $basis2 = $ecology->{$row->{'taxon_no'}}{'maximum_body_mass'.'basis'};
-        } else {
-            ($value1,$basis1,$value2,$basis2) = ("?","","","");
-        }
+        } 
         $all_rank_keys{$basis1} = 1;
         $all_rank_keys{$basis2} = 1; 
         print "<td class=dataTableCell>$value1<span class='superscript'>$rankToKey{$basis1}</span>";
@@ -4564,11 +4590,13 @@ sub processEnterCollectionForm {
 	}
 	print "added</font></h3></center>";
 
-   # $recID = collection_no
-   displayCollectionDetailsPage($recID);
-   print "<div align=center>".$hbo->populateHTML('occurrence_display_buttons', [$recID],['collection_no'])."</div>";
-
-
+    my $sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, c.* FROM collections c LEFT JOIN person p1 ON p1.person_no=c.authorizer_no LEFT JOIN person p2 ON p2.person_no=c.enterer_no LEFT JOIN person p3 ON p3.person_no=c.modifier_no WHERE collection_no=" . $recID;
+    my @rs = @{$dbt->getData($sql)};
+    my $coll = $rs[0]; 
+    if ($coll) {
+        displayCollectionDetailsPage($coll);
+        print "<div align=center>".$hbo->populateHTML('occurrence_display_buttons', [$recID],['collection_no'])."</div>";
+    }
    
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></p></b>|;
 	#print qq| <b><p><a href="$exec_url?action=displayEnterCollPage&prefill_collection_no=$recID">Add another collection with fields prefilled based on this collection</a></p></b></center>|;
@@ -5491,15 +5519,18 @@ sub processEditCollectionForm {
 
 	# Updates here 
 	my $recID = updateRecord( 'collections', 'collection_no', $q->param('collection_no') );
-   
-    displayCollectionDetailsPage($collection_no);
-
-    print "<div align=center>";
-    print $hbo->populateHTML('occurrence_display_buttons', [$collection_no],['collection_no']);
-    print $hbo->populateHTML('reid_display_buttons', [$collection_no],['collection_no']);
-    print "</div>";
-
-
+  
+    # $recID = collection_no
+    my $sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, c.* FROM collections c LEFT JOIN person p1 ON p1.person_no=c.authorizer_no LEFT JOIN person p2 ON p2.person_no=c.enterer_no LEFT JOIN person p3 ON p3.person_no=c.modifier_no WHERE collection_no=" . $collection_no;
+    my @rs = @{$dbt->getData($sql)};
+    my $coll = $rs[0];
+    if ($coll) {  
+        displayCollectionDetailsPage($coll);
+        print "<div align=center>";
+        print $hbo->populateHTML('occurrence_display_buttons', [$collection_no],['collection_no']);
+        print $hbo->populateHTML('reid_display_buttons', [$collection_no],['collection_no']);
+        print "</div>";
+    }
    
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit">Edit another collection using the same reference</a></p></b></center>|;
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</a></p></b></center>|;
@@ -6216,8 +6247,8 @@ sub processEditOccurrences {
 
 	# Show the rows for this collection to the user
 	my $collection_no = ${$all_params{collection_no}}[0];
-
-	print buildTaxonomicList( $collection_no, \@gnew_names,\@subgnew_names,\@snew_names );
+    my $coll = ${$dbt->getData("SELECT collection_no,reference_no FROM collections WHERE collection_no=$collection_no")}[0];
+	print buildTaxonomicList( $coll, \@gnew_names,\@subgnew_names,\@snew_names );
 
 	# Show a link to re-edit
 	print "
@@ -7366,7 +7397,7 @@ sub getCollsWithRef	{
     $sth->execute();
 
 	my $p = Permissions->new($s,$dbt);
-    $results = [];
+    my $results = [];
 	if($sth->rows) {
 	    my $limit = 999;
 	    my $ofRows = 0;
@@ -7759,7 +7790,7 @@ sub logRequest {
         $| = 1;
         select $ofh;
 
-        $line = "$ip\t$date\t$user\t$postdata\n";
+        my $line = "$ip\t$date\t$user\t$postdata\n";
         print LOG $line;
     }
 }
