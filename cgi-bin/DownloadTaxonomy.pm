@@ -68,10 +68,15 @@ sub displayITISDownload {
 
     if (@errors) {
         displayErrors(@errors);
+        print "<div align=\"center\"><h5><a href=\"bridge.pl?action=displayDownloadTaxonomyForm\">Please try again</a></h5></div><br>";
         return;
     }
 
     print "<div align=\"center\"><h2>Taxonomy download results</h2></div>";
+
+    print '<div align="center">
+        <table border=0 width=600><tr><td>
+        <h3 class="darkList" style="margin-bottom: 0em;">Output files</h3>';
 
     my ($filesystem_dir,$http_dir) = makeDataFileDir($s);
 
@@ -129,7 +134,7 @@ sub displayITISDownload {
     }
     close FH_AL;
     $taxon_author_count = "No" if ($taxon_author_count == 0);
-    print "<p>$taxon_author_count taxon authors names were printed to file</p>";
+    print "$taxon_author_count taxon authors names were printed to file<br>";
 
     
     open FH_TU, ">$filesystem_dir/taxonomic_units.dat"
@@ -175,7 +180,7 @@ sub displayITISDownload {
     close FH_TU;
     my $taxon_count = scalar(@names); 
     $taxon_count = "No" if ($taxon_count == 0);
-    print "<p>$taxon_count taxononomic units were printed to file</p>";
+    print "$taxon_count taxononomic units were printed to file<br>";
 
     open FH_SL, ">$filesystem_dir/synonym_links.dat";
     my $synonym_count = 0;
@@ -195,7 +200,7 @@ sub displayITISDownload {
     }
     close FH_SL;
     $synonym_count = "No" if ($synonym_count == 0);
-    print "<p>$synonym_count synonym links were printed to file</p>";
+    print "$synonym_count synonym links were printed to file<br>";
     
     my @references = keys %references; 
     open FH_P, ">$filesystem_dir/publications.dat";
@@ -236,7 +241,7 @@ sub displayITISDownload {
     }     
     close FH_P;
     $ref_count = "No" if ($ref_count == 0);
-    print "<p>$ref_count publications were printed to file</p>";
+    print "$ref_count publications were printed to file<br>";
     
     my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,%options); 
     my @opinions = @$opinions;
@@ -258,9 +263,9 @@ sub displayITISDownload {
     close FH_RL;
     $ref_link_count = "No" if ($ref_link_count == 0);
     if ($opinion_file_message =~ /no search criteria/) {
-        print "<p>No reference links could be downloaded because no search criteria related to \"Taxonomic opinions\" were entered</p>";
+        print "No reference links could be downloaded because no search criteria related to \"Taxonomic opinions\" were entered<br>";
     } else {
-        print "<p>$ref_link_count reference links were printed to file</p>";
+        print "$ref_link_count reference links were printed to file<br>";
     }
    
    
@@ -269,7 +274,7 @@ sub displayITISDownload {
     # Note that our comments aren't denormalized so the comment_id key
     # (primary key for comments table for ITIS is just the primary key taxon_no for us
     # header:     #comment_id,author,   comment,  created,  modified
-    my @columns = ("taxon_no","enterer","comments","created","modified_short");
+    @columns = ("taxon_no","enterer","comments","created","modified_short");
     my $comment_count = 0;
     foreach my $taxon (@names) {
         if ($taxon->{'comments'}) {
@@ -286,14 +291,14 @@ sub displayITISDownload {
     }
     close FH_C;
     $comment_count = "No" if ($comment_count == 0);
-    print "<p>$comment_count comments and comment links were printed to file</p>";
+    print "$comment_count comments and comment links were printed to file<br>";
 
     open FH_CL, ">$filesystem_dir/tu_comments_links.dat";
     # Note that our comments aren't denormalized so the comment_id key
     # (primary key for comments table for ITIS is just the primary key taxon_no for us
     # Why a modified value exists for a many-to-one type join table is beyond me
     # header:     #taxon_no,comment_id,   modified
-    my @columns = ("taxon_no","taxon_no","modified_short");
+    @columns = ("taxon_no","taxon_no","modified_short");
     foreach my $taxon (@names) {
         if ($taxon->{'comments'}) {
             my @line = ();
@@ -327,7 +332,8 @@ sub displayITISDownload {
     #print "$cmd -- $ot -- <BR>";
 
 
-    print "<div align=\"center\"><a href='/paleodb/data/$dirname.tar.gz'>Download file</a></div>";
+    print "<div align=\"center\"><h5><a href='/paleodb/data/$dirname.tar.gz'>Download file</a> - <a href=\"bridge.pl?action=displayDownloadTaxonomyForm\">Do another download</a></h5></div><br>";
+    print "</td></tr></table></div>";
     #print "<a href='/paleodb/data/JSepkoski/taxonomic_units.dat'>taxonomic units</a><BR>";
     #print "<a href='/paleodb/data/JSepkoski/publications.dat'>publications</a><BR>";
     #print "<a href='/paleodb/data/JSepkoski/reference_links.dat'>reference links</a><BR>";
@@ -390,11 +396,15 @@ sub displayPBDBDownload {
 
     if (@errors) {
         displayErrors(@errors);
+        print "<div align=\"center\"><h5><a href=\"bridge.pl?action=displayDownloadTaxonomyForm\">Please try again</a></h5></div><br>";
         return;
     }
 
     print "<div align=\"center\"><h2>Taxonomy download results</h2></div>";
     
+    print '<div align="center">
+        <table border=0 width=600><tr><td>
+        <h3 class="darkList" style="margin-bottom: 0em;">Output files</h3>';
 
     my ($filesystem_dir,$http_dir) = makeDataFileDir($s);
 
@@ -481,7 +491,7 @@ sub displayPBDBDownload {
 
     my @references = keys %references; 
     open FH_REF, ">$filesystem_dir/references.csv";
-    my @header = ('authorizer','enterer','modifier','reference_no','author1init','author1last','author2init','author2last','otherauthors','pubyr','reftitle','pubtitle','pubvol','pubno','firstpage','lastpage','publication_type','classification_quality','comments','created','modified');
+    @header = ('authorizer','enterer','modifier','reference_no','author1init','author1last','author2init','author2last','otherauthors','pubyr','reftitle','pubtitle','pubvol','pubno','firstpage','lastpage','publication_type','classification_quality','comments','created','modified');
     $csv->combine(@header);
     print FH_REF $csv->string()."\n";
     if (@references) {
@@ -508,10 +518,15 @@ sub displayPBDBDownload {
             print FH_REF $csv_string."\n";  
         }
         my $ref_link = $http_dir."/references.csv";
-        print "<p>$ref_count references were printed to <a href=\"$ref_link\">references.csv</a></p>";
+        print "$ref_count references were printed to <a href=\"$ref_link\">references.csv</a><br>";
     } else {
-        print "<p>No references were printed to file</p>";
+        print "No references were printed to file<br>";
     }
+
+
+print '</td></tr></table></div>';
+  print "<div align=\"center\"><h5><a href=\"bridge.pl?action=displayDownloadTaxonomyForm\">Do another download</a></h5></div><br>";
+
 
     cleanOldGuestFiles();
 }
@@ -580,6 +595,16 @@ sub getTaxonomicNames {
         my $date = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
         my $sign = ($options{'created_before_after'} eq 'before') ? '<=' : '>=';
         push @where,"a.created $sign $date";
+    }
+
+    if ($options{'taxon_rank'} && $options{'taxon_rank'} !~ 'all') {
+        if ($options{'taxon_rank'} =~ /above genus/) {
+            push @where,"a.taxon_rank NOT IN ('subspecies','species','subgenus','genus')";
+        } elsif ($options{'taxon_rank'} =~ /genus or below/) {
+            push @where,"a.taxon_rank IN ('subspecies','species','subgenus','genus')";
+        } else {
+            push @where,"a.taxon_rank LIKE ".$dbh->quote($options{'taxon_rank'});
+        }
     }
 
     # use between and both values so we'll use a key for a smaller tree;
@@ -690,10 +715,10 @@ sub getTaxonomicNames {
         }
         my $it_link = $http_dir."/invalid_taxa.csv";
         my $vt_link = $http_dir."/valid_taxa.csv";
-        $message .= "<p>$valid_count valid taxa were printed to <a href=\"$vt_link\">valid_taxa.csv</a></p>";
-        $message .= "<p>$invalid_count invalid taxa were printed to <a href=\"$it_link\">invalid_taxa.csv</a></p>";
+        $message .= "$valid_count valid taxa were printed to <a href=\"$vt_link\">valid_taxa.csv</a><br>";
+        $message .= "$invalid_count invalid taxa were printed to <a href=\"$it_link\">invalid_taxa.csv</a><br>";
     } else {
-        $message = "<p>No taxonomic names were downloaded because no search criteria were entered</p>";
+        $message = "No taxonomic names were downloaded because no search criteria were entered<br>";
     }
     
     return (\@results, $message);
@@ -778,6 +803,16 @@ sub getTaxonomicOpinions {
         }  
     }
 
+    if ($options{'taxon_rank'} && $options{'taxon_rank'} !~ 'all') {
+        if ($options{'taxon_rank'} =~ /above genus/) {
+            push @where,"a1.taxon_rank NOT IN ('subspecies','species','subgenus','genus')";
+        } elsif ($options{'taxon_rank'} =~ /genus or below/) {
+            push @where,"a1.taxon_rank IN ('subspecies','species','subgenus','genus')";
+        } else {
+            push @where,"a1.taxon_rank LIKE ".$dbh->quote($options{'taxon_rank'});
+        }
+    }
+
     # use between and both values so we'll use a key for a smaller tree;
     my @results = ();
     my $message = "";
@@ -810,9 +845,9 @@ sub getTaxonomicOpinions {
         @results = @{$dbt->getData($sql)};
         my $op_link = $http_dir."/opinions.csv";
         
-        $message .= "<p>".scalar(@results)." taxonomic opinions were printed to <a href=\"$op_link\">opinions.csv</a></p>";
+        $message .= scalar(@results)." taxonomic opinions were printed to <a href=\"$op_link\">opinions.csv</a><br>";
     } else {
-        $message .= "<p>No taxonomic opinions were downloaded because no search criteria were entered</p>";
+        $message .= "No taxonomic opinions were downloaded because no search criteria were entered<br>";
     }
     return (\@results,$message);
 }
