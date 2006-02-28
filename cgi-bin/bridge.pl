@@ -3490,17 +3490,31 @@ sub buildTaxonomicList {
 			$abund_values++ if($row->{abund_value});
 			$comments++ if($row->{comments});
 		}
-			
-		$sql = "SELECT collection_name FROM collections ".
-			   "WHERE collection_no=$collection_no";
-		my @coll_name = @{$dbt->getData($sql)};
+		
+        my $sql = "SELECT c.collection_name,c.country,c.state,concat(i1.eml_interval,' ',i1.interval_name) max_interval, concat(i2.eml_interval,' ',i2.interval_name) min_interval " 
+                . " FROM collections c "
+                . " LEFT JOIN intervals i1 ON c.max_interval_no=i1.interval_no"
+                . " LEFT JOIN intervals i2 ON c.min_interval_no=i2.interval_no"
+                . " WHERE c.collection_no=$coll->{collection_no}";
+        my $coll = ${$dbt->getData($sql)}[0];
+
+        # get the max/min interval names
+        my $time_place = $coll->{'collection_name'}.": ";
+        if ($coll->{'max_interval'} ne $coll->{'min_interval'} && $coll->{'min_interval'}) {
+            $time_place .= "$coll->{max_interval} - $coll->{min_interval}";
+        } else {
+            $time_place .= "$coll->{max_interval}";
+        } 
+        if ($coll->{'state'}) {
+            $time_place .= ", $coll->{state}";
+        } elsif ($coll->{'country'}) {
+            $time_place .= ", $coll->{country}";
+        } 
 
 		# Taxonomic list header
-		$return = "
-		<div align='center'>
-		<h3>Taxonomic list for " . $coll_name[0]->{collection_name} .
-		" (PBDB collection $collection_no)</h3>";
+		$return = "<div align=\"center\"><h3><b>Taxonomic list for $time_place<br><span style=\"font-size:0.85em;\">(PBDB collection number $collection_no)</span></b></h3><div>";
 
+        $return .= "<div align=\"center\">";
 		if ($new_found) {
 			$return .= "<h3><font color=red>WARNING!</font> Taxon names in ".
 					   "<b>bold</b> are new to the occurrences table.</h3><p>Please make ".
