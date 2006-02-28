@@ -142,6 +142,7 @@ sub processPrintHierarchy	{
     # get printed out correctly below
     @node_stack = ($tree);
     my @nodes_to_print = ();
+    my %syn_status = ();
     while (@node_stack) {
         my $node = shift @node_stack;
         push @nodes_to_print, $node;
@@ -154,15 +155,32 @@ sub processPrintHierarchy	{
                 }
             }
             my @children = @{$node->{'children'}};
+            
             foreach (@{$nomen{$node->{'taxon_no'}}}) {
                 $_->{'depth'} = $node->{'depth'} + 1;
             }
             push @children, @{$nomen{$node->{'taxon_no'}}};
+
             foreach (@{$node->{'synonyms'}}) {
-                $_->{'status'} = 'synonym';
+                # Not very efficient, but no better way to get the status I don't think
+                my $orig_no = TaxonInfo::getOriginalCombination($dbt,$_->{'taxon_no'});
+                if ($orig_no) {
+                    my $mrpo = TaxonInfo::getMostRecentParentOpinion($dbt,$orig_no);
+                    if ($mrpo) {
+                        if ($mrpo->{'status'} =~ /subjective/) { $_->{'status'} = 'subjective synonym'; }
+                        elsif ($mrpo->{'status'} =~ /objective/) { $_->{'status'} = 'objective synonym'; }
+                        elsif ($mrpo->{'status'} =~ /replaced/) { $_->{'status'} = 'replacement'; }
+                        else { $_->{'status'} = "BLAH $mrpo->{status}";}
+                    } else {
+                        $_->{'status'} = 'synonym';
+                    }
+                } else {
+                    $_->{'status'} = 'synonym';
+                }
                 $_->{'depth'} = $node->{'depth'} + 1;
             }
             push @children, @{$node->{'synonyms'}};
+
             @children = sort {$rank_order{$b->{'taxon_rank'}} <=> $rank_order{$a->{'taxon_rank'}} ||
                               $a->{'taxon_name'} cmp $b->{'taxon_name'}} @children;
             unshift @node_stack, @children;
@@ -212,22 +230,26 @@ sub processPrintHierarchy	{
 #        my $type_taxon_for = $type_taxon_nos{$record->{'taxon_no'}};
 #        if ($type_taxon_for) {
             if ($found_type_for{$record->{'taxon_no'}}) {
-                print " <small>(type taxon)</small>";
+                print " <small>(type)</small>";
             } 
-#           elsif ($not_found_type_for{$record->{'taxon_no'}}) {
-#                my $type_taxon_for = $not_found_type_for{$record->{'taxon_no'}};
-#                my $t = TaxonInfo::getTaxon($dbt,'taxon_no'=>$type_taxon_for);
-#                print "<span style=\"color: red;\">";
-#                print " - type taxon for $type_taxon_for,$t->{taxon_name}, but not classified into it";
-#                print "<span style=\"color: red;\">";
-#            }
+            #elsif ($not_found_type_for{$record->{'taxon_no'}}) {
+            #    my $type_taxon_for = $not_found_type_for{$record->{'taxon_no'}};
+            #    my $t = TaxonInfo::getTaxon($dbt,'taxon_no'=>$type_taxon_for);
+            #    print " <small>(excludes $t->{taxon_name}, the type)</small>";
+            #}
 #        }
-#        if ($record->{'type_taxon_no'} && $not_found_type_taxon{$record->{'taxon_no'}}) {
-#            my $t = TaxonInfo::getTaxon($dbt,'taxon_no'=>$record->{'type_taxon_no'});
-#            print "<span style=\"color: red;\">";
-#            print " - type taxon $record->{type_taxon_no},$t->{taxon_name} not classified into it";
-#            print "</span>";
-#        }
+        if ($record->{'type_taxon_no'} && $not_found_type_taxon{$record->{'taxon_no'}}) {
+            my $t = TaxonInfo::getTaxon($dbt,'taxon_no'=>$record->{'type_taxon_no'});
+            if ($t) {
+                my $link = "<a href=bridge.pl?action=checkTaxonInfo&taxon_no=$t->{taxon_no}>$t->{taxon_name}</a>";
+                if ( $t->{'taxon_rank'} =~ /species|genus/ ) {
+                    $link = "<i>".$link."</i>";
+                } 
+                print "<small>";
+                print " (excludes $link, the type)";
+                print "</small>";
+            }
+        }
 
         #if (@{$record->{'spellings'}}) {
         #    print " [";
