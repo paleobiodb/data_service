@@ -5,123 +5,126 @@
 // Checks the form data
 function checkForm ( ) {
 
-	var frm = document.forms[0];
-	var errors = "";
+    var frm = document.forms[0];
+    var errors = "";
 
-	if ( frm.section_name.value == ""
+    var returnVal = checkIntervalNames();
+    if (!returnVal) {
+        return false;
+    }
+
+    if ( frm.section_name.value == ""
         && frm.county.value == ""
         && frm.reference_no.value == ""
-		&& frm.taxon_name.value == ""
-		&& frm.country.value == ""
-		&& frm.state.value == ""
-		&& frm.max_interval.value == ""
-		&& frm.group_formation_member.value == ""
-		&& frm.authorizer_reversed.value == ""
-		&& frm.enterer_reversed.value == ""
-		&& frm.research_group.selectedIndex == 0 
-		&& frm.lithology1.selectedIndex == 0
-		&& frm.environment.selectedIndex == 0 ) {
-		errors = "Please supply a search term";
-	}
+        && frm.taxon_name.value == ""
+        && frm.country.value == ""
+        && frm.state.value == ""
+        && frm.max_interval.value == ""
+        && frm.min_interval.value == ""
+        && frm.group_formation_member.value == ""
+        && frm.person_reversed.value == ""
+        && frm.research_group.selectedIndex == 0 
+        && frm.lithology1.selectedIndex == 0
+        && frm.environment.selectedIndex == 0 ) {
+        errors = "Please supply a search term";
+    }
 
-	if ( errors != "" ) { 
-		alert ( errors );
-		return false;
-	} else {
-		return true;
-	}
+    if ( errors != "" ) { 
+        alert ( errors );
+        return false;
+    } else {
+        return true;
+    }
 }
 
 
 //  End -->
 </script>
 
-    <div align="center">
-	<h2>Section search form</h2>
-	<h4>Fill in any of the following fields and press "Search sections"</h4>
-    </div>
+<div align="center">
+  <h2>Section search form</h2>
+</div>
 
-    <form method=post action="bridge.pl" onSubmit="return checkForm();">
-	<input id="action" type=hidden name="action" value="displaySearchSectionResults">
+<div align=center>
+<form method=post action="bridge.pl" onSubmit="return checkForm();">
+<input id="action" type=hidden name="action" value="displaySearchSectionResults">
 
-    <center><p><font size=-1><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character.</i></font></p></center>
-
-		<hr>
-
-	<table width=100%><tr><td align=center>
+<div class="displayPanel" align=left>
+  <span class="displayPanelHeader"><b>Search Values</b></span>
+  <div class="displayPanelContent small">
     <table border=0 cellpadding=2 cellspacing=2>
-	<tr><td colspan=4 align=center><b>Search values</b></td></tr>
-	<tr>
-      <td>Section name: <br><input name=section_name size=30><br></td>
-	  <td>Reference number: <br><input name=reference_no size=30><br></td>
-	</tr>
-	<tr>
-      <td>Authorizer: <br><input name="authorizer_reversed" size=27 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_reversed%%'">Me</a></td>
-      <td>Enterer: <br><input name="enterer_reversed" size=27 onKeyUp="doComplete(event, this, entererNames());">&nbsp;<a href="#" onClick="document.forms[0].enterer_reversed.value='%%enterer_reversed%%'">Me</a></td>    
-	  <td>Research group or project: <br>
-<select id="research_group">
-</select>
-</td>
-	</tr>
-	<tr>
-	  <td>
-      <span style="white-space: nowrap;">Taxon name: </span>
-	<br><input name=taxon_name size=30><br></td>
-	</tr>
-	<tr>
-	  <td>Country/continent: <br><input name=country size=30><br></td>
-	  <td>State/province: <br><input name=state size=30><br></td>
-	  <td>County/parish: <br><input name=county size=30><br></td>
-	</tr>
-	<tr>
-	  <td>Oldest time interval (or age in Ma): <br><select id="eml_max_interval"></select><input name=max_interval size=15 onKeyUp="doComplete(event, this, intervalNames(),1);"><br></td>
-	  <td>Youngest time interval/Ma: <br><select id="eml_min_interval"></select><input name=min_interval size=15 onKeyUp="doComplete(event, this, intervalNames(),1);"><br></td>
-	</tr>
-	<tr>
-	  <td>Group, formation, or member:<BR><input name="group_formation_member" size=30></select><BR></td>
-	  <td>Paleoenvironment: <br><select id="environment"></select><br></td>
-	</tr>
-	<tr>
-	  <td>Lithology adjective 1: <br><select id="lithadj"></select></td> 
-	  <td>Primary lithology:<br> <select id="lithology1"></select><br></td>
-	</tr>
-	<tr>
-<!-- OPTIONAL collection_search -->
-	  <td>Lithology adjective 2: <br><select id="lithadj2"></select></td> 
-	  <td>Secondary lithology: <br><select id="lithology2"></select><br></td>
-	
-	  </tr>
-<!-- END collection_search -->
-	</table>
-	</td></tr></table>
-	<hr>
+      <tr>
+        <td>Section name: </td><td><input name=section_name size=20 class="small"></td>
+        <td style="padding-left: 1em">Reference number: </td><td><input name=reference_no class="small" size=6></td>
+      </tr>
+      <tr>
+        <td>Data <select name="person_type" class="small"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="any">any of above</option></select>: </td>
+        <td><input name="person_reversed" onKeyUp="doComplete(event, this, entererNames());" class="small" size=16>&nbsp;<a href="#" onClick="document.forms[0].person_reversed.value='%%enterer_reversed%%'">Me</a></td>
+        <td style="padding-left: 1em;">Research group or project: </td>
+        <td><select id="research_group" class="small"></select>
+      </tr>
+      <tr>
+        <td>Taxon name:</td><td><input name=taxon_name class="small"></td>
+        <td style="padding-left: 1em;">Country/continent: </td><td><input name=country class="small"></td>
+      </tr>
+      <tr>
+        <td>State/province: </td><td><input name=state class="small"></td>
+        <td style="padding-left: 1em;">County/parish: </td><td><input name=county class="small"></td>
+      </tr>
+      <tr>
+        <td>Oldest time interval (or age in Ma): </td><td colspan=3><select id="eml_max_interval" class="small"></select><input name="max_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
+      </tr>
+      <tr>
+        <td>Youngest time interval/Ma: </td><td colspan=3><select id="eml_min_interval" class="small"></select><input name="min_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
+      </tr>
+      <tr>
+        <td>Group, formation, or member:</td><td><input name="group_formation_member" class="small"></td>
+      </tr>
+      <tr>
+        <td>Paleoenvironment: </td><td colspan=3><select id="environment" class="small"></select></td>
+      </tr>
+      <tr>
+        <td>Lithology:</td><td colspan=3><select id="lithadj" class="small"></select><select id="lithology1" class="small"></select><br></td>
+      </tr>
+      <tr>
+        <td colspan=4 align="center">
+          <div class="small" style="width: 640px;">
+            <i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character or "%" for an open ended match.</i>
+          </div>
+        </td>
+      </tr>
+    </table>
+
+  </div>
+</div>
 
 
-	<table width=100%><tr><td align=center>
-	<table border=0 cellpadding=2 cellspacing=2>
-	<tr>
-		<td colspan="4" align=center><b>Search and display options</b></td>
-	</tr>
-	<tr>
-	  <td colspan=4>Remove taxa from chart: <select name=show_taxon_list><option>YES</option><option SELECTED>NO</option></select><br></td>
-	</tr>
-	<tr>
-	  <td colspan=4>Resolution of taxa in chart: <select name=taxon_resolution><option>genus</option><option SELECTED>species</option></select><br></td>
-	</tr>
-	<tr valign=top>
-		<td><input type=radio name=wild value=N></td>
-		<td>require exact matches</td>
-		<td><input type=radio name=wild value=Y checked></td>
-		<td>allow wildcards and partial string matches</td>
-	</tr>
-    <!-- END collection_search -->
-    <tr>
-	    <td colspan="4">Number of matching records shown: <input name=limit size=10 value=30>
-    </tr>
-</table>
+<div class="displayPanel" align=left>
+  <span class="displayPanelHeader"><b>Search and display options</b></span>
+  <div class="displayPanelContent small">
+
+    <table border=0 cellpadding=2 cellspacing=2>
+      <tr>
+        <td nowrap>Remove taxa from chart: <select name=show_taxon_list class="small"><option>YES</option><option SELECTED>NO</option></select></td>
+        <td nowrap style="padding-left: 2em;">Resolution of taxa in chart: <select name=taxon_resolution class="small"><option>genus</option><option SELECTED>species</option></select></td>
+      </tr> 
+      <tr valign=top>
+        <td nowrap>Allow wildcards:
+          <select name="wild" class="small">
+            <option value="Y">yes, allow wildcards</option>
+            <option value="N">no, require exact matches</option>
+          </select>
+        </td>
+        <td nowrap style="padding-left: 2em;">
+          Number of records per page: <input name=limit size=10 value=30 class="small">
+        </td>
+      </tr>
+    </table>
+
+  </div>
+</div>
 
 <p><input type="submit" value="Search sections"></p>
 
-</td></tr></table>
-
 </form>
+</div>

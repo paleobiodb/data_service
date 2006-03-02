@@ -1,131 +1,137 @@
+%%NOESCAPE_enterer_authorizer_lists%%
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
-
-    // This is a handy little function for seeing what properties an object has
-    function showProperties ( obj ) {
-        var result = "";
-
-        for ( var i in obj ) {
-            result += "o." + i + " = " + obj[i] + "<BR>\n";
-        }
-        document.write ( result );
-    }
-
 
 // Checks the form data
 function checkForm ( ) {
 
-	var frm = document.forms[0];
-	var errors = "";
+    var frm = document.forms[0];
+    var errors = "";
 
-	if ( frm.collection_names.value == ""
+    var returnVal = checkIntervalNames();
+    if (!returnVal) {
+        return false;
+    }
+
+    if ( frm.collection_names.value == ""
         && frm.county.value == ""
         && frm.reference_no.value == ""
-		&& frm.collection_no.value == ""
-		&& frm.taxon_name.value == ""
-		&& frm.country.value == ""
-		&& frm.state.value == ""
-		&& frm.group_formation_member.value == ""
-		&& frm.research_group.selectedIndex == 0
-		&& frm.lithology1.selectedIndex == 0
-		&& frm.lithology2.selectedIndex == 0
-		&& frm.environment.selectedIndex == 0 ) {
-		errors = "Please supply a search term.";
-	}
+        && frm.taxon_name.value == ""
+        && frm.country.value == ""
+        && frm.state.value == ""
+        && frm.max_interval.value == ""
+        && frm.min_interval.value == ""
+        && frm.group_formation_member.value == ""
+        && frm.person_reversed.value == ""
+        && frm.research_group.selectedIndex == 0 
+        && frm.lithology1.selectedIndex == 0
+        && frm.environment.selectedIndex == 0 ) {
+        errors = "Please supply a search term";
+    }
 
-	if ( errors != "" ) { 
-		alert ( errors );
-		return false;
-	} else {
-		return true;
-	}
+    if ( errors != "" ) { 
+        alert ( errors );
+        return false;
+    } else {
+        return true;
+    }
 }
 
 
 //  End -->
 </script>
 
-    <div align="center">
-	<h2>Collection search form</h2>
-	<h4>Fill in any of the following fields and press "Search collections."</h4>
-    </div>
+<div align="center">
+  <h2>Collection search form</h2>
+</div>
 
-    <form method=post action="bridge.pl" onSubmit="return checkForm();">
-	<input id="action" type=hidden name="action" value="displayCollResults">
-	<input id="user" type=hidden name="user" value="Guest">
-	<input id="type" type=hidden name="type" value="%%type%%">
+<div align=center>
+<form method=post action="bridge.pl" onSubmit="return checkForm();">
+<input id="action" type=hidden name="action" value="displayCollResults">
+<input id="type" type=hidden name="type" value="%%type%%">
+<input id="use_primary" type=hidden name="use_primary" value="%%use_primary%%">
 
-    <div align="center"><div style="width: 640px"><font size="-1"><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character or "%" for an open ended match.</i></font></div></div>
-		<hr>
-
-	<table width="100%"><tr><td align=center>
+<div class="displayPanel" align=left>
+  <span class="displayPanelHeader"><b>Search Values</b></span>
+  <div class="displayPanelContent small">
     <table border=0 cellpadding=2 cellspacing=2>
-	<tr><td colspan=4 align=center><b>Search values</b></td></tr>
-	<tr>
-      <td>Collection name: <br><input name=collection_names size=30><br></td>
-	  <td>Collection number: <br><input name=collection_no size=30><br></td>
-	</tr>
-	<tr>
-	<td>      <span style="white-space: nowrap;">Taxon name: </span><br>
-<input name=taxon_name size=30><br></td>
+      <tr>
+        <td>Collection name or number: </td><td><input name=collection_names class="small" size=20></td>
+        <td style="padding-left: 1em">Reference number: </td><td><input name=reference_no class="small" size=6></td>
+      </tr>
+      <tr>
+        <td>Data <select name="person_type" class="small"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="any">any of above</option></select>: </td>
+        <td><input name="person_reversed" onKeyUp="doComplete(event, this, entererNames());" class="small" size=20></td>
+        <td style="padding-left: 1em;">Research group or project: </td>
+        <td><select id="research_group" class="small"></select>
+      </tr>
+      <tr>
+        <td>Taxon name:</td><td><input name=taxon_name class="small"></td>
+        <td style="padding-left: 1em;">Country/continent: </td><td><input name=country class="small"></td>
+      </tr>
+      <tr>
+        <td>State/province: </td><td><input name=state class="small"></td>
+        <td style="padding-left: 1em;">County/parish: </td><td><input name=county class="small"></td>
+      </tr>
+      <tr>
+        <td>Oldest time interval (or age in Ma): </td><td colspan=3><select id="eml_max_interval" class="small"></select><input name="max_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
+      </tr>
+      <tr>
+        <td>Youngest time interval/Ma: </td><td colspan=3><select id="eml_min_interval" class="small"></select><input name="min_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
+      </tr>
+      <tr>
+        <td>Group, formation, or member:</td><td><input name="group_formation_member" class="small"></td>
+      </tr>
+      <tr>
+        <td>Paleoenvironment: </td><td colspan=3><select id="environment" class="small"></select></td>
+      </tr>
+      <tr>
+        <td>Lithology:</td><td colspan=3><select id="lithadj" class="small"></select><select id="lithology1" class="small"></select><br></td>
+      </tr>
+      <tr>
+        <td colspan=4 align="center">
+          <div class="small" style="width: 640px;">
+            <i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character or "%" for an open ended match.</i>
+          </div>
+        </td>
+      </tr>
+    </table>
 
-	  <td>Research group: <br>
-<select id="research_group" name="research_group"></select>
-</td>
-	</tr>
-	<tr>
-	  <td>Country/continent: <br><input name=country size=30><br></td>
-	  <td>State/province: <br><input name=state size=30><br></td>
-<!-- LEGACY
-	  <td>Period: <br><select name=period><option><option>Modern<option>Holocene<option>Quaternary<option>Tertiary<option>Cretaceous<option>Jurassic<option>Triassic<option>Permian<option>Carboniferous<option>Devonian<option>Silurian<option>Ordovician<option>Cambrian<option>Neoproterozoic</select></td>
--->
-	</tr>
-	<tr>
-	  <td>Oldest time interval (or age in Ma): <br><span style="white-space: nowrap;"><select id="eml_max_interval"></select><input name=max_interval size=14></span></td>
-	  <td>Youngest time interval/Ma: <br><span style="white-space: nowrap;"><select id="eml_min_interval"></select><input name=min_interval size=14></span></td>
-
-<!-- LEGACY
-	  <td>Epoch: <br><input name=epoch size=30><br></td>
-	  <td>International age/stage: <br><input name=intage size=30><br></td>
-	  <td>Local age/stage: <br><input name=locage size=30><br></td>
--->
-	</tr>
-	<tr>
-	  <td>Group, formation, or member:<BR><input name="group_formation_member" size=30><br></td>
-      <td>Paleoenvironment: <br><select id="environment"></select><br></td>
-    </tr>
-    <tr>
-      <td>Lithology adjective 1: <br><select id="lithadj"></select></td>
-      <td>Primary lithology:<br> <select id="lithology1"></select><br></td>
-    </tr>
-    <tr>
-      <td>Lithology adjective 2: <br><select id="lithadj2"></select></td>
-      <td>Secondary lithology: <br><select id="lithology2"></select><br></td>
-    </tr>
-
-	</table>
-	</td></tr></table>
-	<hr>
+  </div>
+</div>
 
 
-	<table width="100%"><tr><td align=center>
-	<table border=0 cellpadding=2 cellspacing=2>
-	<tr>
-		<td colspan="4" align=center><b>Search and display options</b></td>
-	</tr>
-	<tr valign=top>
-		<td><input type=radio name=wild value=N></td>
-		<td>require exact matches</td>
-		<td><input type=radio name=wild value=Y checked></td>
-		<td>allow wildcards and partial string matches</td>
-	</tr>
-<tr>
-	<td colspan="4">Number of matching records shown: <input name=limit size=10 value=30>
-</tr>
-</table>
+<div class="displayPanel" align=left>
+  <span class="displayPanelHeader"><b>Search and display options</b></span>
+  <div class="displayPanelContent small">
+
+    <table border=0 cellpadding=2 cellspacing=2>
+      <tr valign=top>
+        <td nowrap>Allow wildcards:
+          <select name="wild" class="small">
+            <option value="Y">yes, allow wildcards</option>
+            <option value="N">no, require exact matches</option>
+          </select>
+        </td>
+        <td nowrap style="padding-left: 2em;">Sort by:
+          <select name="sortby" class="small">
+            <option value="collection_no">collection number</option>
+            <option value="collection_name">collection name</option>
+            <option value="interval_name">time interval name</option>
+            <option value="geography">country, state</option>
+          </select>
+          <select name=sortorder class="small"><option value="asc">ascending<option value="desc">descending</select>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2">Number of records per page: <input name=limit size=10 value=30 class="small">
+      </tr>
+    </table>
+
+  </div>
+</div>
 
 <p><input type="submit" value="Search collections"></p>
 
-</td></tr></table>
-
 </form>
+</div>

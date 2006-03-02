@@ -5,471 +5,133 @@
 // Checks the form data
 function checkForm ( ) {
 
-	var frm = document.forms[0];
-	var errors = "";
+    var frm = document.forms[0];
+    var errors = "";
 
     var returnVal = checkIntervalNames();
     if (!returnVal) {
         return false;
     }
 
-	if ( frm.collection_names.value == ""
+    if ( frm.collection_names.value == ""
         && frm.county.value == ""
         && frm.reference_no.value == ""
-		&& frm.collection_no.value == ""
-		&& frm.taxon_name.value == ""
-		&& frm.country.value == ""
-		&& frm.state.value == ""
-		&& frm.max_interval.value == ""
-		&& frm.min_interval.value == ""
-		&& frm.group_formation_member.value == ""
-		&& frm.authorizer_reversed.value == ""
-		&& frm.enterer_reversed.value == ""
-		&& frm.research_group.selectedIndex == 0 
-		&& frm.lithology1.selectedIndex == 0
-		&& frm.environment.selectedIndex == 0 ) {
-		errors = "Please supply a search term";
-	}
+        && frm.taxon_name.value == ""
+        && frm.country.value == ""
+        && frm.state.value == ""
+        && frm.max_interval.value == ""
+        && frm.min_interval.value == ""
+        && frm.group_formation_member.value == ""
+        && frm.person_reversed.value == ""
+        && frm.research_group.selectedIndex == 0 
+        && frm.lithology1.selectedIndex == 0
+        && frm.environment.selectedIndex == 0 ) {
+        errors = "Please supply a search term";
+    }
 
-	if ( errors != "" ) { 
-		alert ( errors );
-		return false;
-	} else {
-		return true;
-	}
+    if ( errors != "" ) { 
+        alert ( errors );
+        return false;
+    } else {
+        return true;
+    }
 }
 
 
 //  End -->
 </script>
 
-    <div align="center">
-	<h2>Collection search form</h2>
-	<h4>Fill in any of the following fields and press "Search collections."</h4>
-    </div>
+<div align="center">
+  <h2>Collection search form</h2>
+</div>
 
-    <form method=post action="bridge.pl" onSubmit="return checkForm();">
-	<input id="action" type=hidden name="action" value="displayCollResults">
-	<input id="type" type=hidden name="type" value="%%type%%">
-	<input id="use_primary" type=hidden name="use_primary" value="%%use_primary%%">
+<div align=center>
+<form method=post action="bridge.pl" onSubmit="return checkForm();">
+<input id="action" type=hidden name="action" value="displayCollResults">
+<input id="type" type=hidden name="type" value="%%type%%">
+<input id="use_primary" type=hidden name="use_primary" value="%%use_primary%%">
 
-    <div align="center"><div style="width: 640px"><font size="-1"><i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character or "%" for an open ended match.</i></font></div></div>
-
-		<hr>
-
-	<table width="100%"><tr><td align=center>
+<div class="displayPanel" align=left>
+  <span class="displayPanelHeader"><b>Search Values</b></span>
+  <div class="displayPanelContent small">
     <table border=0 cellpadding=2 cellspacing=2>
-	<tr><td colspan=4 align=center><b>Search values</b></td></tr>
-	<tr>
-      <td>Collection name: <br><input name=collection_names size=30><br></td>
-	  <td>Collection number: <br><input name=collection_no size=30><br></td>
-	  <td>Reference number: <br><input name=reference_no size=30><br></td>
-	</tr>
-	<tr>
-	  <td>Authorizer: <br><input name="authorizer_reversed" size=27 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_reversed%%'">Me</a></td>
-	  <td>Enterer: <br><input name="enterer_reversed" size=27 onKeyUp="doComplete(event, this, entererNames());">&nbsp;<a href="#" onClick="document.forms[0].enterer_reversed.value='%%enterer_reversed%%'">Me</a></td>
-	  <td>Research group or project: <br>
-<select id="research_group">
-</select>
-</td>
-	</tr>
-	<tr>
-	  <td>
-        <span style="whitespace: nowrap">Taxon name: </span><br>
-	    <input name=taxon_name size=30><br>
-      </td>
-	</tr>
-	<tr>
-	  <td>Country/continent: <br><input name=country size=30><br></td>
-	  <td>State/province: <br><input name=state size=30><br></td>
-	  <td>County/parish: <br><input name=county size=30><br></td>
-	</tr>
-	<tr>
-	  <td>Oldest time interval (or age in Ma): <br><select id="eml_max_interval"></select><input name="max_interval" size=15 onKeyUp="doComplete(event, this, intervalNames(),1);"><br></td>
-	  <td>Youngest time interval/Ma: <br><select id="eml_min_interval"></select><input name="min_interval" size=15 onKeyUp="doComplete(event, this, intervalNames(),1);"><br></td>
-	</tr>
-	<tr>
-	  
-	  <!--<td>Formation: <br><input name=formation size=30><br></td>
-	  <td>Member: <br><input name=member size=30><br></td>
-	  -->
-	  
-	  <td>Group, formation, or member:<BR><input name="group_formation_member" size=30><br /></td>
-	  <td>Paleoenvironment: <br><select id="environment"></select><br></td>
+      <tr>
+        <td>Collection name or number: </td><td><input name=collection_names class="small" size=20></td>
+        <td style="padding-left: 1em">Reference number: </td><td><input name=reference_no class="small" size=6></td>
+      </tr>
+      <tr>
+        <td>Data <select name="person_type" class="small"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="any">any of above</option></select>: </td>
+        <td><input name="person_reversed" onKeyUp="doComplete(event, this, entererNames());" class="small" size=16>&nbsp;<a href="#" onClick="document.forms[0].person_reversed.value='%%enterer_reversed%%'">Me</a></td>
+        <td style="padding-left: 1em;">Research group or project: </td>
+        <td><select id="research_group" class="small"></select>
+      </tr>
+      <tr>
+        <td>Taxon name:</td><td><input name=taxon_name class="small"></td>
+        <td style="padding-left: 1em;">Country/continent: </td><td><input name=country class="small"></td>
+      </tr>
+      <tr>
+        <td>State/province: </td><td><input name=state class="small"></td>
+        <td style="padding-left: 1em;">County/parish: </td><td><input name=county class="small"></td>
+      </tr>
+      <tr>
+        <td>Oldest time interval (or age in Ma): </td><td colspan=3><select id="eml_max_interval" class="small"></select><input name="max_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
+      </tr>
+      <tr>
+        <td>Youngest time interval/Ma: </td><td colspan=3><select id="eml_min_interval" class="small"></select><input name="min_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
+      </tr>
+      <tr>
+        <td>Group, formation, or member:</td><td><input name="group_formation_member" class="small"></td>
+      </tr>
+      <tr>
+        <td>Paleoenvironment: </td><td colspan=3><select id="environment" class="small"></select></td>
+      </tr>
+      <tr>
+        <td>Lithology:</td><td colspan=3><select id="lithadj" class="small"></select><select id="lithology1" class="small"></select><br></td>
+      </tr>
+      <tr>
+        <td colspan=4 align="center">
+          <div class="small" style="width: 640px;">
+            <i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character or "%" for an open ended match.</i>
+          </div>
+        </td>
+      </tr>
+    </table>
 
-	</tr>
-	<tr>
-	  <td>Lithology adjective 1: <br><select id="lithadj"></select></td> 
-	  <td>Primary lithology:<br> <select id="lithology1"></select><br></td>
-	</tr>
-	<tr>
-<!-- OPTIONAL collection_search -->
-	  <td>Lithology adjective 2: <br><select id="lithadj2"></select></td> 
-	  <td>Secondary lithology: <br><select id="lithology2"></select><br></td>
-	
-	  </tr>
-<!-- END collection_search -->
-	</table>
-	</td></tr></table>
-	<hr>
+  </div>
+</div>
 
 
-	<table width="100%"><tr><td align=center>
-	<table border=0 cellpadding=2 cellspacing=2>
-	<tr>
-		<td colspan="4" align=center><b>Search and display options</b></td>
-	</tr>
-	<tr valign=top>
-		<td><input type=radio name=wild value=N></td>
-		<td>require exact matches</td>
-		<td><input type=radio name=wild value=Y checked></td>
-		<td>allow wildcards and partial string matches</td>
-	</tr>
-<!-- OPTIONAL collection_search -->
-<!--	<tr>
-		<td>Column 1:</td>
-		<td>collection number</td>
-	<td>Column 3:</td>
-		<td><select name="column1">
-<option>
-<option>authorizer_no
-<option>enterer
-<option>modifier
-<option>collection_no
-<option>collection_subset
-<option>reference_no
-<option>collection_name
-<option>collection_aka
-<option>country
-<option>state
-<option>county
-<option>latdeg
-<option>latmin
-<option>latsec
-<option>latdec
-<option>latdir
-<option>lngdeg
-<option>lngmin
-<option>lngsec
-<option>lngdec
-<option>lngdir
-<option>latlng_basis
-<option>altitude_value
-<option>altitude_unit
-<option>geogscale
-<option>geogcomments
-<option>emlperiod_max
-<option>emlperiod_min
-<option>period_max
-<option>emlepoch_max
-<option>emlepoch_min
-<option>epoch_max
-<option>epoch_min
-<option>emlintage_max
-<option>intage_max
-<option>emlintage_min
-<option>intage_min
-<option>emllocage_max
-<option>locage_max
-<option>emllocage_min
-<option>locage_min
-<option>zone
-<option>research_group
-<option>formation
-<option>geological_group
-<option>member
-<option>localsection
-<option>localbed
-<option>localorder
-<option>regionalsection
-<option>regionalbed
-<option>regionalorder
-<option>stratscale
-<option>stratcomments
-<option>lithdescript
-<option>lithadj
-<option>lithification
-<option>lithology1
-<option>fossilsfrom1
-<option>lithology2
-<option>fossilsfrom2
-<option>environment
-<option>tectonic_setting
-<option>pres_mode
-<option>geology_comments
-<option>collection_type
-<option>collection_coverage
-<option>coll_meth
-<option>collection_size
-<option>collection_size_unit
-<option>collection_comments
-<option>taxonomy_comments
-<option>created
-<option>modified
-<option>release_date
-<option>access_level
-<option>lithification2
-<option>lithadj2
-<option>period_min
-<option>otherenvironment
-<option>rock_censused_unit
-<option>rock_censused
-<option>spatial_resolution
-<option>temporal_resolution
-<option>feed_pred_traces
-<option>encrustation
-<option>bioerosion
-<option>fragmentation
-<option>sorting
-<option>disassoc_minor_elems
-<option>disassoc_maj_elems
-<option>art_whole_bodies
-<option>disart_assoc_maj_elems
-<option>seq_strat
-<option>lagerstatten
-<option>concentration
-<option>orientation
-<option>preservation_quality
-<option>abund_in_sediment
-<option>sieve_size_min
-<option>sieve_size_max
-<option>assembl_comps
-<option>taphonomy_comments
-</select>
-		</td>
-	</tr>
-	<tr>
-		<td>Column 2:</td>
-		<td>collection name</td>
-		<td>Column 4:</td>
-		<td><select name="column2">
-<option>
-<option>authorizer_no
-<option>enterer_no
-<option>modifier_no
-<option>collection_no
-<option>collection_subset
-<option>reference_no
-<option>collection_name
-<option>collection_aka
-<option>country
-<option>state
-<option>county
-<option>latdeg
-<option>latmin
-<option>latsec
-<option>latdec
-<option>latdir
-<option>lngdeg
-<option>lngmin
-<option>lngsec
-<option>lngdec
-<option>lngdir
-<option>latlng_basis
-<option>altitude_value
-<option>altitude_unit
-<option>geogscale
-<option>geogcomments
-<option>emlperiod_max
-<option>emlperiod_min
-<option>period_max
-<option>emlepoch_max
-<option>emlepoch_min
-<option>epoch_max
-<option>epoch_min
-<option>emlintage_max
-<option>intage_max
-<option>emlintage_min
-<option>intage_min
-<option>emllocage_max
-<option>locage_max
-<option>emllocage_min
-<option>locage_min
-<option>zone
-<option>research_group
-<option>formation
-<option>geological_group
-<option>member
-<option>localsection
-<option>localbed
-<option>localorder
-<option>regionalsection
-<option>regionalbed
-<option>regionalorder
-<option>stratscale
-<option>stratcomments
-<option>lithdescript
-<option>lithadj
-<option>lithification
-<option>lithology1
-<option>fossilsfrom1
-<option>lithology2
-<option>fossilsfrom2
-<option>environment
-<option>tectonic_setting
-<option>pres_mode
-<option>geology_comments
-<option>collection_type
-<option>collection_coverage
-<option>coll_meth
-<option>collection_size
-<option>collection_size_unit
-<option>collection_comments
-<option>taxonomy_comments
-<option>created
-<option>modified
-<option>release_date
-<option>access_level
-<option>lithification2
-<option>lithadj2
-<option>period_min
-<option>otherenvironment
-<option>rock_censused_unit
-<option>rock_censused
-<option>spatial_resolution
-<option>temporal_resolution
-<option>feed_pred_traces
-<option>encrustation
-<option>bioerosion
-<option>fragmentation
-<option>sorting
-<option>disassoc_minor_elems
-<option>disassoc_maj_elems
-<option>art_whole_bodies
-<option>disart_assoc_maj_elems
-<option>seq_strat
-<option>lagerstatten
-<option>concentration
-<option>orientation
-<option>preservation_quality
-<option>abund_in_sediment
-<option>sieve_size_min
-<option>sieve_size_max
-<option>assembl_comps
-<option>taphonomy_comments
-</select>
-		</td>
-	</tr>
--->
-	<tr>
-	 	<td>Sort column:</td>
-		<td><select name="sortby">
-<option>
-<option>authorizer_no
-<option>enterer_no
-<option>modifier_no
-<option selected>collection_no
-<option>collection_subset
-<option>reference_no
-<option>collection_name
-<option>collection_aka
-<option>country
-<option>state
-<option>county
-<option>latdeg
-<option>latmin
-<option>latsec
-<option>latdec
-<option>latdir
-<option>lngdeg
-<option>lngmin
-<option>lngsec
-<option>lngdec
-<option>lngdir
-<option>latlng_basis
-<option>altitude_value
-<option>altitude_unit
-<option>geogscale
-<option>geogcomments
-<option>emlperiod_max
-<option>emlperiod_min
-<option>period_max
-<option>emlepoch_max
-<option>emlepoch_min
-<option>epoch_max
-<option>epoch_min
-<option>emlintage_max
-<option>intage_max
-<option>emlintage_min
-<option>intage_min
-<option>emllocage_max
-<option>locage_max
-<option>emllocage_min
-<option>locage_min
-<option>zone
-<option>research_group
-<option>formation
-<option>geological_group
-<option>member
-<option>localsection
-<option>localbed
-<option>localorder
-<option>regionalsection
-<option>regionalbed
-<option>regionalorder
-<option>stratscale
-<option>stratcomments
-<option>lithdescript
-<option>lithadj
-<option>lithification
-<option>lithology1
-<option>fossilsfrom1
-<option>lithology2
-<option>fossilsfrom2
-<option>environment
-<option>tectonic_setting
-<option>pres_mode
-<option>geology_comments
-<option>collection_type
-<option>collection_coverage
-<option>coll_meth
-<option>collection_size
-<option>collection_size_unit
-<option>collection_comments
-<option>taxonomy_comments
-<option>created
-<option>modified
-<option>release_date
-<option>access_level
-<option>lithification2
-<option>lithadj2
-<option>period_min
-<option>otherenvironment
-<option>rock_censused_unit
-<option>rock_censused
-<option>spatial_resolution
-<option>temporal_resolution
-<option>feed_pred_traces
-<option>encrustation
-<option>bioerosion
-<option>fragmentation
-<option>sorting
-<option>disassoc_minor_elems
-<option>disassoc_maj_elems
-<option>art_whole_bodies
-<option>disart_assoc_maj_elems
-<option>seq_strat
-<option>lagerstatten
-<option>concentration
-<option>orientation
-<option>preservation_quality
-<option>abund_in_sediment
-<option>sieve_size_min
-<option>sieve_size_max
-<option>assembl_comps
-<option>taphonomy_comments
-</select></td>
-	<td>Sort order:</td>
-	<td><select name=sortorder size=1><option value="asc">ascending<option value="desc">descending</select></td>
-</tr>
-<!-- END collection_search -->
-<tr>
-	<td colspan="4">Number of matching records shown: <input name=limit size=10 value=30>
-</tr>
-</table>
+<div class="displayPanel" align=left>
+  <span class="displayPanelHeader"><b>Search and display options</b></span>
+  <div class="displayPanelContent small">
+
+    <table border=0 cellpadding=2 cellspacing=2>
+      <tr valign=top>
+        <td nowrap>Allow wildcards:
+          <select name="wild" class="small">
+            <option value="Y">yes, allow wildcards</option>
+            <option value="N">no, require exact matches</option>
+          </select>
+        </td>
+        <td nowrap style="padding-left: 2em;">Sort by:
+          <select name="sortby" class="small">
+            <option value="collection_no">collection number</option>
+            <option value="collection_name">collection name</option>
+            <option value="interval_name">time interval name</option>
+            <option value="geography">country, state</option>
+          </select>
+          <select name=sortorder class="small"><option value="asc">ascending<option value="desc">descending</select>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2">Number of records per page: <input name=limit size=10 value=30 class="small">
+      </tr>
+    </table>
+
+  </div>
+</div>
 
 <p><input type="submit" value="Search collections"></p>
 
-</td></tr></table>
-
 </form>
+</div>

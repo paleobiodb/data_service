@@ -51,11 +51,16 @@ function doCheckFieldsBasicInfo() {
         for(i=0; i<radio_vals.length; i++){
             for(j=0; j<checked_vals.length; j++){
                 if(radio_vals[i] == checked_vals[j] && frm.secondary_reference_no[i].checked && frm.delete_ref[j].checked){
-                    bad_info += "\n    -Primary reference cannot be deleted";
+                    bad_info += "\n    - Primary reference cannot be deleted";
                 }
             }
         }
     } // if secondary_reference_no
+
+    var IGSNre = /^[a-zA-Z]{3}[0-9a-zA-Z]{6}$/i;
+    if (frm.igsn.value != '' && IGSNre.test(frm.igsn.value) == false) {
+        bad_info += "\n    - IGSN doesn't appear to be valid";
+    }
 
     if ( frm.collection_type.selectedIndex == 0) {
         bad_info += "\n    - Reason for describing collection (required)";
@@ -344,6 +349,14 @@ function doCheckFieldsTaphonomy() {
       </td>
       <td>
         <textarea id="collection_aka" rows=2 wrap=virtual cols=50></textarea>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        IGSN (<a target="_BLANK" href="http://www.geosamples.org">SESAR</a>) number:
+      </td>
+      <td>
+        <input id="igsn" size=10 maxlength=9>
       </td>
     </tr>
     <tr>
