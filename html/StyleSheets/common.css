@@ -88,37 +88,15 @@ H6 {font-size: .9em;}
 	color: white;
 }
 
-/* puts a nice border around tables */
-table.niceBorder {
-	border-style: solid;  /*solid, dashed, dotted, grooved */
-    border-color: #C8C8C8;
-    border-width: 4px 4px 4px 4px;
-	
-	padding: 1em 1em 1em 1em;
-}
-
 /*	Meant to be a main section, for example, in an entry form. 
 	Used to help divide the page and make it easier to use.*/
-div.mainSection {
+.mainSection {
     padding: 1em 1em 1em 1em;
-    
-	/*background-color: RGB(240,240,240);*/
-    
 	margin: 1em 1em 1em 1em;
-	
-    border-style: solid;  /*solid, dashed, dotted, grooved */
+    border-style: solid;
     border-color: #C8C8C8;
-    border-left-width: 4px;
-    border-right-width: 4px;
-    border-bottom-width: 4px;
-    border-top-width: 4px;
+    border-width: 4px 4px 4px 4px;
 }
-
-/* nothing here yet */
-div.subSection {
-	
-}
-
 
 /* Usually used for a single line of text which needs a bit more emphasis to stand out */
 div.emphasized {
@@ -137,6 +115,7 @@ div.emphasized {
 
 
 /*	used for titles at top of forms, ie, "Collection Search Form" */
+/*  deprecated, use H2 -- PS */
 .title,.title_small_overhead {
 	padding-top: 0.2em;
 	padding-bottom: 0.6em;
@@ -147,6 +126,7 @@ div.emphasized {
 
 /*	most titles have a smaller details section after them,
 	ie, "Fill in any of the following fields." */ 
+/*  deprecated, use H4 -- PS */
 .titleDetails {
 	padding-top: 0em;
 	padding-bottom: 1em;
@@ -174,7 +154,7 @@ div.emphasized {
 	text-align: center;
 }
 
-DIV.errorTitle {
+div.errorTitle {
 	color:red;
 	font-weight: bold;
 	font-size: 120%;
@@ -182,7 +162,7 @@ DIV.errorTitle {
 	margin: 0em 0em 1em 0em;
 }
 
-DIV.errorMessage {
+div.errorMessage {
 	border-color: #404040;
 	border-width: 2px;
 	border-style: solid;
@@ -392,58 +372,39 @@ span.nonEditable {
 	text-decoration: none;
 }
 
-.options_box {      
-    border: 1px solid black;    
-    /*background-color: #EEEEEE;*/      
-    background-image: url(/public/PDbg.gif);    
-    margin-top: 20px;   
-    padding-top: .0em;      
-    padding-left: .3em;     
-    padding-right: .3em;    
-    padding-bottom: .3em;   
-}   
-     
-.options_box_header{    
-    position: relative;     
-    top:-.6em;      
-    left:2em;   
-    padding-left: 1em;      
-    padding-right: 1em;     
-    /*border: 1px solid black;*/    
-    background-image: url(/public/PDbg.gif);    
-    white-space: nowrap;    
-}
 
 .displayPanel {      
-    /*border: 1px solid lightgrey;  */  
+    border: 1px solid #C8C8C8; 
     /*background-color: #EEEEEE;*/      
     background-image: url(/public/PDbg.gif);    
     /*margin-top: 20px;   */
-    padding-top: .3em;      
-    padding-left: .3em;     
-    padding-right: .3em;    
-    padding-bottom: .3em;   
+    padding-top: 0.0em;
+    padding-left: 0.3em;     
+    padding-right: 0.3em;    
+    padding-bottom: 0.3em;   
+    margin-bottom: 1em;
 }   
      
 .displayPanelHeader{    
-    /*position: relative; */
+    position: relative; 
     font-size: 1em;
-    top: 1em;      
-/*    padding-left: 1em;      
-    padding-right: 1em;     */
+    top: -0.6em;      
+    padding-left: 0.5em;      
+    padding-right: 0.5em;     
     /*border: 1px solid black;*/    
-    border-bottom: 1px solid lightgrey;
-    padding-bottom: .3em; 
-/*    background-image: url(/public/PDbg.gif);    */
+/*    border-bottom: 1px solid lightgrey;*/
+    /*padding-bottom: .3em; */
+    background-image: url(/public/PDbg.gif);    
     white-space: nowrap;    
 }
 
 .displayPanelContent {
-/*    background-image: url(/public/PDbg.gif);    */
+    background-image: url(/public/PDbg.gif);    
 }
 
 .displayPanelText tbody {
     font-size: .9em;
+    background-image: url(/public/PDbg.gif);    
 }
 
 #dropDown, #dropDown ul {
@@ -492,6 +453,7 @@ span.nonEditable {
     border-bottom: 1px #6F89B3 solid;
     position: absolute;
     padding: 0.15em;
+    z-index: 999;
     /*width: 20em;*/
 /*    left: -999em;*/
 /*    top: 1em;*/
