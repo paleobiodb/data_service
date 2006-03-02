@@ -1,11 +1,8 @@
 package PBDBUtil;
+use strict;
 
-use Data::Dumper;
-
-### NOTE: SET UP EXPORTER AND EXPORT SUB NAMES.
-
-# This package contains a collection of methods that are universally 
-# useful to the pbdb codebase.
+# This contains various miscellaneous functions that don't belong anywhere
+# else or haven't been moved out yet
 my $DEBUG = 0;
 
 ## debug($level, $message)
@@ -19,7 +16,7 @@ sub debug{
     my $message = shift;
 
     if(($level <= $DEBUG) && $message){ 
-	print "<font color='green'>$message</font><BR>\n";
+	    print "<font color='green'>$message</font><BR>\n";
     }
 
     return $DEBUG;
@@ -223,9 +220,9 @@ sub setSecondaryRef{
 
 	# If we got this far, the ref is not associated with the collection,
 	# so add it to the secondary_refs table.
-	$sql = "INSERT INTO secondary_refs (collection_no, reference_no) ".
+	my $sql = "INSERT INTO secondary_refs (collection_no, reference_no) ".
 		   "VALUES ($collection_no, $reference_no)";	
-    $sth = $dbh->prepare($sql);
+    my $sth = $dbh->prepare($sql);
     if($sth->execute() != 1){
 		print "<font color=\"FF0000\">Failed to create secondary reference ".
 			  "for collection $collection_no and reference $reference_no.<br>".
@@ -379,10 +376,10 @@ sub isRefSecondary{
 	my $reference_no = shift;
 
 	# Next, see if the ref is listed as a secondary
-	$sql = "SELECT reference_no from secondary_refs ".
+	my $sql = "SELECT reference_no from secondary_refs ".
 			  "WHERE collection_no=$collection_no";
 
-    $sth = $dbh->prepare($sql);
+    my $sth = $dbh->prepare($sql);
     $sth->execute();
     my @results = @{$sth->fetchall_arrayref({})};
     $sth->finish();
@@ -507,7 +504,7 @@ sub taxonomic_search{
     if ($taxon_name_or_no =~ /^\d+$/) {
         $taxon_no = $taxon_name_or_no;
     } else {
-        @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon_name_or_no);
+        my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon_name_or_no);
         if (scalar(@taxon_nos) == 1) {
             $taxon_no = $taxon_nos[0];
         }       
@@ -555,7 +552,7 @@ sub getMostRecentReIDforOcc{
 	}
 }
 
-sub authorAndPubyrFromTaxonNo{
+sub authorAndPubyrFromTaxonNo {
 	my $dbt = shift;
 	my $taxon_no = shift;
 	my %return_vals = ();
@@ -567,9 +564,9 @@ sub authorAndPubyrFromTaxonNo{
     if($auth_rec[0]->{ref_is_authority} =~ /YES/i){
         PBDBUtil::debug(2,"author and year from refs");
         if($auth_rec[0]->{reference_no}){
-			$sql = "SELECT author1last, author2last, otherauthors, pubyr FROM refs ".
+			$sql = "SELECT reference_no, author1last, author2last, otherauthors, pubyr FROM refs ".
 				   "WHERE reference_no=".$auth_rec[0]->{reference_no};
-			@results = @{$dbt->getData($sql)};
+			my @results = @{$dbt->getData($sql)};
 			$return_vals{author1last} = $results[0]->{author1last};
 			if ( $results[0]->{otherauthors} )	{
 				$return_vals{author1last} .= " et al.";
@@ -578,19 +575,21 @@ sub authorAndPubyrFromTaxonNo{
 			}
 			$return_vals{pubyr} = $results[0]->{pubyr};
         }
+        $return_vals{'ref_is_authority'} = 'YES';
     }
     # If ref_is_authority is not set, use the authorname and pubyr in this
     # record.
     elsif($auth_rec[0]->{author1last} && $auth_rec[0]->{pubyr}){
         PBDBUtil::debug(2,"author and year from authorities");
         $return_vals{author1last} = $auth_rec[0]->{author1last};
-	if ( $auth_rec[0]->{otherauthors} )	{
-		$return_vals{author1last} .= " et al.";
-	} elsif ( $auth_rec[0]->{author2last} )	{
-		$return_vals{author1last} .= " and " . $auth_rec[0]->{author2last};
-	}
-	$return_vals{pubyr} = $auth_rec[0]->{pubyr};
+        if ( $auth_rec[0]->{otherauthors} )	{
+            $return_vals{author1last} .= " et al.";
+        } elsif ( $auth_rec[0]->{author2last} )	{
+            $return_vals{author1last} .= " and " . $auth_rec[0]->{author2last};
+        }
+        $return_vals{pubyr} = $auth_rec[0]->{pubyr};
     }
+    $return_vals{'reference_no'} = $auth_rec[0]->{'reference_no'};
 	# This could be empty, so it's up to the caller to test the return vals.
 	return \%return_vals;
 }
@@ -680,10 +679,11 @@ sub getChildren {
     my $return_type = (shift || "sort_hierarchical");
 
     # We need to resolve it to be a taxon_no or we're done
+    my $taxon_no;
     if ($taxon_name_or_no =~ /^\d+$/) {
         $taxon_no = $taxon_name_or_no;
     } else {
-        @taxon_nos = TaxonInfo::getTaxonNos($taxon_no);
+        my @taxon_nos = TaxonInfo::getTaxonNos($taxon_no);
         if (scalar(@taxon_nos) == 1) {
             $taxon_no = $taxon_name_or_no;
         }    
