@@ -704,7 +704,7 @@ sub doCollections{
     my %options = ();
     $options{'permission_type'} = 'read';
     $options{'calling_script'} = "TaxonInfo";
-    $options{'taxon_list'} = $in_list if (@$in_list);
+    $options{'taxon_list'} = $in_list if ($in_list && @$in_list);
     # These fields passed from strata module,etc
     foreach ('group_formation_member','formation','geological_group','member','taxon_name') {
         if (defined($q->param($_))) {
@@ -1194,49 +1194,50 @@ sub displayRelatedTaxa {
         }
     }
 
-    my $taxon_records = [];
     my @child_taxa_links;
     # This section generates links for children if we have a taxon_no (in authorities table)
-    my $tree = TaxaCache::getChildren($dbt,$focal_taxon_no,'tree',1) if ($focal_taxon_no);
-    my $taxon_no=$tree->{'taxon_no'};
-    $taxon_records = $tree->{'children'};
-    if (@{$taxon_records}) {
-        my $sql = "SELECT type_taxon_no FROM authorities WHERE taxon_no=$focal_taxon_no";
-        my $type_taxon_no = ${$dbt->getData($sql)}[0]->{'type_taxon_no'};
-        foreach my $record (@{$taxon_records}) {
-            my @syn_links;                                                         
-            my @synonyms = @{$record->{'synonyms'}};
-            push @syn_links, $_->{'taxon_name'} for @synonyms;
-            my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$record->{taxon_no}">$record->{taxon_name}|;
-            $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
-            $link .= "</a>";
-            if ($type_taxon_no && $type_taxon_no == $record->{'taxon_no'}) {
-                $link .= " <small>(type $record->{taxon_rank})</small>";
-            }
-            push @child_taxa_links, $link;
-        }
-    }    
-
-    # Get sister taxa as well
-    # PS 01/20/2004
-    $taxon_records = [];
-    my @sister_taxa_links;
-    # This section generates links for sister if we have a taxon_no (in authorities table)
-    $tree = TaxaCache::getChildren($dbt,$parent_taxon_no,'tree',1) if ($parent_taxon_no);
-    $taxon_records = $tree->{'children'};
-    if (@{$taxon_records}) {
-        foreach my $record (@{$taxon_records}) {
-            next if ($record->{'taxon_no'} == $taxon_no);
-            if ($focal_taxon_rank ne $record->{'taxon_rank'}) {
-                PBDBUtil::debug(1,"rank mismatch $focal_taxon_rank -- $record->{taxon_rank} for sister $record->{taxon_name}");
-            } else {
-                my @syn_links;
+    if ($focal_taxon_no) {
+        my $tree = TaxaCache::getChildren($dbt,$focal_taxon_no,'tree',1);
+        my $taxon_records = $tree->{'children'};
+        if (@{$taxon_records}) {
+            my $sql = "SELECT type_taxon_no FROM authorities WHERE taxon_no=$focal_taxon_no";
+            my $type_taxon_no = ${$dbt->getData($sql)}[0]->{'type_taxon_no'};
+            foreach my $record (@{$taxon_records}) {
+                my @syn_links;                                                         
                 my @synonyms = @{$record->{'synonyms'}};
                 push @syn_links, $_->{'taxon_name'} for @synonyms;
                 my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$record->{taxon_no}">$record->{taxon_name}|;
                 $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
                 $link .= "</a>";
-                push @sister_taxa_links, $link;
+                if ($type_taxon_no && $type_taxon_no == $record->{'taxon_no'}) {
+                    $link .= " <small>(type $record->{taxon_rank})</small>";
+                }
+                push @child_taxa_links, $link;
+            }
+        }
+    }
+
+    # Get sister taxa as well
+    # PS 01/20/2004
+    my @sister_taxa_links;
+    # This section generates links for sister if we have a taxon_no (in authorities table)
+    if ($parent_taxon_no) {
+        my $tree = TaxaCache::getChildren($dbt,$parent_taxon_no,'tree',1);
+        my $taxon_records = $tree->{'children'};
+        if (@{$taxon_records}) {
+            foreach my $record (@{$taxon_records}) {
+                next if ($record->{'taxon_no'} == $focal_taxon_no);
+                if ($focal_taxon_rank ne $record->{'taxon_rank'}) {
+                    PBDBUtil::debug(1,"rank mismatch $focal_taxon_rank -- $record->{taxon_rank} for sister $record->{taxon_name}");
+                } else {
+                    my @syn_links;
+                    my @synonyms = @{$record->{'synonyms'}};
+                    push @syn_links, $_->{'taxon_name'} for @synonyms;
+                    my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$record->{taxon_no}">$record->{taxon_name}|;
+                    $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
+                    $link .= "</a>";
+                    push @sister_taxa_links, $link;
+                }
             }
         }
     }
