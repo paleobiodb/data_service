@@ -103,6 +103,8 @@ sub displaySearchSectionResults{
     $options{'permission_type'} = 'read';
     $options{'limit'} = 10000000;
     $options{'calling_script'} = 'Confidence';
+    $options{'lithologies'} = $options{'lithology1'}; delete $options{'lithology1'};
+    $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'}; 
     ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
     @dataRows = sort {$a->{regionalsection} cmp $b->{regionalsection} ||
                       $a->{localsection} cmp $b->{localsection}} @$dataRows;
