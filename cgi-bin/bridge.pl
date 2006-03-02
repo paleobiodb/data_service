@@ -1942,6 +1942,8 @@ sub displayCollResults {
         # Even if we have a match in the authorities table, still match against the bare occurrences/reids  table
         $options{'include_occurrences'} = 1;
         $options{'permission_type'} = $permission_type;
+        $options{'lithologies'} = $options{'lithology1'}; delete $options{'lithology1'};
+        $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'};
         if ($q->param("taxon_list")) {
             my @in_list = split(/,/,$q->param('taxon_list'));
             $options{'taxon_list'} = \@in_list if (@in_list);
@@ -2376,11 +2378,6 @@ sub processCollectionsSearch {
         }
     }
 
-    # Only necessary if we're doing a union
-    if ($options{'sortby'}) {
-        push @from, "c.$options{sortby}";
-    }
-
 	# Handle wildcards
 	my $comparator = "=";
 	my $wildcardToken = "";
@@ -2566,31 +2563,48 @@ IS NULL))";
 		}
 	}
 
-    # Handle period
+    # Handle period - legacy
 	if ($options{'period'}) {
 		my $periodName = $dbh->quote($wildcardToken . $options{'period'} . $wildcardToken);
 		push @where, "(period_min LIKE " . $periodName . " OR period_max LIKE " . $periodName . ")";
 	}
 	
-	# Handle intage
+	# Handle intage - legacy
 	if ($options{'intage'}) {
 		my $intageName = $dbh->quote($wildcardToken . $options{'intage'} . $wildcardToken);
 		push @where, "(intage_min LIKE " . $intageName . " OR intage_max LIKE " . $intageName . ")";
 	}
 	
-	# Handle locage
+	# Handle locage - legacy
 	if ($options{'locage'}) {
 		my $locageName = $dbh->quote($wildcardToken . $options{'locage'} . $wildcardToken);
 		push @where, "(locage_min LIKE " . $locageName . " OR locage_max LIKE " . $locageName . ")";
 	}
 	
-	# Handle epoch
+	# Handle epoch - legacy
 	if ($options{'epoch'}) {
 		my $epochName = $dbh->quote($wildcardToken . $options{'epoch'} . $wildcardToken);
 		push @where, "(epoch_min LIKE " . $epochName . " OR epoch_max LIKE " . $epochName . ")";
 	}
 
-    # Handle authorizer/enterer/modifier
+    # Handle authorizer/enterer/modifier - mostly legacy except for person
+    if ($options{'person_reversed'}) {
+        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($options{'person_reversed'});
+        my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};
+        if (!$person_no) {
+            push @errors, "$options{peson_reversed} is not a valid database member. Format like 'Sepkoski, J.'";
+        } else {
+            if ($options{'person_type'} eq 'any') {
+                push @where, "(c.authorizer_no=$person_no OR c.enterer_no=$person_no OR c.modifier_no=$person_no)";
+            } elsif ($options{'person_type'} eq 'modifier') {
+                $options{'modifier_no'} = $person_no;
+            } elsif ($options{'person_type'} eq 'enterer') {
+                $options{'enterer_no'} = $person_no;
+            } else { #default authorizer
+                $options{'authorizer_no'} = $person_no;
+            }
+        }
+    }
     if ($options{'authorizer_reversed'}) {
         my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($options{'authorizer_reversed'});
         $options{'authorizer_no'} = ${$dbt->getData($sql)}[0]->{'person_no'};
@@ -2652,8 +2666,12 @@ IS NULL))";
 	
 	# Handle collection name (must also search collection_aka field) JA 7.3.02
 	if ( $options{'collection_names'} ) {
-		my $val = $dbh->quote($wildcardToken . $options{'collection_names'} . $wildcardToken);
-		push(@where, "(collection_name LIKE $val OR collection_aka LIKE $val)");
+        if ($options{'collection_names'} =~ /^\d+$/) {
+            $options{'collection_no'}=$options{'collection_names'};
+        } else {
+		    my $val = $dbh->quote($wildcardToken . $options{'collection_names'} . $wildcardToken);
+		    push @where, "(collection_name LIKE $val OR collection_aka LIKE $val)";
+        }
 	}
 	
     # Handle localbed, regionalbed
@@ -2725,6 +2743,10 @@ IS NULL))";
         my $val = $dbh->quote($options{"lithologies"});
 		push @where, "(c.lithology1=$val OR c.lithology2=$val)"; 
 	}
+	if ($options{"lithadjs"}) {
+        my $val = $dbh->quote($options{"lithadjs"});
+		push @where, "(FIND_IN_SET($val,c.lithadj) OR FIND_IN_SET($val,c.lithadj2))"; 
+    }
 
     # This can be country or continent. If its country just treat it like normal, else
     # do a lookup of all the countries in the continent
@@ -2759,8 +2781,10 @@ IS NULL))";
     
 	# Compose the WHERE clause
 	# loop through all of the possible fields checking if each one has a value in it
+    my %all_fields = ();
     while (my $row = $sth->fetchrow_hashref()) {
         my $field = $row->{'COLUMN_NAME'};
+        $all_fields{$field} = 1;
         my $type = $row->{'TYPE_NAME'};
         my $is_nullable = ($row->{'IS_NULLABLE'} eq 'YES') ? 1 : 0;
         my $is_primary =  $row->{'mysql_is_pri_key'};
@@ -2830,19 +2854,35 @@ IS NULL))";
         push @groupby,"c.collection_no";
     }
 
+	# Handle sort order
+
+    # Only necessary if we're doing a union
+    my $sortby = "";
+    if ($options{'sortby'}) {
+        if ($all_fields{$options{'sortby'}}) {
+            $sortby .= "c.$options{sortby}";
+        } elsif ($options{'sortby'} eq 'interval_name') {
+            push @left_joins, "LEFT JOIN intervals si ON si.interval_no=c.max_interval_no";
+            $sortby .= "si.interval_name";
+        } elsif ($options{'sortby'} eq 'geography') {
+            $sortby .= "IF(c.state IS NOT NULL AND c.state != '',c.state,c.country)";
+        }
+
+        if ($sortby) {
+            if ($options{'sortorder'} =~ /desc/i) {
+                $sortby.= " DESC";
+            } else {
+                $sortby.= " ASC";
+            }
+        }
+    }
+
     $sql = "SELECT ".join(",",@from).
            " FROM " .join(",",@tables)." ".join (" ",@left_joins).
            " WHERE ".join(" AND ",@where);
     $sql .= " GROUP BY ".join(",",@groupby) if (@groupby);  
     $sql .= " HAVING ".join(",",@having) if (@having);  
-
-	# Handle sort order
-    if ($options{'sortby'}) {
-        my $sortBy = $options{'sortby'};
-        $sortBy =~ s/[^a-zA-Z0-9_]//g;
-	    $sortBy .= " DESC" if ($options{'sortorder'} =~ /desc/i);
-        $sql .= " ORDER BY $sortBy";
-    }
+    $sql .= " ORDER BY ".$sortby if ($sortby);
     dbg("Collections sql: $sql");
 
     $sth = $dbt->dbh->prepare($sql);
@@ -6303,7 +6343,7 @@ sub displayReIDCollsAndOccsSearchForm
 
 	print stdIncludes( "std_page_top" );
   
-	print "<h4>You may now reidentify either a set of occurrences matching a genus or higher taxon name, or all the occurrences in one collection.</h4>";
+	print "<div align=center style=\"width: 640px\"><h4>You may now reidentify either a set of occurrences matching a genus or higher taxon name, or all the occurrences in one collection.</h4></div>";
   
 	# Display the collection search form
 	%pref = getPreferences($s->get('enterer_no'));
