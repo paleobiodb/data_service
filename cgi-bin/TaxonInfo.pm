@@ -2125,7 +2125,7 @@ sub getSeniorSynonym {
     # Limit this to 10 iterations, in case we a have some weird loop
     for(my $i=0;$i<10;$i++) {
         my $parent = getMostRecentParentOpinion($dbt,$taxon_no,0,0,$restrict_to_reference_no);
-        if ($seen{$parent->{'child_no'}}) {
+        if ($parent && $seen{$parent->{'child_no'}}) {
             # If we have a loop, disambiguate using last entered
             my @rows = sort {$b->{'opinion_no'} <=> $a->{'opinion_no'}} values %seen;
             #my @rows = sort {$b->{'reliability_index'} <=> $a->{'reliability_index'} || 
