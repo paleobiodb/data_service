@@ -1,0 +1,9 @@
+# based on anymouse.uchicago.edu robots.txt file
+
+User-agent: *
+Disallow: /paleodb/data/
+Disallow: /public/data/
+Disallow: /public/maps/
+Disallow: /public/confidence/
+Disallow: /nofollow/
+
