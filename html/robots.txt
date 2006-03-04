@@ -6,4 +6,6 @@ Disallow: /public/data/
 Disallow: /public/maps/
 Disallow: /public/confidence/
 Disallow: /nofollow/
+Disallow: /cgi-bin/bridge.pl?action=displayDownloadTaxonomy
+Disallow: /cgi-bin/bridge.pl?action=displayMapOfCollection
 
