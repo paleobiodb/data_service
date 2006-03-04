@@ -985,6 +985,11 @@ sub findBestBothScale{
     my $dbt = shift;
     my $max_interval_no = shift;
     my $min_interval_no = shift;
+    my $bestbothscale;
+    my $max_pubyr = -1;
+
+    return ($bestbothscale) if ($max_interval_no !~ /^\d+$/ || $min_interval_no !~ /^\d+$/);
+    
     # find the scale no for the max interval
 	my $sql = "SELECT scale_no FROM correlations WHERE interval_no=$max_interval_no";
 	my @max_scales = map {$_->{'scale_no'}} @{$dbt->getData($sql)};
@@ -994,8 +999,6 @@ sub findBestBothScale{
 	my @min_scales = map {$_->{'scale_no'}} @{$dbt->getData($sql)};
 
     # if the scale's pubyr is most recent, record the scale number
-    my $bestbothscale;
-    my $max_pubyr = -1;
 	for my $max_scale (@max_scales) {
 	    for my $min_scale (@min_scales) {
             if ($min_scale == $max_scale && $pubyr{$max_scale} > $max_pubyr) {
