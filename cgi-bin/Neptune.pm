@@ -60,22 +60,8 @@ sub setupOutput {
         'binary'      => 1
     });
 
-    my $authorizer = $s->get('authorizer');
-    my ($authinit,$authlast) = split / /,$authorizer;
-    my @temp = split //,$authinit;
-    if ( ! $temp[0] || $q->param('yourname') ne "" )    {
-        # first try to use yourname JA 17.7.05
-        if ( $q->param('yourname') ne "" )  {
-            $temp[0] = $q->param('yourname');
-            $temp[0] =~ s/ //g;
-            $temp[0] =~ s/\.//g;
-            $temp[0] =~ tr/[A-Z]/[a-z]/;
-            $authlast = "";
-        } else  {
-            $temp[0] = "unknown";
-        }
-    } 
-    my $filename = $temp[0].$authlast;
+    my $name = ($s->get("enterer")) ? $s->get("enterer") : $q->param("yourname");
+    my $filename = PBDBUtil::getFilename($name); 
 
     my $summary_file = "$OUT_FILE_DIR/$filename-neptune_summary.$ext";
     my $results_file = "$OUT_FILE_DIR/$filename-pacman.$ext";
