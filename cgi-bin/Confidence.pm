@@ -1446,14 +1446,13 @@ sub printResultTable {
     $tableColHeader = $_[3];
     @table = @{$_[4]};
     $transpose = ($_[5] || 0);
-
     
 
     # Print it out to file
     @tableRowHeader = @$tableRowHeader;
     @tableColHeader = @$tableColHeader;
     my $csv = Text::CSV_XS->new();
-    my $file = "$ENV{BRIDGE_HTML_DIR}/public/data/confidence$tableNo.csv";
+    my $file = "$ENV{BRIDGE_HTML_DIR}/public/confidence/confidence$tableNo.csv";
     open FILE_H,">$file";
     $csv->combine(($tableName,@tableColHeader));
     print FILE_H $csv->string(),"\n";
@@ -1498,7 +1497,7 @@ sub printResultTable {
         print "</TR>";
     }
     print "</TABLE>";
-    print "<a href=\"/public/data/confidence$tableNo.csv\">Download confidence data</a>";
+    print "<a href=\"/public/confidence/confidence$tableNo.csv\">Download confidence data</a>";
     print "</TD></TR></TABLE>";
 }
 
