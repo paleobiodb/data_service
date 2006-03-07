@@ -874,21 +874,11 @@ sub getKingdomMap {
 sub makeDataFileDir {
     my $s = shift;
 
-    #  0    1    2     3     4    5     6     7     8
-    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =localtime(time); 
-    my $date = sprintf("%d%02d%02d",($year+1900),$mon,$mday);
+    my $name = ($s->get("enterer")) ? $s->get("enterer") : "";
+    my $filename = PBDBUtil::getFilename($name,1); 
+    my $filesystem_dir = $ENV{'DOWNLOAD_OUTFILE_DIR'}."/".$filename;
+    my $http_dir = "/paleodb/data/".$filename;
 
-    my $filesystem_dir;
-    my $http_dir;
-    if ($s->isDBMember()) {
-        $filesystem_dir = $ENV{'DOWNLOAD_OUTFILE_DIR'}."/".$s->{'enterer'};
-        $http_dir = "/paleodb/data/".$s->{'enterer'};
-    } else {
-        $filesystem_dir = $ENV{'DOWNLOAD_OUTFILE_DIR'}."/guest".$date."_".$$;
-        $http_dir = "/paleodb/data/guest".$date."_".$$;
-    }
-    $filesystem_dir =~ s/[^a-zA-Z0-9_\/]//g;
-    $http_dir =~ s/[^a-zA-Z0-9_\/]//g;
     umask '022';
     main::dbg("File dir is $filesystem_dir");
     if (! -e $filesystem_dir) {
