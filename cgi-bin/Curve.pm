@@ -243,35 +243,19 @@ sub assignGenera	{
 	my $self = shift;
 
 	# BEGINNING of input file parsing routine
-	# WARNING: we're assuming the user went with the defaults and
-	#  downloaded a comma-delimited file
-
-	my $authorizer = $s->get('authorizer');
-	my ($authinit,$authlast) = split / /,$authorizer;
-	my @temp = split //,$authinit;
-	if ( ! $temp[0] || $q->param('yourname') ne "" )	{
-		# first try to use yourname JA 17.7.05
-		if ( $q->param('yourname') ne "" )	{
-			$temp[0] = $q->param('yourname');
-			$temp[0] =~ s/ //g;
-			$temp[0] =~ s/\.//g;
-			$temp[0] =~ tr/[A-Z]/[a-z]/;
-			$authlast = "";
-		} else	{
-			$temp[0] = "unknown";
-		}
-	}
+    my $name = ($s->get("enterer")) ? $s->get("enterer") : $q->param("yourname");
+    my $filename = PBDBUtil::getFilename($name); 
 
     my ($occsfilecsv,$occsfiletab);
     if ($q->param("time_scale") =~ /neptune pacman/i) {
-        $occsfilecsv = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-pacman.csv";
-        $occsfiletab = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-pacman.tab";
+        $occsfilecsv = $DOWNLOAD_FILE_DIR."/$filename-pacman.csv";
+        $occsfiletab = $DOWNLOAD_FILE_DIR."/$filename-pacman.tab";
     } elsif ($q->param("time_scale") =~ /neptune/i) {
-        $occsfilecsv = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-neptune.csv";
-        $occsfiletab = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-neptune.tab";
+        $occsfilecsv = $DOWNLOAD_FILE_DIR."/$filename-neptune.csv";
+        $occsfiletab = $DOWNLOAD_FILE_DIR."/$filename-neptune.tab";
     } else {
-        $occsfilecsv = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.csv";
-        $occsfiletab = $DOWNLOAD_FILE_DIR.'/'.$temp[0] . $authlast . "-occs.tab";
+        $occsfilecsv = $DOWNLOAD_FILE_DIR."/$filename-occs.csv";
+        $occsfiletab = $DOWNLOAD_FILE_DIR."/$filename-occs.tab";
     }
     if ((-e $occsfiletab && -e $occsfilecsv && ((-M $occsfiletab) < (-M $occsfilecsv))) ||
         (-e $occsfiletab && !-e $occsfilecsv)){
