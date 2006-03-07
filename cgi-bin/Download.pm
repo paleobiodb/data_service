@@ -270,6 +270,7 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
         $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
         $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
+        $html .= $self->retellOptionsRow ( "Exclude classified occurrences?", $q->param("classified") );
         $html .= $self->retellOptionsRow ( "Minimum # of specimens to compute mean abundance", $q->param("min_mean_abundance") ) if ($q->param("min_mean_abundance"));
 
         my $plantOrganFieldCount = 0;
@@ -1170,6 +1171,14 @@ sub getOccurrencesWhereClause {
         my $plant_organs = join(",", @includedPlantOrgans);
         push @occ_where, "(o.plant_organ IN ($plant_organs) OR o.plant_organ2 IN ($plant_organs))";
     }  
+
+    if ($q->param("classified") =~ /unclassified/i) {
+        push @occ_where, "o.taxon_no=0";
+        push @reid_where, "re.taxon_no=0";
+    } elsif ($q->param("classified") =~ /classified/i) {
+        push @occ_where, "o.taxon_no != 0";
+        push @reid_where, "re.taxon_no != 0";
+    }
 
     
     my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('authorizer_reversed'));
@@ -2719,27 +2728,21 @@ sub setupOutput {
 			'sep_char'    => $sepChar,
 			'binary'      => 1
 	});
-	
-	my $authorizer = $s->get("authorizer");
-	if ( ! $authorizer )	{
-		if ( $q->param("yourname") )	{
-			$authorizer = $q->param("yourname");
-		} else	{
-			$authorizer = "unknown";
-		}
-	}
-	$authorizer =~ s/(\s|\.|[^A-Za-z0-9])//g;
-	$occsOutFileName = $authorizer . "-occs.$outFileExtension";
-	$generaOutFileName = $authorizer . "-genera.$outFileExtension";
+
+
+    my $name = ($s->get("enterer")) ? $s->get("enterer") : $q->param("yourname");
+    my $filename = PBDBUtil::getFilename($name);
+
 	if ( $q->param("output_data") eq 'collections')	{
-		$occsOutFileName = $authorizer . "-cols.$outFileExtension";
+		$occsOutFileName = "$filename-cols.$outFileExtension";
 	} elsif ($q->param("output_data") eq 'specimens') {
-        $occsOutFileName = $authorizer . "-specimens.".$outFileExtension;
-	} 
-	$refsOutFileName = $authorizer . "-refs.$outFileExtension";
-	if ( $q->param('time_scale') )	{
-		$scaleOutFileName = $authorizer . "-scale.$outFileExtension";
-	}
+        $occsOutFileName = "$filename-specimens.".$outFileExtension;
+	}  else {
+	    $occsOutFileName = "$filename-occs.$outFileExtension";
+    }
+	$generaOutFileName = "$filename-genera.$outFileExtension";
+	$refsOutFileName = "$filename-refs.$outFileExtension";
+	$scaleOutFileName = "$filename-scale.$outFileExtension";
 
 	if ( ! open(OUTFILE, ">$OUT_FILE_DIR/$occsOutFileName") ) {
 	    die ( "Could not open output file: $OUT_FILE_DIR/$occsOutFileName ($!) <BR>\n" );
