@@ -471,7 +471,7 @@ function checkAll(checkbox,the_class){
 
 <tr class="lightGrey">
 <td valign=top class="small">Exclude collections with subset collections? </td>
-<td valign=top class="small" colspan=3><select name="exclude_superset"><option>NO</option><option>YES</option></select></td></tr>
+<td valign=top class="small" colspan=3><select name="exclude_superset"><option selected value="NO">no, include them</option><option value="YES">yes, exclude them</option></select></td></tr>
 <tr> 
 
 </table>
@@ -572,10 +572,21 @@ function checkAll(checkbox,the_class){
 </td></tr>
 
 <tr>
+<td valign=top class="small">Include occurrences that are classified or unclassified?<br><small><i>This is useful if you want to find entries that might be typos</i></small></td>
+<td valign=top class="small">
+<select name=classified>
+<option selected value="">include both</option>
+<option>unclassified only</option>
+<option>classified only</option>
+</select>
+</td></tr>   
+
+<tr class="lightGrey">
 <td valign=top class="small">Minimum # of specimens needed to compute mean abundance</td>
 <td valign=top class="small"><input name=min_mean_abundance type="text" size="12"></td></tr>
 </table>
 
+<br>
 <div class="displayPanel">
 <span class="displayPanelHeader"><b>Include plants with the following organs</b></span></br>
 <table width=100%>
@@ -985,6 +996,7 @@ Note that the collection ID and genus name fields are always output.</p>
 Basic fields will only be downloaded when output type is "specimens".  Measurement fields will can be downloaded with
 any output type, but will be aggregate values for the occurrence, collection, or taxon if occurrences, collections, of taxonomic names are downloaded, respectively.
 
+<br><br>
 <div class="displayPanel">
 <span class="displayPanelHeader"><b>Basic fields</b></span></br>
 <table width="100%" class="tiny">
