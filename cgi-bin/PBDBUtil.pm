@@ -776,6 +776,40 @@ sub getChildrenRecurse {
     }
 }
 
+# Generation of filenames standardized here to avoid security issues or
+# potential weirdness. PS 3/6/2006
+# If filetype == 1, use date/pid in randomizing filename.  Else use the ip
+# Generally filetype == 1 is good, unless the files need to stick around and
+# be reused for some reason (like in the download script)
+sub getFilename {
+    my $enterer = shift;
+    my $filetype = shift;
+
+    my $filename = "";
+    if ($enterer eq '' || !$enterer) {
+        if ($filetype == 1) {
+            #  0    1    2     3     4    5     6     7     8
+            my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =localtime(time);
+            my $date = sprintf("%d%02d%02d",($year+1900),$mon,$mday);
+            $filename = "guest_".$date."_".$$;
+        } else {
+            my $ip = $ENV{'REMOTE_ADDR'}; 
+            $ip =~ s/\./_/g;
+            #my @bits = split(/\./,$ip);
+            #my $longip = ($bits[0] << 24) | ($bits[1] << 16) | ($bits[2] << 8) | ($bits[3]);
+            $filename = "guest_".$ip;
+        }
+    } else {
+        #$enterer =~ s/['-]+/_/g;
+        $enterer =~ s/[^a-zA-Z0-9_]//g;
+        if (length($enterer) > 30) {
+            $enterer = substr($enterer,0,30);
+        }
+        $filename = $enterer;
+    }
+    return $filename;
+}
+
 # pass this a number like "5" and it will return the name ("five").
 # only works for numbers up through 19.  Above that and it will just return
 # the original number.
@@ -822,20 +856,12 @@ sub isIn {
         }
     }
 
-
     return 0;
 }
     
 
-# Pass this an array ref and 
-# an element to delete.
-#
-# It will search through the array and
-# delete *any* and all occurrences of the passed
-# element if it finds them. 
-#
+# Pass this an array ref and an element to delete.
 # It returns a reference to a new array but *doesn't* modify the original.
-#
 # Does a string compare (eq)
 sub deleteElementFromArray {
     my $ref = shift; 
