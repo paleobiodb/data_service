@@ -1648,7 +1648,7 @@ sub doQuery {
 	if ( $q->param('output_data') =~ /occurrences|specimens/)	{
 		$sql .= " ORDER BY collection_no";
 	}
-	
+
     #
     # Header Generation
     #
@@ -2944,7 +2944,7 @@ sub getTaxonString {
         @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon);
         $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
         if (scalar(@taxon_nos) == 0) {
-            push @sql_bits, "genus_name like ".$dbh->quote($taxon);
+            push @sql_bits, "genus_name LIKE ".$dbh->quote($taxon);
         } elsif (scalar(@taxon_nos) == 1) {
             my @all_taxon_nos = TaxaCache::getChildren($dbt,$taxon_nos[0]);
             # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
@@ -2953,7 +2953,9 @@ sub getTaxonString {
             #do nothing here, quit above
         }
     }
-    push @sql_bits, "taxon_no IN (".join(", ",keys(%taxon_nos_unique)).")";
+    if (%taxon_nos_unique) {
+        push @sql_bits, "taxon_no IN (".join(", ",keys(%taxon_nos_unique)).")";
+    }
     return @sql_bits;
 }
 
