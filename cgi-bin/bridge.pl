@@ -7566,7 +7566,7 @@ sub RefQuery {
 		}
 		
 		if ($refsortby)	{
-			$orderBy .= "r.author1last, r.author1init, r.author2last, r.pubyr";
+			$orderBy .= "r.author1last, r.pubyr";
 		}
 
 		# only append the ORDER clause if something is in it,
