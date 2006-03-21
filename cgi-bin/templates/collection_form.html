@@ -127,13 +127,13 @@ function doCheckFieldsGeography() {
         bad_info += "\n    - Latitude minutes must be integer";
     } 
     if ( frm.latmin.value != "" && parseInt(frm.latmin.value) >= 60)	{
-        bad_info += "\n    - Longitude minutes must be less than 60";
+        bad_info += "\n    - Latitude minutes must be less than 60";
     }
     if ( integerOpt.test (frm.lngmin.value) == false ) {
-        bad_info += "\n    - Longitude minutes must be less than 60";
+        bad_info += "\n    - Longitude minutes must be an integer";
     }
     if ( frm.lngmin.value != "" && parseInt(frm.lngmin.value) >= 60)	{
-        bad_info += "\n    - Longitude minutes must be less 60";
+        bad_info += "\n    - Longitude minutes must be less than 60";
     }
 
     // added decimal vs. minutes checks JA 18.5.04
