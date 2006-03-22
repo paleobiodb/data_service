@@ -8,7 +8,7 @@ body {
 	background-color: white;
 	background-image: url(/public/PDbg.gif);
 	font-family: Verdana, Arial, Helvetica, sans-serif;
-	font-size: 0.9em;
+	font-size: 0.85em;
 }
 
 table, tbody, tr, td { 
@@ -31,17 +31,17 @@ A:hover	{ color : #C80078; text-decoration:none; }
 
 /* how should the links look in the menu bar at the top?  */
 A:link.menu { 
-	color : White; font-size : 0.9em; text-decoration:none; 
+	color : White; font-size : 0.85em; text-decoration:none; 
 	padding: 2px 5px 2px 5px;
 }
 
 A:visited.menu { 
-	color : White; font-size : 0.9em; text-decoration:none; 
+	color : White; font-size : 0.85em; text-decoration:none; 
 	padding: 2px 5px 2px 5px;
 }
 
 A:active.menu { 
-	color : White; font-size : 0.9em; text-decoration:none; 
+	color : White; font-size : 0.85em; text-decoration:none; 
 	padding: 2px 5px 2px 5px;
 }
 
