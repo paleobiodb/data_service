@@ -46,7 +46,7 @@ A:active.menu {
 }
 
 A:hover.menu { 
-	color : black; font-size : 0.9em; 
+	color : black; font-size : 0.85em; 
 
 	border-style: solid;  /*solid, dashed, dotted, grooved */
     border-color: white;
