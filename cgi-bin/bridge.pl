@@ -942,7 +942,7 @@ sub displayDownloadResults {
 
 	print stdIncludes( "std_page_top" );
 
-	my $m = Download->new( $dbh, $dbt, $q, $s, $hbo );
+	my $m = Download->new($dbt,$q,$s,$hbo);
 	$m->buildDownload( );
 
 	print stdIncludes("std_page_bottom");
@@ -956,7 +956,7 @@ sub displayDownloadNeptuneForm {
     
 sub displayDownloadNeptuneResults {
     print stdIncludes( "std_page_top" );
-    Neptune::displayNeptuneDownloadResults($q,$s,$hbo);
+    Neptune::displayNeptuneDownloadResults($q,$s,$hbo,$dbt);
     print stdIncludes("std_page_bottom");
 }  
 
@@ -1010,9 +1010,13 @@ sub displayCurveForm {
 	print stdIncludes( "std_page_top" );
 
 	my $html = $hbo->populateHTML( 'curve_form', [ '', '', '', '' ] , [ 'research_group', 'collection_type', 'lithology1', 'lithology2' ] );
-    if ($q->param("input_data") eq 'neptune') {
+    if ($q->param("input_data") =~ /neptune/) {
         $html =~ s/<option selected>10 m\.y\./<option>10 m\.y\./;
-        $html =~ s/<option>Neptune PACMAN/<option selected>Neptune PACMAN/;
+        if ($q->param("input_data") =~ /neptune_pbdb/) {
+            $html =~ s/<option>Neptune-PBDB PACMAN/<option selected>Neptune-PBDB PACMAN/;
+        } else {
+            $html =~ s/<option>Neptune PACMAN/<option selected>Neptune PACMAN/;
+        }
     }
     if ($q->param("yourname") && !$s->isDBMember()) {
         my $yourname = $q->param("yourname");
@@ -2190,7 +2194,7 @@ sub processCollectionsSearchForAdd	{
 	my $sql = "SELECT c.collection_no, c.collection_aka, c.authorizer_no, p1.name authorizer, c.collection_name, c.access_level, c.research_group, c.release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, c.country, c.state, c.latdeg, c.latmin, c.latsec, c.latdec, c.latdir, c.lngdeg, c.lngmin, c.lngsec, c.lngdec, c.lngdir, c.max_interval_no, c.min_interval_no, c.reference_no FROM collections c LEFT JOIN person p1 ON p1.person_no = c.authorizer_no WHERE ";
 
 	# get a list of interval numbers that fall in the geological period
-	my ($inlistref) = TimeLookup::processLookup($dbh,$dbt,'',$q->param('period_max'),'','','intervals');
+	my ($inlistref) = TimeLookup::processLookup($dbh,$dbt,'',$q->param('period_max'),'','');
 	my @intervals = @{$inlistref};
 
 	$sql .= "c.max_interval_no IN (" . join(',', @intervals) . ") AND ";
@@ -2519,7 +2523,7 @@ sub processCollectionsSearch {
         if ($min =~ /[a-z][A-Z]/ && !Validation::checkInterval($dbt,$eml_min,$min)) {
             push @errors, "There is no record of $eml_min $min in the database";
         }
- 		my ($intervals,$errors,$warnings) = TimeLookup::processLookup($dbh, $dbt, $eml_max,$max,$eml_min,$min,'intervals');
+ 		my ($intervals,$errors,$warnings) = TimeLookup::processLookup($dbh, $dbt, $eml_max,$max,$eml_min,$min);
         push @errors, @$errors;
         push @warnings, @$warnings;
         my $val = join(",",@$intervals);
@@ -3267,6 +3271,7 @@ sub buildTaxonomicList {
 			"       taxon_no ".
 			"  FROM occurrences ".
 			" WHERE collection_no = $collection_no";
+
 
 	my @rowrefs = @{$dbt->getData($sql)};
 

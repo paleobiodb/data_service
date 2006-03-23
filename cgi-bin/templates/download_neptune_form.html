@@ -21,32 +21,33 @@ function checkAll(checkbox,the_class){
 <input id="action" type=hidden name="action" value="displayDownloadNeptuneResults">
 
 
-<p style='width:600;'>This form allows you to download data from the Neptune database, hosted by <a href="http://chronos.org">CHRONOS</a>. Diversity and PAC-MAN analyses can be run after downloading data, or on the last downloaded data set <a href="bridge.pl?action=displayCurveForm&input_data=neptune">here</a>.</p>
+<p style='width:600;'>This form allows you to download data from the Neptune database, hosted by <a href="http://chronos.org">CHRONOS</a>. Diversity and Pacman analyses can be run after downloading data, or on the last downloaded data set <a href="bridge.pl?action=displayCurveForm&input_data=neptune">here</a>.</p>
 
 <table width="100%" cellpadding="3" cellspacing="0">
-<!--
-<tr>
-<td valign=top class="small">Output format</td>
-<td valign=top class="small"><select name=output_format>
-<option selected>comma-delimited text</option>
-<option>tab-delimited text</option>
-</select>
-</td></tr>
--->
-
 
 <tr class="lightGrey">
-<td valign=top class="small" nowrap>Output format
+<td valign=top class="small" nowrap>Data source
 </td>
 <td>
-<select name="output_format">
-<option value="comma">comma-delimited text</option>
-<option value="tab">tab-delimited text</option>
+<select name="data_source">
+<option value="neptune">Neptune</option>
+<option value="both">Neptune and PBDB</option>
 </select>
 </td>
 </tr>
 
 <tr>
+<td valign=top class="small" nowrap>Output format
+</td>
+<td>
+<select name="output_format">
+<option value="csv">comma-delimited text</option>
+<option value="tab">tab-delimited text</option>
+</select>
+</td>
+</tr>
+
+<tr class="lightGrey">
 <td valign=top class="small">
 Fossil group(s)
 </td>
@@ -57,21 +58,29 @@ Fossil group(s)
 <input type="checkbox" name="fossil_group" value="N">nannoplankton
 </td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top class="small">Names of genera or species</td>
 <td valign=top class="small">
 <textarea name=taxon_name rows=2 cols=30></textarea></td></tr>       
 
-
-<tr>
+<tr class="lightGrey">
 <td valign=top class="small">
 Taxon status
 </td>
 <td valign=top class="small">
 <span style="white-space: nowrap;"><input type="checkbox" name="taxon_status" value="V" checked>valid</span>
 <span style="white-space: nowrap;"><input type="checkbox" name="taxon_status" value="S" checked>synonym</span>
-<span style="white-space: nowrap;"><input type="checkbox" name="taxon_status" value="D">questionable</span>
+<span style="white-space: nowrap;"><input type="checkbox" name="taxon_status" value="Q">questionable</span>
 </td></tr>
+
+<tr>
+<td valign=top class="small">Include specifically indeterminate occurrences?</td>
+<td valign=top class="small">
+<select name="sp">
+<option value="NO">no, exclude them</option>
+<option selected value="YES">yes, include them</option>
+</select>
+</td></tr> 
 
 <tr class="lightGrey">
 <td valign=top class="small" nowrap>Sample age range (Ma)
@@ -86,7 +95,8 @@ Taxon status
 <td valign=top class="small" nowrap>Minimum # of samples per taxon
 </td>
 <td class="small">
-<input name="min_samples" size=6>
+<span style="white-space: nowrap;">for Neptune data: <input name="min_samples_neptune" size=6></span><br>
+<span style="white-space: nowrap;">for PBDB data: <input name="min_samples_pbdb" size=6></span>
 </td>
 </tr>
 
@@ -131,38 +141,38 @@ Taxon status
     <td class="small" nowrap><input type=checkbox checked title="Check all" onClick="checkAll(this,'basic');"><B>Check all</B></td>
   </tr>
   <tr>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_leg value="YES">leg</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_site value="YES">site</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_hole value="YES">hole</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_hole_id value="YES">hole_id</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_ocean_code value="YES">ocean code</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_leg value="YES">leg</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_site value="YES">site</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_hole value="YES">hole</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_hole_id value="YES">hole_id</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_ocean_code value="YES">ocean code</td>
   </tr>
 
   <tr>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_longitude value="YES">longitude</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_latitude value="YES">latitude</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_paleo_longitude value="YES">paleolongitude</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_paleo_latitude value="YES">paleolatitude</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_longitude value="YES">longitude</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_latitude value="YES">latitude</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_paleo_longitude value="YES">paleolongitude</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_paleo_latitude value="YES">paleolatitude</td>
   </tr>
   
   <tr>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_sample_id value="YES">sample_id</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_sample_group_abundance value="YES">sample group abundance</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_sample_age_ma value="YES">sample age ma</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_sample_preservation value="YES">sample preservation</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_sample_depth_mbsf value="YES">sample depth mbsf</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_sample_id value="YES">sample_id</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_sample_group_abundance value="YES">sample group abundance</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_sample_age_ma value="YES">sample age ma</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_sample_preservation value="YES">sample preservation</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_sample_depth_mbsf value="YES">sample depth mbsf</td>
   </tr>
 
   <tr>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_taxon_id value="YES">taxon id</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_fossil_name value="YES">fossil name</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_taxon_status value="YES">taxon status</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_taxon_abundance value="YES">taxon abundance</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_taxon_id value="YES">taxon id</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_fossil_name value="YES">fossil name</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_taxon_status value="YES">taxon status</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_taxon_abundance value="YES">taxon abundance</td>
   </tr>
   <tr>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_resolved_taxon_id value="YES">resolved taxon id</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_resolved_fossil_name value="YES">resolved fossil name</td>
-    <td class="small"><input type=checkbox checked class="basic" name=fields_resolved_taxon_status value="YES">resolved taxon status</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_resolved_taxon_id value="YES">resolved taxon id</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_resolved_fossil_name value="YES">resolved fossil name</td>
+    <td class="small"><input type=checkbox checked class="basic" name=neptune_resolved_taxon_status value="YES">resolved taxon status</td>
   </tr>
 
 </table>

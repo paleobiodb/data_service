@@ -247,9 +247,15 @@ sub assignGenera	{
     my $filename = PBDBUtil::getFilename($name); 
 
     my ($occsfilecsv,$occsfiletab);
-    if ($q->param("time_scale") =~ /neptune pacman/i) {
-        $occsfilecsv = $DOWNLOAD_FILE_DIR."/$filename-pacman.csv";
-        $occsfiletab = $DOWNLOAD_FILE_DIR."/$filename-pacman.tab";
+    if ($q->param("time_scale") =~ /neptune-pbdb pacman/i) {
+        $occsfilecsv = $DOWNLOAD_FILE_DIR."/$filename-neptune_pbdb_pacman.csv";
+        $occsfiletab = $DOWNLOAD_FILE_DIR."/$filename-neptune_pbdb_pacman.tab";
+    } elsif ($q->param("time_scale") =~ /neptune-pbdb/i) {
+        $occsfilecsv = $DOWNLOAD_FILE_DIR."/$filename-neptune_pbdb.csv";
+        $occsfiletab = $DOWNLOAD_FILE_DIR."/$filename-neptune_pbdb.tab";
+    } elsif ($q->param("time_scale") =~ /neptune pacman/i) {
+        $occsfilecsv = $DOWNLOAD_FILE_DIR."/$filename-neptune_pacman.csv";
+        $occsfiletab = $DOWNLOAD_FILE_DIR."/$filename-neptune_pacman.tab";
     } elsif ($q->param("time_scale") =~ /neptune/i) {
         $occsfilecsv = $DOWNLOAD_FILE_DIR."/$filename-neptune.csv";
         $occsfiletab = $DOWNLOAD_FILE_DIR."/$filename-neptune.tab";
@@ -267,6 +273,7 @@ sub assignGenera	{
         $occsfile = $occsfilecsv;
         $sepChar = ",";
     }
+    print "USING FILE $occsfile<BR>";
 
     $csv = Text::CSV_XS->new({
         'quote_char'  => '"',

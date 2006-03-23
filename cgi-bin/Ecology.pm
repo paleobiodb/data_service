@@ -184,7 +184,7 @@ sub processEcologyForm	{
 # 
 # It'll return a hash where the keys are taxon_nos and the value is a hash of ecology data
 # example: $class_hash = TaxaCache::getParents($dbt,[$taxon_no],'array');
-#          @ecotaph_fields = $dbt->tableColumns('ecotaph');
+#          @ecotaph_fields = $dbt->getTableColumns('ecotaph');
 #          $eco_hash = Ecology::getEcology($dbt,$eco_hash,\@ecotaph_fields,1);
 #          $life_habit_for_taxon_no = $eco_hash->{$taxon_no}{'life_habit'};
 #          @refs_for_taxon_no = @{$eco_hash->{$taxon_no}{'references'}};

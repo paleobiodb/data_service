@@ -43,7 +43,9 @@ sub processLookup	{
 	my $min_interval_name = shift;
 
 	my $return_type = shift;
-    my $lookup_type = shift;
+    #Where numeric (Ma) values are used, use the midpoint instead of max and min bounds
+    # when throwing out intervals. Used by Neptune script only right now
+    my $use_mid = shift; 
     my $bestbothscale;
     my @errors = ();
     my @warnings = ();
@@ -111,7 +113,7 @@ sub processLookup	{
         #} 
         main::dbg("Lookup type 1 with boundaries $max_interval_name, $min_interval_name\n");
 	    &findBestScales();
-	    &getIntervalRangeByBoundary($max_interval_name,$min_interval_name);
+	    &getIntervalRangeByBoundary($max_interval_name,$min_interval_name,$use_mid);
     } else {
         if ( $min_interval_name eq '')	{
             $eml_min_interval = $eml_max_interval;
@@ -163,12 +165,7 @@ sub processLookup	{
         }
 #        print Dumper(@intervals);
     }
-	if ( $return_type eq "intervals" )	{
-		return (\@intervals,\@errors,\@warnings);
-	}
-	my $colls = getCollectionList();
-    return ($colls,\@errors,\@warnings);
-
+    return (\@intervals,\@errors,\@warnings);
 }
 
 sub checkIntervalIsObsolete {
@@ -768,6 +765,7 @@ sub getIntervalRangeByBoundary {
         $max_boundary = $_[1];
         $min_boundary = $_[0];
     }
+    my $use_mid = $_[2];
     main::dbg("Using numbers - max is $max_boundary and min is $min_boundary");
 
     # Changed to use the nicer findBoundaries function, 
@@ -775,8 +773,17 @@ sub getIntervalRangeByBoundary {
     ($upperbound,$lowerbound) = findBoundaries($dbh,$dbt);
     while (my ($i,$lbound) = each %$lowerbound) {
         my $ubound = $upperbound->{$i};
-        if ($lbound && $ubound && $lbound <= $max_boundary && $ubound >= $min_boundary) {
-            push @intervals,$i;
+        if ($lbound ne '' && $ubound ne '') {
+            if ($use_mid) {
+                my $mid = ($ubound+$lbound)/2;
+                if ($mid <= $max_boundary && $mid >= $min_boundary) {
+                    push @intervals,$i;
+                }
+            } else {
+                if ($lbound <= $max_boundary && $ubound >= $min_boundary) {
+                    push @intervals,$i;
+                }
+            }
         }
     }
 }
@@ -1133,7 +1140,7 @@ sub mapIntervals	{
 }
 
 # query the collections table for collections where the max is in the list
-#   and so is the min
+#   and so is the min - DEPRECATED
 sub getCollectionList	{
 	my @collections = ();
 

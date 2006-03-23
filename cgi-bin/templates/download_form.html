@@ -145,10 +145,11 @@ function checkAll(checkbox,the_class){
 
 <tr>
 <td valign=top class="small">Output format:</td>
-<td valign=top class="small"><select name=output_format>
-<option selected>comma-delimited text</option>
-<option>tab-delimited text</option>
-<option>CONJUNCT</option>
+<td valign=top class="small">
+<select name=output_format>
+  <option selected value="csv">comma-delimited text</option>
+  <option value="tab">tab-delimited text</option>
+  <option value="conjunct">CONJUNCT</option>
 </select>
 </td></tr>
 
@@ -671,26 +672,14 @@ function checkAll(checkbox,the_class){
   </tr>
 
   <tr>
-  <td nowrap><input type=checkbox class="c_geography" name=collections_lng value="YES">longitude in 
-  <select name="collections_lng_format">
+  <td nowrap colspan=2><input type=checkbox class="c_geography" name=collections_coords value="YES">latitude/longitude in
+  <select name="collections_coords_format" class="small">
     <option value="decimal">decimal</option>
     <option value="DMS">DMS+dir</option>
   </select>  
   </td>
-  <td nowrap><input type=checkbox class="c_geography" name=collections_lat value="YES">latitude in
-  <select name="collections_lat_format">
-    <option value="decimal">decimal</option>
-    <option value="DMS">DMS+dir</option>
-  </select>  
-  </td>
-  <td nowrap><input type=checkbox class="c_geography" name=collections_paleolng value="YES">paleolongitude in 
-  <select name="collections_paleolng_format">
-    <option value="decimal">decimal</option>
-    <option value="DMS">DMS+dir</option>
-  </select>  
-  </td>
-  <td nowrap><input type=checkbox class="c_geography" name=collections_paleolat value="YES">paleolatitude in
-  <select name="collections_paleolat_format">
+  <td nowrap colspan=2><input type=checkbox class="c_geography" name=collections_paleocoords value="YES">paleolatitude/longitude in 
+  <select name="collections_paleocoords_format" class="small">
     <option value="decimal">decimal</option>
     <option value="DMS">DMS+dir</option>
   </select>  

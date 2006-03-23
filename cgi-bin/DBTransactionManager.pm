@@ -65,7 +65,7 @@ sub getTableDesc {
 #
 # Pass it a table name.
 # Returns an arrayref of all column names in this table. 
-sub tableColumns {
+sub getTableColumns {
 	my DBTransactionManager $self = shift;
 	my $tableName = shift;
 	
