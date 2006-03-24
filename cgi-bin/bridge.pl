@@ -341,8 +341,8 @@ sub makeAuthEntJavaScript	{
 	## We need to build a list of the enterers and authorizers for 
 	## the java script to use for autocompletion.
 	####
-	my $authListRef = Person::listOfAuthorizers($dbt,1);
-	my $entListRef = Person::listOfEnterers($dbt,1);
+	my $authListRef = Person::listOfAuthorizers($dbt);
+	my $entListRef = Person::listOfEnterers($dbt);
 	
 	my $authList;
 	my $entList;
