@@ -180,6 +180,7 @@ sub getWriteRows {
 
 	while ( my $row = $sth->fetchrow_hashref() ) {
 
+        exit;
 		my $okToWrite = "";				# Clear
 		my $failedReason = "";			# Clear
 
@@ -312,12 +313,11 @@ sub displayPermissionListForm {
     # First make sure they're logged in
     my $authorizer_no = int($s->get('authorizer_no'));
     if (!$authorizer_no) {
-        main::htmlError("ERROR: you must be logged in to view this page");
-        exit;
+        print "<div class=\"errorMessage\">ERROR: you must be logged in to view this page</div>";
+        return;
     }
 
 
-    print main::stdIncludes( "std_page_top" );
     # First provide a form to add new authoriziers to the list
 
     my @authorizers = @{Person::listOfAuthorizers($dbt,1)};
@@ -330,19 +330,22 @@ sub displayPermissionListForm {
 
     print qq|<div align="center">|;
     print qq|<h3>Editing permission list</h3>|;
+   
+    # Form for designating heir:
+    my $sql = "SELECT p2.reversed_name heir_reversed FROM person p1 LEFT JOIN person p2 ON p1.heir_no=p2.person_no WHERE p1.person_no=$authorizer_no";
+    my @results  = @{$dbt->getData($sql)};
+    my $heir_reversed = "";
+    if (@results) {
+        $heir_reversed = $results[0]->{'heir_reversed'};
+    }
     print qq|<form method="POST" action="bridge.pl">|;
-    print qq|<input type="hidden" name="action" value="submitPermissionList">|;
-    print qq|<input type="hidden" name="submit_type" value="add">|;
+    print qq|<input type="hidden" name="action" value="submitHeir">|;
     print qq|<table cellpadding=0 cellspacing=3>|;
-    print qq|<tr><td>Add an authorizer to the list: </td><td><input type="text" name="authorizer_reversed" onKeyUp="doComplete(event,this,authorizerNames())"> <input type="submit" name="submit_authorizer" value="Go"></td></tr>|;
-    print qq|<tr><td> ... <i> or </i> add all authorizers from a working group: </td><td>$working_group_select <input type="submit" name="submit_working_group" value="Go"></td></tr>|;
+    print qq|<tr><td>Designate who will manage your data <br>if you leave the database: </td><td><input type="text" name="heir_reversed" value="$heir_reversed" onKeyUp="doComplete(event,this,authorizerNames())"> <input type="submit" name="submit_heir" value="Go"></td></tr>|;
     print qq|</table>|;
     print qq|</form>|;
 
 
-    # Now get a list of people who have permission to edit my data and display it
-    my $sql = "SELECT p.reversed_name modifier_name, pm.modifier_no FROM person p, permissions pm WHERE p.person_no=pm.modifier_no AND pm.authorizer_no=$authorizer_no ORDER BY p.reversed_name";
-    my @results = @{$dbt->getData($sql)};
 
     # javascript for autocompletion
     my $javaScript = qq|<SCRIPT language="JavaScript" type="text/javascript">
@@ -352,32 +355,71 @@ sub displayPermissionListForm {
                         } 
                         </SCRIPT>|;
     print $javaScript;    
-    # Now list authorizers already on the editing permissions list and give a chance to delete them
-    print qq|<form method="POST" action="bridge.pl">|;
-    print qq|<input type="hidden" name="action" value="submitPermissionList">|;
-    print qq|<input type="hidden" name="submit_type" value="delete">|;
-    print qq|<table cellpadding=0 cellspacing=2>|;
-    print qq|<tr><td colspan=2 align="center">The following people may edit my data:</td></tr>|;
-    print qq|<tr><td colspan=2 align="center">&nbsp;</td></tr>|;
-    if (@results) {
-        my $midpoint = int((scalar(@results) + 1)/2); # have two columns
-        for(my $i=0;$i<$midpoint;$i++) {
-            my $row1 = $results[$i];
-            my $row2 = $results[$i+$midpoint];
-            print qq|<tr><td><input type="checkbox" name="modifier_no" value="$row1->{modifier_no}"> $row1->{modifier_name}</td>|;
-            if ($row2) {
-                print qq|<td><input type="checkbox" name="modifier_no" value="$row2->{modifier_no}"> $row2->{modifier_name}</td>|;
-            }
-            print qq|</tr>|;
-        }
-        print qq|<tr><td colspan=2 align="center">&nbsp;</td></tr>|;
-        print qq|<tr><td colspan=2 align="center"><input type="submit" name="submit" value="Delete checked"> &nbsp;&nbsp;</td></tr>|;
-    } else {
-        print "<tr><td><i>No one else may currently edit my data</i></td></tr>";
+
+    my @persons = ($authorizer_no);
+
+    $sql = "SELECT person_no FROM person WHERE active=0 AND heir_no=$authorizer_no";
+    @results = @{$dbt->getData($sql)};
+    foreach my $row (@results) {
+        push @persons,$row->{'person_no'};
     }
-    print qq|</table></form>|;
+
+    # Now get a list of people who have permission to edit my data and display it
+    foreach my $person_no (@persons) {
+        my $sql = "SELECT p.reversed_name modifier_name, pm.modifier_no FROM person p, permissions pm WHERE p.person_no=pm.modifier_no AND pm.authorizer_no=$person_no ORDER BY p.reversed_name";
+        my @results = @{$dbt->getData($sql)};
+        # Now list authorizers already on the editing permissions list and give a chance to delete them
+        my ($owner1,$owner2);
+        if ($person_no == $authorizer_no) {
+            $owner1 = "your list";
+            $owner2 = "my data";
+        } else {
+            my $sql = "SELECT name FROM person  WHERE person_no=$person_no";
+            my $person = ${$dbt->getData($sql)}[0]->{'name'};
+            my $epithet = "'s";
+            if ($person =~ /s$/) {
+                $epithet = "'";
+            }
+            $owner1 = $person.$epithet." list";
+            $owner2 = $person.$epithet." data";
+        }
+        # Form for adding people to permission list
+        print qq|<hr><form method="POST" action="bridge.pl">|;
+        print qq|<input type="hidden" name="action" value="submitPermissionList">|;
+        print qq|<input type="hidden" name="submit_type" value="add">|;
+        print qq|<input type="hidden" name="action_for" value="$person_no">|;
+        print qq|<table cellpadding=0 cellspacing=3>|;
+        print qq|<tr><td>Add an authorizer to $owner1: </td><td><input type="text" name="authorizer_reversed" onKeyUp="doComplete(event,this,authorizerNames())"> <input type="submit" name="submit_authorizer" value="Go"></td></tr>|;
+        print qq|<tr><td> ... <i> or </i> add all authorizers from a working group: </td><td>$working_group_select <input type="submit" name="submit_working_group" value="Go"></td></tr>|;
+        print qq|</table>|;
+        print qq|</form>|;
+
+        print qq|<form method="POST" action="bridge.pl">|;
+        print qq|<input type="hidden" name="action" value="submitPermissionList">|;
+        print qq|<input type="hidden" name="action_for" value="$person_no">|;
+        print qq|<input type="hidden" name="submit_type" value="delete">|;
+        print qq|<table cellpadding=0 cellspacing=2>|;
+        print qq|<tr><td colspan=2 align="center">The following people may edit $owner2:</td></tr>|;
+        print qq|<tr><td colspan=2 align="center">&nbsp;</td></tr>|;
+        if (@results) {
+            my $midpoint = int((scalar(@results) + 1)/2); # have two columns
+            for(my $i=0;$i<$midpoint;$i++) {
+                my $row1 = $results[$i];
+                my $row2 = $results[$i+$midpoint];
+                print qq|<tr><td><input type="checkbox" name="modifier_no" value="$row1->{modifier_no}"> $row1->{modifier_name}</td>|;
+                if ($row2) {
+                    print qq|<td><input type="checkbox" name="modifier_no" value="$row2->{modifier_no}"> $row2->{modifier_name}</td>|;
+                }
+                print qq|</tr>|;
+            }
+            print qq|<tr><td colspan=2 align="center">&nbsp;</td></tr>|;
+            print qq|<tr><td colspan=2 align="center"><input type="submit" name="submit" value="Delete checked"> &nbsp;&nbsp;</td></tr>|;
+        } else {
+            print "<tr><td><i>No one else may currently edit $owner2</i></td></tr>";
+        }
+        print qq|</table></form>|;
+    }
     print qq|</div>|;
-    print main::stdIncludes("std_page_bottom");
 
 }   
 
@@ -390,18 +432,35 @@ sub submitPermissionList {
     # First make sure they're logged in
     my $authorizer_no = int($s->get('authorizer_no'));
     if (!$authorizer_no) {
-        main::htmlError("ERROR: you must be logged");
-        exit;
+        print "<div class=\"errorMessage\">ERROR: you must be logged in to view this page</div>";
+        return;
     }
+
+    my $action_for = $q->param('action_for');
+
+    # A person can set permissions for himself, as well as all inactive members thats have designated him as the heir
+    my $sql = "SELECT person_no FROM person WHERE active=0 AND heir_no=$authorizer_no";
+    my @results = @{$dbt->getData($sql)};
+    my  %can_set_list_for = ();
+    $can_set_list_for{$authorizer_no} = 1;
+    foreach my $row (@results) {
+        $can_set_list_for{$row->{'person_no'}} = 1;
+    }  
+
+    if (!$can_set_list_for{$action_for}) {
+        print "<div class=\"errorMessage\">ERROR: can't set the permission list for that person</div>";
+        return;
+    }
+    
 
     if ($q->param('submit_type') eq 'add') {
         if ($q->param('submit_authorizer')) {
             my $sql = "SELECT person_no FROM person WHERE reversed_name LIKE ".$dbh->quote($q->param('authorizer_reversed'));
             my $row = ${$dbt->getData($sql)}[0];
             if ($row) {
-                if ($row->{'person_no'} != $authorizer_no) {
+                if ($row->{'person_no'} != $action_for) {
                     # Note: the IGNORE just causes mysql to not throw an error when inserting a dupe
-                    $sql = "INSERT IGNORE INTO permissions (authorizer_no,modifier_no) VALUES ($authorizer_no,$row->{person_no})";
+                    $sql = "INSERT IGNORE INTO permissions (authorizer_no,modifier_no) VALUES ($action_for,$row->{person_no})";
                     dbg("Inserting into permission list: ".$sql);
                     $dbh->do($sql);
                 }
@@ -412,9 +471,9 @@ sub submitPermissionList {
             my $sql = "SELECT person_no FROM person WHERE $working_group=1";
             my @persons = @{$dbt->getData($sql)};
             foreach my $row (@persons) {
-                if ($row->{'person_no'} != $authorizer_no) {
+                if ($row->{'person_no'} != $action_for) {
                     # Note: the IGNORE just causes mysql to not throw an error when inserting a dupe
-                    $sql = "INSERT IGNORE INTO permissions (authorizer_no,modifier_no) VALUES ($authorizer_no,$row->{person_no})";
+                    $sql = "INSERT IGNORE INTO permissions (authorizer_no,modifier_no) VALUES ($action_for,$row->{person_no})";
                     dbg("Inserting into permission list: ".$sql);
                     $dbh->do($sql);
                 }
@@ -423,11 +482,56 @@ sub submitPermissionList {
     } elsif ($q->param('submit_type') eq 'delete') {
         my @modifiers = $q->param('modifier_no');
         foreach my $modifier_no (@modifiers) {
-            my $sql = "DELETE FROM permissions WHERE authorizer_no=$authorizer_no AND modifier_no=$modifier_no";
+            my $sql = "DELETE FROM permissions WHERE authorizer_no=$action_for AND modifier_no=$modifier_no";
             dbg("Deleting from permission list: ".$sql);
             $dbh->do($sql);
         }
 
+    }
+
+    displayPermissionListForm($dbt,$q,$s,$hbo);
+}   
+
+# This handles form submission from displayPermissionListForm
+# Basically only two types of operations: add and delete
+# Both should be pretty straightforward
+sub submitHeir {
+    my ($dbt,$q,$s,$hbo) = @_;
+    my $dbh = $dbt->dbh;
+    # First make sure they're logged in
+    my $authorizer_no = int($s->get('authorizer_no'));
+    if (!$authorizer_no) {
+        print "<div class=\"errorMessage\">ERROR: you must be logged in to do this</div>";
+        return;
+    }
+
+    if ($q->param("heir_reversed")) {
+        my $sql = "SELECT person_no FROM person WHERE reversed_name LIKE ".$dbh->quote($q->param('heir_reversed'));
+        my $row = ${$dbt->getData($sql)}[0];
+        if ($row) {
+            # Note: the IGNORE just causes mysql to not throw an error when inserting a dupe
+            $sql = "UPDATE person SET heir_no=$row->{'person_no'} WHERE person_no=$authorizer_no";
+            dbg("Updating heir: ".$sql);
+            my $return = $dbh->do($sql);
+            if ($return) {
+                my ($last,$init) = split(/,/,$q->param('heir_reversed'));
+                print "<div class=\"warning\">Set your future data manager to $init $last</div>";
+            } else {
+                print "<div class=\"errorMessage\">ERROR: could update database, please submit a bug report</div>";
+            }
+        } else {
+            print "<div class=\"errorMessage\">ERROR: could not set your future data manager, ".$q->param("heir_reversed"). " not found in the database</div>";
+        }
+    } else {
+        # Note: the IGNORE just causes mysql to not throw an error when inserting a dupe
+        my $sql = "UPDATE person SET heir_no=0 WHERE person_no=$authorizer_no";
+        dbg("Updating heir: ".$sql);
+        my $return = $dbh->do($sql);
+        if ($return) {
+            print "<div class=\"warning\">Unset your future data manager</div>";
+        } else {
+            print "<div class=\"errorMessage\">ERROR: could update database, please submit a bug report</div>";
+        }
     }
 
     displayPermissionListForm($dbt,$q,$s,$hbo);

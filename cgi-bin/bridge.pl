@@ -5100,11 +5100,21 @@ sub submitTypeTaxonSelect {
 ##############
 ## Editing list stuff
 sub displayPermissionListForm {
+	print stdIncludes("std_page_top");
     Permissions::displayPermissionListForm($dbt,$q,$s,$hbo);
+	print stdIncludes("std_page_bottom");
 }
 
 sub submitPermissionList {
+	print stdIncludes("std_page_top");
     Permissions::submitPermissionList($dbt,$q,$s,$hbo);
+	print stdIncludes("std_page_bottom");
+} 
+
+sub submitHeir{
+	print stdIncludes("std_page_top");
+    Permissions::submitHeir($dbt,$q,$s,$hbo);
+	print stdIncludes("std_page_bottom");
 } 
 
 ##############
