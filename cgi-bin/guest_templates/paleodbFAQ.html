@@ -37,7 +37,7 @@ Revised on an ongoing basis.
 <font>
 <a name="whatisit"></a>
 <b>What is the Paleobiology Database?</b><br>
-The Paleobiology Database is a public resource for the scientific community.
+The Paleobiology Database is a public resource for the global scientific community.
 It has been organized and operated by a multi-disciplinary, multi-institutional, international group of paleobiological researchers.
 Its purpose is to provide global, collection-based occurrence and taxonomic data for marine and terrestrial animals and plants of any geological age, as well as web-based software for statistical analysis of the data.
 The project's wider, long-term goal is to encourage collaborative efforts to answer large-scale paleobiological questions by developing a useful database infrastructure and bringing together large data sets.
@@ -50,22 +50,24 @@ We also maintain a list of <a href="$exec_url?user=Guest&action=displayPage&page
 
 <a name="structure"></a>
 <b>What is the database structure?</b><br>
-The Database currently includes six main tables: references, taxonomic names, taxonomic opinions, primary collection data, taxonomic occurrences, and reidentifications of occurrences. The tables are tied together relationally with record ID numbers. Most tables are relatively simple; the collection table has many fields that are described on a separate <a href="$exec_url?user=Guest&action=displayPage&page=structure1">database structure</a> page.
-We are working to add tables that will handle taxonomic authority information and taxonomic opinions (e.g., synonymies).
-At a later date we will add tables to handle phylogenetic relationships, ecomorphological attributes, stratigraphic sections, radioisotopic age estimates, and other data.
+The Database currently includes nine main tables: published references, taxonomic names, taxonomic synonymies and classifications, primary collection data, taxonomic occurrences, reidentifications of occurrences, and three tables describing geological time scales.
+Additional scientific tables track ecological and taphonomic attributes of higher taxa and species, measurements of specimens, and data about the digital fossil images on the site.
+There are also a number of bookkeeping tables.
+The tables are tied together relationally with record ID numbers.
+At a later date we may add tables to handle phylogenetic relationships, ecomorphological attributes, stratigraphic sections, radioisotopic age estimates, and other data.
 <p>
 
 <a name="funding"></a>
 <b>How is the Paleobiology Database funded?</b><br>
-The Paleobiology Database is currently funded by a five-year grant from the National Science Foundation's Biocomplexity program, and by grants to individual Database members.
+The Paleobiology Database is currently funded by a five-year grant from the National Science Foundation's Biocomplexity program that ends in August, 2006; a separate grant from the NSF Sedimentary Geology and Paleobiology program; and grants to individual Database members.
 We are confident of our ability to obtain long-term funding.
 <p>
 
 <a name="organization"></a>
 <b>How is the Database organized?</b><br>
-The Database has a main office at NCEAS that houses <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">John Alroy</a>, the Database coordinator.
+The Database has a main office at NCEAS that houses <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">John Alroy</a>, the Database coordinator, and  <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">Peter Schroeter</a>, the Database software developer and database manager.
 Backups of the data are reposited permanently at five different institutions.
-The Database includes five working groups, several other research groups, and many individual data contributors, and also serves as a repository for the Evolution of Terrestrial Ecosystems database and Paleogeographic Atlas Project.
+The Database includes five <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=working_groups">working groups</a>, several other research groups, and many individual data contributors, and also serves as a repository for the Evolution of Terrestrial Ecosystems database and Paleogeographic Atlas Project.
 General issues are discussed by an Advisory Board that meets once a year and communicates over an e-mail list.<p>
 
 <a name="board"></a>
@@ -109,8 +111,8 @@ The past and current Board members are:<p>
 <a name="history"></a>
 <b>How did the Database come into existence?</b><br>
 The Paleobiology Database originated in the <a href="http://www.nceas.ucsb.edu/">NCEAS</a>-funded Phanerozoic Marine Paleofaunal Database initiative, which operated from August 1998 through August 2000.
-It was funded from September 2000 through August 2006 by an NSF Biocomplexity grant.
-It currently is funded by the NSF Sedimentary Geology and Paleobiology program.<p>
+Since then, it has been funded primarily by the National Science Foundation.
+<p>
 
 <a name="participants"></a>
 <b>Who is currently participating in the Paleobiology Database?</b><br>
@@ -120,6 +122,7 @@ Please see our <a href="$exec_url?user=Guest&action=displayPage&page=participant
 <b>Who can join the Paleobiology Database?</b><br>
 Database membership is open to all professional researchers who agree to abide by Database policy and contribute a significant amount of data.
 There is no charge for membership or any other service provided by the Database.
+Conversely, the Database will not make payments to receive existing data sets.
 By "professional," we normally mean trained at a graduate level in paleontology: more than 95% of our contributors have a Ph.D., and the others have master's degrees.
 We also expect that contributors will work largely independently of any academic supervisor, as opposed to using data collected by a supervisor.
 If you don't fit these criteria but do want to contribute, you might consider entering data under the authorization of a formal Database member who is in your local area.
@@ -141,9 +144,9 @@ Just write the database coordinator stating the name of the group and its member
 
 <a name="ownership"></a>
 <b>Who has access to the data?</b><br>
-We encourage making all contributed data publicly accessible. However, all data sets entered into our system may be protected so that they are not viewable either by any other users (your private data) or by anyone outside of your research group (your group data). Protection is limited for up to two years after date of entry for previously published data, and up to five years for unpublished data.
+We encourage making all contributed data publicly accessible. However, all faunal and floral data sets entered into our system may be protected so that they are not viewable either by any other users (your private data) or by anyone outside of your research group (your group data). Protection is limited for up to two years after date of entry for previously published data, and up to five years for unpublished data.
 Your own password will allow you to view research group-readable data belonging to any group that includes you.
-Protected data cannot be accessed by any of our scripts or in any other way unless the appropriate password is provided. The only exception is the reference search script, which needs to access all the references because we need to avoid duplicate entry of published data.<p>
+Protected data cannot be accessed by any of our scripts or in any other way unless the appropriate password is provided. The only exceptions are the reference search and taxonomy scripts, which need to access all the reference and taxonomy data because there is little subjective interpretation and we need to avoid duplicate entry of published data.<p>
 
 <a name="upload"></a>
 <b>Can I upload data into the Database?</b><br>
@@ -152,7 +155,7 @@ We are happy to accept paleontological data files for upload. However, we do hav
 <ul>
 <li class="medium"> The contributor already is a PBDB member, or the Advisory Board has approved making the contributor a member after discussing the proposed upload.
 <li class="medium"> The data already are in electronic form.
-<li class="medium"> Entering the data by hand into the PBDB simply wasn't possible.
+<li class="medium"> Entering the data by hand into the PBDB would be extremely time consuming.
 <li class="medium"> The data include most, if not necessarily all, of our key fields (e.g., for a collection record we'd like country, lat/long, period, reference).
 <li class="medium"> A good-faith effort has been made to get the data into PBDB format.
 <li class="medium"> A good-faith effort has been made to identify and remove data that replicate existing PBDB data.
