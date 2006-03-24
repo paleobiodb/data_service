@@ -515,7 +515,7 @@ sub submitHeir {
             my $return = $dbh->do($sql);
             if ($return) {
                 my ($last,$init) = split(/,/,$q->param('heir_reversed'));
-                print "<div class=\"warning\">Set your future data manager to $init $last</div>";
+                print "<div class=\"warning\">Your future data manager has been set to $init $last</div>";
             } else {
                 print "<div class=\"errorMessage\">ERROR: could update database, please submit a bug report</div>";
             }
@@ -528,9 +528,9 @@ sub submitHeir {
         dbg("Updating heir: ".$sql);
         my $return = $dbh->do($sql);
         if ($return) {
-            print "<div class=\"warning\">Unset your future data manager</div>";
+            print "<div class=\"warning\">Your future data manager has been set to no one</div>";
         } else {
-            print "<div class=\"errorMessage\">ERROR: could update database, please submit a bug report</div>";
+            print "<div class=\"errorMessage\">ERROR: could not update database, please submit a bug report</div>";
         }
     }
 
