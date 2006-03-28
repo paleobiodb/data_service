@@ -138,7 +138,7 @@ sub retellOptions {
     $self->setupQueryFields() if (! $self->{'setup_query_fields_called'});
 
     my $html = '<div align="center"><table border=0 width=600>';
-    $html .= '<tr><td colspan=2 class="darkList"><h4>Download criteria</h4></td></tr>';
+    $html .= '<tr><td colspan=2 class="darkList"><h3>Download criteria</h3></td></tr>';
 
     # authorizer added 30.6.04 JA (left out by mistake?) 
     $html .= $self->retellOptionsRow ( "Output data type", $q->param("output_data") );
