@@ -218,12 +218,15 @@ function fillDays() {
 	}
 }
 
-function showElem() {
 
-}
-
-function hideElem() { 
-}
-
-
+//pass this function a checkbox.
+function checkAll(checkbox,the_class){
+    var state = checkbox.checked;
+    var frm = document.forms[0];
+    for(var i=0; i < frm.elements.length; i++){
+        if(frm.elements[i].className == the_class) {
+            frm.elements[i].checked = state;
+        }
+    }
+}   
 
