@@ -90,7 +90,7 @@ sub buildCurve {
 	my $self = shift;
 
 	$self->setArrays;
-	$self->printHeader;
+	print '<div align="center"><h2>Paleobiology Database diversity curve report</h2></div>';
 	# compute the sizes of intermediate steps to be reported in subsampling curves
 	if ($q->param('stepsize') ne "")	{
 	  $self->setSteps;
@@ -115,7 +115,6 @@ sub setArrays	{
 	$CLASS_DATA_DIR = "$DDIR/classdata";
 					                                # the default working directory
 	$PRINTED_DIR = "/public/data";
-	$BACKGROUND="/public/PDbg.gif";
 	
 	$OUTPUT_DIR = $PUBLIC_DIR;
 	# customize the subdirectory holding the output files
@@ -157,19 +156,6 @@ sub setArrays	{
 
 }
 
-sub printHeader	{
-	my $self = shift;
-
-	print "<html>\n<head><title>Paleobiology Database diversity curve report";
-	print "</title></head>\n";
-	print "<body bgcolor=\"white\" background=\"";
-	print $BACKGROUND;
-	print "\" text=black link=\"#0055FF\" vlink=\"#990099\">\n\n";
-
-	print "<center>\n<h1>Paleobiology Database diversity curve report";
-	print "</h1></center>\n";
-
-}
 
 # compute the sizes of intermediate steps to be reported in subsampling curves
 sub setSteps	{
@@ -273,7 +259,6 @@ sub assignGenera	{
         $occsfile = $occsfilecsv;
         $sepChar = ",";
     }
-    print "USING FILE $occsfile<BR>";
 
     $csv = Text::CSV_XS->new({
         'quote_char'  => '"',
@@ -333,9 +318,9 @@ sub assignGenera	{
 			$field_genus_name = $fieldcount;
 		} elsif ( $fn eq "occurrences.species_name" )	{
 			$field_species_name = $fieldcount;
-		} elsif ( $fn eq "family_name" )	{
+		} elsif ( $fn eq "occurrences.family_name" )	{
 			$field_family_name = $fieldcount;
-		} elsif ( $fn eq "order_name" )	{
+		} elsif ( $fn eq "occurrences.order_name" )	{
 			$field_order_name = $fieldcount;
 		} elsif ( $fn eq "resolved_fossil_name" )   {
 			$field_genus_name = $fieldcount;
@@ -740,11 +725,7 @@ sub assignGenera	{
 
 	# compute sampled diversity, range through diversity, originations,
 	#  extinctions, singletons and doubletons (Chao l and m)
-    if ($q->param("taxonomic_level") eq "genus") {
-	    print PADATA "genus\ttotal occs";
-    } else {
-	    print PADATA "species\ttotal occs";
-    }
+	print PADATA $q->param("taxonomic_level")."\t"."total occs";
 	for $i (reverse 1..$chrons)	{
 		print PADATA "\t$chname[$i]";
 	}
@@ -1421,8 +1402,11 @@ sub printResults	{
 		close CURVES;
 	}
 	
-	if ( ! open TABLE,">$OUTPUT_DIR/curvedata.csv" ) {
-		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/curvedata.csv<BR>$!" );
+	if ( ! open TABLE,">$OUTPUT_DIR/raw_curve_data.csv" ) {
+		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/raw_curve_data.csv<BR>$!" );
+	}
+	if ( ! open SUB_TABLE,">$OUTPUT_DIR/subsampled_curve_data.csv" ) {
+		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/subsampled_curve_data.csv<BR>$!" );
 	}
 	
 	if ($listsread > 0)	{
@@ -1437,11 +1421,30 @@ sub printResults	{
 		$generaorrefs = "orders";
 	}
 
+
+    if ($q->param('samplesize')) {
+        print '<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>';
+        print '<div align=center>
+                 <table cellpadding=0 cellspacing=0 border=0 width=600><tr>
+                   <td id="tab1" class="tabOff" style="white-space: nowrap;"
+                     onClick="showPanel(1);" 
+                     onMouseOver="hover(this);" 
+                     onMouseOut="setState(1)">Raw data</td>
+                   <td id="tab2" class="tabOff" style="white-space: nowrap;"
+                     onClick="showPanel(2);" 
+                     onMouseOver="hover(this);" 
+                     onMouseOut="setState(2)">Subsampled data </td>
+                 </tr></table>
+               </div>';
+        print '<div id="panel1" class="panel">';               
+    }
+
+
 		if ( $q->param('count_refs') eq "yes" )	{
 			$generaorrefs = "references";
 		}
 		if ($q->param('samplesize') ne "")	{
-			print "<hr>\n<h3>Raw data</h3>\n\n";
+			print "<h3>Raw data</h3>\n\n";
 		}
 		# need this diversity value for origination rates to make sense
 		#  when ranging through taxa to the Recent in Pull of the
@@ -1613,6 +1616,9 @@ sub printResults	{
 			print TABLE ",Median richness";
 		}
 		print TABLE "\n";
+
+	 # make sure all the files are read/writeable
+		chmod 0664, "$PRINTED_DIR/*";
 	
 		for $i (1..$chrons)	{
 			if ($rangethrough[$i] > 0 && $listsinchron[$i] > 0)	{
@@ -1895,8 +1901,30 @@ sub printResults	{
 			print "\n<b>$refsread</b> reference and interval combinations, <b>$listsread</b> lists, and <b>$occsread</b> occurrences met the search criteria.<p>\n";
 		}
 	
-		if ($q->param('samplesize') ne "")	{
-			print "\n<hr>\n<h3>Results of subsampling analysis</h3>\n\n";
+		print "\nThe following data files have been created:<p>\n";
+		print "<ul>\n";
+		print "<li>The above diversity curve data (<a href=\"http://$CURVE_HOST$PRINTED_DIR/raw_curve_data.csv\">raw_curve_data.csv</a>)<p>\n";
+	
+	
+		print "<li>A first-by-last occurrence count matrix (<a href=\"http://$CURVE_HOST$PRINTED_DIR/firstlast.txt\">firstlast.txt</a>)<p>\n";
+	
+		print "<li>A list of each ".$q->param('taxonomic_level').", the number of collections including it,  and the ID number of the intervals in which it was found (<a href=\"http://$CURVE_HOST$PRINTED_DIR/presences.txt\">presences.txt</a>)<p>\n";
+
+		print "</ul><p>\n";
+
+        my $downloadForm = "displayDownloadForm";
+        if ($q->param('time_scale') =~ /neptune/i) {
+            $downloadForm = "displayDownloadNeptuneForm";
+        }  
+		print "\nYou may wish to <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">download another data set</a></b> before you run another analysis.<p>\n";
+
+
+        if ($q->param('samplesize') ne '') {
+            print "</div>"; # END PANEL1 DIV
+            print '<div id="panel2" class="panel">';
+
+
+			print "<h3>Results of subsampling analysis</h3>\n\n";
 			print "<table cellpadding=4>\n";
 			print "<tr><td class=tiny valign=top><b>Interval</b>\n";
 			if ( $q->param('print_base_ss') eq "YES" )	{
@@ -2007,116 +2035,116 @@ sub printResults	{
 					print "<td class=tiny align=center valign=top><b>Michaelis-Menten<br>estimate</b> ";
 				}
 			}
-			print TABLE "Bin,Bin name";
+			print SUB_TABLE "Bin,Bin name";
 			if ( $q->param('print_base_ss') eq "YES" )	{
-				print TABLE ",Base (Ma)";
+				print SUB_TABLE ",Base (Ma)";
 			}
 			if ( $q->param('print_midpoint_ss') eq "YES" )	{
-				print TABLE ",Midpoint (Ma)";
+				print SUB_TABLE ",Midpoint (Ma)";
 			}
 	#		if ( $q->param('print_') eq "YES" )	{
-	#			print TABLE ",Sampled $generaorrefs";
+	#			print SUB_TABLE ",Sampled $generaorrefs";
 	#		}
 	#		if ( $q->param('print_') eq "YES" )	{
-	#			print TABLE ",Range-through $generaorrefs";
+	#			print SUB_TABLE ",Range-through $generaorrefs";
 	#		}
 			if ( $q->param('print_items') eq "YES" )	{
-				print TABLE ",Items sampled";
+				print SUB_TABLE ",Items sampled";
 			}
 			if ( $q->param('print_refs_ss') eq "YES" )	{
-				print TABLE ",References sampled";
+				print SUB_TABLE ",References sampled";
 			}
 			if ( $q->param('print_median') eq "YES" )	{
-				print TABLE ",Median ";
-				printf TABLE "%s diversity",$q->param('diversity');
+				print SUB_TABLE ",Median ";
+				printf SUB_TABLE "%s diversity",$q->param('diversity');
 			}
 			if ( $q->param('print_ci') eq "YES" )	{
-				print TABLE ",1-sigma lower CI,1-sigma upper CI";
+				print SUB_TABLE ",1-sigma lower CI,1-sigma upper CI";
 			}
 			if ( $q->param('print_mean') eq "YES" )	{
-				print TABLE ",Mean ";
-				printf TABLE "%s diversity",$q->param('diversity');
+				print SUB_TABLE ",Mean ";
+				printf SUB_TABLE "%s diversity",$q->param('diversity');
 			}
 			if ($q->param('diversity') =~ /two timers/)	{
 				if ( $q->param('print_three_timers_ss') eq "YES" )	{
-					print TABLE ",Mean three timers";
+					print SUB_TABLE ",Mean three timers";
 				}
 				if ( $q->param('print_corrected_bc') eq "YES" )	{
-					print TABLE ",Corrected BC diversity";
+					print SUB_TABLE ",Corrected BC diversity";
 				}
 				if ( $q->param('print_estimated_midpoint') eq "YES" )	{
-					print TABLE ",Estimated midpoint diversity";
+					print SUB_TABLE ",Estimated midpoint diversity";
 				}
 				if ( $q->param('print_estimated_mesa') eq "YES" )	{
-					print TABLE ",Estimated mesa diversity";
+					print SUB_TABLE ",Estimated mesa diversity";
 				}
 				if ( $q->param('print_raw_sib') eq "YES" )	{
-					print TABLE ",Raw SIB diversity";
+					print SUB_TABLE ",Raw SIB diversity";
 				}
 				if ( $q->param('print_corrected_sib') eq "YES" )	{
-					print TABLE ",Corrected SIB diversity";
+					print SUB_TABLE ",Corrected SIB diversity";
 				}
 				if ( $q->param('print_origination_rate_ss') eq "YES" )	{
-					print TABLE ",Origination rate";
+					print SUB_TABLE ",Origination rate";
 				}
 				if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
-					print TABLE ",Extinction rate";
+					print SUB_TABLE ",Extinction rate";
 				}
 			}
 			elsif ($q->param('diversity') =~ /boundary-crossers/)	{
 				if ( $q->param('print_first_appearances_ss') eq "YES" )	{
-					print TABLE ",First appearances";
+					print SUB_TABLE ",First appearances";
 				}
 				if ( $q->param('print_origination_rate_ss') eq "YES" )	{
-					print TABLE ",Origination rate";
+					print SUB_TABLE ",Origination rate";
 				}
 				if ( $q->param('print_origination_percentage') eq "YES" )	{
-					print TABLE ",Origination percentage";
+					print SUB_TABLE ",Origination percentage";
 				}
 				if ( $q->param('print_last_appearances_ss') eq "YES" )	{
-					print TABLE ",Last appearances";
+					print SUB_TABLE ",Last appearances";
 				}
 				if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
-					print TABLE ",Extinction rate";
+					print SUB_TABLE ",Extinction rate";
 				}
 				if ( $q->param('print_extinction_percentage') eq "YES" )	{
-					print TABLE ",Extinction percentage";
+					print SUB_TABLE ",Extinction percentage";
 				}
 			} else	{
 				if ( $q->param('print_origination_percentage') eq "YES" )	{
-					print TABLE ",Origination percentage";
+					print SUB_TABLE ",Origination percentage";
 				}
 				if ( $q->param('print_extinction_percentage') eq "YES" )	{
-					print TABLE ",Extinction percentage";
+					print SUB_TABLE ",Extinction percentage";
 				}
 			}
 			if ( $q->param('print_singletons_ss') eq "YES" )	{
-				print TABLE ",Singletons";
+				print SUB_TABLE ",Singletons";
 			}
 			if ( $q->param('print_gap_analysis_stat_ss') eq "YES" )	{
-				print TABLE ",Gap analysis sampling stat";
+				print SUB_TABLE ",Gap analysis sampling stat";
 			}
 			if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
-				print TABLE ",Gap analysis diversity estimate";
+				print SUB_TABLE ",Gap analysis diversity estimate";
 			}
 			if ( $q->param('print_three_timer_stat_ss') eq "YES" )	{
-				print TABLE ",Three timer sampling stat";
+				print SUB_TABLE ",Three timer sampling stat";
 			}
 			if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
-				print TABLE ",Three timer diversity estimate";
+				print SUB_TABLE ",Three timer diversity estimate";
 			}
 			if ( $q->param('print_chao-2_ss') eq "YES" )	{
-				print TABLE ",Chao-2 estimate";
+				print SUB_TABLE ",Chao-2 estimate";
 			}
 			if ( $q->param('print_jolly-seber_ss') eq "YES" )	{
-				print TABLE ",Jolly-Seber estimate";
+				print SUB_TABLE ",Jolly-Seber estimate";
 			}
 			if ( $samplingmethod == 2)	{
 				if ( $q->param('print_michaelis-menten') eq "YES" )	{
-					print TABLE ",Michaelis-Menten estimate";
+					print SUB_TABLE ",Michaelis-Menten estimate";
 				}
 			}
-			print TABLE "\n";
+			print SUB_TABLE "\n";
 
 			for ($i = 1; $i <= $chrons; $i++)     {
 				if ($rangethrough[$i] > 0)  {
@@ -2143,10 +2171,10 @@ sub printResults	{
 					$temp =~ s/ /&nbsp;/;
 					print "<tr><td class=tiny valign=top>$temp";
 					if ( $q->param('print_base_ss') eq "YES" )	{
-						printf "<td class=tiny valign=top>%.1f ",$basema{$chname[$i]};
+						printf "<td class=tiny align=center valign=top>%.1f ",$basema{$chname[$i]};
 					}
 					if ( $q->param('print_midpoint_ss') eq "YES" )	{
-						printf "<td class=tiny valign=top>%.1f ",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
+						printf "<td class=tiny align=center valign=top>%.1f ",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
 					}
 #					printf "<td class=tiny align=center valign=top>%.1f ",$msubsrichness[$i];
 #					printf "<td class=tiny align=center valign=top>%.1f ",$msubsrangethrough[$i];
@@ -2254,188 +2282,188 @@ sub printResults	{
 					if ( $q->param('print_singletons_ss') eq "YES" )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$msubssingletons[$i];
 					}
-					print TABLE $chrons - $i + 1;
-					print TABLE ",$chname[$i]";
+					print SUB_TABLE $chrons - $i + 1;
+					print SUB_TABLE ",$chname[$i]";
 					if ( $q->param('print_base_ss') eq "YES" )	{
-						printf TABLE ",%.1f",$basema{$chname[$i]};
+						printf SUB_TABLE ",%.1f",$basema{$chname[$i]};
 					}
 					if ( $q->param('print_midpoint_ss') eq "YES" )	{
-						printf TABLE ",%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
+						printf SUB_TABLE ",%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
 					}
-#					printf TABLE ",%.1f",$msubsrichness[$i];
-#					printf TABLE ",%.1f",$msubsrangethrough[$i];
+#					printf SUB_TABLE ",%.1f",$msubsrichness[$i];
+#					printf SUB_TABLE ",%.1f",$msubsrangethrough[$i];
 					if ( $q->param('print_items') eq "YES" )	{
-						printf TABLE ",%.1f",$tsampled[$i];
+						printf SUB_TABLE ",%.1f",$tsampled[$i];
 					}
 					if ( $q->param('print_refs_ss') eq "YES" )	{
-						printf TABLE ",%.1f",$msubsrefrichness[$i];
+						printf SUB_TABLE ",%.1f",$msubsrefrichness[$i];
 					}
 					if ( $q->param('print_median') eq "YES" )	{
-						print TABLE ",$outrichness[$i][$s]";
+						print SUB_TABLE ",$outrichness[$i][$s]";
 					}
 					if ( $q->param('print_ci') eq "YES" )	{
-						print TABLE ",$outrichness[$i][$qq]";
+						print SUB_TABLE ",$outrichness[$i][$qq]";
 					}
 					if ( $q->param('print_ci') eq "YES" )	{
-						print TABLE ",$outrichness[$i][$r]";
+						print SUB_TABLE ",$outrichness[$i][$r]";
 					}
 					if ( $q->param('print_mean') eq "YES" )	{
-						printf TABLE ",%.1f",$meanoutrichness[$i];
+						printf SUB_TABLE ",%.1f",$meanoutrichness[$i];
 					}
 					if ($q->param('diversity') =~ /two timers/)	{
 						if ( $q->param('print_three_timers_ss') eq "YES" )	{
-							printf TABLE ",%.1f",$mthreetimers[$i];
+							printf SUB_TABLE ",%.1f",$mthreetimers[$i];
 						}
 						if ( $q->param('print_corrected_bc') eq "YES" )	{
-							printf TABLE ",%.1f",$mnewbc[$i];
+							printf SUB_TABLE ",%.1f",$mnewbc[$i];
 						}
 						if ( $q->param('print_estimated_midpoint') eq "YES" )	{
-							printf TABLE ",%.1f",$mmidptdiv[$i];
+							printf SUB_TABLE ",%.1f",$mmidptdiv[$i];
 						}
 						if ( $q->param('print_estimated_mesa') eq "YES" )	{
-							printf TABLE ",%.1f",$mmesa[$i];
+							printf SUB_TABLE ",%.1f",$mmesa[$i];
 						}
 						if ( $q->param('print_raw_sib') eq "YES" )	{
-							printf TABLE ",%.3f",$msubsrichness[$i];
+							printf SUB_TABLE ",%.3f",$msubsrichness[$i];
 						}
 						if ( $q->param('print_corrected_sib') eq "YES" )	{
-							printf TABLE ",%.1f",$mnewsib[$i];
+							printf SUB_TABLE ",%.1f",$mnewsib[$i];
 						}
 						if ( $q->param('print_origination_rate_ss') eq "YES" )	{
-							printf TABLE ",%.3f",$lam[$i];
+							printf SUB_TABLE ",%.3f",$lam[$i];
 						}
 						if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
-							printf TABLE ",%.3f",$mu[$i];
+							printf SUB_TABLE ",%.3f",$mu[$i];
 						}
 					}
 					elsif ($q->param('diversity') =~ /boundary-crossers/)	{
 					# Foote origination rate
 						if ( $q->param('print_first_appearances_ss') eq "YES" )	{
-							printf TABLE ",%.1f",$msubsoriginate[$i];
+							printf SUB_TABLE ",%.1f",$msubsoriginate[$i];
 						}
 						if ( $q->param('print_origination_rate_ss') eq "YES" )	{
 							if ( $meanoutrichness[$i-1] > 0 && $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 )	{
-								printf TABLE ",%.4f",log( $meanoutrichness[$i-1] / ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) );
+								printf SUB_TABLE ",%.4f",log( $meanoutrichness[$i-1] / ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) );
 							} else	{
-								print TABLE ",NaN";
+								print SUB_TABLE ",NaN";
 							}
 						}
 						if ( $q->param('print_origination_percentage') eq "YES" )	{
 							if ( $meanoutrichness[$i] > 0 )	{
-								printf TABLE ",%.1f",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
+								printf SUB_TABLE ",%.1f",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
 							} else	{
-								print TABLE ",NaN";
+								print SUB_TABLE ",NaN";
 							}
 						}
 					# Foote extinction rate
 						if ( $q->param('print_last_appearances_ss') eq "YES" )	{
-							printf TABLE ",%.1f",$msubsextinct[$i];
+							printf SUB_TABLE ",%.1f",$msubsextinct[$i];
 						}
 						if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
 							if ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 && $meanoutrichness[$i] > 0 )	{
-								printf TABLE ",%.4f",log( ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanoutrichness[$i] ) * -1;
+								printf SUB_TABLE ",%.4f",log( ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanoutrichness[$i] ) * -1;
 							} else	{
-								print TABLE ",NaN";
+								print SUB_TABLE ",NaN";
 							}
 						}
 						if ( $q->param('print_extinction_percentage') eq "YES" )	{
 							if ( $meanoutrichness[$i] > 0 )	{
-								printf TABLE ",%.1f",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
+								printf SUB_TABLE ",%.1f",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
 							} else	{
-								print TABLE ",NaN";
+								print SUB_TABLE ",NaN";
 							}
 						}
 					} else	{
 						if ( $q->param('print_origination_percentage') eq "YES" )	{
 							if ( $meanoutrichness[$i] > 0 )	{
-								printf TABLE ",%.1f",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
+								printf SUB_TABLE ",%.1f",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
 							} else	{
-								print TABLE ",NaN";
+								print SUB_TABLE ",NaN";
 							}
 						}
 						if ( $q->param('print_extinction_percentage') eq "YES" )	{
 							if ( $meanoutrichness[$i] > 0 )	{
-								printf TABLE ",%.1f",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
+								printf SUB_TABLE ",%.1f",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
 							} else	{
-								print TABLE ",NaN";
+								print SUB_TABLE ",NaN";
 							}
 						}
 					}
 					if ( $q->param('print_singletons_ss') eq "YES" )	{
-						printf TABLE ",%.1f",$msubssingletons[$i];
+						printf SUB_TABLE ",%.1f",$msubssingletons[$i];
 					}
 					if ($gapstat > 0)	{
 						if ( $q->param('print_gap_analysis_stat_ss') eq "YES" )	{
 							printf "<td class=tiny align=center valign=top>%.3f ",$gapstat;
-							printf TABLE ",%.3f",$gapstat;
+							printf SUB_TABLE ",%.3f",$gapstat;
 						}
 						if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
 							printf "<td class=tiny align=center valign=top>%.1f ",$msubsrichness[$i] / $gapstat;
-							printf TABLE ",%.3f",$msubsrichness[$i] / $gapstat;
+							printf SUB_TABLE ",%.3f",$msubsrichness[$i] / $gapstat;
 						}
 					}
 					else	{
 						if ( $q->param('print_gap_analysis_stat_ss') eq "YES" )	{
 							print "<td class=tiny align=center valign=top>NaN ";
-							print TABLE ",NaN";
+							print SUB_TABLE ",NaN";
 						}
 						if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
 							print "<td class=tiny align=center valign=top>NaN ";
-							print TABLE ",NaN";
+							print SUB_TABLE ",NaN";
 						}
 					}
 					if ($ttstat > 0)	{
 						if ( $q->param('print_three_timer_stat_ss') eq "YES" )	{
 							printf "<td class=tiny align=center valign=top>%.3f ",$ttstat;
-							printf TABLE ",%.3f",$ttstat;
+							printf SUB_TABLE ",%.3f",$ttstat;
 						}
 						if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
 							printf "<td class=tiny align=center valign=top>%.1f ",$mnewsib[$i] / $ttstat;
-							printf TABLE ",%.3f",$mnewsib[$i] / $ttstat;
+							printf SUB_TABLE ",%.3f",$mnewsib[$i] / $ttstat;
 						}
 					}
 					else	{
 						if ( $q->param('print_three_timer_stat_ss') eq "YES" )	{
 							print "<td class=tiny align=center valign=top>NaN ";
-							print TABLE ",NaN";
+							print SUB_TABLE ",NaN";
 						}
 						if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
 							print "<td class=tiny align=center valign=top>NaN ";
-							print TABLE ",NaN";
+							print SUB_TABLE ",NaN";
 						}
 					}
 					if ( $q->param('print_chao-2_ss') eq "YES" )	{
 						if ($msubschaostat > 0 && $msubsrichness[$i] > 0 )	{
 							printf "<td class=tiny align=center valign=top>%.1f ",$msubschaostat;
-							printf TABLE ",%.1f",$msubschaostat;
+							printf SUB_TABLE ",%.1f",$msubschaostat;
 						} else    {
 							print "<td class=tiny align=center valign=top>NaN ";
-							print TABLE ",NaN";
+							print SUB_TABLE ",NaN";
 						}
 					}
 					if ( $q->param('print_jolly-seber_ss') eq "YES" )	{
 						if ($msubsjolly[$i] > 0 && $msubsrichness[$i] > 0 )	{
 							printf "<td class=tiny align=center valign=top>%.1f ",$msubsjolly[$i];
-							printf TABLE ",%.1f",$msubsjolly[$i];
+							printf SUB_TABLE ",%.1f",$msubsjolly[$i];
 						} else    {
 							print "<td class=tiny align=center valign=top>NaN ";
-							print TABLE ",NaN";
+							print SUB_TABLE ",NaN";
 						}
 					}
 					if ( $q->param('print_michaelis-menten') eq "YES" )	{
 						if ( $samplingmethod == 2)	{
 							if ($michaelis[$i] > 0 && $msubsrichness[$i] > 0 )	{
 					  			printf "<td class=tiny align=center valign=top>%.1f ",$michaelis[$i];
-					  			printf TABLE ",%.1d",$michaelis[$i];
+					  			printf SUB_TABLE ",%.1d",$michaelis[$i];
 							}
 							else    {
 								print "<td class=tiny align=center valign=top>NaN ";
-								print TABLE ",NaN";
+								print SUB_TABLE ",NaN";
 							}
 						}
 					}
 					print "<p>\n";
-					print TABLE "\n";
+					print SUB_TABLE "\n";
 				}
 			}
 			print "</table><p>\n\n";
@@ -2451,31 +2479,24 @@ sub printResults	{
 			if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
 				print "Corrected SIB, not raw SIB, was used for the three timer diversity estimate.<p>\n";
 			}
-			print "<hr>\n";
+            if ($q->param('stepsize') ne "")	{
+		        print "\nThe following data files have been created:<p>\n";
+            } else {
+		        print "\nThe following data file has been created:<p>\n";
+            }
+		    print "<ul>\n";
+		    print "<li>The subsampled diversity curve data (<a href=\"http://$CURVE_HOST$PRINTED_DIR/subsampled_curve_data.csv\">subsampled_curve_data.csv</a>)<p>\n";
+            if ($q->param('stepsize') ne "")	{
+                print "<li>The subsampling curves (<a href=\"http://$CURVE_HOST$PRINTED_DIR/subcurve.tab\">subcurve.tab</a>)<p>\n";
+            }
+    		print "</ul><p>\n";
+
+            print '</div>'; # End PANEL2 div
+            print '<script language="JavaScript" type="text/javascript">
+                    showPanel(1);
+                  </script> ';
 		}
 	
-	 # make sure all the files are read/writeable
-		chmod 0664, "$PRINTED_DIR/*";
-	
-		print "\nThe following data files have been created and can be downloaded by clicking on their names:<p>\n";
-		print "<ul>\n";
-		print "<li>The above diversity curve data (<a href=\"http://$CURVE_HOST$PRINTED_DIR/curvedata.csv\">curvedata.csv</a>)<p>\n";
-	
-		if ($q->param('stepsize') ne "")	{
-			print "<li>The subsampling curves (<a href=\"http://$CURVE_HOST$PRINTED_DIR/subcurve.tab\">subcurve.tab</a>)<p>\n";
-		}
-	
-		print "<li>A first-by-last occurrence count matrix (<a href=\"http://$CURVE_HOST$PRINTED_DIR/firstlast.txt\">firstlast.txt</a>)<p>\n";
-	
-		print "<li>A list of each ".$q->param('taxonomic_level').", the number of collections including it,  and the ID number of the intervals in which it was found (<a href=\"http://$CURVE_HOST$PRINTED_DIR/presences.txt\">presences.txt</a>)<p>\n";
-
-		print "</ul><p>\n";
-
-        my $downloadForm = "displayDownloadForm";
-        if ($q->param('time_scale') =~ /neptune/i) {
-            $downloadForm = "displayDownloadNeptuneForm";
-        }  
-		print "\nYou may wish to <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">download another data set</a></b> before you run another analysis.<p>\n";
 	
 	}
 	else	{
@@ -2493,8 +2514,6 @@ sub printResults	{
 		print "</ul><p>\n";
 	}
 	
-	print "\n</body>\n";
-
 }
 
 # This only shown for internal errors

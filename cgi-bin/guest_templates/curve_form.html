@@ -1,34 +1,9 @@
-<script language="JavaScript" type="text/javascript">
-<!-- Begin     
-//pass this function a checkbox.
-function checkAllRaw(checkbox) {
-    var state = checkbox.checked;
-    var frm = document.forms[0];
+<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>                                                                   
 
-    var isRaw = /^print_((.*?)_raw|sampled|range-through|boundary-crosser|two_timer|three_timer|pie|lists|occurrences|occurrences-squared|mean_richness|median_richness)$/;
+<div align="center">
+<h2>Paleobiology Database diversity curve request form</h2>
+</div>
 
-    for(var i=0; i < frm.elements.length; i++){
-        if(isRaw.test(frm.elements[i].name)) {
-            frm.elements[i].checked = state;
-        }
-    }
-}  
-function checkAllSS(checkbox){
-    var state = checkbox.checked;
-    var frm = document.forms[0];
-
-    var isSS = /^print_((.*?)_ss|michaelis-menten|corrected_bc|estimated_midpoint|origination_percentage|items|mean|estimated_mesa|extinction_percentage|median|ci|raw_sib|corrected_sib)$/;
-
-    for(var i=0; i < frm.elements.length; i++){
-        if(isSS.test(frm.elements[i].name)) {
-            frm.elements[i].checked = state;
-        }
-    }
-}  
--->
-</script>  
-
-<div align="center"><h2>Diversity curve request form</h2></div>
 
 <p>
 This form allows you to request a diversity curve with assorted statistics.
@@ -40,402 +15,423 @@ This form allows you to request a diversity curve with assorted statistics.
 <li>To run a standardized subsampling analysis, fill out the three required fields
 <li>Subsampling analysis and diversity measures are explained in Alroy et al. 2001 (PNAS 98:6261-6266)
 <li>Note: our server is fast, but requests still may take a minute or two to process
-</ul>
+</ul> 
+
+<div align=center>
+  <table cellpadding=0 cellspacing=0 border=0 width=600><tr>
+    <td id="tab1" class="tabOff" style="white-space: nowrap;"
+      onClick="showPanel(1);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(1)">Basic options</td>
+    <td id="tab2" class="tabOff" style="white-space: nowrap;"
+      onClick="showPanel(2);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(2)">Subsampling options</td>
+    <td id="tab3" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(3);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(3)">Raw data columns</td>
+    <td id="tab4" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(4);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(4)">Subsampling columns</td>
+  </tr></table>
+</div>  
 
 
 
 <form method="POST" action="$exec_url">
 <input type=hidden name="action" value="displayCurveResults">
-<input type=hidden name="user" value="Guest">
-<input type=hidden name=scale value="10 m.y. intervals">
 
-<hr>
+<div id="panel1" class="panel">
+<center><h3>Basic options</h3></center> 
 
-<TABLE cellpadding=4>
-
-<tr><td valign=top>
-<font size=-1>Your name:<br></font>
-<i><font size=-2>If you entered your name when you downloaded the data, you must enter the same name here.<br>
-If you didn't, leave this field blank.</font></i>
-
-<td valign=top>
-<input name=yourname size="20">
-</td>
-
-<tr><td valign=top>
-<font size=-1>Time scale:<br></font>
-</td>
-
-<td valign=top>
-<font size=-1>
-<select name=time_scale>
-<option selected>10 m.y. bins</option>
-<option>stages</option>
-<option>epochs</option>
-<option>Cenozoic subepochs</option>
-<option>periods</option>
-<option>Neptune PACMAN</option>
-<option>Neptune</option>  
-<option>Neptune-PBDB PACMAN</option>
-<option>Neptune-PBDB</option>  
-</select>
-</font>
-</td></tr>
-
-<tr><td valign=top>
-<font size=-1>Bin size, millions of years:</font><br>
-<i><font color="FF0000" size=-2>Required</font> <font size=-2> if you selected either of the Neptune options above.</font></i>
-</td>
-<td valign=top>
-<input type="text" name="neptune_bin_size" value="">
-</td></tr>
-
-<tr><td valign=top>
-<font size=-1>Taxonomic level:</font><br>
-</td>
-<td valign=top>
-<select name=taxonomic_level>
-<option>order</option>
-<option>family</option>
-<option selected>genus</option>
-<option>species</option>
-</td></tr>
-
-<tr><td valign=top>
-<font size=-1>Diversity measure to report:<br></font>
-<i><font size=-2>Two timers will tell you the Meaning of Life.</font></i>
-</td>
-
-<td valign=top>
-<font size=-1>
-<select name=diversity>
-<option>boundary-crossers</option>
-<option>range-through</option>
-<option>range-through minus singletons</option>
-<option>sampled-in-bin</option>
-<option>sampled minus singletons</option>
-<option selected>two timers</option>
-<option>local boundary-crossers</option>
-<option>local range-through</option>
-</select>
-</font>
-</td></tr>
-
-<tr><td valign=top>
-<font size=-1>
-Subsampling method:<br>
-<i><font color="FF0000" size=-2>Required</font> <font size=-2>if you want to do a subsampling analysis.</font></i>
-</td>
-
-<td valign=top>
-<font size=-1>
-<select name=samplingmethod>
-<option selected></option>
-<option>classical rarefaction</option>
-<option>by list (unweighted)</option>
-<option>by list (occurrences weighted)</option>
-<option>by list (occurrences-exponentiated weighted)</option>
-<option>by specimen</option>
-</select>
-</font>
-</td>
-
-<tr><td valign=top>
-<font size=-1>Weighting exponent:</font><br>
-<i><font color="FF0000" size=-2>Required</font> <font size=-2>if you want to do occurrences-exponentiated subsampling. <font size=-2>Set this to 2.0 if you want occurrences-squared weighting. 0.0 = unweighted subsampling; 1.0 = occurrences-weighted subsampling.</font></i>
-</td>
-
-<td valign=top>
-<font size=-1>
-<select name=exponent>
-<option>0.0
-<option>0.1
-<option>0.2
-<option>0.3
-<option>0.4
-<option>0.5
-<option>0.6
-<option>0.7
-<option>0.8
-<option>0.9
-<option>1.0
-<option>1.1
-<option>1.2
-<option>1.3
-<option>1.4
-<option>1.5
-<option>1.6
-<option>1.7
-<option>1.8
-<option>1.9
-<option selected>2.0
-<option>2.1
-<option>2.2
-<option>2.3
-<option>2.4
-<option>2.5
-<option>2.6
-<option>2.7
-<option>2.8
-<option>2.9
-<option>3.0
-</select>
-</font>
-</td>
-
-<tr><td valign=top>
-<font size=-1>
-Exact number of items (lists, occurrences, or occurrences-squared) to draw in each temporal bin:<br>
-<i><font color="FF0000" size=-2>Required</font> <font size=-2>if you want to do
-a subsampling analysis.</font></i>
-</font>
-</td>
-
-<td valign=top>
-<input name=samplesize>
-<!--
-<font size=-1>
-<select name=samplesize>
-<option selected>
-<option>10
-<option>20
-<option>50
-<option>100
-<option>150
-<option>200
-<option>500
-<option>1000
-<option>1500
-<option>2000
-<option>5000
-</select>
--->
-</td>
-
-<tr><td valign=top>
-<font size=-1>Number of subsampling trials:<br></font>
-<i><font color="FF0000" size=-2>Required</font> <font size=-2>if you want to do a subsampling analysis.</font></i>
-</td>
-
-<td valign=top>
-<font size=-1>
-<select name=samplingtrials>
-<option selected></option>
-<option>1</option>
-<option>5</option>
-<option>10</option>
-<option>20</option>
-<option>50</option>
-<option>100</option>
-</select>
-</font>
-</td>
+<table cellpadding=4>
+<tr>
+  <td valign=top>
+    Your name:<br>
+    <i><span class="small">If you entered your name when you downloaded the data, you must enter the same name here.<br>
+    If you didn't, leave this field blank.</span></i>
+  <td valign=top>
+    <input name=yourname size="20">
+  </td>  
 </tr>
 
-<tr><td valign=top>
-<font size=-1>
-Intermediate numbers of items to report in subsampling curves:<br>
-</font>
-<i><font size=-2>Not required.</font></i>
-</td>
+<tr>
+  <td valign=top>
+    Time scale:<br>
+  </td>
+  <td valign=top>
+    <select name=time_scale>
+      <option selected>10 m.y. bins</option>
+      <option>stages</option>
+      <option>epochs</option>
+      <option>Cenozoic subepochs</option>
+      <option>periods</option>
+      <option>Neptune PACMAN</option>
+      <option>Neptune</option>
+      <option>Neptune-PBDB PACMAN</option>
+      <option>Neptune-PBDB</option>
+    </select>
+  </td>
+</tr>
 
-<td valign=top>
-<font size=-1>
-<select name=stepsize>
-<option selected></option>
-<option>1, 10, 100...</option>
-<option>1, 3, 10, 30...</option>
-<option>1, 2, 5, 10...</option>
-<option>1, 2, 4, 8...</option>
-<option>1, 1.4, 2, 2.8...</option>
-<option>1000, 2000, 3000...</option>
-<option>100, 200, 300...</option>
-<option>50, 100, 150...</option>
-<option>20, 40, 60...</option>
-</select>
-</font>
-</td>
+<tr>
+  <td valign=top>
+    Bin size, millions of years:<br>
+    <i><span class="small"><span class="required">Required</span> if you selected either of the Neptune options above.</span></i>
+  </td>
+  <td valign=top>
+    <input type="text" name="neptune_bin_size" value="">
+  </td>
+</tr>
 
-<tr><td valign=top>
-<font size=-1>Print subsampling stats for intervals with less items than the exact quota?<br>
-</font>
-<i><font size=-2>Not required.</font></i>
-</td>
+<tr>
+  <td valign=top>
+    Taxonomic level:<br>
+  </td>
+  <td valign=top>
+    <select name=taxonomic_level>
+      <option>order</option>
+      <option>family</option>
+      <option selected>genus</option>
+      <option>species</option>
+    </select>
+  </td>
+</tr>
 
-<td valign=top>
-<font size=-1>
-<select name=printall>
-<option selected>no</option>
-<option>yes</option>
-</select>
-</font>
-</td>
+<tr>
+  <td valign=top>
+    Diversity measure to report:<br>
+    <i><span class="small">Two timers will tell you the Meaning of Life.</span></i>
+  </td>
+  <td valign=top>
+    <select name=diversity>
+      <option>boundary-crossers</option>
+      <option>range-through</option>
+      <option>range-through minus singletons</option>
+      <option>sampled-in-bin</option>
+      <option>sampled minus singletons</option>
+      <option selected>two timers</option>
+      <option>local boundary-crossers</option>
+      <option>local range-through</option>
+    </select>
+  </td>
+</tr>
+
+<tr>
+  <td valign=top>
+    Count references instead of genera?
+  </td>
+  <td valign=top>
+    <select name=count_refs>
+      <option selected>no</option>
+      <option>yes</option>
+    </select>
+  </td>
+</tr>
+
+<tr>
+  <td valign=top>
+    Range marine genera through to the Recent using Sepkoski's Compendium?
+  </td>
+  <td valign=top>
+    <input type=checkbox name=recent_genera value="YES"> yes
+  </td>
+</tr>
+</table>
+
+<br><div align="center"><input type=submit value="Submit"></div>
+
+</div>
+
+
+<div id="panel2" class="panel">
+<center><h3>Subsampling options</h3></center> 
+
+<table cellpadding=4>
+<tr>
+  <td valign=top>
+    Subsampling method:<br>
+    <i><span class="small"><span class="required">Required</span> if you want to do a subsampling analysis.</span></i>
+  </td>
+  <td valign=top>
+    <select name=samplingmethod>
+      <option selected></option>
+      <option>classical rarefaction</option>
+      <option>by list (unweighted)</option>
+      <option>by list (occurrences weighted)</option>
+      <option>by list (occurrences-exponentiated weighted)</option>
+      <option>by specimen</option>
+    </select>
+  </td>
+</tr>
+
+<tr>
+  <td valign=top>
+    Weighting exponent:<br>
+    <i><span class="small"><span class="required">Required</span> if you want to do occurrences-exponentiated subsampling. Set this to 2.0 if you want occurrences-squared weighting. 0.0 = unweighted subsampling; 1.0 = occurrences-weighted subsampling.</span></i>
+  </td>
+  <td valign=top>
+    <select name=exponent>
+      <option>0.0</option>
+      <option>0.1</option>
+      <option>0.2</option>
+      <option>0.3</option>
+      <option>0.4</option>
+      <option>0.5</option>
+      <option>0.6</option>
+      <option>0.7</option>
+      <option>0.8</option>
+      <option>0.9</option>
+      <option>1.0</option>
+      <option>1.1</option>
+      <option>1.2</option>
+      <option>1.3</option>
+      <option>1.4</option>
+      <option>1.5</option>
+      <option>1.6</option>
+      <option>1.7</option>
+      <option>1.8</option>
+      <option>1.9</option>
+      <option selected>2.0</option>
+      <option>2.1</option>
+      <option>2.2</option>
+      <option>2.3</option>
+      <option>2.4</option>
+      <option>2.5</option>
+      <option>2.6</option>
+      <option>2.7</option>
+      <option>2.8</option>
+      <option>2.9</option>
+      <option>3.0</option>
+    </select>
+  </td>
+</tr>
+
+<tr>
+  <td valign=top>
+    Exact number of items (lists, occurrences, or occurrences-squared) to draw in each temporal bin:<br>
+    <i><span class="small"><span class="required">Required</span> if you want to do a subsampling analysis.</span></i>
+  </td>
+  <td valign=top>
+    <input name=samplesize>
+  </td>
+</tr>
+
+<tr>
+  <td valign=top>
+    Number of subsampling trials:<br>
+    <i><span class="small"><span class="required">Required</span> if you want to do a subsampling analysis.</span></i>
+  </td>
+  <td valign=top>
+  <select name=samplingtrials>
+    <option selected></option>
+    <option>1</option>
+    <option>5</option>
+    <option>10</option>
+    <option>20</option>
+    <option>50</option>
+    <option>100</option>
+  </select>
+  </td>
+</tr>
+
+<tr>
+  <td valign=top>
+    Intermediate numbers of items to report in subsampling curves:<br>
+    <i><span class="small">Not required.</span></i>
+  </td>
+  <td valign=top>
+    <select name=stepsize>
+      <option selected></option>
+      <option>1, 10, 100...</option>
+      <option>1, 3, 10, 30...</option>
+      <option>1, 2, 5, 10...</option>
+      <option>1, 2, 4, 8...</option>
+      <option>1, 1.4, 2, 2.8...</option>
+      <option>1000, 2000, 3000...</option>
+      <option>100, 200, 300...</option>
+      <option>50, 100, 150...</option>
+      <option>20, 40, 60...</option>
+    </select>
+  </td>
+</tr>
+
+<tr>
+  <td valign=top>
+    Print subsampling stats for intervals with less items than the exact quota?<br>
+    <i><span class="small">Not required.</span></i>
+  </td>
+  <td valign=top>
+    <select name=printall>
+      <option selected>no</option>
+      <option>yes</option>
+    </select>
+  </td>
+</tr>
+
+<tr>
+  <td valign=top>
+    Maximum number of references to draw in each temporal bin:<br>
+    <i><span class="small">The count may be exceeded for computational reasons. Works with unweighted, occurrences weighted, or occurrences-squared weighted subsampling. Important: don't combine this with the "Count references instead of genera" or the following option.</span></i>
+  </td>
+  <td valign=top>
+    <input name=ref_quota>
+  </td>
+</tr>
+
+<tr>
+  <td valign=top>
+    Avoid collections coming from references that yield many collections?<br>
+    <i><span class="small">Works only with unweighted or occurrences-weighted by-list subsampling.</span></i>
+  </td>
+  <td valign=top>
+    <select name=weight_by_ref>
+      <option selected>no</option>
+      <option>yes</option>
+    </select>
+  </td>
 </tr>
 
 </table>
 
-<hr>
+<br><div align="center"><input type=submit value="Submit"></div>
+</div>
+
+
+
+<div id="panel3" class="panel">
+<center><h3>Raw data columns</h3></center> 
 
 <table cellpadding=4>
 
-<tr><td valign=top>
-<p>Raw data columns to print</p>
-</td></tr>
-
 <tr><td class="small" valign="top">
-<b>
-<input type="checkbox" onClick="checkAllRaw(this);"> Check all
-</b>
+<b><input type="checkbox" onClick="checkAll(this,'raw');"> Check all</b>
 </td></tr>   
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_base_raw" value="YES" checked> Base (Ma)
-<input type="checkbox" name="print_midpoint_raw" value="YES" checked> Midpoint (Ma)
-<input type="checkbox" name="print_sampled" value="YES" checked> Sampled genera
-<input type="checkbox" name="print_range-through" value="YES" checked> Range-through genera
-<input type="checkbox" name="print_boundary-crosser" value="YES" checked> Boundary-crosser genera
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="raw" name="print_base_raw" value="YES" checked> Base (Ma)
+<input type="checkbox" class="raw" name="print_midpoint_raw" value="YES" checked> Midpoint (Ma)
+<input type="checkbox" class="raw" name="print_sampled" value="YES" checked> Sampled genera
+<input type="checkbox" class="raw" name="print_range-through" value="YES" checked> Range-through genera
+<input type="checkbox" class="raw" name="print_boundary-crosser" value="YES" checked> Boundary-crosser genera
 </td></tr>
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_two_timer" value="YES"> Two timer genera
-<nobr><input type="checkbox" name="print_three_timer" value="YES"> Three timer genera</nobr>
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="raw" name="print_two_timer" value="YES"> Two timer genera
+<input type="checkbox" class="raw" name="print_three_timer" value="YES"> Three timer genera
 </td></tr>
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_first_appearances_raw" value="YES"> First appearances
-<input type="checkbox" name="print_origination_rate_raw" value="YES" checked> Origination rate
-<input type="checkbox" name="print_last_appearances_raw" value="YES"> Last appearances
-<input type="checkbox" name="print_extinction_rate_raw" value="YES" checked> Extinction rate
-<input type="checkbox" name="print_singletons_raw" value="YES"> Singletons
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="raw" name="print_first_appearances_raw" value="YES"> First appearances
+<input type="checkbox" class="raw" name="print_origination_rate_raw" value="YES" checked> Origination rate
+<input type="checkbox" class="raw" name="print_last_appearances_raw" value="YES"> Last appearances
+<input type="checkbox" class="raw" name="print_extinction_rate_raw" value="YES" checked> Extinction rate
+<input type="checkbox" class="raw" name="print_singletons_raw" value="YES"> Singletons
 </td></tr>
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_gap_analysis_stat_raw" value="YES"> Gap analysis sampling stat
-<input type="checkbox" name="print_gap_analysis_estimate_raw" value="YES"> Gap analysis diversity estimate
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="raw" name="print_gap_analysis_stat_raw" value="YES"> Gap analysis sampling stat
+<input type="checkbox" class="raw" name="print_gap_analysis_estimate_raw" value="YES"> Gap analysis diversity estimate
 </td></tr>
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_three_timer_stat_raw" value="YES"> Three timer sampling stat
-<input type="checkbox" name="print_three_timer_estimate_raw" value="YES"> Three timer diversity estimate
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="raw" name="print_three_timer_stat_raw" value="YES"> Three timer sampling stat
+<input type="checkbox" class="raw" name="print_three_timer_estimate_raw" value="YES"> Three timer diversity estimate
 </td></tr>
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_chao-2_raw" value="YES"> Chao-2 estimate
-<input type="checkbox" name="print_jolly-seber_raw" value="YES"> Jolly-Seber estimate
-<input type="checkbox" name="print_pie" value="YES"> Evenness of occurrences (PIE)
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="raw" name="print_chao-2_raw" value="YES"> Chao-2 estimate
+<input type="checkbox" class="raw" name="print_jolly-seber_raw" value="YES"> Jolly-Seber estimate
+<input type="checkbox" class="raw" name="print_pie" value="YES"> Evenness of occurrences (PIE)
 </td></tr>
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_lists" value="YES" checked> Lists
-<input type="checkbox" name="print_occurrences" value="YES" checked> Occurrences
-<input type="checkbox" name="print_occurrences-exponentiated" value="YES" checked> Occurrences-squared or exponentiated
-<input type="checkbox" name="print_mean_richness" value="YES"> Mean richness
-<input type="checkbox" name="print_median_richness" value="YES"> Median richness
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="raw" name="print_lists" value="YES" checked> Lists
+<input type="checkbox" class="raw" name="print_occurrences" value="YES" checked> Occurrences
+<input type="checkbox" class="raw" name="print_occurrences-exponentiated" value="YES" checked> Occurrences-squared or exponentiated
+<input type="checkbox" class="raw" name="print_mean_richness" value="YES"> Mean richness
+<input type="checkbox" class="raw" name="print_median_richness" value="YES"> Median richness
 </td></tr>
 
-<tr><td class="small" valign="top">
-<p></p>
-</td></tr>
+</table>
+<br><div align="center"><input type=submit value="Submit"></div>
 
-<tr><td valign="top">
-<p>Subsampling analysis columns to print</p>
-</td></tr>
+</div>
+
+
+
+<div id="panel4" class="panel">
+<center><h3>Subsampling columns</h3></center> 
+
+<table cellpadding=4>
 
 <tr><td class="small" valign="top">
-<b>
-<input type="checkbox" onClick="checkAllSS(this);"> Check all
-</b>
+<b><input type="checkbox" onClick="checkAll(this,'subsampling');"> Check all</b>
 </td></tr>   
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_base_ss" value="YES" checked> Base (Ma)
-<input type="checkbox" name="print_midpoint_ss" value="YES" checked> Midpoint (Ma)
-<input type="checkbox" name="print_items" value="YES" checked> Items sampled
-<input type="checkbox" name="print_median" value="YES"> Median diversity
-<input type="checkbox" name="print_ci" value="YES"> 1-sigma CI
-<input type="checkbox" name="print_mean" value="YES" checked> Mean diversity
-</nobr>
-
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_three_timers_ss" value="YES"> Mean three timers
-<input type="checkbox" name="print_corrected_bc" value="YES"> Corrected BC diversity
-<input type="checkbox" name="print_estimated_midpoint" value="YES"> Estimated midpoint diversity
-<input type="checkbox" name="print_estimated_mesa" value="YES"> Estimated mesa diversity
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="subsampling" name="print_base_ss" value="YES" checked> Base (Ma)
+<input type="checkbox" class="subsampling" name="print_midpoint_ss" value="YES" checked> Midpoint (Ma)
+<input type="checkbox" class="subsampling" name="print_items" value="YES" checked> Items sampled
+<input type="checkbox" class="subsampling" name="print_median" value="YES"> Median diversity
+<input type="checkbox" class="subsampling" name="print_ci" value="YES"> 1-sigma CI
+<input type="checkbox" class="subsampling" name="print_mean" value="YES" checked> Mean diversity
 </td></tr>
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_raw_sib" value="YES" checked> Raw SIB diversity
-<input type="checkbox" name="print_corrected_sib" value="YES" checked> Corrected SIB diversity
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="subsampling" name="print_three_timers_ss" value="YES"> Mean three timers
+<input type="checkbox" class="subsampling" name="print_corrected_bc" value="YES"> Corrected BC diversity
+<input type="checkbox" class="subsampling" name="print_estimated_midpoint" value="YES"> Estimated midpoint diversity
+<input type="checkbox" class="subsampling" name="print_estimated_mesa" value="YES"> Estimated mesa diversity
 </td></tr>
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_first_appearances_ss" value="YES"> First appearances
-<input type="checkbox" name="print_origination_rate_ss" value="YES" checked> Origination rate
-<input type="checkbox" name="print_origination_percentage" value="YES"> Origination percentage
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="subsampling" name="print_raw_sib" value="YES" checked> Raw SIB diversity
+<input type="checkbox" class="subsampling" name="print_corrected_sib" value="YES" checked> Corrected SIB diversity
 </td></tr>
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_last_appearances_ss" value="YES"> Last appearances
-<input type="checkbox" name="print_extinction_rate_ss" value="YES" checked> Extinction rate
-<input type="checkbox" name="print_extinction_percentage" value="YES"> Extinction percentage
-<input type="checkbox" name="print_singletons_ss" value="YES"> Singletons
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="subsampling" name="print_first_appearances_ss" value="YES"> First appearances
+<input type="checkbox" class="subsampling" name="print_origination_rate_ss" value="YES" checked> Origination rate
+<input type="checkbox" class="subsampling" name="print_origination_percentage" value="YES"> Origination percentage
 </td></tr>
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_gap_analysis_stat_ss" value="YES"> Gap analysis sampling stat
-<input type="checkbox" name="print_gap_analysis_estimate_ss" value="YES"> Gap analysis diversity estimate
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="subsampling" name="print_last_appearances_ss" value="YES"> Last appearances
+<input type="checkbox" class="subsampling" name="print_extinction_rate_ss" value="YES" checked> Extinction rate
+<input type="checkbox" class="subsampling" name="print_extinction_percentage" value="YES"> Extinction percentage
+<input type="checkbox" class="subsampling" name="print_singletons_ss" value="YES"> Singletons
 </td></tr>
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_three_timer_stat_ss" value="YES"> Three timer sampling stat
-<input type="checkbox" name="print_three_timer_estimate_ss" value="YES"> Three timer diversity estimate
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="subsampling" name="print_gap_analysis_stat_ss" value="YES"> Gap analysis sampling stat
+<input type="checkbox" class="subsampling" name="print_gap_analysis_estimate_ss" value="YES"> Gap analysis diversity estimate
 </td></tr>
 
-<tr><td class="small" valign="top">
-<nobr>
-<input type="checkbox" name="print_chao-2_ss" value="YES"> Chao-2 estimate
-<input type="checkbox" name="print_jolly-seber_ss" value="YES"> Jolly-Seber estimate
-<input type="checkbox" name="print_michaelis-menten" value="YES"> Michaelis-Menten estimate
-</nobr>
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="subsampling" name="print_three_timer_stat_ss" value="YES"> Three timer sampling stat
+<input type="checkbox" class="subsampling" name="print_three_timer_estimate_ss" value="YES"> Three timer diversity estimate
+</td></tr>
+
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="subsampling" name="print_chao-2_ss" value="YES"> Chao-2 estimate
+<input type="checkbox" class="subsampling" name="print_jolly-seber_ss" value="YES"> Jolly-Seber estimate
+<input type="checkbox" class="subsampling" name="print_michaelis-menten" value="YES"> Michaelis-Menten estimate
 </td></tr>
 
 </table>
 
-<hr>
+<p><span class="small">To compute Michaelis-Menten diversity estimates, set the diversity measure to "sampled-in-bin" and the subsampling method to "lists tallied."</span></p>
 
-<center>
-<input type=submit value="Submit">
-</center>
+<br><div align="center"><input type=submit value="Submit"></div>
 
-<input type=hidden name=authorizer value="nobody">
+</div>
+
 </form>
 
-</body>
 
+<script language="JavaScript" type="text/javascript">
+    showPanel(1);
+</script> 
