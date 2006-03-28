@@ -935,6 +935,7 @@ sub displayDownloadForm {
 	buildTimeScalePulldown ( \$html );
 	print $html;
 
+    print "</body></html>";
 }
 
 sub displayDownloadResults {
@@ -1006,8 +1007,16 @@ sub displayReportResults {
 }
 
 sub displayCurveForm {
-
-	print stdIncludes( "std_page_top" );
+    if ($s->isDBMember() && $q->param('user') !~ /guest/i) {                                                                                             
+	    my $std_page_top = stdIncludes( "std_page_top" );
+        $std_page_top =~ s/ height="100%"//;
+        print $std_page_top;
+        print "</td></tr></table>\n\n";
+        print "</td></tr></table>\n\n";  
+    } else {
+        my $std_page_top = stdIncludes("std_page_top");
+        print $std_page_top;
+    }
 
 	my $html = $hbo->populateHTML( 'curve_form', [ '', '', '', '' ] , [ 'research_group', 'collection_type', 'lithology1', 'lithology2' ] );
     if ($q->param("input_data") =~ /neptune/) {
@@ -1024,18 +1033,27 @@ sub displayCurveForm {
     }
     print $html;
 
-	print stdIncludes("std_page_bottom");
+    print "</body></html>";
 }
 
 sub displayCurveResults {
     logRequest($s,$q);
 
-	print stdIncludes( "std_page_top" );
+    if ($s->isDBMember() && $q->param('user') !~ /guest/i) {
+        my $std_page_top = stdIncludes( "std_page_top" );
+        $std_page_top =~ s/ height="100%"//;
+        print $std_page_top;
+        print "</td></tr></table>\n\n";
+        print "</td></tr></table>\n\n";
+    } else {
+        my $std_page_top = stdIncludes("std_page_top");
+        print $std_page_top;
+    }  
 
 	my $c = Curve->new( $dbh, $q, $s, $dbt );
 	$c->buildCurve();
 
-	print stdIncludes("std_page_bottom");
+    print "</body></html>";
 }
 
 # JA 9.8.04
@@ -5121,7 +5139,7 @@ sub submitHeir{
 ## Reclassify stuff
 
 sub startStartReclassifyOccurrences	{
-	Reclassify::startReclassifyOccurrences($q, $s, $dbh, $dbt);
+	Reclassify::startReclassifyOccurrences($q, $s, $dbh, $dbt, $hbo);
 }
 
 sub startDisplayOccurrenceReclassify	{
@@ -6339,9 +6357,7 @@ sub processEditOccurrences {
 #       occurrences from that collection
 #     OR
 #     * User searches for genus names of occurrences to work with
-sub displayReIDCollsAndOccsSearchForm
-{
-
+sub displayReIDCollsAndOccsSearchForm {
 	# Have to be logged in
 	if (!$s->isDBMember()) {
 		$s->enqueue( $dbh, "action=displayReIDCollsAndOccsSearchForm" );
@@ -6357,13 +6373,11 @@ sub displayReIDCollsAndOccsSearchForm
 	}	
 
 	print stdIncludes( "std_page_top" );
-  
-	print "<div align=center style=\"width: 640px\"><h4>You may now reidentify either a set of occurrences matching a genus or higher taxon name, or all the occurrences in one collection.</h4></div>";
-  
+
 	# Display the collection search form
-	%pref = getPreferences($s->get('enterer_no'));
+	my %pref = getPreferences($s->get('enterer_no'));
 	my @prefkeys = keys %pref;
-	my $html = $hbo->populateHTML('search_collections_form', ['', '', 'displayReIDForm', $reference_no,'',$q->param('type'),'','','',''], ['authorizer', 'enterer', 'action', 'reid_reference_no', 'lithadj', 'lithology1','type','lithadj2', 'lithology2','environment','eml_min_interval','eml_max_interval'], \@prefkeys);
+	my $html = $hbo->populateHTML('search_reids_form', ['','',''], ['research_group','eml_min_interval','eml_max_interval'], \@prefkeys);
 
     my $javaScript = &makeAuthEntJavaScript();
     $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
@@ -6380,11 +6394,6 @@ sub displayReIDCollsAndOccsSearchForm
   
 	print '</form>';
 	print stdIncludes("std_page_bottom");
-}
-
-sub displayReIDForm {
-	$q->param("type" => "reid");
-	displayCollResults();
 }
 
 sub displayOccsForReID
