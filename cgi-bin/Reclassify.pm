@@ -1,39 +1,40 @@
 package Reclassify;
 
+
+use URI::Escape;
+
 # written by JA 31.3, 1.4.04
 # in memory of our dearly departed Ryan Poling
 
 # start the process to get to the reclassify occurrences page
 # modelled after startAddEditOccurrences
 sub startReclassifyOccurrences	{
+	my ($q,$s,$dbh,$dbt,$hbo) = @_;
 
-	my $q = shift;
-	my $s = shift;
-	my $dbh = shift;
-	my $dbt = shift;
-
-
-	# have to be logged in
 	if (!$s->isDBMember()) {
+	    # have to be logged in
 		$s->enqueue( $dbh, "action=startStartReclassifyOccurrences" );
 		main::displayLoginPage( "Please log in first." );
-		exit;
-	}
-	# if they have the collection number, they'll immediately go to the
-	#  reclassify page
-	elsif ( $q->param("collection_no") )	{
+	} elsif ( $q->param("collection_no") )	{
+        # if they have the collection number, they'll immediately go to the
+        #  reclassify page
 		&displayOccurrenceReclassify($q,$s,$dbh,$dbt);
-		exit;
-	}
-	# otherwise, they'll need to search for the collection
-	# the "type" will be passed along by displaySearchColls and
-	#  used by displayCollResults
-	else	{
-		$q->param(type => 'reclassify_occurrence');
-		main::displaySearchColls();
-		exit;
-	}
+	} else	{
+        my $html = $hbo->populateHTML('search_reclassify_form', [ '', '', ''], [ 'research_group', 'eml_max_interval', 'eml_min_interval'], []);
 
+        my $javaScript = main::makeAuthEntJavaScript();
+        $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
+        my $authorizer_reversed = $s->get("authorizer_reversed");
+        $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
+        my $enterer_reversed = $s->get("enterer_reversed");
+        $html =~ s/%%enterer_reversed%%/$enterer_reversed/;
+
+        # Spit out the HTML
+        print main::stdIncludes( "std_page_top" );
+        main::printIntervalsJava(1);
+        print $html;
+        print main::stdIncludes("std_page_bottom");  
+    }
 }
 
 # print a list of the taxa in the collection with pulldowns indicating
@@ -101,6 +102,8 @@ sub displayOccurrenceReclassify	{
 
 	my $rowcolor = 0;
     my $nonEditableCount = 0;
+    my @badoccrefs;
+    my $genusOnly = 0;
 	for my $o ( @occrefs )	{
         my $editable = ($s->get("superuser") || $is_modifier_for{$o->{'authorizer_no'}} || $o->{'authorizer_no'} == $s->get('authorizer_no')) ? 1 : 0;
         my $disabled = ($editable) ?  '' : 'DISABLED';
@@ -115,18 +118,18 @@ sub displayOccurrenceReclassify	{
 		# otherwise print it
 		else	{
 			# compose the taxon name
-			$taxon_name = $o->{genus_name};
+			my $taxon_name = $o->{genus_name};
 			if ( $o->{species_reso} !~ /informal/ && $o->{species_name} ne "sp." && $o->{species_name} ne "indet." )	{
 				$taxon_name .= " " . $o->{species_name};
 			}
 
 			# find taxon names that match
-			$sql = "SELECT taxon_no,ref_is_authority,authorities.author1last as aa1,authorities.author2last as aa2,authorities.otherauthors as aoa,authorities.pubyr as ayr,refs.author1last as ra1,refs.author2last as ra2,refs.otherauthors as roa,refs.pubyr as ryr FROM authorities,refs WHERE refs.reference_no=authorities.reference_no AND taxon_name='$taxon_name'";
-			@taxnorefs = @{$dbt->getData($sql)};
+			my $sql = "SELECT taxon_no,ref_is_authority,authorities.author1last as aa1,authorities.author2last as aa2,authorities.otherauthors as aoa,authorities.pubyr as ayr,refs.author1last as ra1,refs.author2last as ra2,refs.otherauthors as roa,refs.pubyr as ryr FROM authorities,refs WHERE refs.reference_no=authorities.reference_no AND taxon_name='$taxon_name'";
+			my @taxnorefs = @{$dbt->getData($sql)};
 
 			# didn't work? maybe the genus is known even though
 			#  the species isn't
-			$usedGenus = "";
+			my $usedGenus = "";
 			if ( ! @taxnorefs && $taxon_name =~ / / )	{
 				($taxon_name) = split / /,$taxon_name;
 				$sql = "SELECT taxon_no,ref_is_authority,authorities.author1last as aa1,authorities.author2last as aa2,authorities.otherauthors as aoa,authorities.pubyr as ayr,refs.author1last as ra1,refs.author2last as ra2,refs.otherauthors as roa,refs.pubyr as ryr FROM authorities,refs WHERE refs.reference_no=authorities.reference_no AND taxon_name='$taxon_name'";
@@ -164,7 +167,7 @@ sub displayOccurrenceReclassify	{
                     $collection_string .= " $authorizer";
                     $collection_string .= "</span>";
 
-                    print "<td style=\"padding-right: 1.5em; padding-left: 1.5em;\"><a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$o->{collection_no}\">$o->{collection_no}</td><td>$collection_string</a></td>";
+                    print "<td style=\"padding-right: 1.5em; padding-left: 1.5em;\"><a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$o->{collection_no}\">$o->{collection_no}</a></td><td>$collection_string</td>";
                 }
 				print "<td nowrap>&nbsp;&nbsp;\n";
 
@@ -180,20 +183,15 @@ sub displayOccurrenceReclassify	{
 
 				# need a hidden recording the old taxon number
                 $collection_string .= ": " if ($collection_string);
-                $collection_string =~ s/'//g;
                  
 				if ( ! $o->{reid_no} )	{
-					print "<input type='hidden' $disabled name='old_taxon_no' value='" , $o->{taxon_no}, "+" , $collection_string, $formatted , "'>\n";
+					print "<input type=\"hidden\" $disabled name=\"old_taxon_no\" value=\"$o->{'taxon_no'}\">";
+                    print "<input type=\"hidden\" $disabled name=\"occurrence_description\" value=\"".uri_escape($collection_string.$formatted)."\">\n";
+					print "<input type=\"hidden\" $disabled name=\"occurrence_no\" value=\"" , $o->{occurrence_no}, "\">\n";
 				} else	{
-					print "<input type='hidden' $disabled name='old_reid_taxon_no' value='" , $o->{taxon_no}, "+" , $collection_string, $formatted , "'>\n";
-				}
-
-				# need a hidden recording the occurrence number
-				#  or reID number as appropriate
-				if ( ! $o->{reid_no} )	{
-					print "<input type='hidden' $disabled name='occurrence_no' value='" , $o->{occurrence_no}, "'>\n";
-				} else	{
-					print "<input type='hidden' $disabled name='reid_no' value='" , $o->{reid_no}, "'>\n";
+					print "<input type=\"hidden\" $disabled name=\"old_reid_taxon_no\" value=\"$o->{taxon_no}\">\n";
+                    print "<input type=\"hidden\" $disabled name=\"reid_description\" value=\"".uri_escape($collection_string.$formatted)."\">\n";
+					print "<input type=\"hidden\" $disabled name=\"reid_no\" value=\"" , $o->{reid_no}, "\">\n";
 					print "&nbsp;&nbsp;<span class='small'><b>reID =</b></span>&nbsp;";
 				}
 
@@ -343,6 +341,7 @@ sub processReclassifyForm	{
 	my $dbt = shift;
 	my $exec_url = shift;
 
+    print "<BR>";
 	print main::stdIncludes("std_page_top");
 
 	print "<center>\n\n";
@@ -358,24 +357,27 @@ sub processReclassifyForm	{
 	# get lists of old and new taxon numbers
 	# WARNING: taxon names are stashed in old numbers and authority info
 	#  is stashed in new numbers
-	@old_taxa = $q->param('old_taxon_no');
-	@new_taxa = $q->param('taxon_no');
-	@occurrences = $q->param('occurrence_no');
-	@old_reid_taxa = $q->param('old_reid_taxon_no');
-	@new_reid_taxa = $q->param('reid_taxon_no');
-	@reids = $q->param('reid_no');
+	my @old_taxa = $q->param('old_taxon_no');
+	my @new_taxa = $q->param('taxon_no');
+	my @occurrences = $q->param('occurrence_no');
+	my @occurrence_descriptions = $q->param('occurrence_description');
+	my @reid_descriptions = $q->param('reid_description');
+	my @old_reid_taxa = $q->param('old_reid_taxon_no');
+	my @new_reid_taxa = $q->param('reid_taxon_no');
+	my @reids = $q->param('reid_no');
 
 	print "<table border=0 cellpadding=2 cellspacing=0>\n";
 	my $rowcolor = 0;
 
 	# first tick through the occurrence taxa and update as appropriate
-	for $i (0..$#old_taxa)	{
-		my ($old_taxon_no,$taxon_name) = split /\+/,$old_taxa[$i];
+	foreach my $i (0..$#old_taxa)	{
+		my $old_taxon_no = $old_taxa[$i];
+        my $occurrence_description = uri_unescape($occurrence_descriptions[$i]);
 		my ($new_taxon_no,$authority) = split /\+/,$new_taxa[$i];
 		if ( $old_taxa[$i] != $new_taxa[$i] )	{
 
 		# update the occurrences table
-			$sql = "UPDATE occurrences SET taxon_no=".$new_taxon_no.
+			my $sql = "UPDATE occurrences SET taxon_no=".$new_taxon_no.
                    ", modifier=".$dbh->quote($s->get('enterer')).
 			       ", modifier_no=".$s->get('enterer_no');
 			if ( $old_taxon_no > 0 )	{
@@ -392,7 +394,7 @@ sub processReclassifyForm	{
 			} else	{
 				print "<tr class='darkList'>";
 			}
-			print "<td>&nbsp;&nbsp;$taxon_name $authority&nbsp;&nbsp;</td>\n";
+			print "<td>&nbsp;&nbsp;$occurrence_description $authority&nbsp;&nbsp;</td>\n";
 			print "</tr>\n";
 			$rowcolor++;
 		}
@@ -401,13 +403,14 @@ sub processReclassifyForm	{
 	# then tick through the reidentification taxa and update as appropriate
 	# WARNING: this isn't very slick; all the reIDs always come after
 	#  all the occurrences
-	for $i (0..$#old_reid_taxa)	{
-		my ($old_taxon_no,$taxon_name) = split /\+/,$old_reid_taxa[$i];
+	foreach my $i (0..$#old_reid_taxa)	{
+		my $old_taxon_no = $old_reid_taxa[$i];
+        my $reid_description = uri_unescape($reid_descriptions[$i]);
 		my ($new_taxon_no,$authority) = split /\+/,$new_reid_taxa[$i];
 		if ( $old_reid_taxa[$i] != $new_reid_taxa[$i] )	{
 
 		# update the reidentifications table
-			$sql = "UPDATE reidentifications SET taxon_no=".$new_taxon_no.
+			my $sql = "UPDATE reidentifications SET taxon_no=".$new_taxon_no.
                    ", modifier=".$dbh->quote($s->get('enterer')).
 			       ", modifier_no=".$s->get('enterer_no');
 			if ( $old_taxon_no > 0 )	{
@@ -424,7 +427,7 @@ sub processReclassifyForm	{
 			} else	{
 				print "<tr class='darkList'>";
 			}
-			print "<td>&nbsp;&nbsp;$taxon_name $authority&nbsp;&nbsp;</td>\n";
+			print "<td>&nbsp;&nbsp;$reid_description $authority&nbsp;&nbsp;</td>\n";
 			print "</tr>\n";
 			$rowcolor++;
 		}
