@@ -1440,7 +1440,7 @@ sub queryDatabase {
     }
     
     # Handle matching against secondary refs
-    if($q->param('research_group') =~ /^(?:decapod|ETE|5%|1%|PACED|PGAP)$/){
+    if($q->param('research_group') =~ /^(?:divergence|decapod|ETE|5%|1%|PACED|PGAP)$/){
         push @left_joins, "LEFT JOIN secondary_refs sr ON sr.collection_no=c.collection_no";
     }
 

@@ -630,7 +630,7 @@ sub reportQueryDB{
 
     my $research_group_sql = PBDBUtil::getResearchGroupSQL($dbt,$q->param('research_group'));
     push @whereTerms, $research_group_sql if ($research_group_sql);
-    if($q->param('research_group') =~ /^(?:decapod|ETE|5%|1%|PACED|PGAP)$/) {
+    if($q->param('research_group') =~ /^(?:decapod|divergence|ETE|5%|1%|PACED|PGAP)$/) {
         $leftJoinSQL .= " LEFT JOIN secondary_refs sr ON sr.collection_no=c.collection_no";
     }                               
 

@@ -38,7 +38,7 @@ sub getResearchGroupSQL {
     my $restricted_to = shift;
 
     my @terms = ();
-    if($research_group =~ /^(?:decapod|ETE|5%|1%|PACED|PGAP)$/){
+    if($research_group =~ /^(?:decapod|divergence|ETE|5%|1%|PACED|PGAP)$/){
         my $sql = "SELECT reference_no FROM refs WHERE ";
         if ($restricted_to) {
             $sql .= " FIND_IN_SET(".$dbt->dbh->quote($research_group).",project_name)";
@@ -51,7 +51,7 @@ sub getResearchGroupSQL {
         if ($restricted_to) {
             # In the restricted to case the collections research group is only looked
             # at for these overlapping cases
-            if ($research_group !~ /^(?:decapod|ETE|PACED)$/) {
+            if ($research_group !~ /^(?:decapod|divergence|ETE|PACED)$/) {
                 push @terms, "c.reference_no IN ($refs)";
             }
         } else {
@@ -59,7 +59,7 @@ sub getResearchGroupSQL {
             push @terms, "sr.reference_no IN ($refs)";
         }
     } 
-    if($research_group =~ /^(?:decapod|ETE|marine invertebrate|micropaleontology|PACED|paleobotany|paleoentomology|taphonomy|vertebrate)$/) {
+    if($research_group =~ /^(?:decapod|divergence|ETE|marine invertebrate|micropaleontology|PACED|paleobotany|paleoentomology|taphonomy|vertebrate)$/) {
         if ($restricted_to) {
             push @terms, "c.research_group=".$dbt->dbh->quote($research_group);
         } else {

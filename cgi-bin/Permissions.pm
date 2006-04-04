@@ -324,8 +324,8 @@ sub displayPermissionListForm {
     my $authList = join(",", map {'"'.$_->{'reversed_name'}.'"'} @authorizers);
 
 
-    my $working_group_values = ['','decapod','marine_invertebrate','micropaleontology','PACED','paleobotany','taphonomy','vertebrate'];
-    my $working_group_names =  ['','decapod','marine invertebrate','micropaleontology','PACED','paleobotany','taphonomy','vertebrate'];
+    my $working_group_values = ['','decapod','divergence','marine_invertebrate','micropaleontology','PACED','paleobotany','taphonomy','vertebrate'];
+    my $working_group_names =  ['','decapod','divergence','marine invertebrate','micropaleontology','PACED','paleobotany','taphonomy','vertebrate'];
     my $working_group_select = $hbo->buildSelect('working_group',$working_group_names,$working_group_values);
 
     print qq|<div align="center">|;

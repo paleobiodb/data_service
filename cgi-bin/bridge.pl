@@ -2739,7 +2739,7 @@ IS NULL))";
 
     # Do a left join on secondary refs if we have to
     # PS 11/29/2004
-    if ($options{'research_group'} =~ /^(?:decapod|ETE|5%|1%|PACED|PGAP)$/ || int($options{'reference_no'})) {
+    if ($options{'research_group'} =~ /^(?:decapod|divergence|ETE|5%|1%|PACED|PGAP)$/ || int($options{'reference_no'})) {
         push @left_joins, "LEFT JOIN secondary_refs sr ON sr.collection_no=c.collection_no";
     }
 
