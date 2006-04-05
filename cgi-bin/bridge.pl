@@ -911,18 +911,8 @@ sub displayMapOfCollection {
 
 
 sub displayDownloadForm {
-    # this is hack to disable the usual 100% height table that wraps around
-    #  the entire page JA 1.9.05
-    if ($s->isDBMember() && $q->param('user') !~ /guest/i) {
-        my $std_page_top = stdIncludes("std_page_top");
-        $std_page_top =~ s/ height="100%"//;
-        print $std_page_top;
-        print "</td></tr></table>\n\n";
-        print "</td></tr></table>\n\n";  
-    } else {
-        my $std_page_top = stdIncludes("std_page_top");
-        print $std_page_top;
-    }
+    my $std_page_top = stdIncludes("std_page_top");
+    print $std_page_top;
 
 	my $html = $hbo->populateHTML( 'download_form', [ '', '', '', '', '', '','','','','' ], [ 'research_group', 'country','environment','lithology1','ecology1','ecology2','ecology3','ecology4','ecology5','ecology6' ] );
     my $javaScript = &makeAuthEntJavaScript();
@@ -935,7 +925,7 @@ sub displayDownloadForm {
 	buildTimeScalePulldown ( \$html );
 	print $html;
 
-    print "</body></html>";
+	print stdIncludes("std_page_bottom");
 }
 
 sub displayDownloadResults {
@@ -1007,16 +997,8 @@ sub displayReportResults {
 }
 
 sub displayCurveForm {
-    if ($s->isDBMember() && $q->param('user') !~ /guest/i) {                                                                                             
-	    my $std_page_top = stdIncludes( "std_page_top" );
-        $std_page_top =~ s/ height="100%"//;
-        print $std_page_top;
-        print "</td></tr></table>\n\n";
-        print "</td></tr></table>\n\n";  
-    } else {
-        my $std_page_top = stdIncludes("std_page_top");
-        print $std_page_top;
-    }
+    my $std_page_top = stdIncludes("std_page_top");
+    print $std_page_top;
 
 	my $html = $hbo->populateHTML( 'curve_form', [ '', '', '', '' ] , [ 'research_group', 'collection_type', 'lithology1', 'lithology2' ] );
     if ($q->param("input_data") =~ /neptune/) {
@@ -1033,27 +1015,19 @@ sub displayCurveForm {
     }
     print $html;
 
-    print "</body></html>";
+    print stdIncludes("std_page_bottom");
 }
 
 sub displayCurveResults {
     logRequest($s,$q);
 
-    if ($s->isDBMember() && $q->param('user') !~ /guest/i) {
-        my $std_page_top = stdIncludes( "std_page_top" );
-        $std_page_top =~ s/ height="100%"//;
-        print $std_page_top;
-        print "</td></tr></table>\n\n";
-        print "</td></tr></table>\n\n";
-    } else {
-        my $std_page_top = stdIncludes("std_page_top");
-        print $std_page_top;
-    }  
+    my $std_page_top = stdIncludes("std_page_top");
+    print $std_page_top;
 
 	my $c = Curve->new( $dbh, $q, $s, $dbt );
 	$c->buildCurve();
 
-    print "</body></html>";
+    print stdIncludes("std_page_bottom");
 }
 
 # JA 9.8.04
@@ -4389,13 +4363,8 @@ sub displayEnterCollPage {
     unshift(@htmlFields,'secondary_reference_string','session_reference_string');
     unshift(@htmlValues,'','');
    
-# this is hack to disable the usual 100% height table that wraps around
-#  the entire page JA 1.9.05
 	my $std_page_top = stdIncludes("std_page_top");
-	$std_page_top =~ s/ height="100%"//;
 	print $std_page_top;
-	print "</td></tr></table>\n\n";
-	print "</td></tr></table>\n\n";
 
 	print printIntervalsJava();
 
@@ -4417,6 +4386,7 @@ sub displayEnterCollPage {
 
     print $html;
 
+    print stdIncludes("std_page_bottom");
 }
 
 # print Javascript to limit entry of time interval names
@@ -5376,13 +5346,8 @@ sub displayEditCollection {
 
 	my $session_ref = $s->get('reference_no');
 
-# this is hack to disable the usual 100% height table that wraps around
-#  the entire page JA 1.9.05
 	my $std_page_top = stdIncludes("std_page_top");
-	$std_page_top =~ s/ height="100%"//;
 	print $std_page_top;
-	print "</td></tr></table>\n\n";
-	print "</td></tr></table>\n\n";
 
 	# Get the reference for this collection
 	my $curColNum = 0;
@@ -5461,6 +5426,7 @@ sub displayEditCollection {
     my $html = $hbo->populateHTML("collection_form", \@row, \@fieldNames, \@prefkeys);
 
     print $html;
+    print stdIncludes("std_page_bottom");
 }
 
 

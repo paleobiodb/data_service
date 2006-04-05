@@ -25,7 +25,12 @@ function showPanel(panelNum) {
 function hidePanel() {
     //hide visible panel, unhilite tab
     document.getElementById('panel'+currentPanel).style.visibility = 'hidden';
-    document.getElementById('tab'+currentPanel).className = "tabOff";
+    var isLoading = /Loading/i;
+    if (isLoading.test(document.getElementById('tab'+currentPanel).className)) {
+        document.getElementById('tab'+currentPanel).className = "tabLoadingOff";
+    } else {
+        document.getElementById('tab'+currentPanel).className = "tabOff";
+    }
     //document.getElementById
     //  ('tab'+currentPanel).style.backgroundColor =
     //  '#ffffff';
@@ -34,15 +39,24 @@ function hidePanel() {
 }
                                                                                                                                                      
 function setState(tabNum) {
+    var isLoading = /Loading/i;
     if (tabNum==currentPanel) {
-    document.getElementById('tab'+tabNum).className = "tabOn";
+        if (isLoading.test(document.getElementById('tab'+tabNum).className)) {
+            document.getElementById('tab'+tabNum).className = "tabLoadingOn";
+        } else {
+            document.getElementById('tab'+tabNum).className = "tabOn";
+        }
         // document.getElementById
         //   ('tab'+tabNum).style.backgroundColor =
         //   '#ddddff';
         // document.getElementById
         //   ('tab'+tabNum).style.color = 'red';
     } else {
-        document.getElementById('tab'+tabNum).className = "tabOff";
+        if (isLoading.test(document.getElementById('tab'+tabNum).className)) {
+            document.getElementById('tab'+tabNum).className = "tabLoadingOff";
+        } else {
+            document.getElementById('tab'+tabNum).className = "tabOff";
+        }
         // document.getElementById
         //   ('tab'+tabNum).style.backgroundColor =
         //   '#ffffff';
@@ -55,3 +69,21 @@ function hover(tab) {
     //tab.style.backgroundColor = 'ddddff';
     return true;
 }
+
+function showTabText(tabNum) {
+    if (tabNum==currentPanel) {
+        document.getElementById('tab'+tabNum).className = "tabOn";
+        showPanel(tabNum);
+    } else {
+        document.getElementById('tab'+tabNum).className = "tabOff";
+    }
+}
+
+function hideTabText(tabNum) {
+    if (tabNum==currentPanel) {
+        document.getElementById('tab'+tabNum).className = "tabLoadingOn";
+    } else {
+        document.getElementById('tab'+tabNum).className = "tabLoadingOff";
+    }
+} 
+

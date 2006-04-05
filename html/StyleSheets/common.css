@@ -304,7 +304,7 @@ table.navbox {
     margin-right: 20px;
 }
 
-.tabOn, .tabOff, .tabHoverOn, .tabHoverOff {
+.tabOn, .tabOff, /*.tabHoverOn, .tabHoverOff,*/ .tabLoadingOn, .tabLoadingOff {
     /*background-color: #EEEEEE;*/
 	color : white; 
     background-color: #909090;
@@ -321,19 +321,27 @@ table.navbox {
     cursor: hand;
 }
 
-.tabOff {
+.tabOff, .tabLoadingOff {
     font-weight: normal;
     background-color: #C9C9C9;
 	border-color: #E0E0E0;
 }
 
-.tabHoverOn{
+.tabLoadingOn {
+    color: #909090;
+}
+.tabLoadingOff {
+    color: #C9C9C9;
+}
+
+/*.tabHoverOn{
     background-color: #B0B0B0;
 }
 
 .tabHoverOff{
     background-color: #D0D0D0;
 }
+*/
 
 .panel{
     position: absolute;
@@ -344,6 +352,7 @@ table.navbox {
     padding: 10px;
 }
 
+/*
 A:link.tabOn, A:visited.tabOn, A:active.tabOn, A:link.tabOff, A:visited.tabOff, A:active.tabOff { 
 	color : white; text-decoration:none; 
 }
@@ -351,6 +360,7 @@ A:link.tabOn, A:visited.tabOn, A:active.tabOn, A:link.tabOff, A:visited.tabOff, 
 A:hover.tabOn, A:hover.tabOff{ 
 	color : black;  text-decoration:none; 
 }       
+*/
 
 .superscript {
     font-size: 0.75em;

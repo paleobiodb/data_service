@@ -211,16 +211,92 @@ sub displayTaxonInfoResults {
     }
 
     print "<div class=\"small\">";
-    print "<div class=\"float_box\">";
-    print "<p>&nbsp;</p>";
-    my @modules_to_display = doNavBox($dbt,$q,$s,scalar(@diagnoses));
-    print "</div>";
+    my @modules_to_display = (1,2,3,4,5,6,7,8,9,10);
+    #print "<div class=\"float_box\">";
+    #print "<p>&nbsp;</p>";
+    #my @modules_to_display = doNavBox($dbt,$q,$s,scalar(@diagnoses));
+    #print "</div>";
 
-    print "<p>&nbsp;</p><div class=\"float_box\">";
-    doThumbs($dbt,$in_list);
-    print "</div>";
+    #print "<p>&nbsp;</p><div class=\"float_box\">";
+    #doThumbs($dbt,$in_list);
+    #print "</div>";
 
 	print "<div align=\"center\"><h2>$taxon_name</h2></div>";
+    #my %module_num_to_name = (1 => "classification",
+    #                          2 => "related taxa",
+    #                          3 => "taxonomic history",
+    #                          4 => "synonymy",
+    #                          5 => "diagnosis",
+    #                          6 => "ecology/taphonomy",
+    #                          7 => "measurements",
+    #                          8 => "map",
+    #                          9 => "age range/collections");
+                                                             
+
+
+    print '
+<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>                                                                                       
+<div align=center>
+  <table cellpadding=0 cellspacing=0 border=0 width=600>
+  <tr>
+    <td id="tab1" class="tabOff" style="white-space: nowrap;"
+      onClick="showPanel(1);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(1)">Classification</td>
+    <td id="tab2" class="tabOff" style="white-space: nowrap;"
+      onClick="showPanel(2);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(2)">Related taxa</td>
+    <td id="tab3" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(3);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(3)">Taxonomic history</td>
+    <td id="tab4" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(4);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(4)">Synonymy</td>
+    <td id="tab5" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(5);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(5)">Diagnosis</td>
+  </tr>
+  <tr>
+    <td id="tab6" class="tabOff" style="white-space: nowrap;"
+      onClick="showPanel(6);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(6)">Ecology and taphonomy</td>
+    <td id="tab7" class="tabOff" style="white-space: nowrap;"
+      onClick="showPanel(7);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(7)">Measurements</td>
+    <td id="tab8" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(8);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(8)">Map</td>
+    <td id="tab9" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(9);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(9)">Age range and collections</td>
+    <td id="tab10" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(10);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(10)">Images</td>
+  </tr>
+  </table>
+</div>';
+
+    
+    print '<script language="JavaScript" type="text/javascript">
+    hideTabText(2);
+    hideTabText(3);
+    hideTabText(4);
+    hideTabText(5);
+    hideTabText(6);
+    hideTabText(7);
+    hideTabText(8);
+    hideTabText(9);
+    hideTabText(10);
+</script>';
 
     my %modules = ();
     $modules{$_} = 1 foreach @modules_to_display;
@@ -233,62 +309,110 @@ sub displayTaxonInfoResults {
 
 	# classification
 	if($modules{1}) {
+        print '<div id="panel1" class="panel">';
 		print '<div align="center"><h3>Classification</h3></div>';
         #print '<div align="center" style=\"border-bottom-width: 1px; border-bottom-color: red; border-bottom-style: solid;\">';
         print '<div align="center">';
 		print displayTaxonClassification($dbt, $genus, $species, $taxon_no);
+
+        my $entered_name = $q->param('entered_name') || $q->param('taxon_name') || $taxon_name;
+        my $entered_no   = $q->param('entered_no') || $q->param('taxon_no');
+        print "<p>";
+        print "<div>";
+        if($s->isDBMember()) {
+            # Entered Taxon
+            if ($entered_no) {
+                print "<center><a href=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=$entered_no\">";
+                print "<b>Edit taxonomic data for $entered_name</b></a> - ";
+            } else {
+                print "<center><a href=\"/cgi-bin/bridge.pl?action=submitTaxonSearch&goal=authority&taxon_no=-1&taxon_name=$entered_name\">";
+                print "<b>Enter taxonomic data for $entered_name</b></a> - ";
+            }
+
+            if ($entered_no) {
+                print "<a href=\"/cgi-bin/bridge.pl?action=displayOpinionChoiceForm&taxon_no=$entered_no\"><b>Edit taxonomic opinions about $entered_name</b></a> - ";
+                print "<a href=\"bridge.pl?action=startPopulateEcologyForm&taxon_no=$taxon_no\"><b>Add/edit ecological/taphonomic data</b></a> - ";
+            }
+            
+            print "<a href=\"/cgi-bin/bridge.pl?action=startImage\">".
+                  "<b>Enter an image</b></a> - \n";
+        } else {
+            print "<center>";
+        }
+
+    	print "<a href=\"/cgi-bin/bridge.pl?action=beginTaxonInfo\">".
+	    	  "<b>Get info on another taxon</b></a></center></div>\n";
+        print "</p>";
         print '</div>';
-        print $hr;
+        print '</div>';
 	}
+                                                                                                                                                                                
+    print '<script language="JavaScript" type="text/javascript">
+    showPanel(1);
+</script>';
+                                                                                                                                                                                
     
 	# sister and child taxa
     if($modules{2}) {
+        print '<div id="panel2" class="panel">';
 		print '<div align="center"><h3>Related taxa</h3></div>';
         print '<div align="center">';
 		print displayRelatedTaxa($dbt, $genus, $species, $taxon_no);
         print '</div>';
-        print $hr;
+        print '</div>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(2); </script>';
 	}
 	# synonymy
 	if($modules{3}) {
+        print '<div id="panel3" class="panel">';
 		print '<div align="center"><h3>Taxonomic history</h3></div>';
         print '<div align="center">';
         print displayTaxonSynonymy($dbt, $genus, $species, $taxon_no);
         print '</div>';
-        print $hr;
+        print '</div>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(3); </script>';
 	}
 
 	if ($modules{4}) {
+        print '<div id="panel4" class="panel">';
 		print '<div align="center"><h3>Synonymy</h3></div>';
         print '<div align="center">';
     	print displaySynonymyList($dbt, $q, $genus, $species, $taxon_no);
         print '</div>';
-        print $hr;
+        print '</div>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(4); </script>';
 	}
     
-    if ($modules{5} && scalar(@diagnoses)) {
+    if ($modules{5}) {
+        print '<div id="panel5" class="panel">';
 		print '<div align="center"><h3>Diagnosis</h3></div>';
         print '<div align="center">';
-        print displayDiagnoses(@diagnoses) if (@diagnoses);
+        print displayDiagnoses(@diagnoses);
         print '</div>';
-        print $hr;
+        print '</div>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(5); </script>';
     }
     if ($modules{6}) {
+        print '<div id="panel6" class="panel">';
 		print '<div align="center"><h3>Ecology</h3></div>';
         print '<div align="center">';
 		print displayEcology($dbt,$taxon_no,$in_list);
         print '</div>';
-        print $hr;
+        print '</div>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(6); </script>';
     }
     if ($modules{7}) {
+        print '<div id="panel7" class="panel">';
 		print '<div align="center"><h3>Specimen measurements</h3></div>';
         print '<div align="center">';
 		print displayMeasurements($dbt,$taxon_no,$genus,$species,$in_list);
         print '</div>';
-        print $hr;
+        print '</div>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(7); </script>';
 	}
 	# map
     if ($modules{8}) {
+        print '<div id="panel8" class="panel">';
 		print '<div align="center"><h3>Distribution</h3></div>';
         print '<div align="center">';
 		# MAP USES $q->param("taxon_name") to determine what it's doing.
@@ -313,13 +437,27 @@ sub displayTaxonInfoResults {
 			print "<input type=hidden name=\"map_num\" value=\"$map_html_path\">";
 		}
         print '</div>';
-        print $hr;
+        print '</div>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(8); </script>';
 	}
 	# collections
     if ($modules{9}) {
+        print '<div id="panel9" class="panel">';
 		print doCollections($q->url(), $q, $dbt, $dbh, $in_list);
-        print $hr;
+        print '</div>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(9); </script>';
 	}
+
+    if ($modules{10}) {
+        print '<div id="panel10" class="panel">';
+		print '<div align="center"><h3>Images</h3></div>';
+        print '<div align="center">';
+        doThumbs($dbt,$in_list);
+        print '</div>';
+        print '</div>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(10); </script>';
+    }
+
 
     
 	# Go through the list
@@ -331,35 +469,7 @@ sub displayTaxonInfoResults {
 	#}
 	# images are last
 
-    my $entered_name = $q->param('entered_name') || $q->param('taxon_name') || $taxon_name;
-    my $entered_no   = $q->param('entered_no') || $q->param('taxon_no');
-    print "<div>";
-	if($s->isDBMember()) {
-		# Entered Taxon
-        if ($entered_no) {
-		    print "<center><a href=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_no=$entered_no\">";
-		    print "<b>Edit taxonomic data for $entered_name</b></a> - ";
-        } else {
-		    print "<center><a href=\"/cgi-bin/bridge.pl?action=submitTaxonSearch&goal=authority&taxon_no=-1&taxon_name=$entered_name\">";
-		    print "<b>Enter taxonomic data for $entered_name</b></a> - ";
-        }
-
-        if ($entered_no) {
-		    print "<a href=\"/cgi-bin/bridge.pl?action=displayOpinionChoiceForm&taxon_no=$entered_no\"><b>Edit taxonomic opinions about $entered_name</b></a> - ";
-            print "<a href=\"bridge.pl?action=startPopulateEcologyForm&taxon_no=$taxon_no\"><b>Add/edit ecological/taphonomic data</b></a> - ";
-        }
-		
-		print "<a href=\"/cgi-bin/bridge.pl?action=startImage\">".
-			  "<b>Enter an image</b></a> - \n";
-	} else {
-		print "<center>";
-	}
-
-	print "<a href=\"/cgi-bin/bridge.pl?action=beginTaxonInfo\">".
-		  "<b>Get info on another taxon</b></a></center></div>\n";
-
     print "</div>"; # Ends div class="small" declared at start
-	print "<br><br>";
 }
 
 sub doNavBox {
@@ -454,11 +564,12 @@ sub doThumbs {
 	my @thumbs = Images::getImageList($dbt, $in_list);
 
     if (@thumbs) {
-        my $images_per_row = 2;
-        print "<div class=\"navtable\">";
-        print "<table cellspacing=0 cellpadding=0>".
-              "<tr><td valign=\"top\" align=\"center\" class=\"large\"><b>Images</b></td></tr>";
-        print "<tr><td><table border=0 cellspacing=8 cellpadding=0>";
+        my $images_per_row = 6;
+        #print "<div class=\"navtable\">";
+        #print "<table cellspacing=0 cellpadding=0>".
+        #      "<tr><td valign=\"top\" align=\"center\" class=\"large\"><b>Images</b></td></tr>";
+        #print "<tr><td><table border=0 cellspacing=8 cellpadding=0>";
+        print "<table border=0 cellspacing=8 cellpadding=0>";
 
         for (my $i = 0;$i < scalar(@thumbs);$i+= $images_per_row) {
             print "<tr>";
@@ -485,8 +596,10 @@ sub doThumbs {
             print "</tr>";
         }
         print "</td></tr></table>";
-        print "</table>";
-        print "</div>";
+        #print "</table>";
+        #print "</div>";
+    } else {
+        print "<i>No images are available</i>";
     }
 } 
 
@@ -1012,7 +1125,7 @@ sub doCollections{
 
 		$output .= "<center><h3>Collections</h3></center>\n";
 
-		$output .= "<table width=\"100%\"><tr>";
+		$output .= "<table><tr>";
 		$output .= "<th align=\"center\">Time interval</th>";
 		$output .= "<th align=\"center\">Country or state</th>";
 		$output .= "<th align=\"left\">PBDB collection number</th></tr>";
