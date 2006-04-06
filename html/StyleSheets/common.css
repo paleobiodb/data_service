@@ -88,6 +88,13 @@ H6 {font-size: .9em;}
 	color: white;
 }
 
+.indentNext {
+    text-indent: -1em; 
+    margin-left: 1em; 
+    margin-top: 0.15em; 
+    margin-bottom: 0;
+}
+
 /*	Meant to be a main section, for example, in an entry form. 
 	Used to help divide the page and make it easier to use.*/
 .mainSection {
