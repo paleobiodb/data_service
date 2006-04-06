@@ -1413,7 +1413,9 @@ sub displayRelatedTaxa {
 
     if (!$output) {
         $output = "<i> No related taxa found </i>";
-    } else {
+    } 
+
+    if ($orig_no) {
         $output .= "<p><b><a href=\"bridge.pl?action=displayDownloadTaxonomyResults&taxon_no=$orig_no\">Download authority and opinion data</a></b> - <b><a href=\"bridge.pl?action=startProcessPrintHierarchy&maximum_levels=99&taxon_no=$orig_no\">View classification of included taxa</a></b></br></p>";
     }
 	return $output;
