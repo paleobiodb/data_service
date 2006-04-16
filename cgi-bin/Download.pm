@@ -2399,6 +2399,7 @@ sub printCSV {
     return (scalar (@$results),$mainFile);
 }
 
+# this section is by Schroeter; I'm just doing a cleanup 15.4.06 JA
 sub printCONJUNCT {
     my $self = shift;
     my $results = shift;
@@ -2419,9 +2420,9 @@ sub printCONJUNCT {
             if ( $lastcoll )    {
                 print OUTFILE ".\n\n";
             }
-            if ( $row->{collection_name} )    {
-                $row->{collection_name} =~ s/ /_/g;
-                printf OUTFILE "%s\n",$row->{collection_name};
+            if ( $row->{'c.collection_name'} )    {
+                $row->{'c.collection_name'} =~ s/ /_/g;
+                printf OUTFILE "%s\n",$row->{'c.collection_name'};
             } else    {
                 print OUTFILE "Collection_$row->{'collection_no'}\n";
             }
@@ -2431,7 +2432,10 @@ sub printCONJUNCT {
             foreach (@collectionsFieldNames) {
                 if ($q->param("collections_".$_) eq 'YES') {
                     if ($row->{'c.'.$_}) {
-                        push @comments,"$_: $row->{$_}"; 
+			# these three will be printed anyway
+			if ( $_ !~ /(collection_name)|(localsection)|(localbed)/ )	{
+                        	push @comments,"$_: $row->{'c.'.$_}"; 
+                    	}
                     }
                 }
             } 
@@ -2458,15 +2462,16 @@ sub printCONJUNCT {
             }
             if ($level) {
                 $level =~ s/ /_/g;
-                print OUTFILE "level: _${level}_ $level_value\n";
+                print OUTFILE "level: $level $level_value\n";
             }
         }
         
-        if ( $row->{'o.genus_reso'} && $row->{'o.genus_reso'} !~ /informal|"/) {
+# informals and new taxa don't work; we're punting on adding quotes
+        if ( $row->{'o.genus_reso'} && $row->{'o.genus_reso'} !~ /(informal)|(")|(n\. gen\.)/) {
             printf OUTFILE "%s ",$row->{'o.genus_reso'};
         }
         print OUTFILE "$row->{'o.genus_name'} ";
-        if ( $row->{'o.species_reso'} && $row->{'o.species_reso'} !~ /informal|"/) {
+        if ( $row->{'o.species_reso'} && $row->{'o.species_reso'} !~ /(informal)|(")|(n\. sp\.)/) {
             printf OUTFILE "%s ",$row->{'o.species_reso'};
         }
         if ( ! $row->{'o.species_name'} )    {
