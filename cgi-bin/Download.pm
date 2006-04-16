@@ -1780,13 +1780,20 @@ sub queryDatabase {
         my $lump = 0;
             
         if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
+            # swap the reIDs into the occurrences (pretty important!)
+            # don't do this unless the user requested it (the default)
+            #  JA 16.4.06
             if ($row->{'re.reid_no'}) {
-                foreach my $field (@reidFieldNames,@reidTaxonFieldNames) {
-                    $row->{'or.'.$field}=$row->{'o.'.$field};
-                    $row->{'o.'.$field}=$row->{'re.'.$field};
+                if ( $q->param('replace_with_reid') ne 'NO' ) {
+                    foreach my $field (@reidFieldNames,@reidTaxonFieldNames) {
+                        $row->{'or.'.$field}=$row->{'o.'.$field};
+                        $row->{'o.'.$field}=$row->{'re.'.$field};
+                    }
                 }
             }
             # Replace with senior_synonym_no PS 11/1/2005
+            # this is ugly because the "original name" is actually a reID
+            #  whenever a reID exists
             if ( $q->param('replace_with_ss') ne 'NO' ) {
                 if ($ss_taxon_nos{$row->{'o.taxon_no'}}) {
                     my ($genus,$subgenus,$species,$subspecies) = @{$ss_taxon_names{$row->{'o.taxon_no'}}};
