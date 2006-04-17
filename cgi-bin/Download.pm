@@ -304,6 +304,7 @@ sub retellOptions {
     if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
         $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
         $html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
+        $html .= $self->retellOptionsRow ( "Replace names with reidentifications?", $q->param("replace_with_reid") );
         $html .= $self->retellOptionsRow ( "Replace names with senior synonyms?", $q->param("replace_with_ss") );
         $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param('indet') );
         $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", $q->param('sp') );
@@ -1112,6 +1113,7 @@ sub getOccurrencesWhereClause {
         push @occ_where, "(o.plant_organ IN ($plant_organs) OR o.plant_organ2 IN ($plant_organs))";
     }  
 
+# I'm not sure this is going to work if reidentifications are not used
     if ($q->param("classified") =~ /unclassified/i) {
         push @occ_where, "o.taxon_no=0";
         push @reid_where, "re.taxon_no=0";
@@ -1129,14 +1131,21 @@ sub getOccurrencesWhereClause {
 
     push @all_where, "o.abund_value NOT LIKE \"\" AND o.abund_value IS NOT NULL" if $q->param("without_abundance") eq 'NO';
 
-    push @occ_where, "o.species_name!='indet.'" if $q->param('indet') ne 'YES';
-    push @occ_where, "o.species_name!='sp.'" if $q->param('sp') ne 'YES';
+    push @occ_where, "o.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
+    push @occ_where, "o.species_name NOT LIKE '%sp.%'" if $q->param('sp') ne 'YES';
     my $genusResoString = $self->getGenusResoString();
     push @occ_where, $genusResoString if $genusResoString;
     push @occ_where, "(o.genus_reso NOT LIKE '%informal%' OR o.genus_reso IS NULL)" if $q->param('informal') ne 'YES';
 
-    push @reid_where, "re.species_name!='indet.'" if $q->param('indet') ne 'YES';
-    push @reid_where, "re.species_name!='sp.'" if $q->param('sp') ne 'YES';
+# nasty hack: if we're not going to use the reIDs, then don't worry about
+#  whether they meet the indet. and sp. tests JA 16.4.06
+    if ( $q->param('replace_with_reid') ne 'NO' )	{
+        push @reid_where, "re.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
+        push @reid_where, "re.species_name NOT LIKE '%sp.%'" if $q->param('sp') ne 'YES';
+    } else	{
+        push @reid_where, "o.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
+        push @reid_where, "o.species_name NOT LIKE '%sp.%'" if $q->param('sp') ne 'YES';
+    }
     # this is kind of a hack, I admit it JA 31.7.05
     $genusResoString =~ s/o\.genus_reso/re.genus_reso/g;
     push @reid_where, $genusResoString if $genusResoString;
@@ -1393,8 +1402,13 @@ sub queryDatabase {
             @taxon_where = $self->getTaxonString();
             push @occ_sql, "o.$_" for @taxon_where;
             push @reid_sql, "re.$_" for @taxon_where;
+            push @reid_sql, "o.$_" for @taxon_where;
             push @occ_where, "(".join(" OR ",@occ_sql).")";
-            push @reid_where, "(".join(" OR ",@reid_sql).")";
+# nasty hack: just ignore the taxon no in list for the reIDs table if the
+#  user isn't going to use the reIDs anyway JA 16.4.06
+            if ( $q->param('replace_with_reid') ne 'NO' )	{
+                push @reid_where, "(".join(" OR ",@reid_sql).")";
+            }
         }
 
         if ( $q->param('pubyr') > 0) {
@@ -2484,7 +2498,14 @@ sub printCONJUNCT {
         if ( ! $row->{'o.species_name'} )    {
             print OUTFILE "sp.\n";
         } else {
-            printf OUTFILE "%s\n",$row->{'o.species_name'};
+            my $species_name = $row->{'o.species_name'};
+# if there are spaces in the species name, it's some stupid thing like "sp. A",
+#   so put the garbage in brackets JA 16.4.06
+            if ( $species_name =~ / / )	{
+                $species_name =~ s/ / \[/;
+                $species_name .= "]";
+            }
+            printf OUTFILE "%s\n",$species_name;
         }
         $lastcoll = $row->{'collection_no'};
     }
@@ -2811,7 +2832,7 @@ sub setupQueryFields {
     $self->{'setup_query_fields_called'} = 1;
 
     # Setup default parameters
-    $q->param('output_format'=>'csv') if ($q->param('output_format') !~ /csv|tab|conjunct/);
+    $q->param('output_format'=>'csv') if ($q->param('output_format') !~ /csv|tab|conjunct/i);
     $q->param('output_data'=>'occurrences') if ($q->param('output_data') !~ /collections|occurrences|specimens|genera|species/);
 
     if ($q->param('output_format') =~ /conjunct/i) {
