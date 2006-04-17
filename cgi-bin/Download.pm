@@ -1139,13 +1139,13 @@ sub getOccurrencesWhereClause {
 
 # nasty hack: if we're not going to use the reIDs, then don't worry about
 #  whether they meet the indet. and sp. tests JA 16.4.06
-    if ( $q->param('replace_with_reid') ne 'NO' )	{
-        push @reid_where, "re.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
-        push @reid_where, "re.species_name NOT LIKE '%sp.%'" if $q->param('sp') ne 'YES';
-    } else	{
-        push @reid_where, "o.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
-        push @reid_where, "o.species_name NOT LIKE '%sp.%'" if $q->param('sp') ne 'YES';
-    }
+    #if ( $q->param('replace_with_reid') ne 'NO' )	{
+    push @reid_where, "re.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
+    push @reid_where, "re.species_name NOT LIKE '%sp.%'" if $q->param('sp') ne 'YES';
+    #} else	{
+    #    push @reid_where, "o.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
+    #    push @reid_where, "o.species_name NOT LIKE '%sp.%'" if $q->param('sp') ne 'YES';
+    #}
     # this is kind of a hack, I admit it JA 31.7.05
     $genusResoString =~ s/o\.genus_reso/re.genus_reso/g;
     push @reid_where, $genusResoString if $genusResoString;
@@ -1351,13 +1351,16 @@ sub queryDatabase {
                        'o.species_name AS `o.species_name`',
                        'o.taxon_no AS `o.taxon_no`',
                        'o.abund_value AS `o.abund_value`',
-                       'o.abund_unit AS `o.abund_unit`',
-                       're.reid_no AS `re.reid_no`',
-                       're.reference_no AS `re.reference_no`',
-                       're.genus_reso AS `re.genus_reso`',
-                       're.genus_name AS `re.genus_name`',
-                       're.species_name AS `re.species_name`',
-                       're.taxon_no AS `re.taxon_no`';
+                       'o.abund_unit AS `o.abund_unit`';
+                       
+            if ( $q->param('replace_with_reid') ne 'NO' )   {
+                push @fields, 're.reid_no AS `re.reid_no`',
+                           're.reference_no AS `re.reference_no`',
+                           're.genus_reso AS `re.genus_reso`',
+                           're.genus_name AS `re.genus_name`',
+                           're.species_name AS `re.species_name`',
+                           're.taxon_no AS `re.taxon_no`';
+            }
             my ($whereref,$occswhereref,$reidswhereref) = $self->getOccurrencesWhereClause();
             push @where, @$whereref;
             push @occ_where, @$occswhereref;
@@ -1369,29 +1372,37 @@ sub queryDatabase {
                     push @fields,"o.$c AS `o.$c`";
                 }
             }
-            foreach my $c (@reid_columns) {
-                # Note we use occurrences_ fields
-                if ($q->param("occurrences_".$c)) {
-                    push @fields,"re.$c AS `re.$c`";
+            if ( $q->param('replace_with_reid') ne 'NO' )   {
+                foreach my $c (@reid_columns) {
+                    # Note we use occurrences_ fields
+                    if ($q->param("occurrences_".$c)) {
+                        push @fields,"re.$c AS `re.$c`";
+                    }
                 }
             }
             if ($q->param('occurrences_authorizer') eq 'YES') {
                 push @left_joins, "LEFT JOIN person po1 ON o.authorizer_no=po1.person_no";
                 push @fields, 'po1.name AS `o.authorizer`';
-                push @left_joins, "LEFT JOIN person pre1 ON re.authorizer_no=pre1.person_no";
-                push @fields, 'pre1.name AS `re.authorizer`';
+                if ( $q->param('replace_with_reid') ne 'NO' )   {
+                    push @left_joins, "LEFT JOIN person pre1 ON re.authorizer_no=pre1.person_no";
+                    push @fields, 'pre1.name AS `re.authorizer`';
+                }
             }
             if ($q->param('occurrences_enterer') eq 'YES') {
                 push @left_joins, "LEFT JOIN person po2 ON o.enterer_no=po2.person_no";
                 push @fields, 'po2.name AS `o.enterer`';
-                push @left_joins, "LEFT JOIN person pre2 ON re.enterer_no=pre2.person_no";
-                push @fields, 'pre2.name AS `re.enterer`';
+                if ( $q->param('replace_with_reid') ne 'NO' )   {
+                    push @left_joins, "LEFT JOIN person pre2 ON re.enterer_no=pre2.person_no";
+                    push @fields, 'pre2.name AS `re.enterer`';
+                }
             }
             if ($q->param('occurrences_modifier') eq 'YES') {
                 push @left_joins, "LEFT JOIN person po3 ON o.modifier_no=po3.person_no";
                 push @fields, 'po3.name AS `o.modifier`';
-                push @left_joins, "LEFT JOIN person pre3 ON re.modifier_no=pre3.person_no";
-                push @fields, 'pre3.name AS `re.modifier`';
+                if ( $q->param('replace_with_reid') ne 'NO' )   {
+                    push @left_joins, "LEFT JOIN person pre3 ON re.modifier_no=pre3.person_no";
+                    push @fields, 'pre3.name AS `re.modifier`';
+                }
             }
         } 
 
@@ -1406,9 +1417,9 @@ sub queryDatabase {
             push @occ_where, "(".join(" OR ",@occ_sql).")";
 # nasty hack: just ignore the taxon no in list for the reIDs table if the
 #  user isn't going to use the reIDs anyway JA 16.4.06
-            if ( $q->param('replace_with_reid') ne 'NO' )	{
-                push @reid_where, "(".join(" OR ",@reid_sql).")";
-            }
+            #if ( $q->param('replace_with_reid') ne 'NO' )	{
+            push @reid_where, "(".join(" OR ",@reid_sql).")";
+            #}
         }
 
         if ( $q->param('pubyr') > 0) {
@@ -1464,7 +1475,11 @@ sub queryDatabase {
     # Do the grouping in PERL, since otherwise we can't get a list of references
     # nor can we filter out old reids and rows that don't pass permissions.
     if ( $q->param('output_data') =~ /genera|species|occurrences/ )    {
-        push @groupby, 'o.occurrence_no,re.reid_no';
+        if ( $q->param('replace_with_reid') ne 'NO' )   {
+            push @groupby, 'o.occurrence_no,re.reid_no';
+        } else {
+            push @groupby, 'o.occurrence_no';
+        }
     } elsif ($q->param('output_data') eq 'collections' && ($q->param('research_group') || $join_reids || $q->param('include_specimen_fields'))) { # = collections
        push @groupby, 'c.collection_no';
     }
@@ -1486,24 +1501,33 @@ sub queryDatabase {
         #
         # In the future: when we update to mysql 4.1, filter for "most recent" REID in a subquery, rather
         # than after the fact in the "exclude++" section of the code
-        my @left_joins1 = ('LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no',@left_joins);
+        if ( $q->param('replace_with_reid') ne 'NO' )   {
+            my @left_joins1 = ('LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no',@left_joins);
 
-        # This term very important.  sql1 deal with occs with NO reid, sql2 deals with only reids
-        # This way WHERE terms can focus on only pruning the occurrences table for sql1 and only
-        # pruning on the reids table for sql2 PS 07/15/2005
-        my @where1 = (@where,@occ_where,"re.reid_no IS NULL");
-        my $sql1 = "SELECT ".join(",",@fields).
-               " FROM " .join(",",@tables)." ".join (" ",@left_joins1).
-               " WHERE ".join(" AND ",@where1);
-        $sql1 .= " GROUP BY ".join(",",@groupby) if (@groupby);
+            # This term very important.  sql1 deal with occs with NO reid, sql2 deals with only reids
+            # This way WHERE terms can focus on only pruning the occurrences table for sql1 and only
+            # pruning on the reids table for sql2 PS 07/15/2005
+            my @where1 = (@where,@occ_where,"re.reid_no IS NULL");
+            my $sql1 = "SELECT ".join(",",@fields).
+                   " FROM " .join(",",@tables)." ".join (" ",@left_joins1).
+                   " WHERE ".join(" AND ",@where1);
+            $sql1 .= " GROUP BY ".join(",",@groupby) if (@groupby);
 
-        my @where2 = ("re.occurrence_no=o.occurrence_no AND re.most_recent='YES'",@where,@reid_where);
-        my @tables2 = (@tables,'reidentifications re'); 
-        my $sql2 = "SELECT ".join(",",@fields).
-               " FROM " .join(",",@tables2)." ".join (" ",@left_joins).
-               " WHERE ".join(" AND ",@where2);
-        $sql2 .= " GROUP BY ".join(",",@groupby) if (@groupby);
-        $sql = "($sql1) UNION ($sql2)";
+            my @where2 = ("re.occurrence_no=o.occurrence_no AND re.most_recent='YES'",@where,@reid_where);
+            my @tables2 = (@tables,'reidentifications re'); 
+            my $sql2 = "SELECT ".join(",",@fields).
+                   " FROM " .join(",",@tables2)." ".join (" ",@left_joins).
+                   " WHERE ".join(" AND ",@where2);
+            $sql2 .= " GROUP BY ".join(",",@groupby) if (@groupby);
+            $sql = "($sql1) UNION ($sql2)";
+        } else {
+            my @where1 = (@where,@occ_where);
+            my $sql1 = "SELECT ".join(",",@fields).
+                   " FROM " .join(",",@tables)." ".join (" ",@left_joins).
+                   " WHERE ".join(" AND ",@where1);
+            $sql1 .= " GROUP BY ".join(",",@groupby) if (@groupby);
+            $sql = $sql1;
+        }
 
         # This is a tricky part of the code. This will get records for specimens/genera
         # for which there is just a specimen measurement but there is no occurrence.  
