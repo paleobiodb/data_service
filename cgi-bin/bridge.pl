@@ -3440,26 +3440,24 @@ sub buildTaxonomicList {
                 $taxon_no = $rowref->{'taxon_no'};
             }
             if ($taxon_no) {
-                my $ss_taxon_no = TaxonInfo::getSeniorSynonym($dbt,$taxon_no);
-                my $is_synonym = ($ss_taxon_no != $taxon_no) ? 1 : 0;
+                my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
+                my $ss_taxon_no = TaxonInfo::getSeniorSynonym($dbt,$orig_no);
+                my $is_synonym = ($ss_taxon_no != $orig_no) ? 1 : 0;
                 my $is_spelling = 0;
                 my $spelling_reason = "";
 
                 my $correct_row = TaxonInfo::getMostRecentParentOpinion($dbt,$ss_taxon_no,1);
-                my $taxon_name;
-                my $taxon_rank;
+                my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$ss_taxon_no);
+                my $taxon_name = $taxon->{'taxon_name'};
+                my $taxon_rank = $taxon->{'taxon_rank'};
                 if ($correct_row) {
                     $taxon_name = $correct_row->{'child_name'};
                     $taxon_rank = $correct_row->{'child_rank'};
-                    if ($correct_row->{'child_spelling_no'} != $correct_row->{'child_no'}) {
+                    if ($correct_row->{'child_spelling_no'} != $taxon_no) {
                         $is_spelling = 1;
                         $spelling_reason = $correct_row->{'status'};
                     }
-                } else {
-                    my $taxon = TaxonInfo::getTaxon($dbt,$ss_taxon_no);
-                    $taxon_name = $taxon->{'taxon_name'};
-                    $taxon_rank = $taxon->{'taxon_rank'};
-                }
+                } 
                 if ($is_synonym || $is_spelling) {
                     $output .= "<tr>";
                     $output .= "<td></td><td></td><td></td>"; #class,order,family - blanks

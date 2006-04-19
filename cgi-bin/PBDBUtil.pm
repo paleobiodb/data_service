@@ -537,7 +537,7 @@ sub getMostRecentReIDforOcc{
 	my $occ = shift;
 	my $returnTheRef = shift;
 
-    my $sql = "SELECT re.genus_name, re.species_name, re.collection_no, re.reid_no, r.pubyr, re.created FROM reidentifications re, refs r WHERE r.reference_no=re.reference_no AND re.occurrence_no=".int($occ)." ORDER BY r.pubyr DESC, re.reid_no DESC LIMIT 1";  
+    my $sql = "SELECT re.*, r.pubyr FROM reidentifications re, refs r WHERE r.reference_no=re.reference_no AND re.occurrence_no=".int($occ)." ORDER BY r.pubyr DESC, re.reid_no DESC LIMIT 1";  
 
 	my @results = @{$dbt->getData($sql)};
 
