@@ -123,19 +123,19 @@ sub buildMap {
         }
 
         if ($dotsizeterm eq "tiny")	{
-            $dotsize = 1;
+            $dotsize = 0.5;
         } elsif ($dotsizeterm eq "small")	{
-            $dotsize = 1.5;
+            $dotsize = 0.75;
         } elsif ($dotsizeterm eq "medium")	{
-            $dotsize = 2;
+            $dotsize = 1;
         } elsif ($dotsizeterm eq "large")	{
-            $dotsize = 3;
+            $dotsize = 1.5;
         } elsif ($dotsizeterm eq "huge")	{
-            $dotsize = 4;
+            $dotsize = 2;
         }
         $maxdotsize = $dotsize;
         if ($dotsizeterm eq "proportional")	{
-          $maxdotsize = 7;
+          $maxdotsize = 3.5;
         }
 
         if ($ptset > 1) {
@@ -261,13 +261,13 @@ sub drawMapOnly {
         }
     }
 
-    if ($dotsizeterm eq "tiny")	{ $dotsize = 1; } 
-    elsif ($dotsizeterm eq "small")	{ $dotsize = 1.5; }
-    elsif ($dotsizeterm eq "medium") { $dotsize = 2;} 
-    elsif ($dotsizeterm eq "large") {$dotsize = 3;} 
-    elsif ($dotsizeterm eq "huge")	{$dotsize = 4;}
+    if ($dotsizeterm eq "tiny")	{ $dotsize = 0.5; } 
+    elsif ($dotsizeterm eq "small")	{ $dotsize = 0.75; }
+    elsif ($dotsizeterm eq "medium") { $dotsize = 1;} 
+    elsif ($dotsizeterm eq "large") {$dotsize = 1.5;} 
+    elsif ($dotsizeterm eq "huge")	{$dotsize = 2;}
     $maxdotsize = $dotsize;
-    if ($dotsizeterm eq "proportional")	{ $maxdotsize = 7; }
+    if ($dotsizeterm eq "proportional")	{ $maxdotsize = 3.5; }
 
     my %options = $q->Vars();
     $self->{'options'} = \%options;
