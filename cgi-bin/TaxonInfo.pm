@@ -394,7 +394,7 @@ sub displayTaxonInfoResults {
     }
     if ($modules{6}) {
         print '<div id="panel6" class="panel">';
-		print '<div align="center"><h3>Ecology</h3></div>';
+		print '<div align="center"><h3>Ecology and taphonomy</h3></div>';
         print '<div align="center">';
 		print displayEcology($dbt,$taxon_no,$in_list);
         print '</div>';
@@ -403,7 +403,7 @@ sub displayTaxonInfoResults {
     }
     if ($modules{7}) {
         print '<div id="panel7" class="panel">';
-		print '<div align="center"><h3>Specimen measurements</h3></div>';
+		print '<div align="center"><h3>Measurements</h3></div>';
         print '<div align="center">';
 		print displayMeasurements($dbt,$taxon_no,$genus,$species,$in_list);
         print '</div>';
@@ -413,7 +413,7 @@ sub displayTaxonInfoResults {
 	# map
     if ($modules{8}) {
         print '<div id="panel8" class="panel">';
-		print '<div align="center"><h3>Distribution</h3></div>';
+		print '<div align="center"><h3>Map</h3></div>';
         print '<div align="center">';
 		# MAP USES $q->param("taxon_name") to determine what it's doing.
 		my $map_html_path = doMap($dbh, $dbt, $q, $s, $in_list);
@@ -1926,10 +1926,15 @@ sub displayMeasurements {
 
     my $str = "";
     if (@specimens) {
+        my $temp;
         while (my($part,$m_table)=each %$p_table) {
-            my $part_str = ($part) ? "<b>Part: </b>$part<br>" : "";
-            $str .= "<table><tr><td colspan=5 style=\"padding-bottom: .75em;\">$part_str<b>Specimens measured:</b> $m_table->{specimens_measured}</td></tr>".
-                    "<tr><th></th><th>Mean</th><th>Minimum</th><th>Maximum</th><th>Median</th><th>Error</th><th></th></tr>";
+            $temp++;
+            my $part_str = ($part) ? "<p><b>Part: </b>$part</p>" : "";
+            if ( $temp > 1 )	{
+              $part_str = "<hr>\n" . $part_str;
+            }
+            $str .= "<table><tr><td colspan=6 style=\"padding-bottom: .75em;\">$part_str<b>Specimens measured:</b> $m_table->{specimens_measured}</td></tr>".
+                    "<tr><th></th><th>mean</th><th>minimum</th><th>maximum</th><th>median</th><th>error</th><th></th></tr>";
 
             foreach my $type (('length','width','height','diagonal','inflation')) {
                 if (exists ($m_table->{$type})) {
