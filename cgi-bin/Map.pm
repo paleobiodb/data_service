@@ -444,22 +444,20 @@ sub mapFinishImage {
         }
         print MAPOUT "within the mapped area, have lat/long data, and matched your query";
         print MAPOUT "</td>\n";
-    }
 
-    if ($dotsizeterm eq "proportional")	{
+        if ($dotsizeterm eq "proportional")	{
+            print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
+            print MAPOUT "<br>Sizes of $dotshape are proportional to counts of collections at each point.\n"
+        }
+
         print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
-        print MAPOUT "<br>Sizes of $dotshape are proportional to counts of collections at each point.\n"
-    }
+        print MAPOUT "You may download the image in ";
+        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
+        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">PNG</a></b>, ";
+        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
+        print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format\n";
+        print MAPOUT "</td></tr>\n";
 
-    print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
-    print MAPOUT "You may download the image in ";
-    print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
-    print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">PNG</a></b>, ";
-    print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
-    print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format\n";
-    print MAPOUT "</td></tr>\n";
-
-    unless($q->param("simple_map") =~ /YES/i){
         print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
         print MAPOUT "Click on a point to recenter the map\n";
         print MAPOUT "</td></tr>\n";
@@ -496,6 +494,15 @@ sub mapFinishImage {
 
     print MAPOUT "<td align=center><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
     print MAPOUT "</table>\n";
+
+    # JA 26.4.06
+    if ($q->param("simple_map") =~ /YES/i){
+        print MAPOUT "<p>You may download the image in ";
+        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
+        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">PNG</a></b>, ";
+        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
+        print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format.</p>\n";
+    }
 
     close MAPOUT;
 }
