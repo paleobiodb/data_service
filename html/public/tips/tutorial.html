@@ -9,17 +9,18 @@
 <title id="title">Paleobiology Database</title>
 
 <STYLE type="text/css"> <!--
-        TD      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
-        TH      { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
-        P       { font-family : Arial, Verdana, Helvetica; font-size : 14px; }
-        H2      { font-family : Arial, Verdana, Helvetica; }
-        H3      { font-family : Arial, Verdana, Helvetica; }
-        H4      { font-family : Arial, Verdana, Helvetica; }
-        OL     { font-family : Arial, Verdana, Helvetica; font-size : 12px; }
-        .menu { font-family : Arial, Verdana, Helvetica; color : White; font-size : 12px; text-decoration:none; }
-        .small { font-family : Arial, Verdana, Helvetica; font-size : 12px; text-decoration:none; }
-        .large { font-family : Arial, Verdana, Helvetica; font-size : 16px; text-decoration:none; }
-        .cell { font-family : Arial, Verdana, Helvetica; font-size : 12px; text-decoration:none; }
+        TD      { font-family : Verdana, Arial, Helvetica; font-size : 14px; }
+        TH      { font-family : Verdana, Arial, Helvetica; font-size : 14px; }
+        P       { font-family : Verdana, Arial, Helvetica; font-size : 14px; }
+        H2      { font-family : Verdana, Arial, Helvetica; }
+        H3      { font-family : Verdana, Arial, Helvetica; }
+        H4      { font-family : Verdana, Arial, Helvetica; }
+        OL     { font-family : Verdana, Arial, Helvetica; font-size : 12px; }
+        LI     { font-family : Verdana, Arial, Helvetica; font-size : 12px; }
+        .menu { font-family : Verdana, Arial, Helvetica; color : White; font-size : 12px; text-decoration:none; }
+        .small { font-family : Verdana, Arial, Helvetica; font-size : 12px; text-decoration:none; }
+        .large { font-family : Verdana, Arial, Helvetica; font-size : 16px; text-decoration:none; }
+        .cell { font-family : Verdana, Arial, Helvetica; font-size : 12px; text-decoration:none; }
         H1, H2, H3, H4 { margin: 0px 0px 0px 0px; }
                 -->
 </STYLE>
@@ -85,6 +86,27 @@ The authorizer is typically the Ph.D. who is supervising a data entry project; t
 If you ever need to get back to this page from anywhere in the contributors' area, hit <u>Main menu</u> in the navigation bar.
 </ol>
 
+<h3>What script to use</h3>
+
+<p>
+We store many kinds of data, so there are so many data entry scripts, and it may not be clear which one you should use.
+Here are some common scenarios.
+</p>
+
+<ul>
+<li><i>I can't find the reference I am reading in the Database.</i> <a href="#References">Enter a reference</a>.
+<li><i>I want to record where the fossils came from.</i> <a href="#Collections">Enter a collection</a> after entering the reference.
+<li><i>I want to record the species found in a collection of fossils.</i> <a href="#Occurrences">Enter the occurrences</a> after creating the collection.
+<li><i>The list of occurrences in my collection or someone else's is wrong because it is missing some species.</i> <a href="#Occurrences">Add more occurrences</a> to an existing collection.
+<li><i>The list is wrong because the original identification of those fossils in that collection has been changed in a later paper.</i> <a href="#Reidentifications">Reidentify the occurrence</a> after entering the reference.
+<li><i>The list is wrong because the species aren't being classified.</i> Either <a href="#Reclassifications">reclassify the occurrences</a> when more than one taxon has a name spelt exactly the same way (e.g., because there are homonyms), or <a href="#Taxonomy">add authority and classification data</a> if we just know nothing right now about the classification of the name. The latter scenario is far, far more common.
+<li><i>The list is wrong because the name is invalid - it was synonymized, recombined, or  made a nomen dubium.</i> <a href="#Taxonomy">Enter taxonomic data</a>.
+<li><i>I'm creating an Online Systematics Archive, or just throwing in some classification data.</i> <a href="#Taxonomy">Enter taxonomic data</a>.
+<li><i>I want to place species, genera, or higher taxa into ecological or taphonomic categories.</i> <a href="#Ecology">Add ecological/taphonomic information</a>.
+<li><i>I have digital images I want to upload.</i> <a href="#Images">Add images</a> to the Database.
+</ul>
+
+<a name="References">
 <h3>References</h3>
 
 <p>Every major table in the Database is tied back to the references table, which tracks publications yielding assorted data.
@@ -104,6 +126,7 @@ Don't worry about the project codes if you don't know what they are; if you can,
 If you are on the backup server you can do so; otherwise, hit <u>Main menu</u>.
 </ol>
 
+<a name="Collections">
 <h3>Collections</h3>
 
 <p>We separate information about fossil collections into two tables that have different data entry forms.
@@ -129,6 +152,7 @@ Fill out every field you can following the instructions on the <a href="javascri
 <li>Once you're done, unless you're on the backup server don't hit <u>Enter new collection</u>; instead, hit <u>Main menu</u>.
 </ol>
 
+<a name="Occurrences">
 <h3>Occurrences</h3>
 
 <p>The "occurrences" comprise the taxonomic list for a collection, plus abundance data, comments, etc.
@@ -149,6 +173,7 @@ If your authorizer doesn't own the old records, they won't be writeable.
 <li>Once you're done, unless you're on the backup server don't hit <u>Save changes</u>; instead, hit <u>Main menu</u>.
 </ol>
 
+<a name="Reidentifications">
 <h3>Reidentifications</h3>
 
 <p>If a newer paper says that the identification in an older taxonomic list is wrong, you need to record the new ID or "reidentification."
@@ -172,6 +197,7 @@ If the first page doesn't have the occurrences you need to correct, hit the <u>V
 <li>Once you're done, unless you're on the backup server don't hit <u>Save reidentifications</u>; instead, hit <u>Main menu</u>.
 </ol>
 
+<a name="Reclassifications">
 <h3>Reclassifications</h3>
 
 <p>Our system normally figures out for you which taxonomic authority record (= formally listed name) goes with which occurrence or reidentification.
@@ -193,6 +219,7 @@ You can't do anything about those names unless you first create the taxonomic au
 <li>Once you're done, unless you're on the backup server don't hit <u>Reclassify</u>; instead, hit <u>Main menu</u>.
 </ol>
 
+<a name="Taxonomy">
 <h3>Taxonomic data</h3>
 
 <p>We have two tables that handle all the basic information of alpha taxonomy.
@@ -217,6 +244,7 @@ Carefully consult the <a href="javascript: tipsPopup('/public/tips/taxonomy_tips
 Hit <u>Add/edit taxonomic opinion</u> under "Taxa" and then follow the equivalent of steps 3 - 6.
 </ol>
 
+<a name="Ecology">
 <h3>Ecological/taphonomic information</h3>
 
 <p>The Database can record general information about higher or lower taxa such as their skeletal composition or diet.
@@ -235,6 +263,7 @@ Carefully consult the <a href="javascript: tipsPopup('/public/tips/ecology_tips.
 <li>Once you're done, unless you're on the backup server don't hit <u>Submit</u>; instead, hit <u>Main menu</u>.
 </ol>
 
+<a name="Images">
 <h3>Images</h3>
 
 <p>The Database can store image files such as JPG, GIF, or PNG.
@@ -252,5 +281,4 @@ The caption is optional but will appear below the images.
 Note that you can only upload one image at a time; if you have multiple images of the same species, start the procedure over again for each one.
 <li>Once you're done, unless you're on the backup server don't hit <u>Enter new collection</u>; instead, hit <u>Main menu</u>.
 </ol>
-
 
