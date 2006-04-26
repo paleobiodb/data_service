@@ -124,14 +124,18 @@ sub buildMap {
 
         if ($dotsizeterm eq "tiny")	{
             $dotsize = 0.5;
-        } elsif ($dotsizeterm eq "small")	{
+        } elsif ($dotsizeterm eq "very small")	{
             $dotsize = 0.75;
-        } elsif ($dotsizeterm eq "medium")	{
+        } elsif ($dotsizeterm eq "small")	{
             $dotsize = 1;
+        } elsif ($dotsizeterm eq "medium")	{
+            $dotsize = 1.25;
         } elsif ($dotsizeterm eq "large")	{
             $dotsize = 1.5;
-        } elsif ($dotsizeterm eq "huge")	{
+        } elsif ($dotsizeterm eq "very large")	{
             $dotsize = 2;
+        } elsif ($dotsizeterm eq "huge")	{
+            $dotsize = 2.5;
         }
         $maxdotsize = $dotsize;
         if ($dotsizeterm eq "proportional")	{
@@ -262,10 +266,12 @@ sub drawMapOnly {
     }
 
     if ($dotsizeterm eq "tiny")	{ $dotsize = 0.5; } 
-    elsif ($dotsizeterm eq "small")	{ $dotsize = 0.75; }
-    elsif ($dotsizeterm eq "medium") { $dotsize = 1;} 
+    elsif ($dotsizeterm eq "very small")	{ $dotsize = 0.75; }
+    elsif ($dotsizeterm eq "small")	{ $dotsize = 1; }
+    elsif ($dotsizeterm eq "medium") { $dotsize = 1.25;} 
     elsif ($dotsizeterm eq "large") {$dotsize = 1.5;} 
-    elsif ($dotsizeterm eq "huge")	{$dotsize = 2;}
+    elsif ($dotsizeterm eq "very large") {$dotsize = 2;} 
+    elsif ($dotsizeterm eq "huge")	{$dotsize = 2.5;}
     $maxdotsize = $dotsize;
     if ($dotsizeterm eq "proportional")	{ $maxdotsize = 3.5; }
 
