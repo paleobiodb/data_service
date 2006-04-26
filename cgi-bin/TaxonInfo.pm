@@ -709,18 +709,28 @@ sub doMap{
 	# redunant (since we scale below).. taking it out will
 	# cause a division by zero error in Map.pm.
 	$q->param('mapscale'=>'X 1');
-    $q->param('mapsize'=>'75%');
+    $q->param('mapsize'=>'100%');
 
+	# we need to get the number of collections out of dataRowsRef
+	#  before figuring out the point size
+	require Map;
+	my $m = Map->new( $dbh, $q, $s, $dbt );
+	my $dataRowsRef = $m->buildMapOnly($in_list);
 
-	$q->param('pointsize1'=>'tiny');
+	# find the point size JA 26.4.06
+	if ( $#{$dataRowsRef} > 100 )	{
+		$q->param('pointsize1'=>'medium');
+	} elsif ( $#{$dataRowsRef} > 50 )	{
+		$q->param('pointsize1'=>'large');
+	} elsif ( $#{$dataRowsRef} > 20 )	{
+		$q->param('pointsize1'=>'very large');
+	} else	{
+		$q->param('pointsize1'=>'huge');
+	}
 
 	if(!$q->param('projection') or $q->param('projection') eq ""){
 		$q->param('projection'=>'rectilinear');
 	}
-
-	require Map;
-	my $m = Map->new( $dbh, $q, $s, $dbt );
-	my $dataRowsRef = $m->buildMapOnly($in_list);
 
 	if(scalar(@{$dataRowsRef}) > 0) {
 		# this section added by rjp on 12/11/2003
