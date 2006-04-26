@@ -694,14 +694,26 @@ sub doMap{
 		}
 	}
 	# Not covered by prefs:
+	if(!$q->param('mapbgcolor')){
+		$q->param('mapbgcolor' => 'white');
+	}
 	if(!$q->param('pointshape1')){
 		$q->param('pointshape1' => 'circles');
 	}
 	if(!$q->param('dotcolor1')){
 		$q->param('dotcolor1' => 'red');
 	}
+	if(!$q->param('dotborder1')){
+		$q->param('dotborder1' => 'no');
+	}
 	if(!$q->param('coastlinecolor')){
-		$q->param('coastlinecolor' => 'black');
+		$q->param('coastlinecolor' => 'gray');
+	}
+	if(!$q->param('borderlinecolor')){
+		$q->param('borderlinecolor' => 'gray');
+	}
+	if(!$q->param('usalinecolor')){
+		$q->param('usalinecolor' => 'gray');
 	}
 	$q->param('mapresolution'=>'medium');
 
