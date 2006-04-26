@@ -451,7 +451,7 @@ sub mapFinishImage {
         }
 
         print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
-        print MAPOUT "You may download the image in ";
+        print MAPOUT "You may download this map in ";
         print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
         print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">PNG</a></b>, ";
         print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
@@ -497,7 +497,7 @@ sub mapFinishImage {
 
     # JA 26.4.06
     if ($q->param("simple_map") =~ /YES/i){
-        print MAPOUT "<p>You may download the image in ";
+        print MAPOUT "<p>You may download this map in ";
         print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
         print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">PNG</a></b>, ";
         print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
