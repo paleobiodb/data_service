@@ -62,26 +62,17 @@
 <table>
 <tr><td colspan=2 valign=top><h4>View options</h4>
 
-<tr><td valign=top>Data points:
-<td valign=top>
-<select id="pointsize1"></select>
-<select id="dotcolor1"></select>
-<select id="pointshape1"></select>
-<font size=-1>with</font>
-<select id="dotborder1"></select>
-<font size=-1>borders</font>
-
-<tr><td valign=top>Image size:
-<td valign=top><select id="mapsize">
-</select>
+<tr><td valign=top>Reconstruction date:
+<td valign=top><input name="maptime" size=4 onChange="fillPeriodEpoch();">
+million years ago
 
 <tr><td valign=top>Projection:
 <td valign=top><select id="projection">
 </select>
 
-<tr><td valign=top>Reconstruction date:
-<td valign=top><input name="maptime" size=4 onChange="fillPeriodEpoch();">
-million years ago
+<tr><td valign=top>Image size:
+<td valign=top><select id="mapsize">
+</select>
 
 <tr><td valign=top>Map focus:
 <td valign=top><select id="mapfocus">
@@ -99,6 +90,15 @@ lng = <input name="maplng" size=4>
 <tr><td valign=top>Resolution:
 <td valign=top><select id="mapresolution">
 </select>
+
+<tr><td valign=top>Data points:
+<td valign=top>
+<select id="pointsize1"></select>
+<select id="dotcolor1"></select>
+<select id="pointshape1"></select>
+<font size=-1>with</font>
+<select id="dotborder1"></select>
+<font size=-1>borders</font>
 
 <tr><td valign=top>Background/ocean color:
 <td valign=top><select id="mapbgcolor">
