@@ -733,7 +733,7 @@ sub displayMapForm {
 	# List fields that should be preset
 	my @fieldNames = ( 'research_group', 'country', 'period_max', 'lithology1', 'environment', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapscale', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngnocolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize1', 'pointshape1', 'dotcolor1', 'dotborder1', 'mapsearchfields2', 'pointsize2', 'pointshape2', 'dotcolor2', 'dotborder2', 'mapsearchfields3', 'pointsize3', 'pointshape3', 'dotcolor3', 'dotborder3', 'mapsearchfields4', 'pointsize4', 'pointshape4', 'dotcolor4', 'dotborder4' );
 	# Set default values
-	my @row = ( '', '', '', '', '', '100%', 'rectilinear', '0', 'Europe', 'X 1', 'medium', 'white', 'none', '30 degrees', 'gray', 'in back', 'medium', 'none', 'black', 'none', 'none', 'medium', 'circles', 'red', 'black', '', 'medium', 'squares', 'blue', 'black', '', 'medium', 'triangles', 'yellow', 'black', '', 'medium', 'diamonds', 'green', 'black' );
+	my @row = ( '', '', '', '', '', '100%', 'rectilinear', '0', 'Europe', 'X 1', 'medium', 'white', 'none', 'none', 'gray', 'in back', 'medium', 'none', 'gray', 'none', 'none', 'large', 'circles', 'red', 'none', '', 'medium', 'squares', 'blue', 'black', '', 'medium', 'triangles', 'yellow', 'black', '', 'medium', 'diamonds', 'green', 'black' );
 	
 	# Read preferences if there are any JA 8.7.02
 	my %pref = getPreferences($s->get('enterer_no'));
@@ -751,11 +751,11 @@ sub displayMapForm {
 
 	%pref = getPreferences($s->get('enterer_no'));
 	my @prefkeys = keys %pref;
-    my $html = $hbo->populateHTML('map_form', \@row, \@fieldNames, \@prefkeys);
+	my $html = $hbo->populateHTML('map_form', \@row, \@fieldNames, \@prefkeys);
 
 
-    my $javaScript = &makeAuthEntJavaScript();
-    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
+	my $javaScript = &makeAuthEntJavaScript();
+	$html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
 
 	my $authorizer_reversed = $s->get("authorizer_reversed");
 	$html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
