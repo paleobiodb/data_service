@@ -593,7 +593,7 @@ sub getTaxonomicNames {
     if ($options{'taxon_created_year'}) {
         my ($yyyy,$mm,$dd) = ($options{'taxon_created_year'},$options{'taxon_created_month'},$options{'taxon_created_day'});
         my $date = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
-        my $sign = ($options{'created_before_after'} eq 'before') ? '<=' : '>=';
+        my $sign = ($options{'taxon_created_before_after'} eq 'before') ? '<=' : '>=';
         push @where,"a.created $sign $date";
     }
 
@@ -788,6 +788,13 @@ sub getTaxonomicOpinions {
         push @where, "IF(o.ref_has_opinion='YES',".
             "r.author1last LIKE $author OR r.author2last LIKE $author OR r.otherauthors LIKE $authorWild,". # If ref_is_authority, use ref
             "o.author1last LIKE $author OR o.author2last LIKE $author OR o.otherauthors LIKE $authorWild)"; # Else, use record itself
+    }
+
+    if ($options{'opinion_created_year'}) {
+        my ($yyyy,$mm,$dd) = ($options{'opinion_created_year'},$options{'opinion_created_month'},$options{'opinion_created_day'});
+        my $date = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
+        my $sign = ($options{'opinion_created_before_after'} eq 'before') ? '<=' : '>=';
+        push @where,"o.created $sign $date";
     }
 
     if ($options{'opinion_person_no'}) {
