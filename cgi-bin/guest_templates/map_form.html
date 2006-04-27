@@ -12,10 +12,17 @@
 
 	
 
-<table width="100%">
+<table width="100%" cellpadding=5>
 
-<tr><td width="40%" valign=top><table>
+<tr><td width="40%" valign=top>
+<table cellspacing=1 bgcolor="999999">
+<tr><td align="center" valign="top" bgcolor="#FAFAFA">
+<table>
 <tr><td colspan=2 valign=top><h4>Search options</h4>
+
+<tr><td valign=top nowrap>Taxon name:
+<td valign=top><input name="taxon_name" size=25>
+
 <tr><td valign=top>Research group<br>or project:
 <td valign=top>
 <select id="research_group">
@@ -42,9 +49,18 @@
 
 <tr><td valign="top">Paleoenvironment:
 <td valign=top><select id="environment"></select>
+<p></p>
 
-<tr><td valign=top nowrap>Taxon name:
-<td valign=top><input name="taxon_name" size=25>
+</table>
+</td></tr>
+</table>
+
+<td valign=top width="60%" rowspan=2>
+
+<table cellspacing=1 bgcolor="999999">
+<tr><td align="center" valign="top" bgcolor="#FAFAFA">
+<table>
+<tr><td colspan=2 valign=top><h4>View options</h4>
 
 <tr><td valign=top>Data points:
 <td valign=top>
@@ -54,21 +70,6 @@
 <font size=-1>with</font>
 <select id="dotborder1"></select>
 <font size=-1>borders</font>
-
-<tr><td colspan=2 valign=top><h4>Examples</h4>
-
-<tr><td align=left valign=top colspan=2>
-<p><i>Colors</i></p>
-<img src="/public/palette.gif"></a>
-
-<tr><td align=left valign=top colspan=2>
-<p><i>Projections</i></p>
-<img src="/public/projections.gif"></a>
-
-</table>
-
-<td valign=top width="60%"><table>
-<tr><td colspan=2 valign=top><h4>View options</h4>
 
 <tr><td valign=top>Image size:
 <td valign=top><select id="mapsize">
@@ -80,7 +81,7 @@
 
 <tr><td valign=top>Reconstruction date:
 <td valign=top><input name="maptime" size=4 onChange="fillPeriodEpoch();">
-m.y. ago
+million years ago
 
 <tr><td valign=top>Map focus:
 <td valign=top><select id="mapfocus">
@@ -134,6 +135,28 @@ lng = <input name="maplng" size=4>
 </table>
 </table>
 
+<tr><td valign="top">
+<table cellspacing=1 width="100%" bgcolor="999999">
+<tr><td align="left" valign="top" bgcolor="#FAFAFA">
+<table>
+<tr><td colspan=2 valign=top><h4>Examples</h4>
+
+<tr><td align=left valign=top colspan=2>
+<p><i>Colors</i></p>
+<img src="/public/palette.gif"></a>
+
+<tr><td align=left valign=top colspan=2>
+<p><i>Projections</i></p>
+<img src="/public/projections.gif"></a>
+
+</table>
+</td></tr>
+</table>
+
+</td></tr>
+
+</table>
+
 <table width=100%>
 <tr><td width=40%><td width=60%><input type=submit value="Draw map">
 </table>
@@ -141,6 +164,9 @@ lng = <input name="maplng" size=4>
 </form>
 
 <center><p class=small>
-<i>For more information about the plate reconstructions visit the PALEOMAP website - <a href="http://www.scotese.com/license.htm">http://www.scotese.com</a></i>
+<i>
+You can make a paleogeographic map by entering a reconstruction date.<br>
+For more information about the plate reconstructions visit the PALEOMAP website - <a href="http://www.scotese.com/license.htm">http://www.scotese.com</a>
+</i>
 <p></center>
 
