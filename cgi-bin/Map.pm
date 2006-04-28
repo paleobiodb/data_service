@@ -688,7 +688,8 @@ sub mapGetRotations	{
 		if ( $topma < 1000 )	{
 			$basewgt = ( $topma - $self->{maptime} ) / ( $topma - $basema );
 			$topwgt = ( $self->{maptime} - $basema ) / ( $topma - $basema );
-			for $pid (1..1000)	{
+			@pids = sort { $a <=> $b } keys %{$rotx{'20'}};
+			for $pid ( @pids )	{
 				my $x1 = $rotx{$basema}{$pid};
 				my $x2 = $rotx{$topma}{$pid};
 				my $y1 = $roty{$basema}{$pid};
@@ -697,23 +698,55 @@ sub mapGetRotations	{
 				my $z2 = $rotdeg{$topma}{$pid};
 
 				$rotx{$self->{maptime}}{$pid} = ( $basewgt * $x1 ) + ( $topwgt * $x2 ) ;
+			# rewrote almost all of the following section:
+			#  equations for rotx were just wrong, and there was
+			#  no correction for rotdeg JA 28.4.06
 				# the amazing "Madagascar 230 Ma" correction
 				if ( ( $x1 > 0 && $x2 < 0 ) || ( $x1 < 0 && $x2 > 0 ) )	{
 					if ( abs($x1 - $x2) > 180 )	{ # Madagascar case
-						$rotx{$self->{maptime}}{$pid} = ( ( 180 - $x1 ) + ( 180 - $x2 ) ) / 2;
+						my $avg;
+						if ( $x1 > 0 && $x2 < 0 ) 	{
+							$avg = ( $basewgt * ( $1 - 180 ) ) + ( $topwgt* ( $x2 + 180 ) );
+						} else	{
+							$avg = ( $basewgt * ( $x1 + 180 ) ) + ( $topwgt * ( $x2 - 180 ) );
+						}
+						if ( $avg > 0 )	{
+							$avg = $avg - 180;
+						} else	{
+							$avg = $avg + 180;
+						}
+						$rotx{$self->{maptime}}{$pid} = $avg;
 					} elsif ( abs($x1 - $x2) > 90 )	{ # Africa plate 701/150 Ma case
+			# I'm not really sure I have this fixed JA 28.4.06
 						$y2 = -1 * $y2;
 						$z2 = -1 * $z2;
 						if ( abs($x1) > abs($x2) )	{
-							$rotx{$self->{maptime}}{$pid} = ( 180 + $x1 + $x2 ) / 2;
+							$rotx{$self->{maptime}}{$pid} = 90 + ( $basewgt * $x1 ) + ( $topwgt * $x2 );
 						} else	{
-							$rotx{$self->{maptime}}{$pid} = ( 180 - $x1 - $x2 ) / 2;
+							$rotx{$self->{maptime}}{$pid} = 90 - ( $basewgt * $x1 ) - ( $topwgt * $x2 );
 						}
 					}
 				}
 
 				$roty{$self->{maptime}}{$pid} = ( $basewgt * $y1 ) + ( $topwgt * $y2 );
-				$rotdeg{$self->{maptime}}{$pid} = ( $basewgt * $z1 ) + ( $topwgt * $z2 );
+				if ( abs($z1 - $z2) > 180 )	{
+				# rotate the points 180 degrees, find the
+				#   average, then rerotate JA 28.4.06
+					my $avg;
+					if ( $z1 > 0 && $z2 < 0 )	{
+						$avg = ( $basewgt * ( $z1 - 180 ) ) + ( $topwgt* ( $z2 + 180 ) );
+					} else	{
+						$avg = ( $basewgt * ( $z1 + 180 ) ) + ( $topwgt * ( $z2 - 180 ) );
+					}
+					if ( $avg > 0 )	{
+						$avg = $avg - 180;
+					} else	{
+						$avg = $avg + 180;
+					}
+					$rotdeg{$self->{maptime}}{$pid} = $avg;
+				} else	{
+					$rotdeg{$self->{maptime}}{$pid} = ( $basewgt * $z1 ) + ( $topwgt * $z2 );
+				}
 			}
 		}
 	}
