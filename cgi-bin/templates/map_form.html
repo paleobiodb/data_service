@@ -1,27 +1,35 @@
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+//  End -->
+</script>
+
 %%NOESCAPE_enterer_authorizer_lists%%
-<div align="center"><h2>Map request form</h2></div>
 
-<form method=post action="$exec_url" onSubmit="return checkForm();">
-<input id="action" type=hidden name="action" value="displayMapResults">
+	<div align="center"><h2>Fossil collection map form</h2></div>
 
+    <form method=post action="$exec_url" onSubmit="return checkForm();">
+	<input id="action" type=hidden name="action" value="displayMapResults">
+	<input id="user" type=hidden name="user" value="Guest">
 
-<hr>
-<table width="100%">
+	
+<div class="displayPanel" align=left>
+<span class="displayPanelHeader"><b>Data to include</b></span>
+<div class="displayPanelContent small">
 
-<tr><td colspan=2 valign=top><h4>Search options</h4>
+<table border=0 cellpadding=2 cellspacing=2 width="100%">
 
-<tr><td width="50%" valign=top>
+<tr><td valign="top" width="50%">
 
-<table>
+<table border=0 cellpadding=2 cellspacing=2>
 
-<tr><td valign=top nowrap> Taxon name:
-</td><td valign=top><input name="taxon_name" size=25></td></tr>
+<tr><td valign=top nowrap>Taxon name:
+<td valign=top><input name="taxon_name" size=25>
 
-<tr><td valign=top>Research group<br> or project:
+<tr><td valign=top>Research group<br>or project:
 <td valign=top>
-<select id="research_group">
+<select id="research_group" class="small">
 </select>
-
 
 <tr>
 	<td valign=top>Authorizer:</td>
@@ -35,11 +43,12 @@
 
 <tr><td valign=top>
 <select name="beforeafter">
-<option>created after
-<option>created before
-<option>modified after
-<option>modified before
+<option value="created after">Created after
+<option value="created before">Created before
+<option value="modified after">Modified after
+<option value="modified before">Modified before
 </select>
+
 <td valign=top>
 <select name="modified_since">
 <option selected>
@@ -67,214 +76,168 @@
 <option selected></option>
 <SCRIPT>fillYears();</SCRIPT>
 </select>
-	</td>
+</td>
 </tr>
 
 </table>
 
-<td width="40%">
-
-<table>
-
-<tr><td valign=top>Country:</td>
-<td valign=top><select id="country">
-</select>
 </td>
 
+<td valign="top" width="50%">
+
+<table border=0 cellpadding=2 cellspacing=2>
+
+<tr><td valign=top>Country:
+<td valign=top><select id="country" class="small">
+</select>
+
+
 <tr><td valign="top">State/province:
-<td valign=top><input name="state" size=25>
+<td valign=top><input name="state" size=25 class="small">
 
 <tr><td valign=top>Time interval:
-<td valign=top><input name=interval_name size=25>
+<td valign=top><input name=interval_name size=25 class="small">
 
 <tr><td valign=top>Formation:
-<td valign=top><input name=formation size=25>
+<td valign=top><input name=formation size=25 class="small">
 
 <tr><td valign=top>Lithology:
-<td valign=top><select id="lithology1">
+<td valign=top><select id="lithology1" class="small">
 </select>
 
 <tr><td valign="top">Paleoenvironment:
-<td valign=top><select id="environment"></select>
+<td valign=top><select id="environment" class="small"></select>
+<p></p>
 
 </table>
 
-<tr><td valign=top width=50%>
-
-<table>
-
-<tr><td valign=top colspan=2><h4>First set of data points</h4>
-
-<tr><td colspan=2 valign=top class=small><i>Data are selected based on search criteria given above.</i>
-<tr><td valign=top class=small>Points:
-<td valign=top class=small>
-<select id="pointsize1" class=small></select>
-<select id="dotcolor1" class=small></select>
-<select id="pointshape1" class=small></select>
-with
-<select id="dotborder1" class=small></select>
-borders
-
 </table>
 
-<td width=50%>
-
-<table>
-
-<tr><td colspan=2><h4>Second set of data points</h4>
-
-<tr><td colspan=2 valign=top class=small><i>Data are the same except that...</i>
-<tr><td valign=top class=small>
-<select id="mapsearchfields2" class=small></select>
-<td valign=top class=small>includes
-<input name="mapsearchterm2" size=25 class=small>
-
-<tr><td valign=top class=small>Points:
-<td valign=top class=small>
-<select id="pointsize2" class=small></select>
-<select id="dotcolor2" class=small></select>
-<select id="pointshape2" class=small></select>
-with
-<select id="dotborder2" class=small></select>
-borders
-
-</table>
-
-<tr><td width=50%>
-
-<table>
-
-<tr><td colspan=2><h4>Third set of data points</h4>
-
-<tr><td colspan=2 valign=top class=small><i>Data are the same except that...</i>
-<tr><td valign=top class=small>
-<select id="mapsearchfields3" class=small></select>
-<td valign=top class=small>includes
-<input name="mapsearchterm3" size=25 class=small>
-
-<tr><td valign=top class=small>Points:
-<td valign=top class=small>
-<select id="pointsize3" class=small></select>
-<select id="dotcolor3" class=small></select>
-<select id="pointshape3" class=small></select>
-with
-<select id="dotborder3" class=small></select>
-borders
-</table>
-
-<td width=50%>
-
-<table>
-<tr>
-<td colspan=2><h4>Fourth set of data points</h4>
-
-<tr><td colspan=2 valign=top class=small><i>Data are the same except that...</i>
-<tr><td valign=top class=small>
-<select id="mapsearchfields4" class=small></select>
-<td valign=top class=small>includes
-<input name="mapsearchterm4" size=25 class=small>
-
-<tr><td valign=top class=small>Points:
-<td valign=top class=small>
-<select id="pointsize4" class=small></select>
-<select id="dotcolor4" class=small></select>
-<select id="pointshape4" class=small></select>
-with
-<select id="dotborder4" class=small></select>
-borders
-</table>
-
-<tr><td colspan=2 valign=top width="50%">
-
-<h4>View options</h4>
-<tr><td colspan=2><div class="small"><i>Don't forget to <a href="$exec_url?action=displayPreferencesPage&destination=displayMapForm">set your preferences</a>.</i><p></div></td></tr>
-
-<tr><td valign=top width="50%">
-
-<table>
+</div>
+</div>
 
 
-<tr><td valign=top>Image size:
-<td valign=top><select id="mapsize">
-</select>
+<div class="displayPanel" align=left>
+<span class="displayPanelHeader"><b>Map plotting options</b></span>
+<div class="displayPanelContent small">
 
-<tr><td valign=top>Projection:
-<td valign=top><select id="projection">
-</select>
+<table border=0 cellpadding=2 cellspacing=2 width="100%">
+
+<tr><td valign="top" width="50%">
+
+<table border=0 cellpadding=2 cellspacing=2>
 
 <tr><td valign=top>Reconstruction date:
-<td valign=top><input name="maptime" size=4>
-m.y. ago
+<td valign=top><input name="maptime" size=4 class="small" onChange="fillPeriodEpoch();">
+million years ago
+
+<tr><td valign=top>Projection:
+<td valign=top><select id="projection" class="small">
+</select>
+
+<tr><td valign=top>Image size:
+<td valign=top><select id="mapsize" class="small">
+</select>
 
 <tr><td valign=top>Map focus:
-<td valign=top><select id="mapfocus">
+<td valign=top><select id="mapfocus" class="small">
 </select>
 
 <tr><td valign=top><i>... or</i> focal coordinates:
 <td valign=top>
-lat = <input name="maplat" size=3>,
-lng = <input name="maplng" size=4>
+lat = <input name="maplat" size=3 class="small">,
+lng = <input name="maplng" size=4 class="small">
 
 <tr><td valign=top>Magnification:
-<td valign=top><select id="mapscale">
+<td valign=top><select id="mapscale" class="small">
 </select>
 
 <tr><td valign=top>Resolution:
-<td valign=top><select id="mapresolution">
+<td valign=top><select id="mapresolution" class="small">
 </select>
+
+<tr><td valign=top>Data points:
+<td valign=top>
+<select id="pointsize1" class="small"></select>
+<select id="dotcolor1" class="small"></select>
+<select id="pointshape1" class="small"></select>
+<font size=-1>with</font>
+<select id="dotborder1" class="small"></select>
+<font size=-1>borders</font>
+
 </table>
 
-<td valign=top width="50%">
+</td>
 
-<table>
+<td valign="top" width="50%">
+
+<table border=0 cellpadding=2 cellspacing=2>
 
 <tr><td valign=top>Background/ocean color:
-<td valign=top><select id="mapbgcolor">
+<td valign=top><select id="mapbgcolor" class="small">
 </select>
 
 <tr><td valign=top>Continental crust color:
-<td valign=top><select id="crustcolor">
+<td valign=top><select id="crustcolor" class="small">
 </select>
 
 <tr><td valign=top>Spacing, color, and position of grid lines:
-<td valign=top><select id="gridsize">
+<td valign=top><select id="gridsize" class="small">
 </select>,
-<select id="gridcolor">
+<select id="gridcolor" class="small">
 </select>,
-<select id="gridposition">
+<select id="gridposition" class="small">
 </select>
 
 <tr><td valign=top>Color of lat/long numbers:
-<td valign=top><select id="latlngnocolor">
+<td valign=top><valign=top><select id="latlngnocolor" class="small">
 </select>
 
 <tr><td valign=top>Thickness and color of coastlines:
-<td valign=top><select id="linethickness"></select>
-<select id="coastlinecolor"></select>
+<td valign=top><select id="linethickness" class="small"></select>
+<select id="coastlinecolor" class="small"></select>
 
 <tr><td valign=top>International borders:
-<td valign=top><select id="borderlinecolor">
+<td valign=top><valign=top><select id="borderlinecolor" class="small">
 </select>
 
 <tr><td valign=top>USA state borders:
-<td valign=top><select id="usalinecolor">
+<td valign=top><valign=top><select id="usalinecolor" class="small">
 </select>
 
+<tr><td valign=top colspan=2>
+<div class="small"><i>Don't forget to <a href="$exec_url?action=displayPreferencesPage&destination=displayMapForm">set your preferences</a>.</i><p></div>
+
 </table>
 
-<tr><td colspan=2><h4>Examples</h4>
-<tr><td valign=top><p><i>Colors</i></p>
-<img src="/public/palette.gif" WIDTH=270 HEIGHT=19>
+</table>
 
-<td valign=top>
+</div>
+</div>
+
+<div class="displayPanel" align=left>
+<span class="displayPanelHeader"><b>Examples</b></span>
+<div class="displayPanelContent small">
+
+<table border=0 cellpadding=2 cellspacing=2 width="100%">
+
+<tr><td align=left valign=top width="50%">
+<p><i>Colors</i></p>
+<br>
+<img src="/public/palette.gif"></a>
+</td>
+
+<td align=left valign=top width="50%">
 <p><i>Projections</i></p>
-<img src="/public/projections.gif" WIDTH=261 HEIGHT=55>
-<table>
+<img src="/public/projections.gif"></a>
+</td>
+</tr>
 
 </table>
-</table>
 
-<hr>
+</div>
+</div>
+
 <table width=100%>
 <tr><td width=40%><td width=60%><input type=submit value="Draw map">
 </table>
@@ -282,6 +245,9 @@ lng = <input name="maplng" size=4>
 </form>
 
 <center><p class=small>
-<i>For more information about the plate reconstructions visit the PALEOMAP website - <a href="http://www.scotese.com/license.htm">http://www.scotese.com</a></i>
+<i>
+You can make a paleogeographic map by entering a reconstruction date.<br>
+For more information about the plate reconstructions visit the PALEOMAP website - <a href="http://www.scotese.com/license.htm">http://www.scotese.com</a>
+</i>
 <p></center>
 
