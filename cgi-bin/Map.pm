@@ -355,16 +355,6 @@ sub mapFinishImage {
         print AI "(o) Tx 1 0 Tk\nTO\n";
     }
 
-    # cap the byline with a horizontal line
-    $im->line(0,$height,$width,$height,$col{'black'});
-    print AI "u\n";  # start the group
-    print AI "$mycolor\n";
-    printf AI "0.5 w\n";
-    printf AI "%.1f %.1f m\n",$AILEFT,$AITOP-$height;
-    printf AI "%.1f %.1f l\n",$AILEFT+$width,$AITOP-$height;
-    print AI "S\n";
-    print AI "U\n";  # terminate the group
-
     binmode STDOUT;
     print MAPGIF $im->png;
     close MAPGIF;
