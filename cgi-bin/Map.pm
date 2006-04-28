@@ -706,7 +706,7 @@ sub mapGetRotations	{
 					if ( abs($x1 - $x2) > 180 )	{ # Madagascar case
 						my $avg;
 						if ( $x1 > 0 && $x2 < 0 ) 	{
-							$avg = ( $basewgt * ( $1 - 180 ) ) + ( $topwgt* ( $x2 + 180 ) );
+							$avg = ( $basewgt * ( $x1 - 180 ) ) + ( $topwgt* ( $x2 + 180 ) );
 						} else	{
 							$avg = ( $basewgt * ( $x1 + 180 ) ) + ( $topwgt * ( $x2 - 180 ) );
 						}
