@@ -183,7 +183,7 @@ sub buildMap {
         print "<br><div align=center><table width=600 border=0>" .
               "<tr><td class=darkList><font size='+1'><b> Warning$plural</b></font></td></tr>" .
               "<tr><td>";
-        print "<li class='medium'>$_</li>" for (@warnings);
+        print "<li class='small'>$_</li>" for (@warnings);
         print "</td></tr></table></div><br>";
     } 
     $self->mapFinishImage();
@@ -427,12 +427,12 @@ sub mapFinishImage {
     print MAPOUT "</map>\n";
     print MAPOUT "</table>\n";
 
-    print MAPOUT "<table cellpadding=0>\n<tr>\n";
+    print MAPOUT "<table cellpadding=10>\n<tr>\n";
     print MAPOUT "<td valign=\"middle\">\n";
     print MAPOUT "<table cellpadding=0 cellspacing=1><tr>\n<td align=\"right\" valign=\"top\" bgcolor=\"black\">\n";
     print MAPOUT "<table cellpadding=5 cellspacing=1>\n";
     unless ($q->param("simple_map") =~ /YES/i){
-        print MAPOUT "<tr><td width=110 valign=\"top\" bgcolor=\"white\" class=\"small\">";
+        print MAPOUT "<tr><td width=110 valign=\"top\" bgcolor=\"white\" class=\"tiny\">";
         my $count = scalar(keys %coll_count);
         if ($count > 1)	{
             print MAPOUT "<b>$count&nbsp;collections</b> fall ";
@@ -446,11 +446,11 @@ sub mapFinishImage {
         print MAPOUT "</td>\n";
 
         if ($dotsizeterm eq "proportional")	{
-            print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
+            print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"tiny\">";
             print MAPOUT "<br>Sizes of $dotshape are proportional to counts of collections at each point.\n"
         }
 
-        print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
+        print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"tiny\">";
         print MAPOUT "You may download this map in ";
         print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
         print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">PNG</a></b>, ";
@@ -458,7 +458,7 @@ sub mapFinishImage {
         print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format\n";
         print MAPOUT "</td></tr>\n";
 
-        print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"small\">";
+        print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"tiny\">";
         print MAPOUT "Click on a point to recenter the map\n";
         print MAPOUT "</td></tr>\n";
 
@@ -474,25 +474,25 @@ sub mapFinishImage {
             $zoom2--;
         }
 
-        print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
+        print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"medium\">";
         $temp = $clickstring . "&mapscale=" . ( $scale + $zoom1 );
-        print MAPOUT "<p class=\"large\"><b><a href=\"$temp\">Zoom&nbsp;in</a></b></p>\n";
+        print MAPOUT "<p class=\"medium\"><b><a href=\"$temp\">Zoom&nbsp;in</a></b></p>\n";
         print MAPOUT "</td></tr>\n";
 
-        print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
+        print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"medium\">";
         $temp = $clickstring . "&mapscale=" . ( $scale - $zoom2 );
-        print MAPOUT "<p class=\"large\"><b><a href=\"$temp\">Zoom&nbsp;out</a></b></p>\n";
+        print MAPOUT "<p class=\"medium\"><b><a href=\"$temp\">Zoom&nbsp;out</a></b></p>\n";
         print MAPOUT "</td></tr>\n";
 
-        print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"large\">";
-        print MAPOUT "<p class=\"large\"><b><a href='?action=displayMapForm'>Search&nbsp;again</a></b></p>\n";
+        print MAPOUT "<tr><td width=100 align=\"center\" valign=\"top\" bgcolor=\"white\" class=\"medium\">";
+        print MAPOUT "<p class=\"medium\"><b><a href='?action=displayMapForm'>Search&nbsp;again</a></b></p>\n";
         print MAPOUT "</td></tr>\n";
     }
     print MAPOUT "</tr></table>\n";
     print MAPOUT "</td></tr></table>\n";
     print MAPOUT "</td>\n";
 
-    print MAPOUT "<td align=center><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
+    print MAPOUT "<td align=\"center\"><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
     print MAPOUT "</table>\n";
 
     # JA 26.4.06
@@ -790,10 +790,15 @@ sub mapSetupImage {
     }
     $x = $q->param('mapsize');
     $x =~ s/%//;
+    # need this correction because the entire image is too large with
+    #  this projection JA 27.4.06
+    if ( $q->param("projection") eq "orthographic")	{
+        $x = $x * 0.75;
+    }
     $hmult = $hmult * $x / 100;
     $vmult = $vmult * $x / 100;
     if ( $q->param("projection") eq "orthographic")	{
-        $hmult = $hmult * 1.25;
+       $hmult = $hmult * 1.25;
     }
     $height = $vmult * $vpix;
     $width = $hmult * $hpix;
@@ -1762,6 +1767,12 @@ sub getLng	{
 	if ( $l eq "NaN" )	{
 		return('NaN');
 	}
+	# correction here and in the next three subroutines corrects fo
+	#  the fact that the orthographic projection squashes down the
+	#  edges of the map into a globe JA 27.4.06
+	if ( $q->param('projection') eq "orthographic" )	{
+		$l = $l * 1.5;
+	}
 	$l = (180 + $l - $offlng - $gifoffhor) * $hmult * $scale;
 	if ( $l < 0 || $l > $width )	{
 		return('NaN');
@@ -1779,6 +1790,9 @@ sub getLngTrunc	{
 	if ( $l eq "NaN" )	{
 		return('NaN');
 	}
+	if ( $q->param('projection') eq "orthographic" )	{
+		$l = $l * 1.5;
+	}
 	$l = (180 + $l - $offlng - $gifoffhor) * $hmult * $scale;
 	if ( $l <= 0 )	{
 		return(0.0001);
@@ -1794,6 +1808,9 @@ sub getLat	{
 	my $l = $_[0];
 	if ( $l eq "NaN" )	{
 		return('NaN');
+	}
+	if ( $q->param('projection') eq "orthographic" )	{
+		$l = $l * 1.5;
 	}
 	$l = (90 - $l - $offlat - $gifoffver) * $vmult * $scale;
 	if ( $l < 0 || $l > $height )	{
@@ -1811,6 +1828,9 @@ sub getLatTrunc	{
 	my $l = $_[0];
 	if ( $l eq "NaN" )	{
 		return('NaN');
+	}
+	if ( $q->param('projection') eq "orthographic" )	{
+		$l = $l * 1.5;
 	}
 	$l = (90 - $l - $offlat - $gifoffver) * $vmult * $scale;
 	if ( $l <= 0 )	{
