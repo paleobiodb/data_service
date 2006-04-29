@@ -553,6 +553,7 @@ sub mapDefineOutlines	{
 		}
 		$lat--;
 	}
+	close MASK;
 
 	if ( ! open COAST,"<$COAST_DIR/noaa.coastlines.$resostem" ) {
 		$self->htmlError ( "Couldn't open [$COAST_DIR/noaa.coastlines.$resostem]: $!" );
@@ -646,7 +647,7 @@ sub mapGetRotations	{
 		my ($x,$y,$z) = split /,/,$_;
 		$plate{$x}{$y} = $z;
 	}
-    $self->{plate} = \%plate;
+	$self->{plate} = \%plate;
 
 	if ( ! open ROT,"<$COAST_DIR/master01c.rot" ) {
 		$self->htmlError ( "Couldn't open [$COAST_DIR/master01c.rot]: $!" );
@@ -717,14 +718,20 @@ sub mapGetRotations	{
 						}
 						$rotx{$self->{maptime}}{$pid} = $avg;
 					} elsif ( abs($x1 - $x2) > 90 )	{ # Africa plate 701/150 Ma case
-			# I'm not really sure I have this fixed JA 28.4.06
+			#  rewrote this almost completely JA 28.4.06
 						$y2 = -1 * $y2;
-						$z2 = -1 * $z2;
-						if ( abs($x1) > abs($x2) )	{
-							$rotx{$self->{maptime}}{$pid} = 90 + ( $basewgt * $x1 ) + ( $topwgt * $x2 );
-						} else	{
-							$rotx{$self->{maptime}}{$pid} = 90 - ( $basewgt * $x1 ) - ( $topwgt * $x2 );
+			# in the Africa 150 Ma case, the degree offset changes
+			#  sign; in the 365 Ma case it does not, so the
+			#  conditional is needed JA 28.4.06
+						if ( ( $z1 > 0 && $z2 < 0 ) || ( $z1 < 0 && $z2 > 0 ) )	{
+							$z2 = -1 * $z2;
 						}
+						if ( $x2 > 0 )	{
+							$x2 = $x2 - 180;
+						} else	{
+							$x2 = $x2 + 180;
+						}
+						$rotx{$self->{maptime}}{$pid} = ( $basewgt * $x1 ) + ( $topwgt * $x2 ) ;
 					}
 				}
 
@@ -1574,7 +1581,7 @@ sub projectPoints	{
 		}
 
 	# what plate is this point on?
-    my %plate = %{$self->{plate}};
+	my %plate = %{$self->{plate}};
 	$pid = $plate{$q}{$r};
         
 	# if there are no data, just bomb out
