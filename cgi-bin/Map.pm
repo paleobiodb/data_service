@@ -323,7 +323,7 @@ sub mapFinishImage {
     }
     $im->filledRectangle(0,$height,$width,$totalheight,$col{'white'});
     $im->arc(97,$height+6,10,10,0,360,$col{'black'});
-    $im->string(gdTinyFont,5,$height+1,"plotting software c 2002 J. Alroy",$col{'black'});
+    $im->string(gdTinyFont,5,$height+1,"plotting software c 2002 - 2006 J. Alroy",$col{'black'});
     print AI "0 To\n";
     printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+5,$AITOP-$height-8;
     my $mycolor = $aicol{'black'};
@@ -331,7 +331,7 @@ sub mapFinishImage {
     printf AI "0 Tr\n0 O\n%s\n",$mycolor;
     print AI "/_Courier 10 Tf\n";
     printf AI "0 Tw\n";
-    print AI "(plotting software c 2002 J. Alroy) Tx 1 0 Tk\nTO\n";
+    print AI "(plotting software c 2002 - 2006 J. Alroy) Tx 1 0 Tk\nTO\n";
     print AI "0 To\n";
     printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+111,$AITOP-$height-10;
     print AI "/_Courier 18 Tf\n";
@@ -794,11 +794,17 @@ sub mapSetupImage {
     $gifcount++;
 
     # set up the filenames
-    $gifname = "pbdbmap" . $gifcount . ".png";
-    $htmlname = "pbdbmap".$gifcount.".html";
-    $ainame = "pbdbmap" . $gifcount . ".ai";
-    $jpgname = "pbdbmap" . $gifcount . ".jpg";
-    $pictname = "pbdbmap" . $gifcount . ".pict";
+    my $mapstem = "pbdbmap";
+    # change the file names if it looks like this is a linecommand, assuming
+    #  that animations are being produced JA 29.4.06
+    if ( $q->param('linecommand') =~ /[A-Za-z]/ )	{
+        $mapstem = "anim";
+    }
+    $gifname = $mapstem . $gifcount . ".png";
+    $htmlname = $mapstem .$gifcount.".html";
+    $ainame = $mapstem . $gifcount . ".ai";
+    $jpgname = $mapstem . $gifcount . ".jpg";
+    $pictname = $mapstem . $gifcount . ".pict";
     if ( ! open MAPGIF,">$GIF_DIR/$gifname" ) {
           $self->htmlError ( "Couldn't open [$GIF_DIR/$gifname]: $!" );
     }
