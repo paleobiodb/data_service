@@ -936,7 +936,18 @@ sub mapSetupImage {
 	# color in the continents based on Scotese's age data
 	if ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') )	{
 
-		open MASK,"<$COAST_DIR/masks2/tiltmask.".$self->{maptime};
+		# option to use 1 degree resolution instead of default
+		#  2 degree resolution JA 29.4.06
+		my $maskdir;
+		my $ts = 2;
+		if ( $q->param('tiltsize') eq "fine" )	{
+			$maskdir = "masks1";
+			$ts = 1;
+		} else	{
+			$maskdir = "masks2";
+		}
+
+		open MASK,"<$COAST_DIR/$maskdir/tiltmask.".$self->{maptime};
 		while (<MASK>)	{
 			s/\n//;
 			my ($lat,$lng) = split /\t/,$_;
@@ -955,35 +966,35 @@ sub mapSetupImage {
 				if ( $touched{$lng}{$lat} ne "" )	{
 					my @xs = ();
 					my @ys = ();
-					push @xs, $lng+1;
-					push @xs, $lng+1;
-					push @xs, $lng-1;
-					push @xs, $lng-1;
-					push @ys, $lat+1;
-					push @ys, $lat-1;
-					push @ys, $lat-1;
-					push @ys, $lat+1;
+					push @xs, $lng + ($ts / 2);
+					push @xs, $lng + ($ts / 2);
+					push @xs, $lng - ($ts / 2);
+					push @xs, $lng - ($ts / 2);
+					push @ys, $lat + ($ts / 2);
+					push @ys, $lat - ($ts / 2);
+					push @ys, $lat - ($ts / 2);
+					push @ys, $lat + ($ts / 2);
 					my $npts = 3;
 					my @newxs = ();
 					my @newys = ();
 					# smooth left half of cell to the north
-					if ( $touched{$lng-2}{$lat+2} ne "" &&
-					     $touched{$lng}{$lat+2} eq "" )	{
+					if ( $touched{$lng-$ts}{$lat+$ts} ne "" &&
+					     $touched{$lng}{$lat+$ts} eq "" )	{
 						push @newxs, $xs[3] - ($xs[3] - $xs[2]) / 2;
 						push @newys, $ys[3] + ($ys[3] - $ys[2]) / 2;
 						$npts++;
 					}
 					# smooth right half of cell to the north
-					if ( $touched{$lng+2}{$lat+2} ne "" &&
-					     $touched{$lng}{$lat+2} eq "" )	{
+					if ( $touched{$lng+$ts}{$lat+$ts} ne "" &&
+					     $touched{$lng}{$lat+$ts} eq "" )	{
 						push @newxs, $xs[0] + ($xs[0] - $xs[1]) / 2;
 						push @newys, $ys[0] + ($ys[0] - $ys[1]) / 2;
 						$npts++;
 					}
 					# flatten upper right corner by
 					#  adding a point
-					if ( $touched{$lng}{$lat+2} eq "" &&
-					     $touched{$lng+2}{$lat} eq "" )	{
+					if ( $touched{$lng}{$lat+$ts} eq "" &&
+					     $touched{$lng+$ts}{$lat} eq "" )	{
 						push @newxs, $xs[0] - ($xs[0] - $xs[3]) / 2;
 						push @newys, $ys[0];
 						push @newxs, $xs[0];
@@ -994,22 +1005,22 @@ sub mapSetupImage {
 						push @newys, $ys[0];
 					}
 					# smooth upper half of cell to the east
-					if ( $touched{$lng+2}{$lat+2} ne "" &&
-					     $touched{$lng+2}{$lat} eq "" )	{
+					if ( $touched{$lng+$ts}{$lat+$ts} ne "" &&
+					     $touched{$lng+$ts}{$lat} eq "" )	{
 						push @newxs, $xs[0] + ($xs[0] - $xs[3]) / 2;
 						push @newys, $ys[0] + ($ys[0] - $ys[3]) / 2;
 						$npts++;
 					}
 					# smooth lower half of cell to the east
-					if ( $touched{$lng+2}{$lat-2} ne "" &&
-					     $touched{$lng+2}{$lat} eq "" )	{
+					if ( $touched{$lng+$ts}{$lat-$ts} ne "" &&
+					     $touched{$lng+$ts}{$lat} eq "" )	{
 						push @newxs, $xs[1] + ($xs[1] - $xs[2]) / 2;
 						push @newys, $ys[1] - ($ys[1] - $ys[2]) / 2;
 						$npts++;
 					}
 					# lower right corner
-					if ( $touched{$lng+2}{$lat} eq "" &&
-					     $touched{$lng}{$lat-2} eq "" )	{
+					if ( $touched{$lng+$ts}{$lat} eq "" &&
+					     $touched{$lng}{$lat-$ts} eq "" )	{
 						push @newxs, $xs[1];
 						push @newys, $ys[1] + ($ys[0] - $ys[1]) / 2;
 						push @newxs, $xs[1] - ($xs[1] - $xs[2]) / 2;
@@ -1020,8 +1031,8 @@ sub mapSetupImage {
 						push @newys, $ys[1];
 					}
 					# lower left corner
-					if ( $touched{$lng}{$lat-2} eq "" &&
-					     $touched{$lng-2}{$lat} eq "" )	{
+					if ( $touched{$lng}{$lat-$ts} eq "" &&
+					     $touched{$lng-$ts}{$lat} eq "" )	{
 						push @newxs, $xs[2] + ($xs[1] - $xs[2]) / 2;
 						push @newys, $ys[2];
 						push @newxs, $xs[2];
@@ -1032,8 +1043,8 @@ sub mapSetupImage {
 						push @newys, $ys[2];
 					}
 					# upper left corner
-					if ( $touched{$lng-2}{$lat} eq "" &&
-					     $touched{$lng}{$lat+2} eq "" )	{
+					if ( $touched{$lng-$ts}{$lat} eq "" &&
+					     $touched{$lng}{$lat+$ts} eq "" )	{
 						push @newxs, $xs[3];
 						push @newys, $ys[3] - ($ys[3] - $ys[2]) / 2;
 						push @newxs, $xs[3] + ($xs[0] - $xs[3]) / 2;
