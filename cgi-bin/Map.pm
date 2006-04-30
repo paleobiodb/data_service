@@ -323,7 +323,7 @@ sub mapFinishImage {
     }
     $im->filledRectangle(0,$height,$width,$totalheight,$col{'white'});
     $im->arc(97,$height+6,10,10,0,360,$col{'black'});
-    $im->string(gdTinyFont,5,$height+1,"plotting software c 2002 - 2006 J. Alroy",$col{'black'});
+    $im->string(gdTinyFont,5,$height+1,"plotting software c 2002-2006 J. Alroy",$col{'black'});
     print AI "0 To\n";
     printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+5,$AITOP-$height-8;
     my $mycolor = $aicol{'black'};
@@ -331,7 +331,7 @@ sub mapFinishImage {
     printf AI "0 Tr\n0 O\n%s\n",$mycolor;
     print AI "/_Courier 10 Tf\n";
     printf AI "0 Tw\n";
-    print AI "(plotting software c 2002 - 2006 J. Alroy) Tx 1 0 Tk\nTO\n";
+    print AI "(plotting software c 2002-2006 J. Alroy) Tx 1 0 Tk\nTO\n";
     print AI "0 To\n";
     printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+111,$AITOP-$height-10;
     print AI "/_Courier 18 Tf\n";
@@ -339,16 +339,22 @@ sub mapFinishImage {
     if ( $self->{maptime} > 0 )	{
         if ( $width > 300 )	{
             $im->arc($width-103,$height+6,10,10,0,360,$col{'black'});
-            $im->string(gdTinyFont,$width-225,$height+1,"tectonic reconstruction c 2002 C. R. Scotese",$col{'black'});
+            $im->string(gdTinyFont,$width-185,$height+1,"palaeogeography c 2002 C. R. Scotese",$col{'black'});
+            if ( $q->param('linecommand') =~ /[A-Za-z]/ )	{
+                $im->string(gdTinyFont,5,$height-10,"$self->{maptime} Ma",$col{'black'});
+            }
         } else	{
             $im->arc($width-103,$height+18,10,10,0,360,$col{'black'});
-            $im->string(gdTinyFont,$width-225,$height+13,"tectonic reconstruction c 2002 C. R. Scotese",$col{'black'});
+            $im->string(gdTinyFont,$width-185,$height+13,"palaeogeography c 2002 C. R. Scotese",$col{'black'});
+            if ( $q->param('linecommand') =~ /[A-Za-z]/ )	{
+                $im->string(gdTinyFont,5,$height,"$self->{maptime} Ma",$col{'black'});
+            }
             $scoteseoffset = 12;
         }
         print AI "0 To\n";
         printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$width-270,$AITOP-$height-8-$scoteseoffset;
         print AI "/_Courier 10 Tf\n";
-        print AI "(tectonic reconstruction c 2002 C. R. Scotese) Tx 1 0 Tk\nTO\n";
+        print AI "(paleogeography c 2002 C. R. Scotese) Tx 1 0 Tk\nTO\n";
         print AI "0 To\n";
         printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$width-128,$AITOP-$height-10-$scoteseoffset;
         print AI "/_Courier 18 Tf\n";
@@ -698,62 +704,54 @@ sub mapGetRotations	{
 				my $z1 = $rotdeg{$basema}{$pid};
 				my $z2 = $rotdeg{$topma}{$pid};
 
-				$rotx{$self->{maptime}}{$pid} = ( $basewgt * $x1 ) + ( $topwgt * $x2 ) ;
+			# the amazing "Madagascar 230 Ma" correction
 			# rewrote almost all of the following section:
 			#  equations for rotx were just wrong, and there was
-			#  no correction for rotdeg JA 28.4.06
-				# the amazing "Madagascar 230 Ma" correction
-				if ( ( $x1 > 0 && $x2 < 0 ) || ( $x1 < 0 && $x2 > 0 ) )	{
-					if ( abs($x1 - $x2) > 180 )	{ # Madagascar case
-						my $avg;
-						if ( $x1 > 0 && $x2 < 0 ) 	{
-							$avg = ( $basewgt * ( $x1 - 180 ) ) + ( $topwgt* ( $x2 + 180 ) );
-						} else	{
-							$avg = ( $basewgt * ( $x1 + 180 ) ) + ( $topwgt * ( $x2 - 180 ) );
-						}
-						if ( $avg > 0 )	{
-							$avg = $avg - 180;
-						} else	{
-							$avg = $avg + 180;
-						}
-						$rotx{$self->{maptime}}{$pid} = $avg;
-					} elsif ( abs($x1 - $x2) > 90 )	{ # Africa plate 701/150 Ma case
-			#  rewrote this almost completely JA 28.4.06
-						$y2 = -1 * $y2;
+			#  no correction for rotdeg JA 28-29.4.06
 			# in the Africa 150 Ma case, the degree offset changes
 			#  sign; in the 365 Ma case it does not, so the
 			#  conditional is needed JA 28.4.06
-						if ( ( $z1 > 0 && $z2 < 0 ) || ( $z1 < 0 && $z2 > 0 ) )	{
-							$z2 = -1 * $z2;
-						}
+				if ( ( ( $x1 > 0 && $x2 < 0 ) || ( $x1 < 0 && $x2 > 0 ) ) && ( abs($x1 - $x2) > 90 ) )	{
+				# simple sign switch
+					if ( abs($x1 - $x2) < 270 )	{
 						if ( $x2 > 0 )	{
 							$x2 = $x2 - 180;
 						} else	{
 							$x2 = $x2 + 180;
 						}
-						$rotx{$self->{maptime}}{$pid} = ( $basewgt * $x1 ) + ( $topwgt * $x2 ) ;
+						if ( ( $y1 > 0 && $y2 < 0 ) || ( $y1 < 0 && $y2 > 0 ) )	{
+							$y2 = -1 * $y2;
+						}
+						if ( ( $z1 > 0 && $z2 < 0 ) || ( $z1 < 0 && $z2 > 0 ) )	{
+							$z2 = -1 * $z2;
+						}
 					}
+				# actually, nothing has switched: it's just
+				#  that the longitude has gone over 180
+				# use a simple, nasty trick: let x2 go over
+				#  180 or under -180
+					else	{
+						if ( $x2 > 0 )	{
+							$x2 = -360 + $x2;
+						} else	{
+							$x2 = 360 + $x2;
+						}
+					}
+				}
+				if ( ( ( $z1 > 0 && $z2 < 0 ) || ( $z1 < 0 && $z2 > 0 ) ) && ( abs($z1 - $z2) > 90 ) )	{
+					$z2 = -1 * $z2;
 				}
 
-				$roty{$self->{maptime}}{$pid} = ( $basewgt * $y1 ) + ( $topwgt * $y2 );
-				if ( abs($z1 - $z2) > 180 )	{
-				# rotate the points 180 degrees, find the
-				#   average, then rerotate JA 28.4.06
-					my $avg;
-					if ( $z1 > 0 && $z2 < 0 )	{
-						$avg = ( $basewgt * ( $z1 - 180 ) ) + ( $topwgt* ( $z2 + 180 ) );
-					} else	{
-						$avg = ( $basewgt * ( $z1 + 180 ) ) + ( $topwgt * ( $z2 - 180 ) );
-					}
-					if ( $avg > 0 )	{
-						$avg = $avg - 180;
-					} else	{
-						$avg = $avg + 180;
-					}
-					$rotdeg{$self->{maptime}}{$pid} = $avg;
-				} else	{
-					$rotdeg{$self->{maptime}}{$pid} = ( $basewgt * $z1 ) + ( $topwgt * $z2 );
+				$rotx{$self->{maptime}}{$pid} = ( $basewgt * $x1 ) + ( $topwgt * $x2 ) ;
+			# might need to clean up the mess caused by the nasty
+			#  trick used above
+				if ( $rotx{$self->{maptime}}{$pid} > 180 )	{
+					$rotx{$self->{maptime}}{$pid} = -360 + $rotx{$self->{maptime}}{$pid};
+				} elsif ( $rotx{$self->{maptime}}{$pid} < -180 )	{
+					$rotx{$self->{maptime}}{$pid} = 360 + $rotx{$self->{maptime}}{$pid};
 				}
+				$roty{$self->{maptime}}{$pid} = ( $basewgt * $y1 ) + ( $topwgt * $y2 );
+				$rotdeg{$self->{maptime}}{$pid} = ( $basewgt * $z1 ) + ( $topwgt * $z2 );
 			}
 		}
 	}
