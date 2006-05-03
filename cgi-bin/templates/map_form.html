@@ -1,6 +1,14 @@
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
 
+function checkMapBrowserVersion()	{
+	var match = /Microsoft/i;
+
+	if (match.test(navigator.appName))	{
+		document.write('<input id="browser" type="hidden" name="browser" value="Microsoft">');
+	}
+}
+
 //  End -->
 </script>
 
@@ -12,7 +20,8 @@
 	<input id="action" type=hidden name="action" value="displayMapResults">
 	<input id="user" type=hidden name="user" value="Guest">
 
-	
+<script>checkMapBrowserVersion();</script>
+
 <div class="displayPanel" align=left>
 <span class="displayPanelHeader"><b>Data to include</b></span>
 <div class="displayPanelContent small">
