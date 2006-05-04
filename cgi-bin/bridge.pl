@@ -707,12 +707,14 @@ sub displayHomePage {
 	my $rs = $sth->fetchrow_hashref();
     my (@rowData,@fieldNames);
 	push ( @rowData,	$rs->{reference_total},
+						$rs->{taxon_total}, 
 						$rs->{collection_total}, 
 						$rs->{occurrence_total}, 
 						$rs->{enterer_total}, 
 						$rs->{institution_total}, 
 						$rs->{country_total}, '', '' );
 	push ( @fieldNames,	"reference_total",
+						"taxon_total", 
 						"collection_total", 
 						"occurrence_total", 
 						"enterer_total", 
@@ -2645,7 +2647,22 @@ IS NULL))";
         } elsif ($options{'year'}) {
             $yyyy = $options{'year'};
             $mm = $options{'month'};
+            # caught a major error here in which months passed as strings
+            #  (as normal) were not converted to numbers JA 4.5.06
+            my @months = ( "","January","February","March","April","May","June","July","August","September","October","November","December" );
+            for my $m ( 0..$#months )	{
+                if ( $mm eq $months[$m] )	{
+                    $mm = $m;
+                    last;
+                }
+            }
+            if ( $mm !~ /(10)|(11)|(12)/ )	{
+                $mm = "0" . $mm;
+            }
             $dd = $options{'date'};
+            if ( $dd < 10 )	{
+                $dd = "0" . $dd;
+            }
         }  
 
         my $val = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
