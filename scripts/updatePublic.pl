@@ -39,6 +39,13 @@ $sth->execute();
 my $reference_total = $stats[0];
 $sth->finish();
 
+$sql = "SELECT count(*) FROM authorities";
+$sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
+$sth->execute();
+@stats = $sth->fetchrow_array();
+my $taxon_total = $stats[0];
+$sth->finish();
+
 $sql = "SELECT count(*) FROM collections";
 $sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
 $sth->execute();
@@ -77,6 +84,7 @@ $sth->finish();
 # Now put into our holding tank
 $sql =	"UPDATE statistics SET ".
 		"		reference_total = $reference_total, ".
+		"		taxon_total = $taxon_total, ".
 		"		collection_total = $collection_total, ".
 		"		occurrence_total = $occurrence_total, ".
 		"		enterer_total = $enterer_total, ".
