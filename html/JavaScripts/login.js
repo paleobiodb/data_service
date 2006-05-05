@@ -10,21 +10,6 @@ function doComplete(e, form_elem, names, skip_check_if_space) {
         return true;
     }
 
-    var val = form_elem.value;
-    var sub = val.substr(0, val.length -1);
-    
-    //check to make sure that they haven't already typed in a valid
-    //name..  If they have, then don't let 
-    //them type in any extra characters
-    var lastChar = val.substr(val.length-1,1);
-    // Only skip the check if the last char is a space (only relevant so ppl can enter
-    // 10 my bin terms in interval form
-    if (!(lastChar == " " && skip_check_if_space)) {
-        if (alreadyPresent(sub, names)) {
-            form_elem.value = sub;
-            return;
-        }
-    }
     
     // loop through each element in the names list
     var match = new RegExp("^" + form_elem.value, "i");
@@ -40,6 +25,22 @@ function doComplete(e, form_elem, names, skip_check_if_space) {
     
     if (numMatches == 1) {
         form_elem.value =lastMatch;
+    } else if (numMatches == 0) {
+        var val = form_elem.value;
+        var sub = val.substr(0, val.length -1);
+        
+        //check to make sure that they haven't already typed in a valid
+        //name..  If they have, then don't let 
+        //them type in any extra characters
+        var lastChar = val.substr(val.length-1,1);
+        // Only skip the check if the last char is a space (only relevant so ppl can enter
+        // 10 my bin terms in interval form
+        if (!(lastChar == " " && skip_check_if_space)) {
+            if (alreadyPresent(sub, names)) {
+                form_elem.value = sub;
+                return;
+            }
+        }
     }
 }
 
@@ -49,15 +50,24 @@ function doComplete(e, form_elem, names, skip_check_if_space) {
 function alreadyPresent(input, names) {
     var i;
     var len = names.length;
-    
+
+    var numMatches = 0;
     for (i = 0; i < len; i++) {
-        var match = new RegExp("^" + names[i] + "$", "i"); //i means ignore case
-        if (match.test(input)) {
-            return true;
+        var match = new RegExp("^" + input , "i"); //i means ignore case
+        if (match.test(names[i])) {
+            numMatches += 1;
         }
+        //var match = new RegExp("^" + names[i] , "i"); //i means ignore case
+        //if (match.test(input)) {
+        //    numMatches += 1;
+        //}
     }
 
-    return false;
+    if (numMatches == 1) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 
