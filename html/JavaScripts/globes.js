@@ -2,10 +2,12 @@
 	// read in the globe frames
 	var globe;
 	var globeSrcs = new Array(13)
-	var latbox = 3;
-	var lngbox = 7;
+	var latbox;
+	var lngbox;
 
 	function newGlobe(g)	{
+		latbox = 3;
+		lngbox = 7;
 		for ( x = 0; x <= 12; x++ )	{
 			globeSrcs[x] = new Array(7)
 		}
@@ -57,7 +59,6 @@
 			}
 		}
 		if ( code ==  38 || code == 63232 )	{ //38
-	//	if ( window.event.keyCode == 63232 )	{
 			latbox++;
 			swapView(globe);
 		} else if ( code == 40 || code == 63233 )	{
