@@ -175,7 +175,7 @@ sub new {
 					mapresolution=>[ 'coarse', 'medium', 'fine', 'very fine' ],
 					mapbgcolor=>[ 'white', 'black', 'gray', 'light gray', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
 					crustcolor=>[ 'none', 'black', 'gray', 'light gray', 'white', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
-					gridsize=>['30 degrees', '15 degrees', '10 degrees', 'none'],
+					gridsize=>['none', '45 degrees', '30 degrees', '15 degrees', '22.5 degrees', '10 degrees'],
 					gridcolor=>[ 'black', 'gray', 'light gray', 'white', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
 					latlngnocolor=>[ 'none', 'black', 'gray', 'light gray', 'white', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
 					gridposition=>[ 'in front', 'in back' ],
