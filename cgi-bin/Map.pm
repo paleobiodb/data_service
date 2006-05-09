@@ -387,7 +387,7 @@ sub mapFinishImage {
          if ( ! $q->param('linecommand') && $width > 300 )	{
              $im->string(gdTinyFont,5,$height-6,$counter,$col{'black'});
          } elsif ( $q->param('projection') eq "orthographic" )	{
-             $im->string(gdTinyFont,20,$height-20,$counter,$col{'black'});
+             $im->string(gdTinyFont,30,$height-30,$counter,$col{'black'});
          } elsif ( $q->param('projection') eq "Eckert IV" )	{
              $im->string(gdTinyFont,5,$height-45,$counter,$col{'black'});
          } elsif ( $width > 300 )	{
