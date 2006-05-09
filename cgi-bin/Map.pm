@@ -48,6 +48,7 @@ sub acos {
     }
     atan2( sqrt(1 - $a * $a), $a )
 }
+sub asin { atan2($_[0], sqrt(1 - $_[0] * $_[0])) }
 
 
 sub tan { sin($_[0]) / cos($_[0]) }
@@ -62,6 +63,15 @@ sub new {
 	$s = shift;
 	$dbt = shift;
     $hbo = shift;
+
+	# some functions that call Map do not pass a q object
+	if ( $q )	{
+		if ( $q->param('linecommand') =~ /[A-Za-z]/ )	{
+			$GIF_DIR =~ s/maps$//;
+			$GIF_DIR .= "animations";
+		}
+	}
+
 	my $self = {maptime=>0,plate=>()};
 
 	bless $self, $class;
@@ -122,7 +132,9 @@ sub buildMap {
             }
         }
 
-        if ($dotsizeterm eq "tiny")	{
+        if ($dotsizeterm eq "pixel")	{
+            $dotsize = 0;
+        } elsif ($dotsizeterm eq "tiny")	{
             $dotsize = 0.5;
         } elsif ($dotsizeterm eq "very small")	{
             $dotsize = 0.75;
@@ -265,7 +277,8 @@ sub drawMapOnly {
         }
     }
 
-    if ($dotsizeterm eq "tiny")	{ $dotsize = 0.5; } 
+    if ($dotsizeterm eq "pixel")	{ $dotsize = 0; } 
+    elsif ($dotsizeterm eq "tiny")	{ $dotsize = 0.5; } 
     elsif ($dotsizeterm eq "very small")	{ $dotsize = 0.75; }
     elsif ($dotsizeterm eq "small")	{ $dotsize = 1; }
     elsif ($dotsizeterm eq "medium") { $dotsize = 1.25;} 
@@ -318,12 +331,26 @@ sub mapFinishImage {
     my $self = shift;
 
     my $mapbgcolor = $q->param('mapbgcolor');
-    if (!$mapbgcolor || $mapbgcolor eq 'transparent') {
+    if ( ! $mapbgcolor )	{
         $mapbgcolor = 'white';
     }
-    $im->filledRectangle(0,$height,$width,$totalheight,$col{'white'});
-    $im->arc(97,$height+6,10,10,0,360,$col{'black'});
-    $im->string(gdTinyFont,5,$height+1,"plotting software c 2002-2006 J. Alroy",$col{'black'});
+    # draw a box around the map if this is a equirectangular map with a white
+    #  background JA 2.5.06
+    if ( $mapbgcolor eq "white" && $projection eq "equirectangular" )	{
+        # don't show the poles if this is a full-sized paleogeographic map
+        if ( $self->{maptime} > 0 && $scale == 1 )	{
+            my $poleoffset = int($height * 5 / 180);
+            $im->rectangle(0,0+$poleoffset,$width-1,$height-$poleoffset,$edgecolor);
+        } else	{
+            $im->rectangle(0,0,$width-1,$height-1,$edgecolor);
+        }
+    }
+    # used to draw a short white rectangle across the bottom for the caption
+    #  here, but this is no longer needed
+    if ( ! $q->param('linecommand') )	{
+        $im->arc(97,$height+7.5,9,9,0,360,$col{'black'});
+        $im->string(gdTinyFont,5,$height+3,"plotting software c 2002-2006 J. Alroy",$col{'black'});
+    }
     print AI "0 To\n";
     printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+5,$AITOP-$height-8;
     my $mycolor = $aicol{'black'};
@@ -336,19 +363,47 @@ sub mapFinishImage {
     printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+111,$AITOP-$height-10;
     print AI "/_Courier 18 Tf\n";
     print AI "(o) Tx 1 0 Tk\nTO\n";
-    if ( $self->{maptime} > 0 )	{
+
+    # print the Ma or year counter except if you are computing a small image
+    #  from the line command JA 3.5.06
+    if ( ( $q->param('year') > 0 || $self->{maptime} > 0 ) && ( ! $q->param('linecommand') || $width > 300 ) ) 	{
+         my $counter;
+         if ( $q->param('year') > 0 )	{
+             my $year = $q->param('year');
+             $year =~ s/^(19)|(20)//;
+             my $month = $q->param('month');
+             @months = ("","January","February","March","April","May","June","July","August","September","October","November","December");
+             for my $m ( 0..$#months )	{
+                 $month =~ s/$months[$m]/$m/;
+             }
+             if ( $q->param('beforeafter') =~ /before/i )	{
+                 $counter = "< " . $month . "/" . $q->param('date') . "/" . $year;
+             } else	{
+                 $counter = "> " . $month . "/" . $q->param('date') . "/" . $year;
+             }
+         } else	{
+             $counter = $self->{maptime} . " Ma";
+         }
+         if ( ! $q->param('linecommand') && $width > 300 )	{
+             $im->string(gdTinyFont,5,$height-6,$counter,$col{'black'});
+         } elsif ( $q->param('projection') eq "orthographic" )	{
+             $im->string(gdTinyFont,20,$height-20,$counter,$col{'black'});
+         } elsif ( $q->param('projection') eq "Eckert IV" )	{
+             $im->string(gdTinyFont,5,$height-45,$counter,$col{'black'});
+         } elsif ( $width > 300 )	{
+             $im->string(gdTinyFont,5,$height+1,$counter,$col{'black'});
+         } else	{
+             $im->string(gdTinyFont,5,$height+13,$counter,$col{'black'});
+        }
+    }
+
+    if ( $self->{maptime} > 0 && ! $q->param('linecommand') )	{
         if ( $width > 300 )	{
-            $im->arc($width-103,$height+6,10,10,0,360,$col{'black'});
-            $im->string(gdTinyFont,$width-185,$height+1,"palaeogeography c 2002 C. R. Scotese",$col{'black'});
-            if ( $q->param('linecommand') =~ /[A-Za-z]/ )	{
-                $im->string(gdTinyFont,5,$height-10,"$self->{maptime} Ma",$col{'black'});
-            }
+            $im->arc($width-103,$height+7.5,9,9,0,360,$col{'black'});
+            $im->string(gdTinyFont,$width-180,$height+3,"paleogeography c 2002 C. R. Scotese",$col{'black'});
         } else	{
-            $im->arc($width-103,$height+18,10,10,0,360,$col{'black'});
-            $im->string(gdTinyFont,$width-185,$height+13,"palaeogeography c 2002 C. R. Scotese",$col{'black'});
-            if ( $q->param('linecommand') =~ /[A-Za-z]/ )	{
-                $im->string(gdTinyFont,5,$height,"$self->{maptime} Ma",$col{'black'});
-            }
+            $im->arc($width-103,$height+17.5,9,9,0,360,$col{'black'});
+            $im->string(gdTinyFont,$width-180,$height+13,"paleogeography c 2002 C. R. Scotese",$col{'black'});
             $scoteseoffset = 12;
         }
         print AI "0 To\n";
@@ -359,6 +414,12 @@ sub mapFinishImage {
         printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$width-128,$AITOP-$height-10-$scoteseoffset;
         print AI "/_Courier 18 Tf\n";
         print AI "(o) Tx 1 0 Tk\nTO\n";
+    }
+
+    # do this only if the browser is not IE
+    # this prevents errors with rendering of transparent pixels in PNG format
+    if ( $q->param('browser') =~ /Microsoft/ )	{
+        $im->trueColorToPalette();
     }
 
     binmode STDOUT;
@@ -543,23 +604,61 @@ sub mapDefineOutlines	{
 		$resostem = "010";
 	}
 
-	# read grid cell ages
-	open MASK,"<$COAST_DIR/agev7.txt";
-	my $lat = 90;
-	while (<MASK>)	{
-		s/\n//;
-		my @crustages = split /\t/,$_;
-		my $lng = -180;
-		for $crustage (@crustages)	{
-			$cellage{$lng}{$lat} = $crustage;
-			if ( $cellage{$lng}{$lat} == 254 )	{
-				$cellage{$lng}{$lat} = 999;
-			}
-			$lng++;
+	# need to know the plate IDs to determine which cells are oceanic
+	# necessary either if crust is being drawn, or if plates are being
+	#  rotated
+	# this code used to be near the top of mapGetRotations, but I moved
+	#  it because the plate IDs are needed here to avoid the Andes bug
+	#  JA 5.5.06
+	if ( $self->{maptime} > 0 || ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ ) )	{
+		if ( ! open IDS,"<$COAST_DIR/plateidsv2.lst" ) {
+			$self->htmlError ( "Couldn't open [$COAST_DIR/plateidsv2.lst]: $!" );
 		}
-		$lat--;
+
+		# skip the first line
+		<IDS>;
+
+		# read the plate IDs: numbers are longitude, latitude, and ID number
+		while (<IDS>)	{
+			s/\n//;
+			my ($x,$y,$z) = split /,/,$_;
+			$plate{$x}{$y} = $z;
+		# Andes correction: Scotese sometimes assigned 254 Ma ages to
+		#  oceanic crust cells that are much younger, so those need to
+		#  be eliminated JA 4.5.06
+			if ( $z >= 900)	{
+				$cellage{$x}{$y} = -1;
+			}
+		}
+		close IDS;
+		$self->{plate} = \%plate;
 	}
-	close MASK;
+
+	# read grid cell ages
+	if ( $self->{maptime} > 0 || ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ ) )	{
+
+		open MASK,"<$COAST_DIR/agev7.txt";
+		my $lat = 90;
+		while (<MASK>)	{
+			s/\n//;
+			my @crustages = split /\t/,$_;
+			my $lng = -180;
+			for $crustage (@crustages)	{
+			# oceanic crust test: ages assigned to -1 if plate IDs
+			#  are >= 900
+				if ( $cellage{$lng}{$lat} != -1 )	{
+					$cellage{$lng}{$lat} = $crustage;
+					if ( $cellage{$lng}{$lat} == 254 )	{
+						$cellage{$lng}{$lat} = 999;
+					}
+				}
+				$lng++;
+			}
+			$lat--;
+		}
+		close MASK;
+
+	}
 
 	if ( ! open COAST,"<$COAST_DIR/noaa.coastlines.$resostem" ) {
 		$self->htmlError ( "Couldn't open [$COAST_DIR/noaa.coastlines.$resostem]: $!" );
@@ -567,15 +666,15 @@ sub mapDefineOutlines	{
 	while (<COAST>)	{
 		s/\n//;
 		($a,$b) = split /\t/,$_;
-		if ( $a > 0 )	{
-			$ia = int($a + 0.5);
+		if ( $a >= 0 )	{
+			$ia = int($a);
 		} else	{
-			$ia = int($a - 0.5);
+			$ia = int($a - 1);
 		}
-		if ( $b > 0 )	{
-			$ib = int($b + 0.5);
+		if ( $b >= 0 )	{
+			$ib = int($b);
 		} else	{
-			$ib = int($b - 0.5);
+			$ib = int($b - 1);
 		}
 		# save data
 		# NOTE: separators are saved intentionally so they
@@ -585,23 +684,24 @@ sub mapDefineOutlines	{
 			push @worldlat,$b;
 		}
 	}
+	close COAST;
 
-	if ( $q->param('borderlinecolor') ne "none" )	{
+	if ( $q->param('borderlinecolor') ne "none" && $q->param('borderlinecolor') =~ /[A-Za-z]/ )	{
 		if ( ! open BORDER,"<$COAST_DIR/noaa.borders.$resostem" ) {
 			$self->htmlError ( "Couldn't open [$COAST_DIR/noaa.borders.$resostem]: $!" );
 		}
 		while (<BORDER>)	{
 			s/\n//;
 			($a,$b) = split /\t/,$_;
-			if ( $a > 0 )	{
-				$ia = int($a + 0.5);
+			if ( $a >= 0 )	{
+				$ia = int($a);
 			} else	{
-				$ia = int($a - 0.5);
+				$ia = int($a - 1);
 			}
-			if ( $b > 0 )	{
-				$ib = int($b + 0.5);
+			if ( $b >= 0 )	{
+				$ib = int($b);
 			} else	{
-				$ib = int($b - 0.5);
+				$ib = int($b - 1);
 			}
 			if ( $a =~ /#/ || ( $a =~ /[0-9]/ && $cellage{$ia}{$ib} >= $self->{maptime} ) )	{
 				push @borderlng,$a;
@@ -610,22 +710,22 @@ sub mapDefineOutlines	{
 		}
 		close BORDER;
 	}
-	if ( $q->param('usalinecolor') ne "none" )	{
+	if ( $q->param('usalinecolor') ne "none" && $q->param('usalinecolor') =~ /[A-Za-z]/ )	{
 		if ( ! open USA,"<$COAST_DIR/noaa.usa.$resostem" ) {
 			$self->htmlError ( "Couldn't open [$COAST_DIR/noaa.usa.$resostem]: $!" );
 		}
 		while (<USA>)	{
 			s/\n//;
 			($a,$b) = split /\t/,$_;
-			if ( $a > 0 )	{
-				$ia = int($a + 0.5);
+			if ( $a >= 0 )	{
+				$ia = int($a);
 			} else	{
-				$ia = int($a - 0.5);
+				$ia = int($a - 1);
 			}
-			if ( $b > 0 )	{
-				$ib = int($b + 0.5);
+			if ( $b >= 0 )	{
+				$ib = int($b);
 			} else	{
-				$ib = int($b - 0.5);
+				$ib = int($b - 1);
 			}
 			if ( $a =~ /#/ || ( $a =~ /[0-9]/ && $cellage{$ia}{$ib} >= $self->{maptime} ) )	{
 				push @usalng,$a;
@@ -634,26 +734,35 @@ sub mapDefineOutlines	{
 		}
 		close USA;
 	}
+	if ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ )	{
+		if ( ! open PLATES,"<$COAST_DIR/platepolygons/polygons.$self->{maptime}" ) {
+			$self->htmlError ( "Couldn't open [$COAST_DIR/platepolygons/polygons.$self->{maptime}]: $!" );
+		}
+		while (<PLATES>)	{
+			s/\n//;
+			($a,$b) = split /\t/,$_;
+			if ( $a >= 0 )	{
+				$ia = int($a);
+			} else	{
+				$ia = int($a - 1);
+			}
+			if ( $b >= 0 )	{
+				$ib = int($b);
+			} else	{
+				$ib = int($b - 1);
+			}
+			if ( $a =~ /#/ || $a =~ /[0-9]/ )	{
+				push @crustlng,$a;
+				push @crustlat,$b;
+			}
+		}
+		close PLATES;
+	}
 }
 
 # read Scotese's plate ID and rotation data files
 sub mapGetRotations	{
 	my $self = shift;
-
-	if ( ! open IDS,"<$COAST_DIR/plateidsv2.lst" ) {
-		$self->htmlError ( "Couldn't open [$COAST_DIR/plateidsv2.lst]: $!" );
-	}
-
-	# skip the first line
-	<IDS>;
-
-	# read the plate IDs: numbers are longitude, latitude, and ID number
-	while (<IDS>)	{
-		s/\n//;
-		my ($x,$y,$z) = split /,/,$_;
-		$plate{$x}{$y} = $z;
-	}
-	$self->{plate} = \%plate;
 
 	if ( ! open ROT,"<$COAST_DIR/master01c.rot" ) {
 		$self->htmlError ( "Couldn't open [$COAST_DIR/master01c.rot]: $!" );
@@ -665,14 +774,24 @@ sub mapGetRotations	{
 	while (<ROT>)	{
 		s/\n//;
 		my @temp = split /,/,$_;
-		$rotx{$temp[0]}{$temp[1]} = $temp[3];
-		$roty{$temp[0]}{$temp[1]} = $temp[2];
-		$rotdeg{$temp[0]}{$temp[1]} = $temp[4];
+	# Philippines test: pole of rotation doesn't change, so actually
+	#  the plate comes into existence after the Paleozoic
+		if ( $lastrotx{$temp[1]} != $temp[3] || $lastroty{$temp[1]} != $temp[2] || $lastrotdeg{$temp[1]} != $temp[4] || $temp[1] == 1 )	{
+			$rotx{$temp[0]}{$temp[1]} = $temp[3];
+			$roty{$temp[0]}{$temp[1]} = $temp[2];
+			$rotdeg{$temp[0]}{$temp[1]} = $temp[4];
+		}
+		if ( $temp[3] =~ /[0-9]/ )	{
+			$lastrotx{$temp[1]} = $temp[3];
+			$lastroty{$temp[1]} = $temp[2];
+			$lastrotdeg{$temp[1]} = $temp[4];
+		}
 	}
 	close ROT;
 	# rotations for the Recent are all zero; poles are same as 10 Ma
+	my @pids = sort { $a <=> $b } keys %{$rotx{'10'}};
 	if ( $self->{maptime} > 0 && $self->{maptime} < 10 )	{
-		for $p (1..999)	{
+		for $p ( @pids )	{
 			$rotx{0}{$p} = $rotx{10}{$p};
 			$roty{0}{$p} = $roty{10}{$p};
 			$rotdeg{0}{$p} = 0;
@@ -695,7 +814,7 @@ sub mapGetRotations	{
 		if ( $topma < 1000 )	{
 			$basewgt = ( $topma - $self->{maptime} ) / ( $topma - $basema );
 			$topwgt = ( $self->{maptime} - $basema ) / ( $topma - $basema );
-			@pids = sort { $a <=> $b } keys %{$rotx{'20'}};
+			my @pids = sort { $a <=> $b } keys %{$rotx{$topma}};
 			for $pid ( @pids )	{
 				my $x1 = $rotx{$basema}{$pid};
 				my $x2 = $rotx{$topma}{$pid};
@@ -774,22 +893,24 @@ sub mapSetupImage {
 		}
 	}
 
-    # get the next number for file creation.
-    if ( ! open GIFCOUNT,"<$GIF_DIR/gifcount" ) {
-		$self->htmlError ( "Couldn't open [$GIF_DIR/gifcount]: $!" );
-    }
-    $gifcount = <GIFCOUNT>;
-    chomp($gifcount);
-    close GIFCOUNT;
+    if ( $q->param('mapname') !~ /[A-Za-z]/ )	{
+        # get the next number for file creation.
+        if ( ! open GIFCOUNT,"<$GIF_DIR/gifcount" ) {
+            $self->htmlError ( "Couldn't open [$GIF_DIR/gifcount]: $!" );
+        }
+        $gifcount = <GIFCOUNT>;
+        chomp($gifcount);
+        close GIFCOUNT;
 
-    $gifcount++;
-    if ( ! open GIFCOUNT,">$GIF_DIR/gifcount" ) {
-          $self->htmlError ( "Couldn't open [$GIF_DIR/gifcount]: $!" );
-    }
-    print GIFCOUNT "$gifcount";
-    close GIFCOUNT;
+        $gifcount++;
+        if ( ! open GIFCOUNT,">$GIF_DIR/gifcount" ) {
+            $self->htmlError ( "Couldn't open [$GIF_DIR/gifcount]: $!" );
+        }
+        print GIFCOUNT "$gifcount";
+        close GIFCOUNT;
 
-    $gifcount++;
+        $gifcount++;
+    }
 
     # set up the filenames
     my $mapstem = "pbdbmap";
@@ -797,6 +918,10 @@ sub mapSetupImage {
     #  that animations are being produced JA 29.4.06
     if ( $q->param('linecommand') =~ /[A-Za-z]/ )	{
         $mapstem = "anim";
+        if ( $q->param('mapname') =~ /[A-Za-z]/ )	{
+            $mapstem = $q->param('mapname');
+            $gifcount = "";
+        }
     }
     $gifname = $mapstem . $gifcount . ".png";
     $htmlname = $mapstem .$gifcount.".html";
@@ -810,16 +935,20 @@ sub mapSetupImage {
 	# Write this to a file, not stdout
 	open(MAPOUT,">$GIF_DIR/$htmlname") or die "couldn't open $GIF_DIR/$htmlname ($!)";
 
-    $hmult = 1.6;
+    $hmult = 2;
     $vmult = 2;
-    $hpix = 360;
-    $vpix = 180;
+    $hpix = 312;
+    $vpix = 156;
     if ( $q->param('projection') eq "orthographic" )	{
-        $hpix = 280;
-        $vpix = 280;
+        $hpix = 288;
+        $vpix = 288;
+    } elsif ( $q->param('projection') =~ /Eckert IV|Mollweide/ )	{
+    # these numbers cram the map in as tightly as possible
+        $hpix = 288;
+        $vpix = 146;
     } elsif ( ( $cont =~ /Africa/ || $cont =~ /South America/ ) &&
               $scale > 1.5 )	{
-        $hpix = 280;
+        $hpix = 288;
         $vpix = 240;
     }
     $x = $q->param('mapsize');
@@ -831,8 +960,12 @@ sub mapSetupImage {
     }
     $hmult = $hmult * $x / 100;
     $vmult = $vmult * $x / 100;
-    if ( $q->param("projection") eq "orthographic")	{
-       $hmult = $hmult * 1.25;
+    # squash the plate caree projection horizontally to make it an
+    #  equirectangular projection JA 8.5.08
+    # previously, I called this the rectilinear projection and used an
+    #  arbitrary and incorrect 0.8 factor; this one is 0.866
+    if ( $q->param("projection") eq "equirectangular" )	{
+       $hmult = $hmult * sin( 60 * $PI / 180 );
     }
     $height = $vmult * $vpix;
     $width = $hmult * $hpix;
@@ -843,9 +976,9 @@ sub mapSetupImage {
 
     if ( $width > 300 )	{
         if (!$im)  {
-            $im = new GD::Image($width,$height+12,1);
+            $im = new GD::Image($width,$height+14,1);
         }
-        $totalheight = $height + 12;
+        $totalheight = $height + 14;
     } else	{
         if (!$im)  {
             $im = new GD::Image($width,$height+24,1);
@@ -924,6 +1057,8 @@ sub mapSetupImage {
 
 	# create an interlaced GIF with a white background
 	$im->interlaced('true');
+	# I'm not sure what this does, it seems to have no effect one way or
+	#  another and I'm not sure who put it in JA 2.5.06
 	$im->transparent(-1);
 	($x,$y) = $self->drawBackground();
 
@@ -931,195 +1066,36 @@ sub mapSetupImage {
 		$self->drawGrids();
 	}
 
-	# color in the continents based on Scotese's age data
-	if ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') )	{
+    # draw crust, coastlines, and borders
 
-		# option to use 1 degree resolution instead of default
-		#  2 degree resolution JA 29.4.06
-		my $maskdir;
-		my $ts = 2;
-		if ( $q->param('tiltsize') eq "fine" )	{
-			$maskdir = "masks1";
-			$ts = 1;
-		} else	{
-			$maskdir = "masks2";
-		}
-
-		open MASK,"<$COAST_DIR/$maskdir/tiltmask.".$self->{maptime};
-		while (<MASK>)	{
-			s/\n//;
-			my ($lat,$lng) = split /\t/,$_;
-			$touched{$lng}{$lat} = 1;
-		}
-		close MASK;
-
-		my $crustcolor = $q->param('crustcolor');
-		my $mycolor = $aicol{$crustcolor};
-		$mycolor =~ s/ K/ k/;
-		print AI "u\n";  # start the group
-
-		# draw a rectangle for each touched cell
-		for $lat (-90..90)	{
-			for $lng (-180..180)	{
-				if ( $touched{$lng}{$lat} ne "" )	{
-					my @xs = ();
-					my @ys = ();
-					push @xs, $lng + ($ts / 2);
-					push @xs, $lng + ($ts / 2);
-					push @xs, $lng - ($ts / 2);
-					push @xs, $lng - ($ts / 2);
-					push @ys, $lat + ($ts / 2);
-					push @ys, $lat - ($ts / 2);
-					push @ys, $lat - ($ts / 2);
-					push @ys, $lat + ($ts / 2);
-					my $npts = 3;
-					my @newxs = ();
-					my @newys = ();
-					# smooth left half of cell to the north
-					if ( $touched{$lng-$ts}{$lat+$ts} ne "" &&
-					     $touched{$lng}{$lat+$ts} eq "" )	{
-						push @newxs, $xs[3] - ($xs[3] - $xs[2]) / 2;
-						push @newys, $ys[3] + ($ys[3] - $ys[2]) / 2;
-						$npts++;
-					}
-					# smooth right half of cell to the north
-					if ( $touched{$lng+$ts}{$lat+$ts} ne "" &&
-					     $touched{$lng}{$lat+$ts} eq "" )	{
-						push @newxs, $xs[0] + ($xs[0] - $xs[1]) / 2;
-						push @newys, $ys[0] + ($ys[0] - $ys[1]) / 2;
-						$npts++;
-					}
-					# flatten upper right corner by
-					#  adding a point
-					if ( $touched{$lng}{$lat+$ts} eq "" &&
-					     $touched{$lng+$ts}{$lat} eq "" )	{
-						push @newxs, $xs[0] - ($xs[0] - $xs[3]) / 2;
-						push @newys, $ys[0];
-						push @newxs, $xs[0];
-						push @newys, $ys[0] - ($ys[0] - $ys[1]) / 2;
-						$npts++;
-					} else	{
-						push @newxs, $xs[0];
-						push @newys, $ys[0];
-					}
-					# smooth upper half of cell to the east
-					if ( $touched{$lng+$ts}{$lat+$ts} ne "" &&
-					     $touched{$lng+$ts}{$lat} eq "" )	{
-						push @newxs, $xs[0] + ($xs[0] - $xs[3]) / 2;
-						push @newys, $ys[0] + ($ys[0] - $ys[3]) / 2;
-						$npts++;
-					}
-					# smooth lower half of cell to the east
-					if ( $touched{$lng+$ts}{$lat-$ts} ne "" &&
-					     $touched{$lng+$ts}{$lat} eq "" )	{
-						push @newxs, $xs[1] + ($xs[1] - $xs[2]) / 2;
-						push @newys, $ys[1] - ($ys[1] - $ys[2]) / 2;
-						$npts++;
-					}
-					# lower right corner
-					if ( $touched{$lng+$ts}{$lat} eq "" &&
-					     $touched{$lng}{$lat-$ts} eq "" )	{
-						push @newxs, $xs[1];
-						push @newys, $ys[1] + ($ys[0] - $ys[1]) / 2;
-						push @newxs, $xs[1] - ($xs[1] - $xs[2]) / 2;
-						push @newys, $ys[1];
-						$npts++;
-					} else	{
-						push @newxs, $xs[1];
-						push @newys, $ys[1];
-					}
-					# lower left corner
-					if ( $touched{$lng}{$lat-$ts} eq "" &&
-					     $touched{$lng-$ts}{$lat} eq "" )	{
-						push @newxs, $xs[2] + ($xs[1] - $xs[2]) / 2;
-						push @newys, $ys[2];
-						push @newxs, $xs[2];
-						push @newys, $ys[2] + ($ys[3] - $ys[2]) / 2;
-						$npts++;
-					} else	{
-						push @newxs, $xs[2];
-						push @newys, $ys[2];
-					}
-					# upper left corner
-					if ( $touched{$lng-$ts}{$lat} eq "" &&
-					     $touched{$lng}{$lat+$ts} eq "" )	{
-						push @newxs, $xs[3];
-						push @newys, $ys[3] - ($ys[3] - $ys[2]) / 2;
-						push @newxs, $xs[3] + ($xs[0] - $xs[3]) / 2;
-						push @newys, $ys[3];
-						$npts++;
-					} else	{
-						push @newxs, $xs[3];
-						push @newys, $ys[3];
-					}
-					@xs = @newxs;
-					@ys = @newys;
-					my $nan = "";
-					for $p (0..$npts)	{
-						($xs[$p],$ys[$p],$rawxs[$p],$rawys[$p]) = $self->projectPoints($xs[$p],$ys[$p],"grid");
-						if ( $p == 0 )	{
-							$firstx = $rawxs[0];
-							$firsty = $rawys[0];
-						}
-						if ( abs($rawxs[$p] - $firstx) > 180 )	{
-							$xs[$p] = -1 * $xs[$p];
-						}
-						if ( abs($rawys[$p] - $firsty) > 90 )	{
-							$ys[$p] = -1 * $ys[$p];
-						}
-						$xs[$p] = $self->getLngTrunc($xs[$p]);
-						$ys[$p] = $self->getLatTrunc($ys[$p]);
-						if ( $xs[$p] eq "NaN" || $ys[$p] eq "NaN" )	{
-							$nan = "Y";
-						}
-					}
-
-					if ( $nan eq "" )	{
-       						my $poly = new GD::Polygon;
-						for $p (0..$npts)	{
-							$poly->addPt($xs[$p],$ys[$p]);
-						}
-      		 				$im->filledPolygon($poly,$col{$crustcolor});
-						print AI "0 O\n";
-						print AI "$mycolor\n";
-						print AI "4 M\n";
-						printf AI "%.1f %.1f m\n",$AILEFT+$xs[0],$AITOP-$ys[0];
-						for $p (1..$npts)	{
-							printf AI "%.1f %.1f L\n",$AILEFT+$xs[$p],$AITOP-$ys[$p];
-						}
-						printf AI "%.1f %.1f L\n",$AILEFT+$xs[0],$AITOP-$ys[0];
-						print AI "f\n";
-					}
-				}
-			}
-		}
-
-		print AI "U\n";  # terminate the group
-	}
-
-    # draw coastlines
     # first rescale the coordinates depending on the rotation
-    if ( $q->param('mapcontinent') ne "standard" || $q->param('projection') ne "rectilinear" )	{
+        if ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ )	{
+            for $c (0..$#crustlat)	{
+                if ( $crustlat[$c] =~ /[0-9]/ )	{
+                    ($crustlng[$c],$crustlat[$c],$crustlngraw[$c],$crustlatraw[$c],$crustplate[$c]) = $self->projectPoints($crustlng[$c],$crustlat[$c],"grid");
+                }
+            }
+        }
         for $c (0..$#worldlat)	{
             if ( $worldlat[$c] =~ /[0-9]/ )	{
                 ($worldlng[$c],$worldlat[$c],$worldlngraw[$c],$worldlatraw[$c],$worldplate[$c]) = $self->projectPoints($worldlng[$c],$worldlat[$c]);
             }
         }
-        if ( $q->param('borderlinecolor') ne "none" )	{
+        if ( $q->param('borderlinecolor') ne "none" && $q->param('borderlinecolor') =~ /[A-Za-z]/ )	{
             for $c (0..$#borderlat)	{
                 if ( $borderlat[$c] =~ /[0-9]/ )	{
                     ($borderlng[$c],$borderlat[$c],$borderlngraw[$c],$borderlatraw[$c],$borderplate[$c]) = $self->projectPoints($borderlng[$c],$borderlat[$c]);
                 }
             }
         }
-        if ( $q->param('usalinecolor') ne "none" )	{
+        if ( $q->param('usalinecolor') ne "none" && $q->param('usalinecolor') =~ /[A-Za-z]/ )	{
             for $c (0..$#usalat)	{
                 if ( $usalat[$c] =~ /[0-9]/ )	{
                     ($usalng[$c],$usalat[$c],$usalngraw[$c],$usalatraw[$c],$usaplate[$c]) = $self->projectPoints($usalng[$c],$usalat[$c]);
                 }
             }
         }
-    }
+
     if ( $q->param('linethickness') eq "thick" )	{
         $thickness = 0.5;
         $aithickness = 1.5;
@@ -1131,10 +1107,148 @@ sub mapSetupImage {
         $aithickness = 0.5;
     }
 
+    # draw crust - this is different from coastlines or borders because the
+    #  crust pieces need to be filled, which means drawing a polygon for each
+    #  degree cell JA 30.4.06
+    # oh yeah, and it's incredibly complicated and slow
+    if ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ )	{
+        my $crustcolor = $q->param('crustcolor');
+    # the rotation may have forced the polygon to straddle the edges of the map
+    # if so, it has to be broken into pieces, which can be done by creating two
+    #  smaller, poorly shaped ones
+        my $lastsep = 1;
+        my $bad = 0;
+        my @newcrustlat = ();
+        my @newcrustlng = ();
+        my @newcrustlatraw = ();
+        my @newcrustlngraw = ();
+        my @templat = ();
+        my @templng = ();
+        my @templatraw = ();
+        my @templngraw = ();
+        for my $c (0..$#crustlat-1)	{
+            push @templat , $crustlat[$c];
+            push @templng , $crustlng[$c];
+            push @templatraw , $crustlatraw[$c];
+            push @templngraw , $crustlngraw[$c];
+            my $d;
+            if ( $crustlng[$c+1] =~ /#/ )	{
+                $d = $lastsep;
+            } else	{
+                $d = $c + 1;
+            }
+            if ( $crustlng[$c] !~ /NaN/ && $crustlng[$c] =~ /[0-9]/ &&
+                 abs ( $crustlng[$c] - $crustlng[$d] ) >= 45 )	{
+                $bad++;
+            }
+            if ( $crustlng[$c+1] =~ /#/ )	{
+                $lastsep = $c + 2;
+            # okay, the cell is normal
+                if ( $bad == 0 )	{
+                  for my $t ( 0..$#templat )	{
+                      push @newcrustlat , $templat[$t];
+                      push @newcrustlng , $templng[$t];
+                      push @newcrustlatraw , $templatraw[$t];
+                      push @newcrustlngraw , $templngraw[$t];
+                  }
+            # no it isn't, it straddles 180 degrees longitude, so make
+            #  two cells on opposite sides of the map
+                } else	{
+                  my @templng2 = @templng;
+                  my @templat2 = @templat;
+                  my @templngraw2 = @templngraw;
+                  my @templatraw2 = @templatraw;
+                  for my $t ( 0..$#templat )	{
+                      if ( $templng[$t] > 0 )	{
+                        $templng[$t] = -179.9;
+                      }
+                      push @newcrustlat , $templat[$t];
+                      push @newcrustlng , $templng[$t];
+                      push @newcrustlatraw , $templatraw[$t];
+                      push @newcrustlngraw , $templngraw[$t];
+                  }
+                  for my $t ( 0..$#templat2 )	{
+                      if ( $templng2[$t] < 0 )	{
+                        $templng2[$t] = 179.9;
+                      }
+                      push @newcrustlat , $templat2[$t];
+                      push @newcrustlng , $templng2[$t];
+                      push @newcrustlatraw , $templatraw2[$t];
+                      push @newcrustlngraw , $templngraw2[$t];
+                  }
+                }
+                @templat = ();
+                @templng = ();
+                @templatraw = ();
+                @templngraw = ();
+                $bad = 0;
+            }
+        }
+        @crustlat = @newcrustlat;
+        @crustlng = @newcrustlng;
+        @crustlatraw = @newcrustlatraw;
+        @crustlngraw = @newcrustlngraw;
+
+    # this is the main crust cell drawing routine
+        my $poly = new GD::Polygon;
+        print AI "u\n";  # start the group
+        my $lastsep = 1;
+        my $bad = 0;
+        push @crustlng , $crustlng[0];
+        push @crustlngraw , $crustlng[0];
+        push @crustlat , "";
+        push @crustlatraw , "";
+        for my $c (0..$#crustlat-1)	{
+            my $d;
+            if ( $crustlng[$c+1] =~ /#/ )	{
+                $d = $lastsep;
+            } else	{
+                $d = $c + 1;
+            }
+            if ( $crustlng[$c] !~ /NaN/ && $crustlng[$c] =~ /[0-9]/ &&
+                 ( ( abs ( $crustlat[$c] - $crustlat[$d] ) < 60 &&
+                 abs ( $crustlng[$c] - $crustlng[$d] ) < 60 ) ||
+                 abs ( $crustlng[$c] - $crustlng[$d] ) == 359.8 ) )	{
+                my $x1 = $self->getLng($crustlng[$c]);
+                my $y1 = $self->getLat($crustlat[$c]);
+                if ( $x1 !~ /NaN/ && $y1 !~ /NaN/ )	{
+                    $poly->addPt($x1,$y1);
+    # WARNING: I'm too lazy/rushed to rewrite this section to fill the plates,
+    #  so right now it just draws the borders - this may produce nonsense
+                    print AI "$aicol{$crustcolor}\n";
+                    print AI "0.5 w\n";
+                    printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
+                    printf AI "%.1f %.1f l\n",$AILEFT+$x2,$AITOP-$y2;
+                    print AI "S\n";
+                } else	{
+                    $bad++;
+                }
+            } elsif ( $crustlng[$c] !~ /#/ )	{
+                $bad++;
+            }
+    # finish up with this plate and start a new one
+            if ( $crustlng[$c+1] =~ /#/ )	{
+                $lastsep = $c + 2;
+                if ( $bad == 0 )	{
+                    $im->filledPolygon($poly,$col{$crustcolor});
+                }
+                $bad = 0;
+                print AI "U\n";  # terminate the group
+                $poly = new GD::Polygon;
+                print AI "u\n";  # start the group
+            }
+        }
+    # finish the last plate
+        if ( $bad == 0 )	{
+            $im->filledPolygon($poly,$col{$crustcolor});
+            print AI "U\n";  # terminate the group
+        }
+    }
+
     # draw coastlines
-    # do NOT connect neighboring points that (1) are on different tectonic plates,
-    #  or (2) now are widely separated because one point has rotated onto the
-    #  other edge of the map
+    # do NOT connect neighboring points that (1) are on different tectonic
+    #  plates, or (2) now are widely separated because one point has rotated
+    #  onto the other edge of the map
     $coastlinecolor  = $q->param('coastlinecolor');
     print AI "u\n";  # start the group
     for $c (0..$#worldlat-1)	{
@@ -1168,7 +1282,7 @@ sub mapSetupImage {
     print AI "U\n";  # terminate the group
 
     # draw the international borders
-    if ( $q->param('borderlinecolor') ne "none" )	{
+    if ( $q->param('borderlinecolor') ne "none" && $q->param('borderlinecolor') =~ /[A-Za-z]/ )	{
         $borderlinecolor = $q->param('borderlinecolor');
         print AI "u\n";  # start the group
         for $c (0..$#borderlat-1)	{
@@ -1195,7 +1309,7 @@ sub mapSetupImage {
     }
 
     # draw USA state borders
-    if ( $q->param('usalinecolor') ne "none" )	{
+    if ( $q->param('usalinecolor') ne "none" && $q->param('usalinecolor') =~ /[A-Za-z]/ )	{
         $usalinecolor = $q->param('usalinecolor');
         print AI "u\n";  # start the group
         for $c (0..$#usalat-1)	{
@@ -1312,6 +1426,11 @@ sub mapDrawPoints{
                 $x1+$maxdotsize < $width &&
                 $y1-$maxdotsize > 0 &&
                 $y1+$maxdotsize < $height )	{
+            # the rounding guarantees that all circles will have the same
+            #  shape, and adding 0.5 guarantees that all circles will be
+            #  symmetrical and therefore round
+                    $x1 = int($x1) + 0.5;
+                    $y1 = int($y1) + 0.5;
                     $atCoord{$x1}{$y1}++;
                     $longVal{$x1} = $coll{'lngdeg'} . $lnghalf . " " . $coll{'lngdir'};
                     $latVal{$y1} = $coll{'latdeg'} . $lathalf . " " . $coll{'latdir'};
@@ -1379,15 +1498,20 @@ sub mapDrawPoints{
                 }
                 # draw a circle and fill it
 
+                $im->setAntiAliased($col{$dotcolor});
                 if ($dotshape =~ /^circles$/)	{
                   if ( $x1+($dotsize*1.5)+1 < $width && $x1-($dotsize*1.5)-1 > 0 &&
                        $y1+($dotsize*1.5)+1 < $height && $y1-($dotsize*1.5)-1 > 0 )	{
-                    $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,360,$col{$bordercolor});
-                    $im->fillToBorder($x1,$y1,$col{$bordercolor},$col{$dotcolor});
-                    $im->fillToBorder($x1+$dotsize,$y1,$col{$bordercolor},$col{$dotcolor});
-                    $im->fillToBorder($x1-$dotsize,$y1,$col{$bordercolor},$col{$dotcolor});
-                    $im->fillToBorder($x1,$y1+$dotsize,$col{$bordercolor},$col{$dotcolor});
-                    $im->fillToBorder($x1,$y1-$dotsize,$col{$bordercolor},$col{$dotcolor});
+                    my $poly = new GD::Polygon;
+                    $poly->addPt($x1,$y1+($dotsize*2));
+                    $poly->addPt($x1+($dotsize*1.414),$y1+($dotsize*1.414));
+                    $poly->addPt($x1+($dotsize*2),$y1);
+                    $poly->addPt($x1+($dotsize*1.414),$y1-($dotsize*1.414));
+                    $poly->addPt($x1,$y1-($dotsize*2));
+                    $poly->addPt($x1-($dotsize*1.414),$y1-($dotsize*1.414));
+                    $poly->addPt($x1-($dotsize*2),$y1);
+                    $poly->addPt($x1-($dotsize*1.414),$y1+($dotsize*1.414));
+                    $im->filledPolygon($poly,gdAntiAliased);
                 my $diam = $dotsize * 3;
                 my $rad = $diam / 2;
                 my $aix = $AILEFT+$x1+$rad;
@@ -1501,7 +1625,16 @@ sub mapDrawPoints{
             }
             if ($dotshape =~ /^circles$/)	{
               # for consistency, antialiasing actually only supported for straight lines, not arcs
-              $im->arc($x1,$y1,($dotsize*3)+2,($dotsize*3)+2,0,$hpix,$col{$bordercolor});
+              my $poly = new GD::Polygon;
+              $poly->addPt($x1,$y1+($dotsize*2));
+              $poly->addPt($x1+($dotsize*1.414),$y1+($dotsize*1.414));
+              $poly->addPt($x1+($dotsize*2),$y1);
+              $poly->addPt($x1+($dotsize*1.414),$y1-($dotsize*1.414));
+              $poly->addPt($x1,$y1-($dotsize*2));
+              $poly->addPt($x1-($dotsize*1.414),$y1-($dotsize*1.414));
+              $poly->addPt($x1-($dotsize*2),$y1);
+              $poly->addPt($x1-($dotsize*1.414),$y1+($dotsize*1.414));
+              $im->polygon($poly,gdAntiAliased);
             } elsif ($dotshape =~ /^crosses$/)	{ # don't do anything
             } elsif ($dotshape =~ /^diamonds$/)	{
               my $poly = new GD::Polygon;
@@ -1582,6 +1715,9 @@ sub projectPoints	{
 
 
 	# integer coordinates are needed to determine the plate ID
+	# IMPORTANT: Scotese's plate ID data are weird in that the coordinates
+	#   refer to the lower left (southwest) corner of each grid cell, so,
+	#  say, cell -10 / 10 is from -10 to -9 long and 10 to 11 lat
 		my $q; 
 		my $r;
 		if ( $x >= 0 )	{
@@ -1656,7 +1792,7 @@ sub projectPoints	{
 	}
 
 	# rotate point if origin is not at 0/0
-	if ( $pointclass ne "crust" && ( $midlat != 0 || $midlng != 0 ) )	{
+	if ( $midlat != 0 || $midlng != 0 )	{
 		($x,$y) = rotatePoint($x,$y,$midlng,$midlat);
 		if ( $x eq "NaN" || $y eq "NaN" )	{
 			return('NaN','NaN');
@@ -1666,11 +1802,21 @@ sub projectPoints	{
 	$rawx = $x;
 	$rawy = $y;
 
-	if ( $pointclass eq "crust" )	{
-		return($x,$y,$rawx,$rawy,$pid);
+	# don't even bother drawing anything near the poles in a equirectangular
+	#  projection, because the crust gets completely screwed up there
+	#  JA 2.5.06
+	if ( $self->{maptime} > 0 && $scale == 1 )	{
+		if ( $projection eq "equirectangular" and $y > 85 )	{
+			$y = 85;
+		} elsif ( $projection eq "equirectangular" and $y < -85 )	{
+			$y = -85;
+		}
 	}
 
-	if ( $projection eq "orthographic" && $x ne "" )	{
+	if ( $projection eq "equirectangular" && $x ne "" )	{
+		$x = $x * sin( 60 * $PI / 180);
+		$y = $y * sin( 60 * $PI / 180);
+	} elsif ( $projection eq "orthographic" && $x ne "" )	{
 
 		# how far is this point from the origin?
 		my $dist = ($x**2 + $y**2)**0.5;
@@ -1690,17 +1836,49 @@ sub projectPoints	{
 			$y = 0.001;
 		}
 	} elsif ( $projection eq "Mollweide" && $x ne "")	{
-	# WARNING: this is an approximation of the Mollweide projection;
-	#  a factor of 180 deg for the longitude would seem intuitive,
-	#  but 190 gives a better visual match to assorted Google images
-		$x = $x * cos($y * $PI / 190);
-		$y = $y * cos($y * $PI / 360);
-	} elsif ( $projection eq "Eckert" && $x ne "")	{
-	# WARNING: this is an approximation of the Eckert IV projection
-	#  and is not nearly as complicated
-		$x = $x * cos($y * $PI / 300);
-		$y = $y * cos($y * $PI / 360);
+	# this is the exact Mollweide projection; previously an approximation
+	#  was used JA 7.5.06
+	# first convert to radians
+		$x = $x * $PI / 360;
+		$y = $y * $PI / 360;
+		my $maxy = 90 * $PI / 360;
+		my $theta = asin($y / $maxy);
+		$y = 1 / 2 * sqrt(8) * sin($theta);
+		if ( $y**2 >= 2 )	{
+			$y = sqrt(2) - 0.00000001;
+		}
+		$x = 2 * 2 * $x / $PI * sqrt(2 - $y**2);
+	# rescale just to fit in the image, using the maximum possible value
+	#  of x
+		my $imagescale = ($hpix - 2) / (4 * sqrt(2));
+		$x = $x * $imagescale;
+		$y = $y * $imagescale;
+	} elsif ( $projection eq "Eckert IV" && $x ne "")	{
+	# this is the exact Eckert IV projection; previously an approximation
+	#  was used JA 7.5.06
+	# in mathematical notation, longitude and latitude in radians are
+	#  lambda and phi
+	# first convert to radians
+		$x = $x * $PI / 360;
+		$y = $y * $PI / 720;
+	# the Eckert IV uses a special expression for theta that some sources
+	#  don't mention
+	# algebraically, it might seem that the maximum ratio of X to Y would
+	#  be 2, but actually the expression for theta has a maximum not of
+	#  pi / 2 but of 1.336, so the maximum of sin(theta) is not 1 but
+	#  0.9792, so a scaling factor is needed
+		my $theta = 1 / 2 * (4 + $PI) * sin($y);
+		$x = 2 * 2 * $x * (1 + cos($theta)) / sqrt($PI * (4 + $PI));
+		$y = 2 * sqrt($PI) / sqrt(4 + $PI) * sin($theta);
+		my $scaley = sin(1 / 2 * (4 + $PI) * sin(90 * $PI / 720));
+		$y = $y / $scaley;
+	# rescale just to fit in the image, using the maximum possible value
+	#  of x
+		my $imagescale = ($hpix - 2) / (8 * $PI / sqrt($PI * (4 + $PI)));
+		$x = $x * $imagescale;
+		$y = $y * $imagescale;
 	}
+
 	return($x,$y,$rawx,$rawy,$pid);
 }
 
@@ -1750,7 +1928,7 @@ sub rotatePoint	{
 	#  point to the new north pole must be 90 - latitude
 
 	$y = 90 - $porgcd;
-	if ( $y == 90 )	{
+	if ( $y > 89.9 )	{
 		$y = 89.9;
 	}
 	if ( $x >= 179.999 )	{
@@ -1891,22 +2069,39 @@ sub drawBackground	{
 	my $stage = shift;
 
 	my ($origx,$origy) = $self->projectPoints($midlng,$midlat);
-    my $mapbgcolor = $q->param('mapbgcolor');
-    if (!$mapbgcolor || $mapbgcolor eq 'transparent') {
-        $mapbgcolor = 'white';
-    }
+	my $mapbgcolor = $q->param('mapbgcolor');
+	if (  !$mapbgcolor )	{
+		$mapbgcolor = 'white';
+	}
 	$origx = $self->getLng($origx);
 	$origy = $self->getLat($origy);
+	# need this color to encircle the globe with a solid line
 	$edgecolor = $col{$q->param('coastlinecolor')};
 	$aiedgecolor = $aicol{$q->param('coastlinecolor')};
 	my $mycolor = $aicol{$q->param('mapbgcolor')};
 	$mycolor =~ s/ K/ k/;
 	print AI "u\n";  # start the group
-	if ( $edgecolor eq "white" )	{
-		$edgecolor = $col{'offwhite'};
+	# gray will have to do (previously this was offwhite; I'm not sure
+	#  whose fault that was) JA 2.5.06
+	if ( $q->param('coastlinecolor') eq "white" )	{
+		$edgecolor = $col{'gray'};
+		$aiedgecolor = $aicol{'gray'};
 	}
-	if ( $q->param('projection') eq "rectilinear" )	{
-        $im->filledRectangle(0,0,$width,$height,$col{$mapbgcolor});
+	# this is a little tricky: draw a background rectangle in a weird
+	#  color, then declare the color transparent, so nothing else
+	#  will be
+	my $transparent = $im->colorAllocate(11, 22, 33);
+	$im->filledRectangle(0,0,$width,$totalheight,$transparent);
+	$im->transparent($transparent);
+	if ( $q->param('projection') eq "equirectangular" )	{
+		# don't even try to draw the background around the poles
+		my $poleoffset = 0;
+		# don't show the poles if this is a full-sized paleogeographic
+                #  map
+		if ( $self->{maptime} > 0 && $scale == 1 )	{
+			$poleoffset = $height * 5 / 180;
+		}
+		$im->filledRectangle(0,0+$poleoffset,$width,$height-$poleoffset,$col{$mapbgcolor});
   		print AI "0 O\n";
             	printf AI "%s\n",$mycolor;
 		printf AI "%.1f %.1f m\n",$AILEFT,$AITOP;
@@ -1915,14 +2110,14 @@ sub drawBackground	{
 		printf AI "%.1f %.1f L\n",$AILEFT,$AITOP-$height;
 		printf AI "%.1f %.1f L\n",$AILEFT,$AITOP;
 	} else	{
-        $im->filledRectangle(0,0,$width,$height,$col{'white'});
-        my $poly = new GD::Polygon;
+	# now draw the background of the globe proper
+		my $poly = new GD::Polygon;
   		print AI "0 O\n";
            	printf AI "%s\n",$mycolor;
 		my $x1;
 		my $y1;
 		for my $hemi (0..1)	{
-			for my $lat (-90..89)	{
+			for my $lat (-90..90)	{
 				my $ll = $lat;
 				if ( $hemi == 1 )	{
 					$ll = -1 * $ll;
@@ -1930,12 +2125,40 @@ sub drawBackground	{
 				if ( $q->param('projection') eq "orthographic" )	{
 					$x1 = 90 * cos($ll * $PI / 180);
 					$y1 = 90 * sin($ll * $PI / 180);
-				} elsif ( $q->param('projection') eq "Eckert" )	{
-					$x1 = 180 * cos($ll * $PI / 300);
-					$y1 = $ll * cos($ll * $PI / 360);
+				} elsif ( $q->param('projection') eq "Eckert IV" )	{
+				# this is the exact Eckert IV equation JA 7.5.06
+				# first convert to radians
+					$x1 = $PI / 2;
+					$y1 = $ll * $PI / 720;
+					$theta = 1 / 2 * (4 + $PI) * sin($y1);
+					$x1 = 2 * 2 * $x1 * (1 + cos($theta)) / sqrt($PI * (4 + $PI));
+					$y1 = 2 * sqrt($PI) / sqrt(4 + $PI) * sin($theta);
+					my $scaley1 = sin(1 / 2 * (4 + $PI) * sin(90 * $PI / 720));
+					$y1 = $y1 / $scaley1;
+				# rescale just to fit in the image
+					my $imagescale = ($hpix - 2) / (8 * $PI / sqrt($PI * (4 + $PI)));
+					$x1 = $x1 * $imagescale;
+					$y1 = $y1 * $imagescale;
 				} elsif ( $q->param('projection') eq "Mollweide" )	{
-					$x1 = 180 * cos($ll * $PI / 190);
-					$y1 = $ll * cos($ll * $PI / 360);
+				# this is the exact Mollweide equation JA 7.5.06
+				# first convert to radians
+					$x1 = $PI / 2;
+					$y1 = $ll * $PI / 360;
+					my $maxy = 90 * $PI / 360;
+					my $theta = asin($y1 / $maxy);
+					$y1 = 1 / 2 * sqrt(8) * sin($theta);
+					if ( $y1**2 >= 2 )	{
+						if ( $y1 >= 0 )	{
+							$y1 = sqrt(2) - 0.00000001;
+						} else	{
+							$y1 = -1 * (sqrt(2) - 0.00000001);
+						}
+					}
+					$x1 = 2 * 2 * $x1 / $PI * sqrt(2 - $y1**2);
+				# rescale just to fit in the image
+					my $imagescale = ($hpix - 2) / (4 * sqrt(2));
+					$x1 = $x1 * $imagescale;
+					$y1 = $y1 * $imagescale;
 				}
 				if ( $hemi == 1 )	{
 					$x1 = -1* $x1;
@@ -1953,6 +2176,14 @@ sub drawBackground	{
 			}
 		}
 		$im->filledPolygon($poly,$col{$mapbgcolor});
+	# the globe has to have a dark edge or it won't be readable, but
+	#  this is only ever a problem if the background is white JA 2.5.06
+	# there is a big, big assumption here that you want the coastlines
+	#  and the edge of the map to be the same color
+	# I'm not sure why all previous versions apparently left this out
+		if ( $mapbgcolor eq "white" )	{
+			$im->openPolygon($poly,$edgecolor);
+		}
 	}
 	print AI "f\n";
   	print AI "U\n";  # terminate the group
@@ -1963,29 +2194,28 @@ sub drawBackground	{
 sub drawGrids	{
     my $self = shift;
 
+  # this section used to have a very complicated routine for printing lat/long
+  #  numbers along the grid lines; I removed it because the numbers looked
+  #  horrible and weren't being printed due to some bug I couldn't fix
+  #  JA 7.5.06
   $grids = $q->param('gridsize');
   $gridcolor = $q->param('gridcolor');
   print AI "u\n";  # start the group
   if ($grids > 0)	{
     $latlngnocolor = $q->param('latlngnocolor');
     for my $lat ( int(-90/$grids)..int(90/$grids) )	{
-      @edgexs = ();
-      @edgeys = ();
       for my $deg (-180..179)	{
-        my ($lng1,$lat1) = $self->projectPoints($deg , $lat * $grids, "grid");
-        my ($lng2,$lat2) = $self->projectPoints($deg + 1 , $lat * $grids, "grid");
+        my $lng1;
+        my $lat1;
+        my $lng2;
+        my $lat2;
+        ($lng1,$lat1) = $self->projectPoints($deg , $lat * $grids, "grid");
+        ($lng2,$lat2) = $self->projectPoints($deg + 1 , $lat * $grids, "grid");
         if ( $lng1 ne "NaN" && $lat1 ne "NaN" && $lng2 ne "NaN" && $lat2 ne "NaN" && abs($lng1-$lng2) < 90 )	{
           my $x1 = $self->getLng($lng1);
           my $y1 = $self->getLat($lat1);
           my $x2 = $self->getLng($lng2);
           my $y2 = $self->getLat($lat2);
-          if ( $x1 > 0 && $y1 > 0 && $x1 ne "NaN" && $y1 ne "NaN" && ( $y2 eq "NaN" || $x2 eq "NaN" ) )	{
-            push @edgexs , $x1;
-            push @edgeys , $y1;
-          } elsif ( ( $x1 eq "NaN" || $y1 eq "NaN" ) && $x2 > 0 && $y2 > 0 && $x2 ne "NaN" && $y2 ne "NaN" )	{
-            push @edgexs , $x2;
-            push @edgeys , $y2;
-          }
           if ( $x1 ne "NaN" && $y1 ne "NaN" && $x2 ne "NaN" && $y2 ne "NaN" )	{
             $im->line( $x1, $y1, $x2, $y2, $col{$gridcolor} );
             print AI "$aicol{$gridcolor}\n";
@@ -1995,30 +2225,17 @@ sub drawGrids	{
           }
         }
       }
-      for my $i ( 0..$#edgexs )	{
-         my $xfudge = -4;
-         if ( $edgexs[$i] < 20 )	{
-           $xfudge = 4;
-         } elsif ( $edgexs[$i] > $width - 20 )	{
-           $xfudge = -12;
-         }
-         my $yfudge = -5;
-         if ( $edgeys[$i] < 20 )	{
-           $yfudge = -2;
-         } elsif ( $edgeys[$i] > $height - 20 )	{
-           $yfudge = -12;
-         }
-         $im->string(gdSmallFont,$edgexs[$i] + $xfudge,$edgeys[$i] + $yfudge,$lat * $grids,$col{$latlngnocolor});
-      }
     }
 
     for my $lng ( int(-180/$grids)..int(180/$grids) )	{
-      @edgexs = ();
-      @edgeys = ();
       for my $doubledeg (-180..178)	{
 	my $deg = $doubledeg / 2;
-        my ($lng1,$lat1) = $self->projectPoints($lng * $grids, $deg, "grid");
-        my ($lng2,$lat2) = $self->projectPoints($lng * $grids, $deg + 0.5, "grid");
+        my $lng1;
+        my $lat1;
+        my $lng2;
+        my $lat2;
+        ($lng1,$lat1) = $self->projectPoints($lng * $grids, $deg, "grid");
+        ($lng2,$lat2) = $self->projectPoints($lng * $grids, $deg + 0.5, "grid");
 	if ( $lng1 == 180 )	{
 		$lng1 = 179.5;
 	}
@@ -2030,13 +2247,6 @@ sub drawGrids	{
           my $y1 = $self->getLat($lat1);
           my $x2 = $self->getLng($lng2);
           my $y2 = $self->getLat($lat2);
-          if ( $x1 > 0 && $y1 > 0 && $x1 ne "NaN" && $y1 ne "NaN" && ( $y2 eq "NaN" || $x2 eq "NaN" ) )	{
-            push @edgexs , $x1;
-            push @edgeys , $y1;
-          } elsif ( ( $x1 eq "NaN" || $y1 eq "NaN" ) && $x2 > 0 && $y2 > 0 && $x2 ne "NaN" && $y2 ne "NaN" )	{
-            push @edgexs , $x2;
-            push @edgeys , $y2;
-          }
           if ( $x1 ne "NaN" && $y1 ne "NaN" && $x2 ne "NaN" && $y2 ne "NaN" )	{
             $im->line( $x1, $y1, $x2, $y2, $col{$gridcolor} );
             print AI "$aicol{$gridcolor}\n";
@@ -2045,27 +2255,6 @@ sub drawGrids	{
             print AI "S\n";
           }
         }
-      }
-      for my $i ( 0..$#edgexs )	{
-         my $xfudge = -4;
-         if ( $lng * $grids > 99 )	{
-           $xfudge = $xfudge - 4;
-         }
-         if ( $edgexs[$i] < 20 )	{
-           $xfudge = 4;
-         } elsif ( $edgexs[$i] > $width - 20 )	{
-           $xfudge = -12;
-           if ( $lng * $grids > 99 )	{
-             $xfudge = $xfudge - 4;
-           }
-         }
-         my $yfudge = -5;
-         if ( $edgeys[$i] < 20 )	{
-           $yfudge = -2;
-         } elsif ( $edgeys[$i] > $height - 20 )	{
-           $yfudge = -12;
-         }
-         $im->string(gdSmallFont,$edgexs[$i] + $xfudge,$edgeys[$i] + $yfudge,$lng * $grids,$col{$latlngnocolor});
       }
     }
   }
