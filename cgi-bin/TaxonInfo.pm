@@ -741,7 +741,7 @@ sub doMap{
 	}
 
 	if(!$q->param('projection') or $q->param('projection') eq ""){
-		$q->param('projection'=>'rectilinear');
+		$q->param('projection'=>'equirectangular');
 	}
 
 	if(scalar(@{$dataRowsRef}) > 0) {
@@ -769,8 +769,8 @@ sub doMap{
 			if ($lonWidth == 0) { $lonWidth = 1; }
 		
 			# multiply by 0.9 to give a slight boundary around the zoom.
-			my $latRatio = (0.9 * 180) / $latWidth;
-			my $lonRatio = (0.9 * 360) / $lonWidth;
+			my $latRatio = (0.9 * 156) / $latWidth;
+			my $lonRatio = (0.9 * 312) / $lonWidth;
 
 			#print "latRatio = $latRatio\n";
 			#print "lonRatio = $lonRatio\n";
