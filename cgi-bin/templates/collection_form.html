@@ -183,7 +183,7 @@ function doCheckFieldsGeography() {
               frm.country.options[index].text == "France" ||
               frm.country.options[index].text == "Spain" ||
               frm.country.options[index].text == "United Kingdom" ) &&
-             ( parseInt(frm.lngdeg.value) > 15 ||
+             ( parseInt(frm.lngdeg.value) > 18 ||
                frm.latdir.options[indexLat].text != "North" ) ) {
             bad_info += "\n    - Lat/long (mismatch country)";
         }
