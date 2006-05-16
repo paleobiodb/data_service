@@ -3507,7 +3507,10 @@ sub buildTaxonomicList {
             # N sp. id the only species reso that comes after the species
 			elsif($output =~ /n\. sp\.\s*<species>/s){
 				$output =~ s/<r_genus>(.*)?<\/r_genus> <genus>(.*)?<\/genus>(.*)?<species>(.*)?<\/species>/<a href="\/cgi-bin\/bridge.pl?action=checkTaxonInfo&taxon_name=$2"><i>$1 $2 $3 $4<\/i><\/a>/g;
-				$output =~ s/(n\. sp\.)(.*)?<\/i><\/a>/$2 $1<\/a>/g;
+			# move the n. sp. after the ital/link, not before it,
+			#  and also swap n. gen. to the end JA 16.5.06
+				$output =~ s/(n\. sp\.)(.*)?(<\/i><\/a>)/$2 $3 $1<\/a>/g;
+				$output =~ s/(n\. gen\.)(.*)?(<\/i><\/a>)/$2 $3 $1<\/a>/g;
 			}
 			# shouldn't be any <i> tags for indet's.
 			elsif($output =~ /<species>indet/s){
