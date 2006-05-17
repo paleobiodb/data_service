@@ -24,13 +24,13 @@ my $dbh = DBI->connect("DBI:$driver:database=$db;host=$host", $user, $password, 
 my $s = Session->new();
 my $dbt = DBTransactionManager->new($dbh, $s);
 
-my $fix = 1;
+my $fix = 0;
 #
 # This scripts  find (and optionally fixes) problems with chained reocmbinations
 #
 
 $count = 0;
-@results = @{$dbt->getData("SELECT DISTINCT child_no,status,parent_no FROM opinions WHERE status IN ('recombined as', 'corrected as', 'rank changed as') AND parent_no IS NOT NULL")};
+@results = @{$dbt->getData("SELECT DISTINCT o1.child_no,o1.child_spelling_no FROM opinions o1, opinions o2 WHERE o1.child_no != o1.child_spelling_no AND o1.child_spelling_no=o2.child_no")};
 foreach $row (@results) {
     # row->{child_no} is orig comb, row->{parent_no} is recombined  name
     # find other children of the recombined name

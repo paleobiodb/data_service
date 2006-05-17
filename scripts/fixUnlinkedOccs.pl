@@ -25,55 +25,59 @@ if ($ARGV[0] eq '--do_sql') {
 #
 
 $count = 0;
-%tables = ('reid_no'=>'reidentifications','occurrence_no'=>'occurrences');
-while(($pkey,$table)=each(%tables)) {
-    $sql = "SELECT * FROM $table WHERE taxon_no=0";
-    @results = @{$dbt->getData($sql)};
-    foreach $row (@results) {
-        $taxon_no = 0;
-        $genus = $row->{'genus_name'};
-        $species = $row->{'species_name'};
-        next if ($row->{'genus_reso'} =~ /informal/); 
+#%tables = ('reid_no'=>'reidentifications','occurrence_no'=>'occurrences');
+my $sql = "SELECT * FROM authorities GROUP BY taxon_name HAVING count(*) = 1";
+my @results = @{$dbt->getData($sql)};
 
-        if ($species != /^sp(\.){0,1}|indet(\.{0,1})/ && $row->{'species_reso'} !~ /informal/) {
-            @taxonNos = TaxonInfo::getTaxonNos($dbt,$genus." ".$species);
-            if (scalar(@taxonNos)==1) {
-                $taxon_no = $taxonNos[0];
-                $taxon_created = ${$dbt->getData("select created from authorities where taxon_no=$taxon_no")}[0]->{'created'};
-                print "Found match for $genus $species on $pkey=$row->{$pkey} created $row->{created} to taxon no $taxon_no created $taxon_created\n";
-                $fnd{"$genus $species"} = $taxonNos[0];
-            } elsif (scalar(@taxonNos) > 1) {
-                print "ERROR: ambigious: $genus $species\n";
-                $ambig{"$genus $species"} =join(', ',@taxonNos);
+foreach my $row (@results) {
+    if ($row->{'taxon_rank'} =~ /species/) {
+        my ($g,$s) = split(/\s*/,$row->{'taxon_name'});
+        if ($g && $s) {
+            $g = $dbh->quote($g);
+            $s = $dbh->quote($s);
+            $sql1 = "SELECT count(*) c FROM occurrences WHERE species_reso NOT LIKE '%informal%' AND genus_name LIKE $g AND species_name LIKE $s AND taxon_no != $row->{taxon_no}";
+            $sql2 = "SELECT count(*) c FROM reidentifications WHERE species_reso NOT LIKE '%informal%' AND genus_name LIKE $g and species_name LIKE $s AND taxon_no != $row->{taxon_no}";
+            my $c1 = ${$dbt->getData($sql1)}[0]->{c};
+            my $c2 = ${$dbt->getData($sql2)}[0]->{c};
+            if ($c1) {
+                print "Found $c1 occs for $row->{taxon_no} $row->{taxon_name}\n";
+                $usql = "UPDATE occurrences SET taxon_no=$row->{taxon_no},modified=modified WHERE genus_name LIKE $g and species_name LIKE $s";
+                print $usql,"\n";
+                if ($doUpdate) {
+#                    $dbh->do($usql);
+                }
+            }
+            if ($c2) {
+                print "Found $c2 reids for $row->{taxon_no} $row->{taxon_name}\n";
+                $usql = "UPDATE reidentifications SET taxon_no=$row->{taxon_no},modified=modified WHERE genus_name LIKE $g and species_name LIKE $s";
+                print $usql,"\n";
+                if ($doUpdate) {
+#                    $dbh->do($usql);
+                }
             }
         }
-        if (!$taxon_no) {
-            @taxonNos = TaxonInfo::getTaxonNos($dbt,$genus);
-            if (scalar(@taxonNos)==1) {
-                $taxon_no = $taxonNos[0];
-                $taxon_created = ${$dbt->getData("select created from authorities where taxon_no=$taxon_no")}[0]->{'created'};
-                print "Found match for $genus on $pkey=$row->{$pkey} created $row->{created} to taxon no $taxon_no created $taxon_created\n";
-                $fnd{"$genus"} = $taxonNos[0];
-            } elsif (scalar(@taxonNos) > 1) {
-               print "ERROR ambigious: $genus\n";
-                $ambig{"$genus"} =join(', ',@taxonNos);
-            } else {
-                #print "ERROR could not find: $genus $species\n";
-                $cnf{"$genus $species"} =1;
-            }
-        }
-        if ($taxon_no) {
-            $sql = "UPDATE $table SET modified=modified,taxon_no=$taxon_no WHERE $pkey=$row->{$pkey}";
-            print $sql."\n";
+    } else {
+        $g = $dbh->quote($row->{'taxon_name'});
+        $sql1 = "SELECT count(*) c FROM occurrences WHERE species_reso NOT LIKE '%informal%' AND genus_name LIKE $g AND taxon_no=0"; 
+        $sql2 = "SELECT count(*) c FROM reidentifications WHERE species_reso NOT LIKE '%informal%' AND genus_name LIKE $g AND taxon_no=0";
+        my $c1 = ${$dbt->getData($sql1)}[0]->{c};
+        my $c2 = ${$dbt->getData($sql2)}[0]->{c};
+        if ($c1) {
+            print "Found $c1 occs for $row->{taxon_no} $row->{taxon_name}\n";
+            $usql = "UPDATE occurrences SET taxon_no=$row->{taxon_no},modified=modified WHERE genus_name LIKE $g AND taxon_no=0";
+            print $usql,"\n";
             if ($doUpdate) {
-                my $r = $dbh->do($sql);
+#                $dbh->do($usql);
+            }
+        }
+        if ($c2) {
+            print "Found $c2 reids for $row->{taxon_no} $row->{taxon_name}\n";
+            $usql = "UPDATE reidentifications SET taxon_no=$row->{taxon_no},modified=modified WHERE genus_name LIKE $g AND taxon_no=0";
+            print $usql,"\n";
+            if ($doUpdate) {
+#                $dbh->do($usql);
             }
         }
     }
 }
-
-#print "$count Found\n";
-#print "could not find: ".join(', ',sort keys %cnf);
-print "\n\nambiguous: ".join(', ',sort keys %ambig);
-print "\n\nfound: ".join(',',sort keys %fnd);
 

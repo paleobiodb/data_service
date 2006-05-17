@@ -21,7 +21,7 @@ my $dbt = new DBTransactionManager($dbh);
 
 
 $taxon = $ARGV[0];
-@t = TaxonInfo::getTaxon($dbt,'taxon_name'=>$taxon);
+@t = TaxonInfo::getTaxon($dbt,{'taxon_name'=>$taxon});
 $taxon_no = $t[0]->{'taxon_no'};  
 
 print "Comparing $taxon ($taxon_no)\n";

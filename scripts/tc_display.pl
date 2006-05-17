@@ -25,7 +25,7 @@ foreach (@ARGV) {
 
 
 $taxon = $REST[0];
-@t = TaxonInfo::getTaxon($dbt,'taxon_name'=>$taxon);
+@t = TaxonInfo::getTaxon($dbt,{'taxon_name'=>$taxon});
 $taxon_no = $t[0]->{'taxon_no'};
 
 print ($compare ? "COMPARING" : "SHOWING");

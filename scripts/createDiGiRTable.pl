@@ -114,7 +114,7 @@ while($row = $sth->fetchrow_hashref()) {
         ($kingdom,$phylum,$class,$order,$family) = @{$class_cache{$taxon_no}};
 
         if ($row->{'species_name'} =~ /indet/) {
-            my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$taxon_no);
+            my $taxon = TaxonInfo::getTaxon($dbt,{'taxon_no'=>$taxon_no});
             if ($taxon->{'taxon_rank'} eq 'kingdom') {
                 $kingdom = $taxon->{'taxon_name'};
             } elsif ($taxon->{'taxon_rank'} eq 'phylum') {
@@ -142,7 +142,7 @@ while($row = $sth->fetchrow_hashref()) {
 
     $short_ref = "";
     if ($taxon_no) {
-        $taxon_row = TaxonInfo::getTaxon($dbt,'taxon_no'=>$taxon_no,'get_reference'=>1); 
+        $taxon_row = TaxonInfo::getTaxon($dbt,{'taxon_no'=>$taxon_no,'get_reference'=>1}); 
         if ($taxon_row) {
             $short_ref = Reference::formatShortRef($taxon_row);
         }
