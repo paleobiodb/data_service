@@ -66,7 +66,8 @@ sub processPrintHierarchy	{
 	my $MAX = $q->param('maximum_levels');
     my $MAX_SEEN = 0;
 
-    my $tree = TaxaCache::getChildren($dbt,$ref->{'taxon_no'},'tree');
+    my $orig_no = TaxonInfo::getOriginalCombination($dbt,$ref->{taxon_no});        
+    my $tree = TaxaCache::getChildren($dbt,$orig_no,'tree');
     $tree->{'depth'} = 0;
     my @node_stack = ($tree);
     # mark higher level taxa that had all their children removed as "invalid"
@@ -235,12 +236,12 @@ sub processPrintHierarchy	{
             } 
             #elsif ($not_found_type_for{$record->{'taxon_no'}}) {
             #    my $type_taxon_for = $not_found_type_for{$record->{'taxon_no'}};
-            #    my $t = TaxonInfo::getTaxon($dbt,'taxon_no'=>$type_taxon_for);
+            #    my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$type_taxon_for});
             #    print " <small>(excludes $t->{taxon_name}, the type)</small>";
             #}
 #        }
         if ($record->{'type_taxon_no'} && $not_found_type_taxon{$record->{'taxon_no'}}) {
-            my $t = TaxonInfo::getTaxon($dbt,'taxon_no'=>$record->{'type_taxon_no'});
+            my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$record->{'type_taxon_no'}});
             if ($t) {
                 my $link = "<a href=bridge.pl?action=checkTaxonInfo&taxon_no=$t->{taxon_no}>$t->{taxon_name}</a>";
                 if ( $t->{'taxon_rank'} =~ /species|genus/ ) {
