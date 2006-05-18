@@ -139,115 +139,109 @@ function checkForm() {
 </script>
 
 
-%%message%%
-%%error_message%%
+<span id="message"></span>
+<span id="error_message"></span>
 
-<div align="center"><H2>Add/edit opinion record for %%child_name%%</H2></div>
+<div align="center"><h2>Add/edit opinion record for <span id="child_name"></span></h2></div>
 
-<form method="POST" action="%%exec_url%%" onSubmit="checkForm()">
+<form method="POST" action="bridge.pl" onSubmit="checkForm()">
 
 <DIV class="mainSection">
 
-<!-- some hidden values -->
-%%hiddens%%
-
 <input type="hidden" id="action" name="action" value="submitOpinionForm">
-<input type="hidden" id="reference_no" name="reference_no" value="%%reference_no%%">
+<input type="hidden" id="reference_no" name="reference_no">
 
-<!-- taxon_no, and taxon_rank apply to the child_no taxon, ie, the taxon about
-which they are entering the authority record. -->
-<input type="hidden" id="child_no" name="child_no" value="%%child_no%%">
-<input type="hidden" id="opinion_no" name="opinion_no" value="%%opinion_no%%">
-<input type="hidden" id="orig_taxon_status" name="orig_taxon_status" value="%%orig_taxon_status%%">
-<input type="hidden" id="confirm_create_authority" name="confirm_create_authority" value="%%confirm_create_authority%%">
+<input type="hidden" id="child_no" name="child_no">
+<input type="hidden" id="opinion_no" name="opinion_no">
+<input type="hidden" id="orig_taxon_status" name="orig_taxon_status">
+<input type="hidden" id="confirm_migrate_opinions" name="confirm_migrate_opinions">
+<input type="hidden" id="confirm_create_spelling" name="confirm_create_spelling">
+<input type="hidden" id="confirm_create_spelling_rank" name="confirm_create_spelling_rank">
 
-<!-- end of hiddens.  other fields may be converted to hidden if the user is not 
-supposed to edit them -->
-
-<div align="center"><h2>Whose opinion on %%child_name%% are you entering?</h2></div>
+<div align="center"><h2>Whose opinion on <span id="child_name"></span> are you entering?</h2></div>
 
 <div class="emphasized" align=left>
-<input id="ref_has_opinion" name="ref_has_opinion" type="radio" value="PRIMARY" %%ref_has_opinion_primary%%>
+<input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="PRIMARY">
 The primary reference argues for this opinion:
-<div align="center" class="small">%%formatted_primary_reference%%</div>
-%%START_OPTIONAL_current_reference%%
+<div align="center" class="small"><span id="formatted_primary_reference"></span></div>
+<!-- OPTIONAL current_reference -->
 <br>
-<input id="ref_has_opinion" name="ref_has_opinion" type="radio" value="CURRENT" %%ref_has_opinion_current%%>
+<input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="CURRENT">
  ... <i>or</i> the current reference argues for this opinion:
-<br><div align="center" class="small">%%formatted_current_reference%%</div>
-%%END_OPTIONAL_current_reference%%
+<br><div align="center" class="small"><span id="formatted_current_reference"></span></div>
+<!-- END current_reference -->
 </div>
 
 <br>
 <center>
 <p>
-<b>Pages*:</b> <input id="pages" name="pages" size=12 value="%%pages%%">
-<b>Figures*:</b> <input id="figures" name="figures" size=12 value="%%figures%%">
+<b>Pages*:</b> <input id="pages" name="pages" size=12>
+<b>Figures*:</b> <input id="figures" name="figures" size=12>
 </p>
 </center>
 
 
 <div class="emphasized" align=left>
-<input id="ref_has_opinion" name="ref_has_opinion" type="radio" value="NO" %%ref_has_opinion_no%%>
- ... <i>or</i> the opinion is repeated from an earlier authority, which is:</DIV>
-<BR>
+<input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="NO">
+ ... <i>or</i> the opinion is repeated from an earlier authority, which is:</div>
+<br>
 
-<CENTER>
-<TABLE>
+<center>
+<table>
 
-<TR>
+<tr>
 <td></td><td class=tiny>initials</td><td class=tiny>last name</td>
 <td></td><td class=tiny>initials</td><td class=tiny>last name</td>
 </TR>
 
 <TR><td align=right><b>First author:</b></td>
-<td><input id="author1init" name="author1init" size=6 value="%%author1init%%"></td>
-<td><input id="author1last" name="author1last" size=20 value="%%author1last%%"></td>
+<td><input id="author1init" name="author1init" size=6></td>
+<td><input id="author1last" name="author1last" size=20></td>
 <td align=right><b>Second author:</b></td>
-<td><input id="author2init" name="author2init" size=6 value="%%author2init%%"></td>
-<td><input id="author2last" name="author2last" size=20 value="%%author2last%%"></td>
+<td><input id="author2init" name="author2init" size=6></td>
+<td><input id="author2last" name="author2last" size=20></td>
 </TR>
 
 <TR><td valign=top align=right><b>Other authors:</b></td>
-<td colspan=5><textarea id="otherauthors" name="otherauthors" rows=3 cols=70>%%otherauthors%%</textarea></td>
+<td colspan=5><textarea id="otherauthors" name="otherauthors" rows=3 cols=70></textarea></td>
 </TR>
 
 <TR><td align=right><b>Year:</b></td>
-<td colspan=1><input id="pubyr" name="pubyr" size=6 value="%%pubyr%%"></td>
-<td colspan=4><b>Pages*:</b> <input id="2nd_pages" name="2nd_pages" size=12 value="%%2nd_pages%%">
-<b>Figures*:</b> <input id="2nd_figures" name="2nd_figures" size=12 value="%%2nd_figures%%"></td>
+<td colspan=1><input id="pubyr" name="pubyr" size=6></td>
+<td colspan=4><b>Pages*:</b> <input id="2nd_pages" name="2nd_pages" size=12>
+<b>Figures*:</b> <input id="2nd_figures" name="2nd_figures" size=12></td>
 </TR>
 </table>
-</CENTER>
+</center>
 
-<CENTER>
+<center>
 <p><span class="tiny">* Enter numbers of pages and figures that describe and show the type specimen(s).</span></p>
-</CENTER>
+</center>
 
-</DIV>
+</div>
 
 
 
 <div class="mainSection">
-<div align="center"><h2>What did they say about %%child_name%%?</h2></div>
+<div align="center"><h2>What did they say about <span id="child_name"></span>?</h2></div>
   
 <div class="emphasized">
 <b>How was it classified?</b>
 </div>
 <table  width="100%" border=0 style="padding: 0em 2em 0em 2em;">
-  %%belongs_to_row%% 
+  <span id="belongs_to_row"></span>
   <tr>
     <td valign="middle" align=left colspan=3><b>Diagnosis:</b><br>
-      <textarea id="diagnosis" name="diagnosis" rows=3 cols=70>%%diagnosis%%</textarea>
+      <textarea id="diagnosis" name="diagnosis" rows=3 cols=70></textarea>
     </td>
   </tr>
-  %%synonym_row%%
-  %%nomen_row%%
+  <span id="synonym_row"></span>
+  <span id="nomen_row"></span>
 
   <tr>
     <td colspan=3 align=left valign=top>
       <b>Comments:</b><BR>
-      <textarea id="comments" name="comments" rows=2 cols=70>%%comments%%</textarea>
+      <textarea id="comments" name="comments" rows=2 cols=70></textarea>
     </td>
   </tr>
   
@@ -267,7 +261,7 @@ The primary reference argues for this opinion:
 </div>
 
 <table  width="100%" border=0 style="padding: 0em 2em 0em 2em;">
-  %%spelling_row%%
+  <span id="spelling_row"></span>
   <tr><td colspan=2>
     <small>Note that you should select a value regardless of whether this paper was the first to use this combination, spelling, or rank.<small>
   </td></tr>
@@ -276,17 +270,17 @@ The primary reference argues for this opinion:
 
 <div align="center">
 
-<TABLE BORDER=0 cellpadding=0>
-<TR>
-<TD style="padding-right: 20px;">%%authorizer_name%%</TD>
-<TD style="padding-right: 20px;">%%enterer_name%%</TD>
-<TD>%%modifier_name%%</TD>
-</TR>
-<TR>
-<TD style="padding-right: 20px;">%%created%%</TD>
-<TD>%%modified%%</TD>
-</TR>
-</TABLE> 
+<table BORDER=0 cellpadding=0>
+<tr>
+<td style="padding-right: 20px;"><span id="authorizer_name"></span></td>
+<td style="padding-right: 20px;"><span id="enterer_name"></span></td>
+<td><span id="modifier_name"><span></td>
+</tr>
+<tr>
+<td style="padding-right: 20px;"><span id="created"></span></td>
+<td><span id="modified"></span></td>
+</tr>
+</table> 
 
 <input type=submit value="Submit">
 

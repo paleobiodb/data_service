@@ -1,172 +1,149 @@
 
-<STYLE type="text/css">
-    H2 { text-align: center; }
-</STYLE>
+<span id="message"></span>
+<span id="error_message"></span>
+
+<div align="center"><h2>Add/edit authority data for <span id="taxon_name"></span></h2></div>
 
 
-%%message%%
-%%error_message%%
+<form method="POST" action="bridge.pl">
 
-<H2>Add/edit authority data for %%taxon_name%%</H2>
-
-
-<FORM method="POST" action="%%exec_url%%">
-
-<DIV class="mainSection">
-
-<!-- some hidden values -->
-%%hiddens%%
+<div class="mainSection">
 
 <input type="hidden" id="action" name="action" value="submitAuthorityForm">
-<input type="hidden" id="reference_no" name="reference_no" value="%%reference_no%%">
-<input type="hidden" id="taxon_no" name="taxon_no" value="%%taxon_no%%">
-<input type="hidden" id="confirmed_taxon_name" name="confirmed_taxon_name" value="%%confirmed_taxon_name%%">
+<input type="hidden" id="reference_no" name="reference_no">
+<input type="hidden" id="taxon_no" name="taxon_no">
+<input type="hidden" id="confirmed_taxon_name" name="confirmed_taxon_name">
 
+<div align="center"><h2>Who named <input type="text" id="taxon_name" name="taxon_name" size="30">&nbsp;?</h2></div>
 
-<!-- end of hiddens.  other fields may be converted to hidden if the user is not 
-supposed to edit them -->
-
-
-
-<H2>Who named <input type="text" name="taxon_name" id="taxon_name" size="30" value="%%taxon_name%%">&nbsp;?</H2>
-
-<CENTER>
-<SPAN class="tiny">
+<center>
+<span class="tiny">
 See the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Authority')">tip sheet</a>.
 If the name is misspelled, <a href="$exec_url?action=displayAuthorityTaxonSearchForm">try another search</a>.
-</SPAN>
-</CENTER>
+</span>
+</center>
 
-<BR>
+<br>
 
 <div class="emphasized" align=left>
-<input id="ref_is_authority" name="ref_is_authority" type="radio" value="PRIMARY" %%ref_is_authority_primary%%>
+<input id="ref_is_authority" name="ref_is_authority" type="radio" value="PRIMARY">
 It was first named in the data record's primary reference, which is:
-<div align="center" class="small">%%formatted_primary_reference%%</div>
-%%START_OPTIONAL_current_reference%%
+<div align="center" class="small"><span id="formatted_primary_reference"></span></div>
+<!-- OPTIONAL current_reference -->
 <br>
-<input id="ref_is_authority" name="ref_is_authority" type="radio" value="CURRENT" %%ref_is_authority_current%%>
+<input id="ref_is_authority" name="ref_is_authority" type="radio" value="CURRENT">
  ... <i>or</i> it was first named in the current reference, which is: 
-<br><div align="center" class="small">%%formatted_current_reference%%</div>
-%%END_OPTIONAL_current_reference%%
+<br><div align="center" class="small"><span id="formatted_current_reference"></span></div>
+<!-- END current_reference -->
 </div>  
 
 <center>
 <p>
-<b>Pages*:</b> <input id="pages" name="pages" size=12 value="%%pages%%">
-<b>Figures*:</b> <input id="figures" name="figures" size=12 value="%%figures%%">
+<b>Pages*:</b> <input id="pages" name="pages" size=12>
+<b>Figures*:</b> <input id="figures" name="figures" size=12>
 </p>
 </center>
 
 <div class="emphasized" align=left>
-<input id="ref_is_authority" name="ref_is_authority" type="radio" value="NO" %%ref_is_authority_no%%>
+<input id="ref_is_authority" name="ref_is_authority" type="radio" value="NO">
 
 ... <i>or</i> it was named in an earlier publication, which is:</DIV>
-<BR>
+<br>
 
-<CENTER>
-<TABLE>
+<center>
+<table>
 
-<TR>
+<tr>
 <td></td><td class=tiny>initials</td><td class=tiny>last name</td>
 <td></td><td class=tiny>initials</td><td class=tiny>last name</td>
-</TR>
+</tr>
 
-<TR><td align=right><b>First author:</b></td>
-<td><input id="author1init" name="author1init" size=6 value="%%author1init%%"></td>
-<td><input id="author1last" name="author1last" size=20 value="%%author1last%%"></td>
+<tr><td align=right><b>First author:</b></td>
+<td><input id="author1init" name="author1init" size=6></td>
+<td><input id="author1last" name="author1last" size=20></td>
 <td align=right><b>Second author:</b></td>
-<td><input id="author2init" name="author2init" size=6 value="%%author2init%%"></td>
-<td><input id="author2last" name="author2last" size=20 value="%%author2last%%"></td>
-</TR>
+<td><input id="author2init" name="author2init" size=6></td>
+<td><input id="author2last" name="author2last" size=20></td>
+</tr>
 
-<TR><td valign=top align=right><b>Other authors:</b></td>
-<td colspan=5><textarea id="otherauthors" name="otherauthors" rows=3 cols=70>%%otherauthors%%</textarea></td>
-</TR>
+<tr><td valign=top align=right><b>Other authors:</b></td>
+<td colspan=5><textarea id="otherauthors" name="otherauthors" rows=3 cols=70></textarea></td>
+</tr>
 
-<TR><td align=right><b>Year:</b></td>
-<td colspan=1><input id="pubyr" name="pubyr" size=6 value="%%pubyr%%"></td>
-<td colspan=4><b>Pages*:</b> <input id="2nd_pages" name="2nd_pages" size=12 value="%%2nd_pages%%">
-<b>Figures*:</b> <input id="2nd_figures" name="2nd_figures" size=12 value="%%2nd_figures%%"></td>
-</TR>
+<tr><td align=right><b>Year:</b></td>
+<td colspan=1><input id="pubyr" name="pubyr" size=6></td>
+<td colspan=4><b>Pages*:</b> <input id="2nd_pages" name="2nd_pages" size=12>
+<b>Figures*:</b> <input id="2nd_figures" name="2nd_figures" size=12></td>
+</tr>
 </table>
-</CENTER>
+</center>
 
-<CENTER>
+<center>
 <p><span class="tiny">* Enter numbers of pages and figures that describe and show the type specimen(s).</span></p>
-</CENTER>
+</center>
 
-</DIV>
+</div>
 
-<DIV class="mainSection">
+<div class="mainSection">
 
-<H2>How was %%taxon_name%% named?</H2>
+<div align="center"><h2>How was <span id="taxon_name"></span> named?</h2></div>
 
 <table>
 <tr><td align=right><b>Original rank:</b></td>
 <td>
-<!-- Note: any field named "taxon_rank" will be replaced as
-usual.  However, any field called "taxon_rank_popup" will be replaced with
-a popup menu of taxon ranks with the current "taxon_rank" selected. -->
-<select id="taxon_rank" name="taxon_rank">
-%%taxon_rank_popup%%
-</select>
+
+<span id="taxon_rank_select"></span>
 
 &nbsp; &nbsp;
-%%parent_taxon_popup%%
+<span id="parent_taxon_select"></span>
 </td>
 </tr>
 
 
-%%START_OPTIONAL_type_taxon%%
 <!-- Note: this should only appear if the rank is species -->
-<TR><td></td><td><input id="type_taxon" name="type_taxon" type="checkbox" %%type_taxon_checked%% value="1"><b>This is the type %%taxon_rank%%</b>
+<!-- OPTIONAL type_taxon -->
+<tr><td></td><td><input type="checkbox" id="type_taxon" name="type_taxon" value="1"><b>This is the type <span id="taxon_rank"></span></b>
 </td>
-</TR>
-%%END_OPTIONAL_type_taxon%%
+</tr>
+<!-- END type_taxon -->
 
-%%START_OPTIONAL_type_specimen%%
-<TR><td align=right><b>Type specimen:</b></td>
-<td><input id="type_specimen" name="type_specimen" size=50 value="%%type_specimen%%">
+<!-- OPTIONAL type_specimen -->
+<tr><td align=right><b>Type specimen:</b></td>
+<td><input id="type_specimen" name="type_specimen" size=50>
 </td>
-</TR>
-%%END_OPTIONAL_type_specimen%%
+</tr>
+<!-- END type_specimen -->
 
 <tr><td colspan=2>
-<b>Is this an extant (living) taxon?</b> %%extant_popup%%
+<b>Is this an extant (living) taxon?</b> <span id="extant_select"></span>
 </td></tr>
 
 
-<TR><td align=right valign=top><b>Comments:</b></td>
-<td colspan=5><textarea id="comments" name="comments" rows=2 cols=70>%%comments%%</textarea></td>
-</TR>
-</TABLE>
+<tr><td align=right valign=top><b>Comments:</b></td>
+<td colspan=5><textarea id="comments" name="comments" rows=2 cols=70></textarea></td>
+</tr>
+</table>
 
-</center>
+</div>
 
-</DIV>
+</div>
+<div align=center>
 
+<table border=0 cellpadding=0>
+<tr>
+<td style="padding-right: 20px;"><span id="authorizer_name"></span></td>
+<td style="padding-right: 20px;"><span id="enterer_name"></span></td>
+<td><span id="modifier_name"></span></td>
+</tr>
+<tr>
+<td style="padding-right: 20px;"><span id="created"></span></td>
+<td><span id="modified"></span></td>
+</tr>
+</table>
 
+<input type="submit" value="Submit">
+</div>
 
-<CENTER>
-
-<TABLE BORDER=0 cellpadding=0>
-<TR>
-<TD style="padding-right: 20px;">%%authorizer_name%%</TD>
-<TD style="padding-right: 20px;">%%enterer_name%%</TD>
-<TD>%%modifier_name%%</TD>
-</TR>
-<TR>
-<TD style="padding-right: 20px;">%%created%%</TD>
-<TD>%%modified%%</TD>
-</TR>
-</TABLE>
-
-
-
-<INPUT type="submit" value="Submit">
-</CENTER>
-
-</FORM>
-<BR>
+</form>
+<br>
 
