@@ -221,78 +221,10 @@ sub new {
 # Not sure how I will make this easier to configure.  I'll think of something.
 #my %NESTED_SELECTS = (environments=>[{
 
-my $rowCount = 0;
 
-
-
-
-
-
-# pass this a hashref
-# and it will escapeHTML on all 
-# fields, except the ones that look like they're already html, or the 
-# ones which have "NOESCAPE" in the key name.
-#
-# Should do this before displaying the values in a form.
-sub escapeHTMLOnFields {
-	my $ref = shift;
-	
-	if (!$ref) {
-		return;
-	}
-	
-	foreach my $key (keys(%$ref)) {
-		my $val = $ref->{$key};
-		
-		# only compile once.
-		# we don't want to HTML escape field which are already 
-		# formatted as HTML!  So we'll do a simple check to see if they
-		# have anything that looks like an HTML tag in them..
-		#
-		# Also, we'll not escape any key which has "NOESCAPE" somewhere in the
-		# key name.
-		if (($key =~ m/NOESCAPE/) || 
-			($val =~ m/ (?:< (?:[-A-Za-z"=0-9%._]|\s)* >)+ /xgo) ) {
-			#Debug::dbPrint("I think this is HTML: " . $ref->{$key});
-		} else {
-			$ref->{$key} = CGI::escapeHTML($ref->{$key});
-		}
-	}
-}
-
-
-
-# rjp, 3/2004
-#
-# same as buildSelect(),
-# but pass it a name of a list in the
-# hard coded %SELECT_LISTS which is defined at
-# the top of this HTMLBuilder file.
-#
-# Optionally pass the second argument as the default value
-# to select.
-#
-# Returns HTML formatted select statement.
-sub buildSelectWithHardList {
-	my $self = shift;
-
-	my $listName = shift;
-	my $toSelect = shift;
-
-	my $temp = $SELECT_LISTS{$listName};
-
-	return $self->buildSelect($temp, $listName, $toSelect);
-}
-
-
-
-# rjp, 3/2004
-#
-# Pass this an arrayref, a name for the select,
-# and an optional choice to select.
-#
-# It will return an HTML formatted select statement
-# with the approriate one selected.
+# Pass an SELECT name, an array of keys (display text), values (value attribute, whats passed through form), 
+# and an optional element to select.  We pass two arrays instead of a hash to preserve order here
+# Can be called from $hbo type object or statically
 sub buildSelect {
     if (UNIVERSAL::isa($_[0],'HTMLBuilder')) {
         # If called from an object oriented interface, 
@@ -305,7 +237,7 @@ sub buildSelect {
 	my @values = @{$_[2]};
 	my $toSelect = $_[3];
 	
-	my $html = "<select name=\"$name\" id=\"$name\">\n";
+	my $html = "<select name=\"$name\">\n";
 
     for(my $i=0;$i<scalar(@keys);$i++) {
         my $selected = ($values[$i] eq $toSelect) ? "SELECTED" : "";
@@ -316,192 +248,29 @@ sub buildSelect {
 	return $html;
 }
 
-# Creates a popup menu of taxon ranks (a select).
+# Pass this an HTML string and an array ref
+# of tag names to make non editable..  
 #
-# Pass it a rank to select as the first argument,
-# and optionally pass it an array ref of ranks which you want to have excluded
-# from the list as the second argument.
-sub rankPopupMenu {
-	my $self = shift;
-	my $rankToSelect = shift;
-	my $toExcludeRef = shift; # optional
-	
-	my @toExclude;
-	if ($toExcludeRef) {
-		@toExclude = @$toExcludeRef;
-	}
-	
-	my @ranks = ('subspecies', 'species', 'subgenus', 'genus', 'subtribe', 'tribe', 'subfamily', 'family', 'superfamily', 'infraorder', 'suborder', 'order', 'superorder', 'infraclass', 'subclass', 'class', 'superclass', 'subphylum', 'phylum', 'superphylum', 'subkingdom', 'kingdom', 'superkingdom', 'unranked clade');
-	
-	my $html;
-	my $selected = "";
-	
-	foreach my $rank (@ranks) {
-		# add each rank unless it's in the exclude list.
-		if ($rank eq $rankToSelect) {
-			$selected = "selected";
-		} else {
-			$selected = '';
-		}
-
-		$html .= "<OPTION $selected>$rank</OPTION>" unless PBDBUtil::isIn(\@toExclude, $rank);
-		
-	}
-	
-	return $html;
-}
-
-
-# rjp, 3/2004..
-# pass it a template name, and a hash ref of field names as keys 
-# and values to substitute as values.  Similar to the older populateHTML, but
-# much simpler, and doesn't do as much.  It also makes non-editable fields non-editable
-# using an HTML tag (readonly, or disabled) instead of making them underlined text
-# like the older populateHTML did.
+# It returns the modified HTML string.
 #
-# Note: all values to substitute will be assumed to take the format %%fieldname%% in
-# the template file, but when passing the field name, the %% are not necessary.
-#
-
-## New Note: the automatic hidden fields feature has been disabled due to some problems.
-## if re-enabling it, be very careful because it may break forms such as
-## the add_enter_authority or add_enter_opinion.  3/2004.
-# Note: any fields which don't exist in the template will be created as hidden input fields.
-##
-
-#
-# You can optionally pass an array ref of tag names to make non-editable.  This would typically
-# apply to <input> and <textarea>, although it will search for any HTML tag with a matching
-# name or id. 
-# For example,
-# if the input is <INPUT name="myname" id="myname" value="avalue">, then you would pass
-# "myname" in the array and the method will search and replace the entire input tag with
-# underlined text (non-editable).
-#
-# Can also remove optional sections.
-# Optional sections are denoted in the template by:
-#
-# %%START_OPTIONAL_userdefinedname%%
-# optional section here
-# %%END_OPTIONAL_userdefinedname%%
-#
-# By default, this routine will leave all optional sections in the code,
-# and will automatically remove the surrounding tags.
+# See the description for newPopulateHTML() for more details on this.
 # 
-# If you want to *delete* an optional section, then pass it
-# in the hash with the key = "OPTIONAL_userdefinedname" and the value = 0 (false).
-#
-# returns fully populated HTML string.
-sub newPopulateHTML {
-	my $self = shift;
-	my $templateName = shift;	# template to populate (without .html extension)
-	my $hashRef = shift;		# hash of fields and values to populate with
-	my $nonEditableRef = shift;		# array of input fields to make non-editable
-    my $dbt = $self->{'dbt'};
+# Mainly used by the new populateHTML method.
+# rjp, 2/2004
+sub makeNonEditableInputs {
+	my $html = shift;
+    my $fields = shift;
+    my %fields = %{$fields};
+	my $nameRef = shift;
 	
-	#Debug::dbPrint("nonEditables = ");
-	#Debug::printArray($nonEditableRef);
-	
-	
-	if (! $hashRef) {
-		Debug::logError("improper hashref in HTMLBuilder::newPopulateHTML.");
-		return;
-	}
-		
-	my %fields = %$hashRef;
-	
-	# escape the fields we're populating with for proper html encoding.
-	escapeHTMLOnFields(\%fields);
-	
-	#Debug::dbPrint("in newPopulateHTML, fields = ");
-	#Debug::printHash(\%fields);
-	
-	# read the template from the templates or guest_templates folder.
-	my $html = $self->newReadTemplate($templateName);
-	if (! $html) {
-		return "<HTML><BODY><DIV class=\"warning\">Error: No template '" . $templateName ."' found...</DIV></BODY></HTML>";	
-	}
-
-	
-	
-	# loop through all keys in the passed hash and
-	# replace field names with their values
-	my $hiddenInputs;
-	
-	# do a preliminary loop through all keys in the fields hash
-	# and see if we should add any keys such as a nicely formatted
-	# reference entry, or a taxon_rank popup.
-	foreach my $key (keys(%fields)) {
-	
-		if ($key eq 'taxon_rank') {
-			# if it's name is taxon_rank, then we'll look for any fields
-			# in the template called "taxon_rank_popup" and fill them with
-			# a popup menu of ranks.
-			
-			# if the rank is 'subspecies' or 'species', then we should
-			# only show the appropriate one in the list.
-			#
-			# however, if the rank is genus or higher, then we show everything
-			# from genus on up.
-			my $rank = $fields{taxon_rank};
-			my @toExclude;
-			
-			# grab the entire list of ranks..
-			@toExclude = @{$SELECT_LISTS{taxon_rank}};
-
-			if (($rank eq 'subspecies') || ($rank eq 'species')) {  
-				# then we don't want to exclude it.
-				@toExclude = @{PBDBUtil::deleteElementFromArray(\@toExclude, $rank)};
-			} else {
-				@toExclude = ('subspecies', 'species');
-			}
-			
-			Debug::dbPrint("toExclude = @toExclude");
-			
-			$fields{taxon_rank_popup} = $self->rankPopupMenu($rank, \@toExclude);
-		}
-	}
-	
-	# now do the main loop through the keys which will search and replace values
-	# in the template.
-	foreach my $key (keys(%fields)) {
-		
-		if ($key =~ m/OPTIONAL/i) {
-			# this is an optional section key - see note in the method documentation.
-
-			if (! $fields{$key}) {
-				# if the value for this optional key is false, then we should
-				# delete the entire optional section.
-				
-				# Note, the .*? is important, the ? forces this to be LAZY instead
-				# of greedy so we don't go too far..
-				
-				$html =~ s/[%][%]START_$key[%][%].*?[%][%]END_$key[%][%]//sg;
-			}
-			next;
-		}
-		
-		# replace all fields in the template which are of the form
-		# %%fieldname%% with their replacement values.
-		my $numReplacements = ($html =~ s/([%][%]$key[%][%])/$fields{$key}/sg);
-		#if ($numReplacements <= 0) {
-			#print "$key<BR>";
-			# if we didn't match anything, then
-			# create it as a hidden input, if it doesn't already exist somewhere.
-		#	if ($html !~ m/$key/) {
-		#		$hiddenInputs .= "<INPUT type=\"hidden\" name=\"$key\" id=\"$key\" value=\"" .
-		#		$fields{$key} . "\">\n";
-		#	}
-		#}
-	}
-	
-	
+	if (!$nameRef) { return $html; };
 	
 	# now we should also make hiddens out of any field that the user wants
 	# to make non-editable.  This will allow us to still have access to their values.
-	if ($nonEditableRef) {
+    my $hiddenInputs = "";
+	if ($nameRef) {
 	    my $validChars = '(?:[-A-Za-z"\'=0-9%._]|\s)*';
-		foreach my $key (@$nonEditableRef) {
+		foreach my $key (@$nameRef) {
 			# only add it to the list if we haven't already done so.. This is to 
 			# prevent duplicates which will screw up the form processing script.
 			if ($hiddenInputs !~ m/["]$key["]/g) {
@@ -525,41 +294,11 @@ sub newPopulateHTML {
 	# now we'll make any fields non-editable that were passed in the @nonEditableInputs
 	# array. This is optional.
 
-	#Debug::printArray($nonEditableRef);
-	
-	if ($nonEditableRef) {
-		$html = makeNonEditableInputs($html, $nonEditableRef);
-	}
-	
+	#Debug::printArray($nameRef);
 	
 	# now, we'll add the hiddens (fields which didn't exist in the template,
 	# but which were present in the list passed to us).
 	$html =~ s/hiddensgohere/$hiddenInputs/;
-	
-	
-	return $html;
-}
-
-
-# Pass this an HTML string and an array ref
-# of tag names to make non editable..  
-#
-# It returns the modified HTML string.
-#
-# See the description for newPopulateHTML() for more details on this.
-# 
-# Mainly used by the new populateHTML method.
-# rjp, 2/2004
-sub makeNonEditableInputs {
-	my $html = shift;
-	my $nameRef = shift;
-	
-	if (!$nameRef) { return $html; };
-	
-	# static box to replace non-editable fields with.
-	my $toReplace = "<SPAN class=\"nonEditable\">";
-	my $end = "</SPAN>";
-	
 	
 	# note, very important, we have to make sure that it doesn't match
 	# hidden fields... That would screw stuff up.
@@ -602,397 +341,358 @@ sub makeNonEditableInputs {
 
 
 
-# rjp, 2/2004
-#
-# pass it a template name and it will return it
-# note, it will either get it from the templates or the guest_templates
-# directory depending on whether or not the user is logged in.
-#
-# returns 0 if it can't find the template.
-sub newReadTemplate {
-	my $self = shift;
-	my $template = shift;
-	
-	if ($template eq '') {
-		return 0; 
-	}
-	
-	my $dir = $self->{'template_dir'}."/$template" . ".html";
-	
-	my $success = open(TEMPLATE, "<$dir");
-	unless ($success) {
-		# if we can't open the file...
-		return 0;
-	}
-	
-	# read the entire file in at once.
-	my $string = do { local $/, <TEMPLATE> };
-	
-	close(TEMPLATE);
-	
-	return $string;
-}
-
-
-
-
-
+# TBD - backport escapeHTML possibly and non-editable fields
 
 
 sub populateHTML {
-  # Get the template name, the row (list of values)
-  # and a list of fieldnames to scan for
-  my ($self, $htmlTemplateName, $row, $fieldNames, $prefkeys) = @_;
-  
-  #Debug::dbPrint("start of populateHTML");
-  #Debug::dbPrint("template = $htmlTemplateName, row = $row, fieldNames = $fieldNames, prefKeys = $prefKeys");
-  
-  my @row;
-  my @fieldNames;
-  if(UNIVERSAL::isa($row, "HASH")){
-		while(my ($key,$value) = each %$row){
-			push(@row, $value);
-			push(@fieldNames, $key);
-		}
-  }
-  elsif(UNIVERSAL::isa($row, "ARRAY")){
-	  @row = @$row;
-	  @fieldNames = @$fieldNames;
-  }
-  #print "look: " . join(',', @fieldNames);
-
-  my $htmlTemplateString = $self->getTemplateString($htmlTemplateName,\@$prefkeys);
-  
-  # Substitute in the application URL if it is supplied
-  my $exec_url = $self->{exec_url};
-
-  $htmlTemplateString =~ s/(<.+?)\$exec_url/$1$exec_url/gim;
-
-  # Do substitutions
-  my $fieldNum = 0;
-  foreach my $fieldName (@fieldNames) {
-    my $val = $row[$fieldNum];
-	# insert spaces after commas for the set members
-	if($fieldName =~ /(lithadj*|research_group|pres_mode|coll_meth|museum|feed_pred_traces|assembl_comps|project_name)/){ 
-		$val =~ s/,/, /g;	
-	}
+    # Get the template name, the row (list of values)
+    # and a list of fieldnames to scan for
+    my ($self, $htmlTemplateName, $values, $keys, $optional) = @_;
     
-	my @split_val = split(/(<.*?>)/,$val);
-	foreach my $token (@split_val) {
-		if($token !~ /[<>]/){
-			$token =~ s/"/&quot;/g;
-		}
-	}
-	$val = join('',@split_val);
-
-	# Reformat modified field JA 27.6.02
-	if ($fieldName eq "modified")	{
-		$val = date($val);
-	}
-
-	# genera with species equal to 'indet.' shoudn't be italicized
-	if($htmlTemplateName eq 'taxa_display_row' && $fieldName eq 'species_name'){
-		if($val eq 'indet.'){
-			$htmlTemplateString =~ s/<i>//g;
-			$htmlTemplateString =~ s/<\/i>//g;
-		}	
-	}
-
-    # Do div tags (eventually, other tags should support show/hide attributes)
-	# revised by JA 16.7.02
-	if ($val ne "")	{
-		# If we have a value, replace the div tags with just what's between
-		# them (which could be <span> tags).
-		$htmlTemplateString =~ s/(<optional_$fieldName>)(.*?)(<\/optional_$fieldName>)/$2/gis;
-		$htmlTemplateString =~ s/(<div show="$fieldName">)(.*?)(<\/div>)/$2/gim;
-	} else	{
-		# Otherwise, remove the div tags, and everything inbetween (like <span>
-		# tags), completely
-		$htmlTemplateString =~ s/(<optional_$fieldName>)(.*?)(<\/optional_$fieldName>)//gis;
-		$htmlTemplateString =~ s/<div show="$fieldName">.*?<\/div>//gim;
-
-        # Do spans with show
-        # Remove the <span> tags and everything inbetween if there is no
-        # corresponding value.
-        $htmlTemplateString =~ s/<span show="$fieldName">.*?<\/span>//gim;
-	}
-    
-
-    # Do span tags with id
-	# Else, replace span tags with just the value
-    $htmlTemplateString =~ s/<span\s+id="$fieldName">.*?<\/span>/$val/gim if $val ne "";
-
-	# Variable substitution (of form %%variable%%) -- tone
-    if ( $fieldName =~ /^%%.*%%$/ ) { 
-		$htmlTemplateString =~ s/$fieldName/$val/gim; 
-	}
-
-    my $keepMatching = 1;
-    while($keepMatching)
-    {
-      $keepMatching = 0;
-      # Do select tags
-      if($htmlTemplateString =~ /(<select\s+id="$fieldName"(.*?)>)/im){
-        my $otherstuff = $2;
-
-		# Get a list of select lists with this name
-		my @selLists = ($htmlTemplateString =~ /(<select\s+id="$fieldName".*?>)/img);
-				
-		# If the list has a length greater than 1, then this is an enumeration field
-		if(@selLists > 1){
-			my @selVals = split(/\s*,\s*/, $val);
-			
-			my $selListCount = 0;
-			foreach my $selList (@selLists)
-			{
-				# Make a new SelectList instance
-				my $sl = new SelectList;
-		        # Set the name
-		        $sl->setName($fieldName);
-		        # If an array having this field name exists, use it
-		        if(defined $SELECT_LISTS{$fieldName})
-		        {
-		          $sl->setList(@{$SELECT_LISTS{$fieldName}});
-		        }
-				# Set the size attribute if it has one
-				if($selList =~ /size="?(\d+)"?/)
-				{
-					my $size = $1;
-  					$sl->setSize($size);
-				}
-				# Set other main tag attributes if any (like class=)
-				if($selList =~ /<select\s+id="$fieldName"(.*?)>/)
-				{
-					if($1){
-  						$sl->setMainTagStuff($1);
-					}
-				}
-                if($selList =~ /<select\s+id="$fieldName"(.*?)>/)
-                {
-                    if($1){
-                        my $stuff = $1;
-                        $sl->setMainTagStuff($stuff);
-                    }
-                }
-
-		        $sl->setSelected($selVals[$selListCount]) if $selVals[$selListCount];
-		        $sl->setAllowNulls(0);
-		        my $htmlString = $sl->toHTML();
-						
-				#print "stuff: $stuff\nhtmlString: $htmlString\n\n";
-						
-				$htmlTemplateString =~ s/\Q$selList/$htmlString/im;
-						
-				$selListCount++;
-			}
-			next;
-		}
-				
-        # Make a new SelectList instance
-        my $sl = new SelectList;
-        # Set the name
-        $sl->setName($fieldName);
-    	# Set other stuff
-	    $sl->setMainTagStuff($otherstuff) if($otherstuff);
-        # If an array having this field name exists, use it
-        if(defined $SELECT_LISTS{$fieldName})
-        {
-          $sl->setList(@{$SELECT_LISTS{$fieldName}});
+    my @values = ();
+    my @keys = ();
+    my %fields = ();
+    if(UNIVERSAL::isa($values, "HASH")){
+        while(my ($key,$value) = each %$values){
+            push(@values, $value);
+            push(@keys, $key);
         }
-		# Set the size attribute if it has one
-	
-		
-		if ($stuff =~ /size="?(\d+)"?/)
-		{
-			my $size = $1;
-			$sl->setSize($size);
-		}
-        $sl->setSelected($val);
-        $sl->setAllowNulls(0);
-        my $selectString = $sl->toHTML();
-        $htmlTemplateString =~ s/\Q$stuff/$selectString/gim;
-        $keepMatching = 1;
-      }
-
-      # Do <input> tags
-      # To Do: This should match any valid input tag, not just one with id="" next to <input
-      elsif ( $htmlTemplateString =~ /(<input\s+(type="{0,1}.*?"{0,1}\s+){0,1}id="{0,1}$fieldName"{0,1}.*?>)/im)
-      {
-        my $stuff = $1;
-        #print "\n\n<!-- $stuff -->\n\n";
-        # Checkboxes
-        if ( $stuff =~ /type="?checkbox"?/im ) {
-			# Get a list of checkboxes with this name
-			my @checkboxes = ($htmlTemplateString =~ /(<input\s+id="?$fieldName"?.*?>)/img);
-			# If the list has a length greater than 1, then this is an enumeration field
-			if ( @checkboxes > 1 ) {
-				my %CHECK_VALS;
-				my @checkVals = split(/\s*,\s*/, $val);
-				foreach my $checkVal (@checkVals) {
-					$CHECK_VALS{$checkVal} = 1;
-				}
-				
-				my $cbCount = 0;
-				foreach my $checkbox (@checkboxes) {
-					my ($formVal) = $checkbox =~ /value="(.+?)"/;
-					$formVal = 1 unless $formVal;
-					
-					my $cb = Checkbox->new();
-					$cb->setName($fieldName);
-					$cb->setChecked(1) if $CHECK_VALS{$formVal};
-					$cb->setValue($formVal);
-					my $htmlString = '';
-					# tone - took out value of NULL in the next line value attribute
-					$htmlString .= qq|<input type=hidden name="$fieldName" value="">| if $cbCount == 0;
-					$htmlString .= $cb->toHTML();
-							
-					#print "stuff: $stuff\nhtmlString: $htmlString\n\n";
-							
-					$htmlTemplateString =~ s/\Q$checkbox/$htmlString/im;
-					# Get the value
-							
-					$cbCount++;
-				}
-				next;
-			}
-					
-			#print "$fieldName has " . @checkboxes . "<br>";
-					
-			my ($formVal) = $stuff =~ /value="(.+?)"/;
-			$formVal = 1 unless $formVal;
-					
-			my $cb = Checkbox->new();
-			$cb->setName($fieldName);
-			$cb->setChecked(1) if $val eq $formVal;
-			$cb->setValue($formVal);
-			my $htmlString = $cb->toHTML();
-					
-			#print "stuff: $stuff\nhtmlString: $htmlString\n\n";
-					
-			$htmlTemplateString =~ s/\Q$stuff/$htmlString/im;
+        %fields = %$values;
+        $optional = $keys;
+    } elsif(UNIVERSAL::isa($values, "ARRAY")){
+        @values = @$values;
+        @keys = @$keys;
+        for(my $i = 0;$i < scalar(@keys); $i++) {
+            $fields{$keys[$i]} = $values[$i];
         }
-        # Do radios
-		# Each radio gets the current field name for the name,
-		# and the current val for the value
-        elsif($stuff =~ /type="?radio"?/im)
-        {
-			# Get the value from the form
-			$stuff =~ /value="?(.+?)"?/im;
-			my $formVal = $1;
-
-			my $rd = Radiodial->new();
-			$rd->setName($fieldName);
-			$rd->setValue($formVal);
-
-			# print "val: $val formVal: $formVal<BR>\n";
-			# Is there a db value?
-			if ( defined ( $val ) ) {
-				$rd->setChecked(1) if $val eq $formVal;
-			} else {
-				# See if there is a default value
-				if ( $stuff =~ /checked/im ) {
-					$rd->setChecked(1);
-				}
-			}
-
-			my $htmlString = $rd->toHTML();
-			$htmlTemplateString =~ s/\Q$stuff/$htmlString/im;
-        }
-        # Do submit buttons
-        elsif ( $stuff =~ /type="?submit"?/im )
-        {
-        }
-        # Do hiddens
-        elsif($stuff =~ /type="?hidden"?/im)
-        {
-          my $hn = Hidden->new();
-          $hn->setValue($val);
-          $hn->setName($fieldName);
-          my $htmlString = $hn->toHTML();
-          $htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
-        }
-        # Do text fields
-        else
-        #else( $stuff =~ /type="?text"?/i || $stuff !~ /type/i )
-        {
-			my $tf = TextField->new();
-			$tf->setText($val);
-			$tf->setName($fieldName);
-
-			if( $stuff =~ /size="?(\d+)"?/im)       { $tf->setSize($1); }
-			if( $stuff =~ /maxlength="?(\d+)"?/im)  { $tf->setMaxLength($1); }
-			if( $stuff =~ /disabled/im )            { $tf->setDisabled(); }
-
-            my $otherstuff = $stuff;
-            $otherstuff =~ s/(value|size|maxlength|type|id|name)="(.*?)"(\s|>)//igm;
-            $otherstuff =~ s/(value|size|maxlength|type|id|name)=(.*?)(\s|>)//igm;
-            $otherstuff =~ s/disabled//im;   
-            if ($otherstuff =~ /\s+(.*?)>/)  { $tf->setMainTagStuff($1)};
-
-			my $htmlString = $tf->toHTML();
-			$htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
-        }
-        $keepMatching = 1;
-      }
-
-      # Do textareas
-      elsif($htmlTemplateString =~ /(<textarea\s+id="?$fieldName"?.*?>)/im)
-      {
-        my $stuff = $1;
-        
-        $stuff =~ /cols="?(\d+)"?/im;
-        my $formCols = $1;
-        $stuff =~ /rows="?(\d+)"?/im;
-        my $formRows = $1;
-        
-        my $ta = TextArea->new();
-        $ta->setName($fieldName);
-        $ta->setText($val);
-        $ta->setWrapVirtual(1) if $stuff =~ /wrap="?virtual"?/im;
-        $ta->setRows($formRows);
-        $ta->setCols($formCols);
-        my $htmlString = $ta->toHTML();
-        $htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
-        
-        $keepMatching = 1;
-      }
-
-      # Do anchor tags
-      # (To Do: Get path from ???)
-      elsif($htmlTemplateString =~ /(<a\s+id="?$fieldName"?.*?>)/im)
-      {
-        my $stuff = $1;
-        
-        my $ah = Anchor->new();
-        $ah->setHref("$exec_url?action=$val");
-        my $htmlString = $ah->toHTML();
-        $htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
-        
-        $keepMatching = 0;
-      }
     }
-    $fieldNum++;
-  }
-  
-  # This is a global, so be careful
-  $rowCount++;
-  return $htmlTemplateString;
+
+    my $htmlTemplateString = $self->getTemplateString($htmlTemplateName, $optional);
+    
+    # Substitute in the application URL if it is supplied
+    my $exec_url = $self->{'exec_url'};
+
+    $htmlTemplateString =~ s/(<.+?)\$exec_url/$1$exec_url/gim;
+
+    # Do substitutions
+    my $fieldNum = 0;
+    foreach my $fieldName (@keys) {
+        my $val = $values[$fieldNum];
+        # insert spaces after commas for the set members
+        if($fieldName =~ /(lithadj*|research_group|pres_mode|coll_meth|museum|feed_pred_traces|assembl_comps|project_name)/){ 
+            $val =~ s/,/, /g;	
+        }
+        
+        my @split_val = split(/(<.*?>)/,$val);
+        foreach my $token (@split_val) {
+            if($token !~ /[<>]/){
+                $token =~ s/"/&quot;/g;
+            }
+        }
+        $val = join('',@split_val);
+
+        # Reformat modified field JA 27.6.02
+        if ($fieldName eq "modified")	{
+            $val = date($val);
+        }
+
+        # genera with species equal to 'indet.' shoudn't be italicized
+        if($htmlTemplateName eq 'taxa_display_row' && $fieldName eq 'species_name'){
+            if($val eq 'indet.'){
+                $htmlTemplateString =~ s/<i>//g;
+                $htmlTemplateString =~ s/<\/i>//g;
+            }	
+        }
+
+        # Do div tags (eventually, other tags should support show/hide attributes)
+        # revised by JA 16.7.02
+        if ($val ne "")	{
+            # If we have a value, replace the div tags with just what's between
+            # them (which could be <span> tags).
+            $htmlTemplateString =~ s/(<optional_$fieldName>)(.*?)(<\/optional_$fieldName>)/$2/gis;
+            $htmlTemplateString =~ s/(<div show="$fieldName">)(.*?)(<\/div>)/$2/gim;
+        } else	{
+            # Otherwise, remove the div tags, and everything inbetween (like <span>
+            # tags), completely
+            $htmlTemplateString =~ s/(<optional_$fieldName>)(.*?)(<\/optional_$fieldName>)//gis;
+            $htmlTemplateString =~ s/<div show="$fieldName">.*?<\/div>//gim;
+
+            # Do spans with show
+            # Remove the <span> tags and everything inbetween if there is no
+            # corresponding value.
+            $htmlTemplateString =~ s/<span show="$fieldName">.*?<\/span>//gim;
+        }
+        
+
+        # Do span tags with id
+        # Else, replace span tags with just the value
+        $htmlTemplateString =~ s/<span\s+id="$fieldName">.*?<\/span>/$val/gim if $val ne "";
+
+        # Variable substitution (of form %%variable%%) -- tone
+        if ( $fieldName =~ /^%%.*%%$/ ) { 
+            $htmlTemplateString =~ s/$fieldName/$val/gim; 
+        }
+
+        my $keepMatching = 1;
+        my $matched = 0;
+        while($keepMatching) {
+            $matched++;
+            $keepMatching = 0;
+            # Do select tags
+            if($htmlTemplateString =~ /(<select\s+id="$fieldName"(.*?)>)/im){
+                my $otherstuff = $2;
+
+                # Get a list of select lists with this name
+                my @selLists = ($htmlTemplateString =~ /(<select\s+id="$fieldName".*?>)/img);
+                        
+                # If the list has a length greater than 1, then this is an enumeration field
+                if(@selLists > 1){
+                    my @selVals = split(/\s*,\s*/, $val);
+                    
+                    my $selListCount = 0;
+                    foreach my $selList (@selLists) {
+                        # Make a new SelectList instance
+                        my $sl = new SelectList;
+                        # Set the name
+                        $sl->setName($fieldName);
+                        # If an array having this field name exists, use it
+                        if(defined $SELECT_LISTS{$fieldName})
+                        {
+                          $sl->setList(@{$SELECT_LISTS{$fieldName}});
+                        }
+                        # Set the size attribute if it has one
+                        if($selList =~ /size="?(\d+)"?/)
+                        {
+                            my $size = $1;
+                            $sl->setSize($size);
+                        }
+                        # Set other main tag attributes if any (like class=)
+                        if($selList =~ /<select\s+id="$fieldName"(.*?)>/)
+                        {
+                            if($1){
+                                $sl->setMainTagStuff($1);
+                            }
+                        }
+                        if($selList =~ /<select\s+id="$fieldName"(.*?)>/)
+                        {
+                            if($1){
+                                my $stuff = $1;
+                                $sl->setMainTagStuff($stuff);
+                            }
+                        }
+
+                        $sl->setSelected($selVals[$selListCount]) if $selVals[$selListCount];
+                        $sl->setAllowNulls(0);
+                        my $htmlString = $sl->toHTML();
+                                
+                        #print "stuff: $stuff\nhtmlString: $htmlString\n\n";
+                                
+                        $htmlTemplateString =~ s/\Q$selList/$htmlString/im;
+                                
+                        $selListCount++;
+                    }
+                    next;
+                }
+                        
+                # Make a new SelectList instance
+                my $sl = new SelectList;
+                # Set the name
+                $sl->setName($fieldName);
+                # Set other stuff
+                $sl->setMainTagStuff($otherstuff) if($otherstuff);
+                # If an array having this field name exists, use it
+                if(defined $SELECT_LISTS{$fieldName})
+                {
+                  $sl->setList(@{$SELECT_LISTS{$fieldName}});
+                }
+                # Set the size attribute if it has one
+            
+                
+                if ($stuff =~ /size="?(\d+)"?/)
+                {
+                    my $size = $1;
+                    $sl->setSize($size);
+                }
+                $sl->setSelected($val);
+                $sl->setAllowNulls(0);
+                my $selectString = $sl->toHTML();
+                $htmlTemplateString =~ s/\Q$stuff/$selectString/gim;
+                $keepMatching = 1;
+            }
+
+            # Do <input> tags
+            # To Do: This should match any valid input tag, not just one with id="" next to <input
+            elsif ( $htmlTemplateString =~ /(<input\s+(type="{0,1}.*?"{0,1}\s+){0,1}id="{0,1}$fieldName"{0,1}.*?>)/im)
+            {
+                my $stuff = $1;
+                # Checkboxes
+                if ( $stuff =~ /type="?checkbox"?/im ) {
+                    # Get a list of checkboxes with this name
+                    my @checkboxes = ($htmlTemplateString =~ /(<input\s+id="?$fieldName"?.*?>)/img);
+                    # If the list has a length greater than 1, then this is an enumeration field
+                    if ( @checkboxes > 1 ) {
+                        my %CHECK_VALS;
+                        my @checkVals = split(/\s*,\s*/, $val);
+                        foreach my $checkVal (@checkVals) {
+                            $CHECK_VALS{$checkVal} = 1;
+                        }
+                        
+                        my $cbCount = 0;
+                        foreach my $checkbox (@checkboxes) {
+                            my ($formVal) = $checkbox =~ /value="(.+?)"/;
+                            $formVal = 1 unless $formVal;
+                            
+                            my $cb = Checkbox->new();
+                            $cb->setName($fieldName);
+                            $cb->setChecked(1) if $CHECK_VALS{$formVal};
+                            $cb->setValue($formVal);
+                            my $htmlString = '';
+                            # tone - took out value of NULL in the next line value attribute
+                            $htmlString .= qq|<input type=hidden name="$fieldName" value="">| if $cbCount == 0;
+                            $htmlString .= $cb->toHTML();
+                                    
+                            #print "stuff: $stuff\nhtmlString: $htmlString\n\n";
+                                    
+                            $htmlTemplateString =~ s/\Q$checkbox/$htmlString/im;
+                            # Get the value
+                                    
+                            $cbCount++;
+                        }
+                        next;
+                    }
+                            
+                    #print "$fieldName has " . @checkboxes . "<br>";
+                            
+                    my ($formVal) = $stuff =~ /value="(.+?)"/;
+                    $formVal = 1 unless $formVal;
+                            
+                    my $cb = Checkbox->new();
+                    $cb->setName($fieldName);
+                    $cb->setChecked(1) if $val eq $formVal;
+                    $cb->setValue($formVal);
+                    my $htmlString = $cb->toHTML();
+                            
+                    #print "stuff: $stuff\nhtmlString: $htmlString\n\n";
+                            
+                    $htmlTemplateString =~ s/\Q$stuff/$htmlString/im;
+                }
+                # Do radios
+                # Each radio gets the current field name for the name,
+                # and the current val for the value
+                elsif($stuff =~ /type="?radio"?/im)
+                {
+                    # Get the value from the form
+                    $stuff =~ /value="(.+?)"/im;
+                    my $formVal = $1;
+
+                    my $rd = Radiodial->new();
+                    $rd->setName($fieldName);
+                    $rd->setValue($formVal);
+
+                    # print "val: $val formVal: $formVal<BR>\n";
+                    # Is there a db value?
+                    if ( defined ( $val ) ) {
+                        $rd->setChecked(1) if $val eq $formVal;
+                    } else {
+                        # See if there is a default value
+                        if ( $stuff =~ /checked/im ) {
+                            $rd->setChecked(1);
+                        }
+                    }
+
+                    my $htmlString = $rd->toHTML();
+                    $htmlTemplateString =~ s/\Q$stuff/$htmlString/im;
+                }
+                # Do submit buttons
+                elsif ( $stuff =~ /type="?submit"?/im )
+                {
+                }
+                # Do hiddens
+                elsif($stuff =~ /type="?hidden"?/im)
+                {
+                    my $hn = Hidden->new();
+                    $hn->setValue($val);
+                    $hn->setName($fieldName);
+                    my $htmlString = $hn->toHTML();
+                    $htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
+                }
+                # Do text fields
+                else
+                #else( $stuff =~ /type="?text"?/i || $stuff !~ /type/i )
+                {
+                    my $tf = TextField->new();
+                    $tf->setText($val);
+                    $tf->setName($fieldName);
+
+                    if( $stuff =~ /size="?(\d+)"?/im)       { $tf->setSize($1); }
+                    if( $stuff =~ /maxlength="?(\d+)"?/im)  { $tf->setMaxLength($1); }
+                    if( $stuff =~ /disabled/im )            { $tf->setDisabled(); }
+
+                    my $otherstuff = $stuff;
+                    $otherstuff =~ s/(value|size|maxlength|type|id|name)="(.*?)"(\s|>)//igm;
+                    $otherstuff =~ s/(value|size|maxlength|type|id|name)=(.*?)(\s|>)//igm;
+                    $otherstuff =~ s/disabled//im;   
+                    if ($otherstuff =~ /\s+(.*?)>/)  { $tf->setMainTagStuff($1)};
+
+                    my $htmlString = $tf->toHTML();
+                    $htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
+                }
+                $keepMatching = 1;
+            }
+
+            # Do textareas
+            elsif($htmlTemplateString =~ /(<textarea\s+id="?$fieldName"?.*?>)/im)
+            {
+                my $stuff = $1;
+                
+                $stuff =~ /cols="?(\d+)"?/im;
+                my $formCols = $1;
+                $stuff =~ /rows="?(\d+)"?/im;
+                my $formRows = $1;
+                
+                my $ta = TextArea->new();
+                $ta->setName($fieldName);
+                $ta->setText($val);
+                $ta->setWrapVirtual(1) if $stuff =~ /wrap="?virtual"?/im;
+                $ta->setRows($formRows);
+                $ta->setCols($formCols);
+                my $htmlString = $ta->toHTML();
+                $htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
+                
+                $keepMatching = 1;
+            }
+
+            # Do anchor tags
+            # (To Do: Get path from ???)
+            elsif($htmlTemplateString =~ /(<a\s+id="?$fieldName"?.*?>)/im)
+            {
+                my $stuff = $1;
+                
+                my $ah = Anchor->new();
+                $ah->setHref("$exec_url?action=$val");
+                my $htmlString = $ah->toHTML();
+                $htmlTemplateString =~ s/\Q$stuff/$htmlString/gim;
+                
+                $keepMatching = 0;
+            } else {
+#                print "Didn't match $fieldName<BR>" if ($matched <= 1);
+            }
+        }
+        $fieldNum++;
+    }
+    
+    return $htmlTemplateString;
 }
 
 # Reads in the HTML template
 sub getTemplateString {
-	my ($self, $templateName, $prefkeys) = @_;
-	
+	my ($self, $templateName, $optional) = @_;
+
 	my $templateString;
 	my $htmlTemplateDir = $self->{'template_dir'};
-	my %pref;
-	for my $p (@$prefkeys)	{
-		$pref{$p} = "yes";
-	}
 
-	my $templateFile = "$htmlTemplateDir/" . ${templateName};
-	if (${templateName} !~ /\.ftp$/ && ${templateName} !~ /\.pdf$/ &&
-		${templateName} !~ /\.eps$/ && ${templateName} !~ /\.gif$/ )	{
+	my $templateFile = "$htmlTemplateDir/" . $templateName;
+	if ($templateName !~ /\.(?:ftp|pdf|eps|gif|html)$/) {
 		$templateFile .= ".html";
 	}
 
@@ -1000,24 +700,27 @@ sub getTemplateString {
 		$templateString = $self->{'CACHED_TEMPLATES'}{$templateName};
 	} elsif(open(HTMLTEMPLATEFILE, $templateFile)) {
 		while(<HTMLTEMPLATEFILE>) {
-			if ($_ =~ /<!-- OPTIONAL/)	{
-				my ($a,$b) = split /OPTIONAL /,$_,2;
-				($a,$b) = split / -->/,$b,2;
-				if ( $a ne "genus_and_species_only" && $pref{$a} ne "yes" || ( $a eq "genus_and_species_only" && $pref{$a} eq "yes" ) )	{
-					while ($_ !~ / END $a /)	{
-						$_ = <HTMLTEMPLATEFILE>;
-					}
-				}
-			}
-			$templateString .= $_;
+			if ($_ =~ /<!--\s*OPTIONAL\s*([a-zA-Z0-9_]+)\s*-->/) {
+                my $keyname = $1;
+                if (($keyname eq 'genus_and_species_only' && $optional->{$keyname} =~ /^yes$|^1$/i) ||
+                    ($keyname ne 'genus_and_species_only' && $optional->{$keyname} !~ /^yes$|^1$/i)) {
+                    while (1) {
+                        my $nextline = <HTMLTEMPLATEFILE>;
+                        last if (! $nextline);
+                        last if ($nextline =~ /END $keyname/);
+                    }
+                }
+			} else {
+			    $templateString .= $_;
+            }
 		}
-		$self->{'CACHED_TEMPLATES'}{$templateName} = $templateString;
 		close HTMLTEMPLATEFILE;
+		$self->{'CACHED_TEMPLATES'}{$templateName} = $templateString;
 	} else {
 		return $templateFile . "<br>";
 		#return join(',', @row) . "<br>\n";
 	}
-	return $templateString
+	return $templateString;
 }
 
                                     
