@@ -140,9 +140,9 @@ sub get_classification_hash{
             } else {
                 $parent_no=0;
                 $child_spelling_no=$child_no;
-                my @results = TaxonInfo::getTaxon($dbt,'taxon_no'=>$child_no);
-                $taxon_name=$results[0]->{'taxon_name'};
-                $taxon_rank=$results[0]->{'taxon_rank'};
+                my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$child_no});
+                $taxon_name=$taxon->{'taxon_name'};
+                $taxon_rank=$taxon->{'taxon_rank'};
                 $status = "";
             }
 

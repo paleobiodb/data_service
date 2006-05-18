@@ -1997,7 +1997,7 @@ sub queryDatabase {
                 }
                 # Get higher order names for indets as well
                 if ($row->{'o.species_name'} =~ /indet/ && $row->{'o.taxon_no'}) {
-                    my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$row->{'o.taxon_no'});
+                    my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'o.taxon_no'}});
                     if ($taxon->{'taxon_rank'} eq 'family') {
                         $row->{'o.family_name'} = $taxon->{'taxon_name'};
                     } elsif ($taxon->{'taxon_rank'} eq 'order') {
