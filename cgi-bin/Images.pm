@@ -18,7 +18,7 @@ sub displayLoadImageForm{
 	# list constraints: image size and image type
     my $exec_url = $q->url();
     my ($taxon_no,$taxon_name);
-    my @results = TaxonInfo::getTaxon($dbt,'taxon_no'=>$q->param('taxon_no'));
+    my @results = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$q->param('taxon_no')});
     if (@results) {
         $taxon_no = $results[0]->{'taxon_no'}; 
         $taxon_name = $results[0]->{'taxon_name'}; 

@@ -29,7 +29,7 @@ sub submitSpecimenSearch {
     my $where = "";
     my @taxa;
     if ($q->param('taxon_name')) {
-        @taxa = TaxonInfo::getTaxon($dbt,'taxon_name'=>$q->param('taxon_name'));
+        @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$q->param('taxon_name'),'match_subgenera'=>1});
     } 
     my $taxon_nos;        
     if (@taxa) {
@@ -180,7 +180,7 @@ sub displaySpecimenList {
         main::dbg("sql is $sql");
         @results = @{$dbt->getData($sql)};
 
-        my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>int($q->param('taxon_no')));
+        my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>int($q->param('taxon_no'))});
         if ($taxon->{'taxon_rank'} =~ /species/) {
             $taxon_name = $taxon->{'taxon_name'};
         } elsif ($taxon->{'taxon_rank'} =~ /genus/) {
@@ -298,7 +298,7 @@ sub populateMeasurementForm {
             return;
         }
     } else {
-        my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>int($q->param('taxon_no')));
+        my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>int($q->param('taxon_no'))});
         if ($taxon->{'taxon_rank'} =~ /species/) {
             $taxon_name = $taxon->{'taxon_name'};
         } elsif ($taxon->{'taxon_rank'} =~ /genus/) {
@@ -461,7 +461,7 @@ sub processMeasurementForm	{
             return;
         }
     } else {
-        my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>int($q->param('taxon_no')));
+        my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>int($q->param('taxon_no'))});
         if ($taxon->{'taxon_rank'} =~ /species/) {
             $taxon_name = $taxon->{'taxon_name'};
         } elsif ($taxon->{'taxon_rank'} =~ /genus/) {
@@ -684,9 +684,9 @@ sub getMeasurements {
     } elsif ($options{'taxon_name'} || $options{'taxon_no'}) {
         my @taxa;
         if ($options{'taxon_name'}) {
-            @taxa = TaxonInfo::getTaxon($dbt,'taxon_name'=>$options{'taxon_name'});
+            @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'}},['taxon_no']);
         } else {
-            @taxa = TaxonInfo::getTaxon($dbt,'taxon_no'=>$options{'taxon_no'});
+            @taxa = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$options{'taxon_no'}},['taxon_no']);
         }
         if (@taxa) {
             my (@taxon_nos,%all_taxa);
