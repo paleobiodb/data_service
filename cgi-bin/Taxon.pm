@@ -171,9 +171,11 @@ sub displayAuthorityForm {
 	my $s = shift;
 	my $q = shift;
     my $error_message = shift;
+    my $dbh = $dbt->dbh;
 	
 	my %fields;  # a hash of fields and values that
 				 # we'll pass to HTMLBuilder to pop. the form.
+    my $optional = {};
 				 
 	
 	if ((!$dbt) || (!$hbo) || (! $s) || (! $q)) {
@@ -232,22 +234,7 @@ sub displayAuthorityForm {
         $fields{'created'} = "<B>Created: </B>".$fields{'created'};
 	}
 
-    # Handle radio button
-    if ($fields{'ref_is_authority'} eq 'PRIMARY') {
-        $fields{'ref_is_authority_primary'} = 'checked';
-        $fields{'ref_is_authority_current'} = '';
-        $fields{'ref_is_authority_no'} = '';
-    } elsif ($fields{'ref_is_authority'} eq 'CURRENT') {
-        $fields{'ref_is_authority_primary'} = '';
-        $fields{'ref_is_authority_current'} = 'checked';
-        $fields{'ref_is_authority_no'} = '';
-    } elsif (exists $fields{'ref_is_authority'}) {
-        $fields{'ref_is_authority_primary'} = '';
-        $fields{'ref_is_authority_current'} = '';
-        $fields{'ref_is_authority_no'} = 'checked';
-    }    
-
-   if ($fields{'reference_no'}) {
+    if ($fields{'reference_no'}) {
         my $ref = Reference->new($dbt,$fields{'reference_no'});
         $fields{formatted_primary_reference} = $ref->formatAsHTML() if ($ref);
     }
@@ -257,9 +244,9 @@ sub displayAuthorityForm {
             my $ref = Reference->new($dbt,$s->get('reference_no'));
             $fields{formatted_current_reference} = $ref->formatAsHTML() if ($ref);
         }
-        $fields{'OPTIONAL_current_reference'} = 1;
+        $optional->{'current_reference'} = 1;
     } else {
-        $fields{'OPTIONAL_current_reference'} = 0;
+        $optional->{'current_reference'} = 0;
     } 
 	
 
@@ -281,37 +268,35 @@ sub displayAuthorityForm {
     }
     $fields{'type_taxon_checked'} = ($fields{'type_taxon'}) ? 'CHECKED' : '';
 	
-	# Now we need to deal with the taxon rank popup menu.
+	# Now we need to deal with the taxon rank select menu.
 	# If we've already displayed the form and the user is now making changes
 	# from an error message, then we should use the rank they chose on the last form.
 	# Else, if it's the first display of the form, then we use the rank from the database
 	# if it's an edit of an old record, or we use the rank from the spacing of the name
 	# they typed in if it's a new record.
 	
-	my $rankToUse;
 	if ($reSubmission) {
-		$rankToUse = $q->param('taxon_rank'); 
+		$fields{'taxon_rank'} = $q->param('taxon_rank'); 
 	} else { 
 		# first time
 		if ($isNewEntry) {
 	        # Figure out the rank based on spacing of the name.
-			$rankToUse = Validation::taxonRank($q->param('taxon_name'));
-	        if ($rankToUse eq 'higher') {
-		        # the popup menu doesn't have "higher", so use "genus" instead.
-		        $rankToUse = 'genus';
-	        }
+			$fields{'taxon_rank'} = guessTaxonRank($q->param('taxon_name'));
+            $fields{'taxon_rank'} = 'genus' if (!$fields{'taxon_rank'});
 		} else {
 			# not a new entry
-			$rankToUse = $t->get('taxon_rank');
+			$fields{'taxon_rank'} = $t->get('taxon_rank');
 		}
 	}
-	$fields{'taxon_rank'} = $rankToUse;
 	
 	# remove the type taxon stuff, it'll be assigned in opinions
-	if (!($rankToUse eq 'species' || $rankToUse eq 'subspecies')) {
-		$fields{'OPTIONAL_type_taxon'} = 0;
-		$fields{'OPTIONAL_type_specimen'} = 0;
-	} 
+	if ($fields{'taxon_rank'} !~ /species/) {
+		$optional->{'type_taxon'} = 0;
+		$optional->{'type_specimen'} = 0;
+	}  else {
+		$optional->{'type_taxon'} = 1;
+		$optional->{'type_specimen'} = 1;
+    }
 	
 	## If this is a new species or subspecies, then we will automatically
 	# create an opinion record with a state of 'belongs to'.  However, we 
@@ -320,75 +305,49 @@ sub displayAuthorityForm {
 	# 'Equus newtaxon' and we have three entries in authorities for 'Equus'
 	# then we should present a menu and ask them which one to use.
 
-	if ($isNewEntry && ($rankToUse eq 'species' || $rankToUse eq 'subspecies')) {
-		my $tname = $fields{taxon_name};
-		my ($one, $two, $three) = split(/ /, $tname);
+	if ($isNewEntry && ($fields{'taxon_rank'} =~ /subspecies|species|subgenus/)) {
+		my @bits = split(/ /,$fields{'taxon_name'});
+        pop @bits;
+	    my $parentName = join(" ",@bits);	
 		
-		my $name;
-		if ($rankToUse eq 'species') {
-			$name = $one;
-		} else {
-			$name = "$one $two";
-		}
-		
-		# figure out how many authoritiy records could be the possible parent.
-		my $count = ${$dbt->getData("SELECT COUNT(*) as c FROM authorities WHERE taxon_name = '" . $name . "'")}[0]->{c};
-        $fields{'parent_name'} = $name;
-		
-		# if only one record, then we don't have to ask the user anything.
-		# otherwise, we should ask them to pick which one.
 		my $select;
 		my $errors = Errors->new();
-		my $parentRankToPrint;
 
-		my $parentRankShouldBe;
-		if ($rankToUse eq 'species') {
-			$parentRankShouldBe = "(taxon_rank = 'genus' OR taxon_rank = 'subgenus')";
-			$parentRankToPrint = "genus or subgenus";
-		} elsif ($rankToUse eq 'subspecies') {
-			$parentRankShouldBe = "taxon_rank = 'species'";
-			$parentRankToPrint = "species";
-		}
-
+        my $parentRank = guessTaxonRank($parentName);
+        if (!$parentRank) { 
+            $parentRank = 'genus';
+        }
+        my @parents = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parentName,'taxon_rank'=>$parentRank},['*']);
 		
-		if ($count >= 1) {
-			# make sure that the parent we select is the correct parent,
-			# for example, we don't want to grab a family or something higher
-			# by accident.
-			
-			my $results = $dbt->getData("SELECT taxon_no, taxon_name FROM authorities WHERE taxon_name = '" . $name . "' AND $parentRankShouldBe");
-		
+		if (@parents) {
 			my $select;
-			
-			my $chosen;
-			foreach my $row (@$results) {
-				my $taxon = Taxon->new($dbt,$row->{'taxon_no'});
+            # if only one record, then we don't have to ask the user anything.
+            # otherwise, we should ask them to pick which one.
+			foreach my $row (@parents) {
+                my $selected = '';
 	
 				# if they are redisplaying the form, we want to choose
 				# the appropriate one.
-				if ($q->param('parent_taxon_no') eq $row->{'taxon_no'}) {
-					$chosen = 'selected';
-				} else {
-					$chosen = '';
-				}
+				if ($q->param('parent_taxon_no') == $row->{'taxon_no'}) {
+					$selected = 'selected';
+				} 
 				
-				$select .= "<option value=\"$row->{taxon_no}\" $chosen>";
-				$select .= $taxon->get('taxon_name') . " " . $taxon->authors();
+				$select .= "<option value=\"$row->{taxon_no}\" $selected>";
+				$select .= $row->{'taxon_name'}." ".Reference::formatShortRef($row);
 		        # tack on the closest higher order name
 				my $parent = TaxaCache::getParent($dbt,$row->{'taxon_no'});
                 my $higher_class = ($parent) ? $parent->{'taxon_name'} : "unclassified";
 				$select .= " [$higher_class]";
 				$select .= "</option>\n";
-
 			}
 			
-			$fields{parent_taxon_popup} = "<b>Belongs to:</b>
+			$fields{'parent_taxon_select'} = "<b>Belongs to:</b>
 			<SELECT name=\"parent_taxon_no\">
 			$select
 			</SELECT>";
 		} else {
 			# count = 0, so we need to warn them to enter the parent taxon first.
-			$errors->add("The $parentRankToPrint '$name' for this $rankToUse doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$name\">create a new authority record for '$name'</A> before trying to add this $rankToUse.");
+			$errors->add("The $parentRank '$parentName' for this $fields{'taxon_rank'} doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$parentName\">create a new authority record for '$parentName'</A> before trying to add this $fields{'taxon_rank'}.");
 			
 			$errors->setDisplayEndingMessage(0); 
 			
@@ -397,28 +356,36 @@ sub displayAuthorityForm {
 		}
 	}
 
-    # Build extant popup
-    my @extant_values = ('','YES','NO');
-    $fields{'extant_popup'} = $hbo->buildSelect('extant',\@extant_values,\@extant_values,$fields{'extant'});
+
+    my @taxon_ranks;
+    if ($fields{'taxon_rank'} =~ /subspecies|species|subgenus/) {
+        @taxon_ranks = ($fields{'taxon_rank'});
+    } else {
+        @taxon_ranks = grep {!/subspecies|species|subgenus/} @{$hbo->{'SELECT_LISTS'}{'taxon_rank'}};
+    }
+    $fields{'taxon_rank_select'} = $hbo->buildSelect('taxon_rank',\@taxon_ranks,\@taxon_ranks,$fields{'taxon_rank'}); 
+
     
-	# Fields we'll pass to HTMLBuilder that the user can't edit.
-	my @nonEditables; 	
 
-	## Make the taxon_name non editable if this is a new entry to simplify things
-	## New addition, 3/22/2004
-	if ($isNewEntry) {
-		push(@nonEditables, 'taxon_name');
-	}
-
-    # All other fields are editable, no write protection for authorities table PS 09/12/2005
-
+    # Build extant select
+    my @extant_values = ('','YES','NO');
+    $fields{'extant_select'} = $hbo->buildSelect('extant',\@extant_values,\@extant_values,$fields{'extant'});
+    
     # add in the error message
     if ($error_message) {
         $fields{'error_message'}=$error_message;
     }
 	
 	# print the form	
-	print $hbo->newPopulateHTML("add_enter_authority", \%fields, \@nonEditables);
+    my @k = keys %fields;
+    my @v = values %fields;
+    my $html = $hbo->populateHTML("add_enter_authority", \@v,\@k,$optional);  
+    
+	## Make the taxon_name non editable if this is a new entry to simplify things
+	if ($isNewEntry) {
+		$html =~ s/<input type="input" name="taxon_name" value="(.*?)">/$1<input type="hidden" name="taxon_name" value="$1">/;
+	}
+    print $html;
 }
 
 
@@ -436,11 +403,8 @@ sub displayAuthorityForm {
 #
 # rjp, 3/2004.
 sub submitAuthorityForm {
-    my $dbt = shift;
+    my ($dbt,$hbo,$s,$q) = @_;
     my $dbh = $dbt->dbh;
-	my $hbo = shift;
-	my $s = shift;		# the cgi parameters
-	my $q = shift;		# session
 
 	if ((!$dbt) || (!$hbo) || (!$s) || (!$q)) {
 		carp("Taxon::submitAuthorityForm had invalid arguments passed to it.");
@@ -563,7 +527,7 @@ sub submitAuthorityForm {
 	# to prevent complications, we will prevent the user from changing 
 	# a genus name on a species, or a species name on a subspecies if they
 	# are editing an old record.
-	if (!$isNewEntry && $t->get('taxon_rank') =~ /species/) {
+	if (!$isNewEntry && $t->get('taxon_rank') =~ /subgenus|species/) {
         my @new_name = split(/ /,$q->param('taxon_name'));
         my @old_name = split(/ /,$t->get('taxon_name'));
 
@@ -572,43 +536,36 @@ sub submitAuthorityForm {
             $error =1;
         }
 		# make sure no higher order names are changes (i.e. genus or subgenus if its a species)
-        for (my $i=0;$i<$#new_name;$i++) {
+        for (my $i=0;$i<(scalar(@new_name) - 1);$i++) {
 			if ($new_name[$i] ne $old_name[$i]) {
                 $error=1;
             }
         }
        
         if ($error) {
-		    if ($t->get('taxon_rank') eq 'species') {
-				$errors->add("You can't change the genus or subgenus name of a species that already exists.  Contact the database manager if you need to do this.");
+		    if ($t->get('taxon_rank') eq 'subgenus') {
+				$errors->add("You can't change the genus name of a subgenus that already exists.  Email <a href=\"mailto:pbdbadmin\@nceas.ucsb.edu\">the database manager</a> if you need to do this.");
+		    } elsif ($t->get('taxon_rank') eq 'species') {
+				$errors->add("You can't change the genus or subgenus name of a species that already exists.  Email the <a href=\"mailto:pbdbadmin\@nceas.ucsb.edu\">database manager</a> if you need to do this.");
 		    } elsif ($t->get('taxon_rank') eq 'subspecies') {
-				$errors->add("You can't change the genus, subgenus, or species name of a subspecies that already exists.  Contact the database manager if you need to do this.");
+				$errors->add("You can't change the genus, subgenus, or species name of a subspecies that already exists.  Email the <a href=\"mailto:pbdbadmin\@nceas.ucsb.edu\">database manager</a> if you need to do this.");
             }    
         }
 	}
 	
-	
-	{ # so we have our own scope for these variables.
-		my $taxon_name = $q->param('taxon_name');
-		my $rankFromSpaces = Validation::taxonRank($taxon_name);
-		my $trank = $q->param('taxon_rank');
-		my $er = 0;
-		
-		
-		if ($rankFromSpaces eq 'invalid') {
-			$errors->add("The taxon's name is invalid; please check spacing and capitalization");	
-		}
-		
-		if (Validation::looksLikeBadSubgenus($taxon_name)) {
-			$errors->add("If you are attempting to enter a subgenus, only enter the subgenus name and don't use parentheses");
-		}
-		
-		if (($rankFromSpaces eq 'subspecies' && $trank ne 'subspecies') ||
-			($rankFromSpaces eq 'species'    && $trank ne 'species') ||
-			($rankFromSpaces eq 'higher'     && $trank =~ /species/)) {
-			$errors->add("The original rank '$trank' doesn't match the spacing of the taxon name '$taxon_name'");
-		}
-	}
+    
+    
+    if (! validTaxonName($q->param('taxon_name'))) {
+        $errors->add("The taxon's name is invalid; please check spacing and capitalization");	
+    }
+    
+    my $rankFromSpaces = guessTaxonRank($q->param('taxon_name'));
+    if (($rankFromSpaces eq 'subspecies' && $q->param('taxon_rank') ne 'subspecies') ||
+        ($rankFromSpaces eq 'species' && $q->param('taxon_rank') ne 'species') ||
+        ($rankFromSpaces eq 'subgenus' && $q->param('taxon_rank') ne 'subgenus') ||
+        ($rankFromSpaces eq ''     && $q->param('taxon_rank') =~ /subspecies|species|subgenus/)) {
+        $errors->add("The selected rank '".$q->param('taxon_rank')."' doesn't match the spacing of the taxon name '".$q->param('taxon_name')."'");
+    }
 	
 	foreach my $formField ($q->param()) {
         # if the value isn't already in our fields to enter
@@ -617,9 +574,8 @@ sub submitAuthorityForm {
         }
 	}
 
-	my $taxonRank = $q->param('taxon_rank'); 	# rank in popup menu
 
-	$fields{taxon_name} = $q->param('taxon_name');
+	$fields{'taxon_name'} = $q->param('taxon_name');
 	
 	# correct the ref_is_authority field.  In the HTML form, it can be "YES" or "NO"
 	# but in the database, it should be "YES" or "" (empty).
@@ -634,19 +590,17 @@ sub submitAuthorityForm {
 	# For example, if the child taxon is "Equus blah" then we need to 
 	# make sure we have an opinion that it belongs to "Equus".
 	#
-	# 3/22/2004, this is bit of a  **HACK** for now.  Eventually,
-	# the opinion object should do this for us (?)
 	my $parentTaxon;
 
-	if ( $isNewEntry && (($taxonRank eq 'species') || ($taxonRank eq 'subspecies')) ) {
+	if ( $isNewEntry && $q->param('taxon_rank') =~ /species|subspecies|subgenus/) {
 		# we want to do this for new entries & for edits.
 				
 		$parentTaxon = Taxon->new($dbt, $q->param('parent_taxon_no'));
 		
 		if (! $parentTaxon->get('taxon_no')) {
 			$errors->add("The parent taxon '" . $parentTaxon->get('taxon_name') . 
-			"' that this $taxonRank belongs to doesn't exist in our 
-			database.  Please add an authority record for this $taxonRank
+			"' that this ".$q->param('taxon_rank')." belongs to doesn't exist in our 
+			database.  Please add an authority record for this ".$q->param('taxon_rank')."
 			before continuing.");
 		}
 	}
@@ -665,7 +619,7 @@ sub submitAuthorityForm {
 	# This only applies to new entries, and to edits where they changed the taxon_name
 	# field to be the name of a different taxon which already exists.
 	if ($q->param('confirmed_taxon_name') ne $q->param('taxon_name')) {
-        my @taxon = TaxonInfo::getTaxon($dbt,'taxon_name'=>$fields{'taxon_name'},'get_reference'=>1);
+        my @taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$fields{'taxon_name'}},['*']);
         my $taxonExists = scalar(@taxon);
         
 		if (($isNewEntry && $taxonExists) ||
@@ -676,7 +630,7 @@ sub submitAuthorityForm {
             }
             my $plural = ($taxonExists == 1) ? "" : "s";
             $q->param('confirmed_taxon_name'=>$q->param('taxon_name'));
-			$errors->add("This taxonomic name already appears $taxonExists time$plural in the database: ".join(", ",@pub_info).". If you really want to submit this record, hit submit again.");
+			$errors->add("This taxonomic name already appears $taxonExists time$plural in the database: ".join(", ",@pub_info).". If this record is a homonym and you want to create a new record, hit submit again.");
 		}
 	}
 	
@@ -713,6 +667,7 @@ sub submitAuthorityForm {
 			
 			my %opinionHash = (
                 'status'=>'belongs to',
+                'spelling_reason'=>'original spelling',
                 'child_no'=>$resultTaxonNumber,
                 'child_spelling_no'=>$resultTaxonNumber,
                 'parent_no'=>$orig_parent_no,
@@ -758,107 +713,23 @@ sub submitAuthorityForm {
                     #open STDOUT, ">>SOMEFILE";
                 }
                 TaxaCache::updateCache($dbt2,$resultTaxonNumber);
+                sleep(2);
                 exit;
             }         
 		}
-
 	} else {
 		# if it's an old entry, then we'll update.
 		$resultTaxonNumber = $t->get('taxon_no');
-		$status = $dbt->updateRecord($s,'authorities', 'taxon_no',$resultTaxonNumber, \%fields);
+		$status = $dbt->updateRecord($s,'authorities','taxon_no',$resultTaxonNumber, \%fields);
+        propagateAuthorityInfo($dbt,$t->get('taxon_no'));
 	}
 
     # JA 2.4.04
     # if the taxon name is unique, find matches to it in the
     #  occurrences table and set the taxon numbers appropriately
     if ($status && ($isNewEntry || ($t->get('taxon_name') ne $fields{'taxon_name'}))) {
-		# start with a test for uniqueness
-		my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name=".$dbh->quote($fields{taxon_name});
-        my @taxon_nos = @{$dbt->getData($sql)};
-        @taxon_nos = map {$_->{'taxon_no'}} @taxon_nos;
-
-		if (scalar(@taxon_nos) > 1) {
-            my $sql1 = "SELECT p.name, p.email, count(*) cnt FROM occurrences o,person p WHERE o.authorizer_no=p.person_no AND o.taxon_no IN (".join(",",@taxon_nos).") group by p.person_no";
-            my $sql2 = "SELECT p.name, p.email, count(*) cnt FROM reidentifications re,person p WHERE re.authorizer_no=p.person_no AND re.taxon_no IN (".join(",",@taxon_nos).") group by p.person_no";
-            my @results = @{$dbt->getData($sql1)};
-            push @results,@{$dbt->getData($sql2)};
-            my %emails = ();
-            my %counts = ();
-            foreach my $row (@results) {
-                $emails{$row->{'name'}} = $row->{'email'};
-                $counts{$row->{'name'}} += $row->{'cnt'};
-            }
-
-            my $link = "bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$fields{taxon_name}";
-            while (my ($name,$email) = each %emails) {
-                my %headers = ('Subject'=> 'Please reclassify your occurrences','From'=>'alroy');
-                if ($ENV{'BRIDGE_HOST_URL'} =~ /paleodb\.org/) {
-                    if ($email) {
-                        $headers{'To'} = $email; 
-                    } else {
-                        # This will happen if email is blank, such as with Sepkoski
-                        $headers{'To'} = 'alroy@nceas.ucsb.edu';
-                    }
-                } else {
-                    # DEBUGGING EMAIL ADDRESS
-                    $headers{'To'} = 'schroeter@nceas.ucsb.edu';
-                }
-                my $taxon_count = scalar(@taxon_nos);
-                my $occ_count = $counts{$name};
-                my $body = <<END_OF_MESSAGE;
-Dear $name:
-
-This is an automated message from the Paleobiology Database. Please don't reply to this message directly, but rather send replies to John Alroy (alroy\@nceas.ucsb.edu).
-
-This message has been sent to you because the taxonomic name $fields{taxon_name} has just been entered into the database, and other taxa with the same name already have been entered. So, we have more than one version. This taxonomic name is tied to $occ_count occurrences and reidentifications you own. We can't be sure which version of the name these records should be tied to, so the records must be manually reclassified to choose between them. 
-
-To fix your records, Please click this link while logged in:
-http://paleodb.org/cgi-bin/$link
-
-Or log in, go to the main menu, click "Reclassify occurrences" and enter $fields{taxon_name} into the taxon name field.
-END_OF_MESSAGE
-                my $mailer = new Mail::Mailer;
-                $mailer->open(\%headers);
-                print $mailer $body; 
-                $mailer->close;
-            }
-            
-            # Deal with homonym issue
-            $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
-            $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
-            $dbt->getData($sql1);
-            $dbt->getData($sql2);
-            push @warnings, "Since $fields{taxon_name} is a homonym, occurrences of it are no longer classified.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$fields{taxon_name}\">Reclassify occurrences</a>\" and manually classify <b>all</b> occurrences of this taxon.";
-		} elsif (scalar(@taxon_nos) == 1) {
-			# start composing update sql
-			# NOTE: in theory, taxon no for matching records always
-			#  should be zero, unless the new name is a species and
-			#  some matching records were set on the basis of their
-			#  genus, in which case we assume users will want the
-			#  new number for the species instead; that's why there
-			#  is no test to make sure the taxon no is empty
-			my $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=" . $resultTaxonNumber . " WHERE ";
-			my $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=" . $resultTaxonNumber . " WHERE ";
-
-			my ($genus,$species) = split / /,$fields{taxon_name};
-			$sql1 .= " genus_name=".$dbh->quote($genus);
-			$sql2 .= " genus_name=".$dbh->quote($genus);
-            if ($species) {
-                $sql1 .= " AND species_name=".$dbh->quote($species);
-                $sql2 .= " AND species_name=".$dbh->quote($species);
-            }
-            # We don't want to accidentally overwrite the species taxon_no with the genus taxon_no
-            # if we have an edit;
-            if (!$isNewEntry && !$species) {
-                $sql1 .= " AND taxon_no=0";
-                $sql2 .= " AND taxon_no=0";
-            }
-			# update the occurrences and reidentifications tables
-			$dbt->getData($sql1);
-			$dbt->getData($sql2);
-            main::dbg("sql to update occs: $sql1");
-            main::dbg("sql to update reids: $sql2");
-		}
+        my @set_warnings = setOccurrencesTaxonNoByTaxon($dbt,$resultTaxonNumber);
+        push @warnings, @set_warnings;
     }
 	
     # displays info about the authority record the user just entered...
@@ -880,7 +751,7 @@ END_OF_MESSAGE
             $end_message .= "<LI>$_</LI>" for (@warnings);
             $end_message .= "</DIV>";
         }
-        $end_message .= "<H3>" . $fields{'taxon_name'} . " " .Reference::formatShortRef(\%fields). " has been $enterupdate the database</H3>";
+        $end_message .= "<div align=\"center\"><h3>" . $fields{'taxon_name'} . " " .Reference::formatShortRef(\%fields). " has been $enterupdate the database</h3></div>";
 
         my $origResultTaxonNumber = TaxonInfo::getOriginalCombination($dbt,$resultTaxonNumber);
         $end_message .= qq|
@@ -906,6 +777,171 @@ END_OF_MESSAGE
 	
 	print "<BR>";
 	print "</CENTER>";
+}
+
+
+sub setOccurrencesTaxonNoByTaxon {
+    my $dbt = shift;
+    my $dbh = $dbt->dbh;
+    my $taxon_no = shift;
+    my @warnings = ();
+
+    my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no});
+    return if (!$t);
+
+    my $taxon_name = $t->{'taxon_name'};
+    my ($genus,$subgenus,$species,$subspecies) = splitTaxon($taxon_name);
+    $genus = "" if (!$genus);
+    $subgenus = "" if (!$subgenus);
+    $species = "" if (!$species);
+    $subspecies = "" if (!$subspecies);
+
+    # Don't support resolutioin at the subspecies level, so don't set it for subspecies.
+    # If they set a species the taxon_no will equal the species taxon_no already since
+    # they have to enter the species first, so this should be ok
+    if ($subspecies) {
+        return ();
+    }
+
+    # start with a test for uniqueness
+    my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name=".$dbh->quote($taxon_name);
+    my @taxon_nos = @{$dbt->getData($sql)};
+    @taxon_nos = map {$_->{'taxon_no'}} @taxon_nos;
+
+    if (scalar(@taxon_nos) > 1) {
+        my $sql1 = "SELECT p.name, p.email, count(*) cnt FROM occurrences o,person p WHERE o.authorizer_no=p.person_no AND o.taxon_no IN (".join(",",@taxon_nos).") group by p.person_no";
+        my $sql2 = "SELECT p.name, p.email, count(*) cnt FROM reidentifications re,person p WHERE re.authorizer_no=p.person_no AND re.taxon_no IN (".join(",",@taxon_nos).") group by p.person_no";
+        my @results = @{$dbt->getData($sql1)};
+        push @results,@{$dbt->getData($sql2)};
+        my %emails = ();
+        my %counts = ();
+        foreach my $row (@results) {
+            $emails{$row->{'name'}} = $row->{'email'};
+            $counts{$row->{'name'}} += $row->{'cnt'};
+        }
+
+        my $link = "bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$taxon_name";
+        while (my ($name,$email) = each %emails) {
+            my %headers = ('Subject'=> 'Please reclassify your occurrences','From'=>'alroy');
+            if ($ENV{'BRIDGE_HOST_URL'} =~ /paleodb\.org/) {
+                if ($email) {
+                    $headers{'To'} = $email; 
+                } else {
+                    # This will happen if email is blank, such as with Sepkoski
+                    $headers{'To'} = 'alroy@nceas.ucsb.edu';
+                }
+            } else {
+                # DEBUGGING EMAIL ADDRESS
+                $headers{'To'} = 'schroeter@nceas.ucsb.edu';
+            }
+            my $taxon_count = scalar(@taxon_nos);
+            my $occ_count = $counts{$name};
+            my $body = <<END_OF_MESSAGE;
+Dear $name:
+
+This is an automated message from the Paleobiology Database. Please don't reply to this message directly, but rather send replies to John Alroy (alroy\@nceas.ucsb.edu).
+
+This message has been sent to you because the taxonomic name $taxon_name has just been entered into the database, and other taxa with the same name already have been entered. So, we have more than one version. This taxonomic name is tied to $occ_count occurrences and reidentifications you own. We can't be sure which version of the name these records should be tied to, so the records must be manually reclassified to choose between them. 
+
+To fix your records, Please click this link while logged in:
+http://paleodb.org/cgi-bin/$link
+
+Or log in, go to the main menu, click "Reclassify occurrences" and enter $taxon_name into the taxon name field.
+END_OF_MESSAGE
+            my $mailer = new Mail::Mailer;
+            $mailer->open(\%headers);
+            print $mailer $body; 
+            $mailer->close;
+        }
+        
+        # Deal with homonym issue
+        $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
+        $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
+        $dbt->getData($sql1);
+        $dbt->getData($sql2);
+        push @warnings, "Since $taxon_name is a homonym, occurrences of it are no longer classified.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$taxon_name\">Reclassify occurrences</a>\" and manually classify <b>all</b> occurrences of this taxon.";
+    } elsif (scalar(@taxon_nos) == 1) {
+        my @matchedOccs = ();
+        my @matchedReids = ();
+        # Name is unique, so set taxon_nos in the occurrences table
+        my @higher_names = ($dbh->quote($genus));
+        if ($subgenus) {
+            push @higher_names, $dbh->quote($subgenus);
+        }
+        # Algorithm is as follows:
+        # First get all potential matches.  Potential matches means where the species matches, if there is a species
+        # and the genus or subgenus of the occurrence/reid matches the genus or subgenus of the authorities table
+        # record.  Note a genus can match a subgenus and vice versa as well, so this is pretty fuzzy.  If the new
+        # authorities table match is BETTER than the old authorities table match, then replace the taxon_no.  
+        # See computeMatchLevel to see how matches are ranked. PS 4/21/2006
+        my $sql1 = "SELECT occurrence_no,o.taxon_no,genus_name,subgenus_name,species_name,taxon_name,taxon_rank FROM occurrences o "
+                . " LEFT JOIN authorities a ON o.taxon_no=a.taxon_no"
+                . " WHERE genus_name IN (".join(", ",@higher_names).")";
+        my $sql2 = "SELECT reid_no,re.taxon_no,genus_name,subgenus_name,species_name,taxon_name,taxon_rank FROM reidentifications re "
+                . " LEFT JOIN authorities a ON re.taxon_no=a.taxon_no"
+                . " WHERE genus_name IN (".join(", ",@higher_names).")";
+        my $sql3 = "SELECT occurrence_no,o.taxon_no,genus_name,subgenus_name,species_name,taxon_name,taxon_rank FROM occurrences o "
+                . " LEFT JOIN authorities a ON o.taxon_no=a.taxon_no"
+                . " WHERE subgenus_name IN (".join(", ",@higher_names).")";
+        my $sql4 = "SELECT reid_no,re.taxon_no,genus_name,subgenus_name,species_name,taxon_name,taxon_rank FROM reidentifications re "
+                . " LEFT JOIN authorities a ON re.taxon_no=a.taxon_no"
+                . " WHERE subgenus_name IN (".join(", ",@higher_names).")";
+        if ($species) {
+            $sql1 .= " AND species_name LIKE ".$dbh->quote($species);
+            $sql2 .= " AND species_name LIKE ".$dbh->quote($species);
+            $sql3 .= " AND species_name LIKE ".$dbh->quote($species);
+            $sql4 .= " AND species_name LIKE ".$dbh->quote($species);
+        }
+        my @results1 = @{$dbt->getData($sql1)};
+        my @results2 = @{$dbt->getData($sql2)};
+        my @results3 = @{$dbt->getData($sql3)};
+        my @results4 = @{$dbt->getData($sql4)};
+        foreach my $row (@results1,@results2,@results3,@results4) {
+#            print "MATCHING: $row->{genus_name} ($row->{subgenus_name}) $row->{species_name} TIED TO  $row->{taxon_name}\n";
+            my $old_match_level = 0;
+            my $new_match_level = 0;
+
+            # Maybe not necessary to cast these again as variables, but do just
+            # to be safe.  PERL subs screw up if you try to pass in an undef var.
+            my $occ_genus = $row->{'genus_name'};
+            my $occ_subgenus = $row->{'subgenus_name'};
+            my $occ_species = $row->{'species_name'};
+            $occ_genus = "" if (!$occ_genus);
+            $occ_subgenus = "" if (!$occ_subgenus);
+            $occ_species = "" if (!$occ_species);
+            if ($row->{'taxon_no'}) {
+                # The "tied" variables refer to the taxonomic name to which the the occurrence is currently
+                # set.  I.E. the taxon_name associated with the taxon_no.
+                my ($tied_genus,$tied_subgenus,$tied_species) = splitTaxon($row->{'taxon_name'});
+                $tied_genus = "" if (!$tied_genus);
+                $tied_subgenus = "" if (!$tied_subgenus);
+                $tied_species = "" if (!$tied_species);
+
+                $old_match_level = computeMatchLevel($occ_genus,$occ_subgenus,$occ_species,$tied_genus,$tied_subgenus,$tied_species);
+            }
+            $new_match_level = computeMatchLevel($occ_genus,$occ_subgenus,$occ_species,$genus,$subgenus,$species);
+            if ($new_match_level > $old_match_level) {
+                if ($row->{'reid_no'}) { 
+                    push @matchedReids, $row->{'reid_no'};
+                } else {
+                    push @matchedOccs, $row->{'occurrence_no'};
+                }
+            }
+        }
+
+        # Compose final SQL
+        if (@matchedOccs) {
+            my $sql = "UPDATE occurrences SET modified=modified,taxon_no=$taxon_no WHERE occurrence_no IN (".join(",",@matchedOccs).")";
+            print "$sql\n";
+            $dbh->do($sql);
+        }
+        if (@matchedReids) {
+            my $sql = "UPDATE reidentifications SET modified=modified,taxon_no=$taxon_no WHERE reid_no IN (".join(",",@matchedReids).")";
+            print "$sql\n";
+            $dbh->do($sql);
+        }
+    }
+    return @warnings;
 }
 
 # This section handles updating of the type_taxon_no field in the authorities table and is used both
@@ -1058,7 +1094,7 @@ sub getTypeTaxonList {
     my $type_taxon_no = shift;   
     my $reference_no = shift;
             
-    my $focal_taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$type_taxon_no);
+    my $focal_taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$type_taxon_no});
             
     my $parents = Classification::get_classification_hash($dbt,'all',[$type_taxon_no],'array',$reference_no);
     # This array holds possible higher taxa this taxon can be a type taxon for
@@ -1084,11 +1120,11 @@ sub getTypeTaxonList {
     # This sets values in the hashes for the type_taxon_no, type_taxon_name, and type_taxon_rank
     # in addition to the taxon_no, taxon_name, taxon_rank of the parent
     foreach my  $parent (@parents) {
-        my $parent_taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$parent->{'taxon_no'});
+        my $parent_taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$parent->{'taxon_no'}},['taxon_no','type_taxon_no','authorizer_no']);
         $parent->{'authorizer_no'} = $parent_taxon->{'authorizer_no'};
         $parent->{'type_taxon_no'} = $parent_taxon->{'type_taxon_no'};
         if ($parent->{'type_taxon_no'}) {
-            my $type_taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$parent->{'type_taxon_no'});
+            my $type_taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$parent->{'type_taxon_no'}});
             $parent->{'type_taxon_name'} = $type_taxon->{'taxon_name'};
             $parent->{'type_taxon_rank'} = $type_taxon->{'taxon_rank'};
         }
@@ -1103,7 +1139,7 @@ sub getTypeTaxonList {
 # This will print out the name of a taxon, its publication info, and its first parent
 # for distinguishing between taxon of the same name
 # Assumes correct publication info is conveniently in the record itself
-#   I.E. data from getTaxon($dbt,'taxon_name'=>$taxon_name,'get_reference'=>1) -- see function for details
+#   I.E. data from getTaxa($dbt,{'taxon_name'=>$taxon_name},['*']) -- see function for details
 # 
 # it returns some HTML to display the authority information.
 sub formatAuthorityLine	{
@@ -1113,7 +1149,7 @@ sub formatAuthorityLine	{
 
 	# Print the name
 	# italicize if genus or species.
-	if ( $taxon->{'taxon_rank'} =~ /species|genus/) {
+	if ( $taxon->{'taxon_rank'} =~ /subspecies|species|genus/) {
 		$authLine .= "<i>" . $taxon->{'taxon_name'} . "</i>";
 	} else {
 		$authLine .= $taxon->{'taxon_name'};
@@ -1140,14 +1176,256 @@ sub formatAuthorityLine	{
 
 sub splitTaxon {
     my $name = shift;
-    my ($genus,$subgenus,$species,$subspecies);
+    my ($genus,$subgenus,$species,$subspecies) = ("","","","");
   
-    if ($name =~ /^(\w+)(?:\s+\((\w+)\))*\s*(\w+)*\s*(\w+)*/o) {
-        ($genus,$subgenus,$species,$subspecies) = ($1,$2,$3,$4);
+    if ($name =~ /^([A-Z][a-z]+)(?:\s\(([A-Z][a-z]+)\))?(?:\s([a-z]+))?(?:\s([a-z]+))?/) {
+        $genus = $1 if ($1);
+        $subgenus = $2 if ($2);
+        $species = $3 if ($3);
+        $subspecies = $4 if ($4);
+    }
+
+    if (!$genus && $name) {
+        # Loose match, capitalization doesn't matter. The % is a wildcard symbol
+        if ($name =~ /^([a-z%]+)(?:\s\(([a-z%]+)\))?(?:\s([a-z]+))?(?:\s([a-z]+))?/) {
+            $genus = $1 if ($1);
+            $subgenus = $2 if ($2);
+            $species = $3 if ($3);
+            $subspecies = $4 if ($4);
+        }
     }
     
     return ($genus,$subgenus,$species,$subspecies);
 }
+
+sub guessTaxonRank {
+    my $taxon = shift;
+    
+    if ($taxon =~ /^[A-Z][a-z]+ (\([A-Z][a-z]+ \))?[a-z]+ [a-z]+$/) {
+        return "subspecies";
+    } elsif ($taxon =~ /^[A-Z][a-z]+ (\([A-Z][a-z]+\) )?[a-z]+$/) {
+        return "species";
+    } elsif ($taxon =~ /^[A-Z][a-z]+ \([A-Z][a-z]+\)$/) {
+        return "subgenus";
+    } 
+
+    return "";
+}  
+
+sub validTaxonName {
+    my $taxon = shift;
+    
+    if ($taxon =~ /[()]/) {
+        if ($taxon =~ /^[A-Z][a-z]+ \([A-Z][a-z]+\)( [a-z]+){0,2}$/) {
+            return 1;
+        }
+    } else {
+        if ($taxon =~ /^[A-Z][a-z]+( [a-z]+){0,2}$/) {
+            return 1;
+        }
+    }
+
+    return 0;
+}  
+
+# This function takes two taxonomic names -- one from the occurrences/reids
+# table and one from the authorities table (broken down in genus (g), 
+# subgenus (sg) and species (s) components -- use splitTaxonName to
+# do this for entries from the authorities table) and compares
+# How closely they match up.  The higher the number, the better the
+# match.
+# 
+# < 30 but > 20 = species level match
+# < 20 but > 10 = genus/subgenus level match
+# 0 = no match
+sub computeMatchLevel {
+    my ($occ_g,$occ_sg,$occ_sp,$taxon_g,$taxon_sg,$taxon_sp) = @_;
+
+    my $match_level = 0;
+    return 0 if ($occ_g eq '' || $taxon_g eq '');
+
+    if ($taxon_sp) {
+        if ($occ_g eq $taxon_g && 
+            $occ_sg eq $taxon_sg && 
+            $occ_sp eq $taxon_sp) {
+            $match_level = 30; # Exact match
+        } elsif ($occ_g eq $taxon_g && 
+                 $occ_sp && $taxon_sp && $occ_sp eq $taxon_sp) {
+            $match_level = 28; # Genus and species match, next best thing
+        } elsif ($occ_g eq $taxon_sg && 
+                 $occ_sp && $taxon_sp && $occ_sp eq $taxon_sp) {
+            $match_level = 27; # The authorities subgenus being used a genus
+        } elsif ($occ_sg eq $taxon_g && 
+                 $occ_sp && $taxon_sp && $occ_sp eq $taxon_sp) {
+            $match_level = 26; # The authorities genus being used as a subgenus
+        } elsif ($occ_sg && $taxon_sg && $occ_sg eq $taxon_sg && 
+                 $occ_sp && $taxon_sp && $occ_sp eq $taxon_sp) {
+            $match_level = 25; # Genus don't match, but subgenus/species does, pretty weak
+        } 
+    } elsif ($taxon_sg) {
+        if ($occ_g eq $taxon_g  &&
+            $occ_sg eq $taxon_sg) {
+            $match_level = 19; # Genus and subgenus match
+        } elsif ($occ_g eq $taxon_sg) {
+            $match_level = 17; # The authorities subgenus being used a genus
+        } elsif ($occ_sg eq $taxon_g) {
+            $match_level = 16; # The authorities genus being used as a subgenus
+        } elsif ($occ_sg eq $taxon_sg) {
+            $match_level = 14; # Subgenera match up but genera don't, very junky
+        }
+    } else {
+        if ($occ_g eq $taxon_g) {
+            $match_level = 18; # Genus matches at least
+        } elsif ($occ_sg eq $taxon_g) {
+            $match_level = 15; # The authorities genus being used as a subgenus
+        }
+    }
+    return $match_level;
+}
+
+# This function 
+
+sub getBestClassification{
+    my ($dbt,$genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name) = @_;
+    my $dbh = $dbt->dbh;
+    my @matches = ();
+
+    if ( $genus_reso !~ /informal/) {
+        my $species_sql = "";
+        if ($species_reso  !~ /informal/ && $species_name =~ /^[a-z]+$/ && $species_name !~ /^sp$|^indet$/) {
+            $species_sql = "AND ((taxon_rank='species' and taxon_name like '% $species_name') or taxon_rank != 'species')";
+        }
+        my $sql = "(SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_name LIKE '$genus_name%' $species_sql)";
+        $sql .= " UNION ";
+        $sql .= "(SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_rank='subgenus' AND taxon_name LIKE '% ($genus_name)')";
+        if ($subgenus_reso !~ /informal/ && $subgenus_name) {
+            $sql .= " UNION ";
+            $sql .= "(SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_name LIKE '$subgenus_name%' $species_sql)";
+            $sql .= " UNION ";
+            $sql .= "(SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_rank='subgenus' AND taxon_name LIKE '% ($subgenus_name)')";
+        }
+
+        #print "Trying to match $genus_name ($subgenus_name) $species_name\n";
+        #print $sql,"\n";
+        my @results = @{$dbt->getData($sql)};
+
+        my @more_results = ();
+        # Do this query separetly cause it needs to do a full table scan and is SLOW
+        foreach my $row (@results) {
+            my ($taxon_genus,$taxon_subgenus,$taxon_species) = splitTaxon($row->{'taxon_name'});
+            if ($taxon_subgenus && $genus_name eq $taxon_subgenus && $genus_name ne $taxon_genus) {
+                my $last_sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_name LIKE '% ($taxon_subgenus) %' AND taxon_rank='species'";
+#                print "Querying for more results because only genus didn't match but subgenus (w/g) did matched up with $row->{taxon_name}\n";
+#                print $last_sql,"\n";
+                my @more_results = @{$dbt->getData($last_sql)};
+                last;
+            }
+            if ($taxon_subgenus && $subgenus_name eq $taxon_subgenus && $genus_name ne $taxon_subgenus) {
+                my $last_sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_name LIKE '% ($taxon_subgenus) %' and taxon_rank='species'";
+#                print "Querying for more results because only genus didn't match but subgenus (w/subg) did matched up with $row->{taxon_name}\n";
+#                print $last_sql,"\n";
+                my @more_results = @{$dbt->getData($last_sql)};
+                last;
+            }
+        }                     
+
+        foreach my $row (@results,@more_results) {
+            my ($taxon_genus,$taxon_subgenus,$taxon_species,$taxon_subspecies) = splitTaxon($row->{'taxon_name'});
+            if (!$taxon_subspecies) {
+                my $match_level = Taxon::computeMatchLevel($genus_name,$subgenus_name,$species_name,$taxon_genus,$taxon_subgenus,$taxon_species);
+                if ($match_level > 0) {
+                    $row->{'match_level'} = $match_level;
+                    push @matches, $row;
+#                    print "MATCH found at $match_level for matching occ $genus_name $subgenus_name $species_name to taxon $row->{taxon_name}\n";
+                }
+            }
+        }
+    }
+
+    @matches = sort {$b->{'match_level'} <=> $a->{'match_level'}} @matches;
+
+    if (wantarray) {
+        # If the user requests a array, then return all matches that are in the same class.  The classes are
+        #  30: exact match, no need to return any others
+        #  20-29: species level match
+        #  10-19: genus level match
+        if (@matches) {
+            my $best_match_class = int($matches[0]->{'match_level'}/10);
+            my @matches_in_class;
+            foreach my $row (@matches) {
+                my $match_class = int($row->{'match_level'}/10);
+                if ($match_class >= $best_match_class) {
+                    push @matches_in_class, $row;
+                }
+            }
+            return @matches_in_class;
+        } else {
+            return ();
+        }
+    } else {
+        # If the user requests a scalar, only return the best match, assuming it is not a homonym
+        if (scalar(@matches) > 1) {
+            if ($matches[0]->{'taxon_name'} eq $matches[1]->{'taxon_name'}) {
+                return 0;
+            } else {
+                return $matches[0]->{'taxon_no'};
+            }
+            return $matches[0][0]; # This will be the taxon_no
+        } elsif (scalar(@matches) == 1) {
+            return $matches[0]->{'taxon_no'};
+        } else {
+            return 0;
+        }
+    }
+}
+
+sub propagateAuthorityInfo {
+    my $dbt = shift;
+    my $taxon_no = shift;
+    my $dbh = $dbt->dbh;
+    return if (!$taxon_no);
+
+    my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
+    return if (!$orig_no);
+
+    main::dbg("propagateAuthorityInfo called with taxon_no $taxon_no and orig $orig_no");
+
+    my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no=$orig_no and child_spelling_no != $taxon_no";
+    my @results = @{$dbt->getData($sql)};
+    # Note that this is the taxon_no passed in, not the original combination -- an update to
+    # a spelling should proprate around as well
+    my $orig = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
+
+    my @authority_fields = ('author1init','author1last','author2init','author2last','otherauthors','pubyr');
+    my @more_fields = ('pages','figures','extant','preservation');
+    foreach my $row (@results) {
+        my @toUpdate = ();
+        my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}},['*']);
+        # If its tied to a reference, they should update the reference.
+        # Only weird thing is if they update a subsequent spelling and the original combination
+        # is tied to a reference. The data in the reference won't be updated.
+        if ($orig->{'ref_is_authority'} =~ /yes/i) {
+            my $u_sql = "UPDATE authorities SET modified=modified, reference_no=$orig->{reference_no},ref_is_authority='YES' WHERE taxon_no=$row->{'child_spelling_no'}";
+            main::dbg("propagateAuthorityInfo updating authority: $u_sql");
+            $dbh->do($u_sql);
+        } else {
+            if ($spelling->{'ref_is_authority'} =~ /yes/i) {
+                next;
+            } else {
+                foreach my $f (@authority_fields,@more_fields) {
+                    if ($spelling->{$f} ne $orig->{$f}) {
+                        push @toUpdate, "$f=".$dbh->quote($orig->{$f});
+                    }
+                }
+                if (@toUpdate) {
+                    my $u_sql =  "UPDATE authorities SET modified=modified, ".join(",",@toUpdate)." WHERE taxon_no=$row->{child_spelling_no}";
+                    main::dbg("propagateAuthorityInfo updating authority: $u_sql");
+                    $dbh->do($u_sql);
+                }
+            }
+        }
+    }
+}                                                                                                                                                                   
 
 # end of Taxon.pm
 
