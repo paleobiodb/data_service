@@ -78,10 +78,9 @@ You can record the authority in one of two ways:</p>
 <ul>
 <li>Never create more than one authority record for a taxon, even if the original record is owned by some other authorizer and/or entered by some other enterer; the original record mistakenly has different names of authors, dates of publication, etc.; or if you are about to classify the taxon in a new way.
 But <i>do</i> create a new record if the taxon is actually biologically different even though its name is spelt the same way (i.e., it has a different type specimen or type taxon).
-This can happen when names are homonyms (see definitions of opinion terms below).</p>
+This can happen when names are homonyms (see definitions of opinion terms below).
 <li>Create a new authority record for any taxon name that is spelt differently.
-So, if Linnaeus named the family "Equidae" but someone later created a subfamily called "Equinae," or reranked "Equidae" as the subfamily "Equinae," then Linnaeus is the author of that name too, but you need to make a new authority record anyway.
-<li>Conversely, don't create a new record if the rank changed but the spelling didn't.
+So, if Linnaeus named the family "Equidae" but someone later created a subfamily called "Equinae," or reranked "Equidae" as the subfamily "Equinae," then Linnaeus is the author of that name too, a new authority record will be needed for that new spelling and rank combination. The script will automatically create one for you when you enter the new classification.
 <li>DO NOT enter common English names such as "antelope", "oyster," or "conifer" as new taxa.
 These terms always can be translated into formal scientific names such as "Bovidae," so they should not be entered anywhere in the Database.
 <li>Likewise, never create an authority record for an informal but still scientific name such as a leaf type category.
@@ -120,9 +119,7 @@ In this section you record key data about the taxon that should have been publis
 The Linnean taxonomic rank of the taxon that is being discussed, as it was originally published by the original author.<p>
 
 <ul>
-<li>If someone changed the rank and the spelling changed (e.g., "Herpestinae" changed to "Herpestidae"), make a new authority record for the new spelling and make a "rank changed as" opinion to connect the authority records.
-<li>But if the spelling didn't change, don't change the "original rank" value or do anything else; we simply are not tracking trivial changes in ranks.
-In cases like that, simply add a comment to the original authority record saying so-and-so changed the rank to such-and-such.
+<li>If someone changed the rank and the spelling changed (e.g., "Herpestinae" changed to "Herpestidae"), enter the new name and rank in the "How was it spelled section" and a new authority record based off the original spelling will be created for you and linked to the original, if need be.  
 <li>Use the "unranked clade" value if the original author does not use ranks but does use formal Latin names for higher taxa.
 Also use this term for non-standard ranks such as "Mirorder" or "Parvorder."
 <li>You may <i>not</i> define genera or species as "unranked clades"; this term only applies to higher taxa.
@@ -230,14 +227,15 @@ Pick "Invalid and no other name can be applied" and then choose the status. The 
 </ul>
 
 <p><b>Spelling</b></p>
-There are four possible values related to the spelling of an authority.<br>
+There are five possible values related to the spelling of an authority.<br>
 <ul>
  <li>"<i>original spelling</i>" means that this was the spelling that the original author used
  <li>"<i>recombined as</i>" means a <u>species</u> is valid but has been moved to another genus. Put the new combination in the parent taxon field.  To create a recombination, add the opinion to the original combination.
+ <li>"<i>reassigned as</i>" means a <u>subgenus</u> is valid but has been moved to another genus. Put the new genus in the parent taxon field. Base opinions off the original Genus (Subgenus) name 
 For example, Linnaeus called chimps "Homo troglodytes"; the name was recombined by Oken (1816) as "Pan troglodytes," which is still used.
  <li>"<i>corrected as</i>" means that the original spelling was grammatically incorrect and a new spelling has been proposed. To add a correction, add an opinion to the taxon with the <i>original spelling</i>, and type in the name of the corrected spelling in the text field of the "How was it spelled?" section. This new spelling does not have to be already exist in the database.
- <li>"<i>rank changed as</i>" means that the original spelling was changed because the taxon's rank was changed.
-Create a new authority record for the new spelling. Add an opinion to the taxon with the original spelling, and place the name of the new spelling in the text field of the "How was it spelled?" section.
+ <li>"<i>rank changed as</i>" means that the taxon's rank and/or spelling was changed
+dd an opinion to the taxon with the original spelling, and place the name of the new spelling and rank "How was it spelled?" section.
 It does <i>not</i> matter if the new rank is higher or lower than the old one.
 </ul>
 
@@ -257,6 +255,7 @@ First, fill out a form with X in the taxon name field; G in full in the parent t
 <li><i>Taxon X has been shuffled among many higher taxa</i> (<u>classification</u>). Fill out multiple forms, with each one giving the higher taxon favored by that authority. Fill out a different form for each paper that renders an opinion, even if lots of authorities said the same thing or if the same authority said the same thing in different papers. <i>You have to do this even if the classification of the taxon has never been debated - in those cases, give the original authority's classification info.</i>
 <li><i>Taxon X turns out to be valid and in the correct higher taxon</i> (<u>classification</u>). Fill out multiple forms if you know of multiple opinions, <i>even</i> if the original opinion turns out to be right.
 <li><i>Taxon X is a synonym or or otherwise invalid</i> (<u>synonymy/validity</u>). Make sure to fill out one form recording the problem with the name, but also make sure to record the classification that was favored by the original author.
+<li><i>Genus G Subgenus (H) was elevated to a genus</i> Fill out a form based off Genus G Subgenus (H), assigning it to a higher taxon in the "How was it classified section".  In the "How was it spelled section" give the spelling as "Genus H" and mark that it was ranked from its original rank of subgenus.
 </ul>
 
 <i>Species:</i>
