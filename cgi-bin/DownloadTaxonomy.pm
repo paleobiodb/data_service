@@ -7,6 +7,7 @@ use TimeLookup;
 use Data::Dumper;
 use DBTransactionManager;
 use TaxaCache;
+use Opinion;
 use CGI::Carp;
 use Class::Date qw(date localdate gmdate now);
 
@@ -36,7 +37,7 @@ sub displayITISDownload {
     # the parameters.  Store the parameters in the %options hash and pass that in
     my %options = $q->Vars();
     if ($options{'taxon_name'}) {
-        my @taxon = TaxonInfo::getTaxon($dbt,'taxon_name'=>$options{'taxon_name'});
+        my @taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1});
         if (scalar(@taxon) > 1) {
             push @errors, "Taxon name is homonym";
         } elsif (scalar(@taxon) < 1) {
@@ -364,7 +365,7 @@ sub displayPBDBDownload {
 
     my %options = $q->Vars();
     if ($options{'taxon_name'}) {
-        my @taxon = TaxonInfo::getTaxon($dbt,'taxon_name'=>$options{'taxon_name'});
+        my @taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1});
         if (scalar(@taxon) > 1) {
             push @errors, "Taxon name is homonym";
         } elsif (scalar(@taxon) < 1) {
@@ -471,7 +472,7 @@ sub displayPBDBDownload {
     my @opinions = @$opinions;
     open FH_OP, ">$filesystem_dir/opinions.csv"
         or die "Could not open opinions.csv ($!)";
-    @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","created","modified");
+    @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","spelling_reason","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","created","modified");
     $csv->combine(@header);
     print FH_OP $csv->string()."\n";
     foreach my $o (@opinions) {
@@ -702,10 +703,23 @@ sub getTaxonomicNames {
                         $row->{'synonym_no'} = $row->{'senior_synonym_no'};
                     }
                 } else {
-                    my $sql = "SELECT taxon_name,taxon_rank FROM authorities where taxon_no=$row->{spelling_no}";
+                    my $sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities where taxon_no=$row->{spelling_no}";
                     my @s = @{$dbt->getData($sql)};
-                    my $spelling_reason = guessSpellingReason($row->{'taxon_name'},$row->{'taxon_rank'},$s[0]->{'taxon_name'},$s[0]->{'taxon_rank'});
-                    $row->{'invalid_reason'} = "$spelling_reason $s[0]->{taxon_name}";
+                    my $spelling_reason = Opinion::guessSpellingReason($row,$s[0]);
+                    if ($spelling_reason =~ /^corr/) {
+                        $row->{'invalid_reason'} = "corrected as $s[0]->{taxon_name}";
+                    } elsif ($spelling_reason =~ /^recomb/) {
+                        $row->{'invalid_reason'} = "recombined as $s[0]->{taxon_name}";
+                    } elsif ($spelling_reason =~ /^reass/) {
+                        $row->{'invalid_reason'} = "reassigned as $s[0]->{taxon_name}";
+                    } elsif ($spelling_reason =~ /^rank/) {
+                        $row->{'invalid_reason'} = "rank changed to $s[0]->{taxon_rank}";
+                        if ($row->{'taxon_name'} ne $s[0]->{'taxon_name'}) {
+                            $row->{'invalid_reason'} .= ", name to $s[0]->{taxon_name}";
+                        }
+                    } else {
+                        $row->{'invalid_reason'} = $spelling_reason;
+                    }
                 }
                 $invalid_count++;
             } else {
@@ -722,32 +736,6 @@ sub getTaxonomicNames {
     }
     
     return (\@results, $message);
-}
-
-sub guessSpellingReason {
-    my ($taxon_name1,$taxon_rank1,$taxon_name2,$taxon_rank2) = @_;
-    my $spelling_status;
-    # For a recombination, the upper names will always differ. If they're the same, its a correction
-    if ($taxon_rank1 =~ /species/) {
-        my @childBits = split(/ /,$taxon_name1);
-        my @spellingBits= split(/ /,$taxon_name2);
-        pop @childBits;
-        pop @spellingBits;
-        my $childName = join(' ',@childBits);
-        my $spellingName = join(' ',@spellingBits);
-        if ($childName eq $spellingName) {
-            # If the genus/subgenus/species names are the same, its a correction
-            $spelling_status ='corrected as';
-        } else {
-            # If they differ, its a bad record or its a recombination
-            $spelling_status ='recombined as';
-        }
-    } elsif ($taxon_rank1 ne $taxon_rank2) {
-        $spelling_status = 'rank changed as';
-    } else {
-        $spelling_status = 'corrected as';
-    } 
-    return $spelling_status;
 }
 
 sub getTaxonomicOpinions {
@@ -827,7 +815,7 @@ sub getTaxonomicOpinions {
         my $sql = "(SELECT p1.name authorizer, p2.name enterer, p3.name modifier, "
                 . "a1.taxon_name child_name, a2.taxon_name child_spelling_name, "
                 . "a3.taxon_name parent_name, a4.taxon_name parent_spelling_name,"
-                . "o.opinion_no,o.reference_no,o.status,o.child_no,o.child_spelling_no,o.parent_no,o.parent_spelling_no, "
+                . "o.opinion_no,o.reference_no,o.status,o.spelling_reason,o.child_no,o.child_spelling_no,o.parent_no,o.parent_spelling_no, "
                 . "o.pages,o.figures,o.created,o.modified,o.comments,r.classification_quality,"
                 . " IF (o.ref_has_opinion='YES',r.pubyr,o.pubyr) pubyr,"
                 . " IF (o.ref_has_opinion='YES',r.author1init,o.author1init) author1init,"
