@@ -751,13 +751,10 @@ sub displayMapForm {
 		}
 	}
 
-	%pref = getPreferences($s->get('enterer_no'));
-	my @prefkeys = keys %pref;
-	my $html = $hbo->populateHTML('map_form', \@row, \@fieldNames, \@prefkeys);
+    my $html = $hbo->populateHTML('map_form', \@row, \@fieldNames);
 
-
-	my $javaScript = &makeAuthEntJavaScript();
-	$html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
+    my $javaScript = &makeAuthEntJavaScript();
+    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
 
 	my $authorizer_reversed = $s->get("authorizer_reversed");
 	$html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
@@ -1725,6 +1722,17 @@ sub processReferenceEditForm {
     }
 
 
+	my $refID = updateRecord('refs', 'reference_no', $q->param('reference_no'));
+		
+    $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$refID;
+	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+    $sth->execute();
+    my $rowref = $sth->fetchrow_arrayref();
+    my $md = MetadataModel->new($sth);
+    my $drow = DataRow->new($rowref, $md);
+    my $refString = makeRefString($drow);
+
+
     if (@child_nos) {
         my $pid = fork();
         if (!defined($pid)) {
@@ -1762,21 +1770,10 @@ sub processReferenceEditForm {
             foreach my $child_no (@child_nos) {
                 TaxaCache::updateCache($dbt2,$child_no);
             }
-
+            sleep(2);
             exit;
         }  
     }
-
-	my $refID = updateRecord('refs', 'reference_no', $q->param('reference_no'));
-		
-    $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$refID;
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-    $sth->execute();
-    my $rowref = $sth->fetchrow_arrayref();
-    my $md = MetadataModel->new($sth);
-    my $drow = DataRow->new($rowref, $md);
-    my $refString = makeRefString($drow);
-
 
 
     print "<center><h3><font color='red'>Reference record updated</font></h3></center>\n";
@@ -1802,9 +1799,6 @@ sub displaySearchCollsForAdd	{
 		displaySearchRefs( "Please choose a reference first" );
 		exit;
 	}
-
-	# use some preferences JA 20.10.04
-	my %pref = getPreferences($s->get('enterer_no'));
 
 	my $html = $hbo->populateHTML('search_collections_for_add_form' , [ '' , $pref{'latdeg'} , '' , '' , '' , $pref{'latdir'} , $pref{'lngdeg'} , '' , '' , '' , $pref{'lngdir'} ] , [ 'period_max' , 'latdeg' , 'latmin' , 'latsec' , 'latdec' , 'latdir',  'lngdeg' , 'lngmin' , 'lngsec' , 'lngdec' , 'lngdir' ] );
 
@@ -1841,9 +1835,7 @@ sub displaySearchColls {
 	# edit_occurrence	result list links go to edit occurrence page
 
 	# Show the "search collections" form
-	my %pref = getPreferences($s->get('enterer_no'));
-	my @prefkeys = keys %pref;
-    my $html = $hbo->populateHTML('search_collections_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment',$type ], \@prefkeys);
+    my $html = $hbo->populateHTML('search_collections_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment',$type ]);
 
     my $javaScript = &makeAuthEntJavaScript();
     $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
@@ -2417,7 +2409,6 @@ sub processCollectionsSearch {
             push @results, @{$dbt->getData($sql2)}; 
         } elsif ($options{'taxon_name'} || $options{'taxon_no'}) {
             # Parse these values regardless
-            my ($genus,$subgenus,$species);
             my @taxon_nos;
 
             if ($options{'taxon_no'}) {
@@ -2426,21 +2417,13 @@ sub processCollectionsSearch {
                 @taxon_nos = (int($options{'taxon_no'}))
             } else {
                 if (! $options{'no_authority_lookup'}) {
-                    my $taxon_sql = "SELECT taxon_no FROM authorities WHERE taxon_name LIKE ".$dbh->quote($options{'taxon_name'});
-                    @taxon_nos = map {$_->{taxon_no}} @{$dbt->getData($taxon_sql)}; 
+                    my @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1});
+                    @taxon_nos = map {$_->{taxon_no}} @taxa;
                 }
             }
             
             # Fix up the genus name and set the species name if there is a space 
-            my @taxon_bits = split(/\s+/,$options{'taxon_name'});
-            if (scalar(@taxon_bits) == 3) {
-                ($genus,$subgenus,$species) = @taxon_bits;
-                $subgenus =~ s/[\(\)]//g;
-            } elsif (scalar(@taxon_bits) == 2) {
-                ($genus,$species) = @taxon_bits;
-            } elsif (scalar(@taxon_bits) == 1) {
-                ($genus) = @taxon_bits;
-            }
+            my ($genus,$subgenus,$species) = Taxon::splitTaxon($options{'taxon_name'});
 
             # Set for displayOccsForReID
             $q->param('species_name' => $species) if ($species);
@@ -2481,8 +2464,10 @@ sub processCollectionsSearch {
                     $sql1b .= " AND o.species_name LIKE ".$dbh->quote($species.$wildcardToken);
                     $sql2b .= " AND re.species_name LIKE ".$dbh->quote($species.$wildcardToken);
                 }
-                push @results, @{$dbt->getData($sql1b)}; 
-                push @results, @{$dbt->getData($sql2b)}; 
+                if ($genus || $subgenus || $species) {
+                    push @results, @{$dbt->getData($sql1b)}; 
+                    push @results, @{$dbt->getData($sql2b)}; 
+                }
             }
         }
 
@@ -3105,15 +3090,16 @@ sub displayCollectionDetailsPage {
     }
     
     
-    
+   
+    my $optional = {};
     foreach ('stratigraphy_panel','lithology_panel','taphonomy_panel','methods_panel') {
-        $row->{$_} = 1;
+        $optional->{$_} = 1;
     }
     my @stratigraphy_fields = ('geological_group','formation','member','localsection','localbed','localorder','regionalsection','regionalbed');
 
     my @fields = keys %{$row};
     my @fieldValues = values %{$row};
-    print $hbo->populateHTML('collection_display_fields', \@fieldValues,\@fields);
+    print $hbo->populateHTML('collection_display_fields', \@fieldValues,\@fields,$optional);
 		
     # If the viewer is the authorizer (or it's me), display the record with edit buttons
     if ($s->isDBMember() && $q->param('user') !~ /guest/i) {
@@ -3414,7 +3400,7 @@ sub buildTaxonomicList {
                 }
                 # If its a higher order name and indet, like "Omomyidae indet." get the higher order name as well
                 if ($rowref->{'taxon_no'}) {
-                    my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$rowref->{'taxon_no'});
+                    my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}});
                     if ($taxon->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
                         $classification{$taxon->{'taxon_rank'}} = $taxon;
                     }
@@ -3464,7 +3450,7 @@ sub buildTaxonomicList {
                 my $spelling_reason = "";
 
                 my $correct_row = TaxonInfo::getMostRecentParentOpinion($dbt,$ss_taxon_no,1);
-                my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$ss_taxon_no);
+                my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$ss_taxon_no});
                 my $taxon_name = $taxon->{'taxon_name'};
                 my $taxon_rank = $taxon->{'taxon_rank'};
                 if ($correct_row) {
@@ -3814,7 +3800,7 @@ sub getReidHTMLTableByOccNum {
         }
         # If its a higher order name and indet, like "Omomyidae indet." get the higher order name as well
         if ($row[9]) {
-            my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$row[9]);
+            my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row[9]});
             if ($taxon->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
                 $classification{$taxon->{'taxon_rank'}} = $taxon;
             }
@@ -4399,8 +4385,7 @@ sub displayEnterCollPage {
     push(@htmlFields, 'page_footer');
 
     # Output the main part of the page
-    my @prefkeys = keys %pref;
-    my $html = $hbo->populateHTML("collection_form", \@htmlValues, \@htmlFields, \@prefkeys);
+    my $html = $hbo->populateHTML("collection_form", \@htmlValues, \@htmlFields, \%pref);
 
     print $html;
 
@@ -4785,83 +4770,51 @@ sub processTaxonSearch {
 	$errors->setDisplayEndingMessage(0); 
 
     if ($q->param('taxon_name')) {
-        if ( (Validation::looksLikeBadSubgenus($q->param('taxon_name'))) ||
-             ((Validation::taxonRank($q->param('taxon_name')) eq 'invalid')) ) {
-            $errors->add("Ill-formed taxon.  Check capitalization and spacing.");
+        if (! Taxon::validTaxonName($q->param('taxon_name'))) {
+            $errors->add("Ill-formed taxon name.  Check capitalization and spacing.");
         }
-    } 
-    
-	if ($errors->count()) {
-		print $errors->errorMessage();
-		return;
-	}
+    }
+
 	# Try to find this taxon in the authorities table
-    my (@results);
+
+    my %options;
     if ($q->param('taxon_name')) {
-        @results = TaxonInfo::getTaxon($dbt,'taxon_name'=>$q->param('taxon_name'),'get_reference'=>1);
+        $options{'taxon_name'} = $q->param('taxon_name');
     } else {
-#        @results = TaxonInfo::getTaxon($dbt,'reference_no'=>$q->param('reference_no'),'get_reference'=>1);
-        my @where = ();
-        my @errors = ();
-        my $join_refs = "";
-        if ($q->param("reference_no")) {
-            push @where, "a.reference_no=".int($q->param("reference_no"));
-        }
         if ($q->param("authorizer_reversed")) {
             my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('authorizer_reversed'));
             my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
             if (!$authorizer_no) {
-                push @errors, $q->param('authorizer_reversed')." is not a valid authorizer. Format like 'Sepkoski, J.'" if (!$authorizer_no);
+                $errors->add($q->param('authorizer_reversed')." is not a valid authorizer. Format like 'Sepkoski, J.'");
             } else {
-                push @where, "a.authorizer_no=".$authorizer_no;
+                $options{'authorizer_no'} = $authorizer_no;
             }
         }
         if ($q->param('created_year')) {
             my ($yyyy,$mm,$dd) = ($q->param('created_year'),$q->param('created_month'),$q->param('created_day'));
-            my $date = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
-            my $sign = ($q->param('created_before_after') eq 'before') ? '<=' : '>=';
-            push @where,"a.created $sign $date";
+            my $date = sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd);
+            $options{'created'}=$date;
+            $options{'created_before_after'}=$q->param('created_before_after');
         }
-        if ($q->param('pubyr')) {
-            my $pubyr = $dbh->quote($q->param('pubyr'));
-            push @where,"((a.ref_is_authority NOT LIKE 'YES' AND a.pubyr LIKE $pubyr) OR (a.ref_is_authority LIKE 'YES' AND r.pubyr LIKE $pubyr))";
-        }
-        if ($q->param('author')) {
-            my $author = $dbh->quote($q->param('author'));
-            my $authorWild = $dbh->quote('%'.$q->param('author').'%');
-            push @where,"((a.ref_is_authority NOT LIKE 'YES' AND (a.author1last LIKE $author OR a.author2last LIKE $author OR a.otherauthors LIKE $authorWild)) OR".
-                        "(a.ref_is_authority LIKE 'YES' AND (r.author1last LIKE $author OR r.author2last LIKE $author OR r.otherauthors LIKE $authorWild)))";
-        }
-
-        if (@where && !@errors) {
-            my $sql = "SELECT a.taxon_no,a.taxon_rank,a.taxon_name,a.pages,a.figures,a.comments, ".
-                   " IF (a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,".
-                   " IF (a.ref_is_authority='YES',r.author1init,a.author1init) author1init,".
-                   " IF (a.ref_is_authority='YES',r.author1last,a.author1last) author1last,".
-                   " IF (a.ref_is_authority='YES',r.author2init,a.author2init) author2init,".
-                   " IF (a.ref_is_authority='YES',r.author2last,a.author2last) author2last,".
-                   " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors".
-                   " FROM authorities a LEFT JOIN refs r ON a.reference_no=r.reference_no".
-                   " WHERE ".join(" AND ",@where).
-                   " ORDER BY a.taxon_name ASC";
-            @results = @{$dbt->getData($sql)};
-        } else {
-            if (@errors) {
-                my $plural = (scalar(@errors) > 1) ? "s" : "";
-                my $message = "<br><div align=center><table width=600 border=0>" .
-                      "<tr><td class=darkList><font size='+1'><b> Error$plural</b></font></td></tr>" .
-                      "<tr><td>";
-                $message .= "<li class='medium'>$_</li>" for (@errors);
-                $message .= "</td></tr></table>";
-                $message .= "</div><br>";
-                print $message;
-                return;
-            } else {
-                print "<div align=\"center\">No terms were entered.</div>";
-                return;
-            }
-        } 
+        $options{'author'} = $q->param('author');
+        $options{'pubyr'} = $q->param('pubyr');
+        $options{'reference_no'} = $q->param('reference_no');
     }
+    if (scalar(%options) == 0) {
+        $errors->add("You must fill in at least one field");
+    }
+
+	if ($errors->count()) {
+		print $errors->errorMessage();
+		return;
+	}
+
+    # Denormalize with the references table automatically
+    $options{'get_reference'} = 1;
+    # Also match against subgenera if the user didn't explicity state the genus
+    $options{'match_subgenera'} = 1;
+    
+    my @results = TaxonInfo::getTaxa($dbt,\%options,['*']);
         
     # If there were no matches, present the new taxon entry form immediately
     # We're adding a new taxon
@@ -4882,7 +4835,7 @@ sub processTaxonSearch {
             }
         } else {
             if ($q->param('taxon_name')) {
-                print "<div class=\"warning\">The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> authority record for this taxon first.</DIV>";
+                print "<div class=\"warning\">The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database. Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> authority record for this taxon first.</DIV>";
             } else {
                 print "<div class=\"warning\">No taxonomic names were found matching the search criteria.</div>";
             }
@@ -5439,9 +5392,7 @@ sub displayEditCollection {
 
     # Output the main part of the page
     my %pref = getPreferences($s->get('enterer_no'));
-    my @prefkeys = keys %pref;
-
-    my $html = $hbo->populateHTML("collection_form", \@row, \@fieldNames, \@prefkeys);
+    my $html = $hbo->populateHTML("collection_form", \@row, \@fieldNames, \%pref);
 
     print $html;
     print stdIncludes("std_page_bottom");
@@ -5703,8 +5654,6 @@ sub displayOccurrenceAddEdit {
 	}
 
 	my %pref = getPreferences($s->get('enterer_no'));
-	my @prefkeys = keys %pref;
-
 	my $html = $hbo->populateHTML('js_occurrence_checkform');
 
 	# only print the JavaScript involving subgenera if the user
@@ -5735,7 +5684,7 @@ sub displayOccurrenceAddEdit {
 	push @tempRow, $collection_name;
 	push @tempFieldName, "collection_name";
 
-	print $hbo->populateHTML('occurrence_header_row', \@tempRow, \@tempFieldName, \@prefkeys);
+	print $hbo->populateHTML('occurrence_header_row', \@tempRow, \@tempFieldName, \%pref);
 
     # main loop
     # each record is represented as a hash
@@ -5756,15 +5705,15 @@ sub displayOccurrenceAddEdit {
             # processEditOccurrences uses 'row_token' 
             # to determine which rows to update
             if($gray_counter%2==0){
-                $occHTML = $hbo->populateHTML("occurrence_read_only_row_gray", \@row, \@names, \@prefkeys);
+                $occHTML = $hbo->populateHTML("occurrence_read_only_row_gray", \@row, \@names, \%pref);
             }
             else{
-                $occHTML = $hbo->populateHTML("occurrence_read_only_row", \@row, \@names, \@prefkeys);
+                $occHTML = $hbo->populateHTML("occurrence_read_only_row", \@row, \@names, \%pref);
             }
         }
         else{
             print qq|<input type=hidden name="row_token" value="row_token">\n|;
-            $occHTML = $hbo->populateHTML("occurrence_edit_row", \@row, \@names, \@prefkeys);
+            $occHTML = $hbo->populateHTML("occurrence_edit_row", \@row, \@names, \%pref);
         }
 		print $occHTML;
 
@@ -5779,15 +5728,15 @@ sub displayOccurrenceAddEdit {
             # Read Only
             if($hash_ref->{'writeable'} == 0){
                 if($gray_counter%2==0){
-                    $reidHTML = $hbo->populateHTML("occurrence_read_only_row_gray", \@re_row, \@re_names, \@prefkeys);
+                    $reidHTML = $hbo->populateHTML("occurrence_read_only_row_gray", \@re_row, \@re_names, \%pref);
                 }
                 else{
-                    $reidHTML = $hbo->populateHTML("occurrence_read_only_row", \@re_row, \@re_names, \@prefkeys);
+                    $reidHTML = $hbo->populateHTML("occurrence_read_only_row", \@re_row, \@re_names, \%pref);
                 }
             }
             else{
                 print qq|<input type=hidden name="row_token" value="row_token">\n|;
-                $reidHTML = $hbo->populateHTML("occurrence_edit_row", \@re_row, \@re_names, \@prefkeys);
+                $reidHTML = $hbo->populateHTML("occurrence_edit_row", \@re_row, \@re_names, \%pref);
             }
             # Strip away abundance widgets (crucial because reIDs never may
             #  have abundances) JA 30.7.02
@@ -5820,7 +5769,6 @@ sub displayOccurrenceAddEdit {
 
 	# Read the users' preferences related to occurrence entry/editing
 	%pref = getPreferences($s->get('enterer_no'));
-	@prefkeys = keys %pref;
 
 	# Figure out the number of blanks to print
 	my $blanks = $pref{'blanks'};
@@ -5835,7 +5783,7 @@ sub displayOccurrenceAddEdit {
 
 	for ( my $i = 0; $i<$blanks ; $i++) {
 		print qq|<input type=hidden name="row_token" value="row_token">\n|;
-		print $hbo->populateHTML("occurrence_entry_row", \@row, \@fieldNames, \@prefkeys);
+		print $hbo->populateHTML("occurrence_entry_row", \@row, \@fieldNames, \%pref);
 	}
 
 	print "</table><br>\n";
@@ -5903,39 +5851,21 @@ sub processEditOccurrences {
 		}
 		my $sql = "";
 
-	# guess the taxon no by trying to find a single match for the name
-	#  in the authorities table JA 1.4.04
-	# see Reclassify.pm for a similar operation
-	# only do this for non-informal taxa
-		if ( $all_params{'genus_reso'}[$index] !~ /informal/ )	{
-			$taxon_name = $all_params{'genus_name'}[$index];
-			if ( $all_params{'species_reso'}[$index] !~ /informal/ && $all_params{'species_name'}[$index] ne "sp." && $all_params{'species_name'}[$index] ne "indet." )	{
-				$taxon_name .= " " . $all_params{'species_name'}[$index];
-			}
-			$sql = "SELECT taxon_no FROM authorities WHERE taxon_name='";
-			$sql .= $taxon_name . "'";
-			my @taxnorefs = @{$dbt->getData($sql)};
-			# exactly one match?
-			if ( $#taxnorefs == 0 )	{
-				$all_params{'taxon_no'}[$index] = $taxnorefs[0]->{taxon_no};
-			}
-			# no match? try genus alone
-			elsif ( ! @taxnorefs && $taxon_name =~ / / )	{
-				($taxon_name) = split / /,$taxon_name;
-				$sql = "SELECT taxon_no FROM authorities WHERE taxon_name='";
-				$sql .= $taxon_name . "'";
-				@taxnorefs = @{$dbt->getData($sql)};
-				if ( $#taxnorefs == 0 )	{
-					$all_params{'taxon_no'}[$index] = $taxnorefs[0]->{taxon_no};
-				} else	{
-					$all_params{'taxon_no'}[$index] = 0;
-				}
-			} else	{
-				$all_params{'taxon_no'}[$index] = 0;
-			}
-		} else {
-			$all_params{'taxon_no'}[$index] = 0;
-        }
+        # guess the taxon no by trying to find a single match for the name
+        #  in the authorities table JA 1.4.04
+        # see Reclassify.pm for a similar operation
+        # only do this for non-informal taxa
+
+        my ($genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name) = ("","","","","","");
+        $genus_reso ||= $all_params{'genus_reso'}[$index];
+        $genus_name ||= $all_params{'genus_name'}[$index];
+        $subgenus_reso ||= $all_params{'subgenus_reso'}[$index];
+        $subgenus_name ||= $all_params{'subgenus_name'}[$index];
+        $species_reso ||= $all_params{'species_reso'}[$index];
+        $species_name ||= $all_params{'species_name'}[$index];
+        my $best_taxon_no = Taxon::getBestClassification($dbt,$genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name);
+        $all_params{'taxon_no'}[$index] = $best_taxon_no;
+        
 
 		# back to our normal code, pre-existing the above
 
@@ -6335,6 +6265,7 @@ sub processEditOccurrences {
 }
 
 
+
  #  3.* System processes new reference if user entered one.  System
 #       displays search occurrences and search collections forms
 #     * User searches for a collection in order to work with
@@ -6359,9 +6290,7 @@ sub displayReIDCollsAndOccsSearchForm {
 	print stdIncludes( "std_page_top" );
 
 	# Display the collection search form
-	my %pref = getPreferences($s->get('enterer_no'));
-	my @prefkeys = keys %pref;
-	my $html = $hbo->populateHTML('search_reids_form', ['','',''], ['research_group','eml_min_interval','eml_max_interval'], \@prefkeys);
+	my $html = $hbo->populateHTML('search_reids_form', ['','',''], ['research_group','eml_min_interval','eml_max_interval']);
 
     my $javaScript = &makeAuthEntJavaScript();
     $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
@@ -6468,7 +6397,6 @@ sub displayOccsForReID
 
 	my $rowCount = 0;
 	my %pref = getPreferences($s->get('enterer_no'));
-	my @prefkeys = keys %pref;
 	foreach my $rowRef (@array_of_hash_refs)
 	{
 		# If we have 11 rows, skip the last one; and we need a next button
@@ -6476,7 +6404,7 @@ sub displayOccsForReID
 		last if $rowCount > 10;
 
 		if ($rowCount == 1)	{
-			print $hbo->populateHTML('reid_header_row', [ $refString ], [ 'ref_string' ], \@prefkeys);
+			print $hbo->populateHTML('reid_header_row', [ $refString ], [ 'ref_string' ], \%pref);
 		}
 
 		my %row = %{$rowRef};
@@ -6497,7 +6425,7 @@ sub displayOccsForReID
 			print "    <td>" . $row{"plant_organ2"} . "</td>\n";
 		}
 		print "</tr>";
-		print $hbo->populateHTML('reid_entry_row', [$row{'occurrence_no'}, $row{'collection_no'}, $s->get('authorizer'), $s->get('enterer'),'','','','',''], ['occurrence_no', 'collection_no', 'authorizer', 'enterer','genus_reso','subgenus_reso','species_reso','plant_organ','plant_organ2'], \@prefkeys);
+		print $hbo->populateHTML('reid_entry_row', [$row{'occurrence_no'}, $row{'collection_no'}, $s->get('authorizer'), $s->get('enterer'),'','','','',''], ['occurrence_no', 'collection_no', 'authorizer', 'enterer','genus_reso','subgenus_reso','species_reso','plant_organ','plant_organ2'], \%pref);
 
 		# print other reids for the same occurrence
 		$sql = "SELECT * FROM reidentifications WHERE occurrence_no=" . $row{'occurrence_no'};
@@ -6665,7 +6593,7 @@ sub processNewReIDs {
 		#  (see below) JA 6.5.04
 			my $collection_no;
 			my $reference_no = $s->get('reference_no');
-            my ($genus_name,$genus_reso,$species_reso,$species_name);
+            my ($genus_name,$genus_reso,$subgenus_reso,$subgenus_name,$species_reso,$species_name) = ("","","","","","");
 			for(my $j = 0;$j < $numFields;$j++)
 			{
 				my $fieldName = $fieldNames[$j];
@@ -6677,6 +6605,8 @@ sub processNewReIDs {
 				}
                 $genus_reso = $curVal if ($fieldName eq 'genus_reso');
                 $genus_name= $curVal if ($fieldName eq 'genus_name');
+                $subgenus_reso = $curVal if ($fieldName eq 'subgenus_reso');
+                $subgenus_name= $curVal if ($fieldName eq 'subgenus_name');
                 $species_reso = $curVal if ($fieldName eq 'species_reso');
                 $species_name = $curVal if ($fieldName eq 'species_name');
 				
@@ -6715,32 +6645,10 @@ sub processNewReIDs {
 				}
 				#print "<br>$i $fieldName: $val";
 			}
-
             
-            # guess the taxon no by trying to find a single match for the name
-            #  in the authorities table JA 1.4.04
-            # see Reclassify.pm for a similar operation
-            # only do this for non-informal taxa
             # missing from here, added in 03/23/2005 PS
-            my $taxon_no = 0;
-            if ( $genus_reso !~ /informal/ )  {
-                my @taxon_nos;
-                # Try Genus+species first, if possible
-                if ( $species_name !~ /^(indet\.|sp\.)/i && $species_reso !~ /informal/) {
-                    @taxon_nos = TaxonInfo::getTaxonNos($dbt,"$genus_name $species_name");
-                    if (scalar(@taxon_nos) == 1) {
-                        $taxon_no = $taxon_nos[0];
-                    }
-                }    
-                # Lastly try just Genus. If taxon_nos > 0, we found 1 match, or too many
-                # In either case, we're hosed
-                if ( !scalar(@taxon_nos) ) {
-                    @taxon_nos = TaxonInfo::getTaxonNos($dbt,$genus_name);
-                    if (scalar(@taxon_nos) == 1) {
-                        $taxon_no = $taxon_nos[0];
-                    }    
-                } 
-            }
+            my $taxon_no = Taxon::getBestClassification($dbt,$genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name);
+
             #print "sn $species_name sr $species_reso gn $genus_name gr $genus_reso t# $taxon_no<br>";
 			push(@fieldList, 'taxon_no');
 			push(@row, $taxon_no);
@@ -6825,13 +6733,6 @@ sub processNewReIDs {
 	print "<p align=center><b><a href=\"$exec_url?action=displayReIDCollsAndOccsSearchForm\">Reidentify more occurrences</a></b></p>\n";
 
 	print stdIncludes("std_page_bottom");
-}
-
-sub displayProjectStatusPage
-{
-	  print stdIncludes( "std_page_top" );
-	  print $hbo->populateHTML('project_status_page');
-	  print stdIncludes("std_page_bottom");
 }
 
 # Marks the most_recent field in the reidentifications table to YES for the most recent reid for
