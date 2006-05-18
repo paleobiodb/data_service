@@ -955,11 +955,11 @@ sub submitOpinionForm {
                 $errors->add("The spelling '$childSpellingName' exists multiple times in the database. Please select the one you want");	
             } elsif (scalar(@spellings) == 0) {
                 if ($q->param('confirm_create_spelling') eq $q->param('child_spelling_name') && 
-                    $q->param('confirm_create_spelling_rank') eq $q->param('child_spelling_rank')) {
+                    $q->param('confirm_create_rank') eq $q->param('child_spelling_rank')) {
                     $createAuthority = 1;
                 } else {
                     $q->param('confirm_create_spelling'=>$q->param('child_spelling_name'));
-                    $q->param('confirm_create_spelling_rank'=>$q->param('child_spelling_rank'));
+                    $q->param('confirm_create_rank'=>$q->param('child_spelling_rank'));
                     $errors->add("The ".$q->param('child_spelling_rank')." '$childSpellingName' doesn't exist in our database.  If this isn't a typo, hit submit again to automatically create a new database record for it");	
                 }
             } elsif (scalar(@spellings) == 1) {
