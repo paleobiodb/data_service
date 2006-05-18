@@ -932,12 +932,12 @@ END_OF_MESSAGE
         # Compose final SQL
         if (@matchedOccs) {
             my $sql = "UPDATE occurrences SET modified=modified,taxon_no=$taxon_no WHERE occurrence_no IN (".join(",",@matchedOccs).")";
-            print "$sql\n";
+            main::dbg("Updating matched occs:".$sql);
             $dbh->do($sql);
         }
         if (@matchedReids) {
             my $sql = "UPDATE reidentifications SET modified=modified,taxon_no=$taxon_no WHERE reid_no IN (".join(",",@matchedReids).")";
-            print "$sql\n";
+            main::dbg("Updating matched reids:".$sql);
             $dbh->do($sql);
         }
     }
