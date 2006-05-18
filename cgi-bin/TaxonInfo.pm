@@ -86,40 +86,24 @@ sub checkTaxonInfo {
         # now deal with results:
         if(scalar @results < 1 ){
             # If nothing from authorities, go to occs + reids
-            my ($genus,$species) = split(/ /,$q->param('taxon_name'));
+            my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($q->param('taxon_name'));
             my $where = "WHERE genus_name LIKE ".$dbh->quote($genus);
+            if ($subgenus) {
+                $where .= " AND subgenus_name LIKE ".$dbh->quote($subgenus);
+            }
             if ($species) {
                 $where .= " AND species_name LIKE ".$dbh->quote($species);
             }
             $sql = "(SELECT genus_name FROM occurrences $where GROUP BY genus_name)".
                    " UNION ".
                    "(SELECT genus_name FROM reidentifications $where GROUP BY genus_name)";
-            my @genera = @{$dbt->getData($sql)};
-            if (scalar(@genera) > 1) {
-                # now create a table of choices and display that to the user
-                print "<div align=\"center\"><h2>Please select a taxon</h2><br>";
-
-                print qq|<form method="POST" action="bridge.pl">|;
-                print qq|<input type="hidden" name="action" value="checkTaxonInfo">|;
-                
-                print "<table>\n";
-                print "<tr>";
-                for(my $i=0; $i<scalar(@genera); $i++) {
-                    my $checked = ($i == 0) ? "CHECKED" : "";
-                    my $taxon_name = "$genera[$i]->{genus_name} $species";
-                    print qq|<td><input type="radio" name="taxon_name" value="$taxon_name" $checked>$taxon_name</td>|;
-                    print "</tr><tr>";
-                }
-                print "</tr>";
-                print "<tr><td align=\"center\" colspan=3><br>";
-                print "<input type=\"submit\" value=\"Get taxon info\">";
-                print "</td></tr></table></form></div>";
-            } elsif (scalar(@genera) == 1) {
-                my $taxon_name = $genera[0]->{'genus_name'};
-                if ($species) {
-                    $taxon_name .= " $species";
-                }    
-                $q->param('taxon_name'=>$taxon_name);
+            my @occs = @{$dbt->getData($sql)};
+            if (scalar(@occs) >= 1) {
+                #my $taxon_name = $genera[0]->{'genus_name'};
+                #if ($species) {
+                #    $taxon_name .= " $species";
+                #}    
+                #$q->param('taxon_name'=>$taxon_name);
                 displayTaxonInfoResults($dbt,$s,$q);
             } else {
                 # If nothing, print out an error message
@@ -183,7 +167,7 @@ sub displayTaxonInfoResults {
             $taxon_name = $correct_row->{'child_name'};
             $taxon_rank = $correct_row->{'child_rank'};
         } else {
-            my $t = getTaxon($dbt,'taxon_no'=>$taxon_no);
+            my $t = getTaxa($dbt,{'taxon_no'=>$taxon_no});
             $taxon_name = $t->{'taxon_name'};
             $taxon_rank = $t->{'taxon_rank'};
         }  
@@ -203,7 +187,7 @@ sub displayTaxonInfoResults {
         }
 	} 
 
-    my ($genus,$species) = split(/ /,$taxon_name);
+    my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
 
     my @diagnoses;
     if ($taxon_no) {
@@ -212,25 +196,8 @@ sub displayTaxonInfoResults {
 
     print "<div class=\"small\">";
     my @modules_to_display = (1,2,3,4,5,6,7,8,9,10);
-    #print "<div class=\"float_box\">";
-    #print "<p>&nbsp;</p>";
-    #my @modules_to_display = doNavBox($dbt,$q,$s,scalar(@diagnoses));
-    #print "</div>";
-
-    #print "<p>&nbsp;</p><div class=\"float_box\">";
-    #doThumbs($dbt,$in_list);
-    #print "</div>";
 
 	print "<div align=\"center\"><h2>$taxon_name</h2></div>";
-    #my %module_num_to_name = (1 => "classification",
-    #                          2 => "related taxa",
-    #                          3 => "taxonomic history",
-    #                          4 => "synonymy",
-    #                          5 => "diagnosis",
-    #                          6 => "ecology/taphonomy",
-    #                          7 => "measurements",
-    #                          8 => "map",
-    #                          9 => "age range/collections");
                                                              
 
 
@@ -313,7 +280,7 @@ sub displayTaxonInfoResults {
 		print '<div align="center"><h3>Classification</h3></div>';
         #print '<div align="center" style=\"border-bottom-width: 1px; border-bottom-color: red; border-bottom-style: solid;\">';
         print '<div align="center">';
-		print displayTaxonClassification($dbt, $genus, $species, $taxon_no);
+		print displayTaxonClassification($dbt, $taxon_no, $taxon_name);
 
         my $entered_name = $q->param('entered_name') || $q->param('taxon_name') || $taxon_name;
         my $entered_no   = $q->param('entered_no') || $q->param('taxon_no');
@@ -357,7 +324,7 @@ sub displayTaxonInfoResults {
         print '<div id="panel2" class="panel">';
 		print '<div align="center"><h3>Related taxa</h3></div>';
         print '<div align="center">';
-		print displayRelatedTaxa($dbt, $genus, $species, $taxon_no);
+		print displayRelatedTaxa($dbt, $taxon_no, $taxon_name);
         print '</div>';
         print '</div>';
         print '<script language="JavaScript" type="text/javascript"> showTabText(2); </script>';
@@ -367,7 +334,7 @@ sub displayTaxonInfoResults {
         print '<div id="panel3" class="panel">';
 		print '<div align="center"><h3>Taxonomic history</h3></div>';
         print '<div align="center">';
-        print displayTaxonSynonymy($dbt, $genus, $species, $taxon_no);
+        print displayTaxonSynonymy($dbt, $taxon_no);
         print '</div>';
         print '</div>';
         print '<script language="JavaScript" type="text/javascript"> showTabText(3); </script>';
@@ -377,7 +344,7 @@ sub displayTaxonInfoResults {
         print '<div id="panel4" class="panel">';
 		print '<div align="center"><h3>Synonymy</h3></div>';
         print '<div align="center">';
-    	print displaySynonymyList($dbt, $q, $genus, $species, $taxon_no);
+    	print displaySynonymyList($dbt, $taxon_no);
         print '</div>';
         print '</div>';
         print '<script language="JavaScript" type="text/javascript"> showTabText(4); </script>';
@@ -405,7 +372,7 @@ sub displayTaxonInfoResults {
         print '<div id="panel7" class="panel">';
 		print '<div align="center"><h3>Measurements</h3></div>';
         print '<div align="center">';
-		print displayMeasurements($dbt,$taxon_no,$genus,$species,$in_list);
+		print displayMeasurements($dbt,$taxon_no,$taxon_name,$in_list);
         print '</div>';
         print '</div>';
         print '<script language="JavaScript" type="text/javascript"> showTabText(7); </script>';
@@ -458,123 +425,21 @@ sub displayTaxonInfoResults {
         print '<script language="JavaScript" type="text/javascript"> showTabText(10); </script>';
     }
 
-
-    
-	# Go through the list
-	#foreach my $module (@$modules_to_display){
-    #    print "<div align=\"center\">";
-	#	doModules($dbt,$dbh,$q,$s,$exec_url,$module,$genus,$species,$in_list,$taxon_no,\@diagnoses);
-    #    print "</div>";
-	#	print "<hr>" unless ($module == 5 && !$are_diagnoses); 
-	#}
-	# images are last
-
     print "</div>"; # Ends div class="small" declared at start
 }
 
-sub doNavBox {
-    my $dbt = shift;
-    my $q = shift;
-    my $s = shift;
-    my $are_diagnoses = shift;
-
-    my $entered_name = $q->param('entered_name') || $q->param('taxon_name');
-    my $entered_no = $q->param('taxon_no');
-	# Write out a hidden with the 'genus_name' and 'taxon_rank' for subsequent
-	# hits to this page
-	print "<form name=\"module_nav_form\" method=\"POST\" action=\"bridge.pl\">";
-    print "<input type=hidden name=\"action\" value=\"displayTaxonInfoResults\">";
-    print "<input type=hidden name=\"taxon_name\" value=\"".$entered_name."\">";
-    print "<input type=hidden name=\"taxon_no\" value=\"".$entered_no."\">";
-	# Now, the checkboxes and submit button, 
-	my @modules_to_display = $q->param('modules');
-	my %module_num_to_name = (1 => "classification",
-							  2 => "related taxa",
-							  3 => "taxonomic history",
-							  4 => "synonymy",
-							  5 => "diagnosis",
-							  6 => "ecology/taphonomy",
-							  7 => "measurements",
-							  8 => "map",
-							  9 => "age range/collections");
-
-	# if the modules are known and the user is not a guest,
-	#  set the module preferences in the person table
-	# if the modules are not known try to pull them from the person table
-	# of course, we don't have to reset the preferences in that case
-	# JA 21.10.04
-	if ( $s->isDBMember()) {
-		if ( @modules_to_display )	{
-			my $pref = join ' ', @modules_to_display;
-			my $prefsql = "UPDATE person SET taxon_info_modules='$pref',last_action=last_action WHERE person_no='" . $s->get("enterer_no") . "'";
-			$dbt->getData($prefsql);
-		}
-		elsif ( ! @modules_to_display )	{
-			my $prefsql = "SELECT taxon_info_modules FROM person WHERE person_no=".$s->get("enterer_no");
-			my $pref = ${$dbt->getData($prefsql)}[0]->{'taxon_info_modules'};
-			@modules_to_display = split / /,$pref;
-		}
-	}
-
-	# if that didn't work, set the default
-	if ( ! @modules_to_display )	{
-		@modules_to_display = (1,2,3,4);
-	}
-	
-	# Put in order
-	@modules_to_display = sort {$a <=> $b} @modules_to_display;
-
-	# First module has the checkboxes on the side.
-    print "<div class=\"navtable\">";
-	print "<table cellspacing=0 cellpadding=0>".
-          "<tr><td valign=\"top\" align=\"center\"><div class=\"large\"><b>Display</b></div></td></tr>";
-	
-	foreach my $key (sort keys %module_num_to_name){
-        # Only display the diagnosis checkbox if any actually exist
-        if ($key == 5) {
-            if (!$are_diagnoses) {
-                print "<input type=\"hidden\" name=modules value=$key>";
-                next;
-            }
-            # If there are diagnoses, then we just print the checkbox like normal
-        } 
-	    print "<tr><td align=left valign=top nowrap>";
-		print "<input type=checkbox name=modules value=$key";
-		foreach my $checked (@modules_to_display){
-			if($key == $checked){
-				print " checked";
-				last;
-			}
-		}
-		print ">$module_num_to_name{$key}";
-        print "</td></tr>";
-	}
-
-    print "<tr><td align=\"center\"><br><input type=submit value=\"update\"></td></tr>";
-    print "</table>";
-    print "</div>";
-    print "</form>";
-
-    return @modules_to_display;
-}
-
-
 sub doThumbs {
     my ($dbt,$in_list) = @_;
+    my $images_per_row = 6;
+    my $thumbnail_size = 100;
 	my @thumbs = Images::getImageList($dbt, $in_list);
 
     if (@thumbs) {
-        my $images_per_row = 6;
-        #print "<div class=\"navtable\">";
-        #print "<table cellspacing=0 cellpadding=0>".
-        #      "<tr><td valign=\"top\" align=\"center\" class=\"large\"><b>Images</b></td></tr>";
-        #print "<tr><td><table border=0 cellspacing=8 cellpadding=0>";
         print "<table border=0 cellspacing=8 cellpadding=0>";
-
         for (my $i = 0;$i < scalar(@thumbs);$i+= $images_per_row) {
             print "<tr>";
             for( my $j = $i;$j<$i+$images_per_row;$j++) {
-                print "<td width=56>";
+                print "<td>";
                 my $thumb = $thumbs[$j];
                 if ($thumb) {
                     my $thumb_path = $thumb->{path_to_image};
@@ -585,8 +450,19 @@ sub doThumbs {
                     $width = 300 if ($width < 300);
                     $height +=  130;
                     $width += 50;
+                    my $t_width=$thumbnail_size;
+                    my $t_height=$thumbnail_size;
+                    if ($thumb->{'width'} && $thumb->{'height'}) {
+                        if ($thumb->{'width'} > $thumb->{'height'}) {
+                            $t_width = $thumbnail_size;
+                            $t_height = int($thumb->{'height'}/$thumb->{'width'}*$thumbnail_size);
+                        } else {
+                            $t_width = int($thumb->{'width'}/$thumb->{'height'}*$thumbnail_size);
+                            $t_height = $thumbnail_size;
+                        }
+                    }
                     print "<a href=\"javascript: imagePopup('bridge.pl?action=displayImage&image_no=$thumb->{image_no}&display_header=NO',$width,$height)\">";
-                    print "<img align=\"center\" src=\"$thumb_path\" border=1 vspace=3 alt=\"$caption\">";
+                    print "<img align=\"center\" src=\"$thumb_path\" border=1 vspace=3 width=$t_width height=$t_height alt=\"$caption\">";
                     print "</a>";
                 } else {
                     print "&nbsp;";
@@ -596,8 +472,6 @@ sub doThumbs {
             print "</tr>";
         }
         print "</td></tr></table>";
-        #print "</table>";
-        #print "</div>";
     } else {
         print "<i>No images are available</i>";
     }
@@ -1178,69 +1052,100 @@ sub doCollections{
 #
 # SEND IN GENUS OR HIGHER TO GENUS_NAME, ONLY SET SPECIES IF THERE'S A SPECIES.
 ##
-sub displayTaxonClassification{
-	my $dbt = shift;
+sub displayTaxonClassification {
+    my ($dbt,$orig_no,$taxon_name) = @_;
     my $dbh = $dbt->dbh;
-	my $genus = (shift or "");
-	my $species = (shift or "");
-	my $orig_no = (shift or ""); #Pass in original combination no
 
     my $output; # the html actually returned by the function
 
-    my ($child_spelling_no,$taxon_no,$taxon_name,$taxon_rank,$genus_no,$append_species);
+    # These variables will reflect the name as currently used
+    my ($taxon_no,$taxon_rank) = (0,"");
+    # the classification variables refer to the taxa derived from the taxon_no we're using for classification
+    # purposes.  If we found an exact match in the authorities table this classification_no wil
+    # be the same as the original combination taxon_no for an authority. If we passed in a Genus+species
+    # type combo but only the genus is in the authorities table, the classification_no will refer
+    # to the genus
+    my ($classification_no,$classification_name);
+
     if ($orig_no) {
         my $correct_row = getMostRecentParentOpinion($dbt,$orig_no,1);
         # First, find the rank, name, of the focal taxon
         if ($correct_row) {
-            $child_spelling_no = $correct_row->{'child_spelling_no'};    
+            $taxon_no = $correct_row->{'child_spelling_no'};    
             $taxon_name = $correct_row->{'child_name'};    
             $taxon_rank = $correct_row->{'child_rank'};    
         } else {
-            my $t = getTaxon($dbt,'taxon_no'=>$orig_no);
-            $child_spelling_no = $t->{'taxon_no'};
+            my $t = getTaxa($dbt,{'taxon_no'=>$orig_no});
+            $taxon_no = $t->{'taxon_no'};
             $taxon_name = $t->{'taxon_name'};    
             $taxon_rank = $t->{'taxon_rank'};    
         }
-        if (!$genus) {
-            ($genus,$species) = split(/ /,$taxon_name);
-        }
-    } elsif ($genus && $species) {
-        # Theres one case where we might want to do upward classification when theres no taxon_no:
+        $classification_no = $orig_no;
+        $classification_name = $taxon_name;
+        
+    } else {
+        # Theres are some case where we might want to do upward classification when theres no taxon_no:
         #  The Genus+species isn't in authorities, but the genus is
-        my @results = getTaxon($dbt,'taxon_name'=>$genus);
-        if (@results == 1) {
-            $child_spelling_no = $results[0]->{'taxon_no'};
-            $taxon_name = $results[0]->{'taxon_name'};    
-            $taxon_rank = $results[0]->{'taxon_rank'};    
-            $genus_no=$results[0]->{'taxon_no'}; 
-            $append_species=1;
+        #  The exact taxa isn't in the authorities, but something close is (i.e. the Genus+species matches 
+        #  The Subgenus+species of some taxon
+        my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
+        $classification_no = Taxon::getBestClassification($dbt,'',$genus,'',$subgenus,'',$species);
+        if ($classification_no) {
+            my $taxon = getTaxa($dbt,{'taxon_no'=>$classification_no});
+            $classification_name = $taxon->{'taxon_name'};
         }
     }
+   
+    my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
+    my ($c_genus,$c_subgenus,$c_species,$c_subspecies) = Taxon::splitTaxon($classification_name);
 
-    #
+
     # Do the classification
-    #
-    #my ($taxon_no,$taxon_rank,$taxon_name,$child_spelling_no);
     my @table_rows = ();
-    if ($orig_no || $genus_no) {
-        # format of table_rows: taxon_rank,taxon_name,taxon_no(original combination),taxon_no(recombination, if recombined)
-        # This will happen if the genus has a taxon_no but not the species
-        if ($append_species) {
-            push @table_rows, ['species',"$genus $species",0,0];
-        }
-
-        # Is the classification based on the taxon itself, or is a species thats classified using the genus?
-        my $classify_no = ($orig_no) ? $orig_no : $genus_no;
-        push @table_rows, [$taxon_rank,$taxon_name,$classify_no,$child_spelling_no];
-
+    if ($classification_no) {
         # Now find the rank,name, and publication of all its parents
-        my $parent_hash = TaxaCache::getParents($dbt,[$classify_no],'array_full');
-        my @parent_array = @{$parent_hash->{$classify_no}}; 
+        my $orig_classification_no = getOriginalCombination($dbt,$classification_no);
+        my $parent_hash = TaxaCache::getParents($dbt,[$orig_classification_no],'array_full');
+        my @parent_array = @{$parent_hash->{$orig_classification_no}}; 
+        
         if (@parent_array) {
+            my ($subspecies_no,$species_no,$subgenus_no,$genus_no) = (0,0,0,0);
+            # Set for focal taxon
+            $subspecies_no = $taxon_no if ($taxon_rank eq 'subspecies');
+            $species_no = $taxon_no if ($taxon_rank eq 'species');
+            $subgenus_no = $taxon_no if ($taxon_rank eq 'subgenus');
+            $genus_no = $taxon_no if ($taxon_rank eq 'genus');
             foreach my $row (@parent_array) {
-                my $orig_no = getOriginalCombination($dbt,$row->{'taxon_no'});
-                push (@table_rows,[$row->{'taxon_rank'},$row->{'taxon_name'},$orig_no,$row->{'taxon_no'}]);
+                # Set for all possible higher taxa
+                # Handle species/genus separately below.  The reason for this is the "loose" classification that
+                # the PBDB does.  Taxon::getBestClassification will find a proximate match if we can't
+                # find an exact match in the database.  Because of this, some of the lower level names
+                # (genus,subgenus,species,subspecies) may not match up exactly from what the user entered
+                $subspecies_no = $row->{'taxon_no'} if ($row->{'taxon_rank'} eq 'subspecies');
+                $species_no = $row->{'taxon_no'} if ($row->{'taxon_rank'} eq 'species');
+                $subgenus_no = $row->{'taxon_no'} if ($row->{'taxon_rank'} eq 'subgenus');
+                $genus_no = $row->{'taxon_no'} if ($row->{'taxon_rank'} eq 'genus');
+             
+                if ($row->{'taxon_rank'} !~ /species|genus/) {
+                    push (@table_rows,[$row->{'taxon_rank'},$row->{'taxon_name'},$row->{'taxon_name'},$row->{'taxon_no'}]);
+                }
                 last if ($row->{'taxon_rank'} eq 'kingdom');
+            }
+            if ($genus) {
+                unshift @table_rows, ['genus',$genus,$genus,$genus_no];
+            }
+            if ($subgenus) {
+                unshift @table_rows, ['subgenus',"$genus ($subgenus)",$subgenus,$subgenus_no];
+            }
+            if ($species) {
+                my $species_name = "$genus $species";
+                if ($subgenus) {
+                    $species_name = "$genus ($subgenus) $species";
+                } 
+                unshift @table_rows, ['species',"$species_name",$species,$species_no];
+            }
+            if ($subspecies) {
+                unshift @table_rows, ['subspecies',"$taxon_name",$subspecies,$subspecies_no];
             }
 
             #
@@ -1251,11 +1156,7 @@ sub displayTaxonClassification{
             for(my $i = scalar(@table_rows)-1;$i>=0;$i--) {
                 $class = $class eq '' ? 'class="darkList"' : '';
                 $output .= "<tr $class>";
-                my($taxon_rank,$taxon_name,$taxon_no,$child_spelling_no) = @{$table_rows[$i]};
-                if ($taxon_rank =~ /species/) {
-                    my @taxon_name = split(/\s+/,$taxon_name);
-                    $taxon_name = $taxon_name[-1];
-                }
+                my($taxon_rank,$taxon_name,$show_name,$taxon_no) = @{$table_rows[$i]};
                 my %auth_yr;
                 if ($taxon_no) {
                     %auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$taxon_no)}
@@ -1264,18 +1165,15 @@ sub displayTaxonClassification{
                 if ($auth_yr{'ref_is_authority'} =~ /yes/i) {
                     $pub_info = "<a href=\"bridge.pl?action=displayRefResults&type=view&reference_no=$auth_yr{reference_no}\">$pub_info</a>";
                 }
-                if ($child_spelling_no != $taxon_no) {
+                my $orig_no = getOriginalCombination($dbt,$taxon_no);
+                if ($orig_no != $taxon_no) {
                     $pub_info = "(".$pub_info.")" if $pub_info !~ /^\s*$/;
                 } 
                 my $link;
                 if ($taxon_no) {
-                    #if ($species !~ /^sp(\.)*$|^indet(\.)*$/) 
-                    $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_no=$taxon_no">$taxon_name</a>|;
+                    $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_no=$taxon_no">$show_name</a>|;
                 } else {
-                    my $show_rank = ($taxon_rank eq 'species') ? 'Genus and species' : 
-                                    ($taxon_rank eq 'genus')   ? 'Genus' : 
-                                                                 'Higher taxon'; 
-                    $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$table_rows[$i][1]&taxon_rank=$show_rank">$taxon_name</a>|;
+                    $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name">$show_name</a>|;
                 }
                 $output .= qq|<td align="center">$taxon_rank</td>|.
                            qq|<td align="center">$link</td>|.
@@ -1283,6 +1181,12 @@ sub displayTaxonClassification{
                 $output .= '</tr>';
             }
             $output .= "</table>";
+           
+            if ($classification_no != $orig_no) {
+                $output .= "<div class=\"warning\" style=\"width: 600px;\">";
+                $output .= "A formal classification for '$taxon_name' could not be found.  An approximate match to '$classification_name' was used to create this classification.";
+                $output .= "</div>";
+            }
         } else {
             $output .= "<i>No classification data are available</i>";
         }
@@ -1297,9 +1201,9 @@ sub displayTaxonClassification{
 sub displayRelatedTaxa {
 	my $dbt = shift;
     my $dbh = $dbt->dbh;
-	my $genus = (shift or "");
-	my $species = (shift or "");
 	my $orig_no = (shift or ""); #Pass in original combination no
+    my $taxon_name = shift;
+    my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
 
     my $output = "";
 
@@ -1308,14 +1212,13 @@ sub displayRelatedTaxa {
     # PS 01/20/2004 - rewrite: Use getChildren function
     # First get the children
     #
-    my $focal_taxon_no   = $orig_no;
+    my $focal_taxon_no = $orig_no;
     my ($focal_taxon_rank,$parent_taxon_no);
-    if ($orig_no) {
-        my $taxon = getTaxon($dbt,'taxon_no'=>$orig_no);
+    $focal_taxon_rank = Taxon::guessTaxonRank($taxon_name);
+    if (!$focal_taxon_rank && $orig_no) {
+        my $taxon = getTaxa($dbt,{'taxon_no'=>$orig_no});
         $focal_taxon_rank = $taxon->{'taxon_rank'};
-    } elsif ($genus && $species) {
-        $focal_taxon_rank = 'species';
-    }
+    } 
 
     if ($orig_no) {
         my $parent = TaxaCache::getParent($dbt,$orig_no);
@@ -1323,9 +1226,19 @@ sub displayRelatedTaxa {
             $parent_taxon_no = $parent->{'taxon_no'};
         }
     } else {
-        my @genus_nos = getTaxonNos($dbt,$genus,'genus');
-        if ($genus && scalar(@genus_nos) <= 1) {
-            $parent_taxon_no=$genus_nos[0];
+        my @bits = split(/ /,$taxon_name);
+        pop @bits;
+        my $taxon_parent = join(" ",@bits);
+        my @parents = ();
+        my $taxon_parent_rank = "";
+        if ($taxon_parent) {
+            $taxon_parent_rank = Taxon::guessTaxonRank($taxon_parent);
+            $taxon_parent_rank = 'genus' if (!$taxon_parent_rank);
+            @parents = getTaxa($dbt,{'taxon_name'=>$taxon_parent,'taxon_rank'=>$taxon_parent_rank});
+        }
+       
+        if ($taxon_parent && scalar(@parents) <= 1) {
+            $parent_taxon_no=getOriginalCombination($dbt,$parents[0]->{'taxon_no'});
         }
     }
 
@@ -1377,30 +1290,58 @@ sub displayRelatedTaxa {
         }
     }
     # This generates links if all we have is occurrences records
-    my @genus_nos = getTaxonNos($dbt,$genus,'genus');
     my (@possible_sister_taxa_links,@possible_child_taxa_links);
-    if ($genus && scalar(@genus_nos) <= 1) {
+    if ($taxon_name) {
         my ($sql,$whereClause,@results);
-        my $genus_sql = $dbh->quote($genus);
-        my ($occ_genus_no_sql,$reid_genus_no_sql);
-        $occ_genus_no_sql = " OR o.taxon_no=$genus_nos[0]" if (@genus_nos);
-        $reid_genus_no_sql = " OR re.taxon_no=$genus_nos[0]" if (@genus_nos);
-        $sql  = "(SELECT o.genus_name,o.species_name FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE re.reid_no IS NULL AND o.genus_name like $genus_sql AND o.genus_reso NOT LIKE '%informal%' and o.species_reso NOT LIKE '%informal%' AND (o.taxon_no=0 OR o.taxon_no IS NULL $occ_genus_no_sql))";
-        $sql .= " UNION ";
-        $sql .= "(SELECT re.genus_name,re.species_name FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND re.most_recent='YES' AND re.genus_name like $genus_sql AND re.genus_reso NOT LIKE '%informal%' and re.species_reso NOT LIKE '%informal%' AND (re.taxon_no=0 OR re.taxon_no IS NULL $reid_genus_no_sql))"; 
-        $sql .= "ORDER BY genus_name,species_name";
-        main::dbg("Get from occ table: $sql");
-        @results = @{$dbt->getData($sql)};
-        foreach my $row (@results) {
-            next if ($row->{'species_name'} =~ /^sp(p)*\.|^indet\.|s\.\s*l\./);
-            if ($species) {
-                if ($species ne $row->{'species_name'}) {
-                    my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$row->{genus_name} $row->{species_name}">$row->{genus_name} $row->{species_name}</a>|;
-                    push @possible_sister_taxa_links, $link;
+        my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
+        my @names = ();
+        if ($genus) {
+            push @names, $dbh->quote($genus);
+        }
+        if ($subgenus) {
+            push @names, $dbh->quote($subgenus);
+        }
+        if (@names) {
+            my $genus_sql = "a.genus_name IN (".join(",",@names).")";
+            my $subgenus_sql = " a.subgenus_name  IN (".join(",",@names).")";
+            my ($occ_genus_no_sql,$reid_genus_no_sql) = ("","");
+            #$occ_genus_no_sql = " OR a.taxon_no=$parents[0]->{taxon_no}" if (@parents);
+            #$reid_genus_no_sql = " OR a.taxon_no=$parents[0]->{taxon_no}" if (@parents);
+            # Note that the table aliased to "a" and "b" is switched up.  The table we want to dislay names for and do matches
+            # against is "a" and the non-important table is "b"
+            my $sql  = "(SELECT a.genus_name,a.subgenus_name,a.species_name,c.taxon_name FROM occurrences a LEFT JOIN reidentifications b ON a.occurrence_no=b.occurrence_no LEFT JOIN authorities c ON a.taxon_no=c.taxon_no WHERE b.reid_no IS NULL AND $genus_sql AND (a.species_reso IS NOT NULL AND a.species_reso NOT LIKE '%informal%'))";
+            $sql .= " UNION ";
+            $sql .= "(SELECT a.genus_name,a.subgenus_name,a.species_name,c.taxon_name FROM occurrences b, reidentifications a LEFT JOIN authorities c ON a.taxon_no=c.taxon_no WHERE a.occurrence_no=b.occurrence_no AND a.most_recent='YES' AND $genus_sql AND (a.species_reso IS NOT NULL AND a.species_reso NOT LIKE '%informal%'))";
+            $sql .= " UNION ";
+            $sql .= "(SELECT a.genus_name,a.subgenus_name,a.species_name,c.taxon_name FROM occurrences a LEFT JOIN reidentifications b ON a.occurrence_no=b.occurrence_no LEFT JOIN authorities c ON a.taxon_no=c.taxon_no WHERE b.reid_no IS NULL AND $subgenus_sql AND (a.species_reso IS NOT NULL AND a.species_reso NOT LIKE '%informal%'))";
+            $sql .= " UNION ";
+            $sql .= "(SELECT a.genus_name,a.subgenus_name,a.species_name,c.taxon_name FROM occurrences b, reidentifications a LEFT JOIN authorities c ON a.taxon_no=c.taxon_no WHERE a.occurrence_no=b.occurrence_no AND a.most_recent='YES' AND $subgenus_sql AND (a.species_reso IS NOT NULL AND a.species_reso NOT LIKE '%informal%'))";
+            $sql .= " ORDER BY genus_name,subgenus_name,species_name";
+            main::dbg("Get from occ table: $sql");
+            @results = @{$dbt->getData($sql)};
+            foreach my $row (@results) {
+                next if ($row->{'species_name'} =~ /^sp(p)*\.|^indet\.|s\.\s*l\./);
+                my ($g,$sg,$sp) = Taxon::splitTaxon($row->{'taxon_name'});
+                my $match_level = 0;
+                if ($row->{'taxon_name'}) {
+                    $match_level = Taxon::computeMatchLevel($row->{'genus_name'},$row->{'subgenus_name'},$row->{'species_name'},$g,$sg,$sp);
                 }
-            } else {
-                my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$row->{genus_name} $row->{species_name}">$row->{genus_name} $row->{species_name}</a>|;
-                push @possible_child_taxa_links, $link;
+                if ($match_level < 20) { # For occs with only a genus level match, or worse
+                    my $occ_name = $row->{'genus_name'};
+                    if ($row->{'subgenus'}) {
+                        $occ_name .= " ($row->{subgenus})";
+                    }
+                    $occ_name .= " ".$row->{'species_name'};
+                    if ($species) {
+                        if ($species ne $row->{'species_name'}) {
+                            my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$occ_name">$occ_name</a>|;
+                            push @possible_sister_taxa_links, $link;
+                        }
+                    } else {
+                        my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$occ_name">$occ_name</a>|;
+                        push @possible_child_taxa_links, $link;
+                    }
+                }
             }
         }
     }
@@ -1446,14 +1387,12 @@ sub displayRelatedTaxa {
 # Handle the 'Taxonomic history' section
 sub displayTaxonSynonymy {
 	my $dbt = shift;
-	my $genus = (shift or "");
-	my $species = (shift or "");
 	my $taxon_no = (shift or "");
 	
 	my $output = "";  # html output...
 	
 	unless($taxon_no) {
-		return "<i>No taxonomic history is available for $genus $species.</i>";
+		return "<i>No taxonomic history is available</i>";
 	}
 
     # Surrounding able prevents display bug in firefox
@@ -1463,8 +1402,7 @@ sub displayTaxonSynonymy {
 	# Select all parents of the original combination whose status' are
 	# either 'recombined as,' 'corrected as,' or 'rank changed as'
 	my $sql = "SELECT DISTINCT(child_spelling_no), status FROM opinions ".
-		   "WHERE child_no=$original_combination_no ".	
-		   "AND (status='recombined as' OR status='corrected as' OR status='rank changed as')";
+		   "WHERE child_no=$original_combination_no ";
 	my @results = @{$dbt->getData($sql)};
 
 	# Combine parent numbers from above for the next select below. If nothing
@@ -1526,11 +1464,14 @@ sub getSynonymyParagraph{
 	my $dbt = shift;
 	my $taxon_no = shift;
 	
-	my %synmap = ( 'recombined as' => 'recombined as ',
+	my %synmap1 = ('original spelling' => 'revalidated',
+                   'recombination' => 'recombined as ',
+				   'correction' => 'corrected as ',
+				   'rank change' => 'reranked as ',
+				   'reassigment' => 'reassigned as ');
+                   
+	my %synmap2 = ('belongs to' => 'revalidated ',
 				   'replaced by' => 'replaced with ',
-				   'corrected as' => 'corrected as ',
-				   'rank changed as' => 'changed to another rank and altered to ',
-				   'belongs to' => 'revalidated ',
 				   'nomen dubium' => 'considered a nomen dubium ',
 				   'nomen nudum' => 'considered a nomen nudum ',
 				   'nomen vanum' => 'considered a nomen vanum ',
@@ -1575,7 +1516,7 @@ sub getSynonymyParagraph{
 	# Get all things this taxon as been. Note we don't use ref_has_opinion but rather the 
     # pubyr cause of a number of broken records (ref_has_opinion is blank, but no pub info)
     # Transparently insert in the right pubyr and sort by it
-    $sql = "(SELECT o.status,o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, ".
+    $sql = "(SELECT o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, ".
            " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.pubyr,r.pubyr) pubyr,".
            " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.author1last,r.author1last) author1last,".
            " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.author2last,r.author2last) author2last,".
@@ -1593,14 +1534,7 @@ sub getSynonymyParagraph{
 	# If something
 	foreach my $row (@results){
 		# put all syn's referring to the same taxon_name together
-        if ($row->{'status'} =~ /corrected|rank changed|recombined/) {
-            if (!exists $rc_group_index{$row->{'child_spelling_no'}}) {
-                $rc_group_index{$row->{'child_spelling_no'}} = scalar(@syns);
-            }
-            my $index = $rc_group_index{$row->{'child_spelling_no'}};
-            push @{$syns[$index]},$row;
-            $list_revalidations = 1;
-        } elsif ($row->{'status'} =~ /synonym|homonym|replaced/) {
+        if ($row->{'status'} =~ /synonym|homonym|replaced/) {
             if (!exists $syn_group_index{$row->{'parent_spelling_no'}}) {
                 $syn_group_index{$row->{'parent_spelling_no'}} = scalar(@syns);
             }
@@ -1620,7 +1554,14 @@ sub getSynonymyParagraph{
             }
             push @{$nomens[$index]},$row;
             $list_revalidations = 1;
-        } elsif ($row->{'status'} =~ /belongs/ && $list_revalidations) {    
+        } elsif ($row->{'status'} =~ /corr|rank|recomb/ || $row->{'spelling_reason'} =~ /^corr|^rank|^recomb|^reass/) {
+            if (!exists $rc_group_index{$row->{'child_spelling_no'}}) {
+                $rc_group_index{$row->{'child_spelling_no'}} = scalar(@syns);
+            }
+            my $index = $rc_group_index{$row->{'child_spelling_no'}};
+            push @{$syns[$index]},$row;
+            $list_revalidations = 1;
+        } elsif (($row->{'status'} =~ /belongs/ && $list_revalidations && $row->{'spelling_reason'} !~ /^recomb|^corr|^rank|^reass/)) {
             # Belongs to's are only considered revalidations if they come
             # after a recombined as, synonym, or nomen *
             my $index;
@@ -1657,15 +1598,30 @@ sub getSynonymyParagraph{
 	# Each parent number is a hash key whose value is an array ref of records.
     foreach my $group (@synonyms) {
         my $first_row = ${$group}[0];
-		$text .= "; it was ".$synmap{$first_row->{'status'}};
-        if ($first_row->{'status'} !~ /belongs|nomen/) {
-            if ($first_row->{'status'} =~ /corrected|recombined|rank/) {
-                $taxon_no = $first_row->{'child_spelling_no'};
-            } elsif ($first_row->{'status'} =~ /synonym|replaced|homonym/) {
+        if ($first_row->{'status'} =~ /belongs/) {
+            if ($first_row->{'spelling_reason'} eq 'rank change') {
+                my $child = getTaxa($dbt,{'taxon_no'=>$first_row->{'child_no'}});
+                my $spelling = getTaxa($dbt,{'taxon_no'=>$first_row->{'child_spelling_no'}});
+                if ($child->{'taxon_rank'} =~ /genus/) {
+		            $text .= "; it was reranked as ";
+                } else {
+                    $text .= "; it was reranked as the $spelling->{taxon_rank} ";
+                }
+            } else {
+		        $text .= "; it was ".$synmap1{$first_row->{'spelling_reason'}};
+            }
+        } else {
+		    $text .= "; it was ".$synmap2{$first_row->{'status'}};
+        }
+        if ($first_row->{'status'} !~ /nomen/) {
+            my $taxon_no;
+            if ($first_row->{'status'} =~ /synonym|replaced|homonym/) {
                 $taxon_no = $first_row->{'parent_spelling_no'};
+            } elsif ($first_row->{'spelling_reason'} =~ /correct|recomb|rank|reass/) {
+                $taxon_no = $first_row->{'child_spelling_no'};
             }
             if ($taxon_no) {
-                my $taxon = getTaxon($dbt,'taxon_no'=>$taxon_no);
+                my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no});
 			    $text .= "<i>".$taxon->{'taxon_name'}."</i>";
             }
         }
@@ -1742,7 +1698,7 @@ sub getMostRecentParentOpinion {
     # All values of the enum classification_quality get recast as integers for easy sorting
     # Lowest should appear at top of list (authoritative) and highest at bottom (compendium) so sort ASC
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
-    my $sql = "(SELECT ${child_fields}o.child_no, o.child_spelling_no, o.status, o.parent_no, o.parent_spelling_no, o.opinion_no, "
+    my $sql = "(SELECT ${child_fields}o.child_no, o.child_spelling_no, o.status, o.spelling_reason, o.parent_no, o.parent_spelling_no, o.opinion_no, "
             . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr,"
             . " (IF(r.reference_no = 6930,0," # is compendium, then 0 (lowest priority)
             .   "IF(r.classification_quality = 'second hand',1," # else if second hand, next lowest
@@ -1881,13 +1837,13 @@ sub displayEcology	{
 
 # PS 6/27/2005
 sub displayMeasurements {
-    my ($dbt,$taxon_no,$genus,$species,$in_list) = @_;
+    my ($dbt,$taxon_no,$taxon_name,$in_list) = @_;
 
     # Specimen level data:
     my @specimens;
     my $specimen_count;
     if ($taxon_no) {
-        my $t = getTaxon($dbt,'taxon_no'=>$taxon_no);
+        my $t = getTaxa($dbt,{'taxon_no'=>$taxon_no});
         if ($t->{'taxon_rank'} =~ /genus|species/) {
             # If the rank is genus or lower we want the big aggregate list of all taxa
             @specimens = Measurement::getMeasurements($dbt,'taxon_list'=>$in_list,'get_global_specimens'=>1);
@@ -1898,7 +1854,7 @@ sub displayMeasurements {
             # get alternate spellings of focal taxon. 
             my @syns = getJuniorSynonyms($dbt,$taxon_no); 
             push @syns,$taxon_no;
-            my $sql = "SELECT child_spelling_no FROM opinions WHERE status IN ('recombined as','corrected as','rank changed as') AND child_no IN (".join(",",@syns).")";
+            my $sql = "SELECT child_spelling_no FROM opinions WHERE child_no IN (".join(",",@syns).")";
             my @results = @{$dbt->getData($sql)};
 
             # Use the hash to get only unique taxon_nos
@@ -1912,10 +1868,6 @@ sub displayMeasurements {
             @specimens = Measurement::getMeasurements($dbt,'taxon_list'=>\@small_in_list,'get_global_specimens'=>1);
         }
     } else {
-        my $taxon_name = $genus;
-        if ($species) {
-            $taxon_name .= " ".$species;
-        }
         @specimens = Measurement::getMeasurements($dbt,'taxon_name'=>$taxon_name,'get_global_specimens'=>1);
     }
 
@@ -1994,21 +1946,9 @@ sub displayDiagnoses {
 # JA 11-12,14.9.03
 sub displaySynonymyList	{
 	my $dbt = shift;
-	my $q = shift;
-	my $genus = (shift or "");
-	my $species = (shift or "");
     # taxon_no must be an original combination
 	my $taxon_no = (shift or "");
-	my $taxon_name;
 	my $output = "";
-
-
-	if ( $genus && $species ne "" )	{
-		$taxon_name = $genus . " " . $species;
-	}
-	else{
-		$taxon_name = $genus;
-	}
 
     unless ($taxon_no) {
         return "<i>No synonymy data are available</i>";
@@ -2026,7 +1966,7 @@ sub displaySynonymyList	{
     # don't do this if the parent is actually the focal taxon
 	my @synparents;
 	foreach my $syn (@syns)	{
-		my $sql = "SELECT child_spelling_no FROM opinions WHERE status IN ('recombined as','rank changed as','corrected as') AND child_no=" . $syn . " AND child_spelling_no != " . $taxon_no;
+		my $sql = "SELECT child_spelling_no FROM opinions WHERE child_no=" . $syn . " AND child_spelling_no != " . $taxon_no;
 		my @synparentrefs = @{$dbt->getData($sql)};
 		foreach my $synparentref ( @synparentrefs )	{
 			push @synparents, $synparentref->{'child_spelling_no'};
@@ -2052,7 +1992,7 @@ sub displaySynonymyList	{
 		$sql .= "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE child_spelling_no=$syn AND status IN ('belongs to','recombined as','rank changed as','corrected as'))";
 		my @userefs =  @{$dbt->getData($sql)};
 
-        my $parent = getTaxon($dbt,'taxon_no'=>$syn);
+        my $parent = getTaxa($dbt,{'taxon_no'=>$syn});
 
 		my $parent_name = $parent->{'taxon_name'};
 		my $parent_rank = $parent->{'taxon_rank'};
@@ -2108,7 +2048,7 @@ sub displaySynonymyList	{
 # authorities, not recomined authorities, which are just duplicates of the original
     my %isoriginal;
 	foreach my $syn (@syns)	{
-		my $sql = "SELECT count(*) AS c FROM opinions WHERE child_spelling_no=$syn AND status IN ('recombined as','rank changed as','corrected as')";
+		my $sql = "SELECT count(*) AS c FROM opinions WHERE child_spelling_no=$syn AND child_no != child_spelling_no";
 		my $timesrecombined = ${$dbt->getData($sql)}[0]->{c};
 		if ( ! $timesrecombined )	{
 			$isoriginal{$syn} = "YES";
@@ -2203,52 +2143,146 @@ sub getTaxonNos {
     return @taxon_nos;
 }
 
-# Small utility function, added 04/26/2005
-# pass it a hash of options
+# Now a large centralized function, PS 5/3/2006
+# @taxa_rows = getTaxa($dbt,\%options,\@fields)
+# Pass it a $dbt object first, a hashref of options, an arrayref of fields. See examples.
+# arrayref of fields is optional, default fields returned at taxon_no,taxon_name,taxon_rank
+# arrayref of fields can all be values ['*'] and ['all'] to get all fields. Note that is fields
+# requested are any of the pubyr or author fields (author1init, etc) then this function will
+# do a join with the references table automatically and pull the data from the ref if it is the
+# authority for you. So no need to hit the refs table separately afterwords; 
+#
 # Returns a array of hashrefs, like getData
-# valid hash keys: reference_no, taxon_no, taxon_name, get_reference
-# the first three should be self-explanatory.  get_reference set to 1 
-# means to include pubyr, author1, etc directly into the hashref.  this can be
-# used to distinguish between multiple records of the same name
+#
+# valid options: 
+#  reference_no - Get taxa with reference_no as their reference
+#  taxon_no - Get taxon with taxon-no
+#  taxon_name - Get all taxa with taxon_name
+#  taxon_rank - Restrict search to certain ranks
+#  authorizer_no - restrict to authorizeer
+#  match_subgenera - the taxon_name can either match the genus or subgenus.  Note taht
+#    this is very slow since it has to do a full table scan
+#  pubyr - Match the pubyr
+#  authorlast - Match against author1last, author2last, and otherauthors
+#  created - get records created before or after a date
+#  created_before_after: whether to get records created before or after the created date.  Valid values
+#  are 'before' and 'after'.  Default is 'after'
+#
 # Example usage: 
-#   @results = getTaxon($dbt,'reference_no'=>345); get all taxa attached to this ref.
-#   @results = getTaxon($dbt,'taxon_name'=>'Chelonia', 'get_reference'=>1);  get all records named chelonia, and 
-#       transparently include pub info (author1last, pubyr, etc) directly in the 
-sub getTaxon {
+#   Example 1: get all taxa attached to a reference. fields returned are taxon_no,taxon_name,taxon_rank
+#     @results = TaxonInfo::getTaxa($dbt,{'reference_no'=>345}); 
+#     my $first_taxon_name = $results[0]->{taxon_name}
+#   Example 2: get all records named chelonia, and transparently include pub info (author1last, pubyr, etc) directly in the records
+#     even if that pub. info is stored in the reference and ref_is_authority=YES
+#     @results = TaxonInfo::getTaxa($dbt,{'taxon_name'=>'Chelonia'},['taxon_name','taxon_rank','author1last','author2last','pubyr');  
+#   Example 3: get all records where the genus or subgenus is Clymene, get all fields
+#     my %options;
+#     $options{taxon_name}='Clymene';
+#     $options{match_subgenera}=1;
+#     @results = getTaxa($dbt,\%options,['*']);
+#   Example 4: get record where taxon_no is 555.  Note that we don't pass back an array, he get the (first) hash record directly
+#     $taxon = getTaxa($dbt,'taxon_no'=>555);
+
+sub getTaxa {
     my $dbt = shift;
-    my %options = @_;
+    my $options = shift;
+    my $fields = shift;
+    my $dbh = $dbt->dbh;
+
+    my $join_refs = 0;
+    my @where = ();
+    if ($options->{'taxon_no'}) {
+        push @where, "a.taxon_no=".int($options->{'taxon_no'});
+    } else {
+        if ($options->{'taxon_rank'}) {
+            push @where, "taxon_rank=".$dbh->quote($options->{'taxon_rank'});
+        }
+        if ($options->{'reference_no'}) {
+            push @where, "a.reference_no=".int($options->{'reference_no'});
+        }
+        if ($options->{'authorizer_no'}) {
+            push @where, "a.authorizer_no=".int($options->{'authorizer_no'});
+        }
+        if ($options->{'created'}) {
+            my $sign = ($options->{'created_before_after'} eq 'before') ? '<=' : '>=';
+            push @where, "a.created $sign ".$dbh->quote($options->{'created'});
+        }
+        if ($options->{'pubyr'}) {
+            my $pubyr = $dbh->quote($options->{'pubyr'});
+            push @where,"((a.ref_is_authority NOT LIKE 'YES' AND a.pubyr LIKE $pubyr) OR (a.ref_is_authority LIKE 'YES' AND r.pubyr LIKE $pubyr))";
+            $join_refs = 1;
+        }
+        if ($options->{'author'}) {
+            my $author = $dbh->quote($options->{'author'});
+            my $authorWild = $dbh->quote('%'.$options->{'author'}.'%');
+            push @where,"((a.ref_is_authority NOT LIKE 'YES' AND (a.author1last LIKE $author OR a.author2last LIKE $author OR a.otherauthors LIKE $authorWild)) OR".
+                        "(a.ref_is_authority LIKE 'YES' AND (r.author1last LIKE $author OR r.author2last LIKE $author OR r.otherauthors LIKE $authorWild)))";
+            $join_refs = 1;
+        }
+    }
+
+#    all_fields = (authorizer_no,enterer_no,modifier_no,taxon_no,reference_no,taxon_rank,taxon_name,type_taxon_no,type_specimen,extant,preservation,ref_is_authority,author1init,author1last,author2init,author2last,otherauthors,pubyr,pages,figures,comments,created,modified);
+    my @fields;
+    if ($fields) {
+        @fields = @$fields;
+        if  ($fields[0] =~ /\*|all/) {
+            @fields = ('taxon_no','reference_no','taxon_rank','taxon_name','type_taxon_no','type_specimen','extant','preservation','ref_is_authority','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments');
+        }
+        foreach my $f (@fields) {
+            if ($f =~ /^author(1|2)(last|init)$|otherauthors|pubyr$/) {
+                $f = "IF (a.ref_is_authority LIKE 'YES',r.$f,a.$f) $f";
+                $join_refs = 1;
+            } else {
+                $f = "a.$f";
+            }
+        }
+    } else {
+        @fields = ('a.taxon_no','a.taxon_name','a.taxon_rank');
+    }
+    my $base_sql = "SELECT ".join(",",@fields)." FROM authorities a";
+    if ($join_refs) {
+        $base_sql .= " LEFT JOIN refs r ON a.reference_no=r.reference_no";
+    }
 
     my @results = ();
-    if ($dbt && %options) {
-        my $sql;
-        if ($options{'get_reference'}) {
-            $sql = "SELECT a.taxon_no,a.taxon_rank,a.taxon_name,a.pages,a.figures,a.comments, ".
-                   " IF (a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,".
-                   " IF (a.ref_is_authority='YES',r.author1init,a.author1init) author1init,".
-                   " IF (a.ref_is_authority='YES',r.author1last,a.author1last) author1last,".
-                   " IF (a.ref_is_authority='YES',r.author2init,a.author2init) author2init,".
-                   " IF (a.ref_is_authority='YES',r.author2last,a.author2last) author2last,".
-                   " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors".
-                   " FROM authorities a LEFT JOIN refs r ON a.reference_no=r.reference_no";
+    if ($options->{'match_subgenera'} && $options->{'taxon_name'}) {
+        my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($options->{'taxon_name'});
+        my $species_sql = "";
+        if ($species =~ /[a-z]/) {
+            $species_sql .= " $species";
+        }
+        if ($subspecies =~ /[a-z]/) {
+            $species_sql .= " $subspecies";
+        }
+        my $taxon1_sql = "taxon_name LIKE '$options->{taxon_name}'";
+        
+        my $sql = "($base_sql WHERE ".join(" AND ",@where,$taxon1_sql).")";
+        if ($subgenus) {
+            # Only exact matches for now, may have to rethink this
+            #my $taxon3_sql = "taxon_name LIKE '$subgenus (%)$species_sql'";
+            #my $taxon4_sql = "taxon_name LIKE '% ($subgenus)$species_sql'";
+            #$sql .= "($base_sql WHERE ".join(" AND ",@where,$taxon3_sql).")";
+            #$sql .= " UNION ";
+            #$sql .= "($base_sql WHERE ".join(" AND ",@where,$taxon4_sql).")";
         } else {
-            $sql = "SELECT * FROM authorities a";
+            $sql .= " UNION ";
+            my $taxon2_sql = "taxon_name LIKE '% ($genus)$species_sql'";
+            $sql .= "($base_sql WHERE ".join(" AND ",@where,$taxon2_sql).")";
         }
-        my @terms = ();
-        if ($options{'taxon_no'}) {
-            push @terms, 'a.taxon_no='.$dbt->dbh->quote($options{'taxon_no'});
+        #print $sql,"\n";
+        @results = @{$dbt->getData($sql)};
+    } else {
+        if ($options->{'taxon_name'}) {
+            push @where,"a.taxon_name LIKE ".$dbh->quote($options->{'taxon_name'});
         }
-        if ($options{'taxon_name'}) {
-            push @terms, 'a.taxon_name like '.$dbt->dbh->quote($options{'taxon_name'});
-        }
-        if ($options{'reference_no'}) {
-            push @terms, 'a.reference_no='.$dbt->dbh->quote($options{'reference_no'});
-        }
-        if (@terms) {
-            $sql .= " WHERE ".join(" AND ",@terms); 
-            $sql .= " ORDER BY taxon_name" if ($options{'reference_no'});
+        if (@where) {
+            my $sql = $base_sql." WHERE ".join(" AND ",@where); 
+            $sql .= " ORDER BY taxon_name" if ($options->{'reference_no'});
+            #print $sql,"\n";
             @results = @{$dbt->getData($sql)};
         }
     }
+
     if (wantarray) {
         return @results;
     } else {
@@ -2344,7 +2378,7 @@ sub getAllTaxonomicNames {
 #  is_synonym: boolean denoting whether this is a 
 #  taxon_name: spelling_name for the opinion fo rwhich the diagnosis exists
 # Example usage:
-#   $taxon = getTaxon($dbt,'Calippus');
+#   $taxon = getTaxa($dbt,{'taxon_name'=>'Calippus'});
 #   @diagnoses = getDiagnoses($dbt,$taxon->{taxon_no});
 #   foreach $d (@diagnoses) {
 #       print "$d->{reference}: $d->{diagnosis}";
@@ -2529,7 +2563,7 @@ sub nomenChildren {
                 my $mrpo_no_nomen = ${$dbt->getData($sql)}[0];
                 if ($mrpo_no_nomen->{'parent_no'} == $row->{'parent_no'}) {
                     #print "child $row->{child_no} LAST PARENT IS PARENT $row->{parent_no} <BR>";
-                    my $taxon = getTaxon($dbt,'taxon_no'=>$row->{'child_no'});
+                    my $taxon = getTaxa($dbt,{'taxon_no'=>$row->{'child_no'}});
                     $taxon->{'status'} = $mrpo->{'status'};
                     push @{$nomen{$mrpo_no_nomen->{'parent_no'}}}, $taxon;
                 } else {
