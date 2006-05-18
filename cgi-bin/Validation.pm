@@ -119,65 +119,6 @@ sub isInteger {
 }
 
 
-# pass this a taxon name as a string,
-# and it will look at the number of spaces to determine
-# the rank.  Returns "invalid" if it's not a valid spacing..
-#
-# 0 spaces = higher
-# 1 space  = species
-# 2 spaces = subspecies
-#
-# it will return a string, either "higher", "species", "subspecies", or "invalid"
-# ** note, we can't tell the difference between a genus and a higher taxon
-# by just looking at the spacing.. so a genus name will return as "higher" as well.
-#
-# by rjp, 2/2004 
-sub taxonRank {
-	my $taxon = shift;
-
-	
-	if ($taxon =~ m/^[A-Z][a-z]+[ ][a-z]+[ ][a-z]+\n?$/) {
-		return "subspecies";	
-	}
-	
-	if ($taxon =~ m/^[A-Z][a-z]+[ ][a-z]+\n?$/) {
-		return "species";	
-	}
-
-	if ($taxon =~ m/^[A-Z][a-z]+\n?$/) {
-		return "higher";
-	}
-	
-	return "invalid";
-}
-
-# pass this a taxon name, it will return a true value if
-# it looks like a bad subgenus name.  Checks for two cases:
-# 1: two capitalized words in a row such as Equus Blahhus blah
-# 2: parenthesis anywhere in the name.
-#
-sub looksLikeBadSubgenus {
-	my $taxon = shift;
-	return (($taxon =~ m/[)(]/) || 
-			($taxon =~ m/^[A-Z][a-z]+[ ][A-Z][a-z]+/) );
-}
-
-
-
-# pass this a species or subspecies and it will
-# return the Genus by doing a simple search
-#
-# rjp, 2/2004.
-sub genusFromString {
-	my $input = shift;
-
-	$input =~ m/^(\w+)\b/;
-	
-	return $1;
-}
-
-
-
 # returns true if the input is in a proper format for a last name
 # JA: added \W meaning any letter including accented ones 17.4.04
 sub properLastName {
