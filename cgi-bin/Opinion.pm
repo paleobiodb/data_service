@@ -1,27 +1,16 @@
-#!/usr/bin/perl
-
 # created by rjp, 3/2004.
 # Represents information about a particular opinion
 
 # Reworked PS 04/30/2005 - reworked accessor methods to make sense.  Also, return undef
 # if the opinion isn't in the opinions table, since a Opinion object with a opinion_no is pointless 
 
-
-
 package Opinion;
-
 use strict;
 
-use DBI;
 use DBConnection;
 use DBTransactionManager;
-use PBDBUtil;
-use Class::Date qw(date localdate gmdate now);
-use Session;
-use Classification;
 use CGI::Carp;
 use Data::Dumper;
-use Permissions;
 use TaxaCache;
 
 # list of allowable data fields.
@@ -72,52 +61,47 @@ sub getRow {
 
 # Figure out the spelling status - tricky cause we may need to infer it
 # Something can be a 'corrected as', but the status is 'synonym of', so that info is lost
-sub getSpellingStatus {
-    my ($dbt,%fields);
-    if ($_[0]->isa('DBTransactionManager')) {
-        # If called from a functional interface
-        $dbt = $_[0];
-        %fields = %{$_[1]};
-    } else {
-        # If called from an object oriented interface
-        my $self = shift;
-        $dbt = $self->{'dbt'};
-        %fields = %{$self->getRow()};
-    }
+sub guessSpellingReason {
+    my $child = shift;
+    my $spelling = shift;
     
-    my $spelling_status = "";
+    my $spelling_reason = "";
     
-    if ($fields{'status'} =~ /belongs|recombined|rank|corrected/) {
-        $spelling_status = $fields{'status'};   
-    } elsif ($fields{'child_no'} eq $fields{'child_spelling_no'}) {
-        $spelling_status ='belongs to';
+    if ($child->{'taxon_no'} == $spelling->{'taxon_no'}) {
+        $spelling_reason ='original spelling';
     } else {
-        my $child= Taxon->new($dbt,$fields{'child_no'}); 
-        my $spelling = Taxon->new($dbt,$fields{'child_spelling_no'});
        
         # For a recombination, the upper names will always differ. If they're the same, its a correction
-        if ($child->get('taxon_rank') =~ /species/) {
-            my @childBits = split(/ /,$child->get('taxon_name'));
-            my @spellingBits= split(/ /,$spelling->get('taxon_name'));
+        if ($child->{'taxon_rank'} =~ /species|subgenus/) {
+            my @childBits = split(/ /,$child->{'taxon_name'});
+            my @spellingBits= split(/ /,$spelling->{'taxon_name'});
             pop @childBits;
             pop @spellingBits;
-            my $childName = join(' ',@childBits);
-            my $spellingName = join(' ',@spellingBits);
-            if ($childName eq $spellingName) {
+            my $childParent = join(' ',@childBits);
+            my $spellingParent = join(' ',@spellingBits);
+            if ($childParent eq $spellingParent) {
                 # If the genus/subgenus/species names are the same, its a correction
-                $spelling_status ='corrected as';
+                $spelling_reason = 'correction';
             } else {
                 # If they differ, its a bad record or its a recombination
-                $spelling_status ='recombined as';
+                if ($child->{'taxon_rank'} =~ /subgenus/) {
+                    if ($child->{'taxon_rank'} ne $spelling->{'taxon_rank'}) {
+                        $spelling_reason = 'rank change';
+                    } else {
+                        $spelling_reason = 'reassignment';
+                    } 
+                } else {
+                    $spelling_reason = 'recombination';
+                } 
             }
-        } elsif ($child->get('taxon_rank') ne $spelling->get('taxon_rank')) {
-            $spelling_status = 'rank changed as';
+        } elsif ($child->{'taxon_rank'} ne $spelling->{'taxon_rank'}) {
+            $spelling_reason = 'rank change';
         } else {
-            $spelling_status = 'corrected as';
+            $spelling_reason = 'correction';
         }
     }
-    main::dbg("Get spelling status called, return $spelling_status");
-    return $spelling_status;
+    main::dbg("Get spelling status called, return $spelling_reason");
+    return $spelling_reason;
 }
 
 # Small utility function, added 04/26/2005 PS
@@ -131,11 +115,8 @@ sub getOpinion {
         @results = @{$dbt->getData($sql)};
     }
 
-
     return @results;
 }
-
-
 
 
 # returns the authors of the opinion record
@@ -199,43 +180,93 @@ sub pubyr {
 sub formatAsHTML {
 	my Opinion $self = shift;
 	my $row = $self->{'DBrow'};
+    my $dbt = $self->{'dbt'};
 	
-	my $status = $row->{'status'};
-	my $statusPhrase = $row->{'status'};
-	
-	if (($status eq 'subjective synonym of') || 
-		($status eq 'objective synonym of') || 
-		($status eq 'homonym of') || 
-		($status =~ m/nomen/)) {
-			$statusPhrase = "is a $status";
-	}
+    my $output = "";
 
-    my ($child,$parent,$spelling);
-    if ($status =~ /recombined|corrected|rank/) {
-	    $child = Taxon->new($self->{'dbt'},$row->{'child_no'});
-    } else {
-	    $child = Taxon->new($self->{'dbt'},$row->{'child_spelling_no'});
-    }
-    my $child_html = ($child) ? $child->taxonNameHTML() : "";
-	if ($status =~ m/nomen/ || $status eq 'revalidated') {
-		return "'$child_html $statusPhrase' according to " . $self->authors() ;
-	} else {
-        if ($status =~ /corrected|rank/) {
-            $parent = Taxon->new($self->{'dbt'},$row->{'parent_spelling_no'});
-            my $parent_html = ($parent) ? $parent->taxonNameHTML() : "";
-            $spelling = Taxon->new($self->{'dbt'},$row->{'child_spelling_no'});
-            my $spelling_html = ($spelling) ? $spelling->taxonNameHTML() : "";
-		    return "'$child_html $statusPhrase $spelling_html and belongs to $parent_html' according to " . $self->authors();
-        } elsif ($status =~ /recombined/) {
-            $spelling = Taxon->new($self->{'dbt'},$row->{'child_spelling_no'});
-            my $spelling_html = ($spelling) ? $spelling->taxonNameHTML() : "";
-		    return "'$child_html $statusPhrase $spelling_html' according to " . $self->authors();
-        } else {
-            $parent = Taxon->new($self->{'dbt'},$row->{'parent_spelling_no'});
-            my $parent_html = ($parent) ? $parent->taxonNameHTML() : "";
-		    return "'$child_html $statusPhrase $parent_html' according to " . $self->authors();
+    if ($row->{'status'} =~ /synonym|homonym|replace|nomen|revalidated/) {
+        my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}});
+        my $child_html  = ($child->{'taxon_rank'} =~ /species|genus/) 
+                        ? "<i>$child->{'taxon_name'}</i>" 
+                        : $child->{'taxon_name'};
+        $output .= "'$child_html is a $row->{'status'}";
+        if ($row->{'status'} =~ /synonym|homonym|replace/) {
+            my $parent = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'parent_spelling_no'}});
+            if ($parent) {
+                my $parent_html = ($parent->{'taxon_rank'} =~ /species|genus/) 
+                                ? "<i>$parent->{'taxon_name'}</i>" 
+                                : $parent->{'taxon_name'};
+                $output .= " of $parent_html";
+            }
+            $output .= "'";
         }
-	} 
+    } else {
+        my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_no'}});
+        my $child_html  = ($child->{'taxon_rank'} =~ /species|genus/) ? "<i>$child->{'taxon_name'}</i>" : $child->{'taxon_name'};
+
+        if ($row->{'spelling_reason'} =~ /correction/) {
+            my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}});
+            my $spelling_html = ($spelling->{'taxon_rank'} =~ /species|genus/) 
+                              ? "<i>$child->{'taxon_name'}</i>" 
+                              : $child->{'taxon_name'};
+            my $parent = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'parent_spelling_no'}});
+            my $parent_html = "";
+            if ($parent) {
+                $parent_html = ($parent->{'taxon_rank'} =~ /species|genus/) 
+                             ? "<i>$parent->{'taxon_name'}</i>" 
+                             : $parent->{'taxon_name'};
+            }
+		    $output .= "'$child_html is corrected as $spelling_html and belongs to $parent_html'";
+        } elsif ($row->{'spelling_reason'} =~ /rank change/) {
+            my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}});
+            my $spelling_html = ($spelling->{'taxon_rank'} =~ /species|genus/) 
+                              ? "<i>$spelling->{'taxon_name'}</i>" 
+                              : $spelling->{'taxon_name'};
+            my $parent = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'parent_spelling_no'}});
+            my $parent_html = "";
+            if ($parent) {
+                $parent_html = ($parent->{'taxon_rank'} =~ /species|genus/) 
+                             ? "<i>$parent->{'taxon_name'}</i>" 
+                             : $parent->{'taxon_name'};
+            }
+            if ($spelling_html ne $child_html) {
+                if ($child->{'taxon_rank'} =~ /genus/) {
+		            $output .= "'$child_html was reranked as $spelling_html ";
+                } else {
+		            $output .= "'$child_html was reranked as the $spelling->{taxon_rank} $spelling_html ";
+                }
+            } else {
+		        $output .= "'$child_html was reranked as a $spelling->{taxon_rank} ";
+            }
+            $output .= " and belongs to $parent_html'";
+        } elsif ($row->{'spelling_reason'} =~ /reassignment/) {
+            my $parent = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'parent_spelling_no'}});
+            my $parent_html = "";
+            if ($parent) {
+                $parent_html = ($parent->{'taxon_rank'} =~ /species|genus/) 
+                             ? "<i>$parent->{'taxon_name'}</i>" 
+                             : $parent->{'taxon_name'};
+            }
+		    $output .= "'$child_html is reassigned into $parent_html'";
+        } elsif ($row->{'spelling_reason'} =~ /recombination/) {
+            my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}});
+            my $spelling_html = ($spelling->{'taxon_rank'} =~ /species|genus/) 
+                              ? "<i>$spelling->{'taxon_name'}</i>" 
+                              : $spelling->{'taxon_name'};
+		    $output .= "'$child_html is recombined as $spelling_html'";
+        } else {
+            my $parent = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'parent_spelling_no'}});
+            my $parent_html = "";
+            if ($parent) {
+                $parent_html = ($parent->{'taxon_rank'} =~ /species|genus/) 
+                             ? "<i>$parent->{'taxon_name'}</i>"
+                             : $parent->{'taxon_name'};
+            }
+		    $output .= "'$child_html belongs to $parent_html'";
+        } 
+    }
+    $output .= " according to ".$self->authors();
+    return $output;
 }
 
 # display the form which allows users to enter/edit opinion
@@ -256,11 +287,13 @@ sub displayOpinionForm {
 	
 	my %fields;  # a hash of fields and values that
 				 # we'll pass to HTMLBuilder to pop. the form.
+    my $optional = {}; # optional sections
 				 
 	# Fields we'll pass to HTMLBuilder that the user can't edit.
 	# (basically, any field which is not empty or 0 in the database,
 	# if the authorizer is not the original authorizer of the record).
-	my @nonEditables; 	
+    # Don't do anymore, anyone can edit
+	#my @nonEditables; 	
 	
 	if ((!$dbt) || (!$hbo) || (! $s) || (! $q)) {
 		croak("Opinion::displayOpinionForm had invalid arguments passed to it.");
@@ -297,7 +330,10 @@ sub displayOpinionForm {
             $fields{'child_no'} = $q->param('child_no');
             $fields{'child_spelling_no'} = $q->param('child_spelling_no') || $q->param('child_no');
 		    $fields{'reference_no'} = $s->get('reference_no');
-            $fields{'spelling_status'} = getSpellingStatus($dbt,\%fields);
+            my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}});
+            my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_spelling_no'}});
+            my $reason = guessSpellingReason($child,$spelling);
+            $fields{'spelling_reason'} = $reason;
         } else {
             %fields = %{$o->getRow()};
 
@@ -331,10 +367,6 @@ sub displayOpinionForm {
                     last;
                 }
             }    
-
-            # This is in its own function cause it may/may not equal the actual status
-            # and must be inferred
-            $fields{'spelling_status'} = $o->getSpellingStatus();
         }
     }
 
@@ -343,7 +375,6 @@ sub displayOpinionForm {
     my $childName = $childTaxon->get('taxon_name');
     my $childRank = $childTaxon->get('taxon_rank');
 
-    
     # its important that we save this in case the user selected a parent_spelling_no from the pulldown
     # AND switches the taxon_status radio. In that case we have to throw out the parent_spelling_no
     $fields{'orig_taxon_status'} = $fields{'taxon_status'};
@@ -352,6 +383,7 @@ sub displayOpinionForm {
     # or from the values passed in for a new && resubmission
     my @child_spelling_nos = ();
     my $childSpellingName = "";
+    my $childSpellingRank = "";
     if ($fields{'child_spelling_no'} > 0) {
         # This will happen on an edit (first submission) OR resubmission w/homonyms
         # SQL trick: get not only the authoritiy data for child_spelling_no, but all its homonyms as well
@@ -360,43 +392,28 @@ sub displayOpinionForm {
         foreach my $row (@results) {
             push @child_spelling_nos, $row->{'taxon_no'};
             $childSpellingName = $row->{'taxon_name'};
+            $childSpellingRank = $row->{'taxon_rank'};
         }
     } else {
         $childSpellingName = $q->param('child_spelling_name') || $childName;
-        @child_spelling_nos = TaxonInfo::getTaxonNos($dbt,$childSpellingName);
+        $childSpellingRank = $q->param('child_spelling_rank') || $childRank;
+        @child_spelling_nos = TaxonInfo::getTaxonNos($dbt,$childSpellingName,$childSpellingRank);
     }
     # If the childSpellingName and childName are the same (and possibly amiguous)
     # Use the child_no as the spelling_no so we unneccesarily don't get a radio select to select
     # among the different homonyms
-    if ($childSpellingName eq $childName) {
+    if ($childSpellingName eq $childName && $childSpellingRank eq $childRank) {
         @child_spelling_nos = ($fields{'child_no'});
         $fields{'child_spelling_no'} = $fields{'child_no'};
-    }
+    } elsif (@child_spelling_nos ==  1) {
+        $fields{'child_spelling_no'} = $child_spelling_nos[0];
+    }   
     
     $fields{'child_name'} = $childName;
+    $fields{'child_rank'} = $childRank;
     $fields{'child_spelling_name'} = $childSpellingName;
+    $fields{'child_spelling_rank'} = $childSpellingRank;
 
-	# if this is a second pass and we have a list of alternative taxon
-	#  numbers, make a pulldown menu listing the taxa JA 25.4.04
-	my $spelling_pulldown;
-	if ( scalar(@child_spelling_nos) > 1) {
-        $spelling_pulldown .= qq|<input type="radio" name="child_spelling_no" value=""> \nOther: <input type="text" name="child_spelling_name" value=""><br>\n|;
-        foreach my $child_spelling_no (@child_spelling_nos) {
-	        my $parent = TaxaCache::getParent($dbt,$child_spelling_no);
-			my %auth = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$child_spelling_no)};
-            my $selected = ($fields{'child_spelling_no'} == $child_spelling_no) ? "CHECKED" : "";
-            my $pub_info = "$auth{author1last} $auth{pubyr}";
-            $pub_info = ", ".$pub_info if ($pub_info !~ /^\s*$/);
-            my $higher_class;
-            if ($parent) {
-                $higher_class = $parent->{'taxon_name'};
-            } else {
-                my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$child_spelling_no);
-                $higher_class = "unclassified $taxon->{taxon_rank}";
-            } 
-			$spelling_pulldown .= qq|<input type="radio" name="child_spelling_no" $selected value='$child_spelling_no'> ${childSpellingName}$pub_info [$higher_class]<br>\n|;
-        }
-	}
 
     # This does the same thing for the parent
     my @parent_nos = ();
@@ -414,8 +431,6 @@ sub displayOpinionForm {
         # This block will happen on a resubmission w/o homonyms
         if ($fields{'taxon_status'} eq 'belongs to') { 
             $parentName = $q->param('belongs_to_parent');
-        } elsif ($fields{'taxon_status'} eq 'recombined as') { 
-            $parentName = $q->param('recombined_as_parent');
         } elsif ($fields{'taxon_status'} eq 'invalid1') { 
             $parentName = $q->param('synonym_parent');
         } else {
@@ -435,22 +450,23 @@ sub displayOpinionForm {
 	#  numbers, make a pulldown menu listing the taxa JA 25.4.04
 	my $parent_pulldown;
 	if ( scalar(@parent_nos) > 1) {
-        $parent_pulldown .= qq|<input type="radio" name="parent_spelling_no" value=""> \nOther: <input type="text" name="belongs_to_parent" value=""><br>\n|;
         foreach my $parent_no (@parent_nos) {
 	        my $parent = TaxaCache::getParent($dbt,$parent_no);
-			my %auth = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$parent_no)};
+            my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$parent_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
+            my $pub_info = Reference::formatShortRef($taxon);
+
             my $selected = ($fields{'parent_spelling_no'} == $parent_no) ? "CHECKED" : "";
-            my $pub_info = "$auth{author1last} $auth{pubyr}";
             $pub_info = ", ".$pub_info if ($pub_info !~ /^\s*$/);
             my $higher_class;
             if ($parent) {
                 $higher_class = $parent->{'taxon_name'}
             } else {
-                my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$parent_no);
+                my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$parent_no});
                 $higher_class = "unclassified $taxon->{taxon_rank}";
             }
 			$parent_pulldown .= qq|<input type="radio" name="parent_spelling_no" $selected value='$parent_no'> ${parentName}$pub_info [$higher_class]<br>\n|;
         }
+        $parent_pulldown .= qq|<input type="radio" name="parent_spelling_no" value=""> \nOther name: <input type="text" name="belongs_to_parent" value=""><br>\n|;
 	}
 
     main::dbg("parentName $parentName parents: ".scalar(@parent_nos));
@@ -470,21 +486,6 @@ sub displayOpinionForm {
         $fields{'created'} = "<B>Created: </B>".$fields{'created'}; 
     }
 
-    # Handle radio button
-    if ($fields{'ref_has_opinion'} eq 'PRIMARY') {
-		$fields{'ref_has_opinion_primary'} = 'checked';
-		$fields{'ref_has_opinion_current'} = '';
-		$fields{'ref_has_opinion_no'} = '';
-    } elsif ($fields{'ref_has_opinion'} eq 'CURRENT') {
-		$fields{'ref_has_opinion_primary'} = '';
-		$fields{'ref_has_opinion_current'} = 'checked';
-		$fields{'ref_has_opinion_no'} = '';
-    } elsif (exists $fields{'ref_has_opinion'}) {
-		$fields{'ref_has_opinion_primary'} = '';
-		$fields{'ref_has_opinion_current'} = '';
-		$fields{'ref_has_opinion_no'} = 'checked';
-	}
-
     if ($fields{'reference_no'}) {
         my $ref = Reference->new($dbt,$fields{'reference_no'}); 
         $fields{formatted_primary_reference} = $ref->formatAsHTML() if ($ref);
@@ -495,67 +496,10 @@ sub displayOpinionForm {
             my $ref = Reference->new($dbt,$s->get('reference_no'));
             $fields{formatted_current_reference} = $ref->formatAsHTML() if ($ref);
         }
-        $fields{'OPTIONAL_current_reference'} = 1;
-    } else {
-        $fields{'OPTIONAL_current_reference'} = 0;
-    }
+        $optional->{'current_reference'} = 'yes';
+    } 
 	
-	# if the authorizer of this record doesn't match the current
-	# authorizer, and if this is an edit (not a first entry),
-	# then only let them edit empty fields.  However, if they're superuser
-	# (alroy, alroy), then let them edit anything.
-	#
-	# otherwise, they can edit any field.
-	my $sesAuth = $s->get('authorizer_no');
-
-    # A list of people who have permitted the current authorizer to edit their records
-    my $p = Permissions->new($s,$dbt);
-    my %is_modifier_for = %{$p->getModifierList()};  
-
-	if ($s->isSuperUser()) {
-		$fields{'message'} = "<p align=center><i>You are the superuser, so you can edit any field in this record!</i></p>";
-	} elsif ((! $isNewEntry) && (!$is_modifier_for{$o->get('authorizer_no')}) && ($sesAuth != $o->get('authorizer_no')) && ($o->get('authorizer_no') != 0)) {
-	
-		# grab the authorizer name for this record.
-		my $authName = $fields{'authorizer_name'};
-	
-		$fields{'message'} = "<p align=center><i>This record was created by a different authorizer ($authName) so you can only edit empty fields.</i></p>";
-		
-		# we should always make the ref_has_opinion radio buttons disabled
-		# because only the original authorizer can edit these.
-		
-		
-		# depending on the status of the ref_has_opinion radio, we should
-		# make the other reference fields non-editable.
-		if ($fields{'ref_has_opinion'} =~ /YES|PRIMARY|CURRENT/) {
-			push (@nonEditables, ('author1init', 'author1last', 'author2init', 'author2last', 'otherauthors', 'pubyr', '2nd_pages', '2nd_figures'));
-		} else {
-			push (@nonEditables, ('pages', 'figures'));
-		}
-		
-		
-        # Required fields which will always be set 
-		push(@nonEditables, 'taxon_status', 'nomen','synonym','belongs_to_parent','recombined_as_parent','synonym_parent');
-		push(@nonEditables, 'ref_has_opinion','child_spelling_name','spelling_status');
-		
-		if ($fields{'status'} ne 'recombined as' && ($fields{status} ne 'belongs to')) {
-			push(@nonEditables, 'diagnosis');
-		}
-				
-		# find all fields in the database record which are not empty and add them to the list.
-        while (my ($field,$value)=each %{$o->getRow()}) {
-            push(@nonEditables,$field) if ($value);
-		}
-		
-		# we'll also have to add a few fields separately since they don't exist in the database,
-		# but only in our form.
-        foreach my $field ('2nd_pages','2nd_figures') {
-            if ($fields{$field}) {
-                push @nonEditables, $field;
-            }
-        }
-	}
-
+	# Anyone can now edit anything. Restore from CVS if we have to backpedal PS 5/17/2006
 
     # Each of the 'taxon_status' row options
 	my $belongs_to_row;
@@ -577,7 +521,7 @@ sub displayOpinionForm {
     my $colspan = ($parent_pulldown && $selected) ? "": "colspan=2";
     $belongs_to_row .= qq|<tr><td valign="top"><input type="radio" name="taxon_status" value="belongs to" $selected></td>\n|;
     if ($childRank =~ /species/) {
-        $belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid $childRank</b>, classified as belonging to $higher_rank |;
+        $belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid</b>, classified as belonging to |;
     } else {
         $belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid or reranked $childRank</b>, classified as belonging to $higher_rank |;
     }
@@ -586,7 +530,7 @@ sub displayOpinionForm {
         $belongs_to_row .= "<td width='100%'>$parent_pulldown</td>";
     } else	{
         my $parentTaxon = ($selected || ($isNewEntry && $childRank =~ /species/)) ? $parentName : "";
-        $belongs_to_row .= qq|<input name="belongs_to_parent" size="30" value="$parentTaxon">|;
+        $belongs_to_row .= qq|<input name="belongs_to_parent" size="24" value="$parentTaxon">|;
     }
     $belongs_to_row .= "</td></tr>";
     if (!$reSubmission && !$isNewEntry) {
@@ -624,7 +568,7 @@ sub displayOpinionForm {
 		$synonym_row .= "<td width='100%'>$parent_pulldown</td>"; 
 	} else	{
         my $parentTaxon = ($selected) ? $parentName : "";
-		$synonym_row .= qq|<input name="synonym_parent" size="50" value="$parentTaxon">|;
+		$synonym_row .= qq|<input name="synonym_parent" size="30" value="$parentTaxon">|;
 	}
     $synonym_row .= "</td></tr>";
 
@@ -636,27 +580,78 @@ sub displayOpinionForm {
     $nomen_row .= $hbo->buildSelect('nomen',\@nomArray, \@nomArray, $fields{'nomen'});
     $nomen_row .= "</td></tr>";
 
+	# if this is a second pass and we have a list of alternative taxon
+	#  numbers, make a pulldown menu listing the taxa JA 25.4.04
     # build the spelling pulldown, if necessary, else the spelling box
-    my $all_ranks = "";
-    if ($childRank eq 'subspecies') {
-        $all_ranks = ' (genus, species, and subspecies)';
-    } elsif ($childRank eq 'species') {
-        $all_ranks = ' (genus and species)';
-    } 
-    my $spelling_note .= "<small>Note that the name may be different than listed above due to a correction, recombination, or rank change.</small>";
-    $spelling_row .= "<tr><td colspan=2>Please enter the full name of the taxon as used in the reference${all_ranks}:</td></tr>";
-    if ($spelling_pulldown) {
-        $spelling_row .= "<tr><td nowrap width=\"100%\">$spelling_pulldown<br>$spelling_note</td></tr>";
-    } else {
-        $spelling_row .= qq|<tr><td nowrap width="100%"><input id="child_spelling_name" name="child_spelling_name" size=30 value="$childSpellingName"><br>$spelling_note</td></tr>|;
-    }   
 
-#    my @select_values = ('belongs to','corrected as','recombined as','rank changed as','lapsus calami for');
-#    my @select_keys = ("was the original spelling $childName","was a correction of $childName","is a recombination of $childName","had its rank changed from it's original rank of $childRank","was a lapsus calami for an older spelling");
-    my @select_values = ('belongs to','recombined as','corrected as','rank changed as');
-    my @select_keys = ("is the original spelling of '$childName'","is a recombination of '$childName'","is a correction of '$childName'","has had its rank changed from its original rank of $childRank");
+    my $all_ranks = "";
+    if ($childSpellingRank eq 'subspecies') {
+        $all_ranks = ': e.g. "Genus (Subgenus) species subspecies"';
+    } elsif ($childSpellingRank eq 'species') {
+        $all_ranks = ': e.g. "Genus (Subgenus) species"';
+    }  elsif ($childSpellingRank eq 'subgenus') {
+        $all_ranks = ': e.g. "Genus (Subgenus)"';
+    }
+
+    my @ranks = ();
+    if ($childRank =~ /subspecies|species/) {
+        @ranks = ('subspecies','species');
+    } elsif ($childRank =~ /subgenus|genus/) {
+        @ranks = ('subgenus','genus');
+    } else {
+        @ranks = grep {!/subspecies|species|subgenus|genus/} @{$hbo->{'SELECT_LISTS'}{'taxon_rank'}};
+    } 
+
+    my @opinions_to_migrate;
+    if (scalar(@child_spelling_nos) == 1) {
+        @opinions_to_migrate = getOpinionsToMigrate($dbt,$fields{'child_no'},$child_spelling_nos[0]);
+    }
+    
+    my $spelling_note = "<small>Note that the name may be different than listed above due to a correction, recombination, or rank change.</small>";
+    $spelling_row .= "<tr><td colspan=2>Please enter the full name and rank of the taxon as used in the reference${all_ranks}:</td></tr>";
+
+    my $spelling_rank_pulldown = $hbo->buildSelect('child_spelling_rank',\@ranks, \@ranks, $fields{'child_spelling_rank'});
+	if (scalar(@child_spelling_nos) > 1 || (scalar(@child_spelling_nos) == 1 && @opinions_to_migrate)) {
+        $spelling_row .= "<tr><td nowrap width=\"100%\">";
+        foreach my $child_spelling_no (@child_spelling_nos) {
+	        my $parent = TaxaCache::getParent($dbt,$child_spelling_no);
+            my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$child_spelling_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
+            my $pub_info = Reference::formatShortRef($taxon);
+            my $selected = ($fields{'child_spelling_no'} == $child_spelling_no) ? "CHECKED" : "";
+            $pub_info = ", ".$pub_info if ($pub_info !~ /^\s*$/);
+            my $orig_no = TaxonInfo::getOriginalCombination($dbt,$child_spelling_no);
+            my $orig_info = "";
+            if ($orig_no != $child_spelling_no) {
+                my $orig = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$orig_no});
+                $orig_info = ", originally $orig->{taxon_name}";
+            }
+			$spelling_row .= qq|<input type="radio" name="child_spelling_no" $selected value='$child_spelling_no'> ${childSpellingName}${pub_info}${orig_info} <br>\n|;
+        }
+        $spelling_row .= qq|<input type="radio" name="child_spelling_no" value=""> \nOther name: <input type="text" name="child_spelling_name" value="">$spelling_rank_pulldown<br>\n|;
+	    $spelling_row .= qq|<input type="hidden" name="new_child_spelling_name" value="$childSpellingName">|;
+        my $new_child_spelling_rank_pulldown = $hbo->buildSelect('new_child_spelling_rank',\@ranks, \@ranks, $fields{'child_spelling_rank'});
+	    $spelling_row .= qq|<input type="radio" name="child_spelling_no" value="-1"> Create a new '$childSpellingName' based off '$childName' with rank $new_child_spelling_rank_pulldown<br>|;
+        $spelling_row .= "$spelling_note</td></tr>";
+	} else {
+        $spelling_row .= qq|<tr><td nowrap width="100%"><input id="child_spelling_name" name="child_spelling_name" size=30 value="$childSpellingName">$spelling_rank_pulldown<br>$spelling_note</td></tr>|;
+    }
+
+
+    my @select_values = ();
+    my @select_keys = ();
+    if ($childRank =~ /subgenus/) {
+        my ($genusName,$subGenusName) = Taxon::splitTaxon($childName);
+        @select_values = ('original spelling','correction','rank change','reassignment');
+        @select_keys = ("is the original spelling of '$childName'", "is a correction of '$childName'","has had its rank changed from its original rank of $childRank","has been reassigned from its original genus '$genusName'");
+    } elsif ($childRank =~ /species/) {
+        @select_values = ('original spelling','recombination','correction');
+        @select_keys = ("is the original spelling of '$childName'","is a recombination of '$childName'","is a correction of '$childName'");
+    } else {
+        @select_values = ('original spelling','correction','rank change');
+        @select_keys = ("is the original spelling of '$childName'","is a correction of '$childName'","has had its rank changed from its original rank of $childRank");
+    }
     $spelling_row .= "<tr><td>&nbsp;</td></tr>";
-    $spelling_row .= "<tr><td>Enter the reason why this spelling was used:<br>This name ". $hbo->buildSelect('spelling_status',\@select_keys,\@select_values,$fields{'spelling_status'})."</td></tr>";
+    $spelling_row .= "<tr><td>Enter the reason why this spelling was used:<br>This name ". $hbo->buildSelect('spelling_reason',\@select_keys,\@select_values,$fields{'spelling_reason'})."</td></tr>";
 
     main::dbg("showOpinionForm, fields are: <pre>".Dumper(\%fields)."</pre>");
 
@@ -667,7 +662,10 @@ sub displayOpinionForm {
 
 	# print the form	
     $fields{'error_message'} = $error_message;
-	my $html = $hbo->newPopulateHTML("add_enter_opinion", \%fields, \@nonEditables);
+
+    my @k = keys %fields;
+    my @v = values %fields;
+	my $html = $hbo->populateHTML("add_enter_opinion", \@v,\@k, $optional);
 
 	print $html;
 }
@@ -678,8 +676,6 @@ sub displayOpinionForm {
 #
 # The majority of this method deals with validation of the input to make
 # sure the user didn't screw up, and to display an appropriate error message if they did.
-#
-# rjp, 3/2004.
 sub submitOpinionForm {
     my $dbt = shift;
 	my $hbo = shift;
@@ -908,7 +904,7 @@ sub submitOpinionForm {
                     $errors->add("You must enter the name of a higher taxon this taxon belongs to");
                 }
             } else {    
-                my @parents = TaxonInfo::getTaxon($dbt,'taxon_name'=>$parentName); 
+                my @parents = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parentName}); 
                 if (scalar(@parents) > 1) {
                     $errors->add("The taxon '$parentName' exists multiple times in the database. Please select the one you want");	
                 } elsif (scalar(@parents) == 0) {
@@ -930,18 +926,20 @@ sub submitOpinionForm {
     my $childSpellingRank = '';
     my $createAuthority = 0;
     if ($q->param('child_spelling_no')) {
-        # This is a second pass through, b/c there was a homonym issue, the user
-        # was presented with a pulldown to distinguish between homonyms, and has submitted the form
-        my $sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_no=".$dbh->quote($q->param('child_spelling_no'));
-        my $row = ${$dbt->getData($sql)}[0];
-        if (!$row) {
-            croak("Fatal error, child_spelling_no ".$q->param('child_spelling_no')." was set but not in the authorities table");
+        if ($q->param('child_spelling_no') == -1) {
+            $createAuthority = 1;
+            $childSpellingName = $q->param('new_child_spelling_name');
+            $childSpellingRank = $q->param('new_child_spelling_rank');
+        } else {
+            # This is a second pass through, b/c there was a homonym issue, the user
+            # was presented with a pulldown to distinguish between homonyms, and has submitted the form
+            my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$q->param('child_spelling_no')});
+            $childSpellingName = $spelling->{'taxon_name'};
+            $childSpellingRank = $spelling->{'taxon_rank'};
+            $fields{'child_spelling_no'} = $q->param('child_spelling_no');
         }
-        $childSpellingName = $row->{'taxon_name'};
-        $childSpellingRank = $row->{'taxon_rank'};
-        $fields{'child_spelling_no'} = $q->param('child_spelling_no');
     } else {
-        if ($childName eq $q->param('child_spelling_name')) {
+        if ($childName eq $q->param('child_spelling_name') && $childRank eq $q->param('child_spelling_rank')) {
             # This is the simplest case - if the childName and childSpellingName are the same, they get
             # the same taxon_no - don't present a pulldown in this case, even if the name is a homonym,
             # since we already resolved the homonym issue before we even got to this form
@@ -951,24 +949,21 @@ sub submitOpinionForm {
         } else {
             # Otherwise, go through the whole big routine
             $childSpellingName = $q->param('child_spelling_name');
-            my @spellings = TaxonInfo::getTaxon($dbt,'taxon_name'=>$childSpellingName); 
+            $childSpellingRank = $q->param('child_spelling_rank');
+            my @spellings = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$childSpellingName,'taxon_rank'=>$childSpellingRank}); 
             if (scalar(@spellings) > 1) {
                 $errors->add("The spelling '$childSpellingName' exists multiple times in the database. Please select the one you want");	
             } elsif (scalar(@spellings) == 0) {
-                if ($q->param('spelling_status') =~ /rank changed as/) {
-                    $errors->add("The taxon '$childSpellingName' doesn't exist in our database.  Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_no=-1&taxon_name=$childSpellingName\">add this authority</a> through the authorities form before proceeding");	
+                if ($q->param('confirm_create_spelling') eq $q->param('child_spelling_name') && 
+                    $q->param('confirm_create_spelling_rank') eq $q->param('child_spelling_rank')) {
+                    $createAuthority = 1;
                 } else {
-                    if ($q->param('confirm_create_authority') eq $q->param('child_spelling_name')) {
-                        $createAuthority = 1;
-                        $childSpellingRank = $childRank;
-                    } else {
-                        $q->param('confirm_create_authority'=>$q->param('child_spelling_name'));
-                        $errors->add("The taxon '$childSpellingName' doesn't exist in our database.  If this isn't a typo, hit submit again to automatically create an authority record for it");	
-                    }
+                    $q->param('confirm_create_spelling'=>$q->param('child_spelling_name'));
+                    $q->param('confirm_create_spelling_rank'=>$q->param('child_spelling_rank'));
+                    $errors->add("The ".$q->param('child_spelling_rank')." '$childSpellingName' doesn't exist in our database.  If this isn't a typo, hit submit again to automatically create a new database record for it");	
                 }
             } elsif (scalar(@spellings) == 1) {
                 $fields{'child_spelling_no'} = $spellings[0]->{'taxon_no'};
-                $childSpellingRank = $spellings[0]->{'taxon_rank'};
             }
         }
     }
@@ -982,30 +977,48 @@ sub submitOpinionForm {
     # Validate the form, bottom section
     ############################
     # Flatten the status
-    my $status;
-    if ($q->param('taxon_status') =~ /belongs to/) {
-        $status = $q->param('spelling_status');
+    if ($q->param('taxon_status') eq 'belongs to') {
+	    $fields{'status'} = 'belongs to';
     } elsif ($q->param('taxon_status') eq 'invalid1') {
-        $status = $q->param('synonym');
+        $fields{'status'} = $q->param('synonym');
     } elsif ($q->param('taxon_status') eq 'invalid2') {
-        $status = $q->param('nomen');
+        $fields{'status'} = $q->param('nomen');
     }
-	$fields{'status'} = $status;
+	$fields{'spelling_reason'} = $q->param('spelling_reason');
 
+	if (!$q->param("spelling_reason")) {
+		$errors->add("No option was selected in the \"Enter the reason why this spelling was used\" pulldown");
+    } 
+    
 	if (!$q->param("taxon_status")) {
 		$errors->add("You must choose one of radio buttons in the \"How was it classified?\" section");	
-	} elsif (!$status) {
-        $errors->add("You must choose one of the values in the status pulldown");
-    }
+	} 
     
     if ($q->param('taxon_status') ne 'belongs to' && $q->param('type_taxon')) {
         $errors->add("The valid taxon radio button in the \"How was it classified?\" section must be selected if the is the type taxon");
     } 
 
-    if ($q->param('spelling_status') eq 'rank changed as') {
-        if ($childRank =~ /species/ || $parentRank =~ /species/ || $childName =~ / / || $parentName =~ / /) {
-            $errors->add("You may not change the rank of a taxon if it is a species");
+    if ($q->param('spelling_reason') =~ /rank change/) {
+        if ($childRank =~ /species/) {
+            $errors->add("Don't select rank change for species, mark it as a recombination.");
         }
+    }
+
+    my @opinions_to_migrate;
+    if ($fields{'child_spelling_no'}) {
+        @opinions_to_migrate = getOpinionsToMigrate($dbt,$fields{'child_no'},$fields{'child_spelling_no'});
+    }
+    if (@opinions_to_migrate && $q->param("confirm_migrate_opinions") !~ /YES/i) {
+        main::dbg("MIGRATING:<PRE>".Dumper(\@opinions_to_migrate)."</PRE>"); 
+        my $msg = "The taxon $childSpellingName already exists with <a href=\"bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}\" target=\"_BLANK\"> opinions classifying it</a>."; 
+        $msg .= " If you hit submit again, this taxonomic name will be permanently combined with the existing taxon.  This means: <ul>";
+        $msg .= " <li> '$childName' will be considered the 'original' name.  If another spelling is actually the original usage and '$childName' is actually a subsequent usage, please enter opinions based on that other taxon.</li>";
+        $msg .= " <li> Authority information will be made identical and linked.  Changes to reference or authority for this name will automatically be copied over to $childSpellingName its alternate spellings/combinations.</li>";
+        $msg .= " <li> These names will be considered the same taxon and thus be inseparably linked when editing/adding opinions, for classification during downloads or collections searchs, etc.</li>";
+        $msg .= "</ul>";
+        $msg .= " If '$childSpellingName' is actually a homonym (separate taxon), please select 'Create a new '$childSpellingName' in the 'How was it spelled?' section below";
+        $errors->add($msg);
+        $q->param('confirm_migrate_opinions'=>'YES');
     }
 
     # Error checking related to ranks
@@ -1017,7 +1030,7 @@ sub submitOpinionForm {
 		    if ($rankToNum{$parentRank} <= $rankToNum{$childSpellingRank} && 
                 $parentRank ne "unranked clade" && 
                 $childSpellingRank ne "unranked clade") {
-		    	$errors->add("The rank of the higher taxon '$parentName' ($parentRank) must be higher than the rank of '$childName' ($childRank)");	
+		    	$errors->add("The rank of the higher taxon '$parentName' ($parentRank) must be higher than the rank of '$childSpellingName' ($childSpellingRank)");	
 		    }
         } elsif ($q->param('taxon_status') eq 'invalid1') {
     		# the parent rank should be the same as the child rank...
@@ -1028,90 +1041,99 @@ sub submitOpinionForm {
     }
 
     # Some more rank checks
-    if ($fields{'child_spelling_no'}) {
-        if ($q->param('spelling_status') eq 'rank changed as') {
-    		# JA: ... except if the status is "rank changed as," which is actually the opposite case
-		    if ( $childSpellingRank eq $childRank) {
-			    $errors->add("If you change a taxon's rank, its old and new ranks must be different");
-            }
-	    } else {
-		    if ($childSpellingRank ne $childRank) {
-			    $errors->add("If a taxon's name is corrected or recombined the rank of its new spelling must be the same as the rank of its original spelling");
-		    }
-        }    
+    if ($q->param('spelling_reason') =~ 'rank change') {
+        # JA: ... except if the status is "rank changed as," which is actually the opposite case
+        if ( $childSpellingRank eq $childRank) {
+            $errors->add("If you change a taxon's rank, its old and new ranks must be different");
+        }
+    } else {
+        if ($childSpellingRank ne $childRank && $q->param('spelling_reason') !~ /recombination/) {
+            $errors->add("Unless a taxon has its rank changed or is recombined, the rank entered in he \"How was it spelled?\" section must match the original taxonomic name");
+        }
     }    
 
     # error checks related to naming
     # If something is marked as a corrected/recombination/rank change, its spellingName should be differenct from its childName
     # and the opposite is true its an original spelling (they're the same);
-    if ($q->param('spelling_status') eq 'belongs to') {
-        if ($childSpellingName ne $childName) {
+    if ($q->param('spelling_reason') =~ /original spelling/) {
+        if ($childSpellingName ne $childName || $childSpellingRank ne $childRank) {
             $errors->add("If \"This name is the original spelling of '$childName'\" is selected, you must enter '$childName' in the \"How was it spelled?\" section");
         }
     } else {
-        if ($childSpellingName eq $childName) {
-            $errors->add("If you use the original spelling in the \"How was it spelled?\" section, please select \"This name was the original spelling of '$childName'\" in the dropdown");
+        if ($childSpellingName eq $childName && $childSpellingRank eq $childRank) {
+            $errors->add('If you leave the rank and name unchanged, please select "This name is the original spelling" in the \"How was it spelled\" section');
         }
     }
         
     # the genus name should differ for recombinations, but be the same for everything else
-    if ($childRank =~ /species/) {
+    if ($childRank =~ /species|subgenus/) {
         my @childBits = split(/ /,$childName);
         pop @childBits;
         my $childParent = join(' ',@childBits);
         my @spellingBits = split(/ /,$childSpellingName);
         pop @spellingBits;
         my $spellingParent = join(' ',@spellingBits);
-        if ($q->param('spelling_status') eq 'recombined as') {
-            if ($spellingParent eq $childParent) {
-			    $errors->add("The genus name in the new combination must be different from the genus name in the original combination");
-		    }
-        } else {
-            if ($spellingParent ne $childParent) {
-                $errors->add("The genus name of the spelling must be the same as the original genus name when choosing \"This name is a correction\" or \"This name is the original spelling\"");
+        if ($childRank =~ /species/) {
+            if ($q->param('spelling_reason') eq 'recombination') {
+                if ($spellingParent eq $childParent) {
+                    $errors->add("The genus or subgenus in the new combination must be different from the genus or subgenus in the original combination");
+                }
+            } else {
+                if ($spellingParent ne $childParent) {
+                    $errors->add("The genus and subgenus of the spelling must be the same as the original genus and subgenus when choosing \"This name is a correction\" or \"This name is the original spelling\"");
+                }
+            }
+        } else { # Subgenus
+            if ($q->param('spelling_reason') eq 'reassignment') {
+                if ($spellingParent eq $childParent) {
+                    $errors->add("The genus must be changed if \"This subgenus has been reassigned\" is selected in the \"How was it spelled\" section");
+                }
+            } else {
+                if ($spellingParent ne $childParent && $q->param('spelling_reason') ne 'rank change') {
+                    $errors->add("If the genus is changed, selected \"This subgenus has been reassigned\" in the \"How was it spelled\" section");
+                }
             }
         }
-        if ($q->param('taxon_status') eq 'belongs to' && $spellingParent ne $parentName) {
-            $errors->add("The genus name in the \"How was it classified?\" and the \"How was it spelled?\" sections must be the same");
+        if ($q->param('spelling_reason') eq 'original spelling' && $spellingParent ne $childParent) {
+            $errors->add("The genus and subgenus in the \"How was it classified?\" and the \"How was it spelled?\" sections must be the same is this is marked as the original spelling");
         }
     } else {
-        if ($q->param('spelling_status') eq 'recombined as') {
+        if ($q->param('spelling_reason') eq 'reassignment') {
+            $errors->add("Don't mark this as a reassignment if the taxon isn't a subgenus");
+        }
+        if ($q->param('spelling_reason') eq 'recombination') {
             $errors->add("Don't mark this as a recombination if the taxon isn't a species or subspecies");
         }
     }
 
     # Misc error checking 
-    if (($parentName eq $childName || $parentName eq $childSpellingName) && $childSpellingRank !~ /subgenus/) {
+    if ($parentName eq $childName || $parentName eq $childSpellingName) {
         $errors->add("The taxon you are entering and the one it belongs to can't have the same name");	
     } elsif ($fields{'child_no'} == $fields{'parent_no'}) {
         $errors->add("The taxon you are entering and the one it belongs to can't be the same");	
     }
 
+    my $rankFromSpaces = Taxon::guessTaxonRank($childSpellingName);
+    if (($rankFromSpaces eq 'subspecies' && $childSpellingRank ne 'subspecies') ||
+        ($rankFromSpaces eq 'species' && $childSpellingRank ne 'species') ||
+        ($rankFromSpaces eq 'subgenus' && $childSpellingRank ne 'subgenus') ||
+        ($rankFromSpaces eq ''     && $childSpellingRank =~ /subspecies|species|subgenus/)) {
+        $errors->add("The selected rank '$childSpellingRank' doesn't match the spacing of the taxon name '$childSpellingName'");
+    }
 	
 	# The diagnosis field only applies to the case where the status
 	# is belongs to or recombined as.
-	if ( (! ($q->param('spelling_status') eq 'recombined as' || $q->param('spelling_status') eq 'belongs to')) && ($q->param('diagnosis'))) {
-		$errors->add("Don't enter a diagnosis unless you choose the 'belongs to' or 'recombined as' radio button");
+	if ( $q->param('taxon_status') !~ /belongs to/ && $q->param('spelling_reason') !~ /original spelling|recombination/ && $q->param('diagnosis')) {
+		$errors->add("Don't enter a diagnosis unless this taxon is valid or a recombination");
 	}
 
-	# this $editAny variable is true if they can edit any field,
-	# false if they can't.
-    my $editAny = ($isNewEntry || $s->isSuperUser() || $s->get('authorizer_no') == $o->get('authorizer_no')) ? 1 : 0;
-    # Add editable fields to fields hash
-	foreach my $formField ($q->param()) {
-		my $okayToEdit = $editAny;
-		if (! $okayToEdit) {
-			if (! $o->get($formField)) {
-				$okayToEdit = 1;
-			}
-		}
-		if ($okayToEdit) {
-			if (! $fields{$formField}) {
-				$fields{$formField} = $q->param($formField);
-			}
-		}
-	}
-
+    # Get the fields from the form and get them ready for insertion
+    # All other fields should have been set or thrown an error message at some previous time
+    foreach my $f ('author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments','diagnosis') {
+        if (!$fields{$f}) {
+            $fields{$f} = $q->param($f);
+        }
+    }
 	
 	# correct the ref_has_opinion field.  In the HTML form, it can be "YES" or "NO"
 	# but in the database, it should be "YES" or "" (empty).
@@ -1156,36 +1178,24 @@ sub submitOpinionForm {
         );
 
         # author information comes from the original combination,
-        # I'm doing this the "old" way instead of using some
-        #  ridiculously complicated Poling-style objects
-		my $sql = "SELECT * FROM authorities WHERE taxon_no=" . $fields{'child_no'};
-		my $aref = ${$dbt->getData($sql)}[0];
-		my @origAuthFields = ( "taxon_rank", "pages","figures", "comments" );
-		for my $af ( @origAuthFields )	{
-			if ( $aref->{$af} )	{
-                $record{$af}=$aref->{$af};
-			}
-		}
-		@origAuthFields = ( "author1init", "author1last","author2init", "author2last","otherauthors", "pubyr" );
-		if ( $aref->{'author1last'} )	{
-			for my $af ( @origAuthFields )	{
-				if ( $aref->{$af} )	{
-                    $record{$af}=$aref->{$af};
-				}
-			}
-		}
-        # ref is authority is always false, and just to make sure that
-        #  makes sense, we're going to steal the author info from the
-        #  original combination's reference if we don't have it already
-		else	{
-			my $rsql = "SELECT * FROM refs WHERE reference_no=" . $aref->{'reference_no'};
-			my $rref = ${$dbt->getData($rsql)}[0];
-			for my $af ( @origAuthFields )	{
-				if ( $rref->{$af} )	{
-                    $record{$af}=$rref->{$af};
-				}
-			}
-		}
+        my $orig = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}},['*']);
+
+		my @dataFields = ("pages", "figures", "extant", "preservation");
+		my @origAuthFields = ("ref_is_authority","author1init", "author1last","author2init", "author2last","otherauthors", "pubyr" );
+        
+        if ($orig->{'ref_is_authority'} =~ /yes/i) {
+            $record{'reference_no'}=$orig->{'reference_no'};
+            foreach my $f (@dataFields) {
+                $record{$f} = $orig->{$f};
+            }
+            foreach my $f (@origAuthFields) {
+                $record{$f} = "";
+            }
+        } else {
+            foreach my $f (@dataFields,@origAuthFields) {
+                $record{$f} = $orig->{$f};
+            }
+        }
 
         my ($return_code, $taxon_no) = $dbt->insertRecord($s,'authorities', \%record);
         TaxaCache::addName($dbt,$taxon_no);
@@ -1194,45 +1204,9 @@ sub submitOpinionForm {
             die("Unable to create new authority record for $record{taxon_name}. Please contact support");
         }
         $fields{'child_spelling_no'} = $taxon_no;
+        my @set_warnings = Taxon::setOccurrencesTaxonNoByTaxon($dbt,$taxon_no);
+        push @warnings, @set_warnings;
 
-        # if the taxon name is unique, find matches to it in the
-        #  occurrences table and set the taxon numbers appropriately
-        # start with a test for uniqueness
-        $sql = "SELECT taxon_no FROM authorities WHERE taxon_name=".$dbh->quote($record{'taxon_name'});
-        my @taxon_nos = @{$dbt->getData($sql)};
-        @taxon_nos = map {$_->{'taxon_no'}} @taxon_nos;
-
-        if (scalar(@taxon_nos) > 1) {
-            # Deal with homonym issue
-            my $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
-            my $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
-            $dbt->getData($sql1);
-            $dbt->getData($sql2);
-            push @warnings, "Since $record{taxon_name} is a homonym, occurrences of it are no longer classified.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$record{taxon_name}\">Reclassify occurrences</a>\" and manually classify <b>all</b> occurrences of this taxon.";
-        } elsif (scalar(@taxon_nos) == 1) {
-            # start composing update sql
-            # NOTE: in theory, taxon no for matching records always
-            #  should be zero, unless the new name is a species and
-            #  some matching records were set on the basis of their
-            #  genus, in which case we assume users will want the
-            #  new number for the species instead; that's why there
-            #  is no test to make sure the taxon no is empty
-            my $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=".$taxon_no." WHERE ";
-            my $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=".$taxon_no. " WHERE ";
-
-            my ($genus,$species) = split / /,$record{'taxon_name'};
-            $sql1 .= " genus_name=".$dbh->quote($genus);
-            $sql2 .= " genus_name=".$dbh->quote($genus);
-            if ($species) {
-                $sql1 .= " AND species_name=".$dbh->quote($species);
-                $sql2 .= " AND species_name=".$dbh->quote($species);
-            }
-            # update the occurrences and reidentifications tables
-            $dbt->getData($sql1);
-            $dbt->getData($sql2);
-            main::dbg("sql to update occs: $sql1");
-            main::dbg("sql to update reids: $sql2");
-        }
 	}
 
 	my $resultOpinionNumber;
@@ -1250,44 +1224,41 @@ sub submitOpinionForm {
 		
 		($code, $resultOpinionNumber) = $dbt->insertRecord($s,'opinions', \%fields);
 
-		if ($code && ($fields{'spelling_status'} =~ /recombined as|corrected as|rank changed as/)) { 
-		    # At this point, *if* the status of the new opinion was 'recombined as',
-		    # migrated opinions to the original combination.
-            if ($fields{'child_no'} && $fields{'child_spelling_no'}) {
-                my $rsql = "UPDATE opinions SET child_no=$fields{child_no} WHERE child_no=$fields{child_spelling_no}";
-                main::dbg("Move opinions to point FROM: $rsql");;
-                my $return = $dbt->getData($rsql);
-                if (!$return) {
-                    carp "Failed to move opinions off of recombined|corrected as|rank changed as taxon ($fields{child_spelling_no} to original combination ($fields{child_no}) for opinion no $code";
+		if ($code && ($fields{'child_no'} != $fields{'child_spelling_no'})) {
+            #my @opinions = getOpinionsToMigrate($dbt,$fields{'child_no'},$fields{'child_spelling_no'});
+            if (@opinions_to_migrate) {
+                main::dbg("Migrating ".scalar(@opinions_to_migrate)." opinions");
+                my @parents = ();
+                foreach my $row  (@opinions_to_migrate) {
+                    my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}});
+                    my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}});
+                    my $newSpellingReason = guessSpellingReason($child,$spelling);
+                    my $sql = "UPDATE opinions SET modified=modified,spelling_reason='$newSpellingReason',child_no=$fields{child_no} WHERE opinion_no=$row->{opinion_no}";
+                    main::dbg("Migrating child: $sql");
+                    $dbh->do($sql);
+                    if ($row->{'child_spelling_no'} =~ /^\d+$/) {
+                        push @parents,$row->{'child_spelling_no'};
+                    }
+                    if ($row->{'child_no'} =~ /^\d+$/) {
+                        push @parents,$row->{'child_no'};
+                    }
                 }
-            }
-            # Secondly, opinions must point to the original combination as well
-            if ($fields{'child_no'} && $fields{'child_spelling_no'}) {
-                my $rsql = "UPDATE opinions SET parent_no=$fields{child_no} WHERE parent_no=$fields{child_spelling_no} AND child_no != $fields{child_no}";
-                main::dbg("Move opinions to point TO: $rsql");;
-                my $return = $dbt->getData($rsql);
-                if (!$return) {
-                    carp "Failed to move opinions to point to original comb ($fields{child_no} that pointed to recomb name ($fields{parent_no}) for opinion no $code";
-                }
-            }
-            # Lastly, reset the status of opinions to be 'corrected as','recombined as', or 'rank changed as' as necessary
-            # of other migrated opinions
-            my $sql = "SELECT * FROM opinions WHERE status LIKE 'belongs to' AND child_no != child_spelling_no AND child_no=$fields{child_no}";
-            my @results = @{$dbt->getData($sql)};
-            foreach my $row (@results) {
-                my $taxon = {};
-                $taxon->{'child_no'} = $row->{'child_no'};
-                $taxon->{'child_spelling_no'} = $row->{'child_spelling_no'};
-                my $spelling_status = getSpellingStatus($dbt,$taxon);
-                if ($spelling_status =~ /rank|recombined|corrected/) {
-                    $sql = "UPDATE opinions SET modified=modified,status='$spelling_status' WHERE opinion_no=$row->{opinion_no} LIMIT 1";
-                    main::dbg("Also changing opinion # $row->{opinion_no} from 'belongs to' to $spelling_status with sql $sql");
+                
+                # We also have to modify the parent_no so it points to the original combination of an taxa classified into
+                # any migrated opinion
+                if (@parents) {
+                    my $sql = "UPDATE opinions SET modified=modified, parent_no=$fields{'child_no'} WHERE parent_no IN (".join(",",@parents).")";
+                    main::dbg("Migrating parents: $sql");
                     $dbh->do($sql);
                 }
+                
+                # Make sure opinions authority information is synchronized with the original combination
+                Taxon::propagateAuthorityInfo($dbt,$fields{'child_no'});
+
+                # Remove any duplicates that may have been added as a result of the migration
+                removeDuplicateOpinions($dbt,$fields{'child_no'});
             }
-		}	
-        #TaxaCache::updateCache($dbt,$fields{'child_no'});
-        #TaxaCache::markForUpdate($dbt,$fields{'child_no'});
+        }
 	} else {
 		# if it's an old entry, then we'll update.
         unless ($q->param('ref_has_opinion') =~ /CURRENT/) {
@@ -1297,8 +1268,6 @@ sub submitOpinionForm {
 		
 		$resultOpinionNumber = $o->get('opinion_no');
 		$dbt->updateRecord($s,'opinions', 'opinion_no',$resultOpinionNumber, \%fields);
-        #TaxaCache::updateCache($dbt,$fields{'child_no'});
-        #TaxaCache::markForUpdate($dbt,$fields{'child_no'});
 
 	}
     my $pid = fork();
@@ -1368,7 +1337,7 @@ sub submitOpinionForm {
 <td valign=top>
   <br><li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}">Edit other opinions about $childSpellingName</a></b></li>
+  <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}">Add/edit opinion about $childSpellingName from another reference</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit opinions from the same reference</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=current">Add/edit opinion about another taxon</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm">Add/edit opinion about another taxon from another reference</a></b></li>
@@ -1378,13 +1347,31 @@ sub submitOpinionForm {
 
     # See Taxon::displayTypeTaxonSelectForm for details
     Taxon::displayTypeTaxonSelectForm($dbt,$s,$fields{'type_taxon'},$fields{'child_no'},$childName,$childRank,$resultReferenceNumber,$end_message);
-    
+}
+
+# Gets a list of opinions that will be moved from a spelling to an original name.  Made into
+# its own function so we can prompt the user before the move actually happens to make
+# sure they're not making a mistake
+sub getOpinionsToMigrate {
+    my ($dbt,$child_no,$child_spelling_no) = @_;
+ 
+    my $orig_no = TaxonInfo::getOriginalCombination($dbt,$child_spelling_no);
+    my $sql = "SELECT * FROM opinions WHERE child_no=$orig_no";
+    my @results = @{$dbt->getData($sql)};
+  
+    my @opinions = ();
+    foreach my $row (@results) {
+        if ($row->{'child_no'} != $child_no) {
+            push @opinions, $row;
+        }
+    }
+    return @opinions;
 }
 
 # Displays a form which lists all opinions that currently exist
 # for a reference no/taxon
 # Moved/Adapted from Taxon::displayOpinionChoiceForm PS 01/24/2004
-sub displayOpinionChoiceForm{
+sub displayOpinionChoiceForm {
     my $dbt = shift;
     my $s = shift;
     my $q = shift;
@@ -1515,6 +1502,50 @@ sub displayOpinionChoiceForm{
         print "</div>\n";
     }
 }
+
+# Occasionally duplicate opinions will be created sort of due to user err.  User will enter
+# an opinions 'A b belongs to A' when 'A b' isn't the original combination.  They they
+# enter 'C b recombined as A b' from the same source, and the original 'A b' original gets
+# migrated when its actually the same opinion.  Find these opinions.  Don't delete them,
+# but just set all their key fields to zero and mark changes into the comments field
+sub removeDuplicateOpinions {
+    my ($dbt,$child_no,$debug_only) = @_;
+    my $dbh = $dbt->dbh;
+    return if !($child_no);
+    my $sql = "SELECT * FROM opinions WHERE child_no=$child_no";
+    my @results = @{$dbt->getData($sql)};
+    my %dupe_hash = ();
+    foreach my $row (@results) {
+        my $dupe_key;
+        if ($row->{'ref_has_opinion'} =~ /yes/i) {
+            $dupe_key = $row->{'reference_no'}.' '.$row->{'child_no'}.' '.$row->{'parent_no'};
+            push @{$dupe_hash{$dupe_key}},$row;
+        } else {
+            $dupe_key = $row->{'child_no'}.' '.$row->{'parent_no'}.' '.$row->{'author1last'}.' '.$row->{'author2last'}.' '.$row->{'otherauthors'}.' '.$row->{'pubyr'};
+            if ($row->{'author1last'}) { #Deal with some older screwy data records just missing authority info
+                push @{$dupe_hash{$dupe_key}},$row;
+            }
+        }
+    }
+    while (my ($key,$array_ref) = each %dupe_hash) {
+        my @opinions = @$array_ref;
+        if (scalar(@opinions) > 1) {
+            my $orig_row = shift @opinions;
+            foreach my $row (@opinions) {
+                main::dbg("Found duplicate row for $orig_row->{opinion_no} in $row->{opinion_no}");
+                my $new_comments = $row->{'comments'}." :DUPE OF #$orig_row->{opinion_no}:child_no=$row->{child_no},child_spelling_no=$row->{child_spelling_no},parent_no=$row->{parent_no},parent_spelling_no=$row->{parent_spelling_no},reference_no=$row->{reference_no}";
+                $new_comments = $dbh->quote($new_comments);
+                $sql = "UPDATE opinions SET modified=modified,child_no=0,child_spelling_no=0,parent_no=0,parent_spelling_no=0,reference_no=0,comments=$new_comments WHERE opinion_no=$row->{'opinion_no'}";
+                main::dbg("REMOVING DUPE opinion: $sql");
+                if (! $debug_only) {
+                    $dbh->do($sql);
+                }
+            }
+        }
+    }
+}
+
+
 
 1;
 
