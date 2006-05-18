@@ -282,7 +282,7 @@ sub updateRecord {
     $updateEmptyOnly = 0 if (exists $table_row->{'authorizer_no'} && $s->get('authorizer_no') == $table_row->{'authorizer_no'});
     $updateEmptyOnly = 0 if (exists $table_row->{'authorizer_no'} && $is_modifier_for{$table_row->{'authorizer_no'}});
     $updateEmptyOnly = 0 if (!exists $table_row->{'authorizer_no'});
-    $updateEmptyOnly = 0 if ($tableName =~ /authorities/);
+    $updateEmptyOnly = 0 if ($tableName =~ /authorities|opinions/);
 
     # get the column info from the table
     my $sth = $dbh->column_info(undef,'pbdb',$tableName,'%');
