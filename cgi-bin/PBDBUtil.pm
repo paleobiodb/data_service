@@ -477,7 +477,7 @@ sub new_search_recurse {
             my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt, $child->{'child_no'});
 
             if($parent_row->{'parent_no'} == $parent_no){
-                my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE status IN  ('rank changed as','recombined as','corrected as') AND child_no=$child->{'child_no'}";
+                my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no=$child->{'child_no'}";
                 my @results = @{$dbt->getData($sql)}; 
                 foreach my $row (@results) {
                     if ($row->{'child_spelling_no'}) {
@@ -519,7 +519,7 @@ sub taxonomic_search{
     
     # get alternate spellings of focal taxon. all alternate spellings of
     # children will be found by the new_search_recurse function
-    my $sql = "SELECT child_spelling_no FROM opinions WHERE status IN ('recombined as','corrected as','rank changed as') AND child_no=$taxon_no";
+    my $sql = "SELECT child_spelling_no FROM opinions WHERE child_no=$taxon_no";
     my @results = @{$dbt->getData($sql)};
     foreach my $row (@results) {
         $passed->{$row->{'child_spelling_no'}} = 1 if ($row->{'child_spelling_no'});
@@ -809,6 +809,7 @@ sub getFilename {
     }
     return $filename;
 }
+
 
 # pass this a number like "5" and it will return the name ("five").
 # only works for numbers up through 19.  Above that and it will just return
