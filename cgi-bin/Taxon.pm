@@ -625,12 +625,21 @@ sub submitAuthorityForm {
 		if (($isNewEntry && $taxonExists) ||
 		    (!$isNewEntry && $taxonExists && $q->param('taxon_name') ne $t->get('taxon_name'))) {
             my @pub_info = ();
+            my %ranks = ();
             foreach my $row (@taxon) {
-                push @pub_info, Reference::formatShortRef($row);
+                $ranks{$row->{'taxon_rank'}} = 1;
+            }
+            my $different_ranks = scalar(keys(%ranks));
+            foreach my $row (@taxon) {
+                my $pub_info = Reference::formatShortRef($row);
+                if ($different_ranks > 1) {
+                    $pub_info .=" ($row->{taxon_rank})";
+                }
+                push @pub_info, $pub_info;
             }
             my $plural = ($taxonExists == 1) ? "" : "s";
             $q->param('confirmed_taxon_name'=>$q->param('taxon_name'));
-			$errors->add("This taxonomic name already appears $taxonExists time$plural in the database: ".join(", ",@pub_info).". If this record is a homonym and you want to create a new record, hit submit again.");
+			$errors->add("This taxonomic name already appears $taxonExists time$plural in the database: ".join(", ",@pub_info).". If this record is a homonym and you want to create a new record, hit submit again. If its a rank change, just enter an opinion using the new rank.");
 		}
 	}
 	
@@ -804,10 +813,30 @@ sub setOccurrencesTaxonNoByTaxon {
     }
 
     # start with a test for uniqueness
-    my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name=".$dbh->quote($taxon_name);
-    my @taxon_nos = @{$dbt->getData($sql)};
-    @taxon_nos = map {$_->{'taxon_no'}} @taxon_nos;
-
+    my @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$taxon_name},['taxon_no','taxon_rank','taxon_name','author1last','author2last','pubyr']);
+    my @taxon_nos= ();
+    for (my $i=0;$i<@taxa;$i++) {
+        my $orig_no_i = TaxonInfo::getOriginalCombination($dbt,$taxa[$i]->{'taxon_no'});
+        my $is_same_taxon = 0;
+        for (my $j=$i+1;$j<@taxa;$j++) {
+            my $orig_no_j = TaxonInfo::getOriginalCombination($dbt,$taxa[$j]->{'taxon_no'});
+            if ($orig_no_j == $orig_no_i) {
+                $is_same_taxon = 1;
+            }
+            if ($taxa[$i]->{'author1last'} && 
+                $taxa[$i]->{'author1last'} eq $taxa[$j]->{'author1last'} &&
+                $taxa[$i]->{'author2last'} eq $taxa[$j]->{'author2last'} &&
+                $taxa[$i]->{'pubyr'} eq $taxa[$j]->{'pubyr'}) {
+                $is_same_taxon = 1;
+            }
+        }
+        if (!$is_same_taxon) {
+            push @taxon_nos, $taxa[$i]->{'taxon_no'};
+        } else {
+            main::dbg("Not counting taxa as a homonym, it seems to match a another taxa exactly:".Dumper($taxa[$i]));
+        }
+    }
+    
     if (scalar(@taxon_nos) > 1) {
         my $sql1 = "SELECT p.name, p.email, count(*) cnt FROM occurrences o,person p WHERE o.authorizer_no=p.person_no AND o.taxon_no IN (".join(",",@taxon_nos).") group by p.person_no";
         my $sql2 = "SELECT p.name, p.email, count(*) cnt FROM reidentifications re,person p WHERE re.authorizer_no=p.person_no AND re.taxon_no IN (".join(",",@taxon_nos).") group by p.person_no";
@@ -1153,6 +1182,9 @@ sub formatAuthorityLine	{
 		$authLine .= "<i>" . $taxon->{'taxon_name'} . "</i>";
 	} else {
 		$authLine .= $taxon->{'taxon_name'};
+        if ($taxon->{'taxon_rank'} && $taxon->{'taxon_rank'} !~ /unranked clade/) {
+            $authLine .= ", $taxon->{taxon_rank}";
+        }
 	}
 	
 	# If the authority is a PBDB ref, retrieve and print it
