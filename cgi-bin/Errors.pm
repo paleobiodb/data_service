@@ -66,14 +66,9 @@ sub errorMessage {
 	}
 	
 	my $errString = "<DIV class=\"errorMessage\">
-				<UL STYLE=\"text-align:left;\"><DIV class=\"errorTitle\">Please fix the following $count</DIV>" . 
+				<UL STYLE=\"text-align:left;\"><DIV class=\"errorTitle\">Please fix the following $count and resubmit</DIV>" . 
 				$self->{errorString} . "</UL>
 				<SPAN class=\"tiny\">(hint: if you get a formatting error, check for extra spaces in the fields)</SPAN><BR><BR>";
-
-	if ($self->{displayEndingMessage}) { 
-		$errString .= "Make corrections as necessary and resubmit the form.<BR>To cancel, use the back button on your browser.";
-	}
-	
 	$errString .= "</DIV>";
 	
     if ($self->{count} > 0) {
