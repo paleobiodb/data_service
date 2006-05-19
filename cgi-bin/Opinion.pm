@@ -642,16 +642,16 @@ sub displayOpinionForm {
     if ($childRank =~ /subgenus/) {
         my ($genusName,$subGenusName) = Taxon::splitTaxon($childName);
         @select_values = ('original spelling','correction','rank change','reassignment');
-        @select_keys = ("is the original spelling of '$childName'", "is a correction of '$childName'","has had its rank changed from its original rank of $childRank","has been reassigned from its original genus '$genusName'");
+        @select_keys = ("is the original spelling and rank of '$childName'", "is a correction of '$childName'","has had its rank changed from its original rank of $childRank","has been reassigned from its original genus '$genusName'");
     } elsif ($childRank =~ /species/) {
         @select_values = ('original spelling','recombination','correction');
-        @select_keys = ("is the original spelling of '$childName'","is a recombination of '$childName'","is a correction of '$childName'");
+        @select_keys = ("is the original spelling and rank of '$childName'","is a recombination of '$childName'","is a correction of '$childName'");
     } else {
         @select_values = ('original spelling','correction','rank change');
-        @select_keys = ("is the original spelling of '$childName'","is a correction of '$childName'","has had its rank changed from its original rank of $childRank");
+        @select_keys = ("is the original spelling and rank of '$childName'","is a correction of '$childName'","has had its rank changed from its original rank of $childRank");
     }
     $spelling_row .= "<tr><td>&nbsp;</td></tr>";
-    $spelling_row .= "<tr><td>Enter the reason why this spelling was used:<br>This name ". $hbo->buildSelect('spelling_reason',\@select_keys,\@select_values,$fields{'spelling_reason'})."</td></tr>";
+    $spelling_row .= "<tr><td>Enter the reason why this spelling and rank was used:<br>This ". $hbo->buildSelect('spelling_reason',\@select_keys,\@select_values,$fields{'spelling_reason'})."</td></tr>";
 
     main::dbg("showOpinionForm, fields are: <pre>".Dumper(\%fields)."</pre>");
 
@@ -1048,7 +1048,7 @@ sub submitOpinionForm {
         }
     } else {
         if ($childSpellingRank ne $childRank && $q->param('spelling_reason') !~ /recombination/) {
-            $errors->add("Unless a taxon has its rank changed or is recombined, the rank entered in he \"How was it spelled?\" section must match the original taxonomic name");
+            $errors->add("Unless a taxon has its rank changed or is recombined, the rank entered in he \"How was it spelled?\" section must match the original taxon's rank. If the rank has changed, select \"rank change\" even if the spelling remains the same");
         }
     }    
 
@@ -1057,11 +1057,11 @@ sub submitOpinionForm {
     # and the opposite is true its an original spelling (they're the same);
     if ($q->param('spelling_reason') =~ /original spelling/) {
         if ($childSpellingName ne $childName || $childSpellingRank ne $childRank) {
-            $errors->add("If \"This name is the original spelling of '$childName'\" is selected, you must enter '$childName' in the \"How was it spelled?\" section");
+            $errors->add("If \"This is the original spelling and rank of '$childName'\" is selected, you must enter '$childName', '$childRank' in the \"How was it spelled?\" section");
         }
     } else {
         if ($childSpellingName eq $childName && $childSpellingRank eq $childRank) {
-            $errors->add('If you leave the rank and name unchanged, please select "This name is the original spelling" in the \"How was it spelled\" section');
+            $errors->add('If you leave the name and rank unchanged, please select "This is the original spelling and rank" in the \"How was it spelled\" section');
         }
     }
         
@@ -1080,7 +1080,7 @@ sub submitOpinionForm {
                 }
             } else {
                 if ($spellingParent ne $childParent) {
-                    $errors->add("The genus and subgenus of the spelling must be the same as the original genus and subgenus when choosing \"This name is a correction\" or \"This name is the original spelling\"");
+                    $errors->add("The genus and subgenus of the spelling must be the same as the original genus and subgenus when choosing \"This name is a correction\" or \"This is the original spelling and rank\"");
                 }
             }
         } else { # Subgenus
@@ -1181,7 +1181,7 @@ sub submitOpinionForm {
         my $orig = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}},['*']);
 
 		my @dataFields = ("pages", "figures", "extant", "preservation");
-		my @origAuthFields = ("ref_is_authority","author1init", "author1last","author2init", "author2last","otherauthors", "pubyr" );
+		my @origAuthFields = ("author1init", "author1last","author2init", "author2last","otherauthors", "pubyr" );
         
         if ($orig->{'ref_is_authority'} =~ /yes/i) {
             $record{'reference_no'}=$orig->{'reference_no'};
@@ -1191,6 +1191,7 @@ sub submitOpinionForm {
             foreach my $f (@origAuthFields) {
                 $record{$f} = "";
             }
+            $record{'ref_is_authority'}='YES';
         } else {
             foreach my $f (@dataFields,@origAuthFields) {
                 $record{$f} = $orig->{$f};
