@@ -267,7 +267,11 @@ sub processPrintHierarchy	{
 	chmod 0664, "$OUT_FILE_DIR/classification.csv";
 
 	print "<hr><p><b><a href=\"$OUT_HTTP_DIR/classification.csv\">Download</a></b> this list of taxonomic names</p>";
-	print "<p><b><a href=\"bridge.pl?action=displayDownloadTaxonomyResults&taxon_no=".$ref->{"taxon_no"}."\">Download</a></b> authority and opinion data for these taxa</p>";
+    print '<p><b><a href=# onClick="javascript: document.doDownloadTaxonomy.submit()">Download</a></b> authority and opinion data for these taxa</p>';
+    print '<form method="POST" action="bridge.pl" name="doDownloadTaxonomy">';
+    print '<input type="hidden" name="action" value="displayDownloadTaxonomyResults">';
+    print '<input type="hidden" name="taxon_no" value="'.$ref->{'taxon_no'}.'">';
+    print '</form>'; 
 
 	print "<p>You may <b><a href=\"$exec_url?action=startStartPrintHierarchy\">classify another taxon</a></b></p>";
 	print main::stdIncludes( "std_page_bottom" );

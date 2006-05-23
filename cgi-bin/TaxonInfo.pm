@@ -155,6 +155,11 @@ sub displayTaxonInfoResults {
 
     my $taxon_no = $q->param('taxon_no');
 
+    my $real_user = 0;
+    if ($q->request_method() eq 'POST' || $q->param('real_user') || $s->isDBMember()) {
+        $real_user = 1;
+    }
+
 	# Verify taxon: If what was entered is a synonym for something else, use the
     # synonym. Else use the taxon
     my ($taxon_name,$taxon_rank);
@@ -280,7 +285,7 @@ sub displayTaxonInfoResults {
 		print '<div align="center"><h3>Classification</h3></div>';
         #print '<div align="center" style=\"border-bottom-width: 1px; border-bottom-color: red; border-bottom-style: solid;\">';
         print '<div align="center">';
-		print displayTaxonClassification($dbt, $taxon_no, $taxon_name);
+		print displayTaxonClassification($dbt, $taxon_no, $taxon_name,$real_user);
 
         my $entered_name = $q->param('entered_name') || $q->param('taxon_name') || $taxon_name;
         my $entered_no   = $q->param('entered_no') || $q->param('taxon_no');
@@ -324,7 +329,7 @@ sub displayTaxonInfoResults {
         print '<div id="panel2" class="panel">';
 		print '<div align="center"><h3>Related taxa</h3></div>';
         print '<div align="center">';
-		print displayRelatedTaxa($dbt, $taxon_no, $taxon_name);
+		print displayRelatedTaxa($dbt, $taxon_no, $taxon_name,$real_user);
         print '</div>';
         print '</div>';
         print '<script language="JavaScript" type="text/javascript"> showTabText(2); </script>';
@@ -382,27 +387,37 @@ sub displayTaxonInfoResults {
         print '<div id="panel8" class="panel">';
 		print '<div align="center"><h3>Map</h3></div>';
         print '<div align="center">';
-		# MAP USES $q->param("taxon_name") to determine what it's doing.
-		my $map_html_path = doMap($dbh, $dbt, $q, $s, $in_list);
-		if ( $map_html_path )	{
-			if($map_html_path =~ /^\/public/){
-				# reconstruct the full path the image.
-				$map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
-			}
-			open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
-			while(<MAP>){
-				print;
-			}
-			close MAP;
-		} else {
-		    print "<i>No distribution data are available</i>";
+
+        if ($real_user) {
+            # MAP USES $q->param("taxon_name") to determine what it's doing.
+            my $map_html_path = doMap($dbh, $dbt, $q, $s, $in_list);
+            if ( $map_html_path )	{
+                if($map_html_path =~ /^\/public/){
+                    # reconstruct the full path the image.
+                    $map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
+                }
+                open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
+                while(<MAP>){
+                    print;
+                }
+                close MAP;
+            } else {
+                print "<i>No distribution data are available</i>";
+            }
+            # trim the path down beyond apache's root so we don't have a full
+            # server path in our html.
+            if ( $map_html_path )	{
+                $map_html_path =~ s/.*?(\/public.*)/$1/;
+                print "<input type=hidden name=\"map_num\" value=\"$map_html_path\">";
+            }
+        } else {
+            print '<form method="POST" action="bridge.pl">';
+            foreach my $f ($q->param()) {
+                print "<input type=\"hidden\" name=\"$f\" value=\"".$q->param($f)."\">\n";
+            }
+            print "<input type=\"submit\" name=\"submit\" value=\"Show map\">";
+            print '</form>';
         }
-		# trim the path down beyond apache's root so we don't have a full
-		# server path in our html.
-		if ( $map_html_path )	{
-			$map_html_path =~ s/.*?(\/public.*)/$1/;
-			print "<input type=hidden name=\"map_num\" value=\"$map_html_path\">";
-		}
         print '</div>';
         print '</div>';
         print '<script language="JavaScript" type="text/javascript"> showTabText(8); </script>';
@@ -410,7 +425,18 @@ sub displayTaxonInfoResults {
 	# collections
     if ($modules{9}) {
         print '<div id="panel9" class="panel">';
-		print doCollections($q->url(), $q, $dbt, $dbh, $in_list);
+        if ($real_user) {
+		    print doCollections($q->url(), $q, $dbt, $dbh, $in_list, '',$real_user);
+        } else {
+            print '<div align="center">';
+            print '<form method="POST" action="bridge.pl">';
+            foreach my $f ($q->param()) {
+                print "<input type=\"hidden\" name=\"$f\" value=\"".$q->param($f)."\">\n";
+            }
+            print "<input type=\"submit\" name=\"submit\" value=\"Show age range and collections\">";
+            print '</form>';
+            print '</div>';
+        }
         print '</div>';
         print '<script language="JavaScript" type="text/javascript"> showTabText(9); </script>';
 	}
@@ -685,6 +711,7 @@ sub doCollections{
     # age_range_format changes appearance html formatting of age/range information
     # used by the strata module
     my $age_range_format = shift;  
+    my $real_user = shift;
 	my $output = "";
 
 	# get a lookup of the boundary ages for all intervals JA 25.6.04
@@ -1036,7 +1063,7 @@ sub doCollections{
 			$output .= "<td align=\"center\" valign=\"top\">$key</td>".
                        " <td align=\"left\"><span class=\"small\">";
 			foreach  my $collection_no (@{$time_place_coll{$key}}){
-				$output .= "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a> ";
+				$output .= "<a href=\"$exec_url?action=displayCollectionDetails&collection_no=$collection_no&real_user=$real_user\">$collection_no</a> ";
 			}
 			$output .= "</span></td></tr>\n";
 			$row_color++;
@@ -1053,7 +1080,7 @@ sub doCollections{
 # SEND IN GENUS OR HIGHER TO GENUS_NAME, ONLY SET SPECIES IF THERE'S A SPECIES.
 ##
 sub displayTaxonClassification {
-    my ($dbt,$orig_no,$taxon_name) = @_;
+    my ($dbt,$orig_no,$taxon_name,$real_user) = @_;
     my $dbh = $dbt->dbh;
 
     my $output; # the html actually returned by the function
@@ -1163,7 +1190,7 @@ sub displayTaxonClassification {
                 }
                 my $pub_info = $auth_yr{author1last}.' '.$auth_yr{pubyr};
                 if ($auth_yr{'ref_is_authority'} =~ /yes/i) {
-                    $pub_info = "<a href=\"bridge.pl?action=displayRefResults&type=view&reference_no=$auth_yr{reference_no}\">$pub_info</a>";
+                    $pub_info = "<a href=\"bridge.pl?action=displayRefResults&type=view&reference_no=$auth_yr{reference_no}&real_user=$real_user\">$pub_info</a>";
                 }
                 my $orig_no = getOriginalCombination($dbt,$taxon_no);
                 if ($orig_no != $taxon_no) {
@@ -1171,9 +1198,9 @@ sub displayTaxonClassification {
                 } 
                 my $link;
                 if ($taxon_no) {
-                    $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_no=$taxon_no">$show_name</a>|;
+                    $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_no=$taxon_no&real_user=$real_user">$show_name</a>|;
                 } else {
-                    $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name">$show_name</a>|;
+                    $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name&real_user=$real_user">$show_name</a>|;
                 }
                 $output .= qq|<td align="center">$taxon_rank</td>|.
                            qq|<td align="center">$link</td>|.
@@ -1203,6 +1230,7 @@ sub displayRelatedTaxa {
     my $dbh = $dbt->dbh;
 	my $orig_no = (shift or ""); #Pass in original combination no
     my $taxon_name = shift;
+    my $real_user = shift;
     my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
 
     my $output = "";
@@ -1254,7 +1282,7 @@ sub displayRelatedTaxa {
                 my @syn_links;                                                         
                 my @synonyms = @{$record->{'synonyms'}};
                 push @syn_links, $_->{'taxon_name'} for @synonyms;
-                my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$record->{taxon_no}">$record->{taxon_name}|;
+                my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$record->{taxon_no}&real_user=$real_user">$record->{taxon_name}|;
                 $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
                 $link .= "</a>";
                 if ($type_taxon_no && $type_taxon_no == $record->{'taxon_no'}) {
@@ -1281,7 +1309,7 @@ sub displayRelatedTaxa {
                     my @syn_links;
                     my @synonyms = @{$record->{'synonyms'}};
                     push @syn_links, $_->{'taxon_name'} for @synonyms;
-                    my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$record->{taxon_no}">$record->{taxon_name}|;
+                    my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$record->{taxon_no}&real_user=$real_user">$record->{taxon_name}|;
                     $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
                     $link .= "</a>";
                     push @sister_taxa_links, $link;
@@ -1334,11 +1362,11 @@ sub displayRelatedTaxa {
                     $occ_name .= " ".$row->{'species_name'};
                     if ($species) {
                         if ($species ne $row->{'species_name'}) {
-                            my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$occ_name">$occ_name</a>|;
+                            my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$occ_name&real_user=$real_user">$occ_name</a>|;
                             push @possible_sister_taxa_links, $link;
                         }
                     } else {
-                        my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$occ_name">$occ_name</a>|;
+                        my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&taxon_name=$occ_name&real_user=$real_user">$occ_name</a>|;
                         push @possible_child_taxa_links, $link;
                     }
                 }
@@ -1379,7 +1407,17 @@ sub displayRelatedTaxa {
     } 
 
     if ($orig_no) {
-        $output .= "<p><b><a href=\"bridge.pl?action=displayDownloadTaxonomyResults&taxon_no=$orig_no\">Download authority and opinion data</a></b> - <b><a href=\"bridge.pl?action=startProcessPrintHierarchy&maximum_levels=99&taxon_no=$orig_no\">View classification of included taxa</a></b></br></p>";
+        $output .= '<p><b><a href=# onClick="javascript: document.doDownloadTaxonomy.submit()">Download authority and opinion data</a></b> - <b><a href=# onClick="javascript: document.doViewClassification.submit()">View classification of included taxa</a></b></br></p>';
+        $output .= '<form method="POST" action="bridge.pl" name="doDownloadTaxonomy">';
+        $output .= '<input type="hidden" name="action" value="displayDownloadTaxonomyResults">';
+        $output .= '<input type="hidden" name="taxon_no" value="'.$orig_no.'">';
+        $output .= '</form>';
+        $output .= '<form method="POST" action="bridge.pl" name="doViewClassification">';
+        $output .= '<input type="hidden" name="action" value="startProcessPrintHierarchy">';
+        $output .= '<input type="hidden" name="maximum_levels" value="99">';
+        $output .= '<input type="hidden" name="taxon_no" value="'.$orig_no.'">';
+        $output .= '</form>';
+        
     }
 	return $output;
 }
@@ -1948,6 +1986,7 @@ sub displaySynonymyList	{
 	my $dbt = shift;
     # taxon_no must be an original combination
 	my $taxon_no = (shift or "");
+    my $real_user = shift;
 	my $output = "";
 
     unless ($taxon_no) {
@@ -2014,7 +2053,7 @@ sub displaySynonymyList	{
 			} else	{
 				my $sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $useref->{reference_no};
 				my $refref = @{$dbt->getData($sql)}[0];
-				$synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $parent_name . "<a href=\"bridge.pl?action=displayRefResults&type=view&reference_no=$useref->{reference_no}\"> " . $refref->{author1last};
+				$synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $parent_name . "<a href=\"bridge.pl?action=displayRefResults&type=view&reference_no=$useref->{reference_no}&real_user=$real_user\"> " . $refref->{author1last};
 				if ( $refref->{otherauthors} )	{
 					$synkey .= " et al.";
 				} elsif ( $refref->{author2last} )	{
@@ -2083,7 +2122,7 @@ sub displaySynonymyList	{
                 } else	{
                     my $sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $useref->{reference_no};
                     my $refref = @{$dbt->getData($sql)}[0];
-                    $synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $auth_taxon_name . "<a href=\"bridge.pl?action=displayRefResults&type=view&reference_no=$useref->{reference_no}\"> " . $refref->{author1last};
+                    $synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $auth_taxon_name . "<a href=\"bridge.pl?action=displayRefResults&type=view&reference_no=$useref->{reference_no}&real_user=$real_user\"> " . $refref->{author1last};
                     if ( $refref->{otherauthors} )	{
                         $synkey .= " et al.";
                     } elsif ( $refref->{author2last} )	{
