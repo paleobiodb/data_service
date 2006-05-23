@@ -171,6 +171,17 @@ function imagePopup (URL,width,height) {
 	window.open(URL, 'imageview', 'toolbar=0,scrollbars=1,location=0,statusbar=0,menubar=0,resizable=1,width='+width+',height='+height);
 }
 
+// Show a popup with a map in it.  this is kept distinct from the other two popups because if we include
+// the full url in the javascript, search engines will still spider it, which is bad since the map 
+// generation is ultra heavyweight
+function mapPopup(collection_no) {
+    var link = 'bridge'+'.pl'+
+               '?action=displayMapOfCollection'+
+               '&display_header=NO'+
+               '&collection_no='+collection_no;
+    window.open(link,'mapview','toolbar=0,scrollbars=1,location=0,statusbar=0,menubar=0,resizable=1,width=800,height=600');
+}
+
 
 //if java script is turned on, then this will
 //print a hidden input field so we can check from the perl
