@@ -1254,7 +1254,7 @@ sub printGetRefsButton	{
 	if ($overlimit > 30 && $overlimit > $numRows)	{
 		my $oldSearchTerms;
 		my @oldParams = ("name", "year", "reftitle", "reference_no",
-						 "enterer_reversed", "project_name", "refsortby",
+						 "enterer_reversed", "project_name", "refsortby", "refsortorder", 
 						 "refsSeen", "authorizer_reversed");
 		for my $parameter (@oldParams)	{
 			if ($q->param($parameter))	{
@@ -2664,10 +2664,10 @@ IS NULL))";
 	
 	# Handle collection name (must also search collection_aka field) JA 7.3.02
 	if ( $options{'collection_names'} ) {
+		my $val = $dbh->quote($wildcardToken . $options{'collection_names'} . $wildcardToken);
         if ($options{'collection_names'} =~ /^\d+$/) {
-            $options{'collection_no'}=$options{'collection_names'};
+		    push @where, "(collection_name LIKE $val OR collection_aka LIKE $val OR collection_no=$options{collection_names})";
         } else {
-		    my $val = $dbh->quote($wildcardToken . $options{'collection_names'} . $wildcardToken);
 		    push @where, "(collection_name LIKE $val OR collection_aka LIKE $val)";
         }
 	}
@@ -7460,22 +7460,23 @@ sub RefQuery {
     
 		my $orderBy = " ORDER BY ";
 		my $refsortby = $q->param('refsortby');
+        my $refsortorder = ($q->param('refsortorder') =~ /desc/i) ? "DESC" : "ASC"; 
 
 		# order by clause is mandatory
 		if ($refsortby eq 'year') {
-			$orderBy .= "r.pubyr, ";
+			$orderBy .= "r.pubyr $refsortorder, ";
 		} elsif ($refsortby eq 'publication') {
-			$orderBy .= "r.pubtitle, ";
+			$orderBy .= "r.pubtitle $refsortorder, ";
 		} elsif ($refsortby eq 'authorizer') {
-			$orderBy .= "p1.reversed_name, ";
+			$orderBy .= "p1.reversed_name $refsortorder, ";
 		} elsif ($refsortby eq 'enterer') {
-			$orderBy .= "p2.reversed_name, ";
+			$orderBy .= "p2.reversed_name $refsortorder, ";
 		} elsif ($refsortby eq 'entry date') {
-			$orderBy .= "r.reference_no, ";
+			$orderBy .= "r.reference_no $refsortorder, ";
 		}
 		
 		if ($refsortby)	{
-			$orderBy .= "r.author1last, r.pubyr";
+			$orderBy .= "r.author1last $refsortorder, r.pubyr $refsortorder";
 		}
 
 		# only append the ORDER clause if something is in it,
