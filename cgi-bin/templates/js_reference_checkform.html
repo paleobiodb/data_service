@@ -20,18 +20,20 @@
 		// First Author Initials
 		// pattern for multiple spaces match
 		var last_name_institution = /^\S+\s+\S+\s+\S+/;
+		var last_name_anon = /^anon/i;
 		if ( frm.author1init.value == "" ) {
-			if(frm.author1last.value.match(last_name_institution)){
+			if(frm.author1last.value.match(last_name_institution) ||
+               frm.author1last.value.match(last_name_anon)){
 				// OK to have a blank first name if the last name is
-				// and institution.
+				// an institution, or is "anonymous"
 			}
 			else{
 				errors += "First author initials may not be blank.\n"; 
 			}
 		} else {
 			// Check for a capital letter
-			if ( capital.test ( frm.author1init.value ) == false ) {
-				errors += "First author initials should have a capital letter.\n"; 
+			if ( capital.test ( frm.author1init.value ) == false) {
+			    errors += "First author initials should have a capital letter\n"; 
 			}
 		}
 
@@ -41,7 +43,9 @@
 		} else {
 			// Check for a capital letter
 			if ( capital.test ( frm.author1last.value ) == false ) {
-				errors += "First author last name should have a capital letter.\n"; 
+                if (! frm.author1last.value.match(last_name_anon)) {
+				    errors += "First author last name should have a capital letter\n"; 
+                }
 			}
 		}
 
