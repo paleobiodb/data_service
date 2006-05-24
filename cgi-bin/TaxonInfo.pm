@@ -1158,8 +1158,10 @@ sub displayTaxonClassification {
                 }
                 last if ($row->{'taxon_rank'} eq 'kingdom');
             }
-            if ($genus) {
+            if ($genus_no) {
                 unshift @table_rows, ['genus',$genus,$genus,$genus_no];
+            } else {
+                unshift @table_rows, [$taxon_rank,$taxon_name,$taxon_name,$taxon_no];
             }
             if ($subgenus) {
                 unshift @table_rows, ['subgenus',"$genus ($subgenus)",$subgenus,$subgenus_no];
@@ -1261,11 +1263,11 @@ sub displayRelatedTaxa {
         my $taxon_parent_rank = "";
         if ($taxon_parent) {
             $taxon_parent_rank = Taxon::guessTaxonRank($taxon_parent);
-            $taxon_parent_rank = 'genus' if (!$taxon_parent_rank);
-            @parents = getTaxa($dbt,{'taxon_name'=>$taxon_parent,'taxon_rank'=>$taxon_parent_rank});
+            #$taxon_parent_rank = 'genus' if (!$taxon_parent_rank);
+            @parents = getTaxa($dbt,{'taxon_name'=>$taxon_parent});
         }
        
-        if ($taxon_parent && scalar(@parents) <= 1) {
+        if ($taxon_parent && scalar(@parents) == 1) {
             $parent_taxon_no=getOriginalCombination($dbt,$parents[0]->{'taxon_no'});
         }
     }
