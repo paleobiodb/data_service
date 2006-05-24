@@ -464,9 +464,9 @@ sub displayOpinionForm {
                 my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$parent_no});
                 $higher_class = "unclassified $taxon->{taxon_rank}";
             }
-			$parent_pulldown .= qq|<input type="radio" name="parent_spelling_no" $selected value='$parent_no'> ${parentName}$pub_info [$higher_class]<br>\n|;
+			$parent_pulldown .= qq|<input type="radio" name="parent_spelling_no" $selected value='$parent_no'> $parentName, $taxon->{taxon_rank}$pub_info [$higher_class]<br>\n|;
         }
-        $parent_pulldown .= qq|<input type="radio" name="parent_spelling_no" value=""> \nOther name: <input type="text" name="belongs_to_parent" value=""><br>\n|;
+        $parent_pulldown .= qq|<input type="radio" name="parent_spelling_no" value=""> \nOther taxon: <input type="text" name="belongs_to_parent" value=""><br>\n|;
 	}
 
     main::dbg("parentName $parentName parents: ".scalar(@parent_nos));
@@ -627,7 +627,7 @@ sub displayOpinionForm {
             }
 			$spelling_row .= qq|<input type="radio" name="child_spelling_no" $selected value='$child_spelling_no'> ${childSpellingName}${pub_info}${orig_info} <br>\n|;
         }
-        $spelling_row .= qq|<input type="radio" name="child_spelling_no" value=""> \nOther name: <input type="text" name="child_spelling_name" value="">$spelling_rank_pulldown<br>\n|;
+        $spelling_row .= qq|<input type="radio" name="child_spelling_no" value=""> \nOther taxon: <input type="text" name="child_spelling_name" value="">$spelling_rank_pulldown<br>\n|;
 	    $spelling_row .= qq|<input type="hidden" name="new_child_spelling_name" value="$childSpellingName">|;
         my $new_child_spelling_rank_pulldown = $hbo->buildSelect('new_child_spelling_rank',\@ranks, \@ranks, $fields{'child_spelling_rank'});
 	    $spelling_row .= qq|<input type="radio" name="child_spelling_no" value="-1"> Create a new '$childSpellingName' based off '$childName' with rank $new_child_spelling_rank_pulldown<br>|;
