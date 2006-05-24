@@ -108,6 +108,7 @@ sub buildMap {
 	if ( $self->{'maptime'} > 0 )	{
 		$self->mapGetRotations();
 	}
+	$self->{rotatemapfocus} = $q->param('rotatemapfocus');
 
     $img_link = $self->mapSetupImage();
 
@@ -306,6 +307,7 @@ sub buildMapOnly {
 	if ( $self->{maptime} eq "" )	{
 		$self->{maptime} = 0;
 	}
+	$self->{rotatemapfocus} = $q->param('rotatemapfocus');
 
 	$self->mapGetScale();
 	$self->mapDefineOutlines();
@@ -823,56 +825,86 @@ sub mapGetRotations	{
 				my $z1 = $rotdeg{$basema}{$pid};
 				my $z2 = $rotdeg{$topma}{$pid};
 
-			# the amazing "Madagascar 230 Ma" correction
-			# rewrote almost all of the following section:
-			#  equations for rotx were just wrong, and there was
-			#  no correction for rotdeg JA 28-29.4.06
-			# in the Africa 150 Ma case, the degree offset changes
-			#  sign; in the 365 Ma case it does not, so the
-			#  conditional is needed JA 28.4.06
-				if ( ( ( $x1 > 0 && $x2 < 0 ) || ( $x1 < 0 && $x2 > 0 ) ) && ( abs($x1 - $x2) > 90 ) )	{
-				# simple sign switch
-					if ( abs($x1 - $x2) < 270 )	{
+			# Africa/plate 701 150 Ma bug: suddenly the pole of
+			#  rotation is projected to the opposite side of the
+			#  planet, so the degrees of rotation have a flipped
+			#  sign
+			# sometimes the lat/long signs flip but the degrees
+			#  of rotation don't (e.g., plate 619 410 Ma case),
+			#  and therefore nothing should be done to the latter;
+			#  test is whether the degrees have opposite signs
+			# sometimes the pole just goes around the left or right
+			#  edge of the map (e.g., Madagascar/plate 702 230 Ma),
+			#  so nothing should be done; the longitudes will be
+			#  off by > 270 degrees in that case
+
+				if ( abs($x1 - $x2) > 90 && abs($x1 - $x2) < 270 && ( ( $x1 > 0 && $x2 < 0 ) || ( $x1 < 0 && $x2 > 0 ) ) ) 	{
+					if ( ( $y1 > 0 && $y2 < 0 ) || ( $y1 < 0 && $y2 > 0 ) )	{
 						if ( $x2 > 0 )	{
 							$x2 = $x2 - 180;
 						} else	{
 							$x2 = $x2 + 180;
 						}
-						if ( ( $y1 > 0 && $y2 < 0 ) || ( $y1 < 0 && $y2 > 0 ) )	{
-							$y2 = -1 * $y2;
-						}
+						$y2 = -1 * $y2;
 						if ( ( $z1 > 0 && $z2 < 0 ) || ( $z1 < 0 && $z2 > 0 ) )	{
 							$z2 = -1 * $z2;
 						}
 					}
-				# actually, nothing has switched: it's just
-				#  that the longitude has gone over 180
-				# use a simple, nasty trick: let x2 go over
-				#  180 or under -180
+				}
+
+			# sometimes the degrees of rotation suddenly flip
+			#  even though the pole doesn't  (e.g., plate 616
+			#  410 Ma case)
+				if ( abs($z1 - $z2) > 90 && ( $z1 > 0 && $z2 < 0 || $z1 < 0 && $z2 > 0 ) )	{
+					if ( abs($z1 - $z2) < 270 )	{
+						$z2 = -1 * $z2;
+					}
+			# sometimes the degrees have just gone over 180 or
+			#  under -180 (e.g., plate 611 375 Ma case)
 					else	{
-						if ( $x2 > 0 )	{
-							$x2 = -360 + $x2;
+						if ( $z1 > 0 )	{
+							$z1 = $z1 - 360;
 						} else	{
-							$x2 = 360 + $x2;
+							$z1 = $z1 + 360;
 						}
 					}
 				}
-				if ( ( ( $z1 > 0 && $z2 < 0 ) || ( $z1 < 0 && $z2 > 0 ) ) && ( abs($z1 - $z2) > 90 ) )	{
-					$z2 = -1 * $z2;
-				}
 
-				$rotx{$self->{maptime}}{$pid} = ( $basewgt * $x1 ) + ( $topwgt * $x2 ) ;
-			# might need to clean up the mess caused by the nasty
-			#  trick used above
-				if ( $rotx{$self->{maptime}}{$pid} > 180 )	{
-					$rotx{$self->{maptime}}{$pid} = -360 + $rotx{$self->{maptime}}{$pid};
-				} elsif ( $rotx{$self->{maptime}}{$pid} < -180 )	{
-					$rotx{$self->{maptime}}{$pid} = 360 + $rotx{$self->{maptime}}{$pid};
-				}
-				$roty{$self->{maptime}}{$pid} = ( $basewgt * $y1 ) + ( $topwgt * $y2 );
+			
+			# averaging works better and better as you get close
+			#  to the origin, and works horribly near the edges of
+			#  the map, so treat the first pole as the origin,
+			#  rotate the second accordingly, interpolate, and
+			#  unrotate the interpolated pole
+			# key test cases involve Antarctica (45, 85, 290 Ma)
+
+				($x2,$y2) = rotatePoint($x2,$y2,$x1,$y1);
+				my $interpolatedx = $topwgt * $x2;
+				my $interpolatedy = $topwgt * $y2;
+
+				($rotx{$self->{maptime}}{$pid},$roty{$self->{maptime}}{$pid})  = rotatePoint($interpolatedx,$interpolatedy,$x1,$y1,"reversed");
+
 				$rotdeg{$self->{maptime}}{$pid} = ( $basewgt * $z1 ) + ( $topwgt * $z2 );
+
+			# it's mathematically possible that the degrees have
+			#  averaged out to over 180 or under -180 in something
+			#  like the plate 611 375 Ma case
+			if ( $rotdeg{$self->{maptime}}{$pid} > 180 )	{
+				$rotdeg{$self->{maptime}}{$pid} = $rotdeg{$self->{maptime}}{$pid} - 360;
+			} elsif ( $rotdeg{$self->{maptime}}{$pid} < - 180 )	{
+				$rotdeg{$self->{maptime}}{$pid} = $rotdeg{$self->{maptime}}{$pid} + 360;
+			}
+
 			}
 		}
+	}
+
+	$unrotatedmidlng = $midlng;
+	$unrotatedmidlat = $midlat;
+	if ( $q->param('rotatemapfocus') =~ /y/i )	{
+		my $a;
+		my $b;
+		($a,$b,$midlng,$midlat) = $self->projectPoints($midlng,$midlat);
 	}
 
 }
@@ -1707,7 +1739,7 @@ sub projectPoints	{
 	#  north pole; use the GCD between them to get the latitude;
 	#  add the degree offset to its longitude to get the new value;
 	#  re-rotate point back into the original coordinate system
-	if ( $self->{maptime} > 0 && ( $midlng != $x || $midlat != $y ) && $pointclass ne "grid" && $projected{$x}{$y} eq "" )	{
+	if ( $self->{maptime} > 0 && ( $midlng != $x || $midlat != $y || $q->param('rotatemapfocus') =~ /y/i ) && $pointclass ne "grid" && $projected{$x}{$y} eq "" )	{
 
 		my $ma = $self->{maptime};
 		$oldx = $x;
@@ -1792,7 +1824,9 @@ sub projectPoints	{
 	}
 
 	# rotate point if origin is not at 0/0
-	if ( $midlat != 0 || $midlng != 0 )	{
+	# but not if a point on a plate is the map focus and we are trying
+	#  to get the new focus JA 12.5.06
+	if ( ( $midlat != 0 || $midlng != 0 ) && ( $q->param('rotatemapfocus') !~ /y/i || $unrotatedmidlng != $midlng || $unrotatedmidlat != $midlat ) )	{
 		($x,$y) = rotatePoint($x,$y,$midlng,$midlat);
 		if ( $x eq "NaN" || $y eq "NaN" )	{
 			return('NaN','NaN');
