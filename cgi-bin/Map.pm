@@ -901,7 +901,7 @@ sub mapGetRotations	{
 
 	$unrotatedmidlng = $midlng;
 	$unrotatedmidlat = $midlat;
-	if ( $q->param('rotatemapfocus') =~ /y/i )	{
+	if ( $self->{rotatemapfocus} =~ /y/i )	{
 		my $a;
 		my $b;
 		($a,$b,$midlng,$midlat) = $self->projectPoints($midlng,$midlat);
