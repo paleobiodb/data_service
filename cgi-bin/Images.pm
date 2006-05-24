@@ -198,7 +198,7 @@ sub processLoadImage{
     my $width = $image->Get('width') || 0;
     my $height = $image->Get('height') || 0;
 	warn "$x" if "$x";
-	$x = $image->Scale('50x50');
+	$x = $image->Scale('100x100');
 	warn "$x" if "$x";
 	my $new_thumb = "${taxon_name}_${number}_thumb.$suffix";
 	$x = $image->Write("$docroot$subdirs/$new_thumb");
