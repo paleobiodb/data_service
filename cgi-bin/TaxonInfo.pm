@@ -1092,7 +1092,7 @@ sub displayTaxonClassification {
     # be the same as the original combination taxon_no for an authority. If we passed in a Genus+species
     # type combo but only the genus is in the authorities table, the classification_no will refer
     # to the genus
-    my ($classification_no,$classification_name);
+    my ($classification_no,$classification_name,$classification_rank);
 
     if ($orig_no) {
         my $correct_row = getMostRecentParentOpinion($dbt,$orig_no,1);
@@ -1109,6 +1109,7 @@ sub displayTaxonClassification {
         }
         $classification_no = $orig_no;
         $classification_name = $taxon_name;
+        $classification_rank = $taxon_rank;
         
     } else {
         # Theres are some case where we might want to do upward classification when theres no taxon_no:
@@ -1120,6 +1121,7 @@ sub displayTaxonClassification {
         if ($classification_no) {
             my $taxon = getTaxa($dbt,{'taxon_no'=>$classification_no});
             $classification_name = $taxon->{'taxon_name'};
+            $classification_rank = $taxon->{'taxon_rank'};
         }
     }
    
@@ -1160,8 +1162,8 @@ sub displayTaxonClassification {
             }
             if ($genus_no) {
                 unshift @table_rows, ['genus',$genus,$genus,$genus_no];
-            } else {
-                unshift @table_rows, [$taxon_rank,$taxon_name,$taxon_name,$taxon_no];
+            } elsif ($classification_no) {
+                unshift @table_rows, [$classification_rank,$classification_name,$classification_name,$classification_no];
             }
             if ($subgenus) {
                 unshift @table_rows, ['subgenus',"$genus ($subgenus)",$subgenus,$subgenus_no];

@@ -1210,7 +1210,7 @@ sub splitTaxon {
     my $name = shift;
     my ($genus,$subgenus,$species,$subspecies) = ("","","","");
   
-    if ($name =~ /^([A-Z][a-z]+)(?:\s\(([A-Z][a-z]+)\))?(?:\s([a-z]+))?(?:\s([a-z]+))?/) {
+    if ($name =~ /^([A-Z][a-z]+)(?:\s\(([A-Z][a-z]+)\))?(?:\s([a-z.]+))?(?:\s([a-z.]+))?/) {
         $genus = $1 if ($1);
         $subgenus = $2 if ($2);
         $species = $3 if ($3);
@@ -1219,7 +1219,7 @@ sub splitTaxon {
 
     if (!$genus && $name) {
         # Loose match, capitalization doesn't matter. The % is a wildcard symbol
-        if ($name =~ /^([a-z%]+)(?:\s\(([a-z%]+)\))?(?:\s([a-z]+))?(?:\s([a-z]+))?/) {
+        if ($name =~ /^([a-z%]+)(?:\s\(([a-z%]+)\))?(?:\s([a-z.]+))?(?:\s([a-z.]+))?/) {
             $genus = $1 if ($1);
             $subgenus = $2 if ($2);
             $species = $3 if ($3);
@@ -1233,9 +1233,9 @@ sub splitTaxon {
 sub guessTaxonRank {
     my $taxon = shift;
     
-    if ($taxon =~ /^[A-Z][a-z]+ (\([A-Z][a-z]+ \))?[a-z]+ [a-z]+$/) {
+    if ($taxon =~ /^[A-Z][a-z]+ (\([A-Z][a-z]+ \))?[a-z.]+ [a-z.]+$/) {
         return "subspecies";
-    } elsif ($taxon =~ /^[A-Z][a-z]+ (\([A-Z][a-z]+\) )?[a-z]+$/) {
+    } elsif ($taxon =~ /^[A-Z][a-z]+ (\([A-Z][a-z]+\) )?[a-z.]+$/) {
         return "species";
     } elsif ($taxon =~ /^[A-Z][a-z]+ \([A-Z][a-z]+\)$/) {
         return "subgenus";
@@ -1324,7 +1324,7 @@ sub getBestClassification{
 
     if ( $genus_reso !~ /informal/) {
         my $species_sql = "";
-        if ($species_reso  !~ /informal/ && $species_name =~ /^[a-z]+$/ && $species_name !~ /^sp$|^indet$/) {
+        if ($species_reso  !~ /informal/ && $species_name =~ /^[a-z]+$/ && $species_name !~ /^sp(\.)?$|^indet(\.)?$/) {
             $species_sql = "AND ((taxon_rank='species' and taxon_name like '% $species_name') or taxon_rank != 'species')";
         }
         my $sql = "(SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_name LIKE '$genus_name%' $species_sql)";
@@ -1398,7 +1398,20 @@ sub getBestClassification{
         # If the user requests a scalar, only return the best match, assuming it is not a homonym
         if (scalar(@matches) > 1) {
             if ($matches[0]->{'taxon_name'} eq $matches[1]->{'taxon_name'}) {
-                return 0;
+                # This might happen if a higher order taxon is reranked
+                my $orig0 = TaxonInfo::getOriginalCombination($dbt,$matches[0]->{'taxon_no'});
+                my $orig1 = TaxonInfo::getOriginalCombination($dbt,$matches[1]->{'taxon_no'});
+                if ($orig0 == $orig1) {
+                    if ($matches[0]->{taxon_no} == $orig0) {
+                        return $orig0;
+                    } elsif ($matches[1]->{taoxn_no} == $orig1) {
+                        return $orig1;
+                    } else {
+                        return $matches[0]->{taxon_no};
+                    }
+                } else {
+                    return 0;
+                }
             } else {
                 return $matches[0]->{'taxon_no'};
             }
