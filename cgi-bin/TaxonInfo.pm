@@ -56,34 +56,14 @@ sub checkTaxonInfo {
     } elsif (!$q->param('taxon_name') && !($q->param('pubyr')) & !$q->param('author')) {
         searchForm($hbo,$q);
     } else {
-        my @results = ();
-        my $sql = "SELECT a.taxon_no,a.taxon_rank,a.taxon_name,a.pages,a.figures,a.comments, ".
-               " IF (a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,".
-               " IF (a.ref_is_authority='YES',r.author1init,a.author1init) author1init,".
-               " IF (a.ref_is_authority='YES',r.author1last,a.author1last) author1last,".
-               " IF (a.ref_is_authority='YES',r.author2init,a.author2init) author2init,".
-               " IF (a.ref_is_authority='YES',r.author2last,a.author2last) author2last,".
-               " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors".
-               " FROM authorities a LEFT JOIN refs r ON a.reference_no=r.reference_no WHERE 1=1";
+        my $options = {'match_subgenera'=>1};
+        foreach ('taxon_name','author','pubyr') {
+            if ($q->param($_)) {
+                $options->{$_} = $q->param($_);
+            }
+        }
+        my @results = getTaxa($dbt,$options,['taxon_no','taxon_rank','taxon_name','author1last','author2last','otherauthors','pubyr','pages','figures','comments']);   
 
-        if ($q->param("taxon_name")) {
-            $sql .= " AND taxon_name LIKE ".$dbh->quote($q->param('taxon_name'));
-        }
-        
-        # Handle pubyr and author fields
-        my $having_sql = '';
-        my $authorlast = $q->param('author');
-        if ($q->param('author')) {
-            $having_sql .= " AND (author1last like ".$dbh->quote($authorlast)." OR author2last like ".$dbh->quote($authorlast)." OR otherauthors like ".$dbh->quote('%'.$authorlast.'%').")";
-        }
-        if ($q->param('pubyr')) {
-            $having_sql .= " AND pubyr like ".$dbh->quote($q->param('pubyr'));
-        }
-        $having_sql =~ s/^ AND/ HAVING/;
-        $sql .= $having_sql;
-        @results = @{$dbt->getData($sql)};
-
-        # now deal with results:
         if(scalar @results < 1 ){
             # If nothing from authorities, go to occs + reids
             my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($q->param('taxon_name'));
@@ -94,7 +74,7 @@ sub checkTaxonInfo {
             if ($species) {
                 $where .= " AND species_name LIKE ".$dbh->quote($species);
             }
-            $sql = "(SELECT genus_name FROM occurrences $where GROUP BY genus_name)".
+            my $sql = "(SELECT genus_name FROM occurrences $where GROUP BY genus_name)".
                    " UNION ".
                    "(SELECT genus_name FROM reidentifications $where GROUP BY genus_name)";
             my @occs = @{$dbt->getData($sql)};
