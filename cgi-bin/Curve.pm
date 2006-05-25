@@ -270,9 +270,9 @@ sub assignGenera	{
 
 	if ( ! open OCCS,"<$occsfile" )	{
         if ($q->param("time_scale") =~ /neptune/i) {
-		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with sample age data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadNeptuneForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with sample age data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadNeptuneForm\">Download the data again</a> and make sure to check off this field in the form.</h3>\n";
         } else {
-		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage, or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to check the field you want in the \"Collection fields\" part of the form.</h3>\n";
+		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage, or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to check off the field you want in the \"Collection fields\" part of the form.</h3>\n";
         }
         return;
 	}
@@ -370,7 +370,7 @@ sub assignGenera	{
         if ($q->param('time_scale') =~ /neptune/i) {
             $collection_field = "sample id";
         } 
-		print "<h3>The data can't be analyzed because the $collection_field field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because the $collection_field field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the \"Collection fields\" part of the form.</h3>\n";
 		exit;
 	# this one is crucial and might be missing
 	} elsif ( ! $field_bin )	{
