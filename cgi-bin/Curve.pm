@@ -366,20 +366,20 @@ sub assignGenera	{
         $downloadForm = "displayDownloadNeptuneForm";
     }
 	if ( $field_collection_no < 0)	{
-        my $collection_field = "collection number";
-        if ($q->param('time_scale') =~ /neptune/i) {
-            $collection_field = "sample id";
-        } 
-		print "<h3>The data can't be analyzed because the $collection_field field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the \"Collection fields\" part of the form.</h3>\n";
+		my $collection_field = "collection number";
+		if ($q->param('time_scale') =~ /neptune/i)	{
+			$collection_field = "sample id";
+		} 
+		print "<h3>The data can't be analyzed because the $collection_field field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the form.</h3>\n";
 		exit;
 	# this one is crucial and might be missing
 	} elsif ( ! $field_bin )	{
 		my $time_scale_field = $q->param('time_scale');
 		$time_scale_field =~ s/s$//;
-        if ($time_scale_field =~ /neptune/i) {
-            $time_scale_field = "sample_age_ma";
-        }
-		print "<h3>The data can't be analyzed because the $time_scale_field field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		if ($time_scale_field =~ /neptune/i)	{
+			$time_scale_field = "sample_age_ma";
+		}
+		print "<h3>The data can't be analyzed because the $time_scale_field field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the \"Collection fields\" part of the form.</h3>\n";
 		exit;
 	# this one also always should be present anyway, unless the user
 	#  screwed up and didn't download the ref numbers despite wanting
