@@ -58,3 +58,14 @@ Email: rfeldman@kent.edu
 </tr></table>
 </p>
 
+<h3><a href="javascript: document.forms[0].submit()">Download Schweitzer and Feldman's Data</a></h3>
+
+<form method="POST" action="bridge.pl">
+  <input type="hidden" name="action" value="displayDownloadTaxonomyResults">
+  <input type="hidden" name="taxon_person_type" value="all">
+  <input type="hidden" name="taxon_person_no" value="213,214">
+  <input type="hidden" name="opinion_person_type" value="all">
+  <input type="hidden" name="opinion_person_no" value="213,214">
+  <input type="hidden" name="get_referenced_taxa" value="YES">
+</form>
+
