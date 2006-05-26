@@ -394,6 +394,14 @@ sub displayPBDBDownload {
         }
     }
 
+    my $sepChar = ($q->param('output_type') eq 'pipe') ? '|'
+                                                       : ",";
+    my $csv = Text::CSV_XS->new({
+            'quote_char'  => '"',
+            'escape_char' => '"',
+            'sep_char'    => $sepChar,
+            'binary'      => 1
+    }); 
 
     if (@errors) {
         displayErrors(@errors);
@@ -408,23 +416,53 @@ sub displayPBDBDownload {
         <h3 class="darkList" style="margin-bottom: 0em;">Output files</h3>';
 
     my ($filesystem_dir,$http_dir) = makeDataFileDir($s);
+    my %references;
+
+    # Create the opinions file 
+    # Note that the opinions file MUST be created first -- this is because there is an option to get taxa
+    # that have an opinion that fit the criteria attached to them, so we need to get a additional list of taxa
+    # from the opinions function to download
+    my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,%options); 
+    my @opinions = @$opinions;
+    open FH_OP, ">$filesystem_dir/opinions.csv"
+        or die "Could not open opinions.csv ($!)";
+    my @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","spelling_reason","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","created","modified");
+    $csv->combine(@header);
+    print FH_OP $csv->string()."\n";
+    foreach my $o (@opinions) {
+        my @line = ();
+        foreach my $val (@header) {
+            my $csv_val = $o->{$val} || '';
+            push @line, $csv_val;
+        }
+        $csv->combine(@line);
+        my $csv_string = $csv->string();
+        $csv_string =~ s/\r|\n//g;
+        print FH_OP $csv_string."\n";  
+        $references{$o->{'reference_no'}} = 1;
+    }
+    close FH_OP;
+    print $opinion_file_message;
+
+    # If the user selects an option to get taxonomic names used by the downloaded opinions
+    # then make a list of additional taxa to downlod
+    if ($options{'get_referenced_taxa'}) {
+        my %referenced_taxa = (-1=>1);
+        foreach my $o (@opinions) {
+            $referenced_taxa{$o->{'child_no'}} = 1; 
+            $referenced_taxa{$o->{'child_spelling_no'}} = 1; 
+        }
+        $options{'referenced_taxa'} = \%referenced_taxa;
+    }
+
 
     my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$http_dir,%options);
     my @names = @$names;
-    my %references;
 
-    my $sepChar = ($q->param('output_type') eq 'pipe') ? '|'
-                                                       : ",";
-    my $csv = Text::CSV_XS->new({
-            'quote_char'  => '"',
-            'escape_char' => '"',
-            'sep_char'    => $sepChar,
-            'binary'      => 1
-    }); 
 
     open FH_VT, ">$filesystem_dir/valid_taxa.csv"
         or die "Could not open valid_taxa.csv ($!)";
-    my @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","taxon_rank","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","type_taxon","type_specimen","comments","created","modified");
+    @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","taxon_rank","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","type_taxon","type_specimen","comments","created","modified");
     $csv->combine(@header);
     print FH_VT $csv->string()."\n";
     foreach my $t (@names) {
@@ -466,29 +504,6 @@ sub displayPBDBDownload {
     close FH_IT;
     print $taxon_file_message;
 
-
-    # Create the opinions file 
-    my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,%options); 
-    my @opinions = @$opinions;
-    open FH_OP, ">$filesystem_dir/opinions.csv"
-        or die "Could not open opinions.csv ($!)";
-    @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","spelling_reason","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","created","modified");
-    $csv->combine(@header);
-    print FH_OP $csv->string()."\n";
-    foreach my $o (@opinions) {
-        my @line = ();
-        foreach my $val (@header) {
-            my $csv_val = $o->{$val} || '';
-            push @line, $csv_val;
-        }
-        $csv->combine(@line);
-        my $csv_string = $csv->string();
-        $csv_string =~ s/\r|\n//g;
-        print FH_OP $csv_string."\n";  
-        $references{$o->{'reference_no'}} = 1;
-    }
-    close FH_OP;
-    print $opinion_file_message;
 
     my @references = keys %references; 
     open FH_REF, ">$filesystem_dir/references.csv";
@@ -581,13 +596,13 @@ sub getTaxonomicNames {
     if ($options{'taxon_person_no'}) {
         if ($options{'taxon_person_type'} eq 'all') {
             my $p = $options{'taxon_person_no'};
-            push @where, "(a.authorizer_no=$p OR a.enterer_no=$p OR a.modifier_no=$p)";
+            push @where, "(a.authorizer_no IN ($p) OR a.enterer_no IN ($p) OR a.modifier_no IN ($p))";
         } elsif ($options{'taxon_person_type'} eq 'enterer') {
-            push @where, 'a.enterer_no='.int($options{'taxon_person_no'});
+            push @where, 'a.enterer_no IN ('.$options{'taxon_person_no'}.')';
         } elsif ($options{'taxon_person_type'} eq 'modifier') {
-            push @where, 'a.modifier_no='.int($options{'taxon_person_no'});
+            push @where, 'a.modifier_no IN ('.$options{'taxon_person_no'}.')';
         } else { # defaults to authorizer
-            push @where, 'a.authorizer_no='.int($options{'taxon_person_no'});
+            push @where, 'a.authorizer_no IN ('.$options{'taxon_person_no'}.')';
         }
     }
 
@@ -611,7 +626,7 @@ sub getTaxonomicNames {
     # use between and both values so we'll use a key for a smaller tree;
     my @results;
     my $message;
-    if (@where) {
+    if (@where || $options{'referenced_taxa'}) {
         my $sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, tt.taxon_name type_taxon,"
                 . "a.taxon_no,a.reference_no,a.taxon_rank,a.taxon_name,a.type_specimen,a.extant,"
                 . "a.pages,a.figures,a.created,a.modified,a.comments,t.spelling_no,t.synonym_no senior_synonym_no,"
@@ -628,9 +643,19 @@ sub getTaxonomicNames {
                 . " LEFT JOIN person p3 ON p3.person_no=a.modifier_no"
                 . " LEFT JOIN authorities tt ON tt.taxon_no=a.type_taxon_no"
                 . " LEFT JOIN refs r ON r.reference_no=a.reference_no"
-                . " WHERE t.taxon_no=a.taxon_no"
-                . " AND ".join(" AND ",@where)
-                . " ORDER BY a.taxon_name";
+                . " WHERE t.taxon_no=a.taxon_no";
+
+        if ($options{'referenced_taxa'} && @where) {
+            my %taxon_nos = %{$options{'referenced_taxa'}};
+            my $referenced_list = join(",",keys(%taxon_nos));
+            $sql = "($sql AND ".join(" AND ",@where).") UNION ($sql AND a.taxon_no IN ($referenced_list)) ORDER BY taxon_name";
+        } elsif (@where) {
+            $sql = "$sql AND ".join(" AND ",@where)." ORDER BY a.taxon_name";
+        } else {
+            my %taxon_nos = %{$options{'referenced_taxa'}};
+            my $referenced_list = join(",",keys(%taxon_nos));
+            $sql = "$sql AND a.taxon_no IN ($referenced_list) ORDER BY a.taxon_name";
+        }
         main::dbg("getTaxonomicNames called: ($sql)");
         @results = @{$dbt->getData($sql)};
 
@@ -788,13 +813,13 @@ sub getTaxonomicOpinions {
     if ($options{'opinion_person_no'}) {
         if ($options{'opinion_person_type'} eq 'all') {
             my $p = $options{'opinion_person_no'};
-            push @where, "(o.authorizer_no=$p OR o.enterer_no=$p OR o.modifier_no=$p)";
+            push @where, "(o.authorizer_no IN ($p) OR o.enterer_no IN ($p) OR o.modifier_no IN ($p))";
         } elsif ($options{'opinion_person_type'} eq 'enterer') {
-            push @where, 'o.enterer_no='.int($options{'opinion_person_no'});
+            push @where, 'o.enterer_no IN ('.$options{'opinion_person_no'}.')';
         } elsif ($options{'opinion_person_type'} eq 'modifier') {
-            push @where, 'o.modifier_no='.int($options{'opinion_person_no'});
+            push @where, 'o.modifier_no IN ('.$options{'opinion_person_no'}.')';
         } else { # defaults to authorizer
-            push @where, 'o.authorizer_no='.int($options{'opinion_person_no'});
+            push @where, 'o.authorizer_no IN ('.$options{'opinion_person_no'}.')';
         }  
     }
 
