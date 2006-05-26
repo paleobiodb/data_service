@@ -51,3 +51,10 @@ FAX: (805) 892-2510<br>
 e-mail: alroy@nceas.ucsb.edu
 </p>
 
+<h3><a href="javascript: document.forms[0].submit()">Download Tetrapod Data</a></h3>
+
+<form method="POST" action="bridge.pl">
+  <input type="hidden" name="action" value="displayDownloadTaxonomyResults">
+  <input type="hidden" name="opinion_reference_no" value="4783">
+  <input type="hidden" name="get_referenced_taxa" value="YES">
+</form>
