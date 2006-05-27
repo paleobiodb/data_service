@@ -134,7 +134,7 @@ sub buildMap {
         }
 
         if ($dotsizeterm eq "pixel")	{
-            $dotsize = 0;
+            $dotsize = 0.3;
         } elsif ($dotsizeterm eq "tiny")	{
             $dotsize = 0.5;
         } elsif ($dotsizeterm eq "very small")	{
@@ -278,7 +278,7 @@ sub drawMapOnly {
         }
     }
 
-    if ($dotsizeterm eq "pixel")	{ $dotsize = 0; } 
+    if ($dotsizeterm eq "pixel")	{ $dotsize = 0.3; } 
     elsif ($dotsizeterm eq "tiny")	{ $dotsize = 0.5; } 
     elsif ($dotsizeterm eq "very small")	{ $dotsize = 0.75; }
     elsif ($dotsizeterm eq "small")	{ $dotsize = 1; }
