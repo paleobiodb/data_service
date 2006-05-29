@@ -11,7 +11,7 @@
 <link REL="shortcut icon" HREF="/public/favicon.ico" type="image/x-icon">
 
 <meta name="keywords" content="paleobiology, paleo, database, paleontology, fossil, fossils, marine, terrestrial, paleontologist, evolution">
-<meta name="description" content="The Paleobiology Database is an NSF-funded project involving more than 80 professional scientific researchers and scores of graduate students. Its goal is to provide global, collection-based occurrence and taxonomic data for marine and terrestrial animals and plants of any geological age.">
+<meta name="description" content="The Paleobiology Database is an NSF-funded project involving more than 130 professional scientific researchers and scores of graduate students. Its goal is to provide global, collection-based occurrence and taxonomic data for marine and terrestrial animals and plants of any geological age.">
 
 <script src="/JavaScripts/login.js" language="JavaScript" type="text/javascript"></script>
 <script src="/JavaScripts/common.js" language="JavaScript" type="text/javascript"></script>
@@ -19,46 +19,28 @@
 
 <body>
 
-<table class="navbox" border="0" width="100%" cellpadding="0" cellspacing="0">
-<tr>
+<div id="homeBanner">
+<div align="center" style="width: 60em; clear: right;">
+<img alt="banner" src="/public/bannerimages/coralbanner.jpg">
+</div>
+</div>
 
-  <td valign="top" align="left" rowspan="2">
-    <table border="0" cellpadding="0" cellspacing="0" bgcolor="#88C0FF">
-      <tr><td align="left"><img src="/public/bannerimages/fossil.jpg"></td></tr>
-    </table>
-  </td>
+<div id="homeLinks">
+<div align="center" style="width: 60em; clear: right;">
 
-  <td valign="top" align="center">
-    <table border="0" cellpadding="0" cellspacing="0" bgcolor="#88C0FF" width="100%">
-      <tr><td align="center"><img src="/public/PBDBbannerOct05.jpg"></td></tr>
-    </table>
-  </td>
-
-  <td valign="top" align="right" rowspan="2">
-    <table border="0" cellpadding="0" cellspacing="0" bgcolor="#88C0FF">
-      <tr><td align="right"><img src="/public/bannerimages/fossil.jpg"></td></tr>
-    </table>
-  </td>
-
-</tr>
-
-<tr>
-  <td nowrap align="center">
 	<!-- Menu -->
 
-    <table border="0" bgcolor="#88C0FF" width="100%" cellpadding="0" cellspacing="0" id="dropDown">
+    <table border="0" cellpadding="0" cellspacing="0" id="dropDown">
 	  <tr>
-
-		<td align="center" nowrap width=30>&nbsp;</td>
-		<td align="center" nowrap>
+		<td align="left" nowrap>
           <div class="dropDownVertSpacer">
             <a href="$exec_url?user=Guest&amp;action=displayHomePage">Home</a>
           </div>
         </td>
-		<td align="center" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
-        <td align="center" nowrap>
+		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+        <td align="left" nowrap>
           <div class="dropDownVertSpacer"> 
-            <a href="$exec_url?user=Guest&amp;action=displaySearchColls&amp;type=view">View</a>
+            <a href="$exec_url?user=Guest&amp;action=displaySearchColls&amp;type=view">Search</a>
           </div>
           <ul>
             <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view">Fossil collection records</a></li>
@@ -68,8 +50,8 @@
             <li><a href="javascript:tipsPopup('$exec_url?action=startScale')">Compilation of time scales</a></li>
           </ul>
         </td>
-		<td align="center" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
-        <td align="center" nowrap>
+		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+        <td align="left" nowrap>
           <div class="dropDownVertSpacer"> 
             <a href="$exec_url?user=Guest&amp;action=displaySearchColls&amp;type=view">Download</a>
           </div>
@@ -79,8 +61,8 @@
             <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayDownloadNeptuneForm">Neptune data</a></li>
           </ul>
         </td>
-		<td align="center" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
-        <td align="center" nowrap>
+		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+        <td align="left" nowrap>
           <div class="dropDownVertSpacer"> 
             <a href="$exec_url?user=Guest&amp;action=displaySearchColls&amp;type=view">Analyze</a>
           </div>
@@ -92,8 +74,8 @@
             <li><a href="/cgi-bin/bridge.pl?action=displaySearchSectionForm">Analyze stratigraphic sections</a></li> 
           </ul>
         </td>
-		<td align="center" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
-        <td align="center" nowrap>
+		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+        <td align="left" nowrap>
           <div class="dropDownVertSpacer"> 
             <a href="$exec_url?user=Guest&amp;action=displaySearchColls&amp;type=view">About</a>
           </div>
@@ -107,8 +89,8 @@
             <li><a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">Project personnel</a></li>
           </ul>
         </td>
-		<td align="center" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
-		<td align="center" nowrap>
+		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+		<td align="left" nowrap>
           <div class="dropDownVertSpacer"> 
             <a href="$exec_url?user=Contributor&amp;action=displayHomePage">Contributor's area</a>
           </div>
@@ -116,15 +98,19 @@
         
       </tr>
     </table>
-  </td>
-</tr>
 
-</table>
+</div>
+</div>
+
 
 <noscript>
 <p class="warning">
 JavaScript is required to use this web site.  Please turn it on before proceeding.
 </p>
 </noscript>
+
+<div class="mainBody">
+
+<div id="mainSpacer">
 
 <!-- End std_page_top.html -->
