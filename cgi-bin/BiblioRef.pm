@@ -108,12 +108,12 @@ sub toString
 	$retVal .= "-" if $self->{_firstpage} && $self->{_lastpage};
 	$retVal .= $self->{_lastpage};
 	# also displays authorizer and enterer JA 23.2.02
-	$retVal .= "<font size=\"small\"> [".$self->{_authorizer}."/".
+	$retVal .= "<span class=\"small\"> [".$self->{_authorizer}."/".
 			   $self->{_enterer};
 	if($self->{_modifier}){
 		$retVal .= "/".$self->{_modifier};
 	}
-	$retVal .= "]</font>\n";
+	$retVal .= "]</span>\n";
 	$retVal .= "</td>\n";
 	$retVal .= "</tr>\n";
 
