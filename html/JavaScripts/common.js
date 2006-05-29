@@ -47,7 +47,7 @@ function checkBrowserVersion() {
 	var match = /Microsoft/i;
 	
 	if (match.test(navigator.appName)) {
-		document.write("<div class=\"warning\">Warning: Internet Explorer is not recommended for this web site. <BR> Aside from cosmetic defects in page rendering, error checking routines may not work correctly and you may be randomly logged out of the site.<BR><BR> Read the web browsers <A HREF=\"javascript: tipsPopup('/public/tips/browser_tips.html')\">tip sheet</A> for information on which browser to download.</div>");
+		document.write("<div class=\"warning\">Warning: Internet Explorer is not standards compliant and you should not use it on this web site or elsewhere. <BR> Aside from cosmetic defects in page rendering, error checking routines may not work correctly and you may be randomly logged out of the site.<BR><BR> Please download and use <a href="http://www.apple.com/safari/">Safari</a> or <a href="http://www.mozilla.org/firefox/">Firefox</a>, or read the web browser <A HREF=\"javascript: tipsPopup('/public/tips/browser_tips.html')\">tip sheet</A> for information on other free browsers.</div>");
 	}
 }
 
