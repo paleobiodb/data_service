@@ -9,6 +9,10 @@ body {
 	background-image: url(/public/PDbg.gif);
 	font-family: Verdana, Arial, Helvetica, sans-serif;
 	font-size: 0.85em;
+	margin-bottom: 0px;
+	margin-top: 0px;
+	margin-right: 0px;
+	margin-left: 0px;
 }
 
 table, tbody, tr, td { 
@@ -24,7 +28,7 @@ hr {
 }
 
 /* how should the regular links look? */
-A:link	{ color : #4090FF; text-decoration:none; }
+A:link	{ color : #0040FF; text-decoration:none; }
 A:visited	{ color : #6E00FF; text-decoration:none; }
 A:active	{ color : #00AAFF; text-decoration:none; }
 A:hover	{ color : #C80078; text-decoration:none; }
@@ -61,6 +65,22 @@ A:hover.menu {
 
 	
 	text-decoration:none; 
+}
+
+A:link.homeStats	{
+	color : #000000;
+}       
+
+A:visited.homeStats	{
+	color : #808080;
+}       
+
+A:active.homeStats	{
+	color : #808080;
+}       
+
+A:hover.homeStats	{
+	color : #A0C0F0;
 }       
 
 
@@ -76,12 +96,15 @@ H4 {font-size: 1.1em;}
 H5 {font-size: 1em;}
 H6 {font-size: .9em;}
 
-.tiny {  font-size : .72222em; text-decoration:none; }
-.small {  font-size : .85em; text-decoration:none; }
-.medium {  font-size : 1em; text-decoration:none; }
+.verytiny {  font-size : 0.7em; text-decoration:none; }
+.tiny {  font-size : 0.8em; text-decoration:none; }
+.small {  font-size : 0.9em; text-decoration:none; }
+.medium {  font-size : 1.0em; text-decoration:none; }
 .large {  font-size : 1.1em; text-decoration:none; }
+.verylarge {  font-size : 1.3em; text-decoration:none; }
+.huge {  font-size : 1.5em; text-decoration:none; }
 .cell {  font-size : 1.1em; text-decoration:none; }
-.blue {  font-size : .85em; color : #4090FF; text-decoration:none; }
+.blue {  font-size : .85em; color : #0040FF; text-decoration:none; }
 
 /* the menu at the top and bottom of each page. */
 .menu {
@@ -93,6 +116,171 @@ H6 {font-size: .9em;}
     margin-left: 1em; 
     margin-top: 0.15em; 
     margin-bottom: 0;
+}
+
+/* need this because the entire body now has no margins, in order to
+    make sure the banner doesn't */
+.mainBody	{
+    height: 100%;
+    margin-left: 1em; 
+    margin-right: 1em; 
+    margin-top: 0em; 
+    margin-bottom: 0em;
+}
+
+#mainSpacer	{
+    position: absolute;
+    padding-top: 2em;
+    top: 52px;
+    bottom: 0;
+}
+
+#homeBanner	{
+    width: 100%;
+    background-image: url(/public/bannerimages/dcaloostBlue3.jpg);
+    min-width: 60em; /* needed because scrolling down when a window is small
+                          causes the image to be truncated */
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    z-index: 9;
+}
+
+#homeLinks	{
+    width: 100%;
+    min-width: 60em; /* needed because scrolling down when a window is small
+                          causes the image to be truncated */
+    background-color: #64A8FF;
+    border-bottom: 1px #909090 solid;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50px;
+    z-index: 9;
+}
+
+#homeTotals	{
+    background-color: rgb(208, 224, 255);
+    border-bottom: 1px solid rgb(144, 144, 144);
+    text-align: center;
+    margin-left: -1em;
+    padding-top: 3em;
+    height: 45em;
+    width: 14em;
+    position: absolute;
+    top: 0px;
+    bottom: 0px;
+    left: 0em;
+    right: 14em;
+    z-index: 1;
+}
+
+.Features	{
+    background-color: #FFFFFF;
+    margin-left: 1.25em;
+    margin-right: 1.5em;
+    padding-left: 0.75em;
+    padding-right: 0.75em;
+    text-align: left;
+    font-family: Century Gothic, Verdana, Arial, Helvetica, sans-serif;
+    border: 1px solid #7090B0;
+/* Explorer demands to know this - go figure */
+    position: relative;
+}
+
+.FeatureHeadline	{
+    text-align: center;
+    background-color: #7090B0;
+    color: #FFFFFF;
+    margin-left: -0.75em;
+    margin-right: -0.75em;
+    margin-bottom: -0.25em;
+    padding-top: 0.15em;
+    padding-bottom: 0.25em;
+}
+
+.FeatureText	{
+    padding-top: 0.75em;
+    padding-bottom: 0.75em;
+}
+
+#homeInfo	{
+    padding-top: 3em;
+    padding-bottom: 0em;
+    border-bottom: 1px solid rgb(144, 144, 144);
+    border-left: 1px solid rgb(144, 144, 144);
+    border-right: 1px solid rgb(144, 144, 144);
+    height: 45em;
+    width: 32em;
+    position: absolute;
+    top: 0px;
+    left: 13em;
+    right: 45em;
+    z-index: 2;
+}
+
+.homeTextBoxes	{
+    font-size : 0.9em; text-decoration: none;
+    float: left;
+}
+
+#homeTextBoxShadow	{
+    background: #E0E0E0;
+    margin-left: 0.5em;
+    margin-right: 0.5em;
+    position: relative;
+}
+
+#homeTextBox	{
+    background-image: url(/public/PDbg.gif);
+    border: 1px solid #808080;
+    padding: 16px;
+    position: relative;
+    left: -2px;
+    top: -2px;
+}
+
+#homeBorder	{
+    margin-left: 45em;
+    padding-top: 3em;
+    padding-left: 20px;
+    border-bottom: 1px solid rgb(144, 144, 144);
+    border-right: 1px solid rgb(144, 144, 144);
+    height: 45em;
+    width: 150px;
+    position: absolute;
+    top: 0px;
+}
+
+
+/*
+html,body	{
+    height: 100%;
+}
+*/
+
+
+.homePageOnBullet	{
+    padding-top : 0.2em;
+    padding-left: 0.6em;
+    font-size : 1.0em; color: #000000; text-decoration: none;
+}
+
+.homePageOffBullet	{
+    padding-top : 0.2em;
+    padding-left: 0.6em;
+    font-size : 1.0em; color: #909090; text-decoration: none;
+}
+
+.homePageMSIEBullet	{
+    padding-top : 0.0em;
+    padding-left: 0.6em;
+    font-size : 1.33em; text-decoration: none;
+}
+
+.largeBullet	{
+   font-size : 2em;
 }
 
 /*	Meant to be a main section, for example, in an entry form. 
@@ -278,7 +466,7 @@ div.navbox {
 	
 	text-align: center;
 	
-	background-color: #88C0FF;
+	background-color: #64A8FF;
 
 	width: 100%;
 	margin: 10px 20px 20px 20px;
@@ -288,13 +476,13 @@ table.navbox {
 	border-style: solid;
 	border-width: 1px;
 	border-color: #909090;
-	
-	background-color: #88C0FF;
+
+	background-color: #64A8FF;
 	margin-bottom: 20px;
 }
 
 .navtable {
-	background-color: #E0E0E0;
+    background-color: #E0E0E0;
     border-style: solid;
     border-width: 1px;
     border-color: #666666;
@@ -461,40 +649,32 @@ span.nonEditable {
 
 #dropDown td ul {
     text-align: left;
-    background: #88C0FF;
-/*    background: #CBC9DD;*/
-/*    background: #84B7F0;*/
+    background: #64A8FF;
     border-top: 1px #88B2DF solid;
-    border-left: 1px #78C0D4 solid;
-    border-right: 1px #6F89B3 solid;
-    border-bottom: 1px #6F89B3 solid;
     position: absolute;
     padding: 0.15em;
     z-index: 999;
-    /*width: 20em;*/
-/*    left: -999em;*/
-/*    top: 1em;*/
     display: none;
 }
 #dropDown td ul a:link,#dropDown td ul a:visited, #dropDown td ul a:hover {
     color: #EFEFEF;
 }
 #dropDown td ul li:hover, #dropDown td ul li.sfhover {
-    background: #88C0FF;
-    background: #80B3F0;
+    background: #90A0A8;
 }
 #dropDown td ul a:hover {
     color: #FFFFFF;
 }
 
 /* This makes the div a bit bigger so the UL below it 
-   (the drop down menu) is flush with the bottom of the top menu */
+   (the drop down menu) is flush with the bottom of the top menu
+  adding some padding JA 19.5.06 */
 #dropDown div.dropDownVertSpacer {
     height: 1.5em;
+    padding-top: 0.2em;
 }
 
 #dropDown td ul li {
-/*    border-top: 1px #909090 solid;*/
     font-size : 0.95em;
     white-space: nowrap;
     text-align: left;
