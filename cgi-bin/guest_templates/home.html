@@ -1,134 +1,323 @@
-<div class="small">
+<!--
+<script src="/JavaScripts/animations.js" language="JavaScript" type="text/javascript"></script>
+-->
 
-<br>
-<table width="100%" cellpadding="8"><tr>
-<td valign="top" width="75%">
+<script language="JavaScript" type="text/javascript">
+<!--
 
-<table>
-<tr><td valign="top" width="50%">
+var tableHeightStr;
+var oldTableHeightStr;
 
-<h3>About&nbsp;the&nbsp;Database</h3>
+var detect = navigator.userAgent.toLowerCase();
 
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=paleodbFAQ">Frequently asked questions</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=OSA">Online Systematics Archives</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=publications">Official publications</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=participants">Participating researchers</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=institutions">Participating institutions</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=working_groups">Working groups</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">Project personnel</a></div>
-    <br>
+var lastbullet = "bullet1";
 
+// Explorer has no unicode value for medium down triangles and uses a
+//  different unicode value for down triangles (!), so I'm using circles
+if ( checkBrowser('msie') )	{
+	var onbullet = '<div class="homePageMSIEBullet">&#9679;<\/div>';
+	var offbullet = '<div class="homePageMSIEBullet">&#9675;<\/div>';
+} else	{
+	var onbullet = '<div class="homePageOnBullet">&#9660;<\/div>';
+	var offbullet = '<div class="homePageOffBullet">&#9655;<\/div>';
+}
+
+var WhatIs = '<p>' +
+'We are an international scientific organization run by and for paleontological <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=participants">researchers<\/a> from many <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=institutions">institutions<\/a>. ' +
+'We are bringing together information about the entire fossil record in a single database to educate the public, summarize the literature for professionals, and foster statistical analyses of medium-scale patterns, like global diversity increases and mass extinctions.' +
+'<\/p>' +
+'<div style="padding-top: 10px; padding-bottom: 10px; padding-right: 1em; width: 100%; text-align: center"><img alt="This hour\'s fossil image" height="180" src="/public/images/fossil.jpg"><\/div>';
+
+
+var Contents = '<p>' +
+'We record all kinds of published information <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=beginTaxonInfo">about fossil plants and animals<\/a>, including systematic classifications, ecological categories, measurements, age ranges, spatial distributions, and digital images. ' +
+'Major data sets comprise <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives<\/a>. ' +
+'You can also view the <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=startStartPrintHierarchy">classification of everything in a group<\/a> all at once.' +
+'<\/p>' +
+'<p>' +
+'We document the distribution of fossils in time and space by inventorying <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view">fossil collection records<\/a>. ' +
+'The collections are shown on our <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=animations">paleogeographic animations<\/a> and <a href=""/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes<\/a>. ' +
+'You can see the <a href="javascript:tipsPopup(\'$exec_url?action=startScale\')">time scales<\/a> we use to date the collections.' +
+'<\/p>' +
+'<p>' +
+'All of our data are tied to <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view">published scientific references<\/a>, and almost all of our data can be downloaded by anyone. ' +
+'Just fill out our forms for <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayDownloadForm">collection, occurrence, or specimen data<\/a>, or <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayDownloadTaxonomyForm">taxonomic names and opinions<\/a>. ' +
+'We also provide a form for downloading and analyzing <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayDownloadNeptuneForm">Neptune data<\/a> housed by <a href="http://chronos.org">CHRONOS<\/a>.' +
+'<\/p>';
+
+
+var Tools = '<p>' +
+'You can <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayMapForm">draw maps<\/a> showing the distribution of our fossil collections, including paleomaps like the ones shown on this page. ' +
+'We have several <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=animations">additional animations<\/a> and <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes<\/a > of different geological periods that you can view. ' +
+'You can stop or reverse the animations by clicking on them. ' +
+'We also have 11 rotatable  <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes<\/a> representing each of the geological periods. ' +
+'You can <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayReportForm">generate data summary tables<\/a> that will show you how much data we have in different categories.' +
+'<\/p>' +
+'<p>' +
+'Scientists can generate <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayCurveForm">diversity curve data<\/a> showing changes in the number of species or genera through time, or compute stratigraphic confidence intervals on taxonomic ranges across <a href="/cgi-bin/bridge.pl?action=displayTaxaIntervalsForm">time scales<\/a> or <a href="/cgi-bin/bridge.pl?action=displaySearchSectionForm">stratigraphic sections<\/a>.' +
+'<\/p>';
+
+
+var GetInvolved = '<p>' +
+'As explained on our <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=paleodbFAQ">FAQ<\/a> page, any professional paleontologist may <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=join_us">join the Database<\/a>. ' +
+'New members, meetings, and script features are listed on our <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=newsindex">news<\/a> page. ' +
+'Experts on taxonomic groups may create <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives<\/a> to house their classifications. ' +
+'Contributors form <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=working_groups">working groups<\/a> that collaborate on medium projects. ' +
+'We have many <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=publications">official publications<\/a> that have resulted from analyses of our data and activities of our groups.' +
+'<\/p>' +
+'<p>' +
+'If you are interested in <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=join_us">joining the Database<\/a>, you may want to see how we enter data. ' +
+'You can view examples of forms for entering <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=reference_form">references<\/a>, <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=collection_form">fossil collections<\/a>, <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=occurrence_form">taxonomic occurrences<\/a>, <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=authority_form">taxonomic names<\/a>, and <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=opinion_form">classifications of plants and animals<\/a>.' +
+'<\/p>' +
+'<p>' +
+'We offer an <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=summer_course_2007">intensive summer course<\/a>, which is sponsored this year by <a href="http://www.nceas.ucsb.edu">NCEAS<\/a>, <a href="http://www.nescent.org">NESCent<\/a>, and <a href="http://paleosoc.org">the Paleontological Society<\/a>.' +
+'<\/p>';
+
+
+var OtherInfo = '<p>' +
+'Most of the Database\'s <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">personnel<\/a> are at the <a href="http://www.ucsb.edu">University of California, Santa Barbara<\/a>.  We also maintain a <a href="http://paleodb.jcu.edu.au">mirror site in Australia<\/a>. <\/p>' +
+'<p>' +
+'We coordinate our activities with many other <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=links">paleontological databases<\/a>, provide data to <a href="http://www.gbif.org">GBIF<\/a>, and share data with <a href="http://chronos.org">CHRONOS<\/a>.' +
+'<\/p>' +
+'<p>' +
+'The Database has been featured in a <a href="http://www.nature.com/cgi-taf/DynaPage.taf?file=/nature/journal/v424/n6948/full/424482a_fs.html"><i>Nature<\/i> article<\/a>.' +
+'<p>' +
+'<p>' +
+'The original working group was funded by <a href="http://www.nceas.ucsb.edu">NCEAS<\/a>. ' +
+'Current funding is by an <a href="http://www.nsf.gov/geo/ere/ereweb/fund-biocomplex.cfm">NSF Biocomplexity<\/a> grant to <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">John Alroy<\/a>, <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">Charles Marshall<\/a>, and <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">Arnie Miller<\/a>, and by an <a href="http://nsf.gov/funding/pgm_summ.jsp?pims_id=13413&amp;org=EAR">NSF Sedimentary Geology and Paleobiology<\/a> grant to <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">John Alroy<\/a>. ' +
+'The web site is maintained by <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">John Alroy<\/a>.' +
+'<\/p>';
+
+window.onload = startPage;
+
+function startPage()	{
+	changeText('homeTextBox',WhatIs);
+	changeText('bullet1',onbullet);
+	changeText('bullet2',offbullet);
+	changeText('bullet3',offbullet);
+	changeText('bullet4',offbullet);
+	changeText('bullet5',offbullet);
+	//loadFrames('first_homepage',1);
+	animsrc = "/public/animations/homepage/homepage.gif";
+	document["homepage_anim"].src = animsrc;
+}
+
+function changeBullet(what,text)	{
+	document.getElementById(what).innerHTML = text;
+	lastbullet = what;
+}
+
+function changeText(what,text)	{
+	document.getElementById(what).innerHTML = text;
+}
+
+function checkBrowser(string)	{
+	place = detect.indexOf(string) + 1;
+	thestring = string;
+	return place;
+}
+
+//-->
+</script>
+
+<div id="homeTotals">
+
+<div style="padding-top: 0.3em;"></div>
+
+<div class="Features">
+<div class="FeatureHeadline">
+<div class="tiny">
+<i>This hour's totals</i>
+</div>
+</div>
+
+<div class="FeatureText">
+<!-- the width needs to be given exactly or Explorer will freak out (of course) -->
+<table cellpadding="0" cellspacing="4" style="width: 9.5em;">
+<tr><td align="right" valign="top">
+
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats"><span id="reference_total"></span></a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats"><span id="taxon_total"></span></a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats"><span id="collection_total"></span></a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats"><span id="occurrence_total"></span></a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=participants" class="homeStats"><span id="enterer_total"></span></a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=institutions" class="homeStats"><span id="institution_total"></span></a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=participants" class="homeStats"><span id="country_total"></span></a></span></span>
+</td>
+
+<td align="left" valign="top">
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats">references</a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats">taxa</a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">collections</a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">occurrences</a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=participants" class="homeStats">contributors</a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=institutions" class="homeStats">institutions</a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=institutions" class="homeStats">countries</a></span></span>
+</td></tr>
+</table>
+
+</div>
+</div>
+
+<div style="padding: 1.25em;">
+</div>
+
+<div class="Features">
+<div class="FeatureHeadline">
+<div class="tiny">
+<i>Featured paper</i>
+</div>
+</div>
+
+<div class="FeatureText">
+<div class="verytiny">
+J. S. Madin, J. Alroy, M. Aberhan, F. T. F&uuml;rsich, W. Kiessling, M. A. Kosnik, and P. J. Wagner. 2006. Statistical independence of escalatory ecological trends in Phanerozoic marine invertebrates. <a href="http://www.sciencemag.org/cgi/content/abstract/312/5775/897?maxtoshow=&amp;HITS=10&amp;hits=10&amp;RESULTFORMAT=&amp;fulltext=Madin&amp;searchid=1&amp;FIRSTINDEX=0&amp;resourcetype=HWCIT"><i>Science</i> 312:897-900</a>. <b>#44</b>
+</div>
+</div>
+</div>
+
+<div style="padding: 1.25em;">
+</div>
+
+<div class="Features">
+<div class="FeatureHeadline">
+<div class="tiny">
+<i>Newest member</i>
+</div>
+</div>
+
+<div class="FeatureText">
+<div class="verytiny">
+<a href="http://www.uniraj.ernet.in">D. K. Pandey</a><br>
+University of Rajasthan</div>
+</div>
+</div>
+
+</div> <!-- end homeTotals -->
+
+<!-- wraps around all the questions and the rotating text -->
+
+<div id="homeInfo">
+
+<table width="98%" cellpadding="2" cellspacing="4">
+<tr>
+
+<!-- the width 2% is needed because Windows browsers insist on padding the cell otherwise; height 2% is needed to prevent Windows Firefox from spreading all the rows equally across the window -->
+<td align="right" valign="top" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet1',onbullet); changeText('homeTextBox',WhatIs);" height="2%" width="2%">
+<div id="bullet1">
+</div>
+</td>
+
+<td align="left" valign="top">
+
+<div class="medium">
+<span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet1',onbullet); changeText('homeTextBox',WhatIs);">What is the Database?</span>
+</div>
+
+</td>
+
+<td align="right" valign="top" width="2%" rowspan="5">
+
+<!--
+<a href="#" onClick="startAnimation('first_homepage',1)" onDblClick="startAnimation('first_homepage',1,'reverse')">
+-->
+<img name="homepage_anim" alt="animation" src="/public/animations/homepage/anim1.jpg" height="153" width="129" border="0" style="margin-right: 0.5em">
+<!--
+</a>
+-->
+
+&nbsp;
+&nbsp;
+
+</td>
+
+</tr>
+
+<tr>
+
+<td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet2',onbullet); changeText('homeTextBox',Contents);">
+<div id="bullet2">
+</div>
 </td>
 
 <td valign="top">
 
-<h3>Search&nbsp;our&nbsp;data</h3>
-
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displaySearchColls&type=view">Fossil collection records</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=beginTaxonInfo">About fossil plants and animals</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displaySearchRefs&type=view">Published references</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=startStartPrintHierarchy">Classifications of organisms in groups</a></div>
-	<div class="indentNext"><a href="javascript:tipsPopup('$exec_url?action=startScale')">Compilation of time scales</a></div>
-    <div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayDownloadForm">Download collection, occurrence, or specimen data</a></div>
-    <div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayDownloadTaxonomyForm">Download taxonomic names and opinions</a></div>
-    <div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayDownloadNeptuneForm">Download and analyze Neptune data</a></div>
-<br>
+<div class="medium">
+<span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet2',onbullet); changeText('homeTextBox',Contents);">What kinds of data can you see?</span>
+</div>
 
 </td></tr>
 
-<tr><td valign="top">
+<tr>
 
-<h3>Activities</h3>
-
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=newsindex">News</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=join_us">Join the Paleobiology Database!</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=summer_course_2007">About our intensive summer course</a>, sponsored by <a href="http://www.nceas.ucsb.edu">NCEAS</a>, <a href="http://www.nescent.org">NESCent</a>, and <a href="http://paleosoc.org">the Paleontological Society</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=Berlin">The International Paleobiology Database Symposium</a>, 13 - 14 March, 2003</div>
-<br>
-
+<td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet3',onbullet); changeText('homeTextBox',Tools);">
+<div id="bullet3">
+</div>
 </td>
 
 <td valign="top">
 
-<h3>Analyze&nbsp;our&nbsp;data</h3>
-
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayMapForm">Draw maps of our fossil collections</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayReportForm">Generate data summary tables</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayCurveForm">Generate diversity curve data</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?action=displayTaxaIntervalsForm">Analyze taxonomic ranges</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?action=displaySearchSectionForm">Analyze stratigraphic sections</a></div>
-<br>
+<div class="medium">
+<span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet3',onbullet); changeText('homeTextBox',Tools);">What can you do with the data?</span>
+</div>
 
 </td></tr>
 
-<tr><td valign="top">
+<tr>
 
-<h3>Other&nbsp;information</h3>
-
-	<div class="indentNext"><a href="http://www.nature.com/cgi-taf/DynaPage.taf?file=/nature/journal/v424/n6948/full/424482a_fs.html"><i>Nature</i> article about the Database</a></div>
-	<div class="indentNext"><a href="http://www.nceas.ucsb.edu/nceas-web/projects/98ALROY1/proposal.pdf">Text of the 1998 NCEAS proposal</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=pdnetwork">Paleontology Database Network info page</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=links">Links</a></div>
-	<div class="indentNext"><a href="http://paleodb.jcu.edu.au">Mirror site in Australia</a></div>
-	<div class="indentNext"><a href="http://chronos.org"><img src="/public/chronos120white.jpg"></a></div>
-<br>
-
+<td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet4',onbullet); changeText('homeTextBox',GetInvolved);">
+<div id="bullet4">
+</div>
 </td>
 
 <td valign="top">
 
-<h3>Examples&nbsp;of&nbsp;entry&nbsp;forms</h3>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=reference_form">References</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=collection_form">Fossil collections</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=occurrence_form">Taxonomic occurrences</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=authority_form">Taxonomic names</a></div>
-	<div class="indentNext"><a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=opinion_form">Classifications of plants and animals</a></div>
-<br>
+<div class="medium">
+<span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet4',onbullet); changeText('homeTextBox',GetInvolved);">How can you get involved?</span>
+</div>
 
-</td></tr></table>
+</td></tr>
 
+<tr>
+
+<td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet5',onbullet); changeText('homeTextBox',OtherInfo);">
+<div id="bullet5">
+</div>
 </td>
 
 <td valign="top">
-<center>
-<img src="/public/images/fossil.jpg" width="130">
-</center>
-<br>
 
-<h3><span style="white-space: nowrap;">This hour's Database totals</span></h3>
-	<ul>
-	<li style="white-space: nowrap;"><b><span id="reference_total"></span></b> published references</li>
-	<li style="white-space: nowrap;"><b><span id="collection_total"></span></b> fossil collections</li>
-	<li style="white-space: nowrap;"><b><span id="occurrence_total"></span></b> taxonomic occurrences</li>
-	</ul>
-	<p><span style="white-space: nowrap;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>entered by</i> <b><span id="enterer_total"></span></b> researchers <i>from</i></span><br>
-	&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="institution_total"></span></b> institutions
-	<i>in</i> <b><span id="country_total"></span></b> countries<br>
-	&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<table><tr><td align="center"><a href="javascript: tipsPopup('/public/animations/growthmap1.html')">See an animated map of the Database's growth</a></td></tr></table></p>
+<div class="medium">
+<span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet5',onbullet); changeText('homeTextBox',OtherInfo);">Other information...</span>
+</div>
+
+</td></tr>
+
+<tr>
+
+<td valign="top" colspan="3">
+
+<div style="padding-left: 0.75em;">
+<div class="homeTextBoxes" id="homeTextBoxShadow">
+<div class="homeTextBoxes" id="homeTextBox">
+</div>
+</div>
+</div>
 
 </td>
 </tr>
+
 </table>
 
-<hr>
+</div> <!-- end homeInfo -->
 
-<table><tr>
-<td>
-<I>
-Original working group funded by <a href="http://www.nceas.ucsb.edu">NCEAS</a>.
-Current funding is by an <a href="http://www.nsf.gov/ere/">NSF Biocomplexity</a> grant to
-<a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">John Alroy</a>,
-<a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">Charles Marshall</a>,
-and <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">Arnie Miller</a>,
-and by an <a href="http://nsf.gov/funding/pgm_summ.jsp?pims_id=13413&org=EAR">NSF Sedimentary Geology and Paleobiology</a> grant to <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">John Alroy</a>.
-Web page maintained by <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">John Alroy</a>.
-</I>
-</td></tr></table>
+<div id="homeBorder">
+<img alt="fossils" src="/public/homeBorder2.jpg" style="margin-top: 2em;">
+</div> <!-- end homeBorder -->
 
-</div>
-
-
-<div>
+<div style="position: absolute; bottom: 0; right: 0;">
 <a href="bridge.pl?action=listCollections"><span style="font-size: .25em; color: white;">list collections</span></a>
 <a href="bridge.pl?action=listTaxa"><span style="font-size: .25em; color: white;">list taxa</span></a>
 </div>
+
+
