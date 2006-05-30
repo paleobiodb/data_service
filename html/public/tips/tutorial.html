@@ -40,6 +40,8 @@
 
 <body>
 
+<div class="mainBody">
+
 <center><h2>Data entry tutorial</h2></center>
 
 <h3>Introduction</h3>
@@ -48,19 +50,14 @@
 In this tutorial you will step through the procedure for entering data into each major table, stopping short right before submitting <i>unless</i> you are using the backup server.
 If you have any other questions, write to <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=personnel">the Database coordinator</a>.</p>
 
-<h3>Public pages</h3>
-
-<p>The first step is to check some of the public web pages that explain the Database.</p>
-
-<ol>
-<li>Go to <u>paleodb.org</u>.
-<li>Hit <u>public area</u>.
-<li>Hit <u>Frequently asked questions</u> and read the entire page.
+<p>
+You should read the entire <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=paleodbFAQ">frequently asked questions</a> page before doing anything else.
 Pay careful attention to the sections "What is the database structure?"; "How is the Database organized?"; "Who can join..."; "How can I form a research group..."; and "Who has access..."
-<li>Hit <u>Home</u> in the blue navigation bar.
-<li>Hit <u>General data entry tip sheet</u> in the "How we do data entry" section, and read the entire page. Pay very close attention to the "General comments."
-<li>Hit <u>Home</u> and successively read the three other tip sheets.
-</ol>
+</p>
+
+<p>Note: when you log in, be sure to get the "Authorizer" and "Enterer" names right.
+The authorizer is typically the Ph.D. who is supervising a data entry project; the enterer could be the same as the authorizer, but more often is a student or postdoc working with the authorizer.
+</p>
 
 <h3>The backup server and test database</h3>
 
@@ -72,18 +69,20 @@ Everything from this point on should be done on the backup server. The address i
 
 <p><a href="http://paleobackup.nceas.ucsb.edu:8090">http://paleobackup.nceas.ucsb.edu:8090</a></p>
 
-<h3>Logging in</h3>
+<h3>Entering a paper</h3>
 
-<p>To do any data entry, you must log in to the "Contributors' area," which is password-protected and closed to the public.</p>
+<p>It's important to enter all the data in every paper, not just the data you need for your specific project.
+You should proceed in this order:</p>
 
 <ol>
-<li>Starting on the public web site, hit <u>Contributors' area</u> on the navigation bar.
-<li>Fill in the "Authorizer" and "Enterer" names.
-The authorizer is typically the Ph.D. who is supervising a data entry project; the enterer could be the same as the authorizer, but more often is a student or postdoc working with the authorizer.
-<li>Enter the "Password" of the authorizer and hit <u>Login</u>.
-<li>If you enter the wrong password or select the wrong authorizer name, you will be bounced right back to the same page.
-<li>Once you log in correctly, you should now be on the data entry "Main menu."
-If you ever need to get back to this page from anywhere in the contributors' area, hit <u>Main menu</u> in the navigation bar.
+<li>Enter the full <a href="#References">reference</a>.
+<li>Enter all taxonomic <a href="#Taxonomy">authority and classification data</a>.
+<li>Enter the <a href="#Collections">collection data</a>.
+Be sure you are not entering duplicates, and split the collections as finely as is reasonable.
+If you have multiple collections and they are very similar, you may want to enter them all at once using the prefilling option.
+<li>Enter the <a href="#Occurrences">occurrence data</a>.
+<li><a href="#Reidentifications">Reidentify</a> any occurrences in other collections that are discussed in this paper.
+<li><a href="#Ecology">Add ecological/taphonomic data</a>, if there are any.
 </ol>
 
 <h3>What script to use</h3>
@@ -132,6 +131,7 @@ If you are on the backup server you can do so; otherwise, hit <u>Main menu</u>.
 <p>We separate information about fossil collections into two tables that have different data entry forms.
 For the collections table there is a lengthy form that records all the contextual information: geography, stratigraphy, lithology, taphonomy, collection methods, etc.
 Each collection is supposed to represent the most geographically and stratigraphically restricted unit you can identify, and ultimately would correspond to the fossils collection from one bed in one spot by one worker in one field season.</p>
+<p>Before you enter any data, you should read the <a href="javascript: tipsPopup('/public/tips/tips.html')">collection and occurrence data entry tip sheet</a> in its entirety.</p>
 
 <ol>
 <li>From the main menu, hit <u>Add a new collection</u> under "Collections."
@@ -148,7 +148,7 @@ Do NOT search by "Authorizer" or "Enterer."
 Make sure none of them are the same as the one you are trying to create.
 It helps to click on the collection names, look at the full records on the resulting pages, and then hit the back button to get back to the list.
 <li>If you did not find any matching collections, or if you hit <u>Add a new collection</u>, you will get a data entry form.
-Fill out every field you can following the instructions on the <a href="javascript: tipsPopup('/public/tips/tips.html')">general data entry tip sheet</a>.
+Fill out every field you can following the instructions on the <a href="javascript: tipsPopup('/public/tips/tips.html')">collection and occurrence data entry tip sheet</a>.
 <li>Once you're done, unless you're on the backup server don't hit <u>Enter new collection</u>; instead, hit <u>Main menu</u>.
 </ol>
 
@@ -281,4 +281,8 @@ The caption is optional but will appear below the images.
 Note that you can only upload one image at a time; if you have multiple images of the same species, start the procedure over again for each one.
 <li>Once you're done, unless you're on the backup server don't hit <u>Enter new collection</u>; instead, hit <u>Main menu</u>.
 </ol>
+
+</div>
+
+</body>
 
