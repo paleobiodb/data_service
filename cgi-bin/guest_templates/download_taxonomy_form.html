@@ -58,7 +58,7 @@
     <table width="100%" border=0 cellpadding=3 cellspacing=0>
       <tr>
         <td style="white-space: nowrap;">Data <select name="taxon_person_type"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="all">any of the above</option></select>:</td>
-        <td><input name="taxon_person_reversed" size=14 onKeyUp="doComplete(event, this, entererNames());"></a></td>
+        <td><input name="taxon_person_reversed" size=14 onKeyUp="doComplete(event, this, entererNames());"></td>
       </tr>
       <tr class="lightGrey">
         <td>Author:</td>
@@ -102,6 +102,11 @@
           </select>  
         </td>
       </tr>
+      <tr>
+        <td colspan=2>
+          <input type="checkbox" name="get_referenced_taxa" value="YES" checked> Get any additional taxa classified in an opinion
+        </td>
+      </tr>
     </table>
     </div>
 
@@ -110,7 +115,7 @@
     <table width="100%" border=0 cellpadding=3 cellspacing=0>
       <tr>
         <td style="white-space: nowrap;">Data <select name="opinion_person_type"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="all">any of the above</option></select>:</td>
-        <td><input name="opinion_person_reversed" size=14 onKeyUp="doComplete(event, this, entererNames());"></a></td>
+        <td><input name="opinion_person_reversed" size=14 onKeyUp="doComplete(event, this, entererNames());"></td>
       </tr>
       <tr class="lightGrey">
         <td>Author:</td>
