@@ -275,9 +275,16 @@ sub processAction {
 	# print out the HTML headers..  We have to do this differently for
 	# the displayLogin routine because it turns off the cache control for some reason...(rjp)
 	unless ($action eq 'displayLogin' or $old_action eq 'processLogin') {
-        print $q->header(-type => "text/html", 
+        if ($q->param('output_format') eq 'xml' ||
+            $q->param('action') =~ /XML$/) {
+            print $q->header(-type => "text/xml", 
                          -Cache_Control=>'no-cache',
                          -expires =>"now" );
+        } else {
+            print $q->header(-type => "text/html", 
+                         -Cache_Control=>'no-cache',
+                         -expires =>"now" );
+        } 
 	}
 	
 	
@@ -1921,6 +1928,9 @@ sub displayCollResults {
 		($dataRows,$ofRows) = processCollectionsSearchForAdd();
 	} else	{
         my $fields = ["authorizer","country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no","collection_aka"];  
+        if ($q->param('output_format') eq 'xml') {
+            push @$fields, "latdeg","latmin","latsec","latdir","latdec","lngdeg","lngmin","lngsec","lngdir","lngdec";
+        }
         my %options = $q->Vars();
         if ($type eq "reclassify_occurrence") {
             # Want to not get taxon_nos when reclassifying. Otherwise, if the taxon_no is set to zero, how will you find it?
@@ -1943,6 +1953,11 @@ sub displayCollResults {
 
     my @dataRows = @$dataRows;
     my $displayRows = scalar(@dataRows);	# get number of rows to display
+
+    if ($q->param('output_format') eq 'xml') {
+        printCollectionsPGAP($dataRows,$q);
+        return;
+    }
 
     if ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
 		# go right to the chase with ReIDs if a taxon_rank was specified
@@ -2170,6 +2185,179 @@ sub displayCollResults {
 	print stdIncludes("std_page_bottom");
 
 } # end sub displayCollResults
+
+
+sub getOccurrencesXML {
+    require XML::Generator;
+    logRequest($s,$q);
+
+    my $rowOffset = $q->param('rowOffset') || 0;
+    my $limit = $q->param('limit') ? $q->param('limit') : '';
+
+    # limit passed to permissions module
+    my $perm_limit = ($limit) ? $limit + $rowOffset : 100000000;
+
+    $q->param('max_interval_name'=>$q->param("max_interval"));
+    $q->param('min_interval_name'=>$q->param("min_interval"));
+    $q->param('collections_coords'=>'YES');
+    $q->param('collections_coords_format'=>'decimal');
+    if ($q->param('xml_format') =~ /points/i) { 
+        $q->param('output_data'=>'collections');
+    } else {
+        $q->param('collections_sp'=>'YES');
+        $q->param('collections_collection_name'=>'YES');
+        $q->param('collections_pres_mode'=>'YES');
+        $q->param('collections_reference_no'=>'YES');
+        $q->param('collections_country'=>'YES');
+        $q->param('collections_state'=>'YES');
+        $q->param('collections_geological_group'=>'YES');
+        $q->param('collections_formation'=>'YES');
+        $q->param('collections_member'=>'YES');
+        $q->param('collections_ma_max'=>'YES');
+        $q->param('collections_ma_min'=>'YES');
+        $q->param('collections_max_interval_no'=>'YES');
+        $q->param('collections_min_interval_no'=>'YES');
+        $q->param('collections_paleocoords'=>'YES');
+        $q->param('collections_paleocoords_format'=>'decimal');
+        $q->param('occurrences_occurrence_no'=>'YES');
+        $q->param('occurrences_subgenus_name'=>'YES');
+        $q->param('occurrences_species_name'=>'YES');
+        $q->param('occurrences_plant_organ'=>'YES');
+        $q->param('occurrences_plant_organ2'=>'YES');
+        $q->param('occurrences_stratcomments'=>'YES');
+        $q->param('occurrences_geology_comments'=>'YES');
+        $q->param('occurrences_collection_comments'=>'YES');
+        $q->param('occurrences_taxonomy_comments'=>'YES');
+    }
+
+    my $d = new Download($dbt,$q,$s,$hbo);
+    my ($dataRows) = $d->queryDatabase();
+    my @dataRows = @$dataRows;
+
+    my $last_record = scalar(@dataRows);
+    if ($limit && (($rowOffset+$limit) < $last_record)) {
+        $last_record = $rowOffset + $limit;
+    } 
+
+    print "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" standalone=\"yes\"?>\n";
+ 
+    my (%period_lookup,%epoch_lookup,%stage_lookup);
+    if ($q->param('xml_format') !~ /points/i) { 
+        %period_lookup = %{TimeLookup::processScaleLookup($dbh,$dbt,'69','intervalToScale')}; 
+        %epoch_lookup  = %{TimeLookup::processScaleLookup($dbh,$dbt,'71','intervalToScale')}; 
+        %stage_lookup  = %{TimeLookup::processScaleLookup($dbh,$dbt,'73','intervalToScale')}; 
+    }
+
+    my $g = XML::Generator->new(escape=>'always',conformance=>'strict',empty=>'args');
+
+    if ($q->param('xml_format') =~ /points/i) { 
+        print "<points>\n";
+    } else {
+        print "<occurrences>\n";
+    }
+#    print "<size>".scalar(@dataRows)."</size>";
+    for (my $i = $rowOffset; $i< $last_record;$i++) {
+        my $row = $dataRows[$i];
+
+        if ($q->param('xml_format') =~ /points/i) { 
+            print $g->p(
+                $g->col($row->{'collection_no'}),
+                $g->lat($row->{'c.latdec'}),
+                $g->lng($row->{'c.lngdec'})
+            );
+        } else {
+            if (!$row->{'c.min_interval_no'} && $row->{'c.max_interval_no'}) {
+                $row->{'c.min_interval_no'} = $row->{'c.max_interval_no'};
+            }
+
+            my ($period_max,$period_min) = ("","");
+            my ($epoch_max,$epoch_min) = ("","");
+            my ($stage_max,$stage_min) = ("","");
+
+            # Period lookup
+            if ($period_lookup{$row->{'c.max_interval_no'}}) {
+                $period_max = $period_lookup{$row->{'c.max_interval_no'}};
+            }
+            if ($period_lookup{$row->{'c.min_interval_no'}}) {
+                $period_min = $period_lookup{$row->{'c.min_interval_no'}};
+            }
+            if (!$period_max) {$period_max = "";}
+            if (!$period_min) {$period_min= "";}
+
+            # Epoch lookup
+            if ($epoch_lookup{$row->{'c.max_interval_no'}}) {
+                $epoch_max = $epoch_lookup{$row->{'c.max_interval_no'}};
+            }
+            if ($epoch_lookup{$row->{'c.min_interval_no'}}) {
+                $epoch_min = $epoch_lookup{$row->{'c.min_interval_no'}};
+            }
+            if (!$epoch_max) {$epoch_max = "";}
+            if (!$epoch_min) {$epoch_min= "";}
+
+            # Stage lookup
+            if ($stage_lookup{$row->{'c.max_interval_no'}}) {
+                $stage_max = $stage_lookup{$row->{'c.max_interval_no'}};
+            }
+            if ($stage_lookup{$row->{'c.min_interval_no'}}) {
+                $stage_min = $stage_lookup{$row->{'c.min_interval_no'}};
+            }
+            if (!$stage_max) {$stage_max = "";}
+            if (!$stage_min) {$stage_min= "";}
+
+            $longitude *= -1 if ($row->{'lngdir'} eq "West");
+
+            my $taxon_name = $row->{'o.genus_name'};
+            if ($q->param('lump_genera') ne 'YES') {
+                if ($row->{'o.subgenus_name'}) {
+                    $taxon_name .= " ($row->{'o.subgenus_name'})";
+                }
+                $taxon_name .= " $row->{'o.species_name'}";
+            }
+
+            $plant_organ = $row->{'o.plant_organ'};
+            if ($row->{'o.plant_organ2'}) {
+                $plant_organ .= ",".$row->{'o.plant_organ2'}; 
+            }
+
+            print $g->occurrence(
+                $g->occurrence_no($row->{'o.occurrence_no'}),
+                $g->collection_no($row->{'collection_no'}),
+                $g->reference_no($row->{'c.reference_no'}),
+                $g->latitude($row->{'c.latdec'}),
+                $g->longitude($row->{'c.lngdec'}),
+                $g->paleolatitude($row->{'c.paleolatdec'}),
+                $g->paleolongitude($row->{'c.paleolngdec'}),
+                $g->age_max($row->{'c.ma_max'}),
+                $g->age_min($row->{'c.ma_min'}),
+                $g->collection_name($row->{'c.collection_name'}),
+                $g->preservation($row->{'c.pres_mode'}),
+                $g->group($row->{'c.geological_group'}),
+                $g->formation($row->{'c.formation'}),
+                $g->member($row->{'c.member'}),
+                $g->country($row->{'c.country'}),
+                $g->state($row->{'c.state'}),
+                $g->taxon_name($taxon_name),
+                $g->time_period_max($period_max),
+                $g->time_period_min($period_min),
+                $g->time_epoch_max($epoch_max),
+                $g->time_epoch_min($epoch_min),
+                $g->time_stage_max($stage_max),
+                $g->time_stage_min($stage_min),
+                $g->plant_organ($plant_organs),
+                $g->strat_comments($row->{'o.stratcomments'}),
+                $g->geology_comments($row->{'o.geology_comments'}),
+                $g->collection_comments($row->{'o.collection_comments'}),
+                $g->taxonomy_comments($row->{'o.taxonomy_comments'})
+            );
+        }
+        print "\n";
+    }
+    if ($q->param('xml_format') =~ /points/i) { 
+        print "</points>\n";
+    } else {
+        print "</occurrences>\n";
+    }
+}
 
 
 # JA 5-6.4.04

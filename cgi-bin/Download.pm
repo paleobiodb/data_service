@@ -19,7 +19,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no collection_name collection_aka country state county tectonic_plate_id latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch subepoch stage 10mybin max_interval_no min_interval_no ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no collection_name collection_aka country state county tectonic_plate_id latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch subepoch stage 10mybin max_interval min_interval ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
 my @occFieldNames = qw(authorizer enterer modifier occurrence_no abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @occTaxonFieldNames = qw(genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no);
 my @reidFieldNames = qw(authorizer enterer modifier reid_no reference_no comments created modified modified_temp plant_organ);
@@ -302,7 +302,7 @@ sub retellOptions {
     $html .= $self->retellOptionsRow ( "Exclude collections with ".$q->param("occurrence_count_qualifier")." than",$q->param("occurrence_count")." occurrences") if ($q->param("occurrence_count") =~ /^\d+$/);
 
     if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
-        $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lumpgenera") );
+        $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lump_genera") );
         $html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
         $html .= $self->retellOptionsRow ( "Replace names with reidentifications?", $q->param("replace_with_reid") );
         $html .= $self->retellOptionsRow ( "Replace names with senior synonyms?", $q->param("replace_with_ss") );
@@ -1648,8 +1648,8 @@ sub queryDatabase {
          $q->param('collections_ma_mid')) &&
         $q->param("output_data") !~ /genera|species/) {
         my @bounds = TimeLookup::findBoundaries($dbh,$dbt);
-        %upper_bound = %{$bounds[2]};
-        %lower_bound = %{$bounds[3]}; 
+        %upper_bound = %{$bounds[0]};
+        %lower_bound = %{$bounds[1]}; 
     }
 
 
@@ -1663,8 +1663,8 @@ sub queryDatabase {
 
     # Get hash to map interval_no -> interval_name
     my %intervalNames;
-    if (($q->param("collections_max_interval_no") eq "YES" || 
-         $q->param("collections_min_interval_no") eq "YES") &&
+    if (($q->param("collections_max_interval") eq "YES" || 
+         $q->param("collections_min_interval") eq "YES") &&
         $q->param("output_data") !~ /genera|species/) {
 
         # get the names of time intervals
@@ -1733,13 +1733,18 @@ sub queryDatabase {
 
     # See if rows okay by permissions module
     my @dataRows = ( );
-    my $limit = 1000000;
+    my $limit = 10000000;
+#    if ($q->param('limit')) {
+#        $limit = $q->param('limit');
+#    }
+#    if (int($q->param('row_offset'))) {
+#        $limit += $q->param('row_offset');
+#    }
     my $ofRows = 0;
     $p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
 
     $sth->finish();
     $self->dbg("Rows that passed Permissions: number of rows $ofRows, length of dataRows array: ".@dataRows."<br>");
-
 
     # ss = senior_synonym
     my %ss_taxon_nos = ();
@@ -1866,9 +1871,9 @@ sub queryDatabase {
 
             # Lump by genera or genera/collection here in code, so we can get refs + filter reids
             # correctly above
-            if ($exclude == 0 && ($q->param('output_data') =~ /genera|species/ || $q->param('lumpgenera') eq 'YES')) {
+            if ($exclude == 0 && ($q->param('output_data') =~ /genera|species/ || $q->param('lump_genera') eq 'YES')) {
                 my $genus_string;
-                if ($q->param('lumpgenera') eq 'YES') {
+                if ($q->param('lump_genera') eq 'YES') {
                     $genus_string .= $row->{'collection_no'};
                 }
               
@@ -1944,6 +1949,16 @@ sub queryDatabase {
     }
     
     @dataRows = @lumpedDataRows;
+
+    # This is a bit nasty doing it here, but since we do lumping in PERL code, we have to do this after the
+    # fact and can't do it after the fact. Will have to amend table structure or radically alter queries
+    # so we can do more in SQL to get around this I think PS
+    if (int($q->param('row_offset'))) {
+        splice(@dataRows,0,int($q->param('row_offset')));
+    }
+    if (int($q->param('limit'))) {
+        splice(@dataRows,int($q->param('limit')));
+    }
 
 
     # Get a list of parents for classification purposes
@@ -2097,12 +2112,12 @@ sub queryDatabase {
                 $plate_key .= $row->{'c.latdeg'};
                 $row->{'c.tectonic_plate_id'} = $plate_ids{$plate_key};
             }
-            if ($q->param("collections_max_interval_no") eq "YES") {
+            if ($q->param("collections_max_interval") eq "YES") {
                 # translate interval nos into names JA 18.9.03
-                $row->{'c.max_interval_no'} = $intervalNames{$row->{'c.max_interval_no'}};
+                $row->{'c.max_interval'} = $intervalNames{$row->{'c.max_interval_no'}};
             }
-            if ($q->param("collections_min_interval_no") eq "YES") {
-                $row->{'c.min_interval_no'} = $intervalNames{$row->{'c.min_interval_no'}};
+            if ($q->param("collections_min_interval") eq "YES") {
+                $row->{'c.min_interval'} = $intervalNames{$row->{'c.min_interval_no'}};
             }    
             if ($q->param("collections_period") eq "YES") {
                 # translate bogus period or epoch max into legitimate,
@@ -2873,14 +2888,12 @@ sub setupQueryFields {
 
     # hey, if you want the data binned into time intervals you have to
     #  download the interval names into the occurrences table too
-    if ( $q->param('time_scale') )    {
-        $q->param('collections_max_interval_no' => "YES");
-        $q->param('collections_min_interval_no' => "YES");
-    }
-
-    if ($q->param('collections_ma_max') eq 'YES' ||
+    if ($q->param('time_scale') ||
         $q->param('collections_ma_max') eq 'YES' ||
-        $q->param('collections_ma_max') eq 'YES') {
+        $q->param('collections_ma_max') eq 'YES' ||
+        $q->param('collections_ma_max') eq 'YES' ||
+        $q->param('collections_max_interval') eq 'YES' ||
+        $q->param('collections_min_interval') eq 'YES') {
         $q->param('collections_max_interval_no' => "YES");
         $q->param('collections_min_interval_no' => "YES");
     }
