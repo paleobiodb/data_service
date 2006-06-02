@@ -1,42 +1,40 @@
 
 // WARNING: the script assumes that there are exactly 213 frames per animation
 
-	var mapDir = ["","fullsize","fullsize2","eckert","eckert2","northpole","southpole","history","history2"]
-	var srcs = new Array(9)
-	var cs = [2,2,2,2,2,2,2,2,2]
-	var lastc = [0,0,0,0,0,0,0,0,0]
-	var intervals = [0,0,0,0,0,0,0,0,0]
-	var intervals2 = [0,0,0,0,0,0,0,0,0]
+	var mapDir = ["","homepage","orthographic","orthographic2","eckert","eckert2","northpole","southpole","history","history2","Beijing","London","New_Delhi","New_York","Santa_Barbara","Sao_Paulo","Sydney"]
+	var srcs = new Array(17)
+	var cs = [2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2]
+	var lastc = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+	var intervals = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+	var intervals2 = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
 	var maxframes = 213
 	var maxframes2 = 30
 
-	for ( x = 0; x <= 8; x++)	{
+	function loadFrames(firstframe,x)	{
+
 		srcs [x] = new Array(maxframes+2)
-	}
 
-	for ( y = 1; y <= maxframes; y++)	{
-		for ( x = 0; x <= 6; x++)	{
-			if ( x == 3 || x == 4 )	{
-				srcs[x][y] = new Image(432,282);
-			} else	{
-				srcs[x][y] = new Image(324,315);
+		if ( x != 8 && x != 9 )	{
+			for ( y = 1; y <= maxframes; y++)	{
+				if ( x == 4 || x == 5 )	{
+				//	newImage = new Image(432,282);
+				} else	{
+				//	newImage= new Image(324,315);
+				}
+				srcs[x][y] = "/public/animations/" + mapDir[x] + "/anim" + y + ".jpg";
 			}
-			srcs[x][y] = "/public/animations/" + mapDir[x] + "/anim" + y + ".jpg";
-		}
-	}
-
-	for ( y = 1; y <= maxframes2; y++)	{
-		for ( x = 7; x <= 8; x++)	{
-			if ( x == 7 || 8 == 4 )	{
-				srcs[x][y] = new Image(432,282);
-			} else	{
-				srcs[x][y] = new Image(324,315);
+		} else	{
+			for ( y = 1; y <= maxframes2; y++)	{
+				//var newImage = new Image(432,282);
+				srcs[x][y] = "/public/animations/" + mapDir[x] + "/anim" + y + ".jpg";
 			}
-			srcs[x][y] = "/public/animations/" + mapDir[x] + "/anim" + y + ".jpg";
 		}
+
+		startAnimation(firstframe,x);
+
 	}
 
-	function start_animation(firstframe,anim,direction)	{
+	function startAnimation(firstframe,anim,direction)	{
 
 		if ( cs[anim] > 2 )	{
 			cs[anim] = -1;
@@ -48,7 +46,7 @@
 		}
 		clearInterval(intervals[anim]);
 		clearInterval(intervals2[anim]);
-		if ( anim <= 6 )	{
+		if ( anim != 8 && anim != 9 )	{
 			intervals[anim] = setInterval("incrementSource(" + anim + ",'" + direction + "')", 250);
 			intervals2[anim] = setInterval("rotateFrame('" + firstframe + "'," + anim + ")",250);
 		} else	{
@@ -61,7 +59,7 @@
 	function incrementSource(anim,direction)	{
 
 		var animmaxframes = maxframes;
-		if ( anim == 7 || anim == 8 )	{
+		if ( anim == 8 || anim == 9 )	{
 			animmaxframes = maxframes2;
 		}
 
