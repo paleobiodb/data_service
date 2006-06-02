@@ -164,7 +164,7 @@ sub displayNeptuneDownloadResults {
         $q2->param('occurrences_abund_unit'=>'YES');
 
         my $d = new Download($dbt,$q2,$s,$hbo);
-        $pbdb_results = $d->queryDatabase();
+        ($pbdb_results) = $d->queryDatabase();
     }
     my $results = queryNeptuneDB($q,$dbh_neptune);
     my ($csv,$filename) = setupOutput($q,$s);

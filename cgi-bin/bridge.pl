@@ -2204,7 +2204,8 @@ sub getOccurrencesXML {
     if ($q->param('xml_format') =~ /points/i) { 
         $q->param('output_data'=>'collections');
     } else {
-        $q->param('collections_sp'=>'YES');
+        $q->param('sp'=>'YES');
+        $q->param('indet'=>'YES');
         $q->param('collections_collection_name'=>'YES');
         $q->param('collections_pres_mode'=>'YES');
         $q->param('collections_reference_no'=>'YES');
@@ -2231,7 +2232,7 @@ sub getOccurrencesXML {
     }
 
     my $d = new Download($dbt,$q,$s,$hbo);
-    my ($dataRows) = $d->queryDatabase();
+    my ($dataRows,$allDataRows,$dataRowsSize) = $d->queryDatabase();
     my @dataRows = @$dataRows;
 
     my $last_record = scalar(@dataRows);
@@ -2251,9 +2252,9 @@ sub getOccurrencesXML {
     my $g = XML::Generator->new(escape=>'always',conformance=>'strict',empty=>'args');
 
     if ($q->param('xml_format') =~ /points/i) { 
-        print "<points>\n";
+        print "<points total=\"$dataRowsSize\">\n";
     } else {
-        print "<occurrences>\n";
+        print "<occurrences total=\"$dataRowsSize\">\n";
     }
 #    print "<size>".scalar(@dataRows)."</size>";
     for (my $i = $rowOffset; $i< $last_record;$i++) {

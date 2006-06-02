@@ -1949,6 +1949,7 @@ sub queryDatabase {
     }
     
     @dataRows = @lumpedDataRows;
+    my $dataRowsSize = scalar(@dataRows);
 
     # This is a bit nasty doing it here, but since we do lumping in PERL code, we have to do this after the
     # fact and can't do it after the fact. Will have to amend table structure or radically alter queries
@@ -2170,7 +2171,7 @@ sub queryDatabase {
         }
     }
 
-    return \@dataRows,\@allDataRows;
+    return (\@dataRows,\@allDataRows,$dataRowsSize);
 }
 
 
