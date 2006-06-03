@@ -207,8 +207,8 @@ sub formatAsHTML {
         if ($row->{'spelling_reason'} =~ /correction/) {
             my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}});
             my $spelling_html = ($spelling->{'taxon_rank'} =~ /species|genus/) 
-                              ? "<i>$child->{'taxon_name'}</i>" 
-                              : $child->{'taxon_name'};
+                              ? "<i>$spelling->{'taxon_name'}</i>" 
+                              : $spelling->{'taxon_name'};
             my $parent = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'parent_spelling_no'}});
             my $parent_html = "";
             if ($parent) {
