@@ -1225,41 +1225,6 @@ sub submitOpinionForm {
 		
 		($code, $resultOpinionNumber) = $dbt->insertRecord($s,'opinions', \%fields);
 
-		if ($code && ($fields{'child_no'} != $fields{'child_spelling_no'})) {
-            #my @opinions = getOpinionsToMigrate($dbt,$fields{'child_no'},$fields{'child_spelling_no'});
-            if (@opinions_to_migrate) {
-                main::dbg("Migrating ".scalar(@opinions_to_migrate)." opinions");
-                my @parents = ();
-                foreach my $row  (@opinions_to_migrate) {
-                    my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}});
-                    my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}});
-                    my $newSpellingReason = guessSpellingReason($child,$spelling);
-                    my $sql = "UPDATE opinions SET modified=modified,spelling_reason='$newSpellingReason',child_no=$fields{child_no} WHERE opinion_no=$row->{opinion_no}";
-                    main::dbg("Migrating child: $sql");
-                    $dbh->do($sql);
-                    if ($row->{'child_spelling_no'} =~ /^\d+$/) {
-                        push @parents,$row->{'child_spelling_no'};
-                    }
-                    if ($row->{'child_no'} =~ /^\d+$/) {
-                        push @parents,$row->{'child_no'};
-                    }
-                }
-                
-                # We also have to modify the parent_no so it points to the original combination of an taxa classified into
-                # any migrated opinion
-                if (@parents) {
-                    my $sql = "UPDATE opinions SET modified=modified, parent_no=$fields{'child_no'} WHERE parent_no IN (".join(",",@parents).")";
-                    main::dbg("Migrating parents: $sql");
-                    $dbh->do($sql);
-                }
-                
-                # Make sure opinions authority information is synchronized with the original combination
-                Taxon::propagateAuthorityInfo($dbt,$fields{'child_no'});
-
-                # Remove any duplicates that may have been added as a result of the migration
-                removeDuplicateOpinions($dbt,$fields{'child_no'});
-            }
-        }
 	} else {
 		# if it's an old entry, then we'll update.
         unless ($q->param('ref_has_opinion') =~ /CURRENT/) {
@@ -1271,6 +1236,39 @@ sub submitOpinionForm {
 		$dbt->updateRecord($s,'opinions', 'opinion_no',$resultOpinionNumber, \%fields);
 
 	}
+    
+    if (@opinions_to_migrate) {
+        main::dbg("Migrating ".scalar(@opinions_to_migrate)." opinions");
+        my @parents = ();
+        foreach my $row  (@opinions_to_migrate) {
+            my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}});
+            my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}});
+            my $newSpellingReason = guessSpellingReason($child,$spelling);
+            my $sql = "UPDATE opinions SET modified=modified,spelling_reason='$newSpellingReason',child_no=$fields{child_no} WHERE opinion_no=$row->{opinion_no}";
+            main::dbg("Migrating child: $sql");
+            $dbh->do($sql);
+            if ($row->{'child_spelling_no'} =~ /^\d+$/) {
+                push @parents,$row->{'child_spelling_no'};
+            }
+            if ($row->{'child_no'} =~ /^\d+$/) {
+                push @parents,$row->{'child_no'};
+            }
+        }
+        
+        # We also have to modify the parent_no so it points to the original combination of an taxa classified into
+        # any migrated opinion
+        if (@parents) {
+            my $sql = "UPDATE opinions SET modified=modified, parent_no=$fields{'child_no'} WHERE parent_no IN (".join(",",@parents).")";
+            main::dbg("Migrating parents: $sql");
+            $dbh->do($sql);
+        }
+        
+        # Make sure opinions authority information is synchronized with the original combination
+        Taxon::propagateAuthorityInfo($dbt,$fields{'child_no'});
+
+        # Remove any duplicates that may have been added as a result of the migration
+        removeDuplicateOpinions($dbt,$fields{'child_no'});
+    }
     my $pid = fork();
     if (!defined($pid)) {
         carp "ERROR, could not fork";
