@@ -510,6 +510,9 @@ sub moveChildren {
     my $lft = $c_row->{'lft'};
     my $rgt = $c_row->{'rgt'};
 
+    if ($parent_no && $c_row->{'lft'} == $p_row->{'lft'}) {
+        print "moveChildren skipped, child and parent appear to be the same" if ($DEBUG);
+    }
     # if PARENT && PARENT.RGT BTWN LFT AND RGT
     # If a loop occurs (the insertion point where we're going to move the child is IN the child itself
     # then we have some special logic: Move to the end so it has no parents, then move the child to 
