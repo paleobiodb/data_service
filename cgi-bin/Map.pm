@@ -590,6 +590,35 @@ sub mapGetScale	{
     $offlng = 180 * ( $scale - 1 ) / $scale;
     $offlat = 90 * ( $scale - 1 ) / $scale;
 }
+        
+sub readPlateIDs {
+    my $self = shift;
+    if ( ! open IDS,"<$COAST_DIR/plateidsv2.lst" ) {
+        $self->htmlError ( "Couldn't open [$COAST_DIR/plateidsv2.lst]: $!" );
+    }
+
+
+    # skip the first line
+    <IDS>;
+
+    my %plate;
+    my %cellage;
+    # read the plate IDs: numbers are longitude, latitude, and ID number
+    while (<IDS>)	{
+        s/\n//;
+        my ($x,$y,$z) = split /,/,$_;
+        $plate{$x}{$y} = $z;
+        # Andes correction: Scotese sometimes assigned 254 Ma ages to
+        #  oceanic crust cells that are much younger, so those need to
+        #  be eliminated JA 4.5.06
+        if ( $z >= 900)	{
+            $cellage{$x}{$y} = -1;
+        }
+    }
+    close IDS;
+    $self->{plate} = \%plate;
+    $self->{cellage} = \%cellage;
+}
 
 
 # extract outlines taken from NOAA's NGDC Coastline Extractor
@@ -612,28 +641,12 @@ sub mapDefineOutlines	{
 	# this code used to be near the top of mapGetRotations, but I moved
 	#  it because the plate IDs are needed here to avoid the Andes bug
 	#  JA 5.5.06
+    my %plate;
+    my %cellage;
 	if ( $self->{maptime} > 0 || ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ ) )	{
-		if ( ! open IDS,"<$COAST_DIR/plateidsv2.lst" ) {
-			$self->htmlError ( "Couldn't open [$COAST_DIR/plateidsv2.lst]: $!" );
-		}
-
-		# skip the first line
-		<IDS>;
-
-		# read the plate IDs: numbers are longitude, latitude, and ID number
-		while (<IDS>)	{
-			s/\n//;
-			my ($x,$y,$z) = split /,/,$_;
-			$plate{$x}{$y} = $z;
-		# Andes correction: Scotese sometimes assigned 254 Ma ages to
-		#  oceanic crust cells that are much younger, so those need to
-		#  be eliminated JA 4.5.06
-			if ( $z >= 900)	{
-				$cellage{$x}{$y} = -1;
-			}
-		}
-		close IDS;
-		$self->{plate} = \%plate;
+        $self->readPlateIDs();
+        %plate = %{$self->{'plate'}};
+        %cellage = %{$self->{'cellage'}};
 	}
 
 	# read grid cell ages
@@ -1766,7 +1779,7 @@ sub projectPoints	{
 	# what plate is this point on?
 	my %plate = %{$self->{plate}};
 	$pid = $plate{$q}{$r};
-        
+
 	# if there are no data, just bomb out
 		if ( $pid eq "" || $rotx{$ma}{$pid} eq "" || $roty{$ma}{$pid} eq "" )	{
 			return('NaN','NaN');

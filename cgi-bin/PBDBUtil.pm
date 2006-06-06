@@ -639,6 +639,7 @@ sub getPaleoCoords {
         # rotx, roty, rotdeg get set by the function, needed by projectPoints below
         my $map_o = new Map;
         $map_o->{maptime} = $collage;
+        $map_o->readPlateIDs();
         $map_o->mapGetRotations();
 
         my ($lngdeg, $latdeg);
