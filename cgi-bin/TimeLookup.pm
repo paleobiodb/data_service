@@ -388,16 +388,23 @@ sub processBinLookup	{
 		"61" => "Silurian 2", # Wenlock
 		"62" => "Silurian 1", # Llandovery
 		"638" => "Ordovician 5", # Ashgillian
+	# added 8.6.06
+		"63" => "Ordovician 5", # Ashgill
 		"639" => "Ordovician 4", # Caradocian
+	# added 8.6.06
+		"64" => "Ordovician 4", # Caradoc
 		"65" => "Ordovician 3", # Llandeilo
 		"66" => "Ordovician 3", # Llanvirn
 	# used up to 15.8.04
 	#	"30" => "Ordovician 3", # Middle Ordovician
 		"596" => "Ordovician 2", # Arenigian
-	#	"67" => "Ordovician 2", # Arenigian
+	# added 8.6.06
+		"67" => "Ordovician 2", # Arenig
 	# used up to 15.8.04
 	#	"641" => "Ordovician 2", # Latorpian
 		"559" => "Ordovician 1", # Tremadocian
+	# added 8.6.06
+		"68" => "Ordovician 1", # Tremadoc
 		"69" => "Cambrian 4", # Merioneth
 		"70" => "Cambrian 3", # St David's
 		"71" => "Cambrian 2", # Caerfai
