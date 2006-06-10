@@ -120,10 +120,13 @@ H6 {font-size: .9em;}
 
 .mainBody	{
     margin-left: 1em; 
-    margin-right: 1em; 
+    margin-right: 1em;
 }
 
 #mainSpacer	{
+ /* need align and width to roughly center the page contents below the banner */
+    text-align: center;
+    width: 58em;
     position: absolute;
     padding-top: 2em;
     top: 52px;
