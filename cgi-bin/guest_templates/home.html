@@ -23,7 +23,7 @@ if ( checkBrowser('msie') )	{
 }
 
 var WhatIs = '<p>' +
-'We are an international scientific organization run by and for paleontological <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=participants">researchers<\/a> from many <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=institutions">institutions<\/a>. ' +
+'We are an international scientific organization run by and for paleontological <a href="/cgi-bin/bridge.pl?action=displayAuthorizers">researchers<\/a> from many <a href="/cgi-bin/bridge.pl?action=displayInstitutions">institutions<\/a>. ' +
 'We are bringing together information about the entire fossil record in a single database to educate the public, summarize the literature for professionals, and foster statistical analyses of medium-scale patterns, like global diversity increases and mass extinctions.' +
 '<\/p>' +
 '<div style="padding-top: 10px; padding-bottom: 10px; padding-right: 1em; width: 100%; text-align: center"><img alt="This hour\'s fossil image" height="180" src="/public/images/fossil.jpg"><\/div>';
@@ -140,9 +140,9 @@ function checkBrowser(string)	{
 	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats"><span id="taxon_total"></span></a></span></span><br>
 	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats"><span id="collection_total"></span></a></span></span><br>
 	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats"><span id="occurrence_total"></span></a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=participants" class="homeStats"><span id="enterer_total"></span></a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=institutions" class="homeStats"><span id="institution_total"></span></a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=participants" class="homeStats"><span id="country_total"></span></a></span></span>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayAuthorizers" class="homeStats"><span id="enterer_total"></span></a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayInstitutions" class="homeStats"><span id="institution_total"></span></a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayAuthorizers" class="homeStats"><span id="country_total"></span></a></span></span>
 </td>
 
 <td align="left" valign="top">
@@ -150,9 +150,9 @@ function checkBrowser(string)	{
 	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats">taxa</a></span></span><br>
 	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">collections</a></span></span><br>
 	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">occurrences</a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=participants" class="homeStats">contributors</a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=institutions" class="homeStats">institutions</a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=institutions" class="homeStats">countries</a></span></span>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayAuthorizers" class="homeStats">contributors</a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayInstitutions" class="homeStats">institutions</a></span></span><br>
+	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayAuthorizers" class="homeStats">countries</a></span></span>
 </td></tr>
 </table>
 
