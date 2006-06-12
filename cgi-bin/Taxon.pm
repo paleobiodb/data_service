@@ -639,7 +639,7 @@ sub submitAuthorityForm {
             }
             my $plural = ($taxonExists == 1) ? "" : "s";
             $q->param('confirmed_taxon_name'=>$q->param('taxon_name'));
-			$errors->add("This taxonomic name already appears $taxonExists time$plural in the database: ".join(", ",@pub_info).". If this record is a homonym and you want to create a new record, hit submit again. If its a rank change, just enter an opinion using the new rank.");
+			$errors->add("This taxonomic name already appears $taxonExists time$plural in the database: ".join(", ",@pub_info).". If this record is a homonym and you want to create a new record, hit submit again. If its a rank change, just enter an opinion based on the existing taxon that uses the new rank and it'll be automatically created.");
 		}
 	}
 	
@@ -737,7 +737,7 @@ sub submitAuthorityForm {
     # if the taxon name is unique, find matches to it in the
     #  occurrences table and set the taxon numbers appropriately
     if ($status && ($isNewEntry || ($t->get('taxon_name') ne $fields{'taxon_name'}))) {
-        my @set_warnings = setOccurrencesTaxonNoByTaxon($dbt,$resultTaxonNumber);
+        my @set_warnings = setOccurrencesTaxonNoByTaxon($dbt,$s,$resultTaxonNumber);
         push @warnings, @set_warnings;
     }
 	
@@ -756,7 +756,7 @@ sub submitAuthorityForm {
         my $end_message;
         if (@warnings) {
 		    $end_message .= "<DIV class=\"warning\">";
-            $end_message .= "Warnings inserting/updating authority record:<BR>"; 
+            $end_message .= "<div class=\"large\"><b>Warnings</b></div>"; 
             $end_message .= "<LI>$_</LI>" for (@warnings);
             $end_message .= "</DIV>";
         }
@@ -791,6 +791,7 @@ sub submitAuthorityForm {
 
 sub setOccurrencesTaxonNoByTaxon {
     my $dbt = shift;
+    my $s = shift;
     my $dbh = $dbt->dbh;
     my $taxon_no = shift;
     my @warnings = ();
@@ -838,19 +839,22 @@ sub setOccurrencesTaxonNoByTaxon {
     }
     
     if (scalar(@taxon_nos) > 1) {
-        my $sql1 = "SELECT p.name, p.email, count(*) cnt FROM occurrences o,person p WHERE o.authorizer_no=p.person_no AND o.taxon_no IN (".join(",",@taxon_nos).") group by p.person_no";
-        my $sql2 = "SELECT p.name, p.email, count(*) cnt FROM reidentifications re,person p WHERE re.authorizer_no=p.person_no AND re.taxon_no IN (".join(",",@taxon_nos).") group by p.person_no";
+        my $sql1 = "SELECT p.person_no, p.name, p.email, count(*) cnt FROM occurrences o,person p WHERE o.authorizer_no=p.person_no AND o.taxon_no IN (".join(",",@taxon_nos).") group by p.person_no";
+        my $sql2 = "SELECT p.person_no, p.name, p.email, count(*) cnt FROM reidentifications re,person p WHERE re.authorizer_no=p.person_no AND re.taxon_no IN (".join(",",@taxon_nos).") group by p.person_no";
         my @results = @{$dbt->getData($sql1)};
         push @results,@{$dbt->getData($sql2)};
         my %emails = ();
         my %counts = ();
+        my %names = ();
         foreach my $row (@results) {
-            $emails{$row->{'name'}} = $row->{'email'};
-            $counts{$row->{'name'}} += $row->{'cnt'};
+            $names{$row->{'person_no'}} = $row->{'name'};
+            $emails{$row->{'person_no'}} = $row->{'email'};
+            $counts{$row->{'person_no'}} += $row->{'cnt'};
         }
 
-        my $link = "bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$taxon_name";
-        while (my ($name,$email) = each %emails) {
+        while (my ($person_no,$email) = each %emails) {
+            my $name = $names{$person_no};
+            my $link = "bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$taxon_name&occurrences_authorizer_no=$person_no";
             my %headers = ('Subject'=> 'Please reclassify your occurrences','From'=>'alroy');
             if ($ENV{'BRIDGE_HOST_URL'} =~ /paleodb\.org/) {
                 if ($email) {
@@ -864,7 +868,7 @@ sub setOccurrencesTaxonNoByTaxon {
                 $headers{'To'} = 'schroeter@nceas.ucsb.edu';
             }
             my $taxon_count = scalar(@taxon_nos);
-            my $occ_count = $counts{$name};
+            my $occ_count = $counts{$person_no};
             my $body = <<END_OF_MESSAGE;
 Dear $name:
 
@@ -884,11 +888,13 @@ END_OF_MESSAGE
         }
         
         # Deal with homonym issue
-        $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
-        $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
-        $dbt->getData($sql1);
-        $dbt->getData($sql2);
-        push @warnings, "Since $taxon_name is a homonym, occurrences of it are no longer classified.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$taxon_name\">Reclassify occurrences</a>\" and manually classify <b>all</b> occurrences of this taxon.";
+        # Default behavior changed: leave occurrences classified by default, since whoever entered them in thet first
+        # place probably wants them to be classifeid to the exiting taxa in the datbaase.
+#        $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
+#        $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
+#        $dbt->getData($sql1);
+#        $dbt->getData($sql2);
+        push @warnings, "Since $taxon_name is a homonym, occurrences of it may be incorrectly classified using the wrong homonym.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$taxon_name&occurrences_authorizer_no=".$s->get('authorizer_no')."\">Reclassify occurrences</a>\" and manually classify <b>all</b> your  occurrences of this taxon.";
     } elsif (scalar(@taxon_nos) == 1) {
         my @matchedOccs = ();
         my @matchedReids = ();
