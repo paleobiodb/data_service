@@ -229,6 +229,20 @@ function fillDays() {
 	}
 }
 
+// Email addresses pass through a simple javascript, which most automated scripts won't execute
+// before being displayed
+function descram(part2r,part1r) {
+    var em = "";
+    for (i = 0; i <= part2r.length; i++) {
+      em = part2r.charAt(i) + em;
+    } 
+    em = "@" + em;
+    for (i = 0; i <= part1r.length; i++) {
+      em = part1r.charAt(i) + em;
+    } 
+    document.write(em);
+}
+
 
 //pass this function a checkbox.
 function checkAll(checkbox,the_class){
