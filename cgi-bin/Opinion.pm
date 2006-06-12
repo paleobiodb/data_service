@@ -1205,7 +1205,7 @@ sub submitOpinionForm {
             die("Unable to create new authority record for $record{taxon_name}. Please contact support");
         }
         $fields{'child_spelling_no'} = $taxon_no;
-        my @set_warnings = Taxon::setOccurrencesTaxonNoByTaxon($dbt,$taxon_no);
+        my @set_warnings = Taxon::setOccurrencesTaxonNoByTaxon($dbt,$s,$taxon_no);
         push @warnings, @set_warnings;
 
 	}
@@ -1419,7 +1419,7 @@ sub displayOpinionChoiceForm {
             push @where, "o.reference_no=".int($q->param("reference_no"));
         }
         if ($q->param("authorizer_reversed")) {
-            my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('authorizer_reversed'));
+            my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed')));
             my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
             if (!$authorizer_no) {
                 push @errors, $q->param('authorizer_reversed')." is not a valid authorizer. Format like 'Sepkoski, J.'" if (!$authorizer_no); 
