@@ -20,7 +20,7 @@ sub startReclassifyOccurrences	{
         #  reclassify page
 		&displayOccurrenceReclassify($q,$s,$dbh,$dbt);
 	} else	{
-        my $html = $hbo->populateHTML('search_reclassify_form', [ '', '', ''], [ 'research_group', 'eml_max_interval', 'eml_min_interval'], []);
+        my $html = $hbo->populateHTML('search_reclassify_form', [ '', '', '',$s->get('authorizer_no')], [ 'research_group', 'eml_max_interval', 'eml_min_interval','authorizer_no'], []);
 
         my $javaScript = main::makeAuthEntJavaScript();
         $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
@@ -63,11 +63,17 @@ sub displayOccurrenceReclassify	{
         if ($species) {
             $sql .= " AND o.species_name LIKE ".$dbh->quote($species);
         }
+        if ($q->param('occurrences_authorizer_no') =~ /^[\d,]+$/) {
+            $sql .= " AND o.authorizer_no IN (".$q->param('occurrences_authorizer_no').")";
+        }
         $sql .= ")";
         $sql .= " UNION ";
         $sql .= "( SELECT re.reid_no, re.authorizer_no,re.occurrence_no,re.taxon_no, re.genus_reso, re.genus_name, re.subgenus_reso, re.subgenus_name, re.species_reso, re.species_name, c.collection_no, c.collection_name, c.country, c.state, c.max_interval_no, c.min_interval_no FROM reidentifications re, occurrences o, collections c WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no AND c.collection_no IN (".join(", ",@collections).") AND (re.genus_name IN ($names) OR re.subgenus_name IN ($names))";
         if ($species) {
             $sql .= " AND re.species_name LIKE ".$dbh->quote($species);
+        }
+        if ($q->param('occurrences_authorizer_no') =~ /^[\d,]+$/) {
+            $sql .= " AND re.authorizer_no IN (".$q->param('occurrences_authorizer_no').")";
         }
         $sql .= ") ORDER BY occurrence_no ASC, reid_no ASC";
         main::dbg("Reclassify sql:".$sql);
@@ -76,12 +82,17 @@ sub displayOccurrenceReclassify	{
 	    my $sql = "SELECT collection_name FROM collections WHERE collection_no=" . $q->param('collection_no');
 	    my $coll_name = ${$dbt->getData($sql)}[0]->{collection_name};
 	    print "<center><h3>Classification of taxa in collection ",$q->param('collection_no')," ($coll_name)</h3>";
+       
+        my $authorizer_where = "";
+        if ($q->param('occurrences_authorizer_no') =~ /^[\d,]+$/) {
+            $authorizer_where = " AND authorizer_no IN (".$q->param('occurrences_authorizer_no').")";
+        }
 
         # get all the occurrences
         my $collection_no = int($q->param('collection_no'));
-        $sql = "(SELECT 0 reid_no,authorizer_no, occurrence_no,taxon_no,genus_reso,genus_name,subgenus_reso,subgenus_name,species_reso,species_name FROM occurrences WHERE collection_no=$collection_no)".
+        $sql = "(SELECT 0 reid_no,authorizer_no, occurrence_no,taxon_no,genus_reso,genus_name,subgenus_reso,subgenus_name,species_reso,species_name FROM occurrences WHERE collection_no=$collection_no $authorizer_where)".
                " UNION ".
-               "(SELECT reid_no,authorizer_no, occurrence_no,taxon_no,genus_reso,genus_name,subgenus_reso,subgenus_name,species_reso,species_name FROM reidentifications WHERE collection_no=$collection_no)".
+               "(SELECT reid_no,authorizer_no, occurrence_no,taxon_no,genus_reso,genus_name,subgenus_reso,subgenus_name,species_reso,species_name FROM reidentifications WHERE collection_no=$collection_no $authorizer_where)".
                " ORDER BY occurrence_no ASC,reid_no ASC";
         main::dbg("Reclassify sql:".$sql);
         @occrefs = @{$dbt->getData($sql)};
@@ -92,6 +103,7 @@ sub displayOccurrenceReclassify	{
 	if ( @occrefs )	{
 		print "<form method=\"post\">\n";
 		print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"startProcessReclassifyForm\">\n";
+		print "<input name=\"occurrences_authorizer_no\" type=\"hidden\" value=\"".$q->param('occurrences_authorizer_no')."\">\n";
         if (@collections) {
             print "<input type=\"hidden\" name=\"taxon_name\" value=\"".$q->param('taxon_name')."\">";
 		    print "<table border=0 cellpadding=0 cellspacing=0>\n";
@@ -158,12 +170,12 @@ sub displayOccurrenceReclassify	{
                     } else  {
                         $collection_string .= $o->{"country"};
                     }
-                    $collection_string .= " $authorizer";
                     $collection_string .= "</span>";
+                    $collection_string .= " <span class=\"tiny\" style=\"white-space: nowrap;\">$authorizer</span>";
 
                     print "<td style=\"padding-right: 1.5em; padding-left: 1.5em;\"><a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$o->{collection_no}\">$o->{collection_no}</a></td><td>$collection_string</td>";
                 }
-				print "<td nowrap>&nbsp;&nbsp;\n";
+				print "<td><span style=\"white-space:nowrap;\">&nbsp;&nbsp;\n";
 
 				# here's the name
 				my $formatted = "";
@@ -178,6 +190,11 @@ sub displayOccurrenceReclassify	{
 				if ( $o->{'species_name'} !~ /^indet\./ )	{
 					$formatted .= "</i>";
 				}
+                $formatted .= " </span>";
+                if (!$collection_string) {
+                    $formatted .= " <span class=\"tiny\" style=\"white-space: nowrap;\">$authorizer</span>";
+                }
+                $formatted . " <td>";
 
 				# need a hidden recording the old taxon number
                 $collection_string .= ": " if ($collection_string);
@@ -339,7 +356,7 @@ sub processReclassifyForm	{
     } else {
         print "<h3>Taxa reclassified for " , $q->param('taxon_name') ,"</h3>\n\n";
 	    print "<table border=0 cellpadding=2 cellspacing=0>\n";
-        print "<tr><th colspan=2>Collection</th><th>Classification based on</th></tr>";
+        print "<tr><th>Collection</th><th>Classification based on</th></tr>";
     }
 
 	# get lists of old and new taxon numbers
@@ -428,10 +445,18 @@ sub processReclassifyForm	{
         print "<div align=\"center\">No taxa reclassified</div>";
     }
 
-	print "<p><a href=\"$exec_url?action=startStartReclassifyOccurrences&collection_no=";
-	print $q->param('collection_no');
-	print "\"><b>Reclassify this collection</b></a> - ";
-	print "<a href=\"$exec_url?action=startStartReclassifyOccurrences\"><b>Reclassify another collection</b></a></p>\n\n";
+	print "<p>";
+   
+    if ($q->param('collection_no')) {
+        print "<a href=\"$exec_url?action=startStartReclassifyOccurrences&occurrences_authorizer_no=".$q->param('occurrences_authorizer_no')."&collection_no=";
+	    print $q->param('collection_no');
+	    print "\"><b>Reclassify this collection</b></a> - ";
+    } else {
+        print "<a href=\"$exec_url?action=displayCollResults&type=reclassify_occurrence&occurrences_authorizer_no=".$q->param('occurrences_authorizer_no')."&taxon_name=";
+	    print $q->param('taxon_name');
+	    print "\"><b>Reclassify ".$q->param('taxon_name')."</b></a> - ";
+    }
+	print "<a href=\"$exec_url?action=startStartReclassifyOccurrences\"><b>Reclassify another collection or taxon</b></a></p>\n\n";
 
 	print "<center>\n\n";
 
