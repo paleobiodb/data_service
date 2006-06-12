@@ -1124,7 +1124,7 @@ sub getOccurrencesWhereClause {
 
    
     if ($q->param('authorizer_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('authorizer_reversed'));
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed')));
         my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
         push @all_where, "o.authorizer_no=".$authorizer_no if ($authorizer_no);
     }
@@ -1164,7 +1164,7 @@ sub getCollectionsWhereClause {
     
     # This is handled by getOccurrencesWhereClause if we're getting occs data.
     if($q->param('output_data') eq 'collections' && $q->param('authorizer_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('authorizer_reversed'));
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed')));
         my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
         push @where, "c.authorizer_no=".$authorizer_no if ($authorizer_no);
     }
@@ -1604,80 +1604,34 @@ sub queryDatabase {
     ###########################################################################
     #  Set up various lookup tables before we loop through results
     ###########################################################################
-
-    # get the period names for the collections JA 22.2.04
-    # updated to use Gradstein instead of Harland JA 5.12.05
-    # based on scale 69 = Gradstein periods
-    my %myperiod;
-    if ( $q->param('collections_period')  && $q->param("output_data") !~ /genera|species/) {
-        my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '69');
-        %myperiod = %{$intervalInScaleRef};
-    }
-
-    # get the epoch names for the collections JA 22.2.04
-    # updated to use Gradstein instead of Harland JA 5.12.05
-    # based on scale 71 = Gradstein epochs
-    my %myepoch;
-    if ( $q->param('collections_epoch') && $q->param("output_data") !~ /genera|species/) {
-        my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '71');
-        %myepoch = %{$intervalInScaleRef};
-    }
-
-    # get the Gradstein Cenozoic subepoch names for the collections
-    #  JA 26.1.06
-    # based on scale 72 = Gradstein Cenozoic subepochs
-    my %mysubepoch;
-    if ( $q->param('collections_subepoch') && $q->param("output_data") !~ /genera|species/) {
-        my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '72');
-        %mysubepoch = %{$intervalInScaleRef};
-    }
-
-    # get the stage names for the collections PS 08/19/2005
-    # updated to use Gradstein instead of Harland JA 5.12.05
-    # based on scale 73 = Gradstein stages
-    my %mystage;
-    if ( $q->param('collections_stage') && $q->param("output_data") !~ /genera|species/) {
-        my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, '73');
-        %mystage = %{$intervalInScaleRef};
-    }
-
-    my %upper_bound;
-    my %lower_bound;
-    if (($q->param('collections_ma_max') ||
-         $q->param('collections_ma_min') ||
-         $q->param('collections_ma_mid')) &&
-        $q->param("output_data") !~ /genera|species/) {
-        my @bounds = TimeLookup::findBoundaries($dbh,$dbt);
-        %upper_bound = %{$bounds[0]};
-        %lower_bound = %{$bounds[1]}; 
-    }
-
-
-    # get the PBDB 10 m.y. bin names for the collections JA 3.3.04
-    my %mybin;
-    if ( ($q->param('collections_10mybin') && $q->param("output_data") !~ /genera|species/) ||
-         $q->param('compendium_ranges') eq 'NO' ) {
-        @_ = TimeLookup::processBinLookup($dbh,$dbt);
-        %mybin = %{$_[0]};
-    }
-
-    # Get hash to map interval_no -> interval_name
-    my %intervalNames;
-    if (($q->param("collections_max_interval") eq "YES" || 
-         $q->param("collections_min_interval") eq "YES") &&
-        $q->param("output_data") !~ /genera|species/) {
-
-        # get the names of time intervals
-        my $sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
-        my @results = @{$dbt->getData($sql)};
-        foreach my $row( @results) {
-            if ( $row->{'eml_interval'} )    {
-                $intervalNames{$row->{'interval_no'}} = $row->{'eml_interval'} . " " . $row->{'interval_name'};
-            } else    {
-                $intervalNames{$row->{'interval_no'}} = $row->{'interval_name'};
-            }
+    # Changed to use prebuild lookup table PS
+    my $time_lookup;
+    my @time_fields = ();
+    if ($q->param("output_data") !~ /genera|species/) {
+        push @time_fields, 'period_name' if ($q->param('collections_period'));
+        push @time_fields, 'subepoch_name'  if ($q->param('collections_epoch'));
+        push @time_fields, 'epoch_name'  if ($q->param('collections_epoch'));
+        push @time_fields, 'stage_name'  if ($q->param('collections_stage'));
+        if ($q->param('collections_ma_max') ||
+            $q->param('collections_ma_min') ||
+            $q->param('collections_ma_mid')) {
+            push @time_fields, 'lower_boundary','upper_boundary';
+        }
+        if (($q->param("collections_max_interval") eq "YES" || 
+             $q->param("collections_min_interval") eq "YES")) {
+            push @time_fields, 'interval_name';
         }
     }
+
+    # get the PBDB 10 m.y. bin names for the collections JA 3.3.04
+    if ( ($q->param('collections_10mybin') && $q->param("output_data") !~ /genera|species/) ||
+         $q->param('compendium_ranges') eq 'NO' ) {
+        push @time_fields, 'ten_my_bin'  if ($q->param('collections_10mybin'));
+    }
+    if (@time_fields) {
+        $time_lookup = TimeLookup::lookupIntervals($dbt,[],\@time_fields);
+    }
+
 
     # Get a list of acceptable Sepkoski compendium taxa/10 m.y. bin pairs
     my %incompendium = ();
@@ -1811,6 +1765,61 @@ sub queryDatabase {
         }
     }
 
+    #use Benchmark qw(:all);
+    #my $t0 = new Benchmark;
+
+    # Populate calculated time fields, which are needed below
+    if (@time_fields) {
+        my %COLL = ();
+        foreach my $row ( @dataRows ){
+            if ($COLL{$row->{'collection_no'}}) {
+                # This is merely a timesaving measure, reuse old collections values if we've already come across this collection
+                my $orow = $COLL{$row->{'collection_no'}};
+                $row->{'c.10mybin'} = $orow->{'c.10mybin'};
+                $row->{'c.stage'}   = $orow->{'c.stage'};
+                $row->{'c.epoch'}   = $orow->{'c.epoch'};
+                $row->{'c.subepoch'}= $orow->{'c.subepoch'};
+                $row->{'c.max_interval'}= $orow->{'c.max_interval'};
+                $row->{'c.min_interval'}= $orow->{'c.min_interval'};
+                $row->{'c.period'}  = $orow->{'c.period'};
+                $row->{'c.ma_max'}  = $orow->{'c.ma_max'};
+                $row->{'c.ma_min'}  = $orow->{'c.ma_min'};
+                $row->{'c.ma_mid'}  = $orow->{'c.ma_mid'};
+                next;
+            }
+            # Populate the generated time fields;
+            my $max_lookup = $time_lookup->{$row->{'c.max_interval_no'}};
+            my $min_lookup = ($row->{'c.min_interval_no'}) ? $time_lookup->{$row->{'c.min_interval_no'}} : $max_lookup;
+            
+            if ($max_lookup->{'ten_my_bin'} && $max_lookup->{'ten_my_bin'} eq $min_lookup->{'ten_my_bin'}) {
+                $row->{'c.10mybin'} = $max_lookup->{'ten_my_bin'};
+            }
+            
+            if ($max_lookup->{'period_name'} && $max_lookup->{'period_name'} eq $min_lookup->{'period_name'}) {
+                $row->{'c.period'} = $max_lookup->{'period_name'};
+            }
+            if ($max_lookup->{'epoch_name'} && $max_lookup->{'epoch_name'} eq $min_lookup->{'epoch_name'}) {
+                $row->{'c.epoch'} = $max_lookup->{'epoch_name'};
+            }
+            if ($max_lookup->{'subepoch_name'} && $max_lookup->{'subepoch_name'} eq $min_lookup->{'subepoch_name'}) {
+                $row->{'c.subepoch'} = $max_lookup->{'subepoch_name'};
+            }
+            if ($max_lookup->{'stage_name'} && $max_lookup->{'stage_name'} eq $min_lookup->{'stage_name'}) {
+                $row->{'c.stage'} = $max_lookup->{'stage_name'};
+            }
+            $row->{'c.max_interval'} = $time_lookup->{$row->{'c.max_interval_no'}}{'interval_name'};
+            $row->{'c.min_interval'} = $time_lookup->{$row->{'c.min_interval_no'}}{'interval_name'};
+            $row->{'c.ma_max'} = $max_lookup->{'lower_boundary'};
+            $row->{'c.ma_min'} = $min_lookup->{'upper_boundary'};
+            $row->{'c.ma_mid'} = ($max_lookup->{'lower_boundary'} + $min_lookup->{'upper_boundary'})/2;
+            $COLL{$row->{'collection_no'}} = $row; 
+        }
+    }
+    #my $t1 = new Benchmark;
+    #my $td = timediff($t1,$t0);
+    #my $time = 0+$td->[0] + $td->[1];
+    #print "TD for populateStuffs: $time\n";
+
     my %lumpseen;
     my %occseen;
     my %genusseen;
@@ -1864,7 +1873,7 @@ sub queryDatabase {
             #  Compendium or (2) falling outside the official Compendium
             #  age range JA 27.8.04
             if ( $q->param('compendium_ranges') eq 'NO' )    {
-                if ( ! $incompendium{$row->{'o.genus_name'}.$mybin{$row->{'collection_no'}}} )    {
+                if ( ! $incompendium{$row->{'o.genus_name'}.$row->{'c.10mybin'}} )    {
                     $exclude++;
                 }
             }
@@ -2112,56 +2121,6 @@ sub queryDatabase {
                 $plate_key .= "-" if ($row->{'c.latdir'} eq 'South' && $row->{'c.latdeg'} != 0);
                 $plate_key .= $row->{'c.latdeg'};
                 $row->{'c.tectonic_plate_id'} = $plate_ids{$plate_key};
-            }
-            if ($q->param("collections_max_interval") eq "YES") {
-                # translate interval nos into names JA 18.9.03
-                $row->{'c.max_interval'} = $intervalNames{$row->{'c.max_interval_no'}};
-            }
-            if ($q->param("collections_min_interval") eq "YES") {
-                $row->{'c.min_interval'} = $intervalNames{$row->{'c.min_interval_no'}};
-            }    
-            if ($q->param("collections_period") eq "YES") {
-                # translate bogus period or epoch max into legitimate,
-                #   looked-up period or epoch names JA 22.2.04
-                # WARNING: this won't work at all if the period_max
-                #   and/or epoch_max fields are ever removed from
-                #   the database
-                $row->{'c.period'} = $myperiod{$row->{'collection_no'}};
-            }
-            if ($q->param("collections_epoch") eq "YES") {
-                $row->{'c.epoch'} = $myepoch{$row->{'collection_no'}};
-            }
-            if ($q->param("collections_subepoch") eq "YES") {
-                $row->{'c.subepoch'} = $mysubepoch{$row->{'collection_no'}};
-            }
-            if ($q->param("collections_stage") eq "YES") {
-                $row->{'c.stage'} = $mystage{$row->{'collection_no'}};
-            }
-            if ($q->param("collections_10mybin") eq "YES") {
-                # WARNING: similar trick here in which useless legacy
-                #  field locage_max is used as a placeholder for the
-                #  bin name
-                $row->{'c.10mybin'} = $mybin{$row->{'collection_no'}};
-            }
-            if ($q->param('collections_ma_max') eq "YES") {
-                $row->{'c.ma_max'} = $lower_bound{$row->{'c.max_interval_no'}};
-            }
-            if ($q->param('collections_ma_min') eq "YES") {
-                if ($row->{'c.min_interval_no'}) {
-                    $row->{'c.ma_min'} = $upper_bound{$row->{'c.min_interval_no'}};
-                } else {
-                    $row->{'c.ma_min'} = $upper_bound{$row->{'c.max_interval_no'}};
-                }
-            }
-            if ($q->param('collections_ma_mid') eq "YES") {
-                my ($max,$min);
-                $max = $lower_bound{$row->{'c.max_interval_no'}};
-                if ($row->{'c.min_interval_no'}) {
-                    $min = $upper_bound{$row->{'c.min_interval_no'}};
-                } else {
-                    $min = $upper_bound{$row->{'c.max_interval_no'}};
-                }
-                $row->{'c.ma_mid'} = ($max+$min)/2;
             }
         }
 
@@ -2887,17 +2846,10 @@ sub setupQueryFields {
 
     # Setup additional fields that should appear as columns in the CSV file
 
-    # hey, if you want the data binned into time intervals you have to
-    #  download the interval names into the occurrences table too
-    if ($q->param('time_scale') ||
-        $q->param('collections_ma_max') eq 'YES' ||
-        $q->param('collections_ma_max') eq 'YES' ||
-        $q->param('collections_ma_max') eq 'YES' ||
-        $q->param('collections_max_interval') eq 'YES' ||
-        $q->param('collections_min_interval') eq 'YES') {
-        $q->param('collections_max_interval_no' => "YES");
-        $q->param('collections_min_interval_no' => "YES");
-    }
+    # Just always download these two fields, since so many other fields are dependent on them 
+    $q->param('collections_max_interval_no' => "YES");
+    $q->param('collections_min_interval_no' => "YES");
+
     # and hey, if you want counts of some enum field split up within
     #  time interval bins, you have to download that field
     if ( $q->param('binned_field') )    {
@@ -2931,10 +2883,6 @@ sub setupQueryFields {
         if (!$q->param("collections_coords")) {
             $q->param("collections_coords"=>"YES");
         }
-    }
-    if ($q->param('lump_by_interval')) {
-        $q->param('collections_max_interval_no'=>'YES');
-        $q->param('collections_min_interval_no'=>'YES');
     }
     if ($q->param('lump_by_mbr')) {
         $q->param('collections_formation'=>'YES');
