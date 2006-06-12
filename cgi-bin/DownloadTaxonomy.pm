@@ -48,7 +48,7 @@ sub displayITISDownload {
     }
 
     if ($q->param('opinion_person_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('opinion_person_reversed'));
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('opinion_person_reversed')));
         my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
         if ($person_no) {
             $options{'opinion_person_no'} = $person_no;
@@ -57,7 +57,7 @@ sub displayITISDownload {
         }
     }
     if ($q->param('taxon_person_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('taxon_person_reversed'));
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('taxon_person_reversed')));
         my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
         if ($person_no) {
             $options{'taxon_person_no'} = $person_no;
@@ -376,7 +376,7 @@ sub displayPBDBDownload {
     }
 
     if ($q->param('opinion_person_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('opinion_person_reversed'));
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('opinion_person_reversed')));
         my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
         if ($person_no) {
             $options{'opinion_person_no'} = $person_no;
@@ -385,7 +385,7 @@ sub displayPBDBDownload {
         }
     }
     if ($q->param('taxon_person_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('taxon_person_reversed'));
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('taxon_person_reversed')));
         my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
         if ($person_no) {
             $options{'taxon_person_no'} = $person_no;
