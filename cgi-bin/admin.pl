@@ -4,7 +4,6 @@
 
 use CGI;
 use DBI;
-use FileHandle;
 use HTMLBuilder;
 use Class::Date qw(date localdate gmdate now);
 
@@ -30,7 +29,6 @@ if ( ! $action ) { $action = "displayHomePage"; }
 
 # Print a header
 print $q->header(	-type => "text/html", 
-					-cookie => $cookie,
 					-expires =>"now" );
 
 &$action;
@@ -104,7 +102,7 @@ sub processPersonEdit {
 sub displayPersonList {
 
 	print $hb->getTemplateString ( "std_page_top" );
-	print createList( "person", 1, "reversed_name" );
+	print createList( "person", 1, "last_name,first_name" );
 	
 }
 
@@ -197,13 +195,13 @@ sub displayActions	{
 	print $hb->getTemplateString ( "std_page_top" );
 	print $hb->getTemplateString ( "index" );
 
-	my $sql = "SELECT name, last_action FROM person";
+	my $sql = "SELECT first_name, last_name, last_action FROM person";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 	
 	my $lastlogin;
-	while ( my @values = $sth->fetchrow_array() ) {
-		$lastlogin{$values[0]} = $values[1];
+	while ( my $row = $sth->fetchrow_hashref() ) {
+		$lastlogin{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'last_action'};
 	}
 	$sth->finish();
 	
