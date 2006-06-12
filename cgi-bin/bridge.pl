@@ -354,13 +354,13 @@ sub makeAuthEntJavaScript	{
 	my $authList;
 	my $entList;
 	foreach my $p (@$authListRef) {
-		$authList .= "\"" . $p->{'reversed_name'} . "\", ";  # reversed name
+		$authList .= "\"" . Person::reverseName($p->{'name'}) . "\", ";  # reversed name
 	}
 	$authList =~ s/,\s*$//; # remove last comma and space if present.
 
 
 	foreach my $p (@$entListRef) {
-		$entList .= "\"" . $p->{'reversed_name'} . "\", ";  # reversed name
+		$entList .= "\"" . Person::reverseName($p->{'name'}) . "\", ";  # reversed name
 	}
 	$entList =~ s/,\s*$//; # remove last comma and space if present.
 
@@ -2085,6 +2085,9 @@ sub displayCollResults {
                 if($q->param('species_name')){
                     print "&species_name=".$q->param('species_name');
                 }
+                if ($q->param('occurrences_authorizer_no')) {
+                    print "&occurrences_authorizer_no=".$q->param('occurrences_authorizer_no');
+                }
                 print "\">$dataRow->{collection_no}</a></td>";
             } else {	
                 # Don't link it if if we're in edit mode and we don't have permission
@@ -2761,7 +2764,7 @@ IS NULL))";
 
     # Handle authorizer/enterer/modifier - mostly legacy except for person
     if ($options{'person_reversed'}) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($options{'person_reversed'});
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($options{'person_reversed'}));
         my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};
         if (!$person_no) {
             push @errors, "$options{peson_reversed} is not a valid database member. Format like 'Sepkoski, J.'";
@@ -2778,20 +2781,20 @@ IS NULL))";
         }
     }
     if ($options{'authorizer_reversed'}) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($options{'authorizer_reversed'});
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($options{'authorizer_reversed'}));
         $options{'authorizer_no'} = ${$dbt->getData($sql)}[0]->{'person_no'};
         push @errors, "$options{authorizer_reversed} is not a valid authorizer. Format like 'Sepkoski, J.'" if (!$options{'authorizer_no'});
     }
 
     if ($options{'enterer_reversed'}) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($options{'enterer_reversed'});
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($options{'enterer_reversed'}));
         $options{'enterer_no'} = ${$dbt->getData($sql)}[0]->{'person_no'};
         push @errors, "$options{enterer_reversed} is not a valid enterer. Format like 'Sepkoski, J.'" if (!$options{'enterer_no'});
         
     }
 
     if ($options{'modifier_reversed'}) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($options{'modifier_reversed'});
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(person::reverseName($options{'modifier_reversed'}));
         $options{'modifier_no'} = ${$dbt->getData($sql)}[0]->{'person_no'};
         push @errors, "$options{modifier_reversed} is not a valid modifier. Format like 'Sepkoski, J.'" if (!$options{'modifier_no'});
     }
@@ -2855,9 +2858,9 @@ IS NULL))";
 	if ( $options{'collection_names'} ) {
 		my $val = $dbh->quote($wildcardToken . $options{'collection_names'} . $wildcardToken);
         if ($options{'collection_names'} =~ /^\d+$/) {
-		    push @where, "(collection_name LIKE $val OR collection_aka LIKE $val OR collection_no=$options{collection_names})";
+		    push @where, "(c.collection_name LIKE $val OR c.collection_aka LIKE $val OR c.collection_no=$options{collection_names})";
         } else {
-		    push @where, "(collection_name LIKE $val OR collection_aka LIKE $val)";
+		    push @where, "(c.collection_name LIKE $val OR c.collection_aka LIKE $val)";
         }
 	}
 	
@@ -4971,7 +4974,7 @@ sub processTaxonSearch {
         $options{'taxon_name'} = $q->param('taxon_name');
     } else {
         if ($q->param("authorizer_reversed")) {
-            my $sql = "SELECT person_no FROM person WHERE reversed_name like ".$dbh->quote($q->param('authorizer_reversed'));
+            my $sql = "SELECT person_no FROM person WHERE name LIKE ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed')));
             my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
             if (!$authorizer_no) {
                 $errors->add($q->param('authorizer_reversed')." is not a valid authorizer. Format like 'Sepkoski, J.'");
@@ -7639,10 +7642,10 @@ sub RefQuery {
         push @where, "FIND_IN_SET(".$dbh->quote($q->param('project_name')).",r.project_name)" if ($q->param('project_name'));
         
 		if ( $q->param('authorizer_reversed')) {
-            push @where, "p1.reversed_name LIKE ".$dbh->quote($q->param('authorizer_reversed')) if ($q->param('authorizer_reversed'));
+            push @where, "p1.name LIKE ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed'))) if ($q->param('authorizer_reversed'));
 		}
 		if ( $q->param('enterer_reversed')) {
-            push @where, "p2.reversed_name LIKE ".$dbh->quote($q->param('enterer_reversed')) if ($q->param('enterer_reversed'));
+            push @where, "p2.name LIKE ".$dbh->quote(Person::reverseName($q->param('enterer_reversed'))) if ($q->param('enterer_reversed'));
 		}
 	
         my $sql = "SELECT $from FROM $tables WHERE ".join(" AND ",@where);
@@ -7657,9 +7660,9 @@ sub RefQuery {
 		} elsif ($refsortby eq 'publication') {
 			$orderBy .= "r.pubtitle $refsortorder, ";
 		} elsif ($refsortby eq 'authorizer') {
-			$orderBy .= "p1.reversed_name $refsortorder, ";
+			$orderBy .= "p1.last_name $refsortorder, p1.first_name $refsortorder";
 		} elsif ($refsortby eq 'enterer') {
-			$orderBy .= "p2.reversed_name $refsortorder, ";
+			$orderBy .= "p2.last_name $refsortorder, p2.first_name $refsortorder";
 		} elsif ($refsortby eq 'entry date') {
 			$orderBy .= "r.reference_no $refsortorder, ";
 		}
@@ -7784,6 +7787,31 @@ sub buildReference {
 
 	return $reference;
 }
+
+# ------------------------ #
+# Person pages
+# ------------------------ #
+sub displayEnterers {
+    logRequest($s,$q);
+    print stdIncludes("std_page_top");
+    print Person::displayEnterers($dbt);
+    print stdIncludes("std_page_bottom");
+}
+
+sub displayAuthorizers {
+    logRequest($s,$q);
+    print stdIncludes("std_page_top");
+    print Person::displayAuthorizers($dbt);
+    print stdIncludes("std_page_bottom");
+}
+
+sub displayInstitutions {
+    logRequest($s,$q);
+    print stdIncludes("std_page_top");
+    print Person::displayInstitutions($dbt);
+    print stdIncludes("std_page_bottom");
+}
+
 
 # ------------------------ #
 # Confidence Intervals JSM #
