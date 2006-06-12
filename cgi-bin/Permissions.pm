@@ -321,7 +321,7 @@ sub displayPermissionListForm {
     # First provide a form to add new authoriziers to the list
 
     my @authorizers = @{Person::listOfAuthorizers($dbt,1)};
-    my $authList = join(",", map {'"'.$_->{'reversed_name'}.'"'} @authorizers);
+    my $authList = join(",", map {'"'.Person::reverseName($_->{'name'}).'"'} @authorizers);
 
 
     my $working_group_values = ['','decapod','divergence','marine_invertebrate','micropaleontology','PACED','paleobotany','taphonomy','vertebrate'];
@@ -332,11 +332,11 @@ sub displayPermissionListForm {
     print qq|<h3>Editing permission list</h3>|;
    
     # Form for designating heir:
-    my $sql = "SELECT p2.reversed_name heir_reversed FROM person p1 LEFT JOIN person p2 ON p1.heir_no=p2.person_no WHERE p1.person_no=$authorizer_no";
+    my $sql = "SELECT p2.name heir FROM person p1 LEFT JOIN person p2 ON p1.heir_no=p2.person_no WHERE p1.person_no=$authorizer_no";
     my @results  = @{$dbt->getData($sql)};
     my $heir_reversed = "";
     if (@results) {
-        $heir_reversed = $results[0]->{'heir_reversed'};
+        $heir_reversed = Person::reverseName($results[0]->{'heir'});
     }
     print qq|<form method="POST" action="bridge.pl">|;
     print qq|<input type="hidden" name="action" value="submitHeir">|;
@@ -366,7 +366,7 @@ sub displayPermissionListForm {
 
     # Now get a list of people who have permission to edit my data and display it
     foreach my $person_no (@persons) {
-        my $sql = "SELECT p.reversed_name modifier_name, pm.modifier_no FROM person p, permissions pm WHERE p.person_no=pm.modifier_no AND pm.authorizer_no=$person_no ORDER BY p.reversed_name";
+        my $sql = "SELECT p.name modifier_name, pm.modifier_no FROM person p, permissions pm WHERE p.person_no=pm.modifier_no AND pm.authorizer_no=$person_no ORDER BY p.last_name, p.first_name";
         my @results = @{$dbt->getData($sql)};
         # Now list authorizers already on the editing permissions list and give a chance to delete them
         my ($owner1,$owner2);
@@ -455,7 +455,7 @@ sub submitPermissionList {
 
     if ($q->param('submit_type') eq 'add') {
         if ($q->param('submit_authorizer')) {
-            my $sql = "SELECT person_no FROM person WHERE reversed_name LIKE ".$dbh->quote($q->param('authorizer_reversed'));
+            my $sql = "SELECT person_no FROM person WHERE name LIKE ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed')));
             my $row = ${$dbt->getData($sql)}[0];
             if ($row) {
                 if ($row->{'person_no'} != $action_for) {
@@ -506,7 +506,7 @@ sub submitHeir {
     }
 
     if ($q->param("heir_reversed")) {
-        my $sql = "SELECT person_no FROM person WHERE reversed_name LIKE ".$dbh->quote($q->param('heir_reversed'));
+        my $sql = "SELECT person_no FROM person WHERE name LIKE ".$dbh->quote(Person::reverseName($q->param('heir_reversed')));
         my $row = ${$dbt->getData($sql)}[0];
         if ($row) {
             # Note: the IGNORE just causes mysql to not throw an error when inserting a dupe
