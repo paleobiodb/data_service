@@ -109,9 +109,9 @@ my $exec_url = $q->url();
 # added by rjp, 2/2004
 # don't do this for reclassification because italics need to be passed through
 #  JA 1.4.04
-if ( $q->param('action') ne "startProcessReclassifyForm" )	{
-	Validation::cleanCGIParams($q);
-}
+#if ( $q->param('action') ne "startProcessReclassifyForm" )	{
+#	Validation::cleanCGIParams($q);
+#}
 
 # Get the database connection
 my $dbh = DBConnection::connect();
@@ -2288,8 +2288,6 @@ sub getOccurrencesXML {
             if (!$stage_max) {$stage_max = "";}
             if (!$stage_min) {$stage_min= "";}
 
-            $longitude *= -1 if ($row->{'lngdir'} eq "West");
-
             my $taxon_name = $row->{'o.genus_name'};
             if ($q->param('lump_genera') ne 'YES') {
                 if ($row->{'o.subgenus_name'}) {
@@ -2298,9 +2296,9 @@ sub getOccurrencesXML {
                 $taxon_name .= " $row->{'o.species_name'}";
             }
 
-            $plant_organ = $row->{'o.plant_organ'};
+            my $plant_organs = $row->{'o.plant_organ'};
             if ($row->{'o.plant_organ2'}) {
-                $plant_organ .= ",".$row->{'o.plant_organ2'}; 
+                $plant_organs .= ",".$row->{'o.plant_organ2'}; 
             }
 
             print $g->occurrence(
@@ -6006,10 +6004,10 @@ sub processEditOccurrences {
 	my @required_fields = ("collection_no", "genus_name", "species_name", "reference_no");
 	# hashes of which fields per table are integral (vs. text) type
 	# and which may contain NULL values.
-	%reidIntFields = ();
-	%reidNullFields = ();
-	%occsIntFields = ();
-	%occsNullFields = ();
+	my %reidIntFields = ();
+	my %reidNullFields = ();
+	my %occsIntFields = ();
+	my %occsNullFields = ();
 
 	# loop over all rows submitted from the form
 	ROW:
