@@ -1954,11 +1954,6 @@ sub displayCollResults {
     my @dataRows = @$dataRows;
     my $displayRows = scalar(@dataRows);	# get number of rows to display
 
-    if ($q->param('output_format') eq 'xml') {
-        printCollectionsPGAP($dataRows,$q);
-        return;
-    }
-
     if ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
 		# go right to the chase with ReIDs if a taxon_rank was specified
 		if ($q->param('taxon_name') && ($q->param('type') eq "reid" ||
@@ -2245,11 +2240,9 @@ sub getOccurrencesXML {
 
     print "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" standalone=\"yes\"?>\n";
  
-    my (%period_lookup,%epoch_lookup,%stage_lookup);
+    my $time_lookup;
     if ($q->param('xml_format') !~ /points/i) { 
-        %period_lookup = %{TimeLookup::processScaleLookup($dbh,$dbt,'69','intervalToScale')}; 
-        %epoch_lookup  = %{TimeLookup::processScaleLookup($dbh,$dbt,'71','intervalToScale')}; 
-        %stage_lookup  = %{TimeLookup::processScaleLookup($dbh,$dbt,'73','intervalToScale')}; 
+        $time_lookup = TimeLookup::lookupIntervals($dbt,[],['period_name','epoch_name','stage_name']);
     }
 
     my $g = XML::Generator->new(escape=>'always',conformance=>'strict',empty=>'args');
@@ -2274,37 +2267,24 @@ sub getOccurrencesXML {
                 $row->{'c.min_interval_no'} = $row->{'c.max_interval_no'};
             }
 
-            my ($period_max,$period_min) = ("","");
-            my ($epoch_max,$epoch_min) = ("","");
-            my ($stage_max,$stage_min) = ("","");
-
+            my ($period_max,$period_min,$epoch_max,$epoch_min,$stage_max,$stage_min);
+            my $max_lookup = $time_lookup->{$row->{'c.max_interval_no'}};
+            my $min_lookup = $time_lookup->{$row->{'c.min_interval_no'}};
             # Period lookup
-            if ($period_lookup{$row->{'c.max_interval_no'}}) {
-                $period_max = $period_lookup{$row->{'c.max_interval_no'}};
-            }
-            if ($period_lookup{$row->{'c.min_interval_no'}}) {
-                $period_min = $period_lookup{$row->{'c.min_interval_no'}};
-            }
+            $period_max = $max_lookup->{'period_name'};
+            $period_min = $min_lookup->{'period_name'};
             if (!$period_max) {$period_max = "";}
             if (!$period_min) {$period_min= "";}
 
             # Epoch lookup
-            if ($epoch_lookup{$row->{'c.max_interval_no'}}) {
-                $epoch_max = $epoch_lookup{$row->{'c.max_interval_no'}};
-            }
-            if ($epoch_lookup{$row->{'c.min_interval_no'}}) {
-                $epoch_min = $epoch_lookup{$row->{'c.min_interval_no'}};
-            }
+            $epoch_max = $max_lookup->{'epoch_name'};
+            $epoch_min = $min_lookup->{'epoch_name'};
             if (!$epoch_max) {$epoch_max = "";}
             if (!$epoch_min) {$epoch_min= "";}
 
             # Stage lookup
-            if ($stage_lookup{$row->{'c.max_interval_no'}}) {
-                $stage_max = $stage_lookup{$row->{'c.max_interval_no'}};
-            }
-            if ($stage_lookup{$row->{'c.min_interval_no'}}) {
-                $stage_min = $stage_lookup{$row->{'c.min_interval_no'}};
-            }
+            $stage_max = $max_lookup->{'stage_name'};
+            $stage_min = $min_lookup->{'stage_name'};
             if (!$stage_max) {$stage_max = "";}
             if (!$stage_min) {$stage_min= "";}
 
