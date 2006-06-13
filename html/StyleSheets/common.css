@@ -126,7 +126,7 @@ H6 {font-size: .9em;}
 #mainSpacer	{
  /* need align and width to roughly center the page contents below the banner */
     text-align: center;
-    width: 58em;
+    width: 56em;
     position: absolute;
     padding-top: 2em;
     top: 52px;
@@ -136,7 +136,7 @@ H6 {font-size: .9em;}
 #homeBanner	{
     width: 100%;
     background-image: url(/public/bannerimages/dcaloostBlue3.jpg);
-    min-width: 60em; /* needed because scrolling down when a window is small
+    min-width: 56em; /* needed because scrolling down when a window is small
                           causes the image to be truncated */
     position: absolute;
     left: 0;
@@ -147,7 +147,7 @@ H6 {font-size: .9em;}
 
 #homeLinks	{
     width: 100%;
-    min-width: 60em; /* needed because scrolling down when a window is small
+    min-width: 56em; /* needed because scrolling down when a window is small
                           causes the image to be truncated */
     background-color: #64A8FF;
     border-bottom: 1px #909090 solid;
@@ -241,11 +241,11 @@ H6 {font-size: .9em;}
 
 #homeBorder	{
     margin-left: 45em;
-    padding-top: 3em;
-    padding-left: 20px;
+    padding-top: 1.5em;
+    padding-left: 0px;
     border-bottom: 1px solid rgb(144, 144, 144);
     border-right: 1px solid rgb(144, 144, 144);
-    height: 45em;
+    height: 46.5em;
     width: 150px;
     position: absolute;
     top: 0px;
