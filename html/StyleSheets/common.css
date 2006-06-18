@@ -165,7 +165,7 @@ H6 {font-size: .9em;}
     margin-left: -1em;
     padding-top: 3em;
     height: 45em;
-    width: 14em;
+    width: 13em;
     position: absolute;
     top: 0px;
     bottom: 0px;
@@ -176,10 +176,10 @@ H6 {font-size: .9em;}
 
 .Features	{
     background-color: #FFFFFF;
-    margin-left: 1.25em;
-    margin-right: 1.5em;
-    padding-left: 0.75em;
-    padding-right: 0.75em;
+    margin-left: 1.0em;
+    margin-right: 1.0em;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
     text-align: left;
     font-family: Verdana, Arial, Helvetica, sans-serif;
     border: 1px solid #7090B0;
@@ -191,8 +191,8 @@ H6 {font-size: .9em;}
     text-align: center;
     background-color: #7090B0;
     color: #FFFFFF;
-    margin-left: -0.75em;
-    margin-right: -0.75em;
+    margin-left: -0.5em;
+    margin-right: -0.5em;
     margin-bottom: -0.25em;
     padding-top: 0.15em;
     padding-bottom: 0.25em;
