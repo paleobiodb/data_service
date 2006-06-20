@@ -426,7 +426,7 @@ sub displayPBDBDownload {
     my @opinions = @$opinions;
     open FH_OP, ">$filesystem_dir/opinions.csv"
         or die "Could not open opinions.csv ($!)";
-    my @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","spelling_reason","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","created","modified");
+    my @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","spelling_reason","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","comments","created","modified");
     $csv->combine(@header);
     print FH_OP $csv->string()."\n";
     foreach my $o (@opinions) {
@@ -629,13 +629,14 @@ sub getTaxonomicNames {
     if (@where || $options{'referenced_taxa'}) {
         my $sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, tt.taxon_name type_taxon,"
                 . "a.taxon_no,a.reference_no,a.taxon_rank,a.taxon_name,a.type_specimen,a.extant,"
-                . "a.pages,a.figures,a.created,a.modified,a.comments,t.spelling_no,t.synonym_no senior_synonym_no,"
+                . "a.pages,a.figures,a.created,a.comments,t.spelling_no,t.synonym_no senior_synonym_no,"
                 . " IF (a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,"
                 . " IF (a.ref_is_authority='YES',r.author1init,a.author1init) author1init,"
                 . " IF (a.ref_is_authority='YES',r.author1last,a.author1last) author1last,"
                 . " IF (a.ref_is_authority='YES',r.author2init,a.author2init) author2init,"
                 . " IF (a.ref_is_authority='YES',r.author2last,a.author2last) author2last,"
                 . " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,"
+                . " DATE_FORMAT(a.modified,'%Y-%m-%e %H:%i:%s') modified, "
                 . " DATE_FORMAT(a.modified,'%m/%e/%Y') modified_short "
                 . " FROM taxa_tree_cache t, authorities a"
                 . " LEFT JOIN person p1 ON p1.person_no=a.authorizer_no"
@@ -841,13 +842,14 @@ sub getTaxonomicOpinions {
                 . "a1.taxon_name child_name, a2.taxon_name child_spelling_name, "
                 . "a3.taxon_name parent_name, a4.taxon_name parent_spelling_name,"
                 . "o.opinion_no,o.reference_no,o.status,o.spelling_reason,o.child_no,o.child_spelling_no,o.parent_no,o.parent_spelling_no, "
-                . "o.pages,o.figures,o.created,o.modified,o.comments,r.classification_quality,"
+                . "o.pages,o.figures,o.created,o.comments,r.classification_quality,"
                 . " IF (o.ref_has_opinion='YES',r.pubyr,o.pubyr) pubyr,"
                 . " IF (o.ref_has_opinion='YES',r.author1init,o.author1init) author1init,"
                 . " IF (o.ref_has_opinion='YES',r.author1last,o.author1last) author1last,"
                 . " IF (o.ref_has_opinion='YES',r.author2init,o.author2init) author2init,"
                 . " IF (o.ref_has_opinion='YES',r.author2last,o.author2last) author2last,"
                 . " IF (o.ref_has_opinion='YES',r.otherauthors,o.otherauthors) otherauthors, "
+                . " DATE_FORMAT(o.modified,'%Y-%m-%e %H:%i:%s') modified, "
                 . " DATE_FORMAT(o.modified,'%m/%e/%Y') modified_short "
                 . " FROM taxa_tree_cache t, opinions o"
                 . " LEFT JOIN authorities a1 ON a1.taxon_no=o.child_no"
