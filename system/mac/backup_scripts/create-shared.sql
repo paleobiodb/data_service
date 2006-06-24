@@ -36,7 +36,7 @@ alter table shared.secondary_refs add primary key (`collection_no`,`reference_no
 drop table if exists shared.occurrences;
 create table shared.occurrences
 select pbdb.occurrences.* from shared.collections, pbdb.occurrences where pbdb.occurrences.collection_no=shared.collections.collection_no;
-alter table shared.occurrences add primary key (`occurrence_no`), add index (`collection_no`), add index (`authorizer_no`), add index (`enterer_no`), add index (`modifier_no`), add index (`genus_name`), add index (`subgenus_name`), add index (`species_name`), add index (`taxon_no`);
+alter table shared.occurrences add primary key (`occurrence_no`), add index (`collection_no`), add index(`reference_no`), add index (`authorizer_no`), add index (`enterer_no`), add index (`modifier_no`), add index (`genus_name`), add index (`subgenus_name`), add index (`species_name`), add index (`taxon_no`);
 
 ##
 ##	ONLY COPY REIDS OF PUBLICALLY ACCESSABLE COLLECTIONS
@@ -45,7 +45,7 @@ alter table shared.occurrences add primary key (`occurrence_no`), add index (`co
 drop table if exists shared.reidentifications;
 create table shared.reidentifications
 select pbdb.reidentifications.* from pbdb.reidentifications, shared.occurrences where pbdb.reidentifications.occurrence_no=shared.occurrences.occurrence_no;
-alter table shared.reidentifications add primary key (`reid_no`), add index (`occurrence_no`), add index (`collection_no`), add index (`authorizer_no`), add index (`enterer_no`), add index(`modifier_no`), add index (`genus_name`), add index (`subgenus_name`), add index (`species_name`), add index (`taxon_no`);
+alter table shared.reidentifications add primary key (`reid_no`), add index (`occurrence_no`), add index (`collection_no`), add index(`reference_no`), add index (`authorizer_no`), add index (`enterer_no`), add index(`modifier_no`), add index (`genus_name`), add index (`subgenus_name`), add index (`species_name`), add index (`taxon_no`);
 
 ##
 ##	ONLY COPY RELEVANT FIELDS FROM PERSON TABLE
