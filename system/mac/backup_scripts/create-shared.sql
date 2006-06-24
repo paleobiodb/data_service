@@ -52,7 +52,7 @@ alter table shared.reidentifications add primary key (`reid_no`), add index (`oc
 ##
 drop table if exists shared.person;
 create table shared.person
-select pbdb.person.reversed_name, pbdb.person.name, pbdb.person.first_name,pbdb.person.last_name, pbdb.person.person_no, pbdb.person.email, pbdb.person.is_authorizer, pbdb.person.active, pbdb.person.decapod, pbdb.person.divergence, pbdb.person.marine_invertebrate, pbdb.person.PACED, pbdb.person.paleobotany, pbdb.person.taphonomy, pbdb.person.vertebrate ,pbdb.person.created ,pbdb.person.modified from pbdb.person;
+select pbdb.person.person_no, pbdb.person.reversed_name, pbdb.person.name, pbdb.person.first_name,pbdb.person.last_name, pbdb.person.email, pbdb.person.is_authorizer, pbdb.person.active, pbdb.person.country, pbdb.person.institution, pbdb.person.homepage, pbdb.person.decapod, pbdb.person.divergence, pbdb.person.marine_invertebrate, pbdb.person.PACED, pbdb.person.paleobotany, pbdb.person.taphonomy, pbdb.person.vertebrate ,pbdb.person.created ,pbdb.person.modified from pbdb.person;
 alter table shared.person add primary key (`person_no`);
 
 ##
