@@ -61,7 +61,7 @@ alter table shared.person add primary key (`person_no`);
 drop table if exists shared.authorities;
 create table shared.authorities
 select pbdb.authorities.* from pbdb.authorities;
-alter table shared.authorities add primary key (`taxon_no`), add index (`reference_no`), add index(`taxon_no`), add index(`type_taxon_no`);
+alter table shared.authorities add primary key (`taxon_no`), add index (`reference_no`),  add index(`type_taxon_no`);
 
 drop table if exists shared.correlations;
 create table shared.correlations
