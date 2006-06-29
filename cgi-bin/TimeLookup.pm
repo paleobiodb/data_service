@@ -379,6 +379,8 @@ sub processBinLookup	{
 		"168" => "Carboniferous 3", # Arnsbergian
 		"169" => "Carboniferous 3", # Pendleian
 		"170" => "Carboniferous 3", # Brigantian
+	# added 29.6.06
+		"53" => "Carboniferous 3", # Serpukhovian
 		"171" => "Carboniferous 2", # Asbian
 		"172" => "Carboniferous 2", # Holkerian
 		"173" => "Carboniferous 2", # Arundian
@@ -397,9 +399,13 @@ sub processBinLookup	{
 		"638" => "Ordovician 5", # Ashgillian
 	# added 8.6.06
 		"63" => "Ordovician 5", # Ashgill
+	# added 29.6.06
+		"192" => "Ordovician 5", # Hirnantian
 		"639" => "Ordovician 4", # Caradocian
 	# added 8.6.06
 		"64" => "Ordovician 4", # Caradoc
+	# added 29.6.06
+		"787" => "Ordovician 4", # early Late Ordovician
 		"65" => "Ordovician 3", # Llandeilo
 		"66" => "Ordovician 3", # Llanvirn
 	# used up to 15.8.04
@@ -407,15 +413,28 @@ sub processBinLookup	{
 		"596" => "Ordovician 2", # Arenigian
 	# added 8.6.06
 		"67" => "Ordovician 2", # Arenig
+	# added 29.6.06
+		"789" => "Ordovician 2", # late Early Ordovician
 	# used up to 15.8.04
 	#	"641" => "Ordovician 2", # Latorpian
 		"559" => "Ordovician 1", # Tremadocian
 	# added 8.6.06
 		"68" => "Ordovician 1", # Tremadoc
 		"69" => "Cambrian 4", # Merioneth
+	# added 29.6.06
+		"780" => "Cambrian 4", #  Furongian
 		"70" => "Cambrian 3", # St David's
+	# added 29.6.06
+		"781" => "Cambrian 3", # Middle Cambrian
 		"71" => "Cambrian 2", # Caerfai
-		"748" => "Cambrian 1"); # Manykaian
+	# next four added 29.6.06
+		"749" => "Cambrian 2", # Toyonian
+		"750" => "Cambrian 2", # Botomian
+		"213" => "Cambrian 2", # Atdabanian
+		"214" => "Cambrian 2", # Tommotian
+		"748" => "Cambrian 1", # Manykaian
+	# added 29.6.06
+		"799" => "Cambrian 1"); # Nemakit-Daldynian
 
 	my @binnames = values %binning;
 
