@@ -39,7 +39,7 @@ sub submitSpecimenSearch {
                 @taxon_nos = TaxaCache::getChildren($dbt,$_->{'taxon_no'});
                 @all_taxa{@taxon_nos} = ();
             } else {
-                @taxon_nos = TaxonInfo::getAllTaxonomicNames($dbt,$_->{'taxon_no'});
+                @taxon_nos = TaxonInfo::getAllSynonyms($dbt,$_->{'taxon_no'});
                 @all_taxa{@taxon_nos} = ();
                 @all_taxa{$_->{'taxon_no'}} = 1; 
             }
