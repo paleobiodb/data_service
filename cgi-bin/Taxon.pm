@@ -755,10 +755,7 @@ sub submitAuthorityForm {
 	
         my $end_message;
         if (@warnings) {
-		    $end_message .= "<DIV class=\"warning\">";
-            $end_message .= "<div class=\"large\"><b>Warnings</b></div>"; 
-            $end_message .= "<LI>$_</LI>" for (@warnings);
-            $end_message .= "</DIV>";
+            $end_message .= Debug::printWarnings(\@warnings);
         }
         $end_message .= "<div align=\"center\"><h3>" . $fields{'taxon_name'} . " " .Reference::formatShortRef(\%fields). " has been $enterupdate the database</h3></div>";
 
@@ -1061,12 +1058,7 @@ sub displayTypeTaxonSelectForm {
 
 
     if (@warnings) {
-        my $plural = (scalar(@warnings) > 1) ? "s" : "";
-        print "<br><div align=\"center\"><table width=600 border=0>" .
-              "<tr><td class=darkList><font size='+1'><b>Warning$plural</b></font></td></tr>" .
-              "<tr><td>";
-        print "<li class='medium'>$_</li>" for (@warnings);
-        print "</td></tr></table></div><br>";
+        print Debug::printWarnings(\@warnings);
     }
 
     if ($show_end_message) {
@@ -1111,12 +1103,7 @@ sub submitTypeTaxonSelect {
     }
 
     if (@warnings) {
-        my $plural = (scalar(@warnings) > 1) ? "s" : "";
-        print "<br><div align=\"center\"><table width=600 border=0>" .
-              "<tr><td class=darkList><font size='+1'><b>Warning$plural</b></font></td></tr>" .
-              "<tr><td>";
-        print "<li class='medium'>$_</li>" for (@warnings);
-        print "</td></tr></table></div><br>";
+        print Debug::printWarnings(\@warnings);
     }
 
     print $end_message;
@@ -1328,7 +1315,7 @@ sub getBestClassification{
     my $dbh = $dbt->dbh;
     my @matches = ();
 
-    if ( $genus_reso !~ /informal/) {
+    if ( $genus_reso !~ /informal/ && $genus_name) {
         my $species_sql = "";
         if ($species_reso  !~ /informal/ && $species_name =~ /^[a-z]+$/ && $species_name !~ /^sp(\.)?$|^indet(\.)?$/) {
             $species_sql = "AND ((taxon_rank='species' and taxon_name like '% $species_name') or taxon_rank != 'species')";
@@ -1441,22 +1428,22 @@ sub propagateAuthorityInfo {
 
     main::dbg("propagateAuthorityInfo called with taxon_no $taxon_no and orig $orig_no");
 
-    my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no=$orig_no and child_spelling_no != $taxon_no";
-    my @results = @{$dbt->getData($sql)};
+    my @spellings = TaxonInfo::getAllSpellings($dbt,$orig_no);
     # Note that this is the taxon_no passed in, not the original combination -- an update to
     # a spelling should proprate around as well
     my $orig = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
 
     my @authority_fields = ('author1init','author1last','author2init','author2last','otherauthors','pubyr');
     my @more_fields = ('pages','figures','extant','preservation');
-    foreach my $row (@results) {
+    foreach my $spelling_no (@spellings) {
+        next if ($spelling_no==$taxon_no);
         my @toUpdate = ();
-        my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}},['*']);
+        my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$spelling_no},['*']);
         # If its tied to a reference, they should update the reference.
         # Only weird thing is if they update a subsequent spelling and the original combination
         # is tied to a reference. The data in the reference won't be updated.
         if ($orig->{'ref_is_authority'} =~ /yes/i) {
-            my $u_sql = "UPDATE authorities SET modified=modified, reference_no=$orig->{reference_no},ref_is_authority='YES' WHERE taxon_no=$row->{'child_spelling_no'}";
+            my $u_sql = "UPDATE authorities SET modified=modified, reference_no=$orig->{reference_no},ref_is_authority='YES' WHERE taxon_no=$spelling_no";
             main::dbg("propagateAuthorityInfo updating authority: $u_sql");
             $dbh->do($u_sql);
         } else {
@@ -1469,7 +1456,7 @@ sub propagateAuthorityInfo {
                     }
                 }
                 if (@toUpdate) {
-                    my $u_sql =  "UPDATE authorities SET modified=modified, ".join(",",@toUpdate)." WHERE taxon_no=$row->{child_spelling_no}";
+                    my $u_sql =  "UPDATE authorities SET modified=modified, ".join(",",@toUpdate)." WHERE taxon_no=$spelling_no";
                     main::dbg("propagateAuthorityInfo updating authority: $u_sql");
                     $dbh->do($u_sql);
                 }
