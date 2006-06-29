@@ -17,7 +17,7 @@ use fields qw(
 				dbh
 				_id
 				_err
-								
+                tableDefinitions								
 				tableNames);  # list of allowable data fields.
 
 # dbh				:	handle to the database
@@ -37,6 +37,8 @@ sub new {
     } else {
         $self->{'dbh'} = $dbh;
     }
+    $self->{'tableDefinitions'} = {};
+    $self->{'tableNames'} = [];
 	
 	return $self;
 }
@@ -119,20 +121,22 @@ sub isValidTableName {
 }
 
 
-# rjp, 2/2004.
+# Reword PS 2005.
 #
 # Pass it a table name such as "occurrences", and a
 # hash ref - the hash should contain keys which correspond
 # directly to column names in the database.  Note, not all columns need to 
 # be listed; only the ones which you are inserting data for.
 #
+# Args:
+#  s: session object
+#  tableName, primary_key_field, primary_key_value: self explanatory, the record to update
+#  data: hashref for all our key->value pairs we want to insert
+#    note you can just throw it a $q->Vars or something, it won't throw
+#    stuff into there that isn't in the table definition, thats filtered out
+#
 # Returns an array.  First element is result code from the dbh->do() method,
 # second element is primary key value of the last insert.
-#
-# Note, for now, this just blindly inserts whatever the user passes.
-#
-# Reworked PS 04/30/2005 to be more flexible - uses code from bridge.pl::insertRecord
-#
 #
 sub insertRecord {
 	my DBTransactionManager $self = shift;
@@ -148,14 +152,24 @@ sub insertRecord {
 		return;
 	}
 	
-    # get the column info from the table
-    my $sth = $dbh->column_info(undef,'pbdb',$tableName,'%');
+    # Get the table definition, only get it once though. Careful about this if we move to mod_perl, cache
+    # will exist for as long of the $dbt object exists
+    my @table_definition = ();
+    if ($self->{'tableDefinitions'}{$tableName}) {
+        @table_definition = @{$self->{'tableDefinitions'}{$tableName}};
+    } else {
+        my $sth = $dbh->column_info(undef,'pbdb',$tableName,'%');
+        while (my $row = $sth->fetchrow_hashref()) {
+            push @table_definition, $row;    
+        }
+        $self->{'tableDefinitions'}{$tableName} = \@table_definition;
+    }
 
 	# loop through each key in the passed hash and
 	# build up the insert statement.
     my @insertFields=();
     my @insertValues=();
-    while (my $row = $sth->fetchrow_hashref()) {
+    foreach my $row (@table_definition) {
         my $field = $row->{'COLUMN_NAME'};
         my $type = $row->{'TYPE_NAME'};
         my $is_nullable = ($row->{'IS_NULLABLE'} eq 'YES') ? 1 : 0;
@@ -210,14 +224,12 @@ sub insertRecord {
         main::dbg("insertRecord in DBTransaction manager called: sql: $insertSQL");
         # actually insert into the database
         my $insertResult = $dbh->do($insertSQL);
-        
-        # bug fix here by JA 2.4.04
-        my $idNum = ${$self->getData("SELECT LAST_INSERT_ID() AS l FROM $tableName")}[0]->{l};
+        my $idNum = $dbh->last_insert_id(undef, undef, undef, undef);
+        main::dbg("INSERTED ID IS $idNum for TABLE $tableName");
 	
         # return the result code from the do() method.
 	    return ($insertResult, $idNum);
     }
-		
 }
 
 # Reworked PS 04/30/2005 
@@ -225,10 +237,13 @@ sub insertRecord {
 #
 # Args: 
 #  s: session object
+#  tableName, primary_key_field, primary_key_value: self explanatory, the record to update
 #  update_empty_only: 1 means update only blank or null columns, 0 mean update anything
 #  data: hashref for all our key->value pairs we want to update
 #    note you can just throw it a $q->Vars or something, it won't throw
 #    stuff into there that isn't in the table definition, thats filtered out
+#
+# Returns the result returned my mysql, or -1 if there was nothing to update
 #
 sub updateRecord {
 	my $self = shift;
@@ -252,6 +267,11 @@ sub updateRecord {
 		return 0;	
 	}
 
+    if ($primary_key_value !~ /^\d+$/) {
+        croak ("Non numeric primary key value supplied: $primary_key_field --> $primary_key_value");
+        return 0;
+    }
+
 	# get the record we're going to update from the table
     my $sql = "SELECT * FROM $tableName WHERE $primary_key_field=$primary_key_value";
     my @results = @{$self->getData($sql)};
@@ -262,11 +282,6 @@ sub updateRecord {
     my $table_row = $results[0];
     if (!$table_row) {
         croak("Could not pull row from table $tableName for $primary_key_field=$primary_key_value");
-        return 0;
-    }
-
-    if ($primary_key_value !~ /^\d+$/) {
-        croak ("Non numeric primary key value supplied: $primary_key_field --> $primary_key_value");
         return 0;
     }
 
@@ -284,11 +299,22 @@ sub updateRecord {
     $updateEmptyOnly = 0 if (!exists $table_row->{'authorizer_no'});
     $updateEmptyOnly = 0 if ($tableName =~ /authorities|opinions/);
 
-    # get the column info from the table
-    my $sth = $dbh->column_info(undef,'pbdb',$tableName,'%');
+    # Get the table definition, only get it once though. Careful about this if we move to mod_perl, cache
+    # will exist for as long of the $dbt object exists
+    my @table_definition = ();
+    if ($self->{'tableDefinitions'}{$tableName}) {
+        @table_definition = @{$self->{'tableDefinitions'}{$tableName}};
+    } else {
+        my $sth = $dbh->column_info(undef,'pbdb',$tableName,'%');
+        while (my $row = $sth->fetchrow_hashref()) {
+            push @table_definition, $row;
+        }
+        $self->{'tableDefinitions'}{$tableName} = \@table_definition;
+    } 
 
     my @updateTerms = ();
-    while (my $row = $sth->fetchrow_hashref()) {
+    my $termCount = 0;
+    foreach my $row (@table_definition) {
         my $field = $row->{COLUMN_NAME};
         my $type = $row->{TYPE_NAME};
         my $is_nullable = ($row->{IS_NULLABLE} eq 'YES') ? 1 : 0; 
@@ -309,25 +335,34 @@ sub updateRecord {
                     # separated by \0.  See CPAN CGI documentation about this
                     my @vals = split(/\0/,$data->{$field});
                     my $value;
+                    my $raw_value;
                     if ($type eq 'SET') {
-                        $value = $dbh->quote(join(",",@vals));
+                        $raw_value = join(",",@vals);
+                        $value = $dbh->quote($raw_value);
                     } else {
-                        $value = $vals[0];
-                        if ($value =~ /^\s*$/ && $is_nullable) {
+                        $raw_value = $vals[0];
+                        if ($raw_value =~ /^\s*$/ && $is_nullable) {
                             $value = 'NULL';
                         } else {
-                            if (! defined $value) { $value = ''; }
-                            $value = $dbh->quote($value);
+                            if (! defined $raw_value) { 
+                                $value = $dbh->quote('');
+                            } else {
+                                $value = $dbh->quote($raw_value);
+                            }
                         }
                     }
-                    push @updateTerms, "$field=$value";
+                    my $old_value = $table_row->{$field};
+                    if ($raw_value ne $old_value) {
+                        push @updateTerms, "$field=$value";
+                        $termCount++;
+                    }
                 }
             } 
         }
     }
 
     # updateTerms will always be at least 1 in size (for modifer_no/modifier). If it isn't, nothing to update
-    if (scalar(@updateTerms) > 1) {
+    if ($termCount) {
         my $updateSql = "UPDATE $tableName SET ".join(",",@updateTerms)." WHERE $primary_key_field=$primary_key_value";
         main::dbg("UPDATE SQL:".$updateSql);
     	my $updateResult = $dbh->do($updateSql);
@@ -339,6 +374,120 @@ sub updateRecord {
     }
 }
 
+# PS 04/30/2005 
+# This function deletes a database record and inserts a row into a table called delete_log.  This
+# row contains an insert statement taht can exactly duplicate the deleted record, for easy undos
+# should the case every arise, as well as keeps track of who/when the row was deleted
+#
+# Args: 
+#  s: session object
+#  tableName, primary_key, primary_key_value: self explanatory, delete this record from the table
+#  comments: Why the record was deleted
+sub deleteRecord {
+	my $self = shift;
+	my $s = shift;
+	my $tableName = shift;
+	my $primary_key_field = shift;
+	my $primary_key_value = shift;
+    my $comments = (shift || "");
+	
+    my $dbh = $self->dbh;
+	
+	# make sure they're allowed to update data!
+	if (!$s || !$s->isDBMember()) {
+		croak("Invalid session or enterer in updateRecord");
+		return 0;
+	}
+	
+	# make sure the whereClause and tableName aren't empty!  That would be bad.
+	if (($tableName eq '') || ($primary_key_field eq '')) {
+        croak ("No tablename or primary_key supplied to deleteRecord"); 
+		return 0;	
+	}
+
+    if ($primary_key_value !~ /^\d+$/) {
+        croak ("Non numeric primary key value supplied: $primary_key_field --> $primary_key_value");
+        return 0;
+    }
+
+	# get the record we're going to update from the table
+    my $sql = "SELECT * FROM $tableName WHERE $primary_key_field=$primary_key_value";
+    my @results = @{$self->getData($sql)};
+    if (scalar(@results) != 1) {
+        croak ("Error in updateRecord: $sql return ".scalar(@results)." values instead of 1");
+        return 0;
+    }
+    my $table_row = $results[0];
+    if (!$table_row) {
+        croak("Could not pull row from table $tableName for $primary_key_field=$primary_key_value");
+        return 0;
+    }
+
+    # A list of people who have permitted the current authorizer to edit their records
+    my $p = Permissions->new($s,$self);
+    my %is_modifier_for = %{$p->getModifierList()};
+
+    # People doing updates can only update previously empty fields, unless they own the record
+    my $deletePermission = 0;
+    # Following people may edit the record: super_user, authorizer, or someone whos listed authorizer as a buddy
+    # Or anyone, if the table has no authorizer (i.e. measurements table);
+    $deletePermission = 1 if ($s->isSuperUser());
+    $deletePermission = 1 if (exists $table_row->{'authorizer_no'} && $s->get('authorizer_no') == $table_row->{'authorizer_no'});
+    $deletePermission = 1 if (exists $table_row->{'authorizer_no'} && $is_modifier_for{$table_row->{'authorizer_no'}});
+    $deletePermission = 1 if (!exists $table_row->{'authorizer_no'});
+    $deletePermission = 1 if ($tableName =~ /authorities|opinions/);
+
+    # Get the table definition, only get it once though. Careful about this if we move to mod_perl, cache
+    # will exist for as long of the $dbt object exists
+    my @table_definition = ();
+    if ($self->{'tableDefinitions'}{$tableName}) {
+        @table_definition = @{$self->{'tableDefinitions'}{$tableName}};
+    } else {
+        my $sth = $dbh->column_info(undef,'pbdb',$tableName,'%');
+        while (my $row = $sth->fetchrow_hashref()) {
+            push @table_definition, $row;
+        }
+        $self->{'tableDefinitions'}{$tableName} = \@table_definition;
+    } 
+
+    if ($deletePermission) {
+        # loop through each key in the passed hash and
+        # build up the insert statement.
+        my @insertFields=();
+        my @insertValues=();
+        foreach my $row (@table_definition) {
+            my $field = $row->{'COLUMN_NAME'};
+            my $type = $row->{'TYPE_NAME'};
+            my $is_nullable = ($row->{'IS_NULLABLE'} eq 'YES') ? 1 : 0;
+            my $is_primary =  $row->{'mysql_is_pri_key'};
+
+            # It exists in the passed in user hash
+            my $value = $table_row->{$field};
+            if ($value =~ /^\s*$/ && $is_nullable) {
+                $value = 'NULL';
+            } else {
+                if (! defined $value) { $value = ''; }
+                $value = $dbh->quote($value);
+            }
+            push @insertFields, $field;
+            push @insertValues, $value;
+        }
+
+        if (@insertFields) {
+            my $insertSQL = "INSERT INTO $tableName (".join(",",@insertFields).") VALUES (".join(",",@insertValues).")";
+            my $enterer_no = $s->get('enterer_no');
+            my $authorizer_no = $s->get('authorizer_no');
+            my $deleteLogSQL = "INSERT INTO delete_log (delete_time,authorizer_no,enterer_no,comments,delete_sql) VALUES (NOW(),$authorizer_no,$enterer_no,".$dbh->quote($comments).",".$dbh->quote($insertSQL).")";
+            main::dbg("Delete log final SQL: $deleteLogSQL");
+            $dbh->do($deleteLogSQL);
+            my $deleteSQL = "DELETE FROM $tableName WHERE $primary_key_field=$primary_key_value LIMIT 1";
+            main::dbg("Deletion SQL: $deleteSQL");
+            $dbh->do($deleteSQL);
+        }
+    } else {
+        main::dbg("User ".$s->get('authorizer_no')." does not have permission to delete $tableName $primary_key_value"); 
+    }
+}
 
 ###
 ## The following methods are from the old DBTransactionManager class 
@@ -366,10 +515,7 @@ sub updateRecord {
 ##
 sub getData{
 	my DBTransactionManager $self = shift;
-	
 	my $sql = shift;
-#	my $type = (shift or "neither");
-	my $attr_hash_ref = shift;
     my $dbh = $self->{'dbh'};
 
 	# First, check the sql for any obvious problems
@@ -394,22 +540,8 @@ sub getData{
                 $errstr .= " GET,POST ($getpoststr)";
                 croak $errstr;
             }    
-			# Ok now attributes are accessible
-			foreach my $key (keys(%{$attr_hash_ref})){
-				$attr_hash_ref->{$key} = $sth->{$key};
-			}	
 			my @data = @{$sth->fetchall_arrayref({})};
 			$sth->finish();
-			
-# ?? THIS MAY OR MAY NOT BE IMPLEMENTED AS NOTED BELOW (FUTURE RELEASE)
-#*******	# Ok now check permissions... **********************************
-# - session object.
-# - either paste permissions methods in here (modified - without the executes,
-#	etc., or make modified versions in Permissions.pm.  NOTE: modified versions
-#	in Permissions.pm could be done as copied methods with new names, or adding
-#	functionality (conditionals) to the existing methods so they behave 
-#	differently depending on how they're called.
-
 			return \@data;
 		}
 		# non-SELECT:
