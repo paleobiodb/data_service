@@ -379,8 +379,8 @@ sub buildList    {
             push @{$thistaxon->{spellings}}, {'taxon_no'=>$_->{child_spelling_no}} for (@$spellings);
             my $orig_taxon_no = TaxonInfo::getOriginalCombination($dbt,$no_or_name);
             my $senior_taxon_no = TaxonInfo::getSeniorSynonym($dbt,$orig_taxon_no);
-            my $correct_name = TaxonInfo::getMostRecentParentOpinion($dbt,$orig_taxon_no,1);
-            $thistaxon->{taxon_name} = $correct_name->{child_name};
+            my $correct_name = TaxonInfo::getMostRecentSpelling($dbt,$orig_taxon_no);
+            $thistaxon->{taxon_name} = $correct_name->{taxon_name};
             my @synonyms = TaxonInfo::getJuniorSynonyms($dbt,$senior_taxon_no);
             push @{$thistaxon->{synonyms}}, {'taxon_no'=>$_} for (@synonyms);
             unshift @$children, $thistaxon;
@@ -530,14 +530,14 @@ sub displayStratTaxa{
             my $orig_taxon_no = TaxonInfo::getOriginalCombination($dbt,$row->{'taxon_no'});
             $taxon_no = TaxonInfo::getSeniorSynonym($dbt,$orig_taxon_no);
             # This actually gets the most correct name
-            my $correct_row = TaxonInfo::getMostRecentParentOpinion($dbt,$taxon_no,1); 
+            my $correct_row = TaxonInfo::getMostRecentSpelling($dbt,$taxon_no); 
             $name = $row->{'genus_name'} . ' ' . $row->{'species_name'};
 #use Data::Dumper; print Dumper($correct_row)."<BR>";
-            if ($correct_row->{child_name} =~ / / && $correct_row->{child_name} ne $name) {
+            if ($correct_row->{'taxon_name'} =~ / / && $correct_row->{'taxon_name'} ne $name) {
 #                print "USING corrected name $correct_row->{child_name} for $name<BR>";
-                $name = $correct_row->{'child_name'};
+                $name = $correct_row->{'taxon_name'};
             } elsif ($row->{'species_name'} =~ /sp\.|indet\./) {
-                $name = $correct_row->{'child_name'} . " " . $row->{'species_name'};
+                $name = $correct_row->{'taxon_name'} . " " . $row->{'species_name'};
             }
 
             
