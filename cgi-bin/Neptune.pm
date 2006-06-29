@@ -7,6 +7,7 @@
 package Neptune;
 use strict;
 use DBI;
+use Debug;
 
 # Flags and constants
 my $DEBUG=0; # The debug level of the calling program
@@ -529,7 +530,7 @@ sub queryNeptuneDB {
     print $sql if ($DEBUG);
 
     if (@errors) {
-        PBDBUtil::printErrors(@errors);
+        print Debug::printErrors(\@errors);
         print main::stdIncludes("std_page_bottom");
         exit;
     }
