@@ -100,7 +100,7 @@ sub get_classification_hash{
         # Bug fix: prevent a senior synonym from being considered a parent
         $child_no = TaxonInfo::getSeniorSynonym($dbt,$child_no,$restrict_to_reference_no);
         # prime the pump 
-        my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no,0,0,$restrict_to_reference_no);
+        my $parent_row = TaxonInfo::getMostRecentClassification($dbt,$child_no,$restrict_to_reference_no);
         if ($DEBUG) { print "Start:".Dumper($parent_row)."<br>"; }
         my $status = $parent_row->{'status'};
         $child_no = $parent_row->{'parent_no'};
@@ -125,18 +125,19 @@ sub get_classification_hash{
             }
 
             # Belongs to should always point to original combination
-            $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no,1,0,$restrict_to_reference_no);
+            $parent_row = TaxonInfo::getMostRecentClassification($dbt,$child_no,$restrict_to_reference_no);
             if ($DEBUG) { print "Loop:".Dumper($parent_row)."<br>"; }
        
             # No parent was found. This means we're at end of classification, althought
             # we don't break out of the loop till the end of adding the node since we
             # need to add the current child still
             if ($parent_row) {
+                my $taxon= TaxonInfo::getMostRecentSpelling($dbt,$child_no,$restrict_to_reference_no);
                 $parent_no  = $parent_row->{'parent_no'};
-                $child_spelling_no= $parent_row->{'child_spelling_no'};
-                $taxon_name = $parent_row->{'child_name'};
-                $taxon_rank = $parent_row->{'child_rank'};
                 $status = $parent_row->{'status'};
+                $child_spelling_no = $taxon->{'taxon_no'};
+                $taxon_name = $taxon->{'taxon_name'};
+                $taxon_rank = $taxon->{'taxon_rank'};
             } else {
                 $parent_no=0;
                 $child_spelling_no=$child_no;
