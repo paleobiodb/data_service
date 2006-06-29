@@ -80,7 +80,8 @@ sub reportDisplayHTML {
 	print "</h2>\n";
 
     # Print Warnings
-    $self->printWarnings();
+    my $msg = Debug::printWarnings($self->{'warnings'});
+    if ($msg) { print $msg. "<BR>"; }
     
     # Print Header
     my $isDoubleArray = scalar @{$self->{'sortKeys2'}};
@@ -842,19 +843,6 @@ sub getRegions	{
 	}
     return \%regions;
 	close REGIONS;
-}
-
-# This only shown for internal errors
-sub printWarnings{
-    my $self = shift;
-    if (scalar(@{$self->{'warnings'}})) {
-        my $plural = (scalar(@{$self->{'warnings'}}) > 1) ? "s" : "";
-        print "<br><table width=600 border=0>" .
-              "<tr><td class=darkList><font size='+1'><b>Warning$plural</b></font></td></tr>" .
-              "<tr><td>";
-        print "<li class='medium'>$_</li>" for (@{$self->{'warnings'}});
-        print "</td></tr></table><br>";
-    }
 }
 
 # This only shown for internal errors
