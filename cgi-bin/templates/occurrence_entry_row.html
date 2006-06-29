@@ -1,27 +1,28 @@
 <!-- Begin occurrence entry row -->
 <tr>
-	<input id="collection_no" type=hidden>
+	<input id="collection_no" type="hidden">
+	<input name="occurrence_no" type="hidden" value="-1">
 <!-- OPTIONAL genus_and_species_only -->
-	<td align=right><select id="genus_reso" class="small"></select></td>
+	<td align="right"><select id="genus_reso" class="small"></select></td>
 <!-- END genus_and_species_only -->
-	<td><input name="genus_name" size=20 maxlength=255 class="small"></td>
+	<td><input name="genus_name" size="20" maxlength="255" class="small"></td>
 <!-- OPTIONAL genus_and_species_only -->
 <!-- OPTIONAL subgenera -->
-	<td align=right><select id="subgenus_reso" class="small"></select></td>
-	<td><input name="subgenus_name" size=20 maxlength=255 class="small"></td>
+	<td align="right"><select id="subgenus_reso" class="small"></select></td>
+	<td><input name="subgenus_name" size="20" maxlength="255" class="small"></td>
 <!-- END subgenera -->
-	<td align=right><select id="species_reso" class="small"></select></td>
+	<td align="right"><select id="species_reso" class="small"></select></td>
 <!-- END genus_and_species_only -->
-	<td><input id="species_name" name="species_name" size=20 maxlength=255 class="small"></td>
+	<td><input id="species_name" name="species_name" size="20" maxlength="255" class="small"></td>
 <!-- OPTIONAL genus_and_species_only -->
 <!-- OPTIONAL abundances -->
-	<td><input name="abund_value" size=4 maxlength=255 class="small"></td>
-	<td><select name="abund_unit" class="small"><option><option>specimens<option>%-specimens<option>individuals<option>%-individuals<option>%-volume<option>%-area<option>grid-count<option>rank<option>category<option>% of quadrats<option># of quadrats</select></td>
+	<td><input name="abund_value" size="4" maxlength="255" class="small"></td>
+	<td><select id="abund_unit" class="small"></td>
 <!-- END abundances -->
 <!-- END genus_and_species_only -->
 	<td align="center"><input id="reference_no" type="hidden" class="small"><span style="color: lightgrey;"><span id="reference_no"></span></span></td>
 <!-- OPTIONAL genus_and_species_only -->
-	<td><input name="comments" size=40 maxlength=65535 class="small"></td>
+	<td><input name="comments" size="40" maxlength="65535" class="small"></td>
 <!-- OPTIONAL plant_organs -->
 	<td><select id="plant_organ" class="small"></select></td>
 	<td><select id="plant_organ2" class="small"></select></td>

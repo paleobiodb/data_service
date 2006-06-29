@@ -6,9 +6,14 @@
 <span id="ref_string"></span>
 </table>
 
-<hr color='blue'>
+<form method=POST action="$exec_url" onSubmit="return checkForm();">
+<input type="hidden" name="form_source" value="new_reids_form">
+<input type="hidden" name="action" value="processEditOccurrences">
+<input id="reference_no" name="reference_no" type="hidden">
+<input id="list_collection_no " name="list_collection_no" type="hidden">
+<input id="taxon_name" name="taxon_name" type="hidden">
 
-<table border=0 class="small">
+<table border=0 class="small" cellpadding=1 cellspacing=0>
 <tr>
 	<th>Genus reso</th>
 	<th><span class="required">Genus name</span></th>
@@ -25,7 +30,4 @@
 <!-- END plant_organs -->
 </tr>
 
-<form method=POST action='$exec_url' onSubmit='return checkForm();'>
-<input type=hidden name=action value=processNewReIDs>
-<input type=hidden name=reference_no value=".$s->get("reference_no").">
 <!-- End reid_header_row.html -->
