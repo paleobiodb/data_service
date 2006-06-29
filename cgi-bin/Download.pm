@@ -105,11 +105,7 @@ sub buildDownload {
     }
 
     if (@form_warnings) {
-        my $plural = (scalar(@form_warnings) > 1) ? "s" : "";
-        print "<br><div align=\"center\"><div style=\"width: 600;\" align=\"left\">";
-        print "<h3 class=\"darkList\" style=\"margin-bottom: 0em;\">Warning$plural</h3>";
-        print "<li class=\"medium\">$_</li>" for (@form_warnings);
-        print "</div></div></br>";
+        print Debug::printWarnings(\@form_warnings);
     } 
 
     # Tell what happened
@@ -1591,13 +1587,7 @@ sub queryDatabase {
     $self->dbg("<b>Occurrences query:</b><br>\n$sql<BR>");
 
     if (@form_errors) {
-        my $plural = (scalar(@form_errors) > 1) ? "s" : "";
-
-        print "<br><div align=\"center\"><div style=\"width: 600;\" align=\"left\">";
-        print "<h3 class=\"darkList\" style=\"margin-bottom: 0em;\">Error$plural</h3>";
-        print "<li class=\"medium\">$_</li>" for (@form_errors);
-        print "</div></div></br>";  
-
+        print Debug::printErrors(\@form_errors);
         return ([],[]);
     } 
 
