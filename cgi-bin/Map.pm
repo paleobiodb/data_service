@@ -252,7 +252,7 @@ sub mapCheckForm {
    
     # Now if there are any errors, die
     if (@errors) {
-        PBDBUtil::printErrors(@errors);
+        print Debug::printErrors(\@errors);
         print main::stdIncludes("std_page_bottom");
         exit;
     }
