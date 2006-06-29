@@ -138,7 +138,7 @@ sub getSecondaryRefsString{
 					);
 		my $an = AuthorNames->new(\%temp);
 
-		$result_string .= "<td valign=top width=\"1%\"><b>$ref->{reference_no}</b></td>";
+		$result_string .= "<td valign=top width=\"1%\"><b><a href=\"bridge.pl?action=displayRefResults&type=view&reference_no=$ref->{reference_no}\">$ref->{reference_no}</a></b></td>";
 
 		if($ref->{project_name}){
 			$result_string .= "<td width=\"1%\" valign=top><span style=\"color: red;\"".
@@ -409,39 +409,31 @@ sub isRefSecondary{
 #
 ##
 sub newTaxonNames{
-	my $dbh = shift;
+	my $dbt = shift;
+    my $dbh = $dbt->dbh;
 	my $names = shift;
-	my $type = shift;
+    my $type = shift;
 
 	my @names = @{$names};
+    my @taxa = ();
 	my @result = ();
+    my @res;
 	
-	# This should be 'genus_name', 'species_name' or 'subgenus_name'
-	$type .= '_name';
-
-	# put each string in single quotes for the query
-	foreach my $single (@names){
-		$single = "\'$single\'";
-	}
-	my $sql = "SELECT count($type), $type FROM occurrences ".
-			  "WHERE $type IN (".join(',',@names).") GROUP BY $type";
-	my $sth = $dbh->prepare($sql) or die "Failure preparing sql: $sql ($!)";
-	$sth->execute();
-	my @res = @{$sth->fetchall_arrayref({})};
-	$sth->finish();
-
-	# remove the single quotes for comparison
-	foreach my $single (@names){
-		$single =~ /^'(.*)?'$/;
-		$single = $1;
+    foreach my $name (@names) {
+        push @taxa, $dbh->quote($name) if ($name);
+    }
+    if (@taxa) {
+    	my $sql = "SELECT $type FROM occurrences WHERE $type IN (".join(',',@taxa).") GROUP BY $type";
+        @res = @{$dbt->getData($sql)};
 	}
 	
 	NAME:
 	foreach my $check (@names){
+        next if (!$check);
 		foreach my $check_res (@res){ 
 			next NAME if(uc($check_res->{$type}) eq uc($check));
 		}
-		push(@result, $check);
+		push(@result, $check); 
 	}
 	
 	return @result;
@@ -460,8 +452,8 @@ sub new_search_recurse {
 	$passed->{$parent_child_spelling_no} = 1 if ($parent_child_spelling_no);
     return if (!$parent_no);
 
-    # Get the children
-    my $sql = "SELECT DISTINCT child_no FROM opinions WHERE parent_no=$parent_no";
+    # Get the children. Second bit is for lapsus opinions
+    my $sql = "SELECT DISTINCT child_no FROM opinions WHERE parent_no=$parent_no AND child_no != parent_no";
     my @results = @{$dbt->getData($sql)};
 
     #my $debug_msg = "";
@@ -469,12 +461,12 @@ sub new_search_recurse {
         # Validate all the children
         foreach my $child (@results){
 			# Don't revisit same child. Avoids loops in data structure, and speeds things up
-            if (exists $passed->{$child->{child_no}}) {
+            if (exists $passed->{$child->{'child_no'}}) {
                 #print "already visited $child->{child_no}<br>";
                 next;    
             }
             # (the taxon_nos in %$passed will always be original combinations since orig. combs always have all the belongs to links)
-            my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt, $child->{'child_no'});
+            my $parent_row = TaxonInfo::getMostRecentClassification($dbt, $child->{'child_no'});
 
             if($parent_row->{'parent_no'} == $parent_no){
                 my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no=$child->{'child_no'}";
@@ -482,6 +474,13 @@ sub new_search_recurse {
                 foreach my $row (@results) {
                     if ($row->{'child_spelling_no'}) {
                         $passed->{$row->{'child_spelling_no'}}=1;
+                    }
+                }
+                $sql = "SELECT DISTINCT parent_spelling_no FROM opinions WHERE child_no=$child->{'child_no'} AND status='misspelling of'";
+                @results = @{$dbt->getData($sql)}; 
+                foreach my $row (@results) {
+                    if ($row->{'parent_spelling_no'}) {
+                        $passed->{$row->{'parent_spelling_no'}}=1;
                     }
                 }
                 undef @results;
@@ -522,7 +521,16 @@ sub taxonomic_search{
     my $sql = "SELECT child_spelling_no FROM opinions WHERE child_no=$taxon_no";
     my @results = @{$dbt->getData($sql)};
     foreach my $row (@results) {
-        $passed->{$row->{'child_spelling_no'}} = 1 if ($row->{'child_spelling_no'});
+        if ($row->{'child_spelling_no'}) {
+            $passed->{$row->{'child_spelling_no'}} = 1;
+        }
+    }
+    $sql = "SELECT DISTINCT parent_spelling_no FROM opinions WHERE child_no=$taxon_no AND status='misspelling of'";
+    @results = @{$dbt->getData($sql)}; 
+    foreach my $row (@results) {
+        if ($row->{'parent_spelling_no'}) {
+            $passed->{$row->{'parent_spelling_no'}}=1;
+        }
     }
 
     # get all its children
@@ -723,28 +731,34 @@ sub getChildrenRecurse {
     return if (!$node->{'taxon_no'});
 
     # find all children of this parent, do a join so we can do an order by on it
-    my $sql = "SELECT DISTINCT child_no FROM opinions, authorities WHERE opinions.child_spelling_no=authorities.taxon_no AND parent_no=$node->{taxon_no} ORDER BY taxon_name";
+    my $sql = "SELECT DISTINCT child_no FROM opinions o, authorities a WHERE o.child_spelling_no=a.taxon_no AND o.parent_no=$node->{taxon_no} AND o.child_no != o.parent_no ORDER BY a.taxon_name";
     my @children = @{$dbt->getData($sql)};
     
     # Create the children and add them into the children array
     for my $row (@children) {
         # (the taxon_nos will always be original combinations since orig. combs always have all the belongs to links)
         # go back up and check each child's parent(s)
-        my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$row->{'child_no'},1); 
+        my $parent_row = TaxonInfo::getMostRecentClassification($dbt,$row->{'child_no'}); 
         if ($parent_row->{'parent_no'}==$node->{'taxon_no'})	{
             # Get alternate spellings
-            my $sql = "SELECT DISTINCT taxon_no, taxon_name, taxon_rank FROM opinions, authorities ".
-                      "WHERE opinions.child_spelling_no=authorities.taxon_no ".
-                      "AND child_no=$parent_row->{child_no} ".
-                      "AND child_spelling_no!=$parent_row->{child_spelling_no} ".
-                      "ORDER BY taxon_name"; 
+            my $sql = "(SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank FROM opinions o, authorities a".
+                      " WHERE o.child_spelling_no=a.taxon_no".
+                      " AND o.child_no = $parent_row->{child_no}".
+                      " AND o.child_spelling_no != $parent_row->{child_spelling_no})".
+                      " UNION ".
+                      "(SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank FROM opinions o, authorities a".
+                      " WHERE o.parent_spelling_no=a.taxon_no".
+                      " AND o.child_no = $parent_row->{child_no}".
+                      " AND o.status='misspelling of')".
+                      " ORDER BY taxon_name"; 
             my $spellings= $dbt->getData($sql);
 
             # Create the node for the new child - note its taxon_no is always the original combination,
             # but its name/rank are from the corrected name/recombined name
+            my $taxon = TaxonInfo::getMostRecentSpelling($dbt,$row->{'child_no'});
             my $new_node = {'taxon_no'=>$parent_row->{'child_no'}, 
-                            'taxon_name'=>$parent_row->{'child_name'},
-                            'taxon_rank'=>$parent_row->{'child_rank'},
+                            'taxon_name'=>$taxon->{'taxon_name'},
+                            'taxon_rank'=>$taxon->{'taxon_rank'},
                             'depth'=>$depth,
                             'children'=>[],
                             'spellings'=>$spellings,
@@ -880,17 +894,5 @@ sub deleteElementFromArray {
     return \@newArray;
 }   
 
-
-# Utilitiy, no other place to put it PS 01/26/2004
-sub printErrors{
-    if (scalar(@_)) {
-        my $plural = (scalar(@_) > 1) ? "s" : "";
-        print "<br><div align=center><table width=600 border=0>" .
-              "<tr><td class=darkList><font size='+1'><b> Error$plural</b></font></td></tr>" .
-              "<tr><td>";
-        print "<li class='medium'>$_</li>" for (@_);
-        print "</td></tr></table></div><br>";
-    }
-}
 
 1;
