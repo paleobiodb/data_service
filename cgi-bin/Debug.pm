@@ -47,4 +47,35 @@ sub logError {
 	print LOG "Error, $date: $string \n";	
 }
 
+# Utilitiy, no other place to put it PS 01/26/2004
+sub printWarnings {
+    my @msgs = @{$_[0]} if $_[0];
+    my $return = "";
+    if (scalar(@msgs)) {
+        my $plural = (scalar(@msgs) > 1) ? "s" : "";
+        $return .= "<br><div class=\"warningBox\">" .
+              "<div class=\"warningTitle\">Warning$plural</div>";
+        $return .= "<ul>";
+        $return .= "<li class='boxBullet'>$_</li>" for (@msgs);
+        $return .= "</ul>";
+        $return .= "</div>";
+    }
+    return $return;
+}
+
+sub printErrors{
+    my @msgs = @{$_[0]} if $_[0];
+    my $return = "";
+    if (scalar(@msgs)) {
+        my $plural = (scalar(@msgs) > 1) ? "s" : "";
+        $return .= "<br><div class=\"errorBox\">" .
+              "<div class=\"errorTitle\">Error$plural</div>";
+        $return .= "<ul>";
+        $return .= "<li class='boxBullet'>$_</li>" for (@msgs);
+        $return .= "</ul>";
+        $return .= "</div>";
+    }
+    return $return;
+}  
+
 1;
