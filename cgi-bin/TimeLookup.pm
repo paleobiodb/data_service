@@ -1378,7 +1378,7 @@ sub generateLookupTable {
         my $ten_my_bin = $dbh->quote($bin_lookup->{$row->{'interval_no'}});
         my $ub = $dbh->quote($ub_lookup->{$row->{'interval_no'}});
         my $lb = $dbh->quote($lb_lookup->{$row->{'interval_no'}});
-        my $sql = "SELECT interval_no FROM interval_lookup";
+        my $sql = "SELECT interval_no FROM interval_lookup WHERE interval_no=$row->{interval_no}";
         my @r = @{$dbt->getData($sql)};
         if ($r[0]) {
             my $sql = "UPDATE interval_lookup SET interval_no=$row->{interval_no},ten_my_bin=$ten_my_bin,stage_no=$stage_no,subepoch_no=$subepoch_no,epoch_no=$epoch_no,period_no=$period_no,lower_boundary=$lb,upper_boundary=$ub WHERE interval_no=$row->{interval_no}";
