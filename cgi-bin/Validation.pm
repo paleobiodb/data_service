@@ -173,6 +173,25 @@ sub properYear {
 	return 1;
 }
 
+# To be done: have better matches that take whether or not its informal into account
+sub validOccurrenceGenus {
+    my ($reso,$name) = @_;
+    if ($name =~ /^[A-Za-z0-9 \-]+$/) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+sub validOccurrenceSpecies {
+    my ($reso,$name) = @_;
+    if ($name =~ /^[a-z0-9 \-\.'"]+$/) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
 # Trivial function to check if an interval name is valid. Used in form checking
 # two params = eml, interval name
 sub checkInterval {
