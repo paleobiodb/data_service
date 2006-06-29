@@ -64,19 +64,19 @@ sub toString
 	}
 
 	if ( $selectable ) {
-		$retVal .= "	<td width=\"5%\" valign=top><input type=\"radio\" name=\"reference_no\" value=\"" . $self->{_reference_no} . "\"></td>\n";
+		$retVal .= "	<td valign=top><input type=\"radio\" name=\"reference_no\" value=\"" . $self->{_reference_no} . "\">&nbsp;</td>\n";
 	} else {
 		# Nothing there?  Make it small
 		$retVal .= "	<td></td>\n";
 	}
 
-	$retVal .= "	<td width=\"5%\" valign=top><b>".$self->{_reference_no}."</b></td>\n";
+	$retVal .= "	<td valign=top><b><a href=\"bridge.pl?action=displayRefResults&type=view&reference_no=$self->{_reference_no}\">".$self->{_reference_no}."</a></b>&nbsp;</td>\n";
 
 	# Project name
 	if ($self->{_project_name})	{
 		$retVal .= "	<td valign=\"top\"><font color=\"red\">".$self->{_project_name};
 		$retVal .= " ".$self->{_project_ref_no} if $self->{_project_ref_no};
-		$retVal .= "</font></td>\n";
+		$retVal .= " </font>&nbsp;</td>\n";
 	} else {
 		# Nothing there?  Make it small
 		$retVal .= "	<td></td>\n";
