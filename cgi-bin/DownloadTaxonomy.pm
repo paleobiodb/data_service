@@ -451,6 +451,9 @@ sub displayPBDBDownload {
         foreach my $o (@opinions) {
             $referenced_taxa{$o->{'child_no'}} = 1; 
             $referenced_taxa{$o->{'child_spelling_no'}} = 1; 
+            if ($o->{'status'} eq 'misspelling of') {
+                $referenced_taxa{$o->{'parent_spelling_no'}} = 1;
+            }
         }
         $options{'referenced_taxa'} = \%referenced_taxa;
     }
@@ -669,7 +672,7 @@ sub getTaxonomicNames {
                 $row->{'parent_name'} = $parent_name_cache{$row->{'senior_synonym_no'}}{'taxon_name'};
             }
             my $orig_no = TaxonInfo::getOriginalCombination($dbt,$row->{'senior_synonym_no'});
-            my $parent = TaxonInfo::getMostRecentParentOpinion($dbt,$orig_no);
+            my $parent = TaxonInfo::getMostRecentClassification($dbt,$orig_no);
             if ($parent && $parent->{'parent_no'}) {
                 my $sql = "SELECT a.taxon_no, a.taxon_name FROM taxa_tree_cache t, authorities a WHERE a.taxon_no=t.synonym_no AND t.taxon_no=$parent->{parent_no}";
                 my @r = @{$dbt->getData($sql)};
@@ -716,7 +719,7 @@ sub getTaxonomicNames {
                 $row->{'is_valid'} = 0;
                 if ($row->{'spelling_no'} != $row->{'senior_synonym_no'}) {
                     my $orig_no = TaxonInfo::getOriginalCombination($dbt,$row->{'taxon_no'});
-                    my $parent = TaxonInfo::getMostRecentParentOpinion($dbt,$orig_no);
+                    my $parent = TaxonInfo::getMostRecentClassification($dbt,$orig_no);
                     if ($parent && $parent->{'parent_no'}) {
                         my $sql = "SELECT taxon_name FROM authorities where taxon_no=$parent->{parent_no}";
                         my @s = @{$dbt->getData($sql)};
