@@ -1,6 +1,6 @@
 package Reclassify;
 
-
+use strict;
 use URI::Escape;
 
 # written by JA 31.3, 1.4.04
@@ -46,7 +46,8 @@ sub displayOccurrenceReclassify	{
 	my $dbh = shift;
 	my $dbt = shift;
     my $collections_ref = shift;
-    my @collections = @$collections_ref;
+    my @collections = ();
+    @collections = @$collections_ref if ($collections_ref);
 
 	print main::stdIncludes("std_page_top");
 
@@ -101,7 +102,7 @@ sub displayOccurrenceReclassify	{
 	# tick through the occurrences
 	# NOTE: the list will be in data entry order, nothing fancy here
 	if ( @occrefs )	{
-		print "<form method=\"post\">\n";
+		print "<form action=\"bridge.pl\" method=\"post\">\n";
 		print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"startProcessReclassifyForm\">\n";
 		print "<input name=\"occurrences_authorizer_no\" type=\"hidden\" value=\"".$q->param('occurrences_authorizer_no')."\">\n";
         if (@collections) {
@@ -125,7 +126,6 @@ sub displayOccurrenceReclassify	{
     my $nonExact = 0;
 	for my $o ( @occrefs )	{
         my $editable = ($s->get("superuser") || $is_modifier_for{$o->{'authorizer_no'}} || $o->{'authorizer_no'} == $s->get('authorizer_no')) ? 1 : 0;
-        my $disabled = ($editable) ?  '' : 'DISABLED';
         my $authorizer = ($editable) ? '' : '(<b>Authorizer:</b> '.Person::getPersonName($dbt,$o->{'authorizer_no'}).')';
         $nonEditableCount++ if (!$editable);
 
@@ -141,10 +141,23 @@ sub displayOccurrenceReclassify	{
 			if ( $o->{species_reso} !~ /informal/ && $o->{species_name} !~ /^sp\./ && $o->{species_name} !~ /^indet\./)	{
 				$taxon_name .= " " . $o->{species_name};
 			}
-            @all_matches = Taxon::getBestClassification($dbt,$o->{'genus_reso'},$o->{'genus_name'},$o->{'subgenus_reso'},$o->{'subgenus_name'},$o->{'species_reso'},$o->{'species_name'});
+            # Give these default values, don't want to pass in possibly undef values to any function or PERL might screw it up
+            my ($genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name) = ("","","","","","");
+            $genus_name = $o->{'genus_name'} if ($o->{'genus_name'});
+            $genus_reso = $o->{'genus_reso'} if ($o->{'genus_reso'});
+            $subgenus_reso = $o->{'subgenus_reso'} if ($o->{'subgenus_reso'});
+            $subgenus_name = $o->{'subgenus_name'} if ($o->{'subgenus_name'});
+            $species_reso = $o->{'species_reso'} if ($o->{'species_reso'});
+            $species_name = $o->{'species_name'} if ($o->{'species_name'});
+            my @all_matches = Taxon::getBestClassification($dbt,$genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name);
 
 			# now print the name and the pulldown of authorities
 			if ( @all_matches )	{
+                foreach my $m (@all_matches) {
+                    if ($m->{'match_level'} < 30)	{
+                        $nonExact++;
+                    }
+                }
 				if ( $rowcolor % 2 )	{
 					print "<tr>";
 				} else	{
@@ -194,21 +207,15 @@ sub displayOccurrenceReclassify	{
                 if (!$collection_string) {
                     $formatted .= " <span class=\"tiny\" style=\"white-space: nowrap;\">$authorizer</span>";
                 }
-                $formatted . " <td>";
 
 				# need a hidden recording the old taxon number
                 $collection_string .= ": " if ($collection_string);
                  
-				if ( ! $o->{reid_no} )	{
-					print "<input type=\"hidden\" $disabled name=\"old_taxon_no\" value=\"$o->{'taxon_no'}\">";
-                    print "<input type=\"hidden\" $disabled name=\"occurrence_description\" value=\"".uri_escape($collection_string.$formatted)."\">\n";
-					print "<input type=\"hidden\" $disabled name=\"occurrence_no\" value=\"" , $o->{occurrence_no}, "\">\n";
-				} else	{
-					print "<input type=\"hidden\" $disabled name=\"old_reid_taxon_no\" value=\"$o->{taxon_no}\">\n";
-                    print "<input type=\"hidden\" $disabled name=\"reid_description\" value=\"".uri_escape($collection_string.$formatted)."\">\n";
-					print "<input type=\"hidden\" $disabled name=\"reid_no\" value=\"" , $o->{reid_no}, "\">\n";
+				if ( $o->{reid_no} )	{
 					print "&nbsp;&nbsp;<span class='small'><b>reID =</b></span>&nbsp;";
-				}
+                }
+
+                my $description = "$collection_string $formatted";
 
 				print $formatted;
 				print "</td>\n";
@@ -216,64 +223,13 @@ sub displayOccurrenceReclassify	{
 				# start the select list
 				# the name depends on whether this is
 				#  an occurrence or reID
-				if ( ! $o->{reid_no} )	{
-					print "<td>&nbsp;&nbsp;\n<select $disabled name='taxon_no'>\n";
-				} else	{
-					print "<td>&nbsp;&nbsp;\n<select $disabled name='reid_taxon_no'>\n";
-				}
-				# populate the select list of authorities
-				foreach my $m ( @all_matches)	{
-                    my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$m->{'taxon_no'}},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
-					# have to format the authority data
-					my $authority = "$t->{taxon_name}";
-                    my $pub_info = Reference::formatShortRef($t);
-                    if ($pub_info =~ /[A-Za-z0-9]/) {
-                        $authority .= ", $pub_info";
-                    }
-                	# needed by Classification
-                    my %master_class=%{TaxaCache::getParents($dbt, [$t->{'taxon_no'}],'array_full')};
-
-					my @parents = @{$master_class{$t->{'taxon_no'}}};
-                    if (@parents) {
-						$authority .= " [";
-                        my $foundParent = 0;
-                        foreach (@parents) {
-                            if ($_->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
-                                $foundParent = 1;
-                                $authority .= $_->{'taxon_name'}.", ";
-                                last;
-                            }
-                        }
-                        $authority =~ s/, $//;
-                        if (!$foundParent) {
-                            $authority .= $parents[0]->{'taxon_name'};
-                        }
-                        $authority .= "]";
-                    }
-					if ( $authority !~ /[A-Za-z]/ )	{
-						$authority = "taxon number " . $t->{taxon_no};
-					}
-					# clean up in case there's a
-					#  classification but no author
-					$authority =~ s/^ //;
-
-					if ($m->{'match_level'} < 30)	{
-						$nonExact++;
-					}
-
-					print "<option value='" , $t->{taxon_no} , "+" , $authority , "'";
-					if ( $t->{taxon_no} eq $o->{taxon_no} )	{
-						print " selected";
-					}
-					print ">";
-					print $authority , "\n";
-				}
-				if ( $o->{taxon_no} )	{
-					print "<option value='0'>leave unclassified\n";
-				} else	{
-					print "<option value='0' selected>leave unclassified\n";
-				}
-				print "</select>&nbsp;&nbsp;</td>\n";
+				print "<td>&nbsp;&nbsp;\n";
+                if ($o->{reid_no}) {
+                    print classificationSelect($dbt,$o->{reid_no},1,$editable,\@all_matches,$o->{taxon_no},$description);
+                } else {
+                    print classificationSelect($dbt,$o->{occurrence_no},0,$editable,\@all_matches,$o->{taxon_no},$description);
+                }
+                print "</td>\n";
 				print "</tr>\n";
 				$rowcolor++;
 			} else	{
@@ -287,11 +243,15 @@ sub displayOccurrenceReclassify	{
 		print "</form>\n";
 	}
 	print "<p>\n";
+    my @warnings;
 	if ( $nonExact)	{
-		print "<p><div class=\"warning\">Exact formal classifications for some taxa could not be found, so approximate matches were used.  For example, a species might not be formally classified but its genus is.</div></p>\n";
+		push @warnings, "Exact formal classifications for some taxa could not be found, so approximate matches were used.  For example, a species might not be formally classified but its genus is.";
 	}
     if ( $nonEditableCount) {
-        print "<p><div class=\"warning\">Some occurrences can't be reclassified because they have a different authorizer</div></p>\n";
+        push @warnings, "Some occurrences can't be reclassified because they have a different authorizer.";
+    }
+    if (@warnings) {
+        print Debug::printWarnings(\@warnings);
     }
 
 	# print the informal and otherwise unclassifiable names
@@ -353,10 +313,14 @@ sub processReclassifyForm	{
         print "<h3>Taxa reclassified in collection " , $q->param('collection_no') ," (" , $coll_name , ")</h3>\n\n";
 	    print "<table border=0 cellpadding=2 cellspacing=0>\n";
         print "<tr><th>Taxon</th><th>Classification based on</th></tr>";
-    } else {
+    } elsif ($q->param('taxon_name')) {
         print "<h3>Taxa reclassified for " , $q->param('taxon_name') ,"</h3>\n\n";
 	    print "<table border=0 cellpadding=2 cellspacing=0>\n";
         print "<tr><th>Collection</th><th>Classification based on</th></tr>";
+    } else {
+        print "<h3>Taxa reclassified</h3>";
+	    print "<table border=0 cellpadding=2 cellspacing=0>\n";
+        print "<tr><th>Taxon</th><th>Classification based on</th></tr>";
     }
 
 	# get lists of old and new taxon numbers
@@ -392,6 +356,7 @@ sub processReclassifyForm	{
 				$sql .= " WHERE taxon_no=0";
 			}
 			$sql .= " AND occurrence_no=" . $occurrences[$i];
+            main::dbg($sql);
 			$dbt->getData($sql);
 
 		# print the taxon's info
@@ -426,6 +391,7 @@ sub processReclassifyForm	{
 				$sql .= " WHERE taxon_no=0";
 			}
 			$sql .= " AND reid_no=" . $reids[$i];
+            main::dbg($sql);
 			$dbt->getData($sql);
 
 		# print the taxon's info
@@ -447,21 +413,92 @@ sub processReclassifyForm	{
 
 	print "<p>";
    
-    if ($q->param('collection_no')) {
-        print "<a href=\"$exec_url?action=startStartReclassifyOccurrences&occurrences_authorizer_no=".$q->param('occurrences_authorizer_no')."&collection_no=";
-	    print $q->param('collection_no');
-	    print "\"><b>Reclassify this collection</b></a> - ";
-    } else {
-        print "<a href=\"$exec_url?action=displayCollResults&type=reclassify_occurrence&occurrences_authorizer_no=".$q->param('occurrences_authorizer_no')."&taxon_name=";
-	    print $q->param('taxon_name');
-	    print "\"><b>Reclassify ".$q->param('taxon_name')."</b></a> - ";
+    if ($q->param('show_links')) {
+        print uri_unescape($q->param("show_links"));
+    } else { 
+        if ($q->param('collection_no')) {
+            print "<a href=\"$exec_url?action=startStartReclassifyOccurrences&occurrences_authorizer_no=".$q->param('occurrences_authorizer_no')."&collection_no=";
+            print $q->param('collection_no');
+            print "\"><b>Reclassify this collection</b></a> - ";
+        } else {
+            print "<a href=\"$exec_url?action=displayCollResults&type=reclassify_occurrence&occurrences_authorizer_no=".$q->param('occurrences_authorizer_no')."&taxon_name=";
+            print $q->param('taxon_name');
+            print "\"><b>Reclassify ".$q->param('taxon_name')."</b></a> - ";
+        }
+    	print "<a href=\"$exec_url?action=startStartReclassifyOccurrences\"><b>Reclassify another collection or taxon</b></a></p>\n\n";
     }
-	print "<a href=\"$exec_url?action=startStartReclassifyOccurrences\"><b>Reclassify another collection or taxon</b></a></p>\n\n";
-
-	print "<center>\n\n";
 
 	print main::stdIncludes("std_page_bottom");
 
+}
+
+sub classificationSelect {
+    my ($dbt,$key_no,$is_reid,$editable,$matches,$taxon_no,$description) = @_;
+
+    my $disabled = ($editable) ?  '' : 'DISABLED';
+
+    my $html = "";
+    if ($is_reid) {
+        $html .= "<input type=\"hidden\" $disabled name=\"old_reid_taxon_no\" value=\"$taxon_no\">\n";
+        $html .= "<input type=\"hidden\" $disabled name=\"reid_description\" value=\"".uri_escape($description)."\">\n";
+        $html .= "<input type=\"hidden\" $disabled name=\"reid_no\" value=\"$key_no\">\n";
+        $html .= "<select $disabled name=\"reid_taxon_no\">";
+    } else {
+		$html .= "<input type=\"hidden\" $disabled name=\"old_taxon_no\" value=\"$taxon_no\">\n";
+        $html .= "<input type=\"hidden\" $disabled name=\"occurrence_description\" value=\"".uri_escape($description)."\">\n";
+		$html .= "<input type=\"hidden\" $disabled name=\"occurrence_no\" value=\"$key_no\">\n";
+        $html .= "<select $disabled name=\"taxon_no\">";
+    }
+                 
+    # populate the select list of authorities
+    foreach my $m (@$matches)	{
+        my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$m->{'taxon_no'}},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
+        # have to format the authority data
+        my $authority = "$t->{taxon_name}";
+        my $pub_info = Reference::formatShortRef($t);
+        if ($pub_info =~ /[A-Za-z0-9]/) {
+            $authority .= ", $pub_info";
+        }
+        # needed by Classification
+        my %master_class=%{TaxaCache::getParents($dbt, [$t->{'taxon_no'}],'array_full')};
+
+        my @parents = @{$master_class{$t->{'taxon_no'}}};
+        if (@parents) {
+            $authority .= " [";
+            my $foundParent = 0;
+            foreach (@parents) {
+                if ($_->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
+                    $foundParent = 1;
+                    $authority .= $_->{'taxon_name'}.", ";
+                    last;
+                }
+            }
+            $authority =~ s/, $//;
+            if (!$foundParent) {
+                $authority .= $parents[0]->{'taxon_name'};
+            }
+            $authority .= "]";
+        }
+        if ( $authority !~ /[A-Za-z]/ )	{
+            $authority = "taxon number " . $t->{taxon_no};
+        }
+        # clean up in case there's a
+        #  classification but no author
+        $authority =~ s/^ //;
+
+        $html .= "<option value=\"" . $t->{taxon_no} . "+" . $authority . "\"";
+        if ($t->{taxon_no} eq $taxon_no) {
+            $html .= " selected";
+        }
+        $html .= ">$authority</option>\n";
+    }
+    if ($taxon_no) {
+        $html .= "<option value=\"0+unclassified\">leave unclassified</option>\n";
+    } else {
+        $html .= "<option value=\"0+unclassified\" selected>leave unclassified</option>\n";
+    }
+    $html .= "</select>";
+    return $html;
 }
 
 
