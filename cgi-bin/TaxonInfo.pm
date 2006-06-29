@@ -147,15 +147,9 @@ sub displayTaxonInfoResults {
         my $orig_taxon_no = getOriginalCombination($dbt,$taxon_no);
         $taxon_no = getSeniorSynonym($dbt,$orig_taxon_no);
         # This actually gets the most correct name
-        my $correct_row = getMostRecentParentOpinion($dbt,$taxon_no,1);
-        if ($correct_row) {
-            $taxon_name = $correct_row->{'child_name'};
-            $taxon_rank = $correct_row->{'child_rank'};
-        } else {
-            my $t = getTaxa($dbt,{'taxon_no'=>$taxon_no});
-            $taxon_name = $t->{'taxon_name'};
-            $taxon_rank = $t->{'taxon_rank'};
-        }  
+        my $taxon = getMostRecentSpelling($dbt,$taxon_no);
+        $taxon_name = $taxon->{'taxon_name'};
+        $taxon_rank = $taxon->{'taxon_rank'};
     } else {
         $taxon_name = $q->param('taxon_name');
     }
@@ -1068,18 +1062,10 @@ sub displayTaxonClassification {
     my ($classification_no,$classification_name,$classification_rank);
 
     if ($orig_no) {
-        my $correct_row = getMostRecentParentOpinion($dbt,$orig_no,1);
-        # First, find the rank, name, of the focal taxon
-        if ($correct_row) {
-            $taxon_no = $correct_row->{'child_spelling_no'};    
-            $taxon_name = $correct_row->{'child_name'};    
-            $taxon_rank = $correct_row->{'child_rank'};    
-        } else {
-            my $t = getTaxa($dbt,{'taxon_no'=>$orig_no});
-            $taxon_no = $t->{'taxon_no'};
-            $taxon_name = $t->{'taxon_name'};    
-            $taxon_rank = $t->{'taxon_rank'};    
-        }
+        my $taxon = getMostRecentSpelling($dbt,$orig_no);
+        $taxon_no = $taxon->{'taxon_no'};    
+        $taxon_name = $taxon->{'taxon_name'};    
+        $taxon_rank = $taxon->{'taxon_rank'};    
         $classification_no = $orig_no;
         $classification_name = $taxon_name;
         $classification_rank = $taxon_rank;
@@ -1420,8 +1406,7 @@ sub displayTaxonHistory {
 	
 	# Select all parents of the original combination whose status' are
 	# either 'recombined as,' 'corrected as,' or 'rank changed as'
-	my $sql = "SELECT DISTINCT(child_spelling_no), status FROM opinions ".
-		   "WHERE child_no=$original_combination_no ";
+	my $sql = "SELECT DISTINCT(child_spelling_no), status FROM opinions WHERE child_no=$original_combination_no ";
 	my @results = @{$dbt->getData($sql)};
 
 	# Combine parent numbers from above for the next select below. If nothing
@@ -1437,7 +1422,8 @@ sub displayTaxonHistory {
 	# Select all synonymies for the above list of taxa.
 	$sql = "SELECT DISTINCT child_no  FROM opinions ".
 		   "WHERE parent_no IN (".join(',',@parent_list).") ".
-		   "AND status IN ('subjective synonym of','objective synonym of','homonym of','replaced by')";
+		   "AND status IN ('subjective synonym of','objective synonym of','homonym of','replaced by') ".
+		   "AND child_no != parent_no"; # last bit for lapsus, shoudln't be necessary
 	my @synonyms = @{$dbt->getData($sql)};
 
 	# Reduce these results to original combinations: shouldn't be necessary to do this
@@ -1456,7 +1442,7 @@ sub displayTaxonHistory {
     my %results_no_dupes;
     @results_no_dupes{@synonyms} = ();
     @results_no_dupes{@more_orig} = ();
-    my @results = keys %results_no_dupes;
+    @results = keys %results_no_dupes;
 
 	
 	
@@ -1503,6 +1489,7 @@ sub getSynonymyParagraph{
 				   'nomen nudum' => 'considered a nomen nudum ',
 				   'nomen vanum' => 'considered a nomen vanum ',
 				   'nomen oblitum' => 'considered a nomen oblitum ',
+				   'misspelling of' => 'misspelled as ',
 				   'subjective synonym of' => 'synonymized subjectively with ',
 				   'objective synonym of' => 'synonymized objectively with ');
 	my $text = "";
@@ -1515,7 +1502,7 @@ sub getSynonymyParagraph{
 	
 	# Get ref info from refs if 'ref_is_authority' is set
 	if(! $taxon->{'author1last'}) {
-		$text .= "<li><i>The author of $taxon->{taxon_rank} <a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$taxon->{taxon_no}&real_user=$real_user\">$taxon->{taxon_name}</a> is not known. </i>";
+		$text .= "<li><i>The author of $taxon->{taxon_rank} <a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$taxon->{taxon_no}&real_user=$real_user\">$taxon->{taxon_name}</a> is not known</i>. ";
     } else {
 		$text .= "<li><i><a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$taxon->{taxon_no}&real_user=$real_user\">$taxon->{taxon_name}</a></i> was named by ";
         if ($taxon->{'ref_is_authority'}) {
@@ -1559,10 +1546,12 @@ sub getSynonymyParagraph{
         $text =~ s/, $/. /;
     }
 
+    $text .= "<br><br>";
+
 	# Get all things this taxon as been. Note we don't use ref_has_opinion but rather the 
     # pubyr cause of a number of broken records (ref_has_opinion is blank, but no pub info)
     # Transparently insert in the right pubyr and sort by it
-    my $sql = "(SELECT o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, ".
+    $sql = "(SELECT o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, ".
            " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.pubyr,r.pubyr) pubyr,".
            " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.author1last,r.author1last) author1last,".
            " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.author2last,r.author2last) author2last,".
@@ -1580,7 +1569,7 @@ sub getSynonymyParagraph{
 	# If something
 	foreach my $row (@results) {
 		# put all syn's referring to the same taxon_name together
-        if ($row->{'status'} =~ /synonym|homonym|replaced/) {
+        if ($row->{'status'} =~ /synonym|homonym|replaced|misspell/) {
             if (!exists $syn_group_index{$row->{'parent_spelling_no'}}) {
                 $syn_group_index{$row->{'parent_spelling_no'}} = scalar(@syns);
             }
@@ -1661,8 +1650,10 @@ sub getSynonymyParagraph{
         }
         if ($first_row->{'status'} !~ /nomen/) {
             my $taxon_no;
-            if ($first_row->{'status'} =~ /synonym|replaced|homonym/) {
+            if ($first_row->{'status'} =~ /synonym|replaced|homonym|misspelled/) {
                 $taxon_no = $first_row->{'parent_spelling_no'};
+            } elsif ($first_row->{'status'} =~ /misspell/) {
+                $taxon_no = $first_row->{'child_spelling_no'};
             } elsif ($first_row->{'spelling_reason'} =~ /correct|recomb|rank|reass/) {
                 $taxon_no = $first_row->{'child_spelling_no'};
             }
@@ -1671,7 +1662,11 @@ sub getSynonymyParagraph{
 			    $text .= "<i>".$taxon->{'taxon_name'}."</i>";
             }
         }
-        $text .= " by ";
+        if ($first_row->{'status'} eq 'misspelling of') {
+            $text .= " according to ";
+        } else {
+            $text .= " by ";
+        }
         for(my $i=0;$i<@$group;$i++) {
             my $comma = "";
             if ($i == scalar(@$group) - 2) {
@@ -1707,11 +1702,12 @@ sub getSynonymyParagraph{
     my @parents_ordered = sort {$parents{$a}[-1]->{'pubyr'} <=> $parents{$b}[-1]->{'pubyr'} } keys %parents;
     if (@parents_ordered) {
         $text .= "<br><br>";
-        my $taxon_name = $taxon->{'taxon_name'};
-        if ($taxon->{'taxon_rank'} =~ /genus|species/) {
-            $taxon_name = "<i>$taxon_name</i>";
-        }
-        $text .= "<a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$taxon->{taxon_no}&real_user=$real_user\">$taxon_name</a> was assigned ";
+        #my $taxon_name = $taxon->{'taxon_name'};
+        #if ($taxon->{'taxon_rank'} =~ /genus|species/) {
+        #    $taxon_name = "<i>$taxon_name</i>";
+        #}
+        #$text .= "<a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$taxon->{taxon_no}&real_user=$real_user\">$taxon_name</a> was assigned ";
+        $text .= "It was assigned";
         for(my $j=0;$j<@parents_ordered;$j++) {
             my $parent_no = $parents_ordered[$j];
             my $parent = getTaxa($dbt,{'taxon_no'=>$parent_no});
@@ -1756,7 +1752,13 @@ sub getOriginalCombination{
 	my @results = @{$dbt->getData($sql)};
 
     if (@results == 0) {
-        return $taxon_no;
+        $sql = "SELECT DISTINCT o.child_no FROM opinions o WHERE o.parent_spelling_no=$taxon_no AND o.status='misspelling of'";
+	    @results = @{$dbt->getData($sql)};
+        if (@results == 0) {
+            return $taxon_no;
+        } else {
+            return $results[0]->{'child_no'};
+        }
     } elsif (@results == 1) {
         return $results[0]->{'child_no'};
     } else {
@@ -1774,37 +1776,21 @@ sub getOriginalCombination{
     }
 }
 
-# PS, used to be selectMostRecentParentOpinion, changed to this to simplify code 
-# and consolidate bug fixes 04/20/2005
-sub getMostRecentParentOpinion {
-	my $dbt = shift;
-	my $child_no = shift;
-    my $include_child_taxon_info = (shift || 0);
-    my $include_reference = (shift || 0);
-    my $reference_no = (shift || '');
+# See _getMostRecentParenetOpinion
+sub getMostRecentClassification {
+    my $dbt = shift;
+    my $child_no = int(shift);
+    my $reference_no = shift;
+    my $exclude_nomen = shift;
     return if (!$child_no);
     return if ($reference_no eq '0');
-
-    # The child_name is the correct spelling of the child passed in, not the name of the parent, which 
-    # is sort of a bad abstraction on my part PS 09/14/2005. Use this to get the corrected name of a taxon
-    my $child_fields = '';
-    my $child_join = '';
-    if ($include_child_taxon_info) {
-        $child_fields .= "a1.taxon_name child_name, a1.taxon_rank child_rank, ";
-        $child_join .= " LEFT JOIN authorities a1 ON o.child_spelling_no=a1.taxon_no";
-    }
-
-    my $reference_clause = '';
-    if ($reference_no) {
-        $reference_clause = " AND o.reference_no=$reference_no";
-    }
 
     # This will return the most recent parent opinions. its a bit tricky cause: 
     # we're sorting by aliased fields. So surround the query in parens () to do this:
     # All values of the enum classification_quality get recast as integers for easy sorting
     # Lowest should appear at top of list (authoritative) and highest at bottom (compendium) so sort ASC
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
-    my $sql = "(SELECT ${child_fields}o.child_no, o.child_spelling_no, o.status, o.spelling_reason, o.parent_no, o.parent_spelling_no, o.opinion_no, "
+    my $sql = "(SELECT o.opinion_no,o.child_no, o.child_spelling_no,o.status,o.spelling_reason,o.parent_no,o.parent_spelling_no,"
             . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr,"
             . " (IF(r.reference_no = 6930,0," # is compendium, then 0 (lowest priority)
             .   "IF(r.classification_quality = 'second hand',1," # else if second hand, next lowest
@@ -1812,17 +1798,111 @@ sub getMostRecentParentOpinion {
             .   "IF(r.classification_quality = 'authoritative',3,"
             .   "0))))) reliability_index " # else low priority (compnedium level, should never happen)
             . " FROM opinions o" 
-            . $child_join
             . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
-            . " WHERE o.child_no=$child_no" 
-            . $reference_clause
-            . ") ORDER BY reliability_index DESC, pubyr DESC, opinion_no DESC LIMIT 1";
+            . " WHERE o.child_no=$child_no"
+            . " AND o.child_no != o.parent_no AND o.status != 'misspelling of'";
+    if ($reference_no) {
+        $sql .= " AND o.reference_no=$reference_no";
+    }
+    if ($exclude_nomen) {
+        $sql .= " AND o.status NOT LIKE '%nomen%'";
+    }
+    $sql .= ") ORDER BY reliability_index DESC, pubyr DESC, opinion_no DESC LIMIT 1";
 
     my @rows = @{$dbt->getData($sql)};
     if (scalar(@rows)) {
         return $rows[0];
+    } else {
+        return undef;
     }
 }
+
+sub getMostRecentSpelling {
+    my $dbt = shift;
+    my $child_no = int(shift);
+    my $reference_no = shift;
+    return if (!$child_no);
+    return if ($reference_no eq '0');
+    my $dbh = $dbt->dbh;
+
+    # Get a list of misspellings and exclude them - do this is a subselect in the future
+    my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no=$child_no AND status='misspelling of'";
+    my $sth = $dbh->prepare($sql);
+    $sth->execute();
+    my @misspellings;
+    while (my @row = $sth->fetchrow_array()) {
+        push @misspellings, $row[0];
+    }
+    # This will return the most recent parent opinions. its a bit tricky cause: 
+    # we're sorting by aliased fields. So surround the query in parens () to do this:
+    # All values of the enum classification_quality get recast as integers for easy sorting
+    # Lowest should appear at top of list (authoritative) and highest at bottom (compendium) so sort ASC
+    # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
+    $sql = "(SELECT o.spelling_reason, a.taxon_no, a.taxon_name, a.taxon_rank, o.opinion_no, "
+         . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) AS pubyr,"
+         . " (IF(r.reference_no = 6930,0," # is compendium, then 0 (lowest priority)
+         .   "IF(r.classification_quality = 'second hand',1," # else if second hand, next lowest
+         .   "IF(r.classification_quality = 'standard',2," # elsif standard, normal priority
+         .   "IF(r.classification_quality = 'authoritative',3,"
+         .   "0))))) reliability_index " # else low priority (compnedium level, should never happen)
+         . " FROM opinions o" 
+         . " LEFT JOIN authorities a ON o.child_spelling_no=a.taxon_no"
+         . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
+         . " WHERE o.child_no=$child_no"
+         . " AND o.child_no != o.parent_no AND o.status != 'misspelling of'";
+    if ($reference_no) {
+        $sql .= " AND o.reference_no=$reference_no";
+    }
+    if (@misspellings) {
+        $sql .= " AND o.child_spelling_no NOT IN (".join(",",@misspellings).")";
+    }
+    $sql .= ") ";
+    if (@misspellings) {
+        $sql .= " UNION ";
+        $sql .= "(SELECT o.spelling_reason, a.taxon_no, a.taxon_name, a.taxon_rank, o.opinion_no, "
+              . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr,"
+              . " (IF(r.reference_no = 6930,0," # is compendium, then 0 (lowest priority)
+              .   "IF(r.classification_quality = 'second hand',1," # else if second hand, next lowest
+              .   "IF(r.classification_quality = 'standard',2," # elsif standard, normal priority
+              .   "IF(r.classification_quality = 'authoritative',3,"
+              .   "0))))) reliability_index " # else low priority (compnedium level, should never happen)
+              . " FROM opinions o" 
+              . " LEFT JOIN authorities a ON o.parent_spelling_no=a.taxon_no"
+              . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
+              . " WHERE o.child_no=$child_no"
+              . " AND o.status = 'misspelling of' AND o.child_no=o.parent_no";
+        if ($reference_no) {
+            $sql .= " AND o.reference_no=$reference_no";
+        }
+        $sql .= ") ";
+    }
+    $sql .= " ORDER BY reliability_index DESC, pubyr DESC, opinion_no DESC LIMIT 1";
+    my @rows = @{$dbt->getData($sql)};
+
+    if (scalar(@rows)) {
+        return $rows[0];
+    } else {
+        my $taxon = getTaxa($dbt,{'taxon_no'=>$child_no});
+        $taxon->{'spelling_reason'} = "original spelling";
+        return $taxon;
+    }
+}
+
+sub isMisspelling {
+    my ($dbt,$taxon_no) = @_;
+    my $answer = 0;
+    my $sql = "SELECT count(*) cnt FROM opinions WHERE child_spelling_no=$taxon_no AND status='misspelling of'";
+    my $row = ${$dbt->getData($sql)}[0];
+    return $row->{'cnt'};
+}
+
+# PS, used to be selectMostRecentParentOpinion, changed to this to simplify code 
+# PS, changed from getMostRecentParentOpinion to _getMostRecentParentOpinion, to denote
+# this is an interval function not to be called directly.  call getMostRecentClassification
+# or getMostRecentSpelling instead, depending on whats wanted.  Because
+# of lapsus calami (misspelling of) cases, these functions will differ occassionally, since a lapsus is a 
+# special case that affects the spelling but doesn't affect the classification
+# and consolidate bug fixes 04/20/2005
 
 # JA 1.8.03
 sub displayEcology	{
@@ -1954,22 +2034,11 @@ sub displayMeasurements {
             # If the rank is genus or lower we want the big aggregate list of all taxa
             @specimens = Measurement::getMeasurements($dbt,'taxon_list'=>$in_list,'get_global_specimens'=>1);
         } else {
-            # I fthe rank is higher than genus, then that rank is too big to be meaningful.  
+            # If the rank is higher than genus, then that rank is too big to be meaningful.  
             # In that case we only want the taxon itself (and its synonyms and alternate names), not the big recursively generated list
             # i.e. If they entered Nasellaria, get Nasellaria indet., or Nasellaria sp. or whatever.
             # get alternate spellings of focal taxon. 
-            my @syns = getJuniorSynonyms($dbt,$taxon_no); 
-            push @syns,$taxon_no;
-            my $sql = "SELECT child_spelling_no FROM opinions WHERE child_no IN (".join(",",@syns).")";
-            my @results = @{$dbt->getData($sql)};
-
-            # Use the hash to get only unique taxon_nos
-            my %all_taxa;
-            @all_taxa{@syns} = ();
-            foreach my $row (@results) {
-               $all_taxa{$row->{'child_spelling_no'}} = 1 if ($row->{'child_spelling_no'});
-            }    
-            my @small_in_list = keys %all_taxa;
+            my @small_in_list = TaxonInfo::getAllSynonyms($dbt,$taxon_no);
             main::dbg("Passing small_in_list to getMeasurements".Dumper(\@small_in_list));
             @specimens = Measurement::getMeasurements($dbt,'taxon_list'=>\@small_in_list,'get_global_specimens'=>1);
         }
@@ -2096,9 +2165,9 @@ sub displaySynonymyList	{
 #  which we already know
     my %synline = ();
 	foreach my $syn (@syns)	{
-		my $sql = "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','homonym of','replaced by') AND parent_spelling_no=$syn)";
+		my $sql = "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','homonym of','replaced by','misspelling of') AND parent_spelling_no=$syn)";
         $sql .= " UNION ";
-		$sql .= "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','homonym of','replaced by') AND parent_no=$syn)";
+		$sql .= "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','homonym of','replaced by','misspelling of') AND parent_no=$syn)";
         $sql .= " UNION ";
 		$sql .= "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE child_spelling_no=$syn AND status IN ('belongs to','recombined as','rank changed as','corrected as'))";
 		my @userefs =  @{$dbt->getData($sql)};
@@ -2160,7 +2229,7 @@ sub displaySynonymyList	{
     my %isoriginal;
 	foreach my $syn (@syns)	{
 		my $sql = "SELECT count(*) AS c FROM opinions WHERE child_spelling_no=$syn AND child_no != child_spelling_no";
-		my $timesrecombined = ${$dbt->getData($sql)}[0]->{c};
+		my $timesrecombined = ${$dbt->getData($sql)}[0]->{'c'};
 		if ( ! $timesrecombined )	{
 			$isoriginal{$syn} = "YES";
 		}
@@ -2411,7 +2480,7 @@ sub getSeniorSynonym {
     my %seen = ();
     # Limit this to 10 iterations, in case we a have some weird loop
     for(my $i=0;$i<10;$i++) {
-        my $parent = getMostRecentParentOpinion($dbt,$taxon_no,0,0,$restrict_to_reference_no);
+        my $parent = getMostRecentClassification($dbt,$taxon_no,$restrict_to_reference_no);
         last if (!$parent || !$parent->{'child_no'});
         if ($seen{$parent->{'child_no'}}) {
             # If we have a loop, disambiguate using last entered
@@ -2449,10 +2518,10 @@ sub getJuniorSynonyms {
         } else {
             last;
         }
-        my $sql = "SELECT DISTINCT child_no FROM opinions WHERE parent_no=$taxon_no";
+        my $sql = "SELECT DISTINCT child_no FROM opinions WHERE parent_no=$taxon_no AND child_no != parent_no";
         my @results = @{$dbt->getData($sql)};
         foreach my $row (@results) {
-            my $parent = getMostRecentParentOpinion($dbt,$row->{'child_no'});
+            my $parent = getMostRecentClassification($dbt,$row->{'child_no'});
             if ($parent->{'parent_no'} == $taxon_no && $parent->{'status'} =~ /synonym|homonym|replaced/) {
                 if (!$seen_syn{$row->{'child_no'}}) {
                     push @queue, $row->{'child_no'};
@@ -2464,22 +2533,50 @@ sub getJuniorSynonyms {
     return (keys %seen_syn);
 }
 
+
+# Get all recombinations and corrections a taxon_no could be, but not junior synonyms
+# Assume that the taxon_no passed in is already an original combination
+sub getAllSpellings {
+    my $dbt = shift;
+    my @taxon_nos = @_;
+    my %all;
+    $all{$_} = 1 for @taxon_nos;
+
+    if (@taxon_nos) {
+        my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no IN (".join(",",keys %all).")";
+        my @results = @{$dbt->getData($sql)};
+        $all{$_->{'child_spelling_no'}} = 1 for @results;
+
+        $sql = "SELECT DISTINCT child_no FROM opinions WHERE child_spelling_no IN (".join(",",keys %all).")";
+        @results = @{$dbt->getData($sql)};
+        $all{$_->{'child_no'}} = 1 for @results;
+
+        # Bug fix: bad records with multiple original combinations
+        $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no IN (".join(",",keys(%all)).")";
+        @results = @{$dbt->getData($sql)};
+        $all{$_->{'child_spelling_no'}} = 1 for @results;
+
+        $sql = "SELECT DISTINCT parent_spelling_no FROM opinions WHERE status='misspelling of' AND child_no IN (".join(",",keys %all).")";
+        @results = @{$dbt->getData($sql)};
+        $all{$_->{'parent_spelling_no'}} = 1 for @results;
+    }
+    delete $all{''};
+    delete $all{'0'};
+    return keys %all;
+}
+
 # Get all synonyms/recombinations and corrections a taxon_no could be
-sub getAllTaxonomicNames {
+# Assume that the taxon_no passed in is already an original combination
+sub getAllSynonyms {
     my $dbt = shift;
     my $taxon_no = shift;
-    my %all = ($taxon_no=>1);
     if ($taxon_no) {
         $taxon_no = getSeniorSynonym($dbt,$taxon_no); 
         my @js = getJuniorSynonyms($dbt,$taxon_no); 
-        @all{@js} = ();
-        my $sql1 = "SELECT DISTINCT child_no taxon_no FROM opinions WHERE child_spelling_no IN (".join(",",keys %all).")";
-        my $sql2 = "SELECT DISTINCT child_spelling_no taxon_no FROM opinions WHERE child_no IN (".join(",",keys %all).")";
-        my @results = @{$dbt->getData($sql1)};
-        push @results,@{$dbt->getData($sql2)};
-        $all{$_->{'taxon_no'}} = 1 for @results;
+        return getAllSpellings($dbt,@js,$taxon_no);
+    } else {
+        return ();
     }
-    return keys %all;
 }
 
 # This will return all diagnoses for a particular taxon, for all its spellings, and
@@ -2656,24 +2753,11 @@ sub nomenChildren {
         my $sql = "SELECT DISTINCT o2.child_no,o1.parent_no FROM opinions o1, opinions o2 WHERE o1.child_no=o2.child_no AND o2.status LIKE '%nomen%' AND o1.parent_no IN (".join(",",@taxon_nos).")";
         my @results = @{$dbt->getData($sql)};
         foreach my $row (@results) {
-            my $mrpo = getMostRecentParentOpinion($dbt,$row->{'child_no'});
+            my $mrpo = getMostRecentClassification($dbt,$row->{'child_no'});
             if ($mrpo->{'status'} =~ /nomen/) {
                 #print "child $row->{child_no} IS NOMEN<BR>";
                 # This will get the most recent parent opinion where it is not classified as a %nomen%
-                my $sql = "(SELECT o.child_no, o.child_spelling_no, o.status, o.parent_no, o.parent_spelling_no, o.opinion_no, "
-                        . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr,"
-                        . " (IF(r.reference_no = 6930,0," # is compendium, then 0 (lowest priority)
-                        .   "IF(r.classification_quality = 'second hand',1," # else if second hand, next lowest
-                        .   "IF(r.classification_quality = 'standard',2," # elsif standard, normal priority
-                        .   "IF(r.classification_quality = 'authoritative',3,"
-                        .   "0))))) reliability_index " # else low priority (compnedium level, should never happen)
-                        . " FROM opinions o"
-                        . " LEFT JOIN refs r ON r.reference_no=o.reference_no"
-                        . " WHERE o.child_no=$row->{child_no}"
-                        . " AND o.status NOT LIKE '%nomen%'"
-                        . ") ORDER BY reliability_index DESC, pubyr DESC, opinion_no DESC LIMIT 1";
-
-                my $mrpo_no_nomen = ${$dbt->getData($sql)}[0];
+                my $mrpo_no_nomen = getMostRecentClassification($dbt,$row->{'child_no'},'',1);
                 if ($mrpo_no_nomen->{'parent_no'} == $row->{'parent_no'}) {
                     #print "child $row->{child_no} LAST PARENT IS PARENT $row->{parent_no} <BR>";
                     my $taxon = getTaxa($dbt,{'taxon_no'=>$row->{'child_no'}});
