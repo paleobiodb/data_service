@@ -77,7 +77,7 @@ sub rebuildCache {
                 my $ancestor_no = TaxonInfo::getOriginalCombination($dbt,$row->{'taxon_no'});
                 # Get the topmost ancestor     
                 for(my $i=0;$i<100;$i++) { # max out at 100;
-                    my $opinion = TaxonInfo::getMostRecentParentOpinion($dbt,$ancestor_no);
+                    my $opinion = TaxonInfo::getMostRecentClassification($dbt,$ancestor_no);
                     if ($opinion && $opinion->{'parent_no'}) {
                         $ancestor_no=$opinion->{'parent_no'};
                     } else {
@@ -117,7 +117,7 @@ sub rebuildCache {
             $visits{$child_no} = 1; 
 
             # Belongs to should always point to original combination
-            my $parent_row = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no);
+            my $parent_row = TaxonInfo::getMostRecentClassification($dbt,$child_no);
 
             my ($parent_no,$status);
             if ($parent_row) {
@@ -219,39 +219,18 @@ sub rebuildAddChild {
     
     # now get recombinations, and corrections for current child and insert at the same 
     # place as the child.  $taxon_no should already be the senior synonyms if there are synonyms
-    my %all_taxa = ($taxon_no=>1);
-    # This hash to get around bad records, with multiple original combinations
-    my %all_orig = ($taxon_no=>1);
+    my @all_taxa = TaxonInfo::getAllSpellings($dbt,$taxon_no);
+    my %all_hash; $all_hash{$_} = 1 for @all_taxa;
 
-    # Get a list of alternative names of existing taxa as well
-    my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no IN (".join(",",keys(%all_taxa)).")";
+    # get an list of children for the current node. second part to deal with lapsus records
+    my $sql = "SELECT DISTINCT o.child_no FROM opinions o WHERE o.parent_no IN (".join(",",@all_taxa).") AND o.child_no != o.parent_no";
     my @results = @{$dbt->getData($sql)};
-    foreach my $row (@results) {
-        $all_taxa{$row->{'child_spelling_no'}} = 1 if ($row->{'child_spelling_no'});
-    }
-    $sql = "SELECT DISTINCT child_no FROM opinions WHERE child_spelling_no IN (".join(",",keys(%all_taxa)).")";
-    @results = @{$dbt->getData($sql)};
-    foreach my $row (@results) {
-        $all_taxa{$row->{'child_no'}} = 1 if ($row->{'child_no'});
-        $all_orig{$row->{'child_no'}} = 1 if ($row->{'child_no'});
-    } 
-
-    # Bug fix: bad records with multiple original combinations, redo this part
-    $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no IN (".join(",",keys(%all_taxa)).")";
-    @results = @{$dbt->getData($sql)};
-    foreach my $row (@results) {
-        $all_taxa{$row->{'child_spelling_no'}} = 1 if ($row->{'child_spelling_no'});
-    }
-
-    # get an list of children for the current node. 
-    $sql = "SELECT DISTINCT o.child_no FROM opinions o WHERE o.parent_no IN (".join(",",keys(%all_orig)).")";
-    @results = @{$dbt->getData($sql)};
     my @children = ();
     foreach my $row (@results) {
         next if ($processed->{$row->{'child_no'}});
-        my $opinion = TaxonInfo::getMostRecentParentOpinion($dbt,$row->{'child_no'});
+        my $opinion = TaxonInfo::getMostRecentClassification($dbt,$row->{'child_no'});
         # Note theres no distinction between synonyms and belongs to - both just considered children
-        if ($opinion && $all_orig{$opinion->{'parent_no'}}) {
+        if ($opinion && $all_hash{$opinion->{'parent_no'}}) {
             push @children,$row->{'child_no'};
         }
     }
@@ -268,11 +247,8 @@ sub rebuildAddChild {
     print "rebuildAddChild: $taxon_no $lft $rgt<BR>\n" if ($DEBUG);
 
     # Find the name that was last used so we can mark it
-    my $spelling_no=$taxon_no;
-    my $correct_row = TaxonInfo::getMostRecentParentOpinion($dbt,$taxon_no);
-    if ($correct_row && $correct_row->{'child_spelling_no'}) {
-        $spelling_no = $correct_row->{'child_spelling_no'};
-    }
+    my $spelling = TaxonInfo::getMostRecentSpelling($dbt,$taxon_no);
+    my $spelling_no = $spelling->{'taxon_no'};
 
     my $synonym_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
     if ($synonym_no) {
@@ -280,15 +256,13 @@ sub rebuildAddChild {
     } else {
         $synonym_no = TaxonInfo::getSeniorSynonym($dbt,$taxon_no);
     }
-    $correct_row = TaxonInfo::getMostRecentParentOpinion($dbt,$synonym_no);
-    if ($correct_row && $correct_row->{'child_spelling_no'}) {
-        $synonym_no = $correct_row->{'child_spelling_no'};
-    }
+    my $synonym_spelling = TaxonInfo::getMostRecentSpelling($dbt,$synonym_no);
+    $synonym_no = $synonym_spelling->{'taxon_no'};
 
     # Now insert all the names
     # This is insert ignore instead of inserto to deal with bad records
     $sql = "INSERT IGNORE INTO taxa_tree_cache_new (taxon_no,lft,rgt,spelling_no,synonym_no) VALUES ";
-    foreach my $t (keys %all_taxa) {
+    foreach my $t (@all_taxa) {
         $sql .= "($t,$lft,$rgt,$spelling_no,$synonym_no),";
         $processed->{$t} = 1;
     }    
@@ -338,6 +312,7 @@ sub updateCache {
     my ($dbt,$child_no) = @_;
     my $dbh=$dbt->dbh;
     return if (!$child_no);
+    $child_no = TaxonInfo::getOriginalCombination($dbt,$child_no);
 
     my $sql;
     my $updateList = 0;
@@ -369,15 +344,14 @@ sub updateCache {
     if (!$cache_row) {
         $cache_row = addName($dbt,$child_no);
     }
+    my @spellings = TaxonInfo::getAllSpellings($dbt,$child_no);
 
     # First section: combine any new spellings that have been added into the original combination
-    $sql = "SELECT DISTINCT o.child_spelling_no FROM opinions o WHERE o.child_spelling_no != o.child_no AND o.child_no=$child_no";
-    my @results = @{$dbt->getData($sql)};
+#    $sql = "SELECT DISTINCT o.child_spelling_no FROM opinions o WHERE o.child_spelling_no != o.child_no AND o.child_no=$child_no";
+#    my @results = @{$dbt->getData($sql)};
     my @upd_rows = ();
-    foreach my $row (@results) {
-        my $spelling_no = $row->{'child_spelling_no'};
-
-        $sql = "SELECT taxon_no,lft,rgt,spelling_no,synonym_no FROM taxa_tree_cache WHERE taxon_no=$spelling_no";
+    foreach my $spelling_no (@spellings) {
+        my $sql = "SELECT taxon_no,lft,rgt,spelling_no,synonym_no FROM taxa_tree_cache WHERE taxon_no=$spelling_no";
         my $spelling_row = ${$dbt->getData($sql)}[0];
         if (!$spelling_row) {
             $spelling_row = addName($dbt,$spelling_no);
@@ -399,12 +373,12 @@ sub updateCache {
             # Refresh he cache row from the db since it may have been changed above
             $sql = "SELECT taxon_no,lft,rgt,spelling_no,synonym_no FROM taxa_tree_cache WHERE taxon_no=$child_no";
             $cache_row = ${$dbt->getData($sql)}[0];
+            $sql = "SELECT taxon_no,lft,rgt,spelling_no,synonym_no FROM taxa_tree_cache WHERE taxon_no=$spelling_no";
+            $spelling_row = ${$dbt->getData($sql)}[0];
            
             # Combine the spellings
-            # The weird join condition is because the lft and rgt values might have been modified above, 
-            # And if you do it this way that doens't matter since it will use the current DB lft and rgt values
-            $sql = "UPDATE taxa_tree_cache t1, taxa_tree_cache t2 SET t1.lft=$cache_row->{lft},t1.rgt=$cache_row->{rgt} WHERE t1.lft=t2.lft and t2.taxon_no=$spelling_row->{taxon_no}";
-            print "Combining spelling $spelling_no with $child_no: $sql\n" if ($DEBUG);
+            $sql = "UPDATE taxa_tree_cache SET lft=$cache_row->{lft},rgt=$cache_row->{rgt} WHERE lft=$spelling_row->{lft}";
+            print "Combining spellings $spelling_no with $child_no: $sql\n" if ($DEBUG);
             $dbh->do($sql);
             $updateList = 1;
 
@@ -414,10 +388,12 @@ sub updateCache {
             
         }
     }
+    # Uncombine children.  This may happen if an enterer adds says X is corrected or recombined as Y by accident, but later
+    # changes it TBD
 
     # New most recent opinion
-    my $mrpo = TaxonInfo::getMostRecentParentOpinion($dbt,$child_no);
-    my $spelling_no = ($mrpo) ? $mrpo->{'child_spelling_no'} : $child_no;
+    my $spelling = TaxonInfo::getMostRecentSpelling($dbt,$child_no);
+    my $spelling_no = $spelling->{'taxon_no'};
        
     # Change the most current spelling_no
     $sql = "UPDATE taxa_tree_cache SET spelling_no=$spelling_no WHERE lft=$cache_row->{lft}"; 
@@ -427,32 +403,23 @@ sub updateCache {
     # Change it so the senior synonym no points to the senior synonym's most correct name
     # for this taxa and any of ITs junior synonyms
     my $senior_synonym_no = TaxonInfo::getSeniorSynonym($dbt,$child_no);
-    my $correct_row = TaxonInfo::getMostRecentParentOpinion($dbt,$senior_synonym_no);
-    if ($correct_row && $correct_row->{'child_spelling_no'}) {
-        $senior_synonym_no = $correct_row->{'child_spelling_no'};
-    }
+    my $senior_synonym_spelling = TaxonInfo::getMostRecentSpelling($dbt,$senior_synonym_no);
+    $senior_synonym_no = $senior_synonym_spelling->{'taxon_no'};
     $sql = "UPDATE taxa_tree_cache SET synonym_no=$senior_synonym_no WHERE lft=$cache_row->{lft} OR (lft >= $cache_row->{lft} AND rgt <= $cache_row->{rgt} AND synonym_no=$cache_row->{synonym_no})"; 
     print "Updating synonym with $senior_synonym_no: $sql\n" if ($DEBUG);
     $dbh->do($sql);
-
-    # (may take some time) and b/c there may be setting of spelling/no synonym_no after the first
-    # section of code that needs to take place before this function should be called
-    #foreach my $taxon_no (@upd_rows) {
-    #    updateListCache($dbt,$taxon_no);
-    #}
 
     # Second section: Now we check if the parents have been chagned by a recent opinion, and only update
     # it if that is the case
     $sql = "SELECT spelling_no parent_no FROM taxa_tree_cache WHERE lft < $cache_row->{lft} AND rgt > $cache_row->{rgt} ORDER BY lft DESC LIMIT 1";
     # BUG: may be multiple parents, compare most recent spelling:
     my $row = ${$dbt->getData($sql)}[0];
+    my $mrpo = TaxonInfo::getMostRecentClassification($dbt,$child_no);
     my $new_parent_no = ($mrpo && $mrpo->{'parent_no'}) ? $mrpo->{'parent_no'} : 0;
     if ($new_parent_no) {
         # Compare most recent spellings of the names, for consistency
-        my $correct_row = TaxonInfo::getMostRecentParentOpinion($dbt,$new_parent_no);
-        if ($correct_row && $correct_row->{'child_spelling_no'}) {
-            $new_parent_no = $correct_row->{'child_spelling_no'};
-        }
+        my $parent_spelling = TaxonInfo::getMostRecentSpelling($dbt,$new_parent_no);
+        $new_parent_no = $parent_spelling->{'taxon_no'};
     }
     my $old_parent_no = ($row && $row->{'parent_no'}) ? $row->{'parent_no'} : 0;
 
