@@ -1,4 +1,5 @@
 # This schedules all of the various backup scripts...
+PERL5LIB="/sw/lib/perl5/5.8.1/darwin-thread-multi-2level:/sw/lib/perl5/5.8.1"
 
 # Create shared database using script...
 17 0  * * * mysql -u loadshared -p'screwthemall' < create-shared.sql
@@ -14,3 +15,19 @@
 31 2 * * * /Users/backup/send2paleobackup.sh
 # send backup to jcu...
 19 2 * * * /Users/backup/send2jcu.sh
+
+# regenerate the interval lookup table in case the table or TimeLookup is edited by hadn
+2 */2 * * * perl /Volumes/pbdb_RAID/httpdocs/scripts/interval_lookup_build.pl
+
+# call update public every hour to rotate images and update totals
+1 * * * * perl /Volumes/pbdb_RAID/httpdocs/scripts/updatePublic.pl
+
+# run webalizer to update the access logs
+10 3 * * * /usr/local/bin/webalizer -c /Volumes/pbdb_RAID/httpdocs/html/admin/logs/everyone/webalizer.conf
+20 3 * * * /usr/local/bin/webalizer -c /Volumes/pbdb_RAID/httpdocs/html/admin/logs/members/webalizer.conf
+
+# Update the copy of the request_log where ips are resolved if possible
+45 3 * * * perl /Volumes/pbdb_RAID/httpdocs/scripts/requestLogLookup.pl
+
+# Update the DiGiR table for GBIF once a week, satuday in the middle of the night
+0 4 * * 6 perl /Volumes/pbdb_RAID/httpdocs/scripts/createDiGiRTable.pl
