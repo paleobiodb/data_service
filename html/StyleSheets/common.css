@@ -371,6 +371,41 @@ div.emphasized {
 }
 
 
+.errorTitle {
+	background-color: #FFFF60;
+    color: red;
+    font-size: 1.2em;
+    font-weight: bold;
+	padding: 0.25em 0.25em 0.25em 0.25em;
+    text-align: left;
+}
+
+.errorBox {
+	border: 1px #909090 solid;
+	background-color: #FFFF80;
+	width: 600;
+    text-align: left;
+}
+.warningTitle {
+	background-color: #DDDDEE;
+    font-size: 1.2em;
+    font-weight: bold;
+	padding: 0.25em 0.25em 0.25em 0.25em;
+    text-align: left;
+}
+
+.warningBox {
+	border: 1px #909090 solid;
+	background-color: #EDEDFE;
+	width: 600;
+    text-align: left;
+}
+.boxBullet {  
+    font-size : 1.0em; 
+    padding: 0em 1em 0.25em 0em;
+}
+
+
 /* format for required entries in forms */
 .required {
 	color: red;
