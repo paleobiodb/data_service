@@ -224,7 +224,17 @@ sub insertRecord {
         main::dbg("insertRecord in DBTransaction manager called: sql: $insertSQL");
         # actually insert into the database
         my $insertResult = $dbh->do($insertSQL);
-        my $idNum = $dbh->last_insert_id(undef, undef, undef, undef);
+#       DON'T USE THIS VERY BUGGY!
+#        my $idNum = $dbh->last_insert_id(undef, undef, undef, undef);
+        my $idNum = 0;
+        if ($insertResult) {
+            my $sth = $dbh->prepare("SELECT LAST_INSERT_ID()");
+            $sth->execute();
+            my $row = $sth->fetchrow_arrayref;
+            if ($row) {
+                $idNum = $row->[0];
+            }
+        }
         main::dbg("INSERTED ID IS $idNum for TABLE $tableName");
 	
         # return the result code from the do() method.
