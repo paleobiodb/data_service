@@ -1925,7 +1925,7 @@ sub displayCollResults {
 	# which function to use depends on whether the user is adding a collection
 	my $sql;
     
-    my ($dataRows,$ofRows,$warnings);
+    my ($dataRows,$ofRows,$warnings) = ([],'',[]);
 	if ( $q->param('type') eq "add" )	{
 		# you won't have an in list if you are adding
 		($dataRows,$ofRows) = processCollectionsSearchForAdd();
