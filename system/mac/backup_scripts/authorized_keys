@@ -1,0 +1,1 @@
+command="/usr/bin/rsync --server --daemon --config=/home/backup/rsyncd.conf .",from="128.111.220.228" ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAIEAxuH7T08YB7XTOo1OM3CZN/Qe2E4DOiDLlbQ30ik0jiG015CT7jh3/qziFgPj+ujrABpIT8TFwhG0demvXRwRF32bDT6r/vAkdc62SYr4BA+vtetHfa9E6/H6SGEkHKEMxjMkuU8YrViQXzrQJH+7Rg5jzpmm2stnrwlzWheFEb8= peters@dhcp228.nceas.ucsb.edu
