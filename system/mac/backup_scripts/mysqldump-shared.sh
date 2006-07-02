@@ -1,5 +1,5 @@
 #!/bin/bash
-MYSQL_BACKUP_DIR=/Volumes/pbdb_RAID/dailybackups
+MYSQL_BACKUP_DIR=/Volumes/pbdb_RAID/dailybackups/db
 OF=mysql-shared-$(date +%Y%m%d)
 
 # mysqldump method (preferred)
