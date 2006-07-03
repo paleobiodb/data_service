@@ -7128,7 +7128,8 @@ sub processCheckNearMatch{
 
 	if($what_to_do eq 'Continue'){
 		# these are mostly dummy vars, except tablename and the last two.
-		insertRecord($table_name, $idName, 0, 5, $searchField, \@fields, \@vals);
+        my $pkey;
+		insertRecord($table_name, $idName, \$pkey, 5, $searchField, \@fields, \@vals);
 	}
 	else{
 		print stdIncludes("std_page_top");
