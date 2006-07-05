@@ -247,6 +247,13 @@ sub retellOptions {
         my ($min,$max,$lower,$upper) = @{$ranges[$i]};
         my $description = "";
 
+	# user may have confused min and max, so swap them JA 5.7.06
+	if ( $min > $max )	{
+		my $temp = $min;
+		$min = $max;
+		$max = $temp;
+	}
+
         # If either the min or max value has been changed from an upper bound
         # (i.e. its been modified by the user) than we want to print a description
         # message
@@ -601,6 +608,18 @@ sub getPaleoLatLongString    {
         my $lngmin = $q->param('paleolngmin'.$i);
         my $lngmax = $q->param('paleolngmax'.$i);
 
+	# user may have confused min and max, so swap them JA 5.7.06
+	if ( $latmin > $latmax )	{
+		my $temp = $latmin;
+		$latmin = $latmax;
+		$latmax = $temp;
+	}
+	if ( $lngmin > $lngmax )	{
+		my $temp = $lngmin;
+		$lngmin = $lngmax;
+		$lngmax = $temp;
+	}
+
         # if all are blank, just return (no parameters may have been passed in if this wasn't called form a script
         if ($latmin =~ /^\s*$/ && $latmax =~ /^\s*$/ && $lngmin =~ /^\s*$/ && $lngmax =~ /^\s*$/) {
             next;
@@ -649,6 +668,19 @@ sub getLatLongString    {
         my $latmax = $q->param('latmax'.$i);
         my $lngmin = $q->param('lngmin'.$i);
         my $lngmax = $q->param('lngmax'.$i);
+
+	# user may have confused min and max, so swap them JA 5.7.06
+	if ( $latmin > $latmax )	{
+		my $temp = $latmin;
+		$latmin = $latmax;
+		$latmax = $temp;
+	}
+	if ( $lngmin > $lngmax )	{
+		my $temp = $lngmin;
+		$lngmin = $lngmax;
+		$lngmax = $temp;
+	}
+
         my $abslatmin = abs($latmin);
         my $abslatmax = abs($latmax);
         my $abslngmin = abs($lngmin);
