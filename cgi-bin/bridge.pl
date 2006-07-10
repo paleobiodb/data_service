@@ -1946,7 +1946,7 @@ sub displayCollResults {
         # Even if we have a match in the authorities table, still match against the bare occurrences/reids  table
         $options{'include_occurrences'} = 1;
         $options{'permission_type'} = $permission_type;
-        $options{'lithologies'} = $options{'lithology1'}; delete $options{'lithology1'};
+        $options{'lithologies'} = $options{'lithology1'} if (!$options{'lithologies'}); delete $options{'lithology1'};
         $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'};
         if ($q->param("taxon_list")) {
             my @in_list = split(/,/,$q->param('taxon_list'));
@@ -2944,8 +2944,12 @@ IS NULL))";
 	# group_formation_member, and we'll have to deal with it separately.
 	# added by rjp on 1/13/2004
 	if ($options{"group_formation_member"}) {
-        my $val = $dbh->quote($wildcardToken.$options{"group_formation_member"}.$wildcardToken);
-		push(@where, "(c.geological_group LIKE $val OR c.formation LIKE $val OR c.member LIKE $val)");
+        if ($options{"group_formation_member"} eq 'NOT_NULL_OR_EMPTY') {
+		    push(@where, "((c.geological_group IS NOT NULL AND c.geological_group !='') OR (c.formation IS NOT NULL AND c.formation !=''))");
+        } else {
+            my $val = $dbh->quote($wildcardToken.$options{"group_formation_member"}.$wildcardToken);
+		    push(@where, "(c.geological_group LIKE $val OR c.formation LIKE $val OR c.member LIKE $val)");
+        }
 	}
 
     # This field is only passed by section search form PS 12/01/2004
@@ -3348,13 +3352,13 @@ sub displayCollectionDetailsPage {
         $row->{'localsection'} = "<a href=\"$exec_url?action=displayStratTaxaForm&taxon_resolution=species&skip_taxon_list=YES&input_type=local&input=".uri_escape($row->{'localsection'})."\">$row->{localsection}</a>";
     }
     if ($row->{'member'}) {
-        $row->{'member'} = "<a href=\"$exec_url?action=displayStrataSearch&group_hint=".uri_escape($row->{'geological_group'})."&formation_hint=".uri_escape($row->{'formation'})."&group_formation_member=".uri_escape($row->{'member'})."\">$row->{member}</a>";
+        $row->{'member'} = "<a href=\"$exec_url?action=displayStrata&group_hint=".uri_escape($row->{'geological_group'})."&formation_hint=".uri_escape($row->{'formation'})."&group_formation_member=".uri_escape($row->{'member'})."\">$row->{member}</a>";
     }
     if ($row->{'formation'}) {
-        $row->{'formation'} = "<a href=\"$exec_url?action=displayStrataSearch&group_hint=".uri_escape($row->{'geological_group'})."&group_formation_member=".uri_escape($row->{'formation'})."\">$row->{formation}</a>";
+        $row->{'formation'} = "<a href=\"$exec_url?action=displayStrata&group_hint=".uri_escape($row->{'geological_group'})."&group_formation_member=".uri_escape($row->{'formation'})."\">$row->{formation}</a>";
     }
     if ($row->{'geological_group'}) {
-        $row->{'geological_group'} = "<a href=\"$exec_url?action=displayStrataSearch&group_formation_member=".uri_escape($row->{'geological_group'})."\">$row->{geological_group}</a>";
+        $row->{'geological_group'} = "<a href=\"$exec_url?action=displayStrata&group_formation_member=".uri_escape($row->{'geological_group'})."\">$row->{geological_group}</a>";
     }
     
     
@@ -5577,10 +5581,24 @@ sub processMeasurementForm {
 
 ##############
 ## Strata stuff
-sub displayStrataSearch {
+sub displayStrata {
     logRequest($s,$q);
-    Strata::displayStrataSearch($dbh,$dbt,$hbo,$q,$s);
+    print stdIncludes("std_page_top");
+    Strata::displayStrata($q,$s,$dbt,$hbo);
+    print stdIncludes("std_page_bottom");
 }
+
+sub displaySearchStrataForm {
+    print stdIncludes("std_page_top");
+    Strata::displaySearchStrataForm($q,$s,$dbt,$hbo);
+    print stdIncludes("std_page_bottom");
+}  
+
+sub displaySearchStrataResults{
+    print stdIncludes("std_page_top");
+    Strata::displaySearchStrataResults($q,$s,$dbt,$hbo);
+    print stdIncludes("std_page_bottom");
+}  
 ## END Strata stuff
 ##############
 
@@ -7530,7 +7548,6 @@ sub displayInstitutions {
     print Person::displayInstitutions($dbt);
     print stdIncludes("std_page_bottom");
 }
-
 
 # ------------------------ #
 # Confidence Intervals JSM #
