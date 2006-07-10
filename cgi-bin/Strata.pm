@@ -1,7 +1,7 @@
 package Strata;
 
+use strict;
 use TaxonInfo;
-use Permissions;
 use URI::Escape;
 if ($main::DEBUG) {
     use Data::Dumper;
@@ -10,61 +10,15 @@ if ($main::DEBUG) {
 # written by PS  12/01/2004
 
 
-# Not imp'd yet
-sub startStrataSearch	{
-	my $dbh = shift;
-	my $hbo = shift;
-	my $s = shift;
-
-	# print the search form
-	print main::stdIncludes("std_page_top");
-	#my $form = $hbo->populateHTML('search_strata_form','','');
-	#print $form;
-	print main::stdIncludes("std_page_bottom");
-	return;
-}
-
-# Not imp'd yet
-sub populateStrataForm	{
-	my $dbh = shift;
-	my $dbt = shift;
-	my $hbo = shift;
-	my $q = shift;
-	my $s = shift;
-
-	my @fieldNames;
-	my @fieldValues;
-    
-	for my $field ( @fields )	{
-		push @fieldNames, $field;
-		push @fieldValues, '';
-	}
-
-    my @fields = ();
-	# populate the form
-
-	#print main::stdIncludes("std_page_top");
-	#my $form = $hbo->populateHTML(strata_form, \@fieldValues, \@fieldNames);
-	#print $form;
-	#print main::stdIncludes("std_page_bottom");
-
-	return;
-
-}
-
 # print out info for a geological group, formation, or member, including:
 #   * group/formation/member name
 #   * formation present if group, members present if formation
 #   * lithologies present, paleoenvironments present
 #   * age range
 #   * what collections are in it, binned into timerange then country bins
-sub displayStrataSearch{
-	my $dbh = shift;
-	my $dbt = shift;
-    my $hbo = shift;
-	my $q = shift;
-    my $s = shift;
-
+sub displayStrata {
+    my ($q,$s,$dbt,$hbo) = @_;
+    my $dbh = $dbt->dbh;
 
     # Gets teh datas
     my %options = $q->Vars();
@@ -114,6 +68,9 @@ sub displayStrataSearch{
     # build data structures, looped through later
     my ($is_group, $is_formation, $is_member, %lith_count, %environment_count);
     my ($row_count, %c_formations, %c_members, %p_groups, %p_formations);
+    my %formation_uc;
+    my %member_uc;
+    my %group_uc;
     $is_group = 0; $is_formation = 0; $is_member = 0; %lith_count = (); %environment_count = ();
     $row_count = 0; %c_formations = (); %c_members = ();
 
@@ -141,14 +98,21 @@ sub displayStrataSearch{
         }
         if (lc($q->param('group_formation_member')) eq lc($row->{'formation'})) {
             $is_formation = 1; 
-            $c_members{$row->{'member'}} += 1;
-            $p_groups{$row->{'geological_group'}} = 1 if ($row->{'geological_group'});
+            $c_members{lc($row->{'member'})} += 1;
+            $p_groups{lc($row->{'geological_group'})} = 1 if ($row->{'geological_group'});
         }
         if (lc($q->param('group_formation_member')) eq lc($row->{'member'})) {
             $is_member = 1;
-            $p_formations{$row->{'formation'}} = 1 if ($row->{'formation'});
-            $p_groups{$row->{'geological_group'}} = 1 if ($row->{'geological_group'});
+            $p_formations{lc($row->{'formation'})} = 1 if ($row->{'formation'});
+            $p_groups{lc($row->{'geological_group'})} = 1 if ($row->{'geological_group'});
         }
+
+        # mysql isn't case sensitive but perl is, which is a problem since the cases often differ for things like "lower" and "upper"
+        # So we want to store all the counts using only lowercased versions of stuff, but we want to store the uppercase "real" spelling
+        # in the _uc arrays for printing back out later
+        $member_uc{lc($row->{'member'})} = ($row->{'member'}) if (lc($row->{'member'}) ne $row->{'member'});
+        $formation_uc{lc($row->{'formation'})} = ($row->{'formation'}) if (lc($row->{'formation'}) ne $row->{'formation'});
+        $group_uc{lc($row->{'geological_group'})} = $row->{'geological_group'} if (lc($row->{'geological_group'}) ne $row->{'geological_group'});
 
         # lithology data
         my $lith1 = $row->{'lithology1'};
@@ -168,7 +132,6 @@ sub displayStrataSearch{
     main::dbg("c_mbr: <pre>" . Dumper(%c_members) . "</pre>");
 
     # Display Header
-	print main::stdIncludes("std_page_top");
 
     my $in_strata_type = "";
     $in_strata_type .= "Member" if ($is_member);
@@ -181,23 +144,26 @@ sub displayStrataSearch{
                                  : "$row_count collections total";
     print qq|<div align="center"><h2>|;
     my $name = ucfirst($q->param('group_formation_member'));
-    if ($name =~ /^(lower part|upper part|lower|middle|upper|bottom|top|medium|base|basal|uppermost)(to (lower part|upper part|lower|middle|upper|bottom|top|medium|base|basal|uppermost))*$/i) {
+    if ($name =~ /^(lower part|upper part|lower|middle|upper|bottom|top|medium|base|basal|uppermost)(\s+to\s+(lower part|upper part|lower|middle|upper|bottom|top|medium|base|basal|uppermost))*$/i) {
         if ($is_member) {
             my @formations = keys %p_formations;
             my $formation = $formations[0];
+            $formation = ($formation_uc{$formation}) ? $formation_uc{$formation} : $formation; # get correct capitalization
             if ($formation) {
                 $name = "$name $formation";
             } else {
                 my @groups = sort keys %p_groups;
                 my $group = $groups[0];
                 if ($group) {
+                    $group = ($group_uc{$group}) ? $group_uc{$group} : $group; # get correct capitalization
                     $name = "$name $group";
                 }
             }
         }  elsif ($is_formation) {
-            my @groups = sort keys %c_groups;
+            my @groups = sort keys %p_groups;
             my $group = $groups[0];
             if ($group) {
+                $group = ($group_uc{$group}) ? $group_uc{$group} : $group; # get correct capitalization
                 $name = "$name $group";
             }
         }
@@ -206,14 +172,16 @@ sub displayStrataSearch{
     print $q->escapeHTML($name)." ".$in_strata_type;
     print qq|</h2>($collTxt)</div></br>|;
 
+    print "<div style=\"text-align: left\">";
     # Display formations in groups, members in formations
     my ($cnt,$plural,$coll_link,$html);
     if ($is_formation || $is_member) {
         my @groups = sort keys %p_groups;
         if (@groups) {
             my $html = "<p><b>Group:</b> ";
-            foreach my $g (@groups) {
-                $html .=  qq|<a href="$exec_url?action=displayStrataSearch&geological_group=|.uri_escape($g)
+            foreach my $g_lc (@groups) {
+                my $g = ($group_uc{$g_lc}) ? $group_uc{$g_lc} : $g_lc;
+                $html .=  qq|<a href="bridge.pl?action=displayStrata&geological_group=|.uri_escape($g)
                       . "&group_formation_member=".uri_escape($g)."\">$g</a>, ";
             }
             $html =~ s/, $//;
@@ -225,8 +193,9 @@ sub displayStrataSearch{
         my @formations = sort keys %p_formations;
         if (@formations) {
             my $html = "<p><b>Formation:</b> ";
-            foreach my $fm (@formations) {
-                $html .=  qq|<a href="$exec_url?action=displayStrataSearch&formation=|.uri_escape($fm)
+            foreach my $fm_lc (@formations) {
+                my $fm = ($formation_uc{$fm_lc}) ? $formation_uc{$fm_lc} : $fm_lc;
+                $html .=  qq|<a href="bridge.pl?action=displayStrata&formation=|.uri_escape($fm)
                       . "&group_formation_member=".uri_escape($fm)."\">$fm</a>, ";
             }
             $html =~ s/, $//;
@@ -236,20 +205,21 @@ sub displayStrataSearch{
     }
 
     if ($is_group) {
-        $html = "<p><b>Formations in the $name Group:</b> ";
-        foreach $formation (sort(keys(%c_formations))) {
-            $cnt = $c_formations{$formation};
+        my $html = "<p><b>Formations in the $name Group:</b> ";
+        foreach my $fm_lc (sort(keys(%c_formations))) {
+            $cnt = $c_formations{$fm_lc};
             $coll_link = "";
-            if ($formation) {
-                $coll_link =  qq|<a href="$exec_url?action=displayCollResults&geological_group=|
+            my $fm = ($formation_uc{$fm_lc}) ? $formation_uc{$fm_lc} : $fm_lc;
+            if ($fm) {
+                $coll_link =  qq|<a href="bridge.pl?action=displayCollResults&geological_group=|
                          . uri_escape($q->param('group_formation_member'))
-                         . qq|&formation=|.uri_escape($formation).qq|">$formation</a>|;
+                         . qq|&formation=|.uri_escape($fm).qq|">$fm</a>|;
             } else {
-                $coll_link =  qq|<a href="$exec_url?action=displayCollResults&geological_group=|
+                $coll_link =  qq|<a href="bridge.pl?action=displayCollResults&geological_group=|
                          . uri_escape($q->param('group_formation_member'))
-                         . qq|&formation=NULL_OR_EMPTY">unknown</a>|;
+                         . qq|&formation=NULL_OR_EMPTY"><i>unknown</i></a>|;
             }
-            $html .=  "$coll_link ($c_formations{$formation}), ";
+            $html .=  "$coll_link ($c_formations{$fm}), ";
         }
         $html =~ s/, $//g;
         $html .= "</p>\n";
@@ -257,22 +227,23 @@ sub displayStrataSearch{
     }
 
     if ($is_formation) {
-        $html = "<p><b>Members in the $name Formation:</b> ";
-        foreach $member (sort(keys(%c_members))) {
-            $cnt = $c_members{$member};
+        my $html = "<p><b>Members in the $name Formation:</b> ";
+        foreach my $mbr_lc (sort(keys(%c_members))) {
+            $cnt = $c_members{$mbr_lc};
             $coll_link = "";
-            if ($member) {
-                $coll_link =  qq|<a href="$exec_url?action=displayCollResults&formation=|
+            my $mbr = ($member_uc{$mbr_lc}) ? $member_uc{$mbr_lc} : $mbr_lc;
+            if ($mbr) {
+                $coll_link =  qq|<a href="bridge.pl?action=displayCollResults&formation=|
                            . uri_escape($q->param('group_formation_member'));
                 $coll_link .= "&geological_group=".uri_escape($q->param('geological_group')) if $q->param('geological_group');
-                $coll_link .= qq|&member=|.uri_escape($member).qq|">$member</a>|;
+                $coll_link .= qq|&member=|.uri_escape($mbr).qq|">$mbr</a>|;
             } else {
-                $coll_link =  qq|<a href="$exec_url?action=displayCollResults&formation=|
+                $coll_link =  qq|<a href="bridge.pl?action=displayCollResults&formation=|
                            . uri_escape($q->param('group_formation_member'));
                 $coll_link .= "&geological_group=".uri_escape($q->param('geological_group')) if $q->param('geological_group');
-                $coll_link .= qq|&member=NULL_OR_EMPTY">unknown</a>|;
+                $coll_link .= qq|&member=NULL_OR_EMPTY"><i>unknown</i></a>|;
             } 
-            $html .= "$coll_link ($c_members{$member}), ";
+            $html .= "$coll_link ($c_members{$mbr_lc}), ";
         }
         $html =~ s/, $//g;
         $html .= "</p>\n";
@@ -283,10 +254,10 @@ sub displayStrataSearch{
     my @lith_list = @{$hbo->{SELECT_LISTS}{lithology1}};
     $html = "<p><b>Lithologies:</b> ";
     if (%lith_count) {
-        foreach $lithology (@lith_list) {
+        foreach my $lithology (@lith_list) {
             if ($lith_count{$lithology}) {
-                $cnt = $lith_count->{$lithology};
-                $coll_link = qq|<a href="$exec_url?action=displayCollResults| 
+                $cnt = $lith_count{$lithology};
+                $coll_link = qq|<a href="bridge.pl?action=displayCollResults| 
                             . "&group_formation_member=".uri_escape($q->param('group_formation_member'));
                 $coll_link .= "&formation=".uri_escape($q->param('formation')) if $q->param('formation');
                 $coll_link .= "&geological_group=".uri_escape($q->param('geological_group')) if $q->param('geological_group');
@@ -306,9 +277,9 @@ sub displayStrataSearch{
     my @env_list = @{$hbo->{SELECT_LISTS}{environment}};
     $html = "<p><b>Paleoenvironments:</b> ";
     if (%environment_count) {
-        foreach $environment (@env_list) {
+        foreach my $environment (@env_list) {
             if ($environment_count{$environment}) {
-                $coll_link = qq|<a href="$exec_url?action=displayCollResults| 
+                $coll_link = qq|<a href="bridge.pl?action=displayCollResults| 
                               . "&group_formation_member=".uri_escape($q->param('group_formation_member'));
                 $coll_link .= "&formation=".uri_escape($q->param('formation')) if $q->param('formation');
                 $coll_link .= "&geological_group=".uri_escape($q->param('grup')) if $q->param('geological_group');
@@ -328,8 +299,8 @@ sub displayStrataSearch{
     print TaxonInfo::doCollections($q->url(), $q, $dbt, $dbh, '',"for_strata_module");
 
     print "<p>&nbsp;</p>";
+    print "</div>";
 
-	print main::stdIncludes("std_page_bottom");
 	return;
 }
 
@@ -343,8 +314,7 @@ sub checkConflict {
     my $dataRows = shift;
     my $q = shift;
 
-    my (%p_formations, %p_groups, %gp_groups);
-    %p_formations = (); %p_groups = (); %gp_groups = ();
+    my %p_formations = (); my %p_groups = (); my %gp_groups = ();
 
     foreach my $row (@{$dataRows}) {
         if ($q->param('formation')) {
@@ -400,11 +370,10 @@ sub displayStrataChoice {
     my $q = shift; 
     my $conflict_reason = shift;
     my $dataRows = shift;
-    my (%formation_links,%group_links);
-    %formation_links = ();
-    %group_links = ();
+    my %formation_links = ();
+    my %group_links = ();
 
-    foreach $row (@{$dataRows}) {
+    foreach my $row (@{$dataRows}) {
         if ($q->param('formation')) {
             next unless (lc($q->param('formation')) eq lc($row->{'formation'}));
         }    
@@ -420,38 +389,37 @@ sub displayStrataChoice {
     }    
 
     main::dbg("In display strata choice for reason: $conflict_reason");
-	print main::stdIncludes("std_page_top");
     print "<center>";
     my $count = 0;
     if ($conflict_reason eq "different groups") {
         print "The ".$q->param('group_formation_member')." formation belongs to multiple groups.  Please select the one you want: <p>";
-        foreach $grp (keys %group_links) {
+        foreach my $grp (keys %group_links) {
             print " - " if ($count++) != 0;
-            print "<b><a href=\"$exec_url?action=displayStrataSearch"
+            print "<b><a href=\"bridge.pl?action=displayStrata"
                 . "&geological_group=".uri_escape($grp)
                 . "&group_formation_member=".uri_escape($q->param('group_formation_member'))."\">$grp</a></b>";
         }          
         print "</p>";
     } elsif ($conflict_reason eq "different formations") {
         print "The ".$q->param('group_formation_member')." member belongs to multiple formations.  Please select the one you want: <p>";
-        foreach $fm (sort keys %formation_links) {
+        foreach my $fm (sort keys %formation_links) {
             print " - " if ($count++) != 0;
-            print "<b><a href=\"$exec_url?action=displayStrataSearch"
+            print "<b><a href=\"bridge.pl?action=displayStrata"
                 . "&formation=".uri_escape($fm)
                 . "&group_formation_member=".uri_escape($q->param('group_formation_member'))."\">$fm</a></b> ";
         }          
         print "</p>";
     } elsif ($conflict_reason eq "different lines") {
         print "The term ".$q->param('group_formation_member')." is ambiguous and belongs to multiple formations or groups.  Please select the one you want: <p>";
-        foreach $fm (sort keys %formation_links) {
+        foreach my $fm (sort keys %formation_links) {
             print " - " if ($count++) != 0;
-            print "<b><a href=\"$exec_url?action=displayStrataSearch"
+            print "<b><a href=\"bridge.pl?action=displayStrata"
                 . "&formation=".uri_escape($fm)
                 . "&group_formation_member=".uri_escape($q->param('group_formation_member'))."\">$fm (formation)</a></b> ";
         }          
-        foreach $grp (sort keys %group_links) {
+        foreach my $grp (sort keys %group_links) {
             print " - " if ($count++) != 0;
-            print "<b><a href=\"$exec_url?action=displayStrataSearch"
+            print "<b><a href=\"bridge.pl?action=displayStrata"
                 . "&geological_group=".uri_escape($grp)
                 . "&group_formation_member=".uri_escape($q->param('group_formation_member'))."\">$grp (group)</a></b><br> ";
         }          
@@ -460,8 +428,248 @@ sub displayStrataChoice {
     print "</center>";
 
     print "<p>&nbsp;</p>";
-
-	print main::stdIncludes("std_page_bottom");
 }
+
+#
+# Search strata stuff
+#
+# PS 02/04/2005
+sub displaySearchStrataForm {
+    my ($q,$s,$dbt,$hbo) = @_;
+    my $dbh = $dbt->dbh;
+    
+    # Show the "search collections" form
+    my %pref = main::getPreferences($s->get('enterer_no'));
+    my @prefkeys = keys %pref;
+    my $html = $hbo->populateHTML('search_strata_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment'], \@prefkeys);
+
+    # Set the Enterer
+    my $javaScript = &main::makeAuthEntJavaScript();
+    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
+    my $enterer_reversed = $s->get("enterer_reversed");
+    $html =~ s/%%enterer_reversed%%/$enterer_reversed/;
+    my $authorizer_reversed = $s->get("authorizer_reversed");
+    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
+
+    # Spit out the HTML
+    print $html;
+}
+   
+#
+# Search strata stuff
+#
+# Displays a search page modeled after the collections search to search for local/regional sections
+# PS 02/04/2005
+sub displaySearchStrataResults {
+    my ($q,$s,$dbt,$hbo) = @_;
+    my $dbh = $dbt->dbh;
+
+    my $limit = $q->param('limit') || 30;
+    $limit = $limit*2; # two columns
+    my $rowOffset = $q->param('rowOffset') || 0;
+
+    # Build the SQL
+
+    my $fields = ['max_interval_no','min_interval_no','state','country','localbed','localsection','localbedunit','regionalbed','regionalsection','regionalbedunit','geological_group','formation','member'];
+    my %options = $q->Vars();
+    $options{'permission_type'} = 'read';
+    $options{'limit'} = 10000000;
+    $options{'calling_script'} = 'Confidence';
+    $options{'lithologies'} = $options{'lithology1'}; delete $options{'lithology1'};
+    $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'}; 
+    if ($options{'group_formation_member'} eq '') {
+        $options{'group_formation_member'} = 'NOT_NULL_OR_EMPTY';
+    }
+    my ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
+    # Schwartzian tranform to be able to sort case insensitively and without quotes
+    my @dataRows = 
+        map {$_->[0]}
+        sort {$a->[1] cmp $b->[1]}
+        map {[$_,eval{my $j = lc($_->{'geological_group'}.$_->{'formation'});$j =~ s/["'\?]//g;$j =~ s/^\s*//;$j}]}
+        @$dataRows;
+
+    # get the enterer's preferences (needed to determine the number
+    # of displayed blanks) JA 1.8.02
+
+    my @period_order = TimeLookup::getScaleOrder($dbt,'69');
+    # Convert max_interval_no to a period like 'Quaternary'
+    my %int2period = %{TimeLookup::processScaleLookup($dbh,$dbt,'69','intervalToScale')};
+
+    # We need to group the collections here in the code rather than SQL so that
+    # we can get a list of max_interval_nos.  There should generaly be only 1 country.
+    my @tableRows = ();
+    my ($last_group,$last_formation);
+    if (@dataRows) {
+        $last_group= $dataRows[0]->{'geological_group'};
+        $last_formation = $dataRows[0]->{'formation'};
+        my (%period_list,%country_list,%member_list);
+        for(my $i=0;$i<scalar(@dataRows)+1;$i++) {
+            # The +1 is important, go one over so we print the last row correctly
+            my $row = $dataRows[$i];
+            if ($i == scalar(@dataRows) ||
+                $last_group ne $row->{'geological_group'} ||
+                $last_formation ne $row->{'formation'}) {
+                my ($time_str, $place_str);
+                my $link;
+                if ($last_group) { 
+                    $link .= "<a href=\"bridge.pl?action=displayStrata"
+                           . "&geological_group=".uri_escape($last_group)
+                           . "&group_formation_member=".uri_escape($last_group)
+                           . "\">$last_group</a>";
+                }
+                if ($last_group && $last_formation) { 
+                    $link .= "/";
+                }
+                if ($last_formation) {
+                    $link .= "<a href=\"bridge.pl?action=displayStrata"
+                           . "&geological_group=".uri_escape($last_group)
+                           . "&formation=".uri_escape($last_formation)
+                           . "&group_formation_member=".uri_escape($last_formation)
+                           . "\">$last_formation</a>";
+                }
+                if (!$last_group && !$last_formation) {
+                    $link .= "<i>unknown</i>";
+                }
+                # Tack on members
+                $link .= "<small> - ";
+                foreach my $member (sort values %member_list) {
+                    $link .= "<a href=\"bridge.pl?action=displayStrata"
+                           . "&geological_group=".uri_escape($last_group)
+                           . "&formation=".uri_escape($last_formation)
+                           . "&member=".uri_escape($member)
+                           . "&group_formation_member=".uri_escape($member)
+                           . "\">$member</a>, ";
+                }
+                $link =~ s/, $//;
+                $link .= " - " if ($link !~ /-\s*$/);
+               
+                # Tack on period
+                foreach my $period (@period_order) {
+                    $link .= $period.", " if ($period_list{$period});
+                }
+                $link =~ s/, $//;
+                $link .= " - " if ($link !~ /-\s*$/);
+
+                # Tack on country
+                foreach my $country (sort keys %country_list) {
+                    $link .= $country.", ";
+                }
+                $link =~ s/, $//;
+                $link .= "</small>";
+
+                push @tableRows, $link;
+                %period_list = ();
+                %country_list = ();
+                %member_list = ();
+            }
+            # We go over by one in the count, so don't set these for the last $i
+            unless ($i == scalar(@dataRows)) {
+                $country_list{$row->{'country'}} = 1;
+                $period_list{$int2period{$row->{'max_interval_no'}}} = 1;
+                $member_list{lc($row->{'member'})} = $row->{'member'} if ($row->{'member'});
+                $last_group = $row->{'geological_group'};
+                $last_formation = $row->{'formation'};
+            }
+        }
+    }
+
+    my $ofRows = scalar(@tableRows);
+    if ($ofRows > 1 || ($ofRows == 1 && !$last_formation && !$last_group)) {
+        # Display header link that says which collections we're currently viewing
+        print "<center>";
+        print "<h3>Your search produced $ofRows matches</h3>\n";
+        if ($ofRows > $limit) {
+            print "<h4>Here are";
+            if ($rowOffset > 0) {
+                print " rows ".($rowOffset+1)." to ";
+                my $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
+                print $printRows;
+                print "</h4>\n";
+            } else {
+                print " the first ";
+                my $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
+                print $printRows;
+                print " rows</h4>\n";
+            }
+        }
+        print "</center>\n";
+        print "<br>\n";
+        print "<table width='100%' border=0 cellpadding=4 cellspacing=0>\n";
+
+        # print columns header
+        print '<tr><th align=left nowrap>Group/formation name</th>';
+        if ($rowOffset + $limit/2 < $ofRows) { 
+            print '<th align=left nowrap>Group/formation name</th>';
+        }    
+        print '</tr>';
+   
+        # print each of the rows generated above
+        for(my $i=$rowOffset;$i<$ofRows && $i < $rowOffset+$limit/2;$i++) {
+            # should it be a dark row, or a light row?  Alternate them...
+            if ( $i % 2 == 0 ) {
+                print "<tr class=\"darkList\">";
+            } else {
+                print "<tr>";
+            }
+            print "<td>$tableRows[$i]</td>";
+            if ($i+$limit/2 < $ofRows) {
+                print "<td>".$tableRows[$i+$limit/2]."</td>";
+            } else {
+                print "<td>&nbsp;</td>";
+            }
+            print "</tr>\n";
+        }
+ 
+        print "</table>\n";
+    } elsif ($ofRows == 1 ) { # if only one row to display, cut to next page in chain
+        print "<center>\n<h3>Your search produced exactly one match</h3></center>";
+        my $highest = ($last_group) ? $last_group : $last_formation;
+        my $my_q = new CGI({
+                         'group_formation_member'=>$highest,
+                         'geological_group'=>$last_group,
+                         'formation'=>$last_formation,
+                         'member'=>''});
+        displayStrata($my_q,$s,$dbt,$hbo);
+        return;
+    } else {
+        print "<center>\n<h3>Your search produced no matches</h3>";
+        print "<p>Please try again with fewer search terms.</p>\n</center>\n";
+    }
+ 
+    ###
+    # Display the footer links
+    ###
+    print "<center><p>";
+ 
+    # this q2  var is necessary because the processCollectionSearch
+    # method alters the CGI object's internals above, and deletes some fields
+    # so, we create a new CGI object with everything intact
+    my $q2 = new CGI;
+    my @params = $q2->param;
+    my $getString = "rowOffset=".($rowOffset+$limit);
+    foreach my $param_key (@params) {
+        if ($param_key ne "rowOffset") {
+            if ($q2->param($param_key) ne "" || $param_key eq 'section_name') {
+                $getString .= "&".uri_escape($param_key)."=".uri_escape($q2->param($param_key));
+            }
+        }
+    }
+ 
+    if (($rowOffset + $limit) < $ofRows) {
+        my $numLeft;
+        if (($rowOffset + $limit + $limit) > $ofRows) {
+            $numLeft = "the last " . ($ofRows - $rowOffset - $limit);
+        } else {
+            $numLeft = "the next " . $limit;
+        }
+        print "<a href='bridge.pl?$getString'><b>Get $numLeft units</b></a> - ";
+    }
+    print "<a href='bridge.pl?action=displaySearchSectionForm'><b>Do another search</b></a>";
+
+    print "</center></p>";
+    # End footer links
+}
+   
+
 
 1;
