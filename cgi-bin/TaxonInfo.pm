@@ -1699,6 +1699,7 @@ sub getSynonymyParagraph{
             }
         }
     }
+    $text =~ s/<br><br>\s*\.\s*$//i;
     my @parents_ordered = sort {$parents{$a}[-1]->{'pubyr'} <=> $parents{$b}[-1]->{'pubyr'} } keys %parents;
     if (@parents_ordered) {
         $text .= "<br><br>";
