@@ -2954,10 +2954,10 @@ IS NULL))";
 
     # This field is only passed by section search form PS 12/01/2004
     if (exists $options{"section_name"} && $options{"section_name"} eq '') {
-        push @where, "((c.regionalsection IS NOT NULL AND c.regionalsection != '' AND c.regionalbed REGEXP '^[0-9.]+\$') OR (c.localsection IS NOT NULL AND c.localsection != '' AND c.localbed REGEXP '^[0-9.]+\$'))";
+        push @where, "((c.regionalsection IS NOT NULL AND c.regionalsection != '' AND c.regionalbed REGEXP '^(-)?[0-9.]+\$') OR (c.localsection IS NOT NULL AND c.localsection != '' AND c.localbed REGEXP '^(-)?[0-9.]+\$'))";
     } elsif ($options{"section_name"}) {
         my $val = $dbh->quote($wildcardToken.$options{"section_name"}.$wildcardToken);
-        push @where, "((c.regionalsection  LIKE  $val AND c.regionalbed REGEXP '^[0-9.]+\$') OR (c.localsection  LIKE  $val AND c.localbed REGEXP '^[0-9.]+\$'))"; 
+        push @where, "((c.regionalsection  LIKE  $val AND c.regionalbed REGEXP '^(-)?[0-9.]+\$') OR (c.localsection  LIKE  $val AND c.localbed REGEXP '^(-)?[0-9.]+\$'))"; 
     }                
 
     # This field is only passed by links created in the Strata module PS 12/01/2004
