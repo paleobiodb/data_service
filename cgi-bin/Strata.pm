@@ -485,7 +485,7 @@ sub displaySearchStrataResults {
     my @dataRows = 
         map {$_->[0]}
         sort {$a->[1] cmp $b->[1]}
-        map {[$_,eval{my $j = lc($_->{'geological_group'}.$_->{'formation'});$j =~ s/["'\?]//g;$j =~ s/^\s*//;$j}]}
+        map {[$_,eval{my $j = lc($_->{'geological_group'}.$_->{'formation'});if ($j =~ s/^(["'\?\s]+)//) {$j .= $1;};$j}]}
         @$dataRows;
 
     # get the enterer's preferences (needed to determine the number
