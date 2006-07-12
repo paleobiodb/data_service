@@ -509,7 +509,7 @@ sub displayStratTaxa{
               " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no".
               " WHERE o.collection_no=c.collection_no ".
               " AND re.reid_no IS NULL".
-              " AND ${section_type}section LIKE " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^[0-9.]+\$'".
+              " AND ${section_type}section LIKE " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^(-)?[0-9.]+\$'".
               " GROUP BY o.taxon_no,o.genus_name,o.species_name)".
               " UNION ".
               "(SELECT o.occurrence_no, re.taxon_no, re.genus_name, re.species_name".
@@ -517,7 +517,7 @@ sub displayStratTaxa{
               " WHERE o.collection_no=c.collection_no ".
               " AND o.occurrence_no=re.occurrence_no".
               " AND re.most_recent='YES'".
-              " AND ${section_type}section LIKE " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^[0-9.]+\$'".
+              " AND ${section_type}section LIKE " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^(-)[0-9.]+\$'".
               " GROUP BY re.taxon_no,re.genus_name,re.species_name)";
     main::dbg($sql);
     my @strat_taxa_list= @{$dbt->getData($sql)};
@@ -1534,25 +1534,26 @@ sub calculateStratInterval	{
             }
         }
 
-        my $sql = "(SELECT ${section_type}bed, ${section_type}order, o.collection_no, o.genus_name, o.species_name, o.taxon_no FROM collections c, occurrences o". 
+        my $sql = "(SELECT ${section_type}bed, ${section_type}order, ${section_type}bedunit, o.collection_no, o.genus_name, o.species_name, o.taxon_no FROM collections c, occurrences o". 
                   " LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no ".
                   " WHERE c.collection_no=o.collection_no".
                   " AND $occ_sql".
                   " AND re.reid_no IS NULL".
                   " AND ${section_type}section=".$dbh->quote($section_name).
-                  " AND ${section_type}bed REGEXP '^[0-9.]+\$')".
+                  " AND ${section_type}bed REGEXP '^(-)?[0-9.]+\$')".
                   " UNION ".
-                  "(SELECT ${section_type}bed, ${section_type}order, o.collection_no, o.genus_name, o.species_name, re.taxon_no FROM collections c, occurrences o, reidentifications re". 
+                  "(SELECT ${section_type}bed, ${section_type}order, ${section_type}bedunit, o.collection_no, o.genus_name, o.species_name, re.taxon_no FROM collections c, occurrences o, reidentifications re". 
                   " WHERE c.collection_no=o.collection_no".
                   " AND re.occurrence_no=o.occurrence_no".
                   " AND re.most_recent = 'YES'".
                   " AND $reid_sql".
                   " AND ${section_type}section=".$dbh->quote($section_name).
-                  " AND ${section_type}bed REGEXP '^[0-9.]+\$')";
+                  " AND ${section_type}bed REGEXP '^(-)?[0-9.]+\$')";
 
         main::dbg("sql to get beds from species list: $sql");
         my @beds_and_colls = @{$dbt->getData($sql)};
         foreach my $row (@beds_and_colls) {
+            $bed_unit = $row->{$section_type.'bedunit'};
             $sectionbed{$row->{'collection_no'}}=$row->{$section_type.'bed'};
             push @{$mainHash{$taxon_name}}, $row->{$section_type.'bed'};
             if ($row->{'taxon_no'}) {
@@ -1673,11 +1674,17 @@ sub calculateStratInterval	{
     foreach my $counter (($lower_lim)..($upper_lim+1))  {
         if ($i > $j)    {
             $gd->line(65,($fig_length - 20) - $i,70,($fig_length - 20) - $i,$gdColors->{'black'});   #GD
-            $gd->string(gdTinyFont,55-length($counter)*5,($fig_length - 20) - ($i) - 4,$counter,$gdColors->{'black'});      #GD
+            $str = $counter;
+            if ($bed_unit) {
+                $str .= " $bed_unit";
+            } else {
+                $str = "  ".$str;
+            }
+            $gd->string(gdTinyFont,50-length($counter)*5,($fig_length - 20) - ($i) - 4,$str,$gdColors->{'black'});      #GD
             aiLine(65,($fig_length - 20) - $i,70,($fig_length - 20) - $i,$aiColors->{'black'});    #AI
-            aiText("null",55-length($counter)*6,(($fig_length - 20) - $i) + 2,$counter,$aiColors->{'black'});       #AI
+            aiText("null",50-length($counter)*6,(($fig_length - 20) - $i) + 2,$str,$aiColors->{'black'});       #AI
             if ($counter > $minhorizon && $counter <= $maxhorizon) {
-                $image_map .= "<area shape=rect coords=\"".(55-length($counter)*6).",".int($fig_length - $i - 15).",55,".int($fig_length - $i - 30)."\" HREF=\"bridge.pl?action=displayCollResults&${section_type}section=$section_name&${section_type}bed=$counter\" ALT=\"$section_type bed $counter of $section_name\">";
+                $image_map .= "<area shape=rect coords=\"".(50-length($counter)*6).",".int($fig_length - $i - 15).",55,".int($fig_length - $i - 30)."\" HREF=\"bridge.pl?action=displayCollResults&${section_type}section=$section_name&${section_type}bed=$counter\" ALT=\"$section_type bed $counter of $section_name\">";
             }
             $j = $j + 8;
         }
@@ -1689,7 +1696,7 @@ sub calculateStratInterval	{
     }
     print AI "U\n";                                                     # AI terminate the group 
     $gd->line(70,$fig_length - 20 - $horizon_unit,70,$fig_length - (($fig_long + 1)*$horizon_unit) - 20,$gdColors->{'black'});   #GD    
-    $gd->stringUp(gdMediumBoldFont, 13,(250 + (($fig_length - 220)/2)), "Section: $section_name", $gdColors->{'black'});
+    $gd->stringUp(gdMediumBoldFont, 13,(250 + (($fig_length - 220)/2)), "$section_name", $gdColors->{'black'});
     #$image_map .= "<area shape=rect coords=\"12,".int(260 + ($fig_length - 220)/2).",28,".int(260 + ($fig_length-380)/2-length($section_name)*7)."\" HREF=\"bridge.pl?action=displayStrataSearch&localsection=$section_name\" ALT=\"section $section_name\">";
     $gd->string(gdTinyFont, $fig_width - 70,$fig_length - 10, "J. Madin 2004", $gdColors->{'black'});
     aiLine(70,$fig_length - 20 - $horizon_unit,70,$fig_length - (($fig_long + 1)*$horizon_unit) - 20,$aiColors->{'black'});   #AI    
@@ -1774,7 +1781,7 @@ sub calculateStratInterval	{
     close IMAGEP;
     $image_map .= "</map>";
 # ---------------------------------RESULTS-PAGE----------------------------------------
-    print "<div align=\"center\"><H2>Confidence interval results for the <i>$section_name</i> stratigraphic section</H2></div><BR>";
+    print "<div align=\"center\"><H2><i>$section_name</i> stratigraphic section</H2></div><BR>";
     #if ($fig_width > 750)  {
     #   print "<CENTER><IMG WIDTH=750 SRC=\"/public/confidence/$imagenamepng\"></CENTER><BR><BR>";
     #} else {
