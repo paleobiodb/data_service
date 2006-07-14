@@ -3269,10 +3269,12 @@ sub displayCollectionDetailsPage {
         }
     }
     if ($max_lookup->{'lower_boundary'} && $min_lookup->{'upper_boundary'}) {
+        my @boundaries = ($max_lookup->{'lower_boundary'},$max_lookup->{'upper_boundary'},$min_lookup->{'lower_boundary'},$min_lookup->{'upper_boundary'});
+        @boundaries = sort {$b <=> $a} @boundaries;
         # Get rid of extra trailing zeros
-        $max_lookup->{'lower_boundary'} =~ s/(\.0|[1-9])(0)*$/$1/;
-        $min_lookup->{'upper_boundary'} =~ s/(\.0|[1-9])(0)*$/$1/;
-        $row->{'age_range'} = $max_lookup->{'lower_boundary'}." - ".$min_lookup->{'upper_boundary'}." m.y. ago";
+        $boundaries[0] =~ s/(\.0|[1-9])(0)*$/$1/;
+        $boundaries[-1] =~ s/(\.0|[1-9])(0)*$/$1/;
+        $row->{'age_range'} = $boundaries[0]." - ".$boundaries[-1]." m.y. ago";
     } else {
         $row->{'age_range'} = "";
     }
