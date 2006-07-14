@@ -139,9 +139,6 @@ sub displayStrata {
     $in_strata_type .= ", Group" if ($is_group);
     $in_strata_type =~ s/^, //g;
    
-    my $collTxt = ($row_count == 0) ? "No collections found" 
-                : ($row_count == 1) ? "1 collection total"
-                                 : "$row_count collections total";
     print qq|<div align="center"><h2>|;
     my $name = ucfirst($q->param('group_formation_member'));
     if ($name =~ /^(lower part|upper part|lower|middle|upper|bottom|top|medium|base|basal|uppermost)(\s+to\s+(lower part|upper part|lower|middle|upper|bottom|top|medium|base|basal|uppermost))*$/i) {
@@ -169,8 +166,7 @@ sub displayStrata {
         }
     }
     $name =~ s/ (formation|group|member|fm\.|gp\.|mbr\.|grp\.)$//ig;
-    print $q->escapeHTML($name)." ".$in_strata_type;
-    print qq|</h2>($collTxt)</div></br>|;
+    print $q->escapeHTML($name)." ".$in_strata_type."</h2>";
 
     print "<div style=\"text-align: left\">";
     # Display formations in groups, members in formations
