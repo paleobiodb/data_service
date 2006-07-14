@@ -170,7 +170,7 @@ sub new {
 					scale_rank=>['eon/eonothem', 'era/erathem', 'period/system', 'subperiod/system', 'epoch/series', 'subepoch/series', 'age/stage', 'subage/stage', 'chron/zone'],
 					mapsize=>[ '50%', '75%', '100%', '125%', '150%' ],
 					projection=>[ 'Eckert IV', 'equirectangular', 'Mollweide', 'orthographic' ],
-					mapfocus=>['standard (0,0)', 'Africa (10,20)', 'Antarctica (-90,0)', 'Arctic (90,0)', 'Asia (20,100)', 'Australia (-28,135)', 'Europe (50,10)', 'North America (35,-100)', 'Pacific (0,150)', 'South America (-10,-50)'],
+					mapfocus=>['standard (0,0)', 'Africa (10,20)', 'Antarctica (-90,0)', 'Arctic (90,0)', 'Asia (20,100)', 'Australia (-28,135)', 'Europe (50,10)', 'North America (35,-100)', 'Pacific (0,150)', 'South America (-20,-60)'],
 					mapscale=>['X 1', 'X 1.2', 'X 1.5', 'X 2', 'X 2.5', 'X 3', 'X 4', 'X 5', 'X 6',  'X 7', 'X 8', 'X 9', 'X 10'],
 					mapresolution=>[ 'coarse', 'medium', 'fine', 'very fine' ],
 					mapbgcolor=>[ 'white', 'black', 'gray', 'light gray', 'dark red', 'red', 'pink', 'brown', 'light brown', 'ochre', 'orange', 'light orange', 'yellow', 'light yellow', 'green', 'light green', 'turquoise', 'jade', 'teal', 'dark blue', 'blue', 'light blue', 'sky blue', 'lavender', 'violet', 'light violet', 'purple' ],
