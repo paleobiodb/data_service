@@ -3148,7 +3148,6 @@ sub displayCollectionDetails {
         return;
     }
     displayCollectionDetailsPage($coll);
-	print "<hr>\n";
 	
 	my $taxa_list = buildTaxonomicList($dbt,'collection_no'=>$coll->{'collection_no'},'hide_reference_no'=>$coll->{'reference_no'});
 	print $taxa_list;
@@ -3822,7 +3821,10 @@ sub buildTaxonomicList {
             } 
 
             # Taxonomic list header
-            $return = "<div align=\"center\"><h3><b>Taxonomic list for $time_place<br><span style=\"font-size:0.85em;\">(PBDB collection number $options{'collection_no'})</span></b></h3><div>";
+            $return = "<div class=\"displayPanel\" align=\"left\">\n" .
+                      "  <span class=\"displayPanelHeader\"><b>Taxonomic list</b></span>\n" .
+                      "  <div class=\"displayPanelContent\">\n" .
+                      "  <table border=0 cellpadding=2 class=\"displayPanelText\" width=\"100%\">\n";
         } else {
             $return = "<div align=\"center\"><h3><b>Taxonomic list</b></h3><div>";
         }
@@ -3850,47 +3852,47 @@ sub buildTaxonomicList {
             }
         }
 
-		$return .= "<table border=\"0\" cellpadding=\"3\" cellspacing=\"0\"><tr>";
+		$return .= "<table border=\"0\" cellpadding=\"3\" cellspacing=\"0\" class=\"tiny\"><tr>";
 
         if (! $options{'collection_no'}) {
-            $return .= "<td nowrap><u>Collection</u></td>";
+            $return .= "<td nowrap><b>Collection</b></td>";
         } else {
             $return .= "<td nowrap></td>";
         }
 		if($class_nos == 0){
 			$return .= "<td nowrap></td>";
 		} else {
-			$return .= "<td nowrap><u>Class</u></td>";
+			$return .= "<td nowrap><b>Class</b></td>";
 		}
 		if($order_nos == 0){
 			$return .= "<td></td>";
 		} else {
-			$return .= "<td><u>Order</u></td>";
+			$return .= "<td><b>Order</b></td>";
 		}
 		if($family_nos == 0){
 			$return .= "<td></td>";
 		} else {
-			$return .= "<td><u>Family</u></td>";
+			$return .= "<td><b>Family</b></td>";
 		}
 
 		# if ALL taxa have no genus or species, we have no list,
 		# so always print this.
-		$return .= "<td><u>Taxon</u></td>";
+		$return .= "<td><b>Taxon</b></td>";
 
 		if($reference_nos == 0){
 			$return .= "<td></td>";
 		} else {
-			$return .= "<td><u>Reference</u></td>";
+			$return .= "<td><b>Reference</b></td>";
 		}
 		if($abund_values == 0){
 			$return .= "<td></td>";
 		} else {
-			$return .= "<td><u>Abundance</u></td>";
+			$return .= "<td><b>Abundance</b></td>";
 		}
 		if($comments == 0){
 			$return .= "<td></td>";
 		} else {
-			$return .= "<td><u>Comments</u></td></tr>";
+			$return .= "<td><b>Comments</b></td></tr>";
 		}
 
 		# Sort:
