@@ -27,8 +27,13 @@ if [ -x /Volumes/pbdb_RAID/httpdocs/cgi-bin ]; then
 	# remove static stuff...
 	rm cgi-bin/data/noaa.*
 	rm cgi-bin/data/pmpd-*
+    rm cgi-bin/data/platepolygons/*
 	rm -R cgi-bin/data/masks2
 	rm -R cgi-bin/data/nam
+
+	# remove cgi-bin stuff that isn't explicity allowed. 
+	find -E .  -regex '\./cgi-bin/.*'  -not -regex '\./cgi-bin/(data/.*|guest_templates.*|templates.*|bridge.pl|.*\.cgi|[A-Z][A-Za-z0-9]*\.pm)' -delete
+	find . -regex '.*/\.#.*' -delete
 
 	tar -cf cgi-bin.tar cgi-bin
 	gzip cgi-bin.tar
