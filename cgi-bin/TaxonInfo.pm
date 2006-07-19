@@ -801,16 +801,19 @@ sub doCollections{
             #if ( ! $toovague{$max." ".$min} && ! $seeninterval{$max." ".$min})	
             # WARNING: we're assuming upper boundary ages will never be
             #  greater than 999 million years
-            # also, we're just going to ignore fractions of m.y. estimates
-            #  because those would screw up the sort below
-            $upper = int($upper);
-            $upper = 999 - $upper;
-            if ( $upper < 10 )	{
-                $upper = "00" . $upper;
-            } elsif ( $upper < 100 )	{
-                $upper = "0" . $upper;
+            my $lower = int($lowerbound{$max} * 1000);
+            $upper = $upper * 1000;
+            $upper = int(999000 - $upper);
+            if ( $lower < 1000 )	{
+                $lower = "000" . $lower;
             }
-            $bounds_coll{$res} = int($lowerbound{$max}) . $upper;
+            elsif ( $lower < 10000 )	{
+                $lower = "00" . $lower;
+            }
+            elsif ( $lower < 100000 )	{
+                $lower = "0" . $lower;
+            }
+            $bounds_coll{$res} = $lower . $upper;
             $intervals{$max} = 1 if ($max);
             $intervals{$min} = 1 if ($min);
 	    }
