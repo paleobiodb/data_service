@@ -665,7 +665,7 @@ sub reportQueryDB{
         $selectSQL .= ",".$groupSQL;
 
         $fromSQL .= ", occurrences o ";
-        $fromSQL .= " LEFT JOIN reidentifications re ON re.occurrence_no = o.occurrence_no";
+        $leftJoinSQL = " LEFT JOIN reidentifications re ON re.occurrence_no = o.occurrence_no ".$leftJoinSQL;
         push @whereTerms,"o.collection_no = c.collection_no";
 
         # get a list of Sepkoski's genera, if needed JA 28.2.03
@@ -716,7 +716,7 @@ sub reportQueryDB{
     }
 
 
-    my $sql = "SELECT ".$selectSQL." FROM ".$fromSQL." ".$leftJoinSQL;
+    my $sql = "SELECT ".$selectSQL." FROM (".$fromSQL.") ".$leftJoinSQL;
     if (@whereTerms) {
         $sql .= " WHERE ".join(' AND ',@whereTerms);
     }

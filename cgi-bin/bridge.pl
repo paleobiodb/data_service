@@ -3095,7 +3095,7 @@ IS NULL))";
     }
 
     my $sql = "SELECT ".join(",",@from).
-           " FROM " .join(",",@tables)." ".join (" ",@left_joins).
+           " FROM (" .join(",",@tables).") ".join (" ",@left_joins).
            " WHERE ".join(" AND ",@where);
     $sql .= " GROUP BY ".join(",",@groupby) if (@groupby);  
     $sql .= " HAVING ".join(",",@having) if (@having);  
@@ -7365,7 +7365,7 @@ sub RefQuery {
 	if ( $refsearchstring ) { $refsearchstring = "for '$refsearchstring' "; }
 
 	if ( $refsearchstring ne "" || $q->param('authorizer_reversed') || $q->param('enterer_reversed') || $q->param('project_name') ) {
-        my $tables = "refs r, person p1, person p2".
+        my $tables = "(refs r, person p1, person p2)".
                      " LEFT JOIN person p3 ON p3.person_no=r.modifier_no";
         # This exact order is very important due to work around with inflexible earlier code
         my $from = "p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.comments,r.language,r.created,r.modified";

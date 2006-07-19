@@ -1537,21 +1537,21 @@ sub queryDatabase {
             # pruning on the reids table for sql2 PS 07/15/2005
             my @where1 = (@where,@occ_where,"re.reid_no IS NULL");
             my $sql1 = "SELECT ".join(",",@fields).
-                   " FROM " .join(",",@tables)." ".join (" ",@left_joins1).
+                   " FROM (" .join(",",@tables).") ".join (" ",@left_joins1).
                    " WHERE ".join(" AND ",@where1);
             $sql1 .= " GROUP BY ".join(",",@groupby) if (@groupby);
 
             my @where2 = ("re.occurrence_no=o.occurrence_no AND re.most_recent='YES'",@where,@reid_where);
             my @tables2 = (@tables,'reidentifications re'); 
             my $sql2 = "SELECT ".join(",",@fields).
-                   " FROM " .join(",",@tables2)." ".join (" ",@left_joins).
+                   " FROM (" .join(",",@tables2).") ".join (" ",@left_joins).
                    " WHERE ".join(" AND ",@where2);
             $sql2 .= " GROUP BY ".join(",",@groupby) if (@groupby);
             $sql = "($sql1) UNION ($sql2)";
         } else {
             my @where1 = (@where,@occ_where);
             my $sql1 = "SELECT ".join(",",@fields).
-                   " FROM " .join(",",@tables)." ".join (" ",@left_joins).
+                   " FROM (" .join(",",@tables).") ".join (" ",@left_joins).
                    " WHERE ".join(" AND ",@where1);
             $sql1 .= " GROUP BY ".join(",",@groupby) if (@groupby);
             $sql = $sql1;
@@ -1588,10 +1588,10 @@ sub queryDatabase {
                     } else {
                         push @specimen_fields, 'NULL';
                     }
-                }
+            }
                 my $sql3 = "SELECT ".join(",",@specimen_fields).
-                         " FROM specimens s, authorities a ";
-                if ($q->param('specimens_authorizer') eq 'YES') {
+                         " FROM (specimens s, authorities a) ";
+            if ($q->param('specimens_authorizer') eq 'YES') {
                     $sql3 .= " LEFT JOIN person ps1 ON s.authorizer_no=ps1.person_no";
                 }
                 if ($q->param('specimens_enterer') eq 'YES') {
@@ -1607,7 +1607,7 @@ sub queryDatabase {
         }
     } else {
         $sql = "SELECT ".join(",",@fields).
-               " FROM " .join(",",@tables)." ".join (" ",@left_joins).
+               " FROM (" .join(",",@tables).") ".join (" ",@left_joins).
                " WHERE ".join(" AND ",@where);
         $sql .= " GROUP BY ".join(",",@groupby) if (@groupby);
     }
