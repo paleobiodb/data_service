@@ -123,11 +123,23 @@ function checkBrowser(string)	{
 //-->
 </script>
 
+</div> <!-- end mainSpacer (terminated immediately to allow correct positioning of gray box) -->
+</div> <!-- end mainBody (ditto) -->
+
+<!-- gray box outside of main area -->
+<div style="position: absolute; top: 0px; bottom: 0px; left: 0px; right: 0px; z-index: 1; background-color: #E0E0E0;">
+</div>
+
+<div class="mainBody">
+
+<div class="mainSpacer">
+
 <div id="homeTotals">
 
 <div style="padding-top: 0.3em;"></div>
 
 <div class="FeaturesShadow">
+<div class="FeaturesShadow2">
 <div class="Features">
 <div class="FeatureHeadline">
 <div class="tiny">
@@ -163,11 +175,13 @@ function checkBrowser(string)	{
 </div>
 </div>
 </div>
+</div>
 
 <div style="padding: 1.25em;">
 </div>
 
 <div class="FeaturesShadow">
+<div class="FeaturesShadow2">
 <div class="Features">
 <div class="FeatureHeadline">
 <div class="tiny">
@@ -182,11 +196,13 @@ J. S. Madin, J. Alroy, M. Aberhan, F. T. F&uuml;rsich, W. Kiessling, M. A. Kosni
 </div>
 </div>
 </div>
+</div>
 
 <div style="padding: 1.25em;">
 </div>
 
 <div class="FeaturesShadow">
+<div class="FeaturesShadow2">
 <div class="Features">
 <div class="FeatureHeadline">
 <div class="tiny">
@@ -198,6 +214,8 @@ J. S. Madin, J. Alroy, M. Aberhan, F. T. F&uuml;rsich, W. Kiessling, M. A. Kosni
 <div class="verytiny">
 <a href="http://www.geol.savbb.sk">Adam Tomasovych</a><br>
 Geological Institute SAS<br>
+</div>
+</div>
 </div>
 </div>
 </div>
@@ -308,7 +326,9 @@ Geological Institute SAS<br>
 
 <div style="padding-left: 0.75em;">
 <div class="homeTextBoxes" id="homeTextBoxShadow">
+<div class="homeTextBoxes" id="homeTextBoxShadow2">
 <div class="homeTextBoxes" id="homeTextBox">
+</div>
 </div>
 </div>
 </div>
@@ -324,9 +344,9 @@ Geological Institute SAS<br>
 <img alt="fossils" src="/public/homeBorder2.jpg" style="margin-top: 2em;">
 </div> <!-- end homeBorder -->
 
-<div style="position: absolute; bottom: 0; right: 0;">
-<a href="bridge.pl?action=listCollections"><span style="font-size: .25em; color: white;">list collections</span></a>
-<a href="bridge.pl?action=listTaxa"><span style="font-size: .25em; color: white;">list taxa</span></a>
-</div>
 
+<div style="position: absolute; bottom: 0; right: 0;">
+<a href="bridge.pl?action=listCollections"><span style="font-size: .25em; color: #E0E0E0;">list collections</span></a>
+<a href="bridge.pl?action=listTaxa"><span style="font-size: .25em; color: #E0E0E0;">list taxa</span></a>
+</div>
 
