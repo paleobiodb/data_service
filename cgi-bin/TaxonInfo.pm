@@ -1498,7 +1498,7 @@ sub displayTaxonHistory {
 	my @results = @{$dbt->getData($sql)};
 
 	# Combine parent numbers from above for the next select below. If nothing
-	# was returned from above, use the original combination number.
+	# was returned from above, use the original combination number. Shouldn't be necessary but just in case
 	my @parent_list = ();
     foreach my $rec (@results) {
         push(@parent_list,$rec->{'child_spelling_no'});
@@ -1506,18 +1506,12 @@ sub displayTaxonHistory {
     # don't forget the original (verified) here, either: the focal taxon	
     # should be one of its children so it will be included below.
     push(@parent_list, $original_combination_no);
-
-	# Select all synonymies for the above list of taxa.
-	$sql = "SELECT DISTINCT child_no  FROM opinions ".
-		   "WHERE parent_no IN (".join(',',@parent_list).") ".
-		   "AND status IN ('subjective synonym of','objective synonym of','homonym of','replaced by') ".
-		   "AND child_no != parent_no"; # last bit for lapsus, shoudln't be necessary
-	my @synonyms = @{$dbt->getData($sql)};
+	my @synonyms = getJuniorSynonyms($dbt,@parent_list);
 
 	# Reduce these results to original combinations: shouldn't be necessary to do this
-	foreach my $rec (@synonyms) {
-		$rec = getOriginalCombination($dbt, $rec->{child_no});	
-	}
+	#foreach my $rec (@synonyms) {
+#		$rec = getOriginalCombination($dbt, $rec->{child_no});	
+	#}
 
 	# Get alternate "original" combinations, usually lapsus calami type cases.  Shouldn't exist, 
     # exists cause of sort of buggy data.
@@ -1577,6 +1571,7 @@ sub getSynonymyParagraph{
 				   'nomen nudum' => 'considered a nomen nudum ',
 				   'nomen vanum' => 'considered a nomen vanum ',
 				   'nomen oblitum' => 'considered a nomen oblitum ',
+				   'homonym of' => ' considered a homonym of ',
 				   'misspelling of' => 'misspelled as ',
 				   'subjective synonym of' => 'synonymized subjectively with ',
 				   'objective synonym of' => 'synonymized objectively with ');
@@ -1746,8 +1741,16 @@ sub getSynonymyParagraph{
                 $taxon_no = $first_row->{'child_spelling_no'};
             }
             if ($taxon_no) {
-                my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no});
-			    $text .= "<i>".$taxon->{'taxon_name'}."</i>";
+                my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
+                if ($taxon->{'taxon_rank'} =~ /genus|species/) {
+			        $text .= "<i>".$taxon->{'taxon_name'}."</i>";
+                } else {
+			        $text .= $taxon->{'taxon_name'};
+                }
+                if ($first_row->{'status'} eq 'homonym of') {
+                    my $pub_info = Reference::formatShortRef($taxon);
+                    $text .= ", $pub_info";
+                }
             }
         }
         if ($first_row->{'status'} eq 'misspelling of') {
@@ -1889,7 +1892,7 @@ sub getMostRecentClassification {
             . " FROM opinions o" 
             . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
             . " WHERE o.child_no=$child_no"
-            . " AND o.child_no != o.parent_no AND o.status != 'misspelling of'";
+            . " AND o.child_no != o.parent_no AND o.status NOT IN ('misspelling of','homonym of')";
     if ($reference_no) {
         $sql .= " AND o.reference_no=$reference_no";
     }
@@ -2254,9 +2257,9 @@ sub displaySynonymyList	{
 #  which we already know
     my %synline = ();
 	foreach my $syn (@syns)	{
-		my $sql = "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','homonym of','replaced by','misspelling of') AND parent_spelling_no=$syn)";
+		my $sql = "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','replaced by','misspelling of') AND parent_spelling_no=$syn)";
         $sql .= " UNION ";
-		$sql .= "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','homonym of','replaced by','misspelling of') AND parent_no=$syn)";
+		$sql .= "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','replaced by','misspelling of') AND parent_no=$syn)";
         $sql .= " UNION ";
 		$sql .= "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE child_spelling_no=$syn AND status IN ('belongs to','recombined as','rank changed as','corrected as'))";
 		my @userefs =  @{$dbt->getData($sql)};
@@ -2581,7 +2584,7 @@ sub getSeniorSynonym {
             last;
         } else {
             $seen{$parent->{'child_no'}} = $parent;
-            if ($parent->{'status'} =~ /synonym|replaced|homonym/) {
+            if ($parent->{'status'} =~ /synonym|replaced/) {
                 $taxon_no = $parent->{'parent_no'};
             } else {
                 last;
@@ -2596,9 +2599,10 @@ sub getSeniorSynonym {
 # and original combination must be passed in. Use a hash to keep track to avoid duplicate and recursion
 sub getJuniorSynonyms {
     my $dbt = shift;
-    my $taxon_no = shift;
+    my @taxon_nos = @_;
 
-    my @queue = ($taxon_no);
+    my @queue = ();
+    push @queue, $_ for (@taxon_nos);
     my %seen_syn = ();
     for(my $i = 0;$i<50;$i++) {
         my $taxon_no;
@@ -2611,7 +2615,7 @@ sub getJuniorSynonyms {
         my @results = @{$dbt->getData($sql)};
         foreach my $row (@results) {
             my $parent = getMostRecentClassification($dbt,$row->{'child_no'});
-            if ($parent->{'parent_no'} == $taxon_no && $parent->{'status'} =~ /synonym|homonym|replaced/) {
+            if ($parent->{'parent_no'} == $taxon_no && $parent->{'status'} =~ /synonym|replaced/) {
                 if (!$seen_syn{$row->{'child_no'}}) {
                     push @queue, $row->{'child_no'};
                 }

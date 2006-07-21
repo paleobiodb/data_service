@@ -132,7 +132,7 @@ sub rebuildCache {
                 $status = "";
             }
 
-            if ($status =~ /^(?:repl|subj|obje|hom)/o) {
+            if ($status =~ /^(?:repl|subj|obje)/o) {
                 $syns{$child_no} = $parent_no;
             } else {
                 $link_cache{$child_no} = $parent_no;

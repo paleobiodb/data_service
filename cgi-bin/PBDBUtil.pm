@@ -771,7 +771,7 @@ sub getChildrenRecurse {
                 push @$sorted_records, $new_node if (!$parent_is_synonym);
                 getChildrenRecurse($dbt,$new_node,$max_depth,$depth+1,$sorted_records);
                 push @{$node->{'children'}}, $new_node;
-            } elsif ($parent_row->{'status'} =~ /^(?:subj|homo|obje|repl)/o) {
+            } elsif ($parent_row->{'status'} =~ /^(?:subj|obje|repl)/o) {
                 getChildrenRecurse($dbt,$new_node,$max_depth,$depth,$sorted_records,1);
                 push @{$node->{'synonyms'}}, $new_node;
             }

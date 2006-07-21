@@ -1,7 +1,7 @@
 <span id="message"></span>
 <span id="error_message"></span>
 
-<div align="center"><h2>Add/edit opinion record for <span id="child_spelling_name"></span></h2></div>
+<div align="center"><h2>Add/edit opinion record for <span id="taxon_display_name"></span></h2></div>
 
 <form method="POST" action="bridge.pl" onSubmit="checkForm()">
 
@@ -18,7 +18,7 @@
 <input type="hidden" id="confirm_create_spelling" name="confirm_create_spelling">
 <input type="hidden" id="confirm_create_rank" name="confirm_create_rank">
 
-<div align="center"><h2>Whose opinion on <span id="child_spelling_name"></span> are you entering?</h2></div>
+<div align="center"><h2>Whose opinion on <span id="taxon_display_name"></span> are you entering?</h2></div>
 
 <div class="emphasized" align=left>
 <input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="PRIMARY">
@@ -83,7 +83,7 @@ The primary reference argues for this opinion:
 
 
 <div class="mainSection">
-<div align="center"><h2>What did they say about <span id="child_spelling_name"></span>?</h2></div>
+<div align="center"><h2>What did they say about <span id="taxon_display_name"></span>?</h2></div>
   
 <div class="emphasized">
 <b>How was it classified?</b>

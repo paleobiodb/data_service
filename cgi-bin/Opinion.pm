@@ -185,7 +185,23 @@ sub formatAsHTML {
 	
     my $output = "";
 
-    if ($row->{'status'} =~ /synonym|homonym|replace|nomen|revalidated|misspell/) {
+    if ($row->{'status'} =~ /homonym/) {
+        my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}},['taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
+        my $child_html  = ($child->{'taxon_rank'} =~ /species|genus/) 
+                        ? "<i>$child->{'taxon_name'}</i>" 
+                        : $child->{'taxon_name'};
+        my $child_pub_info = Reference::formatShortRef($child);
+        $output .= "'$child_html, <small>$child_pub_info</small> is a $row->{status}";
+        my $parent = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'parent_spelling_no'}},['taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
+        if ($parent) {
+            my $parent_html = ($parent->{'taxon_rank'} =~ /species|genus/) 
+                            ? "<i>$parent->{'taxon_name'}</i>" 
+                            : $parent->{'taxon_name'};
+            my $parent_pub_info = Reference::formatShortRef($parent);
+            $output .= " $parent_html, <small>$parent_pub_info</small>";
+        }
+        $output .= "'";
+    } elsif ($row->{'status'} =~ /synonym|homonym|replace|nomen|revalidated|misspell/) {
         my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}});
         my $child_html  = ($child->{'taxon_rank'} =~ /species|genus/) 
                         ? "<i>$child->{'taxon_name'}</i>" 
@@ -424,6 +440,15 @@ sub displayOpinionForm {
     $fields{'child_spelling_name'} = $childSpellingName;
     $fields{'child_spelling_rank'} = $childSpellingRank;
 
+    $fields{'taxon_display_name'} = $childSpellingName.$fields{'status'};
+    if ($fields{'taxon_status'} eq 'invalid1' && $fields{'synonym'} eq 'homonym of') {
+        my $authority = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}},['author1last','author2last','otherauthors','pubyr']);
+        my $pub_info = Reference::formatShortRef($authority);
+        if ($pub_info !~ /^\s*$/) {
+            $fields{'taxon_display_name'} .= ", $pub_info";
+        }
+    }
+
 
     # This does the same thing for the parent
     my @parent_nos = ();
@@ -461,7 +486,7 @@ sub displayOpinionForm {
 
 
     my @opinions_to_migrate2;
-    if ($fields{'status'} eq 'misspelling of') {
+    if ($fields{'taxon_status'} eq 'invalid1' && $fields{'synonym'} eq 'misspelling of') {
         if (scalar(@parent_nos) == 1) {
             @opinions_to_migrate2 = getOpinionsToMigrate($dbt,$fields{'child_no'},$parent_nos[0],$fields{'opinion_no'});
         }
@@ -470,7 +495,7 @@ sub displayOpinionForm {
 	# if this is a second pass and we have a list of alternative taxon
 	#  numbers, make a pulldown menu listing the taxa JA 25.4.04
 	my $parent_pulldown;
-	if ( scalar(@parent_nos) > 1 || (scalar(@parent_nos) == 1 && @opinions_to_migrate2 && $fields{'status'} eq 'misspelling of')) {
+	if ( scalar(@parent_nos) > 1 || (scalar(@parent_nos) == 1 && @opinions_to_migrate2 && $fields{'taxon_status'} eq 'invalid1' && $fields{'synonym'} eq 'misspelling of')) {
         foreach my $parent_no (@parent_nos) {
 	        my $parent = TaxaCache::getParent($dbt,$parent_no);
             my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$parent_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
@@ -1175,6 +1200,16 @@ sub submitOpinionForm {
     if ($fields{'status'} eq 'misspelling of') {
         if ($parentName eq $childSpellingName) {
             $errors->add("The names entered in the \"How was it spelled\" and \"How was it classified\" sections must be different when noting a misspelling");
+        }
+    } elsif ($fields{'status'} eq 'homonym of') {
+        if ($parentName ne $childSpellingName) {
+            $errors->add("If you select 'homonym of', the taxon and its homonym must be spelled the same");
+        }
+        if ($fields{'child_spelling_no'} == $fields{'parent_spelling_no'} ||
+            $fields{'child_no'} == $fields{'parent_no'} ||
+            $fields{'child_spelling_no'} == $fields{'parent_no'} ||
+            $fields{'child_no'} == $fields{'parent_spelling_no'}) {
+            $errors->add("The taxon you are entering and the one it belongs to can't be the same");	
         }
     } else {
         if ($parentName eq $childName || $parentName eq $childSpellingName) {
