@@ -440,7 +440,7 @@ sub displayOpinionForm {
     $fields{'child_spelling_name'} = $childSpellingName;
     $fields{'child_spelling_rank'} = $childSpellingRank;
 
-    $fields{'taxon_display_name'} = $childSpellingName.$fields{'status'};
+    $fields{'taxon_display_name'} = $childSpellingName;
     if ($fields{'taxon_status'} eq 'invalid1' && $fields{'synonym'} eq 'homonym of') {
         my $authority = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}},['author1last','author2last','otherauthors','pubyr']);
         my $pub_info = Reference::formatShortRef($authority);
