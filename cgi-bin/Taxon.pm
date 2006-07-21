@@ -1226,7 +1226,7 @@ sub splitTaxon {
 sub guessTaxonRank {
     my $taxon = shift;
     
-    if ($taxon =~ /^[A-Z][a-z]+ (\([A-Z][a-z]+ \))?[a-z.]+ [a-z.]+$/) {
+    if ($taxon =~ /^[A-Z][a-z]+ (\([A-Z][a-z]+\) )?[a-z\.]+ [a-z\.]+$/) {
         return "subspecies";
     } elsif ($taxon =~ /^[A-Z][a-z]+ (\([A-Z][a-z]+\) )?[a-z.]+$/) {
         return "species";
