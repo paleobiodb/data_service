@@ -820,7 +820,7 @@ sub submitOpinionForm {
                       " AND author1last=".$dbh->quote($q->param('author1last')).
                       " AND author2last=".$dbh->quote($q->param('author2last')).
                       " AND pubyr=".$dbh->quote($q->param('pubyr')).
-                      " AND status != 'misspelling of'";
+                      " AND status NOT IN ('misspelling of','homonym of')";
             my $row = ${$dbt->getData($sql)}[0];
             if ( $row->{'c'} > 0 ) {
                 $errors->add("The author's opinion on ".$childName." already has been entered - an author can only have one opinion on a name");
@@ -894,7 +894,7 @@ sub submitOpinionForm {
         my $sql = "SELECT count(*) c FROM opinions WHERE ref_has_opinion='YES'".
                   " AND child_no=".$dbh->quote($fields{'child_no'}).
                   " AND reference_no=".$dbh->quote($lookup_reference).
-                  " AND status != 'misspelling of'";
+                  " AND status NOT IN ('misspelling of','homonym of')";
         if (! $isNewEntry) {
             $sql .= " AND opinion_no != ".$o->{'opinion_no'};
         }
