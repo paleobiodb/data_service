@@ -701,8 +701,9 @@ sub displayHomePage {
 				$q->param ( $parm => $queue{$parm} );
 			}
 	
-			# Run the command
-			&{$queue{action}};
+	 		# Run the command
+            my $action = \&{$queue{'action'}}; # Hack so use strict doesn't back
+			&$action;
 			exit;
 		}
 	}
