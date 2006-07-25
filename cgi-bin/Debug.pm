@@ -4,6 +4,7 @@
 
 package Debug;
 
+
 use strict;
 
 # prints the passed string to a debug file
