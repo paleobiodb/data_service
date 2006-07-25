@@ -723,7 +723,61 @@ sub getTemplateString {
 	return $templateString;
 }
 
-                                    
+sub printHTMLTable {
+    if (UNIVERSAL::isa($_[0],'HTMLBuilder')) {
+        # If called from an object oriented interface, 
+        # don't need the object ref, just shift it off
+        shift;
+    }
 
+    my $data = shift;
+    my $isDoubleArray = 1;
+  
+    my ($rows,$cols,$row_title,$column_title,$row_total,$col_total);
+    if ($isDoubleArray) {
+        ($rows,$cols,$row_title,$column_title) = @_;
+        $row_total = scalar(@$rows);
+        $col_total = scalar(@$cols);
+    } else {
+        ($rows,$row_title) = @_;
+        $row_total = scalar(@$rows);
+    }
 
-1;
+    # Print Header
+    my $html = "";
+    $html .= "<table border=0 class=dataTable cellspacing=0>";
+    if ($column_title) {
+        if ($isDoubleArray) {
+            my $numCols = scalar(@$cols);
+            $html .= "<tr><td class=dataTableTopULCorner>&nbsp;</td>";
+            $html .= "<td class=dataTableTop colspan=$numCols align=center><b>$column_title</b></td>";
+            $html .= "<td>&nbsp;</td></tr>";
+        }
+    }
+    $html .= "<tr>";
+    $html .= "<td class=dataTableULCorner align=center><b>$row_title</b></td>";
+    if ($isDoubleArray) { 
+        for(my $j=0;$j<$col_total;$j++) {
+            $html .= "<td class=dataTableColumn>$cols->[$j]</td>";
+        }
+    } else {
+        $html .= "<td class=dataTableColumn>$row_title</td>";
+    }
+    $html .= "</tr>\n";
+
+    # Print Data
+    for(my $i=0;$i<$row_total;$i++) {
+        $html .= "<tr>";
+        $html .= "<td class=dataTableRow>$rows->[$i]</td>";
+        if ($isDoubleArray) {
+            for(my $j=0;$j<$col_total;$j++) {
+                $html .= "<td class=dataTableCell align=right>$data->[$i][$j]</td>";
+            } 
+        } else {
+            $html .= "<td class=dataTableCell align=right>$data->[$i]</td>";
+        } 
+        $html .= "</tr>\n";
+    }
+    $html .= "</table>\n";
+    return $html;
+}
