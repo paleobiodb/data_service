@@ -694,7 +694,7 @@ sub displayOpinionForm {
         @select_keys = ("is the original spelling and rank of this taxon", "is a correction of '$childName'","is a misspelling of this taxon","has had its rank changed from its original rank of $childRank","has been reassigned from its original genus '$genusName'");
     } elsif ($childRank =~ /species/) {
         @select_values = ('original spelling','recombination','correction','misspelling');
-        @select_keys = ("is the original spelling and rank of this taxon","is a recombination of '$childName'","is a correction of '$childName'","is a misspelling of this taxon");
+        @select_keys = ("is the original spelling and rank of this taxon","is a recombination or rank change of '$childName'","is a correction of '$childName'","is a misspelling of this taxon");
     } else {
         @select_values = ('original spelling','correction','misspelling','rank change');
         @select_keys = ("is the original spelling and rank of this taxon","is a correction of '$childName'","is a misspelling of this taxon","has had its rank changed from its original rank of $childRank");
