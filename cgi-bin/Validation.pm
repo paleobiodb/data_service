@@ -176,6 +176,9 @@ sub properYear {
 # To be done: have better matches that take whether or not its informal into account
 sub validOccurrenceGenus {
     my ($reso,$name) = @_;
+    if ($reso =~ /informal/i) {
+        return 1;
+    }
     if ($name =~ /^[A-Za-z0-9 \-]+$/) {
         return 1;
     } else {
@@ -185,6 +188,9 @@ sub validOccurrenceGenus {
 
 sub validOccurrenceSpecies {
     my ($reso,$name) = @_;
+    if ($reso =~ /informal/i) {
+        return 1;
+    }
     if ($name =~ /^[a-z0-9 \-\.'"]+$/) {
         return 1;
     } else {
