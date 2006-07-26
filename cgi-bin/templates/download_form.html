@@ -430,13 +430,27 @@ function countryChange() {
 </td></tr>
 
 <tr>
-<td valign=top class="small">Lump collections by:<br><small><i>Occurrences lumped by species if the species_name field is downloaded, else is lumped by genus</i></small></td>  
+<td valign=top class="small">Lump collections by:<br>
+<small><i>
+Occurrences of the same species will be lumped if the species name field is downloaded; otherwise lumping is by genus<br>
+The more boxes you check, the less will be lumped, and vice versa
+</i></small>
+</td>  
 
 <td valign=top class="small" colspan=3>
-<span style="white-space: nowrap"><input type=checkbox name='lump_by_coord' value="YES"> exact coordinate</span>
-<span style="white-space: nowrap"><input type=checkbox name='lump_by_mbr' value="YES"> formation and member</span>
 <span style="white-space: nowrap"><input type=checkbox name='lump_by_ref' value="YES"> reference</span>
+<span style="white-space: nowrap"><input type=checkbox name='lump_by_coord' value="YES"> exact coordinate</span>
 <span style="white-space: nowrap"><input type=checkbox name='lump_by_interval' value="YES"> time interval</span>
+&nbsp;
+strat unit:
+<span style="white-space: nowrap">
+<select class="small" name="lump_by_strat_unit">
+<option selected>
+<option>group
+<option>formation
+<option>member
+</select>
+</span>
 </td></tr>
 
 <tr class="lightGrey">
