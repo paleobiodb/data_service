@@ -228,6 +228,10 @@ function doCheckFieldsStratigraphy() {
     if ( hasmember.test ( frm.member.value ) == true )      {
         bad_info += "\n  - A member name can't include the word \"member\"";
     }
+    var hasmbr = /mbr\./i;
+    if ( hasmbr.test ( frm.member.value ) == true )      {
+        bad_info += "\n  - A member name can't include the word \"mbr.\"";
+    }
 }
 
 function doCheckFieldsGeology() {
