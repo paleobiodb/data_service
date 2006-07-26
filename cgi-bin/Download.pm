@@ -297,7 +297,7 @@ sub retellOptions {
     $html .= $self->retellOptionsGroup("Stratigraphic scale of collections", 'stratscale_',\@stratscale_group);
 
     $html .= $self->retellOptionsRow ( "Lump by exact geographic coordinate?", $q->param("lump_by_coord") );
-    $html .= $self->retellOptionsRow ( "Lump by formation and member?", $q->param("lump_by_mbr") );
+    $html .= $self->retellOptionsRow ( "Lump by stratigraphic unit?", $q->param("lump_by_strat_unit") );
     $html .= $self->retellOptionsRow ( "Lump by published reference?", $q->param("lump_by_ref") );
     $html .= $self->retellOptionsRow ( "Lump by time interval?", $q->param("lump_by_interval") );
     $html .= $self->retellOptionsRow ( "Restrict to collection(s): ",$q->param("collection_no"));
@@ -1923,7 +1923,7 @@ sub queryDatabase {
 
         # lump bed/group of beds scale collections with the exact same
         #  formation/member and geographic coordinate JA 21.8.04
-        if ( $exclude == 0 && ( $q->param('lump_by_coord') eq 'YES' || $q->param('lump_by_interval') eq 'YES' || $q->param('lump_by_mbr') eq 'YES' || $q->param('lump_by_ref') eq 'YES' ) )    {
+        if ( $exclude == 0 && ( $q->param('lump_by_coord') eq 'YES' || $q->param('lump_by_interval') eq 'YES' || $q->param('lump_by_strat_unit') =~ /(group)|(formation)|(member)/i || $q->param('lump_by_ref') eq 'YES' ) )    {
 
             my $lump_string;
 
@@ -1933,8 +1933,36 @@ sub queryDatabase {
             if ( $q->param('lump_by_interval') eq 'YES' )    {
                 $lump_string .= $row->{'c.max_interval_no'}.$row->{'c.min_interval_no'};
             }
-            if ( $q->param('lump_by_mbr') eq 'YES' )    {
-                $lump_string .= $row->{'c.formation'}.$row->{'c.member'};
+            if ( $q->param('lump_by_strat_unit') eq 'group' )    {
+                if ( $row->{'c.geological_group'} )	{
+                    $lump_string .= $row->{'c.geological_group'};
+            # if there's no group, at least you can lump by formation
+                } elsif ( $row->{'c.formation'} )	{
+                    $lump_string .= $row->{'c.formation'};
+            # you don't want to lump by member if there's no formation,
+            #  because that's probably a data entry error
+                } else	{
+                    $lump_string .= $row->{'collection_no'};
+                }
+            }
+            elsif ( $q->param('lump_by_strat_unit') eq 'formation' )    {
+            # we could also add in the group name, but often the formation
+            #  appears both with and without the group, so that would split
+            #  collections actually from the same formation
+                if ( $row->{'c.formation'} )	{
+                    $lump_string .= $row->{'c.formation'};
+            # you don't want to lump by member if there's no formation,
+            #  because that's probably a data entry error
+                } else	{
+                    $lump_string .= $row->{'collection_no'};
+                }
+            }
+            elsif ( $q->param('lump_by_strat_unit') eq 'member' )    {
+                if ( $row->{'c.formation'} && $row->{'c.member'} )	{
+                    $lump_string .= $row->{'c.formation'}.$row->{'c.member'};
+                } else	{
+                    $lump_string .= $row->{'collection_no'};
+                }
             }
             if ( $q->param('lump_by_ref') eq 'YES' )    {
                 $lump_string .= $row->{'c.reference_no'};
@@ -2906,9 +2934,16 @@ sub setupQueryFields {
             $q->param("collections_coords"=>"YES");
         }
     }
-    if ($q->param('lump_by_mbr')) {
-        $q->param('collections_formation'=>'YES');
-        $q->param('collections_member'=>'YES');
+    if ($q->param('lump_by_strat_unit')) {
+        if ( $q->param('lump_by_strat_unit') eq "group" )	{
+            $q->param('collections_geological_group'=>'YES');
+            $q->param('collections_formation'=>'YES');
+        } elsif ( $q->param('lump_by_strat_unit') eq "formation" )	{
+            $q->param('collections_formation'=>'YES');
+        } elsif ( $q->param('lump_by_strat_unit') eq "member" )	{
+            $q->param('collections_formation'=>'YES');
+            $q->param('collections_member'=>'YES');
+        }
     }
     if ($q->param('lump_by_ref')) {
         $q->param('collections_reference_no'=>'YES');
