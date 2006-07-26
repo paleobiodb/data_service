@@ -212,9 +212,17 @@ function doCheckFieldsStratigraphy() {
     if ( hasgroup.test ( frm.geological_group.value ) == true )      {
         bad_info += "\n  - A group name can't include the word \"group\"";
     }
+    var hasgr = /gr\./i;
+    if ( hasgr.test ( frm.geological_group.value ) == true )      {
+        bad_info += "\n  - A group name can't include the word \"gr.\"";
+    }
     var hasformation = /formation/i;
     if ( hasformation.test ( frm.formation.value ) == true )      {
         bad_info += "\n  - A formation name can't include the word \"formation\"";
+    }
+    var hasfm = /fm\./i;
+    if ( hasfm.test ( frm.formation.value ) == true )      {
+        bad_info += "\n  - A formation name can't include the word \"fm.\"";
     }
     var hasmember = /member/i;
     if ( hasmember.test ( frm.member.value ) == true )      {
