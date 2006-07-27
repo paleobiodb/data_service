@@ -19,9 +19,7 @@ function checkFields() {
 
     if ( bad_info != "" ) { 
         bad_info = "WARNING!\n" +
-                      "The following fields have incorrect values:\n" +
-                      bad_info + "\n_____________________________" +
-                      "\nPlease correct them and submit the form again.";
+                      bad_info + "\n\nPlease make corrections and resubmit.";
         alert(bad_info);
         bad_info = "";
         return false; 
@@ -51,23 +49,23 @@ function doCheckFieldsBasicInfo() {
         for(i=0; i<radio_vals.length; i++){
             for(j=0; j<checked_vals.length; j++){
                 if(radio_vals[i] == checked_vals[j] && frm.secondary_reference_no[i].checked && frm.delete_ref[j].checked){
-                    bad_info += "\n    - Primary reference cannot be deleted";
+                    bad_info += "\no The primary reference can't be deleted";
                 }
             }
         }
     } // if secondary_reference_no
 
+    if ( frm.collection_name.value == "") {
+        bad_info += "\no Collection name is required";
+    }
+
     var IGSNre = /^[a-zA-Z]{3}[0-9a-zA-Z]{6}$/i;
     if (frm.igsn.value != '' && IGSNre.test(frm.igsn.value) == false) {
-        bad_info += "\n    - IGSN doesn't appear to be valid";
+        bad_info += "\no The IGSN number doesn't appear to be valid";
     }
 
     if ( frm.collection_type.selectedIndex == 0) {
-        bad_info += "\n    - Reason for describing collection (required)";
-    }
-
-    if ( frm.collection_name.value == "") {
-        bad_info += "\n    - Collection name (required)";
+        bad_info += "\no Reason for describing collection is required";
     }
 }
 
@@ -77,7 +75,7 @@ function doCheckFieldsCollectingInfo() {
     if ( frm.collection_size.value != "" ) {
         var	numeric = /^[0-9]*$/;
         if ( numeric.test ( frm.collection_size.value ) == false ) {
-            bad_info += "\n    - Collection size must be numeric";
+            bad_info += "\no Collection size must be numeric";
         }
     }
 }
@@ -86,7 +84,7 @@ function doCheckFieldsGeography() {
     var frm = document.forms[0];
 
     if ( frm.country.selectedIndex == 0 ) {
-        bad_info += "\n    - Country (required)";
+        bad_info += "\no Country is required";
     }
     var stateEntered = /.* state.*/i;
     var provinceEntered = /.* province.*/i;
@@ -96,52 +94,52 @@ function doCheckFieldsGeography() {
         var index = frm.country.selectedIndex;
         if ( index != 0 ) {
             if ( frm.country.options[index].text == "United States") {
-                bad_info += "\n    - U.S. state (required)";
+                bad_info += "\no U.S. state is required";
             }
         }
     }
     else if ( stateEntered.test (frm.state.value) == true )	{
-        bad_info += "\n    - \"State\" cannot appear in the state field";
+        bad_info += "\no Don't put \"state\" can't appear in the state field";
     }
     else if ( provinceEntered.test (frm.state.value) == true )	{
-        bad_info += "\n    - \"Province\" cannot appear in the state field";
+        bad_info += "\no Don't put \"province\" in the state field";
     }
     if ( stateAbbreviation.test (frm.state.value) == true )	{
-        bad_info += "\n    - The full name of the state must be entered";
+        bad_info += "\no Enter the full name of the state";
     }
     var integerReq = /^[0-9]+$/;
     var integerOpt = /^[0-9]*$/;
     if ( integerReq.test (frm.latdeg.value) == false ) {
-        bad_info += "\n    - Latitude must be an integer";
+        bad_info += "\no Latitude must be an integer";
     }
     if ( parseInt(frm.latdeg.value) > 90 )	{
-        bad_info += "\n    - Latitude must be less than 90";
+        bad_info += "\no Latitude must be less than 90";
     }
     if ( integerReq.test (frm.lngdeg.value) == false ) {
-        bad_info += "\n    - Longitude must be an integer";
+        bad_info += "\no Longitude must be an integer";
     }
     if ( parseInt(frm.lngdeg.value) > 180 )	{
-        bad_info += "\n    - Longitude must be less than 180";
+        bad_info += "\no Longitude must be less than 180";
     }
     if ( integerOpt.test (frm.latmin.value) == false ) {
-        bad_info += "\n    - Latitude minutes must be integer";
+        bad_info += "\no Latitude minutes must be integer";
     } 
     if ( frm.latmin.value != "" && parseInt(frm.latmin.value) >= 60)	{
-        bad_info += "\n    - Latitude minutes must be less than 60";
+        bad_info += "\no Latitude minutes must be less than 60";
     }
     if ( integerOpt.test (frm.lngmin.value) == false ) {
-        bad_info += "\n    - Longitude minutes must be an integer";
+        bad_info += "\no Longitude minutes must be an integer";
     }
     if ( frm.lngmin.value != "" && parseInt(frm.lngmin.value) >= 60)	{
-        bad_info += "\n    - Longitude minutes must be less than 60";
+        bad_info += "\no Longitude minutes must be less than 60";
     }
 
     // added decimal vs. minutes checks JA 18.5.04
     if ( frm.latdec.value != "" && frm.latmin.value != "" ) {
-        bad_info += "\n    - Latitude: can't enter both decimal and minutes/seconds values";
+        bad_info += "\no You can't enter both decimal and minutes/seconds latitude values";
     }
     if ( frm.lngdec.value != "" && frm.lngmin.value != "" ) {
-        bad_info += "\n    - Longitude: can't enter both decimal and minutes/seconds values";
+        bad_info += "\no You can't enter both decimal and minutes/seconds longitude values";
     }
 
     var index = frm.country.selectedIndex;
@@ -153,7 +151,7 @@ function doCheckFieldsGeography() {
                frm.country.options[index].text == "Mexico" ) &&
              ( frm.latdir.options[indexLat].text != "North" ||
                frm.lngdir.options[indexLng].text != "West" ) ) {
-            bad_info += "\n    - Lat/long (mismatch country)";
+            bad_info += "\no Lat and long are outside this country";
         }
         else if ( ( frm.country.options[index].text == "Germany" ||
               frm.country.options[index].text == "China" ||
@@ -164,20 +162,20 @@ function doCheckFieldsGeography() {
               frm.country.options[index].text == "India" ) &&
              ( frm.latdir.options[indexLat].text != "North" ||
                frm.lngdir.options[indexLng].text != "East" ) ) {
-            bad_info += "\n    - Lat/long (mismatch country)";
+            bad_info += "\no Lat and long are outside this country";
         }
         else if ( ( frm.country.options[index].text == "Australia" ||
               frm.country.options[index].text == "Tanzania, United Republic of" ||
               frm.country.options[index].text == "South Africa" ) &&
              ( frm.latdir.options[indexLat].text != "South" ||
                frm.lngdir.options[indexLng].text != "East" ) ) {
-            bad_info += "\n    - Lat/long (mismatch country)";
+            bad_info += "\no Lat and long are outside this country";
         }
         else if ( ( frm.country.options[index].text == "Argentina" ||
               frm.country.options[index].text == "Chile" ) &&
              ( frm.latdir.options[indexLat].text != "South" ||
                frm.lngdir.options[indexLng].text != "West" ) ) {
-            bad_info += "\n    - Lat/long (mismatch country)";
+            bad_info += "\no Lat and long are outside this country";
         }
         else if ( ( frm.country.options[index].text == "Algeria" ||
               frm.country.options[index].text == "France" ||
@@ -185,20 +183,20 @@ function doCheckFieldsGeography() {
               frm.country.options[index].text == "United Kingdom" ) &&
              ( parseInt(frm.lngdeg.value) > 18 ||
                frm.latdir.options[indexLat].text != "North" ) ) {
-            bad_info += "\n    - Lat/long (mismatch country)";
+            bad_info += "\no Lat and long are outside this country";
         }
         // PM 09/19/02 Changed the "West" check to longitude from latitude
         else if ( frm.country.options[index].text == "Brazil" &&
              ( parseInt(frm.latdeg.value) > 35 ||
                frm.lngdir.options[indexLng].text != "West" ) ) {
-            bad_info += "\n    - Lat/long (mismatch country)";
+            bad_info += "\no Lat and long are outside this country";
         }
         else if ( ( frm.country.options[index].text == "Kenya" ||
               frm.country.options[index].text == "Uganda" ||
               frm.country.options[index].text == "Indonesia" ) &&
              ( parseInt(frm.latdeg.value) > 15 ||
                frm.lngdir.options[indexLng].text != "East" ) ) {
-            bad_info += "\n    - Lat/long (mismatch country)";
+            bad_info += "\no Lat and long are outside this country";
         }
     }
 
@@ -208,29 +206,50 @@ function doCheckFieldsGeography() {
 function doCheckFieldsStratigraphy() {
     var frm = document.forms[0];
 
+    if ( frm.eml_max_interval.value == frm.eml_min_interval.value && frm.max_interval.value == frm.min_interval.value )	{
+        bad_info += "\no If the maximum and minimum time intervals are the same, leave the minimum blank";
+    }
+
     var hasgroup = /group/i;
     if ( hasgroup.test ( frm.geological_group.value ) == true )      {
-        bad_info += "\n  - A group name can't include the word \"group\"";
+        bad_info += "\no A group name can't include the word \"group\"";
     }
     var hasgr = /gr\./i;
     if ( hasgr.test ( frm.geological_group.value ) == true )      {
-        bad_info += "\n  - A group name can't include the word \"gr.\"";
+        bad_info += "\no A group name can't include the word \"gr.\"";
     }
     var hasformation = /formation/i;
     if ( hasformation.test ( frm.formation.value ) == true )      {
-        bad_info += "\n  - A formation name can't include the word \"formation\"";
+        bad_info += "\no A formation name can't include the word \"formation\"";
     }
     var hasfm = /fm\./i;
     if ( hasfm.test ( frm.formation.value ) == true )      {
-        bad_info += "\n  - A formation name can't include the word \"fm.\"";
+        bad_info += "\no A formation name can't include the word \"fm.\"";
     }
     var hasmember = /member/i;
     if ( hasmember.test ( frm.member.value ) == true )      {
-        bad_info += "\n  - A member name can't include the word \"member\"";
+        bad_info += "\no A member name can't include the word \"member\"";
     }
     var hasmbr = /mbr\./i;
     if ( hasmbr.test ( frm.member.value ) == true )      {
-        bad_info += "\n  - A member name can't include the word \"mbr.\"";
+        bad_info += "\no A member name can't include the word \"mbr.\"";
+    }
+
+    var haslocalsection = /[A-Za-z0-9]/;
+    var haslocalbed = /[A-Za-z0-9]/;
+    if ( haslocalsection.test ( frm.localsection.value ) == true && haslocalbed.test ( frm.localbed.value ) == false )	{
+        bad_info += "\no If you enter a local section name, also enter a local bed";
+    }
+    else if ( haslocalsection.test ( frm.localsection.value ) == false && haslocalbed.test ( frm.localbed.value ) == true )	{
+        bad_info += "\no If you enter a local bed, also enter a local section name";
+    }
+    var hasregionalsection = /[A-Za-z0-9]/;
+    var hasregionalbed = /[A-Za-z0-9]/;
+    if ( hasregionalsection.test ( frm.regionalsection.value ) == true && hasregionalbed.test ( frm.regionalbed.value ) == false )	{
+        bad_info += "\no If you enter a local section name, also enter a local bed";
+    }
+    else if ( hasregionalsection.test ( frm.regionalsection.value ) == false && hasregionalbed.test ( frm.regionalbed.value ) == true )	{
+        bad_info += "\no If you enter a local bed, also enter a local section name";
     }
 }
 
@@ -240,7 +259,7 @@ function doCheckFieldsGeology() {
     var hasdashes = /--/i;
 
     if ( frm.environment.options[index].text == "" || hasdashes.test ( frm.environment.value ) == true ) {
-        bad_info += "\n    - Environment (required)";
+        bad_info += "\no Environment is required";
     }
 }
 
@@ -261,7 +280,7 @@ function doCheckFieldsTaphonomy() {
         full_count  += 1;
     } 
     if (full_count > 1) {
-        bad_info += "\n  - Only one pulldown in the \"Articulation/element representation\" section be set to \"all\"";
+        bad_info += "\no Only one pulldown in the \"Articulation/element representation\" section be set to \"all\"";
     }
     
     
