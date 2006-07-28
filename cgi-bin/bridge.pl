@@ -1580,10 +1580,32 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
     my $md = MetadataModel->new($sth);
     my $drow = DataRow->new($rowref, $md);
     my $retVal = makeRefString($drow);
-    print '<table>' . $retVal . '</table>';
 
-    print qq|<center><p><a href="$exec_url?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p>\n|;
-	print qq|<p><a href="$exec_url?action=displaySearchCollsForAdd&type=add"><b>Add a new collection</b></a></p></center>|;
+# print a list of all the things the user should now do, with links to
+#  popup windows JA 28.7.06
+    print qq|
+    <div class="displayPanel" align="left">\n
+    <span class="displayPanelHeader"><b>New reference</b></span>\n\n
+        <table>$retVal</table>\n
+    </span>
+    </div>\n\n
+
+    <div class="displayPanel" align="left">\n
+    <span class="displayPanelHeader"><b>Please enter all the data</b></span>\n\n
+    <div class="displayPanelContent">
+    <ul class="small" style="text-align: left;">\n
+        <li>Add or edit all the <a href="#" onClick="popup = window.open('$exec_url?action=displayAuthorityTaxonSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizeable=yes');">taxonomic names</a>, especially if they are new or newly combined\n
+        <li>Add or edit all the new or second-hand <a href="#" onClick="popup = window.open('$exec_url?action=displayOpinionSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizeable=yes');">taxonomic opinions</a> about classification or synonymy\n
+        <li>Edit <a href="#" onClick="popup = window.open('$exec_url?action=startEditCollection', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizeable=yes');">existing collections</a> if new details are given\n
+        <li>Add all the <a href="#" onClick="popup = window.open('$exec_url?action=startAddCollection', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizeable=yes');">new collections</a>\n
+        <li>Add all new <a href="#" onClick="popup = window.open('$exec_url?action=startAddEditOccurrences', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizeable=yes');">occurrences</a> in existing or new collections\n
+        <li>Add all new <a href="#" onClick="popup = window.open('$exec_url?action=startReidentifyOccurrences', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizeable=yes');">reidentifications</a> of existing occurrences\n
+        <li>Add <a href="#" onClick="popup = window.open('$exec_url?action=startStartEcologyTaphonomySearch', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizeable=yes');">ecological/taphonomic data</a>, <a href="#" onClick="popup = window.open('$exec_url?action=displaySpecimenSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizeable=yes');">specimen measurements</a>, and <a href="#" onClick="popup = window.open('$exec_url?action=startImage', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizeable=yes');">images</a>\n
+    <ul>\n
+    </div>\n
+    </div>\n
+    </center>\n|;
+
     print stdIncludes("std_page_bottom");
 }
 
