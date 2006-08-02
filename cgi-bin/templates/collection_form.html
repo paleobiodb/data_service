@@ -246,10 +246,10 @@ function doCheckFieldsStratigraphy() {
     var hasregionalsection = /[A-Za-z0-9]/;
     var hasregionalbed = /[A-Za-z0-9]/;
     if ( hasregionalsection.test ( frm.regionalsection.value ) == true && hasregionalbed.test ( frm.regionalbed.value ) == false )	{
-        bad_info += "\no If you enter a local section name, also enter a local bed";
+        bad_info += "\no If you enter a regional section name, also enter a regional bed";
     }
     else if ( hasregionalsection.test ( frm.regionalsection.value ) == false && hasregionalbed.test ( frm.regionalbed.value ) == true )	{
-        bad_info += "\no If you enter a local bed, also enter a local section name";
+        bad_info += "\no If you enter a regional bed, also enter a regional section name";
     }
 }
 
