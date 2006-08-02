@@ -1,14 +1,8 @@
-#!/usr/bin/perl
-
 # created by rjp, 1/2004.
-# Represents information about a particular reference
-
 
 package Reference;
-
 use strict;
-use DBI;
-use DBTransactionManager;
+use AuthorNames;
 use CGI::Carp;
 use Data::Dumper;
 
@@ -101,17 +95,41 @@ sub formatAsHTML {
 	return $html;
 }
 
+sub getReference {
+    my $dbt = shift;
+    my $reference_no = int(shift);
 
+    if ($reference_no) {
+        my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.classification_quality,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=$reference_no";
+        my $ref = ${$dbt->getData($sql)}[0];
+        return $ref;
+    } else {
+        return undef;
+    }
+    
+}
 # JA 16-17.8.02
 # Moved and extended by PS 05/2005 to accept a number (reference_no) or hashref (if all the pertinent data has been grabbed already);
 sub formatShortRef  {
-    my $refData = shift;
+    my $refData;
+    my %options;
+    if (UNIVERSAL::isa($_[0],'DBTransactionManager')) {
+        my $dbt = shift;
+        my $reference_no = int(shift);
+        if ($reference_no) {
+            my $sql = "SELECT reference_no,author1init,author2last,author2init,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$reference_no";
+            $refData = ${$dbt->getData($sql)}[0];
+        }
+        %options = @_;
+    } else {
+        $refData = shift;
+        %options = @_;
+    }
     return if (!$refData);
 
-    my %options = @_;
     my $shortRef = "";
-
-    $shortRef .= $refData->{'author1init'} . " " . $refData->{'author1last'};
+    $shortRef .= $refData->{'author1init'}." " if $refData->{'author1init'};
+    $shortRef .= $refData->{'author1last'};
     if ( $refData->{'otherauthors'} ) {
         $shortRef .= " et al.";
     } elsif ( $refData->{'author2last'} ) {
@@ -119,7 +137,8 @@ sub formatShortRef  {
         if($refData->{'author2last'} ne "et al."){
             $shortRef .= " and ";
         } 
-        $shortRef .= $refData->{'author2init'} . " ". $refData->{'author2last'};
+        $shortRef .= $refData->{'author2init'}." " if $refData->{'author2init'};
+        $shortRef .= $refData->{'author2last'};
     }
     if ($refData->{'pubyr'}) {
         if ($options{'alt_pubyr'}) {
@@ -136,11 +155,71 @@ sub formatShortRef  {
     }
     if ($options{'link_id'}) {
         if ($refData->{'reference_no'}) {
-            $shortRef = qq|<a href="bridge.pl?action=displayRefResults&type=view&reference_no=$refData->{reference_no}">$shortRef</a>|;
+            $shortRef = qq|<a href="bridge.pl?action=displayReference&reference_no=$refData->{reference_no}">$shortRef</a>|;
         }
     }
 
     return $shortRef;
+}
+
+sub formatLongRef {
+    my $ref;
+    if (UNIVERSAL::isa($_[0],'DBTransactionManager')) {
+        $ref = getReference(@_);
+    } else {
+        $ref = shift;
+    }
+    return if (!$ref);
+
+    return "" if (!$ref);
+
+    my $longRef = "";
+    my $an = AuthorNames->new($ref);
+	$longRef .= $an->toString();
+
+	$longRef .= "." if $longRef && $longRef !~ /\.\Z/;
+	$longRef .= " ";
+
+	$longRef .= $ref->{'pubyr'}.". " if $ref->{'pubyr'};
+
+	$longRef .= $ref->{'reftitle'} if $ref->{'reftitle'};
+	$longRef .= "." if $ref->{'reftitle'} && $ref->{'reftitle'} !~ /\.\Z/;
+	$longRef .= " " if $ref->{'reftitle'};
+
+	$longRef .= "<i>" . $ref->{'pubtitle'} . "</i>" if $ref->{'pubtitle'};
+	$longRef .= " " if $ref->{'pubtitle'};
+
+	$longRef .= "<b>" . $ref->{'pubvol'} . "</b>" if $ref->{'pubvol'};
+
+	$longRef .= "<b>(" . $ref->{'pubno'} . ")</b>" if $ref->{'pubno'};
+
+	$longRef .= ":" if $ref->{'pubvol'} && ( $ref->{'firstpage'} || $ref->{'lastpage'} );
+
+	$longRef .= $ref->{'firstpage'} if $ref->{'firstpage'};
+	$longRef .= "-" if $ref->{'firstpage'} && $ref->{'lastpage'};
+	$longRef .= $ref->{'lastpage'};
+	# also displays authorizer and enterer JA 23.2.02
+	$longRef .= "<span class=\"small\"> [".$ref->{'authorizer'}."/".
+			   $ref->{'enterer'};
+	if($ref->{'modifier'}){
+		$longRef .= "/".$ref->{'modifier'};
+	}
+	$longRef .= "]</span>";
+    return $longRef;
+}
+
+sub getSecondaryRefs {
+    my $dbt = shift;
+    my $collection_no = int(shift);
+    
+    my @refs = ();
+    if ($collection_no) {
+        my $sql = "SELECT sr.reference_no FROM secondary_refs sr, refs r WHERE sr.reference_no=r.reference_no AND sr.collection_no=$collection_no ORDER BY r.author1last, r.author1init, r.author2last, r.pubyr";
+        foreach my $row (@{$dbt->getData($sql)}) {
+            push @refs, $row->{'reference_no'};
+        }
+    }
+    return @refs;
 }
 
 1;
