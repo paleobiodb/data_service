@@ -1603,7 +1603,7 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
     print qq|
     <div class="displayPanel" align="left">\n
     <span class="displayPanelHeader"><b>New reference</b></span>\n\n
-        <table>$retVal</table>\n
+        <table><tr><td valign=top><b>$reference_no</b></td><td>$retVal</td></tr></table>\n
     </span>
     </div>\n\n
 
@@ -1749,10 +1749,14 @@ sub processReferenceEditForm {
     }
 
 
-    print "<center><h3><font color='red'>Reference record updated</font></h3></center>\n";
-    print '<table>' . $refString . '</table>';
+    print "<div align=center><h3><font color='red'>Reference record updated</font></h3>";
+    print '<table cellspacing="0" cellpadding="2"><tr>'.
+          "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$refID\">$refID</a></td>".
+          "<td valign=\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
+          "<td>$refString</td>".
+          "</tr></table>";
 		
-    print qq|<center><p><a href="$exec_url?action=displaySearchRefs&type=edit"><b>Edit another reference</b></a></p></center><br>\n|;
+    print qq|<p><a href="$exec_url?action=displaySearchRefs&type=edit"><b>Edit another reference</b></a></p></div><br>\n|;
 	print stdIncludes("std_page_bottom");
 }
 
