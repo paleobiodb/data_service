@@ -1,7 +1,6 @@
 <!--
 <script src="/JavaScripts/animations.js" language="JavaScript" type="text/javascript"></script>
 -->
-
 <script language="JavaScript" type="text/javascript">
 <!--
 
@@ -123,102 +122,103 @@ function checkBrowser(string)	{
 //-->
 </script>
 
-</div> <!-- end mainSpacer (terminated immediately to allow correct positioning of gray box) -->
+<!-- </div> end mainSpacer (terminated immediately to allow correct positioning of gray box) -->
 </div> <!-- end mainBody (ditto) -->
 
 <!-- gray box outside of main area -->
 <div style="position: absolute; top: 0px; bottom: 0px; left: 0px; right: 0px; z-index: 1; background-image: url('/public/PDbg-reversed.gif'); background-position: 13em 52px;">
 </div>
 
+<!--
 <div class="mainBody">
 
 <div class="mainSpacer">
-
+-->
 <div id="homeTotals">
+  <div style="padding-top: 0.3em;"></div>
+ 
+  <div class="FeaturesShadow">
+  <div class="FeaturesShadow2">
+  <div class="Features">
 
-<div style="padding-top: 0.3em;"></div>
+  <div class="FeatureHeadline">
+  <div class="tiny">
+  <i>This hour's totals</i>
+  </div>
+  </div>
 
-<div class="FeaturesShadow">
-<div class="FeaturesShadow2">
-<div class="Features">
-<div class="FeatureHeadline">
-<div class="tiny">
-<i>This hour's totals</i>
-</div>
-</div>
+  <div class="FeatureText">
+  <!-- seems ok : style="width: 9.5em;" the width needs to be given exactly or Explorer will freak out (of course) -->
+  <table cellpadding="0" cellspacing="4">
+  <tr><td align="right" valign="top">
 
-<div class="FeatureText">
-<!-- the width needs to be given exactly or Explorer will freak out (of course) -->
-<table cellpadding="0" cellspacing="4" style="width: 9.5em;">
-<tr><td align="right" valign="top">
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats"><span id="reference_total"></span></a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats"><span id="taxon_total"></span></a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats"><span id="collection_total"></span></a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats"><span id="occurrence_total"></span></a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayAuthorizers" class="homeStats"><span id="enterer_total"></span></a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayInstitutions" class="homeStats"><span id="institution_total"></span></a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayAuthorizers" class="homeStats"><span id="country_total"></span></a></span></span>
+  </td>
 
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats"><span id="reference_total"></span></a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats"><span id="taxon_total"></span></a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats"><span id="collection_total"></span></a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats"><span id="occurrence_total"></span></a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayAuthorizers" class="homeStats"><span id="enterer_total"></span></a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayInstitutions" class="homeStats"><span id="institution_total"></span></a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayAuthorizers" class="homeStats"><span id="country_total"></span></a></span></span>
-</td>
+  <td align="left" valign="top">
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats">references</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats">taxa</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">collections</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">occurrences</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayAuthorizers" class="homeStats">contributors</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayInstitutions" class="homeStats">institutions</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayAuthorizers" class="homeStats">countries</a></span></span>
+  </td></tr>
+  </table>
 
-<td align="left" valign="top">
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats">references</a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats">taxa</a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">collections</a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">occurrences</a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayAuthorizers" class="homeStats">contributors</a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayInstitutions" class="homeStats">institutions</a></span></span><br>
-	<span style="white-space: nowrap;"><span class="tiny"> <a href="/cgi-bin/bridge.pl?action=displayAuthorizers" class="homeStats">countries</a></span></span>
-</td></tr>
-</table>
+  </div>
+  </div>
+  </div>
+  </div>
 
-</div>
-</div>
-</div>
-</div>
+  <div style="padding: 1.25em;">
+  </div>
 
-<div style="padding: 1.25em;">
-</div>
+  <div class="FeaturesShadow">
+  <div class="FeaturesShadow2">
+  <div class="Features">
+  <div class="FeatureHeadline">
+  <div class="tiny">
+  <i>Featured paper</i>
+  </div>
+  </div>
 
-<div class="FeaturesShadow">
-<div class="FeaturesShadow2">
-<div class="Features">
-<div class="FeatureHeadline">
-<div class="tiny">
-<i>Featured paper</i>
-</div>
-</div>
+  <div class="FeatureText">
+  <div class="verytiny">
+  J. S. Madin, J. Alroy, M. Aberhan, F. T. F&uuml;rsich, W. Kiessling, M. A. Kosnik, and P. J. Wagner. 2006. Statistical independence of escalatory ecological trends in Phanerozoic marine invertebrates. <a href="http://www.sciencemag.org/cgi/content/abstract/312/5775/897?maxtoshow=&amp;HITS=10&amp;hits=10&amp;RESULTFORMAT=&amp;fulltext=Madin&amp;searchid=1&amp;FIRSTINDEX=0&amp;resourcetype=HWCIT"><i>Science</i> 312:897-900</a>. <b>#44</b>
+  </div>
+  </div>
+  </div>
+  </div>
+  </div>
 
-<div class="FeatureText">
-<div class="verytiny">
-J. S. Madin, J. Alroy, M. Aberhan, F. T. F&uuml;rsich, W. Kiessling, M. A. Kosnik, and P. J. Wagner. 2006. Statistical independence of escalatory ecological trends in Phanerozoic marine invertebrates. <a href="http://www.sciencemag.org/cgi/content/abstract/312/5775/897?maxtoshow=&amp;HITS=10&amp;hits=10&amp;RESULTFORMAT=&amp;fulltext=Madin&amp;searchid=1&amp;FIRSTINDEX=0&amp;resourcetype=HWCIT"><i>Science</i> 312:897-900</a>. <b>#44</b>
-</div>
-</div>
-</div>
-</div>
-</div>
+  <div style="padding: 1.25em;">
+  </div>
 
-<div style="padding: 1.25em;">
-</div>
+  <div class="FeaturesShadow">
+  <div class="FeaturesShadow2">
+  <div class="Features">
+  <div class="FeatureHeadline">
+  <div class="tiny">
+  <i>Newest member</i>
+  </div>
+  </div>
 
-<div class="FeaturesShadow">
-<div class="FeaturesShadow2">
-<div class="Features">
-<div class="FeatureHeadline">
-<div class="tiny">
-<i>Newest member</i>
-</div>
-</div>
-
-<div class="FeatureText">
-<div class="verytiny">
-<a href="http://www.smm.org/research/Paleontology/krogers.php">Kristi Curry Rogers</a><br>
-Science Museum of Minnesota<br>
-</div>
-</div>
-</div>
-</div>
-</div>
+  <div class="FeatureText">
+  <div class="verytiny">
+  <a href="http://www.smm.org/research/Paleontology/krogers.php">Kristi Curry Rogers</a><br>
+  Science Museum of Minnesota<br>
+  </div>
+  </div>
+  </div>
+  </div>
+  </div>
 
 </div> <!-- end homeTotals -->
 
@@ -226,124 +226,123 @@ Science Museum of Minnesota<br>
 
 <div id="homeInfo">
 
-<table width="98%" cellpadding="2" cellspacing="4">
-<tr>
+  <table width="98%" cellpadding="2" cellspacing="4">
+  <tr>
 
-<!-- the width 2% is needed because Windows browsers insist on padding the cell otherwise; height 2% is needed to prevent Windows Firefox from spreading all the rows equally across the window -->
-<td align="right" valign="top" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet1',onbullet); changeText('homeTextBox',WhatIs);" height="2%" width="2%">
-<div id="bullet1">
-</div>
-</td>
+  <!-- the width 2% is needed because Windows browsers insist on padding the cell otherwise; height 2% is needed to prevent Windows Firefox from spreading all the rows equally across the window -->
+  <td align="right" valign="top" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet1',onbullet); changeText('homeTextBox',WhatIs);" height="2%" width="2%">
+  <div id="bullet1">
+  </div>
+  </td>
 
-<td align="left" valign="top">
+  <td align="left" valign="top">
 
-<div class="medium">
-<span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet1',onbullet); changeText('homeTextBox',WhatIs);">What is the Database?</span>
-</div>
+  <div class="medium">
+  <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet1',onbullet); changeText('homeTextBox',WhatIs);">What is the Database?</span>
+  </div>
 
-</td>
+  </td>
 
-<td align="right" valign="top" width="2%" rowspan="5">
+  <td align="right" valign="top" width="2%" rowspan="5">
 
-<!--
-<a href="#" onClick="startAnimation('first_homepage',1)" onDblClick="startAnimation('first_homepage',1,'reverse')">
--->
-<img name="homepage_anim" alt="animation" src="/public/animations/homepage/anim1.jpg" height="153" width="129" border="0" style="margin-right: 0.5em">
-<!--
-</a>
--->
+  <!--
+  <a href="#" onClick="startAnimation('first_homepage',1)" onDblClick="startAnimation('first_homepage',1,'reverse')">
+  -->
+  <img name="homepage_anim" alt="animation" src="/public/animations/homepage/anim1.jpg" height="153" width="129" border="0" style="margin-right: 0.5em">
+  <!--
+  </a>
+  -->
 
-&nbsp;
-&nbsp;
+  &nbsp;
+  &nbsp;
 
-</td>
+  </td>
 
-</tr>
+  </tr>
 
-<tr>
+  <tr>
 
-<td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet2',onbullet); changeText('homeTextBox',Contents);">
-<div id="bullet2">
-</div>
-</td>
+  <td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet2',onbullet); changeText('homeTextBox',Contents);">
+  <div id="bullet2">
+  </div>
+  </td>
 
-<td valign="top">
+  <td valign="top">
 
-<div class="medium">
-<span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet2',onbullet); changeText('homeTextBox',Contents);">What kinds of data can you see?</span>
-</div>
+  <div class="medium">
+  <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet2',onbullet); changeText('homeTextBox',Contents);">What kinds of data can you see?</span>
+  </div>
 
-</td></tr>
+  </td></tr>
 
-<tr>
+  <tr>
 
-<td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet3',onbullet); changeText('homeTextBox',Tools);">
-<div id="bullet3">
-</div>
-</td>
+  <td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet3',onbullet); changeText('homeTextBox',Tools);">
+  <div id="bullet3">
+  </div>
+  </td>
 
-<td valign="top">
+  <td valign="top">
 
-<div class="medium">
-<span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet3',onbullet); changeText('homeTextBox',Tools);">What can you do with the data?</span>
-</div>
+  <div class="medium">
+  <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet3',onbullet); changeText('homeTextBox',Tools);">What can you do with the data?</span>
+  </div>
 
-</td></tr>
+  </td></tr>
 
-<tr>
+  <tr>
 
-<td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet4',onbullet); changeText('homeTextBox',GetInvolved);">
-<div id="bullet4">
-</div>
-</td>
+  <td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet4',onbullet); changeText('homeTextBox',GetInvolved);">
+  <div id="bullet4">
+  </div>
+  </td>
 
-<td valign="top">
+  <td valign="top">
 
-<div class="medium">
-<span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet4',onbullet); changeText('homeTextBox',GetInvolved);">How can you get involved?</span>
-</div>
+  <div class="medium">
+  <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet4',onbullet); changeText('homeTextBox',GetInvolved);">How can you get involved?</span>
+  </div>
 
-</td></tr>
+  </td></tr>
 
-<tr>
+  <tr>
 
-<td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet5',onbullet); changeText('homeTextBox',OtherInfo);">
-<div id="bullet5">
-</div>
-</td>
+  <td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet5',onbullet); changeText('homeTextBox',OtherInfo);">
+  <div id="bullet5">
+  </div>
+  </td>
 
-<td valign="top">
+  <td valign="top">
 
-<div class="medium">
-<span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet5',onbullet); changeText('homeTextBox',OtherInfo);">Other information...</span>
-</div>
+  <div class="medium">
+  <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet5',onbullet); changeText('homeTextBox',OtherInfo);">Other information...</span>
+  </div>
 
-</td></tr>
+  </td></tr>
 
-<tr>
+  <tr>
 
-<td valign="top" colspan="3">
+  <td valign="top" colspan="3">
 
-<div style="padding-left: 0.75em;">
-<div class="homeTextBoxes" id="homeTextBoxShadow">
-<div class="homeTextBoxes" id="homeTextBoxShadow2">
-<div class="homeTextBoxes" id="homeTextBox">
-</div>
-</div>
-</div>
-</div>
+  <div style="padding-left: 0.75em;">
+  <div class="homeTextBoxes" id="homeTextBoxShadow">
+  <div class="homeTextBoxes" id="homeTextBoxShadow2">
+  <div class="homeTextBoxes" id="homeTextBox">
+  </div>
+  </div>
+  </div>
+  </div>
 
-</td>
-</tr>
+  </td>
+  </tr>
 
-</table>
+  </table>
 
 </div> <!-- end homeInfo -->
 
-<div id="homeBorder">
-<img alt="fossils" src="/public/homeBorder2.jpg" style="margin-top: 2em;">
+<div id="homeBorder" align="center">
+  <img alt="fossils" src="/public/homeBorder2.jpg" style="margin-top: 0.5em;">
 </div> <!-- end homeBorder -->
-
 
 <div style="position: absolute; bottom: 0; right: 0;">
 <a href="bridge.pl?action=listCollections"><span style="font-size: .25em; color: #E0E0E0;">list collections</span></a>
