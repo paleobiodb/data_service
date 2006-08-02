@@ -3,10 +3,10 @@
 package Confidence;
 
 use DBTransactionManager;
-use Debug;
 use URI::Escape;
 use Data::Dumper; 
 use TaxaCache;
+use Classification;
 use GD;
 
 my $IMAGE_DIR = $ENV{'BRIDGE_HTML_DIR'}."/public/confidence";
@@ -22,17 +22,17 @@ my $AITOP = 450;
 # PS 02/08/2004
 sub displayHomonymForm {
     my ($q,$s,$dbt,$homonym_names,$splist) = @_;
-    $dbh=$dbt->dbh;
+    my $dbh=$dbt->dbh;
 
     my %splist = %$splist;
     my @homonym_names = @$homonym_names;
 
     my $pl1 = scalar(@homonym_names) > 1 ? "s" : "";
     my $pl2 = scalar(@homonym_names) > 1 ? "" : "s";
-    print "<CENTER><H3>The following taxonomic name$pl1 belong$pl2 to multiple taxonomic <br>hierarchies.  Please choose the one$pl1 you want.</H3>";
-    print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"buildListForm\">";
-    print "<INPUT TYPE=\"hidden\" NAME=\"split_taxon\" VALUE=\"".$q->param('split_taxon')."\">\n";
-    print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"taxon\">\n";
+    print "<center><h3>The following taxonomic name$pl1 belong$pl2 to multiple taxonomic <br>hierarchies.  Please choose the one$pl1 you want.</h3>";
+    print "<form action=\"bridge.pl\" method=\"post\"><input type=\"hidden\" name=\"action\" value=\"buildListForm\">";
+    print "<input type=\"hidden\" name=\"split_taxon\" value=\"".$q->param('split_taxon')."\">\n";
+    print "<input type=\"hidden\" name=\"input_type\" value=\"taxon\">\n";
                        
 
     my $i=0;
@@ -41,34 +41,32 @@ sub displayHomonymForm {
 
         # Find the parent taxon and use that to clarify the choice
 
-        print '<TABLE BORDER=0 CELLSPACING=3 CELLPADDING=3>'."\n";
-        print "<TR>";
+        print '<table border=0 cellspacing=3 cellpadding=3>'."\n";
+        print "<tr>";
         foreach $taxon_no (@taxon_nos) {
             my $parent = TaxaCache::getParent($dbt,$taxon_no);
-            print "<TD><INPUT TYPE='radio' CHECKED NAME='speciesname$i' VALUE='$taxon_no'>$homonym_name [$parent->{taxon_name}]</TD>";
+            print "<td><input type='radio' checked name='speciesname$i' value='$taxon_no'>$homonym_name [$parent->{taxon_name}]</td>";
         }
-        print "<INPUT TYPE='hidden' NAME='keepspecies$i' VALUE='$homonym_name'>\n";
-        print "</TR>";
-        print "</TABLE>";
+        print "<input type='hidden' name='keepspecies$i' value='$homonym_name'>\n";
+        print "</tr>";
+        print "</table>";
         $i++;
     }
     while(($taxon,$taxon_list) = each %splist) {
-        print "<INPUT TYPE='hidden' NAME='speciesname$i' VALUE='$taxon_list'>";
-        print "<INPUT TYPE='hidden' NAME='keepspecies$i' VALUE='$taxon'>\n";
+        print "<input type='hidden' name='speciesname$i' value='$taxon_list'>";
+        print "<input type='hidden' name='keepspecies$i' value='$taxon'>\n";
         $i++;
     }
-    print "<BR><INPUT TYPE='submit' NAME='submit' VALUE='Submit'></CENTER></FORM><BR><BR>";
+    print "<br><input type='submit' name='submit' value='Submit'></center></form><br><br>";
 }
 
 # Displays a search page modeled after the collections search to search for local/regional sections
 # PS 02/04/2005
-sub displaySearchSectionForm{
-    my $q = shift;
-    my $s = shift;
-    my $dbt = shift;
-    my $hbo = shift;
+sub displaySearchSectionForm {
+    my ($q,$s,$dbt,$hbo) = @_;
+
     # Show the "search collections" form
-    %pref = main::getPreferences($s->get('enterer_no'));
+    my %pref = main::getPreferences($s->get('enterer_no'));
     my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML('search_section_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment'], \@prefkeys);
 
@@ -87,10 +85,7 @@ sub displaySearchSectionForm{
 # Handles processing of the output from displaySectionSearchForm similar to displayCollResults
 # Goes to next step if 1 result returned, else displays a list of matches
 sub displaySearchSectionResults{
-    my $q = shift;
-    my $s = shift;
-    my $dbt = shift;
-    my $hbo = shift;
+    my ($q,$s,$dbt,$hbo) = @_;
 
     my $limit = $q->param('limit') || 30;
     $limit = $limit*2; # two columns
@@ -148,7 +143,6 @@ sub displaySearchSectionResults{
         }    
             
         $link .= "<span class='tiny'> - $time_str - $place_str</span>";
-            
     }
 
     # We need to group the collections here in the code rather than SQL so that
@@ -282,29 +276,22 @@ sub displaySearchSectionResults{
     # End footer links
 
 }
-#----------------------FIRST-PAGE-----------------------------------------------
 
+# FIRST-PAGE
 sub displayTaxaIntervalsForm {
-    my $q = shift;
-    my $s = shift;
-    my $dbt = shift;
-    my $hbo = shift;
+    my ($q,$s,$dbt,$hbo) = @_;
     # Show the "search collections" form
-    %pref = main::getPreferences($s->get('enterer_no'));
+    my %pref = main::getPreferences($s->get('enterer_no'));
     my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML('taxa_intervals_form', [], [], \@prefkeys);
-                                                                                                                                                             
     # Spit out the HTML
     print $html;
 }
 
-sub displayTaxaIntervalsResults{
-    my $q=shift;
-    my $s=shift;
-    my $dbt=shift;
-    my $hbo=shift; 
+# REMAKE SPECIES LIST
+sub displayTaxaIntervalsResults {
+    my ($q,$s,$dbt,$hbo) = @_;
     my $dbh=$dbt->dbh;
-# ----------------------REMAKE SPECIES LIST-----ALSO REMOVE UNCHECKED--------------
 
     # if homonyms found, display homonym chooser form
     # if no homonyms: 
@@ -319,8 +306,8 @@ sub displayTaxaIntervalsResults{
         my %splist;
         my @homonyms;
         
-        foreach $taxon (@taxa) {
-            @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon);
+        foreach my $taxon (@taxa) {
+            my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon);
             if (scalar(@taxon_nos) > 1) {
                 push @homonyms, $taxon;
             } elsif (scalar(@taxon_nos) == 1) {
@@ -333,10 +320,10 @@ sub displayTaxaIntervalsResults{
         if (scalar(@homonyms) > 0) {
             displayHomonymForm($q,$s,$dbt,\@homonyms,\%splist);
         } else {
-            buildList($q, $s, $dbt, $hbo,\%splist);
+            buildList($q,$s,$dbt,$hbo,\%splist);
         }
     } else {
-        displayTaxaIntervalsForm($q, $s, $dbt,$hbo);
+        displayTaxaIntervalsForm($q,$s,$dbt,$hbo);
     }
     main::dbg("Species list: ".Dumper(\%splist));
 }
@@ -366,7 +353,7 @@ sub buildList    {
         my $found = 0;
         if ($no_or_name =~ /^\d+$/) {
             # Found the taxon in the authorities table, get its children
-            my $children = PBDBUtil::getChildren($dbt,$no_or_name,30);
+            my $children = Classification::getChildren($dbt,$no_or_name,30);
 
             # The getChildren function returns recombinations/synonyms for children, but not for the
             # taxon itself, so we manually add it onto the array ourselves here. messy.
