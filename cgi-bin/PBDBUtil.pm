@@ -74,127 +74,6 @@ sub getResearchGroupSQL {
     return $sql_terms;
 }
 
-## getSecondaryRefsString($dbh, $collection_no, $selectable, $deletable)
-# 	Description:	constructs table rows of refs record data including
-#					reference_no, reftitle, author info, pubyr and authorizer
-#					and enterer.
-#
-#	Parameters:		$dbh			database handle
-#					$collection_no	the collection number to which the 
-#									references pertain.
-#					$selectable		make this ref selectable (display a radio
-#									button)	
-#					$deletable		make this ref deletable (display a check
-#									box)	
-#
-#	Returns:		table rows
-##
-sub getSecondaryRefsString{
-    my $dbh = shift;
-    my $collection_no = shift;
-	my $selectable = shift;
-	my $deletable = shift;
-	
-    my $sql = "SELECT refs.reference_no, refs.author1init, refs.author1last, ".
-			  "refs.author2init, refs.author2last, refs.otherauthors, ".
-              "refs.pubyr, refs.reftitle, refs.pubtitle, refs.pubvol, ".
-			  "refs.pubno, refs.firstpage, refs.lastpage, refs.project_name ".
-              "FROM refs, secondary_refs ".
-              "WHERE refs.reference_no = secondary_refs.reference_no ".
-              "AND secondary_refs.collection_no = $collection_no ".
-			  "ORDER BY author1last, author1init, author2last, pubyr";
-    my $sth = $dbh->prepare($sql);
-    $sth->execute();
-    my @results = @{$sth->fetchall_arrayref({})};
-    $sth->finish();
-	unless(scalar @results > 0){ 
-		return "";
-	}
-
-	# Authorname Formatting
-	use AuthorNames;
-
-	my $result_string = "<table border=0 cellpadding=2 cellspacing=0 width=\"100%\">";
-	# Format each row from the database as a table row.
-	my $row_color = 0;
-    foreach my $ref (@results){
-		# add in a couple of single-space cells around the reference_no
-		# to match the formatting of Reference from BiblioRef.pm
-		if($row_color % 2){
-			$result_string .="<tr>";
-		} else{
-			$result_string .= "<tr class=\"darkList\">";
-		}
-		if($selectable){
-			$result_string .= "<td width=\"1%\" valign=top><input type=radio name=secondary_reference_no value=" . $ref->{reference_no} . "></td>\n";
-		}
-
-		# Get all the authornames for formatting
-		my %temp = ('author1init',$ref->{author1init},
-					'author1last',$ref->{author1last},
-					'author2init',$ref->{author2init},
-					'author2last',$ref->{author2last},
-					'otherauthors',$ref->{otherauthors}
-					);
-		my $an = AuthorNames->new(\%temp);
-
-		$result_string .= "<td valign=top width=\"1%\"><b><a href=\"bridge.pl?action=displayRefResults&type=view&reference_no=$ref->{reference_no}\">$ref->{reference_no}</a></b></td>";
-
-		if($ref->{project_name}){
-			$result_string .= "<td width=\"1%\" valign=top><span style=\"color: red;\"".
-							  ">&nbsp;$ref->{project_name}&nbsp;</span></td>";
-		} else {
-			$result_string .= "<td width=\"1%\" valign=top></td>";
-        }
-
-		$result_string .= "<td valign=top width=\"93%\">". $an->toString().".&nbsp;$ref->{pubyr}.&nbsp;";
-
-		if($ref->{reftitle}){
-			$result_string .= "$ref->{reftitle}.";
-		}
-		if($ref->{pubtitle}){
-			$result_string .="&nbsp;<i>$ref->{pubtitle}</i>&nbsp;";
-		}
-
-		$result_string .= "<b>";
-
-		if($ref->{pubvol}){
-			$result_string .= "$ref->{pubvol}";
-		}
-		if($ref->{pubno}){
-			 $result_string .= "($ref->{pubno})";
-		}
-
-		$result_string .= "</b>";
-
-		if($ref->{firstpage}){
-			$result_string .= ":$ref->{firstpage}";
-		}
-		if($ref->{lastpage}){
-			$result_string .= "-$ref->{lastpage}";
-		}
-
-		$result_string .= "</td></tr>";
-					
-		# put in a checkbox for deletion if no occs with this ref are tied
-		# to the collection
-		if($deletable && refIsDeleteable($dbh,$collection_no,$ref->{reference_no})){
-			if($row_color % 2){
-				$result_string .= "<tr>";
-			}	
-			else{
-				$result_string .= "<tr class='darkList'>";
-			}
-			$result_string .= "<td style=\"background-color:red;\"><input type=checkbox name=delete_ref value=$ref->{reference_no}></td><td colspan=\"3\">remove&nbsp;</td></tr>\n";
-		}
-        print "</tr>";
-		$row_color++;
-    }
-	$sth->finish();
-	$result_string .= "</table>";
-	return $result_string;
-}
-
 ## setSecondaryRef($dbh, $collection_no, $reference_no)
 # 	Description:	Checks if reference_no is the primary reference or a 
 #					secondary reference	for this collection.  If yes to either
@@ -216,19 +95,20 @@ sub setSecondaryRef{
 	my $collection_no = shift;
 	my $reference_no = shift;
 
-	return if(isRefSecondary($dbh, $collection_no, $reference_no));
+	return if(isRefPrimaryOrSecondary($dbh, $collection_no, $reference_no));
 
 	# If we got this far, the ref is not associated with the collection,
 	# so add it to the secondary_refs table.
-	my $sql = "INSERT INTO secondary_refs (collection_no, reference_no) ".
+	my $sql = "INSERT IGNORE INTO secondary_refs (collection_no, reference_no) ".
 		   "VALUES ($collection_no, $reference_no)";	
     my $sth = $dbh->prepare($sql);
-    if($sth->execute() != 1){
-		print "<font color=\"FF0000\">Failed to create secondary reference ".
-			  "for collection $collection_no and reference $reference_no.<br>".
-			  "Please notify the database administrator with this message.".
-			  "</font><br>";
-	}
+    my $return = $sth->execute();
+    #if($sth->execute() != 1){
+	#	print "<font color=\"FF0000\">Failed to create secondary reference ".
+	#		  "for collection $collection_no and reference $reference_no.<br>".
+	#		  "Please notify the database administrator with this message.".
+	#		  "</font><br>";
+	#}
 	debug(1,"ref $reference_no added as secondary for collection $collection_no");
 	return 1;
 }
@@ -294,13 +174,13 @@ sub deleteRefAssociation{
 	my $sth = $dbh->prepare($sql) or print "SQL failed to prepare: $sql<br>";
 	my $res = $sth->execute();
 	debug(1,"execute returned:$res.");
-    if($res != 1){
-		print "<font color=\"FF0000\">Failed to delete secondary ref for".
-			  "collection $collection_no and reference $reference_no.<br>".
-			  "Return code:$res<br>".
-			  "Please notify the database administrator with this message.".                  "</font><br>";
-		return 0;
-	}
+    #if($res != 1){
+	#	print "<font color=\"FF0000\">Failed to delete secondary ref for".
+	#		  "collection $collection_no and reference $reference_no.<br>".
+	#		  "Return code:$res<br>".
+	#		  "Please notify the database administrator with this message.".                  "</font><br>";
+	#	return 0;
+	#}
 	$sth->finish();
 	return 1;
 }
@@ -359,186 +239,6 @@ sub isRefPrimaryOrSecondary{
 	return 0;
 }
 
-## isRefSecondary($dbh, $collection_no, $reference_no)
-#
-#	Description	Checks the secondary_refs tables to see if
-#				$reference_no is a secondary reference for $collection
-#
-#	Parameters	$dbh			database handle
-#				$collection_no	collection with which ref may be associated
-#				$reference_no	reference to check for association.
-#
-#	Returns		boolean
-##	
-sub isRefSecondary{
-	my $dbh = shift;
-	my $collection_no = shift;
-	my $reference_no = shift;
-
-	# Next, see if the ref is listed as a secondary
-	my $sql = "SELECT reference_no from secondary_refs ".
-			  "WHERE collection_no=$collection_no";
-
-    my $sth = $dbh->prepare($sql);
-    $sth->execute();
-    my @results = @{$sth->fetchall_arrayref({})};
-    $sth->finish();
-
-	# Check the refs for a match
-	foreach my $ref (@results){
-		if($ref->{reference_no} == $reference_no){
-		debug(1,"ref $reference_no exists as secondary for collection $collection_no");
-			return 1;
-		}
-	}
-
-	# Not in secondary_refs table
-	return 0;
-}
-
-## sub newTaxonNames
-#	Description:	checks whether each of the names given to it are
-#					currently in the database, returning an array of those
-#					that aren't.
-#
-#	Arguments:		$dbh		database handle
-#					$names		reference to an array of genus_names
-#					$type		'genus_name', 'species_name' or 'subgenus_name'
-#
-#	Returns:		Array of names NOT currently in the database.
-#
-##
-sub newTaxonNames{
-	my $dbt = shift;
-    my $dbh = $dbt->dbh;
-	my $names = shift;
-    my $type = shift;
-
-	my @names = @{$names};
-    my @taxa = ();
-	my @result = ();
-    my @res;
-	
-    foreach my $name (@names) {
-        push @taxa, $dbh->quote($name) if ($name);
-    }
-    if (@taxa) {
-    	my $sql = "SELECT $type FROM occurrences WHERE $type IN (".join(',',@taxa).") GROUP BY $type";
-        @res = @{$dbt->getData($sql)};
-	}
-	
-	NAME:
-	foreach my $check (@names){
-        next if (!$check);
-		foreach my $check_res (@res){ 
-			next NAME if(uc($check_res->{$type}) eq uc($check));
-		}
-		push(@result, $check); 
-	}
-	
-	return @result;
-}
-
-# Pass in a taxon_no and this function returns all taxa that are  a part of that taxon_no, recursively
-# This function isn't meant to be called itself but is a recursive utility function for taxonomic_search
-# deprecated, see taxonomic_search
-sub new_search_recurse {
-    # Start with a taxon_name:
-    my $dbt = shift;
-    my $passed = shift;
-    my $parent_no = shift;
-    my $parent_child_spelling_no = shift;
-	$passed->{$parent_no} = 1 if ($parent_no);
-	$passed->{$parent_child_spelling_no} = 1 if ($parent_child_spelling_no);
-    return if (!$parent_no);
-
-    # Get the children. Second bit is for lapsus opinions
-    my $sql = "SELECT DISTINCT child_no FROM opinions WHERE parent_no=$parent_no AND child_no != parent_no";
-    my @results = @{$dbt->getData($sql)};
-
-    #my $debug_msg = "";
-    if(scalar @results > 0){
-        # Validate all the children
-        foreach my $child (@results){
-			# Don't revisit same child. Avoids loops in data structure, and speeds things up
-            if (exists $passed->{$child->{'child_no'}}) {
-                #print "already visited $child->{child_no}<br>";
-                next;    
-            }
-            # (the taxon_nos in %$passed will always be original combinations since orig. combs always have all the belongs to links)
-            my $parent_row = TaxonInfo::getMostRecentClassification($dbt, $child->{'child_no'});
-
-            if($parent_row->{'parent_no'} == $parent_no){
-                my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no=$child->{'child_no'}";
-                my @results = @{$dbt->getData($sql)}; 
-                foreach my $row (@results) {
-                    if ($row->{'child_spelling_no'}) {
-                        $passed->{$row->{'child_spelling_no'}}=1;
-                    }
-                }
-                $sql = "SELECT DISTINCT parent_spelling_no FROM opinions WHERE child_no=$child->{'child_no'} AND status='misspelling of'";
-                @results = @{$dbt->getData($sql)}; 
-                foreach my $row (@results) {
-                    if ($row->{'parent_spelling_no'}) {
-                        $passed->{$row->{'parent_spelling_no'}}=1;
-                    }
-                }
-                undef @results;
-                new_search_recurse($dbt,$passed,$child->{'child_no'},$child->{'child_spelling_no'});
-            } 
-        }
-    } 
-}
-
-##
-# Recursively find all taxon_nos or genus names belonging to a taxon
-# deprecated PS 10/10/2005 - use TaxaCache::getChildren instead
-##
-sub taxonomic_search{
-	my $dbt = shift;
-	my $taxon_name_or_no = (shift or "");
-    my $taxon_no;
-
-    # We need to resolve it to be a taxon_no or we're done    
-    if ($taxon_name_or_no =~ /^\d+$/) {
-        $taxon_no = $taxon_name_or_no;
-    } else {
-        my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon_name_or_no);
-        if (scalar(@taxon_nos) == 1) {
-            $taxon_no = $taxon_nos[0];
-        }       
-    }
-    if (!$taxon_no) {
-        return wantarray ? (-1) : "-1"; # bad... ambiguous name or none
-    }
-    # Make sure its an original combination
-    $taxon_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
-
-    my $passed = {};
-    
-    # get alternate spellings of focal taxon. all alternate spellings of
-    # children will be found by the new_search_recurse function
-    my $sql = "SELECT child_spelling_no FROM opinions WHERE child_no=$taxon_no";
-    my @results = @{$dbt->getData($sql)};
-    foreach my $row (@results) {
-        if ($row->{'child_spelling_no'}) {
-            $passed->{$row->{'child_spelling_no'}} = 1;
-        }
-    }
-    $sql = "SELECT DISTINCT parent_spelling_no FROM opinions WHERE child_no=$taxon_no AND status='misspelling of'";
-    @results = @{$dbt->getData($sql)}; 
-    foreach my $row (@results) {
-        if ($row->{'parent_spelling_no'}) {
-            $passed->{$row->{'parent_spelling_no'}}=1;
-        }
-    }
-
-    # get all its children
-	new_search_recurse($dbt,$passed,$taxon_no);
-
-    return (wantarray) ? keys(%$passed) : join(', ', keys(%$passed));
-}
-
 
 sub getMostRecentReIDforOcc{
 	my $dbt = shift;
@@ -558,48 +258,6 @@ sub getMostRecentReIDforOcc{
 			return $results[0]->{'reid_no'};
 		}
 	}
-}
-
-sub authorAndPubyrFromTaxonNo {
-	my $dbt = shift;
-	my $taxon_no = shift;
-	my %return_vals = ();
-
-    my $sql = "SELECT taxon_name, author1last, author2last, otherauthors, pubyr, reference_no, ".
-              "ref_is_authority FROM authorities WHERE taxon_no=$taxon_no";
-    my @auth_rec = @{$dbt->getData($sql)};
-    # Get ref info from refs if 'ref_is_authority' is set
-    if($auth_rec[0]->{ref_is_authority} =~ /YES/i){
-        PBDBUtil::debug(2,"author and year from refs");
-        if($auth_rec[0]->{reference_no}){
-			$sql = "SELECT reference_no, author1last, author2last, otherauthors, pubyr FROM refs ".
-				   "WHERE reference_no=".$auth_rec[0]->{reference_no};
-			my @results = @{$dbt->getData($sql)};
-			$return_vals{author1last} = $results[0]->{author1last};
-			if ( $results[0]->{otherauthors} )	{
-				$return_vals{author1last} .= " et al.";
-			} elsif ( $results[0]->{author2last} )	{
-				$return_vals{author1last} .= " and " . $results[0]->{author2last};
-			}
-			$return_vals{pubyr} = $results[0]->{pubyr};
-        }
-        $return_vals{'ref_is_authority'} = 'YES';
-    }
-    # If ref_is_authority is not set, use the authorname and pubyr in this
-    # record.
-    elsif($auth_rec[0]->{author1last} && $auth_rec[0]->{pubyr}){
-        PBDBUtil::debug(2,"author and year from authorities");
-        $return_vals{author1last} = $auth_rec[0]->{author1last};
-        if ( $auth_rec[0]->{otherauthors} )	{
-            $return_vals{author1last} .= " et al.";
-        } elsif ( $auth_rec[0]->{author2last} )	{
-            $return_vals{author1last} .= " and " . $auth_rec[0]->{author2last};
-        }
-        $return_vals{pubyr} = $auth_rec[0]->{pubyr};
-    }
-    $return_vals{'reference_no'} = $auth_rec[0]->{'reference_no'};
-	# This could be empty, so it's up to the caller to test the return vals.
-	return \%return_vals;
 }
 
 ## sub getPaleoCoords
@@ -661,134 +319,6 @@ sub getPaleoCoords {
 
     main::dbg("Paleolng: $paleolng Paleolat $paleolat fx $f_lngdeg fy $f_latdeg rx $rx ry $ry pid $pid");
     return ($paleolng, $paleolat);
-}
-
-# Gets the childen of a taxon, sorted/output in various fashions
-# Algorithmically, this behaves more or less identically to taxonomic_search,
-# except its slower since it can potentially return much more data and is much more flexible
-# Data is kept track of internally in a tree format. Additional data is kept track of as well
-#  -- Alternate spellings get stored in a "spellings" field
-#  -- Synonyms get stored in a "synonyms" field
-# Separated 01/19/2004 PS. 
-#  Inputs:
-#   * 1st arg: $dbt
-#   * 2nd arg: taxon name or taxon number
-#   * 3nd arg: max depth: no of iterations to go down
-#   * 4th arg: what we want the data to look like. possible values are:
-#       tree: a tree-like data structure, more general and the format used internally
-#       sort_hierarchical: an array sorted in hierarchical fashion, suitable for PrintHierarchy.pm
-#       sort_alphabetical: an array sorted in alphabetical fashion, suitable for TaxonInfo.pm or Confidence.pm
-# 
-#  Outputs: an array of hash (record) refs
-#    See 'my %new_node = ...' line below for what the hash looks like
-sub getChildren {
-    my $dbt = shift; 
-    my $taxon_name_or_no = shift;
-    my $max_depth = (shift || 1);
-    my $return_type = (shift || "sort_hierarchical");
-
-    # We need to resolve it to be a taxon_no or we're done
-    my $taxon_no;
-    if ($taxon_name_or_no =~ /^\d+$/) {
-        $taxon_no = $taxon_name_or_no;
-    } else {
-        my @taxon_nos = TaxonInfo::getTaxonNos($taxon_no);
-        if (scalar(@taxon_nos) == 1) {
-            $taxon_no = $taxon_name_or_no;
-        }    
-    }
-    if (!$taxon_no) {
-        return undef; # bad... ambiguous name or none
-    } 
-    
-    # described above, return'd vars
-    my $tree_root = {'taxon_no'=>$taxon_no, 'taxon_name'=>'ROOT','children'=>[]};
-
-    # The sorted records are sorted in a hierarchical fashion suitable for passing to printHierachy
-    my @sorted_records = ();
-    getChildrenRecurse($dbt, $tree_root, $max_depth, 1, \@sorted_records);
-    #pop (@sorted_records); # get rid of the head
-   
-    if ($return_type eq 'tree') {
-        return $tree_root;
-    } elsif ($return_type eq 'sort_alphabetical') {
-        @sorted_records = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @sorted_records;
-        return \@sorted_records;
-    } else { # default 'sort_hierarchical'
-        return \@sorted_records;
-    }
-   
-}
-
-sub getChildrenRecurse { 
-    my $dbt = shift;
-    my $node = shift;
-    my $max_depth = shift;
-    my $depth = shift;
-    my $sorted_records = shift;
-    my $parent_is_synonym = (shift || 0);
-    
-    return if (!$node->{'taxon_no'});
-
-    # find all children of this parent, do a join so we can do an order by on it
-    my $sql = "SELECT DISTINCT child_no FROM opinions o, authorities a WHERE o.child_spelling_no=a.taxon_no AND o.parent_no=$node->{taxon_no} AND o.child_no != o.parent_no ORDER BY a.taxon_name";
-    my @children = @{$dbt->getData($sql)};
-    
-    # Create the children and add them into the children array
-    for my $row (@children) {
-        # (the taxon_nos will always be original combinations since orig. combs always have all the belongs to links)
-        # go back up and check each child's parent(s)
-        my $parent_row = TaxonInfo::getMostRecentClassification($dbt,$row->{'child_no'}); 
-        if ($parent_row->{'parent_no'}==$node->{'taxon_no'})	{
-            # Get alternate spellings
-            my $sql = "(SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank FROM opinions o, authorities a".
-                      " WHERE o.child_spelling_no=a.taxon_no".
-                      " AND o.child_no = $parent_row->{child_no}".
-                      " AND o.child_spelling_no != $parent_row->{child_spelling_no})".
-                      " UNION ".
-                      "(SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank FROM opinions o, authorities a".
-                      " WHERE o.parent_spelling_no=a.taxon_no".
-                      " AND o.child_no = $parent_row->{child_no}".
-                      " AND o.status='misspelling of')".
-                      " ORDER BY taxon_name"; 
-            my $spellings= $dbt->getData($sql);
-
-            # Create the node for the new child - note its taxon_no is always the original combination,
-            # but its name/rank are from the corrected name/recombined name
-            my $taxon = TaxonInfo::getMostRecentSpelling($dbt,$row->{'child_no'});
-            my $new_node = {'taxon_no'=>$parent_row->{'child_no'}, 
-                            'taxon_name'=>$taxon->{'taxon_name'},
-                            'taxon_rank'=>$taxon->{'taxon_rank'},
-                            'depth'=>$depth,
-                            'children'=>[],
-                            'spellings'=>$spellings,
-                            'synonyms'=>[]};
-          
-            # Populate the new node and place it in its right place
-            if ( $parent_row->{'status'} =~ /^(?:bel|rec|cor|ran)/o ) {
-                return if ($depth > $max_depth);
-                # Hierarchical sort, in depth first order
-                push @$sorted_records, $new_node if (!$parent_is_synonym);
-                getChildrenRecurse($dbt,$new_node,$max_depth,$depth+1,$sorted_records);
-                push @{$node->{'children'}}, $new_node;
-            } elsif ($parent_row->{'status'} =~ /^(?:subj|obje|repl)/o) {
-                getChildrenRecurse($dbt,$new_node,$max_depth,$depth,$sorted_records,1);
-                push @{$node->{'synonyms'}}, $new_node;
-            }
-        }
-    }
-
-    if (0) {
-    print "synonyms for $node->{taxon_name}:";
-    print "$_->{taxon_name} " for (@{$node->{'synonyms'}}); 
-    print "\n<br>";
-    print "spellings for $node->{taxon_name}:";
-    print "$_->{taxon_name} " for (@{$node->{'spellings'}}); 
-    print "\n<br>";
-    print "children for $node->{taxon_name}:";
-    print "$_->{taxon_name} " for (@{$node->{'children'}}); 
-    print "\n<br>";
-    }
 }
 
 # Generation of filenames standardized here to avoid security issues or
