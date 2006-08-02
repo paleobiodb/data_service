@@ -1,24 +1,24 @@
 #!/usr/local/bin/perl
 
-
-#-d:ptkdb
-
 # bridge.pl is the starting point for all parts of PBDB system.  Everything passes through
 # here to start with. 
 
-use strict;	# eventually, should have use strict set.. rjp 2/2004.
+use strict;	
 
+# CPAN modules
 use CGI;
+use URI::Escape;
+use Text::CSV_XS;
 use CGI::Carp qw(fatalsToBrowser);
-use CGI::Carp;
+use Class::Date qw(date localdate gmdate now);
+use POSIX qw(ceil floor);
+use DBI;
+
+# PBDB modules
 use HTMLBuilder;
 use DBConnection;
-use DBI;
 use Session;
-use Class::Date qw(date localdate gmdate now);
-use DataRow;
 use AuthorNames;
-use BiblioRef;
 use Map;
 use Download;
 use Curve;
@@ -33,23 +33,19 @@ use TimeLookup;
 use Ecology;
 use Strata;
 use PrintHierarchy;
-use URI::Escape;
 use Report;
-use Text::CSV_XS;
-use POSIX qw(ceil floor);
 use Confidence;
 use Measurement;
 use TaxaCache;
 use DownloadTaxonomy;
 use Neptune;
-use URI::Escape;
-
+use TypoChecker;
 # god awful Poling modules
 use Taxon;
 use Opinion;
-
 use Validation;
 use Debug;
+
 
 
 #*************************************
@@ -81,35 +77,12 @@ my $HTML_DIR = $ENV{'BRIDGE_HTML_DIR'};
 my $OUTPUT_DIR = "public/data";
 my $DATAFILE_DIR = $ENV{'DOWNLOAD_DATAFILE_DIR'};
 
-# some generally useful trig stuff needed by processCollectionsSearchForAdd
-my $PI = 3.14159265;
-sub acos {
-    my $a;
-    if ($_[0] > 1 || $_[0] < -1) {
-        $a = 1;
-    } else {
-        $a = $_[0];
-    }
-    atan2( sqrt(1 - $a * $a), $a )
-}  
-# returns great circle distance given two latitudes and a longitudinal offset
-sub GCD { ( 180 / $PI ) * acos( ( sin($_[0]*$PI/180) * sin($_[1]*$PI/180) ) + ( cos($_[0]*$PI/180) * cos($_[1]*$PI/180) * cos($_[2]*$PI/180) ) ) }
-
-
 # Create the CGI, Session, and some other objects.
 my $q = CGI->new();
 
 # Get the URL pointing to bridge
 # WARNING (JA 13.6.02): must do this before making the HTMLBuilder object!
 my $exec_url = $q->url();
-
-# this cleans all of the CGI parameters by removing HTML, escaping quotes, etc.
-# added by rjp, 2/2004
-# don't do this for reclassification because italics need to be passed through
-#  JA 1.4.04
-#if ( $q->param('action') ne "startProcessReclassifyForm" )	{
-#	Validation::cleanCGIParams($q);
-#}
 
 # Get the database connection
 my $dbh = DBConnection::connect();
@@ -121,8 +94,6 @@ my $dbt = DBTransactionManager->new($dbh);
 my $hbo = HTMLBuilder->new($TEMPLATE_DIR, $dbt, $exec_url );
 
 my $s = Session->new($dbt);
-
-#my $action = "";
 
 # don't let users into the contributors' area unless they're on the main site
 #  or backup server (as opposed to a mirror site) JA 3.8.04
@@ -163,6 +134,7 @@ sub processAction {
 	}
 
 	if ($action eq "displayLogin") {
+    	print $q->header( -type => "text/html", -Cache_Control=>'no-cache');
 		displayLoginPage();
 		return;
 	}
@@ -222,6 +194,9 @@ sub processAction {
 			$q->param("user" => "Guest");
 			$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
 			
+            print $q->header(-type => "text/html", 
+                         -Cache_Control=>'no-cache',
+                         -expires =>"now" );
 			# return them to the login page with a message about the bad login.
 			displayLoginPage(Debug::printErrors(["Sorry, your login failed. $errorMessage"]));
 			
@@ -248,6 +223,9 @@ sub processAction {
 		
 	if (!$cookie) {
 		if ($q->param("user") eq "Contributor") {			
+            print $q->header(-type => "text/html", 
+                         -Cache_Control=>'no-cache',
+                         -expires =>"now" );
 			displayLoginPage();
 			return;
 		} else {
@@ -319,7 +297,7 @@ sub logout {
 sub displayLoginPage {	
 	my $message = shift;
 	
-	print $q->header( -type => "text/html", -Cache_Control=>'no-cache');
+#	print $q->header( -type => "text/html", -Cache_Control=>'no-cache');
 	
 	my $authorizer = $q->param("authorizer_reversed") ? $q->param("authorizer_reversed") : $q->cookie("authorizer_reversed");
 	my $enterer = $q->param("enterer_reversed") ? $q->param("enterer_reversed") : $q->cookie("enterer_reversed");
@@ -1136,14 +1114,16 @@ sub stdIncludes {
 	my $reference = buildReference( $s->get("reference_no"), "bottom" );
 	my $enterer;
 
-	ENTERER: {
-		# Already was logged in
-		if ( $s->get("enterer") ne "" ) { $enterer = $s->get("enterer"); last; }
-		# Just logged in
-		if ( $q->param("enterer") ne "" ) { $enterer = $q->param("enterer"); last; }
-		# Don't know
-		$enterer = "none";
-	}
+    if ( $s->get("enterer") ne "" ) { 
+        # Already was logged in
+        $enterer = $s->get("enterer"); 
+    } elsif ( $q->param("enterer") ne "" ) { 
+        # Just logged in
+        $enterer = $q->param("enterer"); 
+    } else {
+        # Don't know
+        $enterer = "none";
+    }
 
 	return $hbo->populateHTML(	$page, 
 								[ $reference, $enterer ], 
@@ -1160,25 +1140,13 @@ sub displaySearchRefs {
     my $noHeader = (shift || 0);
 	my $type = $q->param("type");
 
-	my @row;
-	my @fields = ( "action" );
-
 	my $html = "";
 
-	print &stdIncludes ( "std_page_top" ) unless ($noHeader);
-
-	TYPE: {
-		if ( $type eq "select" ) { push ( @row, "displayRefResults" ); last; }
-		if ( $type eq "edit" ) { push ( @row, "displaySelectRefForEditPage" ); last; }
-		if ( $type eq "add" ) { push ( @row, "displayRefResultsForAdd" ); last; }
-
-		# Unspecified
-		push ( @row, "displayRefResults" );
-	}
+	print stdIncludes ( "std_page_top" ) unless ($noHeader);
 
 	# Prepend the message and the type
-	unshift ( @row, $message, $type );
-	unshift ( @fields, "%%message%%", "type" );
+	my @row = ( $message, $type );
+	my @fields = ( "%%message%%", "type" );
 
 	# If we have a default reference_no set, show another button.
 	# Don't bother to show if we are in select mode.
@@ -1190,7 +1158,7 @@ sub displaySearchRefs {
 		unshift ( @row, "" );
 	}
 
-# Users editing collections may want to have their current reference
+    # Users editing collections may want to have their current reference
 	# swapped with the primary reference of the collection to be edited.
 	unshift ( @fields, "%%use_primary%%" );
 	if ($q->param('action') eq "startEditCollection" ) {
@@ -1220,280 +1188,338 @@ sub displaySearchRefs {
 }
 
 
-# Print out the number of refs found by a ref search JA 26.7.02
-sub describeRefResults	{
-	my $numRows = shift;
-	my $overlimit = shift;
-    my $refsearchstring = shift;
-	
-	print "<center><h3>Your search $refsearchstring produced ";
-	if ($numRows > 30 || $numRows < $overlimit)	{
-		if ($overlimit > 0)	{
-			print "$overlimit";
-		} else	{
-			print "$numRows";
-		}
-		print " matches</h3><h4>Here are ";
-		if ($numRows == 30)	{
-			print "the first 30";
-		} elsif ($numRows < $overlimit)	{
-			print "references ", $numRows - 29, " through ",$numRows;
-		} else	{
-			print "the remaining " . $numRows % 30 . " references";
-		}
-		print "</h4>";
-	} elsif ( $numRows == 1)	{
-		print "exactly one match</h3>";
-	} else	{
-		print "$numRows matches</h3>";
-	}
-	print "</center>\n";
-
-}
-
-
-
-
-sub printGetRefsButton	{
-
-	my $numRows = shift;
-	my $overlimit = shift;
-
-	if ($overlimit > 30 && $overlimit > $numRows)	{
-		my $oldSearchTerms;
-		my @oldParams = ("name", "year", "reftitle", "reference_no",
-						 "enterer_reversed", "project_name", "refsortby", "refsortorder", 
-						 "refsSeen", "authorizer_reversed");
-		for my $parameter (@oldParams)	{
-			if ($q->param($parameter))	{
-				$oldSearchTerms .= "&" . $parameter . "=" . $q->param($parameter);
-			}
-		}
-		print qq|<center><p><a href="$exec_url?action=displayRefResults&type=select$oldSearchTerms"><b>Get the next 30 references</b></a> - |;
-	} else	{
-		print  "<center><p>";
-	}
-
-	my $authname = $s->get('authorizer');
-	$authname =~ s/\. //;
-	print qq|<a href="$HOST_URL/$OUTPUT_DIR/$authname.refs"><b>Download all the references</b></a> - \n|;
-
-}
-
 
 
 # This shows the actual references.
 sub displayRefResults {
     logRequest($s,$q);
-    my ($sth,$overlimit,$refsearchstring,$md);
-	my @rows;
-	my $numRows;
+
+    my $type = $q->param('type');
 
 	# use_primary is true if the user has clicked on the "Current reference" link at
 	# the top or bottom of the page.  Basically, don't bother doing a complicated 
 	# query if we don't have to.
+    my ($data,$query_description) = ([],'');
 	unless($q->param('use_primary')) {
-		($sth, $overlimit,$refsearchstring) = RefQuery($q);
-	    $md = MetadataModel->new($sth);
-		
-		@rows = @{$sth->fetchall_arrayref()};
-		$numRows = @rows;
-	} else {
-		$q->param('use_primary' => "yes");
-		$numRows = 1;
-	}
+		($data,$query_description) = RefQuery($q);
+	} 
+    my @data = @$data;
 
-
-	if ( $numRows == 1 ) {
+	if ((scalar(@data) == 1 && $q->param('type') ne 'add') || $q->param('use_primary')) {
 		# Do the action, don't show results...
 
 		# Set the reference_no
-		unless($q->param('use_primary') || $q->param('type') eq 'view'){
-			$s->setReferenceNo( $dbh, ${$rows[0]}[3] );
+		unless($q->param('use_primary') || $q->param('type') eq 'view') {
+			$s->setReferenceNo( $dbh, $data[0]->{'reference_no'});
 		}
 
 		# QUEUE
 		my %queue = $s->unqueue( $dbh );
-		$q->param( "type" => $queue{type} );		# Store the type, just in case
-		$q->param( "collection_no" => $queue{collection_no} );
-		my $action = $queue{action};
+		my $action = $queue{'action'};
 
 		# Get all query params that may have been stuck on the queue
 		# back into the query object:
-		foreach my $key (keys %queue){
+		foreach my $key (keys %queue) {
 			$q->param($key => $queue{$key});
 		}
 
 		# if there's an action, go straight back to it without showing the ref
-		if ( $action)	{
+		if ($action)	{
             $action = \&{$action}; # Hack so use strict doesn't back
 			&$action;			# Run the action
-		} else	{  
-		
+		} elsif ($q->param('type') eq 'edit') {  
+            $q->param("reference_no"=>$data[0]->{'reference_no'});
+            displayRefEdit();
+		} elsif ($q->param('type') eq 'select') {  
+            displayMenuPage()
+        } else {
 			# otherwise, display a page showing the ref JA 10.6.02
-			print stdIncludes( "std_page_top" );
-			print "<h3>Here is the full reference...</h3>\n";
-			print "<table border=0 cellpadding=4 cellspacing=0>\n";
-		    my $drow = DataRow->new($rows[0], $md);
-			# Args: data row, selectable, row, rowcount, suppress_colls
-			# Suppress collections so I can insert other stuff and then
-			# call it below.
-		   	print makeRefString( $drow, 0, 1, 1, 1);
-			print "<tr><td colspan=\"3\">&nbsp;</td>";
-			print "<td>\n";
-			print "<table border=0 cellpadding=0 cellspacing=0>";
-			# Now the pubyr:
-			# This spacing is to match up with the collections, below
-			if(@{$rows[0]}[16]){
-				print "<tr><td>Publication type:&nbsp;<i>".${$rows[0]}[16]."</i></td></tr>";
-			}
-			# Now the comments:
-			if(@{$rows[0]}[17]){
-				print "<tr><td>Comments:&nbsp;<i>".${$rows[0]}[17]."</i></td></tr>";
-			}
-			# getCollsWithRef creates a new <tr> for the collections.
-			my $refColls = getCollsWithRef(${$rows[0]}[3], 0, 0);
-			# remove the cells that cause this to line up since we're putting
-			# it in a subtable.
-			$refColls =~ s/^<tr>\n<td colspan=\"3\">&nbsp;<\/td>/<tr>/;
-			print $refColls;
-			print "</table>\n";
-			print "</table><p>\n";
-			print stdIncludes( "std_page_bottom" );
+            displayReference($data[0]);
 		}
 		return;		# Out of here!
 	}
 
 
-	print stdIncludes( "std_page_top" );
 
-	if ( $numRows ) {
-		describeRefResults($numRows,$overlimit,$refsearchstring);
-
-		print qq|<FORM method="POST" action="$exec_url"'>\n|;
-
-		print qq|<input type=hidden name="action" value="selectReference">\n|;
-
-		my $row = 1;
+    # Needs to be > 0 for add -- case where its 1 is handled above explicitly
+	if ( scalar(@data) > 0 ) {
+	    print stdIncludes( "std_page_top" );
+        # Print the sub header
+        my $offset = (int($q->param('refsSeen')) || 0);
+        my $limit = 30;
+        print "<div align=\"center\"><h3>Your search $query_description produced ";
+        if (scalar(@data) > 1 && scalar(@data) > $limit) {
+            print scalar(@data)." matches</h3><h4>Here are ";
+            if ($offset == 0)	{
+                print "the first $limit";
+            } elsif ($offset + $limit > scalar(@data)) {
+                print "the remaining ".(scalar(@data)-$offset)." references";
+            } else	{
+                print "references ",($offset + 1), " through ".($offset + $limit);
+            }
+            print "</h4>";
+        } elsif ( scalar(@data) == 1) {
+            print "exactly one match</h3>";
+        } else	{
+            print scalar(@data)." matches</h3>";
+        }
+        print "</div>\n";
+#        if ($type eq 'add') {
+#            print "If the reference is not already in the system press \"Add reference.\"<br><br>";
+#        } elsif ($type eq 'edit') {
+#            print "Click the reference number to edit the reference<br><br>";
+#        } elsif ($type eq 'select') {
+#            print "Click the reference number to select the reference<br><br>";
+#        } else {
+#        }
 
 		# Print the references found
 		print "<table border=0 cellpadding=5 cellspacing=0>\n";
 
 		# Only print the last 30 rows that were found JA 26.7.02
-		foreach my $rowref ( @rows ) {
-		    my $drow = DataRow->new($rowref, $md);
-			if ( $row + 30 > $q->param('refsSeen') )	{
-				# Don't show radio buttons if Guest
-		   		print &makeRefString( $drow, $s->isDBMember() , $row, $numRows );
-
-                if ( $row % 2 != 0 ) {
-                    print "<tr class=\"darkList\">";
+        for(my $i=$offset;$i < $offset + 30 && $i < scalar(@data); $i++) {
+            my $row = $data[$i];
+            if ( ($offset - $i) % 2 == 0 ) {
+                print "<tr class=\"darkList\">";
+            } else {
+                print "<tr>";
+            }
+            print "<td valign=\"top\"><b>";
+            if ($s->isDBMember()) {
+                if ($type eq 'add') {
+                    print "<a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
+                } elsif ($type eq 'edit') {
+                    print "<a href=\"bridge.pl?action=displayRefResults&reference_no=$row->{reference_no}&type=edit\">$row->{reference_no}</a>";
+                } elsif ($type eq 'select') {
+                    print "<a href=\"bridge.pl?action=displayRefResults&reference_no=$row->{reference_no}&type=select\">$row->{reference_no}</a><br>";
                 } else {
-                    print "<tr>";
+                    print "<a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a><br>";
                 }
-			}
-			$row++;
+            } else {
+                print "<a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
+            }
+            print "</b></td>";
+            my $formatted_reference = Reference::formatLongRef($row);
+            print "<td>".$formatted_reference;
+            my $reference_summary = getReferenceLinkSummary($row->{'reference_no'});
+            print "<small><br><br>$reference_summary</small></td>";
+            print "</tr>";
 		}
 		print "</table>\n";
 
-		$sth->finish();
+        # Now print links at bottom
+        print  "<center><p>";
+        if ($offset + 30 < scalar(@data)) {
+            my %vars = $q->Vars();
+            $vars{'refsSeen'} += 30;
+            my $old_query = "";
+            foreach my $k (sort keys %vars) {
+                $old_query .= "&$k=$vars{$k}" if $vars{$k};
+            }
+            $old_query =~ s/^&//;
+            print qq|<a href="$exec_url?$old_query"><b>Get the next 30 references</b></a> - |;
+        } 
 
-		if($s->isDBMember()){
-			print qq|<input type=submit value="Select reference"></form>\n|;
-		}
-
-		printGetRefsButton($numRows,$overlimit);
-
+        my $authname = $s->get('authorizer');
+        $authname =~ s/\. //;
+        printRefsCSV(\@data,$authname);
+        print qq|<a href="$HOST_URL/$OUTPUT_DIR/$authname.refs"><b>Download all the references</b></a> \n|;
 	} else {
-		print "<center>\n<h3>Your search $refsearchstring produced no matches</h3>\n";
-		print "<p>Please try again with fewer search terms.</p>\n</center>\n";
-		print "<center>\n<p>";
+        if ($q->param('type') eq 'add') {
+            displayRefAdd();
+            return;
+        } else {
+	        print stdIncludes( "std_page_top" );
+            print "<center>\n<h3>Your search $query_description produced no matches</h3>\n";
+            print "<p>Please try again with fewer search terms.</p>\n</center>\n";
+            print "<center>\n<p>";
+        }
 	}
 
-	print qq|<a href="$exec_url?action=displaySearchRefs&type=select"><b>Do another search</b></a>\n|;
-	if($s->isDBMember()){
-		print qq| - <a href="$exec_url?action=displayRefAdd"><b>Enter a new reference</b></a>\n|; 
-	}
+    my $type = $q->param('type');
+	print qq| - <a href="$exec_url?action=displaySearchRefs&type=$type"><b>Do another search</b></a>\n|;
 	print "</p></center><br>\n";
 
-	print stdIncludes("std_page_bottom");
-}
-
-
-
-sub displayRefResultsForAdd {
-
-	my ($sth, $overlimit,$refsearchstring) = RefQuery($q);
-	my $md = MetadataModel->new($sth);
-
-	my @rows = @{$sth->fetchall_arrayref()};
-	my $numRows = @rows;
-  
-	if ( ! $numRows ) {
-		# No matches?  Great!  Get them where the were going.
-		displayRefAdd();
-		exit;
-	}
-
-	print stdIncludes( "std_page_top" );
-
-	describeRefResults($numRows,$overlimit,$refsearchstring);
-
-	print qq|<FORM method="POST" action="$exec_url"'>\n|;
-
-	# This is view only... you may not select
-	print qq|<input type=hidden name="action" value="displayRefAdd">\n|;
-
-	# carry search terms over for populating form
-	foreach my $s_param ("name","year","reftitle","project_name") {
-		if($q->param($s_param)){
-			print "<input type=hidden name=\"$s_param\" value=\"".
-				  $q->param($s_param)."\">\n";
-		}
-	}
-
-	# Print the references found
-	print "<table border=0 cellpadding=5 cellspacing=0>\n";
-	my $row = 1;
-	foreach my $rowref ( @rows ) {
-
-	    my $drow = DataRow->new($rowref, $md);
-	    #print $drow->getValue('reference_no') . "<BR>";
-		# This is view only... you may not select
-    	print makeRefString( $drow, 0, $row, $numRows );
-		$row++;
-	}
-	print "</table>\n";
-	$sth->finish();
-
-	printGetRefsButton($numRows,$overlimit);
-
-	print qq|<a href="$exec_url?action=displaySearchRefs&type=add"><b>Do another search</b></a></p>\n|;
-
-	print qq|<p><input type=submit value="Add reference"></center>\n</p>\n|;
+    if ($type eq 'add') {
+        print "<div align=\"center\">";
+        print "<form method=\"POST\" action=\"bridge.pl\">";
+        print "<input type=\"hidden\" name=\"action\" value=\"displayRefAdd\">";
+        foreach my $f ("name","year","reftitle","project_name") {
+            print "<input type=\"hidden\" name=\"$f\" value=\"".$q->param($f)."\">";
+        }
+        print "<input type=submit value=\"Add reference\"></center>";
+        print "</form>";
+        print "</div>";
+    }
 
 	print stdIncludes("std_page_bottom");
 }
 
+sub displayReference {
+    my $ref = shift;
+    if (!$ref) {
+        $ref = Reference::getReference($dbt,$q->param('reference_no'));
+    } 
 
-# Given the sth of a single row result, find the reference_no.
-# Then set the SESSION_DATA variable.
-sub setReferenceNoFromSth {
-	my $sth = shift;
-	my $values = shift;
+    if (!$ref) {
+        htmlErr("Valid reference not supplied"); 
+        return;
+    }
+    my $reference_no = $ref->{'reference_no'};
 
-	if ( $sth->rows ) {
-		my @names = @{$sth->{NAME}};
-		for ( my $i=0; $i<$#names; $i++ ) {
-			if ( $names[$i] eq "reference_no" ) {
-				$s->setReferenceNo( $dbh, ${$values}[$i] );
-			}
-		}
-	}
+    
+    # Create the thin line boxes
+    my $box = sub { 
+        my $html = '<div class="displayPanel" align="left">'
+                 . qq'<span class="displayPanelHeader"><b>$_[0]</b></span>'
+                 . qq'<div class="displayPanelContent">'
+                 . qq'<div class="displayPanelText">$_[1]'
+                 . '</div></div></div>';
+        return $html;
+    };
+
+	print stdIncludes("std_page_top");
+    print "<div align=\"center\"><h3>PBDB reference $ref->{reference_no}</h3></div>";
+
+    my $citation = Reference::formatLongRef($ref);
+    print &$box("Full reference",$citation);
+   
+    # Start Metadata box
+    my $html = "<table border=0 cellspacing=0 cellpadding=0\">";
+    if ($ref->{'created'}) {
+        $html .= "<tr><td class=\"displayPanelLabel\"><b>Created:</b></td><td>$ref->{'created'}</td></tr>";
+    }
+    if ($ref->{'modified'}) {
+        my $modified = date($ref->{'modified'});
+        $html .= "<tr><td class=\"displayPanelLabel\"><b>Modified:</b></td><td> $modified</td></tr>" unless ($modified eq $ref->{'created'});
+    }
+    if($ref->{'project_name'}) {
+        $html .= "<tr><td class=\"displayPanelLabel\"><b>Project name:</b></td><td>$ref->{'project_name'}";
+        if ($ref->{'project_ref_no'}) {
+            $html .= " $ref->{'project_ref_no'}";
+        }
+        $html .= "</td></tr>";
+    }
+    if($ref->{'language'}) {
+        $html .= "<tr><td class=\"displayPanelLabel\"><b>Language:</b></td><td>$ref->{'language'} </td></tr>";
+    }
+    if($ref->{'classification_quality'}) {
+        $html .= "<tr><td class=\"displayPanelLabel\"><b>Taxonomic classification quality:</b></td><td>$ref->{'classification_quality'}</td></tr>";
+    }
+    if($ref->{'publication_type'}) {
+        $html .= "<tr><td class=\"displayPanelLabel\"><b>Publication type:</b></td><td>$ref->{'publication_type'}</td></tr>";
+    }
+    if($ref->{'comments'}) {
+        $html .= "<tr><td colspan=2><b>Comments:</b> $ref->{'comments'}</td></tr>";
+    }
+    $html .= "</table>";
+    if ($html) {
+        print &$box("Metadata",$html);
+    }
+
+
+    # Get counts
+    my $sql = "SELECT count(*) c FROM authorities WHERE reference_no=$reference_no";
+    my $authority_count = ${$dbt->getData($sql)}[0]->{'c'};
+    
+    # TBD: scales, ecotaph, images, specimens/measurements, occs+reids
+
+    # Handle taxon names box
+    if ($authority_count) {
+        my $html = "";
+        if ($authority_count < 100) {
+            my $sql = "SELECT taxon_no,taxon_name FROM authorities WHERE reference_no=$reference_no ORDER BY taxon_name";
+            my @results = 
+                map { qq'<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$_->{taxon_no}">$_->{taxon_name}</a>' }
+                @{$dbt->getData($sql)};
+            $html = join(", ",@results);
+        } else {
+            $html .= qq|<b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
+            my $plural = ($authority_count == 1) ? "" : "s";
+            $html .= "View taxonomic name$plural";
+            $html .= qq|</a></b> |;
+        }
+        print &$box(qq'Taxonomic names (<a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$authority_count</a>)',$html);
+    }
+    
+    # Handle opinions box
+    $sql = "SELECT count(*) c FROM opinions WHERE reference_no=$reference_no";
+    my $opinion_count = ${$dbt->getData($sql)}[0]->{'c'};
+
+    if ($opinion_count) {
+        my $html = "";
+        if ($opinion_count < 30) {
+            my $sql = "SELECT opinion_no FROM opinions WHERE reference_no=$reference_no";
+            my @results = 
+                map {$_->[1] }
+                sort { $a->[0] cmp $b->[0] }
+                map { 
+                    my $o = Opinion->new($dbt,$_->{'opinion_no'}); 
+                    my $html = $o->formatAsHTML; 
+                    my $name = $html;
+                    $name =~ s/^'(<i>)?//; 
+                    $name =~ s/(belongs |replaced |recombined |synonym | homonym | misspelled).*?$//; 
+                    [$name,$html] }
+                @{$dbt->getData($sql)};
+            $html = join("<br>",@results);
+        } else {
+            $html .= qq|<b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
+            if ($opinion_count) {
+                my $plural = ($opinion_count == 1) ? "" : "s";
+                $html .= "View taxonomic opinion$plural";
+            }
+            $html .= qq|</a></b> |;
+        }
+    
+        print &$box(qq'Taxonomic opinions (<a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count</a>)',$html);
+    }      
+
+    # Handle collections box
+    $sql = "SELECT count(*) c FROM collections WHERE reference_no=$reference_no";
+    my $collection_count = ${$dbt->getData($sql)}[0]->{'c'};
+    $sql = "SELECT count(*) c FROM secondary_refs WHERE reference_no=$reference_no";
+    $collection_count += ${$dbt->getData($sql)}[0]->{'c'}; 
+    if ($collection_count) {
+        my $html = "";
+        if ($collection_count < 100) {
+            # primary ref in first SELECT, secondary refs in second SELECT
+            # the '1 is primary' and '0 is_primary' is a cool trick - alias the value 1 or 0 to column is_primary
+            # any primary referneces will have a  virtual column called "is_primary" set to 1, and secondaries will not have it.  PS 04/29/2005
+            my $sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections where reference_no=$reference_no)";
+            $sql .= " UNION ";
+            $sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
+
+            my $sth = $dbh->prepare($sql);
+            $sth->execute();
+
+            my $p = Permissions->new($s,$dbt);
+            my $results = [];
+            if($sth->rows) {
+                my $limit = 100;
+                my $ofRows = 0;
+                $p->getReadRows($sth,$results,$limit,\$ofRows);
+            }
+
+            foreach my $row (@$results) {
+                my $coll_link = qq|<a href="bridge.pl?action=displayCollectionDetails&collection_no=$row->{collection_no}">$row->{collection_no}</a>|;
+                if ($row->{'is_primary'}) {
+                    $coll_link = "<b>".$coll_link."</b>";
+                }
+                $html .= $coll_link . ", ";
+            }
+            $html =~ s/, $//;
+        } else {
+            my $plural = ($collection_count == 1) ? "" : "s";
+            $html .= qq|<b><a href="bridge.pl?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">View collection$plural</a> </b> |;
+        }
+        if ($html) {
+            print &$box(qq'Collections (<a href="bridge.pl?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count</a>)',$html);
+        }
+    }
+	print stdIncludes("std_page_bottom");
 }
 
 sub selectReference {
-
 	$s->setReferenceNo( $dbh, $q->param("reference_no") );
 	displayMenuPage( );
 }
@@ -1565,21 +1591,12 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
 	if ( $return == $DUPLICATE ) {
    		print "already ";
 	}
-	print "added</font></h3><center>";
+	print "added</font></h3></center>";
 
 	# Set the reference_no
 	$s->setReferenceNo( $dbh, $reference_no );
-
-    my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$reference_no;  
-    
-    dbg( "$sql<HR>" );
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-    $sth->execute();
-
-    my $rowref = $sth->fetchrow_arrayref();
-    my $md = MetadataModel->new($sth);
-    my $drow = DataRow->new($rowref, $md);
-    my $retVal = makeRefString($drow);
+    my $ref = Reference::getReference($dbt,$reference_no);
+    my $retVal = Reference::formatLongRef($ref);
 
 # print a list of all the things the user should now do, with links to
 #  popup windows JA 28.7.06
@@ -1607,73 +1624,6 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
     </center>\n|;
 
     print stdIncludes("std_page_bottom");
-}
-
-
-#  * User submits completed refs search form
-#  * System displays matching reference results
-sub displaySelectRefForEditPage
-{
-
-	my ($sth, $overlimit,$refsearchstring) = RefQuery($q);
-	my $md = MetadataModel->new($sth);
-	
-	my @rowrefs = @{$sth->fetchall_arrayref()};
-	my $numRows = @rowrefs;
-
-	if ( $numRows == 1 ) {
-		# Grab the default ref if no ref no was supplied in a form
-		if ($q->param("reference_no") <= 0)	{
-			my $drow = DataRow->new($rowrefs[0], $md);
-			if ( $drow->getValue('reference_no') )	{
-				$q->param("reference_no" => $drow->getValue('reference_no'));
-			}
-			# Otherwise grab the default ref
-			if ($q->param("reference_no") <= 0)	{
-				$q->param("reference_no" => $s->get("reference_no") );
-			}
-		}
-		displayRefEdit();
-		exit;
-	}
-
-	print stdIncludes( "std_page_top" );
-
-	if ( $numRows > 0) {
-
-		describeRefResults($numRows,$overlimit,$refsearchstring);
-
-		print qq|<form method="POST" action="$exec_url">\n|;
-		print qq|<input type=hidden name="action" value="displayRefEdit">\n|;
-
-		print "<table border=0 cellpadding=5 cellspacing=0>\n";
-		my $matches;
-		my $row = 1;
-		foreach my $rowref (@rowrefs) {
-			my $drow = DataRow->new($rowref, $md);
-			my $retVal = makeRefString($drow, 1, $row, $numRows);
-			print $retVal;
-			#$matches++ if $selectable;
-			$matches++;
-			$row++;
-		}
-		print "</table>";
-		if ($matches > 0)	{
-			print qq|<input type=submit value="Edit selected">\n|;
-		}
-		print "</form>";
-
-		printGetRefsButton($numRows,$overlimit);
-
-	} else {
-		print "<center><h3>Your search $refsearchstring produced no matches</h3>\n";
-		print "<p>Please try again with fewer search terms.</p></center>\n";
-		print "<center><p>";
-	}
-
-	print qq|<a href="$exec_url?action=displaySearchRefs&type=edit"><b>Search for another reference</b></a></p></center><br>\n|;
-
-	print stdIncludes("std_page_bottom");
 }
 
 # Wrapper to displayRefEdit
@@ -1753,15 +1703,8 @@ sub processReferenceEditForm {
 
 
 	my $refID = updateRecord('refs', 'reference_no', $q->param('reference_no'));
-		
-    my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$refID;
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-    $sth->execute();
-    my $rowref = $sth->fetchrow_arrayref();
-    my $md = MetadataModel->new($sth);
-    my $drow = DataRow->new($rowref, $md);
-    my $refString = makeRefString($drow);
-
+    my $ref = Reference::getReference($dbt,$refID);
+    my $refString = Reference::formatLongRef($ref);
 
     if (@child_nos) {
         my $pid = fork();
@@ -1808,8 +1751,6 @@ sub processReferenceEditForm {
 
     print "<center><h3><font color='red'>Reference record updated</font></h3></center>\n";
     print '<table>' . $refString . '</table>';
-	# my $bibRef = BiblioRef->new($drow);
-	# print '<table>' . $bibRef->toString() . '</table>';
 		
     print qq|<center><p><a href="$exec_url?action=displaySearchRefs&type=edit"><b>Edit another reference</b></a></p></center><br>\n|;
 	print stdIncludes("std_page_bottom");
@@ -2392,6 +2333,8 @@ sub getOccurrencesXML {
 # compose the SQL to find collections of a certain age within 100 km of
 #  a coordinate (required when the user wants to add a collection)
 sub processCollectionsSearchForAdd	{
+    # some generally useful trig stuff needed by processCollectionsSearchForAdd
+    my $PI = 3.14159265;
 
 	my $sql = "SELECT c.collection_no, c.collection_aka, c.authorizer_no, p1.name authorizer, c.collection_name, c.access_level, c.research_group, c.release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, c.country, c.state, c.latdeg, c.latmin, c.latsec, c.latdec, c.latdir, c.lngdeg, c.lngmin, c.lngsec, c.lngdec, c.lngdir, c.max_interval_no, c.min_interval_no, c.reference_no FROM collections c LEFT JOIN person p1 ON p1.person_no = c.authorizer_no WHERE ";
 
@@ -2527,7 +2470,7 @@ sub processCollectionsSearchForAdd	{
         #    push @tempDataRows, $dr;
         #    $ofRows++;
         #}
-        my $distance = 111 * GCD($mylat,$lat,abs($mylng-$lng));
+        my $distance = 111 * Map::GCD($mylat,$lat,abs($mylng-$lng));
         if ( $distance < 100 )	{
             $dr->{'distance'} = $distance;
             push @tempDataRows, $dr;
@@ -3199,19 +3142,34 @@ sub displayCollectionDetailsPage {
 
     # Get the reference
     if ($row->{'reference_no'}) {
-        my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$row->{'reference_no'};
-        my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-        $sth->execute();
-        my $refRowRef = $sth->fetchrow_arrayref();
-
-        my $md = MetadataModel->new($sth);
-        my $drow = DataRow->new($refRowRef, $md);
-        my $bibRef = BiblioRef->new($drow);
-        $sth->finish();
-        my $refString = $bibRef->toString();
-
-        $row->{'reference_string'} = $refString;
-        $row->{'secondary_reference_string'} = PBDBUtil::getSecondaryRefsString($dbh,$collection_no,0,0);
+        $row->{'reference_string'} = '';
+        my $ref = Reference::getReference($dbt,$row->{'reference_no'});
+        my $formatted_primary = Reference::formatLongRef($ref);
+        $row->{'reference_string'} = '<table cellspacing="0" cellpadding="2" width="100%"><tr>'.
+            "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">".$row->{'reference_no'}."</a></td>".
+            "<td valign=\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
+            "<td>$formatted_primary</td>".
+            "</tr></table>";
+        
+        $row->{'secondary_reference_string'} = '';
+        my @secondary_refs = Reference::getSecondaryRefs($dbt,$collection_no);
+        if (@secondary_refs) {
+            my $table = "";
+            $table .= '<table cellspacing="0" cellpadding="2" width="100%">';
+            for(my $i=0;$i < @secondary_refs;$i++) {
+                my $sr = $secondary_refs[$i];
+                my $ref = Reference::getReference($dbt,$sr);
+                my $formatted_secondary = Reference::formatLongRef($ref);
+                my $class = ($i % 2 == 0) ? 'class="darkList"' : '';
+                $table .= "<tr $class>".
+                    "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$sr\">$sr</a></td>".
+                    "<td valign=\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
+                    "<td>$formatted_secondary</td>".
+                    "</tr>";
+            }
+            $table .= "</table>";
+            $row->{'secondary_reference_string'} = $table;
+        }
     }
 
 	# Get any subset collections JA 25.6.02
@@ -4618,21 +4576,15 @@ sub displayEnterCollPage {
             @htmlValues = @{$v};
             @htmlFields = @{$f};
 
-            my $reference_no = $row->{'reference_no'};
-            # Get the reference data
-            $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$reference_no;
+            my $ref = Reference::getReference($dbt,$row->{'reference_no'});
+            my $formatted_primary = Reference::formatLongRef($ref);
 
-            $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-            $sth->execute();
-
-            my $md = MetadataModel->new($sth);
-            my $refRowRef = $sth->fetchrow_arrayref();
-            my $drow = DataRow->new($refRowRef, $md);
-            my $bibRef = BiblioRef->new($drow);
-            $sth->finish();
-
-            my $refRowString = "<table>" . $bibRef->toString() . '</table>';
-
+            my $refRowString = '<table cellspacing="0" cellpadding="2" width="100%"><tr>'.
+            "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">".$row->{'reference_no'}."</a></b>&nbsp;</td>".
+            "<td valign-\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
+            "<td>$formatted_primary</td>".
+            "</tr></table>";
+        
             unshift(@htmlFields, 'ref_string');
             unshift(@htmlValues, $refRowString);
 
@@ -4651,31 +4603,21 @@ sub displayEnterCollPage {
             exit;
         }	
 
-        # Get the reference data
-        my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$reference_no;
-        my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-        $sth->execute();
+        my $ref = Reference::getReference($dbt,$reference_no);
+        my $formatted_primary = Reference::formatLongRef($ref);
 
-        my $md = MetadataModel->new($sth);
-        my $refRowRef = $sth->fetchrow_arrayref();
-        my $drow = DataRow->new($refRowRef, $md);
-        my $bibRef = BiblioRef->new($drow);
-        $sth->finish();
-
-        my $refRowString = "<table>" . $bibRef->toString() . '</table>';
+        my $refRowString = '<table cellspacing="0" cellpadding="2" width="100%"><tr>'.
+        "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$reference_no\">".$reference_no."</a></b>&nbsp;</td>".
+        "<td valign=\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
+        "<td>$formatted_primary</td>".
+        "</tr></table>";
 
         # Get the field names
-        $sql = "SELECT * FROM collections WHERE collection_no=0";
-        dbg( "$sql" );
-        $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-        $sth->execute();
-        my @fieldNames = @{$sth->{NAME}};
-        $sth->finish();
+        my @fieldNames = $dbt->getTableColumns('collections');
         # Tack a few extra fields
         push @htmlValues, '' for @fieldNames;
         @htmlFields = @fieldNames;
-        unshift(@htmlFields,    'authorizer',
-            'enterer',
+        unshift(@htmlFields, 
             'reference_no',
             'ref_string',
             'country',
@@ -4683,8 +4625,7 @@ sub displayEnterCollPage {
             'max_interval',
             'eml_min_interval',
             'min_interval' );
-        unshift(@htmlValues,   $s->get('authorizer'),
-            $s->get('enterer'),
+        unshift(@htmlValues,   
             $reference_no,
             $refRowString,
             '',
@@ -5430,6 +5371,30 @@ sub submitHeir{
 } 
 
 ##############
+## Occurrence misspelling stuff
+
+sub searchOccurrenceMisspellingForm {
+	print stdIncludes("std_page_top");
+	TypoChecker::searchOccurrenceMisspellingForm ($dbt,$q,$s,$hbo);
+	print stdIncludes("std_page_bottom");
+}
+
+sub occurrenceMisspellingForm {
+	print stdIncludes("std_page_top");
+	TypoChecker::occurrenceMisspellingForm ($dbt,$q,$s,$hbo);
+	print stdIncludes("std_page_bottom");
+}
+
+sub submitOccurrenceMisspelling {
+	print stdIncludes("std_page_top");
+	TypoChecker::submitOccurrenceMisspelling($dbt,$q,$s,$hbo);
+	print stdIncludes("std_page_bottom");
+}
+
+## END occurrence misspelling stuff
+##############
+
+##############
 ## Reclassify stuff
 
 sub startStartReclassifyOccurrences	{
@@ -5698,39 +5663,60 @@ sub displayEditCollection {
 		$curColNum++;
 	}
 	# Current primary ref
-	my $refRowString = getCurrRefDisplayStringForColl($dbh, $collection_no, $reference_no);
-	push(@row, $refRowString);
+	my $ref = Reference::getReference($dbt,$reference_no);
+	my $primary_ref = "<table cellspacing=0 cellpadding=2 border=0 width=\"100%\"><tr class=\"darkList\"><td valign=top><b>$ref->{reference_no}</b></td><td>".Reference::formatLongRef($ref)."</td></table>";
+
+	push(@row, $primary_ref);
 	push(@fieldNames, 'ref_string');
 
 	# Secondary refs, followed by current ref
-	$refRowString = PBDBUtil::getSecondaryRefsString($dbh,$collection_no,1,1);
-
+    my @secondary_refs = Reference::getSecondaryRefs($dbt,$collection_no);
+    my $secondary_ref_string = "";
+    if (@secondary_refs) {
+        my $table = '<table cellspacing="0" cellpadding="2" width="100%">';
+        for(my $i=0;$i < @secondary_refs;$i++) {
+            my $sr = $secondary_refs[$i];
+            my $ref = Reference::getReference($dbt,$sr);
+            my $formatted_secondary = Reference::formatLongRef($ref);
+            my $class = ($i % 2 == 0) ? 'class="darkList"' : '';
+            $table .= "<tr $class>".
+                "<td valign=\"top\"><input type=\"radio\" name=\"secondary_reference_no\" value=\"$sr\"></td>".
+                "<td valign=\"top\"><b>$sr</b></th>".
+                "<td valign=\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
+                "<td>$formatted_secondary</td>".
+                "</tr>";
+            if(PBDBUtil::refIsDeleteable($dbh,$collection_no,$sr)) {
+                $table .= "<tr $class>"
+                    . "<td style=\"background-color:red;\">"
+                    . "<input type=checkbox name=delete_ref value=$sr>"
+                    . "</td>"
+                    . "<td colspan=\"3\">remove</td></tr>";
+            }
+        }
+        $table .= "</table>";
+        $secondary_ref_string = $table;
+    }   
     # secondary_references
-	push(@row, $refRowString);
+	push(@row, $secondary_ref_string);
 	push(@fieldNames, 'secondary_reference_string');
 
 	# Clear the variable for use below
-	$refRowString = "";
+	my $refRowString = "";
 
 	# Check if current session ref is at all associated with the collection
 	# If not, list it beneath the sec. refs. (with radio button for selecting
 	# as the primary ref, as with the secondary refs below).
 	unless(PBDBUtil::isRefPrimaryOrSecondary($dbh,$collection_no,$session_ref)){
-		# This part allows current session ref to be selected as primary
-		$refRowString = "<table border=0 cellpadding=8><tr><td>".
-						 "<table border=0 cellpadding=2 cellspacing=0><tr>".
-						 "</td></tr><tr class='darkList'><td valign=top>".
-						 #"</td></tr><tr><td valign=top>".
-						 "<input type=radio name=secondary_reference_no value=".
-						 $session_ref."></td><td></td>";
-		my $sr = getCurrRefDisplayStringForColl($dbh, $collection_no,$session_ref);
-		# put the radio on the same line as the ref
-		$sr =~ s/<tr>//;
-		$refRowString .= $sr."</table></td></tr></table>";
+        my $ref = Reference::getReference($dbt,$session_ref);
+        my $sr = Reference::formatLongRef($ref);
+        my $table = '<table cellspacing="0" cellpadding="2" width="100%">'
+                  . "<tr class='darkList'><td valign=top><input type=radio name=secondary_reference_no value=$session_ref></td>";
+		$table .= "<td valign=top><b>$ref->{reference_no}</b></td>";
+		$table .= "<td>$sr</td></tr></table>";
 		# Now, set up the current session ref to be added as a secondary even
 		# if it's not picked as a primary (it's currently neither).
-		$refRowString .= "\n<input type=hidden name=add_session_ref_as_2ndary ".
-						 "value=$session_ref>\n";
+		$table .= "\n<input type=hidden name=add_session_ref_as_2ndary value=$session_ref>\n";
+        $refRowString .= $table;
 	}
 
     # get the session reference
@@ -5752,7 +5738,7 @@ sub displayEditCollection {
                                                                                                                                                              
     push(@row, '<input type=submit name="update_button" value="Update collection and exit">');
     push(@fieldNames, 'page_submit_button');
-                                                                                                                                                             
+    
     #push(@row, stdIncludes("std_page_bottom"));
     push(@row, stdIncludes('std_page_bottom'));
     push(@fieldNames, 'page_footer');
@@ -5781,43 +5767,11 @@ sub processEditCollectionForm {
 		return;
 	}
 
-	# SECONDARY REF STUFF...
 	# If a radio button was checked, we're changing a secondary to the primary
-	if($q->param('secondary_reference_no')){
-		# The updateRecord() logic will take care of putting in the new primary
-		# reference for the collection
+	if($secondary) {
 		$q->param(reference_no => $secondary);
-		# Now, put the old primary ref into the secondary ref table
-		PBDBUtil::setSecondaryRef($dbh, $collection_no, $reference_no);
-		# and remove the new primary from the secondary table
-		if(PBDBUtil::isRefSecondary($dbh,$collection_no,$secondary)){
-			PBDBUtil::deleteRefAssociation($dbh, $collection_no, $secondary);
-		}
-	}
-	# If the current session ref isn't being made the primary, and it's not
-	# currently a secondary, add it as a secondary ref for the collection 
-	# (this query param doesn't show up if session ref is already a 2ndary.)
-	if(defined $q->param('add_session_ref_as_2ndary')){
-		my $session_ref = $q->param('add_session_ref_as_2ndary');
-		my $sess_ref_is_sec = PBDBUtil::isRefSecondary($dbh,$collection_no,
-														$session_ref);
-		if(($session_ref != $secondary) && (!$sess_ref_is_sec)){
-			PBDBUtil::setSecondaryRef($dbh, $collection_no, $session_ref);
-		}
-	}
-	# Delete secondary ref associations
-	my @refs_to_delete = $q->param("delete_ref");
-	dbg("secondary ref associations to delete: @refs_to_delete<br>");
-	if(scalar @refs_to_delete > 0){
-		foreach my $ref_no (@refs_to_delete){
-			# check if any occurrences with this ref are tied to the collection
-			if(PBDBUtil::refIsDeleteable($dbh, $collection_no, $ref_no)){
-				# removes secondary_refs association between the numbers.
-				dbg("removing secondary ref association (col,ref): $collection_no, $ref_no<br>");
-				PBDBUtil::deleteRefAssociation($dbh, $collection_no, $ref_no);
-			}
-		}
-	}
+    }
+
 
 	# change interval names into numbers by querying the intervals table
 	# JA 11-12.7.03
@@ -5908,8 +5862,40 @@ sub processEditCollectionForm {
 
 	# Updates here 
 	my $recID = updateRecord( 'collections', 'collection_no', $q->param('collection_no') );
+    
+	# Secondary ref handling.  Handle this after updating the collection or it'll mess up
+    if ($secondary) {
+		# The updateRecord() logic will take care of putting in the new primary
+		# reference for the collection
+		# Now, put the old primary ref into the secondary ref table
+		PBDBUtil::setSecondaryRef($dbh, $collection_no, $reference_no);
+		# and remove the new primary from the secondary table
+		PBDBUtil::deleteRefAssociation($dbh, $collection_no, $secondary);
+	}
+	# If the current session ref isn't being made the primary, and it's not
+	# currently a secondary, add it as a secondary ref for the collection 
+	# (this query param doesn't show up if session ref is already a 2ndary.)
+	if(defined $q->param('add_session_ref_as_2ndary')){
+		my $session_ref = $q->param('add_session_ref_as_2ndary');
+		if($session_ref != $secondary) {
+			PBDBUtil::setSecondaryRef($dbh, $collection_no, $session_ref);
+		}
+	}
+	# Delete secondary ref associations
+	my @refs_to_delete = $q->param("delete_ref");
+	dbg("secondary ref associations to delete: @refs_to_delete<br>");
+	if(scalar @refs_to_delete > 0){
+		foreach my $ref_no (@refs_to_delete){
+			# check if any occurrences with this ref are tied to the collection
+			if(PBDBUtil::refIsDeleteable($dbh, $collection_no, $ref_no)){
+				# removes secondary_refs association between the numbers.
+				dbg("removing secondary ref association (col,ref): $collection_no, $ref_no<br>");
+				PBDBUtil::deleteRefAssociation($dbh, $collection_no, $ref_no);
+			}
+		}
+	}
   
-    # $recID = collection_no
+    # reprint the collection
     $sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, c.* FROM collections c LEFT JOIN person p1 ON p1.person_no=c.authorizer_no LEFT JOIN person p2 ON p2.person_no=c.enterer_no LEFT JOIN person p3 ON p3.person_no=c.modifier_no WHERE collection_no=" . $collection_no;
     my @rs = @{$dbt->getData($sql)};
     my $coll = $rs[0];
@@ -5928,34 +5914,6 @@ sub processEditCollectionForm {
 
 	print stdIncludes("std_page_bottom");
 }
-
-## getCurrRefDisplayStringForColl($dbh, $collection_no, $reference_no, $session)
-#   Description:    builds the reference display row
-#
-#   Parameters:     $collection_no  the collection to which the ref belongs
-#                   $reference_no   the reference for which the string is
-#                                   being built.
-#                   $session        session object
-#
-#   Returns:        reference_display_row as processed by HTMLBuilder
-##
-sub getCurrRefDisplayStringForColl{
-    my $dbh = shift;
-    my $collection_no = shift;
-    my $reference_no = shift;
-
-    my $sql = "SELECT r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type FROM refs r WHERE r.reference_no=$reference_no";
-    
-    my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-    $sth->execute();
-    my @refRow = $sth->fetchrow_array();
-    my @refFieldNames = @{$sth->{NAME}};
-    $sth->finish();
-    my $refRowString = $hbo->populateHTML('reference_display_row', \@refRow, \@refFieldNames);
-
-    return $refRowString;
-}
-
 
 sub displayOccurrenceAddEdit {
 
@@ -6191,9 +6149,9 @@ sub processEditOccurrences {
 	my @subgenera = $q->param('subgenus_name');
 	my @species = $q->param('species_name');
 	# get all genus names in order to check for a new name
-	my @new_genera = PBDBUtil::newTaxonNames($dbt,\@genera,'genus_name');
-	my @new_subgenera =  PBDBUtil::newTaxonNames($dbt,\@subgenera,'subgenus_name');
-	my @new_species =  PBDBUtil::newTaxonNames($dbt,\@species,'species_name');
+	my @new_genera = TypoChecker::newTaxonNames($dbt,\@genera,'genus_name');
+	my @new_subgenera =  TypoChecker::newTaxonNames($dbt,\@subgenera,'subgenus_name');
+	my @new_species =  TypoChecker::newTaxonNames($dbt,\@species,'species_name');
 
 	# loop over all rows submitted from the form
 	for(my $i = 0;$i < @rowTokens; $i++) {
@@ -6469,7 +6427,6 @@ sub displayReIDCollsAndOccsSearchForm {
 sub displayOccsForReID {
 	my $collection_no = $q->param('collection_no');
     my $taxon_name = $q->param('taxon_name');
-	my $sql = "";
 	my $where = "";
 
 	#dbg("genus_name: $genus_name, subgenus_name: $subgenus_name, species_name: $species_name");
@@ -6502,17 +6459,14 @@ sub displayOccsForReID {
 		$onFirstPage = 1; 
 	}
 
-	# Get the current reference data
-    $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$s->get('reference_no');
-	dbg("$sql");
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-    my $md = MetadataModel->new($sth);
-	my $refRow = $sth->fetchrow_arrayref();
-    my $drow = DataRow->new($refRow, $md);
-    my $bibRef = BiblioRef->new($drow);
-	$sth->finish();
-	my $refString = $bibRef->toString();
+
+    my $reference_no = $current_session_ref;
+    my $ref = Reference::getReference($dbt,$reference_no);
+    my $formatted_primary = Reference::formatLongRef($ref);
+    my $refString = '<table cellspacing="0" cellpadding="2" width="100%"><tr>'.
+        "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$reference_no\">".$reference_no."</a></b>&nbsp;</td>".
+        "<td>$formatted_primary</td>".
+        "</tr></table>";
 
 	# Build the SQL
     my @where = ();
@@ -6538,11 +6492,11 @@ sub displayOccsForReID {
 	push @where, "occurrence_no > $lastOccNum";
 
 	# some occs are out of primary key order, so order them JA 26.6.04
-    $sql = "SELECT * FROM occurrences WHERE ".join(" AND ",@where).
+    my $sql = "SELECT * FROM occurrences WHERE ".join(" AND ",@where).
            " ORDER BY occurrence_no LIMIT 11";
 
 	dbg("$sql<br>");
-	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 
     
@@ -6582,55 +6536,28 @@ sub displayOccsForReID {
             $html .= $hbo->populateHTML('reid_entry_row', [$row{'occurrence_no'}, $row{'collection_no'}, $s->get('authorizer'), $s->get('enterer'),'','','','',''], ['occurrence_no', 'collection_no', 'authorizer', 'enterer','genus_reso','subgenus_reso','species_reso','plant_organ','plant_organ2'], \%pref);
 
             # print other reids for the same occurrence
-            #$sql = "SELECT * FROM reidentifications WHERE occurrence_no=" . $row{'occurrence_no'};
-            #$sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-            #$sth2->execute();
 
             $html .= "<tr><td colspan=100>";
             my ($table,$classification) = getReidHTMLTableByOccNum($row{'occurrence_no'}, 0);
             $html .= "<table>".$table."</table>";
             $html .= "</td></tr>\n";
             #$sth2->finish();
+            
+            my $ref = Reference::getReference($dbt,$row{'reference_no'});
+            my $formatted_primary = Reference::formatLongRef($ref);
+            my $refString = "<a href=\"bridge.pl?action=displayReference&reference_no=$row{reference_no}\">$row{reference_no}</a></b>&nbsp;$formatted_primary";
 
-            # Print the reference details
-            $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=".$row{'reference_no'};
-            my $sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-            $sth2->execute();
-            my $md = MetadataModel->new($sth2);
-            my $refRow = $sth2->fetchrow_arrayref();
-            my $drow = DataRow->new($refRow, $md);
-            # my $bibRef = BiblioRef->new($drow, $md);
-
-            $html .= "
-    <tr>
-        <td colspan=100>
-        <table border=0 cellspacing=0 cellpadding=0>
-        <tr>
-            <td colspan='4'>
-            <b>Original reference</b>:
-            </td>
-        </tr>
-    ";
-            # Last parameter is "suppress_colls" so collection numbers aren't shown.
-            my $ref_string = makeRefString($drow,0,0,0,1);
-            $html .= $ref_string;
-            # print $bibRef->toString();
-
-            $html .= "</table></td></tr>";
-
-            $sth2->finish();
-
+            $html .= "<tr><td colspan=20><b>Original reference</b>:<br>$refString</td></tr>";
             # Print the collections details
             if ( $printCollectionDetails) {
-
-                $sql = "SELECT collection_name,state,country,formation,period_max FROM collections WHERE collection_no=" . $row{'collection_no'};
-                $sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-                $sth2->execute();
-                my %collRow = %{$sth2->fetchrow_hashref()};
+                my $sql = "SELECT collection_name,state,country,formation,period_max FROM collections WHERE collection_no=" . $row{'collection_no'};
+                my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+                $sth->execute();
+                my %collRow = %{$sth->fetchrow_hashref()};
                 $html .= "<tr>";
-                $html .= "  <td colspan=100>";
+                $html .= "  <td colspan=20>";
                 $html .= "<b>Collection</b>:<br>";
-                my $details = "<a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$row{'collection_no'}\"><b>$row{'collection_no'}</b></a>"." ".$collRow{'collection_name'};
+                my $details = "<a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$row{'collection_no'}\">$row{'collection_no'}</a>"." ".$collRow{'collection_name'};
                 if ($collRow{'state'})	{
                      $details .= " - " . $collRow{'state'};
                 }
@@ -6645,7 +6572,7 @@ sub displayOccsForReID {
                 }
                 $html .= "$details </td>";
                 $html .= "</tr>";
-                $sth2->finish();
+                $sth->finish();
             }
         
             #$html .= "<tr><td colspan=100><hr width=100%></td></tr>";
@@ -7237,63 +7164,29 @@ sub dbg {
 	return $DEBUG;					# Either way, return the current DEBUG value
 }
 
-# JA 25.2.02
-# Given a single row of data, send it back as a table row
-sub makeRefString	{
-	my $drow = shift;
-	my $selectable = shift;
-	my $row = shift;
-	my $rowcount = shift;
-	my $supress_colls = shift;
-
-	my $retRefString  = "";
-	my $bibRef = BiblioRef->new( $drow );
-
-	$retRefString = $bibRef->toString( $selectable, $row, $rowcount );
-	if($supress_colls){
-		return $retRefString;
-	}
-	my $tempRefNo = $bibRef->get("_reference_no");
-	
-	# getCollsWithRef creates a new <tr> for the collections.
-	$retRefString .= getCollsWithRef($tempRefNo, $row, $rowcount);
-
-	return $retRefString;
-}
 
 # JA 23.2.02
-sub getCollsWithRef	{
-	my $tempRefNo = shift;
-	my $row = shift;
-	my $rowcount = shift;
+sub getReferenceLinkSummary {
+	my $reference_no = shift;
 	my $retString = "";
 
-    # Set up output
-	if ($row % 2 != 0 && $rowcount > 1)	{
-		$retString .= "<tr class='darkList'>\n";
-	} else	{
-		$retString .= "<tr>\n";
-    }    
-	$retString .= "<td colspan=\"3\">&nbsp;</td>\n<td>\n";
-
-    
     # Handle Authorities
-    my $sql = "SELECT count(*) c FROM authorities WHERE reference_no=$tempRefNo";
+    my $sql = "SELECT count(*) c FROM authorities WHERE reference_no=$reference_no";
     my $authority_count = ${$dbt->getData($sql)}[0]->{'c'};
 
     if ($authority_count) {
-        $retString .= qq|<b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$tempRefNo">|;
+        $retString .= qq|<b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
         my $plural = ($authority_count == 1) ? "" : "s";
         $retString .= "$authority_count taxonomic name$plural";
         $retString .= qq|</a></b>, |;
     }
     
     # Handle Opinions
-    $sql = "SELECT count(*) c FROM opinions WHERE reference_no=$tempRefNo";
+    $sql = "SELECT count(*) c FROM opinions WHERE reference_no=$reference_no";
     my $opinion_count = ${$dbt->getData($sql)}[0]->{'c'};
 
     if ($opinion_count) {
-        $retString .= qq|<b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$tempRefNo">|;
+        $retString .= qq|<b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
         if ($opinion_count) {
             my $plural = ($opinion_count == 1) ? "" : "s";
             $retString .= "$opinion_count taxonomic opinion$plural";
@@ -7308,9 +7201,9 @@ sub getCollsWithRef	{
 	# primary ref in first SELECT, secondary refs in second SELECT
     # the '1 is primary' and '0 is_primary' is a cool trick - alias the value 1 or 0 to column is_primary
     # any primary referneces will have a  virtual column called "is_primary" set to 1, and secondaries will not have it.  PS 04/29/2005
-    $sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections where reference_no=$tempRefNo)";
+    $sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections where reference_no=$reference_no)";
     $sql .= " UNION ";
-    $sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$tempRefNo) ORDER BY collection_no";
+    $sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
 
     my $sth = $dbh->prepare($sql);
     $sth->execute();
@@ -7328,8 +7221,8 @@ sub getCollsWithRef	{
         $retString .= "No collections";
     } else {
         my $plural = ($collection_count == 1) ? "" : "s";
-        $retString .= qq|<b><a href="bridge.pl?action=displayCollResults&type=view&wild=N&reference_no=$tempRefNo">$collection_count collection$plural</a> </b> ( |;
-        foreach $row (@$results) {
+        $retString .= qq|<b><a href="bridge.pl?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count collection$plural</a> </b> ( |;
+        foreach my $row (@$results) {
 			my $coll_link = qq|<a href="bridge.pl?action=displayCollectionDetails&collection_no=$row->{collection_no}">$row->{collection_no}</a>|;
             if ($row->{'is_primary'}) {
                 $coll_link = "<b>".$coll_link."</b>";
@@ -7339,9 +7232,6 @@ sub getCollsWithRef	{
         $retString .= ")";
     } 
     
-
-    $retString .= "</td></tr>";
-
 	return $retString;
 }
 
@@ -7351,131 +7241,95 @@ sub getCollsWithRef	{
 # completely messed up by Poling 3.04 and restored by JA 10.4.04
 sub RefQuery {
 	my $q = shift;
-    
-    my $csv = Text::CSV_XS->new({'binary'=>1});
-    my $sth;
+    my %options = $q->Vars();
 
-	# Use current reference button?
-	if ($q->param('use_current')) {
-		# if so, grab the current reference info.
-		my $sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.comments,r.language,r.created,r.modified FROM refs r".
-                  " LEFT JOIN person p1 ON p1.person_no=r.authorizer_no ".
-                  " LEFT JOIN person p2 ON p2.person_no=r.enterer_no".
-                  " LEFT JOIN person p3 ON p3.person_no=r.modifier_no".
-                  " WHERE reference_no = ?";
-		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute($s->get('reference_no'));
-		return $sth;
-	}
-
-	# do these really need to be globals?  rjp 12/29/03
-	# I'm changing them to locals, rjp, 3/15/2004.
-	my $name = $q->param('name');
-	my $pubyr = $q->param('year');
-	my $reftitle = $q->param('reftitle');
-	my $pubtitle = $q->param('pubtitle');
-	my $refno = $q->param('reference_no');
+    if ($options{'use_current'}) {
+        $options{'reference_no'} = $s->get('reference_no');
+    }
 
 	# build a string that will tell the user what they asked for
-	my $refsearchstring = qq|$name| if $name;
-	$refsearchstring .= qq| $pubyr| if $pubyr;
-	$refsearchstring .= qq| $reftitle| if $reftitle;
-	$refsearchstring .= qq| $pubtitle| if $pubtitle;
-	$refsearchstring .= qq| reference $refno| if $refno;
-	$refsearchstring =~ s/^ //;
-	my $overlimit;
+	my $refsearchstring = '';
 
-	if ( $refsearchstring ) { $refsearchstring = "for '$refsearchstring' "; }
+    my @where = ();
+    if ($options{'reference_no'}) {
+        push @where, "r.reference_no=".int($options{'reference_no'}) if ($options{'reference_no'});
+        $refsearchstring .= " reference ".$options{'reference_no'} 
+    } else {
+        if ($options{'name'}) {
+            $refsearchstring .= " ".$options{'name'};
+            push @where,"(r.author1last LIKE ".$dbh->quote('%'.$options{'name'}.'%').
+                        " OR r.author2last LIKE ".$dbh->quote('%'.$options{'name'}.'%').
+                        " OR r.otherauthors LIKE ".$dbh->quote('%'.$options{'name'}.'%').')';
+        }
+        if ($options{'year'}) {
+            push @where, "r.pubyr LIKE ".$dbh->quote($options{'year'});
+            $refsearchstring .= " ".$options{'year'};
+        }
+        if ($options{'reftitle'}) {
+            push @where, "r.reftitle LIKE ".$dbh->quote('%'.$options{'reftitle'}.'%');
+            $refsearchstring .= " ".$options{'reftitle'};
+        }
+        if ($options{'pubtitle'}) {
+            push @where, "r.pubtitle LIKE ".$dbh->quote('%'.$options{'pubtitle'}.'%');
+            $refsearchstring .= " ".$options{'pubtitle'};
+        }
+        if ($options{'project_name'}) {
+            push @where, "FIND_IN_SET(".$dbh->quote($options{'project_name'}).",r.project_name)";
+            $refsearchstring .= " ".$options{'project_name'};
+        }
+        if ( $options{'authorizer_reversed'}) {
+            push @where, "p1.name LIKE ".$dbh->quote(Person::reverseName($options{'authorizer_reversed'}));
+            $refsearchstring .= " authorizer ".$options{'authorizer_reversed'};
+        }
+        if ( $options{'enterer_reversed'}) {
+            push @where, "p2.name LIKE ".$dbh->quote(Person::reverseName($options{'enterer_reversed'}));
+            $refsearchstring .= " enterer ".$options{'enterer_reversed'};
+        }
+    }
 
-	if ( $refsearchstring ne "" || $q->param('authorizer_reversed') || $q->param('enterer_reversed') || $q->param('project_name') ) {
+    if (@where) {
         my $tables = "(refs r, person p1, person p2)".
                      " LEFT JOIN person p3 ON p3.person_no=r.modifier_no";
         # This exact order is very important due to work around with inflexible earlier code
         my $from = "p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.comments,r.language,r.created,r.modified";
-        my @where = ("r.authorizer_no=p1.person_no","r.enterer_no=p2.person_no");
+        my @join_conditions = ("r.authorizer_no=p1.person_no","r.enterer_no=p2.person_no");
+        my $sql = "SELECT $from FROM $tables WHERE ".join(" AND ",@join_conditions,@where);
+        my $orderBy = " ORDER BY ";
+        my $refsortby = $options{'refsortby'};
+        my $refsortorder = ($options{'refsortorder'} =~ /desc/i) ? "DESC" : "ASC"; 
 
-		if ($name) {
-			push @where,"(r.author1last LIKE ".$dbh->quote('%'.$name.'%').
-                        " OR r.author2last LIKE ".$dbh->quote('%'.$name.'%').
-                        " OR r.otherauthors LIKE ".$dbh->quote('%'.$name.'%').')';
-		}
-        push @where, "r.pubyr LIKE ".$dbh->quote($pubyr) if ($pubyr);
-        push @where, "r.reftitle LIKE ".$dbh->quote('%'.$reftitle.'%') if ($reftitle);
-        push @where, "r.pubtitle LIKE ".$dbh->quote('%'.$pubtitle.'%') if ($pubtitle);
-        push @where, "r.reference_no=".int($refno) if ($refno);
-        push @where, "FIND_IN_SET(".$dbh->quote($q->param('project_name')).",r.project_name)" if ($q->param('project_name'));
+        # order by clause is mandatory
+        if ($refsortby eq 'year') {
+            $orderBy .= "r.pubyr $refsortorder, ";
+        } elsif ($refsortby eq 'publication') {
+            $orderBy .= "r.pubtitle $refsortorder, ";
+        } elsif ($refsortby eq 'authorizer') {
+            $orderBy .= "p1.last_name $refsortorder, p1.first_name $refsortorder";
+        } elsif ($refsortby eq 'enterer') {
+            $orderBy .= "p2.last_name $refsortorder, p2.first_name $refsortorder";
+        } elsif ($refsortby eq 'entry date') {
+            $orderBy .= "r.reference_no $refsortorder, ";
+        }
         
-		if ( $q->param('authorizer_reversed')) {
-            push @where, "p1.name LIKE ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed'))) if ($q->param('authorizer_reversed'));
-		}
-		if ( $q->param('enterer_reversed')) {
-            push @where, "p2.name LIKE ".$dbh->quote(Person::reverseName($q->param('enterer_reversed'))) if ($q->param('enterer_reversed'));
-		}
-	
-        my $sql = "SELECT $from FROM $tables WHERE ".join(" AND ",@where);
-    
-		my $orderBy = " ORDER BY ";
-		my $refsortby = $q->param('refsortby');
-        my $refsortorder = ($q->param('refsortorder') =~ /desc/i) ? "DESC" : "ASC"; 
+        if ($refsortby)	{
+            $orderBy .= "r.author1last $refsortorder, r.pubyr $refsortorder";
+        }
 
-		# order by clause is mandatory
-		if ($refsortby eq 'year') {
-			$orderBy .= "r.pubyr $refsortorder, ";
-		} elsif ($refsortby eq 'publication') {
-			$orderBy .= "r.pubtitle $refsortorder, ";
-		} elsif ($refsortby eq 'authorizer') {
-			$orderBy .= "p1.last_name $refsortorder, p1.first_name $refsortorder";
-		} elsif ($refsortby eq 'enterer') {
-			$orderBy .= "p2.last_name $refsortorder, p2.first_name $refsortorder";
-		} elsif ($refsortby eq 'entry date') {
-			$orderBy .= "r.reference_no $refsortorder, ";
-		}
-		
-		if ($refsortby)	{
-			$orderBy .= "r.author1last $refsortorder, r.pubyr $refsortorder";
-		}
-
-		# only append the ORDER clause if something is in it,
-		#  which we know because it doesn't end with "BY "
-		if ( $orderBy !~ /BY $/ )	{
-			$orderBy =~ s/, $//;
-			$sql .= $orderBy;
-		}
+        # only append the ORDER clause if something is in it,
+        #  which we know because it doesn't end with "BY "
+        if ( $orderBy !~ /BY $/ )	{
+            $orderBy =~ s/, $//;
+            $sql .= $orderBy;
+        }
 
         dbg("RefQuery SQL".$sql);
-
-		# Execute the ref query
-		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute();
-		my @refFields = @{$sth->{NAME}};
-		my @rows = @{$sth->fetchall_arrayref()};
-		
-		# If too many refs were found, set a limit
-		if (@rows > 30)	{
-			$overlimit = @rows;
-			$q->param('refsSeen' => 30 + $q->param('refsSeen') );
-			$sql = $sql . " LIMIT " .$q->param('refsSeen');
-		}
-	
-		
-		# Dump the refs to a flat file JA 1.7.02
-		my $authname = $s->get('authorizer');
-		$authname =~ s/\. //;
-		open REFOUTPUT,">$HTML_DIR/$OUTPUT_DIR/$authname.refs";
-
-        if ($csv->combine(@refFields)) {
-            print REFOUTPUT $csv->string(),"\n";
+        
+	    if ( $refsearchstring ) { 
+            $refsearchstring =~ s/^\s*//;
+            $refsearchstring = "for '$refsearchstring' "; 
         }
-		for my $rowRef (@rows)	{
-			if ($csv->combine(@$rowRef))	{
-				print REFOUTPUT $csv->string(),"\n";
-			}
-		}
-		close REFOUTPUT;
-		
-		# Rerun the query
-		$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute();
+        my @data = @{$dbt->getData($sql)};
+	    return (\@data,$refsearchstring);
 	} else {
 		print stdIncludes("std_page_top");
 		print "<center><h4>Sorry! You can't do a search without filling in at least one field</h4>\n";
@@ -7483,9 +7337,33 @@ sub RefQuery {
 		print stdIncludes("std_page_bottom");
 		exit(0);
 	}
-	
-	return ($sth, $overlimit,$refsearchstring);
 }
+   
+sub printRefsCSV {
+    my @data = @{$_[0]};
+    my $authname = $_[1];
+    $authname =~ s/\. //;
+    # Dump the refs to a flat file JA 1.7.02
+    my $csv = Text::CSV_XS->new({'binary'=>1});
+    open REFOUTPUT,">$HTML_DIR/$OUTPUT_DIR/$authname.refs";
+
+    my @fields = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage publication_type comments language created modified); 
+    if ($csv->combine(@fields)) {
+        print REFOUTPUT $csv->string(),"\n";
+    }
+    for my $row (@data)	{
+        my @row;
+        foreach (@fields) {
+            push @row, $row->{$_};
+        }
+        if ($csv->combine(@row))	{
+            print REFOUTPUT $csv->string(),"\n";
+        } else {
+            print "ERR";
+        }
+    }
+    close REFOUTPUT;
+} 
 
 
 # This only shown for internal errors
@@ -7518,7 +7396,7 @@ sub buildReference {
 				$reference = $reference_no." (";
 			}
 			elsif ($outputtype eq "list")	{
-				$reference = "<a href=bridge.pl?action=displayRefResults&type=view&reference_no=$reference_no>";
+				$reference = "<a href=bridge.pl?action=displayReference&reference_no=$reference_no>";
 			}
 			$reference .= $rs->{author1last};
 
