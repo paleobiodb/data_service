@@ -35,35 +35,26 @@ A:hover	{ color : #C80078; text-decoration:none; }
 
 /* how should the links look in the menu bar at the top?  */
 A:link.menu { 
-	color : White; font-size : 0.85em; text-decoration:none; 
+	color : white; font-size : 0.85em; text-decoration:none; 
 	padding: 2px 5px 2px 5px;
 }
 
 A:visited.menu { 
-	color : White; font-size : 0.85em; text-decoration:none; 
+	color : white; font-size : 0.85em; text-decoration:none; 
 	padding: 2px 5px 2px 5px;
 }
 
 A:active.menu { 
-	color : White; font-size : 0.85em; text-decoration:none; 
+	color : white; font-size : 0.85em; text-decoration:none; 
 	padding: 2px 5px 2px 5px;
 }
 
 A:hover.menu { 
 	color : black; font-size : 0.85em; 
-
-	border-style: solid;  /*solid, dashed, dotted, grooved */
-    border-color: white;
-    border-left-width: 0px;
-    border-right-width: 0px;
-    border-bottom-width: 0px;
-    border-top-width: 0px;   
-	
+    border: 0px solid white;
 	/* top, right, bottom, left*/
 	/*padding: 0px 4px 0px 4px;*/
 	padding: 2px 5px 2px 5px;
-
-	
 	text-decoration:none; 
 }
 
@@ -118,20 +109,25 @@ H6 {font-size: .9em;}
     margin-bottom: 0;
 }
 
-.mainBody	{
+#mainBody	{
+    padding-top: 1em;
+    padding-left: 1em;
     margin-left: 1em; 
     margin-right: 1em;
+    text-align: center;
 }
 
-.mainSpacer	{
+#mainBodyGuest {
  /* need align and width to roughly center the page contents below the banner */
-    text-align: center;
+    padding-top: 2em;
+    padding-left: 1em;
+    margin-left: 0em; 
+    margin-right: 0em;
+    text-align: left;
     width: 56em;
     position: absolute;
-    padding-top: 2em;
     top: 52px;
-    bottom: 0;
-    z-index: 1;
+/*    bottom: 0;*/
 }
 
 #homeBanner	{
@@ -139,42 +135,46 @@ H6 {font-size: .9em;}
     background-image: url(/public/bannerimages/dcaloostBlue3.jpg);
     min-width: 56em; /* needed because scrolling across when a window is small
                           causes the image to be truncated */
+
     position: absolute;
     left: 0;
-    right: 0;
     top: 0;
+    right: 0;
     z-index: 9;
 }
 
-#homeLinksShadow	{
+
+.homeLinksShadow	{
     background: #E4E4E4;
-    width: 100%;
     position: relative;
-    top: 52px;
-    z-index: 9;
 }
 
-#homeLinksShadow2	{
+.homeLinksShadow2	{
     background: #D0D0D0;
     width: 100%;
     position: relative;
-    top: -1px;
-    z-index: 9;
+    left: -0px;
+    top: -2px;
 }
 
 #homeLinks	{
     width: 100%;
     min-width: 56em; /* needed because scrolling down when a window is small
                           causes the image to be truncated */
+    position: absolute;
+    top: 50px;
+    left: 0;
+    z-index: 9; 
+}
+
+#homeLinksMenu {
+    margin: 0 0 0 0;
+    padding: 0 0 0 0;
     background-color: #64A8FF;
     border-bottom: 1px #909090 solid;
-    position: relative;
-    #position: absolute;
     left: 0;
     right: 0;
-    top: -1px;
-    #top: 50px;
-    z-index: 9;
+    top: 0;
 }
 
 #homeTotals	{
@@ -187,12 +187,48 @@ H6 {font-size: .9em;}
     height: 45em;
     width: 13em;
     position: absolute;
-    top: 0px;
+    float: left;
+    top: 52px;
     bottom: 0px;
-    left: 0em;
-    right: 13em;
+    left: 1em;
     z-index: 2;
 }
+
+#homeInfo	{
+    background-image: url(/public/PDbg.gif);
+    padding-top: 3em;
+    padding-bottom: 0em;
+    border-bottom: 1px solid rgb(144, 144, 144);
+    border-left: 1px solid rgb(144, 144, 144);
+    border-right: 1px solid rgb(144, 144, 144);
+    height: 45em;
+    width: 32em;
+    position: absolute;
+    top: 52px;
+    left: 13em;
+    right: 45em;
+    z-index: 3;
+}
+
+#homeBorder	{
+    background-image: url(/public/PDbg.gif);
+    padding-top: 3em;
+    border-bottom: 1px solid rgb(144, 144, 144);
+    border-right: 1px solid rgb(144, 144, 144);
+    height: 45em;
+    width: 150px;
+    position: absolute;
+/*    margin-left: 45em;*/
+    left: 45em;
+    top: 52px;
+    z-index: 2;
+}
+
+
+.fixedWidth {
+    width: 56em; 
+}
+
 
 .FeaturesShadow	{
     background: #E4E4E4;
@@ -238,22 +274,6 @@ H6 {font-size: .9em;}
     padding-bottom: 0.75em;
 }
 
-#homeInfo	{
-    background-image: url(/public/PDbg.gif);
-    padding-top: 3em;
-    padding-bottom: 0em;
-    border-bottom: 1px solid rgb(144, 144, 144);
-    border-left: 1px solid rgb(144, 144, 144);
-    border-right: 1px solid rgb(144, 144, 144);
-    height: 45em;
-    width: 32em;
-    position: absolute;
-    top: 0px;
-    left: 12em;
-    right: 44em;
-    z-index: 3;
-}
-
 .homeTextBoxes	{
     font-size : 0.9em; text-decoration: none;
     float: left;
@@ -280,24 +300,7 @@ H6 {font-size: .9em;}
     padding: 16px;
     position: relative;
     left: -2px;
-    top: -1px;
 }
-
-#homeBorder	{
-    background-image: url(/public/PDbg.gif);
-    background-position: -32em 0em;
-    margin-left: 44em;
-    padding-top: 1.5em;
-    padding-left: 0px;
-    border-bottom: 1px solid rgb(144, 144, 144);
-    border-right: 1px solid rgb(144, 144, 144);
-    height: 46.5em;
-    width: 150px;
-    position: absolute;
-    top: 0px;
-    z-index: 2;
-}
-
 
 /*
 html,body	{
@@ -454,6 +457,7 @@ div.emphasized {
 
 
 /* format for required entries in forms */
+.red { color: red; }
 .required {
 	color: red;
 	font-weight: bold;	
@@ -619,10 +623,11 @@ table.navbox {
 */
 
 .panel{
-    position: absolute;
+    position: relative;
     left: 10px;
     width: 95%;
     z-index: 1;
+    display: none;
     visibility: hidden;
     padding: 10px;
 }
@@ -687,8 +692,15 @@ span.nonEditable {
     background-image: url(/public/PDbg.gif);    
 }
 
-.displayPanelText tbody {
-    font-size: .9em;
+.displayPanelLabel {
+    padding-right: 1em;
+    width: 1%;
+    white-space: nowrap;
+}
+
+/*.displayPanelText tbody,.displayPanelText {*/
+.displayPanelText {
+    font-size: 0.9em;
     background-image: url(/public/PDbg.gif);    
 }
 
