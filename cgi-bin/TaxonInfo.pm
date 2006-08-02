@@ -1238,13 +1238,13 @@ sub displayTaxonClassification {
                 if ($taxon_rank eq 'unranked clade') {
                     $taxon_rank = "&mdash;";
                 }
-                my %auth_yr;
+                my $authority;
                 if ($taxon_no) {
-                    %auth_yr = %{PBDBUtil::authorAndPubyrFromTaxonNo($dbt,$taxon_no)}
+                    $authority = getTaxa($dbt,{'taxon_no'=>$taxon_no},['author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
                 }
-                my $pub_info = $auth_yr{author1last}.' '.$auth_yr{pubyr};
-                if ($auth_yr{'ref_is_authority'} =~ /yes/i) {
-                    $pub_info = "<a href=\"bridge.pl?action=displayRefResults&type=view&reference_no=$auth_yr{reference_no}&real_user=$real_user\">$pub_info</a>";
+                my $pub_info = Reference::formatShortRef($authority);
+                if ($authority->{'ref_is_authority'} =~ /yes/i) {
+                    $pub_info = "<a href=\"bridge.pl?action=displayReference&reference_no=$authority->{reference_no}&real_user=$real_user\">$pub_info</a>";
                 }
                 my $orig_no = getOriginalCombination($dbt,$taxon_no);
                 if ($orig_no != $taxon_no) {
@@ -2286,7 +2286,7 @@ sub displaySynonymyList	{
 			} else	{
 				my $sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $useref->{reference_no};
 				my $refref = @{$dbt->getData($sql)}[0];
-				$synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $parent_name . "<a href=\"bridge.pl?action=displayRefResults&type=view&reference_no=$useref->{reference_no}&real_user=$real_user\"> " . $refref->{author1last};
+				$synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $parent_name . "<a href=\"bridge.pl?action=displayReference&reference_no=$useref->{reference_no}&real_user=$real_user\"> " . $refref->{author1last};
 				if ( $refref->{otherauthors} )	{
 					$synkey .= " et al.";
 				} elsif ( $refref->{author2last} )	{
@@ -2355,7 +2355,7 @@ sub displaySynonymyList	{
                 } else	{
                     my $sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $useref->{reference_no};
                     my $refref = @{$dbt->getData($sql)}[0];
-                    $synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $auth_taxon_name . "<a href=\"bridge.pl?action=displayRefResults&type=view&reference_no=$useref->{reference_no}&real_user=$real_user\"> " . $refref->{author1last};
+                    $synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $auth_taxon_name . "<a href=\"bridge.pl?action=displayReference&reference_no=$useref->{reference_no}&real_user=$real_user\"> " . $refref->{author1last};
                     if ( $refref->{otherauthors} )	{
                         $synkey .= " et al.";
                     } elsif ( $refref->{author2last} )	{
