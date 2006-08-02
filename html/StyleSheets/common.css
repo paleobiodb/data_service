@@ -623,11 +623,10 @@ table.navbox {
 */
 
 .panel{
-    position: relative;
+    position: absolute;
     left: 10px;
     width: 95%;
     z-index: 1;
-    display: none;
     visibility: hidden;
     padding: 10px;
 }
