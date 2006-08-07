@@ -1,4 +1,3 @@
-%%NOESCAPE_enterer_authorizer_lists%%                                                                                                                       
 <div align=center><table border=0><tr><td>                                                                                                                                      
 <div align="center">
   <h2>Taxonomy download request form</h2><br>
@@ -58,7 +57,9 @@
     <table width="100%" border=0 cellpadding=3 cellspacing=0>
       <tr>
         <td style="white-space: nowrap;">Data <select name="taxon_person_type"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="all">any of the above</option></select>:</td>
-        <td><input name="taxon_person_reversed" size=14 onKeyUp="doComplete(event, this, entererNames());"></td>
+        <td><input name="taxon_person_reversed" size=14 onKeyUp="doComplete(event, this, entererNames());">
+        <div show="is_contributor"><a href="#" onClick="document.forms[0].taxon_person_reversed.value='%%authorizer_me%%'">Me</a></div>
+        </td>
       </tr>
       <tr class="lightGrey">
         <td>Author:</td>
@@ -88,18 +89,9 @@
           </select>:
         </td>
         <td style="white-space: nowrap;">
-          <select name="taxon_created_day">
-            <option selected></option>
-            <script language="JavaScript" type="text/javascript">fillDays();</script>
-          </select>
-          <select name="taxon_created_month">
-            <option selected></option>
-            <script language="JavaScript" type="text/javascript">fillMonths();</script>
-          </select>
-          <select name="taxon_created_year">
-            <option selected></option>
-            <script language="JavaScript" type="text/javascript">fillYears();</script>
-          </select>  
+          <select name="taxon_created_month" autofill=month></select>
+          <select name="taxon_created_day" autofill=day_of_month></select>
+          <select name="taxon_created_year" autofill=year></select>  
         </td>
       </tr>
       <tr>
@@ -115,7 +107,9 @@
     <table width="100%" border=0 cellpadding=3 cellspacing=0>
       <tr>
         <td style="white-space: nowrap;">Data <select name="opinion_person_type"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="all">any of the above</option></select>:</td>
-        <td><input name="opinion_person_reversed" size=14 onKeyUp="doComplete(event, this, entererNames());"></td>
+        <td><input name="opinion_person_reversed" size=14 onKeyUp="doComplete(event, this, entererNames());">
+        <div show="is_contributor"><a href="#" onClick="document.forms[0].opinion_person_reversed.value='%%authorizer_me%%'">Me</a></div>
+        </td>
       </tr>
       <tr class="lightGrey">
         <td>Author:</td>
@@ -145,18 +139,9 @@
           </select>:
         </td>
         <td style="white-space: nowrap;">
-          <select name="opinion_created_day">
-            <option selected></option>
-            <script language="JavaScript" type="text/javascript">fillDays();</script>
-          </select>
-          <select name="opinion_created_month">
-            <option selected></option>
-            <script language="JavaScript" type="text/javascript">fillMonths();</script>
-          </select>
-          <select name="opinion_created_year">
-            <option selected></option>
-            <script language="JavaScript" type="text/javascript">fillYears();</script>
-          </select>  
+          <select name="opinion_created_month" autofill=month></select>
+          <select name="opinion_created_day" autofill=day_of_month></select>
+          <select name="opinion_created_year" autofill=year></select>  
         </td>
       </tr>
     </table>

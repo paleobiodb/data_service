@@ -5,12 +5,17 @@
 <input id="type" type=hidden name="type" value="">
 <input id="goal" type=hidden name="goal" value="">
 
-<div align="center"><h2>Reference search form</h2></div>
+<div hide="type=add">
+    <div align="center"><h2>Reference search form</h2></div>
+</div>
+<div show="type=add">
+    <div align="center"><h2>Duplicate reference search form</h2></div>
+</div>
 
 <center>
-<h4><span style="color: red;">
+<div style="color: red;"><h4>
 %%message%%
-</span></h4>
+</h4></div>
 
 <table border=0 cellpadding=4>
 <tr>
@@ -36,7 +41,7 @@
 	<input id="pubtitle" name="pubtitle" type=text size=40>
 	</td>
 </tr>
-
+<div hide="type=add">
 <tr>
 	<th align=right> Reference number: </th>
 	<td>
@@ -56,11 +61,12 @@
 	<th align=right>Enterer:</th>
 	<td><input id="enterer_reversed" name="enterer_reversed" size=18 onKeyUp="doComplete(event, this, entererNames());"></td>
 </tr>
+</div>
 
 <tr>
 	<th align=right valign=top>Sort by:</th>
 	<td>
-      <select name="refsortby">
+	  <select name="refsortby">
         <option>author</option>
         <option>year</option>
         <option>publication</option>
@@ -68,11 +74,11 @@
         <option>enterer</option>
         <option>entry date</option>
       </select>
-      <select name="refsortorder">
+	  <select name="refsortorder">
         <option>ascending</option>
         <option>descending</option>
       </select>
-    <br><br>
+	<br><br>
 	</td> 
 </tr>
 

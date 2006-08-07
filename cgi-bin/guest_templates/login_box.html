@@ -1,20 +1,4 @@
-<style type="text/css">
-.test {
-    background-color: #E6E6E6;
-
-    border-width: 6px 6px 6px 6px;
-    border-style: solid;
-    border-color: #C8C8C8;
-    padding: 1em 1em 0.5em 1em;
-}
-</style>
-
-<!-- this will be populated by the CGI script with functions to 
-grab a list of enterers and authorizers from the database -->
-%%NOESCAPE_enterer_authorizer_lists%%
-
 <center>
-
 
 <script>checkBrowserVersion();</script>
 
@@ -26,22 +10,22 @@ grab a list of enterers and authorizers from the database -->
 <form method="POST" action="bridge.pl">
 
 <input type=hidden name="action" value="processLogin">
-<input type=hidden name="destination" value="%%destination%%">
+<input type=hidden name="destination">
 
-<table border=0 cellpadding=4 class="test">
+<table border=0 cellpadding=4 class="loginBox">
 <tr>
 <td align=right>Authorizer:</td>
-<td><input id="authorizer" name="authorizer_reversed" size=18 onKeyUp="doComplete(event, this, authorizerNames());"></td>
+<td><input name="authorizer_reversed" size=18 onKeyUp="doComplete(event, this, authorizerNames());"></td>
 </tr>
 
 <tr>
 <td align=right>Enterer:</td>
-<td><input id="enterer" name="enterer_reversed" size=18 onKeyUp="doComplete(event, this, entererNames());"></td>
+<td><input name="enterer_reversed" size=18 onKeyUp="doComplete(event, this, entererNames());"></td>
 </tr>
 
 <tr>
 <td align=right>Password:</td>
-<td><input id="password" name="password" type="password" size=18></td>
+<td><input name="password" type="password" size=18></td>
 </tr>
 
 <tr>

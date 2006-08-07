@@ -1,5 +1,6 @@
 
-<div align="center"><h3><b><span id="collection_name"></span></b></h3></div>     
+<div align="center"><h3><b><span id="collection_name"></span></b></h3></div>
+
 
 <table><tr><td valign=top width="50%">
 
@@ -11,10 +12,19 @@
   <div show="state"><tr><td valign=top nowrap><b>State/province:</b></td><td valign=top><span id="state"></span></td></tr></div>
   <div show="county"><tr><td valign=top nowrap><b>County:</b></td><td valign=top><span id="county"></span></td></tr></div>
   <div show="latdeg"><tr><td valign=top nowrap><b>Coordinates:</b></td><td valign=top>
-  <span style="white-space: nowrap;"><span id="latdeg"></span>&deg; <span id="latdir"></span></span>, <span style="white-space: nowrap;"><span id="lngdeg"></span>&deg; <span id="lngdir"></span></span> <a href="javascript: mapPopup('<span id="collection_no"></span>')">(View map)</a></td></tr></div>
-  <div show="latlng_basis"><tr><td valign=top nowrap><b>Basis of coordinate:</b></td><td valign=top><span id="latlng_basis"></span></td></tr></div>
-  <div show="altitude_value"><tr><td valign=top nowrap><b>Altitude:</b></td><td valign=top><span id="altitude_value"></span> <span id="altitude_unit"></span></td></div>
+  <div show="is_contributor">
+    <span style="white-space: nowrap;"><span id="latdeg"></span><span show="latdec">.</span><span id="latdec"></span><span show="latdec"></span>&deg; <span id="latmin"></span><span show="latmin">'</span>  <span id="latsec"></span><span show="latsec">&quot;</span> <span id="latdir"></span></span>, <span style="white-space: nowrap;"><span id="lngdeg"></span><span show="lngdec">.</span><span id="lngdec"></span><span show="lngdec"></span>&deg; <span id="lngmin"></span><span show="lngmin">'</span>  <span id="lngsec"></span><span show="lngsec">&quot;</span> <span id="lngdir"></span></span> <a href="javascript: mapPopup('<span id="collection_no"></span>')")>(View map)</a></td></tr>
+  </div> <!-- is_contributor=true end-->
+  <div hide="is_contributor">
+    <span style="white-space: nowrap;"><span id="latdeg"></span> <span id="latdir"></span></span>, <span style="white-space: nowrap;"><span id="lngdeg"></span> <span id="lngdir"></span></span> <a href="javascript: mapPopup('<span id="collection_no"></span>')")>(View map)</a></td></tr>
+  </div> <!-- is_contributor=false end-->
+  </div> <!-- latdeg show end-->
+    <div show="latlng_basis"><tr><td valign=top nowrap><b>Basis of coordinate:</b></td><td valign=top><span id="latlng_basis"></span></td></tr></div>
+    <div show="altitude_value"><tr><td valign=top nowrap><b>Altitude:</b></td><td valign=top><span id="altitude_value"></span> <span id="altitude_unit"></span></td></div>
   <div show="geogscale"><tr><td valign=top><b>Scale of geographic resolution:</b></td><td valign=top><span id="geogscale"></span></td></tr></div>
+  <div show="is_contributor">
+    <div show="geogcomments"><tr><td valign=top colspan=2><b>Geography comments:</b> <span id="geogcomments"></span></td></tr></div>
+  </div>
   </table>
   </div>
 </div>
@@ -38,9 +48,7 @@
   </table>
   </div>
 </div>
-         
 
-<!-- OPTIONAL stratigraphy_panel -->
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader"><b>Stratigraphy</b></span>
   <div class="displayPanelContent">
@@ -59,9 +67,7 @@
   </table>
   </div>
 </div>
-<!-- END stratigraphy_panel -->
 
-<!-- OPTIONAL lithology_panel -->
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader"><b>Lithology</b></span>
   <div class="displayPanelContent">
@@ -78,14 +84,11 @@
   </table>
   </div>
 </div>
-<!-- END lithology_panel -->
-
 
 
 </td><td valign=top width="50%" style="padding-left: 0.6em;">
 
 
-<!-- OPTIONAL taphonomy_panel -->
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader"><b>Taphonomy</b></span>
   <div class="displayPanelContent">
@@ -112,9 +115,7 @@
   </table>
   </div>
 </div>
-<!-- END taphonomy_panel -->
 
-<!-- OPTIONAL methods_panel -->
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader"><b>Collection methods and comments</b></span>
   <div class="displayPanelContent">
@@ -133,7 +134,6 @@
   </table>
   </div>
 </div>
-<!-- END methods_panel -->
 
 
 <div class="displayPanel" align="left">
@@ -142,7 +142,7 @@
   <table border=0 cellpadding=2 class="displayPanelText">
   <div show="collection_aka"><tr><td valign=top nowrap><b>Also known as:</b></td><td valign=top><span id="collection_aka"></span></td></tr></div>
   <div show="collection_no"><tr><td valign=top nowrap><b>PBDB number:</b></td><td valign=top><span id="collection_no"></span></td></tr></div>
-  <div show="igsn"><tr><td valign=top nowrap><b>IGSN (<a target="_BLANK" href="http://www.geosamples.org">SESAR</a>) number:</b></td><td valign=top><span id="igsn"></span></td></tr></div> 
+  <div show="igsn"><tr><td valign=top nowrap><b>IGSN (<a target="_BLANK" href="http://www.geosamples.org">SESAR</a>) number:</b></td><td valign=top><span id="igsn"></span></td></tr></div>
   <div show="authorizer"><tr><td valign=top nowrap><b>Authorizer:</b></td><td valign=top><span id="authorizer"></span></td></tr></div>
   <div show="enterer"><tr><td valign=top nowrap><b>Enterer:</b></td><td valign=top><span id="enterer"></span></td></tr></div>
   <div show="modifier"><tr><td valign=top nowrap><b>Modifier:</b></td><td valign=top><span id="modifier"></span></td></tr></div>
@@ -156,6 +156,7 @@
   </table>
   </div>
 </div>
+
 
 <td></tr></table>
 
