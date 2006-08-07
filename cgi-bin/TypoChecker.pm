@@ -495,7 +495,7 @@ sub submitOccurrenceMisspelling {
                         if ($reid->{'comments'} =~ (/\[entered as/)) {
                             $comment = "";
                         }
-                        my $sql = "UPDATE reidentifications SET $comment,".join(", ",@set_fields)
+                        my $sql = "UPDATE reidentifications SET $comment".join(", ",@set_fields)
                                 . " WHERE reid_no=$reid_no"
                                 . " AND authorizer_no IN ($authorizer_list)";
                         main::dbg("Reid sql $sql");
