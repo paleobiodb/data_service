@@ -109,6 +109,11 @@ H6 {font-size: .9em;}
     margin-bottom: 0;
 }
 
+.readOnlyCheckBox,.readOnlyInput,.readOnlyTextarea,.readOnlySelect {
+/*    border: 1px darkgrey solid;*/
+/*    background-color: #E0E0E0;*/
+}
+
 #mainBody	{
     padding-top: 1em;
     padding-left: 1em;
@@ -582,6 +587,15 @@ table.navbox {
     margin-left: 20px;
     margin-right: 20px;
 }
+
+.loginBox {
+    background-color: #E6E6E6;
+
+    border-width: 6px 6px 6px 6px;
+    border-style: solid;
+    border-color: #C8C8C8;
+    padding: 1em 1em 0.5em 1em;
+}  
 
 .tabOn, .tabOff, /*.tabHoverOn, .tabHoverOff,*/ .tabLoadingOn, .tabLoadingOff {
     /*background-color: #EEEEEE;*/
