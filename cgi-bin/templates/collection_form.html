@@ -324,6 +324,7 @@ function doCheckFieldsTaphonomy() {
 
   <form name="form" action="$exec_url" method="post" onSubmit="return checkFields();">
   <span id="page_target"></span>
+  <input id="use_primary" type="hidden">
   <input id="reference_no" type="hidden">
   <input id="collection_no" type="hidden">
 
@@ -889,7 +890,7 @@ original material is preserved!</i></p>
   </table>
   <p>
  
-<!-- OPTIONAL taphonomy --> 
+<div show="taphonomy"> 
   <table width=100%>
   <tr>
     <td valign=top width=50%>
@@ -901,7 +902,7 @@ original material is preserved!</i></p>
   </tr>
   </table>
   <p>
-<!-- END taphonomy -->
+</div> <!-- div show=taphonomy end -->
 
 	  <A HREF="javascript:tipsPopup('/public/tips/tips.html#AssemblageComponents')">Assemblage components</A>:
       <p>
@@ -910,10 +911,10 @@ original material is preserved!</i></p>
       <input id="assembl_comps" type=checkbox value="microfossils"> microfossils
   <p>
 
-<!-- OPTIONAL taphonomy -->
+<div show="taphonomy">
       <u>Spatial orientation</u> <select id="orientation"></select>
   <p>
-<!-- END taphonomy -->
+</div> <!-- div show=taphonomy end -->
  
   <table>
   <tr>
@@ -950,7 +951,7 @@ original material is preserved!</i></p>
   </table>
   <p>
 
-<!-- OPTIONAL taphonomy -->
+<div show="taphonomy">
   <table width=100%>
   <tr>
     <td width=50%>
@@ -1042,7 +1043,7 @@ original material is preserved!</i></p>
   </tr>
   </table>
   <p>
-<!-- END taphonomy -->
+</div> <!-- div show=taphonomy end-->
 
   <table width=100%>
   <tr>

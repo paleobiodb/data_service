@@ -1,0 +1,45 @@
+<!-- Begin occurrence edit row -->
+<div show="darkList">
+<tr class="darkList">
+</div>
+<div hide="darkList">
+<tr>
+</div>
+
+<input id="collection_no" type="hidden">
+<input id="occurrence_no" type="hidden">
+<input id="reid_no" type="hidden">
+<input type=hidden name="row_token" value="row_token">
+
+<div show="genus_and_species_only">
+	<td nowrap> <b>reid=</b><input id="genus_name" size="20" maxlength="255" class="tiny"></td>
+</div>
+<div hide="genus_and_species_only">
+	<td align="right" nowrap><span class=tiny><b>reid=</b></span><select id="genus_reso" class="tiny"></select></td>
+	<td><input id="genus_name" size="20" maxlength="255" class="tiny"></td>
+</div>
+
+<div hide="genus_and_species_only">
+<div show="subgenera">
+	<td align="right"><select id="subgenus_reso" class="tiny"></select></td>
+	<td><input id="subgenus_name" size="20" maxlength="255" class="tiny"></td>
+</div>
+	<td align="right"><select id="species_reso" class="tiny"></select></td>
+</div>
+	<td><input id="species_name" size="20" maxlength="255" class="tiny"></td>
+<div hide="genus_and_species_only">
+<div show="abundances">
+	<td align="right"><input type="hidden" name="abund_value" value=""></td>
+	<td><input type="hidden" name="abund_unit" value=""></select></td>
+</div>
+</div>
+	<td align="center"><input id="reference_no" size="6" maxlength="10" class="tiny"></td>
+<div hide="genus_and_species_only">
+	<td><input id="comments" size="40" maxlength="65535" class="tiny"></td>
+<div show="plant_organs">
+	<td><select id="plant_organ" class="tiny"></select></td>
+	<td><select id="plant_organ2" class="tiny"></select></td>
+</div>
+</div>
+</tr>
+<!-- End occurrence edit row -->

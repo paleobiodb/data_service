@@ -1,4 +1,3 @@
-%%NOESCAPE_enterer_authorizer_lists%%                                                                                                                       
 <script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>                                                                   
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
@@ -147,7 +146,7 @@ function countryChange() {
 <td valign=top class="small">Data authorizer:</td>
 <td valign="bottom">
 <input name="authorizer_reversed" size=22 onKeyUp="doComplete(event, this, authorizerNames());">
-<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_reversed%%'">Me</a></td>
+<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_me%%'">Me</a></td>
 </tr>
 
 <tr>
@@ -171,18 +170,9 @@ function countryChange() {
 </select>:
 </td>
 <td>
-<select name="date">
-<option selected></option>
-<script language="JavaScript" type="text/javascript">fillDays();</script>
-</select>
-<select name="month">
-<option selected></option>
-<script language="JavaScript" type="text/javascript">fillMonths();</script>
-</select>
-<select name="year">
-<option selected></option>
-<script language="JavaScript" type="text/javascript">fillYears();</script>
-</select>
+<select name="month"></select>
+<select name="day_of_month"></select>
+<select name="year"></select>
 </td>
 </tr>
 
@@ -207,7 +197,7 @@ function countryChange() {
 <tr class="lightGrey">
 <td valign=top class="small">... or if you want to get counts of occurrences and genera by temporal bin, select a time scale:</td>
 <td valign=top class="small">
-%%time scale%%
+<select name="time_scale"></select>
 </td></tr>
 
 <tr class="lightGrey">
@@ -958,16 +948,16 @@ Note that the collection ID and genus name fields are always output.</p>
 <table width="100%" class="tiny">
   <tr>
     <td nowrap>
-      <select id="ecology1"></select>
-      <select id="ecology2"></select>
-      <select id="ecology3"></select>
+      <select id="ecology1" autofill=ecotaph></select>
+      <select id="ecology2" autofill=ecotaph></select>
+      <select id="ecology3" autofill=ecotaph></select>
     </td>
   </tr>
   <tr>
     <td nowrap>
-      <select id="ecology4"></select>
-      <select id="ecology5"></select>
-      <select id="ecology6"></select>
+      <select id="ecology4" autofill=ecotaph></select>
+      <select id="ecology5" autofill=ecotaph></select>
+      <select id="ecology6" autofill=ecotaph></select>
     </td>
   </tr>
 </table>

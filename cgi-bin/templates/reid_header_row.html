@@ -1,10 +1,7 @@
 <!-- Begin reid_header_row.html -->
 <div align="center"><h2>Reidentification form</h2></div>
 
-<p><b>Current reference:</b></p>
-<table border=0>
-<span id="ref_string"></span>
-</table>
+<p><b>Current reference:</b> <span id="ref_string"></span></p>
 
 <form method=POST action="$exec_url" onSubmit="return checkForm();">
 <input type="hidden" name="form_source" value="new_reids_form">
@@ -17,17 +14,17 @@
 <tr>
 	<th>Genus reso</th>
 	<th><span class="required">Genus name</span></th>
-<!-- OPTIONAL subgenera -->
+<div show="subgenera">
 	<th>Subgenus reso</th>
 	<th>Subgenus name</th>
-<!-- END subgenera -->
+</div>
 	<th>Species reso</th>
 	<th><span class="required">Species name</span></th>
 	<th>Comments</th>
-<!-- OPTIONAL plant_organs -->
+<div show="plant_organs">
 	<th>Plant organs</th>
 	<th>Plant organs 2</th>
-<!-- END plant_organs -->
+</div>
 </tr>
 
 <!-- End reid_header_row.html -->

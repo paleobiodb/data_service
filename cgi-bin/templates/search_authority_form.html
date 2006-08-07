@@ -19,7 +19,7 @@
               </tr>
               <tr>
                 <td><b>Authorizer:</b></td>
-                <td><input name="authorizer_reversed" size=14 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_reversed%%'">Me</a></td>
+                <td><input name="authorizer_reversed" size=14 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_me%%'">Me</a></td>
               </tr>
               <tr>
                 <td><b>Author:</b></td>
@@ -42,18 +42,9 @@
                   </select>:
                 </td>
                 <td>
-                  <select name="created_day">
-                    <option selected></option>
-                    <script language="JavaScript" type="text/javascript">fillDays();</script>
-                  </select>
-                  <select name="created_month">
-                    <option selected></option>
-                    <script language="JavaScript" type="text/javascript">fillMonths();</script>
-                  </select>
-                  <select name="created_year">
-                    <option selected></option>
-                    <script language="JavaScript" type="text/javascript">fillYears();</script>
-                  </select>  
+                  <select name="created_month" autofill="month"></select>
+                  <select name="created_day" autofill="day_of_month"></select>
+                  <select name="created_year" autofill="year"></select>  
                 </td>
               </tr>
             </table>

@@ -1,4 +1,3 @@
-%%NOESCAPE_enterer_authorizer_lists%%
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
 
@@ -36,17 +35,15 @@ function checkForm ( ) {
 </script>
 
 <div align="center">
-  <h2>Reidentifications search form</h2>
+  <h2>%%page_title%%</h2>
 </div>
 
-       
-<div align=center style="width: 640px"><h5>You may now reidentify either a set of occurrences matching a genus or higher taxon name, or all the occurrences in one collection.</h5></div>
-                                                                                                                                                                       
+<div show="page_subtitle"><div align=center><div style="width: 640px"><h5>%%page_subtitle%%</h5></div></div></div>
 
 <div align=center>
 <form method=post action="bridge.pl" onSubmit="return checkForm();">
-<input type="hidden" name="action" value="displayCollResults">
-<input type=hidden name="type" value="reid">
+<input type="hidden" name="action">
+<input type="hidden" name="type">
 
 <div class="displayPanel" align=left>
   <span class="displayPanelHeader"><b>Search by taxon</b></span>
@@ -71,7 +68,7 @@ function checkForm ( ) {
       </tr>
       <tr>
         <td>Data <select name="person_type" class="small"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="any">any of above</option></select>: </td>
-        <td><input name="person_reversed" onKeyUp="doComplete(event, this, entererNames());" class="small" size=16>&nbsp;<a href="#" onClick="document.forms[0].person_reversed.value='%%enterer_reversed%%'">Me</a></td>
+        <td><input name="person_reversed" onKeyUp="doComplete(event, this, entererNames());" class="small" size=16>&nbsp;<a href="#" onClick="document.forms[0].person_reversed.value='%%enterer_me%%'">Me</a></td>
         <td style="padding-left: 1em;">Research group or project: </td>
         <td><select id="research_group" class="small"></select>
       </tr>
@@ -99,32 +96,63 @@ function checkForm ( ) {
   <div class="displayPanelContent small">
 
     <table border=0 cellpadding=2 cellspacing=2>
-      <tr valign=top>
-        <td nowrap>Allow wildcards:
-          <select name="wild" class="small">
-            <option value="Y">yes, allow wildcards</option>
-            <option value="N">no, require exact matches</option>
+      <div show="action=occurrenceMisspellingForm">
+        <tr valign=top>
+          <td nowrap>
+          <input type="checkbox" name="edit_only" checked value="YES">
+            Only show occurrences I have permission to edit
+          </td>
+        </tr>
+        <tr valign=top>
+          <td>
+          Show:
+          <select name="show_detail">
+            <option value="full">not fully classified occurrences, and typos</option>
+            <option value="unclassified" selected>unclassified occurrences, and typos</option>
+            <option value="typos">typos only</option>
           </select>
-        </td>
-        <td nowrap style="padding-left: 2em;">Sort by:
-          <select name="sortby" class="small">
-            <option value="collection_no">collection number</option>
-            <option value="collection_name" SELECTED>collection name</option>
-            <option value="interval_name">time interval name</option>
-            <option value="geography">country, state</option>
-          </select>
-          <select name=sortorder class="small"><option value="asc">ascending<option value="desc">descending</select>
-        </td>
-      </tr>
-      <tr>
-        <td colspan="2">Number of records per page: <input name=limit size=10 value=30 class="small">
-      </tr>
+        </tr>
+        <tr>
+          <td>Number of records per page: <input name=limit size=10 value=15 class="small">
+        </tr>
+        <tr>
+          <td align="center">
+            <div class="small" style="width: 640px;">
+              <i>Note "not fully classified" means there is no species level taxonomy data, though there may be genus level data. "unclassified" means there's not even genus level taxonomic data.</i>
+            </div>
+          </td>
+        </tr>  
+      </div>
+      <div show="action=displayCollResults">
+        <div show="type=reclassify_occurrence">
+          <tr valign=top colspan=2>
+            <td nowrap>
+              <input type="checkbox" name="authorizer_only" value="YES">
+              Only show occurrences where I'm the authorizer
+            </td>
+          </tr>
+        </div>
+        <tr valign=top>
+          <td>Sort by:
+            <select name="sortby" class="small">
+              <option value="collection_no">collection number</option>
+              <option value="collection_name" SELECTED>collection name</option>
+              <option value="interval_name">time interval name</option>
+              <option value="geography">country, state</option>
+            </select>
+            <select name=sortorder class="small"><option value="asc">ascending<option value="desc">descending</select>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="2">Number of records per page: <input name=limit size=10 value=30 class="small">
+        </tr>
+      </div>
     </table>
 
-  </div>
-</div>
+    </div>
+    </div>
 
-<p><input type="submit" value="Search for reidentifications"></p>
+    <p><input type="submit" value="Search for reidentifications"></p>
 
 </form>
 </div>

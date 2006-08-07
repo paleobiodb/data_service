@@ -1,33 +1,40 @@
 <!-- Begin occurrence edit row -->
+<div show="darkList">
+<tr class="darkList">
+</div>
+<div hide="darkList">
 <tr>
+</div>
+
+    <input type=hidden name="row_token" value="row_token">
 	<input id="collection_no" type="hidden">
 	<input id="occurrence_no" type="hidden">
 	<input id="reid_no" type="hidden">
-<!-- OPTIONAL genus_and_species_only -->
+<div hide="genus_and_species_only">
 	<td align="right"><select id="genus_reso" class="small"></select></td>
-<!-- END genus_and_species_only -->
+</div>
 	<td><input id="genus_name" size="20" maxlength="255" class="small"></td>
-<!-- OPTIONAL genus_and_species_only -->
-<!-- OPTIONAL subgenera -->
+<div hide="genus_and_species_only">
+<div show="subgenera">
 	<td align="right"><select id="subgenus_reso" class="small"></select></td>
 	<td><input id="subgenus_name" size="20" maxlength="255" class="small"></td>
-<!-- END subgenera -->
+</div>
 	<td align="right"><select id="species_reso" class="small"></select></td>
-<!-- END genus_and_species_only -->
+</div>
 	<td><input id="species_name" size="20" maxlength="255" class="small"></td>
-<!-- OPTIONAL genus_and_species_only -->
-<!-- OPTIONAL abundances -->
-	<td><input id="abund_value" size="4" maxlength="255" class="small"></td>
+<div hide="genus_and_species_only">
+<div show="abundances">
+	<td align="right"><input id="abund_value" size="4" maxlength="255" class="small"></td>
 	<td><select id="abund_unit" class="small"></select></td>
-<!-- END abundances -->
-<!-- END genus_and_species_only -->
+</div>
+</div>
 	<td align="center"><input id="reference_no" size="6" maxlength="10" class="small"></td>
-<!-- OPTIONAL genus_and_species_only -->
+<div hide="genus_and_species_only">
 	<td><input id="comments" size="40" maxlength="65535" class="small"></td>
-<!-- OPTIONAL plant_organs -->
+<div show="plant_organs">
 	<td><select id="plant_organ" class="small"></select></td>
 	<td><select id="plant_organ2" class="small"></select></td>
-<!-- END plant_organs -->
-<!-- END genus_and_species_only -->
+</div>
+</div>
 </tr>
 <!-- End occurrence edit row -->

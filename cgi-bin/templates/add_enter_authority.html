@@ -29,12 +29,13 @@ If the name is misspelled, <a href="$exec_url?action=displayAuthorityTaxonSearch
 <input id="ref_is_authority" name="ref_is_authority" type="radio" value="PRIMARY">
 It was first named in the data record's primary reference, which is:
 <div align="center" class="small"><span id="formatted_primary_reference"></span></div>
-<!-- OPTIONAL current_reference -->
-<br>
-<input id="ref_is_authority" name="ref_is_authority" type="radio" value="CURRENT">
- ... <i>or</i> it was first named in the current reference, which is: 
-<br><div align="center" class="small"><span id="formatted_current_reference"></span></div>
-<!-- END current_reference -->
+<div show="current_reference">
+  <br>
+  <input id="ref_is_authority" name="ref_is_authority" type="radio" value="CURRENT">
+   ... <i>or</i> it was first named in the current reference, which is: 
+  <br><div align="center" class="small"><span id="formatted_current_reference"></span></div>
+</div>
+
 </div>  
 
 <center>
@@ -101,18 +102,18 @@ It was first named in the data record's primary reference, which is:
 
 
 <!-- Note: this should only appear if the rank is species -->
-<!-- OPTIONAL type_taxon -->
-<tr><td></td><td><input type="checkbox" id="type_taxon" name="type_taxon" value="1"><b>This is the type <span id="taxon_rank"></span></b>
-</td>
-</tr>
-<!-- END type_taxon -->
+<div show="type_taxon">
+  <tr><td></td><td><input type="checkbox" id="type_taxon" name="type_taxon" value="1"><b>This is the type <span id="taxon_rank"></span></b>
+  </td>
+  </tr>
+</div>
 
-<!-- OPTIONAL type_specimen -->
-<tr><td align=right><b>Type specimen:</b></td>
-<td><input id="type_specimen" name="type_specimen" size=50>
-</td>
-</tr>
-<!-- END type_specimen -->
+<div show="type_specimen">
+  <tr><td align=right><b>Type specimen:</b></td>
+  <td><input id="type_specimen" name="type_specimen" size=50>
+  </td>
+  </tr>
+</div>
 
 <tr><td colspan=2>
 <b>Is this an extant (living) taxon?</b> <span id="extant_select"></span>

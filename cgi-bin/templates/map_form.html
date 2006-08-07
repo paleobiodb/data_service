@@ -12,8 +12,6 @@ function checkMapBrowserVersion()	{
 //  End -->
 </script>
 
-%%NOESCAPE_enterer_authorizer_lists%%
-
 	<div align="center"><h2>Fossil collection map form</h2></div>
 
     <form method=post action="$exec_url" onSubmit="return checkForm();">
@@ -42,12 +40,12 @@ function checkMapBrowserVersion()	{
 
 <tr>
 	<td valign=top>Authorizer:</td>
-	<td valign=top><input name="authorizer_reversed" size=22 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_reversed%%'">Me</a></td>
+	<td valign=top><input name="authorizer_reversed" size=22 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_reversed_me%%'">Me</a></td>
 </tr>
 
 <tr>
 	<td valign=top>Enterer:</td>
-	<td valign=top><input name="enterer_reversed" size=22 onKeyUp="doComplete(event, this, entererNames());">&nbsp;<a href="#" onClick="document.forms[0].enterer_reversed.value='%%enterer_reversed%%'">Me</a></td>
+	<td valign=top><input name="enterer_reversed" size=22 onKeyUp="doComplete(event, this, entererNames());">&nbsp;<a href="#" onClick="document.forms[0].enterer_reversed.value='%%enterer_reversed_me%%'">Me</a></td>
 </tr>
 
 <tr><td valign=top>
@@ -71,20 +69,11 @@ function checkMapBrowserVersion()	{
 <option>last month
 </select>&nbsp;or...<br>
 
-<select name="date">
-<option selected></option>
-<SCRIPT>fillDays();</SCRIPT>
-</select>
 
-<select name="month">
-<option selected></option>
-<SCRIPT>fillMonths();</SCRIPT>
-</select>
+<select name="month"></select>
+<select name="day_of_month"></select>
+<select name="year"></select>
 
-<select name="year">
-<option selected></option>
-<SCRIPT>fillYears();</SCRIPT>
-</select>
 </td>
 </tr>
 
@@ -111,7 +100,7 @@ function checkMapBrowserVersion()	{
 <td valign=top><input name=formation size=25 class="small">
 
 <tr><td valign=top>Lithology:
-<td valign=top><select id="lithology1" class="small">
+<td valign=top><select id="lithologies" class="small" autofill="lithology1">
 </select>
 
 <tr><td valign="top">Paleoenvironment:
@@ -167,12 +156,12 @@ lng = <input name="maplng" size=4 class="small">
 
 <tr><td valign=top>Data points:
 <td valign=top>
-<select id="pointsize1" class="small"></select>
-<select id="dotcolor1" class="small"></select>
-<select id="pointshape1" class="small"></select>
-<font size=-1>with</font>
-<select id="dotborder1" class="small"></select>
-<font size=-1>borders</font>
+<select id="pointsize1" class="small" autofill="pointsize"></select>
+<select id="dotcolor1" class="small" autofill="dotcolor"></select>
+<select id="pointshape1" class="small" autofill="pointshape"></select>
+<small>with</small>
+<select id="dotborder1" class="small" autofill="dotborder"></select>
+<small>borders</small>
 
 </table>
 

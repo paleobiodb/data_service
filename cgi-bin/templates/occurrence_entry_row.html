@@ -2,31 +2,33 @@
 <tr>
 	<input id="collection_no" type="hidden">
 	<input name="occurrence_no" type="hidden" value="-1">
-<!-- OPTIONAL genus_and_species_only -->
+    <input type=hidden name="row_token" value="row_token">
+
+<div hide="genus_and_species_only">
 	<td align="right"><select id="genus_reso" class="small"></select></td>
-<!-- END genus_and_species_only -->
+</div>
 	<td><input name="genus_name" size="20" maxlength="255" class="small"></td>
-<!-- OPTIONAL genus_and_species_only -->
-<!-- OPTIONAL subgenera -->
+<div hide="genus_and_species_only">
+<div show="subgenera">
 	<td align="right"><select id="subgenus_reso" class="small"></select></td>
 	<td><input name="subgenus_name" size="20" maxlength="255" class="small"></td>
-<!-- END subgenera -->
+</div>
 	<td align="right"><select id="species_reso" class="small"></select></td>
-<!-- END genus_and_species_only -->
+</div>
 	<td><input id="species_name" name="species_name" size="20" maxlength="255" class="small"></td>
-<!-- OPTIONAL genus_and_species_only -->
-<!-- OPTIONAL abundances -->
+<div hide="genus_and_species_only">
+<div show="abundances">
 	<td><input name="abund_value" size="4" maxlength="255" class="small"></td>
 	<td><select id="abund_unit" class="small"></td>
-<!-- END abundances -->
-<!-- END genus_and_species_only -->
+</div>
+</div>
 	<td align="center"><input id="reference_no" type="hidden" class="small"><span style="color: lightgrey;"><span id="reference_no"></span></span></td>
-<!-- OPTIONAL genus_and_species_only -->
+<div hide="genus_and_species_only">
 	<td><input name="comments" size="40" maxlength="65535" class="small"></td>
-<!-- OPTIONAL plant_organs -->
+<div show="plant_organs">
 	<td><select id="plant_organ" class="small"></select></td>
 	<td><select id="plant_organ2" class="small"></select></td>
-<!-- END plant_organs -->
-<!-- END genus_and_species_only -->
+</div>
+</div>
 </tr>
 <!-- End occurrence entry row -->
