@@ -1389,7 +1389,7 @@ sub getBestClassification{
                 if ($orig0 == $orig1) {
                     if ($matches[0]->{taxon_no} == $orig0) {
                         return $orig0;
-                    } elsif ($matches[1]->{taoxn_no} == $orig1) {
+                    } elsif ($matches[1]->{taxon_no} == $orig1) {
                         return $orig1;
                     } else {
                         return $matches[0]->{taxon_no};
@@ -1400,7 +1400,7 @@ sub getBestClassification{
             } else {
                 return $matches[0]->{'taxon_no'};
             }
-            return $matches[0][0]; # This will be the taxon_no
+            return $matches[0]->{'taxon_no'}; # This will be the taxon_no
         } elsif (scalar(@matches) == 1) {
             return $matches[0]->{'taxon_no'};
         } else {
