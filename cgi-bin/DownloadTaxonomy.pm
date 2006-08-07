@@ -2,14 +2,11 @@ package DownloadTaxonomy;
 
 #use strict;
 use PBDBUtil;
-use Classification;
-use TimeLookup;
 use Data::Dumper;
 use DBTransactionManager;
 use TaxaCache;
 use Opinion;
 use CGI::Carp;
-use Class::Date qw(date localdate gmdate now);
 
 # Flags and constants
 my $DEBUG=0; # The debug level of the calling program

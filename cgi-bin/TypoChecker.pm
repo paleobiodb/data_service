@@ -18,23 +18,23 @@ sub searchOccurrenceMisspellingForm {
         return;
 	} 
 
-    my %form_vars = $q->Vars();
+    my %vars = $q->Vars();
+    $vars{'enterer_me'} = $s->get('enterer_reversed');
+    $vars{'submit'} = "Search for reidentifications";
     unless ($no_header) {
-        $form_vars{'page_title'} = ' <h2>Misspelled occurrence search form</h2>';
+        $vars{'page_title'} = "Misspelled occurrence search form";
     }
-    $form_vars{'research_group'} ||= '';
-    $form_vars{'eml_max_interval'} ||= '';
-    $form_vars{'eml_min_interval'} ||= '';
-    $form_vars{'authorizer_reversed'} = $s->get('authorized_reversed');
-    $form_vars{'enterer_reversed'} = $s->get('enterer_reversed');
-    $form_vars{'authorizer_no'} = $s->get('authorizer_no');
-    $form_vars{'message'} = $message;
+    $vars{'action'} = "occurrenceMisspellingForm";
+    $vars{'page_subtitle'} = $message;
 
-    my $html = $hbo->populateHTML('search_occurrence_misspelling_form',\%form_vars);
 
     # Spit out the HTML
     print main::makeAuthEntJavaScript();
     main::printIntervalsJava(1);
+    my $html = $hbo->populateHTML('search_occurrences_form',\%vars);
+    if ($no_header) {
+        $html =~ s/forms\[0\]/forms[1]/g;
+    }
     print $html;
 }
 

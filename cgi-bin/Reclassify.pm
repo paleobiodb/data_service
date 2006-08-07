@@ -20,19 +20,19 @@ sub startReclassifyOccurrences	{
         #  reclassify page
 		&displayOccurrenceReclassify($q,$s,$dbh,$dbt);
 	} else	{
-        my $html = $hbo->populateHTML('search_reclassify_form', [ '', '', '',$s->get('authorizer_no')], [ 'research_group', 'eml_max_interval', 'eml_min_interval','authorizer_no'], []);
-
-        my $javaScript = main::makeAuthEntJavaScript();
-        $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
-        my $authorizer_reversed = $s->get("authorizer_reversed");
-        $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
-        my $enterer_reversed = $s->get("enterer_reversed");
-        $html =~ s/%%enterer_reversed%%/$enterer_reversed/;
+        my %vars = $q->Vars();
+        $vars{'enterer_me'} = $s->get('enterer_reversed');
+        $vars{'submit'} = "Search for occurrences";
+        $vars{'page_title'} = "Reclassification search form";
+        $vars{'action'} = "displayCollResults";
+        $vars{'type'} = "reclassify_occurrence";
+        $vars{'page_subtitle'} = "You may now reclassify either a set of occurrences matching a genus or higher taxon name, or all the occurrences in one collection.";
 
         # Spit out the HTML
         print main::stdIncludes( "std_page_top" );
         main::printIntervalsJava(1);
-        print $html;
+        print main::makeAuthEntJavaScript();
+        print $hbo->populateHTML('search_occurrences_form',\%vars);
         print main::stdIncludes("std_page_bottom");  
     }
 }
@@ -64,6 +64,9 @@ sub displayOccurrenceReclassify	{
         if ($species) {
             $sql .= " AND o.species_name LIKE ".$dbh->quote($species);
         }
+        if ($q->param('authorizer_only') =~ /yes/i) {
+            $sql .= " AND o.authorizer_no=".$s->get('authorizer_no');
+        }
         if ($q->param('occurrences_authorizer_no') =~ /^[\d,]+$/) {
             $sql .= " AND o.authorizer_no IN (".$q->param('occurrences_authorizer_no').")";
         }
@@ -72,6 +75,9 @@ sub displayOccurrenceReclassify	{
         $sql .= "( SELECT re.reid_no, re.authorizer_no,re.occurrence_no,re.taxon_no, re.genus_reso, re.genus_name, re.subgenus_reso, re.subgenus_name, re.species_reso, re.species_name, c.collection_no, c.collection_name, c.country, c.state, c.max_interval_no, c.min_interval_no FROM reidentifications re, occurrences o, collections c WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no AND c.collection_no IN (".join(", ",@collections).") AND (re.genus_name IN ($names) OR re.subgenus_name IN ($names))";
         if ($species) {
             $sql .= " AND re.species_name LIKE ".$dbh->quote($species);
+        }
+        if ($q->param('authorizer_only') =~ /yes/i) {
+            $sql .= " AND re.authorizer_no=".$s->get('authorizer_no');
         }
         if ($q->param('occurrences_authorizer_no') =~ /^[\d,]+$/) {
             $sql .= " AND re.authorizer_no IN (".$q->param('occurrences_authorizer_no').")";

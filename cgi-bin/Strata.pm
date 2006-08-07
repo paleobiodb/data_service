@@ -247,7 +247,7 @@ sub displayStrata {
     } 
 
     # Display lithologies present
-    my @lith_list = @{$hbo->{SELECT_LISTS}{lithology1}};
+    my @lith_list = $hbo->getList('lithology1');
     $html = "<p><b>Lithologies:</b> ";
     if (%lith_count) {
         foreach my $lithology (@lith_list) {
@@ -270,7 +270,7 @@ sub displayStrata {
     print $html;
 
     # Display environments present
-    my @env_list = @{$hbo->{SELECT_LISTS}{environment}};
+    my @env_list = $hbo->getList('environment');
     $html = "<p><b>Paleoenvironments:</b> ";
     if (%environment_count) {
         foreach my $environment (@env_list) {
@@ -433,22 +433,14 @@ sub displayStrataChoice {
 sub displaySearchStrataForm {
     my ($q,$s,$dbt,$hbo) = @_;
     my $dbh = $dbt->dbh;
-    
+   
+    my $vars = $q->Vars();
+    $vars->{'enterer_me'} = $s->get("enterer_reversed");
     # Show the "search collections" form
-    my %pref = main::getPreferences($s->get('enterer_no'));
-    my @prefkeys = keys %pref;
-    my $html = $hbo->populateHTML('search_strata_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment'], \@prefkeys);
 
     # Set the Enterer
-    my $javaScript = &main::makeAuthEntJavaScript();
-    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
-    my $enterer_reversed = $s->get("enterer_reversed");
-    $html =~ s/%%enterer_reversed%%/$enterer_reversed/;
-    my $authorizer_reversed = $s->get("authorizer_reversed");
-    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
-
-    # Spit out the HTML
-    print $html;
+    print main::makeAuthEntJavaScript();
+    print $hbo->populateHTML('search_strata_form',$vars)
 }
    
 #
@@ -471,9 +463,9 @@ sub displaySearchStrataResults {
     $options{'permission_type'} = 'read';
     $options{'limit'} = 10000000;
     $options{'calling_script'} = 'Confidence';
-    $options{'lithologies'} = $options{'lithology1'}; delete $options{'lithology1'};
-    $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'}; 
-    if ($options{'group_formation_member'} eq '') {
+#    $options{'lithologies'} = $options{'lithology1'}; delete $options{'lithology1'};
+#    $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'}; 
+    if (!$options{'group_formation_member'}) {
         $options{'group_formation_member'} = 'NOT_NULL_OR_EMPTY';
     }
     my ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);

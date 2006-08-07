@@ -1,8 +1,5 @@
-#!/usr/bin/perl
-
 package Confidence;
 
-use DBTransactionManager;
 use URI::Escape;
 use Data::Dumper; 
 use TaxaCache;
@@ -65,21 +62,8 @@ sub displayHomonymForm {
 sub displaySearchSectionForm {
     my ($q,$s,$dbt,$hbo) = @_;
 
-    # Show the "search collections" form
-    my %pref = main::getPreferences($s->get('enterer_no'));
-    my @prefkeys = keys %pref;
-    my $html = $hbo->populateHTML('search_section_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment'], \@prefkeys);
-
-    # Set the Enterer
-    my $javaScript = &main::makeAuthEntJavaScript();
-    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;   
-    my $enterer_reversed = $s->get("enterer_reversed");
-    $html =~ s/%%enterer_reversed%%/$enterer_reversed/;
-    my $authorizer_reversed = $s->get("authorizer_reversed");
-    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
-
-    # Spit out the HTML
-    print $html;
+    print main::makeAuthEntJavaScript();
+    print $hbo->populateHTML('search_section_form',{'enterer_me'=>$s->get('enterer_reversed')})
 }
 
 # Handles processing of the output from displaySectionSearchForm similar to displayCollResults
@@ -615,7 +599,7 @@ sub optionsForm    {
             push @values,$row->{'scale_no'};
         }
         my $scale_selected = ($q->param('scale') || 73); 
-        $scale_select = HTMLBuilder::buildSelect('scale',\@keys,\@values,$scale_selected);
+        $scale_select = HTMLBuilder::htmlSelect('scale',\@keys,\@values,$scale_selected);
     }
 
 #------------------------------OPTIONS FORM----------------------------------
@@ -633,22 +617,22 @@ sub optionsForm    {
     }     
 
     my $methods = ['Strauss and Sadler (1989)','Marshall (1994)','Solow (1996)'];
-    my $method_select = HTMLBuilder::buildSelect('conftype',$methods,$methods,$q->param('conftype'));
+    my $method_select = HTMLBuilder::htmlSelect('conftype',$methods,$methods,$q->param('conftype'));
 
     my $estimates = ['total duration','first appearance','last appearance','no confidence intervals'];
-    my $estimate_select = HTMLBuilder::buildSelect('conffor',$estimates,$estimates,$q->param('conffor'));
+    my $estimate_select = HTMLBuilder::htmlSelect('conffor',$estimates,$estimates,$q->param('conffor'));
 
     my $confidences = ['0.99','0.95','0.8','0.5','0.25'];
-    my $confidence_select = HTMLBuilder::buildSelect('alpha',$confidences,$confidences,$q->param('alpha'));
+    my $confidence_select = HTMLBuilder::htmlSelect('alpha',$confidences,$confidences,$q->param('alpha'));
 
     my $order_by = ['name','first appearance','last appearance','stratigraphic range'];
-    my $order_by_select = HTMLBuilder::buildSelect('order',$order_by,$order_by,$q->param('order'));
+    my $order_by_select = HTMLBuilder::htmlSelect('order',$order_by,$order_by,$q->param('order'));
 
     my $colors = ['grey','black','red','blue','yellow','green','orange','purple'];
-    my $color_select = HTMLBuilder::buildSelect('color',$colors,$colors,$q->param('color'));
+    my $color_select = HTMLBuilder::htmlSelect('color',$colors,$colors,$q->param('color'));
 
     my $glyph_types = ['boxes','circles','hollow circles','squares','hollow squares','none'];
-    my $glyph_type_select = HTMLBuilder::buildSelect('glyph_type',$glyph_types,$glyph_types,$q->param('glyph_type'));
+    my $glyph_type_select = HTMLBuilder::htmlSelect('glyph_type',$glyph_types,$glyph_types,$q->param('glyph_type'));
     
     if ($form_type eq 'large') {
         print "<div align=\"center\"><H2>Confidence interval options</H2></div>";

@@ -175,7 +175,6 @@ sub displayAuthorityForm {
 	
 	my %fields;  # a hash of fields and values that
 				 # we'll pass to HTMLBuilder to pop. the form.
-    my $optional = {};
 				 
 	
 	if ((!$dbt) || (!$hbo) || (! $s) || (! $q)) {
@@ -244,9 +243,7 @@ sub displayAuthorityForm {
             my $ref = Reference->new($dbt,$s->get('reference_no'));
             $fields{formatted_current_reference} = $ref->formatAsHTML() if ($ref);
         }
-        $optional->{'current_reference'} = 1;
-    } else {
-        $optional->{'current_reference'} = 0;
+        $fields{'current_reference'} = 1;
     } 
 	
 
@@ -290,12 +287,9 @@ sub displayAuthorityForm {
 	}
 	
 	# remove the type taxon stuff, it'll be assigned in opinions
-	if ($fields{'taxon_rank'} !~ /species/) {
-		$optional->{'type_taxon'} = 0;
-		$optional->{'type_specimen'} = 0;
-	}  else {
-		$optional->{'type_taxon'} = 1;
-		$optional->{'type_specimen'} = 1;
+	if ($fields{'taxon_rank'} =~ /species/) {
+		$fields{'type_taxon'} = 1;
+		$fields{'type_specimen'} = 1;
     }
 	
 	## If this is a new species or subspecies, then we will automatically
@@ -361,15 +355,15 @@ sub displayAuthorityForm {
     if ($fields{'taxon_rank'} =~ /subspecies|species|subgenus/) {
         @taxon_ranks = ($fields{'taxon_rank'});
     } else {
-        @taxon_ranks = grep {!/subspecies|species|subgenus/} @{$hbo->{'SELECT_LISTS'}{'taxon_rank'}};
+        @taxon_ranks = grep {!/subspecies|species|subgenus/} $hbo->getList('taxon_rank');
     }
-    $fields{'taxon_rank_select'} = $hbo->buildSelect('taxon_rank',\@taxon_ranks,\@taxon_ranks,$fields{'taxon_rank'}); 
+    $fields{'taxon_rank_select'} = $hbo->htmlSelect('taxon_rank',\@taxon_ranks,\@taxon_ranks,$fields{'taxon_rank'}); 
 
     
 
     # Build extant select
     my @extant_values = ('','YES','NO');
-    $fields{'extant_select'} = $hbo->buildSelect('extant',\@extant_values,\@extant_values,$fields{'extant'});
+    $fields{'extant_select'} = $hbo->htmlSelect('extant',\@extant_values,\@extant_values,$fields{'extant'});
     
     # add in the error message
     if ($error_message) {
@@ -377,9 +371,7 @@ sub displayAuthorityForm {
     }
 	
 	# print the form	
-    my @k = keys %fields;
-    my @v = values %fields;
-    my $html = $hbo->populateHTML("add_enter_authority", \@v,\@k,$optional);  
+    my $html = $hbo->populateHTML("add_enter_authority", \%fields);
     
 	## Make the taxon_name non editable if this is a new entry to simplify things
 	if ($isNewEntry) {

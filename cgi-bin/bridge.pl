@@ -71,8 +71,6 @@ my $DUPLICATE = 2;
 # Paths from the Apache environment variables (in the httpd.conf file).
 my $HOST_URL = $ENV{'BRIDGE_HOST_URL'};
 my $BRIDGE_HOME = $HOST_URL . "/cgi-bin/bridge.pl";
-my $TEMPLATE_DIR = "./templates";
-my $GUEST_TEMPLATE_DIR = "./guest_templates";
 my $HTML_DIR = $ENV{'BRIDGE_HTML_DIR'};
 my $OUTPUT_DIR = "public/data";
 my $DATAFILE_DIR = $ENV{'DOWNLOAD_DATAFILE_DIR'};
@@ -90,16 +88,18 @@ my $dbh = DBConnection::connect();
 # Make a Transaction Manager object
 my $dbt = DBTransactionManager->new($dbh);
 
-# Make the HTMLBuilder object with the private template directory..  
-my $hbo = HTMLBuilder->new($TEMPLATE_DIR, $dbt, $exec_url );
-
-my $s = Session->new($dbt);
+# Make the session object
+my $s = Session->new($dbt,$q->cookie('session_id'));
 
 # don't let users into the contributors' area unless they're on the main site
 #  or backup server (as opposed to a mirror site) JA 3.8.04
 if ( $HOST_URL !~ /paleobackup\.nceas\.ucsb\.edu/ && $HOST_URL !~ /paleodb\.org/ )	{
 	 $q->param("user" => "Guest");
 }
+
+# Make the HTMLBuilder object - it'll use whatever template dir is appropriate
+my $use_guest = ($q->param('user') =~ /^guest$/i) ? 1 : 0;
+my $hbo = HTMLBuilder->new($dbt,$s,$use_guest);
 
 
 # process the action
@@ -111,146 +111,23 @@ processAction();
 
 # rjp, 2/2004
 sub processAction {
-	my $cookie;
-		
 	# Grab the action from the form.  This is what subroutine we should run.
-	my $action = $q->param("action");
+	my $action = ($q->param("action") || "displayMenuPage");
 	
-	if ( $q->param("user") eq "Guest" || ! $q->param("user") )	{
-		$action = "displayHomePage" unless ( $action );  # set default action to home page
-	} else	{
-		$action = "displayMenuPage" unless ( $action );  # set default action to menu page
-	}
-
-	
-	# need to know (below) if we did a processLogin and then changed the action
-	my $old_action = "";
-
-	# figure out what to do with the action
-	
-	if ($action eq 'logout') { 
-		logout();
-		return;
-	}
-
-	if ($action eq "displayLogin") {
-    	print $q->header( -type => "text/html", -Cache_Control=>'no-cache');
-		displayLoginPage();
-		return;
-	}
-
-	
-	# Process Login
-	if ($action eq "processLogin") {
-        my $authorizer = $q->param('authorizer_reversed');
-        my $enterer = $q->param('enterer_reversed');
-        my $password = $q->param('password');
-        $authorizer = Person::reverseName($authorizer);
-        $enterer = Person::reverseName($enterer);
-
-
-		$cookie = $s->processLogin($q,$authorizer,$enterer,$password);
-
-		if ($cookie) {
-			my $cf = CookieFactory->new();
-            # The following two cookies are for setting the select lists
-            # on the login page.
-            my $cookieEnterer = $cf->buildCookie("enterer_reversed", $q->param("enterer_reversed"));
-            my $cookieAuthorizer = $cf->buildCookie("authorizer_reversed", $q->param("authorizer_reversed"));
-            
-            print $q->header(-type => "text/html", 
-                             -cookie => [$cookie, $cookieEnterer, $cookieAuthorizer],
-                             -expires =>"now" );
-
-			# Destination
-			if ($q->param("destination") ne "") {
-				$action = $q->param("destination");
-			}
-			if ($action eq "processLogin") {
-				$action = "displayMenuPage";
-				$old_action = "processLogin";
-			}
-		} else { # no cookie
-			# failed login:  (bad password, etc.)
-			my $errorMessage;
-
-			if (!$authorizer) {
-				$errorMessage = "The authorizer name is required. ";
-			} 
-			if (!$enterer) {
-				$errorMessage .= "The enterer name is required. ";
-			}
-            if (($authorizer && $authorizer !~ /\./) ||
-                ($enterer && $enterer !~ /\./)) {
-				$errorMessage .= "Note that the format for names is <i>Smith, A.</i> ";
-            }    
-			if (!$password) {
-				$errorMessage .= "The password is required. ";
-			}
-			if (!$errorMessage )	{
-				$errorMessage .= "The authorizer name, enterer name, or password is invalid. ";
-			}
-			
-			$q->param("user" => "Guest");
-			$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
-			
-            print $q->header(-type => "text/html", 
-                         -Cache_Control=>'no-cache',
-                         -expires =>"now" );
-			# return them to the login page with a message about the bad login.
-			displayLoginPage(Debug::printErrors(["Sorry, your login failed. $errorMessage"]));
-			
-			return;
-		}
-		
-		# if we make it to here, then we can continue...
-	}
-
-	
-	# Guest page? 
-	if ($q->param("user") eq "Guest") {
-		# Change the HTMLBuilder object so that the templates
-		# will come from the guest directory instead of the private directory.
-		$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbt, $exec_url );
-	}
-	
-	# Validate User
-	my $temp_cookie = $q->cookie('session_id');
-	if (! $cookie) { # if we didn't just make a cookie, then grab it from the session.
-		$cookie = $s->validateUser($dbh, $q->cookie('session_id'));
-	}
-	Debug::dbPrint("processAction $action authorizer ".$s->get('authorizer')." enterer ".$s->get('enterer')." session ".$q->cookie('session_id')." ip $ENV{REMOTE_ADDR}");
-		
-	if (!$cookie) {
-		if ($q->param("user") eq "Contributor") {			
-            print $q->header(-type => "text/html", 
-                         -Cache_Control=>'no-cache',
-                         -expires =>"now" );
-			displayLoginPage();
-			return;
-		} else {
-			$q->param("user" => "Guest");
-			$hbo = HTMLBuilder->new( $GUEST_TEMPLATE_DIR, $dbh, $exec_url );
-		}
-	}
-
-
     # The right combination will allow me to conditionally set the DEBUG flag
     if ($s->get("enterer") eq "J. Sepkoski" && 
         $s->get("authorizer") eq "J. Alroy" ) {
             $DEBUG = 1;
     }
-	
     
-	# Record the date of the action in the person table JA 27/30.6.02
-	if ($s->isDBMember()) {
-		my $sql = "UPDATE person SET last_action=NOW() WHERE person_no=".$s->get('enterer_no');
-		$dbh->do( $sql ) || die ( "$sql<HR>$!" );
-	}
-	
-	# print out the HTML headers..  We have to do this differently for
-	# the displayLogin routine because it turns off the cache control for some reason...(rjp)
-	unless ($action eq 'displayLogin' or $old_action eq 'processLogin') {
+	# figure out what to do with the action
+    if ($action eq 'logout') {
+    	logout();
+        return;
+    } elsif ($action eq 'processLogin') {
+        processLogin();
+        return;
+    } else {
         if ($q->param('output_format') eq 'xml' ||
             $q->param('action') =~ /XML$/) {
             print $q->header(-type => "text/xml", 
@@ -261,20 +138,87 @@ sub processAction {
                          -Cache_Control=>'no-cache',
                          -expires =>"now" );
         } 
-	}
-	
-	
-	dbg("<p><font color='red' size='+1' face='arial'>You are in DEBUG mode!</font><br> Cookie [$cookie]<BR> Action [$action] Authorizer [".$s->get("authorizer")."] Enterer [".$s->get("enterer")."]<BR></p>");
-	#dbg("@INC");
-	dbg($q->Dump);
+        
+        dbg("<p><font color='red' size='+1' face='arial'>You are in DEBUG mode!</font><br> Cookie []<BR> Action [$action] Authorizer [".$s->get("authorizer")."] Enterer [".$s->get("enterer")."]<BR></p>");
+        #dbg("@INC");
+        dbg($q->Dump);
 
-    $action = \&{$action}; # Hack so use strict doesn't break
-	# Run the action (ie, call the proper subroutine)
-	&$action;
+        $action = \&{$action}; # Hack so use strict doesn't break
+        # Run the action (ie, call the proper subroutine)
+        &$action;
+	}
+    exit;
 }
 
 
+sub processLogin {
+    my $authorizer = $q->param('authorizer_reversed');
+    my $enterer = $q->param('enterer_reversed');
+    my $password = $q->param('password');
+    $authorizer = Person::reverseName($authorizer);
+    $enterer = Person::reverseName($enterer);
 
+    my $cookie = $s->processLogin($authorizer,$enterer,$password);
+
+    if ($cookie) {
+        # The following two cookies are for setting the select lists
+        # on the login page.
+
+        my $cookieEnterer= $q->cookie(
+                -name    => 'enterer_reversed',
+                -value   => $q->param('enterer_reversed'),
+                -expires => '+1y',
+                -path    => "/",
+                -secure  => 0);
+        my $cookieAuthorizer = $q->cookie(
+                -name    => 'authorizer_reversed',
+                -value   => $q->param('authorizer_reversed'),
+                -expires => '+1y',
+                -path    => "/",
+                -secure  => 0);
+
+        print $q->header(-type => "text/html", 
+                         -cookie => [$cookie, $cookieEnterer, $cookieAuthorizer],
+                         -expires =>"now" );
+
+        my $action = "displayMenuPage";
+        # Destination
+        if ($q->param("destination") ne "") {
+            $action = $q->param("destination");
+        } 
+        $action = \&{$action}; # Hack so use strict doesn't break
+        # Run the action (ie, call the proper subroutine)
+        &$action;
+    } else { # no cookie
+        # failed login:  (bad password, etc.)
+        my $errorMessage;
+
+        if (!$authorizer) {
+            $errorMessage = "The authorizer name is required. ";
+        } 
+        if (!$enterer) {
+            $errorMessage .= "The enterer name is required. ";
+        }
+        if (($authorizer && $authorizer !~ /\./) ||
+            ($enterer && $enterer !~ /\./)) {
+            $errorMessage .= "Note that the format for names is <i>Smith, A.</i> ";
+        }    
+        if (!$password) {
+            $errorMessage .= "The password is required. ";
+        }
+        if (!$errorMessage )	{
+            $errorMessage .= "The authorizer name, enterer name, or password is invalid. ";
+        }
+
+        print $q->header(-type => "text/html", 
+                         -Cache_Control=>'no-cache',
+                         -expires =>"now" );
+
+        # return them to the login page with a message about the bad login.
+        displayLoginPage(Debug::printErrors(["Sorry, your login failed. $errorMessage"]));
+        exit;
+    }
+}
 
 # Logout
 # Clears the SESSION_DATA table of this session.
@@ -296,26 +240,18 @@ sub logout {
 # original Ederer function messed up by Poling and revised by JA 13.4.04
 sub displayLoginPage {	
 	my $message = shift;
+    my $destination = shift;
 	
-#	print $q->header( -type => "text/html", -Cache_Control=>'no-cache');
+    my %vars = $q->Vars();
+    $vars{'message'} = $message;
+    $vars{'authorizer_reversed'} ||= $q->cookie("authorizer_reversed");
+    $vars{'enterer_reversed'} ||= $q->cookie("enterer_reversed");
+    $vars{'destination'} ||= $destination;
 	
-	my $authorizer = $q->param("authorizer_reversed") ? $q->param("authorizer_reversed") : $q->cookie("authorizer_reversed");
-	my $enterer = $q->param("enterer_reversed") ? $q->param("enterer_reversed") : $q->cookie("enterer_reversed");
-	my $destination = $q->param("destination");
-
-	my $javaScript = &makeAuthEntJavaScript();
-
-	my $html = $hbo->populateHTML('login_box', [$authorizer,$enterer] , ['authorizer_reversed','enterer_reversed' ] );
-	$html =~ s/%%message%%/$message/;
-	$html =~ s/%%destination%%/$destination/;
-	$html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
-	
-	print &stdIncludes ("std_page_top");
-
-	print $html;
-
-	print &stdIncludes ("std_page_bottom");
-	
+	print stdIncludes("std_page_top");
+    print makeAuthEntJavaScript();
+	print $hbo->populateHTML('login_box', \%vars);
+	print stdIncludes("std_page_bottom");
 	exit;
 }
 
@@ -582,53 +518,6 @@ sub setPreferences	{
 
 }
 
-# JA 29.2.04
-sub buildTimeScalePulldown	{
-	my $html = shift;			# HTML page into which we substitute
-
-	# get the time scales and their ID numbers
-	my $sql = "SELECT scale_no,scale_name FROM scales";
-	my @timescalerefs = @{$dbt->getData($sql)};
-
-	# alphabetize the time scale names
-	my %tsid;
-	for my $ts ( @timescalerefs )	{
-		$tsid{$ts->{scale_name}} = $ts->{scale_no};
-	}
-	my @tsnames = keys %tsid;
-	@tsnames = sort @tsnames;
-
-	# move the Gradstein global scales to the start of the list
-	# switched this from Harland to Gradstein JA 5.12.05
-	my @gradsteinnames;
-	my @temptsnames;
-	for my $ts ( @tsnames )	{
-		if ( $ts =~ /Gradstein .:/ )	{
-			push @gradsteinnames, $ts;
-		} else	{
-			push @temptsnames, $ts;
-		}
-	}
-	@tsnames = @gradsteinnames;
-	push @tsnames, @temptsnames;
-
-	# build the select list
-	my $timescale = "<select name=\"time_scale\">\n<option selected>\n";
-	# add the 10 m.y. bin option at the head of the list
-	$timescale .= "<option>PBDB 10 m.y. bins\n<option>\n";
-	for my $ts ( @tsnames )	{
-		$timescale .= "<option value=\"$tsid{$ts}\">$ts\n";
-	}
-	$timescale .= "</select>\n";
-
-
-	# add a blank after the Gradstein stages
-	$timescale =~ s/<option value="73">Gradstein 7: Stages/<option value="73">Gradstein 7: Stages\n<option>\n/;
-
-	# put the select list into the web page
-	$$html =~ s/%%time scale%%/$timescale/;
-}
-
 # displays the main menu page for the data enterers
 sub displayMenuPage	{
 	# Clear Queue?  This is highest priority
@@ -652,12 +541,18 @@ sub displayMenuPage	{
 			exit;
 		}
 	}
-	
-	print stdIncludes("std_page_top");
-	print $hbo->populateHTML('menu', [],[]);
-	print stdIncludes("std_page_bottom");
 
-
+    if ($s->isDBMember() && $q->param('user') ne 'Guest') {
+	    print stdIncludes("std_page_top");
+	    print $hbo->populateHTML('menu');
+	    print stdIncludes("std_page_bottom");
+    } else {
+        if ($q->param('user') eq 'Contributor') {
+		    displayLoginPage( "Please log in first.","displayMenuPage" );
+        } else {
+            displayHomePage();
+        }
+    }
 }
 
 
@@ -688,28 +583,10 @@ sub displayHomePage {
 
 	# Get some populated values
 	my $sql = "SELECT * FROM statistics";
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-   	$sth->execute();
-	my $rs = $sth->fetchrow_hashref();
-    my (@rowData,@fieldNames);
-	push ( @rowData,	$rs->{reference_total},
-						$rs->{taxon_total}, 
-						$rs->{collection_total}, 
-						$rs->{occurrence_total}, 
-						$rs->{enterer_total}, 
-						$rs->{institution_total}, 
-						$rs->{country_total}, '', '' );
-	push ( @fieldNames,	"reference_total",
-						"taxon_total", 
-						"collection_total", 
-						"occurrence_total", 
-						"enterer_total", 
-						"institution_total", 
-						"country_total", "main_menu", "login" );
-	$sth->finish();
+    my $row = ${$dbt->getData($sql)}[0];
 
 	print stdIncludes("std_page_top");
-	print $hbo->populateHTML('home', \@rowData, \@fieldNames);
+	print $hbo->populateHTML('home', $row);
 	print stdIncludes("std_page_bottom");
 }
 
@@ -719,38 +596,31 @@ sub displayHomePage {
 sub displayMapForm {
 
 	# List fields that should be preset
-	my @fieldNames = ( 'research_group', 'country', 'period_max', 'lithology1', 'environment', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapscale', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngnocolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointsize1', 'pointshape1', 'dotcolor1', 'dotborder1', 'mapsearchfields2', 'pointsize2', 'pointshape2', 'dotcolor2', 'dotborder2', 'mapsearchfields3', 'pointsize3', 'pointshape3', 'dotcolor3', 'dotborder3', 'mapsearchfields4', 'pointsize4', 'pointshape4', 'dotcolor4', 'dotborder4' );
-	# Set default values
-	my @row = ( '', '', '', '', '', '100%', 'equirectangular', '0', 'Europe', 'X 1', 'medium', 'white', 'none', 'none', 'gray', 'in back', 'medium', 'none', 'gray', 'none', 'none', 'large', 'circles', 'red', 'none', '', 'medium', 'squares', 'blue', 'black', '', 'medium', 'triangles', 'yellow', 'black', '', 'medium', 'diamonds', 'green', 'black' );
+	my %vars = ( 'mapsize'=>'100%', 'projection'=>'equirectangular', 'maptime'=>'', 'mapfocus'=>'Europe (50,10)', 'mapscale'=>'X 1', 'mapresolution'=>'medium', 'mapbgcolor'=>'white', 'crustcolor'=>'none', 'gridsize'=>'none', 'gridcolor'=>'gray', 'gridposition'=>'in back', 'linethickness'=>'medium', 'latlngnocolor'=>'none', 'coastlinecolor'=>'gray', 'borderlinecolor'=>'none', 'usalinecolor'=>'none', 'pointsize1'=>'large', 'pointshape1'=>'circles', 'dotcolor1'=>'red', 'dotborder1'=>'no', 'mapsearchfields2'=>'', 'pointsize2'=>'medium', 'pointshape2'=>'squares', 'dotcolor2'=>'blue', 'dotborder2'=>'black', 'mapsearchfields3'=>'', 'pointsize3'=>'medium', 'pointshape3'=>'triangles', 'dotcolor3'=>'yellow', 'dotborder3'=>'black', 'mapsearchfields4'=>'', 'pointsize4'=>'medium', 'pointshape4'=>'diamonds', 'dotcolor4'=>'green', 'dotborder4'=>'black' );
 	
-	# Read preferences if there are any JA 8.7.02
+	# Prefs have higher precedence;
 	my %pref = getPreferences($s->get('enterer_no'));
-	# Get the enterer's preferences
-	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = &getPrefFields();
-	for my $p (@{$setFieldNames})	{
-		if ($pref{$p} ne "")	{
-			#these prefs are for collection entry form, don't display the here
-			if ($p !~ /environment|research_group|formation|country|state|interval_name|lithology|period_max/) {
-				unshift @row,$pref{$p};
-				unshift @fieldNames,$p;
-			}
-		}
+	my ($setFieldNames) = &getPrefFields();
+	foreach my $p (@{$setFieldNames}) {
+        #these prefs are for collection entry form, don't display the here
+        if ($p !~ /environment|research_group|formation|country|state|interval_name|lithology|period_max/) {
+            $vars{$p} = $pref{$p} if $pref{$p};
+        }
 	}
+    $vars{'enterer_me'} = $s->get('enterer_reversed');
+    $vars{'authorizer_me'} = $s->get('authorizer_reversed');
 
-    my $html = $hbo->populateHTML('map_form', \@row, \@fieldNames);
-
-    my $javaScript = &makeAuthEntJavaScript();
-    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
-
-	my $authorizer_reversed = $s->get("authorizer_reversed");
-	$html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
-	my $enterer_reversed = $s->get("enterer_reversed");
-	$html =~ s/%%enterer_reversed%%/$enterer_reversed/;
+    # Lastly resubmission takes highest precedence
+    my $q_vars = $q->Vars();
+    while (my ($k,$v) = each %{$q_vars}) {
+        $vars{$k} = $v if $v;
+    }
 
 	# Spit out the HTML
 	print stdIncludes("std_page_top" );
+    print makeAuthEntJavaScript();
 	print $hbo->populateHTML('js_map_checkform');
-	print $html;
+    print $hbo->populateHTML('map_form', \%vars);
 	print stdIncludes("std_page_bottom");
 }
 
@@ -896,20 +766,14 @@ sub displayMapOfCollection {
 
 
 sub displayDownloadForm {
-    my $std_page_top = stdIncludes("std_page_top");
-    print $std_page_top;
-
-	my $html = $hbo->populateHTML( 'download_form', [ '', '', '', '', '', '','','','','' ], [ 'research_group', 'country','environment','lithology1','ecology1','ecology2','ecology3','ecology4','ecology5','ecology6' ] );
-    my $javaScript = &makeAuthEntJavaScript();
-    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
-    my $authorizer_reversed = $s->get("authorizer_reversed");
-    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
-    my $enterer_reversed = $s->get("enterer_reversed");
-    $html =~ s/%%enterer_reversed%%/$enterer_reversed/;  
     
-	buildTimeScalePulldown ( \$html );
-	print $html;
-
+    my %vars = $q->Vars();
+    $vars{'authorizer_me'} = $s->get("authorizer_reversed");
+    $vars{'enterer_me'} = $s->get("authorizer_reversed");
+    
+    print stdIncludes("std_page_top");
+    print makeAuthEntJavaScript();
+	print $hbo->populateHTML('download_form',\%vars);
 	print stdIncludes("std_page_bottom");
 }
 
@@ -926,7 +790,7 @@ sub displayDownloadResults {
 
 sub displayDownloadNeptuneForm {
     print stdIncludes("std_page_top");
-    print $hbo->populateHTML( 'download_neptune_form', [], []);
+    print $hbo->populateHTML( 'download_neptune_form');
     print stdIncludes("std_page_bottom");
 }       
     
@@ -937,15 +801,13 @@ sub displayDownloadNeptuneResults {
 }  
 
 sub displayDownloadTaxonomyForm {
+   
+    my %vars = $q->Vars();
+    $vars{'authorizer_me'} = $s->get('authorizer_reversed');
+
     print stdIncludes("std_page_top");
-    
-    my $html = $hbo->populateHTML( 'download_taxonomy_form', [''], ['taxon_rank']);
-    my $javaScript = &makeAuthEntJavaScript();
-    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
-    my $authorizer_reversed = ($s->get("authorizer_reversed") || "");
-    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/g;
-        
-    print $html;
+    print makeAuthEntJavaScript();
+    print $hbo->populateHTML('download_taxonomy_form',\%vars);
     print stdIncludes("std_page_bottom");
 }       
     
@@ -962,11 +824,8 @@ sub displayDownloadTaxonomyResults {
 }  
 
 sub displayReportForm {
-
 	print stdIncludes( "std_page_top" );
-
-	print $hbo->populateHTML( 'report_form', [ '' ], [ 'research_group' ] );
-
+	print $hbo->populateHTML('report_form');
 	print stdIncludes("std_page_bottom");
 }
 
@@ -985,7 +844,7 @@ sub displayCurveForm {
     my $std_page_top = stdIncludes("std_page_top");
     print $std_page_top;
 
-	my $html = $hbo->populateHTML( 'curve_form', [ '', '', '', '' ] , [ 'research_group', 'collection_type', 'lithology1', 'lithology2' ] );
+	my $html = $hbo->populateHTML('curve_form');
     if ($q->param("input_data") =~ /neptune/) {
         $html =~ s/<option selected>10 m\.y\./<option>10 m\.y\./;
         if ($q->param("input_data") =~ /neptune_pbdb/) {
@@ -1127,7 +986,7 @@ sub stdIncludes {
 
 	return $hbo->populateHTML(	$page, 
 								[ $reference, $enterer ], 
-								[ "%%reference%%", "%%enterer%%" ] );
+								[ "reference", "enterer" ] );
 }
 
 
@@ -1146,11 +1005,11 @@ sub displaySearchRefs {
 
 	# Prepend the message and the type
 	my @row = ( $message, $type );
-	my @fields = ( "%%message%%", "type" );
+	my @fields = ( "message", "type" );
 
 	# If we have a default reference_no set, show another button.
 	# Don't bother to show if we are in select mode.
-	unshift ( @fields, "%%use_current%%" );
+	unshift ( @fields, "use_current" );
 	my $reference_no = $s->get("reference_no");
 	if ( $reference_no && $type ne "add" ) {
 		unshift ( @row, "<input type='submit' name='use_current' value='Use current reference ($reference_no)'>\n" );
@@ -1160,31 +1019,16 @@ sub displaySearchRefs {
 
     # Users editing collections may want to have their current reference
 	# swapped with the primary reference of the collection to be edited.
-	unshift ( @fields, "%%use_primary%%" );
+	unshift ( @fields, "use_primary" );
 	if ($q->param('action') eq "startEditCollection" ) {
-		unshift ( @row, "<input type='submit' name='use_primary' value=\"Use collection's reference\">\n" ); } else {
+		unshift ( @row, "<input type='submit' name='use_primary' value=\"Use collection's reference\">\n" ); 
+    } else {
 		unshift ( @row, "" );
 	}
 
-	unshift @row,"";
-	unshift @fields,"project_name";
-
-	$html .= $hbo->populateHTML("search_refs_form", \@row, \@fields);
-
-	# insert the JavaScript
-	# WARNING: this can't be done by means of populateHTML because
-	#  quotes would be turned into &quot; tags
-	my $javaScript = &makeAuthEntJavaScript();
-	$html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
-    my $authorizer_reversed = $s->get("authorizer_reversed");
-    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
-    my $enterer_reversed = $s->get("enterer_reversed");
-    $html =~ s/%%enterer_reversed%%/$enterer_reversed/;  
-
-	print $html;
+	print $hbo->populateHTML("search_refs_form", \@row, \@fields);
 
 	print &stdIncludes ("std_page_bottom") unless ($noHeader);
-
 }
 
 
@@ -1526,7 +1370,7 @@ sub selectReference {
 
 sub displayRefAdd {
 	my @fieldNames = (	"publication_type", 
-						"%%new_message%%" );
+						"new_message" );
 	my @row = ( "", 
 				"<p>If the reference is <b>new</b>, please fill out the following form.</p>" );
 
@@ -1669,8 +1513,8 @@ sub displayRefEdit
 	$sth->finish();
 
 	# Tack on a few extras
-	push (@fieldNames, 'action','%%new_message%%');
-	push (@row, 'processReferenceEditForm','');
+	push (@fieldNames, 'action');
+	push (@row, 'processReferenceEditForm');
 
 	print $hbo->populateHTML('enter_ref_form', \@row, \@fieldNames);
 
@@ -1777,7 +1621,7 @@ sub displaySearchCollsForAdd	{
 
     my %pref = getPreferences($s->get('enterer_no'));                                                                                                  
 
-	my $html = $hbo->populateHTML('search_collections_for_add_form' , [ '' , $pref{'latdeg'} , '' , '' , '' , $pref{'latdir'} , $pref{'lngdeg'} , '' , '' , '' , $pref{'lngdir'} ] , [ 'period_max' , 'latdeg' , 'latmin' , 'latsec' , 'latdec' , 'latdir',  'lngdeg' , 'lngmin' , 'lngsec' , 'lngdec' , 'lngdir' ] );
+	my $html = $hbo->populateHTML('search_collections_for_add_form' , \%pref);
 
 	# Spit out the HTML
 	print stdIncludes( "std_page_top" );
@@ -1812,29 +1656,14 @@ sub displaySearchColls {
 	# edit_occurrence	result list links go to edit occurrence page
 
 	# Show the "search collections" form
-    my $html = $hbo->populateHTML('search_collections_form', [ '', '', '', '', '', '','' ], [ 'research_group', 'eml_max_interval', 'eml_min_interval', 'lithadj', 'lithology1', 'lithadj2', 'lithology2', 'environment',$type ]);
-
-    my $javaScript = &makeAuthEntJavaScript();
-    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
-    my $authorizer_reversed = $s->get("authorizer_reversed");
-    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
-    my $enterer_reversed = $s->get("enterer_reversed");
-    $html =~ s/%%enterer_reversed%%/$enterer_reversed/;  
-
-	# propagate this through the next server hit.
-	if($q->param('use_primary')){
-		$html =~ s/%%use_primary%%/yes/;
-	}
-	else{
-		$html =~ s/%%use_primary%%//;
-	}
-
-	# Set the type
-	$html =~ s/%%type%%/$type/;
+    my %vars = $q->Vars();
+    $vars{'enterer_me'} = $s->get('enterer_reversed');
+    my $html = $hbo->populateHTML('search_collections_form', \%vars);
 
 	# Spit out the HTML
 	print stdIncludes( "std_page_top" );
     printIntervalsJava(1);
+    print makeAuthEntJavaScript();
 	print $html;
 	print stdIncludes("std_page_bottom");
 }
@@ -1879,7 +1708,7 @@ sub displayCollResults {
     my $action = "displayCollectionDetails";
 	# We create different links depending on their destination, using the hidden type field.
 	if ( $type eq "add" )		{ $action = "displayCollectionDetails"; $permission_type = "read"; }
-	elsif ( $type eq "edit" )	{ $action = "displayEditCollection"; $permission_type = "write"; }
+	elsif ( $type eq "edit" )	{ $action = "displayCollectionForm"; $permission_type = "write"; }
 	elsif ( $type eq "view" )	{ $action = "displayCollectionDetails"; $permission_type= "read"; }
 	elsif ( $type eq "edit_occurrence" )   { $action = "displayOccurrenceAddEdit"; $permission_type= "read"; }
 	elsif ( $type eq "reid" )	{ $action = "displayOccsForReID"; $permission_type= "read"; }
@@ -1914,8 +1743,8 @@ sub displayCollResults {
         # Even if we have a match in the authorities table, still match against the bare occurrences/reids  table
         $options{'include_occurrences'} = 1;
         $options{'permission_type'} = $permission_type;
-        $options{'lithologies'} = $options{'lithology1'} if (!$options{'lithologies'}); delete $options{'lithology1'};
-        $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'};
+#        $options{'lithologies'} = $options{'lithology1'} if (!$options{'lithologies'}); delete $options{'lithology1'};
+#        $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'};
         if ($q->param("taxon_list")) {
             my @in_list = split(/,/,$q->param('taxon_list'));
             $options{'taxon_list'} = \@in_list if (@in_list);
@@ -2104,7 +1933,7 @@ sub displayCollResults {
     } else {
 		# If this is an add,  Otherwise give an error
 		if ( $type eq "add" ) {
-			displayEnterCollPage();
+			displayCollectionForm();
 			return;
 		} else {
 			print stdIncludes( "std_page_top" );
@@ -2166,7 +1995,7 @@ sub displayCollResults {
 			}
 		}
 
-		print qq|<input type="hidden" name="action" value="displayEnterCollPage">\n|;
+		print qq|<input type="hidden" name="action" value="displayCollectionForm">\n|;
 		print qq|<center>\n<input type=submit value="Add a new collection">\n|;
 		print qq|</center>\n</form>\n|;
 	}
@@ -2834,7 +2663,7 @@ IS NULL))";
             if ( $mm !~ /(10)|(11)|(12)/ )	{
                 $mm = "0" . $mm;
             }
-            $dd = $options{'date'};
+            $dd = $options{'day_of_month'};
             if ( $dd < 10 )	{
                 $dd = "0" . $dd;
             }
@@ -2878,13 +2707,13 @@ IS NULL))";
     if ( $options{'environment'}) {
         my $environment;
         if ($options{'environment'} =~ /General/) {
-            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_general'}});
+            $environment = join(",", map {"'".$_."'"} $hbo->getList('environment_general'));
         } elsif ($options{'environment'} =~ /Terrestrial/) {
-            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_terrestrial'}});
+            $environment = join(",", map {"'".$_."'"} $hbo->getList('environment_terrestrial'));
         } elsif ($options{'environment'} =~ /Siliciclastic/) {
-            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_siliciclastic'}});
+            $environment = join(",", map {"'".$_."'"} $hbo->getList('environment_siliciclastic'));
         } elsif ($options{'environment'} =~ /Carbonate/) {
-            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_carbonate'}});
+            $environment = join(",", map {"'".$_."'"} $hbo->getList('environment_carbonate'));
         } else {
             $environment = $dbh->quote($options{'environment'});
         }
@@ -3346,18 +3175,12 @@ sub displayCollectionDetailsPage {
     if ($row->{'geological_group'}) {
         $row->{'geological_group'} = "<a href=\"$exec_url?action=displayStrata&group_formation_member=".uri_escape($row->{'geological_group'})."\">$row->{geological_group}</a>";
     }
+
+    $row->{'modified'} = date($row->{'modified'});
     
     
    
-    my $optional = {};
-    foreach ('stratigraphy_panel','lithology_panel','taphonomy_panel','methods_panel') {
-        $optional->{$_} = 1;
-    }
-    my @stratigraphy_fields = ('geological_group','formation','member','localsection','localbed','localorder','regionalsection','regionalbed');
-
-    my @fields = keys %{$row};
-    my @fieldValues = values %{$row};
-    print $hbo->populateHTML('collection_display_fields', \@fieldValues,\@fields,$optional);
+    print $hbo->populateHTML('collection_display_fields', $row);
 		
     # If the viewer is the authorizer (or it's me), display the record with edit buttons
     if ($s->isDBMember() && $q->param('user') !~ /guest/i) {
@@ -3378,106 +3201,8 @@ sub displayCollectionDetailsPage {
 # first part gets interval names matching numbers in intervals table;
 # second part figures out whether to display dashes in time interval fields
 sub getMaxMinNamesAndDashes	{
-
-	my $r = shift;
-	my $f = shift;
-
-	my @row = @{$r};
-	my @fieldNames = @{$f};
-
-	# get the interval names by querying the intervals table JA 11.7.03
-	# also get the E/M/Ls JA 17.7.03
-	my ($max_interval_no,$min_interval_no,$fieldCount);
-    $fieldCount = "";
-	for my $tmpVal (@fieldNames) {
-		if ( $tmpVal eq 'max_interval_no') {
-			$max_interval_no = $row[$fieldCount];
-		} elsif ( $tmpVal eq 'min_interval_no' )	{
-			$min_interval_no = $row[$fieldCount];
-		}
-		if ( $max_interval_no && $min_interval_no )	{
-			last;
-		}
-		$fieldCount++;
-	}
-	if ( $max_interval_no )	{
-		my $sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $max_interval_no;
-        my $interval = ${$dbt->getData($sql)}[0];
-		unshift @row, $interval->{eml_interval};
-		unshift @row, $interval->{interval_name};
-	} else	{
-		unshift @row, '';
-		unshift @row, '';
-	}
-	unshift @fieldNames, 'eml_max_interval';
-	unshift @fieldNames, 'max_interval';
-
-	if ( $min_interval_no )	{
-		my $sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $min_interval_no;
-        my $interval = ${$dbt->getData($sql)}[0];
-		unshift @row, $interval->{eml_interval};
-		unshift @row, $interval->{interval_name};
-	} else	{
-		unshift @row, '';
-		unshift @row, '';
-	}
-	unshift @fieldNames, 'eml_min_interval';
-	unshift @fieldNames, 'min_interval';
-
-	# check whether we have period/epoch/locage/intage max AND/OR min:
-	for my $term ("_interval","epoch_","intage_","locage_","period_"){
-		my $max = 0;
-		my $min = 0;
-		for my $index (0..scalar(@fieldNames)){
-			if($fieldNames[$index] eq "max".$term && $row[$index]){
-				$max = 1;
-			}
-			elsif($fieldNames[$index] eq "min".$term && $row[$index]){
-				$min = 1;
-			}
-			if($fieldNames[$index] eq $term."max" && $row[$index]){
-				$max = 1;
-			}
-			elsif($fieldNames[$index] eq $term."min" && $row[$index]){
-				$min = 1;
-			}
-		}
-		# Do this regardless:
-		my $termtitle = $term."title";
-		if ( $term =~ /_interval/ )	{
-			$termtitle = "title".$term;
-		}
-		push(@fieldNames,$termtitle);
-		if($max || $min){
-			# There is no corresponding span, so this is just a placeholder, 
-			# but necessary so that htmlbuilder doesn't wipe the contents of 
-			# the div tags.
-			push(@row, "dummy"); 
-
-			if($max && $min){
-				if ( $term =~ /_interval/ )	{
-					push(@fieldNames,"dash".$term);
-				} else	{
-					push(@fieldNames,$term."dash");
-				}
-				push(@row, " - ");
-			}
-			elsif($min && !$max){
-				if ( $term =~ /_interval/ )	{
-					push(@fieldNames, "min_only".$term);
-				} else	{
-					push(@fieldNames, $term."min_only");
-				}
-				push(@row, "<p class=\"small\">(minimum)</p>");
-			}
-		}
-		# This will cause the whole "*_title" section to be erased.
-		else{
-			push(@row,"");
-		}
-	}
-
-	return (\@row, \@fieldNames);
+    my $vars = shift;
+    
 
 }
 
@@ -4550,142 +4275,176 @@ sub displayCollectionEcology	{
 }
 
 
-sub displayEnterCollPage {
+# This is a multi step process: 
+# First populate our page variables with prefs, these have the lowest priority
+# TBD CHeck for reerence no
+sub displayCollectionForm {
 
 	# Have to be logged in
 	if (!$s->isDBMember()) {
-		$s->enqueue( $dbh, "action=displayEnterCollPage" );
+		$s->enqueue( $dbh, "action=displayCollectionForm" );
 		displayLoginPage( "Please log in first." );
 		exit;
 	}
-	# Need to build the research_group checkboxes
 
-    my (@htmlFields,@htmlValues,%pref);
-    if ($q->param('prefill_collection_no') =~ /^\d+$/) {
-        dbg("Prefilling form with ".$q->param('prefill_collection_no'));
-        my $sql = "SELECT * FROM collections WHERE collection_no=" . $q->param('prefill_collection_no');
-        my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-        $sth->execute();
-        my @fieldNames = @{$sth->{NAME}};
-        my $row = $sth->fetchrow_hashref();
-        if ($row) {
-            foreach my $field (@fieldNames) {
-                if ($field !~ /^(authorizer|enterer|modifier|authorizer_no|enterer_no|modifier_no|created|modified|collection_no)/) {
-                    push @htmlFields,$field;
-                    push @htmlValues,$row->{$field};
-                }
-            }
-            # get the max/min interval names
-            my ($v,$f) = getMaxMinNamesAndDashes(\@htmlValues,\@htmlFields);
-            @htmlValues = @{$v};
-            @htmlFields = @{$f};
+    my $isNewEntry = ($q->param('collection_no') =~ /^\d+$/) ? 0 : 1;
+    my $reSubmission = ($q->param('action') =~ /processEditCollectionForm|processEnterCollectionForm/) ? 1 : 0;
 
-            my $ref = Reference::getReference($dbt,$row->{'reference_no'});
-            my $formatted_primary = Reference::formatLongRef($ref);
-
-            my $refRowString = '<table cellspacing="0" cellpadding="2" width="100%"><tr>'.
-            "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">".$row->{'reference_no'}."</a></b>&nbsp;</td>".
-            "<td valign-\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
-            "<td>$formatted_primary</td>".
-            "</tr></table>";
-        
-            unshift(@htmlFields, 'ref_string');
-            unshift(@htmlValues, $refRowString);
-
-	        %pref = getPreferences($s->get('enterer_no'));
-                  
-            $sth->finish();
-        } else { 
-            die "Tried to prefill entry form with non-existant collection no: ".$q->param('prefill_collection_no');
-        }
-    } else {
-        # Have to have a reference #
-        my $reference_no = $s->get("reference_no");
-        if ( ! $reference_no ) {
-            $s->enqueue( $dbh, "action=displayEnterCollPage" );
+    # First check to nake sure they have a reference no for new entries
+    if ($isNewEntry) {
+        if (!$s->get('reference_no')) {
+            $s->enqueue( $dbh, $q->query_string() );
             displaySearchRefs( "Please choose a reference first" );
             exit;
-        }	
+        }  
+    }
 
-        my $ref = Reference::getReference($dbt,$reference_no);
-        my $formatted_primary = Reference::formatLongRef($ref);
+    # First get all three sources of data: form submision (%form), prefs (%prefs), and database (%row)
+    my %vars = ();
 
-        my $refRowString = '<table cellspacing="0" cellpadding="2" width="100%"><tr>'.
-        "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$reference_no\">".$reference_no."</a></b>&nbsp;</td>".
-        "<td valign=\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
-        "<td>$formatted_primary</td>".
-        "</tr></table>";
+    my %row = ();
+    if (!$isNewEntry) {
+        my $collection_no = int($q->param('collection_no'));
+        my $sql = "SELECT * FROM collections WHERE collection_no=$collection_no";
+        my $c_row = ${$dbt->getData($sql)}[0] or die "invalid collection no";
+        %row = %{$c_row};
+    }
+    my %prefs =  getPreferences($s->get('enterer_no'));
+    my %form = $q->Vars();
 
-        # Get the field names
-        my @fieldNames = $dbt->getTableColumns('collections');
-        # Tack a few extra fields
-        push @htmlValues, '' for @fieldNames;
-        @htmlFields = @fieldNames;
-        unshift(@htmlFields, 
-            'reference_no',
-            'ref_string',
-            'country',
-            'eml_max_interval',
-            'max_interval',
-            'eml_min_interval',
-            'min_interval' );
-        unshift(@htmlValues,   
-            $reference_no,
-            $refRowString,
-            '',
-            '',
-            '',
-            '',
-            '' );
-
-        %pref = getPreferences($s->get('enterer_no'));
-        # Get the enterer's preferences JA 25.6.02
-        my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = getPrefFields();
-        for my $p (@{$setFieldNames})	{
-            if ($pref{$p} ne "")	{
-                unshift @htmlValues,$pref{$p};
-                unshift @htmlFields,$p;
+    if ($reSubmission) {
+        %vars = %form;
+    } if ($isNewEntry && int($q->param('prefill_collection_no'))) {
+        my $collection_no = int($q->param('prefill_collection_no'));
+        my $sql = "SELECT * FROM collections WHERE collection_no=$collection_no";
+        my $row = ${$dbt->getData($sql)}[0] or die "invalid collection no";
+        foreach my $field (keys(%$row)) {
+            if ($field =~ /^(authorizer|enterer|modifier|authorizer_no|enterer_no|modifier_no|created|modified|collection_no)/) {
+                delete $row->{$field};
             }
         }
-
+        %vars = %$row;
+        $vars{'reference_no'} = $s->get('reference_no');
+    } elsif ($isNewEntry) {
+        %vars = %prefs; 
         # carry over the lat/long coordinates the user entered while doing
         #  the mandatory collection search JA 6.4.04
-        my @coordfields = ("latdeg","latmin","latsec","latdec","latdir",
-                "lngdeg","lngmin","lngsec","lngdec","lngdir");
-        for my $cf (@coordfields)	{
-            if ( $q->param($cf) )	{
-                unshift @htmlValues,$q->param($cf);
-                unshift @htmlFields,$cf;
+        my @coordfields = ("latdeg","latmin","latsec","latdec","latdir","lngdeg","lngmin","lngsec","lngdec","lngdir");
+        foreach my $cf (@coordfields) {
+            $vars{$cf} = $form{$cf};
+        }
+        $vars{'reference_no'} = $s->get('reference_no');
+    } else {
+        %vars = %row;
+    }
+    
+    # always carry over optional fields
+    $vars{'taphonomy'} = $prefs{'taphonomy'};
+    $vars{'use_primary'} = $q->param('use_primary');
+
+    my $ref = Reference::getReference($dbt,$vars{'reference_no'});
+    my $formatted_primary = Reference::formatLongRef($ref);
+
+    $vars{'ref_string'} = '<table cellspacing="0" cellpadding="2" width="100%"><tr>'.
+    "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$vars{reference_no}\">".$vars{'reference_no'}."</a></b>&nbsp;</td>".
+    "<td valign-\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
+    "<td>$formatted_primary</td>".
+    "</tr></table>";      
+
+    if (!$isNewEntry) {
+        my $collection_no = $row{'collection_no'};
+        # We need to take some additional steps for an edit
+        my $p = Permissions->new($s,$dbt);
+        my %is_modifier_for = %{$p->getModifierList()};
+        unless ($s->get("superuser") ||
+                ($s->get('authorizer_no') && $s->get("authorizer_no") == $row{'authorizer_no'}) ||
+                $is_modifier_for{$row{'authorizer_no'}}) {
+            my $authorizer = Person::getPersonName($dbt,$row{'authorizer_no'});
+            htmlError("You may not edit this record because it is owned by a different authorizer ($authorizer)");
+            exit;
+        }
+
+        # Secondary refs, followed by current ref
+        my @secondary_refs = Reference::getSecondaryRefs($dbt,$collection_no);
+        if (@secondary_refs) {
+            my $table = '<table cellspacing="0" cellpadding="2" width="100%">';
+            for(my $i=0;$i < @secondary_refs;$i++) {
+                my $sr = $secondary_refs[$i];
+                my $ref = Reference::getReference($dbt,$sr);
+                my $formatted_secondary = Reference::formatLongRef($ref);
+                my $class = ($i % 2 == 0) ? 'class="darkList"' : '';
+                $table .= "<tr $class>".
+                    "<td valign=\"top\"><input type=\"radio\" name=\"secondary_reference_no\" value=\"$sr\"></td>".
+                    "<td valign=\"top\"><b>$sr</b></th>".
+                    "<td valign=\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
+                    "<td>$formatted_secondary</td>".
+                    "</tr>";
+                if(PBDBUtil::refIsDeleteable($dbh,$collection_no,$sr)) {
+                    $table .= "<tr $class>"
+                        . "<td style=\"background-color:red;\">"
+                        . "<input type=checkbox name=delete_ref value=$sr>"
+                        . "</td>"
+                        . "<td colspan=\"3\">remove</td></tr>";
+                }
+            }
+            $table .= "</table>";
+            $vars{'secondary_reference_string'} = $table;
+        }   
+
+        # Check if current session ref is at all associated with the collection
+        # If not, list it beneath the sec. refs. (with radio button for selecting
+        # as the primary ref, as with the secondary refs below).
+        my $session_ref = ($q->param('use_primary')) ? $vars{'reference_no'} : $s->get('reference_no');
+        my $session_ref;
+        if ($session_ref) {
+            unless(PBDBUtil::isRefPrimaryOrSecondary($dbh,$collection_no,$session_ref)){
+                my $ref = Reference::getReference($dbt,$session_ref);
+                my $sr = Reference::formatLongRef($ref);
+                my $table = '<table cellspacing="0" cellpadding="2" width="100%">'
+                          . "<tr class='darkList'><td valign=top><input type=radio name=secondary_reference_no value=$session_ref></td>";
+                $table .= "<td valign=top><b>$ref->{reference_no}</b></td>";
+                $table .= "<td>$sr</td></tr></table>";
+                # Now, set up the current session ref to be added as a secondary even
+                # if it's not picked as a primary (it's currently neither).
+                $table .= "\n<input type=hidden name=add_session_ref_as_2ndary value=$session_ref>\n";
+                $vars{'session_reference_string'} = $table;
             }
         }
     }
 
-    # Remove these from being displayed
-    unshift(@htmlFields,'secondary_reference_string','session_reference_string');
-    unshift(@htmlValues,'','');
-   
-	my $std_page_top = stdIncludes("std_page_top");
-	print $std_page_top;
+    # Get back the names for these
+	if ( $vars{'max_interval_no'} )	{
+		my $sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=".$vars{'max_interval_no'};
+        my $interval = ${$dbt->getData($sql)}[0];
+		$vars{'eml_max_interval'} = $interval->{eml_interval};
+		$vars{'max_interval'} = $interval->{interval_name};
+	}
+	if ( $vars{'min_interval_no'} )	{
+		my $sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=".$vars{'min_interval_no'};
+        my $interval = ${$dbt->getData($sql)}[0];
+		$vars{'eml_min_interval'} = $interval->{eml_interval};
+		$vars{'min_interval'} = $interval->{interval_name};
+	}
 
+    my $ref = Reference::getReference($dbt,$vars{'reference_no'});
+    my $formatted_primary = Reference::formatLongRef($ref);
+
+	print stdIncludes("std_page_top");
 	print printIntervalsJava();
 
-    push(@htmlValues, '<input type="hidden" name="action" value="processEnterCollectionForm">');
-    push(@htmlFields, 'page_target');
-
-    push(@htmlValues, "Collection entry form");
-    push(@htmlFields, 'page_title');
-
-    push(@htmlValues, '<input type=submit name="enter_button" value="Enter collection and exit">');
-    push(@htmlFields, 'page_submit_button');
-
-    push(@htmlValues, stdIncludes("std_page_bottom"));
-    push(@htmlFields, 'page_footer');
+    if ($isNewEntry) {
+        $vars{'page_title'} =  "Collection entry form";
+        $vars{'page_target'} = '<input type="hidden" name="action" value="processEnterCollectionForm">';
+        $vars{'page_submit_button'} = '<input type=submit name="enter_button" value="Enter collection and exit">';
+    } else {
+        $vars{'page_title'} =  "Collection number ".$vars{'collection_no'};
+        $vars{'page_target'} = '<input type="hidden" name="action" value="processEditCollectionForm">';
+        $vars{'page_submit_button'} = '<input type=submit name="edit_button" value="Edit collection and exit">';
+    }
+#    $vars{'page_footer'} = stdIncludes("std_page_bottom");
 
     # Output the main part of the page
-    my $html = $hbo->populateHTML("collection_form", \@htmlValues, \@htmlFields, \%pref);
-
-    print $html;
-
+    print $hbo->populateHTML("collection_form", \%vars);
     print stdIncludes("std_page_bottom");
 }
 
@@ -4947,7 +4706,6 @@ sub processEnterCollectionForm {
     }
    
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></p></b>|;
-	#print qq| <b><p><a href="$exec_url?action=displayEnterCollPage&prefill_collection_no=$recID">Add another collection with fields prefilled based on this collection</a></p></b></center>|;
  
 	print stdIncludes("std_page_bottom");
 }
@@ -4965,7 +4723,7 @@ sub startEditCollection {
 		exit;
 	}
 	elsif ( $q->param("collection_no") ) {
-		$s->enqueue( $dbh, "action=displayEditCollection&collection_no=".$q->param("collection_no") );
+		$s->enqueue( $dbh, "action=displayCollectionForm&collection_no=".$q->param("collection_no") );
 	} else {
 		$s->enqueue( $dbh, "action=displaySearchColls&type=edit" );
 	}
@@ -5239,15 +4997,11 @@ sub processTaxonSearch {
 # Called when the user clicks on the "Add/edit taxonomic name" or 
 sub displayAuthorityTaxonSearchForm {
     print stdIncludes("std_page_top");
-    my $html = $hbo->populateHTML('search_authority_form',[$q->param("use_reference")],['use_reference']);
+    my %vars = $q->Vars();
+    $vars{'authorizer_me'} = $s->get('authorizer_reversed');
 
-    my $javaScript = &makeAuthEntJavaScript();
-    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
-
-    my $authorizer_reversed = $s->get("authorizer_reversed");
-    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
-    
-    print $html;
+    print makeAuthEntJavaScript();
+    print $hbo->populateHTML('search_authority_form',\%vars);
 
     print stdIncludes("std_page_bottom");
 }
@@ -5289,15 +5043,11 @@ sub submitAuthorityForm {
 # Step 1 in our opinion editing process
 sub displayOpinionSearchForm {
     print stdIncludes("std_page_top");
-    my $html = $hbo->populateHTML('search_opinion_form', [$q->param('use_reference')], ['use_reference']);
+    my %vars = $q->Vars();
+    $vars{'authorizer_me'} = $s->get('authorizer_reversed');
 
-    my $javaScript = &makeAuthEntJavaScript();
-    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/;
-
-    my $authorizer_reversed = $s->get("authorizer_reversed");
-    $html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
-
-    print $html; 
+    print makeAuthEntJavaScript();
+    print $hbo->populateHTML('search_opinion_form', \%vars);
     print stdIncludes("std_page_bottom");
 }
 
@@ -5610,152 +5360,6 @@ sub startProcessPrintHierarchy	{
 ## END PrintHierarchy stuff
 ##############
 
-sub displayEditCollection {
-	# Have to be logged in
-	if (!$s->isDBMember()) {
-		$s->enqueue( $dbh, "action=displayEditCollection" );
-		displayLoginPage( "Please log in first." );
-		exit;
-	}
-
-
-	
-	my $collection_no = $q->param('collection_no');
-	my $sql = "SELECT c.reference_no,c.* FROM collections c WHERE c.collection_no=" . $collection_no;
-	dbg( "$sql<HR>" );
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-	my @fieldNames = @{$sth->{NAME}};
-	my @row = $sth->fetchrow_array();
-	$sth->finish();
-
-    # Check to make sure that we have write permission
-    my $authorizer_no;
-    for(my $i=0;$i<scalar(@fieldNames);$i++) {
-        if ($fieldNames[$i] eq 'authorizer_no') {
-            $authorizer_no=$row[$i]; last;
-        }
-    }
-
-    my $p = Permissions->new($s,$dbt);
-    my %is_modifier_for = %{$p->getModifierList()};
-    unless ($s->get("superuser") ||
-            ($s->get('authorizer_no') && $s->get("authorizer_no") == $authorizer_no) ||
-            $is_modifier_for{$authorizer_no}) {
-        my $authorizer = Person::getPersonName($dbt,$authorizer_no);
-        htmlError("You may not edit this record because it is owned by a different authorizer ($authorizer)");
-        exit;
-    }
-
-	if($q->param('use_primary')){
-		$s->put('reference_no', $row[0]);
-	}
-
-	my $session_ref = $s->get('reference_no');
-
-	my $std_page_top = stdIncludes("std_page_top");
-	print $std_page_top;
-
-	# Get the reference for this collection
-	my $curColNum = 0;
-	my $reference_no;
-	foreach my $colName (@fieldNames) {
-		if ( $colName eq 'reference_no') {
-			$reference_no = $row[$curColNum];
-			last;
-		}
-		$curColNum++;
-	}
-	# Current primary ref
-	my $ref = Reference::getReference($dbt,$reference_no);
-	my $primary_ref = "<table cellspacing=0 cellpadding=2 border=0 width=\"100%\"><tr class=\"darkList\"><td valign=top><b>$ref->{reference_no}</b></td><td>".Reference::formatLongRef($ref)."</td></table>";
-
-	push(@row, $primary_ref);
-	push(@fieldNames, 'ref_string');
-
-	# Secondary refs, followed by current ref
-    my @secondary_refs = Reference::getSecondaryRefs($dbt,$collection_no);
-    my $secondary_ref_string = "";
-    if (@secondary_refs) {
-        my $table = '<table cellspacing="0" cellpadding="2" width="100%">';
-        for(my $i=0;$i < @secondary_refs;$i++) {
-            my $sr = $secondary_refs[$i];
-            my $ref = Reference::getReference($dbt,$sr);
-            my $formatted_secondary = Reference::formatLongRef($ref);
-            my $class = ($i % 2 == 0) ? 'class="darkList"' : '';
-            $table .= "<tr $class>".
-                "<td valign=\"top\"><input type=\"radio\" name=\"secondary_reference_no\" value=\"$sr\"></td>".
-                "<td valign=\"top\"><b>$sr</b></th>".
-                "<td valign=\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
-                "<td>$formatted_secondary</td>".
-                "</tr>";
-            if(PBDBUtil::refIsDeleteable($dbh,$collection_no,$sr)) {
-                $table .= "<tr $class>"
-                    . "<td style=\"background-color:red;\">"
-                    . "<input type=checkbox name=delete_ref value=$sr>"
-                    . "</td>"
-                    . "<td colspan=\"3\">remove</td></tr>";
-            }
-        }
-        $table .= "</table>";
-        $secondary_ref_string = $table;
-    }   
-    # secondary_references
-	push(@row, $secondary_ref_string);
-	push(@fieldNames, 'secondary_reference_string');
-
-	# Clear the variable for use below
-	my $refRowString = "";
-
-	# Check if current session ref is at all associated with the collection
-	# If not, list it beneath the sec. refs. (with radio button for selecting
-	# as the primary ref, as with the secondary refs below).
-	unless(PBDBUtil::isRefPrimaryOrSecondary($dbh,$collection_no,$session_ref)){
-        my $ref = Reference::getReference($dbt,$session_ref);
-        my $sr = Reference::formatLongRef($ref);
-        my $table = '<table cellspacing="0" cellpadding="2" width="100%">'
-                  . "<tr class='darkList'><td valign=top><input type=radio name=secondary_reference_no value=$session_ref></td>";
-		$table .= "<td valign=top><b>$ref->{reference_no}</b></td>";
-		$table .= "<td>$sr</td></tr></table>";
-		# Now, set up the current session ref to be added as a secondary even
-		# if it's not picked as a primary (it's currently neither).
-		$table .= "\n<input type=hidden name=add_session_ref_as_2ndary value=$session_ref>\n";
-        $refRowString .= $table;
-	}
-
-    # get the session reference
-    push(@row, $refRowString);
-    push(@fieldNames, 'session_reference_string');
-
-	# get the max/min interval names
-	my ($r,$f) = getMaxMinNamesAndDashes(\@row,\@fieldNames);
-	@row = @{$r};
-	@fieldNames = @{$f};
-
-	print printIntervalsJava();
-
-    push(@row, '<input type="hidden" name="action" value="processEditCollectionForm">');
-    push(@fieldNames, 'page_target');
-                                                                                                                                                             
-    push(@row, "Collection no ".$collection_no);
-    push(@fieldNames, 'page_title');
-                                                                                                                                                             
-    push(@row, '<input type=submit name="update_button" value="Update collection and exit">');
-    push(@fieldNames, 'page_submit_button');
-    
-    #push(@row, stdIncludes("std_page_bottom"));
-    push(@row, stdIncludes('std_page_bottom'));
-    push(@fieldNames, 'page_footer');
-
-    # Output the main part of the page
-    my %pref = getPreferences($s->get('enterer_no'));
-    my $html = $hbo->populateHTML("collection_form", \@row, \@fieldNames, \%pref);
-
-    print $html;
-    print stdIncludes("std_page_bottom");
-}
-
-
 sub processEditCollectionForm {
 	# Save the old one in case a new one comes in
 	my $reference_no = $q->param("reference_no");
@@ -5913,7 +5517,6 @@ sub processEditCollectionForm {
    
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit">Edit another collection using the same reference</a></p></b></center>|;
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</a></p></b></center>|;
-	#print qq| <b><p><a href="$exec_url?action=displayEnterCollPage&prefill_collection_no=$recID">Add a collection with fields prefilled based on this collection</a></p></b></center>|;
 	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add a collection with the same reference</a></p></b></center>|;
 
 	print stdIncludes("std_page_bottom");
@@ -5983,140 +5586,86 @@ sub displayOccurrenceAddEdit {
 	}
 
 	my %pref = getPreferences($s->get('enterer_no'));
-	my $html = $hbo->populateHTML('js_occurrence_checkform');
-
-	# only print the JavaScript involving subgenera if the user
-	#  wants to see them
-	if ( $pref{'subgenera'} eq "yes" )	{
-		$html =~ s/\/\/ check subgenera/\/\/ check subgenera
-				if ( frm.subgenus_name[i].value != "" ) {
-					errors += checkName ( "Subgenus", frm.subgenus_name[i].value, frm.subgenus_reso[i], i );
-				}
-/;
-		$html =~ s/\/\/ check subgenus/\/\/ check subgenus
-                                if ( frm.subgenus_name.value != "" ) {
-                                        errors += checkName ( "Subgenus", frm.subgenus_name.value, frm.subgenus_reso, 1 );
-                                }
-/; 
-	}
-
-	print $html;
+    my @optional = ('subgenera','genus_and_species_only','abundances','plant_organs');
+	print $hbo->populateHTML('js_occurrence_checkform');
 
 	print qq|<form method=post action="$exec_url" onSubmit='return checkForm();'>\n|;
 	print qq|<input name="action" value="processEditOccurrences" type=hidden>\n|;
 	print qq|<input name="list_collection_no" value="$collection_no" type=hidden>\n|;
 	print "<table>";
 
-    my (@tempRow,@tempFieldName);
-	push @tempRow, $collection_no;
-	push @tempFieldName, "collection_no";
+    my $header_vars = {
+        'collection_no'=>$collection_no,
+        'collection_name'=>$collection_name,
+    };
+    $header_vars->{$_} = $pref{$_} for (@optional);
 
-	push @tempRow, $collection_name;
-	push @tempFieldName, "collection_name";
-
-	print $hbo->populateHTML('occurrence_header_row', \@tempRow, \@tempFieldName, \%pref);
+	print $hbo->populateHTML('occurrence_header_row', $header_vars);
 
     # main loop
     # each record is represented as a hash
     my $gray_counter = 0;
     foreach my $all_data_index ($firstrow..$lastrow){
-	my $hash_ref = $all_data[$all_data_index];
+    	my $occ_row = $all_data[$all_data_index];
 		# This essentially empty reid_no is necessary as 'padding' so that
 		# any actual reid number (see while loop below) will line up with 
 		# its row in the form, and ALL rows (reids or not) will be processed
 		# properly by processEditOccurrences(), below.
-        $hash_ref->{'reid_no'} = '0';
-        my @row = values %$hash_ref;
-        my @names = keys %$hash_ref;
+        $occ_row->{'reid_no'} = '0';
+   
+        # Copy over optional fields;
+        $occ_row->{$_} = $pref{$_} for (@optional);
 
-        my $occHTML = "";
         # Read Only
-        if($hash_ref->{'writeable'} == 0){
-            # processEditOccurrences uses 'row_token' 
-            # to determine which rows to update
-            if($gray_counter%2==0){
-                $occHTML = $hbo->populateHTML("occurrence_read_only_row_gray", \@row, \@names, \%pref);
-            }
-            else{
-                $occHTML = $hbo->populateHTML("occurrence_read_only_row", \@row, \@names, \%pref);
-            }
-        }
-        else{
-            print qq|<input type=hidden name="row_token" value="row_token">\n|;
-            $occHTML = $hbo->populateHTML("occurrence_edit_row", \@row, \@names, \%pref);
-        }
-		print $occHTML;
+        my $occ_read_only = ($occ_row->{'writeable'} == 0) ? "all" : ""; 
+        $occ_row->{'darkList'} = ($occ_read_only eq 'all' && $gray_counter%2 == 0) ? "darkList" : "";
+        #    print qq|<input type=hidden name="row_token" value="row_token">\n|;
+        print $hbo->populateHTML("occurrence_edit_row", $occ_row, [$occ_read_only]);
 
-        $sql = "SELECT * FROM reidentifications WHERE occurrence_no=" .  $hash_ref->{'occurrence_no'};
-		my $sth2 = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth2->execute();
-        while(my $hr = $sth2->fetchrow_hashref()) {
-            my @re_row = values %$hr;
-            my @re_names = keys %$hr;
-#			print "<tr><td></td><td colspan=3 class=tiny><i>reidentified as</i></td></tr>\n";
-            my $reidHTML = "";
+        my $sql = "SELECT * FROM reidentifications WHERE occurrence_no=" .  $occ_row->{'occurrence_no'};
+        my @reid_rows = @{$dbt->getData($sql)};
+        foreach my $re_row (@reid_rows) {
+            # Copy over optional fields;
+            $re_row->{$_} = $pref{$_} for (@optional);
+
             # Read Only
-            if($hash_ref->{'writeable'} == 0){
-                if($gray_counter%2==0){
-                    $reidHTML = $hbo->populateHTML("occurrence_read_only_row_gray", \@re_row, \@re_names, \%pref);
-                }
-                else{
-                    $reidHTML = $hbo->populateHTML("occurrence_read_only_row", \@re_row, \@re_names, \%pref);
-                }
-            }
-            else{
-                print qq|<input type=hidden name="row_token" value="row_token">\n|;
-                $reidHTML = $hbo->populateHTML("occurrence_edit_row", \@re_row, \@re_names, \%pref);
-            }
+            my $re_read_only = $occ_read_only;
+            $re_row->{'darkList'} = $occ_row->{'darkList'};
+            
+            my $reidHTML = $hbo->populateHTML("reid_edit_row", $re_row, [$re_read_only]);
             # Strip away abundance widgets (crucial because reIDs never may
             #  have abundances) JA 30.7.02
-            $reidHTML =~ s/<td><input id="abund_value"(.*?)><\/td>/<td><input type=hidden name="abund_value"><\/td>/;
-            $reidHTML =~ s/<td><select id="abund_unit"(.*?)>(.*?)<\/select><\/td>/<td><input type=hidden name="abund_unit"><\/td>/;
-            $reidHTML =~ s/<td align=right><select name="genus_reso">/<td align=right><nobr><b>reID<\/b><select name="genus_reso">/;
+#            $reidHTML =~ s/<td><input id="abund_value"(.*?)><\/td>/<td><input type=hidden name="abund_value"><\/td>/;
+#            $reidHTML =~ s/<td><select id="abund_unit"(.*?)>(.*?)<\/select><\/td>/<td><input type=hidden name="abund_unit"><\/td>/;
+#            $reidHTML =~ s/<td align=right><select name="genus_reso">/<td align=right><nobr><b>reID<\/b><select name="genus_reso">/;
 #            $reidHTML =~ s/<td /<td class=tiny /g;
             # The first one needs to be " = (species ..."
-            $reidHTML =~ s/<div id="genus_reso">/<div class=tiny>= /;
-            $reidHTML =~ s/<input /<input class=tiny /g;
-            $reidHTML =~ s/<select /<select class=tiny /g;
+#            $reidHTML =~ s/<div id="genus_reso">/<div class=tiny>= /;
+#            $reidHTML =~ s//<input class=tiny /g;
+#            $reidHTML =~ s/<select /<select class=tiny /g;
             print $reidHTML;
         }
-        $sth2->finish();
         $gray_counter++;
     }
 
 	# Extra rows for adding
-	# Set collection_no, authorizer, enterer, and other hidden goodies
-	my @fieldNames = (	'collection_no', 
-                        'occurrence_no',
-						'reference_no', 
-						'genus_reso',
-						'subgenus_reso',
-						'species_reso',
-						'plant_organ', 
-						'plant_organ2',
-                        'abund_unit');
-	my @row = ( $collection_no, 
-				-1,
-				$s->get("reference_no"),
-                '', '', '', '', '','');
+    my $blank = {
+        'collection_no'=>$collection_no,
+        'reference_no'=>$s->get('reference_no'),
+        'occurrence_no'=>-1,
+        'species_name'=>$pref{'species_name'}
+    };
+    
 
-	# Read the users' preferences related to occurrence entry/editing
-	%pref = getPreferences($s->get('enterer_no'));
-
+    # Copy over optional fields;
+    $blank->{$_} = $pref{$_} for (@optional);
+        
 	# Figure out the number of blanks to print
-	my $blanks = $pref{'blanks'};
-	if ( ! $blanks ) { $blanks = 10; }
-
-	# Set the default species name (indet. or sp.) JA 9.7.02
-	# JA 21.4.04: have to ALWAYS do this or the id= tag in the form
-	#  won't be stripped, which causes the JavaScript to get confused
-	#  about row numbering
-	unshift @row, $pref{'species_name'};
-	unshift @fieldNames, "species_name";
+	my $blanks = $pref{'blanks'} || 10;
 
 	for ( my $i = 0; $i<$blanks ; $i++) {
-		print qq|<input type=hidden name="row_token" value="row_token">\n|;
-		print $hbo->populateHTML("occurrence_entry_row", \@row, \@fieldNames, \%pref);
+#		print qq|<input type=hidden name="row_token" value="row_token">\n|;
+		print $hbo->populateHTML("occurrence_entry_row", $blank);
 	}
 
 	print "</table><br>\n";
@@ -6218,8 +5767,8 @@ sub processEditOccurrences {
         }
         
 		# CASE 1: UPDATE REID
-        if ($fields{'reid_no'} =~ /^\d+$/ &&
-            $fields{'occurrence_no'} =~ /^\d+$/) {
+        if ($fields{'reid_no'} =~ /^\d+$/ && $fields{'reid_no'} > 0 &&
+            $fields{'occurrence_no'} =~ /^\d+$/ && $fields{'occurrence_no'} > 0) {
 
             # CASE 1a: Delete record
             if ($fields{'genus_name'} =~ /^\s*$/) {
@@ -6250,7 +5799,7 @@ sub processEditOccurrences {
             push @occurrences, $fields{'occurrence_no'};
         }
 		# CASE 2: NEW REID
-		elsif ($fields{'occurrence_no'} =~ /^\d+$/ &&
+		elsif ($fields{'occurrence_no'} =~ /^\d+$/ && $fields{'occurrence_no'} > 1 && 
                $fields{'reid_no'} == -1) {
             # Check for duplicates
             my @keys = ("genus_name","species_name","occurrence_no");
@@ -6272,7 +5821,7 @@ sub processEditOccurrences {
         }
 		
 		# CASE 3: UPDATE OCCURRENCE
-		elsif($fields{'occurrence_no'} =~ /^\d+$/) {
+		elsif($fields{'occurrence_no'} =~ /^\d+$/ && $fields{'occurrence_no'} > 0) {
             # CASE 3a: Delete record
             if ($fields{'genus_name'} =~ /^\s*$/) {
                 # We push this onto an array for later processing because we can't delete an occurrence
@@ -6361,7 +5910,7 @@ sub processEditOccurrences {
             my $collection_no = $q->param("list_collection_no");
             $links .= "<a href=\"$exec_url?action=displayOccurrenceAddEdit&collection_no=$collection_no\">Add/edit&nbsp;this&nbsp;collection's&nbsp;occurrences</a> - ";
             $links .= "<a href=\"$exec_url?action=startStartReclassifyOccurrences&collection_no=$collection_no\"><b>Reclassify&nbsp;this&nbsp;collection's&nbsp;occurrences</b></a> - ";
-            $links .= "<a href=\"$exec_url?action=displayEditCollection&collection_no=$collection_no\">Edit&nbsp;the&nbsp;main&nbsp;collection&nbsp;record</a> - ";
+            $links .= "<a href=\"$exec_url?action=displayCollectionForm&collection_no=$collection_no\">Edit&nbsp;the&nbsp;main&nbsp;collection&nbsp;record</a> - ";
         }
         $links .= "<a href=\"$exec_url?action=displaySearchColls&type=edit_occurrence\">Add/edit&nbsp;occurrences&nbsp;for&nbsp;a&nbsp;different&nbsp;collection</a> - ";
         $links .= "<a href=\"$exec_url?action=displayReIDCollsAndOccsSearchForm\">Reidentify&nbsp;more&nbsp;occurrences</a> - ";
@@ -6406,25 +5955,20 @@ sub displayReIDCollsAndOccsSearchForm {
 		exit;
 	}	
 
-	print stdIncludes( "std_page_top" );
 
-	# Display the collection search form
-	my $html = $hbo->populateHTML('search_reids_form', ['','',''], ['research_group','eml_min_interval','eml_max_interval']);
-
-    my $javaScript = &makeAuthEntJavaScript();
-    $html =~ s/%%NOESCAPE_enterer_authorizer_lists%%/$javaScript/; 
-
-	# Set the Enterer & Authorizer
-	my $enterer_reversed = $s->get("enterer_reversed");
-	$html =~ s/%%enterer_reversed%%/$enterer_reversed/;
-	my $authorizer_reversed = $s->get("authorizer_reversed");
-	$html =~ s/%%authorizer_reversed%%/$authorizer_reversed/;
+    my %vars = $q->Vars();
+    $vars{'enterer_me'} = $s->get('enterer_reversed');
+    $vars{'submit'} = "Search for reidentifications";
+    $vars{'page_title'} = "Reidentifications search form";
+    $vars{'action'} = "displayCollResults";
+    $vars{'type'} = "reid";
+    $vars{'page_subtitle'} = "You may now reidentify either a set of occurrences matching a genus or higher taxon name, or all the occurrences in one collection.";
 
 	# Spit out the HTML
+	print stdIncludes( "std_page_top" );
     printIntervalsJava(1);
-	print $html;
-  
-	print '</form>';
+    print makeAuthEntJavaScript();
+	print $hbo->populateHTML('search_occurrences_form',\%vars);
 	print stdIncludes("std_page_bottom");
 }
 
@@ -6467,10 +6011,7 @@ sub displayOccsForReID {
     my $reference_no = $current_session_ref;
     my $ref = Reference::getReference($dbt,$reference_no);
     my $formatted_primary = Reference::formatLongRef($ref);
-    my $refString = '<table cellspacing="0" cellpadding="2" width="100%"><tr>'.
-        "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$reference_no\">".$reference_no."</a></b>&nbsp;</td>".
-        "<td>$formatted_primary</td>".
-        "</tr></table>";
+    my $refString = "<b><a href=\"bridge.pl?action=displayReference&reference_no=$reference_no\">$reference_no</a></b> $formatted_primary<br>";
 
 	# Build the SQL
     my @where = ();
@@ -6500,68 +6041,73 @@ sub displayOccsForReID {
            " ORDER BY occurrence_no LIMIT 11";
 
 	dbg("$sql<br>");
-	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-	$sth->execute();
-
-    
-	my $array_ref_of_hash_refs = $sth->fetchall_arrayref({});
-	my @array_of_hash_refs = @{$array_ref_of_hash_refs};
-	dbg("got ".@array_of_hash_refs." occs for reid<br>");
+    my @results = @{$dbt->getData($sql)};
 
 	my $rowCount = 0;
 	my %pref = getPreferences($s->get('enterer_no'));
-    if (@array_of_hash_refs) {
-		print $hbo->populateHTML('reid_header_row', [ $refString, $current_session_ref, $taxon_name, $collection_no ], [ 'ref_string', 'reference_no', 'taxon_name', 'list_collection_no' ], \%pref);
+    my @optional = ('subgenera','genus_and_species_only','abundances','plant_organs');
+    if (@results) {
+        my $header_vars = {
+            'ref_string'=>$refString, 
+            'reference_no'=>$current_session_ref, 
+            'taxon_name'=>$taxon_name, 
+            'list_collection_no'=>$collection_no
+        };
+        $header_vars->{$_} = $pref{$_} for (@optional);
+		print $hbo->populateHTML('reid_header_row', $header_vars);
 
-        foreach my $rowRef (@array_of_hash_refs) {
+        foreach my $row (@results) {
             my $html = "";
             # If we have 11 rows, skip the last one; and we need a next button
             $rowCount++;
             last if $rowCount > 10;
 
-            my %row = %{$rowRef};
-
             # Print occurrence row and reid input row
             $html .= "<tr>\n";
-            $html .= "    <td align=right>".$row{"genus_reso"}."</td>\n";
-            $html .= "    <td>".$row{"genus_name"}."</td>\n";
+            $html .= "    <td align=right>".$row->{"genus_reso"}."</td>\n";
+            $html .= "    <td>".$row->{"genus_name"}."</td>\n";
             if ($pref{'subgenera'} eq "yes")	{
-                $html .= "    <td align=right>".$row{"subgenus_reso"}."</td>\n";
-                $html .= "    <td>".$row{"subgenus_name"}."</td>\n";
+                $html .= "    <td align=right>".$row->{"subgenus_reso"}."</td>\n";
+                $html .= "    <td>".$row->{"subgenus_name"}."</td>\n";
             }
-            $html .= "    <td align=right>".$row{"species_reso"}."</td>\n";
-            $html .= "    <td>".$row{"species_name"}."</td>\n";
-            $html .= "    <td>" . $row{"comments"} . "</td>\n";
+            $html .= "    <td align=right>".$row->{"species_reso"}."</td>\n";
+            $html .= "    <td>".$row->{"species_name"}."</td>\n";
+            $html .= "    <td>" . $row->{"comments"} . "</td>\n";
             if ($pref{'plant_organs'} eq "yes")	{
-                $html .= "    <td>" . $row{"plant_organ"} . "</td>\n";
-                $html .= "    <td>" . $row{"plant_organ2"} . "</td>\n";
+                $html .= "    <td>" . $row->{"plant_organ"} . "</td>\n";
+                $html .= "    <td>" . $row->{"plant_organ2"} . "</td>\n";
             }
             $html .= "</tr>";
-            $html .= $hbo->populateHTML('reid_entry_row', [$row{'occurrence_no'}, $row{'collection_no'}, $s->get('authorizer'), $s->get('enterer'),'','','','',''], ['occurrence_no', 'collection_no', 'authorizer', 'enterer','genus_reso','subgenus_reso','species_reso','plant_organ','plant_organ2'], \%pref);
+            my $vars = {
+                'collection_no'=>$row->{'collection_no'},
+                'occurrence_no'=>$row->{'occurrence_no'}
+            };
+            $vars->{$_} = $pref{$_} for (@optional);
+            $html .= $hbo->populateHTML('reid_entry_row',$vars);
 
             # print other reids for the same occurrence
 
             $html .= "<tr><td colspan=100>";
-            my ($table,$classification) = getReidHTMLTableByOccNum($row{'occurrence_no'}, 0);
+            my ($table,$classification) = getReidHTMLTableByOccNum($row->{'occurrence_no'}, 0);
             $html .= "<table>".$table."</table>";
             $html .= "</td></tr>\n";
             #$sth2->finish();
             
-            my $ref = Reference::getReference($dbt,$row{'reference_no'});
+            my $ref = Reference::getReference($dbt,$row->{'reference_no'});
             my $formatted_primary = Reference::formatLongRef($ref);
-            my $refString = "<a href=\"bridge.pl?action=displayReference&reference_no=$row{reference_no}\">$row{reference_no}</a></b>&nbsp;$formatted_primary";
+            my $refString = "<a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a></b>&nbsp;$formatted_primary";
 
             $html .= "<tr><td colspan=20><b>Original reference</b>:<br>$refString</td></tr>";
             # Print the collections details
             if ( $printCollectionDetails) {
-                my $sql = "SELECT collection_name,state,country,formation,period_max FROM collections WHERE collection_no=" . $row{'collection_no'};
+                my $sql = "SELECT collection_name,state,country,formation,period_max FROM collections WHERE collection_no=" . $row->{'collection_no'};
                 my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
                 $sth->execute();
                 my %collRow = %{$sth->fetchrow_hashref()};
                 $html .= "<tr>";
                 $html .= "  <td colspan=20>";
                 $html .= "<b>Collection</b>:<br>";
-                my $details = "<a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$row{'collection_no'}\">$row{'collection_no'}</a>"." ".$collRow{'collection_name'};
+                my $details = "<a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$row->{'collection_no'}\">$row->{'collection_no'}</a>"." ".$collRow{'collection_name'};
                 if ($collRow{'state'})	{
                      $details .= " - " . $collRow{'state'};
                 }
@@ -6585,7 +6131,7 @@ sub displayOccsForReID {
             }
             print $html;
 
-            $lastOccNum = $row{'occurrence_no'};
+            $lastOccNum = $row->{'occurrence_no'};
         }
     }
 

@@ -308,7 +308,6 @@ sub displayOpinionForm {
 	
 	my %fields;  # a hash of fields and values that
 				 # we'll pass to HTMLBuilder to pop. the form.
-    my $optional = {}; # optional sections
 				 
 	# Fields we'll pass to HTMLBuilder that the user can't edit.
 	# (basically, any field which is not empty or 0 in the database,
@@ -542,7 +541,7 @@ sub displayOpinionForm {
             my $ref = Reference->new($dbt,$s->get('reference_no'));
             $fields{formatted_current_reference} = $ref->formatAsHTML() if ($ref);
         }
-        $optional->{'current_reference'} = 'yes';
+        $fields{'current_reference'} = 'yes';
     } 
 	
 	# Anyone can now edit anything. Restore from CVS if we have to backpedal PS 5/17/2006
@@ -610,7 +609,7 @@ sub displayOpinionForm {
 	$synonym_row .= "<td colspan=2 valign='top'><b>Invalid</b>, and another name should be used.</td></tr>";
     $synonym_row .= "<tr><td></td><td $colspan valign='top' nowrap>Status: "; 
 	# actually build the synonym popup menu.
-	$synonym_row .= $hbo->buildSelect('synonym',\@synArray, \@synArray, $fields{'synonym'});
+	$synonym_row .= $hbo->htmlSelect('synonym',\@synArray, \@synArray, $fields{'synonym'});
 	if ($parent_pulldown && $selected) {
         $parent_pulldown =~ s/belongs_to_parent/synonym_parent/;
 		$synonym_row .= "<td width='100%'>$parent_pulldown</td>"; 
@@ -625,7 +624,7 @@ sub displayOpinionForm {
     $nomen_row = qq|<tr><td valign="top"><input type="radio" name="taxon_status" value="invalid2" $selected></td>|;
 	$nomen_row .= "<td colspan=2><b>Invalid</b>, and no other name can be used.</td></tr>";
     $nomen_row .= "<tr><td></td><td colspan=2>Status: "; 
-    $nomen_row .= $hbo->buildSelect('nomen',\@nomArray, \@nomArray, $fields{'nomen'});
+    $nomen_row .= $hbo->htmlSelect('nomen',\@nomArray, \@nomArray, $fields{'nomen'});
     $nomen_row .= "</td></tr>";
 
 	# if this is a second pass and we have a list of alternative taxon
@@ -647,7 +646,7 @@ sub displayOpinionForm {
     } elsif ($childRank =~ /subgenus|genus/) {
         @ranks = ('subgenus','genus');
     } else {
-        @ranks = grep {!/subspecies|species|subgenus|genus/} @{$hbo->{'SELECT_LISTS'}{'taxon_rank'}};
+        @ranks = grep {!/subspecies|species|subgenus|genus/} $hbo->getList('taxon_rank');
     } 
 
     my @opinions_to_migrate1;
@@ -659,7 +658,7 @@ sub displayOpinionForm {
 #    my $spelling_note = "<small>Note that the name may be different than listed above due to a correction, recombination, or rank change.</small>";
     $spelling_row .= "<tr><td colspan=2>Please enter the full name and rank of the taxon as used in the reference${all_ranks}:</td></tr>";
 
-    my $spelling_rank_pulldown = $hbo->buildSelect('child_spelling_rank',\@ranks, \@ranks, $fields{'child_spelling_rank'});
+    my $spelling_rank_pulldown = $hbo->htmlSelect('child_spelling_rank',\@ranks, \@ranks, $fields{'child_spelling_rank'});
 	if (scalar(@child_spelling_nos) > 1 || (scalar(@child_spelling_nos) == 1 && @opinions_to_migrate1)) {
         $spelling_row .= "<tr><td nowrap width=\"100%\">";
         foreach my $child_spelling_no (@child_spelling_nos) {
@@ -678,7 +677,7 @@ sub displayOpinionForm {
         }
         $spelling_row .= qq|<input type="radio" name="child_spelling_no" value=""> \nOther taxon: <input type="text" name="child_spelling_name" value="">$spelling_rank_pulldown<br>\n|;
 	    $spelling_row .= qq|<input type="hidden" name="new_child_spelling_name" value="$childSpellingName">|;
-        my $new_child_spelling_rank_pulldown = $hbo->buildSelect('new_child_spelling_rank',\@ranks, \@ranks, $fields{'child_spelling_rank'});
+        my $new_child_spelling_rank_pulldown = $hbo->htmlSelect('new_child_spelling_rank',\@ranks, \@ranks, $fields{'child_spelling_rank'});
 	    $spelling_row .= qq|<input type="radio" name="child_spelling_no" value="-1"> Create a new '$childSpellingName' based off '$childName' with rank $new_child_spelling_rank_pulldown<br>|;
         $spelling_row .= "$spelling_note</td></tr>";
 	} else {
@@ -700,7 +699,7 @@ sub displayOpinionForm {
         @select_keys = ("is the original spelling and rank of this taxon","is a correction of '$childName'","is a misspelling of this taxon","has had its rank changed from its original rank of $childRank");
     }
     $spelling_row .= "<tr><td>&nbsp;</td></tr>";
-    $spelling_row .= "<tr><td>Enter the reason why this spelling and rank was used:<br>This ". $hbo->buildSelect('spelling_reason',\@select_keys,\@select_values,$fields{'spelling_reason'})."</td></tr>";
+    $spelling_row .= "<tr><td>Enter the reason why this spelling and rank was used:<br>This ". $hbo->htmlSelect('spelling_reason',\@select_keys,\@select_values,$fields{'spelling_reason'})."</td></tr>";
 
     main::dbg("showOpinionForm, fields are: <pre>".Dumper(\%fields)."</pre>");
 
@@ -712,9 +711,7 @@ sub displayOpinionForm {
 	# print the form	
     $fields{'error_message'} = $error_message;
 
-    my @k = keys %fields;
-    my @v = values %fields;
-	my $html = $hbo->populateHTML("add_enter_opinion", \@v,\@k, $optional);
+	my $html = $hbo->populateHTML("add_enter_opinion", \%fields);
 
 	print $html;
 }

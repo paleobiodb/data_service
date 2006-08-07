@@ -150,7 +150,7 @@ sub retellOptions {
     
     # added by rjp on 12/30/2003
     if ($q->param('year')) {
-        my $dataCreatedBeforeAfter = $q->param("created_before_after") . " " . $q->param("date") . " " . $q->param("month") . " " . $q->param("year");
+        my $dataCreatedBeforeAfter = $q->param("created_before_after") . " " . $q->param("month") . " " . $q->param("day_of_month") . " " . $q->param("year");
         $html .= $self->retellOptionsRow ( "Data records created", $dataCreatedBeforeAfter);
     }
     
@@ -815,6 +815,7 @@ sub getLithificationString    {
 # major rewrite JA 14.8.04 to handle checkboxes instead of pulldown
 sub getLithologyString    {
     my $self = shift;
+    my $hbo = $self->{'hbo'};
     my $q = $self->{'q'};
     my $dbh = $self->{'dbh'};
 
@@ -841,9 +842,9 @@ sub getLithologyString    {
         # only do something if some of the boxes aren't checked
         if  ( ! $carbonate || ! $mixed || ! $silic || ! $unknown)    {
 
-            my $silic_str = join(",", map {"'".$_."'"} @{$self->{'hbo'}{'SELECT_LISTS'}{'lithology_siliciclastic'}});
-            my $mixed_str = join(",", map {"'".$_."'"} @{$self->{'hbo'}{'SELECT_LISTS'}{'lithology_mixed'}});
-            my $carbonate_str = join(",", map {"'".$_."'"} @{$self->{'hbo'}{'SELECT_LISTS'}{'lithology_carbonate'}});
+            my $silic_str = join(",", map {"'".$_."'"} $hbo->getList('lithology_siliciclastic'));
+            my $mixed_str = join(",", map {"'".$_."'"} $hbo->getList('lithology_mixed'));
+            my $carbonate_str = join(",", map {"'".$_."'"} $hbo->getList('lithology_carbonate'));
             
             # the logic is basically different for every combination,
             #  so go through all of them
@@ -904,13 +905,13 @@ sub getEnvironmentString{
         # Maybe this is redundant, but for consistency sake
         my $environment;
         if ($q->param('environment') =~ /General/) {
-            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_general'}});
+            $environment = join(",", map {"'".$_."'"} $hbo->getList('environment_general'));
         } elsif ($q->param('environment') =~ /Terrestrial/) {
-            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_terrestrial'}});
+            $environment = join(",", map {"'".$_."'"} $hbo->getList('environment_terrestrial'));
         } elsif ($q->param('environment') =~ /Siliciclastic/) {
-            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_siliciclastic'}});
+            $environment = join(",", map {"'".$_."'"} $hbo->getList('environment_siliciclastic'));
         } elsif ($q->param('environment') =~ /Carbonate/) {
-            $environment = join(",", map {"'".$_."'"} @{$hbo->{'SELECT_LISTS'}{'environment_carbonate'}});
+            $environment = join(",", map {"'".$_."'"} $hbo->getList('environment_carbonate'));
         } else {
             $environment = $dbh->quote($q->param('environment'));
         }
@@ -921,9 +922,9 @@ sub getEnvironmentString{
             return qq| c.environment IN ($environment)|;
         }
     } else {
-        my $carbonate_str = join(",", map {"'".$_."'"} @{$self->{'hbo'}{'SELECT_LISTS'}{'environment_carbonate'}});
-        my $siliciclastic_str = join(",", map {"'".$_."'"} @{$self->{'hbo'}{'SELECT_LISTS'}{'environment_siliciclastic'}});
-        my $terrestrial_str = join(",", map {"'".$_."'"} @{$self->{'hbo'}{'SELECT_LISTS'}{'environment_terrestrial'}});
+        my $carbonate_str = join(",", map {"'".$_."'"} $hbo->getList('environment_carbonate'));
+        my $siliciclastic_str = join(",", map {"'".$_."'"} $hbo->getList('environment_siliciclastic'));
+        my $terrestrial_str = join(",", map {"'".$_."'"} $hbo->getList('environment_terrestrial'));
         if (! $q->param("environment_carbonate") || ! $q->param("environment_siliciclastic") || 
             ! $q->param("environment_terrestrial") || ! $q->param("environment_unknown")) {
             if ( $q->param("environment_carbonate") ) {
@@ -1205,13 +1206,9 @@ sub getCollectionsWhereClause {
     # (filter it if they enter a year at the minimum.
     if ($q->param('year')) {
         
-        my $month = $q->param('month');
-        my $day = $q->param('date');
+        my $month = ($q->param('month') || "01");
+        my $day = ($q->param('day_of_month') || "01");
 
-        # use default values if the user didn't enter any.        
-        if (! $q->param('month')) { $month = "01" }
-        if (! $q->param('date')) { $day = "01" }
-                 
         if ( length $day == 1 )    {
             $day = "0".$q->param('date'); #prepend a zero if only one digit.
         }

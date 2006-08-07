@@ -84,15 +84,6 @@ sub populateEcologyForm	{
 
 	# populate the form
     if ($q->param('goal') eq 'ecovert') {
-        # For the vertebrate ecology form, we need to rename these three fields to alternate versions
-        # (ecovert_diet1, ecovert_diet2, ecovert_life_habit) so that HTMLBuilder will populate them with
-        # the alternate versions of the select lists.  For processEcologyForm we need to tranlate back 
-        # to DB-friendly names as well
-        for(my $i=0;$i<scalar(@fields);$i++) {
-            if ($fields[$i] =~ /^life_habit|diet1|diet2|reproduction$/) {
-                $fields[$i] = 'ecovert_'.$fields[$i];
-            }
-        }
 	    print $hbo->populateHTML('ecovert_form', \@values, \@fields);
     } else {
 	    print $hbo->populateHTML('ecotaph_form', \@values, \@fields);
@@ -147,13 +138,6 @@ sub processEcologyForm	{
         $fields{'body_mass_estimate'} = gramsToKg($fields{'body_mass_estimate'});
     } 
 
-    if ($q->param('goal') eq 'ecovert') {
-        # Translate the special fields back to their names in the DB
-        $fields{'reproduction'} = $fields{'ecovert_reproduction'};
-        $fields{'life_habit'} = $fields{'ecovert_life_habit'};
-        $fields{'diet1'} = $fields{'ecovert_diet1'};
-        $fields{'diet2'} = $fields{'ecovert_diet2'};
-    }
 	if ( $q->param('ecotaph_no') > 0 )	{
         $dbt->updateRecord($s,'ecotaph','ecotaph_no',$q->param('ecotaph_no'),\%fields);
 		print "<center><h3>Ecological/taphonomic data for $taxon_name have been updated</h3></center>\n";

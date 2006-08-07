@@ -379,9 +379,9 @@ sub mapFinishImage {
                  $month =~ s/$months[$m]/$m/;
              }
              if ( $q->param('beforeafter') =~ /before/i )	{
-                 $counter = "< " . $month . "/" . $q->param('date') . "/" . $year;
+                 $counter = "< " . $month . "/" . $q->param('day_of_month') . "/" . $year;
              } else	{
-                 $counter = "> " . $month . "/" . $q->param('date') . "/" . $year;
+                 $counter = "> " . $month . "/" . $q->param('day_of_month') . "/" . $year;
              }
          } else	{
              $counter = $self->{maptime} . " Ma";
@@ -456,7 +456,7 @@ sub mapFinishImage {
     my $clickstring = "$BRIDGE_HOME?action=displayMapResults";
     unless($q->param("simple_map") =~ /YES/i){
         # need a list of possible parameters
-        my @params = ('research_group', 'authorizer', 'enterer', 'authorizer_reversed','enterer_reversed','modified_since', 'date', 'month', 'year', 'country', 'state', 'interval_name', 'formation', 'lithology1', 'environment', 'taxon_rank', 'taxon_name', 'pointsize1', 'dotcolor1', 'pointshape1', 'dotborder1', 'mapsearchfields2', 'mapsearchterm2', 'pointsize2', 'dotcolor2', 'pointshape2', 'dotborder2', 'mapsearchfields3', 'mapsearchterm3', 'pointsize3', 'dotcolor3', 'pointshape3', 'dotborder3', 'mapsearchfields4', 'mapsearchterm4', 'pointsize4', 'dotcolor4', 'pointshape4', 'dotborder4', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngnocolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor');
+        my @params = ('research_group', 'authorizer', 'enterer', 'authorizer_reversed','enterer_reversed','modified_since', 'day_of_month', 'month', 'year', 'country', 'state', 'interval_name', 'formation', 'lithology1', 'environment', 'taxon_rank', 'taxon_name', 'pointsize1', 'dotcolor1', 'pointshape1', 'dotborder1', 'mapsearchfields2', 'mapsearchterm2', 'pointsize2', 'dotcolor2', 'pointshape2', 'dotborder2', 'mapsearchfields3', 'mapsearchterm3', 'pointsize3', 'dotcolor3', 'pointshape3', 'dotborder3', 'mapsearchfields4', 'mapsearchterm4', 'pointsize4', 'dotcolor4', 'pointshape4', 'dotborder4', 'mapsize', 'projection', 'maptime', 'mapfocus', 'mapresolution', 'mapbgcolor', 'crustcolor', 'gridsize', 'gridcolor', 'gridposition', 'linethickness', 'latlngnocolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor');
 
         # Crate a new cgi object cause the original may have been changed
         my $q2 = new CGI;

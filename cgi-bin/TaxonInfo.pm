@@ -1,20 +1,13 @@
 package TaxonInfo;
 
 use PBDBUtil;
-use Classification;
 use Debug;
-use HTMLBuilder;
-use DBTransactionManager;
 use Taxon;
 use TimeLookup;
 use Data::Dumper;
 use Images;
-use POSIX qw(ceil floor);
 
 use strict;
-
-my $DEBUG = 0;
-
 
 # JA: rjp did a big complicated reformatting of the following and I can't
 #  confirm that no damage was done in the course of it
