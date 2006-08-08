@@ -1,9 +1,10 @@
-#!/usr/bin/perl
+#!/usr/local/bin/perl
 use CGI;
 use DBI;
 use Permissions;
 use Session;
 use DBConnection;
+use DBTransactionManager;
 
 # written 20.10.02
 # restricts searches to refs with a particular status; uses GeoRef numbers
@@ -11,13 +12,19 @@ use DBConnection;
 # searches and displays language field 2.3.03
 
 
+# Create the CGI, Session, and some other objects.
 my $q = CGI->new();
 my $dbh = DBConnection::connect();
-my $s = Session->new();
-$s->validateUser($dbh, $q->cookie('session_id'));
+my $dbt = DBTransactionManager->new($dbh);
+my $s = Session->new($dbt,$q->cookie('session_id'));
 
 print $q->header( -type => "text/html" );
 &PrintHeader();
+
+unless ($s->isDBMember()) {
+    print qq|<p><div align=center>Please <a href="bridge.pl?action=displayLoginPage">log in</a> first.</div></p>|;
+    exit;
+}
 
 # Search the refs and print matches
 if ( $q->param("action") eq "search" )	{

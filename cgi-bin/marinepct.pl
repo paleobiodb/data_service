@@ -1,19 +1,28 @@
-#!/usr/bin/perl
+#!/usr/local/bin/perl
 use CGI;
 use DBI;
 use Permissions;
 use Session;
 use DBConnection;
+use DBTransactionManager;
 
 # made from a copy of fivepct.pl 19.8.03
 
+
+# Create the CGI, Session, and some other objects.
 my $q = CGI->new();
 my $dbh = DBConnection::connect();
-my $s = Session->new();
-$s->validateUser($dbh, $q->cookie('session_id'));
+my $dbt = DBTransactionManager->new($dbh);
+my $s = Session->new($dbt,$q->cookie('session_id'));
 
 print $q->header( -type => "text/html" );
 &PrintHeader();
+
+unless ($s->isDBMember()) {
+    print qq|<p><div align=center>Please <a href="bridge.pl?action=displayLoginPage">log in</a> first.</div></p>|;
+    exit;
+}      
+
 
 # Search the refs and print matches
 if ( $q->param("action") eq "search" )	{
