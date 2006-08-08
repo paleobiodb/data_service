@@ -422,7 +422,7 @@ sub writeBlock {
             $value = escapeHTML($vars->{$block->{'name'}});
         } 
         $html .= qq|<input type="$block->{type}"|;
-        $html .= qq| name="$block->{name}"| if ($block->{'name'});
+        $html .= qq| name="|.escapeHTML($block->{name}).qq|"| if ($block->{'name'} ne '');
         $html .= qq| value="$value"| unless $block->{'type'} eq 'password';
         $html .= qq| $attribs->{other}| if ($attribs->{'other'});
         $html .= ">";
@@ -451,7 +451,9 @@ sub writeBlock {
         }
         # The default value (CHECKED or not) will be in $attribs->{other}, so don't have to do anything
         $value = escapeHTML($value);
-        $html .= qq|<input type="$block->{type}" name="$block->{name}" value="$value"|;
+        $html .= qq|<input type="$block->{type}"|;
+        $html .= qq| name="|.escapeHTML($block->{name}).qq|"| if ($block->{'name'} ne '');
+        $html .= qq| value="$value"|;
         $html .= " ".$checked if $checked;
         $html .= " ".$attribs->{'other'} if ($attribs->{'other'});
         $html .= ">";
