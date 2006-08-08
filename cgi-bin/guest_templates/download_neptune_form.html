@@ -11,15 +11,17 @@
 
 <table width="100%" cellpadding="3" cellspacing="0">
 
-<tr class="lightGrey">
+<div hide="is_contributor">
+<tr%%row_class_1%%>
 <td valign=top class="small" nowrap>Your name (optional)
 </td>
 <td>
 <input type="text" name="yourname" value="">
 </td>
 </tr>
+</div>
 
-<tr>
+<tr%%row_class_2%%>
 <td valign=top class="small" nowrap>Data source
 </td>
 <td>
@@ -30,7 +32,7 @@
 </td>
 </tr> 
 
-<tr class="lightGrey">
+<tr%%row_class_1%%>
 <td valign=top class="small" nowrap>Output format
 </td>
 <td>
@@ -41,7 +43,7 @@
 </td>
 </tr>
 
-<tr>
+<tr%%row_class_2%%>
 <td valign=top class="small">
 Fossil group(s)
 </td>
@@ -52,12 +54,12 @@ Fossil group(s)
 <input type="checkbox" name="fossil_group" value="N">nannoplankton
 </td></tr>
 
-<tr class="lightGrey">
+<tr%%row_class_1%%>
 <td valign=top class="small">Names of genera or species</td>
 <td valign=top class="small">
 <textarea name=taxon_name rows=2 cols=30></textarea></td></tr>       
 
-<tr>
+<tr%%row_class_2%%>
 <td valign=top class="small">
 Taxon status
 </td>
@@ -67,7 +69,7 @@ Taxon status
 <span style="white-space: nowrap;"><input type="checkbox" name="taxon_status" value="Q">questionable</span>
 </td></tr>
 
-<tr class="lightGrey">
+<tr%%row_class_1%%>
 <td valign=top class="small">Include specifically indeterminate occurrences?</td>
 <td valign=top class="small">
 <select name="sp">
@@ -76,7 +78,7 @@ Taxon status
 </select>
 </td></tr> 
 
-<tr>
+<tr%%row_class_2%%>
 <td valign=top class="small" nowrap>Sample age range (Ma)
 </td>
 <td>
@@ -85,7 +87,7 @@ Taxon status
 </td>
 </tr>
 
-<tr class="lightGrey">
+<tr%%row_class_1%%>
 <td valign=top class="small" nowrap>Minimum # of samples per taxon
 </td>
 <td class="small">
@@ -94,7 +96,7 @@ Taxon status
 </td>
 </tr>  
 
-<tr>
+<tr%%row_class_2%%>
 <td valign=top class="small" nowrap>Top % of samples to throw out per taxon
 </td>
 <td class="small">
@@ -102,7 +104,7 @@ Taxon status
 </td>
 </tr>
 
-<tr>
+<tr%%row_class_2%%>
 <td valign=top class="small" nowrap>Bottom % of samples to throw out per taxon
 </td>
 <td class="small">
@@ -110,14 +112,14 @@ Taxon status
 </td>
 </tr>
 
-<tr class="lightGrey">
+<tr%%row_class_1%%>
 <td valign=top class="small">Latitudinal range</td>
 <td valign=top class="small">
 <input name="latmin" size="4" value="-90">&deg; to
 <input name="latmax" size="4" value="90">&deg;
 </td>
     
-<tr class="lightGrey">
+<tr%%row_class_1%%>
 <td valign=top class="small">Longitudinal range</td>
 <td valign=top class="small">
 <input name="lngmin" size="4" value="-180">&deg; to

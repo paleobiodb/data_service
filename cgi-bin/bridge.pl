@@ -121,7 +121,9 @@ sub processAction {
     }
     
 	# figure out what to do with the action
-    if ($action eq 'logout') {
+    if ($action eq 'displayDownloadNeptuneForm' &&  $HOST_URL !~ /paleodb\.org/) {
+	    print $q->redirect( -url=>'http://paleodb.org/cgi-bin/bridge.pl?action='.$action);
+    } elsif ($action eq 'logout') {
     	logout();
         return;
     } elsif ($action eq 'processLogin') {
@@ -142,11 +144,20 @@ sub processAction {
         dbg("<p><font color='red' size='+1' face='arial'>You are in DEBUG mode!</font><br> Cookie []<BR> Action [$action] Authorizer [".$s->get("authorizer")."] Enterer [".$s->get("enterer")."]<BR></p>");
         #dbg("@INC");
         dbg($q->Dump);
-
-        $action = \&{$action}; # Hack so use strict doesn't break
-        # Run the action (ie, call the proper subroutine)
-        &$action;
+        execAction($action);
 	}
+    exit;
+}
+
+# Exec actions with this so we can peform some sanity check or do whatever on them
+# trap this in an eval {} later so we can dump out all relevant data on crash in the
+# future
+sub execAction {
+    my $action = shift;
+    $action =~ s/[^a-zA-Z0-9_]//g;
+    $action = \&{$action}; # Hack so use strict doesn't break
+    # Run the action (ie, call the proper subroutine)
+    &$action;
     exit;
 }
 
@@ -186,9 +197,7 @@ sub processLogin {
         if ($q->param("destination") ne "") {
             $action = $q->param("destination");
         } 
-        $action = \&{$action}; # Hack so use strict doesn't break
-        # Run the action (ie, call the proper subroutine)
-        &$action;
+        execAction($action);
     } else { # no cookie
         # failed login:  (bad password, etc.)
         my $errorMessage;
@@ -536,8 +545,7 @@ sub displayMenuPage	{
 			}
 	
 	 		# Run the command
-            my $action = \&{$queue{'action'}}; # Hack so use strict doesn't back
-			&$action;
+            execAction($queue{'action'});
 			exit;
 		}
 	}
@@ -575,9 +583,8 @@ sub displayHomePage {
 			}
 	
 	 		# Run the command
-            my $action = \&{$queue{'action'}}; # Hack so use strict doesn't back
-			&$action;
-			exit;
+            execAction($queue{'action'}); # Hack so use strict doesn't back
+            exit;
 		}
 	}
 
@@ -770,6 +777,14 @@ sub displayDownloadForm {
     my %vars = $q->Vars();
     $vars{'authorizer_me'} = $s->get("authorizer_reversed");
     $vars{'enterer_me'} = $s->get("authorizer_reversed");
+
+    if ($s->isDBMember()) {
+        $vars{'row_class_1a'} = '';
+        $vars{'row_class_1b'} = ' class="lightGrey"';
+    } else {
+        $vars{'row_class_1a'} = ' class="lightGrey"';
+        $vars{'row_class_1b'} = '';
+    }
     
     print stdIncludes("std_page_top");
     print makeAuthEntJavaScript();
@@ -789,8 +804,16 @@ sub displayDownloadResults {
 }
 
 sub displayDownloadNeptuneForm {
+    my %vars;
+    if ($s->isDBMember()) {
+        $vars{'row_class_1'} = '';
+        $vars{'row_class_2'} = ' class="lightGrey"';
+    } else {
+        $vars{'row_class_1'} = ' class="lightGrey"';
+        $vars{'row_class_2'} = '';
+    }
     print stdIncludes("std_page_top");
-    print $hbo->populateHTML( 'download_neptune_form');
+    print $hbo->populateHTML('download_neptune_form',\%vars);
     print stdIncludes("std_page_bottom");
 }       
     
@@ -1069,8 +1092,7 @@ sub displayRefResults {
 
 		# if there's an action, go straight back to it without showing the ref
 		if ($action)	{
-            $action = \&{$action}; # Hack so use strict doesn't back
-			&$action;			# Run the action
+            execAction($action);
 		} elsif ($q->param('type') eq 'edit') {  
             $q->param("reference_no"=>$data[0]->{'reference_no'});
             displayRefEdit();
@@ -1927,8 +1949,7 @@ sub displayCollResults {
     } elsif ( $displayRows == 1 ) { # if only one row to display...
 		$q->param(collection_no=>$dataRows[0]->{'collection_no'});
 		# Do the action directly if there is only one row
-        $action = \&{$action}; # Hack so use strict doesn't back
-		&$action;
+        execAction($action);
 		exit;
     } else {
 		# If this is an add,  Otherwise give an error
