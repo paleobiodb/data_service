@@ -2,10 +2,12 @@
 
 <script>checkBrowserVersion();</script>
 
-<!-- On optional message, for example, if they enter the wrong user name or password. -->
-%%message%%
-
+<div show="message">
+<p>%%message%%</p>
+</div>
+<div hide="message">
 <p>If you are a data contributor, please log in</p>
+</div>
 
 <form method="POST" action="bridge.pl">
 
