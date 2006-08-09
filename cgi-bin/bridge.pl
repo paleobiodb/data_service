@@ -5838,7 +5838,7 @@ sub processEditOccurrences {
 		elsif ($fields{'occurrence_no'} =~ /^\d+$/ && $fields{'occurrence_no'} > 1 && 
                $fields{'reid_no'} == -1) {
             # Check for duplicates
-            my @keys = ("genus_name","species_name","occurrence_no");
+            my @keys = ("genus_reso","genus_name","subgenus_reso","subgenus_name","species_reso","species_name","occurrence_no");
             my @values = map{$dbh->quote($_)} @fields{@keys};
             my $record_id;
             my $return = checkDuplicates( "reid_no", \$record_id, "reidentifications", \@keys, \@values);
@@ -5892,7 +5892,7 @@ sub processEditOccurrences {
         elsif ($fields{'occurrence_no'} == -1) {
             # Check for duplicates
             # Check for duplicates
-            my @keys = ("genus_name","species_name","collection_no");
+            my @keys = ("genus_reso","genus_name","subgenus_reso","subgenus_name","species_reso","species_name","collection_no");
             my @values = map{$dbh->quote($_)} @fields{@keys};
             my $record_id;
             my $return = checkDuplicates("occurrence_no", \$record_id, "occurrences", \@keys, \@values);
@@ -6719,8 +6719,9 @@ sub checkDuplicates {
 		# Also "comments" (relevant to occs and reids) JA 28.6.02
 		if ( $$fields[$i] !~ /^(:?$idName|taxon_no|upload|most_recent|created|modified|release_date|comments|authorizer|enterer|modifier|authorizer_no|enterer_no|modifier_no)$/ ) {
 			# Tack on the field and value; take care of NULLs.
-			if ( $$vals[$i] eq "NULL" ) {
-				$sql .= $$fields[$i]." IS NULL";
+            
+			if ( $$vals[$i] eq "NULL" || $$vals[$i] eq "''") {
+				$sql .= "(".$$fields[$i]." IS NULL OR ".$$fields[$i]."='')";
 			} else {
 				$sql .= $$fields[$i]." = ".$$vals[$i];
 			}
