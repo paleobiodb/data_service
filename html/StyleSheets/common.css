@@ -437,7 +437,7 @@ div.emphasized {
 .errorBox {
 	border: 1px #909090 solid;
 	background-color: #FFFF80;
-	width: 600;
+	width: 600px;
     text-align: left;
 }
 .warningTitle {
@@ -451,7 +451,7 @@ div.emphasized {
 .warningBox {
 	border: 1px #909090 solid;
 	background-color: #EDEDFE;
-	width: 600;
+	width: 600px;
     text-align: left;
 }
 .boxBullet {  
@@ -603,14 +603,12 @@ table.navbox {
     font-weight: bold;
     /*border: 1px solid #0044CC;*/
     border: 1px solid #D9D9D9;
-    position: inline;
     top: 10px;
     width: 140px;
     text-align: center;
     z-index: 2;
     padding: 3px;
     cursor: pointer;
-    cursor: hand;
 }
 
 .tabOff, .tabLoadingOff {
