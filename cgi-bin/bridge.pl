@@ -3773,31 +3773,46 @@ sub formatOccurrenceTaxonName {
     }
 
     # n. gen., n. subgen., n. sp. come afterwards
-    if ($row->{'genus_reso'} ne 'n. gen.' && $row->{'genus_reso'}) {
+    if ($row->{'genus_reso'} eq 'n. gen.') {
+        $taxon_name .= "$row->{genus_name} n. gen.";
+    } elsif ($row->{'genus_reso'} eq '"') {
+        $taxon_name .= '"'.$row->{'genus_name'};
+        $taxon_name .= '"' unless ($row->{'subgenus_reso'} eq '"' || $row->{'species_reso'} eq '"');
+    } elsif ($row->{'genus_reso'}) {
         $taxon_name .= $row->{'genus_reso'}." ".$row->{'genus_name'};
     } else {
         $taxon_name .= $row->{'genus_name'};
     }
-    if ($row->{'genus_reso'} eq 'n. gen.') {
-        $taxon_name .= " n. gen.";
-    }
 
     if ($row->{'subgenus_name'}) {
         $taxon_name .= " (";
-        if ($row->{'subgenus_reso'} ne 'n. subgen.' && $row->{'subgenus_reso'}) {
-            $taxon_name .= $row->{'subgenus_reso'}." ";
-        }
-        $taxon_name .= $row->{'subgenus_name'};
         if ($row->{'subgenus_reso'} eq 'n. subgen.') {
-            $taxon_name .= " n. subgen."
+            $taxon_name .= "$row->{subgenus_name} n. subgen.";
+        } elsif ($row->{'subgenus_reso'} eq '"') {
+            $taxon_name .= '"' unless ($row->{'genus_reso'} eq '"');
+            $taxon_name .= $row->{'subgenus_name'};
+            $taxon_name .= '"' unless ($row->{'species_reso'} eq '"');
+        } elsif ($row->{'subgenus_reso'}) {
+            $taxon_name .= $row->{'subgenus_reso'}." ".$row->{'subgenus_name'};
+        } else {
+            $taxon_name .= $row->{'subgenus_name'};
         }
         $taxon_name .= ")";
     }
 
-    if ($row->{'species_reso'} ne 'n. sp.' && $row->{'species_reso'}) {
-        $taxon_name .= " ".$row->{'species_reso'};
+    $taxon_name .= " ";
+    if ($row->{'species_reso'} eq '"') {
+        $taxon_name .= '"' unless ($row->{'genus_reso'} eq '"' || $row->{'subgenus_reso'} eq '"');
+        $taxon_name .= $row->{'species_name'}.'"';
+    } elsif ($row->{'species_reso'} && $row->{'species_reso'} ne 'n. sp.') {
+        $taxon_name .= $row->{'species_reso'}." ".$row->{'species_name'};
+    } else {
+        $taxon_name .= $row->{'species_name'};
     }
-    $taxon_name .= " ".$row->{'species_name'};
+    #if ($row->{'species_reso'} ne 'n. sp.' && $row->{'species_reso'}) {
+    #    $taxon_name .= " ".$row->{'species_reso'};
+    #}
+    #$taxon_name .= " ".$row->{'species_name'};
 
     if ($row->{'species_name'} !~ /^indet/ && $row->{'genus_reso'} !~ /informal/) {
         $taxon_name .= "</i>";
