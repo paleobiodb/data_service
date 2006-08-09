@@ -288,8 +288,8 @@ sub displayAuthorityForm {
 	
 	# remove the type taxon stuff, it'll be assigned in opinions
 	if ($fields{'taxon_rank'} =~ /species/) {
-		$fields{'type_taxon'} = 1;
-		$fields{'type_specimen'} = 1;
+		$fields{'show_type_taxon'} = 1;
+		$fields{'show_type_specimen'} = 1;
     }
 	
 	## If this is a new species or subspecies, then we will automatically
