@@ -673,7 +673,7 @@ sub displayOpinionForm {
                 my $orig = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$orig_no});
                 $orig_info = ", originally $orig->{taxon_name}";
             }
-			$spelling_row .= qq|<input type="radio" name="child_spelling_no" $selected value='$child_spelling_no'> ${childSpellingName}, ${childSpellingRank}${pub_info}${orig_info} <br>\n|;
+			$spelling_row .= qq|<input type="radio" name="child_spelling_no" $selected value='$child_spelling_no'> ${childSpellingName}, $taxon->{taxon_rank}${pub_info}${orig_info} <br>\n|;
         }
         $spelling_row .= qq|<input type="radio" name="child_spelling_no" value=""> \nOther taxon: <input type="text" name="child_spelling_name" value="">$spelling_rank_pulldown<br>\n|;
 	    $spelling_row .= qq|<input type="hidden" name="new_child_spelling_name" value="$childSpellingName">|;
