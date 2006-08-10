@@ -155,6 +155,8 @@ sub displayITISDownload {
                         $t->{'invalid_reason'} = 'unavailable, nomen vanum';
                     } elsif ($t->{'invalid_reason'} =~ /homonym/) {
                         $t->{'invalid_reason'} = 'junior homonym';
+                    } elsif ($t->{'invalid_reason'} =~ /invalid/) {
+                        $t->{'invalid_reason'} = 'invalid subgroup';
                     } elsif ($t->{'invalid_reason'} =~ /replaced/) {
                         $t->{'invalid_reason'} = 'unavailable, incorrect original spelling';
                     } elsif ($t->{'invalid_reason'} =~ /recombined|corrected/) {
@@ -423,7 +425,7 @@ sub displayPBDBDownload {
     my @opinions = @$opinions;
     open FH_OP, ">$filesystem_dir/opinions.csv"
         or die "Could not open opinions.csv ($!)";
-    my @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","spelling_reason","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","comments","created","modified");
+    my @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","phylogenetic_status","spelling_reason","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","comments","created","modified");
     $csv->combine(@header);
     print FH_OP $csv->string()."\n";
     foreach my $o (@opinions) {
@@ -841,7 +843,7 @@ sub getTaxonomicOpinions {
         my $sql = "(SELECT p1.name authorizer, p2.name enterer, p3.name modifier, "
                 . "a1.taxon_name child_name, a2.taxon_name child_spelling_name, "
                 . "a3.taxon_name parent_name, a4.taxon_name parent_spelling_name,"
-                . "o.opinion_no,o.reference_no,o.status,o.spelling_reason,o.child_no,o.child_spelling_no,o.parent_no,o.parent_spelling_no, "
+                . "o.opinion_no,o.reference_no,o.status,o.phylogenetic_status,o.spelling_reason,o.child_no,o.child_spelling_no,o.parent_no,o.parent_spelling_no, "
                 . "o.pages,o.figures,o.created,o.comments,r.classification_quality,"
                 . " IF (o.ref_has_opinion='YES',r.pubyr,o.pubyr) pubyr,"
                 . " IF (o.ref_has_opinion='YES',r.author1init,o.author1init) author1init,"

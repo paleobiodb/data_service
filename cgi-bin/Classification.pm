@@ -470,13 +470,13 @@ sub getChildrenRecurse {
                             'synonyms'=>[]};
           
             # Populate the new node and place it in its right place
-            if ( $parent_row->{'status'} =~ /^(?:bel|rec|cor|ran)/o ) {
+            if ( $parent_row->{'status'} =~ /^(?:belongs)/o ) {
                 return if ($depth > $max_depth);
                 # Hierarchical sort, in depth first order
                 push @$sorted_records, $new_node if (!$parent_is_synonym);
                 getChildrenRecurse($dbt,$new_node,$max_depth,$depth+1,$sorted_records);
                 push @{$node->{'children'}}, $new_node;
-            } elsif ($parent_row->{'status'} =~ /^(?:subj|homo|obje|repl)/o) {
+            } elsif ($parent_row->{'status'} =~ /^(?:subjective|objective|replaced|invalid subgroup)/o) {
                 getChildrenRecurse($dbt,$new_node,$max_depth,$depth,$sorted_records,1);
                 push @{$node->{'synonyms'}}, $new_node;
             }

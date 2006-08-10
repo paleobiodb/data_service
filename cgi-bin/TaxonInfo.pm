@@ -1322,10 +1322,18 @@ sub displayRelatedTaxa {
     if ($focal_taxon_no) {
         my $tree = TaxaCache::getChildren($dbt,$focal_taxon_no,'tree',1);
         my $taxon_records = $tree->{'children'};
-        if (@{$taxon_records}) {
+        my @children = @{$taxon_records};
+        my @syns = @{$tree->{'synonyms'}};
+        foreach my $syn (@syns) {
+            if ($syn->{'children'}) {
+                push @children, @{$syn->{'children'}};
+            }
+        }
+        @children = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @children;
+        if (@children) {
             my $sql = "SELECT type_taxon_no FROM authorities WHERE taxon_no=$focal_taxon_no";
             my $type_taxon_no = ${$dbt->getData($sql)}[0]->{'type_taxon_no'};
-            foreach my $record (@{$taxon_records}) {
+            foreach my $record (@children) {
                 my @syn_links;                                                         
                 my @synonyms = @{$record->{'synonyms'}};
                 push @syn_links, $_->{'taxon_name'} for @synonyms;
@@ -1566,9 +1574,22 @@ sub getSynonymyParagraph{
 				   'nomen oblitum' => 'considered a nomen oblitum ',
 				   'homonym of' => ' considered a homonym of ',
 				   'misspelling of' => 'misspelled as ',
+				   'invalid subgroup of' => 'considered an invalid subgroup of ',
 				   'subjective synonym of' => 'synonymized subjectively with ',
 				   'objective synonym of' => 'synonymized objectively with ');
 	my $text = "";
+
+	# Get all things this taxon as been. Note we don't use ref_has_opinion but rather the 
+    # pubyr cause of a number of broken records (ref_has_opinion is blank, but no pub info)
+    # Transparently insert in the right pubyr and sort by it
+    my $sql = "(SELECT o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, o.phylogenetic_status, ".
+           " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.pubyr,r.pubyr) pubyr,".
+           " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.author1last,r.author1last) author1last,".
+           " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.author2last,r.author2last) author2last,".
+           " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.otherauthors,r.otherauthors) otherauthors".
+           " FROM opinions o LEFT JOIN refs r ON o.reference_no=r.reference_no" . 
+           " WHERE child_no=$taxon_no) ORDER BY pubyr";
+	my @results = @{$dbt->getData($sql)};
 
 	# "Named by" part first:
 	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
@@ -1608,7 +1629,7 @@ sub getSynonymyParagraph{
 
     # THis may have to be improved in the future aso all various spellings and what not
     # get passed into this
-    my $sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE type_taxon_no=$taxon_no"; 
+    $sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE type_taxon_no=$taxon_no"; 
     my @type_for = @{$dbt->getData($sql)};
     if (@type_for) {
         $text .= "It is the type for ";
@@ -1621,20 +1642,32 @@ sub getSynonymyParagraph{
         }
         $text =~ s/, $/. /;
     }
+    
+   my %phyly = ();
+    foreach my $row (@results) {
+        if ($row->{'phylogenetic_status'}) {
+            push @{$phyly{$row->{'phylogenetic_status'}}},$row
+        }
+    }
+    my @phyly_list = keys %phyly;
+    if (@phyly_list) {
+        my $para_text = " It was considered ";
+        @phyly_list = sort {$phyly{$a}->[-1]->{'pubyr'} <=> $phyly{$b}->[-1]->{'pubyr'}} @phyly_list;
+        foreach my $phylogenetic_status (@phyly_list) {
+            $para_text .= " $phylogenetic_status by ";
+            my $parent_block = $phyly{$phylogenetic_status};
+            $para_text .= printReferenceList($parent_block);
+            $para_text .= ", ";
+        }
+        $para_text =~ s/, $/\./;
+        my $last_comma = rindex($para_text,",");
+        if ($last_comma >= 0) {
+            substr($para_text,$last_comma,1," and ");
+        }
+        $text .= $para_text;
+    }
 
     $text .= "<br><br>";
-
-	# Get all things this taxon as been. Note we don't use ref_has_opinion but rather the 
-    # pubyr cause of a number of broken records (ref_has_opinion is blank, but no pub info)
-    # Transparently insert in the right pubyr and sort by it
-    $sql = "(SELECT o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, ".
-           " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.pubyr,r.pubyr) pubyr,".
-           " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.author1last,r.author1last) author1last,".
-           " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.author2last,r.author2last) author2last,".
-           " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.otherauthors,r.otherauthors) otherauthors".
-           " FROM opinions o LEFT JOIN refs r ON o.reference_no=r.reference_no" . 
-           " WHERE child_no=$taxon_no) ORDER BY pubyr";
-	my @results = @{$dbt->getData($sql)};
 
     # We want to group opinions together that have the same spelling/parent
     # We do this by creating a double array - $syns[$group_index][$child_index]
@@ -1645,7 +1678,7 @@ sub getSynonymyParagraph{
 	# If something
 	foreach my $row (@results) {
 		# put all syn's referring to the same taxon_name together
-        if ($row->{'status'} =~ /synonym|homonym|replaced|misspell/) {
+        if ($row->{'status'} =~ /subgroup|synonym|homonym|replaced|misspell/) {
             if (!exists $syn_group_index{$row->{'parent_spelling_no'}}) {
                 $syn_group_index{$row->{'parent_spelling_no'}} = scalar(@syns);
             }
@@ -1726,7 +1759,7 @@ sub getSynonymyParagraph{
         }
         if ($first_row->{'status'} !~ /nomen/) {
             my $taxon_no;
-            if ($first_row->{'status'} =~ /synonym|replaced|homonym|misspelled/) {
+            if ($first_row->{'status'} =~ /subgroup|synonym|replaced|homonym|misspelled/) {
                 $taxon_no = $first_row->{'parent_spelling_no'};
             } elsif ($first_row->{'status'} =~ /misspell/) {
                 $taxon_no = $first_row->{'child_spelling_no'};
@@ -1751,21 +1784,7 @@ sub getSynonymyParagraph{
         } else {
             $text .= " by ";
         }
-        for(my $i=0;$i<@$group;$i++) {
-            my $comma = "";
-            if ($i == scalar(@$group) - 2) {
-                # replace the final comma with ' and '
-                $comma = ' and ';
-            } elsif ($i < scalar(@$group) - 2) {
-                # otherwise if its before the and, just use commas
-                $comma = ', ';
-            } 
-            if (${$group}[$i]->{'ref_has_opinion'} =~ /yes/i) {
-                $text .= Reference::formatShortRef(${$group}[$i],'alt_pubyr'=>1,'show_comments'=>1, 'link_id'=>1) . $comma;
-            } else {
-                $text .= Reference::formatShortRef(${$group}[$i],'alt_pubyr'=>1,'show_comments'=>1) . $comma;
-            }
-        }
+        $text .= printReferenceList($group);
 	}
 	if($text ne ""){
         if ($text !~ /\.\s*$/) {
@@ -1803,30 +1822,36 @@ sub getSynonymyParagraph{
                 $parent_name = "<i>$parent_name</i>";
             }
             $text .= " to <a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$parent->{taxon_no}&real_user=$real_user\">$parent_name</a> by ";
-            for(my $i=0;$i<@parent_array;$i++) {
-                my $comma = "";
-                if ($i == scalar(@parent_array) - 2) {
-                    # replace the final comma with ' and '
-                    $comma = ' and ';
-                } elsif ($i < scalar(@parent_array) - 2) {
-                    # otherwise if its before the and, just use commas
-                    $comma = ', ';
-                } 
-                if (${parent_array}[$i]->{'ref_has_opinion'} =~ /yes/i) {
-                    $text .= Reference::formatShortRef($parent_array[$i],'alt_pubyr'=>1,'show_comments'=>1, 'link_id'=>1) . $comma;
-                } else {
-                    $text .= Reference::formatShortRef($parent_array[$i],'alt_pubyr'=>1,'show_comments'=>1) . $comma;
-                }
-            }
-            #unless (@parents_ordered == 2 && $j == 0) {
-                $text .= "; ";
-            #}
+            $text .= printReferenceList(\@parent_array);
+            $text .= "; ";
         }
         $text =~ s/; $/\./;
     }
-    $text .= "</li>";
 
+    
+    $text .= "</li>";
 	return $text;
+
+    # Only used in this function, just a simple utility to print out a formatted list of references
+    sub printReferenceList {
+        my @ref_array = @{$_[0]};
+        my $text = " ";
+        foreach my $ref (@ref_array) {
+            if ($ref->{'ref_has_opinion'} =~ /yes/i) {
+                $text .= Reference::formatShortRef($ref,'alt_pubyr'=>1,'show_comments'=>1, 'link_id'=>1).", ";
+            } else {
+                $text .= Reference::formatShortRef($ref,'alt_pubyr'=>1,'show_comments'=>1).", ";
+            }
+        }
+        $text =~ s/, $//;
+        my $last_comma = rindex($text,",");
+        if ($last_comma >= 0) {
+            substr($text,$last_comma,1," and ");
+        }
+        
+        return $text;
+    }
+
 }
 
 
@@ -2250,9 +2275,9 @@ sub displaySynonymyList	{
 #  which we already know
     my %synline = ();
 	foreach my $syn (@syns)	{
-		my $sql = "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','replaced by','misspelling of') AND parent_spelling_no=$syn)";
+		my $sql = "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','replaced by','invalid subgroup of','misspelling of') AND parent_spelling_no=$syn)";
         $sql .= " UNION ";
-		$sql .= "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','replaced by','misspelling of') AND parent_no=$syn)";
+		$sql .= "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','replaced by','invalid subgroup of','misspelling of') AND parent_no=$syn)";
         $sql .= " UNION ";
 		$sql .= "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE child_spelling_no=$syn AND status IN ('belongs to','recombined as','rank changed as','corrected as'))";
 		my @userefs =  @{$dbt->getData($sql)};
@@ -2556,7 +2581,7 @@ sub getTaxa {
 }
 
 # Keep going until we hit a belongs to, recombined, corrected as, or nome *
-# relationship
+# relationship. Note that invalid subgroup is technically not a synoym, but treated computationally the same
 sub getSeniorSynonym {
     my $dbt = shift;
     my $taxon_no = shift;
@@ -2577,7 +2602,7 @@ sub getSeniorSynonym {
             last;
         } else {
             $seen{$parent->{'child_no'}} = $parent;
-            if ($parent->{'status'} =~ /synonym|replaced/) {
+            if ($parent->{'status'} =~ /synonym|replaced|subgroup/) {
                 $taxon_no = $parent->{'parent_no'};
             } else {
                 last;
@@ -2590,6 +2615,7 @@ sub getSeniorSynonym {
 
 # They may potentialy be chained, so keep going till we're done. Use a queue isntead of recursion to simplify things slightly
 # and original combination must be passed in. Use a hash to keep track to avoid duplicate and recursion
+# Note that invalid subgroup is technically not a synoym, but treated computationally the same
 sub getJuniorSynonyms {
     my $dbt = shift;
     my @taxon_nos = @_;
@@ -2608,7 +2634,7 @@ sub getJuniorSynonyms {
         my @results = @{$dbt->getData($sql)};
         foreach my $row (@results) {
             my $parent = getMostRecentClassification($dbt,$row->{'child_no'});
-            if ($parent->{'parent_no'} == $taxon_no && $parent->{'status'} =~ /synonym|replaced/) {
+            if ($parent->{'parent_no'} == $taxon_no && $parent->{'status'} =~ /synonym|replaced|subgroup/) {
                 if (!$seen_syn{$row->{'child_no'}}) {
                     push @queue, $row->{'child_no'};
                 }

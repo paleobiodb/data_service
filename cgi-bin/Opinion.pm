@@ -201,13 +201,17 @@ sub formatAsHTML {
             $output .= " $parent_html, <small>$parent_pub_info</small>";
         }
         $output .= "'";
-    } elsif ($row->{'status'} =~ /synonym|homonym|replace|nomen|revalidated|misspell/) {
+    } elsif ($row->{'status'} =~ /synonym|homonym|replace|nomen|revalidated|misspell|subgroup/) {
         my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}});
         my $child_html  = ($child->{'taxon_rank'} =~ /species|genus/) 
                         ? "<i>$child->{'taxon_name'}</i>" 
                         : $child->{'taxon_name'};
-        $output .= "'$child_html is a $row->{status}";
-        if ($row->{'status'} =~ /synonym|homonym|replace|misspell/) {
+        if ($row->{'status'} =~ /^[aeiou]/) {
+            $output .= "'$child_html is an $row->{status}";
+        } else {
+            $output .= "'$child_html is a $row->{status}";
+        }
+        if ($row->{'status'} =~ /synonym|homonym|replace|misspell|subgroup/) {
             my $parent = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'parent_spelling_no'}});
             if ($parent) {
                 my $parent_html = ($parent->{'taxon_rank'} =~ /species|genus/) 
@@ -324,7 +328,7 @@ sub displayOpinionForm {
     my $isNewEntry = ($q->param('opinion_no') > 0) ? 0 : 1;
     my $reSubmission = ($error_message) ? 1 : 0;
 	my @belongsArray = ('belongs to', 'recombined as', 'revalidated', 'rank changed as','corrected as');
-	my @synArray = ('','subjective synonym of', 'objective synonym of', 'homonym of','replaced by','misspelling of');
+	my @synArray = ('','subjective synonym of', 'objective synonym of','homonym of','replaced by','misspelling of','invalid subgroup of');
 	my @nomArray = ('','nomen dubium','nomen nudum','nomen oblitum', 'nomen vanum');
 
     # if the opinion already exists, grab it
@@ -773,7 +777,6 @@ sub submitOpinionForm {
 		}
 	} 
 
-
     # Get the child name and rank
 	my $childTaxon = Taxon->new($dbt,$fields{'child_no'});
 	my $childName = $childTaxon->get('taxon_name');
@@ -1103,7 +1106,7 @@ sub submitOpinionForm {
     # Error checking related to ranks
     # Only bother if we're down to one parent
     if ($fields{'parent_spelling_no'}) {
-	    if ($q->param('taxon_status') eq 'belongs to') {
+	    if ($q->param('taxon_status') eq 'belongs to' || ($q->param('taxon_status') eq 'invalid1' && $q->param('synonym') eq 'invalid subgroup of')) {
 		    # for belongs to, the parent rank should always be higher than the child rank.
 		    # unless either taxon is an unranked clade (JA)
 		    if ($rankToNum{$parentRank} <= $rankToNum{$childSpellingRank} && 
@@ -1113,8 +1116,8 @@ sub submitOpinionForm {
 		    }
         } elsif ($q->param('taxon_status') eq 'invalid1') {
     		# the parent rank should be the same as the child rank...
-	    	if ( $parentRank ne $childSpellingRank) {
-		    	$errors->add("The rank of a taxon and the rank of its synonym, homonym, or replacement name must be the same");
+            if ( $parentRank ne $childSpellingRank) {
+                $errors->add("The rank of a taxon and the rank of its synonym, homonym, or replacement name must be the same");
             }    
 		} 
     }
@@ -1233,7 +1236,7 @@ sub submitOpinionForm {
 
     # Get the fields from the form and get them ready for insertion
     # All other fields should have been set or thrown an error message at some previous time
-    foreach my $f ('author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments','diagnosis') {
+    foreach my $f ('author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments','diagnosis','phylogenetic_status') {
         if (!$fields{$f}) {
             $fields{$f} = $q->param($f);
         }

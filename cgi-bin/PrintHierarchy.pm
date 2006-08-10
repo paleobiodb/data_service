@@ -170,6 +170,7 @@ sub processPrintHierarchy	{
                     if ($mrpo) {
                         if ($mrpo->{'status'} =~ /subjective/) { $_->{'status'} = 'subjective synonym'; }
                         elsif ($mrpo->{'status'} =~ /objective/) { $_->{'status'} = 'objective synonym'; }
+                        elsif ($mrpo->{'status'} =~ /subgroup/) { $_->{'status'} = 'invalid subgroup'; }
                         elsif ($mrpo->{'status'} =~ /replaced/) { $_->{'status'} = 'replacement'; }
                         else { $_->{'status'} = "$mrpo->{status}";}
                     } else {

@@ -1324,7 +1324,7 @@ sub displayReference {
                     my $html = $o->formatAsHTML; 
                     my $name = $html;
                     $name =~ s/^'(<i>)?//; 
-                    $name =~ s/(belongs |replaced |recombined |synonym | homonym | misspelled).*?$//; 
+                    $name =~ s/(belongs |replaced |invalid subgroup |recombined |synonym | homonym | misspelled).*?$//; 
                     [$name,$html] }
                 @{$dbt->getData($sql)};
             $html = join("<br>",@results);
@@ -4102,7 +4102,7 @@ sub displayCollectionEcology	{
     logRequest($s,$q);
 	print stdIncludes("std_page_top");
 
-    my @ranks = @{$hbo->{'SELECT_LISTS'}{'taxon_rank'}};
+    my @ranks = $hbo->getList('taxon_rank');
     my %rankToKey = ();
     foreach my $rank (@ranks) {
         my $rank_abbrev = $rank;

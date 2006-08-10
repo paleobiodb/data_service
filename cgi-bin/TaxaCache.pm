@@ -132,7 +132,7 @@ sub rebuildCache {
                 $status = "";
             }
 
-            if ($status =~ /^(?:repl|subj|obje)/o) {
+            if ($status =~ /^(?:replaced|subjective|objective|invalid subgroup)/o) {
                 $syns{$child_no} = $parent_no;
             } else {
                 $link_cache{$child_no} = $parent_no;
