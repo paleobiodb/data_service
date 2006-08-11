@@ -255,3 +255,19 @@ function checkAll(checkbox,the_class){
     }
 }   
 
+// used in the PAST module to hide or show lines of text that pop up next
+//  to data points in plots on mouse over; assumes that the named elements
+//  are single lines of text stacked on top of each other
+function showHide(what)	{
+        var elems = document.getElementsByName(what);
+        for (var i=0,a; a=elems[i]; i++)	{
+                if ( a.style.visibility != "hidden" )	{
+                        a.style.visibility = "hidden";
+                        a.style.height = "0em";
+                } else	{
+                        a.style.visibility = "visible";
+                        a.style.height = "1.25em";
+                }
+        }
+}
+
