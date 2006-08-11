@@ -343,7 +343,7 @@ sub getEcology {
                         $ecotaph{$taxon_no}{'minimum_body_mass'} = $v;
                         my $reference_no = $taxon->{'reference_no'};
                         $refs_for_taxon{$reference_no} = 1;
-                        $ecotaph{$taxon_no}{'minimum_body_mass'.'basis'} = $taxon->{'taxon_rank'} ($get_basis);
+                        $ecotaph{$taxon_no}{'minimum_body_mass'.'basis'} = $taxon->{'taxon_rank'} if ($get_basis);
                     }
                     if ($v && 
                            (!exists $ecotaph{$taxon_no}{'maximum_body_mass'} ||
@@ -351,7 +351,7 @@ sub getEcology {
                         $ecotaph{$taxon_no}{'maximum_body_mass'} = $v;
                         my $reference_no = $taxon->{'reference_no'};
                         $refs_for_taxon{$reference_no} = 1;
-                        $ecotaph{$taxon_no}{'maximum_body_mass'.'basis'} = $taxon->{'taxon_rank'} ($get_basis);
+                        $ecotaph{$taxon_no}{'maximum_body_mass'.'basis'} = $taxon->{'taxon_rank'} if ($get_basis);
                     }
                     # Note the distinction between exists and empty string ""
                     #  if it doesn't exist, we have no value for it yet, so we're safe to use one
