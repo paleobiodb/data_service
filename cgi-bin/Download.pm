@@ -121,8 +121,9 @@ sub buildDownload {
         print "$scaleCount time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleFile\">$scaleFile</a><br>\n";
     }
     print '</table>';
-    print '<p align="center" style="white-space: nowrap;"><b><a href="bridge.pl?action=displayDownloadForm">Do another download</a> -';
-    print '<a href="bridge.pl?action=displayCurveForm">Generate diversity curves</a></b></p></div>';
+    print '<p align="center" style="white-space: nowrap;"><b><a href="bridge.pl?action=displayDownloadForm">Do another download</a> - ';
+    print '<a href="bridge.pl?action=displayCurveForm">Generate diversity curves</a> - ';
+    print '<a href="bridge.pl?action=PASTQueryForm">Analyze with PAST functions</a></b></p></div>';
 }
 
 
@@ -1757,10 +1758,14 @@ sub queryDatabase {
     # 4.0 doesn't support subqueries and we can't the count correctly
     # if the user downloads occurrences instead of collections. Do it before
     # we tally refs and other stats below so those don't get screwed up as well
+    # JA: need to only count the occurrences that have actually been downloaded,
+    #  so we need to store those in an in list 10.8.06
     if ($q->param('occurrence_count') =~ /^\d+$/) {
         my %COLL = ();
+        my @occnos = ();
         foreach my $row (@dataRows) {
             $COLL{$row->{'collection_no'}}=1;
+            push @occnos , $row->{'o.occurrence_no'};
         }
         my @collnos = keys %COLL;
         if ( @collnos ) {
@@ -1768,7 +1773,7 @@ sub queryDatabase {
             if ($q->param('occurrence_count_qualifier') =~ /more/i) {
                 $qualifier = ">";
             }
-            my $sql = "SELECT c.collection_no FROM collections c LEFT JOIN occurrences o ON c.collection_no=o.collection_no WHERE c.collection_no IN (".join(", ",@collnos).") GROUP BY c.collection_no HAVING COUNT(o.occurrence_no) $qualifier ".$q->param('occurrence_count');
+            my $sql = "SELECT c.collection_no FROM collections c LEFT JOIN occurrences o ON c.collection_no=o.collection_no WHERE c.collection_no IN (".join(", ",@collnos).") AND o.occurrence_no IN (".join(", ",@occnos).") GROUP BY c.collection_no HAVING COUNT(o.occurrence_no) $qualifier ".$q->param('occurrence_count');
             my @results = @{$dbt->getData($sql)};
             my %exclude = ();
             foreach my $row (@results) {
