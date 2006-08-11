@@ -174,11 +174,15 @@ sub processEcologyForm	{
 #          @refs_for_taxon_no = @{$eco_hash->{$taxon_no}{'references'}};
 #          $based_off_rank = $eco_hash{$taxon_no}{'life_habit'.'basis'};
 
+# Can return authorities.preservation if $get_preservation is 1 as well PS 8/2006
+
 sub getEcology {
     my $dbt = shift;
     my $classification_hash = shift;
-    my $user_fields = shift;
+    my $ecology_fields = shift;
     my $get_basis = shift;
+    my $get_preservation = shift;
+    my @ecology_fields = @$ecology_fields;
     
     my @taxon_nos = keys(%$classification_hash);
     # This first section gets ecology data for all taxa and parent taxa
@@ -193,9 +197,6 @@ sub getEcology {
             $all_taxon_nos{$taxon_no} = 1;
             foreach my $parent (@{$classification_hash->{$taxon_no}}) {
                 $all_taxon_nos{$parent->{'taxon_no'}} = 1;
-                #foreach my $synonym (@{$parent->{'synonyms'}}) {
-                #    $all_taxon_nos{$synonym->{'taxon_no'}} = 1;
-                #}
             }
         }
     }
@@ -208,56 +209,49 @@ sub getEcology {
         push @{$alt_taxon_nos{$row->{'synonym_no'}}},$row->{'taxon_no'};
         $all_taxon_nos{$row->{'taxon_no'}} = 1;
     }
-    
-#    my $sql = "SELECT DISTINCT child_no,child_spelling_no FROM opinions WHERE child_no != child_spelling_no AND child_no IN (".join(", ",keys %all_taxon_nos).")";
-#    my @results = @{$dbt->getData($sql)};
-#    foreach my $row (@results) {
-#        push @{$alt_taxon_nos{$row->{'child_no'}}},$row->{'child_spelling_no'};
-#        $all_taxon_nos{$row->{'child_spelling_no'}} = 1;
-#    }
-#    $sql = "SELECT DISTINCT child_no,child_spelling_no FROM opinions WHERE child_no != child_spelling_no AND child_spelling_no IN (".join(", ",keys %all_taxon_nos).")";
-#    @results = @{$dbt->getData($sql)};
-#    foreach my $row (@results) {
-#        push @{$alt_taxon_nos{$row->{'child_spelling_no'}}},$row->{'child_no'};
-#        $all_taxon_nos{$row->{'child_no'}} = 1;
-#    }
-
-    $sql = "SELECT taxon_no,reference_no,".join(", ",@$user_fields)." FROM ecotaph WHERE taxon_no IN (".join(", ",keys %all_taxon_nos).")";
-    main::dbg("Ecology sql: $sql");
-    @results = @{$dbt->getData($sql)};
-    my %all_ecologies;
-    foreach my $row (@results) {
-        $all_ecologies{$row->{'taxon_no'}} = $row;
+  
+    my %taxon_metadata = ();
+    if (@ecology_fields) {
+        $sql = "SELECT taxon_no,reference_no,".join(", ",@ecology_fields)." FROM ecotaph WHERE taxon_no IN (".join(", ",keys %all_taxon_nos).")";
+        main::dbg("Ecology sql: $sql");
+        @results = @{$dbt->getData($sql)};
+        foreach my $row (@results) {
+            $taxon_metadata{$row->{'taxon_no'}} = $row;
+        }
     }
 
-    my %ranks;
-    if ($get_basis) {
+    if ($get_basis || $get_preservation) {
         if (@taxon_nos) {
-            $sql = "SELECT taxon_no,taxon_rank FROM authorities WHERE taxon_no IN (".join(",",keys %all_taxon_nos).")";
+            $sql = "SELECT taxon_no,taxon_rank,preservation FROM authorities WHERE taxon_no IN (".join(",",keys %all_taxon_nos).")";
             my @results = @{$dbt->getData($sql)};
             foreach my $row (@results) {
-                $ranks{$row->{'taxon_no'}} = $row->{'taxon_rank'};
+                $taxon_metadata{$row->{'taxon_no'}}{'taxon_rank'} = $row->{'taxon_rank'};
+                $taxon_metadata{$row->{'taxon_no'}}{'preservation'} = $row->{'preservation'};
             }
-        }  
+        }
     }
+
 
     my @fields = ();
 
     # Recurse fields are fields whose properties are inheritied from children, not just parents
     my $get_body_mass = 0;
-    foreach my $field (@$user_fields) {
+    foreach my $field (@ecology_fields) {
         if ($field =~ /maximum_body_mass|minimum_body_mass|body_mass_estimate/) {
             $get_body_mass = 1;
         } else {
             push @fields, $field;
         }
     }
+    if ($get_preservation) {
+        push @fields,'preservation';
+    }
     
     my %child_taxa;
     if ($get_body_mass) {
         my %all_child_taxon_nos = (-1=>1);
         foreach my $taxon_no (@taxon_nos) {
-            if ($ranks{$taxon_no} =~ /species/) {
+            if ($taxon_metadata{$taxon_no}{'rank'} =~ /species/) {
                 # Optimization: if its species, don't call function, just get the species itself and its alternate spellings
                 $child_taxa{$taxon_no} = [$taxon_no,@{$alt_taxon_nos{$taxon_no}}];
             } else {
@@ -272,16 +266,16 @@ sub getEcology {
         @results = @{$dbt->getData($sql)};
         foreach my $row (@results) {
             # do it this way instead of assigning the whole row so as not to obliterate previous entries
-            $all_ecologies{$row->{'taxon_no'}}{'minimum_body_mass'}  = $row->{'minimum_body_mass'};
-            $all_ecologies{$row->{'taxon_no'}}{'maximum_body_mass'}  = $row->{'maximum_body_mass'};
-            $all_ecologies{$row->{'taxon_no'}}{'body_mass_estimate'} = $row->{'body_mass_estimate'};
-            $all_ecologies{$row->{'taxon_no'}}{'reference_no'} = $row->{'reference_no'};
+            $taxon_metadata{$row->{'taxon_no'}}{'minimum_body_mass'}  = $row->{'minimum_body_mass'};
+            $taxon_metadata{$row->{'taxon_no'}}{'maximum_body_mass'}  = $row->{'maximum_body_mass'};
+            $taxon_metadata{$row->{'taxon_no'}}{'body_mass_estimate'} = $row->{'body_mass_estimate'};
+            $taxon_metadata{$row->{'taxon_no'}}{'reference_no'} = $row->{'reference_no'};
         }
         if ($get_basis) {
             $sql = "SELECT taxon_no,taxon_rank FROM authorities WHERE taxon_no IN (".join(",",keys %all_child_taxon_nos).")";
             my @results = @{$dbt->getData($sql)};
             foreach my $row (@results) {
-                $ranks{$row->{'taxon_no'}} = $row->{'taxon_rank'};
+                $taxon_metadata{$row->{'taxon_no'}}{'taxon_rank'} = $row->{'taxon_rank'};
             }
         }
     }
@@ -301,37 +295,35 @@ sub getEcology {
         foreach my $parent (@{$classification_hash->{$taxon_no}}) {
             push @exec_order, $parent->{'taxon_no'}; #ditto as above
             push @exec_order, @{$alt_taxon_nos{$parent->{'taxon_no'}}}; 
-            #foreach my $synonym (reverse @{$parent->{'synonyms'}}) {
-            #    push @exec_order, $synonym->{'taxon_no'}; # then junior synonyms last
-            #}
         }
         
         my ($seen_diet,$seen_composition,$seen_adult) = (0,0,0);
         foreach my $use_taxon_no (@exec_order) {
+            my $taxon = $taxon_metadata{$use_taxon_no};
             foreach my $field (@fields) {
-                if ($all_ecologies{$use_taxon_no}{$field} && !$ecotaph{$taxon_no}{$field}) {
+                if ($taxon->{$field} && !$ecotaph{$taxon_no}{$field}) {
                     # The following three next's deal with linked fields. We can't mix and match
                     # diet1/diet2 from different family/classes, so if one of them is set, skip messing with the whole group
                     next if ($field =~ /^composition/ && $seen_composition);
                     next if ($field =~ /^diet/ && $seen_diet);
                     next if ($field =~ /^adult_/ && $seen_adult);
-                    $ecotaph{$taxon_no}{$field} = $all_ecologies{$use_taxon_no}{$field};
+                    $ecotaph{$taxon_no}{$field} = $taxon->{$field};
                     # If we want to know what class this data is based off of 
                     # (used in displayCollectionEcology), get that as well
-                    $ecotaph{$taxon_no}{$field.'basis'} = $ranks{$use_taxon_no} if ($get_basis);
-                    my $reference_no = $all_ecologies{$use_taxon_no}{'reference_no'};
+                    $ecotaph{$taxon_no}{$field.'basis'} = $taxon->{'taxon_rank'} if ($get_basis);
+                    my $reference_no = $taxon->{'reference_no'};
                     $refs_for_taxon{$reference_no} = 1;
                 }
             }
-            $seen_composition = 1 if ($all_ecologies{$use_taxon_no}{'composition1'} ||
-                                      $all_ecologies{$use_taxon_no}{'composition2'});
-            $seen_diet = 1 if ($all_ecologies{$use_taxon_no}{'diet1'} ||
-                               $all_ecologies{$use_taxon_no}{'diet2'});
-            $seen_adult = 1 if ($all_ecologies{$use_taxon_no}{'adult_length'} ||
-                                $all_ecologies{$use_taxon_no}{'adult_width'} ||
-                                $all_ecologies{$use_taxon_no}{'adult_height'} ||
-                                $all_ecologies{$use_taxon_no}{'adult_area'} ||
-                                $all_ecologies{$use_taxon_no}{'adult_volume'});
+            $seen_composition = 1 if ($taxon->{'composition1'} ||
+                                      $taxon->{'composition2'});
+            $seen_diet = 1 if ($taxon->{'diet1'} ||
+                               $taxon->{'diet2'});
+            $seen_adult = 1 if ($taxon->{'adult_length'} ||
+                                $taxon->{'adult_width'} ||
+                                $taxon->{'adult_height'} ||
+                                $taxon->{'adult_area'} ||
+                                $taxon->{'adult_volume'});
         }
 
         # Now get minimum and maximum body mass. Algorithm is:
@@ -340,25 +332,26 @@ sub getEcology {
         # can also count as a minimum or maximum value
         if ($get_body_mass){
             foreach my $use_taxon_no (@{$child_taxa{$taxon_no}}) {
-                my @values = ($all_ecologies{$use_taxon_no}{'minimum_body_mass'},
-                              $all_ecologies{$use_taxon_no}{'maximum_body_mass'},
-                              $all_ecologies{$use_taxon_no}{'body_mass_estimate'});
+                my $taxon = $taxon_metadata{$use_taxon_no};
+                my @values = ($taxon->{'minimum_body_mass'},
+                              $taxon->{'maximum_body_mass'},
+                              $taxon->{'body_mass_estimate'});
                 foreach my $v (@values) {
                     if ($v && 
                           (!exists $ecotaph{$taxon_no}{'minimum_body_mass'} ||
                            $v < $ecotaph{$taxon_no}{'minimum_body_mass'})) {
                         $ecotaph{$taxon_no}{'minimum_body_mass'} = $v;
-                        my $reference_no = $all_ecologies{$use_taxon_no}{'reference_no'};
+                        my $reference_no = $taxon->{'reference_no'};
                         $refs_for_taxon{$reference_no} = 1;
-                        $ecotaph{$taxon_no}{'minimum_body_mass'.'basis'} = $ranks{$use_taxon_no} if ($get_basis);
+                        $ecotaph{$taxon_no}{'minimum_body_mass'.'basis'} = $taxon->{'taxon_rank'} ($get_basis);
                     }
                     if ($v && 
                            (!exists $ecotaph{$taxon_no}{'maximum_body_mass'} ||
                            $v > $ecotaph{$taxon_no}{'maximum_body_mass'})) {
                         $ecotaph{$taxon_no}{'maximum_body_mass'} = $v;
-                        my $reference_no = $all_ecologies{$use_taxon_no}{'reference_no'};
+                        my $reference_no = $taxon->{'reference_no'};
                         $refs_for_taxon{$reference_no} = 1;
-                        $ecotaph{$taxon_no}{'maximum_body_mass'.'basis'} = $ranks{$use_taxon_no} if ($get_basis);
+                        $ecotaph{$taxon_no}{'maximum_body_mass'.'basis'} = $taxon->{'taxon_rank'} ($get_basis);
                     }
                     # Note the distinction between exists and empty string ""
                     #  if it doesn't exist, we have no value for it yet, so we're safe to use one
