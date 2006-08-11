@@ -40,12 +40,12 @@ use TaxaCache;
 use DownloadTaxonomy;
 use Neptune;
 use TypoChecker;
+use PAST;
 # god awful Poling modules
 use Taxon;
 use Opinion;
 use Validation;
 use Debug;
-
 
 
 #*************************************
@@ -166,8 +166,12 @@ sub processLogin {
     my $authorizer = $q->param('authorizer_reversed');
     my $enterer = $q->param('enterer_reversed');
     my $password = $q->param('password');
-    $authorizer = Person::reverseName($authorizer);
-    $enterer = Person::reverseName($enterer);
+    if ( $authorizer =~ /,/ )	{
+        $authorizer = Person::reverseName($authorizer);
+    }
+    if ( $enterer =~ /,/ )	{
+        $enterer = Person::reverseName($enterer);
+    }
 
     my $cookie = $s->processLogin($authorizer,$enterer,$password);
 
@@ -5395,6 +5399,22 @@ sub startProcessPrintHierarchy	{
 }
 ## END PrintHierarchy stuff
 ##############
+
+##############
+## PAST stuff
+sub PASTQueryForm {
+    print stdIncludes("std_page_top");
+        PAST::queryForm($dbt,$q,$hbo,$s);
+    print stdIncludes("std_page_bottom");
+}
+sub PASTQuerySubmit {
+    print stdIncludes("std_page_top");
+        PAST::querySubmit($dbt,$q,$hbo,$s);
+    print stdIncludes("std_page_bottom");
+}
+## End PAST stuff
+##############
+
 
 sub processEditCollectionForm {
 	# Save the old one in case a new one comes in
