@@ -562,6 +562,13 @@ strat unit:
 </td></tr>
 
 <tr>
+<td valign=top class="small">Include preservation categories:</td>
+<td valign=top class="small">
+  <span class="white-space: nowrap"><input type="checkbox" name="preservation" value="regular taxon" checked> regular taxon</span>
+  <span class="white-space: nowrap"><input type="checkbox" name="preservation" value="form taxon" checked> form taxon</span>
+  <span class="white-space: nowrap"><input type="checkbox" name="preservation" value="ichnofossil" checked> ichnofossil</span></td></tr>
+
+<tr class="lightGrey">
 <td valign=top class="small">Include occurrences falling outside their age ranges in Sepkoski's Compendium?</td>
 <td valign=top class="small">
 <select name=compendium_ranges>
@@ -570,7 +577,7 @@ strat unit:
 </select>
 </td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top class="small">Include occurrences without abundance data?</td>
 <td valign=top class="small">
 <select name=without_abundance>
@@ -579,7 +586,7 @@ strat unit:
 </select>
 </td></tr>
 
-<tr>
+<tr class="lightGrey">
 <td valign=top class="small">Include occurrences that are classified or unclassified?<br><small><i>This is useful if you want to find entries that might be typos</i></small></td>
 <td valign=top class="small">
 <select name=classified>
@@ -589,7 +596,7 @@ strat unit:
 </select>
 </td></tr>   
 
-<tr class="lightGrey">
+<tr>
 <td valign=top class="small">Minimum # of specimens needed to compute mean abundance</td>
 <td valign=top class="small"><input name=min_mean_abundance type="text" size="12"></td></tr>
 </table>
@@ -952,6 +959,7 @@ Note that the collection ID and genus name fields are always output.</p>
   <tr>
     <td><input type=checkbox class="o_basic" name=occurrences_plant_organ value="YES">plant organ</td>
     <td><input type=checkbox class="o_basic" name=occurrences_plant_organ2 value="YES">plant organ 2</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_preservation value="YES">preservation category</td>
   </tr>
 </table>
 </div>

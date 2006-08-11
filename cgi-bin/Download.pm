@@ -319,6 +319,8 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
         $html .= $self->retellOptionsRow ( "Exclude classified occurrences?", $q->param("classified") );
         $html .= $self->retellOptionsRow ( "Minimum # of specimens to compute mean abundance", $q->param("min_mean_abundance") ) if ($q->param("min_mean_abundance"));
+        my @preservation = $q->param('preservation');
+        $html .= $self->retellOptionsRow ( "Include preservation categories:", join(", ",@preservation)) if scalar(@preservation) < 3;
 
         my $plantOrganFieldCount = 0;
         foreach my $plantOrganField (@plantOrganFieldNames) {
@@ -363,6 +365,8 @@ sub retellOptions {
             push @occFields, 'subgenus_name' if ($q->param('occurrences_subgenus_name'));
             push @occFields, 'species_name';
         }
+
+        push @occFields, 'preservation' if ($q->param('occurrences_preservation'));
 
         if (@occFields) {
             $html .= $self->retellOptionsRow ( "Occurrence output fields", join ( "<BR>", @occFields) );
@@ -1720,21 +1724,24 @@ sub queryDatabase {
     $sth->finish();
     $self->dbg("Rows that passed Permissions: number of rows $ofRows, length of dataRows array: ".@dataRows."<br>");
 
+    # Generate this hash if need be
+    my %all_taxa = ();
+    foreach my $row (@dataRows) {
+        if ($row->{'re.taxon_no'}) {
+            $all_taxa{$row->{'re.taxon_no'}} = 1; 
+        } elsif ($row->{'o.taxon_no'}) {
+            $all_taxa{$row->{'o.taxon_no'}} = 1;
+        }
+    }
+
+
+    
     # ss = senior_synonym
     my %ss_taxon_nos = ();
     my %ss_taxon_names = ();
-    if ($q->param("replace_with_ss") ne 'NO' && $q->param('output_data') =~ /occurrences|specimens|genera|species/) {
-        my %all_taxa = ();
-        foreach my $row (@dataRows) {
-            if ($row->{'re.taxon_no'}) {
-                $all_taxa{$row->{'re.taxon_no'}} = 1; 
-            } elsif ($row->{'o.taxon_no'}) {
-                $all_taxa{$row->{'o.taxon_no'}} = 1;
-            }
-        }
-        my @taxon_nos = keys %all_taxa;
-
-        if (@taxon_nos) {
+    if ($q->param("replace_with_ss") ne 'NO' &&
+        $q->param('output_data') =~ /occurrences|specimens|genera|species/) {
+        if (%all_taxa) {
             # Get senior synonyms for taxon used in this download
             # Note the t.taxon_no != t.synonym_no clause - this is here
             # so that the array only gets filled with replacement names,
@@ -1743,17 +1750,43 @@ sub queryDatabase {
                       "FROM taxa_tree_cache t, authorities a ".
                       "WHERE t.synonym_no=a.taxon_no ".
                       "AND t.taxon_no != t.synonym_no ".
-                      "AND t.taxon_no IN (".join(",",@taxon_nos).")";
+                      "AND t.taxon_no IN (".join(",",keys %all_taxa).")";
             my @results = @{$dbt->getData($sql)};
             foreach my $row (@results) {
-               $ss_taxon_nos{$row->{'taxon_no'}} = $row->{'synonym_no'};
-               # Split it into bits here and store that, optimazation
-               my @name_bits = Taxon::splitTaxon($row->{'taxon_name'});
-               $ss_taxon_names{$row->{'taxon_no'}} = \@name_bits;
+                # Don't forget these as well
+                $all_taxa{$row->{'synonym_no'}} = 1;
+                $ss_taxon_nos{$row->{'taxon_no'}} = $row->{'synonym_no'};
+                # Split it into bits here and store that, optimazation
+                my @name_bits = Taxon::splitTaxon($row->{'taxon_name'});
+                $ss_taxon_names{$row->{'taxon_no'}} = \@name_bits;
             }
         }
     }
 
+    my @taxon_nos = keys %all_taxa;
+    my %master_class;
+    my %ecotaph;
+    my @preservation = $q->param('preservation');
+    my $get_preservation = 0;
+    if ($q->param("output_data") =~ /occurrences|specimens|genera|species/) { 
+        if ((@preservation > 0 && @preservation < 3) ||
+            $q->param('occurrences_preservation')) {
+            $get_preservation = 1;
+        }
+         
+        if (@ecoFields || $get_preservation ||
+            $q->param("occurrences_class_name") eq "YES" || 
+            $q->param("occurrences_order_name") eq "YES" || 
+            $q->param("occurrences_family_name") eq "YES"){
+            %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'array_full')};
+        }
+        
+        # get the higher order names associated with each genus name,
+        #   then set the ecotaph values by running up the hierarchy
+        if (@ecoFields || $get_preservation) {
+            %ecotaph = %{Ecology::getEcology($dbt,\%master_class,\@ecoFields,0,$get_preservation)};
+        }
+    }
     # We have to do this now instead of before in the query cause
     # 4.0 doesn't support subqueries and we can't the count correctly
     # if the user downloads occurrences instead of collections. Do it before
@@ -1762,31 +1795,22 @@ sub queryDatabase {
     #  so we need to store those in an in list 10.8.06
     if ($q->param('occurrence_count') =~ /^\d+$/) {
         my %COLL = ();
-        my @occnos = ();
         foreach my $row (@dataRows) {
-            $COLL{$row->{'collection_no'}}=1;
-            push @occnos , $row->{'o.occurrence_no'};
+            $COLL{$row->{'collection_no'}}++;
         }
-        my @collnos = keys %COLL;
-        if ( @collnos ) {
-            my $qualifier = "<";
-            if ($q->param('occurrence_count_qualifier') =~ /more/i) {
-                $qualifier = ">";
+        my $count = int($q->param('occurrence_count'));
+        my @temp = ();
+        my $more_than = ($q->param('occurrence_count_qualifier') =~ /more/i) ? 1 : 0;
+        foreach my $row (@dataRows) {
+            if ($more_than) {
+                next if ($COLL{$row->{'collection_no'}} > $count);
+            } else {
+                next if ($COLL{$row->{'collection_no'}} < $count);
             }
-            my $sql = "SELECT c.collection_no FROM collections c LEFT JOIN occurrences o ON c.collection_no=o.collection_no WHERE c.collection_no IN (".join(", ",@collnos).") AND o.occurrence_no IN (".join(", ",@occnos).") GROUP BY c.collection_no HAVING COUNT(o.occurrence_no) $qualifier ".$q->param('occurrence_count');
-            my @results = @{$dbt->getData($sql)};
-            my %exclude = ();
-            foreach my $row (@results) {
-                $exclude{$row->{'collection_no'}} = 1;
-            }
-            my @temp = ();
-            foreach my $row (@dataRows) {
-                if (!$exclude{$row->{'collection_no'}}) {
-                    push @temp, $row;
-                }
-            }
-            @dataRows = @temp;
+
+            push @temp,$row;
         }
+        @dataRows = @temp;
     }
 
     #use Benchmark qw(:all);
@@ -1844,33 +1868,48 @@ sub queryDatabase {
     #my $time = 0+$td->[0] + $td->[1];
     #print "TD for populateStuffs: $time\n";
 
+    # Set this up
+
     my %lumpseen;
     my %occseen;
     my %genusseen;
-    my %taxon_nos_seen;
     my %occs_by_taxa;
     my @allDataRows = ();
     my @lumpedDataRows = ();
+    # This is quite a bit faster than lots of Q calls, and sets default values
+    my $replace_with_ss = ($q->param("replace_with_ss") !~ /no/i) ? 1 : 0;
+    my $replace_with_reid = ($q->param("replace_with_reid") !~ /no/i) ? 1 : 0;
+    my $split_subgenera = ($q->param('split_subgenera') =~ /yes/i) ? 1 : 0;
+    my $occurrence_dl = ($q->param('output_data') =~ /occurrences|specimens|genera|species/) ? 1 : 0;
+    my $compendium_only = ($q->param('compendium_ranges') =~ /no/i ) ? 1 : 0;
+    my ($get_regular,$get_ichno,$get_form) = (0,0,0);
+    if ($get_preservation) {
+        my @preservations = $q->param('preservation');
+        foreach my $p (@preservations) {
+            $get_regular = 1 if ($p eq 'regular taxon'); 
+            $get_ichno   = 1 if ($p eq 'ichnofossil'); 
+            $get_form    = 1 if ($p eq 'form taxon');
+        }
+    }
+    
     foreach my $row ( @dataRows ){
         my $exclude = 0;
         my $lump = 0;
             
-        if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
+        if ($occurrence_dl) {
             # swap the reIDs into the occurrences (pretty important!)
             # don't do this unless the user requested it (the default)
             #  JA 16.4.06
-            if ($row->{'re.reid_no'}) {
-                if ( $q->param('replace_with_reid') ne 'NO' ) {
-                    foreach my $field (@reidFieldNames,@reidTaxonFieldNames) {
-                        $row->{'or.'.$field}=$row->{'o.'.$field};
-                        $row->{'o.'.$field}=$row->{'re.'.$field};
-                    }
+            if ($row->{'re.reid_no'} && $replace_with_reid) {
+                foreach my $field (@reidFieldNames,@reidTaxonFieldNames) {
+                    $row->{'or.'.$field}=$row->{'o.'.$field};
+                    $row->{'o.'.$field}=$row->{'re.'.$field};
                 }
             }
             # Replace with senior_synonym_no PS 11/1/2005
             # this is ugly because the "original name" is actually a reID
             #  whenever a reID exists
-            if ( $q->param('replace_with_ss') ne 'NO' ) {
+            if ($replace_with_ss) {
                 if ($ss_taxon_nos{$row->{'o.taxon_no'}}) {
                     my ($genus,$subgenus,$species,$subspecies) = @{$ss_taxon_names{$row->{'o.taxon_no'}}};
                     #print "$row->{occurrence_no}, SENIOR SYN FOR $row->{o.genus_name}/$row->{o.subgenus_name}/$row->{o.species_name}/$row->{o.subspecies_name} IS $genus/$subgenus/$species/$subspecies<BR>";
@@ -1890,15 +1929,26 @@ sub queryDatabase {
                 }
             }
             # raise subgenera to genus level JA 18.8.04
-            if ( $q->param('split_subgenera') eq 'YES' && $row->{'o.subgenus_name'} )    {
+            if ( $split_subgenera && $row->{'o.subgenus_name'} ) {
                 $row->{'o.genus_name'} = $row->{'o.subgenus_name'};
             }
             # get rid of occurrences of genera either (1) not in the
             #  Compendium or (2) falling outside the official Compendium
             #  age range JA 27.8.04
-            if ( $q->param('compendium_ranges') eq 'NO' )    {
+            if ( $compendium_only) {
                 if ( ! $incompendium{$row->{'o.genus_name'}.$row->{'c.10mybin'}} )    {
                     $exclude++;
+                }
+            }
+
+            if ($get_preservation) {
+                my $preservation = $ecotaph{$row->{'o.taxon_no'}}{'preservation'};
+                if ($preservation eq 'ichnofossil') {
+                    $exclude++ unless  ($get_ichno);
+                } elsif ($preservation eq 'form taxon') {
+                    $exclude++ unless  ($get_form);
+                } else {
+                    $exclude++ unless  ($get_regular);
                 }
             }
 
@@ -2004,13 +2054,17 @@ sub queryDatabase {
             push @allDataRows, $row;
         }
         if ( $exclude == 0 && $lump == 0)    {
-            $taxon_nos_seen{$row->{'o.taxon_no'}}++;
             push @lumpedDataRows, $row;
         }
     }
     
     @dataRows = @lumpedDataRows;
     my $dataRowsSize = scalar(@dataRows);
+    # Get a list of parents for classification purposes
+
+
+        
+
 
     # This is a bit nasty doing it here, but since we do lumping in PERL code, we have to do this after the
     # fact and can't do it after the fact. Will have to amend table structure or radically alter queries
@@ -2023,33 +2077,12 @@ sub queryDatabase {
     }
 
 
-    # Get a list of parents for classification purposes
-    my @taxon_nos = keys %taxon_nos_seen;
-
-    my %master_class;
-    if (@ecoFields || 
-        ($q->param("output_data") =~ /occurrences|specimens|genera|species/ && 
-        ($q->param("occurrences_class_name") eq "YES" || 
-         $q->param("occurrences_order_name") eq "YES" || 
-         $q->param("occurrences_family_name") eq "YES"))){
-        %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'array_full')};
-    }
-
     # Sort by
     if ($q->param('output_data') =~ /^(?:genera|specimens|species)$/) {
         @dataRows = sort { $a->{'o.genus_name'} cmp $b->{'o.genus_name'} ||
                            $a->{'o.species_name'} cmp $b->{'o.species_name'}} @dataRows;
     }
 
-    # get the higher order names associated with each genus name,
-    #   then set the ecotaph values by running up the hierarchy
-    # JA 28.2.04: only do this is ecotaph data were requested
-    # JA 4.4.04: adapted this to use taxon numbers instead of names
-    # PS 08/20/2005 - get for all higher ranks, not just common ones
-    my %ecotaph;
-    if (@ecoFields) {
-        %ecotaph = %{Ecology::getEcology($dbt,\%master_class,\@ecoFields)};
-    }
 
     # main pass through the results set
     my $acceptedCount = 0;
@@ -2086,13 +2119,14 @@ sub queryDatabase {
             }
 
             # Set up the ecology fields
-            foreach (@ecoFields) {
+            foreach (@ecoFields,'preservation') {
                 if ($ecotaph{$row->{'o.taxon_no'}}{$_} !~ /^\s*$/) {
                     $row->{$_} = $ecotaph{$row->{'o.taxon_no'}}{$_};
                 } else {
                     $row->{$_} = '';
                 }
             }
+
         }
 
         # Set up collections fields
@@ -2356,6 +2390,7 @@ sub printCSV {
 
     if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
         push @header,@ecoFields;
+        push @header,'preservation' if ($q->param("occurrences_preservation"));
     }
        
     if ($q->param('output_data') =~ /collections|occurrences|specimens/) {
