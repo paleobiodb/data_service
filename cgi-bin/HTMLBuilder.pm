@@ -102,7 +102,7 @@ sub new {
    
     # This block 'installs' a code reference in $select_lists to generate the list on the fly when its needed
     my %table_enums = (
-        'authorities' => ['taxon_rank'],
+        'authorities' => ['taxon_rank','preservation'],
         'opinions' => ['phylogenetic_status'],
         'refs'=> ['project_name','publication_type','classification_quality','language'],
         'collections'=> ['access_level', 'latdir', 'lngdir', 'latlng_basis', 'gps_datum', 'altitude_unit', 'geogscale', 'localbedunit', 'localorder', 'regionalbedunit', 'regionalorder', 'stratscale', 'lithification', 'lithification2',  'tectonic_setting', 'seq_strat', 'lagerstatten', 'concentration', 'orientation', 'preservation_quality', 'abund_in_sediment', 'art_whole_bodies', 'disart_assoc_maj_elems', 'disassoc_maj_elems', 'disassoc_minor_elems', 'sorting', 'fragmentation', 'bioerosion', 'encrustation', 'temporal_resolution', 'spatial_resolution', 'collection_type', 'collection_size_unit', 'rock_censused_unit', 'museum'],
