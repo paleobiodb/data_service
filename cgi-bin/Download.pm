@@ -135,7 +135,7 @@ sub retellOptions {
     $self->setupQueryFields() if (! $self->{'setup_query_fields_called'});
 
     my $html = '<div align="center"><table border=0 width=600>';
-    $html .= '<tr><td colspan=2 class="darkList"><h3>Download criteria</h3></td></tr>';
+    $html .= '<tr><td colspan=2 class="darkList"><h3 style="margin-bottom: 0em;">Download criteria</h3></td></tr>';
 
     # authorizer added 30.6.04 JA (left out by mistake?) 
     $html .= $self->retellOptionsRow ( "Output data type", $q->param("output_data") );
@@ -195,7 +195,7 @@ sub retellOptions {
 
     # Collection types
     my @collection_types_group = ('archaeological','biostratigraphic','paleoecologic','taphonomic','taxonomic','general_faunal/floral','unknown');
-    $html .= $self->retellOptionsGroup('Reasons for describing included collections:','collection_type',\@collection_types_group);
+    $html .= $self->retellOptionsGroup('Reasons for describing included collections:','collection_type_',\@collection_types_group);
 
     # Continents or country
     my (@continents,@paleocontinents);
@@ -204,7 +204,6 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Country", $q->param("include_exclude_country") . " " . $q->param("country") );
     }
     else    {
-        if ( $q->param("global") )             { push ( @continents, "global" ); }
         if ( $q->param("Africa") )             { push ( @continents, "Africa" ); }
         if ( $q->param("Antarctica") )         { push ( @continents, "Antarctica" ); }
         if ( $q->param("Asia") )             { push ( @continents, "Asia" ); }
@@ -302,22 +301,23 @@ sub retellOptions {
     $html .= $self->retellOptionsRow ( "Lump by published reference?", $q->param("lump_by_ref") );
     $html .= $self->retellOptionsRow ( "Lump by time interval?", $q->param("lump_by_interval") );
     $html .= $self->retellOptionsRow ( "Restrict to collection(s): ",$q->param("collection_no"));
-    $html .= $self->retellOptionsRow ( "Exclude collections with subset collections? ",$q->param("exclude_superset"));
-    $html .= $self->retellOptionsRow ( "Exclude collections with ".$q->param("occurrence_count_qualifier")." than",$q->param("occurrence_count")." occurrences") if ($q->param("occurrence_count") =~ /^\d+$/);
+    $html .= $self->retellOptionsRow ( "Exclude collections with subset collections? ",$q->param("exclude_superset")) if ($q->param("exclude_superset") eq 'YES');
+    $html .= $self->retellOptionsRow ( "Exclude collections with ".$q->param("occurrence_count_qualifier")." than",$q->param("occurrence_count")." occurrences") if (int($q->param("occurrence_count")));
+    $html .= $self->retellOptionsRow ( "Exclude collections with ".$q->param("abundance_count_qualifier")." than",$q->param("abundance_count")." specimens/individuals") if (int($q->param("abundance_count")));
 
     if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
-        $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?", $q->param("lump_genera") );
-        $html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?", $q->param("split_subgenera") );
-        $html .= $self->retellOptionsRow ( "Replace names with reidentifications?", $q->param("replace_with_reid") );
-        $html .= $self->retellOptionsRow ( "Replace names with senior synonyms?", $q->param("replace_with_ss") );
-        $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", $q->param('indet') );
-        $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", $q->param('sp') );
-        my @genus_reso_types_group = ('aff.','cf.','ex_gr.','n. gen.','sensu lato','?','"');
+        $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?","YES") if ($q->param('lump_genera') eq 'YES');
+        $html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?","YES") if ($q->param("split_subgenera") eq 'YES');
+        $html .= $self->retellOptionsRow ( "Replace names with reidentifications?","NO") if ($q->param('repace_with_reid') eq 'NO');
+        $html .= $self->retellOptionsRow ( "Replace names with senior synonyms?", "NO") if ($q->param("replace_with_ss") eq 'NO');
+        $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", "YES") if ($q->param('indet') eq 'YES');
+        $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", "YES") if ($q->param('sp') eq 'YES');
+        my @genus_reso_types_group = ('aff.','cf.','ex gr.','n. gen.','sensu lato','?','"');
         $html .= $self->retellOptionsGroup('Include occurrences qualified by','genus_reso_',\@genus_reso_types_group);
-        $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", $q->param("informal") );
-        $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", $q->param("compendium_ranges") );
-        $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") );
-        $html .= $self->retellOptionsRow ( "Exclude classified occurrences?", $q->param("classified") );
+        $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", "YES") if ( $q->param("informal") eq 'YES');
+        $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", "NO") if ($q->param("compendium_ranges") eq 'NO');
+        $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") ) if ($q->param("without_abundance") eq 'NO');
+        $html .= $self->retellOptionsRow ( "Exclude classified occurrences?", $q->param("classified") ) if ($q->param("classified" !~ /classified|unclassified/i));
         $html .= $self->retellOptionsRow ( "Minimum # of specimens to compute mean abundance", $q->param("min_mean_abundance") ) if ($q->param("min_mean_abundance"));
         my @preservation = $q->param('preservation');
         $html .= $self->retellOptionsRow ( "Include preservation categories:", join(", ",@preservation)) if scalar(@preservation) < 3;
@@ -1078,7 +1078,7 @@ sub getGenusResoString{
     my $q = $self->{'q'};
 
     my $resos = "";
-    if ( !$q->param('genus_reso_n. gen.') || ! $q->param('genus_reso_aff.') || ! $q->param('genus_reso_cf.') || ! $q->param('genus_reso_ex_gr.') || ! $q->param('genus_reso_?') || ! $q->param('genus_reso_"') ) { 
+    if ( !$q->param('genus_reso_n. gen.') || ! $q->param('genus_reso_aff.') || ! $q->param('genus_reso_cf.') || ! $q->param('genus_reso_ex gr.') || ! $q->param('genus_reso_sensu lato') || ! $q->param('genus_reso_?') || ! $q->param('genus_reso_"') ) { 
         if ( $q->param('genus_reso_aff.') )    {
             $resos .= ",'aff.'";
             if ($q->param('informal') eq 'YES') {
@@ -1091,10 +1091,10 @@ sub getGenusResoString{
                 $resos .= ",'informal cf.'";
             }
         }
-        if ( $q->param('genus_reso_ex_gr.') )    {
+        if ( $q->param('genus_reso_ex gr.') )    {
             $resos .= ",'ex gr.'";
         }
-        if ( $q->param('genus_reso_sensu_lato') )    {
+        if ( $q->param('genus_reso_sensu lato') )    {
             $resos .= ",'sensu lato'";
         }
         if ( $q->param('genus_reso_?') )    {
@@ -1688,8 +1688,7 @@ sub queryDatabase {
     }
 
     ###########################################################################
-    #  Loop through the result set and build a flattened version suitable for
-    #  printing out to file or normal use
+    #  Execute
     ###########################################################################
 
     my $sth = $dbh->prepare($sql); #|| die $self->dbg("Prepare query failed ($!)<br>");
@@ -1724,6 +1723,10 @@ sub queryDatabase {
     $sth->finish();
     $self->dbg("Rows that passed Permissions: number of rows $ofRows, length of dataRows array: ".@dataRows."<br>");
 
+    ###########################################################################
+    #  Tally some data we will need later
+    ###########################################################################
+
     # Generate this hash if need be
     my %all_taxa = ();
     foreach my $row (@dataRows) {
@@ -1733,10 +1736,9 @@ sub queryDatabase {
             $all_taxa{$row->{'o.taxon_no'}} = 1;
         }
     }
+    my @taxon_nos = keys %all_taxa;
 
-
-    
-    # ss = senior_synonym
+    # Replace with senior synonym data
     my %ss_taxon_nos = ();
     my %ss_taxon_names = ();
     if ($q->param("replace_with_ss") ne 'NO' &&
@@ -1763,7 +1765,7 @@ sub queryDatabase {
         }
     }
 
-    my @taxon_nos = keys %all_taxa;
+    # Ecotaph/preservation/parent data
     my %master_class;
     my %ecotaph;
     my @preservation = $q->param('preservation');
@@ -1787,34 +1789,6 @@ sub queryDatabase {
             %ecotaph = %{Ecology::getEcology($dbt,\%master_class,\@ecoFields,0,$get_preservation)};
         }
     }
-    # We have to do this now instead of before in the query cause
-    # 4.0 doesn't support subqueries and we can't the count correctly
-    # if the user downloads occurrences instead of collections. Do it before
-    # we tally refs and other stats below so those don't get screwed up as well
-    # JA: need to only count the occurrences that have actually been downloaded,
-    #  so we need to store those in an in list 10.8.06
-    if ($q->param('occurrence_count') =~ /^\d+$/) {
-        my %COLL = ();
-        foreach my $row (@dataRows) {
-            $COLL{$row->{'collection_no'}}++;
-        }
-        my $count = int($q->param('occurrence_count'));
-        my @temp = ();
-        my $more_than = ($q->param('occurrence_count_qualifier') =~ /more/i) ? 1 : 0;
-        foreach my $row (@dataRows) {
-            if ($more_than) {
-                next if ($COLL{$row->{'collection_no'}} > $count);
-            } else {
-                next if ($COLL{$row->{'collection_no'}} < $count);
-            }
-
-            push @temp,$row;
-        }
-        @dataRows = @temp;
-    }
-
-    #use Benchmark qw(:all);
-    #my $t0 = new Benchmark;
 
     # Populate calculated time fields, which are needed below
     if (@time_fields) {
@@ -1863,44 +1837,34 @@ sub queryDatabase {
             $COLL{$row->{'collection_no'}} = $row; 
         }
     }
-    #my $t1 = new Benchmark;
-    #my $td = timediff($t1,$t0);
-    #my $time = 0+$td->[0] + $td->[1];
-    #print "TD for populateStuffs: $time\n";
 
-    # Set this up
+    ###########################################################################
+    #  First handle occurrence level filters
+    ###########################################################################
 
-    my %lumpseen;
-    my %occseen;
-    my %genusseen;
     my %occs_by_taxa;
-    my @allDataRows = ();
-    my @lumpedDataRows = ();
-    # This is quite a bit faster than lots of Q calls, and sets default values
-    my $replace_with_ss = ($q->param("replace_with_ss") !~ /no/i) ? 1 : 0;
-    my $replace_with_reid = ($q->param("replace_with_reid") !~ /no/i) ? 1 : 0;
-    my $split_subgenera = ($q->param('split_subgenera') =~ /yes/i) ? 1 : 0;
-    my $occurrence_dl = ($q->param('output_data') =~ /occurrences|specimens|genera|species/) ? 1 : 0;
-    my $compendium_only = ($q->param('compendium_ranges') =~ /no/i ) ? 1 : 0;
-    my ($get_regular,$get_ichno,$get_form) = (0,0,0);
-    if ($get_preservation) {
-        my @preservations = $q->param('preservation');
-        foreach my $p (@preservations) {
-            $get_regular = 1 if ($p eq 'regular taxon'); 
-            $get_ichno   = 1 if ($p eq 'ichnofossil'); 
-            $get_form    = 1 if ($p eq 'form taxon');
+    if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
+        # Do integer compares is quite a bit faster than q-> calls, so set that up here
+        my $replace_with_ss = ($q->param("replace_with_ss") ne 'NO') ? 1 : 0;
+        my $replace_with_reid = ($q->param("replace_with_reid") ne 'NO') ? 1 : 0;
+        my $split_subgenera = ($q->param('split_subgenera') eq 'YES') ? 1 : 0;
+        my $compendium_only = ($q->param('compendium_ranges') eq 'NO') ? 1 : 0;
+        my ($get_regular,$get_ichno,$get_form) = (0,0,0);
+        if ($get_preservation) {
+            my @preservations = $q->param('preservation');
+            foreach my $p (@preservations) {
+                $get_regular = 1 if ($p eq 'regular taxon'); 
+                $get_ichno   = 1 if ($p eq 'ichnofossil'); 
+                $get_form    = 1 if ($p eq 'form taxon');
+            }
         }
-    }
-    
-    foreach my $row ( @dataRows ){
-        my $exclude = 0;
-        my $lump = 0;
+        my @temp = ();
+        foreach my $row ( @dataRows ) {
             
-        if ($occurrence_dl) {
             # swap the reIDs into the occurrences (pretty important!)
             # don't do this unless the user requested it (the default)
             #  JA 16.4.06
-            if ($row->{'re.reid_no'} && $replace_with_reid) {
+            if ($row->{'re.reid_no'} > 0 && $replace_with_reid) {
                 foreach my $field (@reidFieldNames,@reidTaxonFieldNames) {
                     $row->{'or.'.$field}=$row->{'o.'.$field};
                     $row->{'o.'.$field}=$row->{'re.'.$field};
@@ -1937,53 +1901,120 @@ sub queryDatabase {
             #  age range JA 27.8.04
             if ( $compendium_only) {
                 if ( ! $incompendium{$row->{'o.genus_name'}.$row->{'c.10mybin'}} )    {
-                    $exclude++;
+                    next; # Skip, no need to process any more
                 }
             }
 
             if ($get_preservation) {
                 my $preservation = $ecotaph{$row->{'o.taxon_no'}}{'preservation'};
                 if ($preservation eq 'ichnofossil') {
-                    $exclude++ unless  ($get_ichno);
+                    next unless  ($get_ichno);
                 } elsif ($preservation eq 'form taxon') {
-                    $exclude++ unless  ($get_form);
+                    next unless  ($get_form);
                 } else {
-                    $exclude++ unless  ($get_regular);
+                    next unless  ($get_regular);
                 }
             }
+            if ($row->{'specimens_exist'}) {
+                if ($q->param('output_data') eq 'genera' || $q->param('output_data') eq 'species') {
+                    my $genus_string = $row->{'o.genus_name'};
+                    if ($q->param('output_data')  eq 'species') {
+                        $genus_string .= " $row->{'o.species_name'}";
+                    } 
+                    push @{$occs_by_taxa{$genus_string}}, $row->{'o.occurrence_no'};
+                }
+            }
+            # If we haven't skipped this row yet because of a "next", we use it 
+            push @temp, $row;
+        }
+        @dataRows = @temp;
+        
+        ###########################################################################
+        #  Some more occurrence level filters where you need to first aggregate data 
+        #  at the collection level
+        ###########################################################################
+        my $occurrence_count = int($q->param('occurrence_count'));
+        my $abundance_count  = int($q->param('abundance_count'));
+        if ($occurrence_count || $abundance_count) {
+            my %COLL = ();
+            my %ABUND = ();
+            foreach my $row (@dataRows) {
+                $COLL{$row->{'collection_no'}}++;
+                if ( $row->{'o.abund_unit'} =~ /^(?:specimens|individuals)$/ && $row->{'o.abund_value'} > 0 ) {
+                    $ABUND{$row->{'collection_no'}} += $row->{'o.abund_value'};
+                }
+            }
+            my @temp = ();
+            my $occ_more_than = ($q->param('occurrence_count_qualifier') =~ /more/i) ? 1 : 0;
+            my $abund_more_than = ($q->param('abundance_count_qualifier') =~ /more/i) ? 1 : 0;
+            foreach my $row (@dataRows) {
+                if ($occurrence_count) {
+                    if ($occ_more_than) {
+                        next if ($COLL{$row->{'collection_no'}} > $occurrence_count);
+                    } else {
+                        next if ($COLL{$row->{'collection_no'}} < $occurrence_count);
+                    }
+                }
+                if ($abundance_count) {
+                    if ($abund_more_than) {
+                        next if ($ABUND{$row->{'collection_no'}} > $abundance_count);
+                    } else {
+                        next if ($ABUND{$row->{'collection_no'}} < $abundance_count);
+                    }
+                }
+                push @temp,$row;
+            }
+            @dataRows = @temp;
+        }
+    }
 
-            # Lump by genera or genera/collection here in code, so we can get refs + filter reids
-            # correctly above
-            if ($exclude == 0 && ($q->param('output_data') =~ /genera|species/ || $q->param('lump_genera') eq 'YES')) {
-                my $genus_string;
-                if ($q->param('lump_genera') eq 'YES') {
-                    $genus_string .= $row->{'collection_no'};
-                }
-              
-                if ($q->param('output_data') =~ /species/i) {
-                    $genus_string .= $row->{'o.genus_name'}.$row->{'o.species_name'};
-                } else {
-                    $genus_string .= $row->{'o.genus_name'};
-                }
-                if ($genusseen{$genus_string}) {
-                    $lump++;
-                } else {
-                    $genusseen{$genus_string}++;
-                }
+    #use Benchmark qw(:all);
+    #my $t0 = new Benchmark;
+
+    #my $t1 = new Benchmark;
+    #my $td = timediff($t1,$t0);
+    #my $time = 0+$td->[0] + $td->[1];
+    #print "TD for populateStuffs: $time\n";
+
+    ###########################################################################
+    #  Now handle lumping of collections
+    ###########################################################################
+
+    my %lumpseen;
+    my %occseen;
+    my %genusseen;
+    my @lumpedDataRows = ();
+    my @allDataRows = @dataRows;
+    foreach my $row ( @dataRows ) {
+        my $lump = 0;
+        if (($q->param('output_data') =~ /genera|species/ || $q->param('lump_genera') eq 'YES')) {
+            my $genus_string;
+            if ($q->param('lump_genera') eq 'YES') {
+                $genus_string .= $row->{'collection_no'};
+            }
+          
+            if ($q->param('output_data') =~ /species/i) {
+                $genus_string .= $row->{'o.genus_name'}.$row->{'o.species_name'};
+            } else {
+                $genus_string .= $row->{'o.genus_name'};
+            }
+            if ($genusseen{$genus_string}) {
+                $lump++;
+            } else {
+                $genusseen{$genus_string}++;
             }
         }
-
         # lump bed/group of beds scale collections with the exact same
         #  formation/member and geographic coordinate JA 21.8.04
-        if ( $exclude == 0 && ( $q->param('lump_by_coord') eq 'YES' || $q->param('lump_by_interval') eq 'YES' || $q->param('lump_by_strat_unit') =~ /(group)|(formation)|(member)/i || $q->param('lump_by_ref') eq 'YES' ) )    {
+        if ( ( $q->param('lump_by_coord') eq 'YES' || $q->param('lump_by_interval') eq 'YES' || $q->param('lump_by_strat_unit') =~ /(group)|(formation)|(member)/i || $q->param('lump_by_ref') eq 'YES' ) )    {
 
             my $lump_string;
 
             if ( $q->param('lump_by_coord') eq 'YES' )    {
-                $lump_string .= $row->{'c.latdeg'}.$row->{'c.latmin'}.$row->{'c.latsec'}.$row->{'c.latdec'}.$row->{'c.latdir'}.$row->{'c.lngdeg'}.$row->{'c.lngmin'}.$row->{'c.lngsec'}.$row->{'c.lngdec'}.$row->{'c.lngdir'};
+                $lump_string .= $row->{'c.latdeg'}."|".$row->{'c.latmin'}."|".$row->{'c.latsec'}."|".$row->{'c.latdec'}."|".$row->{'c.latdir'}."|".$row->{'c.lngdeg'}."|".$row->{'c.lngmin'}."|".$row->{'c.lngsec'}."|".$row->{'c.lngdec'}."|".$row->{'c.lngdir'};
             }
             if ( $q->param('lump_by_interval') eq 'YES' )    {
-                $lump_string .= $row->{'c.max_interval_no'}.$row->{'c.min_interval_no'};
+                $lump_string .= $row->{'c.max_interval_no'}."|".$row->{'c.min_interval_no'};
             }
             if ( $q->param('lump_by_strat_unit') eq 'group' )    {
                 if ( $row->{'c.geological_group'} )	{
@@ -2041,19 +2072,7 @@ sub queryDatabase {
             }
             $occseen{$row->{'collection_no'}.$genus_string}++;
         }
-        if ( $exclude == 0) {
-            if ($q->param('output_data') eq 'genera' || $q->param('output_data') eq 'species') {
-                if ($row->{'specimens_exist'}) {
-                    my $genus_string = $row->{'o.genus_name'};
-                    if ($q->param('output_data')  eq 'species') {
-                        $genus_string .= " $row->{'o.species_name'}";
-                    } 
-                    push @{$occs_by_taxa{$genus_string}}, $row->{'o.occurrence_no'};
-                }
-            }
-            push @allDataRows, $row;
-        }
-        if ( $exclude == 0 && $lump == 0)    {
+        if ( $lump == 0) {
             push @lumpedDataRows, $row;
         }
     }

@@ -484,8 +484,13 @@ strat unit:
   <select name="occurrence_count_qualifier"><option>less</option><option>more</option></select> than</td>
 <td valign=top class="small" colspan=3><input name=occurrence_count type="text" size="12"> occurrences</td></tr>
 
-
 <tr class="lightGrey">
+<td valign=top class="small" nowrap>Exclude collections with
+  <select name="abundance_count_qualifier"><option>less</option><option>more</option></select> than</td>
+<td valign=top class="small" colspan=3><input name=abundance_count type="text" size="12"> specimens/individuals</td></tr>
+
+
+<tr>
 <td valign=top class="small">Exclude collections with subset collections? </td>
 <td valign=top class="small" colspan=3><select name="exclude_superset"><option selected value="NO">no, include them</option><option value="YES">yes, exclude them</option></select></td></tr>
 
@@ -569,9 +574,9 @@ strat unit:
 <td valign=top class="small">
 <input type=checkbox name='genus_reso_aff.' value="YES" checked>aff.
 <input type=checkbox name='genus_reso_cf.' value="YES" checked>cf.
-<input type=checkbox name='genus_reso_ex_gr.' value="YES" checked>ex gr.
+<input type=checkbox name='genus_reso_ex gr.' value="YES" checked>ex gr.
 <input type=checkbox name='genus_reso_n. gen.' value="YES" checked>n. gen.
-<input type=checkbox name='genus_reso_sensu_lato' value="YES" checked>sensu lato
+<input type=checkbox name='genus_reso_sensu lato' value="YES" checked>sensu lato
 <input type=checkbox name='genus_reso_?' value="YES" checked>?
 <input type=checkbox name='genus_reso_"' value="YES" checked>"
 </td></tr>
