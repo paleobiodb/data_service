@@ -352,7 +352,7 @@ sub mapFinishImage {
     # used to draw a short white rectangle across the bottom for the caption
     #  here, but this is no longer needed
     if ( ! $q->param('linecommand') )	{
-        $im->stringFT($col{'black'},$FONT,10,0,5,$height+12,"plotting software 2002-2006 J. Alroy");
+        $im->stringFT($col{'unantialiased'},$FONT,10,0,5,$height+12,"plotting software 2002-2006 J. Alroy");
     }
     print AI "0 To\n";
     printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+5,$AITOP-$height-8;
@@ -399,15 +399,14 @@ sub mapFinishImage {
          #} else	{
          #    $im->string(gdTinyFont,5,$height+13,$counter,$col{'black'});
          #}
-          $im->stringFT($col{'black'},$FONT,11,0,int($width/2)-14,$height+12,$counter);
+          $im->stringFT($col{'unantialiased'},$FONT,11,0,int($width/2)-14,$height+12,$counter);
     }
 
     if ( $self->{maptime} > 0 && ! $q->param('linecommand') )	{
-$im->setAntiAliased($col{'black'});
         if ( $width > 300 )	{
-            $im->stringFT($col{'black'},$FONT,10,0,$width-160,$height+12,"paleogeography 2002 C. R. Scotese");
+            $im->stringFT($col{'unantialiased'},$FONT,10,0,$width-160,$height+12,"paleogeography 2002 C. R. Scotese");
         } else	{
-            $im->stringFT($col{'black'},$FONT,10,0,$width-160,$height+22,"paleogeography 2002 C. R. Scotese");
+            $im->stringFT($col{'unantialiased'},$FONT,10,0,$width-160,$height+22,"paleogeography 2002 C. R. Scotese");
             $scoteseoffset = 12;
         }
         print AI "0 To\n";
@@ -1042,6 +1041,9 @@ sub mapSetupImage {
 
     $sizestring = $width . "x";
     $sizestring .= $height + 12;
+
+    # this color is needed to fool GD into NOT anti-aliasing fonts (!)
+    $col{'unantialiased'} = $im->colorAllocate(-1,-1,-1);
 
     $col{'white'} = $im->colorAllocate(255,255,255);
     $aicol{'white'} = "0.00 0.00 0.00 0.00 K";
