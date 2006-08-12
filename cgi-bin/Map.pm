@@ -21,6 +21,8 @@ my $BRIDGE_HOME = "/cgi-bin/bridge.pl";
 my $GIF_HTTP_ADDR = "/public/maps";               # For maps
 my $COAST_DIR = $ENV{MAP_COAST_DIR};        # For maps
 my $GIF_DIR = $ENV{MAP_GIF_DIR};      # For maps
+my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
+my $FONT = "$DATAFILE_DIR/fonts/orangeki.ttf";
 my $PI = 3.14159265;
 my $C72 = cos(72 * $PI / 180);
 my $AILEFT = 100;
@@ -350,8 +352,7 @@ sub mapFinishImage {
     # used to draw a short white rectangle across the bottom for the caption
     #  here, but this is no longer needed
     if ( ! $q->param('linecommand') )	{
-        $im->arc(97,$height+7.5,9,9,0,360,$col{'black'});
-        $im->string(gdTinyFont,5,$height+3,"plotting software c 2002-2006 J. Alroy",$col{'black'});
+        $im->stringFT($col{'black'},$FONT,10,0,5,$height+12,"plotting software 2002-2006 J. Alroy");
     }
     print AI "0 To\n";
     printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+5,$AITOP-$height-8;
@@ -386,26 +387,27 @@ sub mapFinishImage {
          } else	{
              $counter = $self->{maptime} . " Ma";
          }
-         if ( ! $q->param('linecommand') && $width > 300 )	{
-             $im->string(gdTinyFont,5,$height-6,$counter,$col{'black'});
-         } elsif ( $q->param('projection') eq "orthographic" )	{
-             $im->string(gdTinyFont,30,$height-30,$counter,$col{'black'});
-         } elsif ( $q->param('projection') eq "Eckert IV" )	{
-             $im->string(gdTinyFont,5,$height-45,$counter,$col{'black'});
-         } elsif ( $width > 300 )	{
-             $im->string(gdTinyFont,5,$height+1,$counter,$col{'black'});
-         } else	{
-             $im->string(gdTinyFont,5,$height+13,$counter,$col{'black'});
-        }
+         # some of this might be needed for producing animations, not sure
+         #if ( ! $q->param('linecommand') && $width > 300 )	{
+         #    $im->string(gdTinyFont,5,$height-6,$counter,$col{'black'});
+         #} elsif ( $q->param('projection') eq "orthographic" )	{
+         #    $im->string(gdTinyFont,30,$height-30,$counter,$col{'black'});
+         #} elsif ( $q->param('projection') eq "Eckert IV" )	{
+         #    $im->string(gdTinyFont,5,$height-45,$counter,$col{'black'});
+         #} elsif ( $width > 300 )	{
+         #    $im->string(gdTinyFont,5,$height+1,$counter,$col{'black'});
+         #} else	{
+         #    $im->string(gdTinyFont,5,$height+13,$counter,$col{'black'});
+         #}
+          $im->stringFT($col{'black'},$FONT,11,0,int($width/2)-14,$height+12,$counter);
     }
 
     if ( $self->{maptime} > 0 && ! $q->param('linecommand') )	{
+$im->setAntiAliased($col{'black'});
         if ( $width > 300 )	{
-            $im->arc($width-103,$height+7.5,9,9,0,360,$col{'black'});
-            $im->string(gdTinyFont,$width-180,$height+3,"paleogeography c 2002 C. R. Scotese",$col{'black'});
+            $im->stringFT($col{'black'},$FONT,10,0,$width-160,$height+12,"paleogeography 2002 C. R. Scotese");
         } else	{
-            $im->arc($width-103,$height+17.5,9,9,0,360,$col{'black'});
-            $im->string(gdTinyFont,$width-180,$height+13,"paleogeography c 2002 C. R. Scotese",$col{'black'});
+            $im->stringFT($col{'black'},$FONT,10,0,$width-160,$height+22,"paleogeography 2002 C. R. Scotese");
             $scoteseoffset = 12;
         }
         print AI "0 To\n";
@@ -1021,14 +1023,14 @@ sub mapSetupImage {
 
     if ( $width > 300 )	{
         if (!$im)  {
-            $im = new GD::Image($width,$height+14,1);
+            $im = new GD::Image($width,$height+16,1);
         }
-        $totalheight = $height + 14;
+        $totalheight = $height + 16;
     } else	{
         if (!$im)  {
-            $im = new GD::Image($width,$height+24,1);
+            $im = new GD::Image($width,$height+26,1);
         }
-        $totalheight = $height + 24;
+        $totalheight = $height + 26;
     }
 
     open AI,">$GIF_DIR/$ainame";
