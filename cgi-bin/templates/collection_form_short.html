@@ -1,0 +1,663 @@
+<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+var bad_info = ""; // Global variable
+
+function checkFields() {
+    doCheckFieldsBasicInfo();
+    doCheckFieldsGeography();
+    doCheckFieldsStratigraphy();
+    doCheckFieldsGeology();
+    doCheckFieldsTaphonomy();
+    doCheckFieldsCollectingInfo();
+    
+    var returnVal = checkIntervalNames(1);
+    if (!returnVal) {
+        return false;
+    }
+
+    if ( bad_info != "" ) { 
+        bad_info = "WARNING!\n" +
+                      bad_info + "\n\nPlease make corrections and resubmit.";
+        alert(bad_info);
+        bad_info = "";
+        return false; 
+    }    
+    return true;
+}
+
+function doCheckFieldsBasicInfo() {
+    var frm = document.forms[0];
+
+    // Deleting the primary reference is not allowed.
+    // Note that the length of the radio group (or checkbox group) equals 
+    // the number of radio buttons regardless of their checked status.
+    // Note the the length of each may be different since there's not
+    // necessarily a one to one correspondence.
+    if(frm.secondary_reference_no && frm.delete_ref){
+        var i;
+        var radio_vals = new Array();
+        for(i=0; i<frm.secondary_reference_no.length; i++){
+            radio_vals[i] = parseInt(frm.secondary_reference_no[i].value);
+        }
+        var checked_vals = new Array();
+        for(i=0; i<frm.delete_ref.length; i++){
+            checked_vals[i] = parseInt(frm.delete_ref[i].value);
+        }
+        var j;
+        for(i=0; i<radio_vals.length; i++){
+            for(j=0; j<checked_vals.length; j++){
+                if(radio_vals[i] == checked_vals[j] && frm.secondary_reference_no[i].checked && frm.delete_ref[j].checked){
+                    bad_info += "\no The primary reference can't be deleted";
+                }
+            }
+        }
+    } // if secondary_reference_no
+
+    if ( frm.collection_name.value == "") {
+        bad_info += "\no Collection name is required";
+    }
+
+    var IGSNre = /^[a-zA-Z]{3}[0-9a-zA-Z]{6}$/i;
+    if (frm.igsn.value != '' && IGSNre.test(frm.igsn.value) == false) {
+        bad_info += "\no The IGSN number doesn't appear to be valid";
+    }
+
+    if ( frm.collection_type.selectedIndex == 0) {
+        bad_info += "\no Reason for describing collection is required";
+    }
+}
+
+function doCheckFieldsCollectingInfo() {
+    var frm = document.forms[0];
+
+    if ( frm.collection_size.value != "" ) {
+        var	numeric = /^[0-9]*$/;
+        if ( numeric.test ( frm.collection_size.value ) == false ) {
+            bad_info += "\no Collection size must be numeric";
+        }
+    }
+}
+
+function doCheckFieldsGeography() {
+    var frm = document.forms[0];
+
+    if ( frm.country.selectedIndex == 0 ) {
+        bad_info += "\no Country is required";
+    }
+    var stateEntered = /.* state.*/i;
+    var provinceEntered = /.* province.*/i;
+    var stateAbbreviation = /[A-Z][A-Z]/;
+    if ( frm.state.value == "" ) {
+        // This is a squirrely way to do this, but otherwise some browsers fail
+        var index = frm.country.selectedIndex;
+        if ( index != 0 ) {
+            if ( frm.country.options[index].text == "United States") {
+                bad_info += "\no U.S. state is required";
+            }
+        }
+    }
+    else if ( stateEntered.test (frm.state.value) == true )	{
+        bad_info += "\no Don't put \"state\" can't appear in the state field";
+    }
+    else if ( provinceEntered.test (frm.state.value) == true )	{
+        bad_info += "\no Don't put \"province\" in the state field";
+    }
+    if ( stateAbbreviation.test (frm.state.value) == true )	{
+        bad_info += "\no Enter the full name of the state";
+    }
+    var integerReq = /^[0-9]+$/;
+    var integerOpt = /^[0-9]*$/;
+    if ( integerReq.test (frm.latdeg.value) == false ) {
+        bad_info += "\no Latitude must be an integer";
+    }
+    if ( parseInt(frm.latdeg.value) > 90 )	{
+        bad_info += "\no Latitude must be less than 90";
+    }
+    if ( integerReq.test (frm.lngdeg.value) == false ) {
+        bad_info += "\no Longitude must be an integer";
+    }
+    if ( parseInt(frm.lngdeg.value) > 180 )	{
+        bad_info += "\no Longitude must be less than 180";
+    }
+    if ( integerOpt.test (frm.latmin.value) == false ) {
+        bad_info += "\no Latitude minutes must be integer";
+    } 
+    if ( frm.latmin.value != "" && parseInt(frm.latmin.value) >= 60)	{
+        bad_info += "\no Latitude minutes must be less than 60";
+    }
+    if ( integerOpt.test (frm.lngmin.value) == false ) {
+        bad_info += "\no Longitude minutes must be an integer";
+    }
+    if ( frm.lngmin.value != "" && parseInt(frm.lngmin.value) >= 60)	{
+        bad_info += "\no Longitude minutes must be less than 60";
+    }
+
+    // added decimal vs. minutes checks JA 18.5.04
+    if ( frm.latdec.value != "" && frm.latmin.value != "" ) {
+        bad_info += "\no You can't enter both decimal and minutes/seconds latitude values";
+    }
+    if ( frm.lngdec.value != "" && frm.lngmin.value != "" ) {
+        bad_info += "\no You can't enter both decimal and minutes/seconds longitude values";
+    }
+
+    var index = frm.country.selectedIndex;
+    var indexLat = frm.latdir.selectedIndex;
+    var indexLng = frm.lngdir.selectedIndex;
+    if ( index != 0 ) {
+        if ( ( frm.country.options[index].text == "United States" ||
+               frm.country.options[index].text == "Canada" ||
+               frm.country.options[index].text == "Mexico" ) &&
+             ( frm.latdir.options[indexLat].text != "North" ||
+               frm.lngdir.options[indexLng].text != "West" ) ) {
+            bad_info += "\no Lat and long are outside this country";
+        }
+        else if ( ( frm.country.options[index].text == "Germany" ||
+              frm.country.options[index].text == "China" ||
+              frm.country.options[index].text == "Egypt" ||
+              frm.country.options[index].text == "Ethiopia" ||
+              frm.country.options[index].text == "Japan" ||
+              frm.country.options[index].text == "Russian Federation" ||
+              frm.country.options[index].text == "India" ) &&
+             ( frm.latdir.options[indexLat].text != "North" ||
+               frm.lngdir.options[indexLng].text != "East" ) ) {
+            bad_info += "\no Lat and long are outside this country";
+        }
+        else if ( ( frm.country.options[index].text == "Australia" ||
+              frm.country.options[index].text == "Tanzania, United Republic of" ||
+              frm.country.options[index].text == "South Africa" ) &&
+             ( frm.latdir.options[indexLat].text != "South" ||
+               frm.lngdir.options[indexLng].text != "East" ) ) {
+            bad_info += "\no Lat and long are outside this country";
+        }
+        else if ( ( frm.country.options[index].text == "Argentina" ||
+              frm.country.options[index].text == "Chile" ) &&
+             ( frm.latdir.options[indexLat].text != "South" ||
+               frm.lngdir.options[indexLng].text != "West" ) ) {
+            bad_info += "\no Lat and long are outside this country";
+        }
+        else if ( ( frm.country.options[index].text == "Algeria" ||
+              frm.country.options[index].text == "France" ||
+              frm.country.options[index].text == "Spain" ||
+              frm.country.options[index].text == "United Kingdom" ) &&
+             ( parseInt(frm.lngdeg.value) > 18 ||
+               frm.latdir.options[indexLat].text != "North" ) ) {
+            bad_info += "\no Lat and long are outside this country";
+        }
+        // PM 09/19/02 Changed the "West" check to longitude from latitude
+        else if ( frm.country.options[index].text == "Brazil" &&
+             ( parseInt(frm.latdeg.value) > 35 ||
+               frm.lngdir.options[indexLng].text != "West" ) ) {
+            bad_info += "\no Lat and long are outside this country";
+        }
+        else if ( ( frm.country.options[index].text == "Kenya" ||
+              frm.country.options[index].text == "Uganda" ||
+              frm.country.options[index].text == "Indonesia" ) &&
+             ( parseInt(frm.latdeg.value) > 15 ||
+               frm.lngdir.options[indexLng].text != "East" ) ) {
+            bad_info += "\no Lat and long are outside this country";
+        }
+    }
+
+
+}
+                                                                                                                                     
+function doCheckFieldsStratigraphy() {
+    var frm = document.forms[0];
+
+    if ( frm.eml_max_interval.value == frm.eml_min_interval.value && frm.max_interval.value == frm.min_interval.value )	{
+        bad_info += "\no If the maximum and minimum time intervals are the same, leave the minimum blank";
+    }
+
+    var hasgroup = /group/i;
+    if ( hasgroup.test ( frm.geological_group.value ) == true )      {
+        bad_info += "\no A group name can't include the word \"group\"";
+    }
+    var hasgr = /gr\./i;
+    if ( hasgr.test ( frm.geological_group.value ) == true )      {
+        bad_info += "\no A group name can't include the word \"gr.\"";
+    }
+    var hasformation = /formation/i;
+    if ( hasformation.test ( frm.formation.value ) == true )      {
+        bad_info += "\no A formation name can't include the word \"formation\"";
+    }
+    var hasfm = /fm\./i;
+    if ( hasfm.test ( frm.formation.value ) == true )      {
+        bad_info += "\no A formation name can't include the word \"fm.\"";
+    }
+    var hasmember = /member/i;
+    if ( hasmember.test ( frm.member.value ) == true )      {
+        bad_info += "\no A member name can't include the word \"member\"";
+    }
+    var hasmbr = /mbr\./i;
+    if ( hasmbr.test ( frm.member.value ) == true )      {
+        bad_info += "\no A member name can't include the word \"mbr.\"";
+    }
+
+    var haslocalsection = /[A-Za-z0-9]/;
+    var haslocalbed = /[A-Za-z0-9]/;
+    if ( haslocalsection.test ( frm.localsection.value ) == true && haslocalbed.test ( frm.localbed.value ) == false )	{
+        bad_info += "\no If you enter a local section name, also enter a local bed";
+    }
+    else if ( haslocalsection.test ( frm.localsection.value ) == false && haslocalbed.test ( frm.localbed.value ) == true )	{
+        bad_info += "\no If you enter a local bed, also enter a local section name";
+    }
+    var hasregionalsection = /[A-Za-z0-9]/;
+    var hasregionalbed = /[A-Za-z0-9]/;
+    if ( hasregionalsection.test ( frm.regionalsection.value ) == true && hasregionalbed.test ( frm.regionalbed.value ) == false )	{
+        bad_info += "\no If you enter a regional section name, also enter a regional bed";
+    }
+    else if ( hasregionalsection.test ( frm.regionalsection.value ) == false && hasregionalbed.test ( frm.regionalbed.value ) == true )	{
+        bad_info += "\no If you enter a regional bed, also enter a regional section name";
+    }
+}
+
+function doCheckFieldsGeology() {
+    var frm = document.forms[0];
+    var index = frm.environment.selectedIndex;
+    var hasdashes = /--/i;
+
+    if ( frm.environment.options[index].text == "" || hasdashes.test ( frm.environment.value ) == true ) {
+        bad_info += "\no Environment is required";
+    }
+}
+
+function doCheckFieldsTaphonomy() {
+    var frm = document.forms[0];
+    var full_count = 0;
+
+    if (frm.art_whole_bodies.options[frm.art_whole_bodies.selectedIndex].text == "all") { 
+        full_count  += 1;
+    }    
+    if (frm.disart_assoc_maj_elems.options[frm.disart_assoc_maj_elems.selectedIndex].text == "all") {
+        full_count  += 1;
+    }
+    if (frm.disassoc_maj_elems.options[frm.disassoc_maj_elems.selectedIndex].text == "all") {
+        full_count  += 1;
+    }
+    if (frm.disassoc_minor_elems.options[frm.disassoc_minor_elems.selectedIndex].text == "all") {
+        full_count  += 1;
+    } 
+    if (full_count > 1) {
+        bad_info += "\no Only one pulldown in the \"Articulation/element representation\" section be set to \"all\"";
+    }
+    
+    
+}
+
+// End -->
+</script>
+
+<div align="center"><h2>
+<span id="page_title"></span>
+</h2></div>
+
+   <div align=center>
+   <table cellpadding=0 cellspacing=0 border=0 width=600><tr>
+   <td id="tab1" class="tabOff" class="verysmall" style="white-space: nowrap;"
+      onClick = "showPanel(1);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(1)">Basic Info</td>
+   <td id="tab2" class="tabOff" class="verysmall" style="white-space: nowrap;"
+      onClick = "showPanel(2);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(2)">Geography</td>
+   <td id="tab3" class="tabOff" class="verysmall" style="white-space: nowrap;"
+      onClick = "showPanel(3);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(3)">Stratigraphy</td>
+   <td id="tab4" class="tabOff" class="verysmall" style="white-space: nowrap;"
+      onClick = "showPanel(4);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(4)">Geology</td>
+   <td id="tab5" class="tabOff" class="verysmall" style="white-space: nowrap;"
+      onClick = "showPanel(5);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(5)">Other</td>
+   </tr></table>
+   </div>
+
+  <form name="form" action="$exec_url" method="post" onSubmit="return checkFields();">
+  <span id="page_target"></span>
+  <input id="use_primary" type="hidden">
+  <input id="reference_no" type="hidden">
+  <input id="collection_no" type="hidden">
+
+<div id="panel1" class="panel">
+  <div align="center" style="margin-top: 2em;">
+
+  <p style="margin-bottom: 2em;">
+    <span class="required">Required fields are in red.</span> 
+	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
+  </p>
+  
+  <table border=0 cellpadding=0 cellspacing=0><tr><td>
+
+  <table border=0 width=620>
+    <tr>
+      <td valign="top" colspan="2"><b>Research group(s):</b></td>
+      <td colspan="2">
+        <span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="decapod"> decapod</span>
+        <span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="divergence"> divergence</span>
+	<span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="ETE"> ETE</span>
+	<span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="marine invertebrate"> marine invertebrate</span>
+	<span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="micropaleontology"> micropaleontology</span>
+	<span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="PACED"> PACED</span>
+	<span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="paleobotany"> paleobotany</span>
+	<span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="paleoentomology"> paleoentomology</span>
+	<span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="taphonomy"> taphonomy</span>
+	<span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="vertebrate"> vertebrate</span>
+      </td>
+    </tr>
+  </table>
+  <br>
+  
+  <table>
+    <tr>
+      <td>
+      <span class="required">Access level:</span>
+      <span class="verysmall"><select class="verysmall" id="access_level"></select></span>
+      &nbsp;&nbsp;
+      <span class="required">Release date:</span>
+      <span class="verysmall"><select class="verysmall" id="release_date"></select></span>
+      <br>
+      <br>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <span class="required">Collection name</span> (truncated at 80 characters):<br>
+        <input id="collection_name" size=50 maxlength=80>
+      </td>
+    </tr>
+  </table>
+
+  <p>Current primary reference:<br>
+  <span id="ref_string"></span>
+  </p>
+  <div show="secondary_reference_string"> <p>Secondary references <span class=tiny>(select to make primary):</span><br><span id="secondary_reference_string"></span></div>
+  <div show="session_reference_string"> <p>Current session reference <span class=tiny>(select to make primary):</span><br> <span id="session_reference_string"></span></div>
+
+  <p>
+    <span class="required">Author's main reason for describing collection:</span> <span class="verysmall"><select class="verysmall" id="collection_type"></select></span> analysis
+  </p>
+
+  <p>
+     <div align="center"><span id="page_submit_button"></span></div>
+  </p>
+  <br>
+  <span id="page_footer"></span>
+  </td></tr></table></div>
+</div>
+
+<div id="panel2" class="panel">
+  <div align="center" style="margin-top: 2em;">
+
+  <table border=0 cellpadding=0 cellspacing=0><tr><td>
+
+  <table border=0>
+    <tr>
+      <td>
+        <span class="required">Country*</span>: <br><span class="verysmall"><select class="verysmall" id="country"></select></span>
+      </td>
+      <td>
+        <span class="required">State*</span>/province: <br><input id="state" maxlength=255>
+      </td>
+      <td>
+        County/parish/etc.: <br><input id="county" maxlength=255>
+      </td>
+    </tr>
+  </table>
+  
+  <i><p class="verysmall">*State is required for collections 
+  within the United States.</i></p>
+  
+  <table>
+    <tr>
+      <td></td>
+      <td><span class="required verysmall">Degrees</span></td>
+      <td><span class="verysmall">Minutes</span></td>
+      <td><span class="verysmall">Seconds</span></td>
+      <td><span class="verysmall">Decimal*</span></td>
+      <td><span class="required verysmall">Direction</span></td>
+    </tr>
+    <tr>
+      <td>Latitude</td>
+      <td><input id="latdeg" size=5 maxlength=3></td>
+      <td><input id="latmin" size=3 maxlength=2></td>
+      <td><input id="latsec" size=3 maxlength=2></td>
+      <td><input id="latdec" size=5 maxlength=8></td>
+      <td><span class="verysmall"><select class="verysmall" id="latdir"></select></span>
+    </tr>
+    <tr>
+      <td>Longitude</td>
+      <td><input id="lngdeg" size=5 maxlength=3></td>
+      <td><input id="lngmin" size=3 maxlength=2></td>
+      <td><input id="lngsec" size=3 maxlength=2></td>
+      <td><input id="lngdec" size=5 maxlength=8></td>
+      <td><span class="verysmall"><select class="verysmall" id="lngdir"></select></span></div></td>
+    </tr>
+  </table>
+
+  <p class="verysmall"><i>*Enter either minutes-seconds or decimal value, but not both.<br>
+  See the <A HREF="javascript:tipsPopup('/public/tips/tips.html#Coordinates')">tip sheet</A>
+  for web sites that provide coordinate data.</i></p>
+  <p>
+  Basis of coordinate: <span class="verysmall"><select class="verysmall" id="latlng_basis"></select></span>
+  <p>
+  
+  <table>
+    <tr>
+      <td>
+        Scale of geographic resolution: <span class="verysmall"><select class="verysmall" id="geogscale"></select></span>
+      </td>
+    </tr>
+  </table>
+  
+  <p>
+  Location details (quadrangle, township and range, etc.):
+  <br>
+  <textarea id="geogcomments" name=geogcomments rows=4 wrap=virtual cols=80></textarea>
+
+  <p>
+     <div align="center"><span id="page_submit_button"></span></div>
+  </p>
+  <br>
+  <span id="page_footer"></span>
+    </td></tr></table></div>
+</div>
+
+<div id="panel3" class="panel">
+  <div align="center" style="margin-top: 2em;">
+
+  <table border=0 cellpadding=0 cellspacing=0><tr><td>
+
+  <table border=0>
+     <tr>
+      <td><span class="required"><nobr>Maximum (oldest) time interval:<nobr></span>&nbsp;&nbsp;&nbsp;&nbsp;<br>
+      <span class="verysmall"><select class="verysmall" id="eml_max_interval"></select></span>
+      <input id="max_interval" maxlength=255 onKeyUp="doComplete(event, this, intervalNames(),0);">
+      </td>
+      <td>Minimum (youngest) time interval:<br><span class="verysmall"><select class="verysmall" id="eml_min_interval"></select></span>
+                        <input id="min_interval" maxlength=255 onKeyUp="doComplete(event, this, intervalNames(),0);">
+      </td>
+    </tr>
+
+    <tr>
+      <td>
+      <i><div show="period_max"> Period (oldest): <span id="emlperiod_max"></span> <span id="period_max"></span> </div></i>
+      </td>
+      <td>
+      <i><div show="period_min"> Period (youngest): <span id="emlperiod_min"></span> <span id="period_min"></span> </div></i>
+      </td>
+    </tr>
+    <tr>
+      <td>
+      <i><div show="epoch_max"> Epoch/series (oldest): <span id="emlepoch_max"></span> <span id="epoch_max"></span> </div></i>
+      </td>
+      <td>
+      <i><div show="epoch_min"> Epoch/series (youngest): <span id="emlepoch_min"></span> <span id="epoch_min"></span> </div></i>
+      </td>
+    </tr>
+    <tr>
+      <td>
+      <i><div show="intage_max"> International age/stage (oldest): <span id="emlintage_max"></span> <span id="intage_max"></span> </div></i>
+      </td>
+      <td>
+      <i><div show="intage_min"> International age/stage (youngest): <span id="emlintage_min"></span> <span id="intage_min"></span> </div></i>
+      </td>
+    </tr>
+    <tr>
+      <td>
+      <i><div show="locage_max"> Local age/stage (oldest): <span id="emllocage_max"></span> <span id="locage_max"></span> </div></i>
+      </td>
+      <td>
+      <i><div show="locage_min"> Local age/stage (youngest): <span id="emllocage_min"></span> <span id="locage_min"></span> </div></i>
+      </td>
+    </tr>
+    <tr>
+      <td width="50%">
+      <i><div show="zone"> Zone:<br><span id="zone"></span> </div></i>
+      </td>
+    </tr>
+
+  </table>
+ 
+  <table border=0>
+    <tr>
+      <td>Formation:<br><input id="formation" maxlength=255></td>
+      <td>Member:<br><input id="member" maxlength=255></td>
+      <td>Scale of stratigraphic resolution:<br><span class="verysmall"><select class="verysmall" id="stratscale"></select></span></div></td>
+    </tr>
+    <tr>
+      <td>Local section name:<br><input id="localsection" maxlength=255></td>
+      <td valign="bottom">Bed/horizon:<br><input id="localbed" maxlength=255>
+      <span class="verysmall"><select class="verysmall" id="localbedunit"></select></span></div>&nbsp;&nbsp;</td>
+      <td>Numbered from:<br><span class="verysmall"><select class="verysmall" id="localorder"></select></span></div></td>
+    </tr>
+  </table>
+  
+  <p>
+    Comments about stratigraphy:<br><textarea id="stratcomments" rows=4 wrap=virtual cols=80></textarea>
+  </p>
+
+  <p>
+     <div align="center"><span id="page_submit_button"></span></div>
+  </p>
+  <br>
+  <span id="page_footer"></span>
+  </td></tr></table></div>   
+</div>
+
+<div id="panel4" class="panel">
+  <div align="center" style="margin-top: 2em;">
+
+<table border=0 cellpadding=0 cellspacing=0><tr><td>
+
+  <h4>Primary lithology</h4>
+  <span class="verysmall"><select class="verysmall" id="lithification"></select></span>
+    <span class="verysmall"><select class="verysmall" id="lithology1"></select></span>
+  &nbsp;Fossils collected from this lithology?<input id="fossilsfrom1" type=checkbox value="Y">
+  <br>
+  <i><p class="verysmall">See the 
+  <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">tip sheet</A>
+  for instructions.</i></p>
+  <p>
+  <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">Lithology adjectives</A>:
+  <br>
+  
+  <table border=0>
+    <tr>
+      <td>
+        <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
+        <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
+        <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
+        <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
+      </td>
+    </tr>
+  </table>
+
+  <H4>Secondary lithology</H4>
+  <span class="verysmall"><select class="verysmall" id="lithification2"></select></span>
+	<span class="verysmall"><select class="verysmall" id="lithology2"></select></span>
+  &nbsp;Fossils collected from this lithology?<input id="fossilsfrom2" type=checkbox value="Y">
+  <p>
+  <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">Lithology adjectives</A>:
+  <br>
+  
+  <table border=0>
+    <tr>
+      <td>
+        <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
+        <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
+        <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
+        <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
+      </td>
+    </tr>
+  </table>
+  
+  <p>
+  Original, complete description of lithology:<br><textarea id="lithdescript" rows=4 wrap=virtual cols=80></textarea>
+  </p>
+
+  <p>
+     <div align="center"><span id="page_submit_button"></span></div>
+  </p>
+  <span id="page_footer"></span>
+  </td></tr></table></div>  
+</div>
+
+<div id="panel5" class="panel">
+  <div align="center" style="margin-top: 2em;">
+
+<table border=0 cellpadding=0 cellspacing=0><tr><td>
+
+  <h4><span class="required">Environment</span>:
+        <span class="verysmall"><select class="verysmall" id="environment"></select></span></span>
+  </h4>
+  
+  <span class="verysmall">
+        Read about
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">carbonate</A>,
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#SiliciMarine')">siliciclastic</A> or
+  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Terrestrial')">terrestial</A> environments.
+  </span>
+  
+  <p>
+    Comments on environment:
+    <br>
+    <textarea id="geology_comments" rows=4 wrap=virtual cols=80></textarea>
+  </p>
+  
+  <p>
+     <div align="center"><span id="page_submit_button"></span></div>
+  </p>
+
+
+  <h4><span class="required">Taxonomic list</h4>
+
+  <p><span class="required"><A HREF="javascript:tipsPopup('/public/tips/tips.html#AssemblageComponents')">Assemblage components</A></span>:
+      <input id="assembl_comps" type=checkbox value="macrofossils"> macrofossils
+      <input id="assembl_comps" type=checkbox value="mesofossils"> mesofossils
+      <input id="assembl_comps" type=checkbox value="microfossils"> microfossils
+  </p>
+
+  <p>
+    Comments on the taxonomic list:<br><textarea id="taxonomy_comments" rows=4 wrap=virtual cols=80></textarea>
+  </p>
+
+  <p>
+     <div align="center"><span id="page_submit_button"></span></div>
+  </p>
+  <br>
+  <span id="page_footer"></span>
+  </td></tr></table></div>
+
+</div>
+  
+</form>
+
+<script language="JavaScript">
+    showPanel(1);
+</script>
