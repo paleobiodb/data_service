@@ -89,6 +89,7 @@ H6 {font-size: .9em;}
 
 .verytiny {  font-size : 0.7em; text-decoration:none; }
 .tiny {  font-size : 0.8em; text-decoration:none; }
+.verysmall {  font-size : 0.85em; text-decoration:none; }
 .small {  font-size : 0.9em; text-decoration:none; }
 .medium {  font-size : 1.0em; text-decoration:none; }
 .large {  font-size : 1.1em; text-decoration:none; }
@@ -392,7 +393,7 @@ div.emphasized {
 	padding: 0.5em 0.5em 0.5em 0.5em;
 
     font-weight: bold;	
-	color: red;
+	color: #D00000;
 	background-color: #FFFF80;
 
 	width:auto;
@@ -402,7 +403,7 @@ div.emphasized {
 }
 
 .errorTitle {
-	color:red;
+	color: #D00000;
 	font-weight: bold;
 	font-size: 120%;
 	text-align: center;	
@@ -427,7 +428,7 @@ div.emphasized {
 
 .errorTitle {
 	background-color: #FFFF60;
-    color: red;
+    color: #D00000;
     font-size: 1.2em;
     font-weight: bold;
 	padding: 0.25em 0.25em 0.25em 0.25em;
@@ -461,9 +462,9 @@ div.emphasized {
 
 
 /* format for required entries in forms */
-.red { color: red; }
+.red { color: #D00000; }
 .required {
-	color: red;
+	color: #D00000;
 	font-weight: bold;	
 }
 
