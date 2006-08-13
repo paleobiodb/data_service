@@ -1729,14 +1729,6 @@ sub queryDatabase {
 
     # Generate this hash if need be
     my %all_taxa = ();
-    foreach my $row (@dataRows) {
-        if ($row->{'re.taxon_no'}) {
-            $all_taxa{$row->{'re.taxon_no'}} = 1; 
-        } elsif ($row->{'o.taxon_no'}) {
-            $all_taxa{$row->{'o.taxon_no'}} = 1;
-        }
-    }
-    my @taxon_nos = keys %all_taxa;
 
     # Replace with senior synonym data
     my %ss_taxon_nos = ();
@@ -1764,6 +1756,17 @@ sub queryDatabase {
             }
         }
     }
+
+    # section moved below the above from above the above because senior
+    #  synonyms need to be classified as well JA 13.8.06
+    foreach my $row (@dataRows) {
+        if ($row->{'re.taxon_no'}) {
+            $all_taxa{$row->{'re.taxon_no'}} = 1; 
+        } elsif ($row->{'o.taxon_no'}) {
+            $all_taxa{$row->{'o.taxon_no'}} = 1;
+        }
+    }
+    my @taxon_nos = keys %all_taxa;
 
     # Ecotaph/preservation/parent data
     my %master_class;
@@ -2109,9 +2112,10 @@ sub queryDatabase {
 
         if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
             # Setup up family/name/class fields
-            if ($q->param("occurrences_class_name") eq "YES" || 
+            if (($q->param("occurrences_class_name") eq "YES" || 
                 $q->param("occurrences_order_name") eq "YES" ||
-                $q->param("occurrences_family_name") eq "YES") {
+                $q->param("occurrences_family_name") eq "YES") &&
+                $row->{'o.taxon_no'} > 0) {
                 my @parents = @{$master_class{$row->{'o.taxon_no'}}};
                 my ($class, $order, $family) = ("","","");
                 foreach my $parent (@parents) {
