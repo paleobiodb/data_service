@@ -21,14 +21,19 @@ if ( checkBrowser('msie') )	{
 	var offbullet = '<div class="homePageOffBullet">&#9655;<\/div>';
 }
 
-var WhatIs = '<p>' +
+var corners = '<div><img src="/public/homeTextBox_corner_TL.png" style="position: relative; top: -21px; left: -21px;"><\/div><div><img src="/public/homeTextBox_corner_TR.png" style="float: left; position: absolute; top: -5px; right: -4px;"><\/div><div><img src="/public/homeTextBox_corner_BL.png" style="position: absolute; bottom: -5px; left: -6px;"><\/div><img src="/public/homeTextBox_corner_BR.png" style="position: absolute; bottom: -4px; right: -5px;"><\/div>' +
+'<p style="margin-top: -16px;">';
+
+var lastpar = '<p style="margin-bottom: -2px;">';
+
+var WhatIs = corners +
 'We are an international scientific organization run by paleontological <a href="/cgi-bin/bridge.pl?action=displayAuthorizers">researchers<\/a> from many <a href="/cgi-bin/bridge.pl?action=displayInstitutions">institutions<\/a>. ' +
 'We are bringing together information about the entire fossil record to educate the public, summarize the literature for professionals, and foster statistical analyses of mass extinctions and other aspects of biodiversity.' +
 '<\/p>' +
-'<div style="padding-top: 10px; padding-bottom: 10px; padding-right: 1em; width: 100%; text-align: center"><img alt="This hour\'s fossil image" height="180" src="/public/images/fossil.jpg"><\/div>';
+'<div style="padding-top: 10px; padding-bottom: 0px; padding-right: 10px; border-top: 1px solid #808080; text-align: center"><img alt="This hour\'s fossil image" height="180" src="/public/images/fossil.jpg"><\/div>';
 
 
-var Contents = '<p>' +
+var Contents = corners +
 'We record all kinds of published information <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=beginTaxonInfo">about fossil plants and animals<\/a>, including systematic classifications, ecological categories, measurements, age ranges, spatial distributions, and digital images. ' +
 'Major data sets comprise <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives<\/a>. ' +
 'You can also view the <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=startStartPrintHierarchy">classification of everything in a group<\/a> all at once.' +
@@ -40,26 +45,26 @@ var Contents = '<p>' +
 '<p>' +
 'You can get information about the <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchStrataForm">stratigraphic units</a> (rock layers) that include the fossils, or see the <a href="javascript:tipsPopup(\'$exec_url?action=startScale\')">time scales<\/a> we use to date them.' +
 '<\/p>' +
-'<p>' +
+lastpar +
 'All of our data are tied to <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view">published scientific references<\/a>, and almost all of our data can be downloaded by anyone. ' +
 'Just fill out our forms for <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayDownloadForm">collection, occurrence, or specimen data<\/a>, or <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayDownloadTaxonomyForm">taxonomic names and opinions<\/a>. ' +
 'We also provide a form for downloading and analyzing <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayDownloadNeptuneForm">Neptune data<\/a> housed by <a href="http://chronos.org">CHRONOS<\/a>.' +
 '<\/p>';
 
 
-var Tools = '<p>' +
+var Tools = corners +
 'You can <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayMapForm">draw maps<\/a> showing the distribution of our fossil collections, including paleomaps like the ones shown on this page. ' +
 'We have several <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=animations">additional animations<\/a> and <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes<\/a > of different geological periods that you can view. ' +
 'You can stop or reverse the animations by clicking on them. ' +
 'We also have 11 rotatable  <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes<\/a> representing each of the geological periods. ' +
 'You can <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayReportForm">generate data summary tables<\/a> that will show you how much data we have in different categories.' +
 '<\/p>' +
-'<p>' +
+lastpar +
 'Scientists can generate <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayCurveForm">diversity curve data<\/a> showing changes in the number of species or genera through time, or compute stratigraphic confidence intervals on taxonomic ranges across <a href="/cgi-bin/bridge.pl?action=displayTaxaIntervalsForm">time scales<\/a> or <a href="/cgi-bin/bridge.pl?action=displaySearchSectionForm">stratigraphic sections<\/a>.' +
 '<\/p>';
 
 
-var GetInvolved = '<p>' +
+var GetInvolved = corners +
 'As explained on our <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=paleodbFAQ">FAQ<\/a> page, any professional paleontologist may <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=join_us">join the Database<\/a>. ' +
 'New members, meetings, and script features are listed on our <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=newsindex">news<\/a> page. ' +
 'Experts on taxonomic groups may create <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives<\/a> to house their classifications. ' +
@@ -70,12 +75,12 @@ var GetInvolved = '<p>' +
 'If you are interested in <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=join_us">joining the Database<\/a>, you may want to see how we enter data. ' +
 'You can view examples of forms for entering <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=reference_form">references<\/a>, <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=collection_form">fossil collections<\/a>, <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=occurrence_form">taxonomic occurrences<\/a>, <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=authority_form">taxonomic names<\/a>, and <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=opinion_form">classifications of plants and animals<\/a>.' +
 '<\/p>' +
-'<p>' +
+lastpar +
 'We offer an <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=summer_course_2007">intensive summer course<\/a>, which is sponsored this year by <a href="http://www.nceas.ucsb.edu">NCEAS<\/a>, <a href="http://www.nescent.org">NESCent<\/a>, and <a href="http://paleosoc.org">the Paleontological Society<\/a>.' +
 '<\/p>';
 
 
-var OtherInfo = '<p>' +
+var OtherInfo = corners +
 'Most of the Database\'s <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">personnel<\/a> are at the <a href="http://www.ucsb.edu">University of California, Santa Barbara<\/a>.  We also maintain a <a href="http://paleodb.jcu.edu.au">mirror site in Australia<\/a> and are setting up more in Berlin, Chicago, and London.<\/p>' +
 '<p>' +
 'We coordinate our activities with many other <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=links">paleontological databases<\/a>, provide data to <a href="http://www.gbif.org">GBIF<\/a>, and share data with <a href="http://chronos.org">CHRONOS<\/a>. ' +
@@ -84,7 +89,7 @@ var OtherInfo = '<p>' +
 '<p>' +
 'The Database has been featured in a <a href="http://www.nature.com/cgi-taf/DynaPage.taf?file=/nature/journal/v424/n6948/full/424482a_fs.html"><i>Nature<\/i> article<\/a>.' +
 '<p>' +
-'<p>' +
+lastpar +
 'Current funding is by an <a href="http://www.nsf.gov/geo/ere/ereweb/fund-biocomplex.cfm">NSF Biocomplexity<\/a> grant to <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">John Alroy<\/a>, <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">Charles Marshall<\/a>, and <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">Arnie Miller<\/a>, and by an <a href="http://nsf.gov/funding/pgm_summ.jsp?pims_id=13413&amp;org=EAR">NSF Sedimentary Geology and Paleobiology<\/a> grant to <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">John Alroy<\/a>. ' +
 'The original working group was funded by <a href="http://www.nceas.ucsb.edu">NCEAS<\/a>. ' +
 'The web site is maintained by <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=personnel">John Alroy<\/a>.' +
@@ -185,13 +190,18 @@ function checkBrowser(string)	{
   <div class="Features">
   <div class="FeatureHeadline">
   <div class="tiny">
-  <i>Featured paper</i>
+   <i>Featured paper</i>
+<!--
+  <i>New analysis function</i>
+-->
   </div>
   </div>
 
   <div class="FeatureText">
   <div class="verytiny">
-  J. S. Madin, J. Alroy, M. Aberhan, F. T. F&uuml;rsich, W. Kiessling, M. A. Kosnik, and P. J. Wagner. 2006. Statistical independence of escalatory ecological trends in Phanerozoic marine invertebrates. <a href="http://www.sciencemag.org/cgi/content/abstract/312/5775/897?maxtoshow=&amp;HITS=10&amp;hits=10&amp;RESULTFORMAT=&amp;fulltext=Madin&amp;searchid=1&amp;FIRSTINDEX=0&amp;resourcetype=HWCIT"><i>Science</i> 312:897-900</a>. <b>#44</b>
+J. S. Madin, J. Alroy, M. Aberhan, F. T. F&uuml;rsich, W. Kiessling, M. A. Kosnik, and P. J. Wagner. 2006. Statistical independence of escalatory ecological trends in Phanerozoic marine invertebrates. <a href="http://www.sciencemag.org/cgi/content/abstract/312/5775/897?maxtoshow=&amp;HITS=10&amp;hits=10&amp;RESULTFORMAT=&amp;fulltext=Madin&amp;searchid=1&amp;FIRSTINDEX=0&amp;resourcetype=HWCIT"><i>Science</i> 312:897-900</a>. <b>#44</b>
+<!--
+<a href="bridge.pl?action=PASTQueryForm">Detrended Correspondence Analysis</a>, adapted by &Oslash;yvind Hammer from the <a href="http://folk.uio.no/ohammer/past/index.html">PAST</a> statistics package -->
   </div>
   </div>
   </div>
@@ -327,7 +337,7 @@ function checkBrowser(string)	{
   <div style="padding-left: 0.75em;">
   <div class="homeTextBoxes" id="homeTextBoxShadow">
   <div class="homeTextBoxes" id="homeTextBoxShadow2">
-  <div class="homeTextBoxes" id="homeTextBox">
+  <div class="homeTextBoxes small" id="homeTextBox">
   </div>
   </div>
   </div>
