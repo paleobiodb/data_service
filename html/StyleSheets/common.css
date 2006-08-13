@@ -185,7 +185,7 @@ H6 {font-size: .9em;}
 #homeTotals	{
     background-image: url(/public/PDbg.gif);
     background-position: 13em 0em;
-    border-bottom: 1px solid rgb(144, 144, 144);
+    border-bottom: 1px #64A8FF solid;
     text-align: center;
     margin-left: -1em;
     padding-top: 3em;
@@ -203,9 +203,9 @@ H6 {font-size: .9em;}
     background-image: url(/public/PDbg.gif);
     padding-top: 3em;
     padding-bottom: 0em;
-    border-bottom: 1px solid rgb(144, 144, 144);
-    border-left: 1px solid rgb(144, 144, 144);
-    border-right: 1px solid rgb(144, 144, 144);
+    border-bottom: 1px #64A8FF solid;
+    border-left: 1px #64A8FF solid;
+    border-right: 1px #64A8FF solid;
     height: 45em;
     width: 32em;
     position: absolute;
@@ -218,8 +218,8 @@ H6 {font-size: .9em;}
 #homeBorder	{
     background-image: url(/public/PDbg.gif);
     padding-top: 3em;
-    border-bottom: 1px solid rgb(144, 144, 144);
-    border-right: 1px solid rgb(144, 144, 144);
+    border-bottom: 1px #64A8FF solid;
+    border-right: 1px #64A8FF solid;
     height: 45em;
     width: 150px;
     position: absolute;
@@ -247,7 +247,7 @@ H6 {font-size: .9em;}
     width: 100%;
     position: relative;
     left: -0px;
-    top: -2px;
+    top: -1px;
 }
 
 .Features	{
@@ -280,7 +280,7 @@ H6 {font-size: .9em;}
 }
 
 .homeTextBoxes	{
-    font-size : 0.9em; text-decoration: none;
+    font-size: text-decoration: none;
     float: left;
 }
 
