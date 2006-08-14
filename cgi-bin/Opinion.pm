@@ -1236,7 +1236,7 @@ sub submitOpinionForm {
 
     # Get the fields from the form and get them ready for insertion
     # All other fields should have been set or thrown an error message at some previous time
-    foreach my $f ('author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments','diagnosis','phylogenetic_status') {
+    foreach my $f ('author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments','diagnosis','phylogenetic_status','type_taxon') {
         if (!$fields{$f}) {
             $fields{$f} = $q->param($f);
         }
