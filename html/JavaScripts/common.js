@@ -44,11 +44,11 @@ function showProperties ( obj ) {
 }  
 
 function checkBrowserVersion() {
-	var match = /Microsoft/i;
-	
-	if (match.test(navigator.appName)) {
-		document.write("<div class=\"warning\">Warning: Internet Explorer is not standards compliant and you should not use it on this web site or elsewhere. <BR> Aside from cosmetic defects in page rendering, error checking routines may not work correctly and you may be randomly logged out of the site.<BR><BR> Please download and use <a href=\"http://www.apple.com/safari/\">Safari</a> or <a href=\"http://www.mozilla.org/firefox/\">Firefox</a>, or read the web browser <A HREF=\"javascript: tipsPopup\('/public/tips/browser_tips.html'\)\">tip sheet</A> for information on other free browsers.</div>");
-	}
+    var match = /Microsoft/i;
+    
+    if (match.test(navigator.appName)) {
+        document.write("<div class=\"warning\">Warning: Internet Explorer is not standards compliant and you should not use it on this web site or elsewhere. <BR> Aside from cosmetic defects in page rendering, error checking routines may not work correctly and you may be randomly logged out of the site.<BR><BR> Please download and use <a href=\"http://www.apple.com/safari/\">Safari</a> or <a href=\"http://www.mozilla.org/firefox/\">Firefox</a>, or read the web browser <A HREF=\"javascript: tipsPopup\('/public/tips/browser_tips.html'\)\">tip sheet</A> for information on other free browsers.</div>");
+    }
 }
 
 
@@ -58,25 +58,25 @@ function checkBrowserVersion() {
 
 // returns true if the input is in a proper format for a last name
 function properLastName(input) {
-	if ((!input) || input == "") { return false; }
-	var match = /^[A-Za-z,-.\'][A-Za-z ,-.\']*$/;
-	return match.test(input);
+    if ((!input) || input == "") { return false; }
+    var match = /^[A-Za-z,-.\'][A-Za-z ,-.\']*$/;
+    return match.test(input);
 }
 
 // returns true if the input is in a proper format for an initial 
 function properInitial(input) {
-	if ((!input) || input == "") { return false; }
-	var match1 = /^[A-Z][A-Za-z .]*$/;
-	var match2 = /[.]/;
-	return (match1.test(input) && match2.test(input));
+    if ((!input) || input == "") { return false; }
+    var match1 = /^[A-Z][A-Za-z .]*$/;
+    var match2 = /[.]/;
+    return (match1.test(input) && match2.test(input));
 }
 
 // returns true if it's a proper year format which begins with a 1 or 2,
 // ie, 1900 and something or 2000 something.
 function properYear(input) {
-	if ((!input) || input == "") { return false; }
-	var match = /^[12]\d{3}$/;
-	return match.test(input);
+    if ((!input) || input == "") { return false; }
+    var match = /^[12]\d{3}$/;
+    return match.test(input);
 }
 
 //
@@ -114,42 +114,42 @@ function guessTaxonRank(taxon) {
 //
 // by rjp, 2/2004
 function Error(msg) {
-	this.starting = "\tPlease fix the following errors:\n\n";
-	this.message = "";
-	this.internalcount = 0;
-	
-	if (msg) {
-		this.message = "* " + msg;	
-	}	
-	
-	this.ending = "\n\nRefer to the tip sheet for instructions.";
+    this.starting = "\tPlease fix the following errors:\n\n";
+    this.message = "";
+    this.internalcount = 0;
+    
+    if (msg) {
+        this.message = "* " + msg;    
+    }    
+    
+    this.ending = "\n\nRefer to the tip sheet for instructions.";
 }
 
 // adds an error with a bullet point to the list of error messages
 Error.prototype.add = function(msg) {
-	this.message += "\n* " + msg;
-	this.internalcount += 1;
+    this.message += "\n* " + msg;
+    this.internalcount += 1;
 }
 
 Error.prototype.count = function() {
-	return this.internalcount;
+    return this.internalcount;
 }
 
 // displays an alert message with the error
 Error.prototype.showAlert = function() {
-	alert(this);
+    alert(this);
 }
 
 // converts the error object to a string.
 Error.prototype.toString = function() {
-	return this.starting + this.message + this.ending;
+    return this.starting + this.message + this.ending;
 }
 
 // pass this method another Error object, and it will append the
 // new object onto the end of itself.
 Error.prototype.appendErrors = function(newError) {
-	this.message += newError.message;
-	this.internalcount += newError.internalcount;
+    this.message += newError.message;
+    this.internalcount += newError.internalcount;
 }
 
 // End of error class.
@@ -161,14 +161,14 @@ Error.prototype.appendErrors = function(newError) {
 function tipsPopup (URL,width,height) {
     var width  = (width == null) ? 640 : width;
     var height = (height== null) ? 480 : height;
-	window.open(URL, 'tips', 'toolbar=1,scrollbars=1,location=1,statusbar=0,menubar=0,resizable=1,width='+width+',height='+height);
+    window.open(URL, 'tips', 'toolbar=1,scrollbars=1,location=1,statusbar=0,menubar=0,resizable=1,width='+width+',height='+height);
 }
 
 //show a popup window with the passed URL.
 function imagePopup (URL,width,height) {
     var width  = (width == null) ? 800 : width;
     var height = (height== null) ? 600 : height;
-	window.open(URL, 'imageview', 'toolbar=0,scrollbars=1,location=0,statusbar=0,menubar=0,resizable=1,width='+width+',height='+height);
+    window.open(URL, 'imageview', 'toolbar=0,scrollbars=1,location=0,statusbar=0,menubar=0,resizable=1,width='+width+',height='+height);
 }
 
 // Show a popup with a map in it.  this is kept distinct from the other two popups because if we include
@@ -187,47 +187,10 @@ function mapPopup(collection_no) {
 //print a hidden input field so we can check from the perl
 //code and see that it was turned on.
 function javascriptOnCheck() {
-	document.writeln("<INPUT type=\"hidden\" name=\"javascripton\" value=\"yes\"></INPUT>");	
+    document.writeln("<INPUT type=\"hidden\" name=\"javascripton\" value=\"yes\"></INPUT>");    
 }
 
 
-//meant to fill the years in a pull down menu from 1998 to the current year.
-//
-// by rjp, 2/2004
-function fillYears() {
-	var yearField = document.forms[0].year
-	var date = new Date();
-
-	var maxYear = date.getFullYear(); 
-	var year;
-
-	for (year = maxYear; year >= 1998; year--) {
-		document.writeln("<OPTION>" + year + "</OPTION>");
-	}	
-}
-
-
-function fillMonths() {
-	document.write("<option value=12>December</option>");
-	document.write("<option value=11>November</option>");
-	document.write("<option value=10>October</option>");
-	document.write("<option value=9>September</option>");
-	document.write("<option value=8>August</option>");
-	document.write("<option value=7>July</option>");
-	document.write("<option value=6>June</option>");
-	document.write("<option value=5>May</option>");
-	document.write("<option value=4>April</option>");
-	document.write("<option value=3>March</option>");
-	document.write("<option value=2>February</option>");
-	document.write("<option value=1>January</option>");
-}
-
-function fillDays() {
-	var i;
-	for (i = 31; i > 0; i--) {
-		document.writeln("<OPTION>" + i + "</OPTION>");
-	}
-}
 
 // Email addresses pass through a simple javascript, which most automated scripts won't execute
 // before being displayed
@@ -258,16 +221,39 @@ function checkAll(checkbox,the_class){
 // used in the PAST module to hide or show lines of text that pop up next
 //  to data points in plots on mouse over; assumes that the named elements
 //  are single lines of text stacked on top of each other
-function showHide(what)	{
-        var elems = document.getElementsByName(what);
-        for (var i=0,a; a=elems[i]; i++)	{
-                if ( a.style.visibility != "hidden" )	{
-                        a.style.visibility = "hidden";
-                        a.style.height = "0em";
-                } else	{
-                        a.style.visibility = "visible";
-                        a.style.height = "1.25em";
-                }
+function showHide(what)    {
+    var elems = document.getElementsByName(what);
+    for (var i=0,a; a=elems[i]; i++)    {
+        if ( a.style.visibility != "hidden" )    {
+            a.style.visibility = "hidden";
+            a.style.height = "0em";
+        } else    {
+            a.style.visibility = "visible";
+            a.style.height = "1.25em";
         }
+    }
+}
+
+function checkAllEmpty(frm,fields) {
+    var element_count = 0;
+    var empty_count = 0;
+    for(i=0;i<frm.elements.length;i++) {
+        var elem = frm.elements[i];
+        for(j=0;j<fields.length;j++) {
+            if (elem.name == fields[j]) {
+                element_count++; 
+                if (elem.options) {
+                    if (elem.selectedIndex == 0) empty_count++;
+                } else {
+                    if (elem.value == '') empty_count++;
+                }
+            }
+        }
+    }
+    if (element_count == empty_count) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
