@@ -1669,28 +1669,26 @@ sub displaySearchColls {
 
 	# Have to have a reference #, unless we are just searching
 	my $reference_no = $s->get("reference_no");
-	if ( ! $reference_no && $type ne "view" && $type ne "reclassify_occurrence" && !$q->param('use_primary') ) {
+	if ( ! $reference_no && $type ne 'analyze_abundance' && $type ne "view" && $type ne "reclassify_occurrence" && !$q->param('use_primary') ) {
 		# Come back here... requeue our option
 		$s->enqueue( $dbh, "action=displaySearchColls&type=$type" );
 		displaySearchRefs( "Please choose a reference first" );
 		exit;
 	}	
 
-	# add				result list links view collection details
-	# view				result list links view collection details
-	# edit				result list links go directly to edit the collection
-	# edit_occurrence	result list links go to edit occurrence page
 
 	# Show the "search collections" form
     my %vars = $q->Vars();
     $vars{'enterer_me'} = $s->get('enterer_reversed');
-    my $html = $hbo->populateHTML('search_collections_form', \%vars);
+    $vars{'page_title'} = "Collection search form";
+    $vars{'action'} = "displayCollResults";
+    $vars{'submit'} = "Search collections";
 
 	# Spit out the HTML
 	print stdIncludes( "std_page_top" );
     printIntervalsJava(1);
     print makeAuthEntJavaScript();
-	print $html;
+    print $hbo->populateHTML('search_collections_form', \%vars);
 	print stdIncludes("std_page_bottom");
 }
 
@@ -1734,6 +1732,7 @@ sub displayCollResults {
     my $action = "displayCollectionDetails";
 	# We create different links depending on their destination, using the hidden type field.
 	if ( $type eq "add" )		{ $action = "displayCollectionDetails"; $permission_type = "read"; }
+	elsif ( $type eq "analyze_abundance" )	{ $action = "rarefyAbundances"; $permission_type = "read"; }
 	elsif ( $type eq "edit" )	{ $action = "displayCollectionForm"; $permission_type = "write"; }
 	elsif ( $type eq "view" )	{ $action = "displayCollectionDetails"; $permission_type= "read"; }
 	elsif ( $type eq "edit_occurrence" )   { $action = "displayOccurrenceAddEdit"; $permission_type= "read"; }
@@ -2385,13 +2384,16 @@ sub processCollectionsSearch {
         }
     }
 
-	# Handle wildcards
-	my $comparator = "=";
-	my $wildcardToken = "";
-	if ($options{'wild'} eq 'Y') {
- 	 	$comparator = " LIKE ";
-  		$wildcardToken = "%";
-	}
+
+    # Handle specimen count for analyze abundance function
+    # The groupby is added separately below
+    if (int($options{'specimen_count'})) {
+        my $specimen_count = int($options{'specimen_count'});
+        push @from, "sum(abund_value) as specimen_count";
+        push @tables, "occurrences o";
+        push @where, "o.collection_no=c.collection_no AND abund_unit IN ('specimens','individuals')";
+        push @having, "sum(abund_value)>$specimen_count";
+    }
 
     # Reworked PS  08/15/2005
     # Instead of just doing a left join on the reids table, we achieve the close to the same effect
@@ -2481,10 +2483,10 @@ sub processCollectionsSearch {
                     $sql2a .= " re.genus_name IN ($names)";
                     $sql2b .= " re.subgenus_name IN ($names)";
                     if ($species )	{
-                        $sql1a .= " AND o.species_name LIKE ".$dbh->quote($species.$wildcardToken);
-                        $sql1b .= " AND o.species_name LIKE ".$dbh->quote($species.$wildcardToken);
-                        $sql2a .= " AND re.species_name LIKE ".$dbh->quote($species.$wildcardToken);
-                        $sql2b .= " AND re.species_name LIKE ".$dbh->quote($species.$wildcardToken);
+                        $sql1a .= " AND o.species_name LIKE ".$dbh->quote($species);
+                        $sql1b .= " AND o.species_name LIKE ".$dbh->quote($species);
+                        $sql2a .= " AND re.species_name LIKE ".$dbh->quote($species);
+                        $sql2b .= " AND re.species_name LIKE ".$dbh->quote($species);
                     }
                     if ($genus || $subgenus || $species) {
                         push @results, @{$dbt->getData($sql1a)}; 
@@ -2496,16 +2498,16 @@ sub processCollectionsSearch {
                     my $sql1b = $sql1;
                     my $sql2b = $sql2;
                     if ($genus)	{
-                        $sql1b .= "o.genus_name LIKE ".$dbh->quote($genus.$wildcardToken);
-                        $sql2b .= "re.genus_name LIKE ".$dbh->quote($genus.$wildcardToken);
+                        $sql1b .= "o.genus_name LIKE ".$dbh->quote($genus);
+                        $sql2b .= "re.genus_name LIKE ".$dbh->quote($genus);
                     }
                     if ($subgenus)	{
-                        $sql1b .= " AND o.subgenus_name LIKE ".$dbh->quote($subgenus.$wildcardToken);
-                        $sql2b .= " AND re.subgenus_name LIKE ".$dbh->quote($subgenus.$wildcardToken);
+                        $sql1b .= " AND o.subgenus_name LIKE ".$dbh->quote($subgenus);
+                        $sql2b .= " AND re.subgenus_name LIKE ".$dbh->quote($subgenus);
                     }
                     if ($species)	{
-                        $sql1b .= " AND o.species_name LIKE ".$dbh->quote($species.$wildcardToken);
-                        $sql2b .= " AND re.species_name LIKE ".$dbh->quote($species.$wildcardToken);
+                        $sql1b .= " AND o.species_name LIKE ".$dbh->quote($species);
+                        $sql2b .= " AND re.species_name LIKE ".$dbh->quote($species);
                     }
                     if ($genus || $subgenus || $species) {
                         push @results, @{$dbt->getData($sql1b)}; 
@@ -2592,25 +2594,25 @@ IS NULL))";
 
     # Handle period - legacy
 	if ($options{'period'}) {
-		my $periodName = $dbh->quote($wildcardToken . $options{'period'} . $wildcardToken);
+		my $periodName = $dbh->quote($options{'period'});
 		push @where, "(period_min LIKE " . $periodName . " OR period_max LIKE " . $periodName . ")";
 	}
 	
 	# Handle intage - legacy
 	if ($options{'intage'}) {
-		my $intageName = $dbh->quote($wildcardToken . $options{'intage'} . $wildcardToken);
+		my $intageName = $dbh->quote($options{'intage'});
 		push @where, "(intage_min LIKE " . $intageName . " OR intage_max LIKE " . $intageName . ")";
 	}
 	
 	# Handle locage - legacy
 	if ($options{'locage'}) {
-		my $locageName = $dbh->quote($wildcardToken . $options{'locage'} . $wildcardToken);
+		my $locageName = $dbh->quote($options{'locage'});
 		push @where, "(locage_min LIKE " . $locageName . " OR locage_max LIKE " . $locageName . ")";
 	}
 	
 	# Handle epoch - legacy
 	if ($options{'epoch'}) {
-		my $epochName = $dbh->quote($wildcardToken . $options{'epoch'} . $wildcardToken);
+		my $epochName = $dbh->quote($options{'epoch'});
 		push @where, "(epoch_min LIKE " . $epochName . " OR epoch_max LIKE " . $epochName . ")";
 	}
 
@@ -2708,7 +2710,7 @@ IS NULL))";
 	
 	# Handle collection name (must also search collection_aka field) JA 7.3.02
 	if ( $options{'collection_names'} ) {
-		my $val = $dbh->quote($wildcardToken . $options{'collection_names'} . $wildcardToken);
+		my $val = $dbh->quote('%'.$options{'collection_names'}.'%');
         if ($options{'collection_names'} =~ /^\d+$/) {
 		    push @where, "(c.collection_name LIKE $val OR c.collection_aka LIKE $val OR c.collection_no=$options{collection_names})";
         } else {
@@ -2771,7 +2773,7 @@ IS NULL))";
         if ($options{"group_formation_member"} eq 'NOT_NULL_OR_EMPTY') {
 		    push(@where, "((c.geological_group IS NOT NULL AND c.geological_group !='') OR (c.formation IS NOT NULL AND c.formation !=''))");
         } else {
-            my $val = $dbh->quote($wildcardToken.$options{"group_formation_member"}.$wildcardToken);
+            my $val = $dbh->quote('%'.$options{"group_formation_member"}.'%');
 		    push(@where, "(c.geological_group LIKE $val OR c.formation LIKE $val OR c.member LIKE $val)");
         }
 	}
@@ -2780,7 +2782,7 @@ IS NULL))";
     if (exists $options{"section_name"} && $options{"section_name"} eq '') {
         push @where, "((c.regionalsection IS NOT NULL AND c.regionalsection != '' AND c.regionalbed REGEXP '^(-)?[0-9.]+\$') OR (c.localsection IS NOT NULL AND c.localsection != '' AND c.localbed REGEXP '^(-)?[0-9.]+\$'))";
     } elsif ($options{"section_name"}) {
-        my $val = $dbh->quote($wildcardToken.$options{"section_name"}.$wildcardToken);
+        my $val = $dbh->quote('%'.$options{"section_name"}.'%');
         push @where, "((c.regionalsection  LIKE  $val AND c.regionalbed REGEXP '^(-)?[0-9.]+\$') OR (c.localsection  LIKE  $val AND c.localbed REGEXP '^(-)?[0-9.]+\$'))"; 
     }                
 
@@ -2818,7 +2820,7 @@ IS NULL))";
             my $in_str = join(",", @countries);
             push @where, "c.country IN ($in_str)";
         } else {
-            push @where, "c.country LIKE ".$dbh->quote($wildcardToken.$q->param('country').$wildcardToken);
+            push @where, "c.country LIKE ".$dbh->quote($q->param('country'));
         }
     }
 
@@ -2855,7 +2857,7 @@ IS NULL))";
                 push @where, "c.$field=".int($value);
 			} else {
                 # Assuming character, datetime, etc. 
-				push @where, "c.$field $comparator ".$dbh->quote($wildcardToken.$value.$wildcardToken);
+				push @where, "c.$field LIKE ".$dbh->quote('%'.$value.'%');
 			}
 		}
 	}
@@ -3943,21 +3945,21 @@ sub rarefyAbundances	{
 	
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
-	my @ids;
+	my @ids = ();
 	my $abundsum;
 	my $abundmax;
     my $ntaxa;
     my @abund;
-	while ( my @abundrow = @{$sth->fetchrow_arrayref()} )	{
+	while ( my @abundrow = $sth->fetchrow_array() )	{
 		push @abund , $abundrow[0];
 		$abundsum = $abundsum + $abundrow[0];
 		if ( $abundrow[0] > $abundmax )	{
 			$abundmax = $abundrow[0];
 		}
 		$ntaxa++;
-		for my $i (1..$abundrow[0])	{
+		foreach my $i (1 .. $abundrow[0]) {
 			push @ids , $ntaxa;
-		}
+        }
 	}
 	$sth->finish();
 
@@ -4021,7 +4023,7 @@ sub rarefyAbundances	{
 		}
 	}
 
-	print "<center><h3>Diversity statistics for $collection_name (PBDB collection ", $q->param('collection_no'), ")</h3></center>\n\n";
+	print "<center><h3>Diversity statistics for $collection_name</h3><h5>(PBDB collection <a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>)</h5></center>\n\n";
 
 	print "<center><table><tr><td align=\"left\">\n";
 	printf "<p>Total richness: <b>%d taxa</b><br>\n",$ntaxa;
@@ -4074,7 +4076,7 @@ sub rarefyAbundances	{
 		$isalevel{$sl} = "Y";
 	}
 
-	print "<hr><center><h3>Rarefaction curve for $collection_name (PBDB collection ", $q->param('collection_no'), ")</h3></center>\n\n";
+	print "<hr><center><h3>Rarefaction curve for $collection_name</h3><h5>(PBDB collection <a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>)</h5></center>\n\n";
 
 	open OUT,">$HTML_DIR/$OUTPUT_DIR/rarefaction.csv";
 	print "<center><table>\n";
@@ -4091,6 +4093,8 @@ sub rarefyAbundances	{
 	print "</table></center>\n<p>\n\n";
 	print "<p><i>Results are based on 200 random sampling trials.\n";
 	print "The data can be downloaded from a <a href=\"$HOST_URL/$OUTPUT_DIR/rarefaction.csv\">tab-delimited text file</a>.</i></p></center>\n\n";
+
+    print "<p><div align=\"center\"><b><a href=\"bridge.pl?action=displaySearchColls&type=analyze_abundance\">Search again</a></b></div></p>";
 
 	print stdIncludes("std_page_bottom");
 

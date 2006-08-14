@@ -436,11 +436,14 @@ sub displaySearchStrataForm {
    
     my $vars = $q->Vars();
     $vars->{'enterer_me'} = $s->get("enterer_reversed");
+    $vars->{'page_title'} = "Stratigraphic unit search form";
+    $vars->{'action'} = "displaySearchStrataResults";
+    $vars->{'submit'} = "Search strata";
     # Show the "search collections" form
 
     # Set the Enterer
     print main::makeAuthEntJavaScript();
-    print $hbo->populateHTML('search_strata_form',$vars)
+    print $hbo->populateHTML('search_collections_form',$vars)
 }
    
 #

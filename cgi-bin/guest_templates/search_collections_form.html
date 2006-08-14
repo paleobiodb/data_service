@@ -5,31 +5,16 @@
 function checkForm ( ) {
 
     var frm = document.forms[0];
-    var errors = "";
 
     var returnVal = checkIntervalNames();
     if (!returnVal) {
         return false;
     }
 
-    if ( frm.collection_names.value == ""
-        && frm.county.value == ""
-        && frm.reference_no.value == ""
-        && frm.taxon_name.value == ""
-        && frm.country.value == ""
-        && frm.state.value == ""
-        && frm.max_interval.value == ""
-        && frm.min_interval.value == ""
-        && frm.group_formation_member.value == ""
-        && frm.person_reversed.value == ""
-        && frm.research_group.selectedIndex == 0 
-        && frm.lithologies.selectedIndex == 0
-        && frm.environment.selectedIndex == 0 ) {
-        errors = "Please supply a search term";
-    }
+    var fields = new Array('collection_names','section_name','reference_no','person_reversed','research_group','taxon_name','country','state','county','max_interval','min_interval','group_formation_member','environment','lithologies');
 
-    if ( errors != "" ) { 
-        alert ( errors );
+    if (checkAllEmpty(frm,fields)) {
+        alert ("Please enter a search term");
         return false;
     } else {
         return true;
@@ -41,12 +26,12 @@ function checkForm ( ) {
 </script>
 
 <div align="center">
-  <h2>Collection search form</h2>
+  <h2>%%page_title%%</h2>
 </div>
 
 <div align=center>
 <form method=post action="bridge.pl" onSubmit="return checkForm();">
-<input type=hidden name="action" value="displayCollResults">
+<input type=hidden name="action">
 <input type=hidden name="type">
 <input type=hidden name="use_primary">
 
@@ -54,10 +39,28 @@ function checkForm ( ) {
   <span class="displayPanelHeader"><b>Search values</b></span>
   <div class="displayPanelContent small">
     <table border=0 cellpadding=2 cellspacing=2>
-      <tr>
-        <td>Collection name or number: </td><td><input name=collection_names class="small" size=20></td>
-        <td style="padding-left: 1em">Reference number: </td><td><input name=reference_no class="small" size=6></td>
-      </tr>
+      <div show="action=displaySearchStrataResults">
+        <tr>
+          <td>Group, formation, or member:</td><td><input name="group_formation_member" class="small"></td>
+        </tr>
+      </div>
+      <div show="action=displayCollResults">
+        <div show="type=analyze_abundance">
+          <tr>
+            <td>Minimum number of specimens:</td><td colspan=3><input type="text" name="specimen_count" value="100" size=4><br></td>
+          </tr>
+        </div>
+        <tr>
+          <td>Collection name or number: </td><td><input name=collection_names class="small" size=20></td>
+          <td style="padding-left: 1em">Reference number: </td><td><input name=reference_no class="small" size=6></td>
+        </tr>
+      </div>
+      <div show="action=displaySearchSectionResults">
+        <tr>
+          <td>Section name: </td><td><input name=section_name size=20 class="small"></td>
+          <td style="padding-left: 1em">Reference number: </td><td><input name=reference_no class="small" size=6></td>
+        </tr>
+      </div>
       <tr>
         <td>Data <select name="person_type" class="small"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="any">any of above</option></select>: 
         </td>
@@ -84,9 +87,11 @@ function checkForm ( ) {
       <tr>
         <td>Youngest time interval/Ma: </td><td colspan=3><select id="eml_min_interval" class="small" autofill="eml_interval"></select><input name="min_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
       </tr>
-      <tr>
-        <td>Group, formation, or member:</td><td><input name="group_formation_member" class="small"></td>
-      </tr>
+      <div hide="action=displaySearchStrataResults">
+        <tr>
+          <td>Group, formation, or member:</td><td><input name="group_formation_member" class="small"></td>
+        </tr>
+      </div>
       <tr>
         <td>Paleoenvironment: </td><td colspan=3><select id="environment" class="small"></select></td>
       </tr>
@@ -96,7 +101,7 @@ function checkForm ( ) {
       <tr>
         <td colspan=4 align="center">
           <div class="small" style="width: 640px;">
-            <i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character or "%" for an open ended match.</i>
+            <i>Hints: the search engine is not case sensitive and wildcards are allowed.  You can use "_" to match any single character or "%" for an open ended match.</i>
           </div>
         </td>
       </tr>
@@ -111,32 +116,55 @@ function checkForm ( ) {
   <div class="displayPanelContent small">
 
     <table border=0 cellpadding=2 cellspacing=2>
-      <tr valign=top>
-        <td nowrap>Allow wildcards:
-          <select name="wild" class="small">
-            <option value="Y">yes, allow wildcards</option>
-            <option value="N">no, require exact matches</option>
-          </select>
-        </td>
-        <td nowrap style="padding-left: 2em;">Sort by:
-          <select name="sortby" class="small">
-            <option value="collection_no">collection number</option>
-            <option value="collection_name">collection name</option>
-            <option value="interval_name">time interval name</option>
-            <option value="geography">country, state</option>
-          </select>
-          <select name=sortorder class="small"><option value="asc">ascending<option value="desc">descending</select>
-        </td>
-      </tr>
-      <tr>
-        <td colspan="2">Number of records per page: <input name=limit size=10 value=30 class="small">
-      </tr>
+    
+      <div show="action=displaySearchStrataResults">
+        <tr valign=top>
+          <td nowrap>Sort by:
+            <select name="sortby" class="small">
+              <option value="group_formation_member">group, formation</option>
+            </select>
+            <select name=sortorder class="small"><option value="asc">ascending<option value="desc">descending</select>
+          </td>
+          <td nowrap style="padding-left: 2em;">
+            Number of records per page: <input name=limit size=10 value=30 class="small">
+          </td>
+        </tr>
+      </div>
+
+      <div show="action=displayCollResults">
+        <tr valign=top>
+          <td nowrap>Sort by:
+            <select name="sortby" class="small">
+              <option value="collection_no">collection number</option>
+              <option value="collection_name">collection name</option>
+              <option value="interval_name">time interval name</option>
+              <option value="geography">country, state</option>
+            </select>
+            <select name=sortorder class="small"><option value="asc">ascending<option value="desc">descending</select>
+          </td>
+          <td nowrap style="padding-left: 2em;">
+            Number of records per page: <input name=limit size=10 value=30 class="small">
+          </td>
+        </tr>
+      </div>
+
+      <div show="action=displaySearchSectionResults">
+        <tr>
+          <td nowrap>Remove taxa from chart: <select name=show_taxon_list class="small"><option>YES</option><option SELECTED>NO</option></select></td>
+          <td nowrap style="padding-left: 2em;">Resolution of taxa in chart: <select name=taxon_resolution class="small"><option>genus</option><option SELECTED>species</option></select></td>
+        </tr> 
+        <tr valign=top>
+          <td>
+            Number of records per page: <input name=limit size=10 value=30 class="small">
+          </td>
+        </tr>
+      </div>
     </table>
 
   </div>
 </div>
 
-<p><input type="submit" value="Search collections"></p>
+<p><input type="submit" name="submit"></p>
 
 </form>
 </div>

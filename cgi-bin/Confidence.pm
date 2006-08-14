@@ -62,8 +62,14 @@ sub displayHomonymForm {
 sub displaySearchSectionForm {
     my ($q,$s,$dbt,$hbo) = @_;
 
+    my %vars; 
+    $vars{'enterer_me'} = $s->get('enterer_reversed');
+    $vars{'page_title'} = "Section search form";
+    $vars{'action'} = "displaySearchSectionResults";
+    $vars{'submit'} = "Search sections";
+    main::printIntervalsJava(1);
     print main::makeAuthEntJavaScript();
-    print $hbo->populateHTML('search_section_form',{'enterer_me'=>$s->get('enterer_reversed')})
+    print $hbo->populateHTML('search_collections_form',\%vars) ;
 }
 
 # Handles processing of the output from displaySectionSearchForm similar to displayCollResults
@@ -82,8 +88,8 @@ sub displaySearchSectionResults{
     $options{'permission_type'} = 'read';
     $options{'limit'} = 10000000;
     $options{'calling_script'} = 'Confidence';
-    $options{'lithologies'} = $options{'lithology1'}; delete $options{'lithology1'};
-    $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'}; 
+#    $options{'lithologies'} = $options{'lithology1'}; delete $options{'lithology1'};
+#    $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'}; 
     ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
     @dataRows = sort {$a->{regionalsection} cmp $b->{regionalsection} ||
                       $a->{localsection} cmp $b->{localsection}} @$dataRows;
