@@ -442,7 +442,7 @@ sub displaySearchStrataForm {
     # Show the "search collections" form
 
     # Set the Enterer
-    printIntervalsJava(1);
+    main::printIntervalsJava(1);
     print main::makeAuthEntJavaScript();
     print $hbo->populateHTML('search_collections_form',$vars)
 }
