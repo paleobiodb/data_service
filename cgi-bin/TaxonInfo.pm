@@ -1628,20 +1628,34 @@ sub getSynonymyParagraph{
         $text .= "It is $preservation.";
     }
 
-    if ($taxon->{'type_specimen'}) {
-        $text .= "Its type is $taxon->{type_specimen}. ";
-    } elsif ($taxon->{'type_taxon_no'}) {
-        my $type_taxon = getTaxa($dbt,{'taxon_no'=>$taxon->{'type_taxon_no'}});
-        my $type_taxon_name = $type_taxon->{'taxon_name'};
-        if ($type_taxon->{'taxon_rank'} =~ /genus|species/) {
-            $type_taxon_name = "<i>".$type_taxon_name."</i>";
-        }
-        $text .= "Its type is <a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$type_taxon->{taxon_no}&real_user=$real_user\">$type_taxon_name</a>. ";  
-    }
+    my @spellings = getAllSpellings($dbt,$taxon->{'taxon_no'});
 
-    # THis may have to be improved in the future aso all various spellings and what not
-    # get passed into this
-    $sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE type_taxon_no=$taxon_no"; 
+    if ($taxon->{'taxon_rank'} =~ /species/) {
+        my $sql = "SELECT taxon_no,type_specimen,type_body_part FROM authorities WHERE ((type_specimen IS NOT NULL and type_specimen != '') OR (type_body_part IS NOT NULL AND type_body_part != '')) AND taxon_no IN (".join(",",@spellings).")";
+        my $specimen_row = ${$dbt->getData($sql)}[0];
+        if ($specimen_row) {
+            $text .= "Its type is $specimen_row->{type_specimen}";
+            if ($specimen_row->{'type_body_part'}) {
+                my $an = ($specimen_row->{'type_body_part'} =~ /^[aeiou]/) ? "an" : "a";
+                $text .= ", " if ($specimen_row->{'type_specimen'});
+                $text .= "$an $specimen_row->{type_body_part}";
+            }
+            $text .= ". ";
+        }
+    } else {
+        my $sql = "SELECT taxon_no,type_taxon_no FROM authorities WHERE type_taxon_no != 0 AND taxon_no IN (".join(",",@spellings).")";
+        my $tt_row = ${$dbt->getData($sql)}[0];
+        if ($tt_row) {
+            my $type_taxon = getTaxa($dbt,{'taxon_no'=>$tt_row->{'type_taxon_no'}});
+            my $type_taxon_name = $type_taxon->{'taxon_name'};
+            if ($type_taxon->{'taxon_rank'} =~ /genus|species/) {
+                $type_taxon_name = "<i>".$type_taxon_name."</i>";
+            }
+            $text .= "Its type is <a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$type_taxon->{taxon_no}&real_user=$real_user\">$type_taxon_name</a>. ";  
+        }
+    }
+    
+    $sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE type_taxon_no IN (".join(",",@spellings).")";
     my @type_for = @{$dbt->getData($sql)};
     if (@type_for) {
         $text .= "It is the type for ";
