@@ -103,24 +103,33 @@ It was first named in the data record's primary reference, which is:
 
 <!-- Note: this should only appear if the rank is species -->
 <div show="show_type_taxon">
-  <tr><td></td><td><input type="checkbox" id="type_taxon" name="type_taxon" value="1"><b>This is the type <span id="taxon_rank"></span></b>
+  <tr><td></td><td colspan=3><input type="checkbox" id="type_taxon" name="type_taxon" value="1"><b>This is the type <span id="taxon_rank"></span></b>
   </td>
   </tr>
 </div>
 
 <div show="show_type_specimen">
-  <tr><td align=right><b>Type specimen:</b></td>
-  <td><input id="type_specimen" name="type_specimen" size=50>
-  </td>
+  <tr>
+    <td align=right><b>Type specimen:</b></td>
+    <td>
+      <input id="type_specimen" name="type_specimen" size=20>
+    </td>
+    <td>
+      <b>Body part of type:</b>
+    </td>
+    <td>
+      <select name="type_body_part"></select>
+    </td>
   </tr>
 </div>
 
-<tr><td colspan=2>
-  <table><tr>
-    <td><b>Is this an extant (living) taxon?</b> <span id="extant_select"></span></td>
-    <td> &nbsp; <b>Preservation category:</b> <select id="preservation"></span></td>
-  </tr></table>
-</td></tr>
+<tr>
+  <td colspan=2>
+    <b>Is this an extant (living) taxon?</b> <span id="extant_select"></span>
+  </td>
+  <td> <b>Preservation category:</b></td>
+  <td> <select id="preservation"></select></td>
+</tr>
 
 
 <tr><td align=right valign=top><b>Comments:</b></td>

@@ -367,6 +367,7 @@ sub retellOptions {
         }
 
         push @occFields, 'preservation' if ($q->param('occurrences_preservation'));
+        push @occFields, 'type_body_part' if ($q->param('occurrences_type_body_part'));
 
         if (@occFields) {
             $html .= $self->retellOptionsRow ( "Occurrence output fields", join ( "<BR>", @occFields) );
@@ -1633,7 +1634,7 @@ sub queryDatabase {
     my @time_fields = ();
     if ($q->param("output_data") !~ /genera|species/) {
         push @time_fields, 'period_name' if ($q->param('collections_period'));
-        push @time_fields, 'subepoch_name'  if ($q->param('collections_epoch'));
+        push @time_fields, 'subepoch_name'  if ($q->param('collections_subepoch'));
         push @time_fields, 'epoch_name'  if ($q->param('collections_epoch'));
         push @time_fields, 'stage_name'  if ($q->param('collections_stage'));
         if ($q->param('collections_ma_max') ||
@@ -1790,6 +1791,22 @@ sub queryDatabase {
         #   then set the ecotaph values by running up the hierarchy
         if (@ecoFields || $get_preservation) {
             %ecotaph = %{Ecology::getEcology($dbt,\%master_class,\@ecoFields,0,$get_preservation)};
+        }
+    }
+
+    # Body part categories
+    my %body_part_lookup;
+    if ($q->param("occurrences_type_body_part")  &&
+        $q->param('output_data') =~ /occurrences|specimens|genera|species/) {
+        if (%all_taxa) {
+            # This SQL is nice in the fact that even if the type_body_part field has been filled in for a previous correction or recombination
+            # it'll still look that up and associate it with all other combinations automatically
+            # I.E. you say the type_body_part for Calippus ansae is a skull or something, and Astrohippus ansae will automatically
+            # assocaite with that. 
+            my $sql = "SELECT t1.taxon_no,a.type_body_part FROM taxa_tree_cache t1, taxa_tree_cache t2, authorities a WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(",",keys %all_taxa).") AND t2.taxon_no=a.taxon_no AND a.type_body_part != ''";
+            foreach my $row (@{$dbt->getData($sql)}) {
+                $body_part_lookup{$row->{'taxon_no'}} = $row->{'type_body_part'};
+            }
         }
     }
 
@@ -2141,6 +2158,14 @@ sub queryDatabase {
                 }
             }
 
+            if ($q->param('occurrences_type_body_part')) {
+                my $taxon_no = $row->{'o.taxon_no'};
+                if ($ss_taxon_nos{$taxon_no}) {
+                    $taxon_no = $ss_taxon_nos{$taxon_no};
+                } 
+                $row->{'type_body_part'} = $body_part_lookup{$taxon_no};
+            }
+
             # Set up the ecology fields
             foreach (@ecoFields,'preservation') {
                 if ($ecotaph{$row->{'o.taxon_no'}}{$_} !~ /^\s*$/) {
@@ -2414,6 +2439,7 @@ sub printCSV {
     if ($q->param('output_data') =~ /occurrences|specimens|genera|species/) {
         push @header,@ecoFields;
         push @header,'preservation' if ($q->param("occurrences_preservation"));
+        push @header,'type_body_part' if ($q->param("occurrences_type_body_part"));
     }
        
     if ($q->param('output_data') =~ /collections|occurrences|specimens/) {
