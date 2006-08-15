@@ -6,22 +6,26 @@ use CGI;
 use DBI;
 use HTMLBuilder;
 use Class::Date qw(date localdate gmdate now);
-
+use Session;
 use DBConnection;
+use DBTransactionManager;
 
+# Make standard objects
+my $q = CGI->new();
+my $dbh = DBConnection::connect();
+my $dbt = DBTransactionManager->new($dbh);
+my $s = Session->new($dbt,$q->cookie('session_id'));
+
+my $hb = HTMLBuilder->new($dbt,$s,0,1);
+
+
+                                                       
 # Flags and constants
 my $DEBUG = 0;			# Shows debug information regarding the page
 
 # A few declarations
 my $sql="";				# Any SQL string
 my $rs;					# Generic recordset
-my $TEMPLATE_DIR = $ENV{ADMIN_TEMPLATE_DIR};
-
-my $dbh = DBConnection::connect();
-
-# Make a few objects
-my $q = CGI->new();
-my $hb = HTMLBuilder->new ( $TEMPLATE_DIR, $dbh, $q->url );
 
 # Get the action
 my $action = $q->param("action");
@@ -31,6 +35,10 @@ if ( ! $action ) { $action = "displayHomePage"; }
 print $q->header(	-type => "text/html", 
 					-expires =>"now" );
 
+unless ($s->get('authorizer_no') eq '4' || $s->get('authorizer_no') eq '48') {
+    print "Not logged in";
+    die;
+}
 &$action;
 
 exit;
@@ -63,7 +71,7 @@ sub displayPerson {
 	unshift ( @values, $type );
 	unshift ( @fieldNames, "%%type%%" );
 
-	print $hb->getTemplateString ( "std_page_top" );
+	print $hb->populateHTML( "std_page_top" );
 	print $hb->populateHTML ( "person", \@values, \@fieldNames );
 }
 
@@ -101,7 +109,7 @@ sub processPersonEdit {
 # Lists all persons for Edit
 sub displayPersonList {
 
-	print $hb->getTemplateString ( "std_page_top" );
+	print $hb->populateHTML( "std_page_top" );
 	print createList( "person", 1, "last_name,first_name" );
 	
 }
@@ -183,17 +191,16 @@ sub htmlError {
 
 
 sub displayHomePage {
-
-	print $hb->getTemplateString ( "std_page_top" );
-	print $hb->getTemplateString ( "index" );
+	print $hb->populateHTML( "std_page_top" );
+	print $hb->populateHTML( "index" );
 
 }
 
 # JA 27.6.02
 sub displayActions	{
 
-	print $hb->getTemplateString ( "std_page_top" );
-	print $hb->getTemplateString ( "index" );
+	print $hb->populateHTML( "std_page_top" );
+	print $hb->populateHTML( "index" );
 
 	my $sql = "SELECT first_name, last_name, last_action FROM person";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
