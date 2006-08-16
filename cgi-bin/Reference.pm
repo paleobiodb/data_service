@@ -117,7 +117,7 @@ sub formatShortRef  {
         my $dbt = shift;
         my $reference_no = int(shift);
         if ($reference_no) {
-            my $sql = "SELECT reference_no,author1init,author2last,author2init,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$reference_no";
+            my $sql = "SELECT reference_no,author1init,author1last,author2init,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$reference_no";
             $refData = ${$dbt->getData($sql)}[0];
         }
         %options = @_;
