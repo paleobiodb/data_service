@@ -997,23 +997,18 @@ sub displayPage {
 # it will return the HTML code.
 sub stdIncludes {
 	my $page = shift;
-	my $reference = buildReference( $s->get("reference_no"), "bottom" );
-	my $enterer;
 
-    if ( $s->get("enterer") ne "" ) { 
-        # Already was logged in
-        $enterer = $s->get("enterer"); 
-    } elsif ( $q->param("enterer") ne "" ) { 
-        # Just logged in
-        $enterer = $q->param("enterer"); 
-    } else {
-        # Don't know
-        $enterer = "none";
+    my $vars = {};
+    if ($page eq 'std_page_top' && $s->isDBMember()) {
+        $vars->{reference} = 'none';
+        my $reference_no = $s->get('reference_no');
+        if ($reference_no) {
+            $vars->{reference} = "$reference_no (".Reference::formatShortRef($dbt,$reference_no).")";
+        }
+        $vars->{enterer} = $s->get("enterer") || "none"; 
     }
 
-	return $hbo->populateHTML(	$page, 
-								[ $reference, $enterer ], 
-								[ "reference", "enterer" ] );
+	return $hbo->populateHTML($page,$vars);
 }
 
 
@@ -3259,7 +3254,7 @@ sub buildTaxonomicList {
 	my $return = "";
 
 	# This is the taxonomic list part
-	my $sql =	"SELECT abund_value, abund_unit, genus_name, genus_reso, subgenus_name, subgenus_reso, species_name, species_reso, comments, reference_no, occurrence_no, taxon_no, collection_no FROM occurrences";
+	my $sql =	"SELECT abund_value, abund_unit, genus_name, genus_reso, subgenus_name, subgenus_reso, plant_organ, plant_organ2, species_name, species_reso, comments, reference_no, occurrence_no, taxon_no, collection_no FROM occurrences";
     if ($options{'collection_no'}) {
         $sql .= " WHERE collection_no = $options{'collection_no'}";
     } elsif ($options{'occurrence_list'} && @{$options{'occurrence_list'}}) {
@@ -3285,21 +3280,14 @@ sub buildTaxonomicList {
 		# loop through each row returned by the query
 		foreach my $rowref (@rowrefs) {
 			my $output = '';
-			my %grand_master_hash = ();
 			my %classification = ();
-
-			# For sorting, later
-			$grand_master_hash{occurrence_no}	= 	$rowref->{occurrence_no};
-			$grand_master_hash{comments} 		= 	$rowref->{comments};
-			$grand_master_hash{abund_value}		= 	$rowref->{abund_value};
-			$grand_master_hash{reference_no}	= 	$rowref->{reference_no};
 
             # If we have specimens
             my $sql_s = "SELECT count(*) c FROM specimens WHERE occurrence_no=$rowref->{occurrence_no}";
             my $specimens_measured = ${$dbt->getData($sql_s)}[0]->{'c'};
             if ($specimens_measured) {
-                my $pl = ($specimens_measured > 1) ? 's' : '';
-                $rowref->{comments} .= " (<a href=\"bridge.pl?action=displaySpecimenList&occurrence_no=$rowref->{occurrence_no}\">$specimens_measured measurement$pl</a>)";
+                my $s = ($specimens_measured > 1) ? 's' : '';
+                $rowref->{comments} .= " (<a href=\"bridge.pl?action=displaySpecimenList&occurrence_no=$rowref->{occurrence_no}\">$specimens_measured measurement$s</a>)";
             }
 			
 			# if the user submitted a form such as adding a new occurrence or 
@@ -3336,11 +3324,7 @@ sub buildTaxonomicList {
                 my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
 
                 if ($taxon->{'taxon_rank'} =~ /species/ || $rowref->{'species_name'} =~ /^indet\.|^sp\./) {
-                    if ($taxon->{'ref_is_authority'}) {
-                        $rowref->{'authority'} = Reference::formatShortRef($taxon,'link_id'=>1);
-                    } else {
-                        $rowref->{'authority'} = Reference::formatShortRef($taxon);
-                    }
+                    $rowref->{'authority'} = Reference::formatShortRef($taxon,'link_id'=>$taxon->{'ref_is_authority'});
                 }   
 			}
 
@@ -3349,32 +3333,15 @@ sub buildTaxonomicList {
 			# if the occurrence's reference differs from the collection's, print it
 			my $newrefno = $rowref->{'reference_no'};
 			if ($newrefno != $options{'hide_reference_no'})	{
-				$rowref->{reference_no} = buildReference($newrefno,"list");
+				$rowref->{reference_no} = Reference::formatShortRef($dbt,$newrefno,'link_id'=>1);
 			} else {
 				$rowref->{reference_no} = '';
 			}
-
-			my @occrow = ();
-			my @occFieldNames = ();
 			
 			# put all keys and values from the current occurrence
 			# into two separate arrays.
-            my $taxon_name = formatOccurrenceTaxonName($rowref);
-            push @occFieldNames, 'taxon_name';
-            push @occrow, $taxon_name;
-			while((my $key, my $value) = each %{$rowref}){
-                if ($key eq 'collection_no' && $options{'collection_no'}) {
-                    push (@occFieldNames, $key);
-                    push (@occrow, '');
-                } else {
-                    push(@occFieldNames, $key);
-                    if ($value =~ /^$/) {
-                        push(@occrow, '');
-                    } else {
-                        push(@occrow, $value);
-                    }
-                }
-			}
+            $rowref->{'taxon_name'} = formatOccurrenceTaxonName($rowref);
+            $rowref->{'hide_collection_no'} = $options{'collection_no'};
 	
 			# get the most recent reidentification of this occurrence.  
 			my $mostRecentReID = PBDBUtil::getMostRecentReIDforOcc($dbt,$rowref->{occurrence_no},1);
@@ -3382,142 +3349,74 @@ sub buildTaxonomicList {
 			# if the occurrence has been reidentified at least once, then 
 			# display the original and reidentifications.
 			if ($mostRecentReID) {
-                push(@occrow, 'YES');
-                push(@occFieldNames, 'show_higher_taxa');
-                push(@occrow, '');
-                push(@occFieldNames, 'show_classification_select');
-				$output = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
+				$output = $hbo->populateHTML("taxa_display_row", $rowref);
 				
 				# rjp, 1/2004, change this so it displays *all* reidentifications, not just
 				# the last one.
-	# JA 2.4.04: this was never implemented by Poling, who instead went
-	#  renegade and wrote the entirely redundant HTMLFormattedTaxonomicList;
-	#  the correct way to do it was to pass in $rowref->{occurrence_no} and
-	#  isReidNo = 0 instead of $mostRecentReID and isReidNo = 1
+                # JA 2.4.04: this was never implemented by Poling, who instead went
+                #  renegade and wrote the entirely redundant HTMLFormattedTaxonomicList;
+                #  the correct way to do it was to pass in $rowref->{occurrence_no} and
+                #  isReidNo = 0 instead of $mostRecentReID and isReidNo = 1
 	
                 my $show_collection = '';
 				my ($table,$classification,$reid_are_reclassifications) = getReidHTMLTableByOccNum($rowref->{occurrence_no}, 0, $options{'do_reclassify'});
                 $are_reclassifications = 1 if ($reid_are_reclassifications);
                 $output .= $table;
 				
-				$grand_master_hash{'class_no'} = ($classification->{'class'}{'taxon_no'} or 1000000);
-				$grand_master_hash{'order_no'} = ($classification->{'order'}{'taxon_no'} or 1000000);
-				$grand_master_hash{'family_no'} = ($classification->{'family'}{'taxon_no'} or 1000000);
+				$rowref->{'class_no'}  = ($classification->{'class'}{'taxon_no'} or 1000000);
+				$rowref->{'order_no'}  = ($classification->{'order'}{'taxon_no'} or 1000000);
+				$rowref->{'family_no'} = ($classification->{'family'}{'taxon_no'} or 1000000);
 			}
-		# otherwise this occurrence has never been reidentified
+    		# otherwise this occurrence has never been reidentified
 			else {
-				
-		# get the classification (by PM): changed 2.4.04 by JA to
-		#  use the occurrence number instead of the taxon name
-				my $class_hash = TaxaCache::getParents($dbt,[$rowref->{'taxon_no'}],'array_full');
-                my @class_array = @{$class_hash->{$rowref->{'taxon_no'}}};
-                my %classification = ();
-                foreach my $taxon (@class_array) {
-                    $classification{$taxon->{'taxon_rank'}} = $taxon;
-                }
-                # If its a higher order name and indet, like "Omomyidae indet." get the higher order name as well
+	        	# get the classification (by PM): changed 2.4.04 by JA to
+		        #  use the occurrence number instead of the taxon name
                 if ($rowref->{'taxon_no'}) {
+                    # Get parents
+				    my $class_hash = TaxaCache::getParents($dbt,[$rowref->{'taxon_no'}],'array_full');
+                    my @class_array = @{$class_hash->{$rowref->{'taxon_no'}}};
+                    # Get Self as well, in case we're a family indet.
                     my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}});
-                    if ($taxon->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
-                        $classification{$taxon->{'taxon_rank'}} = $taxon;
+                    foreach my $t (@class_array,$taxon) {
+                        if ($t->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
+                            $rowref->{$t->{'taxon_rank'}} = $t->{'taxon_name'};
+                            $rowref->{$t->{'taxon_rank'}."_no"} = $t->{'taxon_no'};
+                        }
                     }
-                }
-                
-				# for sorting, later
-				$grand_master_hash{'class_no'} = ($classification{'class'}{'taxon_no'} or 1000000);
-				$grand_master_hash{'order_no'} = ($classification{'order'}{'taxon_no'} or 1000000);
-				$grand_master_hash{'family_no'} = ($classification{'family'}{'taxon_no'} or 1000000);
-
-                if ($rowref->{'taxon_no'}) {
-                    push(@occrow, 'YES');
-                    push(@occFieldNames, 'show_higher_taxa');
-                    push(@occrow, '');
-                    push(@occFieldNames, 'show_classification_select');
-                    push(@occrow, $classification{'class'}{'taxon_name'});
-                    push(@occFieldNames, 'class');
-                    push(@occrow, $classification{'order'}{'taxon_name'});
-                    push(@occFieldNames, 'order');
-                    push(@occrow, $classification{'family'}{'taxon_name'});
-                    push(@occFieldNames, 'family');
+                    $rowref->{'synonym_name'} = getSynonymName($dbt,$rowref->{'taxon_no'});
                 } else {
-                    push(@occrow, '');
-                    push(@occFieldNames, 'show_higher_taxa');
-                    push(@occrow,'YES');
-                    push(@occFieldNames, 'show_classification_select');
                     if ($options{'do_reclassify'}) {
+                        $rowref->{'show_classification_select'} = 1;
                         # Give these default values, don't want to pass in possibly undef values to any function or PERL might screw it up
-                        my ($genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name) = ("","","","","","");
-                        $genus_name = $rowref->{'genus_name'} if ($rowref->{'genus_name'});
-                        $genus_reso = $rowref->{'genus_reso'} if ($rowref->{'genus_reso'});
-                        $subgenus_reso = $rowref->{'subgenus_reso'} if ($rowref->{'subgenus_reso'});
-                        $subgenus_name = $rowref->{'subgenus_name'} if ($rowref->{'subgenus_name'});
-                        $species_reso = $rowref->{'species_reso'} if ($rowref->{'species_reso'});
-                        $species_name = $rowref->{'species_name'} if ($rowref->{'species_name'});
+                        my $genus_name = $rowref->{'genus_name'} || "";
+                        my $genus_reso = $rowref->{'genus_reso'} || "";
+                        my $subgenus_reso = $rowref->{'subgenus_reso'} || "";
+                        my $subgenus_name = $rowref->{'subgenus_name'} || "";
+                        my $species_reso = $rowref->{'species_reso'} || "";
+                        my $species_name = $rowref->{'species_name'} || "";
                         my $taxon_name = $genus_name; 
                         $taxon_name .= " ($subgenus_name)" if ($subgenus_name);
                         $taxon_name .= " $species_name";
                         my @all_matches = Taxon::getBestClassification($dbt,$genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name);
                         if (@all_matches) {
                             $are_reclassifications = 1;
-                            push @occrow, Reclassify::classificationSelect($dbt, $rowref->{'occurrence_no'},0,1,\@all_matches,$rowref->{'taxon_no'},$taxon_name);
-                            push @occFieldNames, 'classification_select';
+                            $rowref->{'classification_select'} = Reclassify::classificationSelect($dbt, $rowref->{'occurrence_no'},0,1,\@all_matches,$rowref->{'taxon_no'},$taxon_name);
                         }
                     }
                 }
+                $rowref->{'class_no'} ||= 1000000;
+                $rowref->{'order_no'} ||= 1000000;
+                $rowref->{'family_no'} ||= 1000000;
 
-				$output = $hbo->populateHTML("taxa_display_row", \@occrow, \@occFieldNames );
+				$output = $hbo->populateHTML("taxa_display_row", $rowref);
 			}
-    
-            my $taxon_no;
-            if ($mostRecentReID) {
-                $taxon_no = $mostRecentReID->{'taxon_no'};    
-            } else {
-                $taxon_no = $rowref->{'taxon_no'};
-            }
-            if ($taxon_no) {
-                my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
-                my $ss_taxon_no = TaxonInfo::getSeniorSynonym($dbt,$orig_no);
-                my $is_synonym = ($ss_taxon_no != $orig_no) ? 1 : 0;
-                my $is_spelling = 0;
-                my $spelling_reason = "";
-
-                my $spelling = TaxonInfo::getMostRecentSpelling($dbt,$ss_taxon_no);
-                if ($spelling->{'taxon_no'} != $taxon_no) {
-                    $is_spelling = 1;
-                    $spelling_reason = $spelling->{'spelling_reason'};
-                    $spelling_reason = 'recombined as' if $spelling_reason eq 'recombination';
-                    $spelling_reason = 'corrected as' if $spelling_reason eq 'correction';
-                    $spelling_reason = 'rank changed as' if $spelling_reason eq 'rank change';
-                    $spelling_reason = 'reassigned as' if $spelling_reason eq 'reassignment';
-                }
-                my $taxon_name = $spelling->{'taxon_name'};
-                my $taxon_rank = $spelling->{'taxon_rank'};
-                if ($is_synonym || $is_spelling) {
-                    $output .= "<tr>";
-                    $output .= "<td colspan=\"4\"></td>"; #collection,class,order,family - blanks
-                    my $show_name; 
-                    if ($taxon_rank =~ /species|genus/) {
-                        $show_name = "<em>$taxon_name</em>";
-                    } else {
-                        $show_name = $taxon_name;
-                    }
-                    if ($is_synonym) {
-                        $output .= "<td><span class=\"small\">&nbsp;&nbsp;&nbsp;&nbsp synonym of <a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$ss_taxon_no\">$show_name</a></span></td>"; 
-                    } else {
-                        $output .= "<td><span class=\"small\">&nbsp;&nbsp;&nbsp;&nbsp $spelling_reason <a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$ss_taxon_no\">$show_name</a></span></td>"; 
-                    }
-                    $output .= "<td></td>"; #reference
-                    $output .= "<td></td><td></td>"; #abund,comments
-                    $output .= "</tr>";
-                }
-            }
 
 			# Clean up abundance values (somewhat messy, but works, and better
 			#   here than in populateHTML) JA 10.6.02
 			$output =~ s/(>1 specimen)s|(>1 individual)s/$1$2/g;
 	
-            $grand_master_hash{'html'} = $output;
-			push(@grand_master_list, \%grand_master_hash);
+            $rowref->{'html'} = $output;
+			push(@grand_master_list, $rowref);
 		}
 
 		# Look at @grand_master_list to see every record has class_no, order_no,
@@ -3625,11 +3524,6 @@ sub buildTaxonomicList {
 			$return .= "<td></td>";
 		} else {
 			$return .= "<td><b>Abundance</b></td>";
-		}
-		if($comments == 0){
-			$return .= "<td></td>";
-		} else {
-			$return .= "<td><b>Comments</b></td></tr>";
 		}
 
 		# Sort:
@@ -3749,6 +3643,10 @@ sub buildTaxonomicList {
         }
         $return .= "</div>";
 	}
+    # This replaces blank cells with blank cells that have no padding, so the don't take up
+    # space - this way the comments field lines is indented correctly if theres a bunch of empty
+    # class/order/family columns sort of an hack but works - PS
+    $return =~ s/<td(.*?)>\s*<\/td>/<td$1 style=\"padding: 0\"><\/td>/g;
 	return $return;
 } # end sub buildTaxonomicList()
 
@@ -3828,12 +3726,57 @@ sub formatOccurrenceTaxonName {
     }
     
     if ($row->{'species_reso'} eq 'n. sp.') {
-            $taxon_name .= " n. sp.";
+        $taxon_name .= " n. sp.";
+    }
+    if ($row->{'plant_organ'} && $row->{'plant_organ'} ne 'unassigned') {
+        $taxon_name .= " $row->{plant_organ}";
+    }
+    if ($row->{'plant_organ2'} && $row->{'plant_organ2'} ne 'unassigned') {
+        $taxon_name .= ", " if ($row->{'plant_organ'} && $row->{'plant_organ'} ne 'unassigned');
+        $taxon_name .= " $row->{plant_organ2}";
     }
 
     return $taxon_name;
 }
 
+# This is pretty much just used in a couple places above
+sub getSynonymName {
+    my ($dbt,$taxon_no) = @_;
+    return "" unless $taxon_no;
+
+    my $synonym_name = "";
+
+    my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
+    my $ss_taxon_no = TaxonInfo::getSeniorSynonym($dbt,$orig_no);
+    my $is_synonym = ($ss_taxon_no != $orig_no) ? 1 : 0;
+    my $is_spelling = 0;
+    my $spelling_reason = "";
+
+    my $spelling = TaxonInfo::getMostRecentSpelling($dbt,$ss_taxon_no);
+    if ($spelling->{'taxon_no'} != $taxon_no) {
+        $is_spelling = 1;
+        $spelling_reason = $spelling->{'spelling_reason'};
+        $spelling_reason = 'recombined as' if $spelling_reason eq 'recombination';
+        $spelling_reason = 'corrected as' if $spelling_reason eq 'correction';
+        $spelling_reason = 'rank changed as' if $spelling_reason eq 'rank change';
+        $spelling_reason = 'reassigned as' if $spelling_reason eq 'reassignment';
+    }
+    my $taxon_name = $spelling->{'taxon_name'};
+    my $taxon_rank = $spelling->{'taxon_rank'};
+    if ($is_synonym || $is_spelling) {
+        if ($taxon_rank =~ /species|genus/) {
+            $synonym_name = "<em>$taxon_name</em>";
+        } else { 
+            $synonym_name = $taxon_name;
+        }
+        if ($is_synonym) {
+            $synonym_name = "synonym of <a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$ss_taxon_no\">$synonym_name</a>";
+        } else {
+            $synonym_name = "$spelling_reason <a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$ss_taxon_no\">$synonym_name</a>";
+        }
+    }
+    return $synonym_name;
+}
 
 
 # note: rjp 1/2004 - I *think* this gets an HTML formatted table
@@ -3848,7 +3791,7 @@ sub getReidHTMLTableByOccNum {
 	my $isReidNo = shift;
     my $doReclassify = shift;
 
-	my $sql = "SELECT genus_reso, genus_name, subgenus_reso, subgenus_name, species_reso, species_name,  re.comments as comments, re.reference_no as reference_no,  pubyr, taxon_no, occurrence_no, reid_no, collection_no FROM reidentifications re"
+	my $sql = "SELECT genus_reso, genus_name, subgenus_reso, subgenus_name, species_reso, species_name, plant_organ, re.comments as comments, re.reference_no as reference_no,  pubyr, taxon_no, occurrence_no, reid_no, collection_no FROM reidentifications re"
             . " LEFT JOIN refs r ON re.reference_no=r.reference_no ";
 	if ($isReidNo) {
 		$sql .= " WHERE reid_no = $occNum";
@@ -3863,36 +3806,29 @@ sub getReidHTMLTableByOccNum {
 
     # We always get all of them PS
 	foreach my $row ( @results ) {
-        $row->{'taxon_name'} = formatOccurrenceTaxonName($row);
+        $row->{'taxon_name'} = "&nbsp;&nbsp;&nbsp;&nbsp;= ".formatOccurrenceTaxonName($row);
         
 		# format the reference (PM)
-		$row->{'reference_no'} = buildReference($row->{'reference_no'},"list");
+		$row->{'reference_no'} = Reference::formatShortRef($dbt,$row->{'reference_no'},'link_id'=>1);
        
-        
 		# get the taxonomic authority JA 19.4.04
         my $taxon;
 		if ($row->{'taxon_no'}) {
             $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
 
             if ($taxon->{'taxon_rank'} =~ /species/ || $row->{'species_name'} =~ /^indet\.|^sp\./) {
-                if ($taxon->{'ref_is_authority'}) {
-                    $row->{'authority'} = Reference::formatShortRef($taxon,'link_id'=>1);
-                } else {
-                    $row->{'authority'} = Reference::formatShortRef($taxon);
-                }
+                $row->{'authority'} = Reference::formatShortRef($taxon,'link_id'=>$taxon->{'ref_is_authority'});
             }
         }
 
         # Just a default value, so formm looks correct
-        $row->{'show_higher_taxa'} = 'YES';
-        $row->{'show_classification_select'} = '';
         # JA 2.4.04: changed this so it only works on the most recently published reID
         if ( $row == $results[$#results] )	{
             if ($row->{'taxon_no'}) {
                 my $class_hash = TaxaCache::getParents($dbt,[$row->{'taxon_no'}],'array_full');
-                # Index 0 is class, 1 is order, 2 is family. add -1 to split to keep empty trailing fields
                 my @class_array = @{$class_hash->{$row->{'taxon_no'}}};
-                foreach my $parent (@class_array) {
+                my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}});
+                foreach my $parent (@class_array,$taxon) {
                     $classification->{$parent->{'taxon_rank'}} = $parent;
                 }
                 # Include the taxon as well, it my be a family and be an indet.
@@ -3900,9 +3836,9 @@ sub getReidHTMLTableByOccNum {
                 $row->{'class'} = $classification->{'class'}{'taxon_name'};
                 $row->{'order'} = $classification->{'order'}{'taxon_name'};
                 $row->{'family'}= $classification->{'family'}{'taxon_name'};
+                $row->{'synonym_name'} = getSynonymName($dbt,$row->{'taxon_no'});
             } else {
                 if ($doReclassify) {
-                    $row->{'show_higher_taxa'} = '';
                     $row->{'show_classification_select'} = 'YES';
                     # Give these default values, don't want to pass in possibly undef values to any function or PERL might screw it up
                     my ($genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name) = ("","","","","","");
@@ -3923,8 +3859,9 @@ sub getReidHTMLTableByOccNum {
                 }
             }
 		}
-        
-		$html .= $hbo->populateHTML("reid_taxa_display_row", $row);
+    
+        $row->{'hide_collection_no'} = 1;
+		$html .= $hbo->populateHTML("taxa_display_row", $row);
 	}
 
 	return ($html,$classification,$are_reclassifications);
@@ -6986,59 +6923,6 @@ sub htmlError {
 	print $message;
     print stdIncludes("std_page_bottom");
 	exit 1;
-}
-
-# Build the reference ( at the bottom of the page )
-sub buildReference {
-	my $reference_no = shift;
-	my $outputtype = shift; # possible values list/bottom
-	my $reference = "";
-
-	if ( $reference_no ) {
-		my $sql = "SELECT reference_no,author1init,author1last,author2init,author2last,otherauthors,pubyr FROM refs where reference_no = $reference_no";
-		#dbg ( "$sql" );
-		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute();
-		if ( $sth->rows ) {
-			my $rs = $sth->fetchrow_hashref ( );
-
-			# First author always shown
-			if ($outputtype eq "bottom")	{
-				$reference = $reference_no." (";
-			}
-			elsif ($outputtype eq "list")	{
-				$reference = "<a href=bridge.pl?action=displayReference&reference_no=$reference_no>";
-			}
-			$reference .= $rs->{author1last};
-
-			AUTHOR: {
-
-				# If otherauthors is filled in, we do an et al.
-				if ( $rs->{otherauthors} )	{
-					$reference .= " et al."; last;
-				}
-				# If there is a second author...
-				elsif ( $rs->{author2last} )	{
-					$reference .= " and ".$rs->{author2last};
-					last;
-				}
-				# Otherwise, it is just the author, so do nothing extra
-			}
-			$reference .= " ".$rs->{pubyr};
-			if ($outputtype eq "bottom")	{
-				$reference .= ")";
-			}
-			elsif ($outputtype eq "list")	{
-				$reference =~ s/ /&nbsp;/g;
-				$reference =~ s/<a&nbsp;href/<a href/g;
-				$reference .= "</a>";
-			}
-		}	
-	} else {
-		$reference = "none";
-	}
-
-	return $reference;
 }
 
 # ------------------------ #
