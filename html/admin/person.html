@@ -50,12 +50,12 @@
     </script>
 
 <form action="admin.pl" method="POST" onSubmit="return checkForm();">
-<input type=hidden name="action" value="processPerson%%type%%">
+<input type=hidden name="action">
 <input id="person_no" type="hidden">
 
 
 <div align="center">
-<h2>Add a new person</h2>
+<h2>%%page_title%%</h2>
 <table border=0 cellpadding=4 cellspacing=1 bgcolor="Silver">
 
 <tr>
@@ -122,7 +122,7 @@
 
 <tr>
 	<td bgcolor="White" colspan="2" align="center">
-	<input type="submit" value="%%type%% person">	
+	<input type="submit" name="submit">	
 	</td>
 </tr>
 </table>
