@@ -179,7 +179,7 @@ sub populateHTML {
 
     # Basic sanitizing
     $template =~ s/\.htm(l)?$//;
-    $template =~ s/[^A-Za-z0-9_-]//g;
+    $template =~ s/[^\/A-Za-z0-9_-]//g;
 
     # Two steps: if we're a db member, first try members templates/ dir
     # Else if we're guest or have been forced to use guest templates, try those, else print no success
