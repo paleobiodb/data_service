@@ -49,7 +49,7 @@ sub displayPerson {
 	my $type = $q->param("type");
 	my @values;
 	my @fieldNames;
-	my $person_no = $q->param("person_no");
+	my $person_no = int($q->param("person_no"));
 
 	# Minimally we need the metadata
 	if ( $type eq "add" ) { $person_no = 0; }
@@ -67,9 +67,21 @@ sub displayPerson {
 	$sth->finish();
 
 	# Upper case
-	$type =~ s/^./\U$&/;
-	unshift ( @values, $type );
-	unshift ( @fieldNames, "%%type%%" );
+	my $myaction;
+    my $page_title;
+	if ( $type eq "edit" )	{
+		$myaction = "processPersonEdit";
+        $page_title = "Edit person";
+	} else {
+        $myaction = "processPersonAdd";
+        $page_title = "Add a new person";
+    }
+	unshift ( @values, $myaction );
+	unshift ( @fieldNames, "action" );
+	unshift ( @values, $page_title);
+	unshift ( @fieldNames, "page_title" );
+	unshift ( @values, ucfirst("$type person")  );
+	unshift ( @fieldNames, "submit" );
 
 	print $hb->populateHTML( "std_page_top" );
 	print $hb->populateHTML ( "person", \@values, \@fieldNames );
