@@ -223,16 +223,33 @@ sub displayActions	{
 		$lastlogin{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'last_action'};
 	}
 	$sth->finish();
+
+	for my $lag ( 1,7,30 )	{
+		my $sql = "SELECT count(*) as c, first_name, last_name FROM person, collections WHERE enterer_no=person_no AND to_days(collections.created) > to_days(now()) - $lag GROUP BY enterer_no";
+		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+		$sth->execute();
+	
+		while ( my $row = $sth->fetchrow_hashref() ) {
+			$collslast{$lag}{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'c'};
+		}
+		$sth->finish();
+	}
 	
 	@names = sort({ $lastlogin{$b} <=> $lastlogin{$a} } keys %lastlogin);
 	
 	print "<p><center><table cellpadding=6>\n";
-	
+
+	print "<tr><td><b>rank</b></td><td><b>name</b></td><td><b>last action</b></td>";
+	print "<td align=\"center\"><b>d</b></td><td align=\"center\"><b>w</b></td><td align=\"center\"><b>m</b></td></tr>\n";
 	for $i (0..29)	{
 		if ($lastlogin{$names[$i]} > 20020630150000)	{
 			$d = date($lastlogin{$names[$i]});
-			printf "<tr><td>%d",$i + 1;
-			print "<td>$names[$i]</td><td>$d</td></tr>\n";
+			printf "<tr><td align=\"center\">%d</td>",$i + 1;
+			print "<td>$names[$i]</td><td>$d</td>";
+			for my $lag ( 1,7,30 )	{
+				print "<td align=\"center\">$collslast{$lag}{$names[$i]}</td>";
+			}
+			print "</tr>\n";
 		}
 	}
 	
