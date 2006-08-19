@@ -67,7 +67,8 @@ sub startSearchScale	{
 			my @sorted = sort keys %{$scale_strings{$c.$r}};
 			if ( $#sorted > -1 )	{
 				print "<div class=\"tiny\" style=\"padding-bottom: 2px;\">$r</div>\n";
-				print "<div class=\"tiny\" style=\"padding-bottom: 4px;\">&nbsp;&nbsp;<select class=\"verytiny\" name=\"scale\">\n";
+				print "<div class=\"tiny\" style=\"padding-bottom: 4px;\">&nbsp;&nbsp;<select class=\"verytiny\" name=\"scale$c$r\">\n";
+				print "<option>\n";
 				for my $string ( @sorted )	{
 					print $scale_strings{$c.$r}{$string};
 				}
@@ -263,6 +264,16 @@ sub processViewTimeScale	{
 		print main::stdIncludes("std_page_top");
 	}
 
+	# new submit form has a ton of scale parameters; strip out the first
+	# one that isn't blank
+	my @params = $q->param();
+	for my $p ( @params )	{
+		if ( $p =~ /^scale/ && $q->param($p) )	{
+			$q->param('scale' => $q->param($p) );
+			last;
+		}
+	}
+
 	# Get basic data on the time scale (WARNING: assumes one was selected properly)
 	my $sql = "SELECT * FROM scales WHERE scale_no=" . $q->param('scale');
 	my @results = @{$dbt->getData($sql)};
@@ -296,7 +307,7 @@ sub processViewTimeScale	{
 		print "</p></div>";
 	}
 
-	print "<p>\n\n<div align=\"center\"><table cellspacing=2><tr><td bgcolor=\"black\"><table bgcolor=\"white\">\n\n";
+	print "<p>\n\n<div align=\"center\" style=\"position: relative; clear: all;\"><table cellspacing=2><tr><td bgcolor=\"black\"><table bgcolor=\"white\">\n\n";
 
 	# Get the scale's intervals
 	$sql = "SELECT * FROM correlations WHERE scale_no=" . $q->param('scale');
@@ -307,7 +318,6 @@ sub processViewTimeScale	{
 	my $nmax;
 	my $nmin;
 	my $nlower;
-	my $ncomments;
 	for my $time (@times)	{
 		if ( $time->{max_interval_no} > 0 )	{
 			$nmax++;
@@ -317,9 +327,6 @@ sub processViewTimeScale	{
 		}
 		if ( $time->{lower_boundary} > 0 )	{
 			$nlower++;
-		}
-		if ( $time->{corr_comments} ne "" )	{
-			$ncomments++;
 		}
 	}
 
@@ -337,10 +344,6 @@ sub processViewTimeScale	{
 	print "</td><td align=\"center\" valign=\"bottom\">";
 	if ( $nlower > 0 )	{
 		print "<b>Ma</b> ";
-	}
-	print "</td><td align=\"center\" valign=\"bottom\">";
-	if ( $ncomments > 0 )	{
-		print "<b>&nbsp;&nbsp;Comments&nbsp;&nbsp;</b> ";
 	}
 	print "</td>\n";
 	print "</tr>\n";
