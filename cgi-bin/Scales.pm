@@ -52,7 +52,7 @@ sub startSearchScale	{
 
 	print "<table cellpadding=5>\n";
 	print "<tr><td align=\"left\"> ";
-	print "<form name=\"scale_view_form\" action=\"$exec_url\" method=\"POST\">\n";
+	print "<form name=\"scale_view_form\" id=\"scale_view_form\" action=\"$exec_url\" method=\"POST\">\n";
 	print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"processViewScale\">\n\n";
 
 	# WARNING: if African or Antarctic scales are ever entered, they need
@@ -67,7 +67,7 @@ sub startSearchScale	{
 			my @sorted = sort keys %{$scale_strings{$c.$r}};
 			if ( $#sorted > -1 )	{
 				print "<div class=\"tiny\" style=\"padding-bottom: 2px;\">$r</div>\n";
-				print "<div class=\"tiny\" style=\"padding-bottom: 4px;\">&nbsp;&nbsp;<select class=\"verytiny\" name=\"scale$c$r\">\n";
+				print "<div class=\"tiny\" style=\"padding-bottom: 4px;\">&nbsp;&nbsp;<select class=\"verytiny\" name=\"scale$c$r\" onChange=\"document.getElementById('scale_view_form').submit()\">\n";
 				print "<option>\n";
 				for my $string ( @sorted )	{
 					print $scale_strings{$c.$r}{$string};
@@ -79,7 +79,9 @@ sub startSearchScale	{
 	}
 
 	print "</td></tr><tr><td align=\"center\"> ";
+	print "<noscript>\n";
 	print "<input type=\"submit\" value=\"View scale\"></form>";
+	print "</noscript>\n";
 	print "</td></tr> ";
 
 	print "<tr><td><p></p></td></tr>\n";
