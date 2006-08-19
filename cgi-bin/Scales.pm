@@ -26,7 +26,7 @@ sub startSearchScale	{
 	print "<div align=\"center\"><h2>Select a time scale to view</h2>\n";
 
 	# Retrieve each scale's name from the database
-	my $sql = "SELECT authorizer_no,scale_no,scale_name,reference_no FROM scales";
+	my $sql = "SELECT authorizer_no,scale_no,scale_name,reference_no,continent,scale_rank FROM scales";
 	my @results = @{$dbt->getData($sql)};
 	my @scale_strings;
 	for my $scaleref (@results)	{
@@ -42,7 +42,7 @@ sub startSearchScale	{
 		}
 		$auth .= " " . $results2[0]->{pubyr};
 		$auth = " [" . $auth . "]\n";
-		$scale_strings{$name} = $option . $name . $auth;
+		$scale_strings{$scaleref->{continent}.$scaleref->{scale_rank}}{$name} = $option . $name . $auth;
 
 		# Get the authorizer's name
 		$sql2 = "SELECT name FROM person WHERE person_no=" . $scaleref->{authorizer_no};
@@ -51,18 +51,33 @@ sub startSearchScale	{
 	}
 
 	print "<table cellpadding=5>\n";
-	print "<tr><td align=\"right\"> ";
+	print "<tr><td align=\"left\"> ";
 	print "<form name=\"scale_view_form\" action=\"$exec_url\" method=\"POST\">\n";
 	print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"processViewScale\">\n\n";
-	print "<select name=\"scale\">\n";
 
-	my @sorted = sort keys %scale_strings;
-	for my $string (@sorted)	{
-		print $scale_strings{$string};
+	# WARNING: if African or Antarctic scales are ever entered, they need
+	#  to be added to this list
+	for my $c ( 'global','Asia','Australia','Europe','New Zealand','North America','South America' )	{
+		my $continent = $c;
+		$continent =~ s/global/Global/;
+		print qq|<div class="displayPanel" align="left" style="padding-left: 2em;">
+  <span class="displayPanelHeader"><b>$continent</b></span>
+  <div class="displayPanelContent">\n|;
+		for my $r ( 'eon/eonothem','era/erathem','period/system','subperiod/system','epoch/series','subepoch/series','age/stage','subage/stage','chron/zone' )	{
+			my @sorted = sort keys %{$scale_strings{$c.$r}};
+			if ( $#sorted > -1 )	{
+				print "<div class=\"tiny\" style=\"padding-bottom: 2px;\">$r</div>\n";
+				print "<div class=\"tiny\" style=\"padding-bottom: 4px;\">&nbsp;&nbsp;<select class=\"verytiny\" name=\"scale\">\n";
+				for my $string ( @sorted )	{
+					print $scale_strings{$c.$r}{$string};
+				}
+				print "</select></div>\n\n";
+			}
+		}
+		print "</div>\n</div>\n\n";
 	}
 
-	print "</select>\n\n";
-	print "</td><td align=\"left\"> ";
+	print "</td></tr><tr><td align=\"center\"> ";
 	print "<input type=\"submit\" value=\"View scale\"></form>";
 	print "</td></tr> ";
 
@@ -87,9 +102,9 @@ sub startSearchScale	{
 		print "<input type=\"submit\" value=\"Add/edit scale\"></form>";
 		print "</td></tr> ";
 	}
-	print "</table>\n<p>\n";
+	print "</table>\n\n";
 
-	print "<p align=\"left\" class=\"small\">All data on the web site are prepared using an automatically generated composite time scale. The composite scale is based on the latest published correlations and boundary estimates for each time interval. Individual scales may be viewed by selecting from the pulldown menu above. Note, however, that the correlations in an individual scale might not be used in computations because they might not be the most recently published.</p>\n";
+	print "<p align=\"left\" class=\"tiny\" style=\"margin-left: 2em; margin-right: 2em;\">All data on the web site are prepared using an automatically generated composite time scale. The composite scale is based on the latest published correlations and boundary estimates for each time interval that are given above.</p>\n";
 
 	print main::stdIncludes("std_page_bottom");
 
