@@ -6,10 +6,10 @@
 <input id="goal" type=hidden name="goal" value="">
 
 <div hide="type=add">
-    <div align="center"><h2>Reference search form</h2></div>
+    <div align="center"><h3>Reference search form</h3></div>
 </div>
 <div show="type=add">
-    <div align="center"><h2>Duplicate reference search form</h2></div>
+    <div align="center"><h3>Duplicate reference search form</h3></div>
 </div>
 
 <center>
@@ -17,56 +17,58 @@
 %%message%%
 </h4></div>
 
-<table border=0 cellpadding=4>
+<div class="displayPanel" align="center" style="width: 40em;">
+<div class="displayPanelContent">
+<table border=0 cellpadding=4 class="small" style="padding-top: 1em; padding-borromt: 1em; padding-left: -1em;">
 <tr>
-	<th align=right>Author's last name:</th>
+	<td align=right>Author's last name:</td>
 	<td><input id="name" name="name" type=text size=20>
 	</td>
 
-	<th align=right>Year:</th>
+	<td align=right>Year:</td>
 	<td>
 	<input id="year" name="year" type=text size=5 maxlength=4>
 	</td>
 
 <tr>
-	<th align=right>Title includes: </th>
+	<td align=right>Title includes: </td>
 	<td colspan=4>
-	<input id="reftitle" name="reftitle" type=text size=40>
+	<input id="reftitle" name="reftitle" type=text size=50>
 	</td> 
 </tr>
 
 <tr>
-	<th align=right>Name of book or serial:</th>
+	<td align=right>Name of book<br>or serial:</td>
 	<td colspan=4>
-	<input id="pubtitle" name="pubtitle" type=text size=40>
+	<input id="pubtitle" name="pubtitle" type=text size=50>
 	</td>
 </tr>
 <div hide="type=add">
 <tr>
-	<th align=right> Reference number: </th>
+	<td align=right> Reference number: </td>
 	<td>
 	<input id="reference_no" name="reference_no" type=text size=7 maxlength=5>
 	</td>
 
-	<th align=right valign=top>Project: </th>
+	<td align=right valign=top>Project: </td>
 	<td valign=top>
-	<select id="project_name"></select>
+	<select id="project_name" class="tiny"></select>
 
 </tr>
 
 <tr>
-	<th align=right>Authorizer:</th>
+	<td align=right>Authorizer:</td>
 	<td><input id="authorizer_reversed" name="authorizer_reversed" size=18 onKeyUp="doComplete(event, this, authorizerNames());"></td>
 
-	<th align=right>Enterer:</th>
+	<td align=right>Enterer:</td>
 	<td><input id="enterer_reversed" name="enterer_reversed" size=18 onKeyUp="doComplete(event, this, entererNames());"></td>
 </tr>
 </div>
 
 <tr>
-	<th align=right valign=top>Sort by:</th>
+	<td align=right valign=top>Sort by:</td>
 	<td>
-	  <select name="refsortby">
+	  <select name="refsortby" class="tiny">
         <option>author</option>
         <option>year</option>
         <option>publication</option>
@@ -74,7 +76,7 @@
         <option>enterer</option>
         <option>entry date</option>
       </select>
-	  <select name="refsortorder">
+	  <select name="refsortorder" class="tiny">
         <option>ascending</option>
         <option>descending</option>
       </select>
@@ -83,13 +85,14 @@
 </tr>
 
 <tr>
-	<td colspan="4" align="center">
-	<BR>
+	<td colspan="4" align="right">
 	<input type=submit value="Search"> %%use_current%% %%use_primary%%
 	</td>
 </tr>
 </table>
-<BR>
 
 </form>
+
+</div>
+</div>
 
