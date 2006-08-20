@@ -2974,7 +2974,15 @@ sub displayCollectionDetails {
 	print $taxa_list;
 
 	print '<p><div align="center"><table><tr>';
-	if ( $taxa_list =~ /Abundance/ )	{
+	# have to have at least three taxa
+	my @occrows = split /\n/,$taxa_list;
+	my $hasabund;
+	for my $or ( @occrows )	{
+		if ( $or =~ /specimen|individual/ )	{
+			$hasabund++;
+		}
+	}
+	if ( $taxa_list =~ /Abundance/ && $hasabund > 2 )	{
 		print "<td>".$hbo->populateHTML('rarefy_display_buttons', [$collection_no],['collection_no'])."</td>";
 	}
 
