@@ -6860,9 +6860,9 @@ sub RefQuery {
         } elsif ($refsortby eq 'publication') {
             $orderBy .= "r.pubtitle $refsortorder, ";
         } elsif ($refsortby eq 'authorizer') {
-            $orderBy .= "p1.last_name $refsortorder, p1.first_name $refsortorder";
+            $orderBy .= "p1.last_name $refsortorder, p1.first_name $refsortorder, ";
         } elsif ($refsortby eq 'enterer') {
-            $orderBy .= "p2.last_name $refsortorder, p2.first_name $refsortorder";
+            $orderBy .= "p2.last_name $refsortorder, p2.first_name $refsortorder, ";
         } elsif ($refsortby eq 'entry date') {
             $orderBy .= "r.reference_no $refsortorder, ";
         }
