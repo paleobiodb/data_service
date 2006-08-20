@@ -635,14 +635,15 @@ sub displayOpinionForm {
 	#  numbers, make a pulldown menu listing the taxa JA 25.4.04
     # build the spelling pulldown, if necessary, else the spelling box
 
-    my $all_ranks = "";
-    if ($childSpellingRank eq 'subspecies') {
-        $all_ranks = ': e.g. "Genus (Subgenus) species subspecies"';
-    } elsif ($childSpellingRank eq 'species') {
-        $all_ranks = ': e.g. "Genus (Subgenus) species"';
-    }  elsif ($childSpellingRank eq 'subgenus') {
-        $all_ranks = ': e.g. "Genus (Subgenus)"';
-    }
+    # took this out because it clutter the form JA 20.8.06
+    #my $all_ranks = "";
+    #if ($childSpellingRank eq 'subspecies') {
+    #    $all_ranks = ': e.g. "Genus (Subgenus) species subspecies"';
+    #} elsif ($childSpellingRank eq 'species') {
+    #    $all_ranks = ': e.g. "Genus (Subgenus) species"';
+    #}  elsif ($childSpellingRank eq 'subgenus') {
+    #    $all_ranks = ': e.g. "Genus (Subgenus)"';
+    #}
 
     my @ranks = ();
     if ($childRank =~ /subspecies|species/) {
@@ -658,9 +659,10 @@ sub displayOpinionForm {
         @opinions_to_migrate1 = getOpinionsToMigrate($dbt,$fields{'child_no'},$child_spelling_nos[0],$fields{'opinion_no'});
     }
 
-    my $spelling_note = "";
+    my $spelling_note = "<small>If the name is invalid, enter the invalid name and not its senior synonym, replacement, etc.</small>";
 #    my $spelling_note = "<small>Note that the name may be different than listed above due to a correction, recombination, or rank change.</small>";
-    $spelling_row .= "<tr><td colspan=2>Please enter the full name and rank of the taxon as used in the reference${all_ranks}:</td></tr>";
+    $spelling_row .= "<tr><td colspan=2>Full name and rank of the taxon used in the reference:</td></tr>";
+    #$spelling_row .= "<tr><td colspan=2>Full name and rank of the taxon used in the reference${all_ranks}:</td></tr>";
 
     my $spelling_rank_pulldown = $hbo->htmlSelect('child_spelling_rank',\@ranks, \@ranks, $fields{'child_spelling_rank'});
 	if (scalar(@child_spelling_nos) > 1 || (scalar(@child_spelling_nos) == 1 && @opinions_to_migrate1)) {
@@ -703,7 +705,7 @@ sub displayOpinionForm {
         @select_keys = ("is the original spelling and rank of this taxon","is a correction of '$childName'","is a misspelling of this taxon","has had its rank changed from its original rank of $childRank");
     }
     $spelling_row .= "<tr><td>&nbsp;</td></tr>";
-    $spelling_row .= "<tr><td>Enter the reason why this spelling and rank was used:<br>This ". $hbo->htmlSelect('spelling_reason',\@select_keys,\@select_values,$fields{'spelling_reason'})."</td></tr>";
+    $spelling_row .= "<tr><td>Reason why this spelling and rank was used:<br>This ". $hbo->htmlSelect('spelling_reason',\@select_keys,\@select_values,$fields{'spelling_reason'})."</td></tr>";
 
     main::dbg("showOpinionForm, fields are: <pre>".Dumper(\%fields)."</pre>");
 
