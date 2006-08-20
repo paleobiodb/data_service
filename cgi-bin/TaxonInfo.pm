@@ -21,9 +21,12 @@ sub searchForm {
 	my $q = shift;
 	my $search_again = (shift or 0);
 
-    my $page_title = "<h2>Taxon search form</h2>";
+    my $page_title = qq|<p></p>
+<div class="displayPanel" align="center" style="width: 40em;">
+  <h3>Taxonomic name search form</h3>
+  <div class="displayPanelContent">|;
 	if ($search_again){
-        $page_title = "<h2>No results found</h2> (please search again)";
+        $page_title = "<p class=\"medium\">No results found (please search again)</p>";
     } 
 	print $hbo->populateHTML('search_taxoninfo_form' , [$page_title,''], ['page_title','page_subtitle']);
 
