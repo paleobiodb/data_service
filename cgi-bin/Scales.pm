@@ -266,11 +266,13 @@ sub processViewTimeScale	{
 
 	# new submit form has a ton of scale parameters; strip out the first
 	# one that isn't blank
-	my @params = $q->param();
-	for my $p ( @params )	{
-		if ( $p =~ /^scale/ && $q->param($p) )	{
-			$q->param('scale' => $q->param($p) );
-			last;
+	if ( ! $q->param('scale') || $q->param('scale') =~ /[^0-9] / )	{
+		my @params = $q->param();
+		for my $p ( @params )	{
+			if ( $p =~ /^scale/ && $p !~ /_name/ && $q->param($p) )	{
+				$q->param('scale' => $q->param($p) );
+				last;
+			}
 		}
 	}
 
