@@ -50,6 +50,8 @@ sub startSearchScale	{
 		$scale_authorizer{$name} = $results2[0]->{name};
 	}
 
+	print "<body onUnload=\"document.scale_view_form.reset()\">\n";
+
 	print "<table cellpadding=5>\n";
 	print "<tr><td align=\"left\"> ";
 	print "<form name=\"scale_view_form\" id=\"scale_view_form\" action=\"$exec_url\" method=\"POST\">\n";
@@ -66,8 +68,10 @@ sub startSearchScale	{
 		for my $r ( 'eon/eonothem','era/erathem','period/system','subperiod/system','epoch/series','subepoch/series','age/stage','subage/stage','chron/zone' )	{
 			my @sorted = sort keys %{$scale_strings{$c.$r}};
 			if ( $#sorted > -1 )	{
+				my $crclean = $c . $r;
+				$crclean =~ s/[^A-Za-z]//g;
 				print "<div class=\"tiny\" style=\"padding-bottom: 2px;\">$r</div>\n";
-				print "<div class=\"tiny\" style=\"padding-bottom: 4px;\">&nbsp;&nbsp;<select class=\"verytiny\" name=\"scale$c$r\" onChange=\"document.getElementById('scale_view_form').submit()\">\n";
+				print "<div class=\"tiny\" style=\"padding-bottom: 4px;\">&nbsp;&nbsp;<select class=\"verytiny\" name=\"scale$crclean\" onChange=\"document.getElementById('scale_view_form').submit()\">\n";
 				print "<option>\n";
 				for my $string ( @sorted )	{
 					print $scale_strings{$c.$r}{$string};
@@ -78,34 +82,25 @@ sub startSearchScale	{
 		print "</div>\n</div>\n\n";
 	}
 
-	print "</td></tr><tr><td align=\"center\"> ";
+	print "</td></tr>";
 	print "<noscript>\n";
-	print "<input type=\"submit\" value=\"View scale\"></form>";
-	print "</noscript>\n";
+	print "<tr><td align=\"center\"> ";
+	print "<input type=\"submit\" value=\"View scale\">";
 	print "</td></tr> ";
-
-	print "<tr><td><p></p></td></tr>\n";
+	print "</noscript>\n";
+	print "</table>\n\n";
+	print "</form>\n\n";
 
 #	if ( $session->get('enterer') ne "Guest" && $session->get('enterer') ne "" )	{
 	if ( $session->get('enterer') eq "J. Alroy" || $session->get('enterer') eq "S. Holland" )	{
-		print "<tr><td colspan=2 align=\"center\" valign=\"bottom\"><h3>... or select a time scale to add or edit</h3></td></tr>\n";
 
-		print "<tr><td align=\"right\"> ";
-		print "<form name=\"scale_add_form\" action=\"$exec_url\" method=\"POST\">\n";
-		print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"processShowForm\">\n\n";
-		print "<select name=\"scale\">\n";
-		print "<option selected value=\"\">------------ select to create a new time scale ------------\n";
-		for my $string (@sorted)	{
-			if ( $session->get('authorizer') eq $scale_authorizer{$string} )	{
-				print $scale_strings{$string};
-			}
-		}
-		print "</select>\n\n";
-		print "</td><td align=\"left\"> ";
-		print "<input type=\"submit\" value=\"Add/edit scale\"></form>";
-		print "</td></tr> ";
+		print qq|
+		<form name="scale_add_form" action="$exec_url" method="POST">
+		<input id="action" type="hidden" name="action" value="processShowForm">
+		<input type="hidden" name="scale" value="add">
+		<input type="submit" value="Add scale">
+		</form>|;
 	}
-	print "</table>\n\n";
 
 	print "<p align=\"left\" class=\"tiny\" style=\"margin-left: 2em; margin-right: 2em;\">All data on the web site are prepared using an automatically generated composite time scale. The composite scale is based on the latest published correlations and boundary estimates for each time interval that are given above.</p>\n";
 
@@ -115,6 +110,8 @@ sub startSearchScale	{
 
 }
 
+# WARNING: facelift of display page means that editing is no longer possible,
+#  because pulldown with scales has been dropped
 sub processShowEditForm	{
 	my $dbh = shift;
 	my $dbt = shift;
@@ -141,7 +138,8 @@ sub processShowEditForm	{
 	my @results;
 	my @olddata;
 	my @times;
-	if ( $q->param('scale') )	{
+
+	if ( $q->param('scale') =~ /[0-9]/ )	{
 		my $sql = "SELECT * FROM scales WHERE scale_no=" . $q->param('scale');
 		@results = @{$dbt->getData($sql)};
 
@@ -289,7 +287,7 @@ sub processViewTimeScale	{
 	@names = @{$dbt->getData($sql)};
 	$enterer_name = $names[0]->{name};
 
-	print $hbo->populateHTML('view_scale_top', [ $auth_name, $enterer_name, $results[0]->{scale_name}, $results[0]->{continent}, $results[0]->{basis}, $results[0]->{scale_rank}, $results[0]->{scale_comments} ], [ 'authorizer', 'enterer', 'scale_name', 'continent', 'basis', 'scale_rank', 'scale_comments' ]);
+	print "<h3 align=\"center\">",$results[0]->{scale_name},"</h3>\n\n";
 
 	if ( @badintervals )	{
 		print "<div align=\"center\"><p><b><font color='red'>WARNING!</font></b> ";
@@ -309,7 +307,8 @@ sub processViewTimeScale	{
 		print "</p></div>";
 	}
 
-	print "<p>\n\n<div align=\"center\" style=\"position: relative; clear: all;\"><table cellspacing=2><tr><td bgcolor=\"black\"><table bgcolor=\"white\">\n\n";
+	print "<p>\n\n<div align=\"center\" style=\"position: relative; width: 34em; margin-left: 11em; clear: all;\">\n";
+	print "<table class=\"verysmall\"><tr><td bgcolor=\"black\"><table bgcolor=\"white\">\n\n";
 
 	# Get the scale's intervals
 	$sql = "SELECT * FROM correlations WHERE scale_no=" . $q->param('scale');
@@ -333,26 +332,21 @@ sub processViewTimeScale	{
 	}
 
 	print "<tr>";
-	print "<td align=\"center\" valign=\"bottom\">&nbsp;<b>Interval</b></td>\n";
-	print "<td valign=\"top\"><font size=+2>&nbsp;</font></td>\n";
-	print "<td align=\"center\" valign=\"bottom\">";
+	print "<td align=\"center\" valign=\"bottom\" style=\"padding-top: 0.5em; padding-bottom: 0.5em;\">&nbsp;<b>Interval</b></td>\n";
+	print "<td align=\"center\" valign=\"bottom\" style=\"padding-top: 0.5em; padding-bottom: 0.5em;\">";
 	if ( $nmax > 0 )	{
 		print "<b>Maximum&nbsp;correlate</b> ";
 	}
-	print "</td><td align=\"center\" valign=\"bottom\">";
+	print "</td><td align=\"center\" valign=\"bottom\" style=\"padding-top: 0.5em; padding-bottom: 0.5em;\">";
 	if ( $nmin > 0 )	{
-		print "<b>Minimum&nbsp;correlate</b> ";
+		print "&nbsp;&nbsp;<b>Minimum&nbsp;correlate</b> ";
 	}
-	print "</td><td align=\"center\" valign=\"bottom\">";
+	print "</td><td align=\"center\" valign=\"bottom\" style=\"padding-top: 0.5em; padding-bottom: 0.5em;\">";
 	if ( $nlower > 0 )	{
 		print "<b>Ma</b> ";
 	}
 	print "</td>\n";
 	print "</tr>\n";
-
-	print "<tr><td colspan=6 valign=\"middle\">\n";
-	print "<hr>\n";
-	print "</td></tr>\n";
 
 
 	# Print the rows
@@ -385,8 +379,13 @@ sub processViewTimeScale	{
 		print $hbo->populateHTML('view_scale_row', [ $eml_interval, $interval, $eml_max_interval, $max_interval, $eml_min_interval, $min_interval, $lower_boundary, $time->{corr_comments}], ['eml_interval', 'interval', 'eml_max_interval', 'max_interval', 'eml_min_interval', 'min_interval', 'lower_boundary', 'corr_comments']);
 	}
 
+	if ( $nlower > 0 )	{
+		print "<tr><td colspan=\"3\" style=\"height: 0.5em; border-top: 1px gray solid;\"></td></tr>\n";
+	}
 
 	print "</table>\n</table>\n</div>\n<p>\n";
+
+	print $hbo->populateHTML('view_scale_top', [ $auth_name, $enterer_name, $results[0]->{scale_name}, $results[0]->{continent}, $results[0]->{basis}, $results[0]->{scale_rank}, $results[0]->{scale_comments} ], [ 'authorizer', 'enterer', 'scale_name', 'continent', 'basis', 'scale_rank', 'scale_comments' ]);
 
 	if ( $stage eq "summary" )	{
 		print "<div align=\"center\"><p><b><a href=\"$exec_url?action=processShowForm&scale=" , $q->param('scale') , "\">Edit this time scale</a></b> - ";
@@ -447,7 +446,7 @@ sub processEditScaleForm	{
 	my $enterer_no = $nos[0]->{person_no};
 
 	my $scale_no;
-	if ( $q->param('scale_no') )	{
+	if ( $q->param('scale_no') =~ /[0-9]/ )	{
 	# update the scales table
 		$scale_no = $q->param('scale_no');
 		$sql = "UPDATE scales SET modifier_no=";
