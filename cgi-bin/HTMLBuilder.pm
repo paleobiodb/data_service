@@ -528,6 +528,9 @@ sub writeBlock {
     } elsif ($block->{'type'} eq 'show') {
         my ($k,$v) = split(/=/,$block->{'name'});
         if ((!$v && $vars->{$k}) || ($v && $vars->{$k} eq $v)) {
+            # textarea values often have returns that need to be rendered
+            #  as <br>s JA 20.8.06
+            $vars->{$k} =~ s/\n/<br>\n/g if $vars->{$k} !~ /<br>/;
             foreach my $c (@{$block->{'children'}}) {
                 $html .= $self->writeBlock($c,$vars,$read_only,$depth);
             }
