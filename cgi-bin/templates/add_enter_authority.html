@@ -2,28 +2,17 @@
 <span id="message"></span>
 <span id="error_message"></span>
 
-<div align="center"><h2>Add/edit authority data for <span id="taxon_name"></span></h2></div>
+<div align="center"style="margin-top: -2em;"><h3>Authority data for <span id="taxon_name"></span></h3></div>
 
 
 <form method="POST" action="bridge.pl">
 
-<div class="mainSection">
+<div class="displayPanel" style="padding-top: 1em;">
 
 <input type="hidden" id="action" name="action" value="submitAuthorityForm">
 <input type="hidden" id="reference_no" name="reference_no">
 <input type="hidden" id="taxon_no" name="taxon_no">
 <input type="hidden" id="confirmed_taxon_name" name="confirmed_taxon_name">
-
-<div align="center"><h2>Who named <input type="text" id="taxon_name" name="taxon_name" size="30">&nbsp;?</h2></div>
-
-<center>
-<span class="tiny">
-See the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Authority')">tip sheet</a>.
-If the name is misspelled, <a href="$exec_url?action=displayAuthorityTaxonSearchForm">try another search</a>.
-</span>
-</center>
-
-<br>
 
 <div class="emphasized" align=left>
 <input id="ref_is_authority" name="ref_is_authority" type="radio" value="PRIMARY">
@@ -39,9 +28,9 @@ It was first named in the data record's primary reference, which is:
 </div>  
 
 <center>
-<p>
-<b>Pages*:</b> <input id="pages" name="pages" size=12>
-<b>Figures*:</b> <input id="figures" name="figures" size=12>
+<p class="tiny">
+<b>Pages*:</b> <input id="pages" name="pages" class="tiny" size=12>
+<b>Figures*:</b> <input id="figures" name="figures" class="tiny" size=12>
 </p>
 </center>
 
@@ -54,27 +43,22 @@ It was first named in the data record's primary reference, which is:
 <center>
 <table>
 
-<tr>
-<td></td><td class=tiny>initials</td><td class=tiny>last name</td>
-<td></td><td class=tiny>initials</td><td class=tiny>last name</td>
+<tr><td align="right" class="tiny"><b>First author:</b></td>
+<td><input id="author1init" name="author1init" class="tiny" size=4></td>
+<td><input id="author1last" name="author1last" class="tiny" size=10></td>
+<td align="right" class="tiny"><b>Second author:</b></td>
+<td><input id="author2init" name="author2init" class="tiny" size=4></td>
+<td><input id="author2last" name="author2last" class="tiny" size=10></td>
 </tr>
 
-<tr><td align=right><b>First author:</b></td>
-<td><input id="author1init" name="author1init" size=6></td>
-<td><input id="author1last" name="author1last" size=20></td>
-<td align=right><b>Second author:</b></td>
-<td><input id="author2init" name="author2init" size=6></td>
-<td><input id="author2last" name="author2last" size=20></td>
+<tr><td valign="top" align="right" class="tiny"><b>Other authors:</b></td>
+<td colspan=5><textarea id="otherauthors" name="otherauthors" rows=3 cols=60></textarea></td>
 </tr>
 
-<tr><td valign=top align=right><b>Other authors:</b></td>
-<td colspan=5><textarea id="otherauthors" name="otherauthors" rows=3 cols=70></textarea></td>
-</tr>
-
-<tr><td align=right><b>Year:</b></td>
-<td colspan=1><input id="pubyr" name="pubyr" size=6></td>
-<td colspan=4><b>Pages*:</b> <input id="2nd_pages" name="2nd_pages" size=12>
-<b>Figures*:</b> <input id="2nd_figures" name="2nd_figures" size=12></td>
+<tr><td align="right" class="tiny"><b>Year:</b></td>
+<td colspan=1 class="tiny"><input id="pubyr" name="pubyr" class="tiny" size=5></td>
+<td colspan=4 class="tiny"><b>Pages*:</b> <input id="2nd_pages" name="2nd_pages" class="tiny" size=12>
+<b>Figures*:</b> <input id="2nd_figures" name="2nd_figures" class="tiny" size=12></td>
 </tr>
 </table>
 </center>
@@ -83,38 +67,31 @@ It was first named in the data record's primary reference, which is:
 <p><span class="tiny">* Enter numbers of pages and figures that describe and show the type specimen(s).</span></p>
 </center>
 
-</div>
-
-<div class="mainSection">
-
-<div align="center"><h2>How was <span id="taxon_name"></span> named?</h2></div>
 
 <table>
-<tr><td align=right><b>Original rank:</b></td>
-<td>
+<tr><td align="right"><b>Original rank:</b></td>
+<td colspan="4">
 
 <span id="taxon_rank_select"></span>
 
 &nbsp; &nbsp;
 <span id="parent_taxon_select"></span>
-</td>
-</tr>
-
 
 <!-- Note: this should only appear if the rank is species -->
 <div show="show_type_taxon">
-  <tr><td></td><td colspan=3><input type="checkbox" id="type_taxon" name="type_taxon" value="1"><b>This is the type <span id="taxon_rank"></span></b>
-  </td>
-  </tr>
+  <input type="checkbox" id="type_taxon" name="type_taxon" value="1">This is the type <span id="taxon_rank"></span>
 </div>
+
+</td>
+</tr>
 
 <div show="show_type_specimen">
   <tr>
-    <td align=right><b>Type specimen:</b></td>
+    <td align="right"><b>Type specimen:</b></td>
     <td>
       <input id="type_specimen" name="type_specimen" size=20>
     </td>
-    <td>
+    <td align="right">
       <b>Body part of type:</b>
     </td>
     <td>
@@ -127,12 +104,12 @@ It was first named in the data record's primary reference, which is:
   <td colspan=2>
     <b>Is this an extant (living) taxon?</b> <span id="extant_select"></span>
   </td>
-  <td> <b>Preservation category:</b></td>
+  <td align="right"> <b>Preservation category:</b></td>
   <td> <select id="preservation"></select></td>
 </tr>
 
 
-<tr><td align=right valign=top><b>Comments:</b></td>
+<tr><td align="right" valign=top><b>Comments:</b></td>
 <td colspan=5><textarea id="comments" name="comments" rows=2 cols=70></textarea></td>
 </tr>
 </table>
@@ -142,7 +119,7 @@ It was first named in the data record's primary reference, which is:
 </div>
 <div align=center>
 
-<table border=0 cellpadding=0>
+<table border=0 cellpadding=0 class="tiny" style="padding-bottom: 1em;">
 <tr>
 <td style="padding-right: 20px;"><span id="authorizer_name"></span></td>
 <td style="padding-right: 20px;"><span id="enterer_name"></span></td>
@@ -157,6 +134,12 @@ It was first named in the data record's primary reference, which is:
 <input type="submit" value="Submit">
 </div>
 
+<center>
+<p class="tiny">
+Please read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Authority')">tip sheet</a>.
+If the name is misspelled, <a href="$exec_url?action=displayAuthorityTaxonSearchForm">try another search</a>.
+</p>
+</center>
+
 </form>
-<br>
 
