@@ -1003,7 +1003,7 @@ sub stdIncludes {
         $vars->{reference} = 'none';
         my $reference_no = $s->get('reference_no');
         if ($reference_no) {
-            $vars->{reference} = "$reference_no (".Reference::formatShortRef($dbt,$reference_no).")";
+            $vars->{reference} = "$reference_no (".Reference::formatShortRef($dbt,$reference_no,'no_inits'=>1).")";
         }
         $vars->{enterer} = $s->get("enterer") || "none"; 
     }
@@ -4738,10 +4738,18 @@ sub startAddCollection {
 		displayLoginPage( "Please log in first." );
 		exit;
 	}
-	$s->enqueue( $dbh, "action=displaySearchCollsForAdd&type=add" );
 
-	$q->param( "type" => "select" );
-	displaySearchRefs( "Please choose a reference first" ); 
+	# don't hassle the user for reference unless they have none at all
+	#  JA 20.8.06
+	if (! $s->get('reference_no'))  {
+		$s->enqueue( $dbh, "action=displaySearchCollsForAdd&type=add" );
+		$q->param( "type" => "select" );
+		displaySearchRefs( "Please choose a reference first" );
+	} else  {
+		$q->param( "type" => "add" );
+		displaySearchCollsForAdd;
+	}
+
 }
 
 # This subroutine intializes the process to get to the Add/Edit Occurrences page
@@ -4906,9 +4914,9 @@ sub processTaxonSearch {
 		print "<div align=\"center\">\n";
         print "<table><tr><td align=\"center\">";
         if ($q->param("taxon_name")) { 
-    		print "<h3>Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</h3>\n<br>\n";
+    		print "<h4>Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</h4>\n<br>\n";
         } else {
-    		print "<h3>Select a taxon to edit:</h3>\n";
+    		print "<h4>Select a taxon to edit</h4>\n";
         }
         my $action = ($q->param('goal') eq 'authority')  ? 'displayAuthorityForm' 
                 : ($q->param('goal') eq 'opinion')    ? 'displayOpinionChoiceForm'
@@ -4925,18 +4933,21 @@ sub processTaxonSearch {
         print "<input type=hidden name=\"use_reference\" value=\"".$q->param('use_reference')."\">\n" if ($q->param('use_reference'));
 
         # now create a table of choices
-		print "<table>\n";
+		print "<div class=\"displayPanel medium\" style=\"padding: 1em;\"><table>\n";
         my $checked = (scalar(@results) == 1) ? "CHECKED" : "";
         foreach my $row (@results) {
             # Check the button if this is the first match, which forces
             #  users who want to create new taxa to check another button
-            print qq|<tr><td align="center"><input type="radio" name="taxon_no" value="$row->{taxon_no}" $checked></td>|;
+            # took this out because it's a big pain and kind of paranoid
+            #  JA 20.8.06
+            print qq|<tr><td align="center"><input type="radio" name="taxon_no" value="$row->{taxon_no}"></td>|;
+            #print qq|<tr><td align="center"><input type="radio" name="taxon_no" value="$row->{taxon_no}" $checked></td>|;
             print "<td>".Taxon::formatAuthorityLine($dbt, $row)."</td></tr>";
         }
 
         # always give them an option to create a new taxon as well
         if ($q->param('goal') eq 'authority' && $q->param('taxon_name')) {
-            print "<tr><td align=\"right\"><input type=\"radio\" name=\"taxon_no\" value=\"-1\"></td>\n<td>";
+            print "<tr><td align=\"right\"><input type=\"radio\" name=\"taxon_no\" value=\"-1\" checked></td>\n<td>";
             if ( scalar(@results) == 1 )	{
                 print "No, not the one above ";
             } else	{
@@ -4952,25 +4963,25 @@ sub processTaxonSearch {
         #  2: this is from a reference_no. No option to add a new taxon, so button is Edit
         if ($q->param('goal') eq 'authority') {
             if ($q->param('taxon_name')) {
-		        print "<p><input type=submit value=\"Submit\"></p>\n</form>\n";
+		        print "<p><input type=submit class=\"small\" value=\"Submit\"></p>\n</form>\n";
 		        print "<p align=\"left\"><span class=\"tiny\">";
-                print "You have a choice because there may be multiple biological species (e.g., a plant and an animal) with identical names.<br>\n";
+                print "You have a choice because there may be multiple biological species<br>&nbsp;&nbsp;(e.g., a plant and an animal) with identical names.<br>\n";
 		        print "Create a new taxon only if the old ones were named by different people in different papers.<br></span></p>\n";
             } else {
-		        print "<p><input type=submit value=\"Edit\"></p>\n</form>\n";
+		        print "<p><input type=submit class=\"small\" value=\"Edit\"></p>\n</form>\n";
             }
         } else {
-            print "<p><input type=submit value=\"Submit\"></p>\n</form>\n";
+            print "<p><input type=submit class=\"small\" value=\"Submit\"></p>\n</form>\n";
             print "<p align=\"left\"><span class=\"tiny\">";
-            print "You have a choice because there may be multiple biological species (e.g., a plant and an animal) with identical names.<br></span></p>\n";
+            print "You have a choice because there may be multiple biological species<br>&nbsp;&nbsp;(e.g., a plant and an animal) with identical names.<br></span></p>\n";
         }
 		print "<p align=\"left\"><span class=\"tiny\">";
         if (!$q->param('reference_no')) {
-		    print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n<br>";
+		    print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n";
         }
 
         print "</td></tr></table>";
-		print "</div>\n";
+		print "</div></div>\n";
 	}
 }
 
@@ -4988,6 +4999,12 @@ sub displayAuthorityTaxonSearchForm {
     print stdIncludes("std_page_top");
     my %vars = $q->Vars();
     $vars{'authorizer_me'} = $s->get('authorizer_reversed');
+    # by default, force the user to use the current ref and skip the reference
+    #  search JA 20.8.06
+    if ( $vars{'use_reference'} ne "new" )	{
+        $vars{'skip_ref_check'} = 1;
+        $vars{'use_reference'} = "current";
+    }
 
     print makeAuthEntJavaScript();
     print $hbo->populateHTML('search_authority_form',\%vars);
@@ -4999,14 +5016,17 @@ sub displayAuthorityTaxonSearchForm {
 #
 # The form to edit an authority
 sub displayAuthorityForm {
-    if ($q->param('taxon_no') == -1) {
+
+    # by default, force the user to use the current ref and skip the reference
+    #  search JA 20.8.06
+    if ( $q->param('taxon_no') == -1 || $q->param('use_reference') eq "new" ) {
 		if (!$q->param('skip_ref_check')) {
 			# if skip_ref_check is not set, then we should prompt them for a reference_no 
 			# set the skip_ref_check in the queued action so we don't endlessly loop 
 			my $toQueue = "action=displayAuthorityForm&skip_ref_check=1&taxon_name=".$q->param('taxon_name')."&taxon_no=" . $q->param('taxon_no');
 			$s->enqueue( $dbh, $toQueue );
 			$q->param( "type" => "select" );
-			displaySearchRefs("You must choose a reference before adding a new taxon." );
+			displaySearchRefs("You must choose a reference before adding a new taxon" );
 			return;
 		}
 	} 
@@ -5058,6 +5078,8 @@ sub displayOpinionForm {
 		return;	
 	}
 
+    # by default, force the user to use the current ref and skip the reference
+    #  search JA 20.8.06
 	if ($q->param('opinion_no') <= 0 && ! $q->param('skip_ref_check')) {
 		# opinion_no == -1, so that means they're adding a new opinion,
 		# and hence, we should prompt them for a reference_no each time.
@@ -7025,9 +7047,6 @@ sub displayTaxonomicNamesAndOpinions {
     print stdIncludes( "std_page_top" );
     my $ref = Reference->new($dbt,$q->param('reference_no'));
     if ($ref) {
-        my $html = $ref->formatAsHTML();
-        print "<center><h3>Showing taxonomic names and opinions from reference: ".$html."</h3></center><br>";
-
         $q->param('goal'=>'authority');
         processTaxonSearch($dbh, $dbt, $hbo, $q, $s, $exec_url);
         Opinion::displayOpinionChoiceForm($dbt,$s,$q);
