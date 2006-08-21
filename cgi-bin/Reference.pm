@@ -128,7 +128,7 @@ sub formatShortRef  {
     return if (!$refData);
 
     my $shortRef = "";
-    $shortRef .= $refData->{'author1init'}." " if $refData->{'author1init'};
+    $shortRef .= $refData->{'author1init'}." " if $refData->{'author1init'} && ! $options{'no_inits'};
     $shortRef .= $refData->{'author1last'};
     if ( $refData->{'otherauthors'} ) {
         $shortRef .= " et al.";
@@ -137,7 +137,7 @@ sub formatShortRef  {
         if($refData->{'author2last'} ne "et al."){
             $shortRef .= " and ";
         } 
-        $shortRef .= $refData->{'author2init'}." " if $refData->{'author2init'};
+        $shortRef .= $refData->{'author2init'}." " if $refData->{'author2init'} && ! $options{'no_inits'};
         $shortRef .= $refData->{'author2last'};
     }
     if ($refData->{'pubyr'}) {
