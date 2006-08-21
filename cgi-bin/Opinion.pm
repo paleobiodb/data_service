@@ -635,7 +635,7 @@ sub displayOpinionForm {
 	#  numbers, make a pulldown menu listing the taxa JA 25.4.04
     # build the spelling pulldown, if necessary, else the spelling box
 
-    # took this out because it clutter the form JA 20.8.06
+    # took this out because it clutters the form JA 20.8.06
     #my $all_ranks = "";
     #if ($childSpellingRank eq 'subspecies') {
     #    $all_ranks = ': e.g. "Genus (Subgenus) species subspecies"';
@@ -1457,16 +1457,16 @@ sub submitOpinionForm {
   <br><li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></b></li>   
   <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit names from the same reference</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=current">Add/edit another taxon</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm">Add/edit another taxon from another reference</a></b></li>
+  <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></b></li>
 </td>
 <td valign=top>
   <p><b>Opinion functions</b></p>
   <li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}">Add/edit opinion about $childSpellingName from another reference</a></b></li>
+  <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}&use_reference=new">Add/edit opinion about $childSpellingName from another reference</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit opinions from the same reference</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=current">Add/edit opinion about another taxon</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm">Add/edit opinion about another taxon from another reference</a></b></li>
+  <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
 </td></tr></table>
 </p>
 </div>
@@ -1521,16 +1521,19 @@ sub displayOpinionChoiceForm {
         
         my $t = Taxon->new($dbt,$child_no);
         print "<div align=\"center\">";
-        print "<h3>Which opinion about ".$t->taxonNameHTML()." do you want to edit?</h3>\n";
+        print "<h4>Which opinion about ".$t->taxonNameHTML()." do you want to edit?</h4>\n";
         
         print qq|<form method="POST" action="bridge.pl">
                  <input type="hidden" name="action" value="displayOpinionForm">\n
                  <input type="hidden" name="child_no" value="$orig_no">\n
                  <input type="hidden" name="child_spelling_no" value="$child_no">\n|;
-        if ($q->param('use_reference') eq 'current' && $s->get('reference_no')) {
+        if ( $q->param('use_reference') eq 'current' && $s->get('reference_no')) {
             print qq|<input type="hidden" name="skip_ref_check" value="1">|;
+        } else	{
+            print qq|<input type="hidden" name="use_current" value="new">|;
         }
-        print "<table border=0>";
+	print qq|<div class="displayPanel" style="padding: 1em;">\n|;
+        print qq|<table border=0 class="small">\n|;
         foreach my $row (@results) {
             my $o = Opinion->new($dbt,$row->{'opinion_no'});
             print "<tr>".
@@ -1539,10 +1542,9 @@ sub displayOpinionChoiceForm {
                   "</tr>\n";
         }
         print qq|<tr><td><input type="radio" name="opinion_no" value="-1" checked></td><td>Create a <b>new</b> opinion record</td></tr>\n|;
-        print qq|</table>|;
+        print qq|</table>\n|;
 #        print qq|<tr><td align="center" colspan=2><p><input type=submit value="Submit"></p><br></td></tr>|;
-        print qq|<p><input type="submit" value="Submit"></p><br>|;
-        print "</div>";
+        print qq|<p><input type="submit" value="Submit"></p>|;
     } else {
         my @where = ();
         my @errors = ();
@@ -1590,11 +1592,12 @@ sub displayOpinionChoiceForm {
                 return;
             }
             print "<div align=\"center\">";
-            print "<h3>Select an opinion to edit:</h3>";
+            print "<h4>Select an opinion to edit</h4>";
 
             print qq|<form method="POST" action="bridge.pl">
                      <input type="hidden" name="action" value="displayOpinionForm">\n|;
-            print "<table border=0>";
+            print qq|<div class="displayPanel" style="padding: 1em;">\n|;
+            print qq|<table border=0 class="small">|;
             foreach my $row (@results) {
                 my $o = Opinion->new($dbt, $row->{'opinion_no'});
                 print "<tr>".
@@ -1603,7 +1606,8 @@ sub displayOpinionChoiceForm {
                       "</tr>\n";
             }
             print "</table>";
-            print qq|<p><input type=submit value="Edit"></p><br>|;
+            print qq|<p><input type=submit value="Edit"></p>|;
+            print "</div>";
             print "</div>";
         } else {
             if (@errors) {
@@ -1622,7 +1626,7 @@ sub displayOpinionChoiceForm {
     } 
     
     if ($q->param("taxon_no")) {
-        print qq|<tr><td align="left" colspan=2><p><span class="tiny">An "opinion" is when an author classifies or synonymizes a taxon.<br>\nSelect an old opinion if it was entered incorrectly or incompletely.<br>\nCreate a new one if the author whose opinion you are looking at right now is not in the above list.</p>\n|;
+        print qq|<p><span class="tiny">An "opinion" is when an author classifies or synonymizes a taxon.<br>\nSelect an old opinion if it was entered incorrectly or incompletely.<br>\nCreate a new one if the author whose opinion you are looking at right now is not in the above list.</p>\n|;
     } elsif ($q->param('reference_no')) {
         print qq|<tr><td align="left" colspan=2><p><span class="tiny">An "opinion" is when an author classifies or synonymizes a taxon.<br>|;
         print qq|You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</span></p>\n|;
