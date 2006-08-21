@@ -749,20 +749,22 @@ sub submitAuthorityForm {
         if (@warnings) {
             $end_message .= Debug::printWarnings(\@warnings);
         }
-        $end_message .= "<div align=\"center\"><h3>" . $fields{'taxon_name'} . " " .Reference::formatShortRef(\%fields). " has been $enterupdate the database</h3></div>";
+        $end_message .= "<div align=\"center\"><p><b>" . $fields{'taxon_name'} . " " .Reference::formatShortRef(\%fields). " has been $enterupdate the database</b></p></div>";
 
         my $origResultTaxonNumber = TaxonInfo::getOriginalCombination($dbt,$resultTaxonNumber);
         $end_message .= qq|
-    <div align="center">
-    <table cellpadding=10><tr><td>
-      <br><li><b><a href="bridge.pl?action=displayAuthorityForm&taxon_no=$resultTaxonNumber">Edit $fields{taxon_name}</a></b></li>
+    <div align="center" class="displayPanel">
+    <table cellpadding="10" class="small"><tr><td>
+      <p><b>Name functions</b></p>
+      <li><b><a href="bridge.pl?action=displayAuthorityForm&taxon_no=$resultTaxonNumber">Edit $fields{taxon_name}</a></b></li>
       <br><li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$resultTaxonNumber">Get general information about $fields{taxon_name}</a></b></li>   
       <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=current">Add/edit another taxon</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm">Add/edit another taxon from another reference</a></b></li>
     </td>
     <td valign=top>
-      <br><li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber">Add an opinion about $fields{taxon_name}</a></b></li>
+      <p><b>Opinion functions</b></p>
+      <li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber">Add an opinion about $fields{taxon_name}</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=current">Add/edit opinion about another taxon</a></b></li>
