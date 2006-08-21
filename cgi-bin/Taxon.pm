@@ -760,7 +760,7 @@ sub submitAuthorityForm {
       <br><li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$resultTaxonNumber">Get general information about $fields{taxon_name}</a></b></li>   
       <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=current">Add/edit another taxon</a></b></li>
-      <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm">Add/edit another taxon from another reference</a></b></li>
+      <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></b></li>
     </td>
     <td valign=top>
       <p><b>Opinion functions</b></p>
@@ -768,7 +768,7 @@ sub submitAuthorityForm {
       <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=current">Add/edit opinion about another taxon</a></b></li>
-      <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm">Add/edit opinion about another taxon from another reference</a></b></li>
+      <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
     </td></tr></table>
     </div>|;
 
