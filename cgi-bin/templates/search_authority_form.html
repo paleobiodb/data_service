@@ -3,9 +3,10 @@
   <tr>
     <td>
       <div align="center">
-        <h2>Please enter the full name of the taxon you want to add or revise</h2><br>
+        <h3>Enter the taxon's full name</h3><br>
       </div>
 
+      <div class="displayPanel" style="padding: 1em;">
       <div align="center">
         <form method="POST" action="bridge.pl">
           <input name="action" type="hidden" value="submitTaxonSearch">
@@ -14,28 +15,28 @@
           <table width="100%"><tr><td align=center>
             <table border=0 cellpadding=2 cellspacing=2>
               <tr>
-                <td><b>Taxon name:</b></td>
+                <td>Taxon name:</td>
                 <td><input name="taxon_name" value="" size="30"></td>
               </tr>
               <tr>
-                <td><b>Authorizer:</b></td>
+                <td>Authorizer:</td>
                 <td><input name="authorizer_reversed" size=14 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_me%%'">Me</a></td>
               </tr>
               <tr>
-                <td><b>Author:</b></td>
+                <td>Author:</td>
                 <td><input name="author" size=14><br></td>
               </tr>
               <tr>
-                <td><b>Publication year:</b></td>
+                <td>Publication year:</td>
                 <td><input name="pubyr" size=4><br></td>
               </tr>
               <tr>
-                <td><b>Reference number:</b></td>
+                <td>Reference number:</td>
                 <td><input name="reference_no" size=10><br></td>
               </tr>
               <tr>
                 <td>
-                  <b>Record created</b>
+                  Record created
                   <select name="created_before_after">
                     <option>before</option>
                     <option selected>after</option>
@@ -56,13 +57,15 @@
       <div align="center">
         <p style="text-align:left; margin: 0em 0em 0em 5%;">
           <span class="tiny">Don't abbreviate the name, and be careful to spell it correctly!<br>
-          Enter higher-ranked taxa first, e.g., enter a genus before its species; enter a family before its genera.<br>
-          Always enter the full taxonomic name for lower ranked taxa. Example: "Pleurotomaria (Scalites) tropidophora."<br>
-          Always enter the genus when enterering subgenera. Example: "Pleurotomaria (Scalites)" for the subgenus Scalites.<br> 
-          If you enter a taxon name, other search fields (authorizer, author, etc.) will be ignored.<br>
+          Enter a genus before its species, a family before its genera, etc.<br>
+          Always enter the full taxonomic name for lower ranked taxa.<br>
+          &nbsp;Example: <i>"Pleurotomaria (Scalites) tropidophora."</i><br>
+          Always enter the genus when enterering subgenera.<br>
+          &nbsp;Example: <i>"Pleurotomaria (Scalites)"</i> for the subgenus <i>Scalites.</i><br> 
           <br>
-          You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</span>
+          Read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</span>
         </p>
+      </div>
       </div>
       
     </td>
