@@ -14,16 +14,19 @@
 <input type="hidden" id="taxon_no" name="taxon_no">
 <input type="hidden" id="confirmed_taxon_name" name="confirmed_taxon_name">
 
-<div class="emphasized" align=left>
+<div align="left">
+<div class="emphasized">
 <input id="ref_is_authority" name="ref_is_authority" type="radio" value="PRIMARY">
-It was first named in the data record's primary reference, which is:
-<div align="center" class="small"><span id="formatted_primary_reference"></span></div>
+<input type="text" id="taxon_name" name="taxon_name" size="20"> was first named in the data record's primary reference:
+</div>
+<div align="center" class="small" style="padding-left: 3em; padding-right: 3em;"><span id="formatted_primary_reference"></span></div>
+</div>
 <div show="current_reference">
   <br>
+  <div class="emphasized">
   <input id="ref_is_authority" name="ref_is_authority" type="radio" value="CURRENT">
-   ... <i>or</i> it was first named in the current reference, which is: 
-  <br><div align="center" class="small"><span id="formatted_current_reference"></span></div>
-</div>
+   ... <i>or</i> it was first named in the current reference: </div>
+  <div align="center" class="small" style="padding-left: 3em; padding-right: 3em;"><span id="formatted_current_reference"></span></div>
 
 </div>  
 
@@ -37,7 +40,7 @@ It was first named in the data record's primary reference, which is:
 <div class="emphasized" align=left>
 <input id="ref_is_authority" name="ref_is_authority" type="radio" value="NO">
 
-... <i>or</i> it was named in an earlier publication, which is:</DIV>
+... <i>or</i> it was named in an earlier publication:</DIV>
 <br>
 
 <center>
