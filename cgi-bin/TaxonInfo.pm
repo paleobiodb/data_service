@@ -414,6 +414,7 @@ sub displayTaxonInfoResults {
         print '<script language="JavaScript" type="text/javascript"> showTabText(10); </script>';
     }
 
+
     print "</div>"; # Ends div class="small" declared at start
 }
 
@@ -451,7 +452,7 @@ sub doThumbs {
                         }
                     }
                     print "<a href=\"javascript: imagePopup('bridge.pl?action=displayImage&image_no=$thumb->{image_no}&display_header=NO',$width,$height)\">";
-                    print "<img align=\"center\" src=\"$thumb_path\" border=1 vspace=3 width=$t_width height=$t_height alt=\"$caption\">";
+                    print "<img src=\"$thumb_path\" border=1 vspace=3 width=$t_width height=$t_height alt=\"$caption\">";
                     print "</a>";
                 } else {
                     print "&nbsp;";
@@ -733,7 +734,7 @@ sub doCollections{
     if ($age_range_format eq 'for_strata_module') {
         print "<b>Age range:</b> $range <br><br><hr><br>"; 
     } else {
-        print "<div align=\"center\"><h3><b>Age Range:</b></h3> $range <br><br><hr>";
+        print "<div align=\"center\"><h3><b>Age Range:</b></h3> $range </div><br><br><hr>";
     }
 
     
