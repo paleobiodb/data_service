@@ -1562,6 +1562,8 @@ sub getSynonymyParagraph{
 	my $dbt = shift;
 	my $taxon_no = shift;
     my $real_user = shift;
+
+    return unless $taxon_no;
 	
 	my %synmap1 = ('original spelling' => 'revalidated',
                    'recombination' => 'recombined as ',
@@ -2249,6 +2251,7 @@ sub displayDiagnoses {
                         $str .= " ($row->{taxon_name})";
                     }
                 } 
+                $row->{diagnosis} =~ s/\n/<br>/g;
                 $str .= "</td><td>$row->{diagnosis}<td></tr>";
             }
             $str .= "</table>\n";
@@ -2681,9 +2684,11 @@ sub getAllSpellings {
     my $dbt = shift;
     my @taxon_nos = @_;
     my %all;
-    $all{$_} = 1 for @taxon_nos;
+    for (@taxon_nos) {
+        $all{int($_)} = 1 if int($_);
+    }
 
-    if (@taxon_nos) {
+    if (%all) {
         my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no IN (".join(",",keys %all).")";
         my @results = @{$dbt->getData($sql)};
         $all{$_->{'child_spelling_no'}} = 1 for @results;
