@@ -50,8 +50,6 @@ sub startSearchScale	{
 		$scale_authorizer{$name} = $results2[0]->{name};
 	}
 
-	print "<body onUnload=\"document.scale_view_form.reset()\">\n";
-
 	print "<table cellpadding=5>\n";
 	print "<tr><td align=\"left\"> ";
 	print "<form name=\"scale_view_form\" id=\"scale_view_form\" action=\"$exec_url\" method=\"POST\">\n";
@@ -71,7 +69,7 @@ sub startSearchScale	{
 				my $crclean = $c . $r;
 				$crclean =~ s/[^A-Za-z]//g;
 				print "<div class=\"tiny\" style=\"padding-bottom: 2px;\">$r</div>\n";
-				print "<div class=\"tiny\" style=\"padding-bottom: 4px;\">&nbsp;&nbsp;<select class=\"verytiny\" name=\"scale$crclean\" onChange=\"document.getElementById('scale_view_form').submit()\">\n";
+				print "<div class=\"verysmall\" style=\"padding-bottom: 4px;\">&nbsp;&nbsp;<select class=\"tiny\" name=\"scale$crclean\" onChange=\"document.getElementById('scale_view_form').submit()\">\n";
 				print "<option>\n";
 				for my $string ( @sorted )	{
 					print $scale_strings{$c.$r}{$string};
@@ -103,6 +101,23 @@ sub startSearchScale	{
 	}
 
 	print "<p align=\"left\" class=\"tiny\" style=\"margin-left: 2em; margin-right: 2em;\">All data on the web site are prepared using an automatically generated composite time scale. The composite scale is based on the latest published correlations and boundary estimates for each time interval that are given above.</p>\n";
+
+	print qq|
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+document.scale_view_form.reset();
+
+window.onunload = unloadPage;
+
+function unloadPage()	{
+	document.scale_view_form.reset();
+}
+
+//  End -->
+</script>
+
+|;
 
 	print main::stdIncludes("std_page_bottom");
 
