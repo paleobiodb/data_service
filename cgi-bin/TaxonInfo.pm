@@ -633,8 +633,14 @@ sub doMap{
 			if ($lonWidth == 0) { $lonWidth = 1; }
 		
 			# multiply by 0.9 to give a slight boundary around the zoom.
-			my $latRatio = (0.9 * 156) / $latWidth;
-			my $lonRatio = (0.9 * 312) / $lonWidth;
+            # don't do this if the entire globe is to be displayed
+            # JA 28.8.06
+		    my $latRatio;
+		    my $lonRatio;
+            if ( $latWidth < 180 && $lonWidth < 360 )   {
+			    $latRatio = (0.9 * 156) / $latWidth;
+			    $lonRatio = (0.9 * 312) / $lonWidth;
+            }
 
 			#print "latRatio = $latRatio\n";
 			#print "lonRatio = $lonRatio\n";
