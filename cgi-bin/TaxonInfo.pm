@@ -728,8 +728,12 @@ sub doCollections{
     my ($lb,$ub,$max,$min) = calculateAgeRange($dbt,\@data,\%lowerbound,\%upperbound);
 
     my $range = "";
-    my $max = join (" or ",map {$interval_name{$_}} @$max);
-    my $min = join (" or ",map {$interval_name{$_}} @$min);
+    # simplified this because the users will understand the basic range,
+    #  and it clutters the form JA 28.8.06
+    #my $max = join (" or ",map {$interval_name{$_}} @$max);
+    #my $min = join (" or ",map {$interval_name{$_}} @$min);
+    my $max = join (" or ",map {$interval_name{$_}} ${@$max}[0]);
+    my $min = join (" or ",map {$interval_name{$_}} ${@$min}[0]);
     if ($max ne $min) {
         $range .= "$max to $min";
     } else {
@@ -740,7 +744,7 @@ sub doCollections{
     if ($age_range_format eq 'for_strata_module') {
         print "<b>Age range:</b> $range <br><br><hr><br>"; 
     } else {
-        print "<div align=\"center\"><h3><b>Age Range:</b></h3> $range </div><br><br><hr>";
+        print "<div align=\"center\"><h3><b>Age range</b></h3> $range </div><br><br><hr>";
     }
 
     
