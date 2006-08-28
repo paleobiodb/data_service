@@ -2978,7 +2978,7 @@ sub displayCollectionDetails {
 	my @occrows = split /\n/,$taxa_list;
 	my $hasabund;
 	for my $or ( @occrows )	{
-		if ( $or =~ /specimen|individual/ )	{
+		if ( $or =~ /specimen|individual/ && $or !~ /-|%/ )	{
 			$hasabund++;
 		}
 	}
