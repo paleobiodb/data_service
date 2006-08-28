@@ -154,7 +154,7 @@ This form allows you to request a diversity curve with assorted statistics.
 <tr>
   <td valign=top>
     Subsampling method:<br>
-    <i><span class="small"><span class="required">Required</span> if you want to do a subsampling analysis.</span></i>
+    <i><span class="small"><span class="required">Required</span> for subsampling.</span></i>
   </td>
   <td valign=top>
     <select name=samplingmethod>
@@ -171,7 +171,7 @@ This form allows you to request a diversity curve with assorted statistics.
 <tr>
   <td valign=top>
     Weighting exponent:<br>
-    <i><span class="small"><span class="required">Required</span> if you want to do occurrences-exponentiated subsampling. Set this to 2.0 if you want occurrences-squared weighting. 0.0 = unweighted subsampling; 1.0 = occurrences-weighted subsampling.</span></i>
+    <i><span class="small"><span class="required">Required</span> for occurrences-exponentiated subsampling, and otherwise ignored. 2.0 = occurrences-squared weighting. 0.0 = unweighted subsampling; 1.0 = occurrences-weighted subsampling.</span></i>
   </td>
   <td valign=top>
     <select name=exponent>
@@ -213,7 +213,7 @@ This form allows you to request a diversity curve with assorted statistics.
 <tr>
   <td valign=top>
     Exact number of items (lists, occurrences, or occurrences-squared) to draw in each temporal bin:<br>
-    <i><span class="small"><span class="required">Required</span> if you want to do a subsampling analysis.</span></i>
+    <i><span class="small"><span class="required">Required</span> for subsampling.</span></i>
   </td>
   <td valign=top>
     <input name=samplesize>
@@ -223,7 +223,7 @@ This form allows you to request a diversity curve with assorted statistics.
 <tr>
   <td valign=top>
     Number of subsampling trials:<br>
-    <i><span class="small"><span class="required">Required</span> if you want to do a subsampling analysis.</span></i>
+    <i><span class="small"><span class="required">Required</span> for subsampling.</span></i>
   </td>
   <td valign=top>
   <select name=samplingtrials>
