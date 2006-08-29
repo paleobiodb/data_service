@@ -1,33 +1,33 @@
 <form method="POST" action="bridge.pl">
 <input name="action" type="hidden" value="checkTaxonInfo">
+
 <div align="center">
-
-<span id="page_title"></span>
-
-<table border=0 cellpadding=2 cellspacing=4 class="displayPanelText">
-  <tr>
-    <td>Name:</td>
-    <td colspan=2><input name="taxon_name" value="" size="35"></td>
-  </tr>
-  <tr>
-    <td>Author:</td>
-    <td align="left"><input name="author" value="" size="12"></td>
-    <td align="right">Publication year: <input name="pubyr" value="" size="4"></td>
-  </tr>
-  <tr>
-    <td colspan=3 align="center" style="padding-top: 2em;"><input type="submit" value="Search"></td>
-  </tr>
-  <tr>
-</table>
-        <div class="tiny" style="width: 600; text-align: left; padding: 1em;"> 
-        Don't enter the genus name if the species originally was combined in a subgenus.<br>
-        &nbsp;Example: enter <i>"Scalites tropidophora"</i> instead of <i>"Pleurotomaria (Scalites) tropidophora."</i><br>
-        To find species without using genus names, you may use the wildcard %.<br>
-        &nbsp;Example: "% validus" would match <i>Belodon validus, Troodon validus,</i> etc.
-       </div> 
+  <h3>%%page_title%%</h3>
+  <div class="displayPanel" align="center" style="width: 40em;">
+  <div class="displayPanelContent">
+    <table border=0 cellpadding=4 class="small" style="padding-top: 1em; padding-bottom: 1em; padding-left: -1em;">
+      <tr>
+        <td>Name:</td>
+        <td colspan=2><input name="taxon_name" value="" size="35"></td>
+      </tr>
+      <tr>
+        <td>Author:</td>
+        <td align="left"><input name="author" value="" size="12"></td>
+        <td align="right">Publication year: <input name="pubyr" value="" size="4"></td>
+      </tr>
+      <tr>
+        <td colspan=3 align="center" style="padding-top: 2em;"><input type="submit" value="Search"></td>
+      </tr>
+      <tr>
+    </table>
+    <div class="tiny" style="width: 600; text-align: left; padding: 1em;"> 
+      Don't enter the genus name if the species originally was combined in a subgenus.<br>
+      &nbsp;Example: enter <i>"Scalites tropidophora"</i> instead of <i>"Pleurotomaria (Scalites) tropidophora."</i><br>
+      To find species without using genus names, you may use the wildcard %.<br>
+      &nbsp;Example: "% validus" would match <i>Belodon validus, Troodon validus,</i> etc.
+    </div> 
+  </div>
+  </div>
 </div>
 </form>
-
-
-</div>
 
