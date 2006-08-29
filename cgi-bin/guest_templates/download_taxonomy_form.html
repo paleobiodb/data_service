@@ -8,8 +8,7 @@
     <input name="action" type="hidden" value="displayDownloadTaxonomyResults">
 
     <div class="displayPanel">
-    <span class="displayPanelHeader"><b>Basic options</b></span></br> 
-    <table width="100%" border=0 cellpadding=3 cellspacing=0>
+    <table width="100%" border=0 cellpadding=3 cellspacing=0 style="padding: 1em;">
       <tr class="lightGrey">
         <td>Output data:</td>
         <td>
@@ -49,49 +48,43 @@
           </select>
         </td>
       </tr>
-    </table>
-    </div>
-
-    <div class="displayPanel">
-    <span class="displayPanelHeader"><b>Taxonomic name options</b></span></br> 
-    <table width="100%" border=0 cellpadding=3 cellspacing=0>
       <tr>
-        <td style="white-space: nowrap;">Data <select name="taxon_person_type"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="all">any of the above</option></select>:</td>
-        <td><input name="taxon_person_reversed" size=14 onKeyUp="doComplete(event, this, entererNames());">
+        <td style="white-space: nowrap;">Data <select name="person_type"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="all">any of the above</option></select>:</td>
+        <td><input name="person_reversed" size=14 onKeyUp="doComplete(event, this, entererNames());">
         <div show="is_contributor"><a href="#" onClick="document.forms[0].taxon_person_reversed.value='%%authorizer_me%%'">Me</a></div>
         </td>
       </tr>
       <tr class="lightGrey">
         <td>Author:</td>
-        <td><input name="taxon_author" size=14><br></td>
+        <td><input name="author" size=14><br></td>
       </tr>
       <tr>
         <td style="white-space: nowrap;">
         Publication year
-          <select name="taxon_pubyr_before_after">
+          <select name="pubyr_before_after">
             <option>before</option>
             <option selected>after</option>
             <option>exactly</option>
           </select>:
         </td>
-        <td><input name="taxon_pubyr" size=4><br></td>
+        <td><input name="pubyr" size=4><br></td>
       </tr>
       <tr class="lightGrey">
         <td>Reference number:</td>
-        <td><input name="taxon_reference_no" size=10><br></td>
+        <td><input name="reference_no" size=10><br></td>
       </tr>
       <tr>
         <td style="white-space: nowrap;">
           Record created
-          <select name="taxon_created_before_after">
+          <select name="created_before_after">
             <option>before</option>
             <option selected>after</option>
           </select>:
         </td>
         <td style="white-space: nowrap;">
-          <select name="taxon_created_month" autofill=month></select>
-          <select name="taxon_created_day" autofill=day_of_month></select>
-          <select name="taxon_created_year" autofill=year></select>  
+          <select name="created_month" autofill=month></select>
+          <select name="created_day" autofill=day_of_month></select>
+          <select name="created_year" autofill=year></select>  
         </td>
       </tr>
       <tr>
@@ -100,52 +93,6 @@
         </td>
       </tr>
     </table>
-    </div>
-
-    <div class="displayPanel">
-    <span class="displayPanelHeader"><b>Taxonomic opinion options</b></span></br> 
-    <table width="100%" border=0 cellpadding=3 cellspacing=0>
-      <tr>
-        <td style="white-space: nowrap;">Data <select name="opinion_person_type"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="all">any of the above</option></select>:</td>
-        <td><input name="opinion_person_reversed" size=14 onKeyUp="doComplete(event, this, entererNames());">
-        <div show="is_contributor"><a href="#" onClick="document.forms[0].opinion_person_reversed.value='%%authorizer_me%%'">Me</a></div>
-        </td>
-      </tr>
-      <tr class="lightGrey">
-        <td>Author:</td>
-        <td><input name="opinion_author" size=14><br></td>
-      </tr>
-      <tr>
-        <td style="white-space: nowrap;">
-          Publication year
-          <select name="opinion_pubyr_before_after">
-            <option>before</option>
-            <option selected>after</option>
-            <option>exactly</option>
-          </select>:
-        </td>
-        <td><input name="opinion_pubyr" size=4><br></td>
-      </tr>
-      <tr class="lightGrey">
-        <td>Reference number:</td>
-        <td><input name="opinion_reference_no" size=10><br></td>
-      </tr>
-      <tr>
-        <td style="white-space: nowrap;">
-          Record created
-          <select name="opinion_created_before_after">
-            <option>before</option>
-            <option selected>after</option>
-          </select>:
-        </td>
-        <td style="white-space: nowrap;">
-          <select name="opinion_created_month" autofill=month></select>
-          <select name="opinion_created_day" autofill=day_of_month></select>
-          <select name="opinion_created_year" autofill=year></select>  
-        </td>
-      </tr>
-    </table>
-
     </div>
 
     <div align="center">
