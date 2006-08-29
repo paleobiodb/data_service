@@ -1,5 +1,3 @@
-#!/usr/bin/perl -w
-
 # created by rjp, 1/2004.
 #
 # Represents a single taxon from the authorities database table. 
@@ -320,28 +318,15 @@ sub displayAuthorityForm {
 			my $select;
             # if only one record, then we don't have to ask the user anything.
             # otherwise, we should ask them to pick which one.
+            my @parent_nos = ();
+            my @parent_descs = ();
 			foreach my $row (@parents) {
-                my $selected = '';
-	
-				# if they are redisplaying the form, we want to choose
-				# the appropriate one.
-				if ($q->param('parent_taxon_no') == $row->{'taxon_no'}) {
-					$selected = 'selected';
-				} 
-				
-				$select .= "<option value=\"$row->{taxon_no}\" $selected>";
-				$select .= $row->{'taxon_name'}." ".Reference::formatShortRef($row);
-		        # tack on the closest higher order name
-				my $parent = TaxaCache::getParent($dbt,$row->{'taxon_no'});
-                my $higher_class = ($parent) ? $parent->{'taxon_name'} : "unclassified";
-				$select .= " [$higher_class]";
-				$select .= "</option>\n";
+                push @parent_nos, $row->{'taxon_no'};	
+                push @parent_descs, formatTaxon($dbt,$row);
 			}
 			
-			$fields{'parent_taxon_select'} = "<b>Belongs to:</b>
-			<SELECT name=\"parent_taxon_no\">
-			$select
-			</SELECT>";
+			$fields{'parent_taxon_select'} = "<b>Belongs to:</b> ".
+                $hbo->htmlSelect('parent_taxon_no',\@parent_descs,\@parent_nos,$q->param('parent_taxon_no'));
 		} else {
 			# count = 0, so we need to warn them to enter the parent taxon first.
 			$errors->add("The $parentRank '$parentName' for this $fields{'taxon_rank'} doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$parentName\">create a new authority record for '$parentName'</A> before trying to add this $fields{'taxon_rank'}.");
@@ -1161,15 +1146,20 @@ sub getTypeTaxonList {
 #   I.E. data from getTaxa($dbt,{'taxon_name'=>$taxon_name},['*']) -- see function for details
 # 
 # it returns some HTML to display the authority information.
-sub formatAuthorityLine	{
+sub formatTaxon{
     my $dbt = shift;
     my $taxon = shift;
+    my %options = shift;
 	my $authLine;
 
 	# Print the name
 	# italicize if genus or species.
 	if ( $taxon->{'taxon_rank'} =~ /subspecies|species|genus/) {
-		$authLine .= "<i>" . $taxon->{'taxon_name'} . "</i>";
+        if ($options{'no_html'}) {
+            $authLine .= ", $taxon->{taxon_rank}";
+        } else {
+		    $authLine .= "<i>" . $taxon->{'taxon_name'} . "</i>";
+        }
 	} else {
 		$authLine .= $taxon->{'taxon_name'};
         if ($taxon->{'taxon_rank'} && $taxon->{'taxon_rank'} !~ /unranked clade/) {
@@ -1185,16 +1175,35 @@ sub formatAuthorityLine	{
 
 	# Print name of higher taxon JA 10.4.03
 	# Get the status and parent of the most recent opinion
-    my $parent = TaxaCache::getParent($dbt,$taxon->{'taxon_no'});
+    my %master_class=%{TaxaCache::getParents($dbt, [$taxon->{'taxon_no'}],'array_full')};
 
-	if ($parent) {
-		$authLine .= " [$parent->{taxon_name}]";
-	} else {
-		$authLine .= " [unclassified]";
+    my @parents = @{$master_class{$taxon->{'taxon_no'}}};
+    if (@parents) {
+        $authLine .= " [";
+        my $foundParent = 0;
+        foreach (@parents) {
+            if ($_->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
+                $foundParent = 1;
+                $authLine .= $_->{'taxon_name'}.", ";
+                last;
+            }
+        }
+        $authLine =~ s/, $//;
+        if (!$foundParent) {
+            $authLine .= $parents[0]->{'taxon_name'};
+        }
+        $authLine .= "]";
+    } else {
+        $authLine .= " [unclassified";
+        if ($taxon->{taxon_rank} && $taxon->{taxon_rank} !~ /unranked/) {
+            $authLine .= " $taxon->{taxon_rank}";
+        }
+        $authLine .= "]";
     }
 
 	return $authLine;
 }
+
 
 sub splitTaxon {
     my $name = shift;
@@ -1305,10 +1314,22 @@ sub computeMatchLevel {
     return $match_level;
 }
 
-# This function 
+# This function will determine get the best taxon_no for a taxon.  Can pass in either 
+# 6 arguments, or 1 argument thats a hashref to an occurrence or reid database row 
 
 sub getBestClassification{
-    my ($dbt,$genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name) = @_;
+    my $dbt = shift;
+    my ($genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name);
+    if (scalar(@_) == 1) {
+        $genus_reso    = $_[0]->{'genus_reso'} || "";
+        $genus_name    = $_[0]->{'genus_name'} || "";
+        $subgenus_reso = $_[0]->{'subgenus_reso'} || "";
+        $subgenus_name = $_[0]->{'subgenus_name'} || "";
+        $species_reso  = $_[0]->{'species_reso'} || "";
+        $species_name  = $_[0]->{'species_name'} || "";
+    } else {
+        ($genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name) = @_;
+    }
     my $dbh = $dbt->dbh;
     my @matches = ();
 
@@ -1385,10 +1406,11 @@ sub getBestClassification{
             return ();
         }
     } else {
-        # If the user requests a scalar, only return the best match, assuming it is not a homonym
+        # If the user requests a scalar, only return the best match, if it is not a homonym
         if (scalar(@matches) > 1) {
             if ($matches[0]->{'taxon_name'} eq $matches[1]->{'taxon_name'}) {
-                # This might happen if a higher order taxon is reranked
+                # matches are homonyms - if they're the same taxon thats been reranked, return
+                # the original.
                 my $orig0 = TaxonInfo::getOriginalCombination($dbt,$matches[0]->{'taxon_no'});
                 my $orig1 = TaxonInfo::getOriginalCombination($dbt,$matches[1]->{'taxon_no'});
                 if ($orig0 == $orig1) {
@@ -1400,12 +1422,14 @@ sub getBestClassification{
                         return $matches[0]->{taxon_no};
                     }
                 } else {
+                    # homonym and not a reranking - return a 0
                     return 0;
                 }
             } else {
+                # Not a homonym, just some stray subgenus match or something still return the best
                 return $matches[0]->{'taxon_no'};
             }
-            return $matches[0]->{'taxon_no'}; # This will be the taxon_no
+            return $matches[0]->{'taxon_no'}; # Dead code
         } elsif (scalar(@matches) == 1) {
             return $matches[0]->{'taxon_no'};
         } else {

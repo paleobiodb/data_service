@@ -21,10 +21,8 @@ sub searchForm {
 	my $q = shift;
 	my $search_again = (shift or 0);
 
-    my $page_title = qq|<p></p>
-<div class="displayPanel" align="center" style="width: 40em;">
-  <h3>Taxonomic name search form</h3>
-  <div class="displayPanelContent">|;
+    my $page_title = "Taxonomic name search form"; 
+    
 	if ($search_again){
         $page_title = "<p class=\"medium\">No results found (please search again)</p>";
     } 
@@ -101,7 +99,7 @@ sub checkTaxonInfo {
             print "<table>\n";
             print "<tr>";
             for(my $i=0; $i<scalar(@results); $i++) {
-                my $authorityLine = Taxon::formatAuthorityLine($dbt,$results[$i]);
+                my $authorityLine = Taxon::formatTaxon($dbt,$results[$i]);
                 my $checked = ($i == 0) ? "CHECKED" : "";
                 print qq|<td><input type="radio" name="taxon_no" value="$results[$i]->{taxon_no}" $checked> $authorityLine</td>|;
                 print "</tr><tr>";

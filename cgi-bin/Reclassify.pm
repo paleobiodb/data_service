@@ -2,6 +2,7 @@ package Reclassify;
 
 use strict;
 use URI::Escape;
+use CGI qw(escapeHTML);
 
 # written by JA 31.3, 1.4.04
 # in memory of our dearly departed Ryan Poling
@@ -13,7 +14,7 @@ sub startReclassifyOccurrences	{
 
 	if (!$s->isDBMember()) {
 	    # have to be logged in
-		$s->enqueue( $dbh, "action=startStartReclassifyOccurrences" );
+		$s->enqueue($dbh,$q->query_string());
 		main::displayLoginPage( "Please log in first." );
 	} elsif ( $q->param("collection_no") )	{
         # if they have the collection number, they'll immediately go to the
@@ -48,6 +49,9 @@ sub displayOccurrenceReclassify	{
     my $collections_ref = shift;
     my @collections = ();
     @collections = @$collections_ref if ($collections_ref);
+    if ($q->param("collection_list")) {
+        @collections = split("\s*,\s*",$q->param('collection_list'));
+    }
 
 	print main::stdIncludes("std_page_top");
 
@@ -147,15 +151,7 @@ sub displayOccurrenceReclassify	{
 			if ( $o->{species_reso} !~ /informal/ && $o->{species_name} !~ /^sp\./ && $o->{species_name} !~ /^indet\./)	{
 				$taxon_name .= " " . $o->{species_name};
 			}
-            # Give these default values, don't want to pass in possibly undef values to any function or PERL might screw it up
-            my ($genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name) = ("","","","","","");
-            $genus_name = $o->{'genus_name'} if ($o->{'genus_name'});
-            $genus_reso = $o->{'genus_reso'} if ($o->{'genus_reso'});
-            $subgenus_reso = $o->{'subgenus_reso'} if ($o->{'subgenus_reso'});
-            $subgenus_name = $o->{'subgenus_name'} if ($o->{'subgenus_name'});
-            $species_reso = $o->{'species_reso'} if ($o->{'species_reso'});
-            $species_name = $o->{'species_name'} if ($o->{'species_name'});
-            my @all_matches = Taxon::getBestClassification($dbt,$genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name);
+            my @all_matches = Taxon::getBestClassification($dbt,$o);
 
 			# now print the name and the pulldown of authorities
 			if ( @all_matches )	{
@@ -335,6 +331,7 @@ sub processReclassifyForm	{
 	my @old_taxa = $q->param('old_taxon_no');
 	my @new_taxa = $q->param('taxon_no');
 	my @occurrences = $q->param('occurrence_no');
+    my @occurrence_lists = $q->param("occurrence_list");
 	my @occurrence_descriptions = $q->param('occurrence_description');
 	my @reid_descriptions = $q->param('reid_description');
 	my @old_reid_taxa = $q->param('old_reid_taxon_no');
@@ -361,7 +358,13 @@ sub processReclassifyForm	{
 			} else	{
 				$sql .= " WHERE taxon_no=0";
 			}
-			$sql .= " AND occurrence_no=" . $occurrences[$i];
+            if ($occurrences[$i] =~ /^\d+$/) {
+			    $sql .= " AND occurrence_no=" . $occurrences[$i];
+            } elsif ($occurrence_lists[$i] =~ /^[\d, ]+$/) {
+                $sql .= " AND occurrence_no IN (".$occurrence_lists[$i].")";
+            } else {
+                die ("Error: No occurrence number found for $occurrence_description");
+            }
             main::dbg($sql);
 			$dbt->getData($sql);
 
@@ -457,42 +460,12 @@ sub classificationSelect {
     }
                  
     # populate the select list of authorities
-    foreach my $m (@$matches)	{
+    foreach my $m (@$matches) {
         my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$m->{'taxon_no'}},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
         # have to format the authority data
-        my $authority = "$t->{taxon_name}";
-        my $pub_info = Reference::formatShortRef($t);
-        if ($pub_info =~ /[A-Za-z0-9]/) {
-            $authority .= ", $pub_info";
-        }
-        # needed by Classification
-        my %master_class=%{TaxaCache::getParents($dbt, [$t->{'taxon_no'}],'array_full')};
+        my $authority = Taxon::formatTaxon($dbt,$t);
 
-        my @parents = @{$master_class{$t->{'taxon_no'}}};
-        if (@parents) {
-            $authority .= " [";
-            my $foundParent = 0;
-            foreach (@parents) {
-                if ($_->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
-                    $foundParent = 1;
-                    $authority .= $_->{'taxon_name'}.", ";
-                    last;
-                }
-            }
-            $authority =~ s/, $//;
-            if (!$foundParent) {
-                $authority .= $parents[0]->{'taxon_name'};
-            }
-            $authority .= "]";
-        }
-        if ( $authority !~ /[A-Za-z]/ )	{
-            $authority = "taxon number " . $t->{taxon_no};
-        }
-        # clean up in case there's a
-        #  classification but no author
-        $authority =~ s/^ //;
-
-        $html .= "<option value=\"" . $t->{taxon_no} . "+" . $authority . "\"";
+        $html .= "<option value=\"" . $t->{taxon_no} . "+" . escapeHTML($authority) . "\"";
         if ($t->{taxon_no} eq $taxon_no) {
             $html .= " selected";
         }
