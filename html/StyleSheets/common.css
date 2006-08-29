@@ -15,7 +15,7 @@ body {
 	margin-left: 0px;
 }
 
-table, tbody, tr, td { 
+table, tbody, tr, td, th { 
     font-size: 1em;
 }
 
@@ -111,7 +111,7 @@ H6 {font-size: .9em;}
 }
 
 .readOnlyCheckBox,.readOnlyInput,.readOnlyTextarea,.readOnlySelect {
-/*    border: 1px darkgrey solid;*/
+/*    border: 1px darkgray solid;*/
 /*    background-color: #E0E0E0;*/
 }
 
@@ -280,7 +280,7 @@ H6 {font-size: .9em;}
 }
 
 .homeTextBoxes	{
-    font-size: text-decoration: none;
+    text-decoration: none;
     float: left;
 }
 
@@ -470,7 +470,7 @@ div.emphasized {
 
 
 /* Used on download form */
-.lightGrey {
+.lightGray {
 	background-color:#EEEEEE;
 }
 
@@ -693,7 +693,7 @@ span.nonEditable {
     padding-left: 0.5em;      
     padding-right: 0.5em;     
     /*border: 1px solid black;*/    
-/*    border-bottom: 1px solid lightgrey;*/
+/*    border-bottom: 1px solid lightgray;*/
     /*padding-bottom: .3em; */
     background-image: url(/public/PDbg.gif);    
     white-space: nowrap;    
@@ -713,6 +713,36 @@ span.nonEditable {
 .displayPanelText {
     font-size: 0.9em;
     background-image: url(/public/PDbg.gif);    
+}
+
+.fixedColumn {
+    overflow: hidden;
+    width: 35px;
+}
+td.fixedColumn {
+    border-right: 1px solid gray; 
+    border-bottom: 1px solid gray; 
+}
+
+.fixedLabel {
+    overflow: hidden;
+    width: 250px;
+}
+td.fixedLabel {
+    border-right: 1px solid gray; 
+    border-bottom: 1px solid gray; 
+}
+.fixedInput,.fixedInputDark {
+    border: 0px;
+    overflow: hidden;
+    font-size: 0.85em;
+}
+.fixedInputDark {
+	background-color:#E0E0E0;
+}
+
+#occurrencesTable {
+    background: #FFFFFF;
 }
 
 #dropDown, #dropDown ul {
