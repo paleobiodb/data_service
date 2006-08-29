@@ -198,9 +198,9 @@ sub displayAuthorityForm {
     }
 
     # grab previous fields
-	if ($reSubmission) {
+    if ($reSubmission) {
         %fields = %{$q->Vars()};
-	} elsif (!$isNewEntry) {
+    } elsif (!$isNewEntry) {
         %fields = %{$t->getRow()};
 
         if ($fields{'ref_is_authority'} =~ /YES/i) {
@@ -214,8 +214,11 @@ sub displayAuthorityForm {
         }  
 
     } else { # brand new, first submission
-	    $fields{'taxon_name'} = $q->param('taxon_name');
-		$fields{'reference_no'} = $s->get('reference_no');
+        $fields{'taxon_name'} = $q->param('taxon_name');
+        $fields{'reference_no'} = $s->get('reference_no');
+        # to speed things up, assume that the primary (current) ref is the
+        #  authority when the taxon is new JA 29.8.06
+        $fields{'ref_is_authority'} = 'PRIMARY';
     }    
 
 	# fill out the authorizer/enterer/modifier info at the bottom of the page
