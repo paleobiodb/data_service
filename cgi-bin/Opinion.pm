@@ -353,7 +353,10 @@ sub displayOpinionForm {
         if ($isNewEntry) {
             $fields{'child_no'} = $q->param('child_no');
             $fields{'child_spelling_no'} = $q->param('child_spelling_no') || $q->param('child_no');
-		    $fields{'reference_no'} = $s->get('reference_no');
+	    $fields{'reference_no'} = $s->get('reference_no');
+            # to speed up entry, assume that the primary (current) ref has
+            #  the opinion JA 29.8.06
+            $fields{'ref_has_opinion'} = 'PRIMARY';
             my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}});
             my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_spelling_no'}});
             my $reason = guessSpellingReason($child,$spelling);
@@ -581,7 +584,7 @@ sub displayOpinionForm {
         my $parentTaxon = ($selected || ($isNewEntry && $childRank =~ /species/)) ? $parentName : "";
         $belongs_to_row .= qq|<input name="belongs_to_parent" size="24" value="$parentTaxon">|;
     }
-    $belongs_to_row .= "</td></tr>";
+    $belongs_to_row .= qq|</td><td><input type="submit" value="Submit"></td></tr>|;
 
 
     if (!$reSubmission && !$isNewEntry) {
