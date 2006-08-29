@@ -6,7 +6,7 @@
 use strict;	
 
 # CPAN modules
-use CGI;
+use CGI qw(escapeHTML);
 use URI::Escape;
 use Text::CSV_XS;
 use CGI::Carp qw(fatalsToBrowser);
@@ -53,7 +53,6 @@ use Debug;
 #*************************************
 # 
 # Some of these variable names are used throughout the code
-# $sql 		: Generally is any SQL string, although it may also be an DBTransactionManager object.
 # $q		: The CGI object - used for getting parameters from HTML forms.
 # $s		: The session object - used for keeping track of users, see Session.pm
 # $hbo		: HTMLBuilder object, used for populating HTML templates with data. 
@@ -431,7 +430,7 @@ sub getPrefFields	{
 # Set new preferences JA 25.6.02
 sub setPreferences	{
     if (!$s->isDBMember()) {
-        displayLoginPage( "Please log in first." );
+        displayLoginPage( "Please log in first.");
         exit;
     }
 
@@ -784,9 +783,9 @@ sub displayDownloadForm {
 
     if ($s->isDBMember()) {
         $vars{'row_class_1a'} = '';
-        $vars{'row_class_1b'} = ' class="lightGrey"';
+        $vars{'row_class_1b'} = ' class="lightGray"';
     } else {
-        $vars{'row_class_1a'} = ' class="lightGrey"';
+        $vars{'row_class_1a'} = ' class="lightGray"';
         $vars{'row_class_1b'} = '';
     }
     
@@ -811,9 +810,9 @@ sub displayDownloadNeptuneForm {
     my %vars;
     if ($s->isDBMember()) {
         $vars{'row_class_1'} = '';
-        $vars{'row_class_2'} = ' class="lightGrey"';
+        $vars{'row_class_2'} = ' class="lightGray"';
     } else {
-        $vars{'row_class_1'} = ' class="lightGrey"';
+        $vars{'row_class_1'} = ' class="lightGray"';
         $vars{'row_class_2'} = '';
     }
     print stdIncludes("std_page_top");
@@ -997,8 +996,7 @@ sub displayPage {
 # it will return the HTML code.
 sub stdIncludes {
 	my $page = shift;
-
-    my $vars = {};
+    my $vars = shift || {};
     if ($page eq 'std_page_top' && $s->isDBMember()) {
         $vars->{reference} = 'none';
         my $reference_no = $s->get('reference_no');
@@ -1508,8 +1506,7 @@ sub displayRefEdit
 {
 	# Have to be logged in
 	if (!$s->isDBMember()) {
-		$s->enqueue( $dbh, "action=displayRefEdit" );
-		displayLoginPage( "Please log in first." );
+		displayLoginPage( "Please log in first.",'displayRefEdit');
 		exit;
 	}
 	my $reference_no = $q->param('reference_no');
@@ -1673,11 +1670,17 @@ sub displaySearchColls {
 
 
 	# Show the "search collections" form
-    my %vars = $q->Vars();
+    my %vars = ();
     $vars{'enterer_me'} = $s->get('enterer_reversed');
     $vars{'page_title'} = "Collection search form";
     $vars{'action'} = "displayCollResults";
+    $vars{'type'} = $type;
     $vars{'submit'} = "Search collections";
+
+    if ($type eq 'occurrence_table') {
+        $vars{'reference_no'} = $reference_no;
+        $vars{'limit'} = 20;
+    }
 
 	# Spit out the HTML
 	print stdIncludes( "std_page_top" );
@@ -1705,7 +1708,8 @@ sub displayCollResults {
 #		$perm_limit = 1000000;
         $perm_limit = $limit + $rowOffset;
 	} else {
-		if ($q->param('taxon_name') && ($q->param('type') eq "reid" ||
+		if ($q->param("type") eq 'occurrence_table' ||
+            $q->param('taxon_name') && ($q->param('type') eq "reid" ||
                                         $q->param('type') eq "reclassify_occurrence")) {
             # We're passing the collection_nos directly to the functions, so pass all of them                                            
             $perm_limit = 1000000000;
@@ -1723,20 +1727,16 @@ sub displayCollResults {
 		$type = $queue{type};
 	}
 
-    my $permission_type = "read";
-    my $action = "displayCollectionDetails";
-	# We create different links depending on their destination, using the hidden type field.
-	if ( $type eq "add" )		{ $action = "displayCollectionDetails"; $permission_type = "read"; }
-	elsif ( $type eq "analyze_abundance" )	{ $action = "rarefyAbundances"; $permission_type = "read"; }
-	elsif ( $type eq "edit" )	{ $action = "displayCollectionForm"; $permission_type = "write"; }
-	elsif ( $type eq "view" )	{ $action = "displayCollectionDetails"; $permission_type= "read"; }
-	elsif ( $type eq "edit_occurrence" )   { $action = "displayOccurrenceAddEdit"; $permission_type= "read"; }
-	elsif ( $type eq "reid" )	{ $action = "displayOccsForReID"; $permission_type= "read"; }
-	# added by JA 31.3.04
-	elsif ( $type eq "reclassify_occurrence" )	{ $action = "startDisplayOccurrenceReclassify"; $permission_type= "write";}
-	# type is unknown, so use defaults.
-	else { $action = "displayCollectionDetails"; $permission_type = "read"; }
-
+    my $action =  
+          ($type eq "add") ? "displayCollectionDetails"
+        : ($type eq "add") ? "displayCollectionDetails"
+        : ($type eq "analyze_abundance") ? "rarefyAbundances"
+        : ($type eq "edit") ? "displayCollectionForm"
+        : ($type eq "view") ? "displayCollectionDetails"
+        : ($type eq "edit_occurrence") ? "displayOccurrenceAddEdit"
+        : ($type eq "reid") ? "displayOccsForReID"
+        : ($type eq "reclassify_occurrence") ?  "startDisplayOccurrenceReclassify"
+        : "displayCollectionDetails";
 	
 	# Build the SQL
 	# which function to use depends on whether the user is adding a collection
@@ -1762,7 +1762,6 @@ sub displayCollResults {
         $options{'include_old_ids'} = 1;
         # Even if we have a match in the authorities table, still match against the bare occurrences/reids  table
         $options{'include_occurrences'} = 1;
-        $options{'permission_type'} = $permission_type;
 #        $options{'lithologies'} = $options{'lithology1'} if (!$options{'lithologies'}); delete $options{'lithology1'};
 #        $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'};
         if ($q->param("taxon_list")) {
@@ -1775,7 +1774,11 @@ sub displayCollResults {
     my @dataRows = @$dataRows;
     my $displayRows = scalar(@dataRows);	# get number of rows to display
 
-    if ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
+    if ( $type eq 'occurrence_table' && @dataRows) {
+        my @colls = map {$_->{'collection_no'}} @dataRows;
+        displayOccurrenceTable(\@colls);
+        exit;
+    } elsif ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
 		# go right to the chase with ReIDs if a taxon_rank was specified
 		if ($q->param('taxon_name') && ($q->param('type') eq "reid" ||
                                         $q->param('type') eq "reclassify_occurrence")) {
@@ -2708,6 +2711,22 @@ IS NULL))";
 		my $val = $dbh->quote('%'.$options{'collection_names'}.'%');
         if ($options{'collection_names'} =~ /^\d+$/) {
 		    push @where, "(c.collection_name LIKE $val OR c.collection_aka LIKE $val OR c.collection_no=$options{collection_names})";
+        } elsif ($options{'collection_names'} =~ /^[0-9, \-]+$/) {
+            my @collection_nos;
+            my @ranges = split(/\s*,\s*/,$options{'collection_names'});
+            foreach my $range (@ranges) {
+                if ($range =~ /-/) {
+                    my ($min,$max) = split(/\s*-\s*/,$range);
+                    if ($min < $max) {
+                        push @collection_nos, ($min .. $max);
+                    } else {
+                        push @collection_nos, ($max .. $min);
+                    }
+                } else {
+                    push @collection_nos , $range;
+                }
+            }
+		    push @where, "c.collection_no IN (".join(",",@collection_nos).")";
         } else {
 		    push @where, "(c.collection_name LIKE $val OR c.collection_aka LIKE $val)";
         }
@@ -3210,19 +3229,11 @@ sub displayCollectionDetailsPage {
     
     
    
+
+    # textarea values often have returns that need to be rendered
+    #  as <br>s JA 20.8.06
+    $row->{$_} =~ s/\n/<br>/g foreach keys %$row;
     print $hbo->populateHTML('collection_display_fields', $row);
-		
-    # If the viewer is the authorizer (or it's me), display the record with edit buttons
-    if ($s->isDBMember() && $q->param('user') !~ /guest/i) {
-	    print '<p><div align="center"><table><tr>';
-        my $p = Permissions->new($s,$dbt);
-        my %is_modifier_for = %{$p->getModifierList()};
-        if (($row->{'authorizer_no'}eq $s->get('authorizer_no')) || $is_modifier_for{$row->{'authorizer_no'}} || ($s->get('authorizer') eq "J. Alroy")) {
-		    print '<td>'.$hbo->populateHTML('collection_display_buttons', [$row->{'collection_no'}], ['collection_no']).'</td>';
-        }
-	    print '<td>'.$hbo->populateHTML('collection_display_buttons2', [$row->{'collection_no'}],['prefill_collection_no']).'</td>';
-	    print '</tr></table></div></p>';
-    }
 
 } # end sub displayCollectionDetails()
 
@@ -3301,28 +3312,31 @@ sub buildTaxonomicList {
 			# if the user submitted a form such as adding a new occurrence or 
 			# editing an existing occurrence, then we'll bold face any of the
 			# new taxa which we don't already have in the database.
+            # Bad bug: rewriting the data directly here fucked up all kinds of operations
+            # below which expect the taxonomic names to be pure, just set some flags
+            # and have stuff interpret them below PS 2006
 			
 			# check for unrecognized genus names
 			foreach my $nn (@gnew_names){
 				if ($rowref->{genus_name} eq  $nn) {
-					$rowref->{genus_name} = "<b>".$rowref->{genus_name}."</b>";
-					$new_found = 1;
+					$rowref->{new_genus_name} = 1;
+                    $new_found++;
 				}
 			}
 
 			# check for unrecognized subgenus names
 			foreach my $nn (@subgnew_names){
 				if($rowref->{subgenus_name} eq $nn){
-					$rowref->{subgenus_name} = "<b>".$rowref->{subgenus_name}."</b>";
-					$new_found = 1;
+					$rowref->{new_subgenus_name} = 1;
+                    $new_found++;
 				}
 			}
 
 			# check for unrecognized species names
 			foreach my $nn (@snew_names){
 				if($rowref->{species_name} eq $nn){
-					$rowref->{species_name}="<b>".$rowref->{species_name}."</b>";
-					$new_found = 1;
+					$rowref->{new_species_name} = 1;
+                    $new_found++;
 				}
 			}
 
@@ -3396,16 +3410,10 @@ sub buildTaxonomicList {
                     if ($options{'do_reclassify'}) {
                         $rowref->{'show_classification_select'} = 1;
                         # Give these default values, don't want to pass in possibly undef values to any function or PERL might screw it up
-                        my $genus_name = $rowref->{'genus_name'} || "";
-                        my $genus_reso = $rowref->{'genus_reso'} || "";
-                        my $subgenus_reso = $rowref->{'subgenus_reso'} || "";
-                        my $subgenus_name = $rowref->{'subgenus_name'} || "";
-                        my $species_reso = $rowref->{'species_reso'} || "";
-                        my $species_name = $rowref->{'species_name'} || "";
-                        my $taxon_name = $genus_name; 
-                        $taxon_name .= " ($subgenus_name)" if ($subgenus_name);
-                        $taxon_name .= " $species_name";
-                        my @all_matches = Taxon::getBestClassification($dbt,$genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name);
+                        my $taxon_name = $rowref->{'genus_name'}; 
+                        $taxon_name .= " ($rowref->{'subgenus_name'})" if ($rowref->{'subgenus_name'});
+                        $taxon_name .= " $rowref->{'species_name'}";
+                        my @all_matches = Taxon::getBestClassification($dbt,$rowref);
                         if (@all_matches) {
                             $are_reclassifications = 1;
                             $rowref->{'classification_select'} = Reclassify::classificationSelect($dbt, $rowref->{'occurrence_no'},0,1,\@all_matches,$rowref->{'taxon_no'},$taxon_name);
@@ -3677,49 +3685,61 @@ sub formatOccurrenceTaxonName {
 
 
     if ($link_name) {
-        $taxon_name .= "<a href=\"bridge.pl?action=checkTaxonInfo&taxon_name=$link_name\">";
+        $taxon_name .= qq|<a href="bridge.pl?action=checkTaxonInfo&amp;taxon_name=|.uri_escape($link_name).qq|">|;
     }
 
     if ($row->{'species_name'} !~ /^indet/ && $row->{'genus_reso'} !~ /informal/) {
         $taxon_name .= "<i>";
     }
 
+    my $genus_name = $row->{'genus_name'};
+    if ($row->{'new_genus_name'}) {
+        $genus_name = "<b>".$genus_name."</b>";
+    }
     # n. gen., n. subgen., n. sp. come afterwards
     if ($row->{'genus_reso'} eq 'n. gen.') {
-        $taxon_name .= "$row->{genus_name} n. gen.";
+        $taxon_name .= "$genus_name n. gen.";
     } elsif ($row->{'genus_reso'} eq '"') {
-        $taxon_name .= '"'.$row->{'genus_name'};
+        $taxon_name .= '"'.$genus_name;
         $taxon_name .= '"' unless ($row->{'subgenus_reso'} eq '"' || $row->{'species_reso'} eq '"');
     } elsif ($row->{'genus_reso'}) {
-        $taxon_name .= $row->{'genus_reso'}." ".$row->{'genus_name'};
+        $taxon_name .= $row->{'genus_reso'}." ".$genus_name;
     } else {
-        $taxon_name .= $row->{'genus_name'};
+        $taxon_name .= $genus_name;
     }
 
     if ($row->{'subgenus_name'}) {
+        my $subgenus_name = $row->{'subgenus_name'};
+        if ($row->{'new_subgenus_name'}) {
+            $subgenus_name = "<b>".$subgenus_name."</b>";
+        }
         $taxon_name .= " (";
         if ($row->{'subgenus_reso'} eq 'n. subgen.') {
-            $taxon_name .= "$row->{subgenus_name} n. subgen.";
+            $taxon_name .= "$subgenus_name n. subgen.";
         } elsif ($row->{'subgenus_reso'} eq '"') {
             $taxon_name .= '"' unless ($row->{'genus_reso'} eq '"');
-            $taxon_name .= $row->{'subgenus_name'};
+            $taxon_name .= $subgenus_name;
             $taxon_name .= '"' unless ($row->{'species_reso'} eq '"');
         } elsif ($row->{'subgenus_reso'}) {
-            $taxon_name .= $row->{'subgenus_reso'}." ".$row->{'subgenus_name'};
+            $taxon_name .= $row->{'subgenus_reso'}." ".$subgenus_name;
         } else {
-            $taxon_name .= $row->{'subgenus_name'};
+            $taxon_name .= $subgenus_name;
         }
         $taxon_name .= ")";
     }
 
     $taxon_name .= " ";
+    my $species_name = $row->{'species_name'};
+    if ($row->{'new_species_name'}) {
+        $species_name = "<b>".$species_name."</b>";
+    }
     if ($row->{'species_reso'} eq '"') {
         $taxon_name .= '"' unless ($row->{'genus_reso'} eq '"' || $row->{'subgenus_reso'} eq '"');
-        $taxon_name .= $row->{'species_name'}.'"';
+        $taxon_name .= $species_name.'"';
     } elsif ($row->{'species_reso'} && $row->{'species_reso'} ne 'n. sp.') {
-        $taxon_name .= $row->{'species_reso'}." ".$row->{'species_name'};
+        $taxon_name .= $row->{'species_reso'}." ".$species_name;
     } else {
-        $taxon_name .= $row->{'species_name'};
+        $taxon_name .= $species_name;
     }
     #if ($row->{'species_reso'} ne 'n. sp.' && $row->{'species_reso'}) {
     #    $taxon_name .= " ".$row->{'species_reso'};
@@ -3848,18 +3868,10 @@ sub getReidHTMLTableByOccNum {
             } else {
                 if ($doReclassify) {
                     $row->{'show_classification_select'} = 'YES';
-                    # Give these default values, don't want to pass in possibly undef values to any function or PERL might screw it up
-                    my ($genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name) = ("","","","","","");
-                    $genus_name = $row->{'genus_name'} if ($row->{'genus_name'});
-                    $genus_reso = $row->{'genus_reso'} if ($row->{'genus_reso'});
-                    $subgenus_reso = $row->{'subgenus_reso'} if ($row->{'subgenus_reso'});
-                    $subgenus_name = $row->{'subgenus_name'} if ($row->{'subgenus_name'});
-                    $species_reso = $row->{'species_reso'} if ($row->{'species_reso'});
-                    $species_name = $row->{'species_name'} if ($row->{'species_name'});
-                    my $taxon_name = $genus_name;
-                    $taxon_name .= " ($subgenus_name)" if ($subgenus_name);
-                    $taxon_name .= " $species_name";
-                    my @all_matches = Taxon::getBestClassification($dbt,$genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name);
+                    my $taxon_name = $row->{'genus_name'}; 
+                    $taxon_name .= " ($row->{'subgenus_name'})" if ($row->{'subgenus_name'});
+                    $taxon_name .= " $row->{'species_name'}";
+                    my @all_matches = Taxon::getBestClassification($dbt,$row);
                     if (@all_matches) {
                         $are_reclassifications = 1;
                         $row->{'classification_select'} = Reclassify::classificationSelect($dbt, $row->{'occurrence_no'},0,1,\@all_matches,$row->{'taxon_no'},$taxon_name);
@@ -4271,8 +4283,7 @@ sub displayCollectionForm {
 
 	# Have to be logged in
 	if (!$s->isDBMember()) {
-		$s->enqueue( $dbh, "action=displayCollectionForm" );
-		displayLoginPage( "Please log in first." );
+		displayLoginPage("Please log in first.");
 		exit;
 	}
 
@@ -4690,11 +4701,25 @@ sub processEnterCollectionForm {
     my @rs = @{$dbt->getData($sql)};
     my $coll = $rs[0]; 
     if ($coll) {
+        my $collection_no = $recID;
         displayCollectionDetailsPage($coll);
-        print "<div align=center>".$hbo->populateHTML('occurrence_display_buttons', [$recID],['collection_no'])."</div>";
-    }
-   
-	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></p></b>|;
+		
+        # If the viewer is the authorizer (or it's me), display the record with edit buttons
+        print '<p><div align="center"><table><tr><td>';
+        my $p = Permissions->new($s,$dbt);
+        my $can_modify = $p->getModifierList();
+        $can_modify->{$s->get('authorizer_no')} = 1;
+        
+        if ($can_modify->{$coll->{'authorizer_no'}} || $s->isSuperUser) {
+            print qq|<li><b><a href="bridge.pl?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a></b></li>|;
+        }
+        print qq|<li><b><a href="bridge.pl?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a></b></li>|;
+        print qq|<li><b><a href="bridge.pl?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></b></li>|;
+        print qq|<li><b><a href="bridge.pl?action=startAddEditOccurrences&collection_no=$collection_no">Edit taxonomic list</a></b></li>|;
+        print qq|<li><b><a href="bridge.pl?action=displayCollResults&type=occurrence_table&reference_no=$coll->{reference_no}">Edit occurrence table for collections from the same reference</a></b></li>|;
+        print qq|<li><b><a href="bridge.pl?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></b></li>|;
+        print "</td></tr></table></div></p>";
+    }   
  
 	print stdIncludes("std_page_bottom");
 }
@@ -4707,8 +4732,7 @@ sub startEditCollection {
 
 	# Have to be logged in
 	if (!$s->isDBMember()) {
-		$s->enqueue( $dbh, "action=startEditCollection" );
-		displayLoginPage( "Please log in first." );
+		displayLoginPage( "Please log in first.",'startEditCollection');
 		exit;
 	}
 	elsif ( $q->param("collection_no") ) {
@@ -4734,8 +4758,7 @@ sub startAddCollection {
 	
 	# Have to be logged in
 	if (!$s->isDBMember()) {
-		$s->enqueue( $dbh, "action=startAddCollection" );
-		displayLoginPage( "Please log in first." );
+		displayLoginPage( "Please log in first.",'startAddCollection');
 		exit;
 	}
 
@@ -4760,18 +4783,18 @@ sub startAddEditOccurrences {
 	
 	# Have to be logged in
 	if (!$s->isDBMember()) {
-		$s->enqueue( $dbh, "action=startAddEditOccurrences" );
-		displayLoginPage( "Please log in first." );
+		displayLoginPage( "Please log in first.",'startAddEditOccurrences');
 		exit;
-	}
-	elsif ( $q->param("collection_no") ) {
-		$s->enqueue( $dbh, "action=displayOccurrenceAddEdit&collection_no=".$q->param("collection_no") );
+	} elsif (!$s->get('reference_no')) {
+        $s->enqueue($dbh,'action=startAddEditOccurrences');
+        $q->param( "type" => "select" );
+        displaySearchRefs(); 
+	} elsif ($q->param("collection_no") ) {
+		displayOccurrenceAddEdit();
 	} else {
-		$s->enqueue( $dbh, "action=displaySearchColls&type=edit_occurrence" );
+        $q->param('type'=>'edit_occurrence');
+		displaySearchColls();
 	}
-
-	$q->param( "type" => "select" );
-	displaySearchRefs(); 
 }
 
 # This subroutine intializes the process to get to the reID entry page
@@ -4942,7 +4965,7 @@ sub processTaxonSearch {
             #  JA 20.8.06
             print qq|<tr><td align="center"><input type="radio" name="taxon_no" value="$row->{taxon_no}"></td>|;
             #print qq|<tr><td align="center"><input type="radio" name="taxon_no" value="$row->{taxon_no}" $checked></td>|;
-            print "<td>".Taxon::formatAuthorityLine($dbt, $row)."</td></tr>";
+            print "<td>".Taxon::formatTaxon($dbt, $row)."</td></tr>";
         }
 
         # always give them an option to create a new taxon as well
@@ -5536,15 +5559,26 @@ sub processEditCollectionForm {
     my $coll = $rs[0];
     if ($coll) {  
         displayCollectionDetailsPage($coll);
-        print "<div align=center>";
-        print $hbo->populateHTML('occurrence_display_buttons', [$collection_no],['collection_no']);
-        print $hbo->populateHTML('reid_display_buttons', [$collection_no],['collection_no']);
-        print "</div>";
-    }
+		
+        # If the viewer is the authorizer (or it's me), display the record with edit buttons
+        print '<p><div align="center"><table><tr><td>';
+        my $p = Permissions->new($s,$dbt);
+        my $can_modify = $p->getModifierList();
+        $can_modify->{$s->get('authorizer_no')} = 1;
+        
+        if ($can_modify->{$coll->{'authorizer_no'}} || $s->isSuperUser) {
+            print qq|<li><b><a href="bridge.pl?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a></b></li>|;
+        }
+        print qq|<li><b><a href="bridge.pl?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a></b></li>|;
+        print qq|<li><b><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add a collection with the same reference</a></b></li>|;
+        print qq|<li><b><a href="bridge.pl?action=displaySearchColls&type=edit">Edit another collection with the same reference</a></b></li>|;
+        print qq|<li><b><a href="$exec_url?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</b></a></li>|;
+        print qq|<li><b><a href="bridge.pl?action=startAddEditOccurrences&collection_no=$collection_no">Edit taxonomic list</a></b></li>|;
+        print qq|<li><b><a href="bridge.pl?action=displayCollResults&type=occurrence_table&reference_no=$coll->{reference_no}">Edit occurrence table for collections from the same reference</a></b></li>|;
+        print qq|<li><b><a href="bridge.pl?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></b></li>|;
    
-	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit">Edit another collection using the same reference</a></p></b></center>|;
-	print qq|<center><b><p><a href="$exec_url?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</a></p></b></center>|;
-	print qq|<center><b><p><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add a collection with the same reference</a></p></b></center>|;
+        print "</td></tr></table></div></p>";
+    }
 
 	print stdIncludes("std_page_bottom");
 }
@@ -5703,6 +5737,559 @@ sub displayOccurrenceAddEdit {
 	print stdIncludes("std_page_bottom");
 }
 
+
+#
+# Sanity checks/error checks?
+# Hit enter, capture and do addrow
+#
+sub displayOccurrenceTable {
+    my @all_collections = @{$_[0]};
+	# Have to be logged in
+	if (!$s->isDBMember()) {
+		displayLoginPage( "Please log in first.",'displayOccurrenceTable' );
+		exit;
+	}
+	# Have to have a reference #
+	my $reference_no = $s->get("reference_no");
+	if ( ! $reference_no ) {
+		$s->enqueue( $dbh, $q->query_string());
+		displaySearchRefs( "Please choose a reference first" );
+		exit;
+	}	
+
+    # Get modifier as well
+    my $p = new Permissions($s,$dbt);
+    my $can_modify = $p->getModifierList();
+    $can_modify->{$s->get('authorizer_no')} = 1;
+
+    my $lower_limit = int($q->param("offset")) || 0;
+    my $limit = int($q->param("limit")) || 20;
+    my $upper_limit = ($lower_limit + $limit);
+    if ($upper_limit > @all_collections) {
+        $upper_limit = @all_collections;
+    }
+
+    my @collections = map {int} @all_collections[$lower_limit .. ($upper_limit-1)];
+    my %taxon_names = ();
+    my %taxon_nos = ();
+
+
+    my $sql = "SELECT 0 reid_no, o.occurrence_no, o.collection_no, o.reference_no, o.authorizer_no, p1.name authorizer, o.taxon_no, o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name, o.abund_value, o.abund_unit FROM occurrences o LEFT JOIN person p1 ON p1.person_no=o.authorizer_no WHERE collection_no IN (".join(",",@collections).")"; 
+    my @occs = @{$dbt->getData($sql)};
+
+    my %count_by_abund_unit;
+    foreach my $row (@occs) {
+        my %hash = %$row;
+        # Make sure the resos come last since we don't want that to affect hte sort below
+        my $taxon_key = join("-_",@hash{"genus_name","subgenus_name","species_name","genus_reso","subgenus_reso","species_reso"});
+        $taxon_names{$taxon_key}{$row->{'collection_no'}} = $row;
+        $taxon_nos{$taxon_key}{$row->{'taxon_no'}} = 1 if ($row->{'taxon_no'} > 0);
+        $count_by_abund_unit{$row->{'abund_unit'}}++ if ($row->{'abund_unit'});
+   }
+
+    # This takes advantage of a bug in IE 6 in which absolutely positioned elements get treated
+    # as fixed position elements when height:100% and overflow-y:auto are added to the body
+    # Note that the browser can't be rendering in "quirks" mode so the doctype must be XHTML
+    # (use a different header)
+    my $extra_header = <<EOF;
+<script src="/JavaScripts/occurrence_table.js" type="text/javascript" language="JavaScript"></script>
+<style type="text/css">
+body {
+    margin:10px; 
+    top:0px; 
+    left:10px; 
+    padding:0 0 0 0; 
+    border:0; 
+    height:100%; 
+    overflow-y:auto; 
+}
+#occurrencesTableHeader {
+    display:block; 
+    top:0px; 
+    left:10px; 
+    position:fixed; 
+    border-bottom:2px solid gray; 
+    padding:0px; 
+    text-align:center; 
+    background-color:#FFFFFF;
+    z-index: 9;
+}
+#occurrencesTableHeader th,#occurrencesTableHeader td {
+    border-right: 1px solid gray;
+    border-bottom: 1px solid gray; 
+}
+* html #occurrencesTableHeader {position:absolute;}
+</style>
+<!--[if lte IE 6]>
+   <style type="text/css">
+   /*<![CDATA[*/ 
+html {overflow-x:auto; overflow-y:hidden;}
+   /*]]>*/
+   </style>
+<![endif]-->
+EOF
+    print $hbo->populateHTML('blank_page_top',{'extra_header'=>$extra_header});
+    print '<form method="post" action="bridge.pl" onSubmit="return handleSubmit();">';
+    print '<input type="hidden" name="action" value="processOccurrenceTable" />';
+    # this field is read by the javascript but not used otherwise
+    print qq|<input type="hidden" name="reference_no" value="$reference_no" />|;
+
+    foreach my $collection_no (@collections) {
+        print qq|<input type="hidden" name="collection_nos" value="$collection_no" />\n|;
+    }
+
+    # Fixed position header
+    # We're make an assumption here, that there will generally only be one abundance unit for the page
+    # and everything gets synced to that one -- we prepopulate the form with that abundance unit, or if
+    # where no abundance unit (a new sheet or only presenses and not abundances records), then we
+    # default to specimens
+    my $selected_abund_unit = 'specimens';
+    my $max_count = 1;
+    while(my ($abund_unit,$count) = each %count_by_abund_unit) {
+        if ($count > $max_count && $abund_unit) {
+            $max_count = $count;
+            $selected_abund_unit = $abund_unit;
+        }
+    }
+    my $abund_select = $hbo->htmlSelect('abund_unit',$hbo->getKeysValues('abund_unit'),$selected_abund_unit,'class="small"');
+    my $reference = "$reference_no (".Reference::formatShortRef($dbt,$reference_no).")";
+    print '<div id="occurrencesTableHeader">';
+    print '<table border=0 cellpadding=0 cellspacing=0>'."\n";
+    print '<tr>';
+    print '<td valign="bottom"><div class="fixedLabel">'.
+          '<div align="left" style="height: 170px; overflow: hidden;" class="small">'.
+          '<b>New cells:</b><br />'.
+          '&nbsp;Reference: '.$reference."<br />".
+          '&nbsp;Abund. unit: '.$abund_select."<br />".
+          '<b>Current cell: </b><br />'.
+          '<div id="cell_info"></div>'.
+          '</div>'.
+          '<input type="submit" name="submit" value="Submit table" /><br /><br />'.
+          '</div></td>';
+    foreach my $collection_no (@collections) {
+        my $collection_name = escapeHTML(generateCollectionLabel($collection_no));
+        print '<td class="addBorders"><div class="fixedColumn">'.
+            qq|<a target="_blank" href="bridge.pl?action=displayCollectionDetails&amp;collection_no=$collection_no"><img border="0" src="/public/collection_labels/$collection_no.png" alt="$collection_name"/></a>|.
+            "</div></td>";
+    }
+    print "</tr>\n";
+    print "</table></div>";
+
+ 
+    print '<div style="height: 236px">&nbsp;</div>';
+    print '<table border=0 cellpadding=0 cellspacing=0 id="occurrencesTable">'."\n";
+    my @sorted_names = sort keys %taxon_names;
+    for(my $i=0;$i<@sorted_names;$i++) {
+        my $taxon_key = $sorted_names[$i];
+        my @taxon_nos = (); 
+        if (exists ($taxon_nos{$taxon_key})) {
+            @taxon_nos = keys %{$taxon_nos{$taxon_key}} ;
+        }
+        my %hash = ();
+        @hash{"genus_name","subgenus_name","species_name","genus_reso","subgenus_reso","species_reso"} = split("-_",$taxon_key);
+        my $show_name = formatOccurrenceTaxonName(\%hash);
+        $show_name =~ s/<a href/<a target="_blank" href/;
+        my $class = ($i % 2 == 0) ? 'class="darkList"' : '';
+        print '<tr '.$class.'><td class="fixedLabel"><div class="fixedLabel">'.
+            $show_name.
+            qq|<input type="hidden" name="row_num" value="$i" />|.
+            qq|<input type="hidden" name="taxon_key_$i" value="|.escapeHTML($taxon_key).qq|" />|;
+        foreach my $taxon_no (@taxon_nos) {
+           print qq|<input type="hidden" name="taxon_no_$i" value="$taxon_no" />|; 
+        }
+        print "</div></td>";
+        $class = ($i % 2 == 0) ? 'fixedInputDark' : 'fixedInput';
+        for (my $j=0;$j<@collections;$j++) {
+            my $collection_no = $collections[$j];
+            my $occ = $taxon_names{$taxon_key}{$collections[$j]};
+            my ($abund_value,$abund_unit,$key_type,$key_value,$occ_reference_no,$readonly,$authorizer);
+            if ($occ) {
+                if ($occ->{'abund_value'}) {
+                    $abund_value = $occ->{'abund_value'};
+                } else {
+                    $abund_value = "X";
+                }
+                if ($occ->{'reid_no'}) {
+                    $key_type = "reid_no";
+                    $key_value = "$occ->{reid_no}";
+                } else {
+                    $key_type = "occurrence_no";
+                    $key_value = "$occ->{occurrence_no}";
+                }
+                $abund_unit = $occ->{'abund_unit'};
+                $occ_reference_no = $occ->{'reference_no'};
+                if (!$can_modify->{$occ->{'authorizer_no'}}) {
+                    $readonly = "readonly";
+                }
+                $authorizer=$occ->{'authorizer'}
+            } else {
+                $abund_unit = "DEFAULT";
+                $key_type = "occurrence_no";
+                $key_value = "-1";
+                $occ_reference_no = $reference_no;
+                $readonly = "";
+            }
+          
+            my $style="";
+            if ($readonly) {
+                $style = 'style="color: red;"';
+            }
+
+            my $esc_show_name = escapeHTML($show_name);
+#            $esc_show_name =~ s/"/\\"/g;
+            print qq|
+                <td class="fixedColumn"><div class="fixedColumn">
+                  
+                  <input name="abund_value_${i}_${collection_no}" size="3" value="$abund_value" class="$class" $readonly $style onClick="changeCurrentCellInfo('$esc_show_name','$collection_no','$occ_reference_no','$readonly','$authorizer')"/>
+                  <input name="abund_unit_${i}_${collection_no}" size="3" value="$abund_unit" type="hidden" />
+                  <input name="key_value_${i}_${collection_no}" value="$key_value" type="hidden" />
+                  <input name="key_type_${i}_${collection_no}" value="$key_type" type="hidden" />
+                </div></td>\n|;
+                  
+        }
+        print "</tr>\n";
+    }
+    print "</table>";
+
+    # Can dynamically add rows using javascript that modified the DOM -- see occurrence_table.js
+    print "<table>";
+    print '<tr><th></th><th class="small">Genus</th><th></th><th class="small">Subgenus</th><th></th><th class="small">Species</th></tr>';
+    print "<tr>".
+        '<td>'.$hbo->htmlSelect("genus_reso",$hbo->getKeysValues('genus_reso'),'','class="small"').'</td>'.
+        '<td><input name="genus_name" class="small" /></td>'.
+        '<td>'.$hbo->htmlSelect("subgenus_reso",$hbo->getKeysValues('subgenus_reso'),'','class="small"').'</td>'.
+        '<td><input name="subgenus_name" class="small" /></td>'.
+        '<td>'.$hbo->htmlSelect("species_reso",$hbo->getKeysValues('species_reso'),'','class="small"').'</td>'.
+        '<td><input name="species_name" class="small" /></td>'.
+        '</tr><tr>'.
+        '<td colspan=6 align=right><input type="button" name="addRow" value="Add Row" onClick="insertOccurrenceRow();" /></td>'.
+        '</tr>';
+    print "</table>";
+
+    print "<br /><br />";
+
+    print '<div align="center"><div style="width: 640px">';
+    print 'Presenses may be denoted with an "X"<br /><br />';
+    if (@all_collections > @collections) {
+        print "<b>";
+        print "Showing collections ".($lower_limit + 1)." to $upper_limit of ".scalar(@all_collections).".";
+        if (@all_collections > $upper_limit) {
+            my $query = "offset=".($upper_limit);
+            foreach my $p ($q->param()) {
+                if ($p ne 'offset' &&  $p ne 'next_page_link') {
+                    $query .= "&amp;$p=".$q->param($p);
+                }
+            }
+            my $remaining = ($limit + $upper_limit >= @all_collections) ? (@all_collections - $upper_limit) : $limit;
+            my $verb = ($limit + $upper_limit >= @all_collections) ? "last" : "next";
+            if ($remaining > 1) {
+                $remaining= "$remaining collections";
+            } else {
+                $remaining = "collection";
+            }
+            print qq|<a href="bridge.pl?$query"> Get $verb $remaining</a>.|;
+
+            # We save this so we can go to the next page easily on form submission
+            my $next_page_link = uri_escape(qq|<b><a href="bridge.pl?$query"> Edit $verb $remaining</a></b>|);
+            print qq|<input type="hidden" name="next_page_link" value="$next_page_link">|;
+        }
+        print "</b>";
+    }
+    print '</div></div>';
+    print "</form>";
+    print "<br /><br />";
+
+    print stdIncludes('blank_page_bottom');
+}
+
+# Submission of all this,
+sub processOccurrenceTable {
+    if (!$s->isDBMember()) {
+        displayLoginPage( "Please log in first." );
+        exit;
+    }
+#    $DEBUG = 1;
+   
+    my @row_tokens = $q->param('row_num');
+    my @collections = $q->param('collection_nos');
+    my $collection_list = join(",",@collections);
+    my $global_abund_unit = $q->param("abund_unit");
+    my $session_ref = $s->get('reference_no');
+    if (!$global_abund_unit) {
+        print "ERROR: no abund_unit specified";
+        die;
+    }
+    if (!$session_ref) {
+        print "ERROR: no session reference";
+        die;
+    }
+    my $p = new Permissions($s,$dbt);
+    my $can_modify = $p->getModifierList();
+    $can_modify->{$s->get('authorizer_no')} = 1;
+
+    print stdIncludes('std_page_top');
+    print '<div align="center"><h3>Occurrence table entry results</h3></div>';
+    print '<form method="post" action="bridge.pl">';
+    print '<input type="hidden" name="action" value="startProcessReclassifyForm">';
+    print '<div align="center"><table cellpadding=3 cellspacing=0 border=0>';
+    my $changed_rows = 0;
+    my $seen_homonyms = 0;
+    foreach my $i (@row_tokens) {
+        my $taxon_key = $q->param("taxon_key_$i");
+        my @taxon_nos = $q->param("taxon_no_$i");
+        my ($genus_name,$subgenus_name,$species_name,$genus_reso,$subgenus_reso,$species_reso) = split("-_",$taxon_key);
+        my (@deleted,@updated,@inserted,@uneditable);
+        my $total_occs = 0;
+        
+        my $taxon_no;
+        my @homonyms = ();
+        my $manual_resolve_homonyms = 0;
+        if (@taxon_nos == 1) {
+            # If taxon_nos == 1: good to go. Note that taxon_nos is derived from what actually exists already in the DB,
+            #  so if theres a homonym but only one version of the name is used it'll just reuse that name.  Likewise
+            $taxon_no = $taxon_nos[0];
+        } elsif (@taxon_nos > 1) {
+            # If taxon_nos > 1: then there are multiple versions of the same
+            # name in the sheet. It would be bad to overwrite any taxons classification arbitrarily
+            # so we have a link for the user to manually classify that taxon by setting $manual_resolve_homonyms
+            #  non-homonyms may have no taxon_no set if its a new entry - do a lookup in that case.
+            @homonyms= @taxon_nos;
+            $manual_resolve_homonyms = 1;
+        } elsif (@taxon_nos == 0) {
+            # If taxon_nos < 1: This can be because the taxon is new or because there are multiple versions of the
+            # name, none of which have been classified.  Give an option to classify if homonyms exist
+            $taxon_no = Taxon::getBestClassification($dbt,$genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name);
+            if (!$taxon_no) {
+                my @matches = Taxon::getBestClassification($dbt,$genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name);
+                if (@matches) {
+                    @homonyms = map {$_->{'taxon_no'}} @matches;
+                    $seen_homonyms++;
+                } # Else doesn't exist in the DB
+            }
+        }
+        my @occurrences = ();
+        foreach my $collection_no (@collections) {
+            my $abund_value = $q->param("abund_value_${i}_${collection_no}");
+            my $abund_unit = $global_abund_unit;
+            my $primary_key = $q->param("key_type_${i}_${collection_no}");
+            my $primary_key_value = int($q->param("key_value_${i}_${collection_no}"));
+            my $table = 'occurrences';
+            if ($primary_key !~ /^occurrence_no$|^reid_no$/) {
+                print "ERROR: invalid primary key type";
+                next;
+            }
+
+            my $in_form = ($abund_value !~ /^\s*$/) ? 1 : 0;
+            my $in_db = ($primary_key_value > 0) ? 1 : 0;
+
+            if (lc($abund_value) eq 'x') {
+                $abund_value = '';
+                $abund_unit = '';
+            } 
+            
+            my $db_row;
+            if ($in_db) {
+                my $sql = "SELECT * FROM $table WHERE $primary_key=$primary_key_value";
+                $db_row = ${$dbt->getData($sql)}[0];
+                if (!$db_row) {
+                    die "Can't find db row $table.$primary_key=$primary_key_value";
+                }
+            }
+
+            my %record = (
+                'collection_no'=>$collection_no,
+                'abund_value'=>$abund_value,
+                'abund_unit'=>$abund_unit,
+                'genus_reso'=>$genus_reso,
+                'genus_name'=>$genus_name,
+                'subgenus_reso'=>$subgenus_reso,
+                'subgenus_name'=>$subgenus_name,
+                'species_reso'=>$species_reso,
+                'species_name'=>$species_name
+            );
+            if ($taxon_no) {
+                $record{'taxon_no'} = $taxon_no;
+            }
+
+            if (!$in_db) {
+                $record{'reference_no'} = $session_ref;
+            }
+
+            if ($in_db) {
+                my $authorizer_no = $db_row->{'authorizer_no'};
+                unless ($can_modify->{$authorizer_no}) {
+                    push @uneditable,$collection_no;
+                    $total_occs++;
+                    next;
+                }
+            }
+        
+            if ($in_form && $in_db) {
+                # Do an update
+                dbg("UPDATING TAXON:$taxon_key COLLECTION:$collection_no $table.$primary_key=$primary_key_value");
+                dbg("Record:".DumpHash(\%record));
+                my $result = $dbt->updateRecord($s,$table,$primary_key,$primary_key_value,\%record);
+                if ($result > 0) { 
+                    push @updated,$collection_no; 
+                }
+                push @occurrences, $primary_key_value;
+                $total_occs++;
+            } elsif ($in_form && !$in_db) {
+                # Do an insert
+                dbg("INSERTING TAXON:$taxon_key COLLECTION:$collection_no $table");
+                dbg("Record:".DumpHash(\%record));
+                my ($result,$occurrence_no) = $dbt->insertRecord($s,$table,\%record);
+                push @inserted,$collection_no; 
+                if ($result) {
+                    push @occurrences, $occurrence_no;
+                }
+                $total_occs++;
+                # Add secondary ref
+                PBDBUtil::setSecondaryRef($dbh,$collection_no,$session_ref);
+            } elsif (!$in_form && $in_db) {
+                # Do a delete
+                dbg("DELETING TAXON:$taxon_key COLLECTION:$collection_no $table.$primary_key=$primary_key_value");
+                dbg("Record:".DumpHash(\%record));
+                $dbt->deleteRecord($s,$table,$primary_key,$primary_key_value);
+                push @deleted,$collection_no; 
+            } 
+        }
+
+        my $taxon_name = formatOccurrenceTaxonName({
+            'genus_name'=>$genus_name,
+            'genus_reso'=>$genus_reso,
+            'subgenus_name'=>$subgenus_reso,
+            'subgenus_reso'=>$subgenus_name,
+            'species_reso'=>$species_reso,
+            'species_name'=>$species_name
+        });
+        
+        my $classification_select = "";
+        if ( @homonyms) {
+            if ($manual_resolve_homonyms) {
+            } else {
+                my @taxon_nos = ("0+unclassified");
+                my @descriptions = ("leave unclassified");
+                foreach my $taxon_no (@homonyms) {
+                    my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['taxon_no','taxon_rank','taxon_name','author1last','author2last','otherauthors','pubyr']);
+                    my $authority = Taxon::formatTaxon($dbt,$t);
+                    push @descriptions, $authority; 
+                    push @taxon_nos, $taxon_no."+".$authority;
+                }
+                $classification_select .= qq|<input type="hidden" name="occurrence_list" value="|.join(",",@occurrences).qq|">|;
+                $classification_select .= qq|<input type="hidden" name="old_taxon_no" value="0">|;
+                $classification_select .= qq|<input type="hidden" name="occurrence_description" value="|.escapeHTML($taxon_name).qq|">|;
+                $classification_select .= $hbo->htmlSelect('taxon_no',\@descriptions,\@taxon_nos);
+            }
+        }
+        if (@inserted || @updated || @deleted || (!$total_occs && @deleted) || $classification_select || $manual_resolve_homonyms) {
+            my $row = "<tr><td>$taxon_name</td><td>$classification_select</td><td>";
+            if (@inserted) {
+                my $s = (@inserted == 1) ? "" : "s";
+                $row .= "Added to ".scalar(@inserted)." collection$s. "; 
+            }
+            if (@updated) {
+                my $s = (@updated == 1) ? "" : "s";
+                $row .= "Updated in ".scalar(@updated)." collection$s. ";
+            }
+            if (@deleted) {
+                my $s = (@deleted == 1) ? "" : "s";
+                $row .= "Removed from ".scalar(@deleted)." collection$s. ";
+            }
+            if (!$total_occs && @deleted) {
+                $row .= "All occurrences of this taxon were removed. ";
+            }
+            if ($manual_resolve_homonyms) {
+                my $simple_taxon_name = $genus_name;
+                $simple_taxon_name .= " ($subgenus_name)" if ($subgenus_name);
+                $simple_taxon_name .= " ".$species_name;
+                $row .= qq|Multiple versions of this name exist and must be <a target="_new" href="bridge.pl?action=startDisplayOccurrenceReclassify&collection_list=$collection_list&taxon_name=$simple_taxon_name">manually classified</a>. |;
+            }
+            $row .= "</td></tr>";
+            print $row;
+            $changed_rows++;
+        }
+    }
+    if (!$changed_rows) {
+        print "<tr><td>No rows were changed</td></tr>";
+    }
+    if ($seen_homonyms) {
+        print qq|<tr><td colspan="3" align="center"><br><input type="submit" name="submit" value="Classify taxa"></td></tr>|;
+        print qq|<tr><td colspan="3">|.Debug::printWarnings(['Multiple versions of some names exist in the database.  Please select the version wanted and hit "Classify taxa"']).qq|</td></tr>|;
+    }
+    print "</table>";
+    print "</div>";
+    print "</form>";
+    print '<div align="center"><p>';
+    print '<b><a href="bridge.pl?action=displaySearchColls&type=occurrence_table">Edit more occurrences</a></b>';
+    if ($q->param('next_page_link')) {
+        print " - ".uri_unescape($q->param("next_page_link"));
+    }
+    print '</p></div>';
+    print stdIncludes('std_page_bottom');
+}
+
+sub DumpHash { 
+    my @k = sort keys %{$_[0]}; 
+    my $t = ''; 
+    $t .= "$_=$_[0]->{$_}," for @k;
+    return $t;
+}
+
+sub generateCollectionLabel {
+    my $collection_no = int(shift); 
+    return unless $collection_no;
+
+    require GD;
+    my $sql = "SELECT collection_name FROM collections WHERE collection_no=".int($collection_no);
+    my $collection_name = ${$dbt->getData($sql)}[0]->{'collection_name'};
+    my $file = $ENV{'DOCUMENT_ROOT'}."/public/collection_labels/$collection_no.png";
+    my $txt = "#$collection_no: $collection_name";
+
+    my $font= "$DATAFILE_DIR/fonts/sapirsan.ttf";
+    my $font_size = 10;
+    my $x = $font_size+2;
+    my $height = 240;
+    my $y = $height-3;
+    my $num_lines = 3;
+    my $angle = 1.57079633;# Specified in radians = .5*pi
+
+    my $width = ($font_size+1)*$num_lines+3;
+    my $im = new GD::Image($width,$height,1);
+    my $white = $im->colorAllocate(255,255,255); # Allocate background color first
+    my $black = $im->colorAllocate(0,0,0);
+    $im->transparent($white);
+    $im->filledRectangle(0,0,$width-1,$height-1,$white);
+
+    my @words = split(/[\s-]+/,$txt);
+    my $line_count = 1;
+    foreach my $word (@words) {
+        # This first call to stringFT is to GD::Image - this doesn't draw anything
+        # but instead gets the @bounds back quickly so we know whether or now to 
+        # wrap to the next line
+        my @bounds = GD::Image->stringFT($black,$font,$font_size,$angle,$x,$y,$word);
+#        print "Bounds are: ".join(",",@bounds)." for $word<BR>";
+        if ($bounds[3] < 0) {
+            #bounds[3] is the top left y coordinate or some such. if its < 0, then this
+            # strin gis running off the image so break to next line
+            $x += $font_size + 1;
+            last if ($line_count > $num_lines);
+            $y = $height - 3;
+            my @bounds = $im->stringFT($black,$font,$font_size,$angle,$x,$y,$word);
+            $y = $bounds[3] - int($font_size/3);
+        } else {
+            my @bounds = $im->stringFT($black,$font,$font_size,$angle,$x,$y,$word);
+            $y = $bounds[3] - int($font_size/3);
+        }
+    }
+
+    open IMG,">$file";
+    print IMG $im->png; 
+    close IMG;
+    return $collection_name;
+}
+
+
 # This function now handles inserting/updating occurrences, as well as inserting/updating reids
 # Rewritten PS to be a bit clearer, handle deleltions of occurrnces, and use DBTransationManager
 # for consistency/simplicity.
@@ -5760,14 +6347,7 @@ sub processEditOccurrences {
         #  in the authorities table JA 1.4.04
         # see Reclassify.pm for a similar operation
         # only do this for non-informal taxa
-        my ($genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name) = ("","","","","","");
-        $genus_reso ||= $fields{'genus_reso'};
-        $genus_name ||= $fields{'genus_name'};
-        $subgenus_reso ||= $fields{'subgenus_reso'};
-        $subgenus_name ||= $fields{'subgenus_name'};
-        $species_reso ||= $fields{'species_reso'};
-        $species_name ||= $fields{'species_name'};
-        my $best_taxon_no = Taxon::getBestClassification($dbt,$genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name);
+        my $best_taxon_no = Taxon::getBestClassification($dbt,\%fields);
         $fields{'taxon_no'} = $best_taxon_no;
 
         if ($fields{'genus_name'} =~ /^\s*$/) {
@@ -5779,16 +6359,16 @@ sub processEditOccurrences {
                 next;  
             }
         } else {
-            if (!Validation::validOccurrenceGenus($genus_reso,$genus_name)) {
-                push @warnings, "Required field genus ($genus_name) is blank or improperly formatted for row $i, so the row was skipped";
+            if (!Validation::validOccurrenceGenus($fields{'genus_reso'},$fields{'genus_name'})) {
+                push @warnings, "Required field genus ($fields{'genus_name'}) is blank or improperly formatted for row $i, so the row was skipped";
                 next; 
             }
-            if ($fields{'subgenus_name'} !~ /^\s*$/ && !Validation::validOccurrenceGenus($subgenus_reso,$subgenus_name)) {
-                push @warnings, "Subgenus ($subgenus_name) improperly formatted for row $i, so the row was skipped";
+            if ($fields{'subgenus_name'} !~ /^\s*$/ && !Validation::validOccurrenceGenus($fields{'subgenus_reso'},$fields{'subgenus_name'})) {
+                push @warnings, "Subgenus ($fields{'subgenus_name'}) improperly formatted for row $i, so the row was skipped";
                 next; 
             }
-            if ($fields{'species_name'} =~ /^\s*$/ || !Validation::validOccurrenceSpecies($species_reso,$species_name)) {
-                push @warnings, "Required field species ($species_name) is blank or improperly formatted for row $i, so the row was skipped";
+            if ($fields{'species_name'} =~ /^\s*$/ || !Validation::validOccurrenceSpecies($fields{'species_reso'},$fields{'species_name'})) {
+                push @warnings, "Required field species ($fields{'species_name'}) is blank or improperly formatted for row $i, so the row was skipped";
                 next; 
             }
         }
@@ -5970,8 +6550,7 @@ sub processEditOccurrences {
 sub displayReIDCollsAndOccsSearchForm {
 	# Have to be logged in
 	if (!$s->isDBMember()) {
-		$s->enqueue( $dbh, "action=displayReIDCollsAndOccsSearchForm" );
-		displayLoginPage( "Please log in first." );
+		displayLoginPage( "Please log in first.",'displayReIDCollsAndOccsSearchForm');
 		exit;
 	}
 	# Have to have a reference #
