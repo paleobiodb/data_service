@@ -424,16 +424,26 @@ sub writeBlock {
         }
     } if ($block->{'type'} =~ /^(?:button|submit|hidden|text|password)$/) {
         my $value = '';
-        if ($attribs->{'value'}) {
-            $value = escapeHTML($attribs->{'value'});
+        if ($block->{'type'} eq 'hidden') {
+            # For hidden attributes (like action) the default value takes precedence if it exists
+            if ($attribs->{'value'}) {
+                $value = escapeHTML($attribs->{'value'});
+            } elsif (exists ($vars->{$block->{'name'}})) {
+                $value = escapeHTML($vars->{$block->{'name'}});
+            } 
         } else {
-            $value = escapeHTML($vars->{$block->{'name'}});
-        } 
+            # Else the passed in value takes precedence
+            if (exists ($vars->{$block->{'name'}})) {
+                $value = escapeHTML($vars->{$block->{'name'}});
+            } else {
+                $value = escapeHTML($attribs->{'value'});
+            }
+        }
         $html .= qq|<input type="$block->{type}"|;
         $html .= qq| name="|.escapeHTML($block->{name}).qq|"| if ($block->{'name'} ne '');
         $html .= qq| value="$value"| unless $block->{'type'} eq 'password';
         $html .= qq| $attribs->{other}| if ($attribs->{'other'});
-        $html .= ">";
+        $html .= "/>";
         if ($read_only->{'all'} || $read_only->{$block->{'name'}}) {
             if ($block->{'type'} eq 'hidden') {
                 $html = "";
@@ -464,7 +474,7 @@ sub writeBlock {
         $html .= qq| value="$value"|;
         $html .= " ".$checked if $checked;
         $html .= " ".$attribs->{'other'} if ($attribs->{'other'});
-        $html .= ">";
+        $html .= "/>";
         if ($read_only->{'all'} || $read_only->{$block->{'name'}}) {
             my $checked_symbol = ($checked) ? "X" : "&nbsp; ";
             $html = "<span class=\"readOnlyCheckBox\">$checked_symbol</span>";
@@ -496,7 +506,7 @@ sub writeBlock {
             $html .= $self->htmlSelect($block->{'name'},\@keys,\@values,$selected,$attribs->{'other'});
         } else {
             my $select_list = $attribs->{'autofill'} || $block->{'name'};
-            my ($keys,$values) = $self->getKeysValue($select_list);
+            my ($keys,$values) = $self->getKeysValues($select_list);
             $html .= $self->htmlSelect($block->{'name'},$keys,$values,$selected,$attribs->{'other'});
         }
         if ($read_only->{'all'} || $read_only->{$block->{'name'}}) {
@@ -528,9 +538,6 @@ sub writeBlock {
     } elsif ($block->{'type'} eq 'show') {
         my ($k,$v) = split(/=/,$block->{'name'});
         if ((!$v && $vars->{$k}) || ($v && $vars->{$k} eq $v)) {
-            # textarea values often have returns that need to be rendered
-            #  as <br>s JA 20.8.06
-            $vars->{$k} =~ s/\n/<br>\n/g if $vars->{$k} !~ /<br>/;
             foreach my $c (@{$block->{'children'}}) {
                 $html .= $self->writeBlock($c,$vars,$read_only,$depth);
             }
@@ -569,7 +576,7 @@ sub parseAttribs {
 # One public interface to getting various lists, whether they be
 # hardcoded or from the database. List context only. Returns
 # refs to keys and values arrays
-sub getKeysValue {
+sub getKeysValues {
     my $self = shift;
     my $name = shift;
     if (exists $self->{'select_lists'}{$name}) {
@@ -595,10 +602,11 @@ sub getKeysValue {
 
 # Second public interface - for most simple lists, just returns it
 # I.E. @environemtn = $hbo->getList('environment')
+# Returns the second arrayref as a normal array from getKeysValues
 sub getList {
     my $self = shift;
     my $name = shift;
-    return @{$self->getKeysValue($name)};
+    return @{$self->getKeysValues($name)};
 }
 
 sub htmlSelect {
@@ -617,7 +625,7 @@ sub htmlSelect {
     for(my $i=0;$i<scalar(@keys);$i++) {
         my $selected = ($toSelect ne '' && $values[$i] eq $toSelect) ? " SELECTED" : "";
         my $value = escapeHTML($values[$i]);
-        my $key = escapeHTML($keys[$i]);
+        my $key = $keys[$i];
 		$html .= qq|  <option value="$value"$selected>$key</option>\n|;
 	}
 	$html .= "</select>";
