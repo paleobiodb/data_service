@@ -329,7 +329,7 @@ sub displayPermissionListForm {
     my $working_group_select = $hbo->htmlSelect('working_group',$working_group_names,$working_group_values);
 
     print qq|<div align="center">|;
-    print qq|<h3>Editing permission list</h3>|;
+    print qq|<h3 style="padding-bottom: 1em;">Editing permission list</h3>\n\n|;
    
     # Form for designating heir:
     my $sql = "SELECT p2.name heir FROM person p1 LEFT JOIN person p2 ON p1.heir_no=p2.person_no WHERE p1.person_no=$authorizer_no";
@@ -338,6 +338,9 @@ sub displayPermissionListForm {
     if (@results) {
         $heir_reversed = Person::reverseName($results[0]->{'heir'});
     }
+    print qq|<div class="displayPanel" align="left">\n|;
+    print qq|<span class="displayPanelHeader"><b>Designated heir</b></span>\n|;
+    print qq|<div class="displayPanelContent" align="center">\n|;
     print qq|<form method="POST" action="bridge.pl">|;
     print qq|<input type="hidden" name="action" value="submitHeir">|;
     print qq|<table cellpadding=0 cellspacing=3>|;
@@ -384,7 +387,10 @@ sub displayPermissionListForm {
             $owner2 = $person.$epithet." data";
         }
         # Form for adding people to permission list
-        print qq|<hr><form method="POST" action="bridge.pl">|;
+        print qq|</div>\n</div>\n\n<div class="displayPanel" align="left">\n|;
+        print qq|<span class="displayPanelHeader"><b>Permitted modifiers</b></span>\n|;
+        print qq|<div class="displayPanelContent" align="center">\n|;
+        print qq|<form method="POST" action="bridge.pl">|;
         print qq|<input type="hidden" name="action" value="submitPermissionList">|;
         print qq|<input type="hidden" name="submit_type" value="add">|;
         print qq|<input type="hidden" name="action_for" value="$person_no">|;
@@ -419,7 +425,30 @@ sub displayPermissionListForm {
         }
         print qq|</table></form>|;
     }
-    print qq|</div>|;
+    # print the people who have put this person on their permission list,
+    #  just so they know JA 28.8.06
+    my $sql = "SELECT p.name authorizer_name, pm.authorizer_no FROM person p, permissions pm WHERE p.person_no=pm.authorizer_no AND pm.modifier_no=$authorizer_no ORDER BY p.last_name, p.first_name";
+    my @results = @{$dbt->getData($sql)};
+    if (@results) {
+        print qq|</div>\n</div>\n\n<div class="displayPanel" align="left">\n|;
+        print qq|<span class="displayPanelHeader"><b>Permitted authorizers</b></span>\n|;
+        print qq|<div class="displayPanelContent" align="center">\n|;
+        print qq|<p>The following people have allowed you to edit their data:</p>\n|;
+        print qq|<table cellpadding=0 cellspacing=2 style="padding-bottom: 1em;">|;
+        my $midpoint = int((scalar(@results) + 1)/2); # have two columns
+        for(my $i=0;$i<$midpoint;$i++) {
+            my $row1 = $results[$i];
+            my $row2 = $results[$i+$midpoint];
+            print "<tr><td style=\"padding-right: 2em;\">$row1->{authorizer_name}</td>\n";
+            if ($row2) {
+                print "<td>$row2->{authorizer_name}</td>\n";
+            }
+            print "</tr>\n";
+        }
+        print qq|</table>\n|;
+    }
+    print qq|</div>\n|;
+    print qq|</div>\n|;
 
 }   
 
