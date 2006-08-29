@@ -1153,10 +1153,10 @@ sub displayRefResults {
                     print "<a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
                 } elsif ($type eq 'edit') {
                     print "<a href=\"bridge.pl?action=displayRefResults&reference_no=$row->{reference_no}&type=edit\">$row->{reference_no}</a>";
-                } elsif ($type eq 'select') {
-                    print "<a href=\"bridge.pl?action=displayRefResults&reference_no=$row->{reference_no}&type=select\">$row->{reference_no}</a><br>";
-                } else {
+                } elsif ($type eq 'view') {
                     print "<a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a><br>";
+                } else {
+                    print "<a href=\"bridge.pl?action=displayRefResults&reference_no=$row->{reference_no}&type=select\">$row->{reference_no}</a><br>";
                 }
             } else {
                 print "<a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
