@@ -8,10 +8,6 @@ use TaxaCache;
 use Opinion;
 use CGI::Carp;
 
-# Flags and constants
-my $DEBUG=0; # The debug level of the calling program
-$|=1; #free flowing data
-
 use strict;
 
 # Builds the itis format. files output are:
@@ -44,22 +40,22 @@ sub displayITISDownload {
         }
     }
 
-    if ($q->param('opinion_person_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('opinion_person_reversed')));
+    if ($q->param('person_reversed')) {
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('person_reversed')));
         my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
         if ($person_no) {
-            $options{'opinion_person_no'} = $person_no;
+            $options{'person_no'} = $person_no;
         } else {
-            push @errors, "Could not find person ".$q->param("opinion_person_reversed")." in the database";
+            push @errors, "Could not find person ".$q->param("person_reversed")." in the database";
         }
     }
-    if ($q->param('taxon_person_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('taxon_person_reversed')));
+    if ($q->param('person_reversed')) {
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('person_reversed')));
         my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
         if ($person_no) {
-            $options{'taxon_person_no'} = $person_no;
+            $options{'person_no'} = $person_no;
         } else {
-            push @errors, "Could not find person ".$q->param("taxon_person_reversed")." in the database";
+            push @errors, "Could not find person ".$q->param("person_reversed")." in the database";
         }
     }
 
@@ -74,7 +70,7 @@ sub displayITISDownload {
 
     print '<div align="center">
         <table border=0 width=600><tr><td>
-        <h3 class="darkList" style="margin-bottom: 0em;">Output files</h3>';
+        <h3 class="darkList" style="margin-bottom: 0em;">Output data</h3>';
 
     my ($filesystem_dir,$http_dir) = makeDataFileDir($s);
 
@@ -132,7 +128,7 @@ sub displayITISDownload {
     }
     close FH_AL;
     $taxon_author_count = "No" if ($taxon_author_count == 0);
-    print "<p>$taxon_author_count taxon authors names were printed to file</p>";
+    print "<p>$taxon_author_count taxon authors names were printed</p>";
 
     
     open FH_TU, ">$filesystem_dir/taxonomic_units.dat"
@@ -180,7 +176,7 @@ sub displayITISDownload {
     close FH_TU;
     my $taxon_count = scalar(@names); 
     $taxon_count = "No" if ($taxon_count == 0);
-    print "<p>$taxon_count taxononomic units were printed to file</p>";
+    print "<p>$taxon_count taxononomic units were printed</p>";
 
     open FH_SL, ">$filesystem_dir/synonym_links.dat";
     my $synonym_count = 0;
@@ -200,7 +196,7 @@ sub displayITISDownload {
     }
     close FH_SL;
     $synonym_count = "No" if ($synonym_count == 0);
-    print "<p>$synonym_count synonym links were printed to file</p>";
+    print "<p>$synonym_count synonym links were printed</p>";
     
     my @references = keys %references; 
     open FH_P, ">$filesystem_dir/publications.dat";
@@ -241,7 +237,7 @@ sub displayITISDownload {
     }     
     close FH_P;
     $ref_count = "No" if ($ref_count == 0);
-    print "</p>$ref_count publications were printed to file</p>";
+    print "</p>$ref_count publications were printed</p>";
     
     my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,%options); 
     my @opinions = @$opinions;
@@ -265,7 +261,7 @@ sub displayITISDownload {
     if ($opinion_file_message =~ /no search criteria/) {
         print "<p>No reference links could be downloaded because no search criteria related to \"Taxonomic opinions\" were entered</p>";
     } else {
-        print "<p>$ref_link_count reference links were printed to file</p>";
+        print "<p>$ref_link_count reference links were printed</p>";
     }
    
    
@@ -291,7 +287,7 @@ sub displayITISDownload {
     }
     close FH_C;
     $comment_count = "No" if ($comment_count == 0);
-    print "<p>$comment_count comments and comment links were printed to file</p>";
+    print "<p>$comment_count comments and comment links were printed</p>";
 
     open FH_CL, ">$filesystem_dir/tu_comments_links.dat";
     # Note that our comments aren't denormalized so the comment_id key
@@ -374,22 +370,22 @@ sub displayPBDBDownload {
         }
     }
 
-    if ($q->param('opinion_person_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('opinion_person_reversed')));
+    if ($q->param('person_reversed')) {
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('person_reversed')));
         my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
         if ($person_no) {
-            $options{'opinion_person_no'} = $person_no;
+            $options{'person_no'} = $person_no;
         } else {
-            push @errors, "Could not find person ".$q->param("opinion_person_reversed")." in the database";
+            push @errors, "Could not find person ".$q->param("person_reversed")." in the database";
         }
     }
-    if ($q->param('taxon_person_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('taxon_person_reversed')));
+    if ($q->param('person_reversed')) {
+        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('person_reversed')));
         my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
         if ($person_no) {
-            $options{'taxon_person_no'} = $person_no;
+            $options{'person_no'} = $person_no;
         } else {
-            push @errors, "Could not find person ".$q->param("taxon_person_reversed")." in the database";
+            push @errors, "Could not find person ".$q->param("person_reversed")." in the database";
         }
     }
 
@@ -538,7 +534,7 @@ sub displayPBDBDownload {
         my $ref_link = $http_dir."/references.csv";
         print "<p>$ref_count references were printed to <a href=\"$ref_link\">references.csv</a></p>";
     } else {
-        print "<p>No references were printed to file</p>";
+        print "<p>No references were printed</p>";
     }
 
 
@@ -575,43 +571,46 @@ sub getTaxonomicNames {
         push @where, "(t.rgt BETWEEN $lft AND $rgt)";
     }
 
-    if ($options{'taxon_reference_no'}) {
-        push @where, "a.reference_no=".int($options{'taxon_reference_no'});
+    if ($options{'reference_no'}) {
+        push @where, "a.reference_no=".int($options{'reference_no'});
     }
 
-    if ($options{'taxon_pubyr'}) {
-        my $sign = ($options{'taxon_pubyr_before_after'} eq 'before') ? '<=' 
-                 : ($options{'taxon_pubyr_before_after'} eq 'exactly') ? '=' 
+    if ($options{'pubyr'}) {
+        my $sign = ($options{'pubyr_before_after'} eq 'before') ? '<=' 
+                 : ($options{'pubyr_before_after'} eq 'exactly') ? '=' 
                                                                        : '>=';
-        my $pubyr = int($options{'taxon_pubyr'});
+        my $pubyr = int($options{'pubyr'});
         push @where, "IF(a.ref_is_authority='YES',r.pubyr $sign $pubyr AND r.pubyr REGEXP '[0-9]+',a.pubyr $sign $pubyr AND a.pubyr REGEXP '[0-9]+')";
     }
 
-    if ($options{'taxon_author'}) {
-        my $author = $dbh->quote($options{'taxon_author'});
-        my $authorWild = $dbh->quote('%'.$options{'taxon_author'}.'%');
+    if ($options{'author'}) {
+        my $author = $dbh->quote($options{'author'});
+        my $authorWild = $dbh->quote('%'.$options{'author'}.'%');
         push @where, "IF(a.ref_is_authority='YES',".
             "r.author1last LIKE $author OR r.author2last LIKE $author OR r.otherauthors LIKE $authorWild,". # If ref_is_authority, use ref
             "a.author1last LIKE $author OR a.author2last LIKE $author OR a.otherauthors LIKE $authorWild)"; # Else, use record itself
     }
 
-    if ($options{'taxon_person_no'}) {
-        if ($options{'taxon_person_type'} eq 'all') {
-            my $p = $options{'taxon_person_no'};
+    if ($options{'person_no'}) {
+        if ($options{'person_type'} eq 'all') {
+            my $p = $options{'person_no'};
             push @where, "(a.authorizer_no IN ($p) OR a.enterer_no IN ($p) OR a.modifier_no IN ($p))";
-        } elsif ($options{'taxon_person_type'} eq 'enterer') {
-            push @where, 'a.enterer_no IN ('.$options{'taxon_person_no'}.')';
-        } elsif ($options{'taxon_person_type'} eq 'modifier') {
-            push @where, 'a.modifier_no IN ('.$options{'taxon_person_no'}.')';
+        } elsif ($options{'person_type'} eq 'authorizer_enterer') {
+            my $p = $options{'person_no'};
+            push @where, "(a.authorizer_no IN ($p) OR a.enterer_no IN ($p))";
+        } elsif ($options{'person_type'} eq 'enterer') {
+            push @where, 'a.enterer_no IN ('.$options{'person_no'}.')';
+        } elsif ($options{'person_type'} eq 'modifier') {
+            push @where, 'a.modifier_no IN ('.$options{'person_no'}.')';
         } else { # defaults to authorizer
-            push @where, 'a.authorizer_no IN ('.$options{'taxon_person_no'}.')';
+            push @where, 'a.authorizer_no IN ('.$options{'person_no'}.')';
         }
     }
 
-    if ($options{'taxon_created_year'}) {
-        my ($yyyy,$mm,$dd) = ($options{'taxon_created_year'},$options{'taxon_created_month'},$options{'taxon_created_day'});
+    if ($options{'created_year'}) {
+        my ($yyyy,$mm,$dd) = ($options{'created_year'},$options{'created_month'},$options{'created_day'});
         my $date = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
-        my $sign = ($options{'taxon_created_before_after'} eq 'before') ? '<=' : '>=';
+        my $sign = ($options{'created_before_after'} eq 'before') ? '<=' : '>=';
         push @where,"a.created $sign $date";
     }
 
@@ -650,7 +649,7 @@ sub getTaxonomicNames {
 
         if ($options{'referenced_taxa'} && @where) {
             my %taxon_nos = %{$options{'referenced_taxa'}};
-            my $referenced_list = join(",",keys(%taxon_nos));
+            my $referenced_list = join(", ",keys(%taxon_nos));
             $sql = "($sql AND ".join(" AND ",@where).") UNION ($sql AND a.taxon_no IN ($referenced_list)) ORDER BY taxon_name";
         } elsif (@where) {
             $sql = "$sql AND ".join(" AND ",@where)." ORDER BY a.taxon_name";
@@ -786,43 +785,46 @@ sub getTaxonomicOpinions {
         push @where, "(t.rgt BETWEEN $lft AND $rgt)";
     }
 
-    if ($options{'opinion_reference_no'}) {
-        push @where, "o.reference_no=".int($options{'opinion_reference_no'});
+    if ($options{'reference_no'}) {
+        push @where, "o.reference_no=".int($options{'reference_no'});
     }
 
-    if ($options{'opinion_pubyr'}) {
-        my $sign = ($options{'opinion_pubyr_before_after'} eq 'before') ? '<=' 
-                 : ($options{'opinion_pubyr_before_after'} eq 'exactly') ? '=' 
+    if ($options{'pubyr'}) {
+        my $sign = ($options{'pubyr_before_after'} eq 'before') ? '<=' 
+                 : ($options{'pubyr_before_after'} eq 'exactly') ? '=' 
                                                                        : '>=';
-        my $pubyr = int($options{'opinion_pubyr'});
+        my $pubyr = int($options{'pubyr'});
         push @where, "IF(o.ref_has_opinion='YES',r.pubyr $sign $pubyr AND r.pubyr REGEXP '[0-9]+',o.pubyr $sign $pubyr AND o.pubyr REGEXP '[0-9]+')";
     }
 
-    if ($options{'opinion_author'}) {
-        my $author = $dbh->quote($options{'opinion_author'});
-        my $authorWild = $dbh->quote('%'.$options{'opinion_author'}.'%');
+    if ($options{'author'}) {
+        my $author = $dbh->quote($options{'author'});
+        my $authorWild = $dbh->quote('%'.$options{'author'}.'%');
         push @where, "IF(o.ref_has_opinion='YES',".
             "r.author1last LIKE $author OR r.author2last LIKE $author OR r.otherauthors LIKE $authorWild,". # If ref_is_authority, use ref
             "o.author1last LIKE $author OR o.author2last LIKE $author OR o.otherauthors LIKE $authorWild)"; # Else, use record itself
     }
 
-    if ($options{'opinion_created_year'}) {
-        my ($yyyy,$mm,$dd) = ($options{'opinion_created_year'},$options{'opinion_created_month'},$options{'opinion_created_day'});
+    if ($options{'created_year'}) {
+        my ($yyyy,$mm,$dd) = ($options{'created_year'},$options{'created_month'},$options{'created_day'});
         my $date = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
-        my $sign = ($options{'opinion_created_before_after'} eq 'before') ? '<=' : '>=';
+        my $sign = ($options{'created_before_after'} eq 'before') ? '<=' : '>=';
         push @where,"o.created $sign $date";
     }
 
-    if ($options{'opinion_person_no'}) {
-        if ($options{'opinion_person_type'} eq 'all') {
-            my $p = $options{'opinion_person_no'};
+    if ($options{'person_no'}) {
+        if ($options{'person_type'} eq 'all') {
+            my $p = $options{'person_no'};
             push @where, "(o.authorizer_no IN ($p) OR o.enterer_no IN ($p) OR o.modifier_no IN ($p))";
-        } elsif ($options{'opinion_person_type'} eq 'enterer') {
-            push @where, 'o.enterer_no IN ('.$options{'opinion_person_no'}.')';
-        } elsif ($options{'opinion_person_type'} eq 'modifier') {
-            push @where, 'o.modifier_no IN ('.$options{'opinion_person_no'}.')';
+        } elsif ($options{'person_type'} eq 'authorizer_enterer') {
+            my $p = $options{'person_no'};
+            push @where, "(o.authorizer_no IN ($p) OR o.enterer_no IN ($p))";
+        } elsif ($options{'person_type'} eq 'enterer') {
+            push @where, 'o.enterer_no IN ('.$options{'person_no'}.')';
+        } elsif ($options{'person_type'} eq 'modifier') {
+            push @where, 'o.modifier_no IN ('.$options{'person_no'}.')';
         } else { # defaults to authorizer
-            push @where, 'o.authorizer_no IN ('.$options{'opinion_person_no'}.')';
+            push @where, 'o.authorizer_no IN ('.$options{'person_no'}.')';
         }  
     }
 
