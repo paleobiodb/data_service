@@ -1,7 +1,10 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
 <head>
-<title id="title">Paleobiology Database</title>
+<title>
+  <div show="title">%%title%%</div>
+  <div hide="title">Paleobiology Database</div>
+</title>
 <meta http-equiv="content-type" content="text/html; charset=iso-8859-1" />
 
 <link rel="stylesheet" type="text/css" href="/StyleSheets/common.css" />
@@ -11,11 +14,12 @@
 <!--javascript containing common functions-->
 <script src="/JavaScripts/login.js" language="JavaScript" type="text/javascript"></script>
 <script src="/JavaScripts/common.js" language="JavaScript" type="text/javascript"></script>
+%%extra_header%%
 </head>
 
 <body>
 <div align="center">
-<table class="navbox" border=0 width=640>
+<table class="navbox" border=0 width=700>
   <tr>
     <td width=160 align="center" nowrap>
       <a href="$exec_url?action=displayMenuPage&amp;clear=clearQueue" class="menu">Main menu</a>
@@ -23,8 +27,8 @@
     <td width=160 align="center">
       <a href="$exec_url?action=logout" class="menu">Current enterer:<BR><span style="white-space: nowrap;">%%enterer%%</span></a>
     </td>
-    <td width=160 align="center">
-      <a href="$exec_url?action=displaySearchRefs&amp;type=select" class="menu">Current reference:<BR><span style="white-space: nowrap;">%%reference%%</span></a>
+    <td width=220 align="center">
+      <a href="$exec_url?action=displaySearchRefs&amp;type=select" class="menu">Current reference:<BR>%%reference%%</a>
     </td>
     <td width=160 align="center" nowrap>
       <a href="$exec_url?user=Contributor&amp;action=displayHomePage" class="menu">Contributors' home page</a>
