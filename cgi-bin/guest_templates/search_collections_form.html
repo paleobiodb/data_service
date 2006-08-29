@@ -51,7 +51,7 @@ function checkForm ( ) {
           </tr>
         </div>
         <tr>
-          <td>Collection name or number: </td><td><input name=collection_names class="small" size=20></td>
+          <td>Collection name or number(s): </td><td><input name=collection_names class="small" size=20></td>
           <td style="padding-left: 1em">Reference number: </td><td><input name=reference_no class="small" size=6></td>
         </tr>
       </div>
@@ -101,7 +101,7 @@ function checkForm ( ) {
       <tr>
         <td colspan=4 align="center">
           <div class="small" style="width: 640px;">
-            <i>Hints: the search engine is not case sensitive and wildcards are allowed.  You can use "_" to match any single character or "%" for an open ended match.</i>
+            <i>Hints: the search engine is not case sensitive and wildcards are allowed.  You can use "_" to match any single character or "%" for an open ended match. You may enter ranges and comma separated variables for collection numbers, i.e. 300, 400-405</i>
           </div>
         </td>
       </tr>
@@ -150,8 +150,8 @@ function checkForm ( ) {
 
       <div show="action=displaySearchSectionResults">
         <tr>
-          <td nowrap>Remove taxa from chart: <select name=show_taxon_list class="small"><option>YES</option><option SELECTED>NO</option></select></td>
-          <td nowrap style="padding-left: 2em;">Resolution of taxa in chart: <select name=taxon_resolution class="small"><option>genus</option><option SELECTED>species</option></select></td>
+          <td nowrap>Remove taxa from chart: <select name="show_taxon_list" class="small"><option>YES</option><option SELECTED>NO</option></select></td>
+          <td nowrap style="padding-left: 2em;">Resolution of taxa in chart: <select name="taxon_resolution" class="small"><option>genus</option><option SELECTED>species</option></select></td>
         </tr> 
         <tr valign=top>
           <td>
