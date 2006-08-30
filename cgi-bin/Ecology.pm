@@ -32,13 +32,11 @@ sub populateEcologyForm	{
     my @values = ();
     if (!$ecotaph) {
         # This is a new entry
-        if (!$q->param('skip_ref_check') || !$s->get('reference_no')) {
-                # Make them choose a reference first
-                my $toQueue = "action=startPopulateEcologyForm&skip_ref_check=1&goal=".$q->param('goal')."&taxon_no=$taxon_no";
-                $s->enqueue( $dbh, $toQueue );
-                $q->param( "type" => "select" );
-                main::displaySearchRefs("Please choose a reference before adding ecological/taphonomic data",1);
-                return;
+        if (!$s->get('reference_no')) {
+            # Make them choose a reference first
+            $s->enqueue( $dbh, $q->query_string());
+            main::displaySearchRefs("Please choose a reference before adding ecological/taphonomic data",1);
+            return;
         } else {
             push @values, '' for @fields;
             for (my $i = 0;$i<scalar(@fields);$i++) { # default to kg for units

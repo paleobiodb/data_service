@@ -87,7 +87,6 @@ sub submitSpecimenSearch {
     } else {
         print "<form method=\"POST\" action=\"bridge.pl\">";
         print "<input type=\"hidden\" name=\"action\" value=\"displaySpecimenList\">";
-        print "<input type=\"hidden\" name=\"use_reference\" value=\"".$q->param('use_reference')."\">";
         print "<div align=\"center\">";
         print "<table cellspacing=0 cellpadding=3>";
         print "<tr><th><span style=\"margin-right: 1em\">Collection name</span></th><th>Taxon name</th><th>Measurements</th></tr>";
@@ -114,7 +113,7 @@ sub submitSpecimenSearch {
                 $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
             }
             #print "<td><input type=\"radio\" name=\"occurrence_no\" value=\"$row->{occurrence_no}\"> $row->{genus_name} $row->{species_name}</td><td>$measurements</td></tr>";
-            print "<td><a href=\"bridge.pl?action=displaySpecimenList&use_reference=".$q->param('use_reference')."&occurrence_no=$row->{occurrence_no}\">$taxon_name</a></td><td>$specimens</td></tr>";
+            print "<td><a href=\"bridge.pl?action=displaySpecimenList&occurrence_no=$row->{occurrence_no}\">$taxon_name</a></td><td>$specimens</td></tr>";
         }
         foreach my $row (@results_taxa_only) {
             $class = ($class eq '') ? $class='class="darkList"' : '';
@@ -128,7 +127,7 @@ sub submitSpecimenSearch {
             } else {
                 $taxon_name = $row->{'taxon_name'}." indet.";
             }
-            print "<td><a href=\"bridge.pl?action=displaySpecimenList&use_reference=".$q->param('use_reference')."&taxon_no=$row->{taxon_no}\">$taxon_name</a></td><td>$specimens</td></tr>";
+            print "<td><a href=\"bridge.pl?action=displaySpecimenList&taxon_no=$row->{taxon_no}\">$taxon_name</a></td><td>$specimens</td></tr>";
 
         }
         print "</table>";
@@ -200,7 +199,6 @@ sub displaySpecimenList {
     } else {
         print "<input type=hidden name=\"taxon_no\" value=\"".$q->param('taxon_no')."\">";
     }
-    print "<input type=\"hidden\" name=\"use_reference\" value=\"".$q->param('use_reference')."\">";
 
     # now create a table of choices
     print "<table>\n";
@@ -314,20 +312,9 @@ sub populateMeasurementForm {
    
     if ($q->param('specimen_no') < 0) {
         # This is a new entry
-        if ($q->param('use_reference') eq 'current' && $s->get('reference_no')) {
-            $q->param('skip_ref_check'=>1);
-        }
-        if (!$q->param('skip_ref_check') || !$s->get('reference_no')) {
-             
+        if (!$s->get('reference_no')) {
             # Make them choose a reference first
-            my $toQueue = "action=populateMeasurementForm&specimen_no=".$q->param('specimen_no')."&specimens_measured=".$q->param('specimens_measured')."&skip_ref_check=1";
-            if ($q->param('occurrence_no')) {
-                $toQueue .= "&occurrence_no=".$q->param('occurrence_no');
-            } else {
-                $toQueue .= "&taxon_no=".$q->param('taxon_no');
-            }
-            $s->enqueue( $dbh, $toQueue );
-            $q->param( "type" => "select" );
+            $s->enqueue( $dbh, $q->query_string());
             main::displaySearchRefs("Please choose a reference before adding specimen measurement data",1);
             return;
         } else {
@@ -615,17 +602,17 @@ sub processMeasurementForm	{
 
     if ($q->param('occurrence_no')) {
 	    print "<div align=\"center\"><table><tr><td><ul>".
-	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-1&occurrence_no=".$q->param('occurrence_no')."\">Add another average or individual measurement of this occurrence</a></b></li>".
-	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-2&specimens_measured=10&occurrence_no=".$q->param('occurrence_no')."\">Add up to 10 new individual measurements of this occurrence</a></b></li>".
+	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-1&occurrence_no=".$q->param('occurrence_no')."\">Add another average or individual measurement of this occurrence</a></b></li>".
+	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-2&specimens_measured=10&occurrence_no=".$q->param('occurrence_no')."\">Add up to 10 new individual measurements of this occurrence</a></b></li>".
 	          "<br><li><b><a href=\"$exec_url?action=displaySpecimenList&occurrence_no=".$q->param('occurrence_no')."\">Edit another measurement of this occurrence</a></b></li>".
-    	      "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&use_reference=current&collection_no=$collection_no\">Add a measurement of another occurrence in this collection</a></b></li>";
+    	      "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&collection_no=$collection_no\">Add a measurement of another occurrence in this collection</a></b></li>";
     } else {
 	    print "<div align=\"center\"><table><tr><td><ul>".
-	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-1&taxon_no=".$q->param('taxon_no')."\">Add another average or individual measurement of $taxon_name</a></b></li>".
-	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&skip_ref_check=1&specimen_no=-2&specimens_measured=10&taxon_no=".$q->param('taxon_no')."\">Add up to 10 new individual measurements of $taxon_name</a></b></li>".
+	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-1&taxon_no=".$q->param('taxon_no')."\">Add another average or individual measurement of $taxon_name</a></b></li>".
+	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-2&specimens_measured=10&taxon_no=".$q->param('taxon_no')."\">Add up to 10 new individual measurements of $taxon_name</a></b></li>".
 	          "<br><li><b><a href=\"$exec_url?action=displaySpecimenList&taxon_no=".$q->param('taxon_no')."\">Edit another measurement of $taxon_name</a></b></li>";
     }
-    print "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&use_reference=current&taxon_name=$taxon_name\">Add a measurement of $taxon_name in another collection</a></b></li>".
+    print "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&taxon_name=$taxon_name\">Add a measurement of $taxon_name in another collection</a></b></li>".
           "<br><li><b><a href=\"$exec_url?action=checkTaxonInfo&taxon_name=$taxon_name\">Get general info about this taxon</a></b></li>".
           "</ul></td></tr></table></div>";
 }
