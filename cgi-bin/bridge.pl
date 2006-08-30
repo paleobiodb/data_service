@@ -1037,15 +1037,6 @@ sub displaySearchRefs {
 		unshift ( @row, "" );
 	}
 
-    # Users editing collections may want to have their current reference
-	# swapped with the primary reference of the collection to be edited.
-	unshift ( @fields, "use_primary" );
-	if ($q->param('action') eq "startEditCollection" ) {
-		unshift ( @row, "<input type='submit' name='use_primary' value=\"Use collection's reference\">\n" ); 
-    } else {
-		unshift ( @row, "" );
-	}
-
 	print $hbo->populateHTML("search_refs_form", \@row, \@fields);
 
 	print &stdIncludes ("std_page_bottom") unless ($noHeader);
@@ -1476,11 +1467,11 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
     <ul class="small" style="text-align: left;">\n
         <li>Add or edit all the <a href="#" onClick="popup = window.open('$exec_url?action=displayAuthorityTaxonSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic names</a>, especially if they are new or newly combined\n
         <li>Add or edit all the new or second-hand <a href="#" onClick="popup = window.open('$exec_url?action=displayOpinionSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic opinions</a> about classification or synonymy\n
-        <li>Edit <a href="#" onClick="popup = window.open('$exec_url?action=startEditCollection', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">existing collections</a> if new details are given\n
-        <li>Add all the <a href="#" onClick="popup = window.open('$exec_url?action=startAddCollection', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">new collections</a>\n
-        <li>Add all new <a href="#" onClick="popup = window.open('$exec_url?action=startAddEditOccurrences', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">occurrences</a> in existing or new collections\n
-        <li>Add all new <a href="#" onClick="popup = window.open('$exec_url?action=startReidentifyOccurrences', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">reidentifications</a> of existing occurrences\n
-        <li>Add <a href="#" onClick="popup = window.open('$exec_url?action=startStartEcologyTaphonomySearch', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">ecological/taphonomic data</a>, <a href="#" onClick="popup = window.open('$exec_url?action=displaySpecimenSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizeable=yes');">specimen measurements</a>, and <a href="#" onClick="popup = window.open('$exec_url?action=startImage', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizeable=yes');">images</a>\n
+        <li>Edit <a href="#" onClick="popup = window.open('$exec_url?action=displaySearchColls&type=edit', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">existing collections</a> if new details are given\n
+        <li>Add all the <a href="#" onClick="popup = window.open('$exec_url?action=displaySearchCollsForAdd', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">new collections</a>\n
+        <li>Add all new <a href="#" onClick="popup = window.open('$exec_url?action=displayOccurrenceAddEdit', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">occurrences</a> in existing or new collections\n
+        <li>Add all new <a href="#" onClick="popup = window.open('$exec_url?action=displayReIDCollsAndOccsSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">reidentifications</a> of existing occurrences\n
+        <li>Add <a href="#" onClick="popup = window.open('$exec_url?action=startStartEcologyTaphonomySearch', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">ecological/taphonomic data</a>, <a href="#" onClick="popup = window.open('$exec_url?action=displaySpecimenSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">specimen measurements</a>, and <a href="#" onClick="popup = window.open('$exec_url?action=startImage', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">images</a>\n
     <ul>\n
     </div>\n
     </div>\n
@@ -1632,18 +1623,17 @@ sub displaySearchCollsForAdd	{
 	my $reference_no = $s->get("reference_no");
 	if ( ! $reference_no ) {
 		# Come back here... requeue our option
-		$s->enqueue( $dbh, "action=displaySearchCollsForAdd&type=add" );
+		$s->enqueue( $dbh, "action=displaySearchCollsForAdd" );
 		displaySearchRefs( "Please choose a reference first" );
 		exit;
 	}
 
+    # Some prefilled variables like lat/lng/time term
     my %pref = getPreferences($s->get('enterer_no'));                                                                                                  
-
-	my $html = $hbo->populateHTML('search_collections_for_add_form' , \%pref);
 
 	# Spit out the HTML
 	print stdIncludes( "std_page_top" );
-	print $html;
+	print  $hbo->populateHTML('search_collections_for_add_form' , \%pref);
 	print stdIncludes("std_page_bottom");
 
 }
@@ -1661,13 +1651,12 @@ sub displaySearchColls {
 
 	# Have to have a reference #, unless we are just searching
 	my $reference_no = $s->get("reference_no");
-	if ( ! $reference_no && $type ne 'analyze_abundance' && $type ne "view" && $type ne "reclassify_occurrence" && !$q->param('use_primary') ) {
+	if ( ! $reference_no && $type !~ /analyze_abundance|view|reclassify_occurrence/) {
 		# Come back here... requeue our option
 		$s->enqueue( $dbh, "action=displaySearchColls&type=$type" );
 		displaySearchRefs( "Please choose a reference first" );
 		exit;
-	}	
-
+	}
 
 	# Show the "search collections" form
     my %vars = ();
@@ -1729,11 +1718,10 @@ sub displayCollResults {
 
     my $action =  
           ($type eq "add") ? "displayCollectionDetails"
-        : ($type eq "add") ? "displayCollectionDetails"
-        : ($type eq "analyze_abundance") ? "rarefyAbundances"
         : ($type eq "edit") ? "displayCollectionForm"
         : ($type eq "view") ? "displayCollectionDetails"
         : ($type eq "edit_occurrence") ? "displayOccurrenceAddEdit"
+        : ($type eq "analyze_abundance") ? "rarefyAbundances"
         : ($type eq "reid") ? "displayOccsForReID"
         : ($type eq "reclassify_occurrence") ?  "startDisplayOccurrenceReclassify"
         : "displayCollectionDetails";
@@ -2988,11 +2976,30 @@ sub displayCollectionDetails {
         return;
     }
     displayCollectionDetailsPage($coll);
-	
+
+
+    # Links at bottom
+    if ($s->isDBMember()) {
+        print '<p><div align="center">';
+        my $p = Permissions->new($s,$dbt);
+        my $can_modify = $p->getModifierList();
+        $can_modify->{$s->get('authorizer_no')} = 1;
+
+        if ($can_modify->{$coll->{'authorizer_no'}} || $s->isSuperUser) {  
+            print qq|<b><a href="bridge.pl?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a></b> - |;
+        }
+        print qq|<b><a href="bridge.pl?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a></b>|;  
+        print "</div></p>";
+    }
+
+
+    # Handle display of taxonomic list now 
 	my $taxa_list = buildTaxonomicList($dbt,'collection_no'=>$coll->{'collection_no'},'hide_reference_no'=>$coll->{'reference_no'});
 	print $taxa_list;
 
-	print '<p><div align="center"><table><tr>';
+
+    # More links at bottom
+	print '<p><div align="center">';
 	# have to have at least three taxa
 	my @occrows = split /\n/,$taxa_list;
 	my $hasabund;
@@ -3001,19 +3008,21 @@ sub displayCollectionDetails {
 			$hasabund++;
 		}
 	}
+
 	if ( $taxa_list =~ /Abundance/ && $hasabund > 2 )	{
-		print "<td>".$hbo->populateHTML('rarefy_display_buttons', [$collection_no],['collection_no'])."</td>";
+		print qq|<b><a href="bridge.pl?action=rarefyAbundances&collection_no=$collection_no">Analyze abundance data</a></b> - |;
 	}
 
-	print "<td>".$hbo->populateHTML('ecology_display_buttons', [$collection_no],['collection_no'])."</td>";
+	print qq|<b><a href="bridge.pl?action=displayCollectionEcology&collection_no=$collection_no">Tabulate ecology data</a></b>|;
 
-	if($coll->{'authorizer_no'} eq $s->get('authorizer_no') || $s->get('authorizer') eq "J. Alroy")	{
-		print "<td>".$hbo->populateHTML('occurrence_display_buttons', [$collection_no],['collection_no'])."</td>";;
-	}
-	if($taxa_list ne "" && $s->isDBMember()) {
-		print "<td>".$hbo->populateHTML('reid_display_buttons', [$collection_no],['collection_no'])."</td>";
-	}
-	print "</tr></table></div></p>";
+    if ($s->isDBMember()) {
+    	print qq| - <b><a href="bridge.pl?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a></b>|;
+        if($taxa_list ne "") {
+	        print qq| - <b><a href="bridge.pl?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></b>|;
+
+        }
+    }
+    print "</div></p>";
 	print stdIncludes("std_page_bottom");
 }
 
@@ -3238,19 +3247,6 @@ sub displayCollectionDetailsPage {
 } # end sub displayCollectionDetails()
 
 
-# written around excised chunk of code from above JA 30.7.03
-# first part gets interval names matching numbers in intervals table;
-# second part figures out whether to display dashes in time interval fields
-sub getMaxMinNamesAndDashes	{
-    my $vars = shift;
-    
-
-}
-
-
-
-
-
 # builds the list of occurrences shown in places such as the collections form
 # must pass it the collection_no
 # reference_no (optional or not?? - not sure).
@@ -3472,16 +3468,12 @@ sub buildTaxonomicList {
                 $time_place .= ", $coll->{country}";
             } 
 
-            # Taxonomic list header
-            $return = "<div class=\"displayPanel\" align=\"left\">\n" .
-                      "  <span class=\"displayPanelHeader\"><b>Taxonomic list</b></span>\n" .
-                      "  <div class=\"displayPanelContent\">\n" .
-                      "  <table border=0 cellpadding=2 class=\"displayPanelText\" width=\"100%\">\n";
-        } else {
-            $return = "<div align=\"center\"><h3><b>Taxonomic list</b></h3><div>";
-        }
+        } 
+        # Taxonomic list header
+        $return = "<div class=\"displayPanel\" align=\"left\">\n" .
+                  "  <span class=\"displayPanelHeader\"><b>Taxonomic list</b></span>\n" .
+                  "  <div class=\"displayPanelContent\">\n" ;
 
-        $return .= "<div align=\"center\">";
 		if ($new_found) {
             push @warnings, "Taxon names in <b>bold</b> are new to the occurrences table. Please make sure the spelling is correct. If it isn't, DON'T hit the back button; hit the \"Edit occurrences\" button below";
 		}
@@ -3657,6 +3649,7 @@ sub buildTaxonomicList {
             $return .= "<br><input type=\"submit\" name=\"submit\" value=\"Classify taxa\">";
             $return .= "</form>"; 
         }
+        $return .= "</div>";
         $return .= "</div>";
 	}
     # This replaces blank cells with blank cells that have no padding, so the don't take up
@@ -4291,8 +4284,9 @@ sub displayCollectionForm {
     my $reSubmission = ($q->param('action') =~ /processEditCollectionForm|processEnterCollectionForm/) ? 1 : 0;
 
     # First check to nake sure they have a reference no for new entries
+    my $session_ref = $s->get('reference_no');
     if ($isNewEntry) {
-        if (!$s->get('reference_no')) {
+        if (!$session_ref) {
             $s->enqueue( $dbh, $q->query_string() );
             displaySearchRefs( "Please choose a reference first" );
             exit;
@@ -4311,6 +4305,7 @@ sub displayCollectionForm {
     }
     my %prefs =  getPreferences($s->get('enterer_no'));
     my %form = $q->Vars();
+
 
     if ($reSubmission) {
         %vars = %form;
@@ -4347,7 +4342,7 @@ sub displayCollectionForm {
 
     $vars{'ref_string'} = '<table cellspacing="0" cellpadding="2" width="100%"><tr>'.
     "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$vars{reference_no}\">".$vars{'reference_no'}."</a></b>&nbsp;</td>".
-    "<td valign-\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
+    "<td valign=\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
     "<td>$formatted_primary</td>".
     "</tr></table>";      
 
@@ -4355,10 +4350,9 @@ sub displayCollectionForm {
         my $collection_no = $row{'collection_no'};
         # We need to take some additional steps for an edit
         my $p = Permissions->new($s,$dbt);
-        my %is_modifier_for = %{$p->getModifierList()};
-        unless ($s->get("superuser") ||
-                ($s->get('authorizer_no') && $s->get("authorizer_no") == $row{'authorizer_no'}) ||
-                $is_modifier_for{$row{'authorizer_no'}}) {
+        my $can_modify = $p->getModifierList();
+        $can_modify->{$s->get('authorizer_no')} = 1;
+        unless ($can_modify->{$row{'authorizer_no'}} || $s->isSuperUser) {
             my $authorizer = Person::getPersonName($dbt,$row{'authorizer_no'});
             htmlError("You may not edit this record because it is owned by a different authorizer ($authorizer)");
             exit;
@@ -4394,19 +4388,18 @@ sub displayCollectionForm {
         # Check if current session ref is at all associated with the collection
         # If not, list it beneath the sec. refs. (with radio button for selecting
         # as the primary ref, as with the secondary refs below).
-        my $session_ref = ($q->param('use_primary')) ? $vars{'reference_no'} : $s->get('reference_no');
-        my $session_ref;
         if ($session_ref) {
             unless(PBDBUtil::isRefPrimaryOrSecondary($dbh,$collection_no,$session_ref)){
                 my $ref = Reference::getReference($dbt,$session_ref);
                 my $sr = Reference::formatLongRef($ref);
                 my $table = '<table cellspacing="0" cellpadding="2" width="100%">'
-                          . "<tr class='darkList'><td valign=top><input type=radio name=secondary_reference_no value=$session_ref></td>";
+                          . "<tr class=\"darkList\"><td valign=top><input type=radio name=secondary_reference_no value=$session_ref></td>";
                 $table .= "<td valign=top><b>$ref->{reference_no}</b></td>";
-                $table .= "<td>$sr</td></tr></table>";
+                $table .= "<td>$sr</td></tr>";
                 # Now, set up the current session ref to be added as a secondary even
                 # if it's not picked as a primary (it's currently neither).
-                $table .= "\n<input type=hidden name=add_session_ref_as_2ndary value=$session_ref>\n";
+                $table .= "<tr class=\"darkList\"><td></td><td colspan=2><input type=checkbox name=add_session_ref value=\"YES\"> Add session reference as secondary reference</td></tr>\n";
+                $table .= "</table>";
                 $vars{'session_reference_string'} = $table;
             }
         }
@@ -4715,7 +4708,7 @@ sub processEnterCollectionForm {
         }
         print qq|<li><b><a href="bridge.pl?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a></b></li>|;
         print qq|<li><b><a href="bridge.pl?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></b></li>|;
-        print qq|<li><b><a href="bridge.pl?action=startAddEditOccurrences&collection_no=$collection_no">Edit taxonomic list</a></b></li>|;
+        print qq|<li><b><a href="bridge.pl?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a></b></li>|;
         print qq|<li><b><a href="bridge.pl?action=displayCollResults&type=occurrence_table&reference_no=$coll->{reference_no}">Edit occurrence table for collections from the same reference</a></b></li>|;
         print qq|<li><b><a href="bridge.pl?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></b></li>|;
         print "</td></tr></table></div></p>";
@@ -4724,90 +4717,7 @@ sub processEnterCollectionForm {
 	print stdIncludes("std_page_bottom");
 }
 
-# This subroutine intializes the process to get to the Edit Collection page
-sub startEditCollection {
 
-	# 1. Need to ensure they have a ref
-	# 2. Need to get a collection
-
-	# Have to be logged in
-	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first.",'startEditCollection');
-		exit;
-	}
-	elsif ( $q->param("collection_no") ) {
-		$s->enqueue( $dbh, "action=displayCollectionForm&collection_no=".$q->param("collection_no") );
-	} else {
-		$s->enqueue( $dbh, "action=displaySearchColls&type=edit" );
-	}
-
-	$q->param( "type" => "select" );
-	displaySearchRefs( ); 
-}
-
-# This subroutine intializes the process to get to the Add Collection page
-# hacked to queue displaySearchCollsForAdd JA 5.4.04
-sub startAddCollection {
-
-	# clear the queue because you never add a collection en route to
-	#  doing something else JA 6.4.04
-	$s->clearQueue( $dbh );
-
-	# 1. Need to ensure they have a ref
-	# 2. Need to get a collection
-	
-	# Have to be logged in
-	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first.",'startAddCollection');
-		exit;
-	}
-
-	# don't hassle the user for reference unless they have none at all
-	#  JA 20.8.06
-	if (! $s->get('reference_no'))  {
-		$s->enqueue( $dbh, "action=displaySearchCollsForAdd&type=add" );
-		$q->param( "type" => "select" );
-		displaySearchRefs( "Please choose a reference first" );
-	} else  {
-		$q->param( "type" => "add" );
-		displaySearchCollsForAdd;
-	}
-
-}
-
-# This subroutine intializes the process to get to the Add/Edit Occurrences page
-sub startAddEditOccurrences {
-
-	# 1. Need to ensure they have a ref
-	# 2. Need to get a collection
-	
-	# Have to be logged in
-	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first.",'startAddEditOccurrences');
-		exit;
-	} elsif (!$s->get('reference_no')) {
-        $s->enqueue($dbh,'action=startAddEditOccurrences');
-        $q->param( "type" => "select" );
-        displaySearchRefs(); 
-	} elsif ($q->param("collection_no") ) {
-		displayOccurrenceAddEdit();
-	} else {
-        $q->param('type'=>'edit_occurrence');
-		displaySearchColls();
-	}
-}
-
-# This subroutine intializes the process to get to the reID entry page
-sub startReidentifyOccurrences {
-
-	# 1. Need to ensure they have a ref
-	# 2. Need to get a collection or genus search
-	
-	$s->enqueue( $dbh, "action=displayReIDCollsAndOccsSearchForm" );
-
-	$q->param( "type" => "select" );
-	displaySearchRefs();
-}
 
 # PS 11/7/2005
 #
@@ -4897,15 +4807,13 @@ sub processTaxonSearch {
     if (scalar(@results) == 0) {
         if ($q->param('goal') eq 'authority') {
             if ($q->param('taxon_name')) {
-                if ($s->get('reference_no') && $q->param('use_reference') eq 'current') {
-                    $q->param('taxon_no'=> -1);
-                    Taxon::displayAuthorityForm($dbt, $hbo, $s, $q);
-                } else {
-                    my $toQueue = "action=displayAuthorityForm&skip_ref_check=1&taxon_no=-1&taxon_name=".$q->param('taxon_name');
-                    $s->enqueue( $dbh, $toQueue );
-                    $q->param( "type" => "select" );
-                    main::displaySearchRefs("Please choose a reference before adding a new taxon",1);
+                if (!$s->get('reference_no')) {
+                    $s->enqueue( $dbh, $q->query_string());
+                    displaySearchRefs("Please choose a reference before adding a new taxon",1);
+                    exit;
                 }
+                $q->param('taxon_no'=> -1);
+                Taxon::displayAuthorityForm($dbt, $hbo, $s, $q);
             } else {
                 print "<div align=\"center\"><h3>No taxonomic names found</h3></div>";
             }
@@ -4953,7 +4861,6 @@ sub processTaxonSearch {
             print "<input type=hidden name=\"goal\" value=\"".$q->param('goal')."\">\n";
         }
 		print "<input type=hidden name=\"taxon_name\" value=\"".$q->param('taxon_name')."\">\n";
-        print "<input type=hidden name=\"use_reference\" value=\"".$q->param('use_reference')."\">\n" if ($q->param('use_reference'));
 
         # now create a table of choices
 		print "<div class=\"displayPanel medium\" style=\"padding: 1em;\"><table>\n";
@@ -5016,15 +4923,12 @@ sub processTaxonSearch {
 
 # Called when the user clicks on the "Add/edit taxonomic name" or 
 sub displayAuthorityTaxonSearchForm {
+    if ($q->param('use_reference') eq 'new') {
+        $s->setReferenceNo($dbh,0);
+    }
     print stdIncludes("std_page_top");
     my %vars = $q->Vars();
     $vars{'authorizer_me'} = $s->get('authorizer_reversed');
-    # by default, force the user to use the current ref and skip the reference
-    #  search JA 20.8.06
-    if ( $vars{'use_reference'} ne "new" )	{
-        $vars{'skip_ref_check'} = 1;
-        $vars{'use_reference'} = "current";
-    }
 
     print makeAuthEntJavaScript();
     print $hbo->populateHTML('search_authority_form',\%vars);
@@ -5036,19 +4940,12 @@ sub displayAuthorityTaxonSearchForm {
 #
 # The form to edit an authority
 sub displayAuthorityForm {
-
-    # by default, force the user to use the current ref and skip the reference
-    #  search JA 20.8.06
-    if ( $q->param('taxon_no') == -1 || $q->param('use_reference') eq "new" ) {
-		if (!$q->param('skip_ref_check')) {
-			# if skip_ref_check is not set, then we should prompt them for a reference_no 
-			# set the skip_ref_check in the queued action so we don't endlessly loop 
-			my $toQueue = "action=displayAuthorityForm&skip_ref_check=1&taxon_name=".$q->param('taxon_name')."&taxon_no=" . $q->param('taxon_no');
-			$s->enqueue( $dbh, $toQueue );
-			$q->param( "type" => "select" );
+    if ( $q->param('taxon_no') == -1) {
+        if (!$s->get('reference_no')) {
+            $s->enqueue($dbh,$q->query_string());
 			displaySearchRefs("You must choose a reference before adding a new taxon" );
-			return;
-		}
+			exit;
+        }
 	} 
     print stdIncludes("std_page_top");
 	Taxon::displayAuthorityForm($dbt, $hbo, $s, $q);	
@@ -5071,6 +4968,9 @@ sub submitAuthorityForm {
 # "Add/edit taxonomic opinion" link on the menu page. 
 # Step 1 in our opinion editing process
 sub displayOpinionSearchForm {
+    if ($q->param('use_reference') eq 'new') {
+        $s->setReferenceNo($dbh,0);
+    }
     print stdIncludes("std_page_top");
     my %vars = $q->Vars();
     $vars{'authorizer_me'} = $s->get('authorizer_reversed');
@@ -5084,6 +4984,9 @@ sub displayOpinionSearchForm {
 # Changed from displayOpinionList to just be a stub for function in Opinion module
 # Step 2 in our opinion editing process. now that we know the taxon, select an opinion
 sub displayOpinionChoiceForm {
+    if ($q->param('use_reference') eq 'new') {
+        $s->setReferenceNo($dbh,0);
+    }
 	print stdIncludes("std_page_top");
     Opinion::displayOpinionChoiceForm($dbt,$s,$q);
 	print stdIncludes("std_page_bottom");
@@ -5094,30 +4997,21 @@ sub displayOpinionChoiceForm {
 # Displays a form for users to add/enter opinions about a taxon.
 # It grabs the taxon_no and opinion_no from the CGI object ($q).
 sub displayOpinionForm {
-	if (! $q->param('opinion_no')) {
+	if ($q->param('opinion_no') != -1 && $q->param("opinion_no") !~ /^\d+$/) {
 		return;	
 	}
 
-    # by default, force the user to use the current ref and skip the reference
-    #  search JA 20.8.06
-	if ($q->param('opinion_no') <= 0 && ! $q->param('skip_ref_check')) {
-		# opinion_no == -1, so that means they're adding a new opinion,
-		# and hence, we should prompt them for a reference_no each time.
-		# Set the skip_ref_check in the queued action so we don't go into an infinite 
-		# loop of asking for references.
-		
-		my $toQueue = 'action=displayOpinionForm&skip_ref_check=1&opinion_no=-1&child_no='.$q->param('child_no')."&child_spelling_no=".$q->param('child_spelling_no');
-		$s->enqueue( $dbh, $toQueue );
-	
-		$q->param( "type" => "select" );
-		displaySearchRefs("You must choose a reference before adding a new opinion");
-		return;
+	if ($q->param('opinion_no') == -1) {
+        if (!$s->get('reference_no')) {
+            $s->enqueue($dbh,$q->query_string()); 
+            displaySearchRefs("You must choose a reference before adding a new opinion");
+            exit;
+        }
 	}
 	
 	print stdIncludes("std_page_top");
 	Opinion::displayOpinionForm($dbt, $hbo, $s, $q);
 	print stdIncludes("std_page_bottom");
-
 }
 
 sub submitOpinionForm {
@@ -5530,8 +5424,8 @@ sub processEditCollectionForm {
 	# If the current session ref isn't being made the primary, and it's not
 	# currently a secondary, add it as a secondary ref for the collection 
 	# (this query param doesn't show up if session ref is already a 2ndary.)
-	if(defined $q->param('add_session_ref_as_2ndary')){
-		my $session_ref = $q->param('add_session_ref_as_2ndary');
+	if($q->param('add_session_ref') eq 'YES'){
+		my $session_ref = $s->get("reference_no");
 		if($session_ref != $secondary) {
 			PBDBUtil::setSecondaryRef($dbh, $collection_no, $session_ref);
 		}
@@ -5570,7 +5464,7 @@ sub processEditCollectionForm {
         print qq|<li><b><a href="$exec_url?action=displaySearchCollsForAdd&type=add">Add a collection with the same reference</a></b></li>|;
         print qq|<li><b><a href="bridge.pl?action=displaySearchColls&type=edit">Edit another collection with the same reference</a></b></li>|;
         print qq|<li><b><a href="$exec_url?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</b></a></li>|;
-        print qq|<li><b><a href="bridge.pl?action=startAddEditOccurrences&collection_no=$collection_no">Edit taxonomic list</a></b></li>|;
+        print qq|<li><b><a href="bridge.pl?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a></b></li>|;
         print qq|<li><b><a href="bridge.pl?action=displayCollResults&type=occurrence_table&reference_no=$coll->{reference_no}">Edit occurrence table for collections from the same reference</a></b></li>|;
         print qq|<li><b><a href="bridge.pl?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></b></li>|;
    
@@ -5582,8 +5476,27 @@ sub processEditCollectionForm {
 
 sub displayOccurrenceAddEdit {
 
+	# 1. Need to ensure they have a ref
+	# 2. Need to get a collection
+	
+	# Have to be logged in
+	if (!$s->isDBMember()) {
+		displayLoginPage( "Please log in first.",'displayOccurrenceAddEdit');
+		exit;
+	} 
+    if (! $s->get('reference_no')) {
+        $s->enqueue($dbh,$q->query_string());
+        displaySearchRefs("Please select a reference first"); 
+        exit;
+	} 
+
 	my $collection_no = $q->param("collection_no");
-	if ( ! $collection_no ) { htmlError( "No collection_no specified" ); }
+    # No collection no is passed in, search for one
+	if ( ! $collection_no ) { 
+        $q->param('type'=>'edit_occurrence');
+		displaySearchColls();
+        exit;
+    }
 
 	# Grab the collection name for display purposes JA 1.10.02
 	my $sql = "SELECT collection_name FROM collections WHERE collection_no=$collection_no";
@@ -6553,7 +6466,7 @@ sub displayReIDCollsAndOccsSearchForm {
 	# Have to have a reference #
 	my $reference_no = $s->get("reference_no");
 	if ( ! $reference_no ) {
-		$s->enqueue( $dbh, "action=displayReIDCollsAndOccsSearchForm" );
+		$s->enqueue($dbh, $q->query_string());
 		displaySearchRefs( "Please choose a reference first" );
 		exit;
 	}	
@@ -6587,9 +6500,9 @@ sub displayOccsForReID {
 	# (the only way to get here without a reference is by doing 
 	# a coll search right after logging in).
 	unless($current_session_ref){
+		$s->enqueue( $dbh, $q->query_string());
 		displaySearchRefs();	
-		$s->enqueue( $dbh, "action=displayOccsForReID&collection_no=$collection_no" );
-		exit();
+		exit;
 	}
 
 	my $collNos = shift;
