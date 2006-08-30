@@ -484,6 +484,11 @@ sub submitPermissionList {
 
     if ($q->param('submit_type') eq 'add') {
         if ($q->param('submit_authorizer')) {
+        # reverse the name if it's reversed, but don't if it's in standard order
+        #  JA 30.8.06
+            if ($q->param("authorizer_reversed") !~ /(, ).*\.$/ ) {
+                $q->param("authorizer_reversed" => Person::reverseName($q->param("authorizer_reversed")));
+            }
             my $sql = "SELECT person_no FROM person WHERE name LIKE ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed')));
             my $row = ${$dbt->getData($sql)}[0];
             if ($row) {
@@ -532,6 +537,12 @@ sub submitHeir {
     if (!$authorizer_no) {
         print "<div class=\"errorMessage\">ERROR: you must be logged in to do this</div>";
         return;
+    }
+
+    # reverse the name if it's reversed, but don't if it's in standard order
+    #  JA 30.8.06
+    if ($q->param("heir_reversed") !~ /(, ).*\.$/ ) {
+        $q->param("heir_reversed" => Person::reverseName($q->param("heir_reversed")));
     }
 
     if ($q->param("heir_reversed")) {
