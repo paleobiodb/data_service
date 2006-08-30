@@ -4961,16 +4961,13 @@ sub processTaxonSearch {
         foreach my $row (@results) {
             # Check the button if this is the first match, which forces
             #  users who want to create new taxa to check another button
-            # took this out because it's a big pain and kind of paranoid
-            #  JA 20.8.06
-            print qq|<tr><td align="center"><input type="radio" name="taxon_no" value="$row->{taxon_no}"></td>|;
-            #print qq|<tr><td align="center"><input type="radio" name="taxon_no" value="$row->{taxon_no}" $checked></td>|;
+            print qq|<tr><td align="center"><input type="radio" name="taxon_no" value="$row->{taxon_no}" $checked></td>|;
             print "<td>".Taxon::formatTaxon($dbt, $row)."</td></tr>";
         }
 
         # always give them an option to create a new taxon as well
         if ($q->param('goal') eq 'authority' && $q->param('taxon_name')) {
-            print "<tr><td align=\"right\"><input type=\"radio\" name=\"taxon_no\" value=\"-1\" checked></td>\n<td>";
+            print "<tr><td align=\"right\"><input type=\"radio\" name=\"taxon_no\" value=\"-1\"></td>\n<td>";
             if ( scalar(@results) == 1 )	{
                 print "No, not the one above ";
             } else	{
