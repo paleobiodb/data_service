@@ -263,10 +263,10 @@ sub setReferenceNo {
 	my $dbh = shift;
 	my $reference_no = shift;
 
-	if ( $reference_no ) {
+	if ($reference_no =~ /^\d+$/) {
 		my $sql =	"UPDATE session_data ".
 				"	SET reference_no = $reference_no ".
-				" WHERE session_id = '".$self->get("session_id")."'";
+				" WHERE session_id = ".$dbh->quote($self->get("session_id"));
 		$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 
 		# Update our reference_no
@@ -359,15 +359,6 @@ sub clearQueue {
 			"	SET queue = NULL ".
 			" WHERE session_id = ".$dbh->quote($self->{'session_id'});
 	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
-}
-
-# Puts a variable into memory
-sub put {
-	my $self = shift;
-	my $key = shift;
-	my $value = shift;
-
-	$self->{$key} = $value;	
 }
 
 # Gets a variable from memory
