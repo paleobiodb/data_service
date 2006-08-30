@@ -1651,7 +1651,7 @@ sub displaySearchColls {
 
 	# Have to have a reference #, unless we are just searching
 	my $reference_no = $s->get("reference_no");
-	if ( ! $reference_no && $type !~ /analyze_abundance|view|reclassify_occurrence/) {
+	if ( ! $reference_no && $type !~ /^(?:analyze_abundance|view|edit|reclassify_occurrence)$/) {
 		# Come back here... requeue our option
 		$s->enqueue( $dbh, "action=displaySearchColls&type=$type" );
 		displaySearchRefs( "Please choose a reference first" );
