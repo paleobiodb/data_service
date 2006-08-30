@@ -353,7 +353,7 @@ sub displayOpinionForm {
         if ($isNewEntry) {
             $fields{'child_no'} = $q->param('child_no');
             $fields{'child_spelling_no'} = $q->param('child_spelling_no') || $q->param('child_no');
-	    $fields{'reference_no'} = $s->get('reference_no');
+    	    $fields{'reference_no'} = $s->get('reference_no');
             # to speed up entry, assume that the primary (current) ref has
             #  the opinion JA 29.8.06
             $fields{'ref_has_opinion'} = 'PRIMARY';
@@ -1459,16 +1459,16 @@ sub submitOpinionForm {
   <li><b><a href="bridge.pl?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">Edit $childSpellingName</a></b></li>
   <br><li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></b></li>   
   <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit names from the same reference</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=current">Add/edit another taxon</a></b></li>
+  <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></b></li>
 </td>
 <td valign=top>
   <p><b>Opinion functions</b></p>
   <li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&skip_ref_check=1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></b></li>
+  <br><li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}&use_reference=new">Add/edit opinion about $childSpellingName from another reference</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit opinions from the same reference</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=current">Add/edit opinion about another taxon</a></b></li>
+  <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
 </td></tr></table>
 </p>
@@ -1530,12 +1530,7 @@ sub displayOpinionChoiceForm {
                  <input type="hidden" name="action" value="displayOpinionForm">\n
                  <input type="hidden" name="child_no" value="$orig_no">\n
                  <input type="hidden" name="child_spelling_no" value="$child_no">\n|;
-        if ( $q->param('use_reference') eq 'current' && $s->get('reference_no')) {
-            print qq|<input type="hidden" name="skip_ref_check" value="1">|;
-        } else	{
-            print qq|<input type="hidden" name="use_current" value="new">|;
-        }
-	print qq|<div class="displayPanel" style="padding: 1em;">\n|;
+	    print qq|<div class="displayPanel" style="padding: 1em;">\n|;
         print qq|<table border=0 class="small">\n|;
         foreach my $row (@results) {
             my $o = Opinion->new($dbt,$row->{'opinion_no'});
