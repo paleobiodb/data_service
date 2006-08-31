@@ -138,7 +138,7 @@ Submit the form without indicating any options for subsampling, unless you do wa
 <tr>
   <td valign=top>
     Subsampling method:<br>
-    <i><span class="small"><span class="required">Required</span> for subsampling.</span></i>
+    <i><span class="small"><span class="required">Required</span> for subsampling. A "list" is a list of taxa in a collection.</span></i>
   </td>
   <td valign=top>
     <select name=samplingmethod>
@@ -196,7 +196,7 @@ Submit the form without indicating any options for subsampling, unless you do wa
 
 <tr>
   <td valign=top>
-    Exact number of items (lists, occurrences, or occurrences-squared) to draw in each temporal bin:<br>
+    Exact number of items (collections, occurrences, or occurrences-squared) to draw in each temporal bin:<br>
     <i><span class="small"><span class="required">Required</span> for subsampling.</span></i>
   </td>
   <td valign=top>
@@ -333,9 +333,13 @@ Submit the form without indicating any options for subsampling, unless you do wa
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
-<input type="checkbox" class="raw" name="print_lists" value="YES" checked> Lists
+<input type="checkbox" class="raw" name="print_lists" value="YES" checked> Collections
 <input type="checkbox" class="raw" name="print_occurrences" value="YES" checked> Occurrences
 <input type="checkbox" class="raw" name="print_occurrences-exponentiated" value="YES" checked> Occurrences-squared or exponentiated
+<input type="checkbox" class="raw" name="print_specimens" value="YES"> Specimens/individuals
+</td></tr>
+
+<tr><td class="small" valign="top" nowrap>
 <input type="checkbox" class="raw" name="print_mean_richness" value="YES"> Mean richness
 <input type="checkbox" class="raw" name="print_median_richness" value="YES"> Median richness
 </td></tr>
@@ -408,7 +412,7 @@ Submit the form without indicating any options for subsampling, unless you do wa
 
 </table>
 
-<p><span class="small">To compute Michaelis-Menten diversity estimates, set the diversity measure to "sampled-in-bin" and the subsampling method to "lists tallied."</span></p>
+<p><span class="small">To compute Michaelis-Menten diversity estimates, set the diversity measure to "sampled-in-bin" and the subsampling method to "by list (unweighted)."</span></p>
 
 <br><div align="center"><input type=submit value="Submit"></div>
 
