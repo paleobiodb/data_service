@@ -443,7 +443,7 @@ sub writeBlock {
         $html .= qq| name="|.escapeHTML($block->{name}).qq|"| if ($block->{'name'} ne '');
         $html .= qq| value="$value"| unless $block->{'type'} eq 'password';
         $html .= qq| $attribs->{other}| if ($attribs->{'other'});
-        $html .= "/>";
+        $html .= " />";
         if ($read_only->{'all'} || $read_only->{$block->{'name'}}) {
             if ($block->{'type'} eq 'hidden') {
                 $html = "";
