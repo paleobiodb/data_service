@@ -463,7 +463,7 @@ sub writeBlock {
 
             foreach (@all_v) {
                 if ($value eq $_) {
-                    $checked = "CHECKED";
+                    $checked = "checked";
                 }
             }
         }
@@ -474,7 +474,7 @@ sub writeBlock {
         $html .= qq| value="$value"|;
         $html .= " ".$checked if $checked;
         $html .= " ".$attribs->{'other'} if ($attribs->{'other'});
-        $html .= "/>";
+        $html .= " />";
         if ($read_only->{'all'} || $read_only->{$block->{'name'}}) {
             my $checked_symbol = ($checked) ? "X" : "&nbsp; ";
             $html = "<span class=\"readOnlyCheckBox\">$checked_symbol</span>";
