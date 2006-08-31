@@ -401,10 +401,10 @@ sub assignGenera	{
 		print "<h3>The data can't be analyzed because the order name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	# these two might be missing
-	} elsif ( ! $field_abund_value && $samplingmethod == 5 )	{
+	} elsif ( ! $field_abund_value && ( $samplingmethod == 5 || $q->param("print_specimens") eq "YES" ) )	{
 		print "<h3>The data can't be analyzed because the abundance value field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
-	} elsif ( ! $field_abund_unit && $samplingmethod == 5 )	{
+	} elsif ( ! $field_abund_unit && ( $samplingmethod == 5 || $q->param("print_specimens") eq "YES" ) )	{
 		print "<h3>The data can't be analyzed because the abundance unit field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	} elsif ( ! $field_refno && ( $q->param('weight_by_ref') eq "yes" || $q->param('ref_quota') > 0 || $q->param('print_refs_raw') eq "yes" || $q->param('print_refs_ss') eq "yes" ) )	{
@@ -634,6 +634,9 @@ sub assignGenera	{
 				$nsp = 1;
 				if ($samplingmethod == 5)	{
 					$nsp = $abund[$xx];
+				}
+				if ( $q->param('print_specimens') eq "YES" && $abund[$xx] > 0 )	{
+					$specimensinchron[$chid[$collno]] += $abund[$xx];
 				}
 				$occsread = $occsread + $nsp;
 				$occsoftax[$occs[$xx]] = $occsoftax[$occs[$xx]] + $nsp;
@@ -1410,7 +1413,7 @@ sub printResults	{
 	}
 	
 	if ($listsread > 0)	{
-		$listorfm = "Lists"; # I'm not sure why this is a variable
+		$listorfm = "Collections"; # I'm not sure why this is a variable
 					# but what the heck
 		$generaorrefs = "genera";
 	if ( $q->param('taxonomic_level') eq 'species') {
@@ -1523,8 +1526,8 @@ sub printResults	{
 				print "<td class=tiny align=center valign=top><b>Occurrences<br><nobr>-exponentiated</nobr></b> ";
 			}
 		}
-		else	{
-			print "<td class=tiny align=center valign=top><b>Specimens</b> ";
+		if ( $samplingmethod == 5 || $q->param('print_specimens') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Specimens/<br>individuals</b> ";
 		}
 		if ( $q->param('print_mean_richness') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Mean<br>richness</b>";
@@ -1607,7 +1610,10 @@ sub printResults	{
 			}
 		}
 		else	{
-			print TABLE ",$listorfm,Specimens";
+			print TABLE ",$listorfm";
+		}
+		if ( $samplingmethod == 5 || $q->param('print_specimens') eq "YES" )	{
+			print TABLE ",Specimens/individuals";
 		}
 		if ( $q->param('print_mean_richness') eq "YES" )	{
 			print TABLE ",Mean richness";
@@ -1762,6 +1768,9 @@ sub printResults	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$occsinchron2[$i];
 					}
 				}
+				if ( $q->param('print_specimens') eq "YES" )	{
+					print "<td class=tiny align=center valign=top>$specimensinchron[$i] ";
+				}
 				if ( $q->param('print_mean_richness') eq "YES" )	{
 					printf "<td class=tiny align=center valign=top>%.1f ",$occsinchron[$i]/$listsinchron[$i];
 				}
@@ -1883,6 +1892,9 @@ sub printResults	{
 						printf TABLE ",%.1f",$occsinchron2[$i];
 					}
 				}
+				if ( $q->param('print_specimens') eq "YES" )	{
+					print TABLE ",$specimensinchron[$i]";
+				}
 				if ( $q->param('print_mean_richness') eq "YES" )	{
 					printf TABLE ",%.1f",$occsinchron[$i]/$listsinchron[$i];
 				}
@@ -1896,9 +1908,9 @@ sub printResults	{
 		print "</table><p>\n";
 
 		if ( $refsread == 0 )	{
-			print "\n<b>$listsread</b> lists and <b>$occsread</b> occurrences met the search criteria.<p>\n";
+			print "\n<b>$listsread</b> collections and <b>$occsread</b> occurrences met the search criteria.<p>\n";
 		} else	{
-			print "\n<b>$refsread</b> reference and interval combinations, <b>$listsread</b> lists, and <b>$occsread</b> occurrences met the search criteria.<p>\n";
+			print "\n<b>$refsread</b> reference and interval combinations, <b>$listsread</b> collections, and <b>$occsread</b> occurrences met the search criteria.<p>\n";
 		}
 	
 		print "\nThe following data files have been created:<p>\n";
@@ -2500,7 +2512,7 @@ sub printResults	{
 	
 	}
 	else	{
-		print "\n<b>Sorry, the search failed.</b> No lists met the search criteria.<p>\n";
+		print "\n<b>Sorry, the search failed.</b> No collections met the search criteria.<p>\n";
 	}
 
 # disabled 12.9.03 JA	
