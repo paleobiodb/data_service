@@ -1975,11 +1975,14 @@ sub queryDatabase {
                         next if ($COLL{$row->{'collection_no'}} < $occurrence_count);
                     }
                 }
+                # also assume that if the user is worrying about specimen or
+                #  individual counts, they only want occurrences that do have
+                #  specimen/individual count data JA 31.8.06
                 if ($abundance_count) {
                     if ($abund_more_than) {
-                        next if ($ABUND{$row->{'collection_no'}} > $abundance_count);
+                        next if ($ABUND{$row->{'collection_no'}} > $abundance_count || $row->{'o.abund_value'} < 1 || $row->{'o.abund_unit'} !~ /^(?:specimens|individuals)$/);
                     } else {
-                        next if ($ABUND{$row->{'collection_no'}} < $abundance_count);
+                        next if ($ABUND{$row->{'collection_no'}} < $abundance_count || $row->{'o.abund_value'} < 1 || $row->{'o.abund_unit'} !~ /^(?:specimens|individuals)$/);
                     }
                 }
                 push @temp,$row;
