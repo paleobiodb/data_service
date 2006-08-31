@@ -1768,7 +1768,7 @@ sub printResults	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$occsinchron2[$i];
 					}
 				}
-				if ( $q->param('print_specimens') eq "YES" )	{
+				if ( $q->param('print_specimens') eq "YES" && $samplingmethod != 5 )	{
 					print "<td class=tiny align=center valign=top>$specimensinchron[$i] ";
 				}
 				if ( $q->param('print_mean_richness') eq "YES" )	{
@@ -1892,7 +1892,7 @@ sub printResults	{
 						printf TABLE ",%.1f",$occsinchron2[$i];
 					}
 				}
-				if ( $q->param('print_specimens') eq "YES" )	{
+				if ( $q->param('print_specimens') eq "YES" && $samplingmethod != 5 )	{
 					print TABLE ",$specimensinchron[$i]";
 				}
 				if ( $q->param('print_mean_richness') eq "YES" )	{
@@ -2515,17 +2515,6 @@ sub printResults	{
 		print "\n<b>Sorry, the search failed.</b> No collections met the search criteria.<p>\n";
 	}
 
-# disabled 12.9.03 JA	
-	if (%badnames ne () && $s->get('enterer') ne "Guest" && $fandango )	{
-		print "\nThe following age/stage names were not recognized:<p>\n<ul>\n";
-		my @temp = keys %badnames;
-		@temp = sort { $a cmp $b } @temp;
-		for $badstage (@temp)	{
-			print "<li>$badstage ($badnames{$badstage})\n";
-		}
-		print "</ul><p>\n";
-	}
-	
 }
 
 # This only shown for internal errors
