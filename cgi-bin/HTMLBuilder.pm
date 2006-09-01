@@ -47,6 +47,7 @@ sub new {
         ecovert_life_habit=>[ '','fossorial','ground dwelling','scansorial','arboreal','volant','amphibious','aquatic'],
         ecovert_reproduction=>['', 'oviparous','ovoviviparous','viviparous'],
         ecovert_diet=>['','herbivore','frugivore','folivore','browser','grazer','granivore','omnivore','insectivore','carnivore','piscivore','durophage'],
+        species_name=>['','indet.','sp.'],
         period_max=>['', 'Holocene', 'Neogene', 'Paleogene', 'Cretaceous', 'Jurassic', 'Triassic', 'Permian', 'Carboniferous', 'Devonian', 'Silurian', 'Ordovician', 'Cambrian', 'Neoproterozoic']
     };
 
