@@ -5557,7 +5557,7 @@ sub displayOccurrenceAddEdit {
 	}
 
 	my %pref = getPreferences($s->get('enterer_no'));
-    my @optional = ('subgenera','genus_and_species_only','abundances','plant_organs','species_name');
+    my @optional = ('subgenera','genus_and_species_only','abundances','plant_organs');
 	print $hbo->populateHTML('js_occurrence_checkform');
 
 	print qq|<form method=post action="$exec_url" onSubmit='return checkForm();'>\n|;
@@ -5629,7 +5629,7 @@ sub displayOccurrenceAddEdit {
     
 
     # Copy over optional fields;
-    $blank->{$_} = $pref{$_} for (@optional);
+    $blank->{$_} = $pref{$_} for (@optional,'species_name');
         
 	# Figure out the number of blanks to print
 	my $blanks = $pref{'blanks'} || 10;
