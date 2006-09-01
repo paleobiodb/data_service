@@ -5002,7 +5002,7 @@ sub displayOpinionForm {
 	}
 
 	if ($q->param('opinion_no') == -1) {
-        if (!$s->get('reference_no')) {
+        if (!$s->get('reference_no') || $q->param('use_reference') eq 'new') {
             $s->enqueue($dbh,$q->query_string()); 
             displaySearchRefs("You must choose a reference before adding a new opinion");
             exit;
@@ -5557,7 +5557,7 @@ sub displayOccurrenceAddEdit {
 	}
 
 	my %pref = getPreferences($s->get('enterer_no'));
-    my @optional = ('subgenera','genus_and_species_only','abundances','plant_organs');
+    my @optional = ('subgenera','genus_and_species_only','abundances','plant_organs','species_name');
 	print $hbo->populateHTML('js_occurrence_checkform');
 
 	print qq|<form method=post action="$exec_url" onSubmit='return checkForm();'>\n|;
@@ -5813,11 +5813,12 @@ EOF
             my $collection_no = $collections[$j];
             my $occ = $taxon_names{$taxon_key}{$collections[$j]};
             my ($abund_value,$abund_unit,$key_type,$key_value,$occ_reference_no,$readonly,$authorizer);
+            my $readonly = 0;
             if ($occ) {
                 if ($occ->{'abund_value'}) {
                     $abund_value = $occ->{'abund_value'};
                 } else {
-                    $abund_value = "X";
+                    $abund_value = "x";
                 }
                 if ($occ->{'reid_no'}) {
                     $key_type = "reid_no";
@@ -5826,51 +5827,56 @@ EOF
                     $key_type = "occurrence_no";
                     $key_value = "$occ->{occurrence_no}";
                 }
-                $abund_unit = $occ->{'abund_unit'};
+#                $abund_unit = $occ->{'abund_unit'};
                 $occ_reference_no = $occ->{'reference_no'};
                 if (!$can_modify->{$occ->{'authorizer_no'}}) {
-                    $readonly = "readonly";
+                    $readonly = 1;
                 }
                 $authorizer=$occ->{'authorizer'}
             } else {
-                $abund_unit = "DEFAULT";
+#                $abund_unit = "DEFAULT";
                 $key_type = "occurrence_no";
                 $key_value = "-1";
                 $occ_reference_no = $reference_no;
-                $readonly = "";
             }
           
             my $style="";
+            my $editCellJS = "editCell($i,$collection_no); ";
             if ($readonly) {
                 $style = 'style="color: red;"';
+                $editCellJS = "";
             }
-
             my $esc_show_name = escapeHTML($show_name);
-#            $esc_show_name =~ s/"/\\"/g;
-            print qq|
-                <td class="fixedColumn"><div class="fixedColumn">
-                  
-                  <input name="abund_value_${i}_${collection_no}" size="3" value="$abund_value" class="$class" $readonly $style onClick="changeCurrentCellInfo('$esc_show_name','$collection_no','$occ_reference_no','$readonly','$authorizer')"/>
-                  <input name="abund_unit_${i}_${collection_no}" size="3" value="$abund_unit" type="hidden" />
-                  <input name="key_value_${i}_${collection_no}" value="$key_value" type="hidden" />
-                  <input name="key_type_${i}_${collection_no}" value="$key_type" type="hidden" />
-                </div></td>\n|;
+            # The span is necessary to act as a container and prevent wrapping
+            # The &nbsp; fixes a Safari bug where the onClick doesn't trigger unless the TD has somethiing in it
+
+            print qq|<td class="fixedColumn" onClick="cellInfo($i,$collection_no,$occ_reference_no,$readonly,'$authorizer');$editCellJS"><div class="fixedColumn"><span class="fixedSpan" id="dummy_${i}_${collection_no}" $style>$abund_value &nbsp;|;
+            print qq|<input type="hidden" id="abund_value_${i}_${collection_no}" name="abund_value_${i}_${collection_no}" size="4" value="$abund_value" class="$class" $style /></span>|;
+            print qq|<input type="hidden" id="${key_type}_${i}_${collection_no}" name="${key_type}_${i}_${collection_no}" value="$key_value"/>|;
+            print qq|</div></td>\n|;
                   
         }
         print "</tr>\n";
     }
     print "</table>";
 
+    my %prefs = getPreferences($s->get('enterer_no'));
     # Can dynamically add rows using javascript that modified the DOM -- see occurrence_table.js
     print "<table>";
-    print '<tr><th></th><th class="small">Genus</th><th></th><th class="small">Subgenus</th><th></th><th class="small">Species</th></tr>';
+    print '<tr><th></th><th class="small">Genus</th>';
+    if ($prefs{'subgenera'} || $prefs{'genus_and_species_only'}) {
+        print '<th></th><th class="small">Subgenus</th>';
+    }
+    print '<th></th><th class="small">Species</th></tr>';
     print "<tr>".
         '<td>'.$hbo->htmlSelect("genus_reso",$hbo->getKeysValues('genus_reso'),'','class="small"').'</td>'.
-        '<td><input name="genus_name" class="small" /></td>'.
-        '<td>'.$hbo->htmlSelect("subgenus_reso",$hbo->getKeysValues('subgenus_reso'),'','class="small"').'</td>'.
-        '<td><input name="subgenus_name" class="small" /></td>'.
-        '<td>'.$hbo->htmlSelect("species_reso",$hbo->getKeysValues('species_reso'),'','class="small"').'</td>'.
-        '<td><input name="species_name" class="small" /></td>'.
+        '<td><input name="genus_name" class="small" /></td>';
+    if ($prefs{'subgenera'} || $prefs{'genus_and_species_only'}) {
+        print '<td>'.$hbo->htmlSelect("subgenus_reso",$hbo->getKeysValues('subgenus_reso'),'','class="small"').'</td>'.
+        '<td><input name="subgenus_name" class="small" /></td>';
+    }
+    print '<td>'.$hbo->htmlSelect("species_reso",$hbo->getKeysValues('species_reso'),'','class="small"').'</td>'.
+        '<td><input name="species_name" class="small" value="'.$prefs{species_name}.'" /></td>'.
         '</tr><tr>'.
         '<td colspan=6 align=right><input type="button" name="addRow" value="Add Row" onClick="insertOccurrenceRow();" /></td>'.
         '</tr>';
@@ -5981,8 +5987,8 @@ sub processOccurrenceTable {
         foreach my $collection_no (@collections) {
             my $abund_value = $q->param("abund_value_${i}_${collection_no}");
             my $abund_unit = $global_abund_unit;
-            my $primary_key = $q->param("key_type_${i}_${collection_no}");
-            my $primary_key_value = int($q->param("key_value_${i}_${collection_no}"));
+            my $primary_key_value = $q->param("occurrence_no_${i}_${collection_no}");
+            my $primary_key = "occurrence_no";
             my $table = 'occurrences';
             if ($primary_key !~ /^occurrence_no$|^reid_no$/) {
                 print "ERROR: invalid primary key type";
@@ -6092,7 +6098,7 @@ sub processOccurrenceTable {
                 $classification_select .= $hbo->htmlSelect('taxon_no',\@descriptions,\@taxon_nos);
             }
         }
-        if (@inserted || @updated || @deleted || (!$total_occs && @deleted) || $classification_select || $manual_resolve_homonyms) {
+        if (@inserted || @updated || @deleted || !$total_occs || $classification_select || $manual_resolve_homonyms) {
             my $row = "<tr><td>$taxon_name</td><td>$classification_select</td><td>";
             if (@inserted) {
                 my $s = (@inserted == 1) ? "" : "s";
@@ -6106,9 +6112,13 @@ sub processOccurrenceTable {
                 my $s = (@deleted == 1) ? "" : "s";
                 $row .= "Removed from ".scalar(@deleted)." collection$s. ";
             }
-            if (!$total_occs && @deleted) {
-                $row .= "All occurrences of this taxon were removed. ";
-            }
+            if (!$total_occs) {
+                if (@deleted) {
+                    $row .= "All occurrences of this taxon were removed. ";
+                } else {
+                    $row .= "No occurrences of this taxon were added. ";
+                }
+            } 
             if ($manual_resolve_homonyms) {
                 my $simple_taxon_name = $genus_name;
                 $simple_taxon_name .= " ($subgenus_name)" if ($subgenus_name);
@@ -6561,7 +6571,7 @@ sub displayOccsForReID {
 
 	my $rowCount = 0;
 	my %pref = getPreferences($s->get('enterer_no'));
-    my @optional = ('subgenera','genus_and_species_only','abundances','plant_organs');
+    my @optional = ('subgenera','genus_and_species_only','abundances','plant_organs','species_name');
     if (@results) {
         my $header_vars = {
             'ref_string'=>$refString, 
