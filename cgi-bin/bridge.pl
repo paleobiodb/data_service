@@ -5767,7 +5767,8 @@ EOF
     print '<table border=0 cellpadding=0 cellspacing=0>'."\n";
     print '<tr>';
     print '<td valign="bottom"><div class="fixedLabel">'.
-          '<div align="left" style="height: 170px; overflow: hidden;" class="small">'.
+          qq|<div align="center" class="small">Please see the <a href="#" onClick="tipsPopup('/public/tips/occurrence_table_tips.html');">tip sheet</a></div><br />|.
+          '<div align="left" style="height: 160px; overflow: hidden;" class="small">'.
           '<b>New cells:</b><br />'.
           '&nbsp;Reference: '.$reference."<br />".
           '&nbsp;Abund. unit: '.$abund_select."<br />".
@@ -5885,7 +5886,6 @@ EOF
     print "<br /><br />";
 
     print '<div align="center"><div style="width: 640px">';
-    print 'Presenses may be denoted with an "X"<br /><br />';
     if (@all_collections > @collections) {
         print "<b>";
         print "Showing collections ".($lower_limit + 1)." to $upper_limit of ".scalar(@all_collections).".";
