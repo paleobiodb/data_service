@@ -732,6 +732,11 @@ td.fixedLabel {
     border-right: 1px solid gray; 
     border-bottom: 1px solid gray; 
 }
+.fixedSpan {
+    white-space: nowrap;
+    font-size: .80em;
+}
+
 .fixedInput,.fixedInputDark {
     border: 0px;
     overflow: hidden;
