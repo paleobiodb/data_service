@@ -740,6 +740,7 @@ sub submitAuthorityForm {
         $end_message .= "<div align=\"center\"><p><b>" . $fields{'taxon_name'} . " " .Reference::formatShortRef(\%fields). " has been $enterupdate the database</b></p></div>";
 
         my $origResultTaxonNumber = TaxonInfo::getOriginalCombination($dbt,$resultTaxonNumber);
+        
         $end_message .= qq|
     <div align="center" class="displayPanel">
     <table cellpadding="10" class="small"><tr><td>
@@ -751,9 +752,13 @@ sub submitAuthorityForm {
       <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></b></li>
     </td>
     <td valign=top>
-      <p><b>Opinion functions</b></p>
-      <li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber">Add an opinion about $fields{taxon_name}</a></b></li>
-      <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li>
+      <p><b>Opinion functions</b></p>|;
+        if ($fields{'taxon_rank'} =~ /species/) {
+            $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&use_reference=new">Add an opinion about $fields{taxon_name} from another reference</a></b></li>|;
+        } else {
+            $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber">Add an opinion about $fields{taxon_name}</a></b></li>|;
+        }
+        $end_message .= qq|<br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
