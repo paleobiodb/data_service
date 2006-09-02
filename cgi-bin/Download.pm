@@ -2003,8 +2003,8 @@ sub queryDatabase {
     #  Now handle lumping of collections
     ###########################################################################
 
-    my %lumpseen;
-    my %occseen;
+    my %lumpcollno;
+    my %lumpoccref;
     my %genusseen;
     my @lumpedDataRows = ();
     my @allDataRows = @dataRows;
@@ -2082,18 +2082,25 @@ sub queryDatabase {
                 $genus_string = $row->{'o.genus_name'};
             }
 
-            if ( $lumpseen{$lump_string} )    {
+            if ( $lumpcollno{$lump_string} )    {
                 # Change  the collection_no to be the same collection_no as the first
                 # collection_no encountered that has the same $lump_string, so that 
                 # Curve.pm will lump them together when doing a calculation
-                $row->{'collection_no'} = $lumpseen{$lump_string};
-                if ( $occseen{$row->{'collection_no'}.$genus_string} > 0 )    {
+                $row->{'collection_no'} = $lumpcollno{$lump_string};
+                if ( $lumpoccref{$row->{'collection_no'}.$genus_string} )    {
                     $lump++;
+                # if you lump occurrences with abundances, the abundances have
+                #  to be added together JA 1.9.06
+                    if ( $row->{'o.abund_unit'} =~ /(^specimens$)|(^individuals$)/ && $row->{'o.abund_value'} > 0 )	{
+                        $lumpoccref{$row->{'collection_no'}.$genus_string}->{'o.abund_value'} += $row->{'o.abund_value'};
+                    }
                 }
             } else    {
-                $lumpseen{$lump_string} = $row->{'collection_no'};
+                $lumpcollno{$lump_string} = $row->{'collection_no'};
             }
-            $occseen{$row->{'collection_no'}.$genus_string}++;
+            if ( ! $lumpoccref{$row->{'collection_no'}.$genus_string} )	{
+            	$lumpoccref{$row->{'collection_no'}.$genus_string} = $row;
+            }
         }
         if ( $lump == 0) {
             push @lumpedDataRows, $row;
