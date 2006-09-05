@@ -2614,6 +2614,27 @@ sub getTaxa {
         }
     }
 
+    if ($options->{'remove_rank_change'}) {
+        if (@results > 1) {
+            my %seen_orig = ();
+            my %is_orig = ();
+            foreach my $row (@results) {
+                my $orig = getOriginalCombination($dbt,$row->{'taxon_no'});
+                $seen_orig{$orig} = $row;
+                if ($orig == $row->{'taxon_no'}) {
+                    $is_orig{$orig} = $row;
+                }
+            }
+            if (scalar keys %seen_orig == 1) {
+                if (%is_orig) {
+                    @results = values %is_orig;
+                } else {
+                    @results = values %seen_orig;
+                }
+            }
+        }
+    }
+
     if (wantarray) {
         return @results;
     } else {
