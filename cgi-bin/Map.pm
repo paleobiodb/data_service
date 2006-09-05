@@ -244,8 +244,8 @@ sub mapCheckForm {
         # Generate warning for taxon with homonyms
         if ($taxon_name) {
             if($q->param('taxon_rank') ne "species") {
-                my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon_name);
-                if (scalar(@taxon_nos)  > 1) {
+                my @taxa = TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon_name,'remove_rank_change'=>1});
+                if (scalar(@taxa)  > 1) {
                     push @errors, "The taxon name '$taxon_name' is ambiguous and belongs to multiple taxonomic hierarchies. Right the map script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
                 }
             }

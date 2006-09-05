@@ -2422,7 +2422,7 @@ sub processCollectionsSearch {
                 @taxon_nos = (int($options{'taxon_no'}))
             } else {
                 if (! $options{'no_authority_lookup'}) {
-                    my @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1});
+                    my @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1,'remove_rank_change'=>1});
                     @taxon_nos = map {$_->{taxon_no}} @taxa;
                 }
             }
@@ -4799,6 +4799,11 @@ sub processTaxonSearch {
     $options{'get_reference'} = 1;
     # Also match against subgenera if the user didn't explicity state the genus
     $options{'match_subgenera'} = 1;
+    # If we have multiple versions of a name (i.e. Cetacea) but they're really the
+    # same taxa that's been ranged differently, then don't treat it as a homonym, use the original rank
+    unless ($q->param('goal') eq 'authority') {
+        $options{'remove_rank_change'} = 1;
+    }
     
     my @results = TaxonInfo::getTaxa($dbt,\%options,['*']);
         

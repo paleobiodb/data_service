@@ -30,7 +30,7 @@ sub displayITISDownload {
     # the parameters.  Store the parameters in the %options hash and pass that in
     my %options = $q->Vars();
     if ($options{'taxon_name'}) {
-        my @taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1});
+        my @taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1,'remove_rank_change'=>1});
         if (scalar(@taxon) > 1) {
             push @errors, "Taxon name is homonym";
         } elsif (scalar(@taxon) < 1) {
@@ -360,7 +360,7 @@ sub displayPBDBDownload {
 
     my %options = $q->Vars();
     if ($options{'taxon_name'}) {
-        my @taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1});
+        my @taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1,'remove_rank_change'=>1});
         if (scalar(@taxon) > 1) {
             push @errors, "Taxon name is homonym";
         } elsif (scalar(@taxon) < 1) {

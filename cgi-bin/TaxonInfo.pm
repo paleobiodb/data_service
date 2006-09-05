@@ -50,7 +50,7 @@ sub checkTaxonInfo {
     } elsif (!$q->param('taxon_name') && !($q->param('pubyr')) & !$q->param('author')) {
         searchForm($hbo,$q);
     } else {
-        my $options = {'match_subgenera'=>1};
+        my $options = {'match_subgenera'=>1,'remove_rank_change'=>1};
         foreach ('taxon_name','author','pubyr') {
             if ($q->param($_)) {
                 $options->{$_} = $q->param($_);
