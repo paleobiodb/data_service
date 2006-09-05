@@ -210,7 +210,7 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 <input name="authorizer_reversed" size=20 onKeyUp="doComplete(event, this, authorizerNames());">
 
 <div show="is_contributor">
-<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_me%%'">Me</a></td>
+<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_me%%'">Me</a>
 </div>
 
 </td>
@@ -275,7 +275,7 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 
 <table style="clear: left;" width="100%" cellpadding="3" cellspacing="0">
 
-<tr class="lightGrey">
+<tr class="lightGray">
 <td valign=top class="small">Lithification of primary lithology:</td>
 <td valign=top class="small" colspan=3>
 <input type=checkbox name="lithification_lithified" value="YES" checked>lithified
@@ -304,7 +304,7 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 </td></tr>
 
 
-<tr class="lightGrey">
+<tr class="lightGray">
 <td valign=middle class="small">Select <b>environments</b>:</td>
 <td valign=top class="small" colspan=3>
 <input type=checkbox name="environment_carbonate" value="YES" checked>carbonate
@@ -313,7 +313,7 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 <input type=checkbox name="environment_unknown" value="YES" checked>unknown
 </td></tr>
 
-<tr class="lightGrey">
+<tr class="lightGray">
 <td valign=top class="small" nowrap> ... or 
 <select name="include_exclude_environment">
 <option>include</option>
@@ -367,7 +367,7 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 </td>
 </tr>
 
-<tr class="lightGrey">
+<tr class="lightGray">
 <td valign=top class="small">Latitudinal range:</td>
 <td valign=top class="small">
 <input name="latmin1" size="4" value="-90">&deg; to
@@ -380,7 +380,7 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 </td>
 </tr>
 
-<tr class="lightGrey">
+<tr class="lightGray">
 <td valign=top class="small">Longitudinal range:</td>
 <td valign=top class="small">
 <input name="lngmin1" size="4" value="-180">&deg; to
@@ -419,7 +419,7 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 </td>
 </tr> 
 
-<tr class="lightGrey">
+<tr class="lightGray">
 <td valign=top class="small">Geographic scale of collections:</td>
 <td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name="geogscale_hand_sample" value="YES" checked>hand sample</span>
@@ -441,7 +441,21 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 <span style="white-space: nowrap"><input type=checkbox name="stratscale_unknown" value="YES" CHECKED>unknown</span>
 </td></tr>
 
-<tr class="lightGrey">
+<tr class="lightGray">
+<td valign=top class="small">Modes of preservation:</td>
+<td valign=top class="small" colspan=3>
+<span style="white-space: nowrap"><input type=checkbox name='pres_mode_cast' value="YES" checked>cast</span>
+<span style="white-space: nowrap"><input type=checkbox name='pres_mode_adpression' value="YES" checked>adpression</span>
+<span style="white-space: nowrap"><input type=checkbox name='pres_mode_mold/impression' value="YES" checked>mold/impression</span>
+<span style="white-space: nowrap"><input type=checkbox name='pres_mode_original aragonite' value="YES" checked>original aragonite</span>
+<span style="white-space: nowrap"><input type=checkbox name='pres_mode_replaced with silica' value="YES" checked>replaced with silica</span>
+<span style="white-space: nowrap"><input type=checkbox name='pres_mode_trace' value="YES" checked>trace</span>
+<span style="white-space: nowrap"><input type=checkbox name='pres_mode_charcoalification' value="YES" checked>charcoalification</span>
+<span style="white-space: nowrap"><input type=checkbox name='pres_mode_coalified' value="YES" checked>coalified</span>
+<span style="white-space: nowrap"><input type=checkbox name='pres_mode_other' value="YES" checked>other</span>
+</td></tr>
+
+<tr>
 <td valign=top class="small">Reason for describing collection:</td>
 <td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name='collection_type_archaeological' value="YES" checked> archaeological</span>
@@ -453,7 +467,7 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 <span style="white-space: nowrap"><input type=checkbox name='collection_type_unknown' value="YES" checked> unknown</span>
 </td></tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small">Lump collections by:<br>
 <small><i>
 Occurrences of the same species will be lumped if the species name field is downloaded; otherwise lumping is by genus<br>
@@ -477,22 +491,22 @@ strat unit:
 </span>
 </td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top class="small">Download only the following collection number(s): </td>
 <td valign=top class="small" colspan=3><input name=collection_no type="text" size="30"></td></tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small" nowrap>Exclude collections with
   <select name="occurrence_count_qualifier"><option>less</option><option>more</option></select> than</td>
 <td valign=top class="small" colspan=3><input name=occurrence_count type="text" size="12"> occurrences</td></tr>
 
-<tr class="lightGrey">
+<tr>
 <td valign=top class="small" nowrap>Exclude collections with
   <select name="abundance_count_qualifier"><option>less</option><option>more</option></select> than</td>
 <td valign=top class="small" colspan=3><input name=abundance_count type="text" size="12"> specimens/individuals</td></tr>
 
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small">Exclude collections with subset collections? </td>
 <td valign=top class="small" colspan=3><select name="exclude_superset"><option selected value="NO">no, include them</option><option value="YES">yes, exclude them</option></select></td></tr>
 
@@ -517,7 +531,7 @@ strat unit:
 </div>
 
 <table style="clear: left;" width="100%" cellpadding="3" cellspacing="0">
-<tr class="lightGrey">
+<tr class="lightGray">
 <td valign=top class="small">Lump occurrences of the same genus from the same collection?</td>
 <td valign=top class="small">
 <select name=lump_genera>
@@ -544,7 +558,7 @@ strat unit:
 </select>
 </td></tr>
 
-<tr class="lightGrey">
+<tr class="lightGray">
 <td valign=top class="small">Replace genus names with subgenus names, so subgenera are treated as separate genera?</td>
 <td valign=top class="small">
 <select name=split_subgenera>
@@ -562,7 +576,7 @@ strat unit:
 </select>
 </td></tr>
 
-<tr class="lightGrey">
+<tr class="lightGray">
 <td valign=top class="small">Include specifically indeterminate occurrences?</td>
 <td valign=top class="small">
 <select name=sp>
@@ -583,7 +597,7 @@ strat unit:
 <input type=checkbox name='genus_reso_"' value="YES" checked>"
 </td></tr>
 
-<tr class="lightGrey">
+<tr class="lightGray">
 <td valign=top class="small">Include occurrences with informal names?</td>
 <td valign=top class="small">
 <select name=informal>
@@ -599,7 +613,7 @@ strat unit:
   <span class="white-space: nowrap"><input type="checkbox" name="preservation" value="form taxon" checked> form taxon</span>
   <span class="white-space: nowrap"><input type="checkbox" name="preservation" value="ichnofossil" checked> ichnofossil</span></td></tr>
 
-<tr class="lightGrey">
+<tr class="lightGray">
 <td valign=top class="small">Include occurrences falling outside their age ranges in Sepkoski's Compendium?</td>
 <td valign=top class="small">
 <select name=compendium_ranges>
@@ -617,7 +631,7 @@ strat unit:
 </select>
 </td></tr>
 
-<tr class="lightGrey">
+<tr class="lightGray">
 <td valign=top class="small">Include occurrences that are classified or unclassified?<br><small><i>This is useful if you want to find entries that might be typos</i></small></td>
 <td valign=top class="small">
 <select name=classified>

@@ -193,6 +193,10 @@ sub retellOptions {
         $html .= $self->retellOptionsGroup('Environments','environment_',\@environment_group);
     }    
 
+    # Preservation mode
+    my @pres_mode_group= ('cast','adpression','original aragonite','mold/impression','replaced with silica','trace','charcoalification','coalified','other');
+    $html .= $self->retellOptionsGroup('Preseration modes:','pres_mode_',\@pres_mode_group);
+
     # Collection types
     my @collection_types_group = ('archaeological','biostratigraphic','paleoecologic','taphonomic','taxonomic','general_faunal/floral','unknown');
     $html .= $self->retellOptionsGroup('Reasons for describing included collections:','collection_type_',\@collection_types_group);
@@ -1032,6 +1036,39 @@ sub getStratscaleString{
     return $stratscales;
 }
 
+sub getPreservationModeString {
+    my $self = shift;
+    my $q = $self->{'q'};
+    my $dbh = $self->{'dbh'};
+
+    my @pres_modes_all = ('cast','adpression','original aragonite','mold/impression','replaced with silica','trace','charcoalification','coalified');
+    my $has_other = ($q->param('pres_mode_other') eq 'YES') ? 1 : 0; 
+
+    # If its in the form, stick in in the array
+    my @pres_modes = grep {$q->param('pres_mode_'.$_) eq 'YES'} @pres_modes_all;
+
+    my $seen_checkbox = ($has_other + @pres_modes);
+    my $total_checkbox = (1 + @pres_modes_all);
+
+    my $sql = "";
+    if ($seen_checkbox > 0 && $seen_checkbox < $total_checkbox) {
+        if ($has_other) {
+            my %seen_modes = ();
+            foreach (@pres_modes_all) {
+                $seen_modes{$_} = 1;
+            }
+            foreach (@pres_modes) {
+                delete $seen_modes{$_};
+            }
+            my @pres_modes_missing = keys %seen_modes;
+            $sql = "(pres_mode IS NULL OR (".join(" AND ", map{'NOT FIND_IN_SET('.$dbh->quote($_).',pres_mode)'} @pres_modes_missing)."))";
+        } else {
+            $sql = "(".join(" OR ",  map{'FIND_IN_SET('.$dbh->quote($_).',pres_mode)'} @pres_modes).")";
+        }
+    }
+
+}
+
 sub getCollectionTypeString{
     my $self = shift;
     my $q = $self->{'q'};
@@ -1262,6 +1299,7 @@ sub getCollectionsWhereClause {
         $self->getGeogscaleString(),
         $self->getStratscaleString(),
         $self->getCollectionTypeString(),
+        $self->getPreservationModeString(),
         $self->getSubsetString()) {
         push @where,$whereItem if ($whereItem);
     }
