@@ -3189,8 +3189,8 @@ sub setupQueryFields {
     # Generate warning for taxon with homonyms
     my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
     foreach my $taxon (@taxa) {
-        my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon);
-        if (scalar(@taxon_nos)  > 1) {
+        my @taxa = TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon,'remove_rank_change'=>1});
+        if (scalar(@taxa)  > 1) {
             push @form_errors, "The taxon name '$taxon' is ambiguous and belongs to multiple taxonomic hierarchies. Right the download script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
         }
     } 
@@ -3231,7 +3231,7 @@ sub getTaxonString {
     my @sql_bits;
     my %taxon_nos_unique = ();
     foreach my $taxon (@taxa) {
-        my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon);
+        my @taxon_nos = map {$_->{'taxon_no'}} TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon,'remove_rank_change'=>1});
         $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
         if (scalar(@taxon_nos) == 0) {
             push @sql_bits, "genus_name LIKE ".$dbh->quote($taxon);
