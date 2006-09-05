@@ -160,10 +160,10 @@ function insertOccurrenceRow() {
     // Do object detection - may not exist
     var subgenus_reso = "";
     if (f.subgenus_reso) 
-        f.subgenus_reso.value;
+        subgenus_reso = f.subgenus_reso.value;
     var subgenus_name = "";
     if (f.subgenus_name) 
-        f.subgenus_name.value;
+        subgenus_name = f.subgenus_name.value;
     var species_reso = f.species_reso.value;
     var species_name = f.species_name.value;
     var taxon_name = formatOccurrence(genus_reso,genus_name,subgenus_reso,subgenus_name,species_reso,species_name);
