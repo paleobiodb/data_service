@@ -5751,7 +5751,7 @@ EOF
     # Fixed position header
     # We're make an assumption here, that there will generally only be one abundance unit for the page
     # and everything gets synced to that one -- we prepopulate the form with that abundance unit, or if
-    # where no abundance unit (a new sheet or only presenses and not abundances records), then we
+    # where no abundance unit (a new sheet or only presences and not abundances records), then we
     # default to specimens
     my $selected_abund_unit = 'specimens';
     my $max_count = 1;
@@ -5767,7 +5767,7 @@ EOF
     print '<table border=0 cellpadding=0 cellspacing=0>'."\n";
     print '<tr>';
     print '<td valign="bottom"><div class="fixedLabel">'.
-          qq|<div align="center" class="small">Please see the <a href="#" onClick="tipsPopup('/public/tips/occurrence_table_tips.html');">tip sheet</a></div><br />|.
+          qq|<div class="small" align="left">Please see the <a href="#" onClick="tipsPopup('/public/tips/occurrence_table_tips.html');">tip sheet</a></div><br />|.
           '<div align="left" style="height: 160px; overflow: hidden;" class="small">'.
           '<b>New cells:</b><br />'.
           '&nbsp;Reference: '.$reference."<br />".
@@ -5879,7 +5879,7 @@ EOF
     print '<td>'.$hbo->htmlSelect("species_reso",$hbo->getKeysValues('species_reso'),'','class="small"').'</td>'.
         '<td><input name="species_name" class="small" value="'.$prefs{species_name}.'" /></td>'.
         '</tr><tr>'.
-        '<td colspan=6 align=right><input type="button" name="addRow" value="Add Row" onClick="insertOccurrenceRow();" /></td>'.
+        '<td colspan=6 align=right><input type="button" name="addRow" value="Add row" onClick="insertOccurrenceRow();" /></td>'.
         '</tr>';
     print "</table>";
 
@@ -6116,7 +6116,7 @@ sub processOccurrenceTable {
                 if (@deleted) {
                     $row .= "All occurrences of this taxon were removed. ";
                 } else {
-                    $row .= "No occurrences of this taxon were added. ";
+                    $row .= "No occurrences of this taxon were entered. ";
                 }
             } 
             if ($manual_resolve_homonyms) {
