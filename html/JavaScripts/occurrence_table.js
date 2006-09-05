@@ -278,7 +278,7 @@ function editCell(row_num,collection_no) {
         dummyEl.appendChild(new_input);
         */
         inputEl = document.getElementById(abund_id);
-        inputEl.onkeypress = handleKeyPress;
+        inputEl.onkeydown = handleKeyPress;
         inputEl.onblur = updateAutoFillHash;
     }
 
