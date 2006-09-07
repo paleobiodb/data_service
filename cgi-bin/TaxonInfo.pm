@@ -151,7 +151,7 @@ sub displayTaxonInfoResults {
 	# Get the sql IN list for a Higher taxon:
 	my $in_list;
 	if($taxon_no) {
-        if ($taxon_rank =~ /class|phylum|kingdom/) {
+        if ($taxon_rank =~ /class|phylum|kingdom/ && !$is_real_user) {
             # Don't do this for class or higher, too many results can be returned PS 08/22/2005
             $in_list = [-1];
         } else {
