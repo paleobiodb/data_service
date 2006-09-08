@@ -881,12 +881,20 @@ sub findRecentGenera	{
 	my $self = shift;
 
 	# draw all comments pertaining to Jack's genera
-	my $asql = "SELECT taxon_name FROM authorities WHERE extant='YES'";
+	my $asql = "SELECT taxon_no,taxon_name FROM authorities WHERE extant='YES'";
 	my @arefs = @{$dbt->getData($asql)};
+    my @taxon_nos= map {$_->{taxon_no}} @arefs;
 
+    my $parents = TaxaCache::getParents($dbt,\@taxon_nos,'array_full');
 	# isRecent must be global!
 	for my $aref ( @arefs )	{
 		$isRecent{$aref->{taxon_name}}++;
+        if ($parents->{$aref->{taxon_no}}) {
+            my @parent_list = @{$parents->{$aref->{taxon_no}}};
+            foreach my $p (@parent_list) {
+                $isRecent{$p->{taxon_name}}++;
+            }
+        }
 	}
 	return;
 
