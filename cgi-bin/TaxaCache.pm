@@ -633,11 +633,14 @@ sub updateListCache {
 #    array - *default* - an array of taxon_nos, in no particular order
 sub getChildren {
     my $dbt = shift;
-    my $taxon_no = shift;
+    my $taxon_no = int(shift);
     my $return_type = shift;
     # This option exists for updateCache above, nasty bug if this isn't set since senior synonyms
     # children will be moved to junior synonym if we do the resolution!
     my $dont_resolve_senior_syn = shift;
+    my $exclude_list = shift;
+    
+    return undef unless $taxon_no;
 
     # First get the senior synonym
     unless ($dont_resolve_senior_syn) {
@@ -647,18 +650,38 @@ sub getChildren {
         }
     }
 
+    my $sql = "SELECT lft,rgt FROM taxa_tree_cache WHERE taxon_no=$taxon_no";
+    my $root_vals = ${$dbt->getData($sql)}[0];
+    return undef unless $root_vals;
+    my $lft = $root_vals->{'lft'};
+    my $rgt = $root_vals->{'rgt'};
+    
+    my @exclude = ();
+    if (ref $exclude_list eq 'ARRAY' && @$exclude_list) {
+        my $excluded = join(",",map {int} @$exclude_list);
+        my $sql = "SELECT lft,rgt FROM taxa_tree_cache WHERE taxon_no IN ($excluded)";
+        foreach my $row (@{$dbt->getData($sql)}) {
+            if ($row->{'lft'} > $lft && $row->{'rgt'} < $rgt) {
+                push @exclude, [$row->{'lft'},$row->{'rgt'}];
+            }
+        }
+    }
+
     if ($return_type eq 'tree') {
         # Ordering is very important. 
         # The ORDER BY tc2.lft makes sure results are returned in hieracharical order, so we can build the tree in one pass below
         # The (tc2.taxon_no != tc2.spelling_no) term ensures the most recent name always comes first (this simplfies later algorithm)
         # use between and both values so we'll use a key for a smaller tree;
-        my $sql = "SELECT tc2.taxon_no, a1.type_taxon_no, a1.taxon_rank, a1.taxon_name, tc2.spelling_no, tc2.lft, tc2.rgt, tc2.synonym_no "
-                . " FROM taxa_tree_cache tc1, taxa_tree_cache tc2, authorities a1"
-                . " WHERE a1.taxon_no=tc2.taxon_no"
-                . " AND (tc2.lft BETWEEN tc1.lft AND tc1.rgt)"
-                . " AND (tc2.rgt BETWEEN tc1.lft AND tc1.rgt)"
-                . " AND tc1.taxon_no=$taxon_no"
-                . " ORDER BY tc2.lft, (tc2.taxon_no != tc2.spelling_no)";
+        my $sql = "SELECT tc.taxon_no, a1.type_taxon_no, a1.taxon_rank, a1.taxon_name, tc.spelling_no, tc.lft, tc.rgt, tc.synonym_no "
+                . " FROM taxa_tree_cache tc, authorities a1"
+                . " WHERE a1.taxon_no=tc.taxon_no"
+                . " AND (tc.lft BETWEEN $lft AND $rgt )"
+                . " AND (tc.rgt BETWEEN $lft AND $rgt)";
+        foreach my $exclude (@exclude) {
+            $sql .= " AND (tc.lft NOT BETWEEN $exclude->[0] AND $exclude->[1])";
+            $sql .= " AND (tc.rgt NOT BETWEEN $exclude->[0] AND $exclude->[1])";
+        }
+        $sql .= " ORDER BY tc.lft, (tc.taxon_no != tc.spelling_no)";
         my @results = @{$dbt->getData($sql)};
 
         my $root = shift @results;
@@ -706,9 +729,13 @@ sub getChildren {
         return $root;
     } else {
         # use between and both values so we'll use a key for a smaller tree;
-        my $sql = "SELECT tc2.taxon_no FROM taxa_tree_cache tc1, taxa_tree_cache tc2 WHERE tc1.taxon_no=$taxon_no "
-                . "AND (tc2.lft BETWEEN tc1.lft AND tc1.rgt) "
-                . "AND (tc2.rgt BETWEEN tc1.lft AND tc1.rgt)";  
+        my $sql = "SELECT tc.taxon_no FROM taxa_tree_cache tc WHERE "
+                . "tc.lft BETWEEN $lft AND $rgt "
+                . "AND tc.rgt BETWEEN $lft AND $rgt";  
+        foreach my $exclude (@exclude) {
+            $sql .= " AND (tc.lft NOT BETWEEN $exclude->[0] AND $exclude->[1])";
+            $sql .= " AND (tc.rgt NOT BETWEEN $exclude->[0] AND $exclude->[1])";
+        }
         #my $sql = "SELECT l.child_no FROM taxa_list_cache l WHERE l.parent_no=$taxon_no";
         my @taxon_nos = map {$_->{'taxon_no'}} @{$dbt->getData($sql)};
         return @taxon_nos;
