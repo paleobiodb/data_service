@@ -688,7 +688,7 @@ sub checkWhereClause {
 	# modified by JA 1.4.04 to accept IS NULL
 	# modified by PS 2.28.05 to accept MATCH (x) AGAINST (y)
     # modified by PS 3.07.05 to accept NOT LIKE/NOT IN
-	$sql =~ /WHERE\s+([A-Z0-9_\.\(\)]+)\s*(NOT)*\s*(=|AGAINST|LIKE|IN|IS NULL|IS NOT NULL|!=|>|<|>=|<=)\s*(.+)?\s*/i;
+	$sql =~ /WHERE\s+([A-Z0-9_\.\(\)]+)\s*(NOT)*\s*(=|BETWEEN|AGAINST|LIKE|IN|IS NULL|IS NOT NULL|!=|>|<|>=|<=)\s*(.+)?\s*/i;
 
 	#print "\$1: $1, \$2: $2 \$3: $3<br>";
 	if(!$1){
