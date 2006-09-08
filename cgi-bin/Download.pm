@@ -161,10 +161,16 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Data records published", $dataPublishedBeforeAfter);
     }
     if ( $q->param("taxon_name") !~ /[ ,]/ )    {
-        $html .= $self->retellOptionsRow ( "Taxon name", $q->param("taxon_name") );
+        $html .= $self->retellOptionsRow ( "Taxon to include", $q->param("taxon_name") );
     } else    {
-        $html .= $self->retellOptionsRow ( "Taxon names", $q->param("taxon_name") );
+        $html .= $self->retellOptionsRow ( "Taxa to include", $q->param("taxon_name") );
     }
+    if ( $q->param("exclude_taxon_name") !~ /[ ,]/ )    {
+        $html .= $self->retellOptionsRow ( "Taxon to exclude", $q->param("exclude_taxon_name") );
+    } else    {
+        $html .= $self->retellOptionsRow ( "Taxa to exclude", $q->param("exclude_taxon_name") );
+    }
+
     $html .= $self->retellOptionsRow ( "Class", $q->param("class") );
 
     if ($q->param("max_interval_name")) {
@@ -1209,15 +1215,9 @@ sub getOccurrencesWhereClause {
     push @occ_where, $genusResoString if $genusResoString;
     push @occ_where, "(o.genus_reso NOT LIKE '%informal%' OR o.genus_reso IS NULL)" if $q->param('informal') ne 'YES';
 
-# nasty hack: if we're not going to use the reIDs, then don't worry about
-#  whether they meet the indet. and sp. tests JA 16.4.06
-    #if ( $q->param('replace_with_reid') ne 'NO' )	{
     push @reid_where, "re.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
     push @reid_where, "re.species_name NOT LIKE '%sp.%'" if $q->param('sp') ne 'YES';
-    #} else	{
-    #    push @reid_where, "o.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
-    #    push @reid_where, "o.species_name NOT LIKE '%sp.%'" if $q->param('sp') ne 'YES';
-    #}
+
     # this is kind of a hack, I admit it JA 31.7.05
     $genusResoString =~ s/o\.genus_reso/re.genus_reso/g;
     push @reid_where, $genusResoString if $genusResoString;
@@ -1346,7 +1346,7 @@ sub queryDatabase {
     #  Generate the query
     ###########################################################################
 
-    my (@fields,@where,@occ_where,@reid_where,@taxon_where,@tables,@from,@groupby,@left_joins);
+    my (@fields,@where,@occ_where,@reid_where,$taxon_where,@tables,@from,@groupby,@left_joins);
 
     @fields = ('c.authorizer_no','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short");
     @tables = ('collections c');
@@ -1407,7 +1407,7 @@ sub queryDatabase {
 
     # We'll want to join with the reid ids if we're hitting the occurrences table,
     # or if we're getting collections and filtering using the taxon_no in the occurrences table
-    my $join_reids = ($q->param('output_data') =~ /occurrences|specimens|genera|species/ || $q->param('taxon_name')) ? 1 : 0;
+    my $join_reids = ($q->param('output_data') =~ /occurrences|specimens|genera|species/ || $q->param('taxon_name') || $q->param('exclude_taxon_name')) ? 1 : 0;
     if ($join_reids) {
         push @tables, 'occurrences o';
         unshift @where, 'c.collection_no = o.collection_no';
@@ -1475,20 +1475,16 @@ sub queryDatabase {
             }
         } 
 
-        if ($q->param('taxon_name')) {
-            my (@occ_sql,@reid_sql);
-            # Don't include @taxon_where in my () above, it needs to stay in scope
+        if ($q->param('taxon_name') || $q->param('exclude_taxon_name')) {
+            # Don't include $taxon_where in my () above, it needs to stay in scope
             # so it can be used much later in function
-            @taxon_where = $self->getTaxonString();
-            push @occ_sql, "o.$_" for @taxon_where;
-            push @reid_sql, "re.$_" for @taxon_where;
-            push @reid_sql, "o.$_" for @taxon_where;
-            push @occ_where, "(".join(" OR ",@occ_sql).")";
-# nasty hack: just ignore the taxon no in list for the reIDs table if the
-#  user isn't going to use the reIDs anyway JA 16.4.06
-            #if ( $q->param('replace_with_reid') ne 'NO' )	{
-            push @reid_where, "(".join(" OR ",@reid_sql).")";
-            #}
+            $taxon_where = $self->getTaxonString();
+            my $occ_sql = $taxon_where;
+            my $reid_sql = $taxon_where;
+            $occ_sql =~ s/table\./o\./g;
+            $reid_sql =~ s/table\./re\./g;
+            push @occ_where, $occ_sql;
+            push @reid_where, $reid_sql;
         }
 
         if ( $q->param('pubyr') > 0) {
@@ -1605,11 +1601,8 @@ sub queryDatabase {
             $q->param('taxon_name') && 
             $q->param('include_specimen_fields') ) {
             my $taxon_nos_clause = "";
-            for (@taxon_where) {
-                if ($_ =~ /taxon_no/) {
-                    $taxon_nos_clause = $_;
-                    last;
-                }
+            if ($taxon_where =~ /(taxon_no\s+IN\s+\(.*?\))/) {
+                $taxon_nos_clause = $1;
             }
             if ($taxon_nos_clause) {
                 my @specimen_fields = ();
@@ -3188,6 +3181,7 @@ sub setupQueryFields {
     }
     # Generate warning for taxon with homonyms
     my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
+    push @taxa, split(/\s*[, \t\n-:;]{1}\s*/,$q->param('exclude_taxon_name'));
     foreach my $taxon (@taxa) {
         my @taxa = TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon,'remove_rank_change'=>1});
         if (scalar(@taxa)  > 1) {
@@ -3216,6 +3210,11 @@ sub formatRow {
 }
 
 # renamed from getGenusNames to getTaxonString to reflect changes in how this works PS 01/06/2004
+# Have to do a regex on the string it returns - $str =~ s/table\./\occurrences\./ or reids or whaetever
+# Is a bit tricky cause of the exclusion.  If we're ONLY excluding taxa when we just do a NOT IN (xxx).
+# If we're including taxa, we have to a set subtraction from the included taxa.  There can be multiple
+# levels of nesting of Include(Exclude(Include))) so its a bit tricky.  The set subtraction happens
+# in the getChildren function by passing in stuff to exclude.   
 sub getTaxonString {
     my $self = shift;
     my $q = $self->{'q'};
@@ -3227,26 +3226,65 @@ sub getTaxonString {
     my $genus_names_string;
 
     my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
+    my @exclude_taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('exclude_taxon_name'));
 
-    my @sql_bits;
+    my (@sql_or_bits,@sql_and_bits);
     my %taxon_nos_unique = ();
-    foreach my $taxon (@taxa) {
-        my @taxon_nos = map {$_->{'taxon_no'}} TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon,'remove_rank_change'=>1});
-        $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
-        if (scalar(@taxon_nos) == 0) {
-            push @sql_bits, "genus_name LIKE ".$dbh->quote($taxon);
-        } elsif (scalar(@taxon_nos) == 1) {
-            my @all_taxon_nos = TaxaCache::getChildren($dbt,$taxon_nos[0]);
-            # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
-            @taxon_nos_unique{@all_taxon_nos} = ();
-        } else { #result > 1
-            #do nothing here, quit above
+    if (@taxa) {
+        my @exclude_taxon_nos = ();
+        foreach my $taxon (@exclude_taxa) {
+            my @taxon_nos = map {$_->{'taxon_no'}} TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon,'remove_rank_change'=>1});
+            if (scalar(@taxon_nos) == 0) {
+                push @sql_and_bits, "table.genus_name NOT LIKE ".$dbh->quote($taxon);
+            } elsif (scalar(@taxon_nos) == 1) {
+                push @exclude_taxon_nos, $taxon_nos[0];
+            } else { #result > 1
+                #do nothing here, quit above
+            }
+        }
+        foreach my $taxon (@taxa) {
+            my @taxon_nos = map {$_->{'taxon_no'}} TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon,'remove_rank_change'=>1});
+#            $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
+            if (scalar(@taxon_nos) == 0) {
+                push @sql_or_bits, "table.genus_name LIKE ".$dbh->quote($taxon);
+            } elsif (scalar(@taxon_nos) == 1) {
+                my @all_taxon_nos = TaxaCache::getChildren($dbt,$taxon_nos[0],'','',\@exclude_taxon_nos);
+                # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
+                @taxon_nos_unique{@all_taxon_nos} = ();
+            } else { #result > 1
+                #do nothing here, quit above
+            }
+        }
+        if (%taxon_nos_unique) {
+            push @sql_or_bits, "table.taxon_no IN (".join(", ",keys(%taxon_nos_unique)).")";
+        }
+    } elsif (@exclude_taxa) {
+        my @exclude_taxon_nos = ();
+        foreach my $taxon (@exclude_taxa) {
+            my @taxon_nos = map {$_->{'taxon_no'}} TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon,'remove_rank_change'=>1});
+            if (scalar(@taxon_nos) == 0) {
+                push @sql_or_bits, "table.genus_name NOT LIKE ".$dbh->quote($taxon);
+            } elsif (scalar(@taxon_nos) == 1) {
+                push @exclude_taxon_nos, $taxon_nos[0];
+                my @all_taxon_nos = TaxaCache::getChildren($dbt,$taxon_nos[0],'','',\@exclude_taxon_nos);
+                # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
+                @taxon_nos_unique{@all_taxon_nos} = ();
+            } else { #result > 1
+                #do nothing here, quit above
+            }
+        }
+        if (%taxon_nos_unique) {
+            push @sql_or_bits, "table.taxon_no NOT IN (".join(", ",keys(%taxon_nos_unique)).")";
         }
     }
-    if (%taxon_nos_unique) {
-        push @sql_bits, "taxon_no IN (".join(", ",keys(%taxon_nos_unique)).")";
+    my $sql = "";
+    if (@sql_or_bits > 1) {
+        $sql = "(".join(" OR ",@sql_or_bits).")"; 
+    } elsif (@sql_or_bits == 1) {
+        $sql = $sql_or_bits[0];
     }
-    return @sql_bits;
+    $sql = join " AND ", $sql , @sql_and_bits;
+    return $sql;
 }
 
 sub dbg {
