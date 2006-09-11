@@ -5008,6 +5008,8 @@ sub displayOpinionForm {
 
 	if ($q->param('opinion_no') == -1) {
         if (!$s->get('reference_no') || $q->param('use_reference') eq 'new') {
+            # Set this to prevent endless loop
+            $q->param('use_reference'=>'');
             $s->enqueue($dbh,$q->query_string()); 
             displaySearchRefs("You must choose a reference before adding a new opinion");
             exit;
