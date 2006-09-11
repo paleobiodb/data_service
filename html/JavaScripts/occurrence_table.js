@@ -214,14 +214,14 @@ function insertOccurrenceRow() {
     for(var i=0;i<collections.length;i++) {
         var cell = row.insertCell(i); 
         var collection_no = collections[i];
-        var html = '<input id="abund_value_'+row_count+'_'+collection_no+'" name="abund_value_'+row_count+'_'+collection_no+'" size="4" value="" class="'+inputClass+'" \/>'
+        var html = '<div class="fixedColumn"><input id="abund_value_'+row_count+'_'+collection_no+'" name="abund_value_'+row_count+'_'+collection_no+'" size="4" value="" class="'+inputClass+'" \/></div>'
                  + '<input name="occurrence_no_'+row_count+'_'+collection_no+'" value="-1" type="hidden" \/>';
         cell.innerHTML = html;
         cell.onclick = function () { cellInfo(row_count,collection_no,f.reference_no.value,0,''); }
         cell.className="fixedColumn";
 
-        if (cell.firstChild) {
-            var inputEl = cell.firstChild;
+        if (cell.firstChild && cell.firstChild.firstChild) {
+            var inputEl = cell.firstChild.firstChild;
             if (inputEl) {
                 inputEl.onblur = updateAutoFillHash;
                 inputEl.onkeypress = handleKeyPress;
