@@ -182,7 +182,7 @@ sub getEcology {
     my $get_preservation = shift;
     my @ecology_fields = @$ecology_fields;
     
-    my @taxon_nos = keys(%$classification_hash);
+    my @taxon_nos = map{int($_)} grep {int($_)} keys(%$classification_hash);
     # This first section gets ecology data for all taxa and parent taxa
     # Dealing with recombinatins/corrections is tricky.  Strategy I use is this: 
     # Store an array of alternative taxon_nos to a taxon in %alt_taxon_nos hash
