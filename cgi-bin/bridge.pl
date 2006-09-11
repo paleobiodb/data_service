@@ -6193,7 +6193,7 @@ sub generateCollectionLabel {
         # but instead gets the @bounds back quickly so we know whether or now to 
         # wrap to the next line
         my @bounds = GD::Image->stringFT($black,$font,$font_size,$angle,$x,$y,$word);
-#        print "Bounds are: ".join(",",@bounds)." for $word<BR>";
+#        carp "Bounds are: ".join(",",@bounds)." for $word<BR>";
         if ($bounds[3] < 0) {
             #bounds[3] is the top left y coordinate or some such. if its < 0, then this
             # strin gis running off the image so break to next line
@@ -6201,10 +6201,10 @@ sub generateCollectionLabel {
             last if ($line_count > $num_lines);
             $y = $height - 3;
             my @bounds = $im->stringFT($black,$font,$font_size,$angle,$x,$y,$word);
-            $y = $bounds[3] - int($font_size/3);
+            $y = $bounds[3] - int($font_size);
         } else {
             my @bounds = $im->stringFT($black,$font,$font_size,$angle,$x,$y,$word);
-            $y = $bounds[3] - int($font_size/3);
+            $y = $bounds[3] - int($font_size);
         }
     }
 
