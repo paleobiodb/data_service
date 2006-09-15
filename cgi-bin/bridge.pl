@@ -3819,7 +3819,7 @@ sub getReidHTMLTableByOccNum {
 	} else {
 		$sql .= " WHERE occurrence_no = $occNum";
 	}
-    $sql .= " ORDER BY re.reference_no";
+    $sql .= " ORDER BY r.pubyr ASC, re.reid_no ASC";
     my @results = @{$dbt->getData($sql)};
 	my $html = "";
     my $classification = {};
