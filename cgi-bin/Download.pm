@@ -2035,8 +2035,8 @@ sub queryDatabase {
     ###########################################################################
 
     my %lumpcollno;
+    my %lumpgenusref;
     my %lumpoccref;
-    my %genusseen;
     my @lumpedDataRows = ();
     my @allDataRows = @dataRows;
     foreach my $row ( @dataRows ) {
@@ -2044,7 +2044,7 @@ sub queryDatabase {
         if (($q->param('output_data') =~ /genera|species/ || $q->param('lump_genera') eq 'YES')) {
             my $genus_string;
             if ($q->param('lump_genera') eq 'YES') {
-                $genus_string .= $row->{'collection_no'};
+                $genus_string = $row->{'collection_no'};
             }
           
             if ($q->param('output_data') =~ /species/i) {
@@ -2052,15 +2052,24 @@ sub queryDatabase {
             } else {
                 $genus_string .= $row->{'o.genus_name'};
             }
-            if ($genusseen{$genus_string}) {
+            if ($lumpgenusref{$genus_string}) {
                 $lump++;
+                if ( $row->{'o.abund_unit'} =~ /(^specimens$)|(^individuals$)/ && $row->{'o.abund_value'} > 0 )	{
+            # don't need to do this if you're lumping by other things, because
+            #  that lumps the genus occurrences anyway
+                  unless ( $q->param('lump_by_coord') eq 'YES' || $q->param('lump_by_interval') eq 'YES' || $q->param('lump_by_strat_unit') =~ /(group)|(formation)|(member)/i || $q->param('lump_by_ref') eq 'YES' )    {
+                    $lumpgenusref{$genus_string}->{'o.abund_value'} += $row->{'o.abund_value'};
+                    $row->{'o.abund_value'} = "";
+                    $row->{'o.abund_unit'} = "";
+                  }
+                }
             } else {
-                $genusseen{$genus_string}++;
+            	$lumpgenusref{$genus_string} = $row;
             }
         }
         # lump bed/group of beds scale collections with the exact same
         #  formation/member and geographic coordinate JA 21.8.04
-        if ( ( $q->param('lump_by_coord') eq 'YES' || $q->param('lump_by_interval') eq 'YES' || $q->param('lump_by_strat_unit') =~ /(group)|(formation)|(member)/i || $q->param('lump_by_ref') eq 'YES' ) )    {
+        if ( $q->param('lump_by_coord') eq 'YES' || $q->param('lump_by_interval') eq 'YES' || $q->param('lump_by_strat_unit') =~ /(group)|(formation)|(member)/i || $q->param('lump_by_ref') eq 'YES' )    {
 
             my $lump_string;
 
