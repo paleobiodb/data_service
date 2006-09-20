@@ -224,15 +224,16 @@ sub displayActions	{
 	}
 	$sth->finish();
 
-	for my $lag ( 1,7,30 )	{
-		my $sql = "SELECT count(*) as c, first_name, last_name FROM person, collections WHERE enterer_no=person_no AND to_days(collections.created) > to_days(now()) - $lag GROUP BY enterer_no";
-		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
-		$sth->execute();
-	
-		while ( my $row = $sth->fetchrow_hashref() ) {
-			$collslast{$lag}{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'c'};
+	for my $table ( "collections","opinions" )	{
+		for my $lag ( 1,7,30 )	{
+			my $sql = "SELECT count(*) as c, first_name, last_name FROM person, $table WHERE enterer_no=person_no AND to_days($table.created) > to_days(now()) - $lag GROUP BY enterer_no";
+			my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+			$sth->execute();
+
+			while ( my $row = $sth->fetchrow_hashref() ) {
+				$lastentries{$table}{$lag}{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'c'}; }
+			$sth->finish();
 		}
-		$sth->finish();
 	}
 	
 	@names = sort({ $lastlogin{$b} <=> $lastlogin{$a} } keys %lastlogin);
@@ -247,7 +248,11 @@ sub displayActions	{
 			printf "<tr><td align=\"center\">%d</td>",$i + 1;
 			print "<td>$names[$i]</td><td>$d</td>";
 			for my $lag ( 1,7,30 )	{
-				print "<td align=\"center\">$collslast{$lag}{$names[$i]}</td>";
+				print "<td align=\"center\">";
+				if ( $lastentries{'collections'}{$lag}{$names[$i]} || $lastentries{'opinions'}{$lag}{$names[$i]} )	{
+					print "$lastentries{'collections'}{$lag}{$names[$i]}/$lastentries{'opinions'}{$lag}{$names[$i]}";
+				}
+				print "</td>";
 			}
 			print "</tr>\n";
 		}
