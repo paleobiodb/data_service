@@ -1177,21 +1177,21 @@ sub displayRefResults {
         my $authname = $s->get('authorizer');
         $authname =~ s/\. //;
         printRefsCSV(\@data,$authname);
-        print qq|<a href="$HOST_URL/$OUTPUT_DIR/$authname.refs"><b>Download all the references</b></a> \n|;
-	} else {
-        if ($q->param('type') eq 'add') {
-            displayRefAdd();
-            return;
-        } else {
-	        print stdIncludes( "std_page_top" );
-            print "<center>\n<h3>Your search $query_description produced no matches</h3>\n";
-            print "<p>Please try again with fewer search terms.</p>\n</center>\n";
-            print "<center>\n<p>";
-        }
+        print qq|<a href="$HOST_URL/$OUTPUT_DIR/$authname.refs"><b>Download all the references</b></a> -\n|;
+	} else	{
+		if ($q->param('type') eq 'add')	{
+			displayRefAdd();
+			return;
+		} else	{
+			print stdIncludes( "std_page_top" );
+			print "<center>\n<h3>Your search $query_description produced no matches</h3>\n";
+			print "<p>Please try again with fewer search terms.</p>\n</center>\n";
+			print "<center>\n<p>";
+		}
 	}
 
     my $type = $q->param('type');
-	print qq| - <a href="$exec_url?action=displaySearchRefs&type=$type"><b>Do another search</b></a>\n|;
+	print qq|<a href="$exec_url?action=displaySearchRefs&type=$type"><b>Do another search</b></a>\n|;
 	print "</p></center><br>\n";
 
     if ($type eq 'add') {
@@ -3094,6 +3094,9 @@ sub displayCollectionDetailsPage {
         $row->{'authorizer'} .= ", $_" for (keys %unique_auth);
         $row->{'enterer'} .= ", $_" for (keys %unique_ent);
         $row->{'modifier'} .= ", $_" for (keys %unique_mod);
+        # many collections have no modifier, so the initial comma needs to be
+        #  stripped off
+        $row->{'modifier'} =~ s/^, //;
     }
 	
 	# get the max/min interval names
