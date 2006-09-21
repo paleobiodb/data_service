@@ -5690,12 +5690,22 @@ sub displayOccurrenceTable {
     }
 
     my @collections = map {int} @all_collections[$lower_limit .. ($upper_limit-1)];
+    my @other_colls = ();
+    if (0 < $lower_limit) {
+        @other_colls = map {int} @all_collections[0 .. $lower_limit-1];
+    }
+
     my %taxon_names = ();
     my %taxon_nos = ();
 
-
-    my $sql = "SELECT 0 reid_no, o.occurrence_no, o.collection_no, o.reference_no, o.authorizer_no, p1.name authorizer, o.taxon_no, o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name, o.abund_value, o.abund_unit FROM occurrences o LEFT JOIN person p1 ON p1.person_no=o.authorizer_no WHERE collection_no IN (".join(",",@collections).")"; 
+    my $sql = "SELECT 0 reid_no, o.occurrence_no, o.collection_no, o.reference_no, o.authorizer_no, p1.name authorizer, o.taxon_no, o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name, o.abund_value, o.abund_unit FROM occurrences o LEFT JOIN person p1 ON p1.person_no=o.authorizer_no WHERE collection_no IN (".join(",",@collections).")";
     my @occs = @{$dbt->getData($sql)};
+
+    if (@occs < @collections && @other_colls) {
+        my $sql = "SELECT 0 reid_no, o.occurrence_no, o.collection_no, o.reference_no, o.authorizer_no, p1.name authorizer, o.taxon_no, o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name, o.abund_value, o.abund_unit FROM occurrences o LEFT JOIN person p1 ON p1.person_no=o.authorizer_no WHERE collection_no IN (".join(",",@other_colls).")";
+        push @occs, @{$dbt->getData($sql)};
+
+    }    
 
     my %count_by_abund_unit;
     foreach my $row (@occs) {
