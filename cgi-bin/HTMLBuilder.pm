@@ -23,9 +23,9 @@ sub new {
 
         # For environment dropdown
         environment_general=>['marine indet.', 'terrestrial indet.'],
-        environment_carbonate=> ['carbonate indet.', 'peritidal', 'shallow subtidal indet.', 'open shallow subtidal', 'lagoonal/restricted shallow subtidal', 'sand shoal', 'reef, buildup or bioherm', 'intrashelf/intraplatform reef', 'platform/shelf-margin reef', 'slope/ramp reef', 'basin reef', 'deep subtidal ramp', 'deep subtidal shelf', 'deep subtidal indet.', 'offshore ramp', 'offshore shelf', 'offshore indet.', 'slope', 'basinal (carbonate)', 'basinal (siliceous)'],
-        environment_siliciclastic => ['marginal marine indet.', 'paralic indet.', 'lagoonal', 'coastal indet.', 'foreshore', 'shoreface', 'transition zone/lower shoreface', 'offshore', 'deltaic indet.', 'delta plain', 'interdistributary bay', 'delta front', 'prodelta', 'deep-water indet.', 'submarine fan', 'basinal (siliciclastic)'],
-        environment_terrestrial=>['terrestrial indet.','fluvial-lacustrine indet.',  'fluvial indet.', '"channel"', 'channel lag', 'coarse channel fill', 'fine channel fill', '"floodplain"', 'wet floodplain', 'dry floodplain', 'levee', 'crevasse splay', 'lacustrine indet.', 'lacustrine - large', 'lacustrine - small', 'pond', 'crater lake', 'karst indet.', 'fissure fill', 'cave', 'sinkhole', 'eolian indet.', 'dune', 'interdune', 'loess', 'fluvial-deltaic indet.', 'deltaic indet.', 'delta plain', 'interdistributary bay', 'estuary/bay', 'lacustrine deltaic indet.', 'lacustrine delta plain', 'lacustrine interdistributary bay', 'lacustrine delta front', 'lacustrine prodelta', 'alluvial fan', 'glacial', 'mire/swamp', 'spring', 'tar'],
+        environment_carbonate=> ['carbonate indet.', '', 'peritidal', 'shallow subtidal indet.', 'open shallow subtidal', 'lagoonal/restricted shallow subtidal', 'sand shoal', '', 'reef, buildup or bioherm', 'intrashelf/intraplatform reef', 'platform/shelf-margin reef', 'slope/ramp reef', 'basin reef', '', 'deep subtidal ramp', 'deep subtidal shelf', 'deep subtidal indet.', 'offshore ramp', 'offshore shelf', 'offshore indet.', '', 'slope', 'basinal (carbonate)', 'basinal (siliceous)'],
+        environment_siliciclastic => ['marine indet.', 'marginal marine indet.', 'coastal indet.', '', 'estuary/bay', 'lagoonal', 'paralic indet.', '', 'delta plain', 'interdistributary bay', 'delta front', 'prodelta', 'deltaic indet.', '', 'foreshore', 'shoreface', 'transition zone/lower shoreface', 'offshore', 'coastal indet.', '', 'submarine fan', 'basinal (siliciclastic)', 'basinal (siliceous)', 'basinal (carbonate)', 'deep-water indet.'],
+        environment_terrestrial=>['terrestrial indet.', '', 'fluvial indet.', 'alluvial fan', 'channel lag', 'coarse channel fill', 'fine channel fill', '"channel"', 'wet floodplain', 'dry floodplain', '"floodplain"', 'crevasse splay', 'levee', 'mire/swamp', 'fluvial-lacustrine indet.', 'delta plain', 'fluvial-deltaic indet.', '', 'lacustrine - large', 'lacustrine - small', 'pond', 'crater lake', 'lacustrine delta plain', 'lacustrine interdistributary bay', 'lacustrine delta front', 'lacustrine prodelta', 'lacustrine deltaic indet.', 'lacustrine indet.', '', 'dune', 'interdune', 'loess', 'eolian indet.', '', 'cave', 'fissure fill', 'sinkhole', 'karst indet.', '', 'tar', 'mire/swamp', 'spring', 'glacial'],
         # Map form parameters 
         mapsize=>[ '50%', '75%', '100%', '125%', '150%' ],
         projection=>[ 'Eckert IV', 'equirectangular', 'Mollweide', 'orthographic' ],
@@ -63,10 +63,10 @@ sub new {
     my $select_lists = {
         #period_max=>[\&_listFromHardList,'periods'],
         environment=>[\&_listFromList,
-            '','--General--','',@{$hard_lists->{'environment_general'}},
-            '', '--Carbonate--', '', @{$hard_lists->{'environment_carbonate'}},
-            '', '--Siliciclastic--', '', @{$hard_lists->{'environment_siliciclastic'}},
-            '', '--Terrestrial--','',@{$hard_lists->{'environment_terrestrial'}}], 
+            '','-- General --','',@{$hard_lists->{'environment_general'}},
+            '', '-- Carbonate marine --', '', @{$hard_lists->{'environment_carbonate'}},
+            '', '-- Siliciclastic marine --', '', @{$hard_lists->{'environment_siliciclastic'}},
+            '', '-- Terrestrial --','',@{$hard_lists->{'environment_terrestrial'}}], 
         lithadj=> [\&_listFromEnum,'collections','lithadj' ,'space_after'=>'pedogenic,lag,pebbly,very coarse,volcaniclastic,shelly/skeletal'],
         lithadj2=>[\&_listFromEnum,'collections','lithadj2','space_after'=>'pedogenic,lag,pebbly,very coarse,volcaniclastic,shelly/skeletal'],
         lithology1=>[\&_listFromEnum,'collections','lithology1','space_after'=>'conglomerate,marl,"carbonate",tar,siderite,quartzite'],
