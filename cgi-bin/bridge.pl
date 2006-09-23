@@ -3901,8 +3901,8 @@ sub rarefyAbundances	{
 	my @ids = ();
 	my $abundsum;
 	my $abundmax;
-    my $ntaxa;
-    my @abund;
+	my $ntaxa;
+	my @abund;
 	while ( my @abundrow = $sth->fetchrow_array() )	{
 		push @abund , $abundrow[0];
 		$abundsum = $abundsum + $abundrow[0];
@@ -3916,6 +3916,16 @@ sub rarefyAbundances	{
 	}
 	$sth->finish();
 
+	if ( $ntaxa < 2 ) 	{
+		my $reason = "it includes no abundance data";
+		if ( $ntaxa == 1 )	{
+			$reason = "only one taxon has abundance data";
+		}	
+		print "<center><h4>Diversity statistics not available</h4>\n<p class=\"medium\">Statistics for $collection_name (PBDB collection <a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>) cannot<br>be computed because $reason</p></center>\n\n";
+    		print "<p><div align=\"center\"><b><a href=\"bridge.pl?action=displaySearchColls&type=analyze_abundance\">Search again</a></b></div></p>";
+		return;
+	}
+
 	# compute Berger-Parker, Shannon-Wiener, and Simpson indices
 	my $bpd = $abundmax / $abundsum;
 	my $swh;
@@ -3928,11 +3938,7 @@ sub rarefyAbundances	{
 	$swh = $swh * -1;
 	$simpson = 1 - $simpson;
 	# Lande 1996 correction
-	if ( $ntaxa > 1 )	{
-		$simpson = $simpson * $ntaxa / ( $ntaxa - 1 );
-	} else	{
-		$simpson = 0;
-	}
+	$simpson = $simpson * $ntaxa / ( $ntaxa - 1 );
 	# compute Fisher's alpha using May 1975 eqns. 3.12 and F.13
 	my $alpha = 100;
 	my $lastalpha;
