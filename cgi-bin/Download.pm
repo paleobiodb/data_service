@@ -2073,6 +2073,7 @@ sub queryDatabase {
             #  that lumps the genus occurrences anyway
                   unless ( $q->param('lump_by_coord') eq 'YES' || $q->param('lump_by_interval') eq 'YES' || $q->param('lump_by_strat_unit') =~ /(group)|(formation)|(member)/i || $q->param('lump_by_ref') eq 'YES' )    {
                     $lumpgenusref{$genus_string}->{'o.abund_value'} += $row->{'o.abund_value'};
+                    $lumpgenusref{$genus_string}->{'o.abund_unit'} = $row->{'o.abund_unit'};
                     $row->{'o.abund_value'} = "";
                     $row->{'o.abund_unit'} = "";
                   }
@@ -2147,6 +2148,7 @@ sub queryDatabase {
                 #  to be added together JA 1.9.06
                     if ( $row->{'o.abund_unit'} =~ /(^specimens$)|(^individuals$)/ && $row->{'o.abund_value'} > 0 )	{
                         $lumpoccref{$row->{'collection_no'}.$genus_string}->{'o.abund_value'} += $row->{'o.abund_value'};
+                        $lumpoccref{$row->{'collection_no'}.$genus_string}->{'o.abund_unit'} = $row->{'o.abund_unit'};
                     }
                 }
             } else    {
