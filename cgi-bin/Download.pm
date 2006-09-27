@@ -327,6 +327,7 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", "YES") if ( $q->param("informal") eq 'YES');
         $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", "NO") if ($q->param("compendium_ranges") eq 'NO');
         $html .= $self->retellOptionsRow ( "Include occurrences without abundance data?", $q->param("without_abundance") ) if ($q->param("without_abundance") eq 'NO');
+        $html .= $self->retellOptionsRow ( "Include abundances if some genera or groups do not have them?", $q->param("incomplete_abundances") ) if ($q->param("incomplete_abundances") eq 'YES');
         $html .= $self->retellOptionsRow ( "Exclude classified occurrences?", $q->param("classified") ) if ($q->param("classified" !~ /classified|unclassified/i));
         $html .= $self->retellOptionsRow ( "Minimum # of specimens to compute mean abundance", $q->param("min_mean_abundance") ) if ($q->param("min_mean_abundance"));
         my @preservation = $q->param('preservation');
@@ -393,6 +394,9 @@ sub retellOptions {
     if ($q->param('output_data') =~ /occurrences|collections|specimens/) {
         # collection table fields
         my @collFields = ( "collection_no");
+        if ( $q->param('incomplete_abundances') eq "NO" )	{
+            $q->param('collections_collection_coverage' => "YES");
+        }
         foreach my $field ( @collectionsFieldNames ) {
             if ( $q->param ( 'collections_'.$field ) ) { push ( @collFields, 'collections_'.$field ); }
         }
@@ -1369,6 +1373,9 @@ sub queryDatabase {
     # Getting only collection data
     if ($q->param('output_data') =~ /specimens|occurrences|collections/) {
         my @collection_columns = $dbt->getTableColumns('collections');
+        if ( $q->param('incomplete_abundances') eq "NO" )	{
+            $q->param('collections_collection_coverage' => "YES");
+        }
         foreach my $c (@collection_columns) {
             next if ($c =~ /^(lat|lng)(deg|dec|min|sec|dir)$/); # handled below - handle these through special "coords" fields
             if ($q->param("collections_".$c)) {
@@ -1651,6 +1658,7 @@ sub queryDatabase {
     }
 
     $self->dbg("<b>Occurrences query:</b><br>\n$sql<BR>");
+print $sql;
 
     if (@form_errors) {
         print Debug::printErrors(\@form_errors);
@@ -1966,6 +1974,16 @@ sub queryDatabase {
                     next unless  ($get_regular);
                 }
             }
+            # delete abundances (not occurrences) if the collection excludes
+            #  some genera or some groups JA 27.9.06
+my $blah;
+            if ( $q->param('incomplete_abundances') eq "NO" && $row->{'c.collection_coverage'} =~ /some genera|some macrofossils|some microfossils/ )	{
+                $row->{'o.abund_value'} = "";
+                $row->{'o.abund_unit'} = "";
+$blah++;
+            }
+#print "$blah FOO",$q->param('incomplete_abundances')," $row->{'c.collection_coverage'}, $row->{'o.abund_value'}" ;
+	
             if ($row->{'specimens_exist'}) {
                 if ($q->param('output_data') eq 'genera' || $q->param('output_data') eq 'species') {
                     my $genus_string = $row->{'o.genus_name'};
