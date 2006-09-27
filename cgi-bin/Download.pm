@@ -1658,7 +1658,6 @@ sub queryDatabase {
     }
 
     $self->dbg("<b>Occurrences query:</b><br>\n$sql<BR>");
-print $sql;
 
     if (@form_errors) {
         print Debug::printErrors(\@form_errors);
@@ -1976,13 +1975,10 @@ print $sql;
             }
             # delete abundances (not occurrences) if the collection excludes
             #  some genera or some groups JA 27.9.06
-my $blah;
             if ( $q->param('incomplete_abundances') eq "NO" && $row->{'c.collection_coverage'} =~ /some genera|some macrofossils|some microfossils/ )	{
                 $row->{'o.abund_value'} = "";
                 $row->{'o.abund_unit'} = "";
-$blah++;
             }
-#print "$blah FOO",$q->param('incomplete_abundances')," $row->{'c.collection_coverage'}, $row->{'o.abund_value'}" ;
 	
             if ($row->{'specimens_exist'}) {
                 if ($q->param('output_data') eq 'genera' || $q->param('output_data') eq 'species') {
