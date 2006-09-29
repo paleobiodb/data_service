@@ -47,8 +47,8 @@
 		clearInterval(intervals[anim]);
 		clearInterval(intervals2[anim]);
 		if ( anim != 8 && anim != 9 )	{
-			intervals[anim] = setInterval("incrementSource(" + anim + ",'" + direction + "')", 250);
-			intervals2[anim] = setInterval("rotateFrame('" + firstframe + "'," + anim + ")",250);
+			intervals[anim] = setInterval("incrementSource(" + anim + ",'" + direction + "')", 500);
+			intervals2[anim] = setInterval("rotateFrame('" + firstframe + "'," + anim + ")",500);
 		} else	{
 			intervals[anim] = setInterval("incrementSource(" + anim + ",'" + direction + "')", 500);
 			intervals2[anim] = setInterval("rotateFrame('" + firstframe + "'," + anim + ")",500);
