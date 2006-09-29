@@ -1,3 +1,4 @@
+
 //some common java script functions which are used throughout the web site.
 //note, these are for use on BOTH the PUBLIC and PRIVATE page.
 //created by rjp, 1/2004.
