@@ -386,7 +386,7 @@ sub occurrenceMisspellingForm {
         print "</h4>";
         print '</div>';
 
-        push @notes, 'If only a genus name is listed in the suggestions, the genus name will be changed but the species left the same. Bolded taxon names are names that exist in both the the occurrences and authority tables. Bolded collection names have occurrences which you have permission to edit, while unbolded names won\'t be changed. Suggestions are generated from existing occurrences and authorities records, so if you see a typo there you can click the name to see the source of the suggestion and track down the authorizer. ';
+        push @notes, 'If only a genus name is listed in the suggestions, the genus name will be changed but the species left the same. Bolded taxon names are names that exist in both the the occurrences and authority tables. Bolded collection names have occurrences which you have permission to edit, while unbolded names won\'t be changed. Suggestions are generated from existing occurrences and authorities records, so if you see a typo there you can click the name to see the source of the suggestion and track down the authorizer. Suggestions without radio buttons have no records which you have permission to edit.';
         if (@notes) {
             print '<div align="left"><div class=small>'.
                 join("<br><br>",@notes).
