@@ -127,7 +127,13 @@ sub properLastName {
 	if ((!$input) || $input eq "") { return 0; }
 	
 	#Debug::dbPrint("properLastName($input) returns " . 
-	
+
+    # If its just a bunch of capital letters repress it
+    # Take lengths <= 3 to be acronyms (such as ETE)
+	if ($input =~ m/^[A-Z][A-Z]/ && length($input) > 3) {
+		return 0;	
+	}
+    # Too many weird cases like "de Something" or "le Something III", or whatever, do a simple check for now
 	if ($input !~ m/^[A-Za-z,-.\'][A-Za-z ,-.\'\W]*$/) {
 		return 0;	
 	}

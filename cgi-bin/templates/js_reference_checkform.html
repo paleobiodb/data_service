@@ -14,6 +14,7 @@
     function checkForm() {
 		var year = /^[1-2][0-9]{3}$/;
 		var capital = /[A-Z]/;
+		var all_caps = /^[A-Z][A-Z]/;
 		var frm = document.forms[0];
 		var errors = "";
 
@@ -46,7 +47,9 @@
                 if (! frm.author1last.value.match(last_name_anon)) {
 				    errors += "First author last name should have a capital letter\n"; 
                 }
-			}
+			} else if ( all_caps.test ( frm.author1last.value ) == true && frm.author1last.value.length > 3) {
+			    errors += "First author name can not consist of all capital letters\n"; 
+            }
 		}
 
 		// Second Author Initials
@@ -54,7 +57,7 @@
 			// Check for a capital letter
 			if ( capital.test ( frm.author2init.value ) == false ) {
 				errors += "Second author initials should have a capital letter.\n"; 
-			}
+			} 
 		}
 
 		// Second Author Last
@@ -62,7 +65,9 @@
 			// Check for a capital letter
 			if ( capital.test ( frm.author2last.value ) == false ) {
 				errors += "Second author last name should have a capital letter.\n"; 
-			}
+			} else if ( all_caps.test ( frm.author2last.value ) == true && frm.author2last.value.length > 3) {
+			    errors += "Second author name can not consist of all capital letters\n"; 
+            }
 		}
 
 		// OtherAuthors
