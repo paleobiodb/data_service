@@ -442,12 +442,12 @@ sub mapFinishImage {
     close AIFOOT;
 
     open JPG,">$GIF_DIR/$jpgname";
-    $image->Write(file=>\*JPG);
+    $image->Write(file=>\*JPG,filename=>"$GIF_DIR/$jpgname");
     close JPG;
     chmod 0664, "$GIF_DIR/$jpgname";
 
     open PICT,">$GIF_DIR/$pictname";
-    $image->Write(file=>\*PICT);
+    $image->Write(file=>\*PICT,filename=>"$GIF_DIR/$pictname");
     close PICT;
     chmod 0664, "$GIF_DIR/$pictname";
 
