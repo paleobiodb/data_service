@@ -74,7 +74,7 @@ function checkFields() {
           </td>
           <td colspan=2>
             Measurements are of the entire body? 
-            <input id="entire_body" type=checkbox value="yes">yes
+            <select id="entire_body"><option value="">no</option><option value="yes">yes</option></select>
           </td>
         </tr>
         <tr>
@@ -145,7 +145,7 @@ function checkFields() {
   <tr>
     <td valign=top>
       <b>Adult polymorphism/dimorphism?</b>
-      <input id="polymorph" type=checkbox value="yes">yes
+      <select id="polymorph"><option value="">no</option><option value="yes">yes</option></select>
       <br>
     </td>
     <td>
@@ -161,6 +161,7 @@ function checkFields() {
   <tr>
     <td valign=top><b>General environment</b></td>
     <td>
+      <input id="taxon_environment" type=hidden value="" replace="NO">
       <input id="taxon_environment" type=checkbox value="hypersaline">hypersaline
       <input id="taxon_environment" type=checkbox value="marine">marine
       <input id="taxon_environment" type=checkbox value="brackish">brackish
@@ -199,7 +200,7 @@ function checkFields() {
     </td>
     <td>
       <b>Brooding?</b>
-      <input id="brooding" type=checkbox value="yes">yes
+      <select id="brooding"><option value="">no</option><option value="yes">yes</option></select>
     </td>
   </tr>
 </table>

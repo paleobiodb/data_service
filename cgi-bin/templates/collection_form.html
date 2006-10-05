@@ -342,6 +342,7 @@ function doCheckFieldsTaphonomy() {
     <tr>
       <td valign="top" colspan="2"><b>Research group(s):</b></td>
       <td colspan="2">
+        <input id="research_group" type="hidden" value="" replace="NO">
         <span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="decapod"> decapod</span>
         <span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="divergence"> divergence</span>
 	<span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="ETE"> ETE</span>
@@ -597,7 +598,7 @@ function doCheckFieldsTaphonomy() {
   <h4>Primary lithology</h4>
   <span class="verysmall"><select class="verysmall" id="lithification"></select></span>
     <span class="verysmall"><select class="verysmall" id="lithology1"></select></span>
-  &nbsp;Fossils collected from this lithology?<input id="fossilsfrom1" type=checkbox value="Y">
+  &nbsp;Fossils collected from this lithology?&nbsp;<select name="fossilsfrom1"><option value="">no</option><option value="Y">yes</option></select>
   <br>
   <i><p class="small">See the 
   <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">tip sheet</A>
@@ -623,7 +624,7 @@ function doCheckFieldsTaphonomy() {
   <H4>Secondary lithology</H4>
   <span class="verysmall"><select class="verysmall" id="lithification2"></select></span>
 	<span class="verysmall"><select class="verysmall" id="lithology2"></select></span>
-  &nbsp;Fossils collected from this lithology?<input id="fossilsfrom2" type=checkbox value="Y">
+  &nbsp;Fossils collected from this lithology?&nbsp;<select name="fossilsfrom2"><option value="">no</option><option value="Y">yes</option></select>
   <p>
   <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">Lithology adjectives</A>:
   <br>
@@ -711,6 +712,7 @@ function doCheckFieldsTaphonomy() {
   <table>
     <tr>
       <td>
+        <input id="pres_mode" type="hidden" value="" replace="NO"> 
         <span class="tiny"><input id="pres_mode" type=checkbox value="body"> body
       </td>
       <td>
@@ -888,7 +890,9 @@ original material is preserved!</i></p>
 </div> <!-- div show=taphonomy end -->
 
 	  <A HREF="javascript:tipsPopup('/public/tips/tips.html#AssemblageComponents')">Assemblage components</A>:
-      <span class="tiny"><input id="assembl_comps" type=checkbox value="macrofossils"> macrofossils
+      <span class="tiny">
+      <input id="assembl_comps" type="hidden" value="" replace="NO">
+      <input id="assembl_comps" type=checkbox value="macrofossils"> macrofossils
       <input id="assembl_comps" type=checkbox value="mesofossils"> mesofossils
       <input id="assembl_comps" type=checkbox value="microfossils"> microfossils
       </span>
@@ -964,6 +968,7 @@ original material is preserved!</i></p>
   <table>
   <tr>
     <td>
+      <input id="feed_pred_traces" type="hidden" value="" replace="NO">
       <input id="feed_pred_traces" type=checkbox value="drill holes"> drill holes
     </td>
     <td>
@@ -1063,6 +1068,7 @@ original material is preserved!</i></p>
   <table border=0>
   <tr>
     <td valign=top>
+      <input id="collection_coverage" type="hidden" value="" replace="NO">
       <nobr>
       <span class="tiny"><input id="collection_coverage" type=checkbox value="all macrofossils"> all macrofossils</span>
       </nobr>
@@ -1112,17 +1118,17 @@ original material is preserved!</i></p>
   </tr>
   <tr>
     <td>
-      <span class="tiny"><input id="coll_meth" type=checkbox value="field collection"> field 
-      collection
+      <input id="coll_meth" type="hidden" value="" replace="NO">
+      <span class="tiny"><input id="coll_meth" type=checkbox value="field collection"> field collection</span>
     </td>
     <td>
-      <span class="tiny"><input id="coll_meth" type=checkbox value="observed (not collected)"> observed (not collected)
+      <span class="tiny"><input id="coll_meth" type=checkbox value="observed (not collected)"> observed (not collected)</span>
     </td>
     <td>
-      <span class="tiny"><input id="coll_meth" type=checkbox value="survey of museum collection"> survey of<br>museum collection
+      <span class="tiny"><input id="coll_meth" type=checkbox value="survey of museum collection"> survey of<br>museum collection</span>
     </td>
     <td>
-      <span class="tiny"><input type=checkbox> rock shop
+      <span class="tiny"><input type=checkbox> rock shop</span>
     </td>
   </tr>
   </table>

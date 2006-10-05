@@ -88,6 +88,7 @@ sub new {
         dotcolor=>[\&_listFromHardList,'mapcolors'],
         country=>[\&_countryList],
         time_scale=>[\&_timeScaleList],
+        opinion_classification_quality=>[\&_listFromEnum,'opinions','classification_quality'],
         month=>[$months], day_of_month=>[$day_of_month], year=>[$years],
 
         # Specimen measurement form 
@@ -427,7 +428,7 @@ sub writeBlock {
         my $value = '';
         if ($block->{'type'} eq 'hidden') {
             # For hidden attributes (like action) the default value takes precedence if it exists
-            if ($attribs->{'value'}) {
+            if ($attribs->{'value'} || lc($attribs->{'replace'}) eq 'no') {
                 $value = escapeHTML($attribs->{'value'});
             } elsif (exists ($vars->{$block->{'name'}})) {
                 $value = escapeHTML($vars->{$block->{'name'}});
@@ -497,7 +498,7 @@ sub writeBlock {
                     $key.= $self->writeBlock($c,$vars,$read_only,$depth);
                 }
                 $key =~ s/^\s*|\s*$//gs;
-                my $value = ($o->{'attribs'}{'value'} || $key);
+                my $value = (exists $o->{'attribs'}{'value'}) ? $o->{'attribs'}{'value'} : $key;
                 push @keys,$key;
                 push @values,$value;
                 if ($o->{'attribs'}{'other'} =~ /selected/ && ! exists $vars->{$block->{'name'}}) {
@@ -558,10 +559,10 @@ sub parseAttribs {
     my $self = shift;
     my $txt = shift;
     my %attribs;
-    while ($txt =~ s/(?:^|\s)(autofill|show|hide|type|id|value|name)=(['"])(.*?)\2//) {
+    while ($txt =~ s/(?:^|\s)(autofill|show|hide|type|id|value|name|replace)=(['"])(.*?)\2//) {
         $attribs{$1} = $3;
     }
-    while ($txt =~ s/(?:^|\s)(autofill|show|hide|type|id|value|name)=(\w+)//) {
+    while ($txt =~ s/(?:^|\s)(autofill|show|hide|type|id|value|name|replace)=(\w+)//) {
         $attribs{$1} = $2;
     }
     if ($txt !~ /^\s*$/) {
