@@ -357,13 +357,13 @@ sub mapFinishImage {
     print AI "0 To\n";
     printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+5,$AITOP-$height-8;
     my $mycolor = $aicol{'black'};
-    $mycolor =~ s/ K/ k/;
+    $mycolor =~ s/ XA/ Xa/;
     printf AI "0 Tr\n0 O\n%s\n",$mycolor;
     print AI "/_CenturyGothic 10 Tf\n";
     printf AI "0 Tw\n";
     print AI "(plotting software c 2002-2006 J. Alroy) Tx 1 0 Tk\nTO\n";
     print AI "0 To\n";
-    printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+111,$AITOP-$height-10;
+    printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+86.5,$AITOP-$height-10;
     print AI "/_CenturyGothic 18 Tf\n";
     print AI "(o) Tx 1 0 Tk\nTO\n";
 
@@ -410,11 +410,11 @@ sub mapFinishImage {
             $scoteseoffset = 12;
         }
         print AI "0 To\n";
-        printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$width-270,$AITOP-$height-8-$scoteseoffset;
+        printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$width-184,$AITOP-$height-8-$scoteseoffset;
         print AI "/_CenturyGothic 10 Tf\n";
         print AI "(paleogeography c 2002 C. R. Scotese) Tx 1 0 Tk\nTO\n";
         print AI "0 To\n";
-        printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$width-128,$AITOP-$height-10-$scoteseoffset;
+        printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$width-100.5,$AITOP-$height-10-$scoteseoffset;
         print AI "/_CenturyGothic 18 Tf\n";
         print AI "(o) Tx 1 0 Tk\nTO\n";
     }
@@ -1045,65 +1045,41 @@ sub mapSetupImage {
     # this color is needed to fool GD into NOT anti-aliasing fonts (!)
     $col{'unantialiased'} = $im->colorAllocate(-1,-1,-1);
 
-    $col{'white'} = $im->colorAllocate(255,255,255);
-    $aicol{'white'} = "0.00 0.00 0.00 0.00 K";
-    $col{'borderblack'} = $im->colorAllocate(1,1,1);
-    $aicol{'borderblack'} = "0.02 0.02 0.02 0.99 K";
-    $col{'black'} = $im->colorAllocate(0,0,0);
-    $aicol{'black'} = "0.00 0.00 0.00 1.00 K";
-    $col{'gray'} = $im->colorAllocate(159,159,159);
-    $aicol{'gray'} = "0.34 0.24 0.21 0.06 K";
-    $col{'light gray'} = $im->colorAllocate(223,223,223);
-    $aicol{'light gray'} = "0.12 0.08 0.06 0.00 K";
-    $col{'offwhite'} = $im->colorAllocate(254,254,254);
-    $aicol{'offwhite'} = "0.0039 0.0039 0.00 0.00 K";
-    $col{'dark red'} = $im->colorAllocate(127,0,0);
-    $aicol{'dark red'} = "0.33 0.94 0.95 0.25 K";
-    $col{'red'} = $im->colorAllocate(255,0,0);
-    $aicol{'red'} = "0.01 0.96 0.91 0.0 K";
-    $col{'pink'} = $im->colorAllocate(255,159,255);
-    $aicol{'pink'} = "0.03 0.38 0.00 0.00 K";
-    $col{'brown'} = $im->colorAllocate(127,63,0);
-    $aicol{'brown'} = "0.33 0.61 0.98 0.25 K";
-    $col{'light brown'} = $im->colorAllocate(223,191,159);
-    $aicol{'light brown'} = "0.11 0.20 0.28 0.02 K";
-    $col{'ochre'} = $im->colorAllocate(191,127,0);
-    $aicol{'ochre'} = "0.20 0.41 0.97 0.07 K";
-    $col{'orange'} = $im->colorAllocate(255,127,0);
-    $aicol{'orange'} = "0.02 0.50 0.93 0.00 K";
-    $col{'light orange'} = $im->colorAllocate(255,159,63);
-    $aicol{'light orange'} = "0.02 0.24 0.58 0.00 K";
-    $col{'yellow'} = $im->colorAllocate(255,255,0);
-    $aicol{'yellow'} = "0.03 0.02 0.91 0.00 K";
-    $col{'light yellow'} = $im->colorAllocate(255,255,127);
-    $aicol{'light yellow'} = "0.02 0.01 0.50 0.00 K";
-    $col{'green'} = $im->colorAllocate(0,255,0);
-    $aicol{'green'} = "0.93 0.00 1.00 0.00 K";
-    $col{'light green'} = $im->colorAllocate(127,255,127);
-    $aicol{'light green'} = "0.51 0.00 0.58 0.00 K";
-    $col{'turquoise'} = $im->colorAllocate(95,191,159);
-    $aicol{'turquoise'} = "0.64 0.02 0.33 0.00 K";
-    $col{'jade'} = $im->colorAllocate(0,143,63);
-    $aicol{'jade'} = "0.93 0.05 0.91 0.01 K";
-    $col{'teal'} = $im->colorAllocate(0,127,127);
-    $aicol{'teal'} = "0.95 0.17 0.40 0.04 K";
-    $col{'dark blue'} = $im->colorAllocate(0,63,191);
-    $aicol{'dark blue'} = "0.94 0.64 0.02 0.00 K";
-    $col{'blue'} = $im->colorAllocate(0,127,255);
-    $aicol{'blue'} = "0.91 0.29 0.00 0.00 K";
-    $col{'light blue'} = $im->colorAllocate(111,191,255);
-    $aicol{'light blue'} = "0.59 0.07 0.00 0.00 K";
-    $col{'sky blue'} = $im->colorAllocate(79,127,255);
-    $aicol{'sky blue'} = "0.72 0.35 0.00 0.00 K";
-    $col{'lavender'} = $im->colorAllocate(127,127,255);
-    $aicol{'lavender'} = "0.53 0.42 0.00 0.00 K";
-    $col{'violet'} = $im->colorAllocate(191,0,255);
-    $aicol{'violet'} = "0.18 0.94 0.00 0.00 K";
-    $col{'light violet'} = $im->colorAllocate(191,159,255);
-    $aicol{'light violet'} = "0.24 0.33 0.00 0.00 K";
-    $col{'purple'} = $im->colorAllocate(223,0,255);
-    $aicol{'purple'} = "0.06 0.93 0.00 0.00 K";
+    my %rgbs = ("white", "255,255,255",
+    "borderblack", "1,1,1",
+    "black", "0,0,0",
+    "gray", "159,159,159",
+    "light gray", "223,223,223",
+    "offwhite", "254,254,254",
+    "dark red", "127,0,0",
+    "red", "255,0,0",
+    "pink", "255,159,255",
+    "brown", "127,63,0",
+    "light brown", "223,191,159",
+    "ochre", "191,127,0",
+    "orange", "255,127,0",
+    "light orange", "255,159,63",
+    "yellow", "255,255,0",
+    "light yellow", "255,255,127",
+    "green", "0,255,0",
+    "light green", "127,255,127",
+    "turquoise", "95,191,159",
+    "jade", "0,143,63",
+    "teal", "0,127,127",
+    "dark blue", "0,63,191",
+    "blue", "0,127,255",
+    "light blue", "111,191,255",
+    "sky blue", "79,127,255",
+    "lavender", "127,127,255",
+    "violet", "191,0,255",
+    "light violet", "191,159,255",
+    "purple","223,0,255");
 
+    for my $color ( keys %rgbs )	{
+        my ($r,$g,$b) = split /,/,$rgbs{$color};
+        $col{$color} = $im->colorAllocate($r,$g,$b);
+        $aicol{$color} = sprintf "%.2f %.2f %.2f XA",$r/255, $g/255, $b/255;
+    }
 	# create an interlaced GIF with a white background
 	$im->interlaced('true');
 	# I'm not sure what this does, it seems to have no effect one way or
@@ -1242,7 +1218,7 @@ sub mapSetupImage {
         my $poly = new GD::Polygon;
         print AI "u\n";  # start the group
         my $tempcolor = $aicol{$crustcolor};
-        $tempcolor =~ s/ K/ k/;
+        $tempcolor =~ s/ XA/ Xa/;
         print AI "$tempcolor\n";
         print AI "0.5 w\n";
         printf AI "%.1f %.1f m\n",$AILEFT,$AITOP;
@@ -1545,7 +1521,7 @@ sub mapDrawPoints{
                 print MAPOUT "&latdeg=$latdeg&latdec_range=$latdec&latdir=$latdir&lngdeg=$lngdeg&lngdec_range=$lngdec&lngdir=$lngdir\">\n";
 
                 my $mycolor = $aicol{$dotcolor};
-                $mycolor =~ s/ K/ k/;
+                $mycolor =~ s/ XA/ Xa/;
                 if ( $dotshape !~ /circles/ && $dotshape !~ /crosses/ )	{
                     print AI "0 O\n";
                     print AI "$mycolor\n";
@@ -2140,7 +2116,7 @@ sub drawBackground	{
 	$edgecolor = $col{$q->param('coastlinecolor')};
 	$aiedgecolor = $aicol{$q->param('coastlinecolor')};
 	my $mycolor = $aicol{$q->param('mapbgcolor')};
-	$mycolor =~ s/ K/ k/;
+	$mycolor =~ s/ XA/ Xa/;
 	print AI "u\n";  # start the group
 	# gray will have to do (previously this was offwhite; I'm not sure
 	#  whose fault that was) JA 2.5.06
@@ -2165,11 +2141,11 @@ sub drawBackground	{
 		$im->filledRectangle(0,0+$poleoffset,$width,$height-$poleoffset,$col{$mapbgcolor});
   		print AI "0 O\n";
             	printf AI "%s\n",$mycolor;
-		printf AI "%.1f %.1f m\n",$AILEFT,$AITOP;
-		printf AI "%.1f %.1f L\n",$AILEFT+$width,$AITOP;
+		printf AI "%.1f %.1f m\n",$AILEFT,$AITOP-$poleoffset;
+		printf AI "%.1f %.1f L\n",$AILEFT+$width,$AITOP-$poleoffset;
 		printf AI "%.1f %.1f L\n",$AILEFT+$width,$AITOP-$height;
 		printf AI "%.1f %.1f L\n",$AILEFT,$AITOP-$height;
-		printf AI "%.1f %.1f L\n",$AILEFT,$AITOP;
+		printf AI "%.1f %.1f L\n",$AILEFT,$AITOP-$poleoffset;
 	} else	{
 	# now draw the background of the globe proper
 		my $poly = new GD::Polygon;
