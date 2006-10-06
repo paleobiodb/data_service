@@ -359,12 +359,12 @@ sub mapFinishImage {
     my $mycolor = $aicol{'black'};
     $mycolor =~ s/ K/ k/;
     printf AI "0 Tr\n0 O\n%s\n",$mycolor;
-    print AI "/_Courier 10 Tf\n";
+    print AI "/_CenturyGothic 10 Tf\n";
     printf AI "0 Tw\n";
     print AI "(plotting software c 2002-2006 J. Alroy) Tx 1 0 Tk\nTO\n";
     print AI "0 To\n";
     printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+111,$AITOP-$height-10;
-    print AI "/_Courier 18 Tf\n";
+    print AI "/_CenturyGothic 18 Tf\n";
     print AI "(o) Tx 1 0 Tk\nTO\n";
 
     # print the Ma or year counter except if you are computing a small image
@@ -411,11 +411,11 @@ sub mapFinishImage {
         }
         print AI "0 To\n";
         printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$width-270,$AITOP-$height-8-$scoteseoffset;
-        print AI "/_Courier 10 Tf\n";
+        print AI "/_CenturyGothic 10 Tf\n";
         print AI "(paleogeography c 2002 C. R. Scotese) Tx 1 0 Tk\nTO\n";
         print AI "0 To\n";
         printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$width-128,$AITOP-$height-10-$scoteseoffset;
-        print AI "/_Courier 18 Tf\n";
+        print AI "/_CenturyGothic 18 Tf\n";
         print AI "(o) Tx 1 0 Tk\nTO\n";
     }
 
@@ -1241,8 +1241,15 @@ sub mapSetupImage {
     # this is the main crust cell drawing routine
         my $poly = new GD::Polygon;
         print AI "u\n";  # start the group
+        my $tempcolor = $aicol{$crustcolor};
+        $tempcolor =~ s/ K/ k/;
+        print AI "$tempcolor\n";
+        print AI "0.5 w\n";
+        printf AI "%.1f %.1f m\n",$AILEFT,$AITOP;
         my $lastsep = 1;
         my $bad = 0;
+        my $lastx1 = "";
+        my $lasty1 = "";
         push @crustlng , $crustlng[0];
         push @crustlngraw , $crustlng[0];
         push @crustlat , "";
@@ -1262,13 +1269,15 @@ sub mapSetupImage {
                 my $y1 = $self->getLat($crustlat[$c]);
                 if ( $x1 !~ /NaN/ && $y1 !~ /NaN/ )	{
                     $poly->addPt($x1,$y1);
-    # WARNING: I'm too lazy/rushed to rewrite this section to fill the plates,
-    #  so right now it just draws the borders - this may produce nonsense
-                    print AI "$aicol{$crustcolor}\n";
-                    print AI "0.5 w\n";
-                    printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
-                    printf AI "%.1f %.1f l\n",$AILEFT+$x2,$AITOP-$y2;
-                    print AI "S\n";
+    # finished writing this (too lazy to do it before) 6.10.06
+                    if ( ! $lastx1 && ! $lasty1 )  {
+                        print AI "f\n";
+                        printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
+                    } else	{
+                        printf AI "%.1f %.1f l\n",$AILEFT+$x1,$AITOP-$y1;
+                    }
+                    $lastx1 = $x1;
+                    $lasty1 = $y1;
                 } else	{
                     $bad++;
                 }
@@ -1282,14 +1291,15 @@ sub mapSetupImage {
                     $im->filledPolygon($poly,$col{$crustcolor});
                 }
                 $bad = 0;
-                print AI "U\n";  # terminate the group
+                $lastx1 = "";
+                $lasty1 = "";
                 $poly = new GD::Polygon;
-                print AI "u\n";  # start the group
             }
         }
     # finish the last plate
         if ( $bad == 0 )	{
             $im->filledPolygon($poly,$col{$crustcolor});
+            print AI "f\n";
             print AI "U\n";  # terminate the group
         }
     }
