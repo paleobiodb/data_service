@@ -606,7 +606,7 @@ sub displayHomePage {
 sub displayMapForm {
 
 	# List fields that should be preset
-	my %vars = ( 'mapsize'=>'100%', 'projection'=>'equirectangular', 'maptime'=>'', 'mapfocus'=>'standard (0,0)', 'mapscale'=>'X 1', 'mapresolution'=>'medium', 'mapbgcolor'=>'white', 'crustcolor'=>'none', 'gridsize'=>'none', 'gridcolor'=>'gray', 'gridposition'=>'in back', 'linethickness'=>'medium', 'latlngnocolor'=>'none', 'coastlinecolor'=>'gray', 'borderlinecolor'=>'none', 'usalinecolor'=>'none', 'pointsize1'=>'large', 'pointshape1'=>'circles', 'dotcolor1'=>'red', 'dotborder1'=>'no', 'mapsearchfields2'=>'', 'pointsize2'=>'medium', 'pointshape2'=>'squares', 'dotcolor2'=>'blue', 'dotborder2'=>'black', 'mapsearchfields3'=>'', 'pointsize3'=>'medium', 'pointshape3'=>'triangles', 'dotcolor3'=>'yellow', 'dotborder3'=>'black', 'mapsearchfields4'=>'', 'pointsize4'=>'medium', 'pointshape4'=>'diamonds', 'dotcolor4'=>'green', 'dotborder4'=>'black' );
+	my %vars = ( 'mapsize'=>'100%', 'projection'=>'equirectangular', 'maptime'=>'', 'mapfocus'=>'standard (0,0)', 'mapscale'=>'X 1', 'mapresolution'=>'medium', 'mapbgcolor'=>'white', 'crustcolor'=>'none', 'gridsize'=>'none', 'gridcolor'=>'gray', 'gridposition'=>'in back', 'linethickness'=>'medium', 'latlngnocolor'=>'none', 'coastlinecolor'=>'gray', 'borderlinecolor'=>'none', 'usalinecolor'=>'none', 'pointsize1'=>'large', 'pointshape1'=>'circles', 'dotcolor1'=>'red', 'dotborder1'=>'no', 'mapsearchfields2'=>'', 'pointsize2'=>'large', 'pointshape2'=>'squares', 'dotcolor2'=>'blue', 'dotborder2'=>'no', 'mapsearchfields3'=>'', 'pointsize3'=>'large', 'pointshape3'=>'triangles', 'dotcolor3'=>'yellow', 'dotborder3'=>'no', 'mapsearchfields4'=>'', 'pointsize4'=>'large', 'pointshape4'=>'diamonds', 'dotcolor4'=>'green', 'dotborder4'=>'no' );
 	
 	# Prefs have higher precedence;
 	my %pref = getPreferences($s->get('enterer_no'));
@@ -2822,7 +2822,7 @@ IS NULL))";
             my $in_str = join(",", @countries);
             push @where, "c.country IN ($in_str)";
         } else {
-            push @where, "c.country LIKE ".$dbh->quote($q->param('country'));
+            push @where, "c.country LIKE ".$dbh->quote($options{'country'});
         }
     }
 
