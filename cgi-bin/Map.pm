@@ -1247,7 +1247,7 @@ sub mapSetupImage {
                     $poly->addPt($x1,$y1);
     # finished writing this (too lazy to do it before) 6.10.06
                     if ( ! $lastx1 && ! $lasty1 )  {
-                        print AI "f\n";
+                        print AI "F\n";
                         printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
                     } else	{
                         printf AI "%.1f %.1f l\n",$AILEFT+$x1,$AITOP-$y1;
@@ -1275,7 +1275,7 @@ sub mapSetupImage {
     # finish the last plate
         if ( $bad == 0 )	{
             $im->filledPolygon($poly,$col{$crustcolor});
-            print AI "f\n";
+            print AI "F\n";
             print AI "U\n";  # terminate the group
         }
     }
