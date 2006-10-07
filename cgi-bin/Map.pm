@@ -1252,6 +1252,10 @@ sub mapSetupImage {
                     } else	{
                         printf AI "%.1f %.1f l\n",$AILEFT+$x1,$AITOP-$y1;
                     }
+                    if ( ! $firstx1 )	{
+                        $firstx1 = $x1;
+                        $firsty1 = $y1;
+                    }
                     $lastx1 = $x1;
                     $lasty1 = $y1;
                 } else	{
@@ -1263,10 +1267,34 @@ sub mapSetupImage {
     # finish up with this plate and start a new one
             if ( $crustlng[$c+1] =~ /#/ )	{
                 $lastsep = $c + 2;
-                if ( $bad == 0 )	{
-                    $im->filledPolygon($poly,$col{$crustcolor});
+        # stretch the polygon up to the edge of the map if necessary
+                if ( $bad > 0 && $bad < 3 )	{
+                    if ( $firstx1 < $width / 10 && $firstx1 / $width < $firsty1 / $height && $firstx1 / $width < ($height - $firsty1) / $height )	{
+                        $poly->addPt(0,$firsty1);
+                        $poly->addPt(0,$lasty1);
+                        printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$firsty1;
+                        printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$lasty1;
+                    } elsif ( $firstx1 > $width * 0.9 && $firstx1 / $width > $firsty1 / $height && $firstx1 / $width > ($height - $firsty1) / $height )	{
+                        $poly->addPt($width,$firsty1);
+                        $poly->addPt($width,$lasty1);
+                        printf AI "%.1f %.1f l\n",$AILEFT+$width,$AITOP-$firsty1;
+                        printf AI "%.1f %.1f l\n",$AILEFT+$width,$AITOP-$lasty1;
+                    } elsif ( $firsty1 < $height / 10 && $firsty1 / $height < $firstx1 / $width && $firsty1 / $height < ($width - $firstx1) / $width )	{
+                        $poly->addPt($firstx1,0);
+                        $poly->addPt($lastx1,0);
+                        printf AI "%.1f %.1f l\n",$AILEFT+$firstx1,$AITOP;
+                        printf AI "%.1f %.1f l\n",$AILEFT+$lastx1,$AITOP;
+                    } elsif ( $firsty1 > $height * 0.9 && $firsty1 / $height > $firstx1 / $width && $firsty1 / $height > ($width - $firstx1) / $width )	{
+                        $poly->addPt($firstx1,$height);
+                        $poly->addPt($lastx1,$height);
+                        printf AI "%.1f %.1f l\n",$AILEFT+$firstx1,$AITOP-$height;
+                        printf AI "%.1f %.1f l\n",$AILEFT+$lastx1,$AITOP-$height;
+                    }
                 }
+                $im->filledPolygon($poly,$col{$crustcolor});
                 $bad = 0;
+                $firstx1 = "";
+                $firsty1 = "";
                 $lastx1 = "";
                 $lasty1 = "";
                 $poly = new GD::Polygon;
