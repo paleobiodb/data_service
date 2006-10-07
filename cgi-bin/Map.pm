@@ -158,23 +158,23 @@ sub buildMap {
         }
 
         if ($ptset > 1) {
-            $extraField = $fieldnames{$q->param('mapsearchfields'.$ptset)} 
-                                        || 
+            $extraField = $fieldnames{$q->param('mapsearchfields'.$ptset)} || 
                           $q->param('mapsearchfields'.$ptset);
             $extraFieldValue = $q->param('mapsearchterm'.$ptset);
+            %toptions = %options;
 
             if ($extraField && $extraFieldValue) {
-                $options{$extraField} = $extraFieldValue;
+                $toptions{$extraField} = $extraFieldValue;
                 # This makes is to both lithology1 and lithology2 get searched
-                if ($options{'lithology1'}) {
-                    $options{'lithologies'} = $options{'lithology1'};
-                    delete $options{'lithology1'};
+                if ($toptions{'lithology1'}) {
+                    $toptions{'lithologies'} = $toptions{'lithology1'};
+                    delete $toptions{'lithology1'};
                 }
-                if ($options{'interval_name'}) {
-                    ($options{'eml_max_interval'},$options{'max_interval'}) = TimeLookup::splitInterval($dbt,$options{'interval_name'});
+                if ($toptions{'interval_name'}) {
+                    ($toptions{'eml_max_interval'},$toptions{'max_interval'}) = TimeLookup::splitInterval($dbt,$toptions{'interval_name'});
                 }
-                my ($dataRowsRef,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);  
-                $self->{'options'} = \%options;
+                my ($dataRowsRef,$ofRows) = main::processCollectionsSearch($dbt,\%toptions,$fields);  
+                $self->{'options'} = \%toptions;
                 $self->mapDrawPoints($dataRowsRef);
             }
         } elsif ($ptset == 1) {
