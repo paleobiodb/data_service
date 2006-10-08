@@ -751,6 +751,32 @@ sub mapDefineOutlines	{
 		close USA;
 	}
 	if ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ )	{
+		if ( $q->param('crustedgecolor') ne "none" && $q->param('crustedgecolor') =~ /[A-Za-z]/ )	{
+			if ( ! open EDGES,"<$COAST_DIR/platepolygons/edges.$self->{maptime}" ) {
+				$self->htmlError ( "Couldn't open [$COAST_DIR/platepolygons/polygons.$self->{maptime}]: $!" );
+			}
+			while (<EDGES>)	{
+				s/\n//;
+				($a,$b) = split /\t/,$_;
+				if ( $a >= 0 )	{
+					$ia = int($a);
+				} else	{
+					$ia = int($a - 1);
+				}
+				if ( $b >= 0 )	{
+					$ib = int($b);
+				} else	{
+					$ib = int($b - 1);
+				}
+				if ( $a =~ /#/ || $a =~ /[0-9]/ )	{
+					push @crustlng,$a;
+					push @crustlat,$b;
+				}
+			}
+			close EDGES;
+			push @crustlng , "edge";
+			push @crustlat , "edge";
+		}
 		if ( ! open PLATES,"<$COAST_DIR/platepolygons/polygons.$self->{maptime}" ) {
 			$self->htmlError ( "Couldn't open [$COAST_DIR/platepolygons/polygons.$self->{maptime}]: $!" );
 		}
@@ -1216,12 +1242,21 @@ sub mapSetupImage {
 
     # this is the main crust cell drawing routine
         my $poly = new GD::Polygon;
+        my $thickness = "0.5";
+        my $strokefill = "F\n";
+        if ( $q->param('crustedgecolor') )	{
+            $im->setThickness(4);
+            $thickness = "3";
+            $crustcolor = $q->param('crustedgecolor');
+            $strokefill = "B\n";
+        }
         print AI "u\n";  # start the group
         my $tempcolor = $aicol{$crustcolor};
-        $tempcolor =~ s/ XA/ Xa/;
+        if ( ! $q->param('crustedgecolor') )	{
+            $tempcolor =~ s/ XA/ Xa/;
+        }
         print AI "$tempcolor\n";
-        print AI "0.5 w\n";
-        printf AI "%.1f %.1f m\n",$AILEFT,$AITOP;
+        print AI "$thickness w\n";
         my $lastsep = 1;
         my $bad = 0;
         my $lastx1 = "";
@@ -1231,6 +1266,7 @@ sub mapSetupImage {
         push @crustlat , "";
         push @crustlatraw , "";
         for my $c (0..$#crustlat-1)	{
+            # finish drawing the edges of the plates
             my $d;
             if ( $crustlng[$c+1] =~ /#/ )	{
                 $d = $lastsep;
@@ -1247,7 +1283,6 @@ sub mapSetupImage {
                     $poly->addPt($x1,$y1);
     # finished writing this (too lazy to do it before) 6.10.06
                     if ( ! $lastx1 && ! $lasty1 )  {
-                        print AI "F\n";
                         printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
                     } else	{
                         printf AI "%.1f %.1f l\n",$AILEFT+$x1,$AITOP-$y1;
@@ -1270,8 +1305,12 @@ sub mapSetupImage {
         # stretch the polygon up to the edge of the map if necessary
                 if ( $bad > 0 && $bad < 3 )	{
                     if ( $firstx1 < $width / 10 && $firstx1 / $width < $firsty1 / $height && $firstx1 / $width < ($height - $firsty1) / $height )	{
-                        $poly->addPt(0,$firsty1);
-                        $poly->addPt(0,$lasty1);
+                        my $x1 = $self->getLng(-180);
+                        if ( $x1 < 0 )	{
+                            $x1 = 0;
+                        }
+                        $poly->addPt($x1,$firsty1);
+                        $poly->addPt($x1,$lasty1);
                         printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$firsty1;
                         printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$lasty1;
                     } elsif ( $firstx1 > $width * 0.9 && $firstx1 / $width > $firsty1 / $height && $firstx1 / $width > ($height - $firsty1) / $height )	{
@@ -1291,19 +1330,37 @@ sub mapSetupImage {
                         printf AI "%.1f %.1f l\n",$AILEFT+$lastx1,$AITOP-$height;
                     }
                 }
-                $im->filledPolygon($poly,$col{$crustcolor});
+                if ( $firstx1 )	{
+                    printf AI "%.1f %.1f l\n",$AILEFT+$firstx1,$AITOP-$firsty1;
+                    print AI $strokefill;
+                    if ( $crustcolor eq $q->param('crustcolor') )	{
+                        $im->filledPolygon($poly,$col{$crustcolor});
+                    } else	{
+                        $im->openPolygon($poly,$col{$crustcolor});
+                    }
+                }
                 $bad = 0;
                 $firstx1 = "";
                 $firsty1 = "";
                 $lastx1 = "";
                 $lasty1 = "";
+                if ( $crustlng[$c] =~ /edge/ )	{
+                    $im->setThickness(1);
+                    $crustcolor = $q->param('crustcolor');
+                    my $tempcolor = $aicol{$crustcolor};
+                    $tempcolor =~ s/ XA/ Xa/;
+                    $strokefill = "F\n";
+                    print AI "U\n";  # terminate the group
+                    print AI "u\n";  # start the group
+                    print AI "$tempcolor\n";
+                    print AI "0.5 w\n";
+                }
                 $poly = new GD::Polygon;
             }
         }
     # finish the last plate
         if ( $bad == 0 )	{
             $im->filledPolygon($poly,$col{$crustcolor});
-            print AI "F\n";
             print AI "U\n";  # terminate the group
         }
     }
