@@ -36,7 +36,7 @@ sub GCD { ( 180 / $PI ) * acos( ( sin($_[0]*$PI/180) * sin($_[1]*$PI/180) ) + ( 
 
 $|=1;					# Freeflowing data
 
-for $maptime (0..600)	{
+for $maptime (0..0)	{
 	print "\r$maptime";
 	&mapGetRotations();
 	&makeMask();
@@ -252,9 +252,25 @@ sub makeMask	{
 	close MASK;
 
 	open OUT,">./data/platepolygons/polygons.$maptime";
+	open OUT2,">./data/platepolygons/edges.$maptime";
 	for $mc (@maskcoords)	{
-		print OUT "# -b\n";
 		my ($lng,$lat) = split /:/,$mc;
+		$outside = "";
+		if ( $plate{$lng}{$lat} != $plate{$lng-1}{$lat} ||
+			$plate{$lng}{$lat} != $plate{$lng+1}{$lat} ||
+			$plate{$lng}{$lat} != $plate{$lng}{$lat-1} ||
+			$plate{$lng}{$lat} != $plate{$lng}{$lat+1} ||
+			$plate{$lng}{$lat} != $plate{$lng-1}{$lat-1} ||
+			$plate{$lng}{$lat} != $plate{$lng-1}{$lat+1} ||
+			$plate{$lng}{$lat} != $plate{$lng+1}{$lat-1} ||
+			$plate{$lng}{$lat} != $plate{$lng+1}{$lat+1} )	{
+			$outside = "YES";
+		}
+
+		print OUT "# -b\n";
+		if ( $outside eq "YES" )	{
+			print OUT2 "# -b\n";
+		}
 		$lng1 = $lng - 1.01;
 		$lng2 = $lng + 1.01;
 		$lat1 = $lat - 1.01;
@@ -264,79 +280,89 @@ sub makeMask	{
 		if ( $plate{$lng-1}{$lat} != $plate{$lng}{$lat} &&
 			$plate{$lng}{$lat-1} != $plate{$lng}{$lat} )	{
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng - 0.51,$lat - 1.01,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng - 1.01,$lat - 0.51,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 		} elsif ( $plate{$lng-1}{$lat} == $plate{$lng}{$lat} &&
 			$plate{$lng}{$lat-1} == $plate{$lng}{$lat} &&
 			$plate{$lng-1}{$lat-1} != $plate{$lng}{$lat} )	{
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng - 1.52,$lat - 1.01,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng - 1.01,$lat - 1.52,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 		} else	{
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng1,$lat1,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 		}
 
 		# upper left
 		if ( $plate{$lng-1}{$lat} != $plate{$lng}{$lat} &&
 			$plate{$lng}{$lat+1} != $plate{$lng}{$lat} )	{
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng - 1.01,$lat + 0.51,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng - 0.51,$lat + 1.01,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 		} elsif ( $plate{$lng-1}{$lat} == $plate{$lng}{$lat} &&
 			$plate{$lng}{$lat+1} == $plate{$lng}{$lat} &&
 			$plate{$lng-1}{$lat+1} != $plate{$lng}{$lat} )	{
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng - 1.52,$lat + 1.01,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng - 1.01,$lat + 1.52,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 		} else	{
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng1,$lat2,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 		}
 
 		# upper right
 		if ( $plate{$lng+1}{$lat} != $plate{$lng}{$lat} &&
 			$plate{$lng}{$lat+1} != $plate{$lng}{$lat} )	{
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng + 0.51,$lat + 1.01,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng + 1.01,$lat + 0.51,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 		} elsif ( $plate{$lng+1}{$lat} == $plate{$lng}{$lat} &&
 			$plate{$lng}{$lat+1} == $plate{$lng}{$lat} &&
 			$plate{$lng+1}{$lat+1} != $plate{$lng}{$lat} )	{
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng + 1.52,$lat + 1.01,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng + 1.01,$lat + 1.52,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 		} else	{
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng2,$lat2,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 		}
 
 		# lower right
 		if ( $plate{$lng+1}{$lat} != $plate{$lng}{$lat} &&
 			$plate{$lng}{$lat-1} != $plate{$lng}{$lat} )	{
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng + 1.01,$lat - 0.51,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng + 0.51,$lat - 1.01,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 		} elsif ( $plate{$lng+1}{$lat} == $plate{$lng}{$lat} &&
 			$plate{$lng}{$lat-1} == $plate{$lng}{$lat} &&
 			$plate{$lng+1}{$lat-1} != $plate{$lng}{$lat} )	{
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng + 1.52,$lat - 1.01,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng + 1.01,$lat - 1.52,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 		} else	{
 			($newlng,$newlat,$rawlng,$rawlat) = &projectPoints($lng2,$lat1,"crust");
-			print OUT "$newlng\t$newlat\n";
+			printPoint();
 		}
 	}
 	close OUT;
+	close OUT2;
+
+}
+
+sub printPoint	{
+
+	print OUT "$newlng\t$newlat\n";
+	if ( $outside eq "YES" )	{
+		print OUT2 "$newlng\t$newlat\n";
+	}
 
 }
 
