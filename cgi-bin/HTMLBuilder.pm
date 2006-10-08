@@ -78,6 +78,7 @@ sub new {
         eml_min_interval=>[\&_listFromEnum,'intervals','eml_interval'],
         mapbgcolor=>[\&_listFromHardList,'mapcolors'],
         crustcolor=>[\&_listFromHardList,'mapcolors','unshift'=>'none'],
+        crustedgecolor=>[\&_listFromHardList,'mapcolors','unshift'=>'none'],
         gridcolor=>[\&_listFromHardList,'mapcolors'],
         latlngnocolor=>[\&_listFromHardList,'mapcolors'],
         coastlinecolor=>[\&_listFromHardList,'mapcolors'],
