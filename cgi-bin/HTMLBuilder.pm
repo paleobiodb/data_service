@@ -33,7 +33,7 @@ sub new {
         mapscale=>['X 1', 'X 1.2', 'X 1.5', 'X 2', 'X 2.5', 'X 3', 'X 4', 'X 5', 'X 6',  'X 7', 'X 8', 'X 9', 'X 10'],
 	mapwidth=>['100%','90%','80%','75%','70%','60%','50%'],
         mapresolution=>[ 'coarse', 'medium', 'fine', 'very fine' ],
-        gridsize=>['none', '45 degrees', '30 degrees', '15 degrees', '22.5 degrees', '10 degrees'],
+        gridsize=>['none', '45 degrees', '30 degrees', '22.5 degrees', '15 degrees', '10 degrees'],
         gridposition=>[ 'in front', 'in back' ],
         linethickness=>[ 'thin', 'medium', 'thick' ],
         mapcolors=>['white','black','gray','light gray','red','dark red','pink','deep pink','violet','orchid','magenta','dark violet','purple','slate blue','teal','cyan','turquoise','steel blue','sky blue','dodger blue','royal blue','blue','dark blue','lime','light green','sea green','green','dark green','olive drab','olive','orange red','dark orange','orange','gold','yellow','medium yellow','tan','sandy brown','chocolate','saddle brown','sienna','brown'],
