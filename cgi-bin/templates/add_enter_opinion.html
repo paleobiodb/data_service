@@ -1,5 +1,5 @@
 <span id="message"></span>
-<span id="error_message"></span>
+<div show="error_message">%%error_message%%<br><br></div>
 
 <div align="center" style="margin-top: -2em;"><h3>Opinion record for <span id="taxon_display_name"></span></h3></div>
 
@@ -96,10 +96,21 @@ The primary reference argues for this opinion:
   <span id="nomen_row"></span>
 
   <tr>
+  </tr>
+
+  <tr>
     <td colspan=3 align=left valign=top>
     <br>
-    <b>Phylogenetic status:</b> <select id='phylogenetic_status'></select>
-    </td>
+    <table border=0 cellspacing=0 cellpadding=0 width="100%">
+    <tr>
+      <td>
+        <b>Phylogenetic status:</b> <select id="phylogenetic_status"></select>
+      </td>
+      <td>
+        <b>Classification quality:</b> <select id="classification_quality" autofill="opinion_classification_quality"></select>
+      </td>
+    </tr>
+    </table>
   </tr>
 
   <tr>

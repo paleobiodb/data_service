@@ -3278,7 +3278,7 @@ sub buildTaxonomicList {
     } elsif ($options{'occurrence_list'} && @{$options{'occurrence_list'}}) {
         $sql .= " WHERE occurrence_no IN (".join(', ',@{$options{'occurrence_list'}}).") ORDER BY occurrence_no";
     } else {
-        return "";
+        $sql = "";
     }
 
     my @warnings;
@@ -3289,7 +3289,10 @@ sub buildTaxonomicList {
     dbg("buildTaxonomicList sql: $sql");
 
 
-	my @rowrefs = @{$dbt->getData($sql)};
+    my @rowrefs;
+    if ($sql) {
+	    @rowrefs = @{$dbt->getData($sql)};
+    }
 
 	if (@rowrefs) {
 		my @grand_master_list = ();
@@ -3342,10 +3345,13 @@ sub buildTaxonomicList {
 			# tack on the author and year if the taxon number exists
 			# JA 19.4.04
 			if ( $rowref->{taxon_no} )	{
-                my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
+                my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
 
                 if ($taxon->{'taxon_rank'} =~ /species/ || $rowref->{'species_name'} =~ /^indet\.|^sp\./) {
-                    $rowref->{'authority'} = Reference::formatShortRef($taxon,'link_id'=>$taxon->{'ref_is_authority'});
+
+                    my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon->{'taxon_no'});
+                    my $is_recomb = ($orig_no == $taxon->{'taxon_no'}) ? 0 : 1;
+                    $rowref->{'authority'} = Reference::formatShortRef($taxon,'link_id'=>$taxon->{'ref_is_authority'},'is_recombination'=>$is_recomb);
                 }   
 			}
 
@@ -3654,7 +3660,14 @@ sub buildTaxonomicList {
         }
         $return .= "</div>";
         $return .= "</div>";
-	}
+	} else {
+        if (@warnings) {
+            $return .= "<div align=\"center\">";
+            $return .= Debug::printWarnings(\@warnings);
+            $return .= "<br>";
+            $return .= "</div>";
+        }
+    }
     # This replaces blank cells with blank cells that have no padding, so the don't take up
     # space - this way the comments field lines is indented correctly if theres a bunch of empty
     # class/order/family columns sort of an hack but works - PS
@@ -6237,7 +6250,7 @@ sub generateCollectionLabel {
 
 
 # This function now handles inserting/updating occurrences, as well as inserting/updating reids
-# Rewritten PS to be a bit clearer, handle deleltions of occurrnces, and use DBTransationManager
+# Rewritten PS to be a bit clearer, handle deleltions of occurrences, and use DBTransationManager
 # for consistency/simplicity.
 sub processEditOccurrences {
     if (!$s->isDBMember()) {
@@ -6295,6 +6308,7 @@ sub processEditOccurrences {
         # only do this for non-informal taxa
         my $best_taxon_no = Taxon::getBestClassification($dbt,\%fields);
         $fields{'taxon_no'} = $best_taxon_no;
+        my $taxon_name = formatOccurrenceTaxonName(\%fields);
 
         if ($fields{'genus_name'} =~ /^\s*$/) {
             if ($fields{'occurrence_no'} =~ /^\d+$/ && $fields{'reid_no'} != -1) {
@@ -6316,6 +6330,17 @@ sub processEditOccurrences {
             if ($fields{'species_name'} =~ /^\s*$/ || !Validation::validOccurrenceSpecies($fields{'species_reso'},$fields{'species_name'})) {
                 push @warnings, "Required field species ($fields{'species_name'}) is blank or improperly formatted for row $i, so the row was skipped";
                 next; 
+            }
+        }
+
+        if ($fields{'occurrence_no'} =~ /^\d+$/ && $fields{'occurrence_no'} > 0 &&
+            (($fields{'reid_no'} =~ /^\d+$/ && $fields{'reid_no'} > 0) || ($fields{'reid_no'} == -1))) {
+            # We're either updating or inserting a reidentification
+            my $sql = "SELECT reference_no FROM occurrences WHERE occurrence_no=$fields{'occurrence_no'}";
+            my $occurrence_reference_no = ${$dbt->getData($sql)}[0]->{'reference_no'};
+            if ($fields{'reference_no'} == $occurrence_reference_no) {
+                push @warnings, "Reidentification reference number ($fields{reference_no}) can not be the same as the original occurrence for row $i, taxon $taxon_name";
+                next;
             }
         }
         
@@ -6352,7 +6377,7 @@ sub processEditOccurrences {
             push @occurrences, $fields{'occurrence_no'};
         }
 		# CASE 2: NEW REID
-		elsif ($fields{'occurrence_no'} =~ /^\d+$/ && $fields{'occurrence_no'} > 1 && 
+		elsif ($fields{'occurrence_no'} =~ /^\d+$/ && $fields{'occurrence_no'} > 0 && 
                $fields{'reid_no'} == -1) {
             # Check for duplicates
             my @keys = ("genus_reso","genus_name","subgenus_reso","subgenus_name","species_reso","species_name","occurrence_no");
@@ -6601,7 +6626,6 @@ sub displayOccsForReID {
     if (@results) {
         my $header_vars = {
             'ref_string'=>$refString, 
-            'reference_no'=>$current_session_ref, 
             'taxon_name'=>$taxon_name, 
             'list_collection_no'=>$collection_no
         };
@@ -6630,12 +6654,17 @@ sub displayOccsForReID {
                 $html .= "    <td>" . $row->{"plant_organ2"} . "</td>\n";
             }
             $html .= "</tr>";
-            my $vars = {
-                'collection_no'=>$row->{'collection_no'},
-                'occurrence_no'=>$row->{'occurrence_no'}
-            };
-            $vars->{$_} = $pref{$_} for (@optional);
-            $html .= $hbo->populateHTML('reid_entry_row',$vars);
+            if ($current_session_ref == $row->{'reference_no'}) {
+                $html .= "<tr><td colspan=20><b>Current reference is the same as the original reference, so this taxon may not be reidentified with this reference.</b></td></tr>";
+            } else {
+                my $vars = {
+                    'collection_no'=>$row->{'collection_no'},
+                    'occurrence_no'=>$row->{'occurrence_no'},
+                    'reference_no'=>$current_session_ref
+                };
+                $vars->{$_} = $pref{$_} for (@optional);
+                $html .= $hbo->populateHTML('reid_entry_row',$vars);
+            }
 
             # print other reids for the same occurrence
 

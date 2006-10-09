@@ -1938,15 +1938,20 @@ sub getMostRecentClassification {
     # This will return the most recent parent opinions. its a bit tricky cause: 
     # we're sorting by aliased fields. So surround the query in parens () to do this:
     # All values of the enum classification_quality get recast as integers for easy sorting
-    # Lowest should appear at top of list (authoritative) and highest at bottom (compendium) so sort ASC
+    # Lowest should appear at top of list (authoritative) and highest at bottom (compendium) so sort DESC
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
+    my $reliability = 
+        "(IF (o.classification_quality != '',".
+            "CASE o.classification_quality WHEN 'second hand' THEN 1 WHEN 'standard' THEN 2 WHEN 'implied' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END,".
+        # ELSE:
+            "IF(r.reference_no = 6930,".
+                "0,".# is compendium, then 0 (lowest priority)
+            # ELSE:
+                " CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
+            ")".
+         ")) AS reliability_index ";
     my $sql = "(SELECT o.opinion_no,o.child_no, o.child_spelling_no,o.status,o.spelling_reason,o.parent_no,o.parent_spelling_no,"
-            . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr,"
-            . " (IF(r.reference_no = 6930,0," # is compendium, then 0 (lowest priority)
-            .   "IF(r.classification_quality = 'second hand',1," # else if second hand, next lowest
-            .   "IF(r.classification_quality = 'standard',2," # elsif standard, normal priority
-            .   "IF(r.classification_quality = 'authoritative',3,"
-            .   "0))))) reliability_index " # else low priority (compnedium level, should never happen)
+            . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr, $reliability "
             . " FROM opinions o" 
             . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
             . " WHERE o.child_no=$child_no"
@@ -1958,6 +1963,7 @@ sub getMostRecentClassification {
         $sql .= " AND o.status NOT LIKE '%nomen%'";
     }
     $sql .= ") ORDER BY reliability_index DESC, pubyr DESC, opinion_no DESC LIMIT 1";
+#            print $sql;
 
     my @rows = @{$dbt->getData($sql)};
     if (scalar(@rows)) {
@@ -1988,13 +1994,18 @@ sub getMostRecentSpelling {
     # All values of the enum classification_quality get recast as integers for easy sorting
     # Lowest should appear at top of list (authoritative) and highest at bottom (compendium) so sort ASC
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
-    $sql = "(SELECT o.spelling_reason, a.taxon_no, a.taxon_name, a.taxon_rank, o.opinion_no, "
-         . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) AS pubyr,"
-         . " (IF(r.reference_no = 6930,0," # is compendium, then 0 (lowest priority)
-         .   "IF(r.classification_quality = 'second hand',1," # else if second hand, next lowest
-         .   "IF(r.classification_quality = 'standard',2," # elsif standard, normal priority
-         .   "IF(r.classification_quality = 'authoritative',3,"
-         .   "0))))) reliability_index " # else low priority (compnedium level, should never happen)
+    my $reliability = 
+        "(IF (o.classification_quality != '',".
+            "CASE o.classification_quality WHEN 'second hand' THEN 1 WHEN 'standard' THEN 2 WHEN 'implied' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END,".
+        # ELSE:
+            "IF(r.reference_no = 6930,".
+                "0,".# is compendium, then 0 (lowest priority)
+            # ELSE:
+                " CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
+            ")".
+         ")) AS reliability_index ";
+    $sql = "(SELECT o.spelling_reason, a.taxon_no, a.taxon_name, a.taxon_rank, o.opinion_no, $reliability, "
+         . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) AS pubyr"
          . " FROM opinions o" 
          . " LEFT JOIN authorities a ON o.child_spelling_no=a.taxon_no"
          . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
@@ -2009,13 +2020,8 @@ sub getMostRecentSpelling {
     $sql .= ") ";
     if (@misspellings) {
         $sql .= " UNION ";
-        $sql .= "(SELECT o.spelling_reason, a.taxon_no, a.taxon_name, a.taxon_rank, o.opinion_no, "
-              . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr,"
-              . " (IF(r.reference_no = 6930,0," # is compendium, then 0 (lowest priority)
-              .   "IF(r.classification_quality = 'second hand',1," # else if second hand, next lowest
-              .   "IF(r.classification_quality = 'standard',2," # elsif standard, normal priority
-              .   "IF(r.classification_quality = 'authoritative',3,"
-              .   "0))))) reliability_index " # else low priority (compnedium level, should never happen)
+        $sql .= "(SELECT o.spelling_reason, a.taxon_no, a.taxon_name, a.taxon_rank, o.opinion_no, $reliability, "
+              . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr"
               . " FROM opinions o" 
               . " LEFT JOIN authorities a ON o.parent_spelling_no=a.taxon_no"
               . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
@@ -2590,17 +2596,17 @@ sub getTaxa {
         my $sql = "($base_sql WHERE ".join(" AND ",@where,$taxon1_sql).")";
         if ($subgenus) {
             # Only exact matches for now, may have to rethink this
-            #my $taxon3_sql = "taxon_name LIKE '$subgenus (%)$species_sql'";
+            my $taxon3_sql = "taxon_name LIKE '$subgenus$species_sql'";
             #my $taxon4_sql = "taxon_name LIKE '% ($subgenus)$species_sql'";
-            #$sql .= "($base_sql WHERE ".join(" AND ",@where,$taxon3_sql).")";
-            #$sql .= " UNION ";
+            $sql .= " UNION ";
+            $sql .= "($base_sql WHERE ".join(" AND ",@where,$taxon3_sql).")";
             #$sql .= "($base_sql WHERE ".join(" AND ",@where,$taxon4_sql).")";
         } else {
             $sql .= " UNION ";
             my $taxon2_sql = "taxon_name LIKE '% ($genus)$species_sql'";
             $sql .= "($base_sql WHERE ".join(" AND ",@where,$taxon2_sql).")";
         }
-        #print $sql,"\n";
+#        print $sql,"\n";
         @results = @{$dbt->getData($sql)};
     } else {
         if ($options->{'taxon_name'}) {

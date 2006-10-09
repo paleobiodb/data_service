@@ -300,19 +300,17 @@ sub displayAuthorityForm {
 	# 'Equus newtaxon' and we have three entries in authorities for 'Equus'
 	# then we should present a menu and ask them which one to use.
 
-	if ($isNewEntry && ($fields{'taxon_rank'} =~ /subspecies|species|subgenus/)) {
+    my $parent_no; my @parents;
+	if ($fields{'taxon_rank'} =~ /subspecies|species|subgenus/) {
 		my @bits = split(/ /,$fields{'taxon_name'});
         pop @bits;
 	    my $parentName = join(" ",@bits);	
 		
-		my $select;
-		my $errors = Errors->new();
-
         my $parentRank = guessTaxonRank($parentName);
         if (!$parentRank) { 
             $parentRank = 'genus';
         }
-        my @parents = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parentName,'taxon_rank'=>$parentRank},['*']);
+        @parents = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parentName,'taxon_rank'=>$parentRank},['*']);
 		
 		if (@parents) {
 			my $select;
@@ -324,26 +322,38 @@ sub displayAuthorityForm {
                 push @parent_nos, $row->{'taxon_no'};	
                 push @parent_descs, formatTaxon($dbt,$row);
 			}
+            if (@parents == 1) {
+                $parent_no = $parents[0]->{'taxon_no'};
+            } else {
+                if ($fields{'taxon_no'}) {
+                    my $parent_nos = join ",",map{$_->{'taxon_no'}} @parents;
+                    my $sql = "SELECT DISTINCT parent_spelling_no FROM opinions WHERE child_spelling_no=$fields{taxon_no} AND parent_spelling_no IN ($parent_nos)";
+                    my @selected = @{$dbt->getData($sql)};
+                    if (@selected == 1) {
+                        $parent_no = $selected[0]->{'parent_spelling_no'};
+                    }
+                }
+            }
 			
 			$fields{'parent_taxon_select'} = "<b>Belongs to:</b> ".
-                $hbo->htmlSelect('parent_taxon_no',\@parent_descs,\@parent_nos,$q->param('parent_taxon_no'));
+                $hbo->htmlSelect('parent_taxon_no',\@parent_descs,\@parent_nos,$parent_no);
 		} else {
 			# count = 0, so we need to warn them to enter the parent taxon first.
-			$errors->add("The $parentRank '$parentName' for this $fields{'taxon_rank'} doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$parentName\">create a new authority record for '$parentName'</A> before trying to add this $fields{'taxon_rank'}.");
-			
-			$errors->setDisplayEndingMessage(0); 
-			
-			print $errors->errorMessage();
-			return;
+#	        my $errors = Errors->new();
+#			$errors->add("The $parentRank '$parentName' for this $fields{'taxon_rank'} doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$parentName\">create a new authority record for '$parentName'</A> before trying to add this $fields{'taxon_rank'}.");
+#            print $errors->errorMessage();
+#            return;
 		}
 	}
 
 
     my @taxon_ranks;
-    if ($fields{'taxon_rank'} =~ /subspecies|species|subgenus/) {
-        @taxon_ranks = ($fields{'taxon_rank'});
+    if ($fields{'taxon_rank'} =~ /genus/) {
+        @taxon_ranks = ('subgenus','genus');
+    } elsif ($fields{'taxon_rank'} =~ /species/) {
+        @taxon_ranks = ('subspecies','species');
     } else {
-        @taxon_ranks = grep {!/subspecies|species|subgenus/} $hbo->getList('taxon_rank');
+        @taxon_ranks = grep {!/species|subgenus/} $hbo->getList('taxon_rank');
     }
     $fields{'taxon_rank_select'} = $hbo->htmlSelect('taxon_rank',\@taxon_ranks,\@taxon_ranks,$fields{'taxon_rank'}); 
 
@@ -480,12 +490,12 @@ sub submitAuthorityForm {
 				recent than that of the primary reference (" . $ref->get('pubyr') . ")");
 			}
 		}
-        if ($q->param('taxon_rank') =~ /species/) {
+        if ($q->param('taxon_rank') =~ /species|subgenus/) {
             if (!$q->param('author1last')) {
-                $errors->add("If entering a species or subspecies, enter at least the last name of the first author");
+                $errors->add("If entering a subgenus, species, or subspecies, enter at least the last name of the first author");
             }
             if (!$q->param('pubyr')) {
-                $errors->add("If entering a species or subspecies, the publication year is required");
+                $errors->add("If entering a subgenus, species, or subspecies, the publication year is required");
             }
         }
 	} else {
@@ -503,40 +513,21 @@ sub submitAuthorityForm {
 	if (!($q->param('taxon_name'))) {
 		$errors->add("You can't submit the form with an empty taxon name!");	
 	}
-	
-	# to prevent complications, we will prevent the user from changing 
-	# a genus name on a species, or a species name on a subspecies if they
-	# are editing an old record.
-	if (!$isNewEntry && $t->get('taxon_rank') =~ /subgenus|species/) {
-        my @new_name = split(/ /,$q->param('taxon_name'));
-        my @old_name = split(/ /,$t->get('taxon_name'));
 
-        my $error = 0;
-        if (scalar(@new_name) != scalar(@old_name)) {
-            $error =1;
-        }
-		# make sure no higher order names are changes (i.e. genus or subgenus if its a species)
-        for (my $i=0;$i<(scalar(@new_name) - 1);$i++) {
-			if ($new_name[$i] ne $old_name[$i]) {
-                $error=1;
-            }
-        }
-       
-        if ($error) {
-		    if ($t->get('taxon_rank') eq 'subgenus') {
-				$errors->add("You can't change the genus name of a subgenus that already exists.  Email <a href=\"mailto:pbdbadmin\@nceas.ucsb.edu\">the database manager</a> if you need to do this.");
-		    } elsif ($t->get('taxon_rank') eq 'species') {
-				$errors->add("You can't change the genus or subgenus name of a species that already exists.  Email the <a href=\"mailto:pbdbadmin\@nceas.ucsb.edu\">database manager</a> if you need to do this.");
-		    } elsif ($t->get('taxon_rank') eq 'subspecies') {
-				$errors->add("You can't change the genus, subgenus, or species name of a subspecies that already exists.  Email the <a href=\"mailto:pbdbadmin\@nceas.ucsb.edu\">database manager</a> if you need to do this.");
-            }    
-        }
-	}
-	
-    
-    
+
     if (! validTaxonName($q->param('taxon_name'))) {
         $errors->add("The taxon's name is invalid; please check spacing and capitalization");	
+    }
+
+    if (!$isNewEntry) {
+        my $old_name = $t->get('taxon_name');
+        my $new_name = $q->param('taxon_name');
+        if ($old_name ne $new_name) {
+            my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$new_name});
+            if ($taxon) {
+                $errors->add("Can't change the taxon's name from '$old_name' to '$new_name' because '$new_name' already exists in the database");
+            }
+        }
     }
     
     my $rankFromSpaces = guessTaxonRank($q->param('taxon_name'));
@@ -570,19 +561,27 @@ sub submitAuthorityForm {
 	# For example, if the child taxon is "Equus blah" then we need to 
 	# make sure we have an opinion that it belongs to "Equus".
 	#
-	my $parentTaxon;
-
-	if ( $isNewEntry && $q->param('taxon_rank') =~ /species|subspecies|subgenus/) {
-		# we want to do this for new entries & for edits.
-				
-		$parentTaxon = Taxon->new($dbt, $q->param('parent_taxon_no'));
-		
-		if (! $parentTaxon->get('taxon_no')) {
-			$errors->add("The parent taxon '" . $parentTaxon->get('taxon_name') . 
-			"' that this ".$q->param('taxon_rank')." belongs to doesn't exist in our 
-			database.  Please add an authority record for this ".$q->param('taxon_rank')."
-			before continuing.");
-		}
+	my $parent_no;
+	if ($q->param('taxon_rank') =~ /^species|^subspecies|^subgenus/) {
+        my @bits = split(/ /,$fields{'taxon_name'});
+        pop @bits;
+        my $parent_name = join(" ",@bits);
+        if ($q->param('parent_taxon_no')) {
+		    my $parent = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$q->param('parent_taxon_no')});
+            if ($parent->{'taxon_name'} eq $parent_name) {
+                $parent_no=$q->param('parent_taxon_no');
+            } 
+        }
+        if (!$parent_no) {
+            my @parents = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parent_name});
+            if (@parents > 1) {
+                $errors->add("The taxon '$parent_name' exists multiple times in our database.  Please select the version you mean.");
+            } elsif (@parents == 1) {
+                $parent_no = $parents[0]->{'taxon_no'};
+            } else {
+                $errors->add("The parent taxon '$parent_name' that this taxon belongs to doesn't exist in our database.  Please add an authority record for this '$parent_name' before continuing.");
+            }
+        } 
 	}
 	## end of hack
 	####
@@ -644,74 +643,56 @@ sub submitAuthorityForm {
 		($status, $resultTaxonNumber) = $dbt->insertRecord($s,'authorities', \%fields);
         TaxaCache::addName($dbt,$resultTaxonNumber);
 		
-		# if the $parentTaxon object exists, then that means that we
-		# need to insert an opinion record which says that our taxon
-		# belongs to the genus represented in $parentTaxon.
-		if ($parentTaxon) {
-            # Get original combination for parent no PS 04/22/2005
-            my $orig_parent_no = $parentTaxon->get('taxon_no');
-            if ($orig_parent_no) {
-                $orig_parent_no = TaxonInfo::getOriginalCombination($dbt,$orig_parent_no);
-            }    
-			
-			my %opinionHash = (
-                'status'=>'belongs to',
-                'spelling_reason'=>'original spelling',
-                'child_no'=>$resultTaxonNumber,
-                'child_spelling_no'=>$resultTaxonNumber,
-                'parent_no'=>$orig_parent_no,
-                'parent_spelling_no'=>$parentTaxon->get('taxon_no'),
-                'ref_has_opinion'=>$fields{'ref_is_authority'}
-            );
-            my @fields = ('reference_no','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures');
-            $opinionHash{$_} = $fields{$_} for @fields;
-		
-            $dbt->insertRecord($s,'opinions',\%opinionHash);
+		if ($parent_no) {
+            addImplicitChildOpinion($dbt,$s,$resultTaxonNumber,$parent_no,\%fields);
             #TaxaCache::updateCache($dbt,$resultTaxonNumber);
             #TaxaCache::markForUpdate($dbt,$resultTaxonNumber);
-            my $pid = fork();
-            if (!defined($pid)) {
-                carp "ERROR, could not fork";
-            }
-
-            if ($pid) {
-                # Child fork
-                # Don't exit here, have child go on to print message
-                # Make new dbh and dbt objects - for some reason one connection
-                # gets closed whent the other fork exits, so split them here
-                $dbh = DBConnection::connect();
-                $dbt = DBTransactionManager->new($dbh); 
-            } else {
-                #my $session_id = POSIX::setsid();
-
-                # Make new dbh and dbt objects - for some reason one connection
-                # gets closed whent the other fork exits, so split them here
-                my $dbh2 = DBConnection::connect();
-                my $dbt2 = DBTransactionManager->new($dbh2);  
-
-                # This is the parent fork.  Have the parent fork
-                # Do the useful work, the child fork will be terminated
-                # when the parent is so don't have it do anything long running
-                # (just terminate). The defined thing is in case the work didn't work
-
-                # Close references to stdin and stdout so Apache
-                # can close the HTTP socket conneciton
-                if (defined $pid) {
-                    open STDIN, "</dev/null";
-                    open STDOUT, ">/dev/null";
-                    #open STDOUT, ">>SOMEFILE";
-                }
-                TaxaCache::updateCache($dbt2,$resultTaxonNumber);
-                sleep(2);
-                exit;
-            }         
 		}
 	} else {
 		# if it's an old entry, then we'll update.
 		$resultTaxonNumber = $t->get('taxon_no');
 		$status = $dbt->updateRecord($s,'authorities','taxon_no',$resultTaxonNumber, \%fields);
         propagateAuthorityInfo($dbt,$t->get('taxon_no'));
+        # Changing a genus|subgenus|species|subspecies is tricky since we have to change
+        # other related opinions and authorities
+        if ($t->get('taxon_name') ne $fields{'taxon_name'} &&
+            $t->get('taxon_rank') =~ /^genus|^subgenus|^species/){
+            updateChildNames($dbt,$s,$t->get('taxon_no'),$t->get('taxon_name'),$fields{'taxon_name'});
+        }
+        updateImplicitBelongsTo($dbt,$s,$t->get('taxon_no'),$parent_no,$t->get('taxon_name'),$fields{'taxon_name'},\%fields);
 	}
+
+    my $pid = fork();
+    if (!defined($pid)) {
+        carp "ERROR, could not fork";
+    }
+
+    if ($pid) {
+        # Child fork
+    } else {
+        # Make new dbh and dbt objects - for some reason one connection
+        # gets closed whent the other fork exits, so split them here
+        my $dbh2 = DBConnection::connect();
+        my $dbt2 = DBTransactionManager->new($dbh2);  
+
+        # This is the parent fork.  Have the parent fork
+        # Do the useful work, the child fork will be terminated
+        # when the parent is so don't have it do anything long running
+        # (just terminate). The defined thing is in case the work didn't work
+
+        # Close references to stdin and stdout so Apache
+        # can close the HTTP socket conneciton
+        if (defined $pid) {
+            open STDIN, "</dev/null";
+            open STDOUT, ">/dev/null";
+            #open STDOUT, ">>SOMEFILE";
+        }
+        TaxaCache::updateCache($dbt2,$resultTaxonNumber);
+        # The main connection gets closes when this fork exits (either fork exiting will kill it)
+        # so sleep for a while to give enough time for the other fork to finish up with the DB
+        sleep(4);
+        exit;
+    }
 
     # JA 2.4.04
     # if the taxon name is unique, find matches to it in the
@@ -771,6 +752,177 @@ sub submitAuthorityForm {
 	print "<BR>";
 	print "</CENTER>";
 }
+
+sub updateChildNames {
+    my ($dbt,$s,$old_taxon_no,$old_name,$new_name) = @_;
+    return if ($old_name eq $new_name || !$old_name);
+    main::dbg("UPDATE CHILD NAMES CALLED WITH: $old_name --> $new_name");
+
+    # Get only the common denominator.  I.E. is a subgenus
+    # in one but not the other, just change the genus part if aplicable
+    my $old_rank = guessTaxonRank($old_name) || 'genus';
+    my $new_rank = guessTaxonRank($new_name) || 'genus';
+    # Sort of punk on this for now
+    return unless $new_rank eq $old_rank;
+
+    my @q = ($old_taxon_no);
+    my %to_change = ();
+    while (my $taxon_no = pop @q) {
+        my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE parent_spelling_no=$taxon_no";
+        my @results = @{$dbt->getData($sql)};
+        foreach my $row (@results) {
+            push @q, $row->{'child_spelling_no'};
+            $to_change{$row->{'child_spelling_no'}} = 1;
+        }
+    }
+    my $quoted_old_name = quotemeta $old_name;
+    foreach my $t (keys %to_change) {
+        my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$t});
+        my $taxon_name = $child->{'taxon_name'};
+        $taxon_name =~ s/^$quoted_old_name/$new_name/; 
+        main::dbg("Changing parent from $old_name to $new_name.  child taxon from $child->{taxon_name} to $taxon_name");
+        $dbt->updateRecord($s,'authorities','taxon_no',$child->{'taxon_no'},{'taxon_name'=>$taxon_name});
+    }
+}
+sub updateImplicitBelongsTo {
+    my ($dbt,$s,$taxon_no,$parent_no,$old_name,$new_name,$fields) = @_;
+    return if ($old_name eq $new_name);
+
+    my @old_name = split(/ /,$old_name);
+    my @new_name = split(/ /,$new_name);
+    my $old_last = pop @old_name;
+    my $new_last = pop @new_name;
+    my $old_higher = join(" ",@old_name);
+    my $new_higher = join(" ",@new_name);
+
+    my %old_parents;
+    if ($old_higher) {
+        main::dbg("Looking for opinions to migrate for $old_higher");
+        foreach my $p (TaxonInfo::getTaxa($dbt,{'taxon_name'=>$old_higher})) {
+            $old_parents{$p->{'taxon_no'}} = 1;
+        }
+    }
+    my $sql = "SELECT * FROM opinions WHERE child_spelling_no=$taxon_no";
+    my @old_opinions = @{$dbt->getData($sql)};
+    #    main::dbg("Found ".scalar(@old_opinions)." existing opinions to migrate for $old_higher");
+
+    if ($new_higher && !$old_higher) {
+        # Insert a new opinion, switch from genus --> subgenus
+        main::dbg("Inserting belongs to since taxa changed from genus $old_name to subgenus $new_name");
+        addImplicitChildOpinion($dbt,$s,$taxon_no,$parent_no,$fields);
+        if (@old_opinions) {
+            my $subgenus = $new_last;
+            $subgenus =~ s/\(|\)//g;
+            my ($new_taxon_no) = addSpellingAuthority($dbt,$s,$taxon_no,$subgenus,'genus');
+            foreach my $row (@old_opinions) {
+                my $changes = {'child_spelling_no'=>$new_taxon_no,'spelling_reason'=>'rank change'};
+                $dbt->updateRecord($s,'opinions','opinion_no',$row->{'opinion_no'},$changes);
+                my $sql = "SELECT * FROM opinions WHERE parent_spelling_no=$taxon_no";
+                foreach my $c (@{$dbt->getData($sql)}) {
+                    $dbt->updateRecord($s,'opinions','opinion_no',$c->{'opinion_no'},{'parent_spelling_no'=>$new_taxon_no});
+                }
+            }
+        }
+    } 
+    if ($old_higher && !$new_higher) {
+        # Delete old opinion, switch from subgenus --> genus
+        foreach my $row (@old_opinions) {
+            if ($old_parents{$row->{'parent_spelling_no'}}) { 
+                main::dbg("Deleting belongs to record since taxa changed from $old_name to $new_name");
+                $dbt->deleteRecord($s,'opinions','opinion_no',$row->{'opinion_no'},"taxon name changed from $old_name to $new_name");
+            }
+        }
+    }
+    if ($old_higher && $new_higher) {
+        my $orig_parent_no = TaxonInfo::getOriginalCombination($dbt,$parent_no);
+        my $found_old_parent = 0;
+        if (@old_opinions) {
+            foreach my $row (@old_opinions) {
+                # Switch opinion
+                if ($old_parents{$row->{'parent_spelling_no'}}) { 
+                    $found_old_parent = 1;
+                    main::dbg("Updating belongs to since taxa changed from $old_name to $new_name");
+                    $dbt->updateRecord($s,'opinions','opinion_no',$row->{opinion_no},{'parent_spelling_no'=>$parent_no,'parent_no'=>$orig_parent_no});
+                }
+            }
+        } 
+        if (!$found_old_parent) {
+            # Insert new opinion
+            main::dbg("Inserting belongs to since taxa changed from $old_name to $new_name");
+            addImplicitChildOpinion($dbt,$s,$taxon_no,$parent_no,$fields);
+        }
+    } 
+}
+
+sub addImplicitChildOpinion {
+    my ($dbt,$s,$child_no,$parent_no,$fields) = @_;
+    return unless ($child_no && $parent_no);
+    # Get original combination for parent no PS 04/22/2005
+    my $orig_parent_no = TaxonInfo::getOriginalCombination($dbt,$parent_no);
+    
+    my %opinionHash = (
+        'status'=>'belongs to',
+        'spelling_reason'=>'original spelling',
+        'child_no'=>$child_no,
+        'child_spelling_no'=>$child_no,
+        'parent_no'=>$orig_parent_no,
+        'parent_spelling_no'=>$parent_no,
+        'ref_has_opinion'=>$fields->{'ref_is_authority'}
+    );
+    my @fields = ('reference_no','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures');
+    $opinionHash{$_} = $fields->{$_} for @fields;
+
+    $dbt->insertRecord($s,'opinions',\%opinionHash);
+}
+
+sub addSpellingAuthority {
+    my ($dbt,$s,$taxon_no,$new_name,$new_rank,$reference_no) = @_;
+
+    my $orig = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
+
+    # next we need to steal data from the opinion
+    my %record = ();
+    $record{taxon_name} = $new_name;
+    if (!$reference_no) {
+        $record{reference_no} = $orig->{reference_no};
+    } else {
+        $record{reference_no} = $reference_no;
+    }
+    if (!$new_rank) {
+        $record{taxon_rank} = $orig->{taxon_rank};
+    } else {
+        $record{taxon_rank} = $new_rank;
+    }
+
+    my @dataFields = ("pages", "figures", "extant", "preservation");
+    my @origAuthFields = ("author1init", "author1last","author2init", "author2last","otherauthors", "pubyr" );
+    
+    if ($orig->{'ref_is_authority'} =~ /yes/i) {
+        $record{'reference_no'}=$orig->{'reference_no'};
+        foreach my $f (@dataFields) {
+            $record{$f} = $orig->{$f};
+        }
+        foreach my $f (@origAuthFields) {
+            $record{$f} = "";
+        }
+        $record{'ref_is_authority'}='YES';
+    } else {
+        foreach my $f (@dataFields,@origAuthFields) {
+            $record{$f} = $orig->{$f};
+        }
+    }
+
+    my ($return_code, $new_taxon_no) = $dbt->insertRecord($s,'authorities', \%record);
+    TaxaCache::addName($dbt,$taxon_no);
+    main::dbg("create new authority record, got return code $return_code");
+    if (!$return_code) {
+        die("Unable to create new authority record for $record{taxon_name}. Please contact support");
+    }
+    my @set_warnings = Taxon::setOccurrencesTaxonNoByTaxon($dbt,$s,$taxon_no);
+    return ($new_taxon_no,\@set_warnings);
+}
+
+
 
 
 sub setOccurrencesTaxonNoByTaxon {
@@ -1171,9 +1323,11 @@ sub formatTaxon{
             $authLine .= ", $taxon->{taxon_rank}";
         }
 	}
-	
+
+    my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon->{'taxon_no'});
+    my $is_recomb = ($orig_no == $taxon->{'taxon_no'}) ? 0 : 1;
 	# If the authority is a PBDB ref, retrieve and print it
-    my $pub_info = Reference::formatShortRef($taxon);
+    my $pub_info = Reference::formatShortRef($taxon,'is_recombination'=>$is_recomb);
     if ($pub_info !~ /^\s*$/) {
         $authLine .= ', '.$pub_info;
     }
@@ -1354,7 +1508,7 @@ sub getBestClassification{
         }
 
         #print "Trying to match $genus_name ($subgenus_name) $species_name\n";
-        #print $sql,"\n";
+        print $sql,"\n";
         my @results = @{$dbt->getData($sql)};
 
         my @more_results = ();
@@ -1365,14 +1519,14 @@ sub getBestClassification{
                 my $last_sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_name LIKE '% ($taxon_subgenus) %' AND taxon_rank='species'";
 #                print "Querying for more results because only genus didn't match but subgenus (w/g) did matched up with $row->{taxon_name}\n";
 #                print $last_sql,"\n";
-                my @more_results = @{$dbt->getData($last_sql)};
+                @more_results = @{$dbt->getData($last_sql)};
                 last;
             }
             if ($taxon_subgenus && $subgenus_name eq $taxon_subgenus && $genus_name ne $taxon_subgenus) {
                 my $last_sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_name LIKE '% ($taxon_subgenus) %' and taxon_rank='species'";
 #                print "Querying for more results because only genus didn't match but subgenus (w/subg) did matched up with $row->{taxon_name}\n";
 #                print $last_sql,"\n";
-                my @more_results = @{$dbt->getData($last_sql)};
+                @more_results = @{$dbt->getData($last_sql)};
                 last;
             }
         }                     

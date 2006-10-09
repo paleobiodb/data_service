@@ -153,6 +153,9 @@ sub formatShortRef  {
             $shortRef .= " [" . $refData->{'comments'}."]";
         }
     }
+    if ($options{'is_recombination'}) {
+        $shortRef = "(".$shortRef.")";
+    }
     if ($options{'link_id'}) {
         if ($refData->{'reference_no'}) {
             $shortRef = qq|<a href="bridge.pl?action=displayReference&reference_no=$refData->{reference_no}">$shortRef</a>|;

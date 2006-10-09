@@ -1241,7 +1241,7 @@ sub submitOpinionForm {
 
     # Get the fields from the form and get them ready for insertion
     # All other fields should have been set or thrown an error message at some previous time
-    foreach my $f ('author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments','diagnosis','phylogenetic_status','type_taxon') {
+    foreach my $f ('author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments','diagnosis','phylogenetic_status','classification_quality','type_taxon') {
         if (!$fields{$f}) {
             $fields{$f} = $q->param($f);
         }
@@ -1283,43 +1283,13 @@ sub submitOpinionForm {
 	# create bogus combinations, and likewise if the opinion create/update
 	#  code below bombs
 	if ($createSpelling) {
-	    # next we need to steal data from the opinion
-        my %record = (
-            'reference_no' => $fields{'reference_no'},
-            'taxon_rank' => $childSpellingRank,
-            'taxon_name' => $childSpellingName
-        );
-
-        # author information comes from the original combination,
-        my $orig = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}},['*']);
-
-		my @dataFields = ("pages", "figures", "extant", "preservation");
-		my @origAuthFields = ("author1init", "author1last","author2init", "author2last","otherauthors", "pubyr" );
+        my ($new_taxon_no,$set_warnings) = Taxon::addSpellingAuthority($dbt,$s,$fields{'child_no'},$childSpellingName,$childSpellingRank,$fields{'reference_no'});
+            
         
-        if ($orig->{'ref_is_authority'} =~ /yes/i) {
-            $record{'reference_no'}=$orig->{'reference_no'};
-            foreach my $f (@dataFields) {
-                $record{$f} = $orig->{$f};
-            }
-            foreach my $f (@origAuthFields) {
-                $record{$f} = "";
-            }
-            $record{'ref_is_authority'}='YES';
-        } else {
-            foreach my $f (@dataFields,@origAuthFields) {
-                $record{$f} = $orig->{$f};
-            }
+        $fields{'child_spelling_no'} = $new_taxon_no;
+        if (ref($set_warnings) eq 'ARRAY') {
+            push @warnings, @{$set_warnings};
         }
-
-        my ($return_code, $taxon_no) = $dbt->insertRecord($s,'authorities', \%record);
-        TaxaCache::addName($dbt,$taxon_no);
-        main::dbg("create new authority record, got return code $return_code");
-        if (!$return_code) {
-            die("Unable to create new authority record for $record{taxon_name}. Please contact support");
-        }
-        $fields{'child_spelling_no'} = $taxon_no;
-        my @set_warnings = Taxon::setOccurrencesTaxonNoByTaxon($dbt,$s,$taxon_no);
-        push @warnings, @set_warnings;
 	}
 
 	my $resultOpinionNumber;
