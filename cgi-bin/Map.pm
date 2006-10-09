@@ -1211,7 +1211,9 @@ sub mapSetupImage {
                   my @templatraw2 = @templatraw;
                   for my $t ( 0..$#templat )	{
                       if ( $templng[$t] > 0 )	{
-                        $templng[$t] = -179.9;
+                          ($templngraw[$t],$templatraw[$t]) = rotatePoint(-179.9,$templatraw[$t],$midlng,$midlat,"reversed");
+                          ($templng[$t],$templat[$t],$templngraw[$t],$templatraw[$t]) = $self->projectPoints($templngraw[$t],$templatraw[$t],"grid");
+
                       }
                       push @newcrustlat , $templat[$t];
                       push @newcrustlng , $templng[$t];
@@ -1220,7 +1222,8 @@ sub mapSetupImage {
                   }
                   for my $t ( 0..$#templat2 )	{
                       if ( $templng2[$t] < 0 )	{
-                        $templng2[$t] = 179.9;
+                          ($templngraw2[$t],$templatraw2[$t]) = rotatePoint(179.9,$templatraw2[$t],$midlng,$midlat,"reversed");
+                          ($templng2[$t],$templat2[$t],$templngraw2[$t],$templatraw2[$t]) = $self->projectPoints($templngraw2[$t],$templatraw2[$t],"grid");
                       }
                       push @newcrustlat , $templat2[$t];
                       push @newcrustlng , $templng2[$t];
@@ -1244,7 +1247,7 @@ sub mapSetupImage {
         my $poly = new GD::Polygon;
         my $thickness = "0.5";
         my $strokefill = "F\n";
-        if ( $q->param('crustedgecolor') )	{
+        if ( $q->param('crustedgecolor') ne "none" && $q->param('crustedgecolor') =~ /[A-Za-z]/ )	{
             $im->setThickness(4);
             $thickness = "3";
             $crustcolor = $q->param('crustedgecolor');
@@ -1261,6 +1264,8 @@ sub mapSetupImage {
         my $bad = 0;
         my $lastx1 = "";
         my $lasty1 = "";
+        my $badlastx1 = "";
+        my $badlasty1 = "";
         push @crustlng , $crustlng[0];
         push @crustlngraw , $crustlng[0];
         push @crustlat , "";
@@ -1294,6 +1299,8 @@ sub mapSetupImage {
                     $lastx1 = $x1;
                     $lasty1 = $y1;
                 } else	{
+                    $badlastx1 = $x1;
+                    $badlasty1 = $y1;
                     $bad++;
                 }
             } elsif ( $crustlng[$c] !~ /#/ )	{
@@ -1304,30 +1311,18 @@ sub mapSetupImage {
                 $lastsep = $c + 2;
         # stretch the polygon up to the edge of the map if necessary
                 if ( $bad > 0 && $bad < 3 )	{
-                    if ( $firstx1 < $width / 10 && $firstx1 / $width < $firsty1 / $height && $firstx1 / $width < ($height - $firsty1) / $height )	{
-                        my $x1 = $self->getLng(-180);
-                        if ( $x1 < 0 )	{
-                            $x1 = 0;
-                        }
-                        $poly->addPt($x1,$firsty1);
-                        $poly->addPt($x1,$lasty1);
-                        printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$firsty1;
-                        printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$lasty1;
-                    } elsif ( $firstx1 > $width * 0.9 && $firstx1 / $width > $firsty1 / $height && $firstx1 / $width > ($height - $firsty1) / $height )	{
-                        $poly->addPt($width,$firsty1);
-                        $poly->addPt($width,$lasty1);
-                        printf AI "%.1f %.1f l\n",$AILEFT+$width,$AITOP-$firsty1;
-                        printf AI "%.1f %.1f l\n",$AILEFT+$width,$AITOP-$lasty1;
-                    } elsif ( $firsty1 < $height / 10 && $firsty1 / $height < $firstx1 / $width && $firsty1 / $height < ($width - $firstx1) / $width )	{
-                        $poly->addPt($firstx1,0);
-                        $poly->addPt($lastx1,0);
-                        printf AI "%.1f %.1f l\n",$AILEFT+$firstx1,$AITOP;
-                        printf AI "%.1f %.1f l\n",$AILEFT+$lastx1,$AITOP;
-                    } elsif ( $firsty1 > $height * 0.9 && $firsty1 / $height > $firstx1 / $width && $firsty1 / $height > ($width - $firstx1) / $width )	{
-                        $poly->addPt($firstx1,$height);
-                        $poly->addPt($lastx1,$height);
-                        printf AI "%.1f %.1f l\n",$AILEFT+$firstx1,$AITOP-$height;
-                        printf AI "%.1f %.1f l\n",$AILEFT+$lastx1,$AITOP-$height;
+                    if ( $badlastx1 =~ / L/ )	{
+	                $poly->addPt(0,$lasty1);
+	                printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$lasty1;
+                    } elsif ( $badlastx1 =~ / R/ )	{
+	                $poly->addPt($width,$lasty1);
+	                printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$lasty1;
+                    } elsif ( $badlasty1 =~ / B/ )	{
+	                $poly->addPt($lastx1,0);
+	                printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$lasty1;
+                    } elsif ( $badlasty1 =~ / T/ )	{
+	                $poly->addPt($lastx1,$height);
+	                printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$lasty1;
                     }
                 }
                 if ( $firstx1 )	{
@@ -1344,6 +1339,8 @@ sub mapSetupImage {
                 $firsty1 = "";
                 $lastx1 = "";
                 $lasty1 = "";
+                $badlastx1 = "";
+                $badlasty1 = "";
                 if ( $crustlng[$c] =~ /edge/ )	{
                     $im->setThickness(1);
                     $crustcolor = $q->param('crustcolor');
@@ -1802,7 +1799,7 @@ sub getCoords	{
 	# Get pixel values
 	$x = $self->getLng($x);
 	$y = $self->getLat($y);
-	if ( $x ne "NaN" && $y ne "NaN" )	{
+	if ( $x !~ /NaN/ && $y !~ /NaN/ )	{
 		if ( $y > 0 )	{
 			return($x,$y,"North");
 		} else	{
@@ -1886,8 +1883,14 @@ sub projectPoints	{
 
 	# rotate the point into the new coordinate system
 		($x,$y) = rotatePoint($x,$y,$neworigx,$neworigy);
-		if ( $x eq "NaN" || $y eq "NaN" )	{
-			return('NaN','NaN');
+		if ( $x =~ /NaN/ || $y =~ /NaN/ )	{
+			if ( $x !~ /NaN/ )	{
+				$x = "NaN";
+			}
+			if ( $y !~ /NaN/ )	{
+				$y = "NaN";
+			}
+			return($x,$y);
 		}
 
 	# adjust the longitude
@@ -1902,8 +1905,14 @@ sub projectPoints	{
 	# put the point back in the old projection
 		($x,$y) = rotatePoint($x,$y,$neworigx,$neworigy,"reversed");
 		$projected{$oldx}{$oldy} = $x . ":" . $y . ":" . $pid;
-		if ( $x eq "NaN" || $y eq "NaN" )	{
-			return('NaN','NaN');
+		if ( $x =~ /NaN/ || $y =~ /NaN/ )	{
+			if ( $x !~ /NaN/ )	{
+				$x = "NaN";
+			}
+			if ( $y !~ /NaN/ )	{
+				$y = "NaN";
+			}
+			return($x,$y);
 		}
 
 	}
@@ -1916,17 +1925,23 @@ sub projectPoints	{
 	#  to get the new focus JA 12.5.06
 	if ( ( $midlat != 0 || $midlng != 0 ) && ( $q->param('rotatemapfocus') !~ /y/i || $unrotatedmidlng != $midlng || $unrotatedmidlat != $midlat ) )	{
 		($x,$y) = rotatePoint($x,$y,$midlng,$midlat);
-		if ( $x eq "NaN" || $y eq "NaN" )	{
-			return('NaN','NaN');
+		if ( $x =~ /NaN/ || $y =~ /NaN/ )	{
+			if ( $x !~ /NaN/ )	{
+				$x = "NaN";
+			}
+			if ( $y !~ /NaN/ )	{
+				$y = "NaN";
+			}
+			return($x,$y);
 		}
 	}
 
 	$rawx = $x;
 	$rawy = $y;
 
-	# don't even bother drawing anything near the poles in a equirectangular
-	#  projection, because the crust gets completely screwed up there
-	#  JA 2.5.06
+	# don't even bother drawing anything near the poles in an
+	#  equirectangular projection, because the crust gets completely
+	#   screwed up there JA 2.5.06
 	if ( $self->{maptime} > 0 && $scale == 1 )	{
 		if ( $projection eq "equirectangular" and $y > 85 )	{
 			$y = 85;
@@ -2109,18 +2124,20 @@ sub getLng	{
 	my $self = shift;
 
 	my $l = $_[0];
-	if ( $l eq "NaN" )	{
-		return('NaN');
+	if ( $l =~ /NaN/ )	{
+		return($l);
 	}
-	# correction here and in the next three subroutines corrects fo
+	# correction here and in the next three subroutines corrects for
 	#  the fact that the orthographic projection squashes down the
 	#  edges of the map into a globe JA 27.4.06
 	if ( $q->param('projection') eq "orthographic" )	{
 		$l = $l * 1.5;
 	}
 	$l = (180 + $l - $offlng - $gifoffhor) * $hmult * $scale;
-	if ( $l < 0 || $l > $width )	{
-		return('NaN');
+	if ( $l < 0 )	{
+		return('NaN L');
+	} elsif ( $l > $width )	{
+		return('NaN R');
 	}
 	if ( $l == 0 )	{
 		$l = 0.0001;
@@ -2132,8 +2149,8 @@ sub getLngTrunc	{
 	my $self = shift;
 
 	my $l = $_[0];
-	if ( $l eq "NaN" )	{
-		return('NaN');
+	if ( $l =~ /NaN/ )	{
+		return($l);
 	}
 	if ( $q->param('projection') eq "orthographic" )	{
 		$l = $l * 1.5;
@@ -2151,15 +2168,17 @@ sub getLat	{
 	my $self = shift;
 
 	my $l = $_[0];
-	if ( $l eq "NaN" )	{
-		return('NaN');
+	if ( $l =~ /NaN/ )	{
+		return($l);
 	}
 	if ( $q->param('projection') eq "orthographic" )	{
 		$l = $l * 1.5;
 	}
 	$l = (90 - $l - $offlat - $gifoffver) * $vmult * $scale;
-	if ( $l < 0 || $l > $height )	{
-		return('NaN');
+	if ( $l < 0 )	{
+		return('NaN B');
+	} elsif ( $l > $height )	{
+		return('NaN T');
 	}
 	if ( $l == 0 )	{
 		$l = 0.0001;
@@ -2171,8 +2190,8 @@ sub getLatTrunc	{
 	my $self = shift;
 
 	my $l = $_[0];
-	if ( $l eq "NaN" )	{
-		return('NaN');
+	if ( $l =~ /NaN/ )	{
+		return($l);
 	}
 	if ( $q->param('projection') eq "orthographic" )	{
 		$l = $l * 1.5;
@@ -2333,12 +2352,12 @@ sub drawGrids	{
         my $lat2;
         ($lng1,$lat1) = $self->projectPoints($deg , $lat * $grids, "grid");
         ($lng2,$lat2) = $self->projectPoints($deg + 1 , $lat * $grids, "grid");
-        if ( $lng1 ne "NaN" && $lat1 ne "NaN" && $lng2 ne "NaN" && $lat2 ne "NaN" && abs($lng1-$lng2) < 90 )	{
+        if ( $lng1 !~ /NaN/ && $lat1 !~ /NaN/ && $lng2 !~ /NaN/ && $lat2 !~ /NaN/ && abs($lng1-$lng2) < 90 )	{
           my $x1 = $self->getLng($lng1);
           my $y1 = $self->getLat($lat1);
           my $x2 = $self->getLng($lng2);
           my $y2 = $self->getLat($lat2);
-          if ( $x1 ne "NaN" && $y1 ne "NaN" && $x2 ne "NaN" && $y2 ne "NaN" )	{
+          if ( $x1 !~ /NaN/ && $y1 !~ /NaN/ && $x2 !~ /NaN/ && $y2 !~ /NaN/ )	{
             $im->line( $x1, $y1, $x2, $y2, $col{$gridcolor} );
             print AI "$aicol{$gridcolor}\n";
             printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
@@ -2364,12 +2383,12 @@ sub drawGrids	{
 	if ( $lng2 == 180 )	{
 		$lng2 = 179.5;
 	}
-        if ( $lng1 ne "NaN" && $lat1 ne "NaN" && $lng2 ne "NaN" && $lat2 ne "NaN" && abs($lat1-$lat2) < 45 )	{
+        if ( $lng1 !~ /NaN/ && $lat1 !~ /NaN/ && $lng2 !~ /NaN/ && $lat2 !~ /NaN/ && abs($lat1-$lat2) < 45 )	{
           my $x1 = $self->getLng($lng1);
           my $y1 = $self->getLat($lat1);
           my $x2 = $self->getLng($lng2);
           my $y2 = $self->getLat($lat2);
-          if ( $x1 ne "NaN" && $y1 ne "NaN" && $x2 ne "NaN" && $y2 ne "NaN" )	{
+          if ( $x1 !~ /NaN/ && $y1 !~ /NaN/ && $x2 !~ /NaN/ && $y2 !~ /NaN/ )	{
             $im->line( $x1, $y1, $x2, $y2, $col{$gridcolor} );
             print AI "$aicol{$gridcolor}\n";
             printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
