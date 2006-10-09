@@ -1108,7 +1108,7 @@ sub mapSetupImage {
     "orange", "255,165,0",
     "gold", "255,215,0",
     "yellow", "255,255,0",
-    "medium yellow", "255,255,128",
+    "medium yellow", "255,255,160",
     "tan", "210,180,140",
     "sandy brown", "244,164,96",
     "chocolate", "210,105,30",
