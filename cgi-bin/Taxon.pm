@@ -1508,7 +1508,7 @@ sub getBestClassification{
         }
 
         #print "Trying to match $genus_name ($subgenus_name) $species_name\n";
-        print $sql,"\n";
+#        print $sql,"\n";
         my @results = @{$dbt->getData($sql)};
 
         my @more_results = ();
