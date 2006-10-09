@@ -384,6 +384,7 @@ sub getPrefFields	{
 		"mapsize" => "image size",
 		"maptime" => "reconstruction date",
 		"mapfocus" => "map focus", "mapscale" => "magnification",
+		"mapwidth" => "map width",
 		"mapresolution" => "resolution",
 		"mapbgcolor" => "background/ocean color",
 		"crustcolor" => "continental crust color",
@@ -408,7 +409,8 @@ sub getPrefFields	{
 			"geogcomments", "stratcomments", "lithdescript",
 		# map form fields
 			"mapsize", "projection", "maptime", "mapfocus",
-			"mapscale", "mapresolution", "mapbgcolor", "crustcolor",
+			"mapscale", "mapwidth", "mapresolution",
+			"mapbgcolor", "crustcolor",
 			"gridsize", "gridcolor", "latlngnocolor",
 			"coastlinecolor", "borderlinecolor", "usalinecolor",
 			"pointsize1", "pointshape1",
@@ -606,7 +608,7 @@ sub displayHomePage {
 sub displayMapForm {
 
 	# List fields that should be preset
-	my %vars = ( 'mapsize'=>'100%', 'projection'=>'equirectangular', 'maptime'=>'', 'mapfocus'=>'standard (0,0)', 'mapscale'=>'X 1', 'mapresolution'=>'medium', 'mapbgcolor'=>'white', 'crustcolor'=>'none', 'gridsize'=>'none', 'gridcolor'=>'gray', 'gridposition'=>'in back', 'linethickness'=>'medium', 'latlngnocolor'=>'none', 'coastlinecolor'=>'gray', 'borderlinecolor'=>'none', 'usalinecolor'=>'none', 'pointsize1'=>'large', 'pointshape1'=>'circles', 'dotcolor1'=>'red', 'dotborder1'=>'no', 'mapsearchfields2'=>'', 'pointsize2'=>'large', 'pointshape2'=>'squares', 'dotcolor2'=>'blue', 'dotborder2'=>'no', 'mapsearchfields3'=>'', 'pointsize3'=>'large', 'pointshape3'=>'triangles', 'dotcolor3'=>'yellow', 'dotborder3'=>'no', 'mapsearchfields4'=>'', 'pointsize4'=>'large', 'pointshape4'=>'diamonds', 'dotcolor4'=>'green', 'dotborder4'=>'no' );
+	my %vars = ( 'mapsize'=>'100%', 'projection'=>'equirectangular', 'maptime'=>'', 'mapfocus'=>'standard (0,0)', 'mapscale'=>'X 1', 'mapwidth'=>'100%', 'mapresolution'=>'medium', 'mapbgcolor'=>'white', 'crustcolor'=>'none', 'gridsize'=>'none', 'gridcolor'=>'gray', 'gridposition'=>'in back', 'linethickness'=>'medium', 'latlngnocolor'=>'none', 'coastlinecolor'=>'gray', 'borderlinecolor'=>'none', 'usalinecolor'=>'none', 'pointsize1'=>'large', 'pointshape1'=>'circles', 'dotcolor1'=>'red', 'dotborder1'=>'no', 'mapsearchfields2'=>'', 'pointsize2'=>'large', 'pointshape2'=>'squares', 'dotcolor2'=>'blue', 'dotborder2'=>'no', 'mapsearchfields3'=>'', 'pointsize3'=>'large', 'pointshape3'=>'triangles', 'dotcolor3'=>'yellow', 'dotborder3'=>'no', 'mapsearchfields4'=>'', 'pointsize4'=>'large', 'pointshape4'=>'diamonds', 'dotcolor4'=>'green', 'dotborder4'=>'no' );
 	
 	# Prefs have higher precedence;
 	my %pref = getPreferences($s->get('enterer_no'));
@@ -692,6 +694,7 @@ sub displayMapOfCollection {
     }
 
     $q->param('mapscale'=>'X 5');
+    $q->param('mapwidth'=>'100%');
     $q->param('mapsize'=>'100%');
 
     my $m = Map->new( $dbh, $q, $s, $dbt );
