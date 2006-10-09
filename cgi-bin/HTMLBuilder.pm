@@ -35,7 +35,7 @@ sub new {
         gridsize=>['none', '45 degrees', '30 degrees', '15 degrees', '22.5 degrees', '10 degrees'],
         gridposition=>[ 'in front', 'in back' ],
         linethickness=>[ 'thin', 'medium', 'thick' ],
-        mapcolors=>['white','black','gray','light gray','red','dark red','pink','deep pink','violet','orchid','magenta','dark violet','purple','slate blue','teal','cyan','turqoise','steel blue','sky blue','dodger blue','royal blue','blue','dark blue','lime','light green','sea green','green','dark green','olive drab','olive','orange red','dark orange','orange','gold','yellow','medium yellow','tan','sandy brown','chocolate','saddle brown','sienna','brown'],
+        mapcolors=>['white','black','gray','light gray','red','dark red','pink','deep pink','violet','orchid','magenta','dark violet','purple','slate blue','teal','cyan','turquoise','steel blue','sky blue','dodger blue','royal blue','blue','dark blue','lime','light green','sea green','green','dark green','olive drab','olive','orange red','dark orange','orange','gold','yellow','medium yellow','tan','sandy brown','chocolate','saddle brown','sienna','brown'],
         pointsize=>[ 'tiny', 'very small', 'small', 'medium', 'large', 'very large', 'huge', 'proportional'],
         pointshape=>[ 'circles', 'crosses', 'diamonds', 'squares', 'stars', 'triangles'],
         dotborder=>[ 'no', 'black', 'white' ],
