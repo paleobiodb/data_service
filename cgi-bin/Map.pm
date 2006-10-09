@@ -369,7 +369,8 @@ sub mapFinishImage {
 
     # print the Ma or year counter except if you are computing a small image
     #  from the line command JA 3.5.06
-    if ( ( $q->param('year') > 0 || $self->{maptime} > 0 ) && ( ! $q->param('linecommand') || $width > 300 ) ) 	{
+    # or narrow image JA 9.10.06
+    if ( ( $q->param('year') > 0 || $self->{maptime} > 0 ) && ! $q->param('linecommand') && $width > 350 ) 	{
          my $counter;
          if ( $q->param('year') > 0 )	{
              my $year = $q->param('year');
@@ -1023,8 +1024,8 @@ sub mapSetupImage {
         $hpix = 288;
         $vpix = 240;
     }
-    $x = $q->param('mapsize');
-    $x =~ s/%//;
+    my $x = $q->param('mapsize');
+    $x =~ s/[^0-9]//g;
     # need this correction because the entire image is too large with
     #  this projection JA 27.4.06
     if ( $q->param("projection") eq "orthographic")	{
@@ -1041,10 +1042,17 @@ sub mapSetupImage {
     }
     $height = $vmult * $vpix;
     $width = $hmult * $hpix;
+    if ( $q->param('mapwidth') !~ /100/ && $q->param('mapwidth') =~ /^[0-9]/ )	{
+        my $x = $q->param('mapwidth');
+        $x =~ s/[^0-9]//g;
+        $width = $width * $x / 100;
+    }
 
     # recenter the image if the GIF size is non-standard
-    $gifoffhor = ( 360 - $hpix ) / ( $scale * 2 );
-    $gifoffver = ( 180 - $vpix ) / ( $scale * 2 );
+    # have to do this using width and height because there may have been
+    #  a width adjustment
+    $gifoffhor = ( 360 - ( $width / $hmult ) ) / ( $scale * 2 );
+    $gifoffver = ( 180 - ( $height / $vmult ) ) / ( $scale * 2 );
 
     if ( $width > 300 )	{
         if (!$im)  {
@@ -1331,13 +1339,13 @@ sub mapSetupImage {
 	                printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$lasty1;
                     } elsif ( $badlastx1 =~ / R/ )	{
 	                $poly->addPt($width,$lasty1);
-	                printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$lasty1;
+	                printf AI "%.1f %.1f l\n",$AILEFT+$width,$AITOP-$lasty1;
                     } elsif ( $badlasty1 =~ / B/ )	{
 	                $poly->addPt($lastx1,0);
-	                printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$lasty1;
+	                printf AI "%.1f %.1f l\n",$AILEFT+$lastx1,$AITOP;
                     } elsif ( $badlasty1 =~ / T/ )	{
 	                $poly->addPt($lastx1,$height);
-	                printf AI "%.1f %.1f l\n",$AILEFT,$AITOP-$lasty1;
+	                printf AI "%.1f %.1f l\n",$AILEFT+$lastx1,$AITOP-$height;
                     }
                 }
                 if ( $firstx1 )	{
