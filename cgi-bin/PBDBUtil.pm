@@ -311,7 +311,7 @@ sub getPaleoCoords {
         my ($lngdeg, $latdeg);
         ($lngdeg,$latdeg,$rx,$ry,$pid) = $map_o->projectPoints($f_lngdeg,$f_latdeg);
         main::dbg("lngdeg: $lngdeg latdeg $latdeg");
-        if ( $lngdeg ne "NaN" && $latdeg ne "NaN" )       {
+        if ( $lngdeg !~ /NaN/ && $latdeg !~ /NaN/ )       {
             $paleolng = $lngdeg;
             $paleolat = $latdeg;
         } 
