@@ -280,7 +280,6 @@ sub displayAuthorityForm {
 		if ($isNewEntry) {
 	        # Figure out the rank based on spacing of the name.
 			$fields{'taxon_rank'} = guessTaxonRank($q->param('taxon_name'));
-            $fields{'taxon_rank'} = 'genus' if (!$fields{'taxon_rank'});
 		} else {
 			# not a new entry
 			$fields{'taxon_rank'} = $t->get('taxon_rank');
