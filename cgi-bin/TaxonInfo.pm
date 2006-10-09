@@ -583,7 +583,8 @@ sub doMap{
 	# redunant (since we scale below).. taking it out will
 	# cause a division by zero error in Map.pm.
 	$q->param('mapscale'=>'X 1');
-    $q->param('mapsize'=>'100%');
+	$q->param('mapwidth'=>'100%');
+	$q->param('mapsize'=>'100%');
 
 	# we need to get the number of collections out of dataRowsRef
 	#  before figuring out the point size
