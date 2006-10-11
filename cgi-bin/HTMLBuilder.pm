@@ -541,14 +541,14 @@ sub writeBlock {
         $html .= $vars->{$block->{'name'}};
     } elsif ($block->{'type'} eq 'show') {
         my ($k,$v) = split(/=/,$block->{'name'});
-        if ((!$v && $vars->{$k}) || ($v && $vars->{$k} eq $v)) {
+        if ((!$v && $vars->{$k} ne '') || ($v && $vars->{$k} eq $v)) {
             foreach my $c (@{$block->{'children'}}) {
                 $html .= $self->writeBlock($c,$vars,$read_only,$depth);
             }
         } 
     } elsif ($block->{'type'} eq 'hide') {
         my ($k,$v) = split(/=/,$block->{'name'});
-        unless ((!$v && $vars->{$k}) || ($v && $vars->{$k} eq $v)) {
+        unless ((!$v && $vars->{$k} ne '') || ($v && $vars->{$k} eq $v)) {
             foreach my $c (@{$block->{'children'}}) {
                 $html .= $self->writeBlock($c,$vars,$read_only,$depth);
             }
