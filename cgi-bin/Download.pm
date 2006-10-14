@@ -2677,12 +2677,21 @@ sub printCONJUNCT {
                 if ($row->{'c.regionalorder'} eq 'top to bottom') {
                     $level_value *= -1;
                 }
+            # CONJUNCT can't cope with decimal values, so toss them
+                if ( $level_value =~ /\./ )	{
+                    my $foo;
+                    ($level_value,$foo) = split /\./,$level_value;
+                }
             }
             if ($row->{'c.localsection'} && $row->{'c.localbed'} =~ /^[0-9]+(\.[0-9]+)*$/) {
                 $level = $row->{'c.localsection'};
                 $level_value = $row->{'c.localbed'};
                 if ($row->{'c.localorder'} eq 'top to bottom') {
                     $level_value *= -1;
+                }
+                if ( $level_value =~ /\./ )	{
+                    my $foo;
+                    ($level_value,$foo) = split /\./,$level_value;
                 }
             }
             if ($level) {
@@ -2699,15 +2708,14 @@ sub printCONJUNCT {
         if ( $row->{'o.species_reso'} && $row->{'o.species_reso'} !~ /(informal)|(")|(n\. sp\.)/) {
             printf OUTFILE "%s ",$row->{'o.species_reso'};
         }
-        if ( ! $row->{'o.species_name'} )    {
+        if ( ! $row->{'o.species_name'} || $row->{'o.species_reso'} =~ /(informal)|(n\. gen\.)/ )    {
             print OUTFILE "sp.\n";
         } else {
             my $species_name = $row->{'o.species_name'};
 # if there are spaces in the species name, it's some stupid thing like "sp. A",
-#   so put the garbage in brackets JA 16.4.06
+#   so put the garbage in brackets JA 16.4.06 and print a sp. JA 14.10.06
             if ( $species_name =~ / / )	{
-                $species_name =~ s/ / \[/;
-                $species_name .= "]";
+                $species_name = "sp. [" . $species_name . "]";
             }
             printf OUTFILE "%s\n",$species_name;
         }
