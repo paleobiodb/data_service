@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-use lib "/Volumes/pbdb_RAID/httpdocs/cgi-bin";
+use lib "../cgi-bin";
 use DBConnection;
 use DBTransactionManager;
 use TimeLookup;
@@ -8,4 +8,5 @@ use TimeLookup;
 my $dbh = DBConnection::connect();
 my $dbt = new DBTransactionManager($dbh);
 
-TimeLookup::generateLookupTable($dbt,1);
+my $t = new TimeLookup($dbt);
+$t->generateLookupTable($dbt,1);
