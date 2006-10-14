@@ -179,8 +179,9 @@ sub occurrenceMisspellingForm {
     main::dbg("FOUND ".scalar(@names).' unique names');
 
     # Some static lookup tables are generated first
-    my @period_order = TimeLookup::getScaleOrder($dbt,'69');
-    my $period_lookup= TimeLookup::processScaleLookup($dbh,$dbt,'69','intervalToScale');
+    my $t = new TimeLookup($dbt);
+    my @period_order = $t->getScaleOrder('69','names');
+    my $period_lookup= $t->getScaleMapping('69','names');
     my $p = Permissions->new($s,$dbt);
     my $can_modify = $p->getModifierList();
     my $authorizer_no = $s->get('authorizer_no');

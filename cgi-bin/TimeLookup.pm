@@ -2,996 +2,1635 @@ package TimeLookup;
 
 use Data::Dumper;
 use CGI::Carp;
+use strict;
 
-#$DEBUG = 0;
+# Ten million year bins, in order from oldest to youngest
+@TimeLookup::bins = ("Cenozoic 6", "Cenozoic 5", "Cenozoic 4", "Cenozoic 3", "Cenozoic 2", "Cenozoic 1", "Cretaceous 8", "Cretaceous 7", "Cretaceous 6", "Cretaceous 5", "Cretaceous 4", "Cretaceous 3", "Cretaceous 2", "Cretaceous 1", "Jurassic 6", "Jurassic 5", "Jurassic 4", "Jurassic 3", "Jurassic 2", "Jurassic 1", "Triassic 4", "Triassic 3", "Triassic 2", "Triassic 1", "Permian 4", "Permian 3", "Permian 2", "Permian 1", "Carboniferous 5", "Carboniferous 4", "Carboniferous 3", "Carboniferous 2", "Carboniferous 1", "Devonian 5", "Devonian 4", "Devonian 3", "Devonian 2", "Devonian 1", "Silurian 2", "Silurian 1", "Ordovician 5", "Ordovician 4", "Ordovician 3", "Ordovician 2", "Ordovician 1", "Cambrian 4", "Cambrian 3", "Cambrian 2", "Cambrian 1");
 
-# written by JA 12.7.03
-# WARNING: the logic assumes you want all intervals falling ENTIRELY WITHIN
-#  the time interval you have queried
+%TimeLookup::binning = (
+    "33" => "Cenozoic 6", # Pleistocene
+    "34" => "Cenozoic 6", # Pliocene
+    "83" => "Cenozoic 6", # Late Miocene
+    "84" => "Cenozoic 5", # Middle Miocene
+    "85" => "Cenozoic 5", # Early Miocene
+    "36" => "Cenozoic 4", # Oligocene
+    "88" => "Cenozoic 3", # Late Eocene
+    "107" => "Cenozoic 3", # Bartonian
+    "108" => "Cenozoic 2", # Lutetian
+    "90" => "Cenozoic 2", # Early Eocene
+    "38" => "Cenozoic 1", # Paleocene
+    "112" => "Cretaceous 8", # Maastrichtian
+    "113" => "Cretaceous 7", # Campanian
+    "114" => "Cretaceous 6", # Santonian
+    "115" => "Cretaceous 6", # Coniacian
+    "116" => "Cretaceous 6", # Turonian
+    "117" => "Cretaceous 5", # Cenomanian
+    "118" => "Cretaceous 4", # Albian
+    "119" => "Cretaceous 3", # Aptian
+    "120" => "Cretaceous 2", # Barremian
+    "121" => "Cretaceous 2", # Hauterivian
+    "122" => "Cretaceous 1", # Valanginian
+    "123" => "Cretaceous 1", # Berriasian
+    "124" => "Jurassic 6", # Tithonian
+    "125" => "Jurassic 5", # Kimmeridgian
+    "126" => "Jurassic 5", # Oxfordian
+    "127" => "Jurassic 5", # Callovian
+    "128" => "Jurassic 4", # Bathonian
+    "129" => "Jurassic 4", # Bajocian
+    "130" => "Jurassic 3", # Aalenian
+    "131" => "Jurassic 3", # Toarcian
+    "132" => "Jurassic 2", # Pliensbachian
+    "133" => "Jurassic 1", # Sinemurian
+    "134" => "Jurassic 1", # Hettangian
+# used from 19.3.05
+    "135" => "Triassic 4", # Rhaetian
+    "136" => "Triassic 4", # Norian
+    "137" => "Triassic 3", # Carnian
+    "45" => "Triassic 2", # Middle Triassic
+# used up to 19.3.05
+#	"135" => "Triassic 5", # Rhaetian
+#	"136" => "Triassic 5", # Norian
+#	"137" => "Triassic 4", # Carnian
+#	"138" => "Triassic 3", # Ladinian
+#	"139" => "Triassic 2", # Anisian
+# used up to 17.8.04
+#	"136" => "Triassic 4", # Norian
+#	"137" => "Triassic 3", # Carnian
+#	"138" => "Triassic 2", # Ladinian
+#	"139" => "Triassic 1", # Anisian
+    "46" => "Triassic 1", # Early Triassic
+    "143" => "Permian 4", # Changxingian
+    "715" => "Permian 4", # Changhsingian
+# used up to 16.8.04
+#	"715" => "Permian 5", # Changhsingian
+    "716" => "Permian 4", # Wuchiapingian
+    "145" => "Permian 3", # Capitanian
+# used up to 16.8.04
+#	"145" => "Permian 4", # Capitanian
+    "146" => "Permian 3", # Wordian
+    "717" => "Permian 3", # Roadian
+    "148" => "Permian 2", # Kungurian
+    "149" => "Permian 2", # Artinskian
+    "150" => "Permian 1", # Sakmarian
+    "151" => "Permian 1", # Asselian
+# used up to 9.8.04, reverted back to 17.8.04
+    "49" => "Carboniferous 5", # Gzelian
+    "50" => "Carboniferous 5", # Kasimovian
+    "51" => "Carboniferous 4", # Moscovian
+# used up to 17.8.04
+#	"51" => "Carboniferous 5", # Moscovian
+    "52" => "Carboniferous 4", # Bashkirian
+    "166" => "Carboniferous 3", # Alportian
+    "167" => "Carboniferous 3", # Chokierian
+# used up to 9.8.04
+#	"166" => "Carboniferous 4", # Alportian
+#	"167" => "Carboniferous 4", # Chokierian
+    "168" => "Carboniferous 3", # Arnsbergian
+    "169" => "Carboniferous 3", # Pendleian
+    "170" => "Carboniferous 3", # Brigantian
+# added 29.6.06
+    "53" => "Carboniferous 3", # Serpukhovian
+    "171" => "Carboniferous 2", # Asbian
+    "172" => "Carboniferous 2", # Holkerian
+    "173" => "Carboniferous 2", # Arundian
+    "174" => "Carboniferous 2", # Chadian
+    "55" => "Carboniferous 1", # Tournaisian
+    "177" => "Devonian 5", # Famennian
+    "178" => "Devonian 4", # Frasnian
+    "57" => "Devonian 3", # Middle Devonian
+    "181" => "Devonian 2", # Emsian
+    "182" => "Devonian 1", # Pragian
+    "183" => "Devonian 1", # Lochkovian
+    "59" => "Silurian 2", # Pridoli
+    "60" => "Silurian 2", # Ludlow
+    "61" => "Silurian 2", # Wenlock
+    "62" => "Silurian 1", # Llandovery
+    "638" => "Ordovician 5", # Ashgillian
+# added 8.6.06
+    "63" => "Ordovician 5", # Ashgill
+# added 29.6.06
+    "192" => "Ordovician 5", # Hirnantian
+    "639" => "Ordovician 4", # Caradocian
+# added 8.6.06
+    "64" => "Ordovician 4", # Caradoc
+# added 29.6.06
+    "787" => "Ordovician 4", # early Late Ordovician
+    "65" => "Ordovician 3", # Llandeilo
+    "66" => "Ordovician 3", # Llanvirn
+# used up to 15.8.04
+#	"30" => "Ordovician 3", # Middle Ordovician
+    "596" => "Ordovician 2", # Arenigian
+# added 8.6.06
+    "67" => "Ordovician 2", # Arenig
+# added 29.6.06
+    "789" => "Ordovician 2", # late Early Ordovician
+# used up to 15.8.04
+#	"641" => "Ordovician 2", # Latorpian
+    "559" => "Ordovician 1", # Tremadocian
+# added 8.6.06
+    "68" => "Ordovician 1", # Tremadoc
+    "69" => "Cambrian 4", # Merioneth
+# added 29.6.06
+    "780" => "Cambrian 4", #  Furongian
+    "70" => "Cambrian 3", # St David's
+# added 29.6.06
+    "781" => "Cambrian 3", # Middle Cambrian
+    "71" => "Cambrian 2", # Caerfai
+# next four added 29.6.06
+    "749" => "Cambrian 2", # Toyonian
+    "750" => "Cambrian 2", # Botomian
+    "213" => "Cambrian 2", # Atdabanian
+    "214" => "Cambrian 2", # Tommotian
+    "748" => "Cambrian 1", # Manykaian
+# added 29.6.06
+    "799" => "Cambrian 1" # Nemakit-Daldynian
+);
 
-my $dbh;
-my $dbt;
 
-sub cleanArrays	{
-# this is the master list of interval numbers to be used
-	@intervals = ();
-# without making this local, repeated calls to TimeLookup will accrete
-#  more and more "good" intervals
-	@tempintervals = ();
+%TimeLookup::rank_order = (
+    'eon/eonothem' => 1,
+    'era/erathem' => 2,
+    'period/system' => 3,
+    'subperiod/system' =>4,
+    'epoch/series' =>5,
+    'subepoch/series' =>6,
+    'age/stage' =>7,
+    'subage/stage' =>8,
+    'chron/zone' =>9
+);
 
-	%intervalInScale = ();
-	%pubyr = ();
-	%bestscale = ();
-	%bestscaleyr = ();
-	%bestboundary = ();
-	%bestboundyr = ();
-	%yesints = ();
-	%immediatemax = ();
-	%immediatemin = ();
+sub new {
+    my $c = shift;
+    my $dbt = shift;
+
+    my $self  = {'ig'=>undef,'dbt'=>$dbt,'set_boundaries'=>0};
+    bless $self,$c;
 }
 
-sub processLookup	{
+# Convenience
+sub getRange {
+    my $self = shift;
+    my ($eml_max,$max,$eml_min,$min,%options) = @_;
+    if ($max =~ /^[0-9.]+$/ || $min =~ /^[0-9.]+$/) {
+        return $self->getRangeByBoundary($max,$min,%options),[],[];
+    } else {
+        return $self->getRangeByInterval(@_);
+        
+    }
+}
 
-	$dbh = shift;
-	$dbt = shift;
+# Boundaries are given in millions of years
+# Intervals must fall completely within the bounds, unless use_mid is passed, in which case
+# intervals midpoints must fall completley within the bounds
+sub getRangeByBoundary {
+    my $self = shift;
+    my $ig = $self->getIntervalGraph;
 
-	&cleanArrays();
+    my ($max,$min,%options) = @_;
 
-	my $eml_max_interval = shift;
-	my $max_interval_name = shift;
-	my $eml_min_interval = shift;
-	my $min_interval_name = shift;
+    if ($max !~ /^[0-9]*\.?[0-9]+$/) {
+        $max = 9999;
+    }
+    if ($min !~ /^[0-9]*\.?[0-9]+$/) {
+        $min = 0;
+    }
+    if ($min > $max) {
+        ($max,$min) = ($min,$max);
+    }
 
-	my $return_type = shift;
-    #Where numeric (Ma) values are used, use the midpoint instead of max and min bounds
-    # when throwing out intervals. Used by Neptune script only right now
-    my $use_mid = shift; 
-    my $bestbothscale;
+    my @intervals;
+    my ($ub,$lb) = $self->getBoundaries;
+    foreach my $i (keys %$ig) {
+        if ($ub->{$i} ne "" && $lb->{$i} ne "") {
+            if ($options{'use_mid'}) {
+                my $mid = ($ub->{$i} + $lb->{$i})/2;
+                if ($min <= $mid && $mid <= $max) {
+                    push @intervals,$i;
+                }
+            } else {
+                if ($min <= $ub->{$i} && $lb->{$i} <= $max) {
+                    push @intervals,$i;
+                }
+            }
+        }
+    }
+
+    return \@intervals;
+}
+
+# You can pass in a 10 million year bin or an eml/interval pair
+sub getRangeByInterval {
+    my $self = shift;
+    my $ig = $self->getIntervalGraph;
+    my $dbt = $self->{'dbt'};
+
+    my ($eml_max,$max,$eml_min,$min,%options) = @_;
+
     my @errors = ();
     my @warnings = ();
 
-
-
-    # 10 M.Y. binning - i.e. Triassic 2
-    if ($max_interval_name =~ /^(?:\w+ \d)$/ || $min_interval_name =~ /^(?:\w+ \d)$/) {
-        if (!$min_interval_name) {
-            $min_interval_name=$max_interval_name;
-        } elsif (!$max_interval_name) {
-            $max_interval_name=$min_interval_name;
-        }
-        my @binnames = getTenMYBins(); 
+    if (! $min) {
+        $eml_min = $eml_max;
+        $min = $max;
+    }
+    if (! $max) {
+        $eml_max = $eml_min;
+        $max = $min;
+    }
+    my @intervals;
+    if ($max =~ /^\w+ \d$/ || $min =~ /^\w+ \d$/) {
+        # 10 M.Y. binning - i.e. Triassic 2
         my ($index1,$index2) = (-1,-1);
-        for($i=0;$i<scalar(@binnames);$i++) {
-            if ($max_interval_name eq $binnames[$i]) {
+        for(my $i=0;$i<scalar(@TimeLookup::bins);$i++) {
+            if ($max eq $TimeLookup::bins[$i]) {
                 $index1 = $i;
             }
-            if ($min_interval_name eq $binnames[$i]) {
+            if ($min eq $TimeLookup::bins[$i]) {
                 $index2 = $i;
             }
         }
 
         if ($index1 < 0) {
-            push @errors, "Term $max_interval_name not valid or not in the database";
-            return ([],@errors);
+            return ([],["Term $max not valid or not in the database"]);
         } elsif ($index2 < 0) {
-            push @errors, "Term $min_interval_name not valid or not in the database.";
-            return ([],@errors);
+            return ([],["Term $min not valid or not in the database"]);
         } else {
             if ($index1 > $index2) {
                 ($index1,$index2) = ($index2,$index1);
             }
-            #print "INDEX 1 is $index1 INDEX 2 is $index2\n";
-            my $binning = processBinLookup($dbh,$dbt,'binning');
-            #print "ALL intervals" . join(", ",@intervals)."<BR>";
-            my %binmap;
-            while (my ($interval_no,$binname) = each %$binning) {
-                push @{$binmap{$binname}},$interval_no;
-            }
-            
-            for ($index1 .. $index2) {
-                $binname = $binnames[$_];
-                #print "ADDING BIN NAME $binname with intervals ".scalar(@{$binmap{$binname}})."<BR>";
-                push @intervals, @{$binmap{$binname}};
-            }
-            #print "ALL intervals" . join(", ",@intervals);
+            @intervals = $self->mapIntervals(@TimeLookup::bins[$index1 .. $index2]);
         }
-    } elsif ($max_interval_name =~ /^[0-9]+$/ || $min_interval_name =~ /^[0-9]+$/) {
-        if ($max_interval_name !~ /^[0-9]+$/) {
-            $max_interval_name = 9999;
-        }
-        if ($min_interval_name !~ /^[0-9]+$/) {
-            $min_interval_name = 0;
-        }
-        #($ub,$lb) = findBoundaries($dbh,$dbt);
-        #my ($max_boundary,$min_boundary);
-
-        #$max_boundary = $lb->{$max_interval_no};
-        #$min_boundary = $ub->{$min_interval_no};
-        #if (!$max_boundary || !$min_boundary) {
-        #    main::dbg("Could not find boundaries $max_boundary, $min_boundary\n");
-        #    return;    
-        #} 
-        main::dbg("Lookup type 1 with boundaries $max_interval_name, $min_interval_name\n");
-	    &findBestScales();
-	    &getIntervalRangeByBoundary($max_interval_name,$min_interval_name,$use_mid);
     } else {
-        if ( $min_interval_name eq '')	{
-            $eml_min_interval = $eml_max_interval;
-            $min_interval_name = $max_interval_name;
-        }
-        if ( $max_interval_name eq '') 	{
-            $eml_max_interval = $eml_min_interval;
-            $max_interval_name = $min_interval_name;
-        }
-        $max_interval_no = getIntervalNo($dbt,$eml_max_interval,$max_interval_name);
-        $min_interval_no = getIntervalNo($dbt,$eml_min_interval,$min_interval_name);
+        my $max_interval_no = $self->getIntervalNo($eml_max,$max);
+        my $min_interval_no = $self->getIntervalNo($eml_min,$min);
+        my $max_name = $eml_max ? "$eml_max $max" : $max;
+        my $min_name = $eml_min ? "$eml_min $min" : $min;
    
         # if numbers weren't found for either interval, bomb out!
         if (!$max_interval_no) {
-            push @errors, "The term \"$max_interval_name\" not valid or not in the database";
+            push @errors, qq/The term "$max_name" not valid or not in the database/;
         }
         if (!$min_interval_no) {
-            push @errors, "The term \"$min_interval_name\" not valid or not in the database";
+            push @errors, qq/The term "$min_name" not valid or not in the database/;
         }
         if (@errors) {
             return ([],\@errors,\@warnings);
         }
-        
-    	&findBestScales();
-	    &findImmediateCorrelates();
-
-        # Make sure these are called before yesints modified, as they clear it out 
-        if (checkIntervalIsObsolete($dbt,$min_interval_no)) {
-            push @warnings, "The term \"$min_interval_name\" may no longer be valid; please use a newer, equivalent term";
+       
+        if ($self->isObsolete($min_interval_no)) {
+            push @warnings, qq/The term "$min_name" may no longer be valid; please use a newer, equivalent term/;
         }
-        if ($min_interval_no != $max_interval_no) {
-            if (checkIntervalIsObsolete($dbt,$max_interval_no)) {
-                push @warnings, "The term \"$max_interval_name\" may no longer be valid; please use a newer, equivalent term";
-            }
+        if ($min_interval_no != $max_interval_no &&
+            $self->isObsolete($max_interval_no)) {
+            push @warnings, qq/The term "$max_name" may no longer be valid; please use a newer, equivalent term/;
         }
 
-        # push the numbers onto the master list
-        push @intervals, $max_interval_no;
-        $yesints{$max_interval_no} = 'Y';
-    	push @intervals, $min_interval_no if ($max_interval_no != $min_interval_no);
-        $yesints{$min_interval_no} = 'Y';
+        my @range = $self->findPath($max_interval_no,$min_interval_no);
+        @intervals = $self->mapIntervals(@range);
 
-	    &getIntervalRangeByNo($max_interval_no,$min_interval_no);
-        &mapIntervalsUpward();
-	    &mapIntervals();
-        $bestbothscale = findBestBothScale($dbt,$max_interval_no,$min_interval_no);
-        if (!$bestbothscale) {
-            push @warnings, "The terms \"$max_interval_name\" and \"$min_interval_name\" are not in the same time scale, so intervals in between them could not be determined; please use terms in the same scale";
-        }
-#        print Dumper(@intervals);
     }
     return (\@intervals,\@errors,\@warnings);
 }
 
-sub checkIntervalIsObsolete {
-    $dbt = shift;
-    $dbh = $dbt->dbh;
-    my $interval_no = shift;
+# You can pass in both an integer corresponding to the scale_no of the scale or
+# the keyword "bins" correspdoning to 10 my bins. Passes back a hashref where
+# the key => value pair is the mapping. If $return_type is "name" the "value"
+# will be the interval name, else it will be the interval_no.  For bins, it'll be the bin name always
+# I.E.:  $hashref = $t->getScaleMapping('bins'), $hashref = $t->getScaleMapping(69,'name');
+sub getScaleMapping {
+    my $self = shift;
+    my $dbt = $self->{'dbt'};
 
-    if (!%immediatemax) {
-        &findImmediateCorrelates();
+    my $scale = shift;
+    my $return_type = shift || "number";
+
+  
+    # This bins thing is slightly tricky - if the keyword "bins" is passed
+    # in, then map to bins
+    my @intervals;
+    if ($scale =~ /bin/) {
+        @intervals = @TimeLookup::bins;
+    } else {
+        my $scale = int($scale);
+        return unless $scale;
+        my $sql = "SELECT interval_no FROM correlations WHERE scale_no=$scale";
+        @intervals = map {$_->{'interval_no'}} @{$dbt->getData($sql)};
     }
 
-    my $sql = "SELECT s.scale_rank FROM correlations c, scales s, refs r WHERE c.scale_no=s.scale_no AND s.reference_no=r.reference_no AND c.interval_no=$interval_no ORDER by r.pubyr DESC LIMIT 1";
-    my $rank = ${$dbt->getData($sql)}[0]->{'scale_rank'};
-    # Skip these, weird cases we can't handle yet
-    if ($rank =~ /stage|chron/) {
-        return 0;
+    my %mapping = ();
+    foreach my $i (@intervals) {
+        # Map intervals accepts both 10 my bins and integers
+        my @mapped = $self->mapIntervals($i);
+        foreach my $j (@mapped) {
+            $mapping{$j} = $i;
+        }
+    } 
+   
+    # If $scale is "bins" then the return type is always going
+    # to be the name of the bin, so don't change anything
+    if ($return_type =~ /name/ && $scale !~ /bin/) {
+        # Return interval_no => interval_name mapping
+        my $ig = $self->getIntervalGraph;
+        while (my ($k,$v) = each %mapping) {
+            $mapping{$k} = $ig->{$v}->{'name'};
+        }
+    } # Else default is to return interval_no => interval_no
+    return \%mapping;
+}
+
+sub getBins {
+    return @TimeLookup::bins;
+}
+
+sub getBinning {
+    return \%TimeLookup::binning;
+}
+
+# Tells whether an interval is obsolete, i.e. Gallic, Tertiary, Quaternary
+# You can pass it an interval_no or the interval object directly
+# Algotihm is slightly tricky.  First filter by intervals
+# that have no intervals assigned into them.  (children is empty, "defunct" children is not)
+# Then make sure at least one of those children fits this criteria:
+#   is from a lower scale rank (at time of assignment, not currently)
+#   is from the same continent
+#   was never a parent to the current interval
+# These criteria are to distinguish between inter-scale correlations and true child-parent style subdivisions
+# TBD? second type of obsolete - intervals without a place in the composite i.e. (Ufimian)
+# TBD: alternate criteria - child is not boundary crosser? boundary crossers tend to be correlations, not sub divisions
+sub isObsolete {
+    my $self = shift;
+    my $dbt = $self->{'dbt'};
+    my $ig = $self->getIntervalGraph;
+
+    my $itv = shift;
+    $itv = ref $itv ? $itv : $ig->{$itv};
+  
+    if (@{$itv->{'defunct'}} && !@{$itv->{'children'}}) {
+        my $itv_rank = $TimeLookup::rank_order{$itv->{'best_scale'}->{'scale_rank'}};
+        foreach my $c (@{$itv->{'defunct'}}) {
+            if ($c == $itv->{'max'} || $c == $itv->{'min'}) {
+                next;
+            } 
+#            if ($c->{'best_scale'}->{'continent'} ne $itv->{'best_scale'}->{'continent'}) {
+#                next;
+#            }
+            my $valid_child = 0;
+            for (my $i = 0; $i < @{$c->{'all_max'}};$i++) {
+                my $max = $c->{'all_max'}->[$i];
+                my $min = $c->{'all_min'}->[$i];
+                my $scale = $c->{'all_max_scales'}->[$i];
+                if ($scale->{'continent'} eq $itv->{'best_scale'}->{'continent'} &&
+                    $TimeLookup::rank_order{$scale->{'scale_rank'}} > $itv_rank) {
+#                    print "FOUND defunct child $c->{name}:$scale->{scale_rank}:$scale->{abbrev} for $itv->{name}:$itv->{best_scale}->{scale_rank}\n";
+                    return 1;
+                }
+            }
+        }
+    }
+    if ((!$itv->{'prev'} || ($itv->{'prev'} && $itv->{'prev'}->{'next'} != $itv)) && 
+        (!$itv->{'next'} || ($itv->{'next'} && $itv->{'next'}->{'prev'} != $itv))) {
+#        print "$itv->{name} is obsolete because it has no prev or next\n";
+        return 2;
+    }
+    return 0;
+}
+
+
+# Given a set of starting intervals (or bins), finds intervals that are implied
+# by those intervals, including all child intervals and parent intervals implied
+# by the children.  Note that saying something like (mapIntervals("Bin 1"),mapIntervals("Bin 2")) 
+# may not be the same as map(Intervals("Bin 1","Bin 2")) since the second call will get
+# additional children and parent intervals that map like between the bins while the first won't 
+# Can pass in interval objects, intervals, or ten my bins (text) and will return appropriate output
+# I.E.:
+# @intervals = $t->mapIntervals(40,41,42,43,44)
+# @interval_objects = $t->mapIntervals($itv1,$itv2,$itv3)
+# @intervals = $t->mapIntervals("Cretaceous 1","Cretaceous 2","Cretaceous 3");
+sub mapIntervals {
+    my $self = shift;
+    my $ig = $self->getIntervalGraph;
+
+    my @intervals = @_;
+    return unless (@intervals);
+
+    # Reset the visited values - each call is indepedent of others
+    foreach my $itv (values %$ig) {
+        $itv->{'visited'} = 0;
     }
 
-    @intervals = ();
-    @tempintervals = ();
-    $yesints{$interval_no} = 'Y';
+    my $input_type = '';
+    if (ref($intervals[0])) {
+        $input_type = 'objects';
+    } elsif ($intervals[0] =~ /^\w+ \d$/) {
+        # We gotta convert the bins into an array of regular intervals
+        $input_type = 'bins';
+        my %binmap;
+        while (my ($interval_no,$binname) = each %TimeLookup::binning) {
+            push @{$binmap{$binname}},$interval_no;
+        }
+        my @bins = @intervals;
+        @intervals = ();
+        foreach my $bin (@bins) {
+            push @intervals, @{$binmap{$bin}};
+        }
+        @intervals = map {$ig->{$_}} @intervals; 
+    } elsif ($intervals[0] =~ /^\d+$/) {
+        # Code expects intervals objects below - convert back afterwards
+        $input_type = 'integers';
+        @intervals = map {$ig->{$_}} @intervals; 
+    } else {
+        die("mapIntervals called with unknown input: ".join(",",@intervals));
+    }
+    
+    my @q = @intervals;
+    
+    my @mapped = ();
+    my %parents;
+    while (@q) {
+        while (my $itv = shift @q) {
+            unless ($itv->{'visited'}) {
+                push @mapped,$itv;
+                $itv->{'visited'} = 1;    
+                $parents{$itv->{'max'}} = $itv->{'max'};
+                $parents{$itv->{'min'}} = $itv->{'min'};
+                
+                foreach my $c (@{$itv->{'children'}}) {
+                    if ($c->{'max'}->{'visited'} && 
+                        $c->{'min'}->{'visited'} && 
+                        ! $c->{'visited'}) {
+                        push @q,$c;
+                    }
+                }
+                if ($itv->{'equiv'}) {
+                    foreach my $e (@{$itv->{'equiv'}}) {
+                        if (! $e->{'visited'}) {
+                            push @q, $e;
+                        }
+                    }
+                }
+            }
+        }
 
-    &mapIntervals();
-    $sql = "(SELECT DISTINCT interval_no FROM correlations WHERE max_interval_no=$interval_no)"
-         . " UNION "
-         . "(SELECT DISTINCT interval_no FROM correlations WHERE min_interval_no=$interval_no)";
-    #print $sql;
-    @results = @{$dbt->getData($sql)};
-    my $moved_count = 0;
-    foreach my $row (@results) {
-        if (!$yesints{$row->{'interval_no'}} && $bestscaleyr{$row->{'interval_no'}} > $bestscaleyr{$interval_no}) {
-                #print "Could not find $row->{interval_no}<BR>";
-                $moved_count++;
+        # Not totally sure quite why this works right now
+        foreach my $itv (values %$ig) {
+        }
+        # Not totally sure quite why this works right now
+        foreach my $itv (values %$ig) {
+            if (!$itv->{'visited'} && $itv->{'prev'}->{'visited'} && $itv->{'next'}->{'visited'}) {
+                push @q, $itv;
+            }
+        }
+        # Is covered means it has children that span the 
+        # entire length of the parent, so the parent
+        # should be included
+        foreach my $p (values %parents) {
+            if (!$p->{'visited'} && $self->isCovered($p)) {
+                push @q,$p;
+            }
+        }
+    }
+    if ($input_type eq 'integers' || $input_type eq 'bins') {
+        return map {$_->{'interval_no'}} @mapped;
+    } else {
+        return @mapped;
+    }
+}
+
+
+# This basically implements Dijkstra's shortest path algorithm, but with some
+# tweaks:  
+#   * After we starting the path in one direction (searching for nodes
+#   going forward (earlier in time) or backward (older in time) we want to keep
+#   going in that same direction and not backtrack - implement this by having
+#   the distance be positive (forward) or backward.  
+#   * We don't just search for the best scale, we search for any scale to satisfy 
+#   the condition, but weight against older scales (search all_prev, all_next, not just prev,next)
+#   * We can "levels" (i.e. following an edge up to a parent or down to a child)
+#   but changing levels is weighted against so we won't do it unless we have to
+#   The level change only happens on "shared" boundaries, or boundary crossers so
+#   we can guarantee a relationship like "A is always younger than B" or vice versa 
+#   when trying to find a valid path
+sub findPath {
+    my $self = shift;
+    my ($from,$to) = @_; 
+    if ($from == $to) {
+        return ($from);
+    } 
+    my $ig = $self->getIntervalGraph;
+    $from = ref $from ? $from : $ig->{$from};
+    $to = ref $to ? $to : $ig->{$to};
+
+    # Reset graph
+    my $infinity = 9999999;
+    foreach my $itv (values %$ig) {
+        $itv->{'visited'} = $infinity;
+    }
+    $from->{'visited'} = 0;
+
+    my %previous;
+    my $pq = PriorityQueue->new();
+    $pq->insert($from,0);
+    while (my $v = $pq->pop()) {
+
+        if ($v == $to) {
+            last;
+        }
+        my @edges = ();
+
+        if ($v->{'visited'} >= 0) {
+            if ($v->{'all_next'}) {
+                foreach my $next (@{$v->{'all_next'}}) {
+                    # The BEST next gets a lower weight
+                    if ($v->{'next'} == $next) {
+                        push @edges, [$next,1];
+                    } else {
+                        push @edges, [$next,5];
+                    }
+                }
+            }
+            if ($v->{'min'} && $v->{'max'} != $v->{'min'}) {
+                # Discourage changing "levels" 
+                push @edges, [$v->{'min'},71];
+            }
+            if ($v->{'max'} && $v->{'shared_lower'} && $v->{'shared_lower'} == $v->{'max'}->{'shared_lower'}) {
+                push @edges, [$v->{'max'},71];
+            }
+            foreach my $c (@{$v->{'children'}}) {
+                # Discourage changing "levels" downward even mor
+                if ($v->{'shared_lower'} && $v->{'shared_lower'} == $c->{'shared_lower'}) {
+                    push @edges,[$c,103];
+                }
+            }
+        }
+        if ($v->{'visited'} <= 0) {
+            if ($v->{'all_prev'}) {
+                foreach my $prev (@{$v->{'all_prev'}}) {
+                    if ($prev->{'next'} == $v) {
+                        push @edges, [$prev,-1];
+                    } else {
+                        push @edges, [$prev,-5];
+                    }
+                }
+            }
+            if ($v->{'max'} && $v->{'max'} != $v->{'min'}) {
+                push @edges, [$v->{'max'},-71];
+            }
+            if ($v->{'min'} && $v->{'shared_upper'} && $v->{'shared_upper'} == $v->{'min'}->{'shared_upper'}) {
+                push @edges, [$v->{'min'},-71];
+            }
+            foreach my $c (@{$v->{'children'}}) {
+                if ($v->{'shared_upper'} && $v->{'shared_upper'} == $c->{'shared_upper'}) {
+                    push @edges,[$c,-103];
+                }
+            }
+        }
+
+        foreach my $e (@edges) {
+            my ($u,$weight) = @$e;
+            if (abs($u->{'visited'}) > abs($v->{'visited'} + $weight)) {
+                $u->{'visited'} = $v->{'visited'} + $weight;
+                $pq->insert($u,abs($u->{'visited'}));
+                $previous{$u->{'interval_no'}} = $v->{'interval_no'};
+            }
+        }
+    }
+    my @path = ();
+    if ($to->{'visited'} != $infinity) {
+        my $next = $to->{'interval_no'};
+        while ($previous{$next}) {
+            push @path, $next;
+            $next = $previous{$next};
+        }
+        push @path, $from->{'interval_no'};
+    }
+
+    return @path;
+}
+
+
+
+sub getBoundaries {
+    my $self = shift;
+    my $return_type = shift;
+    my $ig = $self->getIntervalGraph;
+
+    unless ($self->{'set_boundaries'}) {
+        $self->{'set_boundaries'} = 1;
+        my ($UPPER_MAX,$UPPER_EQ,$UPPER_MIN,$LOWER_MAX,$LOWER_EQ,$LOWER_MIN) = (1,2,3,4,5,6);
+
+        my @q = ();
+        foreach my $itv (values %$ig) {
+            if ($itv->{'boundary'} > 0) {
+                push @q,[$itv,$LOWER_EQ,$itv,0,$itv]; 
+            }
+        }
+        @q = sort {
+            $a->[0]->{'boundary_scale'}->{'pubyr'} <=> $b->[0]->{'boundary_scale'}->{'pubyr'} ||
+            $a->[0]->{'boundary_scale'}->{'scale_no'} <=> $b->[0]->{'boundary_scale'}->{'scale_no'}
+        } @q;
+        # Holocene/Quaternary/Neogene/Cenozoic/Phanerozoic upper bounds need to be put in manually (0 ma AKA NOW) PS 9/14/2005
+        foreach (32,25,12,1,751) {
+            my $itv = $ig->{$_};
+            push @q,[$itv,$UPPER_EQ,{'boundary'=>0,'boundary_scale'=>{'abbrev'=>'gl'}},0,$itv];
+        }
+
+        while(my $constraint = pop @q) {
+            my ($itv,$action,$src,$depth,$from) = @$constraint;
+            next if ($depth > 2);
+            my $abbrev = $src->{'boundary_scale'}->{'abbrev'};
+            
+            my $changed = 0;
+            my $conflict = 0;
+            my @is_younger_than = ();
+            my @is_older_than = ();
+            if ($action == $UPPER_MAX) {
+                @is_older_than = ('upper_boundary','upper_min');
+                @is_younger_than = ('lower_max','lower_boundary');
+            } elsif ($action == $UPPER_EQ) {
+                @is_older_than = ('upper_min');
+                @is_younger_than = ('upper_max','lower_boundary','lower_max');
+            } elsif ($action == $UPPER_MIN) {
+                @is_older_than = ();
+                @is_younger_than = ('lower_max','lower_boundary','upper_max','upper_boundary');
+            } elsif ($action == $LOWER_MAX) {
+                @is_older_than = ('lower_boundary','lower_min','upper_boundary','upper_min');
+                @is_younger_than = ();
+            } elsif ($action == $LOWER_EQ) {
+                @is_older_than = ('upper_min','upper_boundary','lower_min');
+                @is_younger_than = ('lower_max');
+            } elsif ($action == $LOWER_MIN) {
+                @is_older_than = ('upper_boundary','upper_min');
+                @is_younger_than = ('lower_max','lower_boundary');
+            }
+                
+            foreach (@is_younger_than) {
+                my $key = $_.$abbrev;
+                if (exists $itv->{$key}) {
+                    unless ($src->{'boundary'} <= $itv->{$key}) {
+                        $conflict = " $src->{'boundary'} is not younger than $key $itv->{$key}";
+                        last;
+                    }
+                }
+            }
+            foreach (@is_older_than) {
+                my $key = $_.$abbrev;
+                if (exists $itv->{$key}) {
+                    unless ($src->{'boundary'} >= $itv->{$key}) {
+                        $conflict = " $src->{'boundary'} is not older than $key $itv->{$key}";
+                        last;
+                    }
+                }
+            }
+            
+            # Deals with Rhaetian case.  Gradstein 2004 says [Norian --> Rhaetian --> Hettangian]
+            # Only gradstein says [Sevatian maps into Norian, next interval is Lower Hettangian], so basically
+            # Rhaetian is cut out of the picture entirely and assumed to be part of Norian.  In This case
+            # don't let the information propagated from Hettangian screw up Rhaetians boundary, but
+            # let the Sevation boundary continue to have the old info. 
+            if ($itv->{'next'} == $src && ($action == $LOWER_EQ || $action == $LOWER_MAX)) {
+                $conflict = " next interval $src->{name} can't set lower or lower max";
+            }
+            if ($itv->{'prev'} == $src && ($action == $UPPER_EQ || $action == $UPPER_MAX)) {
+                $conflict = " prev interval $src->{name} can't set upper or upper max";
+            }
+
+            if (!$conflict) {
+                if ($abbrev eq $itv->{'best_scale'}->{'abbrev'} ||
+                    $abbrev eq $itv->{'best_boundary'}->{'abbrev'} ||
+                    $abbrev eq 'gl') {
+                    if ($action == $UPPER_MAX) {
+                        if (!exists $itv->{'upper_max'.$abbrev} || $src->{'boundary'} < $itv->{'upper_max'.$abbrev}) {
+                            $itv->{'upper_max'.$abbrev} = $src->{'boundary'};
+                            $itv->{'upper_max'.$abbrev.'src'} = $src;
+                            $changed++;
+                        }
+                    } elsif ($action == $UPPER_EQ) {
+                        if (!exists $itv->{'upper_boundary'.$abbrev}) {
+                            $itv->{'upper_boundary'.$abbrev} = $src->{'boundary'};
+                            $itv->{'upper_boundary'.$abbrev.'src'} = $src;
+                            $changed++;
+                        }
+                    } elsif ($action == $UPPER_MIN) {
+                        if (!exists $itv->{'upper_min'.$abbrev} || $src->{'boundary'} > $itv->{'upper_min'.$abbrev}) {
+                            $itv->{'upper_min'.$abbrev} = $src->{'boundary'};
+                            $itv->{'upper_min'.$abbrev.'src'} = $src;
+                            $changed++;
+                        }
+                    } elsif ($action == $LOWER_MAX) {
+                        if (!exists $itv->{'lower_max'.$abbrev} || $src->{'boundary'} < $itv->{'lower_max'.$abbrev}) {
+                            $itv->{'lower_max'.$abbrev} = $src->{'boundary'};
+                            $itv->{'lower_max'.$abbrev.'src'} = $src;
+                            $changed++;
+                        }
+                    } elsif ($action == $LOWER_EQ) {
+                        if (!exists ($itv->{'lower_boundary'.$abbrev})) {
+                            $itv->{'lower_boundary'.$abbrev} = $src->{'boundary'};
+                            $itv->{'lower_boundary'.$abbrev.'src'} = $src;
+                            $changed++;
+                        }
+                    } elsif ($action == $LOWER_MIN) {
+                        if (!exists $itv->{'lower_min'.$abbrev} || $src->{'boundary'} > $itv->{'lower_min'.$abbrev}) {
+                            $itv->{'lower_min'.$abbrev} = $src->{'boundary'};
+                            $itv->{'lower_min'.$abbrev.'src'} = $src;
+                            $changed++;
+                        }
+                    }
+                }
+            }
+            if ($changed) {
+#                print _printConstraint($constraint);
+                push @{$itv->{'constraints'}},$constraint;
+            } elsif ($conflict) {
+                push @{$itv->{'conflicts'}},[@{$constraint},$conflict];
+                next;
+            } else {
+                # No new data was provided, stop here
+                next;
+            } 
+
+            if ($itv->{'lower_max'.$abbrev} && 
+                $itv->{'lower_max'.$abbrev} == $itv->{'lower_min'.$abbrev} &&
+                ! $itv->{'lower_boundary'.$abbrev}) {
+                $itv->{'lower_boundary'.$abbrev} = $itv->{'lower_max'.$abbrev};
+                $itv->{'lower_boundary'.$abbrev.'src'} = $itv->{'lower_max'.$abbrev.'src'};
+                $action = $LOWER_EQ;
+            }
+            if ($itv->{'upper_max'.$abbrev} && 
+                $itv->{'upper_max'.$abbrev} == $itv->{'upper_min'.$abbrev} &&
+                ! $itv->{'upper_boundary'.$abbrev}) {
+                $itv->{'upper_boundary'.$abbrev} = $itv->{'upper_max'.$abbrev};
+                $itv->{'upper_boundary'.$abbrev.'src'} = $itv->{'upper_max'.$abbrev.'src'};
+                $action = $UPPER_EQ;
+            }
+
+            my @next_q;
+            # Handle propagation to previous intervals
+#            foreach my $prev (@{$itv->{'all_prev'}}) 
+#                if ($prev->{'next'} == $itv) 
+            if ($itv->{'prev'} && $itv->{'prev'}->{'next'} == $itv) {
+                if ($action == $LOWER_EQ) {
+                    push @next_q, [$itv->{prev},$UPPER_EQ,$src,$depth+1,$itv];
+                } elsif ($action == $LOWER_MIN) {
+                    push @next_q, [$itv->{prev},$UPPER_MIN,$src,$depth+1,$itv];
+                } elsif ($action == $LOWER_MAX) {
+                    push @next_q, [$itv->{prev},$UPPER_MAX,$src,$depth+1,$itv];
+                } 
+            }
+#            }
+
+            # Handle propagation to next interval
+            if ($itv->{'next'} && $itv->{'next'}->{'prev'} == $itv) {
+                if ($action == $UPPER_EQ) {
+                    push @next_q, [$itv->{'next'},$LOWER_EQ,$src,$depth+1,$itv];
+                } elsif ($action == $UPPER_MIN) {
+                    push @next_q, [$itv->{'next'},$LOWER_MIN,$src,$depth+1,$itv];
+                } elsif ($action == $UPPER_MAX) {
+                    push @next_q, [$itv->{'next'},$LOWER_MAX,$src,$depth+1,$itv];
+                } 
+            }
+
+            # Handle propagation to other equivalent intervals 
+            if ($action == $UPPER_EQ ||
+                $action == $UPPER_MAX ||
+                $action == $UPPER_MIN) {
+                if ($itv->{'shared_upper'}) {
+                    foreach my $shared (@{$itv->{'shared_upper'}}) {
+                        push @next_q,[$shared,$action,$src,$depth,$itv];
+                    }
+                }
+            }
+            if ($action == $LOWER_EQ ||
+                $action == $LOWER_MAX ||
+                $action == $LOWER_MIN) {
+                if ($itv->{'shared_lower'}) {
+                    foreach my $shared (@{$itv->{'shared_lower'}}) {
+                        push @next_q,[$shared,$action,$src,$depth,$itv];
+                    }
+                }
+            }
+
+            # Handle propagation to max and min interval
+            if ($itv->{'max'}) {
+                if ($action == $LOWER_EQ || $action == $LOWER_MAX || $action == $LOWER_MIN) {
+                    if ($itv->{'shared_lower'} && $itv->{'max'}->{'shared_lower'} == $itv->{'shared_lower'}) {
+                        push @next_q, [$itv->{'max'},$action,$src,$depth,$itv];
+                    } else {
+                        if ($action == $LOWER_EQ || $action == $LOWER_MIN) {
+                            push @next_q, [$itv->{'max'},$LOWER_MIN,$src,$depth,$itv];
+                        }
+                    }
+                    if ($itv->{'max'} != $itv->{'min'}) {
+                        if ($action == $LOWER_EQ || $action == $LOWER_MAX) {
+                            push @next_q, [$itv->{'min'},$LOWER_MAX,$src,$depth,$itv];
+                        }
+                    }
+                } elsif ($action == $UPPER_EQ || $action == $UPPER_MIN || $action == $UPPER_MAX) {
+                    if ($itv->{'shared_upper'} && $itv->{'min'}->{'shared_upper'} == $itv->{'shared_upper'}) {
+                        push @next_q, [$itv->{'min'},$action,$src,$depth,$itv];
+                    } else {
+                        if ($action == $UPPER_EQ || $action == $UPPER_MAX) {
+                            push @next_q, [$itv->{'min'},$UPPER_MAX,$src,$depth,$itv];
+                        }
+                    }
+                    if ($itv->{'max'} != $itv->{'min'}) {
+                        if ($action == $UPPER_EQ || $action == $UPPER_MIN) {
+                            push @next_q, [$itv->{'max'},$UPPER_MIN,$src,$depth,$itv];
+                        }
+                    }
+                }
+            }
+
+            # Handle propagation to child intervals
+            foreach my $c (@{$itv->{'children'}}) {
+                if ($action == $LOWER_EQ || $action == $LOWER_MAX || $action == $LOWER_MIN) {
+                    if ($c->{'max'} == $c->{'min'}) {
+                        if ($itv->{'shared_lower'} && $c->{'shared_lower'} == $itv->{'shared_lower'}) {
+                            push @next_q, [$c,$action,$src,$depth,$itv];
+                        } else {
+                            if ($action == $LOWER_EQ || $action == $LOWER_MAX) {
+                                push @next_q, [$c,$LOWER_MAX,$src,$depth,$itv];
+                            }
+                        }
+                    } elsif ($c->{'max'} != $itv) {
+                        # Boundary crosser at max side
+                        if ($action == $LOWER_EQ) {
+                            push @next_q, [$c,$LOWER_MIN,$src,$depth,$itv];
+                            push @next_q, [$c,$UPPER_MAX,$src,$depth,$itv];
+                        } elsif ($action == $LOWER_MAX) {
+                            push @next_q, [$c,$UPPER_MAX,$src,$depth,$itv];
+                        } elsif ($action == $LOWER_MIN) {
+                            push @next_q, [$c,$LOWER_MIN,$src,$depth,$itv];
+                        }
+                    }
+                } elsif ($action == $UPPER_EQ || $action == $UPPER_MAX || $action == $UPPER_MIN) {
+                    if ($c->{'max'} == $c->{'min'}) {
+                        if ($itv->{'shared_upper'} && $c->{'shared_upper'} == $itv->{'shared_upper'}) {
+                            push @next_q, [$c,$action,$src,$depth,$itv];
+                        } else {
+                            if ($action == $UPPER_EQ || $action == $UPPER_MIN) {
+                                push @next_q, [$c,$UPPER_MIN,$src,$depth,$itv];
+                            }
+                        }
+                    } elsif ($c->{'min'} != $itv) {
+                        # Boundary crosser at min side
+                        if ($action == $UPPER_EQ) {
+                            push @next_q, [$c,$LOWER_MIN,$src,$depth,$itv];
+                            push @next_q, [$c,$UPPER_MAX,$src,$depth,$itv];
+                        } elsif ($action == $UPPER_MIN) {
+                            push @next_q, [$c,$LOWER_MIN,$src,$depth,$itv];
+                        } elsif ($action == $UPPER_MAX) {
+                            push @next_q, [$c,$UPPER_MAX,$src,$depth,$itv];
+                        }
+                    }
+                }
+            }
+#            print $next_q[0][2]->{'boundary_scale'}->{'pubyr'}." vs. ".$next_q[0]->[4]->{'best_scale'}->{'pubyr'}."\n";
+#            @next_q = grep {$_->[2]->{'boundary_scale'}->{'pubyr'} <= $_->[4]->{'best_scale'}->{'pubyr'}} @next_q;
+            push @q, @next_q;
+        }
+
+        # Makes guess at the remaining boundaries
+        foreach my $itv (values %$ig) {
+            my $abbrev = $itv->{'best_scale'}->{'abbrev'};
+            foreach ('upper_max','upper_boundary','upper_min','lower_max','lower_boundary','lower_min') {
+                if ($itv->{$_.$abbrev} =~ /\d/) {
+                    $itv->{$_} = $itv->{$_.$abbrev};
+                    $itv->{$_.'src'} = $itv->{$_.$abbrev.'src'};
+                } elsif ($itv->{$_.'gl'} =~ /\d/) {
+                    $itv->{$_} = $itv->{$_.'gl'};
+                    $itv->{$_.'src'} = $itv->{$_.'gl'.'src'};
+                }
+            }
+        }
+
+        my %set = (); my %unset = ();
+        foreach my $itv (values %$ig) {
+#            if ($self->isObsolete($itv)) {
+#            }
+            if ($itv->{'lower_boundary'} ne '' && $itv->{'upper_boundary'} ne '') {
+                $set{$itv} = $itv;
+            } else {
+                $unset{$itv} = $itv;
+            }
+        }
+
+        my @leaves = grep { not scalar(@{$_->{'children'}}) } values %unset;
+
+        my @obsolete;
+        foreach my $itv (@leaves) {
+            if ($self->isObsolete($itv)) {
+                push @obsolete, $itv;
+                next;
+            }
+            delete $unset{$itv};
+            $set{$itv} = $itv;
+            if ($itv->{'upper_boundary'} !~ /\d/ && $itv->{'upper_min'}) {
+                $itv->{'upper_boundary'} = $itv->{'upper_min'};
+                $itv->{'upper_boundarysrc'} = $itv->{'upper_minsrc'};
+            }
+            if ($itv->{'upper_boundary'} !~ /\d/) {
+                $itv->{'upper_boundary'} = $itv->{'upper_max'};
+                $itv->{'upper_boundarysrc'} = $itv->{'upper_maxsrc'};
+            }
+            if ($itv->{'lower_boundary'} !~ /\d/) {
+                $itv->{'lower_boundary'} = $itv->{'lower_max'};
+                $itv->{'lower_boundarysrc'} = $itv->{'lower_maxsrc'};
+            }
+            if ($itv->{'lower_boundary'} !~ /\d/) {
+                $itv->{'lower_boundary'} = $itv->{'lower_min'};
+                $itv->{'lower_boundarysrc'} = $itv->{'lower_minsrc'};
+            }
+        }
+
+        foreach (values %$ig) {
+            $_->{'visited'} = 0;
+            $_->{'depth'} = 0;
+        }
+#        foreach (@leaves) {
+#            $_->{'depth'} = 0;
+#        }
+        my @q = @leaves;
+        while (my $itv = shift @q) {
+            next if $itv->{'visited'};
+            $itv->{'visited'} = 1;
+            if ($itv->{'max'}) {
+                push @q, $itv->{'max'}; 
+                $itv->{'max'}->{'depth'} = ($itv->{'max'}->{'depth'} > $itv->{'depth'}) ? $itv->{'max'}->{'depth'} : $itv->{'depth'} + 1;
+            }
+            if ($itv->{'min'} && $itv->{'max'} != $itv->{'min'}) {
+                push @q, $itv->{'min'}; 
+                $itv->{'min'}->{'depth'} = ($itv->{'min'}->{'depth'} > $itv->{'depth'}) ? $itv->{'min'}->{'depth'} : $itv->{'depth'} + 1;
+            }
+        }
+        
+        foreach my $itv (sort {$a->{'depth'} <=> $b->{'depth'}} values %unset) {
+            if (!$itv->{'depth'} && !$set{$itv}) {
+#                print "NO DEPTH FOR $itv->{interval_no} $itv->{name} ?\n";
+            }
+            my ($min,$max) = $self->getFromChildren($itv);
+            $itv->{'lower_boundary'} = $max;
+            $itv->{'upper_boundary'} = $min;
+            if ($itv->{'lower_boundary'} ne '' && $itv->{'upper_boundary'} ne '') {
+                delete $unset{$itv};
+                $set{$itv} = $itv;
+            }
+        }
+
+        # Fix for gallic, quaternary, tertiary, etc
+        foreach my $itv (@obsolete) {
+#            print "$itv->{name} IS OBSOLETE\n";
+            my ($min,$max) = $self->getFromChildren($itv,'defunct');
+            $itv->{'lower_boundary'} = $max;
+            $itv->{'upper_boundary'} = $max;
+            if ($itv->{'lower_boundary'} ne '' && $itv->{'upper_boundary'} ne '') {
+                delete $unset{$itv};
+                $set{$itv} = $itv;
+            }
+        }
+        # Fix for cases like the edicaran/sinian/poundian
+        foreach my $itv (values %unset) {
+#            print "$itv->{name} STILL unset\n";
+            if ($itv->{'next'} && $itv->{'next'}->{'lower_boundary'}) {
+                $itv->{'upper_boundary'} = $itv->{'next'}->{'lower_boundary'};
+            } elsif (!$itv->{'next'} && $itv->{'all_next'} && 
+                $itv->{'all_next'}->[0]->{'lower_boundary'}) {
+                $itv->{'upper_boundary'} = $itv->{'all_next'}->[0]->{'lower_boundary'};
+            }
+            if ($itv->{'prev'} && $itv->{'prev'}->{'upper_boundary'}) {
+                $itv->{'lower_boundary'} = $itv->{'prev'}->{'upper_boundary'};
+            } elsif (!$itv->{'prev'} && $itv->{'all_prev'} && 
+                $itv->{'all_prev'}->[0]->{'upper_boundary'}) {
+                $itv->{'lower_boundary'} = $itv->{'all_prev'}->[0]->{'upper_boundary'};
+            }
+            if ($itv->{'lower_boundary'} ne '' && $itv->{'upper_boundary'} ne '') {
+                $set{$itv} = $itv;
+                delete $unset{$itv};
+            }
+        }
+    }
+    if ($return_type ne 'bins') {
+        # Finally finished, return
+        my %upper = ();
+        my %lower = ();
+        foreach my $itv (values %$ig) {
+            $lower{$itv->{'interval_no'}} = $itv->{'lower_boundary'}; 
+            $upper{$itv->{'interval_no'}} = $itv->{'upper_boundary'}; 
+        }
+        return (\%upper,\%lower);
+    } else {
+        return $self->_computeBinBounds();
+    }
+}
+
+sub getFromChildren {
+    my ($self,$itv,$defunct) = @_;
+    my $max = -1;
+    my $min = 999999;
+    my @children;
+    if ($defunct) {
+        @children = @{$itv->{'defunct'}};
+    } else {
+        @children = @{$itv->{'children'}};
+    }
+#    print "FROM CHILDREN: $itv->{name}\n";
+    foreach my $c (@children) {
+#        if ($itv->{'interval_no'} == 3) { print "CHILD $c->{name} $c->{lower_boundary} $c->{upper_boundary}\n"; }
+        if ($c->{'max'} == $itv && $c->{'min'} == $itv) {
+            if ($c->{'lower_boundary'} > $max) {
+                $max = $c->{'lower_boundary'};
+#                print " MAX $max - from $c->{interval_no}\n"
+            } 
+            if ($c->{'upper_boundary'} < $min) {
+                $min = $c->{'upper_boundary'};
+#                print " MIN $min - from $c->{interval_no}\n"
+            }
+        }
+    }
+    
+    $max = ($max == -1) ? "" : $max;
+    $min = ($min == 999999) ? "" : $min;
+    return ($min,$max);
+}
+
+sub _computeBinBounds {
+    my $self = shift;
+    my $ig = $self->getIntervalGraph;
+
+    my $upperbinbound = {};
+    my $lowerbinbound = {};
+    foreach my $bin (@TimeLookup::bins) {
+        my @intervals = map{$ig->{$_}} $self->mapIntervals($bin);
+#        print "$bin: ".Dumper(\@intervals)."<br>";
+
+        # find the boundary ages for the bin by checking the boundaries of
+        #  all intervals falling within it
+        foreach my $itv ( @intervals )    {
+            if ($itv->{'lower_boundarysrc'}->{'boundary_scale'}->{'abbrev'} eq 'gl') {
+                my $lower_bound = $itv->{'lower_boundarygl'};
+                if ( $lower_bound ne '' && $lower_bound > $lowerbinbound->{$bin} )   {
+    #                unless ($skip_lower{$i}) {
+                        $lowerbinbound->{$bin} = $lower_bound;
+    #                }
+                }
+            }
+
+            if ($itv->{'upper_boundarysrc'}->{'boundary_scale'}->{'abbrev'} eq 'gl') {
+                my $upper_bound = $itv->{'upper_boundarygl'};
+                if ( $upper_bound ne '' && $upper_bound < $upperbinbound->{$bin} || $upperbinbound->{$bin} eq "" ) {
+    #                unless ($skip_upper{$i}) {
+                        $upperbinbound->{$bin} = $upper_bound;
+    #                }
+                }
+            }
+        }
+    }
+    return ($upperbinbound,$lowerbinbound);
+}
+
+sub getIntervalGraph {
+    my $self = shift;
+
+    # If its already been created, return it
+    return $self->{'ig'} if $self->{'ig'};
+    
+    my $dbt = $self->{'dbt'};
+    my $dbh = $dbt->dbh;
+
+    # Else create a new one
+    my $ig = {};
+    $self->{'ig'} = $ig;
+
+    my %scales;
+    my $sql = "SELECT s.created,s.scale_no,s.scale_name,s.continent,s.scale_rank,s.reference_no,r.pubyr FROM scales s, refs r WHERE s.reference_no=r.reference_no";
+    foreach (@{$dbt->getData($sql)}) {
+        my $abbrev = $_->{'continent'};
+        if ($abbrev =~ /^(\w)(\w)\w+(?: (\w))?/) {
+            if ($3) {
+                $abbrev = $1.$3;
+            } else {
+                $abbrev= $1.$2;
+            }
+        }
+        $_->{'abbrev'} = $abbrev;
+        $scales{$_->{'scale_no'}} = $_;
+    }
+
+    $sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
+    my @intervals = @{$dbt->getData($sql)};
+
+    $sql = "SELECT scale_no, interval_no, next_interval_no, max_interval_no, min_interval_no, lower_boundary FROM correlations c";
+    my @results = @{$dbt->getData($sql)};
+
+    my %correlations = ();
+    foreach (@results) {
+        push @{$correlations{$_->{'interval_no'}}},$_;
+    }
+    # We first initialize with empty hashes.  Do this so we can directly reference
+    # the interval objects even if they haven't been fully initialized yet
+    foreach (@intervals) {
+        my $interval_no = $_->{'interval_no'};
+        my $name = $_->{'interval_name'};
+        $name = "$_->{eml_interval} $name" if ($_->{eml_interval});
+        $ig->{$interval_no} = {"interval_no"=>$interval_no,"name"=>$name,"distance"=>0,"children"=>[],"defunct"=>[]};
+    }
+    #  Now do the major gruntwork of initalizing the interval object
+    foreach (@intervals) {
+        my $interval_no = $_->{'interval_no'};
+        $self->_initInterval($ig,$ig->{$interval_no},$correlations{$interval_no},\%scales);
+    }
+
+    #  We have to do this after everything above has been set in place
+    foreach (@intervals) {
+        my $interval_no = $_->{'interval_no'};
+        $self->_findSharedBoundaries($ig->{$interval_no});
+        $self->_findEquivalentTerms($ig->{$interval_no});
+    }
+    
+    # manual carboniferous fix
+    $self->_combineBoundaries('shared_upper',$ig->{18},$ig->{27});
+    $self->_combineBoundaries('shared_lower',$ig->{18},$ig->{28});
+    return $ig;
+}
+
+sub getInterval {
+    my ($self,$i) = @_;
+    return unless $i;
+    my $ig = $self->getIntervalGraph;
+    return $ig->{$i};
+}
+
+# This function determines whether a given interval has a set of children which full spans
+# The enter length of the interval.  I.E.  {Oligocene,Eocene,Paleocene} covers Paleogene so implies it
+# Do this by looking for a boundary crosser at each end
+sub isCovered {
+    my $self = shift;
+    my $itv = shift;
+
+    my $cross_lb = 0;
+    my $cross_ub = 0;
+    foreach my $c (@{$itv->{'children'}}) {
+        if ($c->{'visited'}) {
+            if ($c->{'max'} != $itv || ($itv->{'shared_lower'} && $c->{'shared_lower'} == $itv->{'shared_lower'})) {
+                $cross_lb = 1;
+            }
+            if ($c->{'min'} != $itv || ($itv->{'shared_upper'} && $c->{'shared_upper'} == $itv->{'shared_upper'})) {
+                $cross_ub = 1;
+            }
         }
     }
 
-    @intervals = ();
-    @tempintervals = ();
-    %yesints = ();
-    if (scalar(@results) && $moved_count == scalar(@results)) {
+    if ($cross_lb && $cross_ub) {
         return 1;
     } else {
         return 0;
     }
 }
 
-sub processScaleLookup	{
+# Ask John:
+# that bookend lower boundary - can be detected?
 
-	$dbh = shift;
-	$dbt = shift;
-	$focal_scale = shift;
-    $return_type = shift;
 
-	&cleanArrays();
+sub best_by_continent {
+    my ($itv,$type,$continent) = @_;
+    return unless $itv;
+    return unless $itv->{'all_'.$type.'_scales'};
 
-# get an array of the interval numbers falling in the requested scale
-	$sql = "SELECT c.interval_no,i.eml_interval,i.interval_name FROM correlations c LEFT JOIN intervals i ON c.interval_no = i.interval_no WHERE c.scale_no=" . $focal_scale;
-	my @intrefs = @{$dbt->getData($sql)};
+    my $idx = -1;
+    my @scales = @{$itv->{'all_'.$type.'_scales'}};
+    for($idx = 0; $idx < @scales; $idx++) { 
+        if ($scales[$idx]->{'continent'} eq $continent) {
+            last;
+        }
+    }
+    if ($idx >=  @scales) {
+        return;
+    } else {
+        return $itv->{'all_'.$type}->[$idx];
+    }
+}
 
-	&findBestScales();
-	&findImmediateCorrelates();
+# If anything is array 1 matches anything in array 2, return true
+sub matchAny {
+    my @A1 = @{$_[0]};
+    my @A2 = @{$_[1]};
 
-    my %intervalToScale = ();
-    my %intervalToInterval = ();
-# for each interval in the scale, find all other intervals mapping into it
-	for my $intref ( @intrefs )	{
-
-		@intervals = ();
-		@tempintervals = ();
-		push @intervals , $intref->{interval_no};
-		%yesints = ();
-		$yesints{$intref->{interval_no}} = "Y";
-		&mapIntervals();
-
-        # The 'intervalToScale' return type returns a mapping of interval_nos to the interval name of the
-        # scale we're processing.  Used in Report.pm PS 12/27/2004
-        if ($return_type eq 'intervalToInterval') {
-            foreach $interval_in_scale (@intervals) {
-                $intervalToInterval{$interval_in_scale} = $intref->{'interval_no'};
+    my $matched = 0;
+    foreach my $j (@A1) {
+        foreach my $k (@A2) {
+            if ($j == $k) {
+                return 1;
             }
-        } elsif ($return_type eq 'intervalToScale') {
-            foreach $interval_in_scale (@intervals) {
-                if ($intref->{'eml_interval'}) {
-                    $intervalToScale{$interval_in_scale} = $intref->{'eml_interval'} . ' ' . $intref->{'interval_name'}; 
-                } else {
-                    $intervalToScale{$interval_in_scale} = $intref->{'interval_name'} ;
-                }
+        }
+    }
+    return 0;
+}
+
+# This algorithm sets variable in the interval object if the minimum correlate
+# shares the same boundary as the interval itself called "shared_upper".  "shared_upper" is
+# an array of references to all intervals that share that boundary.  
+# Detection is easy enough.  Assuming you have the following structure:
+# Where horizontal arrays denote "next" intervals, vertical lines denotes a boundary, The C -> A
+# denotes the C's min correlate, the D -> B denotes B's max correlate
+#  A -|-> B   then the shared_upper set is {A,C} and the shared_lower set is {B,D}
+#  ^  |   ^   So just look for structures like this.
+#  C -|-> D
+sub _findSharedBoundaries {
+    my $self = shift;
+   
+    my ($A,$B,$C,$D,$B2);
+    $C = shift; 
+
+    return unless $C && $C->{'min'}; 
+    my $max_name = quotemeta $C->{'max'}->{'name'};
+    if ($C->{'name'} =~ /Early\/Lower $max_name$/ || 
+        $C->{'name'} =~ /early Early $max_name$/ ||
+        $C->{'name'} =~ /early $max_name$/) {
+#        print "COMBINING LOWER $C->{'max'}->{'name'} && $C->{name}\n";
+        $self->_combineBoundaries('shared_lower',$C,$C->{'max'});
+    }
+    my $min_name = quotemeta $C->{'min'}->{'name'};
+    if ($C->{'name'} =~ /Late\/Upper $min_name$/ ||
+        $C->{'name'} =~ /late Late $min_name$/ ||
+        $C->{'name'} =~ /late $min_name$/) {
+#        print "COMBINING UPPER $C->{'min'}->{'name'} && $C->{name}\n";
+        $self->_combineBoundaries('shared_upper',$C,$C->{'min'});
+    }
+
+    return unless $C && $C->{'next'} && $C->{'min'};
+    my %continents;
+    $continents{$_} = 1 for map {$_->{'continent'}} @{$C->{'all_next_scales'}};
+    foreach my $continent (keys %continents) {
+        # These correspond to the diagam above
+        $A = best_by_continent($C,'min',$continent);
+        $D = best_by_continent($C,'next',$continent);
+        $B = best_by_continent($D,'max',$continent);
+        $B2 = best_by_continent($A,'next',$continent);
+
+        next unless ($A && $B && $B2 && $C && $D);
+       
+        # The "matchAny" comes up with Calabrian - Calabrians max is Pleistocene, which shared with E. Pleistocene
+        # The previous intervals min is L. Pliocene, which has a next of E. Pleistocene, which doesn't match
+        # Pleistocene directly but matches E. Pleistocene in its shared_lower
+        if ($B == $B2 || 
+            ($B->{'shared_lower'} && matchAny($B->{'shared_lower'},[$B2])) ||
+            ($B2->{'shared_lower'} && matchAny($B2->{'shared_lower'},[$B]))
+            ) {
+
+            $self->_combineBoundaries('shared_upper',$A,$C);
+            $self->_combineBoundaries('shared_lower',$B,$D);
+        }
+    }
+}
+
+
+# See cases like Griesbachian -> Olenekian -> Smithian -> Spathian & Griesbacian -> Nammalian -> Spathian
+# Or Kungurian -> Ufimian -> Wordian. L
+# Look for pattern A -> B -> C matches A -> D -> C or A -> D -> E -> C
+sub _findEquivalentTerms {
+    my $self = shift;
+    my $itv = shift;
+    if ($self->isObsolete($itv) == 2) {
+        foreach my $prev (@{$itv->{'all_prev'}}) {
+            my @combine_upper = ();
+            my @combine_lower = ();
+            if ($prev->{'next'} != $itv && 
+                $prev->{'next'} && $prev->{'next'}->{'next'} &&
+                matchAny([$prev->{'next'}->{'next'}],$itv->{'all_next'})) {
+#                print "Found match: $itv->{name} vs. $prev->{next}->{name}\n"; 
+                $self->_combineBoundaries('shared_upper',$itv,$prev->{'next'});
+                $self->_combineBoundaries('shared_lower',$itv,$prev->{'next'});
+                $itv->{'equiv'} = [$prev->{'next'}];
+                $prev->{'next'}->{'equiv'} = [$itv];
             }
-        # Else we map collection_nos to interval name of the scale we're processing, and return a hash of that.
+            if ($prev->{'next'} != $itv && 
+                $prev->{'next'} && $prev->{'next'}->{'next'} && $prev->{'next'}->{'next'}->{'next'} &&
+                matchAny([$prev->{'next'}->{'next'}->{'next'}],$itv->{'all_next'})) {
+#                print "Found match: $itv->{name} vs. $prev->{next}->{name} & $prev->{next}->{next}->{name}\n";
+                $self->_combineBoundaries('shared_upper',$itv,$prev->{'next'}->{'next'});
+                $self->_combineBoundaries('shared_lower',$itv,$prev->{'next'});
+                $itv->{'equiv'} = [$prev->{'next'},$prev->{'next'}->{'next'}];
+            }
+        }
+    }
+}
+
+# Type should be either "shared_upper" or "shared_lower" for shared upper (younger) and lower (older_ boundaries respectively
+# This makres a special key ($type) to point to a shared array in memory. The array is conceptually like a set.
+# For example, Late Ordovician and Ordovican share an upper boundary (they are interval objects);
+#   $ordovician->{shared_upper}        --> [$ordovician,$late_ordovician]
+#   $late_ordovician->{shared_upper}   -----^ 
+sub _combineBoundaries {
+    my $self = shift;
+    my ($type,$itv1,$itv2) = @_;
+    if ($itv1->{$type} && $itv2->{$type}) {
+        if ($itv1->{$type} != $itv2->{$type}) {
+            #We're mergine two separate "islands"
+            foreach my $itv (@{$itv2->{$type}}) {
+                push @{$itv1->{$type}}, $itv;
+                $itv->{$type} = $itv1->{$type};
+            }
         } else {
-        # get the name of the interval
-            $sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $intref->{interval_no};
-            my $interval_name = @{$dbt->getData($sql)}[0]->{interval_name};
-            my $eml_interval = @{$dbt->getData($sql)}[0]->{eml_interval};
-            if ( $eml_interval ne "" )	{
-                $interval_name = $eml_interval . " " . $interval_name;
-            }
-
-        # get a list of collections in this interval
-            $sql = "SELECT collection_no FROM collections WHERE ";
-            $sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
-            $sql .= "AND ( min_interval_no IN ( " . join(',',@intervals) . " ) ";
-            $sql .= " OR min_interval_no < 1 )";
-            my @collrefs = @{$dbt->getData($sql)};
-
-        # make a hash array in which keys are collection numbers and
-        #   values are the name of this interval in the focal scale
-            for my $collref ( @collrefs )   {
-                $intervalInScale{$collref->{collection_no}} = $interval_name;
-            }
+            # We've already done this
+#                print "WARNING: $itv1->{interval_no} and $itv2->{interval_no} have already been marked as being part of the same set!\n";
         }
-	}
-
-    if ($return_type eq 'intervalToInterval') {
-        return \%intervalToInterval;
-    } if ($return_type eq 'intervalToScale') {
-        return \%intervalToScale;
+    } elsif ($itv1->{$type}) {
+        # Interval is already part of a larger set, add the minimum correlate to the larger set
+        push @{$itv1->{$type}},$itv2;
+        $itv2->{$type} = $itv1->{$type};
+    } elsif ($itv2->{$type}) {
+        # Minimum correlate is already part of a larger set, add interval
+        # to the larger set
+        push @{$itv2->{$type}},$itv1;
+        $itv1->{$type} = $itv2->{$type};
     } else {
-    	return \%intervalInScale;
+        #  This shared boundary isn't part of any larger set of shared boundaries,
+        #  so create a new "shared boundary" object
+        my $shared_set = [$itv1,$itv2];
+        $itv1->{$type} = $shared_set;
+        $itv2->{$type} = $shared_set;
     }
 }
 
-# JA 2-3.3.04
-sub processBinLookup	{
+# Initializes an interval pseudo-object.  The object has the following fields:
+#   interval_no
+#   visited: internal bookkeeping for when we map intervals. Think of visited in the sense of graph nodes
+#   children: all intervals that map into this interval, not ordered though
+#   defunct: all intervals that mapped into this interval at one point in time but no longer do
+#   max: pointer to maximum correlate
+#   min: pointer to minimum correlate
+#   next: pointer to next (newer) interval
+#   all_next: array of pointers to all next intervals, sorted by pubyr desc (all_next[0] is newest)
+#   prev: pointer to prevous (older) interval
+#   all_prev: array of pointers to all prev intervals, sorted by pubyr desc (all_prev[0] is newest)
+#   next_scale: pointer to best scale that gives a next interval
+#   all_scales: pointer to all scale objects which use this interval
+#   boundary_scale: pointer to best scale that gives a boundary
+#   lower_boundary: floating point lower_boundary value
+#   upper_boundary: flatoing point upper_boundary value
 
-	$dbh = shift;
-	$dbt = shift;
-	my $returndata = shift;
+sub _initInterval {
+    my $self = shift;
 
-	&cleanArrays();
+    my ($ig,$itv,$correlations,$scales) = @_;
 
-    my (%upperbound,%lowerbound);
-	# get a lookup of the boundary ages for all intervals
-    if ($returndata ne 'binning') {
-        @_ = &findBoundaries($dbh,$dbt);
-        %upperbound = %{$_[0]};
-        %lowerbound = %{$_[1]};
-    }
-    
+    my %seen_parents = ();
 
-	# this hash array defines the binning
-	%binning = ("33" => "Cenozoic 6", # Pleistocene
-		"34" => "Cenozoic 6", # Pliocene
-		"83" => "Cenozoic 6", # Late Miocene
-		"84" => "Cenozoic 5", # Middle Miocene
-		"85" => "Cenozoic 5", # Early Miocene
-		"36" => "Cenozoic 4", # Oligocene
-		"88" => "Cenozoic 3", # Late Eocene
-		"107" => "Cenozoic 3", # Bartonian
-		"108" => "Cenozoic 2", # Lutetian
-		"90" => "Cenozoic 2", # Early Eocene
-		"38" => "Cenozoic 1", # Paleocene
-		"112" => "Cretaceous 8", # Maastrichtian
-		"113" => "Cretaceous 7", # Campanian
-		"114" => "Cretaceous 6", # Santonian
-		"115" => "Cretaceous 6", # Coniacian
-		"116" => "Cretaceous 6", # Turonian
-		"117" => "Cretaceous 5", # Cenomanian
-		"118" => "Cretaceous 4", # Albian
-		"119" => "Cretaceous 3", # Aptian
-		"120" => "Cretaceous 2", # Barremian
-		"121" => "Cretaceous 2", # Hauterivian
-		"122" => "Cretaceous 1", # Valanginian
-		"123" => "Cretaceous 1", # Berriasian
-		"124" => "Jurassic 6", # Tithonian
-		"125" => "Jurassic 5", # Kimmeridgian
-		"126" => "Jurassic 5", # Oxfordian
-		"127" => "Jurassic 5", # Callovian
-		"128" => "Jurassic 4", # Bathonian
-		"129" => "Jurassic 4", # Bajocian
-		"130" => "Jurassic 3", # Aalenian
-		"131" => "Jurassic 3", # Toarcian
-		"132" => "Jurassic 2", # Pliensbachian
-		"133" => "Jurassic 1", # Sinemurian
-		"134" => "Jurassic 1", # Hettangian
-	# used from 19.3.05
-		"135" => "Triassic 4", # Rhaetian
-		"136" => "Triassic 4", # Norian
-		"137" => "Triassic 3", # Carnian
-		"45" => "Triassic 2", # Middle Triassic
-	# used up to 19.3.05
-	#	"135" => "Triassic 5", # Rhaetian
-	#	"136" => "Triassic 5", # Norian
-	#	"137" => "Triassic 4", # Carnian
-	#	"138" => "Triassic 3", # Ladinian
-	#	"139" => "Triassic 2", # Anisian
-	# used up to 17.8.04
-	#	"136" => "Triassic 4", # Norian
-	#	"137" => "Triassic 3", # Carnian
-	#	"138" => "Triassic 2", # Ladinian
-	#	"139" => "Triassic 1", # Anisian
-		"46" => "Triassic 1", # Early Triassic
-		"143" => "Permian 4", # Changxingian
-		"715" => "Permian 4", # Changhsingian
-	# used up to 16.8.04
-	#	"715" => "Permian 5", # Changhsingian
-		"716" => "Permian 4", # Wuchiapingian
-		"145" => "Permian 3", # Capitanian
-	# used up to 16.8.04
-	#	"145" => "Permian 4", # Capitanian
-		"146" => "Permian 3", # Wordian
-		"717" => "Permian 3", # Roadian
-		"148" => "Permian 2", # Kungurian
-		"149" => "Permian 2", # Artinskian
-		"150" => "Permian 1", # Sakmarian
-		"151" => "Permian 1", # Asselian
-	# used up to 9.8.04, reverted back to 17.8.04
-		"49" => "Carboniferous 5", # Gzelian
-		"50" => "Carboniferous 5", # Kasimovian
-		"51" => "Carboniferous 4", # Moscovian
-	# used up to 17.8.04
-	#	"51" => "Carboniferous 5", # Moscovian
-		"52" => "Carboniferous 4", # Bashkirian
-		"166" => "Carboniferous 3", # Alportian
-		"167" => "Carboniferous 3", # Chokierian
-	# used up to 9.8.04
-	#	"166" => "Carboniferous 4", # Alportian
-	#	"167" => "Carboniferous 4", # Chokierian
-		"168" => "Carboniferous 3", # Arnsbergian
-		"169" => "Carboniferous 3", # Pendleian
-		"170" => "Carboniferous 3", # Brigantian
-	# added 29.6.06
-		"53" => "Carboniferous 3", # Serpukhovian
-		"171" => "Carboniferous 2", # Asbian
-		"172" => "Carboniferous 2", # Holkerian
-		"173" => "Carboniferous 2", # Arundian
-		"174" => "Carboniferous 2", # Chadian
-		"55" => "Carboniferous 1", # Tournaisian
-		"177" => "Devonian 5", # Famennian
-		"178" => "Devonian 4", # Frasnian
-		"57" => "Devonian 3", # Middle Devonian
-		"181" => "Devonian 2", # Emsian
-		"182" => "Devonian 1", # Pragian
-		"183" => "Devonian 1", # Lochkovian
-		"59" => "Silurian 2", # Pridoli
-		"60" => "Silurian 2", # Ludlow
-		"61" => "Silurian 2", # Wenlock
-		"62" => "Silurian 1", # Llandovery
-		"638" => "Ordovician 5", # Ashgillian
-	# added 8.6.06
-		"63" => "Ordovician 5", # Ashgill
-	# added 29.6.06
-		"192" => "Ordovician 5", # Hirnantian
-		"639" => "Ordovician 4", # Caradocian
-	# added 8.6.06
-		"64" => "Ordovician 4", # Caradoc
-	# added 29.6.06
-		"787" => "Ordovician 4", # early Late Ordovician
-		"65" => "Ordovician 3", # Llandeilo
-		"66" => "Ordovician 3", # Llanvirn
-	# used up to 15.8.04
-	#	"30" => "Ordovician 3", # Middle Ordovician
-		"596" => "Ordovician 2", # Arenigian
-	# added 8.6.06
-		"67" => "Ordovician 2", # Arenig
-	# added 29.6.06
-		"789" => "Ordovician 2", # late Early Ordovician
-	# used up to 15.8.04
-	#	"641" => "Ordovician 2", # Latorpian
-		"559" => "Ordovician 1", # Tremadocian
-	# added 8.6.06
-		"68" => "Ordovician 1", # Tremadoc
-		"69" => "Cambrian 4", # Merioneth
-	# added 29.6.06
-		"780" => "Cambrian 4", #  Furongian
-		"70" => "Cambrian 3", # St David's
-	# added 29.6.06
-		"781" => "Cambrian 3", # Middle Cambrian
-		"71" => "Cambrian 2", # Caerfai
-	# next four added 29.6.06
-		"749" => "Cambrian 2", # Toyonian
-		"750" => "Cambrian 2", # Botomian
-		"213" => "Cambrian 2", # Atdabanian
-		"214" => "Cambrian 2", # Tommotian
-		"748" => "Cambrian 1", # Manykaian
-	# added 29.6.06
-		"799" => "Cambrian 1"); # Nemakit-Daldynian
+    my %all_by_scale = ();
+    my %all_with_next = ();
+    my %all_with_boundary = ();
+    my %all_with_max = ();
+    my $best_max = {};
 
-	my @binnames = values %binning;
-
-	&findBestScales();
-	&findImmediateCorrelates();
-
-	# find the list of collections belonging to each bin
-	for my $binname ( @binnames )	{
-		@intervals = ();
-		@tempintervals = ();
-		%yesints = ();
-
-	# find the highest-level intervals falling in the bin
-		my @stagenos = keys %binning;
-		for my $sn ( @stagenos )	{
-			if ( $binning{$sn} eq $binname )	{
-				push @intervals, $sn;
-				$yesints{$sn} = "Y";
-			}
-		}
-
-	# now look up the subtended intervals falling in the bin
-	# these get tacked on to @intervals, which also includes the
-	#  immediately subtended intervals of this bin
-		&mapIntervals();
-
-	# we also want to know the bin assignments of the not-immediately
-	#  subtended intervals, say, for some function to print a list of all
-	#  subtended intervals
-	# this is only going to be returned if the request was for boundaries
-	#  and not for assignments of collections
-		for my $i ( @intervals )	{
-			$binning{$i} = $binname;
-		}
-
-    # we don't care about boundary estimates if we just want a interval-->bin 
-    # mapping, so skip that part
-        next if ($returndata eq 'binning');
-
-	# the boundary estimates for included intervals might contradict
-	#  direct estimates for larger intervals; if so, alter the
-	#  offending estimates
-		for my $i ( @intervals )	{
-			my $max = $immediatemax{$i};
-			while ( $max > 0 )	{
-				if ( $lowerbound{$i} > $lowerbound{$max} )	{
-					$lowerbound{$i} = $lowerbound{$max};
-				}
-				$max = $immediatemax{$max};
-			}
-			my $min = $immediatemin{$i};
-			if ( $min == 0 )	{
-				$min = $immediatemax{$i};
-			}
-			while ( $min > 0 )	{
-				if ( $upperbound{$i} < $upperbound{$min} )	{
-					$upperbound{$i} = $upperbound{$min};				}
-				my $lastmin = $min;
-				$min = $immediatemin{$min};
-				if ( $min == 0 )	{
-					$min = $immediatemax{$lastmin};
-				}
-			}
-		}
-
-	# find the boundary ages for the bin by checking the boundaries of
-	#  all intervals falling within it
-		for my $i ( @intervals )	{
-			if ( $upperbound{$i} < $upperbinbound{$binname} || $upperbinbound{$binname} eq "" )	{
-				$upperbinbound{$binname} = $upperbound{$i};
-			}
-			if ( $lowerbound{$i} > $lowerbinbound{$binname} )	{
-				$lowerbinbound{$binname} = $lowerbound{$i};
-			}
-		}
-
-	# get a list of collections in this bin
-	# don't do this if we only need boundary estimates
-		if ( $returndata ne "boundaries" )	{
-			$sql = "SELECT collection_no FROM collections WHERE ";
-			$sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
-			$sql .= "AND ( min_interval_no IN ( " . join(',',@intervals) . " ) ";
-			$sql .= " OR min_interval_no < 1 )";
-			my @collrefs = @{$dbt->getData($sql)};
-
-	# make a hash array in which keys are collection numbers and
-	#   values are the name of this bin
-			for my $collref ( @collrefs )   {
-				$intervalInScale{$collref->{collection_no}} = $binname;
-			}
-		}
-
-	}
-	@tempintervals = ();
-	%yesints = ();
-    @intervals = (); # Clear it out, don't want to have leftovers screwing stuff up later
-
-	if ( $returndata eq "binning" )	{
-        return \%binning;
-	} elsif ( $returndata eq "boundaries" )	{
-		return (\%upperbinbound,\%lowerbinbound,\%binning);
-	} else	{
-		return (\%intervalInScale,\%upperbinbound,\%lowerbinbound);
-	}
-
-}
-
-# find the numerical upper and lower bound for each and every interval
-# JA 5.3.04
-sub findBoundaries	{
-
-	$dbh = shift;
-	$dbt = shift;
-    my $scale_no = shift;
-    $skip_orphaned_intervals = shift;
-
-	&findBestScales($scale_no);
-	&findImmediateCorrelates();
-
-
-#    print "<br><br>bestincludedmax".Dumper(\%bestincludedmax); 
-#    print "<br><br>bestscale".Dumper(\%bestscale); 
-#    print "<br><br>bestboundary".Dumper(\%bestboundary); 
-#    print "<br><br>immediatemax".Dumper(\%immediatemax); 
-#    print "<br><br>immediatemin".Dumper(\%immediatemin); 
-#    print "<br><br>bestnext".Dumper(\%bestnext); 
-
-	# set lower boundaries for intervals having direct estimates
-	for my $i ( keys %bestscale )	{
-		$lowerbound{$i} = $bestboundary{$i};
-	}
-
-	# percolate upwards the boundary estimates
-	# first the lower boundaries (high numbers)
-	for my $i ( keys %bestscale )	{
-		$j = $immediatemax{$i};
-		while ( $j > 0 && $lowerbound{$i} > 0 )	{
-			if ( $lowerbound{$i} > $lowerbound{$j} && $bestboundyr{$i} > $bestboundyr{$j} )	{
-				$lowerbound{$j} = $lowerbound{$i};
-	# stop if the next, more broad interval already has an older estimate
-			} elsif ( $lowerbound{$i} < $lowerbound{$j} )	{
-				last;
-			}
-			$j = $immediatemax{$j};
-		}
-	}
-
-	# Gallic case: no direct estimate and percolation didn't work because
-	#  interval isn't the immediatemax of anything in the most recent time
-	#  scales, so try grabbing the lowerbound of the immediately included
-	#  interval in the last scale to use the outmoded term
-	# WARNING: this won't work if not just the interval but its
-	#  immediately included interval are outmoded
-	for my $i ( keys %bestscale )	{
-		if ( $lowerbound{$i} eq "" )	{
-			$lowerbound{$i} = $lowerbound{$bestincludedmax{$i}};
-		}
-	}
-
-	# percolate downwards the lower boundaries (early Early Hemphillian
-	#  case)  26.1.05 JA
-	# need to do this when you have (say) zones with no age estimates,
-	#  but they fall into (say) age/stages with estimates
-	for my $i ( keys %bestscale )	{
-		if ( $lowerbound{$i} eq "" )	{
-			$j = $immediatemax{$i};
-			while ( $j > 0 && $lowerbound{$i} == "" )	{
-				$lowerbound{$i} = $lowerbound{$j};
-				$j = $immediatemax{$j};
-			}
-		}
-	}
-
-	# set upper boundaries for intervals having direct estimates
-	# NOTE: now we're using the percolated lower boundaries instead of
-	#   the original estimates
-	for my $i ( keys %bestscale )	{
-		if ( $lowerbound{$i} != $lowerbound{$bestnext{$i}} )	{
-			$upperbound{$i} = $lowerbound{$bestnext{$i}};
-		}
-		# if the next interval has an identical lower bound,
-		#  keep going up trying to find one with a different
-		#  lower bound JA 26.1.05
-		else	{
-			$tempbestnext = $bestnext{$i};
-			while ( $lowerbound{$i} == $lowerbound{$tempbestnext} && $tempbestnext > 0 )	{
-				$tempbestnext = $bestnext{$tempbestnext};
-				if ( $lowerbound{$i} != $lowerbound{$tempbestnext} )	{
-					$upperbound{$i} = $lowerbound{$tempbestnext};
-				}
-			}
-		}
-	}
-
-	# percolate upwards the upper boundaries (low numbers)
-	# NOTE: only do this if the upper boundaries aren't set at all and
-	#  the included interval is the youngest in its scale to map into
-	#  the including interval
-	for my $i ( keys %bestscale )	{
-		my $j = $immediatemin{$i};
-		if ( $j == 0 )	{
-			$j = $immediatemax{$i};
-		}
-		my $nextj = $immediatemin{$bestnext{$i}};
-		if ( $nextj == 0 )	{
-			$nextj = $immediatemax{$bestnext{$i}};
-		}
-		while ( $j > 0  && $upperbound{$i} > 0 )	{
-	# here's that tricky conditional
-			if ( $upperbound{$j} == 0 && $j != $nextj )	{
-				$upperbound{$j} = $upperbound{$i};
-	# stop if the next, more broad interval already has a younger estimate
-			} elsif ( $upperbound{$i} > $upperbound{$j} && $upperbound{$j} > 0 )	{
-				last;
-			}
-			$lastj = $j;
-			$j = $immediatemin{$j};
-			if ( $j == 0 )	{
-				$j = $immediatemax{$j};
-			}
-			$nextj = $immediatemin{$bestnext{$lastj}};
-			if ( $nextj == 0 )	{
-				$nextj = $immediatemax{$bestnext{$lastj}};
-			}
-		}
-	}
-
-	# Pridoli case: upper bound was undefined originally but now exists,
-	#  so set it
-	for my $i ( keys %bestscale )	{
-        my $next_bound = $lowerbound{$bestnext{$i}};
-		if ( $upperbound{$i} eq "" && $next_bound > 0 && $next_bound != $lowerbound{$i}) {
-			$upperbound{$i} = $lowerbound{$bestnext{$i}};
-		}
-	}
-
-	# for the intervals that neither (1) had directly defined boundaries,
-	#  nor (2) had included intervals with useable boundaries, try the
-	#  boundaries for the next higher-ranked interval that has estimates
-	for my $i ( keys %bestscale )	{
-	# if the interval already has a defined lower boundary,
-	#   nothing will happen
-		my $j = $i;
-		while ( $lowerbound{$i} eq "" && $j > 0 )	{
-			$j = $immediatemax{$j};
-			$lowerbound{$i} = $lowerbound{$j};
-		}
-	# now find the upper boundary, again doing nothing if there already
-	#  is a defined value
-		$j = $i;
-		while ( $upperbound{$i} eq "" && $j > 0 )	{
-			my $lastj = $j;
-			$j = $immediatemin{$j};
-			if ( $j == 0 )	{
-				$j = $immediatemax{$lastj};
-			}
-			$upperbound{$i} = $upperbound{$j};
-		}
-	}
-
-    # Ufimian case. Optionally remove intervals which no longer map to any location
-    # in the composite scale by deleting intervals that don't have any interval pointing
-    # to them.  
-    if ($skip_orphaned_intervals) {
-        #while(($k,$v)=each %bestnext) {
-        foreach $v (values %bestnext) {
-            $refbestnext{$v}=1;
+    # First intialize all the boundaries and pointers
+    foreach my $row (@$correlations) {
+        my $scale = $scales->{$row->{'scale_no'}};
+       
+        $all_by_scale{$row->{'scale_no'}} = $row;
+        if ($row->{'max_interval_no'} > 0) {
+            $all_with_max{$row->{'max_interval_no'}} = [$row,$scale];
         }
-        for my $int_no (keys %lowerbound) {
-            if (!$refbestnext{$int_no}) {
-                # We have to make sure that this interval is not an interval that is starting a scale! 
-                my $sql = "SELECT * FROM correlations WHERE next_interval_no=$int_no";
-                my @result = @{$dbt->getData($sql)};
-                if (@result) {
-                    #print "no ref for $int_no"; 
-                    delete $lowerbound{$int_no};
-                    delete $upperbound{$int_no};
-                }
-            } 
+        if ($row->{'next_interval_no'} > 0) {
+            $all_with_next{$row->{'next_interval_no'}} = [$row,$scale];
         }
-    }
-
-    # Holocene/Quaternary/Neogene/Cenozoiz hack PS 9/14/2005
-    $upperbound{32} = 0;
-    $upperbound{25} = 0;
-    $upperbound{12} = 0;
-    $upperbound{1} = 0;
-
-	# make a hash table where keys are interval names
-	# needed by Download.pm
-	$sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
-	my @intrefs = @{$dbt->getData($sql)};
-
-	for my $ir ( @intrefs )	{
-		my $in = $ir->{interval_name};
-		if ( $ir->{eml_interval} )	{
-			$in = $ir->{eml_interval} . " " . $in;
-		}
-		$upperboundbyname{$in} = $upperbound{$ir->{interval_no}} if exists $upperbound{$ir->{interval_no}};
-		$lowerboundbyname{$in} = $lowerbound{$ir->{interval_no}} if exists $lowerbound{$ir->{interval_no}};
-	}
-
-	return (\%upperbound,\%lowerbound,\%upperboundbyname,\%lowerboundbyname);
-
-}
-
-sub findBestScales	{
-    my $scale_no = shift;
-
-    # find the pubyr of each time scale's ref
-    $sql = "SELECT scale_no,reference_no FROM scales";
-    my @refnos = @{$dbt->getData($sql)};
-    for my $r ( 0..$#refnos )	{
-        $sql = "SELECT pubyr FROM refs WHERE reference_no=" . $refnos[$r]->{reference_no};
-        $pubyr{$refnos[$r]->{scale_no}} = @{$dbt->getData($sql)}[0]->{pubyr};
-    }
-
-    # figure out which scale to trust for each interval
-    $sql = "SELECT interval_no,scale_no,next_interval_no,max_interval_no,lower_boundary FROM correlations";
-    my @corrs = @{$dbt->getData($sql)};
-    for my $corr ( @corrs )	{
-        if ($pubyr{$corr->{scale_no}} > $bestscaleyr{$corr->{interval_no}}) {
-        #if ((!$scale_no && ($pubyr{$corr->{scale_no}} > $bestscaleyr{$corr->{interval_no}})) ||
-        #    ( $scale_no && ($corr->{scale_no}==$scale_no)))	
-            $bestscaleyr{$corr->{interval_no}} = $pubyr{$corr->{scale_no}};
-            $bestscale{$corr->{interval_no}} = $corr->{scale_no};
-            if ( $corr->{next_interval_no} > 0 )	{
-                $bestnext{$corr->{interval_no}} = $corr->{next_interval_no};
-            }
-            # need this for orphan intervals like the Gallic that
-            #  aren't the immediatemax of anything in the most
-            #  recent time scales
-            $bestincludedmax{$corr->{max_interval_no}} = $corr->{interval_no};
+        if ($row->{'lower_boundary'} > 0) {
+            $all_with_boundary{$row->{'next_interval_no'}} = [$row,$scale];
         }
-        if ( $pubyr{$corr->{scale_no}} > $bestboundyr{$corr->{interval_no}} && $corr->{lower_boundary} > 0 )	{
-            $bestboundyr{$corr->{interval_no}} = $pubyr{$corr->{scale_no}};
-            $bestboundary{$corr->{interval_no}} = $corr->{lower_boundary};
-        }
+        $seen_parents{$row->{'max_interval_no'}}++ if ($row->{'max_interval_no'});
+        $seen_parents{$row->{'min_interval_no'}}++ if ($row->{'min_interval_no'});
     }
-    #; Hack for Confidence.pm.  If we specifiy a scale no, don't use the composite interval estimates
-    if ($scale_no) {
-        for my $corr ( @corrs )	{
-            if ($corr->{'scale_no'} == $scale_no) {
-                $bestscale{$corr->{interval_no}} = $corr->{scale_no};
-                if ( $corr->{next_interval_no} > 0 )	{
-                    $bestnext{$corr->{interval_no}} = $corr->{next_interval_no};
-                } 
-                if ($corr->{lower_boundary} > 0){
-                    $bestboundary{$corr->{interval_no}} = $corr->{lower_boundary};
-                }
-            }
-        }
-    }
-}
 
-# Boundaries are given in millions of years
-# This will find all intervals between the two boundaries specified
-# and place those intervals into the globabl intervals hash
-sub getIntervalRangeByBoundary {
-    my ($max_boundary,$min_boundary);
-    if ($_[0] > $_[1]) {
-        $max_boundary = $_[0];
-        $min_boundary = $_[1];
-    } else {
-        $max_boundary = $_[1];
-        $min_boundary = $_[0];
-    }
-    my $use_mid = $_[2];
-    main::dbg("Using numbers - max is $max_boundary and min is $min_boundary");
 
-    # Changed to use the nicer findBoundaries function, 
-    # instead of trying to figure out boundaries on its own, PS 04/08/2005
-     ($upperbound,$lowerbound) = findBoundaries($dbh,$dbt);
-     while (my ($i,$lbound) = each %$lowerbound) { 
-        my $ubound = $upperbound->{$i};
-        if ($lbound ne '' && $ubound ne '') {
-            if ($use_mid) {
-                my $mid = ($ubound+$lbound)/2;
-                if ($mid <= $max_boundary && $mid >= $min_boundary) {
-                    push @intervals,$i;
-                }
+    # Catalog and store all scales - first turn the scale_no into
+    # scale objects with the map, then just directly sort those
+    # on their hash keys - We then store an array of scale objects for later use
+    my @all_scales = sort {
+        $b->{'pubyr'} <=> $a->{'pubyr'} ||
+        $b->{'scale_no'} <=> $a->{'scale_no'}
+    } map {$scales->{$_}} keys %all_by_scale;
+    $itv->{'all_scales'} = \@all_scales;
+    $itv->{'best_scale'} = $all_scales[0];
+
+    sub scale_sort {
+        $b->[1]->{'pubyr'} <=> $a->[1]->{'pubyr'} ||
+        $b->[1]->{'scale_no'} <=> $a->[1]->{'scale_no'}
+    };
+
+    my $best_continent = $all_scales[0]->{'continent'};
+   
+    # Mark the best boundary
+    # The grep makes sure the boundary you use is consistent with whether
+    # we're using the interval as a local or global interval now, mixing and matching is bad
+    my @all_with_boundary = sort scale_sort values %all_with_boundary;
+    my @all_with_boundary_continent = grep {$_->[1]->{'continent'} eq $best_continent} @all_with_boundary;
+    if (@all_with_boundary) {
+        $itv->{'boundary'} = $all_with_boundary[0][0]->{'lower_boundary'};
+        $itv->{'boundary_scale'} = $all_with_boundary[0][1];
+    }
+
+    # Mark the best next interval and what not
+    # The grep makes shure the boundary you use is consistent with whether
+    # we're using the interval as a local or global interval now, mixing and matching is bad
+    # See Zechstein - latest "next" is from a global scale but should be thrown out because
+    # its now in a local Europe scale which maps it very differently
+    my @all_with_next = sort scale_sort values %all_with_next;
+    my @all_with_next_continent = grep {$_->[1]->{'continent'} eq $best_continent} @all_with_next;
+    if (@all_with_next_continent) {
+        $itv->{'next'} = $ig->{$all_with_next_continent[0][0]->{'next_interval_no'}};
+        $itv->{'next_scale'} = $all_with_next_continent[0][1];
+        # Set the best prev.  Multiple intervals may have the same next_interval_no
+        # so set the prev to the "best" prev (the one with the newest correlation)
+        if ($itv->{'next'}->{'prev'}) {
+            # The next interval already has a 'prev' - have to compare scale pubyrs
+            # to determine whether to overwrite
+            my $other_itv = $itv->{'next'}->{'prev'};
+            if ($itv->{'next_scale'}->{'pubyr'} > $other_itv->{'next_scale'}->{'pubyr'} ||
+                 ($itv->{'next_scale'}->{'pubyr'} == $other_itv->{'next_scale'}->{'pubyr'} && 
+                  $itv->{'next_scale'}->{'scale_no'} > $other_itv->{'next_scale'}->{'scale_no'})) {
+#                print "WARNING: $itv->{next}->{interval_no} already has a prev $itv->{next}->{prev}->{interval_no}, overwriting with $itv->{interval_no}\n";
+                $itv->{'next'}->{'prev'} = $itv;
             } else {
-                if ($lbound <= $max_boundary && $ubound >= $min_boundary) {
-                    push @intervals,$i;
-                }
+#                print "WARNING: $itv->{next}->{interval_no} already has a prev $itv->{next}->{prev}->{interval_no}, NOT overwriting with $itv->{interval_no}\n";
+            }
+        } else {
+            $itv->{'next'}->{'prev'} = $itv;
+        }
+    }
+
+    # We have to keep track of all next intervals - Store the interval
+    # objects directly as an array 
+    my @all_next = map {$ig->{$_->[0]->{'next_interval_no'}}} @all_with_next;
+    my @all_next_scales = map {$_->[1]} @all_with_next;
+    $itv->{'all_next'} = \@all_next;
+    $itv->{'all_next_scales'} = \@all_next_scales;
+    foreach my $next_itv (@all_next) {
+        push @{$next_itv->{'all_prev'}},$itv;
+    }
+
+    # Mark the max and min - Note we want to use the best max from the same continent as
+    # the best scale the interval is in, not mix and match.  We want to store every
+    # continent the interval has been mapped in though, so the findSharedBoundaries routine
+    # can work
+    my @all_with_max = sort scale_sort values %all_with_max;
+    my @all_with_max_continent = grep {$_->[1]->{'continent'} eq $best_continent} @all_with_max;
+    if (@all_with_max_continent) {
+        $itv->{'max'} = $ig->{$all_with_max_continent[0][0]->{'max_interval_no'}};
+        $itv->{'max_scale'} = $all_with_max_continent[0][1];
+        push @{$itv->{'max'}->{'children'}},$itv;
+        delete $seen_parents{$itv->{'max'}->{'interval_no'}};
+
+        my $min_no = $all_with_max_continent[0][0]->{'min_interval_no'};
+        if ($min_no) {
+            $itv->{'min'} = $ig->{$min_no};
+            push @{$itv->{'min'}->{'children'}},$itv;
+            delete $seen_parents{$itv->{'min'}->{'interval_no'}};
+        } else {
+            $itv->{'min'} = $itv->{'max'};
+        }
+    }
+    my @all_max = map {$ig->{$_->[0]->{'max_interval_no'}}} @all_with_max;
+    my @all_min = map {
+        my $min_no = $_->[0]->{'min_interval_no'};
+        my $max_no = $_->[0]->{'max_interval_no'};
+        if ($min_no) {
+            $ig->{$min_no}
+        } else {
+            $ig->{$max_no}
+        }
+    } @all_with_max;
+    my @all_max_scales = map {$_->[1]} @all_with_max;
+    $itv->{'all_max'} = \@all_max;
+    $itv->{'all_min'} = \@all_min;
+    $itv->{'all_max_scales'} = \@all_max_scales;
+    $itv->{'all_min_scales'} = \@all_max_scales;
+
+    # defunct are children no longer assinged into that interval
+    foreach my $parent_no (keys %seen_parents) {
+        my $parent = $ig->{$parent_no};
+        push @{$parent->{'defunct'}},$itv;
+    }
+}
+
+sub _dumpGraph {
+    my $self = shift;
+    my $ig = $self->getIntervalGraph;
+    my $txt;
+    foreach my $k (sort {$a<=>$b} keys %{$ig}) {
+        $txt .= $self->_dumpInterval($ig->{$k})."\n";
+    }
+    return $txt;
+}
+
+sub _printConstraint {
+    my $c = shift;
+    my ($target,$action,$src,$depth,$last_from,$conflict) = @$c;
+    my ($UPPER_MAX,$UPPER_EQ,$UPPER_MIN,$LOWER_MAX,$LOWER_EQ,$LOWER_MIN) = (1,2,3,4,5,6);
+
+    my $action_txt = ($action == $UPPER_MAX) ? "upper max is" 
+                   : ($action == $UPPER_EQ)  ? "upper bound is"
+                   : ($action == $UPPER_MIN) ? "upper min is"
+                   : ($action == $LOWER_MAX) ? "lower max is"
+                   : ($action == $LOWER_EQ)  ? "lower bound is"
+                   : ($action == $LOWER_MIN) ? "lower min is"
+                   : " ?? unknown ??"; 
+   
+    my $constraint = ($conflict) ? "conflict: $conflict" : "constraint";
+    return "  $constraint: $target->{interval_no}:$target->{name} $action_txt $src->{boundary} $src->{boundary_scale}->{pubyr}:$src->{boundary_scale}->{abbrev}:$src->{boundary_scale}->{scale_no} from $src->{interval_no}:$src->{name} percolated from $last_from->{interval_no}:$last_from->{name}\n";
+}
+
+sub _dumpInterval {
+    my $self = shift;
+    my $itv = shift;
+    my $txt = "Interval $itv->{interval_no}:$itv->{name}\n";
+    foreach ('prev','next','max','min') {
+        if ($itv->{$_}) {
+            $txt .= "  $_: $itv->{$_}->{interval_no}:$itv->{$_}->{name}\n";
+        }
+    }
+    $txt .= "  range: $itv->{lower_boundary} - $itv->{upper_boundary}\n";
+    foreach my $abbrev ('gl','As','Au','Eu','NZ','NA','SA') {
+        my $lower_max = 'lower_max'.$abbrev;
+        my $lower_boundary = 'lower_boundary'.$abbrev;
+        my $lower_min = 'lower_min'.$abbrev;
+        my $upper_max = 'upper_max'.$abbrev;
+        my $upper_boundary = 'upper_boundary'.$abbrev;
+        my $upper_min = 'upper_min'.$abbrev;
+        if ($itv->{$lower_max} || $itv->{$lower_boundary} || $itv->{$lower_min} ||
+            $itv->{$upper_max} || $itv->{$upper_boundary} || $itv->{$upper_min}) { 
+            $txt .= "  $abbrev:lower:[$itv->{$lower_max}/$itv->{$lower_boundary}/$itv->{$lower_min}] - $abbrev:upper:[$itv->{$upper_max}/$itv->{$upper_boundary}/$itv->{$upper_min}]\n";
+        }
+    }
+    foreach ('max_scale','best_scale','next_scale','boundary_scale') {
+        if ($itv->{$_}) {
+            $txt .= "  $_: $itv->{$_}->{scale_no},$itv->{$_}->{pubyr} $itv->{$_}->{continent} $itv->{$_}->{scale_rank}\n";
+        }
+    }
+    foreach ('constraints','conflicts') {
+        if ($itv->{$_}) {
+            foreach my $c (@{$itv->{$_}}) {
+                $txt .= _printConstraint($c);
             }
         }
     }
+    foreach ('all_max_scales','all_next_scales') {
+        if ($itv->{$_}) {
+            $txt .= "  $_: ".join(", ",map {$_->{'scale_no'}.":".$_->{'continent'}.":".$_->{'pubyr'}} @{$itv->{$_}})."\n";
+        }
+    }
+    foreach ('equiv','children','defunct','all_prev','all_next','all_max','all_min') {
+        if ($itv->{$_}) {
+            $txt .= "  $_: ".join(", ",map {$_->{'interval_no'}.":".$_->{'name'}} @{$itv->{$_}})."\n";
+        }
+    }
+    foreach ('shared_lower','shared_upper') {
+        if ($itv->{$_}) {
+            $txt .= "  $_: ".join(", ",map {$_->{'interval_no'}.":".$_->{'name'}} @{$itv->{$_}})."\n";
+        }
+    }
+    return $txt;
 }
 
 
 # This function will find all intervals that an interval maps into
 sub getParentIntervals {
-    $dbt = shift;
-    $dbh = $dbt->dbh;
-    my $interval_no = shift;
-    if (!%immediatemax) {
-        &findImmediateCorrelates();
+    my $self = shift;
+    my $ig = $self->getIntervalGraph;
+
+    my $itv = shift;
+    my $input_type = '';
+    if (ref $itv) {
+        $input_type = 'objects';
+    } else {
+        $input_type = 'integers';
+        $itv = $ig->{$itv};
     }
+
     my @intervals = ();
-    my @queue = ();
-    push @queue, $interval_no;
-    while (@queue) {
-        my $i = pop(@queue);
-        if (my $j = $immediatemax{$i}) {
-            push @intervals,$j;
-            push @queue,$j;
-        }    
-        if (my $j = $immediatemin{$i}) {
-            push @intervals,$j;
-            push @queue,$j;
-        }    
+    my @q = ($itv);
+    while (my $itv = pop @q) {
+        if ($itv->{'max'}) {
+            push @q, $itv->{'max'};
+            push @intervals, $itv->{'max'};
+        }
+        if ($itv->{'min'} && $itv->{'min'} != $itv->{'max'}) {
+            push @q, $itv->{'min'};
+            push @intervals, $itv->{'min'};
+        }
     }
-    return @intervals;
-}
-
-
-# Separated out of the old getIntervalRange, which did multiple separate things before PS 04/08/2005
-# This will get all the intervals that lie between two intervals on the same scale
-# and add those intervals to the global $yesints hash and @intervals hash
-sub getIntervalRangeByNo {
-    my ($orig_max_interval_no, $orig_min_interval_no) = @_;
-
-    # Search for scales the intervals both belong to, and use those if they exist
-    my $bestbothscale = findBestBothScale($dbt,$orig_max_interval_no,$orig_min_interval_no);
-    my ($commonscale, $straggler_no, $max_interval_no, $min_interval_no);
-    # If they don't belong to a common scale, then maybe one of the intervals belongs to
-    # a scale thats common with the other interval
-    if (!$bestbothscale) {
-        @max_parents = getParentIntervals($dbt,$orig_max_interval_no);
-        @min_parents = getParentIntervals($dbt,$orig_min_interval_no);
-        foreach $max_parent (@max_parents) {
-            last if ($commonscale); 
-            $commonscale = findBestBothScale($dbt,$max_parent,$orig_min_interval_no);
-            if ($commonscale) {
-                main::dbg("Found a common scale $commonscale between $orig_min_interval_no and parent $max_parent of $orig_max_interval_no");
-                $max_interval_no=$max_parent;
-                $min_interval_no=$orig_min_interval_no;
-                $bestbothscale = $commonscale;
-                $straggler_no = $orig_max_interval_no;
-            }
-        }
-        foreach $min_parent (@min_parents) {
-            last if ($commonscale); 
-            $commonscale = findBestBothScale($dbt,$orig_max_interval_no,$min_parent);
-            if ($commonscale) {
-                main::dbg("Found a common scale $commonscale between $orig_max_interval_no and parent $min_parent of $orig_min_interval_no");
-                $max_interval_no=$orig_max_interval_no;
-                $min_interval_no=$min_parent;
-                $bestbothscale = $commonscale;
-                $straggler_no = $orig_min_interval_no;
-            }
-        }
+    if ($input_type eq 'integers') {
+        return map {$_->{'interval_no'}} @intervals;
     } else {
-        $max_interval_no =  $orig_max_interval_no;
-        $min_interval_no =  $orig_min_interval_no;
+        return @intervals;
     }
-
-    if ($bestbothscale)	{
-        if ($max_interval_no == $min_interval_no) {
-            return;
-        }
-        $sql = "SELECT interval_no,next_interval_no FROM correlations WHERE ";
-        $sql .= "scale_no=" . $bestbothscale;
-        @results = @{$dbt->getData($sql)};
-        for my $r ( @results )	{
-            $next{$r->{interval_no}} = $r->{next_interval_no};
-        }
-        my $found_range = 0;
-        my $direction = 0;
-        # using the best scale, run up from the max to the min and add all the intervals
-        my $nowat = $max_interval_no;
-        while ($nowat = $next{$nowat}) {
-            if ($nowat == $min_interval_no)  {
-                $found_range = 1;
-                $direction = 1;
-                last;
-            }
-            push @tempintervals, $nowat;
-        }
-
-        # if the min wasn't run across, maybe they're reversed, so go the other way
-        if ( !$found_range) {
-            $nowat = $min_interval_no;
-            @tempintervals = ();
-            while ( $nowat = $next{$nowat})	{
-                if ($nowat == $max_interval_no) {
-                    $found_range = 1;
-                    $direction = 0;
-                    last;
-                }
-                push @tempintervals, $nowat;
-            }
-        }
-
-# if the max wasn't run across, something is seriously wrong, so throw out
-#   the temporary list of intervals and go on
-        if (!$found_range) {
-            @tempintervals = ();
-            carp("Something wrong in getIntervalRangeByNo: Could not find range of interval values
-for scale $bestbothscale and intervals $max_interval_no $min_interval_no"); 
-        } elsif ( @tempintervals )	{
-            if ($straggler_no && $bestscale{$straggler_no}) {
-                $sql = "(SELECT c2.interval_no, c2.next_interval_no, 2.max_interval_no, c2.min_interval_no FROM correlations c1, correlations c2 WHERE c1.interval_no=$straggler_no AND c1.max_interval_no=c2.max_interval_no AND c2.scale_no=$bestscale{$straggler_no})". 
-                       " union ".
-                my $sql = "SELECT interval_no, next_interval_no, max_interval_no, min_interval_no ". 
-                           " FROM correlations c1, c2 WHERE c1. c1.scale_no=$bestscale{$straggler_no}";
-                my @results = @{$dbt->getData($sql)};
-                main::dbg("Looking for stragglers in scale $bestscale{$straggler_no} for straggler $straggler_no and direction $direction");
-                my %next;
-                for my $r ( @results )	{
-                    if ($direction == 0) {
-                        $next{$r->{interval_no}} = $r->{next_interval_no};
-                        main::dbg("$r->{interval_no} --> $r->{next_interval_no}, ");
-                    } else {
-                        $next{$r->{next_interval_no}} = $r->{interval_no};
-                        main::dbg("$r->{next_interval_no} --> $r->{interval_no}, ");
-                    }
-                }
-                $nowat = $straggler_no;
-                while (($nowat = $next{$nowat}) && 
-                       (($immediatemax{$nowat} && $immediatemax{$nowat} == $immediatemax{$straggler_no}) || 
-                        ($immediatemin{$nowat} && $immediatemin{$nowat} == $immediatemin{$straggler_no}))) {
-                    push @tempintervals, $nowat;
-                    main::dbg("Found straggler $nowat");
-                }
-            } 
-        
-# only now add the temp list to the master list of intervals in the range
-            push @intervals, @tempintervals;
-        }
-
-# note that we're not doing a proper return of $yesints and @intervals
-# because we're just setting module globals (call me lazy)
-# for convenience, make a hash array where the keys are the intervals
-        for my $i ( @intervals )	{
-            $yesints{$i} = "Y";
-        }
-    } else {
-        main::dbg("Could not find bestbothscale for $max_interval_no, $min_interval_no in function getIntervalRangeByNo");
-    }
-}
+} 
 
 # A trivial function PS 04/08/2005
 sub getIntervalNo {
-    my $dbt = shift;
+    my $self = shift;
+    my $dbt = $self->{'dbt'};
+    my $dbh = $dbt->dbh;
+
     my $eml = shift;
     my $name = shift;
-    my $dbh = $dbt->dbh;
 
     my $sql = "SELECT interval_no FROM intervals ".
               " WHERE interval_name=".$dbh->quote($name);
@@ -1007,213 +1646,16 @@ sub getIntervalNo {
     }
 }
 
-# find the immediate max and min correlates of each interval for use in
-#   mapIntervals
-sub findImmediateCorrelates	{
-
-    $sql = "SELECT interval_no FROM intervals";
-# since the keys are primary the highest number for an interval is just
-#  the table size plus 1
-    @results = @{$dbt->getData($sql)};
-    $ninterval = $#results + 1;
-
-    if (!%bestscale) {
-        findBestScales();
-    }
-
-# get lookup hashes of the max and min interval nos for each interval no
-    for my $i ( 1..$ninterval )	{
-        if ( $bestscale{$i} > 0 )	{
-            $sql = "SELECT max_interval_no,min_interval_no FROM correlations WHERE interval_no=" . $i . " AND scale_no=" . $bestscale{$i};
-            my $maxmin = @{$dbt->getData($sql)}[0];
-            $immediatemax{$i} = $maxmin->{max_interval_no};
-            $immediatemin{$i} = $maxmin->{min_interval_no};
-        }
-    }
-
-}
-
-sub findBestBothScale{
-    my $dbt = shift;
-    my $max_interval_no = shift;
-    my $min_interval_no = shift;
-    my $bestbothscale;
-    my $max_pubyr = -1;
-
-    return ($bestbothscale) if ($max_interval_no !~ /^\d+$/ || $min_interval_no !~ /^\d+$/);
-    
-    # find the scale no for the max interval
-    my $sql = "SELECT scale_no FROM correlations WHERE interval_no=$max_interval_no";
-    my @max_scales = map {$_->{'scale_no'}} @{$dbt->getData($sql)};
-
-    # find the scale no for the min interval
-    $sql = "SELECT scale_no FROM correlations WHERE interval_no=$min_interval_no";
-    my @min_scales = map {$_->{'scale_no'}} @{$dbt->getData($sql)};
-
-    # if the scale's pubyr is most recent, record the scale number
-    for my $max_scale (@max_scales) {
-        for my $min_scale (@min_scales) {
-            if ($min_scale == $max_scale && $pubyr{$max_scale} > $max_pubyr) {
-                $bestbothscale = $max_scale;
-                $max_pubyr = $pubyr{$max_scale};
-            }
-        }
-    }    
-    return $bestbothscale;
-}
-
-# This finds upward mappings i.e. epochs implied by stages.  The algorithm is such:
-# If all the intervals in a particular scale in a particular broader interval (epoch/etc) are
-# present, then include that broader interval as well.  Do this repeatedly until we can't
-# find any more intervals to include
-# A problem might occur if we have a really tiny scale that doesn't cover all of
-# a broader interval. No way to reliable test for this, may have to find these
-# and exclude them manually - PS 04/13/2005
-sub mapIntervalsUpward {
-    my @new_intervals; 
-    my $first_time = 1;
-    while (@new_intervals || $first_time) {
-        my $intervals_str;
-        if ($first_time) {
-            $intervals_str = join(",",@intervals); 
-        } else {
-            $intervals_str = join(",",@new_intervals);
-        }
-        $first_time = 0;
-        $sql = "(select c2.scale_no,c2.interval_no, c2.max_interval_no, c2.min_interval_no from correlations c1, correlations c2 where c1.interval_no in ($intervals_str) and c1.max_interval_no=c2.max_interval_no)". 
-               " union ".
-               "(select c2.scale_no,c2.interval_no, c2.max_interval_no, c2.min_interval_no from correlations c1, correlations c2 where c1.interval_no in ($intervals_str) and c1.max_interval_no=c2.max_interval_no)"; 
-       
-#            print "classify upwards $sql";
-        my @results = @{$dbt->getData($sql)};
-        my %interval_set = ();
-        foreach my $row (@results) {
-            $interval_set{$row->{'max_interval_no'}}{$row->{'scale_no'}}{$row->{'interval_no'}} = 1 if ($row->{'max_interval_no'});
-            $interval_set{$row->{'min_interval_no'}}{$row->{'scale_no'}}{$row->{'interval_no'}} = 1 if ($row->{'min_interval_no'});
-        }
-#            print "YesInts".Dumper(\%yesints);
-        # Reset new_intervals.  The behavior is:
-        #  if we find new upward intervals, we want to continue looking upwards, as there might
-        #  be other intervals that we have yet to map. if we don't find any new upward intervals,
-        #  then we should stop looking, we're done
-        @new_intervals = ();
-        while(my ($higher_int,$scales)=each %interval_set) {
-            while (my ($scale_no,$children_ints) = each %$scales) {
-                # We add an interval if all intervals that map into that interval (in the same scale) are 
-                # already included, thus implying that this interval should be included as well
-                my $found = scalar(keys(%$children_ints));
-#                print "FOUND higher_int $higher_int with found_cnt = $found\n";
-                foreach $child_int (keys(%$children_ints)) {
-#                    print "Found child $child_int for higher int $higher_int\n";
-                    if ($yesints{$child_int}) {
-                        $found--;
-                    }
-                }
-                #print "Found leftofter $found\n";
-                if ($found == 0) {
-                    main::dbg("Adding interval $higher_int because all intervals in scale $scale_no that map into it are included");
-                    push @new_intervals, $higher_int;
-                    push @intervals, $higher_int;
-                    $yesints{$higher_int}='Y';
-                }
-            }
-        }
-    }
-}
-
-# check every known interval to see if it maps to the master list
-# logic: if the interval's max and min correlates both map to the list,
-#  the interval is entirely within the queried interval
-sub mapIntervals	{
-
-    my $max;
-    my $min;
-  
-    for my $i ( 1..$ninterval )	{
-        if ( $bestscale{$i} > 0 )	{
-            $max = $immediatemax{$i};
-            $min = $immediatemin{$i};
-
-        # if both min and max in the "official" list, you're golden
-            if ( $yesints{$max} && ( $yesints{$min} || $min == 0 ) )	{
-                push @tempintervals , $i;
-                $max = 0;
-                $min = 0;
-            }
-        # if not, look at the max/min intervals of the max and min
-            while ( $max > 0 )	{
-            # this could happen if a correlate isn't actually in a scale
-                if ( ! $bestscale{$max} || ( ! $bestscale{$min} && $min > 0 ) )	{
-                    last;
-                }
-
-
-        # find the min correlate
-                my $lastmin = $min;
-                if ( $min > 0 )	{
-                    $min = $immediatemin{$min};
-        # the min interval might have only had a max; if so check that too
-                    if ( $min == 0 )	{
-                        $min = $immediatemax{$lastmin};
-                    }
-                } else	{
-        # even if the interval had no min, its parent might have
-                    $min = $immediatemin{$max};
-                }
-
-        # now find the max correlate
-                $max = $immediatemax{$max};
-
-        # if the "grandparents" are within the list, add the interval
-        #    we started with and bomb out
-                if ( $yesints{$max} && ( $yesints{$min} || $min == 0 ) )	{
-                    push @tempintervals , $i;
-                    $max = 0;
-                    $min = 0;
-                }
-            }
-        }
-    }
-
-# add the list of correlated intervals to the list of submitted intervals
-    if ( @tempintervals )	{
-        foreach my $ti (@tempintervals) {
-            push @intervals, $ti;
-            $yesints{$ti} = 1;
-        }
-    }
-}
-
-# query the collections table for collections where the max is in the list
-#   and so is the min - DEPRECATED
-sub getCollectionList	{
-    my @collections = ();
-
-    if (@intervals) {
-        $sql = "SELECT collection_no FROM collections WHERE ";
-        $sql .= "max_interval_no IN ( " . join(',',@intervals) . " ) ";
-        $sql .= "AND ( min_interval_no IN ( " . join(',',@intervals) . " ) ";
-        $sql .= " OR min_interval_no < 1 )";
-        my @collrefs = @{$dbt->getData($sql)};
-
-        for my $collref ( @collrefs )	{
-            push @collections, $collref->{collection_no};
-        }
-    }
-# return the matching collections plus a value indicating whether the
-#  intervals are in the same scale (computed by getIntervalRange)
-    return \@collections;
-}
-
 # Utility function, parse input from form into valid eml+interval name pair, if possible
+# Can be called directly or in obj oriented fashion, which is what the shift is for
 sub splitInterval {
-    my $dbt = shift || return ('','');
+    shift if ref $_[0];
     my $interval_name = shift;
 
     my @terms = split(/ /,$interval_name);
     my @eml_terms;
     my @interval_terms;
-    foreach $term (@terms) {
+    foreach my $term (@terms) {
         if ($term =~ /early|lower|middle|late|upper/i) {
             push @eml_terms, $term;
         } else {
@@ -1243,105 +1685,65 @@ sub splitInterval {
     return ($eml,$interval);
 }
 
-sub getTenMYBins() {
-    return ("Cenozoic 6", "Cenozoic 5", "Cenozoic 4", "Cenozoic 3", "Cenozoic 2", "Cenozoic 1", "Cretaceous 8", "Cretaceous 7", "Cretaceous 6", "Cretaceous 5", "Cretaceous 4", "Cretaceous 3", "Cretaceous 2", "Cretaceous 1", "Jurassic 6", "Jurassic 5", "Jurassic 4", "Jurassic 3", "Jurassic 2", "Jurassic 1", "Triassic 4", "Triassic 3", "Triassic 2", "Triassic 1", "Permian 4", "Permian 3", "Permian 2", "Permian 1", "Carboniferous 5", "Carboniferous 4", "Carboniferous 3", "Carboniferous 2", "Carboniferous 1", "Devonian 5", "Devonian 4", "Devonian 3", "Devonian 2", "Devonian 1", "Silurian 2", "Silurian 1", "Ordovician 5", "Ordovician 4", "Ordovician 3", "Ordovician 2", "Ordovician 1", "Cambrian 4", "Cambrian 3", "Cambrian 2", "Cambrian 1");
-}
-
 # Returns an array of interval names in the correct order for a given scale
 # With the newest interval first -- not finished yet, don't use
 # PS 02/28/3004
 sub getScaleOrder {
-    $dbt = shift;
-    $dbh = $dbt->dbh;
+    my $self = shift;
+    my $dbt = $self->{'dbt'};
+    my $dbh = $dbt->dbh;
+    
     my $scale_no = shift;
     my $return_type = shift || "name"; #name or number
-    my $is_composite = shift;
 
     my @scale_list = ();
 
-    if ($is_composite) {
-        if (!%bestnext) {
-            findBestScales();
-        }    
-        # find first guy in scale - sort of a hack, just use max interval no for now
-#        my $sql = "SELECT max(lower_boundary) as maxb FROM correlations WHERE scale_no=".$dbt->dbh->quote($scale_no);
-#        my @results = @{$dbt->getData($sql)};
-        #$sql = "SELECT interval_no FROM correlations WHERE scale_no=".$dbt->dbh->quote($scale_no)." AND lower_boundary=".$results[0]->{'maxb'};
-        my $sql = "SELECT MAX(interval_no) as interval_no FROM correlations WHERE scale_no=".$dbt->dbh->quote($scale_no);
-        my @results = @{$dbt->getData($sql)};
-        my $interval_no = $results[0]->{'interval_no'};
-        my $count = 0;
-        while (1) {
-            if ($count++ > 200) {die "loop";}
-            unshift @scale_list, $interval_no;
-            if (!exists $bestnext{$interval_no}) {
-                if ($bestscale{$interval_no} != $scale_no) {
-                    #Backtrack till we can rejoin teh scale
-                    foreach $orig_interval_no (@scale_list) {
-                        my $sql = "SELECT next_interval_no FROM correlations WHERE interval_no=$orig_interval_no AND scale_no=".$dbt->dbh->quote($scale_no);
-                        my @results = @{$dbt->getData($sql)};
-                        if (scalar(@results)) {
-                            $interval_no=$results[0]->{'next_interval_no'};
-                            last;
-                        }
-                    }
-                    if (!$interval_no) {
-                        last;
-                    }
-                } else {
-                    last;
-                }
-            } else {
-                $interval_no=$bestnext{$interval_no};
-            }
-        }
+    my $count;
+    my @results;
+    my %next_i;
+    if ($return_type  =~ /number/) {
+        my $sql = "SELECT c.correlation_no, c.lower_boundary, c.interval_no, c.next_interval_no FROM correlations c".
+                  " WHERE c.scale_no=".$dbt->dbh->quote($scale_no);
+        @results = @{$dbt->getData($sql)};
     } else {
-        my $count;
-        my @results;
-        my %next_i;
-        if ($return_type eq 'number') {
-            my $sql = "SELECT c.correlation_no, c.lower_boundary, c.interval_no, c.next_interval_no FROM correlations c".
-                      " WHERE c.scale_no=".$dbt->dbh->quote($scale_no);
-            @results = @{$dbt->getData($sql)};
-        } else {
-            my $sql = "SELECT c.correlation_no, c.lower_boundary, c.interval_no, c.next_interval_no, i.eml_interval, i.interval_name FROM correlations c, intervals i".
-                      " WHERE c.interval_no=i.interval_no".
-                      " AND c.scale_no=".$dbt->dbh->quote($scale_no);
-            @results = @{$dbt->getData($sql)};
+        my $sql = "SELECT c.correlation_no, c.lower_boundary, c.interval_no, c.next_interval_no, i.eml_interval, i.interval_name FROM correlations c, intervals i".
+                  " WHERE c.interval_no=i.interval_no".
+                  " AND c.scale_no=".$dbt->dbh->quote($scale_no);
+        @results = @{$dbt->getData($sql)};
+    }
+    my %ints;
+    my %nexts;
+    foreach my $row (@results) {
+        $ints{$row->{'interval_no'}} = $row;
+        $nexts{$row->{'next_interval_no'}} = 1;
+    }
+    my @base_intervals;
+    foreach my $row (@results) {
+        if (!$nexts{$row->{'interval_no'}}) {
+            push @base_intervals,$row->{'interval_no'};
         }
-        my %ints;
-        foreach my $row (@results) {
-            $ints{$row->{'interval_no'}} = $row;
-            $nexts{$row->{'next_interval_no'}} = 1;
+    }
+    @base_intervals = sort {
+        $ints{$b}->{'lower_boundary'} <=> $ints{$a}->{'lower_boundary'} ||
+        $ints{$b}->{'correlation_no'} <=> $ints{$a}->{'correlation_no'}
+    } @base_intervals;
+    my @intervals;
+    foreach my $base (@base_intervals) {
+        my $i = $base;
+        while (my $interval = $ints{$i}) {
+            push @intervals, $interval;
+            $i = $interval->{'next_interval_no'};
         }
-        my @base_intervals;
-        foreach my $row (@results) {
-            if (!$nexts{$row->{'interval_no'}}) {
-                push @base_intervals,$row->{'interval_no'};
-            }
-        }
-        @base_intervals = sort {
-            $ints{$b}->{'lower_boundary'} <=> $ints{$a}->{'lower_boundary'} ||
-            $ints{$b}->{'correlation_no'} <=> $ints{$a}->{'correlation_no'}
-        } @base_intervals;
-        my @intervals;
-        foreach my $base (@base_intervals) {
-            my $i = $base;
-            while (my $interval = $ints{$i}) {
-                push @intervals, $interval;
-                $i = $interval->{'next_interval_no'};
-            }
-        }
+    }
 
-        foreach my $row (reverse @intervals) {
-            if ($return_type eq 'number') {
-                push @scale_list, $row->{'interval_no'};
+    foreach my $row (reverse @intervals) {
+        if ($return_type =~ /number/) {
+            push @scale_list, $row->{'interval_no'};
+        } else {
+            if ($row->{'eml_interval'}) {
+                push @scale_list, $row->{'eml_interval'} . ' ' .$row->{'interval_name'};
             } else {
-                if ($row->{'eml_interval'}) {
-                    push @scale_list, $row->{'eml_interval'} . ' ' .$row->{'interval_name'};
-                } else {
-                    push @scale_list, $row->{'interval_name'};
-                }
+                push @scale_list, $row->{'interval_name'};
             }
         }
     }
@@ -1350,7 +1752,8 @@ sub getScaleOrder {
 }
 
 sub lookupIntervals {
-    my ($dbt,$intervals,$fields) = @_;
+    my ($self,$intervals,$fields) = @_;
+    my $dbt = $self->{'dbt'};
     
     my @fields = ('interval_name','period_name','epoch_name','stage_name','ten_my_bin','lower_boundary','upper_boundary');
     if ($fields) {
@@ -1392,49 +1795,113 @@ sub lookupIntervals {
     }
 
     return \%interval_table;
-    
 }
 
 sub generateLookupTable {
-    my $dbt = shift;
+    my $self = shift;
+    my $dbt = $self->{'dbt'};
     my $dbh = $dbt->dbh;
 
-    my $period_lookup = TimeLookup::processScaleLookup($dbh,$dbt,'69','intervalToInterval');
-    my $epoch_lookup  = TimeLookup::processScaleLookup($dbh,$dbt,'71','intervalToInterval');
-    my $subepoch_lookup  = TimeLookup::processScaleLookup($dbh,$dbt,'72','intervalToInterval');
-    my $stage_lookup  = TimeLookup::processScaleLookup($dbh,$dbt,'73','intervalToInterval');
-    my $bin_lookup = processBinLookup($dbh,$dbt,"binning");
-    my ($ub_lookup,$lb_lookup) =  TimeLookup::findBoundaries($dbh,$dbt);
+    my $period_lookup   = $self->getScaleMapping('69');
+    my $epoch_lookup    = $self->getScaleMapping('71');
+    my $subepoch_lookup = $self->getScaleMapping('72');
+    my $stage_lookup    = $self->getScaleMapping('73');
+    my $bin_lookup      = $self->getScaleMapping('bins');
+    my ($ub_lookup,$lb_lookup) =  $self->getBoundaries();
+
     my $sql = "SELECT interval_no FROM intervals";
-    my @results = @{$dbt->getData($sql)};
-    foreach my $row (@results) {
-        my $period_no = $dbh->quote($period_lookup->{$row->{'interval_no'}});
-        my $subepoch_no = $dbh->quote($subepoch_lookup->{$row->{'interval_no'}});
-        my $epoch_no = $dbh->quote($epoch_lookup->{$row->{'interval_no'}});
-        my $stage_no = $dbh->quote($stage_lookup->{$row->{'interval_no'}});
-        my $ten_my_bin = $dbh->quote($bin_lookup->{$row->{'interval_no'}});
-        my $ub = $dbh->quote($ub_lookup->{$row->{'interval_no'}});
-        my $lb = $dbh->quote($lb_lookup->{$row->{'interval_no'}});
-        my $sql = "SELECT interval_no FROM interval_lookup WHERE interval_no=$row->{interval_no}";
+    my @intervals = map {$_->{'interval_no'}} @{$dbt->getData($sql)};
+    foreach my $interval_no (@intervals) {
+        my $period_no = $dbh->quote($period_lookup->{$interval_no});
+        my $subepoch_no = $dbh->quote($subepoch_lookup->{$interval_no});
+        my $epoch_no = $dbh->quote($epoch_lookup->{$interval_no});
+        my $stage_no = $dbh->quote($stage_lookup->{$interval_no});
+        my $ten_my_bin = $dbh->quote($bin_lookup->{$interval_no});
+        my $ub = $dbh->quote($ub_lookup->{$interval_no});
+        my $lb = $dbh->quote($lb_lookup->{$interval_no});
+        my $sql = "SELECT interval_no FROM interval_lookup WHERE interval_no=$interval_no";
         my @r = @{$dbt->getData($sql)};
         if ($r[0]) {
-            my $sql = "UPDATE interval_lookup SET interval_no=$row->{interval_no},ten_my_bin=$ten_my_bin,stage_no=$stage_no,subepoch_no=$subepoch_no,epoch_no=$epoch_no,period_no=$period_no,lower_boundary=$lb,upper_boundary=$ub WHERE interval_no=$row->{interval_no}";
+            my $sql = "UPDATE interval_lookup SET interval_no=$interval_no,ten_my_bin=$ten_my_bin,stage_no=$stage_no,subepoch_no=$subepoch_no,epoch_no=$epoch_no,period_no=$period_no,lower_boundary=$lb,upper_boundary=$ub WHERE interval_no=$interval_no";
             $dbh->do($sql);
         } else {
-            my $sql = "INSERT INTO interval_lookup(interval_no,ten_my_bin,stage_no,subepoch_no,epoch_no,period_no,lower_boundary,upper_boundary) VALUES ($row->{interval_no},$ten_my_bin,$stage_no,$subepoch_no,$epoch_no,$period_no,$lb,$ub)";
+            my $sql = "INSERT INTO interval_lookup(interval_no,ten_my_bin,stage_no,subepoch_no,epoch_no,period_no,lower_boundary,upper_boundary) VALUES ($interval_no,$ten_my_bin,$stage_no,$subepoch_no,$epoch_no,$period_no,$lb,$ub)";
             $dbh->do($sql);
         }
     }
 }
 
-sub getMaxMinArrays {
-    $dbh = shift;
-    $dbt = shift;
-    if (!%immediatemax) {
-        &findImmediateCorrelates();
-    }
+# Priority queue AKA binary heap - pop removes the element with the 
+# smallest priority. Heap is implemented as a sorted array
+package PriorityQueue;
 
-    return (\%immediatemax,\%immediatemin);
+sub new {
+    my $c = shift;
+    my $self = {'seen'=>{},'heap'=>[]};
+    bless $self,$c;
 }
 
-1;
+# Called like: $queue->insert($hashref,10);
+# If inserting an element that already exists the old one will
+# first be removed to guarantee elements only appear once
+sub insert {
+    my ($self,$el,$priority) = @_;
+    my $heap = $self->{'heap'};
+
+    # Element already in the heap? remove it first
+    if ($self->{'seen'}->{$el->{'interval_no'}}) {
+        $self->remove($el);
+    }
+
+    my $min_idx = 0;
+    my $max_idx = scalar(@$heap);
+
+    while ($min_idx != $max_idx) {
+        if ($max_idx - $min_idx == 1) {
+            if ($heap->[$min_idx]->[0] <= $priority) {
+                $min_idx = $max_idx;
+            }
+            last;
+        }
+        my $target = int(($max_idx + $min_idx)/2);
+        if ($heap->[$target]->[0] <= $priority) {
+            $min_idx = $target;
+        } else {
+            $max_idx = $target;
+        }
+    }
+    $self->{'seen'}->{$el->{'interval_no'}} = 1;
+    splice(@$heap,$min_idx,0,[$priority,$el]);
+}
+
+sub pop {
+    my $self = shift;
+
+    my $ref = shift @{$self->{'heap'}};
+    if ($ref) {
+        my $el = $ref->[1];
+        delete $self->{'seen'}->{$el->{'interval_no'}};
+        return $el;
+    } else {
+        return undef;
+    }
+}
+
+# Called like: $queue->remove($hashref);
+# Only used internally
+sub remove {
+    my ($self,$el) = @_;
+    my $idx = 0; 
+    while ($self->{'heap'}->[$idx]->[1]->{'interval_no'} != $el->{'interval_no'}) {
+        $idx++;
+        last if ($idx > @{$self->{'heap'}});
+    }
+    if ($idx < @{$self->{'heap'}}) {
+        my $ref = splice(@{$self->{'heap'}},$idx,1);
+        delete $self->{'seen'}->{$el->{'interval_no'}};
+        return $ref->[1];
+    }
+}
+
+return 1;
+

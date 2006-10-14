@@ -279,11 +279,12 @@ sub getPaleoCoords {
     my $f_lngdeg = shift;
     my $f_latdeg = shift;
 
-    use TimeLookup;
-    use Map;    
+    require TimeLookup;
+    require Map;    
 
     # Get time interval information
-    @_ = TimeLookup::findBoundaries($dbh,$dbt);
+    my $t = new TimeLookup($dbt);
+    @_ = $t->getBoundaries;
     my %upperbound = %{$_[0]};
     my %lowerbound = %{$_[1]};
  

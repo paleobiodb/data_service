@@ -59,12 +59,13 @@ sub new {
     my $name = ($s->get("enterer")) ? $s->get("enterer") : $q->param("yourname");
     my $filename = PBDBUtil::getFilename($name);
 
-
     my $p = Permissions->new($s,$dbt);
+    my $t = new TimeLookup($dbt);
 
     my $self = {'dbh'=>$dbh,
                 'dbt'=>$dbt,
                 'q'=>$q,
+                't'=>$t,
                 'p'=>$p,
                 's'=>$s,
                 'hbo'=>$hbo, 
@@ -777,7 +778,9 @@ sub getIntervalString    {
         if ($q->param("use_midpoints")) {
             $use_mid = 1;
         }
-        my ($intervals,$errors,$warnings) = TimeLookup::processLookup($dbh, $dbt, $eml_max, $max, $eml_min, $min,'',$use_mid);
+
+        my ($intervals,$errors,$warnings) = $self->{t}->getRange($eml_max, $max, $eml_min, $min,'',$use_mid);
+
         @form_errors = @$errors;
         @form_warnings = @$warnings;
         my $intervals_sql = join(", ",@$intervals);
@@ -1692,7 +1695,7 @@ sub queryDatabase {
         push @time_fields, 'ten_my_bin'  if ($q->param('collections_10mybin'));
     }
     if (@time_fields) {
-        $time_lookup = TimeLookup::lookupIntervals($dbt,[],\@time_fields);
+        $time_lookup = $self->{t}->lookupIntervals([],\@time_fields);
     }
 
 
@@ -2884,7 +2887,8 @@ sub printScaleFile {
     my $dbt = $self->{'dbt'};
     my $dbh = $self->{'dbh'};
 
-    return ('','') if (! $q->param('time_scale'));
+    my $time_scale = int($q->param('time_scale'));
+    return ('','') unless $time_scale;
    
     # Open the file handlea we're going to use or die
     my $filename = $self->{'filename'};
@@ -2894,20 +2898,13 @@ sub printScaleFile {
         die ("Could not open output file: $scaleFile($!) <br>");
     }
 
-    my (%interval_lookup,%upper_bin_bound,%lower_bin_bound);
+    my ($interval_lookup,$upper_bin_bound,$lower_bin_bound);
     if ( $q->param('time_scale') eq "PBDB 10 m.y. bins" ) {
-        @_ = TimeLookup::processBinLookup($dbh,$dbt);
-        %interval_lookup = %{$_[0]};
-        # hash array is by name
-        %upper_bin_bound = %{$_[1]};
-        %lower_bin_bound = %{$_[2]};
+        ($upper_bin_bound,$lower_bin_bound) = $self->{t}->getBoundaries('bins');
+        ($interval_lookup) = $self->{t}->getScaleMapping('bins');
     } else {
-        my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt, $q->param('time_scale'));
-        %interval_lookup = %{$intervalInScaleRef};
-        @_ = TimeLookup::findBoundaries($dbh,$dbt);
-        # first two hash arrays are by number, so used the next two, which are by name
-        %upper_bin_bound = %{$_[2]};
-        %lower_bin_bound = %{$_[3]};
+        ($upper_bin_bound,$lower_bin_bound) = $self->{t}->getBoundaries();
+        ($interval_lookup) = $self->{t}->getScaleMapping($time_scale,'names');
     }
 
     my (%occs_by_bin,%taxa_by_bin);
@@ -2915,7 +2912,14 @@ sub printScaleFile {
     my (%occs_by_bin_and_category,%taxa_by_bin_and_category);
     foreach my $row (@$results) {
         # count up occurrences per time interval bin
-        my $interval = $interval_lookup{$row->{collection_no}};
+        my $max_no = $row->{'max_interval_no'};
+        my $min_no = $row->{'min_interval_no'} || $row->{'max_interval_no'};
+        my $max_lookup = $interval_lookup->{$max_no};
+        my $min_lookup = $interval_lookup->{$min_no};
+        my $interval;
+        if ($max_lookup && $max_lookup eq $min_lookup) {
+            $interval = $max_lookup;
+        }
         my $bin_key = $row->{'o.genus_name'};
         if ($q->param("occurrences_species_name") eq 'YES') {
             $bin_key .="_".$row->{'o.species_name'};
@@ -2961,9 +2965,9 @@ sub printScaleFile {
     my @intervalnames;
     #  list of 10 m.y. bin names
     if ( $q->param('time_scale') =~ /bin/ )    {
-        @intervalnames = TimeLookup::getTenMYBins();
+        @intervalnames = TimeLookup::getBins();
     } else {
-        @intervalnames = TimeLookup::getScaleOrder($dbt,$q->param('time_scale'));
+        @intervalnames = $self->{t}->getScaleOrder(int($q->param('time_scale')));
     }
 
     # need a list of enum values that actually have counts
@@ -2998,9 +3002,9 @@ sub printScaleFile {
     foreach my $intervalName ( @intervalnames ) {
         my @scaleline = ();
         push @scaleline, $intervalName;
-        push @scaleline, sprintf("%.2f",$lower_bin_bound{$intervalName});
-        push @scaleline, sprintf("%.2f",$upper_bin_bound{$intervalName});
-        push @scaleline, sprintf("%.2f",($lower_bin_bound{$intervalName} + $upper_bin_bound{$intervalName}) / 2);
+        push @scaleline, sprintf("%.2f",$lower_bin_bound->{$intervalName});
+        push @scaleline, sprintf("%.2f",$upper_bin_bound->{$intervalName});
+        push @scaleline, sprintf("%.2f",($lower_bin_bound->{$intervalName} + $upper_bin_bound->{$intervalName}) / 2);
         push @scaleline, sprintf("%d",$occs_by_bin{$intervalName});
         push @scaleline, sprintf("%d",$taxa_by_bin{$intervalName});
         foreach my $val ( @enumvals )    {
@@ -3163,7 +3167,7 @@ sub setupQueryFields {
     # Get EML values, check interval names
     if ($q->param('max_interval_name')) {
         if ($q->param('max_interval_name') =~ /[a-zA-Z]/) {
-            my ($eml, $name) = TimeLookup::splitInterval($dbt,$q->param('max_interval_name'));
+            my ($eml, $name) = $self->{t}->splitInterval($q->param('max_interval_name'));
             my $ret = Validation::checkInterval($dbt,$eml,$name);
             if (!$ret) {
                 push @form_errors, "There is no record of ".$q->param('max_interval_name')." in the database";
@@ -3177,7 +3181,7 @@ sub setupQueryFields {
     }
     if ($q->param('min_interval_name')) {
         if ($q->param('min_interval_name') =~ /[a-zA-Z]/) {
-            my ($eml, $name) = TimeLookup::splitInterval($dbt,$q->param('min_interval_name'));
+            my ($eml, $name) = $self->{t}->splitInterval($q->param('min_interval_name'));
             my $ret = Validation::checkInterval($dbt,$eml,$name);
             if (! $ret) {
                 push @form_errors, "There is no record of ".$q->param('min_interval_name')." in the database";

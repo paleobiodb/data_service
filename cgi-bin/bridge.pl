@@ -17,30 +17,22 @@ use DBI;
 # PBDB modules
 use HTMLBuilder;
 use DBConnection;
-use Session;
-use AuthorNames;
-use Map;
-use Download;
-use Curve;
-use Permissions;
-use PBDBUtil;
 use DBTransactionManager;
+use Session;
+
+# Autoloaded libs
+use PBDBUtil;
+use Permissions;
 use Reclassify;
-use Scales;
+
 use Images;
 use TaxonInfo;
 use TimeLookup;
 use Ecology;
-use Strata;
 use PrintHierarchy;
-use Report;
-use Confidence;
 use Measurement;
 use TaxaCache;
-use DownloadTaxonomy;
-use Neptune;
 use TypoChecker;
-use PAST;
 # god awful Poling modules
 use Taxon;
 use Opinion;
@@ -639,10 +631,12 @@ sub displayMapForm {
 
 
 sub displayMapResults {
+    require Map;
+
     logRequest($s,$q);
 	print stdIncludes("std_page_top" );
 
-	my $m = Map::->new( $dbh, $q, $s, $dbt, $hbo);
+	my $m = Map->new( $dbh, $q, $s, $dbt, $hbo);
 	my $file = $m->buildMap();
 
     open(MAP, $file) or die "couldn't open $file ($!)";
@@ -658,6 +652,8 @@ sub displayMapResults {
 # needs to be done so its all abstracted correctly in the Map module and called
 # on Map object creation, maybe later PS 12/14/2005
 sub displayMapOfCollection {
+    require Map;
+
     logRequest($s,$q);
     $q->param("simple_map"=>'YES');
     my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape1', 'dotcolor1', 'dotborder1');
@@ -799,6 +795,7 @@ sub displayDownloadForm {
 }
 
 sub displayDownloadResults {
+    require Download;
     logRequest($s,$q);
 
 	print stdIncludes( "std_page_top" );
@@ -824,6 +821,7 @@ sub displayDownloadNeptuneForm {
 }       
     
 sub displayDownloadNeptuneResults {
+    require Neptune;
     print stdIncludes( "std_page_top" );
     Neptune::displayNeptuneDownloadResults($q,$s,$hbo,$dbt);
     print stdIncludes("std_page_bottom");
@@ -841,6 +839,7 @@ sub displayDownloadTaxonomyForm {
 }       
     
 sub displayDownloadTaxonomyResults {
+    require DownloadTaxonomy;
     logRequest($s,$q);
     print stdIncludes( "std_page_top" );
     if ($q->param('output_data') eq 'itis') {
@@ -859,11 +858,13 @@ sub displayReportForm {
 }
 
 sub displayReportResults {
+    require Report;
+
     logRequest($s,$q);
 
 	print stdIncludes( "std_page_top" );
 
-	my $r = Report->new( $dbh, $q, $s, $dbt );
+	my $r = Report->new($dbt,$q,$s);
 	$r->buildReport();
 
 	print stdIncludes("std_page_bottom");
@@ -892,6 +893,8 @@ sub displayCurveForm {
 }
 
 sub displayCurveResults {
+    require Curve;
+
     logRequest($s,$q);
 
     my $std_page_top = stdIncludes("std_page_top");
@@ -901,75 +904,6 @@ sub displayCurveResults {
 	$c->buildCurve();
 
     print stdIncludes("std_page_bottom");
-}
-
-# JA 9.8.04
-sub displayTenMyBins	{
-
-	print stdIncludes("std_page_top");
-
-	print "<center><h2>10 m.y.-Long Sampling Bins</h2></center>\n\n";
-
-	print "These bin definitions are used by the <a href=\"$exec_url?action=displayCurveForm\">diversity curve generator</a>.\n\n";
-
-	my @binnames = TimeLookup::getTenMYBins();
-
-	@_ = TimeLookup::processBinLookup($dbh,$dbt,"boundaries");
-	#%topma = %{$_[0]};
-	my %basema = %{$_[1]};
-	my %binning = %{$_[2]};
-
-	my $intervalsql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
-	my @intervalrefs = @{$dbt->getData($intervalsql)};
-	my (%intervalname,%intervalalias);
-
-	for my $ir (@intervalrefs)	{
-		$intervalname{$ir->{interval_no}} = $ir->{interval_name};
-		$intervalalias{$intervalname{$ir->{interval_no}}} = $ir->{interval_name};
-		if ( $ir->{eml_interval} =~ /[A-Za-z]/ )	{
-			$intervalname{$ir->{interval_no}} = $ir->{eml_interval} . " " . $ir->{interval_name};
-			if ( $ir->{eml_interval} !~ /middle/i )	{
-				$intervalalias{$intervalname{$ir->{interval_no}}} = $ir->{interval_name} . $ir->{eml_interval};
-			} else	{
-				$intervalalias{$intervalname{$ir->{interval_no}}} = $ir->{interval_name} . "F";
-			}
-		}
-	}
-
-	print "<hr>\n\n";
-
-	print "<table><tr>\n";
-	print "<td valign=top><b>Bin name</b></td>  <td valign=top><b>Age&nbsp;at&nbsp;base&nbsp;(Ma)</b></td>  <td valign=top><b>Included intervals</b></td></tr>\n";
-
-	for my $bn (@binnames)	{
-		my $temp = $bn;
-		$temp =~ s/ /&nbsp;/g;
-		print "<tr><td valign=top>$temp</td>\n";
-		printf "<td align=center valign=top>%.1f</td>\n",$basema{$bn};
-		print "<td class=tiny>";
-		my @namestoprint;
-        my @ints;
-		for my $in ( keys %binning )	{
-			if ( $binning{$in} eq $bn )	{
-				push @namestoprint , $intervalname{$in};
-                push @ints,$in;
-			}
-		}
-		@namestoprint = sort { $intervalalias{$a} cmp $intervalalias{$b} } @namestoprint;
-		my $printed = 0;
-		for my $nametoprint ( @namestoprint )	{
-			if ( $printed > 0 )	{
-				print ", ";
-			}
-			print $nametoprint;
-			$printed++;
-		}
-		print "</td></tr>\n\n";
-	}
-	print "</table>\n<p>\n\n";
-
-	print stdIncludes("std_page_bottom");
-
 }
 
 # Show a generic page
@@ -1193,7 +1127,7 @@ sub displayRefResults {
 		}
 	}
 
-    my $type = $q->param('type');
+    $type = $q->param('type');
 	print qq|<a href="$exec_url?action=displaySearchRefs&type=$type"><b>Do another search</b></a>\n|;
 	print "</p></center><br>\n";
 
@@ -1865,7 +1799,8 @@ sub displayCollResults {
                 my $max_lookup;
                 my $min_lookup;
                 if (@intervals) {
-                    my $lookup = TimeLookup::lookupIntervals($dbt,\@intervals,['interval_name','ten_my_bin']);
+                    my $t = new TimeLookup($dbt);
+                    my $lookup = $t->lookupIntervals(\@intervals,['interval_name','ten_my_bin']);
                     $max_lookup = $lookup->{$dataRow->{'max_interval_no'}};
                     if ($dataRow->{'min_interval_no'} && $dataRow->{'min_interval_no'} != $dataRow->{'max_interval_no'}) {
                         $min_lookup = $lookup->{$dataRow->{'min_interval_no'}};
@@ -2072,10 +2007,11 @@ sub getOccurrencesXML {
     } 
 
     print "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" standalone=\"yes\"?>\n";
- 
+
+    my $t = new TimeLookup($dbt);
     my $time_lookup;
     if ($q->param('xml_format') !~ /points/i) { 
-        $time_lookup = TimeLookup::lookupIntervals($dbt,[],['period_name','epoch_name','stage_name']);
+        $time_lookup = $t->lookupIntervals([],['period_name','epoch_name','stage_name']);
     }
 
     my $g = XML::Generator->new(escape=>'always',conformance=>'strict',empty=>'args');
@@ -2179,14 +2115,16 @@ sub getOccurrencesXML {
 # compose the SQL to find collections of a certain age within 100 km of
 #  a coordinate (required when the user wants to add a collection)
 sub processCollectionsSearchForAdd	{
+    require Map;
+
     # some generally useful trig stuff needed by processCollectionsSearchForAdd
     my $PI = 3.14159265;
 
 	my $sql = "SELECT c.collection_no, c.collection_aka, c.authorizer_no, p1.name authorizer, c.collection_name, c.access_level, c.research_group, c.release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, c.country, c.state, c.latdeg, c.latmin, c.latsec, c.latdec, c.latdir, c.lngdeg, c.lngmin, c.lngsec, c.lngdec, c.lngdir, c.max_interval_no, c.min_interval_no, c.reference_no FROM collections c LEFT JOIN person p1 ON p1.person_no = c.authorizer_no WHERE ";
 
 	# get a list of interval numbers that fall in the geological period
-	my ($inlistref) = TimeLookup::processLookup($dbh,$dbt,'',$q->param('period_max'),'','');
-	my @intervals = @{$inlistref};
+    my $t = new TimeLookup($dbt);
+	my @intervals = $t->getMapping($q->param('period_no'));
 
 	$sql .= "c.max_interval_no IN (" . join(',', @intervals) . ") AND ";
 
@@ -2537,7 +2475,8 @@ sub processCollectionsSearch {
         if ($min =~ /[a-z][A-Z]/ && !Validation::checkInterval($dbt,$eml_min,$min)) {
             push @errors, "There is no record of $eml_min $min in the database";
         }
- 		my ($intervals,$errors,$warnings) = TimeLookup::processLookup($dbh, $dbt, $eml_max,$max,$eml_min,$min);
+        my $t = new TimeLookup($dbt);
+ 		my ($intervals,$errors,$warnings) = $t->getRange($eml_max,$max,$eml_min,$min);
         push @errors, @$errors;
         push @warnings, @$warnings;
         my $val = join(",",@$intervals);
@@ -3136,8 +3075,9 @@ sub displayCollectionDetailsPage {
     push @intervals, $row->{'min_interval_no'} if ($row->{'min_interval_no'} && $row->{'min_interval_no'} != $row->{'max_interval_no'});
     my $max_lookup;
     my $min_lookup;
-    if (@intervals) {
-        my $lookup = TimeLookup::lookupIntervals($dbt,\@intervals);
+    if (@intervals) { 
+        my $t = new TimeLookup($dbt);
+        my $lookup = $t->lookupIntervals(\@intervals);
         $max_lookup = $lookup->{$row->{'max_interval_no'}};
         if ($row->{'min_interval_no'}) { 
             $min_lookup = $lookup->{$row->{'min_interval_no'}};
@@ -4444,8 +4384,8 @@ sub displayCollectionForm {
 		$vars{'min_interval'} = $interval->{interval_name};
 	}
 
-    my $ref = Reference::getReference($dbt,$vars{'reference_no'});
-    my $formatted_primary = Reference::formatLongRef($ref);
+    $ref = Reference::getReference($dbt,$vars{'reference_no'});
+    $formatted_primary = Reference::formatLongRef($ref);
 
 	print stdIncludes("std_page_top");
 	print printIntervalsJava();
@@ -4532,7 +4472,7 @@ EOF
             }
         }
         if ($include_ten_my_bins) {
-            my @binnames = TimeLookup::getTenMYBins();
+            my @binnames = TimeLookup::getBins();
             foreach my $binname (@binnames) {
                 $check .= qq| emltime$i != "|.$binname. qq|" &&\n|;
             }
@@ -5153,18 +5093,49 @@ sub displayTaxonInfoResults {
 ##############
 ## Scales stuff JA 7.7.03
 sub startScale	{
+    require Scales;
 	Scales::startSearchScale($dbh, $dbt, $s, $exec_url);
 }
 sub processShowForm	{
+    require Scales;
 	Scales::processShowEditForm($dbh, $dbt, $hbo, $q, $s, $exec_url);
 }
 sub processViewScale	{
+    require Scales;
     logRequest($s,$q);
 	Scales::processViewTimeScale($dbt, $hbo, $q, $s, $exec_url);
 }
 sub processEditScale	{
+    require Scales;
 	Scales::processEditScaleForm($dbt, $hbo, $q, $s, $exec_url);
 }
+sub displayTenMyBinsDebug {
+    require Scales;
+    Scales::displayTenMyBinsDebug($dbt);
+}
+sub displayInterval {
+    require Scales;
+    Scales::displayInterval($dbt, $hbo, $q);
+}
+sub displayTenMyBins {
+    require Scales;
+    Scales::displayTenMyBins($dbt, $hbo);
+}
+sub displayFullScale {
+    require Scales;
+    Scales::displayFullScale($dbt, $hbo);
+}
+sub dumpAllIntervals {
+    my $t = new TimeLookup($dbt);
+    $t->getBoundaries();
+    my $dmp = $t->_dumpGraph();
+    $dmp =~ s/(Interval (\d+):)/<a name="i$2">$1<\/a>/g;
+    $dmp =~ s/(\d{1,3})(:\w+\W)/<a href="#i$1">$1<\/a>$2/g;
+    print "<hr><pre>AAAAAAAA";
+    print $dmp;
+    print "</pre>";
+}
+
 ## END Scales stuff
 ##############
 
@@ -5285,6 +5256,7 @@ sub processMeasurementForm {
 ##############
 ## Strata stuff
 sub displayStrata {
+    require Strata;
     logRequest($s,$q);
     print stdIncludes("std_page_top");
     Strata::displayStrata($q,$s,$dbt,$hbo);
@@ -5292,12 +5264,14 @@ sub displayStrata {
 }
 
 sub displaySearchStrataForm {
+    require Strata;
     print stdIncludes("std_page_top");
     Strata::displaySearchStrataForm($q,$s,$dbt,$hbo);
     print stdIncludes("std_page_bottom");
 }  
 
 sub displaySearchStrataResults{
+    require Strata;
     print stdIncludes("std_page_top");
     Strata::displaySearchStrataResults($q,$s,$dbt,$hbo);
     print stdIncludes("std_page_bottom");
@@ -5320,13 +5294,15 @@ sub startProcessPrintHierarchy	{
 ##############
 ## PAST stuff
 sub PASTQueryForm {
+    require PAST;
     print stdIncludes("std_page_top");
-        PAST::queryForm($dbt,$q,$hbo,$s);
+    PAST::queryForm($dbt,$q,$hbo,$s);
     print stdIncludes("std_page_bottom");
 }
 sub PASTQuerySubmit {
+    require PAST;
     print stdIncludes("std_page_top");
-        PAST::querySubmit($dbt,$q,$hbo,$s);
+    PAST::querySubmit($dbt,$q,$hbo,$s);
     print stdIncludes("std_page_bottom");
 }
 ## End PAST stuff
@@ -5856,7 +5832,7 @@ EOF
             my $collection_no = $collections[$j];
             my $occ = $taxon_names{$taxon_key}{$collections[$j]};
             my ($abund_value,$abund_unit,$key_type,$key_value,$occ_reference_no,$readonly,$authorizer);
-            my $readonly = 0;
+            $readonly = 0;
             if ($occ) {
                 if ($occ->{'abund_value'}) {
                     $abund_value = $occ->{'abund_value'};
@@ -6230,7 +6206,7 @@ sub generateCollectionLabel {
         # but instead gets the @bounds back quickly so we know whether or now to 
         # wrap to the next line
         my @bounds = GD::Image->stringFT($black,$font,$font_size,$angle,$x,$y,$word);
-#        carp "Bounds are: ".join(",",@bounds)." for $word<BR>";
+#        print "Bounds are: ".join(",",@bounds)." for $word<BR>";
         if ($bounds[3] < 0) {
             #bounds[3] is the top left y coordinate or some such. if its < 0, then this
             # strin gis running off the image so break to next line
@@ -6238,7 +6214,7 @@ sub generateCollectionLabel {
             last if ($line_count > $num_lines);
             $y = $height - 3;
             my @bounds = $im->stringFT($black,$font,$font_size,$angle,$x,$y,$word);
-            $y = $bounds[3] - int($font_size);
+            $y = $bounds[3] - int($font_size/3);
         } else {
             my @bounds = $im->stringFT($black,$font,$font_size,$angle,$x,$y,$word);
             $y = $bounds[3] - int($font_size);
@@ -7541,6 +7517,7 @@ sub displayInstitutions {
 # ------------------------ #
 
 sub displaySearchSectionResults{
+    require Confidence;
     logRequest($s,$q);
     print stdIncludes("std_page_top");
     Confidence::displaySearchSectionResults($q, $s, $dbt,$hbo);
@@ -7548,18 +7525,21 @@ sub displaySearchSectionResults{
 }
 
 sub displaySearchSectionForm{
+    require Confidence;
     print stdIncludes("std_page_top");
     Confidence::displaySearchSectionForm($q, $s, $dbt,$hbo);
     print stdIncludes("std_page_bottom");
 }
 
 sub displayTaxaIntervalsForm{
+    require Confidence;
     print stdIncludes("std_page_top");
     Confidence::displayTaxaIntervalsForm($q, $s, $dbt,$hbo);
     print stdIncludes("std_page_bottom");
 }
 
 sub displayTaxaIntervalsResults{
+    require Confidence;
     logRequest($s,$q);
     print stdIncludes("std_page_top");
     Confidence::displayTaxaIntervalsResults($q, $s, $dbt,$hbo);
@@ -7567,24 +7547,28 @@ sub displayTaxaIntervalsResults{
 }
 
 sub buildListForm {
+    require Confidence;
     print stdIncludes("std_page_top");
     Confidence::buildList($q, $s, $dbt,$hbo);
     print stdIncludes("std_page_bottom");
 }
 
 sub displayStratTaxaForm{
+    require Confidence;
     print stdIncludes("std_page_top");
     Confidence::displayStratTaxa($q, $s, $dbt);
     print stdIncludes("std_page_bottom");
 }
 
 sub showOptionsForm {
+    require Confidence;
 	print stdIncludes("std_page_top");
 	Confidence::optionsForm($q, $s, $dbt);
 	print stdIncludes("std_page_bottom");
 }
 
 sub calculateTaxaInterval {
+    require Confidence;
     logRequest($s,$q);
 	print stdIncludes("std_page_top");
 	Confidence::calculateTaxaInterval($q, $s, $dbt);
@@ -7592,6 +7576,7 @@ sub calculateTaxaInterval {
 }
 
 sub calculateStratInterval {
+    require Confidence;
     logRequest($s,$q);
 	print stdIncludes("std_page_top");
 	Confidence::calculateStratInterval($q, $s, $dbt);

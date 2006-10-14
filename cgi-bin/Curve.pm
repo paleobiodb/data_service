@@ -426,31 +426,39 @@ sub assignGenera	{
 	# also get the bin boundaries in Ma
 	# switched from Harland to Gradstein scales JA 5.12.05
 	my @binnames;
+    my $t = new TimeLookup($dbt);
+    my $ig = $t->getIntervalGraph;
+    my $interval_name = {};
+    $interval_name{$_->{'interval_no'}} = $_->{'name'} foreach values %$ig;
 	if ( $bin_type eq "period" )	{
-        @binnames = TimeLookup::getScaleOrder($dbt,69);
-		@_ = TimeLookup::findBoundaries($dbh,$dbt);
-		%topma = %{$_[2]};
-		%basema = %{$_[3]};
+        my @intervals = $t->getScaleOrder(69,'number');
+        @binnames = map {$interval_name->{$_}} for @intervals;
+		my ($top,$base) = $t->getBoundaries();
+        $topma{$interval_name->{$_}} = $top->{$_} for @intervals;
+        $basema{$interval_name->{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "epoch" )	{
-        @binnames = TimeLookup::getScaleOrder($dbt,71);
-		@_ = TimeLookup::findBoundaries($dbh,$dbt);
-		%topma = %{$_[2]};
-		%basema = %{$_[3]};
+        my @intervals = $t->getScaleOrder(71,'number');
+        @binnames = map {$interval_name->{$_}} for @intervals;
+		my ($top,$base) = $t->getBoundaries();
+        $topma{$interval_name->{$_}} = $top->{$_} for @intervals;
+        $basema{$interval_name->{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "subepoch" )	{
-        @binnames = TimeLookup::getScaleOrder($dbt,72);
-		@_ = TimeLookup::findBoundaries($dbh,$dbt);
-		%topma = %{$_[2]};
-		%basema = %{$_[3]};
+        my @intervals = $t->getScaleOrder(72,'number');
+        @binnames = map {$interval_name->{$_}} for @intervals;
+		my ($top,$base) = $t->getBoundaries();
+        $topma{$interval_name->{$_}} = $top->{$_} for @intervals;
+        $basema{$interval_name->{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "stage" )	{
-        @binnames = TimeLookup::getScaleOrder($dbt,73);
-		@_ = TimeLookup::findBoundaries($dbh,$dbt);
-		%topma = %{$_[2]};
-		%basema = %{$_[3]};
-	} elsif ( $bin_type eq "10my" )	{
-		@binnames = TimeLookup::getTenMYBins();
-		@_ = TimeLookup::processBinLookup($dbh,$dbt,"boundaries");
-		%topma = %{$_[0]};
-		%basema = %{$_[1]};
+        my @intervals = $t->getScaleOrder(73,'number');
+        @binnames = map {$interval_name->{$_}} for @intervals;
+		my ($top,$base) = $t->getBoundaries();
+        $topma{$interval_name->{$_}} = $top->{$_} for @intervals;
+        $basema{$interval_name->{$_}} = $base->{$_} for @intervals;
+    } elsif ( $bin_type eq "10my" ) {
+        @binnames = $t->getBins();
+        my ($top,$base) = $t->getBoundaries('bins');
+        %topma = %$top;
+        %basema = %$base;
 	} elsif ( $bin_type =~ /neptune/ ) {
         # Neptune data ranges from -3 to 150 mA right now, use those at defaults
         $neptune_range_min = 0;

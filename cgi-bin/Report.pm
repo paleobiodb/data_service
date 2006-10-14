@@ -11,10 +11,6 @@ use strict;
 
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
-my $dbh;
-my $dbt;
-my $q;					# Reference to the parameters
-my $s;
 
 my $HOST_URL = $ENV{BRIDGE_HOST_URL};
 my $OUTFILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
@@ -22,15 +18,9 @@ my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
 my $COAST_DIR = $ENV{MAP_COAST_DIR};
 
 sub new {
-	my $class = shift;
-	$dbh = shift;
-	$q = shift;
-	$s = shift;
-	$dbt = shift;
-	my $self = {};
-
+    my ($class,$dbt,$q,$s) = @_;
+	my $self = {dbt=>$dbt,q=>$q,s=>$s};
 	bless $self, $class;
-	return $self;
 }
 
 sub buildReport {
@@ -70,6 +60,8 @@ sub buildReport {
 ##
 sub reportDisplayHTML {
     my $self = shift;
+    my $q = $self->{q};
+    my $s = $self->{s};
 
     # Print Title of Page
 	print "<center>\n";
@@ -175,6 +167,8 @@ sub reportDisplayHTML {
 ##
 sub reportPrintOutfile{
     my $self = shift;
+    my $q = $self->{q};
+    my $s = $self->{s};
 
     #
     # Setup output
@@ -261,6 +255,9 @@ sub reportPrintOutfile{
 ##
 sub reportBuildDataTables {
     my $self = shift;
+    my $q = $self->{q};
+    my $dbt = $self->{dbt};
+
     my $sth = shift;
     my $t1FieldCnt = scalar @{$self->{'searchFields'}[1]}; #searchfield1
     my $t2FieldCnt = scalar @{$self->{'searchFields'}[2]}; #searchfield2
@@ -458,37 +455,42 @@ sub reportBuildDataTables {
         $self->{'dataTable'} = \%coll_dataTable;
     }
 
+    my $t = new TimeLookup($dbt);
     # Provide arrays of sorted keys for the two totals with which
     # to index into the hashes
     if ($q->param('searchfield1') eq "10 m.y. bins (standard order)") {
-        @{$self->{'sortKeys1'}} = TimeLookup::getTenMYBins();
+        $self->{'sortKeys1'} = [$t->getBins()];
     } elsif ($q->param('searchfield1') eq "Gradstein 3: Periods (standard order)") {
-        @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,69);
+        $self->{'sortKeys1'} = [$t->getScaleOrder(69)];
     } elsif ($q->param('searchfield1') eq "Gradstein 5: Epochs (standard order)") {
-        @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,71);
+        $self->{'sortKeys1'} = [$t->getScaleOrder(71)];
     } elsif ($q->param('searchfield1') eq "Gradstein 7: Stages (standard order)") {
-        @{$self->{'sortKeys1'}} = TimeLookup::getScaleOrder($dbt,73);
+        $self->{'sortKeys1'} = [$t->getScaleOrder(73)];
     } else {
-        @{$self->{'sortKeys1'}} = sort {$self->{'totals1'}{$b} <=> $self->{'totals1'}{$a}} keys %{$self->{'totals1'}};
+        $self->{'sortKeys1'} = [sort {$self->{'totals1'}{$b} <=> $self->{'totals1'}{$a}} keys %{$self->{'totals1'}}];
     }    
     # Remove keys with colls/occs in the DB. Have to go in reverse so 
     # we splice the right thing
     for(my $i=scalar(@{$self->{'sortKeys1'}})-1;$i>=0;$i--) {
-        splice @{$self->{'sortKeys1'}},$i,1 if (!exists $self->{'totals1'}{@{$self->{'sortKeys1'}}[$i]}); 
+        if (!exists $self->{'totals1'}{${$self->{'sortKeys1'}}[$i]}) {
+            splice @{$self->{'sortKeys1'}},$i,1;
+        }
     }    
     if ($q->param('searchfield2') eq "10 m.y. bins (standard order)") {
-        @{$self->{'sortKeys2'}} = TimeLookup::getTenMYBins();
+        $self->{'sortKeys2'} = [$t->getBins()];
     } elsif ($q->param('searchfield2') eq "Gradstein 3: Periods (standard order)") {
-        @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,69);
+        $self->{'sortKeys2'} = [$t->getScaleOrder(69)];
     } elsif ($q->param('searchfield2') eq "Gradstein 5: Epochs (standard order)") {
-        @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,71);
+        $self->{'sortKeys2'} = [$t->getScaleOrder(71)];
     } elsif ($q->param('searchfield2') eq "Gradstein 7: Stages (standard order)") {
-        @{$self->{'sortKeys2'}} = TimeLookup::getScaleOrder($dbt,73);
+        $self->{'sortKeys2'} = [$t->getScaleOrder(73)];
     } else {
-        @{$self->{'sortKeys2'}} = sort {$self->{'totals2'}{$b} <=> $self->{'totals2'}{$a}} keys %{$self->{'totals2'}};
+        $self->{'sortKeys2'} = [sort {$self->{'totals2'}{$b} <=> $self->{'totals2'}{$a}} keys %{$self->{'totals2'}}];
     }    
     for(my $i=scalar(@{$self->{'sortKeys2'}})-1;$i>=0;$i--) {
-        splice @{$self->{'sortKeys2'}},$i,1 if (!exists $self->{'totals2'}{@{$self->{'sortKeys2'}}[$i]}); 
+        if (!exists $self->{'totals2'}{${$self->{'sortKeys2'}}[$i]}) {
+            splice @{$self->{'sortKeys2'}},$i,1;
+        }
     }    
 
     # Only return the X most prevalent rows or columns
@@ -602,6 +604,9 @@ sub reportBuildDataTables {
 ##
 sub reportQueryDB{
 	my $self = shift;
+    my $q = $self->{q};
+    my $dbt = $self->{dbt};
+    my $dbh = $dbt->dbh;
     my @whereTerms = ();
     my $fromSQL = 'collections c';
     my $leftJoinSQL = '';
@@ -732,6 +737,9 @@ sub reportQueryDB{
 
 sub getSepkoskiGenera {
     my $self = shift;
+    my $dbt = $self->{dbt};
+    my $dbh = $dbt->dbh;
+
     my ($sql, $sth, @jackrefs, $jacklist);
     
     $sql = "SELECT taxon_no FROM authorities WHERE authorizer_no=48 AND taxon_rank='genus'";
@@ -758,20 +766,22 @@ sub getTranslationTable {
     my $self = shift;
     my $param = shift;
     my %table = ();
+    my $dbt = $self->{'dbt'};
+    my $t = new TimeLookup($dbt);
     if ($param eq "interval name") {
         my $intervals = $self->getIntervalNames();
         %table = %{$intervals};
     } elsif ($param =~ /10 m\.y\. bins/) { 
-        my $binning = TimeLookup::processBinLookup($dbh,$dbt,'binning');
+        my $binning = $t->getScaleMapping('bins');
         %table = %$binning;
     } elsif ($param =~ /Gradstein 3: Periods/) { 
-		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt,'69','intervalToScale');
+		my $intervalInScaleRef = $t->getScaleMapping(69,'names');
 		%table = %{$intervalInScaleRef};
     } elsif ($param =~ /Gradstein 5: Epochs/) { 
-		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt,'71','intervalToScale');
+		my $intervalInScaleRef = $t->getScaleMapping(71,'names');
 		%table = %{$intervalInScaleRef};
     } elsif ($param =~ /Gradstein 7: Stages/) { 
-		my $intervalInScaleRef = TimeLookup::processScaleLookup($dbh,$dbt,'73','intervalToScale');
+		my $intervalInScaleRef = $t->getScaleMapping(73,'names');
 		%table = %{$intervalInScaleRef};
     } elsif ($param eq "continent") {
         my $regions = $self->getRegions();
@@ -810,6 +820,8 @@ sub getTranslationTable {
 # Returns a hash reference filled with all interval names
 sub getIntervalNames {
     my $self = shift;
+    my $dbt = $self->{dbt};
+
     my %interval_names;
  
     # get the names of time intervals

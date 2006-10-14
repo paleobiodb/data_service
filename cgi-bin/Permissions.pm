@@ -427,8 +427,8 @@ sub displayPermissionListForm {
     }
     # print the people who have put this person on their permission list,
     #  just so they know JA 28.8.06
-    my $sql = "SELECT p.name authorizer_name, pm.authorizer_no FROM person p, permissions pm WHERE p.person_no=pm.authorizer_no AND pm.modifier_no=$authorizer_no ORDER BY p.last_name, p.first_name";
-    my @results = @{$dbt->getData($sql)};
+    $sql = "SELECT p.name authorizer_name, pm.authorizer_no FROM person p, permissions pm WHERE p.person_no=pm.authorizer_no AND pm.modifier_no=$authorizer_no ORDER BY p.last_name, p.first_name";
+    @results = @{$dbt->getData($sql)};
     if (@results) {
         print qq|</div>\n</div>\n\n<div class="displayPanel" align="left">\n|;
         print qq|<span class="displayPanelHeader"><b>Permitted authorizers</b></span>\n|;

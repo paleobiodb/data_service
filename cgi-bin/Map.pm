@@ -171,7 +171,7 @@ sub buildMap {
                     delete $toptions{'lithology1'};
                 }
                 if ($toptions{'interval_name'}) {
-                    ($toptions{'eml_max_interval'},$toptions{'max_interval'}) = TimeLookup::splitInterval($dbt,$toptions{'interval_name'});
+                    ($toptions{'eml_max_interval'},$toptions{'max_interval'}) = TimeLookup::splitInterval($toptions{'interval_name'});
                 }
                 my ($dataRowsRef,$ofRows) = main::processCollectionsSearch($dbt,\%toptions,$fields);  
                 $self->{'options'} = \%toptions;
@@ -184,7 +184,7 @@ sub buildMap {
                 delete $options{'lithology1'};
             }
             if ($options{'interval_name'}) {
-                ($options{'eml_max_interval'},$options{'max_interval'}) = TimeLookup::splitInterval($dbt,$options{'interval_name'});
+                ($options{'eml_max_interval'},$options{'max_interval'}) = TimeLookup::splitInterval($options{'interval_name'});
             }
             my ($dataRowsRef,$ofRows,$warnings) = main::processCollectionsSearch($dbt,\%options,$fields);  
             push @warnings, @$warnings; 
@@ -235,7 +235,7 @@ sub mapCheckForm {
 
         # Get EML values, check interval names
         if ($interval_name =~ /[a-zA-Z]/) {
-            my ($eml, $name) = TimeLookup::splitInterval($dbt,$interval_name);
+            my ($eml, $name) = TimeLookup::splitInterval($interval_name);
             if (!Validation::checkInterval($dbt,$eml,$name)) {
                 push @errors, "We have no record of $interval_name in the database";
             } 

@@ -1,7 +1,5 @@
 package TaxonInfo;
 
-use PBDBUtil;
-use Debug;
 use Taxon;
 use TimeLookup;
 use Data::Dumper;
@@ -685,25 +683,8 @@ sub doCollections{
 
 	# get a lookup of the boundary ages for all intervals JA 25.6.04
 	# the boundary age hashes are keyed by interval nos
-    @_ = TimeLookup::findBoundaries($dbh,$dbt);
-    my %upperbound = %{$_[0]};
-    my %lowerbound = %{$_[1]};
-
-    @_ = TimeLookup::getMaxMinArrays($dbh,$dbt);
-    my %immediatemax = %{$_[0]};
-    my %immediatemin = %{$_[1]};
-
-	# get all the interval names because we need them to print the
-	#  total age range below
-	my $isql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
-	my @intrefs =  @{$dbt->getData($isql)};
-	my %interval_name;
-	foreach my $ir ( @intrefs )	{
-		$interval_name{$ir->{'interval_no'}} = $ir->{'interval_name'};
-		if ( $ir->{'eml_interval'} )	{
-			$interval_name{$ir->{'interval_no'}} = $ir->{'eml_interval'} . " " . $ir->{'interval_name'};
-		}
-	}
+    my $t = new TimeLookup($dbt);
+    my ($upperbound,$lowerbound) = $t->getBoundaries;
 
     # Pull the colls from the DB;
     my %options = ();
@@ -724,15 +705,20 @@ sub doCollections{
         print "<div align=\"center\"><h3>Collections</h3><i> No collection or age range data are available</i></div>";
         return;
     }
-    my ($lb,$ub,$max,$min) = calculateAgeRange($dbt,\@data,\%lowerbound,\%upperbound);
+    my ($lb,$ub,$max,$min) = calculateAgeRange($dbt,$t,\@data,$upperbound,$lowerbound);
 
     my $range = "";
+    my $ig = $t->getIntervalGraph;
+    my %interval_name;
+    $interval_name{$_->{'interval_no'}} = $_->{'name'} foreach values %$ig;
     # simplified this because the users will understand the basic range,
     #  and it clutters the form JA 28.8.06
-    #my $max = join (" or ",map {$interval_name{$_}} @$max);
-    #my $min = join (" or ",map {$interval_name{$_}} @$min);
-    my $max = join (" or ",map {$interval_name{$_}} ${@$max}[0]);
-    my $min = join (" or ",map {$interval_name{$_}} ${@$min}[0]);
+    my $max = join (" or ",map {$interval_name{$_}} @$max);
+    my $min = join (" or ",map {$interval_name{$_}} @$min);
+    #my $max_no = $max->[0];
+    #my $min_no = $min->[0];
+    #$max = ($max_no) ? $ig->{$max_no}->{'name'} : "";
+    #$min = ($min_no) ? $ig->{$min_no}->{'name'} : "";
     if ($max ne $min) {
         $range .= "$max to $min";
     } else {
@@ -784,10 +770,10 @@ sub doCollections{
 	    else{
 			$time_place_coll{$res} = [$row->{"collection_no"}];
 			#push(@order,$res);
-            if ($immediatemax{$min} == $max) {
+            if ($ig->{$min}->{'min'}->{'interval_no'} == $max) {
                 $max = $min;
             }
-            if ($immediatemax{$max} == $min) {
+            if ($ig->{$max}->{'max'}->{'interval_no'} == $min) {
                 $min = $max;
             }
             # create a hash array where the keys are the time-place strings
@@ -796,18 +782,18 @@ sub doCollections{
             # this is kind of tricky because we want bigger bins to come
             #  before the bins they include, so the second part of the
             #  number recording the upper boundary has to be reversed
-            my $upper = $upperbound{$max};
+            my $upper = $upperbound->{$max};
             $max_interval_no{$res} = $max;
             $max_interval_name{$res} = $interval_name{$max};
             $min_interval_name{$res} = $max_interval_name{$res};
             if ( $max != $min ) {
-                $upper = $upperbound{$min};
+                $upper = $upperbound->{$min};
                 $min_interval_name{$res} = $interval_name{$min};
             }
             #if ( ! $toovague{$max." ".$min} && ! $seeninterval{$max." ".$min})	
             # WARNING: we're assuming upper boundary ages will never be
             #  greater than 999 million years
-            my $lower = int($lowerbound{$max} * 1000);
+            my $lower = int($lowerbound->{$max} * 1000);
             $upper = $upper * 1000;
             $upper = int(999000 - $upper);
             if ( $lower < 1000 )	{
@@ -828,7 +814,7 @@ sub doCollections{
     my %parents;
     my %best_correlation;
     foreach my $interval (keys %intervals) {
-        $parents{$interval} = join(" ",reverse TimeLookup::getParentIntervals($dbt,$interval));
+        $parents{$interval} = join(" ",reverse $t->getParentIntervals($interval));
         my $sql = "SELECT c.correlation_no FROM correlations c, scales s, refs r WHERE c.scale_no=s.scale_no AND s.reference_no=r.reference_no AND c.interval_no=$interval ORDER by r.pubyr DESC LIMIT 1";  
         $best_correlation{$interval} = ${$dbt->getData($sql)}[0]->{'correlation_no'};
     }
@@ -895,7 +881,7 @@ sub doCollections{
 #           A[-- -- --]
 #       B[------] C[--]
 #    D[-- --- --]
-#            |=========|
+#            |========|
 #   The lower end of the "minimal cover" must be lower than the upper end of _all_ intervals
 #   Conversely, the upper end of the minimal cover must be greater than the lower end of all intervals.  
 #   So, just find the ub and lb that satisfy this condition, then lookup the intervals(s) that correspond
@@ -903,7 +889,7 @@ sub doCollections{
 #   No longer throw out intervals beforehand.  If we throw out A and B for being too vague, then 
 #   the cover will be from D --> C.  So don't throw anything out till the very end
 sub calculateAgeRange {
-    my ($dbt,$data,$lowerbound,$upperbound) = @_;
+    my ($dbt,$t,$data,$lowerbound,$upperbound) = @_;
     my %all_ints = (); 
     my %seen_range = ();
 	foreach my $row (@$data)	{
@@ -994,136 +980,72 @@ sub calculateAgeRange {
     # have early cenomanian.  2. Are in same scale.  Throw out the later or earlier interval in the scale for
     # max and min respectively.  3. Orphaned junk like Teritiary.  Just call a function to check for this
 
-    my %scale_orders; # This is just a CACHE so we don't have to recompute it
-    my %best_scales; # Ditto
-    my %parents;
-    if (scalar(@max) > 1) {
-        foreach my $int (@max) {
-            my @all_parents = TimeLookup::getParentIntervals($dbt,$int);
-            foreach my $p (@all_parents) {
-                $parents{$int}{$p} = 1;
-            }
+    my %parent = ();
+    my %precedes = ();
+    my $ig = $t->getIntervalGraph;
+    foreach my $i (@max,@min) {
+        my @q = ($ig->{$i});
+        while (my $j = pop @q) {
+            $parent{$i}{$j->{'interval_no'}} = 1 unless $i == $j->{'interval_no'};
+            push @q, $j->{'max'} if ($j->{'max'});
+            push @q, $j->{'min'} if ($j->{'min'} && $j->{'min'} != $j->{'max'});
         }
-        # Deal with older term first. This first for block compares this interval with every other
-        # interval and checks if its in the same scale.  If it is in the same scale, the newer
-        # interval gets chucked.  
-        for(my $i=0;$i<scalar(@max);$i++) {
-            my $int_i = $max[$i];
-            next if (!$best_lb_ints{$int_i}); # We've chucked this one, move on
-            for(my $j=$i+1;$j<scalar(@max);$j++) {
-                my $int_j = $max[$j];
-                next if (!$best_lb_ints{$int_j}); # We've chucked this one, move on
-                if ($parents{$int_i}{$int_j}) {
-                    main::dbg("REMOVING $int_j, parent to $int_i");
-                    delete $best_lb_ints{$int_j};
-                } elsif ($parents{$int_j}{$int_i}) {
-                    main::dbg("REMOVING $int_i, parent to $int_j");
-                    delete $best_lb_ints{$int_i};
-                } else {
-                    my $bestscale;
-                    if (exists $best_scales{$int_i.' '.$int_j}) {
-                        $bestscale = $best_scales{$int_i.' '.$int_j};
-                    } else {
-                        $bestscale =  TimeLookup::findBestBothScale($dbt,$int_i,$int_j);
-                    }
-                    $best_scales{$int_i.' '.$int_j} = $bestscale;
-                    if ($bestscale) {
-                        my %scale_order;
-                        if ($scale_orders{$bestscale}) {
-                            %scale_order = %{$scale_orders{$bestscale}};
-                        } else {
-                            # Note that the lowest count is the newest
-                            my @scale = TimeLookup::getScaleOrder($dbt,$bestscale,'number');
-                            my $count=1;
-                            foreach my $interval_no (@scale) {
-                                $scale_order{$interval_no} = $count;
-                                $count++;
-                            }  
-                            $scale_orders{$bestscale} = \%scale_order;
-                        }
-                        if ($scale_order{$int_i} < $scale_order{$int_j}) {
-                            main::dbg("REMOVING $int_i ($scale_order{$int_i}) is younger than $int_j ($scale_order{$int_j})");
-                            delete $best_lb_ints{$int_i};
-                        } elsif ($scale_order{$int_i} > $scale_order{$int_j}) {
-                            main::dbg("REMOVING $int_j ($scale_order{$int_j}) is younger than $int_i ($scale_order{$int_i})");
-                            delete $best_lb_ints{$int_j};
-                        }
-                    }
+        @q = ($ig->{$i});
+        while (my $j = pop @q) {
+            $precedes{$i}{$j->{'interval_no'}} = 1 unless $i == $j->{'interval_no'};
+            foreach my $n (@{$j->{'all_next'}}) {
+                unless ($precedes{$i}{$n->{'interval_no'}}) {
+                    push @q, $n ;
                 }
-            }
-        }
-        foreach my $int_i (@max) {
-            next if (!$best_lb_ints{$int_i});
-            last if (scalar(keys(%best_lb_ints)) == 1);
-            if (TimeLookup::checkIntervalIsObsolete($dbt,$int_i)) {
-                delete $best_lb_ints{$int_i};
             }
         }
     }
-    if (scalar(@min) > 1) {
-        foreach my $int (@max) {
-            unless ($parents{$int}) {
-                my @all_parents = TimeLookup::getParentIntervals($dbt,$int);
-                foreach my $p (@all_parents) {
-                    $parents{$int}{$p} = 1;
-                }
+    # Deal with older term first. Try to get down to only 1 interval by throwing
+    # out broader (parent) intervals and younger intervals
+    my %all_max = (); 
+    $all_max{$_} = 1 for @max;
+    foreach my $i1 (@max) {
+        # If we're down to 1, exit
+        last if scalar keys %all_max == 1;
+        foreach my $i2 (@max) {
+            if ($parent{$i2}{$i1}) {
+                main::dbg("REMOVING $i1, its a parent of $i2");
+                delete $all_max{$i1};
+            } elsif ($precedes{$i2}{$i1}) {
+                main::dbg("REMOVING $i1, its is younger than $i2");
+                delete $all_max{$i1};
             }
         }
-        # Ditto as block above, but now chuck the older term 
-        for(my $i=0;$i<scalar(@min);$i++) {
-            my $int_i = $min[$i];
-            next if (!$best_ub_ints{$int_i});
-            for(my $j=$i+1;$j<scalar(@min);$j++) {
-                my $int_j = $min[$j];
-                next if (!$best_ub_ints{$int_j});
-                if ($parents{$int_i}{$int_j}) {
-                    main::dbg("REMOVING $int_j, parent to $int_i");
-                    delete $best_ub_ints{$int_j};
-                } elsif ($parents{$int_j}{$int_i}) {
-                    main::dbg("REMOVING $int_i, parent to $int_j");
-                    delete $best_ub_ints{$int_i};
-                } else {
-                    my $bestscale;
-                    if (exists $best_scales{$int_i.' '.$int_j}) {
-                        $bestscale = $best_scales{$int_i.' '.$int_j};
-                    } else {
-                        $bestscale =  TimeLookup::findBestBothScale($dbt,$int_i,$int_j);
-                    }
-                    $best_scales{$int_i.' '.$int_j} = $bestscale;
-                    if ($bestscale) {
-                        my %scale_order;
-                        if ($scale_orders{$bestscale}) {
-                            %scale_order = %{$scale_orders{$bestscale}};
-                        } else {
-                            my @scale = TimeLookup::getScaleOrder($dbt,$bestscale,'number');
-                            my $count=1;
-                            foreach my $interval_no (@scale) {
-                                $scale_order{$interval_no} = $count;
-                                $count++;
-                            }  
-                            $scale_orders{$bestscale} = \%scale_order;
-                        }
-                        if ($scale_order{$int_i} > $scale_order{$int_j}) {
-                            main::dbg("REMOVING $int_i ($scale_order{$int_i}) is older than $int_j ($scale_order{$int_j})");
-                            delete $best_ub_ints{$int_i};
-                        } elsif ($scale_order{$int_i} < $scale_order{$int_j}) {
-                            main::dbg("REMOVING $int_j ($scale_order{$int_j}) is older than $int_i ($scale_order{$int_i})");
-                            delete $best_ub_ints{$int_j};
-                        }
-                    }
-                }
-            }
-        }
-        foreach my $int_i (@min) {
-            next if (!$best_ub_ints{$int_i});
-            last if (scalar(keys(%best_ub_ints)) == 1);
-            if (TimeLookup::checkIntervalIsObsolete($dbt,$int_i)) {
-                delete $best_ub_ints{$int_i};
-            }
+        if ($t->isObsolete($i1)) {
+            main::dbg("REMOVING $i1, it is obsolete");
+            delete $all_max{$i1};
         }
     }
-    my @max = keys %best_lb_ints;
-    my @min = keys %best_ub_ints;
+
+    # Deal with younger term. Try to get down to only 1 interval by throwing
+    # out broader (parent) intervals and older intervals
+    my %all_min= (); 
+    $all_min{$_} = 1 for @min;
+    foreach my $i1 (@min) {
+        # If we're down to 1, exit
+        last if scalar keys %all_min == 1;
+        foreach my $i2 (@min) {
+            if ($parent{$i2}{$i1}) {
+                main::dbg("REMOVING $i1, its a parent of $i2");
+                delete $all_min{$i1};
+            } elsif ($precedes{$i1}{$i2}) {
+                main::dbg("REMOVING $i1, its is older than $i2");
+                delete $all_min{$i1};
+            }
+        }
+        if ($t->isObsolete($i1)) {
+            main::dbg("REMOVING $i1, it is obsolete");
+            delete $all_min{$i1};
+        }
+    }
+
+    @max = keys %all_max;
+    @min = keys %all_min;
     $best_lb =~ s/00$//;
     $best_ub =~ s/00$//;
     if ($best_lb == 999999) {
@@ -1372,7 +1294,7 @@ sub displayRelatedTaxa {
             foreach my $record (@{$taxon_records}) {
                 next if ($record->{'taxon_no'} == $focal_taxon_no);
                 if ($focal_taxon_rank ne $record->{'taxon_rank'}) {
-                    PBDBUtil::debug(1,"rank mismatch $focal_taxon_rank -- $record->{taxon_rank} for sister $record->{taxon_name}");
+#                    PBDBUtil::debug(1,"rank mismatch $focal_taxon_rank -- $record->{taxon_rank} for sister $record->{taxon_name}");
                 } else {
                     my @syn_links;
                     my @synonyms = @{$record->{'synonyms'}};

@@ -97,9 +97,10 @@ sub displaySearchSectionResults{
     # get the enterer's preferences (needed to determine the number
     # of displayed blanks) JA 1.8.02
 
-    local @period_order = TimeLookup::getScaleOrder($dbt,'69');
+    my $t = new TimeLookup($dbt);
+    local @period_order = $t->getScaleOrder($dbt,'69');
     # Convert max_interval_no to a period like 'Quaternary'
-    my %int2period = %{TimeLookup::processScaleLookup($dbh,$dbt,'69','intervalToScale')};
+    my $int2period = $t->getScaleMapping('69','names');
 
     local $lastsection = '';
     local $lastregion  = '';
@@ -156,7 +157,7 @@ sub displaySearchSectionResults{
             }    
             $lastsection = $row->{'localsection'};
             $lastregion  = $row->{'regionalsection'};
-            $period_list{$int2period{$row->{'max_interval_no'}}} = 1;
+            $period_list{$int2period->{$row->{'max_interval_no'}}} = 1;
             $country_list{$row->{'country'}} = 1;
         }
         push @tableRows, formatSectionLine();
@@ -722,12 +723,10 @@ sub calculateTaxaInterval {
     my @intervalnumber;
     my @not_in_scale;
 
-    $_ = TimeLookup::processScaleLookup($dbh,$dbt,$scale);
-    my %timeHash = %{$_};
+    my $t = new TimeLookup($dbt);
+    my $timeHash = $t->processScaleLookup($scale,'name');
 
-    @_ = TimeLookup::findBoundaries($dbh,$dbt,$scale);
-    my %upperbound = %{$_[0]};
-    my %lowerbound = %{$_[1]};
+    my ($upperbound,$lowerbound) = $t->getBoundaries($scale);
 
 #    print "testing getScaleOrder ";
 #    @a = TimeLookup::getScaleOrder($dbt,$scale,'number',1);
@@ -778,8 +777,8 @@ sub calculateTaxaInterval {
     my %masterHash;
     foreach my $keycounter (keys(%namescale)) {
         push @{$masterHash{$keycounter}}, $namescale{$keycounter};
-        push @{$masterHash{$keycounter}}, $upperbound{$keycounter};
-        push @{$masterHash{$keycounter}}, $lowerbound{$keycounter};
+        push @{$masterHash{$keycounter}}, $upperbound->{$keycounter};
+        push @{$masterHash{$keycounter}}, $lowerbound->{$keycounter};
     }
 
 # ----------------------------------------------------------------------------
@@ -842,10 +841,10 @@ sub calculateTaxaInterval {
         #need to find max_inteval for each collection in chosen scale.
         my %anotherHash;
         my $count;
-        foreach my $counter (keys(%timeHash)) {
+        foreach my $counter (keys(%$timeHash)) {
             foreach my $arraycounter (@collnums) {
                 if ($arraycounter == $counter) {
-                    push @{$anotherHash{$timeHash{$counter}}}, $arraycounter;
+                    push @{$anotherHash{$timeHash->{$counter}}}, $arraycounter;
                     $count++;
                 } 
             }

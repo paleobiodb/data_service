@@ -220,7 +220,7 @@ sub checkInterval {
         if ($results[0]->{'cnt'} > 0) { $result = 1; }
     }
     if (!$result) {
-        my @binnames = TimeLookup::getTenMYBins();
+        my @binnames = TimeLookup::getBins();
         for (@binnames) {
             if ($interval_name eq $_) {
                 $result = 1; 

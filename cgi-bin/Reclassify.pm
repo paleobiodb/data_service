@@ -50,7 +50,7 @@ sub displayOccurrenceReclassify	{
     my @collections = ();
     @collections = @$collections_ref if ($collections_ref);
     if ($q->param("collection_list")) {
-        @collections = split("\s*,\s*",$q->param('collection_list'));
+        @collections = split(/\s*,\s*/,$q->param('collection_list'));
     }
 
 	print main::stdIncludes("std_page_top");

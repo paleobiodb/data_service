@@ -1,6 +1,5 @@
 package Scales;
-
-$DEBUG = 0;
+use strict;
 
 # written by JA 7-20.7.03
 # caught a bug JA 23.7.03
@@ -18,7 +17,7 @@ $DEBUG = 0;
 sub startSearchScale	{
 	my $dbh = shift;
 	my $dbt = shift;
-	my $session = shift;
+	my $s = shift;
 	my $exec_url = shift;
 
 	# Print the form
@@ -28,8 +27,8 @@ sub startSearchScale	{
 	# Retrieve each scale's name from the database
 	my $sql = "SELECT authorizer_no,scale_no,scale_name,reference_no,continent,scale_rank FROM scales";
 	my @results = @{$dbt->getData($sql)};
-	my @scale_strings;
-	for my $scaleref (@results)	{
+	my %scale_strings;
+	foreach my $scaleref (@results)	{
 		my $option = "<option value=\"" . $scaleref->{scale_no} . "\">";
 		my $name = $scaleref->{scale_name};
 		my $sql2 = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $scaleref->{reference_no};
@@ -45,14 +44,14 @@ sub startSearchScale	{
 		$scale_strings{$scaleref->{continent}.$scaleref->{scale_rank}}{$name} = $option . $name . $auth;
 
 		# Get the authorizer's name
-		$sql2 = "SELECT name FROM person WHERE person_no=" . $scaleref->{authorizer_no};
-		@results2 = @{$dbt->getData($sql2)};
-		$scale_authorizer{$name} = $results2[0]->{name};
+#		$sql2 = "SELECT name FROM person WHERE person_no=" . $scaleref->{authorizer_no};
+#		@results2 = @{$dbt->getData($sql2)};
+#		$scale_authorizer{$name} = $results2[0]->{name};
 	}
 
 	print "<table cellpadding=5>\n";
 	print "<tr><td align=\"left\"> ";
-	print "<form name=\"scale_view_form\" id=\"scale_view_form\" action=\"$exec_url\" method=\"POST\">\n";
+	print "<form name=\"scale_view_form\" id=\"scale_view_form\" action=\"bridge.pl\" method=\"POST\">\n";
 	print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"processViewScale\">\n\n";
 
 	# WARNING: if African or Antarctic scales are ever entered, they need
@@ -89,11 +88,10 @@ sub startSearchScale	{
 	print "</table>\n\n";
 	print "</form>\n\n";
 
-#	if ( $session->get('enterer') ne "Guest" && $session->get('enterer') ne "" )	{
-	if ( $session->get('enterer') eq "J. Alroy" || $session->get('enterer') eq "S. Holland" )	{
+	if ( $s->get('enterer') eq "J. Alroy" || $s->get('enterer') eq "S. Holland" )	{
 
 		print qq|
-		<form name="scale_add_form" action="$exec_url" method="POST">
+		<form name="scale_add_form" action="bridge.pl" method="POST">
 		<input id="action" type="hidden" name="action" value="processShowForm">
 		<input type="hidden" name="scale" value="add">
 		<input type="submit" value="Add scale">
@@ -132,16 +130,16 @@ sub processShowEditForm	{
 	my $dbt = shift;
 	my $hbo = shift;
 	my $q = shift;
-	my $session = shift;
+	my $s = shift;
 	my $exec_url = shift;
 
 	# Have to have a reference #
-	my $reference_no = $session->get("reference_no");
+	my $reference_no = $s->get("reference_no");
 	if ( ! $reference_no )	{
 		if ( $q->param('scale') )	{
-			$session->enqueue( $dbh, "action=processShowForm&scale=" . $q->param('scale') );
+			$s->enqueue( $dbh, "action=processShowForm&scale=" . $q->param('scale') );
 		} else	{
-			$session->enqueue( $dbh, "action=processShowForm" );
+			$s->enqueue( $dbh, "action=processShowForm" );
 		}
 		main::displaySearchRefs ( "Please choose a reference first" );
 		exit;
@@ -179,7 +177,7 @@ sub processShowEditForm	{
 
 	print $hbo->populateHTML('js_enter_scale');
 
-	print "<form name=\"edit_scale_form\" action=\"$exec_url\" method=\"POST\" onSubmit=\"return checkFields();\">\n";
+	print "<form name=\"edit_scale_form\" action=\"bridge.pl\" method=\"POST\" onSubmit=\"return checkFields();\">\n";
 	print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"processEditScale\">\n\n";
 
 	# print out the time scale entry fields
@@ -191,13 +189,13 @@ sub processShowEditForm	{
 
 	print "<tr><td align=\"center\" colspan=2><b><font color=\"red\">Interval</a></b> </td><td align=\"center\" colspan=2>Maximum correlate </td><td align=\"center\" colspan=2>Minimum correlate </td><td align=\"center\" valign=\"bottom\">Lower<br>boundary </td></tr>\n";
 
-	$maxi = $#times;
+	my $maxi = $#times;
 	if ( $maxi < 1 )	{
 		$maxi = 24;
 	} else	{
 		$maxi = $maxi + 10;
 	}
-	for my $i (0..$maxi)	{
+	foreach my $i (0..$maxi)	{
 		my $eml_interval;
 		my $interval;
 		my $eml_max_interval;
@@ -210,7 +208,7 @@ sub processShowEditForm	{
 		if ( $times[$i]->{interval_no} )	{
 
 			my $sqlstem = "SELECT eml_interval FROM intervals WHERE interval_no=";
-			$sql = $sqlstem . $times[$i]->{interval_no};
+			my $sql = $sqlstem . $times[$i]->{interval_no};
 			my @emls = @{$dbt->getData($sql)};
 			$eml_interval = $emls[0]->{eml_interval};
 
@@ -268,12 +266,13 @@ sub processViewTimeScale	{
 	my $dbt = shift;
 	my $hbo = shift;
 	my $q = shift;
-	my $session = shift;
+	my $s = shift;
 	my $exec_url = shift;
 	my $stage = shift;
 	my $bad = shift;
 
-	my @badintervals = @$bad;
+    my @badintervals;
+    @badintervals = @$bad if $bad;
 
 	if ( $stage ne "summary" )	{
 		print main::stdIncludes("std_page_top");
@@ -290,21 +289,16 @@ sub processViewTimeScale	{
 			}
 		}
 	}
+    my $scale_no = int($q->param('scale'));
+    return unless $scale_no;
 
 	# Get basic data on the time scale (WARNING: assumes one was selected properly)
-	my $sql = "SELECT * FROM scales WHERE scale_no=" . $q->param('scale');
+	my $sql = "SELECT s.*,p1.name authorizer,p2.name enterer FROM scales s LEFT JOIN person p1 ON s.authorizer_no=p1.person_no LEFT JOIN person p2 ON s.enterer_no=p2.person_no WHERE s.scale_no=$scale_no";
 	my @results = @{$dbt->getData($sql)};
+    my $row = $results[0];
 
-	# Get the authorizer and enterer names
-	$sql = "SELECT name FROM person WHERE person_no=" . $results[0]{authorizer_no};
-	my @names = @{$dbt->getData($sql)};
-	$auth_name = $names[0]->{name};
 
-	$sql = "SELECT name FROM person WHERE person_no=" . $results[0]{enterer_no};
-	@names = @{$dbt->getData($sql)};
-	$enterer_name = $names[0]->{name};
-
-	print "<h3 align=\"center\">",$results[0]->{scale_name},"</h3>\n\n";
+	print "<h3 align=\"center\">",$row->{scale_name},"</h3>\n\n";
 
 	if ( @badintervals )	{
 		print "<div align=\"center\"><p><b><font color='red'>WARNING!</font></b> ";
@@ -324,12 +318,12 @@ sub processViewTimeScale	{
 		print "</p></div>";
 	}
 
-	print "<p>\n\n<div align=\"center\" style=\"position: relative; width: 34em; margin-left: 11em; clear: all;\">\n";
+	print "<p>\n\n<div align=\"center\"><div style=\"width: 30em\">";
 	print "<table class=\"verysmall\"><tr><td bgcolor=\"black\"><table bgcolor=\"white\">\n\n";
 
 	# Get the scale's intervals
-	$sql = "SELECT * FROM correlations WHERE scale_no=" . $q->param('scale');
-	@times = @{$dbt->getData($sql)};
+	$sql = "SELECT * FROM correlations WHERE scale_no=$scale_no";
+	my @times = @{$dbt->getData($sql)};
 
 	# figure out what headers are needed
 
@@ -369,7 +363,7 @@ sub processViewTimeScale	{
 	# Print the rows
 	for my $time (@times)	{
 
-		$sql2 = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $time->{interval_no};
+		my $sql2 = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $time->{interval_no};
 		my @names = @{$dbt->getData($sql2)};
 		my $eml_interval = $names[0]->{eml_interval};
 		my $interval = $names[0]->{interval_name};
@@ -400,16 +394,17 @@ sub processViewTimeScale	{
 		print "<tr><td colspan=\"3\" style=\"height: 0.5em; border-top: 1px gray solid;\"></td></tr>\n";
 	}
 
-	print "</table>\n</table>\n</div>\n<p>\n";
+	print "</table>\n</table>\n</div></div>\n<p>\n";
 
-	print $hbo->populateHTML('view_scale_top', [ $auth_name, $enterer_name, $results[0]->{scale_name}, $results[0]->{continent}, $results[0]->{basis}, $results[0]->{scale_rank}, $results[0]->{scale_comments} ], [ 'authorizer', 'enterer', 'scale_name', 'continent', 'basis', 'scale_rank', 'scale_comments' ]);
+    $row->{'reference'} = Reference::formatShortRef($dbt,$row->{'reference_no'},'link_id'=>1);
+	print $hbo->populateHTML('view_scale_top', $row);
 
 	if ( $stage eq "summary" )	{
-		print "<div align=\"center\"><p><b><a href=\"$exec_url?action=processShowForm&scale=" , $q->param('scale') , "\">Edit this time scale</a></b> - ";
-		print "<b><a href=\"$exec_url?action=processShowForm\">Create a new time scale</a></b> - ";
-		print "<b><a href=\"$exec_url?action=startScale\">Edit another time scale</a></b></p></div>\n\n";
+		print "<div align=\"center\"><p><b><a href=\"bridge.pl?action=processShowForm&scale=" , $q->param('scale') , "\">Edit this time scale</a></b> - ";
+		print "<b><a href=\"bridge.pl?action=processShowForm\">Create a new time scale</a></b> - ";
+		print "<b><a href=\"bridge.pl?action=startScale\">Edit another time scale</a></b></p></div>\n\n";
 	} else	{
-		print "<div align=\"center\"><p><b><a href=\"$exec_url?action=startScale\">View another time scale</a></b></p></div>\n\n";
+		print "<div align=\"center\"><p><b><a href=\"bridge.pl?action=startScale\">View another time scale</a></b></p></div>\n\n";
 	}
 
 	if ( $stage ne "summary" )	{
@@ -424,41 +419,40 @@ sub processEditScaleForm	{
 	my $dbt = shift;
 	my $hbo = shift;
 	my $q = shift;
-	my $session = shift;
-	my $exec_url = shift;
+	my $s = shift;
 
 	print main::stdIncludes("std_page_top");
 
-	$scale_name = $q->param('scale_name');
-	$scale_comments = $q->param('scale_comments');
+	my $scale_name = $q->param('scale_name');
+	my $scale_comments = $q->param('scale_comments');
 
 	# escape single quotes
 	$scale_name =~ s/'/\\'/g;
 	$scale_comments =~ s/'/\\'/g;
 
-	@correlation_nos = $q->param('correlation_no');
-	@interval_nos = $q->param('interval_no');
+	my @correlation_nos = $q->param('correlation_no');
+	my @interval_nos = $q->param('interval_no');
 
-	@eml_intervals = $q->param('eml_interval');
-	@eml_max_intervals = $q->param('eml_max_interval');
-	@eml_min_intervals = $q->param('eml_min_interval');
+	my @eml_intervals = $q->param('eml_interval');
+	my @eml_max_intervals = $q->param('eml_max_interval');
+	my @eml_min_intervals = $q->param('eml_min_interval');
 
-	@interval_names = $q->param('interval');
-	@max_interval_names = $q->param('max_interval');
-	@min_interval_names = $q->param('min_interval');
+	my @interval_names = $q->param('interval');
+	my @max_interval_names = $q->param('max_interval');
+	my @min_interval_names = $q->param('min_interval');
 
-	@lower_boundaries = $q->param('lower_boundary');
-	@comments_fields = $q->param('corr_comments');
+	my @lower_boundaries = $q->param('lower_boundary');
+	my @comments_fields = $q->param('corr_comments');
 
 	my $sql;
 
 	$sql = "SELECT person_no FROM person WHERE name='";
-	$sql .= $session->get('authorizer') . "'";
+	$sql .= $s->get('authorizer') . "'";
 	my @nos = @{$dbt->getData($sql)};
 	my $authorizer_no = $nos[0]->{person_no};
 
 	$sql = "SELECT person_no FROM person WHERE name='";
-	$sql .= $session->get('enterer') . "'";
+	$sql .= $s->get('enterer') . "'";
 	@nos = @{$dbt->getData($sql)};
 	my $enterer_no = $nos[0]->{person_no};
 
@@ -481,7 +475,7 @@ sub processEditScaleForm	{
 		$sql = "INSERT INTO scales (authorizer_no,enterer_no,reference_no,scale_name,continent,basis,scale_rank,scale_comments) VALUES ('";
 		$sql .= $authorizer_no . "', '";
 		$sql .= $enterer_no . "', '";
-		$sql .= $session->get('reference_no') . "', '";
+		$sql .= $s->get('reference_no') . "', '";
 		$sql .= $scale_name . "', '";
 		$sql .= $q->param('continent') . "', '";
 		$sql .= $q->param('basis') . "', '";
@@ -505,7 +499,10 @@ sub processEditScaleForm	{
 	}
 
 	my %fieldused;
-	for $i ( 0..$#interval_names )	{
+    my %badseen;
+    my (@badintervals);
+    my $next_interval_no;
+	foreach my $i ( 0..$#interval_names )	{
 
 		# not sure if this syntax is correct, but nothing more
 		#  complicated seems to work
@@ -587,7 +584,7 @@ sub processEditScaleForm	{
 				$sql .= $authorizer_no . ", ";
 				$sql .= $enterer_no . ", '";
 				$sql .= $eml_intervals[$i] . "', ";
-				$sql .= $session->get('reference_no') . ", '";
+				$sql .= $s->get('reference_no') . ", '";
 				$sql .= $interval_names[$i] . "')";
 				$dbt->getData($sql);
 
@@ -624,11 +621,11 @@ sub processEditScaleForm	{
 							$sql = "SELECT collection_no,eml_interval,interval_name,emlperiod_min,period_min,emlepoch_min,epoch_min,emlintage_min,intage_min,emllocage_min,locage_min FROM collections,intervals WHERE min_interval_no=interval_no";
 						}
 						my @collnos = @{$dbt->getData($sql)};
-						for my $fieldno ( 0..$#fields )	{
+						foreach my $fieldno ( 0..$#fields )	{
 							my ($f,$e) = split / /, $fields[$fieldno];
-							$emlfield_minmax = "eml" . $f . "_" . $minmax;
-							$field_minmax = $f . "_" . $minmax;
-							for $coll ( @collnos )	{
+							my $emlfield_minmax = "eml" . $f . "_" . $minmax;
+							my $field_minmax = $f . "_" . $minmax;
+							foreach my $coll ( @collnos )	{
 								if ( $e eq "eml" && $coll->{eml_interval} =~ /[A-Za-z]/ && $coll->{eml_interval} eq $coll->{$emlfield_minmax} && lc($coll->{interval_name}) eq lc($coll->{$field_minmax}) )	{
 									$fieldused{$minmax}{$coll->{collection_no}} = $fieldno + 1;
 								} elsif ( $e ne "eml" && $coll->{eml_interval} !~ /[A-Za-z]/ && lc($coll->{interval_name}) eq lc($coll->{$field_minmax}) )	{
@@ -658,7 +655,7 @@ sub processEditScaleForm	{
 			# find the collections that currently have interval
 			#  numbers tied to more general time terms than the
 			#  one that has just been entered
-							for $coll ( @collnos )	{
+							foreach my $coll ( @collnos )	{
 								if ( $fieldused{$minmax}{$coll->{collection_no}} < $fieldno + 1 && $fieldused{$minmax}{$coll->{collection_no}} > 0 )	{
 									push @matches,$coll->{collection_no};
 								}
@@ -713,7 +710,7 @@ sub processEditScaleForm	{
 				$sql = "INSERT INTO correlations (authorizer_no, enterer_no, reference_no, scale_no, interval_no, next_interval_no, max_interval_no, min_interval_no, lower_boundary, corr_comments) VALUES (";
 				$sql .= $authorizer_no . ", ";
 				$sql .= $enterer_no . ", ";
-				$sql .= $session->get('reference_no') . ", '";
+				$sql .= $s->get('reference_no') . ", '";
 				$sql .= $scale_no . "', '";
 				$sql .= $interval_no . "', '";
 				$sql .= $next_interval_no . "', '";
@@ -738,14 +735,307 @@ sub processEditScaleForm	{
 		}
 
 	}
-    TimeLookup::generateLookupTable($dbt);
+    my $t = new TimeLookup($dbt);
+    $t->generateLookupTable;
 
 	$q->param('scale' => $scale_no);
-	processViewTimeScale($dbt, $hbo, $q, $s, $exec_url, 'summary', \@badintervals);
+	processViewTimeScale($dbt, $hbo, $q, $s, 'bridge.pl', 'summary', \@badintervals);
 
 	print main::stdIncludes("std_page_bottom");
 
 	return;
+}
+
+
+# JA 9.8.04
+sub displayTenMyBins	{
+    my ($dbt) = @_;
+    my $t = new TimeLookup($dbt);
+
+	print main::stdIncludes("std_page_top");
+
+	print "<center><h2>10 m.y.-Long Sampling Bins</h2></center>\n\n";
+
+	print "These bin definitions are used by the <a href=\"bridge.pl?action=displayCurveForm\">diversity curve generator</a>.\n\n";
+
+	my @binnames = $t->getBins;
+    my ($upperbin,$lowerbin) = $t->getBoundaries('bins');
+
+
+	my $sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
+	my @results = @{$dbt->getData($sql)};
+
+	my (%intervalname,%intervalalias);
+    foreach my $row (@results) {
+        my $name = "";
+        $name = $row->{'eml_interval'}.' ' if ($row->{'eml_interval'});
+        $name .= $row->{'interval_name'};
+
+        my $alias = $row->{'interval_name'};
+        if ( $row->{eml_interval} =~ /middle/i )	{
+            $alias .= "F";
+        } else	{
+            $alias .= $row->{'eml_interval'};
+		}
+        $intervalname{$row->{'interval_no'}} = $name;
+        $intervalalias{$row->{'interval_no'}} = $alias;
+	}
+
+	print "<hr>\n\n";
+
+	print "<table><tr>\n";
+	print "<td valign=top><b>Bin name</b></td>  <td valign=top><b>Age&nbsp;at&nbsp;base&nbsp;(Ma)</b></td>  <td valign=top><b>Included intervals</b></td></tr>\n";
+
+    foreach my $bin (@binnames) {
+        my @intervals = $t->mapIntervals($bin);  
+
+		print "<tr><td valign=top nowrap>$bin</td>\n";
+		printf "<td align=center valign=top>%.1f</td>\n",$lowerbin->{$bin};
+		#printf "<td align=center valign=top>%.1f - %.1f</td>\n",$lowerbin->{$bin},$upperbin->{$bin};
+		print "<td class=tiny>";
+		@intervals = sort { $intervalalias{$a} cmp $intervalalias{$b} } @intervals;
+		my $printed = 0;
+		foreach my $int ( @intervals )	{
+			if ( $printed > 0 )	{
+				print ", ";
+			}
+			print "<a target=\"_new\" href=\"bridge.pl?action=displayInterval&interval_no=$int\">$intervalname{$int}</a>";
+			$printed++;
+		}
+		print "</td></tr>\n\n";
+	}
+	print "</table>\n<p>\n\n";
+
+	print main::stdIncludes("std_page_bottom");
+}
+
+sub displayTenMyBinsDebug {
+    my ($dbt) = @_;
+    my $t = new TimeLookup($dbt);
+
+	print main::stdIncludes("std_page_top");
+
+	print "<center><h2>10 m.y.-Long Sampling Bins</h2></center>\n\n";
+
+	print "These bin definitions are used by the <a href=\"bridge.pl?action=displayCurveForm\">diversity curve generator</a>.\n\n";
+
+	my @binnames = $t->getBins;
+    my $binning = $t->getBinning;
+    my ($upperbin,$lowerbin) = $t->getBoundaries('bins');
+    my $ig = $t->getIntervalGraph;
+
+	my $sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
+	my @results = @{$dbt->getData($sql)};
+
+	my (%intervalname,%intervalalias);
+    foreach my $row (@results) {
+        my $name = "";
+        $name = $row->{'eml_interval'}.' ' if ($row->{'eml_interval'});
+        $name .= $row->{'interval_name'};
+
+        my $alias = $row->{'interval_name'};
+        if ( $row->{eml_interval} =~ /middle/i )	{
+            $alias .= "F";
+        } else	{
+            $alias .= $row->{'eml_interval'};
+		}
+        $intervalname{$row->{'interval_no'}} = $name;
+        $intervalalias{$row->{'interval_no'}} = $alias;
+	}
+
+	print "<hr>\n\n";
+
+	print "<table><tr>\n";
+	print "<td valign=top><b>Bin name</b></td>  <td valign=top><b>Age&nbsp;at&nbsp;base&nbsp;(Ma)</b></td>  <td valign=top><b>Included intervals</b></td></tr>\n";
+
+
+    foreach my $bin (@binnames) {
+        my @intervals = map{$ig->{$_}} $t->mapIntervals($bin);  
+        my %ok_ints = ();
+        $ok_ints{$_->{'interval_no'}} = 1 foreach (@intervals);
+        my $filter = sub {
+            return $ok_ints{$_[0]->{'interval_no'}}
+        };
+        my @base = ();
+        foreach (@intervals) {
+            if ($binning->{$_->{'interval_no'}}) {
+                push @base, $_;
+            }
+        }
+
+		print "<tr><td valign=top>$bin</td>\n";
+		printf "<td align=center valign=top>%.1f - %.1f</td>\n",$lowerbin->{$bin},$upperbin->{$bin};
+		print "<td class=tiny>";
+        printTree($ig,\@base,$filter);
+		print "</td></tr>\n\n";
+	}
+	print "</table>\n<p>\n\n";
+
+	print main::stdIncludes("std_page_bottom");
+}
+
+sub itvsort {
+    $a->{'all_scales'}->[0]->{'scale_no'} <=> $b->{'all_scales'}->[0]->{'scale_no'}
+    ||
+    $b->{'lower_boundary'} <=> $a->{'lower_boundary'} 
+    ||
+    $b->{'interval_no'} <=> $a->{'interval_no'}
+}
+
+sub displayFullScale {
+    my ($dbt,$hbo) = @_;
+    my $t = new TimeLookup($dbt);
+    $t->getBoundaries();
+    my $ig = $t->getIntervalGraph();
+
+    my @base = ();
+    foreach my $itv (values %$ig) {
+        if (!$itv->{'max'}) {
+            push @base, $itv;
+        }
+    }
+    printTree($ig,\@base);
+}
+
+sub printInterval {
+    my $itv = shift;
+    my $overline = shift;
+    print "&nbsp;" x ($itv->{'depth'}*4);
+    if ($overline) {
+        print "<span style='border-top: 1px black solid'>";
+    }
+    my $scale = "scale $itv->{best_scale}->{scale_no}:$itv->{best_scale}->{continent}:$itv->{best_scale}->{pubyr}";
+    my $bounds = "lower [$itv->{lower_max}/$itv->{lower_boundary}/$itv->{lower_min}] to upper [$itv->{upper_max}/$itv->{upper_boundary}/$itv->{upper_min}]";
+    print "$itv->{interval_no}: $itv->{name} - $bounds - $scale <br>";
+    if ($overline) {
+        print "</span>";
+    }
+}
+
+sub printTree {
+    my ($ig,$base,$filter) = @_;
+    my @base = @$base;
+   
+    $_->{'depth'} = 0 foreach (@base);
+    @base = sort itvsort @base; 
+
+    my $last_depth = 0;
+    my $last_scale = 0;
+    print "<small>";
+    while (my $itv = pop @base) {
+        my $split = 0;
+        if ($last_depth == $itv->{'depth'} && $last_scale != $itv->{'next_scale'}->{'scale_no'}) {
+            $split = 1;
+        }
+        printInterval($itv,$split);
+        $last_depth = $itv->{'depth'};
+        $last_scale = $itv->{'next_scale'}->{'scale_no'};
+
+        my @children = ();
+        foreach (@{$itv->{'children'}}) {
+            if ($_ == $itv->{'max'} || $_ == $itv->{'min'}) {
+                print "SKIPPING $_->{interval_no}:$_->{name}, Loop";
+            } else {
+                if (!$filter || $filter->($_)) {
+                    push @children, $_;
+                } 
+            }
+        }
+
+        $_->{'depth'} = $itv->{'depth'}+1 foreach (@children);
+        @children = sort itvsort @children; 
+
+        push @base, @children;
+    }
+    print "</small>";
+}
+
+sub displayInterval {
+    my ($dbt,$hbo,$q) = @_;
+    my $i = int($q->param('interval_no'));
+    return unless $i;
+
+    print main::stdIncludes("blank_page_top");
+    print "<div class=small>";
+   
+    my $t = new TimeLookup($dbt);
+    my @bounds = $t->getBoundaries;
+    my $itv = $t->getInterval($i);
+    
+    my $printer = sub {
+        my $itv = shift;
+        my $from_scale = shift;
+        my $txt = "";
+        if ($itv) {
+            #$txt = "<a href=\"bridge.pl?action=displayInterval&interval_no=$itv->{interval_no}\">$itv->{name}</a>: $itv->{lower_boundary} - $itv->{upper_boundary}";
+            $txt = "<a href=\"bridge.pl?action=displayInterval&interval_no=$itv->{interval_no}\">$itv->{name}</a>";
+            #<a href=\"bridge.pl?action=processViewScale&scale=$bestscale{$i}\">scale:$bestscale{$i}</a><br>";
+        }
+        return $txt;
+    };
+
+    print "<div align=\"center\"><h3>".$printer->($itv)."</h3></div>";
+
+    if ($itv->{'max'}) {
+        print "Maximum correlate: ".$printer->($itv->{'max'})."<br>";
+        if ($itv->{'min'} != $itv->{'max'}) {
+            print "Minimum correlate: ".$printer->($itv->{'max'})."<br>";
+        }
+    }
+    if ($itv->{'all_prev'}) {
+        my @prev = ();
+        foreach my $p (@{$itv->{'all_prev'}}) {
+            if ($p->{'next'} == $itv) {
+                push @prev, $p;
+            }
+        } 
+
+        if (@prev > 1) {
+            print "Previous intervals: ".join(", ",map {$printer->($_)} @prev)."<br>";
+        } elsif (@prev == 1) {
+            print "Previous interval: ".$printer->($prev[0])."<br>";
+        }
+    }
+
+    if ($itv->{'next'}) {
+        print "Next interval: ".$printer->($itv->{'next'})."<br>";
+    }
+
+    foreach my $c (sort itvsort @{$itv->{'children'}}) {
+        print "$c->{interval_no}:$c->{name} ";
+    }
+    print "</td></tr></table>";
+
+    foreach my $abbrev ('gl','As','Au','Eu','NZ','NA','SA') {
+        my $lower_max = 'lower_max'.$abbrev;
+        my $lower_boundary = 'lower_boundary'.$abbrev;
+        my $lower_min = 'lower_min'.$abbrev;
+        my $upper_max = 'upper_max'.$abbrev;
+        my $upper_boundary = 'upper_boundary'.$abbrev;
+        my $upper_min = 'upper_min'.$abbrev;
+        if ($itv->{$lower_max} || $itv->{$lower_boundary} || $itv->{$lower_min} ||
+            $itv->{$upper_max} || $itv->{$upper_boundary} || $itv->{$upper_min}) {
+            print "  $abbrev:lower:[$itv->{$lower_max}/$itv->{$lower_boundary}/$itv->{$lower_min}] - $abbrev:upper:[$itv->{$upper_max}/$itv->{$upper_boundary}/$itv->{$upper_min}]<br>";
+        } 
+    }
+
+    print "Scales : <br>";
+    foreach my $s (@{$itv->{'all_scales'}}) {
+        print " $s->{scale_name} $s->{continent} $s->{pubyr}<br>";
+    }
+    print "<br>";
+    foreach my $c (@{$itv->{'constraints'}}) {
+        print TimeLookup::_printConstraint($c)."<br>";
+    }
+    foreach my $c (@{$itv->{'conflicts'}}) {
+        print TimeLookup::_printConstraint($c)."<br>";
+    }
+
+    print "</td></tr>";
+    print "</table>";
+
+
+    print main::stdIncludes("std_page_bottom");
 }
 
 1;

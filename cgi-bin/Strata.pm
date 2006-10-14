@@ -3,9 +3,7 @@ package Strata;
 use strict;
 use TaxonInfo;
 use URI::Escape;
-if ($main::DEBUG) {
-    use Data::Dumper;
-}
+use Data::Dumper;
 
 # written by PS  12/01/2004
 
@@ -483,9 +481,10 @@ sub displaySearchStrataResults {
     # get the enterer's preferences (needed to determine the number
     # of displayed blanks) JA 1.8.02
 
-    my @period_order = TimeLookup::getScaleOrder($dbt,'69');
+    my $t = new TimeLookup($dbt);
+    my @period_order = $t->getScaleOrder('69');
     # Convert max_interval_no to a period like 'Quaternary'
-    my %int2period = %{TimeLookup::processScaleLookup($dbh,$dbt,'69','intervalToScale')};
+    my $int2period = $t->getScaleMapping('69','names');
 
     # We need to group the collections here in the code rather than SQL so that
     # we can get a list of max_interval_nos.  There should generaly be only 1 country.
@@ -557,7 +556,7 @@ sub displaySearchStrataResults {
             # We go over by one in the count, so don't set these for the last $i
             unless ($i == scalar(@dataRows)) {
                 $country_list{$row->{'country'}} = 1;
-                $period_list{$int2period{$row->{'max_interval_no'}}} = 1;
+                $period_list{$int2period->{$row->{'max_interval_no'}}} = 1;
                 $member_list{lc($row->{'member'})} = $row->{'member'} if ($row->{'member'});
                 $last_group = $row->{'geological_group'};
                 $last_formation = $row->{'formation'};
