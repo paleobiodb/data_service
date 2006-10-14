@@ -429,28 +429,28 @@ sub assignGenera	{
     my $t = new TimeLookup($dbt);
     my $ig = $t->getIntervalGraph;
     my $interval_name = {};
-    $interval_name{$_->{'interval_no'}} = $_->{'name'} foreach values %$ig;
+    $interval_name->{$_->{'interval_no'}} = $_->{'name'} foreach values %$ig;
 	if ( $bin_type eq "period" )	{
         my @intervals = $t->getScaleOrder(69,'number');
-        @binnames = map {$interval_name->{$_}} for @intervals;
+        @binnames = map {$interval_name->{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
         $topma{$interval_name->{$_}} = $top->{$_} for @intervals;
         $basema{$interval_name->{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "epoch" )	{
         my @intervals = $t->getScaleOrder(71,'number');
-        @binnames = map {$interval_name->{$_}} for @intervals;
+        @binnames = map {$interval_name->{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
         $topma{$interval_name->{$_}} = $top->{$_} for @intervals;
         $basema{$interval_name->{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "subepoch" )	{
         my @intervals = $t->getScaleOrder(72,'number');
-        @binnames = map {$interval_name->{$_}} for @intervals;
+        @binnames = map {$interval_name->{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
         $topma{$interval_name->{$_}} = $top->{$_} for @intervals;
         $basema{$interval_name->{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "stage" )	{
         my @intervals = $t->getScaleOrder(73,'number');
-        @binnames = map {$interval_name->{$_}} for @intervals;
+        @binnames = map {$interval_name->{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
         $topma{$interval_name->{$_}} = $top->{$_} for @intervals;
         $basema{$interval_name->{$_}} = $base->{$_} for @intervals;
