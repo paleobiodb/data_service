@@ -918,7 +918,7 @@ sub getBoundaries {
 
         my @obsolete;
         foreach my $itv (@leaves) {
-            if ($self->isObsolete($itv)) {
+            if ($self->isObsolete($itv) == 1) {
                 push @obsolete, $itv;
                 next;
             }
@@ -980,8 +980,18 @@ sub getBoundaries {
         foreach my $itv (@obsolete) {
 #            print "$itv->{name} IS OBSOLETE\n";
             my ($min,$max) = $self->getFromChildren($itv,'defunct');
-            $itv->{'lower_boundary'} = $max;
-            $itv->{'upper_boundary'} = $max;
+            if ($itv->{'lower_boundary'} eq '') {
+                $itv->{'lower_boundary'} = $max;
+                if ($itv->{'prev'} && $itv->{'prev'}->{'upper_boundary'} eq '') {
+                    $itv->{'prev'}->{'upper_boundary'} = $max;
+                }
+            }
+            if ($itv->{'upper_boundary'} eq '') {
+                $itv->{'upper_boundary'} = $min;
+                if ($itv->{'next'} && $itv->{'next'}->{'lower_boundary'} eq '') {
+                    $itv->{'next'}->{'lower_boundary'} = $min;
+                }
+            }
             if ($itv->{'lower_boundary'} ne '' && $itv->{'upper_boundary'} ne '') {
                 delete $unset{$itv};
                 $set{$itv} = $itv;
@@ -1035,7 +1045,7 @@ sub getFromChildren {
 #    print "FROM CHILDREN: $itv->{name}\n";
     foreach my $c (@children) {
 #        if ($itv->{'interval_no'} == 3) { print "CHILD $c->{name} $c->{lower_boundary} $c->{upper_boundary}\n"; }
-        if ($c->{'max'} == $itv && $c->{'min'} == $itv) {
+        if ($defunct || $c->{'max'} == $itv && $c->{'min'} == $itv) {
             if ($c->{'lower_boundary'} > $max) {
                 $max = $c->{'lower_boundary'};
 #                print " MAX $max - from $c->{interval_no}\n"
