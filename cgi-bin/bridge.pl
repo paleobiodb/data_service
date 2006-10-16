@@ -2120,12 +2120,14 @@ sub processCollectionsSearchForAdd	{
     # some generally useful trig stuff needed by processCollectionsSearchForAdd
     my $PI = 3.14159265;
 
-	my $sql = "SELECT c.collection_no, c.collection_aka, c.authorizer_no, p1.name authorizer, c.collection_name, c.access_level, c.research_group, c.release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, c.country, c.state, c.latdeg, c.latmin, c.latsec, c.latdec, c.latdir, c.lngdeg, c.lngmin, c.lngsec, c.lngdec, c.lngdir, c.max_interval_no, c.min_interval_no, c.reference_no FROM collections c LEFT JOIN person p1 ON p1.person_no = c.authorizer_no WHERE ";
 
 	# get a list of interval numbers that fall in the geological period
     my $t = new TimeLookup($dbt);
-	my @intervals = $t->getMapping($q->param('period_no'));
+    my $sql = "SELECT interval_no FROM intervals WHERE interval_name LIKE ".$dbh->quote($q->param('period_max'));
+    my $period_no = ${$dbt->getData($sql)}[0]->{'interval_no'};
+	my @intervals = $t->mapIntervals($period_no);
 
+	my $sql = "SELECT c.collection_no, c.collection_aka, c.authorizer_no, p1.name authorizer, c.collection_name, c.access_level, c.research_group, c.release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, c.country, c.state, c.latdeg, c.latmin, c.latsec, c.latdec, c.latdir, c.lngdeg, c.lngmin, c.lngsec, c.lngdec, c.lngdir, c.max_interval_no, c.min_interval_no, c.reference_no FROM collections c LEFT JOIN person p1 ON p1.person_no = c.authorizer_no WHERE ";
 	$sql .= "c.max_interval_no IN (" . join(',', @intervals) . ") AND ";
 
 	# convert the coordinates to decimal values
