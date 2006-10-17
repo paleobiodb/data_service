@@ -799,7 +799,8 @@ sub displayTenMyBins	{
 			if ( $printed > 0 )	{
 				print ", ";
 			}
-			print "<a target=\"_new\" href=\"bridge.pl?action=displayInterval&interval_no=$int\">$intervalname{$int}</a>";
+#			print "<a target=\"_new\" href=\"bridge.pl?action=displayInterval&interval_no=$int\">$intervalname{$int}</a>";
+			print "$intervalname{$int}";
 			$printed++;
 		}
 		print "</td></tr>\n\n";
