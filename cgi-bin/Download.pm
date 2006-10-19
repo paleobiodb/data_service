@@ -1385,6 +1385,12 @@ sub queryDatabase {
                 push @fields,"c.$c AS `c.$c`";
             }
         }
+        if ( $q->param("collections_ma_max") )	{
+            push @fields,"c.max_ma AS `c.max_ma`";
+        }
+        if ( $q->param("collections_ma_min") )	{
+            push @fields,"c.min_ma AS `c.min_ma`";
+        }
         if ($q->param('collections_paleocoords') eq 'YES') {
             push @fields,"c.paleolat AS `c.paleolat`";
             push @fields,"c.paleolng AS `c.paleolng`";
@@ -1892,9 +1898,15 @@ sub queryDatabase {
             }
             $row->{'c.max_interval'} = $time_lookup->{$row->{'c.max_interval_no'}}{'interval_name'};
             $row->{'c.min_interval'} = $time_lookup->{$row->{'c.min_interval_no'}}{'interval_name'};
-            $row->{'c.ma_max'} = $max_lookup->{'lower_boundary'};
-            $row->{'c.ma_min'} = $min_lookup->{'upper_boundary'};
-            $row->{'c.ma_mid'} = ($max_lookup->{'lower_boundary'} + $min_lookup->{'upper_boundary'})/2;
+            if ( $row->{'c.max_ma'} && $row->{'c.min_ma'} )	{
+                $row->{'c.ma_max'} = $row->{'c.max_ma'};
+                $row->{'c.ma_min'} = $row->{'c.min_ma'};
+                $row->{'c.ma_mid'} = ($row->{'c.max_ma'} + $row->{'c.min_ma'})/2;
+            } else	{
+                $row->{'c.ma_max'} = $max_lookup->{'lower_boundary'};
+                $row->{'c.ma_min'} = $min_lookup->{'upper_boundary'};
+                $row->{'c.ma_mid'} = ($max_lookup->{'lower_boundary'} + $min_lookup->{'upper_boundary'})/2;
+            }
             $COLL{$row->{'collection_no'}} = $row; 
         }
     }
