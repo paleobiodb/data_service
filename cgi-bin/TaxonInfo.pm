@@ -765,7 +765,6 @@ sub doCollections{
             $row->{"state"} =~ s/ /&nbsp;/;
             $res .= " (" . $row->{"state"} . ")";
         }
-        $res .= "$lowerbound->{$max} - $upperbound->{$min}";
         $res .= "</span>\n";
 
 
