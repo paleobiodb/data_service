@@ -707,18 +707,21 @@ sub doCollections{
     }
     my ($lb,$ub,$max,$min) = calculateAgeRange($dbt,$t,\@data,$upperbound,$lowerbound);
 
+#    print "MAX".Dumper($max);
+#    print "MIN".Dumper($min);
+
     my $range = "";
     my $ig = $t->getIntervalGraph;
     my %interval_name;
     $interval_name{$_->{'interval_no'}} = $_->{'name'} foreach values %$ig;
     # simplified this because the users will understand the basic range,
     #  and it clutters the form JA 28.8.06
-    my $max = join (" or ",map {$interval_name{$_}} @$max);
-    my $min = join (" or ",map {$interval_name{$_}} @$min);
-    #my $max_no = $max->[0];
-    #my $min_no = $min->[0];
-    #$max = ($max_no) ? $ig->{$max_no}->{'name'} : "";
-    #$min = ($min_no) ? $ig->{$min_no}->{'name'} : "";
+#    my $max = join (" or ",map {$interval_name{$_}} @$max);
+#    my $min = join (" or ",map {$interval_name{$_}} @$min);
+    my $max_no = $max->[0];
+    my $min_no = $min->[0];
+    $max = ($max_no) ? $ig->{$max_no}->{'name'} : "";
+    $min = ($min_no) ? $ig->{$min_no}->{'name'} : "";
     if ($max ne $min) {
         $range .= "$max to $min";
     } else {
@@ -762,7 +765,9 @@ sub doCollections{
             $row->{"state"} =~ s/ /&nbsp;/;
             $res .= " (" . $row->{"state"} . ")";
         }
+        $res .= "$lowerbound->{$max} - $upperbound->{$min}";
         $res .= "</span>\n";
+
 
 	    if(exists $time_place_coll{$res}){
 			push(@{$time_place_coll{$res}}, $row->{"collection_no"});
@@ -889,7 +894,7 @@ sub doCollections{
 #   No longer throw out intervals beforehand.  If we throw out A and B for being too vague, then 
 #   the cover will be from D --> C.  So don't throw anything out till the very end
 sub calculateAgeRange {
-    my ($dbt,$t,$data,$lowerbound,$upperbound) = @_;
+    my ($dbt,$t,$data,$upperbound,$lowerbound) = @_;
     my %all_ints = (); 
     my %seen_range = ();
 	foreach my $row (@$data)	{
@@ -902,19 +907,27 @@ sub calculateAgeRange {
         if (!$min) {
             $min = $max;
         }
-        my $lb = $lowerbound->{$max};
-        my $ub = $upperbound->{$min};
-        if ($ub == 0) {
-            $ub = $upperbound->{$max};
+        my $lb_max = $lowerbound->{$max};
+        my $ub_max = $upperbound->{$max};
+        my $lb_min = $lowerbound->{$min};
+        my $ub_min = $upperbound->{$min};
+        main::dbg("MAX $max MIN $min LB $lb_max $lb_min UB $ub_max $ub_min");
+        if ($ub_min !~ /\d/) {
+            $lb_min = $lowerbound->{$max};
+            $ub_min = $upperbound->{$max};
         }
         my $range = "$max $min";
-        if ($lb && $ub && $lb < $ub) {
-            my $tmp = $ub;
-            $ub = $lb;
-            $lb = $tmp;
+        if ($lb_max && $ub_max && $ub_max > $lb_max) {
+            main::dbg("FLIPPING");
+            my $tmp1 = $ub_max;
+            my $tmp2 = $ub_min;
+            $ub_max = $lb_max;
+            $ub_min = $lb_min;
+            $lb_max = $tmp1;
+            $lb_min = $tmp2;
             $range = "$min $max";
         } 
-		$seen_range{$range} = [$lb,$ub];
+		$seen_range{$range} = [$lb_max,$lb_min,$ub_max,$ub_min];
     }
     my @intervals = keys %all_ints;
 
@@ -923,33 +936,49 @@ sub calculateAgeRange {
     # then the oldest upperbound ($oldest_ub) and older than
     # the youngest lowerbound($youngest_ub). So first find these two values, skipping
     # over "vague" interval ranges
-    my $oldest_ub = 0;
+    my $oldest_ub = -1;
     my $youngest_lb = 999999;
     while (my ($range,$bounds) = each %seen_range) {
         my ($max,$min) = split(/ /,$range);
-        my ($lb,$ub) = @$bounds;
+        my ($lb,$x,$x,$ub) = @$bounds;
 
-        if ($ub && $ub > $oldest_ub) {
+        if ($ub =~ /\d/ && $ub > $oldest_ub) {
             $oldest_ub = $ub;
         }
         if ($lb && $lb < $youngest_lb) {
             $youngest_lb = $lb;
         }
     }
+    main::dbg("OLDEST_UB $oldest_ub - YOUNGEST_LB $youngest_lb");
+
 
     # Next step in finding minimal cover
     my $best_lb = 999999;
     my $best_ub = -1;
     while (my ($range,$bounds) = each %seen_range) {
         my ($max,$min) = split(/ /,$range);
-        my ($lb,$ub) = @$bounds;
-        if ($lb > $oldest_ub && $lb < $best_lb) {
-            $best_lb = $lb;
+        my ($lb_max,$ub_max,$lb_min,$ub_min) = @$bounds;
+        if ($lb_max && $lb_max > $oldest_ub && $lb_max < $best_lb) {
+            if ($lb_min < $youngest_lb && $youngest_lb < $oldest_ub) {
+                # See calippus for the purpose for this - if we don't have this caluse upper 
+                # boundary is set to Miocenes upper bound, which is bad since Miocenes lower bound
+                # extends BEYOND what we're using for the lower bound
+                main::dbg("THREW OUT LB $lb_max -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
+            } else {
+                main::dbg("BEST_LB SET TO $lb_max -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
+                $best_lb = $lb_max;
+            }
         }
-        if ($ub < $youngest_lb && $ub > $best_ub) {
-            $best_ub = $ub;
+        if ($ub_min =~ /\d/ && $ub_min < $youngest_lb && $ub_min > $best_ub) {
+            if ($ub_max > $oldest_ub && $youngest_lb < $oldest_ub) {
+                main::dbg("THREW OUT UB $ub_min -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
+            } else {
+                main::dbg("BEST_UB SET TO $ub_min -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
+                $best_ub = $ub_min;
+            }
         }
     }
+    main::dbg("BEST_LB $best_lb - BEST_UB $best_ub");
 
     # We've found our minimal cover now but there may be multiple
     # intervals which can satisfy it.  Store all potential candidates
@@ -959,7 +988,7 @@ sub calculateAgeRange {
     my %best_ub_ints = ();
     while (my ($range,$bounds) = each %seen_range) {
         my ($max,$min) = split(/ /,$range);
-        my ($lb,$ub) = @$bounds;
+        my ($lb,$x,$x,$ub) = @$bounds;
         if ($lb == $best_lb) {
             $best_lb_ints{$max} = 1;
         }

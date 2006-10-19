@@ -1653,12 +1653,15 @@ sub getParentIntervals {
 
     my @intervals = ();
     my @q = ($itv);
+    my %seen = ();
     while (my $itv = pop @q) {
-        if ($itv->{'max'}) {
+        if ($itv->{'max'} && !$seen{$itv->{'max'}}) {
+            $seen{$itv->{'max'}} = 1;
             push @q, $itv->{'max'};
             push @intervals, $itv->{'max'};
         }
-        if ($itv->{'min'} && $itv->{'min'} != $itv->{'max'}) {
+        if ($itv->{'min'} && $itv->{'min'} != $itv->{'max'} && !$seen{$itv->{'min'}}) {
+            $seen{$itv->{'min'}} = 1;
             push @q, $itv->{'min'};
             push @intervals, $itv->{'min'};
         }
