@@ -451,8 +451,8 @@ sub mapIntervals {
             unless ($itv->{'visited'}) {
                 push @mapped,$itv;
                 $itv->{'visited'} = 1;    
-                $parents{$itv->{'max'}} = $itv->{'max'};
-                $parents{$itv->{'min'}} = $itv->{'min'};
+                $parents{$itv->{'max'}} = $itv->{'max'} if ($itv->{'max'});
+                $parents{$itv->{'min'}} = $itv->{'min'} if ($itv->{'min'});
                 
                 foreach my $c (@{$itv->{'children'}}) {
                     if ($c->{'max'}->{'visited'} && 
@@ -476,7 +476,9 @@ sub mapIntervals {
         }
         # Not totally sure quite why this works right now
         foreach my $itv (values %$ig) {
-            if (!$itv->{'visited'} && $itv->{'prev'}->{'visited'} && $itv->{'next'}->{'visited'}) {
+            if (!$itv->{'visited'} && 
+                $itv->{'prev'} && $itv->{'prev'}->{'visited'} && 
+                $itv->{'next'} && $itv->{'next'}->{'visited'}) {
                 push @q, $itv;
             }
         }
@@ -776,7 +778,6 @@ sub getBoundaries {
                     push @next_q, [$itv->{prev},$UPPER_MAX,$src,$depth+1,$itv];
                 } 
             }
-#            }
 
             # Handle propagation to next interval
             if ($itv->{'next'} && $itv->{'next'}->{'prev'} == $itv) {
@@ -844,6 +845,7 @@ sub getBoundaries {
             foreach my $c (@{$itv->{'children'}}) {
                 if ($action == $LOWER_EQ || $action == $LOWER_MAX || $action == $LOWER_MIN) {
                     if ($c->{'max'} == $c->{'min'}) {
+                        # Completely contained child
                         if ($itv->{'shared_lower'} && $c->{'shared_lower'} == $itv->{'shared_lower'}) {
                             push @next_q, [$c,$action,$src,$depth,$itv];
                         } else {
@@ -861,9 +863,15 @@ sub getBoundaries {
                         } elsif ($action == $LOWER_MIN) {
                             push @next_q, [$c,$LOWER_MIN,$src,$depth,$itv];
                         }
+                    } elsif ($c->{'min'} != $itv) {
+                        # Boundary crosser at min side
+                        if ($action == $LOWER_EQ || $action == $LOWER_MAX) {
+                            push @next_q, [$c,$LOWER_MAX,$src,$depth,$itv];
+                        } 
                     }
                 } elsif ($action == $UPPER_EQ || $action == $UPPER_MAX || $action == $UPPER_MIN) {
                     if ($c->{'max'} == $c->{'min'}) {
+                        # Completely contained child
                         if ($itv->{'shared_upper'} && $c->{'shared_upper'} == $itv->{'shared_upper'}) {
                             push @next_q, [$c,$action,$src,$depth,$itv];
                         } else {
@@ -881,7 +889,13 @@ sub getBoundaries {
                         } elsif ($action == $UPPER_MAX) {
                             push @next_q, [$c,$UPPER_MAX,$src,$depth,$itv];
                         }
+                    } elsif ($c->{'max'} != $itv) {
+                        # Boundary crosser at max  side
+                        if ($action == $UPPER_EQ || $action == $UPPER_MIN) {
+                            push @next_q, [$c,$UPPER_MIN,$src,$depth,$itv];
+                        }
                     }
+
                 }
             }
 #            print $next_q[0][2]->{'boundary_scale'}->{'pubyr'}." vs. ".$next_q[0]->[4]->{'best_scale'}->{'pubyr'}."\n";
@@ -907,14 +921,27 @@ sub getBoundaries {
         foreach my $itv (values %$ig) {
 #            if ($self->isObsolete($itv)) {
 #            }
-            if ($itv->{'lower_boundary'} ne '' && $itv->{'upper_boundary'} ne '') {
+            if ($itv->{'lower_boundary'} =~ /\d/ && $itv->{'upper_boundary'} =~ /\d/) {
                 $set{$itv} = $itv;
             } else {
                 $unset{$itv} = $itv;
             }
         }
 
-        my @leaves = grep { not scalar(@{$_->{'children'}}) } values %unset;
+        my @leaves = ();
+        foreach my $itv (values %unset) {
+            my $has_child = 0;
+            foreach my $c (@{$itv->{'children'}}) {
+                if ($c->{'max'} == $itv && $c->{'min'} == $itv) {
+                    $has_child = 1;
+                }
+            }
+            if (!$has_child) {
+                push @leaves, $itv;
+            }
+        }
+#        print "1SET: ".scalar(values(%set))."\n";
+#        print "1UNSET: ".scalar(values(%unset))."\n";
 
         my @obsolete;
         foreach my $itv (@leaves) {
@@ -922,8 +949,6 @@ sub getBoundaries {
                 push @obsolete, $itv;
                 next;
             }
-            delete $unset{$itv};
-            $set{$itv} = $itv;
             if ($itv->{'upper_boundary'} !~ /\d/ && $itv->{'upper_min'}) {
                 $itv->{'upper_boundary'} = $itv->{'upper_min'};
                 $itv->{'upper_boundarysrc'} = $itv->{'upper_minsrc'};
@@ -940,7 +965,13 @@ sub getBoundaries {
                 $itv->{'lower_boundary'} = $itv->{'lower_min'};
                 $itv->{'lower_boundarysrc'} = $itv->{'lower_minsrc'};
             }
+            if ($itv->{'lower_boundary'} =~ /\d/ && $itv->{'upper_boundary'} =~ /\d/) {
+                delete $unset{$itv};
+                $set{$itv} = $itv;
+            }
         }
+#        print "1bSET: ".scalar(values(%set))."\n";
+#        print "1bUNSET: ".scalar(values(%unset))."\n";
 
         foreach (values %$ig) {
             $_->{'visited'} = 0;
@@ -970,11 +1001,14 @@ sub getBoundaries {
             my ($min,$max) = $self->getFromChildren($itv);
             $itv->{'lower_boundary'} = $max;
             $itv->{'upper_boundary'} = $min;
-            if ($itv->{'lower_boundary'} ne '' && $itv->{'upper_boundary'} ne '') {
+            if ($itv->{'lower_boundary'} =~ /\d/ && $itv->{'upper_boundary'} =~ /\d/) {
                 delete $unset{$itv};
                 $set{$itv} = $itv;
             }
         }
+
+#        print "2SET: ".scalar(values(%set))."\n";
+#        print "2UNSET: ".scalar(values(%unset))."\n";
 
         # Fix for gallic, quaternary, tertiary, etc
         foreach my $itv (@obsolete) {
@@ -992,14 +1026,15 @@ sub getBoundaries {
                     $itv->{'next'}->{'lower_boundary'} = $min;
                 }
             }
-            if ($itv->{'lower_boundary'} ne '' && $itv->{'upper_boundary'} ne '') {
+            if ($itv->{'lower_boundary'} =~ /\d/&& $itv->{'upper_boundary'} =~ /\d/) {
                 delete $unset{$itv};
                 $set{$itv} = $itv;
             }
         }
+#        print "3SET: ".scalar(values(%set))."\n";
+#        print "3UNSET: ".scalar(values(%unset))."\n";
         # Fix for cases like the edicaran/sinian/poundian
         foreach my $itv (values %unset) {
-#            print "$itv->{name} STILL unset\n";
             if ($itv->{'next'} && $itv->{'next'}->{'lower_boundary'}) {
                 $itv->{'upper_boundary'} = $itv->{'next'}->{'lower_boundary'};
             } elsif (!$itv->{'next'} && $itv->{'all_next'} && 
@@ -1012,11 +1047,13 @@ sub getBoundaries {
                 $itv->{'all_prev'}->[0]->{'upper_boundary'}) {
                 $itv->{'lower_boundary'} = $itv->{'all_prev'}->[0]->{'upper_boundary'};
             }
-            if ($itv->{'lower_boundary'} ne '' && $itv->{'upper_boundary'} ne '') {
+            if ($itv->{'lower_boundary'} =~ /\d/ && $itv->{'upper_boundary'} =~ /\d/) {
                 $set{$itv} = $itv;
                 delete $unset{$itv};
             }
         }
+#        print "4SET: ".scalar(values(%set))."\n";
+#        print "4UNSET: ".scalar(values(%unset))."\n";
     }
     if ($return_type ne 'bins') {
         # Finally finished, return
@@ -1077,7 +1114,7 @@ sub _computeBinBounds {
         foreach my $itv ( @intervals )    {
             if ($itv->{'lower_boundarysrc'}->{'boundary_scale'}->{'abbrev'} eq 'gl') {
                 my $lower_bound = $itv->{'lower_boundarygl'};
-                if ( $lower_bound ne '' && $lower_bound > $lowerbinbound->{$bin} )   {
+                if ( $lower_bound =~ /\d/ && $lower_bound > $lowerbinbound->{$bin} )   {
     #                unless ($skip_lower{$i}) {
                         $lowerbinbound->{$bin} = $lower_bound;
     #                }
@@ -1086,7 +1123,7 @@ sub _computeBinBounds {
 
             if ($itv->{'upper_boundarysrc'}->{'boundary_scale'}->{'abbrev'} eq 'gl') {
                 my $upper_bound = $itv->{'upper_boundarygl'};
-                if ( $upper_bound ne '' && $upper_bound < $upperbinbound->{$bin} || $upperbinbound->{$bin} eq "" ) {
+                if ( $upper_bound =~ /\d/ && $upper_bound < $upperbinbound->{$bin} || $upperbinbound->{$bin} eq "" ) {
     #                unless ($skip_upper{$i}) {
                         $upperbinbound->{$bin} = $upper_bound;
     #                }
@@ -1449,7 +1486,7 @@ sub _initInterval {
         $itv->{'next_scale'} = $all_with_next_continent[0][1];
         # Set the best prev.  Multiple intervals may have the same next_interval_no
         # so set the prev to the "best" prev (the one with the newest correlation)
-        if ($itv->{'next'}->{'prev'}) {
+        if ($itv->{'next'} && $itv->{'next'}->{'prev'}) {
             # The next interval already has a 'prev' - have to compare scale pubyrs
             # to determine whether to overwrite
             my $other_itv = $itv->{'next'}->{'prev'};
@@ -1817,7 +1854,7 @@ sub generateLookupTable {
     my $subepoch_lookup = $self->getScaleMapping('72');
     my $stage_lookup    = $self->getScaleMapping('73');
     my $bin_lookup      = $self->getScaleMapping('bins');
-    my ($ub_lookup,$lb_lookup) =  $self->getBoundaries();
+    my ($ub_lookup,$lb_lookup) = $self->getBoundaries;
 
     my $sql = "SELECT interval_no FROM intervals";
     my @intervals = map {$_->{'interval_no'}} @{$dbt->getData($sql)};
@@ -1832,10 +1869,12 @@ sub generateLookupTable {
         my $sql = "SELECT interval_no FROM interval_lookup WHERE interval_no=$interval_no";
         my @r = @{$dbt->getData($sql)};
         if ($r[0]) {
-            my $sql = "UPDATE interval_lookup SET interval_no=$interval_no,ten_my_bin=$ten_my_bin,stage_no=$stage_no,subepoch_no=$subepoch_no,epoch_no=$epoch_no,period_no=$period_no,lower_boundary=$lb,upper_boundary=$ub WHERE interval_no=$interval_no";
+            my $sql = "UPDATE interval_lookup SET ten_my_bin=$ten_my_bin,stage_no=$stage_no,subepoch_no=$subepoch_no,epoch_no=$epoch_no,period_no=$period_no,lower_boundary=$lb,upper_boundary=$ub WHERE interval_no=$interval_no";
+#            print $sql,"\n";
             $dbh->do($sql);
         } else {
             my $sql = "INSERT INTO interval_lookup(interval_no,ten_my_bin,stage_no,subepoch_no,epoch_no,period_no,lower_boundary,upper_boundary) VALUES ($interval_no,$ten_my_bin,$stage_no,$subepoch_no,$epoch_no,$period_no,$lb,$ub)";
+#            print $sql,"\n";
             $dbh->do($sql);
         }
     }
