@@ -3127,7 +3127,7 @@ sub displayCollectionDetailsPage {
             $row->{'age_estimate'} .= " +/- " . $row->{'min_ma_error'};
         }
         $row->{'age_estimate'} .= " m.y. ago (" . $row->{'min_ma_method'} . ")";
-    } else	{
+    } elsif ( $row->{'age_estimate'} )	{
         $row->{'age_estimate'} .= " m.y. ago (" . $row->{'max_ma_method'} . ")";
     }
     foreach my $term ("period","epoch","stage") {
