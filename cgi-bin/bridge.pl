@@ -3097,6 +3097,39 @@ sub displayCollectionDetailsPage {
     } else {
         $row->{'age_range'} = "";
     }
+    if ( $row->{'direct_ma'} )	{
+        $row->{'age_estimate'} .= $row->{'direct_ma'};
+        if ( $row->{'direct_ma_error'} )	{
+            $row->{'age_estimate'} .= " +/- " . $row->{'direct_ma_error'};
+        }
+        $row->{'age_estimate'} .= " m.y. ago (" . $row->{'direct_ma_method'} . ")";
+    }
+    if ( $row->{'max_ma'} )	{
+        if ( ! $row->{'min_ma'} || $row->{'max_ma_method'} ne $row->{'min_ma_method'} )	{
+            $row->{'age_estimate'} .= "maximum ";
+        }
+        $row->{'age_estimate'} .= $row->{'max_ma'};
+        if ( $row->{'max_ma_error'} )	{
+            $row->{'age_estimate'} .= " +/- " . $row->{'max_ma_error'};
+        }
+        if ( ! $row->{'min_ma'} || $row->{'max_ma_method'} ne $row->{'min_ma_method'} )	{
+            $row->{'age_estimate'} .= " m.y. ago (" . $row->{'max_ma_method'} . ")";
+        }
+    }
+    if ( $row->{'min_ma'} && ( ! $row->{'max_ma'} || $row->{'min_ma'} ne $row->{'max_ma'} || $row->{'min_ma_method'} ne $row->{'max_ma_method'} ) )	{
+        if ( ! $row->{'max_ma'} || $row->{'max_ma_method'} ne $row->{'min_ma_method'} )	{
+            $row->{'age_estimate'} .= "minimum ";
+        } else	{
+            $row->{'age_estimate'} .= " - ";
+        }
+        $row->{'age_estimate'} .= $row->{'min_ma'};
+        if ( $row->{'min_ma_error'} )	{
+            $row->{'age_estimate'} .= " +/- " . $row->{'min_ma_error'};
+        }
+        $row->{'age_estimate'} .= " m.y. ago (" . $row->{'min_ma_method'} . ")";
+    } else	{
+        $row->{'age_estimate'} .= " m.y. ago (" . $row->{'max_ma_method'} . ")";
+    }
     foreach my $term ("period","epoch","stage") {
         $row->{$term} = "";
         if ($max_lookup->{$term."_name"} &&
