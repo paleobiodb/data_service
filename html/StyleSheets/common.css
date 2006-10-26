@@ -270,7 +270,7 @@ H6 {font-size: .9em;}
 
 .FeatureHeadline	{
     text-align: center;
-    background-color: #F0E070;
+    background-color: #FFDC70;
     color: #202020;
     margin-left: -0.5em;
     margin-right: -0.5em;
@@ -306,6 +306,7 @@ H6 {font-size: .9em;}
 
 #homeTextBox	{
     background-image: url(/public/PDbg.gif);
+    color: 404040;
     border: 1px solid #808080;
     padding: 16px;
     position: relative;
@@ -318,16 +319,34 @@ html,body	{
 }
 */
 
+.questions	{
+    font-family: "Century Gothic", Verdana, Arial, Helvetica, sans-serif;
+    font-size: 1.1em; color: #D0A000;
+}
+
+#questionsShadow	{
+    position: absolute;
+    color: #F0E0D0;
+}
+
+#questionsOverShadow	{
+    position: relative;
+    white-space: nowrap;
+    top: -2px;
+    left: -1px;
+}
 
 .homePageOnBullet	{
     padding-top : 0.2em;
     padding-left: 0.6em;
-    font-size : 1.0em; color: #000000; text-decoration: none;
+margin-top: -3px;
+    font-size : 1.0em; color: #F0B000; text-decoration: none;
 }
 
 .homePageOffBullet	{
     padding-top : 0.2em;
     padding-left: 0.6em;
+margin-top: -3px;
     font-size : 1.0em; color: #909090; text-decoration: none;
 }
 
