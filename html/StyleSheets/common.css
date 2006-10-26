@@ -185,7 +185,7 @@ H6 {font-size: .9em;}
 #homeTotals	{
     background-image: url(/public/PDbg.gif);
     background-position: 13em 0em;
-    border-bottom: 1px #64A8FF solid;
+    border-bottom: 1px #D0D0D0 solid;
     text-align: center;
     margin-left: -1em;
     padding-top: 3em;
@@ -203,9 +203,9 @@ H6 {font-size: .9em;}
     background-image: url(/public/PDbg.gif);
     padding-top: 3em;
     padding-bottom: 0em;
-    border-bottom: 1px #64A8FF solid;
-    border-left: 1px #64A8FF solid;
-    border-right: 1px #64A8FF solid;
+    border-bottom: 1px #D0D0D0 solid;
+    border-left: 1px #D0D0D0 solid;
+    border-right: 1px #D0D0D0 solid;
     height: 45em;
     width: 32em;
     position: absolute;
@@ -218,8 +218,8 @@ H6 {font-size: .9em;}
 #homeBorder	{
     background-image: url(/public/PDbg.gif);
     padding-top: 3em;
-    border-bottom: 1px #64A8FF solid;
-    border-right: 1px #64A8FF solid;
+    border-bottom: 1px #D0D0D0 solid;
+    border-right: 1px #D0D0D0 solid;
     height: 45em;
     width: 150px;
     position: absolute;
@@ -251,22 +251,27 @@ H6 {font-size: .9em;}
 }
 
 .Features	{
-    background-color: #F4F4F8;
+    background-color: #F8F8F8;
     padding-left: 0.5em;
     padding-right: 0.5em;
+    margin-left: 1.25em;
+    margin-right: 1.25em;
     left: -1px;
     top: -1px;
     text-align: left;
     font-family: Verdana, Arial, Helvetica, sans-serif;
-    border: 1px solid #909090;
+    border-left: 1px solid #D0D0D0;
+    border-right: 1px solid #B0B0B0;
+    border-top: 1px solid #D0D0D0;
+    border-bottom: 1px solid #B0B0B0;
 /* Explorer demands to know this - go figure */
     position: relative;
 }
 
 .FeatureHeadline	{
     text-align: center;
-    background-color: #9090A8;
-    color: #FFFFFF;
+    background-color: #F0E070;
+    color: #202020;
     margin-left: -0.5em;
     margin-right: -0.5em;
     margin-bottom: -0.25em;
