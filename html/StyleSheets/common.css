@@ -221,12 +221,12 @@ H6 {font-size: .9em;}
     border-bottom: 1px #D0D0D0 solid;
     border-right: 1px #D0D0D0 solid;
     height: 45em;
-    width: 150px;
+    width: 100px;
     position: absolute;
-/*    margin-left: 45em;*/
     left: 45em;
     top: 52px;
     z-index: 2;
+    overflow: hidden;
 }
 
 
