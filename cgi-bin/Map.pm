@@ -420,14 +420,16 @@ sub mapFinishImage {
         print AI "(o) Tx 1 0 Tk\nTO\n";
     }
 
+    # following lines taken out by JA 27.10.06 while re-implementing support
+    #  for GIF format files, not sure what it does to IE browsers
     # do this only if the browser is not IE
     # this prevents errors with rendering of transparent pixels in PNG format
-    if ( $q->param('browser') =~ /Microsoft/ )	{
+    #if ( $q->param('browser') =~ /Microsoft/ )	{
         $im->trueColorToPalette();
-    }
+    #}
 
     binmode STDOUT;
-    print MAPGIF $im->png;
+    print MAPGIF $im->gif;
     close MAPGIF;
     chmod 0664, "$GIF_DIR/$gifname";
 
@@ -441,6 +443,11 @@ sub mapFinishImage {
         print AI $_;
     }
     close AIFOOT;
+
+    open PNG,">$GIF_DIR/$pngname";
+    print PNG $im->png;
+    close PNG;
+    chmod 0664, "$GIF_DIR/$pngname";
 
     open JPG,">$GIF_DIR/$jpgname";
     $image->Write(file=>\*JPG,filename=>"$GIF_DIR/$jpgname");
@@ -514,9 +521,10 @@ sub mapFinishImage {
         print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"tiny\">";
         print MAPOUT "You may download this map in ";
         print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
-        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">PNG</a></b>, ";
+        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">GIF</a></b>, ";
         print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
-        print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format\n";
+        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b>, ";
+        print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pngname\">PNG</a></b> format\n";
         print MAPOUT "</td></tr>\n";
 
         print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"tiny\">";
@@ -560,9 +568,10 @@ sub mapFinishImage {
     if ($q->param("simple_map") =~ /YES/i){
         print MAPOUT "<p>You may download this map in ";
         print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
-        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">PNG</a></b>, ";
+        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">GIF</a></b>, ";
         print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
-        print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b> format.</p>\n";
+        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$pictname\">PICT</a></b>, ";
+        print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pngname\">PNG</a></b> format.</p>\n";
     }
 
     close MAPOUT;
@@ -996,7 +1005,8 @@ sub mapSetupImage {
             $gifcount = "";
         }
     }
-    $gifname = $mapstem . $gifcount . ".png";
+    $gifname = $mapstem . $gifcount . ".gif";
+    $pngname = $mapstem . $gifcount . ".png";
     $htmlname = $mapstem .$gifcount.".html";
     $ainame = $mapstem . $gifcount . ".ai";
     $jpgname = $mapstem . $gifcount . ".jpg";
