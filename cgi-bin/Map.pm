@@ -429,13 +429,20 @@ sub mapFinishImage {
     #}
 
     binmode STDOUT;
+
+# this doesn't actually seem to work (see below), left in for posterity
     print MAPGIF $im->gif;
     close MAPGIF;
     chmod 0664, "$GIF_DIR/$gifname";
 
     my $image = Image::Magick->new;
 
-    open GIF,"<$GIF_DIR/$gifname";
+    open PNG,">$GIF_DIR/$pngname";
+    print PNG $im->png;
+    close PNG;
+    chmod 0664, "$GIF_DIR/$pngname";
+
+    open GIF,"<$GIF_DIR/$pngname";
     $image->Read(file=>\*GIF);
 
     open AIFOOT,"<./data/AI.footer";
@@ -444,10 +451,12 @@ sub mapFinishImage {
     }
     close AIFOOT;
 
-    open PNG,">$GIF_DIR/$pngname";
-    print PNG $im->png;
-    close PNG;
-    chmod 0664, "$GIF_DIR/$pngname";
+# horrible workaround required by screwy performance of GD on flatpebble
+    close GIF;
+    open GIF2,">$GIF_DIR/$gifname";
+    $image->Write(file=>\*GIF2,filename=>"$GIF_DIR/$gifname");
+    close GIF2;
+    chmod 0664, "$GIF_DIR/$gifname";
 
     open JPG,">$GIF_DIR/$jpgname";
     $image->Write(file=>\*JPG,filename=>"$GIF_DIR/$jpgname");
