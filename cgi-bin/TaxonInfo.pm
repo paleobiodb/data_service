@@ -701,11 +701,13 @@ sub doCollections{
     my ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
     my @data = @$dataRows;
 
+
     if (! @data) {
         print "<div align=\"center\"><h3>Collections</h3><i> No collection or age range data are available</i></div>";
         return;
     }
     my ($lb,$ub,$max,$min) = calculateAgeRange($dbt,$t,\@data,$upperbound,$lowerbound);
+
 
 #    print "MAX".Dumper($max);
 #    print "MIN".Dumper($min);
@@ -939,7 +941,7 @@ sub calculateAgeRange {
     my $youngest_lb = 999999;
     while (my ($range,$bounds) = each %seen_range) {
         my ($max,$min) = split(/ /,$range);
-        my ($lb,$x,$x,$ub) = @$bounds;
+        my ($lb,$x1,$x2,$ub) = @$bounds;
 
         if ($ub =~ /\d/ && $ub > $oldest_ub) {
             $oldest_ub = $ub;
@@ -987,7 +989,7 @@ sub calculateAgeRange {
     my %best_ub_ints = ();
     while (my ($range,$bounds) = each %seen_range) {
         my ($max,$min) = split(/ /,$range);
-        my ($lb,$x,$x,$ub) = @$bounds;
+        my ($lb,$x1,$x2,$ub) = @$bounds;
         if ($lb == $best_lb) {
             $best_lb_ints{$max} = 1;
         }
@@ -1012,13 +1014,17 @@ sub calculateAgeRange {
     my %precedes = ();
     my $ig = $t->getIntervalGraph;
     foreach my $i (@max,@min) {
-        my @q = ($ig->{$i});
-        while (my $j = pop @q) {
-            $parent{$i}{$j->{'interval_no'}} = 1 unless $i == $j->{'interval_no'};
-            push @q, $j->{'max'} if ($j->{'max'});
-            push @q, $j->{'min'} if ($j->{'min'} && $j->{'min'} != $j->{'max'});
+        my @p = $t->getParentIntervals($i);
+        foreach my $p (@p) {
+            $parent{$i}{$p} = 1 unless $i == $p;
         }
-        @q = ($ig->{$i});
+#        my @q = ($ig->{$i});
+#        while (my $j = pop @q) {
+#            $parent{$i}{$j->{'interval_no'}} = 1 unless $i == $j->{'interval_no'};
+#            push @q, $j->{'max'} if ($j->{'max'});
+#            push @q, $j->{'min'} if ($j->{'min'} && $j->{'min'} != $j->{'max'});
+#        }
+        my @q = ($ig->{$i});
         while (my $j = pop @q) {
             $precedes{$i}{$j->{'interval_no'}} = 1 unless $i == $j->{'interval_no'};
             foreach my $n (@{$j->{'all_next'}}) {
