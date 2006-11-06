@@ -1,5 +1,4 @@
 package Scales;
-use strict;
 
 # written by JA 7-20.7.03
 # caught a bug JA 23.7.03
