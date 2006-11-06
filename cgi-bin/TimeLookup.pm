@@ -80,16 +80,17 @@ use strict;
 # used up to 17.8.04
 #	"51" => "Carboniferous 5", # Moscovian
     "52" => "Carboniferous 4", # Bashkirian
-    "166" => "Carboniferous 3", # Alportian
-    "167" => "Carboniferous 3", # Chokierian
+# used up to 6.11.06
+#    "166" => "Carboniferous 3", # Alportian
+#    "167" => "Carboniferous 3", # Chokierian
 # used up to 9.8.04
 #	"166" => "Carboniferous 4", # Alportian
 #	"167" => "Carboniferous 4", # Chokierian
+# Serpukhovian added 29.6.06
+    "53" => "Carboniferous 3", # Serpukhovian
     "168" => "Carboniferous 3", # Arnsbergian
     "169" => "Carboniferous 3", # Pendleian
     "170" => "Carboniferous 3", # Brigantian
-# added 29.6.06
-    "53" => "Carboniferous 3", # Serpukhovian
     "171" => "Carboniferous 2", # Asbian
     "172" => "Carboniferous 2", # Holkerian
     "173" => "Carboniferous 2", # Arundian
