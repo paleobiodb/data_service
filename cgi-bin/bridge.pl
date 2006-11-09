@@ -2321,7 +2321,7 @@ sub processCollectionsSearch {
         push @from, "sum(abund_value) as specimen_count";
         push @tables, "occurrences o";
         push @where, "o.collection_no=c.collection_no AND abund_unit IN ('specimens','individuals')";
-        push @having, "sum(abund_value)>$specimen_count";
+        push @having, "sum(abund_value)>=$specimen_count";
     }
 
     # Reworked PS  08/15/2005
