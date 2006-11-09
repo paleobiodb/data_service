@@ -677,7 +677,7 @@ sub getMeasurements {
     } elsif ($options{'collection_no'}) {
         $sql1 .= " AND o.collection_no=".int($options{'collection_no'});
         $sql2 .= " AND o.collection_no=".int($options{'collection_no'});
-    } elsif (@{$options{'occurrence_list'}}) {
+    } elsif ($options{'occurrence_list'}) {
         $sql1 .= " AND o.occurrence_no IN (".join(",",@{$options{'occurrence_list'}}).")";
         $sql2 .= " AND o.occurrence_no IN (".join(",",@{$options{'occurrence_list'}}).")";
     } elsif ($options{'occurrence_no'}) {
@@ -726,23 +726,28 @@ sub getMeasurementTable {
             $seen_specimens{$row->{'specimen_no'}} = 1;
         }
         $types{$row->{'measurement_type'}}++;
+        my $part_type;
+        if (! exists $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}) {
+            $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}} = {};
+        } 
+        my $part_type = $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}};
 #        $p_table{'a_mean'}{$row->{'measurement_type'}} += $row->{'specimens_measured'} * $row->{'real_average'};
         # Note that "average" is the geometric mean - a_mean (arithmetic mean) is not used right now
-        $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'specimens_measured'} += $row->{'specimens_measured'};
-        $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'average'} += $row->{'specimens_measured'} * log($row->{'real_average'});
+        $part_type->{'specimens_measured'} += $row->{'specimens_measured'};
+        $part_type->{'average'} += $row->{'specimens_measured'} * log($row->{'real_average'});
         if ($row->{'specimens_measured'} == 1) {
-            if (!exists $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'min'} || $row->{'real_average'} < $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'min'}) {
-                $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'min'} = $row->{'real_average'};
+            if (!exists $part_type->{'min'} || $row->{'real_average'} < $part_type->{'min'}) {
+                $part_type->{'min'} = $row->{'real_average'};
             }
-            if (!exists $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'max'} || $row->{'real_average'} > $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'max'}) {
-                $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'max'} = $row->{'real_average'};
+            if (!exists $part_type->{'max'} || $row->{'real_average'} > $part_type->{'max'}) {
+                $part_type->{'max'} = $row->{'real_average'};
             }
         } else {
-            if (!exists $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'min'} || $row->{'real_min'} < $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'min'}) {
-                $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'min'} = $row->{'real_min'};
+            if (!exists $part_type->{'min'} || $row->{'real_min'} < $part_type->{'min'}) {
+                $part_type->{'min'} = $row->{'real_min'};
             }
-            if (!exists $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'max'} || $row->{'real_max'} > $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'max'}) {
-                $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}{'max'} = $row->{'real_max'};
+            if (!exists $part_type->{'max'} || $row->{'real_max'} > $part_type->{'max'}) {
+                $part_type->{'max'} = $row->{'real_max'};
             }
         }
     }    
