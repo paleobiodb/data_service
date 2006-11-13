@@ -594,32 +594,9 @@ sub getKeysValues {
             $keys = $r[0];
             $values = $r[0];
         }
-        # remove duplicates (a problem with the environment pulldown)
-        my %keySeen;
-        my @newKeys;
-        my @newValues;
-        for my $k ( 0..$#{$keys} )	{
-            if ( ! $keySeen{${$keys}[$k]} )	{
-                push @newKeys , ${$keys}[$k];
-                push @newValues , ${$values}[$k];
-            }
-            $keySeen{${$keys}[$k]}++;
-        }
-        @{$keys} = @newKeys;
-        @{$values} = @newValues;
         return ($keys,$values);
     } elsif (exists $self->{'hard_lists'}{$name}) {
         my @keys = @{$self->{'hard_lists'}{$name}};
-        # remove duplicates (a problem with the environment pulldown)
-        my %keySeen;
-        my @newKeys;
-        for my $k ( 0..$#keys )	{
-            if ( ! $keySeen{$keys[$k]} )	{
-                push @newKeys , $keys[$k];
-            }
-            $keySeen{$keys[$k]}++;
-        }
-        my @keys = @newKeys;
         my @values = @keys;
         return (\@keys,\@values);
     } else {
@@ -633,7 +610,33 @@ sub getKeysValues {
 sub getList {
     my $self = shift;
     my $name = shift;
-    return @{$self->getKeysValues($name)};
+    my $distinct = shift;
+    # remove duplicates (a problem with the environment pulldown)
+    if ( $distinct )	{
+        my (@keys,@values) = @{$self->getKeysValues($name)};
+        my %keySeen;
+        my @newKeys;
+        my @newValues;
+        for my $k ( 0..$#keys )	{
+            if ( ! $keySeen{$keys[$k]} )	{
+                push @newKeys , $keys[$k];
+                push @newValues , $values[$k];
+            }
+            $keySeen{$keys[$k]}++;
+        }
+        #for my $k ( 0..$#{$keys} )	{
+        #    if ( ! $keySeen{${$keys}[$k]} )	{
+        #        push @newKeys , ${$keys}[$k];
+        #        push @newValues , ${$values}[$k];
+        #    }
+        #    $keySeen{${$keys}[$k]}++;
+        #}
+        my @keys = @newKeys;
+        my @values = @newValues;
+        return (@keys,@values);
+    } else	{
+        return @{$self->getKeysValues($name)};
+    }
 }
 
 sub htmlSelect {
