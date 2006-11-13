@@ -594,22 +594,33 @@ sub getKeysValues {
             $keys = $r[0];
             $values = $r[0];
         }
+        # remove duplicates (a problem with the environment pulldown)
         my %keySeen;
-        for my $k ( @{$keys} )	{
-            $keySeen{$k}++;
+        my @newKeys;
+        my @newValues;
+        for my $k ( 0..$#{$keys} )	{
+            if ( ! $keySeen{${$keys}[$k]} )	{
+                push @newKeys , ${$keys}[$k];
+                push @newValues , ${$values}[$k];
+            }
+            $keySeen{${$keys}[$k]}++;
         }
-        @{$values} = keys %keySeen;
-	$keys = $values;
+        @{$keys} = @newKeys;
+        @{$values} = @newValues;
         return ($keys,$values);
     } elsif (exists $self->{'hard_lists'}{$name}) {
         my @keys = @{$self->{'hard_lists'}{$name}};
         # remove duplicates (a problem with the environment pulldown)
         my %keySeen;
-        for my $k ( @keys )	{
-            $keySeen{$k}++;
+        my @newKeys;
+        for my $k ( 0..$#keys )	{
+            if ( ! $keySeen{$keys[$k]} )	{
+                push @newKeys , $keys[$k];
+            }
+            $keySeen{$keys[$k]}++;
         }
-        my @values = keys %keySeen;
-	@keys = @values;
+        my @keys = @newKeys;
+        my @values = @keys;
         return (\@keys,\@values);
     } else {
         return ([],[]);
