@@ -594,10 +594,22 @@ sub getKeysValues {
             $keys = $r[0];
             $values = $r[0];
         }
+        my %keySeen;
+        for my $k ( @{$keys} )	{
+            $keySeen{$k}++;
+        }
+        @{$values} = keys %keySeen;
+	$keys = $values;
         return ($keys,$values);
     } elsif (exists $self->{'hard_lists'}{$name}) {
         my @keys = @{$self->{'hard_lists'}{$name}};
-        my @values = @keys;
+        # remove duplicates (a problem with the environment pulldown)
+        my %keySeen;
+        for my $k ( @keys )	{
+            $keySeen{$k}++;
+        }
+        my @values = keys %keySeen;
+	@keys = @values;
         return (\@keys,\@values);
     } else {
         return ([],[]);
