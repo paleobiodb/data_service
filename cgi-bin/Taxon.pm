@@ -352,7 +352,7 @@ sub displayAuthorityForm {
     } elsif ($fields{'taxon_rank'} =~ /species/) {
         @taxon_ranks = ('subspecies','species');
     } else {
-        @taxon_ranks = grep {!/species|subgenus/} $hbo->getList('taxon_rank');
+        @taxon_ranks = grep {!/^\s*$|species|subgenus/} $hbo->getList('taxon_rank');
     }
     $fields{'taxon_rank_select'} = $hbo->htmlSelect('taxon_rank',\@taxon_ranks,\@taxon_ranks,$fields{'taxon_rank'}); 
 
@@ -651,7 +651,7 @@ sub submitAuthorityForm {
 		# if it's an old entry, then we'll update.
 		$resultTaxonNumber = $t->get('taxon_no');
 		$status = $dbt->updateRecord($s,'authorities','taxon_no',$resultTaxonNumber, \%fields);
-        propagateAuthorityInfo($dbt,$t->get('taxon_no'));
+        propagateAuthorityInfo($dbt,$resultTaxonNumber,1);
         # Changing a genus|subgenus|species|subspecies is tricky since we have to change
         # other related opinions and authorities
         if ($t->get('taxon_name') ne $fields{'taxon_name'} &&
@@ -912,16 +912,14 @@ sub addSpellingAuthority {
     }
 
     my ($return_code, $new_taxon_no) = $dbt->insertRecord($s,'authorities', \%record);
-    TaxaCache::addName($dbt,$taxon_no);
+    TaxaCache::addName($dbt,$new_taxon_no);
     main::dbg("create new authority record, got return code $return_code");
     if (!$return_code) {
         die("Unable to create new authority record for $record{taxon_name}. Please contact support");
     }
-    my @set_warnings = Taxon::setOccurrencesTaxonNoByTaxon($dbt,$s,$taxon_no);
+    my @set_warnings = Taxon::setOccurrencesTaxonNoByTaxon($dbt,$s,$new_taxon_no);
     return ($new_taxon_no,\@set_warnings);
 }
-
-
 
 
 sub setOccurrencesTaxonNoByTaxon {
@@ -1599,6 +1597,8 @@ sub getBestClassification{
 sub propagateAuthorityInfo {
     my $dbt = shift;
     my $taxon_no = shift;
+    my $this_is_best = shift;
+    
     my $dbh = $dbt->dbh;
     return if (!$taxon_no);
 
@@ -1607,39 +1607,101 @@ sub propagateAuthorityInfo {
 
     main::dbg("propagateAuthorityInfo called with taxon_no $taxon_no and orig $orig_no");
 
-    my @spellings = TaxonInfo::getAllSpellings($dbt,$orig_no);
+    my @spelling_nos = TaxonInfo::getAllSpellings($dbt,$orig_no);
     # Note that this is the taxon_no passed in, not the original combination -- an update to
     # a spelling should proprate around as well
-    my $orig = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
+    my $me = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
 
     my @authority_fields = ('author1init','author1last','author2init','author2last','otherauthors','pubyr');
     my @more_fields = ('pages','figures','extant','preservation');
-    foreach my $spelling_no (@spellings) {
-        next if ($spelling_no==$taxon_no);
-        my @toUpdate = ();
+
+    # Two steps: find best authority info, then propagate to all spelling variants
+    my @spellings;
+    foreach my $spelling_no (@spelling_nos) {
         my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$spelling_no},['*']);
-        # If its tied to a reference, they should update the reference.
-        # Only weird thing is if they update a subsequent spelling and the original combination
-        # is tied to a reference. The data in the reference won't be updated.
-        if ($orig->{'ref_is_authority'} =~ /yes/i) {
-            my $u_sql = "UPDATE authorities SET modified=modified, reference_no=$orig->{reference_no},ref_is_authority='YES' WHERE taxon_no=$spelling_no";
-            main::dbg("propagateAuthorityInfo updating authority: $u_sql");
-            $dbh->do($u_sql);
-        } else {
-            if ($spelling->{'ref_is_authority'} =~ /yes/i) {
-                next;
+        push @spellings, $spelling;
+    }
+
+    my $getDataQuality = sub {
+        my $taxa = shift;
+        my $quality = 0;
+        # Taxa where the ref is authority are preferred - in the cases where there
+        # are multiple refs that fit this criteria, go with the original combination
+        # Else if there is anything, go with that, otherwise we're stuck with nothing
+        if ($taxa->{'ref_is_authority'} =~ /yes/i) {
+            if ($taxa->{'taxon_no'} == $orig_no) {
+                $quality = 5;
             } else {
-                foreach my $f (@authority_fields,@more_fields) {
-                    if ($spelling->{$f} ne $orig->{$f}) {
-                        push @toUpdate, "$f=".$dbh->quote($orig->{$f});
-                    }
-                }
-                if (@toUpdate) {
-                    my $u_sql =  "UPDATE authorities SET modified=modified, ".join(",",@toUpdate)." WHERE taxon_no=$spelling_no";
-                    main::dbg("propagateAuthorityInfo updating authority: $u_sql");
-                    $dbh->do($u_sql);
+                $quality = 4;
+            }
+        } elsif ($taxa->{'author1last'}) {
+            if ($taxa->{'taxon_no'} == $orig_no) {
+                $quality = 3;
+            } else {
+                $quality = 2;
+            }
+        } else {
+            $quality = 1;
+        }
+        return $quality;
+    };
+   
+    # Sort by quality in descending rder
+    @spellings = 
+        map  {$_->[1]}
+        sort {$b->[0] <=> $a->[0]}
+        map  {[$getDataQuality->($_),$_]}
+        @spellings;
+
+    my @toUpdate;
+    # Get this additional metadata from wherever we can find it, giving preference
+    # to the taxa with better authority data
+    my %seenMore = ();
+    if ($this_is_best) {
+        foreach my $f (@more_fields) {
+            $seenMore{$f} = $me->{$f};
+        }
+    } else {
+        foreach my $spelling (@spellings) {
+            foreach my $f (@more_fields) {
+                if ($spelling->{$f} ne '' && !exists $seenMore{$f}) {
+                    $seenMore{$f} = $spelling->{$f};
                 }
             }
+        }
+    }
+    if (%seenMore) {
+        foreach my $f (@more_fields) {
+            push @toUpdate, "$f=".$dbh->quote($seenMore{$f});
+        }
+    }
+
+    # Set all taxa to be equal to the reference form the best authority data we have
+    my $best;
+    if ($this_is_best) {
+        $best = $me;
+    } else {
+        $best = $spellings[0];
+    }
+    if ($best->{'ref_is_authority'} =~ /yes/i) {
+        foreach my $f (@authority_fields) {
+            push @toUpdate, "$f=''";
+        }
+        push @toUpdate, "reference_no=$best->{reference_no}";
+        push @toUpdate, "ref_is_authority='YES'";
+    } else {
+        foreach my $f (@authority_fields) {
+            push @toUpdate, "$f=".$dbh->quote($best->{$f});
+        }
+        push @toUpdate, "reference_no=$best->{reference_no}";
+        push @toUpdate, "ref_is_authority=''";
+    }
+
+    if (@toUpdate) {
+        foreach my $spelling_no (@spelling_nos) {
+            my $u_sql =  "UPDATE authorities SET modified=modified, ".join(",",@toUpdate)." WHERE taxon_no=$spelling_no";
+            main::dbg("propagateAuthorityInfo updating authority: $u_sql");
+            $dbh->do($u_sql);
         }
     }
 }                                                                                                                                                                   

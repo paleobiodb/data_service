@@ -1618,7 +1618,9 @@ sub removeDuplicateOpinions {
     my $sql = "SELECT * FROM opinions WHERE child_no=$child_no AND child_no != parent_no AND status !='misspelling of'";
     my @results = @{$dbt->getData($sql)};
     my %dupe_hash = ();
-    foreach my $row (@results) {
+    # "Reverse" prevents a bug where we delete teh last entered opinion (if its a dupe)
+    # which causes the scripts to crash later. So delete the earlier entered dupe opinion
+    foreach my $row (reverse @results) {
         if ($row->{'ref_has_opinion'} =~ /yes/i) {
             my $dupe_key = $row->{'reference_no'}.' '.$row->{'child_no'};
             push @{$dupe_hash{$dupe_key}},$row;
