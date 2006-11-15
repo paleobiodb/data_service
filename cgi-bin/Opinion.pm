@@ -597,13 +597,22 @@ sub displayOpinionForm {
             }
         }
     }
+    my $type_select = "";
     if ($childRank =~ /species|genus|tribe|family/) {
         my $checked = ($fields{'type_taxon'}) ? "CHECKED" : "";
-        $belongs_to_row .= "<tr><td></td><td>".
+        $type_select = "<td width=\"40%\" nowrap>".
                        "<input name=\"type_taxon\" type=\"checkbox\" $checked  value=\"1\">".
-                       " This is the type $childRank".
-                       "</td></tr>";
-    }                       
+                       " This is the type $childRank";
+                       "</td>";
+    }
+    my ($diag_keys,$diag_values) = $hbo->getKeysValues('diagnosis_given');
+    my $diagnosis_select = $hbo->htmlSelect('diagnosis_given',$diag_keys,$diag_values,$fields{'diagnosis_given'});
+    
+    $belongs_to_row .= "<tr><td></td><td>".
+                   "<table border=0 cellpadding=0 cellspacing=0 width=\"100%\"><tr>".
+                   $type_select.
+                   "<td nowrap><b>Diagnosis given:</b> $diagnosis_select</td></tr></table>".
+                   "</td></tr>";
 
 	# format the synonym section
 	# note: by now we already have a status pulldown ready to go; we're
@@ -1239,9 +1248,13 @@ sub submitOpinionForm {
 		$errors->add("Don't enter a diagnosis unless this taxon is valid or a recombination");
 	}
 
+    if ($q->param('diagnosis') && $q->param("diagnosis_given") =~ /^$|none/) {
+		$errors->add("When entering a diagnosis please select the type of diagnosis in the \"Diagnosis given\" pulldown");
+    }
+
     # Get the fields from the form and get them ready for insertion
     # All other fields should have been set or thrown an error message at some previous time
-    foreach my $f ('author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments','diagnosis','phylogenetic_status','classification_quality','type_taxon') {
+    foreach my $f ('author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments','diagnosis','phylogenetic_status','classification_quality','type_taxon','diagnosis_given') {
         if (!$fields{$f}) {
             $fields{$f} = $q->param($f);
         }
