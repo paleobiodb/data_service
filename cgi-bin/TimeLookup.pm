@@ -462,20 +462,42 @@ sub mapIntervals {
                         push @q,$c;
                     }
                 }
-                if ($itv->{'equiv'}) {
-                    foreach my $e (@{$itv->{'equiv'}}) {
-                        if (! $e->{'visited'}) {
-                            push @q, $e;
-                        }
-                    }
-                }
             }
         }
 
-        # Not totally sure quite why this works right now
+        # Put in terms equivalent to a term a or sequence already mapped
         foreach my $itv (values %$ig) {
+            if (!$itv->{'visited'} && $itv->{'shared_lower'} && $itv->{'shared_upper'}) {
+                foreach my $sl (@{$itv->{'shared_lower'}}) {
+                    foreach my $ul (@{$itv->{'shared_upper'}}) {
+                        if ($sl == $ul && $sl != $itv && $sl->{'visited'} && $ul->{'visited'}) {
+                            push @q, $itv;
+                        }
+                    } 
+                }
+
+            }
+        }
+        # Put in terms equivalent to a term a or sequence already mapped
+        foreach my $itv (values %$ig) {
+            if (!$itv->{'visited'} && $self->{'equiv'}->{$itv}) {
+                my $set = $self->{'equiv'}->{$itv};
+                my $all_visited = 1;
+                foreach my $itv (@$set) {
+                    if (!$itv->{'visited'}) {
+                        $all_visited = 0;
+                        last;
+                    }
+                }
+                if ($all_visited) {
+#                    print "All members equiv to $itv->{name} [".join(",",map{$_->{'name'}} @$set)."] were found\n";
+                    push @q, $itv;
+                }
+            }
         }
         # Not totally sure quite why this works right now
+        # TBD: Range across scales
+        # TBD: equiv local/globals
         foreach my $itv (values %$ig) {
             if (!$itv->{'visited'} && 
                 $itv->{'prev'} && $itv->{'prev'}->{'visited'} && 
@@ -981,7 +1003,7 @@ sub getBoundaries {
 #        foreach (@leaves) {
 #            $_->{'depth'} = 0;
 #        }
-        my @q = @leaves;
+        @q = @leaves;
         while (my $itv = shift @q) {
             next if $itv->{'visited'};
             $itv->{'visited'} = 1;
@@ -1012,20 +1034,28 @@ sub getBoundaries {
 #        print "2UNSET: ".scalar(values(%unset))."\n";
 
         # Fix for gallic, quaternary, tertiary, etc
-        foreach my $itv (@obsolete) {
+        foreach my $itv (sort {$a->{'interval_no'} <=> $b->{'interval_no'}} @obsolete) {
 #            print "$itv->{name} IS OBSOLETE\n";
             my ($min,$max) = $self->getFromChildren($itv,'defunct');
             if ($itv->{'lower_boundary'} eq '') {
-                $itv->{'lower_boundary'} = $max;
-                if ($itv->{'prev'} && $itv->{'prev'}->{'upper_boundary'} eq '') {
-                    $itv->{'prev'}->{'upper_boundary'} = $max;
+                if ($itv->{'prev'} && $itv->{'prev'}->{'upper_boundary'} ne '' && !$self->isObsolete($itv->{'prev'})) {
+                    $itv->{'lower_boundary'} = $itv->{'prev'}->{'upper_boundary'};
+                } else {
+                    $itv->{'lower_boundary'} = $max;
                 }
+#                if ($itv->{'prev'} && $itv->{'prev'}->{'upper_boundary'} eq '') {
+#                    $itv->{'prev'}->{'upper_boundary'} = $max;
+#                }
             }
             if ($itv->{'upper_boundary'} eq '') {
-                $itv->{'upper_boundary'} = $min;
-                if ($itv->{'next'} && $itv->{'next'}->{'lower_boundary'} eq '') {
-                    $itv->{'next'}->{'lower_boundary'} = $min;
+                if ($itv->{'next'} && $itv->{'next'}->{'lower_boundary'} ne '' && !$self->isObsolete($itv->{'next'})) {
+                    $itv->{'upper_boundary'} = $itv->{'next'}->{'lower_boundary'};
+                } else {
+                    $itv->{'upper_boundary'} = $min;
                 }
+#                if ($itv->{'next'} && $itv->{'next'}->{'lower_boundary'} eq '') {
+#                    $itv->{'next'}->{'lower_boundary'} = $min;
+#                }
             }
             if ($itv->{'lower_boundary'} =~ /\d/&& $itv->{'upper_boundary'} =~ /\d/) {
                 delete $unset{$itv};
@@ -1107,29 +1137,47 @@ sub _computeBinBounds {
     my $upperbinbound = {};
     my $lowerbinbound = {};
     foreach my $bin (@TimeLookup::bins) {
-        my @intervals = map{$ig->{$_}} $self->mapIntervals($bin);
-#        print "$bin: ".Dumper(\@intervals)."<br>";
+#        my @intervals = map{$ig->{$_}} $self->mapIntervals($bin);
+        my @intervals;
+        while (my ($itv_no,$in_bin) = each %TimeLookup::binning) {
+            if ($in_bin eq $bin) {
+                push @intervals, $ig->{$itv_no};
+            }
+        }
 
         # find the boundary ages for the bin by checking the boundaries of
         #  all intervals falling within it
         foreach my $itv ( @intervals )    {
-            if ($itv->{'lower_boundarysrc'}->{'boundary_scale'}->{'abbrev'} eq 'gl') {
+#            if ($itv->{'lower_boundarysrc'}->{'boundary_scale'}->{'abbrev'} eq 'gl') {
                 my $lower_bound = $itv->{'lower_boundarygl'};
+                if ($lower_bound !~ /\d/) {
+                    foreach my $abbrev ('As','Au','Eu','NZ','NA','SA') {
+                        if ($itv->{'lower_boundary'.$abbrev} =~ /\d/) {
+                            $lower_bound = $itv->{'lower_boundary'.$abbrev};
+#                            print "NO LOWER BOUND, TRY LOCAL: $lower_bound\n";
+                        }
+                    }
+                }
                 if ( $lower_bound =~ /\d/ && $lower_bound > $lowerbinbound->{$bin} )   {
-    #                unless ($skip_lower{$i}) {
-                        $lowerbinbound->{$bin} = $lower_bound;
-    #                }
+                    $lowerbinbound->{$bin} = $lower_bound;
                 }
-            }
+#            }
 
-            if ($itv->{'upper_boundarysrc'}->{'boundary_scale'}->{'abbrev'} eq 'gl') {
+#            if ($itv->{'upper_boundarysrc'}->{'boundary_scale'}->{'abbrev'} eq 'gl') {
                 my $upper_bound = $itv->{'upper_boundarygl'};
-                if ( $upper_bound =~ /\d/ && $upper_bound < $upperbinbound->{$bin} || $upperbinbound->{$bin} eq "" ) {
-    #                unless ($skip_upper{$i}) {
-                        $upperbinbound->{$bin} = $upper_bound;
-    #                }
+                if ($upper_bound !~ /\d/) {
+                    foreach my $abbrev ('As','Au','Eu','NZ','NA','SA') {
+                        if ($itv->{'upper_boundary'.$abbrev} =~ /\d/) {
+                            $upper_bound = $itv->{'upper_boundary'.$abbrev};
+#                            print "NO UPPER BOUND, TRY LOCAL: $upper_bound\n";
+                        }
+                    }
                 }
-            }
+                if ( $upper_bound =~ /\d/ && $upper_bound < $upperbinbound->{$bin} || $upperbinbound->{$bin} eq "" ) {
+                        $upperbinbound->{$bin} = $upper_bound;
+                }
+#            }
+#            print "LB $lower_bound UB $upper_bound ITV $itv->{interval_no}<BR>";
         }
     }
     return ($upperbinbound,$lowerbinbound);
@@ -1309,10 +1357,17 @@ sub _findSharedBoundaries {
     $continents{$_} = 1 for map {$_->{'continent'}} @{$C->{'all_next_scales'}};
     foreach my $continent (keys %continents) {
         # These correspond to the diagam above
-        $A = best_by_continent($C,'min',$continent);
-        $D = best_by_continent($C,'next',$continent);
-        $B = best_by_continent($D,'max',$continent);
-        $B2 = best_by_continent($A,'next',$continent);
+        if (scalar(keys(%continents)) > 1) {
+            $A = best_by_continent($C,'min',$continent);
+            $D = best_by_continent($C,'next',$continent);
+            $B = best_by_continent($D,'max',$continent);
+            $B2 = best_by_continent($A,'next',$continent);
+        } else {
+            $A = $C->{'min'};
+            $D = $C->{'next'};
+            $B = $D->{'max'};
+            $B2 = $A->{'next'};
+        }
 
         next unless ($A && $B && $B2 && $C && $D);
        
@@ -1333,33 +1388,73 @@ sub _findSharedBoundaries {
 
 # See cases like Griesbachian -> Olenekian -> Smithian -> Spathian & Griesbacian -> Nammalian -> Spathian
 # Or Kungurian -> Ufimian -> Wordian. L
-# Look for pattern A -> B -> C matches A -> D -> C or A -> D -> E -> C
+# Look for pattern A -> B -> C matches A -> D -> C OR A -> B -> C matches A -> [D -> E] -> C
 sub _findEquivalentTerms {
     my $self = shift;
     my $itv = shift;
-    if ($self->isObsolete($itv) == 2) {
+
+    my %all_next;
+    foreach my $next (@{$itv->{'all_next'}}) {
+        $all_next{$next}=$next;
+    }
+    my @paths = ();
+    foreach my $prev (@{$itv->{'all_prev'}}) {
+        foreach my $scale_no (keys %{$prev->{'by_scale'}}) {
+            my $found_equiv = 0;
+            my @next_by_scale = ();
+            my $next = $prev;
+            foreach (my $i = 0;$i < 4;$i++) {
+                $next = $next->{'by_scale'}{$scale_no}{'next'};
+                last unless $next;
+                last if ($next == $itv);
+                if ($all_next{$next}) {
+                    $found_equiv = 1;
+                    last;
+                }
+                push @next_by_scale, $next;
+                
+            }
+            if ($found_equiv && @next_by_scale) {
+                push @paths, \@next_by_scale;
+            }
+        }
+    }
+
+    foreach my $path (@paths) {
+        my @p = @$path;
+#        print "Found path for $itv->{name} [".join(",",map{$_->{'name'}} @p)."]\n";
+        $self->{'equiv'}->{$itv} = $path;
+        foreach my $other_itv (@p) {
+            $self->{'equiv'}->{$other_itv} = [$itv];
+        }
+        $self->_combineBoundaries('shared_upper',$itv,$p[-1]);
+        $self->_combineBoundaries('shared_lower',$itv,$p[0]);
+    }
+#    if ($self->isObsolete($itv) == 2) {
+    if (0) {
         foreach my $prev (@{$itv->{'all_prev'}}) {
-            my @combine_upper = ();
-            my @combine_lower = ();
+            # 1 level
             if ($prev->{'next'} != $itv && 
                 $prev->{'next'} && $prev->{'next'}->{'next'} &&
                 matchAny([$prev->{'next'}->{'next'}],$itv->{'all_next'})) {
 #                print "Found match: $itv->{name} vs. $prev->{next}->{name}\n"; 
                 $self->_combineBoundaries('shared_upper',$itv,$prev->{'next'});
                 $self->_combineBoundaries('shared_lower',$itv,$prev->{'next'});
-                $itv->{'equiv'} = [$prev->{'next'}];
-                $prev->{'next'}->{'equiv'} = [$itv];
+#                $itv->{'equiv'} = [$prev->{'next'}];
+#                $prev->{'next'}->{'equiv'} = [$itv];
             }
+            # 2 level
             if ($prev->{'next'} != $itv && 
                 $prev->{'next'} && $prev->{'next'}->{'next'} && $prev->{'next'}->{'next'}->{'next'} &&
                 matchAny([$prev->{'next'}->{'next'}->{'next'}],$itv->{'all_next'})) {
 #                print "Found match: $itv->{name} vs. $prev->{next}->{name} & $prev->{next}->{next}->{name}\n";
                 $self->_combineBoundaries('shared_upper',$itv,$prev->{'next'}->{'next'});
                 $self->_combineBoundaries('shared_lower',$itv,$prev->{'next'});
-                $itv->{'equiv'} = [$prev->{'next'},$prev->{'next'}->{'next'}];
+#                $itv->{'equiv'} = [$prev->{'next'},$prev->{'next'}->{'next'}];
             }
         }
     }
+#    }
 }
 
 # Type should be either "shared_upper" or "shared_lower" for shared upper (younger) and lower (older_ boundaries respectively
@@ -1439,6 +1534,7 @@ sub _initInterval {
         }
         if ($row->{'next_interval_no'} > 0) {
             $all_with_next{$row->{'next_interval_no'}} = [$row,$scale];
+            $itv->{'by_scale'}{$row->{'scale_no'}}{'next'} = $ig->{$row->{'next_interval_no'}};
         }
         if ($row->{'lower_boundary'} > 0) {
             $all_with_boundary{$row->{'next_interval_no'}} = [$row,$scale];
