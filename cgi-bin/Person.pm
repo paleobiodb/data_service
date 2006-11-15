@@ -143,7 +143,9 @@ sub displayInstitutions {
 
     my %institutions;
     foreach my $row (@results) {
-        push @{$institutions{$row->{'institution'}}}, $row;
+        if ( $row->{'institution'} =~ /[A-Za-z0-9]/ )	{
+            push @{$institutions{$row->{'institution'}}}, $row;
+        } 
     }
     my @all_institutions = sort {$a cmp $b} keys %institutions;
 
