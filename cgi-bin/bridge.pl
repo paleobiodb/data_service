@@ -3684,12 +3684,12 @@ sub formatOccurrenceTaxonName {
         $genus_name = "<b>".$genus_name."</b>";
     }
     # n. gen., n. subgen., n. sp. come afterwards
-    if ($row->{'genus_reso'} eq 'n. gen.') {
+    if ($row->{'genus_reso'} eq 'n. gen.' && $row->{'species_reso'} ne 'n. sp.') {
         $taxon_name .= "$genus_name n. gen.";
     } elsif ($row->{'genus_reso'} eq '"') {
         $taxon_name .= '"'.$genus_name;
         $taxon_name .= '"' unless ($row->{'subgenus_reso'} eq '"' || $row->{'species_reso'} eq '"');
-    } elsif ($row->{'genus_reso'}) {
+    } elsif ($row->{'genus_reso'} ne 'n. gen.') {
         $taxon_name .= $row->{'genus_reso'}." ".$genus_name;
     } else {
         $taxon_name .= $genus_name;
@@ -3741,6 +3741,9 @@ sub formatOccurrenceTaxonName {
     }
     
     if ($row->{'species_reso'} eq 'n. sp.') {
+        if ($row->{'genus_reso'} eq 'n. gen.') {
+            $taxon_name .= " n. gen.,";
+        }
         $taxon_name .= " n. sp.";
     }
     if ($row->{'plant_organ'} && $row->{'plant_organ'} ne 'unassigned') {
