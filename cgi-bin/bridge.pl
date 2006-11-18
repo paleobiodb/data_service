@@ -1533,7 +1533,7 @@ sub processReferenceEditForm {
             foreach my $child_no (@child_nos) {
                 TaxaCache::updateCache($dbt2,$child_no);
             }
-            sleep(2);
+            sleep(4);
             exit;
         }  
     }

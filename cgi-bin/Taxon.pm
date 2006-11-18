@@ -1,4 +1,3 @@
-# created by rjp, 1/2004.
 #
 # Represents a single taxon from the authorities database table. 
 # Note: if the taxon doesn't exist in the authorities table, then not all methods will work,
@@ -667,6 +666,8 @@ sub submitAuthorityForm {
     }
 
     if ($pid) {
+        $dbh = DBConnection::connect();
+        $dbt = DBTransactionManager->new($dbh);
         # Child fork
     } else {
         # Make new dbh and dbt objects - for some reason one connection

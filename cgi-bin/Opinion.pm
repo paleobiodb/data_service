@@ -1413,6 +1413,7 @@ sub submitOpinionForm {
             #open STDOUT, ">>SOMEFILE";
         }
         TaxaCache::updateCache($dbt2,$fields{'child_no'});
+        sleep(4);
         exit;
     }         
 
