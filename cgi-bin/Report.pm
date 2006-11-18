@@ -686,6 +686,10 @@ sub reportQueryDB{
         my $genus_names_string;
 		if($q->param('taxon_name')){
 	        my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
+            if ($q->param('taxon_name') =~ /[^\s\w, \t\n-:;]/) {
+                print "Invalid taxon name<br>";
+                exit;
+            }
 
             my %taxon_nos_unique = ();
             foreach my $taxon (@taxa) {
