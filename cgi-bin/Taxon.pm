@@ -698,7 +698,7 @@ sub submitAuthorityForm {
     # if the taxon name is unique, find matches to it in the
     #  occurrences table and set the taxon numbers appropriately
     if ($status && ($isNewEntry || ($t->get('taxon_name') ne $fields{'taxon_name'}))) {
-        my @set_warnings = setOccurrencesTaxonNoByTaxon($dbt,$s,$resultTaxonNumber);
+        my @set_warnings = setOccurrencesTaxonNoByTaxon($dbt,$s->get('authorizer_no'),$resultTaxonNumber);
         push @warnings, @set_warnings;
     }
 	
@@ -918,14 +918,14 @@ sub addSpellingAuthority {
     if (!$return_code) {
         die("Unable to create new authority record for $record{taxon_name}. Please contact support");
     }
-    my @set_warnings = Taxon::setOccurrencesTaxonNoByTaxon($dbt,$s,$new_taxon_no);
+    my @set_warnings = Taxon::setOccurrencesTaxonNoByTaxon($dbt,$s->get('authorizer_no'),$new_taxon_no);
     return ($new_taxon_no,\@set_warnings);
 }
 
 
 sub setOccurrencesTaxonNoByTaxon {
     my $dbt = shift;
-    my $s = shift;
+    my $authorizer_no = shift;
     my $dbh = $dbt->dbh;
     my $taxon_no = shift;
     my @warnings = ();
@@ -1028,7 +1028,7 @@ END_OF_MESSAGE
 #        $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
 #        $dbt->getData($sql1);
 #        $dbt->getData($sql2);
-        push @warnings, "Since $taxon_name is a homonym, occurrences of it may be incorrectly classified using the wrong homonym.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$taxon_name&occurrences_authorizer_no=".$s->get('authorizer_no')."\">Reclassify occurrences</a>\" and manually classify <b>all</b> your  occurrences of this taxon.";
+        push @warnings, "Since $taxon_name is a homonym, occurrences of it may be incorrectly classified using the wrong homonym.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$taxon_name&occurrences_authorizer_no=".$authorizer_no."\">Reclassify occurrences</a>\" and manually classify <b>all</b> your  occurrences of this taxon.";
     } elsif (scalar(@taxon_nos) == 1) {
         my @matchedOccs = ();
         my @matchedReids = ();
