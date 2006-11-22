@@ -1065,7 +1065,10 @@ sub submitOpinionForm {
     }
 	$fields{'spelling_reason'} = $q->param('spelling_reason');
 
-	if (!$q->param("spelling_reason")) {
+	if (!$fields{'status'}) {
+		$errors->add("No option was selected in the \"Status\" pulldown");
+    } 
+	if (!$fields{'spelling_reason'}) {
 		$errors->add("No option was selected in the \"Enter the reason why this spelling was used\" pulldown");
     } 
     
