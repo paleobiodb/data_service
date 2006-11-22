@@ -6311,11 +6311,11 @@ sub processEditOccurrences {
         
 		# check that all required fields have a non empty value
         if ($fields{'reference_no'} !~ /^\d+$/) {
-            push @warnings, "Required field reference number is blank for row $i, so the row was skipped";
+            push @warnings, "There is no reference number for row $i, so it was skipped";
             next; 
         }
         if ($fields{'collection_no'} !~ /^\d+$/) {
-            push @warnings, "Required field collection number is blank for row $i, so the row was skipped";
+            push @warnings, "There is no collection number for row $i, so it was skipped";
             next; 
         }
 
@@ -6337,15 +6337,15 @@ sub processEditOccurrences {
             }
         } else {
             if (!Validation::validOccurrenceGenus($fields{'genus_reso'},$fields{'genus_name'})) {
-                push @warnings, "Required field genus ($fields{'genus_name'}) is blank or improperly formatted for row $i, so the row was skipped";
+                push @warnings, "There genus ($fields{'genus_name'}) in row $i is blank or improperly formatted, so was skipped";
                 next; 
             }
             if ($fields{'subgenus_name'} !~ /^\s*$/ && !Validation::validOccurrenceGenus($fields{'subgenus_reso'},$fields{'subgenus_name'})) {
-                push @warnings, "Subgenus ($fields{'subgenus_name'}) improperly formatted for row $i, so the row was skipped";
+                push @warnings, "The subgenus ($fields{'subgenus_name'}) in row $i is improperly formatted, so it was skipped";
                 next; 
             }
             if ($fields{'species_name'} =~ /^\s*$/ || !Validation::validOccurrenceSpecies($fields{'species_reso'},$fields{'species_name'})) {
-                push @warnings, "Required field species ($fields{'species_name'}) is blank or improperly formatted for row $i, so the row was skipped";
+                push @warnings, "The species ($fields{'species_name'}) in row $i is blank or improperly formatted, so it was skipped";
                 next; 
             }
         }
@@ -6356,7 +6356,7 @@ sub processEditOccurrences {
             my $sql = "SELECT reference_no FROM occurrences WHERE occurrence_no=$fields{'occurrence_no'}";
             my $occurrence_reference_no = ${$dbt->getData($sql)}[0]->{'reference_no'};
             if ($fields{'reference_no'} == $occurrence_reference_no) {
-                push @warnings, "Reidentification reference number ($fields{reference_no}) can not be the same as the original occurrence for row $i, taxon $taxon_name";
+                push @warnings, "The reidentification ($fields{reference_no}) cannot have  the same reference as the original occurrence for row $i, taxon $taxon_name";
                 next;
             }
         }
@@ -6403,7 +6403,7 @@ sub processEditOccurrences {
             my $return = checkDuplicates( "reid_no", \$record_id, "reidentifications", \@keys, \@values);
 
             if ( $return == $DUPLICATE ) {
-                push @warnings, "Skipped row $i because it is a duplicate";
+                push @warnings, "Row ". ($i + 1) ." was skipped because it is a duplicate";
             } elsif ( $return ) {
                 $dbt->insertRecord($s,'reidentifications',\%fields);
       
@@ -6457,7 +6457,7 @@ sub processEditOccurrences {
             my $return = checkDuplicates("occurrence_no", \$record_id, "occurrences", \@keys, \@values);
 
             if ( $return == $DUPLICATE ) {
-                push @warnings, "Skipped row $i because it is a duplicate";
+                push @warnings, "Row ". ($i + 1) ." was skipped because it is a duplicate";
                 if ($record_id =~ /^\d+$/) {
                     push @occurrences, $record_id;
                 }
@@ -6672,7 +6672,7 @@ sub displayOccsForReID {
             }
             $html .= "</tr>";
             if ($current_session_ref == $row->{'reference_no'}) {
-                $html .= "<tr><td colspan=20><b>Current reference is the same as the original reference, so this taxon may not be reidentified with this reference.</b></td></tr>";
+                $html .= "<tr><td colspan=20><i>The current reference is the same as the original reference, so this taxon may not be reidentified.</i></td></tr>";
             } else {
                 my $vars = {
                     'collection_no'=>$row->{'collection_no'},
@@ -6735,8 +6735,8 @@ sub displayOccsForReID {
 
 	print "</table>\n";
 	if ($rowCount > 0)	{
-		print qq|<center><input type=submit value="Save reidentifications"></center><br>\n|;
-		print qq|<center><input type="hidden" name="last_occ_num" value="$lastOccNum"></center><br>\n|;
+		print qq|<center><p><input type=submit value="Save reidentifications"></center></p>\n|;
+		print qq|<input type="hidden" name="last_occ_num" value="$lastOccNum">\n|;
 	} else	{
 		print "<center><h3>Sorry! No matches were found</h3></center>\n";
 		print "<p align=center><b>Please <a href=\"$exec_url?action=displayReIDCollsAndOccsSearchForm\">try again</a> with different search terms</b></p>\n";
