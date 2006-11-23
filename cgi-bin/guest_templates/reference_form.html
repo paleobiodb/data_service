@@ -142,7 +142,7 @@
 <DIV>
 <center>
 <table class="mainSection" cellpadding=4><tr><td>
-<input type="hidden" name="reference_no" value="14351">
+<input type="hidden" name="reference_no" value="" />
 <table>
   <tr>
     <p>Required fields are in <span class="required">red</span>. Consult the <a href="javascript:tipsPopup('/public/tips/ref_tips.html')">tip sheet</a> for help.</p>
@@ -151,71 +151,159 @@
 
   <tr>
     <td><span class="required">First author:</span></td>
-    <td><span class="required">initials</span><input name="author1init" value="W. J." size="8" maxlength="10"></td>
-    <td><span class="required">last name</span><input name="author1last" value="Holland" size="20" maxlength="255"></td>
+    <td><span class="required">initials</span><input type="text" name="author1init" value="W. J."  size=8 maxlength=10 /></td>
+    <td><span class="required">last name</span><input type="text" name="author1last" value="Holland"  size=20  maxlength=255 /></td>
   </tr>
   <tr>
-    <td>Second author: <td>initials <input name="author2init" value="" size="8" maxlength="10"></td>
-    <td>last name <input name="author2last" value="" size="20" maxlength="255"></td>
+    <td>Second author: <td>initials <input type="text" name="author2init" value=""  size=8 maxlength=10 /></td>
+    <td>last name <input type="text" name="author2last" value=""  size=20 maxlength=255 /></td>
   </tr>
 </table>
-Initials and names of additional authors (separate the names with commas):<br><textarea name="otherauthors" cols="80" rows="3" wrap="virtual"></textarea><p>
+Initials and names of additional authors (separate the names with commas):<br><textarea name="otherauthors"  rows=3 cols=80 wrap=virtual></textarea><p>
 <TABLE border=0>
   <tr>
     <td><span class="required">Publication year:</span> </td>
     <td>
 	
-	<input name="pubyr" value="1916" size="5" maxlength="4"><br> 
+	<input type="text" name="pubyr" value="1916"  size=5 maxlength=4 /><br> 
 	
 	
 	</td>
     <td align=right>Project code:
-    <input type=hidden name="project_name" value=""><input type="checkbox" name="project_name" value="decapod">decapod
-	<input type="checkbox" name="project_name" value="ETE" checked>ETE
-	<input type="checkbox" name="project_name" value="5%">5%
-	<input type="checkbox" name="project_name" value="1%">1%<br>
-	<input type="checkbox" name="project_name" value="PACED">PACED
-	<input type="checkbox" name="project_name" value="PGAP">PGAP
+    <input type="hidden" name="project_name" value="" />
+    <input type="checkbox" name="project_name" value="decapod" />decapod
+    <input type="checkbox" name="project_name" value="divergence" />divergence
+	<input type="checkbox" name="project_name" value="ETE" checked />ETE<br>
+	<input type="checkbox" name="project_name" value="5%" />5%
+	<input type="checkbox" name="project_name" value="1%" />1%
+	<input type="checkbox" name="project_name" value="PACED" />PACED
+	<input type="checkbox" name="project_name" value="PGAP" />PGAP
 	</td> <tr>
     <td><span class="required">Publication type:</span></td>
-    <td><select name="publication_type"><option></option><option selected>journal article</option><option>book/book chapter</option><option>serial monograph</option><option>Ph.D. thesis</option><option>M.S. thesis</option><option>abstract</option><option>guidebook</option><option>news article</option><option>unpublished</option></select> </td>
-    <td>Project ref number: <input name="project_ref_no" value="" size="5"> </td>
+    <td><select name="publication_type" >
+  <option value=""></option>
+  <option value="journal article" selected>journal article</option>
+  <option value="book/book chapter">book/book chapter</option>
+  <option value="serial monograph">serial monograph</option>
+  <option value="compendium">compendium</option>
+  <option value="Ph.D. thesis">Ph.D. thesis</option>
+  <option value="M.S. thesis">M.S. thesis</option>
+  <option value="abstract">abstract</option>
+  <option value="guidebook">guidebook</option>
+  <option value="news article">news article</option>
+  <option value="unpublished">unpublished</option>
+</select> </td>
+    <td>Project ref number: <input type="text" name="project_ref_no" value=""  size=5 /> </td>
   </tr>
   
   <tr>
     <td><span class="required">Classification quality:</span></td>
     <td>
-      <select name="classification_quality"><option>authoritative</option><option selected>standard</option><option>second hand</option></select>
-    </td>
-    <td><small>
-        An authoritative classification is based on first hand knowledge of the entire group
-    </small></td>
+      <select name="classification_quality" >
+  <option value="authoritative">authoritative</option>
+  <option value="standard" selected>standard</option>
+  <option value="compendium">compendium</option>
+</select><br>
+      <small>
+        &nbsp;<a href="#" onClick="popup = window.open('bridge.pl?action=displayPage&page=classification_quality', 'blah', 'left=100,top=100,height=500,width=500,toolbar=yes,scrollbars=yes,resizeable=yes');">see tip sheet</a>
+      </small>
+</td>
   </tr>
   <tr>
     <td><span class="required">Language:</span></td>
     <td>
-      <select name="language"><option></option><option>Chinese</option><option selected>English</option><option>French</option><option>German</option><option>Italian</option><option>Japanese</option><option>Portugese</option><option>Russian</option><option>Spanish</option><option>other</option></select>
+      <select name="language" >
+  <option value=""></option>
+  <option value="Chinese">Chinese</option>
+  <option value="English" selected>English</option>
+  <option value="French">French</option>
+  <option value="German">German</option>
+  <option value="Italian">Italian</option>
+  <option value="Japanese">Japanese</option>
+  <option value="Portugese">Portugese</option>
+  <option value="Russian">Russian</option>
+  <option value="Spanish">Spanish</option>
+  <option value="other">other</option>
+</select>
     </td>
   </tr>
 </table>
 <table>
   <tr>
-		<td valign=top><span class="required">Title:</span><br><textarea name="reftitle" cols="80" rows="4" wrap="virtual">A new species of Apatosaurus</textarea><br></td>
+		<td valign=top><span class="required">Title:</span><br><textarea name="reftitle"  rows="4" cols="80" wrap="virtual">A new species of Apatosaurus</textarea><br></td>
   <tr>
-		<td valign=top>Select the serial's name:<br><select id="pubtitle_pulldown" name="pubtitle_pulldown"><option><option>Acta Palaeontologica Polonica<option>Alcheringa<option>Ameghiniana<option>American Journal of Botany<option>American Journal of Physical Anthropology<option>American Journal of Science<option>American Museum Novitates<option>Annals of Carnegie Museum<option>Annals of the Missouri Botanical Garden<option>Botanical Journal of the Linnean Society<option>Breviora<option>Bulletin of the American Museum of Natural History<option>Bulletin of the Museum of Comparative Zoology<option>Canadian Journal of Earth Sciences<option>Cretaceous Research<option>Geobios<option>Geological Society America Bulletin<option>Geological Society of America Special Paper<option>Geology<option>International Journal of Plant Sciences<option>Journal of Geology<option>Journal of Human Evolution<option>Journal of Mammalogy<option>Journal of Paleontology<option>Journal of Vertebrate Paleontology<option>Lethaia<option>Nature<option>The Palaeobotanist<option>Palaeogeography, Palaeoclimatology, Palaeoecology<option>Palaeontographica Abteilung A<option>Palaeontographica Abteilung B<option>Palaeontologische Zeitschrift<option>Palaeontology<option>Palaios<option>PaleoBios<option>Paleontological Journal<option>Paludicola<option>Plant Systematics and Evolution<option>Postilla<option>Proceedings of the National Academy of Sciences<option>Quaternary Research<option>Review of Palaeobotany and Palynology<option>Science<option>South African Journal of Science<option>Tertiary Research<option>Transactions of the Royal Society of Edinburgh<option>United States Geological Survey Bulletin<option>United States Geological Survey Professional Paper<option>University of California Publications in Geological Sciences<option>Vertebrata PalAsiatica</select><br>... or enter the full name of the serial or book here:<br><textarea name="pubtitle" cols="80" rows="3" wrap="virtual">Annals of Carnegie Museum</textarea><br></td>
+		<td valign=top>Select the serial's name:<br><select name="pubtitle_pulldown" >
+  <option value=""></option>
+  <option value="Acta Palaeontologica Polonica">Acta Palaeontologica Polonica</option>
+  <option value="Acta Palaeontologica Sinica">Acta Palaeontologica Sinica</option>
+  <option value="Alcheringa">Alcheringa</option>
+  <option value="Ameghiniana">Ameghiniana</option>
+  <option value="American Journal of Botany">American Journal of Botany</option>
+  <option value="American Journal of Physical Anthropology">American Journal of Physical Anthropology</option>
+  <option value="American Journal of Science">American Journal of Science</option>
+  <option value="American Museum Novitates">American Museum Novitates</option>
+  <option value="Annals of Carnegie Museum">Annals of Carnegie Museum</option>
+  <option value="Annals of the Missouri Botanical Garden">Annals of the Missouri Botanical Garden</option>
+  <option value="Botanical Journal of the Linnean Society">Botanical Journal of the Linnean Society</option>
+  <option value="Breviora">Breviora</option>
+  <option value="Bulletin of the American Museum of Natural History">Bulletin of the American Museum of Natural History</option>
+  <option value="Bulletin of the Museum of Comparative Zoology">Bulletin of the Museum of Comparative Zoology</option>
+  <option value="Bulletins of American Paleontology">Bulletins of American Paleontology</option>
+  <option value="Canadian Journal of Earth Sciences">Canadian Journal of Earth Sciences</option>
+  <option value="Cretaceous Research">Cretaceous Research</option>
+  <option value="Geobios">Geobios</option>
+  <option value="Geological Society America Bulletin">Geological Society America Bulletin</option>
+  <option value="Geological Society of America Special Paper">Geological Society of America Special Paper</option>
+  <option value="Geology">Geology</option>
+  <option value="International Journal of Plant Sciences">International Journal of Plant Sciences</option>
+  <option value="Journal of Geology">Journal of Geology</option>
+  <option value="Journal of Human Evolution">Journal of Human Evolution</option>
+  <option value="Journal of Mammalogy">Journal of Mammalogy</option>
+  <option value="Journal of Paleontology">Journal of Paleontology</option>
+  <option value="Journal of Vertebrate Paleontology">Journal of Vertebrate Paleontology</option>
+  <option value="Lethaia">Lethaia</option>
+  <option value="Nature">Nature</option>
+  <option value="New Zealand Journal of Geology and Geophysics">New Zealand Journal of Geology and Geophysics</option>
+  <option value="The Palaeobotanist">The Palaeobotanist</option>
+  <option value="Palaeogeography, Palaeoclimatology, Palaeoecology">Palaeogeography, Palaeoclimatology, Palaeoecology</option>
+  <option value="Palaeontographica Abteilung A">Palaeontographica Abteilung A</option>
+  <option value="Palaeontographica Abteilung B">Palaeontographica Abteilung B</option>
+  <option value="Palaeontologische Zeitschrift">Palaeontologische Zeitschrift</option>
+  <option value="Palaeontology">Palaeontology</option>
+  <option value="Palaios">Palaios</option>
+  <option value="PaleoBios">PaleoBios</option>
+  <option value="Paleontological Journal">Paleontological Journal</option>
+  <option value="Paleontological Research">Paleontological Research</option>
+  <option value="Paludicola">Paludicola</option>
+  <option value="Plant Systematics and Evolution">Plant Systematics and Evolution</option>
+  <option value="Postilla">Postilla</option>
+  <option value="Proceedings of the National Academy of Sciences">Proceedings of the National Academy of Sciences</option>
+  <option value="Quaternary Research">Quaternary Research</option>
+  <option value="Review of Palaeobotany and Palynology">Review of Palaeobotany and Palynology</option>
+  <option value="Science">Science</option>
+  <option value="South African Journal of Science">South African Journal of Science</option>
+  <option value="Tertiary Research">Tertiary Research</option>
+  <option value="Transactions and Proceedings of the Paleontological Society of Japan, N.S.">Transactions and Proceedings of the Paleontological Society of Japan, N.S.</option>
+  <option value="Transactions of the Royal Society of Edinburgh">Transactions of the Royal Society of Edinburgh</option>
+  <option value="Tulane Studies in Geology and Paleontology">Tulane Studies in Geology and Paleontology</option>
+  <option value="United States Geological Survey Bulletin">United States Geological Survey Bulletin</option>
+  <option value="United States Geological Survey Professional Paper">United States Geological Survey Professional Paper</option>
+  <option value="University of California Publications in Geological Sciences">University of California Publications in Geological Sciences</option>
+  <option value="Vertebrata PalAsiatica">Vertebrata PalAsiatica</option>
+</select><br>... or enter the full name of the serial or book here:<br><textarea name="pubtitle"  rows="3" cols="80" wrap="virtual">Annals of Carnegie Museum</textarea><br></td>
 	</tr>
 </table>
 <table>
   <tr>
-    <td>Volume: <input name="pubvol" value="10" size="5" maxlength="10"></td>
-    <td>Number: <input name="pubno" value="1-2" size="4" maxlength="10"></td>
-    <td>Page numbers: <input name="firstpage" value="143" size="5" maxlength="10"></td>
-    <td>- <input name="lastpage" value="145" size="5" maxlength="10"></td>
+    <td>Volume: <input type="text" name="pubvol" value="10"  size=5 maxlength=10 /></td>
+    <td>Number: <input type="text" name="pubno" value="1-2"  size=4 maxlength=10 /></td>
+    <td>Page numbers: <input type="text" name="firstpage" value="143"  size=5 maxlength=10 /></td>
+    <td>- <input type="text" name="lastpage" value="145"  size=5 maxlength=10 /></td>
   </tr>
 </table>
 <table>
   <tr>
-    <td valign=top>Comments:<br><textarea name="comments" cols="80" rows="4" wrap="virtual"></textarea></td>
+    <td valign=top>Comments:<br><textarea name="comments"  rows="4" cols="80" wrap="virtual"></textarea></td>
   </tr>
 </table>
 </table>
@@ -224,12 +312,15 @@ Initials and names of additional authors (separate the names with commas):<br><t
 
 <BR>
 <CENTER>
-<input type=submit value="Submit">
+<input type="submit" value="Submit" />
 </center>
 <BR>
+</form>
 
 
-</td></tr></table>
+
+
+</div> 
  
 </body>
 </html>
