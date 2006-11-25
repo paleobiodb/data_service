@@ -21,12 +21,21 @@ if ( checkBrowser('msie') )	{
 	var offbullet = '<div class="homePageOffBullet">&#9655;<\/div>';
 }
 
-var corners = '<div><img src="/public/homeTextBox_corner_TL.png" style="position: relative; top: -19px; left: -19px;"><\/div><div><img src="/public/homeTextBox_corner_TR.png" style="float: left; position: absolute; top: -3px; right: -4px;"><\/div><div><img src="/public/homeTextBox_corner_BL.png" style="position: absolute; bottom: -3px; left: -4px;"><\/div><img src="/public/homeTextBox_corner_BR.png" style="position: absolute; bottom: -4px; right: -5px;"><\/div>' +
+var corners = '<div><img src="/public/homeTextBox_corner_TL.png" style="position: relative; top: -19px; left: -19px;"><\/div><div><img src="/public/homeTextBox_corner_TR.png" style="float: left; position: absolute; top: -3px; right: -4px;"><\/div><div><img src="/public/homeTextBox_corner_BL.png" style="position: absolute; bottom: -3px; left: -4px;"><\/div><img src="/public/homeTextBox_corner_BR.png" style="position: absolute; bottom: -4px; right: -5px; clear: right;"><\/div>' +
 '<p style="margin-top: -16px;">';
 
 var lastpar = '<p style="margin-bottom: -2px;">';
 
-var WhatIs = corners +
+var WhatIs = 
+'<div id="homeInfoSandbag" style="height: 25px; width: 10px;"><\/div>' +
+'<div id="homeInfoSandbag" style="height: 20px; width: 50px;"><\/div>' +
+'<div id="homeInfoSandbag" style="height: 30px; width: 100px;"><\/div>' +
+'<div id="homeInfoSandbag" style="height: 30px; width: 120px;"><\/div>' +
+'<div id="homeInfoSandbag" style="height: 35px; width: 170px;"><\/div>' +
+'<div id="homeInfoSandbag" style="height: 30px; width: 130px;"><\/div>' +
+'<div id="homeInfoSandbag" style="padding-bottom: 20px; height: 30px; width: 120px;"><\/div>' +
+'<div style="position: absolute; bottom: 0px; right: 0px; float: right; clear: right;"><img alt="Eocene trionychid" src="/public/trionychidBGshadow.png"><\/div>' +
+corners +
 '</p><p style="margin-top: -28px; font-size: 1.1em;">' +
 'The Paleobiology Database is an international scientific organization run by paleontological <a href="/cgi-bin/bridge.pl?action=displayAuthorizers">researchers<\/a> from many <a href="/cgi-bin/bridge.pl?action=displayInstitutions">institutions<\/a>. ' +
 'We are bringing together information about the entire fossil record to educate the public, summarize the literature for professionals, and foster statistical analyses of mass extinctions and other aspects of biodiversity.' +
@@ -203,7 +212,7 @@ function checkBrowser(string)	{
   <div class="Features">
   <div class="FeatureHeadline">
   <div class="tiny">
-  <i>Newest members</i>
+  <i>Newest member</i>
   </div>
   </div>
 
