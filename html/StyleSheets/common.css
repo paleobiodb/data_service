@@ -215,6 +215,14 @@ H6 {font-size: .9em;}
     z-index: 3;
 }
 
+#homeInfoSandbag	{
+    position: relative;
+    bottom: 0px;
+    right: 0px;
+    float: right;
+    clear: right;
+}
+
 #homeBorder	{
     background-image: url(/public/PDbg.gif);
     padding-top: 3em;
