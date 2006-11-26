@@ -64,7 +64,6 @@ lastpar +
 'There\'s also a form for <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayDownloadNeptuneForm">Neptune data<\/a> housed by <a href="http://chronos.org">CHRONOS<\/a>.' +
 '<\/p>';
 
-
 var Tools = corners +
 'You can <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayMapForm">draw maps<\/a> showing the distribution of our fossil collections, including paleomaps like the ones shown on this page. ' +
 'We have several <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=animations">additional animations<\/a> and <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes<\/a > of different geological periods that you can view. ' +
@@ -81,7 +80,7 @@ var GetInvolved = corners +
 'As explained on our <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=paleodbFAQ">FAQ<\/a> page, any professional paleontologist may <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=join_us">join the Database<\/a>. ' +
 'New members, meetings, and script features are listed on our <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=newsindex">news<\/a> page. ' +
 'Experts on taxonomic groups may create <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives<\/a> to house their classifications. ' +
-'Contributors form <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=working_groups">working groups<\/a> that collaborate on medium projects. ' +
+'Contributors form <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=working_groups">working groups<\/a> that collaborate on projects. ' +
 'We have many <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=publications">official publications<\/a> that have resulted from analyses of our data and activities of our groups.' +
 '<\/p>' +
 '<p>' +
@@ -201,7 +200,7 @@ function checkBrowser(string)	{
   </div>
 
   <div class="FeatureText">
-  <div class="verytiny">
+  <div class="tiny">
 <a href="http://www.sciencemag.org/cgi/content/abstract/314/5803/1289">P. J. Wagner et al. 2006. Abundance distributions imply elevated complexity of post-Paleozoic marine ecosystems. <i>Science</i> 314:1289-1292.</a>
 <!--
 <a href="bridge.pl?action=PASTQueryForm">Detrended Correspondence Analysis</a>, adapted by &Oslash;yvind Hammer from the <a href="http://folk.uio.no/ohammer/past/index.html">PAST</a> statistics package -->
@@ -220,7 +219,7 @@ function checkBrowser(string)	{
   </div>
 
   <div class="FeatureText">
-  <div class="verytiny">
+  <div class="tiny">
   You may <a href="/cgi-bin/bridge.pl?user=Guest&amp;action=displayDownloadForm">download</a> occurrence matrices instead of occurrence lists
   </div>
   </div>
@@ -237,7 +236,7 @@ function checkBrowser(string)	{
   </div>
 
   <div class="FeatureText">
-  <div class="verytiny">
+  <div class="tiny">
   Gary Webster,<br>
   <a href="http://www.sees.wsu.edu/Faculty/index.html">Washington State University</a><br>
   </div>
@@ -255,7 +254,7 @@ function checkBrowser(string)	{
   </div>
 
   <div class="FeatureText">
-  <div class="verytiny">
+  <div class="tiny">
   Christy Visaggi,<br>
   <a href="http://www.uncwil.edu/bio/index.html">University of North Carolina, Wilmington</a><br>
   <i>1192 data records</i>
@@ -274,30 +273,23 @@ function checkBrowser(string)	{
 
 <div id="homeInfo">
 
-  <table width="98%" cellpadding="2" cellspacing="4">
-  <tr>
-
-  <!-- the width 2% is needed because Windows browsers insist on padding the cell otherwise; height 2% is needed to prevent Windows Firefox from spreading all the rows equally across the window -->
-  <td align="right" valign="top" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet1',onbullet); changeText('homeTextBox',WhatIs);" height="2%" width="2%">
+  <div align="right" valign="top" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet1',onbullet); changeText('homeTextBox',WhatIs);" style="float: left; clear: left; padding-top: 0.3em;">
   <div id="bullet1">
   </div>
-  </td>
+  </div>
 
-  <td align="left" valign="top">
-
-  <div class="questions">
+  <div class="questions" style="padding-top: 0.3em;">
   <span id="questionsShadow">What is the Database?</span>
   <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet1',onbullet); changeText('homeTextBox',WhatIs);" id="questionsOverShadow">What is the Database?</span>
   </div>
 
-  </td>
-
-  <td align="right" valign="top" width="2%" rowspan="5">
 
   <!--
   <a href="#" onClick="startAnimation('first_homepage',1)" onDblClick="startAnimation('first_homepage',1,'reverse')">
   -->
+  <div style="float: right; padding-right: 1em;">
   <img name="homepage_anim" alt="animation" src="/public/animations/homepage/homepage_firstframe.gif" height="153" width="129" border="0" style="margin-right: 0.5em">
+  </div>
   <!--
   </a>
   -->
@@ -305,93 +297,66 @@ function checkBrowser(string)	{
   &nbsp;
   &nbsp;
 
-  </td>
-
-  </tr>
-
-  <tr>
-
-  <td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet2',onbullet); changeText('homeTextBox',Contents);">
+  <div align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet2',onbullet); changeText('homeTextBox',Contents);" style="float: left; clear: left;">
   <div id="bullet2">
   </div>
-  </td>
-
-  <td valign="top">
+  </div>
 
   <div class="questions">
   <span id="questionsShadow">What kinds of data can you see?</span>
   <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet2',onbullet); changeText('homeTextBox',Contents);" id="questionsOverShadow">What kinds of data can you see?</span>
   </div>
 
-  </td></tr>
-
-  <tr>
-
-  <td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet3',onbullet); changeText('homeTextBox',Tools);">
+  <div align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet3',onbullet); changeText('homeTextBox',Tools);" style="float: left; clear: left;">
   <div id="bullet3">
   </div>
-  </td>
-
-  <td valign="top">
+  </div>
 
   <div class="questions">
   <span id="questionsShadow">What can you do with the data?</span>
   <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet3',onbullet); changeText('homeTextBox',Tools);" id="questionsOverShadow">What can you do with the data?</span>
   </div>
 
-  </td></tr>
-
-  <tr>
-
-  <td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet4',onbullet); changeText('homeTextBox',GetInvolved);">
+  <div align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet4',onbullet); changeText('homeTextBox',GetInvolved);" style="float: left; clear: left;">
   <div id="bullet4">
   </div>
-  </td>
-
-  <td valign="top">
+  </div>
 
   <div class="questions">
   <span id="questionsShadow">How can you get involved?</span>
   <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet4',onbullet); changeText('homeTextBox',GetInvolved);" id="questionsOverShadow">How can you get involved?</span>
   </div>
 
-  </td></tr>
-
-  <tr>
-
-  <td align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet5',onbullet); changeText('homeTextBox',OtherInfo);">
+  <div onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet5',onbullet); changeText('homeTextBox',OtherInfo);" style="float: left; clear: left;">
   <div id="bullet5">
   </div>
-  </td>
-
-  <td valign="top">
+  </div>
 
   <div class="questions">
   <span id="questionsShadow">Other information...</span>
   <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet5',onbullet); changeText('homeTextBox',OtherInfo);" id="questionsOverShadow">Other information...</span>
   </div>
 
-  </td></tr>
 
-  <tr>
-
-  <td valign="top" colspan="3">
-
-  <div style="padding-left: 0.75em;">
+  <div style="margin-top: -16px; padding-left: 0.75em;">
   <div class="homeTextBoxes" id="homeTextBoxShadow">
   <div class="homeTextBoxes" id="homeTextBoxShadow2">
-  <div class="homeTextBoxes medium" id="homeTextBox">
+  <div class="homeTextBoxes small" id="homeTextBox">
   </div>
   </div>
   </div>
   </div>
-
-  </td>
-  </tr>
-
-  </table>
 
 </div> <!-- end homeInfo -->
+
+<div style="padding-top: 51px;">
+<div style="position: absolute; top: 42em; bottom: 50em; left: 12em; height: 4.5em; width: 30.5em; margin-top: 51px; padding: 0.75em; background-image: url('/public/PDbg.gif'); border: 1px solid #D0D0D0; z-index: 9;">
+<span class="verysmall">
+New collections: 
+<span id="collection_links"></span>
+</span>
+</div>
+</div>
 
 <div id="homeBorder" align="center">
   <img alt="fossils" src="/public/homeBorderSmall.jpg" style="margin-top: 0.5em;"><br>
