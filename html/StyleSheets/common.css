@@ -206,7 +206,7 @@ H6 {font-size: .9em;}
     border-bottom: 1px #D0D0D0 solid;
     border-left: 1px #D0D0D0 solid;
     border-right: 1px #D0D0D0 solid;
-    height: 45em;
+    height: 38em;
     width: 32em;
     position: absolute;
     top: 52px;
@@ -331,6 +331,9 @@ html,body	{
 .questions	{
     font-family: "Century Gothic", Verdana, Arial, Helvetica, sans-serif;
     font-size: 1.1em; color: #D0A000;
+    float: left;
+    padding-left: 0.5em;
+    padding-bottom: 0.5em;
 }
 
 #questionsShadow	{
