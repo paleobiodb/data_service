@@ -587,7 +587,28 @@ sub displayHomePage {
 
 	# Get some populated values
 	my $sql = "SELECT * FROM statistics";
-    my $row = ${$dbt->getData($sql)}[0];
+	my $row = ${$dbt->getData($sql)}[0];
+
+	my $nowDate = now();
+	$nowDate = $nowDate-'1M';
+	my ($date,$time) = split / /,$nowDate;
+	my ($yyyy,$mm,$dd) = split /-/,$date,3;
+	my $sql = "SELECT enterer_no,collection_no,collection_name FROM collections WHERE created>".$yyyy.$mm.$dd."000000 ORDER BY collection_no DESC";
+	my @colls = @{$dbt->getData($sql)};
+	my %entererseen;
+	my $printed;
+	for my $coll ( @colls )	{
+		if ( $entererseen{$coll->{enterer_no}} < 3 )	{
+			$entererseen{$coll->{enterer_no}}++;
+			$row->{collection_links} .= qq|<a href="bridge.pl?action=displayCollectionDetails&collection_no=$coll->{collection_no}">$coll->{collection_name}</a>\n|;
+			$printed++;
+			if ( $printed == 8 )	{
+				last;
+			} else	{
+				$row->{collection_links} .= " - ";
+			}
+		}
+	}
 
 	print stdIncludes("std_page_top");
 	print $hbo->populateHTML('home', $row);
