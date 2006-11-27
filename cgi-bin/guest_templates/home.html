@@ -141,9 +141,10 @@ function checkBrowser(string)	{
 <!-- </div> end mainSpacer (terminated immediately to allow correct positioning of gray box) -->
 </div> <!-- end mainBody (ditto) -->
 
-<!-- gray box outside of main area -->
-<div style="position: absolute; top: 0px; bottom: 0px; left: 0px; right: 0px; z-index: 1; background-image: url('/public/PDbg-reversed.gif'); background-position: 13em 52px;">
-</div>
+<!-- gray box outside of main area
+it's really to have a second body tag, but whatever -->
+
+<body style="background-image: url('/public/PDbg-reversed.gif'); background-position: 12em 52px;">
 
 <!--
 <div class="mainBody">
@@ -350,7 +351,7 @@ function checkBrowser(string)	{
 </div> <!-- end homeInfo -->
 
 <div style="padding-top: 51px;">
-<div style="position: absolute; top: 42em; bottom: 50em; left: 12em; height: 4.5em; width: 30.5em; margin-top: 51px; padding: 0.75em; background-image: url('/public/PDbg.gif'); border: 1px solid #D0D0D0; z-index: 9;">
+<div style="position: absolute; top: 42em; bottom: 50em; left: 12em; height: 4.5em; width: 30.5em; margin-top: 51px; padding: 0.75em; background-image: url('/public/PDbg.gif'); background-position: 0px 12px; border: 1px solid #D0D0D0; z-index: 9;">
 <span class="verysmall">
 New collections: 
 <span id="collection_links"></span>
