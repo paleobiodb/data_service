@@ -58,6 +58,22 @@ A:hover.menu {
 	text-decoration:none; 
 }
 
+A:link.homeBodyLinks	{
+	color: #6090FF;
+}       
+
+A:visited.homeBodyLinks	{
+	color : #80888F;
+}       
+
+A:active.homeBodyLinks	{
+	color : #00AAFF;
+}       
+
+A:hover.homeBodyLinks	{
+	color : #C80078;
+}       
+
 A:link.homeStats	{
 	color : #000000;
 }       
@@ -115,7 +131,7 @@ H6 {font-size: .9em;}
 /*    background-color: #E0E0E0;*/
 }
 
-#mainBody	{
+.mainBody	{
     padding-top: 1em;
     padding-left: 1em;
     margin-left: 1em; 
@@ -203,15 +219,16 @@ H6 {font-size: .9em;}
     background-image: url(/public/PDbg.gif);
     padding-top: 3em;
     padding-bottom: 0em;
-    border-bottom: 1px #D0D0D0 solid;
-    border-left: 1px #D0D0D0 solid;
-    border-right: 1px #D0D0D0 solid;
+    border-left: 1px solid #D0D0D0;
+    border-right: 1px solid #B0B0B0;
+    border-bottom: 1px solid #B0B0B0;
     height: 38em;
     width: 32em;
     position: absolute;
     top: 52px;
     left: 12em;
     right: 45em;
+    overflow: hidden;
     z-index: 3;
 }
 
@@ -223,12 +240,31 @@ H6 {font-size: .9em;}
     clear: right;
 }
 
+#newCollectionLinks	{
+    position: absolute;
+    top: 42em;
+    bottom: 50em;
+    left: 12em;
+    height: 4.5em;
+    width: 30.5em;
+    margin-top: 51px;
+    padding: 0.75em;
+    overflow: hidden;
+    background-image: url('/public/PDbg.gif');
+    background-position: 0px 12px;
+    border-left: 1px solid #D0D0D0;
+    border-right: 1px solid #B0B0B0;
+    border-top: 1px solid #D0D0D0;
+    border-bottom: 1px solid #B0B0B0;
+    z-index: 9;
+}
+
 #homeBorder	{
     background-image: url(/public/PDbg.gif);
     padding-top: 3em;
-    border-bottom: 1px #D0D0D0 solid;
-    border-left: 1px #D0D0D0 solid;
-    border-right: 1px #D0D0D0 solid;
+    border-left: 1px solid #D0D0D0;
+    border-right: 1px solid #B0B0B0;
+    border-bottom: 1px solid #B0B0B0;
     height: 45em;
     width: 100px;
     position: absolute;
@@ -279,8 +315,8 @@ H6 {font-size: .9em;}
 
 .FeatureHeadline	{
     text-align: center;
-    background-color: #FFDC70;
-    color: #202020;
+    background-color: #B8D0FF;
+    color: #303030;
     margin-left: -0.5em;
     margin-right: -0.5em;
     margin-bottom: -0.25em;
@@ -330,7 +366,8 @@ html,body	{
 
 .questions	{
     font-family: "Century Gothic", Verdana, Arial, Helvetica, sans-serif;
-    font-size: 1.1em; color: #D0A000;
+    font-size: 1.2em;
+    color: #90B0FF;
     float: left;
     padding-left: 0.5em;
     padding-bottom: 0.5em;
@@ -338,7 +375,7 @@ html,body	{
 
 #questionsShadow	{
     position: absolute;
-    color: #F0E0D0;
+    color: #D0E0FF;
 }
 
 #questionsOverShadow	{
@@ -351,15 +388,19 @@ html,body	{
 .homePageOnBullet	{
     padding-top : 0.2em;
     padding-left: 0.6em;
-margin-top: -3px;
-    font-size : 1.0em; color: #F0B000; text-decoration: none;
+    margin-top: -3px;
+    font-size : 1.0em;
+    text-decoration: none;
+    color: #B8D0FF;
 }
 
 .homePageOffBullet	{
     padding-top : 0.2em;
     padding-left: 0.6em;
-margin-top: -3px;
-    font-size : 1.0em; color: #909090; text-decoration: none;
+    margin-top: -3px;
+    font-size : 1.0em;
+    text-decoration: none;
+    color: #B8D0FF;
 }
 
 .homePageMSIEBullet	{
