@@ -600,7 +600,7 @@ sub displayHomePage {
 	for my $coll ( @colls )	{
 		if ( $entererseen{$coll->{enterer_no}} < 3 )	{
 			$entererseen{$coll->{enterer_no}}++;
-			$row->{collection_links} .= qq|<a href="bridge.pl?action=displayCollectionDetails&collection_no=$coll->{collection_no}">$coll->{collection_name}</a>\n|;
+			$row->{collection_links} .= qq|<a class="homeBodyLinks" href="bridge.pl?action=displayCollectionDetails&collection_no=$coll->{collection_no}">$coll->{collection_name}</a>\n|;
 			$printed++;
 			if ( $printed == 8 )	{
 				last;
