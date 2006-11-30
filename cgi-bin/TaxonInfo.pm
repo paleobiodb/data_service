@@ -1191,13 +1191,13 @@ sub displayTaxonClassification {
             #
             # Print out the table in the reverse order that we initially made it
             #
-            $output .= "<table><tr><td>\n";
+            $output .= "<table><tr><td valign=\"top\">\n";
             $output .= "<table><tr valign=top><th>Rank</th><th>Name</th><th>Author</th></tr>";
             my $class = '';
             for(my $i = scalar(@table_rows)-1;$i>=0;$i--) {
-                if ( $i == int((scalar(@table_rows) - 1) / 2) )	{
+                if ( $i == int((scalar(@table_rows) - 2) / 2) )	{
                     $output .= "\n</td></tr></table>\n\n";
-                    $output .= "\n</td><td style=\"width: 2em;\"></td><td>\n\n";
+                    $output .= "\n</td><td valign=\"top\" style=\"width: 2em;\"></td><td valign=\"top\">\n\n";
                     $output .= "<table><tr valign=top><th>Rank</th><th>Name</th><th>Author</th></tr>";
                 }
                 $class = $class eq '' ? 'class="darkList"' : '';
