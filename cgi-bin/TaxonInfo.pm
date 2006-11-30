@@ -701,7 +701,6 @@ sub doCollections{
     my ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
     my @data = @$dataRows;
 
-
     if (! @data) {
         print "<div align=\"center\"><h3>Collections</h3><i> No collection or age range data are available</i></div>";
         return;
@@ -898,7 +897,8 @@ sub calculateAgeRange {
     my ($dbt,$t,$data,$upperbound,$lowerbound) = @_;
     my %all_ints = (); 
     my %seen_range = ();
-	foreach my $row (@$data)	{
+
+    foreach my $row (@$data)	{
         # First cast max/min into these variables.
         my $max = $row->{'max_interval_no'};
         my $min = $row->{'min_interval_no'};
@@ -928,7 +928,7 @@ sub calculateAgeRange {
             $lb_min = $tmp2;
             $range = "$min $max";
         } 
-		$seen_range{$range} = [$lb_max,$lb_min,$ub_max,$ub_min];
+        $seen_range{$range} = [$lb_max,$lb_min,$ub_max,$ub_min];
     }
     my @intervals = keys %all_ints;
 
@@ -1191,9 +1191,15 @@ sub displayTaxonClassification {
             #
             # Print out the table in the reverse order that we initially made it
             #
+            $output .= "<table><tr><td>\n";
             $output .= "<table><tr valign=top><th>Rank</th><th>Name</th><th>Author</th></tr>";
             my $class = '';
             for(my $i = scalar(@table_rows)-1;$i>=0;$i--) {
+                if ( $i == int((scalar(@table_rows) - 1) / 2) )	{
+                    $output .= "\n</td></tr></table>\n\n";
+                    $output .= "\n</td><td style=\"width: 2em;\"></td><td>\n\n";
+                    $output .= "<table><tr valign=top><th>Rank</th><th>Name</th><th>Author</th></tr>";
+                }
                 $class = $class eq '' ? 'class="darkList"' : '';
                 $output .= "<tr $class>";
                 my($taxon_rank,$taxon_name,$show_name,$taxon_no) = @{$table_rows[$i]};
@@ -1224,6 +1230,7 @@ sub displayTaxonClassification {
                 $output .= '</tr>';
             }
             $output .= "</table>";
+            $output .= "</td></tr></table>";
            
             if ($classification_no != $orig_no) {
                 $output .= "<div class=\"warning\" style=\"width: 600px;\">";
@@ -1590,13 +1597,18 @@ sub getSynonymyParagraph{
     if ($taxon->{'preservation'}) {
         my $preservation = $taxon->{'preservation'};
         if ($preservation eq 'regular taxon') {
-            $preservation = "not an ichnofossil or form taxon";
+            $preservation = "not an ichnofossil or a form taxon";
         } elsif ($preservation =~ /^[aieou]/) {
             $preservation = "an $preservation";
         } else {
             $preservation = "a $preservation";
         }
-        $text .= "It is $preservation.";
+        if ( $taxon->{'extant'} =~ /Y|N/i )	{
+            $text =~ s/\. $//;
+            $text .= "and is $preservation.";
+        } else	{
+            $text .= "It is $preservation.";
+        }
     }
 
     my @spellings = getAllSpellings($dbt,$taxon->{'taxon_no'});
