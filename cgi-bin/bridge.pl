@@ -1975,6 +1975,7 @@ sub displayCollResults {
 
 
 sub getOccurrencesXML {
+    require Download;
     require XML::Generator;
     logRequest($s,$q);
 
