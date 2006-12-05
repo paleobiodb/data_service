@@ -18,7 +18,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no collection_name collection_aka country state county tectonic_plate_id latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch subepoch stage 10mybin max_interval min_interval ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no pubyr collection_name collection_aka country state county tectonic_plate_id latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale geogcomments period epoch subepoch stage 10mybin max_interval min_interval ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification lithology1 fossilsfrom1 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collection_comments taxonomy_comments created modified release_date access_level lithification2 lithadj2 rock_censused_unit rock_censused spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments);
 my @occFieldNames = qw(authorizer enterer modifier occurrence_no abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @occTaxonFieldNames = qw(genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no);
 my @reidFieldNames = qw(authorizer enterer modifier reid_no reference_no comments created modified modified_temp plant_organ);
@@ -31,6 +31,7 @@ my @refsFieldNames = qw(authorizer enterer modifier reference_no author1init aut
 my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
 my @mesoCenozoic = qw(triassic jurassic cretaceous tertiary);
 my @ecoFields = (); # Note: generated at runtime in setupQueryFields
+my @pubyr = ();
 
 my $OUT_HTTP_DIR = "/paleodb/data";
 my $OUT_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
@@ -102,7 +103,7 @@ sub buildDownload {
     if ($q->param('output_data') =~ /matrix/i) {
         ($nameCount,$mainCount,$mainFile) = $self->printMatrix($lumpedResults);
         if ($nameCount =~ /^ERROR/) {
-            push @form_errors, "Too many collections were returned. The matrix is currently limited to $matrix_limit collections and $mainCount were returned. Please email the admins (pbdbadmin\@nceas.ucsb.edu) if this is a problem";
+            push @form_errors, "The matrix is currently limited to $matrix_limit collections and $mainCount were returned. Please email the admins (pbdbadmin\@nceas.ucsb.edu) if this is a problem";
         }
     } elsif ($q->param('output_data') =~ /conjunct/i) {
         ($mainCount,$mainFile) = $self->printCONJUNCT($lumpedResults);
@@ -142,8 +143,9 @@ sub buildDownload {
     }
     print '</table>';
     print '<p align="center" style="white-space: nowrap;"><b><a href="bridge.pl?action=displayDownloadForm">Do another download</a> - ';
-    print '<a href="bridge.pl?action=displayCurveForm">Generate diversity curves</a> - ';
-    print '<a href="bridge.pl?action=PASTQueryForm">Analyze with PAST functions</a></b></p></div>';
+    print '<a href="bridge.pl?action=displayCurveForm">Generate diversity curves</a>';
+    #print '<a href="bridge.pl?action=displayCurveForm">Generate diversity curves</a> - ';
+    #print '<a href="bridge.pl?action=PASTQueryForm">Analyze with PAST functions</a></b></p></div>';
 }
 
 
@@ -318,7 +320,7 @@ sub retellOptions {
     $html .= $self->retellOptionsRow("Additional paleolongitudinal range", $range_descriptions[7]); 
     
     
-    $html .= $self->retellOptionsRow ( "Lump lists of same county & formation?", $q->param("lumplist") );
+    $html .= $self->retellOptionsRow ( "Lump lists by county and formation?", $q->param("lumplist") );
 
     my @geogscale_group = ('small_collection','hand_sample','outcrop','local_area','basin','unknown');
     $html .= $self->retellOptionsGroup( "Geographic scale of collections", 'geogscale_', \@geogscale_group);
@@ -1186,7 +1188,7 @@ sub getGenusResoString{
 }
 
 
-# Returns three where array: The first is applicable to the both the occs
+# Returns three where arrays: The first is applicable to the both the occs
 # and reids table, the second is occs only, and the third is reids only
 sub getOccurrencesWhereClause {
     my $self = shift;
@@ -1391,12 +1393,15 @@ sub queryDatabase {
     } else {
         $q->param('get_global_specimens'=>1);
     }
-  
+ 
     # Getting only collection data
     if ($q->param('output_data') =~ /specimens|occurrence|collections/) {
         my @collection_columns = $dbt->getTableColumns('collections');
         if ( $q->param('incomplete_abundances') eq "NO" )	{
             $q->param('collections_collection_coverage' => "YES");
+        }
+        if ( $q->param('collections_pubyr') eq "YES" )	{
+            $q->param('collections_reference_no' => "YES");
         }
         foreach my $c (@collection_columns) {
             next if ($c =~ /^(lat|lng)(deg|dec|min|sec|dir)$/); # handled below - handle these through special "coords" fields
@@ -1522,7 +1527,7 @@ sub queryDatabase {
             push @reid_where, $reid_sql;
         }
 
-        if ( $q->param('pubyr') > 0) {
+        if ( $q->param('pubyr') > 0 ) {
             push @tables, 'refs r';
             unshift @where, 'r.reference_no=o.reference_no';
         }
@@ -2616,6 +2621,9 @@ sub printCSV {
     foreach my $row (@$results) {
         my @line = ();
 
+        if ( $q->param('collections_pubyr') eq "YES" )	{
+            $row->{'c.pubyr'} = $pubyr[$row->{'c.reference_no'}];
+	}
         foreach my $v (@header) {
             if ($row->{$v} =~ /^\s*$/) {
                 push @line, '';
@@ -3058,6 +3066,9 @@ sub printRefsFile {
             $refLine =~ s/\r|\n/ /g;
             printf REFSFILE "%s\n",$refLine;
             $ref_count++;
+
+            # need this to print the publication year for collections JA 4.12.06
+            $pubyr[$row->{reference_no}] = $row->{pubyr};
         }
     }
     close REFSFILE;
@@ -3075,6 +3086,7 @@ sub printAbundFile {
     my $filename = $self->{'filename'};
     my $ext = ($q->param('output_format') =~ /tab/) ? "tab" : "csv";
     my $abundFile = "$filename-abund.$ext";
+
     if (!open(ABUNDFILE, ">$OUT_FILE_DIR/$abundFile")) {
         die ("Could not open output file: $abundFile($!) <br>");
     }
