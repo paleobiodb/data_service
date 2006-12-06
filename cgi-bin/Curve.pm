@@ -1652,7 +1652,7 @@ sub printResults	{
 		chmod 0664, "$PRINTED_DIR/*";
 	
 		for $i (1..$chrons)	{
-			if ( $rangethrough[$i] > 0 && ( $listsinchron[$i] > 0 || ( $q->param('recent_genera') && $i == 1 ) ) )	{
+			if ( $rangethrough[$i] > 0 || ( $listsinchron[$i] > 0 || ( $q->param('recent_genera') && $i == 1 ) ) )	{
 				$gapstat = $richness[$i] - $originate[$i] - $extinct[$i] + $singletons[$i];
 				if ($gapstat > 0)	{
 					$gapstat = $gapstat / ( $rangethrough[$i] - $originate[$i] - $extinct[$i] + $singletons[$i] );
