@@ -575,7 +575,7 @@ sub assignGenera	{
 		#  the species name was indet., to avoid counting higher taxa;
 		#  whether to do this really is the business of the user,
 		#  however
-			if ( $occrow[$field_genus_name] ne ""  && $chid[$collno] > 0 )      {
+			if ( $occrow[$field_genus_name] ne "" && $chid[$collno] > 0 )      {
 				$temp = $occrow[$field_genus_name];
 		# we used to do some cleanups here that assumed error checking
 		#  on data entry didn't always work
@@ -605,7 +605,11 @@ sub assignGenera	{
 				#  store the abundances
 				if ($xx != -9)	{
 					push @occs,$genid{$temp};
-					push @stone,$lastocc[$collno];
+					if ( $lastocc[$collno] !~ /[0-9]/ )	{
+						push @stone , -1;
+					} else	{
+						push @stone,$lastocc[$collno];
+					}
 					push @abund,$occrow[$field_abund_value];
 					$lastocc[$collno] = $#occs;
 
@@ -626,19 +630,20 @@ sub assignGenera	{
 		}
 	# END of input file parsing routine
 
-	# if Jack's data are being used, declare Recent genera present
-	#  in bin 1
+	# declare Recent genera present in bin 1
 		if ( $q->param('recent_genera') )	{
 			for my $taxon ( keys %isRecent )	{
-				$present[$genid{$taxon}][1]--;
-				$recentbyid[$genid{$taxon}] = 1;
+				if ( $genid{$taxon} =~ /[0-9]/ )	{
+					$present[$genid{$taxon}][1]--;
+					$recentbyid[$genid{$taxon}] = 1;
+				}
 			}
 		}
 
 	 # get basic counts describing lists and their contents
 		for $collno (1..$#lastocc+1)	{
 			$xx = $lastocc[$collno];
-			while ($xx > 0)	{
+			while ( $xx >= 0 && $xx =~ /[0-9]/ )	{
 				$nsp = 1;
 				if ($samplingmethod == 5)	{
 					$nsp = $abund[$xx];
@@ -749,7 +754,7 @@ sub assignGenera	{
 		$last = 0;
 		for $j (1..$chrons)	{
 			if ($present[$i][$j] < 0)	{
-				if ( $j > 1 || ! $q->param('recent_genera') || $present[$i][$j] + $recentbyid[$i] < 0 )	{
+				if ( $j > 1 || $q->param('recent_genera') || $present[$i][$j] + $recentbyid[$i] < 0 )	{
 					$richness[$j]++;
 				}
 				if ($last == 0)	{
@@ -891,18 +896,21 @@ sub findRecentGenera	{
 	# draw all comments pertaining to Jack's genera
 	my $asql = "SELECT taxon_no,taxon_name FROM authorities WHERE extant='YES'";
 	my @arefs = @{$dbt->getData($asql)};
-    my @taxon_nos= map {$_->{taxon_no}} @arefs;
+	my @taxon_nos= map {$_->{taxon_no}} @arefs;
 
-    my $parents = TaxaCache::getParents($dbt,\@taxon_nos,'array_full');
+	my $parents = TaxaCache::getParents($dbt,\@taxon_nos,'array_full');
 	# isRecent must be global!
 	for my $aref ( @arefs )	{
 		$isRecent{$aref->{taxon_name}}++;
-        if ($parents->{$aref->{taxon_no}}) {
-            my @parent_list = @{$parents->{$aref->{taxon_no}}};
-            foreach my $p (@parent_list) {
-                $isRecent{$p->{taxon_name}}++;
-            }
-        }
+		# genera are extant if their species are, families if their
+		#  genera are, etc. (important for family or order level
+		#  analyses) JA 28.9.06
+		if ($parents->{$aref->{taxon_no}}) {
+			my @parent_list = @{$parents->{$aref->{taxon_no}}};
+			for my $p (@parent_list) {
+				$isRecent{$p->{taxon_name}}++;
+			}
+		}
 	}
 	return;
 
@@ -919,11 +927,12 @@ sub subsample	{
 			@lastsubsrichness = ();
 			@present = ();
 			@refsampled = ();
-		# if Jack's data are being used, declare Recent genera present
-		#  in bin 1
+		# declare Recent genera present in bin 1
 			if ( $q->param('recent_genera') )	{
 				for my $taxon ( keys %isRecent )	{
-					$present[$genid{$taxon}][1]--;
+					if ( $genid{$taxon} =~ /[0-9]/ )	{
+						$present[$genid{$taxon}][1]--;
+					}
 				}
 			}
 			for $i (1..$chrons)	{
@@ -1643,7 +1652,7 @@ sub printResults	{
 		chmod 0664, "$PRINTED_DIR/*";
 	
 		for $i (1..$chrons)	{
-			if ($rangethrough[$i] > 0 && $listsinchron[$i] > 0)	{
+			if ( $rangethrough[$i] > 0 && ( $listsinchron[$i] > 0 || ( $q->param('recent_genera') && $i == 1 ) ) )	{
 				$gapstat = $richness[$i] - $originate[$i] - $extinct[$i] + $singletons[$i];
 				if ($gapstat > 0)	{
 					$gapstat = $gapstat / ( $rangethrough[$i] - $originate[$i] - $extinct[$i] + $singletons[$i] );
