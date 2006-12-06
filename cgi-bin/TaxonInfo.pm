@@ -1604,10 +1604,10 @@ sub getSynonymyParagraph{
             $preservation = "a $preservation";
         }
         if ( $taxon->{'extant'} =~ /Y|N/i )	{
-            $text =~ s/\. $//;
-            $text .= "and is $preservation.";
+            $text =~ s/\. $/ /;
+            $text .= "and is $preservation. ";
         } else	{
-            $text .= "It is $preservation.";
+            $text .= "It is $preservation. ";
         }
     }
 
