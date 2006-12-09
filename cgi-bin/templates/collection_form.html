@@ -154,11 +154,15 @@ function doCheckFieldsGeography() {
             bad_info += "\no Lat and long are outside this country";
         }
         else if ( ( frm.country.options[index].text == "Germany" ||
+              frm.country.options[index].text == "Austria" ||
               frm.country.options[index].text == "China" ||
               frm.country.options[index].text == "Egypt" ||
               frm.country.options[index].text == "Ethiopia" ||
               frm.country.options[index].text == "Japan" ||
+              frm.country.options[index].text == "Poland" ||
               frm.country.options[index].text == "Russian Federation" ||
+              frm.country.options[index].text == "Sweden" ||
+              frm.country.options[index].text == "Switzerland" ||
               frm.country.options[index].text == "India" ) &&
              ( frm.latdir.options[indexLat].text != "North" ||
                frm.lngdir.options[indexLng].text != "East" ) ) {
