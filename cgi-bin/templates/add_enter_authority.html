@@ -8,7 +8,7 @@
 
 <form method="POST" action="bridge.pl">
 
-<div class="displayPanel" style="padding-top: 1em; overflow: hidden;">
+<div class="displayPanel" style="padding-top: 1em;">
 
 <input type="hidden" id="action" name="action" value="submitAuthorityForm">
 <input type="hidden" id="reference_no" name="reference_no">
@@ -20,30 +20,37 @@
 <input id="ref_is_authority" name="ref_is_authority" type="radio" value="PRIMARY">
 <input type="text" id="taxon_name" name="taxon_name" size="20"> was first named in the data record's primary reference:
 </div>
-<div align="center" class="small" style="padding-left: 3em; padding-right: 3em;"><span id="formatted_primary_reference"></span></div>
+<div align="center" class="small" style="padding-left: 3em; padding-right: 3em;"><span id="formatted_primary_reference"></span>
 </div>
+</div>
+
 <div show="current_reference">
   <br>
   <div class="emphasized">
   <input id="ref_is_authority" name="ref_is_authority" type="radio" value="CURRENT">
-   ... <i>or</i> it was first named in the current reference: </div>
-  <div align="center" class="small" style="padding-left: 3em; padding-right: 3em;"><span id="formatted_current_reference"></span></div>
-
+   ... <i>or</i> it was first named in the current reference:
+  </div>
+  <div align="center" class="small" style="padding-left: 3em; padding-right: 3em;"><span id="formatted_current_reference"></span>
+  </div>
 </div>  
 
+<div>  
 <center>
 <p class="tiny">
 <b>Pages*:</b> <input id="pages" name="pages" class="tiny" size=12>
 <b>Figures*:</b> <input id="figures" name="figures" class="tiny" size=12>
 </p>
 </center>
+</div>  
 
 <div class="emphasized" align=left>
 <input id="ref_is_authority" name="ref_is_authority" type="radio" value="NO">
 
-... <i>or</i> it was named in an earlier publication:</DIV>
+... <i>or</i> it was named in an earlier publication:
+</div>
 <br>
 
+<div>
 <center>
 <table>
 
@@ -56,8 +63,10 @@
 </tr>
 
 <tr><td valign="top" align="right" class="tiny"><b>Other authors:</b></td>
-<td colspan=5><textarea id="otherauthors" name="otherauthors" rows=1 cols=60></textarea></td>
-</tr>
+<td colspan=5>
+<textarea id="otherauthors" name="otherauthors" rows="1" cols="60">
+</textarea>
+</td></tr>
 
 <tr><td align="right" class="tiny"><b>Year:</b></td>
 <td colspan=1 class="tiny"><input id="pubyr" name="pubyr" class="tiny" size=5></td>
@@ -71,15 +80,18 @@
 <p><span class="tiny">* Enter numbers of pages and figures that describe and show the type specimen(s).</span></p>
 </center>
 
+</div>
+
 <div style="float: left; padding-left: 1em;">
-<div style="float: left; clear: both;">
+
+<div style="clear: right; padding-top: 1em;">
 <nobr>
 <b>Original rank:</b>
 <span id="taxon_rank_select"></span>
 </nobr>
 </div>
 
-<div style="float: left; clear: both;">
+<div style="clear: right;">
 <div show="show_type_specimen">
 <div style="padding-top: 1em;">
 <b>Type specimen:</b>
@@ -88,66 +100,81 @@
 </div>
 </div>
 
-<div style="float: left; clear: both; padding-top: 1em;">
-<b>Is this an extant (living) taxon?</b> <span id="extant_select"></span>
+<div show="show_type_specimen">
+<div style="padding-top: 1em; padding-top: 1em;">
+<b>Body part of type:</b>
+<select name="type_body_part"></select>
 </div>
 </div>
 
-<div style="float: left; padding-left: 2em;">
-<div style="float: left;">
+</div>
+
+<div style="float: left; padding-top: 1em; padding-left: 2em;">
+
+<div style="clear: right;">
 <span id="parent_taxon_select"></span>
 
 <!-- Note: this should only appear if the rank is species -->
 <div show="show_type_taxon">
-  <br>
-  <div style="padding-left: 1em;">
+  <div style="clear: left; padding-bottom: 1em;">
   <nobr>
+  <span show="parent_taxon_select">&nbsp;&nbsp;&nbsp;&nbsp;</span>
   <input type="checkbox" id="type_taxon" name="type_taxon" value="1">This is the type <span id="taxon_rank"></span>
   </nobr>
   </div>
 </div>
 </div>
 
-<div style="float: left; clear: both;">
-<div show="show_type_specimen">
-<div style="padding-top: 1em; padding-bottom: 1em;">
-<b>Body part of type:</b>
-<select name="type_body_part"></select>
-</div>
-</div>
+<div style="clear: right;">
+<b>Is this an extant (living) taxon?</b> <span id="extant_select"></span>
 </div>
 
-<div style="float: left; clear: both;">
+<div style="padding-top: 1em;">
 <b>Preservation category:</b>
 <select id="preservation"></select>
 </div>
+
 </div>
 
-<div style="float: left; clear: both; padding-top: 1em; padding-left: 1em; padding-right: 0.5em;">
+<div style="clear: left; padding: 1em; height: 3em;">
+<div style="float: left; position: relative; left: 0em; top: 0em;">
 <b>Comments:</b>
 </div>
-<div style="float: left; padding-top: 1em;">
-<textarea id="comments" name="comments" rows=2 cols=70></textarea>
+<div style="float: left; position: relative; left: 0.5em; top: 0em;">
+<textarea id="comments" name="comments" rows="2" cols="70">
+</textarea>
 </div>
 </div>
 
 </div>
 
-<div align=center style="clear: both;">
+<div style="clear: left;">
 
-<table border=0 cellpadding=0 class="tiny" style="padding-bottom: 1em;">
-<tr>
-<td style="padding-right: 20px;"><span id="authorizer_name"></span></td>
-<td style="padding-right: 20px;"><span id="enterer_name"></span></td>
-<td><span id="modifier_name"></span></td>
-</tr>
-<tr>
-<td style="padding-right: 20px;"><span id="created"></span></td>
-<td><span id="modified"></span></td>
-</tr>
-</table>
+<center>
 
+<span show="authorizer_name">
+<div align="left" class="tiny" style="margin: 1em; width: 33em;">
+
+<div style="clear: right; padding: 0.5em;">
+<span id="authorizer_name"></span>
+<span id="enterer_name"></span>
+<span id="modifier_name"></span>
+</div>
+
+<div style="padding: 0.5em;">
+<span id="created"></span>
+<span id="modified"></span>
+</div>
+
+</div>
+</span>
+
+<div style="clear: both;">
 <input type="submit" value="Submit">
+</div>
+
+</center>
+
 </div>
 
 <center>
@@ -156,6 +183,7 @@ Please read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#A
 If the name is misspelled, <a href="$exec_url?action=displayAuthorityTaxonSearchForm">try another search</a>.
 </p>
 </center>
+
 
 </form>
 
