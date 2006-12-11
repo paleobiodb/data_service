@@ -502,6 +502,7 @@ sub displayOpinionForm {
 	#  numbers, make a pulldown menu listing the taxa JA 25.4.04
 	my $parent_pulldown;
 	if ( scalar(@parent_nos) > 1 || (scalar(@parent_nos) == 1 && @opinions_to_migrate2 && $fields{'taxon_status'} eq 'invalid1' && $fields{'synonym'} eq 'misspelling of')) {
+        $parent_pulldown .= qq|\n<span class="small">\n|;
         foreach my $parent_no (@parent_nos) {
 	        my $parent = TaxaCache::getParent($dbt,$parent_no);
             my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$parent_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
@@ -516,9 +517,10 @@ sub displayOpinionForm {
                 my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$parent_no});
                 $higher_class = "unclassified $taxon->{taxon_rank}";
             }
-			$parent_pulldown .= qq|<input type="radio" name="parent_spelling_no" $selected value='$parent_no'> $parentName, $taxon->{taxon_rank}$pub_info [$higher_class]<br>\n|;
+            $parent_pulldown .= qq|<br><nobr><input type="radio" name="parent_spelling_no" $selected value='$parent_no'> $parentName, $taxon->{taxon_rank}$pub_info [$higher_class]</nobr>\n|;
         }
-        $parent_pulldown .= qq|<input type="radio" name="parent_spelling_no" value=""> \nOther taxon: <input type="text" name="belongs_to_parent" value=""><br>\n|;
+        $parent_pulldown .= qq|<br><input type="radio" name="parent_spelling_no" value=""> \nOther taxon: <input type="text" name="belongs_to_parent" value=""><br>\n|;
+        $parent_pulldown .= "\n</span>\n";
 	}
 
     main::dbg("parentName $parentName parents: ".scalar(@parent_nos));
@@ -573,18 +575,18 @@ sub displayOpinionForm {
     my $colspan = ($parent_pulldown && $selected) ? "": "colspan=2";
     $belongs_to_row .= qq|<tr><td valign="top"><input type="radio" name="taxon_status" value="belongs to" $selected></td>\n|;
     if ($childRank =~ /species/) {
-        $belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid</b>, classified as belonging to |;
+        $belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid</b>, belonging to |;
     } else {
-        $belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid or reranked $childRank</b>, classified as belonging to $higher_rank |;
+        $belongs_to_row .= qq|<td $colspan valign="top" nowrap><b>Valid or reranked $childRank</b>, belonging to $higher_rank |;
     }
 
     if ($parent_pulldown && $selected) {
-        $belongs_to_row .= "<td width='100%'>$parent_pulldown</td>";
+        $belongs_to_row .= "$parent_pulldown";
     } else	{
         my $parentTaxon = ($selected || ($isNewEntry && $childRank =~ /species/)) ? $parentName : "";
         $belongs_to_row .= qq|<input name="belongs_to_parent" size="24" value="$parentTaxon">|;
     }
-    $belongs_to_row .= qq|</td><td><input type="submit" value="Submit"></td></tr>|;
+    $belongs_to_row .= qq|</td><td valign="top"><input type="submit" value="Submit"></td></tr>|;
 
 
     if (!$reSubmission && !$isNewEntry) {
