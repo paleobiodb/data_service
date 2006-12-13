@@ -58,7 +58,7 @@ if ( $q->param("action") eq "search" )	{
 		}
 		$sql .= "($field LIKE '%" . $searchstring . "%')";
 	}
-	if ( $q->param("language") ne "any year" and $q->param("accession") ne "" )	{
+	if ( $q->param("accession") ne "any year" and $q->param("accession") ne "" )	{
 		$sql .= " AND accession like '" . $q->param("accession") . "-%'";
 	}
 	#if ( $q->param("language") ne "any language" and $q->param("language") ne "" )	{
