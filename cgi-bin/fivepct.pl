@@ -10,6 +10,7 @@ use DBTransactionManager;
 # restricts searches to refs with a particular status; uses GeoRef numbers
 #   instead of table key numbers 21.10.02
 # searches and displays language field 2.3.03
+# hacked to use newfivepct table 13.12.06
 
 
 # Create the CGI, Session, and some other objects.
@@ -34,7 +35,8 @@ if ( $q->param("action") eq "search" )	{
 
 	@statusvals = ("unknown","junk","desirable","help","claimed","copied","discarded","entered");
 
-	$sql = "SELECT ref_no,title,author,pub,subjects,language,status,modifier FROM fivepct WHERE ";
+	$sql = "SELECT ref_no,title,author,pub,subjects,accession,status,modifier FROM newfivepct WHERE ";
+	#$sql = "SELECT ref_no,title,author,pub,subjects,language,status,modifier FROM fivepct WHERE ";
 	if ( $q->param("status") ne "all" )	{
 		$sql .= "status='" . $q->param("status") . "' AND ";
 	}
@@ -56,9 +58,12 @@ if ( $q->param("action") eq "search" )	{
 		}
 		$sql .= "($field LIKE '%" . $searchstring . "%')";
 	}
-	if ( $q->param("language") ne "any language" and $q->param("language") ne "" )	{
-		$sql .= " AND language='" . $q->param("language") . "'";
+	if ( $q->param("language") ne "any year" and $q->param("accession") ne "" )	{
+		$sql .= " AND accession like '" . $q->param("accession") . "-%'";
 	}
+	#if ( $q->param("language") ne "any language" and $q->param("language") ne "" )	{
+	#	$sql .= " AND language='" . $q->param("language") . "'";
+	#}
 	my $sth = $dbh->prepare($sql);
 	$sth->execute();
 	print "<table>\n";
@@ -85,7 +90,8 @@ if ( $q->param("action") eq "search" )	{
 		print "\"$refrow{'title'}\" \n";
 		print "<i>$refrow{'pub'}</i><br>\n";
 		print "<font size=1px>[$refrow{'subjects'}]";
-		print " <b>$refrow{'language'}</b></font></td>\n";
+		print " <b>$refrow{'accession'}</b></font></td>\n";
+		#print " <b>$refrow{'language'}</b></font></td>\n";
 		print "</tr>\n";
 	}
 	print "</table>\n\n";
@@ -105,13 +111,13 @@ elsif ( $q->param("action") eq "update" )	{
 
 	@refnos = split /,/,$q->param("refnos");
 	for $r (@refnos)	{
-		$sql = "SELECT status FROM fivepct WHERE ref_no=" . $r;
+		$sql = "SELECT status FROM newfivepct WHERE ref_no=" . $r;
 		my $sth = $dbh->prepare($sql);
 		$sth->execute();
 		my %refrow = %{$sth->fetchrow_hashref()};
 		$idstring = "status_" . $r;
 		if ( $refrow{'status'} ne $q->param($idstring) )	{
-			$sql = "UPDATE fivepct SET status='";
+			$sql = "UPDATE newfivepct SET status='";
 			$sql .= $q->param($idstring);
 			$sql .= "', modifier='" . $s->get("enterer");
 			$sql .= "' WHERE ref_no=" . $r;
