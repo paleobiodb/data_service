@@ -906,17 +906,17 @@ td.fixedLabel {
 }
 
 /* row and column headers in data tables */
-.PASTtable	{
+.PASTtable,.simpleTable{
     text-align: center;
     border: 1px solid gray;
 }
 
 /* cells in data tables */
-td.PASTheader	{
+td.PASTheader,.simpleTableHeader{
     padding-left: 4px; padding-right: 4px;
 }
 
-td.PASTcell	{
+td.PASTcell,.simpleTableCell{
     text-align: center;
     border-right: 1px solid white;
     border-top: 1px solid white;
