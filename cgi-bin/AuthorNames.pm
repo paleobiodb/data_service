@@ -1,4 +1,5 @@
 package AuthorNames;
+use strict;
 
 # Token type constants
 my $INITIAL = 1;
@@ -571,7 +572,7 @@ sub getHash
   $RETVAL{'au2last'} = $self->getAuthor2Last();
   $RETVAL{'otherAuthors'} = $self->getOtherAuthors();
   
-  return $RETVAL;
+  return \%RETVAL;
 }
 
 sub dbg
