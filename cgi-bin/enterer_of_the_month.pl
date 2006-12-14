@@ -15,7 +15,12 @@ my @tables = ("refs","authorities","opinions","collections","occurrences","reide
 my ($date,$time) = split / /, now();
 my ($yyyy,$mm,$dd) = split /-/,$date,3;
 
-my $lastmonth = $yyyy . $mm -1 . "01000000";
+my $lastmonth;
+if ( $mm == 1 )	{
+	$lastmonth = $yyyy - 1 . "1201000000";
+} else	{
+	$lastmonth = $yyyy . $mm -1 . "01000000";
+}
 my $thismonth = $yyyy . $mm . "01000000";
 
 my %total;
