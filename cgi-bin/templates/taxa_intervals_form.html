@@ -10,8 +10,14 @@
       <td align="left"><textarea cols="40" rows="3" name="input"></textarea></td>
     </tr>
     <tr>
-      <th align="right">Analyze included species separately:</th>
-      <td align="left"><select name="split_taxon"><option>yes</option><option>no</option></select></td>
+      <th align="right">Break taxa into:</th>
+      <td align="left">
+        <select name="taxon_resolution">
+          <option value="species">species</option>
+          <option value="genus">genera</option>
+          <option value="as_is">as entered</option>
+        </select>
+      </td>
     </tr>
     <tr>
       <td></td>

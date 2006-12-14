@@ -4,54 +4,56 @@ use URI::Escape;
 use Data::Dumper; 
 use TaxaCache;
 use Classification;
-use GD;
+use Memoize;
 
-my $IMAGE_DIR = $ENV{'BRIDGE_HTML_DIR'}."/public/confidence";
+memoize('chiSquaredDensity');
+memoize('factorial');
+memoize('gamma');
 
-my $AILEFT = 100;
-my $AITOP = 450;   
+use strict;
+
 
 # written 03.31.04 by Josh Madin as final product
-# Still doesn't allow choice of time-scale when examining the conf ints of taxa
+# Still doesn't allow choice of time scale when examining the conf ints of taxa
 
 # Deals with homonyms that may exist by presenting an option to select either one
 # and passing on the taxon_no.  All non-homonym taxa get passed as hidden fields
 # PS 02/08/2004
 sub displayHomonymForm {
-    my ($q,$s,$dbt,$homonym_names,$splist) = @_;
+    my ($q,$s,$dbt,$homonym_names,$occ_list) = @_;
     my $dbh=$dbt->dbh;
 
-    my %splist = %$splist;
+    my %occ_list = %$occ_list;
     my @homonym_names = @$homonym_names;
 
     my $pl1 = scalar(@homonym_names) > 1 ? "s" : "";
     my $pl2 = scalar(@homonym_names) > 1 ? "" : "s";
     print "<center><h3>The following taxonomic name$pl1 belong$pl2 to multiple taxonomic <br>hierarchies.  Please choose the one$pl1 you want.</h3>";
     print "<form action=\"bridge.pl\" method=\"post\"><input type=\"hidden\" name=\"action\" value=\"buildListForm\">";
-    print "<input type=\"hidden\" name=\"split_taxon\" value=\"".$q->param('split_taxon')."\">\n";
+    print "<input type=\"hidden\" name=\"taxon_resolution\" value=\"".$q->param('taxon_resolution')."\">\n";
     print "<input type=\"hidden\" name=\"input_type\" value=\"taxon\">\n";
                        
 
     my $i=0;
-    foreach $homonym_name (@homonym_names) {
+    foreach my $homonym_name (@homonym_names) {
         my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$homonym_name);
 
         # Find the parent taxon and use that to clarify the choice
 
         print '<table border=0 cellspacing=3 cellpadding=3>'."\n";
         print "<tr>";
-        foreach $taxon_no (@taxon_nos) {
+        foreach my $taxon_no (@taxon_nos) {
             my $parent = TaxaCache::getParent($dbt,$taxon_no);
-            print "<td><input type='radio' checked name='speciesname$i' value='$taxon_no'>$homonym_name [$parent->{taxon_name}]</td>";
+            print "<td><input type='radio' checked name='occurrence_list_$i' value='$taxon_no'>$homonym_name [$parent->{taxon_name}]</td>";
         }
-        print "<input type='hidden' name='keepspecies$i' value='$homonym_name'>\n";
+        print "<input type='hidden' name='taxon_name_$i' value='$homonym_name'>\n";
         print "</tr>";
         print "</table>";
         $i++;
     }
-    while(($taxon,$taxon_list) = each %splist) {
-        print "<input type='hidden' name='speciesname$i' value='$taxon_list'>";
-        print "<input type='hidden' name='keepspecies$i' value='$taxon'>\n";
+    while(my ($taxon,$occurrence_list) = each %occ_list) {
+        print "<input type='hidden' name='occurrence_list_$i' value='$occurrence_list'>";
+        print "<input type='hidden' name='taxon_name_$i' value='$taxon'>\n";
         $i++;
     }
     print "<br><input type='submit' name='submit' value='Submit'></center></form><br><br>";
@@ -90,60 +92,62 @@ sub displaySearchSectionResults{
     $options{'calling_script'} = 'Confidence';
 #    $options{'lithologies'} = $options{'lithology1'}; delete $options{'lithology1'};
 #    $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'}; 
-    ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
-    @dataRows = sort {$a->{regionalsection} cmp $b->{regionalsection} ||
+    my ($dataRows) = main::processCollectionsSearch($dbt,\%options,$fields);
+    my @dataRows = sort {$a->{regionalsection} cmp $b->{regionalsection} ||
                       $a->{localsection} cmp $b->{localsection}} @$dataRows;
 
     # get the enterer's preferences (needed to determine the number
     # of displayed blanks) JA 1.8.02
 
     my $t = new TimeLookup($dbt);
-    local @period_order = $t->getScaleOrder($dbt,'69');
+    my @period_order = $t->getScaleOrder($dbt,'69');
     # Convert max_interval_no to a period like 'Quaternary'
     my $int2period = $t->getScaleMapping('69','names');
 
-    local $lastsection = '';
-    local $lastregion  = '';
-    local $found_localbed = 0;
-    local $found_regionalbed = 0;
-    local (%period_list,%country_list);
+    my $lastsection = '';
+    my $lastregion  = '';
+    my $found_localbed = 0;
+    my $found_regionalbed = 0;
+    my (%period_list,%country_list);
     my @tableRows = ();
     my $rowCount = scalar(@dataRows);
     my $row;
-    local $taxon_resolution = $q->param('taxon_resolution') || 'species';
-    local $show_taxon_list = $q->param('show_taxon_list') || 'NO';
+    my $taxon_resolution = $q->param('taxon_resolution') || 'species';
+    my $show_taxon_list = $q->param('show_taxon_list') || 'NO';
 
     # Only used below, in a couple places.  Print contents of a table row
     sub formatSectionLine {
+        my ($lastsection,$lastregion,$found_regionalbed,$found_localbed,$period_list,$country_list,$period_order,$taxon_resolution,$show_taxon_list) = @_;
         my ($time_str, $place_str);
-        foreach my $period (@period_order) {
-            $time_str .= ", ".$period if ($period_list{$period});
+        foreach my $period (@$period_order) {
+            $time_str .= ", ".$period if ($period_list->{$period});
         }
-        foreach $country (keys %country_list) {
+        foreach my $country (keys %$country_list) {
             $place_str .= ", ".$country; 
         }
         $time_str =~ s/^,//;
         $place_str =~ s/^,//;
         my $link = '';
         if ($lastregion && $found_regionalbed) {
-            $link .= "<a href='bridge.pl?action=displayStratTaxaForm&taxon_resolution=$taxon_resolution&show_taxon_list=$show_taxon_list&input=".uri_escape($lastregion)."&input_type=regional'>$lastregion</a>";
+            $link .= "<a href='bridge.pl?action=displayStratTaxaForm&amp;taxon_resolution=$taxon_resolution&amp;show_taxon_list=$show_taxon_list&amp;input=".uri_escape($lastregion)."&amp;input_type=regional'>$lastregion</a>";
             if ($lastsection) { $link .= " / "};
         }    
         if ($lastsection && $found_localbed) {
-            $link .= "<a href='bridge.pl?action=displayStratTaxaForm&taxon_resolution=$taxon_resolution&show_taxon_list=$show_taxon_list&input=".uri_escape($lastsection)."&input_type=local'>$lastsection</a>";
+            $link .= "<a href='bridge.pl?action=displayStratTaxaForm&amp;taxon_resolution=$taxon_resolution&amp;show_taxon_list=$show_taxon_list&amp;input=".uri_escape($lastsection)."&amp;input_type=local'>$lastsection</a>";
         }    
             
         $link .= "<span class='tiny'> - $time_str - $place_str</span>";
+        return $link;
     }
 
     # We need to group the collections here in the code rather than SQL so that
     # we can get a list of max_interval_nos.  There should generaly be only 1 country.
     # Assumes be do an order by localsection in the SQL and there are no null or empty localsections
     if ($rowCount > 0) {
-        for($i=0;$i<$rowCount;$i++) {
+        for(my $i=0;$i<$rowCount;$i++) {
             $row = $dataRows[$i];
             if ($i != 0 && (($row->{'localsection'} ne $lastsection) || ($row->{'regionalsection'} ne $lastregion))) {
-                push @tableRows, formatSectionLine();
+                push @tableRows, formatSectionLine($lastsection,$lastregion,$found_regionalbed,$found_localbed,\%period_list,\%country_list,\@period_order,$taxon_resolution,$show_taxon_list);
                 %period_list = ();
                 %country_list = ();
                 $found_regionalbed = 0;
@@ -160,10 +164,10 @@ sub displaySearchSectionResults{
             $period_list{$int2period->{$row->{'max_interval_no'}}} = 1;
             $country_list{$row->{'country'}} = 1;
         }
-        push @tableRows, formatSectionLine();
+        push @tableRows, formatSectionLine($lastsection,$lastregion,$found_regionalbed,$found_localbed,\%period_list,\%country_list,\@period_order,$taxon_resolution,$show_taxon_list);
     }
 
-    $ofRows = scalar(@tableRows);
+    my $ofRows = scalar(@tableRows);
     if ($ofRows > 1) {       
         # Display header link that says which collections we're currently viewing
         print "<center>";
@@ -172,12 +176,12 @@ sub displaySearchSectionResults{
             print "<h4>Here are";
             if ($rowOffset > 0) {
                 print " rows ".($rowOffset+1)." to ";
-                $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
+                my $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
                 print $printRows;
                 print "</h4>\n";
             } else {
                 print " the first ";
-                $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
+                my $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
                 print $printRows;
                 print " rows</h4>\n";
             }
@@ -194,7 +198,7 @@ sub displaySearchSectionResults{
         print '</tr>';
    
         # print each of the rows generated above
-        for($i=$rowOffset;$i<$ofRows && $i < $rowOffset+$limit/2;$i++) {
+        for(my $i=$rowOffset;$i<$ofRows && $i < $rowOffset+$limit/2;$i++) {
             # should it be a dark row, or a light row?  Alternate them...
             if ( $i % 2 == 0 ) {
                 print "<tr class=\"darkList\">";
@@ -212,7 +216,7 @@ sub displaySearchSectionResults{
  
         print "</table>\n";
     } elsif ($ofRows == 1 ) { # if only one row to display, cut to next page in chain
-        my $section;
+        my ($section,$section_type);
         if (!$lastsection || $q->param('section_name') eq $lastregion) {
             $section = $lastregion;
             $section_type='regional';
@@ -222,7 +226,7 @@ sub displaySearchSectionResults{
         }
         print "<center>\n<h3>Your search produced exactly one match ($section)</h3></center>";
 
-        $my_q = new CGI({'show_taxon_list'=>$show_taxon_list,
+        my $my_q = new CGI({'show_taxon_list'=>$show_taxon_list,
                          'taxon_resolution'=>$taxon_resolution,
                          'input'=>$section,
                          'input_type'=>$section_type});
@@ -244,10 +248,10 @@ sub displaySearchSectionResults{
     my $q2 = new CGI;
     my @params = $q2->param;
     my $getString = "rowOffset=".($rowOffset+$limit);
-    foreach $param_key (@params) {
+    foreach my $param_key (@params) {
         if ($param_key ne "rowOffset") {
             if ($q2->param($param_key) ne "" || $param_key eq 'section_name') {
-                $getString .= "&".uri_escape($param_key)."=".uri_escape($q2->param($param_key));
+                $getString .= "&amp;".uri_escape($param_key)."=".uri_escape($q2->param($param_key));
             }
         }
     }
@@ -259,9 +263,9 @@ sub displaySearchSectionResults{
         } else {
             $numLeft = "the next " . $limit;
         }
-        print "<a href='$exec_url?$getString'><b>Get $numLeft sections</b></a> - ";
+        print "<a href='bridge.pl?$getString'><b>Get $numLeft sections</b></a> - ";
     }
-    print "<a href='$exec_url?action=displaySearchSectionForm'><b>Do another search</b></a>";
+    print "<a href='bridge.pl?action=displaySearchSectionForm'><b>Do another search</b></a>";
 
     print "</center></p>";
     # End footer links
@@ -287,14 +291,14 @@ sub displayTaxaIntervalsResults {
     # if homonyms found, display homonym chooser form
     # if no homonyms: 
     #   buildList:
-    #     if 'split_taxon' (aka analyze species separately) is 'yes'
+    #     if 'taxon_resolution' (aka analyze species separately) is 'yes'
     #        display a list of taxa to choose (buildList)
     #     else 
     #       display options from
     if ($q->param('input')) {
         my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('input'));
 
-        my %splist;
+        my %occ_list;
         my @homonyms;
         
         foreach my $taxon (@taxa) {
@@ -302,21 +306,20 @@ sub displayTaxaIntervalsResults {
             if (scalar(@taxon_nos) > 1) {
                 push @homonyms, $taxon;
             } elsif (scalar(@taxon_nos) == 1) {
-                $splist{$taxon} = $taxon_nos[0];
+                $occ_list{$taxon} = $taxon_nos[0];
             } else {
-                $splist{$taxon} = $taxon;
+                $occ_list{$taxon} = $taxon;
             }
         }
 
         if (scalar(@homonyms) > 0) {
-            displayHomonymForm($q,$s,$dbt,\@homonyms,\%splist);
+            displayHomonymForm($q,$s,$dbt,\@homonyms,\%occ_list);
         } else {
-            buildList($q,$s,$dbt,$hbo,\%splist);
+            buildList($q,$s,$dbt,$hbo,\%occ_list);
         }
     } else {
         displayTaxaIntervalsForm($q,$s,$dbt,$hbo);
     }
-    main::dbg("Species list: ".Dumper(\%splist));
 }
 #--------------------------TAXON LIST BUILDER------------------------------------
 
@@ -326,134 +329,118 @@ sub buildList    {
     my $dbt=shift;
     my $hbo=shift;
     my $dbh=$dbt->dbh;
-    my $splist_base=shift;
-    my %splist_base=%$splist_base;
-    my %splist;
+    my $occ_list_base=shift;
+    my %occ_list_base=%$occ_list_base;
+    my %occ_list;
 
     # Set from homonym form
-    if (!%splist_base) {
-        for (my $i=0;$q->param("speciesname$i");$i++)  {
-            $splist_base{$q->param("keepspecies$i")} = $q->param("speciesname$i");
+    if (!%occ_list_base) {
+        for (my $i=0;$q->param("occurrence_list_$i");$i++)  {
+            $occ_list_base{$q->param("taxon_name_$i")} = $q->param("occurrence_list_$i");
         }    
     }
 
     # Use taxonomic search to build up a list of taxon_nos that are 
     # children of the potentially higher order taxonomic names entered in by the user
-    # splist_base is the list of higher order names that haven't been
-    while(($taxon_name,$no_or_name)=each(%splist_base)) {
-        my $found = 0;
+    # occ_list_base is the list of higher order names that haven't been
+    my $fields = 'o.occurrence_no,o.taxon_no,o.genus_name,o.subgenus_name,o.species_name';
+    while(my ($taxon_name,$no_or_name) = each %occ_list_base) {
         if ($no_or_name =~ /^\d+$/) {
-            # Found the taxon in the authorities table, get its children
-            my $children = Classification::getChildren($dbt,$no_or_name,30);
+            if ($q->param('taxon_resolution') eq 'as_is') {
+                my @taxon_nos = TaxaCache::getChildren($dbt,$no_or_name);
+                my $taxon_list = join(",",@taxon_nos);
+                my @results = getOccurrenceData($dbt,'taxon_list'=>$taxon_list,'fields'=>$fields);
+                if (@results) {
+                    $occ_list{$taxon_name} = join(",",map {$_->{'occurrence_no'}} @results);
+                }
+            } else {
+                my @taxon_nos = TaxaCache::getChildren($dbt,$no_or_name);
+                my $taxon_list = join(",",@taxon_nos);
+                my $results = getOccurrenceData($dbt,'taxon_list'=>$taxon_list,'fields'=>$fields);
 
-            # The getChildren function returns recombinations/synonyms for children, but not for the
-            # taxon itself, so we manually add it onto the array ourselves here. messy.
-            my $sql = "SELECT DISTINCT child_spelling_no FROM opinions ".
-                      " WHERE child_no=$no_or_name".
-                      " AND child_spelling_no!=$no_or_name";
-            my $spellings= $dbt->getData($sql);
-            my $thistaxon;
-            $thistaxon->{taxon_no} = $no_or_name; 
-            push @{$thistaxon->{spellings}}, {'taxon_no'=>$_->{child_spelling_no}} for (@$spellings);
-            my $orig_taxon_no = TaxonInfo::getOriginalCombination($dbt,$no_or_name);
-            my $senior_taxon_no = TaxonInfo::getSeniorSynonym($dbt,$orig_taxon_no);
-            my $correct_name = TaxonInfo::getMostRecentSpelling($dbt,$orig_taxon_no);
-            $thistaxon->{taxon_name} = $correct_name->{taxon_name};
-            my @synonyms = TaxonInfo::getJuniorSynonyms($dbt,$senior_taxon_no);
-            push @{$thistaxon->{synonyms}}, {'taxon_no'=>$_} for (@synonyms);
-            unshift @$children, $thistaxon;
-            
-
-            foreach $child (@$children) {
-                # Make sure its in the occurrences table first
-                @taxon_nos = ($child->{taxon_no});
-                push @taxon_nos, $_->{taxon_no} for (@{$child->{spellings}});
-                push @taxon_nos, $_->{taxon_no} for (@{$child->{synonyms}});
-                
-                $sql = "(SELECT o.genus_name,o.species_name FROM occurrences o ".
-                       " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no".
-                       " WHERE o.taxon_no IN (".join(",",@taxon_nos).") AND re.reid_no IS NULL)".
-                       " UNION ".
-                       "(SELECT re.genus_name,re.species_name FROM occurrences o, reidentifications re ".
-                       " WHERE o.occurrence_no=re.occurrence_no AND re.most_recent='YES' ".
-                       " AND re.taxon_no IN (".join(",",@taxon_nos)."))".
-                       " LIMIT 1";
-                @results = @{$dbt->getData($sql)};
-                if (scalar(@results) > 0) {
-                    $found = 1;
-                    # split the children up into separate checkboxes by having different entries in %splist
-                    if ($q->param('split_taxon') eq 'yes') {
-                        #if ($taxon_name) {
-                        #my $taxon = TaxonInfo::getTaxon($dbt,'taxon_no'=>$taxon_no);
-                        #$splist{$taxon->{'taxon_name'}} = $taxon_no;
-                        #} else {
-                        if ($child->{taxon_name} =~ / /) {
-                            $splist{$child->{taxon_name}} .= ",".join(",",@taxon_nos);
-                        } else {
-                            $splist{$results[0]->{genus_name}." ".$results[0]->{species_name}} = ",".join(",",@taxon_nos);
+                foreach my $row (@$results) {
+                    my $taxon_no = $row->{'taxon_no'};
+                    my $best_name_ref = TaxaCache::getSeniorSynonym($dbt,$taxon_no);
+                    my $genus_ref;
+                    my $subgenus_ref;
+                    if ($best_name_ref->{'taxon_rank'} =~ /genus|species/) {
+                        if ($best_name_ref->{'taxon_rank'} =~ /species/) {
+                            $subgenus_ref = TaxaCache::getParent($dbt,$taxon_no,'subgenus');
+                            if (!$subgenus_ref) {
+                                $genus_ref= TaxaCache::getParent($dbt,$taxon_no,'genus');
+                            }
                         }
-                        #}
-                    # or clumped together under the same checkbox by having a comma separated list associated with that higher name
-                    } else {
-                        $splist{$taxon_name} .= ",".join(",",@taxon_nos);
+                        my ($genus,$subgenus,$species);
+                        my ($best_genus,$best_subgenus,$best_species) = Taxon::splitTaxon($best_name_ref->{'taxon_name'});
+                        if ($subgenus_ref) {
+                            ($genus,$subgenus) = Taxon::splitTaxon($subgenus_ref->{'taxon_name'});
+                        } elsif ($genus_ref) {
+                            ($genus) = $genus_ref->{'taxon_name'};
+                        } else {
+                            $genus = $best_genus;
+                        }
+                        if ($best_species) {
+                            $species = $best_species;
+                        } else {
+                            $species = $row->{'species_name'};
+                        }
+                        
+                        my $name = $genus;
+                        if ($q->param('taxon_resolution') ne 'genus') {
+                            if ($subgenus) {
+                                $name .= " ($subgenus)";
+                            }
+                            $name .= " ".$species;
+                        }
+                        $occ_list{$name} .= ",".$row->{'occurrence_no'};
+                        $occ_list{$name} =~ s/^,//;
                     }
-                } 
-            }
-        } else {
-            my $genus = $dbh->quote($taxon_name);
-            $sql = "(SELECT o.genus_name,o.species_name FROM occurrences o ".
-                   " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no".
-                   " WHERE o.genus_name=$genus AND re.reid_no IS NULL)".
-                   " UNION ".
-                   "(SELECT re.genus_name,re.species_name FROM occurrences o, reidentifications re ".
-                   " WHERE o.occurrence_no=re.occurrence_no AND re.most_recent='YES' ".
-                   " AND re.genus_name=$genus)";
-            main::dbg("genus sql: $sql");
-            my @results = @{$dbt->getData($sql)};
-            if (@results) {
-                if ($q->param('split_taxon') eq 'yes') {
-                    foreach my $row (@results) {
-                        $splist{"$row->{genus_name} $row->{species_name}"} = "$row->{genus_name} $row->{species_name}";
-                    }
-                } else {
-                    $splist{$taxon_name} = $taxon_name;
                 }
             }
-        }    
-
-        #if (!$found) {
-        #    push @not_found, $taxon_name; 
-        #    print "<center><table><tr><th><font color=\"red\">Sorry, </font><font color=\"blue\">".
-        #          "<i>$taxon_name</i></font><font color=\"red\"> is not in the database</font>".
-        #          "</th></tr></table></CENTER><BR><BR>";
-        #} 
-    } 
-    foreach (values %splist) {
+        } else {
+            my @results = getOccurrenceData($dbt,'taxon_name'=>$taxon_name,'fields'=>$fields);
+            if (@results) {
+                if ($q->param('taxon_resolution') eq 'species') {
+                    foreach my $row (@results) {
+                        my $name = $row->{'genus_name'};
+                        if ($row->{'subgenus_name'}) {
+                            $name .= " ($row->{'subgenus_name'})";
+                        }
+                        $name .= " $row->{species_name}";
+                        $occ_list{$name} = join(",",map {$_->{'occurrence_no'}} @results);
+                    }
+                } else {
+                    $occ_list{$taxon_name} = $taxon_name;
+                }
+            }
+        }
+    }
+    foreach (values %occ_list) {
         s/^,// 
     }
 
     # Now print out the list generated above so the user can select potential species to exclude
     # if they selected 'analyze taxa separately'. Otherwise skip to the options form
-    if (!scalar keys %splist) {
+    if (!scalar keys %occ_list) {
         print "<center><h3><div class='warning'>Sorry, no occurrences of the taxa entered were found in the database.</div></h3></center>";
         displayTaxaIntervalsForm($q,$s,$dbt,$hbo);
     } else {
-        if ($q->param('split_taxon') eq 'yes') {
-            print "<div align=\"center\"><h2>Confidence interval taxon list</h2></div><BR>";
-            print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"showOptionsForm\">";
-            print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"taxon\">";
-            print "<CENTER>";
+        if ($q->param('taxon_resolution') =~/genus|species/) {
+            print "<div align=\"center\"><h2>Confidence interval taxon list</h2></div><br>";
+            print "<form action=\"bridge.pl\" method=\"post\"><input type=\"hidden\" name=\"action\" value=\"showOptionsForm\">";
+            print "<input type=\"hidden\" name=\"input_type\" value=\"taxon\">";
+            print "<center>";
 
             # Print out a list of taxa 3 columns wide
-            print "<TABLE CELLPADDING=5 BORDER=0>";
-            my @sortList = sort {$a cmp $b} keys(%splist);
+            print "<table cellpadding=5 border=0>";
+            my @sortList = sort {$a cmp $b} keys(%occ_list);
             my $columns = int(scalar(@sortList)/3)+1;
-            for($i=0;$i<$columns;$i++) {
+            for(my $i=0;$i<$columns;$i++) {
                 print "<TR>";
-                for($j=$i;$j<scalar(@sortList);$j=$j+$columns) {
-                    $splist{$sortList[$j]} =~ s/,$//; 
-                    print "<TD><INPUT TYPE=checkbox NAME=keepspecies$j VALUE='$sortList[$j]' CHECKED=checked>" . 
-                          "<i>".$sortList[$j] . "</i><INPUT TYPE=hidden NAME=\"speciesname$j\" VALUE=\"$splist{$sortList[$j]}\"></TD>\n";
+                for(my $j=$i;$j<scalar(@sortList);$j=$j+$columns) {
+                    $occ_list{$sortList[$j]} =~ s/,$//; 
+                    print "<TD><INPUT TYPE=checkbox NAME=taxon_name_$j VALUE='$sortList[$j]' CHECKED=checked>" . 
+                          "<i>".$sortList[$j] . "</i><INPUT TYPE=hidden NAME=\"occurrence_list_$j\" VALUE=\"$occ_list{$sortList[$j]}\"></TD>\n";
                 }
                 print "</TR>";
             }
@@ -465,104 +452,112 @@ sub buildList    {
             print "</FORM></CENTER><BR><BR>";
         } else {
             $q->param('input_type'=>'taxon');
-            optionsForm($q, $s, $dbt, \%splist);
+            optionsForm($q, $s, $dbt, \%occ_list);
         }
     }
 }
 #--------------DISPLAYS TAXA IN STRATIGRAPHIC SECTION FOR EDITING BY USER-------
 
-sub displayStratTaxa{
+sub displayStratTaxa {
     my $q=shift;
     my $s=shift;
     my $dbt=shift;
     my $dbh=$dbt->dbh;
-    my %splist;
+    my %occ_list;
     my $section_name = $q->param("input");
     my $section_type = ($q->param("input_type") eq 'regional') ? 'regional' : 'local';
 
     # This will get all the genera in a particular regional/localsection, automatically
     # getting the most recent reids of a an occurrence as well.
-    my $sql = "(SELECT o.occurrence_no, o.taxon_no, o.genus_name, o.species_name".
-              " FROM collections c, occurrences o".
-              " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no".
-              " WHERE o.collection_no=c.collection_no ".
-              " AND re.reid_no IS NULL".
-              " AND ${section_type}section LIKE " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^(-)?[0-9.]+\$'".
-              " GROUP BY o.taxon_no,o.genus_name,o.species_name)".
-              " UNION ".
-              "(SELECT o.occurrence_no, re.taxon_no, re.genus_name, re.species_name".
-              " FROM collections c, occurrences o, reidentifications re ".
-              " WHERE o.collection_no=c.collection_no ".
-              " AND o.occurrence_no=re.occurrence_no".
-              " AND re.most_recent='YES'".
-              " AND ${section_type}section LIKE " . $dbh->quote($section_name) . " AND ${section_type}bed REGEXP '^(-)[0-9.]+\$'".
-              " GROUP BY re.taxon_no,re.genus_name,re.species_name)";
-    main::dbg($sql);
-    my @strat_taxa_list= @{$dbt->getData($sql)};
+    my $taxa_list = getOccurrenceData($dbt,
+        section_type=>$section_type,
+        section_name=>$section_name,
+        fields=>"o.occurrence_no,o.genus_name, o.species_name, o.taxon_no"
+    );
     my %taxonList;
     # We build a comma separated list of taxon_nos to pass in. If the taxon_resolution is species,
     # the list will always have one taxon_no in it, if its genus, it may have more. If theres no
     # taxon_no, use the genus+species name
-    foreach my $row (@strat_taxa_list) {
+    foreach my $row (@$taxa_list) {
         if ($row->{'taxon_no'}) {
-            my $orig_taxon_no = TaxonInfo::getOriginalCombination($dbt,$row->{'taxon_no'});
-            $taxon_no = TaxonInfo::getSeniorSynonym($dbt,$orig_taxon_no);
-            # This actually gets the most correct name
-            my $correct_row = TaxonInfo::getMostRecentSpelling($dbt,$taxon_no); 
-            $name = $row->{'genus_name'} . ' ' . $row->{'species_name'};
-#use Data::Dumper; print Dumper($correct_row)."<BR>";
-            if ($correct_row->{'taxon_name'} =~ / / && $correct_row->{'taxon_name'} ne $name) {
-#                print "USING corrected name $correct_row->{child_name} for $name<BR>";
-                $name = $correct_row->{'taxon_name'};
-            } elsif ($row->{'species_name'} =~ /sp\.|indet\./) {
-                $name = $correct_row->{'taxon_name'} . " " . $row->{'species_name'};
-            }
-
-            
-            if ($q->param('taxon_resolution') eq 'genus') {
-                ($genus) = split(/\s+/,$name);
-                $splist{$genus} .= $row->{'taxon_no'}.",";
-            } else { #species resolution
-                $splist{$name} .= $row->{'taxon_no'}.",";
+            my $best_name_ref = TaxaCache::getSeniorSynonym($dbt,$row->{'taxon_no'});
+            my $genus_ref;
+            my $subgenus_ref;
+            if ($best_name_ref->{'taxon_rank'} =~ /genus|species/) {
+                if ($best_name_ref->{'taxon_rank'} =~ /species/) {
+                    $subgenus_ref = TaxaCache::getParent($dbt,$row->{taxon_no},'subgenus');
+                    if (!$subgenus_ref) {
+                        $genus_ref= TaxaCache::getParent($dbt,$row->{taxon_no},'genus');
+                    }
+                }
+                my ($genus,$subgenus,$species);
+                my ($best_genus,$best_subgenus,$best_species) = Taxon::splitTaxon($best_name_ref->{'taxon_name'});
+                if ($subgenus_ref) {
+                    ($genus,$subgenus) = Taxon::splitTaxon($subgenus_ref->{'taxon_name'});
+                } elsif ($genus_ref) {
+                    ($genus) = $genus_ref->{'taxon_name'};
+                } else {
+                    $genus = $best_genus;
+                }
+                if ($best_species) {
+                    $species = $best_species;
+                } else {
+                    $species = $row->{'species_name'};
+                }
+                
+                my $name = $genus;
+                if ($q->param('taxon_resolution') ne 'genus') {
+                    if ($subgenus) {
+                        $name .= " ($subgenus)";
+                    }
+                    $name .= " ".$species;
+                }
+                $occ_list{$name} .= ",".$row->{'occurrence_no'};
+                $occ_list{$name} =~ s/^,//;
             }
         } else {
-            if ($q->param('taxon_resolution') eq 'genus') {
-                $splist{$row->{'genus_name'}} .= $row->{'genus_name'}.",";
-            } else { #species resolution
-                $splist{$row->{'genus_name'}.' '.$row->{'species_name'}} .= $row->{'genus_name'}.' '.$row->{'species_name'}.",";
+            my $name = $row->{'genus_name'};
+            if ($q->param('taxon_resolution') eq 'species') {
+                if ($row->{'subgenus_name'}) {
+                    $name .= " ($row->{'subgenus_name'})";
+                }
+                $name .= " $row->{species_name}";
             }
+            $occ_list{$name} .= ",".$row->{'occurrence_no'};
+            $occ_list{$name} =~ s/^,//;
         }
     }
 
-    foreach (values %splist) {
+    foreach (values %occ_list) {
         s/,$//;
     } 
 
     if ($q->param('show_taxon_list') eq 'NO') {
-        optionsForm($q, $s, $dbt, \%splist);
+        optionsForm($q, $s, $dbt, \%occ_list);
     } else {
-        print "<div align=\"center\"><H2>Stratigraphic section taxon list</H2></div><BR>";
-        print "<CENTER><TABLE CELLPADDING=5 BORDER=0>";
-        print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"showOptionsForm\">";
-        print "<INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"".uri_escape($section_name)."\">";
-        print "<INPUT TYPE=\"hidden\" NAME=\"taxon_resolution\" VALUE=\"".$q->param("taxon_resolution")."\">";
-        print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"".$q->param('input_type')."\">\n";
-        my @sortList = sort {$a cmp $b} keys(%splist);
+        print "<div align=\"center\"><h2>Stratigraphic section taxon list</h2></div><br>";
+        print "<form action=\"bridge.pl\" method=\"post\"><input type=\"hidden\" name=\"action\" value=\"showOptionsForm\">";
+        print "<center><table cellpadding=5 border=0>";
+        print "<tr><td><input type=checkbox checked=checked onClick=\"checkAll(this,'sp_checkbox');\"> Check all</td></tr>";
+        print "<input type=\"hidden\" name=\"input\" value=\"".uri_escape($section_name)."\">";
+        print "<input type=\"hidden\" name=\"taxon_resolution\" value=\"".$q->param("taxon_resolution")."\">";
+        print "<input type=\"hidden\" name=\"input_type\" value=\"".$q->param('input_type')."\">\n";
+        my @sortList = sort {$a cmp $b} keys(%occ_list);
         my $columns = int(scalar(@sortList)/3)+1;
-        for($i=0;$i<$columns;$i++) {
-            print "<TR>";
-            for($j=$i;$j<scalar(@sortList);$j=$j+$columns) {
-                $splist{$sortList[$j]} =~ s/,$//; 
-                print "<TD><INPUT TYPE=checkbox NAME=keepspecies$j VALUE='$sortList[$j]' CHECKED=checked>" . 
-                      "<i>".$sortList[$j] . "</i><INPUT TYPE=hidden NAME=\"speciesname$j\" VALUE=\"$splist{$sortList[$j]}\"></TD>\n";
+        for(my $i=0;$i<$columns;$i++) {
+            print "<tr>";
+            for(my $j=$i;$j<scalar(@sortList);$j=$j+$columns) {
+                $occ_list{$sortList[$j]} =~ s/,$//; 
+                print "<td><input type=checkbox name=taxon_name_$j value='$sortList[$j]' checked=checked class=\"sp_checkbox\">" . 
+                      "<i>".$sortList[$j] . "</i><input type=hidden name=\"occurrence_list_$j\" value=\"$occ_list{$sortList[$j]}\"></td>\n";
             }
-            print "</TR>";
+            print "</tr>";
         }
-        print "</CENTER></TABLE><BR>";
-        print "<CENTER><SPAN CLASS=\"tiny\">(To remove taxon from list for analysis, uncheck before pressing 'Submit')</SPAN><BR><BR>";
-        print "<INPUT TYPE=\"submit\" VALUE=\"Submit\">";
+        print "</center></table><br>";
+        print "<center><span class=\"tiny\">(To remove taxon from list for analysis, uncheck before pressing 'Submit')</span><br><br>";
+        print "<input type=\"submit\" value=\"Submit\">";
         #print "<A HREF=\"/cgi-bin/bridge.pl?action=displayFirstForm\"><INPUT TYPE=\"button\" VALUE=\"Start again\"></A>";
-        print "</CENTER><BR><BR></FORM>";
+        print "</center><br><br></form>";
     } 
     return;
 }
@@ -572,8 +567,9 @@ sub optionsForm    {
     my $q=shift;
     my $s=shift;
     my $dbt=shift;
-    my $splist=shift;
-    my %splist = %$splist;
+    my $occ_list=shift;
+    my %occ_list;
+    %occ_list= %$occ_list if ref ($occ_list);
     # A large form is meant to be displayed on a page by itself, before the chart is drawn
     # A small form is meant to displayed alongside a chart, so must be tall and skinny, and use different styles
     my $form_type = (shift || "large");
@@ -582,13 +578,11 @@ sub optionsForm    {
     my $type = $q->param("input_type");
 
 # -----------------REMAKE STRAT LIST-----------(REMOVES UNCHECKED)-----------
-    if (!%splist) {
+    if (!%occ_list) {
         my $testspe =0;
-        my $testyes =0;
-        while ($q->param("speciesname$testspe"))  {
-            if ($q->param("keepspecies$testspe"))   {
-                $splist{$q->param("keepspecies$testspe")} = $q->param("speciesname$testspe");
-                $testyes++;
+        while ($q->param("occurrence_list_$testspe"))  {
+            if ($q->param("taxon_name_$testspe"))   {
+                $occ_list{$q->param("taxon_name_$testspe")} = $q->param("occurrence_list_$testspe");
             }
             $testspe++;
         }    
@@ -619,18 +613,19 @@ sub optionsForm    {
         print "<INPUT TYPE=\"hidden\" NAME=\"taxon_resolution\" VALUE=\"".$q->param("taxon_resolution")."\">";
     }    
     print "<INPUT TYPE=\"hidden\" NAME=\"input_type\" VALUE=\"".$q->param('input_type')."\">";
-    for(my $i=0;($taxon_name,$taxon_list) = each(%splist);$i++){
-        print "<INPUT TYPE=hidden NAME=keepspecies$i VALUE='$taxon_name' CHECKED=checked><INPUT TYPE=hidden NAME=\"speciesname$i\" VALUE=\"$taxon_list\">\n";
+    for(my $i=0;my ($taxon_name,$occurrence_list) = each(%occ_list);$i++){
+        print "<INPUT TYPE=hidden NAME=taxon_name_$i VALUE='$taxon_name' CHECKED=checked><INPUT TYPE=hidden NAME=\"occurrence_list_$i\" VALUE=\"$occurrence_list\">\n";
     }     
 
     my $methods = ['Strauss and Sadler (1989)','Marshall (1994)','Solow (1996)'];
-    my $method_select = HTMLBuilder::htmlSelect('conftype',$methods,$methods,$q->param('conftype'));
+    my $method_select = HTMLBuilder::htmlSelect('conf_method',$methods,$methods,$q->param('conf_method'));
 
     my $estimates = ['total duration','first appearance','last appearance','no confidence intervals'];
-    my $estimate_select = HTMLBuilder::htmlSelect('conffor',$estimates,$estimates,$q->param('conffor'));
+    my $estimate_select = HTMLBuilder::htmlSelect('conf_type',$estimates,$estimates,$q->param('conf_type'));
 
     my $confidences = ['0.99','0.95','0.8','0.5','0.25'];
-    my $confidence_select = HTMLBuilder::htmlSelect('alpha',$confidences,$confidences,$q->param('alpha'));
+    my $alpha = $q->param('alpha') || '0.95';
+    my $confidence_select = HTMLBuilder::htmlSelect('alpha',$confidences,$confidences,$alpha);
 
     my $order_by = ['name','first appearance','last appearance','stratigraphic range'];
     my $order_by_select = HTMLBuilder::htmlSelect('order',$order_by,$order_by,$q->param('order'));
@@ -639,41 +634,42 @@ sub optionsForm    {
     my $color_select = HTMLBuilder::htmlSelect('color',$colors,$colors,$q->param('color'));
 
     my $glyph_types = ['boxes','circles','hollow circles','squares','hollow squares','none'];
-    my $glyph_type_select = HTMLBuilder::htmlSelect('glyph_type',$glyph_types,$glyph_types,$q->param('glyph_type'));
+    my $glyph_type = $q->param('glyph_type') || 'squares';
+    my $glyph_type_select = HTMLBuilder::htmlSelect('glyph_type',$glyph_types,$glyph_types,$glyph_type);
     
     if ($form_type eq 'large') {
         print "<div align=\"center\"><H2>Confidence interval options</H2></div>";
-        print '<CENTER><TABLE CELLPADDING=5 BORDER=0>';
+        print '<center><table cellpadding=5 border=0>';
         
         if ($type eq 'taxon')   {    
-            print "<TR><TH align=\"right\"> Time-scale: </TH><TD>$scale_select</TD></TR>";
+            print "<tr><th align=\"right\"> Time scale: </th><td>$scale_select</td></tr>";
         } 
         
-        print "<TR><TH></TH><TD><SPAN CLASS=\"tiny\">(Please select a time-scale that is appropriate for the taxa you have chosen)</SPAN></TD></TR>";
-        print "<TR><TH align=\"right\"> Confidence interval method: </TH><TD> $method_select<A HREF=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</A></TD></TR>";
-        print "<TR><TH align=\"right\"> Estimate: </TH><TD> $estimate_select</TD><TR>";
-        print "<TR><TH align=\"right\"> Confidence level: </TH><TD>$confidence_select</TD></TR>";
-        print "<TR><TH align=\"right\"> Order taxa by: </TH><TD> $order_by_select</TD><TR>";
-        print "<TR><TH align=\"right\"> Draw occurrences with: </TH><TD> $color_select $glyph_type_select</TD><TR>";
-        print "</TABLE><BR>";
-        print "<INPUT NAME=\"full\" TYPE=\"submit\" VALUE=\"Submit\">";
-        print "</FORM></CENTER><BR><BR>";
+        print "<tr><th></th><td><span class=\"tiny\">(Please select a time scale that is appropriate for the taxa you have chosen)</span></td></tr>";
+        print "<tr><th align=\"right\"> Confidence interval Method: </th><td> $method_select<a href=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</a></td></tr>";
+        print "<tr><th align=\"right\"> Estimate: </th><td> $estimate_select</td><tr>";
+        print "<tr><th align=\"right\"> Confidence level: </th><td>$confidence_select</td></tr>";
+        print "<tr><th align=\"right\"> Order taxa by: </th><td> $order_by_select</td><tr>";
+        print "<tr><th align=\"right\"> Draw occurrences with: </th><td> $color_select $glyph_type_select</td><tr>";
+        print "</table><br>";
+        print "<input name=\"full\" type=\"submit\" value=\"Submit\">";
+        print "</form></center><br><br>";
     } else {
-        print '<CENTER><TABLE CLASS="darkList" CELLPADDING=5 BORDER=0 style="border: 1px #000000 solid">';
-        print '<TR><TH ALIGN="CENTER" COLSPAN=4><DIV CLASS="large">Options</DIV></TH><TR>';
+        print '<center><table class="darkList" cellpadding=5 border=0 style="border: 1px #000000 solid">';
+        print '<tr><th align="CENTER" colspan=4><div class="large">Options</div></th><tr>';
         
         if ($type eq 'taxon')   {    
-            print "<TR><TH align=\"right\"> Time-scale: </TH><TD COLSPAN=3>$scale_select</TD></TR>";
+            print "<tr><th align=\"right\"> Time scale: </th><td colspan=3>$scale_select</td></tr>";
         } 
 
-        print "<TR><TH align=\"right\"> Confidence interval method: </TD><TD> $method_select <A HREF=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</A></TD>";
-        print "<TH align=\"right\"> Confidence level: </TH><TD>$confidence_select</TD></TR>";
-        print "<TR><TH align=\"right\"> Estimate: </TH><TD>$estimate_select</TD>";
-        print "<TH ALIGN=\"right\">Order taxa by: </TH><TD>$order_by_select</TD><TR>";
-        print "<TR><TH align=\"right\">Draw occurrences with: </TH><TD COLSPAN=3>$color_select $glyph_type_select</TD></TR>";
-        print "</TABLE><BR>";
-        print "<INPUT NAME=\"full\" TYPE=\"submit\" VALUE=\"Submit\">";
-        print "</FORM></CENTER><BR><BR>";
+        print "<tr><th align=\"right\"> Confidence interval Method: </td><td> $method_select <a href=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</a></td>";
+        print "<TH align=\"right\"> Confidence level: </TH><TD>$confidence_select</td></tr>";
+        print "<TR><TH align=\"right\"> Estimate: </TH><TD>$estimate_select</td>";
+        print "<TH ALIGN=\"right\">Order taxa by: </TH><TD>$order_by_select</td><tr>";
+        print "<TR><TH align=\"right\">Draw occurrences with: </TH><TD COLSPAN=3>$color_select $glyph_type_select</td></tr>";
+        print "</table><br>";
+        print "<input name=\"full\" type=\"submit\" value=\"Submit\">";
+        print "</form></center><br><br>";
     }
     return;
 }
@@ -686,795 +682,458 @@ sub calculateTaxaInterval {
     my $dbt=shift;
     my $dbh=$dbt->dbh;
     my $i=0;
-    my %splist;
+    my %occ_list;
     my $testspe =0;
-    my $testyes =0;
-    while ($q->param("speciesname$testspe"))  {
-        if ($q->param("keepspecies$testspe"))   {
-            $splist{$q->param("keepspecies$testspe")} = $q->param("speciesname$testspe");
-            $testyes++;
+    while ($q->param("occurrence_list_$testspe"))  {
+        if ($q->param("taxon_name_$testspe"))   {
+            $occ_list{$q->param("taxon_name_$testspe")} = $q->param("occurrence_list_$testspe");
         }
         $testspe++;
     }
     
     my $scale = $q->param("scale");
     my $C = $q->param("alpha");
-#    my $C = 1 - $CC;
-    my $conffor = $q->param("conffor");
-    my $conftype = $q->param("conftype");
+    my $conf_type = $q->param("conf_type");
+    my $conf_method = $q->param("conf_method");
 
-    if (scalar(keys(%splist)) == 1 && $conftype eq "Solow (1996)")   {
-
-#    my $i = 0;
-
-
-#    foreach my $speciesname (@list)   {
-#        print "<INPUT TYPE=hidden NAME=\"speciesname$i\" VALUE=\"$speciesname\"></TD>";
-#        $i++;
-#    }     
-
-        optionsForm($q, $s, $dbt, \%splist);
+    if (scalar(keys(%occ_list)) <= 1 && $conf_method eq "Solow (1996)")   {
+        optionsForm($q, $s, $dbt, \%occ_list);
         print "<center><table><tr><th><font color=\"red\">The Solow (1996) method requires more than one taxon</font></th></tr></table></CENTER><br>";
         return;
     }
 
-    my %theHash;
+#    print $q->query_string."<BR>";
+
     my %namescale;
     my @intervalnumber;
     my @not_in_scale;
 
     my $t = new TimeLookup($dbt);
-    my $timeHash = $t->processScaleLookup($scale,'name');
+    my $mapping  = $t->getScaleMapping($scale);
+    my ($upper_boundary,$lower_boundary) = $t->getBoundaries;
 
-    my ($upperbound,$lowerbound) = $t->getBoundaries($scale);
+    # Returns ordered array of interval_nos, ordered from youngest to oldest
+    my @scale = $t->getScaleOrder($scale,'number');
 
-#    print "testing getScaleOrder ";
-#    @a = TimeLookup::getScaleOrder($dbt,$scale,'number',1);
-   #print Dumper(\@a);
-#    die;
-   #print "findboundaries ".Dumper(\%upperbound,\%lowerbound);
-#        foreach my $keycounter (sort {$a <=> $b} keys(%upperbound)) {
-#            print "$keycounter: ";
-#                print "$upperbound{$keycounter} -- $lowerbound{$keycounter}";
-#            print "<BR>";
-#        }
-
-    # Get all the necessary stuff to create a scale
-    my $sql = "SELECT c.interval_no, interval_name, eml_interval,next_interval_no, lower_boundary FROM correlations c,intervals i".
-              " WHERE c.interval_no=i.interval_no" 
-              . " AND c.scale_no = " . $scale;
-    my @results = @{$dbt->getData($sql)};
-    my $last_lower_boundary=0;
-    foreach my $row (@results) {
-        if ($row->{'eml_interval'} ne "")	{
-            $namescale{$row->{'interval_no'}} = $row->{'eml_interval'} . " " . $row->{'interval_name'};
-        } else {
-            $namescale{$row->{'interval_no'}} = $row->{'interval_name'};
-        }
-        push @intervalnumber, $row->{interval_no};
-        #if ($row->{'lower_boundary'}) {
-        #    $lower_boundary = $row->{'lower_boundary'};
-        #} else {
-        #    $lower_boundary = $lowerbound{$row->{'interval_no'}};
-        #}
-        #$lowerbound{$row->{'interval_no'}} = $lower_boundary;
-        #$upperbound{$row->{'interval_no'}} = $last_lower_boundary;
-        #$last_lower_boundary = $lower_boundary;
-    }
-    #foreach $row (@results) {
-    #    $interval_no = $row->{'interval_no'};
-    #    print "$interval_no $namescale{$interval_no} $upperbound{$interval_no} $lowerbound{$interval_no}<BR>";
-    #}
-#    print "<BR>LB:".Dumper(\%lowerbound);
-#    print "<BR>UB:".Dumper(\%upperbound);
-#    print "<BR>NS:".Dumper(\%namescale);
-#    foreach $interval_no (sort {$a <=> $b} keys %namescale) {
-#        print "$interval_no $upperbound{$interval_no} $lowerbound{$interval_no}<BR>";
-#    }
-#    die;
-    
-    my %solowHash;
-    my %masterHash;
-    foreach my $keycounter (keys(%namescale)) {
-        push @{$masterHash{$keycounter}}, $namescale{$keycounter};
-        push @{$masterHash{$keycounter}}, $upperbound->{$keycounter};
-        push @{$masterHash{$keycounter}}, $lowerbound->{$keycounter};
-    }
-
-# ----------------------------------------------------------------------------
-    my $rusty = 1;
-#    my $upper_crosser = 0;
-    while(($taxon_name,$taxon_list)=each(%splist)){
-        my @maxintervals;
-        my @subsetinterval;
-        my @nextinterval;
-        my @lowerbound;
-        my %taxaHash;
-        my $sql;
-# ---------------------START TAXON CHECKER----------------------------------
-        my @taxon_list = split(",",$taxon_list);
-        # We have a list of one of more numbers and we know $taxon_name exists in the authorities table
-        if ($taxon_list[0] =~ /^\d+$/) {
-            my $taxon_sql = join(",",map {$dbh->quote($_)} @taxon_list);
-            $sql = "(SELECT o.collection_no FROM occurrences o ".
-                   " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no".
-                   " WHERE o.taxon_no IN ($taxon_sql) AND re.reid_no IS NULL)".
-                   " UNION ".  
-                   "(SELECT o.collection_no FROM occurrences o, reidentifications re".
-                   " WHERE o.occurrence_no=re.occurrence_no AND re.most_recent='YES'".
-                   " AND re.taxon_no IN ($taxon_sql))";
-            my $taxon_name_link = $taxon_name;
-            $taxon_name_link =~ s/\s*(indet(\.)*|sp\.)//;
-            $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name_link";
-        } else {
-        # No taxon_no for it, match against occurrences table
-            my @taxon = split(/\s+/,$taxon_list[0]);
-            if (scalar(@taxon) == 2) {
-                my $genus = $dbh->quote($taxon[0]);
-                my $species = $dbh->quote($taxon[1]);
-                $sql = "(SELECT o.collection_no FROM occurrences o ".
-                       " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no".
-                       " WHERE o.genus_name=$genus AND o.species_name=$species AND re.reid_no IS NULL)".
-                       " UNION ".  
-                       "(SELECT o.collection_no FROM occurrences o, reidentifications re".
-                       " WHERE o.occurrence_no=re.occurrence_no AND re.most_recent='YES'".
-                       " AND re.genus_name=$genus AND re.species_name=$species)";
-                $taxon_rank = 'Genus and species';
-            } elsif (scalar(@taxon) ==1) {
-                my $genus = $dbh->quote($taxon[0]);
-                $sql = "(SELECT o.collection_no FROM occurrences o ".
-                       " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no".
-                       " WHERE o.genus_name=$genus AND AND re.reid_no IS NULL)".
-                       " UNION ".  
-                       "(SELECT o.collection_no FROM occurrences o, reidentifications re".
-                       " WHERE o.occurrence_no=re.occurrence_no AND re.most_recent='YES'".
-                       " AND re.genus_name=$genus)";
-            } 
-            $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name";
-        }
-        my @col_nos = @{$dbt->getData($sql)};
-        my @collnums;
-        for my $col_n (@col_nos)        {
-            push @collnums, $col_n->{collection_no};
-        }    
-        #All the collection numbers containing a certain taxon
-        #need to find max_inteval for each collection in chosen scale.
-        my %anotherHash;
-        my $count;
-        foreach my $counter (keys(%$timeHash)) {
-            foreach my $arraycounter (@collnums) {
-                if ($arraycounter == $counter) {
-                    push @{$anotherHash{$timeHash->{$counter}}}, $arraycounter;
-                    $count++;
-                } 
+    if ($scale == 6 || $scale == 73) {
+        foreach my $interval_no (32,33) { # Holocene Pleistocene tackd onto gradstein and hardland stages
+            foreach my $sub_itv ($t->mapIntervals($interval_no)) {
+                $mapping->{$sub_itv} = $interval_no;
             }
         }
+        unshift @scale,33;
+        unshift @scale,32;
+    }
+    
+
+    my $ig = $t->getIntervalGraph;
+    my $interval_names;
+    foreach my $itv (values %$ig) {
+        $interval_names->{$itv->{interval_no}} = $itv->{name};
+    }
+
+    my %taxa_hash;
+
+    while(my ($taxon_name,$occurrence_list) = each(%occ_list)){
+
+        my $occs = getOccurrenceData($dbt,'occurrence_list'=>$occurrence_list);
+
+        my %mismappings;
+        my %mappings;
+        foreach my $occ (@$occs) {
+            my $max = $occ->{'max_interval_no'};
+            my $min = $occ->{'max_interval_no'} || $max;
+            if ($mapping->{$max} && $mapping->{$max} == $mapping->{$min}) {
+                my $mapped_interval_no = $mapping->{$max};
+                push @{$mappings{$mapped_interval_no}}, $occ->{'collection_no'};
+            } else {
+                push @{$mismappings{$max."_".$min}}, $occ->{'collection_no'};
+            }
+        } 
+
        
-        main::dbg("anotherHash for $taxon_name:".Dumper(\%anotherHash));
-       
-        if (! scalar keys %anotherHash) {
+        if (! %mappings) {
             push @not_in_scale, $taxon_name;
         } else {
-            push @masterHashOccMatrixOrder, $taxon_name;
-            while (my ($interval_no,$interval_name) = each %namescale) {
-                push @{$masterHash{$interval_no}}, scalar(@{$anotherHash{$interval_name}});
-            }
-            
-            
+            my $bar_data = {};
+            $bar_data->{'mappings'} = \%mappings;
+            $bar_data->{'mismappings'} = \%mismappings;
+            $taxa_hash{$taxon_name} = $bar_data;
+
             #------------FIND FIRST AND LAST OCCURRENCES---------------
-            my $firstint;
-            my $lastint;
+            my $first_interval;
+            my $last_interval;
+            my $last_lower;
             my @gaplist;
-            my $temp = 0;
-            my $temptime;
-            my $m = 0;
-            
-            foreach my $interval_no (sort {$a <=> $b} keys(%masterHash)) {
-                if (@{$masterHash{$interval_no}}[$rusty + 2] ne "" && $temp == 0) {
-                    $lastint = $interval_no;
-                    $temptime = @{$masterHash{$interval_no}}[2];
-                    $temp = 1;
+           
+            for(my $i=0;$i<@scale;$i++) {
+                my $interval_no = $scale[$i];
+                if (!$last_interval && $bar_data->{'mappings'}->{$interval_no}) {
+                    $last_interval = $interval_no;    
+                    my $lower = $lower_boundary->{$interval_no};
+                    $last_lower = $lower;
                 }
-                if (@{$masterHash{$interval_no}}[$rusty + 2] ne "" && $temp == 1) {
-                    $firstint = $interval_no;
-                    push @gaplist, sprintf("%.1f", @{$masterHash{$interval_no}}[2] - $temptime);  #round to 1 decimal precision
-                    $temptime = @{$masterHash{$interval_no}}[2];
-                    $m++;
+                if ($bar_data->{'mappings'}->{$interval_no}) {
+                    my $map_count = scalar(@{ $bar_data->{'mappings'}->{$interval_no} });
+                    $first_interval = $interval_no;
+                    my $lower = $lower_boundary->{$interval_no};
+                    push @gaplist, sprintf("%.1f", $lower - $last_lower); #round to 1 decimal precision
+                    if ($map_count > 1) {
+                        foreach (2 .. $map_count) {
+                            push @gaplist, 0;
+                        }
+                    }
+                    
+                    $last_lower = $lower;
                 }
             }
-            
-            my $first = @{$masterHash{$firstint}}[2];
-            my $last = @{$masterHash{$lastint}}[1];
-            my $lastbottom = @{$masterHash{$lastint}}[2];
-            my $intervallength = $first - $last;
+          
+            my ($C1,$C2) = (0,0);
+            while (my ($i,$c) = each %{$bar_data->{'mappings'}}) {
+                $C1 += scalar(@$c);
+            }
+            while (my ($i,$c) = each %{$bar_data->{'mismappings'}}) {
+                $C2 += scalar(@$c);
+            }
+#            print "FOR $taxon_name: $C1 MAPPED, $C2 MISMAPPED<BR>";
+           
+            my $first = $lower_boundary->{$first_interval};
+            my $last = $upper_boundary->{$last_interval};
+
+            my $length = $first - $last;
             my $N = scalar(@gaplist);
+            #my $occ_count = scalar(@$occs);
 
             shift @gaplist;
-            transpositionTest(\@gaplist, $N);   # TRANSPOSITION TEST
+            $bar_data->{correlation} = transpositionTest(reverse @gaplist);
             @gaplist = sort {$a <=> $b} @gaplist;
             
-            if ($conftype eq "Strauss and Sadler (1989)") {
-                straussSadler($count,$C,$conffor,$intervallength);
+            my ($first_c_long, $last_c_long, $first_c_short, $last_c_short);
+            if ($conf_method eq "Strauss and Sadler (1989)") {
+                my $conf_length = StraussSadler1989($N,$C,$conf_type,$length);
+                $first_c_long = $conf_length;
+#                $conf_length /= $length;
+                $last_c_long = $conf_length;
+            } elsif ($conf_method eq "Marshall (1994)") {
+                ($first_c_long, $first_c_short) = Marshall1994(\@gaplist,$C);
+                ($last_c_long , $last_c_short)  = ($first_c_long, $first_c_short);
             }
-            if ($conftype eq "Marshall (1994)") {
-                distributionFree(\@gaplist,$N,$C);
-            }
-            
-            if ($conftype eq "Solow (1996)") {  
-                $solowHash{$taxon_name} = [$m,$last,$first];
-            }
-
-            my $upper = $last;
-            my $lower = $first;
+           
+            $bar_data->{'first'} = $first; 
+            $bar_data->{'last'} = $last; 
+            $bar_data->{'length'} = $length; 
+            $bar_data->{'occurrence_count'} = $N;
+            $bar_data->{'last_short'} = $last - $last_c_short if ($last_c_short =~ /\d/);
+            $bar_data->{'last_long'} = $last - $last_c_long if ($last_c_long =~ /\d/);
+            $bar_data->{'first_short'} = $first + $first_c_short if ($first_c_short =~ /\d/);
+            $bar_data->{'first_long'} = $first + $first_c_long if ($first_c_long =~ /\d/);
         
-            if ($conffor eq "last appearance" || $conffor eq "total duration")	{
-                $upper = $last - $lastconfidencelengthlong;
-                $uppershort = $last - $lastconfidencelengthshort;
-                if ($upper > $uppershort) {$upper = $uppershort}
-                if ($upper < 0) {
-                	$upper = 0;
-                	#$upper_crosser = 1; ?? Not used PS
-                }
-                if ($uppershort < 0) {$uppershort = 0};
-            }
-        
-            if ($conffor eq "first appearance" || $conffor eq "total duration")   {
-                $lower = $first + $firstconfidencelengthlong;
-                $lowershort = $first + $firstconfidencelengthshort;
-                if ($lower < $lowershort) {$lower = $lowershort}
-            }
-        
-            $theHash{$taxon_name} = [$upper, $lower, $first, $last, $firstconfidencelengthlong, $intervallength, $uppershort, $lowershort, $correlation,$N,$firstconfidencelengthshort,$lastconfidencelengthlong,0];
-            
-#IMPORTANT: UNLIKE OTHER METHODS, CAN"T CALCULATE SOLOW UNTIL FULL LIST IS BUILT
-#    print "theHash ".Dumper(\%theHash)."<br>";
-#    print "anotherHash ".Dumper(\%anotherHash)."<br>";
-            $rusty++;
         }
     }
 
-    if (scalar(@not_in_scale) == scalar(keys(%splist))) {
+    if (scalar(@not_in_scale) == scalar(keys(%occ_list))) {
         print "<p></p><div class=\"warning\">Warning: Could not map any of the taxa to the timescale requested. <br></div>";
-        optionsForm($q, $s, $dbt, \%splist, 'small');
+        optionsForm($q, $s, $dbt, \%occ_list, 'small');
         return;
     }
+
+    if ($conf_method eq "Solow (1996)") { 
+        # Min and max
+        my @mx;
+        foreach my $taxon (keys(%taxa_hash)) {
+            push @mx, $taxa_hash{$taxon}{'first'};
+            push @mx, $taxa_hash{$taxon}{'last'};
+        }
+        @mx = sort {$a <=> $b} @mx;
+        my $Smax = $mx[$#mx];
+        my $Smin = $mx[0];
+        my ($firstsig, $first_c_long, $lastsig, $last_c_long) = Solow1996(\%taxa_hash,$C,$conf_type);
     
-
-
-
-    my @mx;
-    foreach my $keycounter (keys(%solowHash)) {
-        push @mx, $solowHash{$keycounter}[2];
-        push @mx, $solowHash{$keycounter}[1];
-    }  #there must be an easier may to find the maximum horizon!!
-    @mx = sort {$a <=> $b} @mx;
-    my $Smax = $mx[scalar(@mx) - 1];
-    my $Smin = $mx[0];
-
-    if ($conftype eq "Solow (1996)") {  
-        commonEndPoint(\%solowHash,$C,$conffor);
-    
-        foreach my $keycounter (keys(%theHash)) {
-            if ($firstconfidencelengthlong != -999) {
-                $theHash{$keycounter}[1] = $Smax + $firstconfidencelengthlong;
-                $theHash{$keycounter}[4] = $firstconfidencelengthlong;
-            }
-            
-            if ($lastconfidencelengthlong != -999) {
-                $theHash{$keycounter}[0] = $Smin - $lastconfidencelengthlong;
-                $theHash{$keycounter}[11] = $lastconfidencelengthlong;
-            }        
+        foreach my $taxon (keys %taxa_hash) {
+            $taxa_hash{$taxon}{'first_long'} = $first_c_long if ($first_c_long =~ /\d/);
+            $taxa_hash{$taxon}{'first_sig'} = $firstsig;
+            $taxa_hash{$taxon}{'last_long'} = $last_c_long if ($last_c_long =~ /\d/);
+            $taxa_hash{$taxon}{'last_sig'} = $lastsig;
         }
     } 
-       
-#--------------------------------GD---------------------------------------------
 
-    my $fig_wide = scalar(keys(%theHash));
-    my $fig_width = 170 + (16 * $fig_wide);
-    my $fig_length = 250 + 400;
-
-    $image_count = getImageCount();
-                                                                                                                                                             
-    my $imagenamejpg = "confimage$image_count.jpg";
-    my $imagenamepng = "confimage$image_count.png";
-    my $imagenameai = "confimage$image_count.ai";
-    my $image_map = "<map name='ConfidenceMap'>";
-    open(IMAGEJ, ">$IMAGE_DIR/$imagenamejpg");
-    open(IMAGEP, ">$IMAGE_DIR/$imagenamepng");
-    open(AI,">$IMAGE_DIR/$imagenameai");
-    open(AIHEAD,"<./data/AI.header");
-    while (<AIHEAD>)	{
-        print AI $_;
-    }
-    close AIHEAD;
-    my $gd = GD::Image->new($fig_width,$fig_length);       
-    my $poly = GD::Polygon->new();    
-
-    my ($gdColors,$aiColors) = getPalette($gd); 
-    
-    $gd->rectangle(0,0,$fig_width - 1,$fig_length - 1,$gdColors->{'black'});
-#-------------------------MAKING SCALE----------------
-    my $upperlim = 1000;
-    my $lowerlim = 0;
-
-    my %periodinclude;
-    my $mintemp;
-    my $maxtemp;
-    foreach my $count (keys(%theHash)) {
-        my $tempupp = 0;
-        my $templow = 0;
-        foreach my $counter (sort {$a <=> $b} keys(%masterHash))	{
-            if ($mintemp == 0) {
-                $mintemp = $counter;
-            }
-            if ($masterHash{$counter}[2] > @{$theHash{$count}}[0] && $tempupp == 0)	{
-	            $tempupp = $counter - 2;
-            }
-            if ($masterHash{$counter}[1] > @{$theHash{$count}}[1] && $templow == 0)	{
-                $templow = $counter;
-            }
-            $maxtemp = $counter;
-        }
-        if ($tempupp < $mintemp) {
-        	push @{$masterHash{$mintemp - 1}}, ('', 0, @{$masterHash{$mintemp}}[1], 0);
-        	push @{$masterHash{$mintemp - 2}}, ('', 0, 0, 0);
-        	$periodinclude{$tempupp - 1} = $masterHash{$tempupp - 1}[2];
-        }
-
-  #      $periodinclude{$tempupp} = $masterHash{$tempupp + 1}[1];
-
-        if ($templow > $maxtemp) {$templow = $maxtemp};
-        if ($tempupp < $upperlim) {$upperlim = $tempupp};
-        if ($templow > $lowerlim) {$lowerlim = $templow};
-    }
-
-	foreach my $counter ($upperlim..$lowerlim)	{
-        $periodinclude{$counter} = $masterHash{$counter}[2];
-    }
-#    print "<br><br>periodinclude".Dumper(\%periodinclude);
-#    print "<br><br>masterHash ".Dumper(\%masterHash)."<br>";
-#    print "<br><br>theHash ".Dumper(\%theHash)."<br>";
-    
-    
-#    print "<br>periodinclude " . Dumper(\%periodinclude) . "<br>";
-#	print "<br> mintemp: $mintemp    $upperlim     $lowerlim";
-	    
-    my $lowerval = $masterHash{$lowerlim}[2];
-    my $upperval = $masterHash{$upperlim}[1];
-    my $totalval = $lowerval - $upperval;
-    
-#	print "<br> upperval: $upperval    lowerval: $lowerval    totalval: $totalval";
-    
-    my $millionyr = 400 / $totalval;
-    my $marker = 150;
-    my $Smarker = 150;
-    my $aimarker = 150;
-    my $tempn = 0;
-#    my $first_rep = 0;
-    my $leng;
-    foreach my $interval_no (sort {$a <=> $b} keys(%periodinclude))	{
-        my $temp = 230 + (($periodinclude{$interval_no} - $upperval) * $millionyr);
-	
-        if (($temp - $tempn) > 17 && $tempn > 0)	{
-            my $interval_name = @{$masterHash{$interval_no}}[0];
-            $interval_name =~ s/Early\/Lower/Early/;
-            $interval_name =~ s/Late\/Upper/Late/;
-            $leng = length($interval_name);
-            $gd->string(gdTinyFont, $marker - 35 - ($leng * 5), ((($temp - $tempn)/2) + $tempn - 3) , $interval_name, $gdColors->{'black'});
-            aiText("null",$aimarker - 140, ((($temp - $tempn)/2) + $tempn + 3) ,$interval_name,$aiColors->{'black'});       #AI
-#            $leng = length(@{$masterHash{$interval_no}}[0]);
-#            print "<br> length is $leng";
-        }
-        if (($temp - $tempn) > 10)	{
-            $leng = length(sprintf("%.1f", $masterHash{$interval_no}[2]));
-            $gd->string(gdTinyFont, $marker - 48  - ($leng * 5), $temp - 3, sprintf("%.1f", $masterHash{$interval_no}[2]), $gdColors->{'black'});
-            aiText("null", $aimarker - 75, $temp + 3, sprintf("%.1f", $masterHash{$interval_no}[2]),$aiColors->{'black'});       #AI
-        }
-        if ($tempn != 0) {
-            my @interval_array = split(/ /,@{$masterHash{$interval_no}}[0]);
-            my ($eml,$name);
-            if (scalar(@interval_array) > 1) {($eml,$name) = @interval_array; }
-            else {($name)=@interval_array;}
-            $image_map .= "<area shape=rect coords=\"10,".int($temp).",".($marker-30).",".int($tempn)."\" HREF=\"bridge.pl?action=displayCollResults&eml_max_interval=$eml&max_interval=$name&eml_min_interval=$eml&min_interval=$name&taxon_list=".join(",",values %splist)."\" ALT=\"".@{$masterHash{$interval_no}}[0]."\">";
-        }
-        $gd->line($marker - 35, $temp, $marker - 30, $temp, $gdColors->{'black'});
-        aiLine($aimarker - 35, $temp, $aimarker - 30, $temp,$aiColors->{'black'});    #AI
-        $tempn = $temp;
-    }
-    $gd->line($marker - 30, 230, $marker - 30, $fig_length - 20, $gdColors->{'black'});
-    aiLine($aimarker - 30, 230,$aimarker - 30, 530, $aiColors->{'black'});    #AI
-    
-# -------------------------------SORT OUTPUT----------------------------
-    my @sortedKeys = keys(%theHash);
+    # SORT OUTPUT
+    my @sortedTaxa = keys %taxa_hash;
     if ($q->param('order') eq "first appearance")   {
-        @sortedKeys = sort {$theHash{$b}[2] <=> $theHash{$a}[2] ||
-                            $theHash{$b}[3] <=> $theHash{$a}[3] ||
-                            $a cmp $b} @sortedKeys;
+        @sortedTaxa = sort {$taxa_hash{$b}{'first'} <=> $taxa_hash{$a}{'first'} ||
+                            $taxa_hash{$b}{'last'} <=> $taxa_hash{$a}{'last'} ||
+                            $a cmp $b} @sortedTaxa;
     } elsif ($q->param('order') eq "last appearance") {
-        @sortedKeys = sort {$theHash{$b}[3] <=> $theHash{$a}[3] ||
-                            $theHash{$b}[2] <=> $theHash{$a}[2] ||
-                            $a cmp $b} @sortedKeys;
+        @sortedTaxa = sort {$taxa_hash{$b}{'last'} <=> $taxa_hash{$a}{'last'} ||
+                            $taxa_hash{$b}{'first'} <=> $taxa_hash{$a}{'first'} ||
+                            $a cmp $b} @sortedTaxa;
     } elsif ($q->param('order') eq "name")   {
-        @sortedKeys = sort {$a cmp $b} @sortedKeys;
+        @sortedTaxa = sort {$a cmp $b} @sortedTaxa;
     } else  {
-        @sortedKeys = sort {$theHash{$b}[5] <=> $theHash{$a}[5] ||
-                            $theHash{$b}[2] <=> $theHash{$a}[2] ||
-                            $a cmp $b} @sortedKeys;
+        @sortedTaxa = sort {$taxa_hash{$b}{'length'} <=> $taxa_hash{$a}{'length'} ||
+                            $taxa_hash{$b}{'first'} <=> $taxa_hash{$a}{'first'} ||
+                            $a cmp $b} @sortedTaxa;
     }
-#---------------------------BARS---------------------------
-    my $dotmarkerfirst;
-    my $dotmarkerlast;
-    my $dottemp = 0;
-    my $barup;
-    my $bardn;
-    foreach my $taxon_name (@sortedKeys) {
-        $barup = 230 + (@{$theHash{$taxon_name}}[3] - $upperval) * $millionyr;
-        $bardn = 230 + (@{$theHash{$taxon_name}}[2] - $upperval) * $millionyr;
-      
-        #-------------------- GREY BOXES (PS) ------------------------ 
-        my $tempn =0;
-        my $idx=-1;
-        for ($i=0;$i<scalar(@masterHashOccMatrixOrder);$i++) { if ($taxon_name eq $masterHashOccMatrixOrder[$i]) {$idx=3+$i} }
-                        
-        foreach my $key (sort {$a <=> $b} keys(%periodinclude))	{
-            my $temp = 230 + (($periodinclude{$key} - $upperval) * $millionyr);
-           
-            if (@{$masterHash{$key}}[$idx]) {
-                my $interval_name  = ${$masterHash{$key}}[0];
-                next if (!$interval_name);
-                my $gdGlyphColor = exists($gdColors->{$q->param('color')}) ? $gdColors->{$q->param('color')} : $gdColors->{'grey'};
-                my $aiGlyphColor = exists($aiColors->{$q->param('color')}) ? $aiColors->{$q->param('color')} : $aiColors->{'grey'};
-                if ($q->param('glyph_type') eq 'circles') {
-                    $gd->filledArc($marker+3,int(($tempn+$temp)/2),5,5,0,360,$gdGlyphColor);
-                    aiFilledArc($marker+3,int(($tempn+$temp)/2),5,5,0,360,$aiGlyphColor);
-                } elsif ($q->param('glyph_type') eq 'hollow circles') {
-                    $gd->arc($marker+3,int(($tempn+$temp)/2),5,5,0,360,$gdGlyphColor);
-                    aiArc($marker+3,int(($tempn+$temp)/2),7,5,0,360,$aiGlyphColor);
-                } elsif ($q->param('glyph_type') eq 'squares') {
-                    $gd->filledRectangle($marker,int(($tempn+$temp)/2-2.5),$marker+5,int(($tempn+$temp)/2+2.5),$gdGlyphColor);
-                    aiFilledRectangle($marker,int(($tempn+$temp)/2-2.5),$marker+5,int(($tempn+$temp)/2+2.5),$aiGlyphColor);
-                } elsif ($q->param('glyph_type') eq 'hollow squares') {
-                    $gd->rectangle($marker,int(($tempn+$temp)/2+2.5),$marker+5,int(($tempn+$temp)/2-2.5),$gdGlyphColor);
-                    aiRectangle($marker,int(($tempn+$temp)/2+2.5),$marker+5,int(($tempn+$temp)/2-2.5),$aiGlyphColor);
-                } else {
-                    $gd->filledRectangle($marker+1,int($tempn),$marker+5,int($temp),$gdGlyphColor);
-                    aiFilledRectangle($aimarker,int($tempn),$aimarker+5,int($temp),$aiGlyphColor);
-                }
 
-                # use the taxon_no if possible
-                my $taxon_list = $splist{$taxon_name};
-                my @interval_array = split(/ /,$interval_name);
-                my ($eml,$name);
-                if (scalar(@interval_array) > 1) {($eml,$name) = @interval_array; } 
-                else {($name)=@interval_array;} 
-                $image_map .= "<area shape=rect coords=\"$marker,".int($temp).",".($marker+5).",".int($tempn)."\" HREF=\"bridge.pl?action=displayCollResults&eml_max_interval=$eml&max_interval=$name&eml_min_interval=$eml&min_interval=$name&taxon_list=$taxon_list\" ALT=\"".@{$masterHash{$key}}[0]."\">";
-            }
-            $tempn = $temp;
-        }
- 
-        if ($dottemp == 0) { 
-            $dotmarkerfirst = $bardn;
-            $dotmarkerlast = $barup;
-            $dottemp = 1;
-        }
-        
-#        print "upper:" . @{$theHash{$taxon_name}}[0] . "<BR>";
-#        print "lower:" . @{$theHash{$taxon_name}}[1] . "<BR>";
-#        print "first:" . @{$theHash{$taxon_name}}[2] . "<BR>";
-#        print "last:" . @{$theHash{$taxon_name}}[3] . "<BR>";
-#        print "uppershort:" . @{$theHash{$taxon_name}}[6] . "<BR>";
-#        print "lowershort:" . @{$theHash{$taxon_name}}[7] . "<BR>";
+    my $cg = new ConfidenceGraph(
+        $q->Vars,
+       'y_axis_unit'=>"Ma",
+       'y_axis_max'=>0,
+       'y_axis_type'=>'continuous');
 
-        my $limup;
-        my $limdn;
-        my $triangle = 0;
-        if (@{$theHash{$taxon_name}}[7] == @{$theHash{$taxon_name}}[1]) {
-            $limup = 230 + (@{$theHash{$taxon_name}}[6] - $upperval) * $millionyr;
-            $limdn = 230 + (@{$theHash{$taxon_name}}[7] - $upperval) * $millionyr;
-            $triangle = 1;
-        } else {
-            $limup = 230 + (@{$theHash{$taxon_name}}[0] - $upperval) * $millionyr;
-            $limdn = 230 + (@{$theHash{$taxon_name}}[1] - $upperval) * $millionyr;
-        }
-#        print "<br><br>limup $limup   limdn $limdn";
-        my $limupshort = 230 + (@{$theHash{$taxon_name}}[6] - $upperval) * $millionyr;
-        my $limdnshort = 230 + (@{$theHash{$taxon_name}}[7] - $upperval) * $millionyr;
-        
-        # Draw confidence bar
-        $gd->rectangle($marker,$barup,$marker+6,$bardn,$gdColors->{'black'});
-        aiRectangle($marker,$barup,$marker+6,$bardn,$aiColors->{'black'});
 
-        my $recent = 0;
-        if ($barup == 50)   {
-            $recent = 1;  
-        } elsif ($limup <= 50) {
-            $recent = 2;
-        } else  {
-            if (($conffor eq "last appearance" || $conffor eq "total duration") && $conftype ne "Solow (1996)")	{
-                $gd->rectangle($marker + 2,$barup,$marker + 3,$limup, $gdColors->{'black'});
-                $gd->line($marker + 0,$limup,$marker + 5,$limup, $gdColors->{'black'}); 
-                $gd->line($marker + 0,$limupshort,$marker + 5,$limupshort, $gdColors->{'black'});
-                aiRectangle($aimarker + 2,$barup,$aimarker + 3,$limup, $aiColors->{'black'});
-                aiLine($aimarker + 0,$limup,$aimarker + 5, $limup, $aiColors->{'black'});
-                aiLine($aimarker + 0,$limupshort,$aimarker + 5, $limupshort, $aiColors->{'black'});
-                if ($triangle == 1 && @{$theHash{$taxon_name}}[6] > 0) {
-                	#if ($upper_crosser == 1) {$limupshort = $limup};
-                    $gd->line($marker + 1,$limupshort - 1,$marker + 4,$limupshort - 1, $gdColors->{'black'});
-                    $gd->line($marker + 1,$limupshort - 2,$marker + 4,$limupshort - 2, $gdColors->{'black'});
-                    $gd->line($marker + 2,$limupshort - 3,$marker + 3,$limupshort - 3, $gdColors->{'black'});
-                    $gd->line($marker + 2,$limupshort - 4,$marker + 3,$limupshort - 4, $gdColors->{'black'});
-                    aiLine($aimarker + 1,$limupshort - 1,$aimarker + 4,$limupshort - 1, $aiColors->{'black'});
-                    aiLine($aimarker + 1,$limupshort - 2,$aimarker + 4,$limupshort - 2, $aiColors->{'black'});
-                    aiLine($aimarker + 2,$limupshort - 3,$aimarker + 3,$limupshort - 3, $aiColors->{'black'});
-                    aiLine($aimarker + 2,$limupshort - 4,$aimarker + 3,$limupshort - 4, $aiColors->{'black'});
+    foreach my $interval_no (@scale) {
+        my $max = $lower_boundary->{$interval_no};
+        my $min = $upper_boundary->{$interval_no};
+        my $interval_name = $interval_names->{$interval_no};
+        my %collections = ();
+        while (my ($label,$taxon_data) = each %taxa_hash) {
+            if (exists $taxon_data->{'mappings'}->{$interval_no}) {
+                foreach (@{$taxon_data->{'mappings'}->{$interval_no}}) {
+                    $collections{$_} = 1;
                 }
             }
         }
-        if (($conffor eq "first appearance" || $conffor eq "total duration") && $conftype ne "Solow (1996)")   {
-            $gd->rectangle($marker + 2,$bardn,$marker + 3,$limdn, $gdColors->{'black'});
-            $gd->line($marker + 0,$limdn,$marker + 5,$limdn, $gdColors->{'black'}); 
-            $gd->line($marker + 0,$limdnshort,$marker + 5,$limdnshort, $gdColors->{'black'}); 
-            aiRectangle($aimarker + 2,$bardn,$aimarker + 3,$limdn, $aiColors->{'black'});
-            aiLine($aimarker + 0,$limdn,$aimarker + 5, $limdn, $aiColors->{'black'});
-            aiLine($aimarker + 0,$limdnshort,$aimarker + 5, $limdnshort, $aiColors->{'black'});
-                if ($triangle == 1) {
-                    $gd->line($marker + 1,$limdnshort + 1,$marker + 4,$limdnshort + 1, $gdColors->{'black'});
-                    $gd->line($marker + 1,$limdnshort + 2,$marker + 4,$limdnshort + 2, $gdColors->{'black'});
-                    $gd->line($marker + 2,$limdnshort + 3,$marker + 3,$limdnshort + 3, $gdColors->{'black'});
-                    $gd->line($marker + 2,$limdnshort + 4,$marker + 3,$limdnshort + 4, $gdColors->{'black'});
-                    aiLine($aimarker + 1,$limdnshort + 1,$aimarker + 4,$limdnshort + 1, $aiColors->{'black'});
-                    aiLine($aimarker + 1,$limdnshort + 2,$aimarker + 4,$limdnshort + 2, $aiColors->{'black'});
-                    aiLine($aimarker + 2,$limdnshort + 3,$aimarker + 3,$limdnshort + 3, $aiColors->{'black'});
-                    aiLine($aimarker + 2,$limdnshort + 4,$aimarker + 3,$limdnshort + 4, $aiColors->{'black'});
-                }
+        my $link;
+        if (scalar keys %collections) {
+            $link = "bridge.pl?action=displayCollResults&amp;collection_list=".join(",",keys %collections);
         }
-        $gd->stringUp(gdSmallFont, $marker-5, 200, "$taxon_name", $gdColors->{'black'});
-
-        $image_map .= "<area shape=rect coords=\"".($marker-5).",205,".($marker+7).",".(200-length($taxon_name)*6)."\" HREF=\"$links{$taxon_name}\" ALT=\"$taxon_name\">";
-        if (@{$theHash{$taxon_name}}[8] == 1) {
-            $gd->stringUp(gdTinyFont, $marker-1, 206, "*", $gdColors->{'black'});
-            aiTextVert(       "null", $aimarker-1,206, "*", $aiColors->{'black'});
-        }
-        $gd->string(gdSmallFont, 90, 200, 'Ma', $gdColors->{'black'});
-        $gd->string(gdTinyFont, $fig_width - 70,$fig_length - 10, "J. Madin 2004", $gdColors->{'black'});
-        aiTextVert(        "null", $aimarker+7, 200, "$taxon_name", $aiColors->{'black'});      #AI
-        $marker = $marker + 16;
-        $aimarker = $aimarker + 16;
-    }
-    
-    my $center = ((($marker - 11) - $Smarker) / 2) + $Smarker;
-    
-    if ($conftype eq "Solow (1996)" && $lastconfidencelengthlong != -999) {
-        for (my $counter = $Smarker; $counter <= ($marker - 11); $counter=$counter + 2) {
-            $gd->line($counter,230 + ($Smin - $upperval) * $millionyr,$counter,230 + ($Smin - $upperval) * $millionyr, $gdColors->{'black'});
-        }
-#        my $temptemp = (230 + ($Smax - $upperval) * $millionyr);
-#        print "barup: $temptemp <BR>";
-#        my $temptemp = (230 + ($Smin - $upperval) * $millionyr);
-#        print "barup: $temptemp <BR>";       
-
-#        print "dotmarkerlast: $dotmarkerlast <BR>";              
-        for (my $counter = (230 + ($Smin - $upperval) * $millionyr); $counter <= $dotmarkerlast; $counter=$counter + 2) {
-            $gd->line($Smarker, $counter,$Smarker,$counter, $gdColors->{'black'});
-#        print "counter: $counter <BR>";
-
-        }
-        
-        for (my $counter = (230 + ($Smin - $upperval) * $millionyr); $counter <= $barup; $counter=$counter + 2) {
-            $gd->line($marker - 11, $counter,$marker - 11,$counter, $gdColors->{'black'});
-#        print "counter: $counter <BR>";
-
-        }
-        my $conftemp = $lastconfidencelengthlong;
-#        print "lastconfidencelengthlong: $lastconfidencelengthlong <BR>";
-        
-        if (($Smin - $lastconfidencelengthlong) < 0) {
-            $conftemp = $Smin;
-            $gd->line($center -2,230 + 0,$center + 3,230 +0, $gdColors->{'black'});
-            $gd->line($center -1,230 -1,$center + 2,230 -1, $gdColors->{'black'});
-            $gd->line($center -1,230 -2,$center + 2,230 -2, $gdColors->{'black'});
-            $gd->line($center ,230 -3,$center + 1,230 -3, $gdColors->{'black'});
-            $gd->line($center ,230 -4,$center + 1,230 -4, $gdColors->{'black'});  
-        } else {
-#        print "conftemp: $conftemp <BR>";
-            $gd->line($Smarker,(230 + ($Smin - $conftemp - $upperval) * $millionyr),$marker - 11,(230 + ($Smin - $conftemp - $upperval) * $millionyr), $gdColors->{'black'}); 
-        }
-        $gd->rectangle($center , (230 + ($Smin - $conftemp - $upperval) * $millionyr), $center + 1,(230 + ($Smin - $upperval) * $millionyr), $gdColors->{'black'});
-        
-
-        
-    }
-    
-
-    
-    if ($conftype eq "Solow (1996)" && $firstconfidencelengthlong != -999) {
-        for (my $counter = $Smarker; $counter <= ($marker - 11); $counter=$counter + 2) {
-            $gd->line($counter,230 + ($Smax - $upperval) * $millionyr,$counter,230 + ($Smax - $upperval) * $millionyr, $gdColors->{'black'});
-        }
-        for (my $counter = $dotmarkerfirst; $counter <= (230 + ($Smax - $upperval) * $millionyr); $counter=$counter + 2) {
-            $gd->line($Smarker, $counter,$Smarker,$counter, $gdColors->{'black'});
-#        print "counter: $counter <BR>";
-
-        }
-        for (my $counter = $bardn; $counter <= (230 + ($Smax - $upperval) * $millionyr); $counter=$counter + 2) {
-            $gd->line($marker - 11, $counter,$marker - 11,$counter, $gdColors->{'black'});
-#        print "counter: $counter <BR>";
-
-        }
-        $gd->rectangle($center , (230 + ($Smax + $firstconfidencelengthlong - $upperval) * $millionyr), $center + 1,(230 + ($Smax - $upperval) * $millionyr), $gdColors->{'black'});
-        $gd->line($Smarker,(230 + ($Smax + $firstconfidencelengthlong - $upperval) * $millionyr),$marker - 11,(230 + ($Smax + $firstconfidencelengthlong - $upperval) * $millionyr), $gdColors->{'black'}); 
-
+        my $short_interval_name = $interval_name;
+        $short_interval_name =~ s/^early/e./;
+        $short_interval_name =~ s/^middle/m./;
+        $short_interval_name =~ s/^late/l./;
+        $short_interval_name =~ s/Early\/Lower/E./;
+        $short_interval_name =~ s/Middle/M./;
+        $short_interval_name =~ s/Late\/Upper/L./;
+        $cg->addRangeLabel($short_interval_name,$max,$min,$link,$interval_name);
+        $cg->addTick($max,$max);
+        $cg->addTick($min,$min);
     }
 
-    aiText("null", 90, 200, 'Ma', $aiColors->{'black'});                                     #AI
-#    aiText("null", $fig_width - 50,$fig_length - 0, "J. Madin 2004", $aiColors->{'black'});      #AI
-    open AIFOOT,"<./data/AI.footer";
-    while (<AIFOOT>) {print AI $_};
-    close AIFOOT;
-    print IMAGEJ $gd->jpeg;
-    print IMAGEP $gd->png;
-    close IMAGEJ;
-    close IMAGEP;
-    $image_map .= "</map>";
-# ---------------------------------RESULTS-PAGE----------------------------------------
-    print "<div align=\"cener\"><H2>Confidence interval results</H2></div>";
+    foreach my $taxon (@sortedTaxa) {
+        my $taxon_label = $taxon;
+        my $taxon_data = $taxa_hash{$taxon};
+        my %collections = ();
+        foreach my $interval_no (keys %{$taxon_data->{mappings}}){
+            foreach (@{$taxon_data->{'mappings'}->{$interval_no}}) {
+                $collections{$_} = 1;
+            }
+        }
+        my $link;
+        if (scalar keys %collections) {
+            $link = "bridge.pl?action=displayCollResults&amp;collection_list=".join(",",keys %collections);
+        }
+        $cg->addBar($taxon_label,$taxon_data,$link,$taxon);
 
-    print "<CENTER><A HREF=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">Help</A></CENTER>";
+        foreach my $interval_no (keys %{$taxon_data->{mappings}}){
+            my $max = $lower_boundary->{$interval_no};
+            my $min = $upper_boundary->{$interval_no};
+            my $interval_name = $interval_names->{$interval_no};
+            my %collections = ();
+            foreach (@{$taxon_data->{'mappings'}->{$interval_no}}) {
+                $collections{$_} = 1;
+            }
+            my $link;
+            if (scalar keys %collections) {
+                $link = "bridge.pl?action=displayCollResults&amp;collection_list=".join(",",keys %collections);
+            }
+            $cg->addPoint($taxon_label,[$max,$min],$link,"$taxon at $interval_name");
+        }
+    }
 
-    
-    if ($recent == 1)    {
-        print "<center><table><tr><th><font color=\"red\">
-            This taxon may not be extinct</font></th></tr></table></CENTER><BR><BR>";
-    }
-    if ($recent == 2)    {
-        print "<center><table><tr><th><font color=\"red\">
-            The upper confidence interval extends into the future and is therefore unreliable
-            </font></th></tr></table></CENTER><BR><BR>";
-    }
+    my ($image_map,$image_name) = $cg->drawGraph();
+
+    print printResultsPage($q,'Confidence interval results',$image_map,$image_name,\%taxa_hash,\@sortedTaxa,"Ma",\@not_in_scale);
+
+    optionsForm($q, $s, $dbt, \%occ_list, 'small');
+    print " <b><a href=\"bridge.pl?action=displayTaxaInteralsForm\">Start again</a></b><p></center><br><br><br>";
+
+}
+
+
+sub printResultsPage {
+    my ($q,$title,$image_map,$image_name,$taxa_data,$sorted_keys,$unit,$not_in_scale) = @_;
+    my @not_in_scale = @$not_in_scale;
+    my %taxa_hash = %$taxa_data;
+    my @sortedTaxa = @$sorted_keys;
+    my @warnings;
+
+    my $any_correlation = 0;
+    my $any_extant = 0;
+    my $any_future = 0;
+
+    my $conf_method = $q->param('conf_method');
+    $unit = " ($unit)" if ($unit);
+
+    my $image_count = $image_name;
+    $image_count =~ s/[^0-9]//g;
+
+    # RESULTS-PAGE
+    print "<div align=\"center\"><H2>$title</H2></div>";
     
     print $image_map;
-    print "<CENTER><TABLE><TD valign=\"top\"><IMG SRC=\"/public/confidence/$imagenamepng\"  USEMAP=\"#ConfidenceMap\" ISMAP BORDER=0></TD><TD WIDTH=40></TD>";
+    print "<div align=\"center\"><table><tr><td valign=\"top\" align=\"center\"><img src=\"/public/confidence/$image_name.png\"  usemap=\"#ConfidenceMap\" ismap border=0><br>";
+    print "<br><b>Download image as: <a href=\"/public/confidence/$image_name.png\">PNG</a>";
+    print ", <a href=\"/public/confidence/$image_name.jpg\">JPEG</a>";
+    print ", <a href=\"/public/confidence/$image_name.ai\">AI</a></b>";
+    print "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+    print "<b>Download data as: <a href=\"/public/confidence/confidence$image_count.csv\">CSV</a></b>";
+    print "<br><br><b>Click on a taxon, section level, or gray box to get more info</b><br><br></td></tr>";
   
-    print "<TD ALIGN=\"center\">";
-    if($conftype eq "Strauss and Sadler (1989)") {
-        my (@tableRowHeader, @tableColHeader, @table);
-        @tableRowHeader = ('last occurrence (Ma)','first occurrence (Ma)','confidence interval (Ma)', 'number of horizons', 'transposition test');
-        for($i=0;$i<scalar(@sortedKeys);$i++){
-            push @tableColHeader, $sortedKeys[$i]; #taxon name
-            my @confVals = @{$theHash{$sortedKeys[$i]}};
-            $table[$i] = [$confVals[3],$confVals[2],$confVals[4],$confVals[9],$confVals[8]];
+    print "<tr><td align=\"center\">";
+    my $html;
+    my $csv;
+    if($conf_method eq "Strauss and Sadler (1989)") {
+        my @table = ();
+        push @table, ["","first occurrence$unit","last occurrence$unit","confidence interval$unit", 'number of horizons', 'transposition test'];
+        for(my $i=0;$i<scalar(@sortedTaxa);$i++){
+            my @row = ();
+            push @row, $sortedTaxa[$i]; #taxon name
+            my $data = $taxa_hash{$sortedTaxa[$i]};
+            my $conf;
+            if ($data->{'first_long'} =~ /\d/) {
+                $conf = sprintf("%.3f",abs($data->{'first_long'} - $data->{'first'}));
+            } else {
+                $conf = "N/A";
+            }
+            push @row, ($data->{'first'},$data->{'last'},$conf,$data->{'occurrence_count'},$data->{'correlation'});
+            push @table,\@row;
         }
-        my $transpose = (scalar(@sortedKeys) > 5) ? 1 : 0;
-        printResultTable($image_count,'',\@tableRowHeader,\@tableColHeader,\@table,$transpose);
-    } elsif($conftype eq "Marshall (1994)") {
-        my (@tableRowHeader, @tableColHeader, @table);
-        @tableRowHeader = ('last occurrence (Ma)','first occurrence (Ma)','lower confidence interval (Ma)', 'upper confidence interval (Ma)','number of horizons', 'transposition test');
-        for($i=0;$i<scalar(@sortedKeys);$i++){
-            push @tableColHeader, $sortedKeys[$i]; #taxon name
-            my @confVals = @{$theHash{$sortedKeys[$i]}};
-            $table[$i] = [$confVals[3],$confVals[2],$confVals[10],$confVals[4],$confVals[9],$confVals[8]];
+        $html .= printResultTable(\@table);
+        $csv .= printCSV(\@table);
+    } elsif($conf_method eq "Marshall (1994)") {
+        my @table = ();
+        push @table,["","first occurrence$unit","last occurrence$unit","lower confidence interval$unit", "upper confidence interval$unit",'number of horizons', 'transposition test'];
+        for(my $i=0;$i<scalar(@sortedTaxa);$i++){
+            my @row = ();
+            push @row, $sortedTaxa[$i]; #taxon name
+            my $data = $taxa_hash{$sortedTaxa[$i]};
+            my $short;
+            if ($data->{'first_short'} =~ /\d/) {
+                $short = sprintf("%.3f",abs($data->{'first_short'} - $data->{'first'}));
+            } else {
+                $short = "N/A";
+            }
+            my $long; 
+            if ($data->{'first_long'} =~ /\d/) {
+                $long = sprintf("%.3f",abs($data->{'first_long'} - $data->{'first'}));
+            } else {
+                $long = "N/A";
+            }
+            push @row, ($data->{'first'},$data->{'last'},$short,$long,$data->{'occurrence_count'},$data->{'correlation'});
+            push @table,\@row;
         }
-        my $transpose = (scalar(@sortedKeys) > 5) ? 1 : 0;
-        printResultTable($image_count,'',\@tableRowHeader,\@tableColHeader,\@table,$transpose);
-    } elsif($conftype eq "Solow (1996)") {
-        my (@tableRowHeader, @tableColHeader, @table);
-        @tableRowHeader = ('last occurrence (Ma)','first occurrence (Ma)','number of horizons', 'transposition test');
-        for($i=0;$i<scalar(@sortedKeys);$i++){
-            push @tableColHeader, $sortedKeys[$i]; #taxon name
-            my @confVals = @{$theHash{$sortedKeys[$i]}};
-            $table[$i] = [$confVals[3],$confVals[2],$confVals[9],$confVals[8]];
+        $html .= printResultTable(\@table);
+        $csv .= printCSV(\@table);
+    } elsif($conf_method eq "Solow (1996)") {
+        my @table = ();
+        push @table, ["","first occurrence$unit","last occurrence$unit",'number of horizons', 'transposition test'];
+        my $data;
+        for(my $i=0;$i<scalar(@sortedTaxa);$i++){
+            my @row;
+            push @row, $sortedTaxa[$i]; #taxon name
+            $data = $taxa_hash{$sortedTaxa[$i]};
+            push @row, ($data->{'first'},$data->{'last'},$data->{'occurrence_count'},$data->{'correlation'});
+            push @table,\@row;
         }
-        my $transpose = (scalar(@sortedKeys) > 5) ? 1 : 0;
-        printResultTable($image_count,'table 1',\@tableRowHeader,\@tableColHeader,\@table,$transpose);
-        print "<BR><BR>";
-        
-        my $temp1;
-        my $temp2;
-        if ($firstconfidencelengthlong == -999) {
-            $temp1 = "NA";
-        } else {$temp1 = sprintf("%.3f", $firstconfidencelengthlong)}
-        
-        if ($lastconfidencelengthlong == -999) {
-            $temp2 = "NA";
-        } else {$temp2 = sprintf("%.3f", $lastconfidencelengthlong)}
+        $html .= printResultTable(\@table);
+        $csv  .= printCSV(\@table);
+
+        $html .= "<br><br>";
+        $csv  .= ",\n";
+       
+        my $first_long = ($data->{'first_long'} =~ /\d/) ? sprintf("%.3f", $data->{'first_long'}) : "NA";
+        my $first_sig  = $data->{'first_sig'};
+        my $last_long  = ($data->{'last_long'}  =~ /\d/) ? sprintf("%.3f", $data->{'last_long'})  : "NA";
+        my $last_sig   = $data->{'last_sig'};
       
         # print table 2 
-        print "<TABLE CELLSPACING=1 BGCOLOR=\"black\" CELLPADDING=5><TR BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD>table 2</TD><TD WIH=70><B>significance level</B></TD><TD WIH=70><B>confidence limit (Ma)</B></TD></TR>";
-        if ($firstsig != -999) {
-        print "<TR  BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD WIH=70><B>common first occurrence</B></TD><TD>$firstsig</TD><TD>$temp1</TD></TR>";
+        @table = ();
+        push @table,["","significance level","confidence limit$unit"];
+        if ($first_sig =~ /\d/) {
+            push @table,['common first occurrence',$first_sig,$first_long]; 
         }
-        if ($lastsig != -999) {
-        print "<TR  BGCOLOR=\"white\" ALIGN=\"CENTER\"><TD WIH=70><B>common last occurrence</B></TD><TD>$lastsig</TD><TD>$temp2</TD></TR>";
+        if ($last_sig =~ /\d/) {
+            push @table,['common last occurrence',$last_sig,$last_long];
         }
-        print "</TABLE>";
+        if (@table) {
+            $html .= printResultTable(\@table);
+            $csv .= printCSV(\@table);
+        }
+    }
+
+    my $file = "$ENV{BRIDGE_HTML_DIR}/public/confidence/confidence$image_count.csv";
+    open CSV,">$file";
+    print CSV $csv;
+
+    print $html;
+
+    print "<br></td></tr></table>";
+
+
+    if ($any_correlation)    {
+        push @warnings, '* This taxon fails the tranposition test';
+    } 
+
+    if ($any_extant)    {
+        push @warnings, '** This taxon may not be extinct';
+    }
+
+    if ($any_future) {
+        push @warnings, '*** The upper confidence interval extends into the future and is therefore unreliable';
     }
     if (scalar @not_in_scale) {
-        if (scalar(@not_in_scale) > 1) {
-            print "<p></p><div style='border: 1px #000000 solid; font-weight: bold; text-align: center;'>Warning: The following taxa were excluded from the chart because they could not be mapped to the time scale specified:<br>";
-        } else {
-            print "<p></p><div style='border: 1px #000000 solid; font-weight: bold; text-align: center;'>Warning: The following taxon was excluded from the chart because it could not be mapped to the time scale specified:<br>";
-        }
-        print join(", ",@not_in_scale);
-        print "</div>";
+        push @warnings, "The following taxa were excluded from the chart because they could not be mapped to the time scale specified:<br>".join(", ",@not_in_scale);
     }
-    print "</TD></TR>";
         
-    print "</TABLE></TD>";
-
-    print "</TABLE></CENTER><BR><BR>";
-    
-    print "<CENTER><TABLE><TR><TH>Click on a taxon, section level, or gray box to get more info</TH></TR></TABLE></CENTER><BR>";
-    print "<CENTER><b>Download figure as: <a href=\"/public/confidence/$imagenamepng\" TARGET=\"xy\">PNG</a>";
-    print ", <a href=\"/public/confidence/$imagenamejpg\" TARGET=\"xy\">JPEG</a>";
-    print ", <a href=\"/public/confidence/$imagenameai\">AI</a><BR><BR></b>";
-    #print "<INPUT TYPE=submit VALUE=\"Start again\"><BR><BR><BR>";
-    optionsForm($q, $s, $dbt, \%splist, 'small');
-    print " <a href='bridge.pl?action=displayTaxaInteralsForm'>Start again</a></b><p></center><BR><BR><BR>";
+    if (@warnings) {
+        print "<div align=\"center\">".Debug::printWarnings(\@warnings)."</div><br>";
+    }
 
     return;
-} #End Subroutine CalculateIntervals
+}
+
+
+sub printCSV {
+    my $csv = Text::CSV_XS->new();
+
+    my @table = @{$_[0]};
+    my $rows = scalar(@table);
+    my $cols = scalar(@{$table[0]});
+
+    my $txt = "";
+    for(my $i=0;$i<$rows;$i++) {
+        my @row = @{$table[$i]};
+        if ($csv->combine(@row)) {
+            $txt .= $csv->string."\n";
+        }
+    }
+    return $txt;
+}
 
 # Used in CalculateTaxaInterval, print HTML table
 sub printResultTable { 
-    $tableNo = $_[0];
-    $tableName = $_[1];
-    $tableRowHeader = $_[2];
-    $tableColHeader = $_[3];
-    @table = @{$_[4]};
-    $transpose = ($_[5] || 0);
-    
+    my @table = @{$_[0]};
+    my $rows = scalar(@table);
+    my $cols = scalar(@{$table[0]});
 
-    # Print it out to file
-    @tableRowHeader = @$tableRowHeader;
-    @tableColHeader = @$tableColHeader;
-    my $csv = Text::CSV_XS->new();
-    my $file = "$ENV{BRIDGE_HTML_DIR}/public/confidence/confidence$tableNo.csv";
-    open FILE_H,">$file";
-    $csv->combine(($tableName,@tableColHeader));
-    print FILE_H $csv->string(),"\n";
-    for(my $rowNum=0;$rowNum<scalar(@tableRowHeader);$rowNum++){
-        my @row = ($tableRowHeader[$rowNum]);
-        for(my $colNum=0;$colNum<scalar(@tableColHeader);$colNum++){
-            push @row, $table[$colNum][$rowNum];
-        }
-        if ($csv->combine(@row))    {
-            print FILE_H $csv->string(),"\n";
-        }
+    my $html = '<table><tr><td>';
+    $html .= '<table class="simpleTable">';
+    for(my $j=0;$j<$cols;$j++) {
+        $html .= qq|<td class="simpleTableHeader">$table[0][$j]</td>|;
     }
-    close FILE_H;   
-
-    # Print it out to a HTML table
-    if ($transpose) {
-        @tableRowHeader = @$tableColHeader;
-        @tableColHeader = @$tableRowHeader;
-    } else {
-        @tableRowHeader = @$tableRowHeader;
-        @tableColHeader = @$tableColHeader;
-    }
-
-    # RESULTS TABLE HEADER
-    print "<TABLE<TR><TD>";
-    print "<TABLE CELLSPACING=1 BGCOLOR=\"black\" CELLPADDING=5><TR BGCOLOR=\"white\" ALIGN=\"CENTER\">";
-    print "<TD BGCOLOR=\"white\" ALIGN=\"CENTER\"><span style='font-size: 10pt;'><B>$tableName</B></span></TD>";
-    foreach $col (@tableColHeader) { 
-        print "<TD BGCOLOR=\"white\" ALIGN=\"center\"><span style='font-size: 9pt;'><B><I>$col</I></B></span></TD>";
-    }    
-    print "</TR>";
+    $html .= "</tr>";
     # RESULTS TABLE BODY
-    for(my $rowNum=0;$rowNum<scalar(@tableRowHeader);$rowNum++){
-        print "<TR><TD BGCOLOR=\"white\" ALIGN=\"center\"><span style='font-size: 9pt;'><B>$tableRowHeader[$rowNum]</B></span></TD>";
-        for(my $colNum=0;$colNum<scalar(@tableColHeader);$colNum++){
-            if ($transpose) {
-                print "<TD BGCOLOR=\"white\" ALIGN=\"center\"><span style='font-size: 9pt;'>".$table[$rowNum][$colNum]."</span></TD>";
-            } else {
-                print "<TD BGCOLOR=\"white\" ALIGN=\"center\"><span style='font-size: 9pt'>".$table[$colNum][$rowNum]."</span></TD>";
-            }
+    for(my $i=1;$i<$rows;$i++) {
+        for(my $j=0;$j<$cols;$j++) {
+            $html .= qq|<td class="simpleTableCell">$table[$i][$j]</td>|;
         }
-        print "</TR>";
+        $html .= "</tr>";
     }
-    print "</TABLE>";
-    print "<a href=\"/public/confidence/confidence$tableNo.csv\">Download confidence data</a>";
-    print "</TD></TR></TABLE>";
+    $html .= "</table>";
+#    $html .= "<b>Download as: <a href=\"/public/confidence/confidence$tableNo.csv\">CSV</a></b>";
+    $html .= "</td></tr></table>";
+    return $html;
 }
 
 #--------------CALCULATE STRATIGRAPHIC RELATIVE CONFIDENCE INTERVALS----------------
@@ -1483,430 +1142,227 @@ sub calculateStratInterval	{
     my $s=shift;
     my $dbt=shift;
     my $dbh=$dbt->dbh;
-    my $marker = 100;
     my $section_name = uri_unescape($q->param("input"));
     my $section_type = ($q->param("input_type") eq 'regional') ? 'regional' : 'local';
     my $alpha = $q->param("alpha");
-#   $alpha = 1 - $alpha;
-    my $conffor = $q->param("conffor");
-    my $conftype = $q->param("conftype");
+    my $conf_type = $q->param("conf_type");
+    my $conf_method = $q->param("conf_method");
     my $stratres = $q->param("stratres");
 
-    for(my $i=0;$q->param("speciesname$i");$i++) {
-        my $taxon_name = $q->param("keepspecies$i");
-        my @taxon_nos = split(",",$q->param("speciesname$i"));
-        my ($occ_sql,$reid_sql);
-        if ($taxon_nos[0] =~ /^\d+$/) {
-            $taxon_sql = $q->param("speciesname$i"); 
-            $occ_sql = "o.taxon_no IN ($taxon_sql)";
-            $reid_sql = "re.taxon_no IN ($taxon_sql)";
-        } else {
-            my ($genus,$species) = split(/ /,$taxon_nos[0]);
-            $occ_sql = " o.genus_name=".$dbh->quote($genus);
-            $reid_sql = " re.genus_name=".$dbh->quote($genus);
-            if ($species) {
-                $occ_sql .= "AND o.species_name=".$dbh->quote($species);
-                $reid_sql .= "AND re.species_name=".$dbh->quote($species);
-            }
-        }
+    my %taxa_hash;
+    my %sectionbed;
+    my %sectionorder;
+    my %bed_unit;
+    my %occ_list;
 
-        my $sql = "(SELECT ${section_type}bed, ${section_type}order, ${section_type}bedunit, o.collection_no, o.genus_name, o.species_name, o.taxon_no FROM collections c, occurrences o". 
-                  " LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no ".
-                  " WHERE c.collection_no=o.collection_no".
-                  " AND $occ_sql".
-                  " AND re.reid_no IS NULL".
-                  " AND ${section_type}section=".$dbh->quote($section_name).
-                  " AND ${section_type}bed REGEXP '^(-)?[0-9.]+\$')".
-                  " UNION ".
-                  "(SELECT ${section_type}bed, ${section_type}order, ${section_type}bedunit, o.collection_no, o.genus_name, o.species_name, re.taxon_no FROM collections c, occurrences o, reidentifications re". 
-                  " WHERE c.collection_no=o.collection_no".
-                  " AND re.occurrence_no=o.occurrence_no".
-                  " AND re.most_recent = 'YES'".
-                  " AND $reid_sql".
-                  " AND ${section_type}section=".$dbh->quote($section_name).
-                  " AND ${section_type}bed REGEXP '^(-)?[0-9.]+\$')";
+    for(my $i=0;$q->param("occurrence_list_$i");$i++) {
+        my $taxon_name = $q->param("taxon_name_$i");
+        my $occurrence_list = $q->param("occurrence_list_$i");
+        $occ_list{$taxon_name}=$occurrence_list;
 
-        main::dbg("sql to get beds from species list: $sql");
-        my @beds_and_colls = @{$dbt->getData($sql)};
-        foreach my $row (@beds_and_colls) {
-            $bed_unit = $row->{$section_type.'bedunit'};
-            $sectionbed{$row->{'collection_no'}}=$row->{$section_type.'bed'};
-            push @{$mainHash{$taxon_name}}, $row->{$section_type.'bed'};
-            if ($row->{'taxon_no'}) {
-                if ($q->param('taxon_resolution') eq 'genus') {
-                    $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name&taxon_rank='Genus'";
-                } else {
-                    $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_no=$row->{taxon_no}";
-                }
-            } else {
-                if ($q->param('taxon_resolution') eq 'genus') {
-                    $taxon_rank = 'Genus';
-                } else {
-                    $taxon_rank = 'Genus and species';
-                }
-                $links{$taxon_name} = "bridge.pl?action=checkTaxonInfo&taxon_name=$taxon_name&taxon_rank=$taxon_rank";
-            }
+        my $occs = getOccurrenceData($dbt,
+            occurrence_list=>$occurrence_list,
+            fields=>"${section_type}bed, ${section_type}order, ${section_type}bedunit, c.collection_no, o.genus_name, o.species_name, o.taxon_no"
+        );
+
+        foreach my $row (@$occs) {
+            $bed_unit{$row->{$section_type.'bedunit'}}++;
+            $sectionbed{$row->{'collection_no'}} = $row->{$section_type.'bed'};
+            $sectionorder{$row->{$section_type.'order'}}++;
+            push @{$taxa_hash{$taxon_name}{'beds'}}, $row->{$section_type.'bed'};
+            push @{$taxa_hash{$taxon_name}{'collections'}}, $row->{collection_no};
         }
     }
 
-
-# ----------------------------GENERAL FIGURE DIMENSIONS---------------------------
-    my @tempp = sort {$a <=> $b} values %sectionbed;                        
-    main::dbg("sorted sectionbed values:".Dumper(\@tempp));
-    main::dbg("mainHash (genus->beds array):".Dumper(\%mainHash));
-    my $number_horizons = scalar(@tempp);            # how many horizons for whole section
-    my $maxhorizon = $tempp[$number_horizons-1];     # the maximum horizon number, e.g., 17 (+1, for upper bound)
-    my $minhorizon = $tempp[0] - 1;                      # thw minimum horizon number, e.g., 3
-# -------------------CALCULATE CONFIEDENCE INTS------------------------------
-    my %stratHash;
-    my $upper_lim = $maxhorizon;
-    my $lower_lim = $minhorizon;
-    my $upper_horizon_lim = $upper_lim;
-    my $lower_horizon_lim = $lower_lim;
-# ---------------------------STRAUSS AND SADLER----------------------------------
-    foreach my $counter (sort {$a cmp $b} keys(%mainHash))  {
-        my $conf = 0;
-        my @array = sort {$a <=> $b} @{$mainHash{$counter}};
-        my $count = scalar(@array);         # number of horizons
-    #        print "$counter: $count<BR>";
-        my $lower = $array[0] - 1;              # lower species horizon, say 6
-        my $upper = $array[$count - 1]; # upper species horizon, say 10 (+ 1, for upper bound of interval)
-        my $length = $upper - $lower;        # total number of horizons for species, therefore 5;
-        my $limit = 0;
-        # -----------------------------------------
-        if ($conffor eq 'last appearance' || $conffor eq 'first appearance' || $conffor eq 'total duration')  {
-
-            if ($count > 2) {                   # make sure that enough horizons for analysis
-                my $iterate;
-                if ($conffor eq 'last appearance' || $conffor eq 'first appearance')	{    # one tailed
-                    $conf = ((1 - $alpha)**(-1/($count - 1))) - 1;
-                } else	{                                                        # two tailed
-                    foreach my $scounter (1..30000)	{
-                        $conf = $scounter/1000;
-                        $iterate = (1 - (2 * ((1 + $conf)**( - ($count - 1)) ) ) + ((1 + 2 * $conf)**( - ($count - 1))));
-                        if ($iterate > $alpha)	{
-                            last;
-                        }
-                    }
-                }
-            }
-        }
-        # -----------------------------------------
-        $limit = ($length * $conf)/$length;   # length of conf interval as number of horizons
-        $upper_horizon_lim = $upper + $limit;
-        $lower_horizon_lim = $lower - $limit;
-        if ($upper_horizon_lim > $upper_lim)   {$upper_lim = $upper_horizon_lim;}
-        if ($lower_horizon_lim < $lower_lim)   {$lower_lim = $lower_horizon_lim;}
-        $stratHash{$counter} = [$lower, $upper, $limit, $length];  # fill in Hash array with necessary info
+    
+    my @orders = sort {$sectionorder{$b} <=> $sectionorder{$a}} keys %sectionorder;
+    my $common_order = $orders[0];
+    my $y_axis_order = 1;
+    if ($common_order =~ /top to bottom/) {
+        $y_axis_order = 0;
     }
-# ----------------------------THE MAX AND MIN CONFIDENCE RANGES-------------------
 
-    if ($conffor eq "last appearance" || $conffor eq "total duration")	{
-        $upper_lim = (int $upper_lim) + 1;
-    } else {
-        $upper_lim = $maxhorizon;
+    my @units = sort {$bed_unit{$b} <=> $bed_unit{$a}} keys %bed_unit;
+    my $common_unit = $units[0];
+
+
+    # Build and display graph
+    my $y_axis_type = 'discrete';
+    if ($common_unit) {
+        $y_axis_type = 'continuous';
     }
-    if ($conffor eq "first appearance" || $conffor eq "total duration")	{    
-        if ($lower_lim < 0) {
-            $lower_lim = (int $lower_lim) - 3;
-        } else  {
-            $lower_lim = (int $lower_lim) - 2;
-        }
-    } else  {
-        $lower_lim = $minhorizon - 3;
-    }    
-    my $fig_wide = scalar(keys(%mainHash));
-    my $fig_long = $upper_lim - $lower_lim;
-    my $horizon_unit = 400/$fig_long;
-    my $lateral_unit = 16;
-    my $fig_width = 120 + ($lateral_unit * $fig_wide);
-    my $fig_length = 250 + 400;#($horizon_unit * $fig_long);
-    my $image_map = "<map name='ConfidenceMap'>";
-# ------------------------------------GD------------------------
-    $image_count = getImageCount();
-                                                                                                                                                             
-    my $imagenamejpg = "confimage$image_count.jpg";
-    my $imagenamepng = "confimage$image_count.png";
-    my $imagenameai = "confimage$image_count.ai";
 
-    open(IMAGEJ, ">$IMAGE_DIR/$imagenamejpg");
-    open(IMAGEP, ">$IMAGE_DIR/$imagenamepng");
-    open(AI,">$IMAGE_DIR/$imagenameai");
-    open(AIHEAD,"<./data/AI.header");
-    while (<AIHEAD>)	{
-        print AI $_;
-    }
-    close AIHEAD;
-    my $gd = GD::Image->new($fig_width,$fig_length);   
-    my $poly = GD::Polygon->new();    
-
-    my ($gdColors,$aiColors) = getPalette($gd); 
-
-    $gd->rectangle(0,0,$fig_width-1,$fig_length - 1,$gdColors->{'black'});
-# ---------------------------------SCALE BAR---------------------
-    my $i = 0;
-    my $j = 0;
-    print AI "u\n";                                                     # AI start the group 
-    foreach my $counter (($lower_lim)..($upper_lim+1))  {
-        if ($i > $j)    {
-            $gd->line(65,($fig_length - 20) - $i,70,($fig_length - 20) - $i,$gdColors->{'black'});   #GD
-            $str = $counter;
-            if ($bed_unit) {
-                $str .= " $bed_unit";
-            } else {
-                $str = "  ".$str;
-            }
-            $gd->string(gdTinyFont,50-length($counter)*5,($fig_length - 20) - ($i) - 4,$str,$gdColors->{'black'});      #GD
-            aiLine(65,($fig_length - 20) - $i,70,($fig_length - 20) - $i,$aiColors->{'black'});    #AI
-            aiText("null",50-length($counter)*6,(($fig_length - 20) - $i) + 2,$str,$aiColors->{'black'});       #AI
-            if ($counter > $minhorizon && $counter <= $maxhorizon) {
-                $image_map .= "<area shape=rect coords=\"".(50-length($counter)*6).",".int($fig_length - $i - 15).",55,".int($fig_length - $i - 30)."\" HREF=\"bridge.pl?action=displayCollResults&${section_type}section=$section_name&${section_type}bed=$counter\" ALT=\"$section_type bed $counter of $section_name\">";
-            }
-            $j = $j + 8;
+    my @all_beds = ($y_axis_order) 
+        ? sort {$b <=> $a} values %sectionbed
+        : sort {$a <=> $b} values %sectionbed;                        
+    my $number_horizons = scalar(@all_beds);    # how many horizons for whole section
+    my $minhorizon = $all_beds[0];              # youngest horizon, e.g. 3
+    my $maxhorizon = $all_beds[$#all_beds];     # the oldest horizon number, e.g., 17 (+1, for upper bound)
+    
+    my @all_values = @all_beds;
+    foreach my $taxon_name (keys(%taxa_hash)) {
+        my $bar_data = $taxa_hash{$taxon_name};
+            
+        my @horizons = ($y_axis_order) 
+            ? sort {$b <=> $a} @{$bar_data->{'beds'}}
+            : sort {$a <=> $b} @{$bar_data->{'beds'}};
+        my $count = scalar(@horizons);
+        my @gaplist;
+        for(my $i=1;$i<@horizons;$i++) {
+            push @gaplist, abs($horizons[$i] - $horizons[$i-1]);
         }
-        if ($counter == $maxhorizon || $counter == $minhorizon) {
-            $gd->dashedLine(70,($fig_length - 20) - $i,$fig_width - 20,($fig_length - 20) - $i,$gdColors->{'black'});   #GD
-            aiLineDash(70,($fig_length - 20) - $i,$fig_width - 20,($fig_length - 20) - $i,$aiColors->{'black'});      #AI
-        }
-        $i = $i + $horizon_unit;
-    }
-    print AI "U\n";                                                     # AI terminate the group 
-    $gd->line(70,$fig_length - 20 - $horizon_unit,70,$fig_length - (($fig_long + 1)*$horizon_unit) - 20,$gdColors->{'black'});   #GD    
-    $gd->stringUp(gdMediumBoldFont, 13,(250 + (($fig_length - 220)/2)), "$section_name", $gdColors->{'black'});
-    #$image_map .= "<area shape=rect coords=\"12,".int(260 + ($fig_length - 220)/2).",28,".int(260 + ($fig_length-380)/2-length($section_name)*7)."\" HREF=\"bridge.pl?action=displayStrataSearch&localsection=$section_name\" ALT=\"section $section_name\">";
-    $gd->string(gdTinyFont, $fig_width - 70,$fig_length - 10, "J. Madin 2004", $gdColors->{'black'});
-    aiLine(70,$fig_length - 20 - $horizon_unit,70,$fig_length - (($fig_long + 1)*$horizon_unit) - 20,$aiColors->{'black'});   #AI    
-    aiTextVert("null", 13,(250 + (($fig_length - 220)/2)), "Section: $section_name", $aiColors->{'black'});
-    aiText("null", $fig_width - 70,$fig_length - 10, "J. Madin 2004", $aiColors->{'black'});    
-# -------------------------------SORT OUTPUT----------------------------
-    my @sortedKeys = keys(%stratHash);
-    if ($q->param('order') eq "first appearance") {
-        @sortedKeys = sort {$stratHash{$a}[0] <=> $stratHash{$b}[0] ||
-                            $stratHash{$a}[1] <=> $stratHash{$b}[1] ||
-                            $a cmp $b} @sortedKeys;
-    } elsif ($q->param('order') eq "last appearance") {
-        @sortedKeys = sort {$stratHash{$a}[1] <=> $stratHash{$b}[1] ||
-                            $stratHash{$a}[0] <=> $stratHash{$b}[0] ||
-                            $a cmp $b} @sortedKeys;
-    } elsif ($q->param('order') eq "name")   {
-        @sortedKeys = sort {$a cmp $b} @sortedKeys;
-    } else  {
-        @sortedKeys = sort {$stratHash{$a}[3] <=> $stratHash{$b}[3] ||
-                            $stratHash{$a}[1] <=> $stratHash{$b}[1] ||
-                            $a cmp $b} @sortedKeys;
-    }
-# -------------------------------SPECIES BARS----------------------------
-    foreach my $counter (@sortedKeys) {
-        # -----------------GREY BOXES IN BAR (PS)--------------------------
-        my @sectionbeds = @{$mainHash{$counter}};
-        my %seenBeds = ();
-        foreach $bed (@sectionbeds) {
-            if (!$seenBeds{$bed}) {
-                my $gdGlyphColor = exists $gdColors->{$q->param('color')} ? $gdColors->{$q->param('color')} : $gdColors->{'grey'};
-                my $aiGlyphColor = exists $aiColors->{$q->param('color')} ? $aiColors->{$q->param('color')} : $aiColors->{'grey'};
-                if ($q->param('glyph_type') eq 'circles') {
-                    $gd->filledArc($marker+3,int($fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit)),5,5,0,360,$gdGlyphColor);
-                    aiFilledArc($marker+3,int($fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit)),5,5,0,360,$aiGlyphColor);
-                } elsif ($q->param('glyph_type') eq 'hollow circles') {
-                    $gd->arc($marker+3,int($fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit)),5,5,0,360,$gdGlyphColor);
-                    aiArc($marker+3,int($fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit)),5,5,0,360,$aiGlyphColor);
-                } elsif ($q->param('glyph_type') eq 'squares') {
-                    $ymid = $fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit);
-                    $gd->filledRectangle($marker+1,$ymid-2,$marker+5,$ymid+3,$gdGlyphColor);
-                    aiFilledRectangle($marker,$ymid-2,$marker+5,$ymid+3,$aiGlyphColor);
-                } elsif ($q->param('glyph_type') eq 'hollow squares') {
-                    $ymid = $fig_length-20-(($bed-.5-$lower_lim)*$horizon_unit);
-                    $gd->rectangle($marker+1,$ymid-2,$marker+5,$ymid+3,$gdGlyphColor);
-                    aiRectangle($marker,$ymid-2,$marker+5,$ymid+3,$aiGlyphColor);
-                } else {
-                    $gd->filledRectangle($marker+1,$fig_length-20-(($bed-$lower_lim)*$horizon_unit),$marker+5,$fig_length-20-(($bed-1-$lower_lim)*$horizon_unit),$gdGlyphColor);
-                    aiFilledRectangle($marker,$fig_length-20-(($bed-$lower_lim)*$horizon_unit),$marker+5,$fig_length-20-(($bed-1-$lower_lim)*$horizon_unit),$aiGlyphColor);
-                }  
-
-                $image_map .= "<area shape=rect coords=\"".$marker.",".int($fig_length-20-(($bed-$lower_lim)*$horizon_unit)).",".($marker+5).",".int($fig_length-20-(($bed-1-$lower_lim)*$horizon_unit))."\" HREF=\"bridge.pl?action=displayCollResults&${section_type}section=$section_name&${section_type}bed=$bed&genus_name=$counter\" ALT=\"$counter in $section_type bed $bed of section $section_name\">";
-            }
-            $seenBeds{$bed} = 1;
-        }
-        $gd->rectangle($marker, ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), $marker + 6, ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit) , $gdColors->{'black'});
-        aiRectangle(   $marker, ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), $marker + 6, ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit) , $aiColors->{'black'});
-# -----------------CONFIDENCE BARS--------------------------
-        if ($conffor eq "first appearance" || $conffor eq "total duration")	{
-            $gd->rectangle(($marker + 2), ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), ($marker + 3), ($fig_length - 20) - ((-$lower_lim + ($stratHash{$counter}[0] - $stratHash{$counter}[2])) * $horizon_unit), $gdColors->{'black'});
-            aiRectangle(($marker + 2), ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[0]) * $horizon_unit), ($marker + 3), ($fig_length - 20) - ((-$lower_lim + ($stratHash{$counter}[0] - $stratHash{$counter}[2])) * $horizon_unit), $aiColors->{'black'});            
-        }
-        if ($conffor eq "last appearance" || $conffor eq "total duration")   {
-            $gd->rectangle(($marker + 2), ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit), ($marker + 3), ($fig_length - 20) - ((-$lower_lim + ($stratHash{$counter}[1] + $stratHash{$counter}[2])) * $horizon_unit), $gdColors->{'black'});
-            aiRectangle((   $marker + 2), ($fig_length - 20) - ((-$lower_lim + $stratHash{$counter}[1]) * $horizon_unit), ($marker + 3), ($fig_length - 20) - ((-$lower_lim + ($stratHash{$counter}[1] + $stratHash{$counter}[2])) * $horizon_unit), $aiColors->{'black'});
-        }    
-        $gd->stringUp(gdSmallFont, $marker-5, 200, "$counter", $gdColors->{'black'});
-        aiTextVert(        "null", $marker+7, 200, "$counter", $aiColors->{'black'});
-#        $image_map .= "<area shape=rect coords=\"".($marker-5).",205,".($marker+7).",".(200-length($counter)*6)."\" HREF=\"bridge.pl?action=checkTaxonInfo&taxon_name=$counter\" ALT=\"$counter\">";
-        $image_map .= "<area shape=rect coords=\"".($marker-5).",205,".($marker+7).",".(200-length($counter)*6)."\" HREF=\"$links{$counter}\" ALT=\"$counter\">";
-
+        my $first  = $horizons[$#horizons]; # upper species horizon, say 10 (+ 1, for upper bound of interval)
+        my $last   = $horizons[0];              # lower species horizon, say 6
+        my $length = ($y_axis_type =~ /continuous/) 
+            ? abs($first - $last)
+            : abs($first - $last) + 1;        # total number of horizons for species, therefore 5;
+            
+        $bar_data->{correlation} = transpositionTest(reverse @gaplist);
         
-        $marker = $marker + $lateral_unit;
+        my ($first_c_long, $last_c_long, $first_c_short, $last_c_short);
+        if ($conf_method eq "Strauss and Sadler (1989)") {
+            my $conf_length = StraussSadler1989($count,$alpha,$conf_type,$length);
+#            my $conf_horizons = $conf_length/$length;   # length of conf interval as number of horizons
+            ($first_c_long,$last_c_long) = ($conf_length,$conf_length);
+        } elsif ($conf_method eq "Marshall (1994)") {
+            @gaplist = sort {$a <=> $b} @gaplist;
+            ($first_c_long, $first_c_short) = Marshall1994(\@gaplist,$alpha);
+            ($last_c_long , $last_c_short)  = ($first_c_long, $first_c_short); 
+        }
+        $bar_data->{'occurrence_count'} = $count; 
+        $bar_data->{'first'}  = $first;
+        $bar_data->{'last'}   = $last;
+        $bar_data->{'length'} = $length;
+        if ($y_axis_order)  {
+            $bar_data->{'first_long'} = $first - $first_c_long if ($first_c_long =~ /\d/);
+            $bar_data->{'first_short'} = $first - $first_c_short if ($first_c_short =~ /\d/);
+            $bar_data->{'last_long'} = $last + $last_c_long if ($last_c_long =~ /\d/);
+            $bar_data->{'last_short'} = $last + $last_c_short if ($last_c_short =~ /\d/);
+        } else {
+            $bar_data->{'first_long'} = $first + $first_c_long if ($first_c_long =~ /\d/);
+            $bar_data->{'first_short'} = $first + $first_c_short if ($first_c_short =~ /\d/);
+            $bar_data->{'last_long'} = $last - $last_c_long if ($last_c_long =~ /\d/);
+            $bar_data->{'last_short'} = $last - $last_c_short if ($last_c_short =~ /\d/);
+        }
+        push @all_values, $bar_data->{'first_long'} if ($bar_data->{'first_long'} =~ /\d/);
+        push @all_values, $bar_data->{'first_short'} if ($bar_data->{'first_short'} =~ /\d/);
+        push @all_values, $bar_data->{'last_long'} if ($bar_data->{'last_long'} =~ /\d/);
+        push @all_values, $bar_data->{'last_short'} if ($bar_data->{'last_short'} =~ /\d/);
     }
-    #$gd->stringFT($gdColors->{'black'},'/usr/X11R6/lib/X11/fonts/TTF/luximb.ttf',12,0,50,50,'Hello World');
-# ------------------------------------MAKE FIGURE------------------------------
-    open AIFOOT,"<./data/AI.footer";
-    while (<AIFOOT>) {print AI $_};
-    close AIFOOT;
-    print IMAGEJ $gd->jpeg;
-    print IMAGEP $gd->png;
-    close IMAGEJ;
-    close IMAGEP;
-    $image_map .= "</map>";
-# ---------------------------------RESULTS-PAGE----------------------------------------
-    print "<div align=\"center\"><H2><i>$section_name</i> stratigraphic section</H2></div><BR>";
-    #if ($fig_width > 750)  {
-    #   print "<CENTER><IMG WIDTH=750 SRC=\"/public/confidence/$imagenamepng\"></CENTER><BR><BR>";
-    #} else {
-    
-    print $image_map;
-    print "<CENTER><IMG SRC=\"/public/confidence/$imagenamepng\" USEMAP=\"#ConfidenceMap\" ISMAP BORDER=0></CENTER><BR><BR>";
-    #}
-    
-    print "<CENTER><TABLE><TR><TH>Click on a taxon, section level, or gray box to get more info</TH></TR></TABLE></CENTER><BR>";
-    print "<CENTER><b>Download figure as: <a href=\"/public/confidence/$imagenamepng\" TARGET=\"xy\">PNG</a>";
-    print ", <a href=\"/public/confidence/$imagenamejpg\" TARGET=\"xy\">JPEG</a>";
-    print ", <a href=\"/public/confidence/$imagenameai\">AI</a><BR><BR></b>";
 
-    optionsForm($q, $s, $dbt, \%splist, 'small');
-    print " <a href='bridge.pl?action=displaySearchSectionForm'>Do another search</a></b><p></center><BR><BR><BR>";
+    if ($conf_method eq "Solow (1996)") {
+        # Min and max
+        my @mx;
+        foreach my $taxon (keys(%taxa_hash)) {
+            push @mx, $taxa_hash{$taxon}{'first'};
+            push @mx, $taxa_hash{$taxon}{'last'};
+        }
+        @mx = sort {$a <=> $b} @mx;
+        my $Smax = $mx[$#mx];
+        my $Smin = $mx[0];
+        my ($firstsig, $first_c_long, $lastsig, $last_c_long) = Solow1996(\%taxa_hash,$alpha,$conf_type,$y_axis_order);
+    
+        foreach my $taxon (keys %taxa_hash) {
+            $taxa_hash{$taxon}{'first_long'} = $first_c_long if ($first_c_long =~ /\d/);
+            $taxa_hash{$taxon}{'first_sig'} = $firstsig;
+            $taxa_hash{$taxon}{'last_long'} = $last_c_long if ($last_c_long =~ /\d/);
+            $taxa_hash{$taxon}{'last_sig'} = $lastsig;
+        }
+    }
+
+    # Sort taxa
+    my @sortedTaxa = keys %taxa_hash;
+    if ($q->param('order') eq "first appearance") {
+        @sortedTaxa = sort {$taxa_hash{$a}{'first'} <=> $taxa_hash{$b}{'first'} ||
+                            $taxa_hash{$a}{'last'}  <=> $taxa_hash{$b}{'last'} ||
+                            $a cmp $b} @sortedTaxa;
+    } elsif ($q->param('order') eq "last appearance") {
+        @sortedTaxa = sort {$taxa_hash{$a}{'first'} <=> $taxa_hash{$b}{'first'} ||
+                            $taxa_hash{$a}{'last'} <=> $taxa_hash{$b}{'last'} ||
+                            $a cmp $b} @sortedTaxa;
+    } elsif ($q->param('order') eq "name")   {
+        @sortedTaxa = sort {$a cmp $b} @sortedTaxa;
+    } else  {
+        @sortedTaxa = sort {$taxa_hash{$a}{'length'} <=> $taxa_hash{$b}{'length'} ||
+                            $taxa_hash{$a}{'last'} <=> $taxa_hash{$b}{'last'} ||
+                            $a cmp $b} @sortedTaxa;
+    }
+
+    my $common_unit_full_name;
+    if ($common_unit eq 'm') {
+        $common_unit_full_name = "Meters";
+    } elsif ($common_unit eq 'cm') {
+        $common_unit_full_name = "Centimeters";
+    } elsif ($common_unit eq 'ft') {
+        $common_unit_full_name = "Feet";
+    } else {
+        $common_unit_full_name = "Beds";
+    }
+
+    my $cg = new ConfidenceGraph(
+        $q->Vars,
+        'y_axis_order'=>$y_axis_order,
+        'y_axis_unit'=>$common_unit,
+        'y_axis_label'=>$common_unit_full_name,
+        'y_axis_type'=>$y_axis_type);
+
+    @all_values = sort {$a <=> $b} @all_values;
+    foreach my $bed (int($all_values[0]-1) .. int($all_values[$#all_values]+1)) {
+        my $link = "";
+
+        my @collections;
+        while (my($collection_no,$bed_value) = each %sectionbed) {
+            if ($bed_value == $bed) {
+                push @collections,$collection_no;
+            }
+        }
+        if (@collections) {
+            $link = "bridge.pl?action=displayCollResults&amp;collection_list=".join(",",@collections);
+        }
+        $cg->addTick($bed,$bed,$link,$bed);
+    }
+
+    foreach my $taxon (@sortedTaxa) {
+        my $taxon_label = $taxon;
+        my $taxon_data = $taxa_hash{$taxon};
+        my $collection_list = join(",",@{$taxon_data->{'collections'}});
+        my $link = "bridge.pl?action=displayCollResults&amp;collection_list=$collection_list";
+        $cg->addBar($taxon_label,$taxon_data,$link,$taxon);
+
+        foreach my $bed (@{$taxon_data->{beds}}){
+            my $link = "";
+
+            my @collections;
+            for(my $i=0;$i<scalar(@{$taxon_data->{beds}});$i++) {
+                if ($bed == $taxon_data->{beds}->[$i]) {
+                    push @collections, $taxon_data->{collections}->[$i];
+                }
+            }
+            if (@collections) {
+                $link = "bridge.pl?action=displayCollResults&amp;collection_list=".join(",",@collections);
+            }
+            $cg->addPoint($taxon_label,$bed,$link,"$taxon at $bed");
+        }
+    }
+
+    my ($image_map,$image_name) = $cg->drawGraph();
+
+    print printResultsPage($q,"<i>$section_name</i> stratigraphic section",$image_map,$image_name,\%taxa_hash,\@sortedTaxa,$common_unit,[]);
+
+    optionsForm($q, $s, $dbt, \%occ_list, 'small');
+    print " <b><a href=\"bridge.pl?action=displaySearchSectionForm\">Start again</a><b><p></center><br><br><br>";
 
     return;
 } 
 
-sub aiLine {
-    my $x1=shift;
-    my $y1=shift;
-    my $x2=shift;
-    my $y2=shift;
-    my $color=shift;
-    print AI "$color\n";
-    print AI "[]0 d\n";
-    printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
-    printf AI "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y2;
-    print AI "S\n";
-}
-
-sub aiLineDash {
-    my $x1=shift;
-    my $y1=shift;
-    my $x2=shift;
-    my $y2=shift;
-    my $color=shift;
-    print AI "$color\n";
-    print AI "[6 ]0 d\n";
-    printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
-    printf AI "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y2;
-    print AI "S\n";
-}
-
-
-sub aiArc{
-    my ($x,$y,$diam,$null1,$null2,$null3,$color) = @_;
-
-    my $rad = $diam / 2;
-    my $aix = $AILEFT+$x+$rad;
-    my $aiy = $AITOP-$y;
-    my $obl = $diam * 0.27612;
-    print AI "$color\n";
-    print AI "0 G\n";
-    printf AI "%.1f %.1f m\n",$aix,$aiy;
-    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix,$aiy-$obl,$aix-$rad+$obl,$aiy-$rad,$aix-$rad,$aiy-$rad;
-    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad-$obl,$aiy-$rad,$aix-$diam,$aiy-$obl,$aix-$diam,$aiy;
-    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$diam,$aiy+$obl,$aix-$rad-$obl,$aiy+$rad,$aix-$rad,$aiy+$rad;
-    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad+$obl,$aiy+$rad,$aix,$aiy+$obl,$aix,$aiy;
-    print AI "b\n";
-}
-sub aiFilledArc{
-    my ($x,$y,$diam,$null1,$null2,$null3,$color) = @_;
-
-    my $rad = $diam / 2;
-    my $aix = $AILEFT+$x+$rad;
-    my $aiy = $AITOP-$y;
-    my $obl = $diam * 0.27612;
-    print AI "$color\n";
-    print AI "0 G\n";
-    printf AI "%.1f %.1f m\n",$aix,$aiy;
-    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix,$aiy-$obl,$aix-$rad+$obl,$aiy-$rad,$aix-$rad,$aiy-$rad;
-    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad-$obl,$aiy-$rad,$aix-$diam,$aiy-$obl,$aix-$diam,$aiy;
-    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$diam,$aiy+$obl,$aix-$rad-$obl,$aiy+$rad,$aix-$rad,$aiy+$rad;
-    printf AI "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad+$obl,$aiy+$rad,$aix,$aiy+$obl,$aix,$aiy;
-    print AI "f\n";
-}
-
-sub aiFilledRectangle {
-    my $x1=shift;
-    my $y1=shift;
-    my $x2=shift;
-    my $y2=shift;
-    my $color=shift;
-    print AI "0 O\n";
-    print AI "$color\n";
-    print AI "0.5 g\n";
-    print AI "4 M\n";
-    printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
-    printf AI "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y1;
-    printf AI "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y2;
-    printf AI "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y2;
-    printf AI "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1;
-    print AI "f\n";
-}
-
-sub aiRectangle {
-    my $x1=shift;
-    my $y1=shift;
-    my $x2=shift;
-    my $y2=shift;
-    my $color=shift;
-    print AI "$color\n";
-    print AI "[]0 d\n";
-    printf AI "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
-    printf AI "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y1;
-    printf AI "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y2;
-    printf AI "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y2;
-    printf AI "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1;
-    print AI "S\n";
-}
-
-sub aiTextVert {
-    my $font=shift;
-    my $x=shift;
-    my $y=shift;
-    my $text=shift;
-    my $color=shift;
-    print AI "0 To\n";
-    printf AI "0 1 -1 0 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$x,$AITOP-$y;
-    printf AI "0 Tr\n0 O\n%s\n",$color;
-    printf AI "/_Courier %.1f Tf\n",12; 
-    printf AI "0 Tw\n";
-    print AI "($text) Tx 1 0 Tk\n";
-    print AI "(\r) Tx 1 0 Tk\nTO\n";
-}
-
-sub aiText {
-    my $font=shift;
-    my $x=shift;
-    my $y=shift;
-    my $text=shift;
-    my $color=shift;
-    print AI "0 To\n";
-    printf AI "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$x,$AITOP-$y;
-    printf AI "0 Tr\n0 O\n%s\n",$color;
-    printf AI "/_Courier %.1f Tf\n",12; 
-    printf AI "0 Tw\n";
-    print AI "($text) Tx 1 0 Tk\n";
-    print AI "(\r) Tx 1 0 Tk\nTO\n";
-}
 
 sub transpositionTest {
-    my $gaplist = shift;
-    my @gaplist = @$gaplist;
-    my $N = shift;
+    my @gaplist = @_;
+    my $N = scalar(@gaplist);
+
     my $Tmax = ($N * ($N - 1))/2;
-    foreach my $counter (1 .. 2) {    
+    my $Total;
+    foreach my $h (1 .. 2) {    
         my $T = 0;
         my $Tequal = 0;
         my @done;
@@ -1916,30 +1372,31 @@ sub transpositionTest {
                 if ($gaplist[$j] <  $gaplist[$i]) {
                     $T++;
                 }
-                my $pmet = 0;
-                foreach my $counter (@done) {
-                    if ($i == $counter) {
-                        $pmet = 1;
-                    }
-                }
-                if (($gaplist[$i] == $gaplist[$j]) && ($pmet == 0)) {
-                    $temp++;
-                }
-            }    
-            push @done, $gaplist[$i];
-            $Tequal = $Tequal + ($temp*($temp - 1))/4;
+            }   
         }
-        $Total = $T + $Tequal;
+        $Total = $T;
+#        print "H$h TOTAL: $Total\n";
+        my %same_value;
+        foreach (@gaplist) {
+            $same_value{$_}++;
+        }
+        while (my ($gap,$N) = each %same_value) {
+            if ($N> 1) {
+                $Total += $N*($N-1)/4;
+#                print "ADDING ".($N*($N-1)/4). " TO TOTAL FOR $gap\n";
+            }
+        }
+#        print "H$h TOTAL: $Total\n";
         if($Total > ($Tmax/2)) {
             @gaplist = reverse(@gaplist);
         } else {
             last;
         }
     }
-    $correlation = 0;
-    #-----------------p(0.95) ONLY------------------
+    my $correlation = 0;
+    #---------------- equaation for p(0.95) ONLY------------------
     if ($Total <= ((0.215*($N**2))-(1.15*$N)+0.375)) {
-        print "*Significant correlation at alpha = 0.95  <BR>";
+#        print "*Significant correlation at alpha = 0.95  <BR>";
         $correlation = 1;
     } else {
 #        print "No correlataion  <BR>";
@@ -1950,26 +1407,27 @@ sub transpositionTest {
 sub factorial {
     if ($_[0] == 0) {
         1;
-    }
-    else {
+    } else {
         $_[0] * factorial($_[0] - 1);
     }
 }
 
-sub straussSadler {
+sub StraussSadler1989 {
     my $count = shift;
     my $C = shift;
-    my $conffor = shift;
+    my $conf_type = shift;
     my $intervallength = shift;
-    
+         
     my $alpha = 0;      # calculate intervals Strauss and Saddler (1989)
     my $iterate;
     if ($count > 2) {
-        if ($conffor eq 'last appearance' || $conffor eq 'first appearance')	{
+        if ($conf_type eq 'last appearance' || $conf_type eq 'first appearance')	{
             $alpha = ((1 - $C)**(-1/($count - 1))) - 1;
         } else	{
-            foreach my $counter (1..3000)	{
-                $alpha = $counter/100;
+            my $end =  30000;
+            my $divisor = 1000;
+            foreach my $i (1..$end)	{
+                $alpha = $i/$divisor;
                 $iterate = (1 - (2 * ((1 + $alpha)**( - ($count - 1)) ) ) + ((1 + 2 * $alpha)**( - ($count - 1))));
                 if ($iterate > $C)	{
                     last;
@@ -1977,33 +1435,36 @@ sub straussSadler {
             }			
         }
     }
-    $firstconfidencelengthlong = $intervallength * $alpha;
-    $lastconfidencelengthlong = $firstconfidencelengthlong;
-#    $confidencelengthshort = 0; ?? PS
-    $lastconfidencelengthshort = $firstconfidencelengthshort;
-    
-    return $firstconfidencelengthlong, $lastconfidencelengthlong, $firstconfidencelengthshort, $lastconfidencelengthshort;          
+    my $conf_length = $intervallength * $alpha;
+    return $conf_length;
 }
 
-sub distributionFree {          #FOR MARSHALL 1994
+#FOR MARSHALL 1994
+sub Marshall1994{
     my $gaplist = shift;
     my @gaplist = @$gaplist;
-    my $N = shift;
     my $C = shift;
     @gaplist = sort {$a <=> $b} @gaplist;
+    my $N = scalar(@gaplist);
             
     my $alpha = 0.95;       #STANDARD FOR CONFIDENCE PROBABILITIES OF CONFIDENCE INTERVALS ($C)
     my $gamma = (1 - $alpha)/2;
     my $ll = 0;
     my $uu = 0;
-#        print "N: $N<BR>";
+    my ($short,$long);
+#        print "N: $N GAMMA:$gamma\n";
     if ($N > 5) {
-        foreach my $x (1 .. $N) {
-            my $sum = 0;
-            foreach my $i (1 .. $x) {
-                $Nx = factorial($N) / (factorial($i) * factorial($N - ($i)));
-                $sum = $sum + ($Nx * ($C**$i)) * ((1 - $C)**($N - $i));
-            }
+        my @sumtable;
+        my $sum = 0;
+        foreach my $i (0 .. $N) {
+            my $Nx = factorial($N) / (factorial($i) * factorial($N - ($i)));
+            $sum = $sum + ($Nx * ($C**$i)) * ((1 - $C)**($N - $i));
+            $sumtable[$i] = $sum;
+        }
+#        print join(", ",map {sprintf("%.3f",$_)} @sumtable),"\n";
+        my ($low,$upp);
+        foreach my $x (0 .. $N) {
+            my $sum = $sumtable[$x];
             if (($sum > $gamma) && ($ll == 0)) {
                 $ll = 1;
                 $low = $x;
@@ -2017,152 +1478,184 @@ sub distributionFree {          #FOR MARSHALL 1994
 #        print "low: $low<BR>";
         
         if ($upp > $N) {
-            $firstconfidencelengthlong = 0;
-            $firstconfidencelengthshort = $gaplist[$low - 1];        
+#            $first_c_long = 0;
+            $short = $gaplist[$low - 1];        
+#            $short = $gaplist[$low];
         } else {
-            $firstconfidencelengthlong = $gaplist[$upp - 1];
-            $firstconfidencelengthshort = $gaplist[$low - 1];        
+#            $long = $gaplist[$upp];
+#            $short = $gaplist[$low];        
+            $long = $gaplist[$upp - 1];
+            $short = $gaplist[$low - 1];        
         }
         
     } else {
-        $firstconfidencelengthlong = 0;
-        $firstconfidencelengthshort = 0;            
+#        $first_c_long = 0;
+#        $first_c_short = 0;            
     }
-    $lastconfidencelengthlong = $firstconfidencelengthlong;
-    $lastconfidencelengthshort = $firstconfidencelengthshort;
 
-    return $firstconfidencelengthlong, $lastconfidencelengthlong, $firstconfidencelengthshort, $lastconfidencelengthshort;           
+    return ($long,$short);
 }
 
-sub commonEndPoint {        #FOR SOLOW (1996)
-    my $solowHash = shift;
-    my %solowHash = %$solowHash;
+# FOR SOLOW (1996)
+sub Solow1996{
+    my $taxa_hash = shift;
     my $alpha = shift;
-    my $conffor = shift;
+    my $conf_type = shift;
+    my $scale_order = shift;
+
     $alpha = 1 - $alpha;
-#    my $lastsig;
-#    my $firstsig;
-#    my $lastconfidencelengthlong;
-#    my $firstconfidencelengthlong;
-    
-    if ($conffor eq 'total duration' || $conffor eq 'first appearance')	{
+    my ($lastsig,$firstsig,$last_c_long,$first_c_long);
+  
+    # Taxa is the filtered version - must have at least 2 unique values
+    my %taxa;
+    while (my ($taxon,$data) = each %$taxa_hash) {
+        if ($data->{'first'} != $data->{'last'}) {
+            $taxa{$taxon} = $data;
+        }
+    }
+
+    return unless scalar keys %taxa > 1;
+
+    if ($conf_type eq 'total duration' || $conf_type eq 'first appearance')	{
+        #find the maximum horizon
         my @mx;
-        foreach my $keycounter (keys(%solowHash)) {
-            push @mx, $solowHash{$keycounter}[2];
-        }  #there must be an easier may to find the maximum horizon!!
+        while (my ($taxon,$data) = each %taxa) {
+            if ($scale_order) {
+                push @mx, -1*$data->{'first'};
+            } else {
+                push @mx, $data->{'first'};
+            }
+        }
         @mx = sort {$a <=> $b} @mx;
-        my $max = $mx[scalar(@mx) - 1];
+        my $max = $mx[$#mx];
+#        print "first appearance: $max<BR>";
 
         #-------------------------SIGNIFICANCE FINDER-----------------------------
 
-        my $df = 2 * (length(%solowHash) - 1);
+# TBD DOUBLE CHECK THIS
+        my $df = 2*(scalar(keys(%taxa)) - 1);
 #        print "df: $df<BR>";
 #        print "alpha: $alpha<BR>";
     
         my $lambda = 1;
-        foreach my $i (keys(%solowHash)) {
-            $lambda = $lambda * ((($solowHash{$i}[2] - $solowHash{$i}[1]) / ($max - $solowHash{$i}[1])) ** ($solowHash{$i}[0] - 1));
+        while (my ($taxon,$data) = each %taxa) {
+            my $occurrence_count = $data->{'occurrence_count'};
+            my $last  = ($scale_order) ? -1*$data->{'last'} : $data->{'last'};
+            my $first = ($scale_order) ? -1*$data->{'first'}: $data->{'first'};
+            $lambda = $lambda * ((abs($first - $last) / abs($max - $last)) ** ($occurrence_count - 1));
         }
 #        print "lambda: $lambda<BR>";
 
-        $firstsig = chiSquaredDensity($df,0,-2*log($lambda));
+        $firstsig = chiSquaredDensity($df,0,-2*log($lambda),0);
 
-#        print "Significance: $lastsig<BR>";
+#        print "Significance first: $firstsig<BR>";
         #----------------------UPPER CONFIDENCE FINDER-----------------------------
         
-        if ($firstsig > 0.05) {
-            my $df = 2 * scalar(%solowHash);
-            my $tester = chiSquaredDensity($df,$alpha,0);
+        if ($firstsig > $alpha) {
+            my $df = 2 * (scalar(keys(%taxa)));
+            my $tester = chiSquaredDensity($df,$alpha,0,1);
 #            print "tester: $tester<BR>";
             my $j;
             for ($j = $max; $j <= $max + 1000; $j = $j + 0.1) {
                 my $Rstore = 1;
-                foreach my $i (keys(%solowHash)) {
-                    $Rstore = $Rstore * ((($solowHash{$i}[2] - $solowHash{$i}[1])/($j - $solowHash{$i}[1]))**($solowHash{$i}[0] - 1));
+                while (my ($taxon,$data) = each %taxa) {
+                    my $occurrence_count = $data->{'occurrence_count'};
+                    my $last  = ($scale_order) ? -1*$data->{'last'} : $data->{'last'};
+                    my $first = ($scale_order) ? -1*$data->{'first'}: $data->{'first'};
+                    $Rstore = $Rstore * ((abs($first-$last)/abs($j - $last))**($occurrence_count - 1));
                 }
-                if ((-2 * log($Rstore)) > $tester) {last}
+                if ((-2 * log($Rstore)) > $tester) {
+                    last;
+                }
             }
-            $firstconfidencelengthlong = sprintf("%.3f", $j - $max);
-        } else {$firstconfidencelengthlong = -999}
-         
-    } else {
-        $firstsig = -999;
-        $firstconfidencelengthlong = -999;
-    }
-#    print "first SIG: $firstsig, first CONF: $firstconfidencelengthlong<BR>";
+            $first_c_long = sprintf("%.3f", $j);
+            if ($scale_order) {
+                $first_c_long *= -1;
+            }
+        } 
+    } 
+#    print "first SIG: $firstsig, first CONF: $first_c_long<BR>";
 
-    my %tempsolowHash = %solowHash;
-    
-    if ($conffor eq 'total duration' || $conffor eq 'last appearance')	{
-        foreach my $keycounter (keys(%tempsolowHash)) {
-            my $temp = $tempsolowHash{$keycounter}[1];
-            $tempsolowHash{$keycounter}[1] = -$tempsolowHash{$keycounter}[2];
-            $tempsolowHash{$keycounter}[2] = -$temp;
-        }
-
+    if ($conf_type =~ /total duration|last appearance/i) {
         my @mx;
-        foreach my $keycounter (keys(%tempsolowHash)) {
-            push @mx, $tempsolowHash{$keycounter}[2];
-        }  #there must be an easier may to find the maximum horizon!!
+        # Max horizon
+        while (my ($taxon,$data) = each %taxa) {
+            if ($scale_order) {
+                push @mx, $data->{'last'};
+            } else {
+                push @mx, -1*$data->{'last'};
+            }
+        }
         @mx = sort {$a <=> $b} @mx;
-        my $max = $mx[scalar(@mx) - 1];
+# TBD SHOULD THIS BE MAX OR MIN?
+        my $min = $mx[$#mx];
+#        print "last appearance: $min<BR>";
 
         #-------------------------SIGNIFICANCE FINDER-----------------------------
 
-        my $df = 2 * (length(%tempsolowHash) - 1);
+        my $df = 2 * (scalar(keys(%taxa)) - 1);
 #        print "df: $df<BR>";
 #        print "alpha: $alpha<BR>";
     
         my $lambda = 1;
-        foreach my $i (keys(%tempsolowHash)) {
-            $lambda = $lambda * ((($tempsolowHash{$i}[2] - $tempsolowHash{$i}[1]) / ($max - $tempsolowHash{$i}[1])) ** ($tempsolowHash{$i}[0] - 1));
+        while (my ($taxon,$data) = each %taxa) {
+            my $occurrence_count = $data->{'occurrence_count'};
+# TBD: can this be right?
+            my $last  = ($scale_order) ? $data->{'last'} : -1*$data->{'last'};
+            my $first = ($scale_order) ? $data->{'first'}: -1*$data->{'first'};
+            $lambda = $lambda * ((abs($first - $last) / abs($min - $first)) ** ($occurrence_count - 1));
         }
 #        print "lambda: $lambda<BR>";
 
-        $lastsig = chiSquaredDensity($df,0,-2*log($lambda));
+        $lastsig = chiSquaredDensity($df,0,-2*log($lambda),0);
 
-#        print "Significance: $firstsig<BR>";
+#        print "Significance last: $lastsig<BR>";
         #----------------------LOWER CONFIDENCE FINDER-----------------------------
         
-        if ($lastsig > 0.05) {
-            my $df = 2 * scalar(%tempsolowHash);
-            my $tester = chiSquaredDensity($df,$alpha,0);
+        if ($lastsig > $alpha) {
+            my $df = 2 * scalar(keys(%taxa));
+            my $tester = chiSquaredDensity($df,$alpha,0,1);
+#            print "tester: $tester<BR>";
             my $j;
-            for ($j = $max; $j <= $max + 1000; $j = $j + 0.1) {
+            for ($j = $min; $j <= $min+ 1000; $j = $j + .1) {
                 my $Rstore = 1;
-                foreach my $i (keys(%tempsolowHash)) {
-                    $Rstore = $Rstore * ((($tempsolowHash{$i}[2] - $tempsolowHash{$i}[1])/($j - $tempsolowHash{$i}[1]))**($tempsolowHash{$i}[0] - 1));
+                while (my ($taxon,$data) = each %taxa) {
+                    my $occurrence_count = $data->{'occurrence_count'};
+                    my $last  = ($scale_order) ? $data->{'last'} : -1*$data->{'last'};
+                    my $first = ($scale_order) ? $data->{'first'}: -1*$data->{'first'};
+                    $Rstore = $Rstore* ((abs($first - $last) / abs($j - $first)) ** ($occurrence_count - 1));
                 }
                 if ((-2 * log($Rstore)) > $tester) {last}
             }
-            $lastconfidencelengthlong = sprintf("%.3f", $j - $max);
-        } else {$lastconfidencelengthlong = -999}
-         
-    } else {
-        $lastsig = -999;
-        $lastconfidencelengthlong = -999;
+            $last_c_long = sprintf("%.3f", $j);
+            if (! $scale_order) {
+                $last_c_long *= -1;
+            }
+        } 
     }
-#    print "last SIG: $lastsig, last CONF: $lastconfidencelengthlong<BR>";
-    return $firstsig, $firstconfidencelengthlong, $lastsig, $lastconfidencelengthlong;
+#    print "last SIG: $lastsig, last CONF: $last_c_long<BR>";
+    return ($firstsig, $first_c_long, $lastsig, $last_c_long);
 }
 
-sub chiSquaredDensity { #for calculating both types, either alpha or lower must be zero to work
+# for calculating both types, either alpha or lower must be zero to work
+sub chiSquaredDensity { 
     my $df = shift;
     my $alpha = shift;      #ONE TAILED
     my $lower = shift;
+    my $type = shift;
     
     my $resolution = 0.01;      #WILL GET ACCURACY TO APRROX 3 DECIMAL PLACES
     my $upper = 1000;           #MY SURROGATE FOR INFINITE!!
     my $chi = 0;
     my $x;
     
-    if ($lower == 0) {
+    if ($type) {
         for ($x = $upper; $x >= 0; $x = $x - $resolution) {
             $chi = $chi + $resolution * ((($x**(($df/2) - 1)) * exp(-$x/2)) / (gamma($df/2) * (2 ** ($df/2))));
             if($chi >= $alpha) {last}
         }
         return sprintf("%.3f", $x);
-    } elsif ($alpha == 0 ) {
+    } else {
         for ($x = $upper; $x >= $lower; $x = $x - $resolution) {
             $chi = $chi + $resolution * ((($x**(($df/2) - 1)) * exp(-$x/2)) / (gamma($df/2) * (2 ** ($df/2))));
         }
@@ -2170,7 +1663,8 @@ sub chiSquaredDensity { #for calculating both types, either alpha or lower must 
     }
 }
 
-sub gamma {             #THE GAMMA FUNCTION
+#THE GAMMA FUNCTION
+sub gamma {
     my $x = shift;
     my ($y1, $res, $z, $i);
     my $sqrtpi = 0.9189385332046727417803297e0;     # log(sqrt(2*pi))
@@ -2230,7 +1724,7 @@ sub gamma {             #THE GAMMA FUNCTION
         if ($y1 < $y) {
             $res = $res / $y1;
         } elsif ($y1 > $y) {
-            foreach $i ( 1 .. $n ) {
+            foreach my $i ( 1 .. $n ) {
                 $res = $res * $y;
                 $y = $y + 1;
             }
@@ -2255,13 +1749,137 @@ sub gamma {             #THE GAMMA FUNCTION
     return $res;
 }
 
-#Initialize gd's palette, and values 
-sub getPalette{
-#    $col{'green'} = $im->colorAllocate(0,255,0);
-#    $aicol{'green'} = "0.93 0.00 1.00 0.00 K";
 
-    my $gd = shift;
-    my $gdColors = {
+sub getOccurrenceData {
+    my ($dbt,%options) = @_;
+    my $dbh = $dbt->dbh;
+
+    my @where;
+    if (exists $options{'occurrence_list'}) {
+        my @occs = split(/\s*,\s*/,$options{'occurrence_list'});
+        if (@occs) {
+            push @where, "o.occurrence_no IN (".join(",",map {int($_)} @occs).")";
+        } else {
+            push @where, "1=0";
+        }
+    }
+
+    if (exists $options{'taxon_list'}) {
+        my @taxa = split(/\s*,\s*/,$options{'taxon_list'});
+
+        if (@taxa) {
+            if ($taxa[0] =~ /^\d+$/) {
+                push @where, "o.taxon_no IN (".join(",",map {int($_)} @taxa).")";
+            } else {
+                my $taxon_name = $taxa[0];
+                my ($genus,$subgenus,$species) = Taxon::splitTaxon($taxon_name);
+
+                if ($species) {
+                    push @where, "o.genus_name LIKE ".$dbh->quote($genus). " AND o.species_name LIKE ".$dbh->quote($species);
+                } else {
+                    push @where, "o.genus_name LIKE ".$dbh->quote($genus);
+                }
+            }
+        } else {
+            push @where, "1=0";
+        }
+    }
+
+    if (exists $options{'section_type'}) {
+        if ($options{'section_type'} eq 'regional') {
+            push @where, "c.regionalsection=".$dbh->quote($options{'section_name'});
+            push @where, "c.regionalbed REGEXP '^(-)?[0-9.]+\$'";
+        } elsif ($options{'section_type'} eq 'local') {
+            push @where, "c.localsection=".$dbh->quote($options{'section_name'});
+            push @where, "c.localbed REGEXP '^(-)?[0-9.]+\$'";
+        }
+    }
+ 
+    if (@where) {
+        my $where = join " AND ",@where;
+        my $fields = "c.collection_no, c.max_interval_no, c.min_interval_no";
+        if ($options{'fields'}) {
+            $fields = $options{'fields'};
+        }
+        my $sql = "(SELECT $fields FROM occurrences o, collections c "
+                . " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no"
+                . " WHERE o.collection_no=c.collection_no AND $where AND re.reid_no IS NULL)"
+                . " UNION "
+                . "(SELECT $fields FROM reidentifications o, occurrences o2, collections c"
+                . " WHERE o2.collection_no=c.collection_no AND o2.occurrence_no=o.occurrence_no AND o.most_recent='YES' AND $where)";
+        if ($options{'limit'}) {
+            $sql .= " LIMIT 1"
+        }
+
+        main::dbg("getOccurrenceData called: $sql");
+        my @data = @{$dbt->getData($sql)};
+        return \@data;
+    } else {
+        die("NO occurrence data to fetch");
+    }
+}
+
+sub _dumpTaxonObject {
+    my $taxon = shift;
+    my $scale = shift;
+
+    my $txt = "";
+    foreach ('upper','lower','first','last','first_c_long','first_c_short','last_c_long','last_c_short','length','uppershort','lowershort','correlation','occurrence_count'){
+        if (exists $taxon->{$_}) {
+            $txt .= "  $_: $taxon->{$_}";
+        }
+    }
+
+    $txt .= "Intervals:";
+    foreach my $itv (@$scale) {
+        if ($taxon->{'mappings'}->{$itv}) {
+            $txt .= " $itv:".scalar(@{ $taxon->{'mappings'}->{$itv} });
+        }
+    }
+
+    return $txt;
+}
+
+
+package ConfidenceGraph;
+
+use GD;
+
+my $AILEFT = 100;
+my $AITOP = 450;   
+my $IMAGE_DIR = $ENV{'BRIDGE_HTML_DIR'}."/public/confidence";
+
+sub new {
+    my ($class,%options) = @_;
+
+    my $self = {
+        bars=>[],
+        y_labels=>{},
+        x_labels=>{},
+        ai=>"",
+        gd=>undef
+    }; 
+
+    # Set up default values
+    foreach ('y_axis_label','x_axis_label','y_axis_unit') {
+        $self->{$_} = $options{$_} || "";
+    }
+    $self->{y_axis_order}= $options{y_axis_order} || 0;
+    $self->{y_axis_type} = $options{y_axis_type} || 'continuous';
+    $self->{conf_type}   = $options{conf_type} || 'total duration';
+    $self->{conf_method} = $options{conf_method} || 'Strauss and Sadler (1989)';
+    $self->{glyph_type}  = $options{glyph_type} || 'squares';
+    $self->{color}       = $options{color} || 'black';
+
+    bless $self,$class;
+}
+
+sub initCanvas {
+    my ($self,$width,$length) = @_;
+
+    my $gd = GD::Image->new($width,$length);
+
+    my $gd_colors = {
         'white'=> $gd->colorAllocate(255, 255, 255),
         'grey'=> $gd->colorAllocate(122, 122, 122),
         'black'=> $gd->colorAllocate(0,0,0),
@@ -2272,9 +1890,9 @@ sub getPalette{
         'orange'=>$gd->colorAllocate(255,127,0),
         'purple'=>$gd->colorAllocate(223,0,255)
     };
-    my $aiColors = {
+    my $ai_colors = {
         'white'=>"0.00 0.00 0.00 0.00 K",
-        'grey'=> "0.20 0.20 0.20 0.52 k",
+        'grey'=> "0.20 0.20 0.20 0.52 K",
         'black'=> "0.00 0.00 0.00 1.00 K",
         'red'=> "0.01 0.96 0.91 0.0 K",
         'blue'=>"0.80 0.68 0.00 0.00 K",
@@ -2283,8 +1901,688 @@ sub getPalette{
         'orange'=>"0.02 0.50 0.93 0.00 K",
         'purple'=>"0.06 0.93 0.00 0.00 K"
     };
-    return ($gdColors,$aiColors);
+    my $gd_fonts = {
+        'small'=>gdSmallFont,  
+        'tiny'=>gdTinyFont,
+        'large'=>gdLargeFont
+    };
+    my $ai_fonts = {
+        'small'=>10,
+        'tiny'=>8,
+        'large'=>12
+    };
+
+    # Create a brush at an angle
+    my $dotted_brush = new GD::Image(2,1);
+    my $white = $dotted_brush->colorAllocate(255,255,255);
+    my $black = $dotted_brush->colorAllocate(0,0,0);
+    $dotted_brush->transparent($white);
+    $dotted_brush->line(0,0,1,0,$black); # horiz dotted
+
+    # Set the brush
+    $gd->setBrush($dotted_brush);
+
+    $self->{gd} = $gd;
+    $self->{ai} = "";
+    $self->{gd_colors} = $gd_colors;
+    $self->{gd_fonts} = $gd_fonts;
+    $self->{ai_colors} = $ai_colors;
+    $self->{ai_fonts} = $ai_fonts;
 }
+
+sub addBar {
+    my ($self,$label,$bar,$link,$link_alt) = @_;
+    push @{$self->{bars}},[$label,$bar,$link,$link_alt];
+    $self->{x_labels}->{$label} = $bar;
+}
+
+sub addPoint {
+    my ($self,$label,$value,$link,$link_alt) = @_;
+    my $bar = $self->{x_labels}->{$label};
+    if (!$bar) {
+        die "ERROR: Trying to add point to non existant taxon";
+    }
+    push @{$bar->{points}}, [$value,$link,$link_alt];
+}
+
+# Accepted options:
+# range => array ref, i.e. [$y1,$y2]
+# link => image map link
+# link_alt => image map link alternate text
+sub addRangeLabel {
+    my ($self,$label,$max,$min,$link,$link_alt) = @_;
+    $self->{y_labels}->{$label} = [$max,$min,$link,$link_alt];
+}
+
+# Accepted options:
+# value => floating point number
+# link => image map link
+# link_alt => image map link alternate text
+sub addTick {
+    my ($self,$label,$value,$link,$link_alt) = @_;
+    $self->{y_ticks}->{$label} = [$value,$link,$link_alt];
+}
+
+sub getRange {
+    my $self = shift;
+    my $y_axis_order = shift;
+    if (! exists $self->{'oldest'}) { 
+        my @ages = ();
+        foreach my $bar (@{$self->{bars}}) {
+            foreach ('first','last','first_short','last_short','first_long','last_long') {
+                if ($bar->[1]->{$_} =~ /\d/) {
+                    push @ages, $bar->[1]->{$_};
+                }
+            }
+        }
+        @ages = ($y_axis_order) 
+            ? sort {$b <=> $a} @ages
+            : sort {$a <=> $b} @ages;
+        $self->{'oldest'} = $ages[$#ages];
+        $self->{'youngest'} = $ages[0];
+
+        # This is a bit tricky - We want the labels on the left hand side of the scale to extend beyond the 
+        # bars by the minimum possible - to do this we expand the "range" given by oldest-youngest by the
+        # minimum amount possible.  So for a timescale based scale, we find the oldest tick mark (age) thats
+        # younger than the minimum, and vice versa at the other end
+        my @tick_values = 
+            map {$_->[0]}
+            values %{$self->{'y_ticks'}};
+        if ($y_axis_order) {
+            my @older_values   = sort {$a <=> $b} grep {$_ < $self->{'oldest'}}   @tick_values;
+            my @younger_values = sort {$a <=> $b} grep {$_ > $self->{'youngest'}} @tick_values;
+            $self->{'oldest'} = $older_values[$#older_values] if (@older_values);
+            $self->{'youngest'} = $younger_values[0] if (@younger_values);
+        } else {
+            my @older_values   = sort {$a <=> $b} grep {$_ > $self->{'oldest'}}   @tick_values;
+            my @younger_values = sort {$a <=> $b} grep {$_ < $self->{'youngest'}} @tick_values;
+            $self->{'oldest'} = $older_values[0] if (@older_values);
+            $self->{'youngest'} = $younger_values[$#younger_values] if (@younger_values);
+        }
+    }
+    return ($self->{'oldest'},$self->{'youngest'});
+}
+
+sub makePixelMapper {
+    my ($y_offset,$graph_height,$oldest,$youngest,$y_axis_order) = @_;
+    my $range = abs($oldest - $youngest);
+    my $pixel_ratio = $graph_height / $range;
+
+    return sub {
+        if ($y_axis_order) {
+            return ($y_offset + abs($youngest - $_[0])*$pixel_ratio);
+        } else {
+            return ($y_offset + abs($_[0] - $youngest)*$pixel_ratio);
+        }
+    }
+}
+
+sub stripHTML {
+    my $h = shift;
+    $h =~ s/<.*?>//g;
+    return $h;
+}
+
+
+sub drawGraph {
+    my $self = shift;
+
+    my $char_width = 5;
+    my $char_height = 8;
+
+    my $bar_spacing = $char_height + 6;
+    my $bar_width = 8;
+    my $image_map = '<map name="ConfidenceMap">'."\n";
+
+    my $edge_spacing = 20;
+    my $label_height = 15;
+    my $graph_height = 400;
+
+    my $conf_type = $self->{'conf_type'};
+    my $conf_method = $self->{'conf_method'};
+    my $y_axis_order = $self->{'y_axis_order'};
+
+    # Get size of Y labels - two types of labels
+    # labels of "ranges", defined by two values (i.e. a time interval)
+    # and labels of points, defined by one value, add them separately
+    my $y_label_size = 1;
+    foreach my $label (keys %{$self->{'y_labels'}}) {
+        my $text = stripHTML($label);
+        my $size = length($text) + 1;
+        if ($size > $y_label_size) {
+            $y_label_size = $size;
+        }
+    }
+
+    my $y_tick_size = 1;
+    foreach my $label (keys %{$self->{'y_ticks'}}) {
+        my $text = $label;
+        my $size = length($text) + 1;
+        if ($size > $y_tick_size) {
+            $y_tick_size = $size;
+        }
+    }
+    
+    # Get size of X labels
+    my $x_label_size = 0;
+    foreach my $label (keys %{$self->{'x_labels'}}) {
+        my $text = stripHTML($label);
+        my $size = length($text) + 1;
+        if ($size > $x_label_size) {
+            $x_label_size = $size;
+        }
+    }
+
+    # Calculate width: Y_labels + 20*bars
+    # Calculate height: X labels + fixed
+    my $num_bars = scalar(@{$self->{'bars'}});
+    my $y_offset = $x_label_size*$char_width + 2*$edge_spacing;
+    my $x_offset = $y_label_size*$char_width + $y_tick_size*$char_width + $edge_spacing + $label_height;
+    my $fig_width = $x_offset + ($num_bars + 1)*$bar_spacing + $edge_spacing;
+    my $fig_height = $y_offset + $graph_height + $edge_spacing;
+
+    $self->initCanvas($fig_width,$fig_height);
+
+    # First Major labels
+    if ($self->{'y_axis_label'}) {
+        $self->stringUp('large', $edge_spacing - 8, $y_offset + int(($fig_height-$y_offset)/2),$self->{'y_axis_label'},'black');
+    }
+    if ($self->{'y_axis_unit'}) {
+        my $unit =  $self->{"y_axis_unit"};
+        $self->string('small', $x_offset - $char_width*length($unit), $y_offset - 2*$char_height,$self->{'y_axis_unit'},'black');
+    }
+
+    # Initialize bounds and constants
+    my ($oldest,$youngest) = $self->getRange($y_axis_order);
+	main::dbg("ORDER:$y_axis_order RANGE:$oldest to $youngest X_LABELS2ZE:$x_label_size Y_LABELSIZE:$y_label_size:$y_tick_size Y_OFFSET:$y_offset X_OFFSET:$x_offset");
+    my $toPixel = makePixelMapper($y_offset,$graph_height,$oldest,$youngest,$y_axis_order);
+
+    # Draw total border
+    $self->rectangle(0,0,$fig_width - 1,$fig_height- 1,'black');
+    
+    # Draw y axis
+    $self->line($x_offset,int($toPixel->($youngest)),$x_offset,int($toPixel->($oldest)),'black');
+   
+    # And draw tickmarks as well as labels for them
+    my @y_ticks = keys %{$self->{'y_ticks'}};
+    @y_ticks = ($y_axis_order) 
+        ? sort {$self->{'y_ticks'}->{$b}->[0] <=> $self->{'y_ticks'}->{$a}->[0]} @y_ticks
+        : sort {$self->{'y_ticks'}->{$a}->[0] <=> $self->{'y_ticks'}->{$b}->[0]} @y_ticks;
+    my $last_bottom = -1;
+    my $last_tick   = -1;
+    my $tick_width = $y_tick_size*$char_width;
+    foreach my $label (@y_ticks) {
+        my ($value,$link,$link_alt) = @{$self->{y_ticks}->{$label}};
+
+
+        next unless (($value <= $oldest && $value >= $youngest) || 
+                     ($value >= $oldest && $value <= $youngest));
+
+       
+        # Draw label if theres room
+        my $text_top = round($toPixel->($value) - .5*$char_height);
+        if ($text_top < $last_bottom) {
+            next;
+        }
+
+        # Draw tick mark
+        my $tick_top = round($toPixel->($value));
+        $self->line($x_offset - 3,$tick_top,$x_offset,$tick_top,'black');
+
+        my $length = length($label);
+        $self->string('tiny',$x_offset - ($length+1)*$char_width,$text_top,$label,'black');
+
+        if ($link) {
+            my $x1 = $x_offset - ($length+1)*$char_width;
+            my $y1 = $text_top;
+            my $x2 = $x_offset;
+            my $y2 = $text_top + $char_height;
+            $image_map .= qq|<area shape=rect coords="$x1,$y1,$x2,$y2" href="$link" alt="$link_alt">\n|;
+        }
+        $last_bottom = $text_top + $char_height;
+    }
+
+    # Draw Y labels
+    my @y_labels = keys %{$self->{'y_labels'}};
+    @y_labels = ($y_axis_order)
+        ? sort {$self->{'y_labels'}->{$b}->[0] <=> $self->{'y_labels'}->{$a}->[0]} @y_labels
+        : sort {$self->{'y_labels'}->{$a}->[0] <=> $self->{'y_labels'}->{$b}->[0]} @y_labels;
+    $last_bottom = -1;
+    foreach my $label (@y_labels) {
+        my @values = @{$self->{y_labels}->{$label}};
+        unless ($values[0] <= $oldest && $values[1] >= $youngest) {
+            next;
+        }
+        my $mid_point = ($values[0] + $values[1])/2;
+        my $top = round($toPixel->($mid_point) - .5*$char_height);
+        if ($top < $last_bottom) {
+            next;
+        }
+        my $length = length($label);
+        $self->string('tiny',$x_offset - $tick_width - $length*$char_width,$top,$label,'black');
+
+        my $link = $values[2];
+        my $link_alt = $values[3];
+        if ($link) {
+            my $x1 = $x_offset - $tick_width - $length*$char_width;
+            my $y1 = $top;
+            my $x2 = $x_offset - $tick_width;
+            my $y2 = $top + $char_width;
+            $image_map .= qq|<area shape=rect coords="$x1,$y1,$x2,$y2" href="$link" alt="$link_alt">\n|;
+        }
+        $last_bottom = $top + $char_height;
+    }
+
+    # Draw X Labels
+    my @bars = @{$self->{'bars'}};
+    for(my $i=0;$i<@bars;$i++) {
+        my $label = $bars[$i]->[0];
+        my $bar   = $bars[$i]->[1];
+        my $link  = $bars[$i]->[2];
+        my $link_alt= $bars[$i]->[3];
+
+        my $bar_left    = $x_offset + ($i+1)*$bar_spacing - 3;
+        my $bar_right   = $bar_left + $bar_width;
+
+        if ($bar->{'correlation'}) {
+            $label = $label;
+        }
+        $self->stringUp('small', $bar_left, $y_offset - $edge_spacing, $label, 'black');
+
+        if ($link) {
+            $image_map .= qq|<area shape=rect coords="$bar_left,15,$bar_right,$y_offset" href="$link" alt="$link_alt">\n|;
+        }
+    }
+
+    # Draw bars & occurrences within them
+    my $half_unit_size = round(abs($toPixel->(1) - $toPixel->(0))/2);
+    my $min_bar_top = 999999;
+    my $max_bar_bottom = 0;
+    for(my $i=0;$i<@bars;$i++) {
+        my $label = $bars[$i]->[0];
+        my $bar   = $bars[$i]->[1];
+        
+        my ($last,$first,$last_long,$first_long,$last_short,$first_short) = 
+            ($bar->{'last'},$bar->{'first'},$bar->{'last_long'},$bar->{'first_long'},$bar->{'last_short'},$bar->{'first_short'});
+        if ($self->{'y_axis_type'} =~ /discrete/) {
+            if ($y_axis_order) {
+                $last += .5;
+                $last_short += .5 if ($last_short);
+                $last_long += .5 if ($last_long);
+                $first -= .5;
+                $first_short -= .5 if ($first_short);
+                $first_long -= .5 if ($first_long);
+            } else {
+                $last -= .5;
+                $last_short -= .5 if ($last_short);
+                $last_long -= .5 if ($last_long);
+                $first += .5;
+                $first_short += .5 if ($first_short);
+                $first_long += .5 if ($first_long);
+            }
+        }
+        my $bar_top     = round($toPixel->($last));
+        my $bar_bottom  = round($toPixel->($first));
+        my $bar_left    = $x_offset + ($i+1)*$bar_spacing;
+        my $bar_right   = $bar_left + $bar_width;
+
+        $min_bar_top = $bar_top if ($bar_top < $min_bar_top);
+        $max_bar_bottom = $bar_bottom if ($bar_bottom > $max_bar_bottom);
+
+#        print "TOP $bar_top BOTTOM $bar_bottom LEFT $bar_left RIGHT $bar_right ";
+#        foreach my $k (sort keys %$bar) {
+#            if (! ref $bar->{$k}) {
+#                my $v = $bar->{$k};
+#                print uc($k)."=$bar->{$k}";
+#                if (($v <= $oldest && $v >= $youngest) ||
+#                    ($v >= $oldest && $v <= $youngest)) {
+#                    print ":".round($toPixel->($v));
+#                }
+#                print " ";
+#            }            
+#        }
+#        print "<BR>";
+      
+        # Draw the glyphs
+        foreach my $point (@{$bar->{'points'}}) {
+            my ($value,$link,$link_alt)= @$point;
+            my ($min,$avg,$max);
+            if (ref $value) {
+                ($max,$min) = ($value->[0],$value->[1]);
+                $avg = ($max+$min)/2;
+                $max = round($toPixel->($max));
+                $min = round($toPixel->($min));
+                $avg = round($toPixel->($avg));
+            } else {
+                $value = round($toPixel->($value)); 
+                ($min,$avg,$max) = ($value+$bar_width/2,$value,$value-$bar_width/2);
+            }
+
+            if ($self->{'glyph_type'} eq 'circles') {
+                $self->filledCircle(($bar_right+$bar_left)/2,$avg,$bar_width,$self->{'color'});
+            } elsif ($self->{'glyph_type'} eq 'hollow circles') {
+                $self->circle(($bar_right+$bar_left)/2,$avg,$bar_width,$self->{'color'});
+            } elsif ($self->{'glyph_type'} eq 'squares') {
+                $self->filledRectangle($bar_left,$avg-$bar_width/2,$bar_right,$avg+$bar_width/2,$self->{'color'});
+            } elsif ($self->{'glyph_type'} eq 'hollow squares') {
+                $self->rectangle($bar_left,$avg-$bar_width/2,$bar_right,$avg+$bar_width/2,$self->{'color'});
+            } else {
+                $self->filledRectangle($bar_left,$min,$bar_right,$max,$self->{'color'});
+            }
+
+            if ($link) {
+                if ($self->{'glyph_type'} =~ /circles|squares/) {
+                    my $top     = $avg + $bar_width/2;
+                    my $bottom  = $avg - $bar_width/2;
+                    $image_map .= qq|<area shape="rect" coords="$bar_left,$top,$bar_right,$bottom" href="$link" alt="$link_alt">\n|;
+                } else {
+                    $image_map .= qq|<area shape="rect" coords="$bar_left,$max,$bar_right,$min" href="$link" alt="$link_alt">\n|;
+                }
+            }
+        }
+
+        # Draw actual range
+        $self->rectangle($bar_left,$bar_top,$bar_right,$bar_bottom,'black');
+
+        # Draw bars
+        if ($conf_method ne "Solow (1996)") {
+            my $c_bottom       = round($toPixel->($first_long));
+            my $c_short_bottom = round($toPixel->($first_short));
+            my $c_top          = round($toPixel->($last_long));
+            my $c_short_top    = round($toPixel->($last_short));
+            
+            my $triangle_first = ($first_long !~ /\d/ && $first_short =~ /\d/ && $conf_method eq 'Marshall (1994)') ? 1 : 0;
+            my $triangle_last  = ($last_long  !~ /\d/ && $last_short  =~ /\d/ && $conf_method eq 'Marshall (1994)') ? 1 : 0;
+
+    #        if ($barup == 50)   {
+    #            $recent = 1;  
+    #        } elsif ($limup <= 50) {
+    #            $recent = 2;
+    #        } else  {
+                if ($conf_type =~ /last appearance|total duration/) {
+#                    print "RECTANGLE: ".($bar_left+int($bar_width/2)).",".$c_top.",".($bar_left+int($bar_width/2)+1).",".$bar_top."<BR>";
+                    if ($last_long =~ /\d/) {
+                        $self->rectangle($bar_left + int($bar_width/2),$c_top,$bar_left + int($bar_width/2) + 1,$bar_top, 'black');
+                        $self->line($bar_left,$c_top,$bar_right,$c_top, 'black'); 
+                    }
+                    if ($last_short =~ /\d/) {
+                        unless ($last_long =~ /\d/) {
+                            $self->rectangle($bar_left + int($bar_width/2),$c_short_top,$bar_left + int($bar_width/2) + 1,$bar_top, 'black');
+                        }
+                        $self->line($bar_left,$c_short_top,$bar_right,$c_short_top, 'black') if ($c_short_top);
+                    }
+                    if ($triangle_last) {
+                        $self->filledTriangle(
+                            $bar_left,$c_short_top,
+                            $bar_right,$c_short_top,
+                            ($bar_left+$bar_right)/2,$c_short_top-abs(int($bar_left-$bar_right)/2),
+                            'black');
+                    }
+                }
+    #        }
+            if ($conf_type =~ /first appearance|total duration/) {
+                if ($first_long =~ /\d/) {
+                    $self->rectangle($bar_left + int($bar_width/2),$bar_bottom,$bar_left+ int($bar_width/2)+1,$c_bottom, 'black');
+                    $self->line($bar_left,$c_bottom,$bar_right,$c_bottom, 'black'); 
+                }
+                if ($first_short =~ /\d/) {
+                    unless ($first_long =~ /\d/) {
+                        $self->rectangle($bar_left + int($bar_width/2),$bar_bottom,$bar_left+ int($bar_width/2)+1,$c_short_bottom, 'black');
+                    }
+                    $self->line($bar_left,$c_short_bottom,$bar_right,$c_short_bottom, 'black') if ($c_short_bottom);
+                }
+                if ($triangle_first) {
+                    $self->filledTriangle(
+                        $bar_left,$c_short_bottom,
+                        $bar_right,$c_short_bottom,
+                        ($bar_left+$bar_right)/2,$c_short_bottom+abs(int($bar_left-$bar_right)/2),
+                        'black');
+                }
+            }
+        }
+    }
+    
+    # Draw confidence bars
+    if ($conf_method eq "Solow (1996)") {
+        my $box_left    = $x_offset + $bar_spacing;
+        my $box_right   = $x_offset + (scalar(@{$self->{'bars'}}))*$bar_spacing + $bar_width;
+        my $box_bottom  = $max_bar_bottom;
+        my $box_top     = $min_bar_top;
+
+        my $first_long = $self->{'bars'}->[0]->[1]->{'first_long'};
+        my $last_long  = $self->{'bars'}->[0]->[1]->{'last_long'};
+        my $center = int(($box_left + $box_right)/2);
+
+        if ($last_long =~ /\d/) {
+            my $c_top = round($toPixel->($last_long));
+            my $first_top = round($toPixel->($self->{'bars'}->[0]->[1]->{'last'}));
+            my $last_top  = round($toPixel->($self->{'bars'}->[-1]->[1]->{'last'}));
+            $self->dashedLine($box_left,$box_top,$box_right,$box_top,'black');
+            $self->dashedLine($box_left,$box_top,$box_left,$first_top,'black');
+            $self->dashedLine($box_right,$box_top,$box_right,$last_top,'black');
+
+            if (($box_top - $c_top) < 0) {
+                $self->filledTriangle($center -2,$box_top,$center + 3,$box_top,$center,$box_top-3,'black');
+            } else {
+                $self->line($center-3,$c_top,$center+3,$c_top,'black'); 
+            }
+            $self->line($center-3,$c_top,$center+3,$c_top,'black'); 
+            $self->rectangle($center, $c_top, $center + 1,$box_top,'black');
+            
+        }
+    
+        if ($first_long =~ /\d/) {
+            my $c_bottom     = round($toPixel->($first_long));
+            my $first_bottom = round($toPixel->($self->{'bars'}->[0]->[1]->{'first'}));
+            my $last_bottom  = round($toPixel->($self->{'bars'}->[-1]->[1]->{'first'}));
+
+            $self->dashedLine($box_left,$box_bottom,$box_right,$box_bottom,'black');
+            $self->dashedLine($box_left,$first_bottom,$box_left,$box_bottom,'black');
+            $self->dashedLine($box_right,$last_bottom,$box_right,$box_bottom,'black');
+
+            $self->line($center-3,$c_bottom,$center+3,$c_bottom,'black'); 
+            $self->rectangle($center, $box_bottom, $center + 1,$c_bottom,'black');
+        }
+    } 
+
+    # Finish up
+#    $self->string('small', 90, 200, 'Ma', 'black');
+    $self->string('tiny', $fig_width - 70,$fig_height - 10, "J. Madin 2004", 'black');
+    
+
+    # Export and move on
+    my $image_count = getImageCount();
+
+    my $image_name = "confimage$image_count";
+    open(AI,">$IMAGE_DIR/$image_name.ai");
+    open(AIHEAD,"<./data/AI.header");
+    while (<AIHEAD>)	{
+        print AI $_;
+    }
+    close AIHEAD;
+    print AI $self->{ai};
+    open AIFOOT,"<./data/AI.footer";
+    while (<AIFOOT>) {
+        print AI $_;
+    };
+    close AIFOOT;
+
+    my $gd = $self->{'gd'};
+    open(IMAGEJ, ">$IMAGE_DIR/$image_name.jpg");
+    print IMAGEJ $gd->jpeg;
+    close IMAGEJ;
+    
+    open(IMAGEP, ">$IMAGE_DIR/$image_name.png");
+    print IMAGEP $gd->png;
+    close IMAGEP;
+
+    $image_map .= "</map>\n";
+
+    return ($image_map,$image_name);
+}
+
+sub line {
+    my $self = shift;
+    my ($x1,$y1,$x2,$y2,$color) = @_;
+
+    $self->{gd}->line($x1,$y1,$x2,$y2,$self->{gd_colors}->{$color});
+    
+    $self->{ai} .= "$self->{ai_colors}->{$color}\n";
+    $self->{ai} .= "[]0 d\n";
+    $self->{ai} .= sprintf "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
+    $self->{ai} .= sprintf "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y2;
+    $self->{ai} .= "S\n";
+}
+
+sub dashedLine {
+    my $self = shift;
+    my ($x1,$y1,$x2,$y2,$color) = @_;
+    $self->{gd}->setStyle($self->{gd_colors}->{$color},$self->{gd_colors}->{'white'});
+    $self->{gd}->line($x1,$y1,$x2,$y2,gdStyled);
+    $self->{ai} .= "$self->{ai_colors}->{$color}\n";
+    $self->{ai} .= "[6 ]0 d\n";
+    $self->{ai} .= sprintf "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
+    $self->{ai} .= sprintf "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y2;
+    $self->{ai} .= "S\n";
+}
+
+
+sub circle {
+    my $self = shift;
+    my ($x,$y,$diam,$color) = @_;
+
+    $self->{gd}->arc($x,$y,$diam,$diam,0,360,$self->{gd_colors}->{$color});
+
+    my $rad = $diam / 2;
+    my $aix = $AILEFT+$x+$rad;
+    my $aiy = $AITOP-$y;
+    my $obl = $diam * 0.27612;
+    $self->{ai} .= "$self->{ai_colors}->{$color}\n";
+    $self->{ai} .= sprintf "%.1f %.1f m\n",$aix,$aiy;
+    $self->{ai} .= sprintf "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix,$aiy-$obl,$aix-$rad+$obl,$aiy-$rad,$aix-$rad,$aiy-$rad;
+    $self->{ai} .= sprintf "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad-$obl,$aiy-$rad,$aix-$diam,$aiy-$obl,$aix-$diam,$aiy;
+    $self->{ai} .= sprintf "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$diam,$aiy+$obl,$aix-$rad-$obl,$aiy+$rad,$aix-$rad,$aiy+$rad;
+    $self->{ai} .= sprintf "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad+$obl,$aiy+$rad,$aix,$aiy+$obl,$aix,$aiy;
+    $self->{ai} .= "S\n";
+}
+
+sub filledCircle {
+    my $self = shift;
+    my ($x,$y,$diam,$color) = @_;
+
+    $self->{gd}->filledArc($x,$y,$diam,$diam,0,360,$self->{gd_colors}->{$color});
+
+    my $rad = $diam / 2;
+    my $aix = $AILEFT+$x+$rad;
+    my $aiy = $AITOP-$y;
+    my $obl = $diam * 0.27612;
+    my $aiStrokeColor = $self->{ai_colors}->{$color};
+    my $aiFillColor   = $self->{ai_colors}->{$color};
+    $aiFillColor =~ s/K/k/;
+    $self->{ai} .= "$aiStrokeColor\n";
+    $self->{ai} .= "$aiFillColor\n";
+    $self->{ai} .= sprintf "%.1f %.1f m\n",$aix,$aiy;
+    $self->{ai} .= sprintf "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix,$aiy-$obl,$aix-$rad+$obl,$aiy-$rad,$aix-$rad,$aiy-$rad;
+    $self->{ai} .= sprintf "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad-$obl,$aiy-$rad,$aix-$diam,$aiy-$obl,$aix-$diam,$aiy;
+    $self->{ai} .= sprintf "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$diam,$aiy+$obl,$aix-$rad-$obl,$aiy+$rad,$aix-$rad,$aiy+$rad;
+    $self->{ai} .= sprintf "%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad+$obl,$aiy+$rad,$aix,$aiy+$obl,$aix,$aiy;
+    $self->{ai} .= "b\n";
+}
+
+sub rectangle {
+    my $self = shift;
+    my ($x1,$y1,$x2,$y2,$color) = @_;
+
+    $self->{gd}->rectangle($x1,$y1,$x2,$y2,$self->{gd_colors}->{$color});
+
+    $self->{ai} .= "$self->{ai_colors}->{$color}\n";
+    $self->{ai} .= sprintf "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
+    $self->{ai} .= sprintf "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y1;
+    $self->{ai} .= sprintf "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y2;
+    $self->{ai} .= sprintf "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y2;
+    $self->{ai} .= sprintf "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1;
+    $self->{ai} .= "S\n";
+}
+
+sub filledRectangle {
+    my $self = shift;
+    my ($x1,$y1,$x2,$y2,$color) = @_;
+
+    $self->{gd}->filledRectangle($x1,$y1,$x2,$y2,$self->{gd_colors}->{$color});
+
+    $self->{ai} .= "0 O\n";
+    my $aiStrokeColor = $self->{ai_colors}->{$color};
+    my $aiFillColor   = $self->{ai_colors}->{$color};
+    $aiFillColor =~ s/K/k/;
+    $self->{ai} .= "$aiStrokeColor\n";
+    $self->{ai} .= "$aiFillColor\n";
+    $self->{ai} .= "4 M\n";
+    $self->{ai} .= sprintf "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
+    $self->{ai} .= sprintf "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y1;
+    $self->{ai} .= sprintf "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y2;
+    $self->{ai} .= sprintf "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y2;
+    $self->{ai} .= sprintf "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1;
+    $self->{ai} .= "b\n";
+}
+
+sub filledTriangle {
+    my $self = shift;
+    my ($x1,$y1,$x2,$y2,$x3,$y3,$color) = @_;
+    my $poly = new GD::Polygon;
+    $poly->addPt($x1,$y1);
+    $poly->addPt($x2,$y2);
+    $poly->addPt($x3,$y3);
+
+    # draw the polygon, filling it with a color
+    $self->{gd}->filledPolygon($poly,$self->{gd_colors}->{$color});
+
+    $self->{ai} .= "0 O\n";
+    my $aiStrokeColor = $self->{ai_colors}->{$color};
+    my $aiFillColor   = $self->{ai_colors}->{$color};
+    $aiFillColor =~ s/K/k/;
+    $self->{ai} .= "$aiStrokeColor\n";
+    $self->{ai} .= "$aiFillColor\n";
+    $self->{ai} .= "4 M\n";
+    $self->{ai} .= sprintf "%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1;
+    $self->{ai} .= sprintf "%.1f %.1f L\n",$AILEFT+$x2,$AITOP-$y2;
+    $self->{ai} .= sprintf "%.1f %.1f L\n",$AILEFT+$x3,$AITOP-$y3;
+    $self->{ai} .= sprintf "%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1;
+    $self->{ai} .= "b\n";
+}
+
+sub stringUp {
+    my $self = shift;
+    my ($font,$x,$y,$text,$color) = @_;
+
+    my $aiFillColor   = $self->{ai_colors}->{$color};
+    $aiFillColor =~ s/K/k/;
+    $self->{gd}->stringUp($self->{gd_fonts}->{$font},$x,$y,$text,$self->{gd_colors}->{$color});
+    $self->{ai} .= "0 To\n";
+    $self->{ai} .= sprintf "0 1 -1 0 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$x+10,$AITOP-$y;
+    $self->{ai} .= sprintf "0 Tr\n0 O\n%s\n",$aiFillColor;
+    $self->{ai} .= sprintf "/_Courier %.1f Tf\n",$self->{ai_fonts}->{$font}; 
+    $self->{ai} .= sprintf "0 Tw\n";
+    $self->{ai} .= "($text) Tx 1 0 Tk\n";
+    $self->{ai} .= "(\r) Tx 1 0 Tk\nTO\n";
+}
+
+sub string {
+    my $self = shift;
+    my ($font,$x,$y,$text,$color) = @_;
+
+    $self->{gd}->string($self->{gd_fonts}->{$font},$x,$y,$text,$self->{gd_colors}->{$color});
+
+    my $aiFillColor   = $self->{ai_colors}->{$color};
+    $aiFillColor =~ s/K/k/;
+    $self->{ai} .= "0 To\n";
+    $self->{ai} .= sprintf "1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+$x,$AITOP-$y;
+    $self->{ai} .= sprintf "0 Tr\n0 O\n%s\n",$aiFillColor;
+    $self->{ai} .= sprintf "/_Courier %.1f Tf\n",$self->{ai_fonts}->{$font}; 
+    $self->{ai} .= sprintf "0 Tw\n";
+    $self->{ai} .= "($text) Tx 1 0 Tk\n";
+    $self->{ai} .= "(\r) Tx 1 0 Tk\nTO\n";
+}
+
 
 # Cleans out files created more than 1 day ago, increments the image counter and passes back the number
 # corresponding to a new image 
@@ -2300,24 +2598,29 @@ sub getImageCount {
             unlink "$IMAGE_DIR/$file";
         }
     }
-                                                                                                                                                             
+    
     # get the next number for file creation.
     if ( ! open IMAGECOUNT,"<$IMAGE_DIR/imagecount" ) {
-        $self->htmlError ( "Couldn't open [$IMAGE_DIR/imagecount]: $!" );
+        die( "Couldn't open [$IMAGE_DIR/imagecount]: $!" );
     }
-    $image_count = <IMAGECOUNT>;
+    my $image_count = <IMAGECOUNT>;
     chomp($image_count);
     close IMAGECOUNT;
                                                                                                                                                              
     $image_count++;
     if ( ! open IMAGECOUNT,">$IMAGE_DIR/imagecount" ) {
-          $self->htmlError ( "Couldn't open [$IMAGE_DIR/imagecount]: $!" );
+          die( "Couldn't open [$IMAGE_DIR/imagecount]: $!" );
     }
     print IMAGECOUNT "$image_count";
     close IMAGECOUNT;
-                                                                                                                                                             
+    
     $image_count++;
     return $image_count;
 }
+
+sub round {
+    return int($_[0]+.5)
+}
+
 
 1;

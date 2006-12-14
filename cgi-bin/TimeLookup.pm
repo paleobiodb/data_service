@@ -262,29 +262,40 @@ sub getRangeByInterval {
             @intervals = $self->mapIntervals(@TimeLookup::bins[$index1 .. $index2]);
         }
     } else {
-        my $max_interval_no = $self->getIntervalNo($eml_max,$max);
-        my $min_interval_no = $self->getIntervalNo($eml_min,$min);
-        my $max_name = $eml_max ? "$eml_max $max" : $max;
-        my $min_name = $eml_min ? "$eml_min $min" : $min;
+        my ($max_interval_no,$min_interval_no);
+        if ($max =~ /^\d+$/) {
+            $max_interval_no = $max;
+        } else {
+            $max_interval_no = $self->getIntervalNo($eml_max,$max);
+            my $max_name = $eml_max ? "$eml_max $max" : $max;
+            if (!$max_interval_no) {
+                push @errors, qq/The term "$max_name" not valid or not in the database/;
+            } else {
+                if ($min_interval_no != $max_interval_no &&
+                    $self->isObsolete($max_interval_no)) {
+                    push @warnings, qq/The term "$max_name" may no longer be valid; please use a newer, equivalent term/;
+                }
+            }
+        }
+        if ($min =~ /^\d+$/) {
+            $min_interval_no = $min;
+        } else {
+            $min_interval_no = $self->getIntervalNo($eml_min,$min);
+            my $min_name = $eml_min ? "$eml_min $min" : $min;
+            if (!$min_interval_no) {
+                push @errors, qq/The term "$min_name" not valid or not in the database/;
+            } else {
+                if ($self->isObsolete($min_interval_no)) {
+                    push @warnings, qq/The term "$min_name" may no longer be valid; please use a newer, equivalent term/;
+                }
+            }
+        }
    
         # if numbers weren't found for either interval, bomb out!
-        if (!$max_interval_no) {
-            push @errors, qq/The term "$max_name" not valid or not in the database/;
-        }
-        if (!$min_interval_no) {
-            push @errors, qq/The term "$min_name" not valid or not in the database/;
-        }
         if (@errors) {
             return ([],\@errors,\@warnings);
         }
        
-        if ($self->isObsolete($min_interval_no)) {
-            push @warnings, qq/The term "$min_name" may no longer be valid; please use a newer, equivalent term/;
-        }
-        if ($min_interval_no != $max_interval_no &&
-            $self->isObsolete($max_interval_no)) {
-            push @warnings, qq/The term "$max_name" may no longer be valid; please use a newer, equivalent term/;
-        }
 
         my @range = $self->findPath($max_interval_no,$min_interval_no);
         @intervals = $self->mapIntervals(@range);

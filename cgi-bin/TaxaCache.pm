@@ -748,12 +748,21 @@ sub getChildren {
 #   array_full - an array of hashrefs, in order by lowest to highest class. Hash ref has following keys:
 #       taxon_no (integer), taxon_name (string), spellings (arrayref to array of same) synonyms (arrayref to array of same)
 #   array - *default* - an array of taxon_nos, in order from lowest to higher class
+#   rank xxxx - returns taxon resolved to a specific rank
 sub getParents {
     my ($dbt,$taxon_nos_ref,$return_type) = @_;
 
     my %hash = ();
+    my $rank;
+    if ($return_type =~ /rank (\w+)/) {
+        $rank = $dbt->dbh->quote($1);
+    }
     foreach my $taxon_no (@$taxon_nos_ref) {
-        if ($return_type eq 'array_full') {
+        if ($rank) {
+            my $sql = "SELECT a.taxon_no,a.taxon_name,a.taxon_rank FROM taxa_list_cache l, taxa_tree_cache t, authorities a WHERE t.taxon_no=l.parent_no AND a.taxon_no=l.parent_no AND l.child_no=$taxon_no AND a.taxon_rank=$rank ORDER BY t.lft DESC";
+            my @results = @{$dbt->getData($sql)};
+            $hash{$taxon_no} = $results[0];
+        } elsif ($return_type eq 'array_full') {
             my $sql = "SELECT a.taxon_no,a.taxon_name,a.taxon_rank FROM taxa_list_cache l, taxa_tree_cache t, authorities a WHERE t.taxon_no=l.parent_no AND a.taxon_no=l.parent_no AND l.child_no=$taxon_no ORDER BY t.lft DESC";
             $hash{$taxon_no} = $dbt->getData($sql);
         } else {
@@ -770,8 +779,10 @@ sub getParents {
 sub getParent {
     my $dbt = shift;
     my $taxon_no = shift;
+    my $taxon_rank = shift;
 
-    my $sql = "SELECT a.taxon_no,a.taxon_name,a.taxon_rank FROM taxa_list_cache l, taxa_tree_cache t, authorities a WHERE t.taxon_no=l.parent_no AND a.taxon_no=l.parent_no AND l.child_no=$taxon_no ORDER BY t.lft DESC LIMIT 1";
+    my $rank_sql = ($taxon_rank) ? "AND a.taxon_rank=".$dbt->dbh->quote($taxon_rank) : "";
+    my $sql = "SELECT a.taxon_no,a.taxon_name,a.taxon_rank FROM taxa_list_cache l, taxa_tree_cache t, authorities a WHERE t.taxon_no=l.parent_no AND a.taxon_no=l.parent_no AND l.child_no=$taxon_no $rank_sql ORDER BY t.lft DESC LIMIT 1";
     return ${$dbt->getData($sql)}[0];
 }
 
@@ -805,5 +816,46 @@ sub enableBinLog {
     my $return = $dbt->dbh->do("SET SQL_LOG_BIN=1");
     return $return;
 }
+
+sub getMetaData {
+    my ($dbt,$taxon_no,$spelling_no,$synonym_no) = @_;
+    my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
+    my $last_op = TaxonInfo::getMostRecentClassification($dbt,$orig_no);
+
+    my $invalid_reason = 'valid';
+    my $nomen_parent_no = 0;
+    if ($synonym_no != $spelling_no || ($last_op && $last_op->{'status'} !~ /belongs to/)) {
+        if ($last_op->{'status'} =~ /nomen/) {
+            my $last_parent_op = TaxonInfo::getMostRecentClassification($dbt,$orig_no,'',1); 
+            $nomen_parent_no = $last_parent_op->{'parent_no'} || "0";
+        } 
+        $invalid_reason = $last_op->{'status'};
+    } elsif ($taxon_no != $spelling_no) {
+        $invalid_reason = $last_op->{'spelling_reason'};
+    }
+    return ($invalid_reason,$nomen_parent_no);
+}
+
+sub listFromEnum {
+    my ($dbt,$table,$field) = @_;
+    my $dbh = $dbt->dbh;
+
+    my $sql = "SHOW COLUMNS FROM `$table` LIKE '$field'";
+    my $sth = $dbh->prepare($sql);
+    $sth->execute();
+    my $row = $sth->fetchrow_arrayref();
+    if ($row) {
+        my $def = $row->[1];
+        $def =~ s/^enum\('|^set\('|'\)$//g;
+        my @values;
+        foreach (split(/','/,$def)) {
+            push @values,$_;
+        }
+        return (@values);
+    } else {
+        die "bad call to listFromEnum";
+    }
+}  
+
 
 1;

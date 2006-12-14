@@ -2485,7 +2485,7 @@ sub processCollectionsSearch {
     }
 
     # Handle time terms
-	if ( $options{'max_interval'} || $options{'min_interval'}) {
+	if ( $options{'max_interval'} || $options{'min_interval'} || $options{'max_interval_no'} || $options{'min_interval_no'}) {
         #These seeminly pointless four lines are necessary if this script is called from Download or whatever.
         # if the $q->param($var) is not set (undef), the parameters array passed into processLookup doesn't get
         # set properly, so make sure they can't be undef PS 04/10/2005
@@ -2500,7 +2500,12 @@ sub processCollectionsSearch {
             push @errors, "There is no record of $eml_min $min in the database";
         }
         my $t = new TimeLookup($dbt);
- 		my ($intervals,$errors,$warnings) = $t->getRange($eml_max,$max,$eml_min,$min);
+ 		my ($intervals,$errors,$warnings);
+        if ($options{'max_interval_no'} =~ /^\d+$/) {
+ 		    ($intervals,$errors,$warnings) = $t->getRangeByInterval('',$options{'max_interval_no'},'',$options{'min_interval_no'});
+        } else {
+ 		    ($intervals,$errors,$warnings) = $t->getRange($eml_max,$max,$eml_min,$min);
+        }
         push @errors, @$errors;
         push @warnings, @$warnings;
         my $val = join(",",@$intervals);
@@ -2661,6 +2666,9 @@ IS NULL))";
 	}
 	
 	# Handle collection name (must also search collection_aka field) JA 7.3.02
+	if ($options{'collection_list'} && $options{'collection_list'} =~ /^[\d ,]+$/) {
+        push @where, "c.collection_no IN ($options{collection_list})";
+    }
 	if ( $options{'collection_names'} ) {
 		my $val = $dbh->quote('%'.$options{'collection_names'}.'%');
         if ($options{'collection_names'} =~ /^\d+$/) {
