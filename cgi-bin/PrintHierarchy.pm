@@ -86,6 +86,7 @@ sub processPrintHierarchy	{
                 }
             }
             unshift @node_stack,@{$node->{'children'}};
+            unshift @node_stack,@{$node->{'synonyms'}};
         }
         if ($node->{'taxon_rank'} !~ /species|genus/ && !scalar(@{$node->{'children'}})) {
             push @check_is_disused,$node->{'taxon_no'};
@@ -104,6 +105,9 @@ sub processPrintHierarchy	{
             # synonym instead
             while (@child_queue) {
                 my $child = shift @child_queue;
+                foreach (@{$child->{'synonyms'}}) {
+                    push @child_queue,$_;
+                }
                 foreach (@{$child->{'children'}}) {
                     push @child_queue,$_;
                 }
@@ -193,7 +197,7 @@ sub processPrintHierarchy	{
 	open OUT, ">$OUT_FILE_DIR/classification.csv";
 	print "<center><table>\n";
     print "<tr>";
-    for (my $i=0;$i<=$MAX+1 && $i <= $MAX_SEEN+1;$i++) {
+    for (my $i=0;$i<=$MAX+5 && $i <= $MAX_SEEN+5;$i++) {
            print "<td style=\"width:20;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>"; 
     }
     print "</tr>";
@@ -206,7 +210,7 @@ sub processPrintHierarchy	{
 		for (my $i=0;$i<$record->{'depth'};$i++) {
 			print "<td></td>";
 		}
-		print "<td style=\"white-space: nowrap;\" colspan=".($MAX + 1 - $record->{'depth'}).">";
+		print "<td style=\"white-space: nowrap;\" colspan=".($MAX + 5 - $record->{'depth'}).">";
         my $shortrank = $shortranks{$record->{'taxon_rank'}};
         my $title = "<b>$shortrank</b> ";
         my $taxon_name = $record->{'taxon_name'};
