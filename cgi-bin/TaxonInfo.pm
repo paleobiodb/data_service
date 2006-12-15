@@ -37,7 +37,7 @@ sub checkTaxonInfo {
 	my $dbt = shift;
     my $hbo = shift;
 
-    if (!$q->param("taxon_no") && !$q->param("taxon_name") && !$q->param("author") && !$q->param("pubyr")) {
+    if (!$q->param("taxon_no") && !$q->param("taxon_name") && !$q->param("common_name") && !$q->param("author") && !$q->param("pubyr")) {
         searchForm($hbo, $q, 1); # param for not printing header with form
         return;
     }
@@ -45,16 +45,17 @@ sub checkTaxonInfo {
     if ($q->param('taxon_no')) {
         # If we have is a taxon_no, use that:
         displayTaxonInfoResults($dbt,$s,$q);
-    } elsif (!$q->param('taxon_name') && !($q->param('pubyr')) & !$q->param('author')) {
+    } elsif (!$q->param('taxon_name') && !($q->param('common_name')) && !($q->param('pubyr')) && !$q->param('author')) {
         searchForm($hbo,$q);
     } else {
         my $options = {'match_subgenera'=>1,'remove_rank_change'=>1};
-        foreach ('taxon_name','author','pubyr') {
+        foreach ('taxon_name','common_name','author','pubyr') {
             if ($q->param($_)) {
                 $options->{$_} = $q->param($_);
             }
         }
-        my @results = getTaxa($dbt,$options,['taxon_no','taxon_rank','taxon_name','author1last','author2last','otherauthors','pubyr','pages','figures','comments']);   
+
+        my @results = getTaxa($dbt,$options,['taxon_no','taxon_rank','taxon_name','common_name','author1last','author2last','otherauthors','pubyr','pages','figures','comments']);   
 
         if(scalar @results < 1 ){
             # If nothing from authorities, go to occs + reids
@@ -2500,6 +2501,9 @@ sub getTaxa {
     if ($options->{'taxon_no'}) {
         push @where, "a.taxon_no=".int($options->{'taxon_no'});
     } else {
+        if ($options->{'common_name'}) {
+            push @where, "common_name=".$dbh->quote($options->{'common_name'});
+        }
         if ($options->{'taxon_rank'}) {
             push @where, "taxon_rank=".$dbh->quote($options->{'taxon_rank'});
         }
@@ -2532,7 +2536,7 @@ sub getTaxa {
     if ($fields) {
         @fields = @$fields;
         if  ($fields[0] =~ /\*|all/) {
-            @fields = ('taxon_no','reference_no','taxon_rank','taxon_name','type_taxon_no','type_specimen','extant','preservation','ref_is_authority','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments');
+            @fields = ('taxon_no','reference_no','taxon_rank','taxon_name','common_name','type_taxon_no','type_specimen','extant','preservation','ref_is_authority','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments');
         }
         foreach my $f (@fields) {
             if ($f =~ /^author(1|2)(last|init)$|otherauthors|pubyr$/) {
