@@ -57,7 +57,7 @@ sub checkTaxonInfo {
 
         my @results = getTaxa($dbt,$options,['taxon_no','taxon_rank','taxon_name','common_name','author1last','author2last','otherauthors','pubyr','pages','figures','comments']);   
 
-        if(scalar @results < 1 ){
+        if(scalar @results < 1 && $q->param('taxon_name')){
             # If nothing from authorities, go to occs + reids
             my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($q->param('taxon_name'));
             my $where = "WHERE genus_name LIKE ".$dbh->quote($genus);
@@ -84,6 +84,11 @@ sub checkTaxonInfo {
                 if($s->isDBMember()) {
                     print "<center><p><a href=\"bridge.pl?action=submitTaxonSearch&amp;goal=authority&amp;taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
                 }
+            }
+        } elsif(scalar @results < 1 && ! $q->param('taxon_name')){
+            searchForm($hbo, $q, 1); # param for not printing header with form
+            if($s->isDBMember()) {
+                print "<center><p><a href=\"bridge.pl?action=submitTaxonSearch&amp;goal=authority&amp;taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
             }
         } elsif(scalar @results == 1){
             $q->param('taxon_no'=>$results[0]->{'taxon_no'});
@@ -135,13 +140,14 @@ sub displayTaxonInfoResults {
 
 
     # Get most recently used name of taxon
-    my ($taxon_name,$taxon_rank);
+    my ($taxon_name,$common_name,$taxon_rank);
     if ($taxon_no) {
         my $orig_taxon_no = getOriginalCombination($dbt,$taxon_no);
         $taxon_no = getSeniorSynonym($dbt,$orig_taxon_no);
         # This actually gets the most correct name
         my $taxon = getMostRecentSpelling($dbt,$taxon_no);
         $taxon_name = $taxon->{'taxon_name'};
+        $common_name = $taxon->{'common_name'};
         $taxon_rank = $taxon->{'taxon_rank'};
     } else {
         $taxon_name = $q->param('taxon_name');
@@ -162,8 +168,11 @@ sub displayTaxonInfoResults {
     print "<div class=\"small\">";
     my @modules_to_display = (1,2,3,4,5,6,7,8,9,10);
 
-	print "<div align=\"center\"><h2>$taxon_name</h2></div>";
-                                                             
+	if ( $common_name =~ /[A-Za-z]/ )	{
+		print "<div align=\"center\"><h2>$taxon_name ($common_name)</h2></div>";
+	} else	{
+		print "<div align=\"center\"><h2>$taxon_name</h2></div>";
+	}
 
 
     print '
@@ -1974,7 +1983,7 @@ sub getMostRecentSpelling {
                 " CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
             ")".
          ")) AS reliability_index ";
-    $sql = "(SELECT o.spelling_reason, a.taxon_no, a.taxon_name, a.taxon_rank, o.opinion_no, $reliability, "
+    $sql = "(SELECT o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, o.opinion_no, $reliability, "
          . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) AS pubyr"
          . " FROM opinions o" 
          . " LEFT JOIN authorities a ON o.child_spelling_no=a.taxon_no"
@@ -1990,7 +1999,7 @@ sub getMostRecentSpelling {
     $sql .= ") ";
     if (@misspellings) {
         $sql .= " UNION ";
-        $sql .= "(SELECT o.spelling_reason, a.taxon_no, a.taxon_name, a.taxon_rank, o.opinion_no, $reliability, "
+        $sql .= "(SELECT o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, o.opinion_no, $reliability, "
               . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr"
               . " FROM opinions o" 
               . " LEFT JOIN authorities a ON o.parent_spelling_no=a.taxon_no"
