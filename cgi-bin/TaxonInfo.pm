@@ -715,7 +715,7 @@ sub doCollections{
         print "<div align=\"center\"><h3>Collections</h3><i> No collection or age range data are available</i></div>";
         return;
     }
-    my ($lb,$ub,$max,$min) = calculateAgeRange($dbt,$t,\@data,$upperbound,$lowerbound);
+    my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$t,\@data,$upperbound,$lowerbound);
 
 
 #    print "MAX".Dumper($max);
@@ -739,6 +739,18 @@ sub doCollections{
         $range .= "$max";
     }
     $range .= " <i>or</i> $lb to $ub Ma";
+
+    # I hate to hit another table, but we need to know whether ANY of the
+    #  included taxa are extant JA 15.12.06
+    my $extant;
+    if ( $in_list && @$in_list )	{
+        my $sql = "SELECT count(*) AS c FROM authorities WHERE extant='YES' AND taxon_no in (" . join (',',@$in_list) . ")";
+        $extant = ${$dbt->getData($sql)}[0]->{'c'};
+    }
+
+    if ( $minfirst && $extant > 0 && $age_range_format ne 'for_strata_module' )	{
+        $range = "Maximum range based only on fossils: " . $range . "<br>\nMinimum age of oldest fossil: $minfirst Ma";
+    }
 
     if ($age_range_format eq 'for_strata_module') {
         print "<b>Age range:</b> $range <br><br><hr><br>"; 
@@ -1098,7 +1110,7 @@ sub calculateAgeRange {
     if ($best_ub == -1) {
         $best_ub = '';
     }
-    return ($best_lb,$best_ub,\@max,\@min);
+    return ($best_lb,$best_ub,$oldest_ub,\@max,\@min);
 }
 
 
