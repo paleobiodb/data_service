@@ -15,7 +15,7 @@ print OUT qq|
 <div style="margin-left: 1em; margin-right: 1em;">
 <h3 style="text-align: center;">Dinosaur facts and figures</h3>
 
-<p class="medium">Here are some of the coolest dinosaur factoids you can get out of the Paleobiology Database, useful or not.</p>
+<p class="medium">Here are some of the coolest dinosaur factoids you can get out of the Paleobiology Database, useful or not. Most of the data are based on Matt Carrano's <a href="cgi-bin/bridge.pl?user=Guest&action=displayPage&page=OSA_Dinosauria">non-avian dinosaur systematics archive</a>.</p>
 <p class="small">Technical note: birds are dinosaurs. However, birds are not included in any of the following because, well, they're birds.</p>
 |;
 
@@ -201,18 +201,34 @@ print OUT "</ul>\n";
 #  (2) species names are ordered backwards because endings are more
 #       standardized
 
+my $tlets = 0;
 for $sr ( @sprefs )	{
 	my ($gen,$sp) = split / /,$sr->{taxon_name};
 	my @glets = split //,$gen;
 	my @slets = split //,$sp;
-	for my $i ( 0..$#glets-1 )	{
-		$gtotal[$i]++;
-		$gfreq[$i]{$glets[$i].$glets[$i+1]}++;
+	for my $i ( 1..$#glets )	{
+		$letfreq{$glets[$i]}++;
+		$tlets++;
+	}
+	for my $i ( 0..$#slets )	{
+		$letfreq{$slets[$i]}++;
+		$tlets++;
+	}
+	# special treatment for first two letters
+	$ginittotal++;
+	$gfreq{$glets[0].$glets[1]}++;
+	for my $i ( 1..$#glets-1 )	{
+		$gtotal++;
+		#$gtotal[$i]++;
+		$gfreq{$glets[$i].$glets[$i+1]}++;
+		#$gfreq[$i]{$glets[$i].$glets[$i+1]}++;
 	}
 	for my $i ( reverse 1..$#slets )	{
 		my $j = $#slets - $i;
-		$stotal[$j]++;
-		$sfreq[$j]{$slets[$i].$slets[$i-1]}++;
+		$stotal++;
+		#$stotal[$j]++;
+		$sfreq{$slets[$j].$slets[$j-1]}++;
+		#$sfreq[$j]{$slets[$j].$slets[$j-1]}++;
 	}
 }
 
@@ -220,21 +236,31 @@ for $sr ( @sprefs )	{
 	my ($gen,$sp) = split / /,$sr->{taxon_name};
 	my @glets = split //,$gen;
 	my @slets = split //,$sp;
-	my $tlets = 0;
-	for my $i ( 0..$#glets-1 )	{
-		$weird{$sr->{taxon_name}} += $gfreq[$i]{$glets[$i].$glets[$i+1]} / $gtotal[$i];
-		$tlets++;
+	my $lets = 0;
+	$weird{$sr->{taxon_name}} += log($gfreq{$glets[0].$glets[1]} / $ginittotal);
+	for my $i ( 1..$#glets-1 )	{
+		$weird{$sr->{taxon_name}} += log($gfreq{$glets[$i].$glets[$i+1]} / $gtotal);
+		#$weird{$sr->{taxon_name}} += $gfreq{$glets[$i].$glets[$i+1]} / $gtotal;
+		#$weird{$sr->{taxon_name}} += $gfreq[$i]{$glets[$i].$glets[$i+1]} / $gtotal[$i];
+		$lets++;
 	}
 	for my $i ( reverse 1..$#slets )	{
 		my $j = $#slets - $i;
-		$weird{$sr->{taxon_name}} += $sfreq[$j]{$slets[$i].$slets[$i-1]} / $stotal[$j];
-		$tlets++;
+		$weird{$sr->{taxon_name}} += log($sfreq{$slets[$j].$slets[$j-1]} / $stotal);
+		#$weird{$sr->{taxon_name}} += $sfreq{$slets[$j].$slets[$j-1]} / $stotal;
+		#$weird{$sr->{taxon_name}} += $sfreq[$j]{$slets[$j].$slets[$j-1]} / $stotal[$j];
+		$lets++;
 	}
-	$weird{$sr->{taxon_name}} /= $tlets;
+	$weird{$sr->{taxon_name}} /= $lets;
+	$weird2{$sr->{taxon_name}} = $weird{$sr->{taxon_name}} *$lets / ( $lets - 1 );
+	# weirdness should go on for more than a few letters
+	$weird{$sr->{taxon_name}} /= $lets / ( $lets - 1 );
 }
 
 my @spp = keys %weird;
+@spp2 = @spp;
 @spp = sort { $weird{$a} <=> $weird{$b} } @spp;
+@spp2 = sort { $weird2{$b} <=> $weird2{$a} } @spp2;
 
 print OUT "\n<h4>Species with the weirdest names</h4>\n";
 print OUT qq|<p class="small">Based on a very tasty secret formula.</p>\n|;
@@ -242,7 +268,19 @@ print OUT qq|<p class="small">Based on a very tasty secret formula.</p>\n|;
 print OUT "\n<ul>\n";
 my $points = " points";
 for $i (0..9)	{
-	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_name=$spp[$i]&is_real_user=1">$spp[$i]</a> (%.1f$points)\n|,1000 * (0.1 - $weird{$spp[$i]});
+	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_name=$spp[$i]&is_real_user=1">$spp[$i]</a> (%.2f$points)\n|,-1 * $weird{$spp[$i]};
+	#printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_name=$spp[$i]&is_real_user=1">$spp[$i]</a> (%.1f$points)\n|,1000 * (0.1 - $weird{$spp[$i]});
+	$points = "";
+}
+print OUT "\n</ul>\n";
+
+print OUT "\n<h4>Species with the dullest names</h4>\n";
+print OUT qq|<p class="small">Based on almost the same very tasty secret formula.</p>\n|;
+
+print OUT "\n<ul>\n";
+my $points = " points";
+for $i (0..9)	{
+	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_name=$spp2[$i]&is_real_user=1">$spp2[$i]</a> (%.2f$points)\n|,-1 * $weird2{$spp2[$i]};
 	$points = "";
 }
 print OUT "\n</ul>\n";
