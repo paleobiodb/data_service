@@ -357,6 +357,17 @@ sub displayOpinionForm {
             # to speed up entry, assume that the primary (current) ref has
             #  the opinion JA 29.8.06
             $fields{'ref_has_opinion'} = 'PRIMARY';
+            # and even assume the taxon is valid 18.12.06
+            $fields{'taxon_status'} = 'belongs to'; 
+            # also hit the database to get the last values used for some of the
+            #  fields, but only if the same reference was used JA 18.12.06
+            my $sql = "SELECT diagnosis_given,ref_has_opinion,pages,classification_quality FROM opinions WHERE reference_no=" . $s->get('reference_no') . " AND enterer_no=" . $s->get('enterer_no') . " ORDER BY opinion_no DESC LIMIT 1";
+            my $lastopinion = @{$dbt->getData($sql)}[0];
+            if ( $lastopinion->{ref_has_opinion} eq "YES" )	{
+                $fields{'diagnosis_given'} = $lastopinion->{diagnosis_given};
+                $fields{'pages'} = $lastopinion->{pages};
+                $fields{'classification_quality'} = $lastopinion->{classification_quality};
+            }
             my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}});
             my $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_spelling_no'}});
             my $reason = guessSpellingReason($child,$spelling);
