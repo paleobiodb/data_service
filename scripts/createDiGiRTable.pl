@@ -1,6 +1,8 @@
 #!/usr/bin/perl
 
 use lib '/Volumes/pbdb_RAID/httpdocs/cgi-bin';
+use strict;
+
 use DBI;
 use DBTransactionManager;
 use DBConnection;
@@ -17,6 +19,7 @@ my $user = 'gbifwriter';
 my $passwd = 'PBL1nk26B1f';
 my $dsn = "DBI:mysql:database=gbif;host=localhost";
 my $dbh_gbif = DBI->connect($dsn, $user, $passwd);
+my $dbt_gbif = DBTransactionManager->new($dbh_gbif);
 
 my $dbh_pbdb = DBConnection::connect();
 my $dbt = DBTransactionManager->new($dbh_pbdb);
@@ -26,8 +29,16 @@ if ($ARGV[0] eq '--debug') {
     $DEBUG = 1;
 }
 
+
+# Don't log thse inserts - this is a session variable
+# gbigwriter must have SUPER privilege
+my $return = $dbh_gbif->do("SET SQL_LOG_BIN=0");
+if (!$return) {
+    print "WARNING: could not turn off binary logging";
+}
+
 # All the potential fields that we're going to provide to GBIF
-@fields = qw(DateLastModified InstitutionCode CollectionCode CatalogNumber ScientificName BasisOfRecord Kingdom Phylum Class Order Family Genus Species Subspecies ScientificNameAuthor ContinentOcean Country StateProvince County Locality Longitude Latitude MaximumElevation MinimumElevation IndividualCount Notes);
+my @fields = qw(DateLastModified InstitutionCode CollectionCode CatalogNumber ScientificName BasisOfRecord Kingdom Phylum Class Order Family Genus Species Subspecies ScientificNameAuthor ContinentOcean Country StateProvince County Locality Longitude Latitude MaximumElevation MinimumElevation IndividualCount Notes);
 
 # Populate country --> continent look up table
 my %continentLUT = ();
@@ -38,23 +49,23 @@ if ( ! open REGIONS,"<$regions_file" ) {
 while (<REGIONS>)   {
     chomp;
     my ($continent,$country_list) = split /:/, $_, 2;
-    @countries = split /\t/,$country_list;
-    for $country (@countries)   {
+    my @countries = split /\t/,$country_list;
+    foreach my $country (@countries)   {
         $continentLUT{$country} = $continent;
     }
 }
 
-$sql = "DROP TABLE IF EXISTS gbif_new";
+my $sql = "DROP TABLE IF EXISTS gbif_new";
 $dbh_gbif->do($sql);
 
 $sql = "SHOW CREATE TABLE gbif";
-$sth = $dbh_gbif->prepare($sql);
-$result = $sth->execute();
+my $sth = $dbh_gbif->prepare($sql);
+my $result = $sth->execute();
 if (!$result) {
     print $sth->errstr;
 }
-$row = $sth->fetchrow_arrayref();
-$definition = $row->[1];
+my $row = $sth->fetchrow_arrayref();
+my $definition = $row->[1];
 $definition =~ s/CREATE TABLE `gbif`/CREATE TABLE `gbif_new`/;
 print $definition if ($DEBUG);
 $sth = $dbh_gbif->prepare($definition);
@@ -63,11 +74,10 @@ if (!$result) {
     print $sth->errstr;
 }
 
+my $do_limit = "";
 if ($DEBUG) {
     $do_limit = " limit 100";
-} else {
-    $do_limit ="";
-}
+} 
 
 my ($th0, $th1);
 $th0 = gettimeofday;
@@ -85,64 +95,52 @@ $sth->execute();
 #$th0 = $th1;
 
 my %class_cache = (); #speed this lookup up
-while($row = $sth->fetchrow_hashref()) {
+while(my $row = $sth->fetchrow_hashref()) {
     my %gbif_row = ();
     
     $gbif_row{'DateLastModified'} = $row->{'occ_modified'};
-    $gbif_row{'InstitutionCode'} = ($row->{'museum'} ne '') ? $row->{'museum'} : "";
-    $gbif_row{'CollectionCode'} = 'PBDB collection number '.$row->{'collection_no'};
+#    $gbif_row{'InstitutionCode'} = ($row->{'museum'} ne '') ? $row->{'museum'} : "";
+    $gbif_row{'InstitutionCode'} = "PBDB";
+    $gbif_row{'CollectionCode'} = $row->{'collection_no'};
     $gbif_row{'CatalogNumber'} = $row->{'occurrence_no'};
 
-    $taxon_no = $row->{'taxon_no'};
-    $taxon_name = $row->{'genus_name'};
+    my $taxon_no = $row->{'taxon_no'};
+    my $taxon_name = $row->{'genus_name'};
     $taxon_name .= " ".$row->{'subgenus_name'} if ($row->{'subgenus_name'});
     $taxon_name .= " ".$row->{'species_name'};
     $taxon_name .= " ".$row->{'subspecies_name'} if ($row->{'subspecies_name'});
     $gbif_row{'ScientificName'} = $taxon_name;
-    $gbif_row{'BasisOfRecord'} = ''; # Should be publication
+    $gbif_row{'BasisOfRecord'} = 'fossil'; # Should be publication
 
+    my %lookup_by_rank = ();
     if ($taxon_no) {
-        if (! exists $class_cache{$taxon_no}) {
-            print "Making cache for $taxon_no\n" if ($DEBUG);
-            my $class_hash = Classification::get_classification_hash($dbt,'kingdom,phylum,class,order,family',[$taxon_no]);
-            my @higher_taxon = split(/,/,$class_hash->{$taxon_no});
-            $class_cache{$taxon_no} = \@higher_taxon;
-            ($kingdom,$phylum,$class,$order,$family) = @{$class_cache{$taxon_no}}
-        } elsif ($DEBUG) {
-            print "Hit cache for $taxon_no\n";
+        my $hash = TaxaCache::getParents($dbt,[$taxon_no],'array_full');
+        $class_cache{$taxon_no} = $hash->{$taxon_no};
+        my $ss = TaxaCache::getSeniorSynonym($dbt,$taxon_no);
+        foreach my $p ($ss,@{$class_cache{$taxon_no}}) {
+            $lookup_by_rank{$p->{'taxon_rank'}} = $p;
         }
-        ($kingdom,$phylum,$class,$order,$family) = @{$class_cache{$taxon_no}};
-
-        if ($row->{'species_name'} =~ /indet/) {
-            my $taxon = TaxonInfo::getTaxon($dbt,{'taxon_no'=>$taxon_no});
-            if ($taxon->{'taxon_rank'} eq 'kingdom') {
-                $kingdom = $taxon->{'taxon_name'};
-            } elsif ($taxon->{'taxon_rank'} eq 'phylum') {
-                $phylum = $taxon->{'taxon_name'};
-            } elsif ($taxon->{'taxon_rank'} eq 'class') {
-                $class = $taxon->{'taxon_name'};
-            } elsif ($taxon->{'taxon_rank'} eq 'order') {
-                $order = $taxon->{'taxon_name'};
-            } elsif ($taxon->{'taxon_rank'} eq 'family') {
-                $family = $taxon->{'taxon_name'};
-            }
-        }
+    } 
+    $gbif_row{'Kingdom'} = $lookup_by_rank{'kingdom'}{'taxon_name'} || '';
+    $gbif_row{'Phylum'} = $lookup_by_rank{'phylum'}{'taxon_name'} || '';
+    $gbif_row{'Class'} = $lookup_by_rank{'class'}{'taxon_name'} || '';
+    $gbif_row{'Order'} = $lookup_by_rank{'order'}{'taxon_name'} || '';
+    $gbif_row{'Family'} = $lookup_by_rank{'family'}{'taxon_name'} || '';
+    my $genus = $lookup_by_rank{'genus'}{'taxon_name'} || $row->{'genus_name'};
+    my $species = $lookup_by_rank{'species'}{'taxon_name'};
+    my ($g,$sg,$sp) = Taxon::splitTaxon($species);
+    if (!$sp) {
+        $species = $row->{'species_name'};
     } else {
-        ($kingdom,$phylum,$class,$order,$family) = ('','','','','');
+        $species = $sp;
     }
-    
-    $gbif_row{'Kingdom'} = $kingdom;
-    $gbif_row{'Phylum'} = $phylum;
-    $gbif_row{'Class'} = $class;
-    $gbif_row{'Order'} = $order;
-    $gbif_row{'Family'} = $family;
-    $gbif_row{'Genus'} = $row->{'genus_name'};
-    $gbif_row{'Species'} = $row->{'species_name'};
-    $gbif_row{'Subspecies'} = $row->{'subspecies_name'};
+    $gbif_row{'Genus'} = $genus; 
+    $gbif_row{'Species'} = $species; 
+    $gbif_row{'Subspecies'} = '';
 
-    $short_ref = "";
+    my $short_ref = "";
     if ($taxon_no) {
-        $taxon_row = TaxonInfo::getTaxon($dbt,{'taxon_no'=>$taxon_no,'get_reference'=>1}); 
+        my $taxon_row = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
         if ($taxon_row) {
             $short_ref = Reference::formatShortRef($taxon_row);
         }
@@ -162,11 +160,11 @@ while($row = $sth->fetchrow_hashref()) {
 #    $gbif_row{'DayCollected'}
 #    $gbif_row{'JulianDay'}
 #    $gbif_row{'TimeOfDay'}
-    $gbif_row{'ContinentOcean'} = $continentLUT{$row->{'country'}};
-    $gbif_row{'Country'} = $row->{'country'};
-    $gbif_row{'StateProvince'} = $row->{'state'};
-    $gbif_row{'County'} = $row->{'county'};
-    $gbif_row{'Locality'} = $row->{'collection_name'};
+    $gbif_row{'ContinentOcean'} = $continentLUT{$row->{'country'}} || '';
+    $gbif_row{'Country'} = $row->{'country'} || '';
+    $gbif_row{'StateProvince'} = $row->{'state'} || '';
+    $gbif_row{'County'} = $row->{'county'} || '';
+    $gbif_row{'Locality'} = $row->{'collection_name'} || '';
 
     my ($latitude,$longitude) = ('','');
     if ($row->{'latmin'} =~ /\d+/) {
@@ -207,7 +205,7 @@ while($row = $sth->fetchrow_hashref()) {
 #    $gbif_row{'CoordinatePrecision'}
 #    $gbif_row{'BoundingBox'}
    
-    my $altitude = "";
+    my $altitude;
     if ($row->{'altitude_value'}) {
         if ($row->{'altitude_unit'} =~ /feet/) {
             # Convert feet to meters;
@@ -216,6 +214,7 @@ while($row = $sth->fetchrow_hashref()) {
             $altitude = $row->{'altitude_value'};
         }
     }
+    $altitude = undef unless $altitude =~ /\d/;
     $gbif_row{'MinimumElevation'} = $altitude;
     $gbif_row{'MaximumElevation'} = $altitude;
 #    $gbif_row{'MinimumDepth'}
@@ -223,7 +222,7 @@ while($row = $sth->fetchrow_hashref()) {
 #    $gbif_row{'Sex'}
 #    $gbif_row{'PreparationType'}
 
-    $abund_count = "";
+    my $abund_count;
     if ($row->{'abund_unit'} =~ /specimens|individuals/ && $row->{'abund_value'} =~ /^\d+$/) {
         $abund_count = $row->{'abund_value'};
     }
@@ -235,25 +234,25 @@ while($row = $sth->fetchrow_hashref()) {
     $gbif_row{'Notes'} = "$row->{comments}";
 
     if ($DEBUG) {
-        for($i=0;$i<scalar(@fields);$i++) {
+        for(my $i=0;$i<scalar(@fields);$i++) {
             printf "%20s: %s\n",$fields[$i],$gbif_row{$fields[$i]};
         }
     }
 
     my @keys;
     my @values;
-    for($i=0;$i< scalar(@fields);$i++) {
-        if ($gbif_row{$fields[$i]}) {
+    for(my $i=0;$i< scalar(@fields);$i++) {
+#        if (defined $gbif_row{$fields[$i]}) {
             push @keys,'`'.$fields[$i].'`';
             push @values,$dbh_gbif->quote($gbif_row{$fields[$i]});
-        } else {
-            push @keys,'`'.$fields[$i].'`';
-            push @values,"''";
-        }
+#        } else {
+#            push @keys,'`'.$fields[$i].'`';
+#            push @values,"''";
+#        }
     }
 
     $sql = "INSERT INTO gbif_new (".join(',',@keys).") VALUES (".join(',',@values).")\n\n";
-    $sth_i = $dbh_gbif->prepare($sql);
+    my $sth_i = $dbh_gbif->prepare($sql);
     $result = $sth_i->execute();
     if (!$result) {
         print $sth->errstr;
