@@ -55,32 +55,43 @@ while (<REGIONS>)   {
     }
 }
 
-my $sql = "DROP TABLE IF EXISTS gbif_new";
-$dbh_gbif->do($sql);
+#my $sql = "DROP TABLE IF EXISTS gbif_new";
+#$dbh_gbif->do($sql);
 
-$sql = "SHOW CREATE TABLE gbif";
-my $sth = $dbh_gbif->prepare($sql);
-my $result = $sth->execute();
-if (!$result) {
-    print $sth->errstr;
-}
-my $row = $sth->fetchrow_arrayref();
-my $definition = $row->[1];
-$definition =~ s/CREATE TABLE `gbif`/CREATE TABLE `gbif_new`/;
-print $definition if ($DEBUG);
-$sth = $dbh_gbif->prepare($definition);
-$result = $sth->execute();
-if (!$result) {
-    print $sth->errstr;
-}
+#$sql = "SHOW CREATE TABLE gbif";
+#my $sth = $dbh_gbif->prepare($sql);
+#my $result = $sth->execute();
+#if (!$result) {
+#    print $sth->errstr;
+#}
+#my $row = $sth->fetchrow_arrayref();
+#my $definition = $row->[1];
+#$definition =~ s/CREATE TABLE `gbif`/CREATE TABLE `gbif_new`/;
+#print $definition if ($DEBUG);
+#$sth = $dbh_gbif->prepare($definition);
+#$result = $sth->execute();
+#if (!$result) {
+#    print $sth->errstr;
+#}
 
 my $do_limit = "";
 if ($DEBUG) {
     $do_limit = " limit 100";
 } 
 
-my ($th0, $th1);
-$th0 = gettimeofday;
+#my ($th0, $th1);
+#$th0 = gettimeofday;
+
+my %in_gbif;
+my %in_pbdb;
+
+my $sql = "SELECT CatalogNumber FROM gbif";
+my $sth = $dbh_gbif->prepare($sql);
+$sth->execute();
+while(my $row = $sth->fetchrow_arrayref()) {
+    $in_gbif{$row->[0]} = 1;
+}
+$sth->finish();
 
 # Now fetch all the occurrence recods from the database
 $sql = "(SELECT c.altitude_value,c.altitude_unit,c.collection_no,c.museum,DATE_FORMAT(o.modified,'%Y-%m-%d %H:%i:%s') occ_modified,o.occurrence_no, o.genus_reso,o.genus_name,o.species_reso,o.species_name,o.subgenus_reso,o.subgenus_name, c.country, c.state, c.county, c.collection_name, c.latdeg, c.latmin, c.latsec, c.latdir, c.latdec, c.lngdeg, c.lngmin, c.lngsec, c.lngdir, c.lngdec, o.comments, o.taxon_no,o.abund_value,o.abund_unit FROM collections c, occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE o.collection_no=c.collection_no AND re.reid_no IS NULL AND o.genus_name not like 'ERROR' AND (c.access_level LIKE 'the public' OR release_date < NOW()) $do_limit)".
@@ -96,6 +107,7 @@ $sth->execute();
 
 my %class_cache = (); #speed this lookup up
 while(my $row = $sth->fetchrow_hashref()) {
+    $in_pbdb{$row->{'occurrence_no'}} = 1;
     my %gbif_row = ();
     
     $gbif_row{'DateLastModified'} = $row->{'occ_modified'};
@@ -239,6 +251,56 @@ while(my $row = $sth->fetchrow_hashref()) {
         }
     }
 
+    if ($in_gbif{$row->{'occurrence_no'}}) {
+        updateRecord($row->{'occurrence_no'},\%gbif_row);
+    } else {
+        insertRecord(\%gbif_row);
+    }
+}
+
+foreach my $occurrence_no (keys %in_gbif) {
+    if ($occurrence_no) {
+        unless ($in_pbdb{$occurrence_no}) {
+            my $sql = "DELETE FROM gbif WHERE CatalogNumber=".$occurrence_no;
+            my $sth_i = $dbh_gbif->prepare($sql);
+            my $result = $sth_i->execute();
+            if (!$result) {
+                print $sth->errstr;
+            }
+            if ($DEBUG) {
+                print $sql,"\n";
+            }
+        }
+    }
+}
+
+sub updateRecord {
+    my $occurrence_no = $_[0];
+    my %gbif_row = %{$_[1]};
+    my @keys;
+    my @values;
+    my @updates;
+    for(my $i=0;$i< scalar(@fields);$i++) {
+#        if (defined $gbif_row{$fields[$i]}) {
+            push @updates, '`'.$fields[$i].'`'."=".$dbh_gbif->quote($gbif_row{$fields[$i]});
+#        } else {
+#            push @keys,'`'.$fields[$i].'`';
+#            push @values,"''";
+#        }
+    }
+
+    my $sql = "UPDATE gbif SET ".join(",",@updates)." WHERE CatalogNumber=$occurrence_no";
+    my $sth_i = $dbh_gbif->prepare($sql);
+    my $result = $sth_i->execute();
+    if (!$result) {
+        print $sth->errstr;
+    }
+    if ($DEBUG) {
+        print $sql,"\n";
+    }
+}
+sub insertRecord {
+    my %gbif_row = %{$_[0]};
     my @keys;
     my @values;
     for(my $i=0;$i< scalar(@fields);$i++) {
@@ -251,14 +313,14 @@ while(my $row = $sth->fetchrow_hashref()) {
 #        }
     }
 
-    $sql = "INSERT INTO gbif_new (".join(',',@keys).") VALUES (".join(',',@values).")\n\n";
+    my $sql = "INSERT INTO gbif (".join(',',@keys).") VALUES (".join(',',@values).")\n\n";
     my $sth_i = $dbh_gbif->prepare($sql);
-    $result = $sth_i->execute();
+    my $result = $sth_i->execute();
     if (!$result) {
         print $sth->errstr;
     }
     if ($DEBUG) {
-        print $sql;
+        print $sql,"\n";
     }
 }
 
@@ -266,19 +328,19 @@ while(my $row = $sth->fetchrow_hashref()) {
 #print ("Loop exec time: ".sprintf ("%5.3f",($th1 - $th0))); 
 #$th0 = $th1;
 
-$sql = "DROP TABLE gbif_old";
-$sth = $dbh_gbif->prepare($sql);
-$result = $sth->execute();
-if (!$result) {
-    print $sth->errstr;
-}
+#$sql = "DROP TABLE gbif_old";
+#$sth = $dbh_gbif->prepare($sql);
+#$result = $sth->execute();
+#if (!$result) {
+#    print $sth->errstr;
+#}
 
-$sql = "RENAME TABLE gbif TO gbif_old, gbif_new TO gbif";
-$sth = $dbh_gbif->prepare($sql);
-$result = $sth->execute();
-if (!$result) {
-    print $sth->errstr;
-}
+#$sql = "RENAME TABLE gbif TO gbif_old, gbif_new TO gbif";
+#$sth = $dbh_gbif->prepare($sql);
+#$result = $sth->execute();
+#if (!$result) {
+#    print $sth->errstr;
+#}
 
 #$th1 = gettimeofday;
 #print ("Finish exec time: ".sprintf ("%5.3f",($th1 - $th0))); 
