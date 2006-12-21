@@ -662,7 +662,8 @@ sub getBoundaries {
         }
         @q = sort {
             $a->[0]->{'boundary_scale'}->{'pubyr'} <=> $b->[0]->{'boundary_scale'}->{'pubyr'} ||
-            $a->[0]->{'boundary_scale'}->{'scale_no'} <=> $b->[0]->{'boundary_scale'}->{'scale_no'}
+            $a->[0]->{'boundary_scale'}->{'scale_no'} <=> $b->[0]->{'boundary_scale'}->{'scale_no'} ||
+            $a->[0]->{'interval_no'} <=> $b->[0]->{'interval_no'}
         } @q;
         # Holocene/Quaternary/Neogene/Cenozoic/Phanerozoic upper bounds need to be put in manually (0 ma AKA NOW) PS 9/14/2005
         foreach (32,25,12,1,751) {
@@ -1540,7 +1541,7 @@ sub _initInterval {
         my $scale = $scales->{$row->{'scale_no'}};
        
         $all_by_scale{$row->{'scale_no'}} = $row;
-        if ($row->{'max_interval_no'} > 0) {
+        if ($row->{'max_interval_no'} > 0 && $row->{'max_interval_no'} != $row->{'interval_no'}) {
             $all_with_max{$row->{'max_interval_no'}} = [$row,$scale];
         }
         if ($row->{'next_interval_no'} > 0) {
