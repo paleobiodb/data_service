@@ -10,12 +10,13 @@ my $dbh = DBConnection::connect();
 my $dbt = DBTransactionManager->new($dbh);
 
 open OUT,">./guest_templates/dinosaurs.html";
+$| = 1;
 
 print OUT qq|
 <div style="margin-left: 1em; margin-right: 1em;">
 <h3 style="text-align: center;">Dinosaur facts and figures</h3>
 
-<p class="medium">Here are some of the coolest dinosaur factoids you can get out of the Paleobiology Database, useful or not. Most of the data are based on Matt Carrano's <a href="cgi-bin/bridge.pl?user=Guest&action=displayPage&page=OSA_Dinosauria">non-avian dinosaur systematics archive</a>.</p>
+<p class="medium">Here are some of the coolest dinosaur factoids you can get out of the Paleobiology Database, useful or not. Most of the data are based on Matt Carrano's <a href="/cgi-bin/bridge.pl?user=Guest&action=displayPage&page=OSA_Dinosauria">non-avian dinosaur systematics archive</a>.</p>
 <p class="small">Technical note: birds are dinosaurs. However, birds are not included in any of the following because, well, they're birds.</p>
 |;
 
@@ -25,14 +26,14 @@ $sql = "select lft,rgt from taxa_tree_cache t,authorities a where t.taxon_no=a.t
 my $dlft = @{$dbt->getData($sql)}[0]->{lft};
 my $drgt = @{$dbt->getData($sql)}[0]->{rgt};
 
-$sql = "select lft,rgt from taxa_tree_cache t,authorities a where t.taxon_no=a.taxon_no and taxon_name='aves' and taxon_rank='class'";
+$sql = "select lft,rgt from taxa_tree_cache t,authorities a where t.taxon_no=a.taxon_no and taxon_name='avialae'";
 my $alft = @{$dbt->getData($sql)}[0]->{lft};
 my $argt = @{$dbt->getData($sql)}[0]->{rgt};
 
 
 print OUT "\n<h4>Collections with the most dinosaurs</h4>\n";
 
-$sql = "select count(*) c,c.collection_no,collection_name from occurrences o,collections c,taxa_tree_cache t where t.taxon_no=o.taxon_no and c.collection_no=o.collection_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) group by c.collection_no having c>9 order by c desc limit 10";
+$sql = "select count(*) c,c.collection_no,collection_name from occurrences o,collections c,authorities a,taxa_tree_cache t where o.taxon_no=t.taxon_no and c.collection_no=o.collection_no and a.taxon_no=t.taxon_no and preservation not in ('form taxon','ichnofossil') and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) group by c.collection_no having c>9 order by c desc limit 10";
 
 my @collrefs = @{$dbt->getData($sql)};
 print OUT "\n<ul>\n";
@@ -97,9 +98,9 @@ for my $cr ( @collrefs )	{
 print OUT "</ul>\n";
 
 
-print OUT "\n<h4>Species with the most occurrences</h4>\n";
+print OUT "\n<h4>Genera with the most occurrences</h4>\n";
 
-$sql = "select taxon_name,o.taxon_no tn,count(*) c from occurrences o,authorities a,taxa_tree_cache t where t.taxon_no=a.taxon_no and a.taxon_no=o.taxon_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and taxon_rank='species' group by o.taxon_no order by c desc limit 10";
+$sql = "select taxon_name,o.taxon_no tn,count(*) c from occurrences o,authorities a,taxa_tree_cache t where t.taxon_no=a.taxon_no and a.taxon_no=o.taxon_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and taxon_rank='genus' and preservation not in ('form taxon','ichnofossil') group by o.taxon_no order by c desc limit 10";
 @sprefs = @{$dbt->getData($sql)};
 
 print OUT "\n<ul>\n";
@@ -111,7 +112,7 @@ print OUT "</ul>\n";
 
 print OUT "\n<h4>Papers that named the most species</h4>\n";
 
-$sql ="select count(*) as c,r.reference_no rn,r.author1last a1,r.author2last a2,r.otherauthors oa,r.pubyr py from refs r,authorities a,taxa_tree_cache t where r.reference_no=a.reference_no and a.taxon_no=t.taxon_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and t.taxon_no=spelling_no and taxon_rank='species' group by a.reference_no order by c desc limit 30";
+$sql ="select count(*) as c,r.reference_no rn,r.author1last a1,r.author2last a2,r.otherauthors oa,r.pubyr py from refs r,authorities a,taxa_tree_cache t where r.reference_no=a.reference_no and a.taxon_no=t.taxon_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and t.taxon_no=spelling_no and taxon_rank='species' and preservation not in ('form taxon','ichnofossil') and ref_is_authority!='YES' group by a.reference_no order by c desc limit 30";
 @rrefs = @{$dbt->getData($sql)};
 
 print OUT "\n<ul>\n";
@@ -138,10 +139,10 @@ for $rr ( @rrefs )	{
 print OUT "</ul>\n";
 
 
-print OUT "\n<h4>Most debated species</h4>\n";
+print OUT "\n<h4>Most discussed species</h4>\n";
 print OUT qq|<p class="small">Based on the number of published taxonomic opinions.</p>\n|;
 
-$sql ="select count(*) c,taxon_name,a.taxon_no tn from authorities a,opinions o,taxa_tree_cache t where a.taxon_no=t.taxon_no and a.taxon_no=o.child_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and t.taxon_no=spelling_no and taxon_rank='species' group by o.child_no order by c desc limit 20";
+$sql ="select count(*) c,taxon_name,a.taxon_no tn from authorities a,opinions o,taxa_tree_cache t where a.taxon_no=t.taxon_no and a.taxon_no=o.child_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and t.taxon_no=spelling_no and taxon_rank='species' and preservation not in ('form taxon','ichnofossil') group by o.child_no order by c desc limit 20";
 @sprefs = @{$dbt->getData($sql)};
 
 print OUT "\n<ul>\n";
@@ -162,7 +163,7 @@ print OUT "</ul>\n";
 
 print OUT "\n<h4>Species with the most synonymous names</h4>\n";
 
-$sql ="select taxon_name,a.taxon_no tn,lft,rgt from authorities a,taxa_tree_cache t where a.taxon_no=t.taxon_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and t.taxon_no=spelling_no and taxon_rank='species' order by rgt-lft desc limit 10";
+$sql ="select taxon_name,a.taxon_no tn,lft,rgt from authorities a,taxa_tree_cache t where a.taxon_no=t.taxon_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and t.taxon_no=spelling_no and taxon_rank='species' and preservation not in ('form taxon','ichnofossil') order by rgt-lft desc limit 10";
 @sprefs = @{$dbt->getData($sql)};
 
 print OUT "\n<ul>\n";
@@ -170,17 +171,21 @@ for $sr ( @sprefs )	{
 	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sr->{tn}&is_real_user=1">$sr->{taxon_name}</a> (%d)\n|,($sr->{rgt} - $sr->{lft} + 1) / 2;
 }
 print OUT "</ul>\n";
+@sprefs = ();
 
 
 print OUT "\n<h4>Species with the longest names</h4>\n";
 
-$sql = "select taxon_name,a.taxon_no tn,length(taxon_name) l from authorities a,taxa_tree_cache t where a.taxon_no=t.taxon_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and t.taxon_no=spelling_no and taxon_rank='species' and taxon_name not like '%(%' order by l desc";
+$sql = "select taxon_name,a.taxon_no tn,length(taxon_name) l from authorities a,taxa_tree_cache t where a.taxon_no=t.taxon_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and t.taxon_no=spelling_no and taxon_rank='species' and preservation not in ('form taxon','ichnofossil') and taxon_name not like '%(%' order by l desc";
 @sprefs = @{$dbt->getData($sql)};
 
 print OUT "\n<ul>\n";
 my $chars = " characters";
 my $minchar = 0;
 for $i ( 0..29 )	{
+	if ( ! @sprefs )	{
+		last;
+	}
 	if ( $i == 9 )	{
 		$minchar = $sprefs[$i]->{l};
 	}
@@ -286,10 +291,53 @@ for $i (0..9)	{
 print OUT "\n</ul>\n";
 
 
+print OUT "\n<h4>Species named per decade</h4>\n";
+
+$sql = qq|select floor(r.pubyr/10) decade,count(distinct(a.taxon_no)) c from refs r,authorities a,opinions o,taxa_tree_cache t where r.reference_no=a.reference_no and r.pubyr>1700 and ref_is_authority='YES' and t.taxon_no=a.taxon_no and a.taxon_no=o.child_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and taxon_rank='species' and preservation not in ('form taxon','ichnofossil') group by decade order by decade|;
+@sprefs = @{$dbt->getData($sql)};
+
+$sql = qq|select floor(a.pubyr/10) decade,count(distinct(a.taxon_no)) c from authorities a,opinions o,taxa_tree_cache t where a.pubyr>1700 and ref_is_authority!='YES' and t.taxon_no=a.taxon_no and a.taxon_no=o.child_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and taxon_rank='species' and preservation not in ('form taxon','ichnofossil') group by decade order by decade|;
+@sprefs2 = @{$dbt->getData($sql)};
+
+for $sr ( @sprefs )	{
+	$countbydecade{$sr->{decade}} = $sr->{c}; 
+}
+for $sr ( @sprefs2 )	{
+	$countbydecade{$sr->{decade}} += $sr->{c}; 
+}
+
+print OUT "\n<ul>\n";
+for $decade ( 180..201 )	{
+	if ( $countbydecade{$decade} )	{
+		printf OUT qq|<li>%ds: $countbydecade{$decade}\n|,$decade * 10;
+	}
+}
+print OUT "\n</ul>\n";
+
+
+print OUT "\n<h4>The first species ever named</h4>\n";
+
+# join on child_no in opinions to make sure the species is an original
+#  combination (admittedly a nasty trick)
+$sql = qq|select taxon_name,a.taxon_no tn,r.author1last a1,r.author2last a2,r.otherauthors oa,r.pubyr year,concat(r.pubyr," ",r.author1last) yrauth from refs r,authorities a,opinions o,taxa_tree_cache t where r.reference_no=a.reference_no and r.pubyr>1700 and r.pubyr<1845 and ref_is_authority='YES' and t.taxon_no=a.taxon_no and a.taxon_no=o.child_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and taxon_rank='species' and preservation not in ('form taxon','ichnofossil') group by a.taxon_no order by year|;
+@sprefs = @{$dbt->getData($sql)};
+
+$sql = qq|select taxon_name,a.taxon_no tn,a.author1last a1,a.author2last a2,a.otherauthors oa,a.pubyr year,concat(a.pubyr," ",a.author1last) yrauth from authorities a,opinions o,taxa_tree_cache t where a.pubyr>1700 and a.pubyr<1845 and ref_is_authority!='YES' and t.taxon_no=a.taxon_no and a.taxon_no=o.child_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and taxon_rank='species' and preservation not in ('form taxon','ichnofossil') group by a.taxon_no order by year|;
+push @sprefs , @{$dbt->getData($sql)};
+
+@sprefs = sort { $a->{yrauth} <=> $b->{yrauth} } @sprefs;
+
+print OUT "\n<ul>\n";
+for $sr ( @sprefs )	{
+	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sr->{tn}&is_real_user=1">$sr->{taxon_name}</a> ($sr->{year})\n|;
+}
+print OUT "</ul>\n";
+
+
 print OUT "\n<h4>Species named in 2006</h4>\n";
 print OUT qq|\n<p class="small">Silly as they may seem.</p>\n|;
 
-$sql = "select taxon_name,a.taxon_no tn from refs r,authorities a,taxa_tree_cache t where r.reference_no=a.reference_no and r.pubyr=2006 and ref_is_authority='YES' and t.taxon_no=a.taxon_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and taxon_rank='species' order by taxon_name";
+$sql = "select taxon_name,a.taxon_no tn from refs r,authorities a,taxa_tree_cache t where r.reference_no=a.reference_no and r.pubyr=2006 and ref_is_authority='YES' and t.taxon_no=a.taxon_no and lft>=$dlft and rgt<=$drgt and (lft<$alft or rgt>$argt) and taxon_rank='species' and preservation not in ('form taxon','ichnofossil') order by taxon_name";
 @sprefs = @{$dbt->getData($sql)};
 
 print OUT "\n<ul>\n";
