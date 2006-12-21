@@ -146,7 +146,7 @@ while(my $row = $sth->fetchrow_hashref()) {
         }
     }
     
-    $gbif_row{'ScientificNameAuthor'} = $short_ref;
+    $gbif_row{'ScientificNameAuthor'} = $short_ref || undef;
 #    $gbif_row{'IdentifiedBy'}
 #    $gbif_row{'YearIdentified'}
 #    $gbif_row{'MonthIdentified'}
@@ -160,11 +160,11 @@ while(my $row = $sth->fetchrow_hashref()) {
 #    $gbif_row{'DayCollected'}
 #    $gbif_row{'JulianDay'}
 #    $gbif_row{'TimeOfDay'}
-    $gbif_row{'ContinentOcean'} = $continentLUT{$row->{'country'}} || '';
-    $gbif_row{'Country'} = $row->{'country'} || '';
-    $gbif_row{'StateProvince'} = $row->{'state'} || '';
-    $gbif_row{'County'} = $row->{'county'} || '';
-    $gbif_row{'Locality'} = $row->{'collection_name'} || '';
+    $gbif_row{'ContinentOcean'} = $continentLUT{$row->{'country'}} || undef;
+    $gbif_row{'Country'} = $row->{'country'} || undef;
+    $gbif_row{'StateProvince'} = $row->{'state'} || undef;
+    $gbif_row{'County'} = $row->{'county'} || undef;
+    $gbif_row{'Locality'} = $row->{'collection_name'} || undef;
 
     my ($latitude,$longitude) = ('','');
     if ($row->{'latmin'} =~ /\d+/) {
