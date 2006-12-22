@@ -10,7 +10,6 @@ use Data::Dumper;
 use Classification;
 use TaxonInfo;
 use Reference;
-use Time::HiRes qw(gettimeofday);
 
 
 # the password is stored in a file.  This path will work on both the linux box
@@ -31,7 +30,7 @@ if ($ARGV[0] eq '--debug') {
 
 
 # Don't log thse inserts - this is a session variable
-# gbigwriter must have SUPER privilege
+# gbifwriter must have SUPER privilege
 my $return = $dbh_gbif->do("SET SQL_LOG_BIN=0");
 if (!$return) {
     print "WARNING: could not turn off binary logging";
@@ -55,32 +54,10 @@ while (<REGIONS>)   {
     }
 }
 
-#my $sql = "DROP TABLE IF EXISTS gbif_new";
-#$dbh_gbif->do($sql);
-
-#$sql = "SHOW CREATE TABLE gbif";
-#my $sth = $dbh_gbif->prepare($sql);
-#my $result = $sth->execute();
-#if (!$result) {
-#    print $sth->errstr;
-#}
-#my $row = $sth->fetchrow_arrayref();
-#my $definition = $row->[1];
-#$definition =~ s/CREATE TABLE `gbif`/CREATE TABLE `gbif_new`/;
-#print $definition if ($DEBUG);
-#$sth = $dbh_gbif->prepare($definition);
-#$result = $sth->execute();
-#if (!$result) {
-#    print $sth->errstr;
-#}
-
 my $do_limit = "";
 if ($DEBUG) {
     $do_limit = " limit 100";
 } 
-
-#my ($th0, $th1);
-#$th0 = gettimeofday;
 
 my %in_gbif;
 my %in_pbdb;
@@ -101,10 +78,6 @@ print $sql if ($DEBUG);
 $sth = $dbh_pbdb->prepare($sql);
 $sth->execute();
 
-#$th1 = gettimeofday;
-#print ("Query exec time: ".sprintf ("%5.3f",($th1 - $th0))); 
-#$th0 = $th1;
-
 my %class_cache = (); #speed this lookup up
 while(my $row = $sth->fetchrow_hashref()) {
     $in_pbdb{$row->{'occurrence_no'}} = 1;
@@ -118,9 +91,8 @@ while(my $row = $sth->fetchrow_hashref()) {
 
     my $taxon_no = $row->{'taxon_no'};
     my $taxon_name = $row->{'genus_name'};
-    $taxon_name .= " ".$row->{'subgenus_name'} if ($row->{'subgenus_name'});
+    $taxon_name .= " (".$row->{'subgenus_name'}.")" if ($row->{'subgenus_name'});
     $taxon_name .= " ".$row->{'species_name'};
-    $taxon_name .= " ".$row->{'subspecies_name'} if ($row->{'subspecies_name'});
     $gbif_row{'ScientificName'} = $taxon_name;
     $gbif_row{'BasisOfRecord'} = 'fossil'; # Should be publication
 
@@ -281,12 +253,7 @@ sub updateRecord {
     my @values;
     my @updates;
     for(my $i=0;$i< scalar(@fields);$i++) {
-#        if (defined $gbif_row{$fields[$i]}) {
-            push @updates, '`'.$fields[$i].'`'."=".$dbh_gbif->quote($gbif_row{$fields[$i]});
-#        } else {
-#            push @keys,'`'.$fields[$i].'`';
-#            push @values,"''";
-#        }
+        push @updates, '`'.$fields[$i].'`'."=".$dbh_gbif->quote($gbif_row{$fields[$i]});
     }
 
     my $sql = "UPDATE gbif SET ".join(",",@updates)." WHERE CatalogNumber=$occurrence_no";
@@ -304,13 +271,8 @@ sub insertRecord {
     my @keys;
     my @values;
     for(my $i=0;$i< scalar(@fields);$i++) {
-#        if (defined $gbif_row{$fields[$i]}) {
-            push @keys,'`'.$fields[$i].'`';
-            push @values,$dbh_gbif->quote($gbif_row{$fields[$i]});
-#        } else {
-#            push @keys,'`'.$fields[$i].'`';
-#            push @values,"''";
-#        }
+        push @keys,'`'.$fields[$i].'`';
+        push @values,$dbh_gbif->quote($gbif_row{$fields[$i]});
     }
 
     my $sql = "INSERT INTO gbif (".join(',',@keys).") VALUES (".join(',',@values).")\n\n";
@@ -323,28 +285,4 @@ sub insertRecord {
         print $sql,"\n";
     }
 }
-
-#$th1 = gettimeofday;
-#print ("Loop exec time: ".sprintf ("%5.3f",($th1 - $th0))); 
-#$th0 = $th1;
-
-#$sql = "DROP TABLE gbif_old";
-#$sth = $dbh_gbif->prepare($sql);
-#$result = $sth->execute();
-#if (!$result) {
-#    print $sth->errstr;
-#}
-
-#$sql = "RENAME TABLE gbif TO gbif_old, gbif_new TO gbif";
-#$sth = $dbh_gbif->prepare($sql);
-#$result = $sth->execute();
-#if (!$result) {
-#    print $sth->errstr;
-#}
-
-#$th1 = gettimeofday;
-#print ("Finish exec time: ".sprintf ("%5.3f",($th1 - $th0))); 
-#$th0 = $th1;
-
-
 
