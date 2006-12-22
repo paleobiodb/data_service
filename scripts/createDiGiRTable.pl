@@ -79,6 +79,7 @@ $sth = $dbh_pbdb->prepare($sql);
 $sth->execute();
 
 my %class_cache = (); #speed this lookup up
+my %ref_lookup = ();
 while(my $row = $sth->fetchrow_hashref()) {
     $in_pbdb{$row->{'occurrence_no'}} = 1;
     my %gbif_row = ();
@@ -98,36 +99,45 @@ while(my $row = $sth->fetchrow_hashref()) {
 
     my %lookup_by_rank = ();
     if ($taxon_no) {
-        my $hash = TaxaCache::getParents($dbt,[$taxon_no],'array_full');
-        $class_cache{$taxon_no} = $hash->{$taxon_no};
-        my $ss = TaxaCache::getSeniorSynonym($dbt,$taxon_no);
-        foreach my $p ($ss,@{$class_cache{$taxon_no}}) {
+        unless (exists $class_cache{$taxon_no}) {
+            my $hash = TaxaCache::getParents($dbt,[$taxon_no],'array_full');
+            my $ss = TaxaCache::getSeniorSynonym($dbt,$taxon_no);
+            $class_cache{$taxon_no} = [$ss,@{$hash->{$taxon_no}}];
+        }
+        foreach my $p (@{$class_cache{$taxon_no}}) {
             $lookup_by_rank{$p->{'taxon_rank'}} = $p;
         }
     } 
-    $gbif_row{'Kingdom'} = $lookup_by_rank{'kingdom'}{'taxon_name'} || '';
-    $gbif_row{'Phylum'} = $lookup_by_rank{'phylum'}{'taxon_name'} || '';
-    $gbif_row{'Class'} = $lookup_by_rank{'class'}{'taxon_name'} || '';
-    $gbif_row{'Order'} = $lookup_by_rank{'order'}{'taxon_name'} || '';
-    $gbif_row{'Family'} = $lookup_by_rank{'family'}{'taxon_name'} || '';
+    $gbif_row{'Kingdom'} = $lookup_by_rank{'kingdom'}{'taxon_name'} || undef;
+    $gbif_row{'Phylum'} = $lookup_by_rank{'phylum'}{'taxon_name'} || undef;
+    $gbif_row{'Class'} = $lookup_by_rank{'class'}{'taxon_name'} || undef;
+    $gbif_row{'Order'} = $lookup_by_rank{'order'}{'taxon_name'} || undef;
+    $gbif_row{'Family'} = $lookup_by_rank{'family'}{'taxon_name'} || undef;
     my $genus = $lookup_by_rank{'genus'}{'taxon_name'} || $row->{'genus_name'};
     my $species = $lookup_by_rank{'species'}{'taxon_name'};
     my ($g,$sg,$sp) = Taxon::splitTaxon($species);
-    if (!$sp) {
-        $species = $row->{'species_name'};
-    } else {
+    if ($sp) {
         $species = $sp;
+    } else {
+        $species = $row->{'species_name'};
     }
     $gbif_row{'Genus'} = $genus; 
     $gbif_row{'Species'} = $species; 
     $gbif_row{'Subspecies'} = '';
 
     my $short_ref = "";
-    if ($taxon_no) {
-        my $taxon_row = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
-        if ($taxon_row) {
-            $short_ref = Reference::formatShortRef($taxon_row);
+    if (exists $ref_lookup{$taxon_no}) {
+        $short_ref = $ref_lookup{$taxon_no};
+    } else {
+        my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
+        if ($taxon) {
+            if ($taxon->{'taxon_rank'} =~ /species/ || $species =~ /^indet\.|^sp\.|^indet$|^sp$/) {
+                my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon->{'taxon_no'});
+                my $is_recomb = ($orig_no == $taxon->{'taxon_no'}) ? 0 : 1;
+                $short_ref = Reference::formatShortRef($taxon,'is_recombination'=>$is_recomb); 
+            }
         }
+        $ref_lookup{$taxon_no} = $short_ref;
     }
     
     $gbif_row{'ScientificNameAuthor'} = $short_ref || undef;
