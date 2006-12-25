@@ -735,11 +735,18 @@ sub submitAuthorityForm {
     <td valign=top>
       <p><b>Opinion functions</b></p>|;
         if ($fields{'taxon_rank'} =~ /species/) {
-            $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&use_reference=new">Add an opinion about $fields{taxon_name} from another reference</a></b></li>|;
+            my $sql = "SELECT opinion_no FROM opinions WHERE child_spelling_no=$resultTaxonNumber AND child_no=$origResultTaxonNumber ORDER BY opinion_no DESC";
+            my $opinion_no = ${$dbt->getData($sql)}[0]->{opinion_no};
+            $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this reference's opinion about $fields{taxon_name}</a></b></li>|;
+            $end_message .= qq|<br><li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&use_reference=new">Add an opinion about $fields{taxon_name} from another reference</a></b></li>|;
         } else {
             $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber">Add an opinion about $fields{taxon_name}</a></b></li>|;
         }
-        $end_message .= qq|<br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li>
+        # don't need this for a species because the above link has been printed
+        if ($fields{'taxon_rank'} !~ /species/) {
+            $end_message .= qq|<br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li>|;
+        }
+      $end_message .= qq|
       <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li>
       <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
