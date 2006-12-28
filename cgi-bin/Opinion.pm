@@ -1150,6 +1150,11 @@ sub submitOpinionForm {
                 $errors->add("The rank of a taxon and the rank of its synonym, homonym, or replacement name must be the same");
             }    
 		} 
+        if ($q->param('taxon_status') eq 'belongs to') {
+            if ($childRank eq 'species' && $parentRank !~ /genus/) {
+		    	$errors->add("A species must be assigned to a genus or subgenus and not a higher order name");
+            }
+        }
     }
 
     # Some more rank checks
@@ -1192,6 +1197,11 @@ sub submitOpinionForm {
         my @spellingBits = split(/ /,$childSpellingName);
         pop @spellingBits;
         my $spellingParent = join(' ',@spellingBits);
+        if ($fields{'status'} =~ /belongs to|correction/) {
+            if ($spellingParent ne $parentName) {
+		        $errors->add("The $childSpellingRank entered in the \"How was it spelled?\" should match with the higher order name entered in \"How was it classified?\" section");
+            }
+        }
         if ($childRank =~ /species/) {
             if ($q->param('spelling_reason') eq 'recombination') {
                 if ($spellingParent eq $childParent) {
