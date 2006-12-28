@@ -7,6 +7,7 @@ use Data::Dumper;
 use DBTransactionManager;
 use TaxaCache;
 use CGI::Carp;
+use Text::CSV_XS;
 
 use strict;
 
@@ -1802,6 +1803,16 @@ sub queryDatabase {
     # Generate this hash if need be
     my %all_taxa = ();
 
+    # section moved below the above from above the above because senior
+    #  synonyms need to be classified as well JA 13.8.06
+    foreach my $row (@dataRows) {
+        if ($row->{'re.taxon_no'}) {
+            $all_taxa{$row->{'re.taxon_no'}} = 1; 
+        } elsif ($row->{'o.taxon_no'}) {
+            $all_taxa{$row->{'o.taxon_no'}} = 1;
+        }
+    }
+
     # Replace with senior synonym data
     my %ss_taxon_nos = ();
     my %ss_taxon_names = ();
@@ -1829,15 +1840,6 @@ sub queryDatabase {
         }
     }
 
-    # section moved below the above from above the above because senior
-    #  synonyms need to be classified as well JA 13.8.06
-    foreach my $row (@dataRows) {
-        if ($row->{'re.taxon_no'}) {
-            $all_taxa{$row->{'re.taxon_no'}} = 1; 
-        } elsif ($row->{'o.taxon_no'}) {
-            $all_taxa{$row->{'o.taxon_no'}} = 1;
-        }
-    }
     my @taxon_nos = keys %all_taxa;
 
     # Ecotaph/preservation/parent data
