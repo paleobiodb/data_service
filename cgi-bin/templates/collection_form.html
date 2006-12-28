@@ -86,6 +86,7 @@ function doCheckFieldsGeography() {
     if ( frm.country.selectedIndex == 0 ) {
         bad_info += "\no Country is required";
     }
+    var freeState = /.* free state.*/i;
     var stateEntered = /.* state.*/i;
     var provinceEntered = /.* province.*/i;
     var stateAbbreviation = /[A-Z][A-Z]/;
@@ -98,8 +99,8 @@ function doCheckFieldsGeography() {
             }
         }
     }
-    else if ( stateEntered.test (frm.state.value) == true )	{
-        bad_info += "\no Don't put \"state\" can't appear in the state field";
+    else if ( stateEntered.test (frm.state.value) == true && freeState.test(frm.state.value) != true)	{
+        bad_info += "\no Don't put \"state\" in the state field";
     }
     else if ( provinceEntered.test (frm.state.value) == true )	{
         bad_info += "\no Don't put \"province\" in the state field";
