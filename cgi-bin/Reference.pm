@@ -136,7 +136,9 @@ sub formatShortRef  {
         # We have at least 120 refs where the author2last is 'et al.'
         if($refData->{'author2last'} ne "et al."){
             $shortRef .= " and ";
-        } 
+        } else {
+            $shortRef .= " ";
+        }
         $shortRef .= $refData->{'author2init'}." " if $refData->{'author2init'} && ! $options{'no_inits'};
         $shortRef .= $refData->{'author2last'};
     }
