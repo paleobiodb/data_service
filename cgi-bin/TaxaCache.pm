@@ -288,7 +288,6 @@ sub addName {
     my $lft = $row->[0] + 1; 
     my $rgt = $row->[0] + 2; 
   
-    disableBinLog($dbt);
     $sql = "INSERT IGNORE INTO taxa_tree_cache (taxon_no,lft,rgt,spelling_no,synonym_no) VALUES ($taxon_no,$lft,$rgt,$taxon_no,$taxon_no)";
     print "Adding name: $taxon_no: $sql<BR>\n" if ($DEBUG);
     $dbh->do($sql); 
@@ -321,7 +320,6 @@ sub updateCache {
     # will be serialized, which is important to prevent corruption.  Note reads can still happen
     # concurrently with the writes, but any additional writes beyond the first will block on this mutex
     # Don't respect mutexes more than a 2 minutes old, this script shouldn't execute for more than about 15 seconds
-    disableBinLog($dbt);
     while(1) {
         $dbh->do("LOCK TABLES tc_mutex WRITE");
         my @results = @{$dbt->getData("SELECT * FROM tc_mutex WHERE created > DATE_ADD(NOW(), INTERVAL -2 MINUTE)")};
@@ -801,7 +799,7 @@ sub getSeniorSynonym {
     }
 }
 
-# pbdbuser must have SUPER privilege - don't bother logging all these transactions,
+# user must have SUPER privilege - don't bother logging all these transactions,
 # since they're derived from the opinions table anyways. This is for the connection only so if
 # we every swtich to mod_perl, will have to enableBinLog at the end also
 sub disableBinLog {

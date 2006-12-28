@@ -935,6 +935,7 @@ sub setOccurrencesTaxonNoByTaxon {
     my $authorizer_no = shift;
     my $dbh = $dbt->dbh;
     my $taxon_no = shift;
+    my $no_email = shift;
     my @warnings = ();
 
     my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no});
@@ -1022,10 +1023,12 @@ http://paleodb.org/cgi-bin/$link
 
 Or log in, go to the main menu, click "Reclassify occurrences" and enter $taxon_name into the taxon name field.
 END_OF_MESSAGE
-            my $mailer = new Mail::Mailer;
-            $mailer->open(\%headers);
-            print $mailer $body; 
-            $mailer->close;
+            unless ($no_email) {
+                my $mailer = new Mail::Mailer;
+                $mailer->open(\%headers);
+                print $mailer $body; 
+                $mailer->close;
+            }
         }
         
         # Deal with homonym issue

@@ -3,6 +3,7 @@
 # bridge.pl is the starting point for all parts of PBDB system.  Everything passes through
 # here to start with. 
 
+use lib qw(.);
 use strict;	
 
 # CPAN modules
