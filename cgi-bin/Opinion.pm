@@ -615,7 +615,7 @@ sub displayOpinionForm {
         my $checked = ($fields{'type_taxon'}) ? "CHECKED" : "";
         $type_select = "<td width=\"40%\" nowrap>".
                        "<input name=\"type_taxon\" type=\"checkbox\" $checked  value=\"1\">".
-                       " This is the type $childRank";
+                       " This is the type $childRank".
                        "</td>";
     }
     my ($diag_keys,$diag_values) = $hbo->getKeysValues('diagnosis_given');
