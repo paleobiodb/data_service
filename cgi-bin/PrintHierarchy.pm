@@ -69,6 +69,8 @@ sub processPrintHierarchy	{
     my $orig_no = TaxonInfo::getOriginalCombination($dbt,$ref->{taxon_no});        
     my $tree = TaxaCache::getChildren($dbt,$orig_no,'tree');
     $tree->{'depth'} = 0;
+    my $root_status = getStatus($dbt,$orig_no);
+    $tree->{'status'} = $root_status if ($root_status =~ /nomen/);
     my @node_stack = ($tree);
     # mark higher level taxa that had all their children removed as "invalid"
     my %not_found_type_taxon = ();
@@ -162,27 +164,13 @@ sub processPrintHierarchy	{
             my @children = @{$node->{'children'}};
             
             foreach (@{$nomen{$node->{'taxon_no'}}}) {
+                $_->{'status'} = getStatus($dbt,$_->{'taxon_no'});
                 $_->{'depth'} = $node->{'depth'} + 1;
             }
             push @children, @{$nomen{$node->{'taxon_no'}}};
 
             foreach (@{$node->{'synonyms'}}) {
-                # Not very efficient, but no better way to get the status I don't think
-                my $orig_no = TaxonInfo::getOriginalCombination($dbt,$_->{'taxon_no'});
-                if ($orig_no) {
-                    my $mrpo = TaxonInfo::getMostRecentClassification($dbt,$orig_no);
-                    if ($mrpo) {
-                        if ($mrpo->{'status'} =~ /subjective/) { $_->{'status'} = 'subjective synonym'; }
-                        elsif ($mrpo->{'status'} =~ /objective/) { $_->{'status'} = 'objective synonym'; }
-                        elsif ($mrpo->{'status'} =~ /subgroup/) { $_->{'status'} = 'invalid subgroup'; }
-                        elsif ($mrpo->{'status'} =~ /replaced/) { $_->{'status'} = 'replacement'; }
-                        else { $_->{'status'} = "$mrpo->{status}";}
-                    } else {
-                        $_->{'status'} = 'synonym';
-                    }
-                } else {
-                    $_->{'status'} = 'synonym';
-                }
+                $_->{'status'} = getStatus($dbt,$_->{'taxon_no'});
                 $_->{'depth'} = $node->{'depth'} + 1;
             }
             push @children, @{$node->{'synonyms'}};
@@ -283,4 +271,25 @@ sub processPrintHierarchy	{
 	return;
 }
 
+sub getStatus {
+    my ($dbt,$taxon_no) = @_;
+    # Not very efficient, but no better way to get the status I don't think
+    my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
+    my $status = "";
+    if ($orig_no) {
+        my $mrpo = TaxonInfo::getMostRecentClassification($dbt,$orig_no);
+        if ($mrpo) {
+            if ($mrpo->{'status'} =~ /subjective/) { $status = 'subjective synonym'; }
+            elsif ($mrpo->{'status'} =~ /objective/) { $status = 'objective synonym'; }
+            elsif ($mrpo->{'status'} =~ /subgroup/) { $status = 'invalid subgroup'; }
+            elsif ($mrpo->{'status'} =~ /replaced/) { $status = 'replacement'; }
+            else { $status = "$mrpo->{status}";}
+        } else {
+            $status = 'synonym';
+        }
+    } else {
+        $status = 'synonym';
+    }
+    return $status;
+}
 1;

@@ -168,12 +168,26 @@ sub displayTaxonInfoResults {
     print "<div class=\"small\">";
     my @modules_to_display = (1,2,3,4,5,6,7,8,9,10);
 
-	if ( $common_name =~ /[A-Za-z]/ )	{
-		print "<div align=\"center\"><h2>$taxon_name ($common_name)</h2></div>";
-	} else	{
-		print "<div align=\"center\"><h2>$taxon_name</h2></div>";
-	}
+    my $orig_ss = getOriginalCombination($dbt,$taxon_no);
+    my $mrpo = getMostRecentClassification($dbt,$orig_ss);
+    my $last_status = $mrpo->{'status'};
 
+    my %disused;
+    if ($taxon_rank !~ /genus|species/) {
+        %disused = %{disusedNames($dbt,$taxon_no)};
+    }
+
+    my $display_name = $taxon_name;
+	if ( $common_name =~ /[A-Za-z]/ )	{
+        $display_name .= " ($common_name)";
+	} 
+    if ($disused{$taxon_no}) {
+        $display_name .= " (disused)";
+    }
+    if ($last_status =~ /nomen/) {
+        $display_name .= " ($last_status)";
+    }
+    print "<div align=\"center\"><h2>$display_name</h2></div>";
 
     print '
 <script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>                                                                                       

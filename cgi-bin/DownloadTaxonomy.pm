@@ -558,17 +558,29 @@ sub getTaxonomicNames {
     my %options = @_;
     
     my @where = ();
-    
+   
+    my %taxa_list = ();
     if ($options{'taxon_no'}) {
-        my $sql = "SELECT lft,rgt FROM taxa_tree_cache WHERE taxon_no=$options{taxon_no}";
-        my @results = @{$dbt->getData($sql)};
-        my $lft = $results[0]->{'lft'};
-        my $rgt = $results[0]->{'rgt'};
-        if (!$lft || !$rgt) {
-            die "Error in DownloadTaxonomy::getTaxonomicNames, could not find $options{taxon_no} in taxa_tree_cache";
+        $taxa_list{0} = 1; # Prevent crashes for empty lists;
+        my @children = TaxaCache::getChildren($dbt,$options{'taxon_no'});
+        foreach my $taxon_no (@children) {
+            $taxa_list{$taxon_no} = 1;
         }
-        push @where, "(t.lft BETWEEN $lft AND $rgt)";
-        push @where, "(t.rgt BETWEEN $lft AND $rgt)";
+        my %nomen_children = %{TaxonInfo::nomenChildren($dbt,\@children)};
+        foreach my $child_array (values %nomen_children) {
+            foreach my $child (@$child_array) {
+                $taxa_list{$child->{'taxon_no'}} = 1;
+            }
+        }
+    }
+    if ($options{'referenced_taxa'}) {
+        $taxa_list{0} = 1; # Prevent crashes for empty lists;
+        foreach my $taxon_no (split(/,/,$options{'referenced_taxa'})) {
+            $taxa_list{int($taxon_no)} = 1;
+        }
+    }
+    if (%taxa_list) {
+        push @where, "a.taxon_no IN (".join(",",keys %taxa_list).")";
     }
 
     if ($options{'reference_no'}) {
@@ -578,7 +590,7 @@ sub getTaxonomicNames {
     if ($options{'pubyr'}) {
         my $sign = ($options{'pubyr_before_after'} eq 'before') ? '<=' 
                  : ($options{'pubyr_before_after'} eq 'exactly') ? '=' 
-                                                                       : '>=';
+                 : '>=';
         my $pubyr = int($options{'pubyr'});
         push @where, "IF(a.ref_is_authority='YES',r.pubyr $sign $pubyr AND r.pubyr REGEXP '[0-9]+',a.pubyr $sign $pubyr AND a.pubyr REGEXP '[0-9]+')";
     }
@@ -627,8 +639,8 @@ sub getTaxonomicNames {
     # use between and both values so we'll use a key for a smaller tree;
     my @results;
     my $message;
-    if (@where || $options{'referenced_taxa'}) {
-        my $sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, tt.taxon_name type_taxon,"
+    if (@where) {
+        my $base_sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, tt.taxon_name type_taxon,"
                 . "a.taxon_no,a.reference_no,a.taxon_rank,a.taxon_name,a.type_specimen,a.type_body_part,a.extant,a.preservation,"
                 . "a.pages,a.figures,a.created,a.comments,t.spelling_no,t.synonym_no senior_synonym_no,"
                 . " IF (a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,"
@@ -647,17 +659,7 @@ sub getTaxonomicNames {
                 . " LEFT JOIN refs r ON r.reference_no=a.reference_no"
                 . " WHERE t.taxon_no=a.taxon_no";
 
-        if ($options{'referenced_taxa'} && @where) {
-            my %taxon_nos = %{$options{'referenced_taxa'}};
-            my $referenced_list = join(", ",keys(%taxon_nos));
-            $sql = "($sql AND ".join(" AND ",@where).") UNION ($sql AND a.taxon_no IN ($referenced_list)) ORDER BY taxon_name";
-        } elsif (@where) {
-            $sql = "$sql AND ".join(" AND ",@where)." ORDER BY a.taxon_name";
-        } else {
-            my %taxon_nos = %{$options{'referenced_taxa'}};
-            my $referenced_list = join(",",keys(%taxon_nos));
-            $sql = "$sql AND a.taxon_no IN ($referenced_list) ORDER BY a.taxon_name";
-        }
+        my $sql = "$base_sql AND ".join(" AND ",@where)." ORDER BY a.taxon_name";
         main::dbg("getTaxonomicNames called: ($sql)");
         @results = @{$dbt->getData($sql)};
 
@@ -713,6 +715,7 @@ sub getTaxonomicNames {
             if ($parent && $parent->{'status'} =~ /nomen/) {
                 $row->{'is_valid'} = 0;
                 $row->{'invalid_reason'} = $parent->{'status'};
+                $invalid_count++;
             } elsif ($row->{'taxon_no'} != $row->{'senior_synonym_no'}) {
                 $row->{'is_valid'} = 0;
                 if ($row->{'spelling_no'} != $row->{'senior_synonym_no'}) {
@@ -773,16 +776,28 @@ sub getTaxonomicOpinions {
     
     my @where = ();
     
+    my %taxa_list = ();
     if ($options{'taxon_no'}) {
-        my $sql = "SELECT lft,rgt FROM taxa_tree_cache WHERE taxon_no=$options{taxon_no}";
-        my @results = @{$dbt->getData($sql)};
-        my $lft = $results[0]->{'lft'};
-        my $rgt = $results[0]->{'rgt'};
-        if (!$lft || !$rgt) {
-            die "Error in DownloadTaxonomy::getTaxonomicOpinions, could not find $options{taxon_no} in taxa_tree_cache";
+        $taxa_list{0} = 1; # Prevent crashes for empty lists;
+        my @children = TaxaCache::getChildren($dbt,$options{'taxon_no'});
+        foreach my $taxon_no (@children) {
+            $taxa_list{$taxon_no} = 1;
         }
-        push @where, "(t.lft BETWEEN $lft AND $rgt)";
-        push @where, "(t.rgt BETWEEN $lft AND $rgt)";
+        my %nomen_children = %{TaxonInfo::nomenChildren($dbt,\@children)};
+        foreach my $child_array (values %nomen_children) {
+            foreach my $child (@$child_array) {
+                $taxa_list{$child->{'taxon_no'}} = 1;
+            }
+        }
+    }
+    if ($options{'referenced_taxa'}) {
+        $taxa_list{0} = 1; # Prevent crashes for empty lists;
+        foreach my $taxon_no (split(/,/,$options{'referenced_taxa'})) {
+            $taxa_list{int($taxon_no)} = 1;
+        }
+    }
+    if (%taxa_list) {
+        push @where, "o.child_no IN (".join(",",keys %taxa_list).")";
     }
 
     if ($options{'reference_no'}) {
@@ -855,7 +870,7 @@ sub getTaxonomicOpinions {
                 . " IF (o.ref_has_opinion='YES',r.otherauthors,o.otherauthors) otherauthors, "
                 . " DATE_FORMAT(o.modified,'%Y-%m-%e %H:%i:%s') modified, "
                 . " DATE_FORMAT(o.modified,'%m/%e/%Y') modified_short "
-                . " FROM taxa_tree_cache t, opinions o"
+                . " FROM opinions o"
                 . " LEFT JOIN authorities a1 ON a1.taxon_no=o.child_no"
                 . " LEFT JOIN authorities a2 ON a2.taxon_no=o.child_spelling_no"
                 . " LEFT JOIN authorities a3 ON a3.taxon_no=o.parent_no"
@@ -864,8 +879,7 @@ sub getTaxonomicOpinions {
                 . " LEFT JOIN person p2 ON p2.person_no=o.enterer_no"
                 . " LEFT JOIN person p3 ON p3.person_no=o.modifier_no"
                 . " LEFT JOIN refs r ON r.reference_no=o.reference_no"
-                . " WHERE t.taxon_no = o.child_no"
-                . " AND ".join(" AND ",@where)
+                . " WHERE ".join(" AND ",@where)
                 . ") ORDER BY child_name,pubyr";
         main::dbg("getTaxonomicOpinions called: ($sql)");
         @results = @{$dbt->getData($sql)};
