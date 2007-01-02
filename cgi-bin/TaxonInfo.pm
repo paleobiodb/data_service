@@ -48,6 +48,9 @@ sub checkTaxonInfo {
     } elsif (!$q->param('taxon_name') && !($q->param('common_name')) && !($q->param('pubyr')) && !$q->param('author')) {
         searchForm($hbo,$q);
     } else {
+        my $temp = $q->param('taxon_name');
+        $temp =~ s/ sp\.//;
+        $q->param('taxon_name' => $temp);
         my $options = {'match_subgenera'=>1,'remove_rank_change'=>1};
         foreach ('taxon_name','common_name','author','pubyr') {
             if ($q->param($_)) {
