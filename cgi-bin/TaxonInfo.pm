@@ -174,7 +174,8 @@ sub displayTaxonInfoResults {
     my $display_name = $taxon_name;
     if ( $common_name =~ /[A-Za-z]/ )	{
         $display_name .= " ($common_name)";
-    } elsif ( $taxon_no > 0 )	{
+    } 
+    if ($taxon_no) {
         my $orig_ss = getOriginalCombination($dbt,$taxon_no);
         my $mrpo = getMostRecentClassification($dbt,$orig_ss);
         my $last_status = $mrpo->{'status'};
