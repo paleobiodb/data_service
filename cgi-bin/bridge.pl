@@ -1284,7 +1284,8 @@ sub displayReference {
             $html .= qq|</a></b> |;
         }
     
-        print &$box(qq'Taxonomic opinions (<a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count</a>)',$html);
+        my $class_link = qq| <b> - <a href="bridge.pl?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">View classification</a></b>|;
+        print &$box(qq'Taxonomic opinions (<a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count</a>) $class_link',$html);
     }      
 
     # Handle collections box
@@ -5351,7 +5352,7 @@ sub displaySearchStrataResults{
 ##############
 ## PrintHierarchy stuff
 sub startStartPrintHierarchy	{
-	PrintHierarchy::startPrintHierarchy($dbh, $hbo);
+	PrintHierarchy::startPrintHierarchy($hbo);
 }
 sub startProcessPrintHierarchy	{
     logRequest($s,$q);
@@ -7371,7 +7372,7 @@ sub getReferenceLinkSummary {
             my $plural = ($opinion_count == 1) ? "" : "s";
             $retString .= "$opinion_count taxonomic opinion$plural";
         }
-        $retString .= qq|</a></b>, |;
+        $retString .= qq|</a> (<a href="bridge.pl?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">show classification</a>)</b>, |;
     }      
 
     # Handle Collections

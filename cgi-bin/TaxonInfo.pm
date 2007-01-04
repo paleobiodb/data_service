@@ -1908,11 +1908,19 @@ sub getSynonymyParagraph{
 sub getOriginalCombination{
 	my $dbt = shift;
 	my $taxon_no = shift;
+    my $restrict_to_ref = shift;
+
 	my $sql = "SELECT DISTINCT o.child_no FROM opinions o WHERE o.child_spelling_no=$taxon_no";
+    if ($restrict_to_ref) {
+        $sql .= " AND o.reference_no=".$restrict_to_ref;
+    }
 	my @results = @{$dbt->getData($sql)};
 
     if (@results == 0) {
         $sql = "SELECT DISTINCT o.child_no FROM opinions o WHERE o.parent_spelling_no=$taxon_no AND o.status='misspelling of'";
+        if ($restrict_to_ref) {
+            $sql .= " AND o.reference_no=".$restrict_to_ref;
+        }
 	    @results = @{$dbt->getData($sql)};
         if (@results == 0) {
             return $taxon_no;

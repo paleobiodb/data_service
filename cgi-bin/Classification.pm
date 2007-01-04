@@ -1,6 +1,7 @@
 package Classification;
 
 use TaxonInfo;
+use strict;
 use Data::Dumper;
 
 my $DEBUG = 0;
@@ -32,7 +33,7 @@ sub get_classification_hash{
 	my @taxon_names_or_nos = @{$taxon_names_or_nos};
     $ranks =~ s/\s+//g; #NO whitespace
 	my @ranks = split(',', $ranks);
-    %rank_hash = ();
+    my %rank_hash = ();
    
     my %link_cache = (); #for speeding up 
     my %link_head = (); #our master upside-down tree. imagine a table of pointers to linked lists, 
@@ -68,7 +69,7 @@ sub get_classification_hash{
             $taxon_no = $hash_key;
         # We're using taxon_names as input    
         } else {    
-            @taxon_nos = TaxonInfo::getTaxonNos($dbt,$hash_key);
+            my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$hash_key);
 
             # If the name is ambiguous (multiple authorities entries), taxon_no/child_no are undef so nothing gets set
             if (scalar(@taxon_nos) == 1) {
@@ -111,7 +112,7 @@ sub get_classification_hash{
         # Loop at least once, but as long as it takes to get full classification
         for(my $i=0;$child_no && !$found_parent;$i++) {
             #hasn't been necessary yet, but just in case
-            if ($i >= 100) { $msg = "Infinite loop for $child_no in get_classification_hash";carp $msg; last;} 
+            if ($i >= 100) { my $msg = "Infinite loop for $child_no in get_classification_hash";carp $msg; last;} 
 
             # bail if we have a loop
             $visits{$child_no}++;
@@ -131,6 +132,7 @@ sub get_classification_hash{
             # No parent was found. This means we're at end of classification, althought
             # we don't break out of the loop till the end of adding the node since we
             # need to add the current child still
+            my ($taxon_rank);
             if ($parent_row) {
                 my $taxon= TaxonInfo::getMostRecentSpelling($dbt,$child_no,$restrict_to_reference_no);
                 $parent_no  = $parent_row->{'parent_no'};
@@ -210,7 +212,7 @@ sub get_classification_hash{
     #  return_type is numbers : comma separated taxon_nos, in order
     #  return_type is names   : comma separated taxon_names, in order
     #  return_type is array   : array reference to array of hashes, in order.  
-    while(($hash_key, $link) = each(%link_head)) {
+    while(my ($hash_key, $link) = each(%link_head)) {
         my %list= ();
         my %visits = ();
         my $list_ordered;
@@ -252,7 +254,7 @@ sub get_classification_hash{
             # The output list will be in the same order as the input list
             # by looping over this array
             if ($return_type ne 'array') {
-                foreach $rank (@ranks) {
+                foreach my $rank (@ranks) {
                     $list_ordered .= ','.$list{$rank};
                 }
             }
@@ -378,40 +380,33 @@ sub taxonomic_search{
 #  Inputs:
 #   * 1st arg: $dbt
 #   * 2nd arg: taxon name or taxon number
-#   * 3nd arg: max depth: no of iterations to go down
-#   * 4th arg: what we want the data to look like. possible values are:
+#   * 3th arg: what we want the data to look like. possible values are:
 #       tree: a tree-like data structure, more general and the format used internally
 #       sort_hierarchical: an array sorted in hierarchical fashion, suitable for PrintHierarchy.pm
 #       sort_alphabetical: an array sorted in alphabetical fashion, suitable for TaxonInfo.pm or Confidence.pm
+#   * 4nd arg: max depth: no of iterations to go down
 # 
 #  Outputs: an array of hash (record) refs
 #    See 'my %new_node = ...' line below for what the hash looks like
 sub getChildren {
     my $dbt = shift; 
-    my $taxon_name_or_no = shift;
-    my $max_depth = (shift || 1);
+    my $taxon_no = int(shift);
     my $return_type = (shift || "sort_hierarchical");
+    my $max_depth = (shift || 999);
+    my $restrict_to_ref = (shift || undef);
 
-    # We need to resolve it to be a taxon_no or we're done
-    my $taxon_no;
-    if ($taxon_name_or_no =~ /^\d+$/) {
-        $taxon_no = $taxon_name_or_no;
-    } else {
-        my @taxon_nos = TaxonInfo::getTaxonNos($taxon_no);
-        if (scalar(@taxon_nos) == 1) {
-            $taxon_no = $taxon_name_or_no;
-        }    
-    }
     if (!$taxon_no) {
         return undef; # bad... ambiguous name or none
     } 
     
     # described above, return'd vars
-    my $tree_root = {'taxon_no'=>$taxon_no, 'taxon_name'=>'ROOT','children'=>[]};
+    my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no,$restrict_to_ref);
+    my $ss_no = TaxonInfo::getSeniorSynonym($dbt,$orig_no,$restrict_to_ref);
+    my $tree_root = createNode($dbt,$ss_no, $restrict_to_ref, 0);
 
     # The sorted records are sorted in a hierarchical fashion suitable for passing to printHierachy
     my @sorted_records = ();
-    getChildrenRecurse($dbt, $tree_root, $max_depth, 1, \@sorted_records);
+    getChildrenRecurse($dbt, $tree_root, $max_depth, 1, \@sorted_records, 0, $restrict_to_ref);
     #pop (@sorted_records); # get rid of the head
    
     if ($return_type eq 'tree') {
@@ -432,52 +427,35 @@ sub getChildrenRecurse {
     my $depth = shift;
     my $sorted_records = shift;
     my $parent_is_synonym = (shift || 0);
+    my $restrict_to_ref = (shift || undef);
     
-    return if (!$node->{'taxon_no'});
+    return if (!$node->{'orig_no'});
 
     # find all children of this parent, do a join so we can do an order by on it
-    my $sql = "SELECT DISTINCT child_no FROM opinions o, authorities a WHERE o.child_spelling_no=a.taxon_no AND o.parent_no=$node->{taxon_no} AND o.child_no != o.parent_no ORDER BY a.taxon_name";
+    my $sql = "SELECT DISTINCT child_no FROM opinions o, authorities a WHERE o.child_spelling_no=a.taxon_no AND o.parent_no=$node->{orig_no} AND o.child_no != o.parent_no ORDER BY a.taxon_name";
     my @children = @{$dbt->getData($sql)};
     
     # Create the children and add them into the children array
-    for my $row (@children) {
+    foreach my $row (@children) {
         # (the taxon_nos will always be original combinations since orig. combs always have all the belongs to links)
         # go back up and check each child's parent(s)
-        my $parent_row = TaxonInfo::getMostRecentClassification($dbt,$row->{'child_no'}); 
-        if ($parent_row->{'parent_no'}==$node->{'taxon_no'})	{
-            # Get alternate spellings
-            my $sql = "(SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank FROM opinions o, authorities a".
-                      " WHERE o.child_spelling_no=a.taxon_no".
-                      " AND o.child_no = $parent_row->{child_no}".
-                      " AND o.child_spelling_no != $parent_row->{child_spelling_no})".
-                      " UNION ".
-                      "(SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank FROM opinions o, authorities a".
-                      " WHERE o.parent_spelling_no=a.taxon_no".
-                      " AND o.child_no = $parent_row->{child_no}".
-                      " AND o.status='misspelling of')".
-                      " ORDER BY taxon_name"; 
-            my $spellings= $dbt->getData($sql);
+        my $orig_no = $row->{'child_no'};
+        my $parent_row = TaxonInfo::getMostRecentClassification($dbt,$orig_no,$restrict_to_ref); 
+        if ($parent_row->{'parent_no'}==$node->{'orig_no'}) {
 
             # Create the node for the new child - note its taxon_no is always the original combination,
             # but its name/rank are from the corrected name/recombined name
-            my $taxon = TaxonInfo::getMostRecentSpelling($dbt,$row->{'child_no'});
-            my $new_node = {'taxon_no'=>$parent_row->{'child_no'}, 
-                            'taxon_name'=>$taxon->{'taxon_name'},
-                            'taxon_rank'=>$taxon->{'taxon_rank'},
-                            'depth'=>$depth,
-                            'children'=>[],
-                            'spellings'=>$spellings,
-                            'synonyms'=>[]};
+            my $new_node = createNode($dbt, $orig_no,$restrict_to_ref,$depth);
           
             # Populate the new node and place it in its right place
             if ( $parent_row->{'status'} =~ /^(?:belongs)/o ) {
-                return if ($depth > $max_depth);
+                return if ($max_depth && $depth > $max_depth);
                 # Hierarchical sort, in depth first order
                 push @$sorted_records, $new_node if (!$parent_is_synonym);
-                getChildrenRecurse($dbt,$new_node,$max_depth,$depth+1,$sorted_records);
+                getChildrenRecurse($dbt,$new_node,$max_depth,$depth+1,$sorted_records,0,$restrict_to_ref);
                 push @{$node->{'children'}}, $new_node;
             } elsif ($parent_row->{'status'} =~ /^(?:subjective|objective|replaced|invalid subgroup)/o) {
-                getChildrenRecurse($dbt,$new_node,$max_depth,$depth,$sorted_records,1);
+                getChildrenRecurse($dbt,$new_node,$max_depth,$depth,$sorted_records,1,$restrict_to_ref);
                 push @{$node->{'synonyms'}}, $new_node;
             }
         }
@@ -494,6 +472,33 @@ sub getChildrenRecurse {
     print "$_->{taxon_name} " for (@{$node->{'children'}}); 
     print "\n<br>";
     }
+}
+
+sub createNode {
+    my ($dbt,$orig_no,$restrict_to_ref,$depth) = @_;
+    my $taxon = TaxonInfo::getMostRecentSpelling($dbt,$orig_no,$restrict_to_ref);
+    my $new_node = {'orig_no'=>$orig_no,
+                    'taxon_no'=>$taxon->{'taxon_no'},
+                    'taxon_name'=>$taxon->{'taxon_name'},
+                    'taxon_rank'=>$taxon->{'taxon_rank'},
+                    'depth'=>$depth,
+                    'children'=>[],
+                    'synonyms'=>[]};
+
+    # Get alternate spellings
+    my $sql = "(SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank FROM opinions o, authorities a".
+              " WHERE o.child_spelling_no=a.taxon_no".
+              " AND o.child_no = $orig_no".
+              " AND o.child_spelling_no != $taxon->{taxon_no})".
+              " UNION ".
+              "(SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank FROM opinions o, authorities a".
+              " WHERE o.parent_spelling_no=a.taxon_no".
+              " AND o.child_no = $orig_no".
+              " AND o.status='misspelling of')".
+              " ORDER BY taxon_name"; 
+
+    $new_node->{spellings} = $dbt->getData($sql);
+    return $new_node;
 }
 
 
