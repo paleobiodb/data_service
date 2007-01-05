@@ -4902,7 +4902,7 @@ sub processTaxonSearch {
                     print "</ul>";
 
                     print "<div align=left class=small style=\"width: 500\">";
-                    print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  However, some approximate matches were found and are listed above.  If none of the names above match, please enter a new authority record for this taxon";
+                    print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  However, some approximate matches were found and are listed above.  If none of the names above match, please enter a new taxon record";
                     print "</div></p>";
                     print "</div>";
                     print "</td></tr></table></div>";
@@ -4938,7 +4938,7 @@ sub processTaxonSearch {
                 print "</ul>";
 
                 print "<div align=left class=small style=\"width: 500\">";
-                print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  However, some approximate matches were found and are listed above.  If none of the names above match, please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."&amp;skip_typo_check=1\">enter a new authority record</a> first.";
+                print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  However, some approximate matches were found and are listed above.  If none of the names above match, please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."&amp;skip_typo_check=1\">enter a new taxon record</a> first.";
                 print "</div></p>";
                 print "</div>";
                 print "</td></tr></table></div>";
