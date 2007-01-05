@@ -1536,23 +1536,16 @@ sub displayOpinionChoiceForm {
         print "<div align=\"center\">";
         print "<h4>Which opinion about ".$t->taxonNameHTML()." do you want to edit?</h4>\n";
         
-        print qq|<form method="POST" action="bridge.pl">
-                 <input type="hidden" name="action" value="displayOpinionForm">\n
-                 <input type="hidden" name="child_no" value="$orig_no">\n
-                 <input type="hidden" name="child_spelling_no" value="$child_no">\n|;
 	    print qq|<div class="displayPanel" style="padding: 1em;">\n|;
-        print qq|<table border=0 class="small">\n|;
+        print qq|<div align="left"><ul>|;
         foreach my $row (@results) {
             my $o = Opinion->new($dbt,$row->{'opinion_no'});
-            print "<tr>".
-                  qq|<td><input type="radio" name="opinion_no" value="$row->{opinion_no}"></td>|.
-                  "<td>".$o->formatAsHTML()."</td>".
-                  "</tr>\n";
+            my $formatted_opinion = $o->formatAsHTML();
+            print qq|<li><a href="bridge.pl?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=$row->{opinion_no}">$formatted_opinion</a></li>|;
         }
-        print qq|<tr><td><input type="radio" name="opinion_no" value="-1" checked></td><td>Create a <b>new</b> opinion record</td></tr>\n|;
-        print qq|</table>\n|;
+        print qq|<li><a href="bridge.pl?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=-1">Create a <b>new</b> opinion record</a></li>|;
+        print qq|</ul></div>\n|;
 #        print qq|<tr><td align="center" colspan=2><p><input type=submit value="Submit"></p><br></td></tr>|;
-        print qq|<p><input type="submit" value="Submit"></p>|;
     } else {
         my @where = ();
         my @errors = ();
@@ -1602,19 +1595,16 @@ sub displayOpinionChoiceForm {
             print "<div align=\"center\">";
             print "<h4>Select an opinion to edit</h4>";
 
-            print qq|<form method="POST" action="bridge.pl">
-                     <input type="hidden" name="action" value="displayOpinionForm">\n|;
             print qq|<div class="displayPanel" style="padding: 1em;">\n|;
-            print qq|<table border=0 class="small">|;
+            print qq|<div align="left">|;
+            print qq|<ul>|;
             foreach my $row (@results) {
-                my $o = Opinion->new($dbt, $row->{'opinion_no'});
-                print "<tr>".
-                      qq|<td><input type="radio" name="opinion_no" value="$row->{opinion_no}"></td>|.
-                      "<td>".$o->formatAsHTML()."</td>".
-                      "</tr>\n";
+                my $o = Opinion->new($dbt,$row->{'opinion_no'});
+                my $formatted_opinion = $o->formatAsHTML();
+                print qq|<li><a href="bridge.pl?action=displayOpinionForm&amp;opinion_no=$row->{opinion_no}">$formatted_opinion</a></li>|;
             }
-            print "</table>";
-            print qq|<p><input type=submit value="Edit"></p>|;
+            print "</ul>";
+            print "</div>";
             print "</div>";
             print "</div>";
         } else {

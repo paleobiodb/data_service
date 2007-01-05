@@ -1314,19 +1314,20 @@ sub getTypeTaxonList {
 sub formatTaxon{
     my $dbt = shift;
     my $taxon = shift;
-    my %options = shift;
-	my $authLine;
+    my %options = @_;
+	my $nameLine;
+    my $authLine;
 
 	# Print the name
 	# italicize if genus or species.
 	if ( $taxon->{'taxon_rank'} =~ /subspecies|species|genus/) {
         if ($options{'no_html'}) {
-            $authLine .= ", $taxon->{taxon_rank}";
+            $nameLine .= ", $taxon->{taxon_rank}";
         } else {
-		    $authLine .= "<i>" . $taxon->{'taxon_name'} . "</i>";
+		    $nameLine .= "<i>" . $taxon->{'taxon_name'} . "</i>";
         }
 	} else {
-		$authLine .= $taxon->{'taxon_name'};
+		$nameLine .= $taxon->{'taxon_name'};
         if ($taxon->{'taxon_rank'} && $taxon->{'taxon_rank'} !~ /unranked clade/) {
             $authLine .= ", $taxon->{taxon_rank}";
         }
@@ -1337,7 +1338,8 @@ sub formatTaxon{
 	# If the authority is a PBDB ref, retrieve and print it
     my $pub_info = Reference::formatShortRef($taxon,'is_recombination'=>$is_recomb);
     if ($pub_info !~ /^\s*$/) {
-        $authLine .= ', '.$pub_info;
+        $authLine .= ',' unless ($is_recomb);
+        $authLine .= " ".$pub_info;
     }
 
 	# Print name of higher taxon JA 10.4.03
@@ -1368,7 +1370,11 @@ sub formatTaxon{
         $authLine .= "]";
     }
 
-	return $authLine;
+    if ($options{'return_array'}) {
+        return ($nameLine,$authLine);
+    } else {
+	    return $nameLine.$authLine;
+    }
 }
 
 

@@ -4840,28 +4840,114 @@ sub processTaxonSearch {
         $options{'remove_rank_change'} = 1;
     }
     
+    my $goal = $q->param('goal');
+    my $taxon_name = $q->param('taxon_name');
+    my $next_action = 
+          ($goal eq 'authority')  ? 'displayAuthorityForm' 
+        : ($goal eq 'opinion')    ? 'displayOpinionChoiceForm'
+        : ($goal eq 'image')      ? 'displayLoadImageForm'
+        : ($goal eq 'ecotaph')    ? 'startPopulateEcologyForm'
+        : ($goal eq 'ecovert')    ? 'startPopulateEcologyForm'
+        : croak("Unknown goal given in submit taxon search");
+    
     my @results = TaxonInfo::getTaxa($dbt,\%options,['*']);
         
     # If there were no matches, present the new taxon entry form immediately
     # We're adding a new taxon
     if (scalar(@results) == 0) {
         if ($q->param('goal') eq 'authority') {
+            # Try to see if theres any near matches already existing in the DB
             if ($q->param('taxon_name')) {
-                if (!$s->get('reference_no')) {
-                    $s->enqueue( $dbh, $q->query_string());
-                    displaySearchRefs("Please choose a reference before adding a new taxon",1);
-                    exit;
+                my @typoResults = ();
+                unless ($q->param("skip_typo_check")) {
+                    my ($g,$sg,$sp) = Taxon::splitTaxon($q->param('taxon_name'));
+                    my $sql = "SELECT count(*) c FROM occurrences WHERE genus_name LIKE ".$dbh->quote($g);
+                    if ($sg) {
+                        $sql .= " AND subgenus_name LIKE ".$dbh->quote($sg);
+                    }
+                    if ($sp) {
+                        $sql .= " AND species_name LIKE ".$dbh->quote($sp);
+                    }
+                    my $exists_in_occ = ${$dbt->getData($sql)}[0]->{c};
+                    unless ($exists_in_occ) {
+                        my @results = keys %{TypoChecker::taxonTypoCheck($dbt,$q->param('taxon_name'))};
+                        my ($g,$sg,$sp) = Taxon::splitTaxon($q->param('taxon_name'));
+                        foreach my $typo (@results) {
+                            my ($t_g,$t_sg,$t_sp) = Taxon::splitTaxon($typo);
+                            if ($sp && !$t_sp) {
+                                $typo .= " $sp";
+                            }
+                            push @typoResults, $typo;
+                        }
+                    }
                 }
-                $q->param('taxon_no'=> -1);
-                Taxon::displayAuthorityForm($dbt, $hbo, $s, $q);
+
+                if (@typoResults) {
+                    print "<div align=\"center\"><table><tr><td align=\"center\">";
+    		        print "<h4>'<i>" . $q->param('taxon_name') . "</i>' was not found</h4>\n<br>\n";
+                    print "<div class=\"displayPanel medium\" style=\"padding: 1em;\">\n";
+                    print "<p><div align=\"left\"><ul>";
+                    foreach my $name (@typoResults) {
+                        my @full_rows = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$name},['*']);
+                        if (@full_rows) {
+                            foreach my $full_row (@full_rows) {
+                                my ($name,$authority) = Taxon::formatTaxon($dbt,$full_row,'return_array'=>1);
+                                print "<li><a href=\"bridge.pl?action=displayAuthorityForm&amp;taxon_no=$full_row->{taxon_no}\">$name</a>$authority</li>";
+                            }
+                        } else {
+                            print "<li><a href=\"bridge.pl?action=displayAuthorityForm&amp;taxon_name=$name\">$name</a></li>";
+                        }
+                    }
+                    print "<li><a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."&amp;skip_typo_check=1\">None of the above</a> - create a <b>new</b> taxon record";
+                    print "</ul>";
+
+                    print "<div align=left class=small style=\"width: 500\">";
+                    print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  However, some approximate matches were found and are listed above.  If none of the names above match, please enter a new authority record for this taxon";
+                    print "</div></p>";
+                    print "</div>";
+                    print "</td></tr></table></div>";
+                } else {
+                    if (!$s->get('reference_no')) {
+                        $s->enqueue($dbh,$q->query_string());
+                        displaySearchRefs("Please choose a reference before adding a new taxon",1);
+                        exit;
+                    }
+                    $q->param('taxon_no'=> -1);
+                    Taxon::displayAuthorityForm($dbt, $hbo, $s, $q);
+                }
             } else {
                 print "<div align=\"center\"><h3>No taxonomic names found</h3></div>";
             }
         } else {
+            # Try to see if theres any near matches already existing in the DB
+            my @typoResults = ();
             if ($q->param('taxon_name')) {
-                print "<div align=\"center\">".Debug::printErrors(["The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database. Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> authority record for this taxon first."])."</div>";
+                @typoResults = TypoChecker::typoCheck($dbt,'authorities','taxon_name','taxon_no,taxon_name,taxon_rank','',$q->param('taxon_name'),1);
+            }
+
+            if (@typoResults) {
+                print "<div align=\"center\"><table><tr><td align=\"center\">";
+    		    print "<h4>'<i>" . $q->param('taxon_name') . "</i>' was not found</h4>\n<br>\n";
+                print "<div class=\"displayPanel medium\" style=\"padding: 1em;\">\n";
+                print "<p><div align=\"left\"><ul>";
+                foreach my $row (@typoResults) {
+                    my $full_row = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['*']);
+                    my ($name,$authority) = Taxon::formatTaxon($dbt,$full_row,'return_array'=>1);
+                    print "<li><a href=\"bridge.pl?action=$next_action&amp;goal=$goal&amp;taxon_name=$full_row->{taxon_name}&amp;taxon_no=$row->{taxon_no}\">$name</a>$authority</li>";
+                }
+                print "</ul>";
+
+                print "<div align=left class=small style=\"width: 500\">";
+                print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  However, some approximate matches were found and are listed above.  If none of the names above match, please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."&amp;skip_typo_check=1\">enter a new authority record</a> first.";
+                print "</div></p>";
+                print "</div>";
+                print "</td></tr></table></div>";
             } else {
-                print "<div align=\"center\">".Debug::prinErrors("No taxonomic names were found matching the search criteria.")."</div>";
+                if ($q->param('taxon_name')) {
+                    print "<div align=\"center\">The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database. Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> authority record for this taxon first.</div>";
+                } else {
+                    print "<div align=\"center\">No taxonomic names were found matching the search criteria.</div>";
+                }
             }
             return;
         }
@@ -4889,56 +4975,44 @@ sub processTaxonSearch {
         } else {
     		print "<h4>Select a taxon to edit</h4>\n";
         }
-        my $action = ($q->param('goal') eq 'authority')  ? 'displayAuthorityForm' 
-                : ($q->param('goal') eq 'opinion')    ? 'displayOpinionChoiceForm'
-                : ($q->param('goal') eq 'image')      ? 'displayLoadImageForm'
-                : ($q->param('goal') eq 'ecotaph')    ? 'startPopulateEcologyForm'
-                : ($q->param('goal') eq 'ecovert')    ? 'startPopulateEcologyForm'
-                : croak("Unknown goal given in submit taxon search");
-        print "<form method=\"POST\" action=\"bridge.pl\">\n";
-        print "<input type=hidden name=\"action\" value=\"$action\">\n";
-        if ($q->param('goal') eq 'ecotaph' || $q->param('goal') eq 'ecovert') {
-            print "<input type=hidden name=\"goal\" value=\"".$q->param('goal')."\">\n";
-        }
-		print "<input type=hidden name=\"taxon_name\" value=\"".$q->param('taxon_name')."\">\n";
 
         # now create a table of choices
-		print "<div class=\"displayPanel medium\" style=\"padding: 1em;\"><table>\n";
+		print "<div class=\"displayPanel medium\" style=\"padding: 1em;\">";
+        print "<div align=\"left\"><ul>\n";
         my $checked = (scalar(@results) == 1) ? "CHECKED" : "";
         foreach my $row (@results) {
             # Check the button if this is the first match, which forces
             #  users who want to create new taxa to check another button
-            print qq|<tr><td align="center"><input type="radio" name="taxon_no" value="$row->{taxon_no}" $checked></td>|;
-            print "<td>".Taxon::formatTaxon($dbt, $row)."</td></tr>";
+            my ($name,$authority) = Taxon::formatTaxon($dbt, $row,'return_array'=>1);
+            print qq|<li><a href=\"bridge.pl?action=$next_action&amp;goal=$goal&amp;taxon_name=$taxon_name&amp;taxon_no=$row->{taxon_no}\">|;
+            print "$name</a>$authority</li>";
         }
 
         # always give them an option to create a new taxon as well
         if ($q->param('goal') eq 'authority' && $q->param('taxon_name')) {
-            print "<tr><td align=\"right\"><input type=\"radio\" name=\"taxon_no\" value=\"-1\"></td>\n<td>";
+            print qq|<li><a href=\"bridge.pl?action=$next_action&amp;goal=$goal&amp;taxon_name=$taxon_name&amp;taxon_no=-1\">|;
             if ( scalar(@results) == 1 )	{
                 print "No, not the one above ";
             } else	{
                 print "None of the above ";
             }
-            print "- create a <b>new</b> taxon record</i></td></tr>\n";
+            print "</a>";
+            print "- create a <b>new</b> taxon record</li>\n";
         }
         
-		print "</table>";
+		print "</ul></div>";
 
         # we print out difference buttons for two cases:
         #  1: using a taxon name. give them an option to add a new taxon, so button is Submit
         #  2: this is from a reference_no. No option to add a new taxon, so button is Edit
         if ($q->param('goal') eq 'authority') {
             if ($q->param('taxon_name')) {
-		        print "<p><input type=submit class=\"small\" value=\"Submit\"></p>\n</form>\n";
 		        print "<p align=\"left\"><span class=\"tiny\">";
                 print "You have a choice because there may be multiple biological species<br>&nbsp;&nbsp;(e.g., a plant and an animal) with identical names.<br>\n";
 		        print "Create a new taxon only if the old ones were named by different people in different papers.<br></span></p>\n";
             } else {
-		        print "<p><input type=submit class=\"small\" value=\"Edit\"></p>\n</form>\n";
             }
         } else {
-            print "<p><input type=submit class=\"small\" value=\"Submit\"></p>\n</form>\n";
             print "<p align=\"left\"><span class=\"tiny\">";
             print "You have a choice because there may be multiple biological species<br>&nbsp;&nbsp;(e.g., a plant and an animal) with identical names.<br></span></p>\n";
         }
@@ -4947,8 +5021,9 @@ sub processTaxonSearch {
 		    print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n";
         }
 
+        print "</div>";
         print "</td></tr></table>";
-		print "</div></div>\n";
+		print "</div>\n";
 	}
 }
 

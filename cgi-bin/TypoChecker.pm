@@ -520,7 +520,7 @@ sub submitOccurrenceMisspelling {
 
 
 sub taxonTypoCheck {
-    my ($dbt,$name,$genus_is_classified) = @_;
+    my ($dbt,$name,$genus_is_classified,$authority_only) = @_;
     my $dbh = $dbt->dbh;
     return () if (!$name);
     $name =~ s/^\s*//;
@@ -528,34 +528,36 @@ sub taxonTypoCheck {
     my ($g,$sg,$sp,$ssp) = Taxon::splitTaxon($name);
 
     my %names = ();
-    foreach my $table ('occurrences','reidentifications') {
-        my @matches;
-        if ($genus_is_classified) {
-            @matches = ({'genus_name'=>$g});
-        } else {
-            @matches = typoCheck($dbt,$table,'genus_name','genus_name',"AND (genus_reso IS NULL OR genus_reso NOT LIKE '%informal%')",$g);
-        }
-        my $base_quality = ($genus_is_classified) ? 2 : 1;
-        foreach my $row (@matches) {
-            if ($sp) {
-                my $where = "AND (species_reso IS NULL OR species_reso NOT LIKE '%informal%') AND genus_name=".$dbh->quote($g);
-                if ($sg) {
-                    $where .= ' AND subgenus_name='.$dbh->quote($sg);
-                }
-                my @matches_sp = typoCheck($dbt,$table,'species_name','genus_name,subgenus_name,species_name',$where,$sp);
-                if (@matches_sp) {
-                    foreach my $row_sp (@matches_sp) {
-                        if ($row_sp->{'subgenus_name'}) {
-                            $names{$row_sp->{'genus_name'}." ($row_sp->{subgenus_name}) ".$row_sp->{'species_name'}} = {'match_quality'=>$base_quality};
-                        } else {
-                            $names{$row_sp->{'genus_name'}.' '.$row_sp->{'species_name'}} = {'match_quality'=>$base_quality};
+    unless ($authority_only) {
+        foreach my $table ('occurrences','reidentifications') {
+            my @matches;
+            if ($genus_is_classified) {
+                @matches = ({'genus_name'=>$g});
+            } else {
+                @matches = typoCheck($dbt,$table,'genus_name','genus_name',"AND (genus_reso IS NULL OR genus_reso NOT LIKE '%informal%')",$g);
+            }
+            my $base_quality = ($genus_is_classified) ? 2 : 1;
+            foreach my $row (@matches) {
+                if ($sp) {
+                    my $where = "AND (species_reso IS NULL OR species_reso NOT LIKE '%informal%') AND genus_name=".$dbh->quote($g);
+                    if ($sg) {
+                        $where .= ' AND subgenus_name='.$dbh->quote($sg);
+                    }
+                    my @matches_sp = typoCheck($dbt,$table,'species_name','genus_name,subgenus_name,species_name',$where,$sp);
+                    if (@matches_sp) {
+                        foreach my $row_sp (@matches_sp) {
+                            if ($row_sp->{'subgenus_name'}) {
+                                $names{$row_sp->{'genus_name'}." ($row_sp->{subgenus_name}) ".$row_sp->{'species_name'}} = {'match_quality'=>$base_quality};
+                            } else {
+                                $names{$row_sp->{'genus_name'}.' '.$row_sp->{'species_name'}} = {'match_quality'=>$base_quality};
+                            }
                         }
+                    } else {
+                        $names{$row->{'genus_name'}} =  {'match_quality'=>$base_quality};
                     }
                 } else {
-                    $names{$row->{'genus_name'}} =  {'match_quality'=>$base_quality};
+                    $names{$row->{'genus_name'}} = {'match_quality'=>$base_quality};
                 }
-            } else {
-                $names{$row->{'genus_name'}} = {'match_quality'=>$base_quality};
             }
         }
     }
@@ -606,7 +608,7 @@ sub taxonTypoCheck {
 # 1 from the a (1 a in Jybbah, 2 in Jabba)
 # 1 from the h (1 h in Jybbah, 0 in Jabba)
 sub typoCheck {
-    my ($dbt,$table,$field,$return_fields,$where,$value) = @_;
+    my ($dbt,$table,$field,$return_fields,$where,$value,$skip_groupby) = @_;
     my $dbh = $dbt->dbh;
     my $first = substr($value,0,1);
     my $second = substr($value,1,1);
@@ -625,7 +627,9 @@ sub typoCheck {
     if ($where) {
         $sql .= " $where ";
     }
-    $sql .= " GROUP BY $field";
+    unless ($skip_groupby) {
+        $sql .= " GROUP BY $field";
+    }
     my @results = @{$dbt->getData("$sql")};
 #    main::dbg($sql);
     
