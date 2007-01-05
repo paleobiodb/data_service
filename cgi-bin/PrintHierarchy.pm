@@ -39,22 +39,26 @@ sub processPrintHierarchy	{
     my $reference_no = int($q->param('reference_no'));
     $reference_no = undef unless $reference_no;
     if (int($q->param('taxon_no'))) {
-        push @taxa, (TaxonInfo::getTaxa($dbt,{'taxon_no'=>int($q->param('taxon_no'))}));
-        $taxon_no   = $taxa[0]->{'taxon_no'};
-        $taxon_name = $taxa[0]->{'taxon_name'};
-        $taxon_rank = $taxa[0]->{'taxon_rank'};
+        @taxa = TaxonInfo::getTaxa($dbt,{'taxon_no'=>int($q->param('taxon_no'))});
+        if (@taxa) {
+            $taxon_no   = $taxa[0]->{'taxon_no'};
+            $taxon_name = $taxa[0]->{'taxon_name'};
+            $taxon_rank = $taxa[0]->{'taxon_rank'};
+        }
     } elsif ($q->param('taxon_name') =~ /^([A-Za-z -]+)$/) {
-        push @taxa, (TaxonInfo::getTaxa($dbt,{'taxon_name'=>$1}));
-        $taxon_no   = $taxa[0]->{'taxon_no'};
-        $taxon_name = $taxa[0]->{'taxon_name'};
-        $taxon_rank = $taxa[0]->{'taxon_rank'};
+        @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$1});
+        if (@taxa) {
+            $taxon_no   = $taxa[0]->{'taxon_no'};
+            $taxon_name = $taxa[0]->{'taxon_name'};
+            $taxon_rank = $taxa[0]->{'taxon_rank'};
+        }
     } elsif ($reference_no) {
-        push @taxa, (getRootTaxa($dbt,$reference_no));
+        @taxa = getRootTaxa($dbt,$reference_no);
     }
 
 	if (! @taxa) {
         if (int($q->param('taxon_no')) || $q->param('taxon_name') =~ /^([A-Za-z -]+)$/) {
-		    print "<center><h3>Taxon not found</h3>\n";
+		    print "<center><h3>No classification is available for this taxon</h3>\n";
         } elsif ($reference_no) {
 		    print "<center><h3>This reference has no taxonomic opinions</h3>\n";
         } else {
