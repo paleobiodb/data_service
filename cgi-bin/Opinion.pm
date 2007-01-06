@@ -180,6 +180,7 @@ sub pubyr {
 # For example, "belongs to Equidae according to J. D. Archibald 1998"
 sub formatAsHTML {
 	my Opinion $self = shift;
+    my %options = @_;
 	my $row = $self->{'DBrow'};
     my $dbt = $self->{'dbt'};
 	
@@ -290,8 +291,12 @@ sub formatAsHTML {
 		    $output .= "'$child_html belongs to $parent_html'";
         } 
     }
-    $output .= " according to ".$self->authors();
-    return $output;
+    if ($options{'return_array'}) {
+        return ($output," according to ".$self->authors());
+    } else {
+        $output .= " according to ".$self->authors();
+        return $output
+    }
 }
 
 # display the form which allows users to enter/edit opinion
@@ -1540,8 +1545,8 @@ sub displayOpinionChoiceForm {
         print qq|<div align="left"><ul>|;
         foreach my $row (@results) {
             my $o = Opinion->new($dbt,$row->{'opinion_no'});
-            my $formatted_opinion = $o->formatAsHTML();
-            print qq|<li><a href="bridge.pl?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=$row->{opinion_no}">$formatted_opinion</a></li>|;
+            my ($opinion,$authority) = $o->formatAsHTML('return_array'=>1);
+            print qq|<li><a href="bridge.pl?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=$row->{opinion_no}">$opinion</a>$authority</li>|;
         }
         print qq|<li><a href="bridge.pl?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=-1">Create a <b>new</b> opinion record</a></li>|;
         print qq|</ul></div>\n|;
@@ -1600,8 +1605,8 @@ sub displayOpinionChoiceForm {
             print qq|<ul>|;
             foreach my $row (@results) {
                 my $o = Opinion->new($dbt,$row->{'opinion_no'});
-                my $formatted_opinion = $o->formatAsHTML();
-                print qq|<li><a href="bridge.pl?action=displayOpinionForm&amp;opinion_no=$row->{opinion_no}">$formatted_opinion</a></li>|;
+                my ($opinion,$authority) = $o->formatAsHTML('return_array'=>1);
+                print qq|<li><a href="bridge.pl?action=displayOpinionForm&amp;opinion_no=$row->{opinion_no}">$opinion</a>$authority</li>|;
             }
             print "</ul>";
             print "</div>";
