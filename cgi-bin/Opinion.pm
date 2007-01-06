@@ -186,23 +186,7 @@ sub formatAsHTML {
 	
     my $output = "";
 
-    if ($row->{'status'} =~ /homonym/) {
-        my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}},['taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
-        my $child_html  = ($child->{'taxon_rank'} =~ /species|genus/) 
-                        ? "<i>$child->{'taxon_name'}</i>" 
-                        : $child->{'taxon_name'};
-        my $child_pub_info = Reference::formatShortRef($child);
-        $output .= "'$child_html, <small>$child_pub_info</small> is a $row->{status}";
-        my $parent = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'parent_spelling_no'}},['taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
-        if ($parent) {
-            my $parent_html = ($parent->{'taxon_rank'} =~ /species|genus/) 
-                            ? "<i>$parent->{'taxon_name'}</i>" 
-                            : $parent->{'taxon_name'};
-            my $parent_pub_info = Reference::formatShortRef($parent);
-            $output .= " $parent_html, <small>$parent_pub_info</small>";
-        }
-        $output .= "'";
-    } elsif ($row->{'status'} =~ /synonym|homonym|replace|nomen|revalidated|misspell|subgroup/) {
+    if ($row->{'status'} =~ /synonym|replace|nomen|revalidated|misspell|subgroup/) {
         my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}});
         my $child_html  = ($child->{'taxon_rank'} =~ /species|genus/) 
                         ? "<i>$child->{'taxon_name'}</i>" 
@@ -212,7 +196,7 @@ sub formatAsHTML {
         } else {
             $output .= "'$child_html is a $row->{status}";
         }
-        if ($row->{'status'} =~ /synonym|homonym|replace|misspell|subgroup/) {
+        if ($row->{'status'} =~ /synonym|replace|misspell|subgroup/) {
             my $parent = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'parent_spelling_no'}});
             if ($parent) {
                 my $parent_html = ($parent->{'taxon_rank'} =~ /species|genus/) 
@@ -333,7 +317,7 @@ sub displayOpinionForm {
     my $isNewEntry = ($q->param('opinion_no') > 0) ? 0 : 1;
     my $reSubmission = ($error_message) ? 1 : 0;
 	my @belongsArray = ('belongs to', 'recombined as', 'revalidated', 'rank changed as','corrected as');
-	my @synArray = ('','subjective synonym of', 'objective synonym of','homonym of','replaced by','misspelling of','invalid subgroup of');
+	my @synArray = ('','subjective synonym of', 'objective synonym of','replaced by','misspelling of','invalid subgroup of');
 	my @nomArray = ('','nomen dubium','nomen nudum','nomen oblitum', 'nomen vanum');
 
     # if the opinion already exists, grab it
@@ -463,14 +447,6 @@ sub displayOpinionForm {
     $fields{'child_spelling_rank'} = $childSpellingRank;
 
     $fields{'taxon_display_name'} = $childSpellingName;
-    if ($fields{'taxon_status'} eq 'invalid1' && $fields{'synonym'} eq 'homonym of') {
-        my $authority = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}},['author1last','author2last','otherauthors','pubyr']);
-        my $pub_info = Reference::formatShortRef($authority);
-        if ($pub_info !~ /^\s*$/) {
-            $fields{'taxon_display_name'} .= ", $pub_info";
-        }
-    }
-
 
     # This does the same thing for the parent
     my @parent_nos = ();
@@ -852,7 +828,7 @@ sub submitOpinionForm {
                       " AND author1last=".$dbh->quote($q->param('author1last')).
                       " AND author2last=".$dbh->quote($q->param('author2last')).
                       " AND pubyr=".$dbh->quote($q->param('pubyr')).
-                      " AND status NOT IN ('misspelling of','homonym of')";
+                      " AND status NOT IN ('misspelling of')";
             my $row = ${$dbt->getData($sql)}[0];
             if ( $row->{'c'} > 0 ) {
                 $errors->add("The author's opinion on ".$childName." already has been entered - an author can only have one opinion on a name");
@@ -926,7 +902,7 @@ sub submitOpinionForm {
         my $sql = "SELECT count(*) c FROM opinions WHERE ref_has_opinion='YES'".
                   " AND child_no=".$dbh->quote($fields{'child_no'}).
                   " AND reference_no=".$dbh->quote($lookup_reference).
-                  " AND status NOT IN ('misspelling of','homonym of')";
+                  " AND status NOT IN ('misspelling of')";
         if (! $isNewEntry) {
             $sql .= " AND opinion_no != ".$o->{'opinion_no'};
         }
@@ -1245,16 +1221,6 @@ sub submitOpinionForm {
     if ($fields{'status'} eq 'misspelling of') {
         if ($parentName eq $childSpellingName) {
             $errors->add("The names entered in the \"How was it spelled\" and \"How was it classified\" sections must be different when noting a misspelling");
-        }
-    } elsif ($fields{'status'} eq 'homonym of') {
-        if ($parentName ne $childSpellingName) {
-            $errors->add("If you select 'homonym of', the taxon and its homonym must be spelled the same");
-        }
-        if ($fields{'child_spelling_no'} == $fields{'parent_spelling_no'} ||
-            $fields{'child_no'} == $fields{'parent_no'} ||
-            $fields{'child_spelling_no'} == $fields{'parent_no'} ||
-            $fields{'child_no'} == $fields{'parent_spelling_no'}) {
-            $errors->add("The taxon you are entering and the one it belongs to can't be the same");	
         }
     } else {
         if ($parentName eq $childName || $parentName eq $childSpellingName) {
