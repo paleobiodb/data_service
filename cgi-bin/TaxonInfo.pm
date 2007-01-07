@@ -175,7 +175,7 @@ sub displayTaxonInfoResults {
     if ( $common_name =~ /[A-Za-z]/ )	{
         $display_name .= " ($common_name)";
     } 
-    if ($taxon_no) {
+    if ($taxon_no && $common_name !~ /[A-Za-z]/) {
         my $orig_ss = getOriginalCombination($dbt,$taxon_no);
         my $mrpo = getMostRecentClassification($dbt,$orig_ss);
         my $last_status = $mrpo->{'status'};
@@ -1655,7 +1655,7 @@ sub getSynonymyParagraph{
     my @spellings = getAllSpellings($dbt,$taxon->{'taxon_no'});
 
     if ($taxon->{'taxon_rank'} =~ /species/) {
-        my $sql = "SELECT taxon_no,type_specimen,type_body_part FROM authorities WHERE ((type_specimen IS NOT NULL and type_specimen != '') OR (type_body_part IS NOT NULL AND type_body_part != '')) AND taxon_no IN (".join(",",@spellings).")";
+        my $sql = "SELECT taxon_no,type_specimen,type_body_part,part_details FROM authorities WHERE ((type_specimen IS NOT NULL and type_specimen != '') OR (type_body_part IS NOT NULL AND type_body_part != '') OR (part_details IS NOT NULL AND part_details != '')) AND taxon_no IN (".join(",",@spellings).")";
         my $specimen_row = ${$dbt->getData($sql)}[0];
         if ($specimen_row) {
             $text .= "Its type is $specimen_row->{type_specimen}";
@@ -1663,6 +1663,7 @@ sub getSynonymyParagraph{
                 my $an = ($specimen_row->{'type_body_part'} =~ /^[aeiou]/) ? "an" : "a";
                 $text .= ", " if ($specimen_row->{'type_specimen'});
                 $text .= "$an $specimen_row->{type_body_part}";
+                $text .= " ($specimen_row->{part_details})";
             }
             $text .= ". ";
         }
