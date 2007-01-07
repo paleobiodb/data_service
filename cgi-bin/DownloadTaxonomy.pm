@@ -460,7 +460,7 @@ sub displayPBDBDownload {
 
     open FH_VT, ">$filesystem_dir/valid_taxa.csv"
         or die "Could not open valid_taxa.csv ($!)";
-    @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","taxon_rank","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","preservation","type_taxon","type_specimen","type_body_part","comments","created","modified");
+    @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","common_name","taxon_rank","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","preservation","type_taxon","type_specimen","type_body_part","part_details","comments","created","modified");
     $csv->combine(@header);
     print FH_VT $csv->string()."\n";
     foreach my $t (@names) {
@@ -482,7 +482,7 @@ sub displayPBDBDownload {
 
     open FH_IT, ">$filesystem_dir/invalid_taxa.csv"
         or die "Could not open invalid_taxa.csv ($!)";
-    @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","taxon_rank","invalid_reason","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","preservation","type_taxon","type_specimen","type_body_part","comments","created","modified");
+    @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","common_name","taxon_rank","invalid_reason","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","preservation","type_taxon","type_specimen","type_body_part","part_details","comments","created","modified");
     $csv->combine(@header);
     print FH_IT $csv->string()."\n";
     foreach my $t (@names) {
@@ -641,7 +641,7 @@ sub getTaxonomicNames {
     my $message;
     if (@where) {
         my $base_sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, tt.taxon_name type_taxon,"
-                . "a.taxon_no,a.reference_no,a.taxon_rank,a.taxon_name,a.type_specimen,a.type_body_part,a.extant,a.preservation,"
+                . "a.taxon_no,a.reference_no,a.taxon_rank,a.taxon_name,a.common_name,a.type_specimen,a.type_body_part,a.part_details,a.extant,a.preservation,"
                 . "a.pages,a.figures,a.created,a.comments,t.spelling_no,t.synonym_no senior_synonym_no,"
                 . " IF (a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,"
                 . " IF (a.ref_is_authority='YES',r.author1init,a.author1init) author1init,"
