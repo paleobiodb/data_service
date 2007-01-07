@@ -1411,6 +1411,22 @@ sub guessTaxonRank {
         return "species";
     } elsif ($taxon =~ /^[A-Z][a-z]+ \([A-Z][a-z]+\)$/) {
         return "subgenus";
+    } elsif ($taxon =~ /ini$/)	{
+        return "tribe";
+    } elsif ($taxon =~ /inae$/)	{
+        return "subfamily";
+    } elsif ($taxon =~ /idae$/)	{
+        return "family";
+    } elsif ($taxon =~ /eae$/)	{
+        return "family";
+    } elsif ($taxon =~ /oidea$/)	{
+        return "superfamily";
+    } elsif ($taxon =~ /ida$/)	{
+        return "order";
+    } elsif ($taxon =~ /formes$/)	{
+        return "order";
+    } elsif ($taxon =~ /ales$/)	{
+        return "order";
     } 
 
     return "";
