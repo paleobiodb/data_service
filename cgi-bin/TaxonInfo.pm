@@ -1635,7 +1635,9 @@ sub getSynonymyParagraph{
         $text .= "It is not extant. ";
     }
 
-    if ($taxon->{'preservation'}) {
+    # don't report preservation for extant taxa, because they are regular
+    #  taxa by definition
+    if ($taxon->{'preservation'} && $taxon->{'extant'} !~ /Y/i) {
         my $preservation = $taxon->{'preservation'};
         if ($preservation eq 'regular taxon') {
             $preservation = "not an ichnofossil or a form taxon";
@@ -1644,7 +1646,7 @@ sub getSynonymyParagraph{
         } else {
             $preservation = "a $preservation";
         }
-        if ( $taxon->{'extant'} =~ /Y|N/i )	{
+        if ( $taxon->{'extant'} =~ /N/i )	{
             $text =~ s/\. $/ /;
             $text .= "and is $preservation. ";
         } else	{
