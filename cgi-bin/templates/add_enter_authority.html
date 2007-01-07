@@ -91,8 +91,8 @@
 </nobr>
 </div>
 
-<div style="clear: right;">
 <div show="show_type_specimen">
+<div style="clear: right;">
 <div style="padding-top: 1em;">
 <b>Type specimen:</b>
 <input id="type_specimen" name="type_specimen" size=20>
@@ -102,15 +102,32 @@
 
 <div show="show_type_specimen">
 <div style="clear: right;">
+<div style="padding-top: 1em;">
 <b>Body part of type:</b>
 <select name="type_body_part"></select>
 </div>
 </div>
-
-<div style="padding-top: 1em;">
-<b>Preservation category:</b>
-<select id="preservation"></select>
 </div>
+
+<div show="show_type_specimen">
+<div style="clear: right;">
+<b>Part details:</b>
+<input id="part_details" name="part_details" size=23>
+</div>
+</div>
+
+<!--
+<div show="show_type_specimen">
+<div class="small" style="clear: right;">
+<nobr>
+<b>Length:</b>
+<input class="verysmall" name="length" size="4"> mm
+&nbsp;<b>Width:</b>
+<input class="verysmall" name="width" size="4"> mm
+</nobr>
+</div>
+</div>
+-->
 
 </div>
 
@@ -130,15 +147,21 @@
 </div>
 </div>
 
-<div style="clear: right;">
-<b>Is this an extant (living) taxon?</b> <span id="extant_select"></span>
+<div>
+<b>Preservation category:</b>
+<select id="preservation"></select>
 </div>
 
+<div style="clear: right;">
 <div style="padding-top: 1em;">
+<b>Is this an extant (living) taxon?</b> <span id="extant_select"></span>
+</div>
+</div>
+
+<div style="clear: right;">
 <b>Common name:</b>
 <input type="text" id="common_name" name="common_name" size="20">
 </div>
-
 
 </div>
 
