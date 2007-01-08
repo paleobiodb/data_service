@@ -7694,7 +7694,7 @@ sub displayTaxaIntervalsResults{
 sub buildListForm {
     require Confidence;
     print stdIncludes("std_page_top");
-    Confidence::buildList($q, $s, $dbt,$hbo);
+    Confidence::buildList($q, $s, $dbt,$hbo,{});
     print stdIncludes("std_page_bottom");
 }
 
