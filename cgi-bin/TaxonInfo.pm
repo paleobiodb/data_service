@@ -1665,6 +1665,8 @@ sub getSynonymyParagraph{
                 my $an = ($specimen_row->{'type_body_part'} =~ /^[aeiou]/) ? "an" : "a";
                 $text .= ", " if ($specimen_row->{'type_specimen'});
                 $text .= "$an $specimen_row->{type_body_part}";
+            }
+            if ($specimen_row->{'part_details'}) {
                 $text .= " ($specimen_row->{part_details})";
             }
             $text .= ". ";
