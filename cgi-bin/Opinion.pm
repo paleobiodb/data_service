@@ -1132,7 +1132,7 @@ sub submitOpinionForm {
             }    
 		} 
         if ($q->param('taxon_status') eq 'belongs to') {
-            if ($childRank eq 'species' && $parentRank !~ /genus/) {
+            if ($childSpellingRank eq 'species' && $parentRank !~ /genus/) {
 		    	$errors->add("A species must be assigned to a genus or subgenus and not a higher order name");
             }
         }
