@@ -246,7 +246,7 @@ sub mapCheckForm {
             if($q->param('taxon_rank') ne "species") {
                 my @taxa = TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon_name,'remove_rank_change'=>1});
                 if (scalar(@taxa)  > 1) {
-                    push @errors, "The map is not restricted to '$taxon_name' because more than one taxon has that name. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>."
+                    push @errors, "The map can't be drawn because more than one taxon has the name '$taxon_name.' If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>."
                 }
             }
         }
