@@ -59,11 +59,11 @@ A:hover.menu {
 }
 
 A:link.homeBodyLinks	{
-	color: #6090FF;
+	color: #0080FF;
 }       
 
 A:visited.homeBodyLinks	{
-	color : #80888F;
+	color : #7070A0;
 }       
 
 A:active.homeBodyLinks	{
@@ -79,7 +79,7 @@ A:link.homeStats	{
 }       
 
 A:visited.homeStats	{
-	color : #808080;
+	color : #7070A0;
 }       
 
 A:active.homeStats	{
@@ -216,14 +216,10 @@ H6 {font-size: .9em;}
 }
 
 #homeInfo	{
-    background-image: url(/public/PDbg.gif);
     padding-top: 3em;
     padding-bottom: 0em;
-    border-left: 1px solid #D0D0D0;
-    border-right: 1px solid #B0B0B0;
-    border-bottom: 1px solid #B0B0B0;
     height: 38em;
-    width: 32em;
+    width: 36em;
     position: absolute;
     top: 52px;
     left: 12em;
@@ -261,11 +257,11 @@ H6 {font-size: .9em;}
 
 #homeBorder	{
     background-image: url(/public/PDbg.gif);
-    padding-top: 3em;
+    padding-top: 2.5em;
     border-left: 1px solid #D0D0D0;
     border-right: 1px solid #B0B0B0;
     border-bottom: 1px solid #B0B0B0;
-    height: 45em;
+    height: 38.5em;
     width: 100px;
     position: absolute;
     left: 45em;
@@ -366,8 +362,8 @@ html,body	{
 
 .questions	{
     font-family: "Century Gothic", Verdana, Arial, Helvetica, sans-serif;
-    font-size: 1.2em;
-    color: #90B0FF;
+    font-size: 1.25em;
+    color: #303030;
     float: left;
     padding-left: 0.5em;
     padding-bottom: 0.5em;
@@ -375,7 +371,8 @@ html,body	{
 
 #questionsShadow	{
     position: absolute;
-    color: #D0E0FF;
+    left: 1.8em;
+    color: #D0D0D0;
 }
 
 #questionsOverShadow	{
@@ -391,7 +388,7 @@ html,body	{
     margin-top: -3px;
     font-size : 1.0em;
     text-decoration: none;
-    color: #B8D0FF;
+    color : #7070A0;
 }
 
 .homePageOffBullet	{
@@ -400,7 +397,7 @@ html,body	{
     margin-top: -3px;
     font-size : 1.0em;
     text-decoration: none;
-    color: #B8D0FF;
+    color : #7070A0;
 }
 
 .homePageMSIEBullet	{
