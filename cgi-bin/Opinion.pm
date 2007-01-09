@@ -819,9 +819,6 @@ sub submitOpinionForm {
 		# I have no idea why Poling didn't do this himself; typical
 		#  incompetence
 		# note: the ref no and parent no don't need to match
-		# WARNING: we don't check at all to see if the author/taxon
-		#  matches when one opinion (old or new) is a ref_has_opinion
-		#  record and the other is not
         if ($isNewEntry && $q->param('taxon_status') ne 'misspelling of') {
 		    my $sql = "SELECT count(*) c FROM opinions WHERE ref_has_opinion !='YES' ".
                       " AND child_no=".$dbh->quote($fields{'child_no'}).
@@ -830,7 +827,20 @@ sub submitOpinionForm {
                       " AND pubyr=".$dbh->quote($q->param('pubyr')).
                       " AND status NOT IN ('misspelling of')";
             my $row = ${$dbt->getData($sql)}[0];
-            if ( $row->{'c'} > 0 ) {
+            # also make sure there isn't a primary report of this opinion
+            #  JA 9.1.07
+		    my $sql = "SELECT count(*) c FROM opinions o,refs r WHERE ref_has_opinion ='YES' ".
+                      " AND child_no=".$dbh->quote($fields{'child_no'}).
+                      " AND o.reference_no=r.reference_no".
+                      " AND r.author1last=".$dbh->quote($q->param('author1last'));
+                      if ( $q->param('author2last') )	{
+                          $sql .= " AND r.author2last=".$dbh->quote($q->param('author2last'));
+                      }
+                      $sql .= " AND r.pubyr=".$dbh->quote($q->param('pubyr')).
+                      " AND status NOT IN ('misspelling of','homonym of')";
+            my $row2 = ${$dbt->getData($sql)}[0];
+
+            if ( $row->{'c'} > 0 || $row2->{'c'} > 0 ) {
                 $errors->add("The author's opinion on ".$childName." already has been entered - an author can only have one opinion on a name");
             }
         }
@@ -907,7 +917,21 @@ sub submitOpinionForm {
             $sql .= " AND opinion_no != ".$o->{'opinion_no'};
         }
         my $row = ${$dbt->getData($sql)}[0];
-        if ($row->{'c'} > 0) {
+        # also make sure there isn't a secondary report of this opinion
+        #  JA 9.1.07
+        my $sql = "SELECT author1last,author2last,pubyr FROM refs WHERE reference_no=".$dbh->quote($lookup_reference);
+        my $row2 = ${$dbt->getData($sql)}[0];
+        my $row3;
+        if ( $row2->{author1last} )	{
+            my $sql = "SELECT count(*) c FROM opinions WHERE author1last='".$row2->{author1last}."' AND pubyr='".$row2->{pubyr}."'";
+            if ( $row2->{author1last} )	{
+                      $sql .= " AND author2last='".$row2->{author2last}."'";
+            }
+            $sql .= " AND status NOT IN ('misspelling of','homonym of')";
+            $row3 = ${$dbt->getData($sql)}[0];
+        }
+
+        if ($row->{'c'} > 0 || $row3->{'c'} > 0) {
             unless ($q->param('taxon_status') eq 'invalid1' && $q->param("synonym") eq 'misspelling of') {
                 $errors->add("The author's opinion on ".$childName." already has been entered - an author can only have one opinion on a name");
             }
