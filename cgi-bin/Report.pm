@@ -702,7 +702,7 @@ sub reportQueryDB{
                     # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
                     @taxon_nos_unique{@all_taxon_nos} = ();
                 } else { #result > 1
-                    push @{$self->{'warnings'}}, "The taxon name '$taxon' was not included because it is ambiguous and belongs to multiple taxonomic hierarchies. Right the report script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
+                    push @{$self->{'warnings'}}, "'$taxon' was not used in the analysis because more than one taxon has that name. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
                 }
             }
             my $taxon_nos_string = join(", ", keys %taxon_nos_unique);
