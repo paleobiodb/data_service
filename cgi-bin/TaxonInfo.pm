@@ -460,10 +460,19 @@ sub doThumbs {
                     my $thumb_path = $thumb->{path_to_image};
                     $thumb_path =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
                     my $caption = $thumb->{'caption'};
-                    my $width = ($thumb->{'width'}  || 675);
-                    my $height = ($thumb->{'height'}  || 525);
-                    $width = 300 if ($width < 300);
-                    $height +=  130;
+                    my $width = ($thumb->{'width'}  || 300);
+                    my $height = ($thumb->{'height'}  || 400);
+                    my $maxwidth = $width;
+                    my $maxheight = $height;
+                    if ( $maxwidth > 300 || $maxheight > 400 )	{
+                        $maxheight = 400;
+                        $maxwidth = 400 * $width / $height;
+                    }
+                    $height =  $maxheight + 130;
+                    $width = $maxwidth;
+                    if ( $width < 300 )	{
+                        $width = 300;
+                    }
                     $width += 50;
                     my $t_width=$thumbnail_size;
                     my $t_height=$thumbnail_size;
@@ -476,7 +485,8 @@ sub doThumbs {
                             $t_height = $thumbnail_size;
                         }
                     }
-                    print "<a href=\"javascript: imagePopup('bridge.pl?action=displayImage&amp;image_no=$thumb->{image_no}&amp;display_header=NO',$width,$height)\">";
+
+                    print "<a href=\"javascript: imagePopup('bridge.pl?action=displayImage&amp;image_no=$thumb->{image_no}&amp;maxheight=$maxheight&amp;maxwidth=$maxwidth&amp;display_header=NO',$width,$height)\">";
                     print "<img src=\"$thumb_path\" border=1 vspace=3 width=$t_width height=$t_height alt=\"$caption\">";
                     print "</a>";
                 } else {
