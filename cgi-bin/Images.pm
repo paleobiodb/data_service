@@ -255,7 +255,7 @@ sub getImageList {
 }
 
 sub displayImage {
-    my ($dbt,$image_no) = @_;
+    my ($dbt,$image_no,$height,$width) = @_;
 
     my $sql = "SELECT a.taxon_no,a.taxon_name,i.* FROM images i, authorities a where i.taxon_no=a.taxon_no AND i.image_no=$image_no";
     my $row = ${$dbt->getData($sql)}[0];
@@ -265,7 +265,7 @@ sub displayImage {
         my $ss = TaxaCache::getSeniorSynonym($dbt,$row->{'taxon_no'});
         
         print "<div align=\"center\">";
-        print "<img src=\"".$row->{'path_to_image'}."\" border=1><br>\n";
+        print "<img src=\"".$row->{'path_to_image'}."\" height=\"$height\" width=\"$width\" border=1><br>\n";
         print "<i>".$row->{'caption'}."</i><br>\n";
         print "<div class=\"small\">";
         print "<br><table border=0 cellpadding=2 cellspacing=0>";
