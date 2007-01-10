@@ -927,7 +927,8 @@ sub submitOpinionForm {
             if ( $row2->{author1last} )	{
                       $sql .= " AND author2last='".$row2->{author2last}."'";
             }
-            $sql .= " AND status NOT IN ('misspelling of','homonym of')";
+            $sql .= " AND child_no=".$dbh->quote($fields{'child_no'}).
+                    " AND status NOT IN ('misspelling of','homonym of')";
             $row3 = ${$dbt->getData($sql)}[0];
         }
 
