@@ -59,7 +59,7 @@ A:hover.menu {
 }
 
 A:link.homeBodyLinks	{
-	color: #0080FF;
+	color : #3080FF;
 }       
 
 A:visited.homeBodyLinks	{
@@ -388,7 +388,7 @@ html,body	{
     margin-top: -3px;
     font-size : 1.0em;
     text-decoration: none;
-    color : #7070A0;
+    color : #303030;
 }
 
 .homePageOffBullet	{
@@ -397,7 +397,7 @@ html,body	{
     margin-top: -3px;
     font-size : 1.0em;
     text-decoration: none;
-    color : #7070A0;
+    color : #303030;
 }
 
 .homePageMSIEBullet	{
