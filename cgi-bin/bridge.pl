@@ -5318,7 +5318,9 @@ sub displayImage {
     if (!$image_no) {
         print "<div align=\"center\">".Debug::printErrors(["No image number specified"])."</div>";
     } else {
-        Images::displayImage($dbt,$image_no);
+        my $height = $q->param('maxheight');
+        my $width = $q->param('maxwidth');
+        Images::displayImage($dbt,$image_no,$height,$width);
     }
     if ($q->param("display_header") eq 'NO') {
         print stdIncludes("blank_page_bottom"); 
