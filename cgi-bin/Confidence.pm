@@ -349,9 +349,9 @@ sub buildList    {
             if ($q->param('taxon_resolution') eq 'as_is') {
                 my @taxon_nos = TaxaCache::getChildren($dbt,$no_or_name);
                 my $taxon_list = join(",",@taxon_nos);
-                my @results = getOccurrenceData($dbt,'taxon_list'=>$taxon_list,'fields'=>$fields);
-                if (@results) {
-                    $occ_list{$taxon_name} = join(",",map {$_->{'occurrence_no'}} @results);
+                my $results = getOccurrenceData($dbt,'taxon_list'=>$taxon_list,'fields'=>$fields);
+                if (ref $results && @$results) {
+                    $occ_list{$taxon_name} = join(",",map {$_->{'occurrence_no'}} @$results);
                 }
             } else {
                 my @taxon_nos = TaxaCache::getChildren($dbt,$no_or_name);
