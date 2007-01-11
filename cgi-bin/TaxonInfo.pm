@@ -2499,17 +2499,22 @@ sub displaySynonymyList	{
 }
 
 # Small utility function, added 01/06/2005
+# Lump_ranks will cause taxa with the same name but diff rank (same taxa) to only pass
+# back one taxon_no (it doesn't really matter which)
 sub getTaxonNos {
     my $dbt = shift;
     my $name = shift;
     my $rank = shift;
+    my $lump_ranks = shift;
     my @taxon_nos = ();
     if ($dbt && $name)  {
         my $sql = "SELECT a.taxon_no taxon_no FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND taxon_name=".$dbt->dbh->quote($name);
         if ($rank) {
             $sql .= " AND taxon_rank=".$dbt->dbh->quote($rank);
         }
-        $sql .= " GROUP BY lft,rgt";
+        if ($lump_ranks) {
+            $sql .= " GROUP BY lft,rgt";
+        }
         my @results = @{$dbt->getData($sql)};
         push @taxon_nos, $_->{'taxon_no'} for @results;
     }

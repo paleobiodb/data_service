@@ -36,7 +36,7 @@ sub displayHomonymForm {
 
     my $i=0;
     foreach my $homonym_name (@homonym_names) {
-        my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$homonym_name);
+        my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$homonym_name, undef, 1);
 
         # Find the parent taxon and use that to clarify the choice
 
@@ -302,7 +302,7 @@ sub displayTaxaIntervalsResults {
         my @homonyms;
         
         foreach my $taxon (@taxa) {
-            my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon);
+            my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon, undef, 1);
             if (scalar(@taxon_nos) > 1) {
                 push @homonyms, $taxon;
             } elsif (scalar(@taxon_nos) == 1) {

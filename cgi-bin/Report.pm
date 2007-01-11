@@ -693,7 +693,7 @@ sub reportQueryDB{
 
             my %taxon_nos_unique = ();
             foreach my $taxon (@taxa) {
-                my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon);
+                my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon, undef, 1);
                 $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
                 if (scalar(@taxon_nos) == 0) {
                     $genus_names_string .= ", ".$dbh->quote($taxon);
