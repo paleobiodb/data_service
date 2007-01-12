@@ -1204,7 +1204,9 @@ sub submitOpinionForm {
         pop @spellingBits;
         my $spellingParent = join(' ',@spellingBits);
         if ($fields{'status'} =~ /belongs to|correction/) {
-            if ($spellingParent ne $parentName) {
+            if ($spellingParent ne $parentName && 
+                 ($childRank =~ /species/ || 
+                   ($childRank =~ /subgenus/ && $q->param('spelling_reason') ne 'rank change'))){
 		        $errors->add("The $childSpellingRank entered in the \"How was it spelled?\" should match with the higher order name entered in \"How was it classified?\" section");
             }
         }
