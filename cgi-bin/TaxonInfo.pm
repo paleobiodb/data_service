@@ -1628,7 +1628,7 @@ sub getSynonymyParagraph{
 	
 	# Get ref info from refs if 'ref_is_authority' is set
 	if(! $taxon->{'author1last'}) {
-		$text .= "<li><i>The author of $taxon->{taxon_rank} <a href=\"bridge.pl?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a> is not known</i>. ";
+		$text .= "<li><i>The author of $taxon->{taxon_rank} <a href=\"bridge.pl?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a> has not been recorded in the Database yet</i>. ";
     } else {
 		$text .= "<li><i><a href=\"bridge.pl?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a></i> was named by ";
         if ($taxon->{'ref_is_authority'}) {
