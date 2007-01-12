@@ -145,7 +145,7 @@ H6 {font-size: .9em;}
     margin-left: 0em; 
     margin-right: 0em;
     text-align: left;
-    width: 56em;
+    width: 52em;
     position: absolute;
     top: 52px;
 /*    bottom: 0;*/
@@ -154,7 +154,7 @@ H6 {font-size: .9em;}
 #homeBanner	{
     width: 100%;
     background-image: url(/public/bannerimages/dcaloostBlue3.jpg);
-    min-width: 56em; /* needed because scrolling across when a window is small
+    min-width: 52em; /* needed because scrolling across when a window is small
                           causes the image to be truncated */
 
     position: absolute;
@@ -180,7 +180,7 @@ H6 {font-size: .9em;}
 
 #homeLinks	{
     width: 100%;
-    min-width: 56em; /* needed because scrolling down when a window is small
+    min-width: 52em; /* needed because scrolling down when a window is small
                           causes the image to be truncated */
     position: absolute;
     top: 50px;
@@ -203,10 +203,10 @@ H6 {font-size: .9em;}
     background-position: 13em 0em;
     #border-bottom: 1px #D0D0D0 solid;
     text-align: center;
-    margin-left: -1em;
+    margin-left: 0.5em;
     padding-top: 3em;
     height: 45em;
-    width: 13em;
+    width: 13.5em;
     position: absolute;
     float: left;
     top: 52px;
@@ -222,8 +222,8 @@ H6 {font-size: .9em;}
     width: 36em;
     position: absolute;
     top: 52px;
-    left: 12em;
-    right: 45em;
+    left: 15em;
+    right: 50em;
     overflow: hidden;
     z-index: 3;
 }
@@ -272,7 +272,7 @@ H6 {font-size: .9em;}
 
 
 .fixedWidth {
-    width: 56em; 
+    width: 52em; 
 }
 
 
