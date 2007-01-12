@@ -1543,10 +1543,17 @@ sub Solow1996{
             my $last  = ($scale_order) ? -1*$data->{'last'} : $data->{'last'};
             my $first = ($scale_order) ? -1*$data->{'first'}: $data->{'first'};
             $lambda = $lambda * ((abs($first - $last) / abs($max - $last)) ** ($occurrence_count - 1));
+            if (abs($first - $last) == 0) {
+                die "Zero length segment encountered";
+            }
+        }
+        if ($lambda == 0) {
+            $firstsig = 0;
+        } else {
+            $firstsig = chiSquaredDensity($df,0,-2*log($lambda),0);
         }
 #        print "lambda: $lambda<BR>";
 
-        $firstsig = chiSquaredDensity($df,0,-2*log($lambda),0);
 
 #        print "Significance first: $firstsig<BR>";
         #----------------------UPPER CONFIDENCE FINDER-----------------------------
@@ -1604,10 +1611,17 @@ sub Solow1996{
             my $last  = ($scale_order) ? $data->{'last'} : -1*$data->{'last'};
             my $first = ($scale_order) ? $data->{'first'}: -1*$data->{'first'};
             $lambda = $lambda * ((abs($first - $last) / abs($min - $first)) ** ($occurrence_count - 1));
+            if (abs($first - $last) == 0) {
+                die "Zero length segment encountered";
+            }
+        }
+        if ($lambda == 0) {
+            $lastsig = 0;
+        } else {
+            $lastsig = chiSquaredDensity($df,0,-2*log($lambda),0);
         }
 #        print "lambda: $lambda<BR>";
 
-        $lastsig = chiSquaredDensity($df,0,-2*log($lambda),0);
 
 #        print "Significance last: $lastsig<BR>";
         #----------------------LOWER CONFIDENCE FINDER-----------------------------
