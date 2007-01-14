@@ -256,9 +256,32 @@ sub displaySpecimenList {
 
     # always give them an option to create a new measurement as well
     print "<tr><td><input type=\"radio\" name=\"specimen_no\" value=\"-1\"></td>";
-    print "<td colspan=6>Add a <b>new</b> average measurement</i></td></tr>\n";
-    print "<tr><td><input type=\"radio\" name=\"specimen_no\" value=\"-2\"></td>";
-    print "<td colspan=6>Add <input type=\"text\" name=\"specimens_measured\" value=\"10\" size=3><b>new</b> individual measurements</i></td></tr>\n";
+    print "<td colspan=\"6\">Add a <b>new</b> average measurement</i></td></tr>\n";
+    print "<tr><td valign=\"top\"><input type=\"radio\" name=\"specimen_no\" value=\"-2\"></td>";
+    print "<td colspan=\"6\" valign=\"top\">Add <input type=\"text\" name=\"specimens_measured\" value=\"10\" size=3><b>new</b> individual measurements</i><br>";
+    print qq|
+  &nbsp;&nbsp;default side:
+  <select name="default_side">
+  <option value=""></option>
+  <option value="left">left</option>
+  <option value="right">right</option>
+  <option value="left?">left?</option>
+  <option value="right?">right?</option>
+  <option value="dorsal">dorsal</option>
+  <option value="ventral">ventral</option>
+  <option value="both">both</option>
+  </select><br>
+  &nbsp;&nbsp;default part: <input name="default_part" size="10"><br>
+  &nbsp;&nbsp;default source:
+  <select name="default_source">
+  <option value=""></option>
+  <option value="text">text</option>
+  <option value="table">table</option>
+  <option value="picture">picture</option>
+  <option value="graph">graph</option>
+  <option value="direct measurement">direct measurement</option>
+  </select>\n|;
+    print "</td></tr>\n";
 
     print "<tr><td align=\"center\" colspan=7><br><input type=\"Submit\" name=\"Submit\" value=\"Submit\"></td></tr>";
     print "</table></div>";
@@ -337,7 +360,7 @@ sub populateMeasurementForm {
                 #@table_rows = ('specimen_id','length','width','height','diagonal','specimen_side','specimen_part','measurement_source','magnification','is_type');
                 my $table_rows = "";
                 for (1..$q->param('specimens_measured')) {
-                    $table_rows .= $hbo->populateHTML('specimen_measurement_form_row');
+                    $table_rows .= $hbo->populateHTML('specimen_measurement_form_row',[$q->param('default_side'),$q->param('default_part'),$q->param('default_source')],['specimen_side','specimen_part','measurement_source']);
                 }
                 push @fields,'table_rows';
                 push @values,$table_rows;
