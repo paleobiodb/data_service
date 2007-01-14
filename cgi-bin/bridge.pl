@@ -3284,27 +3284,33 @@ sub buildTaxonomicList {
 	# This is the taxonomic list part
 	# join with taxa_tree_cache because lft and rgt will be used to
 	#  order the list JA 13.1.07
-	my $sql =	"SELECT abund_value, abund_unit, genus_name, genus_reso, subgenus_name, subgenus_reso, plant_organ, plant_organ2, species_name, species_reso, comments, reference_no, occurrence_no, o.taxon_no taxon_no, collection_no, lft, rgt FROM occurrences o,taxa_tree_cache t WHERE o.taxon_no=t.taxon_no AND ";
-    if ($options{'collection_no'}) {
-        $sql .= "collection_no = $options{'collection_no'}";
-    } elsif ($options{'occurrence_list'} && @{$options{'occurrence_list'}}) {
-        $sql .= "occurrence_no IN (".join(', ',@{$options{'occurrence_list'}}).") ORDER BY occurrence_no";
-    } else {
-        $sql = "";
-    }
+	my $treefields = ", lft, rgt";
+	my $sqlstart = "SELECT abund_value, abund_unit, genus_name, genus_reso, subgenus_name, subgenus_reso, plant_organ, plant_organ2, species_name, species_reso, comments, reference_no, occurrence_no, o.taxon_no taxon_no, collection_no";
 
-    my @warnings;
-    if ($options{'warnings'}) {
-        @warnings = @{$options{'warnings'}};
-    }
+	my $sqlmiddle = " FROM occurrences o ";
+	my $sqlend;
+	if ($options{'collection_no'}) {
+		$sqlend .= "AND collection_no = $options{'collection_no'}";
+	} elsif ($options{'occurrence_list'} && @{$options{'occurrence_list'}}) {
+		$sqlend .= "AND occurrence_no IN (".join(', ',@{$options{'occurrence_list'}}).") ORDER BY occurrence_no";
+	} else	{
+		$sqlend = "";
+	}
+	my $sql = $sqlstart . ", lft, rgt" . $sqlmiddle . ", taxa_tree_cache t WHERE o.taxon_no=t.taxon_no " . $sqlend;
+	my $sql2 = $sqlstart . $sqlmiddle . "WHERE taxon_no=0 " . $sqlend;
 
-    dbg("buildTaxonomicList sql: $sql");
+	my @warnings;
+	if ($options{'warnings'}) {
+		@warnings = @{$options{'warnings'}};
+	}
 
+	dbg("buildTaxonomicList sql: $sql");
 
-    my @rowrefs;
-    if ($sql) {
-	    @rowrefs = @{$dbt->getData($sql)};
-    }
+	my @rowrefs;
+	if ($sql) {
+		@rowrefs = @{$dbt->getData($sql)};
+		push @rowrefs , @{$dbt->getData($sql2)};
+	}
 
 	if (@rowrefs) {
 		my @grand_master_list = ();
@@ -3440,6 +3446,7 @@ sub buildTaxonomicList {
                 $rowref->{'class_no'} ||= 1000000;
                 $rowref->{'order_no'} ||= 1000000;
                 $rowref->{'family_no'} ||= 1000000;
+                $rowref->{'lft'} ||= 1000000;
 
 				$output = $hbo->populateHTML("taxa_display_row", $rowref);
 			}
@@ -3456,12 +3463,13 @@ sub buildTaxonomicList {
 		# family_no,  reference_no, abundance_unit and comments. 
 		# If ALL records are missing any of those, don't print the header
 		# for it.
-		my ($class_nos, $order_nos, $family_nos, $reference_nos, 
-			$abund_values, $comments) = (0,0,0,0,0,0);
+		my ($class_nos, $order_nos, $family_nos, $lft_nos,
+			$reference_nos, $abund_values, $comments) = (0,0,0,0,0,0,0);
 		foreach my $row (@grand_master_list) {
 			$class_nos++ if($row->{class_no} && $row->{class_no} != 1000000);
 			$order_nos++ if($row->{order_no} && $row->{order_no} != 1000000);
 			$family_nos++ if($row->{family_no} && $row->{family_no} != 1000000);
+			$lft_nos++ if($row->{lft} && $row->{lft} != 1000000);
 			$reference_nos++ if($row->{reference_no} && $row->{reference_no} != $options{'hide_reference_no'});
 			$abund_values++ if($row->{abund_value});
 			$comments++ if($row->{comments});
@@ -3564,19 +3572,21 @@ sub buildTaxonomicList {
         } else {
             # switched from sorting by taxon nos to sorting by lft rgt
             #  JA 13.1.07
-            @sorted = sort{ $a->{lft} <=> $b->{rgt} ||
+            @sorted = sort{ $a->{lft} <=> $b->{lft} ||
                                $a->{rgt} <=> $b->{rgt} ||
                                $a->{occurrence_no} <=> $b->{occurrence_no} } @grand_master_list;
             #@sorted = sort{ $a->{class_no} <=> $b->{class_no} ||
             #                   $a->{order_no} <=> $b->{order_no} ||
             #                   $a->{family_no} <=> $b->{family_no} ||
             #                   $a->{occurrence_no} <=> $b->{occurrence_no} } @grand_master_list;
-            unless($class_nos == 0 && $order_nos == 0 && $family_nos == 0 ){
-                # Now sort the ones that had no class or order or family by occ_no.
+            unless ( $lft_nos == 0 )	{
+            #unless($class_nos == 0 && $order_nos == 0 && $family_nos == 0 ){
+                # Now sort the ones that had no taxon_no by occ_no.
                 my @occs_to_sort = ();
-                while($sorted[-1]->{class_no} == 1000000 &&
-                      $sorted[-1]->{order_no} == 1000000 &&
-                      $sorted[-1]->{family_no} == 1000000){
+                while ( $sorted[-1]->{lft} == 1000000 )	{
+                #while($sorted[-1]->{class_no} == 1000000 &&
+                #      $sorted[-1]->{order_no} == 1000000 &&
+                #      $sorted[-1]->{family_no} == 1000000){
                     push(@occs_to_sort, pop @sorted);
                 }
 
