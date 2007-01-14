@@ -3282,11 +3282,13 @@ sub buildTaxonomicList {
 	my $return = "";
 
 	# This is the taxonomic list part
-	my $sql =	"SELECT abund_value, abund_unit, genus_name, genus_reso, subgenus_name, subgenus_reso, plant_organ, plant_organ2, species_name, species_reso, comments, reference_no, occurrence_no, taxon_no, collection_no FROM occurrences";
+	# join with taxa_tree_cache because lft and rgt will be used to
+	#  order the list JA 13.1.07
+	my $sql =	"SELECT abund_value, abund_unit, genus_name, genus_reso, subgenus_name, subgenus_reso, plant_organ, plant_organ2, species_name, species_reso, comments, reference_no, occurrence_no, o.taxon_no taxon_no, collection_no, lft, rgt FROM occurrences o,taxa_tree_cache t WHERE o.taxon_no=t.taxon_no AND ";
     if ($options{'collection_no'}) {
-        $sql .= " WHERE collection_no = $options{'collection_no'}";
+        $sql .= "collection_no = $options{'collection_no'}";
     } elsif ($options{'occurrence_list'} && @{$options{'occurrence_list'}}) {
-        $sql .= " WHERE occurrence_no IN (".join(', ',@{$options{'occurrence_list'}}).") ORDER BY occurrence_no";
+        $sql .= "occurrence_no IN (".join(', ',@{$options{'occurrence_list'}}).") ORDER BY occurrence_no";
     } else {
         $sql = "";
     }
@@ -3560,10 +3562,15 @@ sub buildTaxonomicList {
             # build the occurrence list (in displayOccsForReID)  Right now this is by occurrence_no, which is being done in sql;
             @sorted = @grand_master_list;
         } else {
-            @sorted = sort{ $a->{class_no} <=> $b->{class_no} ||
-                               $a->{order_no} <=> $b->{order_no} ||
-                               $a->{family_no} <=> $b->{family_no} ||
+            # switched from sorting by taxon nos to sorting by lft rgt
+            #  JA 13.1.07
+            @sorted = sort{ $a->{lft} <=> $b->{rgt} ||
+                               $a->{rgt} <=> $b->{rgt} ||
                                $a->{occurrence_no} <=> $b->{occurrence_no} } @grand_master_list;
+            #@sorted = sort{ $a->{class_no} <=> $b->{class_no} ||
+            #                   $a->{order_no} <=> $b->{order_no} ||
+            #                   $a->{family_no} <=> $b->{family_no} ||
+            #                   $a->{occurrence_no} <=> $b->{occurrence_no} } @grand_master_list;
             unless($class_nos == 0 && $order_nos == 0 && $family_nos == 0 ){
                 # Now sort the ones that had no class or order or family by occ_no.
                 my @occs_to_sort = ();
