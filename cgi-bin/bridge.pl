@@ -4903,7 +4903,7 @@ sub processTaxonSearch {
                     print "</ul>";
 
                     print "<div align=left class=small style=\"width: 500\">";
-                    print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  However, some approximate matches were found and are listed above.  If none of the names above match, please enter a new taxon record";
+                    print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, some approximate matches were found and are listed above.  If none of the names above match, please enter a new taxon record";
                     print "</div></p>";
                     print "</div>";
                     print "</td></tr></table></div>";
@@ -4939,15 +4939,15 @@ sub processTaxonSearch {
                 print "</ul>";
 
                 print "<div align=left class=small style=\"width: 500\">";
-                print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database.  However, some approximate matches were found and are listed above.  If none of the names above match, please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."&amp;skip_typo_check=1\">enter a new taxon record</a> first.";
+                print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, some approximate matches were found and are listed above.  If none of the names above match, please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon=".$q->param('taxon_name')."&amp;skip_typo_check=1\">enter a new authority record</a> first.";
                 print "</div></p>";
                 print "</div>";
                 print "</td></tr></table></div>";
             } else {
                 if ($q->param('taxon_name')) {
-                    print "<div align=\"center\">The taxon '" . $q->param('taxon_name') . "' doesn't exist in our database. Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> authority record for this taxon first.</div>";
+                    print "<div align=\"center\" class=\"large\">The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.<br>Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> an authority record for this taxon first.</div>";
                 } else {
-                    print "<div align=\"center\">No taxonomic names were found matching the search criteria.</div>";
+                    print "<div align=\"center\" class=\"large\">No taxonomic names were found that match the search criteria.</div>";
                 }
             }
             return;
