@@ -3806,9 +3806,10 @@ sub getSynonymName {
     if ($spelling->{'taxon_no'} != $taxon_no) {
         $is_spelling = 1;
         $spelling_reason = $spelling->{'spelling_reason'};
+        $spelling_reason = 'original and current combination' if $spelling_reason eq 'original spelling';
         $spelling_reason = 'recombined as' if $spelling_reason eq 'recombination';
         $spelling_reason = 'corrected as' if $spelling_reason eq 'correction';
-        $spelling_reason = 'rank changed as' if $spelling_reason eq 'rank change';
+        $spelling_reason = 'spelled with current rank as' if $spelling_reason eq 'rank change';
         $spelling_reason = 'reassigned as' if $spelling_reason eq 'reassignment';
     }
     my $taxon_name = $spelling->{'taxon_name'};
