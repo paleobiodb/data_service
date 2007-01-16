@@ -923,12 +923,15 @@ sub submitOpinionForm {
         my $row2 = ${$dbt->getData($sql)}[0];
         my $row3;
         if ( $row2->{author1last} )	{
-            my $sql = "SELECT count(*) c FROM opinions WHERE author1last='".$row2->{author1last}."' AND pubyr='".$row2->{pubyr}."'";
-            if ( $row2->{author1last} )	{
-                      $sql .= " AND author2last='".$row2->{author2last}."'";
+            my $sql = "SELECT count(*) c FROM opinions WHERE author1last=".$dbh->quote($row2->{author1last})." AND pubyr=".$dbh->quote($row2->{pubyr});
+            if ( $row2->{author2last} )	{
+                $sql .= " AND author2last=".$dbh->quote($row2->{author2last});
             }
             $sql .= " AND child_no=".$dbh->quote($fields{'child_no'}).
                     " AND status NOT IN ('misspelling of','homonym of')";
+            if (! $isNewEntry) {
+                $sql .= " AND opinion_no != ".$o->{'opinion_no'};
+            }
             $row3 = ${$dbt->getData($sql)}[0];
         }
 
