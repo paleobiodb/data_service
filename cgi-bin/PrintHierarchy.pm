@@ -46,7 +46,7 @@ sub processPrintHierarchy	{
             $taxon_rank = $taxa[0]->{'taxon_rank'};
         }
     } elsif ($q->param('taxon_name') =~ /^([A-Za-z -]+)$/) {
-        @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$1});
+        @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$1,'remove_rank_change'=>1});
         if (@taxa) {
             $taxon_no   = $taxa[0]->{'taxon_no'};
             $taxon_name = $taxa[0]->{'taxon_name'};
