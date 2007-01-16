@@ -50,9 +50,11 @@ sub buildReport {
                                 # Set in reportQueryDB
 
     my $sth = $self->reportQueryDB();
-    $self->reportBuildDataTables($sth);
-    $self->reportPrintOutfile();
-	$self->reportDisplayHTML();
+    if ($sth) {
+        $self->reportBuildDataTables($sth);
+        $self->reportPrintOutfile();
+        $self->reportDisplayHTML();
+    }
 }
 
 ##
@@ -259,6 +261,8 @@ sub reportBuildDataTables {
     my $dbt = $self->{dbt};
 
     my $sth = shift;
+    return unless $sth;
+
     my $t1FieldCnt = scalar @{$self->{'searchFields'}[1]}; #searchfield1
     my $t2FieldCnt = scalar @{$self->{'searchFields'}[2]}; #searchfield2
     my @t1Fields = @{$self->{'searchFields'}[1]};
@@ -662,6 +666,10 @@ sub reportQueryDB{
         $groupSQL .= ",c.".$_;
     }
     $groupSQL =~ s/^,//;
+    if ($q->param('taxon_name') =~ /[^\s\w, \t\n-:;]/) {
+        print "<div align=\"center\">".Debug::printErrors(["Invalid taxon name"])."</div>";
+        exit;
+    }
 	if (($q->param('output') eq "collections" && ($q->param('Sepkoski') eq "Yes" || $q->param('taxon_name'))) || 
         ($q->param('output') eq "occurrences") ||
         ($q->param('output') eq "average occurrences")) {
@@ -686,10 +694,6 @@ sub reportQueryDB{
         my $genus_names_string;
 		if($q->param('taxon_name')){
 	        my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
-            if ($q->param('taxon_name') =~ /[^\s\w, \t\n-:;]/) {
-                print "Invalid taxon name<br>";
-                exit;
-            }
 
             my %taxon_nos_unique = ();
             foreach my $taxon (@taxa) {
@@ -731,11 +735,15 @@ sub reportQueryDB{
     }
     $sql .= " GROUP BY ".$groupSQL;
 
-    $self->dbg("SQL:".$sql);
-   
-	my $sth = $dbh->prepare($sql) || die "Prepare query failed\n";
-	$sth->execute() || die "Execute query failed\n";
-    return $sth;
+    if ($groupSQL) {
+        $self->dbg("SQL:".$sql);
+       
+        my $sth = $dbh->prepare($sql) || die "Prepare query failed\n";
+        $sth->execute() || die "Execute query failed\n";
+        return $sth;
+    } else {
+        return undef;
+    }
 }
 
 
