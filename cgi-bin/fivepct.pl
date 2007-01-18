@@ -19,6 +19,8 @@ my $dbh = DBConnection::connect();
 my $dbt = DBTransactionManager->new($dbh);
 my $s = Session->new($dbt,$q->cookie('session_id'));
 
+my  $refno_offset = 52560;
+
 print $q->header( -type => "text/html" );
 &PrintHeader();
 
@@ -46,7 +48,7 @@ if ( $q->param("action") eq "search" )	{
 	}
 	if ( $field eq "ID number" )	{
 		$sql .= "ref_no=";
-		$sql .= $q->param("searchstring") / 20;
+		$sql .= ( $q->param("searchstring") - $refno_offset ) / 20;
 	} else	{
 		my $searchstring = $q->param("searchstring");
 		# escape single quotes
@@ -84,7 +86,7 @@ if ( $q->param("action") eq "search" )	{
 		}
 		print "</select><br><i>$refrow{'modifier'}</i> </td>\n";
 		print "<td valign=top><b>";
-		printf "%d",20*$refrow{'ref_no'};
+		printf "%d",20*$refrow{'ref_no'} + $refno_offset;
 		print "</b></td>\n";
 		print "<td valign=top>$refrow{'author'} \n";
 		print "\"$refrow{'title'}\" \n";
@@ -137,7 +139,7 @@ elsif ( $q->param("action") eq "update" )	{
 		$outstring = "ID numbers and new status values: \n";
 	}
 	for $r ( keys %updates )	{
-		my $n = $r * 20;
+		my $n = $r * 20 + $refno_offset;
 		$outstring .= "<b>" . $n . "</b> (<i>$updates{$r}</i>), ";
 	}
 	$outstring =~ s/, $//;
