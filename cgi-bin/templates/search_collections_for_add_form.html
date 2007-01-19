@@ -16,6 +16,14 @@ function checkForm ( ) {
 		errors += "You must supply lat/long coordinates\n";
 	}
 
+	if ( frm.latdeg.value > 89 )	{
+		errors += "The latitude must be less than 90 degrees\n";
+	}
+
+	if ( frm.lngdeg.value > 179 )	{
+		errors += "The longitude must be less than 180 degrees\n";
+	}
+
 	if ( errors != "" ) { 
 		alert ( errors );
 		return false;
@@ -33,7 +41,7 @@ function checkForm ( ) {
 <p>The search will return collections within 100 km of the coordinates.</p>
 </center>
 
-<form method=post action="bridge.pl" onSubmit="return checkForm();">
+<form method="POST" action="bridge.pl" onSubmit="return checkForm();">
 <input id="action" type=hidden name="action" value="displayCollResults">
 <input id="type" type=hidden name="type" value="add">
 
@@ -75,7 +83,12 @@ function checkForm ( ) {
   <tr><td>&nbsp;</td></tr>
   <tr>
     <td colspan=6>
-      Sort by: <select name="sortby"><option value="collection_name">collection name</option><option value="distance">distance from coordinates</option><option value="collection_no">collection number</option></select></p>
+      Sort by:
+      <select name="sortby">
+        <option value="distance">distance from coordinates</option>
+        <option value="collection_name">collection name</option>
+        <option value="collection_no">collection number</option>
+      </select></p>
     </td>
   </tr>
 </table>
