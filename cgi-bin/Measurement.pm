@@ -759,11 +759,13 @@ sub getMeasurementTable {
         $part_type->{'specimens_measured'} += $row->{'specimens_measured'};
         $part_type->{'average'} += $row->{'specimens_measured'} * log($row->{'real_average'});
         if ($row->{'specimens_measured'} == 1) {
-            if (!exists $part_type->{'min'} || $row->{'real_average'} < $part_type->{'min'}) {
-                $part_type->{'min'} = $row->{'real_average'};
-            }
-            if (!exists $part_type->{'max'} || $row->{'real_average'} > $part_type->{'max'}) {
-                $part_type->{'max'} = $row->{'real_average'};
+            unless ($part_type->{'average_only'}) {
+                if (!exists $part_type->{'min'} || $row->{'real_average'} < $part_type->{'min'}) {
+                    $part_type->{'min'} = $row->{'real_average'};
+                }
+                if (!exists $part_type->{'max'} || $row->{'real_average'} > $part_type->{'max'}) {
+                    $part_type->{'max'} = $row->{'real_average'};
+                }
             }
         } else {
             if (!exists $part_type->{'min'} || $row->{'real_min'} < $part_type->{'min'}) {
@@ -771,6 +773,9 @@ sub getMeasurementTable {
             }
             if (!exists $part_type->{'max'} || $row->{'real_max'} > $part_type->{'max'}) {
                 $part_type->{'max'} = $row->{'real_max'};
+            }
+            if ($row->{'real_average'} =~ /\d/ && $row->{'real_min'} !~ /\d/ && $row->{'real_max'} !~ /\d/) {
+                $part_type->{'average_only'} = 1;
             }
         }
     }    
