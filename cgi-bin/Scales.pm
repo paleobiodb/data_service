@@ -367,18 +367,21 @@ sub processViewTimeScale	{
 
 		my $sql2 = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $time->{interval_no};
 		my @names = @{$dbt->getData($sql2)};
-		my $eml_interval = $names[0]->{eml_interval};
-		my $interval = "<a href=\"bridge.pl?action=displayInterval&interval_no=$time->{interval_no}\">$names[0]->{interval_name}</a>";
+        my $interval = $names[0]->{interval_name};
+		$interval = $names[0]->{eml_interval}." ".$interval if ($names[0]->{eml_interval});
+		$interval = "<a href=\"bridge.pl?action=displayInterval&interval_no=$time->{interval_no}\">$interval</a>";
 
 		$sql2 = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $time->{max_interval_no};
 		@names = @{$dbt->getData($sql2)};
-		my $eml_max_interval = $names[0]->{eml_interval};
-		my $max_interval = "<a href=\"bridge.pl?action=displayInterval&interval_no=$time->{max_interval_no}\">$names[0]->{interval_name}</a>";
+        my $max_interval = $names[0]->{interval_name};
+		$max_interval = $names[0]->{eml_interval}." ".$max_interval if ($names[0]->{eml_interval});
+		$max_interval = "<a href=\"bridge.pl?action=displayInterval&interval_no=$time->{max_interval_no}\">$max_interval</a>";
 
 		$sql2 = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $time->{min_interval_no};
 		@names = @{$dbt->getData($sql2)};
-		my $eml_min_interval = $names[0]->{eml_interval};
-		my $min_interval = "<a href=\"bridge.pl?action=displayInterval&interval_no=$time->{min_interval_no}\">$names[0]->{interval_name}</a>";
+        my $min_interval = $names[0]->{interval_name};
+		$min_interval = $names[0]->{eml_interval}." ".$min_interval if ($names[0]->{eml_interval});
+		$min_interval = "<a href=\"bridge.pl?action=displayInterval&interval_no=$time->{min_interval_no}\">$min_interval</a>";
 
 		my $lower_boundary = $time->{lower_boundary};
 		$lower_boundary =~ s/000$//;
@@ -389,7 +392,7 @@ sub processViewTimeScale	{
 			$lower_boundary = "";
 		}
 
-		print $hbo->populateHTML('view_scale_row', [ $eml_interval, $interval, $eml_max_interval, $max_interval, $eml_min_interval, $min_interval, $lower_boundary, $time->{corr_comments}], ['eml_interval', 'interval', 'eml_max_interval', 'max_interval', 'eml_min_interval', 'min_interval', 'lower_boundary', 'corr_comments']);
+		print $hbo->populateHTML('view_scale_row', [ $interval, $max_interval, $min_interval, $lower_boundary, $time->{corr_comments}], ['interval', 'max_interval', 'min_interval', 'lower_boundary', 'corr_comments']);
 	}
 
 	if ( $nlower > 0 )	{
