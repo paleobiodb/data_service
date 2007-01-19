@@ -368,17 +368,17 @@ sub processViewTimeScale	{
 		my $sql2 = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $time->{interval_no};
 		my @names = @{$dbt->getData($sql2)};
 		my $eml_interval = $names[0]->{eml_interval};
-		my $interval = $names[0]->{interval_name};
+		my $interval = "<a href=\"bridge.pl?action=displayInterval&interval_no=$time->{interval_no}\">$names[0]->{interval_name}</a>";
 
 		$sql2 = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $time->{max_interval_no};
 		@names = @{$dbt->getData($sql2)};
 		my $eml_max_interval = $names[0]->{eml_interval};
-		my $max_interval = $names[0]->{interval_name};
+		my $max_interval = "<a href=\"bridge.pl?action=displayInterval&interval_no=$time->{max_interval_no}\">$names[0]->{interval_name}</a>";
 
 		$sql2 = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $time->{min_interval_no};
 		@names = @{$dbt->getData($sql2)};
 		my $eml_min_interval = $names[0]->{eml_interval};
-		my $min_interval = $names[0]->{interval_name};
+		my $min_interval = "<a href=\"bridge.pl?action=displayInterval&interval_no=$time->{min_interval_no}\">$names[0]->{interval_name}</a>";
 
 		my $lower_boundary = $time->{lower_boundary};
 		$lower_boundary =~ s/000$//;

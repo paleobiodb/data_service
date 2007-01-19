@@ -764,9 +764,9 @@ sub doCollections{
     $max = ($max_no) ? $ig->{$max_no}->{'name'} : "";
     $min = ($min_no) ? $ig->{$min_no}->{'name'} : "";
     if ($max ne $min) {
-        $range .= "$max to $min";
+        $range .= "<a href=\"bridge.pl?action=displayInterval&interval_no=$max_no\">$max</a> to <a href=\"bridge.pl?action=displayInterval&interval_no=$min_no\">$min</a>";
     } else {
-        $range .= "$max";
+        $range .= "<a href=\"bridge.pl?action=displayInterval&interval_no=$max_no\">$max</a>";
     }
     $range .= " <i>or</i> $lb to $ub Ma";
 
@@ -806,9 +806,9 @@ sub doCollections{
         if (!$min) {
             $min = $max;
         }
-        my $res = "<span class=\"small\">$interval_name{$max}";
+        my $res = "<span class=\"small\"><a href=\"bridge.pl?action=displayInterval&interval_no=$row->{max_interval_no}\">$interval_name{$max}</a>";
         if ( $max != $min ) {
-            $res .= " - " . $interval_name{$min};
+            $res .= " - " . "<a href=\"bridge.pl?action=displayInterval&interval_no=$row->{min_interval_no}\">$interval_name{$min}</a>";
         }
         $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"small\">";
 

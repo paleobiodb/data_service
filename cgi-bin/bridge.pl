@@ -3220,16 +3220,20 @@ sub displayCollectionDetailsPage {
 	if ( $row->{'max_interval_no'} ) {
 		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $row->{'max_interval_no'};
         my $max_row = ${$dbt->getData($sql)}[0];
+        $row->{'interval'} .= qq|<a href="bridge.pl?action=displayInterval&interval_no=$row->{max_interval_no}">|;
         $row->{'interval'} .= $max_row->{'eml_interval'}." " if ($max_row->{'eml_interval'});
         $row->{'interval'} .= $max_row->{'interval_name'};
+        $row->{'interval'} .= '</a>';
 	} 
 
 	if ( $row->{'min_interval_no'}) { 
 		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $row->{'min_interval_no'};
         my $min_row = ${$dbt->getData($sql)}[0];
         $row->{'interval'} .= " - ";
+        $row->{'interval'} .= qq|<a href="bridge.pl?action=displayInterval&interval_no=$row->{min_interval_no}">|;
         $row->{'interval'} .= $min_row->{'eml_interval'}." " if ($min_row->{'eml_interval'});
         $row->{'interval'} .= $min_row->{'interval_name'};
+        $row->{'interval'} .= '</a>';
 
         if (!$row->{'max_interval_no'}) {
             $row->{'interval'} .= " <span class=small>(minimum)</span>";
