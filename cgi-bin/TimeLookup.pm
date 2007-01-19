@@ -164,7 +164,7 @@ sub new {
     my $c = shift;
     my $dbt = shift;
 
-    my $self  = {'ig'=>undef,'dbt'=>$dbt,'set_boundaries'=>0};
+    my $self  = {'ig'=>undef,'dbt'=>$dbt,'set_boundaries'=>0, 'sl'=>{},'il'=>{}};
     bless $self,$c;
 }
 
@@ -938,7 +938,8 @@ sub getBoundaries {
             push @q, @next_q;
         }
 
-        # Makes guess at the remaining boundaries
+        # Makes guess at the remaining boundaries. First we try to get a continent specific boundary.
+        # If one doesn't exist then we fall back to a global estimate.
         foreach my $itv (values %$ig) {
             my $abbrev = $itv->{'best_scale'}->{'abbrev'};
             foreach ('upper_max','upper_boundary','upper_min','lower_max','lower_boundary','lower_min') {
@@ -949,6 +950,12 @@ sub getBoundaries {
                     $itv->{$_} = $itv->{$_.'gl'};
                     $itv->{$_.'src'} = $itv->{$_.'gl'.'src'};
                 }
+            }
+            if ($itv->{'lower_boundary'} =~ /\d/) {
+                $itv->{'lower_estimate_type'} = 'direct';
+            }
+            if ($itv->{'upper_boundary'} =~ /\d/) {
+                $itv->{'upper_estimate_type'} = 'direct';
             }
         }
 
@@ -984,21 +991,25 @@ sub getBoundaries {
                 push @obsolete, $itv;
                 next;
             }
-            if ($itv->{'upper_boundary'} !~ /\d/ && $itv->{'upper_min'}) {
+            if ($itv->{'upper_boundary'} !~ /\d/ && $itv->{'upper_min'} =~ /\d/) {
                 $itv->{'upper_boundary'} = $itv->{'upper_min'};
                 $itv->{'upper_boundarysrc'} = $itv->{'upper_minsrc'};
+                $itv->{'upper_estimate_type'} = 'correlated';
             }
-            if ($itv->{'upper_boundary'} !~ /\d/) {
+            if ($itv->{'upper_boundary'} !~ /\d/ && $itv->{'upper_max'} =~ /\d/) {
                 $itv->{'upper_boundary'} = $itv->{'upper_max'};
                 $itv->{'upper_boundarysrc'} = $itv->{'upper_maxsrc'};
+                $itv->{'upper_estimate_type'} = 'correlated';
             }
-            if ($itv->{'lower_boundary'} !~ /\d/) {
+            if ($itv->{'lower_boundary'} !~ /\d/ && $itv->{'lower_max'} =~ /\d/) {
                 $itv->{'lower_boundary'} = $itv->{'lower_max'};
                 $itv->{'lower_boundarysrc'} = $itv->{'lower_maxsrc'};
+                $itv->{'lower_estimate_type'} = 'correlated';
             }
-            if ($itv->{'lower_boundary'} !~ /\d/) {
+            if ($itv->{'lower_boundary'} !~ /\d/ && $itv->{'lower_mn'} =~ /\d/) {
                 $itv->{'lower_boundary'} = $itv->{'lower_min'};
                 $itv->{'lower_boundarysrc'} = $itv->{'lower_minsrc'};
+                $itv->{'lower_estimate_type'} = 'correlated';
             }
             if ($itv->{'lower_boundary'} =~ /\d/ && $itv->{'upper_boundary'} =~ /\d/) {
                 delete $unset{$itv};
@@ -1034,8 +1045,14 @@ sub getBoundaries {
 #                print "NO DEPTH FOR $itv->{interval_no} $itv->{name} ?\n";
             }
             my ($min,$max) = $self->getFromChildren($itv);
-            $itv->{'lower_boundary'} = $max;
-            $itv->{'upper_boundary'} = $min;
+            if ($max =~ /\d/) {
+                $itv->{'lower_boundary'} = $max;
+                $itv->{'lower_estimate_type'} = 'children';
+            }
+            if ($min =~ /\d/) {
+                $itv->{'upper_boundary'} = $min;
+                $itv->{'upper_estimate_type'} = 'children';
+            }
             if ($itv->{'lower_boundary'} =~ /\d/ && $itv->{'upper_boundary'} =~ /\d/) {
                 delete $unset{$itv};
                 $set{$itv} = $itv;
@@ -1049,21 +1066,27 @@ sub getBoundaries {
         foreach my $itv (sort {$a->{'interval_no'} <=> $b->{'interval_no'}} @obsolete) {
 #            print "$itv->{name} IS OBSOLETE\n";
             my ($min,$max) = $self->getFromChildren($itv,'defunct');
-            if ($itv->{'lower_boundary'} eq '') {
-                if ($itv->{'prev'} && $itv->{'prev'}->{'upper_boundary'} ne '' && !$self->isObsolete($itv->{'prev'})) {
+            if ($itv->{'lower_boundary'} !~ /\d/) {
+                if ($itv->{'prev'} && $itv->{'prev'}->{'upper_boundary'} =~ /\d/ && !$self->isObsolete($itv->{'prev'})) {
                     $itv->{'lower_boundary'} = $itv->{'prev'}->{'upper_boundary'};
+                    $itv->{'lower_boundarysrc'} = $itv->{'prev'};
+                    $itv->{'lower_estimate_type'} = 'previous';
                 } else {
                     $itv->{'lower_boundary'} = $max;
+                    $itv->{'lower_estimate_type'} = 'children';
                 }
 #                if ($itv->{'prev'} && $itv->{'prev'}->{'upper_boundary'} eq '') {
 #                    $itv->{'prev'}->{'upper_boundary'} = $max;
 #                }
             }
-            if ($itv->{'upper_boundary'} eq '') {
-                if ($itv->{'next'} && $itv->{'next'}->{'lower_boundary'} ne '' && !$self->isObsolete($itv->{'next'})) {
+            if ($itv->{'upper_boundary'} !~ /\d/) {
+                if ($itv->{'next'} && $itv->{'next'}->{'lower_boundary'} =~ /\d/ && !$self->isObsolete($itv->{'next'})) {
                     $itv->{'upper_boundary'} = $itv->{'next'}->{'lower_boundary'};
+                    $itv->{'upper_boundarysrc'} = $itv->{'next'};
+                    $itv->{'upper_estimate_type'} = 'next';
                 } else {
                     $itv->{'upper_boundary'} = $min;
+                    $itv->{'upper_estimate_type'} = 'children';
                 }
 #                if ($itv->{'next'} && $itv->{'next'}->{'lower_boundary'} eq '') {
 #                    $itv->{'next'}->{'lower_boundary'} = $min;
@@ -1078,17 +1101,33 @@ sub getBoundaries {
 #        print "3UNSET: ".scalar(values(%unset))."\n";
         # Fix for cases like the edicaran/sinian/poundian
         foreach my $itv (values %unset) {
-            if ($itv->{'next'} && $itv->{'next'}->{'lower_boundary'}) {
-                $itv->{'upper_boundary'} = $itv->{'next'}->{'lower_boundary'};
+            if ($itv->{'next'} && $itv->{'next'}->{'lower_boundary'} =~ /\d/) {
+                if ($itv->{'upper_boundary'} !~ /\d/) {
+                    $itv->{'upper_boundary'} = $itv->{'next'}->{'lower_boundary'};
+                    $itv->{'upper_boundarysrc'} = $itv->{'next'};
+                    $itv->{'upper_estimate_type'} = 'next';
+                }
             } elsif (!$itv->{'next'} && $itv->{'all_next'} && 
-                $itv->{'all_next'}->[0]->{'lower_boundary'}) {
-                $itv->{'upper_boundary'} = $itv->{'all_next'}->[0]->{'lower_boundary'};
+                $itv->{'all_next'}->[0]->{'lower_boundary'} =~ /\d/) {
+                if ($itv->{'upper_boundary'} !~ /\d/) {
+                    $itv->{'upper_boundary'} = $itv->{'all_next'}->[0]->{'lower_boundary'};
+                    $itv->{'upper_boundarysrc'} = $itv->{'all_next'}->[0];
+                    $itv->{'upper_estimate_type'} = 'next';
+                }
             }
-            if ($itv->{'prev'} && $itv->{'prev'}->{'upper_boundary'}) {
-                $itv->{'lower_boundary'} = $itv->{'prev'}->{'upper_boundary'};
+            if ($itv->{'prev'} && $itv->{'prev'}->{'upper_boundary'} =~ /\d/) {
+                if ($itv->{'lower_boundary'} !~ /\d/) {
+                    $itv->{'lower_boundary'} = $itv->{'prev'}->{'upper_boundary'};
+                    $itv->{'lower_boundarysrc'} = $itv->{'prev'};
+                    $itv->{'lower_estimate_type'} = 'previous';
+                }
             } elsif (!$itv->{'prev'} && $itv->{'all_prev'} && 
-                $itv->{'all_prev'}->[0]->{'upper_boundary'}) {
-                $itv->{'lower_boundary'} = $itv->{'all_prev'}->[0]->{'upper_boundary'};
+                $itv->{'all_prev'}->[0]->{'upper_boundary'} =~ /\d/) {
+                if ($itv->{'lower_boundary'} !~ /\d/) {
+                    $itv->{'lower_boundary'} = $itv->{'all_prev'}->[0]->{'upper_boundary'};
+                    $itv->{'lower_boundarysrc'} = $itv->{'all_prev'}->[0];
+                    $itv->{'lower_estimate_type'} = 'previous';
+                }
             }
             if ($itv->{'lower_boundary'} =~ /\d/ && $itv->{'upper_boundary'} =~ /\d/) {
                 $set{$itv} = $itv;
@@ -1260,13 +1299,6 @@ sub getIntervalGraph {
     return $ig;
 }
 
-sub getInterval {
-    my ($self,$i) = @_;
-    return unless $i;
-    my $ig = $self->getIntervalGraph;
-    return $ig->{$i};
-}
-
 # This function determines whether a given interval has a set of children which full spans
 # The enter length of the interval.  I.E.  {Oligocene,Eocene,Paleocene} covers Paleogene so implies it
 # Do this by looking for a boundary crosser at each end
@@ -1436,6 +1468,8 @@ sub _findEquivalentTerms {
         my @p = @$path;
 #        print "Found path for $itv->{name} [".join(",",map{$_->{'name'}} @p)."]\n";
         $self->{'equiv'}->{$itv} = $path;
+        # Useful for the interval_hash field in interval_lookup
+        $itv->{'equiv'} = $path;
         foreach my $other_itv (@p) {
             $self->{'equiv'}->{$other_itv} = [$itv];
         }
@@ -1967,6 +2001,7 @@ sub generateLookupTable {
     my $stage_lookup    = $self->getScaleMapping('73');
     my $bin_lookup      = $self->getScaleMapping('bins');
     my ($ub_lookup,$lb_lookup) = $self->getBoundaries;
+    my $ig = $self->getIntervalGraph;
 
     my $sql = "SELECT interval_no FROM intervals";
     my @intervals = map {$_->{'interval_no'}} @{$dbt->getData($sql)};
@@ -1978,18 +2013,144 @@ sub generateLookupTable {
         my $ten_my_bin = $dbh->quote($bin_lookup->{$interval_no});
         my $ub = $dbh->quote($ub_lookup->{$interval_no});
         my $lb = $dbh->quote($lb_lookup->{$interval_no});
+        my $itv = $ig->{$interval_no};
+        my $interval_hash = $dbh->quote($self->serializeItv($itv));
         my $sql = "SELECT interval_no FROM interval_lookup WHERE interval_no=$interval_no";
         my @r = @{$dbt->getData($sql)};
         if ($r[0]) {
-            my $sql = "UPDATE interval_lookup SET ten_my_bin=$ten_my_bin,stage_no=$stage_no,subepoch_no=$subepoch_no,epoch_no=$epoch_no,period_no=$period_no,lower_boundary=$lb,upper_boundary=$ub WHERE interval_no=$interval_no";
+            my $sql = "UPDATE interval_lookup SET ten_my_bin=$ten_my_bin,stage_no=$stage_no,subepoch_no=$subepoch_no,epoch_no=$epoch_no,period_no=$period_no,lower_boundary=$lb,upper_boundary=$ub,interval_hash=$interval_hash WHERE interval_no=$interval_no";
 #            print $sql,"\n";
             $dbh->do($sql);
         } else {
-            my $sql = "INSERT INTO interval_lookup(interval_no,ten_my_bin,stage_no,subepoch_no,epoch_no,period_no,lower_boundary,upper_boundary) VALUES ($interval_no,$ten_my_bin,$stage_no,$subepoch_no,$epoch_no,$period_no,$lb,$ub)";
+            my $sql = "INSERT INTO interval_lookup(interval_no,ten_my_bin,stage_no,subepoch_no,epoch_no,period_no,lower_boundary,upper_boundary,interval_hash) VALUES ($interval_no,$ten_my_bin,$stage_no,$subepoch_no,$epoch_no,$period_no,$lb,$ub,$interval_hash)";
 #            print $sql,"\n";
             $dbh->do($sql);
         }
     }
+}
+
+# Serializes an itv object by turning the links into numbers (primary keys such
+# as interval_no and scale_no).  To unserialize, just eval the text.
+sub serializeItv {
+    my ($self,$itv) = @_;
+    my %new_hash = (
+        'lower_boundary'=>$itv->{'lower_boundary'},
+        'upper_boundary'=>$itv->{'upper_boundary'},
+        'lower_estimate_type'=>$itv->{'lower_estimate_type'},
+        'upper_estimate_type'=>$itv->{'upper_estimate_type'},
+        'interval_no'=>$itv->{'interval_no'},
+        'interval_name'=>$itv->{'name'}
+    );
+
+    foreach ('prev','next','max','min','lower_boundarysrc','upper_boundarysrc') {
+        if ($itv->{$_}) {
+            $new_hash{$_."_no"} = $itv->{$_}->{interval_no};
+        }
+    }
+    foreach my $abbrev ('gl','As','Au','Eu','NZ','NA','SA') {
+        my $lower_max = 'lower_max'.$abbrev;
+        my $lower_boundary = 'lower_boundary'.$abbrev;
+        my $lower_min = 'lower_min'.$abbrev;
+        my $upper_max = 'upper_max'.$abbrev;
+        my $upper_boundary = 'upper_boundary'.$abbrev;
+        my $upper_min = 'upper_min'.$abbrev;
+        if ($itv->{$lower_max} || $itv->{$lower_boundary} || $itv->{$lower_min} ||
+            $itv->{$upper_max} || $itv->{$upper_boundary} || $itv->{$upper_min}) { 
+#            $txt .= "  $abbrev:lower:[$itv->{$lower_max}/$itv->{$lower_boundary}/$itv->{$lower_min}] - $abbrev:upper:[$itv->{$upper_max}/$itv->{$upper_boundary}/$itv->{$upper_min}]\n";
+        }
+    }
+    foreach ('max_scale','best_scale','next_scale','boundary_scale') {
+        if ($itv->{$_}) {
+            $new_hash{$_."_no"} = $itv->{$_}->{scale_no};
+        }
+    }
+    foreach ('constraints','conflicts') {
+        if ($itv->{$_}) {
+            foreach my $c (@{$itv->{$_}}) {
+#                $txt .= _printConstraint($c);
+            }
+        }
+    }
+    foreach ('all_max_scales','all_next_scales') {
+        if ($itv->{$_}) {
+            my @scale_nos = map {$_->{'scale_no'}} @{$itv->{$_}};
+            $new_hash{$_."_nos"} = \@scale_nos;
+        }
+    }
+    foreach ('equiv','children','defunct','all_prev','all_next','all_max','all_min','shared_lower','shared_upper') {
+        if ($itv->{$_}) {
+            my @interval_nos = map {$_->{'interval_no'}} @{$itv->{$_}};
+            $new_hash{$_."_nos"} = \@interval_nos;
+        }
+    }
+    local $Data::Dumper::Indent;
+    local $Data::Dumper::SortKeys;
+    $Data::Dumper::Indent = 0;
+    $Data::Dumper::Sortkeys = 1;
+    return Dumper(\%new_hash);
+}
+
+sub deserializeItv {
+	my $self = shift;
+    my $itv_hash = shift;
+
+	my $VAR1; # Prevent run time strict violation
+	my $itv = eval $itv_hash;
+
+    foreach ('max_scale','best_scale','next_scale','boundary_scale') {
+		my $scale_no = $itv->{$_."_no"};
+		if ($scale_no) {
+        	$itv->{$_} = $self->getScale($scale_no);
+		}
+    }
+    foreach ('all_max_scales','all_next_scales') {
+        if ($itv->{$_."_nos"}) {
+            for(my $i=0;$i<@{$itv->{$_."_nos"}};$i++) {
+				my $scale_no = $itv->{$_."_nos"}->[$i];
+        		$itv->{$_}->[$i] = $self->getScale($scale_no);
+            }
+        }
+    }
+    foreach ('prev','next','max','min','lower_boundarysrc','upper_boundarysrc') {
+		my $interval_no = $itv->{$_."_no"};
+        if ($interval_no) {
+        	$itv->{$_} = $self->getInterval($interval_no);
+        }
+    }
+    foreach ('equiv','children','defunct','all_prev','all_next','all_max','all_min','shared_lower','shared_upper') {
+        if ($itv->{$_."_nos"}) {
+            for(my $i=0;$i<@{$itv->{$_."_nos"}};$i++) {
+				my $interval_no = $itv->{$_."_nos"}->[$i];
+				$itv->{$_}->[$i] = $self->getInterval($interval_no);
+			}
+        }
+    }
+	return $itv;
+}
+
+sub getScale {
+	my ($self,$s) = @_;
+	my $dbt = $self->{'dbt'};
+    my $sql = "SELECT s.created,s.scale_no,s.scale_name,s.continent,s.scale_rank,s.reference_no,r.pubyr,s.basis FROM scales s, refs r WHERE s.reference_no=r.reference_no AND s.scale_no=".int($s);
+	return ${$dbt->getData($sql)}[0];
+}
+
+sub getInterval {
+	my ($self,$i) = @_;
+	my $dbt = $self->{'dbt'};
+	my $sql = "SELECT interval_hash FROM interval_lookup WHERE interval_no=".int($i);
+	my $hash = ${$dbt->getData($sql)}[0]->{interval_hash};
+    my $VAR1;
+    my $itv = eval $hash;
+    return $itv;
+}
+
+sub printBoundary {
+    shift if ref ($_[0]);
+    my $bound = shift;
+    $bound =~ s/(0)+$//;
+    $bound =~ s/\.$//;
+    return $bound;
 }
 
 # Priority queue AKA binary heap - pop removes the element with the 

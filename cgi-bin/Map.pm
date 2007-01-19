@@ -98,6 +98,15 @@ sub buildMap {
 
 	$|=1;					# Freeflowing data
 
+    $q->param('coastlinecolor'=>'black') unless defined $q->param('coastlinecolor');
+    $q->param('mapresolution'=>'medium') unless defined $q->param('mapresolution');
+    $q->param('usalinecolor'=>'light gray') unless defined $q->param('usalinecolor');
+    $q->param('borderlinecolor'=>'gray') unless defined $q->param('borderlinecolor');
+    $q->param('projection'=>'equirectangular') unless defined $q->param('projection');
+    $q->param('mapscale'=>'X 5') unless defined $q->param('mapscale');
+    $q->param('mapwidth'=>'100%') unless defined $q->param('mapwidth');
+    $q->param('mapsize'=>'100%') unless defined $q->param('mapsize');
+    
     $self->mapCheckForm(); # Will print out warnings and die if anything is encountered
 
 	$self->{'maptime'} = $q->param('maptime');
@@ -122,9 +131,9 @@ sub buildMap {
     my @warnings;
     
     for my $ptset (1..4) {
-        $dotsizeterm = $q->param("pointsize$ptset");
-        $dotshape = $q->param("pointshape$ptset");
-        $dotcolor = $q->param("dotcolor$ptset");
+        $dotsizeterm = $q->param("pointsize$ptset") || "small";
+        $dotshape = $q->param("pointshape$ptset") || "circles";
+        $dotcolor = $q->param("dotcolor$ptset") || "red";
         $bordercolor = $dotcolor;
 
         if ($q->param("dotborder$ptset") ne "no" )	{
@@ -653,7 +662,9 @@ sub mapDefineOutlines	{
 		$resostem = "025";
 	} elsif ( $q->param('mapresolution') eq "very fine" )	{
 		$resostem = "010";
-	}
+	} else {
+		$resostem = "025";
+    }
 
 	# need to know the plate IDs to determine which cells are oceanic
 	# necessary either if crust is being drawn, or if plates are being

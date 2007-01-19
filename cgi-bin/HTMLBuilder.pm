@@ -663,6 +663,18 @@ sub htmlSelect {
 	return $html;
 }
 
+# Create the thin line boxes
+# arg 1 = title, arg2 = content
+sub htmlBox {
+    shift if ref $_[0];
+    my $html = '<div class="displayPanel" align="left">'
+             . qq'<span class="displayPanelHeader"><b>$_[0]</b></span>'
+             . qq'<div class="displayPanelContent">'
+             . qq'<div class="displayPanelText">$_[1]'
+             . '</div></div></div>';
+    return $html;
+}
+
 sub _listFromTable {
     my ($self,$name) = @_;
     my $dbt = $self->{'dbt'};

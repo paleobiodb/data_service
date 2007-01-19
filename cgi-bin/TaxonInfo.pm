@@ -3,6 +3,7 @@ package TaxonInfo;
 use Taxon;
 use TimeLookup;
 use Data::Dumper;
+use Ecology;
 use Images;
 
 use strict;
