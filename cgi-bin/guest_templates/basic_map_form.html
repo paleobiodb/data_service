@@ -1,0 +1,183 @@
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+function checkMapBrowserVersion()	{
+	var match = /Microsoft/i;
+
+	if (match.test(navigator.appName))	{
+		document.write('<input id="browser" type="hidden" name="browser" value="Microsoft">');
+	}
+}
+
+//  End -->
+</script>
+
+	<div align="center"><h2>Fossil collection map form</h2></div>
+
+    <form method=post action="$exec_url" onSubmit="return checkForm();">
+	<input id="action" type=hidden name="action" value="displayMapResults">
+	<input id="user" type=hidden name="user" value="Guest">
+
+<script>checkMapBrowserVersion();</script>
+
+<div class="displayPanel" align=left>
+<span class="displayPanelHeader"><b>Options</b></span>
+<div class="displayPanelContent small">
+
+<table border=0 cellpadding=2 cellspacing=2 width="100%">
+
+<tr><td valign="top" width="50%">
+
+<table border=0 cellpadding=2 cellspacing=2>
+
+<tr>
+<td valign=top nowrap>Group of animals:
+</td>
+
+<td valign=top>
+<select name="taxon_name">
+<option value="Mammalia">mammals
+<option value="Carnivora">carnivores
+<option value="Insectivora">insectivores
+<option value="Primates">primates
+<option value="Hominidae">hominids
+<option value="Rodentia">rodents
+<option value="Artiodactyla">even-toed ungulates
+<option value="Perissodactyla">odd-toed ungulates
+<option value="Dinosauria">dinosaurs
+<option value="Aves">birds
+<option value="Crocodylia">crocodiles
+<option value="Ichthyopterygia">ichthyosaurs
+<option value="Squamata">lizards and snakes
+<option value="Mosasauridae">mosasaurs
+<option value="Plesiosauria">plesiosaurs
+<option value="Testudines">turtles
+<option value="Amphibia">amphibians
+<option value="Actinopterygii">bony fishes
+<option value="Chondrichthyes">sharks and rays
+<option value="Conodonta">conodonts
+<option value="Graptolithina">graptolites
+<option value="Crinoidea">crinoids
+<option value="Ophiuroidea">brittle stars
+<option value="Asteroidea">sea stars
+<option value="Echinoidea">sea urchins
+<option value="Ammonitida">ammonites
+<option value="Bivalvia">clams
+<option value="Gastropoda">snails
+<option value="Crustacea">crustaceans
+<option value="Trilobita">trilobites
+<option value="Brachiopoda">brachiopods
+<option value="Bryozoa">bryozoans
+<option value="Anthozoa">corals
+<option value="Porifera">sponges
+</select>
+</td>
+
+<tr><td valign=top>
+<i>... or</i> taxon name:
+</td>
+<td valign=top>
+<input name="taxon_name" size=25>
+</td>
+
+<tr><td valign=top>Country:
+</td>
+<td valign=top><select id="country" class="small">
+</td>
+</select>
+
+
+<tr><td valign="top">State/province:
+</td>
+<td valign=top><input name="state" size=25 class="small">
+</td>
+
+<tr><td valign=top>Projection:
+</td>
+<td valign=top><select class="small">
+<option>equirectangular
+<option>equirectangular (north pole)
+<option>equirectangular (south pole)
+<option>Eckert IV
+<option>Eckert IV (north pole)
+<option>Eckert IV (south pole)
+</select>
+</td>
+
+<tr><td valign=top>
+Colors:
+</td>
+<td valign=top>
+<select id="mapcolors" class="small">
+<option>green on blue
+<option>green on white
+<option>gray on white
+</select>
+</td>
+
+</table>
+
+</td>
+
+<td valign="top" width="50%">
+
+<table border=0 cellpadding=2 cellspacing=2>
+
+<tr><td valign=top>Time interval:
+</td>
+<td valign=top>
+<select name="interval_name" class="small">
+<option>
+<option>Pleistocene
+<option>Pliocene
+<option>Miocene
+<option>Oligocene
+<option>Eocene
+<option>Paleocene
+<option>Cretaceous
+<option>Jurassic
+<option>Triassic
+<option>Permian
+<option>Carboniferous
+<option>Devonian
+<option>Silurian
+<option>Ordovician
+<option>Cambrian
+<option>Proterozoic
+</select>
+</td>
+
+<tr><td valign=top>Group, formation, or member:
+</td>
+<td valign=top><input name=group_formation_member size=25 class="small">
+</td>
+
+<tr><td valign=top>Lithology:
+</td>
+<td valign=top><select id="lithologies" class="small" autofill="lithology1">
+</select>
+</td>
+
+<tr><td valign="top">Paleoenvironment:
+</td>
+<td valign=top><select id="environment" class="small"></select>
+</td>
+
+</table>
+
+</div>
+</div>
+
+<table width=100%>
+<tr><td width=30%><td width=70%><input type=submit value="Draw map">
+</table>
+
+</form>
+
+<center><p class=small>
+<i>
+You can make a paleogeographic map by selecting a time interval.
+For more information about the plate reconstructions visit the <a href="http://www.scotese.com/license.htm">PALEOMAP website</a>.
+</i>
+<p></center>
+
