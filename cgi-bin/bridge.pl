@@ -5420,6 +5420,12 @@ sub displayTenMyBinsDebug {
     require Scales;
     Scales::displayTenMyBinsDebug($dbt);
 }
+sub submitSearchInterval {
+    require Scales;
+    print stdIncludes("std_page_top");
+    Scales::submitSearchInterval($dbt, $hbo, $q);
+    print stdIncludes("std_page_bottom");
+}
 sub displayInterval {
     require Scales;
     print stdIncludes("std_page_top");

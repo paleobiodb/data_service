@@ -1175,6 +1175,32 @@ sub displayInterval {
         print $hbo->htmlBox("Appears in scale$s",$html);
     }
     print "</td></tr></table>";
+    print main::printIntervalsJava(1);
+    print $hbo->populateHTML("search_intervals_form");
+}
+
+sub submitSearchInterval {
+    my ($dbt,$hbo,$q) = @_;
+    my $dbh = $dbt->dbh;
+    my $eml  = $q->param('eml_interval');
+    my $name = $q->param('interval_name');
+    my $sql = "SELECT interval_no FROM intervals WHERE eml_interval LIKE ".$dbh->quote($eml)." AND interval_name LIKE ".$dbh->quote($name);
+    my $row = ${$dbt->getData($sql)}[0];
+    if (!$row && $eml) {
+        $sql = "SELECT interval_no FROM intervals WHERE eml_interval LIKE '' AND interval_name LIKE ".$dbh->quote($name);
+        $row = ${$dbt->getData($sql)}[0];
+    }
+    if (!$row) {
+        print "<div align=\"center\">";
+        print "<h3>Could not find ".$q->param('eml')." ".$q->param('interval_name')."</h3>";
+        print "<h4>(Please try again)</h4>";
+        print main::printIntervalsJava(1);
+        print $hbo->populateHTML("search_intervals_form");
+        print "</div>";
+    } else {
+        $q->param('interval_no'=>$row->{'interval_no'});
+        displayInterval($dbt,$hbo,$q);
+    }
 }
 
 sub displayIntervalDebug {
