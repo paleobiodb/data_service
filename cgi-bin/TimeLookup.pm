@@ -2148,6 +2148,7 @@ sub getInterval {
 sub printBoundary {
     shift if ref ($_[0]);
     my $bound = shift;
+    return $bound if ($bound == 0);
     $bound =~ s/(0)+$//;
     $bound =~ s/\.$//;
     return $bound;

@@ -997,7 +997,7 @@ sub displayInterval {
         my $src = $itv->{$type.'_boundarysrc'};
         my $src_link = "<a href=\"bridge.pl?action=displayInterval&interval_no=$src->{interval_no}\">$src->{interval_name}</a>";
         if ($itv->{$type."_boundary"} eq "0" && $itv->{$type.'_estimate_type'} =~ /direct/) {
-            return "Recent";
+            return "direct";
         } if ($itv->{$type.'_estimate_type'} =~ /direct/ && $itv->{$type.'_boundarysrc_no'} == $i) {
             return "direct";
         } elsif ($itv->{$type.'_estimate_type'} =~ /direct/ && $itv->{$type.'_boundarysrc_no'} != $i) {
