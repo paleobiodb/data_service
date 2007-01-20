@@ -433,9 +433,9 @@ sub mapFinishImage {
     #  for GIF format files, not sure what it does to IE browsers
     # do this only if the browser is not IE
     # this prevents errors with rendering of transparent pixels in PNG format
-    #if ( $q->param('browser') =~ /Microsoft/ )	{
+    if ( $q->param('browser') =~ /Microsoft/ || $q->param('linecommand') =~ /[A-Za-z]/ )	{
         $im->trueColorToPalette();
-    #}
+    }
 
     binmode STDOUT;
 
@@ -2403,8 +2403,17 @@ sub drawGrids	{
         my $lat1;
         my $lng2;
         my $lat2;
-        ($lng1,$lat1) = $self->projectPoints($deg , $lat * $grids, "grid");
-        ($lng2,$lat2) = $self->projectPoints($deg + 1 , $lat * $grids, "grid");
+        ($lng1,$lat1,$rawlng1,$rawlat1) = $self->projectPoints($deg , $lat * $grids, "grid");
+        ($lng2,$lat2,$rawlng2,$rawlat2) = $self->projectPoints($deg + 1 , $lat * $grids, "grid");
+	# never draw anything along the map edges JA 20.1.07
+	# don't know why, but somehow the values at the edges come out of
+	#  projectPoints a little low
+	if ( ( $rawlng1 < -178.0 && $rawlng2 < -178.0 ) ||
+             ( $rawlng1 > 178.0 && $rawlng2 > 178.0 ) ||
+             ( $rawlat1 < -88.5 && $rawlat2 < -88.5 ) ||
+             ( $rawlat1 > 88.5 && $rawlat2 > 88.5 ) )	{
+            next;
+        }
         if ( $lng1 !~ /NaN/ && $lat1 !~ /NaN/ && $lng2 !~ /NaN/ && $lat2 !~ /NaN/ && abs($lng1-$lng2) < 90 )	{
           my $x1 = $self->getLng($lng1);
           my $y1 = $self->getLat($lat1);
@@ -2421,15 +2430,24 @@ sub drawGrids	{
       }
     }
 
-    for my $lng ( int(-180/$grids)..int(180/$grids) )	{
+    for my $lng ( int(-180/$grids)..int((180 - $grids)/$grids) )	{
       for my $doubledeg (-180..178)	{
 	my $deg = $doubledeg / 2;
         my $lng1;
         my $lat1;
         my $lng2;
         my $lat2;
-        ($lng1,$lat1) = $self->projectPoints($lng * $grids, $deg, "grid");
-        ($lng2,$lat2) = $self->projectPoints($lng * $grids, $deg + 0.5, "grid");
+        ($lng1,$lat1,$rawlng1,$rawlat1) = $self->projectPoints($lng * $grids, $deg, "grid");
+        ($lng2,$lat2,$rawlng2,$rawlat2) = $self->projectPoints($lng * $grids, $deg + 0.5, "grid");
+	# never draw anything along the map edges JA 20.1.07
+	# don't know why, but somehow the values at the edges come out of
+	#  projectPoints a little low
+	if ( ( $rawlng1 < -178.0 && $rawlng2 < -178.0 ) ||
+             ( $rawlng1 > 178.0 && $rawlng2 > 178.0 ) ||
+             ( $rawlat1 < -88.5 && $rawlat2 < -88.5 ) ||
+             ( $rawlat1 > 88.5 && $rawlat2 > 88.5 ) )	{
+            next;
+        }
 	if ( $lng1 == 180 )	{
 		$lng1 = 179.5;
 	}
