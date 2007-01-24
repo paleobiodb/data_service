@@ -3555,6 +3555,8 @@ sub buildTaxonomicList {
 				$rowref->{'class_no'}  = ($classification->{'class'}{'taxon_no'} or 1000000);
 				$rowref->{'order_no'}  = ($classification->{'order'}{'taxon_no'} or 1000000);
 				$rowref->{'family_no'} = ($classification->{'family'}{'taxon_no'} or 1000000);
+				$rowref->{'lft'} = ($classification->{'lft'}{'taxon_no'} or 1000000);
+				$rowref->{'rgt'} = ($classification->{'rgt'}{'taxon_no'} or 1000000);
 			}
     		# otherwise this occurrence has never been reidentified
 			else {
@@ -4033,7 +4035,7 @@ sub getReidHTMLTableByOccNum {
             }
         }
 
-        # Just a default value, so formm looks correct
+        # Just a default value, so form looks correct
         # JA 2.4.04: changed this so it only works on the most recently published reID
         if ( $row == $results[$#results] )	{
             if ($row->{'taxon_no'}) {
@@ -4049,6 +4051,15 @@ sub getReidHTMLTableByOccNum {
                 $row->{'order'} = $classification->{'order'}{'taxon_name'};
                 $row->{'family'}= $classification->{'family'}{'taxon_name'};
                 $row->{'synonym_name'} = getSynonymName($dbt,$row->{'taxon_no'});
+                # only $classification is being returned, so piggyback lft and
+                #  rgt on it
+                # I hate having to hit taxa_tree_cache with a separate SELECT,
+                #  but you can't hit it until you already know there's a
+                #  taxon_no you can use JA 23.1.07
+                my $sql = "SELECT lft,rgt FROM taxa_tree_cache WHERE taxon_no=" . $row->{'taxon_no'};
+                my $lftrgtref = ${$dbt->getData($sql)}[0];
+                $classification->{'lft'}{'taxon_no'} = $lftrgtref->{'lft'};
+                $classification->{'rgt'}{'taxon_no'} = $lftrgtref->{'rgt'};
             } else {
                 if ($doReclassify) {
                     $row->{'show_classification_select'} = 'YES';
