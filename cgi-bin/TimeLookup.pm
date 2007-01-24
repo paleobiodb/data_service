@@ -2,7 +2,9 @@ package TimeLookup;
 
 use Data::Dumper;
 use CGI::Carp;
+#use Memoize;
 use strict;
+#memoize('findFollowing');
 
 # Ten million year bins, in order from oldest to youngest
 @TimeLookup::bins = ("Cenozoic 6", "Cenozoic 5", "Cenozoic 4", "Cenozoic 3", "Cenozoic 2", "Cenozoic 1", "Cretaceous 8", "Cretaceous 7", "Cretaceous 6", "Cretaceous 5", "Cretaceous 4", "Cretaceous 3", "Cretaceous 2", "Cretaceous 1", "Jurassic 6", "Jurassic 5", "Jurassic 4", "Jurassic 3", "Jurassic 2", "Jurassic 1", "Triassic 4", "Triassic 3", "Triassic 2", "Triassic 1", "Permian 4", "Permian 3", "Permian 2", "Permian 1", "Carboniferous 5", "Carboniferous 4", "Carboniferous 3", "Carboniferous 2", "Carboniferous 1", "Devonian 5", "Devonian 4", "Devonian 3", "Devonian 2", "Devonian 1", "Silurian 2", "Silurian 1", "Ordovician 5", "Ordovician 4", "Ordovician 3", "Ordovician 2", "Ordovician 1", "Cambrian 4", "Cambrian 3", "Cambrian 2", "Cambrian 1");
@@ -643,12 +645,150 @@ sub findPath {
     return @path;
 }
 
+sub makePrecedesHash {
+    my $self = shift;
+    my $ig = $self->getIntervalGraph;
+    while (my ($i,$itv) = each %$ig) {
+        $itv->{'visited'} = 0;
+    }
+    while (my ($i,$itv) = each %$ig) {
+        $self->markFollowing($ig,$itv,0);
+        #foreach ($self->findFollowing($ig,$itv)) {
+        #    $self->{'precedes'}{$i}{$_} = 1;
+        #}
+    }
+}
+
+sub markFollowing {
+    my ($self,$ig,$itv,$depth) = @_;
+    return if ($itv->{'visited'});
+    $itv->{'visited'} = 1;
+    if ($itv->{'next'}) {
+        my @all_next = ($itv->{'next'});
+        my @q = ();
+        foreach my $c (@{$itv->{'next'}{'children'}}) {
+            #if ($c->{'max'} == $itv->{'next'}) {
+            push @q, [$c,$itv->{'next'}];
+            #}
+        }
+        my %seen;
+        while (my $pair = shift @q) {
+            my ($c,$p) = @$pair;
+            next if ($seen{$c->{'interval_no'}}); 
+            $seen{$c->{'interval_no'}} = 1;
+            if ($c->{'max'} == $p) {
+                push @all_next, $c;
+                foreach my $gc (@{$c->{'children'}}) {
+                    push @q, [$gc,$c];
+                }
+            }
+        }
+#        foreach my $c (@{$next->{'children'}}) {
+#            if ($c->{'max'} == $next) {
+#                push @all_next, $c;
+#            }
+#        }
+        my $next = $itv->{'next'};
+        my $max = $next->{'max'};
+        my $min = $next->{'min'};
+        %seen = ();
+        while ($max) {
+            next if ($seen{$max->{'interval_no'}}); $seen{$max->{'interval_no'}} = 1;
+            if ($next->{'shared_lower'} && $next->{'shared_lower'} == $max->{'shared_lower'}) {
+                push @all_next, $max;
+                push @all_next, $min if ($max != $min);
+                $next = $max;
+                $max = $next->{'max'};
+                $min = $next->{'min'};
+            } elsif ($next->{'max'} && $next->{'max'} != $next->{'min'}) {
+                push @all_next, $next->{'min'};
+                $next = $min;
+                $max = $next->{'max'};
+                $min = $next->{'min'};
+            } else {
+                $max = undef;
+            }
+        }
+        foreach my $next_itv (@all_next) {
+            $self->{'precedes'}{$itv->{'interval_no'}}{$next_itv->{'interval_no'}} = 1;
+#            $self->markFollowing($ig,$next_itv,$depth+1);
+#            foreach my $next_no (keys %{$self->{'precedes'}{$next_itv->{'interval_no'}}}) {
+#                $self->{'precedes'}{$itv->{'interval_no'}}{$next_no} = 1;
+#            }
+        }
+    }
+    if ($itv->{'min'}) {
+        $self->markFollowing($ig,$itv->{'min'});
+        foreach my $next_no (keys %{$self->{'precedes'}{$itv->{'min'}{'interval_no'}}}) {
+            $self->{'precedes'}{$itv->{'interval_no'}}{$next_no} = 1;
+        }
+    }
+    foreach my $c (@{$itv->{'children'}}) {
+        if (($c->{'shared_upper'} && $c->{'shared_upper'} == $itv->{'shared_upper'}) || ($c->{'max'} == $itv && $c->{'min'} != $itv)) {
+            $self->markFollowing($ig,$c);
+            foreach my $next_no (keys %{$self->{'precedes'}{$c->{'interval_no'}}}) {
+                $self->{'precedes'}{$itv->{'interval_no'}}{$next_no} = 1;
+            }
+        }
+    }
+}
+
+
+sub makePrecedesHashX {
+    my $self = shift;
+    my $ig = $self->getIntervalGraph;
+    while (my ($i,$itv) = each %$ig) {
+        my $next = $itv->{'next'};
+        my $j = 0;
+        my %seen = ();
+        while ($next) {
+            last if ($seen{$next->{'interval_no'}}); $seen{$next->{'interval_no'}} = 1;
+            $self->{precedes}{$i}{$next->{'interval_no'}} = 1;
+            $next = $next->{'next'};
+        }
+    }
+    while (my ($i,$itv) = each %$ig) {
+        my $min = $itv->{'min'};
+        my $j = 0;
+        my %seen;
+        while ($min) {
+            last if ($seen{$min->{'interval_no'}}); $seen{$min->{'interval_no'}} = 1;
+            foreach (keys %{$self->{precedes}{$min->{'interval_no'}}}) {
+#                last if ($self->{precedes}{$i}{$_});
+                $self->{precedes}{$i}{$_} = 1; 
+            }
+            $min = $min->{'min'};
+        }
+    }
+    while (my ($i,$itv) = each %$ig) {
+        my @q = ();
+        foreach my $c (@{$itv->{'children'}}) {
+            push @q, [$c,$itv];
+        }
+        my %seen;
+        while (my $pair = shift @q) {
+            my ($c,$p) = @$pair;
+            if ($c->{'shared_upper'} == $p->{'shared_upper'} || ($c->{'max'} == $p && $c->{'min'} != $p)) {
+                next if ($seen{$c->{'interval_no'}}); $seen{$c->{'interval_no'}} = 1;
+                foreach (keys %{$self->{precedes}{$c->{'interval_no'}}}) {
+#                    last if ($self->{precedes}{$i}{$_});
+                    $self->{precedes}{$i}{$_} = 1; 
+                }
+                foreach my $gc (@{$c->{'children'}}) {
+                    push @q, [$gc,$c];
+                }
+            }
+        }
+    }
+}
 
 
 sub getBoundaries {
     my $self = shift;
     my $return_type = shift;
     my $ig = $self->getIntervalGraph;
+
+    $self->makePrecedesHash();
 
     unless ($self->{'set_boundaries'}) {
         $self->{'set_boundaries'} = 1;
@@ -724,11 +864,11 @@ sub getBoundaries {
             # Rhaetian is cut out of the picture entirely and assumed to be part of Norian.  In This case
             # don't let the information propagated from Hettangian screw up Rhaetians boundary, but
             # let the Sevation boundary continue to have the old info. 
-            if ($itv->{'next'} == $src && ($action == $LOWER_EQ || $action == $LOWER_MAX)) {
-                $conflict = " next interval $src->{name} can't set lower or lower max";
+            if ($self->{precedes}{$itv->{interval_no}}{$src->{interval_no}} && ($action == $LOWER_EQ || $action == $LOWER_MAX)) {
+                $conflict = " following interval $src->{name} can't set lower, lower max";
             }
-            if ($itv->{'prev'} == $src && ($action == $UPPER_EQ || $action == $UPPER_MAX)) {
-                $conflict = " prev interval $src->{name} can't set upper or upper max";
+            if ($self->{precedes}{$src->{interval_no}}{$itv->{interval_no}} && ($action == $UPPER_EQ || $action == $LOWER_EQ || $action == $UPPER_MIN || $action == $LOWER_MIN)) {
+                $conflict = " preceding interval $src->{name} can't set lower, upper, lower min, or upper min";
             }
 
             if (!$conflict) {
@@ -1187,7 +1327,8 @@ sub _computeBinBounds {
 
     my $upperbinbound = {};
     my $lowerbinbound = {};
-    foreach my $bin (@TimeLookup::bins) {
+    for(my $i=0;$i < @TimeLookup::bins; $i++) {
+        my $bin = $TimeLookup::bins[$i];
 #        my @intervals = map{$ig->{$_}} $self->mapIntervals($bin);
         my @intervals;
         while (my ($itv_no,$in_bin) = each %TimeLookup::binning) {
@@ -1215,20 +1356,26 @@ sub _computeBinBounds {
 #            }
 
 #            if ($itv->{'upper_boundarysrc'}->{'boundary_scale'}->{'abbrev'} eq 'gl') {
-                my $upper_bound = $itv->{'upper_boundarygl'};
-                if ($upper_bound !~ /\d/) {
-                    foreach my $abbrev ('As','Au','Eu','NZ','NA','SA') {
-                        if ($itv->{'upper_boundary'.$abbrev} =~ /\d/) {
-                            $upper_bound = $itv->{'upper_boundary'.$abbrev};
+#                my $upper_bound = $itv->{'upper_boundarygl'};
+#                if ($upper_bound !~ /\d/) {
+#                    foreach my $abbrev ('As','Au','Eu','NZ','NA','SA') {
+#                        if ($itv->{'upper_boundary'.$abbrev} =~ /\d/) {
+#                            $upper_bound = $itv->{'upper_boundary'.$abbrev};
 #                            print "NO UPPER BOUND, TRY LOCAL: $upper_bound\n";
-                        }
-                    }
-                }
-                if ( $upper_bound =~ /\d/ && $upper_bound < $upperbinbound->{$bin} || $upperbinbound->{$bin} eq "" ) {
-                        $upperbinbound->{$bin} = $upper_bound;
-                }
+#                        }
+#                    }
+#                }
+#                if ( $upper_bound =~ /\d/ && $upper_bound < $upperbinbound->{$bin} || $upperbinbound->{$bin} eq "" ) {
+#                        $upperbinbound->{$bin} = $upper_bound;
+#                }
 #            }
 #            print "LB $lower_bound UB $upper_bound ITV $itv->{interval_no}<BR>";
+        }
+        if ($i == 0) {
+            $upperbinbound->{$bin} = 0;
+        } else {
+            my $next_bin = $TimeLookup::bins[$i-1];
+            $upperbinbound->{$bin} = $lowerbinbound->{$next_bin};
         }
     }
     return ($upperbinbound,$lowerbinbound);
@@ -1579,8 +1726,10 @@ sub _initInterval {
             $all_with_max{$row->{'max_interval_no'}} = [$row,$scale];
         }
         if ($row->{'next_interval_no'} > 0) {
-            $all_with_next{$row->{'next_interval_no'}} = [$row,$scale];
-            $itv->{'by_scale'}{$row->{'scale_no'}}{'next'} = $ig->{$row->{'next_interval_no'}};
+            unless ($row->{'interval_no'} == 77 && $row->{'next_interval_no'} == 76) {
+                $all_with_next{$row->{'next_interval_no'}} = [$row,$scale];
+                $itv->{'by_scale'}{$row->{'scale_no'}}{'next'} = $ig->{$row->{'next_interval_no'}};
+            }
         }
         if ($row->{'lower_boundary'} > 0) {
             $all_with_boundary{$row->{'next_interval_no'}} = [$row,$scale];
@@ -2084,7 +2233,7 @@ sub serializeItv {
         }
     }
     local $Data::Dumper::Indent;
-    local $Data::Dumper::SortKeys;
+    local $Data::Dumper::Sortkeys;
     $Data::Dumper::Indent = 0;
     $Data::Dumper::Sortkeys = 1;
     return Dumper(\%new_hash);
