@@ -7730,7 +7730,7 @@ sub RefQuery {
         my $tables = "(refs r, person p1, person p2)".
                      " LEFT JOIN person p3 ON p3.person_no=r.modifier_no";
         # This exact order is very important due to work around with inflexible earlier code
-        my $from = "p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.comments,r.language,r.created,r.modified";
+        my $from = "p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.classification_quality,r.comments,r.language,r.created,r.modified";
         my @join_conditions = ("r.authorizer_no=p1.person_no","r.enterer_no=p2.person_no");
         my $sql = "SELECT $from FROM $tables WHERE ".join(" AND ",@join_conditions,@where);
         my $orderBy = " ORDER BY ";
@@ -7786,7 +7786,7 @@ sub printRefsCSV {
     my $csv = Text::CSV_XS->new({'binary'=>1});
     open REFOUTPUT,">$HTML_DIR/$OUTPUT_DIR/$authname.refs";
 
-    my @fields = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage publication_type comments language created modified); 
+    my @fields = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage publication_type classification_quality comments language created modified); 
     if ($csv->combine(@fields)) {
         print REFOUTPUT $csv->string(),"\n";
     }
