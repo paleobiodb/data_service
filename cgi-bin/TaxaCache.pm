@@ -434,9 +434,9 @@ sub updateCache {
     } else {
         print "Parents are the same: new parent $new_parent_no old parent $old_parent_no\n" if ($DEBUG);
     }
-    if ($updateList) {
+#    if ($updateList) {
         updateListCache($dbt,$cache_row->{'taxon_no'});
-    }
+#    }
 
     # Unlock tables
     $dbh->do("DELETE FROM tc_mutex");
