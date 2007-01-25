@@ -105,7 +105,7 @@ $sql = "select taxon_name,o.taxon_no tn,count(*) c from occurrences o,authoritie
 
 print OUT "\n<ul>\n";
 for $sr ( @sprefs )	{
-	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sr->{tn}&is_real_user=1">$sr->{taxon_name}</a> ($sr->{c})\n|;
+	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sr->{tn}">$sr->{taxon_name}</a> ($sr->{c})\n|;
 }
 print OUT "</ul>\n";
 
@@ -156,7 +156,7 @@ for $sr ( @sprefs )	{
 	if ( $sr->{c} < $minops )	{
 		last;
 	}
-	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sr->{tn}&is_real_user=1">$sr->{taxon_name}</a> ($sr->{c})\n|;
+	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sr->{tn}">$sr->{taxon_name}</a> ($sr->{c})\n|;
 }
 print OUT "</ul>\n";
 
@@ -168,7 +168,7 @@ $sql ="select taxon_name,a.taxon_no tn,lft,rgt from authorities a,taxa_tree_cach
 
 print OUT "\n<ul>\n";
 for $sr ( @sprefs )	{
-	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sr->{tn}&is_real_user=1">$sr->{taxon_name}</a> (%d)\n|,($sr->{rgt} - $sr->{lft} + 1) / 2;
+	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sr->{tn}">$sr->{taxon_name}</a> (%d)\n|,($sr->{rgt} - $sr->{lft} + 1) / 2;
 }
 print OUT "</ul>\n";
 @sprefs = ();
@@ -192,7 +192,7 @@ for $i ( 0..29 )	{
 	if ( $sprefs[$i]->{l} < $minchar )	{
 		last;
 	}
-	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sprefs[$i]->{tn}&is_real_user=1">$sprefs[$i]->{taxon_name}</a> ($sprefs[$i]->{l}$chars)\n|;
+	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sprefs[$i]->{tn}">$sprefs[$i]->{taxon_name}</a> ($sprefs[$i]->{l}$chars)\n|;
 	$chars = "";
 }
 print OUT "</ul>\n";
@@ -273,8 +273,8 @@ print OUT qq|<p class="small">Based on a very tasty secret formula.</p>\n|;
 print OUT "\n<ul>\n";
 my $points = " points";
 for $i (0..9)	{
-	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_name=$spp[$i]&is_real_user=1">$spp[$i]</a> (%.2f$points)\n|,-1 * $weird{$spp[$i]};
-	#printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_name=$spp[$i]&is_real_user=1">$spp[$i]</a> (%.1f$points)\n|,1000 * (0.1 - $weird{$spp[$i]});
+	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_name=$spp[$i]">$spp[$i]</a> (%.2f$points)\n|,-1 * $weird{$spp[$i]};
+	#printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_name=$spp[$i]">$spp[$i]</a> (%.1f$points)\n|,1000 * (0.1 - $weird{$spp[$i]});
 	$points = "";
 }
 print OUT "\n</ul>\n";
@@ -285,7 +285,7 @@ print OUT qq|<p class="small">Based on almost the same very tasty secret formula
 print OUT "\n<ul>\n";
 my $points = " points";
 for $i (0..9)	{
-	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_name=$spp2[$i]&is_real_user=1">$spp2[$i]</a> (%.2f$points)\n|,-1 * $weird2{$spp2[$i]};
+	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_name=$spp2[$i]">$spp2[$i]</a> (%.2f$points)\n|,-1 * $weird2{$spp2[$i]};
 	$points = "";
 }
 print OUT "\n</ul>\n";
@@ -329,7 +329,7 @@ push @sprefs , @{$dbt->getData($sql)};
 
 print OUT "\n<ul>\n";
 for $sr ( @sprefs )	{
-	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sr->{tn}&is_real_user=1">$sr->{taxon_name}</a> ($sr->{year})\n|;
+	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sr->{tn}">$sr->{taxon_name}</a> ($sr->{year})\n|;
 }
 print OUT "</ul>\n";
 
@@ -342,7 +342,7 @@ $sql = "select taxon_name,a.taxon_no tn from refs r,authorities a,taxa_tree_cach
 
 print OUT "\n<ul>\n";
 for $sr ( @sprefs )	{
-	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sr->{tn}&is_real_user=1">$sr->{taxon_name}</a>\n|;
+	printf OUT qq|<li><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$sr->{tn}">$sr->{taxon_name}</a>\n|;
 }
 print OUT "</ul>\n";
 
