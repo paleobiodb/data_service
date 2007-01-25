@@ -109,29 +109,45 @@ sub displayAuthorizers {
     my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=1 ORDER BY last_name,first_name";
     my @results = @{$dbt->getData($sql)};
 
-    $html .= '<div align="center"><h2>List of participants</h2></div>';
-    $html .= '<div align="center"><h4>See also our list of <a href="/cgi-bin/bridge.pl?action=displayInstitutions">participating institutions</a></h4></div>';
+    my @firsthalf;
+    my @secondhalf;
+    for my $r ( 0..int($#results/2) )	{
+        push @firsthalf , $results[$r];
+    }
+    for my $r ( int($#results/2)+1..$#results )	{
+        push @secondhalf , $results[$r];
+    }
 
-    $html .= '<table cellpadding="3" cellspacing="0" border="0" width="100%">';
-    $html .= "<tr><th align=\"left\">Name</th><th align=\"left\">Institution</th><th align=\"left\">Email</th></tr>";
-    for(my $i=0;$i<@results;$i++) {
-        my $row = $results[$i];
+    $html .= '<div align="center"><h4>List of participants</h4></div>';
+    $html .= '<div align="center"><p class="medium">See also our list of <a href="/cgi-bin/bridge.pl?action=displayInstitutions">participating institutions</a></p></div>';
+    $html .= "\n<table><tr><td valign=\"top\">\n\n";
+    $html .= formatAuthorizerTable(\@firsthalf);
+    $html .= "\n</td><td valign=\"top\">\n";
+    $html .= formatAuthorizerTable(\@secondhalf);
+    $html .= "\n</td></tr></table>\n\n";
+
+}
+
+sub formatAuthorizerTable	{
+    my $peopleref = shift;
+    my @people = @{$peopleref};
+
+    my $html .= '<table cellpadding="3" cellspacing="0" border="0">';
+    for(my $i=0;$i<@people;$i++) {
+        my $row = $people[$i];
         my $name = "$row->{first_name} $row->{last_name}";
-        if ($i % 2 == 0) {
-            $html .= "<tr class=\"darkList\">";
-        } else {
-            $html .= "<tr>";
-        }
+        $html .= "<tr>";
         my $email;
         if ($row->{'email'}) {
             $email = scramble("$row->{'email'}");
         } else {
             $email = "<i>address unknown</i>";
         }
-        $html .= "<td>$name</td><td>$row->{institution}</td><td>$email</td></tr>";
+        $html .= "<td class=\"tiny\" style=\"text-indent: -1em; padding-left: 1.5em; padding-right: 0.5em;\">$name, $row->{institution}, $email</td></tr>";
     }
     $html .= "</table>";
     return $html;
+
 }
 
 sub displayInstitutions {
