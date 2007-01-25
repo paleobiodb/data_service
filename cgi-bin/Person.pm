@@ -143,7 +143,7 @@ sub formatAuthorizerTable	{
         } else {
             $email = "<i>address unknown</i>";
         }
-        $html .= "<td class=\"tiny\" style=\"text-indent: -1em; padding-left: 1.5em; padding-right: 0.5em;\">$name, $row->{institution}, $email</td></tr>";
+        $html .= "<td class=\"tiny\" style=\"text-indent: -1em; padding-left: 1.5em; padding-right: 0.5em;\">$name, $row->{institution}, $email</td></tr>\n";
     }
     $html .= "</table>";
     return $html;
@@ -163,26 +163,44 @@ sub displayInstitutions {
             push @{$institutions{$row->{'institution'}}}, $row;
         } 
     }
-    my @all_institutions = sort {$a cmp $b} keys %institutions;
+    my @inst_names= keys %institutions;
+    @inst_names= sort {$a cmp $b} @inst_names;
 
-    $html .= '<div align="center"><h2>List of participating institutions</h2></div>';
-    $html .= '<div align="center"><h4>See also our list of <a href="/cgi-bin/bridge.pl?action=displayAuthorizers">participants</a></h4></div>';
+    my @firsthalf;
+    my @secondhalf;
+    for my $i ( 0..int($#inst_names/2) )	{
+        push @firsthalf , $inst_names[$i];
+    }
+    for my $i ( int($#inst_names/2)+1..$#inst_names)	{
+        push @secondhalf , $inst_names[$i];
+    }
 
-    $html .= '<table cellpadding="3" cellspacing="0" border="0" width="100%">';
-    $html .= "<tr><th align=\"left\">Institution</th><th align=\"left\">Database Members</th></tr>";
-    for(my $i=0;$i<@all_institutions;$i++) {
-        my $institution = $all_institutions[$i];
-        my @all_people = @{$institutions{$institution}};
+    $html .= '<div align="center"><h4>List of participating institutions</h4></div>';
+    $html .= '<div align="center"><p class="medium">See also our list of <a href="/cgi-bin/bridge.pl?action=displayAuthorizers">participants</a></p></div>';
+
+    $html .= "\n<table><tr><td valign=\"top\" width=\"50%\">\n\n";
+    $html .= formatInstitutionTable(\@firsthalf,\%institutions);
+    $html .= "\n</td><td valign=\"top\" width=\"50%\">\n\n";
+    $html .= formatInstitutionTable(\@secondhalf,\%institutions);
+    $html .= "\n</td></tr></table>\n\n";
+
+}
+
+sub formatInstitutionTable	{
+    my $instnameref = shift;
+    my @inst_names = @{$instnameref};
+    my $institutionref = shift;
+    my %institutions = %{$institutionref};
+
+    my $html .= qq|<table cellpadding="3" cellspacing="0" border="0">\n\n|;
+    for(my $i=0;$i<@inst_names;$i++) {
+        my @all_people = @{$institutions{$inst_names[$i]}};
         my @names = map {$_->{'first_name'}." ".$_->{'last_name'}} @all_people;
 
-        if ($i % 2 == 0) {
-            $html .= "<tr class=\"darkList\">";
-        } else {
-            $html .= "<tr>";
-        }
-        $html .= "<td style=\"white-space: nowrap;\">$institution</td><td>".join(", ",@names)."</td></tr>";
+        $html .= "<tr>";
+        $html .= "<td class=\"tiny\" style=\"text-indent: -1em; padding-left: 1.5em;\">\n<b>$inst_names[$i]</b><br>\n".join(", ",@names)."</td></tr>\n";
     }
-    $html .= "</table>";
+    $html .= "</table>\n\n";
     return $html;
 }
 
