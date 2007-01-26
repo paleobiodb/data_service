@@ -5383,6 +5383,37 @@ sub startProcessReclassifyForm	{
 
 ##############
 ## Taxon Info Stuff
+sub randomTaxonInfo{
+    my $sql;
+    my $lft;
+    my $rgt;
+    if ( $q->param('taxon_name') =~ /^[A-Za-z]/ )	{
+        $sql = "SELECT lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$q->param('taxon_name')."'";
+        my $taxref = ${$dbt->getData($sql)}[0];
+        if ( $taxref )	{
+            $lft = $taxref->{lft};
+            $rgt = $taxref->{rgt};
+        }
+    } elsif ( $q->param('common_name') =~ /^[A-Za-z]/ )	{
+        $sql = "SELECT lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND common_name='".$q->param('common_name')."'";
+        my $taxref = ${$dbt->getData($sql)}[0];
+        if ( $taxref )	{
+            $lft = $taxref->{lft};
+            $rgt = $taxref->{rgt};
+        }
+    }
+    if ( $lft > 0 && $rgt > 0 )	{
+        $sql = "SELECT o.taxon_no taxon_no FROM occurrences o,authorities a,taxa_tree_cache t WHERE o.taxon_no=a.taxon_no AND taxon_rank='species' AND a.taxon_no=t.taxon_no AND lft>=$lft AND rgt<=$rgt";
+    } else	{
+        $sql = "SELECT o.taxon_no taxon_no FROM occurrences o,authorities a WHERE o.taxon_no=a.taxon_no AND taxon_rank='species'";
+    }
+    my @orefs = @{$dbt->getData($sql)};
+    my $x = int(rand($#orefs + 1));
+    $q->param('taxon_no' => $orefs[$x]->{taxon_no});
+    $q->param('is_real_user' => 1);
+    checkTaxonInfo();
+}
+
 sub beginTaxonInfo{
     print main::stdIncludes( "std_page_top" );
     TaxonInfo::searchForm($hbo, $q);
@@ -5390,6 +5421,11 @@ sub beginTaxonInfo{
 }
 
 sub checkTaxonInfo{
+    if ( $q->param('random') eq "YES" )	{
+        # infinite loops are bad
+        $q->param('random' => '');
+        randomTaxonInfo();
+    }
     logRequest($s,$q);
     print main::stdIncludes( "std_page_top" );
 	TaxonInfo::checkTaxonInfo($q, $dbh, $s, $dbt, $hbo);
