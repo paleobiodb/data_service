@@ -5411,6 +5411,8 @@ sub randomTaxonInfo{
     my $x = int(rand($#orefs + 1));
     $q->param('taxon_no' => $orefs[$x]->{taxon_no});
     $q->param('is_real_user' => 1);
+    # infinite loops are bad
+    $q->param('random' => '');
     checkTaxonInfo();
 }
 
