@@ -5413,7 +5413,11 @@ sub randomTaxonInfo{
     $q->param('is_real_user' => 1);
     # infinite loops are bad
     $q->param('random' => '');
-    checkTaxonInfo();
+    if ( $q->param('action') eq "checkTaxonInfo" )	{
+        return;
+    } else	{
+        main::checkTaxonInfo();
+    }
 }
 
 sub beginTaxonInfo{
@@ -5430,7 +5434,7 @@ sub checkTaxonInfo{
     }
     logRequest($s,$q);
     print main::stdIncludes( "std_page_top" );
-	TaxonInfo::checkTaxonInfo($q, $dbh, $s, $dbt, $hbo);
+    TaxonInfo::checkTaxonInfo($q, $dbh, $s, $dbt, $hbo);
     print main::stdIncludes("std_page_bottom");
 }
 
