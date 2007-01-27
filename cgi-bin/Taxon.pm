@@ -901,7 +901,7 @@ sub addSpellingAuthority {
         $record{taxon_rank} = $new_rank;
     }
 
-    my @dataFields = ("pages", "figures", "extant", "preservation");
+    my @dataFields = ("pages", "figures", "common_name", "extant", "preservation");
     my @origAuthFields = ("author1init", "author1last","author2init", "author2last","otherauthors", "pubyr" );
     
     if ($orig->{'ref_is_authority'} =~ /yes/i) {
@@ -1646,7 +1646,7 @@ sub propagateAuthorityInfo {
     my $me = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
 
     my @authority_fields = ('author1init','author1last','author2init','author2last','otherauthors','pubyr');
-    my @more_fields = ('pages','figures','extant','preservation');
+    my @more_fields = ('pages','figures','common_name','extant','preservation');
 
     # Two steps: find best authority info, then propagate to all spelling variants
     my @spellings;
