@@ -333,7 +333,7 @@ sub displayAuthorityForm {
                 }
             }
 			
-			$fields{'parent_taxon_select'} = "<b>Belongs to:</b> ".
+			$fields{'parent_taxon_select'} = "<b>Belongs to:</b><br>&nbsp;&nbsp;&nbsp;&nbsp;".
                 $hbo->htmlSelect('parent_taxon_no',\@parent_descs,\@parent_nos,$parent_no);
 		} else {
 			# count = 0, so we need to warn them to enter the parent taxon first.
