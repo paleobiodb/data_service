@@ -336,9 +336,10 @@ sub displayOpinionForm {
     }
    
     # Grab the appropriate data to auto-fill the form
-	if ($reSubmission) {
-		%fields = %{$q->Vars};
-	} else {
+        # always give this a try because field values may have been passed
+        #  in even if this is a new opinion
+	%fields = %{$q->Vars};
+	if (! $reSubmission) {
         if ($isNewEntry) {
             $fields{'child_no'} = $q->param('child_no');
             $fields{'child_spelling_no'} = $q->param('child_spelling_no') || $q->param('child_no');
@@ -1467,20 +1468,24 @@ sub submitOpinionForm {
 <p>
 <table cellpadding="10" class="small"><tr><td valign=top>
   <p><b>Name functions</b></p>
+  <ul>
   <li><b><a href="bridge.pl?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">Edit $childSpellingName</a></b></li>
   <br><li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></b></li>   
   <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit names from the same reference</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></b></li>
+  </ul>
 </td>
 <td valign=top>
   <p><b>Opinion functions</b></p>
+  <ul>
   <li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></b></li>
+  <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}&use_reference=new">Edit another opinion about $childSpellingName</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}&use_reference=new">Add/edit opinion about $childSpellingName from another reference</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit opinions from the same reference</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li>
   <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
+  </ul>
 </td></tr></table>
 </p>
 </div>
