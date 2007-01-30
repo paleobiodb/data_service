@@ -1152,7 +1152,7 @@ sub submitOpinionForm {
 	#  any rank because (for example) sometimes a taxon is considered
 	#  simultaneously to be of too high a rank, and an invalid subgroup of
 	#  a lower-ranked taxon JA 29.1.07
-        } elsif ($q->param('taxon_status') eq 'invalid1' && $q->param('synonym') ne 'invalid subgroup of') && $parentRank ne $childSpellingRank)	{
+        } elsif ($q->param('taxon_status') eq 'invalid1' && $q->param('synonym') ne 'invalid subgroup of' && $parentRank ne $childSpellingRank)	{
 		$errors->add("The rank of a taxon and the rank of its synonym, homonym, or replacement name must be the same");
 	} 
         if ($q->param('taxon_status') eq 'belongs to') {
