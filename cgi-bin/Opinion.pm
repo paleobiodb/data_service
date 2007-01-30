@@ -990,9 +990,9 @@ sub submitOpinionForm {
         if ($q->param('taxon_status') ne 'invalid2') {
             if (!$parentName) {
                 if ($q->param('taxon_status') eq 'invalid1') {
-                    $errors->add("You must enter the name of a taxon of equal rank to synonymize or replace this name with");
+                    $errors->add("You must enter a taxonomic name that should be usd instead of this one");
                 } else {
-                    $errors->add("You must enter the name of a higher taxon this taxon belongs to");
+                    $errors->add("You must enter the name of a higher taxon this one belongs to");
                 }
             } else {    
                 my @parents = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parentName}); 
@@ -1103,12 +1103,6 @@ sub submitOpinionForm {
         $errors->add("The valid taxon radio button in the \"How was it classified?\" section must be selected if the is the type taxon");
     } 
 
-    if ($q->param('spelling_reason') =~ /rank change/) {
-        if ($childRank =~ /species/) {
-            $errors->add("Don't select rank change for species, mark it as a recombination.");
-        }
-    }
-
     my @opinions_to_migrate1;
     my @opinions_to_migrate2;
     if ($fields{'status'} eq 'misspelling of') {
@@ -1146,20 +1140,21 @@ sub submitOpinionForm {
     # Error checking related to ranks
     # Only bother if we're down to one parent
     if ($fields{'parent_spelling_no'}) {
-	    if ($q->param('taxon_status') eq 'belongs to' || ($q->param('taxon_status') eq 'invalid1' && $q->param('synonym') eq 'invalid subgroup of')) {
-		    # for belongs to, the parent rank should always be higher than the child rank.
-		    # unless either taxon is an unranked clade (JA)
-		    if ($rankToNum{$parentRank} <= $rankToNum{$childSpellingRank} && 
-                $parentRank ne "unranked clade" && 
-                $childSpellingRank ne "unranked clade") {
-		    	$errors->add("The rank of the higher taxon '$parentName' ($parentRank) must be higher than the rank of '$childSpellingName' ($childSpellingRank)");	
-		    }
-        } elsif ($q->param('taxon_status') eq 'invalid1') {
-    		# the parent rank should be the same as the child rank...
-            if ( $parentRank ne $childSpellingRank) {
-                $errors->add("The rank of a taxon and the rank of its synonym, homonym, or replacement name must be the same");
-            }    
-		} 
+	if ($q->param('taxon_status') eq 'belongs to')	{ 
+	    # for belongs to, the parent rank should always be higher than the child rank.
+	    # unless either taxon is an unranked clade (JA)
+		if ($rankToNum{$parentRank} <= $rankToNum{$childSpellingRank}
+		  && $parentRank ne "unranked clade" && 
+		  $childSpellingRank ne "unranked clade")	{
+			$errors->add("The rank of the higher taxon '$parentName' ($parentRank) must be higher than the rank of '$childSpellingName' ($childSpellingRank)");	
+		}
+	# synonyms should be of the same rank, but invalid subgroups can be of
+	#  any rank because (for example) sometimes a taxon is considered
+	#  simultaneously to be of too high a rank, and an invalid subgroup of
+	#  a lower-ranked taxon JA 29.1.07
+        } elsif ($q->param('taxon_status') eq 'invalid1' && $q->param('synonym') ne 'invalid subgroup of') && $parentRank ne $childSpellingRank)	{
+		$errors->add("The rank of a taxon and the rank of its synonym, homonym, or replacement name must be the same");
+	} 
         if ($q->param('taxon_status') eq 'belongs to') {
             if ($childSpellingRank eq 'species' && $parentRank !~ /genus/) {
 		    	$errors->add("A species must be assigned to a genus or subgenus and not a higher order name");
@@ -1175,7 +1170,7 @@ sub submitOpinionForm {
         }
     } else {
         if ($childSpellingRank ne $childRank && $q->param('spelling_reason') !~ /recombination|misspelling/) {
-            $errors->add("Unless a taxon has its rank changed or is recombined, the rank entered in he \"How was it spelled?\" section must match the original taxon's rank. If the rank has changed, select \"rank change\" even if the spelling remains the same");
+            $errors->add("Unless a taxon has its rank changed or is recombined, the rank entered in the \"How was it spelled?\" section must match the taxon's original rank (if the rank has changed, select \"rank change\" even if the spelling remains the same)");
         }
     }    
 
