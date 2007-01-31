@@ -5111,7 +5111,11 @@ sub processTaxonSearch {
                 print "</ul>";
 
                 print "<div align=left class=small style=\"width: 500\">";
-                print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, some approximate matches were found and are listed above.  If none of the names above match, please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon=".$q->param('taxon_name')."&amp;skip_typo_check=1\">enter a new authority record</a> first.";
+                if ( $#typoResults > 0 )	{
+                    print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, some approximate matches were found and are listed above.  If none of them are what you're looking for, please <a href=\"bridge.pl?action=displayAuthorityForm&taxon_no=-1&taxon_name=".$q->param('taxon_name')."\">enter a new authority record</a> first.";
+                } else	{
+                    print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, an approximate match was found and is listed above.  If it is not what you are looking for, please <a href=\"bridge.pl?action=displayAuthorityForm&taxon_no=-1&taxon_name=".$q->param('taxon_name')."\">enter a new authority record</a> first.";
+                }
                 print "</div></p>";
                 print "</div>";
                 print "</td></tr></table></div>";
