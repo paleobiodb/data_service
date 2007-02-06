@@ -140,6 +140,9 @@ sub processLoadImage{
 	# create a timestamp for record creation
 	my @timing = localtime(time);
 	my $year = 1900+$timing[5];
+	# localtime returns 0-11 for months, but MySQL numbers them 1-12,
+	#  so the value needs to be incremented JA 5.2.07
+	$timing[4]++;
 	my $month = $timing[4] < 10?"0".$timing[4]:$timing[4];
 	my $day = $timing[3] < 10?"0".$timing[3]:$timing[3];
 	my $hour = $timing[2] < 10?"0".$timing[2]:$timing[2];
