@@ -224,7 +224,7 @@ sub retellOptions {
 
     # Preservation mode
     my @pres_mode_group= ('cast','adpression','original aragonite','mold/impression','replaced with silica','trace','charcoalification','coalified','other');
-    $html .= $self->retellOptionsGroup('Preseration modes:','pres_mode_',\@pres_mode_group);
+    $html .= $self->retellOptionsGroup('Preservation modes:','pres_mode_',\@pres_mode_group);
 
     # Collection types
     my @collection_types_group = ('archaeological','biostratigraphic','paleoecologic','taphonomic','taxonomic','general_faunal/floral','unknown');
@@ -1307,6 +1307,13 @@ sub getCollectionsWhereClause {
         }
     
         push @where,$created_string;
+
+        # the reIDs also need to be sifted, and not having done so has totally
+        #  screwed up every analysis using this option up to now JA 6.2.07
+        if ( $q->param('output_data') eq 'collections' )    {
+            $created_string =~ s/o\.created/re.created/;
+            push @where,$created_string;
+        }
     }
 
     if ($q->param("collection_no") =~ /\d/) {
