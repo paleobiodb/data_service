@@ -605,7 +605,7 @@ sub getKeysValues {
 }
 
 # Second public interface - for most simple lists, just returns it
-# I.E. @environemtn = $hbo->getList('environment')
+# I.E. @environemnt = $hbo->getList('environment')
 # Returns the second arrayref as a normal array from getKeysValues
 sub getList {
     my $self = shift;
@@ -613,29 +613,20 @@ sub getList {
     my $distinct = shift;
     # remove duplicates (a problem with the environment pulldown)
     if ( $distinct )	{
-        my (@keys,@values) = @{$self->getKeysValues($name)};
-        my %keySeen;
-        my @newKeys;
+        my ($keys,$values) = $self->getKeysValues($name);
+        my %seen;
         my @newValues;
-        for my $k ( 0..$#keys )	{
-            if ( ! $keySeen{$keys[$k]} )	{
-                push @newKeys , $keys[$k];
-                push @newValues , $values[$k];
+        foreach my $v (@$values) {
+            unless ($seen{$v}) {
+                push @newValues, $v;
+                $seen{$v}++;
             }
-            $keySeen{$keys[$k]}++;
         }
-        #for my $k ( 0..$#{$keys} )	{
-        #    if ( ! $keySeen{${$keys}[$k]} )	{
-        #        push @newKeys , ${$keys}[$k];
-        #        push @newValues , ${$values}[$k];
-        #    }
-        #    $keySeen{${$keys}[$k]}++;
-        #}
-        my @keys = @newKeys;
-        my @values = @newValues;
-        return (@keys,@values);
+        return @newValues;
     } else	{
-        return @{$self->getKeysValues($name)};
+        #return @{ $self->getKeysValues($name) };
+        my ($k,$v) = $self->getKeysValues($name);
+        return @{$v};
     }
 }
 

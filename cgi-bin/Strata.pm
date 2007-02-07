@@ -268,7 +268,7 @@ sub displayStrata {
     print $html;
 
     # Display environments present
-    my @env_list = $hbo->getList('environment','distinct');
+    my @env_list = $hbo->getList('environment',1);
     $html = "<p><b>Paleoenvironments:</b> ";
     if (%environment_count) {
         foreach my $environment (@env_list) {
