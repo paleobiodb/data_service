@@ -12,11 +12,12 @@ function checkMapBrowserVersion()	{
 //  End -->
 </script>
 
-	<div align="center"><h2>Fossil collection map form</h2></div>
+<div align="center"><h2>Fossil collection map form</h2></div>
 
-    <form method=post action="$exec_url" onSubmit="return checkForm();">
-	<input id="action" type=hidden name="action" value="displayMapResults">
-	<input id="user" type=hidden name="user" value="Guest">
+<form method=post action="$exec_url" onSubmit="return checkForm();">
+<input type="hidden" name="action" value="displayMapResults">
+<input type="hidden" name="form_source" value="basic_map_form">
+<input type="hidden" name="user" value="Guest">
 
 <script>checkMapBrowserVersion();</script>
 
@@ -31,11 +32,11 @@ function checkMapBrowserVersion()	{
 <table border=0 cellpadding=2 cellspacing=2>
 
 <tr>
-<td valign=top nowrap>Group of animals:
-</td>
+<td valign=top nowrap>Group of animals:</td>
 
 <td valign=top>
-<select name="taxon_name">
+<select name="taxon_name_preset">
+<option>
 <option value="Mammalia">mammals
 <option value="Carnivora">carnivores
 <option value="Insectivora">insectivores
@@ -73,40 +74,30 @@ function checkMapBrowserVersion()	{
 </select>
 </td>
 
-<tr><td valign=top>
-<i>... or</i> taxon name:
-</td>
-<td valign=top>
-<input name="taxon_name" size=25>
-</td>
+<tr>
+<td valign=top><i>... or</i> taxon name:</td>
+<td valign=top><input name="taxon_name" size=25></td>
 
-<tr><td valign=top>Country:
-</td>
-<td valign=top><select id="country" class="small">
-</td>
+<tr>
+<td valign=top>Country:</td>
+<td valign=top><select id="country" class="small"></td>
 </select>
 
 
-<tr><td valign="top">State/province:
-</td>
-<td valign=top><input name="state" size=25 class="small">
-</td>
+<tr>
+<td valign="top">State/province:</td>
+<td valign=top><input name="state" size=25 class="small"></td>
 
-<tr><td valign=top>Projection:
-</td>
-<td valign=top><select class="small">
+<tr>
+<td valign=top>Projection:</td>
+<td valign=top><select name="projection" class="small">
 <option>equirectangular
-<option>equirectangular (north pole)
-<option>equirectangular (south pole)
 <option>Eckert IV
-<option>Eckert IV (north pole)
-<option>Eckert IV (south pole)
 </select>
 </td>
 
-<tr><td valign=top>
-Colors:
-</td>
+<tr>
+<td valign=top>Colors:</td>
 <td valign=top>
 <select id="mapcolors" class="small">
 <option>green on blue
@@ -123,10 +114,10 @@ Colors:
 
 <table border=0 cellpadding=2 cellspacing=2>
 
-<tr><td valign=top>Time interval:
-</td>
+<tr>
+<td valign=top>Time interval:</td>
 <td valign=top>
-<select name="interval_name" class="small">
+<select name="interval_name_preset" class="small">
 <option>
 <option>Pleistocene
 <option>Pliocene
@@ -168,16 +159,18 @@ Colors:
 </div>
 </div>
 
-<table width=100%>
-<tr><td width=30%><td width=70%><input type=submit value="Draw map">
+<tr>
+<td colspan=2 align="center"><input type=submit value="Draw map"></td>
+</tr>
 </table>
 
 </form>
 
 <center><p class=small>
 <i>
+For more advanced options <a href="bridge.pl?action=displayMapForm">go here</a><br><br>
 You can make a paleogeographic map by selecting a time interval.
-For more information about the plate reconstructions visit the <a href="http://www.scotese.com/license.htm">PALEOMAP website</a>.
+For more information about the plate reconstructions visit the <a href="http://www.scotese.com/license.htm">PALEOMAP website</a>.<br>
 </i>
 <p></center>
 

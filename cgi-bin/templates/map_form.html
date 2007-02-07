@@ -12,11 +12,11 @@ function checkMapBrowserVersion()	{
 //  End -->
 </script>
 
-	<div align="center"><h2>Fossil collection map form</h2></div>
+<div align="center"><h2>Fossil collection map form</h2></div>
 
-    <form method=post action="$exec_url" onSubmit="return checkForm();">
-	<input id="action" type=hidden name="action" value="displayMapResults">
-	<input id="user" type=hidden name="user" value="Guest">
+<form method=post action="$exec_url" onSubmit="return checkForm();">
+<input id="action" type=hidden name="action" value="displayMapResults">
+<input id="user" type=hidden name="user" value="Guest">
 
 <script>checkMapBrowserVersion();</script>
 
@@ -25,7 +25,6 @@ function checkMapBrowserVersion()	{
 <div class="displayPanelContent small">
 
 <table border=0 cellpadding=2 cellspacing=2 width="100%">
-
 <tr><td valign="top" width="50%">
 
 <table border=0 cellpadding=2 cellspacing=2>
@@ -40,12 +39,12 @@ function checkMapBrowserVersion()	{
 
 <tr>
 	<td valign=top>Authorizer:</td>
-	<td valign=top><input name="authorizer_reversed" size=22 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_reversed_me%%'">Me</a></td>
+	<td valign=top><input name="authorizer_reversed" size=22 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_me%%'">Me</a></td>
 </tr>
 
 <tr>
 	<td valign=top>Enterer:</td>
-	<td valign=top><input name="enterer_reversed" size=22 onKeyUp="doComplete(event, this, entererNames());">&nbsp;<a href="#" onClick="document.forms[0].enterer_reversed.value='%%enterer_reversed_me%%'">Me</a></td>
+	<td valign=top><input name="enterer_reversed" size=22 onKeyUp="doComplete(event, this, entererNames());">&nbsp;<a href="#" onClick="document.forms[0].enterer_reversed.value='%%enterer_me%%'">Me</a></td>
 </tr>
 
 <tr><td valign=top>
@@ -96,8 +95,8 @@ function checkMapBrowserVersion()	{
 <tr><td valign=top><b>Time interval</b>:
 <td valign=top><input name=interval_name size=25 class="small">
 
-<tr><td valign=top>Formation:
-<td valign=top><input name=formation size=25 class="small">
+<tr><td valign=top>Group, formation, or member:
+<td valign=top><input name=group_formation_member size=25 class="small">
 
 <tr><td valign=top>Lithology:
 <td valign=top><select id="lithologies" class="small" autofill="lithology1">
@@ -152,10 +151,6 @@ lng = <input name="maplng" size=4 class="small">
 
 <tr><td valign=top>Width:
 <td valign=top><select id="mapwidth" class="small">
-</select>
-
-<tr><td valign=top>Resolution:
-<td valign=top><select id="mapresolution" class="small">
 </select>
 
 </table>
@@ -227,7 +222,7 @@ where</small>
 <option value="country">country
 <option value="state">state
 <option value="interval_name">time interval
-<option value="formation">formation
+<option value="group_formation_member">grp/fm/mbr
 <option value="lithologies">lithology
 <option value="environment">paleoenvironment
 </select>
@@ -249,7 +244,7 @@ where</small>
 <option value="country">country
 <option value="state">state
 <option value="interval_name">time interval
-<option value="formation">formation
+<option value="group_formation_member">grp/fm/mbr
 <option value="lithologies">lithology
 <option value="environment">paleoenvironment
 </select>
@@ -271,7 +266,7 @@ where</small>
 <option value="country">country
 <option value="state">state
 <option value="interval_name">time interval
-<option value="formation">formation
+<option value="group_formation_member">group/form/mbr
 <option value="lithologies">lithology
 <option value="environment">paleoenvironment
 </select>

@@ -619,6 +619,13 @@ sub displayHomePage {
 
 
 # Shows the form for requesting a map
+sub displayBasicMapForm {
+	print stdIncludes("std_page_top" );
+    print $hbo->populateHTML('basic_map_form');
+	print stdIncludes("std_page_bottom");
+}
+
+# Shows the form for requesting a map
 sub displayMapForm {
 
 	# List fields that should be preset
@@ -655,18 +662,87 @@ sub displayMapForm {
 sub displayMapResults {
     require Map;
 
+    $|=1; # Freeflowing data
+
     logRequest($s,$q);
 	print stdIncludes("std_page_top" );
 
-	my $m = Map->new( $dbh, $q, $s, $dbt, $hbo);
-	my $file = $m->buildMap();
+    my @errors;
+    if ($q->param('interval_name_preset')) {
+        my $interval_name = $q->param('interval_name_preset');
+        my $t = new TimeLookup($dbt);
+        $q->param('interval_name'=>$interval_name);
+        my ($eml,$name) = TimeLookup::splitInterval($interval_name);
+        my $interval_no = $t->getIntervalNo($eml,$name);
+        if (!$interval_no) {
+            push @errors, "Bad interval name";
+        }
+        
+        $q->delete('interval_name_preset');
+        my $h = $t->lookupIntervals([$interval_no]);
+        my $itv = $h->{$interval_no};
+        my $map_age = sprintf("%.0f",(($itv->{'lower_boundary'} + $itv->{'upper_boundary'})/2));
+        if (!$map_age) {
+            push @errors, "No age range for interval";
+        }
+        $q->param('maptime'=>$map_age);
 
-    open(MAP, $file) or die "couldn't open $file ($!)";
-    while(<MAP>){
-        print;
     }
-    close MAP;
+    if ($q->param('taxon_name_preset') && !$q->param('taxon_name')){
+        $q->param('taxon_name'=>$q->param('taxon_name_preset'));
+        $q->delete('taxon_name_preset');
+    }
 
+    if ($q->param('mapcolors')) {
+        my %settings;
+        if ($q->param('mapcolors') eq 'green on white') {
+            %settings = (
+                pointsize1=>'auto', pointshape1=>'circles',
+                dotcolor1=>'gold', dotborder1=>'no',
+                mapbgcolor=>'white',crustcolor=>'olive drab', crustedgecolor=>'none',
+                usalinecolor=>'green', borderlinecolor=>'green', autoborders=>'yes',
+                gridsize=>'30',gridcolor=>'light gray',gridposition=>'in back',
+                coastlinecolor=>'dark green'
+            );
+        } elsif ($q->param('mapcolors') eq 'gray on white') {
+            %settings = (
+                pointsize1=>'auto', pointshape1=>'circles',
+                dotcolor1=>'gold', dotborder1=>'no',
+                mapbgcolor=>'white',crustcolor=>'light gray', crustedgecolor=>'none',
+                usalinecolor=>'light gray', borderlinecolor=>'light gray', autoborders=>'yes',
+                gridsize=>'30',gridcolor=>'light gray',gridposition=>'in back',
+                coastlinecolor=>'black'
+            );
+        } else { # Green on blue default
+            %settings = (
+                pointsize1=>'auto', pointshape1=>'circles',
+                dotcolor1=>'gold', dotborder1=>'no',
+                mapbgcolor=>'sky blue',crustcolor=>'olive drab', crustedgecolor=>'white',
+                usalinecolor=>'green', borderlinecolor=>'green', autoborders=>'yes',
+                gridsize=>'30',gridcolor=>'light gray',gridposition=>'in back',
+                coastlinecolor=>'dark green'
+            );
+        }
+        while(my ($k,$v) = each %settings) {
+            $q->param($k=>$v);
+        }
+    }
+
+	my $m = Map->new($q,$dbt);
+	my ($file,$errors,$warnings) = $m->buildMap();
+    if (ref $errors && @$errors) {
+        print '<div align="center">'.Debug::printErrors($errors).'</div>';
+    } else {
+        if (ref $warnings && @$warnings) {
+            print '<div align="center">'.Debug::printWarnings($warnings).'</div>';
+        }
+   
+        open(MAP, $file) or die "couldn't open $file ($!)";
+        while(<MAP>){
+            print;
+        }
+        close MAP;
+    }
 	print stdIncludes("std_page_bottom");
 }
 
@@ -676,47 +752,32 @@ sub displayMapResults {
 # on Map object creation, maybe later PS 12/14/2005
 sub displayMapOfCollection {
     require Map;
+    return unless $q->param('collection_no') =~ /^\d+$/;
 
     logRequest($s,$q);
+    my $sql = "SELECT c.collection_no,c.lngdeg,c.latdeg,c.lngdir,c.latdir,c.collection_name,c.country,c.state,concat(i1.eml_interval,' ',i1.interval_name) max_interval, concat(i2.eml_interval,' ',i2.interval_name) min_interval "
+            . " FROM collections c "
+            . " LEFT JOIN intervals i1 ON c.max_interval_no=i1.interval_no"
+            . " LEFT JOIN intervals i2 ON c.min_interval_no=i2.interval_no"
+            . " WHERE c.collection_no=".$q->param('collection_no');
+    my $coll = ${$dbt->getData($sql)}[0];
+
+    my $latdeg = $coll->{latdeg};
+    my $lngdeg = $coll->{lngdeg};
+    $latdeg *= -1 if ($coll->{latdir} eq 'South');
+    $lngdeg *= -1 if ($coll->{lngdir} eq 'West');
+    # we need to get the number of collections out of dataRowsRef
+    #  before figuring out the point size
+    require Map;
     $q->param("simple_map"=>'YES');
-    my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape1', 'dotcolor1', 'dotborder1');
-    my %user_prefs = main::getPreferences($s->get('enterer_no'));
-    foreach my $pref (@map_params){
-        if($user_prefs{$pref}){
-            $q->param($pref => $user_prefs{$pref});
-        }
-    }
-    # Not covered by prefs:
-    if(!$q->param('pointshape1')){
-        $q->param('pointshape1' => 'circles');
-    }
-    if(!$q->param('dotcolor1')){
-        $q->param('dotcolor1' => 'red');
-    }
-    if(!$q->param('coastlinecolor')){
-        $q->param('coastlinecolor' => 'black');
-    }
-    if(!$q->param('mapresolution')){
-        $q->param('mapresolution'=>'fine');
-    }
-    if(!$q->param('usalinecolor') || $q->param('usalinecolor') eq 'none'){
-        $q->param('usalinecolor'=>'light gray');
-    }
-    if(!$q->param('borderlinecolor') || $q->param('borderlinecolor') eq 'none'){
-        $q->param('borderlinecolor'=>'gray');
-    }
-    if(!$q->param('pointsize1')){
-        $q->param('pointsize1'=>'medium');
-    }
-    if(!$q->param('projection') or $q->param('projection') eq ""){
-        $q->param('projection'=>'equirectangular');
-    }
+    $q->param('mapscale'=>'x 5');
+    $q->param('maplat'=>$latdeg);
+    $q->param('maplng'=>$lngdeg);
+    $q->param('pointsize1'=>'auto');
+    $q->param('autoborders'=>'yes');
+    my $m = Map->new($q,$dbt);
+    my ($map_html_path,$errors,$warnings) = $m->buildMap();
 
-    $q->param('mapscale'=>'X 5');
-    $q->param('mapwidth'=>'100%');
-    $q->param('mapsize'=>'100%');
-
-    my $m = Map->new( $dbh, $q, $s, $dbt );
 
     if ($q->param("display_header") eq 'NO') {
         print stdIncludes("blank_page_top") 
@@ -724,42 +785,18 @@ sub displayMapOfCollection {
         print stdIncludes("std_page_top") 
     }
 
-    my $dataRowsRef = $m->buildMapOnly();
-    my $coll = ${$dataRowsRef}[0];
-    my ($lat,$lng) = ($coll->{'latdeg'},$coll->{'lngdeg'});
-    if ($coll->{'latdir'} eq "South") {
-        $lat = -1 * $lat;
-    }
-
-    if ($coll->{'lngdir'} eq "West") {
-        $lng = -1 * $lng;
-    }
-
-    $q->param('maplat' => $lat);
-    $q->param('maplng' => $lng);
-    $m->setQAndUpdateScale($q);
-
-    my $map_html_path = $m->drawMapOnly($dataRowsRef);
-
     if ($coll->{'collection_no'}) {
-        my $sql = "SELECT c.collection_name,c.country,c.state,concat(i1.eml_interval,' ',i1.interval_name) max_interval, concat(i2.eml_interval,' ',i2.interval_name) min_interval "
-                . " FROM collections c "
-                . " LEFT JOIN intervals i1 ON c.max_interval_no=i1.interval_no"
-                . " LEFT JOIN intervals i2 ON c.min_interval_no=i2.interval_no"
-                . " WHERE c.collection_no=$coll->{collection_no}";
-        my $row = ${$dbt->getData($sql)}[0];
-
         # get the max/min interval names
-        my $time_place = $row->{'collection_name'}.": ";
-        if ($row->{'max_interval'} ne $row->{'min_interval'} && $row->{'min_interval'}) {
-            $time_place .= "$row->{max_interval} - $row->{min_interval}";
+        my $time_place = $coll->{'collection_name'}.": ";
+        if ($coll->{'max_interval'} ne $coll->{'min_interval'} && $coll->{'min_interval'}) {
+            $time_place .= "$coll->{max_interval} - $coll->{min_interval}";
         } else {
-            $time_place .= "$row->{max_interval}";
+            $time_place .= "$coll->{max_interval}";
         }
-        if ($row->{'state'}) {
-            $time_place .= ", $row->{state}";
-        } elsif ($row->{'country'}) {
-            $time_place .= ", $row->{country}";
+        if ($coll->{'state'}) {
+            $time_place .= ", $coll->{state}";
+        } elsif ($coll->{'country'}) {
+            $time_place .= ", $coll->{country}";
         }
         print '<div align="center"><h3>'.$time_place.'</h3></div>';
     }
@@ -805,133 +842,38 @@ sub displaySimpleMap {
 			$q->param($pref => $user_prefs{$pref});
 		}
 	}
-	# Not covered by prefs:
-	if(!$q->param('mapbgcolor')){
-		$q->param('mapbgcolor' => 'white');
-	}
-	if(!$q->param('pointshape1')){
-		$q->param('pointshape1' => 'circles');
-	}
-	if(!$q->param('dotcolor1')){
-		$q->param('dotcolor1' => 'red');
-	}
-	if(!$q->param('dotborder1')){
-		$q->param('dotborder1' => 'no');
-	}
-	if(!$q->param('coastlinecolor')){
-		$q->param('coastlinecolor' => 'gray');
-	}
-	if(!$q->param('borderlinecolor')){
-		$q->param('borderlinecolor' => 'gray');
-	}
-	if(!$q->param('usalinecolor')){
-		$q->param('usalinecolor' => 'gray');
-	}
-	$q->param('mapresolution'=>'fine');
 
-	# note, we need to leave this in here even though it's 
-	# redunant (since we scale below).. taking it out will
-	# cause a division by zero error in Map.pm.
-	$q->param('mapscale'=>'X 1');
-	$q->param('mapwidth'=>'100%');
-	$q->param('mapsize'=>'100%');
-
-	# we need to get the number of collections out of dataRowsRef
-	#  before figuring out the point size
-	require Map;
-	my $m = Map->new( $dbh, $q, $s, $dbt );
-	my $dataRowsRef = $m->buildMapOnly();
-
-	# find the point size JA 26.4.06
-	if ( $#{$dataRowsRef} > 100 )	{
-		$q->param('pointsize1'=>'medium');
-	} elsif ( $#{$dataRowsRef} > 50 )	{
-		$q->param('pointsize1'=>'large');
-	} elsif ( $#{$dataRowsRef} > 20 )	{
-		$q->param('pointsize1'=>'very large');
-	} else	{
-		$q->param('pointsize1'=>'huge');
-	}
-
-	if(!$q->param('projection') or $q->param('projection') eq ""){
-		$q->param('projection'=>'equirectangular');
-	}
-
-	if(scalar(@{$dataRowsRef}) > 0) {
-		# this section added by rjp on 12/11/2003
-		# at this point, we need to figure out the bounds 
-		# of the collections and the center point.  
-		my @bounds = TaxonInfo::calculateCollectionBounds($dataRowsRef);
-
-		$q->param('maplat' => shift(@bounds));
-		$q->param('maplng' => shift(@bounds));
-
-		# note, we must constrain the map size to be in a ratio
-		# of 360 wide by 180 high, so figure out what ratio to use
-		my $latMin = shift(@bounds);	my $latMax = shift(@bounds);
-		my $lonMin = shift(@bounds);	my $lonMax = shift(@bounds);
-
-		my $latWidth = abs($latMax - $latMin);
-		my $lonWidth = abs($lonMax - $lonMin);
-
-		my $scale = 8;  # default scale value
-		if (not (($latWidth == 0) and ($lonWidth == 0))) {
-			# only do this if they're not both zero...
-		
-			if ($latWidth == 0) { $latWidth = 1; } #to prevent divide by zero
-			if ($lonWidth == 0) { $lonWidth = 1; }
-		
-			# multiply by 0.9 to give a slight boundary around the zoom.
-            # don't do this if the entire globe is to be displayed
-            # JA 28.8.06
-		    my $latRatio;
-		    my $lonRatio;
-            if ( $latWidth < 180 && $lonWidth < 360 )   {
-			    $latRatio = (0.9 * 156) / $latWidth;
-			    $lonRatio = (0.9 * 312) / $lonWidth;
-            }
-
-			#print "latRatio = $latRatio\n";
-			#print "lonRatio = $lonRatio\n";
-
-			if ($latRatio < $lonRatio) {
-				$scale = $latRatio;
-			} else { 
-				$scale = $lonRatio;
-			}
-		}
-
-		if ($scale > 8) { $scale = 8; } # don't let it zoom too far in!
-		$q->param('mapscale' => "X $scale");
-		
-
-		# note, we have already set $q in the map object,
-		# so we have to set it again with the new values.
-		# this is not the ideal way to do it, so perhaps change
-		# this at a future date.
-		$m->setQAndUpdateScale($q);
-		
 	
-		# now actually draw the map
-        print '<div align="center"><h3>Map</h3></div>';
-        print '<div align="center">';
-    
-        my $map_html_path = $m->drawMapOnly($dataRowsRef);
-        if ( $map_html_path )   {
-            if($map_html_path =~ /^\/public/){
-                # reconstruct the full path the image.
-                $map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
-            }
-            open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
-            while(<MAP>){
-                print;
-            }
-            close MAP; 
+    # now actually draw the map
+    require Map;
+    print '<div align="center"><h3>Map</h3></div>';
+    print '<div align="center">';
+
+    # we need to get the number of collections out of dataRowsRef
+    #  before figuring out the point size
+    my ($map_html_path,$errors,$warnings);
+    $q->param("simple_map"=>'YES');
+    $q->param('mapscale'=>'auto');
+    $q->param('autoborders'=>'yes');
+    $q->param('pointsize1'=>'auto');
+    my $m = Map->new($q,$dbt);
+    ($map_html_path,$errors,$warnings) = $m->buildMap();
+
+    # MAP USES $q->param("taxon_name") to determine what it's doing.
+    if ($map_html_path)   {
+        if($map_html_path =~ /^\/public/){
+            # reconstruct the full path the image.
+            $map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
         }
-        print "</div>";
-	}  else {
-        return;
-	}
+        open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
+        while(<MAP>){
+            print;
+        }
+        close MAP;
+    } else {
+        print "<i>No distribution data are available</i>";
+    }  
+    print "</div>";
     print stdIncludes("std_page_bottom");
 }
 
@@ -2513,7 +2455,13 @@ sub processCollectionsSearch {
         # taxon_list an array reference to a list of taxon_no's
         my %all_taxon_nos;
         if ($options{'taxon_list'}) {
-            my $taxon_nos = join(",",@{$options{'taxon_list'}});
+            my $taxon_nos;
+            if (ref $options{'taxon_list'}) {
+                $taxon_nos = join(",",@{$options{'taxon_list'}});
+            } else {
+                $taxon_nos = $options{'taxon_list'};
+            }
+            $taxon_nos =~ s/[^0-9,]//g;
             $taxon_nos = "-1" if (!$taxon_nos);
             $sql1 .= "o.taxon_no IN ($taxon_nos)";
             $sql2 .= "re.taxon_no IN ($taxon_nos)";

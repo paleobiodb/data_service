@@ -379,27 +379,7 @@ sub displayTaxonInfoResults {
         print '<div align="center">';
 
         if ($is_real_user) {
-            # MAP USES $q->param("taxon_name") to determine what it's doing.
-            my $map_html_path = doMap($dbh, $dbt, $q, $s, $in_list);
-            if ( $map_html_path )	{
-                if($map_html_path =~ /^\/public/){
-                    # reconstruct the full path the image.
-                    $map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
-                }
-                open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
-                while(<MAP>){
-                    print;
-                }
-                close MAP;
-            } else {
-                print "<i>No distribution data are available</i>";
-            }
-            # trim the path down beyond apache's root so we don't have a full
-            # server path in our html.
-            if ( $map_html_path )	{
-                $map_html_path =~ s/.*?(\/public.*)/$1/;
-                print "<input type=hidden name=\"map_num\" value=\"$map_html_path\">";
-            }
+            displayMap($dbt,$q,$s,$in_list);
         } else {
             print '<form method="POST" action="bridge.pl">';
             foreach my $f ($q->param()) {
@@ -504,89 +484,9 @@ sub doThumbs {
     }
 } 
 
-
-# PASS this a reference to the collection list array and it
-# should figure out the min/max/center lat/lon 
-# RETURNS an array of parameters (see end of routine for order)
-# written 12/11/2003 by rjp.
-sub calculateCollectionBounds {
-	my $collections = shift;  #collections to plot
-
-	# calculate the min and max latitude and 
-	# longitude with 1 degree resolution
-	my $latMin = 360;
-	my $latMax = -360;
-	my $lonMin = 360;
-	my $lonMax = -360;
-
-	foreach (@$collections) {
-		my %coll = %$_;
-
-		# note, this is *assuming* that latdeg and lngdeg are 
-		# always populated, even if the user set the lat/lon with 
-		# decimal degrees instead.  So if this isn't the case, then
-		# we need to check both of them.  
-		my $latDeg = $coll{'latdeg'};
-		if ($coll{'latdir'} eq "South") {
-			$latDeg = -1*$latDeg;
-		}
-
-		my $lonDeg = $coll{'lngdeg'};
-		if ($coll{'lngdir'} eq "West") {
-			$lonDeg = -1* $lonDeg;
-		}
-
-		#print "lat = $latDeg<BR>";
-		#print "lon = $lonDeg<BR>";
-
-		if ($latDeg > $latMax) { $latMax = $latDeg; }
-		if ($latDeg < $latMin) { $latMin = $latDeg; }
-		if ($lonDeg > $lonMax) { $lonMax = $lonDeg; }
-		if ($lonDeg < $lonMin) { $lonMin = $lonDeg; }
-	}
-
-    # If its spread out over more than 75% of the earth, than just zoom out fully and center the map
-	my $latCenter = 0;
-	my $lonCenter = 0;
-    if (abs($lonMax - $lonMin) >= 270) {
-	    $latCenter = 0;
-	    $lonCenter = 0;
-        $lonMin= -180;
-        $lonMax = 180;
-        $latMin = -90;
-        $latMax = 90;
-    } else {
-	    $latCenter = (($latMax - $latMin)/2) + $latMin;
-	    $lonCenter = (($lonMax - $lonMin)/2) + $lonMin;
-    }
-
-	#print "latCenter = $latCenter<BR>";
-	#print "lonCenter = $lonCenter<BR>";
-	#print "latMin = $latMin<BR>";
-	#print "latMax = $latMax<BR>";
-	#print "lonMin = $lonMin<BR>";
-	#print "lonMax = $lonMax<BR>";
-
-	return ($latCenter, $lonCenter, $latMin, $latMax, $lonMin, $lonMax);
-}
-
-
-
-
-
-sub doMap{
-	my $dbh = shift;
-	my $dbt = shift;
-	my $q = shift;
-	my $s = shift;
-	my $in_list = shift;
-	my $map_num = $q->param('map_num');
-
-	if($q->param('map_num')){
-		return $q->param('map_num');
-	}
-
-	$q->param("simple_map"=>'YES');
+sub displayMap {
+    my ($dbt,$q,$s,$in_list)  = @_;
+    
 	my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape1', 'dotcolor1', 'dotborder1');
 	my %user_prefs = main::getPreferences($s->get('enterer_no'));
 	foreach my $pref (@map_params){
@@ -594,118 +494,36 @@ sub doMap{
 			$q->param($pref => $user_prefs{$pref});
 		}
 	}
-	# Not covered by prefs:
-	if(!$q->param('mapbgcolor')){
-		$q->param('mapbgcolor' => 'white');
-	}
-	if(!$q->param('pointshape1')){
-		$q->param('pointshape1' => 'circles');
-	}
-	if(!$q->param('dotcolor1')){
-		$q->param('dotcolor1' => 'red');
-	}
-	if(!$q->param('dotborder1')){
-		$q->param('dotborder1' => 'no');
-	}
-	if(!$q->param('coastlinecolor')){
-		$q->param('coastlinecolor' => 'gray');
-	}
-	if(!$q->param('borderlinecolor')){
-		$q->param('borderlinecolor' => 'gray');
-	}
-	if(!$q->param('usalinecolor')){
-		$q->param('usalinecolor' => 'gray');
-	}
-	$q->param('mapresolution'=>'medium');
-
-	# note, we need to leave this in here even though it's 
-	# redunant (since we scale below).. taking it out will
-	# cause a division by zero error in Map.pm.
-	$q->param('mapscale'=>'X 1');
-	$q->param('mapwidth'=>'100%');
-	$q->param('mapsize'=>'100%');
 
 	# we need to get the number of collections out of dataRowsRef
 	#  before figuring out the point size
-	require Map;
-	my $m = Map->new( $dbh, $q, $s, $dbt );
-	my $dataRowsRef = $m->buildMapOnly($in_list);
+    my ($map_html_path,$errors,$warnings);
+    if (ref $in_list && @$in_list) {
+        my $taxon_list = join(",",@$in_list);
+        require Map;
+        $q->param("simple_map"=>'YES');
+        $q->param('mapscale'=>'auto');
+        $q->param('autoborders'=>'yes');
+        $q->param('pointsize1'=>'auto');
+        $q->param('taxon_list'=>$taxon_list);
+        my $m = Map->new($q,$dbt);
+        ($map_html_path,$errors,$warnings) = $m->buildMap();
+    }
 
-	# find the point size JA 26.4.06
-	if ( $#{$dataRowsRef} > 100 )	{
-		$q->param('pointsize1'=>'medium');
-	} elsif ( $#{$dataRowsRef} > 50 )	{
-		$q->param('pointsize1'=>'large');
-	} elsif ( $#{$dataRowsRef} > 20 )	{
-		$q->param('pointsize1'=>'very large');
-	} else	{
-		$q->param('pointsize1'=>'huge');
-	}
-
-	if(!$q->param('projection') or $q->param('projection') eq ""){
-		$q->param('projection'=>'equirectangular');
-	}
-
-	if(scalar(@{$dataRowsRef}) > 0) {
-		# this section added by rjp on 12/11/2003
-		# at this point, we need to figure out the bounds 
-		# of the collections and the center point.  
-		my @bounds = calculateCollectionBounds($dataRowsRef);
-
-		$q->param('maplat' => shift(@bounds));
-		$q->param('maplng' => shift(@bounds));
-
-		# note, we must constrain the map size to be in a ratio
-		# of 360 wide by 180 high, so figure out what ratio to use
-		my $latMin = shift(@bounds);	my $latMax = shift(@bounds);
-		my $lonMin = shift(@bounds);	my $lonMax = shift(@bounds);
-
-		my $latWidth = abs($latMax - $latMin);
-		my $lonWidth = abs($lonMax - $lonMin);
-
-		my $scale = 8;  # default scale value
-		if (not (($latWidth == 0) and ($lonWidth == 0))) {
-			# only do this if they're not both zero...
-		
-			if ($latWidth == 0) { $latWidth = 1; } #to prevent divide by zero
-			if ($lonWidth == 0) { $lonWidth = 1; }
-		
-			# multiply by 0.9 to give a slight boundary around the zoom.
-            # don't do this if the entire globe is to be displayed
-            # JA 28.8.06
-		    my $latRatio;
-		    my $lonRatio;
-            if ( $latWidth < 180 && $lonWidth < 360 )   {
-			    $latRatio = (0.9 * 156) / $latWidth;
-			    $lonRatio = (0.9 * 312) / $lonWidth;
-            }
-
-			#print "latRatio = $latRatio\n";
-			#print "lonRatio = $lonRatio\n";
-
-			if ($latRatio < $lonRatio) {
-				$scale = $latRatio;
-			} else { 
-				$scale = $lonRatio;
-			}
-		}
-
-		if ($scale > 8) { $scale = 8; } # don't let it zoom too far in!
-		$q->param('mapscale' => "X $scale");
-		
-
-		# note, we have already set $q in the map object,
-		# so we have to set it again with the new values.
-		# this is not the ideal way to do it, so perhaps change
-		# this at a future date.
-		$m->setQAndUpdateScale($q);
-		
-	
-		# now actually draw the map
-		return $m->drawMapOnly($dataRowsRef);
-	}  else {
-        return;
-	}
+    # MAP USES $q->param("taxon_name") to determine what it's doing.
+    if ( $map_html_path )	{
+        if($map_html_path =~ /^\/public/){
+            # reconstruct the full path the image.
+            $map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
+        }
+        open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
+        while(<MAP>){
+            print;
+        }
+        close MAP;
+    } else {
+        print "<i>No distribution data are available</i>";
+    }
 }
 
 

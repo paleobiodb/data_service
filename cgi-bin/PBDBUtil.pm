@@ -284,41 +284,42 @@ sub getPaleoCoords {
 
     # Get time interval information
     my $t = new TimeLookup($dbt);
-    @_ = $t->getBoundaries;
-    my %upperbound = %{$_[0]};
-    my %lowerbound = %{$_[1]};
- 
+    my @itvs; 
+    push @itvs, $max_interval_no if ($max_interval_no);
+    push @itvs, $min_interval_no if ($min_interval_no && $max_interval_no != $min_interval_no);
+    my $h = $t->lookupIntervals(\@itvs);
 
-    my ($paleolat, $paleolng,$rx,$ry,$pid); 
+    my ($paleolat, $paleolng,$plng,$plat,$lngdeg,$latdeg,$pid); 
     if ($f_latdeg <= 90 && $f_latdeg >= -90  && $f_lngdeg <= 180 && $f_lngdeg >= -180 ) {
-        my $colllowerbound =  $lowerbound{$max_interval_no};
+        my $colllowerbound =  $h->{$max_interval_no}{'lower_boundary'};
         my $collupperbound;
         if ($min_interval_no)  {
-            $collupperbound = $upperbound{$min_interval_no};
+            $collupperbound = $h->{$min_interval_no}{'upper_boundary'};
         } else {        
-            $collupperbound = $upperbound{$max_interval_no};
+            $collupperbound = $h->{$max_interval_no}{'upper_boundary'};
         }
         my $collage = ( $colllowerbound + $collupperbound ) / 2;
         $collage = int($collage+0.5);
-        main::dbg("collage $collage max_i $max_interval_no min_i $min_interval_no colllowerbound $colllowerbound collupperbound $collupperbound ");
+        if ($collage <= 600 && $collage >= 0) {
+            main::dbg("collage $collage max_i $max_interval_no min_i $min_interval_no colllowerbound $colllowerbound collupperbound $collupperbound ");
 
-        # Get Map rotation information - needs maptime to be set (to collage)
-        # rotx, roty, rotdeg get set by the function, needed by projectPoints below
-        my $map_o = new Map;
-        $map_o->{maptime} = $collage;
-        $map_o->readPlateIDs();
-        $map_o->mapGetRotations();
+            # Get Map rotation information - needs maptime to be set (to collage)
+            # rotx, roty, rotdeg get set by the function, needed by projectPoints below
+            my $map_o = new Map;
+            $map_o->{maptime} = $collage;
+            $map_o->readPlateIDs();
+            $map_o->mapGetRotations();
 
-        my ($lngdeg, $latdeg);
-        ($lngdeg,$latdeg,$rx,$ry,$pid) = $map_o->projectPoints($f_lngdeg,$f_latdeg);
-        main::dbg("lngdeg: $lngdeg latdeg $latdeg");
-        if ( $lngdeg !~ /NaN/ && $latdeg !~ /NaN/ )       {
-            $paleolng = $lngdeg;
-            $paleolat = $latdeg;
-        } 
+            ($plng,$plat,$lngdeg,$latdeg,$pid) = $map_o->projectPoints($f_lngdeg,$f_latdeg);
+            main::dbg("lngdeg: $lngdeg latdeg $latdeg");
+            if ( $lngdeg !~ /NaN/ && $latdeg !~ /NaN/ )       {
+                $paleolng = $lngdeg;
+                $paleolat = $latdeg;
+            } 
+        }
     }
 
-    main::dbg("Paleolng: $paleolng Paleolat $paleolat fx $f_lngdeg fy $f_latdeg rx $rx ry $ry pid $pid");
+    main::dbg("Paleolng: $paleolng Paleolat $paleolat fx $f_lngdeg fy $f_latdeg plat $plat plng $plng pid $pid");
     return ($paleolng, $paleolat);
 }
 

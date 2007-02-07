@@ -1,186 +1,47 @@
-    <script language="JavaScript" type="text/javascript">
-    <!-- Begin
-
-// autofill period and epoch fields based on reconstruction date
-	function fillPeriodEpoch ()	{
-
-		var frm = document.forms[0];
-		if ( frm.maptime.value )	{
-			if ( frm.maptime.value == 0 )	{
-				frm.epoch.value = "Holocene";
-				selectPeriod("Quaternary");
-			} else if ( frm.maptime.value <= 2 )	{
-				frm.epoch.value = "Pleistocene";
-				selectPeriod("Quaternary");
-			} else if ( frm.maptime.value <= 5 )	{
-				frm.epoch.value = "Pliocene";
-				selectPeriod("Tertiary");
-			} else if ( frm.maptime.value <= 24  )	{
-				frm.epoch.value = "Miocene";
-				selectPeriod("Tertiary");
-			} else if ( frm.maptime.value <= 34 )	{
-				frm.epoch.value = "Oligocene";
-				selectPeriod("Tertiary");
-			} else if ( frm.maptime.value <= 55 )	{
-				frm.epoch.value = "Eocene";
-				selectPeriod("Tertiary");
-			} else if ( frm.maptime.value <= 65 )	{
-				frm.epoch.value = "Paleocene";
-				selectPeriod("Tertiary");
-			} else if ( frm.maptime.value <= 89 )	{
-				frm.epoch.value = "Senonian";
-				selectPeriod("Cretaceous");
-			} else if ( frm.maptime.value <= 127 )	{
-				frm.epoch.value = "Gallic";
-				selectPeriod("Cretaceous");
-			} else if ( frm.maptime.value <= 144 )	{
-				frm.epoch.value = "Neocomian";
-				selectPeriod("Cretaceous");
-			} else if ( frm.maptime.value <= 159 )	{
-				frm.epoch.value = "Malm";
-				selectPeriod("Jurassic");
-			} else if ( frm.maptime.value <= 180 )	{
-				frm.epoch.value = "Dogger";
-				selectPeriod("Jurassic");
-			} else if ( frm.maptime.value <= 206 )	{
-				frm.epoch.value = "Lias";
-				selectPeriod("Jurassic");
-			} else if ( frm.maptime.value <= 251 )	{
-				frm.epoch.value = "";
-				selectPeriod("Triassic");
-			} else if ( frm.maptime.value <= 270 )	{
-				frm.epoch.value = "Zechstein";
-				selectPeriod("Permian");
-			} else if ( frm.maptime.value <= 300 )	{
-				frm.epoch.value = "Rotliegendes";
-				selectPeriod("Permian");
-			} else if ( frm.maptime.value <= 303 )	{
-				frm.epoch.value = "Gzelian";
-				selectPeriod("Carboniferous");
-			} else if ( frm.maptime.value <= 307 )	{
-				frm.epoch.value = "Kasimovian";
-				selectPeriod("Carboniferous");
-			} else if ( frm.maptime.value <= 311 )	{
-				frm.epoch.value = "Moscovian";
-				selectPeriod("Carboniferous");
-			} else if ( frm.maptime.value <= 314 )	{
-				frm.epoch.value = "Bashkirian";
-				selectPeriod("Carboniferous");
-			} else if ( frm.maptime.value <= 333 )	{
-				frm.epoch.value = "Serpukhovian";
-				selectPeriod("Carboniferous");
-			} else if ( frm.maptime.value <= 343 )	{
-				frm.epoch.value = "Visean";
-				selectPeriod("Carboniferous");
-			} else if ( frm.maptime.value <= 362 )	{
-				frm.epoch.value = "Tournaisian";
-				selectPeriod("Carboniferous");
-			} else if ( frm.maptime.value <= 418 )	{
-				frm.epoch.value = "";
-				selectPeriod("Devonian");
-			} else if ( frm.maptime.value <= 419 )	{
-				frm.epoch.value = "Pridoli";
-				selectPeriod("Silurian");
-			} else if ( frm.maptime.value <= 424 )	{
-				frm.epoch.value = "Ludlow";
-				selectPeriod("Silurian");
-			} else if ( frm.maptime.value <= 428 )	{
-				frm.epoch.value = "Wenlock";
-				selectPeriod("Silurian");
-			} else if ( frm.maptime.value <= 443 )	{
-				frm.epoch.value = "Llandovery";
-				selectPeriod("Silurian");
-			} else if ( frm.maptime.value <= 449 )	{
-				frm.epoch.value = "Ashgill";
-				selectPeriod("Ordovician");
-			} else if ( frm.maptime.value <= 456 )	{
-				frm.epoch.value = "Caradoc";
-				selectPeriod("Ordovician");
-			} else if ( frm.maptime.value <= 461 )	{
-				frm.epoch.value = "Llandeilo";
-				selectPeriod("Ordovician");
-			} else if ( frm.maptime.value <= 470 )	{
-				frm.epoch.value = "Llanvirn";
-				selectPeriod("Ordovician");
-			} else if ( frm.maptime.value <= 483 )	{
-				frm.epoch.value = "Arenig";
-				selectPeriod("Ordovician");
-			} else if ( frm.maptime.value <= 495 )	{
-				frm.epoch.value = "Tremadoc";
-				selectPeriod("Ordovician");
-			} else if ( frm.maptime.value <= 500 )	{
-				frm.epoch.value = "Merioneth";
-				selectPeriod("Cambrian");
-			} else if ( frm.maptime.value <= 518 )	{
-				frm.epoch.value = "St. David's";
-				selectPeriod("Cambrian");
-			} else if ( frm.maptime.value <= 545 )	{
-				frm.epoch.value = "Caerfai";
-				selectPeriod("Cambrian");
-			} else	{
-				frm.epoch.value = "";
-				selectPeriod("Neoproterozoic");
-			}
-
-		}
-
-	}
-
-// select a period
-	function selectPeriod( period_name )	{
-
-		var frm = document.forms[0];
-
-		for ( var loop=0; loop < frm.period.length; loop++ )	{
-			if ( frm.period[loop].text == period_name )	{
-				frm.period.selectedIndex = loop;
-				break;
-			}
-		}
-
-	}
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
 
 // check date, latitude, longitude
-    function checkForm() {
+function checkForm() {
 
-		var frm = document.forms[0];
-		var errors = "";
+    var frm = document.forms[0];
+    var errors = "";
 
-		// date of paleogeographic reconstruction must be 0 - 600 m.y.
+    // date of paleogeographic reconstruction must be 0 - 600 m.y.
 
-		if ( frm.maptime.value != "" && frm.maptime.value < 0 ) {
-			errors += "Reconstruction date is negative\n";
-		}
-		if ( frm.maptime.value != "" && frm.maptime.value > 600 ) {
-			errors += "Reconstruction date is too high\n";
-		}
-
-		// lat/long values must be within a sensible range
-
-		if ( frm.maplat.value != "" && frm.maplat.value < -90 ) {
-			errors += "Latitude is too low\n";
-		}
-		if ( frm.maplat.value != "" && frm.maplat.value > 90 ) {
-			errors += "Latitude is too high\n";
-		}
-		if ( frm.maplng.value != "" && frm.maplng.value < -180 ) {
-			errors += "Longitude is too low\n";
-		}
-		if ( frm.maplng.value != "" && frm.maplng.value > 180 ) {
-			errors += "Longitude is too high\n";
-		}
-		// Report errors
-		if ( errors != "" ) {
-			errors = "   Errors detected!!   \n" + 
-					 "------------------------------------\n\n" +
-					 errors + "\n" +
-					 "------------------------------------\n\n" +
-					 "See the tip sheet for instructions.";
-			alert ( errors );
-			return false;
-		} 
-		return true;
+    if ( frm.maptime && frm.maptime.value != "" && frm.maptime.value < 0 ) {
+        errors += "Reconstruction date is negative\n";
+    }
+    if ( frm.maptime && frm.maptime.value != "" && frm.maptime.value > 600 ) {
+        errors += "Reconstruction date is too high\n";
     }
 
-    //  End -->
-    </script>
+    // lat/long values must be within a sensible range
+
+    if ( frm.maplat && frm.maplat.value != "" && frm.maplat.value < -90 ) {
+        errors += "Latitude is too low\n";
+    }
+    if ( frm.maplat && frm.maplat.value != "" && frm.maplat.value > 90 ) {
+        errors += "Latitude is too high\n";
+    }
+    if ( frm.maplng && frm.maplng.value != "" && frm.maplng.value < -180 ) {
+        errors += "Longitude is too low\n";
+    }
+    if ( frm.maplng && frm.maplng.value != "" && frm.maplng.value > 180 ) {
+        errors += "Longitude is too high\n";
+    }
+    // Report errors
+    if ( errors != "" ) {
+        errors = "   Errors detected!!   \n" + 
+                 "------------------------------------\n\n" +
+                 errors + "\n" +
+                 "------------------------------------\n\n" +
+                 "See the tip sheet for instructions.";
+        alert ( errors );
+        return false;
+    } 
+    return true;
+}
+
+//  End -->
+</script>
