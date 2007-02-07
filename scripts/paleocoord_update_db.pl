@@ -1,7 +1,6 @@
 #!/usr/bin/perl 
 
 BEGIN {
-$ENV{MAP_COAST_DIR} = "/home/peters/apache/cgi-bin/data";
 $ENV{DOWNLOAD_OUTFILE_DIR} = "/Volumes/pbdb_RAID/httpdocs/html/paleodb/data";
 $ENV{DOWNLOAD_DATAFILE_DIR} = "/Volumes/pbdb_RAID/httpdocs/cgi-bin/data";
 $ENV{MAP_COAST_DIR} = "/Volumes/pbdb_RAID/httpdocs/cgi-bin/data";
