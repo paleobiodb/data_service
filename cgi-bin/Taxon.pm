@@ -749,7 +749,7 @@ sub submitAuthorityForm {
             my $opinion_no = ${$dbt->getData($sql)}[0]->{opinion_no};
             if ( $opinion_no > 0 )	{
                 $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this author's opinion about $fields{taxon_name}</a></b></li><br>|;
-            } else	{
+            } elsif ( $q->param('author1last') )	{
             # if that didn't work, either this is not a species, or
             #   something is wrong because an implicit opinion of the
             #   author should have been created; regardless, create a link
