@@ -334,23 +334,24 @@ sub retellOptions {
     $html .= $self->retellOptionsRow ( "Lump by published reference?", $q->param("lump_by_ref") );
     $html .= $self->retellOptionsRow ( "Lump by time interval?", $q->param("lump_by_interval") );
     $html .= $self->retellOptionsRow ( "Restrict to collection(s): ",$q->param("collection_no"));
-    $html .= $self->retellOptionsRow ( "Exclude collections with subset collections? ",$q->param("exclude_superset")) if ($q->param("exclude_superset") eq 'YES');
+    $html .= $self->retellOptionsRow ( "Exclude collections with subset collections? ","yes" ) if ($q->param("exclude_superset") eq 'YES');
     $html .= $self->retellOptionsRow ( "Exclude collections with ".$q->param("occurrence_count_qualifier")." than",$q->param("occurrence_count")." occurrences") if (int($q->param("occurrence_count")));
     $html .= $self->retellOptionsRow ( "Exclude collections with ".$q->param("abundance_count_qualifier")." than",$q->param("abundance_count")." specimens/individuals") if (int($q->param("abundance_count")));
 
     if ($q->param('output_data') =~ /occurrence|specimens|genera|species/) {
-        $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?","YES") if ($q->param('lump_genera') eq 'YES');
-        $html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?","YES") if ($q->param("split_subgenera") eq 'YES');
-        $html .= $self->retellOptionsRow ( "Replace names with reidentifications?","NO") if ($q->param('repace_with_reid') eq 'NO');
-        $html .= $self->retellOptionsRow ( "Replace names with senior synonyms?", "NO") if ($q->param("replace_with_ss") eq 'NO');
-        $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", "YES") if ($q->param('indet') eq 'YES');
-        $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", "YES") if ($q->param('sp') eq 'YES');
+        $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?","yes") if ($q->param('lump_genera') eq 'YES');
+        $html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?","yes") if ($q->param("split_subgenera") eq 'YES');
+        $html .= $self->retellOptionsRow ( "Replace names with reidentifications?","no") if ($q->param('repace_with_reid') eq 'NO');
+        $html .= $self->retellOptionsRow ( "Replace names with senior synonyms?","no") if ($q->param("replace_with_ss") eq 'NO');
+        $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", "yes") if ($q->param('indet') eq 'YES');
+        $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", "yes") if ($q->param('sp') eq 'YES');
         my @genus_reso_types_group = ('aff.','cf.','ex gr.','n. gen.','sensu lato','?','"');
         $html .= $self->retellOptionsGroup('Include occurrences qualified by','genus_reso_',\@genus_reso_types_group);
-        $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", "YES") if ( $q->param("informal") eq 'YES');
-        $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", "NO") if ($q->param("compendium_ranges") eq 'NO');
-        $html .= $self->retellOptionsRow ( "Only include occurrences with abundance data?", $q->param("abundance_required") ) if ($q->param("abundance_required") ne 'all');
-        $html .= $self->retellOptionsRow ( "Include abundances if some genera or groups do not have them?", $q->param("incomplete_abundances") ) if ($q->param("incomplete_abundances") eq 'YES');
+        $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", "yes") if ( $q->param("informal") eq 'YES');
+        $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", "no") if ($q->param("compendium_ranges") eq 'NO');
+        $html .= $self->retellOptionsRow ( "Only include occurrences with abundance data?", "yes, require some kind of abundance data" ) if ($q->param("abundance_required") eq 'abundances');
+        $html .= $self->retellOptionsRow ( "Only include occurrences with abundance data?", "yes, require specimen or individual counts" ) if ($q->param("abundance_required") eq 'specimens');
+        $html .= $self->retellOptionsRow ( "Include abundances if some genera or groups do not have them?", "yes" ) if ($q->param("incomplete_abundances") eq 'YES');
         $html .= $self->retellOptionsRow ( "Exclude classified occurrences?", $q->param("classified") ) if ($q->param("classified" !~ /classified|unclassified/i));
         $html .= $self->retellOptionsRow ( "Minimum # of specimens to compute mean abundance", $q->param("min_mean_abundance") ) if ($q->param("min_mean_abundance"));
         my @preservation = $q->param('preservation');
@@ -2026,6 +2027,11 @@ sub queryDatabase {
             # delete abundances (not occurrences) if the collection excludes
             #  some genera or some groups JA 27.9.06
             if ( $q->param('incomplete_abundances') eq "NO" && $row->{'c.collection_coverage'} =~ /some genera|some macrofossils|some microfossils/ )	{
+                # toss it out completely if abundances are strictly required
+                #  JA 8.2.07
+                if ( $q->param('abundance_required') =~ /abundances|specimens/ )	{
+                    next;
+                }
                 $row->{'o.abund_value'} = "";
                 $row->{'o.abund_unit'} = "";
             }
