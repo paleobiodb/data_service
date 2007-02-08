@@ -1925,7 +1925,7 @@ sub printResults	{
 					print TABLE ",$specimensinchron[$i]";
 				}
 				if ( $q->param('print_mean_richness') eq "YES" )	{
-					f ( $listsinchron[$i] > 0 )	{
+					if ( $listsinchron[$i] > 0 )	{
 						printf TABLE ",%.1f",$occsinchron[$i]/$listsinchron[$i];
 					} else	{
 						 print TABLE ",NaN";
