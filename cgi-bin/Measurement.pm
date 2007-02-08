@@ -175,7 +175,17 @@ sub displaySpecimenList {
             $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
         }
     } else {
-        my $sql = "SELECT s.*,m.*,s.taxon_no FROM specimens s, measurements m WHERE s.specimen_no=m.specimen_no AND s.taxon_no=".int($q->param('taxon_no')); 
+        my $sql = "";
+        my $taxon_no = int($q->param('taxon_no'));
+        if ($q->param('types_only')) {
+            $sql = "(SELECT s.*,m.*,s.taxon_no FROM specimens s, measurements m WHERE s.specimen_no=m.specimen_no AND s.taxon_no=$taxon_no AND s.is_type='holotype')"
+                 . " UNION "
+                 . "(SELECT s.*,m.*,s.taxon_no FROM specimens s, measurements m, occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE s.occurrence_no=o.occurrence_no AND s.specimen_no=m.specimen_no AND o.taxon_no=$taxon_no AND re.reid_no IS NULL AND s.is_type='holotype')"
+                 . " UNION "
+                 . "(SELECT s.*,m.*,s.taxon_no FROM specimens s, measurements m, occurrences o, reidentifications re WHERE s.occurrence_no=o.occurrence_no AND o.occurrence_no=re.occurrence_no AND s.specimen_no=m.specimen_no AND re.taxon_no=$taxon_no AND re.most_recent='YES' AND s.is_type='holotype')"
+        } else {
+            $sql = "SELECT s.*,m.*,s.taxon_no FROM specimens s, measurements m WHERE s.specimen_no=m.specimen_no AND s.taxon_no=$taxon_no";
+        }
         main::dbg("sql is $sql");
         @results = @{$dbt->getData($sql)};
 
@@ -194,6 +204,9 @@ sub displaySpecimenList {
     print "<h3>Specimen list for $taxon_name $collection</h3>\n";
     print "<form method=\"POST\" action=\"bridge.pl\">\n";
     print "<input type=hidden name=\"action\" value=\"populateMeasurementForm\">\n";
+    if ($q->param('types_only')) {
+        print "<input type=hidden name=\"types_only\" value=\"".$q->param('types_only')."\">";
+    }
     if ($q->param('occurrence_no')) {
         print "<input type=hidden name=\"occurrence_no\" value=\"".$q->param('occurrence_no')."\">";
     } else {
@@ -351,12 +364,12 @@ sub populateMeasurementForm {
                         push @values, '';
                     }
                 }
-	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimens_measured','specimen_is_type');
-	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,1,'');
+	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimens_measured','specimen_is_type','types_only');
+	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,1,'',$q->param('types_only'));
 	            print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
             } elsif ($q->param('specimen_no') == -2) {
-	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimen_coverage');
-	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,'');
+	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimen_coverage','types_only');
+	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,'',$q->param('types_only'));
                 #@table_rows = ('specimen_id','length','width','height','diagonal','specimen_side','specimen_part','measurement_source','magnification','is_type');
                 my $table_rows = "";
                 for (1..$q->param('specimens_measured')) {
@@ -412,8 +425,8 @@ sub populateMeasurementForm {
         }      
 
         # some additional fields not from the form row
-	    push (@fields, 'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection_no');
-	    push (@values, int($q->param('occurrence_no')),int($q->param('taxon_no')),$row->{'reference_no'},$row->{'specimen_no'},$taxon_name,$collection_no);
+	    push (@fields, 'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection_no','types_only');
+	    push (@values, int($q->param('occurrence_no')),int($q->param('taxon_no')),$row->{'reference_no'},$row->{'specimen_no'},$taxon_name,$collection_no,$q->param('types_only'));
 	    print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
     }
 
@@ -497,10 +510,12 @@ sub processMeasurementForm	{
             $fields{'is_type'} = '';
         }
 
+        my $specimen_no;
         if ( $fields{'specimen_no'} > 0 )	{
             delete $fields{'taxon_no'}; # keys, never update thse
             delete $fields{'occurrence_no'}; # keys, never update thse
             $result = $dbt->updateRecord($s,'specimens','specimen_no',$fields{'specimen_no'},\%fields);
+            $specimen_no = $fields{specimen_no};
 
             if ($result) {
                 $sql = "SELECT * FROM measurements WHERE specimen_no=".int($fields{'specimen_no'});
@@ -581,7 +596,8 @@ sub processMeasurementForm	{
             } else {
                 $fields{'occurrence_no'} = undef;
             }
-            my ($result,$specimen_no) = $dbt->insertRecord($s,'specimens',\%fields);
+            my $result;
+            ($result,$specimen_no) = $dbt->insertRecord($s,'specimens',\%fields);
 
             if ($result) {
                 # Get the measurement data. types can be "length","width",etc. fields can be "average","max","min",etc.
@@ -617,6 +633,9 @@ sub processMeasurementForm	{
                 carp "Error inserting row in Measurement.pm: ".$result;
             }
         }
+        if ($specimen_no) {
+            syncWithAuthorities($dbt,$s,$hbo,$specimen_no);
+        }
     }
 
     if ($inserted_row_count) {
@@ -633,11 +652,38 @@ sub processMeasurementForm	{
 	    print "<div align=\"center\"><table><tr><td><ul>".
 	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-1&taxon_no=".$q->param('taxon_no')."\">Add another average or individual measurement of $taxon_name</a></b></li>".
 	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-2&specimens_measured=10&taxon_no=".$q->param('taxon_no')."\">Add up to 10 new individual measurements of $taxon_name</a></b></li>".
-	          "<br><li><b><a href=\"$exec_url?action=displaySpecimenList&taxon_no=".$q->param('taxon_no')."\">Edit another measurement of $taxon_name</a></b></li>";
+	          "<br><li><b><a href=\"$exec_url?action=displaySpecimenList&taxon_no=".$q->param('taxon_no')."&types_only=".$q->param('types_only')."\">Edit another measurement of $taxon_name</a></b></li>";
     }
     print "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&taxon_name=$taxon_name\">Add a measurement of $taxon_name in another collection</a></b></li>".
           "<br><li><b><a href=\"$exec_url?action=checkTaxonInfo&taxon_name=$taxon_name\">Get general info about this taxon</a></b></li>".
           "</ul></td></tr></table></div>";
+}
+
+
+sub syncWithAuthorities {
+    my ($dbt,$s,$hbo,$specimen_no) = @_;
+    my $sql = "SELECT taxon_no,magnification,specimen_part,specimen_id FROM specimens WHERE specimen_no=$specimen_no";
+    my $row = ${$dbt->getData($sql)}[0];
+    if ($row && $row->{'taxon_no'} =~ /\d/ && $row->{'magnification'} <= 1) {
+        my $taxon_no = $row->{'taxon_no'};
+        my $sql = "(SELECT specimen_no FROM specimens s WHERE s.is_type='holotype' AND s.taxon_no=$taxon_no) UNION (SELECT specimen_no FROM specimens s, occurrences o left join reidentifications re on o.occurrence_no=re.occurrence_no WHERE s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND o.taxon_no=$taxon_no AND re.reid_no IS NULL) UNION (SELECT specimen_no FROM specimens s, occurrences o, reidentifications re WHERE o.occurrence_no=re.occurrence_no AND s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND re.taxon_no=$taxon_no AND re.most_recent='YES')";
+        my $cnt = scalar(@{$dbt->getData($sql)});
+        if ($cnt <= 1) {
+            my %generic_parts = ();
+            foreach my $p ($hbo->getList('type_body_part')) {
+                $generic_parts{$p} = 1;
+            }
+            if ($row->{'specimen_part'}) {
+                if ($generic_parts{$row->{'specimen_part'}}) {
+                    $fields{'type_body_part'} = $row->{'specimen_part'};
+                } else {
+                    $fields{'part_details'} = $row->{'specimen_part'};
+                }
+            }
+            $fields{'type_specimen'} = $row->{'specimen_id'};
+            $dbt->updateRecord($s,'authorities','taxon_no',$taxon_no,\%fields);
+        }
+    }
 }
 
 # General purpose function for getting occurrences with data.  Pass in 2 arguments:

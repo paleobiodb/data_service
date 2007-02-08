@@ -84,11 +84,9 @@
 
 <div style="float: left; padding-left: 1em;">
 
-<div style="clear: right; padding-top: 1em;">
-<nobr>
+<div style="clear: right; padding-top: 1em; white-space: nowrap;">
 <b>Original rank:</b>
 <span id="taxon_rank_select"></span>
-</nobr>
 </div>
 
 <div show="show_type_specimen">
@@ -111,23 +109,25 @@
 
 <div show="show_type_specimen">
 <div style="clear: right;">
-<b>Part details:</b>
+<b>Specific body part:</b>
 <input id="part_details" name="part_details" size=23>
 </div>
 </div>
 
-<!--
 <div show="show_type_specimen">
-<div class="small" style="clear: right;">
-<nobr>
+<div show="hide_measurements">
+  <div class="small" style="width: 300px">Measurement data can not be edited here, please see the <a target="_new" href="bridge.pl?action=displaySpecimenList&amp;types_only=1&amp;taxon_no=%%taxon_no%%">measurements form</a>.</div>
+</div>
+<div hide="hide_measurements">
+<input type="hidden" name="specimen_no">
+<div class="small" style="clear: right; white-space: nowrap;">
 <b>Length:</b>
-<input class="verysmall" name="length" size="4"> mm
+<input class="small" name="length" size="4"> mm
 &nbsp;<b>Width:</b>
-<input class="verysmall" name="width" size="4"> mm
-</nobr>
+<input class="small" name="width" size="4"> mm
 </div>
 </div>
--->
+</div>
 
 <div>
 <div style="padding-top: 1em;">
@@ -141,15 +141,15 @@
 <div style="float: left; padding-top: 1em; padding-left: 2em;">
 
 <div style="clear: right;">
+<div style="white-space: nowrap;">
 <span id="parent_taxon_select"></span>
+</div>
 
 <!-- Note: this should only appear if the rank is species -->
 <div show="show_type_taxon">
-  <div style="clear: left; padding-bottom: 1em;">
-  <nobr>
-  <span show="parent_taxon_select">&nbsp;&nbsp;&nbsp;&nbsp;</span>
-  <input type="checkbox" id="type_taxon" name="type_taxon" value="1">This is the type <span id="taxon_rank"></span>
-  </nobr>
+  <div style="clear: left; padding-bottom: 1em; white-space: nowrap;">
+    <span show="parent_taxon_select">&nbsp;&nbsp;&nbsp;&nbsp;</span>
+    <input type="checkbox" id="type_taxon" name="type_taxon" value="1">This is the type <span id="taxon_rank"></span>
   </div>
 </div>
 </div>
@@ -158,7 +158,7 @@
 <b>Is this an extant (living) taxon?</b> <span id="extant_select"></span>
 </div>
 
-<div style="clear: right;">
+<div style="clear: right; padding-top: 1em;">
 <b>Common name:</b>
 <input type="text" id="common_name" name="common_name" size="20">
 </div>

@@ -218,6 +218,49 @@ sub displayAuthorityForm {
         $fields{'ref_is_authority'} = 'PRIMARY';
     }    
 
+    # Grab the measuremt data if it exists
+    if (!$isNewEntry) {
+        my $taxon_no = $t->get('taxon_no');
+        my $sql = "(SELECT m.measurement_type,s.magnification,s.specimen_part,s.specimen_no,m.average,m.real_average FROM specimens s LEFT JOIN measurements m ON s.specimen_no=m.specimen_no WHERE s.is_type='holotype' AND s.taxon_no=$taxon_no)"
+            . " UNION "
+            . "(SELECT m.measurement_type,s.magnification,s.specimen_part,s.specimen_no,m.average,m.real_average FROM specimens s, occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no LEFT JOIN measurements m ON s.specimen_no=m.specimen_no WHERE o.occurrence_no=s.occurrence_no AND s.is_type='holotype' AND o.taxon_no=$taxon_no AND re.reid_no IS NULL)"
+            . " UNION "
+            . "(SELECT m.measurement_type,s.magnification,s.specimen_part,s.specimen_no,m.average,m.real_average FROM (specimens s, occurrences o, reidentifications re) LEFT JOIN measurements m ON s.specimen_no=m.specimen_no WHERE o.occurrence_no=re.occurrence_no AND o.occurrence_no=s.occurrence_no AND s.is_type='holotype' AND re.taxon_no=$taxon_no AND re.most_recent='YES')";
+       
+        my @rows = @{$dbt->getData($sql)};
+        if (@rows) {
+            my %specimen_count = ();
+            foreach my $row (@rows) {
+                if ($row->{'magnification'} > 1) {
+                    $fields{'hide_measurements'} = 1;
+                    last;
+                }
+                $specimen_count{$row->{'specimen_no'}}++;
+                if ($row->{'measurement_type'} eq 'width') {
+                    $fields{'width'} = $row->{'average'};
+                } elsif ($row->{'measurement_type'} eq 'length') {
+                    $fields{'length'} = $row->{'average'};
+                }
+            }
+            if (scalar keys %specimen_count > 1) {
+                $fields{'hide_measurements'} = 1;
+            } else {
+                my %generic_parts = ();
+                foreach my $p ($hbo->getList('type_body_part')) {
+                    $generic_parts{$p} = 1;
+                }
+                $fields{'specimen_no'} = $rows[0]->{'specimen_no'};
+                if ($rows[0]->{'specimen_part'}) {
+                    if ($generic_parts{$rows[0]->{'specimen_part'}}) {
+                        $fields{'type_body_part'} = $rows[0]->{'specimen_part'};
+                    } else {
+                        $fields{'part_details'} = $rows[0]->{'specimen_part'};
+                    }
+                }
+            }
+        }
+    }
+
 	# fill out the authorizer/enterer/modifier info at the bottom of the page
 	if (!$isNewEntry) {
 		if ($fields{'authorizer_no'}) { 
@@ -333,7 +376,7 @@ sub displayAuthorityForm {
                 }
             }
 			
-			$fields{'parent_taxon_select'} = "<b>Belongs to:</b><br>&nbsp;&nbsp;&nbsp;&nbsp;".
+			$fields{'parent_taxon_select'} = "<b>Belongs to:</b>&nbsp;".
                 $hbo->htmlSelect('parent_taxon_no',\@parent_descs,\@parent_nos,$parent_no);
 		} else {
 			# count = 0, so we need to warn them to enter the parent taxon first.
@@ -532,8 +575,15 @@ sub submitAuthorityForm {
     if (($rankFromSpaces eq 'subspecies' && $q->param('taxon_rank') ne 'subspecies') ||
         ($rankFromSpaces eq 'species' && $q->param('taxon_rank') ne 'species') ||
         ($rankFromSpaces eq 'subgenus' && $q->param('taxon_rank') ne 'subgenus') ||
-        ($rankFromSpaces eq ''     && $q->param('taxon_rank') =~ /subspecies|species|subgenus/)) {
+        ($rankFromSpaces !~ /species|genus/ && $q->param('taxon_rank') =~ /subspecies|species|subgenus/)) {
         $errors->add("The selected rank '".$q->param('taxon_rank')."' doesn't match the spacing of the taxon name '".$q->param('taxon_name')."'");
+    }
+
+    if ($q->param('length') && $q->param('length') !~ /^[0-9]*\.?[0-9]+$/) {
+        $errors->add("Length must be a decimal number");
+    }
+    if ($q->param('width') && $q->param('width') !~ /^[0-9]*\.?[0-9]+$/) {
+        $errors->add("Width must be a decimal number");
     }
 	
 	foreach my $formField ($q->param()) {
@@ -767,19 +817,74 @@ sub submitAuthorityForm {
         }
         $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&use_reference=new">Add an opinion about $fields{taxon_name}</a></b></li><br>|;
         $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li><br>|;
-      $end_message .= qq|
-      <li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li><br>
-      <li><b><a href="bridge.pl?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li><br>
-      <li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
-      </ul>
-    </td></tr></table>
-    </div>|;
+        $end_message .= qq|
+          <li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li><br>
+          <li><b><a href="bridge.pl?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li><br>
+          <li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
+          </ul>
+        </td></tr></table>
+        </div>|;
+
+        processSpecimenMeasurement($dbt,$s,$resultTaxonNumber,$resultReferenceNumber,\%fields);
 
         displayTypeTaxonSelectForm($dbt,$s,$fields{'type_taxon'},$resultTaxonNumber,$fields{'taxon_name'},$fields{'taxon_rank'},$resultReferenceNumber,$end_message);
 	}
 	
 	print "<BR>";
 	print "</CENTER>";
+}
+
+sub processSpecimenMeasurement {
+    my ($dbt,$s,$taxon_no,$reference_no,$fields) = @_;
+    my $dbh = $dbt->dbh;
+    my $specimen_no = int($fields->{'specimen_no'});
+
+    my $sql = "(SELECT specimen_no FROM specimens s WHERE s.is_type='holotype' AND s.taxon_no=$taxon_no) UNION (SELECT specimen_no FROM specimens s, occurrences o left join reidentifications re on o.occurrence_no=re.occurrence_no WHERE s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND o.taxon_no=$taxon_no AND re.reid_no IS NULL) UNION (SELECT specimen_no FROM specimens s, occurrences o, reidentifications re WHERE o.occurrence_no=re.occurrence_no AND s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND re.taxon_no=$taxon_no AND re.most_recent='YES')";
+    my $cnt = scalar @{$dbt->getData($sql)};
+
+    if ($cnt <= 1) {
+        if ($fields->{'length'} || $fields->{'width'}) {
+            my $part = $fields->{'part_details'} || $fields->{'type_body_part'};
+            my $sfields = {
+                taxon_no=>$taxon_no,
+                reference_no=>$reference_no,
+                specimens_measured=>1,
+                specimen_id=>$fields->{'type_specimen'},
+                specimen_part=>$part,
+                magnification=>1,
+                is_type=>'holotype'
+            };
+            if (!$specimen_no) {
+                my $result;
+                ($result,$specimen_no) = $dbt->insertRecord($s,'specimens',$sfields);
+            } else {
+                $dbt->updateRecord($s,'specimens','specimen_no',$specimen_no,$sfields);
+            }
+        }
+        
+        if ($specimen_no) {
+            foreach my $type ('length','width') {
+                my $value = $fields->{$type};
+                my $sql = "SELECT measurement_no FROM measurements WHERE specimen_no=$specimen_no AND measurement_type='$type'";
+                my $db_row = ${$dbt->getData($sql)}[0];
+
+                my $quoted_value = $dbh->quote($value);
+                if ($value && $db_row) {
+                    my $sql = "UPDATE measurements SET average=$quoted_value, real_average=$quoted_value WHERE measurement_no=$db_row->{measurement_no}";
+                    main::dbg($sql);
+                    $dbh->do($sql);
+                } elsif ($value && !$db_row) {
+                    my $sql = "INSERT measurements (specimen_no,average,real_average,measurement_type) VALUES ($specimen_no,$quoted_value,$quoted_value,'$type')";
+                    main::dbg($sql);
+                    $dbh->do($sql);
+                } elsif (!$value && $db_row) {
+                    my $sql = "DELETE FROM measurements WHERE measurement_no=$db_row->{measurement_no}";
+                    main::dbg($sql);
+                    $dbh->do($sql);
+                }
+            }
+        } 
+    }
 }
 
 sub updateChildNames {

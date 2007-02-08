@@ -1261,7 +1261,7 @@ sub submitOpinionForm {
     if (($rankFromSpaces eq 'subspecies' && $childSpellingRank ne 'subspecies') ||
         ($rankFromSpaces eq 'species' && $childSpellingRank ne 'species') ||
         ($rankFromSpaces eq 'subgenus' && $childSpellingRank ne 'subgenus') ||
-        ($rankFromSpaces eq ''     && $childSpellingRank =~ /subspecies|species|subgenus/)) {
+        ($rankFromSpaces !~ /species|genus/ && $childSpellingRank =~ /subspecies|species|subgenus/)) {
         $errors->add("The selected rank '$childSpellingRank' doesn't match the spacing of the taxon name '$childSpellingName'");
     }
 	
