@@ -5069,7 +5069,8 @@ sub processTaxonSearch {
                 print "</td></tr></table></div>";
             } else {
                 if ($q->param('taxon_name')) {
-                    print "<div align=\"center\" class=\"large\">The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.<br>Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> an authority record for this taxon first.</div>";
+                    push my @errormessages , "The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.<br>Please <a href=\"bridge.pl?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> an authority record for this taxon first.";
+                    print "<div align=\"center\" class=\"large\">".Debug::printWarnings(\@errormessages)."</div>";
                 } else {
                     print "<div align=\"center\" class=\"large\">No taxonomic names were found that match the search criteria.</div>";
                 }
