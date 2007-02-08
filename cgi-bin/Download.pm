@@ -349,7 +349,7 @@ sub retellOptions {
         $html .= $self->retellOptionsGroup('Include occurrences qualified by','genus_reso_',\@genus_reso_types_group);
         $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", "YES") if ( $q->param("informal") eq 'YES');
         $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", "NO") if ($q->param("compendium_ranges") eq 'NO');
-        $html .= $self->retellOptionsRow ( "Only include occurrences with abundance data?", $q->param("abundance_required") ) if ($q->param("abundance_required") eq 'NO');
+        $html .= $self->retellOptionsRow ( "Only include occurrences with abundance data?", $q->param("abundance_required") ) if ($q->param("abundance_required") ne 'all');
         $html .= $self->retellOptionsRow ( "Include abundances if some genera or groups do not have them?", $q->param("incomplete_abundances") ) if ($q->param("incomplete_abundances") eq 'YES');
         $html .= $self->retellOptionsRow ( "Exclude classified occurrences?", $q->param("classified") ) if ($q->param("classified" !~ /classified|unclassified/i));
         $html .= $self->retellOptionsRow ( "Minimum # of specimens to compute mean abundance", $q->param("min_mean_abundance") ) if ($q->param("min_mean_abundance"));
@@ -1236,8 +1236,8 @@ sub getOccurrencesWhereClause {
         push @all_where, "o.authorizer_no=".$authorizer_no if ($authorizer_no);
     }
 
-    push @all_where, "o.abund_value NOT LIKE \"\" AND o.abund_value IS NOT NULL" if $q->param("abundance_required") eq 'abundances';
-    push @all_where, "o.abund_value IN ('individuals','specimens')" if $q->param("abundance_required") eq 'specimens';
+    push @all_where, "o.abund_unit NOT LIKE \"\" AND o.abund_value IS NOT NULL" if $q->param("abundance_required") eq 'abundances';
+    push @all_where, "o.abund_unit IN ('individuals','specimens')" if $q->param("abundance_required") eq 'specimens';
 
     push @occ_where, "o.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
     push @occ_where, "o.species_name NOT LIKE '%sp.%'" if $q->param('sp') ne 'YES';
