@@ -754,7 +754,7 @@ sub assignGenera	{
 		$last = 0;
 		for $j (1..$chrons)	{
 			if ($present[$i][$j] < 0)	{
-				if ( $j > 1 || $q->param('recent_genera') || $present[$i][$j] + $recentbyid[$i] < 0 )	{
+				if ( $j > 1 || ! $q->param('recent_genera') || $present[$i][$j] + $recentbyid[$i] < 0 )	{
 					$richness[$j]++;
 				}
 				if ($last == 0)	{
