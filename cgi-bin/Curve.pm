@@ -1797,7 +1797,11 @@ sub printResults	{
 					print "<td class=tiny align=center valign=top>$specimensinchron[$i] ";
 				}
 				if ( $q->param('print_mean_richness') eq "YES" )	{
-					printf "<td class=tiny align=center valign=top>%.1f ",$occsinchron[$i]/$listsinchron[$i];
+					if ( $listsinchron[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$occsinchron[$i]/$listsinchron[$i];
+					} else	{
+						print "<td class=tiny align=center valign=top>NaN "
+					}
 				}
 				if ( $q->param('print_median_richness') eq "YES" )	{
 					printf "<td class=tiny align=center valign=top>%.1f ",$median[$i];
@@ -1921,7 +1925,11 @@ sub printResults	{
 					print TABLE ",$specimensinchron[$i]";
 				}
 				if ( $q->param('print_mean_richness') eq "YES" )	{
-					printf TABLE ",%.1f",$occsinchron[$i]/$listsinchron[$i];
+					f ( $listsinchron[$i] > 0 )	{
+						printf TABLE ",%.1f",$occsinchron[$i]/$listsinchron[$i];
+					} else	{
+						 print TABLE ",NaN";
+					}
 				}
 				if ( $q->param('print_median_richness') eq "YES" )	{
 					printf TABLE ",%.1f",$median[$i];
