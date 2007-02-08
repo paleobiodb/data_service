@@ -629,11 +629,12 @@ strat unit:
 </td></tr>
 
 <tr>
-<td valign=top class="small">Include occurrences without abundance data?</td>
+<td valign=top class="small">Only include occurrences with abundance data?</td>
 <td valign=top class="small">
 <select name=without_abundance>
-<option value="NO">no, exclude them</option>
-<option selected value="YES">yes, include them</option>
+<option selected value="all">no, include everything</option>
+<option value="abundances">yes, require some kind of abundance data/option>
+<option value="specimens">yes, require counts of specimens or individuals</option>
 </select>
 </td></tr>
 
