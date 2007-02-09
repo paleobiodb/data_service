@@ -75,12 +75,12 @@ function checkMapBrowserVersion()	{
 </td>
 
 <tr>
-<td valign=top><i>... or</i> taxon name:</td>
+<td valign=top><nobr><i>... or</i> taxon name:</nobr></td>
 <td valign=top><input name="taxon_name" size=25></td>
 
 <tr>
 <td valign=top>Country:</td>
-<td valign=top><select id="country" class="small"></td>
+<td valign=top><select id="country" class="tiny"></td>
 </select>
 
 
@@ -145,32 +145,39 @@ function checkMapBrowserVersion()	{
 
 <tr><td valign=top>Lithology:
 </td>
-<td valign=top><select id="lithologies" class="small" autofill="lithology1">
+<td valign=top><select id="lithologies" class="verysmall" autofill="lithology1">
 </select>
 </td>
 
 <tr><td valign="top">Paleoenvironment:
 </td>
-<td valign=top><select id="environment" class="small"></select>
+<td valign=top><select id="environment" class="verysmall"></select>
 </td>
+
+</tr>
 
 </table>
 
+<div style="position: absolute; bottom: 6em; right: 8em;">
+<input type=submit value="Draw map">
+</div>
+
 </div>
 </div>
 
-<tr>
-<td colspan=2 align="center"><input type=submit value="Draw map"></td>
-</tr>
 </table>
 
 </form>
 
-<center><p class=small>
+<center>
+<div style="text-align: left; text-indent: -1em; padding-left: 2em; padding-righ: 1em;">
+<p class=small>
 <i>
-For more advanced options <a href="bridge.pl?action=displayMapForm">go here</a><br><br>
 You can make a paleogeographic map by selecting a time interval.
+You can also use <a href="bridge.pl?action=displayMapForm">more advanced options</a>.
 For more information about the plate reconstructions visit the <a href="http://www.scotese.com/license.htm">PALEOMAP website</a>.<br>
 </i>
-<p></center>
+</p>
+</div>
+</center>
 
