@@ -365,11 +365,11 @@ sub populateMeasurementForm {
                     }
                 }
 	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimens_measured','specimen_is_type','types_only');
-	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,1,'',$q->param('types_only'));
+	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,1,'',int($q->param('types_only')));
 	            print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
             } elsif ($q->param('specimen_no') == -2) {
-	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimen_coverage','types_only');
-	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,'',$q->param('types_only'));
+	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimen_coverage');
+	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,'');
                 #@table_rows = ('specimen_id','length','width','height','diagonal','specimen_side','specimen_part','measurement_source','magnification','is_type');
                 my $table_rows = "";
                 for (1..$q->param('specimens_measured')) {
@@ -426,7 +426,7 @@ sub populateMeasurementForm {
 
         # some additional fields not from the form row
 	    push (@fields, 'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection_no','types_only');
-	    push (@values, int($q->param('occurrence_no')),int($q->param('taxon_no')),$row->{'reference_no'},$row->{'specimen_no'},$taxon_name,$collection_no,$q->param('types_only'));
+	    push (@values, int($q->param('occurrence_no')),int($q->param('taxon_no')),$row->{'reference_no'},$row->{'specimen_no'},$taxon_name,$collection_no,int($q->param('types_only')));
 	    print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
     }
 
