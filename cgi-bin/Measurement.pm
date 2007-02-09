@@ -20,7 +20,8 @@ sub submitSpecimenSearch {
     my $dbh = $dbt->dbh;
 
     if (!$q->param('taxon_name') && !int($q->param('collection_no'))) {
-        print "<div align=\"center\"><h3>You must specify a taxonomic name or a collection number. Please go back and try again.<h3></div>";
+        push my @error , "You must enter a taxonomic name or a collection";
+        print "<center><p>".Debug::printWarnings(\@error)."</p></center>\n";
     }
 
     # Grab the data from the database, filtering by either taxon_name and/or collection_no
@@ -78,18 +79,20 @@ sub submitSpecimenSearch {
     }
 
     if (scalar(@results) == 0 && $q->param('collection_no')) {
-        print "<div align=\"center\"><h3>Could not find any occurrences matching the criteria entered<h3></div>";
+        push my @error , "Occurrences of this taxon could not be found";
+        print "<center><p>".Debug::printWarnings(\@error)."</p></center>\n";
     } elsif (scalar(@results) == 1 && $q->param('collection_no')) {
         $q->param('occurrence_no'=>$results[0]->{'occurrence_no'});
         displaySpecimenList($dbt,$hbo,$q,$s,$exec_url);
     } elsif (scalar(@results) == 0 && scalar(@results_taxa_only) == 0) {
-        print "<div align=\"center\"><h3>Could not find any occurrences or taxa matching the criteria entered<h3></div>";
+        push my @error , "Occurrences or taxa matching these search terms could not be found";
+        print "<center><p>".Debug::printWarnings(\@error)."</p></center>\n";
     } else {
         print "<form method=\"POST\" action=\"bridge.pl\">";
         print "<input type=\"hidden\" name=\"action\" value=\"displaySpecimenList\">";
         print "<div align=\"center\">";
-        print "<table cellspacing=0 cellpadding=3>";
-        print "<tr><th><span style=\"margin-right: 1em\">Collection name</span></th><th>Taxon name</th><th>Measurements</th></tr>";
+        print "<table cellspacing=\"0\" cellpadding=\"6\">";
+        print "<tr><th><span style=\"margin-right: 1em\">Taxon</span></th><th>Collection</th><th>Measurements</th></tr>";
 #        print "<tr><td>Collection name</td><td></td></tr>";
         my $last_collection_no = -1;
         my %coll_names = ();
@@ -97,13 +100,6 @@ sub submitSpecimenSearch {
         my $coll_count = scalar(keys(%coll_names));
         my $class = (scalar($coll_count) > 1) ? '' : 'class="darkList"';
         foreach my $row (@results) {
-            if ($last_collection_no != $row->{'collection_no'}) {
-                $class = ($class eq '') ? $class='class="darkList"' : '';
-                $last_collection_no = $row->{'collection_no'};
-                print "<tr $class><td><span style=\"margin-right: 1em;\"><a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$row->{collection_no}\">$row->{collection_no} $row->{collection_name}</a></span></td>";
-            } else {
-                print "<tr $class><td></td>";
-            }
             my $specimens = ($row->{'cnt'} >= 1) ? $row->{'cnt'} : 'none';
             my $taxon_name;
             my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
@@ -112,12 +108,21 @@ sub submitSpecimenSearch {
             } else {
                 $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
             }
+            if ($last_collection_no != $row->{'collection_no'}) {
+                $class = ($class eq '') ? $class='class="darkList"' : '';
+            }
             #print "<td><input type=\"radio\" name=\"occurrence_no\" value=\"$row->{occurrence_no}\"> $row->{genus_name} $row->{species_name}</td><td>$measurements</td></tr>";
-            print "<td><a href=\"bridge.pl?action=displaySpecimenList&occurrence_no=$row->{occurrence_no}\">$taxon_name</a></td><td>$specimens</td></tr>";
+            print "<tr $class><td><a href=\"bridge.pl?action=displaySpecimenList&occurrence_no=$row->{occurrence_no}\">$taxon_name</a></td>";
+            if ($last_collection_no != $row->{'collection_no'}) {
+                $last_collection_no = $row->{'collection_no'};
+                print "<td><span style=\"margin-right: 1em;\"><a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$row->{collection_no}\">$row->{collection_name}</a></span></td>";
+            } else {
+                print "<td></td>";
+            }
+            print "<td align=\"center\">$specimens</td></tr>";
         }
         foreach my $row (@results_taxa_only) {
             $class = ($class eq '') ? $class='class="darkList"' : '';
-            print "<tr $class><td>unknown collection</td>";
             my $specimens = ($row->{'cnt'} >= 1) ? $row->{'cnt'} : 'none';
             my $taxon_name;
             if ($row->{'taxon_rank'} =~ /species/) {
@@ -127,7 +132,7 @@ sub submitSpecimenSearch {
             } else {
                 $taxon_name = $row->{'taxon_name'}." indet.";
             }
-            print "<td><a href=\"bridge.pl?action=displaySpecimenList&taxon_no=$row->{taxon_no}\">$taxon_name</a></td><td>$specimens</td></tr>";
+            print "<tr $class><td><a href=\"bridge.pl?action=displaySpecimenList&taxon_no=$row->{taxon_no}\">$taxon_name</a></td><td>unknown collection</td><td align=\"center\">$specimens</td></tr>";
 
         }
         print "</table>";
@@ -148,7 +153,8 @@ sub displaySpecimenList {
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
 	if ( ! $q->param('occurrence_no') && ! $q->param('taxon_no')) {
-		print "<center><h3>Sorry, an error has occurred, need an occurrence or taxon to tie this to, email support for help</h3></center>\n";
+		push my @error , "There is no occurrence or classification of this taxon";
+		print "<center><p>".Debug::printWarnings(\@error)."</p></center>\n";
         carp "populateMeasurementForm called with no occurrence_no/taxon_no by ".$s->get('enterer_no');
 		exit;
 	}
@@ -201,7 +207,7 @@ sub displaySpecimenList {
     }
     
     print "<div align=\"center\">";
-    print "<h3>Specimen list for $taxon_name $collection</h3>\n";
+    print "<h4>Specimen list for $taxon_name $collection</h4>\n";
     print "<form method=\"POST\" action=\"bridge.pl\">\n";
     print "<input type=hidden name=\"action\" value=\"populateMeasurementForm\">\n";
     if ($q->param('types_only')) {
@@ -306,7 +312,8 @@ sub populateMeasurementForm {
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
     if ( ! $q->param('occurrence_no') && ! $q->param('taxon_no')) {
-        print "<center><h3>Sorry, an error has occurred, need an occurrence or taxon to tie this to, email support for help</h3></center>\n";
+        push my @error , "There is no matching taxon or occurrence";
+        print "<center><p>".Debug::printWarnings(\@error)."</p></center>\n";
         carp "populateMeasurementForm called with no occurrence_no/taxon_no by ".$s->get('enterer_no');
         exit;
     }   
@@ -327,7 +334,8 @@ sub populateMeasurementForm {
         $collection = "(collection $row->{'collection_no'})";
 
         if (!$row || !$taxon_name || !$collection) {
-            print "<center><h3>An error has occurred. Could not find occurrence in database.</h3></center>\n";
+            push my @error , "The occurrence of this taxon could not be found";
+            print "<center><p>".Debug::printWarnings(\@error)."</p></center>\n";
             carp("processMeasurementForm: no row found for occurrence_no ".$q->param('occurrence_no'));
             return;
         }
@@ -437,7 +445,8 @@ sub processMeasurementForm	{
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
     if ( ! $q->param('occurrence_no') && ! $q->param('taxon_no')) {
-        print "<center><h3>Sorry, an error has occurred, need an occurrence or taxon to tie this to, email support for help</h3></center>\n";
+        push my @error , "There is no matching taxon or occurrence";
+        print "<center><p>".Debug::printWarnings(\@error)."</p></center>\n";
         carp "populateMeasurementForm called with no occurrence_no/taxon_no by ".$s->get('enterer_no');
         exit;
     }
@@ -458,7 +467,8 @@ sub processMeasurementForm	{
         $collection = "(collection $row->{'collection_no'})";
 
         if (!$row || !$taxon_name || !$collection) {
-            print "<center><h3>An error has occurred. Could not find occurrence in database.</h3></center>\n";
+            push my @error , "The occurrence of this taxon could not be found";
+            print "<center><p>".Debug::printWarnings(\@error)."</p></center>\n";
             carp("processMeasurementForm: no row found for occurrence_no ".$q->param('occurrence_no'));
             return;
         }
@@ -582,7 +592,7 @@ sub processMeasurementForm	{
                     }
                 }
 
-                print "<center><h3>Specimen measurement data for $taxon_name $collection has been updated</h3></center>\n";
+                print "<center><h4>The measurement data for $taxon_name $collection have been updated</h4></center>\n";
             } else {
                 print "Error updating database table row, please contact support";
                 carp "Error updating row in Measurement.pm: ".$result;
@@ -639,24 +649,27 @@ sub processMeasurementForm	{
     }
 
     if ($inserted_row_count) {
-        print "<center><h3>Specimen measurement data for $taxon_name $collection has been added</h3></center>\n";
+        print "<center><h4>Measurements for $taxon_name $collection has been added</h4></center>\n";
     }
 
     if ($q->param('occurrence_no')) {
-	    print "<div align=\"center\"><table><tr><td><ul>".
-	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-1&occurrence_no=".$q->param('occurrence_no')."\">Add another average or individual measurement of this occurrence</a></b></li>".
-	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-2&specimens_measured=10&occurrence_no=".$q->param('occurrence_no')."\">Add up to 10 new individual measurements of this occurrence</a></b></li>".
-	          "<br><li><b><a href=\"$exec_url?action=displaySpecimenList&occurrence_no=".$q->param('occurrence_no')."\">Edit another measurement of this occurrence</a></b></li>".
-    	      "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&collection_no=$collection_no\">Add a measurement of another occurrence in this collection</a></b></li>";
+	my ($temp,$collection_no) = split / /,$collection;
+	$collection_no =~ s/\)//;
+	print "<div align=\"center\"><table><tr><td><ul>\n".
+		"<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-1&occurrence_no=".$q->param('occurrence_no')."\">Add another average or individual measurement of this occurrence</a></b></li>\n".
+		"<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-2&specimens_measured=10&occurrence_no=".$q->param('occurrence_no')."\">Add up to 10 new individual measurements of this occurrence</a></b></li>\n".
+		"<br><li><b><a href=\"$exec_url?action=displaySpecimenList&occurrence_no=".$q->param('occurrence_no')."\">Edit another measurement of this occurrence</a></b></li>\n".
+    		"<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&collection_no=$collection_no\">Add a measurement of another occurrence in this collection</a></b></li>\n";
     } else {
-	    print "<div align=\"center\"><table><tr><td><ul>".
-	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-1&taxon_no=".$q->param('taxon_no')."\">Add another average or individual measurement of $taxon_name</a></b></li>".
-	          "<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-2&specimens_measured=10&taxon_no=".$q->param('taxon_no')."\">Add up to 10 new individual measurements of $taxon_name</a></b></li>".
-	          "<br><li><b><a href=\"$exec_url?action=displaySpecimenList&taxon_no=".$q->param('taxon_no')."&types_only=".$q->param('types_only')."\">Edit another measurement of $taxon_name</a></b></li>";
+	    print "<div align=\"center\"><table><tr><td><ul>\n".
+		"<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-1&taxon_no=".$q->param('taxon_no')."\">Add another average or individual measurement of $taxon_name</a></b></li>\n".
+		"<br><li><b><a href=\"$exec_url?action=populateMeasurementForm&specimen_no=-2&specimens_measured=10&taxon_no=".$q->param('taxon_no')."\">Add up to 10 new individual measurements of $taxon_name</a></b></li>\n".
+		"<br><li><b><a href=\"$exec_url?action=displaySpecimenList&taxon_no=".$q->param('taxon_no')."&types_only=".$q->param('types_only')."\">Edit another measurement of $taxon_name</a></b></li>\n";
     }
-    print "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&taxon_name=$taxon_name\">Add a measurement of $taxon_name in another collection</a></b></li>".
-          "<br><li><b><a href=\"$exec_url?action=checkTaxonInfo&taxon_name=$taxon_name\">Get general info about this taxon</a></b></li>".
-          "</ul></td></tr></table></div>";
+    print "<br><li><b><a href=\"$exec_url?action=submitSpecimenSearch&taxon_name=$taxon_name\">Add a measurement of $taxon_name in another collection</a></b></li>\n".
+	"<br><li><b><a href=\"$exec_url?action=checkTaxonInfo&taxon_name=$taxon_name\">Get general info about this taxon</a></b></li>\n".
+	"<br><li><b><a href=\"$exec_url?action=displaySpecimenSearchForm\">Add a measurement of another taxon</a></b></li>\n".
+	"</ul></td></tr></table></div>\n";
 }
 
 
