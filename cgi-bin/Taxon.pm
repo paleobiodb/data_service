@@ -795,10 +795,10 @@ sub submitAuthorityForm {
         #  come from any reference
 
         if ( $q->param('ref_is_authority') !~ /PRIMARY/ )	{
-            my $cleanauth1 = $author1last;
-            $cleanauth1 =~ s/'/\'/;
-            my $cleanauth2 = $author2last;
-            $cleanauth2 =~ s/'/\'/;
+            my $cleanauth1 = $q->param('author1last');
+            $cleanauth1 =~ s/'/\\'/;
+            my $cleanauth2 = $q->param('author2last');
+            $cleanauth2 =~ s/'/\\'/;
             my $sql = "SELECT opinion_no FROM opinions WHERE author1last='$cleanauth1' AND author2last='$cleanauth2' AND pubyr='" . $q->param('pubyr') . "' AND child_spelling_no=$resultTaxonNumber AND child_no=$origResultTaxonNumber ORDER BY opinion_no DESC";
             my $opinion_no = ${$dbt->getData($sql)}[0]->{opinion_no};
             if ( $opinion_no > 0 )	{
