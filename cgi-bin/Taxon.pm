@@ -795,7 +795,11 @@ sub submitAuthorityForm {
         #  come from any reference
 
         if ( $q->param('ref_is_authority') !~ /PRIMARY/ )	{
-            my $sql = "SELECT opinion_no FROM opinions WHERE author1last='" . $q->param('author1last') . "' AND author2last='" . $q->param('author2last') . "' AND pubyr='" . $q->param('pubyr') . "' AND child_spelling_no=$resultTaxonNumber AND child_no=$origResultTaxonNumber ORDER BY opinion_no DESC";
+            my $cleanauth1 = $author1last;
+            $cleanauth1 =~ s/'/\'/;
+            my $cleanauth2 = $author2last;
+            $cleanauth2 =~ s/'/\'/;
+            my $sql = "SELECT opinion_no FROM opinions WHERE author1last='$cleanauth1' AND author2last='$cleanauth2' AND pubyr='" . $q->param('pubyr') . "' AND child_spelling_no=$resultTaxonNumber AND child_no=$origResultTaxonNumber ORDER BY opinion_no DESC";
             my $opinion_no = ${$dbt->getData($sql)}[0]->{opinion_no};
             if ( $opinion_no > 0 )	{
                 $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this author's opinion about $fields{taxon_name}</a></b></li><br>|;
