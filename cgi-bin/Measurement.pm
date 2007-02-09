@@ -423,11 +423,11 @@ sub populateMeasurementForm {
         # This is an edit, use fields from the DB
         push @fields, 'specimen_is_type';
         if ($row->{'is_type'} eq 'holotype') {
-            push @values, 'yes, the holotype';
+            push @values, 'holotype';
         } elsif ($row->{'is_type'} eq 'some paratypes') {
-            push @values, 'yes, some paratypes';
+            push @values, 'some paratypes';
         } elsif ($row->{'is_type'} eq 'paratype') {
-            push @values, 'yes, a paratype';
+            push @values, 'paratype';
         } else {
             push @values, 'no';
         }      
