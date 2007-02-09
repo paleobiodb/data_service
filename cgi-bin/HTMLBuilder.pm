@@ -102,7 +102,7 @@ sub new {
         height_error_unit=>[\&_listFromEnum,'measurements','error_unit'],
         diagonal_error_unit=>[\&_listFromEnum,'measurements','error_unit'],
         inflation_error_unit=>[\&_listFromEnum,'measurements','error_unit'],
-        specimen_is_type=>[\&_listFromList, 'no','yes, the holotype','yes, a paratype','yes, some paratypes'],
+        specimen_is_type=>[\&_listFromList, 'no','holotype','paratype','some paratypes'],
     };
    
     # This block 'installs' a code reference in $select_lists to generate the list on the fly when its needed
