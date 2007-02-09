@@ -183,11 +183,13 @@ sub displayTaxonInfoResults {
         my $last_status = $mrpo->{'status'};
 
         my %disused;
+        my $sql = "SELECT synonym_no FROM taxa_tree_cache WHERE taxon_no=$taxon_no";
+        my $ss_no = ${$dbt->getData($sql)}[0]->{'synonym_no'};
         if ($taxon_rank !~ /genus|species/) {
-            %disused = %{disusedNames($dbt,$taxon_no)};
+            %disused = %{disusedNames($dbt,$ss_no)};
         }
 
-        if ($disused{$taxon_no}) {
+        if ($disused{$ss_no}) {
             $display_name .= " (disused)";
         } elsif ($last_status =~ /nomen/) {
             $display_name .= " ($last_status)";
@@ -2717,6 +2719,7 @@ sub disusedNames {
     } else {
         @taxon_nos = ($arg);
     }
+
 
     my %disused = ();
     if (@taxon_nos) {
