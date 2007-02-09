@@ -169,8 +169,7 @@ sub processLoadImage{
 	}
 	else{ # read all the files in the directory
 		opendir(DIR,$base) or die "can't open $base ($!)";
-		my $taxon_name_escaped = qx($taxon_name);
-		my @files = grep { /$taxon_name_escaped/ } readdir(DIR);
+		my @files = grep { /\Q$taxon_name\E/ } readdir(DIR);
 		closedir(DIR);
 
 		# find any files with the same taxon_name, 
