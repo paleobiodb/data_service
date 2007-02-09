@@ -405,7 +405,9 @@ sub retellOptions {
         push @occFields, 'type_body_part' if ($q->param('occurrences_type_body_part'));
 
         if (@occFields) {
-            $html .= $self->retellOptionsRow ( "Occurrence output fields", join ( "<BR>", @occFields) );
+            my $fieldnames = join "<br>", @occFields;
+            $fieldnames =~ s/occurrences_//g;
+            $html .= $self->retellOptionsRow ( "Occurrence output fields", $fieldnames );
         }
         
         # Ecology fields
@@ -424,7 +426,9 @@ sub retellOptions {
         foreach my $field ( @collectionsFieldNames ) {
             if ( $q->param ( 'collections_'.$field ) ) { push ( @collFields, 'collections_'.$field ); }
         }
-        $html .= $self->retellOptionsRow ( "Collection output fields", join ( "<BR>", @collFields) );
+        my $fieldnames = join "<br>", @collFields;
+        $fieldnames =~ s/collections_//g;
+        $html .= $self->retellOptionsRow ( "Collection output fields", $fieldnames );
     }
 
     # specimen/measurement table fields
@@ -1238,7 +1242,7 @@ sub getOccurrencesWhereClause {
     }
 
     push @all_where, "o.abund_unit NOT LIKE \"\" AND o.abund_value IS NOT NULL" if $q->param("abundance_required") eq 'abundances';
-    push @all_where, "o.abund_unit IN ('individuals','specimens')" if $q->param("abundance_required") eq 'specimens';
+    push @all_where, "o.abund_unit IN ('individuals','specimens') AND o.abund_value IS NOT NULL" if $q->param("abundance_required") eq 'specimens';
 
     push @occ_where, "o.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
     push @occ_where, "o.species_name NOT LIKE '%sp.%'" if $q->param('sp') ne 'YES';
@@ -1312,7 +1316,7 @@ sub getCollectionsWhereClause {
 
         # the reIDs also need to be sifted, and not having done so has totally
         #  screwed up every analysis using this option up to now JA 6.2.07
-        if ( $q->param('output_data') eq 'collections' )    {
+        if ( $q->param('output_data') ne 'collections' )    {
             $created_string =~ s/o\.created/re.created/;
             push @where,$created_string;
         }
