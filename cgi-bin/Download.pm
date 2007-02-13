@@ -351,7 +351,7 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", "no") if ($q->param("compendium_ranges") eq 'NO');
         $html .= $self->retellOptionsRow ( "Only include occurrences with abundance data?", "yes, require some kind of abundance data" ) if ($q->param("abundance_required") eq 'abundances');
         $html .= $self->retellOptionsRow ( "Only include occurrences with abundance data?", "yes, require specimen or individual counts" ) if ($q->param("abundance_required") eq 'specimens');
-        $html .= $self->retellOptionsRow ( "Include abundances if some genera or groups do not have them?", "yes" ) if ($q->param("incomplete_abundances") eq 'YES');
+        $html .= $self->retellOptionsRow ( "Include abundances if some genera do not have them?", "yes" ) if ($q->param("incomplete_abundances") eq 'YES');
         $html .= $self->retellOptionsRow ( "Exclude classified occurrences?", $q->param("classified") ) if ($q->param("classified" !~ /classified|unclassified/i));
         $html .= $self->retellOptionsRow ( "Minimum # of specimens to compute mean abundance", $q->param("min_mean_abundance") ) if ($q->param("min_mean_abundance"));
         my @preservation = $q->param('preservation');
@@ -2034,7 +2034,8 @@ sub queryDatabase {
             }
             # delete abundances (not occurrences) if the collection excludes
             #  some genera or some groups JA 27.9.06
-            if ( $q->param('incomplete_abundances') eq "NO" && $row->{'c.collection_coverage'} =~ /some genera|some macrofossils|some microfossils/ )	{
+            # some groups was too strict, dropped it JA 12.2.07
+            if ( $q->param('incomplete_abundances') eq "NO" && $row->{'c.collection_coverage'} =~ /some genera/ )	{
                 # toss it out completely if abundances are strictly required
                 #  JA 8.2.07
                 if ( $q->param('abundance_required') =~ /abundances|specimens/ )	{
