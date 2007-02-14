@@ -1013,7 +1013,7 @@ sub getGeogscaleString{
             $geogscales = "'hand sample'";
         }
         if ( $q->param('geogscale_small_collection') )    {
-            $geogscales = ",'small collection'";
+            $geogscales .= ",'small collection'";
         }
         if ( $q->param('geogscale_outcrop') )    {
             $geogscales .= ",'outcrop'";
