@@ -27,23 +27,25 @@ my $resolveCount = 0;
 while (my $line = <RLI>) {
     my ($ip,$date,@rest) = split(/\t/,$line);
 
-    my $lineDate = new Class::Date $date;
+    if ($ip =~ /^(\d{1,3}\.){3}\d{1,3}$/) { 
+        my $lineDate = new Class::Date $date;
 
-    if ($lineDate >= $lastDate) {
-        $resolveCount++;
-        my $text = `host $ip`;
-        chomp($text);
-        my $host;
-        if ($text =~ /domain name pointer (.*?)$/) {
-            $host = $1;
-            $host =~ s/\.$//;
+        if ($lineDate >= $lastDate) {
+            $resolveCount++;
+            my $text = `host $ip`;
+            chomp($text);
+            my $host;
+            if ($text =~ /domain name pointer (.*?)$/) {
+                $host = $1;
+                $host =~ s/\.$//;
+            } else {
+                $host = $ip;
+    #            print "Can't lookup $ip: $text\n";
+            }
+            print RLO "$host\t$date\t".join("\t",@rest);
         } else {
-            $host = $ip;
-#            print "Can't lookup $ip: $text\n";
+            $skipCount++;
         }
-        print RLO "$host\t$date\t".join("\t",@rest);
-    } else {
-        $skipCount++;
     }
 }
 
