@@ -142,6 +142,9 @@ sub displayTaxonInfoResults {
     if ($q->request_method() eq 'POST' || $q->param('is_real_user') || $s->isDBMember()) {
         $is_real_user = 1;
     }
+    if (main::checkForBot()) {
+        $is_real_user = 0;
+    }
 
 
     # Get most recently used name of taxon
@@ -161,8 +164,9 @@ sub displayTaxonInfoResults {
 	# Get the sql IN list for a Higher taxon:
 	my $in_list;
 	if($taxon_no) {
-        if ($taxon_rank =~ /class|phylum|kingdom/ && !$is_real_user) {
-            # Don't do this for class or higher, too many results can be returned PS 08/22/2005
+        my $sql = "SELECT (rgt-lft) diff FROM taxa_tree_cache WHERE taxon_no=$taxon_no";
+        my $diff = ${$dbt->getData($sql)}[0];
+        if (!$is_real_user && $diff > 1000) {
             $in_list = [-1];
         } else {
             my @in_list=TaxaCache::getChildren($dbt,$taxon_no);

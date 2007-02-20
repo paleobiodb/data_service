@@ -5,6 +5,8 @@ use Data::Dumper;
 use strict;
 
 
+$TypoChecker::edit_distance = 3;
+
 # start the process to get to the reclassify occurrences page
 # modelled after startAddEditOccurrences
 sub searchOccurrenceMisspellingForm {
@@ -662,7 +664,7 @@ sub typoCheck {
         }
         if ($distance < 4) {
             # Also returns exact matches, filter later
-            if (editDistance($w1,$w2) < 3) {
+            if (editDistance($w1,$w2) < $TypoChecker::edit_distance) {
                 push @matches, $row;
             }
         } 

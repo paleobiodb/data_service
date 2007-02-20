@@ -753,6 +753,7 @@ sub displayMapResults {
 sub displayMapOfCollection {
     require Map;
     return unless $q->param('collection_no') =~ /^\d+$/;
+    return if checkForBot();
 
     logRequest($s,$q);
     my $sql = "SELECT c.collection_no,c.lngdeg,c.latdeg,c.lngdir,c.latdir,c.collection_name,c.country,c.state,concat(i1.eml_interval,' ',i1.interval_name) max_interval, concat(i2.eml_interval,' ',i2.interval_name) min_interval "
@@ -835,6 +836,8 @@ sub displayMapOfCollection {
 sub displaySimpleMap {
     print stdIncludes("std_page_top");
 	$q->param("simple_map"=>'YES');
+    return if checkForBot();
+
 	my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape1', 'dotcolor1', 'dotborder1');
 	my %user_prefs = main::getPreferences($s->get('enterer_no'));
 	foreach my $pref (@map_params){
@@ -943,7 +946,9 @@ sub displayDownloadTaxonomyForm {
 }       
     
 sub displayDownloadTaxonomyResults {
+    return if checkForBot();
     require DownloadTaxonomy;
+
     logRequest($s,$q);
     print stdIncludes( "std_page_top" );
     if ($q->param('output_data') eq 'itis') {
@@ -1088,6 +1093,7 @@ sub displaySearchRefs {
 
 # This shows the actual references.
 sub displayRefResults {
+    return if checkForBot();
     logRequest($s,$q);
 
     my $type = $q->param('type');
@@ -1726,6 +1732,7 @@ sub displaySearchColls {
 # System displays matching collection results
 # Called during collections search, and by displayReIDForm() routine.
 sub displayCollResults {
+    return if checkForBot();
     logRequest($s,$q);
 	my $limit = $q->param('limit') || 30 ;
     my $rowOffset = $q->param('rowOffset') || 0;
@@ -2221,6 +2228,7 @@ sub getOccurrencesXML {
 # compose the SQL to find collections of a certain age within 100 km of
 #  a coordinate (required when the user wants to add a collection)
 sub processCollectionsSearchForAdd	{
+    return if checkForBot();
     require Map;
 
     # some generally useful trig stuff needed by processCollectionsSearchForAdd
@@ -5337,18 +5345,19 @@ sub startProcessReclassifyForm	{
 ##############
 ## Taxon Info Stuff
 sub randomTaxonInfo{
+    return if checkForBot();
     my $sql;
     my $lft;
     my $rgt;
     if ( $q->param('taxon_name') =~ /^[A-Za-z]/ )	{
-        $sql = "SELECT lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$q->param('taxon_name')."'";
+        my $sql = "SELECT lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND taxon_name=".$dbh->quote($q->param('taxon_name'));
         my $taxref = ${$dbt->getData($sql)}[0];
         if ( $taxref )	{
             $lft = $taxref->{lft};
             $rgt = $taxref->{rgt};
         }
     } elsif ( $q->param('common_name') =~ /^[A-Za-z]/ )	{
-        $sql = "SELECT lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND common_name='".$q->param('common_name')."'";
+        my $sql = "SELECT lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND common_name=".$dbh->quote($q->param('common_name'));
         my $taxref = ${$dbt->getData($sql)}[0];
         if ( $taxref )	{
             $lft = $taxref->{lft};
@@ -5356,14 +5365,15 @@ sub randomTaxonInfo{
         }
     }
     if ( $lft > 0 && $rgt > 0 )	{
-        $sql = "SELECT o.taxon_no taxon_no FROM occurrences o,authorities a,taxa_tree_cache t WHERE o.taxon_no=a.taxon_no AND taxon_rank='species' AND a.taxon_no=t.taxon_no AND lft>=$lft AND rgt<=$rgt";
+        $sql = "SELECT o.taxon_no taxon_no FROM occurrences o,authorities a,taxa_tree_cache t WHERE o.taxon_no=a.taxon_no AND taxon_rank='species' AND a.taxon_no=t.taxon_no AND (lft BETWEEN $lft AND $rgt) AND (rgt BETWEEN $lft AND $rgt)";
     } else	{
         $sql = "SELECT o.taxon_no taxon_no FROM occurrences o,authorities a WHERE o.taxon_no=a.taxon_no AND taxon_rank='species'";
     }
     my @orefs = @{$dbt->getData($sql)};
     my $x = int(rand($#orefs + 1));
     $q->param('taxon_no' => $orefs[$x]->{taxon_no});
-    $q->param('is_real_user' => 1);
+    # DON'T SET THIS TO 1
+    #$q->param('is_real_user' => 1);
     # infinite loops are bad
     $q->param('random' => '');
     if ( $q->param('action') eq "checkTaxonInfo" )	{
@@ -5423,6 +5433,7 @@ sub processEditScale	{
 	Scales::processEditScaleForm($dbt, $hbo, $q, $s, $exec_url);
 }
 sub displayTenMyBinsDebug {
+    return if checkForBot();
     require Scales;
     Scales::displayTenMyBinsDebug($dbt);
 }
@@ -5439,6 +5450,7 @@ sub displayInterval {
     print stdIncludes("std_page_bottom");
 }
 sub displayTenMyBins {
+    return if checkForBot();
     require Scales;
     Scales::displayTenMyBins($dbt, $hbo);
 }
@@ -5447,6 +5459,7 @@ sub displayFullScale {
     Scales::displayFullScale($dbt, $hbo);
 }
 sub dumpAllIntervals {
+    return if checkForBot();
     my $t = new TimeLookup($dbt);
     $t->getBoundaries();
     my $dmp = $t->_dumpGraph();
@@ -5608,6 +5621,7 @@ sub startStartPrintHierarchy	{
 	PrintHierarchy::startPrintHierarchy($hbo);
 }
 sub startProcessPrintHierarchy	{
+    return if checkForBot();
     logRequest($s,$q);
 	PrintHierarchy::processPrintHierarchy($dbh, $q, $dbt, $exec_url);
 }
@@ -7674,6 +7688,7 @@ sub getReferenceLinkSummary {
 # Greg Ederer function that is our standard method for querying the refs table
 # completely messed up by Poling 3.04 and restored by JA 10.4.04
 sub RefQuery {
+    return if checkForBot();
 	my $q = shift;
     my %options = $q->Vars();
 
@@ -7774,6 +7789,7 @@ sub RefQuery {
 }
    
 sub printRefsCSV {
+    return if checkForBot();
     my @data = @{$_[0]};
     my $authname = $_[1];
     $authname =~ s/\. //;
@@ -7840,6 +7856,7 @@ sub displayInstitutions {
 # ------------------------ #
 
 sub displaySearchSectionResults{
+    return if checkForBot();
     require Confidence;
     logRequest($s,$q);
     print stdIncludes("std_page_top");
@@ -7862,6 +7879,7 @@ sub displayTaxaIntervalsForm{
 }
 
 sub displayTaxaIntervalsResults{
+    return if checkForBot();
     require Confidence;
     logRequest($s,$q);
     print stdIncludes("std_page_top");
@@ -7870,6 +7888,7 @@ sub displayTaxaIntervalsResults{
 }
 
 sub buildListForm {
+    return if checkForBot();
     require Confidence;
     print stdIncludes("std_page_top");
     Confidence::buildList($q, $s, $dbt,$hbo,{});
@@ -7877,6 +7896,7 @@ sub buildListForm {
 }
 
 sub displayStratTaxaForm{
+    return if checkForBot();
     require Confidence;
     print stdIncludes("std_page_top");
     Confidence::displayStratTaxa($q, $s, $dbt);
@@ -7884,6 +7904,7 @@ sub displayStratTaxaForm{
 }
 
 sub showOptionsForm {
+    return if checkForBot();
     require Confidence;
 	print stdIncludes("std_page_top");
 	Confidence::optionsForm($q, $s, $dbt);
@@ -7891,6 +7912,7 @@ sub showOptionsForm {
 }
 
 sub calculateTaxaInterval {
+    return if checkForBot();
     require Confidence;
     logRequest($s,$q);
 	print stdIncludes("std_page_top");
@@ -7899,6 +7921,7 @@ sub calculateTaxaInterval {
 }
 
 sub calculateStratInterval {
+    return if checkForBot();
     require Confidence;
     logRequest($s,$q);
 	print stdIncludes("std_page_top");
@@ -7920,6 +7943,14 @@ sub displayTaxonomicNamesAndOpinions {
     }
     print stdIncludes("std_page_bottom");
 }
+
+sub checkForBot {
+    if ($ENV{HTTP_USER_AGENT} =~ /slurp|bot|spider|ask jeeves|crawl|archive|holmes|findlinks|webcopier|cfetch|stackrambler/i) {
+        return 1;
+    }
+    return 0;
+}
+
 # check for the presence of the nefarious V.J. Gupta or M.M. Imam
 sub checkFraud{
     dbg("checkFraud called". $q->param('author1last'));
