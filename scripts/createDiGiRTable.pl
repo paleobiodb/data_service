@@ -105,7 +105,9 @@ while(my $row = $sth->fetchrow_hashref()) {
             $class_cache{$taxon_no} = [$ss,@{$hash->{$taxon_no}}];
         }
         foreach my $p (@{$class_cache{$taxon_no}}) {
-            $lookup_by_rank{$p->{'taxon_rank'}} = $p;
+            if (ref $p eq 'HASH') {
+                $lookup_by_rank{$p->{'taxon_rank'}} = $p;
+            }
         }
     } 
     $gbif_row{'Kingdom'} = $lookup_by_rank{'kingdom'}{'taxon_name'} || undef;
