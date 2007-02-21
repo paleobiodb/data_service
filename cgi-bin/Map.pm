@@ -551,14 +551,15 @@ sub calculateBounds {
     if ($lat1 <= $lat2) {
         $lat_dist = $lat2 - $lat1;
     } else {
-        $lat_dist = 180 - ($lat1 - $lat2);
+        $lat_dist = 180 + $lat2 - $lat1;
     }
     my $lng_dist;
     if ($lng1 <= $lng2) {
         $lng_dist = $lng2 - $lng1;
     } else {
-        $lng_dist = 360 - ($lng1 - $lng2);
+        $lng_dist = 360 + $lng2 - $lng1;
     }
+#        print "LNG DIST $lng_dist LAT_DIST $lat_dist<BR>";
     if ($lat_dist >= 90 || $lng_dist >= 180) {
         # If we cover more than 1/2 of the glove in either direction
         # Then just display the whole globe 
@@ -599,9 +600,10 @@ sub calculateBounds {
         }
         $midlng = $lng_dist/2 + $lng1;
         if ($midlng > 180) {
-            $midlat -= 180;
+            $midlng -= 360;
         }
     }
+#    print "MID LAT $midlat MDLNG $midlng SCALE $scale<BR>";
     return ($midlat,$midlng,$scale);
 }
 
