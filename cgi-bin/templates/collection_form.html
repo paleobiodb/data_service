@@ -1085,29 +1085,32 @@ original material is preserved!</i></p>
     </td>
     <td valign=top>
       <nobr>
-      <span class="tiny"><input id="collection_coverage" type=checkbox value="some genera"> some genera</span>
-      </nobr>
-    </td>
-    <td valign=top>
-      <nobr>
-      <span class="tiny"><input id="collection_coverage" type=checkbox value="some macrofossils"> some macrofossils</span>
-      </nobr>
-    </td>
-    <td valign=top>
-      <nobr>
-      <span class="tiny"><input id="collection_coverage" type=checkbox value="some microfossils"> some microfossils</span>
+      <span class="tiny"><input id="collection_coverage" type=checkbox value="some genera"> some genera within</span>
+      </nobr><br>
+      <nobr><span class="tiny">&nbsp;&nbsp;groups that <i>are</i> listed</span>
       </nobr>
     </td>
   </tr>
   <tr>
     <td valign=top>
-      <span class="tiny"><input id="collection_coverage" type=checkbox value="species names"> species names</span>
+      <nobr>
+      <span class="tiny"><input id="collection_coverage" type=checkbox value="some microfossils"> major groups of microfossils</span>
+      </nobr>
+    </td>
+    <td valign=top>
+      <nobr>
+      <span class="tiny"><input id="collection_coverage" type=checkbox value="some macrofossils"> major groups of macrofossils</span><br>
+      <span class="tiny"><i>&nbsp;&nbsp;(e.g., trilobites, gastropods, herps)</i></span>
+      </nobr>
+    </td>
+  </tr>
+  <tr>
+    <td valign=top>
+      <span class="tiny"><input id="collection_coverage" type=checkbox value="species names"> <nobr>most species names</nobr></span>
     </td>
     <td valign=top>
       <span class="tiny"><input id="collection_coverage" type=checkbox value="difficult macrofossils"> difficult macrofossils<br></span>
-      <span class="verytiny"><i>(e.g., annelids, bryozoans,
-      <br>
-      cnidarians, crinoids, sponges)</i></span>
+      <span class="verytiny"><i>&nbsp;&nbsp;(e.g., bryozoans, crinoids, sponges)</i></span>
     </td>
     <td valign=top>
       <span class="tiny"><input id="collection_coverage" type=checkbox value="ichnofossils"> ichnofossils</span>
@@ -1118,13 +1121,13 @@ original material is preserved!</i></p>
   <table>
   <tr>
     <td colspan="3">
-      Collection types:
+      Where did the author get the fossils?
     </td>
   </tr>
   <tr>
     <td>
       <input id="coll_meth" type="hidden" value="" replace="NO">
-      <span class="tiny"><input id="coll_meth" type=checkbox value="field collection"> field collection</span>
+      <span class="tiny"><input id="coll_meth" type=checkbox value="field collection"> own field collection</span>
     </td>
     <td>
       <span class="tiny"><input id="coll_meth" type=checkbox value="observed (not collected)"> observed (not collected)</span>
@@ -1149,14 +1152,13 @@ original material is preserved!</i></p>
       <span class="tiny"><input id="coll_meth" type=checkbox value="bulk"> bulk
     </td>
     <td>
+      <span class="tiny"><input id="coll_meth" type=checkbox value="sieve"> sieve
+    </td>
+    <td>
       <span class="tiny"><input id="coll_meth" type=checkbox value="core"> core
     </td>
     <td>
-      <span class="tiny"><input id="coll_meth" type=checkbox value="selective quarrying"> 
-      selective quarrying 
-    </td>
-    <td>
-      <span class="tiny"><input id="coll_meth" type=checkbox value="salvage"> salvage
+      <span class="tiny"><input id="coll_meth" type=checkbox value="selective quarrying"> quarrying 
     </td>
   </tr>
   <tr>
@@ -1167,6 +1169,9 @@ original material is preserved!</i></p>
     <td>
       <span class="tiny"><input id="coll_meth" type=checkbox value="surface (in situ)"> 
       surface (in situ)
+    </td>
+    <td>
+      <span class="tiny"><input id="coll_meth" type=checkbox value="salvage"> salvage
     </td>
     <td>
       <span class="tiny"><input id="coll_meth" type=checkbox value="anthill"> anthill
@@ -1193,11 +1198,11 @@ original material is preserved!</i></p>
     <td>
       <span class="tiny"><input id="coll_meth" type=checkbox value="smear slide"> smear slide
     </td>
+  </tr>
+  <tr>
     <td>
       <span class="tiny"><input id="coll_meth" type=checkbox value="acetic"> acetic
     </td>
-  </tr>
-  <tr>
     <td>
       <span class="tiny"><input id="coll_meth" type=checkbox value="hydrochloric"> hydrochloric
     </td>
@@ -1206,9 +1211,6 @@ original material is preserved!</i></p>
     </td>
     <td>
       <span class="tiny"><input id="coll_meth" type=checkbox value="peroxide"> peroxide
-    </td>
-    <td>
-      <span class="tiny"><input id="coll_meth" type=checkbox value="sieve"> sieve
     </td>
   </tr>
   <tr>
@@ -1226,7 +1228,8 @@ original material is preserved!</i></p>
   <tr>
     <td>
       Collection size:<nobr><span class="tiny"><input id="collection_size" size=8 maxlength=8></span>
-      <span class="verysmall"><select class="verysmall" id="collection_size_unit"></select></span>&nbsp;&nbsp;</nobr>
+      <span class="verysmall"><select class="verysmall" id="collection_size_unit"></select></span>&nbsp;&nbsp;</nobr><br>
+  <i><p class="tiny">Give a total only if counts are not given for individual taxa.</p></i>
     </td>
   </tr>
   <tr>
@@ -1237,7 +1240,6 @@ original material is preserved!</i></p>
   </tr>
   </table>
   
-  <i><p class="small">Give a total only if counts are not given for individual taxa.</p></i>
   <p>
     Museum repositories:
       <span class="verysmall"><select class="verysmall" id="museum"></select></span>
