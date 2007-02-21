@@ -163,10 +163,12 @@ sub displayTaxonInfoResults {
 
 	# Get the sql IN list for a Higher taxon:
 	my $in_list;
+    my $quick = 0;;
 	if($taxon_no) {
         my $sql = "SELECT (rgt-lft) diff FROM taxa_tree_cache WHERE taxon_no=$taxon_no";
-        my $diff = ${$dbt->getData($sql)}[0];
+        my $diff = ${$dbt->getData($sql)}[0]->{'diff'};
         if (!$is_real_user && $diff > 1000) {
+            $quick = 1;
             $in_list = [-1];
         } else {
             my @in_list=TaxaCache::getChildren($dbt,$taxon_no);
@@ -364,7 +366,9 @@ sub displayTaxonInfoResults {
         print '<div id="panel6" class="panel">';
 		print '<div align="center"><h3>Ecology and taphonomy</h3></div>';
         print '<div align="center">';
-		print displayEcology($dbt,$taxon_no,$in_list);
+        unless ($quick) {
+		    print displayEcology($dbt,$taxon_no,$in_list);
+        }
         print '</div>';
         print '</div>';
         print '<script language="JavaScript" type="text/javascript"> showTabText(6); </script>';
@@ -373,7 +377,9 @@ sub displayTaxonInfoResults {
         print '<div id="panel7" class="panel">';
 		print '<div align="center"><h3>Measurements</h3></div>';
         print '<div align="center">';
-		print displayMeasurements($dbt,$taxon_no,$taxon_name,$in_list);
+        unless ($quick) {
+		    print displayMeasurements($dbt,$taxon_no,$taxon_name,$in_list);
+        }
         print '</div>';
         print '</div>';
         print '<script language="JavaScript" type="text/javascript"> showTabText(7); </script>';
@@ -1173,15 +1179,14 @@ sub displayRelatedTaxa {
     my @child_taxa_links;
     # This section generates links for children if we have a taxon_no (in authorities table)
     if ($focal_taxon_no) {
-        my $tree = TaxaCache::getChildren($dbt,$focal_taxon_no,'tree',1);
-        my $taxon_records = $tree->{'children'};
+        my $taxon_records = TaxaCache::getChildren($dbt,$focal_taxon_no,'immediate_children');
         my @children = @{$taxon_records};
-        my @syns = @{$tree->{'synonyms'}};
-        foreach my $syn (@syns) {
-            if ($syn->{'children'}) {
-                push @children, @{$syn->{'children'}};
-            }
-        }
+#        my @syns = @{$tree->{'synonyms'}};
+#        foreach my $syn (@syns) {
+#            if ($syn->{'children'}) {
+#                push @children, @{$syn->{'children'}};
+#            }
+#        }
         @children = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @children;
         if (@children) {
             my $sql = "SELECT type_taxon_no FROM authorities WHERE taxon_no=$focal_taxon_no";
@@ -1206,10 +1211,10 @@ sub displayRelatedTaxa {
     my @sister_taxa_links;
     # This section generates links for sister if we have a taxon_no (in authorities table)
     if ($parent_taxon_no) {
-        my $tree = TaxaCache::getChildren($dbt,$parent_taxon_no,'tree',1);
-        my $taxon_records = $tree->{'children'};
-        if (@{$taxon_records}) {
-            foreach my $record (@{$taxon_records}) {
+        my @sisters = @{TaxaCache::getChildren($dbt,$parent_taxon_no,'immediate_children')};
+        @sisters = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @sisters;
+        if (@sisters) {
+            foreach my $record (@sisters) {
                 next if ($record->{'taxon_no'} == $focal_taxon_no);
                 if ($focal_taxon_rank ne $record->{'taxon_rank'}) {
 #                    PBDBUtil::debug(1,"rank mismatch $focal_taxon_rank -- $record->{taxon_rank} for sister $record->{taxon_name}");

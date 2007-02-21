@@ -648,11 +648,12 @@ sub getChildren {
         }
     }
 
-    my $sql = "SELECT lft,rgt FROM taxa_tree_cache WHERE taxon_no=$taxon_no";
+    my $sql = "SELECT lft,rgt,synonym_no FROM taxa_tree_cache WHERE taxon_no=$taxon_no";
     my $root_vals = ${$dbt->getData($sql)}[0];
     return undef unless $root_vals;
     my $lft = $root_vals->{'lft'};
     my $rgt = $root_vals->{'rgt'};
+    my $synonym_no = $root_vals->{'synonym_no'};
     
     my @exclude = ();
     if (ref $exclude_list eq 'ARRAY' && @$exclude_list) {
@@ -665,7 +666,14 @@ sub getChildren {
         }
     }
 
-    if ($return_type eq 'tree') {
+    if ($return_type eq 'tree' || $return_type eq 'immediate_children') {
+        my $child_nos;
+        if ($return_type eq 'immediate_children') {
+            my $sql = "SELECT taxon_no FROM taxa_tree_cache WHERE synonym_no=$synonym_no";
+            my $synonym_nos = join(",",-1,map {$_->{'taxon_no'}} @{$dbt->getData($sql)});
+            $sql = "SELECT DISTINCT child_no,child_spelling_no FROM opinions WHERE parent_no IN ($synonym_nos)";
+            $child_nos = join(",",-1,map {($_->{'child_no'},$_->{'child_spelling_no'})} @{$dbt->getData($sql)});
+        }
         # Ordering is very important. 
         # The ORDER BY tc2.lft makes sure results are returned in hieracharical order, so we can build the tree in one pass below
         # The (tc2.taxon_no != tc2.spelling_no) term ensures the most recent name always comes first (this simplfies later algorithm)
@@ -673,11 +681,14 @@ sub getChildren {
         my $sql = "SELECT tc.taxon_no, a1.type_taxon_no, a1.taxon_rank, a1.taxon_name, tc.spelling_no, tc.lft, tc.rgt, tc.synonym_no "
                 . " FROM taxa_tree_cache tc, authorities a1"
                 . " WHERE a1.taxon_no=tc.taxon_no"
-                . " AND (tc.lft BETWEEN $lft AND $rgt )"
+                . " AND (tc.lft BETWEEN $lft AND $rgt)"
                 . " AND (tc.rgt BETWEEN $lft AND $rgt)";
         foreach my $exclude (@exclude) {
             $sql .= " AND (tc.lft NOT BETWEEN $exclude->[0] AND $exclude->[1])";
             $sql .= " AND (tc.rgt NOT BETWEEN $exclude->[0] AND $exclude->[1])";
+        }
+        if ($return_type eq 'immediate_children') {
+             $sql .= " AND tc.taxon_no IN ($synonym_no,$child_nos)"
         }
         $sql .= " ORDER BY tc.lft, (tc.taxon_no != tc.spelling_no)";
         my @results = @{$dbt->getData($sql)};
@@ -687,9 +698,14 @@ sub getChildren {
         $root->{'synonyms'}  = [];
         $root->{'spellings'} = [];
         my @parents = ($root);
+        my %p_lookup = ();
         foreach my $row (@results) {
             last if (!@parents);
             my $p = $parents[0];
+
+            if ($row->{synonym_no} == $row->{taxon_no}) {
+                $p_lookup{$row->{taxon_no}} = $row;
+            }
 
             if ($row->{'lft'} == $p->{'lft'}) {
                 # This is a correction/recombination/rank change
@@ -706,7 +722,10 @@ sub getChildren {
                     $p = $parents[0];
                 }
                 if ($row->{'synonym_no'} != $row->{'spelling_no'}) {
-                    push @{$p->{'synonyms'}},$row;
+                    my $ss = $p_lookup{$row->{synonym_no}};
+                    push @{$ss->{synonyms}}, $row;
+
+                    #push @{$p->{'synonyms'}},$row;
 #                    print "New synonym of parent $p->{taxon_name}: $row->{taxon_name}\n";
                 } else {
                     push @{$p->{'children'}},$row;
@@ -724,7 +743,11 @@ sub getChildren {
             $node->{'children'} = \@children;
             unshift @nodes_to_sort,@children;
         }
-        return $root;
+        if ($return_type eq 'immediate_children') {
+            return $root->{children};
+        } else {
+            return $root;
+        }
     } else {
         # use between and both values so we'll use a key for a smaller tree;
         my $sql = "SELECT tc.taxon_no FROM taxa_tree_cache tc WHERE "
