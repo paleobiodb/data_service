@@ -50,11 +50,11 @@
 		if ( ! overrideEntry ( value ) && ! overridePulldown ( pulldown ) ) {
 			// Must start w/ upper case
  			if ( startUppercase.test( value ) == false ) {
-				return type + " name \"" + value + "\" on row " + ( i + 1 ) + " must be capitalized.\n"; 
+				return "The " + type + " name " + value + " must be capitalized.\n"; 
 			} else {
 				// Check that the rest is acceptable
  				if ( firstUpperRestLower.test( value ) == false ) {
-					return type + " name \"" + value + "\" on row " + ( i + 1 ) + " is ill formed.\n"; 
+					return "The " + type + " name " + value + " is ill formed.\n"; 
 				}
 			}
 		}
@@ -68,12 +68,12 @@
 		if ( ! overrideEntry ( value ) && ! overridePulldown ( pulldown ) ) {
 			// Species must be all lowercase, no numbers
  			if ( lowercase.test( value ) == false ) {
-				return "Species name \"" + value + "\" on row " + ( i + 1 ) + " must be lower case, no numbers, no other characters.\n"; 
+				return "The species name " + value + " must be lower case, no numbers, no other characters.\n"; 
 			}
 
 			// Also check for 'sp' without . typo
 			if ( value == "sp" || value == "spp" ) {
-				return "Species name \"" + value + "\" on row " + ( i + 1 ) + " requires a period. \n"; 
+				return "The species name " + value + " requires a period. \n"; 
 			}
 		}
 		return "";
@@ -91,26 +91,31 @@
 			for ( var i=0; i < rows; i++ ) {
 				// Genus Name
 				if ( frm.genus_name[i].value != "" ) {
-					errors += checkName ( "Genus", frm.genus_name[i].value, frm.genus_reso[i], i );
+					errors += checkName ( "genus", frm.genus_name[i].value, frm.genus_reso[i], i );
+					for ( var j=0; j < i; j++ ) {
+						if ( frm.genus_name[i].value == frm.genus_name[j].value && frm.species_name[i].value == frm.species_name[j].value && i != j ) {
+							errors += frm.genus_name[i].value + " " + frm.species_name[i].value + " is repeated.\n";
+						}
+					}
 				} else {
 					// If they don't have the genus, disregard the entire row
 					continue;
 				}
 	
                 if ( frm.subgenus_name && frm.subgenus_name[i].value != "" ) {
-                    errors += checkName ( "Subgenus", frm.subgenus_name[i].value, frm.subgenus_reso[i], i );
+                    errors += checkName ( "subgenus", frm.subgenus_name[i].value, frm.subgenus_reso[i], i );
                 }
 	
 				// Species must be there
 				if ( frm.species_name[i].value == "" ) {
-					errors += "Species name is required on row " + ( i + 1 ) + ".\n"; 
+					errors += "A species name is required for " + frm.genus_name[i].value + ".\n"; 
 				} else {
 					errors += checkSpecies ( frm.species_name[i].value, frm.species_reso[i], i );
 				}
 
 				// Reference num
 				if ( frm.reference_no[i].value == "" ) {
-					errors += "Reference number required on row " + ( i + 1 ) + ".\n"; 
+					errors += "A reference is required for " + frm.genus_name[i].value + " " + frm.species_name[i].value + ".\n"; 
 				}
 			}
 		} else {
@@ -119,28 +124,28 @@
 
 			// Genus Name
 			if ( frm.genus_name.value != "" ) {
-				errors += checkName ( "Genus", frm.genus_name.value, frm.genus_reso, 1 );
+				errors += checkName ( "genus", frm.genus_name.value, frm.genus_reso, 1 );
 
                 if ( frm.subgenus_name && frm.subgenus_name[i].value != "" ) {
-                    errors += checkName ( "Subgenus", frm.subgenus_name[i].value, frm.subgenus_reso[i], i );
+                    errors += checkName ( "subgenus", frm.subgenus_name[i].value, frm.subgenus_reso[i], i );
                 }
 	
 				// Species must be there
 				if ( frm.species_name.value == "" ) {
-					errors += "Species name is required on row 1.\n"; 
+					errors += "A species name is required for " + frm.genus_name[i].value + ".\n"; 
 				} else {
 					errors += checkSpecies ( frm.species_name.value, frm.species_reso, 1 );
 				}
 
 				// Reference num
 				if ( frm.reference_no.value == "" ) {
-					errors += "Reference number required on row " + ( i + 1 ) + ".\n"; 
+					errors += "A reference is required for " + frm.genus_name[i].value + " " + frm.species_name[i].value + ".\n"; 
 				}
 			}
 		}
 		// Report errors
 		if ( errors != "" ) {
-			errors = "   Errors detected!!   \n" + 
+			errors = "   Please fix the following errors:   \n" + 
 					 "---------------------------------------\n\n" +
 					 errors + "\n" +
 					 "---------------------------------------\n\n" +
