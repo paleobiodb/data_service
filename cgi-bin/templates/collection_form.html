@@ -123,7 +123,7 @@ function doCheckFieldsGeography() {
         bad_info += "\no Longitude must be less than 180";
     }
     if ( integerOpt.test (frm.latmin.value) == false ) {
-        bad_info += "\no Latitude minutes must be integer";
+        bad_info += "\no Latitude minutes must be an integer";
     } 
     if ( frm.latmin.value != "" && parseInt(frm.latmin.value) >= 60)	{
         bad_info += "\no Latitude minutes must be less than 60";
@@ -134,13 +134,19 @@ function doCheckFieldsGeography() {
     if ( frm.lngmin.value != "" && parseInt(frm.lngmin.value) >= 60)	{
         bad_info += "\no Longitude minutes must be less than 60";
     }
+    if ( integerOpt.test (frm.lngdec.value) == false ) {
+        bad_info += "\no Longitude decimal value must be an integer";
+    }
+    if ( integerOpt.test (frm.latdec.value) == false ) {
+        bad_info += "\no Latitude decimal value must be an integer";
+    }
 
     // added decimal vs. minutes checks JA 18.5.04
     if ( frm.latdec.value != "" && frm.latmin.value != "" ) {
-        bad_info += "\no You can't enter both decimal and minutes/seconds latitude values";
+        bad_info += "\no Don't enter both decimal and minutes/seconds latitude values";
     }
     if ( frm.lngdec.value != "" && frm.lngmin.value != "" ) {
-        bad_info += "\no You can't enter both decimal and minutes/seconds longitude values";
+        bad_info += "\no Don't enter both decimal and minutes/seconds longitude values";
     }
 
     var index = frm.country.selectedIndex;
