@@ -590,17 +590,20 @@ sub displayHomePage {
 	my $sql = "SELECT * FROM statistics";
 	my $row = ${$dbt->getData($sql)}[0];
 
+	# display the eight most recently entered collections that have
+	#  distinct combinations of references and enterers (the latter is
+	#  usually redundant)
 	my $nowDate = now();
 	$nowDate = $nowDate-'1M';
 	my ($date,$time) = split / /,$nowDate;
 	my ($yyyy,$mm,$dd) = split /-/,$date,3;
-	my $sql = "SELECT enterer_no,collection_no,collection_name FROM collections WHERE created>".$yyyy.$mm.$dd."000000 ORDER BY collection_no DESC";
+	my $sql = "SELECT reference_no,enterer_no,collection_no,collection_name FROM collections WHERE created>".$yyyy.$mm.$dd."000000 ORDER BY collection_no DESC";
 	my @colls = @{$dbt->getData($sql)};
 	my %entererseen;
 	my $printed;
 	for my $coll ( @colls )	{
-		if ( $entererseen{$coll->{enterer_no}} < 3 )	{
-			$entererseen{$coll->{enterer_no}}++;
+		if ( $entererseen{$coll->{reference_no}.$coll->{enterer_no}} < 1 )	{
+			$entererseen{$coll->{reference_no}.$coll->{enterer_no}}++;
 			$row->{collection_links} .= qq|<a class="homeBodyLinks" href="bridge.pl?action=displayCollectionDetails&collection_no=$coll->{collection_no}">$coll->{collection_name}</a>\n|;
 			$printed++;
 			if ( $printed == 8 )	{
