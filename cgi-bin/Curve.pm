@@ -777,11 +777,21 @@ sub assignGenera	{
 			if ( ( $present[$i][$j-1] < 0 && $present[$i][$j+1] < 0 ) || $present[$i][$j] < 0 )	{
 				$localrt[$j]++;
 			}
+			# chaom is the notation for Chao-2, q1 for ICE
 			if ($present[$i][$j] == -1)	{
 				$chaol[$j]++;
+				$q1[$j]++;
 			}
 			elsif ($present[$i][$j] == -2)	{
 				$chaom[$j]++;
+			}
+			# stats needed for ICE
+			if ( abs($present[$i][$j]) > 10 )	{
+				$sfreq[$j]++;
+			} elsif ( $present[$i][$j] < 0 )	{
+				$q[abs($present[$i][$j])][$j]++;
+				$ninf[$j] += abs($present[$i][$j]);
+				$sinf[$j]++;
 			}
 		}
 		if ($first > 0)	{
@@ -838,6 +848,35 @@ sub assignGenera	{
 		}
 	}
 	close PADATA;
+
+	# compute ICE
+$| = 1;
+	for $i (1..$chrons)	{
+		if ( $ninf[$i] > 0 )	{
+			my $minf = 0;
+			for my $j ( 1..$listsinchron[$i] )	{
+				my $xx = $lastocc[$listsbychron[$i][$j]];
+				while ( $xx >= 0 && $xx =~ /[0-9]/ )	{
+					if ( abs($present[$occs[$xx]][$i]) <= 10 )	{
+						$minf++;
+						$xx = -1;
+					} else	{
+						$xx = $stone[$xx];
+					}
+				}
+			}
+			my $cice = 1 - ( $q1[$i] / $ninf[$i] );
+			my $sum = 0;
+			for $j (1..10)	{
+				$sum += $j * ( $j - 1 ) * $q[$j][$i];
+			}
+			my $g2 = ( ( $sinf[$i] / $cice ) * ( $minf / ( $mimf - 1 ) ) * ( sum / $ninf[$i]**2 ) ) - 1;
+			if ( $g2 < 0 )	{
+				$g2 = 0;
+			}
+			$ice[$i] = $sfreq[$i] + ( $sinf[$i] / $cice ) + ( $q1[$i] / $cice * $g2 );
+		}
+	}
 	for $i (1..$chrons)	{
 		if ( $occsinchron[$i] > 1 )	{
 			$pie[$i] = ( 1 - $pie[$i] ) / ( $occsinchron[$i] / ( $occsinchron[$i] - 1 ) );
@@ -1114,6 +1153,15 @@ $| = 1;
 	
 		 # erase the list or occurrence that has been drawn
 					  if (($samplingmethod != 1) && ($samplingmethod != 5))	{
+						my $xx = $lastocc[$listid[$j]];
+						while ( $xx >= 0 && $xx =~ /[0-9]/ )	{
+							if ( abs($present[$occs[$xx]][$i]) <= 10 )	{
+								$msubsminf[$i]++;
+							$xx = -1;
+						} else	{
+							$xx = $stone[$xx];
+							}
+						}
 					    $listid[$j] = $listid[$nitems];
 					  }
 					  else	{
@@ -1196,9 +1244,18 @@ $| = 1;
 					if ( abs($present[$i][$j]) > 0 )	{
 						if ($present[$i][$j] == -1)	{
 							$msubschaol[$j]++;
+							$msubsq1[$j]++;
 						}
 						elsif ($present[$i][$j] == -2)	{
 							$msubschaom[$j]++;
+						}
+					# stats needed for ICE
+						if ( abs($present[$i][$j]) > 10 )	{
+							$msubssfreq[$j]++;
+						} elsif ( $present[$i][$j] < 0 )	{
+							$msubsq[abs($present[$i][$j])][$j]++;
+							$msubsninf[$j] += abs($present[$i][$j]);
+							$msubssinf[$j]++;
 						}
 						if ( $first > $j )	{
 							$msubsearlier[$j]++;
@@ -1346,6 +1403,22 @@ $| = 1;
 	}
 	# end of Meaning of Life Equations
 
+	# compute incidence-based coverage estimator
+	for $i (1..$chrons)	{
+		if ( $msubsninf[$i] > 0 )	{
+			my $cice = 1 - ( $msubsq1[$i] / $msubsninf[$i] );
+			my $sum = 0;
+			for $j (1..10)	{
+				$sum += $j * ( $j - 1 ) * $msubsq[$j][$i];
+			}
+			my $g2 = ( ( $msubssinf[$i] / $cice ) * ( $msubsminf[$i] / ( $mimf - 1 ) ) * ( sum / $msubsninf[$i]**2 ) ) - 1;
+			if ( $g2 < 0 )	{
+				$g2 = 0;
+			}
+			$msubsice[$i] = $msubssfreq[$i] + ( $msubssinf[$i] / $cice ) + ( $msubsq1[$i] / $cice * $g2 );
+			$msubsice[$i] /= $trials;
+		}
+	}
 
 	# compute Jolly-Seber estimator
 	for $i (reverse 1..$chrons)	{
@@ -1534,6 +1607,9 @@ sub printResults	{
 		if ( $q->param('print_jolly-seber_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
 		}
+		if ( $q->param('print_ice_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Incidence-based<br>coverage estimate</b> ";
+		}
 		if ( $q->param('print_pie') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Evenness of<br>occurrences (PIE)</b> ";
 		}
@@ -1616,6 +1692,9 @@ sub printResults	{
 		}
 		if ( $q->param('print_jolly-seber_raw') eq "YES" )	{
 			print TABLE ",Jolly-Seber estimate";
+		}
+		if ( $q->param('print_ice_raw') eq "YES" )	{
+			print TABLE ",Incidence-based coverage estimate";
 		}
 		if ( $q->param('print_pie') eq "YES" )	{
 			print TABLE ",Evenness of occurrences (PIE)";
@@ -1772,6 +1851,13 @@ sub printResults	{
 						print "<td class=tiny align=center valign=top>NaN ";
 					}
 				}
+				if ( $q->param('print_ice_raw') eq "YES" )	{
+					if ($ice[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$ice[$i];
+					} else    {
+						print "<td class=tiny align=center valign=top>NaN ";
+					}
+				}
 				if ( $q->param('print_pie') eq "YES" )	{
 					if ($pie[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.5f ",$pie[$i];
@@ -1896,6 +1982,13 @@ sub printResults	{
 				if ( $q->param('print_jolly-seber_raw') eq "YES" )	{
 					if ($jolly[$i] > 0 )	{
 						printf TABLE ",%.1f",$jolly[$i];
+					} else    {
+						print TABLE ",NaN";
+					}
+				}
+				if ( $q->param('print_ice_raw') eq "YES" )	{
+					if ($ice[$i] > 0 )	{
+						printf TABLE ",%.1f",$ice[$i];
 					} else    {
 						print TABLE ",NaN";
 					}
@@ -2075,6 +2168,9 @@ sub printResults	{
 			if ( $q->param('print_jolly-seber_ss') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
 			}
+			if ( $q->param('print_ice_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Incidence-based<br>coverage estimate</b> ";
+			}
 			if ( $samplingmethod == 2)	{
 				if ( $q->param('print_michaelis-menten') eq "YES" )	{
 					print "<td class=tiny align=center valign=top><b>Michaelis-Menten<br>estimate</b> ";
@@ -2183,6 +2279,9 @@ sub printResults	{
 			}
 			if ( $q->param('print_jolly-seber_ss') eq "YES" )	{
 				print SUB_TABLE ",Jolly-Seber estimate";
+			}
+			if ( $q->param('print_ice_ss') eq "YES" )	{
+				print SUB_TABLE ",Incidence-based coverage estimate";
 			}
 			if ( $samplingmethod == 2)	{
 				if ( $q->param('print_michaelis-menten') eq "YES" )	{
@@ -2490,6 +2589,15 @@ sub printResults	{
 						if ($msubsjolly[$i] > 0 && $msubsrichness[$i] > 0 )	{
 							printf "<td class=tiny align=center valign=top>%.1f ",$msubsjolly[$i];
 							printf SUB_TABLE ",%.1f",$msubsjolly[$i];
+						} else    {
+							print "<td class=tiny align=center valign=top>NaN ";
+							print SUB_TABLE ",NaN";
+						}
+					}
+					if ( $q->param('print_ice_ss') eq "YES" )	{
+						if ($msubsice[$i] > 0 && $msubsrichness[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$msubsice[$i];
+							printf SUB_TABLE ",%.1f",$msubsice[$i];
 						} else    {
 							print "<td class=tiny align=center valign=top>NaN ";
 							print SUB_TABLE ",NaN";
