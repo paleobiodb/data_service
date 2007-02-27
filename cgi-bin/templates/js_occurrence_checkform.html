@@ -93,7 +93,7 @@
 				if ( frm.genus_name[i].value != "" ) {
 					errors += checkName ( "genus", frm.genus_name[i].value, frm.genus_reso[i], i );
 					for ( var j=0; j < i; j++ ) {
-						if ( frm.genus_name[i].value == frm.genus_name[j].value && frm.species_name[i].value == frm.species_name[j].value && i != j ) {
+						if ( frm.genus_name[i].value == frm.genus_name[j].value && frm.species_name[i].value == frm.species_name[j].value && i != j && frm.reid_no[i].value == 0 ) {
 							errors += frm.genus_name[i].value + " " + frm.species_name[i].value + " is repeated.\n";
 						}
 					}
