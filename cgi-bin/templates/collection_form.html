@@ -86,7 +86,7 @@ function doCheckFieldsGeography() {
     if ( frm.country.selectedIndex == 0 ) {
         bad_info += "\no Country is required";
     }
-    var freeState = /.* free state.*/i;
+    var freeState = /.*free state.*/i;
     var stateEntered = /.* state.*/i;
     var provinceEntered = /.* province.*/i;
     var stateAbbreviation = /[A-Z][A-Z]/;
