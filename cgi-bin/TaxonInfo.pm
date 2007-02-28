@@ -1871,10 +1871,11 @@ sub getMostRecentSpelling {
                 " CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
             ")".
          ")) AS reliability_index ";
-    $sql = "(SELECT o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, o.opinion_no, $reliability, "
+    $sql = "(SELECT a2.taxon_name original_name, o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, o.opinion_no, $reliability, "
          . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) AS pubyr"
          . " FROM opinions o" 
          . " LEFT JOIN authorities a ON o.child_spelling_no=a.taxon_no"
+         . " LEFT JOIN authorities a2 ON o.child_no=a2.taxon_no"
          . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
          . " WHERE o.child_no=$child_no"
          . " AND o.child_no != o.parent_no AND o.status != 'misspelling of'";
