@@ -3527,7 +3527,7 @@ sub buildTaxonomicList {
                     my @class_array = @{$class_hash->{$rowref->{'taxon_no'}}};
                     # Get Self as well, in case we're a family indet.
                     my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}});
-                    foreach my $t (@class_array,$taxon) {
+                    foreach my $t (reverse @class_array,$taxon) {
                         if ($t->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
                             $rowref->{$t->{'taxon_rank'}} = $t->{'taxon_name'};
                             $rowref->{$t->{'taxon_rank'}."_no"} = $t->{'taxon_no'};
@@ -3925,7 +3925,7 @@ sub getSynonymName {
     my $spelling_reason = "";
 
     my $spelling = TaxonInfo::getMostRecentSpelling($dbt,$ss_taxon_no);
-    if ($spelling->{'taxon_no'} != $taxon_no) {
+    if ($spelling->{'taxon_no'} != $taxon_no && $spelling->{'original_name'} ne $spelling->{'taxon_name'}) {
         $is_spelling = 1;
         $spelling_reason = $spelling->{'spelling_reason'};
         $spelling_reason = 'original and current combination' if $spelling_reason eq 'original spelling';
@@ -4001,7 +4001,7 @@ sub getReidHTMLTableByOccNum {
                 my $class_hash = TaxaCache::getParents($dbt,[$row->{'taxon_no'}],'array_full');
                 my @class_array = @{$class_hash->{$row->{'taxon_no'}}};
                 my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}});
-                foreach my $parent (@class_array,$taxon) {
+                foreach my $parent (reverse @class_array,$taxon) {
                     $classification->{$parent->{'taxon_rank'}} = $parent;
                 }
                 # Include the taxon as well, it my be a family and be an indet.
