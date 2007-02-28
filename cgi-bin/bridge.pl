@@ -3527,10 +3527,15 @@ sub buildTaxonomicList {
                     my @class_array = @{$class_hash->{$rowref->{'taxon_no'}}};
                     # Get Self as well, in case we're a family indet.
                     my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}});
-                    foreach my $t (reverse @class_array,$taxon) {
+                    foreach my $t (@class_array,$taxon) {
                         if ($t->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
-                            $rowref->{$t->{'taxon_rank'}} = $t->{'taxon_name'};
-                            $rowref->{$t->{'taxon_rank'}."_no"} = $t->{'taxon_no'};
+                            if ( ! $rowref->{$t->{'taxon_rank'}} )	{
+                                $rowref->{$t->{'taxon_rank'}} = $t->{'taxon_name'};
+                                $rowref->{$t->{'taxon_rank'}."_no"} = $t->{'taxon_no'};
+                            }
+                            if ( $rowref->{'class'} )	{
+                                last;
+                            }
                         }
                     }
                     $rowref->{'synonym_name'} = getSynonymName($dbt,$rowref->{'taxon_no'});
@@ -4001,8 +4006,13 @@ sub getReidHTMLTableByOccNum {
                 my $class_hash = TaxaCache::getParents($dbt,[$row->{'taxon_no'}],'array_full');
                 my @class_array = @{$class_hash->{$row->{'taxon_no'}}};
                 my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}});
-                foreach my $parent (reverse @class_array,$taxon) {
-                    $classification->{$parent->{'taxon_rank'}} = $parent;
+                foreach my $parent (@class_array,$taxon) {
+                    if ( ! $classification->{$parent->{'taxon_rank'}} )	{
+                        $classification->{$parent->{'taxon_rank'}} = $parent;
+                    }
+                    if ( $classification->{'class'} )	{
+                        last;
+                    }
                 }
                 # Include the taxon as well, it my be a family and be an indet.
                 $classification->{$taxon->{'taxon_rank'}} = $taxon;
