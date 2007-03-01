@@ -6056,11 +6056,18 @@ sub displayOccurrenceTable {
     }    
 
     my %count_by_abund_unit;
+    my %min_occ_no;
     foreach my $row (@occs) {
         my %hash = %$row;
         # Make sure the resos come last since we don't want that to affect hte sort below
+        # DON'T change the ordering of taxon_key, this ordering has to match up with the javascript and split functions
+        # throughout this whoel process
         my $taxon_key = join("-_",@hash{"genus_name","subgenus_name","species_name","genus_reso","subgenus_reso","species_reso"});
         $taxon_names{$taxon_key}{$row->{'collection_no'}} = $row;
+        if (!$min_occ_no{$taxon_key} || $row->{occurrence_no} < $min_occ_no{$taxon_key}) {
+            $min_occ_no{$taxon_key} = $row->{occurrence_no};
+        }
+        
         $taxon_nos{$taxon_key}{$row->{'taxon_no'}} = 1 if ($row->{'taxon_no'} > 0);
         $count_by_abund_unit{$row->{'abund_unit'}}++ if ($row->{'abund_unit'});
    }
@@ -6157,7 +6164,12 @@ EOF
  
     print '<div style="height: 236px">&nbsp;</div>';
     print '<table border=0 cellpadding=0 cellspacing=0 id="occurrencesTable">'."\n";
-    my @sorted_names = sort keys %taxon_names;
+    my @sorted_names;
+    if ($q->param('taxa_order') eq 'alphabetical') {
+        @sorted_names = sort keys %taxon_names;
+    } else {
+        @sorted_names = sort {$min_occ_no{$a} <=> $min_occ_no{$b}} keys %taxon_names;
+    }
     for(my $i=0;$i<@sorted_names;$i++) {
         my $taxon_key = $sorted_names[$i];
         my @taxon_nos = (); 

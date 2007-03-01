@@ -131,6 +131,12 @@ function checkForm ( ) {
         </tr>
       </div>
 
+      <div show="type=occurrence_table">
+        <tr>
+          <td nowrap>Sort order for taxa: <select name="taxa_order"><option>as entered</option><option>alphabetical</option></select></td>
+        </tr>
+      </div>
+      <div hide="type=occurrence_table">
       <div show="action=displayCollResults">
         <tr valign=top>
           <td nowrap>Sort by:
@@ -146,6 +152,7 @@ function checkForm ( ) {
             Number of records per page: <input name=limit size=10 value=30 class="small">
           </td>
         </tr>
+      </div>
       </div>
 
       <div show="action=displaySearchSectionResults">
