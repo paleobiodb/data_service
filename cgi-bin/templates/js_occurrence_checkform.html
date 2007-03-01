@@ -93,8 +93,10 @@
 				if ( frm.genus_name[i].value != "" ) {
 					errors += checkName ( "genus", frm.genus_name[i].value, frm.genus_reso[i], i );
 					for ( var j=0; j < i; j++ ) {
-						if ( frm.genus_name[i].value == frm.genus_name[j].value && frm.species_name[i].value == frm.species_name[j].value && i != j && frm.reid_no[i].value == 0 ) {
-							errors += frm.genus_name[i].value + " " + frm.species_name[i].value + " is repeated.\n";
+						if ( frm.genus_reso[i].value == frm.genus_reso[j].value && frm.genus_name[i].value == frm.genus_name[j].value && frm.species_reso[i].value == frm.species_reso[j].value && frm.species_name[i].value == frm.species_name[j].value && i != j && frm.reid_no[i].value == 0 ) {
+							if ( ! frm.subgenus_name || ( frm.subgenus_reso[i].value == frm.subgenus_reso[j].value && frm.subgenus_name[i].value == frm.subgenus_name[j].value ) )	{
+								errors += frm.genus_name[i].value + " " + frm.species_name[i].value + " is repeated.\n";
+							}
 						}
 					}
 				} else {
