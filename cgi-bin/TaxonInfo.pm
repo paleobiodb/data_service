@@ -408,7 +408,7 @@ sub displayTaxonInfoResults {
     if ($modules{9}) {
         print '<div id="panel9" class="panel">';
         if ($is_real_user) {
-		    print doCollections($q->url(), $q, $dbt, $dbh, $in_list, '',$is_real_user);
+		    print doCollections($q->url(), $q, $dbt, $dbh, $taxon_no, $in_list, '',$is_real_user);
         } else {
             print '<div align="center">';
             print '<form method="POST" action="bridge.pl">';
@@ -545,6 +545,7 @@ sub doCollections{
 	my $q = shift;
 	my $dbt = shift;
 	my $dbh = shift;
+	my $taxon_no = shift;
 	my $in_list = shift;
     # age_range_format changes appearance html formatting of age/range information
     # used by the strata module
@@ -604,19 +605,72 @@ sub doCollections{
     # I hate to hit another table, but we need to know whether ANY of the
     #  included taxa are extant JA 15.12.06
     my $extant;
+    my $mincrownfirst;
+    my %iscrown;
     if ( $in_list && @$in_list )	{
-        my $sql = "SELECT count(*) AS c FROM authorities WHERE extant='YES' AND taxon_no in (" . join (',',@$in_list) . ")";
-        $extant = ${$dbt->getData($sql)}[0]->{'c'};
+        my $sql = "SELECT a.taxon_no taxon_no,lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no!=".$taxon_no." AND extant='YES' AND a.taxon_no in (" . join (',',@$in_list) . ") AND a.taxon_no=t.taxon_no";
+        my @extantchildren = @{$dbt->getData($sql)};
+        $extant = $#extantchildren + 1;
+        # now for a big waste of time: the minimum age of the crown group
+        #  must only involve extant, immediate children, so you need to know
+        #  which of the children are extant JA 2.3.07
+        if ( $extant > 0 )	{
+            # build some SQL that will be needed below
+            my $lrsql;
+            for my $ec ( @extantchildren )	{
+                $lrsql .= " OR (lft<=".$ec->{'lft'}." AND rgt>=".$ec->{'rgt'}.")";
+            }
+            $lrsql =~ s/^ OR//;
+
+            # get immediate child taxa
+            my $taxon_records = TaxaCache::getChildren($dbt,$taxon_no,'immediate_children');
+            my @children = @{$taxon_records};
+            my @childnos;
+            for my $c ( @children )	{
+                push @childnos, $c->{'taxon_no'};
+            }
+
+            # get immediate children that include extant children
+            my $sql = "SELECT taxon_no,lft,rgt FROM taxa_tree_cache WHERE taxon_no IN (" . join (',',@childnos) . ") AND (" . $lrsql . ")";
+            my @extantimmediates = @{$dbt->getData($sql)};
+
+            # get children of immediate children that include extant children
+            my $sql = "SELECT taxon_no FROM taxa_tree_cache WHERE";
+for my $ei ( @extantimmediates )	{
+                $sql .= " (lft>=".$ei->{'lft'}." AND rgt<=".$ei->{'rgt'}.") OR ";
+            }
+            $sql =~ s/ OR $//;
+            my @extantcladechildren = @{$dbt->getData($sql)};
+
+            # get collections including the living immediate children
+            # another annoying table hit!
+            my $extant_list;
+            for my $ecc ( @extantcladechildren )	{
+                $extant_list .= "$ecc->{'taxon_no'},";
+            }
+            $extant_list =~ s/,$//;
+            $options{'taxon_list'} = $extant_list;
+            my ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
+            my @data = @$dataRows;
+            my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$t,\@data,$upperbound,$lowerbound);
+            for my $coll ( @data )	{
+                $iscrown{$coll->{'collection_no'}}++;
+            }
+            $mincrownfirst = $minfirst;
+        }
     }
 
     if ( $minfirst && $extant > 0 && $age_range_format ne 'for_strata_module' )	{
-        $range = "Maximum range based only on fossils: " . $range . "<br>\nMinimum age of oldest fossil: $minfirst Ma";
+        $range = "<div style=\"width: 40em; margin-left: auto; margin-right: auto; text-align: left; white-space: nowrap;\">Maximum range based only on fossils: " . $range . "<br>\n";
+        $range .= "Minimum age of oldest fossil (stem group age): $minfirst Ma<br>\n";
+        $range .= "Minimum age of oldest fossil in any extant subgroup (crown group age): $mincrownfirst Ma<br>";
+        $range .= "<span class=\"verysmall\" style=\"padding-left: 2em;\"><i>Collections with crown group taxa are in <b>bold</b>.</i></span></div><br>\n";
     }
 
     if ($age_range_format eq 'for_strata_module') {
         print "<b>Age range:</b> $range <br><br><hr><br>"; 
     } else {
-        print "<div align=\"center\"><h3><b>Age range</b></h3> $range </div><br><br><hr>";
+        print "<div align=\"center\"><h3><b>Age range</b></h3></div>\n $range<br><br><hr>";
     }
 
     
@@ -751,7 +805,11 @@ sub doCollections{
 			$output .= "<td align=\"center\" valign=\"top\">$key</td>".
                        " <td align=\"left\"><span class=\"small\">";
 			foreach  my $collection_no (@{$time_place_coll{$key}}){
-				$output .= "<a href=\"$exec_url?action=displayCollectionDetails&amp;collection_no=$collection_no&amp;is_real_user=$is_real_user\">$collection_no</a> ";
+				my $formatted_no = $collection_no;
+				if ( $iscrown{$collection_no} > 0 )	{
+					$formatted_no = "<b>".$formatted_no."</b>";
+				}
+				$output .= "<a href=\"$exec_url?action=displayCollectionDetails&amp;collection_no=$collection_no&amp;is_real_user=$is_real_user\">$formatted_no</a> ";
 			}
 			$output .= "</span></td></tr>\n";
 			$row_color++;
@@ -1179,31 +1237,31 @@ sub displayRelatedTaxa {
     my @child_taxa_links;
     # This section generates links for children if we have a taxon_no (in authorities table)
     if ($focal_taxon_no) {
-        my $taxon_records = TaxaCache::getChildren($dbt,$focal_taxon_no,'immediate_children');
-        my @children = @{$taxon_records};
+	my $taxon_records = TaxaCache::getChildren($dbt,$focal_taxon_no,'immediate_children');
+	my @children = @{$taxon_records};
 #        my @syns = @{$tree->{'synonyms'}};
 #        foreach my $syn (@syns) {
 #            if ($syn->{'children'}) {
 #                push @children, @{$syn->{'children'}};
 #            }
 #        }
-        @children = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @children;
-        if (@children) {
-            my $sql = "SELECT type_taxon_no FROM authorities WHERE taxon_no=$focal_taxon_no";
-            my $type_taxon_no = ${$dbt->getData($sql)}[0]->{'type_taxon_no'};
-            foreach my $record (@children) {
-                my @syn_links;                                                         
-                my @synonyms = @{$record->{'synonyms'}};
-                push @syn_links, $_->{'taxon_name'} for @synonyms;
-                my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&amp;taxon_no=$record->{taxon_no}&amp;is_real_user=$is_real_user">$record->{taxon_name}|;
-                $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
-                $link .= "</a>";
-                if ($type_taxon_no && $type_taxon_no == $record->{'taxon_no'}) {
-                    $link .= " <small>(type $record->{taxon_rank})</small>";
-                }
-                push @child_taxa_links, $link;
-            }
-        }
+	@children = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @children;
+	if (@children) {
+	    my $sql = "SELECT type_taxon_no FROM authorities WHERE taxon_no=$focal_taxon_no";
+	    my $type_taxon_no = ${$dbt->getData($sql)}[0]->{'type_taxon_no'};
+	    foreach my $record (@children) {
+		my @syn_links;                                                         
+		my @synonyms = @{$record->{'synonyms'}};
+		push @syn_links, $_->{'taxon_name'} for @synonyms;
+		my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&amp;taxon_no=$record->{taxon_no}&amp;is_real_user=$is_real_user">$record->{taxon_name}|;
+		$link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
+		$link .= "</a>";
+		if ($type_taxon_no && $type_taxon_no == $record->{'taxon_no'}) {
+		    $link .= " <small>(type $record->{taxon_rank})</small>";
+		}
+		push @child_taxa_links, $link;
+	    }
+	}
     }
 
     # Get sister taxa as well
@@ -1211,7 +1269,7 @@ sub displayRelatedTaxa {
     my @sister_taxa_links;
     # This section generates links for sister if we have a taxon_no (in authorities table)
     if ($parent_taxon_no) {
-        my @sisters = @{TaxaCache::getChildren($dbt,$parent_taxon_no,'immediate_children')};
+	my @sisters = @{TaxaCache::getChildren($dbt,$parent_taxon_no,'immediate_children')};
         @sisters = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @sisters;
         if (@sisters) {
             foreach my $record (@sisters) {
