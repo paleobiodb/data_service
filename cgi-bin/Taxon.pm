@@ -1769,7 +1769,7 @@ sub propagateAuthorityInfo {
     my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
     return if (!$orig_no);
 
-    main::dbg("propagateAuthorityInfo called with taxon_no $taxon_no and orig $orig_no");
+    #main::dbg("propagateAuthorityInfo called with taxon_no $taxon_no and orig $orig_no");
 
     my @spelling_nos = TaxonInfo::getAllSpellings($dbt,$orig_no);
     # Note that this is the taxon_no passed in, not the original combination -- an update to
@@ -1777,7 +1777,7 @@ sub propagateAuthorityInfo {
     my $me = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
 
     my @authority_fields = ('author1init','author1last','author2init','author2last','otherauthors','pubyr');
-    my @more_fields = ('pages','figures','common_name','extant','preservation');
+    my @more_fields = ('pages','figures','common_name','type_specimen','type_body_part','part_details','extant','preservation');
 
     # Two steps: find best authority info, then propagate to all spelling variants
     my @spellings;
@@ -1810,7 +1810,7 @@ sub propagateAuthorityInfo {
         return $quality;
     };
    
-    # Sort by quality in descending rder
+    # Sort by quality in descending order
     @spellings = 
         map  {$_->[1]}
         sort {$b->[0] <=> $a->[0]}
@@ -1821,17 +1821,20 @@ sub propagateAuthorityInfo {
     # Get this additional metadata from wherever we can find it, giving preference
     # to the taxa with better authority data
     my %seenMore = ();
-    if ($this_is_best) {
+    foreach my $spelling (@spellings) {
         foreach my $f (@more_fields) {
-            $seenMore{$f} = $me->{$f};
-        }
-    } else {
-        foreach my $spelling (@spellings) {
-            foreach my $f (@more_fields) {
-                if ($spelling->{$f} ne '' && !exists $seenMore{$f}) {
-                    $seenMore{$f} = $spelling->{$f};
-                }
+            if ($spelling->{$f} ne '' && !exists $seenMore{$f}) {
+                $seenMore{$f} = $spelling->{$f};
             }
+        }
+    }
+    # the user just entered these data, so if they exist, they should be used
+    # slightly dangerous because you cannot erase data completely if they're
+    #  wrong; you have to replace them with something
+    # this won't mess with authority data
+    foreach my $f (@more_fields) {
+        if ( $me->{$f} )	{
+            $seenMore{$f} = $me->{$f};
         }
     }
     if (%seenMore) {
@@ -1840,7 +1843,7 @@ sub propagateAuthorityInfo {
         }
     }
 
-    # Set all taxa to be equal to the reference form the best authority data we have
+    # Set all taxa to be equal to the reference from the best authority data we have
     my $best;
     if ($this_is_best) {
         $best = $me;
@@ -1864,7 +1867,7 @@ sub propagateAuthorityInfo {
     if (@toUpdate) {
         foreach my $spelling_no (@spelling_nos) {
             my $u_sql =  "UPDATE authorities SET modified=modified, ".join(",",@toUpdate)." WHERE taxon_no=$spelling_no";
-            main::dbg("propagateAuthorityInfo updating authority: $u_sql");
+            #main::dbg("propagateAuthorityInfo updating authority: $u_sql");
             $dbh->do($u_sql);
         }
     }
