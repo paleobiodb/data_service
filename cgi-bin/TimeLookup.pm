@@ -241,7 +241,7 @@ sub getRangeByInterval {
         $max = $min;
     }
     my @intervals;
-    if ($max =~ /^\w+ \d$/ || $min =~ /^\w+ \d$/) {
+    if ($max =~ /^[A-Z][a-z]+ \d$/ || $min =~ /^[A-Z][a-z]+ \d$/)	{
         # 10 M.Y. binning - i.e. Triassic 2
         my ($index1,$index2) = (-1,-1);
         for(my $i=0;$i<scalar(@TimeLookup::bins);$i++) {
