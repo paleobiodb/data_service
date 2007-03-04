@@ -3843,12 +3843,13 @@ sub formatOccurrenceTaxonName {
         $genus_name = "<b>".$genus_name."</b>";
     }
     # n. gen., n. subgen., n. sp. come afterwards
+    # sensu lato always goes at the very end no matter what JA 3.3.07
     if ($row->{'genus_reso'} eq 'n. gen.' && $row->{'species_reso'} ne 'n. sp.') {
         $taxon_name .= "$genus_name n. gen.";
     } elsif ($row->{'genus_reso'} eq '"') {
         $taxon_name .= '"'.$genus_name;
         $taxon_name .= '"' unless ($row->{'subgenus_reso'} eq '"' || $row->{'species_reso'} eq '"');
-    } elsif ($row->{'genus_reso'} ne 'n. gen.') {
+    } elsif ($row->{'genus_reso'} ne 'n. gen.' && $row->{'genus_reso'} ne 'sensu lato') {
         $taxon_name .= $row->{'genus_reso'}." ".$genus_name;
     } else {
         $taxon_name .= $genus_name;
@@ -3882,7 +3883,7 @@ sub formatOccurrenceTaxonName {
     if ($row->{'species_reso'} eq '"') {
         $taxon_name .= '"' unless ($row->{'genus_reso'} eq '"' || $row->{'subgenus_reso'} eq '"');
         $taxon_name .= $species_name.'"';
-    } elsif ($row->{'species_reso'} && $row->{'species_reso'} ne 'n. sp.') {
+    } elsif ($row->{'species_reso'} && $row->{'species_reso'} ne 'n. sp.' && $row->{'species_reso'} ne 'sensu lato') {
         $taxon_name .= $row->{'species_reso'}." ".$species_name;
     } else {
         $taxon_name .= $species_name;
@@ -3899,6 +3900,9 @@ sub formatOccurrenceTaxonName {
         $taxon_name .= "</a>";
     }
     
+    if ($row->{'genus_reso'} eq 'sensu lato' || $row->{'species_reso'} eq 'sensu lato') {
+        $taxon_name .= " sensu lato";
+    }
     if ($row->{'species_reso'} eq 'n. sp.') {
         if ($row->{'genus_reso'} eq 'n. gen.') {
             $taxon_name .= " n. gen.,";
