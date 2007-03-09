@@ -3527,7 +3527,7 @@ sub buildTaxonomicList {
                     my @class_array = @{$class_hash->{$rowref->{'taxon_no'}}};
                     # Get Self as well, in case we're a family indet.
                     my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}});
-                    foreach my $t (@class_array,$taxon) {
+                    foreach my $t ($taxon,@class_array) {
                         if ($t->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
                             if ( ! $rowref->{$t->{'taxon_rank'}} )	{
                                 $rowref->{$t->{'taxon_rank'}} = $t->{'taxon_name'};
@@ -4010,7 +4010,7 @@ sub getReidHTMLTableByOccNum {
                 my $class_hash = TaxaCache::getParents($dbt,[$row->{'taxon_no'}],'array_full');
                 my @class_array = @{$class_hash->{$row->{'taxon_no'}}};
                 my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}});
-                foreach my $parent (@class_array,$taxon) {
+                foreach my $parent ($taxon,@class_array) {
                     if ( ! $classification->{$parent->{'taxon_rank'}} )	{
                         $classification->{$parent->{'taxon_rank'}} = $parent;
                     }
