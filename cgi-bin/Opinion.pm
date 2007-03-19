@@ -579,7 +579,7 @@ sub displayOpinionForm {
         my $parentTaxon = ($selected || ($isNewEntry && $childRank =~ /species/)) ? $parentName : "";
         $belongs_to_row .= qq|<input name="belongs_to_parent" size="24" value="$parentTaxon">|;
     }
-    $belongs_to_row .= qq|</td><td valign="top"><input type="submit" value="Submit"></td></tr>|;
+    $belongs_to_row .= qq|</td></tr>|;
 
 
     if (!$reSubmission && !$isNewEntry) {
