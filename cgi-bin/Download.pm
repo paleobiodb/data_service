@@ -402,7 +402,10 @@ sub retellOptions {
         }
 
         push @occFields, 'preservation' if ($q->param('occurrences_preservation'));
+        push @occFields, 'type_specimen' if ($q->param('occurrences_type_specimen'));
         push @occFields, 'type_body_part' if ($q->param('occurrences_type_body_part'));
+        push @occFields, 'extant' if ($q->param('occurrences_extant'));
+        push @occFields, 'common_name' if ($q->param('occurrences_common_name'));
 
         if (@occFields) {
             my $fieldnames = join "<br>", @occFields;
@@ -1851,7 +1854,7 @@ sub queryDatabase {
                 # Don't forget these as well
                 $all_taxa{$row->{'synonym_no'}} = 1;
                 $ss_taxon_nos{$row->{'taxon_no'}} = $row->{'synonym_no'};
-                # Split it into bits here and store that, optimazation
+                # Split it into bits here and store that, optimization
                 my @name_bits = Taxon::splitTaxon($row->{'taxon_name'});
                 $ss_taxon_names{$row->{'taxon_no'}} = \@name_bits;
             }
@@ -1885,18 +1888,28 @@ sub queryDatabase {
         }
     }
 
-    # Body part categories
+    # Type specimen numbers, body part, extant, and common name data
+    my %type_specimen_lookup;
     my %body_part_lookup;
-    if ($q->param("occurrences_type_body_part")  &&
+    my %extant_lookup;
+    my %common_name_lookup;
+    if (($q->param("occurrences_type_body_part") ||
+        $q->param("occurrences_type_specimen") ||
+        $q->param("occurrences_extant") ||
+        $q->param("occurrences_common_name")) &&
         $q->param('output_data') =~ /occurrence|specimens|genera|species/) {
         if (%all_taxa) {
+
             # This SQL is nice in the fact that even if the type_body_part field has been filled in for a previous correction or recombination
             # it'll still look that up and associate it with all other combinations automatically
             # I.E. you say the type_body_part for Calippus ansae is a skull or something, and Astrohippus ansae will automatically
-            # assocaite with that. 
-            my $sql = "SELECT t1.taxon_no,a.type_body_part FROM taxa_tree_cache t1, taxa_tree_cache t2, authorities a WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(",",keys %all_taxa).") AND t2.taxon_no=a.taxon_no AND a.type_body_part != ''";
+            # associate with that. 
+            my $sql = "SELECT t1.taxon_no,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM taxa_tree_cache t1, taxa_tree_cache t2, authorities a WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(",",keys %all_taxa).") AND t2.taxon_no=a.taxon_no";
             foreach my $row (@{$dbt->getData($sql)}) {
+                $type_specimen_lookup{$row->{'taxon_no'}} = $row->{'type_specimen'};
                 $body_part_lookup{$row->{'taxon_no'}} = $row->{'type_body_part'};
+                $extant_lookup{$row->{'taxon_no'}} = $row->{'extant'};
+                $common_name_lookup{$row->{'taxon_no'}} = $row->{'common_name'};
             }
         }
     }
@@ -1960,6 +1973,7 @@ sub queryDatabase {
     ###########################################################################
 
     my %occs_by_taxa;
+    my %all_genera;
     if ($q->param('output_data') =~ /occurrence|specimens|genera|species/) {
         # Do integer compares is quite a bit faster than q-> calls, so set that up here
         my $replace_with_ss = ($q->param("replace_with_ss") ne 'NO') ? 1 : 0;
@@ -1975,6 +1989,8 @@ sub queryDatabase {
                 $get_form    = 1 if ($p eq 'form taxon');
             }
         }
+
+
         my @temp = ();
         foreach my $row ( @dataRows ) {
             
@@ -2013,6 +2029,9 @@ sub queryDatabase {
             if ( $split_subgenera && $row->{'o.subgenus_name'} ) {
                 $row->{'o.genus_name'} = $row->{'o.subgenus_name'};
             }
+
+            $all_genera{$row->{'o.genus_name'}}++;
+
             # get rid of occurrences of genera either (1) not in the
             #  Compendium or (2) falling outside the official Compendium
             #  age range JA 27.8.04
@@ -2099,6 +2118,33 @@ sub queryDatabase {
             }
             @dataRows = @temp;
         }
+
+    # if the user wants a genus list, then damn the torpedoes and replace
+    #  the taxon no with that of the FIRST matching genus name in the
+    #  authorities table; this is really bad if there are homonyms, but
+    #  necessary to get extant and common name right JA 20.3.07
+    # further warning: extant will be wrong if a species is marked as extant,
+    #  but its genus is not; the error rate is low because we have scored
+    #  this value consistently for genera
+        if ( $q->param('output_data') =~ /genera/ )	{
+            if ( $q->param('occurrences_extant') || $q->param('occurrences_common_name') )	{
+                my $sql = "SELECT taxon_no,taxon_name FROM authorities WHERE taxon_name IN ('";
+                $sql .= join '\',\'',(keys %all_genera);
+                $sql .= "') GROUP BY taxon_name";
+                my @nos = @{$dbt->getData($sql)};
+                my %genus_no_lookup;
+                %all_taxa = ();
+                for my $no ( @nos )	{
+                    $genus_no_lookup{$no->{'taxon_name'}} = $no->{'taxon_no'};
+                    $all_taxa{$no->{'taxon_no'}} = 1;
+                }
+                foreach my $row ( @dataRows )	{
+                    $row->{'o.taxon_no'} = $genus_no_lookup{$row->{'o.genus_name'}};
+                    $row->{'taxon_no'} = $genus_no_lookup{$row->{'o.genus_name'}};
+                }
+            }
+        }
+
     }
 
     #use Benchmark qw(:all);
@@ -2289,12 +2335,15 @@ sub queryDatabase {
                 }
             }
 
-            if ($q->param('occurrences_type_body_part')) {
+            if ($q->param('occurrences_type_specimen') || $q->param('occurrences_type_body_part') || $q->param('occurrences_common_name')) {
                 my $taxon_no = $row->{'o.taxon_no'};
                 if ($ss_taxon_nos{$taxon_no}) {
                     $taxon_no = $ss_taxon_nos{$taxon_no};
                 } 
+                $row->{'type_specimen'} = $type_specimen_lookup{$taxon_no};
                 $row->{'type_body_part'} = $body_part_lookup{$taxon_no};
+                $row->{'extant'} = $extant_lookup{$taxon_no};
+                $row->{'common_name'} = $common_name_lookup{$taxon_no};
             }
 
             # Set up the ecology fields
@@ -2572,7 +2621,10 @@ sub printCSV {
     if ($q->param('output_data') =~ /occurrence|specimens|genera|species/) {
         push @header,@ecoFields;
         push @header,'preservation' if ($q->param("occurrences_preservation"));
+        push @header,'type_specimen' if ($q->param("occurrences_type_specimen"));
         push @header,'type_body_part' if ($q->param("occurrences_type_body_part"));
+        push @header,'extant' if ($q->param("occurrences_extant"));
+        push @header,'common_name' if ($q->param("occurrences_common_name"));
     }
        
     if ($q->param('output_data') =~ /collections|occurrence|specimens/) {
@@ -2760,10 +2812,16 @@ sub printMatrix {
 
     push @occHeader,@ecoFields;
     push @occHeader,'preservation' if ($q->param("occurrences_preservation"));
+    push @occHeader,'type_specimen' if ($q->param("occurrences_type_specimen"));
     push @occHeader,'type_body_part' if ($q->param("occurrences_type_body_part"));
+    push @occHeader,'extant' if ($q->param("occurrences_extant"));
+    push @occHeader,'common_name' if ($q->param("occurrences_common_name"));
     push @printedOccHeader,@ecoFields;
     push @printedOccHeader,'preservation' if ($q->param("occurrences_preservation"));
+    push @printedOccHeader,'type_specimen' if ($q->param("occurrences_type_specimen"));
     push @printedOccHeader,'type_body_part' if ($q->param("occurrences_type_body_part"));
+    push @printedOccHeader,'extant' if ($q->param("occurrences_extant"));
+    push @printedOccHeader,'common_name' if ($q->param("occurrences_common_name"));
 
     my %matrix;
     my %collections;
