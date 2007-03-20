@@ -2335,7 +2335,7 @@ sub queryDatabase {
                 }
             }
 
-            if ($q->param('occurrences_type_specimen') || $q->param('occurrences_type_body_part') || $q->param('occurrences_common_name')) {
+            if ($q->param('occurrences_type_specimen') || $q->param('occurrences_type_body_part') || $q->param('occurrences_extant') || $q->param('occurrences_common_name')) {
                 my $taxon_no = $row->{'o.taxon_no'};
                 if ($ss_taxon_nos{$taxon_no}) {
                     $taxon_no = $ss_taxon_nos{$taxon_no};
