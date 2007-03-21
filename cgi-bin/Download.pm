@@ -3004,11 +3004,13 @@ sub printCONJUNCT {
     } 
 
     my $lastcoll;
+    my %indetseen;
     foreach my $row (@$results) {
         if ($lastcoll != $row->{'collection_no'}) {
             if ( $lastcoll )    {
                 print OUTFILE ".\n\n";
             }
+            %indetseen = ();
             if ( $row->{'c.collection_name'} )    {
                 $row->{'c.collection_name'} =~ s/ /_/g;
                 printf OUTFILE "%s\n",$row->{'c.collection_name'};
@@ -3062,6 +3064,21 @@ sub printCONJUNCT {
                 $level =~ s/ /_/g;
                 print OUTFILE "level: $level $level_value\n";
             }
+        }
+
+# print higher order names as if they were separate taxa, but don't keep
+#  doing it over and over JA 21.3.07
+        if ( $row->{'o.class_name'} && ! $indetseen{$row->{'o.class_name'}} )	{
+            print OUTFILE $row->{'o.class_name'}," indet.\n";
+            $indetseen{$row->{'o.class_name'}} = 1;
+        }
+        if ( $row->{'o.order_name'} && ! $indetseen{$row->{'o.class_name'}} )	{
+            print OUTFILE $row->{'o.order_name'}," indet.\n";
+            $indetseen{$row->{'o.order_name'}} = 1;
+        }
+        if ( $row->{'o.family_name'} && ! $indetseen{$row->{'o.family_name'}} )	{
+            print OUTFILE $row->{'o.family_name'}," indet.\n";
+            $indetseen{$row->{'o.family_name'}} = 1;
         }
         
 # informals and new taxa don't work; we're punting on adding quotes
