@@ -1880,19 +1880,19 @@ sub queryDatabase {
             $q->param("occurrences_order_name") eq "YES" || 
             $q->param("occurrences_family_name") eq "YES"){
             %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'array_full')};
-        }
-
         # will need the genus number for figuring out "extant"
-        for my $no ( @taxon_nos )	{
-            my @parents = @{$master_class{$no}};
-            foreach my $parent (@parents) {
-                if ($parent->{'taxon_rank'} eq 'genus') {
-                    $all_genera{$parent->{'taxon_no'}} = 1;
-                    last;
+            for my $no ( @taxon_nos )	{
+                my @parents = @{$master_class{$no}};
+                foreach my $parent (@parents) {
+                    if ($parent->{'taxon_rank'} eq 'genus') {
+                        $all_genera{$parent->{'taxon_no'}} = 1;
+                        last;
+                    }
                 }
             }
-        }
         
+        }
+
         # get the higher order names associated with each genus name,
         #   then set the ecotaph values by running up the hierarchy
         if (@ecoFields || $get_preservation) {
