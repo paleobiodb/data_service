@@ -3072,7 +3072,7 @@ sub printCONJUNCT {
             print OUTFILE $row->{'o.class_name'}," indet.\n";
             $indetseen{$row->{'o.class_name'}} = 1;
         }
-        if ( $row->{'o.order_name'} && ! $indetseen{$row->{'o.class_name'}} )	{
+        if ( $row->{'o.order_name'} && ! $indetseen{$row->{'o.order_name'}} )	{
             print OUTFILE $row->{'o.order_name'}," indet.\n";
             $indetseen{$row->{'o.order_name'}} = 1;
         }
