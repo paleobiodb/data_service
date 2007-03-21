@@ -1866,6 +1866,7 @@ sub queryDatabase {
     # Ecotaph/preservation/parent data
     my %master_class;
     my %ecotaph;
+    my %all_genera;
     my @preservation = $q->param('preservation');
     my $get_preservation = 0;
     if ($q->param("output_data") =~ /occurrence|specimens|genera|species/) { 
@@ -1874,11 +1875,22 @@ sub queryDatabase {
             $get_preservation = 1;
         }
          
-        if (@ecoFields || $get_preservation ||
+        if (@ecoFields || $get_preservation || $q->param('occurrences_extant') ||
             $q->param("occurrences_class_name") eq "YES" || 
             $q->param("occurrences_order_name") eq "YES" || 
             $q->param("occurrences_family_name") eq "YES"){
             %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'array_full')};
+        }
+
+        # will need the genus number for figuring out "extant"
+        for my $no ( @taxon_nos )	{
+            my @parents = @{$master_class{$no}};
+            foreach my $parent (@parents) {
+                if ($parent->{'taxon_rank'} eq 'genus') {
+                    $all_genera{$parent->{'taxon_no'}} = 1;
+                    last;
+                }
+            }
         }
         
         # get the higher order names associated with each genus name,
@@ -1903,8 +1915,14 @@ sub queryDatabase {
             # This SQL is nice in the fact that even if the type_body_part field has been filled in for a previous correction or recombination
             # it'll still look that up and associate it with all other combinations automatically
             # I.E. you say the type_body_part for Calippus ansae is a skull or something, and Astrohippus ansae will automatically
-            # associate with that. 
-            my $sql = "SELECT t1.taxon_no,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM taxa_tree_cache t1, taxa_tree_cache t2, authorities a WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(",",keys %all_taxa).") AND t2.taxon_no=a.taxon_no";
+            # associate with that.
+
+            my @all_nos = keys %all_taxa;
+            if ( %all_genera )	{
+                push @all_nos , keys %all_genera;
+            }
+
+            my $sql = "SELECT t1.taxon_no,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM taxa_tree_cache t1, taxa_tree_cache t2, authorities a WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(",",@all_nos).") AND t2.taxon_no=a.taxon_no";
             foreach my $row (@{$dbt->getData($sql)}) {
                 $type_specimen_lookup{$row->{'taxon_no'}} = $row->{'type_specimen'};
                 $body_part_lookup{$row->{'taxon_no'}} = $row->{'type_body_part'};
@@ -1973,7 +1991,6 @@ sub queryDatabase {
     ###########################################################################
 
     my %occs_by_taxa;
-    my %all_genera;
     if ($q->param('output_data') =~ /occurrence|specimens|genera|species/) {
         # Do integer compares is quite a bit faster than q-> calls, so set that up here
         my $replace_with_ss = ($q->param("replace_with_ss") ne 'NO') ? 1 : 0;
@@ -2030,8 +2047,6 @@ sub queryDatabase {
                 $row->{'o.genus_name'} = $row->{'o.subgenus_name'};
             }
 
-            $all_genera{$row->{'o.genus_name'}}++;
-
             # get rid of occurrences of genera either (1) not in the
             #  Compendium or (2) falling outside the official Compendium
             #  age range JA 27.8.04
@@ -2075,6 +2090,7 @@ sub queryDatabase {
             }
             # If we haven't skipped this row yet because of a "next", we use it 
             push @temp, $row;
+
         }
         @dataRows = @temp;
         
@@ -2117,32 +2133,6 @@ sub queryDatabase {
                 push @temp,$row;
             }
             @dataRows = @temp;
-        }
-
-    # if the user wants a genus list, then damn the torpedoes and replace
-    #  the taxon no with that of the FIRST matching genus name in the
-    #  authorities table; this is really bad if there are homonyms, but
-    #  necessary to get extant and common name right JA 20.3.07
-    # further warning: extant will be wrong if a species is marked as extant,
-    #  but its genus is not; the error rate is low because we have scored
-    #  this value consistently for genera
-        if ( $q->param('output_data') =~ /genera/ )	{
-            if ( $q->param('occurrences_extant') || $q->param('occurrences_common_name') )	{
-                my $sql = "SELECT taxon_no,taxon_name FROM authorities WHERE taxon_name IN ('";
-                $sql .= join '\',\'',(keys %all_genera);
-                $sql .= "') GROUP BY taxon_name";
-                my @nos = @{$dbt->getData($sql)};
-                my %genus_no_lookup;
-                %all_taxa = ();
-                for my $no ( @nos )	{
-                    $genus_no_lookup{$no->{'taxon_name'}} = $no->{'taxon_no'};
-                    $all_taxa{$no->{'taxon_no'}} = 1;
-                }
-                foreach my $row ( @dataRows )	{
-                    $row->{'o.taxon_no'} = $genus_no_lookup{$row->{'o.genus_name'}};
-                    $row->{'taxon_no'} = $genus_no_lookup{$row->{'o.genus_name'}};
-                }
-            }
         }
 
     }
@@ -2306,14 +2296,17 @@ sub queryDatabase {
 
         if ($q->param('output_data') =~ /occurrence|specimens|genera|species/) {
             # Setup up family/name/class fields
-            if (($q->param("occurrences_class_name") eq "YES" || 
+            if (($q->param('occurrences_extant') ||
+                $q->param("occurrences_class_name") eq "YES" || 
                 $q->param("occurrences_order_name") eq "YES" ||
                 $q->param("occurrences_family_name") eq "YES") &&
                 $row->{'o.taxon_no'} > 0) {
                 my @parents = @{$master_class{$row->{'o.taxon_no'}}};
-                my ($class, $order, $family) = ("","","");
                 foreach my $parent (@parents) {
-                    if ($parent->{'taxon_rank'} eq 'family') {
+           # will need the genus number for figuring out "extant"
+                    if ($parent->{'taxon_rank'} eq 'genus') {
+                        $row->{'o.genus_no'} = $parent->{'taxon_no'};
+                    } elsif ($parent->{'taxon_rank'} eq 'family') {
                         $row->{'o.family_name'} = $parent->{'taxon_name'};
                     } elsif ($parent->{'taxon_rank'} eq 'order') {
                         $row->{'o.order_name'} = $parent->{'taxon_name'};
@@ -2343,6 +2336,11 @@ sub queryDatabase {
                 $row->{'type_specimen'} = $type_specimen_lookup{$taxon_no};
                 $row->{'type_body_part'} = $body_part_lookup{$taxon_no};
                 $row->{'extant'} = $extant_lookup{$taxon_no};
+           # a genus may be marked as extant explicitly, in which case
+           #  always use the value when genera are output
+                if ( $q->param('output_data') eq "genera" && $extant_lookup{$row->{'o.genus_no'}} eq "YES" )	{
+                    $row->{'extant'} = $extant_lookup{$row->{'o.genus_no'}};
+                }
                 $row->{'common_name'} = $common_name_lookup{$taxon_no};
             }
 
