@@ -2324,9 +2324,9 @@ sub queryDatabase {
                 $row->{'o.taxon_no'} > 0) {
                 my @parents = @{$master_class{$row->{'o.taxon_no'}}};
                 foreach my $parent (@parents) {
-                    if ($parent->{'taxon_rank'} eq 'family') {
+                    if ($parent->{'taxon_rank'} eq 'family' && ! $row->{'o.family_name'}) {
                         $row->{'o.family_name'} = $parent->{'taxon_name'};
-                    } elsif ($parent->{'taxon_rank'} eq 'order') {
+                    } elsif ($parent->{'taxon_rank'} eq 'order' && ! $row->{'o.order_name'}) {
                         $row->{'o.order_name'} = $parent->{'taxon_name'};
                     } elsif ($parent->{'taxon_rank'} eq 'class') {
                         $row->{'o.class_name'} = $parent->{'taxon_name'};
@@ -3068,15 +3068,15 @@ sub printCONJUNCT {
 
 # print higher order names as if they were separate taxa, but don't keep
 #  doing it over and over JA 21.3.07
-        if ( $row->{'o.class_name'} && ! $indetseen{$row->{'o.class_name'}} )	{
+        if ( $q->param('occurrences_class_name') eq "YES" && $row->{'o.class_name'} && ! $indetseen{$row->{'o.class_name'}} )	{
             print OUTFILE $row->{'o.class_name'}," indet.\n";
             $indetseen{$row->{'o.class_name'}} = 1;
         }
-        if ( $row->{'o.order_name'} && ! $indetseen{$row->{'o.order_name'}} )	{
+        if ( $q->param('occurrences_order_name') eq "YES" && $row->{'o.order_name'} && ! $indetseen{$row->{'o.order_name'}} )	{
             print OUTFILE $row->{'o.order_name'}," indet.\n";
             $indetseen{$row->{'o.order_name'}} = 1;
         }
-        if ( $row->{'o.family_name'} && ! $indetseen{$row->{'o.family_name'}} )	{
+        if ( $q->param('occurrences_family_name') eq "YES" && $row->{'o.family_name'} && ! $indetseen{$row->{'o.family_name'}} )	{
             print OUTFILE $row->{'o.family_name'}," indet.\n";
             $indetseen{$row->{'o.family_name'}} = 1;
         }
