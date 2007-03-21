@@ -2091,6 +2091,23 @@ sub queryDatabase {
             # If we haven't skipped this row yet because of a "next", we use it 
             push @temp, $row;
 
+            # "extant" calculations must be done here to allow correct
+            #   lumping below
+            if ( $q->param('occurrences_extant') && $row->{'o.taxon_no'} > 0 )	{
+                $row->{'extant'} = $extant_lookup{$row->{'o.taxon_no'}};
+                # if output is a list of genera and a genus is marked as
+                #  extant explicitly, the "occurrence" must be extant
+                if ( $q->param('output_data') eq "genera" )	{
+                    my @parents = @{$master_class{$row->{'o.taxon_no'}}};
+                    foreach my $parent (@parents) {
+                        if ( $parent->{'taxon_rank'} eq 'genus' && $extant_lookup{$parent->{'taxon_no'}} eq "YES" )	{
+                            $row->{'extant'} = "YES";
+                            last;
+                        }
+                    }
+                }
+            }
+
         }
         @dataRows = @temp;
         
@@ -2169,6 +2186,11 @@ sub queryDatabase {
             }
             if ($lumpgenusref{$genus_string}) {
                 $lump++;
+            # an occurrence (or genus) is always extant if anything lumped
+            #  into it is
+                if ( $row->{'extant'} eq "YES" )	{
+                    $lumpgenusref{$genus_string}->{'extant'} = "YES";
+                }
                 if ( $row->{'o.abund_unit'} =~ /(^specimens$)|(^individuals$)/ && $row->{'o.abund_value'} > 0 )	{
             # don't need to do this if you're lumping by other things, because
             #  that lumps the genus occurrences anyway
@@ -2296,17 +2318,13 @@ sub queryDatabase {
 
         if ($q->param('output_data') =~ /occurrence|specimens|genera|species/) {
             # Setup up family/name/class fields
-            if (($q->param('occurrences_extant') ||
-                $q->param("occurrences_class_name") eq "YES" || 
+            if (($q->param("occurrences_class_name") eq "YES" || 
                 $q->param("occurrences_order_name") eq "YES" ||
                 $q->param("occurrences_family_name") eq "YES") &&
                 $row->{'o.taxon_no'} > 0) {
                 my @parents = @{$master_class{$row->{'o.taxon_no'}}};
                 foreach my $parent (@parents) {
-           # will need the genus number for figuring out "extant"
-                    if ($parent->{'taxon_rank'} eq 'genus') {
-                        $row->{'o.genus_no'} = $parent->{'taxon_no'};
-                    } elsif ($parent->{'taxon_rank'} eq 'family') {
+                    if ($parent->{'taxon_rank'} eq 'family') {
                         $row->{'o.family_name'} = $parent->{'taxon_name'};
                     } elsif ($parent->{'taxon_rank'} eq 'order') {
                         $row->{'o.order_name'} = $parent->{'taxon_name'};
@@ -2328,19 +2346,13 @@ sub queryDatabase {
                 }
             }
 
-            if ($q->param('occurrences_type_specimen') || $q->param('occurrences_type_body_part') || $q->param('occurrences_extant') || $q->param('occurrences_common_name')) {
+            if ($q->param('occurrences_type_specimen') || $q->param('occurrences_type_body_part') || $q->param('occurrences_common_name')) {
                 my $taxon_no = $row->{'o.taxon_no'};
                 if ($ss_taxon_nos{$taxon_no}) {
                     $taxon_no = $ss_taxon_nos{$taxon_no};
                 } 
                 $row->{'type_specimen'} = $type_specimen_lookup{$taxon_no};
                 $row->{'type_body_part'} = $body_part_lookup{$taxon_no};
-                $row->{'extant'} = $extant_lookup{$taxon_no};
-           # a genus may be marked as extant explicitly, in which case
-           #  always use the value when genera are output
-                if ( $q->param('output_data') eq "genera" && $extant_lookup{$row->{'o.genus_no'}} eq "YES" )	{
-                    $row->{'extant'} = $extant_lookup{$row->{'o.genus_no'}};
-                }
                 $row->{'common_name'} = $common_name_lookup{$taxon_no};
             }
 
