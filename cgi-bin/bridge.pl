@@ -3822,7 +3822,7 @@ sub formatOccurrenceTaxonName {
         $link_name = $row->{'genus_name'};
 
         if ($row->{'subgenus_name'} && $row->{'subgenus_reso'} !~ /informal/) {
-            $link_name .= " $row->{'subgenus_name'}";
+            $link_name .= " ($row->{'subgenus_name'})";
         }
         if ($row->{'species_name'} && $row->{'species_reso'} !~ /informal/ && $row->{'species_name'} !~ /^indet\.|^sp\./) {
             $link_name .= " $row->{'species_name'}";
