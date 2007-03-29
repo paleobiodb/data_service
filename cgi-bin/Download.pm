@@ -493,11 +493,9 @@ sub retellOptionsGroup {
 
 # Formats a query parameter (name=value) as a table row in html.
 sub retellOptionsRow {
-    my $self = shift;
-    my $name = shift;
-    my $value = shift;
+    my ($self,$name,$value) = @_;
 
-    if ( $value ) {
+    if ( $value  && $value !~ /[<>]/) {
         return "<tr><td valign='top'>$name</td><td valign='top'><i>$value</i></td></tr>\n";
     }
 }
