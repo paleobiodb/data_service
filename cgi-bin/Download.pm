@@ -84,6 +84,9 @@ sub buildDownload {
     my $q = $self->{'q'};
 
     print '<div align="center"><h2>The Paleobiology Database: Download Results</h2></div>';
+    my $inputIsOK = $self->checkInput($q);
+    return unless $inputIsOK;
+
     print $self->retellOptions();
 
     my ($lumpedResults,$allResults) = $self->queryDatabase();
@@ -147,6 +150,29 @@ sub buildDownload {
     print '<a href="bridge.pl?action=displayCurveForm">Generate diversity curves</a>';
     #print '<a href="bridge.pl?action=displayCurveForm">Generate diversity curves</a> - ';
     #print '<a href="bridge.pl?action=PASTQueryForm">Analyze with PAST functions</a></b></p></div>';
+}
+
+sub checkInput {
+    my ($self,$q) = @_;
+    my @clean_vars = ('taxon_name','exclude_taxon_name','yourname','max_interval_name','min_interval_name','authorizer_reversed','pubyr','latmin1','latmax1','latmin2','latmax2','lngmin1','lngmax1','lngmin2','lngmax2','paleolatmin1','paleolatmax1','paleolatmin2','paleolatmax2','paleolngmin1','paleolngmax1','paleolngmin2','paleolngmax2','collection_no','occurrence_count','abundance_count','min_mean_abundance');
+    my @errors;
+    foreach my $p (@clean_vars) {
+        if ($p =~ /taxon_name/) {
+            if ($q->param($p) =~ /[<>]/) {
+                push @errors, "Bad data entered in form field $p";
+            }
+        } else {
+            if ($q->param($p) =~ /[^a-zA-Z0-9\s'\.\-,]/) {
+                push @errors, "Bad data entered in form field $p";
+            }
+        }
+    }
+    
+    if (@errors) {
+        print "<div align=\"center\">".Debug::printErrors(\@errors)."<div>";
+        return 0;
+    } 
+    return 1;
 }
 
 
@@ -1711,6 +1737,7 @@ sub queryDatabase {
     }
 
     $self->dbg("<b>Occurrences query:</b><br>\n$sql<BR>");
+
 
     if (@form_errors) {
         print Debug::printErrors(\@form_errors);
