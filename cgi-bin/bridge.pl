@@ -6731,14 +6731,15 @@ sub processEditOccurrences {
             my $return = checkDuplicates( "reid_no", \$record_id, "reidentifications", \@keys, \@values);
 
             if ( $return == $DUPLICATE ) {
-                push @warnings, "Row ". ($i + 1) ." was skipped because it is a duplicate";
-            } elsif ( $return ) {
-                $dbt->insertRecord($s,'reidentifications',\%fields);
-      
-                unless(PBDBUtil::isRefPrimaryOrSecondary($dbh, $fields{'collection_no'}, $fields{'reference_no'}))	{
-                       PBDBUtil::setSecondaryRef($dbh,$fields{'collection_no'}, $fields{'reference_no'});
-                }
+                push @warnings, "Row ". ($i + 1) ." may be a duplicate";
             }
+#            } elsif ( $return ) {
+            $dbt->insertRecord($s,'reidentifications',\%fields);
+  
+            unless(PBDBUtil::isRefPrimaryOrSecondary($dbh, $fields{'collection_no'}, $fields{'reference_no'}))	{
+                   PBDBUtil::setSecondaryRef($dbh,$fields{'collection_no'}, $fields{'reference_no'});
+            }
+#            }
             setMostRecentReID($dbt,$fields{'occurrence_no'});
             push @occurrences, $fields{'occurrence_no'};
         }
@@ -6785,20 +6786,21 @@ sub processEditOccurrences {
             my $return = checkDuplicates("occurrence_no", \$record_id, "occurrences", \@keys, \@values);
 
             if ( $return == $DUPLICATE ) {
-                push @warnings, "Row ". ($i + 1) ." was skipped because it is a duplicate";
+                push @warnings, "Row ". ($i + 1) ." may be a duplicate";
                 if ($record_id =~ /^\d+$/) {
                     push @occurrences, $record_id;
                 }
-            } elsif ($return) {
-                my ($result, $occurrence_no) = $dbt->insertRecord($s,'occurrences',\%fields);
-                if ($result && $occurrence_no =~ /^\d+$/) {
-                    push @occurrences, $occurrence_no;
-                }
-
-                unless(PBDBUtil::isRefPrimaryOrSecondary($dbh, $fields{'collection_no'}, $fields{'reference_no'}))	{
-                       PBDBUtil::setSecondaryRef($dbh,$fields{'collection_no'}, $fields{'reference_no'});
-                }
             }
+#            } elsif ($return) {
+            my ($result, $occurrence_no) = $dbt->insertRecord($s,'occurrences',\%fields);
+            if ($result && $occurrence_no =~ /^\d+$/) {
+                push @occurrences, $occurrence_no;
+            }
+
+            unless(PBDBUtil::isRefPrimaryOrSecondary($dbh, $fields{'collection_no'}, $fields{'reference_no'}))	{
+                   PBDBUtil::setSecondaryRef($dbh,$fields{'collection_no'}, $fields{'reference_no'});
+            }
+#            }
         }
     }
 
