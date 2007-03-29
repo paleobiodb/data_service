@@ -152,13 +152,17 @@ function doCheckFieldsGeography() {
     var index = frm.country.selectedIndex;
     var indexLat = frm.latdir.selectedIndex;
     var indexLng = frm.lngdir.selectedIndex;
+    
     if ( index != 0 ) {
         if ( ( frm.country.options[index].text == "United States" ||
                frm.country.options[index].text == "Canada" ||
                frm.country.options[index].text == "Mexico" ) &&
              ( frm.latdir.options[indexLat].text != "North" ||
                frm.lngdir.options[indexLng].text != "West" ) ) {
-            bad_info += "\no Lat and long are outside this country";
+            var alTest = /Alaska|Aleutian/i;
+            if (alTest.test(frm.state.value) != true) {
+                bad_info += "\no Lat and long are outside this country";
+            }
         }
         else if ( ( frm.country.options[index].text == "Germany" ||
               frm.country.options[index].text == "Austria" ||
