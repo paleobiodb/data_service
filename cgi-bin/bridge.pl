@@ -4058,6 +4058,7 @@ sub getReidHTMLTableByOccNum {
 
 # JA 21.2.03
 sub rarefyAbundances	{
+    return if checkForBot();
     logRequest($s,$q);
 
 	print stdIncludes("std_page_top");
