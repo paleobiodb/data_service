@@ -835,11 +835,30 @@ sub getIntervalString    {
 
         my ($intervals,$errors,$warnings) = $self->{t}->getRange($eml_max, $max, $eml_min, $min,'',$use_mid);
 
+        # need to know the boundaries of the interval to make use of the
+        #  direct estimates JA 5.4.07
+        my ($ub,$lb) = $self->{t}->getBoundaries();
+        my $upper = 999999;
+        my $lower;
+        my %lowerbounds = %{$lb};
+        my %upperbounds = %{$ub};
+        for my $intvno ( @$intervals )  {
+            if ( $upperbounds{$intvno} < $upper )       {
+                $upper = $upperbounds{$intvno};
+            }
+            if ( $lowerbounds{$intvno} > $lower )       {
+                $lower = $lowerbounds{$intvno};
+            }
+        }
+
+
+
         @form_errors = @$errors;
         @form_warnings = @$warnings;
         my $intervals_sql = join(", ",@$intervals);
         # -1 to prevent crashing on blank string
-        return " (c.max_interval_no IN (-1,$intervals_sql) AND c.min_interval_no IN (0,$intervals_sql))"
+        # only use the interval names if there is no direct estimate
+        return "((c.max_interval_no IN (-1,$intervals_sql) AND c.min_interval_no IN (0,$intervals_sql) AND c.max_ma IS NULL AND c.min_ma IS NULL) OR (c.max_ma<=$lower AND c.min_ma>=$upper AND c.max_ma IS NOT NULL AND c.min_ma IS NOT NULL))";
     }
 
     
