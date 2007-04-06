@@ -2612,9 +2612,27 @@ sub processCollectionsSearch {
         my $val = join(",",@$intervals);
         if (!$val) {
             $val = "-1";
-		    push @errors, "Please enter a valid time term or broader time range";
+		    push @errors , "Please enter a valid time term or broader time range";
         }
-        push @where, "c.max_interval_no IN ($val) AND c.min_interval_no IN (0,$val)";
+
+        # need to know the boundaries of the interval to make use of the
+        #  direct estimates JA 5.4.07
+        my ($ub,$lb) = $t->getBoundaries();
+        my $upper = 999999;
+        my $lower;
+        my %lowerbounds = %{$lb};
+        my %upperbounds = %{$ub};
+        for my $intvno ( @$intervals )	{
+            if ( $upperbounds{$intvno} < $upper )	{
+                $upper = $upperbounds{$intvno};
+            }
+            if ( $lowerbounds{$intvno} > $lower )	{
+                $lower = $lowerbounds{$intvno};
+            }
+        }
+
+        # only use the interval names if there is no direct estimate
+        push @where , "((c.max_interval_no IN ($val) AND c.min_interval_no IN (0,$val) AND c.max_ma IS NULL AND c.min_ma IS NULL) OR (c.max_ma<=$lower AND c.min_ma>=$upper AND c.max_ma IS NOT NULL AND c.min_ma IS NOT NULL))";
 	}
                                         
 	# Handle half/quarter degrees for long/lat respectively passed by Map.pm PS 11/23/2004
