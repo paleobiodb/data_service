@@ -1151,9 +1151,9 @@ sub displayRefResults {
         # Print the sub header
         my $offset = (int($q->param('refsSeen')) || 0);
         my $limit = 30;
-        print "<div align=\"center\"><h3>Your search $query_description produced ";
+        print "<div align=\"center\"><h4>$query_description matched";
         if (scalar(@data) > 1 && scalar(@data) > $limit) {
-            print scalar(@data)." matches</h3><h4>Here are ";
+            print scalar(@data)." references</h4>\n<p class=\"large\">Here are ";
             if ($offset == 0)	{
                 print "the first $limit";
             } elsif ($offset + $limit > scalar(@data)) {
@@ -1161,11 +1161,11 @@ sub displayRefResults {
             } else	{
                 print "references ",($offset + 1), " through ".($offset + $limit);
             }
-            print "</h4>";
+            print "</p>";
         } elsif ( scalar(@data) == 1) {
-            print "exactly one match</h3>";
+            print "exactly one reference</h4>";
         } else	{
-            print scalar(@data)." matches</h3>";
+            print scalar(@data)." references</h4>";
         }
         print "</div>\n";
 #        if ($type eq 'add') {
@@ -1178,7 +1178,8 @@ sub displayRefResults {
 #        }
 
 		# Print the references found
-		print "<table border=0 cellpadding=5 cellspacing=0>\n";
+		print "<div style=\"margin: 0.5em; border: 1px solid #E0E0E0;\">\n";
+		print "<table border=0 cellpadding=5 cellspacing=0 class=\"verysmall\">\n";
 
 		# Only print the last 30 rows that were found JA 26.7.02
         for(my $i=$offset;$i < $offset + 30 && $i < scalar(@data); $i++) {
@@ -1210,6 +1211,7 @@ sub displayRefResults {
             print "</tr>";
 		}
 		print "</table>\n";
+		print "</div>\n";
 
         # Now print links at bottom
         print  "<center><p>";
@@ -7719,7 +7721,7 @@ sub getReferenceLinkSummary {
         $retString .= "No collections";
     } else {
         my $plural = ($collection_count == 1) ? "" : "s";
-        $retString .= qq|<b><a href="bridge.pl?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count collection$plural</a> </b> ( |;
+        $retString .= qq|<b><a href="bridge.pl?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count collection$plural</a> </b> (|;
         foreach my $row (@$results) {
 			my $coll_link = qq|<a href="bridge.pl?action=displayCollectionDetails&collection_no=$row->{collection_no}">$row->{collection_no}</a>|;
             if ($row->{'is_primary'}) {
@@ -7727,6 +7729,7 @@ sub getReferenceLinkSummary {
             }
             $retString .= $coll_link . " ";
         }
+        $retString =~ s/ $//;
         $retString .= ")";
     } 
     
@@ -7811,7 +7814,7 @@ sub RefQuery {
         }
         
         if ($refsortby)	{
-            $orderBy .= "r.author1last $refsortorder, r.pubyr $refsortorder";
+            $orderBy .= "r.author1last $refsortorder, r.author1init $refsortorder, r.pubyr $refsortorder";
         }
 
         # only append the ORDER clause if something is in it,
