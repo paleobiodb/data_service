@@ -1151,7 +1151,7 @@ sub displayRefResults {
         # Print the sub header
         my $offset = (int($q->param('refsSeen')) || 0);
         my $limit = 30;
-        print "<div align=\"center\"><h4>$query_description matched";
+        print "<div align=\"center\"><h4>$query_description matched ";
         if (scalar(@data) > 1 && scalar(@data) > $limit) {
             print scalar(@data)." references</h4>\n<p class=\"large\">Here are ";
             if ($offset == 0)	{
@@ -7828,7 +7828,7 @@ sub RefQuery {
         
 	    if ( $refsearchstring ) { 
             $refsearchstring =~ s/^\s*//;
-            $refsearchstring = "for '$refsearchstring' "; 
+            $refsearchstring = "'$refsearchstring' "; 
         }
         my @data = @{$dbt->getData($sql)};
 	    return (\@data,$refsearchstring);
