@@ -5656,7 +5656,7 @@ sub displaySearchStrataResults{
 ##############
 ## PrintHierarchy stuff
 sub startStartPrintHierarchy	{
-	PrintHierarchy::startPrintHierarchy($hbo);
+	PrintHierarchy::startPrintHierarchy($hbo, $s);
 }
 sub startProcessPrintHierarchy	{
     return if checkForBot();
