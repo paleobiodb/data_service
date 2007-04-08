@@ -7,8 +7,11 @@ use strict;
 
 sub startPrintHierarchy	{
 	my $hbo = shift;
+	my $s = shift;
 	print main::stdIncludes("std_page_top");
-    print $hbo->populateHTML('print_hierarchy_form');
+	my %refno;
+	$refno{'current_ref'} = $s->get('reference_no');
+	print $hbo->populateHTML('print_hierarchy_form',\%refno);
 	print main::stdIncludes("std_page_bottom");
 	return;
 }
