@@ -872,9 +872,11 @@ sub getBoundaries {
             }
 
             if (!$conflict) {
-                if (1 || $src == $from || 
-                    $abbrev eq $itv->{'best_scale'}->{'abbrev'} ||
+                my $max = $itv->{'max'};
+                if ($abbrev eq $itv->{'best_scale'}->{'abbrev'} ||
                     $abbrev eq $itv->{'best_boundary'}->{'abbrev'} ||
+                    ($max && $abbrev eq $max->{'best_scale'}->{'abbrev'}) ||
+                    ($max && $abbrev eq $max->{'best_boundary'}->{'abbrev'}) ||
                     $abbrev eq 'gl') {
                     if ($action == $UPPER_MAX) {
                         if (!exists $itv->{'upper_max'.$abbrev} || $src->{'boundary'} < $itv->{'upper_max'.$abbrev}) {
