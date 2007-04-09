@@ -872,7 +872,8 @@ sub getBoundaries {
             }
 
             if (!$conflict) {
-                if ($abbrev eq $itv->{'best_scale'}->{'abbrev'} ||
+                if (1 || $src == $from || 
+                    $abbrev eq $itv->{'best_scale'}->{'abbrev'} ||
                     $abbrev eq $itv->{'best_boundary'}->{'abbrev'} ||
                     $abbrev eq 'gl') {
                     if ($action == $UPPER_MAX) {
@@ -1079,17 +1080,62 @@ sub getBoundaries {
         }
 
         # Makes guess at the remaining boundaries. First we try to get a continent specific boundary.
-        # If one doesn't exist then we fall back to a global estimate.
+        # If one doesn't exist then we fall back to a global estimate. Lastly try other continents
         foreach my $itv (values %$ig) {
+            my %abbrs = ();
             my $abbrev = $itv->{'best_scale'}->{'abbrev'};
-            foreach ('upper_max','upper_boundary','upper_min','lower_max','lower_boundary','lower_min') {
-                if ($itv->{$_.$abbrev} =~ /\d/) {
-                    $itv->{$_} = $itv->{$_.$abbrev};
-                    $itv->{$_.'src'} = $itv->{$_.$abbrev.'src'};
-                } elsif ($itv->{$_.'gl'} =~ /\d/) {
-                    $itv->{$_} = $itv->{$_.'gl'};
-                    $itv->{$_.'src'} = $itv->{$_.'gl'.'src'};
+            $abbrs{$abbrev} = 1;
+            if ($itv->{'max'}) {
+                $abbrs{$itv->{'max'}->{'best_scale'}->{'abbrev'}} = 2;
+            }
+            if ($itv->{'min'}) {
+                $abbrs{$itv->{'max'}->{'best_scale'}->{'abbrev'}} = 2;
+            }
+            $abbrs{'gl'} = 3 unless $abbrs{'gl'};
+
+#            my @abbrevs = ('As','Au','Eu','NZ','NA','SA');
+            my @abbrevs = keys %abbrs;
+            @abbrevs = sort {$abbrs{$a} <=> $abbrs{$b}} @abbrevs;
+#            for (my $i = 0;$i < @abbrevs; $i++) {
+#                if ($abbrevs[$i] eq $abbrev) {
+#                    splice(@abbrevs,$i,1);
+#                }
+#            }
+#            unshift @abbrevs, 'gl';
+#            unshift @abbrevs, $abbrev;
+
+            foreach my $abbrev (@abbrevs) {
+                foreach my $bound ('upper_max','lower_max') {
+                    if ($itv->{$bound.$abbrev} =~ /\d/) {
+                        if ($itv->{$bound} !~ /\d/ || $itv->{$bound} > $itv->{$bound.$abbrev}) {
+                            $itv->{$bound} = $itv->{$bound.$abbrev};
+                            $itv->{$bound.'src'} = $itv->{$bound.$abbrev.'src'};
+                        }
+                    }
                 }
+                foreach my $bound ('upper_min','lower_min') {
+                    if ($itv->{$bound.$abbrev} =~ /\d/) {
+                        if ($itv->{$bound} !~ /\d/ || $itv->{$bound} < $itv->{$bound.$abbrev}) {
+                            $itv->{$bound} = $itv->{$bound.$abbrev};
+                            $itv->{$bound.'src'} = $itv->{$bound.$abbrev.'src'};
+                        }
+                    }
+                }
+                foreach my $bound ('upper_boundary','lower_boundary') {
+                    if ($itv->{$bound.$abbrev} =~ /\d/) {
+                        if ($itv->{$bound} !~ /\d/) {
+                            $itv->{$bound} = $itv->{$bound.$abbrev};
+                            $itv->{$bound.'src'} = $itv->{$bound.$abbrev.'src'};
+                        }
+                    }
+                }
+                #if ($itv->{$_.$abbrev} =~ /\d/) {
+                #    $itv->{$_} = $itv->{$_.$abbrev};
+                #    $itv->{$_.'src'} = $itv->{$_.$abbrev.'src'};
+                #} elsif ($itv->{$_.'gl'} =~ /\d/) {
+                #    $itv->{$_} = $itv->{$_.'gl'};
+                #    $itv->{$_.'src'} = $itv->{$_.'gl'.'src'};
+                #}
             }
             if ($itv->{'lower_boundary'} =~ /\d/) {
                 $itv->{'lower_estimate_type'} = 'direct';
