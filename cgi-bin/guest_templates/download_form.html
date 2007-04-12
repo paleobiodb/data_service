@@ -167,14 +167,14 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 
 <tr%%row_class_1b%%>
 <td valign=top class="small"><b>Taxon</b> or taxa to include:<br>
-<small><i>Genus level or above.</i></small>
+<small><i>Genus level or above</i></small>
 </td>
 <td valign=top class="small">
 <textarea name=taxon_name rows=2 cols=40></textarea></td></tr>
 
 <tr%%row_class_1b%%>
 <td valign=top class="small"><b>Taxon</b> or taxa to exclude:<br>
-<small><i>Genus level or above.</i></small>
+<small><i>Genus level or above</i></small>
 </td>
 <td valign=top class="small">
 <textarea name=exclude_taxon_name rows=2 cols=40></textarea></td></tr>
@@ -193,7 +193,7 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 
 <tr%%row_class_1b%%>
 <td valign=top class="small">If you selected a scale, you must select a field to be tallied:<br>
-<small><i>If you pick "ecology," you must select ecology categories in the "Occurrence fields" section.</i></small></td>
+<small><i>If you pick "ecology," you must select ecology categories in the "Occurrence fields" section</i></small></td>
 <td valign=top class="small">
 <select name=binned_field>
 <option>
@@ -253,7 +253,7 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 </tr>
 
 <tr%%row_class_1a%%>
-<td valign=top class="small" nowrap>Use occurrences published 
+<td valign=top class="small" nowrap>Use data records published 
 <select name="published_before_after">
 <option>before</option>
 <option selected>after</option>
@@ -378,52 +378,44 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 </tr>
 
 <tr class="lightGray">
-<td valign=top class="small">Latitudinal range:</td>
+<td valign=top class="small"><span style="white-space: nowrap">Latitudinal range:</span></td>
 <td valign=top class="small">
 <input name="latmin1" size="4" value="-90">&deg; to
 <input name="latmax1" size="4" value="90">&deg;
-</td>
-<td valign=top class="small">Additional latitudinal range:</td>
-<td valign=top class="small">
+and
 <input name="latmin2" size="4" value="-90">&deg; to
 <input name="latmax2" size="4" value="90">&deg;
 </td>
 </tr>
 
 <tr class="lightGray">
-<td valign=top class="small">Longitudinal range:</td>
+<td valign=top class="small"><span style="white-space: nowrap">Longitudinal range:</span></td>
 <td valign=top class="small">
 <input name="lngmin1" size="4" value="-180">&deg; to
 <input name="lngmax1" size="4" value="180">&deg;
-</td>
-<td valign=top class="small">Additional longitudinal range:</td>
-<td valign=top class="small">
+and
 <input name="lngmin2" size="4" value="-180">&deg; to
 <input name="lngmax2" size="4" value="180">&deg;
 </td>
 </tr>
 
 <tr>
-<td valign=top class="small">Paleolatitudinal range:</td>
+<td valign=top class="small"><span style="white-space: nowrap">Paleolatitudinal range:</span></td>
 <td valign=top class="small">
 <input name="paleolatmin1" size="4" value="-90">&deg; to
 <input name="paleolatmax1" size="4" value="90">&deg;
-</td>
-<td valign=top class="small">Additional paleolatitudinal range:</td>
-<td valign=top class="small">
+and
 <input name="paleolatmin2" size="4" value="-90">&deg; to
 <input name="paleolatmax2" size="4" value="90">&deg;
 </td>
 </tr>
 
 <tr>
-<td valign=top class="small">Paleolongitudinal range:</td>
+<td valign=top class="small"><span style="white-space: nowrap">Paleolongitudinal range:</span></td>
 <td valign=top class="small">
 <input name="paleolngmin1" size="4" value="-180">&deg; to
 <input name="paleolngmax1" size="4" value="180">&deg;
-</td>
-<td valign=top class="small">Additional paleolongitudinal range:</td>
-<td valign=top class="small">
+and
 <input name="paleolngmin2" size="4" value="-180">&deg; to
 <input name="paleolngmax2" size="4" value="180">&deg;
 </td>
@@ -490,8 +482,8 @@ The more boxes you check, the less will be lumped, and vice versa
 <span style="white-space: nowrap"><input type=checkbox name='lump_by_coord' value="YES"> exact coordinate</span>
 <span style="white-space: nowrap"><input type=checkbox name='lump_by_interval' value="YES"> time interval</span>
 &nbsp;
-strat unit:
 <span style="white-space: nowrap">
+strat unit:
 <select class="small" name="lump_by_strat_unit">
 <option selected>
 <option>group
@@ -512,7 +504,8 @@ strat unit:
 
 <tr>
 <td valign=top class="small" nowrap>Exclude collections with
-  <select name="abundance_count_qualifier"><option>less</option><option>more</option></select> than</td>
+  <select name="abundance_count_qualifier"><option>less</option><option>more</option></select> than<br>
+  <small>Currently doesn't work if output is collection data</small></td>
 <td valign=top class="small" colspan=3><input name=abundance_count type="text" size="12"> specimens/individuals</td></tr>
 
 
