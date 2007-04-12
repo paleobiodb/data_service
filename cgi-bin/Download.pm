@@ -1452,7 +1452,7 @@ sub queryDatabase {
 
     my (@fields,@where,@occ_where,@reid_where,$taxon_where,@tables,@from,@groupby,@left_joins);
 
-    @fields = ('c.authorizer_no','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short");
+    @fields = ('count(*) num,c.authorizer_no','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short");
     @tables = ('collections c');
     @where = $self->getCollectionsWhereClause();
 
@@ -1524,7 +1524,8 @@ sub queryDatabase {
 
     # We'll want to join with the reid ids if we're hitting the occurrences table,
     # or if we're getting collections and filtering using the taxon_no in the occurrences table
-    my $join_reids = ($q->param('output_data') =~ /occurrence|specimens|genera|species/ || $q->param('taxon_name') || $q->param('exclude_taxon_name')) ? 1 : 0;
+    # or excluding collections based on occurrence or abundance counts
+    my $join_reids = ($q->param('output_data') =~ /occurrence|specimens|genera|species/ || $q->param('taxon_name') || $q->param('exclude_taxon_name') || $q->param('occurrence_count') || $q->param('abundance_count')) ? 1 : 0;
     if ($join_reids) {
         push @tables, 'occurrences o';
         unshift @where, 'c.collection_no = o.collection_no';
@@ -1592,7 +1593,7 @@ sub queryDatabase {
             }
         } 
 
-        if ($q->param('taxon_name') || $q->param('exclude_taxon_name')) {
+        if ($q->param('taxon_name') || $q->param('exclude_taxon_name') || $q->param('occurrence_count') || $q->param('abundance_count')) {
             # Don't include $taxon_where in my () above, it needs to stay in scope
             # so it can be used much later in function
             $taxon_where = $self->getTaxonString();
@@ -1698,6 +1699,9 @@ sub queryDatabase {
                    " FROM (" .join(",",@tables).") ".join (" ",@left_joins1).
                    " WHERE ".join(" AND ",@where1);
             $sql1 .= " GROUP BY ".join(",",@groupby) if (@groupby);
+            if ( $q->param('occurrence_count') )	{
+               $sql1 .= ' HAVING num>'.$q->param('occurrence_count');
+            }
 
             my @where2 = ("re.occurrence_no=o.occurrence_no AND re.most_recent='YES'",@where,@reid_where);
             my @tables2 = (@tables,'reidentifications re'); 
@@ -1705,6 +1709,9 @@ sub queryDatabase {
                    " FROM (" .join(",",@tables2).") ".join (" ",@left_joins).
                    " WHERE ".join(" AND ",@where2);
             $sql2 .= " GROUP BY ".join(",",@groupby) if (@groupby);
+            if ( $q->param('occurrence_count') )	{
+               $sql2 .= ' HAVING num>'.$q->param('occurrence_count');
+            }
             $sql = "($sql1) UNION ($sql2)";
         } else {
             my @where1 = (@where,@occ_where);
@@ -1712,6 +1719,9 @@ sub queryDatabase {
                    " FROM (" .join(",",@tables).") ".join (" ",@left_joins).
                    " WHERE ".join(" AND ",@where1);
             $sql1 .= " GROUP BY ".join(",",@groupby) if (@groupby);
+            if ( $q->param('occurrence_count') )	{
+               $sql1 .= ' HAVING num>'.$q->param('occurrence_count');
+            }
             $sql = $sql1;
         }
 
@@ -1765,6 +1775,9 @@ sub queryDatabase {
                " FROM (" .join(",",@tables).") ".join (" ",@left_joins).
                " WHERE ".join(" AND ",@where);
         $sql .= " GROUP BY ".join(",",@groupby) if (@groupby);
+        if ( $q->param('occurrence_count') )	{
+           $sql .= ' HAVING num>'.$q->param('occurrence_count');
+        }
     }
     # added this because the occurrences must be ordered by collection no or the CONJUNCT output will split up the collections JA 14.7.05
     if ( $q->param('output_data') =~ /occurrence|specimens/)    {
