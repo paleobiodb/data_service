@@ -187,7 +187,11 @@ sub retellOptions {
     $html .= '<tr><td colspan=2 class="darkList"><h3 style="margin-bottom: 0em;">Download criteria</h3></td></tr>';
 
     # authorizer added 30.6.04 JA (left out by mistake?) 
-    $html .= $self->retellOptionsRow ( "Output data type", $q->param("output_data") );
+    if ( $q->param("output_data") =~ /conjunct/i )	{
+        $html .= $self->retellOptionsRow ( "Output data type", "CONJUNCT" );
+    } else	{
+        $html .= $self->retellOptionsRow ( "Output data type", $q->param("output_data") );
+    }
     $html .= $self->retellOptionsRow ( "Output data format", $q->param("output_format") );
     $html .= $self->retellOptionsRow ( "Authorizer", $q->param("authorizer_reversed") );
     if ($q->param('research_group')) {
@@ -1250,7 +1254,7 @@ sub getOccurrencesWhereClause {
 
     my (@all_where,@occ_where,@reid_where);
 
-    if ( $q->param('pubyr') > 0 )    {
+    if ( $q->param('pubyr') > 0 && $q->param('output_data') !~ /collections/i )    {
         my $pubyrrelation = ">";
         if ( $q->param('published_before_after') eq "before" )    {
             $pubyrrelation = "<";
@@ -1315,6 +1319,14 @@ sub getCollectionsWhereClause {
 
     my @where = ();
     
+    if ( $q->param('pubyr') > 0 && $q->param('output_data') =~ /collections/i )    {
+        my $pubyrrelation = ">";
+        if ( $q->param('published_before_after') eq "before" )    {
+            $pubyrrelation = "<";
+        } 
+        push @where," r.pubyr".$pubyrrelation.$q->param('pubyr')." ";
+    }
+
     # This is handled by getOccurrencesWhereClause if we're getting occs data.
     if($q->param('output_data') eq 'collections' && $q->param('authorizer_reversed')) {
         my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed')));
@@ -1444,9 +1456,9 @@ sub queryDatabase {
     @tables = ('collections c');
     @where = $self->getCollectionsWhereClause();
 
-    # This confusing block relates to getting specimen measurement data that isn't
+    # This confusing block relates to getting specimen measurement data that aren't
     # tied to a specific occurrence/collection - if these fields are set, we have to throw out
-    # that data, since we can't know if its valid. anything that filters collections should
+    # those data, since we can't know if it's valid. Anything that filters collections should
     # cause us to throw out this data pretty much, except record created date (hence the grep)
     # this may be a bit incomplete, gl trying to keep this logic up to date PS 07/18/2005
     if (scalar(grep(!/created/,@where)) ||
@@ -1594,7 +1606,11 @@ sub queryDatabase {
 
         if ( $q->param('pubyr') > 0 ) {
             push @tables, 'refs r';
-            unshift @where, 'r.reference_no=o.reference_no';
+            if ( $q->param('output_data') =~ /collections/i )	{
+                unshift @where, 'r.reference_no=c.reference_no';
+            } else	{
+                unshift @where, 'r.reference_no=o.reference_no';
+            }
         }
     }
 
@@ -1641,7 +1657,7 @@ sub queryDatabase {
 
 
     # Handle GROUP BY
-    # This is important: don't grouping by genus_name for the obvious cases, 
+    # This is important: don't group by genus_name for the obvious cases, 
     # Do the grouping in PERL, since otherwise we can't get a list of references
     # nor can we filter out old reids and rows that don't pass permissions.
     if ( $q->param('output_data') =~ /genera|species|occurrence/ )    {
@@ -2602,7 +2618,7 @@ sub printCSV {
     my $ext = 'csv';
     if ($q->param('output_format') =~ /tab/i) {
         $ext = 'tab';
-    } 
+    }
 
     my $mainFile = "";
     my $filename = $self->{'filename'};
@@ -3040,8 +3056,8 @@ sub printCONJUNCT {
     my $q = $self->{'q'};
 
     my $filename = $self->{'filename'};
-    # Conjunct is expecint an "occurrences" type or it might screw up, so keep this short
-    my $mainFile = "$filename-occs.conjunct";
+    # Conjunct is expecting an "occurrences" type or it might screw up, so keep this short
+    my $mainFile = "$filename.conjunct";
 
     if (! open(OUTFILE, ">$OUT_FILE_DIR/$mainFile") ) {
         die ( "Could not open output file: $mainFile ($!)<BR>\n" );
