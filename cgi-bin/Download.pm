@@ -1699,7 +1699,7 @@ sub queryDatabase {
                    " FROM (" .join(",",@tables).") ".join (" ",@left_joins1).
                    " WHERE ".join(" AND ",@where1);
             $sql1 .= " GROUP BY ".join(",",@groupby) if (@groupby);
-            if ( $q->param('occurrence_count') )	{
+            if ( $q->param('occurrence_count') && $q->param('output_data') =~ /collections/i )	{
                $sql1 .= ' HAVING num>'.$q->param('occurrence_count');
             }
 
@@ -1709,7 +1709,7 @@ sub queryDatabase {
                    " FROM (" .join(",",@tables2).") ".join (" ",@left_joins).
                    " WHERE ".join(" AND ",@where2);
             $sql2 .= " GROUP BY ".join(",",@groupby) if (@groupby);
-            if ( $q->param('occurrence_count') )	{
+            if ( $q->param('occurrence_count') && $q->param('output_data') =~ /collections/i )	{
                $sql2 .= ' HAVING num>'.$q->param('occurrence_count');
             }
             $sql = "($sql1) UNION ($sql2)";
@@ -1719,7 +1719,7 @@ sub queryDatabase {
                    " FROM (" .join(",",@tables).") ".join (" ",@left_joins).
                    " WHERE ".join(" AND ",@where1);
             $sql1 .= " GROUP BY ".join(",",@groupby) if (@groupby);
-            if ( $q->param('occurrence_count') )	{
+            if ( $q->param('occurrence_count') && $q->param('output_data') =~ /collections/i )	{
                $sql1 .= ' HAVING num>'.$q->param('occurrence_count');
             }
             $sql = $sql1;
@@ -1775,7 +1775,7 @@ sub queryDatabase {
                " FROM (" .join(",",@tables).") ".join (" ",@left_joins).
                " WHERE ".join(" AND ",@where);
         $sql .= " GROUP BY ".join(",",@groupby) if (@groupby);
-        if ( $q->param('occurrence_count') )	{
+        if ( $q->param('occurrence_count') && $q->param('output_data') =~ /collections/i )	{
            $sql .= ' HAVING num>'.$q->param('occurrence_count');
         }
     }
