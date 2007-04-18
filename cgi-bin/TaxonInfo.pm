@@ -1497,17 +1497,21 @@ sub getSynonymyParagraph{
 				   'objective synonym of' => 'synonymized objectively with ');
 	my $text = "";
 
-	# Get all things this taxon as been. Note we don't use ref_has_opinion but rather the 
-    # pubyr cause of a number of broken records (ref_has_opinion is blank, but no pub info)
-    # Transparently insert in the right pubyr and sort by it
-    my $sql = "(SELECT o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, o.phylogenetic_status, ".
-           " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.pubyr,r.pubyr) pubyr,".
-           " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.author1last,r.author1last) author1last,".
-           " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.author2last,r.author2last) author2last,".
-           " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000',o.otherauthors,r.otherauthors) otherauthors".
-           " FROM opinions o LEFT JOIN refs r ON o.reference_no=r.reference_no" . 
-           " WHERE child_no=$taxon_no) ORDER BY pubyr";
-	my @results = @{$dbt->getData($sql)};
+    # got rid of direct hit on opinions table and replaced it with a call
+    #  to getMostRecentClassification because (1) the code was redundant, and
+    #  (2) this way you can identify the opinion actually used in the taxon's
+    #   classification, so it can be bolded in the history paragraph JA 17.4.07
+
+        my $results_ref = getMostRecentClassification($dbt,$taxon_no,'','','all');
+        my @results = @{$results_ref};
+
+    # save the best opinion no
+        my $best_opinion = $results[0]->{opinion_no};
+
+    # getMostRecentClassification returns the opinions in reliability_index
+    #  order, so now they need to be resorted based on pubyr
+
+        @results = sort { $a->{pubyr} <=> $b->{pubyr} } @results;
 
 	# "Named by" part first:
 	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
@@ -1586,7 +1590,7 @@ sub getSynonymyParagraph{
         }
     }
     
-    $sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE type_taxon_no IN (".join(",",@spellings).")";
+    my $sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE type_taxon_no IN (".join(",",@spellings).")";
     my @type_for = @{$dbt->getData($sql)};
     if (@type_for) {
         $text .= "It is the type for ";
@@ -1613,7 +1617,7 @@ sub getSynonymyParagraph{
         foreach my $phylogenetic_status (@phyly_list) {
             $para_text .= " $phylogenetic_status by ";
             my $parent_block = $phyly{$phylogenetic_status};
-            $para_text .= printReferenceList($parent_block);
+            $para_text .= printReferenceList($parent_block,$best_opinion);
             $para_text .= ", ";
         }
         $para_text =~ s/, $/\./;
@@ -1741,7 +1745,7 @@ sub getSynonymyParagraph{
         } else {
             $text .= " by ";
         }
-        $text .= printReferenceList($group);
+        $text .= printReferenceList($group,$best_opinion);
 	}
 	if($text ne ""){
         if ($text !~ /\.\s*$/) {
@@ -1779,7 +1783,7 @@ sub getSynonymyParagraph{
                 $parent_name = "<i>$parent_name</i>";
             }
             $text .= " to <a href=\"bridge.pl?action=checkTaxonInfo&amp;taxon_no=$parent->{taxon_no}&amp;is_real_user=$is_real_user\">$parent_name</a> by ";
-            $text .= printReferenceList(\@parent_array);
+            $text .= printReferenceList(\@parent_array,$best_opinion);
             $text .= "; ";
         }
         $text =~ s/; $/\./;
@@ -1792,12 +1796,27 @@ sub getSynonymyParagraph{
     # Only used in this function, just a simple utility to print out a formatted list of references
     sub printReferenceList {
         my @ref_array = @{$_[0]};
+        my $best_opinion = $_[1];
         my $text = " ";
         foreach my $ref (@ref_array) {
             if ($ref->{'ref_has_opinion'} =~ /yes/i) {
-                $text .= Reference::formatShortRef($ref,'alt_pubyr'=>1,'show_comments'=>1, 'link_id'=>1).", ";
+                if ( $ref->{'opinion_no'} eq $best_opinion )	{
+                    $text .= "<b>";
+                }
+                $text .= Reference::formatShortRef($ref,'alt_pubyr'=>1,'show_comments'=>1, 'link_id'=>1);
+                if ( $ref->{'opinion_no'} eq $best_opinion )	{
+                    $text .= "</b>";
+                }
+                $text .= ", ";
             } else {
-                $text .= Reference::formatShortRef($ref,'alt_pubyr'=>1,'show_comments'=>1).", ";
+                if ( $ref->{'opinion_no'} eq $best_opinion )	{
+                    $text .= "<b>";
+                }
+                $text .= Reference::formatShortRef($ref,'alt_pubyr'=>1,'show_comments'=>1);
+                if ( $ref->{'opinion_no'} eq $best_opinion )	{
+                    $text .= "</b>";
+                }
+                $text .= ", ";
             }
         }
         $text =~ s/, $//;
@@ -1857,6 +1876,7 @@ sub getMostRecentClassification {
     my $child_no = int(shift);
     my $reference_no = shift;
     my $exclude_nomen = shift;
+    my $return_rows = shift;
     return if (!$child_no);
     return if ($reference_no eq '0');
 
@@ -1875,8 +1895,12 @@ sub getMostRecentClassification {
                 " CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
             ")".
          ")) AS reliability_index ";
-    my $sql = "(SELECT o.opinion_no,o.child_no, o.child_spelling_no,o.status,o.spelling_reason,o.parent_no,o.parent_spelling_no,"
-            . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr, $reliability "
+    my $sql = "(SELECT o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, o.phylogenetic_status, ".
+            " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr, "
+            . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.author1last, r.author1last) as author1last, "
+            . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.author2last, r.author2last) as author2last, "
+            . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.otherauthors, r.otherauthors) as otherauthors, "
+            . "$reliability "
             . " FROM opinions o" 
             . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
             . " WHERE o.child_no=$child_no"
@@ -1887,12 +1911,19 @@ sub getMostRecentClassification {
     if ($exclude_nomen) {
         $sql .= " AND o.status NOT LIKE '%nomen%'";
     }
-    $sql .= ") ORDER BY reliability_index DESC, pubyr DESC, opinion_no DESC LIMIT 1";
+    $sql .= ") ORDER BY reliability_index DESC, pubyr DESC, opinion_no DESC";
+    if ( $return_rows ne "all" )	{
+        $sql .= " LIMIT 1";
+    }
 #            print $sql;
 
     my @rows = @{$dbt->getData($sql)};
     if (scalar(@rows)) {
-        return $rows[0];
+        if ( $return_rows eq "all" )	{
+            return \@rows;
+        } else	{
+            return $rows[0];
+        }
     } else {
         return undef;
     }
