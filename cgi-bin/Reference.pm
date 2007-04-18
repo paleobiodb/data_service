@@ -127,6 +127,16 @@ sub formatShortRef  {
     }
     return if (!$refData);
 
+    # stuff like Jr. or III often is in the last name fields, and for a short
+    #  ref we don't care about it JA 18.4.07
+    $refData->{'author1last'} =~ s/( Jr)|( III)|( II)//;
+    $refData->{'author1last'} =~ s/\.$//;
+    $refData->{'author1last'} =~ s/,$//;
+    $refData->{'author2last'} =~ s/( Jr)|( III)|( II)//;
+    $refData->{'author2last'} =~ s/\.$//;
+    $refData->{'author2last'} =~ s/,$//;
+
+
     my $shortRef = "";
     $shortRef .= $refData->{'author1init'}." " if $refData->{'author1init'} && ! $options{'no_inits'};
     $shortRef .= $refData->{'author1last'};
