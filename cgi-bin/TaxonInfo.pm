@@ -1503,15 +1503,17 @@ sub getSynonymyParagraph{
     #   classification, so it can be bolded in the history paragraph JA 17.4.07
 
         my $results_ref = getMostRecentClassification($dbt,$taxon_no,'','','all');
-        my @results = @{$results_ref};
 
+        my @results;
+        my $best_opinion;
+        if ( $results_ref )	{
+            @results = @{$results_ref};
     # save the best opinion no
-        my $best_opinion = $results[0]->{opinion_no};
-
+            $best_opinion = $results[0]->{opinion_no};
     # getMostRecentClassification returns the opinions in reliability_index
     #  order, so now they need to be resorted based on pubyr
-
-        @results = sort { $a->{pubyr} <=> $b->{pubyr} } @results;
+            @results = sort { $a->{pubyr} <=> $b->{pubyr} } @results;
+        }
 
 	# "Named by" part first:
 	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
