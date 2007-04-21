@@ -3053,7 +3053,6 @@ IS NULL))";
 sub displayCollectionDetails {
     logRequest($s,$q);
 	my $collection_no = int($q->param('collection_no'));
-    print stdIncludes( "std_page_top" );
 
     # Handles the meat of displaying information about the colleciton
     # Separated out so it can be reused in enter/edit collection confirmation forms
@@ -3069,6 +3068,13 @@ sub displayCollectionDetails {
     if (!$coll ) {
         print Debug::printErrors(["No collection with collection number $collection_no"]);
         return;
+    }
+    if ( $coll->{'research_group'} =~ /ETE/ && $q->param('guest') eq '' )	{
+my $banner;
+        $banner->{'ete_banner'} = "<div style=\"padding-left: 3em; float: left;\"><img alt=\"banner\" src=\"/public/bannerimages/ete_logo.jpg\"></div>";
+        print $hbo->populateHTML('std_page_top', $banner);
+    } else	{
+        print stdIncludes( "std_page_top" );
     }
     displayCollectionDetailsPage($coll);
 
