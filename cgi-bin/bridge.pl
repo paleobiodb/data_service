@@ -3342,6 +3342,17 @@ sub displayCollectionDetailsPage {
         $row->{'legacy_message'} = '';
     }
 
+    # guests have no idea what the legacy fields are for, and they are always
+    #  wrong where they differ from the regular values, so only show them
+    #  to contributors who may want to fix something using these data
+    #  JA 21.4.07
+    if ( $row->{'legacy_message'} && $q->param('user') eq '' )	{
+        my @legacies = ('epoch','period','intage','locage','message');
+        for my $l ( @legacies )	{
+            $row->{'legacy_'.$l} = "";
+        }
+    }
+
     if ($row->{'interval'} eq $row->{'period'} ||
         $row->{'interval'} eq $row->{'epoch'} ||
         $row->{'interval'} eq $row->{'stage'}) {
@@ -3371,9 +3382,6 @@ sub displayCollectionDetailsPage {
     }
 
     $row->{'modified'} = date($row->{'modified'});
-    
-    
-   
 
     # textarea values often have returns that need to be rendered
     #  as <br>s JA 20.8.06
