@@ -100,7 +100,10 @@ sub checkTaxonInfo {
             displayTaxonInfoResults($dbt,$s,$q);
         } else{
             # now create a table of choices and display that to the user
-            print "<div align=\"center\"><h2>Please select a taxon</h2><br>";
+            print "<div align=\"center\"><h3>Please select a taxon</h3><br>";
+            print qq|<div class="displayPanel" align="center" style="width: 30em; padding-top: 1.5em;">
+<div class="displayPanelContent">
+|;
 
             print qq|<form method="POST" action="bridge.pl">|;
             print qq|<input type="hidden" name="action" value="checkTaxonInfo">|;
@@ -116,7 +119,10 @@ sub checkTaxonInfo {
             print "</tr>";
             print "<tr><td align=\"center\" colspan=3><br>";
             print "<input type=\"submit\" value=\"Get taxon info\">";
-            print "</td></tr></table></form></div>";
+            print qq|</td></tr></table></form></div>
+</div>
+</div>
+|;
 
         }
     }
@@ -313,8 +319,8 @@ sub displayTaxonInfoResults {
     	print "<a href=\"/cgi-bin/bridge.pl?action=beginTaxonInfo\">".
 	    	  "<b>Get info on another taxon</b></a></center></div>\n";
         print "</p>";
-        print '</div>';
-        print '</div>';
+        print "</div>\n";
+        print "</div>\n";
 	}
                                                                                                                                                                                 
     print '<script language="JavaScript" type="text/javascript">
@@ -325,69 +331,70 @@ sub displayTaxonInfoResults {
 	# sister and child taxa
     if($modules{2}) {
         print '<div id="panel2" class="panel">';
-		print '<div align="center"><h3>Related taxa</h3></div>';
+		print "<div align=\"center\"><h3>Related taxa</h3></div>\n";
         print '<div align="center">';
 		print displayRelatedTaxa($dbt, $taxon_no, $taxon_name,$is_real_user);
-        print '</div>';
-        print '</div>';
+        print "</div>\n";
+        print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(2); </script>';
 	}
 	# synonymy
 	if($modules{3}) {
         print '<div id="panel3" class="panel">';
-		print '<div align="center"><h3>Taxonomic history</h3></div>';
+		print "<div align=\"center\"><h3>Taxonomic history</h3></div>\n";
         print '<div align="center">';
         print displayTaxonHistory($dbt, $taxon_no, $is_real_user);
-        print '</div>';
-        print '</div>';
+        print "See something missing? <a href=\"/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=join_us\">Join the Paleobiology Database</a>\n";
+        print "</div>\n";
+        print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(3); </script>';
 	}
 
 	if ($modules{4}) {
         print '<div id="panel4" class="panel">';
-		print '<div align="center"><h3>Synonymy</h3></div>';
+		print "<div align=\"center\"><h3>Synonymy</h3></div>\n";
         print '<div align="center">';
     	print displaySynonymyList($dbt, $taxon_no);
-        print '</div>';
-        print '</div>';
+        print "</div>\n";
+        print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(4); </script>';
 	}
     
     if ($modules{5}) {
         print '<div id="panel5" class="panel">';
-		print '<div align="center"><h3>Diagnosis</h3></div>';
+		print "<div align=\"center\"><h3>Diagnosis</h3></div>\n";
         print '<div align="center">';
         print displayDiagnoses($dbt,$taxon_no);
-        print '</div>';
-        print '</div>';
+        print "</div>\n";
+        print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(5); </script>';
     }
     if ($modules{6}) {
         print '<div id="panel6" class="panel">';
-		print '<div align="center"><h3>Ecology and taphonomy</h3></div>';
+		print "<div align=\"center\"><h3>Ecology and taphonomy</h3></div>\n";
         print '<div align="center">';
         unless ($quick) {
 		    print displayEcology($dbt,$taxon_no,$in_list);
         }
-        print '</div>';
-        print '</div>';
+        print "</div>\n";
+        print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(6); </script>';
     }
     if ($modules{7}) {
         print '<div id="panel7" class="panel">';
-		print '<div align="center"><h3>Measurements</h3></div>';
+		print "<div align=\"center\"><h3>Measurements</h3></div>\n";
         print '<div align="center">';
         unless ($quick) {
 		    print displayMeasurements($dbt,$taxon_no,$taxon_name,$in_list);
         }
-        print '</div>';
-        print '</div>';
+        print "</div>\n";
+        print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(7); </script>';
 	}
 	# map
     if ($modules{8}) {
         print '<div id="panel8" class="panel">';
-		print '<div align="center"><h3>Map</h3></div>';
+		print "<div align=\"center\"><h3>Map</h3></div>\n";
         print '<div align="center">';
 
         if ($is_real_user) {
@@ -398,10 +405,10 @@ sub displayTaxonInfoResults {
                 print "<input type=\"hidden\" name=\"$f\" value=\"".$q->param($f)."\">\n";
             }
             print "<input type=\"submit\" name=\"submit\" value=\"Show map\">";
-            print '</form>';
+            print "</form>\n";
         }
-        print '</div>';
-        print '</div>';
+        print "</div>\n";
+        print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(8); </script>';
 	}
 	# collections
@@ -416,20 +423,20 @@ sub displayTaxonInfoResults {
                 print "<input type=\"hidden\" name=\"$f\" value=\"".$q->param($f)."\">\n";
             }
             print "<input type=\"submit\" name=\"submit\" value=\"Show age range and collections\">";
-            print '</form>';
-            print '</div>';
+            print "</form>\n";
+            print "</div>\n";
         }
-        print '</div>';
+        print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(9); </script>';
 	}
 
     if ($modules{10}) {
         print '<div id="panel10" class="panel">';
-		print '<div align="center"><h3>Images</h3></div>';
+		print "<div align=\"center\"><h3>Images</h3></div>\n";
         print '<div align="center">';
         doThumbs($dbt,$in_list);
-        print '</div>';
-        print '</div>';
+        print "</div>\n";
+        print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(10); </script>';
     }
 
@@ -1382,12 +1389,12 @@ sub displayRelatedTaxa {
         $output .= '<form method="POST" action="bridge.pl" name="doDownloadTaxonomy">';
         $output .= '<input type="hidden" name="action" value="displayDownloadTaxonomyResults">';
         $output .= '<input type="hidden" name="taxon_no" value="'.$orig_no.'">';
-        $output .= '</form>';
+        $output .= "</form>\n";
         $output .= '<form method="POST" action="bridge.pl" name="doViewClassification">';
         $output .= '<input type="hidden" name="action" value="startProcessPrintHierarchy">';
         $output .= '<input type="hidden" name="maximum_levels" value="99">';
         $output .= '<input type="hidden" name="taxon_no" value="'.$orig_no.'">';
-        $output .= '</form>';
+        $output .= "</form>\n";
         
     }
 	return $output;
