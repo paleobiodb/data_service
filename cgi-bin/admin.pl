@@ -214,13 +214,14 @@ sub displayActions	{
 	print $hb->populateHTML( "std_page_top" );
 	print $hb->populateHTML( "index" );
 
-	my $sql = "SELECT first_name, last_name, last_action FROM person";
+	my $sql = "SELECT first_name, last_name, name, last_action FROM person";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 	
 	my $lastlogin;
 	while ( my $row = $sth->fetchrow_hashref() ) {
 		$lastlogin{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'last_action'};
+		$shortname{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'name'};
 	}
 	$sth->finish();
 
@@ -246,7 +247,7 @@ sub displayActions	{
 		if ($lastlogin{$names[$i]} > 20020630150000)	{
 			$d = date($lastlogin{$names[$i]});
 			printf "<tr><td align=\"center\">%d</td>",$i + 1;
-			print "<td>$names[$i]</td><td>$d</td>";
+			print "<td><a href=\"bridge.pl?action=displayCollResults&enterer=$shortname{$names[$i]}&sortby=collection_no&sortorder=desc\">$names[$i]</a></td><td>$d</td>";
 			for my $lag ( 1,7,30 )	{
 				print "<td align=\"center\">";
 				if ( $lastentries{'collections'}{$lag}{$names[$i]} || $lastentries{'opinions'}{$lag}{$names[$i]} )	{
