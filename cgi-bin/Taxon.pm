@@ -381,7 +381,7 @@ sub displayAuthorityForm {
 		} else {
 			# count = 0, so we need to warn them to enter the parent taxon first.
 #	        my $errors = Errors->new();
-#			$errors->add("The $parentRank '$parentName' for this $fields{'taxon_rank'} doesn't exist in our database.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$parentName\">create a new authority record for '$parentName'</A> before trying to add this $fields{'taxon_rank'}.");
+#			$errors->add("The $parentRank '$parentName' for this $fields{'taxon_rank'} hasn't been entered yet.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$parentName\">create a new authority record for '$parentName'</A> before trying to add this $fields{'taxon_rank'}.");
 #            print $errors->errorMessage();
 #            return;
 		}
@@ -623,11 +623,11 @@ sub submitAuthorityForm {
         if (!$parent_no) {
             my @parents = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parent_name});
             if (@parents > 1) {
-                $errors->add("The taxon '$parent_name' exists multiple times in our database.  Please select the version you mean.");
+                $errors->add("There are multiple versions of the name '$parent_name' in the database.  Please select the right one.");
             } elsif (@parents == 1) {
                 $parent_no = $parents[0]->{'taxon_no'};
             } else {
-                $errors->add("The parent taxon '$parent_name' that this taxon belongs to doesn't exist in our database.  Please add an authority record for this '$parent_name' before continuing.");
+                $errors->add("The name '$parent_name' isn't in the database yet.  Please add an authority record for this '$parent_name' before continuing.");
             }
         } 
 	}
@@ -997,10 +997,15 @@ sub addImplicitChildOpinion {
     return unless ($child_no && $parent_no);
     # Get original combination for parent no PS 04/22/2005
     my $orig_parent_no = TaxonInfo::getOriginalCombination($dbt,$parent_no);
-    
+   
+    # several things are always true by definition of the original author's
+    #  opinion on a name: it is authoritative, gives a new diagnosis, and
+    #  uses the original spelling
     my %opinionHash = (
         'status'=>'belongs to',
         'spelling_reason'=>'original spelling',
+        'classification_quality'=>'authoritative',
+        'diagnosis_given'=>'new',
         'child_no'=>$child_no,
         'child_spelling_no'=>$child_no,
         'parent_no'=>$orig_parent_no,
