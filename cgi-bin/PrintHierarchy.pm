@@ -11,6 +11,9 @@ sub startPrintHierarchy	{
 	print main::stdIncludes("std_page_top");
 	my %refno;
 	$refno{'current_ref'} = $s->get('reference_no');
+	if ( $s->get('enterer_no') > 0 )	{
+		$refno{'not_guest'} = 1;
+	}
 	print $hbo->populateHTML('print_hierarchy_form',\%refno);
 	print main::stdIncludes("std_page_bottom");
 	return;
@@ -83,7 +86,7 @@ sub processPrintHierarchy	{
     }
     if ($reference_no) {
         my $shortref = Reference::formatShortRef($dbt,$reference_no);
-        print " from $shortref";
+        print " of $shortref";
     }
     print "</h3></div>";
 
@@ -103,7 +106,7 @@ sub processPrintHierarchy	{
         } else {
             $tree = TaxaCache::getChildren($dbt,$orig_no,'tree');
         }
-        
+
         $tree->{'depth'} = 0;
         my $root_status = getStatus($dbt,$orig_no,$reference_no);
         $tree->{'status'} = $root_status if ($root_status =~ /nomen/);
@@ -297,7 +300,7 @@ sub processPrintHierarchy	{
 
 	chmod 0664, "$OUT_FILE_DIR/classification.csv";
 
-	print "<hr><p><b><a href=\"$OUT_HTTP_DIR/classification.csv\">Download</a></b> this list of taxonomic names</p>";
+	print "<hr><div style=\"padding-left: 2em;\"><p><b><a href=\"$OUT_HTTP_DIR/classification.csv\">Download</a></b> this list of taxonomic names</p>";
     print '<p><b><a href=# onClick="javascript: document.doDownloadTaxonomy.submit()">Download</a></b> authority and opinion data for these taxa</p>';
     print '<form method="POST" action="bridge.pl" name="doDownloadTaxonomy">';
     print '<input type="hidden" name="action" value="displayDownloadTaxonomyResults">';
@@ -309,7 +312,8 @@ sub processPrintHierarchy	{
     }
     print '</form>'; 
 
-	print "<p>You may <b><a href=\"bridge.pl?action=startStartPrintHierarchy\">classify another taxon</a></b></p>";
+	print "<p><b><a href=\"bridge.pl?action=startStartPrintHierarchy\">See another classification</a></b></p>";
+	print "</div>\n";
 	print main::stdIncludes( "std_page_bottom" );
 
 	return;
