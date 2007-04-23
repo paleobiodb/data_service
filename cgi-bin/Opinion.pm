@@ -351,7 +351,7 @@ sub displayOpinionForm {
             $fields{'taxon_status'} = 'belongs to'; 
             # also hit the database to get the last values used for some of the
             #  fields, but only if the same reference was used JA 18.12.06
-            my $sql = "SELECT diagnosis_given,ref_has_opinion,pages,classification_quality FROM opinions WHERE ((diagnosis_given!='' AND diagnosis_given IS NOT NULL) OR (pages!='' AND pages IS NOT NULL) OR (classification_quality!='' AND classification_quality IS NOT NULL)) AND reference_no=" . $s->get('reference_no') . " AND enterer_no=" . $s->get('enterer_no') . " ORDER BY opinion_no DESC LIMIT 1";
+            my $sql = "SELECT diagnosis_given,ref_has_opinion,pages,classification_quality FROM opinions WHERE ((diagnosis_given!='' AND diagnosis_given IS NOT NULL) OR (pages!='' AND pages IS NOT NULL) OR (classification_quality!='' AND classification_quality IS NOT NULL)) AND reference_no=" . $s->get('reference_no') . " AND enterer_no=" . $s->get('enterer_no') . " AND child_no!=" . $q->param('child_no') . " ORDER BY opinion_no DESC LIMIT 1";
             my $lastopinion = @{$dbt->getData($sql)}[0];
             if ( $lastopinion->{ref_has_opinion} eq "YES" )	{
                 $fields{'diagnosis_given'} = $lastopinion->{diagnosis_given};
