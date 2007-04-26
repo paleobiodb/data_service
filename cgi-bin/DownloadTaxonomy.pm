@@ -19,7 +19,7 @@ use strict;
 #   comments.dat - comments fields (from authorities and opinions)
 #   tu_comments_links.dat - joins comments with taxonomic_units, 
 #    we have to make this up since our tables aren't denormalized.
-# These itis files are not output:
+# These ITIS files are not output:
 #   vernaculars.dat, vern_ref_links.dat, experts.dat, geographic_division.dat, jurisdiction.dat, other_sources.dat
 sub displayITISDownload {
     my ($dbt,$q,$s) = @_;
@@ -87,7 +87,7 @@ sub displayITISDownload {
             'binary'      => 1
     }); 
 
-    # A Map of taxon_no --> kingdom_name. Needed for itis, since the kingdom name
+    # A Map of taxon_no --> kingdom_name. Needed for ITIS, since the kingdom name
     # is used as a foreign key in multiple places for some reason
     my %kingdom = getKingdomMap($dbt);
     
@@ -421,7 +421,12 @@ sub displayPBDBDownload {
     my @opinions = @$opinions;
     open FH_OP, ">$filesystem_dir/opinions.csv"
         or die "Could not open opinions.csv ($!)";
-    my @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","phylogenetic_status","spelling_reason","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","comments","created","modified");
+    my @header;
+    if ( $q->param('output_data') =~ /basic/ )	{
+        @header = ("child_name","status","parent_name","author1init","author1last","author2init","author2last","otherauthors","pubyr");
+    } else	{
+        @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","phylogenetic_status","spelling_reason","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","comments","created","modified");
+    }
     $csv->combine(@header);
     print FH_OP $csv->string()."\n";
     foreach my $o (@opinions) {
@@ -460,7 +465,11 @@ sub displayPBDBDownload {
 
     open FH_VT, ">$filesystem_dir/valid_taxa.csv"
         or die "Could not open valid_taxa.csv ($!)";
-    @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","common_name","taxon_rank","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","preservation","type_taxon","type_specimen","type_body_part","part_details","comments","created","modified");
+    if ( $q->param('output_data') =~ /basic/ )	{
+        @header = ("taxon_rank","taxon_name","author1init","author1last","author2init","author2last","otherauthors","pubyr");
+    } else	{
+        @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","common_name","taxon_rank","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","preservation","type_taxon","type_specimen","type_body_part","part_details","comments","created","modified");
+    }
     $csv->combine(@header);
     print FH_VT $csv->string()."\n";
     foreach my $t (@names) {
@@ -482,7 +491,11 @@ sub displayPBDBDownload {
 
     open FH_IT, ">$filesystem_dir/invalid_taxa.csv"
         or die "Could not open invalid_taxa.csv ($!)";
-    @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","common_name","taxon_rank","invalid_reason","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","preservation","type_taxon","type_specimen","type_body_part","part_details","comments","created","modified");
+    if ( $q->param('output_data') =~ /basic/ )	{
+        @header = ("taxon_rank","taxon_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","invalid_reason");
+    } else	{
+        @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","common_name","taxon_rank","invalid_reason","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","preservation","type_taxon","type_specimen","type_body_part","part_details","comments","created","modified");
+    }
     $csv->combine(@header);
     print FH_IT $csv->string()."\n";
     foreach my $t (@names) {
@@ -505,7 +518,11 @@ sub displayPBDBDownload {
 
     my @references = keys %references; 
     open FH_REF, ">$filesystem_dir/references.csv";
-    @header = ('authorizer','enterer','modifier','reference_no','author1init','author1last','author2init','author2last','otherauthors','pubyr','reftitle','pubtitle','pubvol','pubno','firstpage','lastpage','publication_type','classification_quality','comments','created','modified');
+    if ( $q->param('output_data') =~ /basic/ )	{
+        @header = ('author1init','author1last','author2init','author2last','otherauthors','pubyr','reftitle','pubtitle','pubvol','pubno','firstpage','lastpage');
+    } else	{
+        @header = ('authorizer','enterer','modifier','reference_no','author1init','author1last','author2init','author2last','otherauthors','pubyr','reftitle','pubtitle','pubvol','pubno','firstpage','lastpage','publication_type','classification_quality','comments','created','modified');
+    }
     $csv->combine(@header);
     print FH_REF $csv->string()."\n";
     if (@references) {
