@@ -954,7 +954,7 @@ sub displayDownloadTaxonomyResults {
 
     logRequest($s,$q);
     print stdIncludes( "std_page_top" );
-    if ($q->param('output_data') eq 'itis') {
+    if ($q->param('output_data') eq 'ITIS') {
         DownloadTaxonomy::displayITISDownload($dbt,$q,$s);
     } else { 
         DownloadTaxonomy::displayPBDBDownload($dbt,$q,$s);
