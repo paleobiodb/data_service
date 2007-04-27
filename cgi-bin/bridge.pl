@@ -7402,6 +7402,12 @@ sub insertRecord {
 	# with the taxonomy scripts (authorities or opinions tables) but the
 	# taxonomy scripts handle the display when this method returns to them.
 
+	# track the last time each person entered data because we're snoops
+	#  JA 26.4.07
+	my $sql = "UPDATE person SET last_action=last_action,last_entry=" . $q->param('created') . " WHERE person_no=" . $q->param('enterer_no');
+	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+	$sth->execute();
+
 	$$primary_key = $recID;
 	# record ID is returned so printTaxonomicOpinions can tell
 	#  if an opinion is new
