@@ -214,13 +214,14 @@ sub displayActions	{
 	print $hb->populateHTML( "std_page_top" );
 	print $hb->populateHTML( "index" );
 
-	my $sql = "SELECT first_name, last_name, name, last_action FROM person";
+	my $sql = "SELECT first_name, last_name, name, last_action, last_entry FROM person";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 	
-	my $lastlogin;
+	my $lastaction;
 	while ( my $row = $sth->fetchrow_hashref() ) {
-		$lastlogin{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'last_action'};
+		$lastaction{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'last_action'};
+		$lastentry{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'last_entry'};
 		$shortname{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'name'};
 	}
 	$sth->finish();
@@ -237,19 +238,23 @@ sub displayActions	{
 		}
 	}
 	
-	@names = sort({ $lastlogin{$b} <=> $lastlogin{$a} } keys %lastlogin);
+	@names = sort({ $lastaction{$b} <=> $lastaction{$a} } keys %lastaction);
 	
-	print "<p><center><table cellpadding=6>\n";
+	print "<p><center><table cellpadding=3>\n";
 
-	print "<tr><td><b>rank</b></td><td><b>name</b></td><td><b>last action</b></td>";
+	print "<tr><td><b>rank</b></td><td><b>name</b></td><td><b>action</b>/entry</td>";
 	print "<td align=\"center\"><b>d</b></td><td align=\"center\"><b>w</b></td><td align=\"center\"><b>m</b></td></tr>\n";
 	for $i (0..29)	{
-		if ($lastlogin{$names[$i]} > 20020630150000)	{
-			$d = date($lastlogin{$names[$i]});
-			printf "<tr><td align=\"center\">%d</td>",$i + 1;
-			print "<td><a href=\"bridge.pl?action=displayCollResults&enterer=$shortname{$names[$i]}&sortby=collection_no&sortorder=desc\">$names[$i]</a></td><td>$d</td>";
+		if ($lastaction{$names[$i]} > 20020630150000)	{
+			$d = date($lastaction{$names[$i]});
+			$d2 = date($lastentry{$names[$i]});
+			# the year is of no interest
+			$d =~ s/^2....//;
+			$d2 =~ s/^2....//;
+			printf "<tr><td align=\"center\" valign=\"top\">%d</td>",$i + 1;
+			print "<td valign=\"top\"><a href=\"bridge.pl?action=displayCollResults&enterer=$shortname{$names[$i]}&sortby=collection_no&sortorder=desc\">$names[$i]</a></td><td><span style=\"font-size: 0.8em;\"><b>$d</b><br>&nbsp;$d2</span></td>";
 			for my $lag ( 1,7,30 )	{
-				print "<td align=\"center\">";
+				print "<td align=\"center\" valign=\"top\">";
 				if ( $lastentries{'collections'}{$lag}{$names[$i]} || $lastentries{'opinions'}{$lag}{$names[$i]} )	{
 					print "$lastentries{'collections'}{$lag}{$names[$i]}/$lastentries{'opinions'}{$lag}{$names[$i]}";
 				}
