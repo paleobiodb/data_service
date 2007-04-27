@@ -190,6 +190,8 @@ sub insertRecord {
         } elsif ($field eq 'created') {
             push @insertFields, $field;
             push @insertValues, 'NOW()';
+            # I'm stashing this for use in snooping below JA 26.4.07
+            $fields->{'created'} = $insertValues[$#insertValues];
         } else {
             # It exists in the passed in user hash
             if (exists ($fields->{$field})) {
@@ -236,7 +238,11 @@ sub insertRecord {
             }
         }
         main::dbg("INSERTED ID IS $idNum for TABLE $tableName");
-	
+
+        # track the last time each person entered data because we're snoops
+        #  JA 26.4.07
+        my $sql = "UPDATE person SET last_action=last_action,last_entry=" . $fields->{'created'} . " WHERE person_no=" . $dbh->quote($s->get('enterer_no'));
+	$dbh->do($sql);
         # return the result code from the do() method.
 	    return ($insertResult, $idNum);
     }
