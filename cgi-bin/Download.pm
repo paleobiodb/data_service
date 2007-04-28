@@ -1374,7 +1374,8 @@ sub getCollectionsWhereClause {
 
         # the reIDs also need to be sifted, and not having done so has totally
         #  screwed up every analysis using this option up to now JA 6.2.07
-        if ( $q->param('output_data') ne 'collections' )    {
+        # duh, only do this if reIDs are being used JA 27.4.07
+        if ( $q->param('output_data') ne 'collections' && $q->param('replace_with_reid') ne 'NO' )    {
             if ($q->param('created_before_after') eq "before") {
                 $created_string = " (re.created < $created_date OR re.created IS NULL) ";
             } elsif ($q->param('created_before_after') eq "after") {
