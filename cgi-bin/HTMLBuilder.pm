@@ -13,7 +13,7 @@ sub new {
 
     # Move lists - move to html sometime perhaps
     my $hard_lists = {
-        abund_unit=>['', 'specimens', '%-specimens', 'individuals', '%-individuals', '%-volume', '%-area', 'grid-count', 'rank', 'category', '% of quadrats', '# of quadrats'],
+        abund_unit=>['', 'specimens', 'individuals', 'category', 'rank', 'grid-count', 'quadrats', '%-specimens', '%-individuals', '%-quadrats', '%-volume', '%-area'],
 
         release_date=>['immediate','three months','six months','one year','two years','three years','four years','five years'],
         # Not for any drop down yet, used in DL
