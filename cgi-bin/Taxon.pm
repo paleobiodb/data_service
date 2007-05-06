@@ -216,9 +216,20 @@ sub displayAuthorityForm {
         # to speed things up, assume that the primary (current) ref is the
         #  authority when the taxon is new JA 29.8.06
         $fields{'ref_is_authority'} = 'PRIMARY';
+        # prefill some fields based on the last entry from the same ref
+        #  JA 6.5.07
+        my $sql = "SELECT ref_is_authority,pages,preservation,extant FROM authorities WHERE ((pages!='' AND pages IS NOT NULL) OR (preservation!='' AND preservation IS NOT NULL) OR (extant!='' AND extant IS NOT NULL)) AND reference_no=" . $s->get('reference_no') . " AND enterer_no=" . $s->get('enterer_no') . " AND taxon_no!=" . $q->param('taxon_no') . " ORDER BY taxon_no DESC LIMIT 1";
+        my $lastauthority = @{$dbt->getData($sql)}[0];
+        if ( $lastauthority )	{
+            if ( $lastauthority ->{ref_is_authority} eq "YES" )	{
+                $fields{'pages'} = $lastauthority->{pages};
+            }
+            $fields{'preservation'} = $lastauthority->{preservation};
+            $fields{'extant'} = $lastauthority->{extant};
+        }
     }    
 
-    # Grab the measuremt data if it exists
+    # Grab the measurement data if they exist
     if (!$isNewEntry) {
         my $taxon_no = $t->get('taxon_no');
         my $sql = "(SELECT m.measurement_type,s.magnification,s.specimen_part,s.specimen_no,m.average,m.real_average FROM specimens s LEFT JOIN measurements m ON s.specimen_no=m.specimen_no WHERE s.is_type='holotype' AND s.taxon_no=$taxon_no)"
