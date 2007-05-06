@@ -702,7 +702,18 @@ for my $ei ( @extantimmediates )	{
         if ( $max != $min ) {
             $res .= " - " . "<a href=\"bridge.pl?action=displayInterval&interval_no=$row->{min_interval_no}\">$interval_name{$min}</a>";
         }
-        $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"small\">";
+        $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"small\"><nobr>";
+	$res .= $lowerbound->{$max} . " - ";
+	$res =~ s/0+ / /;
+	$res =~ s/\. /.0 /;
+	if ( $max == $min )	{
+		$res .= $upperbound->{$max};
+	} else	{
+		$res .= $upperbound->{$min};
+	}
+        $res .= "</nobr></span></td><td align=\"center\" valign=\"top\"><span class=\"small\">";
+	$res =~ s/0+</</;
+	$res =~ s/\.</.0</;
 
         $row->{"country"} =~ s/ /&nbsp;/;
         $res .= $row->{"country"};
@@ -792,15 +803,39 @@ for my $ei ( @extantimmediates )	{
 		my $exec_url = $q->url();
 
 		$output .= "<div align=\"center\"><h3 style=\"margin-bottom: .4em;\">Collections</h3>\n";
-        my $collTxt = (scalar(@data)== 0) ? "No collections found"
-                    : (scalar(@data) == 1) ? "1 collection total"
-                    : scalar(@data)." collections total";
-        $output .= "($collTxt)</div><br>";
+        my $collTxt = (scalar(@data)== 0) ? "None found"
+                    : (scalar(@data) == 1) ? "One found"
+                    : scalar(@data)." total";
+        $output .= "($collTxt)</div>\n";
+		if ( $#sorted <= 100 )	{
+			$output .= "<br>\n";
+		}
 
-		$output .= "<table><tr>";
-		$output .= "<th align=\"center\">Time interval</th>";
-		$output .= "<th align=\"center\">Country or state</th>";
-		$output .= "<th align=\"left\">PBDB collection number</th></tr>";
+		$output .= "<table>\n";
+		if ( $#sorted > 100 )	{
+			$output .= qq|<tr>
+<td colspan="3"><p class=\"large\"><b>Oldest occurrences</b></p>
+</tr>|;
+		}
+		$output .= qq|<tr>
+<th align="center">Time interval</th>
+<th align="center">Ma</th>
+<th align="center">Country or state</th>
+<th align="left">PBDB collection number</th></tr>
+|;
+
+	# overload rule: if there are more than 100 rows, print only the
+	#  first and last 10 for an extinct taxon, and the oldest 20 for
+	#   an extant taxon JA 6.5.07
+		if ( $#sorted > 100 )	{
+			my @temp = @sorted;
+			if ( $extant == 0 )	{
+				@sorted = splice @temp , 0 , 10;
+				push @sorted , ( splice @temp , $#temp - 9 , 10 );
+			} else	{
+				@sorted = splice @temp , 0 , 20;
+			}
+		}
 		my $row_color = 0;
 		foreach my $key (@sorted){
 			if($row_color % 2 == 0){
@@ -820,6 +855,18 @@ for my $ei ( @extantimmediates )	{
 			}
 			$output .= "</span></td></tr>\n";
 			$row_color++;
+			if ( $row_color == 10 && $output =~ /Oldest/ && $extant == 0 )	{
+				$output .= qq|
+<tr>
+<td colspan="3"><p class="large" style="padding-top: 0.5em;"><b>Youngest occurrences</b></p></td>
+</tr>
+<tr>
+<th align="center">Time interval</th>
+<th align="center">Ma</th>
+<th align="center">Country or state</th>
+<th align="left">PBDB collection number</th></tr>
+|;
+			}
 		}
 		$output .= "</table>";
 	} 
