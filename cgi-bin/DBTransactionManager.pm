@@ -241,7 +241,7 @@ sub insertRecord {
 
         # track the last time each person entered data because we're snoops
         #  JA 26.4.07
-        my $sql = "UPDATE person SET last_action=last_action,last_entry=" . $fields->{'created'} . " WHERE person_no=" . $dbh->quote($s->get('enterer_no'));
+        my $sql = "UPDATE person SET last_action=last_action,last_entry='" . $fields->{'created'} . "' WHERE person_no=" . $dbh->quote($s->get('enterer_no'));
 	$dbh->do($sql);
         # return the result code from the do() method.
 	    return ($insertResult, $idNum);
