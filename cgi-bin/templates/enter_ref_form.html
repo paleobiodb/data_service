@@ -1,15 +1,14 @@
-<FORM method="POST" action="$exec_url" onSubmit='return checkForm();'>
-<input type="hidden" name="action">
+<form method="POST" action="bridge.pl" onSubmit='return checkForm();'>
+<input type="hidden" name="action" value="processReferenceForm">
+<input type=hidden name="reference_no">
 
 <div align="center"><h2>Reference entry form</h2></div>
 
 %%new_message%%
 
-
-<DIV>
+<div>
 <center>
 <table class="mainSection" cellpadding=4><tr><td>
-<input type=hidden name="reference_no">
 <table>
   <tr>
     <p>Required fields are in <span class="required">red</span>. Consult the <a href="javascript:tipsPopup('/public/tips/ref_tips.html')">tip sheet</a> for help.</p>

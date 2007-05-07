@@ -1,26 +1,10 @@
 package PBDBUtil;
 use strict;
 
+use Debug qw(dbg);
+
 # This contains various miscellaneous functions that don't belong anywhere
 # else or haven't been moved out yet
-my $DEBUG = 0;
-
-## debug($level, $message)
-# 	Description:	print out diagnostic messages according to severity,
-#			as determined by $level.
-#	Parameters:	$level - debugging level
-#			$message - message to print
-##
-sub debug{
-    my $level = shift;
-    my $message = shift;
-
-    if(($level <= $DEBUG) && $message){ 
-	    print "<font color='green'>$message</font><BR>\n";
-    }
-
-    return $DEBUG;
-}
 
 ## getResearchGroupSQL($dbt, $research_group)
 # 	Description:    Returns an SQL snippet to filter all collections corresponding to a project or research group
@@ -74,173 +58,7 @@ sub getResearchGroupSQL {
     return $sql_terms;
 }
 
-## setSecondaryRef($dbh, $collection_no, $reference_no)
-# 	Description:	Checks if reference_no is the primary reference or a 
-#					secondary reference	for this collection.  If yes to either
-#					of those, nothing is done, and the method returns.
-#					If the ref exists in neither place, it is added as a
-#					secondary reference for the collection.
-#
-#	Parameters:		$dbh			the database handle
-#					$collection_no	the collection being added or edited or the
-#									collection to which the occurrence or ReID
-#									being added or edited belongs.
-#					$reference_no	the reference for the occ, reid, or coll
-#									being updated or inserted.	
-#
-#	Returns:		boolean for running to completion.	
-##
-sub setSecondaryRef{
-	my $dbh = shift;
-	my $collection_no = shift;
-	my $reference_no = shift;
-
-	return if(isRefPrimaryOrSecondary($dbh, $collection_no, $reference_no));
-
-	# If we got this far, the ref is not associated with the collection,
-	# so add it to the secondary_refs table.
-	my $sql = "INSERT IGNORE INTO secondary_refs (collection_no, reference_no) ".
-		   "VALUES ($collection_no, $reference_no)";	
-    my $sth = $dbh->prepare($sql);
-    my $return = $sth->execute();
-    #if($sth->execute() != 1){
-	#	print "<font color=\"FF0000\">Failed to create secondary reference ".
-	#		  "for collection $collection_no and reference $reference_no.<br>".
-	#		  "Please notify the database administrator with this message.".
-	#		  "</font><br>";
-	#}
-	debug(1,"ref $reference_no added as secondary for collection $collection_no");
-	return 1;
-}
-
-## refIsDeleteable($dbh, $collection_no, $reference_no)
-#
-#	Description		determines whether a reference may be disassociated from
-#					a collection based on whether the reference has any
-#					occurrences tied to the collection
-#
-#	Parameters		$dbh			database handle
-#					$collection_no	collection to which ref is tied
-#					$reference_no	reference in question
-#
-#	Returns			boolean
-#
-##
-sub refIsDeleteable{
-	my $dbh = shift;
-	my $collection_no = shift;
-	my $reference_no = shift;
-	
-	my $sql = "SELECT count(occurrence_no) FROM occurrences ".
-			  "WHERE collection_no=$collection_no ".
-			  "AND reference_no=$reference_no";
-
-	debug(1,"isDeleteable sql: $sql");
-	my $sth = $dbh->prepare($sql) or print "SQL failed to prepare: $sql<br>";
-	$sth->execute();
-	my @rows = @{$sth->fetchall_arrayref({})};
-	my %res = %{$rows[0]};
-	my $num = $res{'count(occurrence_no)'};
-	$sth->finish();
-	if($num >= 1){
-		debug(1,"Reference $reference_no has $num occurrences and is not deletable");
-		return 0;
-	}
-	else{
-		debug(1,"Reference $reference_no has $num occurrences and IS deletable");
-		return 1;
-	}
-}
-
-## deleteRefAssociation($dbh, $collection_no, $reference_no)
-#
-#	Description		Removes association between collection_no and reference_no
-#					in the secondary_refs table.
-#
-#	Parameters		$dbh			database handle
-#					$collection_no	collection to which ref is tied
-#					$reference_no	reference in question
-#
-#	Returns			boolean
-#
-##
-sub deleteRefAssociation{
-	my $dbh = shift;
-	my $collection_no = shift;
-	my $reference_no = shift;
-
-	my $sql = "DELETE FROM secondary_refs where collection_no=$collection_no ".
-			  "AND reference_no=$reference_no";
-	my $sth = $dbh->prepare($sql) or print "SQL failed to prepare: $sql<br>";
-	my $res = $sth->execute();
-	debug(1,"execute returned:$res.");
-    #if($res != 1){
-	#	print "<font color=\"FF0000\">Failed to delete secondary ref for".
-	#		  "collection $collection_no and reference $reference_no.<br>".
-	#		  "Return code:$res<br>".
-	#		  "Please notify the database administrator with this message.".                  "</font><br>";
-	#	return 0;
-	#}
-	$sth->finish();
-	return 1;
-}
-
-## isRefPrimaryOrSecondary($dbh, $collection_no, $reference_no)
-#
-#	Description	Checks the collections and secondary_refs tables to see if
-#				$reference_no is either the primary or secondary reference
-#				for $collection
-#
-#	Parameters	$dbh			database handle
-#				$collection_no	collection with which ref may be associated
-#				$reference_no	reference to check for association.
-#
-#	Returns		positive value if association exists (1 for primary, 2 for
-#				secondary), or zero if no association currently exists.
-##	
-sub isRefPrimaryOrSecondary{
-	my $dbh = shift;
-	my $collection_no = shift;
-	my $reference_no = shift;
-
-	# First, see if the ref is the primary.
-	my $sql = "SELECT reference_no from collections ".
-			  "WHERE collection_no=$collection_no";
-
-    my $sth = $dbh->prepare($sql);
-    $sth->execute();
-    my %results = %{$sth->fetchrow_hashref()};
-    $sth->finish();
-
-	# If the ref is the primary, nothing need be done.
-	if($results{reference_no} == $reference_no){
-		debug(1,"ref $reference_no exists as primary for collection $collection_no");
-		return 1;
-	}
-
-	# Next, see if the ref is listed as a secondary
-	$sql = "SELECT reference_no from secondary_refs ".
-			  "WHERE collection_no=$collection_no";
-
-    $sth = $dbh->prepare($sql);
-    $sth->execute();
-    my @results = @{$sth->fetchall_arrayref({})};
-    $sth->finish();
-
-	# Check the refs for a match
-	foreach my $ref (@results){
-		if($ref->{reference_no} == $reference_no){
-		debug(1,"ref $reference_no exists as secondary for collection $collection_no");
-			return 2;
-		}
-	}
-
-	# If we got this far, the ref is neither primary nor secondary
-	return 0;
-}
-
-
-sub getMostRecentReIDforOcc{
+sub getMostRecentReIDforOcc {
 	my $dbt = shift;
 	my $occ = shift;
 	my $returnTheRef = shift;
@@ -260,68 +78,6 @@ sub getMostRecentReIDforOcc{
 	}
 }
 
-## sub getPaleoCoords
-#	Description: Converts a set of floating point coordinates + min/max interval numbers.
-#	             determines the age from the interval numbers and returns the paleocoords.
-#	Arguments:   $dbh - database handle
-#				 $dbt - database transaction object	
-#				 $max_interval_no,$min_interval_no - max/min interval no
-#				 $f_lngdeg, $f_latdeg - decimal lontitude and latitude
-#	Returns:	 $paleolng, $paleolat - decimal paleo longitude and latitutde, or undefined
-#                variables if a paleolng/lat can't be found 
-#
-##
-sub getPaleoCoords {
-    my $dbh = shift;
-    my $dbt = shift;
-    my $max_interval_no = shift;
-    my $min_interval_no = shift;
-    my $f_lngdeg = shift;
-    my $f_latdeg = shift;
-
-    require TimeLookup;
-    require Map;    
-
-    # Get time interval information
-    my $t = new TimeLookup($dbt);
-    my @itvs; 
-    push @itvs, $max_interval_no if ($max_interval_no);
-    push @itvs, $min_interval_no if ($min_interval_no && $max_interval_no != $min_interval_no);
-    my $h = $t->lookupIntervals(\@itvs);
-
-    my ($paleolat, $paleolng,$plng,$plat,$lngdeg,$latdeg,$pid); 
-    if ($f_latdeg <= 90 && $f_latdeg >= -90  && $f_lngdeg <= 180 && $f_lngdeg >= -180 ) {
-        my $colllowerbound =  $h->{$max_interval_no}{'lower_boundary'};
-        my $collupperbound;
-        if ($min_interval_no)  {
-            $collupperbound = $h->{$min_interval_no}{'upper_boundary'};
-        } else {        
-            $collupperbound = $h->{$max_interval_no}{'upper_boundary'};
-        }
-        my $collage = ( $colllowerbound + $collupperbound ) / 2;
-        $collage = int($collage+0.5);
-        if ($collage <= 600 && $collage >= 0) {
-            main::dbg("collage $collage max_i $max_interval_no min_i $min_interval_no colllowerbound $colllowerbound collupperbound $collupperbound ");
-
-            # Get Map rotation information - needs maptime to be set (to collage)
-            # rotx, roty, rotdeg get set by the function, needed by projectPoints below
-            my $map_o = new Map;
-            $map_o->{maptime} = $collage;
-            $map_o->readPlateIDs();
-            $map_o->mapGetRotations();
-
-            ($plng,$plat,$lngdeg,$latdeg,$pid) = $map_o->projectPoints($f_lngdeg,$f_latdeg);
-            main::dbg("lngdeg: $lngdeg latdeg $latdeg");
-            if ( $lngdeg !~ /NaN/ && $latdeg !~ /NaN/ )       {
-                $paleolng = $lngdeg;
-                $paleolat = $latdeg;
-            } 
-        }
-    }
-
-    main::dbg("Paleolng: $paleolng Paleolat $paleolat fx $f_lngdeg fy $f_latdeg plat $plat plng $plng pid $pid");
-    return ($paleolng, $paleolat);
-}
 
 # Generation of filenames standardized here to avoid security issues or
 # potential weirdness. PS 3/6/2006
@@ -425,6 +181,128 @@ sub deleteElementFromArray {
     
     return \@newArray;
 }   
+
+# print Javascript to limit entry of time interval names
+# WARNING: if "Early/Late Interval" is submitted but only "Interval"
+#  is present in the intervals table, the submission will be rejected
+# the CheckIntervalNames is used for form validation, the intervalNames is used
+# for autocompletion.  They're slightly different in that checkIntervalNames is interested in
+# fully qualified names (i.e. early X) while we don't care about the early/middle/late for the intervalNames
+sub printIntervalsJava  {
+    my $dbt = shift;
+    my $include_ten_my_bins = shift;
+    my $sql = "SELECT eml_interval,interval_name FROM intervals";
+    my @results = @{$dbt->getData($sql)};
+    
+    my %intervals_seen;
+    my $intervals = "";
+    foreach my $row (@results)  {
+        if (!$intervals_seen{$row->{'interval_name'}}) {
+            $intervals .= "'$row->{interval_name}', ";
+            $intervals_seen{$row->{'interval_name'}} = 1;
+        }
+    }
+    $intervals =~ s/, $//;
+                                                                                                                                                             
+print <<EOF;
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+function intervalNames() {
+    var intervals = new Array($intervals);
+    return intervals;
+}
+
+function checkIntervalNames(require_field) {
+    var frm = document.forms[0];
+    var badname1 = "";
+    var badname2 = "";
+    var alertmessage = "";
+    var eml1 = frm.eml_max_interval.options[frm.eml_max_interval.selectedIndex].value;
+    var time1 = frm.max_interval.value;
+    var eml2 = frm.eml_min_interval.options[frm.eml_min_interval.selectedIndex].value;
+    var time2 = frm.min_interval.value;
+    var emltime1 = eml1 + time1;
+    var emltime2 = eml2 + time2;
+    
+    var isInt = /^[0-9.]+\$/;
+    if ( time1 == "" || isInt.test(time1))   {
+        if (require_field) {
+            var noname ="WARNING!\\n" +
+                    "The maximum interval field is required.\\n" +
+                    "Please fill it in and submit the form again.\\n" +
+                    "Hint: epoch names are better than nothing.\\n";
+            alert(noname);
+            return false;
+        } else {
+            return true;
+        }
+    } 
+EOF
+    for my $i (1..2) {
+        my $check = "    if(";
+        for my $row ( @results) {
+            # this is kind of ugly: we're just not going to let users
+            #  enter a time term that has double quotes because that
+            #  would break the JavaScript
+            if ( $row->{'interval_name'} !~ /"/ )   {
+                $check .= qq| emltime$i != "| . $row->{'eml_interval'} . $row->{'interval_name'} . qq|" &&\n|;
+            }
+        }
+        if ($include_ten_my_bins) {
+            my @binnames = TimeLookup::getBins();
+            foreach my $binname (@binnames) {
+                $check .= qq| emltime$i != "|.$binname. qq|" &&\n|;
+            }
+        }
+        if ($i == 1) {
+            chop($check); chop($check); chop($check);#remove trailing &&\n
+        } else {
+            $check .= qq|time$i != ""|;
+        }
+        $check .= ") {\n";
+        $check .= "        badname$i += \"YES\";\n";
+        $check .= "    }\n";
+        print $check;
+    }
+print <<EOF;
+                                                                                                                                                             
+    if ( badname1 != "" || badname2 != "" ) {
+        alertmessage = "WARNING!\\n";
+    }
+                                                                                                                                                             
+    if ( badname1 != "" && badname2 != "" ) {
+        alertmessage += eml1 + " " + time1 +
+                        " and " + eml2 + " " + time2 +
+                        " aren't official time terms.\\n";
+        alertmessage += "Please correct them and submit the form again.\\n";
+    } else if ( badname1 != "" ) {
+        alertmessage += eml1 + " " + time1;
+        alertmessage += " isn't an official time term.\\n" +
+                        "Please correct it and submit the form again.\\n";
+    } else if ( badname2 != "" ) {
+        alertmessage += eml2 + " " + time2;
+        alertmessage += " isn't an official time term.\\n" +
+                        "Please correct it and submit the form again.\\n";
+    }
+    if ( alertmessage != "" ) {
+        alertmessage += "Hint: try epoch names instead.";
+        alert(alertmessage);
+        return false;
+    }
+    return true;
+}
+// END -->
+</script>
+EOF
+    return;
+}
+
+sub checkForBot {
+    if ($ENV{HTTP_USER_AGENT} =~ /slurp|bot|spider|ask jeeves|crawl|archive|holmes|findlinks|webcopier|cfetch|stackrambler/i) {
+        return 1;
+    }
+    return 0;
+}
 
 
 1;

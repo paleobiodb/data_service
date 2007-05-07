@@ -12,6 +12,7 @@ use DBTransactionManager;
 use CGI::Carp;
 use Data::Dumper;
 use TaxaCache;
+use Debug qw(dbg);
 
 # list of allowable data fields.
 use fields qw(opinion_no reference_no dbt DBrow);  
@@ -101,7 +102,7 @@ sub guessSpellingReason {
             $spelling_reason = 'correction';
         }
     }
-    main::dbg("Get spelling status called, return $spelling_reason");
+    dbg("Get spelling status called, return $spelling_reason");
     return $spelling_reason;
 }
 
@@ -117,31 +118,6 @@ sub getOpinion {
     }
 
     return @results;
-}
-
-
-# returns the authors of the opinion record
-sub authors {
-	my Opinion $self = shift;
-	
-	# get all info from the database about this record.
-	my $hr = $self->{'DBrow'};
-	
-	if (!$hr) {
-		return '';	
-	}
-	
-	my $auth;
-	
-	if ($hr->{ref_has_opinion} eq 'YES') {
-		# then get the author info for that reference
-		my $ref = Reference->new($self->{'dbt'},$hr->{'reference_no'});
-		$auth = $ref->authors() if ($ref);
-	} else {
-        $auth = Reference::formatShortRef($hr);	
-	}
-	
-	return $auth;
 }
 
 
@@ -275,11 +251,18 @@ sub formatAsHTML {
 		    $output .= "'$child_html belongs to $parent_html'";
         } 
     }
-    if ($options{'return_array'}) {
-        return ($output," according to ".$self->authors());
+
+    my $short_ref = "";
+    if ($row->{'ref_has_opinion'}) {
+        $short_ref = Reference::formatShortRef($dbt,$row->{reference_no});
     } else {
-        $output .= " according to ".$self->authors();
-        return $output
+        $short_ref = Reference::formatShortRef($row);
+    }
+    if ($options{'return_array'}) {
+        return ($output," according to ".$short_ref);
+    } else {
+        $output .= " according to $short_ref";
+        return $output;
     }
 }
 
@@ -291,11 +274,8 @@ sub formatAsHTML {
 #
 # rjp, 3/2004
 sub displayOpinionForm {
-    my $dbt = shift;
-	my $hbo = shift;
-	my $s = shift;
-	my $q = shift;
-    my $error_message = shift;
+    my ($dbt,$hbo,$s,$q,$error_message) = @_;
+    $dbt->useRemote(1);
 	
     my $dbh = $dbt->dbh;
 	
@@ -516,8 +496,8 @@ sub displayOpinionForm {
         $parent_pulldown .= "\n</span>\n";
 	}
 
-    main::dbg("parentName $parentName parents: ".scalar(@parent_nos));
-    main::dbg("childSpellingName $childSpellingName spellings: ".scalar(@child_spelling_nos));
+    dbg("parentName $parentName parents: ".scalar(@parent_nos));
+    dbg("childSpellingName $childSpellingName spellings: ".scalar(@child_spelling_nos));
 
     if (!$isNewEntry) {
         if ($o->get('authorizer_no')) {
@@ -714,7 +694,7 @@ sub displayOpinionForm {
     $spelling_row .= "<tr><td>&nbsp;</td></tr>";
     $spelling_row .= "<tr><td>Reason why this spelling and rank was used:<br>This ". $hbo->htmlSelect('spelling_reason',\@select_keys,\@select_values,$fields{'spelling_reason'})."</td></tr>";
 
-    main::dbg("showOpinionForm, fields are: <pre>".Dumper(\%fields)."</pre>");
+    dbg("showOpinionForm, fields are: <pre>".Dumper(\%fields)."</pre>");
 
 	$fields{belongs_to_row} = $belongs_to_row;
 	$fields{nomen_row} = $nomen_row;
@@ -736,10 +716,8 @@ sub displayOpinionForm {
 # The majority of this method deals with validation of the input to make
 # sure the user didn't screw up, and to display an appropriate error message if they did.
 sub submitOpinionForm {
-    my $dbt = shift;
-	my $hbo = shift;
-	my $s = shift;		# the cgi parameters
-	my $q = shift;		# session
+    my ($dbt,$hbo,$s,$q) = @_;
+    $dbt->useRemote(1);
 
 	my %rankToNum = (  'subspecies' => 1, 'species' => 2, 'subgenus' => 3,
 		'genus' => 4, 'subtribe' => 5, 'tribe' => 6,
@@ -1070,9 +1048,9 @@ sub submitOpinionForm {
         $fields{'child_no'} = $new_orig;
     } 
 
-    main::dbg("child_no $fields{child_no} childRank $childRank childName $childName ");
-    main::dbg("child_spelling_no $fields{child_spelling_no} childSpellingRank $childSpellingRank childSpellingName $childSpellingName");
-    main::dbg("parent_no $fields{parent_no}  parent_spelling_no $fields{parent_spelling_no} parentSpellingRank $parentRank parentSpellingName $parentName");
+    dbg("child_no $fields{child_no} childRank $childRank childName $childName ");
+    dbg("child_spelling_no $fields{child_spelling_no} childSpellingRank $childSpellingRank childSpellingName $childSpellingName");
+    dbg("parent_no $fields{parent_no}  parent_spelling_no $fields{parent_spelling_no} parentSpellingRank $parentRank parentSpellingName $parentName");
     
 
     ############################
@@ -1114,7 +1092,7 @@ sub submitOpinionForm {
         @opinions_to_migrate1 = getOpinionsToMigrate($dbt,$fields{'child_no'},$fields{'child_spelling_no'},$fields{'opinion_no'});
     }
     if ((@opinions_to_migrate1 || @opinions_to_migrate2) && $q->param("confirm_migrate_opinions") !~ /YES/i) {
-        main::dbg("MIGRATING:<PRE>".Dumper(\@opinions_to_migrate1)."</PRE><PRE>".Dumper(\@opinions_to_migrate2)."</PRE>"); 
+        dbg("MIGRATING:<PRE>".Dumper(\@opinions_to_migrate1)."</PRE><PRE>".Dumper(\@opinions_to_migrate2)."</PRE>"); 
         my $msg = "";
         if (@opinions_to_migrate1) {
             $msg .= "The taxon <b>$childSpellingName</b> already exists with <a href=\"bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}\" target=\"_BLANK\"> opinions classifying it</a>."; 
@@ -1331,7 +1309,7 @@ sub submitOpinionForm {
 	my $resultOpinionNumber;
     my $resultReferenceNumber = $fields{'reference_no'};
 
-    main::dbg("submitOpinionForm, fields are: <pre>".Dumper(\%fields)."</pre>");
+    dbg("submitOpinionForm, fields are: <pre>".Dumper(\%fields)."</pre>");
 	if ($isNewEntry) {
 		my $code;	# result code from dbh->do.
 
@@ -1356,7 +1334,7 @@ sub submitOpinionForm {
 	}
     
     if (@opinions_to_migrate1 || @opinions_to_migrate2) {
-        main::dbg("Migrating ".(scalar(@opinions_to_migrate1)+scalar(@opinions_to_migrate2))." opinions");
+        dbg("Migrating ".(scalar(@opinions_to_migrate1)+scalar(@opinions_to_migrate2))." opinions");
         my @parents = ();
         foreach my $row  (@opinions_to_migrate1,@opinions_to_migrate2) {
             my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}});
@@ -1375,7 +1353,7 @@ sub submitOpinionForm {
                 $newSpellingReason = guessSpellingReason($child,$spelling);
             }
             my $sql = "UPDATE opinions SET modified=modified,spelling_reason='$newSpellingReason',child_no=$fields{child_no} WHERE opinion_no=$row->{opinion_no}";
-            main::dbg("Migrating child: $sql");
+            dbg("Migrating child: $sql");
             $dbh->do($sql);
             if ($row->{'status'} eq 'misspelling of') {
                 push @parents,$row->{'parent_spelling_no'};
@@ -1392,7 +1370,7 @@ sub submitOpinionForm {
         # any migrated opinion
         if (@parents) {
             my $sql = "UPDATE opinions SET modified=modified, parent_no=$fields{'child_no'} WHERE parent_no IN (".join(",",@parents).")";
-            main::dbg("Migrating parents: $sql");
+            dbg("Migrating parents: $sql");
             $dbh->do($sql);
         }
         
@@ -1496,6 +1474,7 @@ sub submitOpinionForm {
 # current opinion in the migration, which will only happen on an edit
 sub getOpinionsToMigrate {
     my ($dbt,$child_no,$child_spelling_no,$exclude_opinion_no) = @_;
+    $dbt->useRemote(1);
  
     my $orig_no = TaxonInfo::getOriginalCombination($dbt,$child_spelling_no);
     my $sql = "SELECT * FROM opinions WHERE child_no=$orig_no";
@@ -1520,6 +1499,9 @@ sub displayOpinionChoiceForm {
     my $dbt = shift;
     my $s = shift;
     my $q = shift;
+    if ($s->isDBMember()) {
+        $dbt->useRemote(1);
+    }
     my $dbh = $dbt->dbh;
 
     print "<div align=\"center\">";
@@ -1644,6 +1626,7 @@ sub displayOpinionChoiceForm {
 # but just set all their key fields to zero and mark changes into the comments field
 sub removeDuplicateOpinions {
     my ($dbt,$s,$child_no,$debug_only) = @_;
+    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
     return if !($child_no);
     my $sql = "SELECT * FROM opinions WHERE child_no=$child_no AND child_no != parent_no AND status !='misspelling of'";
@@ -1667,7 +1650,7 @@ sub removeDuplicateOpinions {
         if (scalar(@opinions) > 1) {
             my $orig_row = shift @opinions;
             foreach my $row (@opinions) {
-                main::dbg("Found duplicate row for $orig_row->{opinion_no} in $row->{opinion_no}");
+                dbg("Found duplicate row for $orig_row->{opinion_no} in $row->{opinion_no}");
                 $dbt->deleteRecord($s,'opinions','opinion_no',$row->{'opinion_no'},"Deleted by Opinion::removeDuplicateOpinion, duplicates $orig_row->{opinion_no}");
             }
         }

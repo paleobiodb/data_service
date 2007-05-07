@@ -5,6 +5,7 @@ use Text::CSV_XS;
 use PBDBUtil;
 use Data::Dumper;
 use GD;
+use Debug qw(dbg);
 
 # Various internal modules
 use PAST::Util;
@@ -68,7 +69,7 @@ sub querySubmit {
     my $filename = getDownloadFileName($q,$s);
     my @download_data = PAST::Util::parseTextFile($filename);
     if (!@download_data) {
-        main::dbg("Error parsing download file");
+        dbg("Error parsing download file");
         return;
     } 
     my @matrix_data = PAST::Util::binaryPresenceMatrix(@download_data);
@@ -121,10 +122,10 @@ sub getDownloadFileName {
     if ((-e $tabfile && -e $csvfile && ((-M $tabfile) < (-M $csvfile))) ||
         (-e $tabfile && !-e $csvfile)){
         $filename = $tabfile;
-        main::dbg("using tab $filename");
+        dbg("using tab $filename");
     } else {
         $filename = $csvfile;
-        main::dbg("using csv $filename");
+        dbg("using csv $filename");
     }
     return $filename;   
 }

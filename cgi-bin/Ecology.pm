@@ -1,18 +1,21 @@
 package Ecology;
 
 use TaxaCache;
+use Debug qw(dbg);
+
 
 # written by JA 27-31.7,1.8.03
 
 my @fields = ('composition1', 'composition2', 'entire_body', 'body_part', 'adult_length', 'adult_width', 'adult_height', 'adult_area', 'adult_volume', 'thickness', 'architecture', 'form', 'reinforcement', 'folds', 'ribbing', 'spines', 'internal_reinforcement', 'polymorph', 'ontogeny', 'grouping', 'clonal', 'taxon_environment', 'locomotion', 'attached', 'epibiont', 'life_habit', 'depth_habitat', 'diet1', 'diet2', 'reproduction', 'asexual', 'brooding', 'dispersal1', 'dispersal2', 'comments','minimum_body_mass','minimum_body_mass_unit','maximum_body_mass','maximum_body_mass_unit','body_mass_comment','body_mass_estimate','body_mass_estimate_unit','body_mass_source','body_mass_type');
 
 sub populateEcologyForm	{
-	my $dbh = shift;
 	my $dbt = shift;
 	my $hbo = shift;
 	my $q = shift;
 	my $s = shift;
 	my $exec_url = shift;
+    $dbt->useRemote(1);
+    my $dbh = $dbt->dbh;
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
 	if ( ! $q->param('taxon_no')) {
@@ -34,7 +37,7 @@ sub populateEcologyForm	{
         # This is a new entry
         if (!$s->get('reference_no')) {
             # Make them choose a reference first
-            $s->enqueue( $dbh, $q->query_string());
+            $s->enqueue($q->query_string());
             main::displaySearchRefs("Please choose a reference before adding ecological/taphonomic data",1);
             return;
         } else {
@@ -90,11 +93,12 @@ sub populateEcologyForm	{
 }
 
 sub processEcologyForm	{
-	my $dbh = shift;
 	my $dbt = shift;
 	my $q = shift;
 	my $s = shift;
 	my $exec_url = shift;
+    $dbt->useRemote(1);
+    my $dbh = $dbt->dbh;
 
 	# can't proceed without a taxon no
 	if (!$q->param('taxon_no'))	{
@@ -211,7 +215,7 @@ sub getEcology {
     my %taxon_metadata = ();
     if (@ecology_fields) {
         $sql = "SELECT taxon_no,reference_no,".join(", ",@ecology_fields)." FROM ecotaph WHERE taxon_no IN (".join(", ",keys %all_taxon_nos).")";
-        main::dbg("Ecology sql: $sql");
+        dbg("Ecology sql: $sql");
         @results = @{$dbt->getData($sql)};
         foreach my $row (@results) {
             $taxon_metadata{$row->{'taxon_no'}} = $row;
@@ -260,7 +264,7 @@ sub getEcology {
         }
     
         $sql = "SELECT taxon_no,reference_no,minimum_body_mass,maximum_body_mass,body_mass_estimate FROM ecotaph WHERE taxon_no IN (".join(", ",keys %all_child_taxon_nos).")";
-        main::dbg("Ecology recurse sql: $sql");
+        dbg("Ecology recurse sql: $sql");
         @results = @{$dbt->getData($sql)};
         foreach my $row (@results) {
             # do it this way instead of assigning the whole row so as not to obliterate previous entries

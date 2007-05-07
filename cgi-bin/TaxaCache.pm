@@ -60,8 +60,6 @@ sub rebuildCache {
     my $time_row = $sth->fetchrow_hashref();
     my $time = $time_row->{'t'};
 
-    disableBinLog($dbt);
-
     if (!$list_only)  {
         # We're going to create a brand new table from scratch, then swap it
         # to be the normal table once its complete
@@ -309,6 +307,7 @@ sub addName {
 #   $child_no is the taxon_no of the child to be updated (if necessary)
 sub updateCache {
     my ($dbt,$child_no) = @_;
+    $dbt->useRemote(1);
     my $dbh=$dbt->dbh;
     return if (!$child_no);
     $child_no = TaxonInfo::getOriginalCombination($dbt,$child_no);
@@ -551,6 +550,7 @@ sub moveChildren {
 # in - we don't want to mark a senior synonym as a "parent" so we filter those out
 sub updateListCache {
     my ($dbt,$taxon_no) = @_; 
+    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
     # Get the row from the db
@@ -822,22 +822,6 @@ sub getSeniorSynonym {
     }
 }
 
-# user must have SUPER privilege - don't bother logging all these transactions,
-# since they're derived from the opinions table anyways. This is for the connection only so if
-# we every swtich to mod_perl, will have to enableBinLog at the end also
-sub disableBinLog {
-    my $dbt = shift;
-    my $return = $dbt->dbh->do("SET SQL_LOG_BIN=0");
-    return $return;
-}
-
-# Only necessary if we every switch to mod_perl
-sub enableBinLog {
-    my $dbt = shift;
-    my $return = $dbt->dbh->do("SET SQL_LOG_BIN=1");
-    return $return;
-}
-
 sub getMetaData {
     my ($dbt,$taxon_no,$spelling_no,$synonym_no) = @_;
     my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
@@ -856,27 +840,6 @@ sub getMetaData {
     }
     return ($invalid_reason,$nomen_parent_no);
 }
-
-sub listFromEnum {
-    my ($dbt,$table,$field) = @_;
-    my $dbh = $dbt->dbh;
-
-    my $sql = "SHOW COLUMNS FROM `$table` LIKE '$field'";
-    my $sth = $dbh->prepare($sql);
-    $sth->execute();
-    my $row = $sth->fetchrow_arrayref();
-    if ($row) {
-        my $def = $row->[1];
-        $def =~ s/^enum\('|^set\('|'\)$//g;
-        my @values;
-        foreach (split(/','/,$def)) {
-            push @values,$_;
-        }
-        return (@values);
-    } else {
-        die "bad call to listFromEnum";
-    }
-}  
 
 
 1;

@@ -2,8 +2,7 @@ package Images;
 
 use Reference;
 use TaxaCache;
-
-$DEBUG = 0;
+use Debug qw(dbg);
 
 ###
 # UPLOADING
@@ -46,6 +45,7 @@ sub displayLoadImageForm{
 
 sub processLoadImage{
 	my $dbt = shift;
+    $dbt->useRemote(1);
 	my $q = shift;
 	my $s = shift;
     my $exec_url = $q->url();
@@ -55,9 +55,7 @@ sub processLoadImage{
 	$taxon_name =~ s/\s+/_/g;
 	my $taxon_no = $q->param('taxon_no');
 	my $reference_no = $q->param('reference_no') || 'NULL';
-	if($DEBUG){
-		print "FILE NAME: $file_name<br>";
-	}
+	dbg("FILE NAME: $file_name");
 
 	my $caption = $q->param('caption');
 	if($caption eq "Optional image description here."){
@@ -112,9 +110,7 @@ sub processLoadImage{
 
 	my $digest =  $image_digest->hexdigest();
 
-	if($DEBUG){
-		print "DIGEST: $digest<br>";
-	}
+	dbg("DIGEST: $digest");
 	
 	# test this checksum against other files' in the db image table
 	# if this checksum already exists send back an error message
@@ -127,14 +123,6 @@ sub processLoadImage{
 		print "<p><a href=\"$exec_url?action=startImage\">".
 			  "<b>Enter another image</b></a></center>";
 		return; 
-	}
-
-	# Need authorizer/enterer numbers from names
-	my $enterer = $s->get('enterer_no');
-	my $authorizer = $s->get('authorizer_no');
-	if(!$enterer or !$authorizer){
-		main::displayLoginPage("Please log in first.");
-		exit;
 	}
 
 	# create a timestamp for record creation
@@ -166,8 +154,7 @@ sub processLoadImage{
 			die "couldn't create enterer's directory. ".
 				"Please notify the webmaster.<br>";
 		}
-	}
-	else{ # read all the files in the directory
+	} else { # read all the files in the directory
 		opendir(DIR,$base) or die "can't open $base ($!)";
 		my @files = grep { /\Q$taxon_name\E/ } readdir(DIR);
 		closedir(DIR);
@@ -207,23 +194,30 @@ sub processLoadImage{
 	$x = $image->Write("$docroot$subdirs/$new_thumb");
 	warn "$x" if "$x";
 
-	my @values = ($authorizer, $enterer, $reference_no, $taxon_no, "'$now'", "'$subdirs/$new_file'", $width, $height, "'$file_name'", "'$caption'", "'$digest'");
+	my %vars = (
+        authorizer_no   => $authorizer,
+        enterer_no      => $enterer, 
+        reference_no    => $reference_no, 
+        taxon_no        => $taxon_no, 
+        host            => $ENV{PRIMARY_HOST},
+        path_to_image   => "$subdirs/$new_file", 
+        width           => $width, 
+        height          => $height, 
+        caption         => $caption, 
+        original_filename=> $file_name, 
+        file_md5_hexdigest=>$digest
+    );
 
-	#	insert a new record into the db
-	$sql = "INSERT INTO images (authorizer_no, enterer_no, reference_no, taxon_no, ".
-		   "created, path_to_image, width, height, original_filename, caption, file_md5_hexdigest) ".
-		   "VALUES (".join(',',@values).")";
-    main::dbg("Image sql: $sql");
-	if(!$dbt->getData($sql)){
-		print $dbt->getErr() ;
+    my ($result,$id) = $dbt->insertRecord($s,'images',\%vars);
+    if (!$result) {
 		# If we had an error inserting, remove the image from the filesystem too
 		my $removed = unlink($new_file);
 		if($removed != 1){
-			die "<p>Image db insert and file removal both failed. Please ".
-				"notify the webmaster.<br>";
-		}
-	}
-	else{
+			die("Image db insert and file removal both failed. Please notify the webmaster");
+		} else {
+			die("Database insert failed. Please notify the webmaster");
+        }
+	} else{
 		my $clean_name = $taxon_name;
 		$clean_name =~ s/_/ /g;
 		print "<center><p>The image of $clean_name was uploaded successfully</p>";

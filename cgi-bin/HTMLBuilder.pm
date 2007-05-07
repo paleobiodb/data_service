@@ -4,53 +4,56 @@ use TimeLookup;
 use CGI qw(escapeHTML);
 use Class::Date qw(now);
 use Data::Dumper;
+use Reference;
+use Person;
 use strict;
+
+# Package wide variable, little messy but other modules need to access it
+%HTMLBuilder::hard_lists = (
+    abund_unit=>['', 'specimens', 'individuals', 'category', 'rank', 'grid-count', 'quadrats', '%-specimens', '%-individuals', '%-quadrats', '%-volume', '%-area'], 
+
+    release_date=>['immediate','three months','six months','one year','two years','three years','four years','five years'],
+    # Not for any drop down yet, used in DL
+    lithology_siliciclastic => ['"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate'],
+    lithology_mixed => ['"mixed carbonate-siliciclastic"','marl'],
+    lithology_carbonate => ['lime mudstone','wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"'],
+
+    # For environment dropdown
+    environment_general=>['marine indet.', 'terrestrial indet.'],
+    environment_carbonate=> ['carbonate indet.', '', 'peritidal', 'shallow subtidal indet.', 'open shallow subtidal', 'lagoonal/restricted shallow subtidal', 'sand shoal', '', 'reef, buildup or bioherm', 'perireef or subreef', 'intrashelf/intraplatform reef', 'platform/shelf-margin reef', 'slope/ramp reef', 'basin reef', '', 'deep subtidal ramp', 'deep subtidal shelf', 'deep subtidal indet.', 'offshore ramp', 'offshore shelf', 'offshore indet.', '', 'slope', 'basinal (carbonate)', 'basinal (siliceous)'],
+    environment_siliciclastic => ['marine indet.', 'marginal marine indet.', 'coastal indet.', '', 'estuary/bay', 'lagoonal', 'paralic indet.', '', 'delta plain', 'interdistributary bay', 'delta front', 'prodelta', 'deltaic indet.', '', 'foreshore', 'shoreface', 'transition zone/lower shoreface', 'offshore', 'coastal indet.', '', 'submarine fan', 'basinal (siliciclastic)', 'basinal (siliceous)', 'basinal (carbonate)', 'deep-water indet.'],
+    environment_terrestrial=>['terrestrial indet.', '', 'fluvial indet.', 'alluvial fan', 'channel lag', 'coarse channel fill', 'fine channel fill', '"channel"', 'wet floodplain', 'dry floodplain', '"floodplain"', 'crevasse splay', 'levee', 'mire/swamp', 'fluvial-lacustrine indet.', 'delta plain', 'fluvial-deltaic indet.', '', 'lacustrine - large', 'lacustrine - small', 'pond', 'crater lake', 'lacustrine delta plain', 'lacustrine interdistributary bay', 'lacustrine delta front', 'lacustrine prodelta', 'lacustrine deltaic indet.', 'lacustrine indet.', '', 'dune', 'interdune', 'loess', 'eolian indet.', '', 'cave', 'fissure fill', 'sinkhole', 'karst indet.', '', 'tar', 'mire/swamp', 'spring', 'glacial'],
+    # Map form parameters 
+    mapsize=>[ '50%', '75%', '100%', '125%', '150%' ],
+    projection=>[ 'Eckert IV', 'equirectangular', 'Mollweide', 'orthographic' ],
+    mapfocus=>['standard (0,0)', 'Africa (10,20)', 'Antarctica (-90,0)', 'Arctic (90,0)', 'Asia (20,100)', 'Australia (-28,135)', 'Europe (50,10)', 'North America (35,-100)', 'Pacific (0,150)', 'South America (-20,-60)'],
+    mapscale=>['X 1', 'X 1.2', 'X 1.5', 'X 2', 'X 2.5', 'X 3', 'X 4', 'X 5', 'X 6',  'X 7', 'X 8', 'X 9', 'X 10'],
+mapwidth=>['100%','90%','80%','75%','70%','60%','50%'],
+    mapresolution=>[ 'coarse', 'medium', 'fine', 'very fine' ],
+    gridsize=>['none', '45 degrees', '30 degrees', '22.5 degrees', '15 degrees', '10 degrees'],
+    gridposition=>[ 'in front', 'in back' ],
+    linethickness=>[ 'thin', 'medium', 'thick' ],
+    mapcolors=>['white','black','gray','light gray','red','dark red','pink','deep pink','violet','orchid','magenta','dark violet','purple','slate blue','teal','cyan','turquoise','steel blue','sky blue','dodger blue','royal blue','blue','dark blue','lime','light green','sea green','green','dark green','olive drab','olive','orange red','dark orange','orange','gold','yellow','medium yellow','tan','sandy brown','chocolate','saddle brown','sienna','brown'],
+    pointsize=>[ 'tiny', 'very small', 'small', 'medium', 'large', 'very large', 'huge', 'proportional'],
+    pointshape=>[ 'circles', 'crosses', 'diamonds', 'squares', 'stars', 'triangles'],
+    dotborder=>[ 'no', 'black', 'white' ],
+    mapsearchfields=>[ 'research group', 'country', 'state/province', 'time interval', 'formation', 'lithology', 'paleoenvironment', 'taxon' ],
+    research_group=>['', 'decapod','divergence', 'marine invertebrate', 'micropaleontology', 'paleobotany', 'paleoentomology', 'taphonomy', 'vertebrate', 'ETE', '5%', '1%', 'PACED', 'PGAP'],
+
+    # Taphonomy/ecology and vertebrate cology fields
+    mass_units=>['g','kg'],
+    ecovert_life_habit=>[ '','fossorial','ground dwelling','scansorial','arboreal','volant','amphibious','aquatic'],
+    ecovert_reproduction=>['', 'oviparous','ovoviviparous','viviparous'],
+    ecovert_diet=>['','herbivore','frugivore','folivore','browser','grazer','granivore','omnivore','insectivore','carnivore','piscivore','durophage'],
+    species_name=>['','indet.','sp.'],
+    period_max=>['', 'Holocene', 'Neogene', 'Paleogene', 'Cretaceous', 'Jurassic', 'Triassic', 'Permian', 'Carboniferous', 'Devonian', 'Silurian', 'Ordovician', 'Cambrian', 'Neoproterozoic']
+);
 
 # Initializes all the autogenerated lists and what not
 sub new {
     my ($class,$dbt,$s,$use_guest,$use_admin) = @_;
     my $self = {};
 
-    # Move lists - move to html sometime perhaps
-    my $hard_lists = {
-        abund_unit=>['', 'specimens', 'individuals', 'category', 'rank', 'grid-count', 'quadrats', '%-specimens', '%-individuals', '%-quadrats', '%-volume', '%-area'],
-
-        release_date=>['immediate','three months','six months','one year','two years','three years','four years','five years'],
-        # Not for any drop down yet, used in DL
-        lithology_siliciclastic => ['"siliciclastic"','claystone','mudstone','"shale"','siltstone','sandstone','conglomerate'],
-        lithology_mixed => ['"mixed carbonate-siliciclastic"','marl'],
-        lithology_carbonate => ['lime mudstone','wackestone','packstone','grainstone','"reef rocks"','floatstone','rudstone','bafflestone','bindstone','framestone','"limestone"','dolomite','"carbonate"'],
-
-        # For environment dropdown
-        environment_general=>['marine indet.', 'terrestrial indet.'],
-        environment_carbonate=> ['carbonate indet.', '', 'peritidal', 'shallow subtidal indet.', 'open shallow subtidal', 'lagoonal/restricted shallow subtidal', 'sand shoal', '', 'reef, buildup or bioherm', 'perireef or subreef', 'intrashelf/intraplatform reef', 'platform/shelf-margin reef', 'slope/ramp reef', 'basin reef', '', 'deep subtidal ramp', 'deep subtidal shelf', 'deep subtidal indet.', 'offshore ramp', 'offshore shelf', 'offshore indet.', '', 'slope', 'basinal (carbonate)', 'basinal (siliceous)'],
-        environment_siliciclastic => ['marine indet.', 'marginal marine indet.', 'coastal indet.', '', 'estuary/bay', 'lagoonal', 'paralic indet.', '', 'delta plain', 'interdistributary bay', 'delta front', 'prodelta', 'deltaic indet.', '', 'foreshore', 'shoreface', 'transition zone/lower shoreface', 'offshore', 'coastal indet.', '', 'submarine fan', 'basinal (siliciclastic)', 'basinal (siliceous)', 'basinal (carbonate)', 'deep-water indet.'],
-        environment_terrestrial=>['terrestrial indet.', '', 'fluvial indet.', 'alluvial fan', 'channel lag', 'coarse channel fill', 'fine channel fill', '"channel"', 'wet floodplain', 'dry floodplain', '"floodplain"', 'crevasse splay', 'levee', 'mire/swamp', 'fluvial-lacustrine indet.', 'delta plain', 'fluvial-deltaic indet.', '', 'lacustrine - large', 'lacustrine - small', 'pond', 'crater lake', 'lacustrine delta plain', 'lacustrine interdistributary bay', 'lacustrine delta front', 'lacustrine prodelta', 'lacustrine deltaic indet.', 'lacustrine indet.', '', 'dune', 'interdune', 'loess', 'eolian indet.', '', 'cave', 'fissure fill', 'sinkhole', 'karst indet.', '', 'tar', 'mire/swamp', 'spring', 'glacial'],
-        # Map form parameters 
-        mapsize=>[ '50%', '75%', '100%', '125%', '150%' ],
-        projection=>[ 'Eckert IV', 'equirectangular', 'Mollweide', 'orthographic' ],
-        mapfocus=>['standard (0,0)', 'Africa (10,20)', 'Antarctica (-90,0)', 'Arctic (90,0)', 'Asia (20,100)', 'Australia (-28,135)', 'Europe (50,10)', 'North America (35,-100)', 'Pacific (0,150)', 'South America (-20,-60)'],
-        mapscale=>['X 1', 'X 1.2', 'X 1.5', 'X 2', 'X 2.5', 'X 3', 'X 4', 'X 5', 'X 6',  'X 7', 'X 8', 'X 9', 'X 10'],
-	mapwidth=>['100%','90%','80%','75%','70%','60%','50%'],
-        mapresolution=>[ 'coarse', 'medium', 'fine', 'very fine' ],
-        gridsize=>['none', '45 degrees', '30 degrees', '22.5 degrees', '15 degrees', '10 degrees'],
-        gridposition=>[ 'in front', 'in back' ],
-        linethickness=>[ 'thin', 'medium', 'thick' ],
-        mapcolors=>['white','black','gray','light gray','red','dark red','pink','deep pink','violet','orchid','magenta','dark violet','purple','slate blue','teal','cyan','turquoise','steel blue','sky blue','dodger blue','royal blue','blue','dark blue','lime','light green','sea green','green','dark green','olive drab','olive','orange red','dark orange','orange','gold','yellow','medium yellow','tan','sandy brown','chocolate','saddle brown','sienna','brown'],
-        pointsize=>[ 'tiny', 'very small', 'small', 'medium', 'large', 'very large', 'huge', 'proportional'],
-        pointshape=>[ 'circles', 'crosses', 'diamonds', 'squares', 'stars', 'triangles'],
-        dotborder=>[ 'no', 'black', 'white' ],
-        mapsearchfields=>[ 'research group', 'country', 'state/province', 'time interval', 'formation', 'lithology', 'paleoenvironment', 'taxon' ],
-        research_group=>['', 'decapod','divergence', 'marine invertebrate', 'micropaleontology', 'paleobotany', 'paleoentomology', 'taphonomy', 'vertebrate', 'ETE', '5%', '1%', 'PACED', 'PGAP'],
-
-        # Taphonomy/ecology and vertebrate cology fields
-        mass_units=>['g','kg'],
-        ecovert_life_habit=>[ '','fossorial','ground dwelling','scansorial','arboreal','volant','amphibious','aquatic'],
-        ecovert_reproduction=>['', 'oviparous','ovoviviparous','viviparous'],
-        ecovert_diet=>['','herbivore','frugivore','folivore','browser','grazer','granivore','omnivore','insectivore','carnivore','piscivore','durophage'],
-        species_name=>['','indet.','sp.'],
-        period_max=>['', 'Holocene', 'Neogene', 'Paleogene', 'Cretaceous', 'Jurassic', 'Triassic', 'Permian', 'Carboniferous', 'Devonian', 'Silurian', 'Ordovician', 'Cambrian', 'Neoproterozoic']
-    };
 
     # Some quickie functions
     my $months = sub {
@@ -64,10 +67,10 @@ sub new {
     my $select_lists = {
         #period_max=>[\&_listFromHardList,'periods'],
         environment=>[\&_listFromList,
-            '','-- General --','',@{$hard_lists->{'environment_general'}},
-            '', '-- Carbonate marine --', '', @{$hard_lists->{'environment_carbonate'}},
-            '', '-- Siliciclastic marine --', '', @{$hard_lists->{'environment_siliciclastic'}},
-            '', '-- Terrestrial --','',@{$hard_lists->{'environment_terrestrial'}}], 
+            '','-- General --','',@{$HTMLBuilder::hard_lists{'environment_general'}},
+            '', '-- Carbonate marine --', '', @{$HTMLBuilder::hard_lists{'environment_carbonate'}},
+            '', '-- Siliciclastic marine --', '', @{$HTMLBuilder::hard_lists{'environment_siliciclastic'}},
+            '', '-- Terrestrial --','',@{$HTMLBuilder::hard_lists{'environment_terrestrial'}}], 
         lithadj=> [\&_listFromEnum,'collections','lithadj' ,'space_after'=>'pedogenic,lag,pebbly,very coarse,volcaniclastic,shelly/skeletal'],
         lithadj2=>[\&_listFromEnum,'collections','lithadj2','space_after'=>'pedogenic,lag,pebbly,very coarse,volcaniclastic,shelly/skeletal'],
         lithology1=>[\&_listFromEnum,'collections','lithology1','space_after'=>'conglomerate,marl,"carbonate",tar,siderite,quartzite'],
@@ -127,8 +130,8 @@ sub new {
     $self->{'use_guest'} = $use_guest;
     $self->{'use_admin'} = $use_admin;
     $self->{'select_lists'} = $select_lists;
-    $self->{'hard_lists'}   = $hard_lists;
-    $self->{'template_cache'} ={};
+    $self->{'included'} = {};
+    $self->{'template_cache'} = {};
     return bless($self,$class);
 }
 
@@ -595,8 +598,8 @@ sub getKeysValues {
             $values = $r[0];
         }
         return ($keys,$values);
-    } elsif (exists $self->{'hard_lists'}{$name}) {
-        my @keys = @{$self->{'hard_lists'}{$name}};
+    } elsif (exists $HTMLBuilder::hard_lists{$name}) {
+        my @keys = @{$HTMLBuilder::hard_lists{$name}};
         my @values = @keys;
         return (\@keys,\@values);
     } else {
@@ -666,6 +669,45 @@ sub htmlBox {
     return $html;
 }
 
+# This only shown for internal errors
+sub htmlError {
+    my ($self,$message) = @_;
+
+	# print $q->header( -type => "text/html" );
+    print $self->stdIncludes("std_page_top");
+	print $message;
+    print $self->stdIncludes("std_page_bottom");
+	exit 1;
+}
+
+# This is a wrapper to put the goodies into the standard page bottom
+# or top.  Pass it the name of a template such as "std_page_top" and 
+# it will return the HTML code.
+sub stdIncludes {
+    my ($self,$page) = @_;
+    my $vars = shift || {};
+
+    my $s = $self->{'s'};
+    my $dbt = $self->{'dbt'};
+
+    if ($self->{included}{$page}) {
+        return "";
+    } else {
+        $self->{included}{$page} = 1;
+    }
+    
+    if ($page eq 'std_page_top' && $s && $s->isDBMember()) {
+        $vars->{reference} = 'none';
+        my $reference_no = $s->get('reference_no');
+        if ($reference_no) {
+            $vars->{reference} = "$reference_no (".Reference::formatShortRef($dbt,$reference_no,'no_inits'=>1).")";
+        }
+        $vars->{enterer} = $s->get("enterer") || "none"; 
+    }
+
+	return $self->populateHTML($page,$vars);
+}
+
 sub _listFromTable {
     my ($self,$name) = @_;
     my $dbt = $self->{'dbt'};
@@ -681,7 +723,7 @@ sub _listFromList {
 
 sub _listFromHardList {
     my ($self,$name,%options) = @_;
-    my @list = @{$self->{'hard_lists'}{$name}};
+    my @list = @{$HTMLBuilder::hard_lists{$name}};
     unshift @list,$options{'unshift'} if (exists $options{'unshift'});
     
     return \@list;

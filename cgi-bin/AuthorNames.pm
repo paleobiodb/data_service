@@ -1,5 +1,6 @@
 package AuthorNames;
 use strict;
+use Debug qw(dbg);
 
 # Token type constants
 my $INITIAL = 1;
@@ -21,7 +22,7 @@ sub new
 	
   if(UNIVERSAL::isa($data, 'DataRow'))
   {
-	$self->dbg("Initializing via a DataRow object<br>");
+	dbg("Initializing via a DataRow object",2);
     $self->setAuthor1Init($data->getValue('author1init'));
     $self->setAuthor1Last($data->getValue('author1last'));
     $self->setAuthor2Init($data->getValue('author2init'));
@@ -30,7 +31,7 @@ sub new
   }
   # Deal with a hash, too
   elsif(UNIVERSAL::isa($data,"HASH")){
-	$self->dbg("Initializing via a HASH<br>");
+	dbg("Initializing via a HASH",2);
 	$self->setAuthor1Init($data->{'author1init'});
     $self->setAuthor1Last($data->{'author1last'});
     $self->setAuthor2Init($data->{'author2init'});
@@ -41,7 +42,7 @@ sub new
 
   # Assume it's a string
   else{
-	  $self->dbg("Initializing via a string<br>");
+	  dbg("Initializing via a string",2);
 	  #$data = $self->toString();
 	  #$self->setAuthorsString($data) if $data;
 	  $self->setAuthorsString($data);
@@ -135,7 +136,7 @@ sub parseAuthorsString
     
     my $tokenType = $self->getTokenType($token);
     
-    $self->dbg("$stage:$token:$tokenType\n");
+    dbg("$stage:$token:$tokenType",2);
     
     ## OK, the quick version
     # If we're in the first name
@@ -181,7 +182,7 @@ sub parseAuthorsString
           $prevTokenType = $tokenType;
           $stage = 2;
           $au2Last .= " $token";
-		  $self->dbg("<br>TokenType=LNAME, Stage=1, au2Last: $au2Last<br>");
+		  dbg("TokenType=LNAME, Stage=1, au2Last: $au2Last",2);
           next;
         }
         # Otherwise, append it to the first author name string
@@ -207,7 +208,7 @@ sub parseAuthorsString
         else
         {
           $au2Last = $token;
-		  $self->dbg("<br>TokenType=ETAL, au2Last: $au2Last<br>");
+		  dbg("TokenType=ETAL, au2Last: $au2Last",2);
           last;
         }
       }
@@ -217,7 +218,7 @@ sub parseAuthorsString
         $token =~ s/(.+)/\u$1/;
         $token =~ s/R\Z/r./i;
         $au2Last .= ", $token";
-	    $self->dbg("<br>TokenType=SUFFIX, au2Last: $au2Last<br>");
+	    dbg("TokenType=SUFFIX, au2Last: $au2Last",2);
       }
       # Otherwise, if this is an initial
       elsif($tokenType == $INITIAL)
@@ -247,7 +248,7 @@ sub parseAuthorsString
         else
         {
           $au2Last .= " $token";
-	      $self->dbg("<br>TokenType=LNAME, Stage=2, au2Last: $au2Last<br>");
+	      dbg("TokenType=LNAME, Stage=2, au2Last: $au2Last",2);
         }
       }
       # Otherwise, if this is a comma, do nothing
@@ -269,15 +270,15 @@ sub parseAuthorsString
   $self->setAuthor2Last($self->trimClean($au2Last));
   $self->setOtherAuthors($self->trimClean($otherAuthors));
   
-  $self->dbg("Orig   : $inStr\n");
-  $self->dbg("Fixd   : $inString\n");
-  $self->dbg("Au1Init: " . $self->getAuthor1Init() . "\n");
-  $self->dbg("Au1Last: " . $self->getAuthor1Last() . "\n");
-  $self->dbg("Au2Init: " . $self->getAuthor2Init() . "\n");
-  $self->dbg("Au2Last: " . $self->getAuthor2Last() . "\n");
-  $self->dbg("Others : " . $self->getOtherAuthors() . "\n");
-  $self->dbg("Tokens : " . join(':', @rawTokens) . "\n");
-  $self->dbg("\n");
+  dbg("Orig   : $inStr",2);
+  dbg("Fixd   : $inString",2);
+  dbg("Au1Init: " . $self->getAuthor1Init(),2);
+  dbg("Au1Last: " . $self->getAuthor1Last(),2);
+  dbg("Au2Init: " . $self->getAuthor2Init(),2);
+  dbg("Au2Last: " . $self->getAuthor2Last(),2);
+  dbg("Others : " . $self->getOtherAuthors(),2);
+  dbg("Tokens : " . join(':', @rawTokens),2);
+  dbg("-",2);
 }
 
 sub trimClean
@@ -324,7 +325,7 @@ sub getTokenType
   else
   {
     $tokenType = $UNKNOWN_TYPE;
-    $self->dbg("Unknown token type: $token\n");
+    dbg("Unknown token type: $token",2);
   }
   
   return $tokenType;
@@ -533,7 +534,7 @@ sub getAuthorsString
     my $otherAu = AuthorNames->new($otherAuthors);
     if($otherAu->getAuthor2Last())
     {
-	  $self->dbg("Created new AuthorNames for OtherAuthors: $otherAuthors<br>");
+	  dbg("Created new AuthorNames for OtherAuthors: $otherAuthors",2);
       $retVal .= ', ';
     }
     else
@@ -573,13 +574,6 @@ sub getHash
   $RETVAL{'otherAuthors'} = $self->getOtherAuthors();
   
   return \%RETVAL;
-}
-
-sub dbg
-{
-  my ($self, $str) = @_;
-  
-  print "<font color=\"green\">$str</font>" if $DEBUG;
 }
 
 1;

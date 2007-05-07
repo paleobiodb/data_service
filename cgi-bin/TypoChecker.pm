@@ -1,7 +1,10 @@
 package TypoChecker;
 
-use Debug;
+use Debug qw(dbg);
 use Data::Dumper;
+use Collection;
+use Person;
+use PBDBUtil;
 use strict;
 
 
@@ -13,12 +16,6 @@ sub searchOccurrenceMisspellingForm {
 	my ($dbt,$q,$s,$hbo,$message,$no_header) = @_;
     my $dbh = $dbt->dbh;
 
-	if (!$s->isDBMember()) {
-	    # have to be logged in
-		$s->enqueue( $dbh, "action=searchOccurrenceMisspellingForm" );
-		main::displayLoginPage( "Please log in first." );
-        return;
-	} 
 
     my %vars = $q->Vars();
     $vars{'enterer_me'} = $s->get('enterer_reversed');
@@ -31,8 +28,8 @@ sub searchOccurrenceMisspellingForm {
 
 
     # Spit out the HTML
-    print main::makeAuthEntJavaScript();
-    main::printIntervalsJava(1);
+    print Person::makeAuthEntJavascript($dbt);
+    print PBDBUtil::printIntervalsJava($dbt,1);
     my $html = $hbo->populateHTML('search_occurrences_form',\%vars);
     if ($no_header) {
         $html =~ s/forms\[0\]/forms[1]/g;
@@ -62,7 +59,7 @@ sub getNameData {
     my $sql = "(SELECT $fields,0 reid_no FROM (occurrences o, collections c) LEFT JOIN authorities a ON (o.taxon_no=a.taxon_no) WHERE (a.taxon_rank IS NULL OR a.taxon_rank NOT LIKE '%species%') AND o.collection_no=c.collection_no AND $where)";
     $sql .= " UNION ";
     $sql .=  "(SELECT $fields, o.reid_no FROM (reidentifications o, collections c) LEFT JOIN authorities a ON (o.taxon_no=a.taxon_no) WHERE (a.taxon_rank IS NULL OR a.taxon_rank NOT LIKE '%species%') AND o.collection_no=c.collection_no AND $where)";
-#    main::dbg("SQL: ".$sql);
+#    dbg("SQL: ".$sql);
     my @results = @{$dbt->getData($sql)};
 
     my %periods;
@@ -130,6 +127,7 @@ sub getNameData {
 # Also, much of the filtering options can't be applied until we get a list of suggesstions
 sub occurrenceMisspellingForm {
 	my ($dbt,$q,$s,$hbo) = @_;
+    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
     my $show_detail = $q->param('show_detail');
@@ -145,7 +143,7 @@ sub occurrenceMisspellingForm {
         my %options = $q->Vars();
         # Do a looser match against occurrences/reids tables only
         $options{'limit'} = 10000000;
-        my ($dataRows,$ofRows,$warnings) = main::processCollectionsSearch($dbt,\%options,['collection_no']);  
+        my ($dataRows,$ofRows,$warnings) = Collection::getCollections($dbt,$s,\%options,['collection_no']);  
         my @collection_nos = map {$_->{'collection_no'}} @$dataRows;
 
         my $fields = 'a.taxon_rank,a.taxon_name,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no';
@@ -153,7 +151,7 @@ sub occurrenceMisspellingForm {
             my $sql = "(SELECT $fields FROM collections c, occurrences o LEFT JOIN authorities a ON (o.taxon_no=a.taxon_no) WHERE (a.taxon_rank IS NULL OR a.taxon_rank NOT LIKE '%species%') AND o.collection_no=c.collection_no AND o.genus_name != '' AND c.collection_no IN (".join(",",@collection_nos).") GROUP BY genus_name,subgenus_name,species_name)";
             $sql .= " UNION ";
             $sql .=  "(SELECT $fields FROM collections c, reidentifications o LEFT JOIN authorities a ON (o.taxon_no=a.taxon_no) WHERE (a.taxon_rank IS NULL OR a.taxon_rank NOT LIKE '%species%') AND o.collection_no=c.collection_no AND o.genus_name != '' AND c.collection_no IN (".join(",",@collection_nos).") GROUP BY genus_name,subgenus_name,species_name)";
-            main::dbg("SQL: ".$sql);
+            dbg("SQL: ".$sql);
             my %seen;
             foreach my $row (@{$dbt->getData($sql)}) {
                 next if ($row->{'genus_reso'} =~ /informal/);
@@ -178,7 +176,7 @@ sub occurrenceMisspellingForm {
         }
     }
     @names = sort {$a cmp $b} @names;
-    main::dbg("FOUND ".scalar(@names).' unique names');
+    dbg("FOUND ".scalar(@names).' unique names');
 
     # Some static lookup tables are generated first
     my $t = new TimeLookup($dbt);
@@ -230,13 +228,13 @@ sub occurrenceMisspellingForm {
             if (!@suggestions) {
                 if ($show_detail =~ /unclassified|typos/) {
                     if ($genus_is_classified) {
-                        main::dbg("Skipping $name, genus is classified, no suggestions");
+                        dbg("Skipping $name, genus is classified, no suggestions");
                         $skip_unclassified++;
                         next;
                     }
                 }
                 if ($show_detail eq 'typos') {
-                    main::dbg("Skipping $name, no suggesstions");
+                    dbg("Skipping $name, no suggesstions");
                     $skip_genus_classified++;
                     next;
                 }
@@ -245,7 +243,7 @@ sub occurrenceMisspellingForm {
             # Grab and compile all the data, also a few more skip conditions below
             my $name_data = getNameData($dbt,$name,$period_lookup,\@period_order,$can_modify);
             if ($q->param('edit_only') && !$name_data->{'permission_to_edit'}) {
-                main::dbg("Skipping $name, no permission to edit");
+                dbg("Skipping $name, no permission to edit");
                 $skip_other++;
                 next;
             }
@@ -269,7 +267,7 @@ sub occurrenceMisspellingForm {
                     # Skipping because its a genus_name only, and the genus exists in teh authorities table
                         if (!@suggestions) {
                         $skip_other++;
-                        main::dbg("Skipping $name, genus is classified and no species part");
+                        dbg("Skipping $name, genus is classified and no species part");
                         # Undo this action
                         $class = ($class) ? '' : 'class="darkList"';
                         next;
@@ -408,6 +406,7 @@ sub occurrenceMisspellingForm {
 #
 sub submitOccurrenceMisspelling {
 	my ($dbt,$q,$s,$hbo) = @_;
+    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
     if ($q->param('submit') =~ /get next/i) {
@@ -479,7 +478,7 @@ sub submitOccurrenceMisspelling {
                         my $sql = "UPDATE occurrences SET $comment".join(", ",@set_fields)
                                 . " WHERE occurrence_no=$occurrence_no"
                                 . " AND authorizer_no IN ($authorizer_list)";
-                        main::dbg("Occ sql $sql");
+                        dbg("Occ sql $sql");
                         my $cnt = $dbh->do($sql);
                         $mod_count += $cnt;
                         # Some additional cleanup -- if we changed genus only recheck classification
@@ -501,7 +500,7 @@ sub submitOccurrenceMisspelling {
                         my $sql = "UPDATE reidentifications SET $comment".join(", ",@set_fields)
                                 . " WHERE reid_no=$reid_no"
                                 . " AND authorizer_no IN ($authorizer_list)";
-                        main::dbg("Reid sql $sql");
+                        dbg("Reid sql $sql");
                         my $cnt = $dbh->do($sql);
                         $mod_count += $cnt;
                     }
@@ -633,7 +632,7 @@ sub typoCheck {
         $sql .= " GROUP BY $field";
     }
     my @results = @{$dbt->getData("$sql")};
-#    main::dbg($sql);
+#    dbg($sql);
     
     my $offset = ord('a');
     my @values;

@@ -63,8 +63,10 @@
 package Curve;
 
 use TimeLookup;
+use Text::CSV_XS;
+use PBDBUtil;
+use TaxaCache;
 
-#require Text::CSV_XS;
 # FOO ##  # CGI::Carp qw(fatalsToBrowser);
 
 # Flags and constants
@@ -76,10 +78,10 @@ my $dbt;
 
 sub new {
 	my $class = shift;
-	$dbh = shift;
 	$q = shift;
 	$s = shift;
 	$dbt = shift;
+    $dbh = $dbt->dbh;
 	my $self = {};
 
 	bless $self, $class;

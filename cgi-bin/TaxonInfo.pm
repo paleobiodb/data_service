@@ -3,9 +3,14 @@ package TaxonInfo;
 use Taxon;
 use TimeLookup;
 use Data::Dumper;
+use Collection;
+use Reference;
+use TaxaCache;
 use Ecology;
 use Images;
 use Measurement;
+use Debug qw(dbg);
+use PBDBUtil;
 
 use strict;
 
@@ -34,10 +39,10 @@ sub searchForm {
 # call from another script.  Can pass it a taxon_no or a taxon_name
 sub checkTaxonInfo {
 	my $q = shift;
-	my $dbh = shift;
 	my $s = shift;
 	my $dbt = shift;
     my $hbo = shift;
+    my $dbh = $dbt->dbh;
 
     if (!$q->param("taxon_no") && !$q->param("taxon_name") && !$q->param("common_name") && !$q->param("author") && !$q->param("pubyr")) {
         searchForm($hbo, $q, 1); # param for not printing header with form
@@ -126,7 +131,6 @@ sub checkTaxonInfo {
 
         }
     }
-
 }
 
 # By the time we're here, we're gone through checkTaxonInfo and one of these scenarios has happened
@@ -148,7 +152,7 @@ sub displayTaxonInfoResults {
     if ($q->request_method() eq 'POST' || $q->param('is_real_user') || $s->isDBMember()) {
         $is_real_user = 1;
     }
-    if (main::checkForBot()) {
+    if (PBDBUtil::checkForBot()) {
         $is_real_user = 0;
     }
 
@@ -415,7 +419,7 @@ sub displayTaxonInfoResults {
     if ($modules{9}) {
         print '<div id="panel9" class="panel">';
         if ($is_real_user) {
-		    print doCollections($q->url(), $q, $dbt, $dbh, $taxon_no, $in_list, '',$is_real_user);
+		    print doCollections($q, $dbt, $s, $taxon_no, $in_list, '',$is_real_user);
         } else {
             print '<div align="center">';
             print '<form method="POST" action="bridge.pl">';
@@ -507,7 +511,7 @@ sub displayMap {
     my ($dbt,$q,$s,$in_list)  = @_;
     
 	my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape1', 'dotcolor1', 'dotborder1');
-	my %user_prefs = main::getPreferences($s->get('enterer_no'));
+	my %user_prefs = $s->getPreferences();
 	foreach my $pref (@map_params){
 		if($user_prefs{$pref}){
 			$q->param($pref => $user_prefs{$pref});
@@ -525,7 +529,7 @@ sub displayMap {
         $q->param('autoborders'=>'yes');
         $q->param('pointsize1'=>'auto');
         $q->param('taxon_list'=>$taxon_list);
-        my $m = Map->new($q,$dbt);
+        my $m = Map->new($q,$dbt,$s);
         ($map_html_path,$errors,$warnings) = $m->buildMap();
     }
 
@@ -548,10 +552,10 @@ sub displayMap {
 
 
 sub doCollections{
-	my $exec_url = shift;
 	my $q = shift;
 	my $dbt = shift;
-	my $dbh = shift;
+    my $s = shift;
+    my $dbh = $dbt->dbh;
 	my $taxon_no = shift;
 	my $in_list = shift;
     # age_range_format changes appearance html formatting of age/range information
@@ -563,7 +567,20 @@ sub doCollections{
 	# get a lookup of the boundary ages for all intervals JA 25.6.04
 	# the boundary age hashes are keyed by interval nos
     my $t = new TimeLookup($dbt);
-    my ($upperbound,$lowerbound) = $t->getBoundaries;
+#    my ($upperbound,$lowerbound) = $t->getBoundaries;
+   
+    my $sql = "SELECT i.interval_no,TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,il.interval_hash,il.lower_boundary,il.upper_boundary FROM interval_lookup il, intervals i WHERE il.interval_no=i.interval_no";
+    my @data = @{$dbt->getData($sql)};
+    my $lowerbound = {};
+    my $upperbound = {};
+    my $interval_name = {};
+    my $interval_hash = {};
+    foreach my $row (@data) {
+        $lowerbound->{$row->{interval_no}} = $row->{lower_boundary};
+        $upperbound->{$row->{interval_no}} = $row->{lower_boundary};
+        $interval_name->{$row->{interval_no}} = $row->{interval_name};
+        $interval_hash->{$row->{interval_no}} = $t->deserializeItv($row->{'interval_hash'});
+    }
 
     # Pull the colls from the DB;
     my %options = ();
@@ -577,31 +594,28 @@ sub doCollections{
         }
     }
     my $fields = ["country", "state", "max_interval_no", "min_interval_no"];  
-    my ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
+    my ($dataRows,$ofRows) = Collection::getCollections($dbt,$s,\%options,$fields);
     my @data = @$dataRows;
 
     if (! @data) {
         print "<div align=\"center\"><h3>Collections</h3><i> No collection or age range data are available</i></div>";
         return;
     }
-    my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$t,\@data,$upperbound,$lowerbound);
+    my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$interval_hash,\@data,$upperbound,$lowerbound);
 
 
 #    print "MAX".Dumper($max);
 #    print "MIN".Dumper($min);
 
     my $range = "";
-    my $ig = $t->getIntervalGraph;
-    my %interval_name;
-    $interval_name{$_->{'interval_no'}} = $_->{'name'} foreach values %$ig;
     # simplified this because the users will understand the basic range,
     #  and it clutters the form JA 28.8.06
 #    my $max = join (" or ",map {$interval_name{$_}} @$max);
 #    my $min = join (" or ",map {$interval_name{$_}} @$min);
     my $max_no = $max->[0];
     my $min_no = $min->[0];
-    $max = ($max_no) ? $ig->{$max_no}->{'name'} : "";
-    $min = ($min_no) ? $ig->{$min_no}->{'name'} : "";
+    $max = ($max_no) ? $interval_name->{$max_no} : "";
+    $min = ($min_no) ? $interval_name->{$min_no} : ""; 
     if ($max ne $min) {
         $range .= "<a href=\"bridge.pl?action=displayInterval&interval_no=$max_no\">$max</a> to <a href=\"bridge.pl?action=displayInterval&interval_no=$min_no\">$min</a>";
     } else {
@@ -657,7 +671,7 @@ for my $ei ( @extantimmediates )	{
             }
             $extant_list =~ s/,$//;
             $options{'taxon_list'} = $extant_list;
-            my ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
+            my ($dataRows,$ofRows) = Collection::getCollections($dbt,$s,\%options,$fields);
             my @data = @$dataRows;
             my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$t,\@data,$upperbound,$lowerbound);
             for my $coll ( @data )	{
@@ -698,9 +712,9 @@ for my $ei ( @extantimmediates )	{
         if (!$min) {
             $min = $max;
         }
-        my $res = "<span class=\"small\"><a href=\"bridge.pl?action=displayInterval&interval_no=$row->{max_interval_no}\">$interval_name{$max}</a>";
+        my $res = "<span class=\"small\"><a href=\"bridge.pl?action=displayInterval&interval_no=$row->{max_interval_no}\">$interval_name->{$max}</a>";
         if ( $max != $min ) {
-            $res .= " - " . "<a href=\"bridge.pl?action=displayInterval&interval_no=$row->{min_interval_no}\">$interval_name{$min}</a>";
+            $res .= " - " . "<a href=\"bridge.pl?action=displayInterval&interval_no=$row->{min_interval_no}\">$interval_name->{$min}</a>";
         }
         $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"small\"><nobr>";
 	$res .= $lowerbound->{$max} . " - ";
@@ -730,10 +744,10 @@ for my $ei ( @extantimmediates )	{
 	    else{
 			$time_place_coll{$res} = [$row->{"collection_no"}];
 			#push(@order,$res);
-            if ($ig->{$min}->{'min'}->{'interval_no'} == $max) {
+            if ($interval_hash->{$min}->{'min_no'} == $max) {
                 $max = $min;
             }
-            if ($ig->{$max}->{'max'}->{'interval_no'} == $min) {
+            if ($interval_hash->{$max}->{'max_no'} == $min) {
                 $min = $max;
             }
             # create a hash array where the keys are the time-place strings
@@ -744,11 +758,11 @@ for my $ei ( @extantimmediates )	{
             #  number recording the upper boundary has to be reversed
             my $upper = $upperbound->{$max};
             $max_interval_no{$res} = $max;
-            $max_interval_name{$res} = $interval_name{$max};
+            $max_interval_name{$res} = $interval_name->{$max};
             $min_interval_name{$res} = $max_interval_name{$res};
             if ( $max != $min ) {
                 $upper = $upperbound->{$min};
-                $min_interval_name{$res} = $interval_name{$min};
+                $min_interval_name{$res} = $interval_name->{$min};
             }
             #if ( ! $toovague{$max." ".$min} && ! $seeninterval{$max." ".$min})	
             # WARNING: we're assuming upper boundary ages will never be
@@ -774,7 +788,7 @@ for my $ei ( @extantimmediates )	{
     my %parents;
     my %best_correlation;
     foreach my $interval (keys %intervals) {
-        $parents{$interval} = join(" ",reverse $t->getParentIntervals($interval));
+        $parents{$interval} = join(" ",reverse getParentIntervals($interval,$interval_hash));
         my $sql = "SELECT c.correlation_no FROM correlations c, scales s, refs r WHERE c.scale_no=s.scale_no AND s.reference_no=r.reference_no AND c.interval_no=$interval ORDER by r.pubyr DESC LIMIT 1";  
         $best_correlation{$interval} = ${$dbt->getData($sql)}[0]->{'correlation_no'};
     }
@@ -873,6 +887,27 @@ for my $ei ( @extantimmediates )	{
 	return $output;
 }
 
+sub getParentIntervals {
+    my ($i,$hash) = @_;
+    my @intervals = ();
+    my @q = ($i);
+    my %seen = ();
+    while (my $i = pop @q) {
+        my $itv = $hash->{$i};
+        if ($itv->{'max_no'} && !$seen{$itv->{'max_no'}}) {
+            $seen{$itv->{'max_no'}} = 1;
+            push @q, $itv->{'max_no'};
+            push @intervals, $itv->{'max_no'};
+        }
+        if ($itv->{'min_no'} && $itv->{'min_no'} != $itv->{'max_no'} && !$seen{$itv->{'min_no'}}) {
+            $seen{$itv->{'min_no'}} = 1;
+            push @q, $itv->{'min_no'};
+            push @intervals, $itv->{'min_no'};
+        }
+    } 
+    return @intervals;
+}
+
 
 # This goes through all collections and finds a "minimal cover". Each collection corresponds to a time range
 # i.e. 40-50 m.y. ago, 10-45 m.y. ago.  The time range that should be reported back is the minimally sized
@@ -889,7 +924,7 @@ for my $ei ( @extantimmediates )	{
 #   No longer throw out intervals beforehand.  If we throw out A and B for being too vague, then 
 #   the cover will be from D --> C.  So don't throw anything out till the very end
 sub calculateAgeRange {
-    my ($dbt,$t,$data,$upperbound,$lowerbound) = @_;
+    my ($dbt,$interval_hash,$data,$upperbound,$lowerbound) = @_;
     my %all_ints = (); 
     my %seen_range = ();
 
@@ -907,14 +942,14 @@ sub calculateAgeRange {
         my $ub_max = $upperbound->{$max};
         my $lb_min = $lowerbound->{$min};
         my $ub_min = $upperbound->{$min};
-        main::dbg("MAX $max MIN $min LB $lb_max $lb_min UB $ub_max $ub_min");
+        dbg("MAX $max MIN $min LB $lb_max $lb_min UB $ub_max $ub_min");
         if ($ub_min !~ /\d/) {
             $lb_min = $lowerbound->{$max};
             $ub_min = $upperbound->{$max};
         }
         my $range = "$max $min";
         if ($lb_max && $ub_max && $ub_max > $lb_max) {
-            main::dbg("FLIPPING");
+            dbg("FLIPPING");
             my $tmp1 = $ub_max;
             my $tmp2 = $ub_min;
             $ub_max = $lb_max;
@@ -945,7 +980,7 @@ sub calculateAgeRange {
             $youngest_lb = $lb;
         }
     }
-    main::dbg("OLDEST_UB $oldest_ub - YOUNGEST_LB $youngest_lb");
+    dbg("OLDEST_UB $oldest_ub - YOUNGEST_LB $youngest_lb");
 
 
     # Next step in finding minimal cover
@@ -959,22 +994,22 @@ sub calculateAgeRange {
                 # See calippus for the purpose for this - if we don't have this caluse upper 
                 # boundary is set to Miocenes upper bound, which is bad since Miocenes lower bound
                 # extends BEYOND what we're using for the lower bound
-                main::dbg("THREW OUT LB $lb_max -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
+                dbg("THREW OUT LB $lb_max -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
             } else {
-                main::dbg("BEST_LB SET TO $lb_max -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
+                dbg("BEST_LB SET TO $lb_max -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
                 $best_lb = $lb_max;
             }
         }
         if ($ub_min =~ /\d/ && $ub_min < $youngest_lb && $ub_min > $best_ub) {
             if ($ub_max > $oldest_ub && $youngest_lb < $oldest_ub) {
-                main::dbg("THREW OUT UB $ub_min -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
+                dbg("THREW OUT UB $ub_min -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
             } else {
-                main::dbg("BEST_UB SET TO $ub_min -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
+                dbg("BEST_UB SET TO $ub_min -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
                 $best_ub = $ub_min;
             }
         }
     }
-    main::dbg("BEST_LB $best_lb - BEST_UB $best_ub");
+    dbg("BEST_LB $best_lb - BEST_UB $best_ub");
 
     # We've found our minimal cover now but there may be multiple
     # intervals which can satisfy it.  Store all potential candidates
@@ -1007,9 +1042,9 @@ sub calculateAgeRange {
 
     my %parent = ();
     my %precedes = ();
-    my $ig = $t->getIntervalGraph;
     foreach my $i (@max,@min) {
-        my @p = $t->getParentIntervals($i);
+        
+        my @p = getParentIntervals($i,$interval_hash);
         foreach my $p (@p) {
             $parent{$i}{$p} = 1 unless $i == $p;
         }
@@ -1019,12 +1054,13 @@ sub calculateAgeRange {
 #            push @q, $j->{'max'} if ($j->{'max'});
 #            push @q, $j->{'min'} if ($j->{'min'} && $j->{'min'} != $j->{'max'});
 #        }
-        my @q = ($ig->{$i});
+        my @q = ($i);
         while (my $j = pop @q) {
-            $precedes{$i}{$j->{'interval_no'}} = 1 unless $i == $j->{'interval_no'};
-            foreach my $n (@{$j->{'all_next'}}) {
-                unless ($precedes{$i}{$n->{'interval_no'}}) {
-                    push @q, $n ;
+            $precedes{$i}{$j} = 1 unless $i == $j;
+            my $itv_j = $interval_hash->{$j};
+            foreach my $n (@{$itv_j->{'all_next'}}) {
+                unless ($precedes{$i}{$n}) {
+                    push @q, $n;
                 }
             }
         }
@@ -1038,15 +1074,15 @@ sub calculateAgeRange {
         last if scalar keys %all_max == 1;
         foreach my $i2 (@max) {
             if ($parent{$i2}{$i1}) {
-                main::dbg("REMOVING $i1, its a parent of $i2");
+                dbg("REMOVING $i1, its a parent of $i2");
                 delete $all_max{$i1};
             } elsif ($precedes{$i2}{$i1}) {
-                main::dbg("REMOVING $i1, its is younger than $i2");
+                dbg("REMOVING $i1, its is younger than $i2");
                 delete $all_max{$i1};
             }
         }
-        if ($t->isObsolete($i1)) {
-            main::dbg("REMOVING $i1, it is obsolete");
+        if ($interval_hash->{$i1}->{is_obsolete}) {
+            dbg("REMOVING $i1, it is obsolete");
             delete $all_max{$i1};
         }
     }
@@ -1060,15 +1096,15 @@ sub calculateAgeRange {
         last if scalar keys %all_min == 1;
         foreach my $i2 (@min) {
             if ($parent{$i2}{$i1}) {
-                main::dbg("REMOVING $i1, its a parent of $i2");
+                dbg("REMOVING $i1, its a parent of $i2");
                 delete $all_min{$i1};
             } elsif ($precedes{$i1}{$i2}) {
-                main::dbg("REMOVING $i1, its is older than $i2");
+                dbg("REMOVING $i1, its is older than $i2");
                 delete $all_min{$i1};
             }
         }
-        if ($t->isObsolete($i1)) {
-            main::dbg("REMOVING $i1, it is obsolete");
+        if ($interval_hash->{$i1}->{is_obsolete}) {
+            dbg("REMOVING $i1, it is obsolete");
             delete $all_min{$i1};
         }
     }
@@ -1370,7 +1406,7 @@ sub displayRelatedTaxa {
             $sql .= " UNION ";
             $sql .= "(SELECT a.genus_name,a.subgenus_name,a.species_name,c.taxon_name FROM occurrences b, reidentifications a LEFT JOIN authorities c ON a.taxon_no=c.taxon_no WHERE a.occurrence_no=b.occurrence_no AND a.most_recent='YES' AND $subgenus_sql AND (a.species_reso IS NOT NULL AND a.species_reso NOT LIKE '%informal%'))";
             $sql .= " ORDER BY genus_name,subgenus_name,species_name";
-            main::dbg("Get from occ table: $sql");
+            dbg("Get from occ table: $sql");
             @results = @{$dbt->getData($sql)};
             foreach my $row (@results) {
                 next if ($row->{'species_name'} =~ /^sp(p)*\.|^indet\.|s\.\s*l\./);
@@ -2209,7 +2245,7 @@ sub displayMeasurements {
             # i.e. If they entered Nasellaria, get Nasellaria indet., or Nasellaria sp. or whatever.
             # get alternate spellings of focal taxon. 
             my @small_in_list = TaxonInfo::getAllSynonyms($dbt,$taxon_no);
-            main::dbg("Passing small_in_list to getMeasurements".Dumper(\@small_in_list));
+            dbg("Passing small_in_list to getMeasurements".Dumper(\@small_in_list));
             @specimens = Measurement::getMeasurements($dbt,'taxon_list'=>\@small_in_list,'get_global_specimens'=>1);
         }
     } else {

@@ -5,8 +5,11 @@ use PBDBUtil;
 use Data::Dumper;
 use DBTransactionManager;
 use TaxaCache;
+use TaxonInfo;
+use Person;
 use Opinion;
 use CGI::Carp;
+use Debug qw(dbg);
 
 use strict;
 
@@ -677,7 +680,7 @@ sub getTaxonomicNames {
                 . " WHERE t.taxon_no=a.taxon_no";
 
         my $sql = "$base_sql AND ".join(" AND ",@where)." ORDER BY a.taxon_name";
-        main::dbg("getTaxonomicNames called: ($sql)");
+        dbg("getTaxonomicNames called: ($sql)");
         @results = @{$dbt->getData($sql)};
 
         my ($valid_count,$invalid_count) = (0,0);
@@ -898,7 +901,7 @@ sub getTaxonomicOpinions {
                 . " LEFT JOIN refs r ON r.reference_no=o.reference_no"
                 . " WHERE ".join(" AND ",@where)
                 . ") ORDER BY child_name,pubyr";
-        main::dbg("getTaxonomicOpinions called: ($sql)");
+        dbg("getTaxonomicOpinions called: ($sql)");
         @results = @{$dbt->getData($sql)};
         my $op_link = $http_dir."/opinions.csv";
         
@@ -937,7 +940,7 @@ sub makeDataFileDir {
     my $http_dir = "/paleodb/data/".$filename;
 
     umask '022';
-    main::dbg("File dir is $filesystem_dir");
+    dbg("File dir is $filesystem_dir");
     if (! -e $filesystem_dir) {
         mkdir($filesystem_dir)
             or die "Could not create directory $filesystem_dir ($!)";

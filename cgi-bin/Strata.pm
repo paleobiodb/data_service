@@ -4,6 +4,9 @@ use strict;
 use TaxonInfo;
 use URI::Escape;
 use Data::Dumper;
+use Debug qw(dbg);
+use Person;
+use PBDBUtil;
 
 # written by PS  12/01/2004
 
@@ -23,7 +26,7 @@ sub displayStrata {
     $options{'permission_type'} = 'read';                                                                                                                   
     $options{'calling_script'} = 'Strata';
     my @fields = ('geological_group','formation','member','lithology1','lithology2','environment');
-    my ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,\@fields);
+    my ($dataRows,$ofRows) = Collection::getCollections($dbt,$s,\%options,\@fields);
 
     # Do conflict checking beforehand, see function definition for explanation
     my $conflict_found = checkConflict($dataRows,$q);
@@ -122,12 +125,12 @@ sub displayStrata {
         my $environment = $row->{'environment'};
         $environment_count{$environment} += 1 if ($environment);
 
-        #main::dbg("c_no: $row->{collection_no} l1: $row->{lithology1} l2: $row->{lithology2} e: $row->{environment}");
-        #main::dbg(" f: $row->{formation} g: $row->{geological_group} m: $row->{member} <br>");
+        #dbg("c_no: $row->{collection_no} l1: $row->{lithology1} l2: $row->{lithology2} e: $row->{environment}");
+        #dbg(" f: $row->{formation} g: $row->{geological_group} m: $row->{member} <br>");
     }
-    main::dbg("is mbr: $is_member is form: $is_formation is grp: $is_group<hr>");
-    main::dbg("c_form: <pre>" . Dumper(%c_formations) . "</pre>");
-    main::dbg("c_mbr: <pre>" . Dumper(%c_members) . "</pre>");
+    dbg("is mbr: $is_member is form: $is_formation is grp: $is_group<hr>");
+    dbg("c_form: <pre>" . Dumper(%c_formations) . "</pre>");
+    dbg("c_mbr: <pre>" . Dumper(%c_members) . "</pre>");
 
     # Display Header
 
@@ -290,7 +293,7 @@ sub displayStrata {
 
     # Display age range/Show what collections are in it 
     # Set this q parameter so processCollectionsSearch (called from doCollections) builds correct SQL query
-    print TaxonInfo::doCollections($q->url(), $q, $dbt, $dbh, '', '', "for_strata_module");
+    print TaxonInfo::doCollections($q, $dbt, $s, '', '', "for_strata_module");
 
     print "<p>&nbsp;</p>";
     print "</div>";
@@ -337,9 +340,9 @@ sub checkConflict {
             $gp_groups{$row->{'formation'}}{$row->{'geological_group'}} += 1;
         }
     }
-    main::dbg("p_form: <pre>" . Dumper(%p_formations) . "</pre>");
-    main::dbg("p_grp: <pre>" . Dumper(%p_groups) . "</pre>");
-    main::dbg("gp_grp: <pre>" . Dumper(%gp_groups) . "</pre>");
+    dbg("p_form: <pre>" . Dumper(%p_formations) . "</pre>");
+    dbg("p_grp: <pre>" . Dumper(%p_groups) . "</pre>");
+    dbg("gp_grp: <pre>" . Dumper(%gp_groups) . "</pre>");
 
     my ($p_formation_cnt, $p_group_cnt, $conflict_found);
     $p_formation_cnt = 0; $p_group_cnt = 0;
@@ -351,7 +354,7 @@ sub checkConflict {
     foreach my $grp (keys %p_groups) {
         $p_group_cnt += 1 if ($grp);
     }             
-    main::dbg("p grp cnt: $p_group_cnt p fm cnt: $p_formation_cnt");
+    dbg("p grp cnt: $p_group_cnt p fm cnt: $p_formation_cnt");
     $conflict_found = "different lines" if ($p_formation_cnt > 0 && $p_group_cnt > 0);
     $conflict_found = "different groups" if ($p_group_cnt > 1);
     $conflict_found = "different formations" if ($p_formation_cnt > 1);
@@ -382,7 +385,7 @@ sub displayStrataChoice {
         }
     }    
 
-    main::dbg("In display strata choice for reason: $conflict_reason");
+    dbg("In display strata choice for reason: $conflict_reason");
     print "<center>";
     my $count = 0;
     if ($conflict_reason eq "different groups") {
@@ -440,8 +443,8 @@ sub displaySearchStrataForm {
     # Show the "search collections" form
 
     # Set the Enterer
-    main::printIntervalsJava(1);
-    print main::makeAuthEntJavaScript();
+    print PBDBUtil::printIntervalsJava($dbt,1);
+    print Person::makeAuthEntJavascript($dbt);
     print $hbo->populateHTML('search_collections_form',$vars)
 }
    
@@ -470,7 +473,7 @@ sub displaySearchStrataResults {
     if (!$options{'group_formation_member'}) {
         $options{'group_formation_member'} = 'NOT_NULL_OR_EMPTY';
     }
-    my ($dataRows,$ofRows) = main::processCollectionsSearch($dbt,\%options,$fields);
+    my ($dataRows,$ofRows) = Collection::getCollections($dbt,$s,\%options,$fields);
     # Schwartzian tranform to be able to sort case insensitively and without quotes
     my @dataRows = 
         map {$_->[0]}

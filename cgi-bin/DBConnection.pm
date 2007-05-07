@@ -8,6 +8,7 @@ package DBConnection;
 use strict;
 use DBI;
 # return a handle to the database (often called $dbh)
+
 sub connect {
     my $driver =   "mysql";
     my $hostName = "localhost";
@@ -19,9 +20,44 @@ sub connect {
     chomp($password);  #remove the newline!  Very important!
     my $dsn = "DBI:$driver:database=$dbName;host=$hostName";
 
-	return (DBI->connect($dsn, $userName, $password, {RaiseError=>1}));	
+    my $connection = DBI->connect($dsn, $userName, $password, {RaiseError=>1});
+    if (!$connection) {
+        die("Could not connect to database");
+    } else {
+        return $connection;
+    }
 }
- 
+
+sub connect_paleodb {
+    # Make sure a symbolic link to this file always exists;
+
+    my $connection;
+    if ($ENV{'SERVER_ADDR'} eq '128.111.220.138' ||
+        $ENV{'SERVER_ADDR'} eq '128.111.220.135') {
+        my $password = `cat /home/paleodbpasswd/passwd`;
+        chomp($password);
+        my $driver =   "mysql";
+        my $hostName = "localhost";
+        my $userName = "pbdbuser";
+        my $dbName =   "pbdb";
+        my $dsn = "DBI:$driver:database=$dbName;host=$hostName";
+	    $connection = DBI->connect($dsn, $userName, $password, {RaiseError=>1});
+    } else {
+        my $password = `cat /home/paleodbpasswd/remote_passwd`;
+        chomp($password);
+        my $driver =   "mysql";
+        my $hostName = "128.111.220.135";
+        my $userName = "pbdbuser";
+        my $dbName =   "pbdb";
+        my $dsn = "DBI:$driver:database=$dbName;host=$hostName";
+	    $connection = DBI->connect($dsn, $userName, $password, {RaiseError=>1});
+    }
+    if (!$connection) {
+        die("Could not connect to paleodb.org");
+    } else {
+        return $connection;
+    }
+}
 
 1;
 

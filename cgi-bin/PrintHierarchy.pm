@@ -8,21 +8,16 @@ use strict;
 sub startPrintHierarchy	{
 	my $hbo = shift;
 	my $s = shift;
-	print main::stdIncludes("std_page_top");
 	my %refno;
 	$refno{'current_ref'} = $s->get('reference_no');
 	if ( $s->get('enterer_no') > 0 )	{
 		$refno{'not_guest'} = 1;
 	}
 	print $hbo->populateHTML('print_hierarchy_form',\%refno);
-	print main::stdIncludes("std_page_bottom");
-	return;
 }
 
 sub processPrintHierarchy	{
-	my $dbh = shift;
-	my $q = shift;
-	my $dbt = shift;
+    my ($q,$dbt,$hbo) = @_;
 
 	my $OUT_HTTP_DIR = "/paleodb/data";
 	my $OUT_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
@@ -36,8 +31,6 @@ sub processPrintHierarchy	{
 			"subphylum" => "Subph.", "phylum" => "Ph.");
 
     my %rank_order = TaxonInfo::rankOrder();
-
-	print main::stdIncludes( "std_page_top" );
 
     # get focal taxon name from query parameters, then figure out taxon number
     my @taxa = ();
@@ -71,8 +64,7 @@ sub processPrintHierarchy	{
 		    print "<center><h3>No query was entered</h3>\n";
         }
 		print "<p>You may want to <a href=\"bridge.pl?action=startStartPrintHierarchy\">try again</a></p></center>\n";
-		print main::stdIncludes( "std_page_bottom" );
-		exit;
+		return;
 	}
 
     if ($taxon_name) {
@@ -314,7 +306,6 @@ sub processPrintHierarchy	{
 
 	print "<p><b><a href=\"bridge.pl?action=startStartPrintHierarchy\">See another classification</a></b></p>";
 	print "</div>\n";
-	print main::stdIncludes( "std_page_bottom" );
 
 	return;
 }

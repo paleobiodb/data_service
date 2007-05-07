@@ -3,6 +3,7 @@ package Reclassify;
 use strict;
 use URI::Escape;
 use CGI qw(escapeHTML);
+use Debug qw(dbg);
 
 # written by JA 31.3, 1.4.04
 # in memory of our dearly departed Ryan Poling
@@ -10,16 +11,17 @@ use CGI qw(escapeHTML);
 # start the process to get to the reclassify occurrences page
 # modelled after startAddEditOccurrences
 sub startReclassifyOccurrences	{
-	my ($q,$s,$dbh,$dbt,$hbo) = @_;
+	my ($q,$s,$dbt,$hbo) = @_;
+    my $dbh = $dbt->dbh;
 
 	if (!$s->isDBMember()) {
 	    # have to be logged in
-		$s->enqueue($dbh,$q->query_string());
+		$s->enqueue($q->query_string());
 		main::displayLoginPage( "Please log in first." );
 	} elsif ( $q->param("collection_no") )	{
         # if they have the collection number, they'll immediately go to the
         #  reclassify page
-		&displayOccurrenceReclassify($q,$s,$dbh,$dbt);
+		displayOccurrenceReclassify($q,$s,$dbt,$hbo);
 	} else	{
         my %vars = $q->Vars();
         $vars{'enterer_me'} = $s->get('enterer_reversed');
@@ -30,30 +32,27 @@ sub startReclassifyOccurrences	{
         $vars{'page_subtitle'} = "You may now reclassify either a set of occurrences matching a genus or higher taxon name, or all the occurrences in one collection.";
 
         # Spit out the HTML
-        print main::stdIncludes( "std_page_top" );
-        main::printIntervalsJava(1);
-        print main::makeAuthEntJavaScript();
+        print $hbo->stdIncludes( "std_page_top" );
+        print PBDBUtil::printIntervalsJava($dbt,1);
+        print Person::makeAuthEntJavascript($dbt);
         print $hbo->populateHTML('search_occurrences_form',\%vars);
-        print main::stdIncludes("std_page_bottom");  
+        print $hbo->stdIncludes("std_page_bottom");  
     }
 }
 
 # print a list of the taxa in the collection with pulldowns indicating
 #  alternative classifications
 sub displayOccurrenceReclassify	{
-
-	my $q = shift;
-	my $s = shift;
-	my $dbh = shift;
-	my $dbt = shift;
-    my $collections_ref = shift;
+    my ($q,$s,$dbt,$hbo,$collections_ref) = @_;
+    $dbt->useRemote(1);
+    my $dbh = $dbt->dbh;
     my @collections = ();
     @collections = @$collections_ref if ($collections_ref);
     if ($q->param("collection_list")) {
         @collections = split(/\s*,\s*/,$q->param('collection_list'));
     }
 
-	print main::stdIncludes("std_page_top");
+	print $hbo->stdIncludes("std_page_top");
 
     my @occrefs;
     if (@collections) {
@@ -87,7 +86,7 @@ sub displayOccurrenceReclassify	{
             $sql .= " AND re.authorizer_no IN (".$q->param('occurrences_authorizer_no').")";
         }
         $sql .= ") ORDER BY occurrence_no ASC, reid_no ASC";
-        main::dbg("Reclassify sql:".$sql);
+        dbg("Reclassify sql:".$sql);
         @occrefs = @{$dbt->getData($sql)};
     } else {
 	    my $sql = "SELECT collection_name FROM collections WHERE collection_no=" . $q->param('collection_no');
@@ -105,7 +104,7 @@ sub displayOccurrenceReclassify	{
                " UNION ".
                "(SELECT reid_no,authorizer_no, occurrence_no,taxon_no,genus_reso,genus_name,subgenus_reso,subgenus_name,species_reso,species_name FROM reidentifications WHERE collection_no=$collection_no $authorizer_where)".
                " ORDER BY occurrence_no ASC,reid_no ASC";
-        main::dbg("Reclassify sql:".$sql);
+        dbg("Reclassify sql:".$sql);
         @occrefs = @{$dbt->getData($sql)};
     }
 
@@ -292,20 +291,18 @@ sub displayOccurrenceReclassify	{
 	print "<p>\n";
 	print "</center>\n";
 
-	print main::stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes("std_page_bottom");
 
 }
 
 sub processReclassifyForm	{
-
-	my $q = shift;
-	my $s = shift;
-	my $dbh = shift;
-	my $dbt = shift;
-	my $exec_url = shift;
+    my ($q,$s,$dbt,$hbo) = @_;
+    $dbt->useRemote(1);
+    my $dbh = $dbt->dbh;
+	my $exec_url = 'bridge.pl';
 
     print "<BR>";
-	print main::stdIncludes("std_page_top");
+	print $hbo->stdIncludes("std_page_top");
 
 	print "<center>\n\n";
 
@@ -350,6 +347,7 @@ sub processReclassifyForm	{
             $seen_reclassification++;
 
 		# update the occurrences table
+            my $dbh_r = $dbt->dbh_remote;
 			my $sql = "UPDATE occurrences SET taxon_no=".$new_taxon_no.
                    ", modifier=".$dbh->quote($s->get('enterer')).
 			       ", modifier_no=".$s->get('enterer_no');
@@ -360,14 +358,15 @@ sub processReclassifyForm	{
 			}
             if ($occurrences[$i] =~ /^\d+$/) {
 			    $sql .= " AND occurrence_no=" . $occurrences[$i];
+                dbg($sql);
+                $dbh_r->do($sql);
             } elsif ($occurrence_lists[$i] =~ /^[\d, ]+$/) {
                 $sql .= " AND occurrence_no IN (".$occurrence_lists[$i].")";
+                dbg($sql);
+                $dbh_r->do($sql);
             } else {
                 die ("Error: No occurrence number found for $occurrence_description");
             }
-            main::dbg($sql);
-			$dbt->getData($sql);
-
 		# print the taxon's info
 			if ( $rowcolor % 2 )	{
 				print "<tr>";
@@ -400,7 +399,7 @@ sub processReclassifyForm	{
 				$sql .= " WHERE taxon_no=0";
 			}
 			$sql .= " AND reid_no=" . $reids[$i];
-            main::dbg($sql);
+            dbg($sql);
 			$dbt->getData($sql);
 
 		# print the taxon's info
@@ -437,7 +436,7 @@ sub processReclassifyForm	{
     	print "<a href=\"$exec_url?action=startStartReclassifyOccurrences\"><b>Reclassify another collection or taxon</b></a></p>\n\n";
     }
 
-	print main::stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes("std_page_bottom");
 
 }
 

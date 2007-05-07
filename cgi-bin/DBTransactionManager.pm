@@ -1,6 +1,4 @@
-## 8/20/2005 - got rid of "SQLBuilder" functionality, its not necessary anymore
-##  this module is just a straight utility module for DBI
-## 3/30/2004 - merged functionality of SQLBuilder and DBTransactionManager rjp
+#  this module is just a straight utility module for DBI
 
 package DBTransactionManager;
 
@@ -11,45 +9,65 @@ use Permissions;
 use Data::Dumper;
 use CGI::Carp;
 use CGI;
+use Debug qw(dbg);
 
-
-use fields qw(	
-				dbh
-				_id
-				_err
-                tableDefinitions								
-				tableNames);  # list of allowable data fields.
-
-# dbh				:	handle to the database
-# _id, _err 		: 	from the old DBTransactionManager
-#
+use fields qw(dbh_l dbh_r _id _err table_definitions table_names use_remote);
 
 # Just pass it a dbh object
 sub new {
 	my $class = shift;
-	my DBTransactionManager $self = fields::new($class);
     my $dbh = shift;
-    
+
+	my DBTransactionManager $self = fields::new($class);
 	if (! $dbh) {
 		# connect if needed
 		$dbh = DBConnection::connect();
-		$self->{'dbh'} = $dbh;
+		$self->{'dbh_l'} = $dbh;
     } else {
-        $self->{'dbh'} = $dbh;
+        $self->{'dbh_l'} = $dbh;
     }
-    $self->{'tableDefinitions'} = {};
-    $self->{'tableNames'} = [];
+    $self->{'dbh_r'} = undef;
+    $self->{'table_definitions'} = {};
+    $self->{'table_names'} = [];
+    $self->{'use_remote'} = 0;
 	
 	return $self;
 }
 
 
-# returns the DBI Database Handle
-# for those cases when it's simpler to directly use the database handle
+# returns the DBI Database Handle. This is a bit tricky
+# since depending on flag dbh will return different handles
 sub dbh {
-	my DBTransactionManager $self = shift;
-	return $self->{'dbh'};
+	my $self = shift;
+    if ($self->{'use_remote'}) {
+	    return $self->dbh_remote;
+    } else {
+	    return $self->dbh_local;
+    }
 }
+sub dbh_local {
+	my $self = shift;
+	return $self->{'dbh_l'};
+}
+sub dbh_remote {
+	my $self = shift;
+	my $dbh_r = $self->{'dbh_r'};
+    if (!$dbh_r) {
+        $dbh_r = DBConnection::connect_paleodb();
+        $self->{'dbh_r'} = $dbh_r;
+    }
+    return $dbh_r;
+}
+
+# This turns on "edit mode".  Edit mode must be turned on when editing a database entry (most importantly in the displayCollectionForm and processCollectionForm).  What this does is makes sure that a connection to flatpebble is opened up when reading/writing when editing database entries, which is important for consistency purposes
+sub useRemote {
+    my ($self,$set) = @_;
+    if ($set ne '') {
+        $self->{'use_remote'} = $set;
+    }
+    return $self->{'use_remote'};
+}
+
 
 # for internal use only
 # Pass it a table name, and it returns a reference to an array of array refs, one per col.
@@ -57,9 +75,10 @@ sub dbh {
 #
 sub getTableDesc {
 	my DBTransactionManager $self = shift;
-	my $tableName = shift;
-	my $sql = "DESC $tableName";
-	my $ref = ($self->{dbh})->selectall_arrayref($sql);
+    my $dbh = $self->dbh;
+	my $table_name = shift;
+	my $sql = "DESC $table_name";
+	my $ref = $dbh->selectall_arrayref($sql);
 	return $ref;
 }
 
@@ -69,11 +88,11 @@ sub getTableDesc {
 # Returns an arrayref of all column names in this table. 
 sub getTableColumns {
 	my DBTransactionManager $self = shift;
-	my $tableName = shift;
+	my $table_name = shift;
 	
 	# it will always be the first row returned since
 	# we're just using describe on this table.
-	my @desc = @{$self->getTableDesc($tableName)};
+	my @desc = @{$self->getTableDesc($table_name)};
 	my @colNames; 	# names of columns in table
 	foreach my $row (@desc) {
 		push(@colNames, $row->[0]);	
@@ -83,45 +102,7 @@ sub getTableColumns {
 }
 
 
-# for internal use only, doesn't return anything
-#
-# simply grabs a list of all table names in the database
-# and stores it in a member variable.
-sub populateTableNames {
-	my DBTransactionManager $self = shift;
-
-	my $sql = "SHOW TABLES";
-	my $ref = ($self->{dbh})->selectcol_arrayref($sql);
-
-	$self->{tableNames} = $ref;
-}
-
-# pass this a table name string and it will
-# return a true or false value dependent on the existence of that
-# table in the database.
-sub isValidTableName {
-	my DBTransactionManager $self = shift;
-	
-	my $tableName = shift;
-	
-	if (! $self->{tableNames}) {
-		# then call a method to figure out the names.
-		$self->populateTableNames();
-	}
-	
-	my $success = 0;
-	my $tableNames = $self->{tableNames};
-	foreach my $name (@$tableNames) {
-		if ($tableName eq $name) {
-			$success = 1;
-		}
-	}
-	
-	return $success;
-}
-
-
-# Reword PS 2005.
+# Reworked PS 2005.
 #
 # Pass it a table name such as "occurrences", and a
 # hash ref - the hash should contain keys which correspond
@@ -130,7 +111,7 @@ sub isValidTableName {
 #
 # Args:
 #  s: session object
-#  tableName, primary_key_field, primary_key_value: self explanatory, the record to update
+#  table_name, primary_key_field, primary_key_value: self explanatory, the record to update
 #  data: hashref for all our key->value pairs we want to insert
 #    note you can just throw it a $q->Vars or something, it won't throw
 #    stuff into there that isn't in the table definition, thats filtered out
@@ -141,10 +122,11 @@ sub isValidTableName {
 sub insertRecord {
 	my DBTransactionManager $self = shift;
     my $s = shift;
-	my $tableName = shift;
+	my $table_name = shift;
 	my $fields = shift;  # don't update this
 	
-	my $dbh = $self->{'dbh'};
+	my $dbh = $self->dbh;
+	my $dbh_r = $self->dbh_remote;
 	
 	# make sure they're allowed to insert data!
 	if (!$s || !$s->isDBMember()) { 
@@ -155,14 +137,14 @@ sub insertRecord {
     # Get the table definition, only get it once though. Careful about this if we move to mod_perl, cache
     # will exist for as long of the $dbt object exists
     my @table_definition = ();
-    if ($self->{'tableDefinitions'}{$tableName}) {
-        @table_definition = @{$self->{'tableDefinitions'}{$tableName}};
+    if ($self->{'table_definitions'}{$table_name}) {
+        @table_definition = @{$self->{'table_definitions'}{$table_name}};
     } else {
-        my $sth = $dbh->column_info(undef,'pbdb',$tableName,'%');
+        my $sth = $dbh->column_info(undef,'pbdb',$table_name,'%');
         while (my $row = $sth->fetchrow_hashref()) {
             push @table_definition, $row;    
         }
-        $self->{'tableDefinitions'}{$tableName} = \@table_definition;
+        $self->{'table_definitions'}{$table_name} = \@table_definition;
     }
 
 	# loop through each key in the passed hash and
@@ -183,7 +165,7 @@ sub insertRecord {
         if ($field =~ /^(authorizer_no|authorizer|enterer_no|enterer)$/) {
             # from the session object
             push @insertFields, $field;
-            push @insertValues, $dbh->quote($s->get($field));
+            push @insertValues, $dbh_r->quote($s->get($field));
         } elsif ($field eq 'modified') {
             push @insertFields, $field;
             push @insertValues, 'NOW()';
@@ -200,14 +182,14 @@ sub insertRecord {
                 my @vals = split(/\0/,$fields->{$field});
                 my $value;
                 if ($type eq 'SET') {
-                    $value = $dbh->quote(join(",",@vals));
+                    $value = $dbh_r->quote(join(",",@vals));
                 } else {
                     $value = $vals[0];
                     if ($value =~ /^\s*$/ && $is_nullable) {
                         $value = 'NULL';
                     } else {
                         if (! defined $value) { $value = ''; }
-                        $value = $dbh->quote($value);
+                        $value = $dbh_r->quote($value);
                     }
                 }
                 push @insertFields, $field;
@@ -218,31 +200,31 @@ sub insertRecord {
 
     #print Dumper($fields);
     for(my $i=0;$i<scalar(@insertFields);$i++) {
-        main::dbg("$insertFields[$i] = $insertValues[$i]");
+        dbg("$insertFields[$i] = $insertValues[$i]");
     }
 
     if (@insertFields) {
-        my $insertSQL = "INSERT INTO $tableName (".join(",",@insertFields).") VALUES (".join(",",@insertValues).")";
-        main::dbg("insertRecord in DBTransaction manager called: sql: $insertSQL");
+        my $insertSQL = "INSERT INTO $table_name (".join(",",@insertFields).") VALUES (".join(",",@insertValues).")";
+        dbg("insertRecord in DBTransaction manager called: sql: $insertSQL");
         # actually insert into the database
-        my $insertResult = $dbh->do($insertSQL);
+        my $insertResult = $dbh_r->do($insertSQL);
 #       DON'T USE THIS VERY BUGGY!
 #        my $idNum = $dbh->last_insert_id(undef, undef, undef, undef);
         my $idNum = 0;
         if ($insertResult) {
-            my $sth = $dbh->prepare("SELECT LAST_INSERT_ID()");
+            my $sth = $dbh_r->prepare("SELECT LAST_INSERT_ID()");
             $sth->execute();
             my $row = $sth->fetchrow_arrayref;
             if ($row) {
                 $idNum = $row->[0];
             }
-        }
-        main::dbg("INSERTED ID IS $idNum for TABLE $tableName");
+            dbg("INSERTED ID IS $idNum for TABLE $table_name");
 
-        # track the last time each person entered data because we're snoops
-        #  JA 26.4.07
-        my $sql = "UPDATE person SET last_action=last_action,last_entry='" . $fields->{'created'} . "' WHERE person_no=" . $dbh->quote($s->get('enterer_no'));
-	$dbh->do($sql);
+            # track the last time each person entered data because we're snoops
+            #  JA 26.4.07
+            my $sql = "UPDATE person SET last_action=last_action,last_entry=NOW() WHERE person_no=".$s->get('enterer_no');
+            $dbh_r->do($sql);
+        }
         # return the result code from the do() method.
 	    return ($insertResult, $idNum);
     }
@@ -253,7 +235,7 @@ sub insertRecord {
 #
 # Args: 
 #  s: session object
-#  tableName, primary_key_field, primary_key_value: self explanatory, the record to update
+#  table_name, primary_key_field, primary_key_value: self explanatory, the record to update
 #  update_empty_only: 1 means update only blank or null columns, 0 mean update anything
 #  data: hashref for all our key->value pairs we want to update
 #    note you can just throw it a $q->Vars or something, it won't throw
@@ -264,12 +246,13 @@ sub insertRecord {
 sub updateRecord {
 	my $self = shift;
 	my $s = shift;
-	my $tableName = shift;
+	my $table_name = shift;
 	my $primary_key_field = shift;
 	my $primary_key_value = shift;
 	my $data = shift;
 	
     my $dbh = $self->dbh;
+    my $dbh_r = $self->dbh_remote;
 	
 	# make sure they're allowed to update data!
 	if (!$s || !$s->isDBMember()) {
@@ -277,9 +260,9 @@ sub updateRecord {
 		return 0;
 	}
 	
-	# make sure the whereClause and tableName aren't empty!  That would be bad.
-	if (($tableName eq '') || ($primary_key_field eq '')) {
-        croak ("No tablename or primary_key supplied to updateRecord"); 
+	# make sure the whereClause and table_name aren't empty!  That would be bad.
+	if (($table_name eq '') || ($primary_key_field eq '')) {
+        croak ("No table_name or primary_key supplied to updateRecord"); 
 		return 0;	
 	}
 
@@ -289,7 +272,7 @@ sub updateRecord {
     }
 
 	# get the record we're going to update from the table
-    my $sql = "SELECT * FROM $tableName WHERE $primary_key_field=$primary_key_value";
+    my $sql = "SELECT * FROM $table_name WHERE $primary_key_field=$primary_key_value";
     my @results = @{$self->getData($sql)};
     if (scalar(@results) != 1) {
         croak ("Error in updateRecord: $sql return ".scalar(@results)." values instead of 1");
@@ -297,7 +280,7 @@ sub updateRecord {
     }
     my $table_row = $results[0];
     if (!$table_row) {
-        croak("Could not pull row from table $tableName for $primary_key_field=$primary_key_value");
+        croak("Could not pull row from table $table_name for $primary_key_field=$primary_key_value");
         return 0;
     }
 
@@ -313,19 +296,19 @@ sub updateRecord {
     $updateEmptyOnly = 0 if (exists $table_row->{'authorizer_no'} && $s->get('authorizer_no') == $table_row->{'authorizer_no'});
     $updateEmptyOnly = 0 if (exists $table_row->{'authorizer_no'} && $is_modifier_for{$table_row->{'authorizer_no'}});
     $updateEmptyOnly = 0 if (!exists $table_row->{'authorizer_no'});
-    $updateEmptyOnly = 0 if ($tableName =~ /authorities|opinions/);
+    $updateEmptyOnly = 0 if ($table_name =~ /authorities|opinions|refs/);
 
     # Get the table definition, only get it once though. Careful about this if we move to mod_perl, cache
     # will exist for as long of the $dbt object exists
     my @table_definition = ();
-    if ($self->{'tableDefinitions'}{$tableName}) {
-        @table_definition = @{$self->{'tableDefinitions'}{$tableName}};
+    if ($self->{'table_definitions'}{$table_name}) {
+        @table_definition = @{$self->{'table_definitions'}{$table_name}};
     } else {
-        my $sth = $dbh->column_info(undef,'pbdb',$tableName,'%');
+        my $sth = $dbh->column_info(undef,'pbdb',$table_name,'%');
         while (my $row = $sth->fetchrow_hashref()) {
             push @table_definition, $row;
         }
-        $self->{'tableDefinitions'}{$tableName} = \@table_definition;
+        $self->{'table_definitions'}{$table_name} = \@table_definition;
     } 
 
     my @updateTerms = ();
@@ -340,9 +323,9 @@ sub updateRecord {
         
         # if it's the modifier_no or modifier, then we'll update it regardless
         if ($field eq 'modifier_no') {
-            push @updateTerms, "modifier_no=".$dbh->quote($s->get('enterer_no'));
+            push @updateTerms, "modifier_no=".$dbh_r->quote($s->get('enterer_no'));
         } elsif ($field eq 'modifier') {
-            push @updateTerms, "modifier=".$dbh->quote($s->get('enterer'));
+            push @updateTerms, "modifier=".$dbh_r->quote($s->get('enterer'));
         } else {
             my $fieldIsEmpty = ($table_row->{$field} == 0 || $table_row->{$field} eq '' || !defined $table_row->{$field}) ? 1 : 0;
             if (exists($data->{$field})) {
@@ -354,16 +337,16 @@ sub updateRecord {
                     my $raw_value;
                     if ($type eq 'SET') {
                         $raw_value = join(",",@vals);
-                        $value = $dbh->quote($raw_value);
+                        $value = $dbh_r->quote($raw_value);
                     } else {
                         $raw_value = $vals[0];
                         if ($raw_value =~ /^\s*$/ && $is_nullable) {
                             $value = 'NULL';
                         } else {
                             if (! defined $raw_value) { 
-                                $value = $dbh->quote('');
+                                $value = $dbh_r->quote('');
                             } else {
-                                $value = $dbh->quote($raw_value);
+                                $value = $dbh_r->quote($raw_value);
                             }
                         }
                     }
@@ -379,9 +362,9 @@ sub updateRecord {
 
     # updateTerms will always be at least 1 in size (for modifer_no/modifier). If it isn't, nothing to update
     if ($termCount) {
-        my $updateSql = "UPDATE $tableName SET ".join(",",@updateTerms)." WHERE $primary_key_field=$primary_key_value";
-        main::dbg("UPDATE SQL:".$updateSql);
-    	my $updateResult = $dbh->do($updateSql);
+        my $updateSql = "UPDATE $table_name SET ".join(",",@updateTerms)." WHERE $primary_key_field=$primary_key_value";
+        dbg("UPDATE SQL:".$updateSql);
+    	my $updateResult = $dbh_r->do($updateSql);
                 
         # return the result code from the do() method.
     	return $updateResult;
@@ -397,17 +380,18 @@ sub updateRecord {
 #
 # Args: 
 #  s: session object
-#  tableName, primary_key, primary_key_value: self explanatory, delete this record from the table
+#  table_name, primary_key, primary_key_value: self explanatory, delete this record from the table
 #  comments: Why the record was deleted
 sub deleteRecord {
 	my $self = shift;
 	my $s = shift;
-	my $tableName = shift;
+	my $table_name = shift;
 	my $primary_key_field = shift;
 	my $primary_key_value = shift;
     my $comments = (shift || "");
 	
     my $dbh = $self->dbh;
+    my $dbh_r = $self->dbh_remote;
 	
 	# make sure they're allowed to update data!
 	if (!$s || !$s->isDBMember()) {
@@ -415,9 +399,9 @@ sub deleteRecord {
 		return 0;
 	}
 	
-	# make sure the whereClause and tableName aren't empty!  That would be bad.
-	if (($tableName eq '') || ($primary_key_field eq '')) {
-        croak ("No tablename or primary_key supplied to deleteRecord"); 
+	# make sure the whereClause and table_name aren't empty!  That would be bad.
+	if (($table_name eq '') || ($primary_key_field eq '')) {
+        croak ("No table_name or primary_key supplied to deleteRecord"); 
 		return 0;	
 	}
 
@@ -427,7 +411,7 @@ sub deleteRecord {
     }
 
 	# get the record we're going to update from the table
-    my $sql = "SELECT * FROM $tableName WHERE $primary_key_field=$primary_key_value";
+    my $sql = "SELECT * FROM $table_name WHERE $primary_key_field=$primary_key_value";
     my @results = @{$self->getData($sql)};
     if (scalar(@results) != 1) {
         croak ("Error in updateRecord: $sql return ".scalar(@results)." values instead of 1");
@@ -435,7 +419,7 @@ sub deleteRecord {
     }
     my $table_row = $results[0];
     if (!$table_row) {
-        croak("Could not pull row from table $tableName for $primary_key_field=$primary_key_value");
+        croak("Could not pull row from table $table_name for $primary_key_field=$primary_key_value");
         return 0;
     }
 
@@ -451,19 +435,19 @@ sub deleteRecord {
     $deletePermission = 1 if (exists $table_row->{'authorizer_no'} && $s->get('authorizer_no') == $table_row->{'authorizer_no'});
     $deletePermission = 1 if (exists $table_row->{'authorizer_no'} && $is_modifier_for{$table_row->{'authorizer_no'}});
     $deletePermission = 1 if (!exists $table_row->{'authorizer_no'});
-    $deletePermission = 1 if ($tableName =~ /authorities|opinions/);
+    $deletePermission = 1 if ($table_name =~ /authorities|opinions/);
 
     # Get the table definition, only get it once though. Careful about this if we move to mod_perl, cache
     # will exist for as long of the $dbt object exists
     my @table_definition = ();
-    if ($self->{'tableDefinitions'}{$tableName}) {
-        @table_definition = @{$self->{'tableDefinitions'}{$tableName}};
+    if ($self->{'table_definitions'}{$table_name}) {
+        @table_definition = @{$self->{'table_definitions'}{$table_name}};
     } else {
-        my $sth = $dbh->column_info(undef,'pbdb',$tableName,'%');
+        my $sth = $dbh->column_info(undef,'pbdb',$table_name,'%');
         while (my $row = $sth->fetchrow_hashref()) {
             push @table_definition, $row;
         }
-        $self->{'tableDefinitions'}{$tableName} = \@table_definition;
+        $self->{'table_definitions'}{$table_name} = \@table_definition;
     } 
 
     if ($deletePermission) {
@@ -483,25 +467,25 @@ sub deleteRecord {
                 $value = 'NULL';
             } else {
                 if (! defined $value) { $value = ''; }
-                $value = $dbh->quote($value);
+                $value = $dbh_r->quote($value);
             }
             push @insertFields, $field;
             push @insertValues, $value;
         }
 
         if (@insertFields) {
-            my $insertSQL = "INSERT INTO $tableName (".join(",",@insertFields).") VALUES (".join(",",@insertValues).")";
+            my $insertSQL = "INSERT INTO $table_name (".join(",",@insertFields).") VALUES (".join(",",@insertValues).")";
             my $enterer_no = $s->get('enterer_no');
             my $authorizer_no = $s->get('authorizer_no');
-            my $deleteLogSQL = "INSERT INTO delete_log (delete_time,authorizer_no,enterer_no,comments,delete_sql) VALUES (NOW(),$authorizer_no,$enterer_no,".$dbh->quote($comments).",".$dbh->quote($insertSQL).")";
-            main::dbg("Delete log final SQL: $deleteLogSQL");
-            $dbh->do($deleteLogSQL);
-            my $deleteSQL = "DELETE FROM $tableName WHERE $primary_key_field=$primary_key_value LIMIT 1";
-            main::dbg("Deletion SQL: $deleteSQL");
-            $dbh->do($deleteSQL);
+            my $deleteLogSQL = "INSERT INTO delete_log (delete_time,authorizer_no,enterer_no,comments,delete_sql) VALUES (NOW(),$authorizer_no,$enterer_no,".$dbh_r->quote($comments).",".$dbh_r->quote($insertSQL).")";
+            dbg("Delete log final SQL: $deleteLogSQL");
+            $dbh_r->do($deleteLogSQL);
+            my $deleteSQL = "DELETE FROM $table_name WHERE $primary_key_field=$primary_key_value LIMIT 1";
+            dbg("Deletion SQL: $deleteSQL");
+            $dbh_r->do($deleteSQL);
         }
     } else {
-        main::dbg("User ".$s->get('authorizer_no')." does not have permission to delete $tableName $primary_key_value"); 
+        dbg("User ".$s->get('authorizer_no')." does not have permission to delete $table_name $primary_key_value"); 
     }
 }
 
@@ -510,8 +494,9 @@ sub deleteRecord {
 ###
 
 ## getData
-#	description:	Handles basic SQL syntax checking, 
-#					it executes the statement, and returns arrayref of hashrefs
+#	description:	it executes the statement, and returns arrayref of hashrefs
+#                   now only works for selects, for writes use the dbh_remote method to
+#                   get a handle and check statements by hand
 #
 #	parameters:		$sql			The SQL statement to be executed
 #					$type			"read", "write", "both", "neither"
@@ -525,68 +510,41 @@ sub deleteRecord {
 #
 #	returns:		For select statements, returns a reference to an array of 
 #					hash references	to rows of all data returned.
-#					For non-select statements, returns the number of rows
-#					affected.
 #					Returns empty anonymous array on failure.
 ##
-sub getData{
+sub getData {
 	my DBTransactionManager $self = shift;
 	my $sql = shift;
-    my $dbh = $self->{'dbh'};
+    my $dbh = $self->dbh;
 
 	# First, check the sql for any obvious problems
-	my $sql_result = $self->checkSQL($sql);
-	if ($sql_result) {
-		my $sth = $self->{dbh}->prepare($sql) or die $self->{dbh}->errstr;
-		
+	my $is_select = $self->checkIsSelect($sql);
+	if ($is_select) {
+		my $sth = $dbh->prepare($sql) or die $dbh->errstr;
 		# execute returns the number of rows affected for non-select statements.
 		# SELECT:
-		if ($sql_result == 1) {
-			eval { $sth->execute() };
-			$self->{_err} = $sth->errstr;
-            if ($sth->errstr) { 
-                my $errstr = "SQL error: sql($sql)";
-                my $q2 = new CGI;
-                $errstr .= " sth err (".$sth->errstr.")" if ($sth->errstr);
-                $errstr .= " IP ($ENV{REMOTE_ADDR})";
-                $errstr .= " script (".$q2->url().")";
-                my $getpoststr; my %params = $q2->Vars; my $k; my $v;
-                while(($k,$v)=each(%params)) { $getpoststr .= "&$k=$v"; }
-                $getpoststr =~ s/\n//;
-                $errstr .= " GET,POST ($getpoststr)";
-                croak $errstr;
-            }    
-			my @data = @{$sth->fetchall_arrayref({})};
-			$sth->finish();
-			return \@data;
-		}
-		# non-SELECT:
-		else{
-			my $num;
-			eval { $num = $sth->execute() };
-			$self->{_err} = $sth->errstr;
-            if ($sth->errstr) { 
-                my $errstr = "SQL error: sql($sql)";
-                my $q2 = new CGI;
-                $errstr .= " sth err (".$sth->errstr.")" if ($sth->errstr);
-                $errstr .= " IP ($ENV{REMOTE_ADDR})";
-                $errstr .= " script (".$q2->url().")";
-                my $getpoststr; my %params = $q2->Vars; my $k; my $v;
-                while(($k,$v)=each(%params)) { $getpoststr .= "&$k=$v"; }
-                $getpoststr =~ s/\n//;
-                $errstr .= " GET,POST ($getpoststr)";
-                croak $errstr;
-            }    
-			# If we did an insert, make the record id available
-			if($sql =~ /INSERT/i){
-				$self->{_id} = $self->{dbh}->{'mysql_insertid'};
-			}
-			$sth->finish();
-			return $num;
-		}
-	} # Don't execute anything that doesn't make it past checkSQL
-	else{
-		return [];
+        my $return = eval { $sth->execute() };
+        $self->{_err} = $sth->errstr;
+        if ($sth->errstr) { 
+            my $errstr = "SQL error: sql($sql)";
+            my $q2 = new CGI;
+            $errstr .= " sth err (".$sth->errstr.")" if ($sth->errstr);
+            $errstr .= " IP ($ENV{REMOTE_ADDR})";
+            $errstr .= " script (".$q2->url().")";
+            my $getpoststr; 
+            my %params = $q2->Vars; 
+            while(my ($k,$v)=each(%params)) { 
+                $getpoststr .= "&$k=$v"; 
+            }
+            $getpoststr =~ s/\n//;
+            $errstr .= " GET,POST ($getpoststr)";
+            croak $errstr;
+        }    
+        my $data = $sth->fetchall_arrayref({});
+        $sth->finish();
+        return $data;
+	} else {
+        die("Can not execute non select statements with getData");
 	}
 }
 
@@ -616,7 +574,7 @@ sub getErr{
 #							3 means valid UPDATE statement
 #							4 means valid DELETE statement
 ##
-sub checkSQL{
+sub checkIsSelect {
 	my DBTransactionManager $self = shift;
 	my $sql = shift;
 
@@ -628,52 +586,16 @@ sub checkSQL{
 	$sql =~/^[\(]*(\w+)\s+/;
 	my $type = uc($1);
 
-	if($type ne "INSERT" && $type ne "REPLACE" && !$self->checkWhereClause($sql)){
-		die "Bad WHERE clause in SQL: $sql";
-	}
-	
 	if($type eq "SELECT"){
 		return 1;
-	}
-	elsif($type eq "INSERT" || $type eq "REPLACE"){
-        # This shit is fucking up so I'm commenting it out 
-        # Its not necessary anyways PS 03/09/2004
-
-		# Check that the columns and values lists are not empty
-		# NOTE: down the road, we could check required fields
-		# against table names.
-		#$sql =~ /(\(.*?\))\s+VALUES\s*(\(.*?\))/i;
-        #print "INSERT VALS for ==$sql== 1(($1)) 2:(($2))<BR>";
-		#if($1 eq "()" or $1 eq "" or $2 eq "()" or $2 eq "" ){
-		#	return 0;
-		#}
-		#else{
-			return 2;
-		#}
-	}
-	elsif($type eq "UPDATE"){
-		# NOTE (FUTURE): on a table by table basis, make sure required 
-		# fields aren't blanked out.
-
-		# Avoid full table updates.
-		if($sql !~ /WHERE/i){
-			return 0;
-		}
-		return 3;
-	}
-	elsif($type eq "DELETE"){
-		# Try to avoid deleting all records from a table
-		if($sql !~ /WHERE/i){
-			return 0;
-		}
-		else{
-			return 4;
-		}
-	}
+	} else {
+        return 0;
+    }
 }
 
 
-# from the old DBTransactionManager class...
+# from the old DBTransactionManager class... 
+#Deprecated ... this function wasn't very useful anyways, PS
 sub checkWhereClause {
 	my DBTransactionManager $self = shift;
 	# NOTE: disregard the following note...
@@ -718,9 +640,241 @@ sub checkWhereClause {
 	}
 }
 
+# Check for duplicates before inserting a record
+sub checkDuplicates {
+    my ($self,$table_name,$vars_ref,$excluded_fields) = @_;
+    my %vars = %{$vars_ref}; # Make a copy
+    my %excluded = ();
+    if ($excluded_fields && ref($excluded_fields)) {
+        my @excluded = @$excluded_fields;
+        foreach my $f (@excluded) {
+            $excluded{$f} = 1;
+        }
+    }
+    
+	my $dbh = $self->dbh;
 
+    # Get the table definition, only get it once though. Careful about this if we move to mod_perl, cache
+    # will exist for as long of the $dbt object exists
+    my @table_definition = ();
+    if ($self->{'table_definitions'}{$table_name}) {
+        @table_definition = @{$self->{'table_definitions'}{$table_name}};
+    } else {
+        my $sth = $dbh->column_info(undef,'pbdb',$table_name,'%');
+        while (my $row = $sth->fetchrow_hashref()) {
+            push @table_definition, $row;    
+        }
+        $self->{'table_definitions'}{$table_name} = \@table_definition;
+    }
 
+    my @terms;
+    my $primary_key_name;
+    foreach my $row (@table_definition) {
+        my $field = $row->{'COLUMN_NAME'};
+        my $type = $row->{'TYPE_NAME'};
+        my $is_nullable = ($row->{'IS_NULLABLE'} eq 'YES') ? 1 : 0;
+        my $is_primary =  $row->{'mysql_is_pri_key'};
+        if ($is_primary) {
+            $primary_key_name = $field;
+        }
 
-# end of DBTransactionManager.pm
+        next unless exists $vars{$field};
+        next if $excluded{$field};
+        next if ($is_primary);
+        # Ref specific
+        next if ($field =~ /^(project_ref_no)$/i);
+        # Generic skips
+        next if ($field =~ /^(taxon_no|upload|most_recent|created|modified|release_date)$/i);
+        next if ($field =~ /^(authorizer|enterer|modifier|authorizer_no|enterer_no|modifier_no)$/i);
+        next if ($field =~ /comments/i);
+        my @vals = split(/\0/,$vars{$field});
+        my $v;
+        if ($type eq 'SET') {
+            $v = join(",",@vals);
+            $v =~ s/^,//;
+        } else {
+            $v = $vals[0];
+        }
+        # Tack on the field and value; take care of NULLs.
+        if ( $v eq "") {
+            push @terms, "($field IS NULL OR $field='')";
+        } else {
+            push @terms, "$field=".$dbh->quote($v);
+        }
+	}
+    if (@terms && $primary_key_name) {
+        my $sql = "SELECT $primary_key_name FROM $table_name WHERE ".join(" AND ",@terms);
+        dbg("checkDuplicates SQL:$sql<HR>");
+
+        my @rows = @{$self->getData($sql)};
+        if ( @rows) {
+            return $rows[0]->{$primary_key_name};
+        }
+    }
+    return 0;
+}
+
+# checkNearMatch
+# This function shelved for now theres too many deficiencies in it PS
+#
+# 	Description:
+#       Check for records that match at least some number of fields
+#
+#	Arguments:
+#       $matchlimit		threshold of column matches to consider whole record a 'match.'
+#       $primary_key_name			name of primary key of table
+#       $table_name		db table in which to look for matches
+#       $searchField	table column on which to search
+#       $searchVal		column value to search against
+#       $fields			names of fields from form (from 
+#                       submission to insertRecord that called
+#                       this method).	
+#       $vals			values from form (as above)
+#
+##			
+sub checkNearMatch {
+    my ($self,$table_name,$primary_key_name,$hbo,$q,$matchlimit,$where_term);
+
+    my $dbh = $self->dbh;
+
+    my %vars = $q->Vars();
+    my $what_to_do = $vars{'what_to_do'};
+
+    my @fields = keys %vars;
+    my @vals = values %vars;
+
+    if ($what_to_do) {
+        if($what_to_do eq 'Continue'){
+            return 0;
+        } else{
+            print Debug::printWarnings(["Record addition canceled"]);
+            return 1;
+        }
+    } else {
+        my $sql = "SELECT * FROM $table_name WHERE $where_term";
+        dbg("checkNearMatch SQL:$sql<br>");
+
+        my @rows = @{$self->getData($sql)};
+
+        # Look for matches in the returned rows
+        my @complaints;
+        foreach my $row (@rows) {
+            my $fieldMatches;
+            for ( my $i=0; $i<$#fields; $i++ ) {
+                my $v = $vals[$i];
+                if ( $fields[$i] !~ /^authorizer|^enterer|^modifier|^created$|^modified$|comments|^release_date$|^upload$/) {
+                    if ( $v eq $row->{$fields[$i]} && $v ne "")	{
+                        $fieldMatches++;
+                    }
+                }
+            }
+            if ($fieldMatches >= $matchlimit)	{
+                push @complaints,$row;
+            }
+        }
+
+        if (@complaints)	{
+            # Print out the possible matches
+            my $warning = "Your new record may duplicate one of the following old ones.";
+            print "<CENTER><H3><FONT COLOR='red'>Warning:</FONT> $warning</H3></CENTER>\n";                                                                         
+            print "<table><tr><td>\n";
+            # Figure out what fields to show
+            my @display = ();
+            # Be more narrowminded if this is a coll
+            if ($table_name eq "refs")	{
+                @display = ("reference_no","author1last","author2last","otherauthors","pubyr","reftitle","pubtitle","pubvol","pubno");
+            } elsif ($table_name eq "collections")	{
+                @display = ("collection_no", "collection_name", "country", "state","formation", "period_max");
+            } else {
+                @display = $self->getTableColumns($table_name);
+            }
+
+            foreach my $row (@complaints) {
+                # Do some cleanup if this is a ref
+                if ($table_name eq "refs")	{
+                    # If otherauthors is filled in, we do an et al.
+                    if ($row->{'otherauthors'} )	{
+                        $row->{'author1last'} .= " et al.";
+                        $row->{'author2init'} = '';
+                        $row->{'author2last'} = '';
+                        $row->{'otherauthors'} = '';
+                    }
+                    # If there is a second author...
+                    elsif ( $row->{'author2last'} )	{
+                        $row->{'author1last'} .= " and ";
+                    }
+                }
+                my @rowData;
+                for my $d (@display)	{
+                    push @rowData,$row->{$d};
+                }
+                if ($table_name eq "refs")	{
+                    print $hbo->populateHTML('reference_display_row', \@rowData, \@display);
+                }
+                elsif($table_name eq "opinions"){
+                    my $sql="SELECT taxon_name FROM authorities WHERE taxon_no=".
+                            $row->{parent_no};
+                    my @results = @{$self->getData($sql)};
+                    print "<table><tr>";
+                    print "<td>$row->{status} $results[0]->{taxon_name}: ".
+                          "$row->{author1last} $row->{pubyr} ";
+
+                    $sql="SELECT p1.name as name1, p2.name as name2, ".
+                            "p3.name as name3 ".
+                            "FROM person as p1, person as p2, person as p3 WHERE ".
+                            "p1.person_no=$row->{authorizer_no} ".
+                            "AND p2.person_no=$row->{enterer_no} ".
+                            "AND p3.person_no=$row->{modifier_no}";
+                    @results = @{$self->getData($sql)};
+
+                    print "<font class=\"tiny\">[".
+                          "$results[0]->{name1}/$results[0]->{name2}/".
+                          "$results[0]->{name3}]".
+                          "</font></td>";
+                    print "</tr></table>";
+                }
+                elsif($table_name eq "authorities"){
+                    print "<table><tr>";
+                    print "<td> $row->{taxon_name}: $row->{author1last} $row->{pubyr} ";
+
+                    my $sql="SELECT p1.name as name1, p2.name as name2, ".
+                            "p3.name as name3 ".
+                            "FROM person as p1, person as p2, person as p3 WHERE ".
+                            "p1.person_no=$row->{authorizer_no} ".
+                            "AND p2.person_no=$row->{enterer_no} ".
+                            "AND p3.person_no=$row->{modifier_no}";
+                    my @results = @{$self->getData($sql)};
+
+                    print "<font class=\"tiny\">[".
+                          "$results[0]->{name1}/$results[0]->{name2}/".
+                          "$results[0]->{name3}]".
+                          "</font></td>";
+                    print "</tr></table>";
+                }
+            }
+            print "</td></tr></table>\n";
+        }
+
+        if(@complaints){
+            print "<center><p><b>What would you like to do?</b></p></center>";
+            print "<form method=POST action=\"bridge.pl\">";
+           
+            
+           
+            print "<center><input type=submit name=\"what_to_do\" value=\"Cancel\"> ";
+            print "<input type=submit name=\"what_to_do\" value=\"Continue\"></center>";
+            print "</form>";
+            if($table_name eq "refs"){
+                print qq|<p><a href="brigde.pl?action=displaySearchRefs&type=add"><b>Add another reference</b></a></p></center><br>\n|;
+            }
+            # we don't want control to return to insertRecord() (which called this
+            # method and will insert the record after control returns to it after
+            # calling this method, thus potentially creating a duplicate record if
+            # the user chooses to continue.
+            # Terminate this server session, and wait for user's response.
+            exit;
+        }
+    }
+}
 
 1;

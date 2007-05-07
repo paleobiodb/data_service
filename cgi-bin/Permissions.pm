@@ -9,6 +9,7 @@ package Permissions;
 use strict;
 use CGI::Carp;
 use Person;
+use Debug qw(dbg);
 
 #session and date objcts
 use fields qw(s dbt);
@@ -144,14 +145,14 @@ sub getReadRows {
 
 		if ( $okToRead ) {
 			# May see row
-			&dbg ( "okToRead [".$row->{collection_no}."]: ".$row->{rd_short}." > ".$now." $okToRead" );
+			dbg ( "okToRead [".$row->{collection_no}."]: ".$row->{rd_short}." > ".$now." $okToRead",2);
 
 			# Stow away the limit of rows (for later...)
 			if ( $$ofRows < $limit ) { push ( @{$dataRows}, $row ); }
 			$$ofRows++;		# This is the number of rows they could see, not the limit
 		} else {
 			# May not see row
-	 			&dbg (	"<font color='red'>".
+	 			dbg (	"<font color='red'>".
 	 					"Not ok[".$row->{collection_no}."]: ".$row->{rd_short}." > ".$now.
 	 					"</font>".
 	 					" al: ".$row->{access_level}.
@@ -159,7 +160,7 @@ sub getReadRows {
 	 					" you: ".$s->get("enterer_no").
 	 					" aut: ".$s->get("authorizer_no").  
 	 					" pb: ".$s->get("paleobotany").
-	 					$failedReason );
+	 					$failedReason ,2);
 		}
 	}
 }
@@ -199,19 +200,19 @@ sub getWriteRows {
 
 		if ( $okToWrite ) {
 			# May see row
-			&dbg ( "okToWrite [".$row->{collection_no}."]: $okToWrite" );
+			dbg ( "okToWrite [".$row->{collection_no}."]: $okToWrite" ,2);
 
 			# Stow away the limit of rows (for later...)
 			if ( $$ofRows < $limit ) { push ( @{$dataRows}, $row ); }
 			$$ofRows++;		# This is the number of rows they could see, not the limit
 		} else {
 			# May not see row
-	 			&dbg ("<font color='red'>".
+	 			dbg ("<font color='red'>".
 	 					"Not ok[".$row->{collection_no}."]: ".
 	 					"</font>".
 	 					" you: ".$s->get("enterer").
 	 					" aut: ".$s->get("authorizer").  
-	 					$failedReason );
+	 					$failedReason ,2);
 		}
 	}
 }
@@ -266,7 +267,7 @@ sub getReadWriteRowsForEdit{
 
 		if ( $okToWrite ) {
 		    # May see row
-		    dbg( "okToWrite [".$row->{collection_no}."]: $okToWrite" );
+		    dbg( "okToWrite [".$row->{collection_no}."]: $okToWrite" ,2);
 
 		} else {
 			# May not see row
@@ -275,7 +276,7 @@ sub getReadWriteRowsForEdit{
 	 			"</font>".
 	 			" entr: ".$s->get("enterer_no").
 	 			" aut: ".$s->get("authorizer_no").  
-	 			$failedReason );
+	 			$failedReason ,2);
 		}
 	}
 	return @results;
@@ -309,6 +310,7 @@ sub getModifierList {
 # And give options to add and delete from the list
 sub displayPermissionListForm {
     my ($dbt,$q,$s,$hbo) = @_;
+    $dbt->useRemote(1);
 
     # First make sure they're logged in
     my $authorizer_no = int($s->get('authorizer_no'));
@@ -457,6 +459,7 @@ sub displayPermissionListForm {
 # Both should be pretty straightforward
 sub submitPermissionList {
     my ($dbt,$q,$s,$hbo) = @_;
+    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
     # First make sure they're logged in
     my $authorizer_no = int($s->get('authorizer_no'));
@@ -531,6 +534,7 @@ sub submitPermissionList {
 # Both should be pretty straightforward
 sub submitHeir {
     my ($dbt,$q,$s,$hbo) = @_;
+    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
     # First make sure they're logged in
     my $authorizer_no = int($s->get('authorizer_no'));
@@ -577,12 +581,6 @@ sub submitHeir {
     displayPermissionListForm($dbt,$q,$s,$hbo);
 }   
 
-
-sub dbg {
-	my $message = shift;
-	if ( $DEBUG && $message ) { print "<font color='green'>$message</font><BR>\n"; }
-	return $DEBUG;
-}
 
 # This only shown for internal errors
 sub htmlError {

@@ -531,7 +531,6 @@ sub queryNeptuneDB {
 
     if (@errors) {
         print Debug::printErrors(\@errors);
-        print main::stdIncludes("std_page_bottom");
         exit;
     }
 

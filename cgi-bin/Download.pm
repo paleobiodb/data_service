@@ -3,10 +3,16 @@ package Download;
 use PBDBUtil;
 use Classification;
 use TimeLookup;
+use TaxonInfo;
+use Validation;
+use Ecology;
+use Taxon;
 use Data::Dumper;
 use DBTransactionManager;
 use TaxaCache;
 use CGI::Carp;
+use Person;
+use Measurement;
 use Text::CSV_XS;
 
 use strict;

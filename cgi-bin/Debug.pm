@@ -3,9 +3,14 @@
 #
 
 package Debug;
-
+require Exporter;
+@ISA = qw(Exporter);
+@EXPORT_OK = qw(dbg);  # symbols to export on request
 
 use strict;
+
+# Debug level, 1 is minimal debugging, higher is more verbose
+$Debug::DEBUG = 0;
 
 # prints the passed string to a debug file
 # called "debug_log"
@@ -50,7 +55,12 @@ sub logError {
 
 # Utilitiy, no other place to put it PS 01/26/2004
 sub printWarnings {
-    my @msgs = @{$_[0]} if $_[0];
+    my @msgs;
+    if (ref $_[0]) {
+        @msgs = @{$_[0]};
+    } else {
+        @msgs = @_;
+    }
     my $return = "";
     if (scalar(@msgs)) {
         my $plural = (scalar(@msgs) > 1) ? "s" : "";
@@ -65,7 +75,12 @@ sub printWarnings {
 }
 
 sub printErrors{
-    my @msgs = @{$_[0]} if $_[0];
+    my @msgs;
+    if (ref $_[0]) {
+        @msgs = @{$_[0]};
+    } else {
+        @msgs = @_;
+    }
     my $return = "";
     if (scalar(@msgs)) {
         my $plural = (scalar(@msgs) > 1) ? "s" : "";
@@ -78,5 +93,14 @@ sub printErrors{
     }
     return $return;
 }  
+
+sub dbg {
+    my $message = shift;
+    my $level = shift || 1;
+    if ( $Debug::DEBUG && $Debug::DEBUG >= $level && $message ) {
+        print "<font color='green'>$message</font><br>\n"; 
+    }
+    return $Debug::DEBUG;
+}
 
 1;

@@ -1,6 +1,6 @@
 package Map;
 
-use Debug;
+use Debug qw(dbg);
 use URI::Escape;                                                                                                                                            
 use GD;
 use CGI::Carp;
@@ -10,9 +10,9 @@ use TimeLookup;
 use Digest::MD5;
 
 # Flags and constants
-my $dbh;    # The database handle
 my $dbt;    # The DBTransactionManager object
 my $q;	    # Reference to the parameters
+my $s;
 
 my $BRIDGE_HOME = "/cgi-bin/bridge.pl";
 my $GIF_HTTP_ADDR = "/public/maps";
@@ -50,13 +50,15 @@ my %map_defaults = (
 
           
 sub new {
-	my $class = shift;
-	$q = shift;
-	$dbt = shift;
-    $dbh = $dbt->dbh if $dbt;
-    $q = new CGI unless $q;
+    my $class = shift;
+    $q = shift;
+    $dbt = shift;
+    $s = shift;
+    unless ($q) {
+        $q = new CGI;
+    }
 
-	# some functions that call Map do not pass a q object
+	# some functions that call Map do not pass a q or s object
 	my $self = {plate=>[]};
 	if ($q)	{
 		if ($q->param('linecommand') =~ /[A-Za-z]/)	{
@@ -193,7 +195,7 @@ sub mapQueryDB {
                 if ($toptions{'interval_name'}) {
                     ($toptions{'eml_max_interval'},$toptions{'max_interval'}) = TimeLookup::splitInterval($toptions{'interval_name'});
                 }
-                my ($dataRowsRef,$ofRows) = main::processCollectionsSearch($dbt,\%toptions,$fields);  
+                my ($dataRowsRef,$ofRows) = Collection::getCollections($dbt,$s,\%toptions,$fields);  
                 $self->{'options'} = \%toptions;
                 $dataSets[$ptset] = $dataRowsRef;
             }
@@ -206,7 +208,7 @@ sub mapQueryDB {
             if ($options{'interval_name'}) {
                 ($options{'eml_max_interval'},$options{'max_interval'}) = TimeLookup::splitInterval($options{'interval_name'});
             }
-            my ($dataRowsRef,$ofRows,$warnings) = main::processCollectionsSearch($dbt,\%options,$fields);  
+            my ($dataRowsRef,$ofRows,$warnings) = Collection::getCollections($dbt,$s,\%options,$fields);  
             push @warnings, @$warnings; 
             $self->{'options'} = \%options;
             $dataSets[$ptset] = $dataRowsRef;
@@ -1111,7 +1113,7 @@ sub mapSetupImage {
     if (-e $pngTileName) {
         $im = GD::Image->newFromPng($pngTileName,1);
         if ($im) {
-            main::dbg("Using premade tile $tileID");
+            dbg("Using premade tile $tileID");
             $self->initPalette($im);
             open(AI_TILE,"<$aiTileName");
             while(<AI_TILE>) {
@@ -1787,7 +1789,7 @@ sub mapDrawPoints{
                     $longVal{$x1} = $coll{'lngdeg'} . $lnghalf . " " . $coll{'lngdir'};
                     $latVal{$y1} = $coll{'latdeg'} . $lathalf . " " . $coll{'latdir'};
 
-                    #main::dbg("Collection ".$coll{'collection_no'}." pixels($x1,$y1) " 
+                    #dbg("Collection ".$coll{'collection_no'}." pixels($x1,$y1) " 
                     #         . "with degrees(".$coll{'lngdeg'}." ".$coll{'lngmin'}."/".$coll{'lngdec'}.",".$coll{'latdeg'}." ".$coll{'latmin'}."/".$coll{'latdec'}.")"
                     #         . "binned to degrees(".$longVal{$x1}.",".$latVal{$y1}.")");
 
@@ -2664,7 +2666,7 @@ sub getTileID {
     my $data = "";
     foreach my $p (@tileParams) {
         $data .= "$p=".$q->param($p);
-        main::dbg("$p=".$q->param($p));
+        dbg("$p=".$q->param($p));
     }
     my $id = Digest::MD5::md5_hex($data);
     return $id;

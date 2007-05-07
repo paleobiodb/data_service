@@ -7,11 +7,10 @@ use Text::CSV_XS;
 use PBDBUtil;
 use TimeLookup;
 use Data::Dumper;
+use Debug qw(dbg);
 use strict;
 
 # Flags and constants
-my $DEBUG=0;			# The debug level of the calling program
-
 my $HOST_URL = $ENV{BRIDGE_HOST_URL};
 my $OUTFILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
 my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
@@ -287,7 +286,7 @@ sub reportBuildDataTables {
     my %occs_totals2 = ();
     my %occs_dataTable = ();
 
-    $self->dbg("t1FieldCnt $t1FieldCnt t2FieldCnt $t2FieldCnt t1Type $t1Type t2Type $t2Type t1Fields "
+    dbg("t1FieldCnt $t1FieldCnt t2FieldCnt $t2FieldCnt t1Type $t1Type t2Type $t2Type t1Fields "
               .join(",",@t1Fields)." t2Fields ".join(",",@t2Fields));
 
     while(my $row = $sth->fetchrow_hashref()) {
@@ -698,7 +697,7 @@ sub reportQueryDB{
             my %taxon_nos_unique = ();
             foreach my $taxon (@taxa) {
                 my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon, undef, 1);
-                $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
+                dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
                 if (scalar(@taxon_nos) == 0) {
                     $genus_names_string .= ", ".$dbh->quote($taxon);
                 } elsif (scalar(@taxon_nos) == 1) {
@@ -736,7 +735,7 @@ sub reportQueryDB{
     $sql .= " GROUP BY ".$groupSQL;
 
     if ($groupSQL) {
-        $self->dbg("SQL:".$sql);
+        dbg("SQL:".$sql);
        
         my $sth = $dbh->prepare($sql) || die "Prepare query failed\n";
         $sth->execute() || die "Execute query failed\n";
@@ -823,8 +822,8 @@ sub getTranslationTable {
             }
         }
     }
-    $self->dbg("get translation table called with param $param. table:");
-    $self->dbg("<pre>".Dumper(\%table)."</pre>") if (scalar keys %table);
+    dbg("get translation table called with param $param. table:");
+    dbg("<pre>".Dumper(\%table)."</pre>") if (scalar keys %table);
 
     return \%table;
 }
@@ -876,15 +875,6 @@ sub htmlError {
 
     print $message;
     exit 1;
-}
-
-sub dbg {
-	my $self = shift;
-	my $message = shift;
-
-	if ( $DEBUG && $message ) { print "<font color='green'>$message</font><BR>\n"; }
-
-	return $DEBUG;					# Either way, return the current DEBUG value
 }
 
 1;

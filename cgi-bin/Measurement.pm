@@ -2,6 +2,7 @@ package Measurement;
 use Data::Dumper;
 use CGI::Carp;
 use TaxaCache;
+use Debug qw(dbg);
 
 # written by PS 6/22/2005 - 6/24/2005
 # Handle display and processing of form to enter measurements for specimens
@@ -17,6 +18,9 @@ my @measurement_fields=('average','median','min','max','error','error_unit');
 #
 sub submitSpecimenSearch {
     my  ($dbt,$hbo,$q,$s,$exec_url) = @_;
+    if ($s->isDBMember()) {
+        $dbt->useRemote(1);
+    }
     my $dbh = $dbt->dbh;
 
     if (!$q->param('taxon_name') && !int($q->param('collection_no'))) {
@@ -66,7 +70,7 @@ sub submitSpecimenSearch {
     $sql2 .= " GROUP BY o.occurrence_no";
     $sql .= "($sql1) UNION ($sql2) ORDER BY collection_no";
 
-    main::dbg("SQL is $sql");       
+    dbg("SQL is $sql");       
 
     my @results = @{$dbt->getData($sql)};
 
@@ -74,7 +78,7 @@ sub submitSpecimenSearch {
     my @results_taxa_only;
     if ($taxon_nos && !$q->param('collection_no')) {
         my $sql = "SELECT a.taxon_no,a.taxon_rank,a.taxon_name, count(DISTINCT specimen_no) cnt FROM authorities a LEFT JOIN specimens s ON s.taxon_no=a.taxon_no WHERE a.taxon_no IN ($taxon_nos) GROUP BY a.taxon_no ORDER by a.taxon_name";
-        main::dbg("SQL for authorities only is $sql");
+        dbg("SQL for authorities only is $sql");
         @results_taxa_only = @{$dbt->getData($sql)};
     }
 
@@ -150,6 +154,9 @@ sub submitSpecimenSearch {
 #
 sub displaySpecimenList {
     my ($dbt,$hbo,$q,$s,$exec_url) = @_;
+    if ($s->isDBMember()) {
+        $dbt->useRemote(1);
+    }
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
 	if ( ! $q->param('occurrence_no') && ! $q->param('taxon_no')) {
@@ -192,7 +199,7 @@ sub displaySpecimenList {
         } else {
             $sql = "SELECT s.*,m.*,s.taxon_no FROM specimens s, measurements m WHERE s.specimen_no=m.specimen_no AND s.taxon_no=$taxon_no";
         }
-        main::dbg("sql is $sql");
+        dbg("sql is $sql");
         @results = @{$dbt->getData($sql)};
 
         my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>int($q->param('taxon_no'))});
@@ -308,7 +315,9 @@ sub displaySpecimenList {
 }
 
 sub populateMeasurementForm {
-    my ($dbh,$dbt,$hbo,$q,$s,$exec_url) = @_;
+    my ($dbt,$hbo,$q,$s,$exec_url) = @_;
+    $dbt->useRemote(1);
+    my $dbh = $dbt->dbh;
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
     if ( ! $q->param('occurrence_no') && ! $q->param('taxon_no')) {
@@ -358,7 +367,7 @@ sub populateMeasurementForm {
         # This is a new entry
         if (!$s->get('reference_no')) {
             # Make them choose a reference first
-            $s->enqueue( $dbh, $q->query_string());
+            $s->enqueue($q->query_string());
             main::displaySearchRefs("Please choose a reference before adding specimen measurement data",1);
             return;
         } else {
@@ -441,7 +450,9 @@ sub populateMeasurementForm {
 }
 
 sub processMeasurementForm	{
-    my ($dbh,$dbt,$hbo,$q,$s,$exec_url) = @_;
+    my ($dbt,$hbo,$q,$s,$exec_url) = @_;
+    $dbt->useRemote(1);
+    my $dbh = $dbt->dbh;
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
     if ( ! $q->param('occurrence_no') && ! $q->param('taxon_no')) {
@@ -561,18 +572,18 @@ sub processMeasurementForm	{
                             }
                         }
                         $in_cgi{$type}{'error_unit'} = $fields{$type."_error_unit"};
-                        main::dbg("UPDATE, TYPE $type: ".Dumper($in_cgi{$type}));
+                        dbg("UPDATE, TYPE $type: ".Dumper($in_cgi{$type}));
 #                        $row->{'error_unit'} = $q->param($type."_error_unit");
                         #$dbt->insertRecord($s,'measurements',$row);
                         $dbt->updateRecord($s,'measurements','measurement_no',$in_db{$type}{'measurement_no'},$in_cgi{$type});
                     } elsif ($in_db{$type}) {
                         # Else if it exists only in the database now, delete it 
                         $sql = "DELETE FROM measurements WHERE measurement_no=".$in_db{$type}{'measurement_no'} . " LIMIT 1";
-                        main::dbg("DELETING type $type: $sql");
+                        dbg("DELETING type $type: $sql");
                         $dbt->getData($sql);
                     } elsif ($in_cgi{$type}) {
                         # Else if its in the form and NOT in the DB, add it
-                        main::dbg("INSERT, TYPE $type: ".Dumper($row));
+                        dbg("INSERT, TYPE $type: ".Dumper($row));
                         foreach my $f (grep(!/error_unit/,@measurement_fields)) {
                             if ($fields{'magnification'} =~ /^[0-9.]+$/) {
                                 $in_cgi{$type}{'real_'.$f}=$in_cgi{$type}{$f}/$fields{'magnification'};
@@ -630,7 +641,7 @@ sub processMeasurementForm	{
                             $row->{'real_'.$f} = $row->{$f};
                         }
                     }
-                    main::dbg("INSERT, TYPE $type: ".Dumper($row));
+                    dbg("INSERT, TYPE $type: ".Dumper($row));
                     $row->{'measurement_type'} = $type;
                     $row->{'specimen_no'} = $specimen_no;
                     $row->{'error_unit'}=$fields{$type."_error_unit"};
@@ -675,6 +686,7 @@ sub processMeasurementForm	{
 
 sub syncWithAuthorities {
     my ($dbt,$s,$hbo,$specimen_no) = @_;
+    $dbt->useRemote(1);
     my $sql = "SELECT taxon_no,magnification,specimen_part,specimen_id FROM specimens WHERE specimen_no=$specimen_no";
     my $row = ${$dbt->getData($sql)}[0];
     if ($row && $row->{'taxon_no'} =~ /\d/ && $row->{'magnification'} <= 1) {
@@ -774,7 +786,7 @@ sub getMeasurements {
     } #else {
       #  $sql = $sql1;
     #}
-    main::dbg("SQL is $sql");
+    dbg("SQL is $sql");
 
     my @results = @{$dbt->getData($sql)};
     return @results;
@@ -812,7 +824,7 @@ sub getMeasurementTable {
         if (! exists $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}) {
             $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}} = {};
         } 
-        my $part_type = $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}};
+        $part_type = $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}};
 #        $p_table{'a_mean'}{$row->{'measurement_type'}} += $row->{'specimens_measured'} * $row->{'real_average'};
         # Note that "average" is the geometric mean - a_mean (arithmetic mean) is not used right now
         $part_type->{'specimens_measured'} += $row->{'specimens_measured'};

@@ -1,6 +1,48 @@
 package Person;
 use strict;
 
+# Poling code calved off from displayLoginPage by JA 13.4.04
+sub makeAuthEntJavascript {
+    my $dbt = shift;
+
+	####
+	## We need to build a list of the enterers and authorizers for 
+	## the java script to use for autocompletion.
+	####
+	my $authListRef = listOfAuthorizers($dbt);
+	my $entListRef = listOfEnterers($dbt);
+	
+	my $authList;
+	my $entList;
+	foreach my $p (@$authListRef) {
+		$authList .= "\"" . reverseName($p->{'name'}) . "\", ";  # reversed name
+	}
+	$authList =~ s/,\s*$//; # remove last comma and space if present.
+
+
+	foreach my $p (@$entListRef) {
+		$entList .= "\"" . reverseName($p->{'name'}) . "\", ";  # reversed name
+	}
+	$entList =~ s/,\s*$//; # remove last comma and space if present.
+
+	my $javaScript = '<SCRIPT language="JavaScript" type="text/javascript">
+	// returns an array of enterer names
+	function entererNames() {
+		var names = new Array(' . $entList . ');
+		return names;
+	}
+		
+	// returns an array of enterer names
+	function authorizerNames() {
+		var names = new Array(' . $authList . ');
+		return names;
+	} 
+	</SCRIPT>
+	';
+
+	return $javaScript;
+}
+
 # can pass it an optional argument, activeOnly
 # if true, then only return active authorizers.
 sub listOfAuthorizers {
@@ -216,6 +258,7 @@ sub scramble {
     }  
     return $email;
 }
+
 
 
 # end of Person.pm

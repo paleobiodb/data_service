@@ -337,8 +337,8 @@ function doCheckFieldsTaphonomy() {
    </tr></table>
    </div>
 
-  <form name="form" action="$exec_url" method="post" onSubmit="return checkFields();">
-  <span id="page_target"></span>
+  <form name="form" action="bridge.pl" method="post" onSubmit="return checkFields();">
+  <input type="hidden" name="action" value="processCollectionForm">
   <input id="use_primary" type="hidden">
   <input id="reference_no" type="hidden">
   <input id="collection_no" type="hidden">

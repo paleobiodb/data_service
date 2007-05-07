@@ -19,6 +19,7 @@
 
 package Validation;
 use strict;
+use TimeLookup;
 
 
 # pass this a string and it returns a "cleaned" copy of it.
@@ -32,10 +33,8 @@ sub clean {
 	
 		#my $validChars = '(?:[-A-Za-z"=0-9%._]|\s)*';
 
-	#Debug::dbPrint("in = $in");
 	$in =~ s/ < [\/]? (?:[-A-Za-z"=0-9%._]|\s)+ >//gx;
 
-	#Debug::dbPrint("new in = $in");
 
 	# comment out the escape quote marks for now..
 	# because it would be an issue if some other code tried to escape them again... 
@@ -126,8 +125,6 @@ sub properLastName {
 	
 	if ((!$input) || $input eq "") { return 0; }
 	
-	#Debug::dbPrint("properLastName($input) returns " . 
-
     # If its just a bunch of capital letters repress it
     # Take lengths <= 3 to be acronyms (such as ETE)
 	if ($input =~ m/^[A-Z][A-Z]/ && length($input) > 3) {

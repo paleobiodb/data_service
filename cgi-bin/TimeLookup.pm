@@ -782,8 +782,24 @@ sub makePrecedesHashX {
     }
 }
 
-
 sub getBoundaries {
+    my $self = shift;
+    my $dbt = $self->{dbt};
+
+    my %ub = ();
+    my %lb = ();
+
+    my $sql = "SELECT interval_no,upper_boundary,lower_boundary FROM interval_lookup";
+    my @results = @{$dbt->getData($sql)};
+    foreach my $row (@results) {
+        $ub{$row->{interval_no}} = $row->{upper_boundary};
+        $lb{$row->{interval_no}} = $row->{upper_boundary};
+    }
+
+    return (\%ub,\%lb);
+}
+
+sub getBoundariesReal {
     my $self = shift;
     my $return_type = shift;
     my $ig = $self->getIntervalGraph;
@@ -2197,7 +2213,7 @@ sub generateLookupTable {
     my $subepoch_lookup = $self->getScaleMapping('72');
     my $stage_lookup    = $self->getScaleMapping('73');
     my $bin_lookup      = $self->getScaleMapping('bins');
-    my ($ub_lookup,$lb_lookup) = $self->getBoundaries;
+    my ($ub_lookup,$lb_lookup) = $self->getBoundariesReal;
     my $ig = $self->getIntervalGraph;
 
     my $sql = "SELECT interval_no FROM intervals";
@@ -2231,6 +2247,7 @@ sub generateLookupTable {
 sub serializeItv {
     my ($self,$itv) = @_;
     my %new_hash = (
+        'is_obsolete'=>$self->isObsolete($itv->{interval_no}),
         'lower_boundary'=>$itv->{'lower_boundary'},
         'upper_boundary'=>$itv->{'upper_boundary'},
         'lower_estimate_type'=>$itv->{'lower_estimate_type'},

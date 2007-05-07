@@ -2,6 +2,7 @@ package Scales;
 
 use Data::Dumper;
 use TimeLookup;
+use strict;
 
 # written by JA 7-20.7.03
 # caught a bug JA 23.7.03
@@ -16,14 +17,13 @@ use TimeLookup;
 # +/+ processViewTimeScale
 # +/+ processEditScaleForm
 
-sub startSearchScale	{
-	my $dbh = shift;
+sub startSearchScale {
 	my $dbt = shift;
 	my $s = shift;
-	my $exec_url = shift;
+
+    my $dbh = $dbt->dbh;
 
 	# Print the form
-	print main::stdIncludes("std_page_top");
 	print "<div align=\"center\"><h2>Select a time scale to view</h2>\n";
 
 	# Retrieve each scale's name from the database
@@ -119,7 +119,6 @@ function unloadPage()	{
 
 |;
 
-	print main::stdIncludes("std_page_bottom");
 
 	return;
 
@@ -128,26 +127,26 @@ function unloadPage()	{
 # WARNING: facelift of display page means that editing is no longer possible,
 #  because pulldown with scales has been dropped
 sub processShowEditForm	{
-	my $dbh = shift;
 	my $dbt = shift;
+    $dbt->useRemote(1);
 	my $hbo = shift;
 	my $q = shift;
 	my $s = shift;
-	my $exec_url = shift;
+	my $dbh = $dbt->dbh;
 
 	# Have to have a reference #
 	my $reference_no = $s->get("reference_no");
+    my $scale = int($q->param('scale'));
 	if ( ! $reference_no )	{
 		if ( $q->param('scale') )	{
-			$s->enqueue( $dbh, "action=processShowForm&scale=" . $q->param('scale') );
+			$s->enqueue( "action=processShowForm&scale=$scale");
 		} else	{
-			$s->enqueue( $dbh, "action=processShowForm" );
+			$s->enqueue( "action=processShowForm" );
 		}
 		main::displaySearchRefs ( "Please choose a reference first" );
 		exit;
 	}
 
-	print main::stdIncludes("std_page_top");
 
 	# Get data on the scale if it's an old one
 	my @results;
@@ -259,7 +258,6 @@ sub processShowEditForm	{
 
 	print "</form>\n";
 
-	print main::stdIncludes("std_page_bottom");
 
 	return;
 }
@@ -269,16 +267,11 @@ sub processViewTimeScale	{
 	my $hbo = shift;
 	my $q = shift;
 	my $s = shift;
-	my $exec_url = shift;
-	my $stage = shift;
+    my $stage = shift;
 	my $bad = shift;
 
     my @badintervals;
     @badintervals = @$bad if $bad;
-
-	if ( $stage ne "summary" )	{
-		print main::stdIncludes("std_page_top");
-	}
 
 	# new submit form has a ton of scale parameters; strip out the first
 	# one that isn't blank
@@ -412,28 +405,27 @@ sub processViewTimeScale	{
 		print "<div align=\"center\"><p><b><a href=\"bridge.pl?action=startScale\">View another time scale</a></b></p></div>\n\n";
 	}
 
-	if ( $stage ne "summary" )	{
-		print main::stdIncludes("std_page_bottom");
-	}
-
 	return;
-
 }
 
 sub processEditScaleForm	{
 	my $dbt = shift;
+    $dbt->useRemote(1);
 	my $hbo = shift;
 	my $q = shift;
 	my $s = shift;
 
-	print main::stdIncludes("std_page_top");
+    my $authorizer_no = $s->get('authorizer_no');
+    my $enterer_no = $s->get('enterer_no');
+    return unless $authorizer_no;
+
+    $dbt->editMode(1);
+    my $dbh_r = $dbt->dbh_remote;
+
+    my $scale_no = int($q->param('scale_no'));
+    die unless ($scale_no && $scale_no =~ /^[0-9]+$/);
 
 	my $scale_name = $q->param('scale_name');
-	my $scale_comments = $q->param('scale_comments');
-
-	# escape single quotes
-	$scale_name =~ s/'/\\'/g;
-	$scale_comments =~ s/'/\\'/g;
 
 	my @correlation_nos = $q->param('correlation_no');
 	my @interval_nos = $q->param('interval_no');
@@ -449,58 +441,20 @@ sub processEditScaleForm	{
 	my @lower_boundaries = $q->param('lower_boundary');
 	my @comments_fields = $q->param('corr_comments');
 
-	my $sql;
-
-	$sql = "SELECT person_no FROM person WHERE name='";
-	$sql .= $s->get('authorizer') . "'";
-	my @nos = @{$dbt->getData($sql)};
-	my $authorizer_no = $nos[0]->{person_no};
-
-	$sql = "SELECT person_no FROM person WHERE name='";
-	$sql .= $s->get('enterer') . "'";
-	@nos = @{$dbt->getData($sql)};
-	my $enterer_no = $nos[0]->{person_no};
-
-	my $scale_no;
-	if ( $q->param('scale_no') =~ /[0-9]/ )	{
-	# update the scales table
-		$scale_no = $q->param('scale_no');
-		$sql = "UPDATE scales SET modifier_no=";
-		$sql .= $enterer_no . ", ";
-		$sql .= "scale_name='". $scale_name . "', ";
-		$sql .= "continent='" . $q->param('continent') . "', ";
-		$sql .= "basis='" . $q->param('basis') . "', ";
-		$sql .= "scale_rank='" . $q->param('scale_rank') . "', ";
-		$sql .= "scale_comments='" . $scale_comments . "'";
-		$sql .= " WHERE scale_no=" . $q->param('scale_no');
-		$dbt->getData($sql);
+    my %vars = (
+        scale_name  =>$scale_name,
+        continent   =>$q->param('continent'),
+        basis       =>$q->param('basis'),
+        scale_rank  =>$q->param('scale_rank'),
+        scale_comments=>$q->param('scale_comments')
+    );
+	if ($scale_no =~ /[0-9]/ )	{
+	    # update the scales table
+        $dbt->updateRecord($s,'scales','scale_no',$scale_no,\%vars);
 	} else	{
-	# add to the scales table
-
-		$sql = "INSERT INTO scales (authorizer_no,enterer_no,reference_no,scale_name,continent,basis,scale_rank,scale_comments) VALUES ('";
-		$sql .= $authorizer_no . "', '";
-		$sql .= $enterer_no . "', '";
-		$sql .= $s->get('reference_no') . "', '";
-		$sql .= $scale_name . "', '";
-		$sql .= $q->param('continent') . "', '";
-		$sql .= $q->param('basis') . "', '";
-		$sql .= $q->param('scale_rank') . "', '";
-		$sql .= $scale_comments . "')";
-		$dbt->getData($sql);
-
-		$sql = "SELECT scale_no FROM scales WHERE scale_name='";
-		$sql .= $scale_name . "'";
-		my @nos = @{$dbt->getData($sql)};
-		$scale_no = $nos[0]->{scale_no};
-
-		# set the created date
-		$sql = "SELECT modified FROM scales WHERE scale_name='";
-		$sql .= $scale_name . "'";
-		my @modifieds = @{$dbt->getData($sql)};
-		$sql = "UPDATE scales SET modified=modified,created=";
-		$sql .= $modifieds[0]->{modified} . " WHERE scale_no=" . $scale_no;
-		$dbt->getData($sql);
-
+    	# add to the scales table
+        my ($result,$id) = $dbt->insertRecord($s,'scales',\%vars);
+        $scale_no = $id;
 	}
 
 	my %fieldused;
@@ -518,7 +472,7 @@ sub processEditScaleForm	{
 		my $max_interval_no = "";
 		my $min_interval_no = "";
 		if ( $max_interval_names[$i] =~ /[A-Za-z]/ )	{
-			$sql = "SELECT interval_no FROM intervals WHERE ";
+			my $sql = "SELECT interval_no FROM intervals WHERE ";
 			$sql .= "eml_interval='" . $eml_max_intervals[$i] . "'";
 			$sql .= " AND interval_name='" . $max_interval_names[$i] . "'";
 			my @nos = @{$dbt->getData($sql)};
@@ -530,7 +484,7 @@ sub processEditScaleForm	{
 		}
 
 		if ( $min_interval_names[$i] =~ /[A-Za-z]/ )	{
-			$sql = "SELECT interval_no FROM intervals WHERE ";
+			my $sql = "SELECT interval_no FROM intervals WHERE ";
 			$sql .= "eml_interval='" . $eml_min_intervals[$i] . "'";
 			$sql .= " AND interval_name='" . $min_interval_names[$i] . "'";
 			my @nos = @{$dbt->getData($sql)};
@@ -543,7 +497,7 @@ sub processEditScaleForm	{
 
 		# if the interval name and no don't match, erase the no
 		if ( $correlation_nos[$i] > 0 && $interval_nos[$i] > 0 )	{
-			$sql = "SELECT eml_interval,interval_name FROM intervals WHERE ";
+			my $sql = "SELECT eml_interval,interval_name FROM intervals WHERE ";
 			$sql .= " interval_no=" . $interval_nos[$i];
 			my @names = @{$dbt->getData($sql)};
 			if ( $names[0]->{eml_interval} ne $eml_intervals[$i] || $names[0]->{interval_name} ne $interval_names[$i] )	{
@@ -553,7 +507,7 @@ sub processEditScaleForm	{
 
 		if ( $correlation_nos[$i] > 0 )	{
 			# update the correlations able
-			$sql = "UPDATE correlations SET ";
+			my $sql = "UPDATE correlations SET ";
 			$sql .= "modifier_no='" . $enterer_no;
 			$sql .= "',next_interval_no='" . $next_interval_no;
 			$sql .= "',max_interval_no='" . $max_interval_no;
@@ -561,23 +515,21 @@ sub processEditScaleForm	{
 			$sql .= "',lower_boundary='" . $lower_boundaries[$i];
 			$sql .= "',corr_comments='" . $comments_fields[$i] . "'";
 			$sql .= " WHERE correlation_no=" . $correlation_nos[$i];
-			$dbt->getData($sql);
+			$dbh_r->do($sql);
 		}
 
 		if ( $correlation_nos[$i] > 0 && $interval_nos[$i] > 0 )	{
 			# update the intervals table
-			$sql = "UPDATE intervals SET ";
+			my $sql = "UPDATE intervals SET ";
 			$sql .= "modifier_no='" . $enterer_no . "'";
 			$sql .= " WHERE interval_no=" . $interval_nos[$i];
-			$dbt->getData($sql);
+			$dbh_r->do($sql);
 
 			$next_interval_no = $interval_nos[$i];
 
 		} elsif ( $interval_names[$i] =~ /[A-Za-z]/)	{
-
-
 			# look for the interval
-			$sql = "SELECT interval_no FROM intervals WHERE ";
+			my $sql = "SELECT interval_no FROM intervals WHERE ";
 			$sql .= "eml_interval='" . $eml_intervals[$i] . "'";
 			$sql .= " AND interval_name='" . $interval_names[$i] . "'";
 			my @nos = @{$dbt->getData($sql)};
@@ -591,7 +543,7 @@ sub processEditScaleForm	{
 				$sql .= $eml_intervals[$i] . "', ";
 				$sql .= $s->get('reference_no') . ", '";
 				$sql .= $interval_names[$i] . "')";
-				$dbt->getData($sql);
+				$dbh_r->getData($sql);
 
 				# set the interval no
 				$sql = "SELECT interval_no FROM intervals WHERE ";
@@ -672,10 +624,10 @@ sub processEditScaleForm	{
 					if ( $#matches > -1 )	{
 						if ( $minmax eq "max" )	{
 							my $sql = "UPDATE collections SET modified=modified,max_interval_no='" . $interval_no . "' WHERE collection_no IN ( " . join(",",@matches) . " )";
-							$dbt->getData($sql);
+							$dbh_r->do($sql);
 						} elsif ( $minmax eq "min" )	{
 							my $sql = "UPDATE collections SET modified=modified,min_interval_no='" . $interval_no . "' WHERE collection_no IN ( " . join(",",@matches) . " )";
-							$dbt->getData($sql);
+							$dbh_r->do($sql);
 						}
 					}
 				}
@@ -744,9 +696,9 @@ sub processEditScaleForm	{
     $t->generateLookupTable;
 
 	$q->param('scale' => $scale_no);
-	processViewTimeScale($dbt, $hbo, $q, $s, 'bridge.pl', 'summary', \@badintervals);
+	processViewTimeScale($dbt, $hbo, $q, $s, 'summary', \@badintervals);
 
-	print main::stdIncludes("std_page_bottom");
+    $dbt->editMode(0);
 
 	return;
 }
@@ -754,10 +706,9 @@ sub processEditScaleForm	{
 
 # JA 9.8.04
 sub displayTenMyBins	{
-    my ($dbt) = @_;
+    my ($dbt,$q,$s,$hbo) = @_;
     my $t = new TimeLookup($dbt);
 
-	print main::stdIncludes("std_page_top");
 
 	print "<center><h2>10 m.y.-Long Sampling Bins</h2></center>\n\n";
 
@@ -811,14 +762,12 @@ sub displayTenMyBins	{
 	}
 	print "</table>\n<p>\n\n";
 
-	print main::stdIncludes("std_page_bottom");
 }
 
 sub displayTenMyBinsDebug {
-    my ($dbt) = @_;
+    my ($dbt,$q,$s,$hbo) = @_;
     my $t = new TimeLookup($dbt);
 
-	print main::stdIncludes("std_page_top");
 
 	print "<center><h2>10 m.y.-Long Sampling Bins</h2></center>\n\n";
 
@@ -876,7 +825,6 @@ sub displayTenMyBinsDebug {
 	}
 	print "</table>\n<p>\n\n";
 
-	print main::stdIncludes("std_page_bottom");
 }
 
 sub itvsort {
@@ -998,6 +946,7 @@ sub displayInterval {
         my $type = shift;
         my $src = $itv->{$type.'_boundarysrc'};
         my $src_link = "<a href=\"bridge.pl?action=displayInterval&interval_no=$src->{interval_no}\">$src->{interval_name}</a>";
+        my $i = $src->{interval_no};
         if ($itv->{$type."_boundary"} eq "0" && $itv->{$type.'_estimate_type'} =~ /direct/) {
             return "direct";
         } if ($itv->{$type.'_estimate_type'} =~ /direct/ && $itv->{$type.'_boundarysrc_no'} == $i) {
@@ -1034,7 +983,7 @@ sub displayInterval {
         
         my $upper = TimeLookup::printBoundary($itv->{'upper_boundary'}); 
         $general_html .= "<b>Upper boundary</b>: $upper Ma<br>";
-        my $estimate = describeEstimate($itv,'upper');
+        $estimate = describeEstimate($itv,'upper');
         if ($estimate) {
             $general_html .= "<b>Upper boundary source</b>: ".$estimate."<br>";
         }
@@ -1102,6 +1051,7 @@ sub displayInterval {
     my @equiv = @{$itv->{'equiv'}} if ($itv->{'equiv'});
     if (@direct_equiv || @equiv) {
         my $html = "";
+        my $range = "";
         foreach my $e (@direct_equiv) {
             $html .= "<li><a href=\"bridge.pl?action=displayInterval&interval_no=$e->{interval_no}\">$e->{interval_name}</a> $range</li>";
         }
@@ -1134,6 +1084,7 @@ sub displayInterval {
     }
     if (@overlaps) {
         my $html = "";
+        my $range = "";
         foreach my $o (@overlaps) {
 #            if ($o->{'lower_boundary'}) {
 #                $range = "(".$o->{'lower_boundary'}." - ".$o->{'upper_boundary'}.")";
@@ -1144,6 +1095,7 @@ sub displayInterval {
     }
     if (@contains) {
         my $html = "";
+        my $range = "";
         foreach my $c (@contains) {
 #            if ($c->{'lower_boundary'}) {
 #                $range = "(".$c->{'lower_boundary'}." - ".$c->{'upper_boundary'}.")";
@@ -1177,7 +1129,7 @@ sub displayInterval {
         print $hbo->htmlBox("Appears in scale$s",$html);
     }
     print "</td></tr></table>";
-    print main::printIntervalsJava(1);
+    print PBDBUtil::printIntervalsJava($dbt,1);
     print $hbo->populateHTML("search_intervals_form");
 }
 
@@ -1196,7 +1148,7 @@ sub submitSearchInterval {
         print "<div align=\"center\">";
         print "<h3>Could not find ".$q->param('eml')." ".$q->param('interval_name')."</h3>";
         print "<h4>(Please try again)</h4>";
-        print main::printIntervalsJava(1);
+        print PBDBUtil::printIntervalsJava($dbt,1);
         print $hbo->populateHTML("search_intervals_form");
         print "</div>";
     } else {
@@ -1210,7 +1162,6 @@ sub displayIntervalDebug {
     my $i = int($q->param('interval_no'));
     return unless $i;
 
-    print main::stdIncludes("blank_page_top");
     print "<div class=small>";
    
     my $t = new TimeLookup($dbt);
@@ -1291,7 +1242,6 @@ sub displayIntervalDebug {
     print "</table>";
 
 
-    print main::stdIncludes("std_page_bottom");
 }
 
 1;

@@ -15,15 +15,13 @@ package Taxon;
 
 use strict;
 
-use DBI;
-use DBConnection;
-use DBTransactionManager;
 use Errors;
 use Data::Dumper;
 use CGI::Carp;
 use URI::Escape;
 use Mail::Mailer;
 use TaxaCache;
+use Debug qw(dbg);
 
 use Reference;
 
@@ -101,30 +99,6 @@ sub getRow {
 }
 
 
-# returns the authors of the authority record for this taxon (if any)
-sub authors {
-	my Taxon $self = shift;
-	
-	# get all info from the database about this record.
-	my $hr = $self->getRow();
-	
-	if (!$hr) {
-		return '';	
-	}
-	
-	my $auth;
-	
-	if ($hr->{ref_is_authority}) {
-		# then get the author info for that reference
-		my $ref = Reference->new($self->{'dbt'},$hr->{'reference_no'});
-		$auth = $ref->authors() if ($ref);
-	} else {
-        $auth = Reference::formatShortRef($hr);	
-	}
-	
-	return $auth;
-}
-
 sub pubyr {
 	my Taxon $self = shift;
 
@@ -168,6 +142,9 @@ sub displayAuthorityForm {
 	my $s = shift;
 	my $q = shift;
     my $error_message = shift;
+    
+    $dbt->useRemote(1);
+    
     my $dbh = $dbt->dbh;
 	
 	my %fields;  # a hash of fields and values that
@@ -446,6 +423,9 @@ sub displayAuthorityForm {
 # rjp, 3/2004.
 sub submitAuthorityForm {
     my ($dbt,$hbo,$s,$q) = @_;
+    
+    $dbt->useRemote(1);
+
     my $dbh = $dbt->dbh;
 
 	if ((!$dbt) || (!$hbo) || (!$s) || (!$q)) {
@@ -851,6 +831,9 @@ sub submitAuthorityForm {
 
 sub processSpecimenMeasurement {
     my ($dbt,$s,$taxon_no,$reference_no,$fields) = @_;
+    
+    $dbt->useRemote(1);
+
     my $dbh = $dbt->dbh;
     my $specimen_no = int($fields->{'specimen_no'});
 
@@ -886,15 +869,15 @@ sub processSpecimenMeasurement {
                 my $quoted_value = $dbh->quote($value);
                 if ($value && $db_row) {
                     my $sql = "UPDATE measurements SET average=$quoted_value, real_average=$quoted_value WHERE measurement_no=$db_row->{measurement_no}";
-                    main::dbg($sql);
+                    dbg($sql);
                     $dbh->do($sql);
                 } elsif ($value && !$db_row) {
                     my $sql = "INSERT measurements (specimen_no,average,real_average,measurement_type) VALUES ($specimen_no,$quoted_value,$quoted_value,'$type')";
-                    main::dbg($sql);
+                    dbg($sql);
                     $dbh->do($sql);
                 } elsif (!$value && $db_row) {
                     my $sql = "DELETE FROM measurements WHERE measurement_no=$db_row->{measurement_no}";
-                    main::dbg($sql);
+                    dbg($sql);
                     $dbh->do($sql);
                 }
             }
@@ -904,8 +887,11 @@ sub processSpecimenMeasurement {
 
 sub updateChildNames {
     my ($dbt,$s,$old_taxon_no,$old_name,$new_name) = @_;
+    
+    $dbt->useRemote(1);
+
     return if ($old_name eq $new_name || !$old_name);
-    main::dbg("UPDATE CHILD NAMES CALLED WITH: $old_name --> $new_name");
+    dbg("UPDATE CHILD NAMES CALLED WITH: $old_name --> $new_name");
 
     # Get only the common denominator.  I.E. is a subgenus
     # in one but not the other, just change the genus part if aplicable
@@ -929,12 +915,13 @@ sub updateChildNames {
         my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$t});
         my $taxon_name = $child->{'taxon_name'};
         $taxon_name =~ s/^$quoted_old_name/$new_name/; 
-        main::dbg("Changing parent from $old_name to $new_name.  child taxon from $child->{taxon_name} to $taxon_name");
+        dbg("Changing parent from $old_name to $new_name.  child taxon from $child->{taxon_name} to $taxon_name");
         $dbt->updateRecord($s,'authorities','taxon_no',$child->{'taxon_no'},{'taxon_name'=>$taxon_name});
     }
 }
 sub updateImplicitBelongsTo {
     my ($dbt,$s,$taxon_no,$parent_no,$old_name,$new_name,$fields) = @_;
+    $dbt->useRemote(1);
     return if ($old_name eq $new_name);
 
     my @old_name = split(/ /,$old_name);
@@ -946,18 +933,18 @@ sub updateImplicitBelongsTo {
 
     my %old_parents;
     if ($old_higher) {
-        main::dbg("Looking for opinions to migrate for $old_higher");
+        dbg("Looking for opinions to migrate for $old_higher");
         foreach my $p (TaxonInfo::getTaxa($dbt,{'taxon_name'=>$old_higher})) {
             $old_parents{$p->{'taxon_no'}} = 1;
         }
     }
     my $sql = "SELECT * FROM opinions WHERE child_spelling_no=$taxon_no";
     my @old_opinions = @{$dbt->getData($sql)};
-    #    main::dbg("Found ".scalar(@old_opinions)." existing opinions to migrate for $old_higher");
+    #    dbg("Found ".scalar(@old_opinions)." existing opinions to migrate for $old_higher");
 
     if ($new_higher && !$old_higher) {
         # Insert a new opinion, switch from genus --> subgenus
-        main::dbg("Inserting belongs to since taxa changed from genus $old_name to subgenus $new_name");
+        dbg("Inserting belongs to since taxa changed from genus $old_name to subgenus $new_name");
         addImplicitChildOpinion($dbt,$s,$taxon_no,$parent_no,$fields);
         if (@old_opinions) {
             my $subgenus = $new_last;
@@ -977,7 +964,7 @@ sub updateImplicitBelongsTo {
         # Delete old opinion, switch from subgenus --> genus
         foreach my $row (@old_opinions) {
             if ($old_parents{$row->{'parent_spelling_no'}}) { 
-                main::dbg("Deleting belongs to record since taxa changed from $old_name to $new_name");
+                dbg("Deleting belongs to record since taxa changed from $old_name to $new_name");
                 $dbt->deleteRecord($s,'opinions','opinion_no',$row->{'opinion_no'},"taxon name changed from $old_name to $new_name");
             }
         }
@@ -990,14 +977,14 @@ sub updateImplicitBelongsTo {
                 # Switch opinion
                 if ($old_parents{$row->{'parent_spelling_no'}}) { 
                     $found_old_parent = 1;
-                    main::dbg("Updating belongs to since taxa changed from $old_name to $new_name");
+                    dbg("Updating belongs to since taxa changed from $old_name to $new_name");
                     $dbt->updateRecord($s,'opinions','opinion_no',$row->{opinion_no},{'parent_spelling_no'=>$parent_no,'parent_no'=>$orig_parent_no});
                 }
             }
         } 
         if (!$found_old_parent) {
             # Insert new opinion
-            main::dbg("Inserting belongs to since taxa changed from $old_name to $new_name");
+            dbg("Inserting belongs to since taxa changed from $old_name to $new_name");
             addImplicitChildOpinion($dbt,$s,$taxon_no,$parent_no,$fields);
         }
     } 
@@ -1005,6 +992,9 @@ sub updateImplicitBelongsTo {
 
 sub addImplicitChildOpinion {
     my ($dbt,$s,$child_no,$parent_no,$fields) = @_;
+    
+    $dbt->useRemote(1);
+
     return unless ($child_no && $parent_no);
     # Get original combination for parent no PS 04/22/2005
     my $orig_parent_no = TaxonInfo::getOriginalCombination($dbt,$parent_no);
@@ -1031,6 +1021,8 @@ sub addImplicitChildOpinion {
 
 sub addSpellingAuthority {
     my ($dbt,$s,$taxon_no,$new_name,$new_rank,$reference_no) = @_;
+
+    $dbt->useRemote(1);
 
     my $orig = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
 
@@ -1068,7 +1060,7 @@ sub addSpellingAuthority {
 
     my ($return_code, $new_taxon_no) = $dbt->insertRecord($s,'authorities', \%record);
     TaxaCache::addName($dbt,$new_taxon_no);
-    main::dbg("create new authority record, got return code $return_code");
+    dbg("create new authority record, got return code $return_code");
     if (!$return_code) {
         die("Unable to create new authority record for $record{taxon_name}. Please contact support");
     }
@@ -1079,6 +1071,7 @@ sub addSpellingAuthority {
 
 sub setOccurrencesTaxonNoByTaxon {
     my $dbt = shift;
+    $dbt->useRemote(1);
     my $authorizer_no = shift;
     my $dbh = $dbt->dbh;
     my $taxon_no = shift;
@@ -1123,7 +1116,7 @@ sub setOccurrencesTaxonNoByTaxon {
         if (!$is_same_taxon) {
             push @taxon_nos, $taxa[$i]->{'taxon_no'};
         } else {
-            main::dbg("Not counting taxa as a homonym, it seems to match a another taxa exactly:".Dumper($taxa[$i]));
+            dbg("Not counting taxa as a homonym, it seems to match a another taxa exactly:".Dumper($taxa[$i]));
         }
     }
     
@@ -1258,12 +1251,12 @@ END_OF_MESSAGE
         # Compose final SQL
         if (@matchedOccs) {
             my $sql = "UPDATE occurrences SET modified=modified,taxon_no=$taxon_no WHERE occurrence_no IN (".join(",",@matchedOccs).")";
-            main::dbg("Updating matched occs:".$sql);
+            dbg("Updating matched occs:".$sql);
             $dbh->do($sql);
         }
         if (@matchedReids) {
             my $sql = "UPDATE reidentifications SET modified=modified,taxon_no=$taxon_no WHERE reid_no IN (".join(",",@matchedReids).")";
-            main::dbg("Updating matched reids:".$sql);
+            dbg("Updating matched reids:".$sql);
             $dbh->do($sql);
         }
     }
@@ -1280,8 +1273,9 @@ END_OF_MESSAGE
 #  possible higher taxa must be linked by opinions from the same ref as this opinion
 sub displayTypeTaxonSelectForm {
     my ($dbt,$s,$is_tt_form_value,$type_taxon_no,$type_taxon_name,$type_taxon_rank,$reference_no,$end_message) = @_;
+    $dbt->useRemote(1);
 
-    main::dbg("displayTypeTaxonSelectForm called with is_tt_form_value $is_tt_form_value tt_no $type_taxon_no tt_name $type_taxon_name tt_rank $type_taxon_rank ref_no $reference_no");
+    dbg("displayTypeTaxonSelectForm called with is_tt_form_value $is_tt_form_value tt_no $type_taxon_no tt_name $type_taxon_name tt_rank $type_taxon_rank ref_no $reference_no");
 
     my @warnings = ();
     my @parents = getTypeTaxonList($dbt,$type_taxon_no,$reference_no);
@@ -1297,7 +1291,7 @@ sub displayTypeTaxonSelectForm {
     #    if its 1: do the insertion or deletion
     #    if its >1: display a list of all parents for the user to check
     #  possible higher taxa must be linked by opinions from the same ref as this opinion
-    main::dbg("TYPE TAXON PARENTS:\n<PRE>".Dumper(\@parents)."</PRE>");
+    dbg("TYPE TAXON PARENTS:\n<PRE>".Dumper(\@parents)."</PRE>");
     if ($is_tt_form_value) {
         if (scalar(@parents) > 1) {
             print "<div align=\"center\">";
@@ -1339,7 +1333,7 @@ sub displayTypeTaxonSelectForm {
     } else {
         # This is not a type taxon.  Find all parents from the same reference, and set the
         # type_taxon_no to 0 if its set to this taxon, otherwise leave it alone
-        main::dbg("Handling deletion of type taxon no $type_taxon_no");
+        dbg("Handling deletion of type taxon no $type_taxon_no");
         foreach my $parent (@parents) {
             if ($parent->{'type_taxon_no'} == $type_taxon_no) {
                 my $return = $dbt->updateRecord($s,'authorities','taxon_no',$parent->{'taxon_no'},{'type_taxon_no'=>'0'});
@@ -1364,6 +1358,7 @@ sub displayTypeTaxonSelectForm {
 
 sub submitTypeTaxonSelect {
     my ($dbt,$s,$q) = @_;
+    $dbt->useRemote(1);
 
     my $type_taxon_no = $q->param('type_taxon_no');
     my $reference_no = $q->param('reference_no');
@@ -1407,6 +1402,7 @@ sub submitTypeTaxonSelect {
 # The array is an array of hash refs with the following keys: taxon_no, taxon_name, taxon_rank, type_taxon_no, type_taxon_name, type_taxon_rank
 sub getTypeTaxonList {
     my $dbt = shift;
+    $dbt->useRemote(1);
     my $type_taxon_no = shift;   
     my $reference_no = shift;
             
@@ -1776,6 +1772,7 @@ sub getBestClassification{
 
 sub propagateAuthorityInfo {
     my $dbt = shift;
+    $dbt->useRemote(1);
     my $taxon_no = shift;
     my $this_is_best = shift;
     
@@ -1785,7 +1782,7 @@ sub propagateAuthorityInfo {
     my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
     return if (!$orig_no);
 
-    #main::dbg("propagateAuthorityInfo called with taxon_no $taxon_no and orig $orig_no");
+    #dbg("propagateAuthorityInfo called with taxon_no $taxon_no and orig $orig_no");
 
     my @spelling_nos = TaxonInfo::getAllSpellings($dbt,$orig_no);
     # Note that this is the taxon_no passed in, not the original combination -- an update to
@@ -1883,7 +1880,7 @@ sub propagateAuthorityInfo {
     if (@toUpdate) {
         foreach my $spelling_no (@spelling_nos) {
             my $u_sql =  "UPDATE authorities SET modified=modified, ".join(",",@toUpdate)." WHERE taxon_no=$spelling_no";
-            #main::dbg("propagateAuthorityInfo updating authority: $u_sql");
+            #dbg("propagateAuthorityInfo updating authority: $u_sql");
             $dbh->do($u_sql);
         }
     }

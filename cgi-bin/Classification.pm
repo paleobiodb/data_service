@@ -3,6 +3,7 @@ package Classification;
 use TaxonInfo;
 use strict;
 use Data::Dumper;
+use Debug qw(dbg);
 
 my $DEBUG = 0;
 
@@ -55,11 +56,11 @@ sub get_classification_hash{
         }
     }
 
-    #main::dbg("get_classification_hash called");
-    #main::dbg('ranks'.Dumper(@ranks));
-    #main::dbg('highest_level'.$highest_level);
-    #main::dbg('return_type'.$return_type);
-    #main::dbg('taxon names or nos'.Dumper(@taxon_names_or_nos));
+    #dbg("get_classification_hash called");
+    #dbg('ranks'.Dumper(@ranks));
+    #dbg('highest_level'.$highest_level);
+    #dbg('return_type'.$return_type);
+    #dbg('taxon names or nos'.Dumper(@taxon_names_or_nos));
 
     foreach my $hash_key (@taxon_names_or_nos){
         my ($taxon_no, $taxon_name, $parent_no, $child_no, $child_spelling_no);

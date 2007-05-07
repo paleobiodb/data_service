@@ -1,16 +1,23 @@
 package Confidence;
 
-use URI::Escape;
+use strict;
 use Data::Dumper; 
 use TaxaCache;
 use Classification;
+use Collection;
+use Person;
+use TaxonInfo;
+use HTMLBuilder;
+use PBDBUtil;
+use URI::Escape;
 use Memoize;
+use Reference;
+use Debug qw(dbg);
 
 memoize('chiSquaredDensity');
 memoize('factorial');
 memoize('gamma');
 
-use strict;
 
 
 # written 03.31.04 by Josh Madin as final product
@@ -69,8 +76,8 @@ sub displaySearchSectionForm {
     $vars{'page_title'} = "Section search form";
     $vars{'action'} = "displaySearchSectionResults";
     $vars{'submit'} = "Search sections";
-    main::printIntervalsJava(1);
-    print main::makeAuthEntJavaScript();
+    print PBDBUtil::printIntervalsJava($dbt,1);
+    print Person::makeAuthEntJavascript($dbt);
     print $hbo->populateHTML('search_collections_form',\%vars) ;
 }
 
@@ -92,7 +99,7 @@ sub displaySearchSectionResults{
     $options{'calling_script'} = 'Confidence';
 #    $options{'lithologies'} = $options{'lithology1'}; delete $options{'lithology1'};
 #    $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'}; 
-    my ($dataRows) = main::processCollectionsSearch($dbt,\%options,$fields);
+    my ($dataRows) = Collection::getCollections($dbt,$s,\%options,$fields);
     my @dataRows = sort {$a->{regionalsection} cmp $b->{regionalsection} ||
                       $a->{localsection} cmp $b->{localsection}} @$dataRows;
 
@@ -276,7 +283,7 @@ sub displaySearchSectionResults{
 sub displayTaxaIntervalsForm {
     my ($q,$s,$dbt,$hbo) = @_;
     # Show the "search collections" form
-    my %pref = main::getPreferences($s->get('enterer_no'));
+    my %pref = $s->getPreferences();
     my @prefkeys = keys %pref;
     my $html = $hbo->populateHTML('taxa_intervals_form', [], [], \@prefkeys);
     # Spit out the HTML
@@ -1095,6 +1102,7 @@ sub printResultsPage {
 
 
 sub printCSV {
+    require Text::CSV_XS;
     my $csv = Text::CSV_XS->new();
 
     my @table = @{$_[0]};
@@ -1825,7 +1833,7 @@ sub getOccurrenceData {
             $sql .= " LIMIT 1"
         }
 
-        main::dbg("getOccurrenceData called: $sql");
+        dbg("getOccurrenceData called: $sql");
         my @data = @{$dbt->getData($sql)};
         return \@data;
     } else {
@@ -1858,6 +1866,7 @@ sub _dumpTaxonObject {
 package ConfidenceGraph;
 
 use GD;
+use Debug qw(dbg);
 
 my $AILEFT = 100;
 my $AITOP = 450;   
@@ -2108,7 +2117,7 @@ sub drawGraph {
 
     # Initialize bounds and constants
     my ($oldest,$youngest) = $self->getRange($y_axis_order);
-	main::dbg("ORDER:$y_axis_order RANGE:$oldest to $youngest X_LABELS2ZE:$x_label_size Y_LABELSIZE:$y_label_size:$y_tick_size Y_OFFSET:$y_offset X_OFFSET:$x_offset");
+	dbg("ORDER:$y_axis_order RANGE:$oldest to $youngest X_LABELS2ZE:$x_label_size Y_LABELSIZE:$y_label_size:$y_tick_size Y_OFFSET:$y_offset X_OFFSET:$x_offset");
     my $toPixel = makePixelMapper($y_offset,$graph_height,$oldest,$youngest,$y_axis_order);
 
     # Draw total border
