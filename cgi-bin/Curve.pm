@@ -458,7 +458,7 @@ sub assignGenera	{
         $basema{$interval_name->{$_}} = $base->{$_} for @intervals;
     } elsif ( $bin_type eq "10my" ) {
         @binnames = $t->getBins();
-        my ($top,$base) = $t->getBoundaries('bins');
+        my ($top,$base) = $t->getBoundariesReal('bins');
         %topma = %$top;
         %basema = %$base;
 	} elsif ( $bin_type =~ /neptune/ ) {

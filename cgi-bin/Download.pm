@@ -3373,7 +3373,7 @@ sub printScaleFile {
 
     my ($interval_lookup,$upper_bin_bound,$lower_bin_bound);
     if ( $q->param('time_scale') eq "PBDB 10 m.y. bins" ) {
-        ($upper_bin_bound,$lower_bin_bound) = $self->{t}->getBoundaries('bins');
+        ($upper_bin_bound,$lower_bin_bound) = $self->{t}->getBoundariesReal('bins');
         ($interval_lookup) = $self->{t}->getScaleMapping('bins');
     } else {
         ($upper_bin_bound,$lower_bin_bound) = $self->{t}->getBoundaries();

@@ -715,7 +715,7 @@ sub displayTenMyBins	{
 	print "These bin definitions are used by the <a href=\"bridge.pl?action=displayCurveForm\">diversity curve generator</a>.\n\n";
 
 	my @binnames = $t->getBins;
-    my ($upperbin,$lowerbin) = $t->getBoundaries('bins');
+    my ($upperbin,$lowerbin) = $t->getBoundariesReal('bins');
 
 
 	my $sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
@@ -775,7 +775,7 @@ sub displayTenMyBinsDebug {
 
 	my @binnames = $t->getBins;
     my $binning = $t->getBinning;
-    my ($upperbin,$lowerbin) = $t->getBoundaries('bins');
+    my ($upperbin,$lowerbin) = $t->getBoundariesReal('bins');
     my $ig = $t->getIntervalGraph;
 
 	my $sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
