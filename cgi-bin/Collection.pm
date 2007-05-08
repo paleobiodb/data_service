@@ -945,7 +945,7 @@ sub processCollectionForm {
         
         my ($dupe,$matches) = (0,0);
         if ($isNewEntry) {
-            $dupe = $dbt->checkDuplicates('collections','collection_no',\%vars);
+            $dupe = $dbt->checkDuplicates('collections',\%vars);
 #          $matches = $dbt->checkNearMatch('collections','collection_no',$q,99,"something=something?");
         }
 
