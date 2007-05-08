@@ -77,12 +77,23 @@ sub buildMap {
 	my $self = shift;
     my %options = @_;
 
+    # Load in default parameters
+    while (my ($p,$def) = each %map_defaults) {
+        if ($q->param($p) eq '') {
+            $q->param($p=>$def);
+        }
+    }
+
     my $dataSets;
-    my ($errors,$warnings)  = $self->mapCheckParams();
-    unless (ref $errors && @$errors) {
-        ($dataSets,$errors2,$warnings2)  = $self->mapQueryDB();
-        push @$errors, @$errors2;
-        push @$warnings, @$warnings2;
+    if ($options{'dataSet'}) {
+        $dataSets->[1] = $options{dataSet};
+    } else {
+        my ($errors,$warnings)  = $self->mapCheckParams();
+        unless (ref $errors && @$errors) {
+            ($dataSets,$errors2,$warnings2)  = $self->mapQueryDB();
+            push @$errors, @$errors2;
+            push @$warnings, @$warnings2;
+        }
     }
 
     foreach my $i (1 .. 4) {
@@ -120,13 +131,6 @@ sub buildMap {
 # e.g. they exist in the db/aren't ambiguous. return errors if they aren't
 sub mapCheckParams {
     my $self = shift;
-
-    # Load in default parameters
-    while (my ($p,$def) = each %map_defaults) {
-        if ($q->param($p) eq '') {
-            $q->param($p=>$def);
-        }
-    }
 
     # For all four datasets (point types) ... 
     my @errors = ();
@@ -196,22 +200,24 @@ sub mapQueryDB {
                     ($toptions{'eml_max_interval'},$toptions{'max_interval'}) = TimeLookup::splitInterval($toptions{'interval_name'});
                 }
                 my ($dataRowsRef,$ofRows) = Collection::getCollections($dbt,$s,\%toptions,$fields);  
-                $self->{'options'} = \%toptions;
                 $dataSets[$ptset] = $dataRowsRef;
             }
         } elsif ($ptset == 1) {
             # This makes is to both lithology1 and lithology2 get searched
-            if ($options{'lithology1'}) {
-                $options{'lithologies'} = $options{'lithology1'};
-                delete $options{'lithology1'};
+            if ($options{'dataSet'}) {
+                $dataSets[$ptset] = $options{'dataSet'};
+            } else {
+                if ($options{'lithology1'}) {
+                    $options{'lithologies'} = $options{'lithology1'};
+                    delete $options{'lithology1'};
+                }
+                if ($options{'interval_name'}) {
+                    ($options{'eml_max_interval'},$options{'max_interval'}) = TimeLookup::splitInterval($options{'interval_name'});
+                }
+                my ($dataRowsRef,$ofRows,$warnings) = Collection::getCollections($dbt,$s,\%options,$fields);  
+                push @warnings, @$warnings; 
+                $dataSets[$ptset] = $dataRowsRef;
             }
-            if ($options{'interval_name'}) {
-                ($options{'eml_max_interval'},$options{'max_interval'}) = TimeLookup::splitInterval($options{'interval_name'});
-            }
-            my ($dataRowsRef,$ofRows,$warnings) = Collection::getCollections($dbt,$s,\%options,$fields);  
-            push @warnings, @$warnings; 
-            $self->{'options'} = \%options;
-            $dataSets[$ptset] = $dataRowsRef;
         }
     }
     return \@dataSets,\@errors,\@warnings;
@@ -1821,23 +1827,6 @@ sub mapDrawPoints{
 			    print MAPOUT "\" href=\"$BRIDGE_HOME?action=displayCollResults";
                 print MAPOUT "&amp;collection_list=".join(",",@{$atCoord{$x1}{$y1}});
                 print MAPOUT "\">\n";
-
-                #my %options = %{$self->{'options'}};
-                #if (!%options) {
-                #    %options = $q->Vars();
-                #}
-                #while(my ($field,$value) = each %options) {
-                #    if ($field !~ /^permission|^calling|^point|^dot|^map|projection|^grid|^action|^line|color$/ && $value) {
-				#	    print MAPOUT "&amp;$field=$value";
-				#    }
-			    #}
-			    #($latdeg,$latdir) = split / /,$latVal{$y1};
-			    #($lngdeg,$lngdir) = split / /,$longVal{$x1};
-                #($latdeg, $latdec) = split /\./,$latdeg;
-                #($lngdeg, $lngdec) = split /\./,$lngdeg;
-                #resolution = full or half degree
-                #print MAPOUT "&amp;coordres=$coordres"; 
-                #print MAPOUT "&amp;latdeg=$latdeg&amp;latdec_range=$latdec&amp;latdir=$latdir&amp;lngdeg=$lngdeg&amp;lngdec_range=$lngdec&amp;lngdir=$lngdir\">\n";
 
                 my $mycolor = $aicol{$dotcolor};
                 $mycolor =~ s/ XA/ Xa/;

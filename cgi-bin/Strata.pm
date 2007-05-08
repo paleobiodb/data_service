@@ -25,7 +25,7 @@ sub displayStrata {
     my %options = $q->Vars();
     $options{'permission_type'} = 'read';                                                                                                                   
     $options{'calling_script'} = 'Strata';
-    my @fields = ('geological_group','formation','member','lithology1','lithology2','environment');
+    my @fields = ('geological_group','formation','member','lithology1','lithology2','environment','max_interval_no', 'min_interval_no','latdeg','latdec','latmin','latsec','latdir','lngdeg','lngdec','lngmin','lngsec','lngdir','country','state');
     my ($dataRows,$ofRows) = Collection::getCollections($dbt,$s,\%options,\@fields);
 
     # Do conflict checking beforehand, see function definition for explanation
@@ -293,7 +293,8 @@ sub displayStrata {
 
     # Display age range/Show what collections are in it 
     # Set this q parameter so processCollectionsSearch (called from doCollections) builds correct SQL query
-    print TaxonInfo::doCollections($q, $dbt, $s, '', '', "for_strata_module");
+    print TaxonInfo::doCollections($dbt, $s, $dataRows, '' ,'', 'for_strata_module');
+#    print TaxonInfo::doCollections($q, $dbt, $s, '', '', "for_strata_module");
 
     print "<p>&nbsp;</p>";
     print "</div>";

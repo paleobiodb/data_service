@@ -575,7 +575,8 @@ sub connect {
     my $hostName = "cdb0.geol.iastate.edu";
     my $userName = "pbdbnep";
     my $dbName = "neptune";
-    my $password=   "tV9KlR";
+    my $password = `cat /home/paleodbpasswd/neptune_passwd`;
+    chomp($password);  #remove the newline!  Very important!
 
     # Make sure a symbolic link to this file always exists;
     #my $password = `cat /home/paleodbpasswd/passwd`;

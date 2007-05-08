@@ -544,7 +544,7 @@ sub getData {
         $sth->finish();
         return $data;
 	} else {
-        die("Can not execute non select statements with getData");
+        die("Can not execute non select statements with getData: $sql");
 	}
 }
 

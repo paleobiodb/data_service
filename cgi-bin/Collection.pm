@@ -2565,9 +2565,9 @@ sub getPaleoCoords {
 ##
 sub setSecondaryRef{
 	my $dbt = shift;
-    $dbt->useRemote(1);
 	my $collection_no = shift;
 	my $reference_no = shift;
+    $dbt->useRemote(1);
 
     unless ($collection_no =~ /^\d+$/ && $reference_no =~ /^\d+$/) {
         return;
@@ -2601,9 +2601,9 @@ sub setSecondaryRef{
 ##
 sub refIsDeleteable {
 	my $dbt = shift;
-    $dbt->useRemote(1);
 	my $collection_no = shift;
 	my $reference_no = shift;
+    $dbt->useRemote(1);
 
     unless ($collection_no =~ /^\d+$/ && $reference_no =~ /^\d+$/) {
         return;
@@ -2637,9 +2637,9 @@ sub refIsDeleteable {
 ##
 sub deleteRefAssociation {
 	my $dbt = shift;
-    $dbt->useRemote(1);
 	my $collection_no = shift;
 	my $reference_no = shift;
+    $dbt->useRemote(1);
 
     unless ($collection_no =~ /^\d+$/ && $reference_no =~ /^\d+$/) {
         return;

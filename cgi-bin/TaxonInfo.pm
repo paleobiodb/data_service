@@ -395,6 +395,12 @@ sub displayTaxonInfoResults {
         print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(7); </script>';
 	}
+   
+    my $collectionsSet;
+    if ($is_real_user) {
+        $collectionsSet = getCollectionsSet($dbt,$q,$s,$in_list);
+    }
+
 	# map
     if ($modules{8}) {
         print '<div id="panel8" class="panel">';
@@ -402,7 +408,7 @@ sub displayTaxonInfoResults {
         print '<div align="center">';
 
         if ($is_real_user) {
-            displayMap($dbt,$q,$s,$in_list);
+            displayMap($dbt,$q,$s,$collectionsSet);
         } else {
             print '<form method="POST" action="bridge.pl">';
             foreach my $f ($q->param()) {
@@ -419,7 +425,7 @@ sub displayTaxonInfoResults {
     if ($modules{9}) {
         print '<div id="panel9" class="panel">';
         if ($is_real_user) {
-		    print doCollections($q, $dbt, $s, $taxon_no, $in_list, '',$is_real_user);
+		    print doCollections($dbt, $s, $collectionsSet, $taxon_no,$in_list, '',$is_real_user);
         } else {
             print '<div align="center">';
             print '<form method="POST" action="bridge.pl">';
@@ -446,6 +452,27 @@ sub displayTaxonInfoResults {
 
 
     print "</div>"; # Ends div class="small" declared at start
+}
+
+
+sub getCollectionsSet {
+    my ($dbt,$q,$s,$in_list) = @_;
+
+    my $fields = ['country', 'state', 'max_interval_no', 'min_interval_no','latdeg','latdec','latmin','latsec','latdir','lngdeg','lngdec','lngmin','lngsec','lngdir'];
+
+    # Pull the colls from the DB;
+    my %options = ();
+    $options{'permission_type'} = 'read';
+    $options{'calling_script'} = 'TaxonInfo';
+    $options{'taxon_list'} = $in_list if ($in_list && @$in_list);
+    # These fields passed from strata module,etc
+    #foreach ('group_formation_member','formation','geological_group','member','taxon_name') {
+    #    if (defined($q->param($_))) {
+    #        $options{$_} = $q->param($_);
+    #    }
+    #}
+    my ($dataRows) = Collection::getCollections($dbt,$s,\%options,$fields);
+    return $dataRows;
 }
 
 sub doThumbs {
@@ -508,7 +535,8 @@ sub doThumbs {
 } 
 
 sub displayMap {
-    my ($dbt,$q,$s,$in_list)  = @_;
+    my ($dbt,$q,$s,$collectionsSet)  = @_;
+    require Map;
     
 	my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape1', 'dotcolor1', 'dotborder1');
 	my %user_prefs = $s->getPreferences();
@@ -521,17 +549,14 @@ sub displayMap {
 	# we need to get the number of collections out of dataRowsRef
 	#  before figuring out the point size
     my ($map_html_path,$errors,$warnings);
-    if (ref $in_list && @$in_list) {
-        my $taxon_list = join(",",@$in_list);
-        require Map;
+#    if (ref $in_list && @$in_list) {
         $q->param("simple_map"=>'YES');
         $q->param('mapscale'=>'auto');
         $q->param('autoborders'=>'yes');
         $q->param('pointsize1'=>'auto');
-        $q->param('taxon_list'=>$taxon_list);
         my $m = Map->new($q,$dbt,$s);
-        ($map_html_path,$errors,$warnings) = $m->buildMap();
-    }
+        ($map_html_path,$errors,$warnings) = $m->buildMap('dataSet'=>$collectionsSet);
+#    }
 
     # MAP USES $q->param("taxon_name") to determine what it's doing.
     if ( $map_html_path )	{
@@ -551,57 +576,59 @@ sub displayMap {
 
 
 
+# age_range_format changes appearance html formatting of age/range information, used by the strata module
 sub doCollections{
-	my $q = shift;
-	my $dbt = shift;
-    my $s = shift;
+    my ($dbt,$s,$colls,$taxon_no,$in_list,$age_range_format,$is_real_user) = @_;
     my $dbh = $dbt->dbh;
-	my $taxon_no = shift;
-	my $in_list = shift;
-    # age_range_format changes appearance html formatting of age/range information
-    # used by the strata module
-    my $age_range_format = shift;  
-    my $is_real_user = shift;
+    
 	my $output = "";
 
 	# get a lookup of the boundary ages for all intervals JA 25.6.04
 	# the boundary age hashes are keyed by interval nos
     my $t = new TimeLookup($dbt);
 #    my ($upperbound,$lowerbound) = $t->getBoundaries;
-   
-    my $sql = "SELECT i.interval_no,TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,il.interval_hash,il.lower_boundary,il.upper_boundary FROM interval_lookup il, intervals i WHERE il.interval_no=i.interval_no";
-    my @data = @{$dbt->getData($sql)};
+  
+    my $interval_hash = {};
     my $lowerbound = {};
     my $upperbound = {};
     my $interval_name = {};
-    my $interval_hash = {};
-    foreach my $row (@data) {
-        $lowerbound->{$row->{interval_no}} = $row->{lower_boundary};
-        $upperbound->{$row->{interval_no}} = $row->{lower_boundary};
-        $interval_name->{$row->{interval_no}} = $row->{interval_name};
-        $interval_hash->{$row->{interval_no}} = $t->deserializeItv($row->{'interval_hash'});
+    my %seen_itv = ();
+    foreach my $c (@$colls) {
+        $seen_itv{$c->{'max_interval_no'}} = 1 if ($c->{max_interval_no});
+        $seen_itv{$c->{'min_interval_no'}} = 1 if ($c->{min_interval_no});
     }
-
-    # Pull the colls from the DB;
-    my %options = ();
-    $options{'permission_type'} = 'read';
-    $options{'calling_script'} = "TaxonInfo";
-    $options{'taxon_list'} = $in_list if ($in_list && @$in_list);
-    # These fields passed from strata module,etc
-    foreach ('group_formation_member','formation','geological_group','member','taxon_name') {
-        if (defined($q->param($_))) {
-            $options{$_} = $q->param($_);
+  
+    # this look gets boundaries for all intervals the in the collection set, as 
+    # well as all parents (broader) of those intervals, which is used below
+    # in calculateAgeRange for pruning purposes
+    my @itvs = keys %seen_itv;
+    while (@itvs) {
+        %seen_itv = ();
+        my $sql = "SELECT i.interval_no,TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,il.interval_hash,il.lower_boundary,il.upper_boundary FROM interval_lookup il, intervals i WHERE il.interval_no=i.interval_no AND i.interval_no IN (".join(",",@itvs).")";
+        my @data = @{$dbt->getData($sql)};
+        foreach my $row (@data) {
+            $lowerbound->{$row->{interval_no}} = $row->{lower_boundary};
+            $upperbound->{$row->{interval_no}} = $row->{upper_boundary};
+            $interval_name->{$row->{interval_no}} = $row->{interval_name};
+            my $itv = $t->deserializeItv($row->{'interval_hash'});
+            if ($itv->{max_no} && !$interval_hash->{$itv->{'max_no'}}) {
+                $seen_itv{$itv->{'max_no'}} = 1 
+            }
+            if ($itv->{min_no} && !$interval_hash->{$itv->{'min_no'}}) {
+                $seen_itv{$itv->{'min_no'}} = 1 
+            }
+            $interval_hash->{$row->{interval_no}} = $itv; 
         }
+        @itvs = keys %seen_itv;
     }
-    my $fields = ["country", "state", "max_interval_no", "min_interval_no"];  
-    my ($dataRows,$ofRows) = Collection::getCollections($dbt,$s,\%options,$fields);
-    my @data = @$dataRows;
 
-    if (! @data) {
+
+
+    if (!@$colls) {
         print "<div align=\"center\"><h3>Collections</h3><i> No collection or age range data are available</i></div>";
         return;
     }
-    my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$interval_hash,\@data,$upperbound,$lowerbound);
+    my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$interval_hash,$colls,$upperbound,$lowerbound);
 
 
 #    print "MAX".Dumper($max);
@@ -657,7 +684,7 @@ sub doCollections{
 
             # get children of immediate children that include extant children
             my $sql = "SELECT taxon_no FROM taxa_tree_cache WHERE";
-for my $ei ( @extantimmediates )	{
+            for my $ei ( @extantimmediates )	{
                 $sql .= " (lft>=".$ei->{'lft'}." AND rgt<=".$ei->{'rgt'}.") OR ";
             }
             $sql =~ s/ OR $//;
@@ -670,10 +697,23 @@ for my $ei ( @extantimmediates )	{
                 $extant_list .= "$ecc->{'taxon_no'},";
             }
             $extant_list =~ s/,$//;
+
+            # Pull the colls from the DB;
+            my %options = ();
+            $options{'permission_type'} = 'read';
+            $options{'calling_script'} = "TaxonInfo";
             $options{'taxon_list'} = $extant_list;
+            # These fields passed from strata module,etc 
+            #foreach ('group_formation_member','formation','geological_group','member','taxon_name') {
+            #    if (defined($q->param($_))) {
+            #        $options{$_} = $q->param($_);                                                                               
+            #    }                                                                                                               
+            #}                                                                                                                   
+            my $fields = ["country", "state", "max_interval_no", "min_interval_no"];
+
             my ($dataRows,$ofRows) = Collection::getCollections($dbt,$s,\%options,$fields);
             my @data = @$dataRows;
-            my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$t,\@data,$upperbound,$lowerbound);
+            my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$interval_hash,\@data,$upperbound,$lowerbound);
             for my $coll ( @data )	{
                 $iscrown{$coll->{'collection_no'}}++;
             }
@@ -706,7 +746,7 @@ for my $ei ( @extantimmediates )	{
 	my %time_place_coll = ();
     my (%max_interval_name,%min_interval_name,%bounds_coll,%max_interval_no);
     my %intervals = ();
-	foreach my $row (@data) {
+	foreach my $row (@$colls) {
         my $max = $row->{'max_interval_no'};
         my $min = $row->{'min_interval_no'};
         if (!$min) {
@@ -812,14 +852,10 @@ for my $ei ( @extantimmediates )	{
 #	my @sorted = sort (keys %time_place_coll);
 
 	if(scalar @sorted > 0){
-		# Do this locally because the module never gets exec_url
-		#   from bridge.pl
-		my $exec_url = $q->url();
-
 		$output .= "<div align=\"center\"><h3 style=\"margin-bottom: .4em;\">Collections</h3>\n";
-        my $collTxt = (scalar(@data)== 0) ? "None found"
-                    : (scalar(@data) == 1) ? "One found"
-                    : scalar(@data)." total";
+        my $collTxt = (scalar(@$colls)== 0) ? "None found"
+                    : (scalar(@$colls) == 1) ? "One found"
+                    : scalar(@$colls)." total";
         $output .= "($collTxt)</div>\n";
 		if ( $#sorted <= 100 )	{
 			$output .= "<br>\n";
@@ -865,7 +901,7 @@ for my $ei ( @extantimmediates )	{
 				if ( $iscrown{$collection_no} > 0 )	{
 					$formatted_no = "<b>".$formatted_no."</b>";
 				}
-				$output .= "<a href=\"$exec_url?action=displayCollectionDetails&amp;collection_no=$collection_no&amp;is_real_user=$is_real_user\">$formatted_no</a> ";
+				$output .= "<a href=\"bridge.pl?action=displayCollectionDetails&amp;collection_no=$collection_no&amp;is_real_user=$is_real_user\">$formatted_no</a> ";
 			}
 			$output .= "</span></td></tr>\n";
 			$row_color++;
@@ -1058,7 +1094,7 @@ sub calculateAgeRange {
         while (my $j = pop @q) {
             $precedes{$i}{$j} = 1 unless $i == $j;
             my $itv_j = $interval_hash->{$j};
-            foreach my $n (@{$itv_j->{'all_next'}}) {
+            foreach my $n (@{$itv_j->{'all_next_nos'}}) {
                 unless ($precedes{$i}{$n}) {
                     push @q, $n;
                 }

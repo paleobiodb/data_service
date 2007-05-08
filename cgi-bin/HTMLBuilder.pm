@@ -684,8 +684,8 @@ sub htmlError {
 # or top.  Pass it the name of a template such as "std_page_top" and 
 # it will return the HTML code.
 sub stdIncludes {
-    my ($self,$page) = @_;
-    my $vars = shift || {};
+    my ($self,$page,$vars) = @_;
+    my $vars ||= {};
 
     my $s = $self->{'s'};
     my $dbt = $self->{'dbt'};
@@ -695,7 +695,7 @@ sub stdIncludes {
     } else {
         $self->{included}{$page} = 1;
     }
-    
+
     if ($page eq 'std_page_top' && $s && $s->isDBMember()) {
         $vars->{reference} = 'none';
         my $reference_no = $s->get('reference_no');

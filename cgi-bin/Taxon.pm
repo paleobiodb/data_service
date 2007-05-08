@@ -21,6 +21,7 @@ use CGI::Carp;
 use URI::Escape;
 use Mail::Mailer;
 use TaxaCache;
+use Classification;
 use Debug qw(dbg);
 
 use Reference;
