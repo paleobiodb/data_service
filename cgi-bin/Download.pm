@@ -1459,7 +1459,8 @@ sub queryDatabase {
 
     my (@fields,@where,@occ_where,@reid_where,$taxon_where,@tables,@from,@groupby,@left_joins);
 
-    @fields = ('count(*) num,c.authorizer_no','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short");
+
+    @fields = ('c.authorizer_no','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short");
     @tables = ('collections c');
     @where = $self->getCollectionsWhereClause();
 
@@ -1663,6 +1664,9 @@ sub queryDatabase {
         push @left_joins, "LEFT JOIN secondary_refs sr ON sr.collection_no=c.collection_no";
     }
 
+    if ( $q->param('occurrence_count') && $q->param('output_data') =~ /collections/i )	{
+        push @fields, 'count(*) num';
+    }
 
     # Handle GROUP BY
     # This is important: don't group by genus_name for the obvious cases, 
