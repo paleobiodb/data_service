@@ -3355,7 +3355,7 @@ sub processEditOccurrences {
             # Check for duplicates
             my @keys = ("genus_reso","genus_name","subgenus_reso","subgenus_name","species_reso","species_name","collection_no");
             my %vars = map{$_,$dbh->quote($_)} @fields{@keys};
-            my $dupe_id = checkDuplicates("occurrences", \%vars);
+            my $dupe_id = $dbt->checkDuplicates("occurrences", \%vars);
 
             if ( $dupe_id ) {
                 push @warnings, "Row ". ($i + 1) ." may be a duplicate";
