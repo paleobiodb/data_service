@@ -2196,11 +2196,15 @@ sub displayInterval {
 sub displayTenMyBins {
     return if PBDBUtil::checkForBot();
     require Scales;
+    print $hbo->stdIncludes("std_page_top");
     Scales::displayTenMyBins($dbt,$q,$s,$hbo);
+    print $hbo->stdIncludes("std_page_bottom");
 }
 sub displayFullScale {
     require Scales;
+    print $hbo->stdIncludes("std_page_top");
     Scales::displayFullScale($dbt, $hbo);
+    print $hbo->stdIncludes("std_page_bottom");
 }
 sub dumpAllIntervals {
     return if PBDBUtil::checkForBot();
