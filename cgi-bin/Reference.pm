@@ -605,10 +605,10 @@ sub displayReferenceForm {
 
     my $isNewEntry = ($reference_no > 0) ? 0 : 1;
     
-    my %defaults = {
+    my %defaults = (
         'classification_quality'=>'standard',
         'language'=>'English'
-    };
+    );
 
     my %db_row = ();
     if (!$isNewEntry) {
@@ -628,6 +628,14 @@ sub displayReferenceForm {
 	foreach my $s_param (keys %query_hash){
 		if($form_vars{$s_param}) {
             $form_vars{$query_hash{$s_param}} = $form_vars{$s_param};
+		}
+	}
+
+	# form_vars may have some blank values that override db_row values with
+	#  the same keys, so delete them JA 8.5.07
+	for my $k ( keys %form_vars )	{
+		if ( $form_vars{$k} !~ /[A-Za-z0-9]/ )	{
+			delete $form_vars{$k};
 		}
 	}
 
