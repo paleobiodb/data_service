@@ -398,7 +398,7 @@ sub displayTaxonInfoResults {
    
     my $collectionsSet;
     if ($is_real_user) {
-        $collectionsSet = getCollectionsSet($dbt,$q,$s,$in_list);
+        $collectionsSet = getCollectionsSet($dbt,$q,$s,$in_list,$taxon_name);
     }
 
 	# map
@@ -456,7 +456,7 @@ sub displayTaxonInfoResults {
 
 
 sub getCollectionsSet {
-    my ($dbt,$q,$s,$in_list) = @_;
+    my ($dbt,$q,$s,$in_list,$taxon_name) = @_;
 
     my $fields = ['country', 'state', 'max_interval_no', 'min_interval_no','latdeg','latdec','latmin','latsec','latdir','lngdeg','lngdec','lngmin','lngsec','lngdir'];
 
@@ -464,7 +464,12 @@ sub getCollectionsSet {
     my %options = ();
     $options{'permission_type'} = 'read';
     $options{'calling_script'} = 'TaxonInfo';
-    $options{'taxon_list'} = $in_list if ($in_list && @$in_list);
+    if ($in_list && @$in_list) {
+        $options{'taxon_list'} = $in_list;
+    } elsif ($taxon_name) {
+        $options{'taxon_name'} = $taxon_name;
+    }
+    
     # These fields passed from strata module,etc
     #foreach ('group_formation_member','formation','geological_group','member','taxon_name') {
     #    if (defined($q->param($_))) {
