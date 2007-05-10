@@ -1096,7 +1096,29 @@ sub displayCollectionDetails {
     if ( $coll->{'research_group'} =~ /ETE/ && $q->param('guest') eq '' )	{
         $page_vars->{ete_banner} = "<div style=\"padding-left: 3em; float: left;\"><img alt=\"ETE\" src=\"/public/bannerimages/ete_logo.jpg\"></div>";
     }
+    # if the user is not logged in, round off the degrees
+    # DO NOT mess with this routine, because Joe Public must not be
+    #  able to locate a collection in the field and pillage it
+    # JA 10.5.07
+    if ( ! $s->isDBMember() )	{
+        $coll->{'lngdec'} = ( $coll->{'lngmin'} / 60 ) + ( $coll->{'lngsec'}  / 3600 ) + $coll->{'lngdec'};
+        $coll->{'latdec'} = ( $coll->{'latmin'} / 60 ) + ( $coll->{'latsec'}  / 3600 ) + $coll->{'latdec'};
+        $coll->{'lngdec'} = 10 * ( int ( ( $coll->{'lngdec'} + 0.05 ) * 10 ) );
+        $coll->{'latdec'} = 10 * ( int ( ( $coll->{'latdec'} + 0.05 ) * 10 ) );
+        $coll->{'lngdec'} =~ s/0$//;
+        $coll->{'latdec'} =~ s/0$//;
+        $coll->{'lngmin'} = '';
+        $coll->{'lngsec'} = '';
+        $coll->{'latmin'} = '';
+        $coll->{'latsec'} = '';
+        $coll->{'geogcomments'} = '';
+    }
     print $hbo->stdIncludes('std_page_top', $page_vars);
+
+    # Handle display of taxonomic list now 
+    my $taxa_list = buildTaxonomicList($dbt,$hbo,{'collection_no'=>$coll->{'collection_no'},'hide_reference_no'=>$coll->{'reference_no'}});
+    $coll->{'taxa_list'} = $taxa_list;
+
     displayCollectionDetailsPage($dbt,$hbo,$q,$s,$coll);
 
     # Links at bottom
@@ -1112,10 +1134,6 @@ sub displayCollectionDetails {
         print qq|<b><a href="bridge.pl?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a></b>|;  
         print "</div></p>";
     }
-
-    # Handle display of taxonomic list now 
-	my $taxa_list = buildTaxonomicList($dbt,$hbo,{'collection_no'=>$coll->{'collection_no'},'hide_reference_no'=>$coll->{'reference_no'}});
-	print $taxa_list;
 
 
     # More links at bottom
@@ -1402,7 +1420,11 @@ sub displayCollectionDetailsPage {
 
     # textarea values often have returns that need to be rendered
     #  as <br>s JA 20.8.06
-    $row->{$_} =~ s/\n/<br>/g foreach keys %$row;
+    for my $r ( keys %$row )	{
+        if ( $r !~ /taxa_list/ )	{
+            $row->{$r} =~ s/\n/<br>/g;
+        }
+    }
     print $hbo->populateHTML('collection_display_fields', $row);
 
 } # end sub displayCollectionDetails()
