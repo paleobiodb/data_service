@@ -685,7 +685,10 @@ sub htmlError {
 # it will return the HTML code.
 sub stdIncludes {
     my ($self,$page,$vars) = @_;
-    my $vars ||= {};
+    # I can't for the life of me figure out what this line was doing here, and
+    #  it was knocking out the politically important display of the ETE logo
+    #  on the public collection display pages JA 10.5.07
+    # my $vars ||= {};
 
     my $s = $self->{'s'};
     my $dbt = $self->{'dbt'};
