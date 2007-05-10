@@ -618,6 +618,8 @@ sub displayReferenceForm {
     }
 
     my %form_vars = $q->Vars();
+    delete $form_vars{'reftitle'};
+    delete $form_vars{'pubtitle'};
 
 	# Pre-populate the form with the search terms:
 	my %query_hash = ("name" => "author1last",
