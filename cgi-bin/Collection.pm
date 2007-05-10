@@ -755,6 +755,14 @@ sub displayCollectionForm {
             exit;
         }
 
+        # translate the release date field to populate the pulldown
+        # I'm not sure if we never did this at all, or if something got
+        #  broken at some point, but it was causing big problems JA 10.5.07
+
+        if ( date($vars{'created'}) != date($vars{'release_date'}) )	{
+            $vars{'release_date'} = getReleaseString($vars{'created'},$vars{'release_date'});
+        }
+
         # Secondary refs, followed by current ref
         my @secondary_refs = Reference::getSecondaryRefs($dbt,$collection_no);
         if (@secondary_refs) {
@@ -1031,8 +1039,8 @@ sub processCollectionForm {
 # Set the release date
 # originally written by Ederer; made a separate function by JA 26.6.02
 sub getReleaseDate	{
-    my ($created_date,$releaseDateString) = @_;
-	my $releaseDate = date($created_date);
+	my ($createdDate,$releaseDateString) = @_;
+	my $releaseDate = date($createdDate);
 
 	if ( $releaseDateString eq 'three months')	{
 		$releaseDate = $releaseDate+'3M';
@@ -1045,12 +1053,37 @@ sub getReleaseDate	{
 	} elsif ( $releaseDateString eq 'three years')	{
 		$releaseDate = $releaseDate+'3Y';
 	} elsif ( $releaseDateString eq 'four years')	{
-        $releaseDate = $releaseDate+'4Y';
+        	$releaseDate = $releaseDate+'4Y';
 	} elsif ( $releaseDateString eq 'five years')	{
 		$releaseDate = $releaseDate+'5Y';
 	}
-    # Else immediate release
-    return $releaseDate;
+	# Else immediate release
+	return $releaseDate;
+}
+
+sub getReleaseString	{
+	my ($created_date,$releaseDate) = @_;
+	my $createdDate = date($created_date);
+	my $releaseDate = date($releaseDate);
+	my $releaseDateString = "immediate";
+
+	if ( $releaseDate == $createdDate+'3M' )	{
+		$releaseDateString = 'three months';
+	} elsif ( $releaseDate == $createdDate+'6M' )	{
+		$releaseDateString = 'six months';
+	} elsif ( $releaseDate == $createdDate+'1Y' )	{
+		$releaseDateString = 'one year';
+	} elsif ( $releaseDate == $createdDate+'2Y' )	{
+		$releaseDateString = 'two years';
+	} elsif ( $releaseDate == $createdDate+'3Y' )	{
+		$releaseDateString = 'three years';
+        } elsif ( $releaseDate == $createdDate+'4Y' )	{
+		$releaseDateString = 'four years';
+	} elsif ( $releaseDate == $createdDate+'5Y' )	{
+		$releaseDateString = 'five years';
+	}
+	# Else immediate release
+	return $releaseDateString;
 }
 
 # Make this more thorough in the future
