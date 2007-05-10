@@ -622,7 +622,6 @@ sub displayReferenceForm {
 	# Pre-populate the form with the search terms:
 	my %query_hash = ("name" => "author1last",
 					  "year" => "pubyr",
-					  "reftitle" => "reftitle",
 					  "project_name" => "project_name");
 
 	foreach my $s_param (keys %query_hash){
