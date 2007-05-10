@@ -9,7 +9,7 @@ use Debug qw(dbg);
 
 #my @specimen_fields= ('specimens_measured', 'specimen_coverage','specimen_id','specimen_side','specimen_part','measurement_source','length_median','length_min','length_max','length_error','length_error_unit','width_median','width_min','width_max','width_error','width_error_unit','height_median','height_min','height_max','height_error','height_error_unit','diagonal_median','diagonal_min','diagonal_max','diagonal_error','diagonal_error_unit','inflation_median','inflation_min','inflation_max','inflation_error','inflation_error_unit','comments','length','width','height','diagonal','inflation');
 
-my @specimen_fields   =('specimens_measured', 'specimen_coverage','specimen_id','specimen_side','specimen_part','measurement_source','magnification','comments');
+my @specimen_fields   =('specimens_measured', 'specimen_coverage','specimen_id','specimen_side','specimen_part','measurement_source','magnification','is_type','comments');
 my @measurement_types =('length','width','height','diagonal','inflation');
 my @measurement_fields=('average','median','min','max','error','error_unit');
 
@@ -372,17 +372,32 @@ sub populateMeasurementForm {
             return;
         } else {
             if ($q->param('specimen_no') == -1) {
-                # Specimen count given a default value of 1 below
-                push @fields,$_ for (grep(!/specimens_measured/,@specimen_fields));
-                push @values, '' for @fields;
+                # get the data from the last record of this taxon entered
+                #  JA 10.5.07
+                my $fieldstring = join(',',@specimen_fields);
+                $fieldstring =~ s/is_type/is_type AS specimen_is_type/;
+                $sql = "SELECT $fieldstring FROM specimens WHERE taxon_no=" . int($q->param('taxon_no')) . " ORDER BY specimen_no DESC";
+                $row = ${$dbt->getData($sql)}[0];
+                push @fields,$_ for @specimen_fields;
+                s/is_type/specimen_is_type/ foreach @fields;
+                if ( ! $row->{'specimens_measured'} )	{
+                    $row->{'specimens_measured'} = 1;
+                }
+                for my $f ( @fields )	{
+                    push @values,  $row->{$f};
+                }
                 foreach my $type (@measurement_types) {
                     foreach my $f (@measurement_fields) {
                         push @fields, $type."_".$f;
-                        push @values, '';
+                        if ( $row->{$f} )	{
+                            push @values, $row->{$f};
+                        } else	{
+                            push @values, '';
+                        }
                     }
                 }
-	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimens_measured','specimen_is_type','types_only');
-	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,1,'',int($q->param('types_only')));
+	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','types_only');
+	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,int($q->param('types_only')));
 	            print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
             } elsif ($q->param('specimen_no') == -2) {
 	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimen_coverage');
